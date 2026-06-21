@@ -333,6 +333,7 @@ h1 {
 }
 
 .back-button,
+.primary-link,
 .secondary-link {
   display: inline-flex;
   align-items: center;
@@ -349,8 +350,17 @@ h1 {
   box-shadow: 0 8px 20px rgba(37, 45, 34, 0.07);
 }
 
+.primary-link {
+  border-color: rgba(117, 189, 37, 0.36);
+  background: linear-gradient(180deg, #82c932 0%, #67aa1e 100%);
+  color: #ffffff;
+  box-shadow: 0 14px 28px rgba(92, 158, 28, 0.22);
+}
+
 .back-button:hover,
 .back-button:focus-visible,
+.primary-link:hover,
+.primary-link:focus-visible,
 .secondary-link:hover,
 .secondary-link:focus-visible {
   border-color: rgba(117, 189, 37, 0.6);

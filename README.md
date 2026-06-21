@@ -7,13 +7,15 @@
 - HP / hlavní rozcestník s 12 moduly.
 - Routing pro hlavní modulové stránky.
 - Připravené skeleton routy pro budoucí modulové dashboardy.
-- Statická konfigurace modulů v `src/data/modules.ts`.
+- Statická konfigurace modulů v `src/data/modules.js`.
 - Lokální SVG komponenty ikon v `src/components/icons/`.
 - Bez API, backendu, databáze, autentizace a Cloudflare deploye.
 
 ## Pneumatiky
 
-Modul Pneumatiky není v tomto projektu implementovaný ani měněný. V aplikaci je pouze karta se štítkem `HOTOVO` a placeholder stránka pro pozdější napojení hotového modulu 1:1.
+Modul Pneumatiky není v tomto projektu přepisovaný ani refaktorovaný. V aplikaci je karta se štítkem `HOTOVO` a stránka `/pneumatiky`, která otevírá hotovou externí aplikaci:
+
+https://oplustil-prog.github.io/kaiser-pneu-evidence/
 
 ## Spuštění lokálně
 

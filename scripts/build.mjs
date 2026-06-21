@@ -1,7 +1,7 @@
 import { access, mkdir, readdir, rm, stat, copyFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { modules } from "../src/data/modules.ts";
+import { modules } from "../src/data/modules.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(root, "dist");
