@@ -1874,6 +1874,10 @@ h1 {
   color: #8c6121;
 }
 
+.absence-calendar-agenda {
+  display: none;
+}
+
 .absence-report-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2217,18 +2221,229 @@ h1 {
   }
 
   .absence-tabs {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    scrollbar-width: thin;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
   }
 
   .absence-tab {
-    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 40px;
+    padding: 6px 8px;
+    font-size: 0.8rem;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  .absence-hero,
+  .absence-panel {
+    padding: 16px;
+  }
+
+  .absence-hero {
+    gap: 14px;
+  }
+
+  .absence-hero h1 {
+    font-size: clamp(1.55rem, 8vw, 2.1rem);
+  }
+
+  .absence-hero p {
+    font-size: 0.95rem;
+  }
+
+  .absence-hero .module-detail__icon {
+    width: 58px;
+    height: 58px;
+  }
+
+  .absence-hero .module-detail__icon .module-icon__svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .absence-kpi {
+    min-height: auto;
+    padding: 14px;
+  }
+
+  .absence-kpi strong {
+    font-size: 1.72rem;
+  }
+
+  .absence-table-wrap {
+    overflow-x: visible;
+  }
+
+  .absence-table {
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .absence-table thead {
+    display: none;
+  }
+
+  .absence-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .absence-table tr {
+    display: grid;
+    overflow: hidden;
+    padding: 4px 12px;
+    border: 1px solid rgba(66, 80, 74, 0.12);
+    border-radius: 8px;
+    background: #fbfcfa;
+  }
+
+  .absence-table td {
+    position: relative;
+    display: block;
+    min-height: 34px;
+    padding: 9px 0 9px 96px;
+    border-bottom: 1px solid rgba(66, 80, 74, 0.1);
+    overflow-wrap: anywhere;
+  }
+
+  .absence-table td::before {
+    position: absolute;
+    top: 11px;
+    left: 0;
+    width: 84px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.68rem;
+    font-weight: 900;
+    line-height: 1.25;
+    text-transform: uppercase;
+  }
+
+  .absence-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .absence-table td span:not(.absence-badge):not(.absence-type) {
+    margin-top: 2px;
+  }
+
+  .absence-actions {
+    justify-content: flex-start;
+  }
+
+  .absence-calendar {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+
+  .absence-calendar__weekday,
+  .absence-calendar__day {
+    min-width: 0;
+  }
+
+  .absence-calendar__weekday {
+    padding: 8px 2px;
+    font-size: 0.62rem;
+  }
+
+  .absence-calendar__day {
+    min-height: 66px;
+    padding: 5px 4px;
+  }
+
+  .absence-calendar__events {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 6px;
+  }
+
+  .absence-calendar__event {
+    width: 8px;
+    height: 8px;
+    overflow: hidden;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 0;
+    line-height: 0;
+    white-space: nowrap;
+  }
+
+  .absence-calendar__more {
+    min-height: 12px;
+    padding: 0 3px;
+    font-size: 0.56rem;
+    line-height: 12px;
+  }
+
+  .absence-calendar-agenda {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .absence-calendar-agenda h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .absence-mini-list__date,
+  .absence-report-history small {
+    white-space: normal;
+  }
+
+  .absence-report-history li {
+    grid-template-columns: 1fr;
+  }
+
+  .absence-report-actions .primary-action,
+  .absence-report-actions .secondary-link {
+    min-height: 44px;
+    padding: 9px 12px;
+    text-align: center;
   }
 
   .absence-report-history li,
   .absence-mini-list li {
     display: grid;
     gap: 7px;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-shell {
+    width: min(100% - 20px, 1180px);
+  }
+
+  .absence-hero,
+  .absence-panel,
+  .module-feedback,
+  .feedback-ticket,
+  .feedback-dashboard section {
+    padding: 14px;
+  }
+
+  .absence-table tr {
+    padding: 4px 10px;
+  }
+
+  .absence-table td {
+    padding-left: 82px;
+  }
+
+  .absence-table td::before {
+    width: 72px;
+    font-size: 0.64rem;
+  }
+
+  .absence-tabs {
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .absence-tab {
+    font-size: 0.76rem;
   }
 }

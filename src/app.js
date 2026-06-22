@@ -588,18 +588,18 @@ function absenceRequestsTable(requests, user, emptyText, showActions = true) {
         <tbody>
           ${requests.map((request) => `
             <tr>
-              <td>
+              <td data-label="Zaměstnanec">
                 <strong>${escapeHtml(request.employeeName)}</strong>
                 <span>${escapeHtml(request.team || request.department || "Provoz")}</span>
               </td>
-              <td>${absenceTypeBadge(request.type)}</td>
-              <td>
+              <td data-label="Typ">${absenceTypeBadge(request.type)}</td>
+              <td data-label="Termín">
                 <strong>${formatAbsenceDate(request.dateFrom)} - ${formatAbsenceDate(request.dateTo)}</strong>
                 <span>${request.halfDayFrom || request.halfDayTo ? "obsahuje půlden" : "celý den"}</span>
               </td>
-              <td>${escapeHtml(formatAbsenceDays(request.daysCount))}</td>
-              <td>${absenceStatusBadge(request.status)}</td>
-              ${showActions ? `<td>${absenceRequestActions(request, user)}</td>` : ""}
+              <td data-label="Dny">${escapeHtml(formatAbsenceDays(request.daysCount))}</td>
+              <td data-label="Stav">${absenceStatusBadge(request.status)}</td>
+              ${showActions ? `<td data-label="Akce">${absenceRequestActions(request, user)}</td>` : ""}
             </tr>
           `).join("")}
         </tbody>
@@ -826,6 +826,7 @@ function absenceCalendar(user) {
     employeeId: absenceUiState.employeeFilter,
     month: absenceUiState.monthFilter
   });
+  const agenda = [...requests].sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
   const days = absenceCalendarDays(absenceUiState.monthFilter);
   const weekdays = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
 
@@ -847,7 +848,10 @@ function absenceCalendar(user) {
               <span class="absence-calendar__date">${day.day}</span>
               <div class="absence-calendar__events">
                 ${dayRequests.slice(0, 3).map((request) => `
-                  <span class="absence-calendar__event absence-calendar__event--${ABSENCE_TYPE_TONES[request.type] || "vacation"}">
+                  <span
+                    class="absence-calendar__event absence-calendar__event--${ABSENCE_TYPE_TONES[request.type] || "vacation"}"
+                    title="${escapeHtml(`${request.employeeName} · ${request.type}`)}"
+                  >
                     ${escapeHtml(request.employeeName)} · ${escapeHtml(request.type)}
                   </span>
                 `).join("")}
@@ -856,6 +860,10 @@ function absenceCalendar(user) {
             </div>
           `;
         }).join("")}
+      </div>
+      <div class="absence-calendar-agenda">
+        <h3>Události v měsíci</h3>
+        ${absenceMiniList(agenda, user, "Pro vybraný měsíc nejsou žádné nepřítomnosti.")}
       </div>
     </section>
   `;
