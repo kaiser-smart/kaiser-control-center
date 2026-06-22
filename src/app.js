@@ -1,10 +1,4 @@
-import {
-  MODULE_STATUS,
-  moduleDashboards,
-  moduleStatusBadge,
-  moduleStatusLabel,
-  modules
-} from "./data/modules.js";
+import { moduleDashboards, modules } from "./data/modules.js";
 import { VersionBackupInfo } from "./components/VersionBackupInfo.js";
 import { VersionNewsInfo } from "./components/VersionNewsInfo.js";
 import { ModuleFeedbackBox } from "./components/ModuleFeedbackBox.js";
@@ -86,7 +80,7 @@ const feedbackMenuItem = {
   description: "Přehled připomínek k modulům, stavů, priorit a interních poznámek.",
   route: "/pripominky",
   icon: ReportsIcon,
-  status: MODULE_STATUS.IN_PROGRESS,
+  status: "správa",
   active: true,
   disabled: false,
   order: 14
@@ -177,13 +171,11 @@ function renderModuleIcon(moduleItem) {
 }
 
 function statusBadge(moduleItem) {
-  const status = moduleStatusBadge(moduleItem.status);
-
-  if (!status) {
+  if (moduleItem.status !== "HOTOVO") {
     return "";
   }
 
-  return `<span class="status-badge status-badge--${status.tone}">${status.label}</span>`;
+  return '<span class="status-badge">HOTOVO</span>';
 }
 
 function visibleModules(user) {
@@ -695,14 +687,14 @@ function loginPage() {
 
 function homePage(user) {
   const modulesForUser = menuModules(user);
-  const completedCount = modulesForUser.filter((moduleItem) => moduleItem.status === MODULE_STATUS.DONE).length;
+  const completedCount = modulesForUser.filter((moduleItem) => moduleItem.status === "HOTOVO").length;
   const cards = modulesForUser
     .map(
       (moduleItem) => `
         <a class="module-card" href="${routeHref(moduleItem.route)}" data-link>
-          ${statusBadge(moduleItem)}
           <span class="module-card__media">
             <span class="module-icon">${renderModuleIcon(moduleItem)}</span>
+            ${statusBadge(moduleItem)}
           </span>
           <span class="module-card__content">
             <span class="module-card__header">
@@ -1529,7 +1521,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
           <p>${description}</p>
           <div class="module-detail__status">
             <span>Stav</span>
-            <strong>${moduleStatusLabel(moduleItem.status)}</strong>
+            <strong>${moduleItem.status}</strong>
           </div>
           <div class="module-actions">
             ${tyresLink}

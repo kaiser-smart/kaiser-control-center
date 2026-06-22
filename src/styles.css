@@ -663,7 +663,6 @@ h1 {
   min-width: 0;
   flex-direction: column;
   gap: 7px;
-  padding-right: 96px;
   padding-top: 1px;
 }
 
@@ -689,38 +688,23 @@ h1 {
 
 .status-badge {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  bottom: -6px;
+  left: 50%;
   display: inline-flex;
+  transform: translateX(-50%);
   align-items: center;
   justify-content: center;
   white-space: nowrap;
   pointer-events: none;
-  padding: 5px 9px;
-  border: 1px solid transparent;
+  padding: 5px 8px;
+  border: 1px solid rgba(117, 189, 37, 0.18);
   border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 900;
-  line-height: 1;
-  box-shadow: 0 6px 14px rgba(37, 45, 34, 0.1);
-}
-
-.status-badge--done {
-  border-color: rgba(117, 189, 37, 0.18);
   background: #f2faea;
   color: var(--kaiser-green-dark);
-}
-
-.status-badge--in-progress {
-  border-color: rgba(245, 158, 11, 0.22);
-  background: #fff7e8;
-  color: #9a5f00;
-}
-
-.status-badge--ready {
-  border-color: rgba(101, 113, 100, 0.2);
-  background: #f2f4f1;
-  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 6px 14px rgba(79, 141, 20, 0.14);
 }
 
 .topbar {
@@ -2799,7 +2783,6 @@ h1 {
   .module-card__content {
     align-items: center;
     gap: 0;
-    padding-right: 0;
   }
 
   .module-card__header {
@@ -2819,10 +2802,8 @@ h1 {
   }
 
   .status-badge {
-    top: 7px;
-    right: 7px;
     padding: 4px 7px;
-    font-size: 0.58rem;
+    font-size: 0.63rem;
   }
 
   .topbar {

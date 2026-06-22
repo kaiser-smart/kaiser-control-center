@@ -14,35 +14,6 @@ import {
   VistosIcon
 } from "../components/icons/index.js";
 
-export const MODULE_STATUS = {
-  DONE: "done",
-  IN_PROGRESS: "in_progress",
-  READY: "ready"
-};
-
-export const MODULE_STATUS_BADGES = {
-  [MODULE_STATUS.DONE]: {
-    label: "HOTOVO",
-    tone: "done"
-  },
-  [MODULE_STATUS.IN_PROGRESS]: {
-    label: "ROZPRACOVÁN",
-    tone: "in-progress"
-  },
-  [MODULE_STATUS.READY]: {
-    label: "PŘIPRAVENO",
-    tone: "ready"
-  }
-};
-
-export function moduleStatusBadge(status) {
-  return MODULE_STATUS_BADGES[status] || null;
-}
-
-export function moduleStatusLabel(status) {
-  return moduleStatusBadge(status)?.label || status || "neuvedeno";
-}
-
 export const modules = [
   {
     id: "dashboard",
@@ -50,7 +21,7 @@ export const modules = [
     description: "Celkový přehled provozu, závad, nákladů a tras.",
     route: "/dashboard",
     icon: DashboardIcon,
-    status: MODULE_STATUS.READY,
+    status: "připraveno",
     active: true,
     disabled: false,
     order: 1
@@ -62,7 +33,7 @@ export const modules = [
     route: "/vozovy-park",
     dashboardRoute: "/vozovy-park/dashboard",
     icon: FleetIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 2
@@ -74,7 +45,7 @@ export const modules = [
     route: "/hlaseni-ridicu",
     dashboardRoute: "/hlaseni-ridicu/dashboard",
     icon: DriverReportsIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 3
@@ -86,7 +57,7 @@ export const modules = [
     route: "/servis-udrzba",
     dashboardRoute: "/servis-udrzba/dashboard",
     icon: ServiceMaintenanceIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 4
@@ -97,7 +68,7 @@ export const modules = [
     description: "Hotový modul evidence pneumatik, dezénu, tlaku a nákladů.",
     route: "/pneumatiky",
     icon: TyresIcon,
-    status: MODULE_STATUS.DONE,
+    status: "HOTOVO",
     active: true,
     disabled: false,
     order: 5
@@ -109,7 +80,7 @@ export const modules = [
     route: "/trasy-svozu",
     dashboardRoute: "/trasy-svozu/dashboard",
     icon: CollectionRoutesIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 6
@@ -121,7 +92,7 @@ export const modules = [
     route: "/trasy-vzorku",
     dashboardRoute: "/trasy-vzorku/dashboard",
     icon: SamplingRoutesIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 7
@@ -133,7 +104,7 @@ export const modules = [
     route: "/vistos",
     dashboardRoute: "/vistos/dashboard",
     icon: VistosIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 8
@@ -145,7 +116,7 @@ export const modules = [
     route: "/naklady",
     dashboardRoute: "/naklady/dashboard",
     icon: CostsIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 9
@@ -157,7 +128,7 @@ export const modules = [
     route: "/reporty",
     dashboardRoute: "/reporty/dashboard",
     icon: ReportsIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 10
@@ -169,7 +140,7 @@ export const modules = [
     route: "/dovolena-nemoc",
     dashboardRoute: "/dovolena-nemoc/dashboard",
     icon: AbsenceIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "mock data",
     active: true,
     disabled: false,
     order: 11
@@ -181,7 +152,7 @@ export const modules = [
     route: "/uzivatele",
     dashboardRoute: "/uzivatele/dashboard",
     icon: UsersRolesIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 12
@@ -193,7 +164,7 @@ export const modules = [
     route: "/nastaveni",
     dashboardRoute: "/nastaveni/dashboard",
     icon: SettingsIcon,
-    status: MODULE_STATUS.IN_PROGRESS,
+    status: "skeleton",
     active: true,
     disabled: false,
     order: 13
