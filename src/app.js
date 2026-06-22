@@ -643,19 +643,19 @@ function absenceDashboard(user) {
           <strong>${summary.pendingCount}</strong>
         </article>
         <article class="absence-kpi">
-          <span>Schválené dovolené tento měsíc</span>
-          <strong>${summary.approvedVacationThisMonth}</strong>
-        </article>
-        <article class="absence-kpi">
-          <span>Nemoci tento měsíc</span>
-          <strong>${summary.illnessThisMonth}</strong>
-        </article>
-        <article class="absence-kpi">
           <span>Lidé mimo práci dnes</span>
           <strong>${summary.peopleOutToday.length}</strong>
         </article>
+        <article class="absence-kpi">
+          <span>Dovolená tento měsíc</span>
+          <strong>${summary.approvedVacationThisMonth}</strong>
+        </article>
+        <article class="absence-kpi">
+          <span>Nemoc tento měsíc</span>
+          <strong>${summary.illnessThisMonth}</strong>
+        </article>
         <article class="absence-kpi absence-kpi--action">
-          <span>Zůstatek dovolené</span>
+          <span>Moje zbývající dovolená</span>
           <strong>${balance.vacationRemainingDays}</strong>
           <button class="primary-action" type="button" data-absence-tab="new">Nová žádost</button>
         </article>
@@ -829,6 +829,7 @@ function absenceCalendar(user) {
   const agenda = [...requests].sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
   const days = absenceCalendarDays(absenceUiState.monthFilter);
   const weekdays = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
+  const today = toIsoDate(new Date());
 
   return `
     <section class="absence-panel">
@@ -844,7 +845,7 @@ function absenceCalendar(user) {
         ${days.map((day) => {
           const dayRequests = requests.filter((request) => requestOverlapsDate(request, day.iso));
           return `
-            <div class="absence-calendar__day ${day.inMonth ? "" : "absence-calendar__day--muted"}">
+            <div class="absence-calendar__day ${day.inMonth ? "" : "absence-calendar__day--muted"} ${day.iso === today ? "absence-calendar__day--today" : ""}">
               <span class="absence-calendar__date">${day.day}</span>
               <div class="absence-calendar__events">
                 ${dayRequests.slice(0, 3).map((request) => `
@@ -1010,9 +1011,18 @@ function absenceActiveContent(activeTab, user) {
 
 function absenceModulePage(moduleItem, user, isDashboard = false) {
   const activeTab = isDashboard ? "dashboard" : absenceUiState.tab;
+  const feedbackState = feedbackFormState[moduleItem.id] || {};
+  const feedbackBox = ModuleFeedbackBox({
+    moduleId: moduleItem.id,
+    moduleName: moduleItem.title,
+    currentUser: user,
+    feedbackItems: moduleFeedbackItems(moduleItem.id, user),
+    notice: feedbackState.message || "",
+    error: feedbackState.error || ""
+  });
 
   return `
-    <main class="app-shell module-page">
+    <main class="app-shell module-page absence-page">
       ${userBar(user)}
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
@@ -1022,9 +1032,9 @@ function absenceModulePage(moduleItem, user, isDashboard = false) {
       <section class="absence-hero" aria-labelledby="absence-title">
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div>
-          <div class="module-detail__eyebrow">Modul</div>
+          <div class="module-detail__eyebrow">SMART ODPADY / DOVOLENÁ A NEMOC</div>
           <h1 id="absence-title">Dovolená / Nemoc</h1>
-          <p>Jednoduchá evidence dovolené, nemoci, lékaře, OČR a náhradního volna pro provoz Kaiser.</p>
+          <p>Jedno místo pro žádosti o dovolenou, nemoc, lékaře, OČR a náhradní volno.</p>
         </div>
         <div class="absence-hero__meta">
           <span>Report</span>
@@ -1048,6 +1058,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false) {
       ${absenceUiState.message ? `<p class="module-feedback__notice">${escapeHtml(absenceUiState.message)}</p>` : ""}
       ${absenceUiState.error ? `<p class="module-feedback__error">${escapeHtml(absenceUiState.error)}</p>` : ""}
       ${absenceActiveContent(activeTab, user)}
+      ${feedbackBox}
     </main>
   `;
 }
