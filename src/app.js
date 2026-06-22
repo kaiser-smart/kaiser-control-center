@@ -401,11 +401,36 @@ function statusPill(user) {
   return `<span class="access-status ${active ? "access-status--active" : "access-status--disabled"}">${activeStatusLabel(user)}</span>`;
 }
 
-function accessNotice() {
+function accessFeedbackMessage(extraClass = "", target = "") {
+  const message = accessState.error || accessState.message;
+
+  if (!message) {
+    return "";
+  }
+
+  if (target && accessState.feedbackTarget && accessState.feedbackTarget !== target) {
+    return "";
+  }
+
+  const toneClass = accessState.error ? "module-feedback__error" : "module-feedback__notice";
+  const role = accessState.error ? "alert" : "status";
+  const className = [toneClass, extraClass].filter(Boolean).join(" ");
+
   return `
-    ${accessState.message ? `<p class="module-feedback__notice access-notice">${escapeHtml(accessState.message)}</p>` : ""}
-    ${accessState.error ? `<p class="module-feedback__error access-notice">${escapeHtml(accessState.error)}</p>` : ""}
+    <p class="${className}" role="${role}" aria-live="polite">${escapeHtml(message)}</p>
   `;
+}
+
+function accessNotice() {
+  return accessFeedbackMessage("access-notice");
+}
+
+function accessInlineNotice(target) {
+  return accessFeedbackMessage("access-inline-notice", target);
+}
+
+function accessToast() {
+  return accessFeedbackMessage("access-toast");
 }
 
 function permissionsMatrixTable({ namePrefix, permissions, roleId = "", disabled = false }) {
@@ -465,7 +490,8 @@ function upsertLocalAccessUser(user) {
     users: [...users, user],
     selectedUserId: user.id,
     message: "Uživatel byl uložen lokálně.",
-    error: ""
+    error: "",
+    feedbackTarget: "user"
   });
 }
 
@@ -554,6 +580,7 @@ function accessUserForm(user, canEditUsers) {
             </button>
           ` : '<p class="permissions-note">Máte pouze čtení správy uživatelů.</p>'}
         </div>
+        ${accessInlineNotice("user")}
       </form>
     </section>
   `;
@@ -618,6 +645,7 @@ function rolesManagementSection(canManageRoles) {
               ? '<p class="permissions-note">Plnou roli v testovacím režimu nejde omezit.</p>'
               : '<p class="permissions-note">Výchozí oprávnění role může měnit pouze uživatel s právem spravovat uživatele.</p>'}
           </div>
+          ${accessInlineNotice("role")}
         </form>
       ` : ""}
     </section>
@@ -798,6 +826,7 @@ function usersManagementSection() {
 
   return `
     ${accessNotice()}
+    ${accessToast()}
     ${adminUsersState.error ? `<section class="users-panel"><p class="login-error">${escapeHtml(adminUsersState.error)}</p></section>` : ""}
     <section class="users-panel" aria-labelledby="users-title">
       <div class="users-panel__head">
@@ -2327,17 +2356,18 @@ function canManageAccessRoles() {
   return hasPermission(currentUser(), "users", "manage");
 }
 
-function setAccessError(error) {
+function setAccessError(error, feedbackTarget = "") {
   setAccessState({
     ...accessState,
     message: "",
-    error
+    error,
+    feedbackTarget
   });
 }
 
 function saveAccessUserForm(form) {
   if (!canEditAccessUsers()) {
-    setAccessError("Nemáte oprávnění upravovat uživatele.");
+    setAccessError("Nemáte oprávnění upravovat uživatele.", "user");
     render();
     return;
   }
@@ -2352,13 +2382,13 @@ function saveAccessUserForm(form) {
   const active = Boolean(form.elements.active?.checked);
 
   if (!name) {
-    setAccessError("Vyplňte jméno uživatele.");
+    setAccessError("Vyplňte jméno uživatele.", "user");
     render();
     return;
   }
 
   if (!email && !phone) {
-    setAccessError("Vyplňte alespoň e-mail nebo telefon.");
+    setAccessError("Vyplňte alespoň e-mail nebo telefon.", "user");
     render();
     return;
   }
@@ -2366,7 +2396,7 @@ function saveAccessUserForm(form) {
   const signedUserId = String(currentUser()?.id || "").trim().toLowerCase();
   const targetUserId = String(sourceUser.id || form.dataset.userId || "").trim().toLowerCase();
   if (!active && signedUserId && signedUserId === targetUserId) {
-    setAccessError("Vlastní účet v mock režimu nejde vypnout, abyste se nezamkli mimo správu.");
+    setAccessError("Vlastní účet v mock režimu nejde vypnout, abyste se nezamkli mimo správu.", "user");
     render();
     return;
   }
@@ -2377,7 +2407,7 @@ function saveAccessUserForm(form) {
     isFullAccessRole(currentUser()) &&
     !isFullAccessRole({ role, active: true })
   ) {
-    setAccessError("Vlastní účet s plným přístupem nejde v testovacím režimu změnit na omezenou roli.");
+    setAccessError("Vlastní účet s plným přístupem nejde v testovacím režimu změnit na omezenou roli.", "user");
     render();
     return;
   }
@@ -2403,14 +2433,14 @@ function saveAccessUserForm(form) {
 
 function saveAccessRoleForm(form) {
   if (!canManageAccessRoles()) {
-    setAccessError("Nemáte oprávnění upravovat role.");
+    setAccessError("Nemáte oprávnění upravovat role.", "role");
     render();
     return;
   }
 
   const roleId = normalizeRole(form.dataset.roleId);
   if (isFullAccessRole({ role: roleId, active: true })) {
-    setAccessError("Admin a Management mají v testovacím režimu vždy plná práva a nejde je omezit.");
+    setAccessError("Admin a Management mají v testovacím režimu vždy plná práva a nejde je omezit.", "role");
     render();
     return;
   }
@@ -2430,14 +2460,15 @@ function saveAccessRoleForm(form) {
     roles,
     selectedRoleId: roleId,
     message: "Výchozí oprávnění role byla uložena lokálně.",
-    error: ""
+    error: "",
+    feedbackTarget: "role"
   });
   render();
 }
 
 function createAccessUser() {
   if (!canEditAccessUsers()) {
-    setAccessError("Nemáte oprávnění přidávat uživatele.");
+    setAccessError("Nemáte oprávnění přidávat uživatele.", "user");
     render();
     return;
   }
@@ -2467,7 +2498,7 @@ function selectAccessUser(userId) {
   const user = findAccessUser(userId);
 
   if (!user) {
-    setAccessError("Uživatel nebyl nalezen.");
+    setAccessError("Uživatel nebyl nalezen.", "user");
     render();
     return;
   }
@@ -2476,7 +2507,8 @@ function selectAccessUser(userId) {
     ...accessState,
     selectedUserId: user.id,
     message: "",
-    error: ""
+    error: "",
+    feedbackTarget: ""
   });
   render();
   focusAccessUserEditor();
@@ -2487,28 +2519,29 @@ function selectAccessRole(roleId) {
     ...accessState,
     selectedRoleId: normalizeRole(roleId),
     message: "",
-    error: ""
+    error: "",
+    feedbackTarget: ""
   });
   render();
 }
 
 function setAccessUserActive(userId, active) {
   if (!canEditAccessUsers()) {
-    setAccessError("Nemáte oprávnění měnit stav uživatele.");
+    setAccessError("Nemáte oprávnění měnit stav uživatele.", "user");
     render();
     return;
   }
 
   const signedUserId = String(currentUser()?.id || "").trim().toLowerCase();
   if (!active && signedUserId && signedUserId === String(userId || "").trim().toLowerCase()) {
-    setAccessError("Vlastní účet v mock režimu nejde vypnout, abyste se nezamkli mimo správu.");
+    setAccessError("Vlastní účet v mock režimu nejde vypnout, abyste se nezamkli mimo správu.", "user");
     render();
     return;
   }
 
   const user = findAccessUser(userId);
   if (!user) {
-    setAccessError("Uživatel nebyl nalezen.");
+    setAccessError("Uživatel nebyl nalezen.", "user");
     render();
     return;
   }
@@ -2524,14 +2557,14 @@ function setAccessUserActive(userId, active) {
 
 function resetAccessUserPermissions(userId) {
   if (!canEditAccessUsers()) {
-    setAccessError("Nemáte oprávnění měnit oprávnění uživatele.");
+    setAccessError("Nemáte oprávnění měnit oprávnění uživatele.", "user");
     render();
     return;
   }
 
   const user = findAccessUser(userId);
   if (!user) {
-    setAccessError("Uživatel nebyl nalezen.");
+    setAccessError("Uživatel nebyl nalezen.", "user");
     render();
     return;
   }
@@ -2565,7 +2598,7 @@ function changeAccessUserRole(select) {
     isFullAccessRole(currentUser()) &&
     !isFullAccessRole({ role, active: true })
   ) {
-    setAccessError("Vlastní účet s plným přístupem nejde v testovacím režimu změnit na omezenou roli.");
+    setAccessError("Vlastní účet s plným přístupem nejde v testovacím režimu změnit na omezenou roli.", "user");
     render();
     return;
   }
