@@ -1,4 +1,5 @@
 import { DEFAULT_USERS } from "./default-users.js";
+import { hasPermission, isUserActive } from "../../src/permissions.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -65,11 +66,14 @@ export function publicUser(user) {
     phone: user.phone,
     role: user.role,
     status: user.status,
+    active: user.active,
     department: user.department,
     position: user.position,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
-    modules: user.modules
+    modules: user.modules,
+    allowedModules: user.allowedModules,
+    deniedModules: user.deniedModules
   };
 }
 
@@ -159,11 +163,13 @@ export async function findAllowedUser(env, identifier) {
   }
 
   const users = await getUsers(env);
-  return users.find((user) => {
-    const email = normalizeIdentifier(user.email);
-    const phone = normalizeIdentifier(user.phone);
+  const user = users.find((item) => {
+    const email = normalizeIdentifier(item.email);
+    const phone = normalizeIdentifier(item.phone);
     return email === normalized || (phone && phone === normalized);
   }) || null;
+
+  return isUserActive(user) ? user : null;
 }
 
 export function checkRateLimit(key, limit = 8, windowMs = 10 * 60 * 1000) {
@@ -282,7 +288,7 @@ export async function currentUser(env, request) {
   const users = await getUsers(env);
   const user = users.find((item) => item.id === session.sub);
 
-  if (!user || user.status !== "active") {
+  if (!isUserActive(user)) {
     return null;
   }
 
@@ -290,13 +296,17 @@ export async function currentUser(env, request) {
 }
 
 export async function requireAdmin(env, request) {
+  return requireUserPermission(env, request, "*", "*");
+}
+
+export async function requireUserPermission(env, request, moduleId, action = "view") {
   const user = await currentUser(env, request);
 
   if (!user) {
     return { user: null, response: json({ error: "Nepřihlášeno." }, 401) };
   }
 
-  if (user.role !== "admin") {
+  if (!hasPermission(user, moduleId, action)) {
     return { user, response: json({ error: "Nemáte oprávnění." }, 403) };
   }
 

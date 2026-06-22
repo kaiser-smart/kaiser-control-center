@@ -23,7 +23,7 @@ export async function onRequestPost({ request, env }) {
 
   const user = await findAllowedUser(env, normalized);
 
-  if (!user || user.status !== "active") {
+  if (!user) {
     console.log("auth.start.ignored", { identifierType: normalized.includes("@") ? "email" : "phone" });
     return json({ ok: true });
   }

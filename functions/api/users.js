@@ -1,7 +1,7 @@
-import { getUsers, json, publicUser, readJson, requireAdmin } from "../_lib/auth.js";
+import { getUsers, json, publicUser, readJson, requireUserPermission } from "../_lib/auth.js";
 
 export async function onRequestGet({ request, env }) {
-  const { response } = await requireAdmin(env, request);
+  const { response } = await requireUserPermission(env, request, "users", "view");
 
   if (response) {
     return response;
@@ -12,7 +12,7 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPost({ request, env }) {
-  const { response } = await requireAdmin(env, request);
+  const { response } = await requireUserPermission(env, request, "users", "edit");
 
   if (response) {
     return response;

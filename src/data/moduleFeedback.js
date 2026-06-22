@@ -1,3 +1,5 @@
+import { hasPermission } from "../permissions.js";
+
 const STORAGE_KEY = "smart_odpady_module_feedback_v1";
 
 export const FEEDBACK_PRIORITIES = ["Nízká", "Běžná", "Důležitá", "Kritická"];
@@ -42,7 +44,7 @@ function normalizeFeedback(item) {
 }
 
 export function canManageFeedback(user) {
-  return ["admin", "management"].includes(user?.role);
+  return hasPermission(user, "feedback", "edit") || hasPermission(user, "feedback", "manage");
 }
 
 export function readModuleFeedback() {

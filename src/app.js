@@ -51,6 +51,12 @@ import {
   updateModuleFeedback,
   visibleFeedbackForUser
 } from "./data/moduleFeedback.js";
+import {
+  canViewModule,
+  filterModulesByUser,
+  hasPermission,
+  roleLabel
+} from "./permissions.js";
 
 const app = document.querySelector("#app");
 const orderedModules = [...modules].sort((a, b) => a.order - b.order);
@@ -75,33 +81,6 @@ const FEEDBACK_ROUTE = "/pripominky";
 const basePath = new URL(document.querySelector("base")?.href || "/", window.location.origin)
   .pathname
   .replace(/\/$/, "");
-
-const roleLabels = {
-  admin: "Admin",
-  management: "Management",
-  garage_master: "Garážmistr",
-  driver: "Řidič",
-  readonly: "Readonly"
-};
-
-const roleModuleAccess = {
-  admin: "all",
-  management: [
-    "dashboard",
-    "fleet",
-    "driver-reports",
-    "service-maintenance",
-    "tyres",
-    "absence",
-    "collection-routes",
-    "sampling-routes",
-    "costs",
-    "reports"
-  ],
-  garage_master: ["fleet", "driver-reports", "service-maintenance", "tyres", "absence", "costs"],
-  driver: ["driver-reports", "fleet", "collection-routes", "absence"],
-  readonly: ["dashboard", "fleet", "service-maintenance", "tyres", "absence", "collection-routes", "costs", "reports"]
-};
 
 let authState = {
   status: "loading",
@@ -182,37 +161,14 @@ function statusBadge(moduleItem) {
   return '<span class="status-badge">HOTOVO</span>';
 }
 
-function roleLabel(role) {
-  return roleLabels[role] || "Uživatel";
-}
-
-function allowedModuleIds(user) {
-  if (!user) {
-    return new Set();
-  }
-
-  if (Array.isArray(user.modules) && user.modules.length > 0) {
-    return new Set(user.modules);
-  }
-
-  const access = roleModuleAccess[user.role] || roleModuleAccess.readonly;
-
-  if (access === "all") {
-    return new Set(orderedModules.map((moduleItem) => moduleItem.id));
-  }
-
-  return new Set(access);
-}
-
 function visibleModules(user) {
-  const allowed = allowedModuleIds(user);
-  return orderedModules.filter((moduleItem) => allowed.has(moduleItem.id));
+  return filterModulesByUser(user, orderedModules);
 }
 
 function menuModules(user) {
   const items = visibleModules(user);
 
-  if (canManageFeedback(user)) {
+  if (canViewModule(user, feedbackMenuItem.id)) {
     return [...items, feedbackMenuItem];
   }
 
@@ -220,13 +176,29 @@ function menuModules(user) {
 }
 
 function visibleDashboardRoutes(user) {
-  const allowed = allowedModuleIds(user);
-  return moduleDashboards.filter((moduleItem) => allowed.has(moduleItem.id));
+  return filterModulesByUser(user, moduleDashboards);
 }
 
 function moduleFeedbackItems(moduleId, user) {
   const items = readModuleFeedback().filter((item) => item.moduleId === moduleId);
   return visibleFeedbackForUser(items, user);
+}
+
+function moduleFeedbackBoxFor(moduleItem, user) {
+  if (!hasPermission(user, "feedback", "create")) {
+    return "";
+  }
+
+  const feedbackState = feedbackFormState[moduleItem.id] || {};
+
+  return ModuleFeedbackBox({
+    moduleId: moduleItem.id,
+    moduleName: moduleItem.title,
+    currentUser: user,
+    feedbackItems: moduleFeedbackItems(moduleItem.id, user),
+    notice: feedbackState.message || "",
+    error: feedbackState.error || ""
+  });
 }
 
 function formatDateTime(value) {
@@ -514,6 +486,46 @@ function absenceTypeBadge(type) {
   return `<span class="absence-type absence-type--${tone}">${escapeHtml(type)}</span>`;
 }
 
+function canUseAbsenceTab(user, tabId) {
+  if (!canViewModule(user, "absence")) {
+    return false;
+  }
+
+  if (tabId === "new") {
+    return hasPermission(user, "absence", "create");
+  }
+
+  if (tabId === "approval") {
+    return hasPermission(user, "absence", "approve");
+  }
+
+  if (tabId === "reports") {
+    return hasPermission(user, "absence", "export");
+  }
+
+  if (tabId === "settings") {
+    return hasPermission(user, "absence", "manage");
+  }
+
+  return true;
+}
+
+function absenceTabsForUser(user) {
+  return ABSENCE_TABS.filter((tab) => canUseAbsenceTab(user, tab.id));
+}
+
+function resolveAbsenceTab(user, tabId) {
+  return canUseAbsenceTab(user, tabId) ? tabId : "dashboard";
+}
+
+function permissionInlineNotice() {
+  return `
+    <section class="absence-panel">
+      <p class="absence-empty">Nemáte oprávnění k této akci.</p>
+    </section>
+  `;
+}
+
 function absenceFilterPanel(user, mode = "calendar") {
   const employeeOptions = absenceEmployeeOptions(absenceState, user).map((employee) => ({
     value: employee.id,
@@ -634,6 +646,9 @@ function absenceDashboard(user) {
   const summary = absenceSummary(absenceState, user);
   const balance = absenceBalanceForEmployee(absenceState, employeeIdForUser(user));
   const pending = approvalAbsenceRequests(absenceState, user);
+  const newRequestButton = hasPermission(user, "absence", "create")
+    ? '<button class="primary-action" type="button" data-absence-tab="new">Nová žádost</button>'
+    : "";
 
   return `
     <section class="absence-dashboard" aria-label="Dashboard Dovolená / Nemoc">
@@ -657,7 +672,7 @@ function absenceDashboard(user) {
         <article class="absence-kpi absence-kpi--action">
           <span>Moje zbývající dovolená</span>
           <strong>${balance.vacationRemainingDays}</strong>
-          <button class="primary-action" type="button" data-absence-tab="new">Nová žádost</button>
+          ${newRequestButton}
         </article>
       </div>
 
@@ -690,6 +705,9 @@ function absenceMyRequests(user) {
   const visibleLabel = canSeeAllAbsences(user)
     ? "Tady vidíte svoje žádosti. V reportech a kalendáři vidíte i ostatní."
     : "Tady vidíte svoje žádosti a hlášení.";
+  const newRequestButton = hasPermission(user, "absence", "create")
+    ? '<button class="primary-action" type="button" data-absence-tab="new">Nová žádost</button>'
+    : "";
 
   return `
     <section class="absence-panel">
@@ -698,7 +716,7 @@ function absenceMyRequests(user) {
           <h2>Moje žádosti</h2>
           <p>${visibleLabel}</p>
         </div>
-        <button class="primary-action" type="button" data-absence-tab="new">Nová žádost</button>
+        ${newRequestButton}
       </div>
       ${absenceRequestsTable(requests, user, "Zatím nemáte žádnou žádost.")}
     </section>
@@ -706,6 +724,10 @@ function absenceMyRequests(user) {
 }
 
 function absenceNewRequest(user) {
+  if (!hasPermission(user, "absence", "create")) {
+    return permissionInlineNotice();
+  }
+
   const employees = absenceEmployeeOptions(absenceState, user);
   const currentEmployeeId = employeeIdForUser(user);
   const employeeOptions = employees.map((employee) => ({
@@ -787,6 +809,10 @@ function absenceNewRequest(user) {
 }
 
 function absenceApproval(user) {
+  if (!hasPermission(user, "absence", "approve")) {
+    return permissionInlineNotice();
+  }
+
   const requests = approvalAbsenceRequests(absenceState, user);
 
   return `
@@ -871,6 +897,10 @@ function absenceCalendar(user) {
 }
 
 function absenceReports(user) {
+  if (!hasPermission(user, "absence", "export")) {
+    return permissionInlineNotice();
+  }
+
   const reportRequests = filterAbsenceRequests(visibleAbsenceRequests(absenceState, user), {
     type: absenceUiState.typeFilter,
     employeeId: absenceUiState.employeeFilter,
@@ -944,7 +974,11 @@ function absenceReports(user) {
   `;
 }
 
-function absenceSettings() {
+function absenceSettings(user) {
+  if (!hasPermission(user, "absence", "manage")) {
+    return permissionInlineNotice();
+  }
+
   const settings = absenceState.settings;
 
   return `
@@ -982,27 +1016,29 @@ function absenceSettings() {
 }
 
 function absenceActiveContent(activeTab, user) {
-  if (activeTab === "my") {
+  const safeTab = resolveAbsenceTab(user, activeTab);
+
+  if (safeTab === "my") {
     return absenceMyRequests(user);
   }
 
-  if (activeTab === "new") {
+  if (safeTab === "new") {
     return absenceNewRequest(user);
   }
 
-  if (activeTab === "approval") {
+  if (safeTab === "approval") {
     return absenceApproval(user);
   }
 
-  if (activeTab === "calendar") {
+  if (safeTab === "calendar") {
     return absenceCalendar(user);
   }
 
-  if (activeTab === "reports") {
+  if (safeTab === "reports") {
     return absenceReports(user);
   }
 
-  if (activeTab === "settings") {
+  if (safeTab === "settings") {
     return absenceSettings(user);
   }
 
@@ -1010,16 +1046,9 @@ function absenceActiveContent(activeTab, user) {
 }
 
 function absenceModulePage(moduleItem, user, isDashboard = false) {
-  const activeTab = isDashboard ? "dashboard" : absenceUiState.tab;
-  const feedbackState = feedbackFormState[moduleItem.id] || {};
-  const feedbackBox = ModuleFeedbackBox({
-    moduleId: moduleItem.id,
-    moduleName: moduleItem.title,
-    currentUser: user,
-    feedbackItems: moduleFeedbackItems(moduleItem.id, user),
-    notice: feedbackState.message || "",
-    error: feedbackState.error || ""
-  });
+  const activeTab = resolveAbsenceTab(user, isDashboard ? "dashboard" : absenceUiState.tab);
+  const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
+  const tabs = absenceTabsForUser(user);
 
   return `
     <main class="app-shell module-page absence-page">
@@ -1044,7 +1073,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false) {
       </section>
 
       <nav class="absence-tabs" aria-label="Menu modulu Dovolená / Nemoc">
-        ${ABSENCE_TABS.map((tab) => `
+        ${tabs.map((tab) => `
           <button
             class="absence-tab ${tab.id === activeTab ? "absence-tab--active" : ""}"
             type="button"
@@ -1084,15 +1113,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
       `
     : "";
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
-  const feedbackState = feedbackFormState[moduleItem.id] || {};
-  const feedbackBox = ModuleFeedbackBox({
-    moduleId: moduleItem.id,
-    moduleName: moduleItem.title,
-    currentUser: user,
-    feedbackItems: moduleFeedbackItems(moduleItem.id, user),
-    notice: feedbackState.message || "",
-    error: feedbackState.error || ""
-  });
+  const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
 
   return `
     <main class="app-shell module-page">
@@ -1152,7 +1173,7 @@ function priorityTone(priority) {
   }[priority] || "normal";
 }
 
-function feedbackAdminItem(item) {
+function feedbackAdminItem(item, canEdit) {
   return `
     <article class="feedback-ticket">
       <header class="feedback-ticket__header">
@@ -1180,39 +1201,44 @@ function feedbackAdminItem(item) {
         </div>
       </dl>
 
-      <div class="feedback-ticket__controls">
-        <label class="module-feedback__field">
-          <span>Stav</span>
-          <select data-feedback-status data-feedback-id="${escapeHtml(item.id)}">
-            ${FEEDBACK_STATUSES.map((status) => `
-              <option value="${escapeHtml(status)}" ${status === item.status ? "selected" : ""}>${escapeHtml(status)}</option>
-            `).join("")}
-          </select>
-        </label>
-        <label class="module-feedback__field module-feedback__field--message">
-          <span>Interní poznámka</span>
-          <textarea
-            rows="3"
-            data-feedback-note
-            data-feedback-id="${escapeHtml(item.id)}"
-            placeholder="Interní poznámka pro admin/management"
-          >${escapeHtml(item.internalNote)}</textarea>
-        </label>
-      </div>
+      ${canEdit ? `
+        <div class="feedback-ticket__controls">
+          <label class="module-feedback__field">
+            <span>Stav</span>
+            <select data-feedback-status data-feedback-id="${escapeHtml(item.id)}">
+              ${FEEDBACK_STATUSES.map((status) => `
+                <option value="${escapeHtml(status)}" ${status === item.status ? "selected" : ""}>${escapeHtml(status)}</option>
+              `).join("")}
+            </select>
+          </label>
+          <label class="module-feedback__field module-feedback__field--message">
+            <span>Interní poznámka</span>
+            <textarea
+              rows="3"
+              data-feedback-note
+              data-feedback-id="${escapeHtml(item.id)}"
+              placeholder="Interní poznámka pro kancelář / management"
+            >${escapeHtml(item.internalNote)}</textarea>
+          </label>
+        </div>
+      ` : ""}
     </article>
   `;
 }
 
 function feedbackPage(user) {
   const allFeedback = readModuleFeedback();
-  const summary = feedbackSummary(allFeedback);
-  const filteredFeedback = filterModuleFeedback(allFeedback, feedbackFilters);
+  const visibleFeedback = visibleFeedbackForUser(allFeedback, user);
+  const summary = feedbackSummary(visibleFeedback);
+  const filteredFeedback = filterModuleFeedback(visibleFeedback, feedbackFilters);
+  const canEdit = canManageFeedback(user);
+  const canExport = hasPermission(user, "feedback", "export");
   const moduleOptions = orderedModules.map((moduleItem) => ({
     value: moduleItem.id,
     label: moduleItem.title
   }));
   const items = filteredFeedback
-    .map(feedbackAdminItem)
+    .map((item) => feedbackAdminItem(item, canEdit))
     .join("");
 
   return `
@@ -1230,9 +1256,11 @@ function feedbackPage(user) {
             <h1 id="feedback-title">Připomínky</h1>
             <p>Seznam připomínek k modulům, jejich stavů, priorit a interních poznámek.</p>
           </div>
-          <button class="primary-action feedback-admin__export" type="button" data-feedback-export>
-            Export CSV
-          </button>
+          ${canExport ? `
+            <button class="primary-action feedback-admin__export" type="button" data-feedback-export>
+              Export CSV
+            </button>
+          ` : ""}
         </div>
 
         <div class="feedback-stats" aria-label="Dashboard připomínek">
@@ -1310,8 +1338,9 @@ function forbiddenPage(user) {
       <section class="module-detail" aria-labelledby="module-title">
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">Oprávnění</div>
-          <h1 id="module-title">Nemáte přístup</h1>
-          <p>Tento modul není pro vaši roli dostupný.</p>
+          <h1 id="module-title">Nemáte oprávnění</h1>
+          <p>Nemáte oprávnění k této části systému.</p>
+          <p>Pokud přístup potřebujete, obraťte se na kancelář nebo administrátora.</p>
         </div>
       </section>
     </main>
@@ -1462,7 +1491,7 @@ async function logout() {
 }
 
 async function loadAdminUsers() {
-  if (adminUsersState.loaded || adminUsersState.loading || authState.user?.role !== "admin") {
+  if (adminUsersState.loaded || adminUsersState.loading || !hasPermission(authState.user, "users", "view")) {
     return;
   }
 
@@ -1493,7 +1522,7 @@ function renderAuthenticatedApp(user) {
   }
 
   if (path === FEEDBACK_ROUTE) {
-    if (!canManageFeedback(user)) {
+    if (!canViewModule(user, "feedback")) {
       app.innerHTML = forbiddenPage(user);
       document.title = `Bez oprávnění | ${APP_NAME}`;
       return;
@@ -1509,7 +1538,7 @@ function renderAuthenticatedApp(user) {
     app.innerHTML = modulePage(moduleItem, user);
     document.title = `${moduleItem.title} | ${APP_NAME}`;
 
-    if (moduleItem.id === "users") {
+    if (moduleItem.id === "users" && hasPermission(user, "users", "view")) {
       loadAdminUsers();
     }
     return;
@@ -1576,6 +1605,15 @@ async function bootstrapAuth() {
 }
 
 function submitModuleFeedback(form) {
+  if (!hasPermission(authState.user, "feedback", "create")) {
+    feedbackFormState[form.dataset.moduleId || ""] = {
+      message: "",
+      error: "Nemáte oprávnění odeslat připomínku."
+    };
+    render();
+    return;
+  }
+
   const moduleId = form.dataset.moduleId || "";
   const moduleName = form.dataset.moduleName || "";
   const message = form.elements.message.value;
@@ -1613,10 +1651,14 @@ function applyFeedbackFilters(form) {
 }
 
 function currentFilteredFeedback() {
-  return filterModuleFeedback(readModuleFeedback(), feedbackFilters);
+  return filterModuleFeedback(visibleFeedbackForUser(readModuleFeedback(), authState.user), feedbackFilters);
 }
 
 function exportFeedbackCsv() {
+  if (!hasPermission(authState.user, "feedback", "export")) {
+    return;
+  }
+
   const csv = moduleFeedbackToCsv(currentFilteredFeedback());
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -1651,6 +1693,12 @@ function downloadCsv(filename, csv) {
 }
 
 function submitAbsenceRequest(form) {
+  if (!hasPermission(authState.user, "absence", "create")) {
+    setAbsenceNotice("", "Nemáte oprávnění vytvořit žádost.");
+    render();
+    return;
+  }
+
   const type = form.elements.type.value;
   const dateFrom = form.elements.dateFrom.value;
   const dateTo = form.elements.dateTo.value;
@@ -1691,6 +1739,12 @@ function submitAbsenceRequest(form) {
 }
 
 function saveAbsenceSettings(form) {
+  if (!hasPermission(authState.user, "absence", "manage")) {
+    setAbsenceNotice("", "Nemáte oprávnění měnit nastavení.");
+    render();
+    return;
+  }
+
   const nextState = updateAbsenceSettings(absenceState, {
     recipientEmail: form.elements.recipientEmail.value.trim() || ABSENCE_REPORT_EMAIL,
     reportDay: Number(form.elements.reportDay.value || ABSENCE_REPORT_DAY),
@@ -1736,12 +1790,24 @@ function updateAbsenceFormPreview(form) {
 }
 
 function approveAbsenceRequest(requestId) {
+  if (!hasPermission(authState.user, "absence", "approve")) {
+    setAbsenceNotice("", "Nemáte oprávnění schvalovat žádosti.");
+    render();
+    return;
+  }
+
   saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Schváleno", authState.user, "Schváleno v modulu Dovolená / Nemoc."));
   setAbsenceNotice("Žádost byla schválena.");
   render();
 }
 
 function rejectAbsenceRequest(requestId) {
+  if (!hasPermission(authState.user, "absence", "approve")) {
+    setAbsenceNotice("", "Nemáte oprávnění zamítat žádosti.");
+    render();
+    return;
+  }
+
   const reason = window.prompt("Důvod zamítnutí", "");
 
   if (reason === null) {
@@ -1764,6 +1830,12 @@ function cancelAbsenceRequest(requestId) {
 }
 
 function exportAbsenceCsv() {
+  if (!hasPermission(authState.user, "absence", "export")) {
+    setAbsenceNotice("", "Nemáte oprávnění exportovat reporty.");
+    render();
+    return;
+  }
+
   const requests = filterAbsenceRequests(visibleAbsenceRequests(absenceState, authState.user), {
     type: absenceUiState.typeFilter,
     employeeId: absenceUiState.employeeFilter,
@@ -1774,6 +1846,12 @@ function exportAbsenceCsv() {
 }
 
 function generateAbsenceMonthlyReport() {
+  if (!hasPermission(authState.user, "absence", "export")) {
+    setAbsenceNotice("", "Nemáte oprávnění generovat report.");
+    render();
+    return;
+  }
+
   const result = generateMonthlyAbsenceReport(absenceState, authState.user);
   saveAbsence(result.state);
   const period = `${String(result.report.periodMonth).padStart(2, "0")}-${result.report.periodYear}`;
@@ -1868,6 +1946,10 @@ document.addEventListener("change", (event) => {
 
   const statusField = event.target.closest("[data-feedback-status]");
   if (statusField) {
+    if (!canManageFeedback(authState.user)) {
+      return;
+    }
+
     updateModuleFeedback(statusField.dataset.feedbackId, { status: statusField.value }, authState.user);
     render();
     return;
@@ -1875,6 +1957,10 @@ document.addEventListener("change", (event) => {
 
   const noteField = event.target.closest("[data-feedback-note]");
   if (noteField) {
+    if (!canManageFeedback(authState.user)) {
+      return;
+    }
+
     updateModuleFeedback(noteField.dataset.feedbackId, { internalNote: noteField.value }, authState.user);
   }
 });
@@ -1882,7 +1968,8 @@ document.addEventListener("change", (event) => {
 document.addEventListener("click", (event) => {
   const absenceTab = event.target.closest("[data-absence-tab]");
   if (absenceTab) {
-    absenceUiState.tab = absenceTab.dataset.absenceTab || "dashboard";
+    const nextTab = absenceTab.dataset.absenceTab || "dashboard";
+    absenceUiState.tab = resolveAbsenceTab(authState.user, nextTab);
     setAbsenceNotice("");
     render();
     return;

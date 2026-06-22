@@ -26,7 +26,7 @@ export async function onRequestPost({ request, env }) {
 
   const user = await findAllowedUser(env, normalized);
 
-  if (!user || user.status !== "active") {
+  if (!user) {
     console.log("auth.verify.denied", { reason: "user_not_allowed" });
     return json({ error: "Přihlášení se nepodařilo." }, 401);
   }

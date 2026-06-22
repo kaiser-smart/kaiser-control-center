@@ -1,3 +1,5 @@
+import { hasPermission, normalizeRole } from "../permissions.js";
+
 export const ABSENCE_STORAGE_KEY = "smart-odpady-absence-v1";
 export const ABSENCE_REPORT_EMAIL = "kancelar@kaiserservis.cz";
 export const ABSENCE_REPORT_DAY = 1;
@@ -71,7 +73,7 @@ const MOCK_EMPLOYEES = [
     id: "martin-bartos",
     name: "Martin Bartoš",
     email: "martin.bartos@kaiser.local",
-    role: "driver",
+    role: "ridic",
     department: "Provoz",
     team: "Svoz"
   },
@@ -79,7 +81,7 @@ const MOCK_EMPLOYEES = [
     id: "lukas-malanik",
     name: "Lukáš Maláník",
     email: "lukas.malanik@kaiser.local",
-    role: "driver",
+    role: "ridic",
     department: "Provoz",
     team: "Svoz"
   },
@@ -87,7 +89,7 @@ const MOCK_EMPLOYEES = [
     id: "roman-drdlik",
     name: "Roman Drdlík",
     email: "roman.drdlik@kaiser.local",
-    role: "driver",
+    role: "ridic",
     department: "Provoz",
     team: "Svoz"
   }
@@ -176,7 +178,7 @@ function currentUserEmployee(user) {
     id: employeeIdForUser(user),
     name: user?.name || user?.email || "Uživatel",
     email: user?.email || "",
-    role: user?.role || "driver",
+    role: user?.role || "ridic",
     department: user?.department || "Provoz",
     team: user?.department || "Provoz"
   };
@@ -340,7 +342,7 @@ function seededBalances() {
   return MOCK_EMPLOYEES.map((employee, index) => {
     const used = [4, 6, 8, 3, 2, 5][index] || 0;
     const pending = [0, 0, 1.5, 3, 0, 0.5][index] || 0;
-    const entitlement = employee.role === "driver" ? 20 : 25;
+    const entitlement = normalizeRole(employee.role) === "ridic" ? 20 : 25;
 
     return {
       id: `absence-balance-${employee.id}-${year}`,
@@ -450,7 +452,7 @@ export function absenceEmployeeOptions(state, user) {
       id: request.employeeId,
       name: request.employeeName,
       email: "",
-      role: "driver",
+      role: "ridic",
       department: request.department || "Provoz",
       team: request.team || request.department || "Provoz"
     });
@@ -460,15 +462,19 @@ export function absenceEmployeeOptions(state, user) {
 }
 
 export function canSeeAllAbsences(user) {
-  return ["admin", "management", "readonly"].includes(user?.role);
+  return (
+    hasPermission(user, "absence", "edit") ||
+    hasPermission(user, "absence", "export") ||
+    normalizeRole(user?.role) === "readonly"
+  );
 }
 
 export function canApproveAbsences(user) {
-  return ["admin", "management", "garage_master"].includes(user?.role);
+  return hasPermission(user, "absence", "approve");
 }
 
 export function canSubmitAbsenceForOthers(user) {
-  return ["admin", "management"].includes(user?.role);
+  return hasPermission(user, "absence", "edit") || hasPermission(user, "absence", "manage");
 }
 
 export function canCancelAbsence(request, user) {

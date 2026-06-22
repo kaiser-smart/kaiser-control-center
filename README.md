@@ -11,7 +11,8 @@ Interní provozní systém pro správu odpadových služeb, vozového parku, ser
 - Lokální SVG komponenty ikon v `src/components/icons/`.
 - Passwordless přihlášení přes jednorázový kód.
 - Cloudflare Pages Functions pro auth API.
-- Filtrování menu podle role.
+- Centrální RBAC práva v `src/permissions.js`.
+- Filtrování menu a akcí podle role.
 - Lokální mock režim bez Twilio účtu.
 
 ## Pneumatiky
@@ -40,6 +41,20 @@ Lokální server obsahuje vývojový mock login nad kontakty z veřejné stránk
 - ověřovací kód `123456`
 
 Mock login je určený jen pro lokální vývoj.
+
+## Přístupová práva
+
+Práva jsou řízená centrálně v `src/permissions.js` přes role:
+
+- `admin`
+- `management`
+- `kancelar`
+- `garazmistr`
+- `dispecer`
+- `ridic`
+- `readonly`
+
+Každé pravidlo má tvar `moduleId:action`, například `absence:approve`, `users:edit` nebo `reports:export`. Helpery `hasPermission`, `canViewModule` a `filterModulesByUser` se používají pro menu, routy a viditelnost akcí. `deniedModules` má přednost před rolí, `allowedModules` umí přidat mimořádný view přístup a staré `modules` dál funguje jako omezení jen na vybrané moduly.
 
 ## Build
 
