@@ -1,4 +1,5 @@
 import { DEFAULT_USERS } from "./default-users.js";
+import { CONTACT_USERS } from "./contact-users.js";
 import { hasPermission, isUserActive } from "../../src/permissions.js";
 
 const encoder = new TextEncoder();
@@ -98,6 +99,10 @@ function userKey(user) {
   return email || String(user.id || "").trim().toLowerCase();
 }
 
+function userIdKey(user) {
+  return String(user?.id || "").trim().toLowerCase();
+}
+
 function mergeUser(baseUser, configuredUser) {
   const mergedUser = { ...baseUser };
 
@@ -118,22 +123,50 @@ function mergeUser(baseUser, configuredUser) {
 
 function mergeConfiguredUsers(configuredUsers) {
   const mergedUsers = new Map();
+  const idToKey = new Map();
 
-  for (const user of DEFAULT_USERS) {
+  function upsertUser(user) {
     const key = userKey(user);
-    if (key) {
-      mergedUsers.set(key, user);
+    const id = userIdKey(user);
+
+    if (!key && !id) {
+      return;
+    }
+
+    const existingKey = (key && mergedUsers.has(key) ? key : "") || (id ? idToKey.get(id) : "");
+
+    if (existingKey) {
+      const mergedUser = mergeUser(mergedUsers.get(existingKey), user);
+      const nextKey = userKey(mergedUser) || existingKey;
+
+      if (nextKey !== existingKey) {
+        mergedUsers.delete(existingKey);
+      }
+
+      mergedUsers.set(nextKey, mergedUser);
+      if (id) {
+        idToKey.set(id, nextKey);
+      }
+      return;
+    }
+
+    const nextKey = key || id;
+    mergedUsers.set(nextKey, user);
+    if (id) {
+      idToKey.set(id, nextKey);
     }
   }
 
-  for (const user of configuredUsers) {
-    const key = userKey(user);
-    if (!key) {
-      continue;
-    }
+  for (const user of DEFAULT_USERS) {
+    upsertUser(user);
+  }
 
-    const existingUser = mergedUsers.get(key);
-    mergedUsers.set(key, existingUser ? mergeUser(existingUser, user) : user);
+  for (const user of CONTACT_USERS) {
+    upsertUser(user);
+  }
+
+  for (const user of configuredUsers) {
+    upsertUser(user);
   }
 
   return [...mergedUsers.values()];
@@ -151,7 +184,7 @@ export async function getUsers(env) {
     }
   }
 
-  return DEFAULT_USERS;
+  return mergeConfiguredUsers([]);
 }
 
 export async function findAllowedUser(env, identifier) {

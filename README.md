@@ -37,7 +37,8 @@ Lokální server obsahuje vývojový mock login nad kontakty z veřejné stránk
 
 - `oplustil@kaiserservis.cz` / role admin
 - ostatní osobní kontakty z https://www.kaiserservis.cz/kontakty/ podle přiřazené role
-- uživatelé převzatí z hotového modulu Pneumatiky s přístupem pouze k modulu Pneumatiky
+- kontakty importované z `Contact.xlsx` v `functions/_lib/contact-users.js`
+- vybraní uživatelé převzatí z hotového modulu Pneumatiky
 - ověřovací kód `123456`
 
 Mock login je určený jen pro lokální vývoj.
