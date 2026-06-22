@@ -1,4 +1,4 @@
-import { versionInfo, versionStatusBadge, versionStatusText } from "../data/versionInfo.js";
+import { versionInfo, versionStatusBadge } from "../data/versionInfo.js";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -34,14 +34,10 @@ export function VersionBackupInfo() {
       </div>
       <dl class="version-backup-info__grid">
         ${infoItem("Aktuální verze", versionInfo.version)}
-        ${infoItem("Stav", versionStatusText(versionInfo.status))}
         ${infoItem("Poslední záloha", versionInfo.backupName)}
         ${infoItem("Datum zálohy", versionInfo.backupDate)}
-        ${infoItem("Pneumatiky", versionInfo.tyreModuleStatus)}
-        ${infoItem("Branch", versionInfo.branch)}
         ${infoItem("Commit", versionInfo.commit)}
       </dl>
-      <p class="version-backup-info__note">Poznámka: Modul Pneumatiky je hotový a neměnit.</p>
     </section>
   `;
 }
