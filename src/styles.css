@@ -333,11 +333,13 @@ h1 {
 .version-backup-info {
   position: relative;
   display: grid;
-  width: min(100%, 650px);
-  gap: 12px;
+  grid-template-columns: minmax(180px, 230px) minmax(0, 1fr);
+  width: 100%;
+  gap: 7px 18px;
+  align-items: center;
   overflow: hidden;
-  margin: 18px 0 0 auto;
-  padding: 14px 15px;
+  margin: 18px 0 0;
+  padding: 10px 14px 10px 16px;
   border: 1px solid rgba(36, 45, 34, 0.08);
   border-radius: 8px;
   background:
@@ -356,16 +358,17 @@ h1 {
 
 .version-backup-info__header {
   display: flex;
-  align-items: flex-start;
+  min-width: 0;
+  align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
   padding-left: 2px;
 }
 
 .version-backup-info__eyebrow {
-  margin: 0 0 4px;
+  margin: 0 0 3px;
   color: var(--kaiser-green-dark);
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 900;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -373,18 +376,18 @@ h1 {
 
 .version-backup-info h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1.2;
 }
 
 .version-backup-info__badge {
   display: inline-flex;
-  min-height: 24px;
+  min-height: 22px;
   align-items: center;
   justify-content: center;
-  padding: 0 8px;
+  padding: 0 7px;
   border-radius: 8px;
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -401,39 +404,52 @@ h1 {
 
 .version-backup-info__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px 14px;
   margin: 0;
 }
 
 .version-backup-info__item {
+  display: flex;
+  min-height: 18px;
   min-width: 0;
+  align-items: baseline;
+  gap: 5px;
 }
 
 .version-backup-info dt {
+  flex: 0 0 auto;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   font-weight: 900;
   line-height: 1.25;
   text-transform: uppercase;
 }
 
 .version-backup-info dd {
-  overflow-wrap: break-word;
-  margin: 4px 0 0;
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
   color: var(--ink);
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .version-backup-info__note {
+  grid-column: 2;
+  min-width: 0;
   margin: 0;
-  padding-top: 2px;
+  padding-top: 1px;
   color: var(--steel);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  line-height: 1.35;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .version-news-info {
@@ -928,6 +944,34 @@ h1 {
   }
 }
 
+@media (max-width: 760px) {
+  .version-backup-info {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .version-backup-info__header {
+    justify-content: flex-start;
+  }
+
+  .version-backup-info__grid {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .version-backup-info__item {
+    flex: 0 0 auto;
+    min-width: 128px;
+  }
+
+  .version-backup-info__note {
+    grid-column: 1;
+  }
+}
+
 @media (max-width: 640px) {
   .login-shell {
     align-items: start;
@@ -980,23 +1024,20 @@ h1 {
     font-size: 1.18rem;
   }
 
-  .version-backup-info {
-    width: 100%;
-    gap: 13px;
-    padding: 15px;
-  }
-
-  .version-backup-info__header {
-    align-items: center;
-  }
-
   .version-backup-info h2 {
-    font-size: 1.05rem;
+    font-size: 0.98rem;
   }
 
   .version-backup-info__grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 7px 10px;
+  }
+
+  .version-backup-info__item {
+    gap: 4px;
+  }
+
+  .version-backup-info dd {
+    white-space: nowrap;
   }
 
   .version-news-info {

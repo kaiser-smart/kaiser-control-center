@@ -27,7 +27,30 @@ export async function readJson(request) {
 
 export function normalizeIdentifier(identifier) {
   const value = String(identifier || "").trim();
-  return value.includes("@") ? value.toLowerCase() : value.replace(/\s+/g, "");
+  if (value.includes("@")) {
+    return value.toLowerCase();
+  }
+
+  const compact = value.replace(/[\s().-]+/g, "");
+  const digits = compact.replace(/\D/g, "");
+
+  if (compact.startsWith("+") && digits) {
+    return `+${digits}`;
+  }
+
+  if (compact.startsWith("00") && digits.length > 2) {
+    return `+${digits.slice(2)}`;
+  }
+
+  if (digits.length === 9) {
+    return `+420${digits}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith("420")) {
+    return `+${digits}`;
+  }
+
+  return digits ? `+${digits}` : "";
 }
 
 export function publicUser(user) {
