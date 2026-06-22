@@ -38,6 +38,7 @@ async function fileExists(filePath) {
 
 const routes = new Set([
   "/",
+  "/pripominky",
   ...modules.map((moduleItem) => moduleItem.route),
   ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)
 ]);
