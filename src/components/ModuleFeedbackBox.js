@@ -54,7 +54,8 @@ export function ModuleFeedbackBox({
   currentUser,
   feedbackItems = [],
   notice = "",
-  error = ""
+  error = "",
+  placeholder = "Např. chybí mi filtr podle SPZ, tlačítko je moc schované, potřebuji export…"
 }) {
   return `
     <section class="module-feedback" aria-labelledby="module-feedback-title-${escapeHtml(moduleId)}">
@@ -72,7 +73,7 @@ export function ModuleFeedbackBox({
           <textarea
             name="message"
             rows="4"
-            placeholder="Např. chybí mi filtr podle SPZ, tlačítko je moc schované, potřebuji export…"
+            placeholder="${escapeHtml(placeholder)}"
             required
           ></textarea>
         </label>

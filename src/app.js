@@ -184,20 +184,23 @@ function moduleFeedbackItems(moduleId, user) {
   return visibleFeedbackForUser(items, user);
 }
 
-function moduleFeedbackBoxFor(moduleItem, user) {
+function moduleFeedbackBoxFor(moduleItem, user, options = {}) {
   if (!hasPermission(user, "feedback", "create")) {
     return "";
   }
 
-  const feedbackState = feedbackFormState[moduleItem.id] || {};
+  const moduleId = options.moduleId || moduleItem.id;
+  const moduleName = options.moduleName || moduleItem.title;
+  const feedbackState = feedbackFormState[moduleId] || {};
 
   return ModuleFeedbackBox({
-    moduleId: moduleItem.id,
-    moduleName: moduleItem.title,
+    moduleId,
+    moduleName,
     currentUser: user,
-    feedbackItems: moduleFeedbackItems(moduleItem.id, user),
+    feedbackItems: moduleFeedbackItems(moduleId, user),
     notice: feedbackState.message || "",
-    error: feedbackState.error || ""
+    error: feedbackState.error || "",
+    placeholder: options.placeholder
   });
 }
 
@@ -1047,7 +1050,13 @@ function absenceActiveContent(activeTab, user) {
 
 function absenceModulePage(moduleItem, user, isDashboard = false) {
   const activeTab = resolveAbsenceTab(user, isDashboard ? "dashboard" : absenceUiState.tab);
-  const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
+  const feedbackBox = activeTab === "dashboard"
+    ? moduleFeedbackBoxFor(moduleItem, user, {
+        moduleId: "dovolena-nemoc",
+        moduleName: "Dovolená / Nemoc",
+        placeholder: "Např. chybí mi přehled zůstatku dovolené, filtr podle zaměstnance, export do PDF…"
+      })
+    : "";
   const tabs = absenceTabsForUser(user);
 
   return `
@@ -1234,7 +1243,7 @@ function feedbackPage(user) {
   const canEdit = canManageFeedback(user);
   const canExport = hasPermission(user, "feedback", "export");
   const moduleOptions = orderedModules.map((moduleItem) => ({
-    value: moduleItem.id,
+    value: moduleItem.id === "absence" ? "dovolena-nemoc" : moduleItem.id,
     label: moduleItem.title
   }));
   const items = filteredFeedback
