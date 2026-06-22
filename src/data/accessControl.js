@@ -46,6 +46,8 @@ export function normalizeAccessUser(user) {
     role: normalizeRole(user?.role || "readonly"),
     department: String(user?.department || ""),
     position: String(user?.position || ""),
+    managerId: String(user?.managerId || ""),
+    managerName: String(user?.managerName || ""),
     active,
     status: active ? "active" : "disabled",
     permissions: Array.isArray(user?.permissions) ? user.permissions.map(normalizePermission) : [],

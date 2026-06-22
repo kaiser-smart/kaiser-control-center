@@ -97,6 +97,8 @@ function publicUser(user) {
     status: user.status,
     department: user.department,
     position: user.position,
+    managerId: user.managerId,
+    managerName: user.managerName,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
     modules: user.modules,
@@ -156,6 +158,54 @@ function currentDevUser(request) {
 function findMockUser(id) {
   const normalizedId = String(id || "").trim().toLowerCase();
   return mockUsers.find((user) => String(user.id || "").trim().toLowerCase() === normalizedId) || null;
+}
+
+function normalizeManagerPayload(payload, id = "", currentUser = null, existingUser = null) {
+  if (!Object.prototype.hasOwnProperty.call(payload || {}, "managerId")) {
+    return payload;
+  }
+
+  const managerId = String(payload.managerId || "").trim();
+  const targetId = String(id || payload?.id || "").trim().toLowerCase();
+  const previousManagerId = String(existingUser?.managerId || "").trim().toLowerCase();
+
+  if (managerId.toLowerCase() !== previousManagerId && !isFullAccessRole(currentUser)) {
+    const error = new Error("Nemáte oprávnění měnit nadřízeného.");
+    error.status = 403;
+    throw error;
+  }
+
+  if (managerId && managerId.toLowerCase() === targetId) {
+    const error = new Error("Uživatel nesmí být sám sobě nadřízený.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!managerId) {
+    return {
+      ...payload,
+      managerId: "",
+      managerName: ""
+    };
+  }
+
+  const manager = mockUsers.find((user) => (
+    String(user.id || "").trim().toLowerCase() === managerId.toLowerCase() &&
+    user.active !== false &&
+    String(user.status || "active").toLowerCase() !== "disabled"
+  ));
+
+  if (!manager) {
+    const error = new Error("Vybraný nadřízený není aktivní uživatel.");
+    error.status = 400;
+    throw error;
+  }
+
+  return {
+    ...payload,
+    managerId: manager.id,
+    managerName: manager.name || ""
+  };
 }
 
 function upsertMockUser(input, id = "") {
@@ -300,7 +350,8 @@ async function handleApi(request, response) {
     }
 
     try {
-      const payload = await readJsonBody(request);
+      const rawPayload = await readJsonBody(request);
+      const payload = normalizeManagerPayload(rawPayload, rawPayload?.id || "", user);
       const savedUser = upsertMockUser(payload);
       sendJson(response, 201, { user: publicUser(savedUser) });
     } catch (error) {
@@ -323,7 +374,12 @@ async function handleApi(request, response) {
 
     try {
       const id = decodeURIComponent(userPatchMatch[1]);
-      const payload = await readJsonBody(request);
+      const existingUser = findMockUser(id);
+      if (!existingUser) {
+        sendJson(response, 404, { error: "Uživatel nebyl nalezen." });
+        return true;
+      }
+      const payload = normalizeManagerPayload(await readJsonBody(request), id, user, existingUser);
       const blockedMessage = blocksCurrentDevUser(user, payload, id);
 
       if (blockedMessage) {

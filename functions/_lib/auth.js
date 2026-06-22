@@ -71,6 +71,8 @@ export function publicUser(user) {
     active: user.active,
     department: user.department,
     position: user.position,
+    managerId: user.managerId,
+    managerName: user.managerName,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
     modules: user.modules,

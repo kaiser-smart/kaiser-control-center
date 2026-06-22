@@ -115,6 +115,11 @@ const adminUsersState = {
   error: ""
 };
 
+const accessManagerState = {
+  savingUserId: "",
+  pendingManagerId: ""
+};
+
 let accessState = loadAccessState();
 
 const feedbackFormState = {};
@@ -607,6 +612,63 @@ function statusPill(user) {
   return `<span class="access-status ${active ? "access-status--active" : "access-status--disabled"}">${activeStatusLabel(user)}</span>`;
 }
 
+function canEditManagers() {
+  return isFullAccessRole(currentUser());
+}
+
+function managerLabel(user, users) {
+  const managerId = String(user?.managerId || "").trim().toLowerCase();
+
+  if (!managerId) {
+    return "Bez nadřízeného";
+  }
+
+  const manager = users.find((item) => String(item.id || "").trim().toLowerCase() === managerId);
+  return manager?.name || user?.managerName || "Bez nadřízeného";
+}
+
+function managerSelectOptions(targetUser, users) {
+  const selectedManagerId = String(targetUser?.managerId || "");
+  const targetUserId = String(targetUser?.id || "").trim().toLowerCase();
+  const options = users.filter((user) => (
+    user.active !== false &&
+    String(user.status || "active").toLowerCase() !== "disabled" &&
+    String(user.id || "").trim().toLowerCase() !== targetUserId
+  ));
+
+  return [
+    `<option value="" ${!selectedManagerId ? "selected" : ""}>Bez nadřízeného</option>`,
+    ...options.map((user) => {
+      const selected = String(user.id || "") === selectedManagerId ? "selected" : "";
+      return `<option value="${escapeHtml(user.id)}" ${selected}>${escapeHtml(user.name || user.email || "Bez jména")}</option>`;
+    })
+  ].join("");
+}
+
+function managerCell(user, users, editable) {
+  const isSaving = String(accessManagerState.savingUserId || "") === String(user.id || "");
+  const value = isSaving ? accessManagerState.pendingManagerId : String(user.managerId || "");
+
+  if (!editable) {
+    return `<span class="manager-readonly">${escapeHtml(managerLabel(user, users))}</span>`;
+  }
+
+  return `
+    <label class="manager-cell">
+      <select
+        class="manager-select"
+        aria-label="Nadřízený uživatele ${escapeHtml(user.name || user.email || "")}"
+        data-access-manager-select
+        data-access-manager-user="${escapeHtml(user.id)}"
+        ${isSaving ? "disabled" : ""}
+      >
+        ${managerSelectOptions({ ...user, managerId: value }, users)}
+      </select>
+      ${isSaving ? '<span class="manager-cell__saving">Ukládám…</span>' : ""}
+    </label>
+  `;
+}
+
 function accessFeedbackMessage(extraClass = "", target = "") {
   const message = accessState.error || accessState.message;
 
@@ -1009,6 +1071,7 @@ function usersManagementSection() {
   const selectedUser = selectedAccessUser(users);
   const canEditUsers = hasPermission(user, "users", "edit") || hasPermission(user, "users", "manage");
   const canManageRoles = hasPermission(user, "users", "manage");
+  const canEditManagerColumn = canEditManagers();
 
   const rows = users
     .map(
@@ -1017,6 +1080,7 @@ function usersManagementSection() {
           <td data-label="Jméno"><strong>${escapeHtml(user.name || "Bez jména")}</strong></td>
           <td data-label="Kontakt">${stackedCell(user.email, user.phone)}</td>
           <td data-label="Role">${escapeHtml(roleLabel(user.role))}</td>
+          <td data-label="Nadřízený">${managerCell(user, users, canEditManagerColumn)}</td>
           <td data-label="Stav">${statusPill(user)}</td>
           <td data-label="Poslední přihlášení">${formatDateTime(user.lastLoginAt)}</td>
           <td data-label="Akce">
@@ -1041,7 +1105,7 @@ function usersManagementSection() {
     )
     .join("") || `
       <tr>
-        <td colspan="6">Zatím tu není žádný uživatel.</td>
+        <td colspan="7">Zatím tu není žádný uživatel.</td>
       </tr>
     `;
 
@@ -1064,6 +1128,7 @@ function usersManagementSection() {
               <th>Jméno</th>
               <th>Kontakt</th>
               <th>Role</th>
+              <th>Nadřízený</th>
               <th>Stav</th>
               <th>Poslední přihlášení</th>
               <th>Akce</th>
@@ -2769,6 +2834,89 @@ async function saveAccessUserStatus(user, active) {
   render();
 }
 
+async function saveAccessUserManager(userId, managerId) {
+  if (!canEditManagers()) {
+    setAccessError("Nemáte oprávnění měnit nadřízeného.", "user");
+    render();
+    return;
+  }
+
+  const user = findAccessUser(userId);
+  if (!user) {
+    setAccessError("Uživatel nebyl nalezen.", "user");
+    render();
+    return;
+  }
+
+  const normalizedManagerId = String(managerId || "").trim();
+  if (
+    normalizedManagerId &&
+    normalizedManagerId.toLowerCase() === String(user.id || "").trim().toLowerCase()
+  ) {
+    setAccessError("Uživatel nesmí být sám sobě nadřízený.", "user");
+    render();
+    return;
+  }
+
+  if (normalizedManagerId) {
+    const manager = allAccessUsers().find((item) => (
+      String(item.id || "").trim().toLowerCase() === normalizedManagerId.toLowerCase() &&
+      item.active !== false &&
+      String(item.status || "active").toLowerCase() !== "disabled"
+    ));
+
+    if (!manager) {
+      setAccessError("Nadřízeného se nepodařilo uložit.", "user");
+      render();
+      return;
+    }
+  }
+
+  accessManagerState.savingUserId = user.id;
+  accessManagerState.pendingManagerId = normalizedManagerId;
+  setAccessState({
+    ...accessState,
+    selectedUserId: user.id,
+    message: "Ukládám…",
+    error: "",
+    feedbackTarget: "user"
+  });
+  render();
+
+  try {
+    const result = await apiJson(`/api/users/${encodeURIComponent(user.id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ managerId: normalizedManagerId })
+    });
+    const savedUser = result.user || {
+      ...user,
+      managerId: normalizedManagerId,
+      managerName: managerLabel({ managerId: normalizedManagerId }, allAccessUsers())
+    };
+    adminUsersState.users = mergeAccessUsers(adminUsersState.users, [savedUser]);
+    if (String(authState.user?.id || "") === String(savedUser.id || "")) {
+      authState = {
+        ...authState,
+        user: savedUser
+      };
+    }
+    setAccessState({
+      ...accessState,
+      selectedUserId: savedUser.id,
+      message: "Nadřízený byl uložen.",
+      error: "",
+      feedbackTarget: "user"
+    });
+  } catch (error) {
+    console.error("smart_odpady_user_manager_save_failed", error);
+    setAccessError("Nadřízeného se nepodařilo uložit.", "user");
+  } finally {
+    accessManagerState.savingUserId = "";
+    accessManagerState.pendingManagerId = "";
+    render();
+  }
+}
+
 function saveAccessRoleForm(form) {
   if (!canManageAccessRoles()) {
     setAccessError("Nemáte oprávnění upravovat role.", "role");
@@ -2823,6 +2971,8 @@ function createAccessUser() {
     role,
     department: "",
     position: "",
+    managerId: "",
+    managerName: "",
     active: true,
     status: "active",
     permissions: userDefaultPermissions(role),
@@ -3025,6 +3175,16 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  const accessManagerSelect = event.target.closest("[data-access-manager-select]");
+  if (accessManagerSelect) {
+    const userId = accessManagerSelect.dataset.accessManagerUser;
+    const nextManagerId = accessManagerSelect.value;
+    const previousManagerId = findAccessUser(userId)?.managerId || "";
+    accessManagerSelect.value = previousManagerId;
+    guardedAccessAction(() => saveAccessUserManager(userId, nextManagerId));
+    return;
+  }
+
   const accessUserRole = event.target.closest("[data-access-user-role]");
   if (accessUserRole) {
     changeAccessUserRole(accessUserRole);
