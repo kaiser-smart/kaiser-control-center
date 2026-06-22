@@ -96,7 +96,8 @@ function publicUser(user) {
     department: user.department,
     position: user.position,
     createdAt: user.createdAt,
-    lastLoginAt: user.lastLoginAt
+    lastLoginAt: user.lastLoginAt,
+    modules: user.modules
   };
 }
 

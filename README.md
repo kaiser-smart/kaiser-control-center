@@ -36,6 +36,7 @@ Lokální server obsahuje vývojový mock login nad kontakty z veřejné stránk
 
 - `oplustil@kaiserservis.cz` / role admin
 - ostatní osobní kontakty z https://www.kaiserservis.cz/kontakty/ podle přiřazené role
+- uživatelé převzatí z hotového modulu Pneumatiky s přístupem pouze k modulu Pneumatiky
 - ověřovací kód `123456`
 
 Mock login je určený jen pro lokální vývoj.
@@ -89,7 +90,7 @@ SENDGRID_API_KEY=...
 
 V produkci se mock OTP nepovolí na větvi `main`; testovací kód `123456` je pouze pro lokální vývoj nebo neprodukční prostředí s `AUTH_MODE=mock`.
 
-Trvalé vytváření a úpravy uživatelů v admin modulu vyžadují další krok s databází, například Cloudflare D1. Aktuální první verze umí povolené uživatele bezpečně číst ze serverové konfigurace; bez vlastní `AUTH_USERS_JSON` použije výchozí veřejné kontakty Kaiser servis.
+Trvalé vytváření a úpravy uživatelů v admin modulu vyžadují další krok s databází, například Cloudflare D1. Aktuální první verze umí povolené uživatele bezpečně číst ze serverové konfigurace; bez vlastní `AUTH_USERS_JSON` použije výchozí kontakty Kaiser servis a uživatele převzaté z modulu Pneumatiky.
 
 ## Ověření buildu
 
