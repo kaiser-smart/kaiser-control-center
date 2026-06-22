@@ -15,6 +15,18 @@ export const DEFAULT_USERS = [
     lastLoginAt: null
   },
   {
+    id: "martin-konecek",
+    name: "Martin Koneček",
+    email: "martin.konecek@gmail.com",
+    phone: "777 204 462",
+    role: "admin",
+    status: "active",
+    department: "Administrace systému",
+    position: "Admin",
+    createdAt: CREATED_AT,
+    lastLoginAt: null
+  },
+  {
     id: "milan-gazi",
     name: "Milan Gaží",
     email: "gazi@kaiserservis.cz",
