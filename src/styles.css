@@ -1011,6 +1011,54 @@ h1 {
   box-shadow: 0 18px 45px rgba(31, 41, 33, 0.18);
 }
 
+.unsaved-changes-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(24, 32, 25, 0.34);
+}
+
+.unsaved-changes-modal {
+  width: min(100%, 520px);
+  padding: 24px;
+  border: 1px solid rgba(117, 189, 37, 0.28);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(31, 41, 33, 0.28);
+}
+
+.unsaved-changes-modal h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.unsaved-changes-modal p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.unsaved-changes-error {
+  padding: 12px 14px;
+  border: 1px solid rgba(168, 47, 47, 0.22);
+  border-radius: 8px;
+  background: #fff0f0;
+  color: #9d2d2d !important;
+}
+
+.unsaved-changes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 .users-actions,
 .access-form-actions {
   display: flex;
@@ -2922,7 +2970,10 @@ h1 {
 
   .users-panel__head .primary-action,
   .access-form-actions .primary-action,
-  .access-form-actions .secondary-link {
+  .access-form-actions .secondary-link,
+  .unsaved-changes-actions .primary-action,
+  .unsaved-changes-actions .secondary-link,
+  .unsaved-changes-actions .text-action {
     width: 100%;
   }
 

@@ -75,16 +75,32 @@ Přes Git příkazem:
 git push origin <nazev-vetve>
 ```
 
-Produkční větev / nasazení posílat až po výslovném potvrzení Radima.
+Produkční větev / nasazení po úspěšném ověření posílej automaticky.
 
-Po potvrzeném nasazení proveď automaticky i navazující produkční kroky, které jsou nutné pro funkčnost nasazené změny:
+Automatické nasazení platí, pokud:
+- build prošel,
+- ověření v prohlížeči prošlo,
+- nejsou chyby v konzoli,
+- není zjištěné riziko ztráty dat,
+- změna nevyžaduje tajný token, heslo nebo bezpečnostní rozhodnutí,
+- Radim výslovně neřekl, že se nasazovat nemá.
+
+Pokud automatické nasazení není bezpečné nebo není úplně ověřené, napiš Radimovi přesně:
+
+```text
+Mohu nasadit...?
+```
+
+a stručně doplň důvod, proč je potřeba potvrzení.
+
+Po nasazení proveď automaticky i navazující produkční kroky, které jsou nutné pro funkčnost nasazené změny:
 - vytvoření nebo nastavení Cloudflare D1 / KV / R2,
 - spuštění databázové migrace,
 - přidání Pages bindingu,
 - nastavení běžných ne-tajných produkčních proměnných,
 - ověření ostré URL v prohlížeči.
 
-Nečekej na samostatné potvrzení pro každý technický krok, pokud už Radim schválil nasazení a krok je bezpečný.
+Nečekej na samostatné potvrzení pro každý technický krok, pokud je krok bezpečný a navazuje na ověřené nasazení.
 
 Zastav se pouze tehdy, když:
 - chybí oprávnění,
@@ -161,3 +177,22 @@ Pokud si nejsi jistý:
 - neukládej data lokálně,
 - nezjednodušuj bezpečnost,
 - zastav se a napiš otázku.
+
+## 12. Ochrana neuložených změn
+
+Aplikace nesmí dovolit ztrátu neuložených změn bez potvrzení uživatele.
+
+Každý editační formulář musí:
+- detekovat neuložené změny,
+- upozornit při odchodu,
+- nabídnout Uložit a odejít,
+- nabídnout Odejít bez uložení,
+- nabídnout Zůstat na stránce,
+- ukládat pouze přes cloud API,
+- při chybě uložení zůstat na stránce.
+
+Zakázané:
+- opustit stránku bez varování,
+- zahodit změny potichu,
+- předstírat uložení bez API,
+- ukládat provozní data lokálně.

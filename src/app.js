@@ -3,6 +3,7 @@ import { VersionBackupInfo } from "./components/VersionBackupInfo.js";
 import { VersionNewsInfo } from "./components/VersionNewsInfo.js";
 import { ModuleFeedbackBox } from "./components/ModuleFeedbackBox.js";
 import { ReportsIcon } from "./components/icons/index.js";
+import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard.js";
 import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
@@ -134,6 +135,8 @@ const absenceUiState = {
   employeeFilter: "",
   monthFilter: currentMonthKey()
 };
+
+let lastRenderedUrl = window.location.href;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -331,6 +334,23 @@ function findAccessUser(userId) {
   return allAccessUsers().find((user) => String(user.id || "").trim().toLowerCase() === normalizedId) || null;
 }
 
+function findSavedAccessUser(userId) {
+  const normalizedId = String(userId || "").trim().toLowerCase();
+  return adminUsersState.users.find((user) => String(user.id || "").trim().toLowerCase() === normalizedId) || null;
+}
+
+function sameAccessUserIdentity(user, reference) {
+  const userId = String(user?.id || "").trim().toLowerCase();
+  const referenceId = String(reference?.id || "").trim().toLowerCase();
+  const userEmail = String(user?.email || "").trim().toLowerCase();
+  const referenceEmail = String(reference?.email || "").trim().toLowerCase();
+
+  return (
+    (userId && referenceId && userId === referenceId) ||
+    (userEmail && referenceEmail && userEmail === referenceEmail)
+  );
+}
+
 function selectedAccessUser(users) {
   const selectedId = String(accessState.selectedUserId || "").trim().toLowerCase();
   return users.find((user) => String(user.id || "").trim().toLowerCase() === selectedId) || users[0] || null;
@@ -392,6 +412,182 @@ function userDefaultPermissions(roleId) {
   return isFullAccessRole({ role: roleId, active: true })
     ? fullPermissionsAllowed()
     : rolePermissionsFor(roleId, accessState.roles);
+}
+
+function comparablePermissions(permissions = [], roleId = "") {
+  const state = matrixPermissions(permissions, roleId);
+
+  return permissionModules.flatMap((moduleItem) => (
+    ACTIONS.map((action) => ({
+      moduleId: moduleItem.id,
+      action,
+      allowed: state.allows(moduleItem.id, action)
+    }))
+  ));
+}
+
+function comparableUser(user) {
+  if (!user) {
+    return null;
+  }
+
+  const role = normalizeRole(user.role);
+  const active = user.active !== false && String(user.status || "").toLowerCase() !== "disabled";
+  const permissions = Array.isArray(user.permissions) && user.permissions.length
+    ? user.permissions
+    : userDefaultPermissions(role);
+
+  return {
+    id: String(user.id || ""),
+    name: String(user.name || "").trim(),
+    email: String(user.email || "").trim(),
+    phone: String(user.phone || "").trim(),
+    role,
+    department: String(user.department || "").trim(),
+    active,
+    permissions: comparablePermissions(permissions, role)
+  };
+}
+
+function comparableRole(role) {
+  if (!role) {
+    return null;
+  }
+
+  return {
+    id: normalizeRole(role.id || role.name),
+    description: String(role.description || "").trim(),
+    defaultPermissions: comparablePermissions(role.defaultPermissions || [], role.id || role.name)
+  };
+}
+
+function isSameData(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function accessUserFormData(form, options = {}) {
+  const sourceUser = findAccessUser(form?.dataset.userId) || {};
+  const now = options.updatedAt || new Date().toISOString();
+  const role = normalizeRole(options.role || form.elements.role.value);
+  const active = Boolean(form.elements.active?.checked);
+
+  return {
+    ...sourceUser,
+    id: sourceUser.id || form.dataset.userId || nextDraftUserId(),
+    name: form.elements.name.value.trim(),
+    email: form.elements.email.value.trim(),
+    phone: form.elements.phone.value.trim(),
+    role,
+    department: form.elements.department.value.trim(),
+    position: sourceUser.position || "",
+    active,
+    status: active ? "active" : "disabled",
+    permissions: options.permissions || permissionsFromMatrix(form, "userperm", role),
+    createdAt: sourceUser.createdAt || now,
+    updatedAt: now,
+    lastLoginAt: sourceUser.lastLoginAt || null
+  };
+}
+
+function currentAccessUserFormTarget() {
+  const form = document.querySelector("[data-access-user-form]");
+
+  if (!form || !canEditAccessUsers()) {
+    return null;
+  }
+
+  const current = accessUserFormData(form);
+  const baselineUser = findSavedAccessUser(form.dataset.userId);
+
+  return {
+    type: "user",
+    form,
+    current,
+    baseline: comparableUser(baselineUser),
+    isDirty: !baselineUser || !isSameData(comparableUser(current), comparableUser(baselineUser))
+  };
+}
+
+function currentAccessRoleFormTarget() {
+  const form = document.querySelector("[data-access-role-form]");
+
+  if (!form || !canManageAccessRoles()) {
+    return null;
+  }
+
+  const roleId = normalizeRole(form.dataset.roleId);
+  const role = accessState.roles.find((item) => item.id === roleId);
+
+  if (!role || isFullAccessRole({ role: roleId, active: true })) {
+    return null;
+  }
+
+  const current = {
+    ...role,
+    description: form.elements.description?.value.trim() || "",
+    defaultPermissions: permissionsFromMatrix(form, "roleperm", roleId)
+  };
+
+  return {
+    type: "role",
+    form,
+    current,
+    baseline: comparableRole(role),
+    isDirty: !isSameData(comparableRole(current), comparableRole(role))
+  };
+}
+
+function currentAccessDirtyTarget() {
+  const userTarget = currentAccessUserFormTarget();
+
+  if (userTarget?.isDirty) {
+    return userTarget;
+  }
+
+  const roleTarget = currentAccessRoleFormTarget();
+
+  if (roleTarget?.isDirty) {
+    return roleTarget;
+  }
+
+  return null;
+}
+
+function discardAccessUserDraft(userId, referenceUser = null) {
+  const reference = referenceUser || findAccessUser(userId) || { id: userId };
+  const users = accessState.users.filter((user) => !sameAccessUserIdentity(user, reference));
+  const selectedUserId = findSavedAccessUser(userId)
+    ? accessState.selectedUserId
+    : (adminUsersState.users[0]?.id || "");
+
+  setAccessState({
+    ...accessState,
+    users,
+    selectedUserId,
+    message: "Neuložené změny byly zahozeny.",
+    error: "",
+    feedbackTarget: "user"
+  });
+}
+
+function discardAccessDirtyChanges() {
+  const target = currentAccessDirtyTarget();
+
+  if (target?.type === "user") {
+    discardAccessUserDraft(target.form.dataset.userId, target.current);
+    render();
+    return;
+  }
+
+  if (target?.type === "role") {
+    setAccessState({
+      ...accessState,
+      message: "Neuložené změny byly zahozeny.",
+      error: "",
+      feedbackTarget: "role"
+    });
+    render();
+  }
 }
 
 function roleOptions(selectedRole) {
@@ -518,6 +714,17 @@ function focusAccessUserEditor() {
   } catch (error) {
     console.error("smart_odpady_access_focus_failed", error);
   }
+}
+
+function currentAccessUserFormFor(userId) {
+  const form = document.querySelector("[data-access-user-form]");
+  const normalizedId = String(userId || "").trim().toLowerCase();
+
+  if (!form) {
+    return null;
+  }
+
+  return String(form.dataset.userId || "").trim().toLowerCase() === normalizedId ? form : null;
 }
 
 function accessUserForm(user, canEditUsers) {
@@ -1957,8 +2164,7 @@ async function logout() {
   };
   adminUsersState.loaded = false;
   adminUsersState.users = [];
-  window.history.pushState({}, "", routeHref("/"));
-  render();
+  navigateToUrl(routeHref("/"));
 }
 
 async function loadAdminUsers() {
@@ -2058,7 +2264,9 @@ function renderApp() {
 
 function render() {
   try {
+    accessUnsavedChangesGuard.unmountModal();
     renderApp();
+    app.insertAdjacentHTML("beforeend", accessUnsavedChangesGuard.renderModal());
   } catch (error) {
     console.error("smart_odpady_render_failed", error);
     app.innerHTML = appErrorPage();
@@ -2091,6 +2299,44 @@ async function bootstrapAuth() {
     };
   }
 
+  render();
+}
+
+function hasAccessUnsavedChanges() {
+  return normalizePath(window.location.pathname) === "/uzivatele" && Boolean(currentAccessDirtyTarget());
+}
+
+const accessUnsavedChangesGuard = useUnsavedChangesGuard({
+  isDirty: hasAccessUnsavedChanges,
+  saveChanges: saveAccessDirtyChanges,
+  discardChanges: discardAccessDirtyChanges,
+  render
+});
+
+function navigateToUrl(url) {
+  window.history.pushState({}, "", url);
+  lastRenderedUrl = window.location.href;
+  render();
+}
+
+function guardedAccessAction(action) {
+  accessUnsavedChangesGuard.confirm(action);
+}
+
+function handlePopStateNavigation() {
+  const targetUrl = window.location.href;
+
+  if (accessUnsavedChangesGuard.isDirty()) {
+    window.history.pushState({}, "", lastRenderedUrl);
+    accessUnsavedChangesGuard.confirm(() => {
+      window.history.pushState({}, "", targetUrl);
+      lastRenderedUrl = window.location.href;
+      render();
+    });
+    return;
+  }
+
+  lastRenderedUrl = targetUrl;
   render();
 }
 
@@ -2395,65 +2641,42 @@ async function saveAccessUserForm(form) {
   if (!canEditAccessUsers()) {
     setAccessError("Nemáte oprávnění upravovat uživatele.", "user");
     render();
-    return;
+    return false;
   }
 
-  const sourceUser = findAccessUser(form.dataset.userId) || {};
   const now = new Date().toISOString();
-  const role = normalizeRole(form.elements.role.value);
-  const name = form.elements.name.value.trim();
-  const email = form.elements.email.value.trim();
-  const phone = form.elements.phone.value.trim();
-  const department = form.elements.department.value.trim();
-  const active = Boolean(form.elements.active?.checked);
+  const payload = accessUserFormData(form, { updatedAt: now });
 
-  if (!name) {
+  if (!payload.name) {
     setAccessError("Vyplňte jméno uživatele.", "user");
     render();
-    return;
+    return false;
   }
 
-  if (!email && !phone) {
+  if (!payload.email && !payload.phone) {
     setAccessError("Vyplňte alespoň e-mail nebo telefon.", "user");
     render();
-    return;
+    return false;
   }
 
   const signedUserId = String(currentUser()?.id || "").trim().toLowerCase();
-  const targetUserId = String(sourceUser.id || form.dataset.userId || "").trim().toLowerCase();
-  if (!active && signedUserId && signedUserId === targetUserId) {
+  const targetUserId = String(payload.id || form.dataset.userId || "").trim().toLowerCase();
+  if (!payload.active && signedUserId && signedUserId === targetUserId) {
     setAccessError("Vlastní účet nejde vypnout, abyste se nezamkli mimo správu.", "user");
     render();
-    return;
+    return false;
   }
 
   if (
     signedUserId &&
     signedUserId === targetUserId &&
     isFullAccessRole(currentUser()) &&
-    !isFullAccessRole({ role, active: true })
+    !isFullAccessRole({ role: payload.role, active: true })
   ) {
     setAccessError("Vlastní účet s plným přístupem nejde v testovacím režimu změnit na omezenou roli.", "user");
     render();
-    return;
+    return false;
   }
-
-  const payload = {
-    ...sourceUser,
-    id: sourceUser.id || form.dataset.userId || nextDraftUserId(),
-    name,
-    email,
-    phone,
-    role,
-    department,
-    position: sourceUser.position || "",
-    active,
-    status: active ? "active" : "disabled",
-    permissions: permissionsFromMatrix(form, "userperm", role),
-    createdAt: sourceUser.createdAt || now,
-    updatedAt: now,
-    lastLoginAt: sourceUser.lastLoginAt || null
-  };
 
   setAccessState({
     ...accessState,
@@ -2465,13 +2688,18 @@ async function saveAccessUserForm(form) {
   render();
 
   try {
-    const isNewUser = !sourceUser.id || String(payload.id || "").startsWith("draft-user-");
+    const savedSourceUser = findSavedAccessUser(form.dataset.userId);
+    const isNewUser = !savedSourceUser?.id || String(payload.id || "").startsWith("draft-user-");
     const result = await apiJson(isNewUser ? "/api/users" : `/api/users/${encodeURIComponent(payload.id)}`, {
       method: isNewUser ? "POST" : "PATCH",
       body: JSON.stringify(payload)
     });
     const savedUser = result.user || payload;
     adminUsersState.users = mergeAccessUsers(adminUsersState.users, [savedUser]);
+    const users = accessState.users.filter((user) => (
+      !sameAccessUserIdentity(user, payload) &&
+      !sameAccessUserIdentity(user, savedUser)
+    ));
     if (String(authState.user?.id || "") === String(savedUser.id || "")) {
       authState = {
         ...authState,
@@ -2480,17 +2708,20 @@ async function saveAccessUserForm(form) {
     }
     setAccessState({
       ...accessState,
+      users,
       selectedUserId: savedUser.id,
       message: "Změny byly uloženy.",
       error: "",
       feedbackTarget: "user"
     });
+    render();
+    return true;
   } catch (error) {
     console.error("smart_odpady_user_save_failed", error);
     setAccessError("Změny se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli.", "user");
+    render();
+    return false;
   }
-
-  render();
 }
 
 async function saveAccessUserStatus(user, active) {
@@ -2542,18 +2773,37 @@ function saveAccessRoleForm(form) {
   if (!canManageAccessRoles()) {
     setAccessError("Nemáte oprávnění upravovat role.", "role");
     render();
-    return;
+    return false;
   }
 
   const roleId = normalizeRole(form.dataset.roleId);
   if (isFullAccessRole({ role: roleId, active: true })) {
     setAccessError("Admin a Management mají v testovacím režimu vždy plná práva a nejde je omezit.", "role");
     render();
-    return;
+    return false;
   }
 
   setAccessError("Změny oprávnění se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli.", "role");
   render();
+  return false;
+}
+
+async function saveAccessDirtyChanges() {
+  const target = currentAccessDirtyTarget();
+
+  if (!target) {
+    return true;
+  }
+
+  if (target.type === "user") {
+    return saveAccessUserForm(target.form);
+  }
+
+  if (target.type === "role") {
+    return saveAccessRoleForm(target.form);
+  }
+
+  return false;
 }
 
 function createAccessUser() {
@@ -2657,9 +2907,12 @@ function resetAccessUserPermissions(userId) {
     return;
   }
 
+  const form = currentAccessUserFormFor(userId);
+  const sourceUser = form ? accessUserFormData(form) : user;
+
   upsertAccessUserInMemory({
-    ...user,
-    permissions: userDefaultPermissions(user.role),
+    ...sourceUser,
+    permissions: userDefaultPermissions(sourceUser.role),
     updatedAt: new Date().toISOString()
   }, "Výchozí práva jsou připravená ve formuláři. Pro trvalou změnu použijte Uložit uživatele.");
   render();
@@ -2691,11 +2944,16 @@ function changeAccessUserRole(select) {
     return;
   }
 
-  upsertAccessUserInMemory({
-    ...user,
+  const sourceUser = accessUserFormData(form, {
     role,
     permissions: userDefaultPermissions(role),
     updatedAt: new Date().toISOString()
+  });
+
+  upsertAccessUserInMemory({
+    ...sourceUser,
+    role,
+    permissions: userDefaultPermissions(role)
   }, "Role je změněná jen ve formuláři. Pro trvalou změnu použijte Uložit uživatele.");
   render();
 }
@@ -2823,28 +3081,46 @@ document.addEventListener("change", (event) => {
   }
 });
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
+  const unsavedAction = event.target.closest("[data-unsaved-action]");
+  if (unsavedAction) {
+    const action = unsavedAction.dataset.unsavedAction;
+
+    if (action === "save") {
+      await accessUnsavedChangesGuard.saveAndContinue();
+      return;
+    }
+
+    if (action === "discard") {
+      await accessUnsavedChangesGuard.discardAndContinue();
+      return;
+    }
+
+    accessUnsavedChangesGuard.stay();
+    return;
+  }
+
   const newAccessUser = event.target.closest("[data-access-new-user]");
   if (newAccessUser) {
-    createAccessUser();
+    guardedAccessAction(createAccessUser);
     return;
   }
 
   const editAccessUser = event.target.closest("[data-access-edit-user]");
   if (editAccessUser) {
-    selectAccessUser(editAccessUser.dataset.accessEditUser);
+    guardedAccessAction(() => selectAccessUser(editAccessUser.dataset.accessEditUser));
     return;
   }
 
   const disableAccessUser = event.target.closest("[data-access-disable-user]");
   if (disableAccessUser) {
-    setAccessUserActive(disableAccessUser.dataset.accessDisableUser, false);
+    guardedAccessAction(() => setAccessUserActive(disableAccessUser.dataset.accessDisableUser, false));
     return;
   }
 
   const enableAccessUser = event.target.closest("[data-access-enable-user]");
   if (enableAccessUser) {
-    setAccessUserActive(enableAccessUser.dataset.accessEnableUser, true);
+    guardedAccessAction(() => setAccessUserActive(enableAccessUser.dataset.accessEnableUser, true));
     return;
   }
 
@@ -2856,7 +3132,7 @@ document.addEventListener("click", (event) => {
 
   const editAccessRole = event.target.closest("[data-access-edit-role]");
   if (editAccessRole) {
-    selectAccessRole(editAccessRole.dataset.accessEditRole);
+    guardedAccessAction(() => selectAccessRole(editAccessRole.dataset.accessEditRole));
     return;
   }
 
@@ -2921,7 +3197,7 @@ document.addEventListener("click", (event) => {
 
   const logoutButton = event.target.closest("[data-logout]");
   if (logoutButton) {
-    logout();
+    guardedAccessAction(logout);
     return;
   }
 
@@ -2932,10 +3208,10 @@ document.addEventListener("click", (event) => {
   }
 
   event.preventDefault();
-  window.history.pushState({}, "", link.href);
-  render();
+  guardedAccessAction(() => navigateToUrl(link.href));
 });
 
-window.addEventListener("popstate", render);
+window.addEventListener("beforeunload", (event) => accessUnsavedChangesGuard.beforeUnload(event));
+window.addEventListener("popstate", handlePopStateNavigation);
 render();
 bootstrapAuth();
