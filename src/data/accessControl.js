@@ -1,18 +1,5 @@
 import { ROLE_DEFINITIONS, isFullAccessRole, normalizeRole } from "../permissions.js";
 
-export const ACCESS_STORAGE_KEY = "smart_odpady_access_control_v1";
-
-function storage() {
-  try {
-    const probe = "__smart_odpady_access_probe__";
-    window.localStorage.setItem(probe, "1");
-    window.localStorage.removeItem(probe);
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 export function cloneRoleDefinitions() {
   return ROLE_DEFINITIONS.map((role) => ({
     ...role,
@@ -84,43 +71,16 @@ export function defaultAccessState() {
 }
 
 export function loadAccessState() {
-  const target = storage();
-  if (!target) {
-    return defaultAccessState();
-  }
-
-  try {
-    const parsed = JSON.parse(target.getItem(ACCESS_STORAGE_KEY) || "{}");
-    const defaults = defaultAccessState();
-    return {
-      ...defaults,
-      ...parsed,
-      users: Array.isArray(parsed.users) ? parsed.users.map(normalizeAccessUser) : defaults.users,
-      roles: Array.isArray(parsed.roles) ? parsed.roles.map(normalizeRoleDefinition) : defaults.roles
-    };
-  } catch {
-    return defaultAccessState();
-  }
+  return defaultAccessState();
 }
 
 export function saveAccessState(state) {
-  const normalized = {
+  return {
     ...defaultAccessState(),
     ...state,
     users: Array.isArray(state.users) ? state.users.map(normalizeAccessUser) : [],
     roles: Array.isArray(state.roles) ? state.roles.map(normalizeRoleDefinition) : cloneRoleDefinitions()
   };
-  const target = storage();
-
-  if (target) {
-    try {
-      target.setItem(ACCESS_STORAGE_KEY, JSON.stringify(normalized));
-    } catch (error) {
-      console.error("smart_odpady_access_storage_failed", error);
-    }
-  }
-
-  return normalized;
 }
 
 function userKey(user) {

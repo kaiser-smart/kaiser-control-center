@@ -63,7 +63,6 @@ import {
   roleLabel
 } from "./permissions.js";
 import {
-  ACCESS_STORAGE_KEY,
   loadAccessState,
   makePermissionsFromMatrix,
   mergeAccessUsers,
@@ -313,7 +312,10 @@ function scrollToPageTop() {
 }
 
 function currentUser() {
-  return withAccessContext(authState.user, accessState);
+  return withAccessContext(authState.user, {
+    ...accessState,
+    users: []
+  });
 }
 
 function allAccessUsers() {
@@ -339,13 +341,13 @@ function selectedAccessRole() {
   return roles.find((role) => role.id === accessState.selectedRoleId) || roles[0];
 }
 
-function nextLocalUserId() {
+function nextDraftUserId() {
   const usedIds = new Set(allAccessUsers().map((user) => user.id));
-  let id = `local-user-${Date.now()}`;
+  let id = `draft-user-${Date.now()}`;
   let index = 2;
 
   while (usedIds.has(id)) {
-    id = `local-user-${Date.now()}-${index}`;
+    id = `draft-user-${Date.now()}-${index}`;
     index += 1;
   }
 
@@ -484,7 +486,7 @@ function permissionsMatrixTable({ namePrefix, permissions, roleId = "", disabled
   `;
 }
 
-function upsertLocalAccessUser(user) {
+function upsertAccessUserInMemory(user, message = "") {
   const nextKey = accessUserKey(user);
   const nextId = String(user.id || "").trim().toLowerCase();
   const users = accessState.users.filter((item) => {
@@ -497,7 +499,7 @@ function upsertLocalAccessUser(user) {
     ...accessState,
     users: [...users, user],
     selectedUserId: user.id,
-    message: "Uživatel byl uložen lokálně.",
+    message,
     error: "",
     feedbackTarget: "user"
   });
@@ -844,7 +846,7 @@ function usersManagementSection() {
       <div class="users-panel__head">
         <div>
           <h2 id="users-title">Přehled uživatelů</h2>
-          <p>Vidíte role, stav účtu a možnost upravit konkrétní oprávnění. Změny se v mock režimu ukládají lokálně.</p>
+          <p>Vidíte role, stav účtu a možnost upravit konkrétní oprávnění. Ukládání probíhá pouze přes serverové API.</p>
         </div>
         ${canEditUsers ? '<button class="primary-action" type="button" data-access-new-user>Přidat uživatele</button>' : ""}
       </div>
@@ -1827,11 +1829,9 @@ function appErrorPage() {
         <h1 id="app-error-title">${APP_NAME}</h1>
         <p class="login-subtitle">Aplikace se nepodařila načíst.</p>
         <p class="login-error">
-          V prohlížeči může být uložená stará verze lokálních oprávnění. Obnovení smaže pouze lokální nastavení práv v tomto prohlížeči.
+          Aplikace narazila na chybu. Obnovte stránku, případně se vraťte na hlavní stránku.
         </p>
-        <button class="primary-action" type="button" data-reset-access-state>
-          Obnovit aplikaci
-        </button>
+        <a class="primary-action" href="${routeHref("/")}" data-link>Zpět na hlavní stránku</a>
       </section>
     </main>
   `;
@@ -2391,7 +2391,7 @@ function handleAccessActionError(error, message, feedbackTarget = "user") {
   }
 }
 
-function saveAccessUserForm(form) {
+async function saveAccessUserForm(form) {
   if (!canEditAccessUsers()) {
     setAccessError("Nemáte oprávnění upravovat uživatele.", "user");
     render();
@@ -2422,7 +2422,7 @@ function saveAccessUserForm(form) {
   const signedUserId = String(currentUser()?.id || "").trim().toLowerCase();
   const targetUserId = String(sourceUser.id || form.dataset.userId || "").trim().toLowerCase();
   if (!active && signedUserId && signedUserId === targetUserId) {
-    setAccessError("Vlastní účet v mock režimu nejde vypnout, abyste se nezamkli mimo správu.", "user");
+    setAccessError("Vlastní účet nejde vypnout, abyste se nezamkli mimo správu.", "user");
     render();
     return;
   }
@@ -2438,9 +2438,9 @@ function saveAccessUserForm(form) {
     return;
   }
 
-  upsertLocalAccessUser({
+  const payload = {
     ...sourceUser,
-    id: sourceUser.id || form.dataset.userId || nextLocalUserId(),
+    id: sourceUser.id || form.dataset.userId || nextDraftUserId(),
     name,
     email,
     phone,
@@ -2453,7 +2453,92 @@ function saveAccessUserForm(form) {
     createdAt: sourceUser.createdAt || now,
     updatedAt: now,
     lastLoginAt: sourceUser.lastLoginAt || null
+  };
+
+  setAccessState({
+    ...accessState,
+    selectedUserId: payload.id,
+    message: "Ukládám uživatele na server...",
+    error: "",
+    feedbackTarget: "user"
   });
+  render();
+
+  try {
+    const isNewUser = !sourceUser.id || String(payload.id || "").startsWith("draft-user-");
+    const result = await apiJson(isNewUser ? "/api/users" : `/api/users/${encodeURIComponent(payload.id)}`, {
+      method: isNewUser ? "POST" : "PATCH",
+      body: JSON.stringify(payload)
+    });
+    const savedUser = result.user || payload;
+    adminUsersState.users = mergeAccessUsers(adminUsersState.users, [savedUser]);
+    if (String(authState.user?.id || "") === String(savedUser.id || "")) {
+      authState = {
+        ...authState,
+        user: savedUser
+      };
+    }
+    setAccessState({
+      ...accessState,
+      selectedUserId: savedUser.id,
+      message: "Uživatel byl uložen na server.",
+      error: "",
+      feedbackTarget: "user"
+    });
+  } catch (error) {
+    setAccessError(
+      `${error.message || "Serverové uložení se nepodařilo."} Nic nebylo uloženo lokálně.`,
+      "user"
+    );
+  }
+
+  render();
+}
+
+async function saveAccessUserStatus(user, active) {
+  const payload = {
+    ...user,
+    active,
+    status: active ? "active" : "disabled",
+    updatedAt: new Date().toISOString()
+  };
+
+  setAccessState({
+    ...accessState,
+    selectedUserId: user.id,
+    message: active ? "Zapínám uživatele na serveru..." : "Vypínám uživatele na serveru...",
+    error: "",
+    feedbackTarget: "user"
+  });
+  render();
+
+  try {
+    const result = await apiJson(`/api/users/${encodeURIComponent(user.id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+    const savedUser = result.user || payload;
+    adminUsersState.users = mergeAccessUsers(adminUsersState.users, [savedUser]);
+    if (String(authState.user?.id || "") === String(savedUser.id || "")) {
+      authState = {
+        ...authState,
+        user: savedUser
+      };
+    }
+    setAccessState({
+      ...accessState,
+      selectedUserId: savedUser.id,
+      message: "Stav uživatele byl uložen na server.",
+      error: "",
+      feedbackTarget: "user"
+    });
+  } catch (error) {
+    setAccessError(
+      `${error.message || "Serverové uložení stavu se nepodařilo."} Nic nebylo uloženo lokálně.`,
+      "user"
+    );
+  }
+
   render();
 }
 
@@ -2471,24 +2556,7 @@ function saveAccessRoleForm(form) {
     return;
   }
 
-  const roles = accessState.roles.map((role) => (
-    role.id === roleId
-      ? {
-          ...role,
-          description: form.elements.description.value.trim(),
-          defaultPermissions: permissionsFromMatrix(form, "roleperm", roleId)
-        }
-      : role
-  ));
-
-  setAccessState({
-    ...accessState,
-    roles,
-    selectedRoleId: roleId,
-    message: "Výchozí oprávnění role byla uložena lokálně.",
-    error: "",
-    feedbackTarget: "role"
-  });
+  setAccessError("Úprava výchozích oprávnění rolí vyžaduje serverové úložiště. Nic nebylo uloženo lokálně.", "role");
   render();
 }
 
@@ -2501,8 +2569,8 @@ function createAccessUser() {
 
   const now = new Date().toISOString();
   const role = "ridic";
-  upsertLocalAccessUser({
-    id: nextLocalUserId(),
+  upsertAccessUserInMemory({
+    id: nextDraftUserId(),
     name: "Nový uživatel",
     email: "",
     phone: "",
@@ -2515,7 +2583,7 @@ function createAccessUser() {
     createdAt: now,
     updatedAt: now,
     lastLoginAt: null
-  });
+  }, "Nový uživatel je jen rozepsaný na obrazovce. Uloží se až přes server.");
   render();
   focusAccessUserEditor();
 }
@@ -2564,7 +2632,7 @@ function setAccessUserActive(userId, active) {
 
   const signedUserId = String(currentUser()?.id || "").trim().toLowerCase();
   if (!active && signedUserId && signedUserId === String(userId || "").trim().toLowerCase()) {
-    setAccessError("Vlastní účet v mock režimu nejde vypnout, abyste se nezamkli mimo správu.", "user");
+    setAccessError("Vlastní účet nejde vypnout, abyste se nezamkli mimo správu.", "user");
     render();
     return;
   }
@@ -2576,13 +2644,7 @@ function setAccessUserActive(userId, active) {
     return;
   }
 
-  upsertLocalAccessUser({
-    ...user,
-    active,
-    status: active ? "active" : "disabled",
-    updatedAt: new Date().toISOString()
-  });
-  render();
+  saveAccessUserStatus(user, active);
 }
 
 function resetAccessUserPermissions(userId) {
@@ -2599,11 +2661,11 @@ function resetAccessUserPermissions(userId) {
     return;
   }
 
-  upsertLocalAccessUser({
+  upsertAccessUserInMemory({
     ...user,
     permissions: userDefaultPermissions(user.role),
     updatedAt: new Date().toISOString()
-  });
+  }, "Výchozí práva jsou připravená ve formuláři. Pro trvalou změnu použijte Uložit uživatele.");
   render();
 }
 
@@ -2633,12 +2695,12 @@ function changeAccessUserRole(select) {
     return;
   }
 
-  upsertLocalAccessUser({
+  upsertAccessUserInMemory({
     ...user,
     role,
     permissions: userDefaultPermissions(role),
     updatedAt: new Date().toISOString()
-  });
+  }, "Role je změněná jen ve formuláři. Pro trvalou změnu použijte Uložit uživatele.");
   render();
 }
 
@@ -2766,14 +2828,6 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("click", (event) => {
-  const resetAccessState = event.target.closest("[data-reset-access-state]");
-  if (resetAccessState) {
-    window.localStorage.removeItem(ACCESS_STORAGE_KEY);
-    accessState = loadAccessState();
-    window.location.reload();
-    return;
-  }
-
   const newAccessUser = event.target.closest("[data-access-new-user]");
   if (newAccessUser) {
     createAccessUser();
