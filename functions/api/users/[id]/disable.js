@@ -9,7 +9,7 @@ export async function onRequestPatch({ request, env }) {
 
   return json(
     {
-      error: "Trvalá deaktivace uživatele vyžaduje D1 databázi. Endpoint je připravený pro další krok."
+      error: "Stav uživatele se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli."
     },
     501
   );

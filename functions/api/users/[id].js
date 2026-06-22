@@ -10,7 +10,7 @@ export async function onRequestPatch({ request, env }) {
   await readJson(request);
   return json(
     {
-      error: "Trvalá úprava uživatele vyžaduje D1 databázi. Endpoint je připravený pro další krok."
+      error: "Změny se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli."
     },
     501
   );

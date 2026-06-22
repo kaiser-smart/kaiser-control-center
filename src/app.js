@@ -846,7 +846,7 @@ function usersManagementSection() {
       <div class="users-panel__head">
         <div>
           <h2 id="users-title">Přehled uživatelů</h2>
-          <p>Vidíte role, stav účtu a možnost upravit konkrétní oprávnění. Ukládání probíhá pouze přes serverové API.</p>
+          <p>Vidíte role, stav účtu a možnost upravit konkrétní oprávnění. Změny se ukládají do centrální správy uživatelů.</p>
         </div>
         ${canEditUsers ? '<button class="primary-action" type="button" data-access-new-user>Přidat uživatele</button>' : ""}
       </div>
@@ -2458,7 +2458,7 @@ async function saveAccessUserForm(form) {
   setAccessState({
     ...accessState,
     selectedUserId: payload.id,
-    message: "Ukládám uživatele na server...",
+    message: "Ukládám změny...",
     error: "",
     feedbackTarget: "user"
   });
@@ -2481,15 +2481,13 @@ async function saveAccessUserForm(form) {
     setAccessState({
       ...accessState,
       selectedUserId: savedUser.id,
-      message: "Uživatel byl uložen na server.",
+      message: "Změny byly uloženy.",
       error: "",
       feedbackTarget: "user"
     });
   } catch (error) {
-    setAccessError(
-      `${error.message || "Serverové uložení se nepodařilo."} Nic nebylo uloženo lokálně.`,
-      "user"
-    );
+    console.error("smart_odpady_user_save_failed", error);
+    setAccessError("Změny se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli.", "user");
   }
 
   render();
@@ -2506,7 +2504,7 @@ async function saveAccessUserStatus(user, active) {
   setAccessState({
     ...accessState,
     selectedUserId: user.id,
-    message: active ? "Zapínám uživatele na serveru..." : "Vypínám uživatele na serveru...",
+    message: active ? "Zapínám uživatele..." : "Vypínám uživatele...",
     error: "",
     feedbackTarget: "user"
   });
@@ -2528,15 +2526,13 @@ async function saveAccessUserStatus(user, active) {
     setAccessState({
       ...accessState,
       selectedUserId: savedUser.id,
-      message: "Stav uživatele byl uložen na server.",
+      message: "Stav uživatele byl uložen.",
       error: "",
       feedbackTarget: "user"
     });
   } catch (error) {
-    setAccessError(
-      `${error.message || "Serverové uložení stavu se nepodařilo."} Nic nebylo uloženo lokálně.`,
-      "user"
-    );
+    console.error("smart_odpady_user_status_save_failed", error);
+    setAccessError("Stav uživatele se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli.", "user");
   }
 
   render();
@@ -2556,7 +2552,7 @@ function saveAccessRoleForm(form) {
     return;
   }
 
-  setAccessError("Úprava výchozích oprávnění rolí vyžaduje serverové úložiště. Nic nebylo uloženo lokálně.", "role");
+  setAccessError("Změny oprávnění se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli.", "role");
   render();
 }
 
@@ -2583,7 +2579,7 @@ function createAccessUser() {
     createdAt: now,
     updatedAt: now,
     lastLoginAt: null
-  }, "Nový uživatel je jen rozepsaný na obrazovce. Uloží se až přes server.");
+  }, "Nový uživatel je připravený. Pro dokončení klikněte na Uložit uživatele.");
   render();
   focusAccessUserEditor();
 }

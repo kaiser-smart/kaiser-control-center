@@ -21,7 +21,7 @@ export async function onRequestPost({ request, env }) {
   await readJson(request);
   return json(
     {
-      error: "Trvalá správa uživatelů vyžaduje D1 databázi. Endpoint je připravený pro další krok."
+      error: "Změny se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli."
     },
     501
   );

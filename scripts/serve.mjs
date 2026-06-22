@@ -251,7 +251,7 @@ async function handleApi(request, response) {
       return true;
     }
     sendJson(response, 501, {
-      error: "Trvalá správa uživatelů vyžaduje serverovou databázi."
+      error: "Změny se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli."
     });
     return true;
   }
