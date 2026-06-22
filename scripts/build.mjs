@@ -9,6 +9,14 @@ const dist = path.join(root, "dist");
 const src = path.join(root, "src");
 const publicDir = path.join(root, "public");
 const template = await readFile(path.join(root, "index.html"), "utf8");
+const buildMeta = await resolveBuildMeta(root);
+const assetVersion = encodeURIComponent(buildMeta.commit || buildMeta.backupDate || String(Date.now()));
+
+function versionedTemplate() {
+  return template
+    .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
+    .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
+}
 
 async function copyDir(from, to) {
   await mkdir(to, { recursive: true });
@@ -48,13 +56,13 @@ await mkdir(dist, { recursive: true });
 await copyDir(src, path.join(dist, "src"));
 await writeFile(
   path.join(dist, "src/data/buildMeta.js"),
-  buildMetaModuleSource(await resolveBuildMeta(root))
+  buildMetaModuleSource(buildMeta)
 );
 if (await fileExists(publicDir)) {
   await copyDir(publicDir, dist);
 }
-await writeFile(path.join(dist, "index.html"), template);
-await writeFile(path.join(dist, "404.html"), template);
+await writeFile(path.join(dist, "index.html"), versionedTemplate());
+await writeFile(path.join(dist, "404.html"), versionedTemplate());
 
 for (const route of routes) {
   if (route === "/") {
@@ -63,7 +71,7 @@ for (const route of routes) {
 
   const routeDir = path.join(dist, route.replace(/^\/+/, ""));
   await mkdir(routeDir, { recursive: true });
-  await writeFile(path.join(routeDir, "index.html"), template);
+  await writeFile(path.join(routeDir, "index.html"), versionedTemplate());
 }
 
 console.log(`Build hotov: ${routes.size} rout, vystup ve slozce dist.`);

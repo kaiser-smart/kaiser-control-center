@@ -62,6 +62,7 @@ import {
   roleLabel
 } from "./permissions.js";
 import {
+  ACCESS_STORAGE_KEY,
   loadAccessState,
   makePermissionsFromMatrix,
   mergeAccessUsers,
@@ -1758,6 +1759,24 @@ function notFoundPage(user) {
   `;
 }
 
+function appErrorPage() {
+  return `
+    <main class="login-shell">
+      <section class="login-panel" aria-labelledby="app-error-title">
+        <a class="kaiser-logo" href="${routeHref("/")}" data-link aria-label="${APP_NAME}">kaiser.</a>
+        <h1 id="app-error-title">${APP_NAME}</h1>
+        <p class="login-subtitle">Aplikace se nepodařila načíst.</p>
+        <p class="login-error">
+          V prohlížeči může být uložená stará verze lokálních oprávnění. Obnovení smaže pouze lokální nastavení práv v tomto prohlížeči.
+        </p>
+        <button class="primary-action" type="button" data-reset-access-state>
+          Obnovit aplikaci
+        </button>
+      </section>
+    </main>
+  `;
+}
+
 async function apiJson(path, options = {}) {
   const response = await fetch(path, {
     credentials: "include",
@@ -1953,7 +1972,7 @@ function renderAuthenticatedApp(user) {
   document.title = `Nenalezeno | ${APP_NAME}`;
 }
 
-function render() {
+function renderApp() {
   if (authState.status === "loading") {
     app.innerHTML = loadingPage();
     document.title = `Přihlášení | ${APP_NAME}`;
@@ -1975,6 +1994,16 @@ function render() {
   }
 
   renderAuthenticatedApp(user);
+}
+
+function render() {
+  try {
+    renderApp();
+  } catch (error) {
+    console.error("smart_odpady_render_failed", error);
+    app.innerHTML = appErrorPage();
+    document.title = `Chyba | ${APP_NAME}`;
+  }
 }
 
 async function bootstrapAuth() {
@@ -2620,6 +2649,14 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  const resetAccessState = event.target.closest("[data-reset-access-state]");
+  if (resetAccessState) {
+    window.localStorage.removeItem(ACCESS_STORAGE_KEY);
+    accessState = loadAccessState();
+    window.location.reload();
+    return;
+  }
+
   const newAccessUser = event.target.closest("[data-access-new-user]");
   if (newAccessUser) {
     createAccessUser();

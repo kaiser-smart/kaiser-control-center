@@ -25,6 +25,34 @@
   </head>
   <body>
     <div id="app"></div>
+    <script>
+      function showStartupError() {
+        const app = document.querySelector("#app");
+        if (!app || app.children.length) {
+          return;
+        }
+
+        app.innerHTML = `
+          <main class="login-shell">
+            <section class="login-panel" aria-label="Chyba načtení">
+              <a class="kaiser-logo" href="/" aria-label="Smart odpady">kaiser.</a>
+              <h1>Smart odpady</h1>
+              <p class="login-subtitle">Aplikace se nepodařila načíst.</p>
+              <button class="primary-action" type="button" onclick="window.location.reload()">
+                Obnovit stránku
+              </button>
+            </section>
+          </main>
+        `;
+      }
+
+      window.addEventListener("error", (event) => {
+        if (event.target && ["SCRIPT", "LINK"].includes(event.target.tagName)) {
+          showStartupError();
+        }
+      }, true);
+      window.addEventListener("unhandledrejection", showStartupError);
+    </script>
     <script type="module" src="src/app.js"></script>
   </body>
 </html>
