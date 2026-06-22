@@ -11,6 +11,7 @@ Interní provozní systém pro správu odpadových služeb, vozového parku, ser
 - Lokální SVG komponenty ikon v `src/components/icons/`.
 - Passwordless přihlášení přes jednorázový kód.
 - Cloudflare Pages Functions pro auth API.
+- Cloudflare D1 připravené pro trvalé ukládání změn uživatelů.
 - Centrální RBAC práva v `src/permissions.js`.
 - Filtrování menu a akcí podle role.
 - Lokální mock režim bez Twilio účtu.
@@ -106,7 +107,29 @@ SENDGRID_API_KEY=...
 
 V produkci se mock OTP nepovolí na větvi `main`; testovací kód `123456` je pouze pro lokální vývoj nebo neprodukční prostředí s `AUTH_MODE=mock`.
 
-Trvalé vytváření a úpravy uživatelů v admin modulu vyžadují další krok s databází, například Cloudflare D1. Aktuální první verze umí povolené uživatele bezpečně číst ze serverové konfigurace; `AUTH_USERS_JSON` doplňuje nebo přepisuje výchozí kontakty Kaiser servis a uživatele převzaté z modulu Pneumatiky.
+## Cloudflare D1 pro uživatele
+
+Trvalé vytváření a úpravy uživatelů používají Cloudflare D1 přes Pages Function binding:
+
+```text
+SMART_ODPADY_DB
+```
+
+V Cloudflare Pages nastavte binding v projektu:
+
+Workers & Pages -> Smart odpady / kaiser-control-center -> Settings -> Bindings -> Add -> D1 database.
+
+Jméno bindingu musí být přesně `SMART_ODPADY_DB`.
+
+Databázová migrace je v:
+
+```text
+migrations/0001_create_users.sql
+```
+
+Po vytvoření databáze je potřeba migraci spustit proti D1. Aplikace potom čte výchozí kontakty a změny z D1 slučuje podle `id`; úprava uživatele v admin modulu uloží aktuální verzi uživatele do D1.
+
+Pokud D1 binding v produkci chybí, čtení výchozích uživatelů dál funguje, ale vytvoření nebo úprava uživatele vrátí bezpečnou chybu konfigurace. Aplikace nesmí ukládat provozní uživatele do `localStorage`, `sessionStorage` ani jiné prohlížečové databáze.
 
 ## Ověření buildu
 

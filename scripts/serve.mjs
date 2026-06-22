@@ -7,7 +7,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
 import { DEFAULT_USERS } from "../functions/_lib/default-users.js";
-import { hasPermission } from "../src/permissions.js";
+import { normalizeUserInput } from "../functions/_lib/users-store.js";
+import { hasPermission, isFullAccessRole } from "../src/permissions.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -15,7 +16,7 @@ const publicRoot = path.join(root, requestedRoot);
 const preferredPort = Number(process.env.PORT || 5173);
 const devCookieName = "smart_odpady_dev_session";
 const devSessions = new Map();
-const mockUsers = DEFAULT_USERS;
+let mockUsers = DEFAULT_USERS.map((user) => ({ ...user }));
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -152,6 +153,53 @@ function currentDevUser(request) {
   return mockUsers.find((user) => user.id === session.userId && user.status === "active") || null;
 }
 
+function findMockUser(id) {
+  const normalizedId = String(id || "").trim().toLowerCase();
+  return mockUsers.find((user) => String(user.id || "").trim().toLowerCase() === normalizedId) || null;
+}
+
+function upsertMockUser(input, id = "") {
+  const existingUser = id ? findMockUser(id) : null;
+  const savedUser = normalizeUserInput({
+    ...existingUser,
+    ...input,
+    id: id || input?.id
+  }, { id: id || input?.id });
+  const existingIndex = mockUsers.findIndex((user) => user.id === savedUser.id);
+
+  if (existingIndex >= 0) {
+    mockUsers = [
+      ...mockUsers.slice(0, existingIndex),
+      savedUser,
+      ...mockUsers.slice(existingIndex + 1)
+    ];
+  } else {
+    mockUsers = [...mockUsers, savedUser];
+  }
+
+  return savedUser;
+}
+
+function blocksCurrentDevUser(currentUser, payload, id) {
+  const currentUserId = String(currentUser?.id || "").trim().toLowerCase();
+  const targetId = String(id || "").trim().toLowerCase();
+
+  if (!currentUserId || currentUserId !== targetId) {
+    return "";
+  }
+
+  const active = payload?.active !== false && String(payload?.status || "active").toLowerCase() !== "disabled";
+  if (!active) {
+    return "Vlastní účet nejde vypnout, abyste se nezamkli mimo správu.";
+  }
+
+  if (isFullAccessRole(currentUser) && !isFullAccessRole({ ...currentUser, ...payload, active: true })) {
+    return "Vlastní účet s plným přístupem nejde změnit na omezenou roli.";
+  }
+
+  return "";
+}
+
 async function handleApi(request, response) {
   const url = new URL(request.url || "/", "http://localhost");
 
@@ -240,7 +288,7 @@ async function handleApi(request, response) {
     return true;
   }
 
-  if (url.pathname.startsWith("/api/users") && ["POST", "PATCH"].includes(request.method || "")) {
+  if (url.pathname === "/api/users" && request.method === "POST") {
     const user = currentDevUser(request);
     if (!user) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
@@ -250,9 +298,79 @@ async function handleApi(request, response) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
-    sendJson(response, 501, {
-      error: "Změny se teď nepodařilo uložit. Zkuste to prosím znovu za chvíli."
-    });
+
+    try {
+      const payload = await readJsonBody(request);
+      const savedUser = upsertMockUser(payload);
+      sendJson(response, 201, { user: publicUser(savedUser) });
+    } catch (error) {
+      sendJson(response, error.status || 400, { error: error.message || "Uživatele se nepodařilo uložit." });
+    }
+    return true;
+  }
+
+  const userPatchMatch = /^\/api\/users\/([^/]+)$/.exec(url.pathname);
+  if (userPatchMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "users", "edit")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const id = decodeURIComponent(userPatchMatch[1]);
+      const payload = await readJsonBody(request);
+      const blockedMessage = blocksCurrentDevUser(user, payload, id);
+
+      if (blockedMessage) {
+        sendJson(response, 400, { error: blockedMessage });
+        return true;
+      }
+
+      const savedUser = upsertMockUser(payload, id);
+      sendJson(response, 200, { user: publicUser(savedUser) });
+    } catch (error) {
+      sendJson(response, error.status || 400, { error: error.message || "Uživatele se nepodařilo uložit." });
+    }
+    return true;
+  }
+
+  const userDisableMatch = /^\/api\/users\/([^/]+)\/disable$/.exec(url.pathname);
+  if (userDisableMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "users", "edit")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const id = decodeURIComponent(userDisableMatch[1]);
+      const existingUser = findMockUser(id);
+
+      if (!existingUser) {
+        sendJson(response, 404, { error: "Uživatel nebyl nalezen." });
+        return true;
+      }
+
+      const blockedMessage = blocksCurrentDevUser(user, { ...existingUser, active: false }, id);
+      if (blockedMessage) {
+        sendJson(response, 400, { error: blockedMessage });
+        return true;
+      }
+
+      const savedUser = upsertMockUser({ ...existingUser, active: false, status: "disabled" }, id);
+      sendJson(response, 200, { user: publicUser(savedUser) });
+    } catch (error) {
+      sendJson(response, error.status || 400, { error: error.message || "Stav uživatele se nepodařilo uložit." });
+    }
     return true;
   }
 

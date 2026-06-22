@@ -1,5 +1,6 @@
 import { DEFAULT_USERS } from "./default-users.js";
 import { CONTACT_USERS } from "./contact-users.js";
+import { listStoredUsers } from "./users-store.js";
 import { hasPermission, isUserActive } from "../../src/permissions.js";
 
 const encoder = new TextEncoder();
@@ -174,18 +175,21 @@ function mergeConfiguredUsers(configuredUsers) {
 }
 
 export async function getUsers(env) {
+  const configuredUsers = [];
+
   if (env.AUTH_USERS_JSON) {
     try {
       const users = JSON.parse(env.AUTH_USERS_JSON);
       if (Array.isArray(users)) {
-        return mergeConfiguredUsers(users);
+        configuredUsers.push(...users);
       }
     } catch (error) {
       console.error("auth.users_json_invalid", { message: error.message });
     }
   }
 
-  return mergeConfiguredUsers([]);
+  const storedUsers = await listStoredUsers(env);
+  return mergeConfiguredUsers([...configuredUsers, ...storedUsers]);
 }
 
 export async function findAllowedUser(env, identifier) {
