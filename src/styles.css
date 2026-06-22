@@ -987,6 +987,230 @@ h1 {
   font-size: 0.86rem;
 }
 
+.access-notice {
+  margin-top: 22px;
+}
+
+.users-actions,
+.access-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.secondary-link--compact,
+.text-action--compact {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.82rem;
+}
+
+.text-action--compact {
+  margin-top: 0;
+}
+
+.access-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.access-status--active {
+  background: rgba(117, 189, 37, 0.12);
+  color: #3f7416;
+}
+
+.access-status--disabled {
+  background: rgba(101, 113, 100, 0.12);
+  color: var(--muted);
+}
+
+.access-editor,
+.access-roles {
+  border-color: rgba(117, 189, 37, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(251, 252, 248, 0.98) 100%),
+    #ffffff;
+}
+
+.access-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.access-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.access-form-grid--role {
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+}
+
+.access-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--steel);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.access-form input,
+.access-form select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  outline: none;
+}
+
+.access-form input:focus,
+.access-form select:focus {
+  border-color: rgba(117, 189, 37, 0.75);
+  box-shadow: 0 0 0 3px rgba(117, 189, 37, 0.15);
+}
+
+.access-form input:disabled,
+.access-form select:disabled {
+  background: #f4f6f1;
+  color: var(--muted);
+}
+
+.access-switch {
+  align-self: end;
+  min-height: 44px;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.access-switch input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--kaiser-green);
+}
+
+.access-subtitle {
+  margin: 2px 0 -4px;
+  color: var(--ink);
+  font-size: 1.06rem;
+}
+
+.access-permissions-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.access-permissions-table {
+  min-width: 980px;
+  margin: 0;
+}
+
+.access-permissions-table th,
+.access-permissions-table td {
+  text-align: center;
+}
+
+.access-permissions-table th:first-child,
+.access-permissions-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 220px;
+  text-align: left;
+  white-space: normal;
+  background: #ffffff;
+}
+
+.access-check {
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.access-check input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.access-check span {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(117, 189, 37, 0.32);
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.access-check input:checked + span {
+  border-color: var(--kaiser-green);
+  background:
+    linear-gradient(135deg, transparent 0 42%, #ffffff 42% 58%, transparent 58%),
+    linear-gradient(45deg, transparent 0 48%, #ffffff 48% 64%, transparent 64%),
+    var(--kaiser-green);
+}
+
+.access-check input:disabled + span {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.access-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.role-card {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.role-card span {
+  color: var(--kaiser-green-dark);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.role-card strong {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.role-card--active {
+  border-color: var(--kaiser-green);
+  background: #f4fbef;
+  box-shadow: 0 10px 24px rgba(117, 189, 37, 0.16);
+}
+
 .module-feedback {
   position: relative;
   display: grid;
@@ -2365,6 +2589,7 @@ h1 {
 
   .module-feedback__form,
   .feedback-filters,
+  .access-form-grid,
   .absence-form,
   .absence-form--settings,
   .absence-filters,
@@ -2373,6 +2598,7 @@ h1 {
   }
 
   .module-feedback__field--message,
+  .access-form-grid--role,
   .feedback-filters__search {
     grid-column: 1 / -1;
   }
@@ -2627,6 +2853,9 @@ h1 {
   .feedback-stats,
   .feedback-dashboard,
   .feedback-filters,
+  .access-form-grid,
+  .access-form-grid--role,
+  .access-roles-grid,
   .absence-hero,
   .absence-kpis,
   .absence-panels,
@@ -2640,6 +2869,7 @@ h1 {
   }
 
   .feedback-admin__head,
+  .users-panel__head,
   .feedback-ticket__header,
   .absence-panel__head {
     display: grid;
@@ -2656,6 +2886,21 @@ h1 {
   .absence-report-actions .primary-action,
   .absence-report-actions .secondary-link {
     width: 100%;
+  }
+
+  .users-panel__head .primary-action,
+  .access-form-actions .primary-action,
+  .access-form-actions .secondary-link {
+    width: 100%;
+  }
+
+  .users-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .access-permissions-table {
+    min-width: 880px;
   }
 
   .absence-tabs {

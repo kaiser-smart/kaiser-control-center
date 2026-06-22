@@ -52,12 +52,24 @@ import {
   visibleFeedbackForUser
 } from "./data/moduleFeedback.js";
 import {
-  ROLE_PERMISSIONS,
+  ACTIONS,
+  ROLE_DEFINITIONS,
   canViewModule,
   filterModulesByUser,
   hasPermission,
+  isUserActive,
+  normalizeRole,
   roleLabel
 } from "./permissions.js";
+import {
+  loadAccessState,
+  makePermissionsFromMatrix,
+  mergeAccessUsers,
+  permissionMap,
+  rolePermissionsFor,
+  saveAccessState,
+  withAccessContext
+} from "./data/accessControl.js";
 
 const app = document.querySelector("#app");
 const orderedModules = [...modules].sort((a, b) => a.order - b.order);
@@ -72,6 +84,7 @@ const feedbackMenuItem = {
   disabled: false,
   order: 14
 };
+const permissionModules = [...orderedModules, feedbackMenuItem];
 const primaryRoutes = new Map(orderedModules.map((moduleItem) => [moduleItem.route, moduleItem]));
 const dashboardRoutes = new Map(moduleDashboards.map((moduleItem) => [moduleItem.route, moduleItem]));
 const TYRES_MODULE_URL = "https://oplustil-prog.github.io/kaiser-pneu-evidence/";
@@ -99,6 +112,8 @@ const adminUsersState = {
   users: [],
   error: ""
 };
+
+let accessState = loadAccessState();
 
 const feedbackFormState = {};
 const feedbackFilters = {
@@ -274,76 +289,322 @@ function moduleTitleByPermissionId(moduleId) {
   return moduleItem?.title || moduleId;
 }
 
-function rolePermissionSummary(role) {
-  const permissions = ROLE_PERMISSIONS[role] || [];
+function roleOrderIndex(roleId) {
+  const index = ROLE_DEFINITIONS.findIndex((role) => role.id === normalizeRole(roleId));
+  return index === -1 ? ROLE_DEFINITIONS.length : index;
+}
 
-  if (permissions.includes("*:*")) {
+function orderedAccessRoles() {
+  return [...accessState.roles].sort((a, b) => roleOrderIndex(a.id) - roleOrderIndex(b.id));
+}
+
+function setAccessState(nextState) {
+  accessState = saveAccessState(nextState);
+}
+
+function currentUser() {
+  return withAccessContext(authState.user, accessState);
+}
+
+function allAccessUsers() {
+  return mergeAccessUsers(adminUsersState.users, accessState.users);
+}
+
+function accessUserKey(user) {
+  return String(user?.email || user?.id || "").trim().toLowerCase();
+}
+
+function findAccessUser(userId) {
+  const normalizedId = String(userId || "").trim().toLowerCase();
+  return allAccessUsers().find((user) => String(user.id || "").trim().toLowerCase() === normalizedId) || null;
+}
+
+function selectedAccessUser(users) {
+  const selectedId = accessState.selectedUserId;
+  return users.find((user) => user.id === selectedId) || users[0] || null;
+}
+
+function selectedAccessRole() {
+  const roles = orderedAccessRoles();
+  return roles.find((role) => role.id === accessState.selectedRoleId) || roles[0];
+}
+
+function nextLocalUserId() {
+  const usedIds = new Set(allAccessUsers().map((user) => user.id));
+  let id = `local-user-${Date.now()}`;
+  let index = 2;
+
+  while (usedIds.has(id)) {
+    id = `local-user-${Date.now()}-${index}`;
+    index += 1;
+  }
+
+  return id;
+}
+
+function matrixPermissions(permissions, roleId = "") {
+  const map = permissionMap(permissions || []);
+  const adminAlwaysAllowed = normalizeRole(roleId) === "admin";
+
+  return {
+    allows(moduleId, action) {
+      return (
+        adminAlwaysAllowed ||
+        map.get(`${moduleId}:${action}`) === true ||
+        map.get(`${moduleId}:*`) === true ||
+        map.get(`*:*`) === true
+      );
+    }
+  };
+}
+
+function fullPermissionsAllowed() {
+  return permissionModules.flatMap((moduleItem) => (
+    ACTIONS.map((action) => ({
+      moduleId: moduleItem.id,
+      action,
+      allowed: true
+    }))
+  ));
+}
+
+function permissionsFromMatrix(form, prefix, roleId = "") {
+  if (normalizeRole(roleId) === "admin") {
+    return fullPermissionsAllowed();
+  }
+
+  return makePermissionsFromMatrix(permissionModules, ACTIONS, new FormData(form), prefix);
+}
+
+function userDefaultPermissions(roleId) {
+  return normalizeRole(roleId) === "admin"
+    ? fullPermissionsAllowed()
+    : rolePermissionsFor(roleId, accessState.roles);
+}
+
+function roleOptions(selectedRole) {
+  return orderedAccessRoles().map((role) => `
+    <option value="${escapeHtml(role.id)}" ${role.id === normalizeRole(selectedRole) ? "selected" : ""}>
+      ${escapeHtml(role.label || roleLabel(role.id))}
+    </option>
+  `).join("");
+}
+
+function activeStatusLabel(user) {
+  return user?.active === false ? "Vypnutý" : "Aktivní";
+}
+
+function statusPill(user) {
+  const active = user?.active !== false;
+  return `<span class="access-status ${active ? "access-status--active" : "access-status--disabled"}">${activeStatusLabel(user)}</span>`;
+}
+
+function accessNotice() {
+  return `
+    ${accessState.message ? `<p class="module-feedback__notice access-notice">${escapeHtml(accessState.message)}</p>` : ""}
+    ${accessState.error ? `<p class="module-feedback__error access-notice">${escapeHtml(accessState.error)}</p>` : ""}
+  `;
+}
+
+function permissionsMatrixTable({ namePrefix, permissions, roleId = "", disabled = false }) {
+  const state = matrixPermissions(permissions, roleId);
+  const disabledAttribute = disabled ? "disabled" : "";
+
+  return `
+    <div class="access-permissions-wrap">
+      <table class="users-table access-permissions-table">
+        <thead>
+          <tr>
+            <th>Modul</th>
+            ${ACTIONS.map((action) => `<th>${escapeHtml(permissionActionLabels[action] || action)}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${permissionModules.map((moduleItem) => `
+            <tr>
+              <td data-label="Modul">
+                <strong>${escapeHtml(moduleTitleByPermissionId(moduleItem.id))}</strong>
+              </td>
+              ${ACTIONS.map((action) => {
+                const checked = state.allows(moduleItem.id, action) ? "checked" : "";
+                return `
+                  <td data-label="${escapeHtml(permissionActionLabels[action] || action)}">
+                    <label class="access-check" title="${escapeHtml(`${moduleTitleByPermissionId(moduleItem.id)} · ${permissionActionLabels[action] || action}`)}">
+                      <input
+                        type="checkbox"
+                        name="${escapeHtml(`${namePrefix}-${moduleItem.id}-${action}`)}"
+                        ${checked}
+                        ${disabledAttribute}
+                      />
+                      <span></span>
+                    </label>
+                  </td>
+                `;
+              }).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function upsertLocalAccessUser(user) {
+  const nextKey = accessUserKey(user);
+  const nextId = String(user.id || "").trim().toLowerCase();
+  const users = accessState.users.filter((item) => {
+    const itemKey = accessUserKey(item);
+    const itemId = String(item.id || "").trim().toLowerCase();
+    return itemKey !== nextKey && itemId !== nextId;
+  });
+
+  setAccessState({
+    ...accessState,
+    users: [...users, user],
+    selectedUserId: user.id,
+    message: "Uživatel byl uložen lokálně.",
+    error: ""
+  });
+}
+
+function accessUserForm(user, canEditUsers) {
+  if (!user) {
     return `
-      <span class="permission-module">
-        <strong>Všechny moduly</strong>
-        <span class="permission-actions">
-          <span class="permission-chip permission-chip--strong">vše</span>
-        </span>
-      </span>
+      <section class="users-panel access-editor">
+        <h2>Detail uživatele</h2>
+        <p>Zatím tu není žádný uživatel. Přidejte prvního uživatele a nastavte mu roli.</p>
+      </section>
     `;
   }
 
-  const grouped = permissions.reduce((modulesMap, permission) => {
-    const [moduleId, action] = permission.split(":");
-    const actions = modulesMap.get(moduleId) || [];
-    actions.push(action);
-    modulesMap.set(moduleId, actions);
-    return modulesMap;
-  }, new Map());
-
-  return [...grouped.entries()]
-    .map(([moduleId, actions]) => `
-      <span class="permission-module">
-        <strong>${escapeHtml(moduleTitleByPermissionId(moduleId))}</strong>
-        <span class="permission-actions">
-          ${actions.map((action) => `
-            <span class="permission-chip">${escapeHtml(permissionActionLabels[action] || action)}</span>
-          `).join("")}
-        </span>
-      </span>
-    `)
-    .join("");
-}
-
-function permissionsOverviewSection() {
-  const roleRows = Object.keys(ROLE_PERMISSIONS)
-    .map((role) => `
-      <tr>
-        <td data-label="Role"><strong>${escapeHtml(roleLabel(role))}</strong></td>
-        <td data-label="Oprávnění">
-          <div class="permission-modules">${rolePermissionSummary(role)}</div>
-        </td>
-      </tr>
-    `)
-    .join("");
+  const effectivePermissions = user.permissions?.length ? user.permissions : userDefaultPermissions(user.role);
+  const disabled = canEditUsers ? "" : "disabled";
+  const activeChecked = user.active !== false ? "checked" : "";
+  const roleIsAdmin = normalizeRole(user.role) === "admin";
 
   return `
-    <section class="users-panel permissions-panel" aria-labelledby="permissions-title">
+    <section class="users-panel access-editor" aria-labelledby="access-user-title">
       <div class="users-panel__head">
         <div>
-          <h2 id="permissions-title">Přístupová práva podle rolí</h2>
-          <p>Tady je vidět, co která role v aplikaci Smart odpady smí zobrazit nebo provést.</p>
+          <h2 id="access-user-title">Detail / editace uživatele</h2>
+          <p>Individuální oprávnění uživatele mají přednost před výchozí rolí.</p>
         </div>
       </div>
-      <div class="users-table-wrap">
-        <table class="users-table permissions-table">
-          <thead>
-            <tr>
-              <th>Role</th>
-              <th>Oprávnění</th>
-            </tr>
-          </thead>
-          <tbody>${roleRows}</tbody>
-        </table>
+
+      <form class="access-form" data-access-user-form data-user-id="${escapeHtml(user.id)}">
+        <div class="access-form-grid">
+          <label>
+            <span>Jméno</span>
+            <input name="name" value="${escapeHtml(user.name)}" ${disabled} required />
+          </label>
+          <label>
+            <span>E-mail</span>
+            <input name="email" type="email" value="${escapeHtml(user.email)}" ${disabled} />
+          </label>
+          <label>
+            <span>Telefon</span>
+            <input name="phone" value="${escapeHtml(user.phone)}" ${disabled} />
+          </label>
+          <label>
+            <span>Role</span>
+            <select name="role" data-access-user-role ${disabled}>
+              ${roleOptions(user.role)}
+            </select>
+          </label>
+          <label>
+            <span>Oddělení</span>
+            <input name="department" value="${escapeHtml(user.department)}" ${disabled} />
+          </label>
+          <label class="access-switch">
+            <input name="active" type="checkbox" ${activeChecked} ${disabled} />
+            <span>Aktivní uživatel</span>
+          </label>
+        </div>
+
+        ${roleIsAdmin ? `
+          <p class="permissions-note">Admin má vždy všechna práva. Checkboxy jsou předvyplněné naplno.</p>
+        ` : ""}
+
+        <h3 class="access-subtitle">Oprávnění podle modulů</h3>
+        ${permissionsMatrixTable({
+          namePrefix: "userperm",
+          permissions: effectivePermissions,
+          roleId: user.role,
+          disabled: !canEditUsers
+        })}
+
+        <div class="access-form-actions">
+          ${canEditUsers ? `
+            <button class="primary-action" type="submit">Uložit uživatele</button>
+            <button class="secondary-link" type="button" data-access-reset-user-permissions="${escapeHtml(user.id)}">
+              Použít výchozí práva role
+            </button>
+          ` : '<p class="permissions-note">Máte pouze čtení správy uživatelů.</p>'}
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function rolesManagementSection(canManageRoles) {
+  const roles = orderedAccessRoles();
+  const selectedRole = selectedAccessRole();
+  const rolePermissions = selectedRole?.defaultPermissions || [];
+  const roleIsAdmin = normalizeRole(selectedRole?.id) === "admin";
+
+  return `
+    <section class="users-panel permissions-panel access-roles" aria-labelledby="access-roles-title">
+      <div class="users-panel__head">
+        <div>
+          <h2 id="access-roles-title">Role a oprávnění</h2>
+          <p>Výchozí práva role se použijí při výběru role u uživatele. Uživatel je může mít následně ručně upravená.</p>
+        </div>
       </div>
-      <p class="permissions-note">
-        Ruční výjimky `deniedModules` mají přednost před rolí. `allowedModules` umí přidat mimořádný přístup k modulu.
-      </p>
+
+      <div class="access-roles-grid">
+        ${roles.map((role) => `
+          <button
+            class="role-card ${role.id === selectedRole?.id ? "role-card--active" : ""}"
+            type="button"
+            data-access-edit-role="${escapeHtml(role.id)}"
+          >
+            <span>${escapeHtml(role.label || roleLabel(role.id))}</span>
+            <strong>${escapeHtml(role.description || "")}</strong>
+          </button>
+        `).join("")}
+      </div>
+
+      ${selectedRole ? `
+        <form class="access-form access-role-form" data-access-role-form data-role-id="${escapeHtml(selectedRole.id)}">
+          <div class="access-form-grid access-form-grid--role">
+            <label>
+              <span>Role</span>
+              <input value="${escapeHtml(selectedRole.label || roleLabel(selectedRole.id))}" disabled />
+            </label>
+            <label>
+              <span>Popis role</span>
+              <input name="description" value="${escapeHtml(selectedRole.description || "")}" ${canManageRoles ? "" : "disabled"} />
+            </label>
+          </div>
+
+          ${roleIsAdmin ? `
+            <p class="permissions-note">Admin má vždy všechna práva. Výchozí práva admina nejdou omezit.</p>
+          ` : ""}
+
+          ${permissionsMatrixTable({
+            namePrefix: "roleperm",
+            permissions: rolePermissions,
+            roleId: selectedRole.id,
+            disabled: !canManageRoles || roleIsAdmin
+          })}
+
+          <div class="access-form-actions">
+            ${canManageRoles && !roleIsAdmin ? `
+              <button class="primary-action" type="submit">Uložit výchozí oprávnění role</button>
+            ` : '<p class="permissions-note">Výchozí oprávnění role může měnit pouze uživatel s právem spravovat uživatele.</p>'}
+          </div>
+        </form>
+      ` : ""}
     </section>
   `;
 }
@@ -479,31 +740,52 @@ function usersManagementSection() {
     return '<section class="users-panel"><p>Načítám uživatele...</p></section>';
   }
 
-  if (adminUsersState.error) {
-    return `<section class="users-panel"><p class="login-error">${escapeHtml(adminUsersState.error)}</p></section>`;
-  }
+  const user = currentUser();
+  const users = allAccessUsers();
+  const selectedUser = selectedAccessUser(users);
+  const canEditUsers = hasPermission(user, "users", "edit") || hasPermission(user, "users", "manage");
+  const canManageRoles = hasPermission(user, "users", "manage");
 
-  const rows = adminUsersState.users
+  const rows = users
     .map(
       (user) => `
         <tr>
-          <td>${escapeHtml(user.name)}</td>
-          <td>${stackedCell(user.email, user.phone)}</td>
-          <td>${escapeHtml(roleLabel(user.role))}</td>
-          <td>${stackedCell(user.department, user.position)}</td>
-          <td>${escapeHtml(user.status)}</td>
+          <td data-label="Jméno"><strong>${escapeHtml(user.name || "Bez jména")}</strong></td>
+          <td data-label="Kontakt">${stackedCell(user.email, user.phone)}</td>
+          <td data-label="Role">${escapeHtml(roleLabel(user.role))}</td>
+          <td data-label="Stav">${statusPill(user)}</td>
+          <td data-label="Poslední přihlášení">${formatDateTime(user.lastLoginAt)}</td>
+          <td data-label="Akce">
+            <div class="users-actions">
+              <button class="secondary-link secondary-link--compact" type="button" data-access-edit-user="${escapeHtml(user.id)}">
+                Upravit
+              </button>
+              ${canEditUsers ? (
+                user.active === false
+                  ? `<button class="text-action text-action--compact" type="button" data-access-enable-user="${escapeHtml(user.id)}">Zapnout</button>`
+                  : `<button class="text-action text-action--compact" type="button" data-access-disable-user="${escapeHtml(user.id)}">Vypnout</button>`
+              ) : ""}
+            </div>
+          </td>
         </tr>
       `
     )
-    .join("");
+    .join("") || `
+      <tr>
+        <td colspan="6">Zatím tu není žádný uživatel.</td>
+      </tr>
+    `;
 
   return `
+    ${accessNotice()}
+    ${adminUsersState.error ? `<section class="users-panel"><p class="login-error">${escapeHtml(adminUsersState.error)}</p></section>` : ""}
     <section class="users-panel" aria-labelledby="users-title">
       <div class="users-panel__head">
         <div>
-          <h2 id="users-title">Povolení uživatelé</h2>
-          <p>První verze čte uživatele z bezpečné serverové konfigurace.</p>
+          <h2 id="users-title">Přehled uživatelů</h2>
+          <p>Vidíte role, stav účtu a možnost upravit konkrétní oprávnění. Změny se v mock režimu ukládají lokálně.</p>
         </div>
+        ${canEditUsers ? '<button class="primary-action" type="button" data-access-new-user>Přidat uživatele</button>' : ""}
       </div>
       <div class="users-table-wrap">
         <table class="users-table">
@@ -512,15 +794,17 @@ function usersManagementSection() {
               <th>Jméno</th>
               <th>Kontakt</th>
               <th>Role</th>
-              <th>Oblast</th>
               <th>Stav</th>
+              <th>Poslední přihlášení</th>
+              <th>Akce</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
     </section>
-    ${permissionsOverviewSection()}
+    ${accessUserForm(selectedUser, canEditUsers)}
+    ${rolesManagementSection(canManageRoles)}
   `;
 }
 
@@ -1446,6 +1730,9 @@ function forbiddenPage(user) {
           <h1 id="module-title">Nemáte oprávnění</h1>
           <p>Nemáte oprávnění k této části systému.</p>
           <p>Pokud přístup potřebujete, obraťte se na kancelář nebo administrátora.</p>
+          <div class="module-actions">
+            <a class="primary-link" href="${routeHref("/")}" data-link>Zpět na hlavní stránku</a>
+          </div>
         </div>
       </section>
     </main>
@@ -1596,7 +1883,7 @@ async function logout() {
 }
 
 async function loadAdminUsers() {
-  if (adminUsersState.loaded || adminUsersState.loading || !hasPermission(authState.user, "users", "view")) {
+  if (adminUsersState.loaded || adminUsersState.loading || !hasPermission(currentUser(), "users", "view")) {
     return;
   }
 
@@ -1679,7 +1966,15 @@ function render() {
     return;
   }
 
-  renderAuthenticatedApp(authState.user);
+  const user = currentUser();
+
+  if (!isUserActive(user)) {
+    app.innerHTML = forbiddenPage(user || authState.user);
+    document.title = `Bez oprávnění | ${APP_NAME}`;
+    return;
+  }
+
+  renderAuthenticatedApp(user);
 }
 
 async function bootstrapAuth() {
@@ -1710,7 +2005,8 @@ async function bootstrapAuth() {
 }
 
 function submitModuleFeedback(form) {
-  if (!hasPermission(authState.user, "feedback", "create")) {
+  const user = currentUser();
+  if (!hasPermission(user, "feedback", "create")) {
     feedbackFormState[form.dataset.moduleId || ""] = {
       message: "",
       error: "Nemáte oprávnění odeslat připomínku."
@@ -1728,7 +2024,7 @@ function submitModuleFeedback(form) {
     createModuleFeedback({
       moduleId,
       moduleName,
-      currentUser: authState.user,
+      currentUser: user,
       message,
       priority
     });
@@ -1756,11 +2052,11 @@ function applyFeedbackFilters(form) {
 }
 
 function currentFilteredFeedback() {
-  return filterModuleFeedback(visibleFeedbackForUser(readModuleFeedback(), authState.user), feedbackFilters);
+  return filterModuleFeedback(visibleFeedbackForUser(readModuleFeedback(), currentUser()), feedbackFilters);
 }
 
 function exportFeedbackCsv() {
-  if (!hasPermission(authState.user, "feedback", "export")) {
+  if (!hasPermission(currentUser(), "feedback", "export")) {
     return;
   }
 
@@ -1798,7 +2094,8 @@ function downloadCsv(filename, csv) {
 }
 
 function submitAbsenceRequest(form) {
-  if (!hasPermission(authState.user, "absence", "create")) {
+  const user = currentUser();
+  if (!hasPermission(user, "absence", "create")) {
     setAbsenceNotice("", "Nemáte oprávnění vytvořit žádost.");
     render();
     return;
@@ -1817,7 +2114,7 @@ function submitAbsenceRequest(form) {
     return;
   }
 
-  const employees = absenceEmployeeOptions(absenceState, authState.user);
+  const employees = absenceEmployeeOptions(absenceState, user);
   const selectedEmployee = employees.find((employee) => employee.id === form.elements.employeeId.value) || employees[0];
   const attachmentInput = form.elements.attachment;
   const attachmentUrls = attachmentInput?.files ? [...attachmentInput.files].map((file) => file.name) : [];
@@ -1831,7 +2128,7 @@ function submitAbsenceRequest(form) {
     note: form.elements.note.value.trim(),
     attachmentUrls,
     substituteUserId: form.elements.substituteUserId?.value || ""
-  }, authState.user);
+  }, user);
 
   saveAbsence(nextState);
   absenceUiState.tab = "my";
@@ -1844,7 +2141,7 @@ function submitAbsenceRequest(form) {
 }
 
 function saveAbsenceSettings(form) {
-  if (!hasPermission(authState.user, "absence", "manage")) {
+  if (!hasPermission(currentUser(), "absence", "manage")) {
     setAbsenceNotice("", "Nemáte oprávnění měnit nastavení.");
     render();
     return;
@@ -1895,19 +2192,21 @@ function updateAbsenceFormPreview(form) {
 }
 
 function approveAbsenceRequest(requestId) {
-  if (!hasPermission(authState.user, "absence", "approve")) {
+  const user = currentUser();
+  if (!hasPermission(user, "absence", "approve")) {
     setAbsenceNotice("", "Nemáte oprávnění schvalovat žádosti.");
     render();
     return;
   }
 
-  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Schváleno", authState.user, "Schváleno v modulu Dovolená / Nemoc."));
+  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Schváleno", user, "Schváleno v modulu Dovolená / Nemoc."));
   setAbsenceNotice("Žádost byla schválena.");
   render();
 }
 
 function rejectAbsenceRequest(requestId) {
-  if (!hasPermission(authState.user, "absence", "approve")) {
+  const user = currentUser();
+  if (!hasPermission(user, "absence", "approve")) {
     setAbsenceNotice("", "Nemáte oprávnění zamítat žádosti.");
     render();
     return;
@@ -1919,7 +2218,7 @@ function rejectAbsenceRequest(requestId) {
     return;
   }
 
-  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Zamítnuto", authState.user, reason));
+  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Zamítnuto", user, reason));
   setAbsenceNotice("Žádost byla zamítnuta.");
   render();
 }
@@ -1929,19 +2228,20 @@ function cancelAbsenceRequest(requestId) {
     return;
   }
 
-  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Zrušeno", authState.user, "Zrušeno uživatelem."));
+  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Zrušeno", currentUser(), "Zrušeno uživatelem."));
   setAbsenceNotice("Žádost byla zrušena.");
   render();
 }
 
 function exportAbsenceCsv() {
-  if (!hasPermission(authState.user, "absence", "export")) {
+  const user = currentUser();
+  if (!hasPermission(user, "absence", "export")) {
     setAbsenceNotice("", "Nemáte oprávnění exportovat reporty.");
     render();
     return;
   }
 
-  const requests = filterAbsenceRequests(visibleAbsenceRequests(absenceState, authState.user), {
+  const requests = filterAbsenceRequests(visibleAbsenceRequests(absenceState, user), {
     type: absenceUiState.typeFilter,
     employeeId: absenceUiState.employeeFilter,
     month: absenceUiState.monthFilter
@@ -1951,13 +2251,14 @@ function exportAbsenceCsv() {
 }
 
 function generateAbsenceMonthlyReport() {
-  if (!hasPermission(authState.user, "absence", "export")) {
+  const user = currentUser();
+  if (!hasPermission(user, "absence", "export")) {
     setAbsenceNotice("", "Nemáte oprávnění generovat report.");
     render();
     return;
   }
 
-  const result = generateMonthlyAbsenceReport(absenceState, authState.user);
+  const result = generateMonthlyAbsenceReport(absenceState, user);
   saveAbsence(result.state);
   const period = `${String(result.report.periodMonth).padStart(2, "0")}-${result.report.periodYear}`;
 
@@ -1969,7 +2270,247 @@ function generateAbsenceMonthlyReport() {
   render();
 }
 
+function canEditAccessUsers() {
+  const user = currentUser();
+  return hasPermission(user, "users", "edit") || hasPermission(user, "users", "manage");
+}
+
+function canManageAccessRoles() {
+  return hasPermission(currentUser(), "users", "manage");
+}
+
+function setAccessError(error) {
+  setAccessState({
+    ...accessState,
+    message: "",
+    error
+  });
+}
+
+function saveAccessUserForm(form) {
+  if (!canEditAccessUsers()) {
+    setAccessError("Nemáte oprávnění upravovat uživatele.");
+    render();
+    return;
+  }
+
+  const sourceUser = findAccessUser(form.dataset.userId) || {};
+  const now = new Date().toISOString();
+  const role = normalizeRole(form.elements.role.value);
+  const name = form.elements.name.value.trim();
+  const email = form.elements.email.value.trim();
+  const phone = form.elements.phone.value.trim();
+  const department = form.elements.department.value.trim();
+  const active = Boolean(form.elements.active?.checked);
+
+  if (!name) {
+    setAccessError("Vyplňte jméno uživatele.");
+    render();
+    return;
+  }
+
+  if (!email && !phone) {
+    setAccessError("Vyplňte alespoň e-mail nebo telefon.");
+    render();
+    return;
+  }
+
+  const signedUserId = String(currentUser()?.id || "").trim().toLowerCase();
+  const targetUserId = String(sourceUser.id || form.dataset.userId || "").trim().toLowerCase();
+  if (!active && signedUserId && signedUserId === targetUserId) {
+    setAccessError("Vlastní účet v mock režimu nejde vypnout, abyste se nezamkli mimo správu.");
+    render();
+    return;
+  }
+
+  upsertLocalAccessUser({
+    ...sourceUser,
+    id: sourceUser.id || form.dataset.userId || nextLocalUserId(),
+    name,
+    email,
+    phone,
+    role,
+    department,
+    position: sourceUser.position || "",
+    active,
+    status: active ? "active" : "disabled",
+    permissions: permissionsFromMatrix(form, "userperm", role),
+    createdAt: sourceUser.createdAt || now,
+    updatedAt: now,
+    lastLoginAt: sourceUser.lastLoginAt || null
+  });
+  render();
+}
+
+function saveAccessRoleForm(form) {
+  if (!canManageAccessRoles()) {
+    setAccessError("Nemáte oprávnění upravovat role.");
+    render();
+    return;
+  }
+
+  const roleId = normalizeRole(form.dataset.roleId);
+  if (roleId === "admin") {
+    setAccessError("Admin má vždy všechna práva a nejde ho omezit.");
+    render();
+    return;
+  }
+
+  const roles = accessState.roles.map((role) => (
+    role.id === roleId
+      ? {
+          ...role,
+          description: form.elements.description.value.trim(),
+          defaultPermissions: permissionsFromMatrix(form, "roleperm", roleId)
+        }
+      : role
+  ));
+
+  setAccessState({
+    ...accessState,
+    roles,
+    selectedRoleId: roleId,
+    message: "Výchozí oprávnění role byla uložena lokálně.",
+    error: ""
+  });
+  render();
+}
+
+function createAccessUser() {
+  if (!canEditAccessUsers()) {
+    setAccessError("Nemáte oprávnění přidávat uživatele.");
+    render();
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const role = "ridic";
+  upsertLocalAccessUser({
+    id: nextLocalUserId(),
+    name: "Nový uživatel",
+    email: "",
+    phone: "",
+    role,
+    department: "",
+    position: "",
+    active: true,
+    status: "active",
+    permissions: userDefaultPermissions(role),
+    createdAt: now,
+    updatedAt: now,
+    lastLoginAt: null
+  });
+  render();
+}
+
+function selectAccessUser(userId) {
+  setAccessState({
+    ...accessState,
+    selectedUserId: userId,
+    message: "",
+    error: ""
+  });
+  render();
+}
+
+function selectAccessRole(roleId) {
+  setAccessState({
+    ...accessState,
+    selectedRoleId: normalizeRole(roleId),
+    message: "",
+    error: ""
+  });
+  render();
+}
+
+function setAccessUserActive(userId, active) {
+  if (!canEditAccessUsers()) {
+    setAccessError("Nemáte oprávnění měnit stav uživatele.");
+    render();
+    return;
+  }
+
+  const signedUserId = String(currentUser()?.id || "").trim().toLowerCase();
+  if (!active && signedUserId && signedUserId === String(userId || "").trim().toLowerCase()) {
+    setAccessError("Vlastní účet v mock režimu nejde vypnout, abyste se nezamkli mimo správu.");
+    render();
+    return;
+  }
+
+  const user = findAccessUser(userId);
+  if (!user) {
+    setAccessError("Uživatel nebyl nalezen.");
+    render();
+    return;
+  }
+
+  upsertLocalAccessUser({
+    ...user,
+    active,
+    status: active ? "active" : "disabled",
+    updatedAt: new Date().toISOString()
+  });
+  render();
+}
+
+function resetAccessUserPermissions(userId) {
+  if (!canEditAccessUsers()) {
+    setAccessError("Nemáte oprávnění měnit oprávnění uživatele.");
+    render();
+    return;
+  }
+
+  const user = findAccessUser(userId);
+  if (!user) {
+    setAccessError("Uživatel nebyl nalezen.");
+    render();
+    return;
+  }
+
+  upsertLocalAccessUser({
+    ...user,
+    permissions: userDefaultPermissions(user.role),
+    updatedAt: new Date().toISOString()
+  });
+  render();
+}
+
+function changeAccessUserRole(select) {
+  if (!canEditAccessUsers()) {
+    return;
+  }
+
+  const form = select.closest("[data-access-user-form]");
+  const user = findAccessUser(form?.dataset.userId);
+  if (!user) {
+    return;
+  }
+
+  const role = normalizeRole(select.value);
+  upsertLocalAccessUser({
+    ...user,
+    role,
+    permissions: userDefaultPermissions(role),
+    updatedAt: new Date().toISOString()
+  });
+  render();
+}
+
 document.addEventListener("submit", (event) => {
+  const accessUserForm = event.target.closest("[data-access-user-form]");
+  if (accessUserForm) {
+    event.preventDefault();
+    saveAccessUserForm(accessUserForm);
+    return;
+  }
+
+  const accessRoleForm = event.target.closest("[data-access-role-form]");
+  if (accessRoleForm) {
+    event.preventDefault();
+    saveAccessRoleForm(accessRoleForm);
+    return;
+  }
+
   const absenceRequestForm = event.target.closest("[data-absence-request-form]");
   if (absenceRequestForm) {
     event.preventDefault();
@@ -2022,6 +2563,12 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  const accessUserRole = event.target.closest("[data-access-user-role]");
+  if (accessUserRole) {
+    changeAccessUserRole(accessUserRole);
+    return;
+  }
+
   const absenceFilter = event.target.closest("[data-absence-filter]");
   if (absenceFilter) {
     const form = absenceFilter.closest("[data-absence-filter-form]");
@@ -2051,30 +2598,68 @@ document.addEventListener("change", (event) => {
 
   const statusField = event.target.closest("[data-feedback-status]");
   if (statusField) {
-    if (!canManageFeedback(authState.user)) {
+    const user = currentUser();
+    if (!canManageFeedback(user)) {
       return;
     }
 
-    updateModuleFeedback(statusField.dataset.feedbackId, { status: statusField.value }, authState.user);
+    updateModuleFeedback(statusField.dataset.feedbackId, { status: statusField.value }, user);
     render();
     return;
   }
 
   const noteField = event.target.closest("[data-feedback-note]");
   if (noteField) {
-    if (!canManageFeedback(authState.user)) {
+    const user = currentUser();
+    if (!canManageFeedback(user)) {
       return;
     }
 
-    updateModuleFeedback(noteField.dataset.feedbackId, { internalNote: noteField.value }, authState.user);
+    updateModuleFeedback(noteField.dataset.feedbackId, { internalNote: noteField.value }, user);
   }
 });
 
 document.addEventListener("click", (event) => {
+  const newAccessUser = event.target.closest("[data-access-new-user]");
+  if (newAccessUser) {
+    createAccessUser();
+    return;
+  }
+
+  const editAccessUser = event.target.closest("[data-access-edit-user]");
+  if (editAccessUser) {
+    selectAccessUser(editAccessUser.dataset.accessEditUser);
+    return;
+  }
+
+  const disableAccessUser = event.target.closest("[data-access-disable-user]");
+  if (disableAccessUser) {
+    setAccessUserActive(disableAccessUser.dataset.accessDisableUser, false);
+    return;
+  }
+
+  const enableAccessUser = event.target.closest("[data-access-enable-user]");
+  if (enableAccessUser) {
+    setAccessUserActive(enableAccessUser.dataset.accessEnableUser, true);
+    return;
+  }
+
+  const resetUserPermissions = event.target.closest("[data-access-reset-user-permissions]");
+  if (resetUserPermissions) {
+    resetAccessUserPermissions(resetUserPermissions.dataset.accessResetUserPermissions);
+    return;
+  }
+
+  const editAccessRole = event.target.closest("[data-access-edit-role]");
+  if (editAccessRole) {
+    selectAccessRole(editAccessRole.dataset.accessEditRole);
+    return;
+  }
+
   const absenceTab = event.target.closest("[data-absence-tab]");
   if (absenceTab) {
     const nextTab = absenceTab.dataset.absenceTab || "dashboard";
-    absenceUiState.tab = resolveAbsenceTab(authState.user, nextTab);
+    absenceUiState.tab = resolveAbsenceTab(currentUser(), nextTab);
     setAbsenceNotice("");
     render();
     return;

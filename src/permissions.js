@@ -10,6 +10,16 @@ export const ROLE_LABELS = {
   readonly: "Readonly"
 };
 
+export const ROLE_DESCRIPTIONS = {
+  admin: "Plný přístup ke všem modulům, nastavení, uživatelům a integracím.",
+  management: "Vedení firmy, přehledy, náklady, reporty a schvalování.",
+  kancelar: "Administrativa, zákazníci, reporty, dovolené a základní práce s uživateli.",
+  garazmistr: "Vozidla, servis, pneumatiky, hlášení závad a týmové schvalování.",
+  dispecer: "Trasy, svozy, řidiči a provozní přehled.",
+  ridic: "Jednoduché zadávání hlášení, dovolené a vlastních provozních údajů.",
+  readonly: "Pouze čtení vybraných modulů bez úprav."
+};
+
 const ROLE_ALIASES = {
   garage_master: "garazmistr",
   garaz_master: "garazmistr",
@@ -111,6 +121,21 @@ export const ROLE_PERMISSIONS = {
   ]
 };
 
+export const ROLE_DEFINITIONS = Object.keys(ROLE_LABELS).map((role) => ({
+  id: role,
+  name: role,
+  label: ROLE_LABELS[role],
+  description: ROLE_DESCRIPTIONS[role],
+  defaultPermissions: ROLE_PERMISSIONS[role].flatMap((permission) => {
+    if (permission === "*:*") {
+      return [{ moduleId: "*", action: "*", allowed: true }];
+    }
+
+    const [moduleId, action] = permission.split(":");
+    return [{ moduleId, action, allowed: true }];
+  })
+}));
+
 export function normalizeRole(role) {
   const key = String(role || "readonly").trim().toLowerCase();
   return ROLE_ALIASES[key] || key || "readonly";
@@ -147,6 +172,38 @@ function permissionSetForRole(role) {
   return new Set(ROLE_PERMISSIONS[normalizeRole(role)] || ROLE_PERMISSIONS.readonly);
 }
 
+function permissionKey(moduleId, action) {
+  return `${normalizeModuleId(moduleId)}:${String(action || "view").trim()}`;
+}
+
+function rolePermissionSet(user) {
+  const role = normalizeRole(user?.role);
+  const rolePermissions = user?.rolePermissions?.[role];
+
+  if (Array.isArray(rolePermissions)) {
+    return new Set(rolePermissions
+      .filter((permission) => permission?.allowed !== false)
+      .map((permission) => (
+        permission.moduleId === "*" && permission.action === "*"
+          ? "*:*"
+          : permissionKey(permission.moduleId, permission.action)
+      )));
+  }
+
+  return permissionSetForRole(role);
+}
+
+function explicitPermission(user, moduleId, action) {
+  const normalizedModuleId = normalizeModuleId(moduleId);
+  const normalizedAction = String(action || "view").trim();
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+
+  return permissions.find((permission) => (
+    normalizeModuleId(permission.moduleId) === normalizedModuleId &&
+    String(permission.action || "").trim() === normalizedAction
+  ));
+}
+
 export function hasPermission(user, moduleId, action = "view") {
   if (!isUserActive(user)) {
     return false;
@@ -154,6 +211,15 @@ export function hasPermission(user, moduleId, action = "view") {
 
   const normalizedModuleId = normalizeModuleId(moduleId);
   const normalizedAction = String(action || "view").trim();
+
+  if (normalizeRole(user?.role) === "admin") {
+    return true;
+  }
+
+  const userPermission = explicitPermission(user, normalizedModuleId, normalizedAction);
+  if (userPermission) {
+    return userPermission.allowed === true;
+  }
 
   if (moduleListIncludes(user.deniedModules, normalizedModuleId)) {
     return false;
@@ -167,7 +233,7 @@ export function hasPermission(user, moduleId, action = "view") {
     return true;
   }
 
-  const permissions = permissionSetForRole(user.role);
+  const permissions = rolePermissionSet(user);
   return (
     permissions.has("*:*") ||
     permissions.has(`${normalizedModuleId}:*`) ||
