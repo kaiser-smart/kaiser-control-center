@@ -189,12 +189,6 @@ export async function getUsers(env) {
 
 export async function findAllowedUser(env, identifier) {
   const normalized = normalizeIdentifier(identifier);
-  const allowedDomain = String(env.ALLOWED_EMAIL_DOMAIN || "").trim().toLowerCase();
-
-  if (normalized.includes("@") && allowedDomain && !normalized.endsWith(`@${allowedDomain}`)) {
-    return null;
-  }
-
   const users = await getUsers(env);
   const user = users.find((item) => {
     const email = normalizeIdentifier(item.email);
