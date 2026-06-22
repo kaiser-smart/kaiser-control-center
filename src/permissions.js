@@ -1,4 +1,24 @@
 export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export", "manage"];
+export const PERMISSION_MODULES = [
+  "dashboard",
+  "fleet",
+  "driver-reports",
+  "service-maintenance",
+  "tyres",
+  "collection-routes",
+  "sampling-routes",
+  "vistos",
+  "costs",
+  "reports",
+  "users",
+  "settings",
+  "absence",
+  "feedback"
+];
+
+export const TEST_MODE_FULL_ACCESS = true;
+export const FULL_ACCESS_ROLES = ["admin"];
+export const TEST_MODE_FULL_ACCESS_ROLES = ["admin", "management"];
 
 export const ROLE_LABELS = {
   admin: "Admin",
@@ -12,7 +32,7 @@ export const ROLE_LABELS = {
 
 export const ROLE_DESCRIPTIONS = {
   admin: "Plný přístup ke všem modulům, nastavení, uživatelům a integracím.",
-  management: "Vedení firmy, přehledy, náklady, reporty a schvalování.",
+  management: "Testovací plný přístup stejně jako Admin. Později půjde zpřísnit.",
   kancelar: "Administrativa, zákazníci, reporty, dovolené a základní práce s uživateli.",
   garazmistr: "Vozidla, servis, pneumatiky, hlášení závad a týmové schvalování.",
   dispecer: "Trasy, svozy, řidiči a provozní přehled.",
@@ -51,21 +71,7 @@ function actions(moduleId, actionList) {
 
 export const ROLE_PERMISSIONS = {
   admin: ["*:*"],
-  management: [
-    ...actions("dashboard", ["view", "export"]),
-    ...actions("fleet", ["view", "export"]),
-    ...actions("driver-reports", ["view", "export"]),
-    ...actions("service-maintenance", ["view", "export"]),
-    ...actions("tyres", ["view", "export"]),
-    ...actions("collection-routes", ["view", "export"]),
-    ...actions("sampling-routes", ["view", "export"]),
-    ...actions("vistos", ["view", "export"]),
-    ...actions("costs", ["view", "export"]),
-    ...actions("reports", ["view", "export"]),
-    ...actions("settings", ["view"]),
-    ...actions("absence", ["view", "create", "approve", "export"]),
-    ...actions("feedback", ["view", "create", "edit", "export"])
-  ],
+  management: ["*:*"],
   kancelar: [
     ...actions("dashboard", ["view"]),
     ...actions("vistos", ["view", "edit", "export"]),
@@ -172,6 +178,17 @@ function permissionSetForRole(role) {
   return new Set(ROLE_PERMISSIONS[normalizeRole(role)] || ROLE_PERMISSIONS.readonly);
 }
 
+export function isFullAccessRole(user) {
+  const role = normalizeRole(typeof user === "string" ? user : user?.role);
+
+  if (typeof user === "object" && user && !isUserActive(user)) {
+    return false;
+  }
+
+  const fullAccessRoles = TEST_MODE_FULL_ACCESS ? TEST_MODE_FULL_ACCESS_ROLES : FULL_ACCESS_ROLES;
+  return fullAccessRoles.includes(role);
+}
+
 function permissionKey(moduleId, action) {
   return `${normalizeModuleId(moduleId)}:${String(action || "view").trim()}`;
 }
@@ -212,7 +229,7 @@ export function hasPermission(user, moduleId, action = "view") {
   const normalizedModuleId = normalizeModuleId(moduleId);
   const normalizedAction = String(action || "view").trim();
 
-  if (normalizeRole(user?.role) === "admin") {
+  if (isFullAccessRole(user)) {
     return true;
   }
 
@@ -225,12 +242,12 @@ export function hasPermission(user, moduleId, action = "view") {
     return false;
   }
 
-  if (Array.isArray(user.modules) && user.modules.length > 0 && !moduleListIncludes(user.modules, normalizedModuleId)) {
-    return false;
-  }
-
   if (normalizedAction === "view" && moduleListIncludes(user.allowedModules, normalizedModuleId)) {
     return true;
+  }
+
+  if (Array.isArray(user.modules) && user.modules.length > 0 && !moduleListIncludes(user.modules, normalizedModuleId)) {
+    return false;
   }
 
   const permissions = rolePermissionSet(user);

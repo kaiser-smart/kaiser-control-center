@@ -1,4 +1,4 @@
-import { ROLE_DEFINITIONS, normalizeRole } from "../permissions.js";
+import { ROLE_DEFINITIONS, isFullAccessRole, normalizeRole } from "../permissions.js";
 
 export const ACCESS_STORAGE_KEY = "smart_odpady_access_control_v1";
 
@@ -29,15 +29,20 @@ function normalizePermission(permission) {
 }
 
 export function normalizeRoleDefinition(role) {
-  const fallback = ROLE_DEFINITIONS.find((item) => item.id === normalizeRole(role?.id || role?.name)) || ROLE_DEFINITIONS.at(-1);
+  const roleId = normalizeRole(role?.id || role?.name);
+  const fallback = ROLE_DEFINITIONS.find((item) => item.id === roleId) || ROLE_DEFINITIONS.at(-1);
+  const defaultPermissions = isFullAccessRole({ role: roleId, active: true })
+    ? fallback.defaultPermissions.map((permission) => ({ ...permission }))
+    : Array.isArray(role?.defaultPermissions)
+      ? role.defaultPermissions.map(normalizePermission)
+      : fallback.defaultPermissions.map((permission) => ({ ...permission }));
+
   return {
     id: normalizeRole(role?.id || role?.name || fallback.id),
     name: normalizeRole(role?.name || role?.id || fallback.name),
     label: String(role?.label || fallback.label),
     description: String(role?.description || fallback.description),
-    defaultPermissions: Array.isArray(role?.defaultPermissions)
-      ? role.defaultPermissions.map(normalizePermission)
-      : fallback.defaultPermissions.map((permission) => ({ ...permission }))
+    defaultPermissions
   };
 }
 

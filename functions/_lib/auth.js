@@ -74,7 +74,8 @@ export function publicUser(user) {
     lastLoginAt: user.lastLoginAt,
     modules: user.modules,
     allowedModules: user.allowedModules,
-    deniedModules: user.deniedModules
+    deniedModules: user.deniedModules,
+    permissions: user.permissions
   };
 }
 

@@ -57,6 +57,7 @@ import {
   canViewModule,
   filterModulesByUser,
   hasPermission,
+  isFullAccessRole,
   isUserActive,
   normalizeRole,
   roleLabel
@@ -345,12 +346,12 @@ function nextLocalUserId() {
 
 function matrixPermissions(permissions, roleId = "") {
   const map = permissionMap(permissions || []);
-  const adminAlwaysAllowed = normalizeRole(roleId) === "admin";
+  const fullAccessAlwaysAllowed = isFullAccessRole({ role: roleId, active: true });
 
   return {
     allows(moduleId, action) {
       return (
-        adminAlwaysAllowed ||
+        fullAccessAlwaysAllowed ||
         map.get(`${moduleId}:${action}`) === true ||
         map.get(`${moduleId}:*`) === true ||
         map.get(`*:*`) === true
@@ -370,7 +371,7 @@ function fullPermissionsAllowed() {
 }
 
 function permissionsFromMatrix(form, prefix, roleId = "") {
-  if (normalizeRole(roleId) === "admin") {
+  if (isFullAccessRole({ role: roleId, active: true })) {
     return fullPermissionsAllowed();
   }
 
@@ -378,7 +379,7 @@ function permissionsFromMatrix(form, prefix, roleId = "") {
 }
 
 function userDefaultPermissions(roleId) {
-  return normalizeRole(roleId) === "admin"
+  return isFullAccessRole({ role: roleId, active: true })
     ? fullPermissionsAllowed()
     : rolePermissionsFor(roleId, accessState.roles);
 }
@@ -492,7 +493,7 @@ function accessUserForm(user, canEditUsers) {
   const effectivePermissions = user.permissions?.length ? user.permissions : userDefaultPermissions(user.role);
   const disabled = canEditUsers ? "" : "disabled";
   const activeChecked = user.active !== false ? "checked" : "";
-  const roleIsAdmin = normalizeRole(user.role) === "admin";
+  const roleHasFullAccess = isFullAccessRole({ role: user.role, active: true });
 
   return `
     <section class="users-panel access-editor" id="access-user-editor" aria-labelledby="access-user-title">
@@ -533,8 +534,8 @@ function accessUserForm(user, canEditUsers) {
           </label>
         </div>
 
-        ${roleIsAdmin ? `
-          <p class="permissions-note">Admin má vždy všechna práva. Checkboxy jsou předvyplněné naplno.</p>
+        ${roleHasFullAccess ? `
+          <p class="permissions-note">Tato role má v testovacím režimu vždy plný přístup. Checkboxy jsou předvyplněné naplno.</p>
         ` : ""}
 
         <h3 class="access-subtitle">Oprávnění podle modulů</h3>
@@ -562,7 +563,7 @@ function rolesManagementSection(canManageRoles) {
   const roles = orderedAccessRoles();
   const selectedRole = selectedAccessRole();
   const rolePermissions = selectedRole?.defaultPermissions || [];
-  const roleIsAdmin = normalizeRole(selectedRole?.id) === "admin";
+  const roleHasFullAccess = isFullAccessRole({ role: selectedRole?.id, active: true });
 
   return `
     <section class="users-panel permissions-panel access-roles" aria-labelledby="access-roles-title">
@@ -599,21 +600,23 @@ function rolesManagementSection(canManageRoles) {
             </label>
           </div>
 
-          ${roleIsAdmin ? `
-            <p class="permissions-note">Admin má vždy všechna práva. Výchozí práva admina nejdou omezit.</p>
+          ${roleHasFullAccess ? `
+            <p class="permissions-note">Admin a Management mají v testovacím režimu vždy všechna práva. Tuto plnou roli nejde omylem omezit.</p>
           ` : ""}
 
           ${permissionsMatrixTable({
             namePrefix: "roleperm",
             permissions: rolePermissions,
             roleId: selectedRole.id,
-            disabled: !canManageRoles || roleIsAdmin
+            disabled: !canManageRoles || roleHasFullAccess
           })}
 
           <div class="access-form-actions">
-            ${canManageRoles && !roleIsAdmin ? `
+            ${canManageRoles && !roleHasFullAccess ? `
               <button class="primary-action" type="submit">Uložit výchozí oprávnění role</button>
-            ` : '<p class="permissions-note">Výchozí oprávnění role může měnit pouze uživatel s právem spravovat uživatele.</p>'}
+            ` : roleHasFullAccess
+              ? '<p class="permissions-note">Plnou roli v testovacím režimu nejde omezit.</p>'
+              : '<p class="permissions-note">Výchozí oprávnění role může měnit pouze uživatel s právem spravovat uživatele.</p>'}
           </div>
         </form>
       ` : ""}
@@ -2368,6 +2371,17 @@ function saveAccessUserForm(form) {
     return;
   }
 
+  if (
+    signedUserId &&
+    signedUserId === targetUserId &&
+    isFullAccessRole(currentUser()) &&
+    !isFullAccessRole({ role, active: true })
+  ) {
+    setAccessError("Vlastní účet s plným přístupem nejde v testovacím režimu změnit na omezenou roli.");
+    render();
+    return;
+  }
+
   upsertLocalAccessUser({
     ...sourceUser,
     id: sourceUser.id || form.dataset.userId || nextLocalUserId(),
@@ -2395,8 +2409,8 @@ function saveAccessRoleForm(form) {
   }
 
   const roleId = normalizeRole(form.dataset.roleId);
-  if (roleId === "admin") {
-    setAccessError("Admin má vždy všechna práva a nejde ho omezit.");
+  if (isFullAccessRole({ role: roleId, active: true })) {
+    setAccessError("Admin a Management mají v testovacím režimu vždy plná práva a nejde je omezit.");
     render();
     return;
   }
@@ -2542,6 +2556,20 @@ function changeAccessUserRole(select) {
   }
 
   const role = normalizeRole(select.value);
+  const signedUserId = String(currentUser()?.id || "").trim().toLowerCase();
+  const targetUserId = String(user.id || "").trim().toLowerCase();
+
+  if (
+    signedUserId &&
+    signedUserId === targetUserId &&
+    isFullAccessRole(currentUser()) &&
+    !isFullAccessRole({ role, active: true })
+  ) {
+    setAccessError("Vlastní účet s plným přístupem nejde v testovacím režimu změnit na omezenou roli.");
+    render();
+    return;
+  }
+
   upsertLocalAccessUser({
     ...user,
     role,

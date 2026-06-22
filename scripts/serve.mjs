@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
 import { DEFAULT_USERS } from "../functions/_lib/default-users.js";
+import { hasPermission } from "../src/permissions.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -97,7 +98,11 @@ function publicUser(user) {
     position: user.position,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
-    modules: user.modules
+    modules: user.modules,
+    allowedModules: user.allowedModules,
+    deniedModules: user.deniedModules,
+    permissions: user.permissions,
+    active: user.active
   };
 }
 
@@ -227,7 +232,7 @@ async function handleApi(request, response) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
       return true;
     }
-    if (user.role !== "admin") {
+    if (!hasPermission(user, "users", "view")) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
@@ -241,7 +246,7 @@ async function handleApi(request, response) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
       return true;
     }
-    if (user.role !== "admin") {
+    if (!hasPermission(user, "users", "edit")) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
