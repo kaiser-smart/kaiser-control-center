@@ -77,6 +77,22 @@ git push origin <nazev-vetve>
 
 Produkční větev / nasazení posílat až po výslovném potvrzení Radima.
 
+Po potvrzeném nasazení proveď automaticky i navazující produkční kroky, které jsou nutné pro funkčnost nasazené změny:
+- vytvoření nebo nastavení Cloudflare D1 / KV / R2,
+- spuštění databázové migrace,
+- přidání Pages bindingu,
+- nastavení běžných ne-tajných produkčních proměnných,
+- ověření ostré URL v prohlížeči.
+
+Nečekej na samostatné potvrzení pro každý technický krok, pokud už Radim schválil nasazení a krok je bezpečný.
+
+Zastav se pouze tehdy, když:
+- chybí oprávnění,
+- chybí tajný token nebo heslo,
+- krok může smazat nebo přepsat produkční data,
+- není jasné, která produkční služba je zdroj pravdy,
+- Cloudflare / GitHub vyžaduje ruční potvrzení vlastníka účtu.
+
 ## 7. Na projektu pracují
 
 Na projektu pracují:
