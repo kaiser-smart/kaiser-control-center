@@ -417,16 +417,16 @@ const speechRecognition = useSpeechRecognition({
   onResult: (transcript) => submitAiAssistantQuestion(transcript, { fromVoice: true }),
   onStatusChange: (status) => {
     aiAssistantState.voiceStatus = status || AI_STATUS_READY;
-    render();
+    renderAiAssistantLayerOnly();
   },
   onListeningChange: (isListening) => {
     aiAssistantState.isListening = isListening;
-    render();
+    renderAiAssistantLayerOnly();
   },
   onError: (error) => {
     aiAssistantState.voiceStatus = error?.status || aiAssistantState.voiceStatus;
     aiAssistantState.voiceNotice = error?.message || "";
-    render();
+    renderAiAssistantLayerOnly();
   }
 });
 
@@ -654,7 +654,7 @@ function setAiAssistant(assistantId) {
     ...aiAssistantState.messages,
     createAiAssistantMessage("bot", assistant.intro, [], assistant.name)
   ];
-  render();
+  renderAiAssistantLayerOnly();
 }
 
 async function probeAiAssistantAvatarAssets() {
@@ -673,7 +673,7 @@ async function probeAiAssistantAvatarAssets() {
     }
   }));
 
-  render();
+  renderAiAssistantLayerOnly();
 }
 
 function moduleIdForAiRoute(route) {
@@ -751,21 +751,21 @@ function showAiToast({ type = "info", message = "" } = {}) {
     type,
     message
   };
-  render();
+  renderAiAssistantLayerOnly();
 
   aiToastTimer = window.setTimeout(() => {
     aiAssistantState.toast = null;
-    render();
+    renderAiAssistantLayerOnly();
   }, 3600);
 }
 
 function showAiHighlight({ message = "" } = {}) {
   aiAssistantState.highlightMessage = String(message || "Zvýrazněno.").trim();
-  render();
+  renderAiAssistantLayerOnly();
 
   window.setTimeout(() => {
     aiAssistantState.highlightMessage = "";
-    render();
+    renderAiAssistantLayerOnly();
   }, 2800);
 }
 
@@ -781,7 +781,7 @@ function requestAiConfirmation({ title, message, confirmLabel, cancelLabel } = {
     cancelLabel
   };
 
-  render();
+  renderAiAssistantLayerOnly();
 
   return new Promise((resolve) => {
     aiConfirmationResolver = resolve;
@@ -792,7 +792,7 @@ function resolveAiConfirmation(confirmed) {
   const resolver = aiConfirmationResolver;
   aiConfirmationResolver = null;
   aiAssistantState.confirmation = null;
-  render();
+  renderAiAssistantLayerOnly();
 
   if (resolver) {
     resolver(Boolean(confirmed));
@@ -937,14 +937,14 @@ function openAiAssistant(mode = "text") {
   aiAssistantState.mode = mode === "voice" ? "voice" : "text";
   aiAssistantState.voiceStatus = AI_STATUS_READY;
   aiAssistantState.voiceNotice = "";
-  render();
+  renderAiAssistantLayerOnly();
 }
 
 function dismissAiAssistantWelcome() {
   aiAssistantState.welcomeVisible = false;
   aiAssistantState.welcomeAnimate = false;
   aiAssistantState.launcherVisible = true;
-  render();
+  renderAiAssistantLayerOnly();
 }
 
 function closeAiAssistant() {
@@ -956,7 +956,7 @@ function closeAiAssistant() {
   aiAssistantState.launcherVisible = true;
   aiAssistantState.isListening = false;
   aiAssistantState.voiceStatus = AI_STATUS_DONE;
-  render();
+  renderAiAssistantLayerOnly();
 }
 
 async function submitAiAssistantQuestion(question, options = {}) {
@@ -979,7 +979,7 @@ async function submitAiAssistantQuestion(question, options = {}) {
     aiAssistantState.voiceStatus = AI_STATUS_DONE;
   }
 
-  render();
+  renderAiAssistantLayerOnly();
 
   if (options.fromVoice && response.actions?.length === 1) {
     const route = normalizeAiRoute(response.actions[0].route);
@@ -1026,7 +1026,7 @@ function stopAiVoiceDemo(options = {}) {
   aiAssistantState.voiceStatus = AI_STATUS_READY;
 
   if (options.renderAfter !== false) {
-    render();
+    renderAiAssistantLayerOnly();
   }
 }
 
@@ -1034,7 +1034,7 @@ function playAiVoiceDemoLine(index = 0) {
   if (!aiAssistantState.demoPlaying || index >= AI_VOICE_DEMO_SCRIPT.length) {
     stopAiVoiceDemo({ renderAfter: false });
     aiAssistantState.demoStatus = "Ukázka dokončena.";
-    render();
+    renderAiAssistantLayerOnly();
     return;
   }
 
@@ -1045,7 +1045,7 @@ function playAiVoiceDemoLine(index = 0) {
   aiAssistantState.demoStatus = line.speaker === "ai" ? "Mluví AI Smart pomocník…" : "Mluví uživatel Kaiser smart…";
   aiAssistantState.voiceStatus = AI_STATUS_DEMO;
   aiAssistantState.isListening = true;
-  render();
+  renderAiAssistantLayerOnly();
 
   const next = () => {
     clearAiVoiceDemoTimer();
@@ -1061,7 +1061,7 @@ function playAiVoiceDemoLine(index = 0) {
     window.speechSynthesis.speak(utterance);
   } else {
     aiAssistantState.demoStatus = "Zvuková ukázka není v tomto prohlížeči podporovaná, přehrávám textově.";
-    render();
+    renderAiAssistantLayerOnly();
   }
 
   aiVoiceDemoTimer = window.setTimeout(() => {
@@ -1112,13 +1112,13 @@ async function startAiVoiceRecognition() {
   aiAssistantState.demoStatus = "";
   aiAssistantState.voiceNotice = "";
   aiAssistantState.voiceStatus = "Připravuji hlasový režim…";
-  render();
+  renderAiAssistantLayerOnly();
 
   await prepareElevenLabsVoiceSession();
 
   const started = speechRecognition.start();
   if (!started) {
-    render();
+    renderAiAssistantLayerOnly();
   }
 }
 
@@ -1127,7 +1127,7 @@ function stopAiVoiceRecognition() {
   speechRecognition.stop();
   aiAssistantState.isListening = false;
   aiAssistantState.voiceStatus = AI_STATUS_DONE;
-  render();
+  renderAiAssistantLayerOnly();
 }
 
 function navigateFromAiAssistant(route) {
@@ -1160,7 +1160,7 @@ function renderAiAssistantLayer() {
 
   const assistant = selectedAiAssistant();
 
-  return [
+  const content = [
     AiWelcomeModal({
       visible: aiAssistantState.welcomeVisible,
       animate: aiAssistantState.welcomeAnimate
@@ -1176,6 +1176,7 @@ function renderAiAssistantLayer() {
       avatarAssetStatus: aiAssistantState.avatarAssetStatus,
       elevenLabsStatus: aiAssistantState.elevenLabsStatus,
       isListening: aiAssistantState.isListening,
+      voiceStatus: aiAssistantState.voiceStatus,
       demoPlaying: aiAssistantState.demoPlaying,
       demoSpeaker: aiAssistantState.demoSpeaker,
       demoSpeakerLabel: aiAssistantState.demoSpeakerLabel,
@@ -1189,6 +1190,27 @@ function renderAiAssistantLayer() {
     renderAiToast(),
     renderAiHighlightMessage()
   ].join("");
+
+  return `<div class="ai-assistant-layer" data-ai-assistant-layer>${content}</div>`;
+}
+
+function renderAiAssistantLayerOnly() {
+  const currentLayer = app.querySelector("[data-ai-assistant-layer]");
+  const nextLayer = renderAiAssistantLayer();
+
+  if (currentLayer) {
+    if (nextLayer) {
+      currentLayer.outerHTML = nextLayer;
+    } else {
+      currentLayer.remove();
+    }
+  } else if (nextLayer) {
+    app.insertAdjacentHTML("beforeend", nextLayer);
+  }
+
+  if (aiAssistantState.welcomeVisible && aiAssistantState.welcomeAnimate) {
+    aiAssistantState.welcomeAnimate = false;
+  }
 }
 
 function formatDateTime(value) {

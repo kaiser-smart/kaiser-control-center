@@ -17,6 +17,7 @@ export function AiVoiceAssistantPanel({
   avatarAssetStatus = {},
   elevenLabsStatus = "",
   listening = false,
+  voiceStatus = "",
   demoPlaying = false,
   demoSpeaker = "",
   demoSpeakerLabel = "",
@@ -29,7 +30,11 @@ export function AiVoiceAssistantPanel({
 
   const assistantName = assistant?.name || "Smart pomocník";
   const speakerClass = demoSpeaker ? `ai-voice-assistant-panel--speaker-${escapeHtml(demoSpeaker)}` : "";
-  const statusText = demoStatus || (listening ? "Poslouchám…" : "Klepnutím spustíš hlasový pokyn.");
+  const normalizedVoiceStatus = String(voiceStatus || "").trim();
+  const fallbackStatus = listening ? "Poslouchám…" : "Klepnutím spustíš hlasový pokyn.";
+  const statusText = demoStatus || (normalizedVoiceStatus && normalizedVoiceStatus !== "Připraven"
+    ? normalizedVoiceStatus
+    : fallbackStatus);
 
   return `
     <section
