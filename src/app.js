@@ -3,7 +3,7 @@ import { VersionBackupInfo } from "./components/VersionBackupInfo.js";
 import { VersionNewsInfo } from "./components/VersionNewsInfo.js";
 import { ModuleFeedbackBox } from "./components/ModuleFeedbackBox.js";
 import { AppearanceSettingsBox } from "./components/AppearanceSettingsBox.js";
-import { ReportsIcon } from "./components/icons/index.js";
+import { QuickAbsenceIcon, ReportsIcon } from "./components/icons/index.js";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard.js";
 import {
   ABSENCE_REPORT_DAY,
@@ -90,7 +90,7 @@ const feedbackMenuItem = {
   status: "správa",
   active: true,
   disabled: false,
-  order: 14
+  order: 15
 };
 const permissionModules = [...orderedModules, feedbackMenuItem];
 const primaryRoutes = new Map(orderedModules.map((moduleItem) => [moduleItem.route, moduleItem]));
@@ -102,6 +102,17 @@ const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
 const FEEDBACK_ROUTE = "/pripominky";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
 const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
+const quickAbsenceMenuItem = {
+  id: "quick-absence",
+  title: "Rychlé zadání",
+  description: "Dovolená, nemoc nebo lékař na pár kliknutí přímo z mobilu.",
+  route: ABSENCE_QUICK_ROUTE,
+  icon: QuickAbsenceIcon,
+  status: "ROZPRACOVÁN",
+  active: true,
+  disabled: false,
+  order: 0
+};
 const EMPLOYMENT_STATUS_OPTIONS = [
   { value: "active", label: "Aktivní" },
   { value: "inactive", label: "Neaktivní" }
@@ -310,11 +321,12 @@ function renderModuleIcon(moduleItem) {
 }
 
 function statusBadge(moduleItem) {
-  if (moduleItem.status !== "HOTOVO") {
+  if (moduleItem.status !== "HOTOVO" && moduleItem.status !== "ROZPRACOVÁN") {
     return "";
   }
 
-  return '<span class="status-badge">HOTOVO</span>';
+  const tone = moduleItem.status === "HOTOVO" ? "done" : "progress";
+  return `<span class="status-badge status-badge--${tone}">${escapeHtml(moduleItem.status)}</span>`;
 }
 
 function visibleModules(user) {
@@ -332,10 +344,6 @@ function menuModules(user) {
 }
 
 function routeForModuleCard(moduleItem, user) {
-  if (moduleItem.id === "absence" && hasPermission(user, "absence", "create")) {
-    return ABSENCE_QUICK_ROUTE;
-  }
-
   return moduleItem.route;
 }
 
@@ -1465,7 +1473,9 @@ function loginPage() {
 }
 
 function homePage(user) {
-  const modulesForUser = menuModules(user);
+  const modulesForUser = hasPermission(user, "absence", "create")
+    ? [quickAbsenceMenuItem, ...menuModules(user)]
+    : menuModules(user);
   const completedCount = modulesForUser.filter((moduleItem) => moduleItem.status === "HOTOVO").length;
   const cards = modulesForUser
     .map(

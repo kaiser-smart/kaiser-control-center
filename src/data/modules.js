@@ -143,7 +143,7 @@ export const modules = [
     status: "mock data",
     active: true,
     disabled: false,
-    order: 11
+    order: 14
   },
   {
     id: "users",

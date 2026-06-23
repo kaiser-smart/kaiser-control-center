@@ -733,6 +733,13 @@ h1 {
   box-shadow: 0 6px 14px rgba(79, 141, 20, 0.14);
 }
 
+.status-badge--progress {
+  border-color: rgba(176, 122, 42, 0.22);
+  background: #fff4df;
+  color: #8a5a12;
+  box-shadow: 0 6px 14px rgba(176, 122, 42, 0.13);
+}
+
 .topbar {
   display: flex;
   align-items: center;

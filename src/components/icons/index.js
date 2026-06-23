@@ -4,6 +4,7 @@ export { CostsIcon } from "./CostsIcon.js";
 export { DashboardIcon } from "./DashboardIcon.js";
 export { DriverReportsIcon } from "./DriverReportsIcon.js";
 export { FleetIcon } from "./FleetIcon.js";
+export { QuickAbsenceIcon } from "./QuickAbsenceIcon.js";
 export { ReportsIcon } from "./ReportsIcon.js";
 export { SamplingRoutesIcon } from "./SamplingRoutesIcon.js";
 export { ServiceMaintenanceIcon } from "./ServiceMaintenanceIcon.js";
