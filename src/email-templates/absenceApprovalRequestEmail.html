@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart odpady – nová žádost ke schválení</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body style="margin:0; padding:0; background:#f7f9f4; font-family:'Quicksand', Arial, Helvetica, sans-serif; color:#1f2921;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%; background:#f7f9f4;">
+    <tr>
+      <td align="center" style="padding:42px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px; background:#ffffff; border:1px solid #e1e6de; border-radius:16px; box-shadow:0 24px 64px rgba(31,41,33,0.14); overflow:hidden;">
+          <tr>
+            <td style="padding:40px 42px;">
+              <div style="display:inline-block; background:#75bd25; border-radius:14px; padding:12px 24px; color:#ffffff; font-size:28px; line-height:32px; font-weight:700; margin:0 0 34px 0;">kaiser.</div>
+
+              <h1 style="margin:0 0 12px 0; font-size:38px; line-height:44px; font-weight:800; color:#1f2921;">Nová žádost ke schválení</h1>
+              <p style="margin:0 0 28px 0; font-size:19px; line-height:28px; font-weight:600; color:#647064;">V systému Smart odpady čeká nová žádost na vaše rozhodnutí.</p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fbf4; border:1px solid #dfe8d9; border-radius:14px; margin:0 0 26px 0;">
+                <tr>
+                  <td style="padding:20px 22px; font-size:16px; line-height:24px;">
+                    <p style="margin:0 0 10px 0;"><strong>Zaměstnanec:</strong> {{employee_name}}</p>
+                    <p style="margin:0 0 10px 0;"><strong>Typ:</strong> {{absence_type}}</p>
+                    <p style="margin:0 0 10px 0;"><strong>Datum od:</strong> {{date_from}}</p>
+                    <p style="margin:0 0 10px 0;"><strong>Datum do:</strong> {{date_to}}</p>
+                    <p style="margin:0 0 10px 0;"><strong>Počet dnů:</strong> {{days_count}}</p>
+                    <p style="margin:0;"><strong>Poznámka:</strong> {{note}}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <a href="{{approval_url}}" style="display:block; text-align:center; background:#75bd25; border-radius:14px; padding:18px 24px; color:#ffffff; font-size:18px; line-height:24px; font-weight:800; text-decoration:none;">Otevřít žádost</a>
+
+              <p style="margin:28px 0 0 0; font-size:13px; line-height:20px; color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

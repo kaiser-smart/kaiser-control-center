@@ -1,5 +1,9 @@
 import { getUsers, json, requireUserPermission } from "../../../_lib/auth.js";
 import {
+  AbsenceRequestStoreError,
+  employeeAbsenceDetail
+} from "../../../_lib/absence-requests-store.js";
+import {
   EmployeeStoreError,
   employeeApiStatus,
   getEmployeeCard
@@ -10,6 +14,10 @@ function employeeId(request, params) {
 }
 
 function employeeError(error) {
+  if (error instanceof AbsenceRequestStoreError) {
+    return json({ error: error.message, code: error.code, apiStatus: "waiting" }, error.status);
+  }
+
   if (error instanceof EmployeeStoreError) {
     return json({ error: error.message, code: error.code }, error.status);
   }
@@ -28,13 +36,12 @@ export async function onRequestGet({ request, env, params }) {
   try {
     const users = await getUsers(env);
     const employee = await getEmployeeCard(env, users, user, employeeId(request, params));
+    const absence = await employeeAbsenceDetail(env, users, user, employee.id);
     return json({
-      status: employee.currentAbsenceStatus,
-      sickDaysCurrentYear: employee.sickDaysCurrentYear,
-      lastAbsenceDate: employee.lastAbsenceDate,
-      items: [],
-      apiStatus: employeeApiStatus(env),
-      note: "Detailní historie absencí čeká na samostatné cloudové API nepřítomností."
+      ...absence,
+      sickDaysCurrentYear: absence.sickDaysCurrentYear || employee.sickDaysCurrentYear,
+      lastAbsenceDate: absence.lastAbsenceDate || employee.lastAbsenceDate,
+      apiStatus: employeeApiStatus(env)
     });
   } catch (error) {
     return employeeError(error);

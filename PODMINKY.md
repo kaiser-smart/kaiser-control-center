@@ -196,3 +196,37 @@ Zakázané:
 - zahodit změny potichu,
 - předstírat uložení bez API,
 - ukládat provozní data lokálně.
+
+## 13. Obrázky, SVG a grafické assety
+
+Codex nesmí sám generovat finální obrázky, loga, ilustrace, SVG ikony ani jiné grafické assety pro produkční použití.
+
+Pokud úprava vyžaduje obrázek, SVG, logo, ikonu, ilustraci, pozadí nebo jiný grafický asset, Codex se musí zastavit a vyžádat si podklad od Radima nebo Martina.
+
+Codex může:
+- připravit přesné zadání pro grafiku,
+- popsat potřebné rozměry,
+- popsat formát souboru,
+- navrhnout název souboru,
+- připravit místo v kódu pro vložení assetu,
+- použít dočasný placeholder jasně označený jako placeholder.
+
+Codex nesmí:
+- vymýšlet finální logo,
+- generovat finální SVG ikony,
+- kreslit finální ilustrace,
+- vytvářet produkční obrázky,
+- používat náhodné externí obrázky,
+- stahovat grafiku z internetu bez potvrzení,
+- nahrazovat schválený design vlastním návrhem.
+
+Povolené dočasné řešení:
+- placeholder bez produkčního významu,
+- jednoduchý box s textem `Čeká na grafiku`,
+- dočasná ikona pouze pokud je jasně označená jako placeholder.
+
+Pravidlo:
+Finální grafické assety dodává Radim nebo Martin.
+
+Pokud asset chybí, Codex má napsat:
+`Chybí grafický podklad. Prosím dodat obrázek/SVG od Radima nebo Martina.`

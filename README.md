@@ -90,6 +90,13 @@ Frontend nevolá Twilio přímo. API vrstva je připravená ve složce `function
 - `GET /api/employees/:id/documents/:documentId`
 - `GET /api/theme-settings`
 - `PATCH /api/theme-settings`
+- `GET /api/absence-requests`
+- `POST /api/absence-requests`
+- `GET /api/absence-requests/:id`
+- `POST /api/absence-requests/:id/approve`
+- `POST /api/absence-requests/:id/reject`
+- `GET /api/absence-requests/pending`
+- `POST /api/absence-requests/send-approval-reminders`
 
 Produkční hodnoty patří do Cloudflare Variables / Secrets, ne do GitHubu:
 
@@ -108,7 +115,12 @@ VITE_BACKUP_DATE="2026-06-21 22:20"
 TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 TWILIO_VERIFY_SERVICE_SID=...
+TWILIO_MESSAGING_SERVICE_SID=...
 SENDGRID_API_KEY=...
+EMAIL_PROVIDER=sendgrid
+EMAIL_FROM=...
+EMAIL_REPLY_TO=...
+ABSENCE_APPROVAL_REMINDER_HOURS=24
 ```
 
 V produkci se mock OTP nepovolí na větvi `main`; testovací kód `123456` je pouze pro lokální vývoj nebo neprodukční prostředí s `AUTH_MODE=mock`.
@@ -136,11 +148,33 @@ migrations/0003_create_theme_settings.sql
 migrations/0004_create_employee_cards.sql
 migrations/0005_create_employee_document_files.sql
 migrations/0006_create_absence_requests.sql
+migrations/0007_create_module_feedback.sql
+migrations/0008_absence_approval_workflow.sql
 ```
 
 Po vytvoření databáze je potřeba migrace spustit proti D1. Aplikace potom čte výchozí kontakty a změny z D1 slučuje podle `id`; úprava uživatele v admin modulu uloží aktuální verzi uživatele do D1.
 
 Pokud D1 binding v produkci chybí, čtení výchozích uživatelů dál funguje, ale vytvoření nebo úprava uživatele vrátí bezpečnou chybu konfigurace. Aplikace nesmí ukládat provozní uživatele do `localStorage`, `sessionStorage` ani jiné prohlížečové databáze.
+
+## Schvalování Dovolená / Nemoc
+
+Žádosti z modulu Dovolená / Nemoc se ukládají přes cloud API do D1 tabulky `absence_requests`.
+
+Workflow:
+
+- `Dovolená`, `Lékař`, `OČR` a `Náhradní volno` vznikají ve stavu `pending_approval`.
+- `Nemoc` vzniká ve stavu `recorded` bez schvalování.
+- Schválení a zamítnutí zapisuje stav do `absence_requests` a historii do `absence_approval_history`.
+- Notifikace se logují do `notification_logs`.
+- E-mail nadřízenému a SMS zaměstnanci se posílají pouze z backendu přes Cloudflare proměnné/secrets.
+
+Hodinové připomínky jsou připravené endpointem:
+
+```text
+POST /api/absence-requests/send-approval-reminders
+```
+
+Cron je připravený v API vrstvě a čeká na Cloudflare Cron Trigger / naplánované volání endpointu každou hodinu.
 
 ## Cloudflare R2 pro dokumenty zaměstnanců
 

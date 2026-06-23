@@ -33,6 +33,7 @@ const contentTypes = new Map([
   [".js", "text/javascript; charset=utf-8"],
   [".ts", "text/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
+  [".png", "image/png"],
   [".svg", "image/svg+xml"]
 ]);
 
@@ -533,8 +534,24 @@ const MOCK_ABSENCE_TYPE_LABELS = {
   compensatory_leave: "Náhradní volno"
 };
 
+const MOCK_ABSENCE_TYPE_ALIASES = {
+  "dovolená": "vacation",
+  dovolena: "vacation",
+  nemoc: "sick",
+  "lékař": "doctor",
+  lekar: "doctor",
+  "očr": "care",
+  ocr: "care",
+  "náhradní volno": "compensatory_leave",
+  "nahradni volno": "compensatory_leave"
+};
+
 const MOCK_ABSENCE_STATUS_LABELS = {
   pending: "Čeká na schválení",
+  pending_approval: "Čeká na schválení",
+  approved: "Schváleno",
+  rejected: "Zamítnuto",
+  cancelled: "Zrušeno",
   recorded: "Evidováno"
 };
 
@@ -569,6 +586,10 @@ function canViewMockAbsenceRequest(currentUser, requestItem) {
     return true;
   }
 
+  if (sameMockId(currentUser?.id, requestItem.managerId)) {
+    return true;
+  }
+
   if (role === "garazmistr" || role === "dispecer") {
     return (
       String(currentUser?.department || "").trim() &&
@@ -580,20 +601,15 @@ function canViewMockAbsenceRequest(currentUser, requestItem) {
 }
 
 function createMockAbsenceRequest(currentUser, payload) {
-  const type = String(payload?.type || "").trim();
-  const status = String(payload?.status || "").trim();
+  const rawType = String(payload?.type || "").trim();
+  const type = MOCK_ABSENCE_TYPE_ALIASES[rawType.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()] || rawType;
   const dateFrom = mockIsoDate(payload?.dateFrom);
   const dateTo = mockIsoDate(payload?.dateTo) || dateFrom;
   const halfDay = Boolean(payload?.halfDay);
+  const status = type === "sick" ? "recorded" : "pending_approval";
 
   if (!Object.hasOwn(MOCK_ABSENCE_TYPE_LABELS, type)) {
     const error = new Error("Vyberte typ nepřítomnosti.");
-    error.status = 400;
-    throw error;
-  }
-
-  if (!Object.hasOwn(MOCK_ABSENCE_STATUS_LABELS, status)) {
-    const error = new Error("Vyberte platný stav žádosti.");
     error.status = 400;
     throw error;
   }
@@ -613,11 +629,14 @@ function createMockAbsenceRequest(currentUser, payload) {
   const employee = findMockUser(payload.employeeId) || currentUser;
   const manager = employee?.managerId ? findMockUser(employee.managerId) : null;
   const now = new Date().toISOString();
+  const id = `absence-request-${randomUUID()}`;
 
   return {
-    id: `absence-request-${randomUUID()}`,
+    id,
     employeeId: employee.id,
     employeeName: employee.name || currentUser.name || "Uživatel",
+    employeeEmail: employee.email || "",
+    employeePhone: employee.phone || "",
     type,
     typeLabel: MOCK_ABSENCE_TYPE_LABELS[type],
     dateFrom,
@@ -629,13 +648,114 @@ function createMockAbsenceRequest(currentUser, payload) {
     daysCount: countMockAbsenceDays(dateFrom, dateTo, halfDay),
     managerId: employee.managerId || "",
     managerName: employee.managerName || manager?.name || "",
+    managerEmail: manager?.email || "",
+    managerPhone: manager?.phone || "",
+    approverId: "",
+    approverName: "",
     approverUserId: employee.managerId || "",
+    submittedAt: now,
+    approvedAt: "",
+    rejectedAt: "",
+    rejectionReason: "",
+    reminderSentAt: "",
     department: employee.department || currentUser.department || "",
     team: employee.team || employee.department || currentUser.department || "",
     createdByUserId: currentUser.id,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    history: [
+      {
+        id: `absence-history-${randomUUID()}`,
+        absenceRequestId: id,
+        fromStatus: "draft",
+        fromStatusLabel: "Rozpracováno",
+        toStatus: status,
+        toStatusLabel: MOCK_ABSENCE_STATUS_LABELS[status],
+        changedByUserId: currentUser.id,
+        changedByName: currentUser.name || currentUser.email || "",
+        changedAt: now,
+        note: String(payload?.note || "").trim()
+      }
+    ]
   };
+}
+
+function canApproveMockAbsence(currentUser, requestItem) {
+  if (!requestItem || sameMockId(currentUser?.id, requestItem.employeeId)) {
+    return false;
+  }
+
+  if (requestItem.status !== "pending_approval" && requestItem.status !== "pending") {
+    return false;
+  }
+
+  if (isFullAccessRole(currentUser) || sameMockId(currentUser?.id, requestItem.managerId)) {
+    return true;
+  }
+
+  const role = normalizeRole(currentUser?.role);
+  if (!hasPermission(currentUser, "absence", "approve")) {
+    return false;
+  }
+
+  if (role === "garazmistr" || role === "dispecer") {
+    return String(currentUser?.department || "").trim().toLowerCase() === String(requestItem.department || requestItem.team || "").trim().toLowerCase();
+  }
+
+  return role === "kancelar";
+}
+
+function changeMockAbsenceStatus(currentUser, id, status, note = "") {
+  const index = mockAbsenceRequests.findIndex((item) => sameMockId(item.id, id));
+  if (index < 0) {
+    const error = new Error("Žádost nebyla nalezena.");
+    error.status = 404;
+    throw error;
+  }
+
+  const existing = mockAbsenceRequests[index];
+  if (!canApproveMockAbsence(currentUser, existing) && status !== "cancelled") {
+    const error = new Error("Nemáte oprávnění změnit tuto žádost.");
+    error.status = 403;
+    throw error;
+  }
+
+  const now = new Date().toISOString();
+  const updated = {
+    ...existing,
+    status,
+    statusLabel: MOCK_ABSENCE_STATUS_LABELS[status],
+    approverId: status === "approved" || status === "rejected" ? currentUser.id : existing.approverId,
+    approverUserId: status === "approved" || status === "rejected" ? currentUser.id : existing.approverUserId,
+    approverName: status === "approved" || status === "rejected" ? currentUser.name : existing.approverName,
+    approvedAt: status === "approved" ? now : "",
+    rejectedAt: status === "rejected" ? now : "",
+    rejectionReason: status === "rejected" ? note : "",
+    updatedAt: now,
+    history: [
+      {
+        id: `absence-history-${randomUUID()}`,
+        absenceRequestId: existing.id,
+        fromStatus: existing.status,
+        fromStatusLabel: existing.statusLabel,
+        toStatus: status,
+        toStatusLabel: MOCK_ABSENCE_STATUS_LABELS[status],
+        changedByUserId: currentUser.id,
+        changedByName: currentUser.name || currentUser.email || "",
+        changedAt: now,
+        note
+      },
+      ...(existing.history || [])
+    ]
+  };
+
+  mockAbsenceRequests = [
+    ...mockAbsenceRequests.slice(0, index),
+    updated,
+    ...mockAbsenceRequests.slice(index + 1)
+  ];
+
+  return updated;
 }
 
 function saveMockEmployee(currentUser, id, payload) {
@@ -845,6 +965,131 @@ async function handleApi(request, response) {
       });
     }
     return true;
+  }
+
+  if (url.pathname === "/api/absence-requests/pending" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const requests = mockAbsenceRequests
+      .filter((item) => canApproveMockAbsence(user, item))
+      .slice(0, 100);
+    sendJson(response, 200, { requests, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/absence-requests/send-approval-reminders" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const requests = mockAbsenceRequests.filter((item) => item.status === "pending_approval" && !item.reminderSentAt);
+    mockAbsenceRequests = mockAbsenceRequests.map((item) => (
+      requests.some((pending) => sameMockId(pending.id, item.id))
+        ? { ...item, reminderSentAt: now, updatedAt: now }
+        : item
+    ));
+    sendJson(response, 200, {
+      count: requests.length,
+      notifications: requests.map((item) => ({
+        requestId: item.id,
+        status: "skipped",
+        errorMessage: "Lokální vývojový server neposílá skutečné e-maily."
+      })),
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  const absenceRequestMatch = /^\/api\/absence-requests\/([^/]+)(?:\/(approve|reject))?$/.exec(url.pathname);
+  if (absenceRequestMatch) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const id = decodeURIComponent(absenceRequestMatch[1]);
+    const action = absenceRequestMatch[2] || "";
+    const existing = mockAbsenceRequests.find((item) => sameMockId(item.id, id));
+
+    if (!existing) {
+      sendJson(response, 404, { error: "Žádost nebyla nalezena.", apiStatus: "ready" });
+      return true;
+    }
+
+    if (request.method === "GET" && !action) {
+      if (!canViewMockAbsenceRequest(user, existing)) {
+        sendJson(response, 403, { error: "Nemáte oprávnění." });
+        return true;
+      }
+      sendJson(response, 200, { request: existing, apiStatus: "ready" });
+      return true;
+    }
+
+    if (request.method === "DELETE" && !action) {
+      const ownRequest = sameMockId(user.id, existing.employeeId);
+      if (!ownRequest && !isFullAccessRole(user)) {
+        sendJson(response, 403, { error: "Nemáte oprávnění." });
+        return true;
+      }
+      const item = changeMockAbsenceStatus(user, id, "cancelled", "Zrušeno uživatelem.");
+      sendJson(response, 200, { request: item, apiStatus: "ready" });
+      return true;
+    }
+
+    if (request.method === "POST" && action === "approve") {
+      try {
+        const item = changeMockAbsenceStatus(user, id, "approved", "Schváleno v modulu Dovolená / Nemoc.");
+        sendJson(response, 200, {
+          request: item,
+          notification: {
+            status: "skipped",
+            errorMessage: "Lokální vývojový server neposílá skutečné SMS."
+          },
+          apiStatus: "ready"
+        });
+      } catch (error) {
+        sendJson(response, error.status || 500, { error: error.message || "Žádost se nepodařilo schválit.", apiStatus: "ready" });
+      }
+      return true;
+    }
+
+    if (request.method === "POST" && action === "reject") {
+      try {
+        const payload = await readJsonBody(request);
+        const item = changeMockAbsenceStatus(user, id, "rejected", String(payload?.reason || "").trim());
+        sendJson(response, 200, {
+          request: item,
+          notification: {
+            status: "skipped",
+            errorMessage: "Lokální vývojový server neposílá skutečné SMS."
+          },
+          apiStatus: "ready"
+        });
+      } catch (error) {
+        sendJson(response, error.status || 500, { error: error.message || "Žádost se nepodařilo zamítnout.", apiStatus: "ready" });
+      }
+      return true;
+    }
   }
 
   if (url.pathname === "/api/module-feedback" && request.method === "GET") {
@@ -1185,13 +1430,20 @@ async function handleApi(request, response) {
       return true;
     }
 
+    const items = mockAbsenceRequests
+      .filter((item) => sameMockId(item.employeeId, employee.id))
+      .filter((item) => canViewMockAbsenceRequest(user, item))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    const history = items.flatMap((item) => item.history || []);
+
     sendJson(response, 200, {
-      status: employee.currentAbsenceStatus,
+      status: items[0]?.statusLabel || employee.currentAbsenceStatus,
       sickDaysCurrentYear: employee.sickDaysCurrentYear,
-      lastAbsenceDate: employee.lastAbsenceDate,
-      items: [],
+      lastAbsenceDate: items[0]?.dateFrom || employee.lastAbsenceDate,
+      items,
+      history,
       apiStatus: "ready",
-      note: "Detailní historie absencí čeká na samostatné cloudové API nepřítomností."
+      note: items.length ? "Historie nepřítomností je načtená z vývojového API." : "Zatím tu nejsou žádné žádosti."
     });
     return true;
   }

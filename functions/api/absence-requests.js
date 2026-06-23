@@ -4,10 +4,11 @@ import {
   createAbsenceRequestRecord,
   listAbsenceRequests
 } from "../_lib/absence-requests-store.js";
+import { sendAbsenceApprovalRequestNotification } from "../_lib/notification-service.js";
 
 function absenceRequestError(error) {
   if (error instanceof AbsenceRequestStoreError) {
-    return json({ error: error.message, apiStatus: "waiting", missingEndpoint: "POST /api/absence-requests" }, error.status);
+    return json({ error: error.message, code: error.code, apiStatus: "waiting", missingEndpoint: "POST /api/absence-requests" }, error.status);
   }
 
   console.error("absence_requests.failed", { message: error.message });
@@ -44,7 +45,8 @@ export async function onRequestPost({ request, env }) {
     const users = await getUsers(env);
     const payload = await readJson(request);
     const absenceRequest = await createAbsenceRequestRecord(env, users, user, payload);
-    return json({ request: absenceRequest, apiStatus: "ready" }, 201);
+    const notification = await sendAbsenceApprovalRequestNotification(env, absenceRequest);
+    return json({ request: absenceRequest, notification, apiStatus: "ready" }, 201);
   } catch (error) {
     return absenceRequestError(error);
   }

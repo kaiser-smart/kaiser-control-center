@@ -17,18 +17,20 @@ import {
   ABSENCE_TABS,
   ABSENCE_TYPES,
   ABSENCE_TYPE_TONES,
+  ABSENCE_API_STATUS_LABELS,
+  ABSENCE_API_TYPE_LABELS,
   absenceBalanceForEmployee,
   absenceEmployeeOptions,
   absenceRequestsToCsv,
   absenceSummary,
+  absenceStatusLabel,
+  absenceTypeLabel,
   approvalAbsenceRequests,
   canApproveAbsence,
   canCancelAbsence,
   canSeeAllAbsences,
   canSubmitAbsenceForOthers,
-  changeAbsenceRequestStatus,
   countAbsenceDays,
-  createAbsenceRequest,
   currentMonthKey,
   employeeIdForUser,
   filterAbsenceRequests,
@@ -135,7 +137,39 @@ const AI_INITIAL_MESSAGE =
   "Ahoj, jsem Smart pomocník. Zeptej se mě na dovolenou, nemoc, pneumatiky, závady, uživatele nebo nastavení.";
 const AI_STATUS_READY = "Připraven";
 const AI_STATUS_DONE = "Hotovo";
-const AI_UNSUPPORTED_NOTICE = "Hlasové ovládání v tomto prohlížeči nejde. Použij textový dotaz.";
+const AI_STATUS_DEMO = "Přehrávám ukázku…";
+const AI_VOICE_DEMO_SCRIPT = [
+  {
+    speaker: "user",
+    label: "Uživatel Kaiser smart",
+    text: "Ahoj Kaiser smart, potřebuju zadat dovolenou na pátek."
+  },
+  {
+    speaker: "ai",
+    label: "AI Smart pomocník",
+    text: "Jasně. Na hlavní stránce klepni na Rychlé zadání, vyber Chci dovolenou a zkontroluj datum."
+  },
+  {
+    speaker: "user",
+    label: "Uživatel Kaiser smart",
+    text: "A když budu nemocný?"
+  },
+  {
+    speaker: "ai",
+    label: "AI Smart pomocník",
+    text: "Nemoc zadáš stejnou cestou. Systém ji zaeviduje a kancelář ji uvidí v modulu Dovolená a Nemoc."
+  },
+  {
+    speaker: "user",
+    label: "Uživatel Kaiser smart",
+    text: "Kde se potom žádost schvaluje?"
+  },
+  {
+    speaker: "ai",
+    label: "AI Smart pomocník",
+    text: "Nadřízený ji najde v části Ke schválení. Po schválení nebo zamítnutí přijde zaměstnanci SMS."
+  }
+];
 const EMPLOYMENT_STATUS_OPTIONS = [
   { value: "active", label: "Aktivní" },
   { value: "inactive", label: "Neaktivní" }
@@ -156,14 +190,15 @@ const basePath = new URL(document.querySelector("base")?.href || "/", window.loc
   .pathname
   .replace(/\/$/, "");
 const QUICK_ABSENCE_TYPES = [
-  { id: "vacation", label: "Chci dovolenou", shortLabel: "Dovolená", marker: "D", status: "pending" },
+  { id: "vacation", label: "Chci dovolenou", shortLabel: "Dovolená", marker: "D", status: "pending_approval" },
   { id: "sick", label: "Jsem nemocný", shortLabel: "Nemoc", marker: "N", status: "recorded" },
-  { id: "doctor", label: "Jdu k lékaři", shortLabel: "Lékař", marker: "L", status: "pending" },
-  { id: "care", label: "OČR", shortLabel: "OČR", marker: "O", status: "recorded" },
-  { id: "compensatory_leave", label: "Náhradní volno", shortLabel: "Náhradní volno", marker: "NV", status: "pending" }
+  { id: "doctor", label: "Jdu k lékaři", shortLabel: "Lékař", marker: "L", status: "pending_approval" },
+  { id: "care", label: "OČR", shortLabel: "OČR", marker: "O", status: "pending_approval" },
+  { id: "compensatory_leave", label: "Náhradní volno", shortLabel: "Náhradní volno", marker: "NV", status: "pending_approval" }
 ];
 const QUICK_ABSENCE_STATUSES = {
   pending: "Čeká na schválení",
+  pending_approval: "Čeká na schválení",
   recorded: "Evidováno"
 };
 
@@ -231,7 +266,20 @@ const absenceUiState = {
   error: "",
   typeFilter: "",
   employeeFilter: "",
-  monthFilter: currentMonthKey()
+  monthFilter: currentMonthKey(),
+  actionLoadingId: "",
+  rejectRequestId: "",
+  rejectReason: ""
+};
+const absenceApiState = {
+  requests: [],
+  loaded: false,
+  loading: false,
+  pendingRequests: [],
+  pendingLoaded: false,
+  pendingLoading: false,
+  error: "",
+  apiStatus: "waiting"
 };
 const quickAbsenceState = {
   step: "type",
@@ -263,8 +311,14 @@ const aiAssistantState = {
   voiceStatus: AI_STATUS_READY,
   voiceNotice: "",
   isListening: false,
+  demoPlaying: false,
+  demoSpeaker: "",
+  demoSpeakerLabel: "",
+  demoLine: "",
+  demoStatus: "",
   messages: [createAiAssistantMessage("bot", AI_INITIAL_MESSAGE)]
 };
+let aiVoiceDemoTimer = 0;
 
 const speechRecognition = useSpeechRecognition({
   onResult: (transcript) => submitAiAssistantQuestion(transcript, { fromVoice: true }),
@@ -535,6 +589,7 @@ function aiAssistantResponse(question) {
 }
 
 function openAiAssistant(mode = "text") {
+  stopAiVoiceDemo({ renderAfter: false });
   aiAssistantState.welcomeVisible = false;
   aiAssistantState.chatOpen = true;
   aiAssistantState.launcherVisible = false;
@@ -551,6 +606,7 @@ function dismissAiAssistantWelcome() {
 }
 
 function closeAiAssistant() {
+  stopAiVoiceDemo({ renderAfter: false });
   speechRecognition.stop({ status: false });
   aiAssistantState.chatOpen = false;
   aiAssistantState.welcomeVisible = false;
@@ -583,20 +639,111 @@ function submitAiAssistantQuestion(question, options = {}) {
   render();
 }
 
-function startAiVoiceRecognition() {
-  aiAssistantState.voiceNotice = "";
+function aiVoiceDemoDelay(line) {
+  return Math.max(3800, Math.min(6200, 1900 + String(line?.text || "").length * 58));
+}
 
-  if (!speechRecognition.supported) {
-    aiAssistantState.voiceStatus = "Hlasové ovládání není podporované";
-    aiAssistantState.voiceNotice = AI_UNSUPPORTED_NOTICE;
+function aiVoiceDemoVoice() {
+  if (!("speechSynthesis" in window)) {
+    return null;
+  }
+
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  return voices.find((voice) => voice.lang?.toLowerCase().startsWith("cs")) || voices[0] || null;
+}
+
+function clearAiVoiceDemoTimer() {
+  if (aiVoiceDemoTimer) {
+    window.clearTimeout(aiVoiceDemoTimer);
+    aiVoiceDemoTimer = 0;
+  }
+}
+
+function stopAiVoiceDemo(options = {}) {
+  clearAiVoiceDemoTimer();
+
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  aiAssistantState.demoPlaying = false;
+  aiAssistantState.demoSpeaker = "";
+  aiAssistantState.demoSpeakerLabel = "";
+  aiAssistantState.demoLine = "";
+  aiAssistantState.demoStatus = "";
+  aiAssistantState.isListening = false;
+  aiAssistantState.voiceStatus = AI_STATUS_READY;
+
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
+function playAiVoiceDemoLine(index = 0) {
+  if (!aiAssistantState.demoPlaying || index >= AI_VOICE_DEMO_SCRIPT.length) {
+    stopAiVoiceDemo({ renderAfter: false });
+    aiAssistantState.demoStatus = "Ukázka dokončena.";
     render();
     return;
   }
 
-  speechRecognition.start();
+  const line = AI_VOICE_DEMO_SCRIPT[index];
+  aiAssistantState.demoSpeaker = line.speaker;
+  aiAssistantState.demoSpeakerLabel = line.label;
+  aiAssistantState.demoLine = line.text;
+  aiAssistantState.demoStatus = line.speaker === "ai" ? "Mluví AI Smart pomocník…" : "Mluví uživatel Kaiser smart…";
+  aiAssistantState.voiceStatus = AI_STATUS_DEMO;
+  aiAssistantState.isListening = true;
+  render();
+
+  const next = () => {
+    clearAiVoiceDemoTimer();
+    aiVoiceDemoTimer = window.setTimeout(() => playAiVoiceDemoLine(index + 1), 260);
+  };
+
+  if ("speechSynthesis" in window) {
+    const utterance = new SpeechSynthesisUtterance(line.text);
+    utterance.lang = "cs-CZ";
+    utterance.rate = line.speaker === "ai" ? 0.94 : 1.02;
+    utterance.pitch = line.speaker === "ai" ? 0.96 : 1.08;
+    utterance.voice = aiVoiceDemoVoice();
+    window.speechSynthesis.speak(utterance);
+  } else {
+    aiAssistantState.demoStatus = "Zvuková ukázka není v tomto prohlížeči podporovaná, přehrávám textově.";
+    render();
+  }
+
+  aiVoiceDemoTimer = window.setTimeout(() => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    next();
+  }, aiVoiceDemoDelay(line));
+}
+
+function startAiVoiceDemo() {
+  if (aiAssistantState.demoPlaying) {
+    stopAiVoiceDemo();
+    return;
+  }
+
+  speechRecognition.stop({ status: false });
+  clearAiVoiceDemoTimer();
+  aiAssistantState.demoPlaying = true;
+  aiAssistantState.demoSpeaker = "";
+  aiAssistantState.demoSpeakerLabel = "";
+  aiAssistantState.demoLine = "";
+  aiAssistantState.demoStatus = "Spouštím ukázkovou komunikaci…";
+  aiAssistantState.voiceNotice = "";
+  playAiVoiceDemoLine(0);
+}
+
+function startAiVoiceRecognition() {
+  startAiVoiceDemo();
 }
 
 function stopAiVoiceRecognition() {
+  stopAiVoiceDemo({ renderAfter: false });
   speechRecognition.stop();
   aiAssistantState.isListening = false;
   aiAssistantState.voiceStatus = AI_STATUS_DONE;
@@ -604,6 +751,7 @@ function stopAiVoiceRecognition() {
 }
 
 function navigateFromAiAssistant(route) {
+  stopAiVoiceDemo({ renderAfter: false });
   speechRecognition.stop({ status: false });
   aiAssistantState.chatOpen = false;
   aiAssistantState.welcomeVisible = false;
@@ -626,9 +774,12 @@ function renderAiAssistantLayer() {
       mode: aiAssistantState.mode,
       messages: aiAssistantState.messages,
       input: aiAssistantState.input,
-      voiceStatus: aiAssistantState.voiceStatus,
-      voiceNotice: aiAssistantState.voiceNotice,
-      isListening: aiAssistantState.isListening
+      isListening: aiAssistantState.isListening,
+      demoPlaying: aiAssistantState.demoPlaying,
+      demoSpeaker: aiAssistantState.demoSpeaker,
+      demoSpeakerLabel: aiAssistantState.demoSpeakerLabel,
+      demoLine: aiAssistantState.demoLine,
+      demoStatus: aiAssistantState.demoStatus
     }),
     AiAssistantLauncher({
       visible: aiAssistantState.launcherVisible && !aiAssistantState.chatOpen && !aiAssistantState.welcomeVisible
@@ -1968,6 +2119,45 @@ function formatAbsenceDays(value) {
   return `${formatted} dne`;
 }
 
+function requestStatusLabel(request) {
+  return request?.statusLabel || ABSENCE_API_STATUS_LABELS[request?.status] || absenceStatusLabel(request?.status) || "";
+}
+
+function requestTypeLabel(request) {
+  return request?.typeLabel || ABSENCE_API_TYPE_LABELS[request?.type] || absenceTypeLabel(request?.type) || "";
+}
+
+function normalizeAbsenceRequestForUi(request) {
+  const status = requestStatusLabel(request);
+  const type = requestTypeLabel(request);
+
+  return {
+    ...request,
+    type,
+    typeLabel: type,
+    status,
+    statusLabel: status,
+    halfDayFrom: Boolean(request?.halfDayFrom ?? request?.halfDay),
+    halfDayTo: Boolean(request?.halfDayTo),
+    approverUserId: request?.approverUserId || request?.approverId || request?.managerId || "",
+    createdAt: request?.createdAt || request?.submittedAt || "",
+    updatedAt: request?.updatedAt || request?.createdAt || ""
+  };
+}
+
+function normalizedApiAbsenceRequests(requests) {
+  return (Array.isArray(requests) ? requests : []).map(normalizeAbsenceRequestForUi);
+}
+
+function absenceDisplayState() {
+  return {
+    ...absenceState,
+    requests: absenceApiState.loaded
+      ? normalizedApiAbsenceRequests(absenceApiState.requests)
+      : []
+  };
+}
+
 function absenceSubmitLabel(type) {
   if (type === "Nemoc") {
     return "Nahlásit nemoc";
@@ -2243,13 +2433,15 @@ function quickAbsenceSuccessStep() {
 }
 
 function quickAbsenceRecentCard(request) {
+  const normalized = normalizeAbsenceRequestForUi(request);
+
   return `
     <article class="quick-absence-recent-card">
       <div>
-        <strong>${escapeHtml(request.typeLabel || request.type || "Žádost")}</strong>
-        <span>${escapeHtml(request.statusLabel || request.status || "")}</span>
+        <strong>${escapeHtml(normalized.typeLabel || "Žádost")}</strong>
+        <span>${escapeHtml(normalized.statusLabel || "")}</span>
       </div>
-      <small>${escapeHtml(formatAbsenceDate(request.dateFrom))}${request.dateTo && request.dateTo !== request.dateFrom ? ` - ${escapeHtml(formatAbsenceDate(request.dateTo))}` : ""}</small>
+      <small>${escapeHtml(formatAbsenceDate(normalized.dateFrom))}${normalized.dateTo && normalized.dateTo !== normalized.dateFrom ? ` - ${escapeHtml(formatAbsenceDate(normalized.dateTo))}` : ""}</small>
     </article>
   `;
 }
@@ -2292,13 +2484,15 @@ function quickAbsenceContent(user) {
 }
 
 function absenceStatusBadge(status) {
-  const tone = ABSENCE_STATUS_TONES[status] || "new";
-  return `<span class="absence-badge absence-badge--${tone}">${escapeHtml(status)}</span>`;
+  const label = ABSENCE_API_STATUS_LABELS[status] || absenceStatusLabel(status);
+  const tone = ABSENCE_STATUS_TONES[label] || ABSENCE_STATUS_TONES[status] || "new";
+  return `<span class="absence-badge absence-badge--${tone}">${escapeHtml(label)}</span>`;
 }
 
 function absenceTypeBadge(type) {
-  const tone = ABSENCE_TYPE_TONES[type] || "vacation";
-  return `<span class="absence-type absence-type--${tone}">${escapeHtml(type)}</span>`;
+  const label = ABSENCE_API_TYPE_LABELS[type] || absenceTypeLabel(type);
+  const tone = ABSENCE_TYPE_TONES[label] || ABSENCE_TYPE_TONES[type] || "vacation";
+  return `<span class="absence-type absence-type--${tone}">${escapeHtml(label)}</span>`;
 }
 
 function canUseAbsenceTab(user, tabId) {
@@ -2394,6 +2588,90 @@ function absenceRequestActions(request, user) {
     : '<span class="absence-muted">bez akce</span>';
 }
 
+function absenceApprovalCard(request, user) {
+  const normalized = normalizeAbsenceRequestForUi(request);
+  const isLoading = absenceUiState.actionLoadingId === normalized.id;
+  const isRejecting = absenceUiState.rejectRequestId === normalized.id;
+  const canApprove = canApproveAbsence(normalized, user);
+
+  return `
+    <article class="absence-approval-card">
+      <div class="absence-approval-card__main">
+        <div>
+          <strong>${employeeNameLink(normalized.employeeId, normalized.employeeName)}</strong>
+          <span>${escapeHtml(normalized.team || normalized.department || "Provoz")}</span>
+        </div>
+        <div>${absenceTypeBadge(normalized.type)}</div>
+        <div>
+          <strong>${escapeHtml(formatAbsenceDate(normalized.dateFrom))} - ${escapeHtml(formatAbsenceDate(normalized.dateTo))}</strong>
+          <span>${escapeHtml(formatAbsenceDays(normalized.daysCount))}${normalized.halfDay ? " · půlden" : ""}</span>
+        </div>
+        <div>${absenceStatusBadge(normalized.status)}</div>
+      </div>
+      <dl class="absence-approval-card__details">
+        <div>
+          <dt>Poznámka</dt>
+          <dd>${escapeHtml(normalized.note || "bez poznámky")}</dd>
+        </div>
+        <div>
+          <dt>Odesláno</dt>
+          <dd>${escapeHtml(formatDateTime(normalized.submittedAt || normalized.createdAt))}</dd>
+        </div>
+        <div>
+          <dt>Schvaluje</dt>
+          <dd>${escapeHtml(normalized.managerName || "Bez nadřízeného")}</dd>
+        </div>
+      </dl>
+      ${canApprove ? `
+        <div class="absence-approval-card__actions">
+          <button class="primary-action" type="button" data-absence-approve="${escapeHtml(normalized.id)}" ${isLoading ? "disabled" : ""}>
+            ${isLoading ? "Ukládám..." : "Schválit"}
+          </button>
+          <button class="secondary-link" type="button" data-absence-reject-toggle="${escapeHtml(normalized.id)}" ${isLoading ? "disabled" : ""}>
+            Zamítnout
+          </button>
+        </div>
+        ${isRejecting ? `
+          <div class="absence-reject-box">
+            <label>
+              <span>Důvod zamítnutí</span>
+              <textarea rows="3" data-absence-reject-reason placeholder="Důvod je nepovinný, ale doporučený.">${escapeHtml(absenceUiState.rejectReason)}</textarea>
+            </label>
+            <div class="absence-approval-card__actions">
+              <button class="absence-icon-button absence-icon-button--reject" type="button" data-absence-reject="${escapeHtml(normalized.id)}" ${isLoading ? "disabled" : ""}>
+                ${isLoading ? "Ukládám..." : "Potvrdit zamítnutí"}
+              </button>
+              <button class="text-action" type="button" data-absence-reject-cancel>
+                Zrušit
+              </button>
+            </div>
+          </div>
+        ` : ""}
+      ` : '<p class="absence-muted">bez akce</p>'}
+    </article>
+  `;
+}
+
+function absenceApprovalCards(requests, user, emptyText) {
+  if (absenceApiState.pendingLoading) {
+    return '<p class="absence-empty">Načítám žádosti ke schválení...</p>';
+  }
+
+  if (absenceApiState.error) {
+    return `<p class="module-feedback__error">${escapeHtml(absenceApiState.error)}</p>`;
+  }
+
+  if (!requests.length) {
+    return `<p class="absence-empty">${emptyText}</p>`;
+  }
+
+  return `
+    <div class="absence-approval-list">
+      ${requests.map((request) => absenceApprovalCard(request, user)).join("")}
+    </div>
+  `;
+}
+
 function absenceRequestsTable(requests, user, emptyText, showActions = true) {
   if (!requests.length) {
     return `<p class="absence-empty">${emptyText}</p>`;
@@ -2458,9 +2736,12 @@ function absenceMiniList(items, user, emptyText) {
 }
 
 function absenceDashboard(user) {
-  const summary = absenceSummary(absenceState, user);
-  const balance = absenceBalanceForEmployee(absenceState, employeeIdForUser(user));
-  const pending = approvalAbsenceRequests(absenceState, user);
+  const displayState = absenceDisplayState();
+  const summary = absenceSummary(displayState, user);
+  const balance = absenceBalanceForEmployee(displayState, employeeIdForUser(user));
+  const pending = absenceApiState.pendingLoaded
+    ? normalizedApiAbsenceRequests(absenceApiState.pendingRequests)
+    : approvalAbsenceRequests(displayState, user);
   const quickRequestButton = hasPermission(user, "absence", "create")
     ? `<a class="primary-action" href="${routeHref(ABSENCE_QUICK_ROUTE)}" data-link>+ Rychle zadat</a>`
     : "";
@@ -2522,7 +2803,8 @@ function absenceDashboard(user) {
 }
 
 function absenceMyRequests(user) {
-  const requests = ownAbsenceRequests(absenceState, user);
+  const displayState = absenceDisplayState();
+  const requests = ownAbsenceRequests(displayState, user);
   const visibleLabel = canSeeAllAbsences(user)
     ? "Tady vidíte svoje žádosti. V reportech a kalendáři vidíte i ostatní."
     : "Tady vidíte svoje žádosti a hlášení.";
@@ -2574,7 +2856,7 @@ function absenceNewRequest(user) {
       <div class="absence-panel__head">
         <div>
           <h2>Nová žádost</h2>
-          <p>Dovolená, lékař a náhradní volno jdou ke schválení. Nemoc a OČR se pouze evidují.</p>
+          <p>Dovolená, lékař, OČR a náhradní volno jdou ke schválení. Nemoc se pouze eviduje.</p>
         </div>
       </div>
       <form class="absence-form" data-absence-request-form>
@@ -2640,17 +2922,19 @@ function absenceApproval(user) {
     return permissionInlineNotice();
   }
 
-  const requests = approvalAbsenceRequests(absenceState, user);
+  const requests = absenceApiState.pendingLoaded
+    ? normalizedApiAbsenceRequests(absenceApiState.pendingRequests)
+    : [];
 
   return `
     <section class="absence-panel">
       <div class="absence-panel__head">
         <div>
           <h2>Ke schválení</h2>
-          <p>Schválení a zamítnutí se ukládá do historie žádosti.</p>
+          <p>Schválení a zamítnutí se ukládá přes cloud API a zapisuje do historie žádosti.</p>
         </div>
       </div>
-      ${absenceRequestsTable(requests, user, "Teď tu není žádná žádost ke schválení.")}
+      ${absenceApprovalCards(requests, user, "Teď tu není žádná žádost ke schválení.")}
     </section>
   `;
 }
@@ -2674,7 +2958,8 @@ function absenceCalendarDays(monthKey) {
 }
 
 function absenceCalendar(user) {
-  const requests = filterAbsenceRequests(visibleAbsenceRequests(absenceState, user), {
+  const displayState = absenceDisplayState();
+  const requests = filterAbsenceRequests(visibleAbsenceRequests(displayState, user), {
     type: absenceUiState.typeFilter,
     employeeId: absenceUiState.employeeFilter,
     month: absenceUiState.monthFilter
@@ -2730,7 +3015,8 @@ function absenceReports(user) {
     return permissionInlineNotice();
   }
 
-  const reportRequests = filterAbsenceRequests(visibleAbsenceRequests(absenceState, user), {
+  const displayState = absenceDisplayState();
+  const reportRequests = filterAbsenceRequests(visibleAbsenceRequests(displayState, user), {
     type: absenceUiState.typeFilter,
     employeeId: absenceUiState.employeeFilter,
     month: absenceUiState.monthFilter
@@ -3076,6 +3362,66 @@ function employeeWorkHistorySection(employee, canEdit) {
   `;
 }
 
+function employeeAbsenceWorkflowSection() {
+  const absence = employeeCardState.absence || {};
+  const items = normalizedApiAbsenceRequests(absence.items || []);
+  const history = Array.isArray(absence.history) ? absence.history : [];
+  const rows = items.length
+    ? items.slice(0, 8).map((item) => `
+        <tr>
+          <td data-label="Typ">${absenceTypeBadge(item.type)}</td>
+          <td data-label="Termín">${escapeHtml(formatAbsenceDate(item.dateFrom))} - ${escapeHtml(formatAbsenceDate(item.dateTo))}</td>
+          <td data-label="Stav">${absenceStatusBadge(item.status)}</td>
+          <td data-label="Schvaluje">${escapeHtml(item.managerName || "Bez nadřízeného")}</td>
+          <td data-label="Odesláno">${escapeHtml(formatDateTime(item.submittedAt || item.createdAt))}</td>
+          <td data-label="Připomínka">${escapeHtml(item.reminderSentAt ? formatDateTime(item.reminderSentAt) : "neodeslána")}</td>
+        </tr>
+      `).join("")
+    : `
+      <tr>
+        <td colspan="6">Zatím tu nejsou uložené žádné žádosti.</td>
+      </tr>
+    `;
+  const historyRows = history.length
+    ? history.slice(0, 8).map((item) => `
+        <li>
+          <strong>${escapeHtml(item.toStatusLabel || item.toStatus || "Změna")}</strong>
+          <span>${escapeHtml(formatDateTime(item.changedAt))} · ${escapeHtml(item.changedByName || item.changedByUserId || "systém")}</span>
+          ${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}
+        </li>
+      `).join("")
+    : '<li><span>Historie zatím není k dispozici.</span></li>';
+
+  return `
+    <section class="employee-card-section employee-card-section--wide">
+      <div class="employee-card-section__head">
+        <div>
+          <h2>Schvalování absencí</h2>
+          <p>Stavy žádostí, schvalovatelé, připomínky a historie z cloud API.</p>
+        </div>
+      </div>
+      <div class="absence-table-wrap">
+        <table class="absence-table employee-card-table">
+          <thead>
+            <tr>
+              <th>Typ</th>
+              <th>Termín</th>
+              <th>Stav</th>
+              <th>Schvaluje</th>
+              <th>Odesláno</th>
+              <th>Připomínka</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <ul class="employee-absence-history">
+        ${historyRows}
+      </ul>
+    </section>
+  `;
+}
+
 function employeeCardContent(employeeId, user) {
   ensureEmployeeCardData(employeeId);
 
@@ -3226,6 +3572,7 @@ function employeeCardContent(employeeId, user) {
       </form>
 
       <div class="employee-card-grid employee-card-grid--bottom">
+        ${employeeAbsenceWorkflowSection()}
         ${employeeWorkHistorySection(employee, canEdit)}
         ${employeeDocumentsSection(employee, canEdit)}
       </div>
@@ -3787,6 +4134,87 @@ async function loadQuickAbsenceRequests(options = {}) {
   }
 }
 
+async function loadAbsenceRequests(options = {}) {
+  if (
+    authState.status !== "authenticated" ||
+    !authState.user ||
+    !hasPermission(currentUser(), "absence", "view") ||
+    absenceApiState.loading ||
+    (absenceApiState.loaded && options.force !== true)
+  ) {
+    return;
+  }
+
+  absenceApiState.loading = true;
+  absenceApiState.error = "";
+
+  try {
+    const result = await apiJson("/api/absence-requests?limit=100");
+    absenceApiState.requests = Array.isArray(result.requests) ? result.requests : [];
+    absenceApiState.apiStatus = result.apiStatus || "ready";
+    absenceApiState.loaded = true;
+  } catch (error) {
+    absenceApiState.apiStatus = error.payload?.apiStatus || "waiting";
+    absenceApiState.error = error.payload?.error || "Žádosti se teď nepodařilo načíst.";
+  } finally {
+    absenceApiState.loading = false;
+  }
+
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
+async function loadAbsenceApprovalRequests(options = {}) {
+  if (
+    authState.status !== "authenticated" ||
+    !authState.user ||
+    !hasPermission(currentUser(), "absence", "view") ||
+    absenceApiState.pendingLoading ||
+    (absenceApiState.pendingLoaded && options.force !== true)
+  ) {
+    return;
+  }
+
+  absenceApiState.pendingLoading = true;
+  absenceApiState.error = "";
+
+  try {
+    const result = await apiJson("/api/absence-requests/pending?limit=100");
+    absenceApiState.pendingRequests = Array.isArray(result.requests) ? result.requests : [];
+    absenceApiState.apiStatus = result.apiStatus || "ready";
+    absenceApiState.pendingLoaded = true;
+  } catch (error) {
+    absenceApiState.apiStatus = error.payload?.apiStatus || "waiting";
+    absenceApiState.error = error.payload?.error || "Žádosti ke schválení se teď nepodařilo načíst.";
+  } finally {
+    absenceApiState.pendingLoading = false;
+  }
+
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
+function mergeAbsenceRequest(request) {
+  if (!request?.id) {
+    return;
+  }
+
+  const pendingWasLoaded = absenceApiState.pendingLoaded;
+  absenceApiState.requests = [
+    request,
+    ...absenceApiState.requests.filter((item) => item.id !== request.id)
+  ];
+  if (pendingWasLoaded) {
+    absenceApiState.pendingRequests = [
+      request,
+      ...absenceApiState.pendingRequests.filter((item) => item.id !== request.id)
+    ].filter((item) => requestStatusLabel(item) === "Čeká na schválení");
+  }
+  absenceApiState.loaded = true;
+}
+
 function applyQuickDateChoice(choiceId) {
   const type = quickAbsenceType();
   const today = isoDateAfter(0);
@@ -4334,6 +4762,11 @@ function renderAuthenticatedApp(user) {
     document.title = `${tabLabel} | ${APP_NAME}`;
     if (routeTab === "quick") {
       loadQuickAbsenceRequests();
+    } else {
+      loadAbsenceRequests();
+      if (routeTab === "approval" || routeTab === "dashboard") {
+        loadAbsenceApprovalRequests();
+      }
     }
     return;
   }
@@ -4363,8 +4796,12 @@ function renderAuthenticatedApp(user) {
     if (moduleItem.id === "users" && hasPermission(user, "users", "view")) {
       loadAdminUsers();
     }
-    if (moduleItem.id === "absence" && (absenceUiState.tab === "quick" || normalizeRole(user?.role) === "ridic")) {
-      loadQuickAbsenceRequests();
+    if (moduleItem.id === "absence") {
+      loadAbsenceRequests();
+      loadAbsenceApprovalRequests();
+      if (absenceUiState.tab === "quick" || normalizeRole(user?.role) === "ridic") {
+        loadQuickAbsenceRequests();
+      }
     }
     return;
   }
@@ -4373,6 +4810,10 @@ function renderAuthenticatedApp(user) {
     const moduleItem = userDashboardRoutes.get(path);
     app.innerHTML = modulePage(moduleItem, user, true);
     document.title = `${moduleItem.pageTitle} | ${APP_NAME}`;
+    if (moduleItem.id === "absence") {
+      loadAbsenceRequests();
+      loadAbsenceApprovalRequests();
+    }
     return;
   }
 
@@ -4638,6 +5079,24 @@ function setAbsenceNotice(message, error = "") {
   absenceUiState.error = error;
 }
 
+function canSeeAbsenceNotificationWarning(user) {
+  const role = normalizeRole(user?.role);
+  return isFullAccessRole(user) || role === "kancelar";
+}
+
+function absenceNotificationWarning(notification, channelLabel, user = currentUser()) {
+  if (!canSeeAbsenceNotificationWarning(user) || !notification) {
+    return "";
+  }
+
+  if (notification.status !== "failed" && notification.status !== "skipped") {
+    return "";
+  }
+
+  const reason = notification.errorMessage ? ` ${notification.errorMessage}` : "";
+  return `Workflow je uložený, ale ${channelLabel} se nepodařilo odeslat.${reason}`;
+}
+
 function downloadText(filename, text, type = "text/plain;charset=utf-8") {
   const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
@@ -4654,7 +5113,7 @@ function downloadCsv(filename, csv) {
   downloadText(filename, csv, "text/csv;charset=utf-8");
 }
 
-function submitAbsenceRequest(form) {
+async function submitAbsenceRequest(form) {
   const user = currentUser();
   if (!hasPermission(user, "absence", "create")) {
     setAbsenceNotice("", "Nemáte oprávnění vytvořit žádost.");
@@ -4677,28 +5136,36 @@ function submitAbsenceRequest(form) {
 
   const employees = absenceEmployeeOptions(absenceState, user);
   const selectedEmployee = employees.find((employee) => employee.id === form.elements.employeeId.value) || employees[0];
-  const attachmentInput = form.elements.attachment;
-  const attachmentUrls = attachmentInput?.files ? [...attachmentInput.files].map((file) => file.name) : [];
-  const nextState = createAbsenceRequest(absenceState, {
-    employee: selectedEmployee,
-    type,
-    dateFrom,
-    dateTo,
-    halfDayFrom,
-    halfDayTo,
-    note: form.elements.note.value.trim(),
-    attachmentUrls,
-    substituteUserId: form.elements.substituteUserId?.value || ""
-  }, user);
 
-  saveAbsence(nextState);
-  absenceUiState.tab = "my";
-  setAbsenceNotice(
-    initialStatusForAbsenceType(type) === "Evidováno"
-      ? "Nepřítomnost byla evidována."
-      : "Žádost byla odeslána ke schválení."
-  );
-  navigateToUrl(routeHref(absenceRouteForTab("my")));
+  try {
+    const result = await apiJson("/api/absence-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        employeeId: selectedEmployee.id,
+        type,
+        dateFrom,
+        dateTo,
+        halfDay: halfDayFrom || halfDayTo,
+        note: form.elements.note.value.trim()
+      })
+    });
+
+    mergeAbsenceRequest(result.request);
+    absenceUiState.tab = "my";
+    const isApprovalRequest = requestStatusLabel(result.request) === "Čeká na schválení";
+    setAbsenceNotice(
+      requestStatusLabel(result.request) === "Evidováno"
+        ? "Nepřítomnost byla evidována."
+        : "Žádost byla odeslána ke schválení.",
+      isApprovalRequest
+        ? absenceNotificationWarning(result.notification, "e-mail nadřízenému", user)
+        : ""
+    );
+    navigateToUrl(routeHref(absenceRouteForTab("my")));
+  } catch (error) {
+    setAbsenceNotice("", error.payload?.error || "Žádost se nepodařilo uložit přes cloud API.");
+    render();
+  }
 }
 
 function saveAbsenceSettings(form) {
@@ -4716,7 +5183,7 @@ function saveAbsenceSettings(form) {
   });
 
   saveAbsence(nextState);
-  setAbsenceNotice("Nastavení reportu bylo uloženo lokálně.");
+  setAbsenceNotice("Nastavení reportu je uložené jen pro aktuální zobrazení. Trvalé uložení čeká na cloud API nastavení modulu.");
   render();
 }
 
@@ -4752,46 +5219,108 @@ function updateAbsenceFormPreview(form) {
   }
 }
 
-function approveAbsenceRequest(requestId) {
+async function approveAbsenceRequest(requestId) {
   const user = currentUser();
-  if (!hasPermission(user, "absence", "approve")) {
+  if (!hasPermission(user, "absence", "approve") && !isFullAccessRole(user)) {
     setAbsenceNotice("", "Nemáte oprávnění schvalovat žádosti.");
     render();
     return;
   }
 
-  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Schváleno", user, "Schváleno v modulu Dovolená / Nemoc."));
-  setAbsenceNotice("Žádost byla schválena.");
+  absenceUiState.actionLoadingId = requestId;
+  setAbsenceNotice("");
+  render();
+
+  try {
+    const result = await apiJson(`/api/absence-requests/${encodeURIComponent(requestId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify({
+        approvedByUserId: user?.id || "",
+        note: "Schváleno v modulu Dovolená / Nemoc."
+      })
+    });
+    mergeAbsenceRequest(result.request);
+    absenceUiState.rejectRequestId = "";
+    absenceUiState.rejectReason = "";
+    setAbsenceNotice(
+      "Žádost byla schválena.",
+      absenceNotificationWarning(result.notification, "SMS zaměstnanci", user)
+    );
+  } catch (error) {
+    setAbsenceNotice("", error.payload?.error || "Žádost se nepodařilo schválit.");
+  } finally {
+    absenceUiState.actionLoadingId = "";
+    await loadAbsenceApprovalRequests({ force: true, renderAfter: false });
+    await loadAbsenceRequests({ force: true, renderAfter: false });
+    render();
+  }
+}
+
+function toggleRejectAbsenceRequest(requestId) {
+  absenceUiState.rejectRequestId = absenceUiState.rejectRequestId === requestId ? "" : requestId;
+  absenceUiState.rejectReason = "";
   render();
 }
 
-function rejectAbsenceRequest(requestId) {
+async function rejectAbsenceRequest(requestId) {
   const user = currentUser();
-  if (!hasPermission(user, "absence", "approve")) {
+  if (!hasPermission(user, "absence", "approve") && !isFullAccessRole(user)) {
     setAbsenceNotice("", "Nemáte oprávnění zamítat žádosti.");
     render();
     return;
   }
 
-  const reason = window.prompt("Důvod zamítnutí", "");
-
-  if (reason === null) {
-    return;
-  }
-
-  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Zamítnuto", user, reason));
-  setAbsenceNotice("Žádost byla zamítnuta.");
+  absenceUiState.actionLoadingId = requestId;
+  setAbsenceNotice("");
   render();
+
+  try {
+    const result = await apiJson(`/api/absence-requests/${encodeURIComponent(requestId)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({
+        rejectedByUserId: user?.id || "",
+        reason: absenceUiState.rejectReason.trim()
+      })
+    });
+    mergeAbsenceRequest(result.request);
+    absenceUiState.rejectRequestId = "";
+    absenceUiState.rejectReason = "";
+    setAbsenceNotice(
+      "Žádost byla zamítnuta.",
+      absenceNotificationWarning(result.notification, "SMS zaměstnanci", user)
+    );
+  } catch (error) {
+    setAbsenceNotice("", error.payload?.error || "Žádost se nepodařilo zamítnout.");
+  } finally {
+    absenceUiState.actionLoadingId = "";
+    await loadAbsenceApprovalRequests({ force: true, renderAfter: false });
+    await loadAbsenceRequests({ force: true, renderAfter: false });
+    render();
+  }
 }
 
-function cancelAbsenceRequest(requestId) {
+async function cancelAbsenceRequest(requestId) {
   if (!window.confirm("Opravdu zrušit tuto žádost?")) {
     return;
   }
 
-  saveAbsence(changeAbsenceRequestStatus(absenceState, requestId, "Zrušeno", currentUser(), "Zrušeno uživatelem."));
-  setAbsenceNotice("Žádost byla zrušena.");
+  absenceUiState.actionLoadingId = requestId;
+  setAbsenceNotice("");
   render();
+
+  try {
+    const result = await apiJson(`/api/absence-requests/${encodeURIComponent(requestId)}`, {
+      method: "DELETE"
+    });
+    mergeAbsenceRequest(result.request);
+    setAbsenceNotice("Žádost byla zrušena.");
+  } catch (error) {
+    setAbsenceNotice("", error.payload?.error || "Žádost se nepodařilo zrušit.");
+  } finally {
+    absenceUiState.actionLoadingId = "";
+    await loadAbsenceRequests({ force: true, renderAfter: false });
+    render();
+  }
 }
 
 function exportAbsenceCsv() {
@@ -4802,7 +5331,8 @@ function exportAbsenceCsv() {
     return;
   }
 
-  const requests = filterAbsenceRequests(visibleAbsenceRequests(absenceState, user), {
+  const displayState = absenceDisplayState();
+  const requests = filterAbsenceRequests(visibleAbsenceRequests(displayState, user), {
     type: absenceUiState.typeFilter,
     employeeId: absenceUiState.employeeFilter,
     month: absenceUiState.monthFilter
@@ -4819,7 +5349,7 @@ function generateAbsenceMonthlyReport() {
     return;
   }
 
-  const result = generateMonthlyAbsenceReport(absenceState, user);
+  const result = generateMonthlyAbsenceReport(absenceDisplayState(), user);
   saveAbsence(result.state);
   const period = `${String(result.report.periodMonth).padStart(2, "0")}-${result.report.periodYear}`;
 
@@ -4827,7 +5357,7 @@ function generateAbsenceMonthlyReport() {
     `mesicni-report-nepritomnosti-${period}.csv`,
     monthlyAbsenceReportToCsv(result.report, result.requests)
   );
-  setAbsenceNotice("Měsíční report byl vygenerovaný lokálně. Reálný e-mail zatím nebyl odeslán.");
+  setAbsenceNotice("Měsíční report byl vygenerovaný v prohlížeči. Reálný e-mail reportu zatím není součástí schvalovacího workflow.");
   render();
 }
 
@@ -5476,7 +6006,7 @@ function changeAccessUserRole(select) {
   render();
 }
 
-document.addEventListener("submit", (event) => {
+document.addEventListener("submit", async (event) => {
   const aiForm = event.target.closest("[data-ai-form]");
   if (aiForm) {
     event.preventDefault();
@@ -5530,7 +6060,7 @@ document.addEventListener("submit", (event) => {
   const absenceRequestForm = event.target.closest("[data-absence-request-form]");
   if (absenceRequestForm) {
     event.preventDefault();
-    submitAbsenceRequest(absenceRequestForm);
+    await submitAbsenceRequest(absenceRequestForm);
     return;
   }
 
@@ -5613,6 +6143,12 @@ document.addEventListener("input", (event) => {
   const quickDateTo = event.target.closest("[data-quick-date-to]");
   if (quickDateTo) {
     updateQuickDateField("to", quickDateTo.value);
+    return;
+  }
+
+  const absenceRejectReason = event.target.closest("[data-absence-reject-reason]");
+  if (absenceRejectReason) {
+    absenceUiState.rejectReason = absenceRejectReason.value;
     return;
   }
 
@@ -5856,19 +6392,33 @@ document.addEventListener("click", async (event) => {
 
   const absenceApprove = event.target.closest("[data-absence-approve]");
   if (absenceApprove) {
-    approveAbsenceRequest(absenceApprove.dataset.absenceApprove);
+    await approveAbsenceRequest(absenceApprove.dataset.absenceApprove);
+    return;
+  }
+
+  const absenceRejectToggle = event.target.closest("[data-absence-reject-toggle]");
+  if (absenceRejectToggle) {
+    toggleRejectAbsenceRequest(absenceRejectToggle.dataset.absenceRejectToggle);
     return;
   }
 
   const absenceReject = event.target.closest("[data-absence-reject]");
   if (absenceReject) {
-    rejectAbsenceRequest(absenceReject.dataset.absenceReject);
+    await rejectAbsenceRequest(absenceReject.dataset.absenceReject);
+    return;
+  }
+
+  const absenceRejectCancel = event.target.closest("[data-absence-reject-cancel]");
+  if (absenceRejectCancel) {
+    absenceUiState.rejectRequestId = "";
+    absenceUiState.rejectReason = "";
+    render();
     return;
   }
 
   const absenceCancel = event.target.closest("[data-absence-cancel]");
   if (absenceCancel) {
-    cancelAbsenceRequest(absenceCancel.dataset.absenceCancel);
+    await cancelAbsenceRequest(absenceCancel.dataset.absenceCancel);
     return;
   }
 

@@ -1,4 +1,4 @@
-import { AiVoicePanel } from "./AiVoicePanel.js";
+import { AiVoiceAssistantPanel } from "./AiVoiceAssistantPanel.js";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -54,19 +54,31 @@ export function AiAssistantChat({
   mode = "text",
   messages = [],
   input = "",
-  voiceStatus = "Připraven",
-  voiceNotice = "",
-  isListening = false
+  isListening = false,
+  demoPlaying = false,
+  demoSpeaker = "",
+  demoSpeakerLabel = "",
+  demoLine = "",
+  demoStatus = ""
 } = {}) {
   if (!open) {
     return "";
   }
 
   const isVoiceMode = mode === "voice";
-  const headerText = isVoiceMode
-    ? "Stačí promluvit nebo napsat dotaz."
-    : "Napiš, s čím potřebuješ poradit.";
-  const visibleMessages = isVoiceMode && messages.length <= 1 ? [] : messages;
+  const headerText = "Napiš, s čím potřebuješ poradit.";
+
+  if (isVoiceMode) {
+    return AiVoiceAssistantPanel({
+      open,
+      listening: isListening,
+      demoPlaying,
+      demoSpeaker,
+      demoSpeakerLabel,
+      demoLine,
+      demoStatus
+    });
+  }
 
   return `
     <section
@@ -87,19 +99,9 @@ export function AiAssistantChat({
       </header>
 
       ${
-        isVoiceMode
-          ? AiVoicePanel({
-              listening: isListening,
-              status: voiceStatus,
-              notice: voiceNotice
-            })
-          : ""
-      }
-
-      ${
-        visibleMessages.length
+        messages.length
           ? `<div class="ai-assistant-chat__messages" aria-live="polite">
-              ${renderMessages(visibleMessages)}
+              ${renderMessages(messages)}
             </div>`
           : ""
       }

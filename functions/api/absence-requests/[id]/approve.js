@@ -1,0 +1,37 @@
+import { getUsers, json, readJson, requireUserPermission } from "../../../_lib/auth.js";
+import {
+  AbsenceRequestStoreError,
+  approveAbsenceRequestRecord
+} from "../../../_lib/absence-requests-store.js";
+import { sendAbsenceDecisionSms } from "../../../_lib/notification-service.js";
+
+function requestId(request, params) {
+  return decodeURIComponent(String(params?.id || new URL(request.url).pathname.split("/").at(-2) || "")).trim();
+}
+
+function absenceRequestError(error) {
+  if (error instanceof AbsenceRequestStoreError) {
+    return json({ error: error.message, code: error.code, apiStatus: "waiting" }, error.status);
+  }
+
+  console.error("absence_request.approve_failed", { message: error.message });
+  return json({ error: "Žádost se nepodařilo schválit.", apiStatus: "waiting" }, 500);
+}
+
+export async function onRequestPost({ request, env, params }) {
+  const { user, response } = await requireUserPermission(env, request, "absence", "view");
+
+  if (response) {
+    return response;
+  }
+
+  try {
+    const users = await getUsers(env);
+    const payload = await readJson(request);
+    const absenceRequest = await approveAbsenceRequestRecord(env, users, user, requestId(request, params), payload);
+    const notification = await sendAbsenceDecisionSms(env, absenceRequest, "approved");
+    return json({ request: absenceRequest, notification, apiStatus: "ready" });
+  } catch (error) {
+    return absenceRequestError(error);
+  }
+}

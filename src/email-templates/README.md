@@ -18,6 +18,8 @@ Tato složka obsahuje základní HTML e-mailové šablony pro systém Smart odpa
 
 - `baseEmailTemplate.html` je obecná základní šablona pro další e-maily.
 - `verificationCodeEmail.html` je konkrétní šablona pro ověřovací kód.
+- `absenceApprovalRequestEmail.html` je šablona pro novou žádost ke schválení.
+- `absenceApprovalReminderEmail.html` je šablona pro připomínku čekající žádosti.
 
 ## Proměnné v základní šabloně
 
@@ -35,3 +37,25 @@ Tato složka obsahuje základní HTML e-mailové šablony pro systém Smart odpa
 Šablona `verificationCodeEmail.html` používá proměnnou:
 
 - `{{twilio_code}}`
+
+## Schvalování Dovolená / Nemoc
+
+Šablona `absenceApprovalRequestEmail.html` používá proměnné:
+
+- `{{employee_name}}`
+- `{{absence_type}}`
+- `{{date_from}}`
+- `{{date_to}}`
+- `{{days_count}}`
+- `{{note}}`
+- `{{approval_url}}`
+
+Šablona `absenceApprovalReminderEmail.html` používá proměnné:
+
+- `{{manager_name}}`
+- `{{employee_name}}`
+- `{{absence_type}}`
+- `{{date_from}}`
+- `{{date_to}}`
+- `{{submitted_at}}`
+- `{{approval_url}}`

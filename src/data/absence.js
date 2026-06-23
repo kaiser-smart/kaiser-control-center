@@ -7,14 +7,14 @@ export const ABSENCE_REPORT_TIME = "06:00";
 
 export const ABSENCE_TYPES = ["Dovolená", "Nemoc", "Lékař", "OČR", "Náhradní volno"];
 export const ABSENCE_STATUSES = [
-  "Nová žádost",
+  "Rozpracováno",
   "Čeká na schválení",
   "Schváleno",
   "Zamítnuto",
   "Zrušeno",
   "Evidováno"
 ];
-export const ABSENCE_APPROVAL_TYPES = new Set(["Dovolená", "Lékař", "Náhradní volno"]);
+export const ABSENCE_APPROVAL_TYPES = new Set(["Dovolená", "Lékař", "OČR", "Náhradní volno"]);
 export const ABSENCE_TABS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "quick", label: "Rychlé zadání" },
@@ -28,12 +28,19 @@ export const ABSENCE_TABS = [
 ];
 
 export const ABSENCE_STATUS_TONES = {
+  Rozpracováno: "new",
   "Nová žádost": "new",
   "Čeká na schválení": "pending",
   Schváleno: "approved",
   Zamítnuto: "rejected",
   Zrušeno: "cancelled",
-  Evidováno: "recorded"
+  Evidováno: "recorded",
+  draft: "new",
+  pending_approval: "pending",
+  approved: "approved",
+  rejected: "rejected",
+  cancelled: "cancelled",
+  recorded: "recorded"
 };
 
 export const ABSENCE_TYPE_TONES = {
@@ -41,7 +48,30 @@ export const ABSENCE_TYPE_TONES = {
   Nemoc: "illness",
   Lékař: "doctor",
   OČR: "care",
-  "Náhradní volno": "timeoff"
+  "Náhradní volno": "timeoff",
+  vacation: "vacation",
+  sick: "illness",
+  doctor: "doctor",
+  care: "care",
+  compensatory_leave: "timeoff"
+};
+
+export const ABSENCE_API_STATUS_LABELS = {
+  draft: "Rozpracováno",
+  pending: "Čeká na schválení",
+  pending_approval: "Čeká na schválení",
+  approved: "Schváleno",
+  rejected: "Zamítnuto",
+  cancelled: "Zrušeno",
+  recorded: "Evidováno"
+};
+
+export const ABSENCE_API_TYPE_LABELS = {
+  vacation: "Dovolená",
+  sick: "Nemoc",
+  doctor: "Lékař",
+  care: "OČR",
+  compensatory_leave: "Náhradní volno"
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -199,6 +229,14 @@ export function countAbsenceDays(dateFrom, dateTo, halfDayFrom = false, halfDayT
 
 export function initialStatusForAbsenceType(type) {
   return ABSENCE_APPROVAL_TYPES.has(type) ? "Čeká na schválení" : "Evidováno";
+}
+
+export function absenceStatusLabel(status) {
+  return ABSENCE_API_STATUS_LABELS[status] || status || "";
+}
+
+export function absenceTypeLabel(type) {
+  return ABSENCE_API_TYPE_LABELS[type] || type || "";
 }
 
 export function employeeIdForUser(user) {
@@ -449,35 +487,11 @@ function normalizeAbsenceState(state) {
 }
 
 export function loadAbsenceState() {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return initialAbsenceState();
-  }
-
-  const raw = window.localStorage.getItem(ABSENCE_STORAGE_KEY);
-
-  if (!raw) {
-    const state = initialAbsenceState();
-    saveAbsenceState(state);
-    return state;
-  }
-
-  try {
-    return normalizeAbsenceState(JSON.parse(raw));
-  } catch {
-    const state = initialAbsenceState();
-    saveAbsenceState(state);
-    return state;
-  }
+  return initialAbsenceState();
 }
 
 export function saveAbsenceState(state) {
-  const normalized = normalizeAbsenceState(state);
-
-  if (typeof window !== "undefined" && window.localStorage) {
-    window.localStorage.setItem(ABSENCE_STORAGE_KEY, JSON.stringify(normalized));
-  }
-
-  return normalized;
+  return normalizeAbsenceState(state);
 }
 
 export function absenceEmployeeOptions(state, user) {
@@ -517,21 +531,32 @@ export function canSubmitAbsenceForOthers(user) {
 
 export function canCancelAbsence(request, user) {
   const ownRequest = request.employeeId === employeeIdForUser(user);
-  const cancellableStatus = ["Nová žádost", "Čeká na schválení"].includes(request.status);
+  const status = absenceStatusLabel(request.statusLabel || request.status);
+  const cancellableStatus = ["Rozpracováno", "Nová žádost", "Čeká na schválení"].includes(status);
 
   return cancellableStatus && (ownRequest || canSeeAllAbsences(user));
 }
 
 export function canApproveAbsence(request, user) {
-  if (!canApproveAbsences(user) || request.status !== "Čeká na schválení") {
+  const status = absenceStatusLabel(request.statusLabel || request.status);
+  if (status !== "Čeká na schválení") {
     return false;
   }
 
-  if (canSeeAllAbsences(user)) {
+  const employeeId = employeeIdForUser(user);
+  if (request.employeeId === employeeId || request.employeeId === user?.id) {
+    return false;
+  }
+
+  if (canSeeAllAbsences(user) && canApproveAbsences(user)) {
     return true;
   }
 
-  return request.approverUserId === employeeIdForUser(user) || request.team === user?.department;
+  if (request.approverUserId === employeeId || request.managerId === user?.id || request.managerId === employeeId) {
+    return true;
+  }
+
+  return canApproveAbsences(user) && (request.team === user?.department || request.department === user?.department);
 }
 
 export function visibleAbsenceRequests(state, user) {
@@ -581,7 +606,7 @@ export function requestOverlapsMonth(request, monthKey) {
 
 export function filterAbsenceRequests(requests, filters = {}) {
   return requests.filter((request) => {
-    if (filters.type && request.type !== filters.type) {
+    if (filters.type && absenceTypeLabel(request.typeLabel || request.type) !== filters.type) {
       return false;
     }
 
@@ -620,15 +645,15 @@ export function absenceSummary(state, user) {
   const activeStatuses = new Set(["Čeká na schválení", "Schváleno", "Evidováno"]);
   const currentMonthRequests = requests.filter((request) => requestOverlapsMonth(request, month));
   const upcoming = requests
-    .filter((request) => dateNumber(request.dateFrom) >= dateNumber(today) && activeStatuses.has(request.status))
+    .filter((request) => dateNumber(request.dateFrom) >= dateNumber(today) && activeStatuses.has(absenceStatusLabel(request.statusLabel || request.status)))
     .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom))
     .slice(0, 6);
 
   return {
-    pendingCount: requests.filter((request) => request.status === "Čeká na schválení").length,
-    approvedVacationThisMonth: currentMonthRequests.filter((request) => request.type === "Dovolená" && request.status === "Schváleno").length,
-    illnessThisMonth: currentMonthRequests.filter((request) => request.type === "Nemoc").length,
-    peopleOutToday: requests.filter((request) => activeStatuses.has(request.status) && requestOverlapsDate(request, today)),
+    pendingCount: requests.filter((request) => absenceStatusLabel(request.statusLabel || request.status) === "Čeká na schválení").length,
+    approvedVacationThisMonth: currentMonthRequests.filter((request) => absenceTypeLabel(request.typeLabel || request.type) === "Dovolená" && absenceStatusLabel(request.statusLabel || request.status) === "Schváleno").length,
+    illnessThisMonth: currentMonthRequests.filter((request) => absenceTypeLabel(request.typeLabel || request.type) === "Nemoc").length,
+    peopleOutToday: requests.filter((request) => activeStatuses.has(absenceStatusLabel(request.statusLabel || request.status)) && requestOverlapsDate(request, today)),
     upcoming
   };
 }
@@ -732,7 +757,7 @@ export function generateMonthlyAbsenceReport(state, user) {
     recipientEmail: state.settings.recipientEmail || ABSENCE_REPORT_EMAIL,
     generatedAt: isoNow(),
     sentAt: null,
-    status: "vygenerováno lokálně",
+    status: "vygenerováno v prohlížeči",
     csvUrl: `local://absence-report-${periodKey}.csv`,
     pdfUrl: "",
     errorMessage: "",
@@ -752,7 +777,7 @@ export function generateMonthlyAbsenceReport(state, user) {
 export function monthlyAbsenceTotals(requests) {
   return ABSENCE_TYPES.reduce((totals, type) => {
     totals[type] = requests
-      .filter((request) => request.type === type)
+      .filter((request) => absenceTypeLabel(request.typeLabel || request.type) === type)
       .reduce((sum, request) => sum + Number(request.daysCount || 0), 0);
     return totals;
   }, {});
@@ -777,11 +802,11 @@ export function absenceRequestsToCsv(requests) {
     ["Zaměstnanec", "Typ", "Od", "Do", "Dny", "Stav", "Poznámka"],
     ...requests.map((request) => [
       request.employeeName,
-      request.type,
+      absenceTypeLabel(request.typeLabel || request.type),
       request.dateFrom,
       request.dateTo,
       request.daysCount,
-      request.status,
+      absenceStatusLabel(request.statusLabel || request.status),
       request.note
     ])
   ];
@@ -791,7 +816,7 @@ export function absenceRequestsToCsv(requests) {
 
 export function monthlyAbsenceReportToCsv(report, requests) {
   const totals = monthlyAbsenceTotals(requests);
-  const pendingCount = requests.filter((request) => request.status === "Čeká na schválení").length;
+  const pendingCount = requests.filter((request) => absenceStatusLabel(request.statusLabel || request.status) === "Čeká na schválení").length;
   const period = `${pad(report.periodMonth)}/${report.periodYear}`;
   const rows = [
     ["Období reportu", period],
@@ -808,11 +833,11 @@ export function monthlyAbsenceReportToCsv(report, requests) {
     ["Zaměstnanec", "Typ", "Od", "Do", "Počet dnů", "Stav"],
     ...requests.map((request) => [
       request.employeeName,
-      request.type,
+      absenceTypeLabel(request.typeLabel || request.type),
       request.dateFrom,
       request.dateTo,
       request.daysCount,
-      request.status
+      absenceStatusLabel(request.statusLabel || request.status)
     ])
   ];
 
