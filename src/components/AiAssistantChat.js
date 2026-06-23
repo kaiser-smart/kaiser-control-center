@@ -39,7 +39,7 @@ function renderMessages(messages = []) {
       (message) => `
         <article class="ai-assistant-chat__message ai-assistant-chat__message--${escapeHtml(message.sender)}">
           <span class="ai-assistant-chat__message-label">
-            ${message.sender === "user" ? "Vy" : "Smart pomocník"}
+            ${message.sender === "user" ? "Ty" : "Smart pomocník"}
           </span>
           <p>${escapeHtml(message.text)}</p>
           ${renderMessageActions(message.actions)}
@@ -65,7 +65,8 @@ export function AiAssistantChat({
   const isVoiceMode = mode === "voice";
   const headerText = isVoiceMode
     ? "Stačí promluvit nebo napsat dotaz."
-    : "Napište, s čím potřebujete poradit.";
+    : "Napiš, s čím potřebuješ poradit.";
+  const visibleMessages = isVoiceMode && messages.length <= 1 ? [] : messages;
 
   return `
     <section
@@ -95,18 +96,22 @@ export function AiAssistantChat({
           : ""
       }
 
-      <div class="ai-assistant-chat__messages" aria-live="polite">
-        ${renderMessages(messages)}
-      </div>
+      ${
+        visibleMessages.length
+          ? `<div class="ai-assistant-chat__messages" aria-live="polite">
+              ${renderMessages(visibleMessages)}
+            </div>`
+          : ""
+      }
 
       <form class="ai-assistant-chat__composer" data-ai-form>
-        <label class="sr-only" for="ai-assistant-input">Napište dotaz</label>
+        <label class="sr-only" for="ai-assistant-input">Napiš dotaz</label>
         <input
           id="ai-assistant-input"
           name="question"
           type="text"
           value="${escapeHtml(input)}"
-          placeholder="Napište dotaz…"
+          placeholder="Napiš dotaz…"
           autocomplete="off"
           data-ai-input
         />

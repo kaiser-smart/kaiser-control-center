@@ -20,9 +20,11 @@ export function VoiceAssistantButton({ listening = false, status = "Připraven" 
         <span class="voice-assistant__button-text">Mluvit</span>
       </button>
       <p class="voice-assistant__status" aria-live="polite">${escapeHtml(status)}</p>
-      <button class="voice-assistant__stop" type="button" data-ai-stop-voice ${listening ? "" : "disabled"}>
-        Zastavit mikrofon
-      </button>
+      ${
+        listening
+          ? `<button class="voice-assistant__stop" type="button" data-ai-stop-voice>Zastavit</button>`
+          : ""
+      }
     </div>
   `;
 }

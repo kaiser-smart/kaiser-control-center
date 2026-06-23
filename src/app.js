@@ -132,10 +132,10 @@ const quickAbsenceMenuItem = {
   order: 0
 };
 const AI_INITIAL_MESSAGE =
-  "Dobrý den, jsem Smart pomocník. Můžete se zeptat na dovolenou, nemoc, pneumatiky, závady, uživatele nebo nastavení.";
+  "Ahoj, jsem Smart pomocník. Zeptej se mě na dovolenou, nemoc, pneumatiky, závady, uživatele nebo nastavení.";
 const AI_STATUS_READY = "Připraven";
 const AI_STATUS_DONE = "Hotovo";
-const AI_UNSUPPORTED_NOTICE = "Hlasové ovládání není v tomto prohlížeči podporované. Použijte textový dotaz.";
+const AI_UNSUPPORTED_NOTICE = "Hlasové ovládání v tomto prohlížeči nejde. Použij textový dotaz.";
 const EMPLOYMENT_STATUS_OPTIONS = [
   { value: "active", label: "Aktivní" },
   { value: "inactive", label: "Neaktivní" }
@@ -481,14 +481,14 @@ function aiAssistantResponse(question) {
 
   if (aiPromptIncludes(prompt, ["nemoc", "jsem nemocny", "nahlasit nemoc"])) {
     return {
-      text: "Pro nahlášení nemoci použijte Rychlé zadání. Otevřu vám ho.",
+      text: "Pro nahlášení nemoci použij Rychlé zadání. Otevřu ti ho.",
       actions: [{ label: "Nahlásit nemoc", route: ABSENCE_QUICK_ROUTE }]
     };
   }
 
   if (aiPromptIncludes(prompt, ["dovolena", "chci dovolenou", "zadost o dovolenou"])) {
     return {
-      text: "Pro zadání dovolené použijte Rychlé zadání. Otevřu vám ho.",
+      text: "Pro zadání dovolené použij Rychlé zadání. Otevřu ti ho.",
       actions: [{ label: "Otevřít Rychlé zadání", route: ABSENCE_QUICK_ROUTE }]
     };
   }
@@ -509,7 +509,7 @@ function aiAssistantResponse(question) {
 
   if (aiPromptIncludes(prompt, ["zavada", "hlaseni", "nahlasit zavadu", "porucha"])) {
     return {
-      text: "Pro nahlášení závady otevřete modul Hlášení řidičů.",
+      text: "Pro nahlášení závady otevři modul Hlášení řidičů.",
       actions: [{ label: "Otevřít Hlášení řidičů", route: "/hlaseni-ridicu" }]
     };
   }
@@ -523,7 +523,7 @@ function aiAssistantResponse(question) {
 
   if (aiPromptIncludes(prompt, ["nastaveni", "vzhled", "barvy", "logo"])) {
     return {
-      text: "Nastavení aplikace otevřete v modulu Nastavení.",
+      text: "Nastavení aplikace najdeš v modulu Nastavení.",
       actions: [{ label: "Otevřít Nastavení", route: "/nastaveni" }]
     };
   }

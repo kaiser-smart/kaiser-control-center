@@ -5,8 +5,8 @@ const STATUS_DONE = "Hotovo";
 const STATUS_MIC_DENIED = "Mikrofon není povolený";
 const STATUS_UNSUPPORTED = "Hlasové ovládání není podporované";
 
-const MIC_DENIED_NOTICE = "Mikrofon není povolený. Povolte mikrofon v prohlížeči nebo použijte textový dotaz.";
-const UNSUPPORTED_NOTICE = "Hlasové ovládání není v tomto prohlížeči podporované. Použijte textový dotaz.";
+const MIC_DENIED_NOTICE = "Mikrofon není povolený. Povol ho v prohlížeči nebo použij textový dotaz.";
+const UNSUPPORTED_NOTICE = "Hlasové ovládání v tomto prohlížeči nejde. Použij textový dotaz.";
 
 function speechRecognitionConstructor() {
   if (typeof window === "undefined") {

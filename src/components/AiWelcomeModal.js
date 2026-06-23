@@ -24,14 +24,14 @@ export function AiWelcomeModal({ visible = false } = {}) {
         <div class="ai-welcome-modal__voice-mark" aria-hidden="true">
           <span class="ai-welcome-modal__mic"></span>
         </div>
-        <span class="ai-welcome-modal__badge">SMART POMOCNÍK</span>
-        <h2 id="ai-welcome-title">Potřebujete pomoct?</h2>
+        <span class="ai-welcome-modal__badge">SMART ODPADY</span>
+        <h2 id="ai-welcome-title">Potřebuješ pomoct?</h2>
         <p id="ai-welcome-description">
-          ${escapeHtml("Smart pomocník vás provede aplikací, poradí kam kliknout a zvládne i hlasové pokyny.")}
+          ${escapeHtml("Provedu tě aplikací, poradím kam kliknout a zvládnu i hlasové pokyny.")}
         </p>
         <div class="ai-welcome-modal__actions">
           <button class="ai-secondary-button" type="button" data-ai-welcome-action="dismiss">
-            Pokračovat bez pomoci
+            Zvládnu to sám
           </button>
           <button class="primary-action" type="button" data-ai-welcome-action="text">
             Textový pomocník
