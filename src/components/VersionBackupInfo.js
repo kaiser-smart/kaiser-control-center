@@ -34,7 +34,6 @@ export function VersionBackupInfo() {
       </div>
       <dl class="version-backup-info__grid">
         ${infoItem("Aktuální verze", versionInfo.version)}
-        ${infoItem("Poslední záloha", versionInfo.backupName)}
         ${infoItem("Datum zálohy", versionInfo.backupDate)}
         ${infoItem("Commit", versionInfo.commit)}
       </dl>
