@@ -18,6 +18,10 @@ export function AiVoiceAssistantPanel({
   elevenLabsStatus = "",
   listening = false,
   voiceStatus = "",
+  voiceUiState = "idle",
+  voiceTranscript = "",
+  voiceAnswer = "",
+  voiceTags = [],
   demoPlaying = false,
   demoSpeaker = "",
   demoSpeakerLabel = "",
@@ -31,25 +35,42 @@ export function AiVoiceAssistantPanel({
   const assistantName = assistant?.name || "Smart pomocník";
   const speakerClass = demoSpeaker ? `ai-voice-assistant-panel--speaker-${escapeHtml(demoSpeaker)}` : "";
   const normalizedVoiceStatus = String(voiceStatus || "").trim();
-  const fallbackStatus = listening ? "Poslouchám…" : "Klepnutím spustíš hlasový pokyn.";
+  const normalizedVoiceUiState = ["idle", "listening", "processing", "speaking", "error"].includes(voiceUiState)
+    ? voiceUiState
+    : "idle";
+  const fallbackStatus = listening ? "Poslouchám…" : "Klepni a mluv";
   const statusText = demoStatus || (normalizedVoiceStatus && normalizedVoiceStatus !== "Připraven"
     ? normalizedVoiceStatus
     : fallbackStatus);
+  const assistantTitle = `${assistantName} – AI asistent`;
+  const avatarAvailable = avatarAssetStatus[assistant?.id] === "available";
+  const microphonePath = assistant?.microphonePath || "src/assets/smart-helper-microphone.png";
+  const avatarVisual = avatarAvailable
+    ? `<img class="ai-voice-assistant-panel__avatar-image" src="${escapeHtml(assistant.avatarPath)}" alt="${escapeHtml(assistantTitle)}" />`
+    : `<div class="ai-voice-assistant-panel__avatar-placeholder" role="img" aria-label="Čeká na grafiku">
+        <span>Čeká na grafiku</span>
+      </div>`;
+  const transcriptText = String(voiceTranscript || "").trim();
+  const answerText = String(voiceAnswer || "").trim();
+  const tags = Array.isArray(voiceTags) && voiceTags.length
+    ? voiceTags
+    : ["Připraven", "Bez odeslání", "Čeká na hlas"];
 
   return `
     <section
-      class="ai-voice-assistant-panel ${listening ? "ai-voice-assistant-panel--listening" : ""} ${demoPlaying ? "ai-voice-assistant-panel--demo-playing" : ""} ${speakerClass}"
+      class="ai-voice-assistant-panel ai-voice-assistant-panel--state-${escapeHtml(normalizedVoiceUiState)} ${listening ? "ai-voice-assistant-panel--listening" : ""} ${demoPlaying ? "ai-voice-assistant-panel--demo-playing" : ""} ${speakerClass}"
       role="dialog"
       aria-modal="false"
       aria-labelledby="ai-voice-assistant-title"
     >
       <header class="ai-voice-assistant-panel__header">
         <div class="ai-voice-assistant-panel__topline">
+          <span class="ai-voice-assistant-panel__app-name">Smart odpady</span>
           <button class="ai-voice-assistant-panel__close" type="button" data-ai-close aria-label="Zavřít Smart pomocníka">
             Zavřít
           </button>
         </div>
-        <h2 id="ai-voice-assistant-title">${escapeHtml(assistantName)}</h2>
+        <h2 id="ai-voice-assistant-title">${escapeHtml(assistantTitle)}</h2>
         <p>${escapeHtml(assistant?.intro || "Hlasový pomocník pro Smart odpady.")}</p>
       </header>
 
@@ -57,14 +78,31 @@ export function AiVoiceAssistantPanel({
 
       <div class="ai-voice-assistant-panel__body">
         <button
-          class="ai-voice-assistant-panel__mic"
+          class="ai-voice-assistant-panel__avatar-stage"
           type="button"
           data-ai-start-voice
-          aria-label="Spustit hlasového pomocníka"
-          aria-pressed="${listening ? "true" : "false"}"
+          aria-label="Spustit asistenta ${escapeHtml(assistantName)}"
         >
-          <img src="src/assets/smart-helper-microphone.png" alt="" aria-hidden="true" />
+          ${avatarVisual}
         </button>
+        <div class="ai-voice-assistant-panel__voice-control">
+          <span class="ai-voice-assistant-panel__wave ai-voice-assistant-panel__wave--left" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </span>
+          <button
+            class="ai-voice-assistant-panel__mic"
+            type="button"
+            data-ai-start-voice
+            aria-label="Spustit hlasového pomocníka"
+            aria-pressed="${listening ? "true" : "false"}"
+          >
+            <span class="ai-voice-assistant-panel__mic-loader" aria-hidden="true"></span>
+            <img src="${escapeHtml(microphonePath)}" alt="" aria-hidden="true" />
+          </button>
+          <span class="ai-voice-assistant-panel__wave ai-voice-assistant-panel__wave--right" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </span>
+        </div>
         <p class="ai-voice-assistant-panel__status" aria-live="polite">
           ${escapeHtml(statusText)}
         </p>
@@ -82,6 +120,19 @@ export function AiVoiceAssistantPanel({
             <p>${escapeHtml(demoLine)}</p>
           </article>
         ` : ""}
+        <div class="ai-voice-assistant-panel__conversation" aria-label="Konverzace s AI asistentem">
+          <article class="ai-voice-assistant-panel__bubble ai-voice-assistant-panel__bubble--user">
+            <span>Přepis řeči</span>
+            <p>${escapeHtml(transcriptText || "Přepis řeči se zobrazí tady.")}</p>
+          </article>
+          <article class="ai-voice-assistant-panel__bubble ai-voice-assistant-panel__bubble--assistant">
+            <span>${escapeHtml(assistantName)}</span>
+            <p>${escapeHtml(answerText || "Odpověď asistenta se zobrazí tady.")}</p>
+          </article>
+        </div>
+        <div class="ai-voice-assistant-panel__tags" aria-label="Stavové štítky">
+          ${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}
+        </div>
       </div>
     </section>
   `;
