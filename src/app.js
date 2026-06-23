@@ -104,10 +104,22 @@ const APP_NAME = "Smart odpady";
 const HOME_SUBTITLE = "Provozní systém pro odpady, vozidla a trasy";
 const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
 const FEEDBACK_ROUTE = "/pripominky";
+const ABSENCE_ROUTE = "/dovolena-nemoc";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
 const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
 const QUICK_ABSENCE_ENTRY_HASH = "#co-potrebujete";
 const QUICK_ABSENCE_ENTRY_ROUTE = `${ABSENCE_QUICK_ROUTE}${QUICK_ABSENCE_ENTRY_HASH}`;
+const ABSENCE_TAB_ROUTES = {
+  dashboard: ABSENCE_ROUTE,
+  quick: ABSENCE_QUICK_ROUTE,
+  my: "/dovolena-nemoc/moje-zadosti",
+  new: "/dovolena-nemoc/nova-zadost",
+  approval: "/dovolena-nemoc/ke-schvaleni",
+  calendar: "/dovolena-nemoc/kalendar",
+  "employee-card": EMPLOYEE_CARD_ROUTE_PREFIX,
+  reports: "/dovolena-nemoc/reporty",
+  settings: "/dovolena-nemoc/nastaveni"
+};
 const quickAbsenceMenuItem = {
   id: "quick-absence",
   title: "Rychlé zadání",
@@ -351,6 +363,19 @@ function routeEmployeeId(path) {
   }
 
   return decodeURIComponent(path.slice(`${EMPLOYEE_CARD_ROUTE_PREFIX}/`.length).split("/")[0] || "").trim();
+}
+
+function absenceTabForRoute(path) {
+  if (path === "/dovolena-nemoc/dashboard") {
+    return "dashboard";
+  }
+
+  return Object.entries(ABSENCE_TAB_ROUTES)
+    .find(([, route]) => route === path)?.[0] || "";
+}
+
+function absenceRouteForTab(tabId) {
+  return ABSENCE_TAB_ROUTES[tabId] || ABSENCE_ROUTE;
 }
 
 function absenceModuleItem() {
@@ -3247,7 +3272,9 @@ function absenceActiveContent(activeTab, user, context = {}) {
 }
 
 function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) {
-  const requestedTab = context.employeeId
+  const requestedTab = context.tab
+    ? context.tab
+    : context.employeeId
     ? "employee-card"
     : context.quick
       ? "quick"
@@ -3291,13 +3318,13 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
 
       <nav class="absence-tabs" aria-label="Menu modulu Dovolená / Nemoc">
         ${tabs.map((tab) => `
-          <button
+          <a
             class="absence-tab ${tab.id === activeTab ? "absence-tab--active" : ""}"
-            type="button"
-            data-absence-tab="${escapeHtml(tab.id)}"
+            href="${routeHref(absenceRouteForTab(tab.id))}"
+            data-link
           >
             ${escapeHtml(tab.label)}
-          </button>
+          </a>
         `).join("")}
       </nav>
 
@@ -4292,18 +4319,22 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
-  if (path === ABSENCE_QUICK_ROUTE) {
-    if (!canUseAbsenceTab(user, "quick")) {
+  const routeTab = absenceTabForRoute(path);
+  if (routeTab) {
+    if (!canUseAbsenceTab(user, routeTab)) {
       app.innerHTML = forbiddenPage(user);
       document.title = `Bez oprávnění | ${APP_NAME}`;
       return;
     }
 
-    absenceUiState.tab = "quick";
+    absenceUiState.tab = routeTab;
     const moduleItem = absenceModuleItem();
-    app.innerHTML = absenceModulePage(moduleItem, user, false, { quick: true });
-    document.title = `Rychlé zadání | ${APP_NAME}`;
-    loadQuickAbsenceRequests();
+    app.innerHTML = absenceModulePage(moduleItem, user, false, { tab: routeTab });
+    const tabLabel = ABSENCE_TABS.find((tab) => tab.id === routeTab)?.label || "Dovolená / Nemoc";
+    document.title = `${tabLabel} | ${APP_NAME}`;
+    if (routeTab === "quick") {
+      loadQuickAbsenceRequests();
+    }
     return;
   }
 
@@ -4667,7 +4698,7 @@ function submitAbsenceRequest(form) {
       ? "Nepřítomnost byla evidována."
       : "Žádost byla odeslána ke schválení."
   );
-  render();
+  navigateToUrl(routeHref(absenceRouteForTab("my")));
 }
 
 function saveAbsenceSettings(form) {
@@ -5801,7 +5832,7 @@ document.addEventListener("click", async (event) => {
     guardedAccessAction(() => {
       absenceUiState.tab = "reports";
       absenceUiState.employeeFilter = employeeId;
-      navigateToUrl(routeHref("/dovolena-nemoc"));
+      navigateToUrl(routeHref(absenceRouteForTab("reports")));
     });
     return;
   }
@@ -5810,33 +5841,15 @@ document.addEventListener("click", async (event) => {
   if (absenceTab) {
     const nextTab = absenceTab.dataset.absenceTab || "dashboard";
     const resolvedTab = resolveAbsenceTab(currentUser(), nextTab);
-    const currentPath = normalizePath(window.location.pathname);
-
     if (resolvedTab === "employee-card") {
-      const targetEmployeeId = employeeCardState.employee?.id || employeeCardState.employees[0]?.id || employeeIdForUser(currentUser());
-      guardedAccessAction(() => navigateToUrl(routeHref(employeeCardRoute(targetEmployeeId))));
-      return;
-    }
-
-    if (resolvedTab === "quick") {
-      guardedAccessAction(() => {
-        absenceUiState.tab = "quick";
-        setAbsenceNotice("");
-        navigateToUrl(routeHref(ABSENCE_QUICK_ROUTE));
-      });
+      guardedAccessAction(() => navigateToUrl(routeHref(absenceRouteForTab("employee-card"))));
       return;
     }
 
     guardedAccessAction(() => {
       absenceUiState.tab = resolvedTab;
       setAbsenceNotice("");
-
-      if (routeEmployeeId(currentPath)) {
-        navigateToUrl(routeHref("/dovolena-nemoc"));
-        return;
-      }
-
-      render();
+      navigateToUrl(routeHref(absenceRouteForTab(resolvedTab)));
     });
     return;
   }

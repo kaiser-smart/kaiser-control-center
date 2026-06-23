@@ -2933,9 +2933,14 @@ h1 {
 }
 
 .absence-tab {
+  display: inline-flex;
   min-height: 38px;
+  align-items: center;
+  justify-content: center;
   padding: 0 12px;
   font-size: 0.88rem;
+  text-align: center;
+  text-decoration: none;
 }
 
 .absence-tab--active {
