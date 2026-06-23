@@ -9,7 +9,7 @@ import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
 import { DEFAULT_USERS } from "../functions/_lib/default-users.js";
 import { normalizeUserInput } from "../functions/_lib/users-store.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
-import { hasPermission, isFullAccessRole } from "../src/permissions.js";
+import { hasPermission, isFullAccessRole, normalizeRole } from "../src/permissions.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -19,6 +19,9 @@ const devCookieName = "smart_odpady_dev_session";
 const devSessions = new Map();
 let mockUsers = DEFAULT_USERS.map((user) => ({ ...user }));
 let mockThemeSettings = normalizeThemeSettings(DEFAULT_THEME_SETTINGS);
+let mockEmployeeCards = new Map();
+let mockEmployeeWorkHistory = new Map();
+let mockEmployeeDocuments = new Map();
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -252,6 +255,171 @@ function blocksCurrentDevUser(currentUser, payload, id) {
   return "";
 }
 
+function splitEmployeeName(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return {
+      firstName: parts[0] || "",
+      lastName: ""
+    };
+  }
+
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts.at(-1)
+  };
+}
+
+function sameMockId(left, right) {
+  return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+}
+
+function fullEmployeeName(employee) {
+  return [employee?.firstName, employee?.lastName].filter(Boolean).join(" ");
+}
+
+function defaultVacationEntitlement(user) {
+  return normalizeRole(user?.role) === "ridic" ? 20 : 25;
+}
+
+function mockEmployeeFromUser(user) {
+  const override = mockEmployeeCards.get(user.id) || {};
+  const nameParts = splitEmployeeName(user.name);
+  const entitlement = Number(override.vacationEntitlementDays ?? defaultVacationEntitlement(user));
+  const used = Number(override.vacationUsedDays ?? 0);
+  const pending = Number(override.vacationPendingDays ?? 0);
+  const managerId = String(override.managerId ?? user.managerId ?? "");
+  const manager = managerId ? findMockUser(managerId) : null;
+
+  return {
+    id: user.id,
+    userId: user.id,
+    firstName: override.firstName ?? nameParts.firstName,
+    lastName: override.lastName ?? nameParts.lastName,
+    email: override.email ?? user.email ?? "",
+    phone: override.phone ?? user.phone ?? "",
+    role: normalizeRole(override.role ?? user.role),
+    department: override.department ?? user.department ?? "",
+    position: override.position ?? user.position ?? "",
+    managerId,
+    managerName: managerId ? (manager?.name || override.managerName || "") : "",
+    employmentStatus: override.employmentStatus ?? (user.active === false ? "inactive" : "active"),
+    startDate: override.startDate ?? "",
+    employmentType: override.employmentType ?? "",
+    workload: Number(override.workload ?? 1),
+    vacationEntitlementDays: entitlement,
+    vacationUsedDays: used,
+    vacationPendingDays: pending,
+    vacationRemainingDays: Number(override.vacationRemainingDays ?? entitlement - used - pending),
+    currentAbsenceStatus: override.currentAbsenceStatus ?? "v práci",
+    sickDaysCurrentYear: Number(override.sickDaysCurrentYear ?? 0),
+    lastAbsenceDate: override.lastAbsenceDate ?? "",
+    internalNote: override.internalNote ?? "",
+    createdAt: override.createdAt ?? user.createdAt ?? new Date().toISOString(),
+    updatedAt: override.updatedAt ?? user.updatedAt ?? user.createdAt ?? new Date().toISOString()
+  };
+}
+
+function canViewMockEmployee(currentUser, employee) {
+  const role = normalizeRole(currentUser?.role);
+
+  if (isFullAccessRole(currentUser) || role === "kancelar" || role === "readonly") {
+    return true;
+  }
+
+  if (sameMockId(currentUser?.id, employee?.userId || employee?.id)) {
+    return true;
+  }
+
+  if (role === "garazmistr" || role === "dispecer") {
+    return (
+      String(currentUser?.department || "").trim() &&
+      String(currentUser.department || "").trim().toLowerCase() === String(employee?.department || "").trim().toLowerCase()
+    );
+  }
+
+  return false;
+}
+
+function canEditMockEmployee(currentUser) {
+  return isFullAccessRole(currentUser) || normalizeRole(currentUser?.role) === "kancelar";
+}
+
+function visibleMockEmployees(currentUser) {
+  return mockUsers
+    .map(mockEmployeeFromUser)
+    .filter((employee) => canViewMockEmployee(currentUser, employee))
+    .sort((a, b) => fullEmployeeName(a).localeCompare(fullEmployeeName(b), "cs"));
+}
+
+function findMockEmployee(currentUser, id) {
+  const user = findMockUser(id);
+
+  if (!user) {
+    return null;
+  }
+
+  const employee = mockEmployeeFromUser(user);
+  return canViewMockEmployee(currentUser, employee) ? employee : null;
+}
+
+function saveMockEmployee(currentUser, id, payload) {
+  if (!canEditMockEmployee(currentUser)) {
+    const error = new Error("Nemáte oprávnění upravit kartu zaměstnance.");
+    error.status = 403;
+    throw error;
+  }
+
+  const employee = findMockEmployee(currentUser, id);
+
+  if (!employee) {
+    const error = new Error("Zaměstnanec nebyl nalezen.");
+    error.status = 404;
+    throw error;
+  }
+
+  const managerId = String(payload.managerId ?? employee.managerId ?? "").trim();
+
+  if (managerId && sameMockId(managerId, employee.id)) {
+    const error = new Error("Zaměstnanec nesmí být sám sobě nadřízený.");
+    error.status = 400;
+    throw error;
+  }
+
+  const manager = managerId ? findMockUser(managerId) : null;
+
+  if (managerId && (!manager || manager.active === false || String(manager.status || "active").toLowerCase() === "disabled")) {
+    const error = new Error("Vybraný nadřízený není aktivní uživatel.");
+    error.status = 400;
+    throw error;
+  }
+
+  const entitlement = Number(payload.vacationEntitlementDays ?? employee.vacationEntitlementDays);
+  const used = Number(payload.vacationUsedDays ?? employee.vacationUsedDays);
+  const pending = Number(payload.vacationPendingDays ?? employee.vacationPendingDays);
+  const saved = {
+    ...employee,
+    ...payload,
+    managerId,
+    managerName: managerId ? manager.name : "",
+    vacationEntitlementDays: Number.isFinite(entitlement) ? entitlement : employee.vacationEntitlementDays,
+    vacationUsedDays: Number.isFinite(used) ? used : employee.vacationUsedDays,
+    vacationPendingDays: Number.isFinite(pending) ? pending : employee.vacationPendingDays,
+    vacationRemainingDays: Number.isFinite(entitlement - used - pending)
+      ? entitlement - used - pending
+      : employee.vacationRemainingDays,
+    updatedAt: new Date().toISOString()
+  };
+
+  mockEmployeeCards.set(employee.id, saved);
+  return saved;
+}
+
+function employeeWorkHistory(employeeId) {
+  return mockEmployeeWorkHistory.get(employeeId) || [];
+}
+
 async function handleApi(request, response) {
   const url = new URL(request.url || "/", "http://localhost");
 
@@ -356,6 +524,266 @@ async function handleApi(request, response) {
       sendJson(response, 200, { settings: mockThemeSettings });
     } catch {
       sendJson(response, 400, { error: "Vzhled se nepodařilo uložit. Zkuste to prosím znovu." });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/employees" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    sendJson(response, 200, { employees: visibleMockEmployees(user), apiStatus: "ready" });
+    return true;
+  }
+
+  const employeeDocumentMatch = /^\/api\/employees\/([^/]+)\/documents$/.exec(url.pathname);
+  if (employeeDocumentMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const id = decodeURIComponent(employeeDocumentMatch[1]);
+    const employee = findMockEmployee(user, id);
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    sendJson(response, 200, {
+      documents: mockEmployeeDocuments.get(employee.id) || [],
+      apiStatus: "ready",
+      uploadStatus: "waiting",
+      missingEndpoint: "POST /api/employees/:id/documents"
+    });
+    return true;
+  }
+
+  if (employeeDocumentMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    sendJson(response, 501, {
+      error: "Upload dokumentů čeká na cloudové úložiště / API.",
+      status: "Čeká na API",
+      missingEndpoint: "POST /api/employees/:id/documents"
+    });
+    return true;
+  }
+
+  const employeeWorkHistoryItemMatch = /^\/api\/employees\/([^/]+)\/work-history\/([^/]+)$/.exec(url.pathname);
+  if (employeeWorkHistoryItemMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view") || !canEditMockEmployee(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeWorkHistoryItemMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    const historyId = decodeURIComponent(employeeWorkHistoryItemMatch[2]);
+    const items = employeeWorkHistory(employee.id);
+    const existingIndex = items.findIndex((item) => sameMockId(item.id, historyId));
+    if (existingIndex < 0) {
+      sendJson(response, 404, { error: "Záznam pracovní historie nebyl nalezen." });
+      return true;
+    }
+
+    const payload = await readJsonBody(request);
+    const updated = {
+      ...items[existingIndex],
+      ...payload,
+      id: items[existingIndex].id,
+      employeeId: employee.id,
+      updatedAt: new Date().toISOString()
+    };
+    const nextItems = [...items.slice(0, existingIndex), updated, ...items.slice(existingIndex + 1)];
+    mockEmployeeWorkHistory.set(employee.id, nextItems);
+    sendJson(response, 200, { item: updated });
+    return true;
+  }
+
+  const employeeWorkHistoryMatch = /^\/api\/employees\/([^/]+)\/work-history$/.exec(url.pathname);
+  if (employeeWorkHistoryMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeWorkHistoryMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    sendJson(response, 200, { items: employeeWorkHistory(employee.id), apiStatus: "ready" });
+    return true;
+  }
+
+  if (employeeWorkHistoryMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view") || !canEditMockEmployee(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeWorkHistoryMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const payload = await readJsonBody(request);
+    const item = {
+      id: `work-history-${randomUUID()}`,
+      employeeId: employee.id,
+      dateFrom: payload.dateFrom || "",
+      dateTo: payload.dateTo || "",
+      position: payload.position || "",
+      department: payload.department || "",
+      note: payload.note || "",
+      createdAt: now,
+      updatedAt: now
+    };
+    mockEmployeeWorkHistory.set(employee.id, [item, ...employeeWorkHistory(employee.id)]);
+    sendJson(response, 201, { item });
+    return true;
+  }
+
+  const employeeVacationMatch = /^\/api\/employees\/([^/]+)\/vacation-balance$/.exec(url.pathname);
+  if (employeeVacationMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeVacationMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    sendJson(response, 200, {
+      employeeId: employee.id,
+      year: new Date().getFullYear(),
+      vacationEntitlementDays: employee.vacationEntitlementDays,
+      vacationUsedDays: employee.vacationUsedDays,
+      vacationPendingDays: employee.vacationPendingDays,
+      vacationRemainingDays: employee.vacationRemainingDays,
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  const employeeAbsenceMatch = /^\/api\/employees\/([^/]+)\/absence$/.exec(url.pathname);
+  if (employeeAbsenceMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeAbsenceMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    sendJson(response, 200, {
+      status: employee.currentAbsenceStatus,
+      sickDaysCurrentYear: employee.sickDaysCurrentYear,
+      lastAbsenceDate: employee.lastAbsenceDate,
+      items: [],
+      apiStatus: "ready",
+      note: "Detailní historie absencí čeká na samostatné cloudové API nepřítomností."
+    });
+    return true;
+  }
+
+  const employeeDetailMatch = /^\/api\/employees\/([^/]+)$/.exec(url.pathname);
+  if (employeeDetailMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeDetailMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    sendJson(response, 200, { employee, apiStatus: "ready" });
+    return true;
+  }
+
+  if (employeeDetailMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const employee = saveMockEmployee(user, decodeURIComponent(employeeDetailMatch[1]), await readJsonBody(request));
+      sendJson(response, 200, { employee });
+    } catch (error) {
+      sendJson(response, error.status || 400, { error: error.message || "Kartu zaměstnance se nepodařilo uložit." });
     }
     return true;
   }

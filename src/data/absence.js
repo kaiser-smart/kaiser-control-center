@@ -21,6 +21,7 @@ export const ABSENCE_TABS = [
   { id: "new", label: "Nová žádost" },
   { id: "approval", label: "Ke schválení" },
   { id: "calendar", label: "Kalendář" },
+  { id: "employee-card", label: "Karta zaměstnance" },
   { id: "reports", label: "Reporty" },
   { id: "settings", label: "Nastavení" }
 ];
@@ -43,6 +44,16 @@ export const ABSENCE_TYPE_TONES = {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const EMPLOYEE_ID_ALIASES = {
+  "martin-bartos": "pneumatiky-martin-bartos",
+  "lukas-malanik": "pneumatiky-lukas-malanik",
+  "roman-drdlik": "pneumatiky-roman-drdlik"
+};
+const EMPLOYEE_NAME_ALIASES = {
+  "pneumatiky-lukas-malanik": "Lukáš Malánik",
+  "pneumatiky-martin-bartos": "Martin Bartoš",
+  "pneumatiky-roman-drdlik": "Roman Drdlík"
+};
 
 const MOCK_EMPLOYEES = [
   {
@@ -70,7 +81,7 @@ const MOCK_EMPLOYEES = [
     team: "Kancelář"
   },
   {
-    id: "martin-bartos",
+    id: "pneumatiky-martin-bartos",
     name: "Martin Bartoš",
     email: "martin.bartos@kaiser.local",
     role: "ridic",
@@ -78,15 +89,15 @@ const MOCK_EMPLOYEES = [
     team: "Svoz"
   },
   {
-    id: "lukas-malanik",
-    name: "Lukáš Maláník",
+    id: "pneumatiky-lukas-malanik",
+    name: "Lukáš Malánik",
     email: "lukas.malanik@kaiser.local",
     role: "ridic",
     department: "Provoz",
     team: "Svoz"
   },
   {
-    id: "roman-drdlik",
+    id: "pneumatiky-roman-drdlik",
     name: "Roman Drdlík",
     email: "roman.drdlik@kaiser.local",
     role: "ridic",
@@ -130,6 +141,32 @@ function newId(prefix) {
 
 function dateNumber(value) {
   return Number(String(value || "").replaceAll("-", ""));
+}
+
+function canonicalEmployeeId(employeeId) {
+  const id = String(employeeId || "").trim();
+  return EMPLOYEE_ID_ALIASES[id] || id;
+}
+
+function normalizeStoredRequest(request) {
+  const employeeId = canonicalEmployeeId(request.employeeId);
+  const substituteUserId = canonicalEmployeeId(request.substituteUserId);
+  const approverUserId = canonicalEmployeeId(request.approverUserId);
+
+  return {
+    ...request,
+    employeeId,
+    employeeName: EMPLOYEE_NAME_ALIASES[employeeId] || request.employeeName,
+    substituteUserId,
+    approverUserId
+  };
+}
+
+function normalizeStoredBalance(balance) {
+  return {
+    ...balance,
+    employeeId: canonicalEmployeeId(balance.employeeId)
+  };
 }
 
 export function countAbsenceDays(dateFrom, dateTo, halfDayFrom = false, halfDayTo = false) {
@@ -190,7 +227,7 @@ function seededRequests() {
   return [
     {
       id: "absence-seed-vacation-pending",
-      employeeId: "martin-bartos",
+      employeeId: "pneumatiky-martin-bartos",
       employeeName: "Martin Bartoš",
       type: "Dovolená",
       dateFrom: dateInMonth(24),
@@ -200,7 +237,7 @@ function seededRequests() {
       daysCount: countAbsenceDays(dateInMonth(24), dateInMonth(26)),
       note: "Rodinná dovolená.",
       attachmentUrls: [],
-      substituteUserId: "roman-drdlik",
+      substituteUserId: "pneumatiky-roman-drdlik",
       status: "Čeká na schválení",
       approverUserId: "radim-oplustil",
       approvedAt: null,
@@ -238,8 +275,8 @@ function seededRequests() {
     },
     {
       id: "absence-seed-illness",
-      employeeId: "lukas-malanik",
-      employeeName: "Lukáš Maláník",
+      employeeId: "pneumatiky-lukas-malanik",
+      employeeName: "Lukáš Malánik",
       type: "Nemoc",
       dateFrom: dateInMonth(21),
       dateTo: dateInMonth(23),
@@ -262,7 +299,7 @@ function seededRequests() {
     },
     {
       id: "absence-seed-doctor",
-      employeeId: "roman-drdlik",
+      employeeId: "pneumatiky-roman-drdlik",
       employeeName: "Roman Drdlík",
       type: "Lékař",
       dateFrom: dateInMonth(22),
@@ -399,8 +436,8 @@ function normalizeAbsenceState(state) {
   return {
     ...seeded,
     ...(state || {}),
-    requests: Array.isArray(state?.requests) ? state.requests : seeded.requests,
-    balances: Array.isArray(state?.balances) ? state.balances : seeded.balances,
+    requests: Array.isArray(state?.requests) ? state.requests.map(normalizeStoredRequest) : seeded.requests,
+    balances: Array.isArray(state?.balances) ? state.balances.map(normalizeStoredBalance) : seeded.balances,
     history: Array.isArray(state?.history) ? state.history : seeded.history,
     reports: Array.isArray(state?.reports) ? state.reports : seeded.reports,
     settings: {

@@ -2237,6 +2237,265 @@ h1 {
   font-size: 0.78rem;
 }
 
+.absence-employee-link {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.absence-employee-link:hover,
+.absence-employee-link:focus-visible {
+  color: var(--kaiser-green-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.employee-card {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.employee-card-header,
+.employee-card-section,
+.employee-card-kpi {
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
+}
+
+.employee-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+}
+
+.employee-card-header h2 {
+  margin: 4px 0 8px;
+  font-size: clamp(1.75rem, 4vw, 2.7rem);
+  line-height: 1.05;
+}
+
+.employee-card-header p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.employee-card-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 520px;
+}
+
+.employee-card-switcher,
+.employee-card-field input,
+.employee-card-field select,
+.employee-card-field textarea,
+.employee-work-history-form input,
+.employee-work-history-form textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+}
+
+.employee-card-switcher {
+  width: min(100%, 250px);
+  padding: 0 12px;
+}
+
+.employee-card-field input,
+.employee-card-field select,
+.employee-card-field textarea,
+.employee-work-history-form input,
+.employee-work-history-form textarea {
+  padding: 10px 12px;
+}
+
+.employee-card-field textarea,
+.employee-work-history-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.employee-card-field input:disabled,
+.employee-card-field select:disabled,
+.employee-card-field textarea:disabled {
+  background: #f6f8f4;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.employee-card-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.employee-card-kpi {
+  display: grid;
+  gap: 8px;
+  min-height: 108px;
+  padding: 16px;
+}
+
+.employee-card-kpi span,
+.employee-card-field > span,
+.employee-card-readonly span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.employee-card-kpi strong {
+  color: var(--ink);
+  font-size: 1.85rem;
+  line-height: 1.05;
+}
+
+.employee-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.employee-card-grid--bottom {
+  align-items: start;
+}
+
+.employee-card-section {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.employee-card-section--wide {
+  grid-column: 1 / -1;
+}
+
+.employee-card-section__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.employee-card-section h2 {
+  margin: 0;
+  font-size: 1.18rem;
+  line-height: 1.2;
+}
+
+.employee-card-section p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.employee-card-fields,
+.employee-work-history-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.employee-card-field {
+  display: grid;
+  gap: 6px;
+}
+
+.employee-card-field--wide,
+.employee-work-history-form .employee-card-field--wide {
+  grid-column: 1 / -1;
+}
+
+.employee-card-readonly {
+  display: grid;
+  gap: 6px;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbf4;
+}
+
+.employee-card-readonly strong {
+  font-size: 0.96rem;
+}
+
+.employee-card-form-actions,
+.employee-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-card-form-actions {
+  margin-top: 16px;
+}
+
+.employee-card-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.employee-card-status--ready {
+  background: #edf8e7;
+  color: var(--kaiser-green-dark);
+}
+
+.employee-card-status--waiting {
+  background: #fff5e5;
+  color: #8a5a00;
+}
+
+.employee-card-document-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.employee-card-document-types span {
+  padding: 6px 9px;
+  border: 1px solid #dfe8d8;
+  border-radius: 999px;
+  background: #f7fbf3;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.employee-card-api-note {
+  padding: 10px 12px;
+  border: 1px solid #ffe0a8;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #715014;
+  font-weight: 800;
+}
+
+.employee-card-table {
+  min-width: 680px;
+}
+
 .absence-badge,
 .absence-type {
   display: inline-flex;
@@ -3583,5 +3842,65 @@ h1 {
 
   .absence-tab {
     font-size: 0.76rem;
+  }
+}
+
+@media (max-width: 980px) {
+  .employee-card-header {
+    display: grid;
+  }
+
+  .employee-card-header__actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .employee-card-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .employee-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .employee-card-header,
+  .employee-card-section {
+    padding: 16px;
+  }
+
+  .employee-card-header h2 {
+    font-size: 1.8rem;
+  }
+
+  .employee-card-kpis,
+  .employee-card-fields,
+  .employee-work-history-form {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-card-kpi {
+    min-height: 92px;
+  }
+
+  .employee-card-switcher,
+  .employee-card-header__actions .secondary-link {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .employee-card {
+    gap: 12px;
+  }
+
+  .employee-card-header,
+  .employee-card-section {
+    padding: 14px;
+  }
+
+  .employee-card-kpi strong {
+    font-size: 1.55rem;
   }
 }
