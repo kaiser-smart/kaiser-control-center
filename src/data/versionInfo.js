@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.30"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.31"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Reporty a moduly",
+    text: "Notifikace zobrazují v tabulce jen krátký souhrn chyby a modulové štítky jsou sjednocené na Nový, Rozpracováno a Hotovo."
+  },
   {
     title: "Smart pomocník",
     text: "Uvítací okno pomocníka zůstává dostupné, ale při dočtení dat v modulech už znovu nespouští vstupní animaci."

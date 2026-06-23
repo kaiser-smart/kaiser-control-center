@@ -740,6 +740,13 @@ h1 {
   box-shadow: 0 6px 14px rgba(176, 122, 42, 0.13);
 }
 
+.status-badge--new {
+  border-color: rgba(77, 90, 86, 0.18);
+  background: #f4f6f2;
+  color: #4f5b55;
+  box-shadow: 0 6px 14px rgba(77, 90, 86, 0.1);
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -4251,6 +4258,25 @@ body:has(.ai-welcome-modal) {
 .notification-status--failed {
   background: #ffe8e8;
   color: #a22d2d;
+}
+
+.notification-error-summary {
+  display: inline-flex;
+  max-width: 240px;
+  align-items: center;
+  color: #667064;
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.notification-error-summary--has-error {
+  max-width: 260px;
+  padding: 6px 9px;
+  border: 1px solid rgba(138, 90, 18, 0.16);
+  border-radius: 999px;
+  background: #fff8e8;
+  color: #7a5114;
+  font-weight: 800;
 }
 
 .notification-empty,

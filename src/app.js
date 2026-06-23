@@ -557,17 +557,25 @@ function moduleFeedbackItems(moduleId, user) {
 
 function moduleStatusLabel(moduleItem) {
   return {
-    HOTOVO: "HOTOVO",
-    "připraveno": "PŘIPRAVENO",
-    skeleton: "ČEKÁ NA API",
-    "mock data": "ROZPRACOVÁN",
-    ROZPRACOVÁN: "ROZPRACOVÁN",
-    správa: "SPRÁVA"
+    HOTOVO: "Hotovo",
+    "připraveno": "Rozpracováno",
+    skeleton: "Nový",
+    "mock data": "Rozpracováno",
+    ROZPRACOVÁN: "Rozpracováno",
+    správa: ""
   }[moduleItem?.status] || moduleItem?.status || "";
 }
 
 function moduleStatusTone(moduleItem) {
-  return moduleItem?.status === "HOTOVO" ? "done" : "progress";
+  if (moduleItem?.status === "HOTOVO") {
+    return "done";
+  }
+
+  if (moduleItem?.status === "skeleton") {
+    return "new";
+  }
+
+  return "progress";
 }
 
 function moduleFeedbackBoxFor(moduleItem, user, options = {}) {
@@ -3964,6 +3972,46 @@ function notificationStatusBadge(status) {
   return `<span class="notification-status notification-status--${escapeHtml(normalized)}">${escapeHtml(notificationStatusLabel(normalized))}</span>`;
 }
 
+function notificationErrorSummary(item) {
+  const lastError = String(item?.lastError || "").trim();
+
+  if (!lastError) {
+    return "bez chyby";
+  }
+
+  const normalized = lastError
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (normalized.includes("chybi e-mail prijemce") || normalized.includes("chybi prijemce e-mailu")) {
+    return "Chybí e-mail příjemce";
+  }
+
+  if (normalized.includes("chybi telefon prijemce")) {
+    return "Chybí telefon příjemce";
+  }
+
+  if (
+    normalized.includes("chybi produkcni nastaveni odesilani") ||
+    normalized.includes("email_provider") ||
+    normalized.includes("sendgrid_api_key") ||
+    normalized.includes("email_from")
+  ) {
+    return "Chybí nastavení e-mailu";
+  }
+
+  if (normalized.includes("chybi produkcni nastaveni sms") || normalized.includes("twilio_")) {
+    return "Chybí nastavení SMS";
+  }
+
+  if (normalized.includes("sendgrid")) {
+    return "Chyba SendGrid";
+  }
+
+  return lastError.length > 72 ? `${lastError.slice(0, 69)}...` : lastError;
+}
+
 function notificationSummaryCards() {
   const summary = notificationCenterState.summary;
   const cards = [
@@ -4042,6 +4090,9 @@ function notificationRow(item) {
     ? `<a class="text-action" href="${routeHref(`/dovolena-nemoc/ke-schvaleni`)}" data-link>Otevřít</a>`
     : '<span class="notification-muted">bez vazby</span>';
   const canRetry = item.status === "failed" || item.status === "not_sent";
+  const lastError = String(item.lastError || "").trim();
+  const errorSummary = notificationErrorSummary(item);
+  const errorTitle = lastError ? ` title="${escapeHtml(lastError)}"` : "";
 
   return `
     <tr>
@@ -4053,7 +4104,11 @@ function notificationRow(item) {
       <td data-label="Příjemce">${escapeHtml(item.recipient || "neuvedeno")}</td>
       <td data-label="Stav">${notificationStatusBadge(item.status)}</td>
       <td data-label="Pokusů">${escapeHtml(item.attempts || 1)}</td>
-      <td data-label="Poslední chyba">${escapeHtml(item.lastError || item.messagePreview || "bez chyby")}</td>
+      <td data-label="Poslední chyba">
+        <span class="notification-error-summary${lastError ? " notification-error-summary--has-error" : ""}"${errorTitle}>
+          ${escapeHtml(errorSummary)}
+        </span>
+      </td>
       <td data-label="Vazba na žádost">${requestButton}</td>
       <td data-label="Akce">
         <button class="text-action" type="button" data-notification-detail="${escapeHtml(item.id)}">Detail</button>
