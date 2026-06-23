@@ -3972,8 +3972,14 @@ function notificationStatusBadge(status) {
   return `<span class="notification-status notification-status--${escapeHtml(normalized)}">${escapeHtml(notificationStatusLabel(normalized))}</span>`;
 }
 
+function notificationHasError(item) {
+  return ["failed", "not_sent", "skipped"].includes(String(item?.status || "").trim());
+}
+
 function notificationErrorSummary(item) {
-  const lastError = String(item?.lastError || "").trim();
+  const lastError = notificationHasError(item)
+    ? String(item?.lastError || item?.messagePreview || "").trim()
+    : "";
 
   if (!lastError) {
     return "bez chyby";
@@ -4090,7 +4096,9 @@ function notificationRow(item) {
     ? `<a class="text-action" href="${routeHref(`/dovolena-nemoc/ke-schvaleni`)}" data-link>Otevřít</a>`
     : '<span class="notification-muted">bez vazby</span>';
   const canRetry = item.status === "failed" || item.status === "not_sent";
-  const lastError = String(item.lastError || "").trim();
+  const lastError = notificationHasError(item)
+    ? String(item.lastError || item.messagePreview || "").trim()
+    : "";
   const errorSummary = notificationErrorSummary(item);
   const errorTitle = lastError ? ` title="${escapeHtml(lastError)}"` : "";
 
