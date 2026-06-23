@@ -45,12 +45,11 @@ import {
   FEEDBACK_PRIORITIES,
   FEEDBACK_STATUSES,
   canManageFeedback,
-  createModuleFeedback,
+  feedbackStatusApiValue,
   feedbackSummary,
   filterModuleFeedback,
   moduleFeedbackToCsv,
-  readModuleFeedback,
-  updateModuleFeedback,
+  normalizeFeedback,
   visibleFeedbackForUser
 } from "./data/moduleFeedback.js";
 import {
@@ -180,6 +179,15 @@ const feedbackFilters = {
   priority: "",
   author: "",
   search: ""
+};
+const feedbackState = {
+  items: [],
+  loaded: false,
+  loading: false,
+  error: "",
+  apiStatus: "waiting",
+  savingId: "",
+  cardMessages: {}
 };
 
 let absenceState = loadAbsenceState();
@@ -336,7 +344,7 @@ function visibleDashboardRoutes(user) {
 }
 
 function moduleFeedbackItems(moduleId, user) {
-  const items = readModuleFeedback().filter((item) => item.moduleId === moduleId);
+  const items = feedbackState.items.filter((item) => item.moduleId === moduleId);
   return visibleFeedbackForUser(items, user);
 }
 
@@ -3126,15 +3134,38 @@ function priorityTone(priority) {
   }[priority] || "normal";
 }
 
+function statusTone(status) {
+  return {
+    Nová: "new",
+    Převzato: "accepted",
+    "V řešení": "in-progress",
+    Hotovo: "done",
+    Zamítnuto: "rejected",
+    Archiv: "archived"
+  }[status] || "archived";
+}
+
+function shortFeedbackId(id) {
+  const cleaned = String(id || "").replace(/^module-feedback-/, "");
+  return cleaned.slice(0, 8) || "neuvedeno";
+}
+
 function feedbackAdminItem(item, canEdit) {
+  const cardState = feedbackCardMessage(item.id);
+  const isSaving = feedbackState.savingId === item.id;
+  const disabled = isSaving ? "disabled" : "";
+
   return `
     <article class="feedback-ticket">
-      <header class="feedback-ticket__header">
-        <div>
+      <header class="feedback-ticket__top">
+        <div class="feedback-ticket__identity">
           <p class="feedback-ticket__module">${escapeHtml(item.moduleName)}</p>
-          <h3>${escapeHtml(item.userName)}</h3>
+          <p class="feedback-ticket__author">${escapeHtml(item.userName)} · ${formatDateTime(item.createdAt)}</p>
         </div>
-        <span class="feedback-priority feedback-priority--${priorityTone(item.priority)}">${escapeHtml(item.priority)}</span>
+        <div class="feedback-ticket__badges" aria-label="Priorita a stav">
+          <span class="feedback-badge feedback-priority--${priorityTone(item.priority)}">${escapeHtml(item.priority)}</span>
+          <span class="feedback-badge feedback-status--${statusTone(item.status)}">${escapeHtml(item.status)}</span>
+        </div>
       </header>
 
       <p class="feedback-ticket__message">${escapeHtml(item.message)}</p>
@@ -3150,37 +3181,49 @@ function feedbackAdminItem(item, canEdit) {
         </div>
         <div>
           <dt>ID</dt>
-          <dd>${escapeHtml(item.id.slice(0, 8))}</dd>
+          <dd>${escapeHtml(shortFeedbackId(item.id))}</dd>
         </div>
       </dl>
 
       ${canEdit ? `
-        <div class="feedback-ticket__controls">
+        <form class="feedback-ticket__management" data-feedback-update-form data-feedback-id="${escapeHtml(item.id)}">
+          <h3>Správa připomínky</h3>
           <label class="module-feedback__field">
             <span>Stav</span>
-            <select data-feedback-status data-feedback-id="${escapeHtml(item.id)}">
+            <select name="status" ${disabled}>
               ${FEEDBACK_STATUSES.map((status) => `
-                <option value="${escapeHtml(status)}" ${status === item.status ? "selected" : ""}>${escapeHtml(status)}</option>
+                <option value="${escapeHtml(feedbackStatusApiValue(status))}" ${status === item.status ? "selected" : ""}>${escapeHtml(status)}</option>
               `).join("")}
             </select>
           </label>
           <label class="module-feedback__field module-feedback__field--message">
             <span>Interní poznámka</span>
             <textarea
+              name="internalNote"
               rows="3"
-              data-feedback-note
-              data-feedback-id="${escapeHtml(item.id)}"
+              ${disabled}
               placeholder="Interní poznámka pro kancelář / management"
             >${escapeHtml(item.internalNote)}</textarea>
           </label>
-        </div>
-      ` : ""}
+          <button class="primary-action feedback-ticket__save" type="submit" ${disabled}>
+            ${isSaving ? "Ukládám…" : "Uložit změny"}
+          </button>
+          ${cardState.message ? `<p class="feedback-ticket__notice">${escapeHtml(cardState.message)}</p>` : ""}
+          ${cardState.error ? `<p class="feedback-ticket__error">${escapeHtml(cardState.error)}</p>` : ""}
+        </form>
+      ` : `
+        <section class="feedback-ticket__readonly" aria-label="Stav připomínky">
+          <strong>Správa připomínky</strong>
+          <span>${escapeHtml(item.status)}</span>
+          ${item.internalNote ? `<p>${escapeHtml(item.internalNote)}</p>` : ""}
+        </section>
+      `}
     </article>
   `;
 }
 
 function feedbackPage(user) {
-  const allFeedback = readModuleFeedback();
+  const allFeedback = feedbackState.items;
   const visibleFeedback = visibleFeedbackForUser(allFeedback, user);
   const summary = feedbackSummary(visibleFeedback);
   const filteredFeedback = filterModuleFeedback(visibleFeedback, feedbackFilters);
@@ -3193,6 +3236,18 @@ function feedbackPage(user) {
   const items = filteredFeedback
     .map((item) => feedbackAdminItem(item, canEdit))
     .join("");
+  const apiMessage = feedbackState.loading
+    ? '<p class="feedback-empty feedback-empty--large">Načítám připomínky…</p>'
+    : feedbackState.error
+      ? `<p class="feedback-empty feedback-empty--large">${escapeHtml(feedbackState.error)}</p>`
+      : "";
+  const emptyState = `
+    <section class="feedback-empty-card">
+      <h2>Žádné připomínky</h2>
+      <p>Zatím nebyly nalezeny žádné připomínky podle zvolených filtrů.</p>
+      <button class="secondary-link feedback-reset-button" type="button" data-feedback-reset-filters>Reset filtrů</button>
+    </section>
+  `;
 
   return `
     <main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>
@@ -3269,11 +3324,14 @@ function feedbackPage(user) {
             <span>Vyhledat</span>
             <input name="search" value="${escapeHtml(feedbackFilters.search)}" placeholder="Text připomínky nebo poznámky" />
           </label>
-          <button class="secondary-link feedback-filter-button" type="submit">Filtrovat</button>
+          <div class="feedback-filters__actions">
+            <button class="primary-action feedback-filter-button" type="submit">Filtrovat</button>
+            <button class="secondary-link feedback-reset-button" type="button" data-feedback-reset-filters>Reset</button>
+          </div>
         </form>
 
         <div class="feedback-list" aria-label="Seznam připomínek">
-          ${items || '<p class="feedback-empty feedback-empty--large">Žádná připomínka neodpovídá filtru.</p>'}
+          ${apiMessage || items || emptyState}
         </div>
       </section>
     </main>
@@ -3357,6 +3415,48 @@ async function apiJson(path, options = {}) {
   }
 
   return payload;
+}
+
+async function loadModuleFeedback(options = {}) {
+  const user = currentUser();
+  if (feedbackState.loaded || feedbackState.loading || !hasPermission(user, "feedback", "view")) {
+    return;
+  }
+
+  feedbackState.loading = true;
+  feedbackState.error = "";
+
+  try {
+    const result = await apiJson("/api/module-feedback");
+    feedbackState.items = (result.feedback || [])
+      .map(normalizeFeedback)
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    feedbackState.apiStatus = result.apiStatus || "ready";
+  } catch (error) {
+    const missing = error.payload?.missingEndpoint;
+    feedbackState.error = missing
+      ? `Čeká na API: ${missing}`
+      : "Připomínky se teď nepodařilo načíst.";
+    feedbackState.apiStatus = error.payload?.apiStatus || "waiting";
+  } finally {
+    feedbackState.loaded = true;
+    feedbackState.loading = false;
+    if (options.render !== false) {
+      render();
+    }
+  }
+}
+
+function replaceFeedbackItem(feedback) {
+  const normalized = normalizeFeedback(feedback);
+  feedbackState.items = [
+    normalized,
+    ...feedbackState.items.filter((item) => item.id !== normalized.id)
+  ].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+function feedbackCardMessage(id) {
+  return feedbackState.cardMessages[id] || { message: "", error: "" };
 }
 
 function mergeQuickAbsenceRecent(request) {
@@ -3868,6 +3968,13 @@ async function logout() {
   adminUsersState.loaded = false;
   adminUsersState.users = [];
   accessUsersSearchState.query = "";
+  feedbackState.items = [];
+  feedbackState.loaded = false;
+  feedbackState.loading = false;
+  feedbackState.error = "";
+  feedbackState.apiStatus = "waiting";
+  feedbackState.savingId = "";
+  feedbackState.cardMessages = {};
   themeState.loaded = false;
   themeState.loading = false;
   themeState.saving = false;
@@ -3903,6 +4010,10 @@ function renderAuthenticatedApp(user) {
   const path = normalizePath(window.location.pathname);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   const userDashboardRoutes = new Map(visibleDashboardRoutes(user).map((moduleItem) => [moduleItem.route, moduleItem]));
+
+  if (hasPermission(user, "feedback", "view")) {
+    loadModuleFeedback({ render: true });
+  }
 
   if (path === "/") {
     app.innerHTML = homePage(user);
@@ -4088,7 +4199,7 @@ function handlePopStateNavigation() {
   render();
 }
 
-function submitModuleFeedback(form) {
+async function submitModuleFeedback(form) {
   const user = currentUser();
   if (!hasPermission(user, "feedback", "create")) {
     feedbackFormState[form.dataset.moduleId || ""] = {
@@ -4105,24 +4216,94 @@ function submitModuleFeedback(form) {
   const priority = form.elements.priority.value;
 
   try {
-    createModuleFeedback({
-      moduleId,
-      moduleName,
-      currentUser: user,
-      message,
-      priority
+    const result = await apiJson("/api/module-feedback", {
+      method: "POST",
+      body: JSON.stringify({
+        moduleId,
+        moduleName,
+        message,
+        priority
+      })
     });
+
+    if (result.feedback) {
+      replaceFeedbackItem(result.feedback);
+    }
+
+    form.reset();
+    feedbackState.apiStatus = result.apiStatus || "ready";
+    feedbackState.loaded = true;
     feedbackFormState[moduleId] = {
       message: "Děkujeme, připomínka byla uložena.",
       error: ""
     };
-  } catch {
+  } catch (error) {
+    const missing = error.payload?.missingEndpoint;
     feedbackFormState[moduleId] = {
       message: "",
-      error: "Připomínku se nepodařilo uložit. Zkuste to prosím znovu."
+      error: missing
+        ? `Čeká na API: ${missing}`
+        : "Připomínku se nepodařilo uložit. Zkuste to prosím znovu."
     };
   }
 
+  render();
+}
+
+async function updateFeedbackCard(form) {
+  const user = currentUser();
+  const id = form.dataset.feedbackId || "";
+
+  if (!canManageFeedback(user) || !id) {
+    return;
+  }
+
+  feedbackState.savingId = id;
+  feedbackState.cardMessages = {
+    ...feedbackState.cardMessages,
+    [id]: { message: "", error: "" }
+  };
+  render();
+
+  try {
+    const result = await apiJson(`/api/module-feedback/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: form.elements.status?.value || "new",
+        internalNote: form.elements.internalNote?.value || ""
+      })
+    });
+
+    if (result.feedback) {
+      replaceFeedbackItem(result.feedback);
+    }
+
+    feedbackState.cardMessages = {
+      ...feedbackState.cardMessages,
+      [id]: { message: "Uloženo", error: "" }
+    };
+    feedbackState.apiStatus = result.apiStatus || "ready";
+  } catch (error) {
+    const missing = error.payload?.missingEndpoint;
+    feedbackState.cardMessages = {
+      ...feedbackState.cardMessages,
+      [id]: {
+        message: "",
+        error: missing ? `Čeká na API: ${missing}` : "Změny se nepodařilo uložit"
+      }
+    };
+  } finally {
+    feedbackState.savingId = "";
+    render();
+  }
+}
+
+function resetFeedbackFilters() {
+  feedbackFilters.moduleId = "";
+  feedbackFilters.status = "";
+  feedbackFilters.priority = "";
+  feedbackFilters.author = "";
+  feedbackFilters.search = "";
   render();
 }
 
@@ -4136,7 +4317,7 @@ function applyFeedbackFilters(form) {
 }
 
 function currentFilteredFeedback() {
-  return filterModuleFeedback(visibleFeedbackForUser(readModuleFeedback(), currentUser()), feedbackFilters);
+  return filterModuleFeedback(visibleFeedbackForUser(feedbackState.items, currentUser()), feedbackFilters);
 }
 
 function exportFeedbackCsv() {
@@ -5075,6 +5256,13 @@ document.addEventListener("submit", (event) => {
     return;
   }
 
+  const feedbackUpdateForm = event.target.closest("[data-feedback-update-form]");
+  if (feedbackUpdateForm) {
+    event.preventDefault();
+    updateFeedbackCard(feedbackUpdateForm);
+    return;
+  }
+
   const filtersForm = event.target.closest("[data-feedback-filters]");
   if (filtersForm) {
     event.preventDefault();
@@ -5198,28 +5386,6 @@ document.addEventListener("change", (event) => {
       applyFeedbackFilters(form);
     }
     return;
-  }
-
-  const statusField = event.target.closest("[data-feedback-status]");
-  if (statusField) {
-    const user = currentUser();
-    if (!canManageFeedback(user)) {
-      return;
-    }
-
-    updateModuleFeedback(statusField.dataset.feedbackId, { status: statusField.value }, user);
-    render();
-    return;
-  }
-
-  const noteField = event.target.closest("[data-feedback-note]");
-  if (noteField) {
-    const user = currentUser();
-    if (!canManageFeedback(user)) {
-      return;
-    }
-
-    updateModuleFeedback(noteField.dataset.feedbackId, { internalNote: noteField.value }, user);
   }
 });
 
@@ -5457,6 +5623,12 @@ document.addEventListener("click", async (event) => {
   const feedbackExport = event.target.closest("[data-feedback-export]");
   if (feedbackExport) {
     exportFeedbackCsv();
+    return;
+  }
+
+  const feedbackReset = event.target.closest("[data-feedback-reset-filters]");
+  if (feedbackReset) {
+    resetFeedbackFilters();
     return;
   }
 

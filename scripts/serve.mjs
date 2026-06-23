@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
 import { DEFAULT_USERS } from "../functions/_lib/default-users.js";
 import { normalizeUserInput } from "../functions/_lib/users-store.js";
+import { normalizeFeedback, normalizeFeedbackPriority, normalizeFeedbackStatus } from "../src/data/moduleFeedback.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { hasPermission, isFullAccessRole, normalizeRole } from "../src/permissions.js";
 
@@ -24,6 +25,7 @@ let mockEmployeeWorkHistory = new Map();
 let mockEmployeeDocuments = new Map();
 let mockEmployeeDocumentFiles = new Map();
 let mockAbsenceRequests = [];
+let mockModuleFeedback = [];
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -352,6 +354,86 @@ function splitEmployeeName(name) {
 
 function sameMockId(left, right) {
   return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+}
+
+function canEditMockFeedback(currentUser) {
+  return hasPermission(currentUser, "feedback", "edit") || hasPermission(currentUser, "feedback", "manage");
+}
+
+function visibleMockFeedback(currentUser) {
+  const items = mockModuleFeedback
+    .map(normalizeFeedback)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+  if (canEditMockFeedback(currentUser)) {
+    return items;
+  }
+
+  return items.filter((item) => sameMockId(item.userId, currentUser?.id));
+}
+
+function createMockModuleFeedback(currentUser, payload) {
+  const message = String(payload?.message || "").trim();
+
+  if (!message) {
+    const error = new Error("Vyplňte text připomínky.");
+    error.status = 400;
+    throw error;
+  }
+
+  return normalizeFeedback({
+    id: `module-feedback-${randomUUID()}`,
+    moduleId: payload?.moduleId || "",
+    moduleName: payload?.moduleName || "",
+    userId: currentUser?.id || "",
+    userName: currentUser?.name || currentUser?.email || "Uživatel",
+    userRole: currentUser?.role || "readonly",
+    message,
+    priority: normalizeFeedbackPriority(payload?.priority),
+    status: "Nová",
+    createdAt: new Date().toISOString(),
+    resolvedAt: null,
+    resolvedByUserId: null,
+    internalNote: ""
+  });
+}
+
+function updateMockModuleFeedback(currentUser, id, payload) {
+  if (!canEditMockFeedback(currentUser)) {
+    const error = new Error("Nemáte oprávnění.");
+    error.status = 403;
+    throw error;
+  }
+
+  const index = mockModuleFeedback.findIndex((item) => sameMockId(item.id, id));
+  if (index < 0) {
+    const error = new Error("Připomínka nebyla nalezena.");
+    error.status = 404;
+    throw error;
+  }
+
+  const existing = normalizeFeedback(mockModuleFeedback[index]);
+  const status = Object.hasOwn(payload || {}, "status")
+    ? normalizeFeedbackStatus(payload.status)
+    : existing.status;
+  const isFinished = status === "Hotovo" || status === "Zamítnuto" || status === "Archiv";
+  const updated = normalizeFeedback({
+    ...existing,
+    status,
+    internalNote: Object.hasOwn(payload || {}, "internalNote")
+      ? String(payload.internalNote || "").trim()
+      : existing.internalNote,
+    resolvedAt: isFinished ? (existing.resolvedAt || new Date().toISOString()) : null,
+    resolvedByUserId: isFinished ? (existing.resolvedByUserId || currentUser?.id || null) : null
+  });
+
+  mockModuleFeedback = [
+    ...mockModuleFeedback.slice(0, index),
+    updated,
+    ...mockModuleFeedback.slice(index + 1)
+  ];
+
+  return updated;
 }
 
 function fullEmployeeName(employee) {
@@ -759,6 +841,65 @@ async function handleApi(request, response) {
     } catch (error) {
       sendJson(response, error.status || 500, {
         error: error.message || "Nepodařilo se odeslat. Zkuste to znovu.",
+        apiStatus: "ready"
+      });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/module-feedback" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "feedback", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    sendJson(response, 200, { feedback: visibleMockFeedback(user), apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/module-feedback" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "feedback", "create")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const feedback = createMockModuleFeedback(user, await readJsonBody(request));
+      mockModuleFeedback = [feedback, ...mockModuleFeedback].slice(0, 500);
+      sendJson(response, 201, { feedback, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Připomínku se nepodařilo uložit.",
+        apiStatus: "ready"
+      });
+    }
+    return true;
+  }
+
+  const moduleFeedbackPatchMatch = /^\/api\/module-feedback\/([^/]+)$/.exec(url.pathname);
+  if (moduleFeedbackPatchMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+
+    try {
+      const feedback = updateMockModuleFeedback(user, decodeURIComponent(moduleFeedbackPatchMatch[1]), await readJsonBody(request));
+      sendJson(response, 200, { feedback, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Změny se nepodařilo uložit.",
         apiStatus: "ready"
       });
     }
