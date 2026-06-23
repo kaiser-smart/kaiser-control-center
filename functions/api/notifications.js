@@ -1,0 +1,35 @@
+import { json, requireUserPermission } from "../_lib/auth.js";
+import {
+  NotificationsStoreError,
+  canViewCentralNotifications,
+  listNotifications
+} from "../_lib/notifications-store.js";
+
+function notificationsError(error, missingEndpoint = "GET /api/notifications") {
+  if (error instanceof NotificationsStoreError) {
+    return json({ error: error.message, apiStatus: "waiting", missingEndpoint }, error.status);
+  }
+
+  console.error("notifications.list_failed", { message: error.message });
+  return json({ error: "Notifikace se nepodařilo načíst.", apiStatus: "waiting" }, 500);
+}
+
+export async function onRequestGet({ request, env }) {
+  const { user, response } = await requireUserPermission(env, request, "reports", "view");
+
+  if (response) {
+    return response;
+  }
+
+  if (!canViewCentralNotifications(user)) {
+    return json({ error: "Nemáte oprávnění zobrazit notifikace." }, 403);
+  }
+
+  try {
+    const url = new URL(request.url);
+    const result = await listNotifications(env, url.searchParams);
+    return json({ ...result, apiStatus: "ready" });
+  } catch (error) {
+    return notificationsError(error);
+  }
+}

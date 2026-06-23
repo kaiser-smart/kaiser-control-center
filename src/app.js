@@ -133,6 +133,35 @@ const quickAbsenceMenuItem = {
   disabled: false,
   order: 0
 };
+const NOTIFICATION_CHANNEL_LABELS = {
+  email: "E-mail",
+  sms: "SMS"
+};
+const NOTIFICATION_STATUS_LABELS = {
+  sent: "Odešlo",
+  not_sent: "Neodešlo",
+  pending: "Čeká",
+  failed: "Selhalo"
+};
+const NOTIFICATION_TYPE_LABELS = {
+  absence_approval_request: "Nová žádost ke schválení",
+  absence_approval_reminder: "Připomínka schválení",
+  absence_approved_sms: "Schváleno SMS",
+  absence_rejected_sms: "Zamítnuto SMS",
+  absence_sickness_recorded_email: "Nemoc evidována"
+};
+const NOTIFICATION_CHANNEL_OPTIONS = [
+  { value: "email", label: "E-mail" },
+  { value: "sms", label: "SMS" }
+];
+const NOTIFICATION_STATUS_OPTIONS = [
+  { value: "sent", label: "Odesláno" },
+  { value: "not_sent", label: "Neodesláno" },
+  { value: "pending", label: "Čeká" },
+  { value: "failed", label: "Selhalo" }
+];
+const NOTIFICATION_TYPE_OPTIONS = Object.entries(NOTIFICATION_TYPE_LABELS)
+  .map(([value, label]) => ({ value, label }));
 const AI_INITIAL_MESSAGE =
   "Ahoj, jsem Smart pomocník. Zeptej se mě na dovolenou, nemoc, pneumatiky, závady, uživatele nebo nastavení.";
 const AI_STATUS_READY = "Připraven";
@@ -257,6 +286,45 @@ const feedbackState = {
   apiStatus: "waiting",
   savingId: "",
   cardMessages: {}
+};
+function notificationDefaultDateFrom() {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+  return date.toISOString().slice(0, 10);
+}
+
+function notificationDefaultDateTo() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+const notificationCenterState = {
+  items: [],
+  summary: {
+    emailSent: 0,
+    emailNotSent: 0,
+    smsSent: 0,
+    smsNotSent: 0,
+    pending: 0,
+    failed: 0
+  },
+  filters: {
+    dateFrom: notificationDefaultDateFrom(),
+    dateTo: notificationDefaultDateTo(),
+    channel: "",
+    status: "",
+    type: "",
+    employeeId: "",
+    managerId: "",
+    search: ""
+  },
+  total: 0,
+  page: 1,
+  pageSize: 50,
+  loaded: false,
+  loading: false,
+  error: "",
+  apiStatus: "waiting",
+  selectedId: ""
 };
 
 let absenceState = loadAbsenceState();
@@ -3705,6 +3773,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
     : "";
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
+  const reportsPanel = moduleItem.id === "reports" && !isDashboard ? notificationCenterSection(user) : "";
   const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
 
   return `
@@ -3733,8 +3802,240 @@ function modulePage(moduleItem, user, isDashboard = false) {
       </section>
       ${usersPanel}
       ${settingsPanel}
+      ${reportsPanel}
       ${feedbackBox}
     </main>
+  `;
+}
+
+function notificationStatusLabel(status) {
+  return NOTIFICATION_STATUS_LABELS[status] || status || "Neznámý stav";
+}
+
+function notificationChannelLabel(channel) {
+  return NOTIFICATION_CHANNEL_LABELS[channel] || channel || "neuvedeno";
+}
+
+function notificationTypeLabel(type) {
+  return NOTIFICATION_TYPE_LABELS[type] || type || "neuvedeno";
+}
+
+function notificationStatusBadge(status) {
+  const normalized = String(status || "not_sent").trim();
+  return `<span class="notification-status notification-status--${escapeHtml(normalized)}">${escapeHtml(notificationStatusLabel(normalized))}</span>`;
+}
+
+function notificationSummaryCards() {
+  const summary = notificationCenterState.summary;
+  const cards = [
+    ["E-maily odeslané", summary.emailSent],
+    ["E-maily neodeslané", summary.emailNotSent],
+    ["SMS odeslané", summary.smsSent],
+    ["SMS neodeslané", summary.smsNotSent],
+    ["Čeká na odeslání", summary.pending],
+    ["Selhalo", summary.failed]
+  ];
+
+  return `
+    <div class="notification-summary-grid">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function notificationFiltersForm() {
+  const filters = notificationCenterState.filters;
+  return `
+    <form class="notification-filters" data-notification-filters>
+      <label>
+        <span>Období od</span>
+        <input name="dateFrom" type="date" value="${escapeHtml(filters.dateFrom)}" data-notification-filter />
+      </label>
+      <label>
+        <span>Období do</span>
+        <input name="dateTo" type="date" value="${escapeHtml(filters.dateTo)}" data-notification-filter />
+      </label>
+      <label>
+        <span>Kanál</span>
+        <select name="channel" data-notification-filter>
+          ${optionList(NOTIFICATION_CHANNEL_OPTIONS, filters.channel)}
+        </select>
+      </label>
+      <label>
+        <span>Stav</span>
+        <select name="status" data-notification-filter>
+          ${optionList(NOTIFICATION_STATUS_OPTIONS, filters.status)}
+        </select>
+      </label>
+      <label>
+        <span>Typ</span>
+        <select name="type" data-notification-filter>
+          ${optionList(NOTIFICATION_TYPE_OPTIONS, filters.type)}
+        </select>
+      </label>
+      <label>
+        <span>Zaměstnanec</span>
+        <input name="employeeId" value="${escapeHtml(filters.employeeId)}" placeholder="ID zaměstnance" data-notification-filter />
+      </label>
+      <label>
+        <span>Nadřízený</span>
+        <input name="managerId" value="${escapeHtml(filters.managerId)}" placeholder="ID nadřízeného" data-notification-filter />
+      </label>
+      <label>
+        <span>Vyhledávání</span>
+        <input name="search" value="${escapeHtml(filters.search)}" placeholder="Jméno, příjemce, chyba nebo typ" data-notification-filter />
+      </label>
+      <div class="notification-filter-actions">
+        <button class="primary-action" type="submit">Filtrovat</button>
+        <button class="secondary-link" type="button" data-notification-reset>Reset</button>
+      </div>
+    </form>
+  `;
+}
+
+function notificationRow(item) {
+  const requestButton = item.absenceRequestId
+    ? `<a class="text-action" href="${routeHref(`/dovolena-nemoc/ke-schvaleni`)}" data-link>Otevřít</a>`
+    : '<span class="notification-muted">bez vazby</span>';
+  const canRetry = item.status === "failed" || item.status === "not_sent";
+
+  return `
+    <tr>
+      <td data-label="Datum / čas">${escapeHtml(formatDateTime(item.createdAt || item.sentAt))}</td>
+      <td data-label="Kanál">${escapeHtml(notificationChannelLabel(item.channel))}</td>
+      <td data-label="Typ">${escapeHtml(notificationTypeLabel(item.type))}</td>
+      <td data-label="Zaměstnanec">${escapeHtml(item.employeeName || "neuvedeno")}</td>
+      <td data-label="Nadřízený / příjemce">${escapeHtml(item.managerName || item.recipientName || "neuvedeno")}</td>
+      <td data-label="Příjemce">${escapeHtml(item.recipient || "neuvedeno")}</td>
+      <td data-label="Stav">${notificationStatusBadge(item.status)}</td>
+      <td data-label="Pokusů">${escapeHtml(item.attempts || 1)}</td>
+      <td data-label="Poslední chyba">${escapeHtml(item.lastError || item.messagePreview || "bez chyby")}</td>
+      <td data-label="Vazba na žádost">${requestButton}</td>
+      <td data-label="Akce">
+        <button class="text-action" type="button" data-notification-detail="${escapeHtml(item.id)}">Detail</button>
+        ${canRetry ? '<button class="text-action" type="button" data-notification-retry disabled title="Čeká na backend retry workflow">Opakovat</button>' : ""}
+      </td>
+    </tr>
+  `;
+}
+
+function notificationTable() {
+  if (notificationCenterState.loading && !notificationCenterState.loaded) {
+    return '<p class="notification-empty">Načítám notifikace...</p>';
+  }
+
+  if (notificationCenterState.error) {
+    return `
+      <div class="notification-error">
+        <p>${escapeHtml(notificationCenterState.error)}</p>
+        <button class="secondary-link" type="button" data-notification-reload>Zkusit znovu</button>
+      </div>
+    `;
+  }
+
+  if (!notificationCenterState.items.length) {
+    return '<p class="notification-empty">Zatím nejsou žádné notifikace.</p>';
+  }
+
+  return `
+    <div class="notification-table-wrap">
+      <table class="notification-table">
+        <thead>
+          <tr>
+            <th>Datum / čas</th>
+            <th>Kanál</th>
+            <th>Typ</th>
+            <th>Zaměstnanec</th>
+            <th>Nadřízený / příjemce</th>
+            <th>Příjemce</th>
+            <th>Stav</th>
+            <th>Pokusů</th>
+            <th>Poslední chyba</th>
+            <th>Vazba na žádost</th>
+            <th>Akce</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${notificationCenterState.items.map(notificationRow).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function notificationDetailPanel() {
+  const item = selectedNotification();
+  if (!item) {
+    return "";
+  }
+
+  return `
+    <section class="notification-detail" aria-label="Detail notifikace">
+      <div class="notification-detail__header">
+        <div>
+          <span>Detail notifikace</span>
+          <h3>${escapeHtml(notificationTypeLabel(item.type))}</h3>
+        </div>
+        <button class="text-action" type="button" data-notification-detail-close>Zavřít</button>
+      </div>
+      <dl>
+        <div><dt>ID</dt><dd>${escapeHtml(item.id)}</dd></div>
+        <div><dt>Kanál</dt><dd>${escapeHtml(notificationChannelLabel(item.channel))}</dd></div>
+        <div><dt>Stav</dt><dd>${notificationStatusBadge(item.status)}</dd></div>
+        <div><dt>Příjemce</dt><dd>${escapeHtml(item.recipient || "neuvedeno")}</dd></div>
+        <div><dt>Zaměstnanec</dt><dd>${escapeHtml(item.employeeName || "neuvedeno")}</dd></div>
+        <div><dt>Nadřízený</dt><dd>${escapeHtml(item.managerName || item.recipientName || "neuvedeno")}</dd></div>
+        <div><dt>Předmět</dt><dd>${escapeHtml(item.subject || "neuvedeno")}</dd></div>
+        <div><dt>Náhled zprávy</dt><dd>${escapeHtml(item.messagePreview || "neuvedeno")}</dd></div>
+        <div><dt>Provider</dt><dd>${escapeHtml(item.provider || "neuvedeno")}</dd></div>
+        <div><dt>Provider Message ID</dt><dd>${escapeHtml(item.providerMessageId || "neuvedeno")}</dd></div>
+        <div><dt>Počet pokusů</dt><dd>${escapeHtml(item.attempts || 1)}</dd></div>
+        <div><dt>Poslední chyba</dt><dd>${escapeHtml(item.lastError || "bez chyby")}</dd></div>
+        <div><dt>Vytvořeno</dt><dd>${escapeHtml(formatDateTime(item.createdAt))}</dd></div>
+        <div><dt>Odesláno</dt><dd>${escapeHtml(formatDateTime(item.sentAt))}</dd></div>
+        <div><dt>Selhalo</dt><dd>${escapeHtml(formatDateTime(item.failedAt))}</dd></div>
+        <div><dt>Vazba na žádost</dt><dd>${escapeHtml(item.absenceRequestId || "neuvedeno")}</dd></div>
+      </dl>
+      ${item.absenceRequestId ? `<a class="secondary-link" href="${routeHref("/dovolena-nemoc/ke-schvaleni")}" data-link>Otevřít žádost</a>` : ""}
+    </section>
+  `;
+}
+
+function notificationCenterSection(user) {
+  if (!canViewNotificationCenter(user)) {
+    return `
+      <section class="notification-center notification-center--locked">
+        <h2>Notifikace</h2>
+        <p>Centrální přehled e-mailů a SMS je dostupný pro Admin, Management a Kancelář.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="notification-center" aria-labelledby="notification-center-title">
+      <div class="notification-center__header">
+        <div>
+          <span>Centrální přehled</span>
+          <h2 id="notification-center-title">Notifikace e-mailů a SMS</h2>
+          <p>Jedno místo pro kontrolu odeslaných i neodeslaných zpráv napříč aplikací.</p>
+        </div>
+        <button class="secondary-link" type="button" data-notification-export ${notificationCenterState.items.length ? "" : "disabled"}>
+          Export CSV
+        </button>
+      </div>
+      ${notificationSummaryCards()}
+      ${notificationFiltersForm()}
+      ${notificationTable()}
+      <p class="notification-meta">
+        Zobrazeno ${escapeHtml(notificationCenterState.items.length)} z ${escapeHtml(notificationCenterState.total)} záznamů.
+      </p>
+      ${notificationDetailPanel()}
+    </section>
   `;
 }
 
@@ -4077,6 +4378,184 @@ async function loadModuleFeedback(options = {}) {
       render();
     }
   }
+}
+
+function normalizeNotificationLog(item) {
+  return {
+    id: String(item?.id || ""),
+    moduleId: String(item?.moduleId || ""),
+    relatedEntityType: String(item?.relatedEntityType || ""),
+    relatedEntityId: String(item?.relatedEntityId || ""),
+    absenceRequestId: String(item?.absenceRequestId || item?.relatedEntityId || ""),
+    channel: String(item?.channel || ""),
+    type: String(item?.type || ""),
+    status: String(item?.status || "not_sent"),
+    recipient: String(item?.recipient || ""),
+    recipientName: String(item?.recipientName || ""),
+    employeeId: String(item?.employeeId || ""),
+    employeeName: String(item?.employeeName || ""),
+    managerId: String(item?.managerId || ""),
+    managerName: String(item?.managerName || ""),
+    subject: String(item?.subject || ""),
+    messagePreview: String(item?.messagePreview || ""),
+    provider: String(item?.provider || ""),
+    providerMessageId: String(item?.providerMessageId || ""),
+    attempts: Number(item?.attempts || 1),
+    lastError: String(item?.lastError || ""),
+    sentAt: String(item?.sentAt || ""),
+    failedAt: String(item?.failedAt || ""),
+    createdAt: String(item?.createdAt || ""),
+    updatedAt: String(item?.updatedAt || "")
+  };
+}
+
+function notificationQueryString() {
+  const params = new URLSearchParams();
+  const filters = notificationCenterState.filters;
+
+  for (const key of ["dateFrom", "dateTo", "channel", "status", "type", "employeeId", "managerId", "search"]) {
+    const value = String(filters[key] || "").trim();
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  params.set("page", String(notificationCenterState.page));
+  params.set("pageSize", String(notificationCenterState.pageSize));
+  return params.toString();
+}
+
+function canViewNotificationCenter(user) {
+  const role = normalizeRole(user?.role);
+  return hasPermission(user, "reports", "view") && (isFullAccessRole(user) || role === "kancelar");
+}
+
+async function loadNotificationCenter(options = {}) {
+  const user = currentUser();
+  if (!canViewNotificationCenter(user)) {
+    return;
+  }
+
+  if (notificationCenterState.loading) {
+    return;
+  }
+
+  notificationCenterState.loading = true;
+  notificationCenterState.error = "";
+
+  try {
+    const query = notificationQueryString();
+    const [listResult, summaryResult] = await Promise.all([
+      apiJson(`/api/notifications?${query}`),
+      apiJson(`/api/notifications/summary?${query}`)
+    ]);
+
+    notificationCenterState.items = (listResult.items || []).map(normalizeNotificationLog);
+    notificationCenterState.summary = {
+      emailSent: Number(summaryResult.emailSent || 0),
+      emailNotSent: Number(summaryResult.emailNotSent || 0),
+      smsSent: Number(summaryResult.smsSent || 0),
+      smsNotSent: Number(summaryResult.smsNotSent || 0),
+      pending: Number(summaryResult.pending || 0),
+      failed: Number(summaryResult.failed || 0)
+    };
+    notificationCenterState.total = Number(listResult.total || 0);
+    notificationCenterState.page = Number(listResult.page || notificationCenterState.page);
+    notificationCenterState.pageSize = Number(listResult.pageSize || notificationCenterState.pageSize);
+    notificationCenterState.apiStatus = listResult.apiStatus || "ready";
+  } catch (error) {
+    const missing = error.payload?.missingEndpoint;
+    notificationCenterState.error = missing
+      ? `Čeká na API: ${missing}`
+      : error.payload?.error || "Notifikace se nepodařilo načíst.";
+    notificationCenterState.apiStatus = error.payload?.apiStatus || "waiting";
+  } finally {
+    notificationCenterState.loaded = true;
+    notificationCenterState.loading = false;
+    if (options.render !== false) {
+      render();
+    }
+  }
+}
+
+function selectedNotification() {
+  return notificationCenterState.items.find((item) => item.id === notificationCenterState.selectedId) || null;
+}
+
+function applyNotificationFilters(form) {
+  notificationCenterState.filters = {
+    dateFrom: form.elements.dateFrom?.value || notificationDefaultDateFrom(),
+    dateTo: form.elements.dateTo?.value || notificationDefaultDateTo(),
+    channel: form.elements.channel?.value || "",
+    status: form.elements.status?.value || "",
+    type: form.elements.type?.value || "",
+    employeeId: form.elements.employeeId?.value.trim() || "",
+    managerId: form.elements.managerId?.value.trim() || "",
+    search: form.elements.search?.value.trim() || ""
+  };
+  notificationCenterState.page = 1;
+  notificationCenterState.loaded = false;
+  notificationCenterState.selectedId = "";
+  render();
+  loadNotificationCenter();
+}
+
+function resetNotificationFilters() {
+  notificationCenterState.filters = {
+    dateFrom: notificationDefaultDateFrom(),
+    dateTo: notificationDefaultDateTo(),
+    channel: "",
+    status: "",
+    type: "",
+    employeeId: "",
+    managerId: "",
+    search: ""
+  };
+  notificationCenterState.page = 1;
+  notificationCenterState.loaded = false;
+  notificationCenterState.selectedId = "";
+  render();
+  loadNotificationCenter();
+}
+
+function notificationCsvValue(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
+function exportNotificationsCsv() {
+  const header = [
+    "Datum / čas",
+    "Kanál",
+    "Typ",
+    "Zaměstnanec",
+    "Nadřízený",
+    "Příjemce",
+    "Stav",
+    "Pokusů",
+    "Poslední chyba",
+    "ID žádosti",
+    "Provider",
+    "Provider Message ID"
+  ];
+  const rows = notificationCenterState.items.map((item) => [
+    formatDateTime(item.createdAt || item.sentAt),
+    notificationChannelLabel(item.channel),
+    notificationTypeLabel(item.type),
+    item.employeeName,
+    item.managerName || item.recipientName,
+    item.recipient,
+    notificationStatusLabel(item.status),
+    item.attempts || 1,
+    item.lastError || item.messagePreview,
+    item.absenceRequestId,
+    item.provider,
+    item.providerMessageId
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map(notificationCsvValue).join(";"))
+    .join("\n");
+
+  downloadText("notifikace-smart-odpady.csv", csv, "text/csv;charset=utf-8");
 }
 
 function replaceFeedbackItem(feedback) {
@@ -4795,6 +5274,9 @@ function renderAuthenticatedApp(user) {
 
     if (moduleItem.id === "users" && hasPermission(user, "users", "view")) {
       loadAdminUsers();
+    }
+    if (moduleItem.id === "reports") {
+      loadNotificationCenter();
     }
     if (moduleItem.id === "absence") {
       loadAbsenceRequests();
@@ -6103,6 +6585,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const notificationFilters = event.target.closest("[data-notification-filters]");
+  if (notificationFilters) {
+    event.preventDefault();
+    applyNotificationFilters(notificationFilters);
+    return;
+  }
+
   const form = event.target.closest("[data-auth-form]");
 
   if (!form) {
@@ -6229,6 +6718,15 @@ document.addEventListener("change", (event) => {
     const form = filterField.closest("[data-feedback-filters]");
     if (form) {
       applyFeedbackFilters(form);
+    }
+    return;
+  }
+
+  const notificationFilter = event.target.closest("[data-notification-filter]");
+  if (notificationFilter) {
+    const form = notificationFilter.closest("[data-notification-filters]");
+    if (form) {
+      applyNotificationFilters(form);
     }
     return;
   }
@@ -6513,6 +7011,39 @@ document.addEventListener("click", async (event) => {
   const feedbackReset = event.target.closest("[data-feedback-reset-filters]");
   if (feedbackReset) {
     resetFeedbackFilters();
+    return;
+  }
+
+  const notificationExport = event.target.closest("[data-notification-export]");
+  if (notificationExport) {
+    exportNotificationsCsv();
+    return;
+  }
+
+  const notificationReset = event.target.closest("[data-notification-reset]");
+  if (notificationReset) {
+    resetNotificationFilters();
+    return;
+  }
+
+  const notificationReload = event.target.closest("[data-notification-reload]");
+  if (notificationReload) {
+    notificationCenterState.loaded = false;
+    loadNotificationCenter();
+    return;
+  }
+
+  const notificationDetail = event.target.closest("[data-notification-detail]");
+  if (notificationDetail) {
+    notificationCenterState.selectedId = notificationDetail.dataset.notificationDetail || "";
+    render();
+    return;
+  }
+
+  const notificationDetailClose = event.target.closest("[data-notification-detail-close]");
+  if (notificationDetailClose) {
+    notificationCenterState.selectedId = "";
+    render();
     return;
   }
 

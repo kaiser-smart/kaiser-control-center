@@ -26,6 +26,7 @@ let mockEmployeeDocuments = new Map();
 let mockEmployeeDocumentFiles = new Map();
 let mockAbsenceRequests = [];
 let mockModuleFeedback = [];
+let mockNotificationLogs = [];
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -355,6 +356,95 @@ function splitEmployeeName(name) {
 
 function sameMockId(left, right) {
   return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+}
+
+function canViewMockNotifications(user) {
+  const role = normalizeRole(user?.role);
+  return isFullAccessRole(user) || role === "kancelar";
+}
+
+function mockNotificationStatus(status) {
+  const cleaned = String(status || "").trim().toLowerCase();
+  return cleaned === "skipped" ? "not_sent" : cleaned || "not_sent";
+}
+
+function addMockNotificationLog(input) {
+  const now = new Date().toISOString();
+  const item = {
+    id: `notification-log-${randomUUID()}`,
+    moduleId: input.moduleId || "dovolena-nemoc",
+    relatedEntityType: input.relatedEntityType || "absence_request",
+    relatedEntityId: input.relatedEntityId || "",
+    absenceRequestId: input.relatedEntityId || "",
+    channel: input.channel || "email",
+    type: input.type || "absence_approval_request",
+    status: mockNotificationStatus(input.status),
+    recipient: input.recipient || "",
+    recipientName: input.recipientName || "",
+    employeeId: input.employeeId || "",
+    employeeName: input.employeeName || "",
+    managerId: input.managerId || "",
+    managerName: input.managerName || "",
+    subject: input.subject || "",
+    messagePreview: input.messagePreview || input.lastError || "",
+    provider: input.provider || (input.channel === "sms" ? "Twilio" : "SendGrid"),
+    providerMessageId: input.providerMessageId || "",
+    attempts: Number(input.attempts || 1),
+    lastError: input.lastError || "",
+    sentAt: input.status === "sent" ? now : "",
+    failedAt: input.status === "failed" ? now : "",
+    createdAt: now,
+    updatedAt: now
+  };
+
+  mockNotificationLogs = [item, ...mockNotificationLogs].slice(0, 500);
+  return item;
+}
+
+function dateBoundary(value, end = false) {
+  const cleaned = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+    const date = new Date();
+    if (!end) {
+      date.setDate(date.getDate() - 30);
+    }
+    return `${date.toISOString().slice(0, 10)}T${end ? "23:59:59.999" : "00:00:00.000"}Z`;
+  }
+
+  return `${cleaned}T${end ? "23:59:59.999" : "00:00:00.000"}Z`;
+}
+
+function filteredMockNotifications(url) {
+  const dateFrom = dateBoundary(url.searchParams.get("dateFrom"));
+  const dateTo = dateBoundary(url.searchParams.get("dateTo"), true);
+  const channel = String(url.searchParams.get("channel") || "").trim();
+  const status = String(url.searchParams.get("status") || "").trim();
+  const type = String(url.searchParams.get("type") || "").trim();
+  const employeeId = String(url.searchParams.get("employeeId") || "").trim().toLowerCase();
+  const managerId = String(url.searchParams.get("managerId") || "").trim().toLowerCase();
+  const search = String(url.searchParams.get("search") || "").trim().toLowerCase();
+
+  return mockNotificationLogs.filter((item) => {
+    if (item.createdAt < dateFrom || item.createdAt > dateTo) return false;
+    if (channel && item.channel !== channel) return false;
+    if (status && item.status !== status) return false;
+    if (type && item.type !== type) return false;
+    if (employeeId && String(item.employeeId || "").toLowerCase() !== employeeId) return false;
+    if (managerId && String(item.managerId || "").toLowerCase() !== managerId) return false;
+    if (search) {
+      const haystack = [
+        item.recipient,
+        item.recipientName,
+        item.employeeName,
+        item.managerName,
+        item.type,
+        item.lastError,
+        item.messagePreview
+      ].join(" ").toLowerCase();
+      return haystack.includes(search);
+    }
+    return true;
+  });
 }
 
 function canEditMockFeedback(currentUser) {
@@ -957,6 +1047,24 @@ async function handleApi(request, response) {
       const payload = await readJsonBody(request);
       const item = createMockAbsenceRequest(user, payload);
       mockAbsenceRequests = [item, ...mockAbsenceRequests].slice(0, 100);
+      if (item.status === "pending_approval") {
+        addMockNotificationLog({
+          relatedEntityId: item.id,
+          channel: "email",
+          type: "absence_approval_request",
+          status: item.managerEmail ? "not_sent" : "not_sent",
+          recipient: item.managerEmail,
+          recipientName: item.managerName,
+          employeeId: item.employeeId,
+          employeeName: item.employeeName,
+          managerId: item.managerId,
+          managerName: item.managerName,
+          subject: "Smart odpady - nová žádost ke schválení",
+          lastError: item.managerEmail
+            ? "Lokální vývojový server neposílá skutečné e-maily."
+            : `Chybí e-mail příjemce: ${item.managerName || "nadřízený"}.`
+        });
+      }
       sendJson(response, 201, { request: item, apiStatus: "ready" });
     } catch (error) {
       sendJson(response, error.status || 500, {
@@ -1062,6 +1170,20 @@ async function handleApi(request, response) {
         const notificationError = item.employeePhone
           ? "Lokální vývojový server neposílá skutečné SMS."
           : `Chybí telefon příjemce: ${item.employeeName}.`;
+        addMockNotificationLog({
+          relatedEntityId: item.id,
+          channel: "sms",
+          type: "absence_approved_sms",
+          status: "not_sent",
+          recipient: item.employeePhone,
+          recipientName: item.employeeName,
+          employeeId: item.employeeId,
+          employeeName: item.employeeName,
+          managerId: item.managerId,
+          managerName: item.managerName,
+          messagePreview: notificationError,
+          lastError: notificationError
+        });
         sendJson(response, 200, {
           request: item,
           notification: {
@@ -1084,6 +1206,20 @@ async function handleApi(request, response) {
         const notificationError = item.employeePhone
           ? "Lokální vývojový server neposílá skutečné SMS."
           : `Chybí telefon příjemce: ${item.employeeName}.`;
+        addMockNotificationLog({
+          relatedEntityId: item.id,
+          channel: "sms",
+          type: "absence_rejected_sms",
+          status: "not_sent",
+          recipient: item.employeePhone,
+          recipientName: item.employeeName,
+          employeeId: item.employeeId,
+          employeeName: item.employeeName,
+          managerId: item.managerId,
+          managerName: item.managerName,
+          messagePreview: notificationError,
+          lastError: notificationError
+        });
         sendJson(response, 200, {
           request: item,
           notification: {
@@ -1098,6 +1234,68 @@ async function handleApi(request, response) {
       }
       return true;
     }
+  }
+
+  if (url.pathname === "/api/notifications" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "reports", "view") || !canViewMockNotifications(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění zobrazit notifikace." });
+      return true;
+    }
+
+    const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+    const pageSize = Math.max(1, Math.min(Number(url.searchParams.get("pageSize") || 50), 100));
+    const items = filteredMockNotifications(url);
+    const offset = (page - 1) * pageSize;
+    sendJson(response, 200, {
+      items: items.slice(offset, offset + pageSize),
+      total: items.length,
+      page,
+      pageSize,
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/notifications/summary" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "reports", "view") || !canViewMockNotifications(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění zobrazit notifikace." });
+      return true;
+    }
+
+    const items = filteredMockNotifications(url);
+    const summary = {
+      emailSent: 0,
+      emailNotSent: 0,
+      smsSent: 0,
+      smsNotSent: 0,
+      pending: 0,
+      failed: 0
+    };
+
+    for (const item of items) {
+      if (item.channel === "email" && item.status === "sent") summary.emailSent += 1;
+      if (item.channel === "email" && item.status !== "sent") summary.emailNotSent += 1;
+      if (item.channel === "sms" && item.status === "sent") summary.smsSent += 1;
+      if (item.channel === "sms" && item.status !== "sent") summary.smsNotSent += 1;
+      if (item.status === "pending") summary.pending += 1;
+      if (item.status === "failed") summary.failed += 1;
+    }
+
+    sendJson(response, 200, {
+      ...summary,
+      apiStatus: "ready"
+    });
+    return true;
   }
 
   if (url.pathname === "/api/module-feedback" && request.method === "GET") {

@@ -127,6 +127,17 @@ ABSENCE_APPROVAL_REMINDER_HOURS=24
 
 V produkci se mock OTP nepovolí na větvi `main`; testovací kód `123456` je pouze pro lokální vývoj nebo neprodukční prostředí s `AUTH_MODE=mock`.
 
+## Centrální přehled notifikací
+
+Modul `Reporty` obsahuje centrální přehled e-mailů a SMS z celé aplikace. Data se načítají pouze přes cloud API:
+
+```text
+GET /api/notifications
+GET /api/notifications/summary
+```
+
+Zdroj pravdy je D1 tabulka `notification_logs`. Frontend žádné e-maily ani SMS neposílá a neobsahuje žádné Twilio, SendGrid ani SMTP tokeny.
+
 ## Cloudflare D1 pro uživatele
 
 Trvalé vytváření a úpravy uživatelů používají Cloudflare D1 přes Pages Function binding:
