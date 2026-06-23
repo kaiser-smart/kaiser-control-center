@@ -2082,6 +2082,39 @@ body:has(.ai-welcome-modal) {
   background: #ffffff;
 }
 
+.ai-assistant-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 280px);
+  gap: 4px;
+  flex: 0 0 auto;
+  justify-self: center;
+  align-self: center;
+  padding: 4px;
+  border: 1px solid rgba(216, 226, 211, 0.98);
+  border-radius: 8px;
+  background: #f7faf3;
+}
+
+.ai-assistant-mode-switch__button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #66706a;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.ai-assistant-mode-switch__button--active {
+  background: #ffffff;
+  color: var(--kaiser-green-dark);
+  box-shadow: 0 8px 18px rgba(31, 41, 33, 0.08);
+}
+
 .ai-voice-assistant-panel > .assistant-avatar-selector {
   padding: 16px 48px;
   border-bottom-color: rgba(216, 226, 211, 0.96);
@@ -2236,6 +2269,12 @@ body:has(.ai-welcome-modal) {
   box-shadow: 0 0 0 3px rgba(117, 189, 37, 0.15);
 }
 
+.ai-assistant-chat__composer input:disabled,
+.ai-assistant-chat__composer button:disabled {
+  cursor: wait;
+  opacity: 0.64;
+}
+
 .ai-confirmation-backdrop {
   position: fixed;
   inset: 0;
@@ -2333,6 +2372,7 @@ body:has(.ai-welcome-modal) {
 .ai-voice-assistant-panel__close:focus-visible,
 .ai-voice-assistant-panel__mic:focus-visible,
 .ai-voice-assistant-panel__stop:focus-visible,
+.ai-assistant-mode-switch__button:focus-visible,
 .ai-assistant-chat__close:focus-visible,
 .ai-assistant-chat__action:focus-visible,
 .assistant-avatar-card:focus-visible,
@@ -6564,6 +6604,34 @@ body:has(.ai-welcome-modal) {
   color: #3d4740;
   font-size: clamp(1rem, 4vw, 1.18rem);
   font-weight: 400;
+}
+
+.ai-voice-assistant-panel__notice {
+  display: grid;
+  width: 100%;
+  max-width: 390px;
+  justify-self: center;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid rgba(160, 54, 54, 0.2);
+  border-radius: 14px;
+  background: #fff7f5;
+  color: #7d302c;
+  text-align: left;
+}
+
+.ai-voice-assistant-panel__notice p,
+.ai-voice-assistant-panel__notice ul {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.ai-voice-assistant-panel__notice ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
 }
 
 .ai-voice-assistant-panel__conversation {

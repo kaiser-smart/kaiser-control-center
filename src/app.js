@@ -12,7 +12,7 @@ import { QuickAbsenceIcon, ReportsIcon } from "./components/icons/index.js";
 import { useSpeechRecognition } from "./useSpeechRecognition.js";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard.js";
 import { AI_ASSISTANTS, DEFAULT_AI_ASSISTANT_ID, assistantById } from "./data/aiAssistants.js";
-import { normalizeAiRoute, routeForAiModule } from "./elevenLabsClientTools.js";
+import { normalizeAiRoute } from "./elevenLabsClientTools.js";
 import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
@@ -173,6 +173,10 @@ const AI_STATUS_READY = "Připraven";
 const AI_STATUS_DONE = "Hotovo";
 const AI_STATUS_DEMO = "Přehrávám ukázku…";
 const AI_STATUS_ELEVENLABS_WAITING = "ElevenLabs čeká na Agent ID a API klíč. Hlasová navigace v prohlížeči je připravená.";
+const AI_TEXT_READY_LABEL = "Textový režim Šarloty je připravený.";
+const AI_TEXT_SENDING_LABEL = "Odesílám dotaz Šarlotě…";
+const AI_TEXT_READY_RESULT_LABEL = "Textový režim Šarloty funguje.";
+const AI_TEXT_ERROR_LABEL = "Textový režim Šarloty se nepodařilo ověřit.";
 const AI_VOICE_IDLE_LABEL = "Klepni a mluv";
 const AI_VOICE_PROCESSING_LABEL = "Zpracovávám…";
 const AI_VOICE_SPEAKING_LABEL = "Odpovídám…";
@@ -400,6 +404,8 @@ const aiAssistantState = {
   elevenLabsConfigured: false,
   elevenLabsConfiguredByAssistant: Object.fromEntries(AI_ASSISTANTS.map((assistant) => [assistant.id, false])),
   input: "",
+  textStatus: AI_TEXT_READY_LABEL,
+  textSending: false,
   voiceStatus: AI_STATUS_READY,
   voiceUiState: "idle",
   voiceTranscript: "",
@@ -421,6 +427,7 @@ let aiVoiceDemoTimer = 0;
 let aiVoiceStateTimer = 0;
 let aiToastTimer = 0;
 let aiConfirmationResolver = null;
+let aiTextRequestId = 0;
 
 const speechRecognition = useSpeechRecognition({
   onResult: (transcript) => submitAiAssistantQuestion(transcript, { fromVoice: true }),
@@ -950,6 +957,8 @@ function resetAiAssistantSession() {
   aiAssistantState.mode = "text";
   aiAssistantState.selectedAssistantId = DEFAULT_AI_ASSISTANT_ID;
   aiAssistantState.input = "";
+  aiAssistantState.textStatus = AI_TEXT_READY_LABEL;
+  aiAssistantState.textSending = false;
   aiAssistantState.voiceStatus = AI_STATUS_READY;
   aiAssistantState.voiceUiState = "idle";
   aiAssistantState.voiceTranscript = "";
@@ -961,126 +970,54 @@ function resetAiAssistantSession() {
   aiAssistantState.toast = null;
   aiAssistantState.highlightMessage = "";
   aiAssistantState.messages = [createAiAssistantMessage("bot", aiAssistantIntroMessage(), [], assistantById(DEFAULT_AI_ASSISTANT_ID).name)];
-}
-
-function normalizeAiPrompt(value) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function aiPromptIncludes(normalizedPrompt, keywords) {
-  return keywords.some((keyword) => normalizedPrompt.includes(keyword));
-}
-
-function aiModuleResponse(prompt) {
-  const modulePrompts = [
-    { keywords: ["rychle zadani", "chci dovolenou", "nahlasit nemoc", "jdu k lekari"], moduleId: "rychle-zadani", label: "Otevřít Rychlé zadání" },
-    { keywords: ["moje zadosti", "moje dovolena"], moduleId: "moje-zadosti", label: "Otevřít Moje žádosti" },
-    { keywords: ["ke schvaleni", "cekaji na schvaleni", "schvaleni"], moduleId: "ke-schvaleni", label: "Otevřít Ke schválení" },
-    { keywords: ["kalendar"], moduleId: "kalendar", label: "Otevřít Kalendář" },
-    { keywords: ["pneumatiky", "pneu"], moduleId: "pneumatiky", label: "Otevřít Pneumatiky" },
-    { keywords: ["hlaseni ridicu", "zavada", "zavady", "porucha"], moduleId: "hlaseni-ridicu", label: "Otevřít Hlášení řidičů" },
-    { keywords: ["vozovy park", "auta", "vozidla"], moduleId: "vozovy-park", label: "Otevřít Vozový park" },
-    { keywords: ["servis", "udrzba"], moduleId: "servis-udrzba", label: "Otevřít Servis a údržbu" },
-    { keywords: ["trasy svozu", "svoz"], moduleId: "trasy-svozu", label: "Otevřít Trasy svozu" },
-    { keywords: ["trasy vzorku", "vzorky"], moduleId: "trasy-vzorku", label: "Otevřít Trasy vzorků" },
-    { keywords: ["vistos", "zakaznici"], moduleId: "vistos", label: "Otevřít Zákazníky / Vistos" },
-    { keywords: ["naklady"], moduleId: "naklady", label: "Otevřít Náklady" },
-    { keywords: ["reporty", "notifikace"], moduleId: "reporty", label: "Otevřít Reporty" },
-    { keywords: ["uzivatel", "uzivatele", "prava", "role"], moduleId: "uzivatele", label: "Otevřít Uživatelé a role" },
-    { keywords: ["nastaveni", "vzhled", "barvy", "logo"], moduleId: "nastaveni", label: "Otevřít Nastavení" },
-    { keywords: ["pripominky", "feedback"], moduleId: "pripominky", label: "Otevřít Připomínky" },
-    { keywords: ["dashboard", "prehled"], moduleId: "dashboard", label: "Otevřít Dashboard" }
-  ];
-
-  const match = modulePrompts.find((item) => aiPromptIncludes(prompt, item.keywords));
-  if (!match) {
-    return null;
-  }
-
-  const route = routeForAiModule(match.moduleId);
-  if (!route) {
-    return null;
-  }
-
-  return {
-    text: `${match.label.replace("Otevřít", "Otevírám").replace("Otevřít", "Otevírám")}.`,
-    actions: [{ label: match.label, route }]
-  };
-}
-
-function formatPendingAbsenceForAi(requests = []) {
-  if (!requests.length) {
-    return "Žádná žádost ke schválení teď není v dostupném přehledu.";
-  }
-
-  const lines = requests.slice(0, 5).map((request) => (
-    `${request.employeeName || "Zaměstnanec"}: ${request.typeLabel || request.type}, ${request.dateFrom || ""}${request.dateTo && request.dateTo !== request.dateFrom ? ` až ${request.dateTo}` : ""}`
-  ));
-
-  return `Ke schválení vidím ${requests.length} žádost(i): ${lines.join("; ")}.`;
+  aiTextRequestId += 1;
 }
 
 async function aiAssistantResponse(question) {
-  const prompt = normalizeAiPrompt(question);
   const assistant = selectedAiAssistant();
 
-  if (aiPromptIncludes(prompt, ["kdo ceka", "cekaji na schvaleni", "zadosti ke schvaleni", "najdi zadosti"])) {
-    try {
-      const result = await apiJson(`/api/ai/absence/pending?limit=5&assistant=${encodeURIComponent(assistant.id)}&assistantName=${encodeURIComponent(assistant.name)}`);
-      return {
-        text: formatPendingAbsenceForAi(result.requests || []),
-        actions: [{ label: "Otevřít Ke schválení", route: "/dovolena-nemoc/ke-schvaleni" }]
-      };
-    } catch (error) {
-      return {
-        text: error.message || "Žádosti ke schválení se teď nepodařilo načíst přes API.",
-        actions: [{ label: "Otevřít Ke schválení", route: "/dovolena-nemoc/ke-schvaleni" }]
-      };
-    }
+  try {
+    const result = await elevenLabsAssistant.sendTextMessage(assistant.id, question);
+    aiAssistantState.elevenLabsConfigured = true;
+    aiAssistantState.elevenLabsConfiguredByAssistant[assistant.id] = true;
+    aiAssistantState.elevenLabsStatus = `ElevenLabs agent ${result.assistantName || assistant.name} je připravený.`;
+
+    return {
+      text: result.text || `${assistant.name} nevrátila textovou odpověď.`,
+      actions: [],
+      failed: false
+    };
+  } catch (error) {
+    aiAssistantState.elevenLabsStatus = error?.payload?.error || AI_STATUS_ELEVENLABS_WAITING;
+
+    return {
+      text: error?.payload?.error || error?.message || "Textový režim Šarloty se teď nepodařilo ověřit.",
+      actions: [],
+      failed: true
+    };
   }
+}
 
-  const moduleResponse = aiModuleResponse(prompt);
-  if (moduleResponse) {
-    return moduleResponse;
-  }
-
-  if (aiPromptIncludes(prompt, ["najdi", "ukaz", "kde je", "hledej"])) {
-    try {
-      const result = await apiJson(`/api/ai/search?q=${encodeURIComponent(question)}&assistant=${encodeURIComponent(assistant.id)}&assistantName=${encodeURIComponent(assistant.name)}`);
-      const firstModule = result.modules?.[0];
-      const firstPage = result.pages?.[0];
-      const actionTarget = firstModule || firstPage;
-
-      return {
-        text: actionTarget
-          ? `Našel jsem: ${actionTarget.title}.`
-          : "Nic přesného jsem nenašel. Zkus kratší dotaz nebo název modulu.",
-        actions: actionTarget ? [{ label: `Otevřít ${actionTarget.title}`, route: actionTarget.route }] : []
-      };
-    } catch (error) {
-      return {
-        text: error.message || "Vyhledávání přes API teď není dostupné.",
-        actions: []
-      };
-    }
-  }
-
-  return {
-    text: `${assistant.name} zatím bezpečně pomáhá s orientací, vyhledáním a přípravou potvrzených akcí přes API.`,
-    actions: []
-  };
+function cancelAiTextRequest(nextStatus = AI_TEXT_READY_LABEL) {
+  aiTextRequestId += 1;
+  elevenLabsAssistant.closeTextSession?.();
+  aiAssistantState.textSending = false;
+  aiAssistantState.textStatus = nextStatus;
 }
 
 function openAiAssistant(mode = "text") {
   stopAiVoiceDemo({ renderAfter: false });
+  const nextMode = mode === "voice" ? "voice" : "text";
+
+  if (aiAssistantState.mode !== nextMode) {
+    cancelAiTextRequest();
+  }
+
   aiAssistantState.welcomeVisible = false;
   aiAssistantState.welcomeAnimate = false;
   aiAssistantState.chatOpen = true;
   aiAssistantState.launcherVisible = false;
-  aiAssistantState.mode = mode === "voice" ? "voice" : "text";
+  aiAssistantState.mode = nextMode;
   if (aiAssistantState.mode === "voice") {
     aiAssistantState.selectedAssistantId = DEFAULT_AI_ASSISTANT_ID;
     const assistant = assistantById(DEFAULT_AI_ASSISTANT_ID);
@@ -1102,6 +1039,7 @@ function dismissAiAssistantWelcome() {
 function closeAiAssistant() {
   stopAiVoiceDemo({ renderAfter: false });
   clearAiVoiceStateTimer();
+  cancelAiTextRequest();
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
@@ -1122,30 +1060,52 @@ async function submitAiAssistantQuestion(question, options = {}) {
     return;
   }
 
+  if (aiAssistantState.textSending) {
+    return;
+  }
+
   if (options.fromVoice) {
     setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Zpracovávám", "Čeká na odpověď", "Bez odeslání"]);
     aiAssistantState.voiceTranscript = text;
     aiAssistantState.voiceAnswer = "";
-    renderAiAssistantLayerOnly();
   }
 
-  const response = await aiAssistantResponse(text);
+  const requestId = ++aiTextRequestId;
   aiAssistantState.messages = [
     ...aiAssistantState.messages,
-    createAiAssistantMessage("user", text),
-    createAiAssistantMessage("bot", response.text, response.actions, selectedAiAssistant().name)
+    createAiAssistantMessage("user", text)
   ];
   aiAssistantState.input = "";
   aiAssistantState.voiceNotice = "";
+  aiAssistantState.textSending = true;
+  aiAssistantState.textStatus = AI_TEXT_SENDING_LABEL;
+  renderAiAssistantLayerOnly();
+
+  const response = await aiAssistantResponse(text);
+
+  if (requestId !== aiTextRequestId) {
+    return;
+  }
+
+  aiAssistantState.messages = [
+    ...aiAssistantState.messages,
+    createAiAssistantMessage("bot", response.text, response.actions, selectedAiAssistant().name)
+  ];
+  aiAssistantState.textSending = false;
+  aiAssistantState.textStatus = response.failed ? AI_TEXT_ERROR_LABEL : AI_TEXT_READY_RESULT_LABEL;
 
   if (options.fromVoice) {
-    setAiVoiceUiState("speaking", AI_VOICE_SPEAKING_LABEL, [
-      "Odpověď připravena",
-      response.actions?.length ? "Čeká na potvrzení" : "Bez akce",
-      /sms/i.test(response.text || "") ? "SMS připravena" : "Bez odeslání"
-    ]);
     aiAssistantState.voiceAnswer = response.text;
-    scheduleAiVoiceIdle(5200);
+    if (response.failed) {
+      setAiVoiceUiState("error", AI_TEXT_ERROR_LABEL, ["Chyba AI", "Textový režim", "Bez odeslání"]);
+    } else {
+      setAiVoiceUiState("speaking", AI_VOICE_SPEAKING_LABEL, [
+        "Odpověď připravena",
+        response.actions?.length ? "Čeká na potvrzení" : "Bez akce",
+        /sms/i.test(response.text || "") ? "SMS připravena" : "Bez odeslání"
+      ]);
+      scheduleAiVoiceIdle(5200);
+    }
   }
 
   renderAiAssistantLayerOnly();
@@ -1286,7 +1246,7 @@ async function startAiVoiceRecognition() {
 
   await prepareElevenLabsVoiceSession();
 
-  const started = speechRecognition.start();
+  const started = await speechRecognition.start();
   if (!started) {
     aiAssistantState.voiceUiState = "error";
     renderAiAssistantLayerOnly();
@@ -1317,6 +1277,7 @@ function navigateFromAiAssistant(route) {
 
   stopAiVoiceDemo({ renderAfter: false });
   speechRecognition.stop({ status: false });
+  cancelAiTextRequest();
   aiAssistantState.chatOpen = false;
   aiAssistantState.welcomeVisible = false;
   aiAssistantState.welcomeAnimate = false;
@@ -1349,12 +1310,15 @@ function renderAiAssistantLayer() {
       selectedAssistantId: aiAssistantState.selectedAssistantId,
       avatarAssetStatus: aiAssistantState.avatarAssetStatus,
       elevenLabsStatus: aiAssistantState.elevenLabsStatus,
+      textStatus: aiAssistantState.textStatus,
+      textSending: aiAssistantState.textSending,
       isListening: aiAssistantState.isListening,
       voiceStatus: aiAssistantState.voiceStatus,
       voiceUiState: aiAssistantState.voiceUiState,
       voiceTranscript: aiAssistantState.voiceTranscript,
       voiceAnswer: aiAssistantState.voiceAnswer,
       voiceTags: aiAssistantState.voiceTags,
+      voiceNotice: aiAssistantState.voiceNotice,
       demoPlaying: aiAssistantState.demoPlaying,
       demoSpeaker: aiAssistantState.demoSpeaker,
       demoSpeakerLabel: aiAssistantState.demoSpeakerLabel,
@@ -7545,6 +7509,12 @@ document.addEventListener("click", async (event) => {
   const aiClose = event.target.closest("[data-ai-close]");
   if (aiClose) {
     closeAiAssistant();
+    return;
+  }
+
+  const aiMode = event.target.closest("[data-ai-mode]");
+  if (aiMode) {
+    openAiAssistant(aiMode.dataset.aiMode || "text");
     return;
   }
 

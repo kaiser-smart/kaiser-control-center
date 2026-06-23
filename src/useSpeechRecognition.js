@@ -5,8 +5,10 @@ const STATUS_DONE = "Hotovo";
 const STATUS_MIC_DENIED = "Mikrofon není povolený";
 const STATUS_UNSUPPORTED = "Hlasové ovládání není podporované";
 
-const MIC_DENIED_NOTICE = "Mikrofon není povolený. Povol ho v prohlížeči nebo použij textový dotaz.";
+const MIC_DENIED_NOTICE = "Mikrofon není povolený. Povolte mikrofon v nastavení prohlížeče a zkuste to znovu.";
 const UNSUPPORTED_NOTICE = "Hlasové ovládání v tomto prohlížeči nejde. Použij textový dotaz.";
+const INSECURE_CONTEXT_NOTICE = "Mikrofon jde spustit jen přes zabezpečené HTTPS připojení.";
+const MEDIA_DEVICES_UNSUPPORTED_NOTICE = "Prohlížeč nepodporuje přístup k mikrofonu. Použij textový dotaz.";
 
 function speechRecognitionConstructor() {
   if (typeof window === "undefined") {
@@ -17,7 +19,15 @@ function speechRecognitionConstructor() {
 }
 
 function errorPayload(errorCode) {
-  if (["not-allowed", "service-not-allowed", "audio-capture"].includes(errorCode)) {
+  if ([
+    "not-allowed",
+    "service-not-allowed",
+    "audio-capture",
+    "NotAllowedError",
+    "PermissionDeniedError",
+    "SecurityError",
+    "AbortError"
+  ].includes(errorCode)) {
     return {
       status: STATUS_MIC_DENIED,
       message: MIC_DENIED_NOTICE
@@ -35,6 +45,53 @@ function errorPayload(errorCode) {
     status: STATUS_UNSUPPORTED,
     message: UNSUPPORTED_NOTICE
   };
+}
+
+function mediaPermissionErrorPayload(error) {
+  const errorName = error?.name || error?.message || "";
+
+  if (!window.isSecureContext) {
+    return {
+      status: STATUS_UNSUPPORTED,
+      message: INSECURE_CONTEXT_NOTICE
+    };
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return {
+      status: STATUS_UNSUPPORTED,
+      message: MEDIA_DEVICES_UNSUPPORTED_NOTICE
+    };
+  }
+
+  return errorPayload(errorName);
+}
+
+async function requestMicrophonePermission() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return {
+      ok: false,
+      ...errorPayload("unsupported")
+    };
+  }
+
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    return {
+      ok: false,
+      ...mediaPermissionErrorPayload()
+    };
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      ...mediaPermissionErrorPayload(error)
+    };
+  }
 }
 
 export function useSpeechRecognition({
@@ -70,13 +127,24 @@ export function useSpeechRecognition({
     }
   }
 
-  function start() {
+  async function start() {
     if (!Recognition) {
       onStatusChange(STATUS_UNSUPPORTED);
       setListening(false);
       onError({
         status: STATUS_UNSUPPORTED,
         message: UNSUPPORTED_NOTICE
+      });
+      return false;
+    }
+
+    const permission = await requestMicrophonePermission();
+    if (!permission.ok) {
+      onStatusChange(permission.status);
+      setListening(false);
+      onError({
+        status: permission.status,
+        message: permission.message
       });
       return false;
     }

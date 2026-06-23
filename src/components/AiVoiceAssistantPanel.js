@@ -1,3 +1,5 @@
+import { AiAssistantModeSwitch } from "./AiAssistantModeSwitch.js";
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -9,6 +11,7 @@ function escapeHtml(value) {
 
 export function AiVoiceAssistantPanel({
   open = false,
+  mode = "voice",
   assistant = null,
   elevenLabsStatus = "",
   listening = false,
@@ -17,6 +20,7 @@ export function AiVoiceAssistantPanel({
   voiceTranscript = "",
   voiceAnswer = "",
   voiceTags = [],
+  voiceNotice = "",
   demoPlaying = false,
   demoSpeaker = "",
   demoSpeakerLabel = "",
@@ -41,6 +45,8 @@ export function AiVoiceAssistantPanel({
   const microphonePath = assistant?.microphonePath || "src/assets/smart-helper-microphone.png";
   const transcriptText = String(voiceTranscript || "").trim();
   const answerText = String(voiceAnswer || "").trim();
+  const noticeText = String(voiceNotice || "").trim();
+  const showMicrophoneHelp = noticeText.includes("Mikrofon není povolený");
   const tags = Array.isArray(voiceTags) && voiceTags.length
     ? voiceTags
     : ["Připraven", "Bez odeslání", "Čeká na hlas"];
@@ -63,6 +69,8 @@ export function AiVoiceAssistantPanel({
       </header>
 
       <div class="ai-voice-assistant-panel__body">
+        ${AiAssistantModeSwitch({ mode })}
+
         <div class="ai-voice-assistant-panel__voice-control">
           <span class="ai-voice-assistant-panel__wave ai-voice-assistant-panel__wave--left" aria-hidden="true">
             <span></span><span></span><span></span><span></span>
@@ -86,6 +94,18 @@ export function AiVoiceAssistantPanel({
         </p>
         ${elevenLabsStatus ? `
           <p class="ai-voice-assistant-panel__elevenlabs-status">${escapeHtml(elevenLabsStatus)}</p>
+        ` : ""}
+        ${noticeText ? `
+          <div class="ai-voice-assistant-panel__notice" role="status">
+            <p>${escapeHtml(noticeText)}</p>
+            ${showMicrophoneHelp ? `
+              <ul>
+                <li>iPhone Safari: Nastavení → Safari → Mikrofon → Povolit</li>
+                <li>Chrome Android: ikona zámku u adresy → Oprávnění → Mikrofon → Povolit</li>
+                <li>Desktop Chrome: ikona zámku u adresy → Mikrofon → Povolit</li>
+              </ul>
+            ` : ""}
+          </div>
         ` : ""}
         ${demoPlaying ? `
           <button class="ai-voice-assistant-panel__stop" type="button" data-ai-stop-voice>

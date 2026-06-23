@@ -17,7 +17,8 @@ export function ElevenLabsAssistantProvider({
     defaultAssistantId: DEFAULT_AI_ASSISTANT_ID,
     assistantById,
     clientTools,
-    prepareSignedUrl: assistant.prepareSignedUrl
+    closeTextSession: assistant.closeTextSession,
+    prepareSignedUrl: assistant.prepareSignedUrl,
+    sendTextMessage: assistant.sendTextMessage
   };
 }
-

@@ -1,4 +1,5 @@
 import { AssistantAvatarSelector } from "./AssistantAvatarSelector.js";
+import { AiAssistantModeSwitch } from "./AiAssistantModeSwitch.js";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -51,13 +52,16 @@ function renderMessages(messages = [], assistantName = "Smart pomocník") {
 
 export function AiTextAssistantPanel({
   open = false,
+  mode = "text",
   messages = [],
   input = "",
   assistant,
   assistants = [],
   selectedAssistantId = "",
   avatarAssetStatus = {},
-  elevenLabsStatus = ""
+  elevenLabsStatus = "",
+  textStatus = "",
+  textSending = false
 } = {}) {
   if (!open || !assistant) {
     return "";
@@ -66,6 +70,7 @@ export function AiTextAssistantPanel({
   const assistantSelector = assistants.length > 1
     ? AssistantAvatarSelector({ assistants, selectedAssistantId, avatarAssetStatus })
     : "";
+  const statusText = String(textStatus || elevenLabsStatus || "").trim();
 
   return `
     <section
@@ -85,10 +90,12 @@ export function AiTextAssistantPanel({
         </button>
       </header>
 
+      ${AiAssistantModeSwitch({ mode })}
+
       ${assistantSelector}
 
-      ${elevenLabsStatus ? `
-        <p class="ai-assistant-chat__voice-notice">${escapeHtml(elevenLabsStatus)}</p>
+      ${statusText ? `
+        <p class="ai-assistant-chat__voice-notice">${escapeHtml(statusText)}</p>
       ` : ""}
 
       ${
@@ -109,8 +116,11 @@ export function AiTextAssistantPanel({
           placeholder="Napiš dotaz…"
           autocomplete="off"
           data-ai-input
+          ${textSending ? "disabled" : ""}
         />
-        <button class="primary-action" type="submit">Odeslat</button>
+        <button class="primary-action" type="submit" ${textSending ? "disabled" : ""}>
+          ${textSending ? "Odesílám" : "Odeslat"}
+        </button>
       </form>
     </section>
   `;

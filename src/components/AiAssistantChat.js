@@ -11,12 +11,15 @@ export function AiAssistantChat({
   selectedAssistantId = "",
   avatarAssetStatus = {},
   elevenLabsStatus = "",
+  textStatus = "",
+  textSending = false,
   isListening = false,
   voiceStatus = "",
   voiceUiState = "idle",
   voiceTranscript = "",
   voiceAnswer = "",
   voiceTags = [],
+  voiceNotice = "",
   demoPlaying = false,
   demoSpeaker = "",
   demoSpeakerLabel = "",
@@ -32,6 +35,7 @@ export function AiAssistantChat({
   if (isVoiceMode) {
     return AiVoiceAssistantPanel({
       open,
+      mode,
       assistant,
       assistants,
       selectedAssistantId,
@@ -43,6 +47,7 @@ export function AiAssistantChat({
       voiceTranscript,
       voiceAnswer,
       voiceTags,
+      voiceNotice,
       demoPlaying,
       demoSpeaker,
       demoSpeakerLabel,
@@ -53,12 +58,15 @@ export function AiAssistantChat({
 
   return AiTextAssistantPanel({
     open,
+    mode,
     messages,
     input,
     assistant,
     assistants,
     selectedAssistantId,
     avatarAssetStatus,
-    elevenLabsStatus
+    elevenLabsStatus,
+    textStatus,
+    textSending
   });
 }
