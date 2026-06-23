@@ -102,6 +102,7 @@ const HOME_SUBTITLE = "Provozní systém pro odpady, vozidla a trasy";
 const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
 const FEEDBACK_ROUTE = "/pripominky";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
+const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
 const EMPLOYMENT_STATUS_OPTIONS = [
   { value: "active", label: "Aktivní" },
   { value: "inactive", label: "Neaktivní" }
@@ -112,11 +113,26 @@ const EMPLOYMENT_TYPE_OPTIONS = [
   "Externí spolupráce",
   "Jiné"
 ];
+const EMPLOYMENT_TYPE_SELECT_OPTIONS = [
+  { value: "", label: "Neuvedeno" },
+  ...EMPLOYMENT_TYPE_OPTIONS.map((option) => ({ value: option, label: option }))
+];
 const EMPLOYEE_ABSENCE_STATUS_OPTIONS = ["v práci", "nemoc", "dovolená", "OČR", "lékař", "náhradní volno"];
 const DOCUMENT_TYPE_LABELS = ["Pracovní smlouva", "Dodatek", "Školení", "Lékařská prohlídka", "Ostatní"];
 const basePath = new URL(document.querySelector("base")?.href || "/", window.location.origin)
   .pathname
   .replace(/\/$/, "");
+const QUICK_ABSENCE_TYPES = [
+  { id: "vacation", label: "Chci dovolenou", shortLabel: "Dovolená", marker: "D", status: "pending" },
+  { id: "sick", label: "Jsem nemocný", shortLabel: "Nemoc", marker: "N", status: "recorded" },
+  { id: "doctor", label: "Jdu k lékaři", shortLabel: "Lékař", marker: "L", status: "pending" },
+  { id: "care", label: "OČR", shortLabel: "OČR", marker: "O", status: "recorded" },
+  { id: "compensatory_leave", label: "Náhradní volno", shortLabel: "Náhradní volno", marker: "NV", status: "pending" }
+];
+const QUICK_ABSENCE_STATUSES = {
+  pending: "Čeká na schválení",
+  recorded: "Evidováno"
+};
 
 let authState = {
   status: "loading",
@@ -171,6 +187,25 @@ const absenceUiState = {
   employeeFilter: "",
   monthFilter: currentMonthKey()
 };
+const quickAbsenceState = {
+  step: "type",
+  type: "",
+  dateMode: "",
+  dateFrom: "",
+  dateTo: "",
+  halfDay: false,
+  noteOpen: false,
+  attachmentOpen: false,
+  note: "",
+  saving: false,
+  success: false,
+  error: "",
+  recent: [],
+  recentLoaded: false,
+  recentLoading: false,
+  apiStatus: "waiting",
+  missingEndpoint: "POST /api/absence-requests"
+};
 
 const employeeCardState = {
   employees: [],
@@ -190,6 +225,8 @@ const employeeCardState = {
   vacationBalance: null,
   workHistory: [],
   documents: [],
+  formDraft: null,
+  documentUploading: false,
   documentsUploadStatus: "waiting",
   documentsMissingEndpoint: "POST /api/employees/:id/documents"
 };
@@ -282,6 +319,14 @@ function menuModules(user) {
   return items;
 }
 
+function routeForModuleCard(moduleItem, user) {
+  if (moduleItem.id === "absence" && hasPermission(user, "absence", "create")) {
+    return ABSENCE_QUICK_ROUTE;
+  }
+
+  return moduleItem.route;
+}
+
 function visibleDashboardRoutes(user) {
   return filterModulesByUser(user, moduleDashboards);
 }
@@ -320,6 +365,24 @@ function formatDateTime(value) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function formatFileSize(value) {
+  const bytes = Number(value || 0);
+
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "";
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1).replace(".", ",")} kB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }
 
 function optionList(options, selected, emptyLabel = "Vše") {
@@ -607,67 +670,104 @@ function employeeManagerOptions(employee, selectedId) {
   ].join("");
 }
 
-function employeeCardComparable(employee) {
-  if (!employee) {
+function normalizeEmployeeCardText(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeEmployeeCardNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeEmployeeCardFormData(data) {
+  if (!data) {
     return null;
   }
 
-  const entitlement = Number(employee.vacationEntitlementDays || 0);
-  const used = Number(employee.vacationUsedDays || 0);
-  const pending = Number(employee.vacationPendingDays || 0);
+  const entitlement = normalizeEmployeeCardNumber(data.vacationEntitlementDays);
+  const used = normalizeEmployeeCardNumber(data.vacationUsedDays);
+  const pending = normalizeEmployeeCardNumber(data.vacationPendingDays);
 
   return {
-    firstName: String(employee.firstName || "").trim(),
-    lastName: String(employee.lastName || "").trim(),
-    email: String(employee.email || "").trim().toLowerCase(),
-    phone: String(employee.phone || "").trim(),
-    role: normalizeRole(employee.role),
-    department: String(employee.department || "").trim(),
-    position: String(employee.position || "").trim(),
-    managerId: String(employee.managerId || "").trim(),
-    employmentStatus: String(employee.employmentStatus || "active").trim(),
-    startDate: String(employee.startDate || "").trim(),
-    employmentType: String(employee.employmentType || "").trim(),
-    workload: Number(employee.workload || 0),
+    firstName: normalizeEmployeeCardText(data.firstName),
+    lastName: normalizeEmployeeCardText(data.lastName),
+    email: normalizeEmployeeCardText(data.email).toLowerCase(),
+    phone: normalizeEmployeeCardText(data.phone),
+    role: normalizeRole(data.role),
+    department: normalizeEmployeeCardText(data.department),
+    position: normalizeEmployeeCardText(data.position),
+    managerId: normalizeEmployeeCardText(data.managerId),
+    employmentStatus: normalizeEmployeeCardText(data.employmentStatus) || "active",
+    startDate: normalizeEmployeeCardText(data.startDate),
+    employmentType: normalizeEmployeeCardText(data.employmentType),
+    workload: normalizeEmployeeCardNumber(data.workload),
     vacationEntitlementDays: entitlement,
     vacationUsedDays: used,
     vacationPendingDays: pending,
     vacationRemainingDays: Number.isFinite(entitlement - used - pending) ? entitlement - used - pending : 0,
-    currentAbsenceStatus: String(employee.currentAbsenceStatus || "v práci").trim(),
-    sickDaysCurrentYear: Number(employee.sickDaysCurrentYear || 0),
-    lastAbsenceDate: String(employee.lastAbsenceDate || "").trim(),
-    internalNote: String(employee.internalNote || "").trim()
+    currentAbsenceStatus: normalizeEmployeeCardText(data.currentAbsenceStatus) || "v práci",
+    sickDaysCurrentYear: normalizeEmployeeCardNumber(data.sickDaysCurrentYear),
+    lastAbsenceDate: normalizeEmployeeCardText(data.lastAbsenceDate),
+    internalNote: normalizeEmployeeCardText(data.internalNote)
   };
+}
+
+const employeeCardComparable = normalizeEmployeeCardFormData;
+
+function employeeCardDraftFor(employee) {
+  const draft = employeeCardState.formDraft;
+  const employeeId = String(employee?.id || "").trim().toLowerCase();
+  const draftId = String(draft?.id || "").trim().toLowerCase();
+
+  if (!draft || !employeeId || draftId !== employeeId) {
+    return employee;
+  }
+
+  return {
+    ...employee,
+    ...draft
+  };
+}
+
+function employeeCardFormField(form, name) {
+  return form.elements.namedItem?.(name) || form.querySelector(`[name="${name}"]`);
+}
+
+function employeeCardFormValue(form, name) {
+  return employeeCardFormField(form, name)?.value ?? "";
 }
 
 function employeeCardFormData(form) {
   const source = employeeCardState.employee || {};
-  const entitlement = Number(form.elements.vacationEntitlementDays?.value || 0);
-  const used = Number(form.elements.vacationUsedDays?.value || 0);
-  const pending = Number(form.elements.vacationPendingDays?.value || 0);
+  const entitlement = Number(employeeCardFormValue(form, "vacationEntitlementDays") || 0);
+  const used = Number(employeeCardFormValue(form, "vacationUsedDays") || 0);
+  const pending = Number(employeeCardFormValue(form, "vacationPendingDays") || 0);
+  const managerId = employeeCardFormValue(form, "managerId");
+  const manager = managerId ? employeeCardState.employees.find((item) => item.id === managerId) : null;
 
   return {
     ...source,
-    firstName: form.elements.firstName?.value.trim() || "",
-    lastName: form.elements.lastName?.value.trim() || "",
-    email: form.elements.email?.value.trim() || "",
-    phone: form.elements.phone?.value.trim() || "",
-    role: normalizeRole(form.elements.role?.value || source.role),
-    department: form.elements.department?.value.trim() || "",
-    position: form.elements.position?.value.trim() || "",
-    managerId: form.elements.managerId?.value || "",
-    employmentStatus: form.elements.employmentStatus?.value || "active",
-    startDate: form.elements.startDate?.value || "",
-    employmentType: form.elements.employmentType?.value.trim() || "",
-    workload: Number(form.elements.workload?.value || 0),
+    firstName: employeeCardFormValue(form, "firstName").trim(),
+    lastName: employeeCardFormValue(form, "lastName").trim(),
+    email: employeeCardFormValue(form, "email").trim(),
+    phone: employeeCardFormValue(form, "phone").trim(),
+    role: normalizeRole(employeeCardFormValue(form, "role") || source.role),
+    department: employeeCardFormValue(form, "department").trim(),
+    position: employeeCardFormValue(form, "position").trim(),
+    managerId,
+    managerName: managerId ? employeeFullName(manager) : "",
+    employmentStatus: employeeCardFormValue(form, "employmentStatus") || "active",
+    startDate: employeeCardFormValue(form, "startDate"),
+    employmentType: employeeCardFormValue(form, "employmentType").trim(),
+    workload: Number(employeeCardFormValue(form, "workload") || 0),
     vacationEntitlementDays: entitlement,
     vacationUsedDays: used,
     vacationPendingDays: pending,
     vacationRemainingDays: Number.isFinite(entitlement - used - pending) ? entitlement - used - pending : 0,
-    currentAbsenceStatus: form.elements.currentAbsenceStatus?.value || "v práci",
-    sickDaysCurrentYear: Number(form.elements.sickDaysCurrentYear?.value || 0),
-    lastAbsenceDate: form.elements.lastAbsenceDate?.value || "",
-    internalNote: form.elements.internalNote?.value.trim() || ""
+    currentAbsenceStatus: employeeCardFormValue(form, "currentAbsenceStatus") || "v práci",
+    sickDaysCurrentYear: Number(employeeCardFormValue(form, "sickDaysCurrentYear") || 0),
+    lastAbsenceDate: employeeCardFormValue(form, "lastAbsenceDate"),
+    internalNote: employeeCardFormValue(form, "internalNote").trim()
   };
 }
 
@@ -818,7 +918,25 @@ function currentAppearanceDirtyTarget() {
 }
 
 function currentDirtyTarget() {
-  return currentAccessDirtyTarget() || currentAppearanceDirtyTarget() || currentEmployeeCardDirtyTarget();
+  const accessTarget = currentAccessDirtyTarget();
+
+  if (accessTarget?.isDirty) {
+    return accessTarget;
+  }
+
+  const appearanceTarget = currentAppearanceDirtyTarget();
+
+  if (appearanceTarget?.isDirty) {
+    return appearanceTarget;
+  }
+
+  const employeeTarget = currentEmployeeCardDirtyTarget();
+
+  if (employeeTarget?.isDirty) {
+    return employeeTarget;
+  }
+
+  return null;
 }
 
 function discardAccessUserDraft(userId, referenceUser = null) {
@@ -1287,7 +1405,7 @@ function homePage(user) {
   const cards = modulesForUser
     .map(
       (moduleItem) => `
-        <a class="module-card" href="${routeHref(moduleItem.route)}" data-link>
+        <a class="module-card" href="${routeHref(routeForModuleCard(moduleItem, user))}" data-link>
           <span class="module-card__media">
             <span class="module-icon">${renderModuleIcon(moduleItem)}</span>
             ${statusBadge(moduleItem)}
@@ -1326,8 +1444,8 @@ function homePage(user) {
       <section class="module-grid" aria-label="Hlavní moduly">
         ${cards}
       </section>
-      ${VersionBackupInfo()}
       ${VersionNewsInfo()}
+      ${VersionBackupInfo()}
     </main>
   `;
 }
@@ -1485,6 +1603,317 @@ function absenceSubmitLabel(type) {
   return "Odeslat žádost";
 }
 
+function quickAbsenceType(typeId = quickAbsenceState.type) {
+  return QUICK_ABSENCE_TYPES.find((type) => type.id === typeId) || null;
+}
+
+function isoDateAfter(days) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return toIsoDate(date);
+}
+
+function quickSetDate(from, to = from, halfDay = false) {
+  quickAbsenceState.dateFrom = from;
+  quickAbsenceState.dateTo = to || from;
+  quickAbsenceState.halfDay = halfDay;
+  quickAbsenceState.step = "summary";
+  quickAbsenceState.error = "";
+}
+
+function quickAbsenceReset(options = {}) {
+  quickAbsenceState.step = "type";
+  quickAbsenceState.type = "";
+  quickAbsenceState.dateMode = "";
+  quickAbsenceState.dateFrom = "";
+  quickAbsenceState.dateTo = "";
+  quickAbsenceState.halfDay = false;
+  quickAbsenceState.noteOpen = false;
+  quickAbsenceState.attachmentOpen = false;
+  quickAbsenceState.note = "";
+  quickAbsenceState.saving = false;
+  quickAbsenceState.success = false;
+  quickAbsenceState.error = "";
+
+  if (options.keepRecent !== true) {
+    quickAbsenceState.recent = [];
+    quickAbsenceState.recentLoaded = false;
+    quickAbsenceState.recentLoading = false;
+  }
+}
+
+function quickAbsenceStatusLabel(type) {
+  return QUICK_ABSENCE_STATUSES[type?.status] || "";
+}
+
+function quickAbsenceDaysLabel() {
+  return formatAbsenceDays(countAbsenceDays(
+    quickAbsenceState.dateFrom,
+    quickAbsenceState.dateTo || quickAbsenceState.dateFrom,
+    quickAbsenceState.halfDay,
+    false
+  ));
+}
+
+function quickAbsenceDateLabel() {
+  if (!quickAbsenceState.dateFrom) {
+    return "";
+  }
+
+  if (quickAbsenceState.halfDay) {
+    return `${formatAbsenceDate(quickAbsenceState.dateFrom)} · půl dne`;
+  }
+
+  if (!quickAbsenceState.dateTo || quickAbsenceState.dateTo === quickAbsenceState.dateFrom) {
+    return formatAbsenceDate(quickAbsenceState.dateFrom);
+  }
+
+  return `${formatAbsenceDate(quickAbsenceState.dateFrom)} - ${formatAbsenceDate(quickAbsenceState.dateTo)}`;
+}
+
+function quickChoiceButton(choice) {
+  return `
+    <button
+      class="quick-absence-choice"
+      type="button"
+      data-quick-date-choice="${escapeHtml(choice.id)}"
+    >
+      <span>${escapeHtml(choice.label)}</span>
+      ${choice.hint ? `<small>${escapeHtml(choice.hint)}</small>` : ""}
+    </button>
+  `;
+}
+
+function quickDateChoices(type) {
+  if (!type) {
+    return [];
+  }
+
+  if (type.id === "vacation") {
+    return [
+      { id: "today", label: "1 den", hint: "dnes" },
+      { id: "tomorrow", label: "Zítra", hint: "1 den" },
+      { id: "two-days", label: "2 dny", hint: "ode dneška" },
+      { id: "week", label: "Týden", hint: "5 dnů" },
+      { id: "custom", label: "Vybrat datum" }
+    ];
+  }
+
+  if (type.id === "doctor") {
+    return [
+      { id: "today", label: "Dnes" },
+      { id: "tomorrow", label: "Zítra" },
+      { id: "half-day", label: "Půl dne" },
+      { id: "custom", label: "Vybrat datum" }
+    ];
+  }
+
+  if (type.id === "compensatory_leave") {
+    return [
+      { id: "today", label: "1 den" },
+      { id: "half-day", label: "Půl dne" },
+      { id: "custom", label: "Vybrat datum" }
+    ];
+  }
+
+  return [
+    { id: "today", label: "Dnes" },
+    { id: "tomorrow-open", label: "Od zítra" },
+    { id: "custom", label: "Vybrat datum" }
+  ];
+}
+
+function quickAbsenceTypeStep() {
+  return `
+    <section class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-absence-title">
+      <p class="quick-absence-kicker">Rychlé zadání</p>
+      <h2 id="quick-absence-title">Co potřebujete nahlásit?</h2>
+      <div class="quick-absence-types">
+        ${QUICK_ABSENCE_TYPES.map((type) => `
+          <button class="quick-absence-type" type="button" data-quick-type="${escapeHtml(type.id)}">
+            <span class="quick-absence-type__icon" aria-hidden="true">${escapeHtml(type.marker)}</span>
+            <span>${escapeHtml(type.label)}</span>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function quickAbsenceCustomDate(type) {
+  if (quickAbsenceState.dateMode !== "custom") {
+    return "";
+  }
+
+  const today = isoDateAfter(0);
+  const showRange = type?.id === "vacation" || type?.id === "care" || type?.id === "sick";
+
+  return `
+    <div class="quick-absence-custom-date">
+      <label>
+        <span>Od</span>
+        <input type="date" value="${escapeHtml(quickAbsenceState.dateFrom || today)}" data-quick-date-from />
+      </label>
+      ${showRange ? `
+        <label>
+          <span>Do</span>
+          <input type="date" value="${escapeHtml(quickAbsenceState.dateTo || quickAbsenceState.dateFrom || today)}" data-quick-date-to />
+        </label>
+      ` : ""}
+      <button class="primary-action quick-absence-wide-action" type="button" data-quick-custom-continue>
+        Pokračovat
+      </button>
+    </div>
+  `;
+}
+
+function quickAbsenceDateStep() {
+  const type = quickAbsenceType();
+
+  if (!type) {
+    return quickAbsenceTypeStep();
+  }
+
+  return `
+    <section class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-date-title">
+      <button class="quick-absence-back" type="button" data-quick-back="type">Zpět</button>
+      <p class="quick-absence-kicker">${escapeHtml(type.shortLabel)}</p>
+      <h2 id="quick-date-title">Kdy?</h2>
+      <div class="quick-absence-choices">
+        ${quickDateChoices(type).map(quickChoiceButton).join("")}
+      </div>
+      ${type.id === "sick" ? '<p class="quick-absence-hint">Nemoc od dnešního dne</p>' : ""}
+      ${quickAbsenceCustomDate(type)}
+    </section>
+  `;
+}
+
+function quickAbsenceOptionalFields() {
+  return `
+    <div class="quick-absence-options">
+      <button class="quick-absence-option-toggle" type="button" data-quick-note-toggle>
+        Přidat poznámku
+      </button>
+      ${quickAbsenceState.noteOpen ? `
+        <label class="quick-absence-note">
+          <span>Poznámka</span>
+          <textarea rows="3" placeholder="Volitelná poznámka" data-quick-note>${escapeHtml(quickAbsenceState.note)}</textarea>
+        </label>
+      ` : ""}
+      <button class="quick-absence-option-toggle" type="button" data-quick-attachment-toggle>
+        Přidat přílohu
+      </button>
+      ${quickAbsenceState.attachmentOpen ? `
+        <p class="quick-absence-api-note">Přílohy čekají na samostatné cloudové API.</p>
+      ` : ""}
+    </div>
+  `;
+}
+
+function quickAbsenceSummaryStep() {
+  const type = quickAbsenceType();
+
+  if (!type) {
+    return quickAbsenceTypeStep();
+  }
+
+  return `
+    <section class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-summary-title">
+      <button class="quick-absence-back" type="button" data-quick-back="date">Zpět</button>
+      <p class="quick-absence-kicker">Kontrola</p>
+      <h2 id="quick-summary-title">Zkontrolujte žádost</h2>
+      <div class="quick-absence-summary">
+        <article>
+          <span>Typ</span>
+          <strong>${escapeHtml(type.shortLabel)}</strong>
+        </article>
+        <article>
+          <span>Datum</span>
+          <strong>${escapeHtml(quickAbsenceDateLabel())}</strong>
+        </article>
+        <article>
+          <span>Rozsah</span>
+          <strong>${escapeHtml(quickAbsenceDaysLabel())}</strong>
+        </article>
+        <article>
+          <span>Stav</span>
+          <strong>${escapeHtml(quickAbsenceStatusLabel(type))}</strong>
+        </article>
+      </div>
+      ${quickAbsenceOptionalFields()}
+      ${quickAbsenceState.error ? `<p class="quick-absence-error">${escapeHtml(quickAbsenceState.error)}</p>` : ""}
+      <div class="quick-absence-sticky">
+        <button class="primary-action quick-absence-submit" type="button" data-quick-submit ${quickAbsenceState.saving ? "disabled" : ""}>
+          ${quickAbsenceState.saving ? "Odesílám…" : "Odeslat"}
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function quickAbsenceSuccessStep() {
+  return `
+    <section class="quick-absence-card quick-absence-card--success" aria-labelledby="quick-success-title">
+      <span class="quick-absence-success-icon" aria-hidden="true">OK</span>
+      <h2 id="quick-success-title">Hotovo</h2>
+      <p>Žádost byla odeslána.</p>
+      <button class="primary-action quick-absence-wide-action" type="button" data-quick-reset>
+        Zpět na úvod
+      </button>
+    </section>
+  `;
+}
+
+function quickAbsenceRecentCard(request) {
+  return `
+    <article class="quick-absence-recent-card">
+      <div>
+        <strong>${escapeHtml(request.typeLabel || request.type || "Žádost")}</strong>
+        <span>${escapeHtml(request.statusLabel || request.status || "")}</span>
+      </div>
+      <small>${escapeHtml(formatAbsenceDate(request.dateFrom))}${request.dateTo && request.dateTo !== request.dateFrom ? ` - ${escapeHtml(formatAbsenceDate(request.dateTo))}` : ""}</small>
+    </article>
+  `;
+}
+
+function quickAbsenceRecentSection() {
+  const waiting = quickAbsenceState.apiStatus !== "ready" && !quickAbsenceState.recentLoading;
+
+  return `
+    <section class="quick-absence-card quick-absence-recent" aria-labelledby="quick-recent-title">
+      <h2 id="quick-recent-title">Moje poslední žádosti</h2>
+      ${quickAbsenceState.recentLoading ? '<p class="quick-absence-muted">Načítám…</p>' : ""}
+      ${waiting ? `<p class="quick-absence-api-note">Čeká na API: ${escapeHtml(quickAbsenceState.missingEndpoint)}</p>` : ""}
+      ${!quickAbsenceState.recentLoading && !waiting && quickAbsenceState.recent.length === 0 ? '<p class="quick-absence-muted">Zatím tu nejsou žádné žádosti.</p>' : ""}
+      <div class="quick-absence-recent-list">
+        ${quickAbsenceState.recent.slice(0, 3).map(quickAbsenceRecentCard).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function quickAbsenceContent(user) {
+  if (!hasPermission(user, "absence", "create")) {
+    return permissionInlineNotice();
+  }
+
+  const content = quickAbsenceState.success
+    ? quickAbsenceSuccessStep()
+    : quickAbsenceState.step === "date"
+      ? quickAbsenceDateStep()
+      : quickAbsenceState.step === "summary"
+        ? quickAbsenceSummaryStep()
+        : quickAbsenceTypeStep();
+
+  return `
+    <section class="quick-absence-shell" aria-label="Rychlé zadání dovolené a nemoci">
+      ${content}
+      ${quickAbsenceRecentSection()}
+    </section>
+  `;
+}
+
 function absenceStatusBadge(status) {
   const tone = ABSENCE_STATUS_TONES[status] || "new";
   return `<span class="absence-badge absence-badge--${tone}">${escapeHtml(status)}</span>`;
@@ -1500,7 +1929,7 @@ function canUseAbsenceTab(user, tabId) {
     return false;
   }
 
-  if (tabId === "new") {
+  if (tabId === "new" || tabId === "quick") {
     return hasPermission(user, "absence", "create");
   }
 
@@ -1655,6 +2084,9 @@ function absenceDashboard(user) {
   const summary = absenceSummary(absenceState, user);
   const balance = absenceBalanceForEmployee(absenceState, employeeIdForUser(user));
   const pending = approvalAbsenceRequests(absenceState, user);
+  const quickRequestButton = hasPermission(user, "absence", "create")
+    ? `<a class="primary-action" href="${routeHref(ABSENCE_QUICK_ROUTE)}" data-link>+ Rychle zadat</a>`
+    : "";
   const newRequestButton = hasPermission(user, "absence", "create")
     ? '<button class="primary-action" type="button" data-absence-tab="new">Nová žádost</button>'
     : "";
@@ -1681,7 +2113,10 @@ function absenceDashboard(user) {
         <article class="absence-kpi absence-kpi--action">
           <span>Moje zbývající dovolená</span>
           <strong>${balance.vacationRemainingDays}</strong>
-          ${newRequestButton}
+          <div class="absence-quick-actions">
+            ${quickRequestButton}
+            ${newRequestButton}
+          </div>
         </article>
       </div>
 
@@ -1714,6 +2149,9 @@ function absenceMyRequests(user) {
   const visibleLabel = canSeeAllAbsences(user)
     ? "Tady vidíte svoje žádosti. V reportech a kalendáři vidíte i ostatní."
     : "Tady vidíte svoje žádosti a hlášení.";
+  const quickRequestButton = hasPermission(user, "absence", "create")
+    ? `<a class="primary-action" href="${routeHref(ABSENCE_QUICK_ROUTE)}" data-link>+ Rychle zadat</a>`
+    : "";
   const newRequestButton = hasPermission(user, "absence", "create")
     ? '<button class="primary-action" type="button" data-absence-tab="new">Nová žádost</button>'
     : "";
@@ -1725,7 +2163,10 @@ function absenceMyRequests(user) {
           <h2>Moje žádosti</h2>
           <p>${visibleLabel}</p>
         </div>
-        ${newRequestButton}
+        <div class="absence-quick-actions">
+          ${quickRequestButton}
+          ${newRequestButton}
+        </div>
       </div>
       ${absenceRequestsTable(requests, user, "Zatím nemáte žádnou žádost.")}
     </section>
@@ -2105,15 +2546,52 @@ function employeeCardReadonlyValue(label, value) {
 
 function employeeDocumentsSection(employee, canEdit) {
   const documents = employeeCardState.documents;
+  const uploadReady = employeeCardState.documentsUploadStatus === "ready";
+  const uploadForm = canEdit && uploadReady
+    ? `
+      <form class="employee-document-upload-form" data-employee-document-upload-form data-employee-id="${escapeHtml(employee.id)}">
+        <label>
+          <span>Typ dokumentu</span>
+          <select name="type">
+            ${DOCUMENT_TYPE_LABELS.map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          <span>Název</span>
+          <input name="name" type="text" placeholder="Např. Pracovní smlouva" />
+        </label>
+        <label>
+          <span>Platnost do</span>
+          <input name="expiresAt" type="date" />
+        </label>
+        <label class="employee-document-upload-form__file">
+          <span>Soubor</span>
+          <input name="file" type="file" required />
+        </label>
+        <label class="employee-document-upload-form__note">
+          <span>Poznámka</span>
+          <textarea name="note" rows="2" placeholder="Volitelná interní poznámka"></textarea>
+        </label>
+        <button class="primary-action" type="submit" ${employeeCardState.documentUploading ? "disabled" : ""}>
+          ${employeeCardState.documentUploading ? "Nahrávám..." : "Přidat dokument"}
+        </button>
+      </form>
+    `
+    : "";
   const rows = documents.length
     ? documents.map((document) => `
         <tr>
           <td data-label="Typ">${escapeHtml(document.type || "Dokument")}</td>
-          <td data-label="Název">${escapeHtml(document.name || "Bez názvu")}</td>
+          <td data-label="Název">
+            <span class="employee-document-name">
+              <strong>${escapeHtml(document.name || "Bez názvu")}</strong>
+              ${formatFileSize(document.sizeBytes) ? `<span>${escapeHtml(formatFileSize(document.sizeBytes))}</span>` : ""}
+            </span>
+          </td>
           <td data-label="Platnost">${escapeHtml(document.expiresAt ? formatAbsenceDate(document.expiresAt) : "neuvedeno")}</td>
           <td data-label="Stav">
             ${document.fileUrl
-              ? `<a href="${escapeHtml(document.fileUrl)}" target="_blank" rel="noopener noreferrer">Otevřít</a>`
+              ? `<a href="${escapeHtml(document.fileUrl)}" target="_blank" rel="noopener noreferrer">Stáhnout</a>`
               : '<span class="employee-card-status employee-card-status--waiting">Čeká na API</span>'}
           </td>
         </tr>
@@ -2132,13 +2610,15 @@ function employeeDocumentsSection(employee, canEdit) {
           <p>Pracovní smlouvy, dodatky, školení, lékařské prohlídky a ostatní dokumenty.</p>
         </div>
         <div class="employee-card-actions">
-          <button class="secondary-link" type="button" disabled>Přidat dokument</button>
-          <span class="employee-card-status employee-card-status--waiting">Čeká na API</span>
+          <span class="employee-card-status ${uploadReady ? "employee-card-status--ready" : "employee-card-status--waiting"}">
+            ${uploadReady ? "Cloud upload" : "Čeká na API"}
+          </span>
         </div>
       </div>
       <div class="employee-card-document-types">
         ${DOCUMENT_TYPE_LABELS.map((label) => `<span>${escapeHtml(label)}</span>`).join("")}
       </div>
+      ${uploadForm}
       <div class="absence-table-wrap">
         <table class="absence-table employee-card-table">
           <thead>
@@ -2152,7 +2632,7 @@ function employeeDocumentsSection(employee, canEdit) {
           <tbody>${rows}</tbody>
         </table>
       </div>
-      ${canEdit ? `
+      ${canEdit && !uploadReady ? `
         <p class="employee-card-api-note">
           Upload souborů není spuštěný. Chybí ${escapeHtml(employeeCardState.documentsMissingEndpoint)}.
         </p>
@@ -2240,15 +2720,15 @@ function employeeCardContent(employeeId, user) {
   const canEdit = canEditEmployeeCards(user);
   const canSeeNote = canSeeEmployeeInternalNote(user);
   const disabled = !canEdit || employeeCardState.saving;
-  const managerSaving = employeeCardState.managerSaving && employeeCardState.managerPendingId === employee.id;
+  const formEmployee = employeeCardDraftFor(employee);
 
   return `
     <section class="employee-card" aria-labelledby="employee-card-title">
       <div class="employee-card-header">
         <div>
           <p class="module-detail__eyebrow">Karta zaměstnance</p>
-          <h2 id="employee-card-title">${escapeHtml(employeeFullName(employee))}</h2>
-          <p>${escapeHtml(employee.position || roleLabel(employee.role))} · ${escapeHtml(employee.department || "bez oddělení")}</p>
+          <h2 id="employee-card-title">${escapeHtml(employeeFullName(formEmployee))}</h2>
+          <p>${escapeHtml(formEmployee.position || roleLabel(formEmployee.role))} · ${escapeHtml(formEmployee.department || "bez oddělení")}</p>
         </div>
         <div class="employee-card-header__actions">
           ${employeeCardApiBadge()}
@@ -2263,7 +2743,7 @@ function employeeCardContent(employeeId, user) {
 
       ${employeeCardState.message ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.message)}</p>` : ""}
       ${employeeCardState.error ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.error)}</p>` : ""}
-      ${employeeCardKpis(employee)}
+      ${employeeCardKpis(formEmployee)}
 
       <form class="employee-card-form" data-employee-card-form data-employee-id="${escapeHtml(employee.id)}">
         <div class="employee-card-grid">
@@ -2275,17 +2755,17 @@ function employeeCardContent(employeeId, user) {
               </div>
             </div>
             <div class="employee-card-fields">
-              ${employeeCardField("Jméno", employeeCardInput("firstName", employee.firstName, { disabled }))}
-              ${employeeCardField("Příjmení", employeeCardInput("lastName", employee.lastName, { disabled }))}
-              ${employeeCardField("E-mail", employeeCardInput("email", employee.email, { type: "email", disabled }))}
-              ${employeeCardField("Telefon", employeeCardInput("phone", employee.phone, { disabled }))}
-              ${employeeCardField("Role", employeeCardSelect("role", ROLE_DEFINITIONS.map((role) => ({ value: role.id, label: role.label })), normalizeRole(employee.role), disabled))}
-              ${employeeCardField("Oddělení", employeeCardInput("department", employee.department, { disabled }))}
-              ${employeeCardField("Pracovní pozice", employeeCardInput("position", employee.position, { disabled }))}
-              ${employeeCardField("Stav zaměstnance", employeeCardSelect("employmentStatus", EMPLOYMENT_STATUS_OPTIONS, employee.employmentStatus || "active", disabled))}
-              ${employeeCardField("Datum nástupu", employeeCardInput("startDate", employee.startDate, { type: "date", disabled }))}
-              ${employeeCardField("Pracovní úvazek", employeeCardInput("workload", employee.workload, { type: "number", step: "0.1", min: "0", disabled }))}
-              ${employeeCardField("Typ pracovního vztahu", employeeCardSelect("employmentType", EMPLOYMENT_TYPE_OPTIONS, employee.employmentType, disabled))}
+              ${employeeCardField("Jméno", employeeCardInput("firstName", formEmployee.firstName, { disabled }))}
+              ${employeeCardField("Příjmení", employeeCardInput("lastName", formEmployee.lastName, { disabled }))}
+              ${employeeCardField("E-mail", employeeCardInput("email", formEmployee.email, { type: "email", disabled }))}
+              ${employeeCardField("Telefon", employeeCardInput("phone", formEmployee.phone, { disabled }))}
+              ${employeeCardField("Role", employeeCardSelect("role", ROLE_DEFINITIONS.map((role) => ({ value: role.id, label: role.label })), normalizeRole(formEmployee.role), disabled))}
+              ${employeeCardField("Oddělení", employeeCardInput("department", formEmployee.department, { disabled }))}
+              ${employeeCardField("Pracovní pozice", employeeCardInput("position", formEmployee.position, { disabled }))}
+              ${employeeCardField("Stav zaměstnance", employeeCardSelect("employmentStatus", EMPLOYMENT_STATUS_OPTIONS, formEmployee.employmentStatus || "active", disabled))}
+              ${employeeCardField("Datum nástupu", employeeCardInput("startDate", formEmployee.startDate, { type: "date", disabled }))}
+              ${employeeCardField("Pracovní úvazek", employeeCardInput("workload", formEmployee.workload, { type: "number", step: "0.1", min: "0", disabled }))}
+              ${employeeCardField("Typ pracovního vztahu", employeeCardSelect("employmentType", EMPLOYMENT_TYPE_SELECT_OPTIONS, formEmployee.employmentType, disabled))}
             </div>
           </section>
 
@@ -2297,10 +2777,10 @@ function employeeCardContent(employeeId, user) {
               </div>
             </div>
             <div class="employee-card-fields">
-              ${employeeCardField("Roční nárok dovolené", employeeCardInput("vacationEntitlementDays", employee.vacationEntitlementDays, { type: "number", step: "0.5", min: "0", disabled }))}
-              ${employeeCardField("Čerpáno", employeeCardInput("vacationUsedDays", employee.vacationUsedDays, { type: "number", step: "0.5", min: "0", disabled }))}
-              ${employeeCardField("Čeká na schválení", employeeCardInput("vacationPendingDays", employee.vacationPendingDays, { type: "number", step: "0.5", min: "0", disabled }))}
-              ${employeeCardReadonlyValue("Zbývá", formatAbsenceDays(employee.vacationRemainingDays || 0))}
+              ${employeeCardField("Roční nárok dovolené", employeeCardInput("vacationEntitlementDays", formEmployee.vacationEntitlementDays, { type: "number", step: "0.5", min: "0", disabled }))}
+              ${employeeCardField("Čerpáno", employeeCardInput("vacationUsedDays", formEmployee.vacationUsedDays, { type: "number", step: "0.5", min: "0", disabled }))}
+              ${employeeCardField("Čeká na schválení", employeeCardInput("vacationPendingDays", formEmployee.vacationPendingDays, { type: "number", step: "0.5", min: "0", disabled }))}
+              ${employeeCardReadonlyValue("Zbývá", formatAbsenceDays(formEmployee.vacationRemainingDays || 0))}
             </div>
           </section>
 
@@ -2312,9 +2792,9 @@ function employeeCardContent(employeeId, user) {
               </div>
             </div>
             <div class="employee-card-fields">
-              ${employeeCardField("Aktuální stav", employeeCardSelect("currentAbsenceStatus", EMPLOYEE_ABSENCE_STATUS_OPTIONS, employee.currentAbsenceStatus || "v práci", disabled))}
-              ${employeeCardField("Nemoc tento rok", employeeCardInput("sickDaysCurrentYear", employee.sickDaysCurrentYear, { type: "number", step: "0.5", min: "0", disabled }))}
-              ${employeeCardField("Poslední absence", employeeCardInput("lastAbsenceDate", employee.lastAbsenceDate, { type: "date", disabled }))}
+              ${employeeCardField("Aktuální stav", employeeCardSelect("currentAbsenceStatus", EMPLOYEE_ABSENCE_STATUS_OPTIONS, formEmployee.currentAbsenceStatus || "v práci", disabled))}
+              ${employeeCardField("Nemoc tento rok", employeeCardInput("sickDaysCurrentYear", formEmployee.sickDaysCurrentYear, { type: "number", step: "0.5", min: "0", disabled }))}
+              ${employeeCardField("Poslední absence", employeeCardInput("lastAbsenceDate", formEmployee.lastAbsenceDate, { type: "date", disabled }))}
               ${employeeCardReadonlyValue("Přehled absencí", employeeCardState.absence?.note || "Detailní seznam čeká na cloudové API nepřítomností.")}
             </div>
           </section>
@@ -2325,7 +2805,6 @@ function employeeCardContent(employeeId, user) {
                 <h2>Nadřízený a schvalování</h2>
                 <p>Aktuální nadřízený a schvalovatel dovolené.</p>
               </div>
-              ${managerSaving ? '<span class="employee-card-status employee-card-status--waiting">Ukládám...</span>' : ""}
             </div>
             <div class="employee-card-fields">
               ${employeeCardField("Aktuální nadřízený", employeeCardSelect(
@@ -2333,11 +2812,10 @@ function employeeCardContent(employeeId, user) {
                 [{ value: "", label: "Bez nadřízeného" }, ...employeeCardState.employees
                   .filter((item) => item.id !== employee.id && item.employmentStatus !== "inactive")
                   .map((item) => ({ value: item.id, label: employeeFullName(item) }))],
-                employee.managerId || "",
-                !canEdit || employeeCardState.managerSaving,
-                `data-employee-manager-select data-employee-manager-employee="${escapeHtml(employee.id)}"`
+                formEmployee.managerId || "",
+                disabled
               ))}
-              ${employeeCardReadonlyValue("Schvalovatel dovolené", employee.managerName || "Bez nadřízeného")}
+              ${employeeCardReadonlyValue("Schvalovatel dovolené", formEmployee.managerName || "Bez nadřízeného")}
             </div>
           </section>
 
@@ -2351,7 +2829,7 @@ function employeeCardContent(employeeId, user) {
               </div>
               <label class="employee-card-field employee-card-field--wide">
                 <span>Interní poznámka</span>
-                <textarea name="internalNote" rows="4" ${disabled ? "disabled" : ""}>${escapeHtml(employee.internalNote || "")}</textarea>
+                <textarea name="internalNote" rows="4" ${disabled ? "disabled" : ""}>${escapeHtml(formEmployee.internalNote || "")}</textarea>
               </label>
             </section>
           ` : '<input type="hidden" name="internalNote" value="" />'}
@@ -2385,6 +2863,10 @@ function absenceActiveContent(activeTab, user, context = {}) {
     return absenceMyRequests(user);
   }
 
+  if (safeTab === "quick") {
+    return quickAbsenceContent(user);
+  }
+
   if (safeTab === "new") {
     return absenceNewRequest(user);
   }
@@ -2413,7 +2895,16 @@ function absenceActiveContent(activeTab, user, context = {}) {
 }
 
 function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) {
-  const activeTab = resolveAbsenceTab(user, context.employeeId ? "employee-card" : (isDashboard ? "dashboard" : absenceUiState.tab));
+  const requestedTab = context.employeeId
+    ? "employee-card"
+    : context.quick
+      ? "quick"
+      : isDashboard
+        ? "dashboard"
+        : normalizeRole(user?.role) === "ridic"
+          ? "quick"
+          : absenceUiState.tab;
+  const activeTab = resolveAbsenceTab(user, requestedTab);
   const feedbackBox = activeTab === "dashboard"
     ? moduleFeedbackBoxFor(moduleItem, user, {
         moduleId: "dovolena-nemoc",
@@ -2422,9 +2913,10 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
       })
     : "";
   const tabs = absenceTabsForUser(user);
+  const isQuickTab = activeTab === "quick";
 
   return `
-    <main class="app-shell module-page module-theme-scope absence-page" ${moduleThemeStyleAttribute()}>
+    <main class="app-shell module-page module-theme-scope absence-page ${isQuickTab ? "absence-page--quick" : ""}" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
@@ -2435,14 +2927,14 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div>
           <div class="module-detail__eyebrow">SMART ODPADY / DOVOLENÁ A NEMOC</div>
-          <h1 id="absence-title">Dovolená / Nemoc</h1>
-          <p>Jedno místo pro žádosti o dovolenou, nemoc, lékaře, OČR a náhradní volno.</p>
+          <h1 id="absence-title">${isQuickTab ? "Rychlé zadání" : "Dovolená / Nemoc"}</h1>
+          <p>${isQuickTab ? "Vyberte typ, datum a odešlete." : "Jedno místo pro žádosti o dovolenou, nemoc, lékaře, OČR a náhradní volno."}</p>
         </div>
-        <div class="absence-hero__meta">
+        ${isQuickTab ? "" : `<div class="absence-hero__meta">
           <span>Report</span>
           <strong>${ABSENCE_REPORT_EMAIL}</strong>
           <small>${ABSENCE_REPORT_DAY}. den v měsíci · ${ABSENCE_REPORT_TIME}</small>
-        </div>
+        </div>`}
       </section>
 
       <nav class="absence-tabs" aria-label="Menu modulu Dovolená / Nemoc">
@@ -2761,10 +3253,11 @@ function appErrorPage() {
 }
 
 async function apiJson(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(path, {
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.headers || {})
     },
     ...options
@@ -2772,10 +3265,159 @@ async function apiJson(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(payload.error || "Požadavek se nepodařilo dokončit.");
+    const error = new Error(payload.error || "Požadavek se nepodařilo dokončit.");
+    error.payload = payload;
+    throw error;
   }
 
   return payload;
+}
+
+function mergeQuickAbsenceRecent(request) {
+  if (!request?.id) {
+    return;
+  }
+
+  quickAbsenceState.recent = [
+    request,
+    ...quickAbsenceState.recent.filter((item) => item.id !== request.id)
+  ].slice(0, 3);
+  quickAbsenceState.recentLoaded = true;
+}
+
+async function loadQuickAbsenceRequests(options = {}) {
+  if (
+    authState.status !== "authenticated" ||
+    !authState.user ||
+    !hasPermission(currentUser(), "absence", "view") ||
+    quickAbsenceState.recentLoading ||
+    (quickAbsenceState.recentLoaded && options.force !== true)
+  ) {
+    return;
+  }
+
+  quickAbsenceState.recentLoading = true;
+
+  try {
+    const result = await apiJson("/api/absence-requests?mine=1&limit=3");
+    quickAbsenceState.recent = Array.isArray(result.requests) ? result.requests.slice(0, 3) : [];
+    quickAbsenceState.apiStatus = result.apiStatus || "ready";
+    quickAbsenceState.missingEndpoint = "";
+    quickAbsenceState.recentLoaded = true;
+  } catch (error) {
+    quickAbsenceState.apiStatus = error.payload?.apiStatus || "waiting";
+    quickAbsenceState.missingEndpoint = error.payload?.missingEndpoint || "POST /api/absence-requests";
+  } finally {
+    quickAbsenceState.recentLoading = false;
+  }
+
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
+function applyQuickDateChoice(choiceId) {
+  const type = quickAbsenceType();
+  const today = isoDateAfter(0);
+  const tomorrow = isoDateAfter(1);
+
+  if (!type) {
+    return;
+  }
+
+  if (choiceId === "custom") {
+    quickAbsenceState.dateMode = "custom";
+    quickAbsenceState.dateFrom = quickAbsenceState.dateFrom || today;
+    quickAbsenceState.dateTo = quickAbsenceState.dateTo || quickAbsenceState.dateFrom;
+    quickAbsenceState.error = "";
+    render();
+    return;
+  }
+
+  quickAbsenceState.dateMode = "";
+
+  if (choiceId === "tomorrow" || choiceId === "tomorrow-open") {
+    quickSetDate(tomorrow, tomorrow);
+  } else if (choiceId === "two-days") {
+    quickSetDate(today, isoDateAfter(1));
+  } else if (choiceId === "week") {
+    quickSetDate(today, isoDateAfter(4));
+  } else if (choiceId === "half-day") {
+    quickSetDate(today, today, true);
+  } else {
+    quickSetDate(today, today);
+  }
+
+  render();
+}
+
+function continueQuickCustomDate() {
+  const fromInput = document.querySelector("[data-quick-date-from]");
+  const toInput = document.querySelector("[data-quick-date-to]");
+  const from = fromInput?.value || quickAbsenceState.dateFrom || isoDateAfter(0);
+  const to = toInput?.value || from;
+
+  if (!from || !to || countAbsenceDays(from, to, false, false) <= 0) {
+    quickAbsenceState.error = "Zkontrolujte prosím datum.";
+    render();
+    return;
+  }
+
+  quickSetDate(from, to);
+  render();
+}
+
+function updateQuickDateField(field, value) {
+  if (field === "from") {
+    quickAbsenceState.dateFrom = value;
+    if (!quickAbsenceState.dateTo || quickAbsenceState.dateTo < value) {
+      quickAbsenceState.dateTo = value;
+    }
+  }
+
+  if (field === "to") {
+    quickAbsenceState.dateTo = value;
+  }
+}
+
+async function submitQuickAbsenceRequest() {
+  const user = currentUser();
+  const type = quickAbsenceType();
+
+  if (!user || !type || !quickAbsenceState.dateFrom || quickAbsenceState.saving) {
+    return;
+  }
+
+  quickAbsenceState.saving = true;
+  quickAbsenceState.error = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/absence-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        employeeId: user.id,
+        type: type.id,
+        dateFrom: quickAbsenceState.dateFrom,
+        dateTo: quickAbsenceState.dateTo || quickAbsenceState.dateFrom,
+        halfDay: quickAbsenceState.halfDay,
+        note: quickAbsenceState.note.trim(),
+        status: type.status
+      })
+    });
+
+    quickAbsenceState.apiStatus = result.apiStatus || "ready";
+    quickAbsenceState.missingEndpoint = "";
+    mergeQuickAbsenceRecent(result.request);
+    quickAbsenceState.success = true;
+  } catch (error) {
+    quickAbsenceState.apiStatus = error.payload?.apiStatus || "waiting";
+    quickAbsenceState.missingEndpoint = error.payload?.missingEndpoint || "POST /api/absence-requests";
+    quickAbsenceState.error = "Nepodařilo se odeslat. Zkuste to znovu.";
+  } finally {
+    quickAbsenceState.saving = false;
+    render();
+  }
 }
 
 function upsertEmployeeCardInList(employee) {
@@ -2846,6 +3488,8 @@ async function loadEmployeeCard(employeeId, options = {}) {
     employeeCardState.vacationBalance = null;
     employeeCardState.workHistory = [];
     employeeCardState.documents = [];
+    employeeCardState.formDraft = null;
+    employeeCardState.documentUploading = false;
   }
 
   if (options.renderBefore !== false) {
@@ -3191,6 +3835,21 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
+  if (path === ABSENCE_QUICK_ROUTE) {
+    if (!canUseAbsenceTab(user, "quick")) {
+      app.innerHTML = forbiddenPage(user);
+      document.title = `Bez oprávnění | ${APP_NAME}`;
+      return;
+    }
+
+    absenceUiState.tab = "quick";
+    const moduleItem = absenceModuleItem();
+    app.innerHTML = absenceModulePage(moduleItem, user, false, { quick: true });
+    document.title = `Rychlé zadání | ${APP_NAME}`;
+    loadQuickAbsenceRequests();
+    return;
+  }
+
   const employeeId = routeEmployeeId(path);
   if (employeeId) {
     if (!canViewModule(user, "absence")) {
@@ -3215,6 +3874,9 @@ function renderAuthenticatedApp(user) {
 
     if (moduleItem.id === "users" && hasPermission(user, "users", "view")) {
       loadAdminUsers();
+    }
+    if (moduleItem.id === "absence" && (absenceUiState.tab === "quick" || normalizeRole(user?.role) === "ridic")) {
+      loadQuickAbsenceRequests();
     }
     return;
   }
@@ -3614,6 +4276,7 @@ async function saveEmployeeCardChanges(target = currentEmployeeCardDirtyTarget()
     return true;
   }
 
+  employeeCardState.formDraft = target.current;
   employeeCardState.saving = true;
   employeeCardState.message = "Ukládám kartu zaměstnance...";
   employeeCardState.error = "";
@@ -3626,12 +4289,14 @@ async function saveEmployeeCardChanges(target = currentEmployeeCardDirtyTarget()
     });
     const savedEmployee = result.employee || target.current;
     employeeCardState.employee = savedEmployee;
+    employeeCardState.formDraft = null;
     upsertEmployeeCardInList(savedEmployee);
     employeeCardState.message = "Karta zaměstnance byla uložena.";
     employeeCardState.error = "";
     return true;
   } catch (error) {
     console.error("smart_odpady_employee_card_save_failed", error);
+    employeeCardState.formDraft = target.current;
     employeeCardState.error = "Kartu zaměstnance se nepodařilo uložit. Zkuste to prosím znovu.";
     employeeCardState.message = "";
     return false;
@@ -3642,6 +4307,7 @@ async function saveEmployeeCardChanges(target = currentEmployeeCardDirtyTarget()
 }
 
 function discardEmployeeCardDirtyChanges() {
+  employeeCardState.formDraft = null;
   employeeCardState.message = "Neuložené změny karty byly zahozeny.";
   employeeCardState.error = "";
   render();
@@ -3720,6 +4386,51 @@ async function saveEmployeeWorkHistory(form) {
     employeeCardState.message = "";
   } finally {
     employeeCardState.workHistorySaving = false;
+    render();
+  }
+}
+
+async function saveEmployeeDocumentUpload(form) {
+  if (!employeeCardState.employee?.id || !canEditEmployeeCards()) {
+    employeeCardState.error = "Nemáte oprávnění nahrávat dokumenty.";
+    render();
+    return;
+  }
+
+  const file = form.elements.file?.files?.[0] || null;
+  if (!file) {
+    employeeCardState.error = "Vyberte soubor dokumentu.";
+    employeeCardState.message = "";
+    render();
+    return;
+  }
+
+  const formData = new FormData(form);
+  employeeCardState.documentUploading = true;
+  employeeCardState.message = "Nahrávám dokument...";
+  employeeCardState.error = "";
+  render();
+
+  try {
+    const result = await apiJson(`/api/employees/${encodeURIComponent(employeeCardState.employee.id)}/documents`, {
+      method: "POST",
+      body: formData
+    });
+
+    if (result.document) {
+      employeeCardState.documents = [result.document, ...employeeCardState.documents];
+    }
+
+    employeeCardState.documentsUploadStatus = result.uploadStatus || "ready";
+    employeeCardState.documentsMissingEndpoint = "";
+    employeeCardState.message = "Dokument byl nahrán.";
+    employeeCardState.error = "";
+  } catch (error) {
+    console.error("smart_odpady_employee_document_upload_failed", error);
+    employeeCardState.error = error.message || "Dokument se nepodařilo nahrát.";
+    employeeCardState.message = "";
+  } finally {
+    employeeCardState.documentUploading = false;
     render();
   }
 }
@@ -4242,6 +4953,13 @@ document.addEventListener("submit", (event) => {
     return;
   }
 
+  const employeeDocumentUploadForm = event.target.closest("[data-employee-document-upload-form]");
+  if (employeeDocumentUploadForm) {
+    event.preventDefault();
+    saveEmployeeDocumentUpload(employeeDocumentUploadForm);
+    return;
+  }
+
   const absenceRequestForm = event.target.closest("[data-absence-request-form]");
   if (absenceRequestForm) {
     event.preventDefault();
@@ -4294,6 +5012,24 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const quickNote = event.target.closest("[data-quick-note]");
+  if (quickNote) {
+    quickAbsenceState.note = quickNote.value;
+    return;
+  }
+
+  const quickDateFrom = event.target.closest("[data-quick-date-from]");
+  if (quickDateFrom) {
+    updateQuickDateField("from", quickDateFrom.value);
+    return;
+  }
+
+  const quickDateTo = event.target.closest("[data-quick-date-to]");
+  if (quickDateTo) {
+    updateQuickDateField("to", quickDateTo.value);
+    return;
+  }
+
   const appearanceField = event.target.closest("[data-appearance-field]");
   if (appearanceField) {
     const form = appearanceField.closest("[data-appearance-form]");
@@ -4341,15 +5077,6 @@ document.addEventListener("change", (event) => {
     const nextEmployeeId = employeeCardSelect.value;
     employeeCardSelect.value = employeeCardState.employee?.id || "";
     guardedAccessAction(() => navigateToUrl(routeHref(employeeCardRoute(nextEmployeeId))));
-    return;
-  }
-
-  const employeeManagerSelect = event.target.closest("[data-employee-manager-select]");
-  if (employeeManagerSelect) {
-    const employeeId = employeeManagerSelect.dataset.employeeManagerEmployee;
-    const nextManagerId = employeeManagerSelect.value;
-    employeeManagerSelect.value = employeeCardState.employee?.managerId || "";
-    guardedAccessAction(() => saveEmployeeManager(employeeId, nextManagerId));
     return;
   }
 
@@ -4515,6 +5242,15 @@ document.addEventListener("click", async (event) => {
       return;
     }
 
+    if (resolvedTab === "quick") {
+      guardedAccessAction(() => {
+        absenceUiState.tab = "quick";
+        setAbsenceNotice("");
+        navigateToUrl(routeHref(ABSENCE_QUICK_ROUTE));
+      });
+      return;
+    }
+
     guardedAccessAction(() => {
       absenceUiState.tab = resolvedTab;
       setAbsenceNotice("");
@@ -4556,6 +5292,72 @@ document.addEventListener("click", async (event) => {
   const absenceReport = event.target.closest("[data-absence-generate-report]");
   if (absenceReport) {
     generateAbsenceMonthlyReport();
+    return;
+  }
+
+  const quickType = event.target.closest("[data-quick-type]");
+  if (quickType) {
+    quickAbsenceState.type = quickType.dataset.quickType || "";
+    quickAbsenceState.step = "date";
+    quickAbsenceState.dateMode = "";
+    quickAbsenceState.dateFrom = "";
+    quickAbsenceState.dateTo = "";
+    quickAbsenceState.halfDay = false;
+    quickAbsenceState.success = false;
+    quickAbsenceState.error = "";
+    render();
+    return;
+  }
+
+  const quickDateChoice = event.target.closest("[data-quick-date-choice]");
+  if (quickDateChoice) {
+    applyQuickDateChoice(quickDateChoice.dataset.quickDateChoice || "");
+    return;
+  }
+
+  const quickCustomContinue = event.target.closest("[data-quick-custom-continue]");
+  if (quickCustomContinue) {
+    continueQuickCustomDate();
+    return;
+  }
+
+  const quickBack = event.target.closest("[data-quick-back]");
+  if (quickBack) {
+    if (quickBack.dataset.quickBack === "type") {
+      quickAbsenceReset({ keepRecent: true });
+    } else {
+      quickAbsenceState.step = "date";
+      quickAbsenceState.success = false;
+      quickAbsenceState.error = "";
+    }
+    render();
+    return;
+  }
+
+  const quickNoteToggle = event.target.closest("[data-quick-note-toggle]");
+  if (quickNoteToggle) {
+    quickAbsenceState.noteOpen = !quickAbsenceState.noteOpen;
+    render();
+    return;
+  }
+
+  const quickAttachmentToggle = event.target.closest("[data-quick-attachment-toggle]");
+  if (quickAttachmentToggle) {
+    quickAbsenceState.attachmentOpen = !quickAbsenceState.attachmentOpen;
+    render();
+    return;
+  }
+
+  const quickSubmit = event.target.closest("[data-quick-submit]");
+  if (quickSubmit) {
+    await submitQuickAbsenceRequest();
+    return;
+  }
+
+  const quickReset = event.target.closest("[data-quick-reset]");
+  if (quickReset) {
+    quickAbsenceReset({ keepRecent: true });
+    render();
     return;
   }
 

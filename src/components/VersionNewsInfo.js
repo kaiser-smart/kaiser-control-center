@@ -24,8 +24,8 @@ export function VersionNewsInfo() {
   return `
     <section class="version-news-info" aria-labelledby="version-news-title">
       <div class="version-news-info__header">
-        <p class="version-news-info__eyebrow">${escapeHtml(versionInfo.version)}</p>
         <h2 id="version-news-title">Co je nového</h2>
+        <p class="version-news-info__eyebrow">${escapeHtml(versionInfo.version)}</p>
       </div>
       <ul class="version-news-info__list">
         ${items}

@@ -183,7 +183,7 @@ export const DEFAULT_USERS = [
     lastLoginAt: null
   },
 
-  // Users imported from the finished Pneumatiky module. They keep access only to Pneumatiky.
+  // Users imported from the finished Pneumatiky module. They keep Pneumatiky access and can use Dovolená / Nemoc.
   {
     id: "pneumatiky-dilna",
     name: "Vedoucí dílny",
@@ -193,7 +193,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Dílna / Brno",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -206,7 +206,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Management / Šlapanice",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -219,7 +219,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / ROP",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -232,7 +232,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / PIU",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -245,7 +245,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / LJE",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -258,7 +258,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / LJE",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -271,7 +271,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / ROP",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -284,7 +284,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / LJE",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -297,7 +297,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / ROP",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -310,7 +310,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / PIU",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -323,7 +323,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / JOL, ROP",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -336,7 +336,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / LJE",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -349,7 +349,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / LJE",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -362,7 +362,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / ROP",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -375,7 +375,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / JOL",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -388,7 +388,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / JOL",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -401,7 +401,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / ROP",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -414,7 +414,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / PIU",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -427,7 +427,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / LJE",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -440,7 +440,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / JOL",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -453,7 +453,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / JOL, ROP",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -466,7 +466,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / ROP, PIU",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -479,7 +479,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / JOL",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   },
@@ -492,7 +492,7 @@ export const DEFAULT_USERS = [
     status: "active",
     department: "Pneumatiky",
     position: "Řidič / ROP",
-    modules: ["tyres"],
+    modules: ["tyres", "absence"],
     createdAt: CREATED_AT,
     lastLoginAt: null
   }

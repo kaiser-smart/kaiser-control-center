@@ -11,7 +11,8 @@ Interní provozní systém pro správu odpadových služeb, vozového parku, ser
 - Lokální SVG komponenty ikon v `src/components/icons/`.
 - Passwordless přihlášení přes jednorázový kód.
 - Cloudflare Pages Functions pro auth API.
-- Cloudflare D1 připravené pro trvalé ukládání změn uživatelů.
+- Cloudflare D1 připravené pro trvalé ukládání změn uživatelů a zaměstnaneckých metadat.
+- Cloudflare R2 připravené pro soubory dokumentů v kartě zaměstnance.
 - Centrální RBAC práva v `src/permissions.js`.
 - Filtrování menu a akcí podle role.
 - Lokální mock režim bez Twilio účtu.
@@ -84,6 +85,9 @@ Frontend nevolá Twilio přímo. API vrstva je připravená ve složce `function
 - `POST /api/users`
 - `PATCH /api/users/:id` včetně částečné změny nadřízeného přes `{ "managerId": "USER_ID" }`
 - `PATCH /api/users/:id/disable`
+- `GET /api/employees/:id/documents`
+- `POST /api/employees/:id/documents`
+- `GET /api/employees/:id/documents/:documentId`
 - `GET /api/theme-settings`
 - `PATCH /api/theme-settings`
 
@@ -129,11 +133,30 @@ Databázové migrace jsou v:
 migrations/0001_create_users.sql
 migrations/0002_add_user_manager.sql
 migrations/0003_create_theme_settings.sql
+migrations/0004_create_employee_cards.sql
+migrations/0005_create_employee_document_files.sql
+migrations/0006_create_absence_requests.sql
 ```
 
 Po vytvoření databáze je potřeba migrace spustit proti D1. Aplikace potom čte výchozí kontakty a změny z D1 slučuje podle `id`; úprava uživatele v admin modulu uloží aktuální verzi uživatele do D1.
 
 Pokud D1 binding v produkci chybí, čtení výchozích uživatelů dál funguje, ale vytvoření nebo úprava uživatele vrátí bezpečnou chybu konfigurace. Aplikace nesmí ukládat provozní uživatele do `localStorage`, `sessionStorage` ani jiné prohlížečové databáze.
+
+## Cloudflare R2 pro dokumenty zaměstnanců
+
+Soubory v kartě zaměstnance používají Cloudflare R2 přes Pages Function binding:
+
+```text
+SMART_ODPADY_DOCUMENTS
+```
+
+Doporučený bucket:
+
+```text
+smart-odpady-documents
+```
+
+Metadata dokumentů zůstávají v D1 tabulkách `employee_documents` a `employee_document_files`. Samotné soubory se ukládají do R2 a stahují se přes chráněný endpoint `/api/employees/:id/documents/:documentId`, aby se ověřilo přihlášení a oprávnění. Pokud R2 binding chybí, upload vrátí bezpečnou konfigurační chybu a nepředstírá uložení.
 
 ## Nastavení vzhledu
 

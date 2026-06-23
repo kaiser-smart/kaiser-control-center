@@ -22,6 +22,8 @@ let mockThemeSettings = normalizeThemeSettings(DEFAULT_THEME_SETTINGS);
 let mockEmployeeCards = new Map();
 let mockEmployeeWorkHistory = new Map();
 let mockEmployeeDocuments = new Map();
+let mockEmployeeDocumentFiles = new Map();
+let mockAbsenceRequests = [];
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -138,6 +140,83 @@ async function readJsonBody(request) {
   } catch {
     return {};
   }
+}
+
+async function readBodyBuffer(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+function parseContentDisposition(value) {
+  const result = {};
+  for (const part of String(value || "").split(";")) {
+    const [rawKey, ...rawValue] = part.trim().split("=");
+    const key = String(rawKey || "").trim().toLowerCase();
+    const itemValue = rawValue.join("=").trim().replace(/^"|"$/g, "");
+
+    if (key) {
+      result[key] = itemValue;
+    }
+  }
+  return result;
+}
+
+async function readMultipartFormData(request) {
+  const contentType = request.headers["content-type"] || "";
+  const boundary = /boundary=([^;]+)/i.exec(contentType)?.[1];
+
+  if (!boundary) {
+    return { fields: new Map(), files: new Map() };
+  }
+
+  const body = await readBodyBuffer(request);
+  const raw = body.toString("latin1");
+  const parts = raw.split(`--${boundary}`).slice(1, -1);
+  const fields = new Map();
+  const files = new Map();
+
+  for (const rawPart of parts) {
+    const part = rawPart.replace(/^\r\n/, "").replace(/\r\n$/, "");
+    const separatorIndex = part.indexOf("\r\n\r\n");
+
+    if (separatorIndex < 0) {
+      continue;
+    }
+
+    const headerLines = part.slice(0, separatorIndex).split("\r\n");
+    const content = part.slice(separatorIndex + 4);
+    const headers = new Map();
+
+    for (const line of headerLines) {
+      const [rawName, ...rawValue] = line.split(":");
+      const name = String(rawName || "").trim().toLowerCase();
+      if (name) {
+        headers.set(name, rawValue.join(":").trim());
+      }
+    }
+
+    const disposition = parseContentDisposition(headers.get("content-disposition"));
+    const fieldName = disposition.name;
+
+    if (!fieldName) {
+      continue;
+    }
+
+    if (disposition.filename) {
+      files.set(fieldName, {
+        name: disposition.filename,
+        type: headers.get("content-type") || "application/octet-stream",
+        buffer: Buffer.from(content, "latin1")
+      });
+    } else {
+      fields.set(fieldName, Buffer.from(content, "latin1").toString("utf8"));
+    }
+  }
+
+  return { fields, files };
 }
 
 function cookieValue(request, name) {
@@ -364,6 +443,119 @@ function findMockEmployee(currentUser, id) {
   return canViewMockEmployee(currentUser, employee) ? employee : null;
 }
 
+const MOCK_ABSENCE_TYPE_LABELS = {
+  vacation: "Dovolená",
+  sick: "Nemoc",
+  doctor: "Lékař",
+  care: "OČR",
+  compensatory_leave: "Náhradní volno"
+};
+
+const MOCK_ABSENCE_STATUS_LABELS = {
+  pending: "Čeká na schválení",
+  recorded: "Evidováno"
+};
+
+function mockIsoDate(value) {
+  const cleaned = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(cleaned) ? cleaned : "";
+}
+
+function countMockAbsenceDays(dateFrom, dateTo, halfDay = false) {
+  const from = new Date(`${dateFrom}T12:00:00`);
+  const to = new Date(`${dateTo}T12:00:00`);
+
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to < from) {
+    return 0;
+  }
+
+  if (halfDay) {
+    return 0.5;
+  }
+
+  return Math.floor((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+}
+
+function canViewMockAbsenceRequest(currentUser, requestItem) {
+  const role = normalizeRole(currentUser?.role);
+
+  if (isFullAccessRole(currentUser) || role === "kancelar" || role === "readonly") {
+    return true;
+  }
+
+  if (sameMockId(currentUser?.id, requestItem.employeeId)) {
+    return true;
+  }
+
+  if (role === "garazmistr" || role === "dispecer") {
+    return (
+      String(currentUser?.department || "").trim() &&
+      String(currentUser.department || "").trim().toLowerCase() === String(requestItem.department || "").trim().toLowerCase()
+    );
+  }
+
+  return false;
+}
+
+function createMockAbsenceRequest(currentUser, payload) {
+  const type = String(payload?.type || "").trim();
+  const status = String(payload?.status || "").trim();
+  const dateFrom = mockIsoDate(payload?.dateFrom);
+  const dateTo = mockIsoDate(payload?.dateTo) || dateFrom;
+  const halfDay = Boolean(payload?.halfDay);
+
+  if (!Object.hasOwn(MOCK_ABSENCE_TYPE_LABELS, type)) {
+    const error = new Error("Vyberte typ nepřítomnosti.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!Object.hasOwn(MOCK_ABSENCE_STATUS_LABELS, status)) {
+    const error = new Error("Vyberte platný stav žádosti.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!dateFrom || countMockAbsenceDays(dateFrom, dateTo, halfDay) <= 0) {
+    const error = new Error("Zkontrolujte datum.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!sameMockId(payload?.employeeId, currentUser?.id) && !isFullAccessRole(currentUser)) {
+    const error = new Error("Můžete vytvořit jen vlastní žádost.");
+    error.status = 403;
+    throw error;
+  }
+
+  const employee = findMockUser(payload.employeeId) || currentUser;
+  const manager = employee?.managerId ? findMockUser(employee.managerId) : null;
+  const now = new Date().toISOString();
+
+  return {
+    id: `absence-request-${randomUUID()}`,
+    employeeId: employee.id,
+    employeeName: employee.name || currentUser.name || "Uživatel",
+    type,
+    typeLabel: MOCK_ABSENCE_TYPE_LABELS[type],
+    dateFrom,
+    dateTo,
+    halfDay,
+    note: String(payload?.note || "").trim(),
+    status,
+    statusLabel: MOCK_ABSENCE_STATUS_LABELS[status],
+    daysCount: countMockAbsenceDays(dateFrom, dateTo, halfDay),
+    managerId: employee.managerId || "",
+    managerName: employee.managerName || manager?.name || "",
+    approverUserId: employee.managerId || "",
+    department: employee.department || currentUser.department || "",
+    team: employee.team || employee.department || currentUser.department || "",
+    createdByUserId: currentUser.id,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
 function saveMockEmployee(currentUser, id, payload) {
   if (!canEditMockEmployee(currentUser)) {
     const error = new Error("Nemáte oprávnění upravit kartu zaměstnance.");
@@ -528,6 +720,51 @@ async function handleApi(request, response) {
     return true;
   }
 
+  if (url.pathname === "/api/absence-requests" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const mine = url.searchParams.get("mine") === "1";
+    const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 20), 100));
+    const requests = mockAbsenceRequests
+      .filter((item) => (mine ? sameMockId(item.employeeId, user.id) : canViewMockAbsenceRequest(user, item)))
+      .slice(0, limit);
+    sendJson(response, 200, { requests, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/absence-requests" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "create")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const payload = await readJsonBody(request);
+      const item = createMockAbsenceRequest(user, payload);
+      mockAbsenceRequests = [item, ...mockAbsenceRequests].slice(0, 100);
+      sendJson(response, 201, { request: item, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Nepodařilo se odeslat. Zkuste to znovu.",
+        apiStatus: "ready"
+      });
+    }
+    return true;
+  }
+
   if (url.pathname === "/api/employees" && request.method === "GET") {
     const user = currentDevUser(request);
     if (!user) {
@@ -544,6 +781,41 @@ async function handleApi(request, response) {
   }
 
   const employeeDocumentMatch = /^\/api\/employees\/([^/]+)\/documents$/.exec(url.pathname);
+  const employeeDocumentFileMatch = /^\/api\/employees\/([^/]+)\/documents\/([^/]+)$/.exec(url.pathname);
+
+  if (employeeDocumentFileMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeDocumentFileMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    const documentId = decodeURIComponent(employeeDocumentFileMatch[2]);
+    const file = mockEmployeeDocumentFiles.get(documentId);
+    if (!file || file.employeeId !== employee.id) {
+      sendJson(response, 404, { error: "Dokument nebyl nalezen." });
+      return true;
+    }
+
+    response.writeHead(200, {
+      "Content-Type": file.type || "application/octet-stream",
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name || "dokument")}`,
+      "Cache-Control": "no-store"
+    });
+    response.end(file.buffer);
+    return true;
+  }
+
   if (employeeDocumentMatch && request.method === "GET") {
     const user = currentDevUser(request);
     if (!user) {
@@ -565,8 +837,8 @@ async function handleApi(request, response) {
     sendJson(response, 200, {
       documents: mockEmployeeDocuments.get(employee.id) || [],
       apiStatus: "ready",
-      uploadStatus: "waiting",
-      missingEndpoint: "POST /api/employees/:id/documents"
+      uploadStatus: "ready",
+      missingEndpoint: ""
     });
     return true;
   }
@@ -577,16 +849,53 @@ async function handleApi(request, response) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
       return true;
     }
-    if (!hasPermission(user, "absence", "view")) {
+    if (!hasPermission(user, "absence", "view") || !canEditMockEmployee(user)) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
 
-    sendJson(response, 501, {
-      error: "Upload dokumentů čeká na cloudové úložiště / API.",
-      status: "Čeká na API",
-      missingEndpoint: "POST /api/employees/:id/documents"
+    const employee = findMockEmployee(user, decodeURIComponent(employeeDocumentMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    const { fields, files } = await readMultipartFormData(request);
+    const file = files.get("file");
+    if (!file || !file.buffer?.length) {
+      sendJson(response, 400, { error: "Vyberte soubor dokumentu." });
+      return true;
+    }
+
+    if (file.buffer.length > 10 * 1024 * 1024) {
+      sendJson(response, 400, { error: "Soubor je příliš velký. Maximum je 10 MB." });
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const documentId = `employee-document-${randomUUID()}`;
+    const document = {
+      id: documentId,
+      employeeId: employee.id,
+      type: fields.get("type") || "Ostatní",
+      name: fields.get("name") || file.name || "Dokument",
+      fileUrl: `/api/employees/${encodeURIComponent(employee.id)}/documents/${encodeURIComponent(documentId)}`,
+      contentType: file.type,
+      sizeBytes: file.buffer.length,
+      uploadedAt: now,
+      uploadedByUserId: user.id,
+      expiresAt: fields.get("expiresAt") || "",
+      note: fields.get("note") || ""
+    };
+
+    mockEmployeeDocumentFiles.set(documentId, {
+      employeeId: employee.id,
+      name: document.name,
+      type: document.contentType,
+      buffer: file.buffer
     });
+    mockEmployeeDocuments.set(employee.id, [document, ...(mockEmployeeDocuments.get(employee.id) || [])]);
+    sendJson(response, 201, { document, apiStatus: "ready", uploadStatus: "ready" });
     return true;
   }
 

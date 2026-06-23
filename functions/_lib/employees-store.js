@@ -1,6 +1,7 @@
 import { isFullAccessRole, normalizeRole } from "../../src/permissions.js";
 
 const EMPLOYEE_DB_BINDING = "SMART_ODPADY_DB";
+export const EMPLOYEE_DOCUMENTS_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
 
 export class EmployeeStoreError extends Error {
   constructor(message, status = 400, code = "employee_store_error") {
@@ -23,6 +24,20 @@ function employeeDatabase(env, required = false) {
   }
 
   return db;
+}
+
+export function employeeDocumentsBucket(env, required = false) {
+  const bucket = env?.[EMPLOYEE_DOCUMENTS_BUCKET_BINDING] || null;
+
+  if (!bucket && required) {
+    throw new EmployeeStoreError(
+      "Úložiště dokumentů není nastavené. Přidejte Cloudflare R2 binding SMART_ODPADY_DOCUMENTS.",
+      503,
+      "employee_documents_bucket_missing"
+    );
+  }
+
+  return bucket;
 }
 
 function cleanString(value) {
@@ -54,6 +69,25 @@ function randomId(prefix) {
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   return `${prefix}-${suffix}`;
+}
+
+function safeFilename(filename) {
+  const fallback = "dokument";
+  return cleanString(filename)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120) || fallback;
+}
+
+export function employeeDocumentStorageKey(employeeId, documentId, filename) {
+  return [
+    "employees",
+    safeFilename(employeeId),
+    safeFilename(documentId),
+    safeFilename(filename)
+  ].join("/");
 }
 
 function splitName(name) {
@@ -197,6 +231,9 @@ function documentFromRow(row) {
     type: cleanString(row.type),
     name: cleanString(row.name),
     fileUrl: cleanString(row.file_url),
+    storageKey: cleanString(row.storage_key),
+    contentType: cleanString(row.content_type),
+    sizeBytes: numberValue(row.size_bytes, 0),
     uploadedAt: cleanString(row.uploaded_at),
     uploadedByUserId: cleanString(row.uploaded_by_user_id),
     expiresAt: dateValue(row.expires_at),
@@ -484,13 +521,152 @@ export async function listEmployeeDocuments(env, employeeId) {
   }
 
   const result = await db
-    .prepare("SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY expires_at ASC, uploaded_at DESC")
+    .prepare(`
+      SELECT d.*, f.storage_key, f.content_type, f.size_bytes
+      FROM employee_documents d
+      LEFT JOIN employee_document_files f ON f.document_id = d.id
+      WHERE d.employee_id = ?
+      ORDER BY d.expires_at ASC, d.uploaded_at DESC
+    `)
     .bind(employeeId)
     .all();
 
   return (result.results || []).map(documentFromRow);
 }
 
+export async function getEmployeeDocument(env, employeeId, documentId) {
+  const db = employeeDatabase(env, true);
+  const result = await db
+    .prepare(`
+      SELECT d.*, f.storage_key, f.content_type, f.size_bytes
+      FROM employee_documents d
+      LEFT JOIN employee_document_files f ON f.document_id = d.id
+      WHERE d.employee_id = ? AND d.id = ?
+      LIMIT 1
+    `)
+    .bind(employeeId, documentId)
+    .first();
+
+  if (!result) {
+    throw new EmployeeStoreError("Dokument zaměstnance nebyl nalezen.", 404, "employee_document_not_found");
+  }
+
+  const document = documentFromRow(result);
+
+  if (!document.storageKey) {
+    throw new EmployeeStoreError("Soubor dokumentu není uložený v cloudovém úložišti.", 404, "employee_document_file_missing");
+  }
+
+  return document;
+}
+
+export async function saveEmployeeDocument(env, employeeId, input) {
+  const db = employeeDatabase(env, true);
+  const now = new Date().toISOString();
+  const id = cleanString(input?.id) || randomId("employee-document");
+  const name = cleanString(input?.name);
+
+  if (!name) {
+    throw new EmployeeStoreError("Zadejte název dokumentu.", 400, "employee_document_name_missing");
+  }
+
+  const storageKey = cleanString(input?.storageKey);
+  if (!storageKey) {
+    throw new EmployeeStoreError("Chybí cesta souboru v cloudovém úložišti.", 400, "employee_document_storage_missing");
+  }
+
+  const fileUrl = cleanString(input?.fileUrl) || `/api/employees/${encodeURIComponent(employeeId)}/documents/${encodeURIComponent(id)}`;
+  const item = {
+    id,
+    employeeId,
+    type: cleanString(input?.type) || "Ostatní",
+    name,
+    fileUrl,
+    storageKey,
+    contentType: cleanString(input?.contentType) || "application/octet-stream",
+    sizeBytes: numberValue(input?.sizeBytes, 0),
+    uploadedAt: now,
+    uploadedByUserId: cleanString(input?.uploadedByUserId),
+    expiresAt: dateValue(input?.expiresAt),
+    note: cleanString(input?.note),
+    createdAt: now,
+    updatedAt: now
+  };
+
+  const documentStatement = db
+    .prepare(`
+      INSERT INTO employee_documents (
+        id,
+        employee_id,
+        type,
+        name,
+        file_url,
+        uploaded_at,
+        uploaded_by_user_id,
+        expires_at,
+        note,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      item.id,
+      item.employeeId,
+      nullableString(item.type),
+      item.name,
+      nullableString(item.fileUrl),
+      item.uploadedAt,
+      nullableString(item.uploadedByUserId),
+      nullableString(item.expiresAt),
+      nullableString(item.note),
+      item.createdAt,
+      item.updatedAt
+    );
+
+  const fileStatement = db
+    .prepare(`
+      INSERT INTO employee_document_files (
+        document_id,
+        employee_id,
+        storage_key,
+        content_type,
+        size_bytes,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(document_id) DO UPDATE SET
+        employee_id = excluded.employee_id,
+        storage_key = excluded.storage_key,
+        content_type = excluded.content_type,
+        size_bytes = excluded.size_bytes,
+        updated_at = excluded.updated_at
+    `)
+    .bind(
+      item.id,
+      item.employeeId,
+      item.storageKey,
+      item.contentType,
+      item.sizeBytes,
+      item.createdAt,
+      item.updatedAt
+    );
+
+  if (typeof db.batch === "function") {
+    await db.batch([documentStatement, fileStatement]);
+  } else {
+    await documentStatement.run();
+    await fileStatement.run();
+  }
+
+  return item;
+}
+
 export function employeeApiStatus(env) {
   return employeeDatabase(env) ? "ready" : "waiting";
+}
+
+export function employeeDocumentsUploadStatus(env) {
+  return employeeDatabase(env) && employeeDocumentsBucket(env) ? "ready" : "waiting";
 }
