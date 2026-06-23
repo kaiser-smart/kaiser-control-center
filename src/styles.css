@@ -3904,6 +3904,10 @@ h1 {
   padding: clamp(18px, 4vw, 28px);
 }
 
+.quick-absence-card--step {
+  scroll-margin-top: 14px;
+}
+
 .quick-absence-kicker {
   margin: 0;
   color: var(--color-primary-dark);

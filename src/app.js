@@ -106,11 +106,13 @@ const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
 const FEEDBACK_ROUTE = "/pripominky";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
 const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
+const QUICK_ABSENCE_ENTRY_HASH = "#co-potrebujete";
+const QUICK_ABSENCE_ENTRY_ROUTE = `${ABSENCE_QUICK_ROUTE}${QUICK_ABSENCE_ENTRY_HASH}`;
 const quickAbsenceMenuItem = {
   id: "quick-absence",
   title: "Rychlé zadání",
   description: "Dovolená, nemoc nebo lékař na pár kliknutí přímo z mobilu.",
-  route: ABSENCE_QUICK_ROUTE,
+  route: QUICK_ABSENCE_ENTRY_ROUTE,
   icon: QuickAbsenceIcon,
   status: "ROZPRACOVÁN",
   active: true,
@@ -715,6 +717,19 @@ function scrollToPageTop() {
   } catch {
     window.scrollTo(0, 0);
   }
+}
+
+function scrollToQuickAbsenceEntry() {
+  if (window.location.hash !== QUICK_ABSENCE_ENTRY_HASH) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    document.querySelector(QUICK_ABSENCE_ENTRY_HASH)?.scrollIntoView({
+      block: "start",
+      behavior: "auto"
+    });
+  });
 }
 
 function currentUser() {
@@ -2063,7 +2078,7 @@ function quickDateChoices(type) {
 
 function quickAbsenceTypeStep() {
   return `
-    <section class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-absence-title">
+    <section id="co-potrebujete" class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-absence-title">
       <p class="quick-absence-kicker">Rychlé zadání</p>
       <h2 id="quick-absence-title">Co potřebujete nahlásit?</h2>
       <div class="quick-absence-types">
@@ -4370,6 +4385,7 @@ function render() {
     renderApp();
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", accessUnsavedChangesGuard.renderModal());
+    scrollToQuickAbsenceEntry();
   } catch (error) {
     console.error("smart_odpady_render_failed", error);
     app.innerHTML = appErrorPage();
