@@ -381,6 +381,7 @@ const quickAbsenceState = {
 let aiAssistantMessageId = 0;
 const aiAssistantState = {
   welcomeVisible: true,
+  welcomeAnimate: true,
   chatOpen: false,
   launcherVisible: false,
   mode: "text",
@@ -602,6 +603,7 @@ function createAiAssistantMessage(sender, text, actions = []) {
 function resetAiAssistantSession() {
   speechRecognition.stop({ status: false });
   aiAssistantState.welcomeVisible = true;
+  aiAssistantState.welcomeAnimate = true;
   aiAssistantState.chatOpen = false;
   aiAssistantState.launcherVisible = false;
   aiAssistantState.mode = "text";
@@ -684,6 +686,7 @@ function aiAssistantResponse(question) {
 function openAiAssistant(mode = "text") {
   stopAiVoiceDemo({ renderAfter: false });
   aiAssistantState.welcomeVisible = false;
+  aiAssistantState.welcomeAnimate = false;
   aiAssistantState.chatOpen = true;
   aiAssistantState.launcherVisible = false;
   aiAssistantState.mode = mode === "voice" ? "voice" : "text";
@@ -694,6 +697,7 @@ function openAiAssistant(mode = "text") {
 
 function dismissAiAssistantWelcome() {
   aiAssistantState.welcomeVisible = false;
+  aiAssistantState.welcomeAnimate = false;
   aiAssistantState.launcherVisible = true;
   render();
 }
@@ -703,6 +707,7 @@ function closeAiAssistant() {
   speechRecognition.stop({ status: false });
   aiAssistantState.chatOpen = false;
   aiAssistantState.welcomeVisible = false;
+  aiAssistantState.welcomeAnimate = false;
   aiAssistantState.launcherVisible = true;
   aiAssistantState.isListening = false;
   aiAssistantState.voiceStatus = AI_STATUS_DONE;
@@ -848,6 +853,7 @@ function navigateFromAiAssistant(route) {
   speechRecognition.stop({ status: false });
   aiAssistantState.chatOpen = false;
   aiAssistantState.welcomeVisible = false;
+  aiAssistantState.welcomeAnimate = false;
   aiAssistantState.launcherVisible = true;
   aiAssistantState.isListening = false;
   guardedAccessAction(() => navigateToUrl(routeHref(route)));
@@ -861,7 +867,10 @@ function renderAiAssistantLayer() {
   }
 
   return [
-    AiWelcomeModal({ visible: aiAssistantState.welcomeVisible }),
+    AiWelcomeModal({
+      visible: aiAssistantState.welcomeVisible,
+      animate: aiAssistantState.welcomeAnimate
+    }),
     AiAssistantChat({
       open: aiAssistantState.chatOpen,
       mode: aiAssistantState.mode,
@@ -5518,6 +5527,9 @@ function render() {
     accessUnsavedChangesGuard.unmountModal();
     renderApp();
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
+    if (aiAssistantState.welcomeVisible && aiAssistantState.welcomeAnimate) {
+      aiAssistantState.welcomeAnimate = false;
+    }
     app.insertAdjacentHTML("beforeend", accessUnsavedChangesGuard.renderModal());
     scrollToQuickAbsenceEntry();
   } catch (error) {

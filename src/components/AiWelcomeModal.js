@@ -7,13 +7,15 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-export function AiWelcomeModal({ visible = false } = {}) {
+export function AiWelcomeModal({ visible = false, animate = true } = {}) {
   if (!visible) {
     return "";
   }
 
+  const backdropClass = animate ? "ai-welcome-backdrop ai-welcome-backdrop--animate" : "ai-welcome-backdrop";
+
   return `
-    <div class="ai-welcome-backdrop" role="presentation">
+    <div class="${backdropClass}" role="presentation">
       <section
         class="ai-welcome-modal"
         role="dialog"

@@ -230,3 +230,21 @@ Finální grafické assety dodává Radim nebo Martin.
 
 Pokud asset chybí, Codex má napsat:
 `Chybí grafický podklad. Prosím dodat obrázek/SVG od Radima nebo Martina.`
+
+## 14. Ověření produkčních notifikací
+
+Pokud Radim zadá nastavení nebo opravu odesílání e-mailů / SMS a zároveň požádá o odeslání, Codex má po nastavení provést jeden kontrolní ostrý test přes existující produkční API / backend aplikace.
+
+Kontrolní test musí:
+- jít přes stejné produkční flow jako běžná zpráva,
+- být jasně rozpoznatelný jako test, pokud aplikace umožňuje poznámku nebo popis,
+- být ověřený v Reportech / Notifikacích podle stavu odeslání,
+- nepoužívat lokální úložiště, mock data ani obejití backendu,
+- nezapisovat tajné tokeny do kódu, frontendu ani lokálních souborů.
+
+Codex se má zastavit pouze tehdy, když:
+- chybí přihlášení nebo oprávnění,
+- chybí tajný token / heslo,
+- není jasný příjemce nebo zdroj pravdy,
+- test může smazat, přepsat nebo poškodit produkční data,
+- odeslání vyžaduje bezpečnostní rozhodnutí mimo už daný pokyn Radima.

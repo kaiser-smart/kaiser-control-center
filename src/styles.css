@@ -1450,6 +1450,9 @@ h1 {
   background:
     radial-gradient(circle at 50% 24%, rgba(117, 189, 37, 0.14), transparent 34%),
     rgba(31, 41, 33, 0.42);
+}
+
+.ai-welcome-backdrop--animate {
   animation: ai-fade-in 180ms ease-out;
 }
 
