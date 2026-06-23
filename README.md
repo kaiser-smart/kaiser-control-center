@@ -90,6 +90,8 @@ Frontend nevolá Twilio přímo. API vrstva je připravená ve složce `function
 - `GET /api/employees/:id/documents/:documentId`
 - `GET /api/theme-settings`
 - `PATCH /api/theme-settings`
+- `GET /api/absence-settings`
+- `PATCH /api/absence-settings`
 - `GET /api/absence-requests`
 - `POST /api/absence-requests`
 - `GET /api/absence-requests/:id`
@@ -163,6 +165,8 @@ migrations/0005_create_employee_document_files.sql
 migrations/0006_create_absence_requests.sql
 migrations/0007_create_module_feedback.sql
 migrations/0008_absence_approval_workflow.sql
+migrations/0009_create_absence_settings.sql
+migrations/0010_add_notification_log_details.sql
 ```
 
 Po vytvoření databáze je potřeba migrace spustit proti D1. Aplikace potom čte výchozí kontakty a změny z D1 slučuje podle `id`; úprava uživatele v admin modulu uloží aktuální verzi uživatele do D1.
@@ -172,6 +176,15 @@ Pokud D1 binding v produkci chybí, čtení výchozích uživatelů dál funguje
 ## Schvalování Dovolená / Nemoc
 
 Žádosti z modulu Dovolená / Nemoc se ukládají přes cloud API do D1 tabulky `absence_requests`.
+
+Nastavení měsíčního reportu Dovolená / Nemoc se ukládá přes:
+
+```text
+GET /api/absence-settings
+PATCH /api/absence-settings
+```
+
+Zdroj pravdy je D1 tabulka `absence_settings`. Pokud D1 binding chybí, čtení vrátí výchozí konfigurační hodnoty se stavem `waiting`, ale zápis vrátí bezpečnou konfigurační chybu a nepředstírá trvalé uložení.
 
 Workflow:
 

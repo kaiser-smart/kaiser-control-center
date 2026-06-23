@@ -10,7 +10,7 @@ const src = path.join(root, "src");
 const publicDir = path.join(root, "public");
 const template = await readFile(path.join(root, "index.html"), "utf8");
 const buildMeta = await resolveBuildMeta(root);
-const assetVersion = encodeURIComponent(buildMeta.commit || buildMeta.backupDate || String(Date.now()));
+const assetVersion = encodeURIComponent(buildMeta.version || buildMeta.commit || buildMeta.backupDate || String(Date.now()));
 
 function versionedTemplate() {
   return template
@@ -47,7 +47,15 @@ async function fileExists(filePath) {
 const routes = new Set([
   "/",
   "/pripominky",
+  "/dovolena-nemoc/rychle-zadani",
+  "/dovolena-nemoc/moje-zadosti",
+  "/dovolena-nemoc/nova-zadost",
+  "/dovolena-nemoc/ke-schvaleni",
+  "/dovolena-nemoc/kalendar",
   "/dovolena-nemoc/zamestnanci",
+  "/dovolena-nemoc/notifikace",
+  "/dovolena-nemoc/reporty",
+  "/dovolena-nemoc/nastaveni",
   ...modules.map((moduleItem) => moduleItem.route),
   ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)
 ]);

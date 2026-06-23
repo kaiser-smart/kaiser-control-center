@@ -2,6 +2,15 @@ import { normalizeIdentifier } from "./auth.js";
 import { markAbsenceReminderSent } from "./absence-requests-store.js";
 
 const NOTIFICATION_DB_BINDING = "SMART_ODPADY_DB";
+const DETAILED_NOTIFICATION_COLUMNS = [
+  "module_id",
+  "subject",
+  "message_preview",
+  "provider",
+  "provider_message_id",
+  "attempts",
+  "updated_at"
+];
 
 const TYPE_LABELS = {
   vacation: "Dovolená",
@@ -13,6 +22,20 @@ const TYPE_LABELS = {
 
 function notificationDatabase(env) {
   return env?.[NOTIFICATION_DB_BINDING] || null;
+}
+
+async function notificationLogColumns(db) {
+  try {
+    const result = await db.prepare("PRAGMA table_info(notification_logs)").all();
+    return new Set((result.results || []).map((row) => cleanString(row.name)));
+  } catch (error) {
+    console.error("notification.schema_read_failed", { message: error.message });
+    return new Set();
+  }
+}
+
+function canWriteDetailedNotification(columns) {
+  return DETAILED_NOTIFICATION_COLUMNS.every((columnName) => columns.has(columnName));
 }
 
 function cleanString(value) {
@@ -153,6 +176,54 @@ export async function logNotification(env, entry) {
   const now = new Date().toISOString();
 
   try {
+    const columns = await notificationLogColumns(db);
+
+    if (canWriteDetailedNotification(columns)) {
+      await db
+        .prepare(`
+          INSERT INTO notification_logs (
+            id,
+            module_id,
+            type,
+            channel,
+            recipient,
+            related_entity_type,
+            related_entity_id,
+            status,
+            error_message,
+            subject,
+            message_preview,
+            provider,
+            provider_message_id,
+            attempts,
+            sent_at,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .bind(
+          randomId("notification-log"),
+          cleanString(entry.moduleId || "dovolena-nemoc"),
+          cleanString(entry.type),
+          cleanString(entry.channel),
+          nullableString(entry.recipient),
+          cleanString(entry.relatedEntityType || "absence_request"),
+          nullableString(entry.relatedEntityId),
+          cleanString(entry.status || "skipped"),
+          nullableString(entry.errorMessage),
+          nullableString(entry.subject),
+          nullableString(entry.messagePreview || entry.errorMessage || entry.subject),
+          nullableString(entry.provider),
+          nullableString(entry.providerMessageId),
+          Number(entry.attempts || 1),
+          entry.status === "sent" ? now : null,
+          now,
+          now
+        )
+        .run();
+      return null;
+    }
+
     await db
       .prepare(`
         INSERT INTO notification_logs (
@@ -176,7 +247,7 @@ export async function logNotification(env, entry) {
         cleanString(entry.relatedEntityType || "absence_request"),
         nullableString(entry.relatedEntityId),
         cleanString(entry.status || "skipped"),
-        nullableString(entry.errorMessage),
+        nullableString(entry.errorMessage || entry.messagePreview || entry.subject),
         entry.status === "sent" ? now : null,
         now
       )
@@ -207,6 +278,8 @@ async function sendEmail(env, { type, to, subject, html, relatedEntityId, recipi
       recipient: to,
       relatedEntityId,
       status: "skipped",
+      subject,
+      provider: "SendGrid",
       errorMessage: missing
     });
     return { status: "skipped", errorMessage: missing, recipientName: cleanRecipientName };
@@ -237,7 +310,10 @@ async function sendEmail(env, { type, to, subject, html, relatedEntityId, recipi
       channel: "email",
       recipient: to,
       relatedEntityId,
-      status: "sent"
+      status: "sent",
+      subject,
+      provider: "SendGrid",
+      providerMessageId: response.headers.get("x-message-id") || ""
     });
     return { status: "sent", recipientName: cleanRecipientName };
   } catch (error) {
@@ -247,6 +323,8 @@ async function sendEmail(env, { type, to, subject, html, relatedEntityId, recipi
       recipient: to,
       relatedEntityId,
       status: "failed",
+      subject,
+      provider: "SendGrid",
       errorMessage: error.message
     });
     return { status: "failed", errorMessage: error.message, recipientName: cleanRecipientName };
@@ -272,6 +350,8 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
       recipient: normalizedTo || to,
       relatedEntityId,
       status: "skipped",
+      provider: "Twilio",
+      messagePreview: body,
       errorMessage: missing
     });
     return { status: "skipped", errorMessage: missing, recipientName: cleanRecipientName };
@@ -291,6 +371,8 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
       })
     });
 
+    const responsePayload = await response.json().catch(() => ({}));
+
     if (!response.ok) {
       throw new Error(`Twilio ${response.status}`);
     }
@@ -300,7 +382,10 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
       channel: "sms",
       recipient: normalizedTo,
       relatedEntityId,
-      status: "sent"
+      status: "sent",
+      provider: "Twilio",
+      providerMessageId: cleanString(responsePayload.sid),
+      messagePreview: body
     });
     return { status: "sent", recipientName: cleanRecipientName };
   } catch (error) {
@@ -310,6 +395,8 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
       recipient: normalizedTo,
       relatedEntityId,
       status: "failed",
+      provider: "Twilio",
+      messagePreview: body,
       errorMessage: error.message
     });
     return { status: "failed", errorMessage: error.message, recipientName: cleanRecipientName };

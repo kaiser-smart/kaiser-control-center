@@ -1,12 +1,14 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "build:sites": "node scripts/build.mjs && node scripts/build-sites.mjs",
+    "lint": "node scripts/check-syntax.mjs",
+    "typecheck": "node scripts/check-syntax.mjs --typecheck",
     "preview": "node scripts/serve.mjs dist"
   },
   "engines": {

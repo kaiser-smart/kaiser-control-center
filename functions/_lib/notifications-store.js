@@ -34,6 +34,22 @@ function notificationsDatabase(env, required = false) {
   return db;
 }
 
+async function notificationLogColumns(db) {
+  try {
+    const result = await db.prepare("PRAGMA table_info(notification_logs)").all();
+    return new Set((result.results || []).map((row) => cleanString(row.name)));
+  } catch (error) {
+    console.error("notifications.schema_read_failed", { message: error.message });
+    return new Set();
+  }
+}
+
+function selectNotificationColumn(columns, columnName, fallbackSql) {
+  return columns.has(columnName)
+    ? `n.${columnName}`
+    : `${fallbackSql} AS ${columnName}`;
+}
+
 function cleanString(value) {
   return String(value ?? "").trim();
 }
@@ -193,6 +209,7 @@ export async function listNotifications(env, params) {
   const filters = normalizeFilters(params);
   const { where, binds } = whereForFilters(filters);
   const offset = (filters.page - 1) * filters.pageSize;
+  const columns = await notificationLogColumns(db);
 
   const countResult = await db
     .prepare(`
@@ -217,8 +234,15 @@ export async function listNotifications(env, params) {
         n.related_entity_id,
         n.status,
         n.error_message,
+        ${selectNotificationColumn(columns, "module_id", "'dovolena-nemoc'")},
+        ${selectNotificationColumn(columns, "subject", "NULL")},
+        ${selectNotificationColumn(columns, "message_preview", "NULL")},
+        ${selectNotificationColumn(columns, "provider", "NULL")},
+        ${selectNotificationColumn(columns, "provider_message_id", "NULL")},
+        ${selectNotificationColumn(columns, "attempts", "1")},
         n.sent_at,
         n.created_at,
+        ${selectNotificationColumn(columns, "updated_at", "n.created_at")},
         a.employee_id,
         a.employee_name,
         a.manager_id,

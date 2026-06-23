@@ -9,6 +9,7 @@ import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
 import { DEFAULT_USERS } from "../functions/_lib/default-users.js";
 import { normalizeUserInput } from "../functions/_lib/users-store.js";
 import { normalizeFeedback, normalizeFeedbackPriority, normalizeFeedbackStatus } from "../src/data/moduleFeedback.js";
+import { normalizeAbsenceSettings } from "../src/data/absence.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { hasPermission, isFullAccessRole, normalizeRole } from "../src/permissions.js";
 
@@ -20,6 +21,7 @@ const devCookieName = "smart_odpady_dev_session";
 const devSessions = new Map();
 let mockUsers = DEFAULT_USERS.map((user) => ({ ...user }));
 let mockThemeSettings = normalizeThemeSettings(DEFAULT_THEME_SETTINGS);
+let mockAbsenceSettings = normalizeAbsenceSettings();
 let mockEmployeeCards = new Map();
 let mockEmployeeWorkHistory = new Map();
 let mockEmployeeDocuments = new Map();
@@ -1008,6 +1010,40 @@ async function handleApi(request, response) {
       sendJson(response, 200, { settings: mockThemeSettings });
     } catch {
       sendJson(response, 400, { error: "Vzhled se nepodařilo uložit. Zkuste to prosím znovu." });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/absence-settings" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    sendJson(response, 200, { settings: mockAbsenceSettings, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/absence-settings" && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const payload = await readJsonBody(request);
+      mockAbsenceSettings = normalizeAbsenceSettings(payload, {
+        updatedAt: new Date().toISOString(),
+        updatedByUserId: user.id
+      });
+      sendJson(response, 200, { settings: mockAbsenceSettings, apiStatus: "ready" });
+    } catch {
+      sendJson(response, 400, { error: "Nastavení reportu se nepodařilo uložit." });
     }
     return true;
   }

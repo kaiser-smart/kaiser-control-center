@@ -19,7 +19,7 @@ function absenceRequestError(error) {
 }
 
 export async function onRequestPost({ request, env, params }) {
-  const { user, response } = await requireUserPermission(env, request, "absence", "view");
+  const { user, response } = await requireUserPermission(env, request, "absence", "approve");
 
   if (response) {
     return response;

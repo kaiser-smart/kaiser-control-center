@@ -39,12 +39,13 @@ import {
   loadAbsenceState,
   monthlyAbsenceReportToCsv,
   monthlyAbsenceTotals,
+  normalizeAbsenceSettings,
   ownAbsenceRequests,
   requestOverlapsDate,
   requestOverlapsMonth,
   saveAbsenceState,
+  sameAbsenceSettings,
   toIsoDate,
-  updateAbsenceSettings,
   visibleAbsenceRequests
 } from "./data/absence.js";
 import {
@@ -339,6 +340,14 @@ const absenceUiState = {
   rejectRequestId: "",
   rejectReason: ""
 };
+const absenceSettingsState = {
+  loaded: false,
+  loading: false,
+  saving: false,
+  apiStatus: "waiting",
+  error: "",
+  missingEndpoint: "PATCH /api/absence-settings"
+};
 const absenceApiState = {
   requests: [],
   loaded: false,
@@ -509,12 +518,13 @@ function renderModuleIcon(moduleItem) {
 }
 
 function statusBadge(moduleItem) {
-  if (moduleItem.status !== "HOTOVO" && moduleItem.status !== "ROZPRACOVÁN") {
+  const label = moduleStatusLabel(moduleItem);
+
+  if (!label || label === "SPRÁVA") {
     return "";
   }
 
-  const tone = moduleItem.status === "HOTOVO" ? "done" : "progress";
-  return `<span class="status-badge status-badge--${tone}">${escapeHtml(moduleItem.status)}</span>`;
+  return `<span class="status-badge status-badge--${moduleStatusTone(moduleItem)}">${escapeHtml(label)}</span>`;
 }
 
 function visibleModules(user) {
@@ -542,6 +552,21 @@ function visibleDashboardRoutes(user) {
 function moduleFeedbackItems(moduleId, user) {
   const items = feedbackState.items.filter((item) => item.moduleId === moduleId);
   return visibleFeedbackForUser(items, user);
+}
+
+function moduleStatusLabel(moduleItem) {
+  return {
+    HOTOVO: "HOTOVO",
+    "připraveno": "PŘIPRAVENO",
+    skeleton: "ČEKÁ NA API",
+    "mock data": "ROZPRACOVÁN",
+    ROZPRACOVÁN: "ROZPRACOVÁN",
+    správa: "SPRÁVA"
+  }[moduleItem?.status] || moduleItem?.status || "";
+}
+
+function moduleStatusTone(moduleItem) {
+  return moduleItem?.status === "HOTOVO" ? "done" : "progress";
 }
 
 function moduleFeedbackBoxFor(moduleItem, user, options = {}) {
@@ -1468,6 +1493,27 @@ function currentAppearanceDirtyTarget() {
   };
 }
 
+function currentAbsenceSettingsDirtyTarget() {
+  if (normalizePath(window.location.pathname) !== absenceRouteForTab("settings") || !hasPermission(currentUser(), "absence", "manage")) {
+    return null;
+  }
+
+  const form = document.querySelector("[data-absence-settings-form]");
+  if (!form) {
+    return null;
+  }
+
+  const current = absenceSettingsFormData(form);
+
+  return {
+    type: "absence-settings",
+    form,
+    current,
+    baseline: absenceState.settings,
+    isDirty: !sameAbsenceSettings(current, absenceState.settings)
+  };
+}
+
 function currentDirtyTarget() {
   const accessTarget = currentAccessDirtyTarget();
 
@@ -1479,6 +1525,12 @@ function currentDirtyTarget() {
 
   if (appearanceTarget?.isDirty) {
     return appearanceTarget;
+  }
+
+  const absenceSettingsTarget = currentAbsenceSettingsDirtyTarget();
+
+  if (absenceSettingsTarget?.isDirty) {
+    return absenceSettingsTarget;
   }
 
   const employeeTarget = currentEmployeeCardDirtyTarget();
@@ -1532,6 +1584,11 @@ function discardAppearanceDirtyChanges() {
   themeState.preview = null;
   themeState.message = "Neuložené změny vzhledu byly zahozeny.";
   themeState.error = "";
+  render();
+}
+
+function discardAbsenceSettingsDirtyChanges() {
+  setAbsenceNotice("Neuložené nastavení reportu bylo zahozeno.");
   render();
 }
 
@@ -2256,9 +2313,25 @@ function normalizedApiAbsenceRequests(requests) {
   return (Array.isArray(requests) ? requests : []).map(normalizeAbsenceRequestForUi);
 }
 
+function employeeAbsenceBalances() {
+  const year = new Date().getFullYear();
+
+  return employeeCardState.employees.map((employee) => ({
+    id: `employee-balance-${employee.id}-${year}`,
+    employeeId: employee.id,
+    year,
+    vacationEntitlementDays: employee.vacationEntitlementDays ?? null,
+    vacationUsedDays: employee.vacationUsedDays ?? null,
+    vacationPendingDays: employee.vacationPendingDays ?? null,
+    vacationRemainingDays: employee.vacationRemainingDays ?? null,
+    updatedAt: employee.updatedAt || ""
+  }));
+}
+
 function absenceDisplayState() {
   return {
     ...absenceState,
+    balances: employeeAbsenceBalances(),
     requests: absenceApiState.loaded
       ? normalizedApiAbsenceRequests(absenceApiState.requests)
       : []
@@ -2643,7 +2716,7 @@ function permissionInlineNotice() {
 }
 
 function absenceFilterPanel(user, mode = "calendar") {
-  const employeeOptions = absenceEmployeeOptions(absenceState, user).map((employee) => ({
+  const employeeOptions = absenceSelectableEmployees(user).map((employee) => ({
     value: employee.id,
     label: employee.name
   }));
@@ -2846,6 +2919,7 @@ function absenceDashboard(user) {
   const displayState = absenceDisplayState();
   const summary = absenceSummary(displayState, user);
   const balance = absenceBalanceForEmployee(displayState, employeeIdForUser(user));
+  const vacationRemaining = balance.vacationRemainingDays ?? "—";
   const pending = absenceApiState.pendingLoaded
     ? normalizedApiAbsenceRequests(absenceApiState.pendingRequests)
     : approvalAbsenceRequests(displayState, user);
@@ -2877,7 +2951,7 @@ function absenceDashboard(user) {
         </article>
         <article class="absence-kpi absence-kpi--action">
           <span>Moje zbývající dovolená</span>
-          <strong>${balance.vacationRemainingDays}</strong>
+          <strong>${escapeHtml(vacationRemaining)}</strong>
           <div class="absence-quick-actions">
             ${quickRequestButton}
             ${newRequestButton}
@@ -3213,36 +3287,42 @@ function absenceSettings(user) {
   }
 
   const settings = absenceState.settings;
+  const apiStatus = absenceSettingsState.apiStatus === "ready" ? "API aktivní" : "Čeká na API";
+  const disabled = absenceSettingsState.saving ? "disabled" : "";
 
   return `
     <section class="absence-panel">
       <div class="absence-panel__head">
         <div>
           <h2>Nastavení</h2>
-          <p>Měsíční report je připravený pro pozdější backend/worker. Reálné e-maily se bez potvrzení neposílají.</p>
+          <p>Měsíční report se ukládá přes cloud API. Reálné e-maily se bez potvrzení neposílají.</p>
         </div>
+        <span class="employee-card-status ${absenceSettingsState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting"}">${apiStatus}</span>
       </div>
+      ${absenceSettingsState.error ? `<p class="module-feedback__error">${escapeHtml(absenceSettingsState.error)}</p>` : ""}
       <form class="absence-form absence-form--settings" data-absence-settings-form>
         <label>
           <span>Příjemce reportu</span>
-          <input name="recipientEmail" type="email" value="${escapeHtml(settings.recipientEmail || ABSENCE_REPORT_EMAIL)}" />
+          <input name="recipientEmail" type="email" value="${escapeHtml(settings.recipientEmail || ABSENCE_REPORT_EMAIL)}" ${disabled} />
         </label>
         <label>
           <span>Den v měsíci</span>
-          <input name="reportDay" type="number" min="1" max="28" value="${escapeHtml(settings.reportDay || ABSENCE_REPORT_DAY)}" />
+          <input name="reportDay" type="number" min="1" max="28" value="${escapeHtml(settings.reportDay || ABSENCE_REPORT_DAY)}" ${disabled} />
         </label>
         <label>
           <span>Čas</span>
-          <input name="reportTime" type="time" value="${escapeHtml(settings.reportTime || ABSENCE_REPORT_TIME)}" />
+          <input name="reportTime" type="time" value="${escapeHtml(settings.reportTime || ABSENCE_REPORT_TIME)}" ${disabled} />
         </label>
         <label>
           <span>E-mail provider</span>
-          <input name="emailProvider" value="${escapeHtml(settings.emailProvider || "")}" placeholder="nenastaveno" />
+          <input name="emailProvider" value="${escapeHtml(settings.emailProvider || "")}" placeholder="nenastaveno" ${disabled} />
         </label>
         <div class="absence-module-note">
           <strong>Plán:</strong> 1× měsíčně v ${escapeHtml(settings.reportTime || ABSENCE_REPORT_TIME)} odeslat report za předchozí měsíc na ${escapeHtml(settings.recipientEmail || ABSENCE_REPORT_EMAIL)}.
         </div>
-        <button class="primary-action absence-form__submit" type="submit">Uložit nastavení</button>
+        <button class="primary-action absence-form__submit" type="submit" ${disabled}>
+          ${absenceSettingsState.saving ? "Ukládám..." : "Uložit nastavení"}
+        </button>
       </form>
     </section>
   `;
@@ -3842,7 +3922,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
           <p>${description}</p>
           <div class="module-detail__status">
             <span>Stav</span>
-            <strong>${moduleItem.status}</strong>
+            <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
           </div>
           <div class="module-actions">
             ${tyresLink}
@@ -5018,6 +5098,40 @@ async function loadThemeSettings(options = {}) {
   }
 }
 
+function setAbsenceSettings(settings) {
+  absenceState = saveAbsenceState({
+    ...absenceState,
+    settings: normalizeAbsenceSettings(settings)
+  });
+}
+
+async function loadAbsenceSettings(options = {}) {
+  if (!authState.user || absenceSettingsState.loading || absenceSettingsState.loaded) {
+    return;
+  }
+
+  absenceSettingsState.loading = true;
+  absenceSettingsState.error = "";
+
+  try {
+    const result = await apiJson("/api/absence-settings");
+    setAbsenceSettings(result.settings || {});
+    absenceSettingsState.apiStatus = result.apiStatus || "ready";
+    absenceSettingsState.missingEndpoint = "";
+    absenceSettingsState.loaded = true;
+  } catch (error) {
+    absenceSettingsState.apiStatus = error.payload?.apiStatus || "waiting";
+    absenceSettingsState.missingEndpoint = error.payload?.missingEndpoint || "PATCH /api/absence-settings";
+    absenceSettingsState.error = error.payload?.error || "Nastavení reportu se teď nepodařilo načíst.";
+  } finally {
+    absenceSettingsState.loading = false;
+  }
+
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
 function updateAppearanceDraft(form, options = {}) {
   themeState.draft = appearanceFormData(form);
   themeState.error = "";
@@ -5185,6 +5299,7 @@ async function verifyLogin(form) {
       mockCode: false
     };
     await loadThemeSettings({ renderAfter: false });
+    await loadAbsenceSettings({ renderAfter: false });
   } catch {
     authState = {
       ...authState,
@@ -5226,6 +5341,13 @@ async function logout() {
   themeState.preview = null;
   themeState.message = "";
   themeState.error = "";
+  absenceState = loadAbsenceState();
+  absenceSettingsState.loaded = false;
+  absenceSettingsState.loading = false;
+  absenceSettingsState.saving = false;
+  absenceSettingsState.apiStatus = "waiting";
+  absenceSettingsState.error = "";
+  absenceSettingsState.missingEndpoint = "PATCH /api/absence-settings";
   navigateToUrl(routeHref("/"));
 }
 
@@ -5273,6 +5395,11 @@ function renderAuthenticatedApp(user) {
 
     app.innerHTML = feedbackPage(user);
     document.title = `Připomínky | ${APP_NAME}`;
+    return;
+  }
+
+  if (path === "/dovolena-nemoc/notifikace") {
+    navigateToUrl(routeHref("/reporty"));
     return;
   }
 
@@ -5414,6 +5541,7 @@ async function bootstrapAuth() {
       mockCode: false
     };
     await loadThemeSettings({ renderAfter: false });
+    await loadAbsenceSettings({ renderAfter: false });
   } catch {
     authState = {
       status: "anonymous",
@@ -5605,8 +5733,13 @@ function exportFeedbackCsv() {
   URL.revokeObjectURL(url);
 }
 
-function saveAbsence(state) {
-  absenceState = saveAbsenceState(state);
+function absenceSettingsFormData(form) {
+  return normalizeAbsenceSettings({
+    recipientEmail: form.elements.recipientEmail?.value,
+    reportDay: form.elements.reportDay?.value,
+    reportTime: form.elements.reportTime?.value,
+    emailProvider: form.elements.emailProvider?.value
+  });
 }
 
 function setAbsenceNotice(message, error = "") {
@@ -5713,23 +5846,40 @@ async function submitAbsenceRequest(form) {
   }
 }
 
-function saveAbsenceSettings(form) {
+async function saveAbsenceSettings(targetOrForm) {
   if (!hasPermission(currentUser(), "absence", "manage")) {
     setAbsenceNotice("", "Nemáte oprávnění měnit nastavení.");
     render();
-    return;
+    return false;
   }
 
-  const nextState = updateAbsenceSettings(absenceState, {
-    recipientEmail: form.elements.recipientEmail.value.trim() || ABSENCE_REPORT_EMAIL,
-    reportDay: Number(form.elements.reportDay.value || ABSENCE_REPORT_DAY),
-    reportTime: form.elements.reportTime.value || ABSENCE_REPORT_TIME,
-    emailProvider: form.elements.emailProvider.value.trim()
-  });
-
-  saveAbsence(nextState);
-  setAbsenceNotice("Nastavení reportu je uložené jen pro aktuální zobrazení. Trvalé uložení čeká na cloud API nastavení modulu.");
+  const settings = targetOrForm?.current || absenceSettingsFormData(targetOrForm);
+  absenceSettingsState.saving = true;
+  absenceSettingsState.error = "";
+  setAbsenceNotice("Ukládám nastavení reportu...");
   render();
+
+  try {
+    const result = await apiJson("/api/absence-settings", {
+      method: "PATCH",
+      body: JSON.stringify(settings)
+    });
+    setAbsenceSettings(result.settings || settings);
+    absenceSettingsState.loaded = true;
+    absenceSettingsState.apiStatus = result.apiStatus || "ready";
+    absenceSettingsState.missingEndpoint = "";
+    setAbsenceNotice("Nastavení reportu bylo uloženo přes cloud API.");
+    return true;
+  } catch (error) {
+    absenceSettingsState.apiStatus = error.payload?.apiStatus || "waiting";
+    absenceSettingsState.missingEndpoint = error.payload?.missingEndpoint || "PATCH /api/absence-settings";
+    absenceSettingsState.error = error.payload?.error || "Nastavení reportu se nepodařilo uložit.";
+    setAbsenceNotice("", absenceSettingsState.error);
+    return false;
+  } finally {
+    absenceSettingsState.saving = false;
+    render();
+  }
 }
 
 function applyAbsenceFilters(form) {
@@ -5895,14 +6045,13 @@ function generateAbsenceMonthlyReport() {
   }
 
   const result = generateMonthlyAbsenceReport(absenceDisplayState(), user);
-  saveAbsence(result.state);
   const period = `${String(result.report.periodMonth).padStart(2, "0")}-${result.report.periodYear}`;
 
   downloadCsv(
     `mesicni-report-nepritomnosti-${period}.csv`,
     monthlyAbsenceReportToCsv(result.report, result.requests)
   );
-  setAbsenceNotice("Měsíční report byl vygenerovaný v prohlížeči. Reálný e-mail reportu zatím není součástí schvalovacího workflow.");
+  setAbsenceNotice("Měsíční report byl vygenerovaný jako CSV export. Reálné odesílání e-mailem čeká na potvrzený backend worker.");
   render();
 }
 
@@ -6366,6 +6515,12 @@ async function saveDirtyChanges() {
     return saveAppearanceSettings(appearanceTarget.current);
   }
 
+  const absenceSettingsTarget = currentAbsenceSettingsDirtyTarget();
+
+  if (absenceSettingsTarget?.isDirty) {
+    return saveAbsenceSettings(absenceSettingsTarget);
+  }
+
   const employeeTarget = currentEmployeeCardDirtyTarget();
 
   if (employeeTarget?.isDirty) {
@@ -6387,6 +6542,13 @@ function discardDirtyChanges() {
 
   if (appearanceTarget?.isDirty) {
     discardAppearanceDirtyChanges();
+    return;
+  }
+
+  const absenceSettingsTarget = currentAbsenceSettingsDirtyTarget();
+
+  if (absenceSettingsTarget?.isDirty) {
+    discardAbsenceSettingsDirtyChanges();
     return;
   }
 
@@ -6612,7 +6774,7 @@ document.addEventListener("submit", async (event) => {
   const absenceSettingsForm = event.target.closest("[data-absence-settings-form]");
   if (absenceSettingsForm) {
     event.preventDefault();
-    saveAbsenceSettings(absenceSettingsForm);
+    await saveAbsenceSettings(absenceSettingsForm);
     return;
   }
 
