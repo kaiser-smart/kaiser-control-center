@@ -173,7 +173,6 @@ const AI_STATUS_READY = "Připraven";
 const AI_STATUS_DONE = "Hotovo";
 const AI_STATUS_DEMO = "Přehrávám ukázku…";
 const AI_STATUS_ELEVENLABS_WAITING = "ElevenLabs čeká na Agent ID a API klíč. Hlasová navigace v prohlížeči je připravená.";
-const AI_ASSISTANT_MAREK_ID = "marek";
 const AI_VOICE_IDLE_LABEL = "Klepni a mluv";
 const AI_VOICE_PROCESSING_LABEL = "Zpracovávám…";
 const AI_VOICE_SPEAKING_LABEL = "Odpovídám…";
@@ -796,6 +795,11 @@ function setAiAssistant(assistantId) {
 
 async function probeAiAssistantAvatarAssets() {
   await Promise.all(AI_ASSISTANTS.map(async (assistant) => {
+    if (!assistant.avatarPath) {
+      aiAssistantState.avatarAssetStatus[assistant.id] = "missing";
+      return;
+    }
+
     try {
       const response = await fetch(assistant.avatarPath, {
         method: "HEAD",
@@ -1078,10 +1082,10 @@ function openAiAssistant(mode = "text") {
   aiAssistantState.launcherVisible = false;
   aiAssistantState.mode = mode === "voice" ? "voice" : "text";
   if (aiAssistantState.mode === "voice") {
-    aiAssistantState.selectedAssistantId = AI_ASSISTANT_MAREK_ID;
-    const marek = assistantById(AI_ASSISTANT_MAREK_ID);
-    aiAssistantState.elevenLabsStatus = aiAssistantState.elevenLabsConfiguredByAssistant[marek.id]
-      ? `ElevenLabs agent ${marek.name} je nakonfigurovaný.`
+    aiAssistantState.selectedAssistantId = DEFAULT_AI_ASSISTANT_ID;
+    const assistant = assistantById(DEFAULT_AI_ASSISTANT_ID);
+    aiAssistantState.elevenLabsStatus = aiAssistantState.elevenLabsConfiguredByAssistant[assistant.id]
+      ? `ElevenLabs agent ${assistant.name} je nakonfigurovaný.`
       : AI_STATUS_ELEVENLABS_WAITING;
   }
   resetAiVoiceConversation();

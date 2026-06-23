@@ -63,6 +63,10 @@ export function AiTextAssistantPanel({
     return "";
   }
 
+  const assistantSelector = assistants.length > 1
+    ? AssistantAvatarSelector({ assistants, selectedAssistantId, avatarAssetStatus })
+    : "";
+
   return `
     <section
       class="ai-assistant-chat ai-assistant-chat--text"
@@ -81,7 +85,7 @@ export function AiTextAssistantPanel({
         </button>
       </header>
 
-      ${AssistantAvatarSelector({ assistants, selectedAssistantId, avatarAssetStatus })}
+      ${assistantSelector}
 
       ${elevenLabsStatus ? `
         <p class="ai-assistant-chat__voice-notice">${escapeHtml(elevenLabsStatus)}</p>

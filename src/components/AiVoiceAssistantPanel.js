@@ -1,5 +1,3 @@
-import { AssistantAvatarSelector } from "./AssistantAvatarSelector.js";
-
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -12,9 +10,6 @@ function escapeHtml(value) {
 export function AiVoiceAssistantPanel({
   open = false,
   assistant = null,
-  assistants = [],
-  selectedAssistantId = "",
-  avatarAssetStatus = {},
   elevenLabsStatus = "",
   listening = false,
   voiceStatus = "",
@@ -42,14 +37,8 @@ export function AiVoiceAssistantPanel({
   const statusText = demoStatus || (normalizedVoiceStatus && normalizedVoiceStatus !== "Připraven"
     ? normalizedVoiceStatus
     : fallbackStatus);
-  const assistantTitle = `${assistantName} – AI asistent`;
-  const avatarAvailable = avatarAssetStatus[assistant?.id] === "available";
+  const assistantTitle = `${assistantName} Smart asistentka`;
   const microphonePath = assistant?.microphonePath || "src/assets/smart-helper-microphone.png";
-  const avatarVisual = avatarAvailable
-    ? `<img class="ai-voice-assistant-panel__avatar-image" src="${escapeHtml(assistant.avatarPath)}" alt="${escapeHtml(assistantTitle)}" />`
-    : `<div class="ai-voice-assistant-panel__avatar-placeholder" role="img" aria-label="Čeká na grafiku">
-        <span>Čeká na grafiku</span>
-      </div>`;
   const transcriptText = String(voiceTranscript || "").trim();
   const answerText = String(voiceAnswer || "").trim();
   const tags = Array.isArray(voiceTags) && voiceTags.length
@@ -71,20 +60,9 @@ export function AiVoiceAssistantPanel({
           </button>
         </div>
         <h2 id="ai-voice-assistant-title">${escapeHtml(assistantTitle)}</h2>
-        <p>${escapeHtml(assistant?.intro || "Hlasový pomocník pro Smart odpady.")}</p>
       </header>
 
-      ${AssistantAvatarSelector({ assistants, selectedAssistantId, avatarAssetStatus })}
-
       <div class="ai-voice-assistant-panel__body">
-        <button
-          class="ai-voice-assistant-panel__avatar-stage"
-          type="button"
-          data-ai-start-voice
-          aria-label="Spustit asistenta ${escapeHtml(assistantName)}"
-        >
-          ${avatarVisual}
-        </button>
         <div class="ai-voice-assistant-panel__voice-control">
           <span class="ai-voice-assistant-panel__wave ai-voice-assistant-panel__wave--left" aria-hidden="true">
             <span></span><span></span><span></span><span></span>
