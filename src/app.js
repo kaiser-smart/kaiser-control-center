@@ -1165,6 +1165,45 @@ function employeeOptionList(selectedId) {
     .join("");
 }
 
+function normalizeAbsenceEmployeeOption(employee) {
+  const id = String(employee?.id || employee?.userId || "").trim();
+
+  if (!id) {
+    return null;
+  }
+
+  return {
+    id,
+    name: employeeFullName(employee),
+    email: employee?.email || "",
+    phone: employee?.phone || "",
+    role: employee?.role || "",
+    department: employee?.department || "",
+    team: employee?.team || employee?.department || "",
+    employmentStatus: employee?.employmentStatus || "active"
+  };
+}
+
+function absenceSelectableEmployees(user = currentUser()) {
+  const employees = new Map();
+
+  absenceEmployeeOptions(absenceState, user).forEach((employee) => {
+    const normalized = normalizeAbsenceEmployeeOption(employee);
+    if (normalized) {
+      employees.set(normalized.id, normalized);
+    }
+  });
+
+  employeeCardState.employees.forEach((employee) => {
+    const normalized = normalizeAbsenceEmployeeOption(employee);
+    if (normalized) {
+      employees.set(normalized.id, normalized);
+    }
+  });
+
+  return [...employees.values()].sort((a, b) => a.name.localeCompare(b.name, "cs"));
+}
+
 function employeeManagerOptions(employee, selectedId) {
   const targetId = String(employee?.id || "").trim().toLowerCase();
   const options = employeeCardState.employees.filter((item) => (
@@ -2905,7 +2944,7 @@ function absenceNewRequest(user) {
     return permissionInlineNotice();
   }
 
-  const employees = absenceEmployeeOptions(absenceState, user);
+  const employees = absenceSelectableEmployees(user);
   const currentEmployeeId = employeeIdForUser(user);
   const employeeOptions = employees.map((employee) => ({
     value: employee.id,
@@ -2918,6 +2957,15 @@ function absenceNewRequest(user) {
       label: employee.name
     }));
   const canChooseEmployee = canSubmitAbsenceForOthers(user);
+  const employeeLoadingNotice = canChooseEmployee && employeeCardState.employeesLoading
+    ? '<p class="absence-form__hint">Načítám úplný seznam zaměstnanců…</p>'
+    : "";
+  const employeeLoadError = canChooseEmployee &&
+    !employeeCardState.employeesLoading &&
+    !employeeCardState.employeesLoaded &&
+    employeeCardState.error
+    ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.error)}</p>`
+    : "";
 
   return `
     <section class="absence-panel">
@@ -2928,6 +2976,8 @@ function absenceNewRequest(user) {
         </div>
       </div>
       <form class="absence-form" data-absence-request-form>
+        ${employeeLoadingNotice}
+        ${employeeLoadError}
         ${canChooseEmployee ? `
           <label>
             <span>Zaměstnanec</span>
@@ -5236,6 +5286,7 @@ function renderAuthenticatedApp(user) {
 
     absenceUiState.tab = routeTab;
     const moduleItem = absenceModuleItem();
+    loadEmployeeList();
     app.innerHTML = absenceModulePage(moduleItem, user, false, { tab: routeTab });
     const tabLabel = ABSENCE_TABS.find((tab) => tab.id === routeTab)?.label || "Dovolená / Nemoc";
     document.title = `${tabLabel} | ${APP_NAME}`;
@@ -5279,6 +5330,7 @@ function renderAuthenticatedApp(user) {
       loadNotificationCenter();
     }
     if (moduleItem.id === "absence") {
+      loadEmployeeList();
       loadAbsenceRequests();
       loadAbsenceApprovalRequests();
       if (absenceUiState.tab === "quick" || normalizeRole(user?.role) === "ridic") {
@@ -5293,6 +5345,7 @@ function renderAuthenticatedApp(user) {
     app.innerHTML = modulePage(moduleItem, user, true);
     document.title = `${moduleItem.pageTitle} | ${APP_NAME}`;
     if (moduleItem.id === "absence") {
+      loadEmployeeList();
       loadAbsenceRequests();
       loadAbsenceApprovalRequests();
     }
@@ -5620,8 +5673,14 @@ async function submitAbsenceRequest(form) {
     return;
   }
 
-  const employees = absenceEmployeeOptions(absenceState, user);
+  const employees = absenceSelectableEmployees(user);
   const selectedEmployee = employees.find((employee) => employee.id === form.elements.employeeId.value) || employees[0];
+
+  if (!selectedEmployee?.id) {
+    setAbsenceNotice("", "Vyberte prosím zaměstnance.");
+    render();
+    return;
+  }
 
   try {
     const result = await apiJson("/api/absence-requests", {

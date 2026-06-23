@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.26"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.27"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Nová žádost Dovolená / Nemoc",
+    text: "Výběr zaměstnance v nové žádosti používá úplný cloudový seznam zaměstnanců."
+  },
   {
     title: "SMS notifikace",
     text: "Produkční SMS notifikace jsou napojené na Twilio Messaging Service se SMS číslem pro provozní zprávy."
