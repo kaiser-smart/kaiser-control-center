@@ -1716,7 +1716,7 @@ async function startAiVoiceRecognition() {
       aiAssistantState.elevenLabsStatus = `ElevenLabs agent ${assistant.name} je odpojený.`;
       aiAssistantState.voiceStatus = AI_VOICE_DISCONNECTED_LABEL;
       aiAssistantState.voiceUiState = "disconnected";
-      aiAssistantState.voiceNotice = "Spojení se přerušilo. Klepni pro obnovení.";
+      aiAssistantState.voiceNotice = "Spojení se Šarlotou se přerušilo. Zkontroluj mikrofon, oprávnění prohlížeče a klikni na Obnovit spojení.";
       aiAssistantState.voiceTags = ["Odpojeno", "Obnovit spojení", "Mikrofon vypnutý"];
       triggerAiVoiceSessionHaptic("problem");
       void releaseAiVoiceWakeLock({ renderAfter: false });
@@ -1785,11 +1785,12 @@ function renderAiAssistantLayer() {
   }
 
   const assistant = selectedAiAssistant();
+  const promoVisible = assistantPromoState.visible;
 
   const content = [
     AiWelcomeModal({
-      visible: aiAssistantState.welcomeVisible,
-      animate: aiAssistantState.welcomeAnimate
+      visible: aiAssistantState.welcomeVisible && !promoVisible,
+      animate: aiAssistantState.welcomeAnimate && !promoVisible
     }),
     AiAssistantChat({
       open: aiAssistantState.chatOpen,
@@ -1818,7 +1819,7 @@ function renderAiAssistantLayer() {
       demoStatus: aiAssistantState.demoStatus
     }),
     AiAssistantLauncher({
-      visible: (aiAssistantState.launcherVisible && !aiAssistantState.chatOpen && !aiAssistantState.welcomeVisible) || shouldShowAiVoiceDock(),
+      visible: !promoVisible && ((aiAssistantState.launcherVisible && !aiAssistantState.chatOpen && !aiAssistantState.welcomeVisible) || shouldShowAiVoiceDock()),
       voiceActive: shouldShowAiVoiceDock(),
       voiceUiState: aiAssistantState.voiceUiState,
       voiceStatus: aiAssistantState.voiceStatus,
@@ -5865,6 +5866,9 @@ async function loadAssistantPromo(options = {}) {
     if (result.show) {
       assistantPromoState.visible = true;
       assistantPromoState.videoFailed = false;
+      aiAssistantState.welcomeVisible = false;
+      aiAssistantState.welcomeAnimate = false;
+      aiAssistantState.launcherVisible = false;
     } else {
       assistantPromoState.visible = false;
     }
@@ -5876,6 +5880,11 @@ async function loadAssistantPromo(options = {}) {
     assistantPromoState.fallbackImageUrl = assistantPromoDefaultState.fallbackImageUrl;
     assistantPromoState.visible = isAssistantPromoActive(assistantPromoState.promoDate);
     assistantPromoState.videoFailed = false;
+    if (assistantPromoState.visible) {
+      aiAssistantState.welcomeVisible = false;
+      aiAssistantState.welcomeAnimate = false;
+      aiAssistantState.launcherVisible = false;
+    }
   } finally {
     assistantPromoState.loaded = true;
     assistantPromoState.loading = false;

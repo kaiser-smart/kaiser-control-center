@@ -40,12 +40,9 @@ export function AiAssistantPromoModal({
             <video
               src="${escapeHtml(safeVideoUrl)}"
               poster="${escapeHtml(safeFallbackImageUrl)}"
-              autoplay
-              muted
-              loop
               playsinline
               controls
-              preload="auto"
+              preload="metadata"
               data-ai-promo-video
               aria-label="Ukázka hlasové asistentky Šarloty"
             ></video>

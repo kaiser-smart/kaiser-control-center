@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.59"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.60"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Stabilnější okno Šarloty",
+    text: "Promo okno Šarloty už nepřekrývá běžné welcome okno, video není po načtení vynuceně ztlumené a hlasový panel ukazuje jasnější návod při přerušeném spojení."
+  },
   {
     title: "Promo Šarloty s fallbackem",
     text: "Pokud prohlížeč nebo síť zablokuje ověření promo API, přihlášenému uživateli se video Šarloty do 30. 6. 2026 zobrazí i tak."

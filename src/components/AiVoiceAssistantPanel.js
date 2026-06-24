@@ -69,7 +69,9 @@ export function AiVoiceAssistantPanel({
   const answerText = String(voiceAnswer || "").trim();
   const noticeText = String(voiceNotice || "").trim();
   const wakeLockText = String(voiceWakeLockMessage || "").trim();
-  const showMicrophoneHelp = noticeText.includes("Mikrofon není povolený");
+  const showMicrophoneHelp = noticeText.includes("Mikrofon není povolený")
+    || noticeText.includes("oprávnění prohlížeče")
+    || noticeText.includes("oprávnění mikrofonu");
   const rawConnectionStatus = String(elevenLabsStatus || "").trim();
   const connectionStatus = rawConnectionStatus.includes("Agent ID a API klíč")
     ? "Spojení připravíme po klepnutí."
@@ -105,7 +107,7 @@ export function AiVoiceAssistantPanel({
     : normalizedVoiceUiState === "assistantSpeaking"
       ? "Nechte zapnutý zvuk zařízení."
       : normalizedVoiceUiState === "disconnected"
-        ? "Klepnutím obnovíte hovor."
+        ? "Zkontroluj mikrofon a obnov hovor."
         : normalizedVoiceUiState === "error"
           ? "Zkontrolujte oprávnění mikrofonu."
           : "Mikrofon se spustí až po klepnutí.";
