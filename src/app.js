@@ -451,7 +451,7 @@ const assistantPromoDefaultState = {
   videoFailed: false,
   promoKey: "",
   promoDate: "",
-  validUntil: "",
+  validUntil: "2026-06-30",
   action: "",
   videoUrl: "/avatars/sarlota-intro.mp4",
   fallbackImageUrl: "/avatars/sarlota-microphone.png",
@@ -5805,10 +5805,37 @@ function resetAssistantPromoState() {
   Object.assign(assistantPromoState, assistantPromoDefaultState);
 }
 
+function assistantPromoDateString(date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("cs-CZ", {
+      timeZone: "Europe/Prague",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(date);
+    const valueFor = (type) => parts.find((part) => part.type === type)?.value || "";
+    const year = valueFor("year");
+    const month = valueFor("month").padStart(2, "0");
+    const day = valueFor("day").padStart(2, "0");
+
+    if (year && month && day) {
+      return `${year}-${month}-${day}`;
+    }
+  } catch {
+    // Promo fallback must not block app start if Intl timezone support is missing.
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function isAssistantPromoActive(dateString = assistantPromoDateString()) {
+  return dateString <= assistantPromoDefaultState.validUntil;
+}
+
 function applyAssistantPromoPayload(payload = {}) {
   assistantPromoState.promoKey = String(payload.promoKey || "");
   assistantPromoState.promoDate = String(payload.promoDate || "");
-  assistantPromoState.validUntil = String(payload.validUntil || "");
+  assistantPromoState.validUntil = String(payload.validUntil || assistantPromoDefaultState.validUntil);
   assistantPromoState.action = String(payload.action || "");
   assistantPromoState.videoUrl = String(payload.videoUrl || assistantPromoDefaultState.videoUrl);
   assistantPromoState.fallbackImageUrl = String(payload.fallbackImageUrl || assistantPromoDefaultState.fallbackImageUrl);
@@ -5843,7 +5870,12 @@ async function loadAssistantPromo(options = {}) {
     }
   } catch (error) {
     assistantPromoState.error = error?.payload?.error || error?.message || "Promo Šarloty se teď nepodařilo ověřit.";
-    assistantPromoState.visible = false;
+    assistantPromoState.promoDate = assistantPromoDateString();
+    assistantPromoState.validUntil = assistantPromoDefaultState.validUntil;
+    assistantPromoState.videoUrl = assistantPromoDefaultState.videoUrl;
+    assistantPromoState.fallbackImageUrl = assistantPromoDefaultState.fallbackImageUrl;
+    assistantPromoState.visible = isAssistantPromoActive(assistantPromoState.promoDate);
+    assistantPromoState.videoFailed = false;
   } finally {
     assistantPromoState.loaded = true;
     assistantPromoState.loading = false;
