@@ -132,6 +132,33 @@ function audioInputLevel(inputBuffer) {
   return Math.sqrt(total / inputBuffer.length);
 }
 
+function supportedMediaConstraints() {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getSupportedConstraints) {
+    return {};
+  }
+
+  try {
+    return navigator.mediaDevices.getSupportedConstraints() || {};
+  } catch {
+    return {};
+  }
+}
+
+function voiceMicrophoneConstraints() {
+  const supportedConstraints = supportedMediaConstraints();
+  const audio = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true
+  };
+
+  if (supportedConstraints.volume) {
+    audio.volume = 1;
+  }
+
+  return { audio };
+}
+
 function createVoiceAudioPlayer() {
   let audioContext = null;
   let nextStartTime = 0;
@@ -580,13 +607,7 @@ export function useElevenLabsAssistant({
 
     let mediaStream = null;
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
+      mediaStream = await navigator.mediaDevices.getUserMedia(voiceMicrophoneConstraints());
     } catch (error) {
       throw new Error(microphoneErrorMessage(error));
     }
@@ -628,6 +649,7 @@ export function useElevenLabsAssistant({
       let metadataFallbackTimer = 0;
       let finishTimer = 0;
       let lastInputLevelAt = 0;
+      const audioTrack = mediaStream.getAudioTracks?.()[0] || null;
 
       function clearTimers() {
         window.clearTimeout(connectionTimer);
@@ -696,6 +718,14 @@ export function useElevenLabsAssistant({
 
         cleanup(reason);
         done(value);
+      }
+
+      if (audioTrack) {
+        audioTrack.addEventListener("ended", () => {
+          if (!settled) {
+            settle(reject, createVoiceDisconnectedError(), "voice-track-ended");
+          }
+        }, { once: true });
       }
 
       function sendJson(payload) {

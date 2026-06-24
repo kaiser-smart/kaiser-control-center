@@ -6929,3 +6929,596 @@ body:has(.ai-welcome-modal) {
     animation: none;
   }
 }
+
+/* AI voice assistant: final mobile-first app shell. */
+.ai-voice-assistant-panel {
+  left: 50%;
+  top: 50%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(500px, calc(100vw - 32px));
+  height: min(860px, calc(100dvh - 32px));
+  min-height: min(660px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  border: 1px solid rgba(216, 226, 211, 0.96);
+  border-radius: 28px;
+  background: #ffffff;
+  color: #172018;
+  box-shadow:
+    0 32px 84px rgba(31, 41, 33, 0.18),
+    0 0 0 9999px rgba(248, 250, 246, 0.76);
+  transform: translate(-50%, -50%);
+}
+
+.ai-voice-assistant-panel__header {
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px 12px;
+  border-bottom: 1px solid rgba(216, 226, 211, 0.92);
+  background: #ffffff;
+}
+
+.ai-voice-assistant-panel__header::after {
+  content: none;
+}
+
+.ai-voice-assistant-panel__topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+}
+
+.ai-voice-assistant-panel__identity {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ai-voice-assistant-panel h2 {
+  margin: 0;
+  color: #172018;
+  font-size: clamp(1.52rem, 6vw, 2.08rem);
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.04;
+  overflow-wrap: anywhere;
+}
+
+.ai-voice-assistant-panel__identity p {
+  max-width: 100%;
+  margin: 0;
+  color: #647066;
+  font-size: clamp(0.92rem, 2.4vw, 1rem);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.ai-voice-assistant-panel__close,
+.ai-voice-assistant-panel__primary,
+.ai-voice-assistant-panel__stop {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font: inherit;
+  letter-spacing: 0;
+  white-space: nowrap;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.ai-voice-assistant-panel__close {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  border: 1px solid rgba(210, 218, 205, 0.98);
+  background: #ffffff;
+  color: #4c574f;
+  font-size: 0.88rem;
+  font-weight: 650;
+  box-shadow: none;
+}
+
+.ai-voice-assistant-panel__connection {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 30px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid rgba(183, 236, 47, 0.34);
+  border-radius: 999px;
+  background: #f7ffe9;
+  color: #536057;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.ai-voice-assistant-panel__body {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, auto) auto;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 18px 16px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #fbfdf8 100%);
+}
+
+.ai-voice-assistant-panel__mode {
+  width: min(100%, 390px);
+  justify-self: center;
+}
+
+.ai-voice-assistant-panel__mode .ai-assistant-mode-switch {
+  width: 100%;
+}
+
+.ai-voice-assistant-panel__stage {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  justify-items: center;
+  text-align: center;
+}
+
+.ai-voice-assistant-panel__voice-control {
+  display: grid;
+  grid-template-columns: minmax(26px, 48px) auto minmax(26px, 48px);
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+}
+
+.ai-voice-assistant-panel__mic {
+  position: relative;
+  display: grid;
+  width: clamp(168px, min(58vw, 34dvh), 244px);
+  min-width: 168px;
+  height: clamp(168px, min(58vw, 34dvh), 244px);
+  min-height: 168px;
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ai-voice-assistant-panel__mic::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  z-index: 1;
+  border: 2px solid rgba(159, 213, 31, 0.26);
+  border-radius: 999px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.ai-voice-assistant-panel__mic img {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: none;
+  transform: scale(1.7);
+}
+
+.ai-voice-assistant-panel__mic-loader {
+  position: absolute;
+  inset: 17px;
+  z-index: 3;
+  display: none;
+  border: 3px solid rgba(117, 189, 37, 0.12);
+  border-top-color: #75bd25;
+  border-radius: 999px;
+}
+
+.ai-voice-assistant-panel__wave {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  opacity: 0.2;
+}
+
+.ai-voice-assistant-panel__wave span {
+  display: block;
+  width: 4px;
+  height: 16px;
+  border-radius: 999px;
+  background: #9fd51f;
+}
+
+.ai-voice-assistant-panel__wave span:nth-child(2) {
+  height: 28px;
+}
+
+.ai-voice-assistant-panel__wave span:nth-child(3) {
+  height: 22px;
+}
+
+.ai-voice-assistant-panel__wave span:nth-child(4) {
+  height: 12px;
+}
+
+.ai-voice-assistant-panel--state-ready .ai-voice-assistant-panel__mic::before {
+  opacity: 0.32;
+}
+
+.ai-voice-assistant-panel--state-listening .ai-voice-assistant-panel__mic::before,
+.ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__mic::before {
+  animation: ai-voice-app-pulse 1.5s ease-in-out infinite;
+}
+
+.ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__mic::before {
+  border-color: rgba(117, 189, 37, 0.62);
+  animation-duration: 720ms;
+}
+
+.ai-voice-assistant-panel--state-listening .ai-voice-assistant-panel__wave,
+.ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__wave,
+.ai-voice-assistant-panel--state-assistantSpeaking .ai-voice-assistant-panel__wave {
+  opacity: 1;
+}
+
+.ai-voice-assistant-panel--state-listening .ai-voice-assistant-panel__wave span,
+.ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__wave span,
+.ai-voice-assistant-panel--state-assistantSpeaking .ai-voice-assistant-panel__wave span {
+  animation: ai-voice-wave 860ms ease-in-out infinite;
+}
+
+.ai-voice-assistant-panel--state-listening .ai-voice-assistant-panel__wave span:nth-child(2),
+.ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__wave span:nth-child(2),
+.ai-voice-assistant-panel--state-assistantSpeaking .ai-voice-assistant-panel__wave span:nth-child(2) {
+  animation-delay: 100ms;
+}
+
+.ai-voice-assistant-panel--state-listening .ai-voice-assistant-panel__wave span:nth-child(3),
+.ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__wave span:nth-child(3),
+.ai-voice-assistant-panel--state-assistantSpeaking .ai-voice-assistant-panel__wave span:nth-child(3) {
+  animation-delay: 180ms;
+}
+
+.ai-voice-assistant-panel--state-assistantSpeaking .ai-voice-assistant-panel__wave span {
+  background: #4f95de;
+}
+
+.ai-voice-assistant-panel--state-connecting .ai-voice-assistant-panel__mic-loader,
+.ai-voice-assistant-panel--state-processing .ai-voice-assistant-panel__mic-loader {
+  display: block;
+  animation: ai-voice-loader 900ms linear infinite;
+}
+
+.ai-voice-assistant-panel--state-connecting .ai-voice-assistant-panel__mic img,
+.ai-voice-assistant-panel--state-processing .ai-voice-assistant-panel__mic img {
+  opacity: 0.36;
+}
+
+.ai-voice-assistant-panel--state-muted .ai-voice-assistant-panel__mic img {
+  opacity: 0.58;
+  filter: grayscale(0.45);
+}
+
+.ai-voice-assistant-panel--state-disconnected .ai-voice-assistant-panel__mic,
+.ai-voice-assistant-panel--state-error .ai-voice-assistant-panel__mic {
+  box-shadow:
+    0 20px 54px rgba(160, 54, 54, 0.14),
+    0 0 0 1px rgba(160, 54, 54, 0.18);
+}
+
+.ai-voice-assistant-panel--state-disconnected .ai-voice-assistant-panel__mic::before,
+.ai-voice-assistant-panel--state-error .ai-voice-assistant-panel__mic::before {
+  border-color: rgba(160, 54, 54, 0.38);
+  opacity: 1;
+}
+
+.ai-voice-assistant-panel__status {
+  min-height: 28px;
+  margin: 0;
+  color: #273029;
+  font-size: clamp(1.08rem, 4vw, 1.28rem);
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1.18;
+}
+
+.ai-voice-assistant-panel__hint {
+  margin: 0;
+  color: #67716a;
+  font-size: 0.9rem;
+  font-weight: 520;
+  line-height: 1.32;
+}
+
+.ai-voice-assistant-panel__notice {
+  display: grid;
+  width: min(100%, 390px);
+  justify-self: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(160, 54, 54, 0.2);
+  border-radius: 12px;
+  background: #fff7f5;
+  color: #7d302c;
+  text-align: left;
+}
+
+.ai-voice-assistant-panel__notice p,
+.ai-voice-assistant-panel__notice ul {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 520;
+  line-height: 1.34;
+}
+
+.ai-voice-assistant-panel__notice ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
+}
+
+.ai-voice-assistant-panel__conversation {
+  display: grid;
+  width: min(100%, 390px);
+  justify-self: center;
+  gap: 8px;
+}
+
+.ai-voice-assistant-panel__bubble {
+  display: grid;
+  max-width: min(92%, 340px);
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid rgba(221, 226, 221, 0.9);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(31, 41, 33, 0.05);
+  overflow-wrap: anywhere;
+}
+
+.ai-voice-assistant-panel__bubble span {
+  color: #657067;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ai-voice-assistant-panel__bubble p {
+  margin: 0;
+  color: #273029;
+  font-size: 0.92rem;
+  font-weight: 480;
+  line-height: 1.34;
+}
+
+.ai-voice-assistant-panel__bubble--user {
+  justify-self: start;
+  border-bottom-left-radius: 7px;
+}
+
+.ai-voice-assistant-panel__bubble--assistant {
+  justify-self: end;
+  border-color: rgba(183, 236, 47, 0.28);
+  border-bottom-right-radius: 7px;
+  background: #fbfdf8;
+}
+
+.ai-voice-assistant-panel__tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: min(100%, 390px);
+  justify-self: center;
+}
+
+.ai-voice-assistant-panel__tags span {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid rgba(183, 236, 47, 0.32);
+  border-radius: 999px;
+  background: #f7ffe9;
+  color: #59665b;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.ai-voice-assistant-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 18px 16px;
+  border-top: 1px solid rgba(216, 226, 211, 0.92);
+  background: #ffffff;
+}
+
+.ai-voice-assistant-panel__primary {
+  min-width: min(100%, 188px);
+  min-height: 56px;
+  padding: 0 22px;
+  border: 1px solid rgba(117, 189, 37, 0.34);
+  background: #b7ec2f;
+  color: #172018;
+  font-size: 1rem;
+  font-weight: 850;
+  box-shadow: 0 12px 28px rgba(117, 189, 37, 0.2);
+}
+
+.ai-voice-assistant-panel__stop {
+  min-width: 112px;
+  min-height: 50px;
+  padding: 0 18px;
+  border: 1px solid rgba(210, 218, 205, 0.98);
+  background: #ffffff;
+  color: #4c574f;
+  font-size: 0.94rem;
+  font-weight: 720;
+  box-shadow: none;
+}
+
+.ai-voice-assistant-panel--state-disconnected .ai-voice-assistant-panel__primary,
+.ai-voice-assistant-panel--state-error .ai-voice-assistant-panel__primary {
+  border-color: rgba(160, 54, 54, 0.24);
+  background: #fff7f5;
+  color: #7d302c;
+  box-shadow: none;
+}
+
+.ai-voice-assistant-panel__mic:disabled,
+.ai-voice-assistant-panel__primary:disabled {
+  cursor: default;
+}
+
+.ai-voice-assistant-panel__primary:disabled {
+  opacity: 0.72;
+  box-shadow: none;
+}
+
+.ai-voice-assistant-panel__demo-line {
+  width: min(100%, 390px);
+  justify-self: center;
+}
+
+@media (max-width: 767px) {
+  .ai-voice-assistant-panel {
+    left: 0;
+    top: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    transform: none;
+  }
+
+  .ai-voice-assistant-panel__header {
+    padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
+  }
+
+  .ai-voice-assistant-panel__body {
+    gap: 10px;
+    padding: 10px 12px 12px;
+  }
+
+  .ai-voice-assistant-panel__actions {
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .ai-voice-assistant-panel__primary {
+    flex: 1 1 176px;
+    min-height: 60px;
+  }
+
+  .ai-voice-assistant-panel__stop {
+    flex: 0 0 auto;
+    min-height: 52px;
+  }
+}
+
+@media (max-width: 360px) {
+  .ai-voice-assistant-panel__header {
+    padding: calc(10px + env(safe-area-inset-top)) 12px 8px;
+  }
+
+  .ai-voice-assistant-panel__close {
+    padding: 0 11px;
+    font-size: 0.82rem;
+  }
+
+  .ai-voice-assistant-panel__connection {
+    font-size: 0.74rem;
+  }
+
+  .ai-voice-assistant-panel__body {
+    gap: 8px;
+    padding: 8px 10px 10px;
+  }
+
+  .ai-voice-assistant-panel__voice-control {
+    grid-template-columns: 24px auto 24px;
+    gap: 6px;
+  }
+
+  .ai-voice-assistant-panel__mic {
+    width: clamp(150px, min(56vw, 30dvh), 186px);
+    min-width: 150px;
+    height: clamp(150px, min(56vw, 30dvh), 186px);
+    min-height: 150px;
+  }
+
+  .ai-voice-assistant-panel__wave span {
+    width: 3px;
+  }
+
+  .ai-voice-assistant-panel__status {
+    min-height: 24px;
+    font-size: 1rem;
+  }
+
+  .ai-voice-assistant-panel__hint,
+  .ai-voice-assistant-panel__bubble p,
+  .ai-voice-assistant-panel__notice p,
+  .ai-voice-assistant-panel__notice ul {
+    font-size: 0.82rem;
+  }
+
+  .ai-voice-assistant-panel__bubble {
+    padding: 8px 10px;
+  }
+
+  .ai-voice-assistant-panel__tags {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ai-voice-assistant-panel {
+    width: min(560px, calc(100vw - 48px));
+    height: min(840px, calc(100dvh - 40px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .ai-voice-assistant-panel {
+    width: min(520px, calc(100vw - 56px));
+    height: min(850px, calc(100dvh - 48px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-voice-assistant-panel--state-listening .ai-voice-assistant-panel__mic::before,
+  .ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__mic::before,
+  .ai-voice-assistant-panel--state-listening .ai-voice-assistant-panel__wave span,
+  .ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__wave span,
+  .ai-voice-assistant-panel--state-assistantSpeaking .ai-voice-assistant-panel__wave span,
+  .ai-voice-assistant-panel--state-connecting .ai-voice-assistant-panel__mic-loader,
+  .ai-voice-assistant-panel--state-processing .ai-voice-assistant-panel__mic-loader {
+    animation: none;
+  }
+}

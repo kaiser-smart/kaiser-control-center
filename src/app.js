@@ -172,7 +172,7 @@ const AI_INITIAL_MESSAGE =
 const AI_STATUS_READY = "Připraven";
 const AI_STATUS_DONE = "Hotovo";
 const AI_STATUS_DEMO = "Přehrávám ukázku…";
-const AI_STATUS_ELEVENLABS_WAITING = "ElevenLabs čeká na Agent ID a API klíč. Hlasová navigace v prohlížeči je připravená.";
+const AI_STATUS_ELEVENLABS_WAITING = "Hlasové spojení Šarloty se připraví po klepnutí.";
 const AI_TEXT_READY_LABEL = "Textový režim Šarloty je připravený.";
 const AI_TEXT_SENDING_LABEL = "Odesílám dotaz Šarlotě…";
 const AI_TEXT_READY_RESULT_LABEL = "Textový režim Šarloty funguje.";
@@ -187,6 +187,9 @@ const AI_VOICE_SPEAKING_LABEL = "Šarlota odpovídá…";
 const AI_VOICE_MUTED_LABEL = "Mikrofon je vypnutý";
 const AI_VOICE_DISCONNECTED_LABEL = "Spojení se přerušilo. Klepni pro obnovení.";
 const AI_VOICE_ERROR_LABEL = "Nepodařilo se připojit mikrofon.";
+const AI_VOICE_WEAK_INPUT_NOTICE = "Mluvte blíže k telefonu nebo zvyšte hlasitost zařízení.";
+const AI_VOICE_WEAK_INPUT_LEVEL = 0.018;
+const AI_VOICE_WEAK_INPUT_MIN_READINGS = 6;
 const AI_VOICE_UI_STATES = [
   "idle",
   "connecting",
@@ -446,6 +449,7 @@ let aiVoiceStateTimer = 0;
 let aiToastTimer = 0;
 let aiConfirmationResolver = null;
 let aiTextRequestId = 0;
+let aiVoiceWeakInputReadings = 0;
 
 const speechRecognition = useSpeechRecognition({
   onResult: (transcript) => submitAiAssistantQuestion(transcript, { fromVoice: true }),
@@ -698,6 +702,42 @@ function setAiVoiceUiState(state, status = "", tags = []) {
   aiAssistantState.voiceTags = tags.length ? tags : aiAssistantState.voiceTags;
 }
 
+function clearAiVoiceWeakInputNotice() {
+  aiVoiceWeakInputReadings = 0;
+
+  if (aiAssistantState.voiceNotice === AI_VOICE_WEAK_INPUT_NOTICE) {
+    aiAssistantState.voiceNotice = "";
+    return true;
+  }
+
+  return false;
+}
+
+function updateAiVoiceInputLevelNotice(event = {}) {
+  const inputLevel = Number(event.inputLevel || 0);
+
+  if (!Number.isFinite(inputLevel) || event.source === "vad_score") {
+    return false;
+  }
+
+  if (event.speaking || inputLevel >= AI_VOICE_WEAK_INPUT_LEVEL) {
+    return clearAiVoiceWeakInputNotice();
+  }
+
+  if (inputLevel <= 0 || aiAssistantState.voiceUiState !== "listening") {
+    return false;
+  }
+
+  aiVoiceWeakInputReadings += 1;
+
+  if (aiVoiceWeakInputReadings >= AI_VOICE_WEAK_INPUT_MIN_READINGS && aiAssistantState.voiceNotice !== AI_VOICE_WEAK_INPUT_NOTICE) {
+    aiAssistantState.voiceNotice = AI_VOICE_WEAK_INPUT_NOTICE;
+    return true;
+  }
+
+  return false;
+}
+
 function syncVoiceUiStateFromStatus(status) {
   const normalizedStatus = String(status || "").trim();
 
@@ -727,6 +767,7 @@ function syncVoiceUiStateFromStatus(status) {
 
 function resetAiVoiceConversation() {
   clearAiVoiceStateTimer();
+  clearAiVoiceWeakInputNotice();
   aiAssistantState.voiceUiState = "idle";
   aiAssistantState.voiceStatus = AI_STATUS_READY;
   aiAssistantState.voiceTranscript = "";
@@ -1272,6 +1313,7 @@ async function startAiVoiceRecognition() {
   speechRecognition.stop({ status: false });
   const requestId = ++aiTextRequestId;
   elevenLabsAssistant.stopVoiceAudio?.();
+  clearAiVoiceWeakInputNotice();
   const assistant = selectedAiAssistant();
   aiAssistantState.demoStatus = "";
   aiAssistantState.voiceNotice = "";
@@ -1305,7 +1347,7 @@ async function startAiVoiceRecognition() {
           return;
         }
         aiAssistantState.isListening = true;
-        aiAssistantState.voiceNotice = "";
+        clearAiVoiceWeakInputNotice();
         setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, ["Poslouchám", "Mikrofon aktivní", "ElevenLabs"]);
         renderAiAssistantLayerOnly();
       },
@@ -1313,6 +1355,8 @@ async function startAiVoiceRecognition() {
         if (requestId !== aiTextRequestId || !aiAssistantState.isListening) {
           return;
         }
+
+        let shouldRender = updateAiVoiceInputLevelNotice(event);
 
         if (event.speaking && aiAssistantState.voiceUiState !== "userSpeaking") {
           setAiVoiceUiState("userSpeaking", AI_VOICE_USER_SPEAKING_LABEL, ["Mluvte teď", "Mikrofon aktivní", "ElevenLabs"]);
@@ -1322,6 +1366,10 @@ async function startAiVoiceRecognition() {
 
         if (!event.speaking && aiAssistantState.voiceUiState === "userSpeaking") {
           setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, ["Poslouchám", "Mikrofon aktivní", "ElevenLabs"]);
+          shouldRender = true;
+        }
+
+        if (shouldRender) {
           renderAiAssistantLayerOnly();
         }
       },
@@ -1331,7 +1379,7 @@ async function startAiVoiceRecognition() {
         }
 
         aiAssistantState.isListening = true;
-        aiAssistantState.voiceNotice = "";
+        clearAiVoiceWeakInputNotice();
         setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, ["Poslouchám", "Mluvte teď", "ElevenLabs"]);
         renderAiAssistantLayerOnly();
       },
@@ -1340,6 +1388,7 @@ async function startAiVoiceRecognition() {
           return;
         }
         aiAssistantState.isListening = false;
+        clearAiVoiceWeakInputNotice();
         aiAssistantState.voiceTranscript = event.text || "";
         setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Zpracovávám", "Čeká na odpověď", "ElevenLabs"]);
         renderAiAssistantLayerOnly();
@@ -1416,7 +1465,7 @@ async function startAiVoiceRecognition() {
       aiAssistantState.elevenLabsStatus = `ElevenLabs agent ${assistant.name} je odpojený.`;
       aiAssistantState.voiceStatus = AI_VOICE_DISCONNECTED_LABEL;
       aiAssistantState.voiceUiState = "disconnected";
-      aiAssistantState.voiceNotice = "Spojení se přerušilo. Klepni na mikrofon pro obnovení.";
+      aiAssistantState.voiceNotice = "Spojení se přerušilo. Klepni pro obnovení.";
       aiAssistantState.voiceTags = ["Odpojeno", "Obnovit spojení", "Mikrofon vypnutý"];
       renderAiAssistantLayerOnly();
       return;
@@ -1436,6 +1485,7 @@ function stopAiVoiceRecognition() {
   aiTextRequestId += 1;
   elevenLabsAssistant.stopVoiceAudio?.();
   clearAiVoiceStateTimer();
+  clearAiVoiceWeakInputNotice();
   speechRecognition.stop();
   aiAssistantState.isListening = false;
   aiAssistantState.voiceUiState = "muted";
