@@ -4247,6 +4247,44 @@ body:has(.ai-assistant-promo-modal) {
   line-height: 1.45;
 }
 
+.employee-medical-exam-pdf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #d9e8cf;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.employee-medical-exam-pdf strong,
+.employee-medical-exam-pdf span {
+  display: block;
+}
+
+.employee-medical-exam-pdf span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.employee-medical-exam-pdf__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.employee-medical-exam-pdf__actions .primary-action,
+.employee-medical-exam-pdf__actions .secondary-link {
+  min-height: 44px;
+  text-decoration: none;
+}
+
 .employee-card-document-types {
   display: flex;
   flex-wrap: wrap;
@@ -4341,6 +4379,17 @@ body:has(.ai-assistant-promo-modal) {
   .employee-document-upload-form__file,
   .employee-document-upload-form__note {
     grid-column: auto;
+  }
+
+  .employee-medical-exam-pdf {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-medical-exam-pdf__actions,
+  .employee-medical-exam-pdf__actions .primary-action,
+  .employee-medical-exam-pdf__actions .secondary-link {
+    width: 100%;
+    justify-content: center;
   }
 }
 

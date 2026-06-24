@@ -53,6 +53,11 @@ function booleanValue(value, fallback = false) {
   return fallback;
 }
 
+function examTypeValue(value) {
+  const cleaned = cleanString(value);
+  return ["entry", "periodic", "extraordinary"].includes(cleaned) ? cleaned : "entry";
+}
+
 function randomId(prefix) {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()
@@ -93,6 +98,12 @@ function baseMedicalExam(employee, row = null) {
     category,
     dateOfBirth,
     lastExamDate,
+    requestExamType: examTypeValue(row?.request_exam_type),
+    requestCategory: normalizeMedicalExamCategory(row?.request_category || category),
+    medicalFacilityName: cleanString(row?.medical_facility_name),
+    medicalDoctorName: cleanString(row?.medical_doctor_name),
+    medicalFacilityAddress: cleanString(row?.medical_facility_address),
+    medicalFacilityCompanyId: cleanString(row?.medical_facility_company_id),
     note: cleanString(row?.note),
     notificationEnabled: row ? booleanValue(row.notification_enabled, true) : true,
     lastNotificationKey: cleanString(row?.last_notification_key),
@@ -188,6 +199,12 @@ export async function saveEmployeeMedicalExam(env, employee, currentUser, input)
     category,
     dateOfBirth,
     lastExamDate,
+    requestExamType: examTypeValue(input?.requestExamType ?? existing?.request_exam_type),
+    requestCategory: normalizeMedicalExamCategory(input?.requestCategory ?? existing?.request_category ?? category),
+    medicalFacilityName: cleanString(input?.medicalFacilityName ?? existing?.medical_facility_name),
+    medicalDoctorName: cleanString(input?.medicalDoctorName ?? existing?.medical_doctor_name),
+    medicalFacilityAddress: cleanString(input?.medicalFacilityAddress ?? existing?.medical_facility_address),
+    medicalFacilityCompanyId: cleanString(input?.medicalFacilityCompanyId ?? existing?.medical_facility_company_id),
     nextExamDate: calculated.nextExamDate,
     intervalMonths: calculated.intervalMonths,
     status: calculated.status,
@@ -207,6 +224,12 @@ export async function saveEmployeeMedicalExam(env, employee, currentUser, input)
         category,
         date_of_birth,
         last_exam_date,
+        request_exam_type,
+        request_category,
+        medical_facility_name,
+        medical_doctor_name,
+        medical_facility_address,
+        medical_facility_company_id,
         next_exam_date,
         interval_months,
         status,
@@ -218,11 +241,17 @@ export async function saveEmployeeMedicalExam(env, employee, currentUser, input)
         updated_by_user_id,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(employee_id) DO UPDATE SET
         category = excluded.category,
         date_of_birth = excluded.date_of_birth,
         last_exam_date = excluded.last_exam_date,
+        request_exam_type = excluded.request_exam_type,
+        request_category = excluded.request_category,
+        medical_facility_name = excluded.medical_facility_name,
+        medical_doctor_name = excluded.medical_doctor_name,
+        medical_facility_address = excluded.medical_facility_address,
+        medical_facility_company_id = excluded.medical_facility_company_id,
         next_exam_date = excluded.next_exam_date,
         interval_months = excluded.interval_months,
         status = excluded.status,
@@ -238,6 +267,12 @@ export async function saveEmployeeMedicalExam(env, employee, currentUser, input)
       nullableString(item.category),
       nullableString(item.dateOfBirth),
       nullableString(item.lastExamDate),
+      nullableString(item.requestExamType),
+      nullableString(item.requestCategory),
+      nullableString(item.medicalFacilityName),
+      nullableString(item.medicalDoctorName),
+      nullableString(item.medicalFacilityAddress),
+      nullableString(item.medicalFacilityCompanyId),
       nullableString(item.nextExamDate),
       item.intervalMonths,
       item.status,
@@ -259,6 +294,12 @@ export async function saveEmployeeMedicalExam(env, employee, currentUser, input)
     category: item.category,
     date_of_birth: item.dateOfBirth,
     last_exam_date: item.lastExamDate,
+    request_exam_type: item.requestExamType,
+    request_category: item.requestCategory,
+    medical_facility_name: item.medicalFacilityName,
+    medical_doctor_name: item.medicalDoctorName,
+    medical_facility_address: item.medicalFacilityAddress,
+    medical_facility_company_id: item.medicalFacilityCompanyId,
     note: item.note,
     notification_enabled: item.notificationEnabled ? 1 : 0,
     last_notification_key: cleanString(existing?.last_notification_key),

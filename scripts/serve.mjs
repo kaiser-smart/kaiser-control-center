@@ -21,6 +21,7 @@ import {
   medicalExamDateValue,
   normalizeMedicalExamCategory
 } from "../src/data/medicalExamRules.js";
+import { renderMedicalExamRequestDocument } from "../functions/_lib/medical-exam-request-template.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { modules } from "../src/data/modules.js";
 import {
@@ -673,6 +674,7 @@ function mockEmployeeFromUser(user) {
     lastName: override.lastName ?? nameParts.lastName,
     email: override.email ?? user.email ?? "",
     phone: override.phone ?? user.phone ?? "",
+    address: override.address ?? user.address ?? "",
     role: normalizeRole(override.role ?? user.role),
     department: override.department ?? user.department ?? "",
     position: override.position ?? user.position ?? "",
@@ -681,6 +683,8 @@ function mockEmployeeFromUser(user) {
     employmentStatus: override.employmentStatus ?? (user.active === false ? "inactive" : "active"),
     startDate: override.startDate ?? "",
     employmentType: override.employmentType ?? "",
+    workplace: override.workplace ?? "",
+    weeklyHours: Number(override.weeklyHours ?? 40),
     workload: Number(override.workload ?? 1),
     vacationEntitlementDays: entitlement,
     vacationUsedDays: used,
@@ -743,6 +747,12 @@ function mockMedicalExamForEmployee(employee) {
     notificationEnabled: stored.notificationEnabled !== false,
     lastNotificationKey: stored.lastNotificationKey || "",
     lastNotificationSentAt: stored.lastNotificationSentAt || "",
+    requestExamType: stored.requestExamType || "entry",
+    requestCategory: stored.requestCategory || category,
+    medicalFacilityName: stored.medicalFacilityName || "",
+    medicalDoctorName: stored.medicalDoctorName || "",
+    medicalFacilityAddress: stored.medicalFacilityAddress || "",
+    medicalFacilityCompanyId: stored.medicalFacilityCompanyId || "",
     updatedByUserId: stored.updatedByUserId || "",
     createdAt: stored.createdAt || "",
     updatedAt: stored.updatedAt || "",
@@ -776,6 +786,12 @@ function saveMockMedicalExam(currentUser, employee, payload) {
     note: String(payload?.note ?? existing.note ?? "").trim(),
     optional: calculated.optional,
     notificationEnabled: payload?.notificationEnabled !== false,
+    requestExamType: String(payload?.requestExamType ?? existing.requestExamType ?? "entry").trim() || "entry",
+    requestCategory: normalizeMedicalExamCategory(payload?.requestCategory ?? existing.requestCategory ?? category) || category,
+    medicalFacilityName: String(payload?.medicalFacilityName ?? existing.medicalFacilityName ?? "").trim(),
+    medicalDoctorName: String(payload?.medicalDoctorName ?? existing.medicalDoctorName ?? "").trim(),
+    medicalFacilityAddress: String(payload?.medicalFacilityAddress ?? existing.medicalFacilityAddress ?? "").trim(),
+    medicalFacilityCompanyId: String(payload?.medicalFacilityCompanyId ?? existing.medicalFacilityCompanyId ?? "").trim(),
     updatedByUserId: currentUser.id,
     createdAt: existing.createdAt || now,
     updatedAt: now
@@ -2508,6 +2524,50 @@ async function handleApi(request, response) {
     } catch (error) {
       sendJson(response, error.status || 400, { error: error.message || "Lékařskou prohlídku se nepodařilo uložit." });
     }
+    return true;
+  }
+
+  const employeeMedicalExamRequestMatch = /^\/api\/employees\/([^/]+)\/medical-exam-request$/.exec(url.pathname);
+  if (employeeMedicalExamRequestMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "export") || !canManageMockMedicalExam(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění exportovat žádost o zdravotní způsobilost." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeMedicalExamRequestMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    const mode = url.searchParams.get("mode") === "print" ? "print" : "download";
+    const medicalExam = mockMedicalExamForEmployee(employee);
+    const html = renderMedicalExamRequestDocument({ employee, exam: medicalExam, mode });
+    mockNotificationLogs = [{
+      id: `employee-document-audit-${randomUUID()}`,
+      type: "employee_document_audit",
+      channel: "system",
+      status: "completed",
+      subject: mode === "print" ? "Tisk žádosti o zdravotní způsobilost" : "Export žádosti o zdravotní způsobilost",
+      recipient: user.email || "",
+      recipientName: user.name || user.email || "",
+      messagePreview: `${mode === "print" ? "Tisk" : "Export"} dokumentu pro zaměstnance ${fullEmployeeName(employee)}`,
+      createdAt: new Date().toISOString()
+    }, ...mockNotificationLogs].slice(0, 500);
+    response.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow",
+      "Content-Disposition": mode === "download"
+        ? `attachment; filename="zadost-zdravotni-zpusobilost-${employee.id}.html"`
+        : "inline"
+    });
+    response.end(html);
     return true;
   }
 

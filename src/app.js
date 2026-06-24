@@ -284,6 +284,18 @@ const EMPLOYMENT_TYPE_SELECT_OPTIONS = [
 ];
 const EMPLOYEE_ABSENCE_STATUS_OPTIONS = ["v práci", "nemoc", "dovolená", "OČR", "lékař", "náhradní volno"];
 const DOCUMENT_TYPE_LABELS = ["Pracovní smlouva", "Dodatek", "Školení", "Lékařská prohlídka", "Ostatní"];
+const MEDICAL_EXAM_REQUEST_TYPE_OPTIONS = [
+  { value: "entry", label: "Vstupní prohlídka" },
+  { value: "periodic", label: "Periodická preventivní prohlídka" },
+  { value: "extraordinary", label: "Mimořádná zdravotní prohlídka" }
+];
+const MEDICAL_EXAM_REQUEST_CATEGORY_OPTIONS = [
+  { value: "", label: "Zkontrolovat před exportem" },
+  { value: "administration_i", label: "Administrativa / kategorie I." },
+  { value: "driver_ii", label: "Řidič / kategorie II." },
+  { value: "technician_ii", label: "Technik / kategorie II." },
+  { value: "wastewater_operator_ii", label: "Obsluha ČOV / kategorie II." }
+];
 const basePath = new URL(document.querySelector("base")?.href || "/", window.location.origin)
   .pathname
   .replace(/\/$/, "");
@@ -626,6 +638,10 @@ function routeHref(route) {
   }
 
   return `${basePath || ""}${route}`;
+}
+
+function apiHref(path) {
+  return `${basePath || ""}${path}`;
 }
 
 function employeeCardRoute(employeeId) {
@@ -2288,11 +2304,14 @@ function normalizeEmployeeCardFormData(data) {
     role: normalizeRole(data.role),
     department: normalizeEmployeeCardText(data.department),
     position: normalizeEmployeeCardText(data.position),
+    address: normalizeEmployeeCardText(data.address),
+    workplace: normalizeEmployeeCardText(data.workplace),
     managerId: normalizeEmployeeCardText(data.managerId),
     employmentStatus: normalizeEmployeeCardText(data.employmentStatus) || "active",
     startDate: normalizeEmployeeCardText(data.startDate),
     employmentType: normalizeEmployeeCardText(data.employmentType),
     workload: normalizeEmployeeCardNumber(data.workload),
+    weeklyHours: normalizeEmployeeCardNumber(data.weeklyHours),
     vacationEntitlementDays: entitlement,
     vacationUsedDays: used,
     vacationPendingDays: pending,
@@ -2346,12 +2365,15 @@ function employeeCardFormData(form) {
     role: normalizeRole(employeeCardFormValue(form, "role") || source.role),
     department: employeeCardFormValue(form, "department").trim(),
     position: employeeCardFormValue(form, "position").trim(),
+    address: employeeCardFormValue(form, "address").trim(),
+    workplace: employeeCardFormValue(form, "workplace").trim(),
     managerId,
     managerName: managerId ? employeeFullName(manager) : "",
     employmentStatus: employeeCardFormValue(form, "employmentStatus") || "active",
     startDate: employeeCardFormValue(form, "startDate"),
     employmentType: employeeCardFormValue(form, "employmentType").trim(),
     workload: Number(employeeCardFormValue(form, "workload") || 0),
+    weeklyHours: Number(employeeCardFormValue(form, "weeklyHours") || 0),
     vacationEntitlementDays: entitlement,
     vacationUsedDays: used,
     vacationPendingDays: pending,
@@ -2406,6 +2428,12 @@ function normalizeEmployeeMedicalExamFormData(data) {
     category,
     dateOfBirth,
     lastExamDate,
+    requestExamType: normalizeEmployeeCardText(data.requestExamType) || "entry",
+    requestCategory: normalizeMedicalExamCategory(data.requestCategory || category),
+    medicalFacilityName: normalizeEmployeeCardText(data.medicalFacilityName),
+    medicalDoctorName: normalizeEmployeeCardText(data.medicalDoctorName),
+    medicalFacilityAddress: normalizeEmployeeCardText(data.medicalFacilityAddress),
+    medicalFacilityCompanyId: normalizeEmployeeCardText(data.medicalFacilityCompanyId),
     note: normalizeEmployeeCardText(data.note),
     notificationEnabled,
     ...calculated
@@ -2423,6 +2451,12 @@ function employeeMedicalExamComparable(data) {
     category: normalized.category,
     dateOfBirth: normalized.dateOfBirth,
     lastExamDate: normalized.lastExamDate,
+    requestExamType: normalized.requestExamType,
+    requestCategory: normalized.requestCategory,
+    medicalFacilityName: normalized.medicalFacilityName,
+    medicalDoctorName: normalized.medicalDoctorName,
+    medicalFacilityAddress: normalized.medicalFacilityAddress,
+    medicalFacilityCompanyId: normalized.medicalFacilityCompanyId,
     note: normalized.note,
     notificationEnabled: normalized.notificationEnabled
   };
@@ -2439,6 +2473,12 @@ function employeeMedicalExamDraftFor(employee) {
       category: "",
       dateOfBirth: "",
       lastExamDate: "",
+      requestExamType: "entry",
+      requestCategory: "",
+      medicalFacilityName: "",
+      medicalDoctorName: "",
+      medicalFacilityAddress: "",
+      medicalFacilityCompanyId: "",
       note: "",
       notificationEnabled: true
     };
@@ -2460,6 +2500,12 @@ function employeeMedicalExamFormData(form) {
     category: employeeCardFormValue(form, "category"),
     dateOfBirth: employeeCardFormValue(form, "dateOfBirth"),
     lastExamDate: employeeCardFormValue(form, "lastExamDate"),
+    requestExamType: employeeCardFormValue(form, "requestExamType"),
+    requestCategory: employeeCardFormValue(form, "requestCategory"),
+    medicalFacilityName: employeeCardFormValue(form, "medicalFacilityName"),
+    medicalDoctorName: employeeCardFormValue(form, "medicalDoctorName"),
+    medicalFacilityAddress: employeeCardFormValue(form, "medicalFacilityAddress"),
+    medicalFacilityCompanyId: employeeCardFormValue(form, "medicalFacilityCompanyId"),
     note: employeeCardFormValue(form, "note"),
     notificationEnabled: employeeCardFormValue(form, "notificationEnabled") !== "false"
   };
@@ -4686,6 +4732,7 @@ function employeeMedicalExamSection(employee, canEdit) {
     { value: "", label: "Vyberte kategorii" },
     ...MEDICAL_EXAM_CATEGORY_OPTIONS
   ];
+  const requestUrl = apiHref(`/api/employees/${encodeURIComponent(employee.id)}/medical-exam-request`);
 
   return `
     <section class="employee-card-section employee-card-section--wide employee-medical-exam-section" aria-labelledby="employee-medical-exam-title">
@@ -4710,6 +4757,8 @@ function employeeMedicalExamSection(employee, canEdit) {
           ${employeeCardField("Kategorie prohlídky", employeeCardSelect("category", categoryOptions, exam.category, disabled))}
           ${employeeCardField("Datum narození pro výpočet věku", employeeCardInput("dateOfBirth", exam.dateOfBirth, { type: "date", disabled }))}
           ${employeeCardField("Datum poslední prohlídky", employeeCardInput("lastExamDate", exam.lastExamDate, { type: "date", disabled }))}
+          ${employeeCardField("Typ prohlídky do PDF", employeeCardSelect("requestExamType", MEDICAL_EXAM_REQUEST_TYPE_OPTIONS, exam.requestExamType || "entry", disabled))}
+          ${employeeCardField("Zařazení do PDF", employeeCardSelect("requestCategory", MEDICAL_EXAM_REQUEST_CATEGORY_OPTIONS, exam.requestCategory || exam.category || "", disabled))}
           ${employeeCardField("Upozornění", employeeCardSelect("notificationEnabled", [
             { value: "true", label: "Zapnuto" },
             { value: "false", label: "Vypnuto" }
@@ -4726,11 +4775,30 @@ function employeeMedicalExamSection(employee, canEdit) {
             <span>Poznámka</span>
             <textarea name="note" rows="3" ${disabled ? "disabled" : ""}>${escapeHtml(exam.note || "")}</textarea>
           </label>
+          ${employeeCardField("Jméno zařízení", employeeCardInput("medicalFacilityName", exam.medicalFacilityName || "", { disabled }))}
+          ${employeeCardField("Posuzující lékař", employeeCardInput("medicalDoctorName", exam.medicalDoctorName || "", { disabled }))}
+          ${employeeCardField("Sídlo zařízení", employeeCardInput("medicalFacilityAddress", exam.medicalFacilityAddress || "", { disabled }))}
+          ${employeeCardField("IČ zařízení", employeeCardInput("medicalFacilityCompanyId", exam.medicalFacilityCompanyId || "", { disabled }))}
         </div>
 
         <p class="employee-medical-exam-note">
           Citlivé údaje jsou dostupné jen oprávněným rolím. E-mailové upozornění se posílá serverově na personalistiku a nikdy z prohlížeče.
         </p>
+
+        <div class="employee-medical-exam-pdf">
+          <div>
+            <strong>Žádost o posouzení zdravotní způsobilosti k práci</strong>
+            <span>Nejdřív uložte změny. Export i tisk se generují přes chráněné backend API a zapíšou audit.</span>
+          </div>
+          <div class="employee-medical-exam-pdf__actions">
+            <a class="primary-action" href="${escapeHtml(`${requestUrl}?mode=download`)}" target="_blank" rel="noopener noreferrer">
+              Export vyplněného PDF
+            </a>
+            <a class="secondary-link" href="${escapeHtml(`${requestUrl}?mode=print`)}" target="_blank" rel="noopener noreferrer">
+              Tisk vyplněného PDF
+            </a>
+          </div>
+        </div>
 
         ${canEdit ? `
           <div class="employee-card-form-actions">
@@ -5029,9 +5097,12 @@ function employeeCardContent(employeeId, user) {
               ${employeeCardField("Role", employeeCardSelect("role", ROLE_DEFINITIONS.map((role) => ({ value: role.id, label: role.label })), normalizeRole(formEmployee.role), disabled))}
               ${employeeCardField("Oddělení", employeeCardInput("department", formEmployee.department, { disabled }))}
               ${employeeCardField("Pracovní pozice", employeeCardInput("position", formEmployee.position, { disabled }))}
+              ${employeeCardField("Bydliště", employeeCardInput("address", formEmployee.address || "", { disabled }))}
+              ${employeeCardField("Místo výkonu práce", employeeCardInput("workplace", formEmployee.workplace || "", { disabled }))}
               ${employeeCardField("Stav zaměstnance", employeeCardSelect("employmentStatus", EMPLOYMENT_STATUS_OPTIONS, formEmployee.employmentStatus || "active", disabled))}
               ${employeeCardField("Datum nástupu", employeeCardInput("startDate", formEmployee.startDate, { type: "date", disabled }))}
               ${employeeCardField("Pracovní úvazek", employeeCardInput("workload", formEmployee.workload, { type: "number", step: "0.1", min: "0", disabled }))}
+              ${employeeCardField("Týdenní hodiny", employeeCardInput("weeklyHours", formEmployee.weeklyHours || (Number(formEmployee.workload || 0) * 40), { type: "number", step: "0.5", min: "0", disabled }))}
               ${employeeCardField("Typ pracovního vztahu", employeeCardSelect("employmentType", EMPLOYMENT_TYPE_SELECT_OPTIONS, formEmployee.employmentType, disabled))}
             </div>
           </section>
