@@ -1,10 +1,142 @@
-# PODMÍNKY PROJEKTU SMART ODPADY
+# BIBLE PROJEKTU KAISER SMART / SMART ODPADY
 
 ## 1. Hlavní pravidlo
 
-Tento soubor má přednost před běžným zadáním.
+Tento soubor je hlavní pracovní bible projektu a má přednost před běžným zadáním.
 
 Pokud je zadání v rozporu s tímto souborem, zastav práci a upozorni na rozpor.
+
+## Povinný pracovní postup Codexu / vývojáře
+
+### 1. Před zahájením práce
+
+Před jakoukoli prací musí Codex/vývojář otevřít a přečíst `BIBLE.md`.
+
+Bez přečtení `BIBLE.md` se nesmí:
+- analyzovat změna
+- implementovat
+- upravovat soubory
+- měnit API
+- měnit databáze
+- měnit Cloudflare
+- commitovat
+- pushovat
+- nasazovat
+
+### 2. Návrh před implementací
+
+Před implementací musí Codex/vývojář stručně a srozumitelně napsat návrh.
+
+Návrh musí obsahovat:
+- pochopení zadání
+- přesný rozsah změny
+- soubory, kterých se změna pravděpodobně dotkne
+- zda se mění frontend
+- zda se mění backend/API
+- zda se mění databáze/migrace
+- zda se mění Cloudflare/Workers/D1/R2/secrets
+- zda se mění externí integrace
+- rizika
+- testovací plán
+
+Po návrhu musí napsat:
+`Čekám na potvrzení před implementací.`
+
+Bez potvrzení Radima/Martina nesmí implementovat.
+
+### 3. Zákaz implementace naslepo
+
+Codex/vývojář nesmí:
+- implementovat bez návrhu
+- měnit soubory bez potvrzení
+- mazat soubory bez potvrzení
+- měnit produkční data bez potvrzení
+- měnit Cloudflare secrets bez potvrzení
+- měnit DB/migrace bez potvrzení
+- pushovat bez jasného ukončení práce
+- nasazovat bez informace Radimovi/Martinovi
+
+### 4. Kontrola před commitem
+
+Těsně před každým commitem musí Codex/vývojář znovu otevřít `BIBLE.md`.
+
+Musí ověřit:
+- že změny neporušují pravidla projektu
+- že nejsou použita lokální úložiště jako databáze
+- že nejsou v repozitáři secrets
+- že nejsou commitnuté citlivé dokumenty
+- že se neposílají e-maily/SMS z frontendu
+- že backend/cloud/API zůstává zdroj pravdy
+- že nebyly změněny zakázané části projektu
+- že proběhl `git diff --check`
+
+### 5. Povinný závěrečný report
+
+Po dokončení práce musí Codex/vývojář napsat srozumitelný report.
+
+Report musí obsahovat:
+
+- `Hotovo / nehotovo`
+- `Changed files`
+- `Co bylo změněno`
+- `Co bylo testováno`
+- `Co nebylo testováno`
+- `Build výsledek`
+- `git diff --check výsledek`
+- `Commit`
+- `Branch`
+- `Push`
+- `Produkce`
+
+U produkce musí být jasně uvedeno:
+
+Pokud je zveřejněno:
+- `Zveřejněno: ANO`
+- URL produkce
+- verze
+- commit
+
+Pokud není zveřejněno:
+- `Zveřejněno: NE`
+- důvod
+- co je potřeba pro zveřejnění
+
+### 6. Povinná formulace po ukončení
+
+Na konci každé práce musí být věta:
+
+`Zveřejněno: ANO/NE.`
+
+A dále:
+
+`Repo je čisté / Repo není čisté.`
+
+Pokud repo není čisté, musí vypsat:
+- změněné soubory
+- nesledované soubory
+- co s nimi doporučuje udělat
+
+### 7. Produkce a nasazení
+
+Codex/vývojář nesmí tvrdit, že je změna v produkci, pokud to neověřil.
+
+Pokud produkci neověřil, musí napsat:
+`Produkci jsem neověřil.`
+
+Pokud produkci ověřil, musí napsat:
+- URL
+- verzi
+- commit
+- co přesně ověřil
+
+### 8. Pravdivost
+
+Codex/vývojář nesmí psát, že něco testoval, pokud to netestoval.
+
+Musí rozlišovat:
+- ověřeno
+- neověřeno
+- domněnka
 
 ## 2. Ukládání dat
 
@@ -318,7 +450,7 @@ https://github.com/kaiser-smart/nanolab-shoptet-blog-automat.git
 ```
 
 Před každou prací musí Codex:
-- přečíst `PODMINKY.md`,
+- přečíst `BIBLE.md`,
 - spustit `git status --short --branch`,
 - ověřit, zda existují necommitnuté změny.
 
@@ -340,9 +472,9 @@ Pro souběžnou práci platí:
 - u souběžné práce se preferuje samostatný `git worktree`,
 - jeden člověk / Codex je vždy vlastník konkrétního rozpracovaného úkolu,
 - dva lidé nesmí současně měnit stejné soubory bez domluvy,
-- společné soubory jako `src/app.js`, `src/styles.css`, `package.json`, `src/data/versionInfo.js` a `PODMINKY.md` vyžadují zvýšenou opatrnost,
-- `PODMINKY.md` je společný pracovní kontrakt pro Radima i Martina,
-- pokud někdo změní `PODMINKY.md`, druhý musí před další prací načíst aktuální verzi z GitHubu.
+- společné soubory jako `src/app.js`, `src/styles.css`, `package.json`, `src/data/versionInfo.js` a `BIBLE.md` vyžadují zvýšenou opatrnost,
+- `BIBLE.md` je společný pracovní kontrakt pro Radima i Martina,
+- pokud někdo změní `BIBLE.md`, druhý musí před další prací načíst aktuální verzi z GitHubu.
 
 Doporučený začátek práce pro Radima i Martina:
 
