@@ -67,6 +67,38 @@ Nesmí vznikat:
 
 ## 6. GitHub
 
+Hlavní firemní GitHub organizace je:
+
+```text
+kaiser-smart
+```
+
+Kaiser repozitáře:
+
+```text
+https://github.com/kaiser-smart/kaiser-control-center.git
+https://github.com/kaiser-smart/kaiser-pneu-evidence.git
+```
+
+Nanolab / Shoptet repozitáře ve stejné organizaci:
+
+```text
+https://github.com/kaiser-smart/prostuduj-shoptet-vs-nanolab-cz-a.git
+https://github.com/kaiser-smart/nanolab-shoptet-blog-automat.git
+```
+
+Radim i Martin jsou vlastníci organizace `kaiser-smart`.
+
+Osobní účet `oplustil-prog` už není hlavní zdroj pravdy pro pracovní repozitáře.
+
+Staré GitHub adresy mohou dočasně fungovat přes redirect, ale pro novou práci se musí používat adresy v `kaiser-smart`.
+
+Po přesunu repozitáře nebo změně ownera vždy ověř:
+- lokální `origin`,
+- GitHub práva,
+- napojení Cloudflare Pages / GitHub Pages,
+- produkční deploy po dalším bezpečném commitu.
+
 Přes jaký nástroj / příkaz se data posílají do GitHubu:
 
 Přes Git příkazem:
@@ -253,10 +285,44 @@ Codex se má zastavit pouze tehdy, když:
 
 Na projektu může současně pracovat více lidí nebo více Codex vláken.
 
+Tato pravidla platí stejně pro Radima, Martina i všechna Codex vlákna.
+
+Radim a Martin mají v GitHub organizaci roli `Owner`.
+
+Vyšší práva neznamenají obcházení pravidel v tomto souboru. I Owner musí před změnou ověřit stav repozitáře a nezasahovat do rozpracované práce druhého.
+
+Zdroj pravdy pro GitHub je organizace:
+
+```text
+kaiser-smart
+```
+
+Před prací ověř, že lokální `origin` míří na správný repozitář v `kaiser-smart`.
+
+Správné remotes:
+
+```text
+Kaiser Control Center:
+https://github.com/kaiser-smart/kaiser-control-center.git
+
+Pneumatiky:
+https://github.com/kaiser-smart/kaiser-pneu-evidence.git
+
+Nanolab / Shoptet:
+https://github.com/kaiser-smart/prostuduj-shoptet-vs-nanolab-cz-a.git
+https://github.com/kaiser-smart/nanolab-shoptet-blog-automat.git
+```
+
 Před každou prací musí Codex:
 - přečíst `PODMINKY.md`,
 - spustit `git status --short --branch`,
 - ověřit, zda existují necommitnuté změny.
+
+Před každou prací musí Radim i Martin:
+- načíst aktuální stav z GitHubu,
+- ověřit aktuální větev,
+- ověřit, že nezačínají práci nad cizími necommitnutými změnami,
+- u většího úkolu založit samostatnou větev.
 
 Pokud existují necommitnuté změny:
 - Codex nesmí předpokládat, že jsou jeho,
@@ -270,7 +336,29 @@ Pro souběžnou práci platí:
 - u souběžné práce se preferuje samostatný `git worktree`,
 - jeden člověk / Codex je vždy vlastník konkrétního rozpracovaného úkolu,
 - dva lidé nesmí současně měnit stejné soubory bez domluvy,
-- společné soubory jako `src/app.js`, `src/styles.css`, `package.json`, `src/data/versionInfo.js` a `PODMINKY.md` vyžadují zvýšenou opatrnost.
+- společné soubory jako `src/app.js`, `src/styles.css`, `package.json`, `src/data/versionInfo.js` a `PODMINKY.md` vyžadují zvýšenou opatrnost,
+- `PODMINKY.md` je společný pracovní kontrakt pro Radima i Martina,
+- pokud někdo změní `PODMINKY.md`, druhý musí před další prací načíst aktuální verzi z GitHubu.
+
+Doporučený začátek práce pro Radima i Martina:
+
+```bash
+git fetch origin
+git status --short --branch
+git remote -v
+```
+
+Pokud lokální větev není aktuální vůči `origin/main`, nejdřív sladit stav a teprve potom začít novou práci.
+
+Větev `main` je produkční / hlavní větev.
+
+Na `main` se nemá dělat větší přímá práce. Větší úkol patří do samostatné větve, například:
+
+```text
+radim/<kratky-popis>
+martin/<kratky-popis>
+codex/<kratky-popis>
+```
 
 Před pushem:
 - spustit build / testy podle úkolu,
@@ -278,10 +366,42 @@ Před pushem:
 - ověřit, že commit obsahuje jen změny daného úkolu,
 - nepushovat cizí rozpracované změny.
 
+Před commitem:
+- zkontrolovat `git diff`,
+- zkontrolovat `git status --short`,
+- necommitovat soubory, které s úkolem nesouvisí,
+- necommitovat dočasné soubory, exporty, tokeny, logy ani osobní data.
+
+Před mergem nebo nasazením:
+- ověřit, že změna není v konfliktu s prací druhého člověka,
+- ověřit produkční dopad,
+- ověřit Cloudflare Pages / GitHub Pages napojení, pokud se měnil GitHub owner, remote, branch nebo deploy konfigurace.
+
+Po každém přesunu repozitáře nebo změně GitHub organizace:
+- aktualizovat lokální `origin`,
+- ověřit `git fetch origin`,
+- ověřit, že GitHub zobrazuje správného ownera,
+- ověřit, že Martin i Radim mají očekávaná práva,
+- ověřit produkční deploy kanál.
+
 Pokud je workspace špinavý a změny patří druhému člověku:
 - vytvořit nový worktree,
 - nebo počkat na commit / stash vlastníka změn,
 - nebo si výslovně potvrdit převzetí konkrétních souborů.
+
+Pokud si Radim nebo Martin nejsou jistí, kdo vlastní rozpracovanou změnu:
+- nepokračovat naslepo,
+- neposouvat ani nepřepisovat cizí branch,
+- nejdřív si napsat krátké předání: větev, soubory, stav, další krok.
+
+Minimální předání práce mezi Radimem a Martinem má obsahovat:
+- název větve,
+- stručný cíl,
+- změněné soubory,
+- co je hotovo,
+- co není otestované,
+- jestli se měnilo API / DB / secrets / produkční nastavení,
+- doporučený další krok.
 
 ## 16. Šarlota / ElevenLabs – pravidla integrace
 
