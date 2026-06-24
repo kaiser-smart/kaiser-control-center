@@ -26,6 +26,10 @@ export const AI_ALLOWED_ROUTES = [
   "/pripominky"
 ];
 
+const AI_ALLOWED_ROUTE_PREFIXES = [
+  "/dovolena-nemoc/zamestnanci/"
+];
+
 export const AI_MODULE_ROUTE_MAP = {
   dashboard: "/dashboard",
   "rychle-zadani": "/dovolena-nemoc/rychle-zadani",
@@ -96,6 +100,62 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
       { name: "selector", type: "string", required: true },
       { name: "message", type: "string", required: false }
     ]
+  },
+  {
+    name: "search_employee",
+    description: "Vyhledá zaměstnance podle jména nebo části jména přes bezpečné cloud API.",
+    parameters: [
+      { name: "query", type: "string", required: true },
+      { name: "limit", type: "number", required: false }
+    ]
+  },
+  {
+    name: "get_employee_detail",
+    description: "Načte bezpečný souhrn zaměstnance podle ID, případně dohledá jednoznačné jméno.",
+    parameters: [
+      { name: "employeeId", type: "string", required: false },
+      { name: "query", type: "string", required: false }
+    ]
+  },
+  {
+    name: "open_employee_card",
+    description: "Otevře kartu zaměstnance v aplikaci bez hard reloadu.",
+    parameters: [
+      { name: "employeeId", type: "string", required: false },
+      { name: "query", type: "string", required: false }
+    ]
+  },
+  {
+    name: "get_employee_manager",
+    description: "Zjistí nadřízeného zaměstnance přes bezpečný souhrn karty.",
+    parameters: [
+      { name: "employeeId", type: "string", required: false },
+      { name: "query", type: "string", required: false }
+    ]
+  },
+  {
+    name: "get_employee_absence_summary",
+    description: "Vrátí stručný souhrn dovolené a nepřítomností zaměstnance.",
+    parameters: [
+      { name: "employeeId", type: "string", required: false },
+      { name: "query", type: "string", required: false }
+    ]
+  },
+  {
+    name: "search_user",
+    description: "Vyhledá uživatele podle jména nebo role, pouze pokud má přihlášený uživatel oprávnění.",
+    parameters: [
+      { name: "query", type: "string", required: true },
+      { name: "limit", type: "number", required: false }
+    ]
+  },
+  {
+    name: "get_user_access_summary",
+    description: "Načte read-only souhrn role a oprávnění uživatele přes cloud API.",
+    parameters: [
+      { name: "userId", type: "string", required: false },
+      { name: "query", type: "string", required: false }
+    ]
   }
 ];
 
@@ -127,7 +187,13 @@ export function normalizeAiRoute(route) {
 
 export function isAllowedAiRoute(route) {
   const normalizedRoute = normalizeAiRoute(route);
-  return Boolean(normalizedRoute && ALLOWED_ROUTE_SET.has(normalizedRoute));
+  return Boolean(
+    normalizedRoute &&
+    (
+      ALLOWED_ROUTE_SET.has(normalizedRoute) ||
+      AI_ALLOWED_ROUTE_PREFIXES.some((prefix) => normalizedRoute.startsWith(prefix))
+    )
+  );
 }
 
 export function routeForAiModule(moduleId) {
@@ -139,7 +205,8 @@ export function createElevenLabsClientTools({
   canUseRoute = () => true,
   confirm = async () => false,
   toast = () => {},
-  highlight = () => {}
+  highlight = () => {},
+  requestJson = null
 } = {}) {
   function guardedRoute(route) {
     const normalizedRoute = normalizeAiRoute(route);
@@ -155,7 +222,103 @@ export function createElevenLabsClientTools({
     return { ok: true, route: normalizedRoute };
   }
 
-  return {
+  async function defaultRequestJson(path, options = {}) {
+    const response = await fetch(path, {
+      credentials: "include",
+      headers: {
+        ...(options.headers || {})
+      },
+      ...options
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Požadavek se nepodařilo dokončit.");
+    }
+
+    return payload;
+  }
+
+  const safeRequestJson = requestJson || defaultRequestJson;
+
+  function withQuery(path, params = {}) {
+    const query = new URLSearchParams();
+
+    Object.entries(params).forEach(([key, value]) => {
+      const cleaned = cleanString(value);
+      if (cleaned) {
+        query.set(key, cleaned);
+      }
+    });
+
+    const suffix = query.toString();
+    return suffix ? `${path}?${suffix}` : path;
+  }
+
+  function identityParameters(parameters = {}, idKey = "employeeId") {
+    return {
+      id: cleanString(parameters[idKey] || parameters.id),
+      query: cleanString(parameters.query || parameters.name || parameters.fullName || parameters.q)
+    };
+  }
+
+  async function readJson(path, params = {}) {
+    return safeRequestJson(withQuery(path, params), { method: "GET" });
+  }
+
+  async function employeeDetailFor(parameters = {}) {
+    const identity = identityParameters(parameters, "employeeId");
+
+    if (identity.id) {
+      const result = await readJson(`/api/ai/employees/${encodeURIComponent(identity.id)}/summary`);
+      return { ok: true, employee: result.employee, apiStatus: result.apiStatus };
+    }
+
+    if (!identity.query) {
+      return { ok: false, error: "Chybí jméno nebo ID zaměstnance." };
+    }
+
+    const search = await tools.search_employee({ query: identity.query, limit: parameters.limit || 5 });
+
+    if (!search.ok || search.count !== 1) {
+      return search;
+    }
+
+    const employeeId = search.employees[0]?.id;
+    if (!employeeId) {
+      return { ok: false, error: "Zaměstnanec nebyl nalezen." };
+    }
+
+    return employeeDetailFor({ employeeId });
+  }
+
+  async function userSummaryFor(parameters = {}) {
+    const identity = identityParameters(parameters, "userId");
+
+    if (identity.id) {
+      const result = await readJson(`/api/ai/users/${encodeURIComponent(identity.id)}/summary`);
+      return { ok: true, user: result.user, apiStatus: result.apiStatus };
+    }
+
+    if (!identity.query) {
+      return { ok: false, error: "Chybí jméno nebo ID uživatele." };
+    }
+
+    const search = await tools.search_user({ query: identity.query, limit: parameters.limit || 5 });
+
+    if (!search.ok || search.count !== 1) {
+      return search;
+    }
+
+    const userId = search.users[0]?.id;
+    if (!userId) {
+      return { ok: false, error: "Uživatel nebyl nalezen." };
+    }
+
+    return userSummaryFor({ userId });
+  }
+
+  const tools = {
     async navigate_to(parameters = {}) {
       const result = guardedRoute(parameters.route);
 
@@ -223,7 +386,125 @@ export function createElevenLabsClientTools({
       window.setTimeout(() => element.classList.remove("ai-assistant-highlight"), 2600);
       highlight({ selector, message });
       return { ok: true, selector, message };
+    },
+
+    async search_employee(parameters = {}) {
+      const query = cleanString(parameters.query || parameters.name || parameters.q);
+
+      if (!query) {
+        return { ok: false, error: "Chybí hledané jméno zaměstnance." };
+      }
+
+      const result = await readJson("/api/ai/employees/search", {
+        q: query,
+        limit: parameters.limit || 5
+      });
+      const count = Number(result.count || 0);
+
+      return {
+        ok: true,
+        query: result.query,
+        employees: Array.isArray(result.employees) ? result.employees : [],
+        count,
+        needsDisambiguation: Boolean(result.needsDisambiguation),
+        message: count > 1
+          ? "Našlo se více zaměstnanců. Požádejte uživatele o upřesnění."
+          : count === 1
+            ? "Našel se jeden zaměstnanec."
+            : "Zaměstnanec nebyl nalezen."
+      };
+    },
+
+    async get_employee_detail(parameters = {}) {
+      return employeeDetailFor(parameters);
+    },
+
+    async open_employee_card(parameters = {}) {
+      const result = await employeeDetailFor(parameters);
+      const route = result.employee?.route || "";
+
+      if (!result.ok || !route) {
+        return result;
+      }
+
+      const guarded = guardedRoute(route);
+      if (!guarded.ok) {
+        return guarded;
+      }
+
+      navigate(guarded.route);
+      return {
+        ok: true,
+        opened: true,
+        route: guarded.route,
+        employee: result.employee,
+        message: `Otevírám kartu zaměstnance ${result.employee.fullName || ""}.`.trim()
+      };
+    },
+
+    async get_employee_manager(parameters = {}) {
+      const result = await employeeDetailFor(parameters);
+
+      if (!result.ok) {
+        return result;
+      }
+
+      return {
+        ok: true,
+        employee: result.employee,
+        managerName: result.employee?.managerName || "",
+        message: result.employee?.managerName
+          ? `Nadřízený zaměstnance ${result.employee.fullName} je ${result.employee.managerName}.`
+          : `U zaměstnance ${result.employee?.fullName || ""} není nadřízený vyplněný.`
+      };
+    },
+
+    async get_employee_absence_summary(parameters = {}) {
+      const result = await employeeDetailFor(parameters);
+
+      if (!result.ok) {
+        return result;
+      }
+
+      return {
+        ok: true,
+        employee: result.employee,
+        vacation: result.employee?.vacation || null,
+        absence: result.employee?.absence || null
+      };
+    },
+
+    async search_user(parameters = {}) {
+      const query = cleanString(parameters.query || parameters.name || parameters.q);
+
+      if (!query) {
+        return { ok: false, error: "Chybí hledané jméno uživatele." };
+      }
+
+      const result = await readJson("/api/ai/users/search", {
+        q: query,
+        limit: parameters.limit || 5
+      });
+      const count = Number(result.count || 0);
+
+      return {
+        ok: true,
+        query: result.query,
+        users: Array.isArray(result.users) ? result.users : [],
+        count,
+        needsDisambiguation: Boolean(result.needsDisambiguation),
+        message: count > 1
+          ? "Našlo se více uživatelů. Požádejte uživatele o upřesnění."
+          : count === 1
+            ? "Našel se jeden uživatel."
+            : "Uživatel nebyl nalezen."
+      };
+    },
+
+    async get_user_access_summary(parameters = {}) {
+      return userSummaryFor(parameters);
     }
   };
-}
 
+  return tools;
+}

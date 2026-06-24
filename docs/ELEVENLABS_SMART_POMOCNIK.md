@@ -87,6 +87,13 @@ V ElevenLabs dashboardu založit client tools se stejnými názvy a parametry:
 - `show_confirmation`: `title`, `message`, `confirmLabel`, `cancelLabel`
 - `show_toast`: `type`, `message`
 - `highlight_element`: `selector`, `message`
+- `search_employee`: `query`, `limit`
+- `get_employee_detail`: `employeeId`, `query`
+- `open_employee_card`: `employeeId`, `query`
+- `get_employee_manager`: `employeeId`, `query`
+- `get_employee_absence_summary`: `employeeId`, `query`
+- `search_user`: `query`, `limit`
+- `get_user_access_summary`: `userId`, `query`
 
 Názvy toolů i parametrů jsou case-sensitive.
 
@@ -96,10 +103,20 @@ Webhook tools směřovat na produkční API:
 
 - `GET /api/ai/search?q={q}`
 - `GET /api/ai/absence/pending`
+- `GET /api/ai/employees/search?q={q}`
+- `GET /api/ai/employees/{id}/summary`
+- `GET /api/ai/users/search?q={q}`
+- `GET /api/ai/users/{id}/summary`
+- `GET /api/ai/user/me`
 - `POST /api/ai/absence/{id}/approve`
 - `POST /api/ai/absence/{id}/reject`
 - `POST /api/ai/feedback`
-- `GET /api/ai/user/me`
+
+Personální nástroje jsou read-only. ElevenLabs nemá přímý přístup do databáze;
+všechna data jdou přes backend endpointy a jejich oprávnění podle přihlášeného
+uživatele. Do odpovědí pro Šarlotu se neposílají API klíče, signed URL tokeny,
+dokumenty zaměstnanců, interní poznámky ani kontaktní údaje, pokud nejsou pro
+konkrétní potvrzený scénář nutné.
 
 Zápisové endpointy vyžadují potvrzení:
 
@@ -132,4 +149,3 @@ migrations/0011_create_ai_action_logs.sql
 ```
 
 Neukládá celé audio ani tokeny.
-

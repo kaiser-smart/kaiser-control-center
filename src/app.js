@@ -504,7 +504,8 @@ const elevenLabsAssistant = ElevenLabsAssistantProvider({
     canUseRoute: (route) => canUseAiRoute(route),
     confirm: (payload) => requestAiConfirmation(payload),
     toast: (payload) => showAiToast(payload),
-    highlight: (payload) => showAiHighlight(payload)
+    highlight: (payload) => showAiHighlight(payload),
+    requestJson: (path, options) => apiJson(path, options)
   }
 });
 

@@ -12,7 +12,14 @@ import { normalizeFeedback, normalizeFeedbackPriority, normalizeFeedbackStatus }
 import { normalizeAbsenceSettings } from "../src/data/absence.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { modules } from "../src/data/modules.js";
-import { hasPermission, isFullAccessRole, normalizeRole } from "../src/permissions.js";
+import {
+  ACTIONS,
+  PERMISSION_MODULES,
+  hasPermission,
+  isFullAccessRole,
+  normalizeRole,
+  roleLabel
+} from "../src/permissions.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -619,6 +626,126 @@ function findMockEmployee(currentUser, id) {
   return canViewMockEmployee(currentUser, employee) ? employee : null;
 }
 
+function normalizeAiMockSearch(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function mockAiLimit(value, fallback = 5) {
+  const parsed = Number(value || fallback);
+  return Math.max(1, Math.min(Number.isFinite(parsed) ? parsed : fallback, 8));
+}
+
+function mockEmployeeAiRoute(employeeId) {
+  const id = String(employeeId || "").trim();
+  return id ? `/dovolena-nemoc/zamestnanci/${encodeURIComponent(id)}` : "/dovolena-nemoc/zamestnanci";
+}
+
+function mockEmployeeMatchesAiQuery(employee, query) {
+  const normalizedQuery = normalizeAiMockSearch(query);
+  if (!normalizedQuery) {
+    return false;
+  }
+
+  return normalizeAiMockSearch([
+    fullEmployeeName(employee),
+    employee?.department,
+    employee?.position,
+    employee?.role,
+    roleLabel(employee?.role),
+    employee?.managerName
+  ].join(" ")).includes(normalizedQuery);
+}
+
+function mockUserMatchesAiQuery(user, query) {
+  const normalizedQuery = normalizeAiMockSearch(query);
+  if (!normalizedQuery) {
+    return false;
+  }
+
+  return normalizeAiMockSearch([
+    user?.name,
+    user?.department,
+    user?.position,
+    user?.role,
+    roleLabel(user?.role),
+    user?.managerName
+  ].join(" ")).includes(normalizedQuery);
+}
+
+function sanitizeMockEmployeeForAi(employee) {
+  return {
+    id: employee.id,
+    userId: employee.userId,
+    fullName: fullEmployeeName(employee),
+    firstName: employee.firstName || "",
+    lastName: employee.lastName || "",
+    role: employee.role || "",
+    roleLabel: roleLabel(employee.role),
+    department: employee.department || "",
+    position: employee.position || "",
+    managerId: employee.managerId || "",
+    managerName: employee.managerName || "",
+    employmentStatus: employee.employmentStatus || "",
+    currentAbsenceStatus: employee.currentAbsenceStatus || "",
+    sickDaysCurrentYear: Number(employee.sickDaysCurrentYear || 0),
+    lastAbsenceDate: employee.lastAbsenceDate || "",
+    vacation: {
+      year: new Date().getFullYear(),
+      entitlementDays: Number(employee.vacationEntitlementDays || 0),
+      usedDays: Number(employee.vacationUsedDays || 0),
+      pendingDays: Number(employee.vacationPendingDays || 0),
+      remainingDays: Number(employee.vacationRemainingDays || 0)
+    },
+    route: mockEmployeeAiRoute(employee.id)
+  };
+}
+
+function mockUserAccessSummary(user) {
+  const accessibleModules = PERMISSION_MODULES
+    .map((moduleId) => {
+      const allowedActions = ACTIONS.filter((action) => hasPermission(user, moduleId, action));
+
+      if (!allowedActions.length) {
+        return null;
+      }
+
+      return {
+        moduleId,
+        title: modules.find((moduleItem) => moduleItem.id === moduleId)?.title || moduleId,
+        actions: allowedActions
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    role: user?.role || "",
+    roleLabel: roleLabel(user?.role),
+    modules: accessibleModules,
+    moduleCount: accessibleModules.length
+  };
+}
+
+function sanitizeMockUserForAi(user, options = {}) {
+  return {
+    id: user.id,
+    name: user.name || "",
+    role: user.role || "",
+    roleLabel: roleLabel(user.role),
+    status: user.status || "",
+    active: user.active !== false,
+    department: user.department || "",
+    position: user.position || "",
+    managerId: user.managerId || "",
+    managerName: user.managerName || "",
+    route: "/uzivatele",
+    ...(options.includePermissions ? { access: mockUserAccessSummary(user) } : {})
+  };
+}
+
 const MOCK_ABSENCE_TYPE_LABELS = {
   vacation: "Dovolená",
   sick: "Nemoc",
@@ -1034,6 +1161,138 @@ async function handleApi(request, response) {
       modules: visibleModules,
       pages: [],
       records: [],
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/ai/employees/search" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const query = String(url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+    if (!query) {
+      sendJson(response, 400, { error: "Zadejte jméno nebo část jména zaměstnance.", code: "ai_employee_query_required" });
+      return true;
+    }
+
+    const limit = mockAiLimit(url.searchParams.get("limit"), 5);
+    const employees = visibleMockEmployees(user)
+      .filter((employee) => mockEmployeeMatchesAiQuery(employee, query))
+      .slice(0, limit)
+      .map(sanitizeMockEmployeeForAi);
+
+    sendJson(response, 200, {
+      query,
+      employees,
+      count: employees.length,
+      needsDisambiguation: employees.length > 1,
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  const aiEmployeeSummaryMatch = /^\/api\/ai\/employees\/([^/]+)\/summary$/.exec(url.pathname);
+  if (aiEmployeeSummaryMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(aiEmployeeSummaryMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen.", code: "employee_not_found" });
+      return true;
+    }
+
+    const items = mockAbsenceRequests
+      .filter((item) => sameMockId(item.employeeId, employee.id))
+      .filter((item) => canViewMockAbsenceRequest(user, item))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+    sendJson(response, 200, {
+      employee: {
+        ...sanitizeMockEmployeeForAi(employee),
+        absence: {
+          status: items[0]?.statusLabel || employee.currentAbsenceStatus,
+          sickDaysCurrentYear: Number(employee.sickDaysCurrentYear || 0),
+          lastAbsenceDate: items[0]?.dateFrom || employee.lastAbsenceDate,
+          pendingCount: items.filter((item) => ["pending", "pending_approval"].includes(item.status)).length,
+          approvedCount: items.filter((item) => item.status === "approved").length,
+          recentCount: items.length,
+          note: items.length ? "Historie nepřítomností je načtená z vývojového API." : "Zatím tu nejsou žádné žádosti."
+        }
+      },
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/ai/users/search" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "users", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const query = String(url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+    if (!query) {
+      sendJson(response, 400, { error: "Zadejte jméno nebo část jména uživatele.", code: "ai_user_query_required" });
+      return true;
+    }
+
+    const limit = mockAiLimit(url.searchParams.get("limit"), 5);
+    const users = mockUsers
+      .filter((item) => mockUserMatchesAiQuery(item, query))
+      .slice(0, limit)
+      .map((item) => sanitizeMockUserForAi(item));
+
+    sendJson(response, 200, {
+      query,
+      users,
+      count: users.length,
+      needsDisambiguation: users.length > 1,
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  const aiUserSummaryMatch = /^\/api\/ai\/users\/([^/]+)\/summary$/.exec(url.pathname);
+  if (aiUserSummaryMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "users", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const targetUser = findMockUser(decodeURIComponent(aiUserSummaryMatch[1]));
+    if (!targetUser) {
+      sendJson(response, 404, { error: "Uživatel nebyl nalezen.", code: "ai_user_not_found" });
+      return true;
+    }
+
+    sendJson(response, 200, {
+      user: sanitizeMockUserForAi(targetUser, { includePermissions: true }),
       apiStatus: "ready"
     });
     return true;
