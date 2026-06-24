@@ -63,6 +63,10 @@ function approvalUrl(env) {
   return `${appBaseUrl(env).replace(/\/+$/, "")}/dovolena-nemoc/ke-schvaleni`;
 }
 
+function feedbackUrl(env) {
+  return `${appBaseUrl(env).replace(/\/+$/, "")}/pripominky`;
+}
+
 function typeLabel(request) {
   return request?.typeLabel || TYPE_LABELS[request?.type] || cleanString(request?.type) || "Žádost";
 }
@@ -207,6 +211,47 @@ function renderApprovalEmail({ title, headline, intro, request, ctaUrl }) {
 </html>`;
 }
 
+function renderFeedbackResolvedEmail({ feedback, recipientName, resolutionMessage, ctaUrl }) {
+  const introName = cleanString(recipientName || feedback.userName) || "uživateli";
+  const cleanResolution = cleanString(resolutionMessage)
+    || "Připomínka byla zapracována a její stav je nyní Hotovo. Detail najdete v modulu Připomínky.";
+
+  return `<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart odpady – připomínka vyřešena</title>
+</head>
+<body style="margin:0;padding:0;background:#f7f9f4;font-family:'Quicksand',Arial,Helvetica,sans-serif;color:#1f2921;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7f9f4;">
+    <tr>
+      <td align="center" style="padding:42px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border:1px solid #e1e6de;border-radius:16px;box-shadow:0 24px 64px rgba(31,41,33,0.14);overflow:hidden;">
+          <tr>
+            <td style="padding:40px 42px;">
+              <div style="display:inline-block;background:#75bd25;border-radius:14px;padding:12px 24px;color:#ffffff;font-size:28px;line-height:32px;font-weight:700;margin:0 0 34px 0;">kaiser.</div>
+              <h1 style="margin:0 0 12px 0;font-size:36px;line-height:42px;font-weight:800;color:#1f2921;">Připomínka je vyřešená</h1>
+              <p style="margin:0 0 26px 0;font-size:18px;line-height:28px;font-weight:600;color:#647064;">Dobrý den, ${htmlEscape(introName)}, připomínka ve Smart odpadech byla označena jako Hotovo.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fbf4;border:1px solid #dfe8d9;border-radius:14px;margin:0 0 24px 0;">
+                <tr><td style="padding:20px 22px;font-size:16px;line-height:24px;">
+                  <p style="margin:0 0 10px 0;"><strong>Modul:</strong> ${htmlEscape(feedback.moduleName || "Připomínky")}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Připomínka:</strong> ${htmlEscape(feedback.message)}</p>
+                  <p style="margin:0;"><strong>Jak bylo vyřešeno:</strong> ${htmlEscape(cleanResolution)}</p>
+                </td></tr>
+              </table>
+              <a href="${htmlEscape(ctaUrl)}" style="display:block;text-align:center;background:#75bd25;border-radius:14px;padding:18px 24px;color:#ffffff;font-size:18px;line-height:24px;font-weight:800;text-decoration:none;">Otevřít Připomínky</a>
+              <p style="margin:28px 0 0 0;font-size:13px;line-height:20px;color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export async function logNotification(env, entry) {
   const db = notificationDatabase(env);
   if (!db) {
@@ -300,7 +345,17 @@ export async function logNotification(env, entry) {
   return null;
 }
 
-async function sendEmail(env, { type, to, subject, html, relatedEntityId, recipientName = "" }) {
+async function sendEmail(env, {
+  type,
+  to,
+  subject,
+  html,
+  relatedEntityId,
+  recipientName = "",
+  moduleId = "dovolena-nemoc",
+  relatedEntityType = "absence_request",
+  messagePreview = ""
+}) {
   const replyTo = cleanString(env.EMAIL_REPLY_TO);
   const apiKey = cleanString(env.SENDGRID_API_KEY || env.EMAIL_API_KEY);
   const provider = cleanString(env.EMAIL_PROVIDER || (apiKey ? "sendgrid" : "")).toLowerCase();
@@ -314,13 +369,16 @@ async function sendEmail(env, { type, to, subject, html, relatedEntityId, recipi
         : "Chybí příjemce e-mailu."
       : missingEmailSettingsMessage({ provider, from, apiKey, recipientName: cleanRecipientName });
     await logNotification(env, {
+      moduleId,
       type,
       channel: "email",
       recipient: to,
+      relatedEntityType,
       relatedEntityId,
       status: "skipped",
       subject,
       provider: "SendGrid",
+      messagePreview,
       errorMessage: missing
     });
     return { status: "skipped", errorMessage: missing, recipientName: cleanRecipientName };
@@ -347,25 +405,31 @@ async function sendEmail(env, { type, to, subject, html, relatedEntityId, recipi
     }
 
     await logNotification(env, {
+      moduleId,
       type,
       channel: "email",
       recipient: to,
+      relatedEntityType,
       relatedEntityId,
       status: "sent",
       subject,
       provider: "SendGrid",
-      providerMessageId: response.headers.get("x-message-id") || ""
+      providerMessageId: response.headers.get("x-message-id") || "",
+      messagePreview
     });
     return { status: "sent", recipientName: cleanRecipientName };
   } catch (error) {
     await logNotification(env, {
+      moduleId,
       type,
       channel: "email",
       recipient: to,
+      relatedEntityType,
       relatedEntityId,
       status: "failed",
       subject,
       provider: "SendGrid",
+      messagePreview,
       errorMessage: error.message
     });
     return { status: "failed", errorMessage: error.message, recipientName: cleanRecipientName };
@@ -442,6 +506,28 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
     });
     return { status: "failed", errorMessage: error.message, recipientName: cleanRecipientName };
   }
+}
+
+export async function sendModuleFeedbackResolvedNotification(env, feedback, options = {}) {
+  const recipientName = cleanString(options.recipientName || feedback.userName);
+  const resolutionMessage = cleanString(options.resolutionMessage);
+
+  return sendEmail(env, {
+    type: "module_feedback_resolved_email",
+    to: cleanString(options.recipientEmail),
+    subject: "Smart odpady – připomínka vyřešena",
+    html: renderFeedbackResolvedEmail({
+      feedback,
+      recipientName,
+      resolutionMessage,
+      ctaUrl: feedbackUrl(env)
+    }),
+    relatedEntityId: feedback.id,
+    recipientName,
+    moduleId: cleanString(feedback.moduleId || "feedback"),
+    relatedEntityType: "module_feedback",
+    messagePreview: resolutionMessage || "Připomínka byla označena jako Hotovo."
+  });
 }
 
 export async function sendAbsenceApprovalRequestNotification(env, request) {

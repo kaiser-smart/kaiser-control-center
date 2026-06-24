@@ -3148,6 +3148,13 @@ body:has(.ai-assistant-promo-modal) {
   box-shadow: 0 0 0 3px rgba(117, 189, 37, 0.15);
 }
 
+.module-feedback__hint {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .module-feedback__submit {
   min-width: 172px;
   white-space: nowrap;

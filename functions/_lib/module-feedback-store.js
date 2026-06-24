@@ -240,6 +240,7 @@ export async function updateModuleFeedbackRecord(env, currentUser, id, input = {
 
   return {
     ...existing,
+    previousStatus: existing.status,
     status,
     internalNote,
     resolvedAt,

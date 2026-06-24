@@ -529,15 +529,18 @@ function updateMockModuleFeedback(currentUser, id, payload) {
     ? normalizeFeedbackStatus(payload.status)
     : existing.status;
   const isFinished = status === "Hotovo" || status === "Zamítnuto" || status === "Archiv";
-  const updated = normalizeFeedback({
-    ...existing,
-    status,
-    internalNote: Object.hasOwn(payload || {}, "internalNote")
-      ? String(payload.internalNote || "").trim()
-      : existing.internalNote,
-    resolvedAt: isFinished ? (existing.resolvedAt || new Date().toISOString()) : null,
-    resolvedByUserId: isFinished ? (existing.resolvedByUserId || currentUser?.id || null) : null
-  });
+  const updated = {
+    ...normalizeFeedback({
+      ...existing,
+      status,
+      internalNote: Object.hasOwn(payload || {}, "internalNote")
+        ? String(payload.internalNote || "").trim()
+        : existing.internalNote,
+      resolvedAt: isFinished ? (existing.resolvedAt || new Date().toISOString()) : null,
+      resolvedByUserId: isFinished ? (existing.resolvedByUserId || currentUser?.id || null) : null
+    }),
+    previousStatus: existing.status
+  };
 
   mockModuleFeedback = [
     ...mockModuleFeedback.slice(0, index),
@@ -546,6 +549,30 @@ function updateMockModuleFeedback(currentUser, id, payload) {
   ];
 
   return updated;
+}
+
+function mockFeedbackResolvedNotification(feedback, payload) {
+  const author = mockUsers.find((user) => sameMockId(user.id, feedback.userId)) || null;
+  const resolutionMessage = String(payload?.resolutionMessage || "").trim()
+    || "Připomínka byla označena jako Hotovo.";
+
+  addMockNotificationLog({
+    moduleId: feedback.moduleId || "feedback",
+    relatedEntityType: "module_feedback",
+    relatedEntityId: feedback.id,
+    channel: "email",
+    type: "module_feedback_resolved_email",
+    status: author?.email ? "sent" : "skipped",
+    recipient: author?.email || "",
+    recipientName: author?.name || feedback.userName,
+    subject: "Smart odpady – připomínka vyřešena",
+    messagePreview: resolutionMessage,
+    lastError: author?.email ? "" : `Chybí e-mail příjemce: ${feedback.userName}.`
+  });
+
+  return author?.email
+    ? { status: "sent", recipientName: author.name || feedback.userName }
+    : { status: "skipped", recipientName: feedback.userName, errorMessage: `Chybí e-mail příjemce: ${feedback.userName}.` };
 }
 
 function fullEmployeeName(employee) {
@@ -1960,8 +1987,13 @@ async function handleApi(request, response) {
     }
 
     try {
-      const feedback = updateMockModuleFeedback(user, decodeURIComponent(moduleFeedbackPatchMatch[1]), await readJsonBody(request));
-      sendJson(response, 200, { feedback, apiStatus: "ready" });
+      const payload = await readJsonBody(request);
+      const updatedFeedback = updateMockModuleFeedback(user, decodeURIComponent(moduleFeedbackPatchMatch[1]), payload);
+      const { previousStatus, ...feedback } = updatedFeedback;
+      const notification = feedback.status === "Hotovo" && previousStatus !== "Hotovo"
+        ? mockFeedbackResolvedNotification(feedback, payload)
+        : null;
+      sendJson(response, 200, { feedback, notification, apiStatus: "ready" });
     } catch (error) {
       sendJson(response, error.status || 500, {
         error: error.message || "Změny se nepodařilo uložit.",

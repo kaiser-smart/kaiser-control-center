@@ -158,7 +158,8 @@ const NOTIFICATION_TYPE_LABELS = {
   absence_approval_reminder: "Připomínka schválení",
   absence_approved_sms: "Schváleno SMS",
   absence_rejected_sms: "Zamítnuto SMS",
-  absence_sickness_recorded_email: "Nemoc evidována"
+  absence_sickness_recorded_email: "Nemoc evidována",
+  module_feedback_resolved_email: "Připomínka vyřešena"
 };
 const NOTIFICATION_CHANNEL_OPTIONS = [
   { value: "email", label: "E-mail" },
@@ -5384,6 +5385,16 @@ function feedbackAdminItem(item, canEdit) {
               placeholder="Interní poznámka pro kancelář / management"
             >${escapeHtml(item.internalNote)}</textarea>
           </label>
+          <label class="module-feedback__field module-feedback__field--message">
+            <span>Zpráva pro uživatele při Hotovo</span>
+            <textarea
+              name="resolutionMessage"
+              rows="3"
+              ${disabled}
+              placeholder="Stručně napište, co bylo vyřešeno. Odešle se jen při změně stavu na Hotovo."
+            ></textarea>
+            <small class="module-feedback__hint">Interní poznámka se uživateli neposílá.</small>
+          </label>
           <button class="primary-action feedback-ticket__save" type="submit" ${disabled}>
             ${isSaving ? "Ukládám…" : "Uložit změny"}
           </button>
@@ -6923,6 +6934,28 @@ async function submitModuleFeedback(form) {
   render();
 }
 
+function feedbackResolutionNotificationMessage(notification) {
+  if (!notification) {
+    return "";
+  }
+
+  if (notification.status === "sent") {
+    return "E-mail uživateli byl odeslán.";
+  }
+
+  const detail = notification.errorMessage ? ` ${notification.errorMessage}` : "";
+
+  if (notification.status === "skipped") {
+    return `E-mail uživateli nebyl odeslán.${detail}`;
+  }
+
+  if (notification.status === "failed") {
+    return `E-mail uživateli se nepodařilo odeslat.${detail}`;
+  }
+
+  return "";
+}
+
 async function updateFeedbackCard(form) {
   const user = currentUser();
   const id = form.dataset.feedbackId || "";
@@ -6943,7 +6976,8 @@ async function updateFeedbackCard(form) {
       method: "PATCH",
       body: JSON.stringify({
         status: form.elements.status?.value || "new",
-        internalNote: form.elements.internalNote?.value || ""
+        internalNote: form.elements.internalNote?.value || "",
+        resolutionMessage: form.elements.resolutionMessage?.value || ""
       })
     });
 
@@ -6953,7 +6987,7 @@ async function updateFeedbackCard(form) {
 
     feedbackState.cardMessages = {
       ...feedbackState.cardMessages,
-      [id]: { message: "Uloženo", error: "" }
+      [id]: { message: ["Uloženo", feedbackResolutionNotificationMessage(result.notification)].filter(Boolean).join(". "), error: "" }
     };
     feedbackState.apiStatus = result.apiStatus || "ready";
   } catch (error) {

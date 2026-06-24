@@ -8,7 +8,8 @@ const TYPES = new Set([
   "absence_approval_reminder",
   "absence_approved_sms",
   "absence_rejected_sms",
-  "absence_sickness_recorded_email"
+  "absence_sickness_recorded_email",
+  "module_feedback_resolved_email"
 ]);
 
 export class NotificationsStoreError extends Error {
@@ -122,7 +123,7 @@ function normalizeFilters(params) {
   };
 }
 
-function whereForFilters(filters) {
+function whereForFilters(filters, columns = new Set()) {
   const clauses = ["n.created_at >= ?", "n.created_at <= ?"];
   const binds = [isoStart(filters.dateFrom), isoEnd(filters.dateTo)];
 
@@ -152,16 +153,21 @@ function whereForFilters(filters) {
   }
 
   if (filters.search) {
+    const searchColumns = [
+      "lower(coalesce(n.recipient, '')) LIKE lower(?)",
+      "lower(coalesce(n.error_message, '')) LIKE lower(?)",
+      ...(columns.has("subject") ? ["lower(coalesce(n.subject, '')) LIKE lower(?)"] : []),
+      ...(columns.has("message_preview") ? ["lower(coalesce(n.message_preview, '')) LIKE lower(?)"] : []),
+      "lower(coalesce(n.type, '')) LIKE lower(?)",
+      "lower(coalesce(a.employee_name, '')) LIKE lower(?)",
+      "lower(coalesce(a.manager_name, '')) LIKE lower(?)",
+      "lower(coalesce(a.note, '')) LIKE lower(?)"
+    ];
     clauses.push(`(
-      lower(coalesce(n.recipient, '')) LIKE lower(?)
-      OR lower(coalesce(n.error_message, '')) LIKE lower(?)
-      OR lower(coalesce(n.type, '')) LIKE lower(?)
-      OR lower(coalesce(a.employee_name, '')) LIKE lower(?)
-      OR lower(coalesce(a.manager_name, '')) LIKE lower(?)
-      OR lower(coalesce(a.note, '')) LIKE lower(?)
+      ${searchColumns.join("\n      OR ")}
     )`);
     const pattern = `%${filters.search}%`;
-    binds.push(pattern, pattern, pattern, pattern, pattern, pattern);
+    binds.push(...searchColumns.map(() => pattern));
   }
 
   return {
@@ -207,9 +213,9 @@ function rowToNotification(row) {
 export async function listNotifications(env, params) {
   const db = notificationsDatabase(env, true);
   const filters = normalizeFilters(params);
-  const { where, binds } = whereForFilters(filters);
-  const offset = (filters.page - 1) * filters.pageSize;
   const columns = await notificationLogColumns(db);
+  const { where, binds } = whereForFilters(filters, columns);
+  const offset = (filters.page - 1) * filters.pageSize;
 
   const countResult = await db
     .prepare(`
