@@ -7,6 +7,7 @@ import {
 import { modules } from "../../src/data/modules.js";
 
 const MODULE_TITLE_BY_ID = new Map(modules.map((moduleItem) => [moduleItem.id, moduleItem.title]));
+const AI_DYNAMIC_VARIABLE_MAX_LENGTH = 1400;
 
 export function cleanAiString(value) {
   return String(value ?? "").trim();
@@ -106,6 +107,10 @@ function moduleTitle(moduleId) {
     return "Všechny moduly";
   }
 
+  if (moduleId === "feedback") {
+    return "Připomínky";
+  }
+
   return MODULE_TITLE_BY_ID.get(moduleId) || moduleId;
 }
 
@@ -131,6 +136,42 @@ export function permissionSummaryForAi(user) {
     roleLabel: roleLabel(user?.role),
     modules: accessibleModules,
     moduleCount: accessibleModules.length
+  };
+}
+
+function truncateAiDynamicVariable(value, maxLength = AI_DYNAMIC_VARIABLE_MAX_LENGTH) {
+  const cleanedValue = cleanAiString(value).replace(/\s+/g, " ");
+
+  if (cleanedValue.length <= maxLength) {
+    return cleanedValue;
+  }
+
+  return `${cleanedValue.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
+function permissionLine(moduleItem) {
+  const actions = Array.isArray(moduleItem?.actions) ? moduleItem.actions : [];
+  return `${moduleItem.moduleId}:${actions.join("/")}`;
+}
+
+export function userDynamicVariablesForAi(user) {
+  const access = permissionSummaryForAi(user);
+  const availableModules = access.modules
+    .map((moduleItem) => moduleItem.title)
+    .filter(Boolean)
+    .join(", ");
+  const userPermissions = access.modules
+    .map(permissionLine)
+    .filter(Boolean)
+    .join("; ");
+
+  return {
+    user_name: truncateAiDynamicVariable(user?.name || "Uživatel", 120),
+    user_role: truncateAiDynamicVariable(access.roleLabel || access.role || "Uživatel", 120),
+    user_permissions: truncateAiDynamicVariable(userPermissions || "bez oprávnění"),
+    available_modules: truncateAiDynamicVariable(availableModules || "žádné moduly"),
+    user_department: truncateAiDynamicVariable(user?.department || "neuvedeno", 160),
+    user_position: truncateAiDynamicVariable(user?.position || "neuvedeno", 160)
   };
 }
 

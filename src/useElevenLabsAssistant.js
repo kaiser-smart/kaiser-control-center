@@ -159,6 +159,36 @@ function voiceMicrophoneConstraints() {
   return { audio };
 }
 
+function cleanDynamicVariableValue(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : "";
+  }
+
+  return String(value ?? "").trim();
+}
+
+function dynamicVariablesForSession(signedUrlSession, interfaceMode) {
+  const serverVariables = (
+    signedUrlSession?.dynamicVariables &&
+    typeof signedUrlSession.dynamicVariables === "object" &&
+    !Array.isArray(signedUrlSession.dynamicVariables)
+  )
+    ? signedUrlSession.dynamicVariables
+    : {};
+
+  return Object.fromEntries(Object.entries({
+    ...serverVariables,
+    interface_mode: interfaceMode,
+    app_name: "Smart odpady"
+  })
+    .map(([key, value]) => [key, cleanDynamicVariableValue(value)])
+    .filter(([key, value]) => String(key || "").trim() && value !== ""));
+}
+
 function createVoiceAudioPlayer() {
   let audioContext = null;
   let nextStartTime = 0;
@@ -503,10 +533,7 @@ export function useElevenLabsAssistant({
               text_only: true
             }
           },
-          dynamic_variables: {
-            interface_mode: "text",
-            app_name: "Smart odpady"
-          }
+          dynamic_variables: dynamicVariablesForSession(signedUrlSession, "text")
         });
         metadataFallbackTimer = window.setTimeout(sendUserMessage, TEXT_METADATA_FALLBACK_MS);
       });
@@ -878,10 +905,7 @@ export function useElevenLabsAssistant({
         window.clearTimeout(connectionTimer);
         sendJson({
           type: "conversation_initiation_client_data",
-          dynamic_variables: {
-            interface_mode: "voice",
-            app_name: "Smart odpady"
-          }
+          dynamic_variables: dynamicVariablesForSession(signedUrlSession, "voice")
         });
         callbacks.onConnected?.({
           assistantId: signedUrlSession.assistantId || assistant.id,
@@ -1173,10 +1197,7 @@ export function useElevenLabsAssistant({
         window.clearTimeout(connectionTimer);
         sendJson({
           type: "conversation_initiation_client_data",
-          dynamic_variables: {
-            interface_mode: "voice",
-            app_name: "Smart odpady"
-          }
+          dynamic_variables: dynamicVariablesForSession(signedUrlSession, "voice")
         });
         metadataFallbackTimer = window.setTimeout(sendUserMessage, TEXT_METADATA_FALLBACK_MS);
       });
