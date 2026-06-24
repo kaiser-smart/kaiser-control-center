@@ -7534,7 +7534,8 @@ body:has(.ai-assistant-promo-modal) {
 
 .ai-voice-assistant-panel__body {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, auto) auto;
+  grid-auto-flow: row;
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 12px;
   min-height: 0;
@@ -7774,20 +7775,37 @@ body:has(.ai-assistant-promo-modal) {
   width: min(100%, 390px);
   justify-self: center;
   gap: 8px;
+  min-width: 0;
   padding: 10px 12px;
   border: 1px solid rgba(160, 54, 54, 0.2);
   border-radius: 12px;
   background: #fff7f5;
   color: #7d302c;
   text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .ai-voice-assistant-panel__notice p,
-.ai-voice-assistant-panel__notice ul {
+.ai-voice-assistant-panel__notice ul,
+.ai-voice-assistant-panel__notice summary {
   margin: 0;
   font-size: 0.84rem;
   font-weight: 520;
   line-height: 1.34;
+}
+
+.ai-voice-assistant-panel__notice-help {
+  display: grid;
+  gap: 7px;
+}
+
+.ai-voice-assistant-panel__notice-help summary {
+  min-height: 32px;
+  align-content: center;
+  color: #7d302c;
+  font-weight: 780;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .ai-voice-assistant-panel__notice ul {
@@ -7801,6 +7819,7 @@ body:has(.ai-assistant-promo-modal) {
   width: min(100%, 390px);
   justify-self: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .ai-voice-assistant-panel__bubble {

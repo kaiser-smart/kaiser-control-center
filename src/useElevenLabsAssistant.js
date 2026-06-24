@@ -116,9 +116,12 @@ function createVoiceStoppedError() {
   return error;
 }
 
-function createVoiceDisconnectedError() {
-  const error = new Error("Spojení se přerušilo. Klepni pro obnovení.");
+function createVoiceDisconnectedError(message = "Spojení se přerušilo. Klepni pro obnovení.", details = {}) {
+  const error = new Error(message);
   error.code = "voice_disconnected";
+  error.voiceReason = details.reason || "";
+  error.closeCode = details.closeCode || 0;
+  error.closeReason = details.closeReason || "";
   return error;
 }
 
@@ -821,7 +824,10 @@ export function useElevenLabsAssistant({
       if (audioTrack) {
         audioTrack.addEventListener("ended", () => {
           if (!settled) {
-            settle(reject, createVoiceDisconnectedError(), "voice-track-ended");
+            settle(reject, createVoiceDisconnectedError(
+              "Mikrofon se v prohlížeči ukončil. Zkontroluj oprávnění mikrofonu a klepni na Obnovit spojení.",
+              { reason: "microphone-track-ended" }
+            ), "voice-track-ended");
           }
         }, { once: true });
       }
@@ -1121,15 +1127,27 @@ export function useElevenLabsAssistant({
       });
 
       socket.addEventListener("error", () => {
-        settle(reject, new Error("Hlasový režim Šarloty se nepodařilo připojit."), "voice-socket-error");
+        settle(reject, createVoiceDisconnectedError(
+          "WebSocket spojení se Šarlotou se nepodařilo udržet. Zkus Obnovit spojení.",
+          { reason: "voice-socket-error" }
+        ), "voice-socket-error");
       });
 
-      socket.addEventListener("close", () => {
+      socket.addEventListener("close", (event) => {
         if (settled) {
           return;
         }
 
-        settle(reject, createVoiceDisconnectedError(), "voice-socket-close");
+        const closeCode = Number(event?.code || 0);
+        const closeReason = String(event?.reason || "").trim().slice(0, 120);
+        const closeText = closeCode
+          ? `WebSocket spojení se Šarlotou se zavřelo (${closeCode}${closeReason ? `: ${closeReason}` : ""}). Klepni na Obnovit spojení.`
+          : "WebSocket spojení se Šarlotou se zavřelo. Klepni na Obnovit spojení.";
+        settle(reject, createVoiceDisconnectedError(closeText, {
+          reason: "voice-socket-close",
+          closeCode,
+          closeReason
+        }), "voice-socket-close");
       });
     });
   }

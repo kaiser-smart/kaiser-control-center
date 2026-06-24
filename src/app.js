@@ -1716,8 +1716,12 @@ async function startAiVoiceRecognition() {
       aiAssistantState.elevenLabsStatus = `ElevenLabs agent ${assistant.name} je odpojený.`;
       aiAssistantState.voiceStatus = AI_VOICE_DISCONNECTED_LABEL;
       aiAssistantState.voiceUiState = "disconnected";
-      aiAssistantState.voiceNotice = "Spojení se Šarlotou se přerušilo. Zkontroluj mikrofon, oprávnění prohlížeče a klikni na Obnovit spojení.";
-      aiAssistantState.voiceTags = ["Odpojeno", "Obnovit spojení", "Mikrofon vypnutý"];
+      aiAssistantState.voiceNotice = error?.message || "Spojení se Šarlotou se přerušilo. Zkontroluj mikrofon, oprávnění prohlížeče a klikni na Obnovit spojení.";
+      aiAssistantState.voiceTags = [
+        "Odpojeno",
+        error?.closeCode ? `Kód ${error.closeCode}` : "Obnovit spojení",
+        error?.voiceReason === "microphone-track-ended" ? "Mikrofon ukončen" : "Mikrofon vypnutý"
+      ];
       triggerAiVoiceSessionHaptic("problem");
       void releaseAiVoiceWakeLock({ renderAfter: false });
       renderAiAssistantLayerOnly();

@@ -178,11 +178,14 @@ export function AiVoiceAssistantPanel({
           <div class="ai-voice-assistant-panel__notice" role="status">
             <p>${escapeHtml(noticeText)}</p>
             ${showMicrophoneHelp ? `
-              <ul>
-                <li>iPhone Safari: Nastavení → Safari → Mikrofon → Povolit</li>
-                <li>Chrome Android: ikona zámku u adresy → Oprávnění → Mikrofon → Povolit</li>
-                <li>Desktop Chrome: ikona zámku u adresy → Mikrofon → Povolit</li>
-              </ul>
+              <details class="ai-voice-assistant-panel__notice-help">
+                <summary>Jak povolit mikrofon</summary>
+                <ul>
+                  <li>iPhone Safari: Nastavení → Safari → Mikrofon → Povolit</li>
+                  <li>Chrome Android: ikona zámku u adresy → Oprávnění → Mikrofon → Povolit</li>
+                  <li>Desktop Chrome: ikona zámku u adresy → Mikrofon → Povolit</li>
+                </ul>
+              </details>
             ` : ""}
           </div>
         ` : ""}
