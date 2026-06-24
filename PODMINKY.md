@@ -28,6 +28,10 @@ Veřejná adresa aplikace je:
 
 https://kaiser-control-center.pages.dev/
 
+Veřejná adresa evidence Pneumatiky je:
+
+https://kaiser-smart.github.io/kaiser-pneu-evidence/
+
 ## 4. Verze aplikace
 
 Při každé významné změně:
