@@ -100,6 +100,7 @@ Pokud není zveřejněno:
 - `Zveřejněno: NE`
 - důvod
 - co je potřeba pro zveřejnění
+- otázku `Mohu zveřejnit?`
 
 ### 6. Povinná formulace po ukončení
 
@@ -128,6 +129,9 @@ Pokud produkci ověřil, musí napsat:
 - verzi
 - commit
 - co přesně ověřil
+
+Pokud Codex/vývojář práci dokončí bez zveřejnění, musí se vždy zeptat:
+`Mohu zveřejnit?`
 
 ### 8. Pravdivost
 
