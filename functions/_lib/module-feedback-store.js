@@ -4,6 +4,7 @@ const FEEDBACK_DB_BINDING = "SMART_ODPADY_DB";
 const PRIORITIES = new Set(["Nízká", "Běžná", "Důležitá", "Kritická"]);
 const STATUSES = new Set(["Nová", "Převzato", "V řešení", "Hotovo", "Zamítnuto", "Archiv"]);
 const FINISHED_STATUSES = new Set(["Hotovo", "Zamítnuto", "Archiv"]);
+const CENTRAL_CREATE_ROLES = new Set(["admin", "management"]);
 
 const STATUS_API_TO_LABEL = {
   new: "Nová",
@@ -71,6 +72,14 @@ function normalizeStatus(value) {
   return label;
 }
 
+function normalizeRole(value) {
+  return String(value || "readonly").trim().toLowerCase();
+}
+
+function composeAdminMessage(title, description) {
+  return `${title}\n\n${description}`.trim();
+}
+
 function sameUser(left, right) {
   return cleanString(left).toLowerCase() === cleanString(right).toLowerCase();
 }
@@ -99,6 +108,10 @@ function rowToFeedback(row) {
 
 export function canEditModuleFeedback(user) {
   return hasPermission(user, "feedback", "edit") || hasPermission(user, "feedback", "manage");
+}
+
+export function canCreateCentralModuleFeedback(user) {
+  return CENTRAL_CREATE_ROLES.has(normalizeRole(user?.role));
 }
 
 export async function listModuleFeedback(env, currentUser) {
@@ -131,6 +144,88 @@ export async function listModuleFeedback(env, currentUser) {
   }
 
   return items.filter((item) => sameUser(item.userId, currentUser?.id));
+}
+
+export async function createCentralModuleFeedbackRecord(env, currentUser, input = {}) {
+  const db = feedbackDatabase(env, true);
+  const moduleId = cleanString(input.moduleId);
+  const moduleName = cleanString(input.moduleName);
+  const title = cleanString(input.title);
+  const description = cleanString(input.description || input.message);
+
+  if (!moduleId || !moduleName) {
+    throw new ModuleFeedbackStoreError("Vyberte modul připomínky.", 400, "module_feedback_module_required");
+  }
+
+  if (!title) {
+    throw new ModuleFeedbackStoreError("Vyplňte název připomínky.", 400, "module_feedback_title_required");
+  }
+
+  if (!description) {
+    throw new ModuleFeedbackStoreError("Vyplňte popis připomínky.", 400, "module_feedback_description_required");
+  }
+
+  const priority = cleanString(input.priority || "Běžná");
+  if (!PRIORITIES.has(priority)) {
+    throw new ModuleFeedbackStoreError("Vyberte platnou prioritu připomínky.", 400, "module_feedback_priority_invalid");
+  }
+
+  const now = new Date().toISOString();
+  const status = normalizeStatus(input.status || "Nová");
+  const resolvedAt = FINISHED_STATUSES.has(status) ? now : null;
+  const resolvedByUserId = FINISHED_STATUSES.has(status) ? (cleanString(currentUser?.id) || null) : null;
+  const feedback = {
+    id: randomId(),
+    moduleId,
+    moduleName,
+    userId: cleanString(currentUser?.id),
+    userName: cleanString(currentUser?.name || currentUser?.email || "Uživatel"),
+    userRole: cleanString(currentUser?.role || "readonly"),
+    message: composeAdminMessage(title, description),
+    priority,
+    status,
+    createdAt: now,
+    resolvedAt,
+    resolvedByUserId,
+    internalNote: cleanString(input.internalNote)
+  };
+
+  await db
+    .prepare(`
+      INSERT INTO module_feedback (
+        id,
+        module_id,
+        module_name,
+        user_id,
+        user_name,
+        user_role,
+        message,
+        priority,
+        status,
+        created_at,
+        resolved_at,
+        resolved_by_user_id,
+        internal_note
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      feedback.id,
+      feedback.moduleId,
+      feedback.moduleName,
+      feedback.userId,
+      feedback.userName,
+      feedback.userRole,
+      feedback.message,
+      feedback.priority,
+      feedback.status,
+      feedback.createdAt,
+      feedback.resolvedAt,
+      feedback.resolvedByUserId,
+      feedback.internalNote
+    )
+    .run();
+
+  return feedback;
 }
 
 export async function createModuleFeedbackRecord(env, currentUser, input = {}) {

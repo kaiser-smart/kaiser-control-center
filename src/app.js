@@ -344,6 +344,13 @@ const feedbackState = {
   savingId: "",
   cardMessages: {}
 };
+const feedbackCreateState = {
+  open: false,
+  saving: false,
+  message: "",
+  error: "",
+  draft: feedbackCreateDefaultDraft()
+};
 function notificationDefaultDateFrom() {
   const date = new Date();
   date.setDate(date.getDate() - 30);
@@ -2478,6 +2485,23 @@ function currentAbsenceSettingsDirtyTarget() {
   };
 }
 
+function currentFeedbackCreateDirtyTarget() {
+  if (normalizePath(window.location.pathname) !== FEEDBACK_ROUTE || !feedbackCreateState.open || !canCreateCentralFeedback(currentUser())) {
+    return null;
+  }
+
+  const form = document.querySelector("[data-feedback-create-form]");
+  const current = form ? updateFeedbackCreateDraft(form) : feedbackCreateState.draft;
+
+  return {
+    type: "feedback-create",
+    form,
+    current,
+    baseline: feedbackCreateDefaultDraft(),
+    isDirty: feedbackCreateDraftIsDirty(current)
+  };
+}
+
 function currentDirtyTarget() {
   const accessTarget = currentAccessDirtyTarget();
 
@@ -2495,6 +2519,12 @@ function currentDirtyTarget() {
 
   if (absenceSettingsTarget?.isDirty) {
     return absenceSettingsTarget;
+  }
+
+  const feedbackCreateTarget = currentFeedbackCreateDirtyTarget();
+
+  if (feedbackCreateTarget?.isDirty) {
+    return feedbackCreateTarget;
   }
 
   const employeeTarget = currentEmployeeCardDirtyTarget();
@@ -5330,6 +5360,161 @@ function shortFeedbackId(id) {
   return cleaned.slice(0, 8) || "neuvedeno";
 }
 
+function feedbackCreateDefaultDraft() {
+  return {
+    moduleId: "",
+    title: "",
+    description: "",
+    priority: "Běžná",
+    status: "Nová",
+    internalNote: ""
+  };
+}
+
+function canCreateCentralFeedback(user) {
+  return ["admin", "management"].includes(normalizeRole(user?.role));
+}
+
+function feedbackModuleOptions() {
+  return orderedModules.map((moduleItem) => ({
+    value: moduleItem.id === "absence" ? "dovolena-nemoc" : moduleItem.id,
+    label: moduleItem.title
+  }));
+}
+
+function updateFeedbackCreateDraft(form) {
+  if (!form) {
+    return feedbackCreateState.draft;
+  }
+
+  feedbackCreateState.draft = {
+    moduleId: form.elements.moduleId?.value || "",
+    title: form.elements.title?.value.trim() || "",
+    description: form.elements.description?.value.trim() || "",
+    priority: form.elements.priority?.value || "Běžná",
+    status: form.elements.status?.value || "Nová",
+    internalNote: form.elements.internalNote?.value.trim() || ""
+  };
+
+  return feedbackCreateState.draft;
+}
+
+function feedbackCreateDraftIsDirty(draft = feedbackCreateState.draft) {
+  const emptyDraft = feedbackCreateDefaultDraft();
+  return Object.keys(emptyDraft).some((key) => String(draft[key] || "") !== String(emptyDraft[key] || ""));
+}
+
+function feedbackCreateModuleName(moduleId) {
+  return feedbackModuleOptions().find((option) => option.value === moduleId)?.label || "";
+}
+
+function resetFeedbackCreateState(options = {}) {
+  feedbackCreateState.open = false;
+  feedbackCreateState.saving = false;
+  feedbackCreateState.error = "";
+  feedbackCreateState.draft = feedbackCreateDefaultDraft();
+
+  if (!options.keepMessage) {
+    feedbackCreateState.message = "";
+  }
+}
+
+function openFeedbackCreateForm() {
+  if (!canCreateCentralFeedback(currentUser())) {
+    return;
+  }
+
+  feedbackCreateState.open = true;
+  feedbackCreateState.error = "";
+  feedbackCreateState.message = "";
+  render();
+}
+
+function closeFeedbackCreateForm() {
+  if (feedbackCreateState.saving) {
+    return;
+  }
+
+  const form = document.querySelector("[data-feedback-create-form]");
+  if (form) {
+    updateFeedbackCreateDraft(form);
+  }
+
+  if (feedbackCreateDraftIsDirty() && !window.confirm("Zahodit rozepsanou připomínku?")) {
+    return;
+  }
+
+  resetFeedbackCreateState();
+  render();
+}
+
+function feedbackCreatePanel(user, moduleOptions) {
+  if (!canCreateCentralFeedback(user)) {
+    return "";
+  }
+
+  if (!feedbackCreateState.open) {
+    return feedbackCreateState.message
+      ? `<p class="feedback-create__notice" role="status">${escapeHtml(feedbackCreateState.message)}</p>`
+      : "";
+  }
+
+  const draft = feedbackCreateState.draft;
+  const disabled = feedbackCreateState.saving ? "disabled" : "";
+  const submitLabel = feedbackCreateState.saving ? "Ukládám..." : "Vytvořit připomínku";
+
+  return `
+    <section class="feedback-create" aria-labelledby="feedback-create-title">
+      <div class="feedback-create__head">
+        <div>
+          <p class="module-detail__eyebrow">Nová připomínka</p>
+          <h2 id="feedback-create-title">Vytvořit připomínku</h2>
+        </div>
+        <button class="secondary-link feedback-create__close" type="button" data-feedback-create-close ${disabled}>
+          Zavřít
+        </button>
+      </div>
+      <form class="feedback-create__form" data-feedback-create-form>
+        <label class="feedback-create__field">
+          <span>Modul</span>
+          <select name="moduleId" data-feedback-create-field required ${disabled}>
+            ${optionList(moduleOptions, draft.moduleId, "Vyberte modul")}
+          </select>
+        </label>
+        <label class="feedback-create__field">
+          <span>Název / krátký předmět</span>
+          <input name="title" value="${escapeHtml(draft.title)}" data-feedback-create-field maxlength="120" required ${disabled} />
+        </label>
+        <label class="feedback-create__field">
+          <span>Priorita</span>
+          <select name="priority" data-feedback-create-field required ${disabled}>
+            ${optionList(FEEDBACK_PRIORITIES, draft.priority, "Vyberte prioritu")}
+          </select>
+        </label>
+        <label class="feedback-create__field">
+          <span>Stav</span>
+          <select name="status" data-feedback-create-field required ${disabled}>
+            ${optionList(FEEDBACK_STATUSES, draft.status, "Vyberte stav")}
+          </select>
+        </label>
+        <label class="feedback-create__field feedback-create__field--wide">
+          <span>Popis</span>
+          <textarea name="description" data-feedback-create-field rows="5" maxlength="1600" required ${disabled}>${escapeHtml(draft.description)}</textarea>
+        </label>
+        <label class="feedback-create__field feedback-create__field--wide">
+          <span>Interní poznámka</span>
+          <textarea name="internalNote" data-feedback-create-field rows="3" maxlength="1200" ${disabled}>${escapeHtml(draft.internalNote)}</textarea>
+        </label>
+        <div class="feedback-create__actions">
+          <button class="primary-action" type="submit" ${disabled}>${submitLabel}</button>
+          <button class="secondary-link" type="button" data-feedback-create-close ${disabled}>Zrušit</button>
+        </div>
+        ${feedbackCreateState.error ? `<p class="feedback-create__error" role="alert">${escapeHtml(feedbackCreateState.error)}</p>` : ""}
+      </form>
+    </section>
+  `;
+}
+
 function feedbackAdminItem(item, canEdit) {
   const cardState = feedbackCardMessage(item.id);
   const isSaving = feedbackState.savingId === item.id;
@@ -5418,11 +5603,9 @@ function feedbackPage(user) {
   const summary = feedbackSummary(visibleFeedback);
   const filteredFeedback = filterModuleFeedback(visibleFeedback, feedbackFilters);
   const canEdit = canManageFeedback(user);
+  const canCreate = canCreateCentralFeedback(user);
   const canExport = hasPermission(user, "feedback", "export");
-  const moduleOptions = orderedModules.map((moduleItem) => ({
-    value: moduleItem.id === "absence" ? "dovolena-nemoc" : moduleItem.id,
-    label: moduleItem.title
-  }));
+  const moduleOptions = feedbackModuleOptions();
   const items = filteredFeedback
     .map((item) => feedbackAdminItem(item, canEdit))
     .join("");
@@ -5454,12 +5637,23 @@ function feedbackPage(user) {
             <h1 id="feedback-title">Připomínky</h1>
             <p>Seznam připomínek k modulům, jejich stavů, priorit a interních poznámek.</p>
           </div>
-          ${canExport ? `
-            <button class="primary-action feedback-admin__export" type="button" data-feedback-export>
-              Export CSV
-            </button>
+          ${canCreate || canExport ? `
+            <div class="feedback-admin__actions">
+              ${canCreate ? `
+                <button class="primary-action feedback-admin__new" type="button" data-feedback-create-open>
+                  Nová připomínka
+                </button>
+              ` : ""}
+              ${canExport ? `
+                <button class="secondary-link feedback-admin__export" type="button" data-feedback-export>
+                  Export CSV
+                </button>
+              ` : ""}
+            </div>
           ` : ""}
         </div>
+
+        ${feedbackCreatePanel(user, moduleOptions)}
 
         <div class="feedback-stats" aria-label="Dashboard připomínek">
           <div class="feedback-stat">
@@ -6616,6 +6810,7 @@ async function logout() {
   feedbackState.apiStatus = "waiting";
   feedbackState.savingId = "";
   feedbackState.cardMessages = {};
+  resetFeedbackCreateState();
   themeState.loaded = false;
   themeState.loading = false;
   themeState.saving = false;
@@ -6932,6 +7127,75 @@ async function submitModuleFeedback(form) {
   }
 
   render();
+}
+
+async function submitCentralModuleFeedback(form) {
+  const user = currentUser();
+  if (!canCreateCentralFeedback(user)) {
+    feedbackCreateState.error = "Nemáte oprávnění vytvořit připomínku.";
+    render();
+    return false;
+  }
+
+  const draft = updateFeedbackCreateDraft(form);
+  const moduleName = feedbackCreateModuleName(draft.moduleId);
+
+  if (!draft.moduleId || !moduleName) {
+    feedbackCreateState.error = "Vyberte modul připomínky.";
+    render();
+    return false;
+  }
+
+  if (!draft.title) {
+    feedbackCreateState.error = "Vyplňte název připomínky.";
+    render();
+    return false;
+  }
+
+  if (!draft.description) {
+    feedbackCreateState.error = "Vyplňte popis připomínky.";
+    render();
+    return false;
+  }
+
+  feedbackCreateState.saving = true;
+  feedbackCreateState.error = "";
+  feedbackCreateState.message = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/module-feedback/admin", {
+      method: "POST",
+      body: JSON.stringify({
+        moduleId: draft.moduleId,
+        moduleName,
+        title: draft.title,
+        description: draft.description,
+        priority: draft.priority,
+        status: draft.status,
+        internalNote: draft.internalNote
+      })
+    });
+
+    if (result.feedback) {
+      replaceFeedbackItem(result.feedback);
+    }
+
+    feedbackState.apiStatus = result.apiStatus || "ready";
+    feedbackState.loaded = true;
+    feedbackCreateState.message = "Připomínka byla vytvořena.";
+    resetFeedbackCreateState({ keepMessage: true });
+    render();
+    return true;
+  } catch (error) {
+    const missing = error.payload?.missingEndpoint;
+    feedbackCreateState.error = missing
+      ? `Čeká na API: ${missing}`
+      : error.payload?.error || "Připomínku se nepodařilo vytvořit.";
+    feedbackCreateState.saving = false;
+    render();
+    return false;
+  }
 }
 
 function feedbackResolutionNotificationMessage(notification) {
@@ -7866,6 +8130,12 @@ async function saveDirtyChanges() {
     return saveAbsenceSettings(absenceSettingsTarget);
   }
 
+  const feedbackCreateTarget = currentFeedbackCreateDirtyTarget();
+
+  if (feedbackCreateTarget?.isDirty) {
+    return submitCentralModuleFeedback(feedbackCreateTarget.form);
+  }
+
   const employeeTarget = currentEmployeeCardDirtyTarget();
 
   if (employeeTarget?.isDirty) {
@@ -7894,6 +8164,14 @@ function discardDirtyChanges() {
 
   if (absenceSettingsTarget?.isDirty) {
     discardAbsenceSettingsDirtyChanges();
+    return;
+  }
+
+  const feedbackCreateTarget = currentFeedbackCreateDirtyTarget();
+
+  if (feedbackCreateTarget?.isDirty) {
+    resetFeedbackCreateState();
+    render();
     return;
   }
 
@@ -8123,6 +8401,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const feedbackCreateForm = event.target.closest("[data-feedback-create-form]");
+  if (feedbackCreateForm) {
+    event.preventDefault();
+    await submitCentralModuleFeedback(feedbackCreateForm);
+    return;
+  }
+
   const absenceFilterForm = event.target.closest("[data-absence-filter-form]");
   if (absenceFilterForm) {
     event.preventDefault();
@@ -8230,6 +8515,12 @@ document.addEventListener("input", (event) => {
       updateAppearanceDraft(form);
     }
   }
+
+  const feedbackCreateField = event.target.closest("[data-feedback-create-field]");
+  if (feedbackCreateField) {
+    const form = feedbackCreateField.closest("[data-feedback-create-form]");
+    updateFeedbackCreateDraft(form);
+  }
 });
 
 document.addEventListener("change", (event) => {
@@ -8297,6 +8588,13 @@ document.addEventListener("change", (event) => {
     if (form) {
       applyFeedbackFilters(form);
     }
+    return;
+  }
+
+  const feedbackCreateField = event.target.closest("[data-feedback-create-field]");
+  if (feedbackCreateField) {
+    const form = feedbackCreateField.closest("[data-feedback-create-form]");
+    updateFeedbackCreateDraft(form);
     return;
   }
 
@@ -8628,6 +8926,18 @@ document.addEventListener("click", async (event) => {
   if (quickReset) {
     quickAbsenceReset({ keepRecent: true });
     render();
+    return;
+  }
+
+  const feedbackCreateOpen = event.target.closest("[data-feedback-create-open]");
+  if (feedbackCreateOpen) {
+    openFeedbackCreateForm();
+    return;
+  }
+
+  const feedbackCreateClose = event.target.closest("[data-feedback-create-close]");
+  if (feedbackCreateClose) {
+    closeFeedbackCreateForm();
     return;
   }
 

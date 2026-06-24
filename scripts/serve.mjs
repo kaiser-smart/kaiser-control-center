@@ -8,7 +8,13 @@ import { fileURLToPath } from "node:url";
 import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
 import { DEFAULT_USERS } from "../functions/_lib/default-users.js";
 import { normalizeUserInput } from "../functions/_lib/users-store.js";
-import { normalizeFeedback, normalizeFeedbackPriority, normalizeFeedbackStatus } from "../src/data/moduleFeedback.js";
+import {
+  FEEDBACK_PRIORITIES,
+  FEEDBACK_STATUSES,
+  normalizeFeedback,
+  normalizeFeedbackPriority,
+  normalizeFeedbackStatus
+} from "../src/data/moduleFeedback.js";
 import { normalizeAbsenceSettings } from "../src/data/absence.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { modules } from "../src/data/modules.js";
@@ -472,6 +478,10 @@ function canEditMockFeedback(currentUser) {
   return hasPermission(currentUser, "feedback", "edit") || hasPermission(currentUser, "feedback", "manage");
 }
 
+function canCreateCentralMockFeedback(currentUser) {
+  return ["admin", "management"].includes(normalizeRole(currentUser?.role));
+}
+
 function visibleMockFeedback(currentUser) {
   const items = mockModuleFeedback
     .map(normalizeFeedback)
@@ -507,6 +517,64 @@ function createMockModuleFeedback(currentUser, payload) {
     resolvedAt: null,
     resolvedByUserId: null,
     internalNote: ""
+  });
+}
+
+function createMockCentralModuleFeedback(currentUser, payload) {
+  const moduleId = String(payload?.moduleId || "").trim();
+  const moduleName = String(payload?.moduleName || "").trim();
+  const title = String(payload?.title || "").trim();
+  const description = String(payload?.description || payload?.message || "").trim();
+  const priority = String(payload?.priority || "Běžná").trim();
+  const status = String(payload?.status || "Nová").trim();
+
+  if (!moduleId || !moduleName) {
+    const error = new Error("Vyberte modul připomínky.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!title) {
+    const error = new Error("Vyplňte název připomínky.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!description) {
+    const error = new Error("Vyplňte popis připomínky.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!FEEDBACK_PRIORITIES.includes(priority)) {
+    const error = new Error("Vyberte platnou prioritu připomínky.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!FEEDBACK_STATUSES.includes(status)) {
+    const error = new Error("Vyberte platný stav připomínky.");
+    error.status = 400;
+    throw error;
+  }
+
+  const now = new Date().toISOString();
+  const finished = ["Hotovo", "Zamítnuto", "Archiv"].includes(status);
+
+  return normalizeFeedback({
+    id: `module-feedback-${randomUUID()}`,
+    moduleId,
+    moduleName,
+    userId: currentUser?.id || "",
+    userName: currentUser?.name || currentUser?.email || "Uživatel",
+    userRole: currentUser?.role || "readonly",
+    message: `${title}\n\n${description}`.trim(),
+    priority,
+    status,
+    createdAt: now,
+    resolvedAt: finished ? now : null,
+    resolvedByUserId: finished ? currentUser?.id || null : null,
+    internalNote: String(payload?.internalNote || "").trim()
   });
 }
 
@@ -1972,6 +2040,30 @@ async function handleApi(request, response) {
     } catch (error) {
       sendJson(response, error.status || 500, {
         error: error.message || "Připomínku se nepodařilo uložit.",
+        apiStatus: "ready"
+      });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/module-feedback/admin" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!canCreateCentralMockFeedback(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const feedback = createMockCentralModuleFeedback(user, await readJsonBody(request));
+      mockModuleFeedback = [feedback, ...mockModuleFeedback].slice(0, 500);
+      sendJson(response, 201, { feedback, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Připomínku se nepodařilo vytvořit.",
         apiStatus: "ready"
       });
     }
