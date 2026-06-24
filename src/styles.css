@@ -7386,6 +7386,16 @@ body:has(.ai-welcome-modal) {
   line-height: 1.32;
 }
 
+.ai-voice-assistant-panel__wake-lock {
+  max-width: min(100%, 360px);
+  margin: 0;
+  color: #526059;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
 .ai-voice-assistant-panel__notice {
   display: grid;
   width: min(100%, 390px);
@@ -7621,6 +7631,7 @@ body:has(.ai-welcome-modal) {
   }
 
   .ai-voice-assistant-panel__hint,
+  .ai-voice-assistant-panel__wake-lock,
   .ai-voice-assistant-panel__bubble p,
   .ai-voice-assistant-panel__notice p,
   .ai-voice-assistant-panel__notice ul {

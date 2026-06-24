@@ -43,6 +43,7 @@ export function AiVoiceAssistantPanel({
   voiceAnswer = "",
   voiceTags = [],
   voiceNotice = "",
+  voiceWakeLockMessage = "",
   demoPlaying = false,
   demoSpeaker = "",
   demoSpeakerLabel = "",
@@ -67,6 +68,7 @@ export function AiVoiceAssistantPanel({
   const transcriptText = String(voiceTranscript || "").trim();
   const answerText = String(voiceAnswer || "").trim();
   const noticeText = String(voiceNotice || "").trim();
+  const wakeLockText = String(voiceWakeLockMessage || "").trim();
   const showMicrophoneHelp = noticeText.includes("Mikrofon není povolený");
   const rawConnectionStatus = String(elevenLabsStatus || "").trim();
   const connectionStatus = rawConnectionStatus.includes("Agent ID a API klíč")
@@ -163,6 +165,11 @@ export function AiVoiceAssistantPanel({
             ${escapeHtml(statusText)}
           </p>
           <p class="ai-voice-assistant-panel__hint">${escapeHtml(statusHint)}</p>
+          ${wakeLockText ? `
+            <p class="ai-voice-assistant-panel__wake-lock" aria-live="polite">
+              ${escapeHtml(wakeLockText)}
+            </p>
+          ` : ""}
         </div>
 
         ${noticeText ? `

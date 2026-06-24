@@ -188,6 +188,8 @@ const AI_VOICE_MUTED_LABEL = "Mikrofon je vypnutý";
 const AI_VOICE_DISCONNECTED_LABEL = "Spojení se přerušilo. Klepni pro obnovení.";
 const AI_VOICE_ERROR_LABEL = "Nepodařilo se připojit mikrofon.";
 const AI_VOICE_WEAK_INPUT_NOTICE = "Mluvte blíže k telefonu nebo zvyšte hlasitost zařízení.";
+const AI_VOICE_WAKE_LOCK_ACTIVE_LABEL = "Displej zůstane během hovoru zapnutý.";
+const AI_VOICE_WAKE_LOCK_UNAVAILABLE_LABEL = "Telefon může během hovoru usnout. Zkontrolujte nastavení displeje.";
 const AI_VOICE_WEAK_INPUT_LEVEL = 0.018;
 const AI_VOICE_WEAK_INPUT_MIN_READINGS = 6;
 const AI_VOICE_UI_STATES = [
@@ -210,6 +212,7 @@ const AI_VOICE_ACTIVE_STATES = [
   "processing",
   "assistantSpeaking"
 ];
+const AI_VOICE_WAKE_LOCK_STATES = [...AI_VOICE_ACTIVE_STATES];
 const AI_VOICE_DOCK_STATES = [
   ...AI_VOICE_ACTIVE_STATES,
   "disconnected",
@@ -446,6 +449,7 @@ const aiAssistantState = {
   voiceAnswer: "",
   voiceTags: ["Připraven", "Bez odeslání", "Čeká na hlas"],
   voiceNotice: "",
+  voiceWakeLockStatus: "idle",
   isListening: false,
   demoPlaying: false,
   demoSpeaker: "",
@@ -468,6 +472,8 @@ let aiVoiceHapticSession = {
   listening: false,
   problem: false
 };
+let aiVoiceWakeLockSentinel = null;
+let aiVoiceWakeLockPending = false;
 
 const speechRecognition = useSpeechRecognition({
   onResult: (transcript) => submitAiAssistantQuestion(transcript, { fromVoice: true }),
@@ -753,11 +759,131 @@ function triggerAiVoiceSessionHaptic(type) {
   triggerAiHaptic([20, 40, 20]);
 }
 
+function aiVoiceWakeLockMessage(status = aiAssistantState.voiceWakeLockStatus) {
+  if (status === "active") {
+    return AI_VOICE_WAKE_LOCK_ACTIVE_LABEL;
+  }
+
+  if (status === "unavailable") {
+    return AI_VOICE_WAKE_LOCK_UNAVAILABLE_LABEL;
+  }
+
+  return "";
+}
+
+function setAiVoiceWakeLockStatus(status, { renderAfter = false } = {}) {
+  const normalizedStatus = ["idle", "active", "unavailable"].includes(status)
+    ? status
+    : "idle";
+
+  if (aiAssistantState.voiceWakeLockStatus === normalizedStatus) {
+    return;
+  }
+
+  aiAssistantState.voiceWakeLockStatus = normalizedStatus;
+
+  if (renderAfter) {
+    renderAiAssistantLayerOnly();
+  }
+}
+
+function canRequestAiVoiceWakeLock() {
+  return typeof navigator !== "undefined" &&
+    Boolean(navigator.wakeLock) &&
+    typeof navigator.wakeLock.request === "function";
+}
+
+function shouldHoldAiVoiceWakeLock() {
+  return aiAssistantState.mode === "voice" &&
+    AI_VOICE_WAKE_LOCK_STATES.includes(aiAssistantState.voiceUiState);
+}
+
+async function requestAiVoiceWakeLock({ renderAfter = false } = {}) {
+  if (!shouldHoldAiVoiceWakeLock()) {
+    return false;
+  }
+
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+    return false;
+  }
+
+  if (!canRequestAiVoiceWakeLock()) {
+    setAiVoiceWakeLockStatus("unavailable", { renderAfter });
+    return false;
+  }
+
+  if (aiVoiceWakeLockSentinel && !aiVoiceWakeLockSentinel.released) {
+    setAiVoiceWakeLockStatus("active", { renderAfter });
+    return true;
+  }
+
+  if (aiVoiceWakeLockPending) {
+    return false;
+  }
+
+  aiVoiceWakeLockPending = true;
+
+  try {
+    const wakeLockSentinel = await navigator.wakeLock.request("screen");
+    aiVoiceWakeLockSentinel = wakeLockSentinel;
+
+    wakeLockSentinel.addEventListener("release", () => {
+      if (aiVoiceWakeLockSentinel !== wakeLockSentinel) {
+        return;
+      }
+
+      aiVoiceWakeLockSentinel = null;
+      setAiVoiceWakeLockStatus(shouldHoldAiVoiceWakeLock() ? "unavailable" : "idle", {
+        renderAfter: true
+      });
+    });
+
+    if (!shouldHoldAiVoiceWakeLock()) {
+      await releaseAiVoiceWakeLock({ renderAfter });
+      return false;
+    }
+
+    setAiVoiceWakeLockStatus("active", { renderAfter });
+    return true;
+  } catch {
+    aiVoiceWakeLockSentinel = null;
+    setAiVoiceWakeLockStatus("unavailable", { renderAfter });
+    return false;
+  } finally {
+    aiVoiceWakeLockPending = false;
+  }
+}
+
+async function releaseAiVoiceWakeLock({ renderAfter = false } = {}) {
+  try {
+    const wakeLockSentinel = aiVoiceWakeLockSentinel;
+    aiVoiceWakeLockSentinel = null;
+
+    if (wakeLockSentinel && !wakeLockSentinel.released) {
+      await wakeLockSentinel.release();
+    }
+  } catch {
+    // Wake Lock je pouze UX doplněk a nesmí ovlivnit hlasovou relaci.
+  } finally {
+    setAiVoiceWakeLockStatus("idle", { renderAfter });
+  }
+}
+
+function syncAiVoiceWakeLock({ renderAfter = false } = {}) {
+  if (shouldHoldAiVoiceWakeLock()) {
+    void requestAiVoiceWakeLock({ renderAfter });
+    return;
+  }
+
+  void releaseAiVoiceWakeLock({ renderAfter });
+}
+
 function setAiVoiceUiState(state, status = "", tags = []) {
   clearAiVoiceStateTimer();
   aiAssistantState.voiceUiState = AI_VOICE_UI_STATES.includes(state) ? state : "idle";
   aiAssistantState.voiceStatus = status || aiAssistantState.voiceStatus || AI_VOICE_IDLE_LABEL;
   aiAssistantState.voiceTags = tags.length ? tags : aiAssistantState.voiceTags;
+  syncAiVoiceWakeLock({ renderAfter: true });
 }
 
 function isAiVoiceSessionActive() {
@@ -849,6 +975,7 @@ function resetAiVoiceConversation() {
   aiAssistantState.voiceAnswer = "";
   aiAssistantState.voiceTags = ["Připraven", "Mikrofon vypnutý", "Klepni"];
   aiAssistantState.voiceNotice = "";
+  void releaseAiVoiceWakeLock({ renderAfter: false });
 }
 
 function scheduleAiVoiceIdle(delay = 2400) {
@@ -857,6 +984,7 @@ function scheduleAiVoiceIdle(delay = 2400) {
     aiAssistantState.voiceUiState = "idle";
     aiAssistantState.voiceStatus = AI_STATUS_READY;
     aiAssistantState.voiceTags = ["Připraven", "Mikrofon vypnutý", "Klepni"];
+    void releaseAiVoiceWakeLock({ renderAfter: false });
     renderAiAssistantLayerOnly();
   }, delay);
 }
@@ -1085,6 +1213,7 @@ function resetAiAssistantSession() {
   speechRecognition.stop({ status: false });
   elevenLabsAssistant.stopVoiceAudio?.();
   clearAiVoiceStateTimer();
+  void releaseAiVoiceWakeLock({ renderAfter: false });
   aiAssistantState.welcomeVisible = true;
   aiAssistantState.welcomeAnimate = true;
   aiAssistantState.chatOpen = false;
@@ -1100,6 +1229,7 @@ function resetAiAssistantSession() {
   aiAssistantState.voiceAnswer = "";
   aiAssistantState.voiceTags = ["Připraven", "Mikrofon vypnutý", "Klepni"];
   aiAssistantState.voiceNotice = "";
+  aiAssistantState.voiceWakeLockStatus = "idle";
   aiAssistantState.isListening = false;
   aiAssistantState.confirmation = null;
   aiAssistantState.toast = null;
@@ -1190,6 +1320,7 @@ function closeAiAssistant() {
   stopAiVoiceDemo({ renderAfter: false });
   elevenLabsAssistant.stopVoiceAudio?.();
   clearAiVoiceStateTimer();
+  void releaseAiVoiceWakeLock({ renderAfter: false });
   cancelAiTextRequest();
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
@@ -1201,6 +1332,8 @@ function closeAiAssistant() {
   aiAssistantState.launcherVisible = true;
   aiAssistantState.isListening = false;
   aiAssistantState.voiceStatus = AI_STATUS_DONE;
+  aiAssistantState.voiceUiState = "idle";
+  aiAssistantState.voiceWakeLockStatus = "idle";
   renderAiAssistantLayerOnly();
 }
 
@@ -1542,6 +1675,7 @@ async function startAiVoiceRecognition() {
       aiAssistantState.voiceStatus = AI_VOICE_MUTED_LABEL;
       aiAssistantState.voiceUiState = "muted";
       aiAssistantState.voiceTags = ["Mikrofon vypnutý", "Klepni", "Připraven"];
+      void releaseAiVoiceWakeLock({ renderAfter: false });
       renderAiAssistantLayerOnly();
       return;
     }
@@ -1553,6 +1687,7 @@ async function startAiVoiceRecognition() {
       aiAssistantState.voiceNotice = "Spojení se přerušilo. Klepni pro obnovení.";
       aiAssistantState.voiceTags = ["Odpojeno", "Obnovit spojení", "Mikrofon vypnutý"];
       triggerAiVoiceSessionHaptic("problem");
+      void releaseAiVoiceWakeLock({ renderAfter: false });
       renderAiAssistantLayerOnly();
       return;
     }
@@ -1563,6 +1698,7 @@ async function startAiVoiceRecognition() {
     aiAssistantState.voiceNotice = error?.payload?.error || error?.message || "Hlasový režim Šarloty se nepodařilo spustit.";
     aiAssistantState.voiceTags = ["Chyba hlasu", "Zkusit znovu", "Bez odeslání"];
     triggerAiVoiceSessionHaptic("problem");
+    void releaseAiVoiceWakeLock({ renderAfter: false });
     renderAiAssistantLayerOnly();
   }
 }
@@ -1578,6 +1714,7 @@ function stopAiVoiceRecognition() {
   aiAssistantState.voiceUiState = "muted";
   aiAssistantState.voiceStatus = AI_VOICE_MUTED_LABEL;
   aiAssistantState.voiceTags = ["Mikrofon vypnutý", "Klepni", "Připraven"];
+  void releaseAiVoiceWakeLock({ renderAfter: false });
   renderAiAssistantLayerOnly();
 }
 
@@ -1641,6 +1778,7 @@ function renderAiAssistantLayer() {
       voiceAnswer: aiAssistantState.voiceAnswer,
       voiceTags: aiAssistantState.voiceTags,
       voiceNotice: aiAssistantState.voiceNotice,
+      voiceWakeLockMessage: aiVoiceWakeLockMessage(),
       demoPlaying: aiAssistantState.demoPlaying,
       demoSpeaker: aiAssistantState.demoSpeaker,
       demoSpeakerLabel: aiAssistantState.demoSpeakerLabel,
@@ -7809,6 +7947,12 @@ document.addEventListener("change", (event) => {
       applyNotificationFilters(form);
     }
     return;
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    syncAiVoiceWakeLock({ renderAfter: true });
   }
 });
 
