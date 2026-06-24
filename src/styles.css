@@ -7723,6 +7723,7 @@ body:has(.ai-assistant-promo-modal) {
   filter: grayscale(0.45);
 }
 
+.ai-voice-assistant-panel--state-microphoneDenied .ai-voice-assistant-panel__mic,
 .ai-voice-assistant-panel--state-disconnected .ai-voice-assistant-panel__mic,
 .ai-voice-assistant-panel--state-error .ai-voice-assistant-panel__mic {
   box-shadow:
@@ -7730,12 +7731,14 @@ body:has(.ai-assistant-promo-modal) {
     0 0 0 1px rgba(160, 54, 54, 0.18);
 }
 
+.ai-voice-assistant-panel--state-microphoneDenied .ai-voice-assistant-panel__mic img,
 .ai-voice-assistant-panel--state-disconnected .ai-voice-assistant-panel__mic img,
 .ai-voice-assistant-panel--state-error .ai-voice-assistant-panel__mic img {
   opacity: 0.72;
   filter: grayscale(0.28);
 }
 
+.ai-voice-assistant-panel--state-microphoneDenied .ai-voice-assistant-panel__mic::before,
 .ai-voice-assistant-panel--state-disconnected .ai-voice-assistant-panel__mic::before,
 .ai-voice-assistant-panel--state-error .ai-voice-assistant-panel__mic::before {
   border-color: rgba(160, 54, 54, 0.38);
@@ -7921,6 +7924,7 @@ body:has(.ai-assistant-promo-modal) {
   box-shadow: none;
 }
 
+.ai-voice-assistant-panel--state-microphoneDenied .ai-voice-assistant-panel__primary,
 .ai-voice-assistant-panel--state-disconnected .ai-voice-assistant-panel__primary,
 .ai-voice-assistant-panel--state-error .ai-voice-assistant-panel__primary {
   border-color: rgba(160, 54, 54, 0.24);

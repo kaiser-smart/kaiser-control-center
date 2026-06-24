@@ -97,6 +97,23 @@ function microphoneErrorMessage(error) {
   return "Mikrofon se nepodařilo spustit. Zkontrolujte oprávnění prohlížeče a zkuste to znovu.";
 }
 
+function isMicrophonePermissionDenied(error) {
+  const errorName = String(error?.name || "").trim();
+  return errorName === "NotAllowedError" || errorName === "SecurityError" || errorName === "PermissionDeniedError";
+}
+
+function createMicrophoneStartError(error) {
+  const wrappedError = new Error(microphoneErrorMessage(error));
+  wrappedError.code = isMicrophonePermissionDenied(error)
+    ? "voice_microphone_denied"
+    : error?.code || "voice_microphone_error";
+  wrappedError.voiceReason = wrappedError.code === "voice_microphone_denied"
+    ? "microphone-permission-denied"
+    : "microphone-start-failed";
+  wrappedError.originalName = String(error?.name || "");
+  return wrappedError;
+}
+
 function createVoiceTimeoutError(message, code) {
   const error = new Error(message);
   error.code = code;
@@ -710,7 +727,7 @@ export function useElevenLabsAssistant({
         stopMediaStreamTracks
       );
     } catch (error) {
-      throw new Error(microphoneErrorMessage(error));
+      throw createMicrophoneStartError(error);
     }
 
     let signedUrlSession = null;

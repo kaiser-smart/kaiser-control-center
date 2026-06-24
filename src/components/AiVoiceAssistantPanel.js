@@ -18,6 +18,7 @@ const VOICE_UI_STATES = [
   "processing",
   "assistantSpeaking",
   "muted",
+  "microphoneDenied",
   "disconnected",
   "error"
 ];
@@ -69,7 +70,8 @@ export function AiVoiceAssistantPanel({
   const answerText = String(voiceAnswer || "").trim();
   const noticeText = String(voiceNotice || "").trim();
   const wakeLockText = String(voiceWakeLockMessage || "").trim();
-  const showMicrophoneHelp = noticeText.includes("Mikrofon není povolený")
+  const showMicrophoneHelp = normalizedVoiceUiState === "microphoneDenied"
+    || noticeText.includes("Mikrofon není povolený")
     || noticeText.includes("oprávnění prohlížeče")
     || noticeText.includes("oprávnění mikrofonu");
   const rawConnectionStatus = String(elevenLabsStatus || "").trim();
@@ -84,12 +86,16 @@ export function AiVoiceAssistantPanel({
     "processing",
     "assistantSpeaking"
   ].includes(normalizedVoiceUiState);
-  const micLabel = normalizedVoiceUiState === "disconnected"
+  const micLabel = normalizedVoiceUiState === "microphoneDenied"
+    ? "Zkusit znovu povolit mikrofon"
+    : normalizedVoiceUiState === "disconnected"
     ? "Obnovit spojení se Šarlotou"
     : normalizedVoiceUiState === "error"
       ? "Zkusit znovu spustit hlasového pomocníka"
       : "Spustit hlasového pomocníka";
-  const primaryActionText = normalizedVoiceUiState === "disconnected"
+  const primaryActionText = normalizedVoiceUiState === "microphoneDenied"
+    ? "Zkusit znovu"
+    : normalizedVoiceUiState === "disconnected"
     ? "Obnovit spojení"
     : normalizedVoiceUiState === "error"
       ? "Zkusit znovu"
@@ -106,6 +112,8 @@ export function AiVoiceAssistantPanel({
     ? "Mluvte normálně do telefonu."
     : normalizedVoiceUiState === "assistantSpeaking"
       ? "Nechte zapnutý zvuk zařízení."
+      : normalizedVoiceUiState === "microphoneDenied"
+        ? "Povol mikrofon pro tento web."
       : normalizedVoiceUiState === "disconnected"
         ? "Zkontroluj mikrofon a obnov hovor."
         : normalizedVoiceUiState === "error"
