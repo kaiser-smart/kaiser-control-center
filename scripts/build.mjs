@@ -72,6 +72,7 @@ if (await fileExists(publicDir)) {
 }
 await writeFile(path.join(dist, "index.html"), versionedTemplate());
 await writeFile(path.join(dist, "404.html"), versionedTemplate());
+await writeFile(path.join(dist, "_redirects"), "/vozovy-park/* /index.html 200\n");
 
 for (const route of routes) {
   if (route === "/") {
