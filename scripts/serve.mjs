@@ -16,6 +16,11 @@ import {
   normalizeFeedbackStatus
 } from "../src/data/moduleFeedback.js";
 import { normalizeAbsenceSettings } from "../src/data/absence.js";
+import {
+  calculateMedicalExamState,
+  medicalExamDateValue,
+  normalizeMedicalExamCategory
+} from "../src/data/medicalExamRules.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { modules } from "../src/data/modules.js";
 import {
@@ -40,6 +45,7 @@ let mockEmployeeCards = new Map();
 let mockEmployeeWorkHistory = new Map();
 let mockEmployeeDocuments = new Map();
 let mockEmployeeDocumentFiles = new Map();
+let mockEmployeeMedicalExams = new Map();
 let mockAbsenceRequests = [];
 let mockModuleFeedback = [];
 let mockNotificationLogs = [];
@@ -712,6 +718,71 @@ function canViewMockEmployee(currentUser, employee) {
 
 function canEditMockEmployee(currentUser) {
   return isFullAccessRole(currentUser) || normalizeRole(currentUser?.role) === "kancelar";
+}
+
+function canManageMockMedicalExam(currentUser) {
+  return isFullAccessRole(currentUser);
+}
+
+function mockMedicalExamForEmployee(employee) {
+  const stored = mockEmployeeMedicalExams.get(employee.id) || {};
+  const category = normalizeMedicalExamCategory(stored.category);
+  const dateOfBirth = medicalExamDateValue(stored.dateOfBirth);
+  const lastExamDate = medicalExamDateValue(stored.lastExamDate);
+  const calculated = calculateMedicalExamState({ category, dateOfBirth, lastExamDate });
+
+  return {
+    id: stored.id || "",
+    employeeId: employee.id,
+    employeeName: fullEmployeeName(employee),
+    employeeEmail: employee.email || "",
+    category,
+    dateOfBirth,
+    lastExamDate,
+    note: stored.note || "",
+    notificationEnabled: stored.notificationEnabled !== false,
+    lastNotificationKey: stored.lastNotificationKey || "",
+    lastNotificationSentAt: stored.lastNotificationSentAt || "",
+    updatedByUserId: stored.updatedByUserId || "",
+    createdAt: stored.createdAt || "",
+    updatedAt: stored.updatedAt || "",
+    ...calculated
+  };
+}
+
+function saveMockMedicalExam(currentUser, employee, payload) {
+  if (!canManageMockMedicalExam(currentUser)) {
+    const error = new Error("Nemáte oprávnění upravit lékařské prohlídky.");
+    error.status = 403;
+    throw error;
+  }
+
+  const existing = mockEmployeeMedicalExams.get(employee.id) || {};
+  const now = new Date().toISOString();
+  const category = normalizeMedicalExamCategory(payload?.category ?? existing.category);
+  const dateOfBirth = medicalExamDateValue(payload?.dateOfBirth ?? existing.dateOfBirth);
+  const lastExamDate = medicalExamDateValue(payload?.lastExamDate ?? existing.lastExamDate);
+  const calculated = calculateMedicalExamState({ category, dateOfBirth, lastExamDate });
+  const item = {
+    ...existing,
+    id: existing.id || `medical-exam-${randomUUID()}`,
+    employeeId: employee.id,
+    category,
+    dateOfBirth,
+    lastExamDate,
+    nextExamDate: calculated.nextExamDate,
+    intervalMonths: calculated.intervalMonths,
+    status: calculated.status,
+    note: String(payload?.note ?? existing.note ?? "").trim(),
+    optional: calculated.optional,
+    notificationEnabled: payload?.notificationEnabled !== false,
+    updatedByUserId: currentUser.id,
+    createdAt: existing.createdAt || now,
+    updatedAt: now
+  };
+
+  mockEmployeeMedicalExams.set(employee.id, item);
+  return mockMedicalExamForEmployee(employee);
 }
 
 function visibleMockEmployees(currentUser) {
@@ -2389,6 +2460,54 @@ async function handleApi(request, response) {
       apiStatus: "ready",
       note: items.length ? "Historie nepřítomností je načtená z vývojového API." : "Zatím tu nejsou žádné žádosti."
     });
+    return true;
+  }
+
+  const employeeMedicalExamMatch = /^\/api\/employees\/([^/]+)\/medical-exam$/.exec(url.pathname);
+  if (employeeMedicalExamMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view") || !canManageMockMedicalExam(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění zobrazit lékařské prohlídky." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeMedicalExamMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    sendJson(response, 200, { medicalExam: mockMedicalExamForEmployee(employee), apiStatus: "ready" });
+    return true;
+  }
+
+  if (employeeMedicalExamMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "view") || !canManageMockMedicalExam(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění upravit lékařské prohlídky." });
+      return true;
+    }
+
+    const employee = findMockEmployee(user, decodeURIComponent(employeeMedicalExamMatch[1]));
+    if (!employee) {
+      sendJson(response, 404, { error: "Zaměstnanec nebyl nalezen." });
+      return true;
+    }
+
+    try {
+      const medicalExam = saveMockMedicalExam(user, employee, await readJsonBody(request));
+      sendJson(response, 200, { medicalExam, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 400, { error: error.message || "Lékařskou prohlídku se nepodařilo uložit." });
+    }
     return true;
   }
 

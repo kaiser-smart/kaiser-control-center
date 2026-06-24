@@ -1,5 +1,6 @@
 import { normalizeIdentifier } from "./auth.js";
 import { markAbsenceReminderSent } from "./absence-requests-store.js";
+import { markMedicalExamReminderSent } from "./medical-exams-store.js";
 
 const NOTIFICATION_DB_BINDING = "SMART_ODPADY_DB";
 const DETAILED_NOTIFICATION_COLUMNS = [
@@ -69,6 +70,10 @@ function feedbackUrl(env) {
 
 function dashboardUrl(env) {
   return `${appBaseUrl(env).replace(/\/+$/, "")}/`;
+}
+
+function employeeCardUrl(env, employeeId) {
+  return `${appBaseUrl(env).replace(/\/+$/, "")}/dovolena-nemoc/zamestnanci/${encodeURIComponent(cleanString(employeeId))}`;
 }
 
 function typeLabel(request) {
@@ -303,6 +308,52 @@ function renderVersionNewsEmail({ title, text, authorName, createdAt, ctaUrl }) 
                 </td></tr>
               </table>
               <a href="${htmlEscape(ctaUrl)}" style="display:block;text-align:center;background:#75bd25;border-radius:14px;padding:18px 24px;color:#ffffff;font-size:18px;line-height:24px;font-weight:800;text-decoration:none;">Otevřít aplikaci</a>
+              <p style="margin:28px 0 0 0;font-size:13px;line-height:20px;color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function renderMedicalExamReminderEmail({ exam, ctaUrl }) {
+  const statusLabel = cleanString(exam.statusLabel) || "Chybí údaje";
+  const intro = exam.status === "overdue"
+    ? `${exam.employeeName} má lékařskou prohlídku po termínu.`
+    : exam.status === "due_soon"
+      ? `${exam.employeeName} má lékařskou prohlídku do 60 dnů.`
+      : `${exam.employeeName} má neúplné údaje k lékařské prohlídce.`;
+
+  return `<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kaiser Smart – lékařské prohlídky</title>
+</head>
+<body style="margin:0;padding:0;background:#f7f9f4;font-family:'Quicksand',Arial,Helvetica,sans-serif;color:#1f2921;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7f9f4;">
+    <tr>
+      <td align="center" style="padding:42px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border:1px solid #e1e6de;border-radius:16px;box-shadow:0 24px 64px rgba(31,41,33,0.14);overflow:hidden;">
+          <tr>
+            <td style="padding:40px 42px;">
+              <div style="display:inline-block;background:#75bd25;border-radius:14px;padding:12px 24px;color:#ffffff;font-size:28px;line-height:32px;font-weight:700;margin:0 0 34px 0;">kaiser.</div>
+              <h1 style="margin:0 0 12px 0;font-size:36px;line-height:42px;font-weight:800;color:#1f2921;">Lékařské prohlídky</h1>
+              <p style="margin:0 0 26px 0;font-size:18px;line-height:28px;font-weight:600;color:#647064;">${htmlEscape(intro)}</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fbf4;border:1px solid #dfe8d9;border-radius:14px;margin:0 0 24px 0;">
+                <tr><td style="padding:20px 22px;font-size:16px;line-height:24px;">
+                  <p style="margin:0 0 10px 0;"><strong>Zaměstnanec:</strong> ${htmlEscape(exam.employeeName)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Kategorie:</strong> ${htmlEscape(exam.categoryLabel || exam.fullCategoryLabel || "neuvedeno")}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Poslední prohlídka:</strong> ${htmlEscape(formatDate(exam.lastExamDate))}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Příští prohlídka:</strong> ${htmlEscape(formatDate(exam.nextExamDate))}</p>
+                  <p style="margin:0;"><strong>Stav:</strong> ${htmlEscape(statusLabel)}</p>
+                </td></tr>
+              </table>
+              <a href="${htmlEscape(ctaUrl)}" style="display:block;text-align:center;background:#75bd25;border-radius:14px;padding:18px 24px;color:#ffffff;font-size:18px;line-height:24px;font-weight:800;text-decoration:none;">Otevřít kartu zaměstnance</a>
               <p style="margin:28px 0 0 0;font-size:13px;line-height:20px;color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
             </td>
           </tr>
@@ -619,6 +670,28 @@ export async function sendVersionNewsNotification(env, news, options = {}) {
   });
 }
 
+export async function sendMedicalExamReminderNotification(env, exam, options = {}) {
+  const recipientEmail = cleanString(options.recipientEmail || env.MEDICAL_EXAM_REMINDER_EMAIL || "olsanikova@kaiserservis.cz");
+  const recipientName = cleanString(options.recipientName || "Olšaníková");
+  const statusLabel = cleanString(exam?.statusLabel) || "Chybí údaje";
+  const messagePreview = `${cleanString(exam?.employeeName) || "Zaměstnanec"} – ${statusLabel}`;
+
+  return sendEmail(env, {
+    type: "employee_medical_exam_reminder",
+    to: recipientEmail,
+    subject: "Kaiser Smart – lékařské prohlídky",
+    html: renderMedicalExamReminderEmail({
+      exam,
+      ctaUrl: employeeCardUrl(env, exam?.employeeId)
+    }),
+    relatedEntityId: cleanString(exam?.id || exam?.employeeId),
+    recipientName,
+    moduleId: "absence",
+    relatedEntityType: "employee_medical_exam",
+    messagePreview
+  });
+}
+
 export async function sendAbsenceApprovalRequestNotification(env, request) {
   if (request.status !== "pending_approval") {
     return { status: "skipped", errorMessage: "Žádost není ve schvalovacím stavu." };
@@ -684,6 +757,21 @@ export async function sendAbsenceApprovalReminders(env, requests) {
 
     if (result.status === "sent") {
       await markAbsenceReminderSent(env, request.id);
+    }
+  }
+
+  return results;
+}
+
+export async function sendMedicalExamReminders(env, exams) {
+  const results = [];
+
+  for (const exam of exams) {
+    const result = await sendMedicalExamReminderNotification(env, exam);
+    results.push({ employeeId: exam.employeeId, examId: exam.id, ...result });
+
+    if (result.status === "sent") {
+      await markMedicalExamReminderSent(env, exam.id, exam.notificationKey);
     }
   }
 

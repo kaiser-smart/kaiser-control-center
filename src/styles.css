@@ -4014,7 +4014,10 @@ body:has(.ai-assistant-promo-modal) {
 .employee-card-field select,
 .employee-card-field textarea,
 .employee-work-history-form input,
-.employee-work-history-form textarea {
+.employee-work-history-form textarea,
+.employee-medical-exam-form input,
+.employee-medical-exam-form select,
+.employee-medical-exam-form textarea {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line);
@@ -4034,12 +4037,16 @@ body:has(.ai-assistant-promo-modal) {
 .employee-card-field select,
 .employee-card-field textarea,
 .employee-work-history-form input,
-.employee-work-history-form textarea {
+.employee-work-history-form textarea,
+.employee-medical-exam-form input,
+.employee-medical-exam-form select,
+.employee-medical-exam-form textarea {
   padding: 10px 12px;
 }
 
 .employee-card-field textarea,
-.employee-work-history-form textarea {
+.employee-work-history-form textarea,
+.employee-medical-exam-form textarea {
   min-height: 96px;
   resize: vertical;
 }
@@ -4121,7 +4128,8 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 .employee-card-fields,
-.employee-work-history-form {
+.employee-work-history-form,
+.employee-medical-exam-form .employee-card-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -4182,6 +4190,61 @@ body:has(.ai-assistant-promo-modal) {
 .employee-card-status--waiting {
   background: #fff5e5;
   color: #8a5a00;
+}
+
+.employee-medical-exam-section {
+  border-color: #d9e8cf;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdf9 100%);
+}
+
+.employee-medical-exam-status-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.employee-medical-exam-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.employee-medical-exam-status--ready {
+  background: #edf8e7;
+  color: var(--kaiser-green-dark);
+}
+
+.employee-medical-exam-status--warning {
+  background: #fff5e5;
+  color: #8a5a00;
+}
+
+.employee-medical-exam-status--danger {
+  background: #fff0f0;
+  color: #9b2c2c;
+}
+
+.employee-medical-exam-status--waiting,
+.employee-medical-exam-status--muted {
+  background: #f1f4ef;
+  color: var(--muted);
+}
+
+.employee-medical-exam-note {
+  margin: 2px 0 0;
+  padding: 12px 14px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #f8fbf4;
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .employee-card-document-types {
@@ -6779,7 +6842,8 @@ body:has(.ai-assistant-promo-modal) {
 
   .employee-card-kpis,
   .employee-card-fields,
-  .employee-work-history-form {
+  .employee-work-history-form,
+  .employee-medical-exam-form .employee-card-fields {
     grid-template-columns: 1fr;
   }
 

@@ -58,6 +58,13 @@ import {
   visibleAbsenceRequests
 } from "./data/absence.js";
 import {
+  MEDICAL_EXAM_CATEGORY_OPTIONS,
+  calculateMedicalExamState,
+  formatMedicalExamDate,
+  medicalExamDateValue,
+  normalizeMedicalExamCategory
+} from "./data/medicalExamRules.js";
+import {
   FEEDBACK_PRIORITIES,
   FEEDBACK_STATUSES,
   canManageFeedback,
@@ -160,7 +167,8 @@ const NOTIFICATION_TYPE_LABELS = {
   absence_rejected_sms: "Zamítnuto SMS",
   absence_sickness_recorded_email: "Nemoc evidována",
   module_feedback_resolved_email: "Připomínka vyřešena",
-  version_news_email: "Co je nového"
+  version_news_email: "Co je nového",
+  employee_medical_exam_reminder: "Lékařská prohlídka"
 };
 const NOTIFICATION_CHANNEL_OPTIONS = [
   { value: "email", label: "E-mail" },
@@ -562,7 +570,13 @@ const employeeCardState = {
   vacationBalance: null,
   workHistory: [],
   documents: [],
+  medicalExam: null,
+  medicalExamSaving: false,
+  medicalExamError: "",
+  medicalExamMessage: "",
+  medicalExamApiStatus: "waiting",
   formDraft: null,
+  medicalExamDraft: null,
   documentUploading: false,
   documentsUploadStatus: "waiting",
   documentsMissingEndpoint: "POST /api/employees/:id/documents"
@@ -2174,6 +2188,10 @@ function canSeeEmployeeInternalNote(user = currentUser()) {
   return isFullAccessRole(user) || role === "kancelar";
 }
 
+function canManageEmployeeMedicalExams(user = currentUser()) {
+  return isFullAccessRole(user);
+}
+
 function currentEmployeeCardId() {
   return routeEmployeeId(normalizePath(window.location.pathname));
 }
@@ -2361,6 +2379,111 @@ function currentEmployeeCardDirtyTarget() {
 
   return {
     type: "employee-card",
+    form,
+    current,
+    baseline,
+    isDirty
+  };
+}
+
+function normalizeEmployeeMedicalExamFormData(data) {
+  if (!data) {
+    return null;
+  }
+
+  const category = normalizeMedicalExamCategory(data.category);
+  const dateOfBirth = medicalExamDateValue(data.dateOfBirth);
+  const lastExamDate = medicalExamDateValue(data.lastExamDate);
+  const calculated = calculateMedicalExamState({ category, dateOfBirth, lastExamDate });
+  const notificationEnabled = data.notificationEnabled === true ||
+    data.notificationEnabled === "true" ||
+    data.notificationEnabled === "1" ||
+    data.notificationEnabled === "on";
+
+  return {
+    id: normalizeEmployeeCardText(data.id),
+    employeeId: normalizeEmployeeCardText(data.employeeId),
+    category,
+    dateOfBirth,
+    lastExamDate,
+    note: normalizeEmployeeCardText(data.note),
+    notificationEnabled,
+    ...calculated
+  };
+}
+
+function employeeMedicalExamComparable(data) {
+  const normalized = normalizeEmployeeMedicalExamFormData(data);
+
+  if (!normalized) {
+    return null;
+  }
+
+  return {
+    category: normalized.category,
+    dateOfBirth: normalized.dateOfBirth,
+    lastExamDate: normalized.lastExamDate,
+    note: normalized.note,
+    notificationEnabled: normalized.notificationEnabled
+  };
+}
+
+function employeeMedicalExamDraftFor(employee) {
+  const draft = employeeCardState.medicalExamDraft;
+  const employeeId = String(employee?.id || "").trim().toLowerCase();
+  const draftId = String(draft?.employeeId || "").trim().toLowerCase();
+
+  if (!draft || !employeeId || draftId !== employeeId) {
+    return employeeCardState.medicalExam || {
+      employeeId: employee?.id || "",
+      category: "",
+      dateOfBirth: "",
+      lastExamDate: "",
+      note: "",
+      notificationEnabled: true
+    };
+  }
+
+  return {
+    ...(employeeCardState.medicalExam || {}),
+    ...draft
+  };
+}
+
+function employeeMedicalExamFormData(form) {
+  const source = employeeCardState.medicalExam || {};
+
+  return {
+    ...source,
+    id: source.id || "",
+    employeeId: employeeCardState.employee?.id || source.employeeId || "",
+    category: employeeCardFormValue(form, "category"),
+    dateOfBirth: employeeCardFormValue(form, "dateOfBirth"),
+    lastExamDate: employeeCardFormValue(form, "lastExamDate"),
+    note: employeeCardFormValue(form, "note"),
+    notificationEnabled: employeeCardFormValue(form, "notificationEnabled") !== "false"
+  };
+}
+
+function currentEmployeeMedicalExamDirtyTarget() {
+  if (!currentEmployeeCardId() || !canManageEmployeeMedicalExams()) {
+    return null;
+  }
+
+  const form = document.querySelector("[data-employee-medical-exam-form]");
+  if (!form || !employeeCardState.employee) {
+    return null;
+  }
+
+  const current = normalizeEmployeeMedicalExamFormData(employeeMedicalExamFormData(form));
+  const baseline = normalizeEmployeeMedicalExamFormData(employeeCardState.medicalExam || {
+    employeeId: employeeCardState.employee.id,
+    notificationEnabled: true
+  });
+  const isDirty = !isSameData(employeeMedicalExamComparable(current), employeeMedicalExamComparable(baseline));
+
+  return {
+    type: "employee-medical-exam",
     form,
     current,
     baseline,
@@ -2558,6 +2681,12 @@ function currentDirtyTarget() {
 
   if (employeeTarget?.isDirty) {
     return employeeTarget;
+  }
+
+  const employeeMedicalExamTarget = currentEmployeeMedicalExamDirtyTarget();
+
+  if (employeeMedicalExamTarget?.isDirty) {
+    return employeeMedicalExamTarget;
   }
 
   return null;
@@ -4521,6 +4650,103 @@ function employeeCardReadonlyValue(label, value) {
   `;
 }
 
+function employeeMedicalExamStatusBadge(state) {
+  const tone = state?.statusTone || "waiting";
+  const label = state?.statusLabel || "Chybí údaje";
+
+  return `<span class="employee-medical-exam-status employee-medical-exam-status--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function employeeMedicalExamDateLabel(value, fallback = "neuvedeno") {
+  return formatMedicalExamDate(value) || fallback;
+}
+
+function employeeMedicalExamAgeLabel(state) {
+  if (state?.age === null || state?.age === undefined) {
+    return state?.ageGroupLabel || "Nelze určit – chybí datum narození";
+  }
+
+  return `${state.age} let · ${state.ageGroupLabel || "neuvedeno"}`;
+}
+
+function employeeMedicalExamSection(employee, canEdit) {
+  if (!canManageEmployeeMedicalExams()) {
+    return "";
+  }
+
+  const exam = normalizeEmployeeMedicalExamFormData(employeeMedicalExamDraftFor(employee) || {
+    employeeId: employee.id,
+    notificationEnabled: true
+  });
+  const disabled = !canEdit || employeeCardState.medicalExamSaving;
+  const nextExamLabel = exam.nextExamDate
+    ? employeeMedicalExamDateLabel(exam.nextExamDate)
+    : (exam.missingReason || "neuvedeno");
+  const categoryOptions = [
+    { value: "", label: "Vyberte kategorii" },
+    ...MEDICAL_EXAM_CATEGORY_OPTIONS
+  ];
+
+  return `
+    <section class="employee-card-section employee-card-section--wide employee-medical-exam-section" aria-labelledby="employee-medical-exam-title">
+      <div class="employee-card-section__head">
+        <div>
+          <h2 id="employee-medical-exam-title">Lékařské prohlídky</h2>
+          <p>Chráněná evidence pracovnělékařských prohlídek a hlídání dalších termínů.</p>
+        </div>
+        <div class="employee-medical-exam-status-group">
+          ${employeeMedicalExamStatusBadge(exam)}
+          <span class="employee-card-status ${employeeCardState.medicalExamApiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting"}">
+            ${employeeCardState.medicalExamApiStatus === "ready" ? "API aktivní" : "Čeká na API"}
+          </span>
+        </div>
+      </div>
+
+      ${employeeCardState.medicalExamMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.medicalExamMessage)}</p>` : ""}
+      ${employeeCardState.medicalExamError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.medicalExamError)}</p>` : ""}
+
+      <form class="employee-medical-exam-form" data-employee-medical-exam-form data-employee-id="${escapeHtml(employee.id)}">
+        <div class="employee-card-fields">
+          ${employeeCardField("Kategorie prohlídky", employeeCardSelect("category", categoryOptions, exam.category, disabled))}
+          ${employeeCardField("Datum narození pro výpočet věku", employeeCardInput("dateOfBirth", exam.dateOfBirth, { type: "date", disabled }))}
+          ${employeeCardField("Datum poslední prohlídky", employeeCardInput("lastExamDate", exam.lastExamDate, { type: "date", disabled }))}
+          ${employeeCardField("Upozornění", employeeCardSelect("notificationEnabled", [
+            { value: "true", label: "Zapnuto" },
+            { value: "false", label: "Vypnuto" }
+          ], exam.notificationEnabled ? "true" : "false", disabled))}
+          ${employeeCardReadonlyValue("Rozhodný věk", employeeMedicalExamAgeLabel(exam))}
+          ${employeeCardReadonlyValue("Perioda", exam.intervalLabel || "neuvedeno")}
+          ${employeeCardReadonlyValue("Příští prohlídka", nextExamLabel)}
+          <div class="employee-card-readonly">
+            <span>Stav termínu</span>
+            ${employeeMedicalExamStatusBadge(exam)}
+          </div>
+          ${employeeCardReadonlyValue("Poznámka pravidla", exam.ruleNote || (exam.required ? "povinná prohlídka" : "nepovinná / nehlídá se"))}
+          <label class="employee-card-field employee-card-field--wide">
+            <span>Poznámka</span>
+            <textarea name="note" rows="3" ${disabled ? "disabled" : ""}>${escapeHtml(exam.note || "")}</textarea>
+          </label>
+        </div>
+
+        <p class="employee-medical-exam-note">
+          Citlivé údaje jsou dostupné jen oprávněným rolím. E-mailové upozornění se posílá serverově na personalistiku a nikdy z prohlížeče.
+        </p>
+
+        ${canEdit ? `
+          <div class="employee-card-form-actions">
+            <button class="primary-action" type="submit" data-employee-medical-exam-save ${employeeCardState.medicalExamSaving ? "disabled" : ""}>
+              ${employeeCardState.medicalExamSaving ? "Ukládám..." : "Uložit lékařskou prohlídku"}
+            </button>
+            <button class="secondary-link" type="button" data-employee-medical-exam-discard>
+              Zrušit změny
+            </button>
+          </div>
+        ` : ""}
+      </form>
+    </section>
+  `;
+}
+
 function employeeDocumentsSection(employee, canEdit) {
   const documents = employeeCardState.documents;
   const uploadReady = employeeCardState.documentsUploadStatus === "ready";
@@ -4758,6 +4984,7 @@ function employeeCardContent(employeeId, user) {
   }
 
   const canEdit = canEditEmployeeCards(user);
+  const canEditMedicalExam = canManageEmployeeMedicalExams(user);
   const canSeeNote = canSeeEmployeeInternalNote(user);
   const disabled = !canEdit || employeeCardState.saving;
   const formEmployee = employeeCardDraftFor(employee);
@@ -4887,6 +5114,8 @@ function employeeCardContent(employeeId, user) {
           </div>
         ` : ""}
       </form>
+
+      ${employeeMedicalExamSection(employee, canEditMedicalExam)}
 
       <div class="employee-card-grid employee-card-grid--bottom">
         ${employeeAbsenceWorkflowSection()}
@@ -6563,6 +6792,11 @@ async function loadEmployeeCard(employeeId, options = {}) {
     employeeCardState.vacationBalance = null;
     employeeCardState.workHistory = [];
     employeeCardState.documents = [];
+    employeeCardState.medicalExam = null;
+    employeeCardState.medicalExamDraft = null;
+    employeeCardState.medicalExamError = "";
+    employeeCardState.medicalExamMessage = "";
+    employeeCardState.medicalExamApiStatus = "waiting";
     employeeCardState.formDraft = null;
     employeeCardState.documentUploading = false;
   }
@@ -6580,11 +6814,15 @@ async function loadEmployeeCard(employeeId, options = {}) {
       upsertEmployeeCardInList(detail.employee);
     }
 
-    const [vacation, absence, history, documents] = await Promise.allSettled([
+    const shouldLoadMedicalExam = canManageEmployeeMedicalExams(authState.user);
+    const [vacation, absence, history, documents, medicalExam] = await Promise.allSettled([
       apiJson(`/api/employees/${encodeURIComponent(employeeId)}/vacation-balance`),
       apiJson(`/api/employees/${encodeURIComponent(employeeId)}/absence`),
       apiJson(`/api/employees/${encodeURIComponent(employeeId)}/work-history`),
-      apiJson(`/api/employees/${encodeURIComponent(employeeId)}/documents`)
+      apiJson(`/api/employees/${encodeURIComponent(employeeId)}/documents`),
+      shouldLoadMedicalExam
+        ? apiJson(`/api/employees/${encodeURIComponent(employeeId)}/medical-exam`)
+        : Promise.resolve(null)
     ]);
 
     if (vacation.status === "fulfilled") {
@@ -6603,6 +6841,16 @@ async function loadEmployeeCard(employeeId, options = {}) {
       employeeCardState.documents = Array.isArray(documents.value.documents) ? documents.value.documents : [];
       employeeCardState.documentsUploadStatus = documents.value.uploadStatus || "waiting";
       employeeCardState.documentsMissingEndpoint = documents.value.missingEndpoint || "POST /api/employees/:id/documents";
+    }
+
+    if (medicalExam.status === "fulfilled" && medicalExam.value) {
+      employeeCardState.medicalExam = medicalExam.value.medicalExam || null;
+      employeeCardState.medicalExamApiStatus = medicalExam.value.apiStatus || "waiting";
+      employeeCardState.medicalExamError = "";
+    } else if (shouldLoadMedicalExam && medicalExam.status === "rejected") {
+      employeeCardState.medicalExam = null;
+      employeeCardState.medicalExamApiStatus = "waiting";
+      employeeCardState.medicalExamError = "Lékařské prohlídky se teď nepodařilo načíst.";
     }
   } catch (error) {
     console.error("smart_odpady_employee_card_load_failed", error);
@@ -7799,6 +8047,50 @@ function discardEmployeeCardDirtyChanges() {
   render();
 }
 
+async function saveEmployeeMedicalExamChanges(target = currentEmployeeMedicalExamDirtyTarget()) {
+  if (!target?.isDirty || !employeeCardState.employee?.id) {
+    employeeCardState.medicalExamMessage = "Lékařské prohlídky nemají žádné změny k uložení.";
+    employeeCardState.medicalExamError = "";
+    render();
+    return true;
+  }
+
+  employeeCardState.medicalExamDraft = target.current;
+  employeeCardState.medicalExamSaving = true;
+  employeeCardState.medicalExamMessage = "Ukládám lékařskou prohlídku...";
+  employeeCardState.medicalExamError = "";
+  render();
+
+  try {
+    const result = await apiJson(`/api/employees/${encodeURIComponent(employeeCardState.employee.id)}/medical-exam`, {
+      method: "PATCH",
+      body: JSON.stringify(employeeMedicalExamComparable(target.current))
+    });
+
+    employeeCardState.medicalExam = result.medicalExam || target.current;
+    employeeCardState.medicalExamDraft = null;
+    employeeCardState.medicalExamApiStatus = result.apiStatus || employeeCardState.medicalExamApiStatus;
+    employeeCardState.medicalExamMessage = "Lékařská prohlídka byla uložena.";
+    employeeCardState.medicalExamError = "";
+    return true;
+  } catch (error) {
+    employeeCardState.medicalExamDraft = target.current;
+    employeeCardState.medicalExamError = error.message || "Lékařskou prohlídku se nepodařilo uložit.";
+    employeeCardState.medicalExamMessage = "";
+    return false;
+  } finally {
+    employeeCardState.medicalExamSaving = false;
+    render();
+  }
+}
+
+function discardEmployeeMedicalExamDirtyChanges() {
+  employeeCardState.medicalExamDraft = null;
+  employeeCardState.medicalExamMessage = "Neuložené změny lékařské prohlídky byly zahozeny.";
+  employeeCardState.medicalExamError = "";
+  render();
+}
+
 async function saveEmployeeManager(employeeId, managerId) {
   if (!canEditEmployeeCards()) {
     employeeCardState.error = "Nemáte oprávnění měnit nadřízeného.";
@@ -8230,12 +8522,23 @@ async function saveDirtyChanges() {
   }
 
   const employeeTarget = currentEmployeeCardDirtyTarget();
+  let savedEmployeeSection = false;
 
   if (employeeTarget?.isDirty) {
-    return saveEmployeeCardChanges(employeeTarget);
+    const saved = await saveEmployeeCardChanges(employeeTarget);
+    if (!saved) {
+      return false;
+    }
+    savedEmployeeSection = true;
   }
 
-  return true;
+  const employeeMedicalExamTarget = currentEmployeeMedicalExamDirtyTarget();
+
+  if (employeeMedicalExamTarget?.isDirty) {
+    return saveEmployeeMedicalExamChanges(employeeMedicalExamTarget);
+  }
+
+  return savedEmployeeSection || true;
 }
 
 function discardDirtyChanges() {
@@ -8269,9 +8572,22 @@ function discardDirtyChanges() {
   }
 
   const employeeTarget = currentEmployeeCardDirtyTarget();
+  let discardedEmployeeSection = false;
 
   if (employeeTarget?.isDirty) {
     discardEmployeeCardDirtyChanges();
+    discardedEmployeeSection = true;
+  }
+
+  const employeeMedicalExamTarget = currentEmployeeMedicalExamDirtyTarget();
+
+  if (employeeMedicalExamTarget?.isDirty) {
+    discardEmployeeMedicalExamDirtyChanges();
+    return;
+  }
+
+  if (discardedEmployeeSection) {
+    return;
   }
 }
 
@@ -8466,6 +8782,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const employeeMedicalExamForm = event.target.closest("[data-employee-medical-exam-form]");
+  if (employeeMedicalExamForm) {
+    event.preventDefault();
+    saveEmployeeMedicalExamChanges(currentEmployeeMedicalExamDirtyTarget());
+    return;
+  }
+
   const employeeWorkHistoryForm = event.target.closest("[data-employee-work-history-form]");
   if (employeeWorkHistoryForm) {
     event.preventDefault();
@@ -8654,6 +8977,16 @@ document.addEventListener("change", (event) => {
     const nextEmployeeId = employeeCardSelect.value;
     employeeCardSelect.value = employeeCardState.employee?.id || "";
     guardedAccessAction(() => navigateToUrl(routeHref(employeeCardRoute(nextEmployeeId))));
+    return;
+  }
+
+  const employeeMedicalExamField = event.target.closest("[data-employee-medical-exam-form] input, [data-employee-medical-exam-form] select, [data-employee-medical-exam-form] textarea");
+  if (employeeMedicalExamField) {
+    const form = employeeMedicalExamField.closest("[data-employee-medical-exam-form]");
+    if (form) {
+      employeeCardState.medicalExamDraft = normalizeEmployeeMedicalExamFormData(employeeMedicalExamFormData(form));
+      render();
+    }
     return;
   }
 
@@ -8879,6 +9212,19 @@ document.addEventListener("click", async (event) => {
   const employeeDiscard = event.target.closest("[data-employee-discard]");
   if (employeeDiscard) {
     discardEmployeeCardDirtyChanges();
+    return;
+  }
+
+  const employeeMedicalExamSave = event.target.closest("[data-employee-medical-exam-save]");
+  if (employeeMedicalExamSave) {
+    event.preventDefault();
+    saveEmployeeMedicalExamChanges(currentEmployeeMedicalExamDirtyTarget());
+    return;
+  }
+
+  const employeeMedicalExamDiscard = event.target.closest("[data-employee-medical-exam-discard]");
+  if (employeeMedicalExamDiscard) {
+    discardEmployeeMedicalExamDirtyChanges();
     return;
   }
 

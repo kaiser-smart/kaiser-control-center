@@ -10,7 +10,8 @@ const TYPES = new Set([
   "absence_rejected_sms",
   "absence_sickness_recorded_email",
   "module_feedback_resolved_email",
-  "version_news_email"
+  "version_news_email",
+  "employee_medical_exam_reminder"
 ]);
 
 export class NotificationsStoreError extends Error {
