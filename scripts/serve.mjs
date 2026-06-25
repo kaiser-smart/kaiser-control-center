@@ -28,9 +28,9 @@ import {
 } from "../functions/_lib/fleet-vistos-import-preview.js";
 import {
   TcarsClientError,
+  loadTcarsStatusPayload,
+  loadTcarsVehiclesPayload,
   syncTcarsLocations,
-  tcarsStatusPayload,
-  tcarsVehiclesPayload
 } from "../functions/_lib/tcars-client.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { modules } from "../src/data/modules.js";
@@ -1465,7 +1465,7 @@ async function handleApi(request, response) {
       return true;
     }
 
-    sendJson(response, 200, tcarsStatusPayload(process.env));
+    sendJson(response, 200, await loadTcarsStatusPayload(process.env));
     return true;
   }
 
@@ -1480,7 +1480,7 @@ async function handleApi(request, response) {
       return true;
     }
 
-    sendJson(response, 200, tcarsVehiclesPayload(process.env));
+    sendJson(response, 200, await loadTcarsVehiclesPayload(process.env));
     return true;
   }
 

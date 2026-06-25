@@ -6738,10 +6738,14 @@ function vehicleTrackingTcarsConfigItems(status = {}) {
   return [
     { label: "T-Cars konfigurace", value: status.configured ? "Nastavená" : "Čeká na Cloudflare Secrets" },
     { label: "API URL", value: config.baseUrl || "https://webservice.t-cars.cz/v2/" },
+    { label: "SOAP endpoint", value: config.endpointUrl || "https://webservice.t-cars.cz/v2/index.php" },
     { label: "Zákaznické číslo", value: config.hasCustomerNumber ? "Uloženo v Cloudflare" : "Čeká na TCARS_CUSTOMER_NUMBER" },
     { label: "Přístupy", value: config.hasCredentials ? "Uloženo v Cloudflare" : "Čeká na TCARS_USERNAME / TCARS_PASSWORD nebo TCARS_API_TOKEN" },
     { label: "API režim", value: config.apiMode || "Čeká na TCARS_API_MODE" },
-    { label: "API dokumentace", value: config.documentationStatus === "missing" ? "Chybí" : config.documentationStatus },
+    { label: "API dokumentace", value: config.documentationStatus === "verified-wsdl" ? "WSDL ověřeno" : "Chybí" },
+    { label: "Načtená vozidla", value: String(status.vehicles?.length || 0) },
+    { label: "Aktuální polohy", value: String(status.locations?.length || 0) },
+    { label: "Poslední načtení", value: status.lastFetchedAt ? formatDateTime(status.lastFetchedAt) : "Zatím neproběhlo" },
     { label: "Interval načítání", value: `${status.pollIntervalSeconds || 60} s` },
     { label: "Zdroj", value: status.source || "T-Cars jednotka" }
   ];
@@ -6766,7 +6770,7 @@ function vehicleTrackingTcarsStatusSection() {
       <div class="tracking-tcars-state ${error ? "tracking-tcars-state--error" : ""}" role="${error ? "alert" : "status"}">
         <strong>${escapeHtml(loading ? VEHICLE_TRACKING_LOADING : message)}</strong>
         <span>${escapeHtml(status.tabletRole || VEHICLE_TRACKING_TABLET_ROLE)}</span>
-        ${status.configured ? `<small>${escapeHtml(VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING)}</small>` : ""}
+        ${status.config?.documentationStatus === "missing" ? `<small>${escapeHtml(VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING)}</small>` : ""}
       </div>
       <div class="tracking-detail-grid tracking-detail-grid--compact">
         ${itemRows.map((item) => vehicleTrackingDemoDetailField(item.label, item.value)).join("")}
@@ -6774,7 +6778,7 @@ function vehicleTrackingTcarsStatusSection() {
       <div class="tracking-tcars-mode-grid">
         <article>
           <h3>T-Cars data</h3>
-          <p>${escapeHtml(status.configured ? "Čeká na ověřené API / export T-Cars." : VEHICLE_TRACKING_TCAR_WAITING)}</p>
+          <p>${escapeHtml(status.apiStatus === "ready" ? `Načteno vozidel: ${status.vehicles?.length || 0}, aktuálních poloh: ${status.locations?.length || 0}.` : status.configured ? "Čeká na úspěšné read-only načtení T-Cars." : VEHICLE_TRACKING_TCAR_WAITING)}</p>
         </article>
         <article>
           <h3>Fallback</h3>
@@ -6786,7 +6790,7 @@ function vehicleTrackingTcarsStatusSection() {
         </article>
       </div>
       <div class="tracking-actions">
-        <button class="secondary-link tracking-disabled-action" type="button" disabled>Čeká na API dokumentaci T-Cars.</button>
+        <button class="secondary-link tracking-disabled-action" type="button" disabled>Read-only režim. Zápis do D1 není zapnutý.</button>
       </div>
     </section>
   `;
@@ -6811,7 +6815,7 @@ function vehicleTrackingTcarsPairingSection() {
           <tbody>
             <tr>
               <td colspan="${VEHICLE_TRACKING_TCAR_PAIRING_COLUMNS.length}">
-                Vozidla a jednotky T-Cars se zobrazí po dodání API dokumentace a nastavení Cloudflare Secrets.
+                Párovací tabulka čeká na cloud API pro uložení vazeb vozidel. T-Cars data se načítají pouze read-only.
               </td>
             </tr>
           </tbody>

@@ -1,5 +1,5 @@
 import { json, requireUserPermission } from "../../../_lib/auth.js";
-import { tcarsVehiclesPayload } from "../../../_lib/tcars-client.js";
+import { loadTcarsVehiclesPayload } from "../../../_lib/tcars-client.js";
 
 export async function onRequestGet({ request, env }) {
   const { response } = await requireUserPermission(env, request, "vehicle-tracking", "view");
@@ -8,5 +8,5 @@ export async function onRequestGet({ request, env }) {
     return response;
   }
 
-  return json(tcarsVehiclesPayload(env));
+  return json(await loadTcarsVehiclesPayload(env));
 }

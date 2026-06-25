@@ -1,8 +1,8 @@
 export const DEMO_VEHICLE_TRACKING_NOTICE = "DEMO REŽIM – ukázkový pohyb vozidel, nejde o reálná GPS data.";
 
-export const DEMO_VEHICLE_TRACKING_API_NOTICE = "Reálné GPS API zatím není připojené.";
+export const DEMO_VEHICLE_TRACKING_API_NOTICE = "Reálné GPS čtení je připravené přes T-Cars read-only.";
 
-export const DEMO_VEHICLE_TRACKING_API_DETAIL = "Demo ukazuje budoucí chování modulu. Reálné polohy budou chodit z T-Cars jednotek přes backend Smart odpady. Android tablet zůstává jako vozidlový terminál.";
+export const DEMO_VEHICLE_TRACKING_API_DETAIL = "Reálné polohy se načítají z T-Cars jednotek přes backend Smart odpady. Ukládání do D1, párování a sync log čekají na další fázi. Android tablet zůstává jako vozidlový terminál.";
 
 export const DEMO_VEHICLE_TRACKING_GOOGLE_MAPS_WAITING = "Čeká na Google Maps API key.";
 
