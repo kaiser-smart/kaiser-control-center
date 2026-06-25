@@ -11,6 +11,109 @@ export const VEHICLE_TRACKING_TCAR_UNAVAILABLE = "T-Cars není aktuálně dostup
 export const VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING = "Chybí API dokumentace T-Cars. Prosím dodat dokumentaci nebo potvrdit způsob napojení.";
 export const VEHICLE_TRACKING_TCAR_LAST_KNOWN = "Poslední známá poloha";
 export const VEHICLE_TRACKING_TABLET_ROLE = "Primární poloha vozidla je z T-Cars jednotky. Android tablet slouží jako vozidlový terminál.";
+export const VEHICLE_TRACKING_ICON_FOLDER = "/vehicles/icons/";
+export const VEHICLE_TRACKING_ICON_WAITING = "Čeká na ikonu vozidla od Radima/Martina.";
+
+export const VEHICLE_TRACKING_ICON_FORMATS = [
+  "PNG s transparentním pozadím",
+  "WebP s transparentním pozadím",
+  "128 x 128 px nebo 256 x 256 px",
+  "zobrazení v mapě 36-48 px",
+  "max. 100 KB na ikonu"
+];
+
+export const VEHICLE_TRACKING_ICON_REQUIREMENTS = [
+  "3D-look je povolený, skutečný 3D model ne",
+  "horní šikmý pohled cca 45 stupňů",
+  "bez SPZ, malých textů a pozadí",
+  "stejný úhel pohledu u všech ikon",
+  "stav vozidla řeší CSS obrys / badge"
+];
+
+export const VEHICLE_TRACKING_ICON_TYPES = [
+  {
+    key: "collection_truck",
+    label: "Svozové vozidlo",
+    slug: "svozove-vozidlo",
+    primary: "/vehicles/icons/svozove-vozidlo.png",
+    webp: "/vehicles/icons/svozove-vozidlo.webp"
+  },
+  {
+    key: "container_truck",
+    label: "Kontejnerové vozidlo",
+    slug: "kontejnerove-vozidlo",
+    primary: "/vehicles/icons/kontejnerove-vozidlo.png",
+    webp: "/vehicles/icons/kontejnerove-vozidlo.webp"
+  },
+  {
+    key: "van",
+    label: "Dodávka",
+    slug: "dodavka",
+    primary: "/vehicles/icons/dodavka.png",
+    webp: "/vehicles/icons/dodavka.webp"
+  },
+  {
+    key: "special",
+    label: "Speciální technika",
+    slug: "specialni-technika",
+    primary: "/vehicles/icons/specialni-technika.png",
+    webp: "/vehicles/icons/specialni-technika.webp"
+  },
+  {
+    key: "car",
+    label: "Osobní vozidlo",
+    slug: "osobni-vozidlo",
+    primary: "/vehicles/icons/osobni-vozidlo.png",
+    webp: "/vehicles/icons/osobni-vozidlo.webp"
+  },
+  {
+    key: "trailer",
+    label: "Přívěs / návěs",
+    slug: "prives-naves",
+    primary: "/vehicles/icons/prives-naves.png",
+    webp: "/vehicles/icons/prives-naves.webp"
+  }
+];
+
+export const VEHICLE_ICON_BY_TYPE = {
+  collection_truck: "/vehicles/icons/svozove-vozidlo.png",
+  container_truck: "/vehicles/icons/kontejnerove-vozidlo.png",
+  van: "/vehicles/icons/dodavka.png",
+  special: "/vehicles/icons/specialni-technika.png",
+  car: "/vehicles/icons/osobni-vozidlo.png",
+  trailer: "/vehicles/icons/prives-naves.png"
+};
+
+export const VEHICLE_ICON_WEBP_BY_TYPE = {
+  collection_truck: "/vehicles/icons/svozove-vozidlo.webp",
+  container_truck: "/vehicles/icons/kontejnerove-vozidlo.webp",
+  van: "/vehicles/icons/dodavka.webp",
+  special: "/vehicles/icons/specialni-technika.webp",
+  car: "/vehicles/icons/osobni-vozidlo.webp",
+  trailer: "/vehicles/icons/prives-naves.webp"
+};
+
+const VEHICLE_ICON_TYPE_ALIASES = {
+  collection_truck: "collection_truck",
+  svozove_vozidlo: "collection_truck",
+  svoz: "collection_truck",
+  popelar: "collection_truck",
+  container_truck: "container_truck",
+  kontejnerove_vozidlo: "container_truck",
+  kontejner: "container_truck",
+  van: "van",
+  dodavka: "van",
+  special: "special",
+  specialni_technika: "special",
+  technika: "special",
+  car: "car",
+  osobni_vozidlo: "car",
+  osobni: "car",
+  trailer: "trailer",
+  prives_naves: "trailer",
+  prives: "trailer",
+  naves: "trailer"
+};
 
 export const VEHICLE_TRACKING_SOURCE_MODES = [
   {
@@ -35,10 +138,13 @@ export const VEHICLE_TRACKING_SOURCE_MODES = [
 
 export const VEHICLE_TRACKING_STATUS_OPTIONS = [
   { value: "moving", label: "Jede", tone: "moving" },
+  { value: "standing", label: "Stojí", tone: "stopped" },
   { value: "stopped", label: "Stojí", tone: "stopped" },
+  { value: "offline", label: "Offline", tone: "offline" },
   { value: "off", label: "Vypnuté", tone: "off" },
   { value: "no_signal", label: "Bez signálu", tone: "no-signal" },
   { value: "service", label: "V servisu", tone: "service" },
+  { value: "out_of_route", label: "Mimo trasu", tone: "off-route" },
   { value: "out_of_order", label: "Mimo provoz", tone: "out-of-order" }
 ];
 
@@ -177,4 +283,21 @@ export function vehicleTrackingStatusLabel(status) {
 
 export function vehicleTrackingStatusTone(status) {
   return VEHICLE_TRACKING_STATUS_OPTIONS.find((option) => option.value === status)?.tone || "waiting";
+}
+
+export function vehicleTrackingIconTypeKey(value = "") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return VEHICLE_ICON_TYPE_ALIASES[normalized] || "";
+}
+
+export function vehicleTrackingIconForType(value = "") {
+  const key = vehicleTrackingIconTypeKey(value);
+  return VEHICLE_TRACKING_ICON_TYPES.find((type) => type.key === key) || null;
 }

@@ -2006,6 +2006,117 @@ h1 {
   transform-origin: -24px 50%;
 }
 
+.tracking-vehicle-marker {
+  position: relative;
+  display: inline-flex;
+  width: 82px;
+  min-width: 82px;
+  height: 62px;
+  min-height: 62px;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  pointer-events: none;
+}
+
+.tracking-vehicle-marker__asset {
+  position: relative;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 3px solid currentColor;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 22px rgba(35, 40, 33, 0.22);
+  transform: rotate(var(--heading));
+  transform-origin: 50% 50%;
+}
+
+.tracking-vehicle-marker__image {
+  position: relative;
+  z-index: 1;
+  max-width: 48px;
+  max-height: 48px;
+  transform: none;
+}
+
+.tracking-vehicle-marker__fallback {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: currentColor;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.tracking-vehicle-marker--has-image .tracking-vehicle-marker__fallback {
+  display: none;
+}
+
+.tracking-vehicle-marker--moving {
+  color: #3f8d1a;
+}
+
+.tracking-vehicle-marker--stopped {
+  color: #596e78;
+}
+
+.tracking-vehicle-marker--service,
+.tracking-vehicle-marker--no-signal {
+  color: #c66b11;
+}
+
+.tracking-vehicle-marker--offline {
+  color: #6f766c;
+}
+
+.tracking-vehicle-marker--off-route {
+  color: #dc5b1f;
+}
+
+.tracking-vehicle-marker--missing-icon .tracking-vehicle-marker__image {
+  display: none;
+}
+
+.tracking-vehicle-marker--selected .tracking-vehicle-marker__asset {
+  box-shadow: 0 0 0 5px rgba(117, 189, 37, 0.20), 0 12px 24px rgba(35, 40, 33, 0.24);
+}
+
+.tracking-vehicle-marker--alert {
+  z-index: 4;
+}
+
+.tracking-vehicle-marker--alert .tracking-vehicle-marker__asset {
+  border-color: #dc5b1f;
+  box-shadow: 0 0 0 7px rgba(220, 91, 31, 0.22), 0 16px 28px rgba(35, 40, 33, 0.28);
+  animation: trackingMarkerAssetPulse 1s ease-in-out infinite;
+}
+
+.tracking-vehicle-marker__alert {
+  position: absolute;
+  top: -5px;
+  right: -2px;
+  z-index: 3;
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #dc3f1f;
+  color: #ffffff;
+  font-size: 0.52rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
 .tracking-map-vehicle-icon {
   display: block;
   width: 100%;
@@ -2108,6 +2219,15 @@ h1 {
   color: #596e78;
 }
 
+.tracking-google-marker--service,
+.tracking-google-marker--no-signal {
+  color: #c66b11;
+}
+
+.tracking-google-marker--offline {
+  color: #6f766c;
+}
+
 .tracking-google-marker--off-route,
 .tracking-google-marker--alert {
   color: #dc5b1f;
@@ -2116,6 +2236,17 @@ h1 {
 
 .tracking-google-marker--selected {
   filter: drop-shadow(0 0 0 rgba(117, 189, 37, 0.1)) drop-shadow(0 0 12px rgba(117, 189, 37, 0.55));
+}
+
+@keyframes trackingMarkerAssetPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(220, 91, 31, 0.18), 0 16px 28px rgba(35, 40, 33, 0.28);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(220, 91, 31, 0.28), 0 16px 28px rgba(35, 40, 33, 0.28);
+  }
 }
 
 @keyframes trackingMarkerPulse {
@@ -2557,6 +2688,119 @@ h1 {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.tracking-icon-spec {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.tracking-icon-spec__head,
+.tracking-icon-spec__grid {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tracking-icon-spec__head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.tracking-icon-spec__head h3,
+.tracking-icon-spec__head p,
+.tracking-icon-spec__grid h4,
+.tracking-icon-spec__mapping {
+  margin: 0;
+}
+
+.tracking-icon-spec__head h3,
+.tracking-icon-spec__grid h4 {
+  color: var(--ink);
+}
+
+.tracking-icon-spec__head p,
+.tracking-icon-spec__head span,
+.tracking-icon-spec__files span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.tracking-icon-spec__head > span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid #ffd78a;
+  border-radius: 999px;
+  background: #fff7df;
+  color: #715014;
+  white-space: nowrap;
+}
+
+.tracking-icon-spec__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tracking-icon-spec__grid article {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tracking-icon-spec__files {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tracking-icon-spec__files li {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #e3eadf;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracking-icon-spec__files strong {
+  color: var(--ink);
+}
+
+.tracking-icon-spec code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--steel);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.tracking-icon-spec__mapping {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e3eadf;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracking-icon-spec__mapping span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .tracking-table-shell {
@@ -6116,6 +6360,8 @@ body:has(.ai-assistant-promo-modal) {
   .tracking-detail-grid--compact,
   .tracking-trip-layout,
   .tracking-tcars-mode-grid,
+  .tracking-icon-spec__head,
+  .tracking-icon-spec__grid,
   .tracking-integration-grid {
     grid-template-columns: 1fr;
   }
@@ -6293,6 +6539,8 @@ body:has(.ai-assistant-promo-modal) {
   .tracking-detail-grid--compact,
   .tracking-trip-layout,
   .tracking-tcars-mode-grid,
+  .tracking-icon-spec__head,
+  .tracking-icon-spec__grid,
   .tracking-integration-grid {
     grid-template-columns: 1fr;
   }
@@ -6457,6 +6705,23 @@ body:has(.ai-assistant-promo-modal) {
     min-width: 66px;
     height: 52px;
     min-height: 52px;
+  }
+
+  .tracking-vehicle-marker {
+    width: 64px;
+    min-width: 64px;
+    height: 50px;
+    min-height: 50px;
+  }
+
+  .tracking-vehicle-marker__asset {
+    width: 42px;
+    height: 42px;
+  }
+
+  .tracking-vehicle-marker__image {
+    max-width: 40px;
+    max-height: 40px;
   }
 
   .tracking-map-vehicle-label {

@@ -140,12 +140,18 @@ import {
 import { runtimeConfig } from "./data/runtimeConfig.js";
 import {
   VEHICLE_STOP_FIELDS,
+  VEHICLE_ICON_BY_TYPE,
   VEHICLE_TRACKING_API_ENDPOINTS,
   VEHICLE_TRACKING_API_ERROR,
   VEHICLE_TRACKING_SOURCE_MODES,
   VEHICLE_TRACKING_EMPTY,
   VEHICLE_TRACKING_FILTERS,
   VEHICLE_TRACKING_GPS_WAITING,
+  VEHICLE_TRACKING_ICON_FOLDER,
+  VEHICLE_TRACKING_ICON_FORMATS,
+  VEHICLE_TRACKING_ICON_REQUIREMENTS,
+  VEHICLE_TRACKING_ICON_TYPES,
+  VEHICLE_TRACKING_ICON_WAITING,
   VEHICLE_TRACKING_LIST_COLUMNS,
   VEHICLE_TRACKING_LOADING,
   VEHICLE_TRACKING_NO_SIGNAL,
@@ -162,6 +168,8 @@ import {
   VEHICLE_TRACKING_TCAR_WAITING,
   VEHICLE_TRIP_FIELDS,
   VEHICLE_TRIP_POINT_FIELDS,
+  vehicleTrackingIconForType,
+  vehicleTrackingStatusLabel,
   vehicleTrackingStatusTone
 } from "./data/vehicleTracking.js";
 
@@ -6209,6 +6217,106 @@ function vehicleTrackingDemoStatusTone(status) {
   return vehicleTrackingDemoStatusMeta(status).tone;
 }
 
+function vehicleTrackingMarkerStatusKey(status = "") {
+  const normalized = String(status || "").trim().toLowerCase().replace(/-/g, "_");
+
+  if (["standing", "stopped"].includes(normalized)) {
+    return normalized;
+  }
+
+  if (["offline", "off"].includes(normalized)) {
+    return "offline";
+  }
+
+  if (["out_of_route", "off_route"].includes(normalized)) {
+    return "out_of_route";
+  }
+
+  if (["no_signal", "service", "moving"].includes(normalized)) {
+    return normalized;
+  }
+
+  return normalized || "no_signal";
+}
+
+function vehicleTrackingMarkerTone(status = "") {
+  const statusKey = vehicleTrackingMarkerStatusKey(status);
+  if (statusKey === "out_of_route") {
+    return "off-route";
+  }
+  if (statusKey === "offline") {
+    return "offline";
+  }
+  return vehicleTrackingStatusTone(statusKey);
+}
+
+function vehicleTrackingMarkerLabel(vehicle = {}, fallback = "KS") {
+  const label = vehicle.shortLabel
+    || vehicle.internalNumber
+    || vehicle.licensePlate
+    || vehicle.tcarsVehicleId
+    || vehicle.externalVehicleId
+    || fallback;
+
+  return String(label || fallback).trim().replace(/\s+/g, "");
+}
+
+function vehicleTrackingIconTypeForVehicle(vehicle = {}) {
+  return vehicleTrackingIconForType(
+    vehicle.iconType
+      || vehicle.vehicleType
+      || vehicle.type
+      || vehicle.bodyType
+      || vehicle.vehicle?.vehicleType
+      || vehicle.vehicle?.type
+      || ""
+  );
+}
+
+function vehicleTrackingMarkerImageSrc(vehicle = {}, options = {}) {
+  const explicitImage = options.imageSrc || vehicle.iconSrc || vehicle.iconUrl || vehicle.imageSrc || "";
+  if (explicitImage) {
+    return explicitImage;
+  }
+
+  return vehicleTrackingIconTypeForVehicle(vehicle)?.primary || "";
+}
+
+function vehicleTrackingMarkerContent(vehicle = {}, options = {}) {
+  const statusKey = vehicleTrackingMarkerStatusKey(options.status || vehicle.status || vehicle.baseStatus);
+  const tone = options.tone || vehicleTrackingMarkerTone(statusKey);
+  const heading = Number(options.heading ?? vehicle.heading ?? 0);
+  const safeHeading = Number.isFinite(heading) ? heading : 0;
+  const label = options.label || vehicleTrackingMarkerLabel(vehicle);
+  const statusLabel = options.statusLabel || vehicleTrackingStatusLabel(statusKey);
+  const iconType = vehicleTrackingIconTypeForVehicle(vehicle);
+  const imageSrc = vehicleTrackingMarkerImageSrc(vehicle, options);
+  const hasImage = Boolean(imageSrc);
+  const isAlert = options.isAlert ?? tone === "off-route";
+  const vehicleTitle = [
+    vehicle.internalNumber || label,
+    vehicle.licensePlate,
+    statusLabel
+  ].filter(Boolean).join(" | ");
+
+  return `
+    <span
+      class="tracking-vehicle-marker tracking-vehicle-marker--${escapeHtml(tone)} ${hasImage ? "tracking-vehicle-marker--has-image" : "tracking-vehicle-marker--missing-icon"} ${isAlert ? "tracking-vehicle-marker--alert" : ""} ${options.selected ? "tracking-vehicle-marker--selected" : ""}"
+      title="${escapeHtml(vehicleTitle || statusLabel)}"
+      data-tracking-vehicle-marker
+      data-tracking-icon-type="${escapeHtml(iconType?.key || "fallback")}"
+      style="--heading: ${safeHeading.toFixed(2)}deg;"
+    >
+      <span class="tracking-vehicle-marker__asset" aria-hidden="true">
+        ${hasImage ? `<img class="tracking-map-vehicle-icon tracking-vehicle-marker__image" src="${escapeHtml(imageSrc)}" alt="" loading="eager" decoding="async" data-tracking-vehicle-icon>` : ""}
+        <span class="tracking-vehicle-marker__fallback">KS</span>
+      </span>
+      <span class="tracking-map-vehicle-label tracking-vehicle-marker__label">${escapeHtml(label)}</span>
+      ${isAlert ? `<span class="tracking-vehicle-marker__alert">ALERT</span>` : ""}
+    </span>
+  `;
+}
+
 function vehicleTrackingAction(label, href = "") {
   if (!href) {
     return `<button class="secondary-link tracking-disabled-action" type="button" disabled>${escapeHtml(label)}</button>`;
@@ -6601,8 +6709,16 @@ function vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs) {
       data-tracking-demo-marker-status="${escapeHtml(vehicle.id)}"
       aria-label="${escapeHtml(`${vehicle.internalNumber} ${summary.statusLabel} Demo data`)}"
     >
-      ${vehicle.imageSrc ? `<img class="tracking-map-vehicle-icon" src="${escapeHtml(vehicle.imageSrc)}" alt="" loading="eager" decoding="async">` : ""}
-      <span class="tracking-map-vehicle-label">${escapeHtml(vehicle.shortLabel)}</span>
+      ${vehicleTrackingMarkerContent(vehicle, {
+        heading: position.heading,
+        imageSrc: vehicle.imageSrc,
+        isAlert: summary.isOffRoute,
+        label: vehicle.shortLabel,
+        selected: isSelected,
+        status: summary.status,
+        statusLabel: summary.statusLabel,
+        tone: summary.tone
+      })}
     </button>
   `;
 }
@@ -6960,6 +7076,50 @@ function vehicleTrackingTcarsPairingSection() {
   `;
 }
 
+function vehicleTrackingIconSpecSection() {
+  return `
+    <div class="tracking-icon-spec" aria-labelledby="tracking-icon-spec-title">
+      <div class="tracking-icon-spec__head">
+        <div>
+          <h3 id="tracking-icon-spec-title">Ikony vozidel pro mapu</h3>
+          <p>Finální ikony dodá Radim / Martin. Do té doby marker používá bezpečný CSS fallback.</p>
+        </div>
+        <span>${escapeHtml(VEHICLE_TRACKING_ICON_WAITING)}</span>
+      </div>
+      <div class="tracking-icon-spec__grid">
+        <article>
+          <h4>Formát</h4>
+          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_ICON_FORMATS)}
+        </article>
+        <article>
+          <h4>Vzhled</h4>
+          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_ICON_REQUIREMENTS)}
+        </article>
+        <article>
+          <h4>Složka</h4>
+          ${vehicleTrackingFieldChips([VEHICLE_TRACKING_ICON_FOLDER, "PNG primárně", "WebP volitelně"])}
+        </article>
+        <article>
+          <h4>Typy vozidel</h4>
+          <ul class="tracking-icon-spec__files">
+            ${VEHICLE_TRACKING_ICON_TYPES.map((type) => `
+              <li>
+                <strong>${escapeHtml(type.label)}</strong>
+                <code>${escapeHtml(type.primary.replace(VEHICLE_TRACKING_ICON_FOLDER, ""))}</code>
+                <span>${escapeHtml(type.webp.replace(VEHICLE_TRACKING_ICON_FOLDER, ""))}</span>
+              </li>
+            `).join("")}
+          </ul>
+        </article>
+      </div>
+      <div class="tracking-icon-spec__mapping">
+        <span>Mapování typů</span>
+        <code>${escapeHtml(JSON.stringify(VEHICLE_ICON_BY_TYPE))}</code>
+      </div>
+    </div>
+  `;
+}
+
 function vehicleTrackingApiSection() {
   return `
     <section class="tracking-section tracking-demo-api-section" id="tracking-api" aria-labelledby="tracking-api-title">
@@ -6999,6 +7159,7 @@ function vehicleTrackingApiSection() {
           ${vehicleTrackingFieldChips(VEHICLE_STOP_FIELDS)}
         </article>
       </div>
+      ${vehicleTrackingIconSpecSection()}
     </section>
   `;
 }
@@ -7191,10 +7352,14 @@ function createVehicleTrackingGoogleMarker(maps, map, vehicle) {
       this.div.type = "button";
       this.div.className = "tracking-google-marker";
       this.div.dataset.trackingDemoSelect = vehicle.id;
-      this.div.innerHTML = `
-        ${vehicle.imageSrc ? `<img class="tracking-map-vehicle-icon" src="${escapeHtml(vehicle.imageSrc)}" alt="" loading="eager" decoding="async">` : ""}
-        <span class="tracking-map-vehicle-label">${escapeHtml(vehicle.shortLabel)}</span>
-      `;
+      this.div.innerHTML = vehicleTrackingMarkerContent(vehicle, {
+        heading: this.heading,
+        imageSrc: vehicle.imageSrc,
+        label: vehicle.shortLabel,
+        selected: this.selected,
+        status: this.tone,
+        tone: this.tone
+      });
       this.div.addEventListener("click", () => handleVehicleTrackingDemoSelect(vehicle.id));
       this.getPanes().overlayMouseTarget.appendChild(this.div);
     }
@@ -7226,6 +7391,17 @@ function createVehicleTrackingGoogleMarker(maps, map, vehicle) {
       this.tone = tone;
       this.selected = selected;
       this.heading = position.heading || 0;
+      if (this.div) {
+        this.div.innerHTML = vehicleTrackingMarkerContent(vehicle, {
+          heading: this.heading,
+          imageSrc: vehicle.imageSrc,
+          isAlert: tone === "off-route",
+          label: vehicle.shortLabel,
+          selected,
+          status: tone,
+          tone
+        });
+      }
       this.draw();
     }
   }
@@ -7396,6 +7572,16 @@ function applyVehicleTrackingDemoFrame(elapsedMs) {
         summary.isOffRoute ? "tracking-demo-marker--alert" : "",
         vehicleTrackingDemoState.selectedVehicleId === vehicle.id ? "tracking-demo-marker--selected" : ""
       ].filter(Boolean).join(" ");
+      marker.innerHTML = vehicleTrackingMarkerContent(vehicle, {
+        heading: position.heading,
+        imageSrc: vehicle.imageSrc,
+        isAlert: summary.isOffRoute,
+        label: vehicle.shortLabel,
+        selected: vehicleTrackingDemoState.selectedVehicleId === vehicle.id,
+        status: summary.status,
+        statusLabel: summary.statusLabel,
+        tone: summary.tone
+      });
     }
 
     const speedNode = document.querySelector(`[data-tracking-demo-speed="${CSS.escape(vehicle.id)}"]`);
@@ -11670,6 +11856,15 @@ document.addEventListener("visibilitychange", () => {
 });
 
 document.addEventListener("error", (event) => {
+  const vehicleIcon = event.target?.closest?.("[data-tracking-vehicle-icon]");
+  if (vehicleIcon) {
+    const marker = vehicleIcon.closest("[data-tracking-vehicle-marker]");
+    marker?.classList.remove("tracking-vehicle-marker--has-image");
+    marker?.classList.add("tracking-vehicle-marker--missing-icon");
+    vehicleIcon.hidden = true;
+    return;
+  }
+
   const promoVideo = event.target?.closest?.("[data-ai-promo-video]");
 
   if (!promoVideo || assistantPromoState.videoFailed) {
