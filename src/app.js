@@ -6368,7 +6368,8 @@ function vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs) {
       data-tracking-demo-marker-status="${escapeHtml(vehicle.id)}"
       aria-label="${escapeHtml(`${vehicle.internalNumber} ${summary.statusLabel} Demo data`)}"
     >
-      <span>${escapeHtml(vehicle.shortLabel)}</span>
+      ${vehicle.imageSrc ? `<img class="tracking-map-vehicle-icon" src="${escapeHtml(vehicle.imageSrc)}" alt="" loading="eager" decoding="async">` : ""}
+      <span class="tracking-map-vehicle-label">${escapeHtml(vehicle.shortLabel)}</span>
     </button>
   `;
 }
@@ -6855,7 +6856,10 @@ function createVehicleTrackingGoogleMarker(maps, map, vehicle) {
       this.div.type = "button";
       this.div.className = "tracking-google-marker";
       this.div.dataset.trackingDemoSelect = vehicle.id;
-      this.div.innerHTML = `<span>${escapeHtml(vehicle.shortLabel)}</span>`;
+      this.div.innerHTML = `
+        ${vehicle.imageSrc ? `<img class="tracking-map-vehicle-icon" src="${escapeHtml(vehicle.imageSrc)}" alt="" loading="eager" decoding="async">` : ""}
+        <span class="tracking-map-vehicle-label">${escapeHtml(vehicle.shortLabel)}</span>
+      `;
       this.div.addEventListener("click", () => handleVehicleTrackingDemoSelect(vehicle.id));
       this.getPanes().overlayMouseTarget.appendChild(this.div);
     }

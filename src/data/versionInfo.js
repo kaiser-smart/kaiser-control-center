@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.79"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.80"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Sledování vozidel: SVG ikony na mapě",
+    text: "Demo mapa používá dodaná SVG vozidla přímo jako mapové ikony v interní fallback mapě i v připraveném Google Maps overlay markeru."
+  },
   {
     title: "Sledování vozidel: čitelnější demo mapa",
     text: "Demo mapa už nepřekrývá vozidla velkým hlášením o Google Maps klíči a k demo vozidlům jsou doplněné dodané SVG podklady."
