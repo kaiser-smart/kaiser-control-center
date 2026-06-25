@@ -3098,6 +3098,34 @@ function updateAccessUsersSearch(input) {
   }
 }
 
+function updateModuleRulesSearch(input) {
+  const panel = input?.closest("[data-module-rules-panel]");
+  const rows = [...(panel?.querySelectorAll("[data-module-rules-row]") || [])];
+  const noResultsRow = panel?.querySelector("[data-module-rules-empty-search]");
+  const countNode = panel?.querySelector("[data-module-rules-search-count]");
+  const normalizedQuery = normalizeAccessSearchText(input?.value || "");
+  let visibleCount = 0;
+
+  rows.forEach((row) => {
+    const matches = !normalizedQuery || String(row.dataset.moduleRulesSearchText || "").includes(normalizedQuery);
+    row.hidden = !matches;
+
+    if (matches) {
+      visibleCount += 1;
+    }
+  });
+
+  if (noResultsRow) {
+    noResultsRow.hidden = !normalizedQuery || visibleCount > 0;
+  }
+
+  if (countNode) {
+    countNode.textContent = normalizedQuery
+      ? `Zobrazeno ${visibleCount} z ${rows.length} read-only návrhů`
+      : `Celkem ${rows.length} read-only návrhy`;
+  }
+}
+
 function accessFeedbackMessage(extraClass = "", target = "") {
   const message = accessState.error || accessState.message;
 
@@ -4755,6 +4783,87 @@ function absenceReports(user) {
   `;
 }
 
+function moduleRulesAutomationDraftItems(moduleName) {
+  return [
+    {
+      title: "Schvalování žádostí podle typu nepřítomnosti",
+      description: "Read-only návrh budoucí evidence pravidla pro dovolenou, lékaře, OČR a náhradní volno.",
+      type: "Pravidlo",
+      module: moduleName,
+      status: "Návrh / čeká na cloud API",
+      trigger: "Událostí / backend",
+      lastRun: "-",
+      nextRun: "-",
+      createdBy: "Systémový návrh",
+      updatedBy: "-",
+      impact: "Žádný zápis, pouze návrh evidence",
+      note: "Není aktivní produkční pravidlo."
+    },
+    {
+      title: "Měsíční report nepřítomností",
+      description: "Read-only návrh evidence budoucí cloudové automatizace měsíčního reportu.",
+      type: "Automatizace",
+      module: moduleName,
+      status: "Návrh / čeká na cloud API",
+      trigger: "Časově / Cloudflare Cron",
+      lastRun: "-",
+      nextRun: "-",
+      createdBy: "Systémový návrh",
+      updatedBy: "-",
+      impact: "Bez odesílání e-mailů, čeká na cloud runner",
+      note: "Není spuštěná automatizace."
+    },
+    {
+      title: "Připomínky lékařských prohlídek",
+      description: "Read-only návrh pravidla pro budoucí hlídání termínů lékařských prohlídek.",
+      type: "Pravidlo",
+      module: moduleName,
+      status: "Návrh / čeká na cloud API",
+      trigger: "Časově / cloud job",
+      lastRun: "-",
+      nextRun: "-",
+      createdBy: "Systémový návrh",
+      updatedBy: "-",
+      impact: "Bez notifikací, pouze návrh evidence",
+      note: "Čeká na schválený datový model a audit log."
+    }
+  ];
+}
+
+function moduleRulesAutomationSearchText(item) {
+  return normalizeAccessSearchText([
+    item.title,
+    item.description,
+    item.type,
+    item.status,
+    item.module,
+    item.note
+  ].join(" "));
+}
+
+function moduleRulesAutomationRow(item) {
+  const searchText = moduleRulesAutomationSearchText(item);
+
+  return `
+    <tr data-module-rules-row data-module-rules-search-text="${escapeHtml(searchText)}">
+      <td>
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.description)}</small>
+      </td>
+      <td>${escapeHtml(item.type)}</td>
+      <td>${escapeHtml(item.module)}</td>
+      <td><span class="module-rules-status-chip">${escapeHtml(item.status)}</span></td>
+      <td>${escapeHtml(item.trigger)}</td>
+      <td>${escapeHtml(item.lastRun)}</td>
+      <td>${escapeHtml(item.nextRun)}</td>
+      <td>${escapeHtml(item.createdBy)}</td>
+      <td>${escapeHtml(item.updatedBy)}</td>
+      <td>${escapeHtml(item.impact)}</td>
+      <td>${escapeHtml(item.note)}</td>
+    </tr>
+  `;
+}
+
 function moduleRulesAutomationPanel({
   moduleKey,
   moduleName,
@@ -4764,6 +4873,7 @@ function moduleRulesAutomationPanel({
   const canManage = hasPermission(user, moduleKey, "manage") || isFullAccessRole(user);
   const statusLabel = apiStatus === "ready" ? "Cloud API aktivní" : "Čeká na cloud API";
   const statusClass = apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
+  const draftItems = moduleRulesAutomationDraftItems(moduleName);
   const endpoints = [
     `GET /api/modules/${moduleKey}/rules`,
     `POST /api/modules/${moduleKey}/rules`,
@@ -4773,7 +4883,7 @@ function moduleRulesAutomationPanel({
   ];
 
   return `
-    <section class="module-rules-panel absence-panel" aria-labelledby="module-rules-title">
+    <section class="module-rules-panel absence-panel" aria-labelledby="module-rules-title" data-module-rules-panel>
       <div class="absence-panel__head">
         <div>
           <h2 id="module-rules-title">Seznam pravidel a automatizace</h2>
@@ -4785,7 +4895,7 @@ function moduleRulesAutomationPanel({
       <div class="module-rules-toolbar" aria-label="Filtry pravidel a automatizací">
         <label class="module-rules-search">
           <span>Vyhledávání</span>
-          <input type="search" placeholder="Název, popis, modul, typ, stav, autor nebo poznámka" disabled />
+          <input type="search" placeholder="Název, popis, modul, typ, stav, autor nebo poznámka" data-module-rules-search />
         </label>
         <label>
           <span>Typ</span>
@@ -4835,8 +4945,10 @@ function moduleRulesAutomationPanel({
 
       <div class="module-rules-empty" role="status">
         <strong>Čeká na cloud API pro pravidla a automatizace.</strong>
-        <span>V pilotu nejsou vložená žádná mock ani runtime produkční pravidla. Stávající schvalování, notifikace a lékařské připomínky zůstávají beze změny, dokud neproběhne schválená migrace do jednotné evidence.</span>
+        <span>V pilotu nejsou vložená žádná aktivní produkční pravidla ani runtime automatizace. Stávající schvalování, notifikace a lékařské připomínky zůstávají beze změny, dokud neproběhne schválená migrace do jednotné evidence.</span>
       </div>
+
+      <p class="module-rules-search-count" data-module-rules-search-count>Celkem ${draftItems.length} read-only návrhy</p>
 
       <div class="module-rules-table-wrap" aria-label="Seznam pravidel a automatizací">
         <table class="module-rules-table">
@@ -4856,8 +4968,9 @@ function moduleRulesAutomationPanel({
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colspan="11">Žádné položky. Čeká na backend endpointy a D1 model.</td>
+            ${draftItems.map(moduleRulesAutomationRow).join("")}
+            <tr data-module-rules-empty-search hidden>
+              <td colspan="11">Žádné pravidlo nebo automatizace neodpovídá hledání.</td>
             </tr>
           </tbody>
         </table>
@@ -12620,6 +12733,12 @@ document.addEventListener("input", (event) => {
   const accessUsersSearch = event.target.closest("[data-access-users-search]");
   if (accessUsersSearch) {
     updateAccessUsersSearch(accessUsersSearch);
+    return;
+  }
+
+  const moduleRulesSearch = event.target.closest("[data-module-rules-search]");
+  if (moduleRulesSearch) {
+    updateModuleRulesSearch(moduleRulesSearch);
     return;
   }
 

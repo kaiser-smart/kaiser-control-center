@@ -6463,6 +6463,40 @@ body:has(.ai-assistant-promo-modal) {
   font-weight: 850;
 }
 
+.module-rules-table td strong,
+.module-rules-table td small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.module-rules-table td strong {
+  color: var(--ink);
+}
+
+.module-rules-table td small,
+.module-rules-search-count {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.module-rules-status-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #f6d184;
+  border-radius: 999px;
+  background: #fff7df;
+  color: #7a4e00;
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
 .module-rules-detail {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
