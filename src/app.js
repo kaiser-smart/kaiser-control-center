@@ -119,6 +119,16 @@ import {
   fleetStatusTone
 } from "./data/fleet.js";
 import {
+  DEMO_VEHICLE_TRACKING_API_DETAIL,
+  DEMO_VEHICLE_TRACKING_API_NOTICE,
+  DEMO_VEHICLE_TRACKING_BOUNDS,
+  DEMO_VEHICLE_TRACKING_NOTICE,
+  DEMO_VEHICLE_TRACKING_PLACES,
+  DEMO_VEHICLE_TRACKING_STATUS_FILTERS,
+  DEMO_VEHICLE_TRACKING_STATUS_META,
+  DEMO_VEHICLE_TRACKING_VEHICLES
+} from "./data/demoVehicleTracking.js";
+import {
   VEHICLE_STOP_FIELDS,
   VEHICLE_TRACKING_API_ENDPOINTS,
   VEHICLE_TRACKING_EMPTY,
@@ -654,6 +664,15 @@ const fleetImportPreviewState = {
 const fleetUiState = {
   message: "",
   error: ""
+};
+
+const vehicleTrackingDemoState = {
+  running: true,
+  startedAt: 0,
+  pausedElapsedMs: 0,
+  frameId: 0,
+  filter: "all",
+  selectedVehicleId: DEMO_VEHICLE_TRACKING_VEHICLES[0]?.id || ""
 };
 
 let lastRenderedUrl = window.location.href;
@@ -5989,19 +6008,19 @@ function fleetModulePage(moduleItem, user, options = {}) {
   `;
 }
 
-function vehicleTrackingBadge(text = VEHICLE_TRACKING_GPS_WAITING) {
-  return `<span class="tracking-badge">${escapeHtml(text)}</span>`;
+function vehicleTrackingBadge(text = VEHICLE_TRACKING_GPS_WAITING, tone = "") {
+  return `<span class="tracking-badge ${tone ? `tracking-badge--${escapeHtml(tone)}` : ""}">${escapeHtml(text)}</span>`;
 }
 
-function vehicleTrackingSectionHeader(id, title, subtitle = "") {
+function vehicleTrackingSectionHeader(id, title, subtitle = "", options = {}) {
   return `
     <div class="tracking-section__head">
       <div>
-        <p class="module-feedback__eyebrow">Sledování vozidel</p>
+        <p class="module-feedback__eyebrow">${escapeHtml(options.eyebrow || "Sledování vozidel")}</p>
         <h2 id="${escapeHtml(id)}">${escapeHtml(title)}</h2>
         ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
       </div>
-      ${vehicleTrackingBadge()}
+      ${vehicleTrackingBadge(options.badgeText || "DEMO REŽIM", options.badgeTone || "demo")}
     </div>
   `;
 }
@@ -6014,103 +6033,16 @@ function vehicleTrackingFieldChips(fields) {
   `;
 }
 
-function vehicleTrackingApiNote(endpoint = "") {
-  return `
-    <p class="tracking-api-note">
-      ${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}
-      ${endpoint ? `<span>Chybí: ${escapeHtml(endpoint)}</span>` : ""}
-    </p>
-  `;
+function vehicleTrackingDemoStatusMeta(status) {
+  return DEMO_VEHICLE_TRACKING_STATUS_META[status] || { label: "Demo", tone: "waiting" };
 }
 
-function vehicleTrackingTabs(activeView, vehicleId = "") {
-  const safeVehicleId = encodeURIComponent(vehicleId || "vybrane-vozidlo");
-  const tabs = [
-    { id: "map", label: "Mapa vozidel", href: `${VEHICLE_TRACKING_BASE_ROUTE}#tracking-map` },
-    { id: "list", label: "Seznam vozidel", href: `${VEHICLE_TRACKING_BASE_ROUTE}#tracking-list` },
-    { id: "detail", label: "Detail vozidla", href: vehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${safeVehicleId}` : "#tracking-detail" },
-    { id: "today-trip", label: "Dnešní trasa", href: vehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${safeVehicleId}/trasa-dnes` : "#tracking-today-trip" },
-    { id: "history", label: "Historie jízd", href: vehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${safeVehicleId}/historie` : "#tracking-history" },
-    { id: "integration", label: "GPS integrace", href: "#tracking-integration" }
-  ];
-
-  return `
-    <nav class="tracking-tabs" aria-label="Menu modulu Sledování vozidel">
-      ${tabs.map((tab) => `
-        <a class="tracking-tab ${tab.id === activeView ? "tracking-tab--active" : ""}" href="${routeHref(tab.href)}" ${tab.href.startsWith("/") ? "data-link" : ""}>
-          ${escapeHtml(tab.label)}
-        </a>
-      `).join("")}
-    </nav>
-  `;
+function vehicleTrackingDemoStatusLabel(status) {
+  return vehicleTrackingDemoStatusMeta(status).label;
 }
 
-function vehicleTrackingStatusLegend() {
-  return `
-    <div class="tracking-status-legend" aria-label="Stavy vozidel">
-      ${VEHICLE_TRACKING_STATUS_OPTIONS.map((status) => `
-        <span class="tracking-status tracking-status--${escapeHtml(vehicleTrackingStatusTone(status.value))}">
-          ${escapeHtml(status.label)}
-        </span>
-      `).join("")}
-    </div>
-  `;
-}
-
-function vehicleTrackingFilters() {
-  return `
-    <form class="tracking-filters" aria-label="Filtry sledování vozidel">
-      ${VEHICLE_TRACKING_FILTERS.map((filter) => `
-        <label>
-          <span>${escapeHtml(filter)}</span>
-          <input type="text" value="${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}" disabled>
-        </label>
-      `).join("")}
-    </form>
-  `;
-}
-
-function vehicleTrackingMapSection() {
-  return `
-    <section class="tracking-section tracking-section--map" id="tracking-map" aria-labelledby="tracking-map-title">
-      ${vehicleTrackingSectionHeader(
-        "tracking-map-title",
-        "Mapa vozidel",
-        "Online mapa bude zobrazovat aktuální polohu, směr jízdy, stav a čas poslední GPS aktualizace."
-      )}
-      <div class="tracking-map-shell" aria-label="Mapový pohled sledování vozidel">
-        <div class="tracking-map-placeholder">
-          <strong>${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}</strong>
-          <span>Bez potvrzeného GPS poskytovatele se nezobrazují žádné body, trasy ani testovací vozidla.</span>
-        </div>
-      </div>
-      ${vehicleTrackingStatusLegend()}
-      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/status")}
-    </section>
-  `;
-}
-
-function vehicleTrackingListSection() {
-  return `
-    <section class="tracking-section" id="tracking-list" aria-labelledby="tracking-list-title">
-      ${vehicleTrackingSectionHeader(
-        "tracking-list-title",
-        "Seznam vozidel",
-        "Kompaktní přehled SPZ, řidiče, stavu, rychlosti, poslední aktualizace a lokality."
-      )}
-      ${vehicleTrackingFilters()}
-      <div class="tracking-list-table" role="table" aria-label="Seznam sledovaných vozidel">
-        <div class="tracking-list-table__head" role="row">
-          ${VEHICLE_TRACKING_LIST_COLUMNS.map((column) => `<span role="columnheader">${escapeHtml(column)}</span>`).join("")}
-        </div>
-        <div class="tracking-empty" role="row">
-          <strong>${escapeHtml(VEHICLE_TRACKING_EMPTY)}</strong>
-          <span>${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}</span>
-        </div>
-      </div>
-      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/status")}
-    </section>
-  `;
+function vehicleTrackingDemoStatusTone(status) {
+  return vehicleTrackingDemoStatusMeta(status).tone;
 }
 
 function vehicleTrackingAction(label, href = "") {
@@ -6121,109 +6053,363 @@ function vehicleTrackingAction(label, href = "") {
   return `<a class="secondary-link" href="${routeHref(href)}" data-link>${escapeHtml(label)}</a>`;
 }
 
-function vehicleTrackingDetailSection(vehicleId = "") {
-  const safeVehicleId = vehicleId || "";
-  const vehicleParkHref = safeVehicleId ? `${FLEET_ROUTE}/${encodeURIComponent(safeVehicleId)}` : "";
-  const todayHref = safeVehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${encodeURIComponent(safeVehicleId)}/trasa-dnes` : "";
-  const historyHref = safeVehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${encodeURIComponent(safeVehicleId)}/historie` : "";
+function vehicleTrackingTabs(activeView = "map") {
+  const tabs = [
+    { id: "map", label: "Demo mapa", href: "#tracking-map" },
+    { id: "list", label: "Vozidla", href: "#tracking-list" },
+    { id: "detail", label: "Detail", href: "#tracking-detail" },
+    { id: "api", label: "Budoucí API", href: "#tracking-api" }
+  ];
 
   return `
-    <section class="tracking-section" id="tracking-detail" aria-labelledby="tracking-detail-title">
+    <nav class="tracking-tabs" aria-label="Menu modulu Sledování vozidel">
+      ${tabs.map((tab) => `
+        <a class="tracking-tab ${tab.id === activeView ? "tracking-tab--active" : ""}" href="${escapeHtml(tab.href)}">
+          ${escapeHtml(tab.label)}
+        </a>
+      `).join("")}
+    </nav>
+  `;
+}
+
+function vehicleTrackingDemoCurrentTime() {
+  return window.performance?.now?.() || Date.now();
+}
+
+function vehicleTrackingDemoCurrentElapsed(now = vehicleTrackingDemoCurrentTime()) {
+  if (!vehicleTrackingDemoState.running) {
+    return vehicleTrackingDemoState.pausedElapsedMs;
+  }
+
+  if (!vehicleTrackingDemoState.startedAt) {
+    vehicleTrackingDemoState.startedAt = now - vehicleTrackingDemoState.pausedElapsedMs;
+  }
+
+  return Math.max(0, now - vehicleTrackingDemoState.startedAt);
+}
+
+function vehicleTrackingDemoShouldMove(vehicle) {
+  return vehicle.status === "moving" && vehicle.route.length > 1;
+}
+
+function vehicleTrackingDemoProjectPoint(point) {
+  const { minLat, maxLat, minLng, maxLng } = DEMO_VEHICLE_TRACKING_BOUNDS;
+  const x = ((point.lng - minLng) / (maxLng - minLng)) * 100;
+  const y = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
+
+  return {
+    x: Math.min(96, Math.max(4, x)),
+    y: Math.min(96, Math.max(4, y))
+  };
+}
+
+function vehicleTrackingDemoPosition(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  if (!vehicleTrackingDemoShouldMove(vehicle)) {
+    const projected = vehicleTrackingDemoProjectPoint(vehicle.route[0]);
+    return {
+      ...projected,
+      heading: 0,
+      speedKmh: 0
+    };
+  }
+
+  const segmentCount = vehicle.route.length - 1;
+  const cycle = ((elapsedMs / 1000) % vehicle.animationSeconds) / vehicle.animationSeconds;
+  const scaled = cycle * segmentCount;
+  const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
+  const localProgress = scaled - segmentIndex;
+  const start = vehicle.route[segmentIndex];
+  const end = vehicle.route[segmentIndex + 1];
+  const point = {
+    lat: start.lat + ((end.lat - start.lat) * localProgress),
+    lng: start.lng + ((end.lng - start.lng) * localProgress)
+  };
+  const projected = vehicleTrackingDemoProjectPoint(point);
+  const startProjected = vehicleTrackingDemoProjectPoint(start);
+  const endProjected = vehicleTrackingDemoProjectPoint(end);
+  const heading = Math.atan2(endProjected.y - startProjected.y, endProjected.x - startProjected.x) * (180 / Math.PI);
+  const speedKmh = Math.max(8, Math.round(vehicle.speedKmh + (Math.sin(elapsedMs / 1300 + segmentIndex) * vehicle.speedWave)));
+
+  return {
+    ...projected,
+    heading,
+    speedKmh
+  };
+}
+
+function vehicleTrackingDemoVisibleVehicles() {
+  if (vehicleTrackingDemoState.filter === "all") {
+    return DEMO_VEHICLE_TRACKING_VEHICLES;
+  }
+
+  return DEMO_VEHICLE_TRACKING_VEHICLES.filter((vehicle) => vehicle.status === vehicleTrackingDemoState.filter);
+}
+
+function vehicleTrackingDemoSelectedVehicle(preferredId = "", visibleVehicles = vehicleTrackingDemoVisibleVehicles()) {
+  const preferred = DEMO_VEHICLE_TRACKING_VEHICLES.find((vehicle) => vehicle.id === preferredId);
+  if (preferred && visibleVehicles.some((vehicle) => vehicle.id === preferred.id)) {
+    return preferred;
+  }
+
+  const current = DEMO_VEHICLE_TRACKING_VEHICLES.find((vehicle) => vehicle.id === vehicleTrackingDemoState.selectedVehicleId);
+  if (current && visibleVehicles.some((vehicle) => vehicle.id === current.id)) {
+    return current;
+  }
+
+  return visibleVehicles[0] || null;
+}
+
+function vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  const position = vehicleTrackingDemoPosition(vehicle, elapsedMs);
+  return {
+    ...vehicle,
+    speedNow: position.speedKmh,
+    tone: vehicleTrackingDemoStatusTone(vehicle.status),
+    statusLabel: vehicleTrackingDemoStatusLabel(vehicle.status)
+  };
+}
+
+function vehicleTrackingDemoRouteSegments(vehicle) {
+  const tone = vehicleTrackingDemoStatusTone(vehicle.status);
+  return vehicle.route.slice(0, -1).map((point, index) => {
+    const start = vehicleTrackingDemoProjectPoint(point);
+    const end = vehicleTrackingDemoProjectPoint(vehicle.route[index + 1]);
+    const width = Math.hypot(end.x - start.x, end.y - start.y);
+    const angle = Math.atan2(end.y - start.y, end.x - start.x) * (180 / Math.PI);
+
+    return `
+      <span
+        class="tracking-demo-route-segment tracking-demo-route-segment--${escapeHtml(tone)}"
+        style="left: ${start.x.toFixed(2)}%; top: ${start.y.toFixed(2)}%; width: ${width.toFixed(2)}%; transform: rotate(${angle.toFixed(2)}deg);"
+        aria-hidden="true"
+      ></span>
+    `;
+  }).join("");
+}
+
+function vehicleTrackingDemoPlaceLabels() {
+  return DEMO_VEHICLE_TRACKING_PLACES.map((place) => {
+    const point = vehicleTrackingDemoProjectPoint(place);
+    return `
+      <span class="tracking-demo-place" style="left: ${point.x.toFixed(2)}%; top: ${point.y.toFixed(2)}%;">
+        ${escapeHtml(place.label)}
+      </span>
+    `;
+  }).join("");
+}
+
+function vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs) {
+  const position = vehicleTrackingDemoPosition(vehicle, elapsedMs);
+  const tone = vehicleTrackingDemoStatusTone(vehicle.status);
+  const isSelected = selectedVehicle?.id === vehicle.id;
+
+  return `
+    <button
+      class="tracking-demo-marker tracking-demo-marker--${escapeHtml(tone)} ${isSelected ? "tracking-demo-marker--selected" : ""}"
+      type="button"
+      style="--x: ${position.x.toFixed(2)}%; --y: ${position.y.toFixed(2)}%; --heading: ${position.heading.toFixed(2)}deg;"
+      data-tracking-demo-marker="${escapeHtml(vehicle.id)}"
+      data-tracking-demo-select="${escapeHtml(vehicle.id)}"
+      aria-label="${escapeHtml(`${vehicle.internalNumber} ${vehicleTrackingDemoStatusLabel(vehicle.status)} Demo data`)}"
+    >
+      <span>${escapeHtml(vehicle.shortLabel)}</span>
+    </button>
+  `;
+}
+
+function vehicleTrackingDemoControls() {
+  return `
+    <div class="tracking-demo-controls" aria-label="Ovládání demo režimu">
+      <button class="secondary-link" type="button" data-tracking-demo-control="toggle">
+        ${vehicleTrackingDemoState.running ? "Pozastavit demo" : "Spustit demo"}
+      </button>
+      <button class="secondary-link" type="button" data-tracking-demo-control="reset">Reset trasy</button>
+    </div>
+  `;
+}
+
+function vehicleTrackingDemoBanner() {
+  const [title, description] = DEMO_VEHICLE_TRACKING_NOTICE.split(" – ");
+
+  return `
+    <section class="tracking-demo-banner" aria-label="Označení demo režimu">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(description || DEMO_VEHICLE_TRACKING_NOTICE)}</span>
+    </section>
+  `;
+}
+
+function vehicleTrackingMapSection(visibleVehicles, selectedVehicle) {
+  const elapsedMs = vehicleTrackingDemoCurrentElapsed();
+
+  return `
+    <section class="tracking-section tracking-section--map tracking-demo-map-section" id="tracking-map" aria-labelledby="tracking-map-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-map-title",
+        "Demo mapa vozidel",
+        "Interní ukázkový mapový podklad bez externího GPS poskytovatele a bez mapových API klíčů."
+      )}
+      ${vehicleTrackingDemoControls()}
+      <div class="tracking-map-shell tracking-demo-map" data-tracking-demo-map aria-label="Demo mapový pohled sledování vozidel">
+        <div class="tracking-demo-road tracking-demo-road--one" aria-hidden="true"></div>
+        <div class="tracking-demo-road tracking-demo-road--two" aria-hidden="true"></div>
+        <div class="tracking-demo-road tracking-demo-road--three" aria-hidden="true"></div>
+        ${visibleVehicles.map(vehicleTrackingDemoRouteSegments).join("")}
+        ${vehicleTrackingDemoPlaceLabels()}
+        ${visibleVehicles.map((vehicle) => vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs)).join("")}
+        ${visibleVehicles.length ? "" : `
+          <div class="tracking-demo-empty-map">
+            <strong>Žádné demo vozidlo v tomto filtru.</strong>
+            <span>Změňte filtr stavu vozidel.</span>
+          </div>
+        `}
+      </div>
+      <div class="tracking-status-legend" aria-label="Stavy demo vozidel">
+        ${DEMO_VEHICLE_TRACKING_STATUS_FILTERS.filter((filter) => filter.value !== "all").map((filter) => `
+          <span class="tracking-status tracking-status--${escapeHtml(vehicleTrackingDemoStatusTone(filter.value))}">
+            ${escapeHtml(filter.label)}
+          </span>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function vehicleTrackingDemoFilters() {
+  return `
+    <div class="tracking-demo-filterbar" aria-label="Filtry demo vozidel">
+      ${DEMO_VEHICLE_TRACKING_STATUS_FILTERS.map((filter) => `
+        <button
+          class="tracking-demo-filter ${vehicleTrackingDemoState.filter === filter.value ? "tracking-demo-filter--active" : ""}"
+          type="button"
+          data-tracking-demo-filter="${escapeHtml(filter.value)}"
+        >
+          ${escapeHtml(filter.label)}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function vehicleTrackingDemoVehicleCard(vehicle, selectedVehicle, elapsedMs) {
+  const summary = vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs);
+  const isSelected = selectedVehicle?.id === vehicle.id;
+
+  return `
+    <article class="tracking-demo-vehicle-card ${isSelected ? "tracking-demo-vehicle-card--selected" : ""}" data-tracking-demo-card="${escapeHtml(vehicle.id)}">
+      <div class="tracking-demo-vehicle-card__head">
+        <div>
+          <strong>${escapeHtml(vehicle.internalNumber)}</strong>
+          <span>${escapeHtml(vehicle.licensePlate)}</span>
+        </div>
+        <span class="tracking-demo-data-badge">Demo data</span>
+      </div>
+      <div class="tracking-demo-vehicle-meta">
+        <span>${escapeHtml(vehicle.driver)}</span>
+        <span>${escapeHtml(vehicle.type)}</span>
+      </div>
+      <div class="tracking-demo-vehicle-status">
+        <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}">${escapeHtml(summary.statusLabel)}</span>
+        <span data-tracking-demo-speed="${escapeHtml(vehicle.id)}">${escapeHtml(`${summary.speedNow} km/h`)}</span>
+        <span data-tracking-demo-updated="${escapeHtml(vehicle.id)}">${escapeHtml(vehicle.lastUpdate)}</span>
+      </div>
+      <button class="secondary-link" type="button" data-tracking-demo-select="${escapeHtml(vehicle.id)}">Detail</button>
+    </article>
+  `;
+}
+
+function vehicleTrackingListSection(visibleVehicles, selectedVehicle) {
+  const elapsedMs = vehicleTrackingDemoCurrentElapsed();
+
+  return `
+    <section class="tracking-section tracking-demo-list-section" id="tracking-list" aria-labelledby="tracking-list-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-list-title",
+        "Demo vozidla",
+        "Seznam filtruje stejné demo položky jako mapa. Nejde o reálné provozní záznamy."
+      )}
+      ${vehicleTrackingDemoFilters()}
+      <div class="tracking-demo-vehicle-list" aria-label="Seznam demo vozidel">
+        ${visibleVehicles.length
+          ? visibleVehicles.map((vehicle) => vehicleTrackingDemoVehicleCard(vehicle, selectedVehicle, elapsedMs)).join("")
+          : `<div class="tracking-empty"><strong>${escapeHtml(VEHICLE_TRACKING_EMPTY)}</strong><span>Ve vybraném demo filtru není žádné vozidlo.</span></div>`}
+      </div>
+    </section>
+  `;
+}
+
+function vehicleTrackingDemoDetailField(label, value) {
+  return `
+    <article>
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "—")}</strong>
+    </article>
+  `;
+}
+
+function vehicleTrackingDetailSection(selectedVehicle) {
+  if (!selectedVehicle) {
+    return `
+      <section class="tracking-section" id="tracking-detail" aria-labelledby="tracking-detail-title">
+        ${vehicleTrackingSectionHeader("tracking-detail-title", "Detail demo vozidla", "Vyberte vozidlo ze seznamu nebo mapy.")}
+        <div class="tracking-empty">
+          <strong>Žádné vozidlo není vybrané.</strong>
+          <span>Změňte filtr nebo klikněte na marker v demo mapě.</span>
+        </div>
+      </section>
+    `;
+  }
+
+  const summary = vehicleTrackingDemoVehicleSummary(selectedVehicle);
+
+  return `
+    <section class="tracking-section tracking-demo-detail-section" id="tracking-detail" aria-labelledby="tracking-detail-title">
       ${vehicleTrackingSectionHeader(
         "tracking-detail-title",
-        safeVehicleId ? `Detail vozidla ${safeVehicleId}` : "Detail vozidla",
-        "Detail zobrazí SPZ, interní číslo, řidiče, stav, rychlost, polohu a dnešní provozní souhrn."
+        `Detail ${selectedVehicle.internalNumber}`,
+        "Detail je pouze demo ukázka pro budoucí napojení na cloud API."
       )}
-      <div class="tracking-detail-grid">
-        ${["SPZ", "Interní číslo", "Značka / model", "Řidič", "Stav", "Rychlost", "Poslední poloha", "Poslední aktualizace", "Dnešní km", "Čas jízdy", "Čas stání"].map((label) => `
-          <article>
-            <span>${escapeHtml(label)}</span>
-            <strong>—</strong>
-          </article>
-        `).join("")}
+      <div class="tracking-demo-detail-title">
+        <span class="tracking-demo-data-badge">Demo data</span>
+        <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}">${escapeHtml(summary.statusLabel)}</span>
       </div>
-      <div class="tracking-pairing-note">
-        <strong>${safeVehicleId ? "Vazba na Vozový park" : "Vozidlo není spárované s Vozovým parkem."}</strong>
-        <span>${safeVehicleId ? "Spárování přes Vehicle.id se ověří z cloud API." : "Bez API nelze otevřít kartu konkrétního vozidla."}</span>
+      <div class="tracking-detail-grid">
+        ${vehicleTrackingDemoDetailField("Interní číslo", selectedVehicle.internalNumber)}
+        ${vehicleTrackingDemoDetailField("SPZ", selectedVehicle.licensePlate)}
+        ${vehicleTrackingDemoDetailField("Řidič", selectedVehicle.driver)}
+        ${vehicleTrackingDemoDetailField("Typ vozidla", selectedVehicle.type)}
+        ${vehicleTrackingDemoDetailField("Stav", summary.statusLabel)}
+        ${vehicleTrackingDemoDetailField("Demo rychlost", `${summary.speedNow} km/h`)}
+        ${vehicleTrackingDemoDetailField("Poslední aktualizace", selectedVehicle.lastUpdate)}
+        ${vehicleTrackingDemoDetailField("Přesnost GPS", selectedVehicle.accuracy)}
+        ${vehicleTrackingDemoDetailField("Zdroj", selectedVehicle.source)}
+        ${vehicleTrackingDemoDetailField("Dnešní trasa", `Demo trasa: ${selectedVehicle.routeName}`)}
       </div>
       <div class="tracking-actions">
-        ${vehicleTrackingAction("Otevřít ve Vozovém parku", vehicleParkHref)}
-        ${vehicleTrackingAction("Zobrazit dnešní trasu", todayHref)}
-        ${vehicleTrackingAction("Historie jízd", historyHref)}
+        <button class="secondary-link tracking-disabled-action" type="button" disabled>Čeká na API pro detail vozidla.</button>
       </div>
-      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/vehicles/:vehicleId")}
     </section>
   `;
 }
 
-function vehicleTrackingTodayTripSection(vehicleId = "") {
+function vehicleTrackingApiSection() {
   return `
-    <section class="tracking-section" id="tracking-today-trip" aria-labelledby="tracking-today-trip-title">
+    <section class="tracking-section tracking-demo-api-section" id="tracking-api" aria-labelledby="tracking-api-title">
       ${vehicleTrackingSectionHeader(
-        "tracking-today-trip-title",
-        "Dnešní trasa",
-        vehicleId ? `Trasa vozidla ${vehicleId} za dnešní den.` : "Trasa vybraného vozidla za dnešní den."
+        "tracking-api-title",
+        "API stav",
+        "Demo režim je oddělený od budoucího reálného GPS provozu.",
+        { badgeText: "Bez reálného GPS API" }
       )}
-      <div class="tracking-trip-layout">
-        <div class="tracking-route-placeholder">
-          <strong>${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}</strong>
-          <span>Mapa trasy, start, konec a zastávky se načtou až z GPS API.</span>
-        </div>
-        <div class="tracking-trip-summary">
-          ${["Start", "Konec", "Zastávky", "Čas jízdy", "Ujeto km", "Řidič", "Poslední aktualizace"].map((label) => `
-            <article>
-              <span>${escapeHtml(label)}</span>
-              <strong>—</strong>
-            </article>
-          `).join("")}
-        </div>
+      <div class="tracking-demo-api-note">
+        <strong>${escapeHtml(DEMO_VEHICLE_TRACKING_API_NOTICE)}</strong>
+        <span>${escapeHtml(DEMO_VEHICLE_TRACKING_API_DETAIL)}</span>
       </div>
-      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/vehicles/:vehicleId/today-trip")}
-    </section>
-  `;
-}
-
-function vehicleTrackingHistorySection() {
-  return `
-    <section class="tracking-section" id="tracking-history" aria-labelledby="tracking-history-title">
-      ${vehicleTrackingSectionHeader(
-        "tracking-history-title",
-        "Historie jízd",
-        "Filtry a tabulka jízd budou používat pouze cloud API, bez ukládání v prohlížeči."
-      )}
-      <form class="tracking-history-filters" aria-label="Filtry historie jízd">
-        ${["Datum od", "Datum do", "Řidič", "Typ vozidla"].map((label) => `
-          <label>
-            <span>${escapeHtml(label)}</span>
-            <input type="text" value="${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}" disabled>
-          </label>
-        `).join("")}
-      </form>
-      <div class="tracking-history-table" role="table" aria-label="Historie jízd">
-        <div class="tracking-history-table__head" role="row">
-          ${["Datum", "Vozidlo", "Řidič", "Začátek", "Konec", "Ujeto km", "Čas jízdy", "Čas stání", "Zastávky", "Akce"].map((column) => `
-            <span role="columnheader">${escapeHtml(column)}</span>
-          `).join("")}
-        </div>
-        <div class="tracking-empty" role="row">
-          <strong>${escapeHtml(VEHICLE_TRACKING_EMPTY)}</strong>
-          <span>${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}</span>
-        </div>
-      </div>
-      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/vehicles/:vehicleId/trips")}
-    </section>
-  `;
-}
-
-function vehicleTrackingIntegrationSection() {
-  return `
-    <section class="tracking-section" id="tracking-integration" aria-labelledby="tracking-integration-title">
-      ${vehicleTrackingSectionHeader(
-        "tracking-integration-title",
-        "GPS integrace a datový model",
-        "Konkrétní GPS provider ani API klíče nejsou v aplikaci nastavené."
-      )}
       <div class="tracking-integration-grid">
+        <article>
+          <h3>Budoucí endpointy</h3>
+          ${vehicleTrackingFieldChips(["GET /api/vehicle-tracking/status", "POST /api/vehicle-tracking/location"])}
+        </article>
         <article>
           <h3>Aktuální stav vozidla</h3>
           ${vehicleTrackingFieldChips(VEHICLE_TRACKING_STATUS_FIELDS)}
@@ -6241,31 +6427,135 @@ function vehicleTrackingIntegrationSection() {
           ${vehicleTrackingFieldChips(VEHICLE_STOP_FIELDS)}
         </article>
         <article>
-          <h3>Cloud API endpointy</h3>
+          <h3>Cloud API kontrakt</h3>
           ${vehicleTrackingFieldChips(VEHICLE_TRACKING_API_ENDPOINTS)}
-        </article>
-        <article>
-          <h3>Bez GPS signálu</h3>
-          <div class="tracking-empty">
-            <strong>${escapeHtml(VEHICLE_TRACKING_NO_SIGNAL)}</strong>
-            <span>Stav se zobrazí až z aktuálního GPS timestampu v API.</span>
-          </div>
         </article>
       </div>
     </section>
   `;
 }
 
+function handleVehicleTrackingDemoControl(action) {
+  const now = vehicleTrackingDemoCurrentTime();
+
+  if (action === "toggle") {
+    if (vehicleTrackingDemoState.running) {
+      vehicleTrackingDemoState.pausedElapsedMs = vehicleTrackingDemoCurrentElapsed(now);
+      vehicleTrackingDemoState.running = false;
+      stopVehicleTrackingDemoRuntime();
+    } else {
+      vehicleTrackingDemoState.running = true;
+      vehicleTrackingDemoState.startedAt = now - vehicleTrackingDemoState.pausedElapsedMs;
+    }
+
+    render();
+    return;
+  }
+
+  if (action === "reset") {
+    vehicleTrackingDemoState.pausedElapsedMs = 0;
+    vehicleTrackingDemoState.startedAt = vehicleTrackingDemoState.running ? now : 0;
+    render();
+  }
+}
+
+function handleVehicleTrackingDemoFilter(filter) {
+  if (!DEMO_VEHICLE_TRACKING_STATUS_FILTERS.some((item) => item.value === filter)) {
+    return;
+  }
+
+  vehicleTrackingDemoState.filter = filter;
+  const visibleVehicles = vehicleTrackingDemoVisibleVehicles();
+  if (!visibleVehicles.some((vehicle) => vehicle.id === vehicleTrackingDemoState.selectedVehicleId)) {
+    vehicleTrackingDemoState.selectedVehicleId = visibleVehicles[0]?.id || "";
+  }
+  render();
+}
+
+function scrollToVehicleTrackingDemoDetail() {
+  window.requestAnimationFrame(() => {
+    document.getElementById("tracking-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function handleVehicleTrackingDemoSelect(vehicleId) {
+  if (!DEMO_VEHICLE_TRACKING_VEHICLES.some((vehicle) => vehicle.id === vehicleId)) {
+    return;
+  }
+
+  vehicleTrackingDemoState.selectedVehicleId = vehicleId;
+  render();
+  scrollToVehicleTrackingDemoDetail();
+}
+
+function stopVehicleTrackingDemoRuntime() {
+  if (!vehicleTrackingDemoState.frameId) {
+    return;
+  }
+
+  window.cancelAnimationFrame(vehicleTrackingDemoState.frameId);
+  vehicleTrackingDemoState.frameId = 0;
+}
+
+function applyVehicleTrackingDemoFrame(elapsedMs) {
+  const visibleVehicles = vehicleTrackingDemoVisibleVehicles();
+  for (const vehicle of visibleVehicles) {
+    const position = vehicleTrackingDemoPosition(vehicle, elapsedMs);
+    const marker = document.querySelector(`[data-tracking-demo-marker="${CSS.escape(vehicle.id)}"]`);
+    if (marker) {
+      marker.style.setProperty("--x", `${position.x.toFixed(2)}%`);
+      marker.style.setProperty("--y", `${position.y.toFixed(2)}%`);
+      marker.style.setProperty("--heading", `${position.heading.toFixed(2)}deg`);
+    }
+
+    const speedNode = document.querySelector(`[data-tracking-demo-speed="${CSS.escape(vehicle.id)}"]`);
+    if (speedNode) {
+      speedNode.textContent = `${position.speedKmh} km/h`;
+    }
+  }
+}
+
+function vehicleTrackingDemoFrame(now = vehicleTrackingDemoCurrentTime()) {
+  if (!normalizePath(window.location.pathname).startsWith(VEHICLE_TRACKING_BASE_ROUTE)) {
+    stopVehicleTrackingDemoRuntime();
+    return;
+  }
+
+  if (!document.querySelector("[data-tracking-demo-map]")) {
+    stopVehicleTrackingDemoRuntime();
+    return;
+  }
+
+  const elapsedMs = vehicleTrackingDemoCurrentElapsed(now);
+  applyVehicleTrackingDemoFrame(elapsedMs);
+
+  if (vehicleTrackingDemoState.running) {
+    vehicleTrackingDemoState.frameId = window.requestAnimationFrame(vehicleTrackingDemoFrame);
+  }
+}
+
+function syncVehicleTrackingDemoRuntime() {
+  const isTrackingPage = normalizePath(window.location.pathname).startsWith(VEHICLE_TRACKING_BASE_ROUTE);
+  if (!isTrackingPage || !document.querySelector("[data-tracking-demo-map]")) {
+    stopVehicleTrackingDemoRuntime();
+    return;
+  }
+
+  applyVehicleTrackingDemoFrame(vehicleTrackingDemoCurrentElapsed());
+
+  if (vehicleTrackingDemoState.running && !vehicleTrackingDemoState.frameId) {
+    vehicleTrackingDemoState.frameId = window.requestAnimationFrame(vehicleTrackingDemoFrame);
+  }
+}
+
 function vehicleTrackingPage(moduleItem, user, context = {}) {
   const vehicleId = context.vehicleId || "";
   const view = context.view || "map";
-  const title = view === "today-trip"
-    ? "Dnešní trasa"
-    : view === "history"
-      ? "Historie jízd"
-      : vehicleId
-        ? "Detail sledování vozidla"
-        : "Sledování vozidel";
+  const visibleVehicles = vehicleTrackingDemoVisibleVehicles();
+  const selectedVehicle = vehicleTrackingDemoSelectedVehicle(vehicleId, visibleVehicles);
+  if (selectedVehicle) {
+    vehicleTrackingDemoState.selectedVehicleId = selectedVehicle.id;
+  }
 
   return `
     <main class="app-shell module-page module-theme-scope tracking-page" ${moduleThemeStyleAttribute()}>
@@ -6279,8 +6569,8 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">SMART ODPADY / SLEDOVÁNÍ VOZIDEL</div>
-          <h1 id="module-title">${escapeHtml(title)}</h1>
-          <p>Aktuální poloha vozidel, trasy a historie jízd na mapě.</p>
+          <h1 id="module-title">Sledování vozidel</h1>
+          <p>Demo ukazuje budoucí mapový pohled, seznam vozidel a detail bez reálných GPS dat.</p>
           <div class="module-detail__status">
             <span>Stav</span>
             <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
@@ -6292,14 +6582,13 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
         </div>
       </section>
 
-      ${vehicleTrackingTabs(view, vehicleId)}
-      <div class="tracking-layout">
-        ${vehicleTrackingMapSection()}
-        ${vehicleTrackingListSection()}
-        ${vehicleTrackingDetailSection(vehicleId)}
-        ${vehicleTrackingTodayTripSection(vehicleId)}
-        ${vehicleTrackingHistorySection()}
-        ${vehicleTrackingIntegrationSection()}
+      ${vehicleTrackingDemoBanner()}
+      ${vehicleTrackingTabs(view)}
+      <div class="tracking-layout tracking-demo-layout">
+        ${vehicleTrackingMapSection(visibleVehicles, selectedVehicle)}
+        ${vehicleTrackingListSection(visibleVehicles, selectedVehicle)}
+        ${vehicleTrackingDetailSection(selectedVehicle)}
+        ${vehicleTrackingApiSection()}
       </div>
       ${moduleFeedbackBoxFor(moduleItem, user, {
         moduleId: "sledovani-vozidel",
@@ -8460,6 +8749,7 @@ function render() {
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
     syncAssistantPromoVideo();
+    syncVehicleTrackingDemoRuntime();
     if (aiAssistantState.welcomeVisible && aiAssistantState.welcomeAnimate) {
       aiAssistantState.welcomeAnimate = false;
     }
@@ -10347,6 +10637,27 @@ document.addEventListener("error", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const trackingDemoControl = event.target.closest("[data-tracking-demo-control]");
+  if (trackingDemoControl) {
+    event.preventDefault();
+    handleVehicleTrackingDemoControl(trackingDemoControl.dataset.trackingDemoControl || "");
+    return;
+  }
+
+  const trackingDemoFilter = event.target.closest("[data-tracking-demo-filter]");
+  if (trackingDemoFilter) {
+    event.preventDefault();
+    handleVehicleTrackingDemoFilter(trackingDemoFilter.dataset.trackingDemoFilter || "all");
+    return;
+  }
+
+  const trackingDemoSelect = event.target.closest("[data-tracking-demo-select]");
+  if (trackingDemoSelect) {
+    event.preventDefault();
+    handleVehicleTrackingDemoSelect(trackingDemoSelect.dataset.trackingDemoSelect || "");
+    return;
+  }
+
   const fleetTab = event.target.closest("[data-fleet-tab]");
   if (fleetTab) {
     event.preventDefault();
