@@ -119,15 +119,24 @@ import {
   fleetStatusTone
 } from "./data/fleet.js";
 import {
+  DEMO_VEHICLE_TRACKING_ALERT,
+  DEMO_VEHICLE_TRACKING_ALERT_END_MS,
+  DEMO_VEHICLE_TRACKING_ALERT_START_MS,
   DEMO_VEHICLE_TRACKING_API_DETAIL,
   DEMO_VEHICLE_TRACKING_API_NOTICE,
   DEMO_VEHICLE_TRACKING_BOUNDS,
+  DEMO_VEHICLE_TRACKING_DEVIATION_START_MS,
+  DEMO_VEHICLE_TRACKING_GOOGLE_MAPS_WAITING,
+  DEMO_VEHICLE_TRACKING_LOOP_MS,
+  DEMO_VEHICLE_TRACKING_MAP_CENTER,
   DEMO_VEHICLE_TRACKING_NOTICE,
+  DEMO_VEHICLE_TRACKING_PHASES,
   DEMO_VEHICLE_TRACKING_PLACES,
   DEMO_VEHICLE_TRACKING_STATUS_FILTERS,
   DEMO_VEHICLE_TRACKING_STATUS_META,
   DEMO_VEHICLE_TRACKING_VEHICLES
 } from "./data/demoVehicleTracking.js";
+import { runtimeConfig } from "./data/runtimeConfig.js";
 import {
   VEHICLE_STOP_FIELDS,
   VEHICLE_TRACKING_API_ENDPOINTS,
@@ -672,8 +681,19 @@ const vehicleTrackingDemoState = {
   pausedElapsedMs: 0,
   frameId: 0,
   filter: "all",
-  selectedVehicleId: DEMO_VEHICLE_TRACKING_VEHICLES[0]?.id || ""
+  selectedVehicleId: DEMO_VEHICLE_TRACKING_VEHICLES[0]?.id || "",
+  audioEnabled: false,
+  mutedForLoop: false,
+  lastLoopIndex: 0,
+  lastBeepAt: 0,
+  googleMapsStatus: "idle",
+  googleMapsPromise: null,
+  googleMapNode: null,
+  googleMap: null,
+  googleOverlays: null
 };
+
+let vehicleTrackingAudioContext = null;
 
 let lastRenderedUrl = window.location.href;
 
@@ -6076,7 +6096,7 @@ function vehicleTrackingDemoCurrentTime() {
   return window.performance?.now?.() || Date.now();
 }
 
-function vehicleTrackingDemoCurrentElapsed(now = vehicleTrackingDemoCurrentTime()) {
+function vehicleTrackingDemoCurrentFullElapsed(now = vehicleTrackingDemoCurrentTime()) {
   if (!vehicleTrackingDemoState.running) {
     return vehicleTrackingDemoState.pausedElapsedMs;
   }
@@ -6088,8 +6108,38 @@ function vehicleTrackingDemoCurrentElapsed(now = vehicleTrackingDemoCurrentTime(
   return Math.max(0, now - vehicleTrackingDemoState.startedAt);
 }
 
-function vehicleTrackingDemoShouldMove(vehicle) {
-  return vehicle.status === "moving" && vehicle.route.length > 1;
+function vehicleTrackingDemoCurrentElapsed(now = vehicleTrackingDemoCurrentTime()) {
+  const fullElapsed = vehicleTrackingDemoCurrentFullElapsed(now);
+  const loopIndex = Math.floor(fullElapsed / DEMO_VEHICLE_TRACKING_LOOP_MS);
+  if (loopIndex !== vehicleTrackingDemoState.lastLoopIndex) {
+    vehicleTrackingDemoState.lastLoopIndex = loopIndex;
+    vehicleTrackingDemoState.mutedForLoop = false;
+  }
+
+  return fullElapsed % DEMO_VEHICLE_TRACKING_LOOP_MS;
+}
+
+function vehicleTrackingDemoPhase(elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  return DEMO_VEHICLE_TRACKING_PHASES.find((phase) => elapsedMs >= phase.fromMs && elapsedMs < phase.toMs)
+    || DEMO_VEHICLE_TRACKING_PHASES[0];
+}
+
+function vehicleTrackingDemoIsAlertActive(elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  return elapsedMs >= DEMO_VEHICLE_TRACKING_ALERT_START_MS
+    && elapsedMs < DEMO_VEHICLE_TRACKING_ALERT_END_MS;
+}
+
+function vehicleTrackingDemoIsVehicleOffRoute(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  return vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId
+    && elapsedMs >= DEMO_VEHICLE_TRACKING_DEVIATION_START_MS;
+}
+
+function vehicleTrackingDemoStatus(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  if (vehicleTrackingDemoIsVehicleOffRoute(vehicle, elapsedMs)) {
+    return "off_route";
+  }
+
+  return vehicle.baseStatus || "moving";
 }
 
 function vehicleTrackingDemoProjectPoint(point) {
@@ -6103,36 +6153,124 @@ function vehicleTrackingDemoProjectPoint(point) {
   };
 }
 
-function vehicleTrackingDemoPosition(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
-  if (!vehicleTrackingDemoShouldMove(vehicle)) {
-    const projected = vehicleTrackingDemoProjectPoint(vehicle.route[0]);
-    return {
-      ...projected,
-      heading: 0,
-      speedKmh: 0
-    };
+function vehicleTrackingDemoRouteDistance(route) {
+  return route.slice(0, -1).reduce((total, point, index) => {
+    const next = route[index + 1];
+    return total + Math.hypot(next.lat - point.lat, next.lng - point.lng);
+  }, 0);
+}
+
+function vehicleTrackingDemoInterpolateRoute(route, progress) {
+  if (!route.length) {
+    return { lat: 0, lng: 0 };
   }
 
-  const segmentCount = vehicle.route.length - 1;
-  const cycle = ((elapsedMs / 1000) % vehicle.animationSeconds) / vehicle.animationSeconds;
-  const scaled = cycle * segmentCount;
-  const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
-  const localProgress = scaled - segmentIndex;
-  const start = vehicle.route[segmentIndex];
-  const end = vehicle.route[segmentIndex + 1];
-  const point = {
-    lat: start.lat + ((end.lat - start.lat) * localProgress),
-    lng: start.lng + ((end.lng - start.lng) * localProgress)
-  };
+  if (route.length === 1) {
+    return route[0];
+  }
+
+  const clampedProgress = Math.min(1, Math.max(0, progress));
+  const targetDistance = vehicleTrackingDemoRouteDistance(route) * clampedProgress;
+  let walked = 0;
+
+  for (let index = 0; index < route.length - 1; index += 1) {
+    const start = route[index];
+    const end = route[index + 1];
+    const segmentDistance = Math.hypot(end.lat - start.lat, end.lng - start.lng);
+    if (walked + segmentDistance >= targetDistance) {
+      const localProgress = segmentDistance ? (targetDistance - walked) / segmentDistance : 0;
+      return {
+        lat: start.lat + ((end.lat - start.lat) * localProgress),
+        lng: start.lng + ((end.lng - start.lng) * localProgress)
+      };
+    }
+    walked += segmentDistance;
+  }
+
+  return route[route.length - 1];
+}
+
+function vehicleTrackingDemoPartialRoute(route, progress) {
+  if (route.length <= 1) {
+    return route;
+  }
+
+  const clampedProgress = Math.min(1, Math.max(0, progress));
+  const target = vehicleTrackingDemoInterpolateRoute(route, clampedProgress);
+  const targetDistance = vehicleTrackingDemoRouteDistance(route) * clampedProgress;
+  let walked = 0;
+  const partial = [route[0]];
+
+  for (let index = 0; index < route.length - 1; index += 1) {
+    const start = route[index];
+    const end = route[index + 1];
+    const segmentDistance = Math.hypot(end.lat - start.lat, end.lng - start.lng);
+    if (walked + segmentDistance >= targetDistance) {
+      partial.push(target);
+      break;
+    }
+    partial.push(end);
+    walked += segmentDistance;
+  }
+
+  return partial;
+}
+
+function vehicleTrackingDemoHeading(route, progress) {
+  if (route.length <= 1) {
+    return 0;
+  }
+
+  const lookBehind = vehicleTrackingDemoProjectPoint(vehicleTrackingDemoInterpolateRoute(route, Math.max(0, progress - 0.02)));
+  const lookAhead = vehicleTrackingDemoProjectPoint(vehicleTrackingDemoInterpolateRoute(route, Math.min(1, progress + 0.02)));
+  return Math.atan2(lookAhead.y - lookBehind.y, lookAhead.x - lookBehind.x) * (180 / Math.PI);
+}
+
+function vehicleTrackingDemoVehicleProgress(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  if ((vehicle.baseStatus || "moving") === "stopped") {
+    return 0;
+  }
+
+  if (vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId) {
+    if (elapsedMs < DEMO_VEHICLE_TRACKING_DEVIATION_START_MS) {
+      return Math.min(0.72, elapsedMs / DEMO_VEHICLE_TRACKING_DEVIATION_START_MS * 0.72);
+    }
+    if (elapsedMs < DEMO_VEHICLE_TRACKING_ALERT_START_MS) {
+      return 0.72 + (((elapsedMs - DEMO_VEHICLE_TRACKING_DEVIATION_START_MS) / (DEMO_VEHICLE_TRACKING_ALERT_START_MS - DEMO_VEHICLE_TRACKING_DEVIATION_START_MS)) * 0.28);
+    }
+    return 1;
+  }
+
+  const loopProgress = elapsedMs / DEMO_VEHICLE_TRACKING_LOOP_MS;
+  return (vehicle.progressOffset + (loopProgress * vehicle.progressScale)) % 1;
+}
+
+function vehicleTrackingDemoActiveRoute(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  if (vehicleTrackingDemoIsVehicleOffRoute(vehicle, elapsedMs) && vehicle.deviationRoute?.length) {
+    return vehicle.deviationRoute;
+  }
+
+  return vehicle.actualRoute || vehicle.plannedRoute;
+}
+
+function vehicleTrackingDemoPosition(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  const route = vehicleTrackingDemoActiveRoute(vehicle, elapsedMs);
+  const progress = vehicleTrackingDemoVehicleProgress(vehicle, elapsedMs);
+  const point = vehicleTrackingDemoInterpolateRoute(route, progress);
   const projected = vehicleTrackingDemoProjectPoint(point);
-  const startProjected = vehicleTrackingDemoProjectPoint(start);
-  const endProjected = vehicleTrackingDemoProjectPoint(end);
-  const heading = Math.atan2(endProjected.y - startProjected.y, endProjected.x - startProjected.x) * (180 / Math.PI);
-  const speedKmh = Math.max(8, Math.round(vehicle.speedKmh + (Math.sin(elapsedMs / 1300 + segmentIndex) * vehicle.speedWave)));
+  const status = vehicleTrackingDemoStatus(vehicle, elapsedMs);
+  const moving = status !== "stopped";
+  const speedKmh = moving
+    ? Math.max(8, Math.round(vehicle.speedKmh + (Math.sin(elapsedMs / 1250 + progress) * vehicle.speedWave)))
+    : 0;
 
   return {
     ...projected,
-    heading,
+    lat: point.lat,
+    lng: point.lng,
+    heading: moving ? vehicleTrackingDemoHeading(route, progress) : 0,
+    progress,
+    status,
     speedKmh
   };
 }
@@ -6142,7 +6280,8 @@ function vehicleTrackingDemoVisibleVehicles() {
     return DEMO_VEHICLE_TRACKING_VEHICLES;
   }
 
-  return DEMO_VEHICLE_TRACKING_VEHICLES.filter((vehicle) => vehicle.status === vehicleTrackingDemoState.filter);
+  const elapsedMs = vehicleTrackingDemoCurrentElapsed();
+  return DEMO_VEHICLE_TRACKING_VEHICLES.filter((vehicle) => vehicleTrackingDemoStatus(vehicle, elapsedMs) === vehicleTrackingDemoState.filter);
 }
 
 function vehicleTrackingDemoSelectedVehicle(preferredId = "", visibleVehicles = vehicleTrackingDemoVisibleVehicles()) {
@@ -6161,25 +6300,40 @@ function vehicleTrackingDemoSelectedVehicle(preferredId = "", visibleVehicles = 
 
 function vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
   const position = vehicleTrackingDemoPosition(vehicle, elapsedMs);
+  const status = vehicleTrackingDemoStatus(vehicle, elapsedMs);
+  const offRoute = status === "off_route";
   return {
     ...vehicle,
     speedNow: position.speedKmh,
-    tone: vehicleTrackingDemoStatusTone(vehicle.status),
-    statusLabel: vehicleTrackingDemoStatusLabel(vehicle.status)
+    deviationText: offRoute ? `${vehicle.deviationMeters || DEMO_VEHICLE_TRACKING_ALERT.distanceMeters} m` : "0 m",
+    isAlertVehicle: vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId,
+    isOffRoute: offRoute,
+    tone: vehicleTrackingDemoStatusTone(status),
+    status,
+    statusLabel: vehicleTrackingDemoStatusLabel(status)
   };
 }
 
-function vehicleTrackingDemoRouteSegments(vehicle) {
-  const tone = vehicleTrackingDemoStatusTone(vehicle.status);
-  return vehicle.route.slice(0, -1).map((point, index) => {
+function vehicleTrackingDemoRouteSegments(vehicle, elapsedMs = vehicleTrackingDemoCurrentElapsed(), routeType = "planned") {
+  const route = routeType === "actual"
+    ? vehicleTrackingDemoPartialRoute(
+      vehicleTrackingDemoActiveRoute(vehicle, elapsedMs),
+      vehicleTrackingDemoVehicleProgress(vehicle, elapsedMs)
+    )
+    : vehicle.plannedRoute;
+  const tone = routeType === "actual"
+    ? vehicleTrackingDemoStatusTone(vehicleTrackingDemoStatus(vehicle, elapsedMs))
+    : "planned";
+
+  return route.slice(0, -1).map((point, index) => {
     const start = vehicleTrackingDemoProjectPoint(point);
-    const end = vehicleTrackingDemoProjectPoint(vehicle.route[index + 1]);
+    const end = vehicleTrackingDemoProjectPoint(route[index + 1]);
     const width = Math.hypot(end.x - start.x, end.y - start.y);
     const angle = Math.atan2(end.y - start.y, end.x - start.x) * (180 / Math.PI);
 
     return `
       <span
-        class="tracking-demo-route-segment tracking-demo-route-segment--${escapeHtml(tone)}"
+        class="tracking-demo-route-segment tracking-demo-route-segment--${escapeHtml(tone)} tracking-demo-route-segment--${escapeHtml(routeType)}"
         style="left: ${start.x.toFixed(2)}%; top: ${start.y.toFixed(2)}%; width: ${width.toFixed(2)}%; transform: rotate(${angle.toFixed(2)}deg);"
         aria-hidden="true"
       ></span>
@@ -6200,17 +6354,18 @@ function vehicleTrackingDemoPlaceLabels() {
 
 function vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs) {
   const position = vehicleTrackingDemoPosition(vehicle, elapsedMs);
-  const tone = vehicleTrackingDemoStatusTone(vehicle.status);
+  const summary = vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs);
   const isSelected = selectedVehicle?.id === vehicle.id;
 
   return `
     <button
-      class="tracking-demo-marker tracking-demo-marker--${escapeHtml(tone)} ${isSelected ? "tracking-demo-marker--selected" : ""}"
+      class="tracking-demo-marker tracking-demo-marker--${escapeHtml(summary.tone)} ${summary.isOffRoute ? "tracking-demo-marker--alert" : ""} ${isSelected ? "tracking-demo-marker--selected" : ""}"
       type="button"
       style="--x: ${position.x.toFixed(2)}%; --y: ${position.y.toFixed(2)}%; --heading: ${position.heading.toFixed(2)}deg;"
       data-tracking-demo-marker="${escapeHtml(vehicle.id)}"
       data-tracking-demo-select="${escapeHtml(vehicle.id)}"
-      aria-label="${escapeHtml(`${vehicle.internalNumber} ${vehicleTrackingDemoStatusLabel(vehicle.status)} Demo data`)}"
+      data-tracking-demo-marker-status="${escapeHtml(vehicle.id)}"
+      aria-label="${escapeHtml(`${vehicle.internalNumber} ${summary.statusLabel} Demo data`)}"
     >
       <span>${escapeHtml(vehicle.shortLabel)}</span>
     </button>
@@ -6220,10 +6375,14 @@ function vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs) {
 function vehicleTrackingDemoControls() {
   return `
     <div class="tracking-demo-controls" aria-label="Ovládání demo režimu">
+      <button class="primary-action" type="button" data-tracking-demo-control="sound">
+        Spustit demo se zvukem
+      </button>
       <button class="secondary-link" type="button" data-tracking-demo-control="toggle">
         ${vehicleTrackingDemoState.running ? "Pozastavit demo" : "Spustit demo"}
       </button>
-      <button class="secondary-link" type="button" data-tracking-demo-control="reset">Reset trasy</button>
+      <button class="secondary-link" type="button" data-tracking-demo-control="reset">Reset demo</button>
+      <button class="secondary-link" type="button" data-tracking-demo-control="mute">Ztišit výstrahu</button>
     </div>
   `;
 }
@@ -6239,30 +6398,74 @@ function vehicleTrackingDemoBanner() {
   `;
 }
 
+function vehicleTrackingDemoGoogleMapsKey() {
+  return String(runtimeConfig.googleMapsApiKey || "").trim();
+}
+
+function vehicleTrackingDemoScenarioPanel(elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  const phase = vehicleTrackingDemoPhase(elapsedMs);
+  const seconds = Math.floor(elapsedMs / 1000);
+
+  return `
+    <div class="tracking-demo-scenario" data-tracking-demo-scenario>
+      <span>Scénář ${seconds}s / ${Math.round(DEMO_VEHICLE_TRACKING_LOOP_MS / 1000)}s</span>
+      <strong data-tracking-demo-phase>${escapeHtml(phase.label)}</strong>
+      <small data-tracking-demo-phase-description>${escapeHtml(phase.description)}</small>
+    </div>
+  `;
+}
+
+function vehicleTrackingDemoAlertOverlay(elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
+  const active = vehicleTrackingDemoIsAlertActive(elapsedMs);
+
+  return `
+    <div class="tracking-demo-alert ${active ? "tracking-demo-alert--active" : ""}" data-tracking-demo-alert aria-live="polite">
+      <div class="tracking-demo-alert__symbol" aria-hidden="true">!</div>
+      <div>
+        <strong>${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.title)}: ${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.text)}</strong>
+        <span>${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.detail)}</span>
+      </div>
+      <div class="tracking-demo-alert__actions">
+        <button class="secondary-link secondary-link--danger" type="button" data-tracking-demo-control="focus-alert">Zobrazit vozidlo</button>
+        <button class="secondary-link" type="button" data-tracking-demo-control="mute">Ztišit výstrahu</button>
+      </div>
+    </div>
+  `;
+}
+
 function vehicleTrackingMapSection(visibleVehicles, selectedVehicle) {
   const elapsedMs = vehicleTrackingDemoCurrentElapsed();
+  const hasGoogleMapsKey = Boolean(vehicleTrackingDemoGoogleMapsKey());
 
   return `
     <section class="tracking-section tracking-section--map tracking-demo-map-section" id="tracking-map" aria-labelledby="tracking-map-title">
       ${vehicleTrackingSectionHeader(
         "tracking-map-title",
-        "Demo mapa vozidel",
-        "Interní ukázkový mapový podklad bez externího GPS poskytovatele a bez mapových API klíčů."
+        hasGoogleMapsKey ? "Google mapa vozidel" : "Demo mapa vozidel",
+        hasGoogleMapsKey
+          ? "Mapový podklad používá Google Maps. Vozidla a trasy jsou pořád pouze demo data."
+          : "Google Maps klíč zatím není dostupný, proto je zobrazen bezpečný fallback bez bílé obrazovky.",
+        { badgeText: hasGoogleMapsKey ? "Google Maps + demo data" : DEMO_VEHICLE_TRACKING_GOOGLE_MAPS_WAITING }
       )}
       ${vehicleTrackingDemoControls()}
-      <div class="tracking-map-shell tracking-demo-map" data-tracking-demo-map aria-label="Demo mapový pohled sledování vozidel">
-        <div class="tracking-demo-road tracking-demo-road--one" aria-hidden="true"></div>
-        <div class="tracking-demo-road tracking-demo-road--two" aria-hidden="true"></div>
-        <div class="tracking-demo-road tracking-demo-road--three" aria-hidden="true"></div>
-        ${visibleVehicles.map(vehicleTrackingDemoRouteSegments).join("")}
-        ${vehicleTrackingDemoPlaceLabels()}
-        ${visibleVehicles.map((vehicle) => vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs)).join("")}
-        ${visibleVehicles.length ? "" : `
-          <div class="tracking-demo-empty-map">
-            <strong>Žádné demo vozidlo v tomto filtru.</strong>
-            <span>Změňte filtr stavu vozidel.</span>
-          </div>
-        `}
+      ${vehicleTrackingDemoScenarioPanel(elapsedMs)}
+      <div class="tracking-map-shell tracking-demo-map ${hasGoogleMapsKey ? "tracking-demo-map--google" : "tracking-demo-map--fallback"}" data-tracking-demo-map aria-label="Demo mapový pohled sledování vozidel">
+        ${hasGoogleMapsKey
+          ? `<div class="tracking-google-map" data-tracking-google-map aria-label="Google mapa demo sledování vozidel"></div>`
+          : `
+            <div class="tracking-demo-map-waiting">
+              <strong>${escapeHtml(DEMO_VEHICLE_TRACKING_GOOGLE_MAPS_WAITING)}</strong>
+              <span>Po nastavení proměnné VITE_GOOGLE_MAPS_API_KEY se tady zobrazí Google mapa. Demo scénář běží i ve fallbacku.</span>
+            </div>
+            <div class="tracking-demo-road tracking-demo-road--one" aria-hidden="true"></div>
+            <div class="tracking-demo-road tracking-demo-road--two" aria-hidden="true"></div>
+            <div class="tracking-demo-road tracking-demo-road--three" aria-hidden="true"></div>
+            ${visibleVehicles.map((vehicle) => vehicleTrackingDemoRouteSegments(vehicle, elapsedMs, "planned")).join("")}
+            ${visibleVehicles.map((vehicle) => vehicleTrackingDemoRouteSegments(vehicle, elapsedMs, "actual")).join("")}
+            ${vehicleTrackingDemoPlaceLabels()}
+            ${visibleVehicles.map((vehicle) => vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs)).join("")}
+          `}
+        ${vehicleTrackingDemoAlertOverlay(elapsedMs)}
       </div>
       <div class="tracking-status-legend" aria-label="Stavy demo vozidel">
         ${DEMO_VEHICLE_TRACKING_STATUS_FILTERS.filter((filter) => filter.value !== "all").map((filter) => `
@@ -6296,7 +6499,7 @@ function vehicleTrackingDemoVehicleCard(vehicle, selectedVehicle, elapsedMs) {
   const isSelected = selectedVehicle?.id === vehicle.id;
 
   return `
-    <article class="tracking-demo-vehicle-card ${isSelected ? "tracking-demo-vehicle-card--selected" : ""}" data-tracking-demo-card="${escapeHtml(vehicle.id)}">
+    <article class="tracking-demo-vehicle-card ${summary.isOffRoute ? "tracking-demo-vehicle-card--alert" : ""} ${isSelected ? "tracking-demo-vehicle-card--selected" : ""}" data-tracking-demo-card="${escapeHtml(vehicle.id)}">
       <div class="tracking-demo-vehicle-card__head">
         <div>
           <strong>${escapeHtml(vehicle.internalNumber)}</strong>
@@ -6309,9 +6512,10 @@ function vehicleTrackingDemoVehicleCard(vehicle, selectedVehicle, elapsedMs) {
         <span>${escapeHtml(vehicle.type)}</span>
       </div>
       <div class="tracking-demo-vehicle-status">
-        <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}">${escapeHtml(summary.statusLabel)}</span>
+        <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}" data-tracking-demo-status="${escapeHtml(vehicle.id)}">${escapeHtml(summary.statusLabel)}</span>
         <span data-tracking-demo-speed="${escapeHtml(vehicle.id)}">${escapeHtml(`${summary.speedNow} km/h`)}</span>
         <span data-tracking-demo-updated="${escapeHtml(vehicle.id)}">${escapeHtml(vehicle.lastUpdate)}</span>
+        <span data-tracking-demo-deviation="${escapeHtml(vehicle.id)}">${escapeHtml(summary.isOffRoute ? `Odchylka ${summary.deviationText}` : "Odchylka 0 m")}</span>
       </div>
       <button class="secondary-link" type="button" data-tracking-demo-select="${escapeHtml(vehicle.id)}">Detail</button>
     </article>
@@ -6325,8 +6529,8 @@ function vehicleTrackingListSection(visibleVehicles, selectedVehicle) {
     <section class="tracking-section tracking-demo-list-section" id="tracking-list" aria-labelledby="tracking-list-title">
       ${vehicleTrackingSectionHeader(
         "tracking-list-title",
-        "Demo vozidla",
-        "Seznam filtruje stejné demo položky jako mapa. Nejde o reálné provozní záznamy."
+        "Sledování vozidel",
+        "Boční panel ukazuje pouze demo data a stav aktuální 50s smyčky."
       )}
       ${vehicleTrackingDemoFilters()}
       <div class="tracking-demo-vehicle-list" aria-label="Seznam demo vozidel">
@@ -6338,11 +6542,11 @@ function vehicleTrackingListSection(visibleVehicles, selectedVehicle) {
   `;
 }
 
-function vehicleTrackingDemoDetailField(label, value) {
+function vehicleTrackingDemoDetailField(label, value, options = {}) {
   return `
     <article>
       <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value || "—")}</strong>
+      <strong>${options.raw ? (value || "—") : escapeHtml(value || "—")}</strong>
     </article>
   `;
 }
@@ -6371,19 +6575,26 @@ function vehicleTrackingDetailSection(selectedVehicle) {
       )}
       <div class="tracking-demo-detail-title">
         <span class="tracking-demo-data-badge">Demo data</span>
-        <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}">${escapeHtml(summary.statusLabel)}</span>
+        <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}" data-tracking-demo-detail-status>${escapeHtml(summary.statusLabel)}</span>
       </div>
+      ${summary.isOffRoute ? `
+        <div class="tracking-demo-detail-alert" data-tracking-demo-detail-alert>
+          Vozidlo je mimo plánovanou trasu.
+        </div>
+      ` : `<div class="tracking-demo-detail-alert" data-tracking-demo-detail-alert hidden>Vozidlo je mimo plánovanou trasu.</div>`}
       <div class="tracking-detail-grid">
         ${vehicleTrackingDemoDetailField("Interní číslo", selectedVehicle.internalNumber)}
         ${vehicleTrackingDemoDetailField("SPZ", selectedVehicle.licensePlate)}
         ${vehicleTrackingDemoDetailField("Řidič", selectedVehicle.driver)}
         ${vehicleTrackingDemoDetailField("Typ vozidla", selectedVehicle.type)}
-        ${vehicleTrackingDemoDetailField("Stav", summary.statusLabel)}
-        ${vehicleTrackingDemoDetailField("Demo rychlost", `${summary.speedNow} km/h`)}
+        ${vehicleTrackingDemoDetailField("Stav", `<span data-tracking-demo-detail-status-text>${escapeHtml(summary.statusLabel)}</span>`, { raw: true })}
+        ${vehicleTrackingDemoDetailField("Demo rychlost", `<span data-tracking-demo-detail-speed>${escapeHtml(`${summary.speedNow} km/h`)}</span>`, { raw: true })}
         ${vehicleTrackingDemoDetailField("Poslední aktualizace", selectedVehicle.lastUpdate)}
         ${vehicleTrackingDemoDetailField("Přesnost GPS", selectedVehicle.accuracy)}
         ${vehicleTrackingDemoDetailField("Zdroj", selectedVehicle.source)}
-        ${vehicleTrackingDemoDetailField("Dnešní trasa", `Demo trasa: ${selectedVehicle.routeName}`)}
+        ${vehicleTrackingDemoDetailField("Plánovaná trasa", selectedVehicle.routeName)}
+        ${vehicleTrackingDemoDetailField("Skutečná trasa", summary.isOffRoute ? "Komárov → odbočka mimo trasu" : selectedVehicle.routeName)}
+        ${vehicleTrackingDemoDetailField("Odchylka od trasy", `<span data-tracking-demo-detail-deviation>${escapeHtml(summary.deviationText)}</span>`, { raw: true })}
       </div>
       <div class="tracking-actions">
         <button class="secondary-link tracking-disabled-action" type="button" disabled>Čeká na API pro detail vozidla.</button>
@@ -6438,9 +6649,17 @@ function vehicleTrackingApiSection() {
 function handleVehicleTrackingDemoControl(action) {
   const now = vehicleTrackingDemoCurrentTime();
 
+  if (action === "sound") {
+    enableVehicleTrackingDemoAudio();
+    vehicleTrackingDemoState.running = true;
+    vehicleTrackingDemoState.startedAt = now - vehicleTrackingDemoState.pausedElapsedMs;
+    render();
+    return;
+  }
+
   if (action === "toggle") {
     if (vehicleTrackingDemoState.running) {
-      vehicleTrackingDemoState.pausedElapsedMs = vehicleTrackingDemoCurrentElapsed(now);
+      vehicleTrackingDemoState.pausedElapsedMs = vehicleTrackingDemoCurrentFullElapsed(now);
       vehicleTrackingDemoState.running = false;
       stopVehicleTrackingDemoRuntime();
     } else {
@@ -6455,7 +6674,22 @@ function handleVehicleTrackingDemoControl(action) {
   if (action === "reset") {
     vehicleTrackingDemoState.pausedElapsedMs = 0;
     vehicleTrackingDemoState.startedAt = vehicleTrackingDemoState.running ? now : 0;
+    vehicleTrackingDemoState.mutedForLoop = false;
+    vehicleTrackingDemoState.lastBeepAt = 0;
     render();
+    return;
+  }
+
+  if (action === "mute") {
+    vehicleTrackingDemoState.mutedForLoop = true;
+    return;
+  }
+
+  if (action === "focus-alert") {
+    vehicleTrackingDemoState.selectedVehicleId = DEMO_VEHICLE_TRACKING_ALERT.vehicleId;
+    render();
+    focusVehicleTrackingGoogleMapOnVehicle(DEMO_VEHICLE_TRACKING_ALERT.vehicleId);
+    scrollToVehicleTrackingDemoDetail();
   }
 }
 
@@ -6488,6 +6722,284 @@ function handleVehicleTrackingDemoSelect(vehicleId) {
   scrollToVehicleTrackingDemoDetail();
 }
 
+function enableVehicleTrackingDemoAudio() {
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    return;
+  }
+
+  if (!vehicleTrackingAudioContext) {
+    vehicleTrackingAudioContext = new AudioContextConstructor();
+  }
+
+  vehicleTrackingDemoState.audioEnabled = true;
+  vehicleTrackingAudioContext.resume?.();
+}
+
+function playVehicleTrackingDemoAlertSound(elapsedMs) {
+  if (!vehicleTrackingDemoState.audioEnabled || vehicleTrackingDemoState.mutedForLoop || !vehicleTrackingDemoIsAlertActive(elapsedMs)) {
+    return;
+  }
+
+  const now = vehicleTrackingDemoCurrentTime();
+  if (now - vehicleTrackingDemoState.lastBeepAt < 850) {
+    return;
+  }
+
+  enableVehicleTrackingDemoAudio();
+  if (!vehicleTrackingAudioContext) {
+    return;
+  }
+
+  vehicleTrackingDemoState.lastBeepAt = now;
+  const oscillator = vehicleTrackingAudioContext.createOscillator();
+  const gain = vehicleTrackingAudioContext.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.value = Math.floor(elapsedMs / 850) % 2 ? 720 : 980;
+  gain.gain.setValueAtTime(0.0001, vehicleTrackingAudioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.12, vehicleTrackingAudioContext.currentTime + 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.0001, vehicleTrackingAudioContext.currentTime + 0.18);
+  oscillator.connect(gain);
+  gain.connect(vehicleTrackingAudioContext.destination);
+  oscillator.start();
+  oscillator.stop(vehicleTrackingAudioContext.currentTime + 0.2);
+}
+
+function vehicleTrackingGoogleMapsScriptUrl(apiKey) {
+  const params = new URLSearchParams({
+    key: apiKey,
+    callback: "kaiserVehicleTrackingGoogleMapsReady",
+    v: "weekly"
+  });
+  return `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+}
+
+function loadVehicleTrackingGoogleMaps() {
+  const apiKey = vehicleTrackingDemoGoogleMapsKey();
+  if (!apiKey) {
+    vehicleTrackingDemoState.googleMapsStatus = "missing-key";
+    return Promise.reject(new Error(DEMO_VEHICLE_TRACKING_GOOGLE_MAPS_WAITING));
+  }
+
+  if (window.google?.maps) {
+    vehicleTrackingDemoState.googleMapsStatus = "ready";
+    return Promise.resolve(window.google.maps);
+  }
+
+  if (vehicleTrackingDemoState.googleMapsPromise) {
+    return vehicleTrackingDemoState.googleMapsPromise;
+  }
+
+  vehicleTrackingDemoState.googleMapsStatus = "loading";
+  vehicleTrackingDemoState.googleMapsPromise = new Promise((resolve, reject) => {
+    window.kaiserVehicleTrackingGoogleMapsReady = () => {
+      vehicleTrackingDemoState.googleMapsStatus = "ready";
+      resolve(window.google.maps);
+    };
+
+    const existingScript = document.getElementById("kaiser-google-maps-sdk");
+    if (existingScript) {
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "kaiser-google-maps-sdk";
+    script.src = vehicleTrackingGoogleMapsScriptUrl(apiKey);
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => {
+      vehicleTrackingDemoState.googleMapsStatus = "error";
+      reject(new Error("Google Maps se nepodařilo načíst."));
+    };
+    document.head.appendChild(script);
+  });
+
+  return vehicleTrackingDemoState.googleMapsPromise;
+}
+
+function createVehicleTrackingGoogleMarker(maps, map, vehicle) {
+  class VehicleTrackingMarker extends maps.OverlayView {
+    constructor() {
+      super();
+      this.position = vehicle.plannedRoute[0];
+      this.tone = "moving";
+      this.selected = false;
+      this.heading = 0;
+      this.div = null;
+      this.setMap(map);
+    }
+
+    onAdd() {
+      this.div = document.createElement("button");
+      this.div.type = "button";
+      this.div.className = "tracking-google-marker";
+      this.div.dataset.trackingDemoSelect = vehicle.id;
+      this.div.innerHTML = `<span>${escapeHtml(vehicle.shortLabel)}</span>`;
+      this.div.addEventListener("click", () => handleVehicleTrackingDemoSelect(vehicle.id));
+      this.getPanes().overlayMouseTarget.appendChild(this.div);
+    }
+
+    draw() {
+      if (!this.div) {
+        return;
+      }
+      const projection = this.getProjection();
+      const point = projection.fromLatLngToDivPixel(new maps.LatLng(this.position.lat, this.position.lng));
+      this.div.style.left = `${point.x}px`;
+      this.div.style.top = `${point.y}px`;
+      this.div.style.setProperty("--heading", `${this.heading.toFixed(2)}deg`);
+      this.div.className = [
+        "tracking-google-marker",
+        `tracking-google-marker--${this.tone}`,
+        this.selected ? "tracking-google-marker--selected" : "",
+        this.tone === "off-route" ? "tracking-google-marker--alert" : ""
+      ].filter(Boolean).join(" ");
+    }
+
+    onRemove() {
+      this.div?.remove();
+      this.div = null;
+    }
+
+    update(position, tone, selected) {
+      this.position = position;
+      this.tone = tone;
+      this.selected = selected;
+      this.heading = position.heading || 0;
+      this.draw();
+    }
+  }
+
+  return new VehicleTrackingMarker();
+}
+
+function clearVehicleTrackingGoogleMap() {
+  const overlays = vehicleTrackingDemoState.googleOverlays;
+  if (!overlays) {
+    return;
+  }
+
+  overlays.plannedPolylines?.forEach((polyline) => polyline.setMap(null));
+  overlays.actualPolylines?.forEach((polyline) => polyline.setMap(null));
+  overlays.markers?.forEach((marker) => marker.setMap(null));
+  overlays.deviationCircle?.setMap(null);
+  vehicleTrackingDemoState.googleOverlays = null;
+  vehicleTrackingDemoState.googleMap = null;
+  vehicleTrackingDemoState.googleMapNode = null;
+}
+
+function initializeVehicleTrackingGoogleMap(maps, node) {
+  if (vehicleTrackingDemoState.googleMap && vehicleTrackingDemoState.googleMapNode === node) {
+    return;
+  }
+
+  clearVehicleTrackingGoogleMap();
+  const map = new maps.Map(node, {
+    center: DEMO_VEHICLE_TRACKING_MAP_CENTER,
+    zoom: 12,
+    clickableIcons: false,
+    fullscreenControl: false,
+    mapTypeControl: false,
+    streetViewControl: false
+  });
+
+  const plannedPolylines = new Map();
+  const actualPolylines = new Map();
+  const markers = new Map();
+
+  for (const vehicle of DEMO_VEHICLE_TRACKING_VEHICLES) {
+    if (vehicle.plannedRoute.length > 1) {
+      plannedPolylines.set(vehicle.id, new maps.Polyline({
+        path: vehicle.plannedRoute,
+        map,
+        strokeColor: "#75bd25",
+        strokeOpacity: 0.72,
+        strokeWeight: 4
+      }));
+    }
+
+    actualPolylines.set(vehicle.id, new maps.Polyline({
+      path: [],
+      map,
+      strokeColor: vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId ? "#dc5b1f" : "#2f7d4c",
+      strokeOpacity: 0.86,
+      strokeWeight: vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId ? 5 : 3
+    }));
+
+    markers.set(vehicle.id, createVehicleTrackingGoogleMarker(maps, map, vehicle));
+  }
+
+  const deviationCircle = new maps.Circle({
+    center: DEMO_VEHICLE_TRACKING_MAP_CENTER,
+    map,
+    radius: 420,
+    strokeColor: "#dc3f1f",
+    strokeOpacity: 0,
+    strokeWeight: 2,
+    fillColor: "#dc3f1f",
+    fillOpacity: 0
+  });
+
+  vehicleTrackingDemoState.googleMap = map;
+  vehicleTrackingDemoState.googleMapNode = node;
+  vehicleTrackingDemoState.googleOverlays = { actualPolylines, deviationCircle, markers, plannedPolylines };
+}
+
+function syncVehicleTrackingGoogleMap(elapsedMs) {
+  const node = document.querySelector("[data-tracking-google-map]");
+  if (!node || !vehicleTrackingDemoGoogleMapsKey()) {
+    clearVehicleTrackingGoogleMap();
+    return;
+  }
+
+  if (vehicleTrackingDemoState.googleMapsStatus === "loading") {
+    return;
+  }
+
+  loadVehicleTrackingGoogleMaps()
+    .then((maps) => {
+      initializeVehicleTrackingGoogleMap(maps, node);
+      const overlays = vehicleTrackingDemoState.googleOverlays;
+      for (const vehicle of DEMO_VEHICLE_TRACKING_VEHICLES) {
+        const position = vehicleTrackingDemoPosition(vehicle, elapsedMs);
+        const summary = vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs);
+        const route = vehicleTrackingDemoPartialRoute(
+          vehicleTrackingDemoActiveRoute(vehicle, elapsedMs),
+          vehicleTrackingDemoVehicleProgress(vehicle, elapsedMs)
+        );
+        overlays.actualPolylines.get(vehicle.id)?.setPath(route);
+        overlays.markers.get(vehicle.id)?.update(position, summary.tone, vehicleTrackingDemoState.selectedVehicleId === vehicle.id);
+      }
+
+      const alertVehicle = DEMO_VEHICLE_TRACKING_VEHICLES.find((vehicle) => vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId);
+      const alertPosition = alertVehicle ? vehicleTrackingDemoPosition(alertVehicle, elapsedMs) : DEMO_VEHICLE_TRACKING_MAP_CENTER;
+      overlays.deviationCircle.setCenter(alertPosition);
+      overlays.deviationCircle.setOptions({
+        strokeOpacity: vehicleTrackingDemoIsVehicleOffRoute(alertVehicle, elapsedMs) ? 0.65 : 0,
+        fillOpacity: vehicleTrackingDemoIsVehicleOffRoute(alertVehicle, elapsedMs) ? 0.12 : 0
+      });
+    })
+    .catch(() => {
+      vehicleTrackingDemoState.googleMapsStatus = "error";
+    });
+}
+
+function focusVehicleTrackingGoogleMapOnVehicle(vehicleId) {
+  const map = vehicleTrackingDemoState.googleMap;
+  if (!map) {
+    return;
+  }
+
+  const vehicle = DEMO_VEHICLE_TRACKING_VEHICLES.find((item) => item.id === vehicleId);
+  if (!vehicle) {
+    return;
+  }
+
+  const position = vehicleTrackingDemoPosition(vehicle);
+  map.panTo({ lat: position.lat, lng: position.lng });
+  map.setZoom(Math.max(map.getZoom() || 12, 14));
+}
+
 function stopVehicleTrackingDemoRuntime() {
   if (!vehicleTrackingDemoState.frameId) {
     return;
@@ -6499,20 +7011,76 @@ function stopVehicleTrackingDemoRuntime() {
 
 function applyVehicleTrackingDemoFrame(elapsedMs) {
   const visibleVehicles = vehicleTrackingDemoVisibleVehicles();
+  const phase = vehicleTrackingDemoPhase(elapsedMs);
+  const alertActive = vehicleTrackingDemoIsAlertActive(elapsedMs);
+
+  document.querySelector("[data-tracking-demo-phase]")?.replaceChildren(document.createTextNode(phase.label));
+  document.querySelector("[data-tracking-demo-phase-description]")?.replaceChildren(document.createTextNode(phase.description));
+
+  const alertNode = document.querySelector("[data-tracking-demo-alert]");
+  if (alertNode) {
+    alertNode.classList.toggle("tracking-demo-alert--active", alertActive);
+  }
+
   for (const vehicle of visibleVehicles) {
     const position = vehicleTrackingDemoPosition(vehicle, elapsedMs);
+    const summary = vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs);
     const marker = document.querySelector(`[data-tracking-demo-marker="${CSS.escape(vehicle.id)}"]`);
     if (marker) {
       marker.style.setProperty("--x", `${position.x.toFixed(2)}%`);
       marker.style.setProperty("--y", `${position.y.toFixed(2)}%`);
       marker.style.setProperty("--heading", `${position.heading.toFixed(2)}deg`);
+      marker.className = [
+        "tracking-demo-marker",
+        `tracking-demo-marker--${summary.tone}`,
+        summary.isOffRoute ? "tracking-demo-marker--alert" : "",
+        vehicleTrackingDemoState.selectedVehicleId === vehicle.id ? "tracking-demo-marker--selected" : ""
+      ].filter(Boolean).join(" ");
     }
 
     const speedNode = document.querySelector(`[data-tracking-demo-speed="${CSS.escape(vehicle.id)}"]`);
     if (speedNode) {
       speedNode.textContent = `${position.speedKmh} km/h`;
     }
+
+    const statusNode = document.querySelector(`[data-tracking-demo-status="${CSS.escape(vehicle.id)}"]`);
+    if (statusNode) {
+      statusNode.textContent = summary.statusLabel;
+      statusNode.className = `tracking-status tracking-status--${summary.tone}`;
+    }
+
+    const deviationNode = document.querySelector(`[data-tracking-demo-deviation="${CSS.escape(vehicle.id)}"]`);
+    if (deviationNode) {
+      deviationNode.textContent = summary.isOffRoute ? `Odchylka ${summary.deviationText}` : "Odchylka 0 m";
+    }
+
+    const cardNode = document.querySelector(`[data-tracking-demo-card="${CSS.escape(vehicle.id)}"]`);
+    if (cardNode) {
+      cardNode.classList.toggle("tracking-demo-vehicle-card--alert", summary.isOffRoute);
+      cardNode.classList.toggle("tracking-demo-vehicle-card--selected", vehicleTrackingDemoState.selectedVehicleId === vehicle.id);
+    }
   }
+
+  const selectedVehicle = vehicleTrackingDemoSelectedVehicle();
+  if (selectedVehicle) {
+    const selectedSummary = vehicleTrackingDemoVehicleSummary(selectedVehicle, elapsedMs);
+    const selectedPosition = vehicleTrackingDemoPosition(selectedVehicle, elapsedMs);
+    const detailStatus = document.querySelector("[data-tracking-demo-detail-status]");
+    if (detailStatus) {
+      detailStatus.textContent = selectedSummary.statusLabel;
+      detailStatus.className = `tracking-status tracking-status--${selectedSummary.tone}`;
+    }
+    document.querySelector("[data-tracking-demo-detail-status-text]")?.replaceChildren(document.createTextNode(selectedSummary.statusLabel));
+    document.querySelector("[data-tracking-demo-detail-speed]")?.replaceChildren(document.createTextNode(`${selectedPosition.speedKmh} km/h`));
+    document.querySelector("[data-tracking-demo-detail-deviation]")?.replaceChildren(document.createTextNode(selectedSummary.deviationText));
+    const detailAlert = document.querySelector("[data-tracking-demo-detail-alert]");
+    if (detailAlert) {
+      detailAlert.hidden = !selectedSummary.isOffRoute;
+    }
+  }
+
+  syncVehicleTrackingGoogleMap(elapsedMs);
+  playVehicleTrackingDemoAlertSound(elapsedMs);
 }
 
 function vehicleTrackingDemoFrame(now = vehicleTrackingDemoCurrentTime()) {
@@ -6538,6 +7106,7 @@ function syncVehicleTrackingDemoRuntime() {
   const isTrackingPage = normalizePath(window.location.pathname).startsWith(VEHICLE_TRACKING_BASE_ROUTE);
   if (!isTrackingPage || !document.querySelector("[data-tracking-demo-map]")) {
     stopVehicleTrackingDemoRuntime();
+    clearVehicleTrackingGoogleMap();
     return;
   }
 
@@ -6570,7 +7139,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">SMART ODPADY / SLEDOVÁNÍ VOZIDEL</div>
           <h1 id="module-title">Sledování vozidel</h1>
-          <p>Demo ukazuje budoucí mapový pohled, seznam vozidel a detail bez reálných GPS dat.</p>
+          <p>Demo ukazuje Google mapu, plánované trasy, odchylku KS 204 a dispečerský alert bez reálných GPS dat.</p>
           <div class="module-detail__status">
             <span>Stav</span>
             <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>

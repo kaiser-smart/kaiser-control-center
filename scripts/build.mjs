@@ -12,6 +12,12 @@ const template = await readFile(path.join(root, "index.html"), "utf8");
 const buildMeta = await resolveBuildMeta(root);
 const assetVersion = encodeURIComponent(buildMeta.version || buildMeta.commit || buildMeta.backupDate || String(Date.now()));
 
+function runtimeConfigModuleSource(env = process.env) {
+  return `export const runtimeConfig = ${JSON.stringify({
+    googleMapsApiKey: env.VITE_GOOGLE_MAPS_API_KEY || ""
+  }, null, 2)};\n`;
+}
+
 function versionedTemplate() {
   return template
     .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
@@ -66,6 +72,10 @@ await copyDir(src, path.join(dist, "src"));
 await writeFile(
   path.join(dist, "src/data/buildMeta.js"),
   buildMetaModuleSource(buildMeta)
+);
+await writeFile(
+  path.join(dist, "src/data/runtimeConfig.js"),
+  runtimeConfigModuleSource()
 );
 if (await fileExists(publicDir)) {
   await copyDir(publicDir, dist);

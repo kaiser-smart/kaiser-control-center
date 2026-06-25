@@ -67,6 +67,12 @@ const contentTypes = new Map([
   [".svg", "image/svg+xml"]
 ]);
 
+function runtimeConfigModuleSource(env = process.env) {
+  return `export const runtimeConfig = ${JSON.stringify({
+    googleMapsApiKey: env.VITE_GOOGLE_MAPS_API_KEY || ""
+  }, null, 2)};\n`;
+}
+
 function isPortFree(port) {
   return new Promise((resolve) => {
     const tester = net
@@ -2777,6 +2783,14 @@ async function sendBuildMetaModule(response) {
   response.end(buildMetaModuleSource(await resolveBuildMeta(root)));
 }
 
+function sendRuntimeConfigModule(response) {
+  response.writeHead(200, {
+    "Content-Type": "text/javascript; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  response.end(runtimeConfigModuleSource());
+}
+
 const server = createServer(async (request, response) => {
   if (await handleApi(request, response)) {
     return;
@@ -2785,6 +2799,11 @@ const server = createServer(async (request, response) => {
   const requestPath = new URL(request.url || "/", "http://localhost").pathname;
   if (requestPath === "/src/data/buildMeta.js") {
     await sendBuildMetaModule(response);
+    return;
+  }
+
+  if (requestPath === "/src/data/runtimeConfig.js") {
+    sendRuntimeConfigModule(response);
     return;
   }
 
