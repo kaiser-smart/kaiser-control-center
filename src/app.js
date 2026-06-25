@@ -9411,6 +9411,17 @@ function handleVehicleTrackingTcarsSelect(locationId, options = {}) {
   queueVehicleTrackingTcarsGoogleSync({ focusSelected: options.focusMap !== false });
 }
 
+function handleVehicleTrackingTcarsSelectEvent(event) {
+  const trackingTcarsSelect = event.target?.closest?.("[data-tracking-tcars-select]");
+  if (!trackingTcarsSelect) {
+    return false;
+  }
+
+  event.preventDefault();
+  handleVehicleTrackingTcarsSelect(trackingTcarsSelect.dataset.trackingTcarsSelect || "");
+  return true;
+}
+
 function resetAssistantPromoState() {
   Object.assign(assistantPromoState, assistantPromoDefaultState);
 }
@@ -12657,6 +12668,10 @@ document.addEventListener("error", (event) => {
   render();
 }, true);
 
+document.addEventListener("pointerup", (event) => {
+  handleVehicleTrackingTcarsSelectEvent(event);
+}, true);
+
 document.addEventListener("click", async (event) => {
   const trackingSourceMode = event.target.closest("[data-tracking-source-mode]");
   if (trackingSourceMode) {
@@ -12686,10 +12701,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  const trackingTcarsSelect = event.target.closest("[data-tracking-tcars-select]");
-  if (trackingTcarsSelect) {
-    event.preventDefault();
-    handleVehicleTrackingTcarsSelect(trackingTcarsSelect.dataset.trackingTcarsSelect || "");
+  if (handleVehicleTrackingTcarsSelectEvent(event)) {
     return;
   }
 
