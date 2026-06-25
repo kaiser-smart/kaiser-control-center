@@ -729,7 +729,12 @@ const vehicleTrackingLiveState = {
   loading: false,
   error: "",
   status: null,
-  selectedLocationId: ""
+  selectedLocationId: "",
+  googleMapNode: null,
+  googleMap: null,
+  googleMarkers: new Map(),
+  googleBoundsKey: "",
+  googleFocusedLocationId: ""
 };
 
 let vehicleTrackingAudioContext = null;
@@ -6972,8 +6977,11 @@ function vehicleTrackingDetailSection(selectedVehicle) {
   `;
 }
 
+const VEHICLE_TRACKING_TCARS_MAX_GPS_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 function vehicleTrackingTcarsConfigItems(status = {}) {
   const config = status.config || {};
+  const locationGroups = vehicleTrackingTcarsLocationGroups(status);
   return [
     { label: "T-Cars konfigurace", value: status.configured ? "Nastavená" : "Čeká na Cloudflare Secrets" },
     { label: "API URL", value: config.baseUrl || "https://webservice.t-cars.cz/v2/" },
@@ -6982,8 +6990,9 @@ function vehicleTrackingTcarsConfigItems(status = {}) {
     { label: "Přístupy", value: config.hasCredentials ? "Uloženo v Cloudflare" : "Čeká na TCARS_USERNAME / TCARS_PASSWORD nebo TCARS_API_TOKEN" },
     { label: "API režim", value: config.apiMode || "Čeká na TCARS_API_MODE" },
     { label: "API dokumentace", value: config.documentationStatus === "verified-wsdl" ? "WSDL ověřeno" : "Chybí" },
-    { label: "Načtená vozidla", value: String(status.vehicles?.length || 0) },
-    { label: "Aktuální polohy", value: String(status.locations?.length || 0) },
+    { label: "Načtená vozidla", value: String(locationGroups.vehicleCount) },
+    { label: "Aktuální polohy", value: String(locationGroups.validLocations.length) },
+    { label: "Bez validní polohy", value: String(locationGroups.invalidVehicles.length) },
     { label: "Poslední načtení", value: status.lastFetchedAt ? formatDateTime(status.lastFetchedAt) : "Zatím neproběhlo" },
     { label: "Interval načítání", value: `${status.pollIntervalSeconds || 60} s` },
     { label: "Zdroj", value: status.source || "T-Cars jednotka" }
@@ -7019,19 +7028,146 @@ function vehicleTrackingTcarsLocationId(location = {}, index = 0) {
   );
 }
 
+function vehicleTrackingTcarsVehicleKey(item = {}) {
+  const vehicle = item.vehicle || {};
+  return String(
+    item.externalVehicleId
+      || item.tcarsVehicleId
+      || item.vehicleId
+      || item.vehicle_id
+      || item.licensePlate
+      || item.internalNumber
+      || vehicle.externalVehicleId
+      || vehicle.tcarsVehicleId
+      || vehicle.vehicleId
+      || vehicle.licensePlate
+      || vehicle.internalNumber
+      || item.id
+      || vehicle.id
+      || ""
+  ).trim().toLowerCase();
+}
+
+function vehicleTrackingTcarsGpsDateValue(location = {}) {
+  return location.lastGpsAt
+    || location.gpsAt
+    || location.positionAt
+    || location.updatedAt
+    || location.receivedAt
+    || "";
+}
+
+function vehicleTrackingTcarsGpsDate(location = {}) {
+  const value = vehicleTrackingTcarsGpsDateValue(location);
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function vehicleTrackingTcarsInvalidReason(location = {}) {
+  const latitude = vehicleTrackingCoordinateValue(location.latitude);
+  const longitude = vehicleTrackingCoordinateValue(location.longitude);
+
+  if (latitude === null || longitude === null) {
+    return "Neplatná poloha z T-Cars";
+  }
+
+  if (latitude === 0 || longitude === 0) {
+    return "Neplatná poloha z T-Cars";
+  }
+
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+    return "Neplatná poloha z T-Cars";
+  }
+
+  const gpsDate = vehicleTrackingTcarsGpsDate(location);
+  if (!gpsDate) {
+    return "Neplatná poloha z T-Cars";
+  }
+
+  if (gpsDate.getFullYear() <= 1900) {
+    return "Neplatná poloha z T-Cars";
+  }
+
+  if (Date.now() - gpsDate.getTime() > VEHICLE_TRACKING_TCARS_MAX_GPS_AGE_MS) {
+    return "Neplatná poloha z T-Cars";
+  }
+
+  return "";
+}
+
 function vehicleTrackingTcarsLocations(status = {}) {
   return (Array.isArray(status.locations) ? status.locations : [])
     .map((location, index) => {
       const latitude = vehicleTrackingCoordinateValue(location.latitude);
       const longitude = vehicleTrackingCoordinateValue(location.longitude);
-      return {
+      const normalizedLocation = {
         ...location,
         latitude,
         longitude,
-        _locationId: vehicleTrackingTcarsLocationId(location, index)
+        _locationId: vehicleTrackingTcarsLocationId(location, index),
+        _vehicleKey: vehicleTrackingTcarsVehicleKey(location)
       };
-    })
-    .filter((location) => location.latitude !== null && location.longitude !== null);
+      return {
+        ...normalizedLocation,
+        _invalidReason: vehicleTrackingTcarsInvalidReason(normalizedLocation)
+      };
+    });
+}
+
+function vehicleTrackingTcarsVehicleList(status = {}) {
+  return Array.isArray(status.vehicles) ? status.vehicles : [];
+}
+
+function vehicleTrackingTcarsInvalidVehicleEntry(vehicle = {}, invalidLocation = null, index = 0) {
+  const merged = {
+    ...(invalidLocation || {}),
+    vehicle,
+    internalNumber: invalidLocation?.internalNumber || vehicle.internalNumber || vehicle.licensePlate || "",
+    licensePlate: invalidLocation?.licensePlate || vehicle.licensePlate || "",
+    lastGpsAt: invalidLocation?.lastGpsAt || invalidLocation?.updatedAt || invalidLocation?.receivedAt || vehicle.lastGpsAt || vehicle.updatedAt || "",
+    _invalidId: `invalid-${vehicleTrackingTcarsVehicleKey(vehicle) || index}`,
+    _invalidReason: invalidLocation?._invalidReason || "Neplatná poloha z T-Cars"
+  };
+  return merged;
+}
+
+function vehicleTrackingTcarsLocationGroups(status = {}) {
+  const allLocations = vehicleTrackingTcarsLocations(status);
+  const validLocations = allLocations.filter((location) => !location._invalidReason);
+  const invalidLocations = allLocations.filter((location) => location._invalidReason);
+  const vehicles = vehicleTrackingTcarsVehicleList(status);
+  const validVehicleKeys = new Set(validLocations.map((location) => location._vehicleKey).filter(Boolean));
+  const invalidLocationByVehicle = new Map();
+
+  for (const location of invalidLocations) {
+    if (location._vehicleKey && !invalidLocationByVehicle.has(location._vehicleKey)) {
+      invalidLocationByVehicle.set(location._vehicleKey, location);
+    }
+  }
+
+  const invalidVehicles = vehicles.length
+    ? vehicles
+      .map((vehicle, index) => {
+        const vehicleKey = vehicleTrackingTcarsVehicleKey(vehicle);
+        if (vehicleKey && validVehicleKeys.has(vehicleKey)) {
+          return null;
+        }
+        return vehicleTrackingTcarsInvalidVehicleEntry(vehicle, invalidLocationByVehicle.get(vehicleKey), index);
+      })
+      .filter(Boolean)
+    : invalidLocations.map((location, index) => vehicleTrackingTcarsInvalidVehicleEntry(location.vehicle || location, location, index));
+
+  return {
+    allLocations,
+    invalidLocations,
+    invalidVehicles,
+    validLocations,
+    vehicleCount: vehicles.length || allLocations.length
+  };
 }
 
 function vehicleTrackingTcarsMapBounds(locations = []) {
@@ -7132,15 +7268,13 @@ function vehicleTrackingTcarsLocationDetail(location = null) {
   if (!location) {
     return `
       <div class="tracking-tcars-location-detail tracking-tcars-location-detail--empty">
-        <strong>Čekám na T-Cars polohu.</strong>
-        <span>Jakmile backend vrátí GPS souřadnice, zobrazí se zde detail vybraného vozidla.</span>
+        <strong>Nejsou dostupné žádné validní GPS polohy.</strong>
+        <span>Mapa zůstává centrovaná na Brno a neplatné T-Cars polohy jsou oddělené mimo mapu.</span>
       </div>
     `;
   }
 
   const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
-  const statusKey = vehicleTrackingMarkerStatusKey(markerVehicle.status);
-  const statusLabel = vehicleTrackingStatusLabel(statusKey);
   const speedValue = Number(location.speedKmh);
   const speed = location.speedKmh !== null && location.speedKmh !== undefined && location.speedKmh !== "" && Number.isFinite(speedValue)
     ? `${speedValue} km/h`
@@ -7154,39 +7288,88 @@ function vehicleTrackingTcarsLocationDetail(location = null) {
           <strong>${escapeHtml(markerVehicle.internalNumber || markerVehicle.licensePlate || "T-Cars vozidlo")}</strong>
           <span>${escapeHtml(markerVehicle.licensePlate || "SPZ neuvedena")}</span>
         </div>
-        <span class="tracking-status tracking-status--${escapeHtml(vehicleTrackingMarkerTone(statusKey))}">${escapeHtml(statusLabel)}</span>
+        <span class="tracking-status tracking-status--moving">Validní poloha</span>
       </div>
       <div class="tracking-detail-grid tracking-detail-grid--compact">
         ${vehicleTrackingDemoDetailField("Rychlost", speed)}
-        ${vehicleTrackingDemoDetailField("Poslední GPS", vehicleTrackingSafeDateTime(location.lastGpsAt || location.updatedAt || location.receivedAt))}
+        ${vehicleTrackingDemoDetailField("Poslední GPS", vehicleTrackingSafeDateTime(vehicleTrackingTcarsGpsDateValue(location)))}
         ${vehicleTrackingDemoDetailField("Adresa", location.address || "neuvedeno")}
         ${vehicleTrackingDemoDetailField("Souřadnice", coordinates)}
         ${vehicleTrackingDemoDetailField("GPS jednotka", location.gpsUnitId || location.externalUnitId || "neuvedeno")}
+        ${vehicleTrackingDemoDetailField("Stav GPS", "Validní poloha")}
         ${vehicleTrackingDemoDetailField("Zdroj", location.source || "T-Cars jednotka")}
       </div>
     </div>
   `;
 }
 
+function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false) {
+  const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
+  const label = vehicleTrackingMarkerLabel(markerVehicle, "TC").slice(0, 10);
+  const title = markerVehicle.internalNumber || markerVehicle.licensePlate || "T-Cars vozidlo";
+
+  return `
+    <span class="tracking-tcars-google-pin ${selected ? "tracking-tcars-google-pin--selected" : ""}" title="${escapeHtml(title)}">
+      <strong>${escapeHtml(label)}</strong>
+      <span>Validní poloha</span>
+    </span>
+  `;
+}
+
+function vehicleTrackingTcarsInvalidSection(invalidVehicles = []) {
+  if (!invalidVehicles.length) {
+    return "";
+  }
+
+  return `
+    <section class="tracking-tcars-invalid" aria-labelledby="tracking-tcars-invalid-title">
+      <div class="tracking-tcars-invalid__head">
+        <div>
+          <h4 id="tracking-tcars-invalid-title">Vozidla bez aktuální polohy</h4>
+          <p>Neplatné T-Cars polohy nejsou vykreslené jako běžné markery.</p>
+        </div>
+        <span>${escapeHtml(`${invalidVehicles.length} vozidel`)}</span>
+      </div>
+      <div class="tracking-tcars-invalid-list">
+        ${invalidVehicles.map((item) => {
+          const markerVehicle = vehicleTrackingTcarsMarkerVehicle(item);
+          return `
+            <article class="tracking-tcars-invalid-card">
+              <div>
+                <strong>${escapeHtml(markerVehicle.internalNumber || markerVehicle.licensePlate || "T-Cars vozidlo")}</strong>
+                <span>${escapeHtml(markerVehicle.licensePlate || "SPZ neuvedena")}</span>
+              </div>
+              <span class="tracking-status tracking-status--no-signal">Bez signálu</span>
+              <small>Poslední známá poloha: ${escapeHtml(vehicleTrackingSafeDateTime(vehicleTrackingTcarsGpsDateValue(item)))}</small>
+              <small>Důvod: ${escapeHtml(item._invalidReason || "Neplatná poloha z T-Cars")}</small>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function vehicleTrackingTcarsMapSection(status = {}) {
   const loading = vehicleTrackingLiveState.loading && !vehicleTrackingLiveState.loaded;
-  const locations = vehicleTrackingTcarsLocations(status);
-  const bounds = vehicleTrackingTcarsMapBounds(locations);
+  const hasGoogleMapsKey = Boolean(vehicleTrackingDemoGoogleMapsKey());
+  const locationGroups = vehicleTrackingTcarsLocationGroups(status);
+  const locations = locationGroups.validLocations;
   const selectedLocation = vehicleTrackingTcarsSelectedLocation(locations);
 
-  if (!locations.length) {
+  if (loading && !locationGroups.allLocations.length) {
     return `
       <div class="tracking-tcars-live">
         <div class="tracking-tcars-live__head">
           <div>
             <h3>T-Cars mapa vozidel</h3>
-            <p>${escapeHtml(loading ? VEHICLE_TRACKING_LOADING : status.fallback?.message || "T-Cars zatím nevrátil aktuální GPS polohy.")}</p>
+            <p>${escapeHtml(VEHICLE_TRACKING_LOADING)}</p>
           </div>
           <span>Read-only</span>
         </div>
         <div class="tracking-tcars-empty">
-          <strong>Bez aktuálních poloh.</strong>
-          <span>Data se budou zobrazovat pouze z chráněného Smart odpady API. Nic se neukládá lokálně.</span>
+          <strong>Čekám na T-Cars data.</strong>
+          <span>Data se zobrazují pouze z chráněného Smart odpady API. Nic se neukládá lokálně.</span>
         </div>
       </div>
     `;
@@ -7197,53 +7380,62 @@ function vehicleTrackingTcarsMapSection(status = {}) {
       <div class="tracking-tcars-live__head">
         <div>
           <h3>T-Cars mapa vozidel</h3>
-          <p>Reálné polohy z T-Cars jsou vykreslené read-only. Klik na marker vybere vozidlo.</p>
+          <p>Reálné validní polohy z T-Cars jsou vykreslené read-only nad Google mapou. Klik na marker nebo položku vybere vozidlo.</p>
         </div>
-        <span>${escapeHtml(`${locations.length} poloh`)}</span>
+        <span>${escapeHtml(`${locations.length} validních`)}</span>
       </div>
-      <div class="tracking-map-shell tracking-tcars-map" aria-label="Mapa T-Cars vozidel">
-        ${locations.map((location, index) => {
-          const position = vehicleTrackingTcarsMapPosition(location, bounds);
-          const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
-          const selected = selectedLocation?._locationId === location._locationId;
-          return `
-            <button
-              class="tracking-tcars-marker ${selected ? "tracking-tcars-marker--selected" : ""}"
-              type="button"
-              style="--x: ${position.x.toFixed(2)}%; --y: ${position.y.toFixed(2)}%;"
-              data-tracking-tcars-select="${escapeHtml(location._locationId)}"
-              aria-label="${escapeHtml(`Vybrat vozidlo ${markerVehicle.internalNumber || markerVehicle.licensePlate || index + 1}`)}"
-            >
-              ${vehicleTrackingMarkerContent(markerVehicle, {
-                heading: markerVehicle.heading,
-                label: vehicleTrackingMarkerLabel(markerVehicle),
-                selected,
-                status: markerVehicle.status,
-                statusLabel: vehicleTrackingStatusLabel(vehicleTrackingMarkerStatusKey(markerVehicle.status)),
-                tone: vehicleTrackingMarkerTone(markerVehicle.status)
-              })}
-            </button>
-          `;
-        }).join("")}
+      <div
+        class="tracking-tcars-map-summary"
+        data-tracking-tcars-total="${escapeHtml(locationGroups.vehicleCount)}"
+        data-tracking-tcars-valid="${escapeHtml(locations.length)}"
+        data-tracking-tcars-invalid="${escapeHtml(locationGroups.invalidVehicles.length)}"
+      >
+        <span>Načtená vozidla: ${escapeHtml(locationGroups.vehicleCount)}</span>
+        <span>Aktuální polohy: ${escapeHtml(locations.length)}</span>
+        <span>Bez validní polohy: ${escapeHtml(locationGroups.invalidVehicles.length)}</span>
       </div>
+      ${hasGoogleMapsKey ? `
+        <div class="tracking-tcars-map-layout">
+          <div class="tracking-map-shell tracking-tcars-map tracking-tcars-map--google" aria-label="Google mapa T-Cars vozidel">
+            <div class="tracking-google-map tracking-tcars-google-map" data-tracking-tcars-google-map aria-label="Google mapa T-Cars poloh"></div>
+            ${locations.length ? "" : `
+              <div class="tracking-tcars-map-overlay" role="status">
+                <strong>Nejsou dostupné žádné validní GPS polohy.</strong>
+                <span>Mapa je centrovaná na Brno.</span>
+              </div>
+            `}
+          </div>
+          <div class="tracking-tcars-location-list" aria-label="Seznam validních T-Cars poloh">
+            ${locations.length ? locations.map((location) => {
+              const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
+              const selected = selectedLocation?._locationId === location._locationId;
+              return `
+                <button
+                  class="tracking-tcars-location-card ${selected ? "tracking-tcars-location-card--selected" : ""}"
+                  type="button"
+                  data-tracking-tcars-select="${escapeHtml(location._locationId)}"
+                >
+                  <strong>${escapeHtml(markerVehicle.internalNumber || markerVehicle.licensePlate || "T-Cars vozidlo")}</strong>
+                  <span>${escapeHtml(markerVehicle.licensePlate || location.address || "Bez SPZ")}</span>
+                  <small>Validní poloha · ${escapeHtml(vehicleTrackingSafeDateTime(vehicleTrackingTcarsGpsDateValue(location)))}</small>
+                </button>
+              `;
+            }).join("") : `
+              <div class="tracking-tcars-empty">
+                <strong>Bez validních markerů.</strong>
+                <span>Nejsou dostupné žádné validní GPS polohy.</span>
+              </div>
+            `}
+          </div>
+        </div>
+      ` : `
+        <div class="tracking-tcars-map-fallback" role="status">
+          <strong>Čeká na Google Maps API key.</strong>
+          <span>Po nastavení klíče se zde zobrazí Google mapa.</span>
+        </div>
+      `}
       ${vehicleTrackingTcarsLocationDetail(selectedLocation)}
-      <div class="tracking-tcars-location-list" aria-label="Seznam T-Cars poloh">
-        ${locations.map((location) => {
-          const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
-          const selected = selectedLocation?._locationId === location._locationId;
-          return `
-            <button
-              class="tracking-tcars-location-card ${selected ? "tracking-tcars-location-card--selected" : ""}"
-              type="button"
-              data-tracking-tcars-select="${escapeHtml(location._locationId)}"
-            >
-              <strong>${escapeHtml(markerVehicle.internalNumber || markerVehicle.licensePlate || "T-Cars vozidlo")}</strong>
-              <span>${escapeHtml(markerVehicle.licensePlate || location.address || "Bez SPZ")}</span>
-              <small>${escapeHtml(vehicleTrackingStatusLabel(vehicleTrackingMarkerStatusKey(markerVehicle.status)))} · ${escapeHtml(vehicleTrackingSafeDateTime(location.lastGpsAt || location.updatedAt || location.receivedAt))}</small>
-            </button>
-          `;
-        }).join("")}
-      </div>
+      ${vehicleTrackingTcarsInvalidSection(locationGroups.invalidVehicles)}
     </div>
   `;
 }
@@ -7255,6 +7447,7 @@ function vehicleTrackingTcarsStatusSection() {
   const message = error || status.message || VEHICLE_TRACKING_TCAR_WAITING;
   const badge = status.configured ? "T-CARS" : "Čeká na konfiguraci";
   const itemRows = vehicleTrackingTcarsConfigItems(status);
+  const locationGroups = vehicleTrackingTcarsLocationGroups(status);
 
   return `
     <section class="tracking-section tracking-tcars-section" id="tracking-tcars-status" aria-labelledby="tracking-tcars-status-title">
@@ -7276,7 +7469,7 @@ function vehicleTrackingTcarsStatusSection() {
       <div class="tracking-tcars-mode-grid">
         <article>
           <h3>T-Cars data</h3>
-          <p>${escapeHtml(status.apiStatus === "ready" ? `Načteno vozidel: ${status.vehicles?.length || 0}, aktuálních poloh: ${status.locations?.length || 0}.` : status.configured ? "Čeká na úspěšné read-only načtení T-Cars." : VEHICLE_TRACKING_TCAR_WAITING)}</p>
+          <p>${escapeHtml(status.apiStatus === "ready" ? `Načteno vozidel: ${locationGroups.vehicleCount}, validních poloh: ${locationGroups.validLocations.length}, bez validní polohy: ${locationGroups.invalidVehicles.length}.` : status.configured ? "Čeká na úspěšné read-only načtení T-Cars." : VEHICLE_TRACKING_TCAR_WAITING)}</p>
         </article>
         <article>
           <h3>Fallback</h3>
@@ -7793,6 +7986,196 @@ function focusVehicleTrackingGoogleMapOnVehicle(vehicleId) {
   map.setZoom(Math.max(map.getZoom() || 12, 14));
 }
 
+function createVehicleTrackingTcarsGoogleMarker(maps, map, location) {
+  class VehicleTrackingTcarsMarker extends maps.OverlayView {
+    constructor(initialLocation) {
+      super();
+      this.location = initialLocation;
+      this.selected = false;
+      this.div = null;
+      this.setMap(map);
+    }
+
+    onAdd() {
+      this.div = document.createElement("button");
+      this.div.type = "button";
+      this.div.className = "tracking-tcars-google-marker";
+      this.div.dataset.trackingTcarsSelect = this.location._locationId;
+      this.div.dataset.trackingTcarsGoogleMarker = this.location._locationId;
+      this.div.addEventListener("click", () => handleVehicleTrackingTcarsSelect(this.location._locationId, { focusMap: true }));
+      this.updateContent();
+      this.getPanes().overlayMouseTarget.appendChild(this.div);
+    }
+
+    draw() {
+      if (!this.div) {
+        return;
+      }
+      const projection = this.getProjection();
+      const point = projection.fromLatLngToDivPixel(new maps.LatLng(this.location.latitude, this.location.longitude));
+      const markerVehicle = vehicleTrackingTcarsMarkerVehicle(this.location);
+      this.div.style.left = `${point.x}px`;
+      this.div.style.top = `${point.y}px`;
+      this.div.style.setProperty("--heading", `${markerVehicle.heading.toFixed(2)}deg`);
+      this.div.className = [
+        "tracking-tcars-google-marker",
+        this.selected ? "tracking-tcars-google-marker--selected" : ""
+      ].filter(Boolean).join(" ");
+    }
+
+    onRemove() {
+      this.div?.remove();
+      this.div = null;
+    }
+
+    updateContent() {
+      if (!this.div) {
+        return;
+      }
+      const markerVehicle = vehicleTrackingTcarsMarkerVehicle(this.location);
+      const label = markerVehicle.internalNumber || markerVehicle.licensePlate || this.location._locationId;
+      this.div.setAttribute("aria-label", `Vybrat vozidlo ${label}`);
+      this.div.dataset.trackingTcarsSelect = this.location._locationId;
+      this.div.dataset.trackingTcarsGoogleMarker = this.location._locationId;
+      this.div.innerHTML = vehicleTrackingTcarsGoogleMarkerContent(this.location, this.selected);
+    }
+
+    update(location, selected) {
+      this.location = location;
+      this.selected = selected;
+      this.updateContent();
+      this.draw();
+    }
+  }
+
+  return new VehicleTrackingTcarsMarker(location);
+}
+
+function clearVehicleTrackingTcarsGoogleMap() {
+  vehicleTrackingLiveState.googleMarkers.forEach((marker) => marker.setMap(null));
+  vehicleTrackingLiveState.googleMarkers.clear();
+  vehicleTrackingLiveState.googleMap = null;
+  vehicleTrackingLiveState.googleMapNode = null;
+  vehicleTrackingLiveState.googleBoundsKey = "";
+  vehicleTrackingLiveState.googleFocusedLocationId = "";
+}
+
+function initializeVehicleTrackingTcarsGoogleMap(maps, node) {
+  if (vehicleTrackingLiveState.googleMap && vehicleTrackingLiveState.googleMapNode === node) {
+    return vehicleTrackingLiveState.googleMap;
+  }
+
+  clearVehicleTrackingTcarsGoogleMap();
+  const map = new maps.Map(node, {
+    center: DEMO_VEHICLE_TRACKING_MAP_CENTER,
+    zoom: 11,
+    clickableIcons: false,
+    fullscreenControl: false,
+    mapTypeControl: true,
+    streetViewControl: false
+  });
+
+  vehicleTrackingLiveState.googleMap = map;
+  vehicleTrackingLiveState.googleMapNode = node;
+  return map;
+}
+
+function vehicleTrackingTcarsBoundsKey(locations = []) {
+  return locations
+    .map((location) => `${location._locationId}:${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`)
+    .sort()
+    .join("|");
+}
+
+function fitVehicleTrackingTcarsGoogleMap(maps, map, locations = []) {
+  if (!locations.length) {
+    map.setCenter(DEMO_VEHICLE_TRACKING_MAP_CENTER);
+    map.setZoom(11);
+    return;
+  }
+
+  if (locations.length === 1) {
+    map.setCenter({ lat: locations[0].latitude, lng: locations[0].longitude });
+    map.setZoom(14);
+    return;
+  }
+
+  const bounds = new maps.LatLngBounds();
+  locations.forEach((location) => {
+    bounds.extend({ lat: location.latitude, lng: location.longitude });
+  });
+  map.fitBounds(bounds, 48);
+}
+
+function focusVehicleTrackingTcarsGoogleMap(locationId) {
+  const map = vehicleTrackingLiveState.googleMap;
+  const location = vehicleTrackingTcarsLocationGroups(vehicleTrackingLiveState.status || {})
+    .validLocations
+    .find((item) => item._locationId === locationId);
+
+  if (!map || !location) {
+    return;
+  }
+
+  map.panTo({ lat: location.latitude, lng: location.longitude });
+  map.setZoom(Math.max(map.getZoom() || 11, 15));
+  vehicleTrackingLiveState.googleFocusedLocationId = locationId;
+}
+
+function syncVehicleTrackingTcarsGoogleMap(options = {}) {
+  const node = document.querySelector("[data-tracking-tcars-google-map]");
+  if (!node || !vehicleTrackingDemoGoogleMapsKey()) {
+    clearVehicleTrackingTcarsGoogleMap();
+    return Promise.resolve();
+  }
+
+  return loadVehicleTrackingGoogleMaps()
+    .then((maps) => {
+      const map = initializeVehicleTrackingTcarsGoogleMap(maps, node);
+      const { validLocations } = vehicleTrackingTcarsLocationGroups(vehicleTrackingLiveState.status || {});
+      const activeIds = new Set(validLocations.map((location) => location._locationId));
+      const selectedLocation = vehicleTrackingTcarsSelectedLocation(validLocations);
+
+      vehicleTrackingLiveState.googleMarkers.forEach((marker, markerId) => {
+        if (!activeIds.has(markerId)) {
+          marker.setMap(null);
+          vehicleTrackingLiveState.googleMarkers.delete(markerId);
+        }
+      });
+
+      validLocations.forEach((location) => {
+        const selected = selectedLocation?._locationId === location._locationId;
+        const existingMarker = vehicleTrackingLiveState.googleMarkers.get(location._locationId);
+        if (existingMarker) {
+          existingMarker.update(location, selected);
+          return;
+        }
+        const marker = createVehicleTrackingTcarsGoogleMarker(maps, map, location);
+        marker.update(location, selected);
+        vehicleTrackingLiveState.googleMarkers.set(location._locationId, marker);
+      });
+
+      const boundsKey = vehicleTrackingTcarsBoundsKey(validLocations);
+      const selectedId = selectedLocation?._locationId || "";
+      if (options.focusSelected && selectedId) {
+        focusVehicleTrackingTcarsGoogleMap(selectedId);
+      } else if (options.forceFit || boundsKey !== vehicleTrackingLiveState.googleBoundsKey) {
+        fitVehicleTrackingTcarsGoogleMap(maps, map, validLocations);
+        vehicleTrackingLiveState.googleBoundsKey = boundsKey;
+      }
+    })
+    .catch(() => {
+      clearVehicleTrackingTcarsGoogleMap();
+      vehicleTrackingDemoState.googleMapsStatus = "error";
+    });
+}
+
+function queueVehicleTrackingTcarsGoogleSync(options = {}) {
+  window.requestAnimationFrame(() => {
+    syncVehicleTrackingTcarsGoogleMap(options);
+  });
+}
+
 function stopVehicleTrackingDemoRuntime() {
   if (!vehicleTrackingDemoState.frameId) {
     return;
@@ -7910,6 +8293,9 @@ function syncVehicleTrackingDemoRuntime() {
   if (!isTrackingPage || !document.querySelector("[data-tracking-demo-map]")) {
     stopVehicleTrackingDemoRuntime();
     clearVehicleTrackingGoogleMap();
+    if (!document.querySelector("[data-tracking-tcars-google-map]")) {
+      clearVehicleTrackingTcarsGoogleMap();
+    }
     return;
   }
 
@@ -8837,6 +9223,9 @@ async function loadVehicleTrackingStatus(options = {}) {
 
   if (renderAfter) {
     render();
+    if (vehicleTrackingActiveSourceMode() === "tcars") {
+      queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
+    }
   }
 }
 
@@ -8892,10 +9281,13 @@ function handleVehicleTrackingSourceMode(mode) {
 
   if (mode === "tcars") {
     loadVehicleTrackingStatus();
+    queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
+  } else {
+    clearVehicleTrackingTcarsGoogleMap();
   }
 }
 
-function handleVehicleTrackingTcarsSelect(locationId) {
+function handleVehicleTrackingTcarsSelect(locationId, options = {}) {
   const normalizedId = String(locationId || "").trim();
   if (!normalizedId) {
     return;
@@ -8903,6 +9295,7 @@ function handleVehicleTrackingTcarsSelect(locationId) {
 
   vehicleTrackingLiveState.selectedLocationId = normalizedId;
   render();
+  queueVehicleTrackingTcarsGoogleSync({ focusSelected: options.focusMap !== false });
 }
 
 function resetAssistantPromoState() {
@@ -10144,6 +10537,7 @@ function renderAuthenticatedApp(user) {
     document.title = `${trackingContext.view === "today-trip" ? "Dnešní trasa" : trackingContext.view === "history" ? "Historie jízd" : "Detail sledování vozidla"} | ${APP_NAME}`;
     if (vehicleTrackingActiveSourceMode() === "tcars") {
       loadVehicleTrackingStatus();
+      queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     return;
   }
@@ -10169,6 +10563,7 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === "vehicle-tracking" && vehicleTrackingActiveSourceMode() === "tcars") {
       loadVehicleTrackingStatus();
+      queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     if (moduleItem.id === "fleet") {
       loadFleetVehicles();

@@ -2742,42 +2742,131 @@ h1 {
   text-align: center;
 }
 
-.tracking-tcars-map {
-  min-height: 420px;
-  background:
-    radial-gradient(circle at 22% 28%, rgba(117, 189, 37, 0.15), transparent 20%),
-    radial-gradient(circle at 72% 62%, rgba(68, 117, 142, 0.12), transparent 24%),
-    linear-gradient(90deg, rgba(117, 189, 37, 0.14) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(66, 80, 74, 0.12) 1px, transparent 1px),
-    linear-gradient(135deg, #f8fbf5 0%, #eef5ea 100%);
-  background-size: auto, auto, 58px 58px, 58px 58px, auto;
+.tracking-tcars-map-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
-.tracking-tcars-marker {
-  position: absolute;
-  z-index: 6;
-  left: var(--x);
-  top: var(--y);
+.tracking-tcars-map-summary span {
   display: inline-flex;
-  width: 82px;
-  min-width: 82px;
-  height: 62px;
-  min-height: 62px;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #dfe8d8;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--steel);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.tracking-tcars-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.tracking-tcars-map {
+  min-height: 420px;
+  background: #edf4e8;
+}
+
+.tracking-tcars-map--google {
+  background: #edf4e8;
+}
+
+.tracking-tcars-google-map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.tracking-tcars-map-overlay,
+.tracking-tcars-map-fallback {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #ffd78a;
+  border-radius: 8px;
+  background: #fff7df;
+  color: #715014;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.tracking-tcars-map-overlay {
+  position: absolute;
+  z-index: 3;
+  left: 18px;
+  bottom: 18px;
+  max-width: min(420px, calc(100% - 36px));
+  box-shadow: 0 12px 30px rgba(35, 40, 33, 0.16);
+}
+
+.tracking-tcars-map-fallback strong,
+.tracking-tcars-map-overlay strong {
+  color: #583b08;
+}
+
+.tracking-tcars-google-marker {
+  position: absolute;
+  display: inline-flex;
+  min-width: 64px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   padding: 0;
   transform: translate(-50%, -50%);
   border: 0;
   background: transparent;
-  color: #3f8d1a;
   font: inherit;
   cursor: pointer;
   filter: drop-shadow(0 12px 18px rgba(35, 40, 33, 0.22));
 }
 
-.tracking-tcars-marker--selected {
-  z-index: 8;
+.tracking-tcars-google-marker--selected {
+  z-index: 8 !important;
   transform: translate(-50%, -50%) scale(1.08);
+}
+
+.tracking-tcars-google-pin {
+  display: grid;
+  gap: 2px;
+  min-width: 64px;
+  padding: 7px 9px 9px;
+  border: 2px solid #3f8d1a;
+  border-radius: 999px 999px 999px 4px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1.05;
+  text-align: center;
+  transform: rotate(-12deg);
+  box-shadow: 0 10px 22px rgba(35, 40, 33, 0.2);
+}
+
+.tracking-tcars-google-pin strong,
+.tracking-tcars-google-pin span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transform: rotate(12deg);
+}
+
+.tracking-tcars-google-pin span {
+  color: var(--kaiser-green-dark);
+  font-size: 0.55rem;
+  text-transform: uppercase;
+}
+
+.tracking-tcars-google-pin--selected {
+  border-color: var(--module-accent);
+  box-shadow: 0 0 0 4px rgba(117, 189, 37, 0.22), 0 14px 24px rgba(35, 40, 33, 0.24);
 }
 
 .tracking-tcars-location-detail {
@@ -2833,6 +2922,13 @@ h1 {
   min-width: 0;
 }
 
+.tracking-tcars-map-layout .tracking-tcars-location-list {
+  grid-template-columns: 1fr;
+  align-content: start;
+  max-height: 420px;
+  overflow: auto;
+}
+
 .tracking-tcars-location-card {
   display: grid;
   gap: 4px;
@@ -2879,6 +2975,99 @@ h1 {
   background: #ffffff;
   color: var(--muted);
   font-weight: 850;
+}
+
+.tracking-tcars-invalid {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #ffe0a8;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.tracking-tcars-invalid__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+}
+
+.tracking-tcars-invalid__head h4,
+.tracking-tcars-invalid__head p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-tcars-invalid__head h4 {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.tracking-tcars-invalid__head p {
+  margin-top: 4px;
+  color: #715014;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.tracking-tcars-invalid__head > span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid #ffd78a;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #715014;
+  font-size: 0.76rem;
+  font-weight: 950;
+  text-align: center;
+}
+
+.tracking-tcars-invalid-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.tracking-tcars-invalid-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #ffd78a;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--steel);
+  font-weight: 850;
+}
+
+.tracking-tcars-invalid-card div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tracking-tcars-invalid-card strong,
+.tracking-tcars-invalid-card span,
+.tracking-tcars-invalid-card small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-tcars-invalid-card strong {
+  color: var(--ink);
+}
+
+.tracking-tcars-invalid-card small {
+  color: #715014;
+  line-height: 1.35;
 }
 
 .tracking-icon-spec {
@@ -6556,8 +6745,11 @@ body:has(.ai-assistant-promo-modal) {
   .tracking-detail-grid--compact,
   .tracking-trip-layout,
   .tracking-tcars-mode-grid,
+  .tracking-tcars-map-layout,
   .tracking-tcars-live__head,
   .tracking-tcars-location-list,
+  .tracking-tcars-invalid__head,
+  .tracking-tcars-invalid-list,
   .tracking-icon-spec__head,
   .tracking-icon-spec__grid,
   .tracking-integration-grid {
@@ -6743,6 +6935,9 @@ body:has(.ai-assistant-promo-modal) {
   .tracking-detail-grid--compact,
   .tracking-trip-layout,
   .tracking-tcars-mode-grid,
+  .tracking-tcars-map-layout,
+  .tracking-tcars-invalid__head,
+  .tracking-tcars-invalid-list,
   .tracking-icon-spec__head,
   .tracking-icon-spec__grid,
   .tracking-integration-grid {
@@ -6772,6 +6967,16 @@ body:has(.ai-assistant-promo-modal) {
 
   .tracking-tcars-map {
     min-height: 360px;
+  }
+
+  .tracking-tcars-map-layout .tracking-tcars-location-list {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .tracking-tcars-map-overlay {
+    inset: auto 12px 12px;
+    max-width: none;
   }
 
   .tracking-map-placeholder {
