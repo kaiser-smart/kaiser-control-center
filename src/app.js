@@ -7382,7 +7382,7 @@ function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false
     <span class="tracking-tcars-google-pin ${selected ? "tracking-tcars-google-pin--selected" : ""}" title="${escapeHtml(title)}">
       <span class="tracking-tcars-google-pin__icon" aria-hidden="true">
         <img src="${escapeHtml(VEHICLE_TRACKING_TCARS_MARKER_ICON_SRC)}" alt="" loading="eager" decoding="async" data-tracking-tcars-marker-icon>
-        <span class="tracking-tcars-google-pin__fallback">Vozidlo</span>
+        <span class="tracking-tcars-google-pin__fallback"></span>
       </span>
       <strong>${escapeHtml(displayName)}</strong>
       <span>${escapeHtml(vehicleTrackingTcarsSpeedText(location))}</span>
