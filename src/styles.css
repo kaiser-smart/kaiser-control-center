@@ -712,6 +712,23 @@ h1 {
   line-height: 1.45;
 }
 
+.module-card__cta {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  padding: 0 10px;
+  border: 1px solid rgba(117, 189, 37, 0.34);
+  border-radius: 8px;
+  background: #f1f9eb;
+  color: var(--kaiser-green-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
 .status-badge {
   position: absolute;
   bottom: -6px;
@@ -1312,9 +1329,9 @@ h1 {
   gap: 10px;
 }
 
-.fleet-disabled-action:disabled {
-  cursor: not-allowed;
-  opacity: 0.68;
+.fleet-action-button {
+  cursor: pointer;
+  white-space: normal;
 }
 
 .fleet-detail-shell {

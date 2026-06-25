@@ -156,6 +156,14 @@ const HOME_SUBTITLE = "Provozní systém pro odpady, vozidla a trasy";
 const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
 const FEEDBACK_ROUTE = "/pripominky";
 const FLEET_ROUTE = "/vozovy-park";
+const FLEET_ACTION_WAITING_MESSAGES = {
+  addVehicle: "Čeká na API pro přidání vozidla.",
+  detail: "Čeká na API pro detail vozidla.",
+  defect: "Čeká na API pro evidenci závad.",
+  service: "Čeká na API pro servisní historii.",
+  documents: "Čeká na API pro dokumenty vozidla.",
+  export: "Čeká na API pro export vozového parku."
+};
 const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
 const ABSENCE_ROUTE = "/dovolena-nemoc";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
@@ -635,6 +643,11 @@ const fleetImportPreviewState = {
   error: ""
 };
 
+const fleetUiState = {
+  message: "",
+  error: ""
+};
+
 let lastRenderedUrl = window.location.href;
 
 function escapeHtml(value) {
@@ -773,6 +786,14 @@ function menuModules(user) {
 
 function routeForModuleCard(moduleItem, user) {
   return moduleItem.route;
+}
+
+function moduleCardCta(moduleItem) {
+  if (moduleItem.id !== "fleet") {
+    return "";
+  }
+
+  return '<span class="module-card__cta">Otevřít modul</span>';
 }
 
 function visibleDashboardRoutes(user) {
@@ -3352,6 +3373,7 @@ function homePage(user) {
               <span class="module-card__title">${moduleItem.title}</span>
             </span>
             <span class="module-card__description">${moduleItem.description}</span>
+            ${moduleCardCta(moduleItem)}
           </span>
         </a>
       `
@@ -5562,6 +5584,15 @@ function fleetApiNotice(endpoint) {
   `;
 }
 
+function fleetActionNotice() {
+  if (!fleetUiState.message && !fleetUiState.error) {
+    return "";
+  }
+
+  const className = fleetUiState.error ? "module-feedback__error" : "module-feedback__notice";
+  return `<p class="${className}" role="status">${escapeHtml(fleetUiState.error || fleetUiState.message)}</p>`;
+}
+
 function fleetTabs(activeId) {
   return `
     <nav class="fleet-tabs" aria-label="Menu modulu Vozový park">
@@ -5574,8 +5605,14 @@ function fleetTabs(activeId) {
   `;
 }
 
-function fleetActionButton(label) {
-  return `<button class="secondary-link fleet-disabled-action" type="button" disabled title="${escapeHtml(FLEET_API_WAITING_LABEL)}">${escapeHtml(label)}</button>`;
+function fleetActionButton(label, action, options = {}) {
+  const dataset = [
+    `data-fleet-action="${escapeHtml(action)}"`,
+    options.vehicleId ? `data-fleet-vehicle-id="${escapeHtml(options.vehicleId)}"` : "",
+    options.target ? `data-fleet-target="${escapeHtml(options.target)}"` : ""
+  ].filter(Boolean).join(" ");
+
+  return `<button class="secondary-link fleet-action-button" type="button" ${dataset}>${escapeHtml(label)}</button>`;
 }
 
 function fleetFieldChips(fields) {
@@ -5672,10 +5709,10 @@ function fleetVehiclesSection() {
         </div>
       </div>
       <div class="fleet-actions-preview" aria-label="Akce vozidla">
-        ${fleetActionButton("Detail")}
-        ${fleetActionButton("Upravit")}
-        ${fleetActionButton("Přidat závadu")}
-        ${fleetActionButton("Přidat servis")}
+        ${fleetActionButton("Detail", "detail")}
+        ${fleetActionButton("Přidat závadu", "defect")}
+        ${fleetActionButton("Přidat servis", "service")}
+        ${fleetActionButton("Dokumenty", "documents", { target: "fleet-documents" })}
       </div>
       ${fleetApiNotice("GET /api/vehicles")}
     </section>
@@ -5717,9 +5754,9 @@ function fleetDetailSection(vehicleId = "") {
         </header>
         <div class="fleet-detail-actions">
           ${safeVehicleId ? `<a class="secondary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Zpět na seznam</a>` : ""}
-          ${fleetActionButton("Upravit")}
-          ${fleetActionButton("Přidat závadu")}
-          ${fleetActionButton("Přidat servis")}
+          ${fleetActionButton("Přidat závadu", "defect", { vehicleId: safeVehicleId })}
+          ${fleetActionButton("Přidat servis", "service", { vehicleId: safeVehicleId })}
+          ${fleetActionButton("Dokumenty", "documents", { vehicleId: safeVehicleId, target: "fleet-documents" })}
         </div>
         <div class="fleet-detail-grid">
           <article>
@@ -5817,8 +5854,7 @@ function fleetDocumentsSection() {
         <span>Soubory musí jít přes cloud API a R2, ne přes lokální úložiště prohlížeče.</span>
       </div>
       <div class="fleet-actions-preview">
-        ${fleetActionButton("Nahrát dokument")}
-        ${fleetActionButton("Stáhnout dokument")}
+        ${fleetActionButton("Dokumenty", "documents")}
       </div>
       ${fleetApiNotice("GET /api/vehicles/:id/documents")}
     </section>
@@ -5886,14 +5922,15 @@ function fleetModulePage(moduleItem, user, options = {}) {
             <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
           </div>
           <div class="module-actions">
+            ${isDashboard ? `<a class="primary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Otevřít modul</a>` : ""}
             ${vehicleId ? `<a class="secondary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Seznam vozidel</a>` : ""}
             ${!isDashboard ? `<a class="secondary-link" href="${routeHref(`${FLEET_ROUTE}/dashboard`)}" data-link>Dashboard modulu</a>` : ""}
-            ${fleetActionButton("Přidat vozidlo")}
-            ${fleetActionButton("Export")}
+            ${fleetActionButton("Přidat vozidlo", "addVehicle")}
           </div>
         </div>
       </section>
 
+      ${fleetActionNotice()}
       ${fleetTabs(vehicleId ? "detail" : "dashboard")}
       <div class="fleet-content">
         ${fleetDashboardSection()}
@@ -7102,6 +7139,11 @@ function isAssistantPromoActive(dateString = assistantPromoDateString()) {
   return dateString <= assistantPromoDefaultState.validUntil;
 }
 
+function shouldAutoShowAssistantPromo() {
+  const path = normalizePath(window.location.pathname);
+  return !path.startsWith(FLEET_ROUTE);
+}
+
 function applyAssistantPromoPayload(payload = {}) {
   assistantPromoState.promoKey = String(payload.promoKey || "");
   assistantPromoState.promoDate = String(payload.promoDate || "");
@@ -7132,7 +7174,7 @@ async function loadAssistantPromo(options = {}) {
     const result = await apiJson("/api/sarlota-promo");
     applyAssistantPromoPayload(result);
 
-    if (result.show) {
+    if (result.show && shouldAutoShowAssistantPromo()) {
       assistantPromoState.visible = true;
       assistantPromoState.videoFailed = false;
       aiAssistantState.welcomeVisible = false;
@@ -7147,7 +7189,7 @@ async function loadAssistantPromo(options = {}) {
     assistantPromoState.validUntil = assistantPromoDefaultState.validUntil;
     assistantPromoState.videoUrl = assistantPromoDefaultState.videoUrl;
     assistantPromoState.fallbackImageUrl = assistantPromoDefaultState.fallbackImageUrl;
-    assistantPromoState.visible = isAssistantPromoActive(assistantPromoState.promoDate);
+    assistantPromoState.visible = isAssistantPromoActive(assistantPromoState.promoDate) && shouldAutoShowAssistantPromo();
     assistantPromoState.videoFailed = false;
     if (assistantPromoState.visible) {
       aiAssistantState.welcomeVisible = false;
@@ -7166,7 +7208,7 @@ async function loadAssistantPromo(options = {}) {
 
 function renderAssistantPromoLayer() {
   return AiAssistantPromoModal({
-    visible: assistantPromoState.visible,
+    visible: assistantPromoState.visible && shouldAutoShowAssistantPromo(),
     videoUrl: assistantPromoState.videoUrl,
     fallbackImageUrl: assistantPromoState.fallbackImageUrl,
     videoFailed: assistantPromoState.videoFailed,
@@ -8813,6 +8855,71 @@ function exportFleetImportPreviewCsv() {
   downloadCsv(`vozovy-park-vistos-preview-${date}.csv`, fleetImportPreviewToCsv(fleetImportPreviewState.preview));
 }
 
+function setFleetActionMessage(message) {
+  fleetUiState.message = message;
+  fleetUiState.error = "";
+  render();
+}
+
+function scrollToFleetTarget(targetId) {
+  if (!targetId) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function handleFleetAction(button) {
+  const action = button.dataset.fleetAction || "";
+  const vehicleId = String(button.dataset.fleetVehicleId || "").trim();
+  const target = String(button.dataset.fleetTarget || "").trim();
+
+  if (action === "openModule") {
+    guardedAccessAction(() => navigateToUrl(routeHref(FLEET_ROUTE)));
+    return;
+  }
+
+  if (action === "addVehicle") {
+    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.addVehicle);
+    return;
+  }
+
+  if (action === "detail") {
+    if (vehicleId) {
+      guardedAccessAction(() => navigateToUrl(routeHref(`${FLEET_ROUTE}/${encodeURIComponent(vehicleId)}`)));
+      return;
+    }
+
+    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.detail);
+    return;
+  }
+
+  if (action === "defect") {
+    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.defect);
+    return;
+  }
+
+  if (action === "service") {
+    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.service);
+    return;
+  }
+
+  if (action === "documents") {
+    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.documents);
+    scrollToFleetTarget(target);
+    return;
+  }
+
+  if (action === "export") {
+    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.export);
+    return;
+  }
+
+  setFleetActionMessage("Akce není dostupná.");
+}
+
 async function submitAbsenceRequest(form) {
   const user = currentUser();
   if (!hasPermission(user, "absence", "create")) {
@@ -10171,6 +10278,13 @@ document.addEventListener("error", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const fleetAction = event.target.closest("[data-fleet-action]");
+  if (fleetAction) {
+    event.preventDefault();
+    handleFleetAction(fleetAction);
+    return;
+  }
+
   const aiPromoAction = event.target.closest("[data-ai-promo-action]");
   if (aiPromoAction) {
     const action = aiPromoAction.dataset.aiPromoAction;
