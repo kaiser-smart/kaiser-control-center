@@ -164,6 +164,14 @@ const FLEET_ACTION_WAITING_MESSAGES = {
   documents: "Čeká na API pro dokumenty vozidla.",
   export: "Čeká na API pro export vozového parku."
 };
+const FLEET_TAB_WAITING_MESSAGES = {
+  detail: FLEET_ACTION_WAITING_MESSAGES.detail,
+  terms: "Čeká na API pro termíny vozidel.",
+  defects: FLEET_ACTION_WAITING_MESSAGES.defect,
+  service: FLEET_ACTION_WAITING_MESSAGES.service,
+  documents: FLEET_ACTION_WAITING_MESSAGES.documents,
+  settings: "Čeká na API pro nastavení vozového parku."
+};
 const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
 const ABSENCE_ROUTE = "/dovolena-nemoc";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
@@ -5575,10 +5583,10 @@ function fleetSectionHeader(id, title, subtitle = "", options = {}) {
   `;
 }
 
-function fleetApiNotice(endpoint) {
+function fleetApiNotice(endpoint, message = FLEET_API_MISSING_MESSAGE) {
   return `
     <p class="fleet-api-note">
-      ${escapeHtml(FLEET_API_MISSING_MESSAGE)}
+      ${escapeHtml(message)}
       ${endpoint ? `<span>Chybí: ${escapeHtml(endpoint)}</span>` : ""}
     </p>
   `;
@@ -5593,11 +5601,48 @@ function fleetActionNotice() {
   return `<p class="${className}" role="status">${escapeHtml(fleetUiState.error || fleetUiState.message)}</p>`;
 }
 
+function isFleetTabId(tabId) {
+  return FLEET_REQUIRED_SECTIONS.some((section) => section.id === tabId);
+}
+
+function fleetTabFromHash(hash = window.location.hash) {
+  const match = String(hash || "").match(/^#fleet-([a-z-]+)$/);
+  const tabId = match ? match[1] : "";
+  return isFleetTabId(tabId) ? tabId : "";
+}
+
+function fleetActiveTab(vehicleId = "") {
+  return fleetTabFromHash() || (vehicleId ? "detail" : "dashboard");
+}
+
+function fleetTabHref(tabId) {
+  const baseUrl = `${window.location.pathname}${window.location.search}`;
+  return `${baseUrl}#fleet-${encodeURIComponent(tabId)}`;
+}
+
+function fleetPanelAttributes(tabId, activeId) {
+  const isActive = tabId === activeId;
+  return [
+    `data-fleet-panel="${escapeHtml(tabId)}"`,
+    `role="tabpanel"`,
+    `tabindex="0"`,
+    isActive ? "" : "hidden",
+    isActive ? "" : `aria-hidden="true"`
+  ].filter(Boolean).join(" ");
+}
+
 function fleetTabs(activeId) {
   return `
-    <nav class="fleet-tabs" aria-label="Menu modulu Vozový park">
+    <nav class="fleet-tabs" aria-label="Menu modulu Vozový park" role="tablist">
       ${FLEET_REQUIRED_SECTIONS.map((section) => `
-        <a class="fleet-tab ${section.id === activeId ? "fleet-tab--active" : ""}" href="#fleet-${escapeHtml(section.id)}">
+        <a
+          class="fleet-tab ${section.id === activeId ? "fleet-tab--active" : ""}"
+          href="${escapeHtml(fleetTabHref(section.id))}"
+          role="tab"
+          aria-selected="${section.id === activeId ? "true" : "false"}"
+          aria-controls="fleet-${escapeHtml(section.id)}"
+          data-fleet-tab="${escapeHtml(section.id)}"
+        >
           ${escapeHtml(section.label)}
         </a>
       `).join("")}
@@ -5623,9 +5668,9 @@ function fleetFieldChips(fields) {
   `;
 }
 
-function fleetDashboardSection() {
+function fleetDashboardSection(activeId) {
   return `
-    <section class="fleet-section" id="fleet-dashboard" aria-labelledby="fleet-dashboard-title">
+    <section class="fleet-section" id="fleet-dashboard" aria-labelledby="fleet-dashboard-title" ${fleetPanelAttributes("dashboard", activeId)}>
       ${fleetSectionHeader(
         "fleet-dashboard-title",
         "Dashboard",
@@ -5689,9 +5734,9 @@ function fleetFiltersSection() {
   `;
 }
 
-function fleetVehiclesSection() {
+function fleetVehiclesSection(activeId) {
   return `
-    <section class="fleet-section" id="fleet-vehicles" aria-labelledby="fleet-vehicles-title">
+    <section class="fleet-section" id="fleet-vehicles" aria-labelledby="fleet-vehicles-title" ${fleetPanelAttributes("vehicles", activeId)}>
       ${fleetSectionHeader(
         "fleet-vehicles-title",
         "Seznam vozidel",
@@ -5719,12 +5764,12 @@ function fleetVehiclesSection() {
   `;
 }
 
-function fleetDetailSection(vehicleId = "") {
+function fleetDetailSection(vehicleId = "", activeId = "detail") {
   const safeVehicleId = vehicleId || "";
   const detailTitle = safeVehicleId ? `Detail vozidla ${safeVehicleId}` : "Detail vozidla";
 
   return `
-    <section class="fleet-section fleet-section--wide" id="fleet-detail" aria-labelledby="fleet-detail-title">
+    <section class="fleet-section fleet-section--wide" id="fleet-detail" aria-labelledby="fleet-detail-title" ${fleetPanelAttributes("detail", activeId)}>
       ${fleetSectionHeader(
         "fleet-detail-title",
         detailTitle,
@@ -5753,7 +5798,7 @@ function fleetDetailSection(vehicleId = "") {
           </div>
         </header>
         <div class="fleet-detail-actions">
-          ${safeVehicleId ? `<a class="secondary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Zpět na seznam</a>` : ""}
+          ${safeVehicleId ? `<a class="secondary-link" href="${routeHref(`${FLEET_ROUTE}#fleet-vehicles`)}" data-link>Zpět na seznam</a>` : ""}
           ${fleetActionButton("Přidat závadu", "defect", { vehicleId: safeVehicleId })}
           ${fleetActionButton("Přidat servis", "service", { vehicleId: safeVehicleId })}
           ${fleetActionButton("Dokumenty", "documents", { vehicleId: safeVehicleId, target: "fleet-documents" })}
@@ -5773,14 +5818,14 @@ function fleetDetailSection(vehicleId = "") {
           </article>
         </div>
       </div>
-      ${fleetApiNotice(safeVehicleId ? "GET /api/vehicles/:id" : "GET /api/vehicles")}
+      ${fleetApiNotice(safeVehicleId ? "GET /api/vehicles/:id" : "GET /api/vehicles", FLEET_TAB_WAITING_MESSAGES.detail)}
     </section>
   `;
 }
 
-function fleetTermsSection() {
+function fleetTermsSection(activeId) {
   return `
-    <section class="fleet-section" id="fleet-terms" aria-labelledby="fleet-terms-title">
+    <section class="fleet-section" id="fleet-terms" aria-labelledby="fleet-terms-title" ${fleetPanelAttributes("terms", activeId)}>
       ${fleetSectionHeader(
         "fleet-terms-title",
         "Termíny",
@@ -5796,14 +5841,14 @@ function fleetTermsSection() {
           </article>
         `).join("")}
       </div>
-      ${fleetApiNotice("GET /api/vehicles")}
+      ${fleetApiNotice("GET /api/vehicles", FLEET_TAB_WAITING_MESSAGES.terms)}
     </section>
   `;
 }
 
-function fleetDefectsSection() {
+function fleetDefectsSection(activeId) {
   return `
-    <section class="fleet-section" id="fleet-defects" aria-labelledby="fleet-defects-title">
+    <section class="fleet-section" id="fleet-defects" aria-labelledby="fleet-defects-title" ${fleetPanelAttributes("defects", activeId)}>
       ${fleetSectionHeader(
         "fleet-defects-title",
         "Závady",
@@ -5815,14 +5860,14 @@ function fleetDefectsSection() {
         <strong>${escapeHtml(FLEET_API_WAITING_LABEL)}</strong>
         <span>Závady se budou zapisovat pouze přes chráněné cloud API.</span>
       </div>
-      ${fleetApiNotice("GET /api/vehicles/:id/defects")}
+      ${fleetApiNotice("GET /api/vehicles/:id/defects", FLEET_TAB_WAITING_MESSAGES.defects)}
     </section>
   `;
 }
 
-function fleetServiceSection() {
+function fleetServiceSection(activeId) {
   return `
-    <section class="fleet-section" id="fleet-service" aria-labelledby="fleet-service-title">
+    <section class="fleet-section" id="fleet-service" aria-labelledby="fleet-service-title" ${fleetPanelAttributes("service", activeId)}>
       ${fleetSectionHeader(
         "fleet-service-title",
         "Servisní historie",
@@ -5834,14 +5879,14 @@ function fleetServiceSection() {
         <strong>${escapeHtml(FLEET_API_WAITING_LABEL)}</strong>
         <span>Servisní záznamy se neukládají do prohlížeče ani do mock databáze.</span>
       </div>
-      ${fleetApiNotice("GET /api/vehicles/:id/service-records")}
+      ${fleetApiNotice("GET /api/vehicles/:id/service-records", FLEET_TAB_WAITING_MESSAGES.service)}
     </section>
   `;
 }
 
-function fleetDocumentsSection() {
+function fleetDocumentsSection(activeId) {
   return `
-    <section class="fleet-section" id="fleet-documents" aria-labelledby="fleet-documents-title">
+    <section class="fleet-section" id="fleet-documents" aria-labelledby="fleet-documents-title" ${fleetPanelAttributes("documents", activeId)}>
       ${fleetSectionHeader(
         "fleet-documents-title",
         "Dokumenty",
@@ -5856,14 +5901,14 @@ function fleetDocumentsSection() {
       <div class="fleet-actions-preview">
         ${fleetActionButton("Dokumenty", "documents")}
       </div>
-      ${fleetApiNotice("GET /api/vehicles/:id/documents")}
+      ${fleetApiNotice("GET /api/vehicles/:id/documents", FLEET_TAB_WAITING_MESSAGES.documents)}
     </section>
   `;
 }
 
-function fleetSettingsSection(user) {
+function fleetSettingsSection(user, activeId) {
   return `
-    <section class="fleet-section fleet-section--wide" id="fleet-settings" aria-labelledby="fleet-settings-title">
+    <section class="fleet-section fleet-section--wide" id="fleet-settings" aria-labelledby="fleet-settings-title" ${fleetPanelAttributes("settings", activeId)}>
       ${fleetSectionHeader(
         "fleet-settings-title",
         "Nastavení / číselníky",
@@ -5890,6 +5935,7 @@ function fleetSettingsSection(user) {
           ${fleetFieldChips(FLEET_API_ENDPOINTS)}
         </article>
       </div>
+      ${fleetApiNotice("GET /api/vehicles/settings", FLEET_TAB_WAITING_MESSAGES.settings)}
       ${fleetVistosImportSection(user)}
     </section>
   `;
@@ -5898,6 +5944,7 @@ function fleetSettingsSection(user) {
 function fleetModulePage(moduleItem, user, options = {}) {
   const isDashboard = Boolean(options.isDashboard);
   const vehicleId = options.vehicleId || "";
+  const activeTab = fleetActiveTab(vehicleId);
   const title = vehicleId ? "Detail vozidla" : isDashboard ? "Vozový park dashboard" : "Vozový park";
   const description = vehicleId
     ? "Detailová karta vozidla je připravená pro cloud API bez lokálního ukládání."
@@ -5923,7 +5970,7 @@ function fleetModulePage(moduleItem, user, options = {}) {
           </div>
           <div class="module-actions">
             ${isDashboard ? `<a class="primary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Otevřít modul</a>` : ""}
-            ${vehicleId ? `<a class="secondary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Seznam vozidel</a>` : ""}
+            ${vehicleId ? `<a class="secondary-link" href="${routeHref(`${FLEET_ROUTE}#fleet-vehicles`)}" data-link>Seznam vozidel</a>` : ""}
             ${!isDashboard ? `<a class="secondary-link" href="${routeHref(`${FLEET_ROUTE}/dashboard`)}" data-link>Dashboard modulu</a>` : ""}
             ${fleetActionButton("Přidat vozidlo", "addVehicle")}
           </div>
@@ -5931,16 +5978,16 @@ function fleetModulePage(moduleItem, user, options = {}) {
       </section>
 
       ${fleetActionNotice()}
-      ${fleetTabs(vehicleId ? "detail" : "dashboard")}
+      ${fleetTabs(activeTab)}
       <div class="fleet-content">
-        ${fleetDashboardSection()}
-        ${fleetVehiclesSection()}
-        ${fleetDetailSection(vehicleId)}
-        ${fleetTermsSection()}
-        ${fleetDefectsSection()}
-        ${fleetServiceSection()}
-        ${fleetDocumentsSection()}
-        ${fleetSettingsSection(user)}
+        ${fleetDashboardSection(activeTab)}
+        ${fleetVehiclesSection(activeTab)}
+        ${fleetDetailSection(vehicleId, activeTab)}
+        ${fleetTermsSection(activeTab)}
+        ${fleetDefectsSection(activeTab)}
+        ${fleetServiceSection(activeTab)}
+        ${fleetDocumentsSection(activeTab)}
+        ${fleetSettingsSection(user, activeTab)}
       </div>
       ${moduleFeedbackBoxFor(moduleItem, user, {
         moduleId: "vozovy-park",
@@ -8871,6 +8918,33 @@ function scrollToFleetTarget(targetId) {
   });
 }
 
+function activateFleetTab(tabId) {
+  if (!isFleetTabId(tabId)) {
+    setFleetActionMessage("Akce není dostupná.");
+    return false;
+  }
+
+  const nextHash = `#fleet-${encodeURIComponent(tabId)}`;
+  if (window.location.hash !== nextHash) {
+    window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+    lastRenderedUrl = window.location.href;
+  }
+
+  return true;
+}
+
+function handleFleetTab(tab) {
+  const tabId = String(tab.dataset.fleetTab || "").trim();
+
+  if (!activateFleetTab(tabId)) {
+    return;
+  }
+
+  fleetUiState.message = "";
+  fleetUiState.error = "";
+  render();
+}
+
 function handleFleetAction(button) {
   const action = button.dataset.fleetAction || "";
   const vehicleId = String(button.dataset.fleetVehicleId || "").trim();
@@ -8892,21 +8966,25 @@ function handleFleetAction(button) {
       return;
     }
 
+    activateFleetTab("detail");
     setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.detail);
     return;
   }
 
   if (action === "defect") {
+    activateFleetTab("defects");
     setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.defect);
     return;
   }
 
   if (action === "service") {
+    activateFleetTab("service");
     setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.service);
     return;
   }
 
   if (action === "documents") {
+    activateFleetTab("documents");
     setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.documents);
     scrollToFleetTarget(target);
     return;
@@ -10278,6 +10356,13 @@ document.addEventListener("error", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const fleetTab = event.target.closest("[data-fleet-tab]");
+  if (fleetTab) {
+    event.preventDefault();
+    handleFleetTab(fleetTab);
+    return;
+  }
+
   const fleetAction = event.target.closest("[data-fleet-action]");
   if (fleetAction) {
     event.preventDefault();
