@@ -5829,6 +5829,14 @@ function fleetVehicleModel(vehicle) {
   return [vehicle.brand, vehicle.model].map((value) => String(value || "").trim()).filter(Boolean).join(" ") || vehicle.model || "";
 }
 
+function fleetVehicleCountValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  return Number.isFinite(Number(value)) ? String(value) : "—";
+}
+
 function fleetVehiclesStatusText() {
   if (fleetVehiclesState.loading) {
     return "Načítám vozidla z T-Cars.";
@@ -5854,7 +5862,7 @@ function fleetVehicleRow(vehicle) {
     ["STK do", vehicle.stkValidTo],
     ["Revize do", vehicle.tachographValidTo || vehicle.craneRevisionValidTo || vehicle.liftRevisionValidTo || vehicle.pressureEquipmentRevisionValidTo],
     ["Pojištění do", vehicle.insuranceValidTo],
-    ["Otevřené závady", Number.isFinite(Number(vehicle.openDefects)) ? String(vehicle.openDefects) : "—"]
+    ["Otevřené závady", fleetVehicleCountValue(vehicle.openDefects)]
   ];
 
   return `
