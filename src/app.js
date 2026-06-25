@@ -796,14 +796,6 @@ function routeForModuleCard(moduleItem, user) {
   return moduleItem.route;
 }
 
-function moduleCardCta(moduleItem) {
-  if (moduleItem.id !== "fleet") {
-    return "";
-  }
-
-  return '<span class="module-card__cta">Otevřít modul</span>';
-}
-
 function visibleDashboardRoutes(user) {
   return filterModulesByUser(user, moduleDashboards);
 }
@@ -3381,7 +3373,6 @@ function homePage(user) {
               <span class="module-card__title">${moduleItem.title}</span>
             </span>
             <span class="module-card__description">${moduleItem.description}</span>
-            ${moduleCardCta(moduleItem)}
           </span>
         </a>
       `
