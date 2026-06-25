@@ -118,6 +118,21 @@ import {
   fleetStatusLabel,
   fleetStatusTone
 } from "./data/fleet.js";
+import {
+  VEHICLE_STOP_FIELDS,
+  VEHICLE_TRACKING_API_ENDPOINTS,
+  VEHICLE_TRACKING_EMPTY,
+  VEHICLE_TRACKING_FILTERS,
+  VEHICLE_TRACKING_GPS_WAITING,
+  VEHICLE_TRACKING_LIST_COLUMNS,
+  VEHICLE_TRACKING_NO_SIGNAL,
+  VEHICLE_TRACKING_ROUTE,
+  VEHICLE_TRACKING_STATUS_FIELDS,
+  VEHICLE_TRACKING_STATUS_OPTIONS,
+  VEHICLE_TRIP_FIELDS,
+  VEHICLE_TRIP_POINT_FIELDS,
+  vehicleTrackingStatusTone
+} from "./data/vehicleTracking.js";
 
 const app = document.querySelector("#app");
 const orderedModules = [...modules].sort((a, b) => a.order - b.order);
@@ -141,6 +156,7 @@ const HOME_SUBTITLE = "Provozní systém pro odpady, vozidla a trasy";
 const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
 const FEEDBACK_ROUTE = "/pripominky";
 const FLEET_ROUTE = "/vozovy-park";
+const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
 const ABSENCE_ROUTE = "/dovolena-nemoc";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
 const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
@@ -681,6 +697,27 @@ function routeFleetVehicleId(path) {
   return decodeURIComponent(path.slice(`${FLEET_ROUTE}/`.length).split("/")[0] || "").trim();
 }
 
+function routeVehicleTrackingContext(path) {
+  if (!path.startsWith(`${VEHICLE_TRACKING_BASE_ROUTE}/`)) {
+    return null;
+  }
+
+  const parts = path
+    .slice(`${VEHICLE_TRACKING_BASE_ROUTE}/`.length)
+    .split("/")
+    .map((part) => decodeURIComponent(part || "").trim())
+    .filter(Boolean);
+
+  if (!parts.length) {
+    return null;
+  }
+
+  return {
+    vehicleId: parts[0],
+    view: parts[1] === "trasa-dnes" ? "today-trip" : parts[1] === "historie" ? "history" : "detail"
+  };
+}
+
 function routeEmployeeId(path) {
   if (!path.startsWith(`${EMPLOYEE_CARD_ROUTE_PREFIX}/`)) {
     return "";
@@ -1204,6 +1241,10 @@ function moduleIdForAiRoute(route) {
 
   if (normalizedRoute.startsWith(FLEET_ROUTE)) {
     return "fleet";
+  }
+
+  if (normalizedRoute.startsWith(VEHICLE_TRACKING_BASE_ROUTE)) {
+    return "vehicle-tracking";
   }
 
   if (normalizedRoute === "/pripominky") {
@@ -5873,6 +5914,327 @@ function fleetModulePage(moduleItem, user, options = {}) {
   `;
 }
 
+function vehicleTrackingBadge(text = VEHICLE_TRACKING_GPS_WAITING) {
+  return `<span class="tracking-badge">${escapeHtml(text)}</span>`;
+}
+
+function vehicleTrackingSectionHeader(id, title, subtitle = "") {
+  return `
+    <div class="tracking-section__head">
+      <div>
+        <p class="module-feedback__eyebrow">Sledování vozidel</p>
+        <h2 id="${escapeHtml(id)}">${escapeHtml(title)}</h2>
+        ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+      </div>
+      ${vehicleTrackingBadge()}
+    </div>
+  `;
+}
+
+function vehicleTrackingFieldChips(fields) {
+  return `
+    <div class="tracking-field-chips">
+      ${fields.map((field) => `<span>${escapeHtml(field)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function vehicleTrackingApiNote(endpoint = "") {
+  return `
+    <p class="tracking-api-note">
+      ${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}
+      ${endpoint ? `<span>Chybí: ${escapeHtml(endpoint)}</span>` : ""}
+    </p>
+  `;
+}
+
+function vehicleTrackingTabs(activeView, vehicleId = "") {
+  const safeVehicleId = encodeURIComponent(vehicleId || "vybrane-vozidlo");
+  const tabs = [
+    { id: "map", label: "Mapa vozidel", href: `${VEHICLE_TRACKING_BASE_ROUTE}#tracking-map` },
+    { id: "list", label: "Seznam vozidel", href: `${VEHICLE_TRACKING_BASE_ROUTE}#tracking-list` },
+    { id: "detail", label: "Detail vozidla", href: vehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${safeVehicleId}` : "#tracking-detail" },
+    { id: "today-trip", label: "Dnešní trasa", href: vehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${safeVehicleId}/trasa-dnes` : "#tracking-today-trip" },
+    { id: "history", label: "Historie jízd", href: vehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${safeVehicleId}/historie` : "#tracking-history" },
+    { id: "integration", label: "GPS integrace", href: "#tracking-integration" }
+  ];
+
+  return `
+    <nav class="tracking-tabs" aria-label="Menu modulu Sledování vozidel">
+      ${tabs.map((tab) => `
+        <a class="tracking-tab ${tab.id === activeView ? "tracking-tab--active" : ""}" href="${routeHref(tab.href)}" ${tab.href.startsWith("/") ? "data-link" : ""}>
+          ${escapeHtml(tab.label)}
+        </a>
+      `).join("")}
+    </nav>
+  `;
+}
+
+function vehicleTrackingStatusLegend() {
+  return `
+    <div class="tracking-status-legend" aria-label="Stavy vozidel">
+      ${VEHICLE_TRACKING_STATUS_OPTIONS.map((status) => `
+        <span class="tracking-status tracking-status--${escapeHtml(vehicleTrackingStatusTone(status.value))}">
+          ${escapeHtml(status.label)}
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+function vehicleTrackingFilters() {
+  return `
+    <form class="tracking-filters" aria-label="Filtry sledování vozidel">
+      ${VEHICLE_TRACKING_FILTERS.map((filter) => `
+        <label>
+          <span>${escapeHtml(filter)}</span>
+          <input type="text" value="${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}" disabled>
+        </label>
+      `).join("")}
+    </form>
+  `;
+}
+
+function vehicleTrackingMapSection() {
+  return `
+    <section class="tracking-section tracking-section--map" id="tracking-map" aria-labelledby="tracking-map-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-map-title",
+        "Mapa vozidel",
+        "Online mapa bude zobrazovat aktuální polohu, směr jízdy, stav a čas poslední GPS aktualizace."
+      )}
+      <div class="tracking-map-shell" aria-label="Mapový pohled sledování vozidel">
+        <div class="tracking-map-placeholder">
+          <strong>${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}</strong>
+          <span>Bez potvrzeného GPS poskytovatele se nezobrazují žádné body, trasy ani testovací vozidla.</span>
+        </div>
+      </div>
+      ${vehicleTrackingStatusLegend()}
+      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/status")}
+    </section>
+  `;
+}
+
+function vehicleTrackingListSection() {
+  return `
+    <section class="tracking-section" id="tracking-list" aria-labelledby="tracking-list-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-list-title",
+        "Seznam vozidel",
+        "Kompaktní přehled SPZ, řidiče, stavu, rychlosti, poslední aktualizace a lokality."
+      )}
+      ${vehicleTrackingFilters()}
+      <div class="tracking-list-table" role="table" aria-label="Seznam sledovaných vozidel">
+        <div class="tracking-list-table__head" role="row">
+          ${VEHICLE_TRACKING_LIST_COLUMNS.map((column) => `<span role="columnheader">${escapeHtml(column)}</span>`).join("")}
+        </div>
+        <div class="tracking-empty" role="row">
+          <strong>${escapeHtml(VEHICLE_TRACKING_EMPTY)}</strong>
+          <span>${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}</span>
+        </div>
+      </div>
+      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/status")}
+    </section>
+  `;
+}
+
+function vehicleTrackingAction(label, href = "") {
+  if (!href) {
+    return `<button class="secondary-link tracking-disabled-action" type="button" disabled>${escapeHtml(label)}</button>`;
+  }
+
+  return `<a class="secondary-link" href="${routeHref(href)}" data-link>${escapeHtml(label)}</a>`;
+}
+
+function vehicleTrackingDetailSection(vehicleId = "") {
+  const safeVehicleId = vehicleId || "";
+  const vehicleParkHref = safeVehicleId ? `${FLEET_ROUTE}/${encodeURIComponent(safeVehicleId)}` : "";
+  const todayHref = safeVehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${encodeURIComponent(safeVehicleId)}/trasa-dnes` : "";
+  const historyHref = safeVehicleId ? `${VEHICLE_TRACKING_BASE_ROUTE}/${encodeURIComponent(safeVehicleId)}/historie` : "";
+
+  return `
+    <section class="tracking-section" id="tracking-detail" aria-labelledby="tracking-detail-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-detail-title",
+        safeVehicleId ? `Detail vozidla ${safeVehicleId}` : "Detail vozidla",
+        "Detail zobrazí SPZ, interní číslo, řidiče, stav, rychlost, polohu a dnešní provozní souhrn."
+      )}
+      <div class="tracking-detail-grid">
+        ${["SPZ", "Interní číslo", "Značka / model", "Řidič", "Stav", "Rychlost", "Poslední poloha", "Poslední aktualizace", "Dnešní km", "Čas jízdy", "Čas stání"].map((label) => `
+          <article>
+            <span>${escapeHtml(label)}</span>
+            <strong>—</strong>
+          </article>
+        `).join("")}
+      </div>
+      <div class="tracking-pairing-note">
+        <strong>${safeVehicleId ? "Vazba na Vozový park" : "Vozidlo není spárované s Vozovým parkem."}</strong>
+        <span>${safeVehicleId ? "Spárování přes Vehicle.id se ověří z cloud API." : "Bez API nelze otevřít kartu konkrétního vozidla."}</span>
+      </div>
+      <div class="tracking-actions">
+        ${vehicleTrackingAction("Otevřít ve Vozovém parku", vehicleParkHref)}
+        ${vehicleTrackingAction("Zobrazit dnešní trasu", todayHref)}
+        ${vehicleTrackingAction("Historie jízd", historyHref)}
+      </div>
+      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/vehicles/:vehicleId")}
+    </section>
+  `;
+}
+
+function vehicleTrackingTodayTripSection(vehicleId = "") {
+  return `
+    <section class="tracking-section" id="tracking-today-trip" aria-labelledby="tracking-today-trip-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-today-trip-title",
+        "Dnešní trasa",
+        vehicleId ? `Trasa vozidla ${vehicleId} za dnešní den.` : "Trasa vybraného vozidla za dnešní den."
+      )}
+      <div class="tracking-trip-layout">
+        <div class="tracking-route-placeholder">
+          <strong>${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}</strong>
+          <span>Mapa trasy, start, konec a zastávky se načtou až z GPS API.</span>
+        </div>
+        <div class="tracking-trip-summary">
+          ${["Start", "Konec", "Zastávky", "Čas jízdy", "Ujeto km", "Řidič", "Poslední aktualizace"].map((label) => `
+            <article>
+              <span>${escapeHtml(label)}</span>
+              <strong>—</strong>
+            </article>
+          `).join("")}
+        </div>
+      </div>
+      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/vehicles/:vehicleId/today-trip")}
+    </section>
+  `;
+}
+
+function vehicleTrackingHistorySection() {
+  return `
+    <section class="tracking-section" id="tracking-history" aria-labelledby="tracking-history-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-history-title",
+        "Historie jízd",
+        "Filtry a tabulka jízd budou používat pouze cloud API, bez ukládání v prohlížeči."
+      )}
+      <form class="tracking-history-filters" aria-label="Filtry historie jízd">
+        ${["Datum od", "Datum do", "Řidič", "Typ vozidla"].map((label) => `
+          <label>
+            <span>${escapeHtml(label)}</span>
+            <input type="text" value="${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}" disabled>
+          </label>
+        `).join("")}
+      </form>
+      <div class="tracking-history-table" role="table" aria-label="Historie jízd">
+        <div class="tracking-history-table__head" role="row">
+          ${["Datum", "Vozidlo", "Řidič", "Začátek", "Konec", "Ujeto km", "Čas jízdy", "Čas stání", "Zastávky", "Akce"].map((column) => `
+            <span role="columnheader">${escapeHtml(column)}</span>
+          `).join("")}
+        </div>
+        <div class="tracking-empty" role="row">
+          <strong>${escapeHtml(VEHICLE_TRACKING_EMPTY)}</strong>
+          <span>${escapeHtml(VEHICLE_TRACKING_GPS_WAITING)}</span>
+        </div>
+      </div>
+      ${vehicleTrackingApiNote("GET /api/vehicle-tracking/vehicles/:vehicleId/trips")}
+    </section>
+  `;
+}
+
+function vehicleTrackingIntegrationSection() {
+  return `
+    <section class="tracking-section" id="tracking-integration" aria-labelledby="tracking-integration-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-integration-title",
+        "GPS integrace a datový model",
+        "Konkrétní GPS provider ani API klíče nejsou v aplikaci nastavené."
+      )}
+      <div class="tracking-integration-grid">
+        <article>
+          <h3>Aktuální stav vozidla</h3>
+          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_STATUS_FIELDS)}
+        </article>
+        <article>
+          <h3>Jízda</h3>
+          ${vehicleTrackingFieldChips(VEHICLE_TRIP_FIELDS)}
+        </article>
+        <article>
+          <h3>Body trasy</h3>
+          ${vehicleTrackingFieldChips(VEHICLE_TRIP_POINT_FIELDS)}
+        </article>
+        <article>
+          <h3>Zastávky</h3>
+          ${vehicleTrackingFieldChips(VEHICLE_STOP_FIELDS)}
+        </article>
+        <article>
+          <h3>Cloud API endpointy</h3>
+          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_API_ENDPOINTS)}
+        </article>
+        <article>
+          <h3>Bez GPS signálu</h3>
+          <div class="tracking-empty">
+            <strong>${escapeHtml(VEHICLE_TRACKING_NO_SIGNAL)}</strong>
+            <span>Stav se zobrazí až z aktuálního GPS timestampu v API.</span>
+          </div>
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+function vehicleTrackingPage(moduleItem, user, context = {}) {
+  const vehicleId = context.vehicleId || "";
+  const view = context.view || "map";
+  const title = view === "today-trip"
+    ? "Dnešní trasa"
+    : view === "history"
+      ? "Historie jízd"
+      : vehicleId
+        ? "Detail sledování vozidla"
+        : "Sledování vozidel";
+
+  return `
+    <main class="app-shell module-page module-theme-scope tracking-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+
+      <section class="module-detail tracking-hero" aria-labelledby="module-title">
+        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        <div class="module-detail__body">
+          <div class="module-detail__eyebrow">SMART ODPADY / SLEDOVÁNÍ VOZIDEL</div>
+          <h1 id="module-title">${escapeHtml(title)}</h1>
+          <p>Aktuální poloha vozidel, trasy a historie jízd na mapě.</p>
+          <div class="module-detail__status">
+            <span>Stav</span>
+            <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
+          </div>
+          <div class="module-actions">
+            ${vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE)}
+            ${vehicleTrackingAction("Správa GPS napojení")}
+          </div>
+        </div>
+      </section>
+
+      ${vehicleTrackingTabs(view, vehicleId)}
+      <div class="tracking-layout">
+        ${vehicleTrackingMapSection()}
+        ${vehicleTrackingListSection()}
+        ${vehicleTrackingDetailSection(vehicleId)}
+        ${vehicleTrackingTodayTripSection(vehicleId)}
+        ${vehicleTrackingHistorySection()}
+        ${vehicleTrackingIntegrationSection()}
+      </div>
+      ${moduleFeedbackBoxFor(moduleItem, user, {
+        moduleId: "sledovani-vozidel",
+        moduleName: "Sledování vozidel",
+        placeholder: "Např. chybí GPS provider, filtr, stav vozidla nebo typ historie jízd…"
+      })}
+    </main>
+  `;
+}
+
 function modulePage(moduleItem, user, isDashboard = false) {
   if (moduleItem.id === "absence") {
     return absenceModulePage(moduleItem, user, isDashboard);
@@ -5880,6 +6242,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
 
   if (moduleItem.id === "fleet") {
     return fleetModulePage(moduleItem, user, { isDashboard });
+  }
+
+  if (moduleItem.id === "vehicle-tracking") {
+    return vehicleTrackingPage(moduleItem, user);
   }
 
   const isTyres = moduleItem.id === "tyres";
@@ -7922,6 +8288,20 @@ function renderAuthenticatedApp(user) {
     const moduleItem = orderedModules.find((item) => item.id === "fleet");
     app.innerHTML = fleetModulePage(moduleItem, user, { vehicleId: fleetVehicleId });
     document.title = `Detail vozidla | ${APP_NAME}`;
+    return;
+  }
+
+  const trackingContext = routeVehicleTrackingContext(path);
+  if (trackingContext) {
+    if (!canViewModule(user, "vehicle-tracking")) {
+      app.innerHTML = forbiddenPage(user);
+      document.title = `Bez oprávnění | ${APP_NAME}`;
+      return;
+    }
+
+    const moduleItem = orderedModules.find((item) => item.id === "vehicle-tracking");
+    app.innerHTML = vehicleTrackingPage(moduleItem, user, trackingContext);
+    document.title = `${trackingContext.view === "today-trip" ? "Dnešní trasa" : trackingContext.view === "history" ? "Historie jízd" : "Detail sledování vozidla"} | ${APP_NAME}`;
     return;
   }
 

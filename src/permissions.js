@@ -2,6 +2,7 @@ export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export",
 export const PERMISSION_MODULES = [
   "dashboard",
   "fleet",
+  "vehicle-tracking",
   "driver-reports",
   "service-maintenance",
   "tyres",
@@ -51,6 +52,7 @@ const ROLE_ALIASES = {
 
 const MODULE_ALIASES = {
   "vozovy-park": "fleet",
+  "sledovani-vozidel": "vehicle-tracking",
   "hlaseni-ridicu": "driver-reports",
   "servis-udrzba": "service-maintenance",
   pneumatiky: "tyres",
@@ -75,6 +77,7 @@ export const ROLE_PERMISSIONS = {
   kancelar: [
     ...actions("dashboard", ["view"]),
     ...actions("fleet", ["view", "edit", "export"]),
+    ...actions("vehicle-tracking", ["view", "export"]),
     ...actions("vistos", ["view", "edit", "export"]),
     ...actions("costs", ["view", "edit", "export"]),
     ...actions("reports", ["view", "export"]),
@@ -86,6 +89,7 @@ export const ROLE_PERMISSIONS = {
   garazmistr: [
     ...actions("dashboard", ["view"]),
     ...actions("fleet", ["view", "edit"]),
+    ...actions("vehicle-tracking", ["view"]),
     ...actions("driver-reports", ["view", "edit"]),
     ...actions("service-maintenance", ["view", "create", "edit", "manage"]),
     ...actions("tyres", ["view", "edit", "export"]),
@@ -97,6 +101,7 @@ export const ROLE_PERMISSIONS = {
   dispecer: [
     ...actions("dashboard", ["view"]),
     ...actions("fleet", ["view"]),
+    ...actions("vehicle-tracking", ["view"]),
     ...actions("driver-reports", ["view"]),
     ...actions("collection-routes", ["view", "edit", "manage"]),
     ...actions("sampling-routes", ["view", "edit", "manage"]),
@@ -108,6 +113,7 @@ export const ROLE_PERMISSIONS = {
   ridic: [
     ...actions("dashboard", ["view"]),
     ...actions("fleet", ["view"]),
+    ...actions("vehicle-tracking", ["view"]),
     ...actions("driver-reports", ["view", "create"]),
     ...actions("collection-routes", ["view"]),
     ...actions("absence", ["view", "create"]),
@@ -116,6 +122,7 @@ export const ROLE_PERMISSIONS = {
   readonly: [
     ...actions("dashboard", ["view"]),
     ...actions("fleet", ["view"]),
+    ...actions("vehicle-tracking", ["view"]),
     ...actions("driver-reports", ["view"]),
     ...actions("service-maintenance", ["view"]),
     ...actions("tyres", ["view"]),

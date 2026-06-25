@@ -15,6 +15,7 @@ export const AI_ALLOWED_ROUTES = [
   "/pneumatiky",
   "/hlaseni-ridicu",
   "/vozovy-park",
+  "/sledovani-vozidel",
   "/servis-udrzba",
   "/trasy-svozu",
   "/trasy-vzorku",
@@ -27,7 +28,8 @@ export const AI_ALLOWED_ROUTES = [
 ];
 
 const AI_ALLOWED_ROUTE_PREFIXES = [
-  "/dovolena-nemoc/zamestnanci/"
+  "/dovolena-nemoc/zamestnanci/",
+  "/sledovani-vozidel/"
 ];
 
 export const AI_MODULE_ROUTE_MAP = {
@@ -45,6 +47,8 @@ export const AI_MODULE_ROUTE_MAP = {
   "hlaseni-ridicu": "/hlaseni-ridicu",
   fleet: "/vozovy-park",
   "vozovy-park": "/vozovy-park",
+  "vehicle-tracking": "/sledovani-vozidel",
+  "sledovani-vozidel": "/sledovani-vozidel",
   "service-maintenance": "/servis-udrzba",
   "servis-udrzba": "/servis-udrzba",
   "collection-routes": "/trasy-svozu",

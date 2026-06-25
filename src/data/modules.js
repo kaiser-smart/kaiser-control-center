@@ -39,6 +39,17 @@ export const modules = [
     order: 2
   },
   {
+    id: "vehicle-tracking",
+    title: "Sledování vozidel",
+    description: "Online poloha vozidel, historie jízd, trasy, zastávky a provozní stav v terénu.",
+    route: "/sledovani-vozidel",
+    icon: FleetIcon,
+    status: "ROZPRACOVÁN",
+    active: true,
+    disabled: false,
+    order: 2.5
+  },
+  {
     id: "driver-reports",
     title: "Hlášení řidičů",
     description: "Rychlé nahlášení závady: fotka, popis, odeslání.",
