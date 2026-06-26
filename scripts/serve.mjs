@@ -1749,8 +1749,10 @@ async function handleApi(request, response) {
       createdAt: now,
       finishedAt: now,
       metadata: {
-        phase: "1A",
-        mode: "read-only-pilot",
+        phase: "1D",
+        mode: "vistos-api-discovery",
+        source: "vistos-api-discovery",
+        vistosConfigured: false,
         createsOperationalRoutes: false,
         sendsEmailOrSms: false,
         startsAutomation: false

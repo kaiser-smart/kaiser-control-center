@@ -1,8 +1,12 @@
 const COLLECTION_ROUTES_DB_BINDING = "SMART_ODPADY_DB";
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 export const COLLECTION_ROUTES_MANUAL_IMPORT_MAX_FILE_SIZE_BYTES = 1024 * 1024;
+const COLLECTION_ROUTES_VISTOS_MAX_ROWS = 1000;
 const MANUAL_IMPORT_PHASE = "1C";
 const MANUAL_IMPORT_MESSAGE = "Import preview – nevytváří ostré trasy.";
+const VISTOS_DISCOVERY_PHASE = "1D";
+const VISTOS_DISCOVERY_MESSAGE = "Vistos API discovery – import preview nevytváří ostré trasy.";
+const DEFAULT_VISTOS_DISCOVERY_PATHS = ["/Contract", "/ServiceList"];
 
 export class CollectionRoutesStoreError extends Error {
   constructor(message, status = 400, code = "collection_routes_error") {
@@ -85,8 +89,8 @@ export function isVistosApiConfigured(env) {
     cleanString(env?.VISTOS_API_BASE_URL) &&
     (
       cleanString(env?.VISTOS_API_TOKEN) ||
-      cleanString(env?.VISTOS_API_USERNAME) ||
-      cleanString(env?.VISTOS_API_CLIENT_ID)
+      (cleanString(env?.VISTOS_API_USERNAME) && cleanString(env?.VISTOS_API_PASSWORD)) ||
+      (cleanString(env?.VISTOS_API_CLIENT_ID) && cleanString(env?.VISTOS_API_CLIENT_SECRET))
     )
   );
 }
@@ -148,6 +152,190 @@ const WASTE_TYPE_MAP = new Map([
 
 const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "5x7", "1x14", "1x30"]);
 const ALLOWED_CONTAINER_VOLUMES = new Set([60, 80, 120, 240, 360, 660, 770, 1100]);
+
+function safeBase64(value) {
+  const text = String(value || "");
+  if (typeof btoa === "function") {
+    return btoa(text);
+  }
+  if (globalThis.Buffer) {
+    return globalThis.Buffer.from(text, "utf8").toString("base64");
+  }
+  return "";
+}
+
+function envList(value) {
+  const text = cleanString(value);
+  if (!text) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed.map(cleanString).filter(Boolean);
+    }
+  } catch {
+    // Plain comma/newline separated values are supported too.
+  }
+  return text
+    .split(/[\n,]+/)
+    .map(cleanString)
+    .filter(Boolean);
+}
+
+function vistosDiscoveryPaths(env) {
+  const configured = [
+    ...envList(env?.VISTOS_COLLECTION_ROUTES_PATHS),
+    ...envList(env?.VISTOS_API_DISCOVERY_PATHS)
+  ];
+  return configured.length ? configured : DEFAULT_VISTOS_DISCOVERY_PATHS;
+}
+
+function vistosUrl(baseUrl, path) {
+  const base = cleanString(baseUrl).replace(/\/+$/, "");
+  const suffix = cleanString(path).replace(/^\/+/, "");
+  return `${base}/${suffix}`;
+}
+
+function authHeaderValue(token) {
+  const value = cleanString(token);
+  if (!value) {
+    return "";
+  }
+  return value.includes(" ") ? value : `Bearer ${value}`;
+}
+
+function vistosRequestHeaders(env) {
+  const headers = {
+    Accept: "application/json"
+  };
+  const token = cleanString(env?.VISTOS_API_TOKEN);
+  const authHeader = cleanString(env?.VISTOS_API_AUTH_HEADER) || "Authorization";
+  const username = cleanString(env?.VISTOS_API_USERNAME);
+  const password = cleanString(env?.VISTOS_API_PASSWORD);
+  const clientId = cleanString(env?.VISTOS_API_CLIENT_ID);
+  const clientSecret = cleanString(env?.VISTOS_API_CLIENT_SECRET);
+
+  if (token) {
+    headers[authHeader] = authHeader.toLowerCase() === "authorization" ? authHeaderValue(token) : token;
+  } else if (username && password) {
+    headers.Authorization = `Basic ${safeBase64(`${username}:${password}`)}`;
+  }
+
+  if (clientId) {
+    headers["X-Client-Id"] = clientId;
+  }
+  if (clientSecret) {
+    headers["X-Client-Secret"] = clientSecret;
+  }
+
+  return headers;
+}
+
+async function fetchVistosJson(env, path) {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeoutMs = Math.max(3000, Math.min(Number(env?.VISTOS_API_TIMEOUT_MS) || 12000, 30000));
+  const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(vistosUrl(env.VISTOS_API_BASE_URL, path), {
+      method: "GET",
+      headers: vistosRequestHeaders(env),
+      signal: controller?.signal
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        ok: false,
+        path,
+        status: response.status,
+        rowCount: 0,
+        message: `Vistos endpoint vrátil HTTP ${response.status}.`
+      };
+    }
+    try {
+      const payload = JSON.parse(text);
+      const rows = extractVistosRows(payload).map((row) => flattenVistosRow(row, path));
+      return {
+        ok: true,
+        path,
+        status: response.status,
+        rowCount: rows.length,
+        rows,
+        message: `Načteno ${rows.length} řádků.`
+      };
+    } catch {
+      return {
+        ok: false,
+        path,
+        status: response.status,
+        rowCount: 0,
+        message: "Vistos endpoint nevrátil validní JSON."
+      };
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      path,
+      status: 0,
+      rowCount: 0,
+      message: error?.name === "AbortError"
+        ? "Vistos endpoint překročil časový limit."
+        : "Vistos endpoint se nepodařilo načíst."
+    };
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+function extractVistosRows(payload) {
+  if (Array.isArray(payload)) {
+    return payload.filter((row) => row && typeof row === "object");
+  }
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  const directKeys = ["rows", "data", "items", "value", "result", "contracts", "services", "records"];
+  for (const key of directKeys) {
+    if (Array.isArray(payload[key])) {
+      return payload[key].filter((row) => row && typeof row === "object");
+    }
+  }
+
+  const nested = [];
+  for (const value of Object.values(payload)) {
+    if (Array.isArray(value)) {
+      nested.push(...value.filter((row) => row && typeof row === "object"));
+    }
+  }
+  return nested;
+}
+
+function flattenVistosRow(row, path) {
+  const flattened = {
+    __vistosEndpoint: cleanString(path)
+  };
+
+  function walk(value, prefix = "") {
+    if (Array.isArray(value)) {
+      flattened[prefix] = value.length;
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const [key, nestedValue] of Object.entries(value)) {
+        const nextPrefix = prefix ? `${prefix}.${key}` : key;
+        walk(nestedValue, nextPrefix);
+      }
+      return;
+    }
+    flattened[prefix] = cleanString(value);
+  }
+
+  walk(row);
+  return flattened;
+}
 
 function parseCsvRows(source) {
   const rows = [];
@@ -342,8 +530,7 @@ function mappedManualRow(rawRow, rowNumber) {
   };
 }
 
-export function buildCollectionRoutesManualImportPreview({ text, filename = "", contentType = "" }) {
-  const sourceRows = parseManualImportRows({ text, filename });
+function buildCollectionRoutesImportPreviewFromRows(sourceRows, { filename = "", contentType = "", message = MANUAL_IMPORT_MESSAGE } = {}) {
   if (sourceRows.length > 1000) {
     throw new CollectionRoutesStoreError("Import preview může mít maximálně 1000 řádků.", 400, "collection_routes_manual_import_too_many_rows");
   }
@@ -393,7 +580,7 @@ export function buildCollectionRoutesManualImportPreview({ text, filename = "", 
     rows: mappedRows,
     summary: {
       status: "preview",
-      message: MANUAL_IMPORT_MESSAGE,
+      message,
       rowCount: mappedRows.length,
       customerCount: uniqueCustomers.size,
       siteCount: uniqueSites.size,
@@ -405,6 +592,15 @@ export function buildCollectionRoutesManualImportPreview({ text, filename = "", 
     },
     previewRows
   };
+}
+
+export function buildCollectionRoutesManualImportPreview({ text, filename = "", contentType = "" }) {
+  const sourceRows = parseManualImportRows({ text, filename });
+  return buildCollectionRoutesImportPreviewFromRows(sourceRows, {
+    filename,
+    contentType,
+    message: MANUAL_IMPORT_MESSAGE
+  });
 }
 
 function siteLocationQuality(row) {
@@ -431,16 +627,26 @@ function manualRowSummary(row) {
   };
 }
 
-export async function createCollectionRoutesManualImportPreview(env, user, { text, filename = "", contentType = "" } = {}) {
+async function persistCollectionRoutesImportPreview(env, user, preview, {
+  phase,
+  mode,
+  source,
+  sourceMode,
+  siteSourceSystem,
+  sourceEntity,
+  locationSource,
+  locationNote,
+  message,
+  metadata = {}
+}) {
   const db = collectionRoutesDatabase(env, true);
-  const preview = buildCollectionRoutesManualImportPreview({ text, filename, contentType });
   const createdAt = nowIso();
   const batchId = randomId("collection-import-batch");
   const siteIds = new Map();
-  const metadata = {
-    phase: MANUAL_IMPORT_PHASE,
-    mode: "manual-import-preview",
-    source: "manual-upload",
+  const metadataJson = {
+    phase,
+    mode,
+    source,
     filename: preview.filename,
     contentType: preview.contentType,
     customerCount: preview.summary.customerCount,
@@ -449,7 +655,8 @@ export async function createCollectionRoutesManualImportPreview(env, user, { tex
     previewRows: preview.previewRows,
     createsOperationalRoutes: false,
     sendsEmailOrSms: false,
-    startsAutomation: false
+    startsAutomation: false,
+    ...metadata
   };
 
   try {
@@ -469,17 +676,19 @@ export async function createCollectionRoutesManualImportPreview(env, user, { tex
           finished_at,
           metadata_json
         )
-        VALUES (?, 'manual-upload', 'manual-import-preview', 'preview', 'ready', ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, 'preview', 'ready', ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
         batchId,
-        MANUAL_IMPORT_MESSAGE,
+        source,
+        sourceMode,
+        message,
         preview.summary.rowCount,
         preview.summary.issueCount,
         cleanString(user?.id),
         createdAt,
         createdAt,
-        jsonString(metadata)
+        jsonString(metadataJson)
       )
       .run();
 
@@ -510,10 +719,11 @@ export async function createCollectionRoutesManualImportPreview(env, user, { tex
               created_at,
               updated_at
             )
-            VALUES (?, 'manual-upload', ?, ?, ?, ?, ?, 'preview', 1, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'preview', 1, ?, ?, ?, ?)
           `)
           .bind(
             siteId,
+            siteSourceSystem,
             normalizeLookupKey(row.customerName),
             row.siteKey,
             row.customerName,
@@ -538,13 +748,14 @@ export async function createCollectionRoutesManualImportPreview(env, user, { tex
               created_at,
               updated_at
             )
-            VALUES (?, ?, ?, 'needs-review', 'manual-import-preview', ?, ?, ?)
+            VALUES (?, ?, ?, 'needs-review', ?, ?, ?, ?)
           `)
           .bind(
             randomId("collection-site-location"),
             siteId,
             locationQuality,
-            "Ruční import preview bez geokódování.",
+            locationSource,
+            locationNote,
             createdAt,
             createdAt
           )
@@ -566,12 +777,13 @@ export async function createCollectionRoutesManualImportPreview(env, user, { tex
             issues_json,
             created_at
           )
-          VALUES (?, ?, ?, 'manual-upload-row', ?, 'preview', ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, 'preview', ?, ?, ?)
         `)
         .bind(
           rowId,
           batchId,
           row.rowNumber,
+          sourceEntity,
           importSourceId,
           jsonString(manualRowSummary(row)),
           jsonString(row.issues),
@@ -686,6 +898,21 @@ export async function createCollectionRoutesManualImportPreview(env, user, { tex
     }
     throw collectionRoutesDbError(error);
   }
+}
+
+export async function createCollectionRoutesManualImportPreview(env, user, { text, filename = "", contentType = "" } = {}) {
+  const preview = buildCollectionRoutesManualImportPreview({ text, filename, contentType });
+  return persistCollectionRoutesImportPreview(env, user, preview, {
+    phase: MANUAL_IMPORT_PHASE,
+    mode: "manual-import-preview",
+    source: "manual-upload",
+    sourceMode: "manual-import-preview",
+    siteSourceSystem: "manual-upload",
+    sourceEntity: "manual-upload-row",
+    locationSource: "manual-import-preview",
+    locationNote: "Ruční import preview bez geokódování.",
+    message: MANUAL_IMPORT_MESSAGE
+  });
 }
 
 export function collectionRoutesDbError(error) {
@@ -958,23 +1185,28 @@ export async function listCollectionLocationIssues(env, limit = 100) {
   }
 }
 
-export async function createCollectionRoutesImportPreview(env, user) {
+async function createCollectionRoutesStatusBatch(env, user, {
+  status,
+  apiStatus,
+  message,
+  issueType = "vistos-api",
+  severity = "warning",
+  metadata = {},
+  issues = []
+}) {
   const db = collectionRoutesDatabase(env, true);
   const createdAt = nowIso();
   const batchId = randomId("collection-import-batch");
-  const issueId = randomId("collection-data-issue");
-  const configured = isVistosApiConfigured(env);
-  const message = configured
-    ? "Vistos API je nakonfigurované, Fáze 1A zatím čeká na schválené mapování endpointů. Ostré trasy nebyly vytvořené."
-    : VISTOS_NOT_CONFIGURED_MESSAGE;
-  const metadata = {
-    phase: "1A",
-    mode: "read-only-pilot",
+  const safeIssues = issues.length ? issues : [{ issueType, severity, message }];
+  const metadataJson = {
+    phase: VISTOS_DISCOVERY_PHASE,
+    mode: "vistos-api-discovery",
     source: "vistos-api-discovery",
-    vistosConfigured: configured,
+    vistosConfigured: isVistosApiConfigured(env),
     createsOperationalRoutes: false,
     sendsEmailOrSms: false,
-    startsAutomation: false
+    startsAutomation: false,
+    ...metadata
   };
 
   try {
@@ -998,18 +1230,18 @@ export async function createCollectionRoutesImportPreview(env, user) {
       `)
       .bind(
         batchId,
-        configured ? "waiting" : "waiting_configuration",
-        configured ? "waiting" : "not_configured",
+        status,
+        apiStatus,
         message,
-        configured ? 0 : 1,
+        safeIssues.length,
         cleanString(user?.id),
         createdAt,
         createdAt,
-        jsonString(metadata)
+        jsonString(metadataJson)
       )
       .run();
 
-    if (!configured) {
+    for (const issue of safeIssues) {
       await db
         .prepare(`
           INSERT INTO collection_data_issues (
@@ -1021,9 +1253,16 @@ export async function createCollectionRoutesImportPreview(env, user) {
             status,
             created_at
           )
-          VALUES (?, ?, 'vistos-api', 'warning', ?, 'open', ?)
+          VALUES (?, ?, ?, ?, ?, 'open', ?)
         `)
-        .bind(issueId, batchId, message, createdAt)
+        .bind(
+          randomId("collection-data-issue"),
+          batchId,
+          cleanString(issue.issueType || issueType),
+          cleanString(issue.severity || severity),
+          cleanString(issue.message || message),
+          createdAt
+        )
         .run();
     }
 
@@ -1034,12 +1273,12 @@ export async function createCollectionRoutesImportPreview(env, user) {
         status: batch.status,
         message,
         rowCount: 0,
-        issueCount: configured ? 0 : 1,
+        issueCount: safeIssues.length,
         createsOperationalRoutes: false,
         sendsEmailOrSms: false,
         startsAutomation: false
       },
-      apiStatus: configured ? "waiting" : "not_configured"
+      apiStatus
     };
   } catch (error) {
     if (error instanceof CollectionRoutesStoreError) {
@@ -1047,4 +1286,108 @@ export async function createCollectionRoutesImportPreview(env, user) {
     }
     throw collectionRoutesDbError(error);
   }
+}
+
+async function loadVistosCollectionRows(env) {
+  if (!isVistosApiConfigured(env)) {
+    return {
+      configured: false,
+      rows: [],
+      endpoints: [],
+      message: VISTOS_NOT_CONFIGURED_MESSAGE,
+      apiStatus: "not_configured"
+    };
+  }
+
+  const paths = vistosDiscoveryPaths(env);
+  const endpoints = [];
+  const rows = [];
+  for (const path of paths) {
+    const result = await fetchVistosJson(env, path);
+    endpoints.push({
+      path,
+      ok: result.ok,
+      status: result.status,
+      rowCount: result.rowCount,
+      message: result.message
+    });
+    if (result.ok && Array.isArray(result.rows)) {
+      rows.push(...result.rows);
+    }
+    if (rows.length >= COLLECTION_ROUTES_VISTOS_MAX_ROWS) {
+      break;
+    }
+  }
+
+  return {
+    configured: true,
+    rows: rows.slice(0, COLLECTION_ROUTES_VISTOS_MAX_ROWS),
+    endpoints,
+    message: rows.length
+      ? VISTOS_DISCOVERY_MESSAGE
+      : "Vistos API discovery nevrátilo žádné mapovatelné řádky.",
+    apiStatus: rows.length ? "ready" : "waiting"
+  };
+}
+
+export async function createCollectionRoutesImportPreview(env, user) {
+  const discovery = await loadVistosCollectionRows(env);
+
+  if (!discovery.configured) {
+    return createCollectionRoutesStatusBatch(env, user, {
+      status: "waiting_configuration",
+      apiStatus: "not_configured",
+      message: VISTOS_NOT_CONFIGURED_MESSAGE,
+      issueType: "vistos-api",
+      severity: "warning",
+      metadata: {
+        endpoints: [],
+        hint: "Nastavte VISTOS_API_BASE_URL a autentizační secret v Cloudflare."
+      }
+    });
+  }
+
+  if (!discovery.rows.length) {
+    const failedEndpoints = discovery.endpoints.filter((endpoint) => !endpoint.ok);
+    return createCollectionRoutesStatusBatch(env, user, {
+      status: "waiting_mapping",
+      apiStatus: "waiting",
+      message: discovery.message,
+      issueType: "vistos-api-discovery",
+      severity: failedEndpoints.length ? "warning" : "info",
+      metadata: {
+        endpoints: discovery.endpoints
+      },
+      issues: (failedEndpoints.length ? failedEndpoints : [{ message: discovery.message, severity: "info" }])
+        .map((endpoint) => ({
+          issueType: "vistos-api-discovery",
+          severity: endpoint.severity || "warning",
+          message: endpoint.path
+            ? `${endpoint.path}: ${endpoint.message}`
+            : endpoint.message
+        }))
+    });
+  }
+
+  const preview = buildCollectionRoutesImportPreviewFromRows(discovery.rows, {
+    filename: "vistos-api-discovery.json",
+    contentType: "application/json",
+    message: VISTOS_DISCOVERY_MESSAGE
+  });
+
+  return persistCollectionRoutesImportPreview(env, user, preview, {
+    phase: VISTOS_DISCOVERY_PHASE,
+    mode: "vistos-api-discovery",
+    source: "vistos",
+    sourceMode: "api-discovery",
+    siteSourceSystem: "vistos",
+    sourceEntity: "vistos-api-row",
+    locationSource: "vistos-api-discovery",
+    locationNote: "Vistos API discovery bez geokódování.",
+    message: VISTOS_DISCOVERY_MESSAGE,
+    metadata: {
+      endpoints: discovery.endpoints,
+      cappedAtRows: COLLECTION_ROUTES_VISTOS_MAX_ROWS
+    }
+  });
 }

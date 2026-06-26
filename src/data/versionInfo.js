@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.109"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.110"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: Vistos API discovery",
+    text: "Fáze 1D doplňuje backendový Vistos API discovery/import preview přes Cloudflare secrets a ukládá jen read-only náhled do pilotních tabulek bez ostrých tras, SMS/e-mailů a automatizací."
+  },
   {
     title: "Trasy svozu: ruční import preview",
     text: "Fáze 1C umí přes backend nahrát JSON/CSV, uložit read-only import batch, řádky a datové problémy do pilotních D1 tabulek bez ostrých tras, SMS/e-mailů a automatizací."

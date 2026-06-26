@@ -98,7 +98,7 @@ export const modules = [
   {
     id: "collection-routes",
     title: "Trasy svozu",
-    description: "Fáze 1A: read-only pilot pro Vistos discovery, import preview a kontrolu stanovišť.",
+    description: "Read-only pilot pro ruční import preview a backendový Vistos API discovery bez ostrých tras.",
     route: "/trasy-svozu",
     dashboardRoute: "/trasy-svozu/dashboard",
     icon: CollectionRoutesIcon,

@@ -212,7 +212,7 @@ const FEEDBACK_ROUTE = "/pripominky";
 const FLEET_ROUTE = "/vozovy-park";
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
-const COLLECTION_ROUTES_PHASE_NOTICE = "Fáze 1A nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
+const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
 const DESIGN_NEUMORPHIC_ROUTE = "/design/neumorphic";
 const FLEET_ACTION_WAITING_MESSAGES = {
   addVehicle: "Čeká na API pro přidání vozidla.",
@@ -9727,7 +9727,7 @@ function collectionRoutesEmptyState(title, text) {
 function collectionRoutesStatGrid() {
   const latestBatch = collectionRoutesLatestBatch();
   return `
-    <div class="collection-routes-stats" aria-label="Stav Fáze 1A">
+    <div class="collection-routes-stats" aria-label="Stav pilotu Tras svozu">
       <article><span>Stav</span><strong>Read-only pilot</strong></article>
       <article><span>Stanoviště</span><strong>${collectionRoutesPilotState.sites.length}</strong></article>
       <article><span>Problémy dat</span><strong>${collectionRoutesPilotState.issues.length}</strong></article>
@@ -9745,14 +9745,14 @@ function collectionRoutesDashboardSection() {
         <div>
           <p class="module-feedback__eyebrow">Dashboard</p>
           <h2 id="collection-routes-dashboard-title">Dashboard Trasy svozu</h2>
-          <p>Bezpečný přehled Fáze 1A. Zatím nevznikají žádné denní trasy ani optimalizace.</p>
+          <p>Bezpečný přehled pilotu. Zatím nevznikají žádné denní trasy ani optimalizace.</p>
         </div>
         <span class="employee-card-status employee-card-status--waiting">Read-only pilot</span>
       </div>
       ${collectionRoutesStatGrid()}
       <div class="collection-routes-phase-note">
         <strong>${COLLECTION_ROUTES_PHASE_NOTICE}</strong>
-        <span>Vistos/T-Cars/Google/SMS/e-mail se ve Fázi 1A nepoužívají k ostrým akcím.</span>
+        <span>Vistos API se používá pouze backendově pro import preview. T-Cars/Google/SMS/e-mail se nepoužívají k ostrým akcím.</span>
       </div>
     </section>
   `;
@@ -9862,8 +9862,8 @@ function collectionRoutesImportSection(user) {
       <div class="collection-routes-panel__head">
         <div>
           <p class="module-feedback__eyebrow">Vistos</p>
-          <h2 id="collection-routes-import-title">Import / sync preview z Vistosu</h2>
-          <p>Discovery Fáze 1A pouze auditovatelně ověří stav konfigurace. Nevytváří zákazníky, stanoviště ani trasy.</p>
+          <h2 id="collection-routes-import-title">Vistos API discovery / import preview</h2>
+          <p>Fáze 1D backendově načte Vistos API, namapuje read-only preview a nevytváří ostré trasy.</p>
         </div>
         <span class="employee-card-status employee-card-status--waiting">${escapeHtml(collectionRoutesApiStatusLabel(collectionRoutesPilotState.apiStatus))}</span>
       </div>
@@ -9871,7 +9871,7 @@ function collectionRoutesImportSection(user) {
       ${canImport ? `
         <form class="collection-routes-import-form" data-collection-routes-import-preview-form>
           <button class="primary-action" type="submit" ${collectionRoutesPilotState.importLoading ? "disabled" : ""}>
-            ${collectionRoutesPilotState.importLoading ? "Spouštím preview..." : "Spustit bezpečný discovery preview"}
+            ${collectionRoutesPilotState.importLoading ? "Spouštím Vistos preview..." : "Spustit Vistos API discovery preview"}
           </button>
         </form>
       ` : `
