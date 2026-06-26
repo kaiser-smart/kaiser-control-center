@@ -570,6 +570,12 @@ Osobní účet `oplustil-prog` už není hlavní zdroj pravdy pro pracovní repo
 
 Staré GitHub adresy mohou dočasně fungovat přes redirect, ale pro novou práci se musí používat adresy v `kaiser-smart`.
 
+Důležité rozlišení:
+- `kaiser-smart` je GitHub organizace / owner repozitáře, ne přihlašovací účet.
+- GitHub CLI se přihlašuje osobním GitHub účtem.
+- Osobní účet musí mít práva k organizaci `kaiser-smart` a konkrétnímu repozitáři.
+- Nestačí být přihlášený do GitHubu obecně; před pushem je nutné ověřit právo k repozitáři.
+
 Po přesunu repozitáře nebo změně ownera vždy ověř:
 - lokální `origin`,
 - GitHub práva,
@@ -583,6 +589,41 @@ Přes Git příkazem:
 ```bash
 git push origin <nazev-vetve>
 ```
+
+Povinný bezpečný postup při problému s GitHub přihlášením / pushem:
+
+```bash
+git remote -v
+git status --short --branch
+gh auth status
+gh auth login --hostname github.com --git-protocol https --web --scopes repo
+gh auth setup-git
+gh repo view kaiser-smart/kaiser-control-center --json nameWithOwner,viewerPermission
+```
+
+Pokračovat v pushi je dovoleno jen pokud:
+- `origin` míří na `https://github.com/kaiser-smart/kaiser-control-center.git`,
+- `gh auth status` ukazuje přihlášený osobní účet,
+- `gh repo view ... viewerPermission` vrací `WRITE`, `MAINTAIN` nebo `ADMIN`.
+
+Pokud se při přihlášení otevře špatný osobní účet, neautorizovat ho naslepo. Nejdřív se v GitHubu odhlásit / přepnout účet a přihlášení spustit znovu.
+
+Zakázané při GitHub přihlášení:
+- nevkládat GitHub token do chatu,
+- nevkládat GitHub token do shell příkazu,
+- nevkládat token do remote URL,
+- neukládat token, heslo ani cookie do repozitáře,
+- nepoužívat `oplustil-prog` jako owner repozitáře Kaiser Smart,
+- nepoužívat `git push --force`, pokud to Radim/Martin výslovně neschválili,
+- nepřepisovat lokálně divergentní `main` bez zálohy.
+
+Pokud lokální `main` obsahuje vlastní commit, který není na `origin/main`, nejdřív vytvořit záložní větev, například:
+
+```bash
+git branch backup/local-main-<sha>
+```
+
+Až potom řešit sladění s `origin/main`.
 
 Produkční větev / nasazení po úspěšném ověření posílej automaticky.
 
