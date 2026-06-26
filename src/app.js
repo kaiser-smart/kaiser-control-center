@@ -535,6 +535,25 @@ const absenceApiState = {
   error: "",
   apiStatus: "waiting"
 };
+const moduleRulesState = {
+  moduleKey: "absence",
+  rules: [],
+  auditLog: [],
+  automationRuns: [],
+  loaded: false,
+  loading: false,
+  saving: false,
+  apiStatus: "waiting",
+  error: "",
+  message: "",
+  formOpen: false,
+  editingId: "",
+  formType: "rule",
+  selectedId: "",
+  searchQuery: "",
+  typeFilter: "all",
+  statusFilter: "all"
+};
 const quickAbsenceState = {
   step: "type",
   type: "",
@@ -3098,16 +3117,30 @@ function updateAccessUsersSearch(input) {
   }
 }
 
-function updateModuleRulesSearch(input) {
-  const panel = input?.closest("[data-module-rules-panel]");
+function updateModuleRulesFilters(panelOrField) {
+  const panel = panelOrField?.matches?.("[data-module-rules-panel]")
+    ? panelOrField
+    : panelOrField?.closest("[data-module-rules-panel]");
   const rows = [...(panel?.querySelectorAll("[data-module-rules-row]") || [])];
   const noResultsRow = panel?.querySelector("[data-module-rules-empty-search]");
   const countNode = panel?.querySelector("[data-module-rules-search-count]");
-  const normalizedQuery = normalizeAccessSearchText(input?.value || "");
+  const searchInput = panel?.querySelector("[data-module-rules-search]");
+  const typeSelect = panel?.querySelector("[data-module-rules-type-filter]");
+  const statusSelect = panel?.querySelector("[data-module-rules-status-filter]");
+  const normalizedQuery = normalizeAccessSearchText(searchInput?.value || "");
+  const typeFilter = String(typeSelect?.value || "all");
+  const statusFilter = String(statusSelect?.value || "all");
   let visibleCount = 0;
 
+  moduleRulesState.searchQuery = searchInput?.value || "";
+  moduleRulesState.typeFilter = typeFilter;
+  moduleRulesState.statusFilter = statusFilter;
+
   rows.forEach((row) => {
-    const matches = !normalizedQuery || String(row.dataset.moduleRulesSearchText || "").includes(normalizedQuery);
+    const matchesQuery = !normalizedQuery || String(row.dataset.moduleRulesSearchText || "").includes(normalizedQuery);
+    const matchesType = typeFilter === "all" || row.dataset.moduleRulesType === typeFilter;
+    const matchesStatus = statusFilter === "all" || row.dataset.moduleRulesStatus === statusFilter;
+    const matches = matchesQuery && matchesType && matchesStatus;
     row.hidden = !matches;
 
     if (matches) {
@@ -3116,14 +3149,18 @@ function updateModuleRulesSearch(input) {
   });
 
   if (noResultsRow) {
-    noResultsRow.hidden = !normalizedQuery || visibleCount > 0;
+    noResultsRow.hidden = visibleCount > 0 || (!normalizedQuery && typeFilter === "all" && statusFilter === "all");
   }
 
   if (countNode) {
-    countNode.textContent = normalizedQuery
-      ? `Zobrazeno ${visibleCount} z ${rows.length} read-only návrhů`
-      : `Celkem ${rows.length} read-only návrhy`;
+    countNode.textContent = normalizedQuery || typeFilter !== "all" || statusFilter !== "all"
+      ? `Zobrazeno ${visibleCount} z ${rows.length} pravidel a automatizací`
+      : `Celkem ${rows.length} pravidel a automatizací`;
   }
+}
+
+function updateModuleRulesSearch(input) {
+  updateModuleRulesFilters(input);
 }
 
 function accessFeedbackMessage(extraClass = "", target = "") {
@@ -4783,146 +4820,375 @@ function absenceReports(user) {
   `;
 }
 
-function moduleRulesAutomationDraftItems(moduleName) {
-  return [
-    {
-      title: "Schvalování žádostí podle typu nepřítomnosti",
-      description: "Read-only návrh budoucí evidence pravidla pro dovolenou, lékaře, OČR a náhradní volno.",
-      type: "Pravidlo",
-      module: moduleName,
-      status: "Návrh / čeká na cloud API",
-      trigger: "Událostí / backend",
-      lastRun: "-",
-      nextRun: "-",
-      createdBy: "Systémový návrh",
-      updatedBy: "-",
-      impact: "Žádný zápis, pouze návrh evidence",
-      note: "Není aktivní produkční pravidlo."
-    },
-    {
-      title: "Měsíční report nepřítomností",
-      description: "Read-only návrh evidence budoucí cloudové automatizace měsíčního reportu.",
-      type: "Automatizace",
-      module: moduleName,
-      status: "Návrh / čeká na cloud API",
-      trigger: "Časově / Cloudflare Cron",
-      lastRun: "-",
-      nextRun: "-",
-      createdBy: "Systémový návrh",
-      updatedBy: "-",
-      impact: "Bez odesílání e-mailů, čeká na cloud runner",
-      note: "Není spuštěná automatizace."
-    },
-    {
-      title: "Připomínky lékařských prohlídek",
-      description: "Read-only návrh pravidla pro budoucí hlídání termínů lékařských prohlídek.",
-      type: "Pravidlo",
-      module: moduleName,
-      status: "Návrh / čeká na cloud API",
-      trigger: "Časově / cloud job",
-      lastRun: "-",
-      nextRun: "-",
-      createdBy: "Systémový návrh",
-      updatedBy: "-",
-      impact: "Bez notifikací, pouze návrh evidence",
-      note: "Čeká na schválený datový model a audit log."
+const MODULE_RULE_STATUS_LABELS = {
+  active: "Aktivní",
+  inactive: "Neaktivní",
+  draft: "Návrh",
+  error: "Chyba"
+};
+
+const MODULE_RULE_TYPE_LABELS = {
+  rule: "Pravidlo",
+  automation: "Automatizace"
+};
+
+const MODULE_RULE_TRIGGER_LABELS = {
+  manual: "Ručně",
+  time: "Časově",
+  event: "Událostí",
+  webhook: "Webhookem"
+};
+
+function moduleRuleStatusLabel(status) {
+  return MODULE_RULE_STATUS_LABELS[String(status || "").trim()] || status || "-";
+}
+
+function moduleRuleTypeLabel(type) {
+  return MODULE_RULE_TYPE_LABELS[String(type || "").trim()] || type || "-";
+}
+
+function moduleRuleTriggerLabel(triggerType) {
+  return MODULE_RULE_TRIGGER_LABELS[String(triggerType || "").trim()] || triggerType || "-";
+}
+
+function moduleRuleUserLabel(userId) {
+  const cleaned = String(userId || "").trim();
+  if (!cleaned) {
+    return "-";
+  }
+
+  if (cleaned === "migration-0015") {
+    return "Migrace 0015";
+  }
+
+  const user = adminUsersState.users.find((item) => String(item.id || "").trim() === cleaned) ||
+    accessState.users.find((item) => String(item.id || "").trim() === cleaned);
+  return user?.name || cleaned;
+}
+
+function moduleRuleJsonPreview(value) {
+  if (!value) {
+    return "{}";
+  }
+
+  if (typeof value === "string") {
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2);
+    } catch {
+      return value;
     }
-  ];
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "{}";
+  }
 }
 
 function moduleRulesAutomationSearchText(item) {
   return normalizeAccessSearchText([
     item.title,
     item.description,
-    item.type,
-    item.status,
-    item.module,
-    item.note
+    moduleRuleTypeLabel(item.type),
+    moduleRuleStatusLabel(item.status),
+    item.moduleKey,
+    item.cloudRunner,
+    item.lastRunMessage,
+    item.actionsJson,
+    item.conditionsJson
   ].join(" "));
 }
 
-function moduleRulesAutomationRow(item) {
+function moduleRulesAutomationMatchesFilters(item) {
   const searchText = moduleRulesAutomationSearchText(item);
+  const normalizedQuery = normalizeAccessSearchText(moduleRulesState.searchQuery || "");
+  const typeFilter = moduleRulesState.typeFilter || "all";
+  const statusFilter = moduleRulesState.statusFilter || "all";
+
+  return (
+    (!normalizedQuery || searchText.includes(normalizedQuery)) &&
+    (typeFilter === "all" || item.type === typeFilter) &&
+    (statusFilter === "all" || item.status === statusFilter)
+  );
+}
+
+function moduleRuleFormDraft() {
+  const existing = moduleRulesState.rules.find((item) => item.id === moduleRulesState.editingId);
+  if (existing) {
+    return existing;
+  }
+
+  const type = moduleRulesState.formType === "automation" ? "automation" : "rule";
+  return {
+    id: "",
+    title: "",
+    description: "",
+    type,
+    status: "draft",
+    conditionsJson: "{}",
+    actionsJson: "{}",
+    isAutomation: type === "automation",
+    triggerType: type === "automation" ? "time" : "manual",
+    scheduleCron: "",
+    eventName: "",
+    cloudRunner: type === "automation" ? "phase2-cloud-cron" : ""
+  };
+}
+
+function moduleRuleForm(canManage) {
+  if (!canManage || !moduleRulesState.formOpen) {
+    return "";
+  }
+
+  const item = moduleRuleFormDraft();
+  const isEditing = Boolean(item.id);
+  const disabled = moduleRulesState.saving ? "disabled" : "";
 
   return `
-    <tr data-module-rules-row data-module-rules-search-text="${escapeHtml(searchText)}">
+    <form class="module-rules-form absence-form" data-module-rule-form data-rule-id="${escapeHtml(item.id || "")}">
+      <div class="module-rules-form__head">
+        <div>
+          <h3>${isEditing ? "Upravit pravidlo / automatizaci" : "Nové pravidlo / automatizace"}</h3>
+          <p>Ukládá se do cloud DB přes backend API. Automatizace se ve Fázi 1 ještě nespouští.</p>
+        </div>
+        <button class="secondary-link" type="button" data-module-rule-form-close ${disabled}>Zavřít</button>
+      </div>
+      <label>
+        <span>Název</span>
+        <input name="title" value="${escapeHtml(item.title)}" required ${disabled} />
+      </label>
+      <label>
+        <span>Popis</span>
+        <textarea name="description" rows="3" ${disabled}>${escapeHtml(item.description)}</textarea>
+      </label>
+      <label>
+        <span>Typ</span>
+        <select name="type" ${disabled}>
+          <option value="rule" ${item.type === "rule" ? "selected" : ""}>Pravidlo</option>
+          <option value="automation" ${item.type === "automation" ? "selected" : ""}>Automatizace</option>
+        </select>
+      </label>
+      <label>
+        <span>Stav</span>
+        <select name="status" ${disabled}>
+          <option value="draft" ${item.status === "draft" ? "selected" : ""}>Návrh</option>
+          <option value="active" ${item.status === "active" ? "selected" : ""}>Aktivní</option>
+          <option value="inactive" ${item.status === "inactive" ? "selected" : ""}>Neaktivní</option>
+          <option value="error" ${item.status === "error" ? "selected" : ""}>Chyba</option>
+        </select>
+      </label>
+      <label>
+        <span>Spouštění</span>
+        <select name="triggerType" ${disabled}>
+          <option value="manual" ${item.triggerType === "manual" ? "selected" : ""}>Ručně</option>
+          <option value="time" ${item.triggerType === "time" ? "selected" : ""}>Časově</option>
+          <option value="event" ${item.triggerType === "event" ? "selected" : ""}>Událostí</option>
+          <option value="webhook" ${item.triggerType === "webhook" ? "selected" : ""}>Webhookem</option>
+        </select>
+      </label>
+      <label>
+        <span>Cron / plán</span>
+        <input name="scheduleCron" value="${escapeHtml(item.scheduleCron)}" placeholder="např. 0 6 * * *" ${disabled} />
+      </label>
+      <label>
+        <span>Událost</span>
+        <input name="eventName" value="${escapeHtml(item.eventName)}" placeholder="např. absence_request_decided" ${disabled} />
+      </label>
+      <label>
+        <span>Cloud runner</span>
+        <input name="cloudRunner" value="${escapeHtml(item.cloudRunner)}" placeholder="phase2-cloud-cron" ${disabled} />
+      </label>
+      <label class="employee-card-field--wide">
+        <span>Podmínky JSON</span>
+        <textarea name="conditionsJson" rows="5" ${disabled}>${escapeHtml(moduleRuleJsonPreview(item.conditionsJson || item.conditions))}</textarea>
+      </label>
+      <label class="employee-card-field--wide">
+        <span>Akce JSON</span>
+        <textarea name="actionsJson" rows="5" ${disabled}>${escapeHtml(moduleRuleJsonPreview(item.actionsJson || item.actions))}</textarea>
+      </label>
+      <label class="employee-card-field--wide">
+        <span>Poznámka do audit logu</span>
+        <input name="auditNote" value="" placeholder="${isEditing ? "Úprava pravidla" : "Vytvoření pravidla"}" ${disabled} />
+      </label>
+      <div class="module-rules-form__actions">
+        <button class="primary-action" type="submit" ${disabled}>${moduleRulesState.saving ? "Ukládám..." : isEditing ? "Uložit změny" : "Vytvořit"}</button>
+        <button class="secondary-link" type="button" data-module-rule-form-close ${disabled}>Zrušit</button>
+      </div>
+    </form>
+  `;
+}
+
+function moduleRulesAutomationRow(item, canManage) {
+  const searchText = moduleRulesAutomationSearchText(item);
+  const hidden = moduleRulesAutomationMatchesFilters(item) ? "" : " hidden";
+  const trigger = [
+    moduleRuleTriggerLabel(item.triggerType),
+    item.scheduleCron || item.eventName || item.cloudRunner
+  ].filter(Boolean).join(" / ");
+  const impact = item.isAutomation
+    ? "Fáze 1: evidováno v DB, běh až ve Fázi 2"
+    : "Backend/cloud pravidlo";
+  const actionCell = canManage
+    ? `
+      <div class="module-rules-row-actions">
+        <button class="secondary-link" type="button" data-module-rule-select="${escapeHtml(item.id)}">Detail</button>
+        <button class="secondary-link" type="button" data-module-rule-edit="${escapeHtml(item.id)}">Upravit</button>
+        <button class="secondary-link" type="button" data-module-rule-toggle="${escapeHtml(item.id)}" data-next-status="${item.status === "active" ? "inactive" : "active"}">
+          ${item.status === "active" ? "Deaktivovat" : "Aktivovat"}
+        </button>
+      </div>
+    `
+    : '<span class="module-rules-readonly">Read-only</span>';
+
+  return `
+    <tr data-module-rules-row data-module-rules-search-text="${escapeHtml(searchText)}" data-module-rules-type="${escapeHtml(item.type)}" data-module-rules-status="${escapeHtml(item.status)}" data-rule-id="${escapeHtml(item.id)}"${hidden}>
       <td>
         <strong>${escapeHtml(item.title)}</strong>
         <small>${escapeHtml(item.description)}</small>
       </td>
-      <td>${escapeHtml(item.type)}</td>
-      <td>${escapeHtml(item.module)}</td>
-      <td><span class="module-rules-status-chip">${escapeHtml(item.status)}</span></td>
-      <td>${escapeHtml(item.trigger)}</td>
-      <td>${escapeHtml(item.lastRun)}</td>
-      <td>${escapeHtml(item.nextRun)}</td>
-      <td>${escapeHtml(item.createdBy)}</td>
-      <td>${escapeHtml(item.updatedBy)}</td>
-      <td>${escapeHtml(item.impact)}</td>
-      <td>${escapeHtml(item.note)}</td>
+      <td>${escapeHtml(moduleRuleTypeLabel(item.type))}</td>
+      <td>${escapeHtml(item.moduleKey === "absence" ? "Dovolená / Nemoc" : item.moduleKey)}</td>
+      <td><span class="module-rules-status-chip module-rules-status-chip--${escapeHtml(item.status)}">${escapeHtml(moduleRuleStatusLabel(item.status))}</span></td>
+      <td>${escapeHtml(trigger || "-")}</td>
+      <td>${escapeHtml(formatDateTime(item.lastRunAt) || "-")}</td>
+      <td>${escapeHtml(formatDateTime(item.nextRunAt) || "-")}</td>
+      <td>${escapeHtml(moduleRuleUserLabel(item.createdByUserId))}</td>
+      <td>${escapeHtml(moduleRuleUserLabel(item.updatedByUserId))}</td>
+      <td>${escapeHtml(item.lastRunMessage || impact)}</td>
+      <td>${actionCell}</td>
     </tr>
+  `;
+}
+
+function moduleRuleDetail() {
+  const selected = moduleRulesState.rules.find((item) => item.id === moduleRulesState.selectedId) || moduleRulesState.rules[0];
+  if (!selected) {
+    return `
+      <section class="module-rules-detail" aria-labelledby="module-rules-detail-title">
+        <h3 id="module-rules-detail-title">Detail pravidla / automatizace</h3>
+        <p>Zatím není vybrané žádné pravidlo.</p>
+      </section>
+    `;
+  }
+
+  const auditRows = moduleRulesState.auditLog.length
+    ? moduleRulesState.auditLog.map((item) => `
+      <li>
+        <strong>${escapeHtml(item.action)}</strong>
+        <span>${escapeHtml(formatDateTime(item.changedAt))} · ${escapeHtml(moduleRuleUserLabel(item.changedByUserId))}</span>
+        ${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}
+      </li>
+    `).join("")
+    : '<li><span>Audit log se načte po výběru detailu nebo po změně pravidla.</span></li>';
+
+  return `
+    <section class="module-rules-detail" aria-labelledby="module-rules-detail-title">
+      <div>
+        <h3 id="module-rules-detail-title">${escapeHtml(selected.title)}</h3>
+        <p>${escapeHtml(selected.description || "Bez popisu")}</p>
+      </div>
+      <div class="module-rules-detail-grid">
+        <article>
+          <span>Typ</span>
+          <strong>${escapeHtml(moduleRuleTypeLabel(selected.type))}</strong>
+        </article>
+        <article>
+          <span>Stav</span>
+          <strong>${escapeHtml(moduleRuleStatusLabel(selected.status))}</strong>
+        </article>
+        <article>
+          <span>Spouštění</span>
+          <strong>${escapeHtml(moduleRuleTriggerLabel(selected.triggerType))}</strong>
+        </article>
+        <article>
+          <span>Cloud runner</span>
+          <strong>${escapeHtml(selected.cloudRunner || "Fáze 2")}</strong>
+        </article>
+      </div>
+      <div class="module-rules-json-grid">
+        <pre>${escapeHtml(moduleRuleJsonPreview(selected.conditionsJson || selected.conditions))}</pre>
+        <pre>${escapeHtml(moduleRuleJsonPreview(selected.actionsJson || selected.actions))}</pre>
+      </div>
+      <div class="module-rules-audit">
+        <h4>Audit změn</h4>
+        <ul>${auditRows}</ul>
+      </div>
+    </section>
   `;
 }
 
 function moduleRulesAutomationPanel({
   moduleKey,
   moduleName,
-  user,
-  apiStatus = "waiting"
+  user
 }) {
   const canManage = hasPermission(user, moduleKey, "manage") || isFullAccessRole(user);
-  const statusLabel = apiStatus === "ready" ? "Cloud API aktivní" : "Čeká na cloud API";
-  const statusClass = apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
-  const draftItems = moduleRulesAutomationDraftItems(moduleName);
-  const endpoints = [
-    `GET /api/modules/${moduleKey}/rules`,
-    `POST /api/modules/${moduleKey}/rules`,
-    `PATCH /api/modules/${moduleKey}/rules/:id`,
-    `GET /api/modules/${moduleKey}/rules/:id/audit`,
-    `GET /api/modules/${moduleKey}/automation-runs`
-  ];
+  const statusLabel = moduleRulesState.loading
+    ? "Načítám cloud API"
+    : moduleRulesState.apiStatus === "ready"
+      ? "Cloud API aktivní"
+      : "Cloud API nedostupné";
+  const statusClass = moduleRulesState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
+  const rules = moduleRulesState.rules;
+  const visibleRulesCount = rules.filter(moduleRulesAutomationMatchesFilters).length;
+  const filtersActive = Boolean(
+    normalizeAccessSearchText(moduleRulesState.searchQuery || "") ||
+    moduleRulesState.typeFilter !== "all" ||
+    moduleRulesState.statusFilter !== "all"
+  );
+  const automationCount = rules.filter((item) => item.isAutomation || item.type === "automation").length;
+  const activeCount = rules.filter((item) => item.status === "active").length;
+  const rows = rules.length
+    ? rules.map((item) => moduleRulesAutomationRow(item, canManage)).join("")
+    : `<tr><td colspan="11">${moduleRulesState.loading ? "Načítám ostrá cloud data..." : "Žádná ostrá pravidla nejsou uložená v cloud DB."}</td></tr>`;
 
   return `
     <section class="module-rules-panel absence-panel" aria-labelledby="module-rules-title" data-module-rules-panel>
       <div class="absence-panel__head">
         <div>
           <h2 id="module-rules-title">Seznam pravidel a automatizace</h2>
-          <p>Jednotný pilot pro evidenci pravidel a cloudových automatizací modulu ${escapeHtml(moduleName)}.</p>
+          <p>Ostrá cloud evidence pravidel a automatizací modulu ${escapeHtml(moduleName)}.</p>
         </div>
         <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
       </div>
 
+      ${moduleRulesState.message ? `<p class="module-feedback__notice">${escapeHtml(moduleRulesState.message)}</p>` : ""}
+      ${moduleRulesState.error ? `<p class="module-feedback__error">${escapeHtml(moduleRulesState.error)}</p>` : ""}
+
       <div class="module-rules-toolbar" aria-label="Filtry pravidel a automatizací">
         <label class="module-rules-search">
           <span>Vyhledávání</span>
-          <input type="search" placeholder="Název, popis, modul, typ, stav, autor nebo poznámka" data-module-rules-search />
+          <input type="search" placeholder="Název, popis, modul, typ, stav, autor nebo poznámka" value="${escapeHtml(moduleRulesState.searchQuery)}" data-module-rules-search />
         </label>
         <label>
           <span>Typ</span>
-          <select disabled>
-            <option>Vše</option>
-            <option>Pravidlo</option>
-            <option>Automatizace</option>
+          <select data-module-rules-type-filter>
+            <option value="all"${moduleRulesState.typeFilter === "all" ? " selected" : ""}>Vše</option>
+            <option value="rule"${moduleRulesState.typeFilter === "rule" ? " selected" : ""}>Pravidlo</option>
+            <option value="automation"${moduleRulesState.typeFilter === "automation" ? " selected" : ""}>Automatizace</option>
           </select>
         </label>
         <label>
           <span>Stav</span>
-          <select disabled>
-            <option>Vše</option>
-            <option>Aktivní</option>
-            <option>Neaktivní</option>
-            <option>Návrh</option>
-            <option>Chyba</option>
+          <select data-module-rules-status-filter>
+            <option value="all"${moduleRulesState.statusFilter === "all" ? " selected" : ""}>Vše</option>
+            <option value="active"${moduleRulesState.statusFilter === "active" ? " selected" : ""}>Aktivní</option>
+            <option value="inactive"${moduleRulesState.statusFilter === "inactive" ? " selected" : ""}>Neaktivní</option>
+            <option value="draft"${moduleRulesState.statusFilter === "draft" ? " selected" : ""}>Návrh</option>
+            <option value="error"${moduleRulesState.statusFilter === "error" ? " selected" : ""}>Chyba</option>
           </select>
         </label>
       </div>
 
       ${canManage ? `
         <div class="module-rules-actions">
-          <button class="primary-action" type="button" disabled>Nové pravidlo</button>
-          <button class="secondary-link" type="button" disabled>Nová automatizace</button>
+          <button class="primary-action" type="button" data-module-rule-new="rule" ${moduleRulesState.saving ? "disabled" : ""}>Nové pravidlo</button>
+          <button class="secondary-link" type="button" data-module-rule-new="automation" ${moduleRulesState.saving ? "disabled" : ""}>Nová automatizace</button>
         </div>
       ` : ""}
+
+      ${moduleRuleForm(canManage)}
 
       <div class="module-rules-status-grid">
         <article>
@@ -4931,24 +5197,24 @@ function moduleRulesAutomationPanel({
         </article>
         <article>
           <span>Pravidla</span>
-          <strong>0</strong>
+          <strong>${rules.length - automationCount}</strong>
         </article>
         <article>
           <span>Automatizace</span>
-          <strong>0</strong>
+          <strong>${automationCount}</strong>
         </article>
         <article>
-          <span>Audit</span>
-          <strong>Čeká na module_rule_audit_log</strong>
+          <span>Aktivní</span>
+          <strong>${activeCount}</strong>
         </article>
       </div>
 
-      <div class="module-rules-empty" role="status">
-        <strong>Čeká na cloud API pro pravidla a automatizace.</strong>
-        <span>V pilotu nejsou vložená žádná aktivní produkční pravidla ani runtime automatizace. Stávající schvalování, notifikace a lékařské připomínky zůstávají beze změny, dokud neproběhne schválená migrace do jednotné evidence.</span>
+      <div class="module-rules-empty module-rules-empty--cloud" role="status">
+        <strong>${moduleRulesState.apiStatus === "ready" ? "Ostrá pravidla jsou načtená z cloud DB." : "Cloud API pro pravidla není dostupné."}</strong>
+        <span>Fáze 1 ukládá pravidla, automatizace a audit log do D1. Skutečné spouštění automatizací, cron a e-mail/SMS zůstávají až pro Fázi 2.</span>
       </div>
 
-      <p class="module-rules-search-count" data-module-rules-search-count>Celkem ${draftItems.length} read-only návrhy</p>
+      <p class="module-rules-search-count" data-module-rules-search-count>${filtersActive ? `Zobrazeno ${visibleRulesCount} z ${rules.length}` : `Celkem ${rules.length}`} pravidel a automatizací</p>
 
       <div class="module-rules-table-wrap" aria-label="Seznam pravidel a automatizací">
         <table class="module-rules-table">
@@ -4968,28 +5234,21 @@ function moduleRulesAutomationPanel({
             </tr>
           </thead>
           <tbody>
-            ${draftItems.map(moduleRulesAutomationRow).join("")}
-            <tr data-module-rules-empty-search hidden>
+            ${rows}
+            <tr data-module-rules-empty-search${filtersActive && visibleRulesCount === 0 ? "" : " hidden"}>
               <td colspan="11">Žádné pravidlo nebo automatizace neodpovídá hledání.</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <section class="module-rules-detail" aria-labelledby="module-rules-detail-title">
-        <div>
-          <h3 id="module-rules-detail-title">Detail pravidla / automatizace</h3>
-          <p>Detail bude načítaný z cloudu, včetně podmínek, akcí, oprávnění, historie změn a logu posledních běhů.</p>
-        </div>
-        <div class="module-rules-endpoints">
-          ${endpoints.map((endpoint) => `<code>${escapeHtml(endpoint)}</code>`).join("")}
-        </div>
-      </section>
+      ${moduleRuleDetail()}
     </section>
   `;
 }
 
 function absenceRulesAutomation(user) {
+  ensureModuleRulesData("absence");
   return moduleRulesAutomationPanel({
     moduleKey: "absence",
     moduleName: "Dovolená / Nemoc",
@@ -10564,6 +10823,225 @@ async function loadAbsenceSettings(options = {}) {
   }
 }
 
+function resetModuleRulesState() {
+  moduleRulesState.moduleKey = "absence";
+  moduleRulesState.rules = [];
+  moduleRulesState.auditLog = [];
+  moduleRulesState.automationRuns = [];
+  moduleRulesState.loaded = false;
+  moduleRulesState.loading = false;
+  moduleRulesState.saving = false;
+  moduleRulesState.apiStatus = "waiting";
+  moduleRulesState.error = "";
+  moduleRulesState.message = "";
+  moduleRulesState.formOpen = false;
+  moduleRulesState.editingId = "";
+  moduleRulesState.formType = "rule";
+  moduleRulesState.selectedId = "";
+  moduleRulesState.searchQuery = "";
+  moduleRulesState.typeFilter = "all";
+  moduleRulesState.statusFilter = "all";
+}
+
+function ensureModuleRulesData(moduleKey = "absence") {
+  if (!authState.user || moduleRulesState.loading) {
+    return;
+  }
+
+  if (moduleRulesState.moduleKey !== moduleKey) {
+    resetModuleRulesState();
+    moduleRulesState.moduleKey = moduleKey;
+  }
+
+  if (!moduleRulesState.loaded) {
+    void loadModuleRules(moduleKey);
+  }
+}
+
+async function loadModuleRules(moduleKey = moduleRulesState.moduleKey, options = {}) {
+  if (!authState.user || moduleRulesState.loading) {
+    return;
+  }
+
+  moduleRulesState.moduleKey = moduleKey;
+  moduleRulesState.loading = true;
+  moduleRulesState.error = "";
+
+  try {
+    const result = await apiJson(`/api/modules/${encodeURIComponent(moduleKey)}/rules`);
+    moduleRulesState.rules = Array.isArray(result.rules) ? result.rules : [];
+    moduleRulesState.loaded = true;
+    moduleRulesState.apiStatus = result.apiStatus || "ready";
+    if (
+      moduleRulesState.selectedId &&
+      !moduleRulesState.rules.some((item) => item.id === moduleRulesState.selectedId)
+    ) {
+      moduleRulesState.selectedId = "";
+    }
+    if (!moduleRulesState.selectedId && moduleRulesState.rules[0]) {
+      moduleRulesState.selectedId = moduleRulesState.rules[0].id;
+      void loadModuleRuleAudit(moduleKey, moduleRulesState.selectedId, { renderAfter: false });
+    }
+  } catch (error) {
+    moduleRulesState.rules = [];
+    moduleRulesState.loaded = false;
+    moduleRulesState.apiStatus = error.payload?.apiStatus || "waiting";
+    moduleRulesState.error = error.payload?.error || "Pravidla a automatizace se teď nepodařilo načíst.";
+  } finally {
+    moduleRulesState.loading = false;
+  }
+
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
+async function loadModuleRuleAudit(moduleKey, ruleId, options = {}) {
+  if (!authState.user || !ruleId) {
+    return;
+  }
+
+  try {
+    const result = await apiJson(`/api/modules/${encodeURIComponent(moduleKey)}/rules/${encodeURIComponent(ruleId)}/audit`);
+    moduleRulesState.auditLog = Array.isArray(result.auditLog) ? result.auditLog : [];
+  } catch (error) {
+    moduleRulesState.auditLog = [];
+    moduleRulesState.error = error.payload?.error || "Audit log pravidla se teď nepodařilo načíst.";
+  }
+
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
+function openModuleRuleForm(type = "rule", id = "") {
+  moduleRulesState.formOpen = true;
+  moduleRulesState.formType = type === "automation" ? "automation" : "rule";
+  moduleRulesState.editingId = id;
+  moduleRulesState.error = "";
+  moduleRulesState.message = "";
+  render();
+}
+
+function closeModuleRuleForm() {
+  moduleRulesState.formOpen = false;
+  moduleRulesState.editingId = "";
+  moduleRulesState.error = "";
+  render();
+}
+
+function parseModuleRuleJson(value, fieldLabel) {
+  const cleaned = String(value || "").trim() || "{}";
+  try {
+    JSON.parse(cleaned);
+    return cleaned;
+  } catch {
+    throw new Error(`${fieldLabel} musí být platný JSON.`);
+  }
+}
+
+function moduleRuleFormData(form) {
+  const formData = new FormData(form);
+  const type = String(formData.get("type") || "rule");
+  return {
+    title: String(formData.get("title") || "").trim(),
+    description: String(formData.get("description") || "").trim(),
+    type,
+    status: String(formData.get("status") || "draft"),
+    isAutomation: type === "automation",
+    triggerType: String(formData.get("triggerType") || "manual"),
+    scheduleCron: String(formData.get("scheduleCron") || "").trim(),
+    eventName: String(formData.get("eventName") || "").trim(),
+    cloudRunner: String(formData.get("cloudRunner") || "").trim(),
+    conditionsJson: parseModuleRuleJson(formData.get("conditionsJson"), "Podmínky JSON"),
+    actionsJson: parseModuleRuleJson(formData.get("actionsJson"), "Akce JSON"),
+    auditNote: String(formData.get("auditNote") || "").trim()
+  };
+}
+
+async function saveModuleRuleForm(form) {
+  if (!hasPermission(currentUser(), moduleRulesState.moduleKey, "manage")) {
+    moduleRulesState.error = "Nemáte oprávnění měnit pravidla a automatizace.";
+    render();
+    return;
+  }
+
+  let payload = null;
+  try {
+    payload = moduleRuleFormData(form);
+  } catch (error) {
+    moduleRulesState.error = error.message;
+    render();
+    return;
+  }
+
+  const ruleId = String(form.dataset.ruleId || "").trim();
+  moduleRulesState.saving = true;
+  moduleRulesState.error = "";
+  moduleRulesState.message = "Ukládám pravidlo do cloud DB...";
+  render();
+
+  try {
+    const path = ruleId
+      ? `/api/modules/${encodeURIComponent(moduleRulesState.moduleKey)}/rules/${encodeURIComponent(ruleId)}`
+      : `/api/modules/${encodeURIComponent(moduleRulesState.moduleKey)}/rules`;
+    const result = await apiJson(path, {
+      method: ruleId ? "PATCH" : "POST",
+      body: JSON.stringify(payload)
+    });
+    moduleRulesState.message = ruleId ? "Pravidlo bylo uloženo." : "Pravidlo bylo vytvořeno.";
+    moduleRulesState.formOpen = false;
+    moduleRulesState.editingId = "";
+    moduleRulesState.selectedId = result.rule?.id || ruleId || moduleRulesState.selectedId;
+    await loadModuleRules(moduleRulesState.moduleKey, { renderAfter: false });
+    await loadModuleRuleAudit(moduleRulesState.moduleKey, moduleRulesState.selectedId, { renderAfter: false });
+  } catch (error) {
+    moduleRulesState.error = error.payload?.error || "Pravidlo se nepodařilo uložit.";
+    moduleRulesState.message = "";
+  } finally {
+    moduleRulesState.saving = false;
+    render();
+  }
+}
+
+async function toggleModuleRuleStatus(ruleId, nextStatus) {
+  if (!hasPermission(currentUser(), moduleRulesState.moduleKey, "manage")) {
+    moduleRulesState.error = "Nemáte oprávnění měnit stav pravidla.";
+    render();
+    return;
+  }
+
+  const action = nextStatus === "active" ? "activate" : "deactivate";
+  moduleRulesState.saving = true;
+  moduleRulesState.error = "";
+  moduleRulesState.message = nextStatus === "active" ? "Aktivuji pravidlo..." : "Deaktivuji pravidlo...";
+  render();
+
+  try {
+    const result = await apiJson(`/api/modules/${encodeURIComponent(moduleRulesState.moduleKey)}/rules/${encodeURIComponent(ruleId)}/${action}`, {
+      method: "POST"
+    });
+    moduleRulesState.selectedId = result.rule?.id || ruleId;
+    moduleRulesState.message = nextStatus === "active" ? "Pravidlo bylo aktivováno." : "Pravidlo bylo deaktivováno.";
+    await loadModuleRules(moduleRulesState.moduleKey, { renderAfter: false });
+    await loadModuleRuleAudit(moduleRulesState.moduleKey, moduleRulesState.selectedId, { renderAfter: false });
+  } catch (error) {
+    moduleRulesState.error = error.payload?.error || "Stav pravidla se nepodařilo změnit.";
+    moduleRulesState.message = "";
+  } finally {
+    moduleRulesState.saving = false;
+    render();
+  }
+}
+
+function selectModuleRule(ruleId) {
+  moduleRulesState.selectedId = ruleId;
+  moduleRulesState.error = "";
+  moduleRulesState.message = "";
+  void loadModuleRuleAudit(moduleRulesState.moduleKey, ruleId);
+  render();
+}
+
 function updateAppearanceDraft(form, options = {}) {
   themeState.draft = appearanceFormData(form);
   themeState.error = "";
@@ -10783,6 +11261,7 @@ async function logout() {
   absenceSettingsState.apiStatus = "waiting";
   absenceSettingsState.error = "";
   absenceSettingsState.missingEndpoint = "PATCH /api/absence-settings";
+  resetModuleRulesState();
   navigateToUrl(routeHref("/"));
 }
 
@@ -12665,6 +13144,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const moduleRuleFormElement = event.target.closest("[data-module-rule-form]");
+  if (moduleRuleFormElement) {
+    event.preventDefault();
+    await saveModuleRuleForm(moduleRuleFormElement);
+    return;
+  }
+
   const feedbackCreateForm = event.target.closest("[data-feedback-create-form]");
   if (feedbackCreateForm) {
     event.preventDefault();
@@ -12823,6 +13309,12 @@ document.addEventListener("change", (event) => {
   const accessUserRole = event.target.closest("[data-access-user-role]");
   if (accessUserRole) {
     changeAccessUserRole(accessUserRole);
+    return;
+  }
+
+  const moduleRulesFilter = event.target.closest("[data-module-rules-type-filter], [data-module-rules-status-filter]");
+  if (moduleRulesFilter) {
+    updateModuleRulesFilters(moduleRulesFilter);
     return;
   }
 
@@ -13173,6 +13665,41 @@ document.addEventListener("click", async (event) => {
       setAbsenceNotice("");
       navigateToUrl(routeHref(absenceRouteForTab(resolvedTab)));
     });
+    return;
+  }
+
+  const moduleRuleNew = event.target.closest("[data-module-rule-new]");
+  if (moduleRuleNew) {
+    openModuleRuleForm(moduleRuleNew.dataset.moduleRuleNew || "rule");
+    return;
+  }
+
+  const moduleRuleFormClose = event.target.closest("[data-module-rule-form-close]");
+  if (moduleRuleFormClose) {
+    closeModuleRuleForm();
+    return;
+  }
+
+  const moduleRuleEdit = event.target.closest("[data-module-rule-edit]");
+  if (moduleRuleEdit) {
+    const ruleId = moduleRuleEdit.dataset.moduleRuleEdit || "";
+    const rule = moduleRulesState.rules.find((item) => item.id === ruleId);
+    openModuleRuleForm(rule?.type || "rule", ruleId);
+    return;
+  }
+
+  const moduleRuleSelect = event.target.closest("[data-module-rule-select]");
+  if (moduleRuleSelect) {
+    selectModuleRule(moduleRuleSelect.dataset.moduleRuleSelect || "");
+    return;
+  }
+
+  const moduleRuleToggle = event.target.closest("[data-module-rule-toggle]");
+  if (moduleRuleToggle) {
+    await toggleModuleRuleStatus(
+      moduleRuleToggle.dataset.moduleRuleToggle || "",
+      moduleRuleToggle.dataset.nextStatus || "inactive"
+    );
     return;
   }
 
