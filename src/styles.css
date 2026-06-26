@@ -33,7 +33,7 @@ body {
     "Segoe UI", sans-serif;
   color: var(--ink);
   background:
-    linear-gradient(145deg, rgba(117, 189, 37, 0.13) 0%, rgba(117, 189, 37, 0) 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--kaiser-green) 13%, transparent) 0%, transparent 34%),
     linear-gradient(215deg, rgba(66, 80, 74, 0.1) 0%, rgba(66, 80, 74, 0) 30%),
     linear-gradient(180deg, #ffffff 0%, var(--page) 52%, #eef1ec 100%);
   letter-spacing: 0;
@@ -93,20 +93,6 @@ a {
   margin-top: 28px;
 }
 
-.home-page-fixed-theme {
-  --kaiser-green: #75bd25;
-  --kaiser-green-dark: #3f7416;
-  --ink: #202821;
-  --muted: #657164;
-  --line: #dfe5dc;
-  --card: #ffffff;
-  --surface: #fbfcf8;
-  --surface-strong: #eef4e9;
-  --steel: #42504a;
-  --shadow-card: 0 12px 28px rgba(36, 45, 34, 0.08);
-  --shadow-card-hover: 0 18px 38px rgba(36, 45, 34, 0.14);
-}
-
 .form-field {
   display: grid;
   gap: 7px;
@@ -129,8 +115,8 @@ a {
 }
 
 .form-field input:focus {
-  border-color: rgba(117, 189, 37, 0.7);
-  box-shadow: 0 0 0 3px rgba(117, 189, 37, 0.15);
+  border-color: color-mix(in srgb, var(--kaiser-green) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--kaiser-green) 15%, transparent);
 }
 
 .form-field input[readonly] {
@@ -154,10 +140,10 @@ a {
   justify-content: center;
   padding: 0 16px;
   border-radius: 8px;
-  background: linear-gradient(180deg, #82c932 0%, #67aa1e 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--kaiser-green) 86%, #ffffff) 0%, var(--kaiser-green) 100%);
   color: #ffffff;
   font-weight: 900;
-  box-shadow: 0 14px 28px rgba(92, 158, 28, 0.22);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--kaiser-green) 24%, transparent);
 }
 
 .primary-action:disabled {
@@ -260,7 +246,7 @@ a {
 .logout-button:focus-visible,
 .primary-action:focus-visible,
 .text-action:focus-visible {
-  outline: 3px solid rgba(117, 189, 37, 0.2);
+  outline: 3px solid color-mix(in srgb, var(--kaiser-green) 20%, transparent);
   outline-offset: 2px;
 }
 
@@ -3626,6 +3612,52 @@ h1 {
 
 .appearance-field--color strong {
   font-size: 0.82rem;
+}
+
+.appearance-field input:disabled {
+  background: color-mix(in srgb, var(--theme-bg) 72%, #ffffff);
+  color: var(--theme-muted);
+  cursor: not-allowed;
+}
+
+.appearance-palette-preview {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.appearance-palette-swatch {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-card);
+  color: var(--theme-text);
+}
+
+.appearance-palette-swatch span {
+  display: block;
+  min-height: 34px;
+  border: 1px solid color-mix(in srgb, var(--theme-muted) 22%, transparent);
+  border-radius: 6px;
+}
+
+.appearance-palette-swatch strong,
+.appearance-palette-swatch small {
+  overflow-wrap: anywhere;
+}
+
+.appearance-palette-swatch strong {
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.appearance-palette-swatch small {
+  color: var(--theme-muted);
+  font-size: 0.72rem;
+  font-weight: 850;
 }
 
 .appearance-preview {
@@ -9213,6 +9245,7 @@ body:has(.ai-assistant-promo-modal) {
   .feedback-filters,
   .feedback-list,
   .appearance-form__grid,
+  .appearance-palette-preview,
   .access-form-grid,
   .absence-form,
   .absence-form--settings,
@@ -9799,6 +9832,7 @@ body:has(.ai-assistant-promo-modal) {
   }
 
   .appearance-form__grid,
+  .appearance-palette-preview,
   .appearance-preview,
   .appearance-meta,
   .appearance-field--color {

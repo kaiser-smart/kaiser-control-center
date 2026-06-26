@@ -7,6 +7,7 @@ import {
   THEME_CARD_SHADOWS,
   THEME_FONTS,
   THEME_LABELS,
+  THEME_PALETTE_MODES,
   normalizeThemeSettings
 } from "../data/themeSettings.js";
 
@@ -26,6 +27,16 @@ function colorField(name, label, value) {
       <input name="${escapeHtml(name)}" type="color" value="${escapeHtml(value)}" data-appearance-field />
       <strong>${escapeHtml(value)}</strong>
     </label>
+  `;
+}
+
+function paletteSwatch(label, value) {
+  return `
+    <div class="appearance-palette-swatch">
+      <span style="background: ${escapeHtml(value)}"></span>
+      <strong>${escapeHtml(label)}</strong>
+      <small>${escapeHtml(value)}</small>
+    </div>
   `;
 }
 
@@ -56,19 +67,20 @@ export function AppearanceSettingsBox({
   const draft = normalizeThemeSettings(draftSettings);
   const saved = normalizeThemeSettings(savedSettings);
   const busy = loading || saving;
+  const manualPaletteDisabled = draft.paletteMode === "auto" ? "disabled" : "";
 
   return `
     <section class="appearance-settings users-panel" aria-labelledby="appearance-title">
       <div class="users-panel__head">
         <div>
-          <h2 id="appearance-title">Vzhled aplikace</h2>
-          <p>Upravte logo, barvy, zaoblení, tlačítka a pozadí vnitřních modulů systému.</p>
+          <h2 id="appearance-title">Vzhled a firemní barevné schéma</h2>
+          <p>Upravte logo, firemní barvu, automatickou paletu nebo ruční barvy pro celé nasazení aplikace.</p>
         </div>
-        <span class="appearance-scope-badge">HP se nemění</span>
+        <span class="appearance-scope-badge">${draft.paletteMode === "auto" ? "auto paleta" : "ruční paleta"}</span>
       </div>
 
       <p class="appearance-fixed-note">
-        Hlavní stránka, modulové karty a HP badge mají pevný schválený vzhled. Toto nastavení se aplikuje jen na vnitřní modulové obrazovky.
+        Nastavení se ukládá přes cloud API. Automatický režim dopočítá čitelnou paletu z jedné firemní barvy, ruční režim dovolí přesné doladění více barev.
       </p>
 
       <form class="appearance-form" data-appearance-form>
@@ -78,12 +90,14 @@ export function AppearanceSettingsBox({
             <input name="logoUrl" value="${escapeHtml(draft.logoUrl)}" placeholder="/logo-kaiser.svg" data-appearance-field />
           </label>
 
-          ${colorField("primaryColor", "Hlavní zelená", draft.primaryColor)}
-          ${colorField("secondaryColor", "Sekundární barva", draft.secondaryColor)}
-          ${colorField("backgroundColor", "Pozadí modulů", draft.backgroundColor)}
-          ${colorField("cardColor", "Barva boxů", draft.cardColor)}
-          ${colorField("textColor", "Text", draft.textColor)}
-          ${colorField("mutedTextColor", "Sekundární text", draft.mutedTextColor)}
+          ${selectField("paletteMode", "Režim palety", THEME_PALETTE_MODES, draft.paletteMode, THEME_LABELS.paletteMode)}
+          ${colorField("primaryColor", "Firemní barva", draft.primaryColor)}
+          ${colorField("accentColor", "Akcent", draft.accentColor).replace("data-appearance-field", `${manualPaletteDisabled} data-appearance-field`)}
+          ${colorField("secondaryColor", "Sekundární barva", draft.secondaryColor).replace("data-appearance-field", `${manualPaletteDisabled} data-appearance-field`)}
+          ${colorField("backgroundColor", "Pozadí aplikace", draft.backgroundColor).replace("data-appearance-field", `${manualPaletteDisabled} data-appearance-field`)}
+          ${colorField("cardColor", "Barva boxů", draft.cardColor).replace("data-appearance-field", `${manualPaletteDisabled} data-appearance-field`)}
+          ${colorField("textColor", "Text", draft.textColor).replace("data-appearance-field", `${manualPaletteDisabled} data-appearance-field`)}
+          ${colorField("mutedTextColor", "Sekundární text", draft.mutedTextColor).replace("data-appearance-field", `${manualPaletteDisabled} data-appearance-field`)}
 
           ${selectField("cardRadius", "Rádius boxů", THEME_CARD_RADIUS_OPTIONS, draft.cardRadius)}
           ${selectField("buttonRadius", "Rádius tlačítek", THEME_BUTTON_RADIUS_OPTIONS, draft.buttonRadius)}
@@ -91,6 +105,15 @@ export function AppearanceSettingsBox({
           ${selectField("backgroundStyle", "Pozadí modulů", THEME_BACKGROUND_STYLES, draft.backgroundStyle, THEME_LABELS.backgroundStyle)}
           ${selectField("cardShadow", "Stíny boxů", THEME_CARD_SHADOWS, draft.cardShadow, THEME_LABELS.cardShadow)}
           ${selectField("fontFamily", "Font v modulech", THEME_FONTS, draft.fontFamily, THEME_LABELS.fontFamily)}
+        </div>
+
+        <div class="appearance-palette-preview" aria-label="Výsledná paleta">
+          ${paletteSwatch("Firemní", draft.primaryColor)}
+          ${paletteSwatch("Sekundární", draft.secondaryColor)}
+          ${paletteSwatch("Akcent", draft.accentColor)}
+          ${paletteSwatch("Pozadí", draft.backgroundColor)}
+          ${paletteSwatch("Boxy", draft.cardColor)}
+          ${paletteSwatch("Text", draft.textColor)}
         </div>
 
         <div class="appearance-preview" aria-label="Živý náhled vzhledu">

@@ -510,6 +510,40 @@ function canManageMockTcars(currentUser) {
   return ["admin", "management", "dispecer"].includes(normalizeRole(currentUser?.role));
 }
 
+function canViewMockDataBox(currentUser) {
+  return hasPermission(currentUser, "data-box", "view");
+}
+
+function mockDataBoxStatusPayload() {
+  return {
+    apiStatus: "ready",
+    storageStatus: "waiting",
+    integrationStatus: "inactive",
+    isdsActive: false,
+    mode: "pilot",
+    dataBox: {
+      id: "kaiser-primary",
+      label: "Kaiser Smart Datova schranka",
+      isdsId: "",
+      mode: "pilot",
+      status: "inactive",
+      lastSyncAt: "",
+      lastSyncStatus: "waiting",
+      lastSyncMessage: "ISDS integrace neni aktivni.",
+      createdAt: "",
+      updatedAt: ""
+    },
+    summary: {
+      received: 0,
+      sent: 0,
+      attachments: 0,
+      syncRuns: 0,
+      lastSyncAt: ""
+    },
+    message: "Lokalni dev API je pripravene, ostre ISDS napojeni neni aktivni."
+  };
+}
+
 function visibleMockFeedback(currentUser) {
   const items = mockModuleFeedback
     .map(normalizeFeedback)
@@ -1482,6 +1516,67 @@ async function handleApi(request, response) {
     }
 
     sendJson(response, 200, await loadTcarsStatusPayload(process.env));
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box/status" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+
+    sendJson(response, 200, mockDataBoxStatusPayload());
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box/messages" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+
+    sendJson(response, 200, { messages: [], apiStatus: "ready" });
+    return true;
+  }
+
+  const dataBoxMessageMatch = /^\/api\/data-box\/messages\/([^/]+)$/.exec(url.pathname);
+  if (dataBoxMessageMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+
+    sendJson(response, 404, { error: "Zprava nebyla nalezena.", apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box/sync-runs" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+
+    sendJson(response, 200, { runs: [], apiStatus: "ready" });
     return true;
   }
 

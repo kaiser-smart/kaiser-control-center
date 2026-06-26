@@ -565,6 +565,17 @@ const moduleRulesState = {
   typeFilter: "all",
   statusFilter: "all"
 };
+const dataBoxState = {
+  loaded: false,
+  loading: false,
+  apiStatus: "waiting",
+  storageStatus: "waiting",
+  integrationStatus: "inactive",
+  status: null,
+  messages: [],
+  syncRuns: [],
+  error: ""
+};
 const quickAbsenceState = {
   step: "type",
   type: "",
@@ -792,6 +803,13 @@ function moduleThemeStyleAttribute() {
     .join("; ");
 
   return `style="${style}"`;
+}
+
+function applyActiveThemeToRoot() {
+  const properties = themeSettingsToCssProperties(activeThemeSettings());
+  for (const [name, value] of Object.entries(properties)) {
+    document.documentElement.style.setProperty(name, value);
+  }
 }
 
 function normalizePath(pathname) {
@@ -2840,9 +2858,11 @@ function currentAccessDirtyTarget() {
 
 function appearanceFormData(form) {
   return normalizeThemeSettings({
+    paletteMode: form.elements.paletteMode.value,
     logoUrl: form.elements.logoUrl.value,
     primaryColor: form.elements.primaryColor.value,
     secondaryColor: form.elements.secondaryColor.value,
+    accentColor: form.elements.accentColor.value,
     backgroundColor: form.elements.backgroundColor.value,
     cardColor: form.elements.cardColor.value,
     textColor: form.elements.textColor.value,
@@ -3540,7 +3560,7 @@ function homePage(user) {
     .join("");
 
   return `
-    <main class="app-shell home-page-fixed-theme">
+    <main class="app-shell module-theme-scope" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
       <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero__main">
@@ -9114,10 +9134,52 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   `;
 }
 
+function dataBoxStatusLabel(value) {
+  const labels = {
+    inactive: "neaktivni",
+    waiting: "ceka",
+    ready: "aktivni",
+    pilot: "pilot"
+  };
+  return labels[String(value || "").trim().toLowerCase()] || String(value || "ceka");
+}
+
 function dataBoxStatusCards() {
+  const status = dataBoxState.status || {};
+  const summary = status.summary || {};
+  const apiReady = dataBoxState.apiStatus === "ready";
+  const storageReady = dataBoxState.storageStatus === "ready";
+  const cards = DATA_BOX_STATUS_CARDS.map((item) => ({ ...item }));
+  cards[0] = {
+    label: "Stav funkce",
+    value: apiReady ? "Funkcni pres API" : (dataBoxState.loading ? "nacitam API" : "UI navrh"),
+    note: apiReady
+      ? "Frontend cte metadata z cloud API a D1. ISDS zustava vypnute."
+      : (dataBoxState.error || "Bez ostreho cteni, zapisu nebo odesilani do ISDS.")
+  };
+  cards[1] = {
+    label: "Zdroj dat",
+    value: apiReady ? "Cloudflare D1" : "ceka na API",
+    note: apiReady
+      ? `${Number(summary.received || 0)} prijatych, ${Number(summary.sent || 0)} odeslanych, ${Number(summary.attachments || 0)} priloh.`
+      : "Cilove cloud backend, D1 metadata a R2 prilohy."
+  };
+  cards[2] = {
+    label: "ISDS napojeni",
+    value: dataBoxStatusLabel(dataBoxState.integrationStatus),
+    note: status.message || "SOAP/WSDL adapter bude az v dalsi fazi."
+  };
+  cards[3] = {
+    label: "Uloziste priloh",
+    value: storageReady ? "R2 pripraveno" : "ceka na R2",
+    note: storageReady
+      ? "Metadata jsou v D1, soubory budou v R2 pres backend."
+      : "Prilohy se zatim nenacitaji ani neukladaji."
+  };
+
   return `
     <div class="data-box-status-grid" aria-label="Stav modulu Datová schránka">
-      ${DATA_BOX_STATUS_CARDS.map((item) => `
+      ${cards.map((item) => `
         <article>
           <span>${escapeHtml(item.label)}</span>
           <strong>${escapeHtml(item.value)}</strong>
@@ -9138,15 +9200,78 @@ function dataBoxTabs() {
   `;
 }
 
+function dataBoxMessageActor(message) {
+  if (message.direction === "sent") {
+    return message.recipientName || message.recipientBoxId || "-";
+  }
+
+  return message.senderName || message.senderBoxId || "-";
+}
+
+function dataBoxAiStatusLabel(value) {
+  const labels = {
+    not_evaluated: "nevyhodnoceno",
+    draft: "navrh",
+    done: "hotovo",
+    failed: "chyba"
+  };
+  return labels[String(value || "").trim().toLowerCase()] || String(value || "-");
+}
+
+function dataBoxMessageRows(direction) {
+  if (dataBoxState.loading && !dataBoxState.loaded) {
+    return `
+      <tr>
+        <td colspan="${DATA_BOX_EMPTY_MESSAGE_COLUMNS.length}">Nacitam metadata z cloud API...</td>
+      </tr>
+    `;
+  }
+
+  if (dataBoxState.error) {
+    return `
+      <tr>
+        <td colspan="${DATA_BOX_EMPTY_MESSAGE_COLUMNS.length}">${escapeHtml(dataBoxState.error)}</td>
+      </tr>
+    `;
+  }
+
+  const rows = dataBoxState.messages.filter((message) => message.direction === direction);
+  if (!rows.length) {
+    return `
+      <tr>
+        <td colspan="${DATA_BOX_EMPTY_MESSAGE_COLUMNS.length}">
+          Zadna ostra zprava neni nactena. Frontend nevola ISDS a neobsahuje provozni data.
+        </td>
+      </tr>
+    `;
+  }
+
+  return rows.map((message) => `
+    <tr>
+      <td>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "-")}</td>
+      <td>${escapeHtml(message.direction === "sent" ? "odeslana" : "prijata")}</td>
+      <td>${escapeHtml(dataBoxMessageActor(message))}</td>
+      <td>${escapeHtml(message.subject || "(bez predmetu)")}</td>
+      <td>${escapeHtml(message.status || "-")}</td>
+      <td>${escapeHtml(String(message.attachmentsCount || 0))}</td>
+      <td>${escapeHtml(dataBoxAiStatusLabel(message.aiStatus))}</td>
+      <td><button class="secondary-link" type="button" disabled>Detail</button></td>
+    </tr>
+  `).join("");
+}
+
 function dataBoxMessageTable(title, direction) {
+  const statusClass = dataBoxState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
+  const statusLabel = dataBoxState.apiStatus === "ready" ? "API aktivni" : (dataBoxState.loading ? "nacitam API" : "ceka na API");
+
   return `
     <section class="data-box-panel" id="${escapeHtml(direction)}" aria-labelledby="data-box-${escapeHtml(direction)}-title">
       <div class="data-box-panel__head">
         <div>
           <h2 id="data-box-${escapeHtml(direction)}-title">${escapeHtml(title)}</h2>
-          <p>Seznam zůstává prázdný, dokud nebude hotový backend adapter a ověřené ISDS připojení.</p>
+          <p>Seznam cte pouze metadata z interniho API. Ostre ISDS pripojeni neni v teto fazi aktivni.</p>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">čeká na API</span>
+        <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
       </div>
       <div class="data-box-table-wrap">
         <table class="data-box-table">
@@ -9154,11 +9279,7 @@ function dataBoxMessageTable(title, direction) {
             <tr>${DATA_BOX_EMPTY_MESSAGE_COLUMNS.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr>
           </thead>
           <tbody>
-            <tr>
-              <td colspan="${DATA_BOX_EMPTY_MESSAGE_COLUMNS.length}">
-                Žádné ostré zprávy nejsou načtené. Frontend nevolá ISDS a neobsahuje provozní data.
-              </td>
-            </tr>
+            ${dataBoxMessageRows(direction)}
           </tbody>
         </table>
       </div>
@@ -9198,6 +9319,10 @@ function dataBoxAiPanel() {
 }
 
 function dataBoxArchitecturePanel() {
+  const status = dataBoxState.status || {};
+  const summary = status.summary || {};
+  const lastSync = summary.lastSyncAt ? formatDateTime(summary.lastSyncAt) : "zatim neprobehla";
+
   return `
     <section class="data-box-panel" id="overview" aria-labelledby="data-box-overview-title">
       <div class="data-box-panel__head">
@@ -9205,7 +9330,11 @@ function dataBoxArchitecturePanel() {
           <h2 id="data-box-overview-title">Provozní realita</h2>
           <p>Rozpad na fáze a cílové cloudové části, aby UI nevypadalo jako ostré ISDS napojení.</p>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">ISDS neaktivní</span>
+        <span class="employee-card-status employee-card-status--waiting">ISDS neaktivni</span>
+      </div>
+      <div class="data-box-warning" role="status">
+        <strong>Posledni synchronizace: ${escapeHtml(lastSync)}</strong>
+        <span>${escapeHtml(status.message || "ISDS integrace neni aktivni. Pripraveny je pouze vlastni cloudovy model dat.")}</span>
       </div>
       <div class="data-box-phase-grid">
         ${DATA_BOX_PHASES.map((phase) => `
@@ -9239,6 +9368,54 @@ function dataBoxArchitecturePanel() {
   `;
 }
 
+function dataBoxSyncRunsPanel() {
+  const statusClass = dataBoxState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
+  const statusLabel = dataBoxState.apiStatus === "ready" ? "D1 log pripraven" : "ceka na D1";
+  const rows = dataBoxState.syncRuns.length
+    ? dataBoxState.syncRuns.map((run) => `
+      <tr>
+        <td>${escapeHtml(formatDateTime(run.startedAt) || "-")}</td>
+        <td>${escapeHtml(run.triggerType || "-")}</td>
+        <td>${escapeHtml(run.status || "-")}</td>
+        <td>${escapeHtml(String(run.messagesFound || 0))}</td>
+        <td>${escapeHtml(String(run.messagesCreated || 0))}</td>
+        <td>${escapeHtml(run.message || run.errorCode || "-")}</td>
+      </tr>
+    `).join("")
+    : `
+      <tr>
+        <td colspan="6">Zadny beh synchronizace zatim neni zapsany. Cloud automatizace a ISDS adapter nejsou aktivni.</td>
+      </tr>
+    `;
+
+  return `
+    <section class="data-box-panel" aria-labelledby="data-box-sync-title">
+      <div class="data-box-panel__head">
+        <div>
+          <h2 id="data-box-sync-title">Log synchronizaci</h2>
+          <p>Evidence budoucich manualnich nebo cloudovych behu. V teto fazi se zadna ISDS synchronizace nespousti.</p>
+        </div>
+        <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <div class="data-box-table-wrap">
+        <table class="data-box-table">
+          <thead>
+            <tr>
+              <th>Start</th>
+              <th>Typ</th>
+              <th>Stav</th>
+              <th>Nalezeno</th>
+              <th>Vytvoreno</th>
+              <th>Zprava</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function dataBoxRulesAutomation(user) {
   ensureModuleRulesData(DATA_BOX_MODULE_KEY);
   return moduleRulesAutomationPanel({
@@ -9251,6 +9428,10 @@ function dataBoxRulesAutomation(user) {
 }
 
 function dataBoxPage(moduleItem, user) {
+  ensureDataBoxData();
+  const apiReady = dataBoxState.apiStatus === "ready";
+  const heroStatus = apiReady ? "Funkcni pres API" : "UI navrh";
+
   return `
     <main class="app-shell module-page module-theme-scope data-box-page" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
@@ -9267,7 +9448,7 @@ function dataBoxPage(moduleItem, user) {
           <p>Pilotní rozhraní pro budoucí ISDS integraci. Teď je to bezpečný UI návrh bez ostrého čtení, zápisu, odesílání a bez uložených přístupových údajů.</p>
           <div class="module-detail__status">
             <span>Stav</span>
-            <strong>UI návrh</strong>
+            <strong>${escapeHtml(heroStatus)}</strong>
           </div>
           <div class="module-actions">
             <button class="primary-action" type="button" disabled title="Čeká na backend ISDS adapter">Synchronizovat</button>
@@ -9287,6 +9468,7 @@ function dataBoxPage(moduleItem, user) {
       ${dataBoxMessageTable("Přijaté zprávy", "received")}
       ${dataBoxMessageTable("Odeslané zprávy", "sent")}
       ${dataBoxAiPanel()}
+      ${dataBoxSyncRunsPanel()}
       <div id="rules">
         ${dataBoxRulesAutomation(user)}
       </div>
@@ -10137,6 +10319,71 @@ async function apiJson(path, options = {}) {
   }
 
   return payload;
+}
+
+function resetDataBoxState() {
+  dataBoxState.loaded = false;
+  dataBoxState.loading = false;
+  dataBoxState.apiStatus = "waiting";
+  dataBoxState.storageStatus = "waiting";
+  dataBoxState.integrationStatus = "inactive";
+  dataBoxState.status = null;
+  dataBoxState.messages = [];
+  dataBoxState.syncRuns = [];
+  dataBoxState.error = "";
+}
+
+async function loadDataBoxData(options = {}) {
+  const { force = false, renderAfter = true } = options;
+
+  if (dataBoxState.loading || (dataBoxState.loaded && !force)) {
+    return;
+  }
+
+  dataBoxState.loading = true;
+  dataBoxState.error = "";
+
+  try {
+    const status = await apiJson("/api/data-box/status");
+    dataBoxState.status = status;
+    dataBoxState.apiStatus = status.apiStatus || "waiting";
+    dataBoxState.storageStatus = status.storageStatus || "waiting";
+    dataBoxState.integrationStatus = status.integrationStatus || "inactive";
+    dataBoxState.messages = [];
+    dataBoxState.syncRuns = [];
+
+    if (dataBoxState.apiStatus === "ready") {
+      const [messagesResult, syncRunsResult] = await Promise.all([
+        apiJson("/api/data-box/messages?limit=100"),
+        apiJson("/api/data-box/sync-runs?limit=50")
+      ]);
+      dataBoxState.messages = messagesResult.messages || [];
+      dataBoxState.syncRuns = syncRunsResult.runs || [];
+    }
+
+    dataBoxState.loaded = true;
+  } catch (error) {
+    dataBoxState.status = null;
+    dataBoxState.messages = [];
+    dataBoxState.syncRuns = [];
+    dataBoxState.apiStatus = error?.payload?.apiStatus || "waiting";
+    dataBoxState.error = error?.payload?.error || error?.message || "Datovou schránku se teď nepodařilo načíst.";
+    dataBoxState.loaded = true;
+  } finally {
+    dataBoxState.loading = false;
+  }
+
+  if (renderAfter) {
+    render();
+  }
+}
+
+function ensureDataBoxData() {
+  if (!hasPermission(currentUser(), DATA_BOX_MODULE_KEY, "view")) {
+    return;
+  }
+
+  void loadDataBoxData();
 }
 
 async function loadVehicleTrackingStatus(options = {}) {
@@ -11376,7 +11623,7 @@ function updateAppearanceDraft(form, options = {}) {
 
   if (options.preview) {
     themeState.preview = themeState.draft;
-    themeState.message = "Náhled změn je zapnutý pouze pro vnitřní modulové stránky.";
+    themeState.message = "Náhled změn je zapnutý pro přihlášenou část aplikace.";
   }
 }
 
@@ -11590,6 +11837,7 @@ async function logout() {
   absenceSettingsState.error = "";
   absenceSettingsState.missingEndpoint = "PATCH /api/absence-settings";
   resetModuleRulesState();
+  resetDataBoxState();
   navigateToUrl(routeHref("/"));
 }
 
@@ -11801,6 +12049,7 @@ function renderApp() {
 function render() {
   try {
     accessUnsavedChangesGuard.unmountModal();
+    applyActiveThemeToRoot();
     renderApp();
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());

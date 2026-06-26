@@ -12,13 +12,13 @@ export const DATA_BOX_TABS = [
 export const DATA_BOX_STATUS_CARDS = [
   {
     label: "Stav funkce",
-    value: "UI návrh",
-    note: "Bez ostrého čtení, zápisu nebo odesílání do ISDS."
+    value: "Funkcni pres API",
+    note: "Cloud API a D1 model bez ostreho cteni, zapisu nebo odesilani do ISDS."
   },
   {
     label: "Zdroj dat",
-    value: "čeká na API",
-    note: "Cílově cloud backend, D1 metadata a R2 přílohy."
+    value: "Cloudflare D1",
+    note: "Metadata datovych schranek, zprav, priloh, AI vysledku a auditu."
   },
   {
     label: "ISDS napojení",
@@ -70,9 +70,10 @@ export const DATA_BOX_INTEGRATION_POINTS = [
 
 export const DATA_BOX_PLANNED_ENDPOINTS = [
   "GET /api/data-box/status",
-  "POST /api/data-box/sync",
   "GET /api/data-box/messages",
   "GET /api/data-box/messages/:id",
+  "GET /api/data-box/sync-runs",
+  "POST /api/data-box/sync",
   "GET /api/data-box/messages/:id/attachments/:attachmentId",
   "POST /api/data-box/messages/:id/ai-evaluate",
   "POST /api/data-box/outbox/drafts",
