@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourceRoots = ["src", "functions", "scripts"];
+const sourceRoots = ["src", "functions", "scripts", "workers"];
 const mode = process.argv.includes("--typecheck") ? "typecheck" : "lint";
 
 async function collectJavaScriptFiles(directory) {

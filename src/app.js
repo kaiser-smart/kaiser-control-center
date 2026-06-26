@@ -4894,6 +4894,7 @@ function moduleRulesAutomationSearchText(item) {
     moduleRuleStatusLabel(item.status),
     item.moduleKey,
     item.cloudRunner,
+    item.lastRunStatus,
     item.lastRunMessage,
     item.actionsJson,
     item.conditionsJson
@@ -4911,6 +4912,36 @@ function moduleRulesAutomationMatchesFilters(item) {
     (typeFilter === "all" || item.type === typeFilter) &&
     (statusFilter === "all" || item.status === statusFilter)
   );
+}
+
+function moduleAutomationRunStatusLabel(status) {
+  const labels = {
+    dry_run: "Dry-run",
+    skipped: "Přeskočeno",
+    error: "Chyba",
+    success: "OK"
+  };
+
+  return labels[status] || status || "-";
+}
+
+function moduleAutomationRunSummary() {
+  const runs = moduleRulesState.automationRuns || [];
+  const latestRun = runs[0] || null;
+
+  return {
+    total: runs.length,
+    dryRun: runs.filter((item) => item.status === "dry_run").length,
+    skipped: runs.filter((item) => item.status === "skipped").length,
+    error: runs.filter((item) => item.status === "error").length,
+    latestRunAt: latestRun?.finishedAt || latestRun?.startedAt || ""
+  };
+}
+
+function moduleAutomationRunsForRule(ruleId) {
+  return (moduleRulesState.automationRuns || [])
+    .filter((item) => item.ruleId === ruleId)
+    .slice(0, 5);
 }
 
 function moduleRuleFormDraft() {
@@ -5027,7 +5058,7 @@ function moduleRulesAutomationRow(item, canManage) {
     item.scheduleCron || item.eventName || item.cloudRunner
   ].filter(Boolean).join(" / ");
   const impact = item.isAutomation
-    ? "Fáze 1: evidováno v DB, běh až ve Fázi 2"
+    ? "Fáze 2A: cloud dry-run bez e-mailu/SMS"
     : "Backend/cloud pravidlo";
   const actionCell = canManage
     ? `
@@ -5081,6 +5112,16 @@ function moduleRuleDetail() {
       </li>
     `).join("")
     : '<li><span>Audit log se načte po výběru detailu nebo po změně pravidla.</span></li>';
+  const automationRuns = moduleAutomationRunsForRule(selected.id);
+  const runRows = automationRuns.length
+    ? automationRuns.map((item) => `
+      <li>
+        <strong>${escapeHtml(moduleAutomationRunStatusLabel(item.status))}</strong>
+        <span>${escapeHtml(formatDateTime(item.finishedAt || item.startedAt) || "-")} · ${escapeHtml(item.triggeredBy || "-")}</span>
+        <small>${escapeHtml(item.message || "Bez zprávy")}</small>
+      </li>
+    `).join("")
+    : '<li><span>Zatím není zapsaný žádný dry-run běh pro toto pravidlo.</span></li>';
 
   return `
     <section class="module-rules-detail" aria-labelledby="module-rules-detail-title">
@@ -5114,6 +5155,10 @@ function moduleRuleDetail() {
         <h4>Audit změn</h4>
         <ul>${auditRows}</ul>
       </div>
+      <div class="module-rules-runs">
+        <h4>Log běhů automatizace</h4>
+        <ul>${runRows}</ul>
+      </div>
     </section>
   `;
 }
@@ -5139,6 +5184,7 @@ function moduleRulesAutomationPanel({
   );
   const automationCount = rules.filter((item) => item.isAutomation || item.type === "automation").length;
   const activeCount = rules.filter((item) => item.status === "active").length;
+  const runSummary = moduleAutomationRunSummary();
   const rows = rules.length
     ? rules.map((item) => moduleRulesAutomationRow(item, canManage)).join("")
     : `<tr><td colspan="11">${moduleRulesState.loading ? "Načítám ostrá cloud data..." : "Žádná ostrá pravidla nejsou uložená v cloud DB."}</td></tr>`;
@@ -5207,11 +5253,19 @@ function moduleRulesAutomationPanel({
           <span>Aktivní</span>
           <strong>${activeCount}</strong>
         </article>
+        <article>
+          <span>Dry-run běhy</span>
+          <strong>${runSummary.total}</strong>
+        </article>
+        <article>
+          <span>Poslední dry-run</span>
+          <strong>${escapeHtml(formatDateTime(runSummary.latestRunAt) || "čeká")}</strong>
+        </article>
       </div>
 
       <div class="module-rules-empty module-rules-empty--cloud" role="status">
         <strong>${moduleRulesState.apiStatus === "ready" ? "Ostrá pravidla jsou načtená z cloud DB." : "Cloud API pro pravidla není dostupné."}</strong>
-        <span>Fáze 1 ukládá pravidla, automatizace a audit log do D1. Skutečné spouštění automatizací, cron a e-mail/SMS zůstávají až pro Fázi 2.</span>
+        <span>Fáze 2A spouští cloudový runner pouze v režimu dry-run. Ostré notifikace, e-mail/SMS a reálné akce nad absencemi jsou vypnuté.</span>
       </div>
 
       <p class="module-rules-search-count" data-module-rules-search-count>${filtersActive ? `Zobrazeno ${visibleRulesCount} z ${rules.length}` : `Celkem ${rules.length}`} pravidel a automatizací</p>
@@ -10868,8 +10922,12 @@ async function loadModuleRules(moduleKey = moduleRulesState.moduleKey, options =
   moduleRulesState.error = "";
 
   try {
-    const result = await apiJson(`/api/modules/${encodeURIComponent(moduleKey)}/rules`);
+    const [result, runsResult] = await Promise.all([
+      apiJson(`/api/modules/${encodeURIComponent(moduleKey)}/rules`),
+      apiJson(`/api/modules/${encodeURIComponent(moduleKey)}/automation-runs`).catch(() => ({ runs: [] }))
+    ]);
     moduleRulesState.rules = Array.isArray(result.rules) ? result.rules : [];
+    moduleRulesState.automationRuns = Array.isArray(runsResult.runs) ? runsResult.runs : [];
     moduleRulesState.loaded = true;
     moduleRulesState.apiStatus = result.apiStatus || "ready";
     if (
@@ -10884,6 +10942,7 @@ async function loadModuleRules(moduleKey = moduleRulesState.moduleKey, options =
     }
   } catch (error) {
     moduleRulesState.rules = [];
+    moduleRulesState.automationRuns = [];
     moduleRulesState.loaded = false;
     moduleRulesState.apiStatus = error.payload?.apiStatus || "waiting";
     moduleRulesState.error = error.payload?.error || "Pravidla a automatizace se teď nepodařilo načíst.";

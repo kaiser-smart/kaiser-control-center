@@ -6612,7 +6612,8 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 .module-rules-json-grid,
-.module-rules-audit {
+.module-rules-audit,
+.module-rules-runs {
   grid-column: 1 / -1;
 }
 
@@ -6630,12 +6631,14 @@ body:has(.ai-assistant-promo-modal) {
   white-space: pre-wrap;
 }
 
-.module-rules-audit h4 {
+.module-rules-audit h4,
+.module-rules-runs h4 {
   margin: 0 0 8px;
   font-size: 0.95rem;
 }
 
-.module-rules-audit ul {
+.module-rules-audit ul,
+.module-rules-runs ul {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -6643,7 +6646,8 @@ body:has(.ai-assistant-promo-modal) {
   list-style: none;
 }
 
-.module-rules-audit li {
+.module-rules-audit li,
+.module-rules-runs li {
   display: grid;
   gap: 3px;
   border: 1px solid var(--line);
@@ -6653,7 +6657,9 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 .module-rules-audit li span,
-.module-rules-audit li small {
+.module-rules-audit li small,
+.module-rules-runs li span,
+.module-rules-runs li small {
   color: var(--muted);
   font-size: 0.8rem;
 }
