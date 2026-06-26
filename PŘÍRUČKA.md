@@ -87,6 +87,14 @@ Report musí obsahovat:
 - `Branch`
 - `Push`
 - `Produkce`
+- `Doporučený další krok`
+- `Proč právě tento krok`
+- `Předpoklady / blokace`
+- `Typ dalšího kroku`
+- `Potřebuje potvrzení Radima/Martina: ANO/NE`
+- `Bezpečné pokračovat samostatně: ANO/NE`
+- `Největší bezpečný programovací celek`
+- `Co se nesmí dělat jako další krok`
 
 U produkce musí být jasně uvedeno:
 
@@ -251,6 +259,17 @@ Například:
 #### Riziko falešného dojmu
 Codex/vývojář musí výslovně napsat, zda hrozí, že UI vypadá jako hotová funkce, ale ve skutečnosti ještě nemá backend/cloud část.
 
+#### Doporučený další krok
+Každý report musí obsahovat:
+- Doporučený další krok
+- Proč právě tento krok
+- Předpoklady / blokace
+- Typ dalšího kroku: implementace / test / nasazení / analýza / oprava / čekání na data
+- Potřebuje potvrzení Radima/Martina: ANO/NE
+- Bezpečné pokračovat samostatně: ANO/NE
+- Největší bezpečný programovací celek
+- Co se nesmí dělat jako další krok
+
 Příklad správného reportu:
 
 ```text
@@ -304,6 +323,100 @@ Zakázané:
 - skrýt omezení do poznámky na konec
 - nechat Radima/Martina domýšlet technické dopady
 - implementovat bez vysvětlení, co nebude fungovat
+
+### 11. Povinný návrh dalšího kroku a práce ve větších bezpečných celcích
+
+Po každém dokončeném úkolu, kroku, fázi, testu, nasazení nebo závěrečném reportu musí Codex/vývojář uvést jasný návrh dalšího postupu.
+
+Codex/vývojář nesmí skončit pouze reportem typu `hotovo/nehotovo` bez doporučení, co má následovat.
+
+Povinný návrh dalšího kroku musí obsahovat:
+
+1. Doporučený další krok
+2. Proč je to další krok
+3. Co je před tím potřeba ověřit nebo dodat
+4. Zda se má pokračovat implementací, testem, nasazením, analýzou, opravou nebo čekáním
+5. Zda je potřeba potvrzení Radima/Martina
+6. Co se nesmí dělat jako další krok
+7. Zda je další krok bezpečný pro samostatné pokračování
+8. Jaký největší bezpečný programovací celek lze udělat najednou
+
+Povinná formulace v reportu:
+
+```text
+Doporučený další krok:
+...
+Proč:
+...
+Předpoklady / blokace:
+...
+Typ dalšího kroku:
+implementace / test / nasazení / analýza / oprava / čekání na data
+Potřebuje potvrzení Radima/Martina: ANO/NE
+Bezpečné pokračovat samostatně: ANO/NE
+Největší bezpečný programovací celek:
+...
+Nesmí se teď dělat:
+...
+```
+
+Návrh dalšího kroku nesmí automaticky znamenat povolení pokračovat.
+
+Pokud další krok mění API, DB, Cloudflare, secrets, produkční data, provozní data, oprávnění, notifikace nebo automatizace, musí Codex/vývojář vyžadovat potvrzení Radima/Martina.
+
+Pokud další krok znamená pouze bezpečnou implementaci už schváleného rozsahu, bez destruktivních změn, bez zásahu do secrets, bez ostrých dat a bez rizika ztráty dat, má Codex/vývojář pokračovat samostatně v co největším logickém programovacím celku.
+
+Codex/vývojář se nemá ptát na každý malý technický krok, pokud už je schválený cíl, rozsah a bezpečnostní mantinely.
+
+Codex/vývojář musí zastavit a chtít potvrzení, pokud narazí na:
+- riziko ztráty dat,
+- změnu produkčních dat,
+- změnu secrets,
+- změnu Cloudflare/D1/R2/Workers,
+- nejasný zdroj pravdy,
+- zásah do cizí práce nebo necommitnutých změn,
+- konflikt s `PŘÍRUČKA.md`,
+- potřebu bezpečnostního nebo provozního rozhodnutí.
+
+Pokud je další krok jen čtení, analýza, bezpečné ověření, UI úprava nebo implementace v rámci schváleného rozsahu, může být označený jako bezpečný pokračovací krok.
+
+Pokud existuje riziko falešného dojmu hotové funkce, musí být UI i report jasně označený podle stavů:
+- `UI návrh`
+- `Read-only pilot`
+- `Funkční přes API`
+- `Cloud automatizace`
+- `Produkčně ověřeno`
+
+Příklad správného dalšího kroku:
+
+```text
+Doporučený další krok:
+Implementovat Fázi 1C – ruční import preview JSON/CSV.
+Proč:
+Nečekáme na Vistos API a potřebujeme začít pracovat s reálnou strukturou dat.
+Předpoklady / blokace:
+Není potřeba secret ani ostré Vistos API. Import preview nesmí vytvářet ostré trasy.
+Typ dalšího kroku:
+implementace
+Potřebuje potvrzení Radima/Martina: ANO, protože vzniká nové API a případně migrace.
+Bezpečné pokračovat samostatně: ANO po potvrzení rozsahu.
+Největší bezpečný programovací celek:
+Frontend upload + backend parser + pilotní uložení batch/rows/issues + UI náhled + základní testy.
+Nesmí se teď dělat:
+Ostré trasy, SMS/e-maily, T-Cars alerty, Waze/Apify, Evidence odpadů, cloud automatizace.
+```
+
+Příklad špatného reportu:
+
+```text
+Hotovo. Co dál?
+```
+
+Nebo:
+
+```text
+Další krok je něco otestovat.
+```
 
 ## 2. Ukládání dat
 
