@@ -540,6 +540,7 @@ const moduleRulesState = {
   rules: [],
   auditLog: [],
   automationRuns: [],
+  automationRunnerRuns: [],
   loaded: false,
   loading: false,
   saving: false,
@@ -4925,6 +4926,18 @@ function moduleAutomationRunStatusLabel(status) {
   return labels[status] || status || "-";
 }
 
+function moduleAutomationRunnerRunStatusLabel(status) {
+  const labels = {
+    running: "Běží",
+    dry_run: "Dry-run",
+    skipped: "Přeskočeno",
+    partial_error: "Částečná chyba",
+    error: "Chyba"
+  };
+
+  return labels[status] || status || "-";
+}
+
 function moduleAutomationRunSummary() {
   const runs = moduleRulesState.automationRuns || [];
   const latestRun = runs[0] || null;
@@ -4935,6 +4948,22 @@ function moduleAutomationRunSummary() {
     skipped: runs.filter((item) => item.status === "skipped").length,
     error: runs.filter((item) => item.status === "error").length,
     latestRunAt: latestRun?.finishedAt || latestRun?.startedAt || ""
+  };
+}
+
+function moduleAutomationRunnerRunSummary() {
+  const runs = moduleRulesState.automationRunnerRuns || [];
+  const latestRun = runs[0] || null;
+
+  return {
+    total: runs.length,
+    latestRun,
+    latestRunAt: latestRun?.finishedAt || latestRun?.startedAt || "",
+    latestStatus: latestRun?.status || "",
+    rulesTotal: Number(latestRun?.rulesTotal || 0),
+    dryRunCount: Number(latestRun?.dryRunCount || 0),
+    skippedCount: Number(latestRun?.skippedCount || 0),
+    failedCount: Number(latestRun?.failedCount || 0)
   };
 }
 
@@ -5185,6 +5214,9 @@ function moduleRulesAutomationPanel({
   const automationCount = rules.filter((item) => item.isAutomation || item.type === "automation").length;
   const activeCount = rules.filter((item) => item.status === "active").length;
   const runSummary = moduleAutomationRunSummary();
+  const runnerSummary = moduleAutomationRunnerRunSummary();
+  const latestRunnerRun = runnerSummary.latestRun;
+  const runnerStatusLabel = moduleAutomationRunnerRunStatusLabel(runnerSummary.latestStatus);
   const rows = rules.length
     ? rules.map((item) => moduleRulesAutomationRow(item, canManage)).join("")
     : `<tr><td colspan="11">${moduleRulesState.loading ? "Načítám ostrá cloud data..." : "Žádná ostrá pravidla nejsou uložená v cloud DB."}</td></tr>`;
@@ -5254,18 +5286,51 @@ function moduleRulesAutomationPanel({
           <strong>${activeCount}</strong>
         </article>
         <article>
-          <span>Dry-run běhy</span>
+          <span>Pravidlové běhy</span>
           <strong>${runSummary.total}</strong>
         </article>
         <article>
-          <span>Poslední dry-run</span>
+          <span>Poslední pravidlový běh</span>
           <strong>${escapeHtml(formatDateTime(runSummary.latestRunAt) || "čeká")}</strong>
+        </article>
+        <article>
+          <span>Poslední spuštění runneru</span>
+          <strong>${escapeHtml(formatDateTime(runnerSummary.latestRunAt) || "čeká")}</strong>
+        </article>
+        <article>
+          <span>Stav runneru</span>
+          <strong>${escapeHtml(runnerSummary.latestStatus ? runnerStatusLabel : "čeká")}</strong>
+        </article>
+        <article>
+          <span>rules_total</span>
+          <strong>${runnerSummary.rulesTotal}</strong>
+        </article>
+        <article>
+          <span>dry_run_count</span>
+          <strong>${runnerSummary.dryRunCount}</strong>
+        </article>
+        <article>
+          <span>skipped_count</span>
+          <strong>${runnerSummary.skippedCount}</strong>
+        </article>
+        <article>
+          <span>failed_count</span>
+          <strong>${runnerSummary.failedCount}</strong>
         </article>
       </div>
 
       <div class="module-rules-empty module-rules-empty--cloud" role="status">
         <strong>${moduleRulesState.apiStatus === "ready" ? "Ostrá pravidla jsou načtená z cloud DB." : "Cloud API pro pravidla není dostupné."}</strong>
         <span>Fáze 2A spouští cloudový runner pouze v režimu dry-run. Ostré notifikace, e-mail/SMS a reálné akce nad absencemi jsou vypnuté.</span>
+        ${latestRunnerRun ? `
+          <small>
+            Poslední audit runneru: ${escapeHtml(runnerStatusLabel)}
+            · ${escapeHtml(latestRunnerRun.triggeredBy || "-")}
+            · ${escapeHtml(latestRunnerRun.d1Binding || "SMART_ODPADY_DB")}
+            ${latestRunnerRun.databaseName ? `→ ${escapeHtml(latestRunnerRun.databaseName)}` : ""}
+            ${latestRunnerRun.message ? `· ${escapeHtml(latestRunnerRun.message)}` : ""}
+          </small>
+        ` : ""}
       </div>
 
       <p class="module-rules-search-count" data-module-rules-search-count>${filtersActive ? `Zobrazeno ${visibleRulesCount} z ${rules.length}` : `Celkem ${rules.length}`} pravidel a automatizací</p>
@@ -10882,6 +10947,7 @@ function resetModuleRulesState() {
   moduleRulesState.rules = [];
   moduleRulesState.auditLog = [];
   moduleRulesState.automationRuns = [];
+  moduleRulesState.automationRunnerRuns = [];
   moduleRulesState.loaded = false;
   moduleRulesState.loading = false;
   moduleRulesState.saving = false;
@@ -10928,6 +10994,7 @@ async function loadModuleRules(moduleKey = moduleRulesState.moduleKey, options =
     ]);
     moduleRulesState.rules = Array.isArray(result.rules) ? result.rules : [];
     moduleRulesState.automationRuns = Array.isArray(runsResult.runs) ? runsResult.runs : [];
+    moduleRulesState.automationRunnerRuns = Array.isArray(runsResult.runnerRuns) ? runsResult.runnerRuns : [];
     moduleRulesState.loaded = true;
     moduleRulesState.apiStatus = result.apiStatus || "ready";
     if (
@@ -10943,6 +11010,7 @@ async function loadModuleRules(moduleKey = moduleRulesState.moduleKey, options =
   } catch (error) {
     moduleRulesState.rules = [];
     moduleRulesState.automationRuns = [];
+    moduleRulesState.automationRunnerRuns = [];
     moduleRulesState.loaded = false;
     moduleRulesState.apiStatus = error.payload?.apiStatus || "waiting";
     moduleRulesState.error = error.payload?.error || "Pravidla a automatizace se teď nepodařilo načíst.";

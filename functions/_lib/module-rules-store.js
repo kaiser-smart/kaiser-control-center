@@ -133,7 +133,7 @@ function dbError(error) {
   const message = cleanString(error?.message);
   if (message.includes("no such table")) {
     return new ModuleRulesStoreError(
-      "Tabulky pravidel a automatizací nejsou v D1 připravené. Spusťte migraci 0015_create_module_rules.sql.",
+      "Tabulky pravidel a automatizací nejsou v D1 připravené. Spusťte poslední migrace pravidel a automatizací.",
       503,
       "module_rules_migration_missing"
     );
@@ -197,6 +197,30 @@ function rowToAutomationRun(row) {
     errorCode: cleanString(row?.error_code),
     triggeredBy: cleanString(row?.triggered_by),
     dedupeKey: cleanString(row?.dedupe_key)
+  };
+}
+
+function rowToAutomationRunnerRun(row) {
+  return {
+    id: cleanString(row?.id),
+    moduleKey: cleanString(row?.module_key),
+    runnerName: cleanString(row?.runner_name),
+    startedAt: cleanString(row?.started_at),
+    scheduledAt: cleanString(row?.scheduled_at),
+    finishedAt: cleanString(row?.finished_at),
+    triggeredBy: cleanString(row?.triggered_by),
+    status: cleanString(row?.status),
+    rulesTotal: Number(row?.rules_total || 0),
+    dryRunCount: Number(row?.dry_run_count || 0),
+    skippedCount: Number(row?.skipped_count || 0),
+    failedCount: Number(row?.failed_count || 0),
+    message: cleanString(row?.message),
+    errorCode: cleanString(row?.error_code),
+    d1Binding: cleanString(row?.d1_binding),
+    databaseName: cleanString(row?.database_name),
+    cron: cleanString(row?.cron),
+    timeZone: cleanString(row?.time_zone),
+    createdAt: cleanString(row?.created_at)
   };
 }
 
@@ -578,6 +602,28 @@ export async function listModuleAutomationRuns(env, rawModuleKey) {
       .all();
 
     return (result.results || []).map(rowToAutomationRun);
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function listModuleAutomationRunnerRuns(env, rawModuleKey) {
+  const moduleKey = normalizeModuleRuleModuleKey(rawModuleKey);
+  const db = moduleRulesDatabase(env, true);
+
+  try {
+    const result = await db
+      .prepare(`
+        SELECT *
+        FROM module_automation_runner_runs
+        WHERE module_key = ?
+        ORDER BY started_at DESC
+        LIMIT 50
+      `)
+      .bind(moduleKey)
+      .all();
+
+    return (result.results || []).map(rowToAutomationRunnerRun);
   } catch (error) {
     throw dbError(error);
   }

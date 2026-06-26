@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.99"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.100"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pravidla a automatizace: audit cronu",
+    text: "Fáze 2A zapisuje každé spuštění cloud runneru do samostatného run-level auditu, takže je vidět dry-run, skipped i chyba bez ostrých e-mailů/SMS."
+  },
   {
     title: "Pravidla a automatizace: cloud dry-run",
     text: "Fáze 2A přidává Cloudflare Worker s Cron Triggerem, který zapisuje pouze dry-run běhy automatizací do D1 bez e-mailů, SMS a reálných akcí nad absencemi."

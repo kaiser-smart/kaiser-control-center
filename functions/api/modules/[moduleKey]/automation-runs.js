@@ -2,6 +2,7 @@ import { json, requireUserPermission } from "../../../_lib/auth.js";
 import {
   ModuleRulesStoreError,
   listModuleAutomationRuns,
+  listModuleAutomationRunnerRuns,
   normalizeModuleRuleModuleKey
 } from "../../../_lib/module-rules-store.js";
 
@@ -33,8 +34,11 @@ export async function onRequestGet({ request, env, params }) {
   }
 
   try {
-    const runs = await listModuleAutomationRuns(env, key);
-    return json({ runs, apiStatus: "ready" });
+    const [runs, runnerRuns] = await Promise.all([
+      listModuleAutomationRuns(env, key),
+      listModuleAutomationRunnerRuns(env, key)
+    ]);
+    return json({ runs, runnerRuns, apiStatus: "ready" });
   } catch (error) {
     return moduleRulesError(error);
   }

@@ -6457,6 +6457,14 @@ body:has(.ai-assistant-promo-modal) {
   font-size: 1.04rem;
 }
 
+.module-rules-empty small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .module-rules-table-wrap {
   overflow-x: auto;
 }

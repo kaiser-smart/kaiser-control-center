@@ -11,11 +11,14 @@ export default {
 
       console.log("module_automation_dry_run.completed", {
         mode: summary.mode,
+        status: summary.status,
+        runnerRunId: summary.runnerRunId,
         moduleKey: summary.moduleKey,
         ruleCount: summary.ruleCount,
         dryRunCount: summary.dryRunCount,
         skippedCount: summary.skippedCount,
-        errorCount: summary.errorCount
+        errorCount: summary.errorCount,
+        emailSms: "disabled"
       });
     })());
   },
@@ -30,4 +33,3 @@ export default {
     });
   }
 };
-

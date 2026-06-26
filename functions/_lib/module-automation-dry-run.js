@@ -1,4 +1,5 @@
 const DB_BINDING = "SMART_ODPADY_DB";
+const DEFAULT_DATABASE_NAME = "smart-odpady";
 const DEFAULT_MODULE_KEY = "absence";
 const DEFAULT_TIME_ZONE = "Europe/Prague";
 const DEFAULT_CRON = "15 3 * * *";
@@ -296,6 +297,84 @@ async function insertAutomationRun(db, run) {
     .run();
 }
 
+async function insertAutomationRunnerRun(db, run) {
+  await db
+    .prepare(`
+      INSERT INTO module_automation_runner_runs (
+        id,
+        module_key,
+        runner_name,
+        started_at,
+        scheduled_at,
+        finished_at,
+        triggered_by,
+        status,
+        rules_total,
+        dry_run_count,
+        skipped_count,
+        failed_count,
+        message,
+        error_code,
+        d1_binding,
+        database_name,
+        cron,
+        time_zone,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      run.id,
+      run.moduleKey,
+      run.runnerName,
+      run.startedAt,
+      nullableString(run.scheduledAt),
+      nullableString(run.finishedAt),
+      nullableString(run.triggeredBy),
+      run.status,
+      Number(run.rulesTotal || 0),
+      Number(run.dryRunCount || 0),
+      Number(run.skippedCount || 0),
+      Number(run.failedCount || 0),
+      nullableString(run.message),
+      nullableString(run.errorCode),
+      nullableString(run.d1Binding),
+      nullableString(run.databaseName),
+      nullableString(run.cron),
+      nullableString(run.timeZone),
+      run.createdAt
+    )
+    .run();
+}
+
+async function updateAutomationRunnerRun(db, run) {
+  await db
+    .prepare(`
+      UPDATE module_automation_runner_runs
+      SET
+        finished_at = ?,
+        status = ?,
+        rules_total = ?,
+        dry_run_count = ?,
+        skipped_count = ?,
+        failed_count = ?,
+        message = ?,
+        error_code = ?
+      WHERE id = ?
+    `)
+    .bind(
+      nullableString(run.finishedAt),
+      run.status,
+      Number(run.rulesTotal || 0),
+      Number(run.dryRunCount || 0),
+      Number(run.skippedCount || 0),
+      Number(run.failedCount || 0),
+      nullableString(run.message),
+      nullableString(run.errorCode),
+      run.id
+    )
+    .run();
+}
+
 async function updateRuleRunState(db, rule, state) {
   await db
     .prepare(`
@@ -409,33 +488,112 @@ export async function runModuleAutomationDryRun(env, options = {}) {
   const db = database(env);
   const moduleKey = cleanString(options.moduleKey || env?.MODULE_AUTOMATION_MODULE_KEY || DEFAULT_MODULE_KEY);
   const timeZone = cleanString(options.timeZone || env?.MODULE_AUTOMATION_TIME_ZONE || DEFAULT_TIME_ZONE);
+  const databaseName = cleanString(options.databaseName || env?.MODULE_AUTOMATION_DATABASE_NAME || DEFAULT_DATABASE_NAME);
   const now = new Date(Number(options.scheduledTime || Date.now()));
   const triggeredBy = cleanString(options.triggeredBy || "cloudflare-cron");
   const cron = cleanString(options.cron || DEFAULT_CRON);
-  const rules = await listActiveAutomations(db, moduleKey);
+  const runnerRunId = randomId("module-automation-runner-run");
+  const executionStartedAt = new Date().toISOString();
+  let rules = [];
   const results = [];
+  let topLevelError = null;
 
-  for (const rule of rules) {
-    results.push(await runRuleDryRun(db, rule, {
-      now,
-      timeZone,
-      triggeredBy,
-      cron
-    }));
+  await insertAutomationRunnerRun(db, {
+    id: runnerRunId,
+    moduleKey,
+    runnerName: RUNNER_NAME,
+    startedAt: executionStartedAt,
+    scheduledAt: now.toISOString(),
+    finishedAt: "",
+    triggeredBy,
+    status: "running",
+    rulesTotal: 0,
+    dryRunCount: 0,
+    skippedCount: 0,
+    failedCount: 0,
+    message: "Cloud runner Fáze 2A spuštěn v režimu dry-run. E-mail/SMS neodesláno.",
+    errorCode: "",
+    d1Binding: DB_BINDING,
+    databaseName,
+    cron,
+    timeZone,
+    createdAt: executionStartedAt
+  });
+
+  try {
+    rules = await listActiveAutomations(db, moduleKey);
+
+    for (const rule of rules) {
+      results.push(await runRuleDryRun(db, rule, {
+        now,
+        timeZone,
+        triggeredBy,
+        cron
+      }));
+    }
+  } catch (error) {
+    topLevelError = error;
   }
+
+  const dryRunCount = results.filter((item) => item.status === "dry_run").length;
+  const skippedCount = results.filter((item) => item.status === "skipped").length;
+  let errorCount = results.filter((item) => item.status === "error").length;
+  let status = "dry_run";
+  let message = "Runner zapsal dry-run běhy. E-mail/SMS neodesláno.";
+  let errorCode = "";
+
+  if (topLevelError) {
+    errorCount = Math.max(errorCount, 1);
+    status = "error";
+    message = "Runner selhal před dokončením dry-run vyhodnocení. E-mail/SMS neodesláno.";
+    errorCode = "runner_failed";
+  } else if (!rules.length) {
+    status = "skipped";
+    message = "Runner spuštěn, nenašel aktivní automatizace. E-mail/SMS neodesláno.";
+  } else if (errorCount > 0 && dryRunCount + skippedCount > 0) {
+    status = "partial_error";
+    message = "Runner doběhl s chybou u části pravidel. E-mail/SMS neodesláno.";
+    errorCode = "runner_partial_error";
+  } else if (errorCount > 0) {
+    status = "error";
+    message = "Runner selhal u všech vyhodnocovaných pravidel. E-mail/SMS neodesláno.";
+    errorCode = "runner_rule_error";
+  } else if (dryRunCount === 0 && skippedCount > 0) {
+    status = "skipped";
+    message = "Runner spuštěn, všechna pravidla přeskočena kvůli dedupe. E-mail/SMS neodesláno.";
+  }
+
+  const executionFinishedAt = new Date().toISOString();
+  await updateAutomationRunnerRun(db, {
+    id: runnerRunId,
+    finishedAt: executionFinishedAt,
+    status,
+    rulesTotal: rules.length,
+    dryRunCount,
+    skippedCount,
+    failedCount: errorCount,
+    message,
+    errorCode
+  });
 
   return {
     mode: "dry-run",
     runner: RUNNER_NAME,
+    runnerRunId,
     moduleKey,
     timeZone,
     cron,
-    startedAt: now.toISOString(),
+    databaseName,
+    d1Binding: DB_BINDING,
+    status,
+    message,
+    startedAt: executionStartedAt,
+    scheduledAt: now.toISOString(),
+    finishedAt: executionFinishedAt,
     ruleCount: rules.length,
-    dryRunCount: results.filter((item) => item.status === "dry_run").length,
-    skippedCount: results.filter((item) => item.status === "skipped").length,
-    errorCount: results.filter((item) => item.status === "error").length,
+    dryRunCount,
+    skippedCount,
+    errorCount,
     results
   };
 }
-
