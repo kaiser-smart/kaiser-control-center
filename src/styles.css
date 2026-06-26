@@ -1988,8 +1988,7 @@ h1 {
   border-bottom: 5px solid transparent;
   border-left: 9px solid currentColor;
   content: "";
-  transform: rotate(var(--heading));
-  transform-origin: -24px 50%;
+  transform: none;
 }
 
 .tracking-vehicle-marker {
@@ -2015,8 +2014,7 @@ h1 {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 12px 22px rgba(35, 40, 33, 0.22);
-  transform: rotate(var(--heading));
-  transform-origin: 50% 50%;
+  transform: none;
 }
 
 .tracking-vehicle-marker__image {
@@ -2193,8 +2191,7 @@ h1 {
   border-bottom: 5px solid transparent;
   border-left: 9px solid currentColor;
   content: "";
-  transform: rotate(var(--heading));
-  transform-origin: -24px 50%;
+  transform: none;
 }
 
 .tracking-google-marker--moving {
