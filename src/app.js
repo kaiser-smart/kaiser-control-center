@@ -213,6 +213,15 @@ const FLEET_ROUTE = "/vozovy-park";
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
+const COLLECTION_ROUTES_TABS = [
+  { id: "dashboard", label: "Dashboard", targetId: "collection-routes-dashboard" },
+  { id: "manual-import", label: "Ruční import preview", targetId: "collection-routes-manual-import" },
+  { id: "import", label: "Import preview", targetId: "collection-routes-import" },
+  { id: "sites", label: "Seznam stanovišť", targetId: "collection-routes-sites" },
+  { id: "location-issues", label: "K doplnění polohy", targetId: "collection-routes-location-issues" },
+  { id: "site-detail", label: "Detail stanoviště", targetId: "collection-routes-site-detail" },
+  { id: "rules", label: "Seznam pravidel a automatizace", targetId: "module-rules-title" }
+];
 const DESIGN_NEUMORPHIC_ROUTE = "/design/neumorphic";
 const FLEET_ACTION_WAITING_MESSAGES = {
   addVehicle: "Čeká na API pro přidání vozidla.",
@@ -585,6 +594,7 @@ const collectionRoutesPilotState = {
   issues: [],
   selectedSiteId: "",
   selectedSiteDetail: null,
+  activeTab: "dashboard",
   message: "",
   error: ""
 };
@@ -1385,6 +1395,11 @@ function shouldShowAiVoiceDock() {
       aiAssistantState.isListening ||
       AI_VOICE_DOCK_STATES.includes(aiAssistantState.voiceUiState)
     );
+}
+
+function shouldShowAiWelcomeModal() {
+  const path = normalizePath(window.location.pathname);
+  return !path.startsWith(COLLECTION_ROUTES_ROUTE);
 }
 
 function clearAiVoiceWeakInputNotice() {
@@ -2271,8 +2286,8 @@ function renderAiAssistantLayer() {
 
   const content = [
     AiWelcomeModal({
-      visible: aiAssistantState.welcomeVisible && !promoVisible,
-      animate: aiAssistantState.welcomeAnimate && !promoVisible
+      visible: aiAssistantState.welcomeVisible && !promoVisible && shouldShowAiWelcomeModal(),
+      animate: aiAssistantState.welcomeAnimate && !promoVisible && shouldShowAiWelcomeModal()
     }),
     AiAssistantChat({
       open: aiAssistantState.chatOpen,
@@ -9701,6 +9716,49 @@ function collectionRoutesCanRunImportPreview(user) {
   return normalizeRole(user?.role) === "admin";
 }
 
+function isCollectionRoutesTabId(tabId) {
+  return COLLECTION_ROUTES_TABS.some((tab) => tab.id === tabId);
+}
+
+function collectionRoutesTabFromHash(hash = window.location.hash) {
+  const cleanHash = String(hash || "").replace(/^#/, "");
+  const tab = COLLECTION_ROUTES_TABS.find((item) => item.targetId === cleanHash);
+  return tab?.id || "";
+}
+
+function activeCollectionRoutesTabId() {
+  const hashTab = collectionRoutesTabFromHash();
+  if (hashTab) {
+    collectionRoutesPilotState.activeTab = hashTab;
+  }
+  if (!isCollectionRoutesTabId(collectionRoutesPilotState.activeTab)) {
+    collectionRoutesPilotState.activeTab = "dashboard";
+  }
+  return collectionRoutesPilotState.activeTab;
+}
+
+function setCollectionRoutesActiveTab(tabId) {
+  if (!isCollectionRoutesTabId(tabId)) {
+    collectionRoutesPilotState.error = "Sekce není dostupná.";
+    collectionRoutesPilotState.message = "";
+    render();
+    return;
+  }
+
+  collectionRoutesPilotState.activeTab = tabId;
+  collectionRoutesPilotState.error = "";
+  collectionRoutesPilotState.message = "";
+
+  const targetId = COLLECTION_ROUTES_TABS.find((tab) => tab.id === tabId)?.targetId || "";
+  const nextHash = targetId ? `#${targetId}` : "";
+  if (window.location.hash !== nextHash) {
+    window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+    lastRenderedUrl = window.location.href;
+  }
+
+  render();
+}
+
 function collectionRoutesApiStatusLabel(status) {
   if (status === "ready") {
     return "Cloud API aktivní";
@@ -10019,12 +10077,36 @@ function collectionRoutesRulesSection(user) {
   });
 }
 
+function collectionRoutesActiveSection(user) {
+  const activeTab = activeCollectionRoutesTabId();
+  if (activeTab === "manual-import") {
+    return collectionRoutesManualImportSection(user);
+  }
+  if (activeTab === "import") {
+    return collectionRoutesImportSection(user);
+  }
+  if (activeTab === "sites") {
+    return collectionRoutesSitesSection();
+  }
+  if (activeTab === "location-issues") {
+    return collectionRoutesLocationIssuesSection();
+  }
+  if (activeTab === "site-detail") {
+    return collectionRoutesSiteDetailSection();
+  }
+  if (activeTab === "rules") {
+    return collectionRoutesRulesSection(user);
+  }
+  return collectionRoutesDashboardSection();
+}
+
 function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
   if (!collectionRoutesCanViewPilot(user)) {
     return forbiddenPage(user);
   }
 
   const title = isDashboard ? "Dashboard Trasy svozu" : "Trasy svozu";
+  const activeTab = activeCollectionRoutesTabId();
   return `
     <main class="app-shell module-page module-theme-scope collection-routes-page" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
@@ -10051,24 +10133,22 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
         <span>Žádná provozní data nejsou uložená v prohlížeči a žádná vymyšlená data nejsou zobrazena jako realita.</span>
       </div>
 
-      <nav class="collection-routes-tabs" aria-label="Sekce Tras svozu">
-        <a href="#collection-routes-dashboard">Dashboard</a>
-        <a href="#collection-routes-manual-import">Ruční import preview</a>
-        <a href="#collection-routes-import">Import preview</a>
-        <a href="#collection-routes-sites">Seznam stanovišť</a>
-        <a href="#collection-routes-location-issues">K doplnění polohy</a>
-        <a href="#collection-routes-site-detail">Detail stanoviště</a>
-        <a href="#module-rules-title">Seznam pravidel a automatizace</a>
+      <nav class="collection-routes-tabs" aria-label="Sekce Tras svozu" role="tablist">
+        ${COLLECTION_ROUTES_TABS.map((tab) => `
+          <button
+            class="collection-routes-tab ${tab.id === activeTab ? "collection-routes-tab--active" : ""}"
+            type="button"
+            role="tab"
+            aria-selected="${tab.id === activeTab ? "true" : "false"}"
+            data-collection-routes-tab="${escapeHtml(tab.id)}"
+          >
+            ${escapeHtml(tab.label)}
+          </button>
+        `).join("")}
       </nav>
 
       ${collectionRoutesPilotState.loading ? `<p class="module-feedback__notice">Načítám pilotní data z API...</p>` : ""}
-      ${collectionRoutesDashboardSection()}
-      ${collectionRoutesManualImportSection(user)}
-      ${collectionRoutesImportSection(user)}
-      ${collectionRoutesSitesSection()}
-      ${collectionRoutesLocationIssuesSection()}
-      ${collectionRoutesSiteDetailSection()}
-      ${collectionRoutesRulesSection(user)}
+      ${collectionRoutesActiveSection(user)}
       ${moduleFeedbackBoxFor(moduleItem, user, {
         moduleId: "trasy-svozu",
         moduleName: "Trasy svozu",
@@ -11273,6 +11353,9 @@ async function loadCollectionRoutesPilot(options = {}) {
   if (!authState.user || collectionRoutesPilotState.loading || !collectionRoutesCanViewPilot(currentUser())) {
     return;
   }
+  if (collectionRoutesPilotState.loaded && options.force !== true) {
+    return;
+  }
 
   collectionRoutesPilotState.loading = true;
   collectionRoutesPilotState.error = "";
@@ -11327,7 +11410,7 @@ async function submitCollectionRoutesImportPreview(form) {
     const summary = result.preview?.summary || {};
     collectionRoutesPilotState.message = summary.message || "Import preview bylo auditovaně spuštěné. Ostré trasy nebyly vytvořené.";
     collectionRoutesPilotState.apiStatus = result.apiStatus || result.preview?.apiStatus || "waiting";
-    await loadCollectionRoutesPilot({ renderAfter: false });
+    await loadCollectionRoutesPilot({ renderAfter: false, force: true });
   } catch (error) {
     collectionRoutesPilotState.error = error.payload?.error || error.message || "Import preview se nepodařilo spustit.";
     collectionRoutesPilotState.message = "";
@@ -11372,7 +11455,7 @@ async function submitCollectionRoutesManualImportPreview(form) {
     collectionRoutesPilotState.message = summary.message ||
       `Import preview načetl ${summary.rowCount || 0} řádků a našel ${summary.issueCount || 0} problémů. Ostré trasy nebyly vytvořené.`;
     collectionRoutesPilotState.apiStatus = result.apiStatus || result.preview?.apiStatus || "ready";
-    await loadCollectionRoutesPilot({ renderAfter: false });
+    await loadCollectionRoutesPilot({ renderAfter: false, force: true });
   } catch (error) {
     collectionRoutesPilotState.error = error.payload?.error || error.message || "Ruční import preview se nepodařilo zpracovat.";
     collectionRoutesPilotState.message = "";
@@ -11389,6 +11472,7 @@ async function selectCollectionRouteSite(siteId) {
   }
 
   collectionRoutesPilotState.selectedSiteId = id;
+  collectionRoutesPilotState.activeTab = "site-detail";
   collectionRoutesPilotState.error = "";
   render();
 
@@ -11709,7 +11793,7 @@ function isAssistantPromoActive(dateString = assistantPromoDateString()) {
 
 function shouldAutoShowAssistantPromo() {
   const path = normalizePath(window.location.pathname);
-  return !path.startsWith(FLEET_ROUTE);
+  return !path.startsWith(FLEET_ROUTE) && !path.startsWith(COLLECTION_ROUTES_ROUTE);
 }
 
 function applyAssistantPromoPayload(payload = {}) {
@@ -15256,6 +15340,13 @@ document.addEventListener("click", async (event) => {
   }
 
   if (handleVehicleTrackingWimSelectEvent(event)) {
+    return;
+  }
+
+  const collectionRoutesTab = event.target.closest("[data-collection-routes-tab]");
+  if (collectionRoutesTab) {
+    event.preventDefault();
+    setCollectionRoutesActiveTab(collectionRoutesTab.dataset.collectionRoutesTab || "dashboard");
     return;
   }
 

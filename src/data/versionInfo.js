@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.110"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.111"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: oprava záložek",
+    text: "Bugfix aktivuje záložky modulu Trasy svozu jako skutečné taby bez rozšíření rozsahu pilotu, ostrých tras, SMS/e-mailů nebo automatizací."
+  },
   {
     title: "Trasy svozu: Vistos API discovery",
     text: "Fáze 1D doplňuje backendový Vistos API discovery/import preview přes Cloudflare secrets a ukládá jen read-only náhled do pilotních tabulek bez ostrých tras, SMS/e-mailů a automatizací."
