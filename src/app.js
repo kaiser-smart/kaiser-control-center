@@ -869,6 +869,10 @@ function normalizePath(pathname) {
   return path.replace(/\/+$/, "") || "/";
 }
 
+function isCollectionRoutesPath(pathname = window.location.pathname) {
+  return normalizePath(pathname).startsWith(COLLECTION_ROUTES_ROUTE);
+}
+
 function routeHref(route) {
   if (route === "/") {
     return `${basePath || ""}/`;
@@ -1398,8 +1402,7 @@ function shouldShowAiVoiceDock() {
 }
 
 function shouldShowAiWelcomeModal() {
-  const path = normalizePath(window.location.pathname);
-  return !path.startsWith(COLLECTION_ROUTES_ROUTE);
+  return !isCollectionRoutesPath();
 }
 
 function clearAiVoiceWeakInputNotice() {
@@ -11793,7 +11796,7 @@ function isAssistantPromoActive(dateString = assistantPromoDateString()) {
 
 function shouldAutoShowAssistantPromo() {
   const path = normalizePath(window.location.pathname);
-  return !path.startsWith(FLEET_ROUTE) && !path.startsWith(COLLECTION_ROUTES_ROUTE);
+  return !path.startsWith(FLEET_ROUTE) && !isCollectionRoutesPath();
 }
 
 function applyAssistantPromoPayload(payload = {}) {
@@ -11859,6 +11862,10 @@ async function loadAssistantPromo(options = {}) {
 }
 
 function renderAssistantPromoLayer() {
+  if (isCollectionRoutesPath()) {
+    return "";
+  }
+
   return AiAssistantPromoModal({
     visible: assistantPromoState.visible && shouldAutoShowAssistantPromo(),
     videoUrl: assistantPromoState.videoUrl,
