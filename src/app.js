@@ -210,6 +210,7 @@ const HOME_SUBTITLE = "Provozní systém pro odpady, vozidla a trasy";
 const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
 const FEEDBACK_ROUTE = "/pripominky";
 const FLEET_ROUTE = "/vozovy-park";
+const DESIGN_NEUMORPHIC_ROUTE = "/design/neumorphic";
 const FLEET_ACTION_WAITING_MESSAGES = {
   addVehicle: "Čeká na API pro přidání vozidla.",
   detail: "Čeká na API pro detail vozidla.",
@@ -941,6 +942,168 @@ function menuModules(user) {
 
 function routeForModuleCard(moduleItem, user) {
   return moduleItem.route;
+}
+
+const NEUMORPHIC_ACCENTS = [
+  { id: "kaiser", label: "Kaiser", value: "#75bd25", contrast: "#ffffff" },
+  { id: "blue", label: "Modrá", value: "#2f80ed", contrast: "#ffffff" },
+  { id: "teal", label: "Tyrkys", value: "#10a9a2", contrast: "#ffffff" },
+  { id: "berry", label: "Malina", value: "#c63c7a", contrast: "#ffffff" },
+  { id: "graphite", label: "Grafit", value: "#5b667a", contrast: "#ffffff" }
+];
+
+function neumorphicVisibleModules(user) {
+  const items = visibleModules(user);
+  return items.length ? items.slice(0, 6) : orderedModules.slice(0, 6);
+}
+
+function neumorphicAccentPicker() {
+  return NEUMORPHIC_ACCENTS
+    .map((accent, index) => `
+      <button
+        class="neo-accent-button ${index === 0 ? "neo-accent-button--active" : ""}"
+        type="button"
+        style="--neo-swatch: ${accent.value}"
+        data-neumorphic-accent="${accent.value}"
+        data-neumorphic-accent-contrast="${accent.contrast}"
+        aria-pressed="${index === 0 ? "true" : "false"}"
+      >
+        <span class="neo-accent-button__swatch" aria-hidden="true"></span>
+        <span>${escapeHtml(accent.label)}</span>
+      </button>
+    `)
+    .join("");
+}
+
+function neumorphicModuleCards(user) {
+  return neumorphicVisibleModules(user)
+    .map((moduleItem) => `
+      <a class="neo-module" href="${routeHref(routeForModuleCard(moduleItem, user))}" data-link>
+        <span class="neo-module__icon">${renderModuleIcon(moduleItem)}</span>
+        <span class="neo-module__text">
+          <span>${escapeHtml(moduleItem.title)}</span>
+          <small>${escapeHtml(moduleStatusLabel(moduleItem) || "Modul")}</small>
+        </span>
+      </a>
+    `)
+    .join("");
+}
+
+function neumorphicClassicModuleCards(user) {
+  return neumorphicVisibleModules(user)
+    .slice(0, 4)
+    .map((moduleItem) => `
+      <span class="neo-classic-module">
+        <span class="neo-classic-module__icon">${renderModuleIcon(moduleItem)}</span>
+        <span>${escapeHtml(moduleItem.title)}</span>
+      </span>
+    `)
+    .join("");
+}
+
+function neumorphicPreviewPage(user) {
+  const modulesForUser = visibleModules(user);
+  const completedCount = modulesForUser.filter((moduleItem) => moduleItem.status === "HOTOVO").length;
+  const pilotRows = [
+    { label: "Sledování vozidel", value: "Mapa a alerty", tone: "active" },
+    { label: "Datová schránka", value: "Pilot ISDS", tone: "waiting" },
+    { label: "Šarlota", value: "Hlasový pilot", tone: "draft" }
+  ];
+  const rowMarkup = pilotRows
+    .map((row) => `
+      <div class="neo-soft-row">
+        <span>
+          <strong>${escapeHtml(row.label)}</strong>
+          <small>${escapeHtml(row.value)}</small>
+        </span>
+        <span class="neo-soft-status neo-soft-status--${escapeHtml(row.tone)}"></span>
+      </div>
+    `)
+    .join("");
+
+  return `
+    <main
+      class="neumorphic-preview-page"
+      data-neumorphic-preview
+      style="--neo-accent: ${NEUMORPHIC_ACCENTS[0].value}; --neo-accent-contrast: ${NEUMORPHIC_ACCENTS[0].contrast};"
+    >
+      <header class="neo-topbar" aria-labelledby="neo-preview-title">
+        <div>
+          <a class="neo-logo" href="${routeHref("/")}" data-link aria-label="${APP_NAME}">kaiser.</a>
+          <p class="neo-eyebrow">Design lab</p>
+          <h1 id="neo-preview-title">Neumorphic varianta</h1>
+        </div>
+        <a class="neo-home-link" href="${routeHref("/")}" data-link>Stávající dashboard</a>
+      </header>
+
+      <section class="neo-hero" aria-label="Nastaveni akcentu">
+        <div class="neo-hero__copy">
+          <p class="neo-section-kicker">Ruční akcent</p>
+          <h2>Kaiser zelená jako hlavní barva, zbytek palety se skládá automaticky.</h2>
+        </div>
+        <div class="neo-accent-picker" aria-label="Výběr hlavní barvy">
+          ${neumorphicAccentPicker()}
+        </div>
+      </section>
+
+      <section class="neo-comparison" aria-label="Porovnání vzhledu">
+        <article class="neo-compare-card neo-compare-card--classic">
+          <div class="neo-card-heading">
+            <p class="neo-section-kicker">Současný styl</p>
+            <h2>Aktuální aplikace</h2>
+          </div>
+          <div class="neo-classic-dashboard">
+            <div class="neo-classic-hero">
+              <span>Smart odpady</span>
+              <strong>${modulesForUser.length || orderedModules.length}</strong>
+              <small>modulu v menu</small>
+            </div>
+            <div class="neo-classic-stats">
+              <span><strong>${completedCount}</strong><small>hotovo</small></span>
+              <span><strong>API</strong><small>zdroj dat</small></span>
+              <span><strong>Cloud</strong><small>provoz</small></span>
+            </div>
+            <div class="neo-classic-modules">
+              ${neumorphicClassicModuleCards(user)}
+            </div>
+          </div>
+        </article>
+
+        <article class="neo-compare-card neo-compare-card--soft">
+          <div class="neo-card-heading">
+            <p class="neo-section-kicker">Návrh stylu</p>
+            <h2>Neumorphic dashboard</h2>
+          </div>
+          <div class="neo-soft-dashboard">
+            <div class="neo-soft-status-card">
+              <span class="neo-soft-ring" aria-hidden="true"><span>${Math.max(completedCount, 1)}</span></span>
+              <div>
+                <strong>Provozní přehled</strong>
+                <small>Měkké panely, výrazný akcent, klidné pozadí.</small>
+              </div>
+            </div>
+
+            <div class="neo-soft-modules">
+              ${neumorphicModuleCards(user)}
+            </div>
+
+            <div class="neo-soft-control-row">
+              <button class="neo-pill-button neo-pill-button--active" type="button">Online</button>
+              <button class="neo-icon-button" type="button" aria-label="Upozornění">!</button>
+              <div class="neo-soft-toggle" aria-label="Aktivní stav"><span></span></div>
+            </div>
+
+            <div class="neo-soft-panel">
+              <div class="neo-soft-progress">
+                <span style="--neo-progress: 72%"></span>
+              </div>
+              ${rowMarkup}
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  `;
 }
 
 function visibleDashboardRoutes(user) {
@@ -12323,6 +12486,12 @@ function renderAuthenticatedApp(user) {
     loadModuleFeedback({ render: true });
   }
 
+  if (path === DESIGN_NEUMORPHIC_ROUTE) {
+    app.innerHTML = neumorphicPreviewPage(user);
+    document.title = `Neumorphic varianta | ${APP_NAME}`;
+    return;
+  }
+
   if (path === "/") {
     app.innerHTML = homePage(user);
     document.title = APP_NAME;
@@ -14451,6 +14620,23 @@ document.addEventListener("pointerup", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const neumorphicAccent = event.target.closest("[data-neumorphic-accent]");
+  if (neumorphicAccent) {
+    event.preventDefault();
+    const preview = neumorphicAccent.closest("[data-neumorphic-preview]");
+
+    if (preview) {
+      preview.style.setProperty("--neo-accent", neumorphicAccent.dataset.neumorphicAccent || "#75bd25");
+      preview.style.setProperty("--neo-accent-contrast", neumorphicAccent.dataset.neumorphicAccentContrast || "#ffffff");
+      preview.querySelectorAll("[data-neumorphic-accent]").forEach((button) => {
+        button.classList.toggle("neo-accent-button--active", button === neumorphicAccent);
+        button.setAttribute("aria-pressed", button === neumorphicAccent ? "true" : "false");
+      });
+    }
+
+    return;
+  }
+
   const trackingSourceMode = event.target.closest("[data-tracking-source-mode]");
   if (trackingSourceMode) {
     event.preventDefault();

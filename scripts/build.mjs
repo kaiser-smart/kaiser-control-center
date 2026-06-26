@@ -21,6 +21,7 @@ function runtimeConfigModuleSource(env = process.env) {
 function versionedTemplate() {
   return template
     .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
+    .replace('href="src/neumorphic-preview.css"', `href="src/neumorphic-preview.css?v=${assetVersion}"`)
     .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
 }
 
@@ -63,6 +64,7 @@ const routes = new Set([
   "/dovolena-nemoc/reporty",
   "/dovolena-nemoc/pravidla-automatizace",
   "/dovolena-nemoc/nastaveni",
+  "/design/neumorphic",
   ...modules.map((moduleItem) => moduleItem.route),
   ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)
 ]);
@@ -87,7 +89,8 @@ await writeFile(path.join(dist, "_redirects"), [
   "/dovolena-nemoc/* /index.html 200",
   "/vozovy-park/* /index.html 200",
   "/sledovani-vozidel/* /index.html 200",
-  "/datova-schranka* /index.html 200"
+  "/datova-schranka* /index.html 200",
+  "/design/neumorphic* /index.html 200"
 ].join("\n") + "\n");
 
 for (const route of routes) {

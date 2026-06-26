@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.104"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.105"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Design: neumorphic preview",
+    text: "Samostatná URL /design/neumorphic ukazuje oddělený neumorphic návrh dashboardu s ručně volenou hlavní barvou a automaticky doladěnými odstíny."
+  },
   {
     title: "Sledovani vozidel: WIM vahy v mape",
     text: "T-Cars mapa dostava read-only WIM vrstvu z D1/API, detail pevnych dalnicnich vah a evidovany navrh 15km SMS/app alertu bez ostreho odesilani."
