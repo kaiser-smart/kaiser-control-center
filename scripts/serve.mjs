@@ -63,6 +63,52 @@ let mockModuleFeedback = [];
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
 
+const mockVehicleWimSites = [
+  ["wim-d0-0781-modletice-jesenice", "D0", "km 78,1 / cca km 79", "mezi Modleticemi a Jesenici", "Cernosice", "vpravo + vlevo", "active", "v provozu", 49.9706, 14.5288, 2],
+  ["wim-d1-1228-jihlava", "D1", "km 122,8-122,9", "u Jihlavy", "Jihlava", "vlevo 122,8; vpravo 122,9", "maintenance", "oprava do 15. 6. 2025", 49.4298, 15.6395, 2],
+  ["wim-d2-0083-zidlochovice", "D2", "km 8,3", "u Brna / Zidlochovic", "Zidlochovice", "vpravo + vlevo", "active", "v provozu", 49.0907, 16.6422, 2],
+  ["wim-d3-0919-sobeslav", "D3", "km 91,9", "u Sobeslavi", "Sobeslav", "vpravo + vlevo", "active", "v provozu", 49.2595, 14.7196, 2],
+  ["wim-d4-0096-jiloviste", "D4", "km 9,6", "u Jiloviste", "Cernosice", "vpravo + vlevo", "active", "v provozu", 49.9224, 14.3461, 2],
+  ["wim-d4-0599-pribram", "D4", "km 59,9", "u Pribrami", "Pribram", "vpravo", "active", "v provozu", 49.6746, 14.0498, 1],
+  ["wim-d4-0884-pisek", "D4", "km 88,4", "u Pisku", "Pisek", "vlevo", "active", "v provozu", 49.3532, 14.0952, 1],
+  ["wim-d5-0233-beroun", "D5", "km 23,3", "u Berouna", "Beroun", "vlevo", "planned", "vystavba 3Q/4Q 2025", 49.9794, 14.0499, 1],
+  ["wim-d5-1062-nyrany", "D5", "km 106,2", "u Plzne / Nyran", "Nyrany", "vpravo", "active", "v provozu", 49.7155, 13.2147, 1],
+  ["wim-d6-0112-unhost", "D6", "km 11,2", "u Unhoste", "Kladno", "vpravo + vlevo", "active", "v provozu", 50.0867, 14.1876, 2],
+  ["wim-d7-0670-louny", "D7", "km 67,0", "u Loun", "Louny", "vpravo + vlevo", "preselection", "predvyber", 50.3402, 13.8182, 2],
+  ["wim-d8-0050-brandys", "D8", "km 5,0", "u Prahy / Brandysa", "Brandys n. L. - St. Boleslav", "vlevo", "upgrade", "technologicky upgrade", 50.1583, 14.4773, 1],
+  ["wim-d8-0488-lovosice", "D8", "km 48,8", "u Lovosic", "Lovosice", "vpravo + vlevo", "active", "v provozu", 50.5295, 14.0410, 2],
+  ["wim-d10-0067-svemyslice", "D10", "km 6,7 / RSD km 5,70-5,75", "u Svemyslic", "Brandys n. L. - St. Boleslav", "vpravo + vlevo", "active", "v provozu / ostry provoz planovan od 6/2025", 50.1282, 14.6167, 2],
+  ["wim-d11-0782-hradec-kralove", "D11", "km 78,2", "u Hradce Kralove", "Hradec Kralove", "vpravo + vlevo", "active", "v provozu", 50.1986, 15.7358, 2],
+  ["wim-d35-2880-olomouc", "D35", "km 288,0", "u Olomouce", "Olomouc", "vpravo + vlevo", "active", "v provozu", 49.5992, 17.2342, 2],
+  ["wim-d48-0489-frydek-mistek", "D48", "km 48,9-49,8", "u Frydku-Mistku", "Frydek-Mistek", "vlevo 48,9; vpravo 49,8", "active", "v provozu", 49.6870, 18.3509, 2],
+  ["wim-d55-0610-veseli-nad-moravou", "D55", "km 61,0", "u Veseli nad Moravou", "Veseli nad Moravou", "vpravo + vlevo", "planned", "vystavba 3Q/4Q 2025", 48.9607, 17.3805, 2]
+].map(([id, road, kmLabel, locationLabel, orp, sideLabel, status, statusLabel, latitude, longitude, deviceCount]) => ({
+  id,
+  road,
+  kmLabel,
+  locationLabel,
+  orp,
+  sideLabel,
+  status,
+  statusLabel,
+  latitude,
+  longitude,
+  deviceCount,
+  sourceLabel: "MD/RSD PDF mapa, stav k 30. 6. 2025, prepsano ze zadani Radima",
+  sourceDate: "2025-06-30",
+  coordinateQuality: "approximate-needs-verification",
+  note: "Lokalni dev mock. Produkce cte WIM mista z D1.",
+  devices: Array.from({ length: deviceCount }, (_, index) => ({
+    id: `${id}-mock-device-${index + 1}`,
+    siteId: id,
+    side: sideLabel.includes("+") ? (index === 0 ? "vpravo" : "vlevo") : sideLabel,
+    kmValue: Number(String(kmLabel).match(/\d+(?:,\d+)?/)?.[0]?.replace(",", ".") || 0),
+    status,
+    statusLabel,
+    note: ""
+  }))
+}));
+
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
@@ -1516,6 +1562,62 @@ async function handleApi(request, response) {
     }
 
     sendJson(response, 200, await loadTcarsStatusPayload(process.env));
+    return true;
+  }
+
+  if (url.pathname === "/api/vehicle-tracking/wim-sites" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!hasPermission(user, "vehicle-tracking", "view")) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+
+    const devicesTotal = mockVehicleWimSites.reduce((sum, site) => sum + site.deviceCount, 0);
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      source: {
+        label: "MD/RSD PDF mapa, stav k 30. 6. 2025, dev mock",
+        sourceDate: "2025-06-30",
+        coordinateQuality: "approximate-needs-verification"
+      },
+      summary: {
+        sitesTotal: mockVehicleWimSites.length,
+        devicesTotal,
+        activeSites: mockVehicleWimSites.filter((site) => site.status === "active").length,
+        plannedSites: mockVehicleWimSites.filter((site) => site.status === "planned").length,
+        maintenanceSites: mockVehicleWimSites.filter((site) => site.status === "maintenance").length,
+        upgradeSites: mockVehicleWimSites.filter((site) => site.status === "upgrade").length,
+        preselectionSites: mockVehicleWimSites.filter((site) => site.status === "preselection").length,
+        alertDistanceKm: 15,
+        automationStatus: "draft",
+        automationMode: "read-only-pilot"
+      },
+      sites: mockVehicleWimSites
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/vehicle-tracking/wim-alerts" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!hasPermission(user, "vehicle-tracking", "view")) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      mode: "read-only-pilot",
+      message: "Ostre SMS ani app alerty se v dev mocku neposilaji.",
+      events: []
+    });
     return true;
   }
 

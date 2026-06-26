@@ -2903,6 +2903,278 @@ h1 {
   box-shadow: 0 0 0 4px rgba(117, 189, 37, 0.22), 0 14px 24px rgba(35, 40, 33, 0.24);
 }
 
+.tracking-wim-google-marker {
+  position: absolute;
+  display: inline-flex;
+  width: 96px;
+  min-width: 96px;
+  min-height: 58px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transform: translate(-50%, -100%);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  filter: drop-shadow(0 10px 16px rgba(35, 40, 33, 0.2));
+}
+
+.tracking-wim-google-marker--selected {
+  z-index: 9 !important;
+  transform: translate(-50%, -100%) scale(1.08);
+}
+
+.tracking-wim-google-pin {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 2px 7px;
+  min-width: 88px;
+  max-width: 96px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 2px solid #a75c10;
+  border-radius: 8px;
+  background: #fff7df;
+  color: #352612;
+  font-size: 0.62rem;
+  font-weight: 950;
+  line-height: 1.05;
+  text-align: left;
+  box-shadow: 0 10px 22px rgba(35, 40, 33, 0.18);
+}
+
+.tracking-wim-google-pin__icon {
+  grid-row: span 2;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #a75c10;
+  color: #ffffff;
+  font-size: 0.58rem;
+  letter-spacing: 0;
+}
+
+.tracking-wim-google-pin strong,
+.tracking-wim-google-pin > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-wim-google-pin--selected {
+  border-color: var(--module-accent);
+  box-shadow: 0 0 0 4px rgba(117, 189, 37, 0.22), 0 14px 24px rgba(35, 40, 33, 0.24);
+}
+
+.tracking-wim-layer {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e8d4b4;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.tracking-wim-layer__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+}
+
+.tracking-wim-layer__head h3,
+.tracking-wim-layer__head p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-wim-layer__head h3 {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.tracking-wim-layer__head p,
+.tracking-wim-source,
+.tracking-wim-note {
+  color: #715014;
+  font-weight: 850;
+  line-height: 1.42;
+}
+
+.tracking-wim-layer__head > span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid #ffd78a;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #715014;
+  font-size: 0.76rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.tracking-wim-state {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #ffd78a;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracking-wim-state--error {
+  border-color: #f0a2a2;
+  background: #fff3f3;
+  color: #8b1e1e;
+}
+
+.tracking-wim-state strong,
+.tracking-wim-state span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-wim-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.tracking-wim-summary article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #eadcc2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracking-wim-summary span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tracking-wim-summary strong {
+  color: var(--ink);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.tracking-wim-source,
+.tracking-wim-note {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.tracking-wim-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.tracking-wim-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.tracking-wim-site-card {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #eadcc2;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--steel);
+  font: inherit;
+  font-weight: 850;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tracking-wim-site-card--selected {
+  border-color: var(--module-accent);
+  box-shadow: 0 0 0 3px rgba(117, 189, 37, 0.16);
+}
+
+.tracking-wim-site-card strong,
+.tracking-wim-site-card span,
+.tracking-wim-site-card small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-wim-site-card strong {
+  color: var(--ink);
+}
+
+.tracking-wim-site-card small {
+  color: #715014;
+  line-height: 1.35;
+}
+
+.tracking-wim-detail,
+.tracking-wim-empty {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #eadcc2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracking-wim-detail--empty,
+.tracking-wim-empty {
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.tracking-wim-detail__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.tracking-wim-detail__head div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tracking-wim-detail__head strong,
+.tracking-wim-detail__head span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-wim-detail__head strong {
+  color: var(--ink);
+}
+
 .tracking-tcars-location-detail {
   display: grid;
   gap: 12px;
@@ -7388,6 +7660,10 @@ body:has(.ai-assistant-promo-modal) {
   .tracking-tcars-location-list,
   .tracking-tcars-invalid__head,
   .tracking-tcars-invalid-list,
+  .tracking-wim-layer__head,
+  .tracking-wim-summary,
+  .tracking-wim-grid,
+  .tracking-wim-list,
   .tracking-icon-spec__head,
   .tracking-icon-spec__grid,
   .tracking-integration-grid {
@@ -7403,7 +7679,8 @@ body:has(.ai-assistant-promo-modal) {
     display: none;
   }
 
-  .tracking-icon-spec__head > span {
+  .tracking-icon-spec__head > span,
+  .tracking-wim-layer__head > span {
     justify-self: start;
     white-space: normal;
     text-align: left;
@@ -7576,6 +7853,10 @@ body:has(.ai-assistant-promo-modal) {
   .tracking-tcars-map-layout,
   .tracking-tcars-invalid__head,
   .tracking-tcars-invalid-list,
+  .tracking-wim-layer__head,
+  .tracking-wim-summary,
+  .tracking-wim-grid,
+  .tracking-wim-list,
   .tracking-icon-spec__head,
   .tracking-icon-spec__grid,
   .tracking-integration-grid {

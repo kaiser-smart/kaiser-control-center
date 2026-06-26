@@ -166,6 +166,11 @@ import {
   VEHICLE_TRACKING_TCAR_SYNC_LOG_FIELDS,
   VEHICLE_TRACKING_TCAR_UNAVAILABLE,
   VEHICLE_TRACKING_TCAR_WAITING,
+  VEHICLE_TRACKING_WIM_ALERT_FIELDS,
+  VEHICLE_TRACKING_WIM_ALERT_PILOT,
+  VEHICLE_TRACKING_WIM_PLACEHOLDER_ICON,
+  VEHICLE_TRACKING_WIM_SITE_FIELDS,
+  VEHICLE_TRACKING_WIM_WAITING,
   VEHICLE_TRIP_FIELDS,
   VEHICLE_TRIP_POINT_FIELDS,
   vehicleTrackingIconForType,
@@ -766,15 +771,25 @@ const vehicleTrackingDemoState = {
   googleOverlays: null
 };
 const vehicleTrackingLiveState = {
-  sourceMode: "demo",
+  sourceMode: "tcars",
   loaded: false,
   loading: false,
   error: "",
   status: null,
+  wimLoaded: false,
+  wimLoading: false,
+  wimError: "",
+  wimApiStatus: "waiting",
+  wimSites: [],
+  wimSummary: null,
+  wimSource: null,
+  wimAlertEvents: [],
+  selectedWimSiteId: "",
   selectedLocationId: "",
   googleMapNode: null,
   googleMap: null,
   googleMarkers: new Map(),
+  wimGoogleMarkers: new Map(),
   googleBoundsKey: "",
   googleFocusedLocationId: ""
 };
@@ -6992,7 +7007,7 @@ function vehicleTrackingSourceModeMeta(modeId) {
 function vehicleTrackingSourceModeFromHash(hash = window.location.hash) {
   const normalizedHash = String(hash || "").trim();
 
-  if (["#tracking-tcars-status", "#tracking-tcars-pairing"].includes(normalizedHash)) {
+  if (["#tracking-tcars-status", "#tracking-tcars-pairing", "#tracking-wim-sites", "#tracking-rules"].includes(normalizedHash)) {
     return "tcars";
   }
 
@@ -7023,7 +7038,9 @@ function vehicleTrackingTabs(activeView = "map", sourceMode = vehicleTrackingAct
   const tabs = sourceMode === "tcars"
     ? [
       { id: "tcars-status", label: "T-Cars stav", href: "#tracking-tcars-status" },
+      { id: "wim-sites", label: "WIM váhy", href: "#tracking-wim-sites" },
       { id: "tcars-pairing", label: "Párování", href: "#tracking-tcars-pairing" },
+      { id: "rules", label: "Pravidla", href: "#tracking-rules" },
       { id: "api", label: "API", href: "#tracking-api" }
     ]
     : [
@@ -7871,6 +7888,141 @@ function vehicleTrackingTcarsMapPosition(location = {}, bounds = null) {
   };
 }
 
+function vehicleTrackingWimSitesForMap() {
+  return (Array.isArray(vehicleTrackingLiveState.wimSites) ? vehicleTrackingLiveState.wimSites : [])
+    .map((site) => ({
+      ...site,
+      latitude: vehicleTrackingCoordinateValue(site.latitude),
+      longitude: vehicleTrackingCoordinateValue(site.longitude)
+    }))
+    .filter((site) => site.latitude !== null && site.longitude !== null);
+}
+
+function vehicleTrackingWimStatusLabel(status = "", fallback = "") {
+  const labels = {
+    active: "v provozu",
+    planned: "vystavba / plan",
+    maintenance: "oprava",
+    upgrade: "technologicky upgrade",
+    preselection: "predvyber"
+  };
+  return labels[String(status || "").trim().toLowerCase()] || fallback || "neznamy stav";
+}
+
+function vehicleTrackingWimStatusTone(status = "") {
+  const tones = {
+    active: "moving",
+    planned: "waiting",
+    maintenance: "service",
+    upgrade: "service",
+    preselection: "off-route"
+  };
+  return tones[String(status || "").trim().toLowerCase()] || "waiting";
+}
+
+function vehicleTrackingWimSiteTitle(site = {}) {
+  return [site.road, site.kmLabel, site.locationLabel].filter(Boolean).join(" ");
+}
+
+function vehicleTrackingWimSiteById(siteId) {
+  const normalizedId = String(siteId || "").trim();
+  if (!normalizedId) {
+    return null;
+  }
+  return vehicleTrackingWimSitesForMap().find((site) => site.id === normalizedId) || null;
+}
+
+function vehicleTrackingSelectedWimSite(sites = vehicleTrackingWimSitesForMap()) {
+  if (!sites.length) {
+    return null;
+  }
+  return sites.find((site) => site.id === vehicleTrackingLiveState.selectedWimSiteId) || sites[0];
+}
+
+function vehicleTrackingWimSiteTooltip(site = {}) {
+  return [
+    vehicleTrackingWimSiteTitle(site),
+    `ORP: ${site.orp || "neuvedeno"}`,
+    `Strana: ${site.sideLabel || "neuvedeno"}`,
+    `Stav: ${site.statusLabel || vehicleTrackingWimStatusLabel(site.status)}`,
+    `Zarizeni: ${site.deviceCount || site.devices?.length || 0}`,
+    `Souradnice: ${Number(site.latitude).toFixed(5)}, ${Number(site.longitude).toFixed(5)}`,
+    `Kvalita GPS: ${site.coordinateQuality || "needs-verification"}`
+  ].join("\n");
+}
+
+function vehicleTrackingWimSummaryItems(summary = {}) {
+  return [
+    { label: "WIM lokalit", value: String(summary.sitesTotal || 0) },
+    { label: "Smerovych vah", value: String(summary.devicesTotal || 0) },
+    { label: "V provozu", value: String(summary.activeSites || 0) },
+    { label: "Plan / vystavba", value: String(summary.plannedSites || 0) },
+    { label: "Oprava / upgrade", value: String((summary.maintenanceSites || 0) + (summary.upgradeSites || 0)) },
+    { label: "Alert vzdalenost", value: `${summary.alertDistanceKm || 15} km` }
+  ];
+}
+
+function vehicleTrackingWimSiteDetail(site = null) {
+  if (!site) {
+    return `
+      <div class="tracking-wim-detail tracking-wim-detail--empty" data-tracking-wim-detail>
+        <strong>WIM mista zatim nejsou nactena.</strong>
+        <span>${escapeHtml(VEHICLE_TRACKING_WIM_WAITING)}</span>
+      </div>
+    `;
+  }
+
+  const tone = vehicleTrackingWimStatusTone(site.status);
+  const statusLabel = site.statusLabel || vehicleTrackingWimStatusLabel(site.status);
+  const coordinates = `${Number(site.latitude).toFixed(5)}, ${Number(site.longitude).toFixed(5)}`;
+  const devices = Array.isArray(site.devices) && site.devices.length
+    ? site.devices.map((device) => `${device.side || "smer"} ${device.kmValue ? `km ${device.kmValue}` : ""}`.trim()).join(", ")
+    : site.sideLabel || "neuvedeno";
+
+  return `
+    <div class="tracking-wim-detail" data-tracking-wim-detail>
+      <div class="tracking-wim-detail__head">
+        <div>
+          <strong>${escapeHtml(vehicleTrackingWimSiteTitle(site))}</strong>
+          <span>${escapeHtml(site.orp || "ORP neuvedeno")}</span>
+        </div>
+        <span class="tracking-status tracking-status--${escapeHtml(tone)}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <div class="tracking-detail-grid tracking-detail-grid--compact">
+        ${vehicleTrackingDemoDetailField("Komunikace", site.road || "neuvedeno")}
+        ${vehicleTrackingDemoDetailField("Kilometrovnik", site.kmLabel || "neuvedeno")}
+        ${vehicleTrackingDemoDetailField("Misto", site.locationLabel || "neuvedeno")}
+        ${vehicleTrackingDemoDetailField("ORP", site.orp || "neuvedeno")}
+        ${vehicleTrackingDemoDetailField("Strana / zarizeni", site.sideLabel || "neuvedeno")}
+        ${vehicleTrackingDemoDetailField("Pocet smerovych vah", String(site.deviceCount || site.devices?.length || 0))}
+        ${vehicleTrackingDemoDetailField("Zarizeni", devices)}
+        ${vehicleTrackingDemoDetailField("Souradnice", coordinates)}
+        ${vehicleTrackingDemoDetailField("Kvalita GPS", site.coordinateQuality || "needs-verification")}
+        ${vehicleTrackingDemoDetailField("Zdroj", site.sourceLabel || "MD/RSD PDF mapa")}
+      </div>
+      <p class="tracking-wim-note">${escapeHtml(site.note || "Souradnice jsou orientacni a cekaji na finalni overeni proti oficialnimu podkladu.")}</p>
+    </div>
+  `;
+}
+
+function syncVehicleTrackingWimSelectionDom(siteId) {
+  const site = vehicleTrackingWimSiteById(siteId);
+  if (!site) {
+    return false;
+  }
+
+  document.querySelectorAll(".tracking-wim-site-card").forEach((card) => {
+    card.classList.toggle("tracking-wim-site-card--selected", card.dataset.trackingWimSelect === siteId);
+  });
+
+  const detail = document.querySelector("[data-tracking-wim-detail]");
+  if (detail) {
+    detail.outerHTML = vehicleTrackingWimSiteDetail(site);
+  }
+
+  return true;
+}
+
 function vehicleTrackingTcarsIconType(location = {}) {
   const vehicle = location.vehicle || {};
   const text = [
@@ -8114,6 +8266,70 @@ function vehicleTrackingTcarsInvalidSection(invalidVehicles = []) {
   `;
 }
 
+function vehicleTrackingWimLayerPanel() {
+  const loading = vehicleTrackingLiveState.wimLoading && !vehicleTrackingLiveState.wimLoaded;
+  const error = vehicleTrackingLiveState.wimError;
+  const sites = vehicleTrackingWimSitesForMap();
+  const selectedSite = vehicleTrackingSelectedWimSite(sites);
+  const summary = vehicleTrackingLiveState.wimSummary || {};
+  const source = vehicleTrackingLiveState.wimSource || {};
+  const message = error || (loading ? "Nacitam WIM mista z API..." : VEHICLE_TRACKING_WIM_ALERT_PILOT);
+  const badge = vehicleTrackingLiveState.wimApiStatus === "ready" ? "Read-only API" : "Ceka na D1";
+
+  return `
+    <section class="tracking-wim-layer" id="tracking-wim-sites" aria-labelledby="tracking-wim-title">
+      <div class="tracking-wim-layer__head">
+        <div>
+          <h3 id="tracking-wim-title">Pevne WIM vahy</h3>
+          <p>Vrstva zobrazuje pevne vysokorychlostni kontrolni vahy nad Google mapou. SMS alert 15 km pred mistem je zatim jen evidovana automatizace.</p>
+        </div>
+        <span>${escapeHtml(badge)}</span>
+      </div>
+      <div class="tracking-wim-state ${error ? "tracking-wim-state--error" : ""}" role="${error ? "alert" : "status"}">
+        <strong>${escapeHtml(message)}</strong>
+        <span>${escapeHtml(VEHICLE_TRACKING_WIM_PLACEHOLDER_ICON)}</span>
+      </div>
+      <div class="tracking-wim-summary">
+        ${vehicleTrackingWimSummaryItems(summary).map((item) => `
+          <article>
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(item.value)}</strong>
+          </article>
+        `).join("")}
+      </div>
+      <p class="tracking-wim-source">
+        Zdroj: ${escapeHtml(source.label || "MD/RSD PDF mapa, stav k 30. 6. 2025")} · souradnice: ${escapeHtml(source.coordinateQuality || "approximate-needs-verification")}
+      </p>
+      <div class="tracking-wim-grid">
+        <div class="tracking-wim-list" aria-label="Seznam WIM vah">
+          ${sites.length ? sites.map((site) => {
+            const selected = selectedSite?.id === site.id;
+            const statusLabel = site.statusLabel || vehicleTrackingWimStatusLabel(site.status);
+            return `
+              <button
+                class="tracking-wim-site-card ${selected ? "tracking-wim-site-card--selected" : ""}"
+                type="button"
+                data-tracking-wim-select="${escapeHtml(site.id)}"
+              >
+                <strong>${escapeHtml(vehicleTrackingWimSiteTitle(site))}</strong>
+                <span>${escapeHtml(site.orp || "ORP neuvedeno")}</span>
+                <small>${escapeHtml(statusLabel)} · ${escapeHtml(site.sideLabel || "strana neuvedena")}</small>
+                <small>${escapeHtml(site.deviceCount || 0)} smerovych vah · GPS overit</small>
+              </button>
+            `;
+          }).join("") : `
+            <div class="tracking-wim-empty">
+              <strong>${escapeHtml(loading ? "Nacitam WIM mista." : "WIM mista nejsou dostupna.")}</strong>
+              <span>${escapeHtml(VEHICLE_TRACKING_WIM_WAITING)}</span>
+            </div>
+          `}
+        </div>
+        ${vehicleTrackingWimSiteDetail(selectedSite)}
+      </div>
+    </section>
+  `;
+}
+
 function vehicleTrackingTcarsMapSection(status = {}) {
   const loading = vehicleTrackingLiveState.loading && !vehicleTrackingLiveState.loaded;
   const hasGoogleMapsKey = Boolean(vehicleTrackingDemoGoogleMapsKey());
@@ -8200,6 +8416,7 @@ function vehicleTrackingTcarsMapSection(status = {}) {
           <span>Po nastavení klíče se zde zobrazí Google mapa.</span>
         </div>
       `}
+      ${vehicleTrackingWimLayerPanel()}
       ${vehicleTrackingTcarsLocationDetail(selectedLocation)}
       ${vehicleTrackingTcarsInvalidSection(locationGroups.invalidVehicles)}
     </div>
@@ -8361,6 +8578,14 @@ function vehicleTrackingApiSection() {
         <article>
           <h3>T-Cars sync log</h3>
           ${vehicleTrackingFieldChips(VEHICLE_TRACKING_TCAR_SYNC_LOG_FIELDS)}
+        </article>
+        <article>
+          <h3>WIM mista</h3>
+          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_WIM_SITE_FIELDS)}
+        </article>
+        <article>
+          <h3>WIM alert udalost</h3>
+          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_WIM_ALERT_FIELDS)}
         </article>
         <article>
           <h3>Jízda</h3>
@@ -8752,6 +8977,76 @@ function focusVehicleTrackingGoogleMapOnVehicle(vehicleId) {
   map.setZoom(Math.max(map.getZoom() || 12, 14));
 }
 
+function createVehicleTrackingWimGoogleMarker(maps, map, site) {
+  class VehicleTrackingWimMarker extends maps.OverlayView {
+    constructor(initialSite) {
+      super();
+      this.site = initialSite;
+      this.selected = false;
+      this.div = null;
+      this.setMap(map);
+    }
+
+    onAdd() {
+      this.div = document.createElement("button");
+      this.div.type = "button";
+      this.div.className = "tracking-wim-google-marker";
+      this.div.dataset.trackingWimSelect = this.site.id;
+      this.div.dataset.trackingWimGoogleMarker = this.site.id;
+      this.div.addEventListener("click", () => handleVehicleTrackingWimSelect(this.site.id, { focusMap: true }));
+      this.updateContent();
+      this.getPanes().overlayMouseTarget.appendChild(this.div);
+    }
+
+    draw() {
+      if (!this.div) {
+        return;
+      }
+      const projection = this.getProjection();
+      const point = projection.fromLatLngToDivPixel(new maps.LatLng(this.site.latitude, this.site.longitude));
+      this.div.style.left = `${point.x}px`;
+      this.div.style.top = `${point.y}px`;
+      this.div.className = [
+        "tracking-wim-google-marker",
+        `tracking-wim-google-marker--${vehicleTrackingWimStatusTone(this.site.status)}`,
+        this.selected ? "tracking-wim-google-marker--selected" : ""
+      ].filter(Boolean).join(" ");
+    }
+
+    onRemove() {
+      this.div?.remove();
+      this.div = null;
+    }
+
+    updateContent() {
+      if (!this.div) {
+        return;
+      }
+      const title = vehicleTrackingWimSiteTooltip(this.site);
+      this.div.setAttribute("aria-label", `Vybrat WIM misto ${vehicleTrackingWimSiteTitle(this.site)}`);
+      this.div.setAttribute("title", title);
+      this.div.dataset.trackingWimSelect = this.site.id;
+      this.div.dataset.trackingWimGoogleMarker = this.site.id;
+      this.div.innerHTML = `
+        <span class="tracking-wim-google-pin ${this.selected ? "tracking-wim-google-pin--selected" : ""}" title="${escapeHtml(title)}">
+          <span class="tracking-wim-google-pin__icon" aria-hidden="true">WIM</span>
+          <strong>${escapeHtml(this.site.road || "WIM")}</strong>
+          <span>${escapeHtml(this.site.kmLabel || "")}</span>
+        </span>
+      `;
+    }
+
+    update(site, selected) {
+      this.site = site;
+      this.selected = selected;
+      this.updateContent();
+      this.draw();
+    }
+  }
+
+  return new VehicleTrackingWimMarker(site);
+}
+
 function createVehicleTrackingTcarsGoogleMarker(maps, map, location) {
   class VehicleTrackingTcarsMarker extends maps.OverlayView {
     constructor(initialLocation) {
@@ -8822,6 +9117,8 @@ function createVehicleTrackingTcarsGoogleMarker(maps, map, location) {
 function clearVehicleTrackingTcarsGoogleMap() {
   vehicleTrackingLiveState.googleMarkers.forEach((marker) => marker.setMap(null));
   vehicleTrackingLiveState.googleMarkers.clear();
+  vehicleTrackingLiveState.wimGoogleMarkers.forEach((marker) => marker.setMap(null));
+  vehicleTrackingLiveState.wimGoogleMarkers.clear();
   vehicleTrackingLiveState.googleMap = null;
   vehicleTrackingLiveState.googleMapNode = null;
   vehicleTrackingLiveState.googleBoundsKey = "";
@@ -8850,9 +9147,12 @@ function initializeVehicleTrackingTcarsGoogleMap(maps, node) {
   return map;
 }
 
-function vehicleTrackingTcarsBoundsKey(locations = []) {
-  return locations
-    .map((location) => `${location._locationId}:${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`)
+function vehicleTrackingTcarsBoundsKey(locations = [], wimSites = vehicleTrackingWimSitesForMap()) {
+  return [
+    ...locations.map((location) => ({ id: location._locationId, latitude: location.latitude, longitude: location.longitude })),
+    ...wimSites.map((site) => ({ id: `wim-${site.id}`, latitude: site.latitude, longitude: site.longitude }))
+  ]
+    .map((location) => `${location.id}:${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`)
     .sort()
     .join("|");
 }
@@ -8892,6 +9192,44 @@ function focusVehicleTrackingTcarsGoogleMap(locationId) {
   vehicleTrackingLiveState.googleFocusedLocationId = locationId;
 }
 
+function focusVehicleTrackingWimGoogleMap(siteId) {
+  const map = vehicleTrackingLiveState.googleMap;
+  const site = vehicleTrackingWimSiteById(siteId);
+
+  if (!map || !site) {
+    return;
+  }
+
+  map.panTo({ lat: site.latitude, lng: site.longitude });
+  map.setZoom(Math.max(map.getZoom() || 8, 13));
+  vehicleTrackingLiveState.googleFocusedLocationId = `wim:${siteId}`;
+}
+
+function syncVehicleTrackingWimGoogleMarkers(maps, map) {
+  const sites = vehicleTrackingWimSitesForMap();
+  const activeIds = new Set(sites.map((site) => site.id));
+  const selectedSite = vehicleTrackingSelectedWimSite(sites);
+
+  vehicleTrackingLiveState.wimGoogleMarkers.forEach((marker, markerId) => {
+    if (!activeIds.has(markerId)) {
+      marker.setMap(null);
+      vehicleTrackingLiveState.wimGoogleMarkers.delete(markerId);
+    }
+  });
+
+  sites.forEach((site) => {
+    const selected = selectedSite?.id === site.id;
+    const existingMarker = vehicleTrackingLiveState.wimGoogleMarkers.get(site.id);
+    if (existingMarker) {
+      existingMarker.update(site, selected);
+      return;
+    }
+    const marker = createVehicleTrackingWimGoogleMarker(maps, map, site);
+    marker.update(site, selected);
+    vehicleTrackingLiveState.wimGoogleMarkers.set(site.id, marker);
+  });
+}
+
 function syncVehicleTrackingTcarsGoogleMap(options = {}) {
   const node = document.querySelector("[data-tracking-tcars-google-map]");
   if (!node || !vehicleTrackingDemoGoogleMapsKey()) {
@@ -8903,6 +9241,7 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
     .then((maps) => {
       const map = initializeVehicleTrackingTcarsGoogleMap(maps, node);
       const { validLocations } = vehicleTrackingTcarsLocationGroups(vehicleTrackingLiveState.status || {});
+      const wimSites = vehicleTrackingWimSitesForMap();
       const activeIds = new Set(validLocations.map((location) => location._locationId));
       const selectedLocation = vehicleTrackingTcarsSelectedLocation(validLocations);
 
@@ -8925,12 +9264,17 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
         vehicleTrackingLiveState.googleMarkers.set(location._locationId, marker);
       });
 
-      const boundsKey = vehicleTrackingTcarsBoundsKey(validLocations);
+      syncVehicleTrackingWimGoogleMarkers(maps, map);
+
+      const boundsKey = vehicleTrackingTcarsBoundsKey(validLocations, wimSites);
       const selectedId = selectedLocation?._locationId || "";
-      if (options.focusSelected && selectedId) {
+      const selectedWimId = vehicleTrackingSelectedWimSite(wimSites)?.id || "";
+      if (options.focusWimSelected && selectedWimId) {
+        focusVehicleTrackingWimGoogleMap(selectedWimId);
+      } else if (options.focusSelected && selectedId) {
         focusVehicleTrackingTcarsGoogleMap(selectedId);
       } else if (options.forceFit || boundsKey !== vehicleTrackingLiveState.googleBoundsKey) {
-        fitVehicleTrackingTcarsGoogleMap(maps, map, validLocations);
+        fitVehicleTrackingTcarsGoogleMap(maps, map, [...validLocations, ...wimSites]);
         vehicleTrackingLiveState.googleBoundsKey = boundsKey;
       }
     })
@@ -9076,6 +9420,17 @@ function syncVehicleTrackingDemoRuntime() {
   }
 }
 
+function vehicleTrackingRulesAutomation(user) {
+  ensureModuleRulesData("vehicle-tracking");
+  return moduleRulesAutomationPanel({
+    moduleKey: "vehicle-tracking",
+    moduleName: "Sledovani vozidel",
+    user,
+    description: "Cloud evidence pravidel a automatizaci pro GPS sledovani, T-Cars, WIM vrstvu a budouci 15km upozorneni ridicum.",
+    cloudNote: "WIM vrstva je read-only pres API. SMS/app alert 15 km pred vahou je zatim navrh automatizace bez ostreho cloud geofencing runneru a bez odesilani SMS."
+  });
+}
+
 function vehicleTrackingPage(moduleItem, user, context = {}) {
   const vehicleId = context.vehicleId || "";
   const view = context.view || "map";
@@ -9124,6 +9479,9 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
           ${vehicleTrackingTcarsPairingSection()}
         `}
         ${vehicleTrackingApiSection()}
+        <div id="tracking-rules">
+          ${vehicleTrackingRulesAutomation(user)}
+        </div>
       </div>
       ${moduleFeedbackBoxFor(moduleItem, user, {
         moduleId: "sledovani-vozidel",
@@ -10333,6 +10691,25 @@ function resetDataBoxState() {
   dataBoxState.error = "";
 }
 
+function resetVehicleTrackingLiveState() {
+  clearVehicleTrackingTcarsGoogleMap();
+  vehicleTrackingLiveState.sourceMode = "tcars";
+  vehicleTrackingLiveState.loaded = false;
+  vehicleTrackingLiveState.loading = false;
+  vehicleTrackingLiveState.error = "";
+  vehicleTrackingLiveState.status = null;
+  vehicleTrackingLiveState.wimLoaded = false;
+  vehicleTrackingLiveState.wimLoading = false;
+  vehicleTrackingLiveState.wimError = "";
+  vehicleTrackingLiveState.wimApiStatus = "waiting";
+  vehicleTrackingLiveState.wimSites = [];
+  vehicleTrackingLiveState.wimSummary = null;
+  vehicleTrackingLiveState.wimSource = null;
+  vehicleTrackingLiveState.wimAlertEvents = [];
+  vehicleTrackingLiveState.selectedWimSiteId = "";
+  vehicleTrackingLiveState.selectedLocationId = "";
+}
+
 async function loadDataBoxData(options = {}) {
   const { force = false, renderAfter = true } = options;
 
@@ -10415,6 +10792,58 @@ async function loadVehicleTrackingStatus(options = {}) {
   }
 }
 
+async function loadVehicleTrackingWimSites(options = {}) {
+  const { force = false, renderAfter = true } = options;
+
+  if (vehicleTrackingLiveState.wimLoading || (vehicleTrackingLiveState.wimLoaded && !force)) {
+    return;
+  }
+
+  if (!hasPermission(currentUser(), "vehicle-tracking", "view")) {
+    return;
+  }
+
+  vehicleTrackingLiveState.wimLoading = true;
+  vehicleTrackingLiveState.wimError = "";
+
+  try {
+    const [sitesResult, alertsResult] = await Promise.all([
+      apiJson("/api/vehicle-tracking/wim-sites"),
+      apiJson("/api/vehicle-tracking/wim-alerts")
+    ]);
+    vehicleTrackingLiveState.wimSites = Array.isArray(sitesResult.sites) ? sitesResult.sites : [];
+    vehicleTrackingLiveState.wimSummary = sitesResult.summary || null;
+    vehicleTrackingLiveState.wimSource = sitesResult.source || null;
+    vehicleTrackingLiveState.wimApiStatus = sitesResult.apiStatus || "ready";
+    vehicleTrackingLiveState.wimAlertEvents = Array.isArray(alertsResult.events) ? alertsResult.events : [];
+    vehicleTrackingLiveState.wimLoaded = true;
+    if (
+      vehicleTrackingLiveState.selectedWimSiteId &&
+      !vehicleTrackingLiveState.wimSites.some((site) => site.id === vehicleTrackingLiveState.selectedWimSiteId)
+    ) {
+      vehicleTrackingLiveState.selectedWimSiteId = "";
+    }
+    if (!vehicleTrackingLiveState.selectedWimSiteId && vehicleTrackingLiveState.wimSites[0]) {
+      vehicleTrackingLiveState.selectedWimSiteId = vehicleTrackingLiveState.wimSites[0].id;
+    }
+  } catch (error) {
+    vehicleTrackingLiveState.wimSites = [];
+    vehicleTrackingLiveState.wimSummary = null;
+    vehicleTrackingLiveState.wimSource = null;
+    vehicleTrackingLiveState.wimApiStatus = error?.payload?.apiStatus || "waiting";
+    vehicleTrackingLiveState.wimError = error?.payload?.error || error?.message || VEHICLE_TRACKING_WIM_WAITING;
+  } finally {
+    vehicleTrackingLiveState.wimLoading = false;
+  }
+
+  if (renderAfter) {
+    render();
+    if (vehicleTrackingActiveSourceMode() === "tcars") {
+      queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
+    }
+  }
+}
+
 async function loadFleetVehicles(options = {}) {
   const { force = false, renderAfter = true } = options;
 
@@ -10467,6 +10896,7 @@ function handleVehicleTrackingSourceMode(mode) {
 
   if (mode === "tcars") {
     loadVehicleTrackingStatus();
+    loadVehicleTrackingWimSites();
     queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
   } else {
     clearVehicleTrackingTcarsGoogleMap();
@@ -10492,6 +10922,28 @@ function handleVehicleTrackingTcarsSelectEvent(event) {
 
   event.preventDefault();
   handleVehicleTrackingTcarsSelect(trackingTcarsSelect.dataset.trackingTcarsSelect || "");
+  return true;
+}
+
+function handleVehicleTrackingWimSelect(siteId, options = {}) {
+  const normalizedId = String(siteId || "").trim();
+  if (!normalizedId || !vehicleTrackingWimSiteById(normalizedId)) {
+    return;
+  }
+
+  vehicleTrackingLiveState.selectedWimSiteId = normalizedId;
+  syncVehicleTrackingWimSelectionDom(normalizedId);
+  queueVehicleTrackingTcarsGoogleSync({ focusWimSelected: options.focusMap !== false });
+}
+
+function handleVehicleTrackingWimSelectEvent(event) {
+  const trackingWimSelect = event.target?.closest?.("[data-tracking-wim-select]");
+  if (!trackingWimSelect) {
+    return false;
+  }
+
+  event.preventDefault();
+  handleVehicleTrackingWimSelect(trackingWimSelect.dataset.trackingWimSelect || "");
   return true;
 }
 
@@ -11838,6 +12290,7 @@ async function logout() {
   absenceSettingsState.missingEndpoint = "PATCH /api/absence-settings";
   resetModuleRulesState();
   resetDataBoxState();
+  resetVehicleTrackingLiveState();
   navigateToUrl(routeHref("/"));
 }
 
@@ -11963,6 +12416,7 @@ function renderAuthenticatedApp(user) {
     document.title = `${trackingContext.view === "today-trip" ? "Dnešní trasa" : trackingContext.view === "history" ? "Historie jízd" : "Detail sledování vozidla"} | ${APP_NAME}`;
     if (vehicleTrackingActiveSourceMode() === "tcars") {
       loadVehicleTrackingStatus();
+      loadVehicleTrackingWimSites();
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     return;
@@ -11989,6 +12443,7 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === "vehicle-tracking" && vehicleTrackingActiveSourceMode() === "tcars") {
       loadVehicleTrackingStatus();
+      loadVehicleTrackingWimSites();
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     if (moduleItem.id === "fleet") {
@@ -13992,6 +14447,7 @@ document.addEventListener("error", (event) => {
 
 document.addEventListener("pointerup", (event) => {
   handleVehicleTrackingTcarsSelectEvent(event);
+  handleVehicleTrackingWimSelectEvent(event);
 }, true);
 
 document.addEventListener("click", async (event) => {
@@ -14024,6 +14480,10 @@ document.addEventListener("click", async (event) => {
   }
 
   if (handleVehicleTrackingTcarsSelectEvent(event)) {
+    return;
+  }
+
+  if (handleVehicleTrackingWimSelectEvent(event)) {
     return;
   }
 
