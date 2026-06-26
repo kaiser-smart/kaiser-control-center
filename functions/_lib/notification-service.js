@@ -72,6 +72,10 @@ function dashboardUrl(env) {
   return `${appBaseUrl(env).replace(/\/+$/, "")}/`;
 }
 
+function vehicleTrackingUrl(env) {
+  return `${appBaseUrl(env).replace(/\/+$/, "")}/sledovani-vozidel`;
+}
+
 function employeeCardUrl(env, employeeId) {
   return `${appBaseUrl(env).replace(/\/+$/, "")}/dovolena-nemoc/zamestnanci/${encodeURIComponent(cleanString(employeeId))}`;
 }
@@ -365,6 +369,42 @@ function renderMedicalExamReminderEmail({ exam, ctaUrl }) {
 </html>`;
 }
 
+function renderAiAssistantNotificationEmail({ subject, message, ctaUrl, authorName }) {
+  const cleanAuthorName = cleanString(authorName) || "Šarlota";
+  const messageHtml = htmlEscape(message).replace(/\n/g, "<br>");
+
+  return `<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${htmlEscape(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background:#f7f9f4;font-family:'Quicksand',Arial,Helvetica,sans-serif;color:#1f2921;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7f9f4;">
+    <tr>
+      <td align="center" style="padding:42px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border:1px solid #e1e6de;border-radius:16px;box-shadow:0 24px 64px rgba(31,41,33,0.14);overflow:hidden;">
+          <tr>
+            <td style="padding:40px 42px;">
+              <div style="display:inline-block;background:#75bd25;border-radius:14px;padding:12px 24px;color:#ffffff;font-size:28px;line-height:32px;font-weight:700;margin:0 0 34px 0;">kaiser.</div>
+              <h1 style="margin:0 0 12px 0;font-size:34px;line-height:40px;font-weight:800;color:#1f2921;">${htmlEscape(subject)}</h1>
+              <p style="margin:0 0 24px 0;font-size:17px;line-height:27px;font-weight:600;color:#647064;">Zpráva byla připravena asistentkou ${htmlEscape(cleanAuthorName)} a odeslána až po potvrzení v aplikaci.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fbf4;border:1px solid #dfe8d9;border-radius:14px;margin:0 0 24px 0;">
+                <tr><td style="padding:20px 22px;font-size:16px;line-height:24px;">${messageHtml}</td></tr>
+              </table>
+              <a href="${htmlEscape(ctaUrl)}" style="display:block;text-align:center;background:#75bd25;border-radius:14px;padding:18px 24px;color:#ffffff;font-size:18px;line-height:24px;font-weight:800;text-decoration:none;">Otevřít Sledování vozidel</a>
+              <p style="margin:28px 0 0 0;font-size:13px;line-height:20px;color:#8a9388;">Provozní zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export async function logNotification(env, entry) {
   const db = notificationDatabase(env);
   if (!db) {
@@ -550,7 +590,15 @@ async function sendEmail(env, {
   }
 }
 
-async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "" }) {
+async function sendSms(env, {
+  type,
+  to,
+  body,
+  relatedEntityId,
+  recipientName = "",
+  moduleId = "dovolena-nemoc",
+  relatedEntityType = "absence_request"
+}) {
   const accountSid = cleanString(env.TWILIO_ACCOUNT_SID);
   const authToken = cleanString(env.TWILIO_AUTH_TOKEN);
   const messagingServiceSid = cleanString(env.TWILIO_MESSAGING_SERVICE_SID);
@@ -564,9 +612,11 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
         : "Chybí telefon příjemce."
       : missingSmsSettingsMessage({ accountSid, authToken, messagingServiceSid, recipientName: cleanRecipientName });
     await logNotification(env, {
+      moduleId,
       type,
       channel: "sms",
       recipient: normalizedTo || to,
+      relatedEntityType,
       relatedEntityId,
       status: "skipped",
       provider: "Twilio",
@@ -597,9 +647,11 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
     }
 
     await logNotification(env, {
+      moduleId,
       type,
       channel: "sms",
       recipient: normalizedTo,
+      relatedEntityType,
       relatedEntityId,
       status: "sent",
       provider: "Twilio",
@@ -609,9 +661,11 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
     return { status: "sent", recipientName: cleanRecipientName };
   } catch (error) {
     await logNotification(env, {
+      moduleId,
       type,
       channel: "sms",
       recipient: normalizedTo,
+      relatedEntityType,
       relatedEntityId,
       status: "failed",
       provider: "Twilio",
@@ -620,6 +674,63 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
     });
     return { status: "failed", errorMessage: error.message, recipientName: cleanRecipientName };
   }
+}
+
+export async function sendAiAssistantNotification(env, options = {}) {
+  const channel = cleanString(options.channel).toLowerCase();
+  const moduleId = cleanString(options.moduleId || "vehicle-tracking");
+  const type = cleanString(options.type || "ai_assistant_message");
+  const relatedEntityType = cleanString(options.relatedEntityType || "ai_assistant_message");
+  const relatedEntityId = cleanString(options.relatedEntityId || randomId("ai-message"));
+  const recipientName = cleanString(options.recipientName);
+  const message = cleanString(options.message);
+  const subject = cleanString(options.subject) || "Kaiser Smart - zpráva od Šarloty";
+  const recipient = cleanString(options.to || options.recipient);
+
+  if (channel === "email") {
+    return sendEmail(env, {
+      type,
+      to: recipient,
+      subject,
+      html: renderAiAssistantNotificationEmail({
+        subject,
+        message,
+        ctaUrl: vehicleTrackingUrl(env),
+        authorName: cleanString(options.assistantName || "Šarlota")
+      }),
+      relatedEntityId,
+      recipientName,
+      fromName: cleanString(options.fromName || "Kaiser Smart"),
+      moduleId,
+      relatedEntityType,
+      messagePreview: message
+    });
+  }
+
+  if (channel === "sms") {
+    return sendSms(env, {
+      type,
+      to: recipient,
+      body: message,
+      relatedEntityId,
+      recipientName,
+      moduleId,
+      relatedEntityType
+    });
+  }
+
+  await logNotification(env, {
+    moduleId,
+    type,
+    channel,
+    recipient,
+    relatedEntityType,
+    relatedEntityId,
+    status: "skipped",
+    messagePreview: message,
+    errorMessage: "Nepodporovaný kanál notifikace."
+  });
+  return { status: "skipped", errorMessage: "Nepodporovaný kanál notifikace.", recipientName };
 }
 
 export async function sendModuleFeedbackResolvedNotification(env, feedback, options = {}) {

@@ -163,11 +163,35 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
       { name: "userId", type: "string", required: false },
       { name: "query", type: "string", required: false }
     ]
+  },
+  {
+    name: "get_vehicle_tracking_summary",
+    description: "Načte read-only souhrn modulu Sledování vozidel přes bezpečné cloud API.",
+    parameters: [
+      { name: "assistantId", type: "string", required: false },
+      { name: "assistantName", type: "string", required: false }
+    ]
+  },
+  {
+    name: "send_vehicle_tracking_message",
+    description: "Po potvrzení v aplikaci odešle SMS nebo e-mail přes backendové kanály Sledování vozidel.",
+    parameters: [
+      { name: "channel", type: "string", required: true },
+      { name: "recipient", type: "string", required: true },
+      { name: "message", type: "string", required: true },
+      { name: "subject", type: "string", required: false },
+      { name: "recipientName", type: "string", required: false },
+      { name: "vehicleId", type: "string", required: false },
+      { name: "licensePlate", type: "string", required: false },
+      { name: "wimSiteId", type: "string", required: false },
+      { name: "reason", type: "string", required: false }
+    ]
   }
 ];
 
 const ALLOWED_ROUTE_SET = new Set(AI_ALLOWED_ROUTES.map((route) => AI_ROUTE_ALIASES[route] || route));
 const TOAST_TYPES = new Set(["success", "error", "info", "warning"]);
+const NOTIFICATION_CHANNELS = new Set(["sms", "email"]);
 
 function cleanString(value) {
   return String(value ?? "").trim();
@@ -178,6 +202,16 @@ function normalizeKey(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function normalizeNotificationChannel(value) {
+  const channel = normalizeKey(value);
+  return NOTIFICATION_CHANNELS.has(channel) ? channel : "";
+}
+
+function previewText(value, limit = 220) {
+  const text = cleanString(value);
+  return text.length > limit ? `${text.slice(0, limit - 1)}...` : text;
 }
 
 export function normalizeAiRoute(route) {
@@ -510,6 +544,85 @@ export function createElevenLabsClientTools({
 
     async get_user_access_summary(parameters = {}) {
       return userSummaryFor(parameters);
+    },
+
+    async get_vehicle_tracking_summary(parameters = {}) {
+      const result = await readJson("/api/ai/vehicle-tracking/summary", {
+        assistant: cleanString(parameters.assistantId || "sarlota"),
+        assistantName: cleanString(parameters.assistantName || "Šarlota")
+      });
+
+      return {
+        ok: true,
+        ...result,
+        message: "Souhrn Sledování vozidel byl načten přes backend."
+      };
+    },
+
+    async send_vehicle_tracking_message(parameters = {}) {
+      const channel = normalizeNotificationChannel(parameters.channel);
+      const recipient = cleanString(parameters.recipient || parameters.to || parameters.phone || parameters.email);
+      const message = cleanString(parameters.message || parameters.body);
+
+      if (!channel) {
+        return { ok: false, error: "Zvolte kanál sms nebo email." };
+      }
+
+      if (!recipient) {
+        return { ok: false, error: "Chybí příjemce zprávy." };
+      }
+
+      if (!message) {
+        return { ok: false, error: "Chybí text zprávy." };
+      }
+
+      const confirmed = await confirm({
+        title: channel === "sms" ? "Odeslat SMS ze Šarloty?" : "Odeslat e-mail ze Šarloty?",
+        message: `Příjemce: ${recipient}\n\n${previewText(message, 360)}`,
+        confirmLabel: "Odeslat",
+        cancelLabel: "Zrušit"
+      });
+
+      if (!confirmed) {
+        return { ok: false, canceled: true, message: "Odeslání bylo zrušeno." };
+      }
+
+      try {
+        const result = await safeRequestJson("/api/ai/vehicle-tracking/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...parameters,
+            channel,
+            recipient,
+            message,
+            confirmed: true,
+            confirmationSource: "ai_ui",
+            assistantId: cleanString(parameters.assistantId || "sarlota"),
+            assistantName: cleanString(parameters.assistantName || "Šarlota")
+          })
+        });
+        const status = cleanString(result.notification?.status);
+        const sent = status === "sent";
+
+        toast({
+          type: sent ? "success" : "warning",
+          message: sent
+            ? "Zpráva byla odeslána."
+            : cleanString(result.notification?.errorMessage || "Zpráva nebyla odeslána.")
+        });
+
+        return {
+          ok: sent,
+          ...result,
+          message: sent
+            ? "Zpráva byla odeslána přes backend."
+            : cleanString(result.notification?.errorMessage || "Zpráva nebyla odeslána.")
+        };
+      } catch (error) {
+        toast({ type: "error", message: error.message || "Zprávu se nepodařilo odeslat." });
+        return { ok: false, error: error.message || "Zprávu se nepodařilo odeslat." };
+      }
     }
   };
 

@@ -11,11 +11,6 @@ const ASSISTANTS = {
     id: "sarlota",
     name: "Šarlota",
     agentEnvKeys: ["ELEVENLABS_AGENT_ID_SARLOTA", "VITE_ELEVENLABS_AGENT_ID_SARLOTA"]
-  },
-  marek: {
-    id: "marek",
-    name: "Marek",
-    agentEnvKeys: ["ELEVENLABS_AGENT_ID_MAREK", "VITE_ELEVENLABS_AGENT_ID_MAREK"]
   }
 };
 
@@ -111,7 +106,7 @@ export async function onRequestGet({ request, env }) {
 
   if (!apiKey || !agentId) {
     return json({
-      error: "ElevenLabs není nastavený. Doplňte ELEVENLABS_API_KEY a Agent ID pro vybraného asistenta.",
+      error: "ElevenLabs není nastavený. Doplňte ELEVENLABS_API_KEY a Agent ID pro Šarlotu.",
       assistantId: assistant.id,
       assistantName: assistant.name,
       configured: false,

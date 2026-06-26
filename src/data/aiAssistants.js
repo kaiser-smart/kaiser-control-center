@@ -5,10 +5,10 @@ export const AI_ASSISTANTS = [
     id: "sarlota",
     name: "Šarlota",
     role: "Smart asistentka",
-    intro: "Hlasová asistence pro Smart odpady.",
+    intro: "Hlasová asistentka pro Smart odpady.",
     avatarPath: "",
     microphonePath: "/avatars/sarlota-microphone.png",
-    introVoiceLine: "Jsem Šarlota. Pomůžu vám ve Smart odpadech najít informace a připravit další krok.",
+    introVoiceLine: "Jsem Šarlota. Pomůžu ti najít informace, připravit další krok a držet se tvých práv.",
     agentIdEnv: "VITE_ELEVENLABS_AGENT_ID_SARLOTA"
   }
 ];

@@ -1,38 +1,42 @@
-# ElevenLabs Smart pomocník
+# ElevenLabs Smart pomocník - Šarlota
 
-Fáze 1 připravuje dvě identity:
+Tento dokument popisuje čisté nastavení agenta Šarlota pro Kaiser Smart / Smart odpady.
 
-- `Šarlota` - výchozí Smart pomocník
-- `Marek` - zástupce Smart pomocníka
+## Stav integrace
 
-## Assety
-
-Finální assety dodá Radim nebo Martin:
-
-- `public/avatars/sarlota.png`
-- `public/avatars/marek.png`
-
-Pokud soubory chybí, aplikace zobrazí `Čeká na avatar od Radima/Martina`.
+- Agent: `Šarlota`
+- ElevenLabs je pouze hlasová a konverzační vrstva.
+- Identita uživatele a oprávnění jsou vždy z aplikace Smart odpady.
+- API key a signed URL se nikdy neposílají do frontendu ani do promptu.
+- Pilotní modul: `Sledování vozidel`.
+- Automatické 15km WIM SMS/app alerty zatím nejsou cloud automatizace. Neexistuje pro ně cron ani queue runner.
 
 ## Proměnné prostředí
 
-Ve frontendu mohou být jen veřejná Agent ID:
+Ve frontendu smí být pouze veřejné Agent ID:
 
 ```env
 VITE_ELEVENLABS_AGENT_ID_SARLOTA=
-VITE_ELEVENLABS_AGENT_ID_MAREK=
 ```
 
 Backend / Cloudflare Secrets:
 
 ```env
 ELEVENLABS_AGENT_ID_SARLOTA=
-ELEVENLABS_AGENT_ID_MAREK=
 ELEVENLABS_API_KEY=
-AI_TOOLS_API_BASE_URL=
 ```
 
-`ELEVENLABS_API_KEY` nesmí být ve frontendu.
+Notifikační kanály používají stávající produkční nastavení:
+
+```env
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_MESSAGING_SERVICE_SID=
+EMAIL_PROVIDER=sendgrid
+EMAIL_FROM=
+SENDGRID_API_KEY=
+EMAIL_REPLY_TO=
+```
 
 ## ElevenLabs agent Šarlota
 
@@ -42,51 +46,54 @@ Název:
 Smart odpady - Šarlota
 ```
 
-Popis:
-
-```text
-Hlavní hlasová asistentka interní aplikace Smart odpady. Pomáhá uživatelům najít správný modul, vyhledat informace a bezpečně spouštět povolené akce.
-```
-
 Jazyk: `cs-CZ`
 
-První zpráva:
+First message:
 
 ```text
-Jsem Šarlota. Pomůžu vám ve Smart odpadech.
+{{intro_announcement}}
 ```
 
-## ElevenLabs agent Marek
+Nepřidávat žádný další pevný pozdrav. `intro_announcement` už obsahuje celý úvod.
 
-Název:
+## Doporučený system prompt pro Radima
 
 ```text
-Smart odpady - Marek
+Jsi Šarlota, hlasová asistentka interní aplikace Kaiser Smart / Smart odpady.
+
+Mluvíš česky, přirozeně a stručně. Uživateli tykáš. Běžná odpověď má mít jednu až dvě věty. Když je zadání nejasné, polož jen jednu doplňující otázku.
+
+Buď kreativní v formulaci odpovědí, ale nikdy si nevymýšlej provozní data, oprávnění, odeslání zprávy ani výsledek API. Když něco nevíš, řekni to a nabídni bezpečný další krok.
+
+Neříkej znovu „Jsem Šarlota“, pokud už hovor začal z aplikace.
+
+Smart odpady jsou zdroj pravdy. ElevenLabs není zdroj pravdy pro práva ani data. Všechna data čti jen přes poskytnuté nástroje aplikace. Nikdy nevyžaduj ani nezobrazuj API klíče, signed URL tokeny, secrets nebo technické interní tokeny.
+
+Respektuj uživatelská práva. Pokud API vrátí chybu oprávnění, řekni stručně: „K tomu nemáš oprávnění.“ Nenabízej obcházení práv.
+
+Pilotní modul je Sledování vozidel. Pro stav vozidel a WIM vah používej nástroj get_vehicle_tracking_summary. Vysvětluj jasně, že WIM 15km automatizace zatím není cloud automatizace, pokud se na ni uživatel zeptá.
+
+SMS nebo e-mail smíš poslat jen přes nástroj send_vehicle_tracking_message. Nikdy neříkej, že zpráva byla odeslaná, dokud nástroj nevrátí stav sent. Pokud nástroj vrátí skipped nebo failed, řekni proč a nenaznačuj úspěch.
+
+Před odesláním SMS/e-mailu musí být v aplikaci potvrzení uživatele. Pokud uživatel zadá příkaz k odeslání, nejdřív zformuluj krátký návrh zprávy, ověř příjemce a pak použij nástroj send_vehicle_tracking_message. Nástroj sám vyvolá potvrzení v UI.
+
+Nepoužívej webový embed ani externí webové propojení mimo aplikaci Kaiser Smart. Pracuj pouze přes interní client tools a backend API aplikace.
 ```
 
-Popis:
+## Client tools v ElevenLabs
 
-```text
-Zástupce hlavní hlasové asistentky Šarloty v interní aplikaci Smart odpady. Pomáhá uživatelům ve stejném rozsahu jako Šarlota.
-```
+Názvy toolů i parametrů jsou case-sensitive.
 
-Jazyk: `cs-CZ`
-
-První zpráva:
-
-```text
-Jsem Marek. Zastupuji Šarlotu, když je potřeba.
-```
-
-## Client tools
-
-V ElevenLabs dashboardu založit client tools se stejnými názvy a parametry:
+Základní navigace:
 
 - `navigate_to`: `route`
 - `open_module`: `moduleId`
 - `show_confirmation`: `title`, `message`, `confirmLabel`, `cancelLabel`
 - `show_toast`: `type`, `message`
 - `highlight_element`: `selector`, `message`
+
+Lidé a práva:
+
 - `search_employee`: `query`, `limit`
 - `get_employee_detail`: `employeeId`, `query`
 - `open_employee_card`: `employeeId`, `query`
@@ -95,30 +102,39 @@ V ElevenLabs dashboardu založit client tools se stejnými názvy a parametry:
 - `search_user`: `query`, `limit`
 - `get_user_access_summary`: `userId`, `query`
 
-Názvy toolů i parametrů jsou case-sensitive.
+Pilot Sledování vozidel:
 
-## Webhook tools
+- `get_vehicle_tracking_summary`: `assistantId`, `assistantName`
+- `send_vehicle_tracking_message`: `channel`, `recipient`, `message`, `subject`, `recipientName`, `vehicleId`, `licensePlate`, `wimSiteId`, `reason`
 
-Webhook tools směřovat na produkční API:
+`send_vehicle_tracking_message` podporuje:
 
-- `GET /api/ai/search?q={q}`
-- `GET /api/ai/absence/pending`
-- `GET /api/ai/employees/search?q={q}`
-- `GET /api/ai/employees/{id}/summary`
-- `GET /api/ai/users/search?q={q}`
-- `GET /api/ai/users/{id}/summary`
-- `GET /api/ai/user/me`
-- `POST /api/ai/absence/{id}/approve`
-- `POST /api/ai/absence/{id}/reject`
-- `POST /api/ai/feedback`
+- `channel = sms`
+- `channel = email`
 
-Personální nástroje jsou read-only. ElevenLabs nemá přímý přístup do databáze;
-všechna data jdou přes backend endpointy a jejich oprávnění podle přihlášeného
-uživatele. Do odpovědí pro Šarlotu se neposílají API klíče, signed URL tokeny,
-dokumenty zaměstnanců, interní poznámky ani kontaktní údaje, pokud nejsou pro
-konkrétní potvrzený scénář nutné.
+Nástroj vždy zobrazí potvrzení v aplikaci a až potom zavolá backend.
 
-Zápisové endpointy vyžadují potvrzení:
+## Backend API pro Šarlotu
+
+Signed URL:
+
+```text
+GET /api/ai/elevenlabs/signed-url?assistant=sarlota
+```
+
+Pilot Sledování vozidel:
+
+```text
+GET /api/ai/vehicle-tracking/summary
+POST /api/ai/vehicle-tracking/notify
+```
+
+Oprávnění:
+
+- `GET /api/ai/vehicle-tracking/summary` vyžaduje `vehicle-tracking:view`.
+- `POST /api/ai/vehicle-tracking/notify` vyžaduje `vehicle-tracking:manage`.
+
+Odeslání zprávy vyžaduje potvrzení:
 
 ```json
 {
@@ -127,25 +143,38 @@ Zápisové endpointy vyžadují potvrzení:
 }
 ```
 
-Bez potvrzení vrátí `409 ai_confirmation_required`.
+Bez potvrzení backend vrátí `409 ai_confirmation_required`.
 
-## Signed URL
+## Audit a notifikace
 
-Aplikace má backend endpoint:
+- AI akce se zapisují do `ai_action_logs`.
+- SMS/e-mail se zapisují do `notification_logs`.
+- Odesílání používá stávající backendové kanály SendGrid/Twilio.
+- Frontend SMS ani e-mail neposílá.
+- API brání duplicitnímu odeslání stejné zprávy v krátkém intervalu přes `dedupeKey` uložený v logu notifikací.
 
-```text
-GET /api/ai/elevenlabs/signed-url?assistant=sarlota
-GET /api/ai/elevenlabs/signed-url?assistant=marek
-```
+## Co funguje po této fázi
 
-Endpoint používá `ELEVENLABS_API_KEY` pouze na backendu a vrací dočasný `signedUrl`.
+- Šarlota umí přes backend načíst read-only souhrn Sledování vozidel.
+- Šarlota umí po potvrzení v aplikaci požádat backend o odeslání SMS/e-mailu.
+- Backend ověřuje práva a loguje AI i notifikační akce.
 
-## Log AI akcí
+## Co ještě není hotové
 
-Datový model je v migraci:
+- Není hotová cloud automatizace přiblížení vozidla k WIM váze 15 km předem.
+- Není cron/queue/worker, který by sám pravidelně vyhodnocoval GPS polohy.
+- Pokud nikdo neotevře aplikaci a Šarlotu nespustí, pilotní nástroje samy nic neposílají.
+- ElevenLabs dashboard musí mít ručně doplněné tool definitions podle tohoto dokumentu.
 
-```text
-migrations/0011_create_ai_action_logs.sql
-```
+## Testovací checklist
 
-Neukládá celé audio ani tokeny.
+- Mikrofon zakázán -> UI ukáže hlášku o mikrofonu.
+- Mikrofon povolen -> backend vrátí signed URL.
+- First message je pouze `{{intro_announcement}}`.
+- Šarlota tyká.
+- `get_vehicle_tracking_summary` vrátí data jen s právem `vehicle-tracking:view`.
+- `send_vehicle_tracking_message` bez potvrzení neodešle nic.
+- `send_vehicle_tracking_message` bez `vehicle-tracking:manage` vrátí chybu oprávnění.
+- Výsledek SMS/e-mailu je vidět v Notifikacích.
+- Build projde.
+- `git diff --check` projde.
