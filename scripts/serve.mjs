@@ -455,6 +455,10 @@ function sameMockId(left, right) {
   return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
 }
 
+function cleanString(value) {
+  return String(value ?? "").trim();
+}
+
 function canViewMockNotifications(user) {
   const role = normalizeRole(user?.role);
   return isFullAccessRole(user) || role === "kancelar";
@@ -554,6 +558,122 @@ function canCreateCentralMockFeedback(currentUser) {
 
 function canManageMockTcars(currentUser) {
   return ["admin", "management", "dispecer"].includes(normalizeRole(currentUser?.role));
+}
+
+function mockVehicleTrackingTcarsSummary(payload = {}) {
+  const vehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
+  const locations = Array.isArray(payload.locations || payload.lastKnownLocations)
+    ? (payload.locations || payload.lastKnownLocations)
+    : [];
+
+  return {
+    provider: cleanString(payload.provider || "tcars"),
+    apiStatus: cleanString(payload.apiStatus || "waiting"),
+    configured: Boolean(payload.configured),
+    message: cleanString(payload.message),
+    vehiclesTotal: vehicles.length,
+    locationsTotal: locations.length,
+    latestLocations: locations.slice(0, 8).map((location) => ({
+      vehicleId: cleanString(location.vehicleId || location.externalVehicleId),
+      licensePlate: cleanString(location.licensePlate),
+      internalNumber: cleanString(location.internalNumber),
+      driverName: cleanString(location.driverName),
+      status: cleanString(location.status),
+      speedKmh: Number.isFinite(Number(location.speedKmh)) ? Number(location.speedKmh) : null,
+      address: cleanString(location.address),
+      lastGpsAt: cleanString(location.lastGpsAt),
+      gpsValid: location.gpsValid === true
+    })),
+    lastFetchedAt: cleanString(payload.lastFetchedAt),
+    waitingReason: cleanString(payload.waitingReason || payload.errorCode)
+  };
+}
+
+function mockVehicleTrackingWimSummary() {
+  const devicesTotal = mockVehicleWimSites.reduce((sum, site) => sum + site.deviceCount, 0);
+
+  return {
+    apiStatus: "ready",
+    source: {
+      label: "MD/RSD PDF mapa, stav k 30. 6. 2025, dev mock",
+      sourceDate: "2025-06-30",
+      coordinateQuality: "approximate-needs-verification"
+    },
+    summary: {
+      sitesTotal: mockVehicleWimSites.length,
+      devicesTotal,
+      activeSites: mockVehicleWimSites.filter((site) => site.status === "active").length,
+      plannedSites: mockVehicleWimSites.filter((site) => site.status === "planned").length,
+      maintenanceSites: mockVehicleWimSites.filter((site) => site.status === "maintenance").length,
+      upgradeSites: mockVehicleWimSites.filter((site) => site.status === "upgrade").length,
+      preselectionSites: mockVehicleWimSites.filter((site) => site.status === "preselection").length,
+      alertDistanceKm: 15,
+      automationStatus: "draft",
+      automationMode: "read-only-pilot"
+    },
+    sites: mockVehicleWimSites.slice(0, 12).map((site) => ({
+      id: cleanString(site.id),
+      road: cleanString(site.road),
+      kmLabel: cleanString(site.kmLabel),
+      locationLabel: cleanString(site.locationLabel),
+      orp: cleanString(site.orp),
+      sideLabel: cleanString(site.sideLabel),
+      status: cleanString(site.status),
+      statusLabel: cleanString(site.statusLabel),
+      deviceCount: Number(site.deviceCount || 0),
+      coordinateQuality: cleanString(site.coordinateQuality)
+    }))
+  };
+}
+
+function mockVehicleTrackingAiSummaryPayload(tcarsPayload = {}) {
+  return {
+    moduleId: "vehicle-tracking",
+    moduleName: "Sledování vozidel",
+    apiStatus: "ready",
+    featureState: {
+      readOnlyPilot: true,
+      notificationSend: "local-dev-mock-after-ui-confirmation",
+      cloudAutomation: false,
+      automationNote: "15km WIM automatizace zatím nemá cloud runner ani cron."
+    },
+    permissions: {
+      read: "vehicle-tracking:view",
+      sendNotification: "vehicle-tracking:manage"
+    },
+    tcars: mockVehicleTrackingTcarsSummary(tcarsPayload),
+    wim: mockVehicleTrackingWimSummary(),
+    wimAlerts: {
+      apiStatus: "ready",
+      mode: "read-only-pilot",
+      message: "Ostré SMS ani app alerty se v lokálním dev mocku neposílají.",
+      eventsTotal: 0,
+      latestEvents: []
+    }
+  };
+}
+
+function normalizeMockAiNotificationChannel(value) {
+  const channel = cleanString(value).toLowerCase();
+  return ["sms", "email"].includes(channel) ? channel : "";
+}
+
+function mockAiRecipientFor(channel, payload) {
+  const direct = cleanString(payload.recipient || payload.to);
+  if (direct) {
+    return channel === "sms" ? normalizeIdentifier(direct) : direct.toLowerCase();
+  }
+
+  if (channel === "sms") {
+    return normalizeIdentifier(payload.phone || payload.driverPhone);
+  }
+
+  return cleanString(payload.email || payload.driverEmail).toLowerCase();
+}
+
+function previewText(value, limit = 220) {
+  const text = cleanString(value);
+  return text.length > limit ? `${text.slice(0, limit - 1)}...` : text;
 }
 
 function canViewMockDataBox(currentUser) {
@@ -2073,6 +2193,99 @@ async function handleApi(request, response) {
     } catch (error) {
       sendJson(response, error.status || 500, { error: error.message || "Připomínku se nepodařilo uložit.", apiStatus: "ready" });
     }
+    return true;
+  }
+
+  if (url.pathname === "/api/ai/vehicle-tracking/summary" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "vehicle-tracking", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const tcarsPayload = await loadTcarsStatusPayload(process.env);
+    sendJson(response, 200, mockVehicleTrackingAiSummaryPayload(tcarsPayload));
+    return true;
+  }
+
+  if (url.pathname === "/api/ai/vehicle-tracking/notify" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "vehicle-tracking", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění odeslat zprávu ze Sledování vozidel." });
+      return true;
+    }
+
+    const payload = await readJsonBody(request);
+    if (payload?.confirmed !== true || payload?.confirmationSource !== "ai_ui") {
+      sendJson(response, 409, { error: "AI akce vyžaduje potvrzení uživatele.", code: "ai_confirmation_required" });
+      return true;
+    }
+
+    const channel = normalizeMockAiNotificationChannel(payload.channel);
+    if (!channel) {
+      sendJson(response, 400, { error: "Zvolte kanál sms nebo email.", code: "ai_vehicle_tracking_channel_required", apiStatus: "ready" });
+      return true;
+    }
+
+    const recipient = mockAiRecipientFor(channel, payload);
+    if (!recipient || (channel === "email" && !recipient.includes("@"))) {
+      sendJson(response, 400, { error: "Chybí platný příjemce zprávy.", code: "ai_vehicle_tracking_recipient_required", apiStatus: "ready" });
+      return true;
+    }
+
+    const message = cleanString(payload.message || payload.body);
+    if (!message) {
+      sendJson(response, 400, { error: "Chybí text zprávy.", code: "ai_vehicle_tracking_message_required", apiStatus: "ready" });
+      return true;
+    }
+
+    const maxLength = channel === "sms" ? 480 : 3000;
+    if (message.length > maxLength) {
+      sendJson(response, 400, {
+        error: `Text zprávy je příliš dlouhý. Limit je ${maxLength} znaků.`,
+        code: "ai_vehicle_tracking_message_too_long",
+        apiStatus: "ready"
+      });
+      return true;
+    }
+
+    const subject = cleanString(payload.subject) || "Kaiser Smart - zpráva ke Sledování vozidel";
+    const notification = addMockNotificationLog({
+      moduleId: "vehicle-tracking",
+      relatedEntityType: "vehicle_tracking_ai_message",
+      relatedEntityId: `local-ai-vehicle-tracking-${randomUUID()}`,
+      channel,
+      type: "ai_vehicle_tracking_message",
+      status: "not_sent",
+      recipient,
+      recipientName: cleanString(payload.recipientName || payload.driverName),
+      subject,
+      messagePreview: previewText(message),
+      provider: "local-dev",
+      attempts: 0,
+      lastError: "Lokální vývojový server neposílá skutečné SMS ani e-maily."
+    });
+
+    sendJson(response, 200, {
+      notification: {
+        id: notification.id,
+        status: "not_sent",
+        channel,
+        recipient,
+        subject,
+        messagePreview: notification.messagePreview,
+        errorMessage: "Lokální vývojový server neposílá skutečné SMS ani e-maily."
+      },
+      apiStatus: "ready"
+    });
     return true;
   }
 
