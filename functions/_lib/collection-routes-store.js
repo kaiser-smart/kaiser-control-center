@@ -223,8 +223,18 @@ const WASTE_TYPE_MAP = new Map([
 ]);
 
 const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "5x7", "1x14", "1x30"]);
-const ALLOWED_CONTAINER_VOLUMES = new Set([60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500]);
+const ALLOWED_CONTAINER_VOLUMES = new Set([30, 60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500]);
 const VISTOS_ROUTE_WASTE_CODES = new Set(["150101", "150102", "150106", "200102", "200108", "200139", "200201", "200301"]);
+const VISTOS_COLLECTION_TEXT_ALIASES = [
+  {
+    text: "20 01 08 - 1 x 30 ltr GASTRO 1 x 7",
+    wasteType: "BIO",
+    wasteCode: "200108",
+    frequency: "1x7",
+    containerVolume: 30,
+    containerType: "container"
+  }
+];
 const VISTOS_NON_ROUTE_NEEDLES = [
   "DOPRAVA",
   "PREPRAVA",
@@ -972,6 +982,20 @@ function productSearchText(contractRow, product) {
   ].map(cleanString).filter(Boolean).join(" ");
 }
 
+function findVistosCollectionTextAlias(text) {
+  const normalized = normalizeValueKey(text);
+  const compact = normalized.replace(/\s+/g, "");
+  if (!compact) {
+    return null;
+  }
+
+  return VISTOS_COLLECTION_TEXT_ALIASES.find((alias) => {
+    const aliasNormalized = normalizeValueKey(alias.text);
+    const aliasCompact = aliasNormalized.replace(/\s+/g, "");
+    return normalized.includes(aliasNormalized) || compact.includes(aliasCompact);
+  }) || null;
+}
+
 function textLooksLikeCollectionService(text) {
   const normalized = normalizeValueKey(text);
   const compact = normalized.replace(/\s+/g, "");
@@ -1227,9 +1251,22 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const looksOutsideCollectionRoute = textLooksLikeNonCollectionRouteService(searchText);
       const looksLikeCollection = !looksOutsideCollectionRoute && textLooksLikeCollectionService(searchText);
       const isOutsideCollectionRoute = looksOutsideCollectionRoute || !looksLikeCollection;
-      const waste = inferVistosWaste(contractRow, product);
-      const frequency = inferVistosFrequency(contractRow, product);
-      const container = inferVistosContainer(contractRow, product);
+      const textAlias = findVistosCollectionTextAlias(searchText);
+      const inferredContainer = inferVistosContainer(contractRow, product);
+      const waste = textAlias
+        ? { wasteType: textAlias.wasteType, wasteCode: textAlias.wasteCode, known: true }
+        : inferVistosWaste(contractRow, product);
+      const frequency = textAlias
+        ? { frequency: textAlias.frequency, known: true }
+        : inferVistosFrequency(contractRow, product);
+      const container = textAlias
+        ? {
+          volume: textAlias.containerVolume,
+          known: true,
+          count: inferredContainer.count,
+          type: textAlias.containerType || inferredContainer.type || "container"
+        }
+        : inferredContainer;
       const issues = [...baseIssues];
 
       if (!isoDateValue(contractRow?.StartDate)) {
