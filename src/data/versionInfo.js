@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.145"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.146"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: bez falešných objemů z katalogových kódů",
+    text: "Parser Vistos Komunál preview už nepoužívá libovolné první číslo v obchodním textu jako objem nádoby, takže kódy odpadu jako 15 01 01 nebo 20 01 08 nevypadají omylem jako litry."
+  },
   {
     title: "Trasy svozu: objem nádob z obchodních textů",
     text: "Parser Vistos Komunál preview rozpozná bezpečné zápisy jako 2x240, P240, P120, kont.1100 nebo 1100ltr jako objem a počet nádob bez hádání typu odpadu."

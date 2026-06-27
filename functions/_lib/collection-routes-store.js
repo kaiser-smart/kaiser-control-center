@@ -854,7 +854,7 @@ function normalizeContainerVolume(value) {
   const prefixedVolume = raw.match(new RegExp(`\\b(?:P|POP|POPEL|KONT|KONTEJNER)\\.?\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
   const preferredVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
   const directVolume = raw.match(new RegExp(`^\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*$`));
-  const match = countedVolume || prefixedVolume || preferredVolume || directVolume || raw.match(/\d+/);
+  const match = countedVolume || prefixedVolume || preferredVolume || directVolume;
   const volume = match ? Number(match[1] || match[0]) : 0;
   return {
     volume,
