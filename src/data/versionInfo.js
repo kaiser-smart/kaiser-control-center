@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.165"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.166"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: celý Vistos Komunál preview jako match kandidáti",
+    text: "Vistos Komunál preview ukládá do D1 celý read-only kandidátní rozsah pro následný match Svozových tras z 13 Excelů, ne jen prvních 250 preview řádků."
+  },
   {
     title: "Trasy svozu: rychlejší Vistos match z uloženého preview",
     text: "Vistos match pro Svozové trasy nejdřív používá poslední uložený read-only Vistos Komunál preview batch v D1, aby se při kliknutí nespouštěl dlouhý živý export a výsledek se rychle propsal do tabulky."

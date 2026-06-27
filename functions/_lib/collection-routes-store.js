@@ -12,6 +12,7 @@ const DEFAULT_VISTOS_DISCOVERY_PATHS = ["/Contract", "/ServiceList"];
 const VISTOS_EXECUTE_API_SUFFIX = "/API/VistosAPI";
 const VISTOS_EXECUTE_PAGE_SIZE = 1000;
 const VISTOS_EXECUTE_MAX_PAGES = 80;
+const VISTOS_KOMUNAL_PERSIST_ROWS_LIMIT = 10000;
 const VISTOS_KOMUNAL_CONTRACT_FILTER = {
   Status_FK: 74,
   Typsmlouvy_FK: [14735]
@@ -2380,7 +2381,7 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
     metadata: {
       filter: VISTOS_KOMUNAL_CONTRACT_FILTER
     },
-    persistRowsLimit: 250
+    persistRowsLimit: VISTOS_KOMUNAL_PERSIST_ROWS_LIMIT
   });
 }
 
