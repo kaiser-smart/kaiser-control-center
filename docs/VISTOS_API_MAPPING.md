@@ -199,10 +199,13 @@ doplnujici kontrolu.
 Datumovou platnost svozove sluzby resit v nasem backendu podle polozky smlouvy:
 
 ```text
-ContractRow.IsActive AND ContractRow.StartDate <= today AND (ContractRow.EndDate is null OR ContractRow.EndDate >= today)
+ContractRow.IsActive AND (ContractRow.EndDate is null OR ContractRow.EndDate >= today)
 ```
 
 Jednoduche range filtry pres Vistos API nebyly potvrzene jako spolehlive.
+`ContractRow.StartDate` je zdroj pravdy pro zacatek platnosti svozove polozky,
+ale dokud ve Vistos API u casti radku chybi, preview radek ponecha jako `needs_review`
+s datovym problemem `missing-contract-row-start-date`.
 
 ## Faze 1E - read-only Vistos Komunal preview
 
@@ -713,7 +716,7 @@ Proto tato pole zatim nepovazovat za povinna.
 - `GetPageParam` filtruje pres `Filter`; `Filters` se ignoruje.
 - `GetByIdParam` funguje pro detail entity, pokud je entita a zaznam dostupny profilu.
 - `Contract` dostupny a obsahuje smlouvy.
-- Aktivni Komunal filtr pres `Contract.Status_FK = 74` a `Contract.Typsmlouvy_FK = [14735]`; aktivita a platnost svozu se bere z polozky smlouvy: `ContractRow.IsActive`, `ContractRow.StartDate <= today` a `ContractRow.EndDate` prazdne nebo >= today.
+- Aktivni Komunal filtr pres `Contract.Status_FK = 74` a `Contract.Typsmlouvy_FK = [14735]`; aktivita a konec platnosti svozu se bere z polozky smlouvy: `ContractRow.IsActive` a `ContractRow.EndDate` prazdne nebo >= today. `ContractRow.StartDate` je zdroj pravdy pro zacatek, ale dokud u nekterych polozek v API chybi, radek zustava v preview jako `needs_review`.
 - `Contract.ContractNumber` je cislo smlouvy.
 - `ContractRow` vraci polozky smlouvy pres `Contract_FK`.
 - `ContractRow.Product_FK_RecordId` vede na `Product`.

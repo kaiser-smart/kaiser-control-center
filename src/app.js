@@ -10104,7 +10104,7 @@ function collectionRoutesVistosKommunalSection(user) {
 
       <div class="collection-routes-phase-note">
         <strong>Tento náhled nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.</strong>
-        <span>Filtr: Contract.Status_FK = 74, Contract.Typsmlouvy_FK = [14735], ContractRow.IsActive, ContractRow.StartDate <= dnes a ContractRow.EndDate prázdné nebo >= dnes. Vistos se nevolá z frontendu.</span>
+        <span>Filtr: Contract.Status_FK = 74, Contract.Typsmlouvy_FK = [14735], ContractRow.IsActive a ContractRow.EndDate prázdné nebo >= dnes. Chybějící ContractRow.StartDate zůstane jako datový problém.</span>
       </div>
 
       <div class="collection-routes-stats" aria-label="Stav Vistos Komunál preview">

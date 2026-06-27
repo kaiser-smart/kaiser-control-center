@@ -817,10 +817,6 @@ function contractRowInActiveRange(row, today = new Date()) {
     return false;
   }
 
-  if (!isoDateValue(row?.StartDate)) {
-    return false;
-  }
-
   return dateInActiveRange(row?.StartDate, row?.EndDate, today);
 }
 
@@ -1039,6 +1035,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const frequency = inferVistosFrequency(contractRow, product);
       const container = inferVistosContainer(contractRow, product);
       const issues = [...baseIssues];
+
+      if (!isoDateValue(contractRow?.StartDate)) {
+        issues.push({ type: "missing-contract-row-start-date", severity: "warning", message: "Položka smlouvy zatím nemá začátek platnosti z Vistosu." });
+      }
 
       if (!looksLikeCollection) {
         issues.push({ type: "item-not-collection-mappable", severity: "info", message: "Položka podle dostupných polí nevypadá jako svoz odpadu." });
