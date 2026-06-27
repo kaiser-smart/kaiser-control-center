@@ -1075,6 +1075,12 @@ function textLooksLikeNonCollectionRouteService(text) {
   if (/MIMORADNYVYVOZ|SKARTAC|SANON|VYKUPN|RUCNISBER|LISOVAN|OBCHODOVATELN/.test(compact)) {
     return true;
   }
+  if (/CENABUDEUPRAVOVANA|CENABUDEAKTUALIZOVANA|CENAJEUPRAVOVANA|CENAPOHYBLIVA|AKTUALNICEN|DLECEN/.test(compact)) {
+    return true;
+  }
+  if (/TRIDENELEPENK|CISTETRIDENE|SUCHEOBALY|VOK|SPALOVN|SKLADK|ROCNI.*1X|PLASTKARTON|PROLOZK|PLASTBUDEVB/.test(compact)) {
+    return true;
+  }
   const wasteCode = compact.match(/(^|\D)(\d{6})(\D|$)/)?.[2] || "";
   if (wasteCode && !VISTOS_ROUTE_WASTE_CODES.has(wasteCode)) {
     return true;
