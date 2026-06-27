@@ -1,6 +1,7 @@
 dist/
 .sites-dist/
 output/
+outputs/
 node_modules/
 .pnpm-store/
 .wrangler/

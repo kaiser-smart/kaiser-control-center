@@ -10510,7 +10510,7 @@ function collectionRoutesRouteOptimizationSummaryCards(preview) {
     <div class="collection-routes-stats" aria-label="Stav optimalizačního preview">
       <article><span>Načtené soubory</span><strong>${collectionRoutesMetricValue(summary.parsedFileCount)}</strong></article>
       <article><span>Řádky návrhu</span><strong>${collectionRoutesMetricValue(summary.rowCount)}</strong></article>
-      <article><span>Nepodporované .xls</span><strong>${collectionRoutesMetricValue(summary.unsupportedFileCount)}</strong></article>
+      <article><span>Nepodporované soubory</span><strong>${collectionRoutesMetricValue(summary.unsupportedFileCount)}</strong></article>
       <article><span>Ostré trasy</span><strong>NE</strong></article>
     </div>
     ${unsupported.length ? `
@@ -10905,7 +10905,7 @@ function collectionRoutesVistosKommunalSection(user) {
             ${collectionRoutesPilotState.routeOptimizationLoading ? "Počítám návrh tras..." : "Připravit optimalizační návrh"}
           </button>
         </form>
-        <p class="module-feedback__notice">Staré binární .xls soubory prosím před uploadem přeuložit jako .xlsx nebo CSV.</p>
+        <p class="module-feedback__notice">Podporuje .xls, .xlsx a CSV. Náhled se po zpracování neukládá jako ostrá trasa.</p>
       ` : `
         <p class="module-feedback__notice">Optimalizační náhled tras může spustit pouze admin.</p>
       `}
@@ -10929,7 +10929,7 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Vykládka", value: (row) => row.disposalSite },
         { label: "Vistos", value: (row) => `${row.vistosMatchStatus || "-"} · ${row.vistosMatchDetail || "-"}` },
         { label: "Jistota", value: (row) => `${row.confidence || "-"} / ${row.vistosMatchConfidence || "-"}` }
-      ], routeOptimizationRows, "Nahrajte dispečerské trasy uložené jako .xlsx nebo CSV. Náhled zůstane pouze read-only a nevytvoří ostré trasy.", `
+      ], routeOptimizationRows, "Nahrajte dispečerské trasy jako .xls, .xlsx nebo CSV. Náhled zůstane pouze read-only a nevytvoří ostré trasy.", `
         <button class="secondary-link" type="button" data-collection-routes-export-optimization>Export do Excelu</button>
       `)}
 
@@ -12646,7 +12646,7 @@ async function submitCollectionRoutesRouteOptimizationPreview(form) {
   const fileInput = form.querySelector("input[type='file'][name='files']");
   const files = Array.from(fileInput?.files || []);
   if (!files.length) {
-    collectionRoutesPilotState.routeOptimizationError = "Vyberte alespoň jeden .xlsx nebo CSV soubor tras.";
+    collectionRoutesPilotState.routeOptimizationError = "Vyberte alespoň jeden .xls, .xlsx nebo CSV soubor tras.";
     collectionRoutesPilotState.routeOptimizationMessage = "";
     render();
     return;
@@ -15139,7 +15139,7 @@ function exportCollectionRoutesRouteOptimization() {
   const rows = collectionRoutesRouteOptimizationRows();
   if (!rows.length) {
     collectionRoutesPilotState.routeOptimizationMessage = "";
-    collectionRoutesPilotState.routeOptimizationError = "Není co exportovat pro optimalizační návrh. Nejdřív nahrajte dispečerské trasy jako .xlsx nebo CSV.";
+    collectionRoutesPilotState.routeOptimizationError = "Není co exportovat pro optimalizační návrh. Nejdřív nahrajte dispečerské trasy jako .xls, .xlsx nebo CSV.";
     render();
     return;
   }

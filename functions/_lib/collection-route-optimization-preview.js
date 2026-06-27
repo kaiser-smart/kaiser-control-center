@@ -1,8 +1,15 @@
 export const COLLECTION_ROUTE_OPTIMIZATION_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 export const COLLECTION_ROUTE_OPTIMIZATION_MAX_FILES = 20;
-export const COLLECTION_ROUTE_OPTIMIZATION_MAX_ROWS = 1200;
+export const COLLECTION_ROUTE_OPTIMIZATION_MAX_ROWS = 5000;
 
 const decoder = new TextDecoder("utf-8");
+const legacyTextDecoder = (() => {
+  try {
+    return new TextDecoder("windows-1250");
+  } catch {
+    return decoder;
+  }
+})();
 
 export const COLLECTION_ROUTE_VEHICLES = [
   {
@@ -25,13 +32,6 @@ export const COLLECTION_ROUTE_VEHICLES = [
     label: "C - 3BE 2831",
     driver: "Miroslav Florián",
     capacityTons: { SKO: 8, PAPIR: 2.5, PLAST: 1 }
-  },
-  {
-    code: "D",
-    registrationNumber: "gastro",
-    label: "D - gastro",
-    driver: "",
-    capacityTons: { BIO: 1 }
   }
 ];
 
@@ -53,7 +53,9 @@ const WASTE_WEIGHTS_TONS = {
 const SERVICE_MINUTES_BY_VOLUME = { 120: 3, 240: 3, 1100: 5 };
 
 function cleanValue(value) {
-  return String(value ?? "").replace(/\u0000/g, "").trim();
+  return String(value ?? "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
+    .trim();
 }
 
 function normalizeKey(value) {
@@ -77,6 +79,22 @@ function bytesFrom(input) {
 
 function decodeText(bytes) {
   return decoder.decode(bytesFrom(bytes)).replace(/^\uFEFF/, "");
+}
+
+function decodeLegacyText(bytes) {
+  return legacyTextDecoder.decode(bytesFrom(bytes)).replace(/^\uFEFF/, "");
+}
+
+function decodeUtf16Le(bytes) {
+  const data = bytesFrom(bytes);
+  let text = "";
+  for (let offset = 0; offset + 1 < data.length; offset += 2) {
+    const code = data[offset] | (data[offset + 1] << 8);
+    if (code) {
+      text += String.fromCharCode(code);
+    }
+  }
+  return text;
 }
 
 function isZipXlsx(bytes) {
@@ -178,6 +196,362 @@ function readUint32(bytes, offset) {
     (bytes[offset + 2] << 16) |
     (bytes[offset + 3] << 24)
   ) >>> 0;
+}
+
+const CFB_END_OF_CHAIN = 0xfffffffe;
+const CFB_FREE_SECTOR = 0xffffffff;
+const CFB_DIFAT_SECTOR = 0xfffffffc;
+const CFB_FAT_SECTOR = 0xfffffffd;
+
+function isCfbChainSector(sector) {
+  return Number.isInteger(sector) && sector >= 0 && sector < CFB_DIFAT_SECTOR;
+}
+
+function sectorOffset(sector, sectorSize) {
+  return (sector + 1) * sectorSize;
+}
+
+function cfbSector(bytes, sector, sectorSize) {
+  const offset = sectorOffset(sector, sectorSize);
+  return bytes.slice(offset, offset + sectorSize);
+}
+
+function readCfbChain(bytes, fat, startSector, sectorSize, maxBytes = 0) {
+  const chunks = [];
+  let sector = startSector;
+  const seen = new Set();
+
+  while (isCfbChainSector(sector) && !seen.has(sector)) {
+    seen.add(sector);
+    chunks.push(cfbSector(bytes, sector, sectorSize));
+    sector = fat[sector];
+  }
+
+  const output = concatUint8Arrays(chunks);
+  return maxBytes > 0 ? output.slice(0, maxBytes) : output;
+}
+
+function concatUint8Arrays(chunks) {
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const output = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return output;
+}
+
+function parseCfb(bytes) {
+  const data = bytesFrom(bytes);
+  if (!isLegacyXls(data)) {
+    throw new Error("Soubor není starý binární Excel .xls.");
+  }
+
+  const sectorSize = 1 << readUint16(data, 30);
+  const miniSectorSize = 1 << readUint16(data, 32);
+  const firstDirectorySector = readUint32(data, 48);
+  const miniStreamCutoffSize = readUint32(data, 56);
+  const firstMiniFatSector = readUint32(data, 60);
+  const miniFatSectorCount = readUint32(data, 64);
+  const firstDifatSector = readUint32(data, 68);
+  const difatSectorCount = readUint32(data, 72);
+
+  const fatSectorIds = [];
+  for (let offset = 76; offset < 512; offset += 4) {
+    const sector = readUint32(data, offset);
+    if (sector !== CFB_FREE_SECTOR) {
+      fatSectorIds.push(sector);
+    }
+  }
+
+  let difatSector = firstDifatSector;
+  for (let index = 0; index < difatSectorCount && isCfbChainSector(difatSector); index += 1) {
+    const sectorData = cfbSector(data, difatSector, sectorSize);
+    for (let offset = 0; offset < sectorSize - 4; offset += 4) {
+      const sector = readUint32(sectorData, offset);
+      if (sector !== CFB_FREE_SECTOR) {
+        fatSectorIds.push(sector);
+      }
+    }
+    difatSector = readUint32(sectorData, sectorSize - 4);
+  }
+
+  const fat = [];
+  for (const sectorId of fatSectorIds) {
+    if (!isCfbChainSector(sectorId) && sectorId !== CFB_FAT_SECTOR && sectorId !== CFB_DIFAT_SECTOR) {
+      continue;
+    }
+    const sectorData = cfbSector(data, sectorId, sectorSize);
+    for (let offset = 0; offset < sectorData.length; offset += 4) {
+      fat.push(readUint32(sectorData, offset));
+    }
+  }
+
+  const directoryStream = readCfbChain(data, fat, firstDirectorySector, sectorSize);
+  const entries = [];
+  for (let offset = 0; offset + 128 <= directoryStream.length; offset += 128) {
+    const entry = directoryStream.slice(offset, offset + 128);
+    const nameLength = readUint16(entry, 64);
+    const nameBytes = nameLength > 2 ? entry.slice(0, nameLength - 2) : new Uint8Array();
+    const name = decodeUtf16Le(nameBytes);
+    const type = entry[66];
+    const startSector = readUint32(entry, 116);
+    const sizeLow = readUint32(entry, 120);
+    const sizeHigh = readUint32(entry, 124);
+    const size = sizeHigh ? sizeHigh * 4294967296 + sizeLow : sizeLow;
+    if (name) {
+      entries.push({ name, type, startSector, size });
+    }
+  }
+
+  const rootEntry = entries.find((entry) => entry.type === 5) || null;
+  const miniFatStream = miniFatSectorCount && isCfbChainSector(firstMiniFatSector)
+    ? readCfbChain(data, fat, firstMiniFatSector, sectorSize, miniFatSectorCount * sectorSize)
+    : new Uint8Array();
+  const miniFat = [];
+  for (let offset = 0; offset + 4 <= miniFatStream.length; offset += 4) {
+    miniFat.push(readUint32(miniFatStream, offset));
+  }
+  const miniStream = rootEntry && isCfbChainSector(rootEntry.startSector)
+    ? readCfbChain(data, fat, rootEntry.startSector, sectorSize, rootEntry.size)
+    : new Uint8Array();
+
+  function readMiniStream(startSector, size) {
+    const chunks = [];
+    let sector = startSector;
+    const seen = new Set();
+    while (isCfbChainSector(sector) && !seen.has(sector)) {
+      seen.add(sector);
+      const offset = sector * miniSectorSize;
+      chunks.push(miniStream.slice(offset, offset + miniSectorSize));
+      sector = miniFat[sector];
+    }
+    return concatUint8Arrays(chunks).slice(0, size);
+  }
+
+  function readStream(nameOptions) {
+    const names = Array.isArray(nameOptions) ? nameOptions : [nameOptions];
+    const entry = entries.find((item) => item.type === 2 && names.includes(item.name));
+    if (!entry) {
+      return null;
+    }
+    if (entry.size < miniStreamCutoffSize && miniFat.length && miniStream.length) {
+      return readMiniStream(entry.startSector, entry.size);
+    }
+    return readCfbChain(data, fat, entry.startSector, sectorSize, entry.size);
+  }
+
+  return { entries, readStream };
+}
+
+function parseBiffString(data, offset) {
+  if (offset + 3 > data.length) {
+    return { text: "", nextOffset: data.length };
+  }
+  const charCount = readUint16(data, offset);
+  const options = data[offset + 2] || 0;
+  const isUtf16 = Boolean(options & 0x01);
+  const hasExtended = Boolean(options & 0x04);
+  const hasRichText = Boolean(options & 0x08);
+  let cursor = offset + 3;
+  let richTextRuns = 0;
+  let extendedSize = 0;
+  if (hasRichText && cursor + 2 <= data.length) {
+    richTextRuns = readUint16(data, cursor);
+    cursor += 2;
+  }
+  if (hasExtended && cursor + 4 <= data.length) {
+    extendedSize = readUint32(data, cursor);
+    cursor += 4;
+  }
+  const byteLength = charCount * (isUtf16 ? 2 : 1);
+  const rawText = data.slice(cursor, Math.min(data.length, cursor + byteLength));
+  const text = isUtf16 ? decodeUtf16Le(rawText) : decodeLegacyText(rawText);
+  return {
+    text: cleanValue(text),
+    nextOffset: Math.min(data.length, cursor + byteLength + richTextRuns * 4 + extendedSize)
+  };
+}
+
+function parseBiffRecords(workbookStream) {
+  const records = [];
+  for (let offset = 0; offset + 4 <= workbookStream.length;) {
+    const sid = readUint16(workbookStream, offset);
+    const length = readUint16(workbookStream, offset + 2);
+    const dataStart = offset + 4;
+    const dataEnd = dataStart + length;
+    if (dataEnd > workbookStream.length) {
+      break;
+    }
+    records.push({
+      sid,
+      offset,
+      data: workbookStream.slice(dataStart, dataEnd)
+    });
+    offset = dataEnd;
+  }
+  return records;
+}
+
+function parseBiffBoundSheet(data) {
+  if (data.length < 8) {
+    return null;
+  }
+  const offset = readUint32(data, 0);
+  const charCount = data[6] || 0;
+  const options = data[7] || 0;
+  const rawName = data.slice(8, 8 + charCount * (options & 0x01 ? 2 : 1));
+  const sheetName = options & 0x01 ? decodeUtf16Le(rawName) : decodeLegacyText(rawName);
+  return {
+    offset,
+    sheetName: cleanValue(sheetName) || "List"
+  };
+}
+
+function parseBiffSst(records, startIndex) {
+  const chunks = [records[startIndex].data];
+  for (let index = startIndex + 1; index < records.length && records[index].sid === 0x003c; index += 1) {
+    chunks.push(records[index].data);
+  }
+  const data = concatUint8Arrays(chunks);
+  const uniqueCount = data.length >= 8 ? readUint32(data, 4) : 0;
+  const strings = [];
+  let offset = 8;
+  for (let index = 0; index < uniqueCount && offset < data.length; index += 1) {
+    const parsed = parseBiffString(data, offset);
+    strings.push(parsed.text);
+    if (parsed.nextOffset <= offset) {
+      break;
+    }
+    offset = parsed.nextOffset;
+  }
+  return strings;
+}
+
+function decodeRkNumber(value) {
+  const multiplied = Boolean(value & 0x01);
+  const isInteger = Boolean(value & 0x02);
+  let number;
+  if (isInteger) {
+    number = value >> 2;
+  } else {
+    const buffer = new ArrayBuffer(8);
+    const view = new DataView(buffer);
+    view.setUint32(0, 0, true);
+    view.setUint32(4, value & 0xfffffffc, true);
+    number = view.getFloat64(0, true);
+  }
+  return multiplied ? number / 100 : number;
+}
+
+function sheetIndexForRecord(recordOffset, sheets) {
+  for (let index = 0; index < sheets.length; index += 1) {
+    const nextOffset = sheets[index + 1]?.offset ?? Number.POSITIVE_INFINITY;
+    if (recordOffset >= sheets[index].offset && recordOffset < nextOffset) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function setBiffCell(sheet, rowIndex, columnIndex, value) {
+  const text = cleanValue(value);
+  if (!text) {
+    return;
+  }
+  if (!sheet.rows[rowIndex]) {
+    sheet.rows[rowIndex] = [];
+  }
+  sheet.rows[rowIndex][columnIndex] = text;
+}
+
+function parseLegacyXlsRows(bytes) {
+  const cfb = parseCfb(bytes);
+  const workbookStream = cfb.readStream(["Workbook", "Book"]);
+  if (!workbookStream) {
+    throw new Error("V souboru .xls se nepodařilo najít Workbook stream.");
+  }
+
+  const records = parseBiffRecords(workbookStream);
+  const boundSheets = records
+    .filter((record) => record.sid === 0x0085)
+    .map((record) => parseBiffBoundSheet(record.data))
+    .filter(Boolean)
+    .sort((left, right) => left.offset - right.offset);
+  const sheets = (boundSheets.length ? boundSheets : [{ offset: 0, sheetName: "List 1" }])
+    .map((sheet) => ({ ...sheet, rows: [] }));
+  let sharedStrings = [];
+
+  for (let index = 0; index < records.length; index += 1) {
+    if (records[index].sid === 0x00fc) {
+      sharedStrings = parseBiffSst(records, index);
+      break;
+    }
+  }
+
+  for (const record of records) {
+    const sheetIndex = sheetIndexForRecord(record.offset, sheets);
+    if (sheetIndex < 0) {
+      continue;
+    }
+    const sheet = sheets[sheetIndex];
+    const data = record.data;
+
+    if (record.sid === 0x00fd && data.length >= 10) {
+      const rowIndex = readUint16(data, 0);
+      const columnIndex = readUint16(data, 2);
+      const sstIndex = readUint32(data, 6);
+      setBiffCell(sheet, rowIndex, columnIndex, sharedStrings[sstIndex] || "");
+    } else if (record.sid === 0x0204 && data.length >= 8) {
+      const rowIndex = readUint16(data, 0);
+      const columnIndex = readUint16(data, 2);
+      const parsed = parseBiffString(data, 6);
+      setBiffCell(sheet, rowIndex, columnIndex, parsed.text);
+    } else if (record.sid === 0x0203 && data.length >= 14) {
+      const rowIndex = readUint16(data, 0);
+      const columnIndex = readUint16(data, 2);
+      const number = new DataView(data.buffer, data.byteOffset + 6, 8).getFloat64(0, true);
+      setBiffCell(sheet, rowIndex, columnIndex, number);
+    } else if (record.sid === 0x027e && data.length >= 10) {
+      const rowIndex = readUint16(data, 0);
+      const columnIndex = readUint16(data, 2);
+      setBiffCell(sheet, rowIndex, columnIndex, decodeRkNumber(readUint32(data, 6)));
+    } else if (record.sid === 0x00bd && data.length >= 10) {
+      const rowIndex = readUint16(data, 0);
+      const firstColumn = readUint16(data, 2);
+      const lastColumn = readUint16(data, data.length - 2);
+      let cursor = 4;
+      for (let columnIndex = firstColumn; columnIndex <= lastColumn && cursor + 6 <= data.length - 2; columnIndex += 1) {
+        setBiffCell(sheet, rowIndex, columnIndex, decodeRkNumber(readUint32(data, cursor + 2)));
+        cursor += 6;
+      }
+    } else if (record.sid === 0x0006 && data.length >= 14) {
+      const rowIndex = readUint16(data, 0);
+      const columnIndex = readUint16(data, 2);
+      const number = new DataView(data.buffer, data.byteOffset + 6, 8).getFloat64(0, true);
+      if (Number.isFinite(number)) {
+        setBiffCell(sheet, rowIndex, columnIndex, number);
+      }
+    }
+  }
+
+  const parsedSheets = sheets
+    .map((sheet) => ({
+      sheetName: sheet.sheetName,
+      rows: compactRows(sheet.rows.map((row) => row || []))
+    }))
+    .filter((sheet) => sheet.rows.length);
+
+  if (!parsedSheets.length) {
+    throw new Error("Soubor .xls se podařilo otevřít, ale neobsahuje čitelné řádky.");
+  }
+
+  return {
+    rows: parsedSheets[0].rows,
+    sheetName: parsedSheets[0].sheetName,
+    sheets: parsedSheets
+  };
 }
 
 function findEndOfCentralDirectory(bytes) {
@@ -299,6 +673,26 @@ function resolveWorkbookSheetPath(workbookXml, relsXml) {
   return target ? normalizeZipPath(target.startsWith("/") ? target.slice(1) : `xl/${target}`) : "xl/worksheets/sheet1.xml";
 }
 
+function workbookSheetEntries(workbookXml, relsXml) {
+  const relationships = new Map(
+    [...relsXml.matchAll(/<Relationship\b[^>]*>/gi)].map((match) => {
+      const node = match[0];
+      return [xmlAttribute(node, "Id"), xmlAttribute(node, "Target")];
+    })
+  );
+  return [...workbookXml.matchAll(/<sheet\b[^>]*>/gi)]
+    .map((match, index) => {
+      const node = match[0];
+      const relationshipId = xmlAttribute(node, "r:id");
+      const target = relationships.get(relationshipId) || "";
+      return {
+        sheetName: xmlAttribute(node, "name") || `List ${index + 1}`,
+        path: target ? normalizeZipPath(target.startsWith("/") ? target.slice(1) : `xl/${target}`) : `xl/worksheets/sheet${index + 1}.xml`
+      };
+    })
+    .filter((sheet) => sheet.path);
+}
+
 function resolveWorkbookSheetName(workbookXml) {
   const firstSheet = /<sheet\b[^>]*>/i.exec(workbookXml)?.[0] || "";
   return xmlAttribute(firstSheet, "name") || "List 1";
@@ -359,14 +753,35 @@ async function parseXlsxRows(bytes) {
   const workbookXml = await zipEntryText(entries, "xl/workbook.xml");
   const relsXml = await zipEntryText(entries, "xl/_rels/workbook.xml.rels");
   const sharedStringsXml = await zipEntryText(entries, "xl/sharedStrings.xml");
-  const sheetPath = resolveWorkbookSheetPath(workbookXml, relsXml);
-  const sheetXml = await zipEntryText(entries, sheetPath) || await zipEntryText(entries, "xl/worksheets/sheet1.xml");
-  if (!sheetXml) {
+  const sheetEntries = workbookSheetEntries(workbookXml, relsXml);
+  const fallbackSheetPath = resolveWorkbookSheetPath(workbookXml, relsXml);
+  const sheets = [];
+  for (const sheetEntry of sheetEntries.length ? sheetEntries : [{ sheetName: resolveWorkbookSheetName(workbookXml), path: fallbackSheetPath }]) {
+    const sheetXml = await zipEntryText(entries, sheetEntry.path);
+    if (!sheetXml) {
+      continue;
+    }
+    sheets.push({
+      rows: parseWorksheetRows(sheetXml, parseSharedStrings(sharedStringsXml)),
+      sheetName: sheetEntry.sheetName
+    });
+  }
+  if (!sheets.length) {
+    const sheetXml = await zipEntryText(entries, "xl/worksheets/sheet1.xml");
+    if (sheetXml) {
+      sheets.push({
+        rows: parseWorksheetRows(sheetXml, parseSharedStrings(sharedStringsXml)),
+        sheetName: resolveWorkbookSheetName(workbookXml)
+      });
+    }
+  }
+  if (!sheets.length) {
     throw new Error("V XLSX se nepodařilo najít první list.");
   }
   return {
-    rows: parseWorksheetRows(sheetXml, parseSharedStrings(sharedStringsXml)),
-    sheetName: resolveWorkbookSheetName(workbookXml)
+    rows: sheets[0].rows,
+    sheetName: sheets[0].sheetName,
+    sheets
   };
 }
 
@@ -385,12 +800,7 @@ async function parseSpreadsheetRows(file) {
   const name = cleanValue(file.filename || file.name).toLowerCase();
   const type = cleanValue(file.contentType || file.type).toLowerCase();
   if (isLegacyXls(bytes) || name.endsWith(".xls")) {
-    return {
-      unsupported: true,
-      reason: "Starý binární .xls v produkci nepřečtu. Soubor prosím přeuložte jako .xlsx nebo CSV.",
-      rows: [],
-      sheetName: ""
-    };
+    return parseLegacyXlsRows(bytes);
   }
   if (name.endsWith(".xlsx") || type.includes("spreadsheetml") || isZipXlsx(bytes)) {
     return parseXlsxRows(bytes);
@@ -487,9 +897,6 @@ function suggestedDays(frequency, baselineDay) {
 }
 
 function vehicleFor({ day, wasteType, wasteCode, region, text }) {
-  if (wasteCode === "200108" || normalizeKey(text).includes("GASTRO")) {
-    return COLLECTION_ROUTE_VEHICLES.find((vehicle) => vehicle.code === "D");
-  }
   if (wasteType === "BIO" && region === "Blansko") {
     return COLLECTION_ROUTE_VEHICLES.find((vehicle) => vehicle.code === "B");
   }
@@ -520,7 +927,7 @@ function sourceRouteName(filename) {
 }
 
 function buildRowsFromSheet({ rows, filename, sheetName }) {
-  const routeMeta = routeMetaFromFilename(filename);
+  const routeMeta = routeMetaFromFilename(`${filename} ${sheetName || ""}`);
   const output = [];
   rows.forEach((cells, index) => {
     const cleanedCells = cells.map(cleanValue).filter(Boolean);
@@ -579,13 +986,30 @@ export async function buildCollectionRouteOptimizationPreview({ files = [] } = {
       unsupportedFiles.push({ filename, reason: parsed.reason });
       continue;
     }
-    const sourceRows = compactRows(parsed.rows || []);
-    const plannedRows = buildRowsFromSheet({ rows: sourceRows, filename, sheetName: parsed.sheetName });
+    const parsedSheets = Array.isArray(parsed.sheets) && parsed.sheets.length
+      ? parsed.sheets
+      : [{ rows: parsed.rows || [], sheetName: parsed.sheetName || "" }];
+    const sheetSummaries = [];
+    const plannedRows = [];
+    let sourceRowCount = 0;
+    for (const sheet of parsedSheets) {
+      const sourceRows = compactRows(sheet.rows || []);
+      const sheetPlannedRows = buildRowsFromSheet({ rows: sourceRows, filename, sheetName: sheet.sheetName });
+      sourceRowCount += sourceRows.length;
+      plannedRows.push(...sheetPlannedRows);
+      sheetSummaries.push({
+        sheetName: sheet.sheetName || "",
+        sourceRowCount: sourceRows.length,
+        plannedRowCount: sheetPlannedRows.length
+      });
+    }
     parsedFiles.push({
       filename,
-      sheetName: parsed.sheetName || "",
-      sourceRowCount: sourceRows.length,
-      plannedRowCount: plannedRows.length
+      sheetName: sheetSummaries[0]?.sheetName || parsed.sheetName || "",
+      sheetCount: sheetSummaries.length,
+      sourceRowCount,
+      plannedRowCount: plannedRows.length,
+      sheets: sheetSummaries.slice(0, 20)
     });
     rows.push(...plannedRows);
   }
