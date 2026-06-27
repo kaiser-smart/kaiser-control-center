@@ -28,12 +28,29 @@ Overene volani:
 
 - prihlaseni: `POST /Execute?LoginParam`
 - cteni gridu/entity: `POST /Execute?GetPageParam`
+- detail zaznamu: `POST /Execute?GetByIdParam`
 
 Dulezite technicke poznamky:
 
 - `Device` musi byt string, napr. `Browser`.
+- Login vraci tokeny, ale dalsi API volani musi bezet ve stejne cookie session.
+  Vistos web klient pouziva `credentials: include` a cookies:
+  - `VistosAccessToken`
+  - `VistosRefreshToken`
 - `Columns: null` muze vracet chybu `ERROR_LOAD_DATAGRID_RECORDS`.
 - Bezpecnejsi je posilat explicitni `Columns`.
+- `Columns` musi byt pole objektu, ne pole stringu:
+
+```json
+[
+  { "ColumnName": "Id", "Status": 1 },
+  { "ColumnName": "ContractNumber", "Status": 1 }
+]
+```
+
+- Filtr u `GetPageParam` musi byt v poli `Filter`.
+- Varianta `Filters` byla API prijata s `status: OK`, ale filtr se ignoroval.
+  Tohle je dulezite: pri `Filters` se vratily nefiltrovane radky.
 - U multiselect FK poli je potreba filter jako pole, napr. `Typsmlouvy_FK: [14735]`.
 - U FK poli API vraci i doplnkova pole:
   - `<field>_MainProjection`
@@ -145,6 +162,25 @@ Overeny vysledek k 2026-06-27:
 - po validaci datumu backendem: 759 platnych
 - budouci zacatek: 2
 - ukonceno podle `EndDate`: 7
+- spravny API parametr je `Filter`, ne `Filters`
+
+Kvalita zakladnich poli u 759 datumove platnych smluv:
+
+- chybejici `Nakladkovaadresa_FK_RecordId`: 32 smluv
+- u techto 32 smluv existoval fallback na `DirectoryBranch_FK_RecordId`
+- GPS u `Nakladkovaadresa_FK_Lat/Long`: 3 smlouvy
+- rozpad `Type_FK` ve filtru aktivni Komunal:
+  - `77`: 480
+  - `15840`: 44
+  - `15957`: 232
+  - `15953`: 1
+  - `76`: 2
+
+Zaver:
+
+- Trasy svozu nesmi spolehat na to, ze Vistos uz ma GPS.
+- Vetsina mist bude muset jit do fronty `K doplneni polohy`.
+- `Typsmlouvy_FK = 14735` je pro vyber Komunal sirsi a vhodnejsi start nez samotne `Type_FK = 77`.
 
 Volitelne zpřesneni:
 
@@ -220,6 +256,16 @@ Priklad overene smlouvy:
 - `ContractRow.Product_FK_RecordId = 5570`
 - `ContractRow.Name = 120 ltr SKO 1 x 14 ANO`
 
+Poznamka k filtrovani polozek:
+
+- `GetPageParam` + `Filter: { "Contract_FK": 7750 }` vratil 1 polozku.
+- `GetPageParam` + `Filters: { "Contract_FK": 7750 }` vratil nefiltrovany grid.
+- Pro import pouzivat vyhradne `Filter`.
+- U prvnich 20 datumove platnych aktivnich Komunal smluv vratil `ContractRow`
+  pouze 2 polozky u 2 smluv.
+- 18 z prvnich 20 smluv nemelo pres `ContractRow` zadnou polozku.
+- `ContractRow` proto zatim nepovazovat za jediny zdroj svozovych polozek.
+
 ## Product - produkt / nadoba / sluzba
 
 | Vyznam | API pole | Stav |
@@ -255,6 +301,18 @@ Priklad produktu:
 - `Product.CostPrice = null`
 - `Product.ListPrice = null`
 - `Product.WeightedCostPrice = null`
+
+Dalsi vzorek z aktivnich Komunal smluv:
+
+- U 2 nalezenych produktu byly vyplnene:
+  - `Product.Quantity`
+  - `Product.ListPrice`
+  - `Product.Typodpadupopelnice_FK`
+  - `Product.Typnadoby`
+  - `Product.Cetnostsvozuodpadu_FK`
+  - `Product.Waste`
+- Pro parser to znamena, ze strukturovana produktova pole existuji a maji prednost
+  pred parsovanim nazvu produktu.
 
 Doporuceni:
 
@@ -321,28 +379,60 @@ Ve vzorku nebyly vraceny radky bez dalsiho filtru.
 
 | Entita | Stav |
 | --- | --- |
-| `ServiceList` | API vratilo 0 radku |
+| `ServiceList` | entita dostupna, ale pro prvnich 10 aktivnich Komunal smluv nevratila vazbu pres `Contract_FK` |
 | `ServiceListItem` | dostupne, total pri pruzkumu 390291 |
 
 Doporuceni:
 
 - Pro trasovy import zatim vychazet ze `Contract` + `ContractRow` + `Product`.
-- `ServiceListItem` vyuzit jako doplnujici zdroj pro realne zakazkove polozky, az bude jasne, jak Vistos generuje zakazkove listy pro svoz.
+- `ServiceListItem` obsahuje prakticka pole pro mnozstvi a ceny:
+  - `Quantity`
+  - `c_OrderedQuantity`
+  - `UnitPrice`
+  - `ListPrice`
+  - `UnitPriceDiscount`
+  - `UnitPriceDiscountPercentage`
+- `ServiceList` obsahuje prakticka pole pro zakazku / adresu / kontakt:
+  - `Contract_FK`
+  - `CustomerCompany_FK`
+  - `CustomerBranch_FK`
+  - `CustomerContact_FK`
+  - `Nakladkovaadresa_FK`
+  - `Stanoviste`
+  - `Phone`
+  - `DateOfServiceList`
+  - `DateStart`
+  - `DateEnd`
+  - `DateOfRealization`
+  - `Waste`
+- Vazba `Contract -> ServiceList -> ServiceListItem` se ale na vzorku prvnich
+  10 aktivnich Komunal smluv nepotvrdila.
+- `ServiceListItem` proto pouzit jen jako doplnujici zdroj, dokud Eurosoftworks
+  nebo dalsi discovery nepotvrdi spravnou vazbu pro pravidelne svozy.
 
 ## Kontakty a kontaktni osoby
 
-Stav: castecne overeno, potrebuje dalsi discovery.
+Stav: castecne overeno, aktualni API profil zatim nestaci pro spolehlive
+cteni kontaktnich osob.
 
 Poznatky:
 
 - V UI existuje URL ve tvaru `#/Contact/edit/<id>`.
-- V `DbObject` nebyla nalezena samostatna entita `Contact`.
-- API entity `Contact` vratila 0 radku.
+- Konkretni UI URL testovana pri pruzkumu: `Contact/edit/117428`.
+- `GetPageParam` s `Filter: { "Id": 117428 }` vratil:
+  - `Directory`: 0 radku
+  - `Contact`: 0 radku
+- `GetByIdParam` pro `Directory` a `Contact` s ID `117428` vratil `status: OK`,
+  ale prazdna `data`.
 - V `DbObject` existuji:
   - `ContactList`
   - `ContactListRow`
   - `Directory`
-- Je pravdepodobne, ze kontakt je projekce nad `Directory`, ne samostatna DB entita `Contact`.
+- `ContactList` a `ContactListRow` maji podle `DbColumn` metadata dostupna.
+- Cteni `ContactList` a `ContactListRow` pres `GetPageParam` ale vratilo HTTP 215
+  `Unauthorized`.
+- Kontakt z URL `Contact/edit/<id>` je tedy pravdepodobne projekce / specialni pohled,
+  ktery neni pro aktualni read-only API profil zatim dostupny bez dalsiho nastaveni.
 
 Relevantni pole v `Directory`:
 
@@ -363,6 +453,24 @@ Relevantni pole v `Directory`:
 - `MainProjection_FK`
 - `IsCompany`
 
+Relevantni pole v `ContactList` podle `DbColumn`:
+
+- `Id`
+- `MainProjection_FK`
+- `Name`
+- `SenderEmail`
+- `SenderName`
+
+Relevantni pole v `ContactListRow` podle `DbColumn`:
+
+- `Id`
+- `Directory_FK`
+- `Email1`
+- `MainProjection_FK`
+- `MasterParent_FK`
+- `Name`
+- `SendMailEnabled`
+
 Doporuceni:
 
 - Kontakty zatim mapovat jako samostatny neovereny blok.
@@ -371,7 +479,8 @@ Doporuceni:
   - kontakt -> pobocka
   - kontakt -> konkretni smlouva nebo sluzba
   - souhlas / typ komunikace
-- Dalsi discovery ma overit konkretni URL napr. `Contact/edit/<id>` proti entite/projekci v API.
+- Od Eurosoftworks potrebujeme potvrdit, jak API cte `Contact/edit/<id>`, nebo doplnit
+  read-only opravneni pro `ContactList` / `ContactListRow` / prislusnou projekci.
 
 ## Upozornovaci SMS 15/30/60 minut predem
 
@@ -499,6 +608,9 @@ Proto tato pole zatim nepovazovat za povinna.
 ## Co je overene
 
 - Login a read-only grid dotazy pres `GetPageParam`.
+- Vistos API vyzaduje stejnou cookie session po loginu.
+- `GetPageParam` filtruje pres `Filter`; `Filters` se ignoruje.
+- `GetByIdParam` funguje pro detail entity, pokud je entita a zaznam dostupny profilu.
 - `Contract` dostupny a obsahuje smlouvy.
 - Aktivni Komunal filtr pres `Status_FK = 74` a `Typsmlouvy_FK = [14735]`.
 - `Contract.ContractNumber` je cislo smlouvy.
@@ -511,6 +623,9 @@ Proto tato pole zatim nepovazovat za povinna.
 ## Co neni overene
 
 - Presna vazba kontaktu z URL `Contact/edit/<id>` do API.
+- Cteni `ContactList` a `ContactListRow` je pro aktualni API profil blokovane
+  stavem `Unauthorized`.
+- Prime cteni `Directory` / `Contact` pro testovane ID z UI vratilo prazdna data.
 - Kde jsou vyplnene kontaktni osoby pro SMS/e-mail notifikace.
 - Pole pro upozornovaci SMS 15/30/60 minut predem. Podle Radima se musi ve Vistosu teprve vytvorit.
 - Ktera cenova tabulka je v praxi zdrojem ceny u vsech typu smluv.
@@ -522,7 +637,8 @@ Proto tato pole zatim nepovazovat za povinna.
 1. Vybrat smlouvu, kde je ve Vistos UI jasne videt cena.
 2. Overit `ContractRow`, `Product`, `ProductAccountPrice`, `ProductPrice`.
 3. Vybrat kontaktni osobu z UI `Contact/edit/<id>`.
-4. Najit presne API mapovani kontaktu a vazbu na `Directory` / `DirectoryBranch`.
+4. Nechat potvrdit od Eurosoftworks presne API mapovani `Contact/edit/<id>` nebo
+   doplnit read-only opravneni na kontaktni projekci.
 5. Overit smlouvu s vice polozkami a vice stanovisti.
 6. Overit aktivni smlouvy Komunal s plnou sadou poli pro svoz.
 7. Po vytvoreni SMS poli ve Vistosu overit jejich technicke nazvy pres `DbColumn`.
