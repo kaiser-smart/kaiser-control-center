@@ -1194,6 +1194,13 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
 
   const uniqueSites = new Set(mappedRows.map((row) => row.siteKey).filter(Boolean));
   const uniqueCustomers = new Set(mappedRows.map((row) => row.sourceCustomerId || normalizeLookupKey(row.customerName)).filter(Boolean));
+  const siteCounts = new Map();
+  for (const row of mappedRows) {
+    if (!row.siteKey) {
+      continue;
+    }
+    siteCounts.set(row.siteKey, (siteCounts.get(row.siteKey) || 0) + 1);
+  }
   const containerCount = mappedRows.reduce((sum, row) => sum + (row.containerVolume ? row.containerCount : 0), 0);
   const issueCount = mappedRows.reduce((sum, row) => sum + row.issues.length, 0);
   const itemCount = mappedRows.filter((row) => row.sourceEntity === "ContractRow").length;
