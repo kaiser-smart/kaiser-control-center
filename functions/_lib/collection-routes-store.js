@@ -223,8 +223,8 @@ const WASTE_TYPE_MAP = new Map([
 ]);
 
 const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "5x7", "1x14", "1x30"]);
-const ALLOWED_CONTAINER_VOLUMES = new Set([30, 60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500]);
-const ALLOWED_CONTAINER_VOLUME_PATTERN = "30|60|80|120|240|360|660|770|1100|1500|2500";
+const ALLOWED_CONTAINER_VOLUMES = new Set([30, 60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500, 5000]);
+const ALLOWED_CONTAINER_VOLUME_PATTERN = "30|60|80|120|240|360|660|770|1100|1500|2500|5000";
 const VISTOS_ROUTE_WASTE_CODES = new Set(["150101", "150102", "150106", "200102", "200108", "200139", "200201", "200301"]);
 const VISTOS_COLLECTION_TEXT_ALIASES = [
   {
@@ -862,6 +862,29 @@ function normalizeContainerVolume(value) {
   };
 }
 
+function normalizeExplicitContainerVolumeText(value) {
+  const raw = cleanString(value);
+  const cubic = raw.match(/\b(\d+(?:[,.]\d+)?)\s*(?:m3|m\s*3|m³|cbm|kubik)\b/i);
+  if (cubic) {
+    const volume = Math.round(Number(cubic[1].replace(",", ".")) * 1000);
+    return {
+      volume,
+      known: Number.isFinite(volume) && ALLOWED_CONTAINER_VOLUMES.has(volume)
+    };
+  }
+
+  const countedVolume = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const prefixedVolume = raw.match(new RegExp(`\\b(?:P|POP|POPEL|KONT|KONTEJNER)\\.?\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
+  const unitVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)\\b`, "i"));
+  const contextualVolume = raw.match(new RegExp(`\\b(?:NADOB(?:A|Y|U|OU|E)?|POPELNIC(?:E|I|A|OU)?|KONTEJNER|KONT|KAPACIT(?:A|OU|Y)?|VELIKOST(?:I)?|OBJEM(?:EM)?|VYKLOP(?:U)?)\\D{0,40}(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
+  const match = countedVolume || prefixedVolume || unitVolume || contextualVolume;
+  const volume = match ? Number(match[1] || match[0]) : 0;
+  return {
+    volume,
+    known: Number.isFinite(volume) && ALLOWED_CONTAINER_VOLUMES.has(volume)
+  };
+}
+
 function normalizeContainerCount(value) {
   const raw = cleanString(value).replace(",", ".");
   const countedVolume = raw.match(new RegExp(`^\\s*(\\d+)\\s*[x×]\\s*(?:${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
@@ -1140,12 +1163,23 @@ function inferVistosFrequency(contractRow, product) {
 }
 
 function inferVistosContainer(contractRow, product) {
-  const raw = firstNonEmpty(product?.Typnadoby, product?.Size, product?.Caption, product?.Name, contractRow?.Name);
+  const raw = firstNonEmpty(product?.Typnadoby, product?.Size);
   const volume = normalizeContainerVolume(raw);
+  const textVolume = volume.known
+    ? volume
+    : normalizeExplicitContainerVolumeText([
+      product?.Typnadoby_Caption,
+      product?.Caption,
+      product?.Name,
+      contractRow?.Caption,
+      contractRow?.Name,
+      contractRow?.Description,
+      contractRow?.Product_FK_Caption
+    ].map(cleanString).filter(Boolean).join(" "));
   const quantitySource = firstNonEmpty(contractRow?.Quantity, product?.Quantity);
   return {
-    volume: volume.volume,
-    known: volume.known,
+    volume: textVolume.volume,
+    known: textVolume.known,
     count: normalizeContainerCount(quantitySource || raw),
     type: cleanString(product?.Typnadoby || "container")
   };
