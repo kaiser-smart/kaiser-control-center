@@ -246,6 +246,49 @@ function vistosCandidateFromRow(row) {
   };
 }
 
+function vistosCandidateFromPersistedImportRow(row) {
+  const summary = parseJson(row?.summary_json, {});
+  return vistosCandidateFromRow({
+    ...summary,
+    sourceId: summary.sourceId || row?.source_id,
+    sourceEntity: summary.sourceEntity || row?.source_entity
+  });
+}
+
+async function loadPersistedVistosKommunalCandidates(db) {
+  const batch = await db.prepare(`
+    SELECT *
+    FROM collection_import_batches
+    WHERE source_mode = 'vistos-komunal-preview'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).first();
+
+  if (!batch) {
+    return {
+      source: "none",
+      batch: null,
+      candidates: []
+    };
+  }
+
+  const rowsResult = await db.prepare(`
+    SELECT *
+    FROM collection_import_rows
+    WHERE batch_id = ?
+    ORDER BY row_number ASC
+    LIMIT ?
+  `).bind(cleanString(batch.id), VISTOS_SOURCE_MATCH_MAX_CANDIDATES).all();
+
+  return {
+    source: "d1-vistos-komunal-preview",
+    batch,
+    candidates: (rowsResult.results || [])
+      .map(vistosCandidateFromPersistedImportRow)
+      .filter((candidate) => candidate.allTokens.size || candidate.contractId || candidate.contractNumber)
+  };
+}
+
 function buildVistosCandidateIndex(candidates) {
   const index = new Map();
   for (const candidate of candidates) {
@@ -993,25 +1036,38 @@ export async function matchCollectionRouteSourceRowsWithVistos(env, user, {
       );
     }
 
-    let vistosExport;
-    try {
-      vistosExport = await createCollectionRoutesVistosKommunalPreviewExport(env, {
-        limit: VISTOS_SOURCE_MATCH_MAX_CANDIDATES
-      });
-    } catch (error) {
-      if (error instanceof CollectionRoutesStoreError) {
+    let candidateSource = await loadPersistedVistosKommunalCandidates(db);
+    let apiStatus = "ready";
+    if (!candidateSource.candidates.length) {
+      try {
+        const vistosExport = await createCollectionRoutesVistosKommunalPreviewExport(env, {
+          limit: VISTOS_SOURCE_MATCH_MAX_CANDIDATES
+        });
+        apiStatus = vistosExport.apiStatus || "ready";
+        candidateSource = {
+          source: "live-vistos-komunal-export",
+          batch: null,
+          candidates: (Array.isArray(vistosExport.rows) ? vistosExport.rows : [])
+            .map(vistosCandidateFromRow)
+            .filter((candidate) => candidate.allTokens.size || candidate.contractId || candidate.contractNumber)
+        };
+      } catch (error) {
+        if (error instanceof CollectionRoutesStoreError) {
+          throw new CollectionRouteSourcesError(
+            `Vistos match nemá uložený Vistos-only preview batch a živý Vistos export se nepodařilo načíst: ${error.message}`,
+            error.status || 503,
+            error.code || "vistos_api_match_failed"
+          );
+        }
         throw new CollectionRouteSourcesError(
-          error.message,
-          error.status || 503,
-          error.code || "vistos_api_match_failed"
+          "Vistos match nemá uložený Vistos-only preview batch a živý Vistos export se nepodařilo načíst.",
+          503,
+          "vistos_api_match_failed"
         );
       }
-      throw error;
     }
 
-    const candidates = (Array.isArray(vistosExport.rows) ? vistosExport.rows : [])
-      .map(vistosCandidateFromRow)
-      .filter((candidate) => candidate.allTokens.size || candidate.contractId || candidate.contractNumber);
+    const candidates = candidateSource.candidates;
     const candidateIndex = buildVistosCandidateIndex(candidates);
 
     await db.prepare(`
@@ -1071,6 +1127,10 @@ export async function matchCollectionRouteSourceRowsWithVistos(env, user, {
       missingContainerCount: matches.filter((match) => match.status === "chybí nádoba").length,
       missingFrequencyCount: matches.filter((match) => match.status === "chybí frekvence").length,
       duplicateCount: matches.filter((match) => match.status === "duplicita").length,
+      candidateSource: candidateSource.source,
+      candidateBatchId: cleanString(candidateSource.batch?.id),
+      candidateBatchCreatedAt: cleanString(candidateSource.batch?.created_at),
+      candidateBatchRowCount: numericValue(candidateSource.batch?.row_count),
       createdAt,
       createdByUserId: cleanString(user?.id),
       source: "13-excel",
@@ -1082,7 +1142,7 @@ export async function matchCollectionRouteSourceRowsWithVistos(env, user, {
 
     return {
       status: "matched",
-      apiStatus: vistosExport.apiStatus || "ready",
+      apiStatus,
       message: `Vistos match hotový pro ${sourceRows.length} řádků z 13 Excelů. Ostré trasy nevznikly.`,
       summary
     };
