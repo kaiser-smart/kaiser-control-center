@@ -10019,14 +10019,14 @@ function collectionRoutesVistosKommunalSection(user) {
         <div>
           <p class="module-feedback__eyebrow">Vistos / Komunál</p>
           <h2 id="collection-routes-vistos-komunal-title">Vistos Komunál preview</h2>
-          <p>Read-only náhled aktivních Komunál smluv z Vistosu přes backend API a pilotní D1 tabulky.</p>
+          <p>Read-only náhled aktivních a datumově platných Komunál smluv z Vistosu přes backend API a pilotní D1 tabulky.</p>
         </div>
         <span class="employee-card-status employee-card-status--waiting">Read-only Vistos preview</span>
       </div>
 
       <div class="collection-routes-phase-note">
         <strong>Tento náhled nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.</strong>
-        <span>Filtr: Status_FK = 74, Typsmlouvy_FK = [14735]. Vistos se nevolá z frontendu.</span>
+        <span>Filtr: Status_FK = 74, Typsmlouvy_FK = [14735], StartDate <= dnes a EndDate prázdné nebo >= dnes. Vistos se nevolá z frontendu.</span>
       </div>
 
       <div class="collection-routes-stats" aria-label="Stav Vistos Komunál preview">

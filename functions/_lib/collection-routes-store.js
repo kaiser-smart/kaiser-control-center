@@ -1697,7 +1697,9 @@ async function loadVistosKommunalPreviewData(env) {
     getAllVistosPages(env, session, "ContractRow", VISTOS_CONTRACT_ROW_COLUMNS, null),
     getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
   ]);
-  const contractIds = new Set(contractsPage.rows.map((contract) => cleanString(contract?.Id)).filter(Boolean));
+  const today = new Date();
+  const activeContracts = contractsPage.rows.filter((contract) => dateInActiveRange(contract?.StartDate, contract?.EndDate, today));
+  const contractIds = new Set(activeContracts.map((contract) => cleanString(contract?.Id)).filter(Boolean));
   const relevantContractRows = contractRowsPage.rows.filter((row) => (
     contractIds.has(cleanString(row?.Contract_FK_RecordId || row?.Contract_FK))
   ));
@@ -1708,7 +1710,7 @@ async function loadVistosKommunalPreviewData(env) {
     configured: true,
     apiStatus: "ready",
     preview: buildVistosKommunalPreview({
-      contracts: contractsPage.rows,
+      contracts: activeContracts,
       contractRows: relevantContractRows,
       products: relevantProducts,
       totals: {
@@ -1716,6 +1718,8 @@ async function loadVistosKommunalPreviewData(env) {
           total: contractsPage.total,
           filtered: contractsPage.filtered,
           loaded: contractsPage.rows.length,
+          dateValid: activeContracts.length,
+          dateExcluded: Math.max(0, contractsPage.rows.length - activeContracts.length),
           capped: contractsPage.capped
         },
         contractRows: {

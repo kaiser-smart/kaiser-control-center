@@ -711,7 +711,7 @@ Proto tato pole zatim nepovazovat za povinna.
 - `GetPageParam` filtruje pres `Filter`; `Filters` se ignoruje.
 - `GetByIdParam` funguje pro detail entity, pokud je entita a zaznam dostupny profilu.
 - `Contract` dostupny a obsahuje smlouvy.
-- Aktivni Komunal filtr pres `Status_FK = 74` a `Typsmlouvy_FK = [14735]`.
+- Aktivni Komunal filtr pres `Status_FK = 74` a `Typsmlouvy_FK = [14735]`; backend navic vyrazuje smlouvy mimo datumovou platnost `StartDate <= today AND (EndDate is null OR EndDate >= today)`.
 - `Contract.ContractNumber` je cislo smlouvy.
 - `ContractRow` vraci polozky smlouvy pres `Contract_FK`.
 - `ContractRow.Product_FK_RecordId` vede na `Product`.
