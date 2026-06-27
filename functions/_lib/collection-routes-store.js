@@ -745,8 +745,10 @@ function normalizeFrequency(value) {
 
 function normalizeContainerVolume(value) {
   const raw = cleanString(value);
-  const match = raw.match(/\d+/);
-  const volume = match ? Number(match[0]) : 0;
+  const preferredVolume = raw.match(/\b(60|80|120|240|360|660|770|1100)\s*(?:l|lt|ltr|litru|litr|litry)?\b/i);
+  const directVolume = raw.match(/^\s*(60|80|120|240|360|660|770|1100)\s*$/);
+  const match = preferredVolume || directVolume || raw.match(/\d+/);
+  const volume = match ? Number(match[1] || match[0]) : 0;
   return {
     volume,
     known: Number.isFinite(volume) && ALLOWED_CONTAINER_VOLUMES.has(volume)
@@ -791,15 +793,67 @@ function productSearchText(contractRow, product) {
   return [
     product?.Kod_druhotnych_surovin,
     product?.Typodpadu_FK,
+    product?.Typodpadu_FK_Caption,
     product?.Typodpadupopelnice_FK,
+    product?.Typodpadupopelnice_FK_Caption,
     product?.Typnadoby,
+    product?.Typnadoby_Caption,
     product?.Cetnostsvozuodpadu_FK,
+    product?.Cetnostsvozuodpadu_FK_Caption,
     product?.ServiceCycle_FK,
+    product?.ServiceCycle_FK_Caption,
     product?.Caption,
     product?.Name,
+    product?.Code,
+    product?.ProductNumber,
+    contractRow?.Caption,
     contractRow?.Name,
-    contractRow?.Description
+    contractRow?.Description,
+    contractRow?.Product_FK,
+    contractRow?.Product_FK_Caption
   ].map(cleanString).filter(Boolean).join(" ");
+}
+
+function textLooksLikeCollectionService(text) {
+  const normalized = normalizeValueKey(text);
+  const compact = normalized.replace(/\s+/g, "");
+  if (!normalized) {
+    return false;
+  }
+
+  if (/\b(60|80|120|240|360|660|770|1100)\s*(?:L|LT|LTR|LITRU|LITR|LITRY)?\b/.test(normalized)) {
+    return true;
+  }
+  if (/[1235]\s*X\s*(7|14|30)/.test(normalized)) {
+    return true;
+  }
+
+  const collectionNeedles = [
+    "SKO",
+    "KOMUNAL",
+    "KOMUNALNI",
+    "SMESNYKOMUNALNI",
+    "POPELNICE",
+    "POPELNICA",
+    "KONTEJNER",
+    "PAPIR",
+    "PLAST",
+    "SKLO",
+    "BIO",
+    "200301",
+    "200101",
+    "200139",
+    "200102",
+    "200201",
+    "150106",
+    "150101",
+    "150102"
+  ];
+  return collectionNeedles.some((needle) => normalized.includes(needle) || compact.includes(needle));
+}
+
+function rowHasExplicitLoadingAddress(contract) {
+  return Boolean(firstNonEmpty(fkRecordId(contract, "Nakladkovaadresa_FK"), fkCaption(contract, "Nakladkovaadresa_FK")));
 }
 
 function inferVistosWaste(contractRow, product) {
@@ -825,9 +879,13 @@ function inferVistosWaste(contractRow, product) {
     ["200102", { wasteType: "SKLO", wasteCode: "200102" }],
     ["200201", { wasteType: "BIO", wasteCode: "200201" }],
     ["SKO", { wasteType: "SKO", wasteCode: "200301" }],
+    ["SMESNYKOMUNALNI", { wasteType: "SKO", wasteCode: "200301" }],
+    ["KOMUNALNI", { wasteType: "SKO", wasteCode: "200301" }],
+    ["KOMUNAL", { wasteType: "SKO", wasteCode: "200301" }],
     ["PAPIR", { wasteType: "PAPIR", wasteCode: "200101" }],
     ["PAP", { wasteType: "PAPIR", wasteCode: "200101" }],
     ["PLAST", { wasteType: "PLAST", wasteCode: "200139" }],
+    ["PLASTY", { wasteType: "PLAST", wasteCode: "200139" }],
     ["SKLO", { wasteType: "SKLO", wasteCode: "200102" }],
     ["BIO", { wasteType: "BIO", wasteCode: "200201" }],
     ["SMESNEOBALY", { wasteType: "SMESNE OBALY", wasteCode: "150106" }]
@@ -934,8 +992,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     if (!contractActiveRange) {
       baseIssues.push({ type: "inactive-contract-range", severity: "warning", message: "Smlouva nemá aktivní datumový rozsah." });
     }
-    if (possibleSiteIds.size > 1) {
-      baseIssues.push({ type: "multiple-sites-contract", severity: "info", message: "Smlouva má více možných adresních vazeb." });
+    if (possibleSiteIds.size > 1 && !rowHasExplicitLoadingAddress(contract)) {
+      baseIssues.push({ type: "multiple-sites-contract", severity: "info", message: "Smlouva má více možných adresních vazeb bez jasné nakládkové adresy." });
     }
 
     if (!contractRowsForContract.length) {
@@ -980,25 +1038,31 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     for (const contractRow of contractRowsForContract) {
       const productId = cleanString(contractRow?.Product_FK_RecordId || contractRow?.Product_FK);
       const product = productsById.get(productId) || null;
+      const searchText = productSearchText(contractRow, product);
+      const looksLikeCollection = textLooksLikeCollectionService(searchText);
       const waste = inferVistosWaste(contractRow, product);
       const frequency = inferVistosFrequency(contractRow, product);
       const container = inferVistosContainer(contractRow, product);
       const issues = [...baseIssues];
 
-      if (!productId || !product) {
-        issues.push({ type: "unknown-product", severity: "warning", message: "Neznámý produkt." });
-      }
-      if (!waste.known) {
-        issues.push({ type: "unknown-waste-type", severity: "warning", message: "Neznámý typ odpadu." });
-      }
-      if (!frequency.known) {
-        issues.push({ type: "unknown-frequency", severity: "warning", message: "Neznámá četnost." });
-      }
-      if (!container.known) {
-        issues.push({ type: "missing-container-volume", severity: "warning", message: "Chybí nádoba/objem." });
-      }
-      if (!waste.known || !frequency.known || !container.known) {
-        issues.push({ type: "item-not-collection-mappable", severity: "warning", message: "Položka není mapovatelná na svoz." });
+      if (!looksLikeCollection) {
+        issues.push({ type: "item-not-collection-mappable", severity: "info", message: "Položka podle dostupných polí nevypadá jako svoz odpadu." });
+      } else {
+        if (!productId || !product) {
+          issues.push({ type: "unknown-product", severity: "warning", message: "Neznámý produkt." });
+        }
+        if (!waste.known) {
+          issues.push({ type: "unknown-waste-type", severity: "warning", message: "Neznámý typ odpadu." });
+        }
+        if (!frequency.known) {
+          issues.push({ type: "unknown-frequency", severity: "warning", message: "Neznámá četnost." });
+        }
+        if (!container.known) {
+          issues.push({ type: "missing-container-volume", severity: "warning", message: "Chybí nádoba/objem." });
+        }
+        if (!waste.known || !frequency.known || !container.known) {
+          issues.push({ type: "item-not-collection-mappable", severity: "warning", message: "Položka není mapovatelná na svoz." });
+        }
       }
 
       mappedRows.push({
@@ -1039,15 +1103,24 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     }
   }
 
-  const siteCounts = new Map();
+  const siteKeysByAddress = new Map();
   for (const row of mappedRows) {
-    if (row.siteKey) {
-      siteCounts.set(row.siteKey, (siteCounts.get(row.siteKey) || 0) + 1);
+    const addressKey = normalizeLookupKey(row.addressRaw || row.siteName);
+    if (!addressKey || !row.siteKey) {
+      continue;
     }
+    if (!siteKeysByAddress.has(addressKey)) {
+      siteKeysByAddress.set(addressKey, new Set());
+    }
+    siteKeysByAddress.get(addressKey).add(row.siteKey);
   }
+  const duplicateAddressKeys = new Set(Array.from(siteKeysByAddress.entries())
+    .filter(([, siteKeys]) => siteKeys.size > 1)
+    .map(([addressKey]) => addressKey));
   for (const row of mappedRows) {
-    if (row.siteKey && siteCounts.get(row.siteKey) > 1) {
-      row.issues.push({ type: "possible-site-duplicate", severity: "info", message: "Možná duplicita stanoviště." });
+    const addressKey = normalizeLookupKey(row.addressRaw || row.siteName);
+    if (duplicateAddressKeys.has(addressKey)) {
+      row.issues.push({ type: "possible-site-duplicate", severity: "info", message: "Možná duplicita stanoviště se stejnou adresou a jiným Vistos ID." });
     }
   }
 
