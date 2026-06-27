@@ -590,6 +590,7 @@ const collectionRoutesPilotState = {
   importLoading: false,
   manualImportLoading: false,
   kommunalPreviewLoading: false,
+  routeOptimizationLoading: false,
   apiStatus: "waiting",
   batches: [],
   sites: [],
@@ -597,6 +598,9 @@ const collectionRoutesPilotState = {
   kommunalPreviewRows: [],
   kommunalPreviewIssues: [],
   kommunalPreviewDetailError: "",
+  routeOptimizationPreview: null,
+  routeOptimizationError: "",
+  routeOptimizationMessage: "",
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -10392,6 +10396,129 @@ function collectionRoutesKommunalRouteDraftRows(metadata = {}) {
     .slice(0, 80);
 }
 
+function collectionRoutesRouteOptimizationKey(value = "") {
+  return collectionRoutesTextKey(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function collectionRoutesRouteOptimizationTokens(value = "") {
+  const ignored = new Set(["brno", "blansko", "trasa", "svoz", "sko", "bio", "plast", "papir", "sklo", "komunal"]);
+  return collectionRoutesRouteOptimizationKey(value)
+    .split(" ")
+    .filter((token) => token.length >= 4 && !ignored.has(token));
+}
+
+function collectionRoutesRouteOptimizationVistosCandidates() {
+  return collectionRoutesPilotState.kommunalPreviewRows.map((row) => {
+    const summary = collectionRoutesImportRowSummary(row);
+    return {
+      contractNumber: summary.contractNumber || "-",
+      customerName: summary.customerName || "-",
+      siteName: summary.siteName || summary.addressRaw || "-",
+      addressRaw: summary.addressRaw || "-",
+      wasteType: summary.wasteType || "",
+      wasteCode: summary.wasteCode || "",
+      frequency: summary.frequency || "",
+      containerVolume: collectionRoutesMetricValue(summary.containerVolume, 0),
+      key: collectionRoutesRouteOptimizationKey([
+        summary.contractNumber,
+        summary.customerName,
+        summary.siteName,
+        summary.addressRaw,
+        summary.productName,
+        summary.rowName,
+        summary.note
+      ].join(" "))
+    };
+  });
+}
+
+function collectionRoutesRouteOptimizationMatch(row, candidates = []) {
+  if (!candidates.length) {
+    return {
+      status: "Čeká na Vistos",
+      detail: "Nejdřív načíst Vistos Komunál preview",
+      contractNumber: "-",
+      confidence: "-"
+    };
+  }
+
+  const rowText = [row.originalText, row.sourceRoute, row.sourceFile].join(" ");
+  const rowTokens = new Set(collectionRoutesRouteOptimizationTokens(rowText));
+  let best = null;
+  let bestScore = 0;
+
+  candidates.forEach((candidate) => {
+    const candidateTokens = collectionRoutesRouteOptimizationTokens(candidate.key);
+    const tokenHits = candidateTokens.reduce((count, token) => count + (rowTokens.has(token) ? 1 : 0), 0);
+    const wasteMatch = row.wasteType && candidate.wasteType && String(row.wasteType).toUpperCase() === String(candidate.wasteType).toUpperCase();
+    const codeMatch = row.wasteCode && candidate.wasteCode && String(row.wasteCode) === String(candidate.wasteCode);
+    const frequencyMatch = row.frequency && candidate.frequency && String(row.frequency) === String(candidate.frequency);
+    const volumeMatch = Number(row.containerVolume) > 0 && Number(row.containerVolume) === Number(candidate.containerVolume);
+    const score = tokenHits * 3 + (wasteMatch ? 2 : 0) + (codeMatch ? 2 : 0) + (frequencyMatch ? 2 : 0) + (volumeMatch ? 1 : 0);
+
+    if (tokenHits > 0 && score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  });
+
+  if (!best || bestScore < 4) {
+    return {
+      status: "Nespárováno",
+      detail: "V Excel řádku není dost společného textu s Vistosem",
+      contractNumber: "-",
+      confidence: "nízká"
+    };
+  }
+
+  return {
+    status: "Možné párování",
+    detail: `${best.contractNumber} · ${best.siteName || best.customerName || "-"}`,
+    contractNumber: best.contractNumber,
+    confidence: bestScore >= 10 ? "vyšší" : "střední"
+  };
+}
+
+function collectionRoutesRouteOptimizationRows() {
+  const rows = Array.isArray(collectionRoutesPilotState.routeOptimizationPreview?.rows)
+    ? collectionRoutesPilotState.routeOptimizationPreview.rows
+    : [];
+  const candidates = collectionRoutesRouteOptimizationVistosCandidates();
+  return rows.map((row) => {
+    const match = collectionRoutesRouteOptimizationMatch(row, candidates);
+    return {
+      ...row,
+      vistosMatchStatus: match.status,
+      vistosMatchDetail: match.detail,
+      vistosMatchContract: match.contractNumber,
+      vistosMatchConfidence: match.confidence
+    };
+  });
+}
+
+function collectionRoutesRouteOptimizationSummaryCards(preview) {
+  if (!preview?.summary) {
+    return "";
+  }
+  const summary = preview.summary;
+  const unsupported = Array.isArray(preview.unsupportedFiles) ? preview.unsupportedFiles : [];
+  return `
+    <div class="collection-routes-stats" aria-label="Stav optimalizačního preview">
+      <article><span>Načtené soubory</span><strong>${collectionRoutesMetricValue(summary.parsedFileCount)}</strong></article>
+      <article><span>Řádky návrhu</span><strong>${collectionRoutesMetricValue(summary.rowCount)}</strong></article>
+      <article><span>Nepodporované .xls</span><strong>${collectionRoutesMetricValue(summary.unsupportedFileCount)}</strong></article>
+      <article><span>Ostré trasy</span><strong>NE</strong></article>
+    </div>
+    ${unsupported.length ? `
+      <p class="module-feedback__notice">${escapeHtml(unsupported.map((file) => `${file.filename}: ${file.reason}`).join(" · "))}</p>
+    ` : ""}
+  `;
+}
+
 function collectionRoutesMetricValue(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -10706,6 +10833,8 @@ function collectionRoutesVistosKommunalSection(user) {
   const issueSummaryRows = collectionRoutesKommunalIssueSummaryRows(metadata);
   const mappingGapRows = collectionRoutesKommunalMappingGapRows(metadata);
   const routeDraftRows = collectionRoutesKommunalRouteDraftRows(metadata);
+  const routeOptimizationPreview = collectionRoutesPilotState.routeOptimizationPreview;
+  const routeOptimizationRows = collectionRoutesRouteOptimizationRows();
   const diagnosticRows = collectionRoutesKommunalFilterDiagnosticRows(metadata);
   const firstContract = contractRows[0] || null;
   const apiStatus = batch?.apiStatus || collectionRoutesPilotState.apiStatus;
@@ -10760,6 +10889,49 @@ function collectionRoutesVistosKommunalSection(user) {
       ${collectionRoutesPilotState.kommunalPreviewDetailError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.kommunalPreviewDetailError)}</p>` : ""}
 
       ${collectionRoutesKommunalIssueOverview(issueSummaryRows, issueCount, hasPreviewData)}
+
+      <div class="collection-routes-phase-note">
+        <strong>Optimalizační náhled z 13 dispečerských Excelů je pouze read-only pilot.</strong>
+        <span>Nahrané soubory se neukládají do databáze ani do prohlížeče. Slouží jen k výpočtu pracovního návrhu Brno/Blansko a párování proti právě načtenému Vistos preview.</span>
+      </div>
+
+      ${canImport ? `
+        <form class="collection-routes-import-form collection-routes-import-form--file" data-collection-routes-route-optimization-form>
+          <label>
+            <span>Excel/CSV trasy dispečinku</span>
+            <input type="file" name="files" accept=".xlsx,.csv,.tsv,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values" multiple>
+          </label>
+          <button class="primary-action" type="submit" ${collectionRoutesPilotState.routeOptimizationLoading ? "disabled" : ""}>
+            ${collectionRoutesPilotState.routeOptimizationLoading ? "Počítám návrh tras..." : "Připravit optimalizační návrh"}
+          </button>
+        </form>
+        <p class="module-feedback__notice">Staré binární .xls soubory prosím před uploadem přeuložit jako .xlsx nebo CSV.</p>
+      ` : `
+        <p class="module-feedback__notice">Optimalizační náhled tras může spustit pouze admin.</p>
+      `}
+
+      ${collectionRoutesPilotState.routeOptimizationMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.routeOptimizationMessage)}</p>` : ""}
+      ${collectionRoutesPilotState.routeOptimizationError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.routeOptimizationError)}</p>` : ""}
+      ${collectionRoutesRouteOptimizationSummaryCards(routeOptimizationPreview)}
+
+      ${collectionRoutesPreviewTable("Optimalizační návrh tras", [
+        { label: "Den", value: (row) => row.suggestedDay },
+        { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
+        { label: "Původní trasa", value: (row) => `${row.sourceRoute || "-"} · ${row.originalDay || "-"} · ${row.originalWeek || "-"}` },
+        { label: "Soubor/řádek", value: (row) => `${row.sourceFile || "-"} #${row.sourceRowNumber || "-"}` },
+        { label: "Skupina", value: (row) => row.optimizationGroup },
+        { label: "Stanoviště / text", value: (row) => row.originalText },
+        { label: "Odpad", value: (row) => `${row.wasteType || "-"}${row.wasteCode ? ` / ${row.wasteCode}` : ""}` },
+        { label: "Četnost", value: (row) => row.frequency },
+        { label: "Nádoba", value: (row) => row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "-" },
+        { label: "Min", value: (row) => row.estimatedServiceMinutes },
+        { label: "t", value: (row) => row.estimatedWeightTons },
+        { label: "Vykládka", value: (row) => row.disposalSite },
+        { label: "Vistos", value: (row) => `${row.vistosMatchStatus || "-"} · ${row.vistosMatchDetail || "-"}` },
+        { label: "Jistota", value: (row) => `${row.confidence || "-"} / ${row.vistosMatchConfidence || "-"}` }
+      ], routeOptimizationRows, "Nahrajte dispečerské trasy uložené jako .xlsx nebo CSV. Náhled zůstane pouze read-only a nevytvoří ostré trasy.", `
+        <button class="secondary-link" type="button" data-collection-routes-export-optimization>Export do Excelu</button>
+      `)}
 
       ${collectionRoutesPreviewTable("Pracovní návrh svozů", [
         { label: "Odpad", value: (row) => `${row.wasteType || "-"}${row.wasteCode ? ` / ${row.wasteCode}` : ""}` },
@@ -12457,6 +12629,57 @@ async function submitCollectionRoutesKommunalPreview(form) {
     }
   } finally {
     collectionRoutesPilotState.kommunalPreviewLoading = false;
+    render();
+  }
+}
+
+async function submitCollectionRoutesRouteOptimizationPreview(form) {
+  const user = currentUser();
+
+  if (!collectionRoutesCanRunImportPreview(user)) {
+    collectionRoutesPilotState.routeOptimizationError = "Optimalizační náhled tras může spustit pouze admin.";
+    collectionRoutesPilotState.routeOptimizationMessage = "";
+    render();
+    return;
+  }
+
+  const fileInput = form.querySelector("input[type='file'][name='files']");
+  const files = Array.from(fileInput?.files || []);
+  if (!files.length) {
+    collectionRoutesPilotState.routeOptimizationError = "Vyberte alespoň jeden .xlsx nebo CSV soubor tras.";
+    collectionRoutesPilotState.routeOptimizationMessage = "";
+    render();
+    return;
+  }
+
+  const formData = new FormData();
+  files.forEach((file, index) => {
+    formData.append(`file-${index + 1}`, file, file.name);
+  });
+
+  collectionRoutesPilotState.routeOptimizationLoading = true;
+  collectionRoutesPilotState.routeOptimizationError = "";
+  collectionRoutesPilotState.routeOptimizationMessage = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/collection-routes/route-optimization-preview", {
+      method: "POST",
+      body: formData
+    });
+    const preview = result.preview || {};
+    const summary = preview.summary || {};
+    collectionRoutesPilotState.routeOptimizationPreview = preview;
+    collectionRoutesPilotState.routeOptimizationMessage =
+      `Optimalizační read-only náhled načetl ${summary.parsedFileCount || 0} souborů a připravil ${summary.rowCount || 0} řádků. Ostré trasy nebyly vytvořené.`;
+    collectionRoutesPilotState.routeOptimizationError = "";
+    collectionRoutesPilotState.activeTab = "vistos-komunal";
+  } catch (error) {
+    collectionRoutesPilotState.routeOptimizationPreview = null;
+    collectionRoutesPilotState.routeOptimizationError = error.payload?.error || error.message || "Optimalizační náhled tras se nepodařilo zpracovat.";
+    collectionRoutesPilotState.routeOptimizationMessage = "";
+  } finally {
+    collectionRoutesPilotState.routeOptimizationLoading = false;
     render();
   }
 }
@@ -14818,6 +15041,72 @@ function collectionRoutesKommunalRouteDraftCsv(rows = []) {
   return `\uFEFF${lines.join("\n")}`;
 }
 
+function collectionRoutesRouteOptimizationCsv(rows = []) {
+  const headers = [
+    "Navržený den",
+    "Vozidlo",
+    "SPZ",
+    "Původní soubor",
+    "List",
+    "Původní řádek",
+    "Původní trasa",
+    "Původní den",
+    "Původní týden",
+    "Optimalizační skupina",
+    "Zdrojový text",
+    "Region",
+    "Odpad",
+    "Kód odpadu",
+    "Četnost",
+    "Počet nádob",
+    "Objem nádoby l",
+    "Odhad minut",
+    "Odhad tun",
+    "Vykládka",
+    "Vistos stav",
+    "Vistos detail",
+    "Vistos smlouva",
+    "Jistota parseru",
+    "Jistota párování",
+    "Důvod",
+    "Ostrá trasa"
+  ];
+  const lines = [
+    "sep=;",
+    collectionRoutesExcelCsvLine(headers),
+    ...rows.map((row) => collectionRoutesExcelCsvLine([
+      row.suggestedDay,
+      row.vehicleCode,
+      row.vehicleRegistration,
+      row.sourceFile,
+      row.sheetName,
+      row.sourceRowNumber,
+      row.sourceRoute,
+      row.originalDay,
+      row.originalWeek,
+      row.optimizationGroup,
+      row.originalText,
+      row.region,
+      row.wasteType,
+      row.wasteCode,
+      row.frequency,
+      row.containerCount,
+      row.containerVolume,
+      row.estimatedServiceMinutes,
+      row.estimatedWeightTons,
+      row.disposalSite,
+      row.vistosMatchStatus,
+      row.vistosMatchDetail,
+      row.vistosMatchContract,
+      row.confidence,
+      row.vistosMatchConfidence,
+      row.reason,
+      "NE"
+    ]))
+  ];
+  return `\uFEFF${lines.join("\n")}`;
+}
+
 function exportCollectionRoutesKommunalMappingGaps() {
   const batch = collectionRoutesLatestBatchByMode("vistos-komunal-preview");
   const rows = collectionRoutesKommunalMappingGapRows(batch?.metadata || {});
@@ -14844,6 +15133,19 @@ function exportCollectionRoutesKommunalRouteDraft() {
 
   const date = new Date().toISOString().slice(0, 10);
   downloadCsv(`vistos-komunal-pracovni-navrh-svozu-${date}.csv`, collectionRoutesKommunalRouteDraftCsv(rows));
+}
+
+function exportCollectionRoutesRouteOptimization() {
+  const rows = collectionRoutesRouteOptimizationRows();
+  if (!rows.length) {
+    collectionRoutesPilotState.routeOptimizationMessage = "";
+    collectionRoutesPilotState.routeOptimizationError = "Není co exportovat pro optimalizační návrh. Nejdřív nahrajte dispečerské trasy jako .xlsx nebo CSV.";
+    render();
+    return;
+  }
+
+  const date = new Date().toISOString().slice(0, 10);
+  downloadCsv(`trasy-svozu-optimalizacni-navrh-${date}.csv`, collectionRoutesRouteOptimizationCsv(rows));
 }
 
 function fleetCsvCell(value) {
@@ -16135,6 +16437,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const collectionRoutesRouteOptimizationForm = event.target.closest("[data-collection-routes-route-optimization-form]");
+  if (collectionRoutesRouteOptimizationForm) {
+    event.preventDefault();
+    await submitCollectionRoutesRouteOptimizationPreview(collectionRoutesRouteOptimizationForm);
+    return;
+  }
+
   const collectionRoutesManualImportForm = event.target.closest("[data-collection-routes-manual-import-form]");
   if (collectionRoutesManualImportForm) {
     event.preventDefault();
@@ -16804,6 +17113,12 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesRouteDraftExport = event.target.closest("[data-collection-routes-export-route-draft]");
   if (collectionRoutesRouteDraftExport) {
     exportCollectionRoutesKommunalRouteDraft();
+    return;
+  }
+
+  const collectionRoutesOptimizationExport = event.target.closest("[data-collection-routes-export-optimization]");
+  if (collectionRoutesOptimizationExport) {
+    exportCollectionRoutesRouteOptimization();
     return;
   }
 

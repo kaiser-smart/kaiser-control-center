@@ -31,6 +31,10 @@ import {
   buildCollectionRoutesManualImportPreview
 } from "../functions/_lib/collection-routes-store.js";
 import {
+  COLLECTION_ROUTE_OPTIMIZATION_MAX_FILE_SIZE_BYTES,
+  buildCollectionRouteOptimizationPreview
+} from "../functions/_lib/collection-route-optimization-preview.js";
+import {
   TcarsClientError,
   loadFleetVehiclesPayload,
   loadTcarsStatusPayload,
@@ -1787,6 +1791,51 @@ async function handleApi(request, response) {
       },
       apiStatus: "not_configured"
     });
+    return true;
+  }
+
+  if (url.pathname === "/api/collection-routes/route-optimization-preview" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+
+    if (normalizeRole(user.role) !== "admin") {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const { files } = await readMultipartFormData(request);
+      const uploadFiles = Array.from(files.values())
+        .filter((file) => file?.buffer?.length)
+        .map((file) => {
+          if (file.buffer.length > COLLECTION_ROUTE_OPTIMIZATION_MAX_FILE_SIZE_BYTES) {
+            const error = new Error(`Soubor ${file.name || ""} je příliš velký. Maximum je 8 MB.`);
+            error.status = 400;
+            throw error;
+          }
+          return {
+            buffer: file.buffer,
+            filename: file.name,
+            contentType: file.type
+          };
+        });
+
+      if (!uploadFiles.length) {
+        sendJson(response, 400, { error: "Nahrajte alespoň jeden Excel/CSV soubor tras." });
+        return true;
+      }
+
+      const preview = await buildCollectionRouteOptimizationPreview({ files: uploadFiles });
+      sendJson(response, 200, { preview, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 400, {
+        error: error.message || "Náhled optimalizace tras se nepodařilo připravit.",
+        apiStatus: "waiting"
+      });
+    }
     return true;
   }
 
