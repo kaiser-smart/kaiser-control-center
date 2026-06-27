@@ -239,14 +239,21 @@ const VISTOS_NON_ROUTE_NEEDLES = [
   "ODBER A PREPRAVA",
   "MANIPULACE",
   "PRIJEM ODPADU",
+  "POSKYTNUTI NADOBY",
+  "VELKOOBJEM",
   "SUD",
   "LAPAK",
+  "LAPOL",
+  "TUKOVY",
   "ODLUCOVAC",
   "OLEJ",
   "ZAOLEJ",
   "EMULZE",
   "BARVY",
   "LAKY",
+  "ROZPOUSTEDL",
+  "INFEKCE",
+  "OBJEMNY ODPAD",
   "ELEKTRO",
   "NEBEZPEC",
   "ABSORPCNI",
@@ -1008,6 +1015,9 @@ function textLooksLikeNonCollectionRouteService(text) {
     return false;
   }
   if (/VYZVA|NAZAVOLANI|DLEPOTREB|NAOBJEDNANI|OBJEDNAVK/.test(compact)) {
+    return true;
+  }
+  if (/(^|\D)(080111|120109|130208|130502|130503|130507|140603|150103|150110|150202|160107|180103|190809|200307)(\D|$)/.test(compact)) {
     return true;
   }
   return VISTOS_NON_ROUTE_NEEDLES.some((needle) => {
