@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.168"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.169"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: přesnější jistý Vistos match",
+    text: "Vistos match nově umí označit jako namapované i podobné Vistos řádky stejného stanoviště, ale jen když sedí konkrétní zákazník, adresa a svozové parametry. Slabé adresové nebo čerpací-staniční shody zůstávají nejasné."
+  },
   {
     title: "Trasy svozu: rychlejší a bezpečnější Vistos match",
     text: "Vistos match pro Svozové trasy počítá nad omezeným indexem kandidátů a staré výsledky čistí až po úspěšném zápisu nové dávky, aby timeout nenechal trasu bez match dat."

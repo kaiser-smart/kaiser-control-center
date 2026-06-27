@@ -12,6 +12,20 @@ const VISTOS_SOURCE_MATCH_MAX_ROWS = 5000;
 const VISTOS_SOURCE_MATCH_MAX_CANDIDATES = 10000;
 const VISTOS_SOURCE_MATCH_MAX_CANDIDATE_POOL = 220;
 const VISTOS_SOURCE_MATCH_COMMON_TOKEN_LIMIT = 550;
+const VISTOS_MATCH_ADDRESS_NOISE_TOKENS = new Set([
+  "CS",
+  "CP",
+  "BENZINA",
+  "OMV",
+  "MOL",
+  "SHELL",
+  "TANK",
+  "ONO",
+  "REST",
+  "RESTAURACE",
+  "PROVOZOVNA",
+  "POBOCKA"
+]);
 const VISTOS_MATCH_STOP_WORDS = new Set([
   "A",
   "I",
@@ -49,7 +63,8 @@ const VISTOS_MATCH_STOP_WORDS = new Set([
   "NADOBA",
   "NADOBY",
   "SVOZ",
-  "ODPAD"
+  "ODPAD",
+  "GROUP"
 ]);
 
 export class CollectionRouteSourcesError extends Error {
@@ -150,6 +165,72 @@ function textTokens(value) {
 
 function tokenSet(value) {
   return new Set(textTokens(value));
+}
+
+function isYearToken(token) {
+  const number = Number(token);
+  return /^\d{4}$/.test(cleanString(token)) && number >= 1900 && number <= 2099;
+}
+
+function isAddressNumberToken(token) {
+  const text = cleanString(token);
+  return Boolean(text && !isYearToken(text) && /^\d+[A-Z]?(?:\/\d+[A-Z]?)?$/.test(text));
+}
+
+function isAddressEvidenceToken(token) {
+  const text = normalizeText(token);
+  if (!text || VISTOS_MATCH_ADDRESS_NOISE_TOKENS.has(text) || isYearToken(text)) {
+    return false;
+  }
+  return /^[A-Z]{4,}$/.test(text) || isAddressNumberToken(text);
+}
+
+function addressEvidenceFromOverlap(overlap = []) {
+  const tokens = overlap.map(normalizeText).filter(isAddressEvidenceToken);
+  const alphaCount = tokens.filter((token) => /^[A-Z]{4,}$/.test(token)).length;
+  const numberCount = tokens.filter(isAddressNumberToken).length;
+  return {
+    tokens,
+    alphaCount,
+    numberCount,
+    hasSpecificAddress: alphaCount >= 2 || (alphaCount >= 1 && numberCount >= 1)
+  };
+}
+
+function hasReliableNameOverlap(overlap = [], context = {}) {
+  if (context.sourceNameLooksAddressOnly) {
+    return false;
+  }
+  const meaningful = overlap
+    .map(normalizeText)
+    .filter((token) => /^[A-Z0-9]+$/.test(token))
+    .filter((token) => !VISTOS_MATCH_ADDRESS_NOISE_TOKENS.has(token))
+    .filter((token) => !isYearToken(token))
+    .filter((token) => !isAddressNumberToken(token));
+  return meaningful.some((token) => token.length >= 5) || meaningful.length >= 2;
+}
+
+function serviceCompatibility(details = {}, context = {}) {
+  const wasteCompatible = !context.sourceWaste || Boolean(details.wasteMatches);
+  const frequencyCompatible = !context.sourceFrequency || Boolean(details.frequencyMatches);
+  const volumeCompatible = !context.sourceContainerVolume || Boolean(details.volumeMatches);
+  return wasteCompatible && frequencyCompatible && volumeCompatible;
+}
+
+function strongMatchEvidence(details = {}, context = {}) {
+  const addressEvidence = addressEvidenceFromOverlap(details.addressOverlap || []);
+  const embeddedAddressEvidence = addressEvidenceFromOverlap(details.nameOverlap || []);
+  const reliableName = hasReliableNameOverlap(details.nameOverlap || [], context);
+  const reliableAddress = addressEvidence.hasSpecificAddress || embeddedAddressEvidence.hasSpecificAddress;
+  const serviceCompatible = serviceCompatibility(details, context);
+  return {
+    reliableName,
+    reliableAddress,
+    serviceCompatible,
+    addressEvidenceTokens: addressEvidence.tokens,
+    embeddedAddressEvidenceTokens: embeddedAddressEvidence.tokens,
+    safeSpecificMatch: reliableName && reliableAddress && serviceCompatible
+  };
 }
 
 function tokenOverlapScore(sourceTokens, candidateTokens) {
@@ -310,6 +391,7 @@ function sourceMatchContext(sourceRow) {
   const sourceName = cleanString(sourceRow.customer_name);
   const sourceAddress = cleanString(sourceRow.address_text);
   const sourceOriginal = cleanString(sourceRow.original_text);
+  const normalizedSourceName = normalizeText(sourceName);
   const sourceAll = [
     sourceName,
     sourceAddress,
@@ -333,7 +415,8 @@ function sourceMatchContext(sourceRow) {
     compactAll: compactText(sourceAll),
     sourceWaste: normalizeMatchWaste(`${sourceRow.waste_type} ${sourceRow.waste_code}`),
     sourceFrequency: normalizeMatchFrequency(sourceRow.frequency),
-    sourceContainerVolume: numericValue(sourceRow.container_volume)
+    sourceContainerVolume: numericValue(sourceRow.container_volume),
+    sourceNameLooksAddressOnly: /^BRNO\b/.test(normalizedSourceName)
   };
 }
 
@@ -431,6 +514,14 @@ function buildVistosSourceMatch(sourceRow, candidates, createdAt, context = sour
   const score = best?.details?.score || 0;
   const secondScore = second?.details?.score || 0;
   const ambiguous = Boolean(best && second && score - secondScore < 8 && secondScore >= 48);
+  const evidence = best ? strongMatchEvidence(best.details, context) : {
+    reliableName: false,
+    reliableAddress: false,
+    serviceCompatible: false,
+    safeSpecificMatch: false
+  };
+  const clearSpecificMatch = Boolean(best && evidence.safeSpecificMatch && score >= 70 && score - secondScore >= 10);
+  const safeAmbiguousMatch = Boolean(best && evidence.safeSpecificMatch && score >= 74);
 
   let status = "nenamapováno";
   let confidence = "žádná";
@@ -439,10 +530,12 @@ function buildVistosSourceMatch(sourceRow, candidates, createdAt, context = sour
     status = sourceIssueStatus;
     confidence = score >= 58 ? "částečná" : "nízká";
     issue = `${cleanString(sourceRow.mapping_issue) || "Zdrojový Excel řádek má datový problém."} Vistos match je jen pomocný údaj.`;
-  } else if (best && score >= 74 && !ambiguous) {
+  } else if (best && ((score >= 74 && (!ambiguous || safeAmbiguousMatch)) || clearSpecificMatch)) {
     status = "namapováno";
-    confidence = "vysoká";
-    issue = "Read-only Vistos match. Zdrojová trasa zůstává podle 13 Excelů.";
+    confidence = ambiguous ? "vysoká se shodným specifickým důkazem" : "vysoká";
+    issue = evidence.safeSpecificMatch && (ambiguous || score < 74)
+      ? "Read-only Vistos match podle konkrétní shody zákazníka, adresy a svozových parametrů. Zdrojová trasa zůstává podle 13 Excelů."
+      : "Read-only Vistos match. Zdrojová trasa zůstává podle 13 Excelů.";
   } else if (best && score >= 48) {
     status = "nejasné";
     confidence = ambiguous ? "nejistá duplicita" : "střední";
@@ -464,6 +557,7 @@ function buildVistosSourceMatch(sourceRow, candidates, createdAt, context = sour
       sourceOriginalMappingIssue: cleanString(sourceRow.mapping_issue),
       score,
       secondScore,
+      matchEvidence: evidence,
       matchDetails: best?.details || null,
       secondCandidate: second ? {
         contractId: second.candidate.contractId,
