@@ -44,6 +44,51 @@ Po návrhu musí napsat:
 
 Bez potvrzení Radima/Martina nesmí implementovat.
 
+#### Bezpečný samostatný koridor po potvrzení
+
+Pokud Radim/Martin po návrhu výslovně potvrdí konkrétní bezpečný cíl, například `souhlas`, `ano`, `pokračuj`, `uprav` nebo `nastav to`, může Codex/vývojář pokračovat samostatně v jednom logickém programovacím celku.
+
+Platí jen pro:
+- read-only analýzu, diagnostiku a ověření,
+- UI nebo textové úpravy bez změny oprávnění,
+- frontend napojení na existující API bez změny API smlouvy,
+- backend/API diagnostiku bez zápisu do produkčních dat,
+- dokumentaci, verzi, changelog a build metadata,
+- commit, push, deploy a ověření buildMeta, pokud prošly kontroly a repo obsahuje jen změny daného úkolu.
+
+Podmínky:
+- cíl a rozsah jsou schválené,
+- nemění se DB/migrace,
+- nemění se Cloudflare secrets/bindings ani citlivé proměnné,
+- nevzniká zápis, mazání ani přepis produkčních/provozních dat,
+- neposílají se SMS/e-maily ani jiné notifikace,
+- nespouští se automatizace, cron, worker, queue ani ostré trasy,
+- nemění se auth, role ani oprávnění,
+- testy/build projdou,
+- repo je před pushem čisté kromě vlastních změn Codexu/vývojáře.
+
+Codex/vývojář musí zastavit a znovu chtít potvrzení, pokud narazí na:
+- DB/migrace,
+- Cloudflare secrets/bindings nebo citlivé proměnné,
+- zápis, mazání nebo přepis produkčních/provozních dat,
+- SMS/e-maily/notifikace,
+- automatizace, cron, worker, queue nebo ostré trasy,
+- auth, role nebo oprávnění,
+- nejasný zdroj pravdy,
+- konflikt v gitu nebo cizí necommitnuté změny,
+- neprošlý test/build,
+- rozpor s touto příručkou.
+
+Mini návrh pro bezpečný koridor:
+
+```text
+Rozsah: read-only/UI/API diagnostika
+Mění DB/secrets/produkční data: NE
+Riziko: nízké
+Test: git diff --check, syntax, build, buildMeta
+Pokračuji samostatně v bezpečném koridoru.
+```
+
 ### 3. Zákaz implementace naslepo
 
 Codex/vývojář nesmí:
@@ -361,6 +406,8 @@ Nesmí se teď dělat:
 ```
 
 Návrh dalšího kroku nesmí automaticky znamenat povolení pokračovat.
+
+Výjimkou z opakovaného čekání je bezpečný samostatný koridor z části `2. Návrh před implementací`, pokud Radim/Martin už potvrdil konkrétní bezpečný cíl a nejsou splněné žádné stop signály.
 
 Pokud další krok mění API, DB, Cloudflare, secrets, produkční data, provozní data, oprávnění, notifikace nebo automatizace, musí Codex/vývojář vyžadovat potvrzení Radima/Martina.
 
@@ -787,6 +834,8 @@ Pokud existují cizí změny, zastav se a upozorni.
 Pracuj samostatně.
 
 Nečekej na potvrzení u každého drobného kroku, pokud zadání není nejasné.
+
+Po potvrzení bezpečného cíle používej bezpečný samostatný koridor z části `2. Návrh před implementací` a dokonči celý ověřitelný celek včetně testů, commitu, pushe a ověření produkční buildMeta, pokud to rozsah umožňuje.
 
 Zastav se pouze když:
 - hrozí ztráta dat,

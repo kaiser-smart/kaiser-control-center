@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.130"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.131"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Příručka: bezpečný samostatný koridor",
+    text: "Pracovní pravidla upřesňují, kdy může Codex po potvrzení rozsahu pokračovat samostatně u nízkorizikových změn a kdy musí znovu zastavit."
+  },
   {
     title: "Trasy svozu: souhrn problemu podle typu",
     text: "Vistos Komunal preview zobrazuje souhrn datovych problemu podle typu s poctem, prioritou a doporucenym postupem pro dalsi cisteni dat."
