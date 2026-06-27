@@ -1510,11 +1510,29 @@ h1 {
   box-shadow: 0 18px 48px rgba(37, 50, 39, 0.08);
 }
 
+.collection-routes-panel > *,
+.collection-routes-panel__head,
+.collection-routes-panel__head > *,
+.collection-routes-phase-note,
+.collection-routes-stats,
+.collection-routes-detail-grid,
+.collection-routes-decision-panel,
+.collection-routes-preview-block {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .collection-routes-panel__head {
   display: flex;
   gap: 14px;
   align-items: flex-start;
   justify-content: space-between;
+}
+
+.collection-routes-panel__head .employee-card-status {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 
 .collection-routes-panel h2 {

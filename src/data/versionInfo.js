@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.140"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.141"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: mobilní šířka Vistos panelu",
+    text: "Panel Vistos Komunál preview drží své bloky a status štítek uvnitř dostupné šířky, aby na mobilu a tabletu nevznikalo vodorovné přetékání."
+  },
   {
     title: "Trasy svozu: odpadní voda mimo trasu",
     text: "Vistos Komunál preview explicitně odděluje odpadní vodu a rozbory mimo aliasy svozových tras, i když mají ve zdrojových datech podobný obchodní text."
