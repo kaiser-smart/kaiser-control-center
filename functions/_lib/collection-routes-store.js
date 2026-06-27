@@ -224,6 +224,7 @@ const WASTE_TYPE_MAP = new Map([
 
 const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "5x7", "1x14", "1x30"]);
 const ALLOWED_CONTAINER_VOLUMES = new Set([60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500]);
+const VISTOS_ROUTE_WASTE_CODES = new Set(["150101", "150102", "150106", "200102", "200108", "200139", "200201", "200301"]);
 const VISTOS_NON_ROUTE_NEEDLES = [
   "DOPRAVA",
   "PREPRAVA",
@@ -1017,7 +1018,8 @@ function textLooksLikeNonCollectionRouteService(text) {
   if (/VYZVA|NAZAVOLANI|DLEPOTREB|NAOBJEDNANI|OBJEDNAVK/.test(compact)) {
     return true;
   }
-  if (/(^|\D)(080111|120109|130208|130502|130503|130507|140603|150103|150110|150202|160107|180103|190809|200307)(\D|$)/.test(compact)) {
+  const wasteCode = compact.match(/(^|\D)(\d{6})(\D|$)/)?.[2] || "";
+  if (wasteCode && !VISTOS_ROUTE_WASTE_CODES.has(wasteCode)) {
     return true;
   }
   return VISTOS_NON_ROUTE_NEEDLES.some((needle) => {
