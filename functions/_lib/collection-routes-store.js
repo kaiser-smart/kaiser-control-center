@@ -1224,6 +1224,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const searchText = productSearchText(contractRow, product);
       const looksOutsideCollectionRoute = textLooksLikeNonCollectionRouteService(searchText);
       const looksLikeCollection = !looksOutsideCollectionRoute && textLooksLikeCollectionService(searchText);
+      const isOutsideCollectionRoute = looksOutsideCollectionRoute || !looksLikeCollection;
       const waste = inferVistosWaste(contractRow, product);
       const frequency = inferVistosFrequency(contractRow, product);
       const container = inferVistosContainer(contractRow, product);
@@ -1234,10 +1235,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       }
       issues.push(...contractRowValidityIssues(contractRow, today));
 
-      if (looksOutsideCollectionRoute) {
+      if (isOutsideCollectionRoute) {
         issues.push({ type: "non-route-contract-row", severity: "info", message: "Položka podle textu patří mimo pravidelnou svozovou trasu." });
-      } else if (!looksLikeCollection) {
-        issues.push({ type: "item-not-collection-mappable", severity: "info", message: "Položka zatím nemá rozpoznaný svozový text pro trasu." });
       } else {
         if (!productId || !product) {
           issues.push({ type: "unknown-product", severity: "warning", message: "Neznámý produkt." });
@@ -1256,9 +1255,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         }
       }
 
-      const routeWaste = looksOutsideCollectionRoute ? { wasteType: "", wasteCode: "" } : waste;
-      const routeFrequency = looksOutsideCollectionRoute ? { frequency: "" } : frequency;
-      const routeContainer = looksOutsideCollectionRoute ? { volume: 0, count: 0, type: "" } : container;
+      const routeWaste = isOutsideCollectionRoute ? { wasteType: "", wasteCode: "" } : waste;
+      const routeFrequency = isOutsideCollectionRoute ? { frequency: "" } : frequency;
+      const routeContainer = isOutsideCollectionRoute ? { volume: 0, count: 0, type: "" } : container;
 
       mappedRows.push({
         rowNumber: mappedRows.length + 1,
@@ -1286,7 +1285,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         productName: firstNonEmpty(product?.Caption, product?.Name, contractRow?.Name),
         rowName: cleanString(contractRow?.Name),
         note: cleanString(contractRow?.Description),
-        mappingStatus: looksOutsideCollectionRoute ? "outside_route" : issues.length ? "needs_review" : "mapped",
+        mappingStatus: isOutsideCollectionRoute ? "outside_route" : issues.length ? "needs_review" : "mapped",
         rowKey: `vistos-contract-${contractId}-row-${cleanString(contractRow?.Id) || productId || mappedRows.length + 1}`,
         siteKey: vistosSiteKey(contract),
         locationQuality: sourceSiteId ? "vistos_unverified" : "missing",

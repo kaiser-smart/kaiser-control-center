@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.138"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.139"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: aliasy jen pro svozové signály",
+    text: "Položky, které samy nevypadají jako pravidelná svozová trasa, se ve Vistos Komunál preview oddělují mimo trasu a nezůstávají v tabulce aliasů."
+  },
   {
     title: "Trasy svozu: běžné svozové kódy v aliasech",
     text: "Tabulka aliasů pro Vistos Komunál preview nechává mezi svozovými texty jen běžné komunál/separát odpady; ostatní katalogové odpady se oddělují mimo svozovou trasu."
