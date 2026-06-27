@@ -2212,6 +2212,7 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
 
 export async function createCollectionRoutesVistosKommunalPreviewExport(env, {
   issueType = "",
+  query = "",
   limit = 5000
 } = {}) {
   const loaded = await loadVistosKommunalPreviewData(env);
@@ -2222,6 +2223,7 @@ export async function createCollectionRoutesVistosKommunalPreviewExport(env, {
 
   const preview = loaded.preview || {};
   const type = cleanString(issueType);
+  const search = cleanString(query).toLowerCase();
   const maxRows = Math.max(1, Math.min(Number(limit) || 5000, 10000));
   const allRows = Array.isArray(preview.rows) ? preview.rows : [];
   const rows = allRows
@@ -2230,6 +2232,38 @@ export async function createCollectionRoutesVistosKommunalPreviewExport(env, {
         return true;
       }
       return (row.issues || []).some((issue) => cleanString(issue?.type) === type);
+    })
+    .filter((row) => {
+      if (!search) {
+        return true;
+      }
+      return [
+        row.sourceId,
+        row.sourceContractId,
+        row.sourceCustomerId,
+        row.sourceSiteId,
+        row.contractId,
+        row.contractRowId,
+        row.productId,
+        row.contractNumber,
+        row.customerName,
+        row.branchName,
+        row.addressRaw,
+        row.siteName,
+        row.wasteType,
+        row.wasteCode,
+        row.frequency,
+        row.containerVolume,
+        row.containerCount,
+        row.containerType,
+        row.productName,
+        row.rowName,
+        row.note,
+        row.mappingStatus,
+        row.rowKey,
+        row.siteKey,
+        row.unitPrice
+      ].some((value) => cleanString(value).toLowerCase().includes(search));
     })
     .slice(0, maxRows);
 
@@ -2241,6 +2275,7 @@ export async function createCollectionRoutesVistosKommunalPreviewExport(env, {
     source: "vistos",
     sourceMode: "vistos-komunal-preview",
     issueType: type,
+    query: search,
     rowCount: rows.length,
     totalPreviewRows: allRows.length,
     createsOperationalRoutes: false,

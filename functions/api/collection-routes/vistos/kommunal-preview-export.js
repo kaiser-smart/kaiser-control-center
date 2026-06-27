@@ -44,6 +44,7 @@ export async function onRequestGet({ request, env }) {
     const url = new URL(request.url);
     const exportPayload = await createCollectionRoutesVistosKommunalPreviewExport(env, {
       issueType: url.searchParams.get("issueType") || "",
+      query: url.searchParams.get("q") || "",
       limit: url.searchParams.get("limit") || 5000
     });
     return json({ export: exportPayload, apiStatus: exportPayload.apiStatus || "ready" });
