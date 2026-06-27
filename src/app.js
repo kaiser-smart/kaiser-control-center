@@ -10010,6 +10010,8 @@ function collectionRoutesVistosKommunalSection(user) {
   const issueRows = collectionRoutesKommunalIssueRows(metadata);
   const firstContract = contractRows[0] || null;
   const apiStatus = batch?.apiStatus || collectionRoutesPilotState.apiStatus;
+  const issueCount = collectionRoutesMetricValue(stats.issues || batch?.issueCount);
+  const issueToneClass = issueCount > 0 ? "collection-routes-stats__item--danger" : "collection-routes-stats__item--ok";
 
   return `
     <section class="collection-routes-panel" id="collection-routes-vistos-komunal" aria-labelledby="collection-routes-vistos-komunal-title">
@@ -10033,7 +10035,7 @@ function collectionRoutesVistosKommunalSection(user) {
         <article><span>Položky</span><strong>${collectionRoutesMetricValue(stats.mappedItems)}</strong></article>
         <article><span>Stanoviště</span><strong>${collectionRoutesMetricValue(stats.sites || batch?.metadata?.siteCount)}</strong></article>
         <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(batch?.metadata?.containerCount)}</strong></article>
-        <article><span>Problémy</span><strong>${collectionRoutesMetricValue(stats.issues || batch?.issueCount)}</strong></article>
+        <article class="${issueToneClass}"><span>Problémy</span><strong>${issueCount}</strong></article>
       </div>
 
       ${canImport ? `
