@@ -1599,6 +1599,24 @@ h1 {
   gap: 10px;
 }
 
+.collection-routes-preview-block__head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.collection-routes-preview-block__head h3 {
+  margin: 0;
+}
+
+.collection-routes-preview-block__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .collection-routes-decision-panel {
   display: grid;
   gap: 12px;
@@ -8396,10 +8414,20 @@ body:has(.ai-assistant-promo-modal) {
   }
 
   .collection-routes-tabs a,
-  .collection-routes-import-form .primary-action {
+  .collection-routes-import-form .primary-action,
+  .collection-routes-preview-block__actions .secondary-link {
     width: 100%;
     justify-content: center;
     text-align: center;
+  }
+
+  .collection-routes-preview-block__head {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-preview-block__actions {
+    justify-content: stretch;
   }
 
   .collection-routes-preview-table {

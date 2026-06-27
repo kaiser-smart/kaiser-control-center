@@ -10537,14 +10537,17 @@ function collectionRoutesImportBatchCards() {
   `;
 }
 
-function collectionRoutesPreviewTable(title, columns, rows, emptyText) {
+function collectionRoutesPreviewTable(title, columns, rows, emptyText, actionsHtml = "") {
   if (!Array.isArray(rows) || !rows.length) {
     return collectionRoutesEmptyState(title, emptyText);
   }
 
   return `
     <div class="collection-routes-preview-block">
-      <h3>${escapeHtml(title)}</h3>
+      <div class="collection-routes-preview-block__head">
+        <h3>${escapeHtml(title)}</h3>
+        ${actionsHtml ? `<div class="collection-routes-preview-block__actions">${actionsHtml}</div>` : ""}
+      </div>
       <div class="collection-routes-preview-table" role="region" aria-label="${escapeHtml(title)}">
         <table>
           <thead>
@@ -10633,7 +10636,9 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Proč to nejde", value: (row) => row.reason },
         { label: "Příklad smlouvy", value: (row) => row.example },
         { label: "Co doplnit", value: (row) => row.action }
-      ], mappingGapRows, "Po dalším načtení preview se zde zobrazí nejčastější Vistos položky, podle kterých doplnit mapovací pravidla.")}
+      ], mappingGapRows, "Po dalším načtení preview se zde zobrazí nejčastější Vistos položky, podle kterých doplnit mapovací pravidla.", `
+        <button class="secondary-link" type="button" data-collection-routes-export-mapping-gaps>Export do Excelu</button>
+      `)}
 
       ${collectionRoutesPreviewTable("Souhrn: co řešit dál", [
         { label: "Co znamená", value: (row) => row.issueLabel },
@@ -14608,6 +14613,45 @@ function downloadCsv(filename, csv) {
   downloadText(filename, csv, "text/csv;charset=utf-8");
 }
 
+function collectionRoutesExcelCsvCell(value) {
+  const text = String(value ?? "").replaceAll('"', '""');
+  return `"${text}"`;
+}
+
+function collectionRoutesExcelCsvLine(values) {
+  return values.map(collectionRoutesExcelCsvCell).join(";");
+}
+
+function collectionRoutesKommunalMappingGapCsv(rows = []) {
+  const headers = ["Text z Vistosu", "Počet", "Proč to nejde", "Příklad smlouvy", "Co doplnit"];
+  const lines = [
+    "sep=;",
+    collectionRoutesExcelCsvLine(headers),
+    ...rows.map((row) => collectionRoutesExcelCsvLine([
+      row.label,
+      row.count,
+      row.reason,
+      row.example,
+      row.action
+    ]))
+  ];
+  return `\uFEFF${lines.join("\n")}`;
+}
+
+function exportCollectionRoutesKommunalMappingGaps() {
+  const batch = collectionRoutesLatestBatchByMode("vistos-komunal-preview");
+  const rows = collectionRoutesKommunalMappingGapRows(batch?.metadata || {});
+  if (!rows.length) {
+    collectionRoutesPilotState.message = "";
+    collectionRoutesPilotState.error = "Není co exportovat. Nejdřív načtěte Vistos Komunál preview.";
+    render();
+    return;
+  }
+
+  const date = new Date().toISOString().slice(0, 10);
+  downloadCsv(`vistos-komunal-vzorky-mapovani-${date}.csv`, collectionRoutesKommunalMappingGapCsv(rows));
+}
+
 function fleetCsvCell(value) {
   const text = String(value ?? "").replaceAll('"', '""');
   return `"${text}"`;
@@ -16554,6 +16598,12 @@ document.addEventListener("click", async (event) => {
   const fleetImportReport = event.target.closest("[data-fleet-import-download-report]");
   if (fleetImportReport) {
     exportFleetImportPreviewCsv();
+    return;
+  }
+
+  const collectionRoutesMappingExport = event.target.closest("[data-collection-routes-export-mapping-gaps]");
+  if (collectionRoutesMappingExport) {
+    exportCollectionRoutesKommunalMappingGaps();
     return;
   }
 
