@@ -373,6 +373,46 @@ Doporuceni:
   - souhlas / typ komunikace
 - Dalsi discovery ma overit konkretni URL napr. `Contact/edit/<id>` proti entite/projekci v API.
 
+## Upozornovaci SMS 15/30/60 minut predem
+
+Stav: budouci pozadavek na Vistos, zatim neexistujici pole.
+
+Upresneni od Radima:
+
+- Pole pro upozornovaci SMS 15/30/60 minut predem se musi ve Vistosu teprve vytvorit.
+- Aktualne se nesmi mapovat jako existujici nebo overene Vistos pole.
+- Kaiser Smart s tim ma pocitat jako s budoucim zdrojem dat.
+
+Doporuceny cilovy model ve Vistosu:
+
+- priznak, zda zakaznik/sluzba chce upozornovaci SMS,
+- typ upozorneni: 15 / 30 / 60 minut predem,
+- kontaktni telefon pro SMS,
+- kontaktni osoba,
+- vazba na smlouvu, sluzbu nebo konkretni stanoviste,
+- informace, zda je kontakt opravnene pouzit pro provozni SMS,
+- datum posledni zmeny,
+- kdo pole naposledy zmenil.
+
+Doporucene rozhodnuti pred implementaci:
+
+- Pokud je SMS nastaveni spolecne pro celou smlouvu, ulozit ho na `Contract`.
+- Pokud se SMS nastaveni lisi podle mista nebo sluzby, ulozit ho radeji na uroven `ContractRow` nebo stanoviste.
+- Pokud se ma SMS posilat ruznym osobam podle stanoviste, musi byt vazba na kontaktni osobu / telefon primo u stanoviste nebo sluzby.
+
+Kaiser Smart mapovani zatim:
+
+- `sms_notice_enabled` = zatim neexistuje ve Vistosu
+- `sms_notice_minutes_json` = zatim neexistuje ve Vistosu
+- `sms_notice_contact_vistos_id` = zatim neexistuje ve Vistosu
+- `sms_notice_phone` = zatim neexistuje jako schvalene zdrojove pole pro tento ucel
+
+Zakazane interpretace:
+
+- Nepouzivat automaticky `Kontaktovatsms` jako potvrzeni pro 15/30/60 minut predem.
+- Nepouzivat libovolny `Mobile` nebo `Phone` bez potvrzene vazby a souhlasu.
+- Netvrdit, ze SMS upozorneni je napojene na Vistos, dokud pole nevznikne a nebude overeno.
+
 ## Zakaznicky manazer a prirazeni
 
 | UI / vyznam | API pole | Poznamka |
@@ -472,6 +512,7 @@ Proto tato pole zatim nepovazovat za povinna.
 
 - Presna vazba kontaktu z URL `Contact/edit/<id>` do API.
 - Kde jsou vyplnene kontaktni osoby pro SMS/e-mail notifikace.
+- Pole pro upozornovaci SMS 15/30/60 minut predem. Podle Radima se musi ve Vistosu teprve vytvorit.
 - Ktera cenova tabulka je v praxi zdrojem ceny u vsech typu smluv.
 - Zda se cetnost vzdy spolehlive vraci ve strukturovanem poli, nebo se musi parsovat z nazvu produktu.
 - Zda `ServiceListItem` lepe odpovida realnym svozovym polozkam nez `ContractRow` u vsech smluv.
@@ -484,6 +525,7 @@ Proto tato pole zatim nepovazovat za povinna.
 4. Najit presne API mapovani kontaktu a vazbu na `Directory` / `DirectoryBranch`.
 5. Overit smlouvu s vice polozkami a vice stanovisti.
 6. Overit aktivni smlouvy Komunal s plnou sadou poli pro svoz.
+7. Po vytvoreni SMS poli ve Vistosu overit jejich technicke nazvy pres `DbColumn`.
 
 ## Zakazane pouziti
 
