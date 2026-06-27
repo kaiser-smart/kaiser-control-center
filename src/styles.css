@@ -1496,6 +1496,11 @@ h1 {
   background: #fff8e8;
 }
 
+.collection-routes-source-review-note {
+  border-color: rgba(88, 104, 130, 0.24);
+  background: #f5f8fb;
+}
+
 .collection-routes-match-status {
   display: grid;
   gap: 10px;
