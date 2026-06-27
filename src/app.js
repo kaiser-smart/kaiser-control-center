@@ -11287,6 +11287,7 @@ function collectionRoutesVistosKommunalSection(user) {
   const routeDailySiteRows = collectionRoutesKommunalDailyDraftSiteRows(routeDailyDraftRows);
   const routeOptimizationPreview = collectionRoutesPilotState.routeOptimizationPreview;
   const routeOptimizationRows = collectionRoutesRouteOptimizationRows();
+  const hasRouteOptimizationRows = routeOptimizationRows.length > 0;
   const diagnosticRows = collectionRoutesKommunalFilterDiagnosticRows(metadata);
   const firstContract = contractRows[0] || null;
   const apiStatus = batch?.apiStatus || collectionRoutesPilotState.apiStatus;
@@ -11318,12 +11319,17 @@ function collectionRoutesVistosKommunalSection(user) {
 
       <div class="collection-routes-source-switch" aria-label="Oddělení zdrojových podkladů a návrhu AI">
         <button class="secondary-link collection-routes-source-switch__link" type="button" data-collection-routes-export-optimization>
-          13 Excelů do Excelu
+          ${hasRouteOptimizationRows ? "13 Excelů do Excelu" : "13 Excelů: nahrát podklady"}
         </button>
         <button class="primary-action collection-routes-source-switch__link" type="button" data-collection-routes-export-daily-draft>
           Optimalizováno AI do Excelu
         </button>
       </div>
+      ${hasRouteOptimizationRows ? `
+        <p class="module-feedback__notice">13 Excelů je připraveno k exportu z právě nahrané historické kalibrace.</p>
+      ` : `
+        <p class="module-feedback__notice">13 Excelů nejsou uložené v aplikaci. Pro export je nejdřív nahrajte níž v části historické kalibrace; provozní návrh dál bere data z Vistosu.</p>
+      `}
 
       <div class="collection-routes-stats" aria-label="Stav Vistos Komunál preview">
         <article><span>Vistos konfigurace</span><strong>${escapeHtml(collectionRoutesApiStatusLabel(apiStatus))}</strong></article>
@@ -15873,14 +15879,22 @@ function exportCollectionRoutesKommunalDailyDraftSites() {
 function exportCollectionRoutesRouteOptimization() {
   const rows = collectionRoutesRouteOptimizationRows();
   if (!rows.length) {
-    collectionRoutesPilotState.routeOptimizationMessage = "";
-    collectionRoutesPilotState.routeOptimizationError = "Není co exportovat pro historickou kalibraci. Pro běžný provoz nejdřív načtěte Vistos; historické Excely nahrávejte jen pro jednorázové porovnání.";
-    render();
+    showCollectionRoutesRouteOptimizationUploadPrompt();
     return;
   }
 
   const date = new Date().toISOString().slice(0, 10);
   downloadCsv(`trasy-svozu-historicka-kalibrace-${date}.csv`, collectionRoutesRouteOptimizationCsv(rows));
+}
+
+function showCollectionRoutesRouteOptimizationUploadPrompt() {
+  collectionRoutesPilotState.routeOptimizationMessage = "13 Excelů nejsou uložené v aplikaci. Nahrajte historické Excel/CSV soubory níž a spusťte porovnání; potom půjde exportovat 13 Excelů do Excelu.";
+  collectionRoutesPilotState.routeOptimizationError = "";
+  render();
+
+  window.requestAnimationFrame(() => {
+    document.getElementById("collection-routes-excel-source")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function fleetCsvCell(value) {
