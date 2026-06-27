@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.124"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.125"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Sledovani vozidel: WIM body v mape",
+    text: "Pevne WIM vahy jsou ve vrstve Sledovani vozidel videt jako samostatne klikaci body v mapovem panelu s detailem mista, stavu a poctu smerovych vah."
+  },
   {
     title: "Trasy svozu: nulovy Vistos preview nesmi prepsat data bez diagnostiky",
     text: "Vistos Komunal preview znovu drzi smlouvy viditelne jako needs_review, pokud selze parovani ContractRow. Prazdny vysledek musi ukazat diagnostiku filtru misto falesneho uspechu."

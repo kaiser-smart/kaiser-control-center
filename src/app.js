@@ -8184,6 +8184,71 @@ function vehicleTrackingWimSummaryItems(summary = {}) {
   ];
 }
 
+function vehicleTrackingWimMapPoint(site = {}, selected = false, bounds = null) {
+  const position = vehicleTrackingTcarsMapPosition(site, bounds);
+  const tone = vehicleTrackingWimStatusTone(site.status);
+  const statusLabel = site.statusLabel || vehicleTrackingWimStatusLabel(site.status);
+  const title = vehicleTrackingWimSiteTooltip(site);
+
+  return `
+    <button
+      class="tracking-wim-map-point tracking-wim-map-point--${escapeHtml(tone)} ${selected ? "tracking-wim-map-point--selected" : ""}"
+      type="button"
+      style="--wim-x: ${position.x.toFixed(2)}%; --wim-y: ${position.y.toFixed(2)}%;"
+      title="${escapeHtml(title)}"
+      aria-label="Vybrat WIM bod ${escapeHtml(vehicleTrackingWimSiteTitle(site))}"
+      aria-pressed="${selected ? "true" : "false"}"
+      data-tracking-wim-select="${escapeHtml(site.id)}"
+      data-tracking-wim-map-point="${escapeHtml(site.id)}"
+    >
+      <span class="tracking-wim-map-point__icon" aria-hidden="true">WIM</span>
+      <strong>${escapeHtml(site.road || "WIM")}</strong>
+      <span>${escapeHtml(site.kmLabel || statusLabel)}</span>
+    </button>
+  `;
+}
+
+function vehicleTrackingWimMapPanel(sites = [], selectedSite = null, options = {}) {
+  const { loading = false, error = "" } = options;
+  const bounds = vehicleTrackingTcarsMapBounds(sites);
+  const selected = selectedSite || vehicleTrackingSelectedWimSite(sites);
+  const mapMessage = error
+    ? "WIM body se nepodarilo nacist z API."
+    : loading
+      ? "Nacitam WIM body z API."
+      : "Klik na bod zobrazi detail pevne WIM vahy.";
+
+  return `
+    <section class="tracking-wim-map-panel" aria-labelledby="tracking-wim-map-title">
+      <div class="tracking-wim-map-panel__head">
+        <div>
+          <h4 id="tracking-wim-map-title">Mapa WIM vah</h4>
+          <p>${escapeHtml(mapMessage)}</p>
+        </div>
+        <span>${escapeHtml(`${sites.length} bodu`)}</span>
+      </div>
+      <div class="tracking-wim-map" aria-label="Mapa pevnych WIM vah jako samostatnych bodu">
+        <div class="tracking-wim-map__country" aria-hidden="true"></div>
+        <span class="tracking-wim-map__label tracking-wim-map__label--praha">Praha</span>
+        <span class="tracking-wim-map__label tracking-wim-map__label--brno">Brno</span>
+        <span class="tracking-wim-map__label tracking-wim-map__label--ostrava">Ostrava</span>
+        <span class="tracking-wim-map__label tracking-wim-map__label--plzen">Plzen</span>
+        ${sites.length ? sites.map((site) => vehicleTrackingWimMapPoint(site, selected?.id === site.id, bounds)).join("") : `
+          <div class="tracking-wim-map-empty">
+            <strong>${escapeHtml(loading ? "Nacitam WIM body." : "Mapa zatim nema WIM body.")}</strong>
+            <span>${escapeHtml(VEHICLE_TRACKING_WIM_WAITING)}</span>
+          </div>
+        `}
+      </div>
+      <div class="tracking-wim-map-legend" aria-label="Legenda stavu WIM bodu">
+        <span><i class="tracking-wim-map-legend__dot tracking-wim-map-legend__dot--active"></i>v provozu</span>
+        <span><i class="tracking-wim-map-legend__dot tracking-wim-map-legend__dot--service"></i>oprava / upgrade</span>
+        <span><i class="tracking-wim-map-legend__dot tracking-wim-map-legend__dot--planned"></i>plan / predvyber</span>
+      </div>
+    </section>
+  `;
+}
+
 function vehicleTrackingWimSiteDetail(site = null) {
   if (!site) {
     return `
@@ -8235,6 +8300,12 @@ function syncVehicleTrackingWimSelectionDom(siteId) {
 
   document.querySelectorAll(".tracking-wim-site-card").forEach((card) => {
     card.classList.toggle("tracking-wim-site-card--selected", card.dataset.trackingWimSelect === siteId);
+  });
+
+  document.querySelectorAll(".tracking-wim-map-point").forEach((point) => {
+    const selected = point.dataset.trackingWimSelect === siteId;
+    point.classList.toggle("tracking-wim-map-point--selected", selected);
+    point.setAttribute("aria-pressed", selected ? "true" : "false");
   });
 
   const detail = document.querySelector("[data-tracking-wim-detail]");
@@ -8522,6 +8593,7 @@ function vehicleTrackingWimLayerPanel() {
       <p class="tracking-wim-source">
         Zdroj: ${escapeHtml(source.label || "MD/RSD PDF mapa, stav k 30. 6. 2025")} · souradnice: ${escapeHtml(source.coordinateQuality || "approximate-needs-verification")}
       </p>
+      ${vehicleTrackingWimMapPanel(sites, selectedSite, { loading, error })}
       <div class="tracking-wim-grid">
         <div class="tracking-wim-list" aria-label="Seznam WIM vah">
           ${sites.length ? sites.map((site) => {
