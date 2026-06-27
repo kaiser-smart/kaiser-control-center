@@ -209,9 +209,13 @@ const WASTE_TYPE_MAP = new Map([
   ["PL", { wasteType: "PLAST", wasteCode: "200139" }],
   ["200139", { wasteType: "PLAST", wasteCode: "200139" }],
   ["150102", { wasteType: "PLAST", wasteCode: "150102" }],
+  ["DREVO", { wasteType: "DREVO", wasteCode: "150103" }],
+  ["150103", { wasteType: "DREVO", wasteCode: "150103" }],
   ["SKLO", { wasteType: "SKLO", wasteCode: "200102" }],
   ["200102", { wasteType: "SKLO", wasteCode: "200102" }],
   ["BIO", { wasteType: "BIO", wasteCode: "200201" }],
+  ["BIOODPAD", { wasteType: "BIO", wasteCode: "200108" }],
+  ["200108", { wasteType: "BIO", wasteCode: "200108" }],
   ["200201", { wasteType: "BIO", wasteCode: "200201" }],
   ["SMESNE OBALY", { wasteType: "SMESNE OBALY", wasteCode: "150106" }],
   ["SMESNEOBALY", { wasteType: "SMESNE OBALY", wasteCode: "150106" }],
@@ -219,7 +223,36 @@ const WASTE_TYPE_MAP = new Map([
 ]);
 
 const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "5x7", "1x14", "1x30"]);
-const ALLOWED_CONTAINER_VOLUMES = new Set([60, 80, 120, 240, 360, 660, 770, 1100]);
+const ALLOWED_CONTAINER_VOLUMES = new Set([60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500]);
+const VISTOS_NON_ROUTE_NEEDLES = [
+  "DOPRAVA",
+  "PREPRAVA",
+  "JIZDNI VYKON",
+  "PRONAJEM",
+  "PORADENSTVI",
+  "ISPOP",
+  "CISTENI",
+  "JIMKA",
+  "CISTERNA",
+  "LABORATOR",
+  "VZOREK",
+  "ODBER A PREPRAVA",
+  "MANIPULACE",
+  "PRIJEM ODPADU",
+  "SUD",
+  "LAPAK",
+  "ODLUCOVAC",
+  "OLEJ",
+  "ZAOLEJ",
+  "EMULZE",
+  "BARVY",
+  "LAKY",
+  "ELEKTRO",
+  "NEBEZPEC",
+  "ABSORPCNI",
+  "FILTRACNI",
+  "KALY"
+];
 
 function safeBase64(value) {
   const text = String(value || "");
@@ -736,6 +769,13 @@ function normalizeWaste(rawWasteType, rawWasteCode) {
 }
 
 function normalizeFrequency(value) {
+  const alias = normalizeFrequencyAlias(value);
+  if (alias) {
+    return {
+      frequency: alias,
+      known: true
+    };
+  }
   const normalized = cleanString(value).toLowerCase().replace(/\s+/g, "").replace("×", "x");
   return {
     frequency: normalized,
@@ -743,10 +783,54 @@ function normalizeFrequency(value) {
   };
 }
 
+function normalizeFrequencyAlias(value) {
+  const normalized = normalizeValueKey(value).replaceAll("×", "X");
+  const compact = normalized.replace(/\s+/g, "");
+  if (!compact) {
+    return "";
+  }
+
+  const direct = compact.match(/([1-5])X(7|14|30)/);
+  if (direct) {
+    return `${direct[1]}x${direct[2]}`;
+  }
+  const weekly = compact.match(/([1-5])X(?:TYDNE|TYDEN|TYD|7DNI|7DEN)/);
+  if (weekly) {
+    return `${weekly[1]}x7`;
+  }
+  if (/KAZDYTYDEN|TYDNE|TYDENNI|1KRATZA7DNI|1KRATTYDNE|1XTYD/.test(compact)) {
+    return "1x7";
+  }
+  if (/2KRATTYDNE|2XTYD|2TYDNE/.test(compact)) {
+    return "2x7";
+  }
+  if (/3KRATTYDNE|3XTYD|3TYDNE/.test(compact)) {
+    return "3x7";
+  }
+  if (/5KRATTYDNE|5XTYD|5TYDNE/.test(compact)) {
+    return "5x7";
+  }
+  if (/14DNI|14DEN|CTRNACTIDEN|CTRNACTIDENNI|OBTYDEN|1X14|1KRATZA14DNI|2TYDNY/.test(compact)) {
+    return "1x14";
+  }
+  if (/MESIC|MESICNE|MESICNI|30DNI|30DEN|1X30|1KRATZAMESIC/.test(compact)) {
+    return "1x30";
+  }
+  return "";
+}
+
 function normalizeContainerVolume(value) {
   const raw = cleanString(value);
-  const preferredVolume = raw.match(/\b(60|80|120|240|360|660|770|1100)\s*(?:l|lt|ltr|litru|litr|litry)?\b/i);
-  const directVolume = raw.match(/^\s*(60|80|120|240|360|660|770|1100)\s*$/);
+  const cubic = raw.match(/\b(\d+(?:[,.]\d+)?)\s*(?:m3|m\s*3|m³|cbm|kubik)\b/i);
+  if (cubic) {
+    const volume = Math.round(Number(cubic[1].replace(",", ".")) * 1000);
+    return {
+      volume,
+      known: Number.isFinite(volume) && ALLOWED_CONTAINER_VOLUMES.has(volume)
+    };
+  }
+  const preferredVolume = raw.match(/\b(60|80|120|240|360|660|770|1100|1500|2500)\s*(?:l|lt|ltr|litru|litr|litry)?\b/i);
+  const directVolume = raw.match(/^\s*(60|80|120|240|360|660|770|1100|1500|2500)\s*$/);
   const match = preferredVolume || directVolume || raw.match(/\d+/);
   const volume = match ? Number(match[1] || match[0]) : 0;
   return {
@@ -900,6 +984,7 @@ function textLooksLikeCollectionService(text) {
     "POPELNICE",
     "POPELNICA",
     "KONTEJNER",
+    "SEPARAT",
     "PAPIR",
     "PLAST",
     "SKLO",
@@ -914,6 +999,22 @@ function textLooksLikeCollectionService(text) {
     "150102"
   ];
   return collectionNeedles.some((needle) => normalized.includes(needle) || compact.includes(needle));
+}
+
+function textLooksLikeNonCollectionRouteService(text) {
+  const normalized = normalizeValueKey(text);
+  const compact = normalized.replace(/\s+/g, "");
+  if (!normalized) {
+    return false;
+  }
+  if (/VYZVA|NAZAVOLANI|DLEPOTREB|NAOBJEDNANI|OBJEDNAVK/.test(compact)) {
+    return true;
+  }
+  return VISTOS_NON_ROUTE_NEEDLES.some((needle) => {
+    const normalizedNeedle = normalizeValueKey(needle);
+    const compactNeedle = normalizedNeedle.replace(/\s+/g, "");
+    return normalized.includes(normalizedNeedle) || compact.includes(compactNeedle);
+  });
 }
 
 function rowHasExplicitLoadingAddress(contract) {
@@ -937,10 +1038,12 @@ function inferVistosWaste(contractRow, product) {
     ["150106", { wasteType: "SMESNE OBALY", wasteCode: "150106" }],
     ["150101", { wasteType: "PAPIR", wasteCode: "150101" }],
     ["150102", { wasteType: "PLAST", wasteCode: "150102" }],
+    ["150103", { wasteType: "DREVO", wasteCode: "150103" }],
     ["200301", { wasteType: "SKO", wasteCode: "200301" }],
     ["200101", { wasteType: "PAPIR", wasteCode: "200101" }],
     ["200139", { wasteType: "PLAST", wasteCode: "200139" }],
     ["200102", { wasteType: "SKLO", wasteCode: "200102" }],
+    ["200108", { wasteType: "BIO", wasteCode: "200108" }],
     ["200201", { wasteType: "BIO", wasteCode: "200201" }],
     ["SKO", { wasteType: "SKO", wasteCode: "200301" }],
     ["SMESNYKOMUNALNI", { wasteType: "SKO", wasteCode: "200301" }],
@@ -952,6 +1055,8 @@ function inferVistosWaste(contractRow, product) {
     ["PLASTY", { wasteType: "PLAST", wasteCode: "200139" }],
     ["SKLO", { wasteType: "SKLO", wasteCode: "200102" }],
     ["BIO", { wasteType: "BIO", wasteCode: "200201" }],
+    ["BIOLOGICKY", { wasteType: "BIO", wasteCode: "200108" }],
+    ["BIOODPAD", { wasteType: "BIO", wasteCode: "200108" }],
     ["SMESNEOBALY", { wasteType: "SMESNE OBALY", wasteCode: "150106" }]
   ];
 
@@ -976,6 +1081,10 @@ function inferVistosFrequency(contractRow, product) {
   }
 
   const text = productSearchText(contractRow, product).replace("×", "x");
+  const textAlias = normalizeFrequency(text);
+  if (textAlias.known) {
+    return textAlias;
+  }
   const match = text.match(/([1235])\s*x\s*(7|14|30)/i);
   if (match) {
     return normalizeFrequency(`${match[1]}x${match[2]}`);
@@ -1091,8 +1200,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         longitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Long),
         issues: [
           ...baseIssues,
-          { type: "missing-contract-items", severity: "warning", message: "Chybí položky smlouvy." },
-          { type: "item-not-collection-mappable", severity: "warning", message: "Položka není mapovatelná na svoz." }
+          { type: "missing-contract-items", severity: "warning", message: "Chybí položky smlouvy." }
         ]
       });
       continue;
@@ -1102,7 +1210,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const productId = cleanString(contractRow?.Product_FK_RecordId || contractRow?.Product_FK);
       const product = productsById.get(productId) || null;
       const searchText = productSearchText(contractRow, product);
-      const looksLikeCollection = textLooksLikeCollectionService(searchText);
+      const looksOutsideCollectionRoute = textLooksLikeNonCollectionRouteService(searchText);
+      const looksLikeCollection = !looksOutsideCollectionRoute && textLooksLikeCollectionService(searchText);
       const waste = inferVistosWaste(contractRow, product);
       const frequency = inferVistosFrequency(contractRow, product);
       const container = inferVistosContainer(contractRow, product);
@@ -1113,8 +1222,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       }
       issues.push(...contractRowValidityIssues(contractRow, today));
 
-      if (!looksLikeCollection) {
-        issues.push({ type: "item-not-collection-mappable", severity: "info", message: "Položka podle dostupných polí nevypadá jako svoz odpadu." });
+      if (looksOutsideCollectionRoute) {
+        issues.push({ type: "non-route-contract-row", severity: "info", message: "Položka podle textu patří mimo pravidelnou svozovou trasu." });
+      } else if (!looksLikeCollection) {
+        issues.push({ type: "item-not-collection-mappable", severity: "info", message: "Položka zatím nemá rozpoznaný svozový text pro trasu." });
       } else {
         if (!productId || !product) {
           issues.push({ type: "unknown-product", severity: "warning", message: "Neznámý produkt." });
@@ -1129,9 +1240,13 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
           issues.push({ type: "missing-container-volume", severity: "warning", message: "Chybí nádoba/objem." });
         }
         if (!waste.known || !frequency.known || !container.known) {
-          issues.push({ type: "item-not-collection-mappable", severity: "warning", message: "Položka není mapovatelná na svoz." });
+          issues.push({ type: "item-not-collection-mappable", severity: "warning", message: "Svozová položka má obchodní text, který zatím nejde převést na trasu." });
         }
       }
+
+      const routeWaste = looksOutsideCollectionRoute ? { wasteType: "", wasteCode: "" } : waste;
+      const routeFrequency = looksOutsideCollectionRoute ? { frequency: "" } : frequency;
+      const routeContainer = looksOutsideCollectionRoute ? { volume: 0, count: 0, type: "" } : container;
 
       mappedRows.push({
         rowNumber: mappedRows.length + 1,
@@ -1150,16 +1265,16 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         branchName,
         addressRaw,
         siteName,
-        wasteType: waste.wasteType,
-        wasteCode: waste.wasteCode,
-        frequency: frequency.frequency,
-        containerVolume: container.volume,
-        containerCount: container.count,
-        containerType: container.type,
+        wasteType: routeWaste.wasteType,
+        wasteCode: routeWaste.wasteCode,
+        frequency: routeFrequency.frequency,
+        containerVolume: routeContainer.volume,
+        containerCount: routeContainer.count,
+        containerType: routeContainer.type,
         productName: firstNonEmpty(product?.Caption, product?.Name, contractRow?.Name),
         rowName: cleanString(contractRow?.Name),
         note: cleanString(contractRow?.Description),
-        mappingStatus: issues.length ? "needs_review" : "mapped",
+        mappingStatus: looksOutsideCollectionRoute ? "outside_route" : issues.length ? "needs_review" : "mapped",
         rowKey: `vistos-contract-${contractId}-row-${cleanString(contractRow?.Id) || productId || mappedRows.length + 1}`,
         siteKey: vistosSiteKey(contract),
         locationQuality: sourceSiteId ? "vistos_unverified" : "missing",
@@ -1493,6 +1608,9 @@ function manualRowSummary(row) {
 
 function kommunalMappingGapReason(issueTypes) {
   const reasons = [];
+  if (issueTypes.has("non-route-contract-row")) {
+    reasons.push("mimo svozovou trasu");
+  }
   if (issueTypes.has("unknown-waste-type")) {
     reasons.push("neznámý typ odpadu");
   }
@@ -1515,11 +1633,14 @@ function kommunalMappingGapReason(issueTypes) {
 }
 
 function kommunalMappingGapAction(issueTypes) {
+  if (issueTypes.has("non-route-contract-row")) {
+    return "Neřešit v mapování tras; položka patří mimo pravidelnou svozovou trasu.";
+  }
   if (issueTypes.has("missing-contract-items")) {
     return "Zkontrolovat, zda má smlouva ve Vistosu svozové položky.";
   }
   if (issueTypes.has("unknown-waste-type") || issueTypes.has("unknown-frequency") || issueTypes.has("missing-container-volume")) {
-    return "Doplnit mapovací pravidlo pro odpad, četnost nebo objem.";
+    return "Doplnit alias obchodního textu pro odpad, četnost nebo objem.";
   }
   if (issueTypes.has("unknown-product")) {
     return "Doplnit produkt do mapování Vistos položek.";
@@ -1533,6 +1654,9 @@ function buildVistosKommunalMappingGapRows(mappedRows) {
   for (const row of mappedRows) {
     const issueTypes = new Set((row.issues || []).map((issue) => cleanString(issue?.type)).filter(Boolean));
     if (!issueTypes.has("item-not-collection-mappable")) {
+      continue;
+    }
+    if (issueTypes.has("non-route-contract-row")) {
       continue;
     }
 

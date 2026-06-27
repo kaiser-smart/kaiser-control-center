@@ -9963,27 +9963,33 @@ const COLLECTION_ROUTES_KOMMUNAL_ISSUE_DEFINITIONS = {
   },
   "unknown-waste-type": {
     label: "Neznámý typ odpadu",
-    priority: "mapování",
-    action: "Doplnit pravidlo pro odpad: komunál, plast, papír, sklo a podobně.",
+    priority: "alias textu",
+    action: "Doplnit alias obchodního textu pro odpad: komunál, plast, papír, sklo a podobně.",
     group: "mapping"
   },
   "unknown-frequency": {
     label: "Neznámá četnost svozu",
-    priority: "mapování",
-    action: "Doplnit pravidlo pro převod textu četnosti na interval svozu.",
+    priority: "alias textu",
+    action: "Doplnit alias obchodního textu četnosti na interval svozu.",
     group: "mapping"
   },
   "missing-container-volume": {
     label: "Chybí objem nádoby",
-    priority: "mapování",
-    action: "Doplnit pravidlo pro rozpoznání objemu nádoby z produktu nebo textu položky.",
+    priority: "alias textu",
+    action: "Doplnit alias obchodního textu pro rozpoznání objemu nádoby.",
     group: "mapping"
   },
   "item-not-collection-mappable": {
-    label: "Položka nejde zařadit jako svoz odpadu",
-    priority: "mapování",
-    action: "Doplnit pravidlo, podle čeho poznat svozovou položku.",
+    label: "Svozová položka má nejasný obchodní text",
+    priority: "alias textu",
+    action: "Doplnit alias pro četnost, objem nebo typ odpadu z textu obchodníka.",
     group: "mapping"
+  },
+  "non-route-contract-row": {
+    label: "Položka je mimo svozovou trasu",
+    priority: "mimo trasu",
+    action: "Neřešit v mapování tras; ponechat mimo Fázi 1E svozové trasy.",
+    group: "outside_route"
   },
   "inactive-contract-range": {
     label: "Smlouva je mimo datum platnosti",
@@ -10095,7 +10101,7 @@ function collectionRoutesKommunalIssueSummaryRows(metadata = {}) {
       };
     })
     .sort((left, right) => {
-      const groupRank = { source: 1, mapping: 1, check: 2, diagnostic: 3 };
+      const groupRank = { source: 1, mapping: 1, check: 2, outside_route: 3, diagnostic: 4 };
       return (groupRank[left.issueGroup] || 4) - (groupRank[right.issueGroup] || 4) ||
         right.count - left.count ||
         left.issueLabel.localeCompare(right.issueLabel, "cs");
@@ -10120,6 +10126,7 @@ function collectionRoutesKommunalIssueOverviewRows(issueSummaryRows = [], issueC
   const mappingAndSourceCount = collectionRoutesKommunalIssueCountByGroup(issueSummaryRows, ["mapping", "source"]);
   const diagnosticCount = collectionRoutesKommunalIssueCountByGroup(issueSummaryRows, ["diagnostic"]);
   const checkCount = collectionRoutesKommunalIssueCountByGroup(issueSummaryRows, ["check"]);
+  const outsideRouteCount = collectionRoutesKommunalIssueCountByGroup(issueSummaryRows, ["outside_route"]);
   const mainActionIssue = issueSummaryRows
     .filter((row) => ["mapping", "source"].includes(row.issueGroup))
     .sort((left, right) => right.count - left.count)[0] || issueSummaryRows[0];
@@ -10135,7 +10142,8 @@ function collectionRoutesKommunalIssueOverviewRows(issueSummaryRows = [], issueC
   return [
     { label: "Stav preview", value: "Funguje", note: "Data se načetla a náhled je použitelný.", tone: "ok" },
     { label: "Blokuje Fázi 1E", value: "NE", note: "Jde o read-only preview, ostré trasy se netvoří.", tone: "ok" },
-    { label: "K řešení pro další fázi", value: mappingAndSourceCount, note: "Mapování a zdrojová data, která dávají smysl čistit dál.", tone: mappingAndSourceCount ? "warning" : "ok" },
+    { label: "K řešení pro trasu", value: mappingAndSourceCount, note: "Aliasy obchodních textů a zdrojová data, která dávají smysl čistit dál.", tone: mappingAndSourceCount ? "warning" : "ok" },
+    { label: "Mimo svozovou trasu", value: outsideRouteCount, note: "Nesvozové nebo jednorázové položky; nepatří do mapování tras.", tone: outsideRouteCount ? "quiet" : "ok" },
     { label: "Neřešit teď", value: diagnosticCount, note: "Jen datumová diagnostika z Vistosu, preview neblokuje.", tone: "quiet" },
     { label: "Ruční kontrola", value: checkCount, note: "Stanoviště a adresní vazby k pozdějšímu ověření.", tone: checkCount ? "warning" : "ok" },
     {
@@ -10151,7 +10159,7 @@ function collectionRoutesKommunalIssueOverviewRows(issueSummaryRows = [], issueC
 function collectionRoutesKommunalIssueOverview(issueSummaryRows = [], issueCount = 0, hasPreviewData = false) {
   const overviewRows = collectionRoutesKommunalIssueOverviewRows(issueSummaryRows, issueCount, hasPreviewData);
   const headline = hasPreviewData
-    ? "Preview funguje. Tabulka níže je seznam toho, co čistit dál, ne seznam blokujících chyb."
+    ? "Preview funguje. Svozové aliasy, zdrojové chyby a položky mimo trasu jsou oddělené."
     : "Po načtení preview se zde zobrazí lidský závěr místo technických kódů.";
 
   return `
@@ -10183,6 +10191,9 @@ function collectionRoutesTextKey(value = "") {
 function collectionRoutesKommunalMappingReason(issueTypes = []) {
   const types = new Set(issueTypes);
   const reasons = [];
+  if (types.has("non-route-contract-row")) {
+    reasons.push("mimo svozovou trasu");
+  }
   if (types.has("unknown-waste-type")) {
     reasons.push("neznámý typ odpadu");
   }
@@ -10206,11 +10217,14 @@ function collectionRoutesKommunalMappingReason(issueTypes = []) {
 
 function collectionRoutesKommunalMappingAction(issueTypes = []) {
   const types = new Set(issueTypes);
+  if (types.has("non-route-contract-row")) {
+    return "Neřešit v mapování tras; položka patří mimo pravidelnou svozovou trasu.";
+  }
   if (types.has("missing-contract-items")) {
     return "Zkontrolovat, zda má smlouva ve Vistosu svozové položky.";
   }
   if (types.has("unknown-waste-type") || types.has("unknown-frequency") || types.has("missing-container-volume")) {
-    return "Doplnit mapovací pravidlo pro odpad, četnost nebo objem.";
+    return "Doplnit alias obchodního textu pro odpad, četnost nebo objem.";
   }
   if (types.has("unknown-product")) {
     return "Doplnit produkt do mapování Vistos položek.";
@@ -10220,17 +10234,19 @@ function collectionRoutesKommunalMappingAction(issueTypes = []) {
 
 function collectionRoutesKommunalMappingGapRows(metadata = {}) {
   if (Array.isArray(metadata.mappingGapRows) && metadata.mappingGapRows.length) {
-    return metadata.mappingGapRows.map((row) => ({
-      label: row.label || "Bez názvu položky",
-      count: collectionRoutesMetricValue(row.count, 0),
-      reason: row.reason || collectionRoutesKommunalMappingReason(row.issueTypes || []),
-      action: row.action || collectionRoutesKommunalMappingAction(row.issueTypes || []),
-      example: Array.isArray(row.sampleContracts) && row.sampleContracts.length
-        ? row.sampleContracts.join(", ")
-        : Array.isArray(row.sampleCustomers) && row.sampleCustomers.length
-          ? row.sampleCustomers.join(", ")
-          : "-"
-    })).slice(0, 30);
+    return metadata.mappingGapRows
+      .filter((row) => !Array.isArray(row.issueTypes) || !row.issueTypes.includes("non-route-contract-row"))
+      .map((row) => ({
+        label: row.label || "Bez názvu položky",
+        count: collectionRoutesMetricValue(row.count, 0),
+        reason: row.reason || collectionRoutesKommunalMappingReason(row.issueTypes || []),
+        action: row.action || collectionRoutesKommunalMappingAction(row.issueTypes || []),
+        example: Array.isArray(row.sampleContracts) && row.sampleContracts.length
+          ? row.sampleContracts.join(", ")
+          : Array.isArray(row.sampleCustomers) && row.sampleCustomers.length
+            ? row.sampleCustomers.join(", ")
+            : "-"
+      })).slice(0, 30);
   }
 
   const rowsByKey = new Map();
@@ -10238,6 +10254,9 @@ function collectionRoutesKommunalMappingGapRows(metadata = {}) {
     const issues = Array.isArray(row.issues) ? row.issues : [];
     const issueTypes = issues.map((issue) => issue.issueType || issue.type).filter(Boolean);
     if (!issueTypes.includes("item-not-collection-mappable")) {
+      return;
+    }
+    if (issueTypes.includes("non-route-contract-row")) {
       return;
     }
     const summary = collectionRoutesImportRowSummary(row);
@@ -10309,7 +10328,7 @@ function collectionRoutesKommunalFilterDiagnosticRows(metadata = {}) {
     {
       label: "Contract použité v preview",
       value: diagnostics.contractsUsedForPreview ?? contractTotals.usedForPreview,
-      note: "Smlouvy ponechané v read-only preview a označené datovými problémy."
+      note: "Smlouvy ponechané v read-only preview a označené upozorněními."
     },
     {
       label: "Contract s napárovanou položkou",
@@ -10344,7 +10363,7 @@ function collectionRoutesKommunalFilterDiagnosticRows(metadata = {}) {
     {
       label: "ContractRow použité v preview",
       value: diagnostics.contractRowsUsedForPreview ?? contractRowTotals.usedForPreview,
-      note: "Řádky ponechané v read-only preview a označené datovými problémy."
+      note: "Řádky ponechané v read-only preview a označené upozorněními."
     },
     {
       label: "Product napárované",
@@ -10381,7 +10400,7 @@ function collectionRoutesKommunalPreviewLoadedMessage(issueCount, mappedItems = 
     return "Preview načteno částečně – některé položky vyžadují kontrolu.";
   }
   if (collectionRoutesMetricValue(issueCount) > 0) {
-    return "Preview načteno. Byly nalezeny datové problémy k vyřešení.";
+    return "Preview načteno. Byla nalezena upozornění k roztřídění.";
   }
   return "Preview načteno.";
 }
@@ -10395,7 +10414,7 @@ function collectionRoutesKommunalPreviewSubmitMessage(summary = {}, apiStatus = 
   const itemCount = collectionRoutesMetricValue(summary.itemCount);
   const issueCount = collectionRoutesMetricValue(summary.issueCount);
   const baseMessage = collectionRoutesKommunalPreviewLoadedMessage(issueCount, itemCount);
-  return `${baseMessage} Smlouvy: ${contractCount}, položky: ${itemCount}, problémy: ${issueCount}. Ostré trasy nebyly vytvořené.`;
+  return `${baseMessage} Smlouvy: ${contractCount}, položky: ${itemCount}, upozornění: ${issueCount}. Ostré trasy nebyly vytvořené.`;
 }
 
 function collectionRoutesKommunalCurrentPreviewState() {
@@ -10622,7 +10641,7 @@ function collectionRoutesVistosKommunalSection(user) {
         <article><span>Položky</span><strong>${collectionRoutesMetricValue(stats.mappedItems)}</strong></article>
         <article><span>Stanoviště</span><strong>${collectionRoutesMetricValue(stats.sites || batch?.metadata?.siteCount)}</strong></article>
         <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(batch?.metadata?.containerCount)}</strong></article>
-        <article class="${issueToneClass}"><span>Problémy</span><strong>${issueCount}</strong></article>
+        <article class="${issueToneClass}"><span>Upozornění</span><strong>${issueCount}</strong></article>
       </div>
 
       ${canImport ? `
@@ -10641,13 +10660,13 @@ function collectionRoutesVistosKommunalSection(user) {
 
       ${collectionRoutesKommunalIssueOverview(issueSummaryRows, issueCount, hasPreviewData)}
 
-      ${collectionRoutesPreviewTable("Vzorky položek k namapování", [
+      ${collectionRoutesPreviewTable("Vzorky svozových textů k aliasům", [
         { label: "Text z Vistosu", value: (row) => row.label },
         { label: "Počet", value: (row) => row.count },
         { label: "Proč to nejde", value: (row) => row.reason },
         { label: "Příklad smlouvy", value: (row) => row.example },
         { label: "Co doplnit", value: (row) => row.action }
-      ], mappingGapRows, "Po dalším načtení preview se zde zobrazí nejčastější Vistos položky, podle kterých doplnit mapovací pravidla.", `
+      ], mappingGapRows, "Po dalším načtení preview se zde zobrazí svozové položky, kde obchodní text potřebuje alias pro četnost, objem nebo odpad.", `
         <button class="secondary-link" type="button" data-collection-routes-export-mapping-gaps>Export do Excelu</button>
       `)}
 
@@ -14634,7 +14653,7 @@ function collectionRoutesExcelCsvLine(values) {
 }
 
 function collectionRoutesKommunalMappingGapCsv(rows = []) {
-  const headers = ["Text z Vistosu", "Počet", "Proč to nejde", "Příklad smlouvy", "Co doplnit"];
+  const headers = ["Svozový text z Vistosu", "Počet", "Co chybí", "Příklad smlouvy", "Jaký alias doplnit"];
   const lines = [
     "sep=;",
     collectionRoutesExcelCsvLine(headers),
@@ -14654,7 +14673,7 @@ function exportCollectionRoutesKommunalMappingGaps() {
   const rows = collectionRoutesKommunalMappingGapRows(batch?.metadata || {});
   if (!rows.length) {
     collectionRoutesPilotState.message = "";
-    collectionRoutesPilotState.error = "Není co exportovat. Nejdřív klikněte na Načíst aktivní Komunál smlouvy z Vistosu.";
+    collectionRoutesPilotState.error = "Není co exportovat pro aliasy. Nejdřív načtěte Vistos preview nebo ověřte, že v něm zůstaly svozové texty k doplnění.";
     render();
     return;
   }
