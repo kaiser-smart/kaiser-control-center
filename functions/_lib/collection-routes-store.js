@@ -1912,7 +1912,8 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
   locationNote,
   message,
   metadata = {},
-  persistRowsLimit = null
+  persistRowsLimit = null,
+  derivedRowsLimit = null
 }) {
   const db = collectionRoutesDatabase(env, true);
   const createdAt = nowIso();
@@ -1921,7 +1922,11 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
   const maxPersistRows = Number.isFinite(Number(persistRowsLimit)) && Number(persistRowsLimit) >= 0
     ? Math.floor(Number(persistRowsLimit))
     : null;
+  const maxDerivedRows = Number.isFinite(Number(derivedRowsLimit)) && Number(derivedRowsLimit) >= 0
+    ? Math.floor(Number(derivedRowsLimit))
+    : null;
   const rowsToPersist = maxPersistRows === null ? preview.rows : preview.rows.slice(0, maxPersistRows);
+  const rowsToDerive = maxDerivedRows === null ? rowsToPersist : rowsToPersist.slice(0, maxDerivedRows);
   const metadataJson = {
     phase,
     mode,
@@ -1937,6 +1942,8 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
     routeDraftRows: preview.routeDraftRows,
     persistedRowCount: rowsToPersist.length,
     persistedRowsLimit: maxPersistRows,
+    derivedRowCount: rowsToDerive.length,
+    derivedRowsLimit: maxDerivedRows,
     createsOperationalRoutes: false,
     sendsEmailOrSms: false,
     startsAutomation: false,
@@ -1977,8 +1984,40 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
       )
       .run();
 
-    for (const row of rowsToPersist) {
-      const rowId = randomId("collection-import-row");
+    const importRowRecords = rowsToPersist.map((row) => ({
+      id: randomId("collection-import-row"),
+      row,
+      importSourceId: cleanString(row.sourceId) || row.rowKey || `manual-row-${row.rowNumber}`
+    }));
+
+    for (let index = 0; index < importRowRecords.length; index += 100) {
+      const chunk = importRowRecords.slice(index, index + 100);
+      await db.batch(chunk.map((record) => db.prepare(`
+        INSERT INTO collection_import_rows (
+          id,
+          batch_id,
+          row_number,
+          source_entity,
+          source_id,
+          status,
+          summary_json,
+          issues_json,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, 'preview', ?, ?, ?)
+      `).bind(
+        record.id,
+        batchId,
+        record.row.rowNumber,
+        record.row.sourceEntity || sourceEntity,
+        record.importSourceId,
+        jsonString(manualRowSummary(record.row)),
+        jsonString(record.row.issues || []),
+        createdAt
+      )));
+    }
+
+    for (const row of rowsToDerive) {
       const importSourceId = cleanString(row.sourceId) || row.rowKey || `manual-row-${row.rowNumber}`;
       let siteId = "";
 
@@ -2055,33 +2094,6 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
         siteId = siteIds.get(row.siteKey) || "";
       }
 
-      await db
-        .prepare(`
-          INSERT INTO collection_import_rows (
-            id,
-            batch_id,
-            row_number,
-            source_entity,
-            source_id,
-            status,
-            summary_json,
-            issues_json,
-            created_at
-          )
-          VALUES (?, ?, ?, ?, ?, 'preview', ?, ?, ?)
-        `)
-        .bind(
-          rowId,
-          batchId,
-          row.rowNumber,
-          row.sourceEntity || sourceEntity,
-          importSourceId,
-          jsonString(manualRowSummary(row)),
-          jsonString(row.issues),
-          createdAt
-        )
-        .run();
-
       let serviceId = null;
       if (siteId && row.wasteType) {
         serviceId = randomId("collection-service");
@@ -2153,7 +2165,7 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
           .run();
       }
 
-      for (const issue of row.issues) {
+      for (const issue of row.issues || []) {
         await db
           .prepare(`
             INSERT INTO collection_data_issues (
@@ -2381,7 +2393,8 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
     metadata: {
       filter: VISTOS_KOMUNAL_CONTRACT_FILTER
     },
-    persistRowsLimit: VISTOS_KOMUNAL_PERSIST_ROWS_LIMIT
+    persistRowsLimit: VISTOS_KOMUNAL_PERSIST_ROWS_LIMIT,
+    derivedRowsLimit: 250
   });
 }
 
