@@ -10,8 +10,13 @@ function collectionRoutesError(error) {
     return json({ error: error.message, code: error.code, apiStatus: "waiting" }, error.status);
   }
 
-  console.error("collection_routes.vistos_kommunal_preview_failed", { message: error.message });
-  return json({ error: "Vistos Komunál preview se teď nepodařilo spustit.", apiStatus: "waiting" }, 500);
+  const detail = String(error?.message || "").slice(0, 240);
+  console.error("collection_routes.vistos_kommunal_preview_failed", { message: detail });
+  return json({
+    error: "Vistos Komunál preview se teď nepodařilo spustit.",
+    detail: detail || "Neznámá chyba backendu.",
+    apiStatus: "waiting"
+  }, 500);
 }
 
 async function requireCollectionRoutesAdmin(env, request) {

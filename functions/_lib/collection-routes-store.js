@@ -778,8 +778,31 @@ function isoDateValue(value) {
     return "";
   }
 
-  const match = text.match(/\d{4}-\d{2}-\d{2}/);
-  return match ? match[0] : text.slice(0, 10);
+  const isoMatch = text.match(/\d{4}-\d{2}-\d{2}/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+
+  const czechMatch = text.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (czechMatch) {
+    const [, day, month, year] = czechMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const vistosTicks = text.match(/\/Date\((-?\d+)/i);
+  if (vistosTicks) {
+    const date = new Date(Number(vistosTicks[1]));
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString().slice(0, 10);
+    }
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return "";
 }
 
 function dateInActiveRange(startDate, endDate, today = new Date()) {
