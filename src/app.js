@@ -606,6 +606,8 @@ const collectionRoutesPilotState = {
   routeOptimizationPreview: null,
   routeOptimizationError: "",
   routeOptimizationMessage: "",
+  routeOptimizationSelectedDay: "PO",
+  routeOptimizationSelectedVehicle: "A",
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -10837,12 +10839,51 @@ function collectionRoutesRouteOptimizationEnrichment(row, match) {
   };
 }
 
+function collectionRoutesRouteOptimizationSourceKey(row = {}) {
+  return [
+    row.sourceFile,
+    row.sheetName,
+    row.sourceRowNumber,
+    row.originalText
+  ].map((value) => String(value ?? "").trim()).join("|");
+}
+
+function collectionRoutesRouteOptimizationShouldReplaceSourceRow(current = {}, candidate = {}) {
+  const currentOriginalDay = String(current.originalDay || "");
+  const candidateOriginalDay = String(candidate.originalDay || "");
+  const currentMatchesOriginalDay = currentOriginalDay && currentOriginalDay !== "-" && current.suggestedDay === currentOriginalDay;
+  const candidateMatchesOriginalDay = candidateOriginalDay && candidateOriginalDay !== "-" && candidate.suggestedDay === candidateOriginalDay;
+
+  if (candidateMatchesOriginalDay && !currentMatchesOriginalDay) {
+    return true;
+  }
+  if (!candidateMatchesOriginalDay && currentMatchesOriginalDay) {
+    return false;
+  }
+  return collectionRoutesDailyDraftDayRank(candidate.suggestedDay) < collectionRoutesDailyDraftDayRank(current.suggestedDay);
+}
+
+function collectionRoutesRouteOptimizationDeduplicateSourceRows(rows = []) {
+  const rowsBySource = new Map();
+  rows.forEach((row) => {
+    const key = collectionRoutesRouteOptimizationSourceKey(row);
+    if (!key || !rowsBySource.has(key) || collectionRoutesRouteOptimizationShouldReplaceSourceRow(rowsBySource.get(key), row)) {
+      rowsBySource.set(key, row);
+    }
+  });
+  return Array.from(rowsBySource.values()).sort((left, right) => (
+    String(left.sourceFile || "").localeCompare(String(right.sourceFile || ""), "cs") ||
+    String(left.sheetName || "").localeCompare(String(right.sheetName || ""), "cs") ||
+    collectionRoutesMetricValue(left.sourceRowNumber) - collectionRoutesMetricValue(right.sourceRowNumber)
+  ));
+}
+
 function collectionRoutesRouteOptimizationRows() {
   const rows = Array.isArray(collectionRoutesPilotState.routeOptimizationPreview?.rows)
     ? collectionRoutesPilotState.routeOptimizationPreview.rows
     : [];
   const candidates = collectionRoutesRouteOptimizationVistosCandidates();
-  return rows.map((row) => {
+  const enrichedRows = rows.map((row) => {
     const match = collectionRoutesRouteOptimizationMatch(row, candidates);
     const enrichment = collectionRoutesRouteOptimizationEnrichment(row, match);
     return {
@@ -10875,6 +10916,188 @@ function collectionRoutesRouteOptimizationRows() {
       vistosDifferences: enrichment.vistosDifferences
     };
   });
+  return collectionRoutesRouteOptimizationDeduplicateSourceRows(enrichedRows);
+}
+
+function collectionRoutesRouteOptimizationDayLabel(dayCode = "") {
+  return COLLECTION_ROUTES_DAILY_DRAFT_DAYS.find((day) => day.code === dayCode)?.label || dayCode || "-";
+}
+
+function collectionRoutesRouteOptimizationVehicleOption(vehicleCode = "") {
+  return COLLECTION_ROUTES_DAILY_DRAFT_VEHICLES.find((vehicle) => vehicle.code === vehicleCode) ||
+    COLLECTION_ROUTES_DAILY_DRAFT_VEHICLES[0];
+}
+
+function collectionRoutesRouteOptimizationSelectedDay(rows = []) {
+  const selected = collectionRoutesPilotState.routeOptimizationSelectedDay || "PO";
+  const available = new Set(rows.map((row) => row.suggestedDay).filter(Boolean));
+  if (!available.size || available.has(selected)) {
+    return selected;
+  }
+  if (available.has("PO")) {
+    return "PO";
+  }
+  return COLLECTION_ROUTES_DAILY_DRAFT_DAYS.find((day) => available.has(day.code))?.code || selected;
+}
+
+function collectionRoutesRouteOptimizationSelectedVehicle() {
+  const selected = collectionRoutesPilotState.routeOptimizationSelectedVehicle || "A";
+  return COLLECTION_ROUTES_DAILY_DRAFT_VEHICLES.some((vehicle) => vehicle.code === selected) ? selected : "A";
+}
+
+function collectionRoutesRouteOptimizationRouteSort(left, right) {
+  return (
+    collectionRoutesDailyDraftDayRank(left.suggestedDay) - collectionRoutesDailyDraftDayRank(right.suggestedDay) ||
+    String(left.vehicleCode || "").localeCompare(String(right.vehicleCode || ""), "cs") ||
+    String(left.region || "").localeCompare(String(right.region || ""), "cs") ||
+    String(left.disposalSite || "").localeCompare(String(right.disposalSite || ""), "cs") ||
+    String(left.resolvedWasteType || left.wasteType || "").localeCompare(String(right.resolvedWasteType || right.wasteType || ""), "cs") ||
+    String(left.resolvedFrequency || left.frequency || "").localeCompare(String(right.resolvedFrequency || right.frequency || ""), "cs") ||
+    collectionRoutesMetricValue(left.resolvedContainerVolume || left.containerVolume) - collectionRoutesMetricValue(right.resolvedContainerVolume || right.containerVolume) ||
+    String(left.sourceRoute || "").localeCompare(String(right.sourceRoute || ""), "cs") ||
+    String(left.sourceFile || "").localeCompare(String(right.sourceFile || ""), "cs") ||
+    collectionRoutesMetricValue(left.sourceRowNumber) - collectionRoutesMetricValue(right.sourceRowNumber)
+  );
+}
+
+function collectionRoutesRouteOptimizationWithRouteOrder(rows = []) {
+  const counters = new Map();
+  return [...rows]
+    .sort(collectionRoutesRouteOptimizationRouteSort)
+    .map((row) => {
+      const key = `${row.suggestedDay || "-"}|${row.vehicleCode || "-"}`;
+      const nextOrder = (counters.get(key) || 0) + 1;
+      counters.set(key, nextOrder);
+      return {
+        ...row,
+        aiRouteOrder: nextOrder,
+        aiDayLabel: collectionRoutesRouteOptimizationDayLabel(row.suggestedDay),
+        aiVehicleLabel: collectionRoutesRouteOptimizationVehicleOption(row.vehicleCode)?.label || row.vehicleCode || "-"
+      };
+    });
+}
+
+function collectionRoutesRouteOptimizationFilteredRouteRows(rows = []) {
+  const selectedDay = collectionRoutesRouteOptimizationSelectedDay(rows);
+  const selectedVehicle = collectionRoutesRouteOptimizationSelectedVehicle();
+  return collectionRoutesRouteOptimizationWithRouteOrder(rows).filter((row) => (
+    row.suggestedDay === selectedDay && row.vehicleCode === selectedVehicle
+  ));
+}
+
+function collectionRoutesRouteOptimizationRouteSummary(rows = []) {
+  return rows.reduce((summary, row) => {
+    summary.rowCount += 1;
+    summary.containerCount += collectionRoutesMetricValue(row.resolvedContainerCount || row.containerCount, 0);
+    summary.minutes += collectionRoutesMetricValue(row.estimatedServiceMinutes, 0);
+    summary.tons = Math.round((summary.tons + collectionRoutesMetricValue(row.estimatedWeightTons, 0)) * 1000) / 1000;
+    if (["Spárováno", "Doplněno z Vistosu", "Rozdíl proti Vistosu"].includes(row.vistosMatchStatus)) {
+      summary.pairedCount += 1;
+    }
+    return summary;
+  }, {
+    rowCount: 0,
+    containerCount: 0,
+    minutes: 0,
+    tons: 0,
+    pairedCount: 0
+  });
+}
+
+function collectionRoutesRouteOptimizationDayOptions(rows = []) {
+  const counts = rows.reduce((map, row) => {
+    const day = row.suggestedDay || "";
+    if (day) {
+      map.set(day, (map.get(day) || 0) + 1);
+    }
+    return map;
+  }, new Map());
+  return COLLECTION_ROUTES_DAILY_DRAFT_DAYS.map((day) => ({
+    value: day.code,
+    label: counts.has(day.code) ? `${day.label} (${counts.get(day.code)})` : day.label
+  }));
+}
+
+function collectionRoutesRouteOptimizationVehicleOptions(rows = [], dayCode = "") {
+  const counts = rows.reduce((map, row) => {
+    if (dayCode && row.suggestedDay !== dayCode) {
+      return map;
+    }
+    const vehicle = row.vehicleCode || "";
+    if (vehicle) {
+      map.set(vehicle, (map.get(vehicle) || 0) + 1);
+    }
+    return map;
+  }, new Map());
+  return COLLECTION_ROUTES_DAILY_DRAFT_VEHICLES.map((vehicle) => ({
+    value: vehicle.code,
+    label: counts.has(vehicle.code) ? `${vehicle.label} (${counts.get(vehicle.code)})` : vehicle.label
+  }));
+}
+
+function collectionRoutesRouteOptimizationAiRouteSection(rows = []) {
+  const selectedDay = collectionRoutesRouteOptimizationSelectedDay(rows);
+  const selectedVehicle = collectionRoutesRouteOptimizationSelectedVehicle();
+  const vehicle = collectionRoutesRouteOptimizationVehicleOption(selectedVehicle);
+  const routeRows = collectionRoutesRouteOptimizationFilteredRouteRows(rows);
+  const summary = collectionRoutesRouteOptimizationRouteSummary(routeRows);
+  const title = `Optimalizováno AI: ${collectionRoutesRouteOptimizationDayLabel(selectedDay)} / ${vehicle?.label || selectedVehicle}`;
+
+  return `
+    <div class="collection-routes-phase-note collection-routes-source-block collection-routes-source-block--ai" id="collection-routes-optimized-ai-route">
+      <strong>Optimalizováno AI je pracovní trasa složená 1:1 z nahraných 13 Excelů, doplněná párováním z Vistosu.</strong>
+      <span>Řádky níže pochází z historických Excelů a drží původní soubor, list, řádek i text. AI pouze navrhuje den, vozidlo a pracovní pořadí. Nejde o ostrou trasu, navigaci ani automatizaci.</span>
+    </div>
+
+    <div class="collection-routes-route-filter" aria-label="Filtr trasy Optimalizováno AI z 13 Excelů">
+      <label>
+        <span>Den</span>
+        <select data-collection-routes-optimized-day-filter>
+          ${collectionRoutesRouteOptimizationDayOptions(rows).map((option) => `
+            <option value="${escapeHtml(option.value)}" ${option.value === selectedDay ? "selected" : ""}>${escapeHtml(option.label)}</option>
+          `).join("")}
+        </select>
+      </label>
+      <label>
+        <span>Vozidlo</span>
+        <select data-collection-routes-optimized-vehicle-filter>
+          ${collectionRoutesRouteOptimizationVehicleOptions(rows, selectedDay).map((option) => `
+            <option value="${escapeHtml(option.value)}" ${option.value === selectedVehicle ? "selected" : ""}>${escapeHtml(option.label)}</option>
+          `).join("")}
+        </select>
+      </label>
+    </div>
+
+    <div class="collection-routes-stats" aria-label="Souhrn vybrané trasy Optimalizováno AI">
+      <article><span>Den</span><strong>${escapeHtml(collectionRoutesRouteOptimizationDayLabel(selectedDay))}</strong></article>
+      <article><span>Vozidlo</span><strong>${escapeHtml(vehicle?.label || selectedVehicle)}</strong></article>
+      <article><span>Položky</span><strong>${collectionRoutesMetricValue(summary.rowCount)}</strong></article>
+      <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(summary.containerCount)}</strong></article>
+      <article><span>Minuty</span><strong>${collectionRoutesMetricValue(summary.minutes)}</strong></article>
+      <article><span>Tuny</span><strong>${collectionRoutesMetricValue(summary.tons)}</strong></article>
+      <article><span>Vistos párování</span><strong>${collectionRoutesMetricValue(summary.pairedCount)}</strong></article>
+      <article><span>Ostrá trasa</span><strong>NE</strong></article>
+    </div>
+
+    ${collectionRoutesPreviewTable(title, [
+      { label: "Pořadí", value: (row) => row.aiRouteOrder },
+      { label: "Soubor/řádek", value: (row) => `${row.sourceFile || "-"} #${row.sourceRowNumber || "-"}` },
+      { label: "Původní trasa", value: (row) => `${row.sourceRoute || "-"} · ${row.originalDay || "-"} · ${row.originalWeek || "-"}` },
+      { label: "Stanoviště / adresa", value: (row) => collectionRoutesRouteOptimizationValue(row.vistosSiteName) || collectionRoutesRouteOptimizationValue(row.vistosAddressRaw) || collectionRoutesRouteOptimizationValue(row.vistosCustomerName) || "-" },
+      { label: "Smlouva", value: (row) => row.vistosMatchContract || "-" },
+      { label: "Odpad", value: (row) => `${row.resolvedWasteType || row.wasteType || "-"}${(row.resolvedWasteCode || row.wasteCode) && (row.resolvedWasteCode || row.wasteCode) !== "-" ? ` / ${row.resolvedWasteCode || row.wasteCode}` : ""}` },
+      { label: "Četnost", value: (row) => row.resolvedFrequency || row.frequency || "-" },
+      { label: "Nádoba", value: (row) => collectionRoutesRouteOptimizationContainerLabel(row.resolvedContainerCount || row.containerCount, row.resolvedContainerVolume || row.containerVolume) },
+      { label: "Původní text", value: (row) => row.originalText },
+      { label: "Kontrola", value: (row) => `${row.vistosMatchStatus || "-"} · ${row.qualityStatus || "-"}` },
+      { label: "Ostrá trasa", value: () => "NE" }
+    ], routeRows, rows.length
+      ? "Pro vybraný den a vozidlo nejsou v nahraných 13 Excelech žádné řádky. Zkuste jiný den/vozidlo."
+      : "Nejdřív nahrajte 13 historických Excelů; bez nich nejde zobrazit trasu 1:1.",
+    `
+      <button class="secondary-link" type="button" data-collection-routes-export-optimized-selected-route>Vybranou trasu do Excelu</button>
+    `)}
+  `;
 }
 
 function collectionRoutesRouteOptimizationContainerLabel(count, volume) {
@@ -10936,7 +11159,7 @@ function collectionRoutesRouteOptimizationSummaryCards(preview, rows = []) {
   return `
     <div class="collection-routes-stats" aria-label="Stav optimalizačního preview">
       <article><span>Načtené soubory</span><strong>${collectionRoutesMetricValue(summary.parsedFileCount)}</strong></article>
-      <article><span>Řádky návrhu</span><strong>${collectionRoutesMetricValue(summary.rowCount)}</strong></article>
+      <article><span>Řádky 1:1</span><strong>${collectionRoutesMetricValue(rows.length || summary.rowCount)}</strong></article>
       <article><span>OK řádky</span><strong>${collectionRoutesMetricValue(qualityCounts.ok)}</strong></article>
       <article><span>Čeká na Vistos</span><strong>${collectionRoutesMetricValue(qualityCounts.needs_vistos_mapping)}</strong></article>
       <article><span>Vistos zdroj</span><strong>${escapeHtml(candidateSource)}</strong></article>
@@ -11321,14 +11544,14 @@ function collectionRoutesVistosKommunalSection(user) {
         <button class="secondary-link collection-routes-source-switch__link" type="button" data-collection-routes-export-optimization>
           ${hasRouteOptimizationRows ? "13 Excelů do Excelu" : "13 Excelů: nahrát podklady"}
         </button>
-        <button class="primary-action collection-routes-source-switch__link" type="button" data-collection-routes-export-daily-draft>
+        <button class="primary-action collection-routes-source-switch__link" type="button" data-collection-routes-export-optimized-excel>
           Optimalizováno AI do Excelu
         </button>
       </div>
       ${hasRouteOptimizationRows ? `
-        <p class="module-feedback__notice">13 Excelů je připraveno k exportu z právě nahrané historické kalibrace.</p>
+        <p class="module-feedback__notice">13 Excelů je připraveno k exportu. Optimalizováno AI používá stejné Excel řádky 1:1 a jen je řadí do pracovních tras podle dne a vozidla.</p>
       ` : `
-        <p class="module-feedback__notice">13 Excelů nejsou uložené v aplikaci. Pro export je nejdřív nahrajte níž v části historické kalibrace; provozní návrh dál bere data z Vistosu.</p>
+        <p class="module-feedback__notice">13 Excelů nejsou uložené v aplikaci. Pro export 13 Excelů i Optimalizováno AI je nejdřív nahrajte níž v části historické kalibrace.</p>
       `}
 
       <div class="collection-routes-stats" aria-label="Stav Vistos Komunál preview">
@@ -11359,11 +11582,11 @@ function collectionRoutesVistosKommunalSection(user) {
       ${collectionRoutesKommunalIssueOverview(issueSummaryRows, issueCount, hasPreviewData)}
 
       <div class="collection-routes-phase-note collection-routes-source-block collection-routes-source-block--ai" id="collection-routes-ai-draft">
-        <strong>Optimalizováno AI je odvozený read-only výpočet z Vistos dat, ne zdrojová tabulka a ne ostrá navigační trasa.</strong>
-        <span>Vychází z mapovatelných položek Vistos preview a rozpadá četnosti do pracovních dnů pro vozidla A 3BN 3558, B 1BP 8373 a C 3BE 2831. Může navrhovat den, vozidlo nebo skupinu jinak než historický Excel. Vzorky stanovišť níže jsou kontrolní podklad z dostupných metadat; úplný seznam zastávek a pořadí patří do další fáze.</span>
+        <strong>Vistos-only pilot je samostatný read-only výpočet z Vistos dat, ne zdroj 13 Excelů a ne ostrá navigační trasa.</strong>
+        <span>Vychází z mapovatelných položek Vistos preview a rozpadá četnosti do pracovních dnů pro vozidla A 3BN 3558, B 1BP 8373 a C 3BE 2831. Slouží jako kontrola Vistos dat; konkrétní Optimalizováno AI trasa z 13 Excelů je níž v části historické kalibrace.</span>
       </div>
 
-      ${collectionRoutesPreviewTable("Optimalizováno AI: souhrn denního rozpadu z Vistosu", [
+      ${collectionRoutesPreviewTable("Vistos-only pilot: souhrn denního rozpadu z Vistosu", [
         { label: "Den", value: (row) => row.dayLabel || row.dayCode },
         { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
         { label: "Skupiny", value: (row) => row.routeGroupCount },
@@ -11373,11 +11596,11 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Položky", value: (row) => row.itemCount },
         { label: "Zátěž", value: (row) => row.loadScore },
         { label: "Ostrá trasa", value: () => "NE" }
-      ], routeDailySummaryRows, "Po načtení Vistos preview se zde zobrazí AI kapacitní denní rozpad pro vozidla A/B/C. Není to zdrojový Excel ani ostrá trasa.", `
+      ], routeDailySummaryRows, "Po načtení Vistos preview se zde zobrazí kapacitní denní rozpad pro vozidla A/B/C. Není to zdrojový Excel ani ostrá trasa.", `
         <button class="secondary-link" type="button" data-collection-routes-export-daily-draft>Export do Excelu</button>
       `)}
 
-      ${collectionRoutesPreviewTable("Optimalizováno AI: denní svozy z Vistosu", [
+      ${collectionRoutesPreviewTable("Vistos-only pilot: denní svozy z Vistosu", [
         { label: "Den", value: (row) => row.dayLabel || row.dayCode },
         { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
         { label: "Odpad", value: (row) => `${row.wasteType || "-"}${row.wasteCode ? ` / ${row.wasteCode}` : ""}` },
@@ -11389,11 +11612,11 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Zátěž", value: (row) => row.loadScore },
         { label: "Příklad stanoviště", value: (row) => Array.isArray(row.sampleSites) && row.sampleSites.length ? row.sampleSites.join(", ") : "-" },
         { label: "Ostrá trasa", value: () => "NE" }
-      ], routeDailyDraftRows, "Po načtení Vistos preview se zde zobrazí první read-only AI rozpad svozových skupin. Nejde o původní pořadí Excelů ani finální pořadí zastávek.", `
+      ], routeDailyDraftRows, "Po načtení Vistos preview se zde zobrazí první read-only rozpad svozových skupin. Nejde o původní pořadí Excelů ani finální pořadí zastávek.", `
         <button class="secondary-link" type="button" data-collection-routes-export-daily-draft>Export do Excelu</button>
       `)}
 
-      ${collectionRoutesPreviewTable("Optimalizováno AI: vzorky stanovišť k dennímu rozpadu", [
+      ${collectionRoutesPreviewTable("Vistos-only pilot: vzorky stanovišť k dennímu rozpadu", [
         { label: "Den", value: (row) => row.dayLabel || row.dayCode },
         { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
         { label: "Stanoviště", value: (row) => row.siteName },
@@ -11403,11 +11626,11 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Příklad smlouvy", value: (row) => Array.isArray(row.sampleContracts) && row.sampleContracts.length ? row.sampleContracts.join(", ") : "-" },
         { label: "Zdroj", value: () => "Vistos routeDraftRows" },
         { label: "Ostrá trasa", value: () => "NE" }
-      ], routeDailySiteRows, "Po načtení Vistos preview se zde zobrazí dostupné vzorky stanovišť pod Optimalizováno AI. Nejde o úplný navigační seznam zastávek.", `
+      ], routeDailySiteRows, "Po načtení Vistos preview se zde zobrazí dostupné vzorky stanovišť z Vistos-only pilotu. Nejde o úplný navigační seznam zastávek.", `
         <button class="secondary-link" type="button" data-collection-routes-export-daily-sites>Export do Excelu</button>
       `)}
 
-      ${collectionRoutesPreviewTable("Optimalizováno AI: pracovní svozové skupiny z Vistosu", [
+      ${collectionRoutesPreviewTable("Vistos-only pilot: pracovní svozové skupiny z Vistosu", [
         { label: "Odpad", value: (row) => `${row.wasteType || "-"}${row.wasteCode ? ` / ${row.wasteCode}` : ""}` },
         { label: "Četnost", value: (row) => row.frequency },
         { label: "Nádoba", value: (row) => row.containerVolume ? `${row.containerVolume} l` : "-" },
@@ -11416,7 +11639,7 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Položky", value: (row) => row.itemCount },
         { label: "Příklad stanoviště", value: (row) => Array.isArray(row.sampleSites) && row.sampleSites.length ? row.sampleSites.join(", ") : "-" },
         { label: "Příklad smlouvy", value: (row) => Array.isArray(row.sampleContracts) && row.sampleContracts.length ? row.sampleContracts.join(", ") : "-" }
-      ], routeDraftRows, "Po načtení Vistos preview se zde zobrazí hlavní read-only výpočet Optimalizováno AI z mapovatelných položek. Tohle je budoucí provozní směr, ne opis Excelů.", `
+      ], routeDraftRows, "Po načtení Vistos preview se zde zobrazí read-only výpočet z mapovatelných Vistos položek. Tohle není opis 13 Excelů.", `
         <button class="secondary-link" type="button" data-collection-routes-export-route-draft>Export do Excelu</button>
       `)}
 
@@ -11443,6 +11666,8 @@ function collectionRoutesVistosKommunalSection(user) {
       ${collectionRoutesPilotState.routeOptimizationMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.routeOptimizationMessage)}</p>` : ""}
       ${collectionRoutesPilotState.routeOptimizationError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.routeOptimizationError)}</p>` : ""}
       ${collectionRoutesRouteOptimizationSummaryCards(routeOptimizationPreview, routeOptimizationRows)}
+
+      ${collectionRoutesRouteOptimizationAiRouteSection(routeOptimizationRows)}
 
       ${collectionRoutesPreviewTable("13 Excelů: historická kalibrace a párování", [
         { label: "AI den", value: (row) => row.suggestedDay },
@@ -15708,6 +15933,7 @@ function collectionRoutesRouteOptimizationCsv(rows = []) {
     "AI navržený den",
     "AI vozidlo",
     "SPZ",
+    "AI pořadí v trase",
     "Původní soubor",
     "List",
     "Původní řádek",
@@ -15764,6 +15990,7 @@ function collectionRoutesRouteOptimizationCsv(rows = []) {
       row.suggestedDay,
       row.vehicleCode,
       row.vehicleRegistration,
+      row.aiRouteOrder,
       row.sourceFile,
       row.sheetName,
       row.sourceRowNumber,
@@ -15876,6 +16103,39 @@ function exportCollectionRoutesKommunalDailyDraftSites() {
   downloadCsv(`vistos-komunal-vzorky-stanovist-denni-navrh-${date}.csv`, collectionRoutesKommunalDailyDraftSitesCsv(rows));
 }
 
+function exportCollectionRoutesOptimizedExcel() {
+  const rows = collectionRoutesRouteOptimizationWithRouteOrder(collectionRoutesRouteOptimizationRows());
+  if (!rows.length) {
+    showCollectionRoutesRouteOptimizationUploadPrompt("Pro export Optimalizováno AI nejdřív nahrajte 13 historických Excel/CSV souborů. AI export potom použije stejné řádky 1:1 a doplní den, vozidlo a pracovní pořadí.");
+    return;
+  }
+
+  const date = new Date().toISOString().slice(0, 10);
+  downloadCsv(`trasy-svozu-optimalizovano-ai-13-excelu-${date}.csv`, collectionRoutesRouteOptimizationCsv(rows));
+}
+
+function exportCollectionRoutesOptimizedSelectedRoute() {
+  const allRows = collectionRoutesRouteOptimizationRows();
+  const rows = collectionRoutesRouteOptimizationFilteredRouteRows(allRows);
+  if (!allRows.length) {
+    showCollectionRoutesRouteOptimizationUploadPrompt("Pro zobrazení a export vybrané trasy nejdřív nahrajte 13 historických Excel/CSV souborů.");
+    return;
+  }
+  if (!rows.length) {
+    const day = collectionRoutesRouteOptimizationDayLabel(collectionRoutesRouteOptimizationSelectedDay(allRows));
+    const vehicle = collectionRoutesRouteOptimizationVehicleOption(collectionRoutesRouteOptimizationSelectedVehicle());
+    collectionRoutesPilotState.routeOptimizationMessage = "";
+    collectionRoutesPilotState.routeOptimizationError = `Pro vybranou kombinaci ${day} / ${vehicle?.label || "-"} nejsou v nahraných 13 Excelech žádné řádky.`;
+    render();
+    return;
+  }
+
+  const date = new Date().toISOString().slice(0, 10);
+  const day = collectionRoutesRouteOptimizationSelectedDay(allRows).toLowerCase();
+  const vehicle = collectionRoutesRouteOptimizationSelectedVehicle().toLowerCase();
+  downloadCsv(`trasy-svozu-optimalizovano-ai-${day}-${vehicle}-${date}.csv`, collectionRoutesRouteOptimizationCsv(rows));
+}
+
 function exportCollectionRoutesRouteOptimization() {
   const rows = collectionRoutesRouteOptimizationRows();
   if (!rows.length) {
@@ -15887,8 +16147,8 @@ function exportCollectionRoutesRouteOptimization() {
   downloadCsv(`trasy-svozu-historicka-kalibrace-${date}.csv`, collectionRoutesRouteOptimizationCsv(rows));
 }
 
-function showCollectionRoutesRouteOptimizationUploadPrompt() {
-  collectionRoutesPilotState.routeOptimizationMessage = "13 Excelů nejsou uložené v aplikaci. Nahrajte historické Excel/CSV soubory níž a spusťte porovnání; potom půjde exportovat 13 Excelů do Excelu.";
+function showCollectionRoutesRouteOptimizationUploadPrompt(message = "13 Excelů nejsou uložené v aplikaci. Nahrajte historické Excel/CSV soubory níž a spusťte porovnání; potom půjde exportovat 13 Excelů do Excelu.") {
+  collectionRoutesPilotState.routeOptimizationMessage = message;
   collectionRoutesPilotState.routeOptimizationError = "";
   render();
 
@@ -17388,6 +17648,20 @@ document.addEventListener("change", (event) => {
     return;
   }
 
+  const collectionRoutesOptimizedDayFilter = event.target.closest("[data-collection-routes-optimized-day-filter]");
+  if (collectionRoutesOptimizedDayFilter) {
+    collectionRoutesPilotState.routeOptimizationSelectedDay = collectionRoutesOptimizedDayFilter.value || "PO";
+    render();
+    return;
+  }
+
+  const collectionRoutesOptimizedVehicleFilter = event.target.closest("[data-collection-routes-optimized-vehicle-filter]");
+  if (collectionRoutesOptimizedVehicleFilter) {
+    collectionRoutesPilotState.routeOptimizationSelectedVehicle = collectionRoutesOptimizedVehicleFilter.value || "A";
+    render();
+    return;
+  }
+
   const employeeCardSelect = event.target.closest("[data-employee-card-select]");
   if (employeeCardSelect) {
     const nextEmployeeId = employeeCardSelect.value;
@@ -17874,6 +18148,18 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesDailySitesExport = event.target.closest("[data-collection-routes-export-daily-sites]");
   if (collectionRoutesDailySitesExport) {
     exportCollectionRoutesKommunalDailyDraftSites();
+    return;
+  }
+
+  const collectionRoutesOptimizedExcelExport = event.target.closest("[data-collection-routes-export-optimized-excel]");
+  if (collectionRoutesOptimizedExcelExport) {
+    exportCollectionRoutesOptimizedExcel();
+    return;
+  }
+
+  const collectionRoutesOptimizedSelectedRouteExport = event.target.closest("[data-collection-routes-export-optimized-selected-route]");
+  if (collectionRoutesOptimizedSelectedRouteExport) {
+    exportCollectionRoutesOptimizedSelectedRoute();
     return;
   }
 

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.161"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.162"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: Optimalizováno AI z 13 Excelů 1:1",
+    text: "Optimalizováno AI nově ukazuje konkrétní trasu podle dne a vozidla z nahraných 13 Excelů, drží původní soubor/řádek/text a odděluje Vistos-only pilot od Excel optimalizace."
+  },
   {
     title: "Trasy svozu: 13 Excelů už nevypadá jako mrtvé tlačítko",
     text: "Tlačítko 13 Excelů teď jasně ukáže, že historické Excel podklady nejsou uložené v aplikaci, a bez nahraných dat přesune uživatele rovnou k jednorázové kalibraci."

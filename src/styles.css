@@ -1765,6 +1765,39 @@ h1 {
   font-weight: 600;
 }
 
+.collection-routes-route-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.collection-routes-route-filter label {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 220px);
+  color: var(--steel);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.collection-routes-route-filter select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid rgba(66, 80, 74, 0.16);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+}
+
+.collection-routes-route-filter select:focus {
+  outline: 3px solid rgba(117, 194, 29, 0.22);
+  border-color: rgba(117, 194, 29, 0.65);
+}
+
 .collection-routes-list {
   display: grid;
   gap: 10px;
