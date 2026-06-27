@@ -9936,76 +9936,127 @@ function collectionRoutesKommunalIssueRows(metadata = {}) {
   }));
 }
 
-function collectionRoutesKommunalIssueAction(issueType = "", severity = "warning") {
+const COLLECTION_ROUTES_KOMMUNAL_ISSUE_DEFINITIONS = {
+  "missing-customer": {
+    label: "Chybí zákazník u smlouvy",
+    priority: "zdrojová data",
+    action: "Opravit zákazníka ve Vistosu před dalším mapováním.",
+    group: "source"
+  },
+  "missing-loading-address": {
+    label: "Chybí svozová adresa",
+    priority: "zdrojová data",
+    action: "Doplnit adresu stanoviště ve Vistosu.",
+    group: "source"
+  },
+  "missing-contract-items": {
+    label: "Smlouva nemá položky",
+    priority: "zdrojová data",
+    action: "Zkontrolovat smlouvu ve Vistosu, preview z ní nemá co mapovat.",
+    group: "source"
+  },
+  "unknown-product": {
+    label: "Neznámý produkt z Vistosu",
+    priority: "mapování",
+    action: "Doplnit pravidlo, jak produkt převést na svoz odpadu.",
+    group: "mapping"
+  },
+  "unknown-waste-type": {
+    label: "Neznámý typ odpadu",
+    priority: "mapování",
+    action: "Doplnit pravidlo pro odpad: komunál, plast, papír, sklo a podobně.",
+    group: "mapping"
+  },
+  "unknown-frequency": {
+    label: "Neznámá četnost svozu",
+    priority: "mapování",
+    action: "Doplnit pravidlo pro převod textu četnosti na interval svozu.",
+    group: "mapping"
+  },
+  "missing-container-volume": {
+    label: "Chybí objem nádoby",
+    priority: "mapování",
+    action: "Doplnit pravidlo pro rozpoznání objemu nádoby z produktu nebo textu položky.",
+    group: "mapping"
+  },
+  "item-not-collection-mappable": {
+    label: "Položka nejde zařadit jako svoz odpadu",
+    priority: "mapování",
+    action: "Doplnit pravidlo, podle čeho poznat svozovou položku.",
+    group: "mapping"
+  },
+  "inactive-contract-range": {
+    label: "Smlouva je mimo datum platnosti",
+    priority: "diagnostika",
+    action: "Neřešit teď. Je to jen datová kontrola, Fázi 1E neblokuje.",
+    group: "diagnostic"
+  },
+  "inactive-contract-row-flag": {
+    label: "Položka je ve Vistosu neaktivní",
+    priority: "diagnostika",
+    action: "Neřešit teď. Preview ji ponechává jen kvůli kontrole dat.",
+    group: "diagnostic"
+  },
+  "future-contract-row-start-date": {
+    label: "Položka začne platit až v budoucnu",
+    priority: "diagnostika",
+    action: "Neřešit teď. Je to datumová kontrola, ne tvrdý filtr preview.",
+    group: "diagnostic"
+  },
+  "expired-contract-row-end-date": {
+    label: "Položka má prošlé datum platnosti",
+    priority: "diagnostika",
+    action: "Neřešit teď. Je to datumová kontrola, ne tvrdý filtr preview.",
+    group: "diagnostic"
+  },
+  "missing-contract-row-start-date": {
+    label: "Chybí datum začátku položky",
+    priority: "diagnostika",
+    action: "Neřešit teď. Chybějící datum Fázi 1E neblokuje.",
+    group: "diagnostic"
+  },
+  "multiple-sites-contract": {
+    label: "Smlouva má více možných stanovišť",
+    priority: "kontrola",
+    action: "Ručně zkontrolovat vazbu smlouvy na stanoviště.",
+    group: "check"
+  },
+  "possible-site-duplicate": {
+    label: "Možná duplicita stanoviště",
+    priority: "kontrola",
+    action: "Ručně zkontrolovat stanoviště a adresní vazbu.",
+    group: "check"
+  }
+};
+
+function collectionRoutesKommunalIssueDefinition(issueType = "", severity = "warning") {
   const type = String(issueType || "").trim();
-
-  if ([
-    "missing-customer",
-    "missing-loading-address",
-    "missing-contract-items"
-  ].includes(type)) {
-    return "Opravit zdrojová data ve Vistosu.";
+  const definition = COLLECTION_ROUTES_KOMMUNAL_ISSUE_DEFINITIONS[type];
+  if (definition) {
+    return definition;
   }
-
-  if ([
-    "unknown-product",
-    "unknown-waste-type",
-    "unknown-frequency",
-    "missing-container-volume",
-    "item-not-collection-mappable"
-  ].includes(type)) {
-    return "Doplnit mapovací pravidla preview.";
-  }
-
-  if ([
-    "inactive-contract-range",
-    "inactive-contract-row-flag",
-    "future-contract-row-start-date",
-    "expired-contract-row-end-date",
-    "missing-contract-row-start-date"
-  ].includes(type)) {
-    return "Ponechat jako datovou kontrolu, neblokuje Fázi 1E.";
-  }
-
-  if ([
-    "multiple-sites-contract",
-    "possible-site-duplicate"
-  ].includes(type)) {
-    return "Zkontrolovat stanoviště a adresní vazby.";
-  }
-
   if (severity === "error") {
-    return "Prověřit zdrojová data před dalším mapováním.";
+    return {
+      label: "Datová chyba ve Vistosu",
+      priority: "zdrojová data",
+      action: "Prověřit zdrojová data před dalším mapováním.",
+      group: "source"
+    };
   }
+  return {
+    label: "Jiný datový problém",
+    priority: "kontrola",
+    action: "Zařadit do následné datové kontroly.",
+    group: "check"
+  };
+}
 
-  return "Zařadit do následné datové kontroly.";
+function collectionRoutesKommunalIssueAction(issueType = "", severity = "warning") {
+  return collectionRoutesKommunalIssueDefinition(issueType, severity).action;
 }
 
 function collectionRoutesKommunalIssuePriority(issueType = "", severity = "warning") {
-  const type = String(issueType || "").trim();
-  if (severity === "error" || ["missing-customer", "missing-loading-address"].includes(type)) {
-    return "vysoká";
-  }
-  if ([
-    "unknown-product",
-    "unknown-waste-type",
-    "unknown-frequency",
-    "missing-container-volume",
-    "item-not-collection-mappable",
-    "missing-contract-items"
-  ].includes(type)) {
-    return "mapování";
-  }
-  if ([
-    "inactive-contract-range",
-    "inactive-contract-row-flag",
-    "future-contract-row-start-date",
-    "expired-contract-row-end-date",
-    "missing-contract-row-start-date"
-  ].includes(type)) {
-    return "diagnostika";
-  }
-  return severity || "info";
+  return collectionRoutesKommunalIssueDefinition(issueType, severity).priority;
 }
 
 function collectionRoutesKommunalIssueSummaryRows(metadata = {}) {
@@ -10028,16 +10079,98 @@ function collectionRoutesKommunalIssueSummaryRows(metadata = {}) {
     }, []);
 
   return sourceRows
-    .map((row) => ({
-      issueType: row.issueType || row.type || "data_issue",
-      count: collectionRoutesMetricValue(row.count, 0),
-      severity: row.severity || "warning",
-      priority: collectionRoutesKommunalIssuePriority(row.issueType || row.type, row.severity),
-      action: collectionRoutesKommunalIssueAction(row.issueType || row.type, row.severity),
-      message: row.message || "Datový problém import preview."
-    }))
-    .sort((left, right) => right.count - left.count)
+    .map((row) => {
+      const issueType = row.issueType || row.type || "data_issue";
+      const severity = row.severity || "warning";
+      const definition = collectionRoutesKommunalIssueDefinition(issueType, severity);
+      return {
+        issueType,
+        issueLabel: definition.label,
+        issueGroup: definition.group,
+        count: collectionRoutesMetricValue(row.count, 0),
+        severity,
+        priority: definition.priority,
+        action: definition.action,
+        message: row.message || "Datový problém import preview."
+      };
+    })
+    .sort((left, right) => {
+      const groupRank = { source: 1, mapping: 1, check: 2, diagnostic: 3 };
+      return (groupRank[left.issueGroup] || 4) - (groupRank[right.issueGroup] || 4) ||
+        right.count - left.count ||
+        left.issueLabel.localeCompare(right.issueLabel, "cs");
+    })
     .slice(0, 50);
+}
+
+function collectionRoutesKommunalIssueCountByGroup(issueSummaryRows = [], groups = []) {
+  const allowedGroups = new Set(groups);
+  return issueSummaryRows.reduce((sum, row) => {
+    if (!allowedGroups.has(row.issueGroup)) {
+      return sum;
+    }
+    return sum + collectionRoutesMetricValue(row.count, 0);
+  }, 0);
+}
+
+function collectionRoutesKommunalIssueOverviewRows(issueSummaryRows = [], issueCount = 0, hasPreviewData = false) {
+  const totalIssues = collectionRoutesMetricValue(
+    issueCount || issueSummaryRows.reduce((sum, row) => sum + collectionRoutesMetricValue(row.count, 0), 0)
+  );
+  const mappingAndSourceCount = collectionRoutesKommunalIssueCountByGroup(issueSummaryRows, ["mapping", "source"]);
+  const diagnosticCount = collectionRoutesKommunalIssueCountByGroup(issueSummaryRows, ["diagnostic"]);
+  const checkCount = collectionRoutesKommunalIssueCountByGroup(issueSummaryRows, ["check"]);
+  const mainActionIssue = issueSummaryRows
+    .filter((row) => ["mapping", "source"].includes(row.issueGroup))
+    .sort((left, right) => right.count - left.count)[0] || issueSummaryRows[0];
+
+  if (!hasPreviewData) {
+    return [
+      { label: "Stav preview", value: "Čeká na načtení", note: "Spusťte read-only načtení z Vistosu.", tone: "waiting" },
+      { label: "Blokuje Fázi 1E", value: "-", note: "Vyhodnotí se po načtení dat.", tone: "waiting" },
+      { label: "K řešení dál", value: "-", note: "Zatím nejsou načtená data.", tone: "waiting" }
+    ];
+  }
+
+  return [
+    { label: "Stav preview", value: "Funguje", note: "Data se načetla a náhled je použitelný.", tone: "ok" },
+    { label: "Blokuje Fázi 1E", value: "NE", note: "Jde o read-only preview, ostré trasy se netvoří.", tone: "ok" },
+    { label: "K řešení pro další fázi", value: mappingAndSourceCount, note: "Mapování a zdrojová data, která dávají smysl čistit dál.", tone: mappingAndSourceCount ? "warning" : "ok" },
+    { label: "Neřešit teď", value: diagnosticCount, note: "Jen datumová diagnostika z Vistosu, preview neblokuje.", tone: "quiet" },
+    { label: "Ruční kontrola", value: checkCount, note: "Stanoviště a adresní vazby k pozdějšímu ověření.", tone: checkCount ? "warning" : "ok" },
+    {
+      label: "Největší problém",
+      value: mainActionIssue ? `${collectionRoutesMetricValue(mainActionIssue.count)}x` : "0",
+      note: mainActionIssue ? mainActionIssue.issueLabel : "Bez mapovacích problémů.",
+      tone: mainActionIssue ? "warning" : "ok"
+    },
+    { label: "Celkem upozornění", value: totalIssues, note: "Součet technických upozornění, ne počet blokujících chyb.", tone: totalIssues ? "quiet" : "ok" }
+  ];
+}
+
+function collectionRoutesKommunalIssueOverview(issueSummaryRows = [], issueCount = 0, hasPreviewData = false) {
+  const overviewRows = collectionRoutesKommunalIssueOverviewRows(issueSummaryRows, issueCount, hasPreviewData);
+  const headline = hasPreviewData
+    ? "Preview funguje. Tabulka níže je seznam toho, co čistit dál, ne seznam blokujících chyb."
+    : "Po načtení preview se zde zobrazí lidský závěr místo technických kódů.";
+
+  return `
+    <div class="collection-routes-decision-panel" aria-label="Co z Vistos Komunál preview plyne">
+      <div class="collection-routes-decision-panel__head">
+        <span>Co z toho plyne</span>
+        <strong>${escapeHtml(headline)}</strong>
+      </div>
+      <div class="collection-routes-decision-grid">
+        ${overviewRows.map((row) => `
+          <div class="collection-routes-decision-item collection-routes-decision-item--${escapeHtml(row.tone || "quiet")}">
+            <span>${escapeHtml(row.label)}</span>
+            <strong>${escapeHtml(row.value)}</strong>
+            <small>${escapeHtml(row.note)}</small>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
 }
 
 function collectionRoutesMetricValue(value, fallback = 0) {
@@ -10343,8 +10476,8 @@ function collectionRoutesVistosKommunalSection(user) {
   const apiStatus = batch?.apiStatus || collectionRoutesPilotState.apiStatus;
   const issueCount = collectionRoutesMetricValue(stats.issues || batch?.issueCount);
   const mappedItems = collectionRoutesMetricValue(stats.mappedItems);
-  const issueToneClass = issueCount > 0 ? "collection-routes-stats__item--danger" : "collection-routes-stats__item--ok";
   const hasPreviewData = collectionRoutesKommunalPreviewHasData(batch, contractRows, siteRows, issueRows, stats);
+  const issueToneClass = issueCount > 0 && hasPreviewData ? "collection-routes-stats__item--warning" : issueCount > 0 ? "collection-routes-stats__item--danger" : "collection-routes-stats__item--ok";
   const suppressGenericError = hasPreviewData && collectionRoutesIsGenericKommunalPreviewError(collectionRoutesPilotState.error);
   const previewMessage = suppressGenericError
     ? collectionRoutesKommunalPreviewLoadedMessage(issueCount, mappedItems)
@@ -10390,18 +10523,20 @@ function collectionRoutesVistosKommunalSection(user) {
       ${previewError ? `<p class="module-feedback__error">${escapeHtml(previewError)}</p>` : ""}
       ${collectionRoutesPilotState.kommunalPreviewDetailError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.kommunalPreviewDetailError)}</p>` : ""}
 
+      ${collectionRoutesKommunalIssueOverview(issueSummaryRows, issueCount, hasPreviewData)}
+
       ${collectionRoutesPreviewTable("Diagnostika filtrů", [
         { label: "Krok", value: (row) => row.label },
         { label: "Počet", value: (row) => row.value },
         { label: "Poznámka", value: (row) => row.note }
       ], diagnosticRows, "Po načtení Vistos Komunál preview se zde zobrazí diagnostika filtrů.")}
 
-      ${collectionRoutesPreviewTable("Souhrn problémů podle typu", [
-        { label: "Typ", value: (row) => row.issueType },
+      ${collectionRoutesPreviewTable("Souhrn: co řešit dál", [
+        { label: "Co znamená", value: (row) => row.issueLabel },
         { label: "Počet", value: (row) => row.count },
-        { label: "Priorita", value: (row) => row.priority },
-        { label: "Doporučený postup", value: (row) => row.action }
-      ], issueSummaryRows, "Po načtení preview se zde zobrazí souhrn problémů podle typu.")}
+        { label: "Skupina", value: (row) => row.priority },
+        { label: "Co s tím", value: (row) => row.action }
+      ], issueSummaryRows, "Po načtení preview se zde zobrazí lidský souhrn toho, co řešit dál.")}
 
       ${firstContract ? `
         <div class="collection-routes-detail-grid" aria-label="Detail jedné smlouvy">
