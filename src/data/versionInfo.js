@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.114"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.115"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: tabulky Vistos preview",
+    text: "Hotfix nacita ulozene radky a problemy posledniho Vistos Komunal batche, aby se po preview zobrazily tabulky smluv, stanovist a problemu."
+  },
   {
     title: "Trasy svozu: oprava Vistos preview",
     text: "Hotfix uklada prazdne vazby pilotniho preview jako NULL, aby read-only Vistos Komunal preview nepadalo na auditovani."

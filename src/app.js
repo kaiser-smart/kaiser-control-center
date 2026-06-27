@@ -594,6 +594,9 @@ const collectionRoutesPilotState = {
   batches: [],
   sites: [],
   issues: [],
+  kommunalPreviewRows: [],
+  kommunalPreviewIssues: [],
+  kommunalPreviewDetailError: "",
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -9782,6 +9785,85 @@ function collectionRoutesLatestBatchByMode(sourceMode) {
   return collectionRoutesPilotState.batches.find((batch) => batch.sourceMode === sourceMode) || null;
 }
 
+function collectionRoutesImportRowSummary(row) {
+  if (row?.summary && typeof row.summary === "object") {
+    return row.summary;
+  }
+  return row && typeof row === "object" ? row : {};
+}
+
+function collectionRoutesKommunalContractRows(metadata = {}) {
+  if (Array.isArray(metadata.contractPreviewRows) && metadata.contractPreviewRows.length) {
+    return metadata.contractPreviewRows;
+  }
+
+  return collectionRoutesPilotState.kommunalPreviewRows.slice(0, 100).map((row, index) => {
+    const summary = collectionRoutesImportRowSummary(row);
+    return {
+      ...summary,
+      rowNumber: row.rowNumber || index + 1,
+      issueCount: Array.isArray(row.issues) ? row.issues.length : summary.issueCount
+    };
+  });
+}
+
+function collectionRoutesKommunalSiteRows(metadata = {}) {
+  if (Array.isArray(metadata.sitePreviewRows) && metadata.sitePreviewRows.length) {
+    return metadata.sitePreviewRows;
+  }
+
+  const sitesByKey = new Map();
+  collectionRoutesPilotState.kommunalPreviewRows.forEach((row) => {
+    const summary = collectionRoutesImportRowSummary(row);
+    const keyParts = [summary.customerName, summary.siteName, summary.addressRaw].map((value) => String(value || "").trim());
+    const key = keyParts.join("|") || String(row.id || row.rowNumber || sitesByKey.size + 1);
+    const existing = sitesByKey.get(key) || {
+      customerName: summary.customerName || "-",
+      siteName: summary.siteName || summary.addressRaw || "-",
+      addressRaw: summary.addressRaw || "-",
+      locationQuality: summary.locationQuality || "neověřeno",
+      itemCount: 0
+    };
+    existing.itemCount += Number(summary.containerCount) || 1;
+    sitesByKey.set(key, existing);
+  });
+
+  return Array.from(sitesByKey.values()).slice(0, 100);
+}
+
+function collectionRoutesKommunalIssueRows(metadata = {}) {
+  if (Array.isArray(metadata.issuePreviewRows) && metadata.issuePreviewRows.length) {
+    return metadata.issuePreviewRows;
+  }
+
+  const rowIssues = [];
+  collectionRoutesPilotState.kommunalPreviewRows.forEach((row) => {
+    const summary = collectionRoutesImportRowSummary(row);
+    const issues = Array.isArray(row.issues) ? row.issues : [];
+    issues.forEach((issue) => {
+      rowIssues.push({
+        contractNumber: summary.contractNumber || "-",
+        siteName: summary.siteName || summary.addressRaw || "-",
+        issueType: issue.issueType || issue.type || "data_issue",
+        severity: issue.severity || "warning",
+        message: issue.message || "Datový problém import preview."
+      });
+    });
+  });
+
+  if (rowIssues.length) {
+    return rowIssues.slice(0, 150);
+  }
+
+  return collectionRoutesPilotState.kommunalPreviewIssues.slice(0, 150).map((issue) => ({
+    contractNumber: "-",
+    siteName: "-",
+    issueType: issue.issueType || issue.type || "data_issue",
+    severity: issue.severity || "warning",
+    message: issue.message || "Datový problém import preview."
+  }));
+}
+
 function collectionRoutesMetricValue(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -9923,9 +10005,9 @@ function collectionRoutesVistosKommunalSection(user) {
   const batch = collectionRoutesLatestBatchByMode("vistos-komunal-preview");
   const metadata = batch?.metadata || {};
   const stats = metadata.mappingStats || {};
-  const contractRows = Array.isArray(metadata.contractPreviewRows) ? metadata.contractPreviewRows : [];
-  const siteRows = Array.isArray(metadata.sitePreviewRows) ? metadata.sitePreviewRows : [];
-  const issueRows = Array.isArray(metadata.issuePreviewRows) ? metadata.issuePreviewRows : [];
+  const contractRows = collectionRoutesKommunalContractRows(metadata);
+  const siteRows = collectionRoutesKommunalSiteRows(metadata);
+  const issueRows = collectionRoutesKommunalIssueRows(metadata);
   const firstContract = contractRows[0] || null;
   const apiStatus = batch?.apiStatus || collectionRoutesPilotState.apiStatus;
 
@@ -9966,6 +10048,7 @@ function collectionRoutesVistosKommunalSection(user) {
 
       ${collectionRoutesPilotState.message ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.message)}</p>` : ""}
       ${collectionRoutesPilotState.error ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.error)}</p>` : ""}
+      ${collectionRoutesPilotState.kommunalPreviewDetailError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.kommunalPreviewDetailError)}</p>` : ""}
 
       ${firstContract ? `
         <div class="collection-routes-detail-grid" aria-label="Detail jedné smlouvy">
@@ -11505,12 +11588,35 @@ async function loadCollectionRoutesPilot(options = {}) {
     collectionRoutesPilotState.batches = Array.isArray(batchesResult.batches) ? batchesResult.batches : [];
     collectionRoutesPilotState.sites = Array.isArray(sitesResult.sites) ? sitesResult.sites : [];
     collectionRoutesPilotState.issues = Array.isArray(issuesResult.issues) ? issuesResult.issues : [];
+    collectionRoutesPilotState.kommunalPreviewRows = [];
+    collectionRoutesPilotState.kommunalPreviewIssues = [];
+    collectionRoutesPilotState.kommunalPreviewDetailError = "";
     collectionRoutesPilotState.apiStatus = batchesResult.apiStatus || sitesResult.apiStatus || issuesResult.apiStatus || "ready";
+
+    const kommunalBatch = collectionRoutesLatestBatchByMode("vistos-komunal-preview");
+    if (kommunalBatch?.id) {
+      try {
+        const [rowsResult, batchIssuesResult] = await Promise.all([
+          apiJson(`/api/collection-routes/import-batches/${encodeURIComponent(kommunalBatch.id)}/rows?limit=1000`),
+          apiJson(`/api/collection-routes/import-batches/${encodeURIComponent(kommunalBatch.id)}/issues?limit=1000`)
+        ]);
+        collectionRoutesPilotState.kommunalPreviewRows = Array.isArray(rowsResult.rows) ? rowsResult.rows : [];
+        collectionRoutesPilotState.kommunalPreviewIssues = Array.isArray(batchIssuesResult.issues) ? batchIssuesResult.issues : [];
+      } catch (detailError) {
+        collectionRoutesPilotState.kommunalPreviewRows = [];
+        collectionRoutesPilotState.kommunalPreviewIssues = [];
+        collectionRoutesPilotState.kommunalPreviewDetailError = detailError.payload?.error || "Detail Vistos Komunál preview se teď nepodařilo načíst.";
+      }
+    }
+
     collectionRoutesPilotState.loaded = true;
   } catch (error) {
     collectionRoutesPilotState.batches = [];
     collectionRoutesPilotState.sites = [];
     collectionRoutesPilotState.issues = [];
+    collectionRoutesPilotState.kommunalPreviewRows = [];
+    collectionRoutesPilotState.kommunalPreviewIssues = [];
+    collectionRoutesPilotState.kommunalPreviewDetailError = "";
     collectionRoutesPilotState.apiStatus = error.payload?.apiStatus || "waiting";
     collectionRoutesPilotState.error = error.payload?.error || "Pilotní data Tras svozu se teď nepodařilo načíst.";
     collectionRoutesPilotState.loaded = false;
