@@ -11316,6 +11316,11 @@ function collectionRoutesVistosKommunalSection(user) {
         <span>Filtr: Contract.Status_FK = 74, Contract.Typsmlouvy_FK = [14735]. Contract.StartDate/EndDate a ContractRow.IsActive/StartDate/EndDate se ve Fázi 1E vyhodnocují jako datové problémy, ne jako tvrdé vyřazení preview.</span>
       </div>
 
+      <div class="collection-routes-source-switch" aria-label="Oddělení zdrojových podkladů a návrhu AI">
+        <a class="secondary-link collection-routes-source-switch__link" href="#collection-routes-excel-source">13 Excelů</a>
+        <a class="primary-action collection-routes-source-switch__link" href="#collection-routes-ai-draft">Návrh AI</a>
+      </div>
+
       <div class="collection-routes-stats" aria-label="Stav Vistos Komunál preview">
         <article><span>Vistos konfigurace</span><strong>${escapeHtml(collectionRoutesApiStatusLabel(apiStatus))}</strong></article>
         <article><span>Smlouvy</span><strong>${collectionRoutesMetricValue(stats.contracts || batch?.metadata?.contractCount)}</strong></article>
@@ -11343,12 +11348,12 @@ function collectionRoutesVistosKommunalSection(user) {
 
       ${collectionRoutesKommunalIssueOverview(issueSummaryRows, issueCount, hasPreviewData)}
 
-      <div class="collection-routes-phase-note">
-        <strong>Denní návrh svozů z Vistosu je read-only kapacitní rozpad, ne ostrá navigační trasa.</strong>
-        <span>Vychází z mapovatelných položek Vistos preview a rozpadá četnosti do pracovních dnů pro vozidla A 3BN 3558, B 1BP 8373 a C 3BE 2831. Vzorky stanovišť níže jsou kontrolní podklad z dostupných metadat; úplný seznam zastávek a pořadí patří do další fáze.</span>
+      <div class="collection-routes-phase-note collection-routes-source-block collection-routes-source-block--ai" id="collection-routes-ai-draft">
+        <strong>Návrh AI je odvozený read-only výpočet z Vistos dat, ne zdrojová tabulka a ne ostrá navigační trasa.</strong>
+        <span>Vychází z mapovatelných položek Vistos preview a rozpadá četnosti do pracovních dnů pro vozidla A 3BN 3558, B 1BP 8373 a C 3BE 2831. Může navrhovat den, vozidlo nebo skupinu jinak než historický Excel. Vzorky stanovišť níže jsou kontrolní podklad z dostupných metadat; úplný seznam zastávek a pořadí patří do další fáze.</span>
       </div>
 
-      ${collectionRoutesPreviewTable("Souhrn denního návrhu z Vistosu", [
+      ${collectionRoutesPreviewTable("Návrh AI: souhrn denního rozpadu z Vistosu", [
         { label: "Den", value: (row) => row.dayLabel || row.dayCode },
         { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
         { label: "Skupiny", value: (row) => row.routeGroupCount },
@@ -11358,11 +11363,11 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Položky", value: (row) => row.itemCount },
         { label: "Zátěž", value: (row) => row.loadScore },
         { label: "Ostrá trasa", value: () => "NE" }
-      ], routeDailySummaryRows, "Po načtení Vistos preview se zde zobrazí kapacitní denní rozpad pro vozidla A/B/C.", `
+      ], routeDailySummaryRows, "Po načtení Vistos preview se zde zobrazí AI kapacitní denní rozpad pro vozidla A/B/C. Není to zdrojový Excel ani ostrá trasa.", `
         <button class="secondary-link" type="button" data-collection-routes-export-daily-draft>Export do Excelu</button>
       `)}
 
-      ${collectionRoutesPreviewTable("Denní návrh svozů z Vistosu", [
+      ${collectionRoutesPreviewTable("Návrh AI: denní svozy z Vistosu", [
         { label: "Den", value: (row) => row.dayLabel || row.dayCode },
         { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
         { label: "Odpad", value: (row) => `${row.wasteType || "-"}${row.wasteCode ? ` / ${row.wasteCode}` : ""}` },
@@ -11374,11 +11379,11 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Zátěž", value: (row) => row.loadScore },
         { label: "Příklad stanoviště", value: (row) => Array.isArray(row.sampleSites) && row.sampleSites.length ? row.sampleSites.join(", ") : "-" },
         { label: "Ostrá trasa", value: () => "NE" }
-      ], routeDailyDraftRows, "Po načtení Vistos preview se zde zobrazí první read-only denní rozpad svozových skupin. Nejde o finální pořadí zastávek.", `
+      ], routeDailyDraftRows, "Po načtení Vistos preview se zde zobrazí první read-only AI rozpad svozových skupin. Nejde o původní pořadí Excelů ani finální pořadí zastávek.", `
         <button class="secondary-link" type="button" data-collection-routes-export-daily-draft>Export do Excelu</button>
       `)}
 
-      ${collectionRoutesPreviewTable("Vzorky stanovišť k dennímu návrhu z Vistosu", [
+      ${collectionRoutesPreviewTable("Návrh AI: vzorky stanovišť k dennímu rozpadu", [
         { label: "Den", value: (row) => row.dayLabel || row.dayCode },
         { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
         { label: "Stanoviště", value: (row) => row.siteName },
@@ -11388,11 +11393,11 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Příklad smlouvy", value: (row) => Array.isArray(row.sampleContracts) && row.sampleContracts.length ? row.sampleContracts.join(", ") : "-" },
         { label: "Zdroj", value: () => "Vistos routeDraftRows" },
         { label: "Ostrá trasa", value: () => "NE" }
-      ], routeDailySiteRows, "Po načtení Vistos preview se zde zobrazí dostupné vzorky stanovišť pod denním návrhem. Nejde o úplný navigační seznam zastávek.", `
+      ], routeDailySiteRows, "Po načtení Vistos preview se zde zobrazí dostupné vzorky stanovišť pod AI návrhem. Nejde o úplný navigační seznam zastávek.", `
         <button class="secondary-link" type="button" data-collection-routes-export-daily-sites>Export do Excelu</button>
       `)}
 
-      ${collectionRoutesPreviewTable("Pracovní návrh svozových skupin z Vistosu", [
+      ${collectionRoutesPreviewTable("Návrh AI: pracovní svozové skupiny z Vistosu", [
         { label: "Odpad", value: (row) => `${row.wasteType || "-"}${row.wasteCode ? ` / ${row.wasteCode}` : ""}` },
         { label: "Četnost", value: (row) => row.frequency },
         { label: "Nádoba", value: (row) => row.containerVolume ? `${row.containerVolume} l` : "-" },
@@ -11401,13 +11406,13 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Položky", value: (row) => row.itemCount },
         { label: "Příklad stanoviště", value: (row) => Array.isArray(row.sampleSites) && row.sampleSites.length ? row.sampleSites.join(", ") : "-" },
         { label: "Příklad smlouvy", value: (row) => Array.isArray(row.sampleContracts) && row.sampleContracts.length ? row.sampleContracts.join(", ") : "-" }
-      ], routeDraftRows, "Po načtení Vistos preview se zde zobrazí hlavní read-only návrh svozových skupin z mapovatelných položek. Tohle je budoucí provozní směr.", `
+      ], routeDraftRows, "Po načtení Vistos preview se zde zobrazí hlavní read-only AI návrh svozových skupin z mapovatelných položek. Tohle je budoucí provozní směr, ne opis Excelů.", `
         <button class="secondary-link" type="button" data-collection-routes-export-route-draft>Export do Excelu</button>
       `)}
 
-      <div class="collection-routes-phase-note">
-        <strong>Hlavní provozní tok je Vistos → návrh svozů. Excel není ranní provozní vstup.</strong>
-        <span>13 dispečerských Excelů slouží jen jako jednorázová historická kalibrace dnešního ručního systému. Nahrané soubory se neukládají do databáze ani do prohlížeče.</span>
+      <div class="collection-routes-phase-note collection-routes-source-block collection-routes-source-block--excel" id="collection-routes-excel-source">
+        <strong>13 Excelů je historický lidský podklad. Návrh AI z něj nesmí dělat dojem původní dispečerské tabulky.</strong>
+        <span>13 dispečerských Excelů slouží jen jako jednorázová historická kalibrace dnešního ručního systému. Řádky si drží původní soubor, list, řádek a text; AI návrh může odděleně dopočítat den, vozidlo nebo skupinu. Nahrané soubory se neukládají do databáze ani do prohlížeče.</span>
       </div>
 
       ${canImport ? `
@@ -11429,13 +11434,13 @@ function collectionRoutesVistosKommunalSection(user) {
       ${collectionRoutesPilotState.routeOptimizationError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.routeOptimizationError)}</p>` : ""}
       ${collectionRoutesRouteOptimizationSummaryCards(routeOptimizationPreview, routeOptimizationRows)}
 
-      ${collectionRoutesPreviewTable("Historická kalibrace tras z Excelů", [
-        { label: "Den", value: (row) => row.suggestedDay },
-        { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
+      ${collectionRoutesPreviewTable("13 Excelů: historická kalibrace a párování", [
+        { label: "AI den", value: (row) => row.suggestedDay },
+        { label: "AI vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
         { label: "Původní trasa", value: (row) => `${row.sourceRoute || "-"} · ${row.originalDay || "-"} · ${row.originalWeek || "-"}` },
         { label: "Soubor/řádek", value: (row) => `${row.sourceFile || "-"} #${row.sourceRowNumber || "-"}` },
-        { label: "Skupina", value: (row) => row.optimizationGroup },
-        { label: "Stanoviště / text", value: (row) => row.originalText },
+        { label: "AI skupina", value: (row) => row.optimizationGroup },
+        { label: "Původní text", value: (row) => row.originalText },
         { label: "Excel odpad", value: (row) => `${row.wasteType || "-"}${row.wasteCode ? ` / ${row.wasteCode}` : ""}` },
         { label: "Četnost", value: (row) => row.frequency },
         { label: "Nádoba", value: (row) => row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "-" },
@@ -11450,7 +11455,7 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Vistos zákazník", value: (row) => row.vistosCustomerName || "-" },
         { label: "Vistos adresa", value: (row) => row.vistosAddressRaw || "-" },
         { label: "Jistota", value: (row) => `${row.confidence || "-"} / ${row.vistosMatchConfidence || "-"} / skóre ${row.vistosMatchScore || 0}` }
-      ], routeOptimizationRows, "Pro běžný provoz nejdřív sestavte návrh z Vistosu. Historické Excely nahrávejte jen jednorázově pro kalibraci a porovnání.", `
+      ], routeOptimizationRows, "Tahle část drží původ 13 Excelů: soubor, list, řádek a text. Sloupce AI den/vozidlo/skupina jsou odvozený návrh, ne původní dispečerské pořadí.", `
         <button class="secondary-link" type="button" data-collection-routes-export-optimization>Export do Excelu</button>
       `)}
 
@@ -15602,8 +15607,8 @@ function collectionRoutesKommunalRouteDraftCsv(rows = []) {
 
 function collectionRoutesKommunalDailyDraftCsv(rows = []) {
   const headers = [
-    "Den",
-    "Vozidlo",
+    "AI den",
+    "AI vozidlo",
     "SPZ",
     "Odpad",
     "Kód odpadu",
@@ -15650,8 +15655,8 @@ function collectionRoutesKommunalDailyDraftCsv(rows = []) {
 
 function collectionRoutesKommunalDailyDraftSitesCsv(rows = []) {
   const headers = [
-    "Den",
-    "Vozidlo",
+    "AI den",
+    "AI vozidlo",
     "SPZ",
     "Stanoviště",
     "Odpad",
@@ -15690,8 +15695,8 @@ function collectionRoutesKommunalDailyDraftSitesCsv(rows = []) {
 
 function collectionRoutesRouteOptimizationCsv(rows = []) {
   const headers = [
-    "Navržený den",
-    "Vozidlo",
+    "AI navržený den",
+    "AI vozidlo",
     "SPZ",
     "Původní soubor",
     "List",
@@ -15699,7 +15704,7 @@ function collectionRoutesRouteOptimizationCsv(rows = []) {
     "Původní trasa",
     "Původní den",
     "Původní týden",
-    "Optimalizační skupina",
+    "AI optimalizační skupina",
     "Zdrojový text",
     "Region",
     "Excel odpad",

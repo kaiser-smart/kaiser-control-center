@@ -1470,6 +1470,32 @@ h1 {
   color: var(--ink);
 }
 
+.collection-routes-source-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.collection-routes-source-switch__link {
+  min-width: 150px;
+  text-decoration: none;
+}
+
+.collection-routes-source-block {
+  scroll-margin-top: 18px;
+}
+
+.collection-routes-source-block--ai {
+  border-color: rgba(38, 139, 68, 0.26);
+  background: #f1fbf3;
+}
+
+.collection-routes-source-block--excel {
+  border-color: rgba(181, 118, 21, 0.28);
+  background: #fff8e8;
+}
+
 .collection-routes-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -8432,6 +8458,7 @@ body:has(.ai-assistant-promo-modal) {
   }
 
   .collection-routes-tabs a,
+  .collection-routes-source-switch__link,
   .collection-routes-import-form .primary-action,
   .collection-routes-preview-block__actions .secondary-link {
     width: 100%;
