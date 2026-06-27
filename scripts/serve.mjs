@@ -35,6 +35,10 @@ import {
   buildCollectionRouteOptimizationPreview
 } from "../functions/_lib/collection-route-optimization-preview.js";
 import {
+  EMPLOYEE_EXCEL_IMPORT_MAX_FILE_SIZE_BYTES,
+  createEmployeeExcelImportPreview
+} from "../functions/_lib/employee-excel-import.js";
+import {
   TcarsClientError,
   loadFleetVehiclesPayload,
   loadTcarsStatusPayload,
@@ -3505,6 +3509,62 @@ async function handleApi(request, response) {
     }
 
     sendJson(response, 200, { employees: visibleMockEmployees(user), apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/employees/import-preview" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "edit")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění importovat zaměstnance." });
+      return true;
+    }
+
+    try {
+      const { files } = await readMultipartFormData(request);
+      const file = files.get("file");
+      if (!file?.buffer?.length) {
+        sendJson(response, 400, { error: "Nahrajte Excel export zaměstnanců.", apiStatus: "ready" });
+        return true;
+      }
+      if (file.buffer.length > EMPLOYEE_EXCEL_IMPORT_MAX_FILE_SIZE_BYTES) {
+        sendJson(response, 400, { error: "Soubor je příliš velký. Maximum je 2 MB.", apiStatus: "ready" });
+        return true;
+      }
+
+      const preview = await createEmployeeExcelImportPreview({}, mockUsers, user, {
+        buffer: file.buffer,
+        filename: file.name,
+        contentType: file.type
+      });
+      sendJson(response, 200, { preview, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Import preview zaměstnanců se teď nepodařilo připravit.",
+        apiStatus: "waiting"
+      });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/employees/import" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "edit")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění importovat zaměstnance." });
+      return true;
+    }
+
+    sendJson(response, 503, {
+      error: "Lokální preview server nemá D1 databázi. Ostrý import spusťte až po cloudové migraci.",
+      apiStatus: "waiting"
+    });
     return true;
   }
 

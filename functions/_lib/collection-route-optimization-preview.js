@@ -797,7 +797,7 @@ function parseTextRows(bytes) {
   };
 }
 
-async function parseSpreadsheetRows(file) {
+export async function parseSpreadsheetRows(file) {
   const bytes = bytesFrom(file.buffer);
   const name = cleanValue(file.filename || file.name).toLowerCase();
   const type = cleanValue(file.contentType || file.type).toLowerCase();

@@ -2,6 +2,63 @@ import { isFullAccessRole, normalizeRole } from "../../src/permissions.js";
 
 const EMPLOYEE_DB_BINDING = "SMART_ODPADY_DB";
 export const EMPLOYEE_DOCUMENTS_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
+export const EMPLOYEE_EXCEL_SOURCE = "employee-excel";
+
+const EMPLOYEE_HR_PROFILE_FIELDS = [
+  ["sourceFile", "source_file", "text"],
+  ["sourceSheet", "source_sheet", "text"],
+  ["sourceRow", "source_row", "number"],
+  ["excelName", "excel_name", "text"],
+  ["company", "company", "text"],
+  ["workCenter", "work_center", "text"],
+  ["country", "country", "text"],
+  ["idCardNumber", "id_card_number", "text"],
+  ["bankAccount", "bank_account", "text"],
+  ["otherBonus", "other_bonus", "number"],
+  ["dailyShiftHours", "daily_shift_hours", "number"],
+  ["fte", "fte", "number"],
+  ["companyId", "company_id", "text"],
+  ["iban", "iban", "text"],
+  ["contactStreet", "contact_street", "text"],
+  ["contactCountry", "contact_country", "text"],
+  ["cost", "cost", "number"],
+  ["personalNumber", "personal_number", "text"],
+  ["pensionContribution", "pension_contribution", "number"],
+  ["contractValidity", "contract_validity", "text"],
+  ["fixedPhone", "fixed_phone", "text"],
+  ["transportContribution", "transport_contribution", "number"],
+  ["maritalStatus", "marital_status", "text"],
+  ["street", "street", "text"],
+  ["driverLicenseNumber", "driver_license_number", "text"],
+  ["houseNumber", "house_number", "text"],
+  ["dateOfBirth", "date_of_birth", "date"],
+  ["departureDate", "departure_date", "date"],
+  ["emailNotificationsEnabled", "email_notifications_enabled", "boolean"],
+  ["hourlyRate", "hourly_rate", "number"],
+  ["emergencyContactName", "emergency_contact_name", "text"],
+  ["probationEndDate", "probation_end_date", "date"],
+  ["contactZip", "contact_zip", "text"],
+  ["currency", "currency", "text"],
+  ["birthPlace", "birth_place", "text"],
+  ["municipality", "municipality", "text"],
+  ["personalEmail", "personal_email", "text"],
+  ["personalPhone", "personal_phone", "text"],
+  ["idCardValidUntil", "id_card_valid_until", "date"],
+  ["passportValidUntil", "passport_valid_until", "date"],
+  ["childrenCount", "children_count", "number"],
+  ["computerWork", "computer_work", "text"],
+  ["accountPrefix", "account_prefix", "text"],
+  ["birthNumber", "birth_number", "text"],
+  ["driverLicenseGroups", "driver_license_groups", "text"],
+  ["state", "state", "text"],
+  ["citizenship", "citizenship", "text"],
+  ["emergencyContactPhone", "emergency_contact_phone", "text"],
+  ["contractType", "contract_type", "text"],
+  ["originalCreatedAt", "original_created_at", "text"],
+  ["contractStartDate", "contract_start_date", "date"],
+  ["healthInsuranceCompany", "health_insurance_company", "text"],
+  ["originalUpdatedAt", "original_updated_at", "text"]
+];
 
 export class EmployeeStoreError extends Error {
   constructor(message, status = 400, code = "employee_store_error") {
@@ -54,9 +111,47 @@ function numberValue(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function nullableNumberValue(value) {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function booleanDbValue(value) {
+  if (value === true || value === 1 || value === "1") {
+    return 1;
+  }
+
+  const normalized = cleanString(value).toLowerCase();
+  if (["ano", "true", "zapnuto", "yes"].includes(normalized)) {
+    return 1;
+  }
+
+  if (value === false || value === 0 || value === "0" || ["ne", "false", "vypnuto", "no"].includes(normalized)) {
+    return 0;
+  }
+
+  return null;
+}
+
+function booleanFromDb(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return Boolean(Number(value));
+}
+
 function dateValue(value) {
   const cleaned = cleanString(value);
   return /^\d{4}-\d{2}-\d{2}$/.test(cleaned) ? cleaned : "";
+}
+
+function nullableDateValue(value) {
+  return dateValue(value) || null;
 }
 
 function sameId(left, right) {
@@ -119,6 +214,10 @@ function defaultVacationEntitlement(user) {
   return normalizeRole(user?.role) === "ridic" ? 20 : 25;
 }
 
+function isEmployeeImportRow(row) {
+  return Boolean(Number(row?.is_hr_only || 0)) || cleanString(row?.source_system) === EMPLOYEE_EXCEL_SOURCE;
+}
+
 function rowToEmployee(row, user, users = []) {
   const fallbackName = splitName(user?.name);
   const entitlement = numberValue(row?.vacation_entitlement_days, defaultVacationEntitlement(user));
@@ -154,6 +253,12 @@ function rowToEmployee(row, user, users = []) {
     sickDaysCurrentYear: numberValue(row?.sick_days_current_year, 0),
     lastAbsenceDate: dateValue(row?.last_absence_date),
     internalNote: cleanString(row?.internal_note),
+    hasLogin: Boolean(user?.id),
+    isHrOnly: Boolean(Number(row?.is_hr_only || 0)) || (!user?.id && isEmployeeImportRow(row)),
+    sourceSystem: cleanString(row?.source_system),
+    sourceEmployeeKey: cleanString(row?.source_employee_key),
+    importedAt: cleanString(row?.imported_at),
+    importedByUserId: cleanString(row?.imported_by_user_id),
     createdAt: cleanString(row?.created_at || user?.createdAt),
     updatedAt: cleanString(row?.updated_at || user?.updatedAt || user?.createdAt)
   };
@@ -247,6 +352,139 @@ function documentFromRow(row) {
   };
 }
 
+function hrProfileValueFromRow(row, column, type) {
+  if (!row || !Object.prototype.hasOwnProperty.call(row, column)) {
+    return type === "boolean" ? null : "";
+  }
+
+  if (type === "number") {
+    return nullableNumberValue(row[column]);
+  }
+
+  if (type === "boolean") {
+    return booleanFromDb(row[column]);
+  }
+
+  if (type === "date") {
+    return dateValue(row[column]);
+  }
+
+  return cleanString(row[column]);
+}
+
+function normalizeHrProfileValue(value, type) {
+  if (type === "number") {
+    return nullableNumberValue(value);
+  }
+
+  if (type === "boolean") {
+    return booleanDbValue(value);
+  }
+
+  if (type === "date") {
+    return nullableDateValue(value);
+  }
+
+  return nullableString(value);
+}
+
+function rowToEmployeeHrProfile(row) {
+  if (!row) {
+    return null;
+  }
+
+  const profile = {
+    employeeId: cleanString(row.employee_id),
+    rawJson: cleanString(row.raw_json),
+    importedAt: cleanString(row.imported_at),
+    importedByUserId: cleanString(row.imported_by_user_id),
+    updatedAt: cleanString(row.updated_at)
+  };
+
+  for (const [key, column, type] of EMPLOYEE_HR_PROFILE_FIELDS) {
+    profile[key] = hrProfileValueFromRow(row, column, type);
+  }
+
+  return profile;
+}
+
+function normalizeEmployeeHrProfileInput(employeeId, input = {}, currentUserId = "", now = new Date().toISOString()) {
+  const profile = {
+    employeeId,
+    rawJson: nullableString(input.rawJson),
+    importedAt: nullableString(input.importedAt) || now,
+    importedByUserId: nullableString(input.importedByUserId || currentUserId),
+    updatedAt: now
+  };
+
+  for (const [key, , type] of EMPLOYEE_HR_PROFILE_FIELDS) {
+    profile[key] = normalizeHrProfileValue(input[key], type);
+  }
+
+  return profile;
+}
+
+async function loadEmployeeHrProfile(db, employeeId) {
+  if (!db || !employeeId) {
+    return { profile: null, apiStatus: "waiting" };
+  }
+
+  try {
+    const row = await db
+      .prepare("SELECT * FROM employee_hr_profiles WHERE employee_id = ? LIMIT 1")
+      .bind(employeeId)
+      .first();
+
+    return {
+      profile: rowToEmployeeHrProfile(row),
+      apiStatus: "ready"
+    };
+  } catch (error) {
+    console.error("employees.hr_profile_load_failed", { message: error.message });
+    return { profile: null, apiStatus: "waiting" };
+  }
+}
+
+export async function saveEmployeeHrProfile(env, employeeId, input = {}, currentUserId = "") {
+  const db = employeeDatabase(env, true);
+  const now = new Date().toISOString();
+  const profile = normalizeEmployeeHrProfileInput(employeeId, input, currentUserId, now);
+  const columns = [
+    "employee_id",
+    ...EMPLOYEE_HR_PROFILE_FIELDS.map(([, column]) => column),
+    "raw_json",
+    "imported_at",
+    "imported_by_user_id",
+    "updated_at"
+  ];
+  const values = [
+    profile.employeeId,
+    ...EMPLOYEE_HR_PROFILE_FIELDS.map(([key]) => profile[key]),
+    profile.rawJson,
+    profile.importedAt,
+    profile.importedByUserId,
+    profile.updatedAt
+  ];
+  const placeholders = columns.map(() => "?").join(", ");
+  const updates = columns
+    .filter((column) => column !== "employee_id")
+    .map((column) => `${column} = excluded.${column}`)
+    .join(",\n        ");
+
+  await db
+    .prepare(`
+      INSERT INTO employee_hr_profiles (
+        ${columns.join(",\n        ")}
+      ) VALUES (${placeholders})
+      ON CONFLICT(employee_id) DO UPDATE SET
+        ${updates}
+    `)
+    .bind(...values)
+    .run();
+
+  return profile;
+}
+
 function employeeVisibilityScope(currentUser) {
   const role = normalizeRole(currentUser?.role);
 
@@ -306,19 +544,29 @@ export async function listEmployeeCards(env, users, currentUser) {
   }
 
   const rowsByUserId = new Map(rows.map((row) => [cleanString(row.user_id || row.id).toLowerCase(), row]));
-  return users
-    .map((user) => rowToEmployee(rowsByUserId.get(cleanString(user.id).toLowerCase()), user, users))
+  const usedRowKeys = new Set();
+  const employeesFromUsers = users.map((user) => {
+    const key = cleanString(user.id).toLowerCase();
+    const row = rowsByUserId.get(key);
+    if (row) {
+      usedRowKeys.add(cleanString(row.user_id || row.id).toLowerCase());
+    }
+    return rowToEmployee(row, user, users);
+  });
+  const employeesFromImport = rows
+    .filter((row) => {
+      const key = cleanString(row.user_id || row.id).toLowerCase();
+      return key && !usedRowKeys.has(key) && isEmployeeImportRow(row);
+    })
+    .map((row) => rowToEmployee(row, null, users));
+
+  return [...employeesFromUsers, ...employeesFromImport]
     .filter((employee) => canViewEmployee(currentUser, employee))
     .sort((a, b) => fullName(a).localeCompare(fullName(b), "cs"));
 }
 
 export async function getEmployeeCard(env, users, currentUser, employeeId) {
   const targetUser = users.find((user) => sameId(user.id, employeeId));
-
-  if (!targetUser) {
-    throw new EmployeeStoreError("Zaměstnanec nebyl nalezen.", 404, "employee_not_found");
-  }
-
   const db = employeeDatabase(env);
   let row = null;
 
@@ -326,17 +574,27 @@ export async function getEmployeeCard(env, users, currentUser, employeeId) {
     try {
       row = await db
         .prepare("SELECT * FROM employee_cards WHERE user_id = ? OR id = ? LIMIT 1")
-        .bind(targetUser.id, employeeId)
+        .bind(targetUser?.id || employeeId, employeeId)
         .first();
     } catch (error) {
       console.error("employees.d1_get_failed", { message: error.message });
     }
   }
 
+  if (!targetUser && !isEmployeeImportRow(row)) {
+    throw new EmployeeStoreError("Zaměstnanec nebyl nalezen.", 404, "employee_not_found");
+  }
+
   const employee = rowToEmployee(row, targetUser, users);
 
   if (!canViewEmployee(currentUser, employee)) {
     throw new EmployeeStoreError("Nemáte oprávnění zobrazit kartu zaměstnance.", 403, "employee_forbidden");
+  }
+
+  if (canEditEmployee(currentUser)) {
+    const hrProfile = await loadEmployeeHrProfile(db, employee.id);
+    employee.hrProfile = hrProfile.profile;
+    employee.hrProfileApiStatus = hrProfile.apiStatus;
   }
 
   return employee;
@@ -437,6 +695,187 @@ export async function saveEmployeeCard(env, users, currentUser, employeeId, inpu
       employee.sickDaysCurrentYear,
       nullableString(employee.lastAbsenceDate),
       nullableString(employee.internalNote),
+      employee.createdAt,
+      employee.updatedAt
+    )
+    .run();
+
+  if (input?.hrProfile && canEditEmployee(currentUser)) {
+    employee.hrProfile = await saveEmployeeHrProfile(env, employee.id, input.hrProfile, currentUser?.id || "");
+    employee.hrProfileApiStatus = "ready";
+  }
+
+  return employee;
+}
+
+export async function saveImportedEmployeeCard(env, users, currentUser, input) {
+  if (!canEditEmployee(currentUser)) {
+    throw new EmployeeStoreError("Nemáte oprávnění importovat zaměstnance.", 403, "employee_import_forbidden");
+  }
+
+  const db = employeeDatabase(env, true);
+  const now = new Date().toISOString();
+  const employeeId = cleanString(input?.id || input?.userId);
+  const targetUser = users.find((user) => sameId(user.id, employeeId));
+  let row = null;
+
+  if (!employeeId) {
+    throw new EmployeeStoreError("Importovaný zaměstnanec nemá ID.", 400, "employee_import_id_missing");
+  }
+
+  try {
+    row = await db
+      .prepare("SELECT * FROM employee_cards WHERE user_id = ? OR id = ? LIMIT 1")
+      .bind(targetUser?.id || employeeId, employeeId)
+      .first();
+  } catch (error) {
+    console.error("employees.import_existing_load_failed", { message: error.message });
+  }
+
+  const existingEmployee = rowToEmployee(row, targetUser, users);
+  const entitlement = numberValue(input?.vacationEntitlementDays ?? existingEmployee.vacationEntitlementDays, defaultVacationEntitlement({
+    role: input?.role || existingEmployee.role
+  }));
+  const used = numberValue(input?.vacationUsedDays ?? existingEmployee.vacationUsedDays, 0);
+  const pending = numberValue(input?.vacationPendingDays ?? existingEmployee.vacationPendingDays, 0);
+  const isHrOnly = !targetUser && input?.isHrOnly !== false;
+  const employee = {
+    id: employeeId,
+    userId: cleanString(input?.userId || employeeId),
+    firstName: cleanString(input?.firstName || existingEmployee.firstName),
+    lastName: cleanString(input?.lastName || existingEmployee.lastName),
+    email: cleanString(input?.email ?? existingEmployee.email).toLowerCase(),
+    phone: cleanString(input?.phone ?? existingEmployee.phone),
+    role: targetUser ? normalizeRole(existingEmployee.role || targetUser.role) : normalizeRole(input?.role || existingEmployee.role || "readonly"),
+    department: cleanString(input?.department ?? existingEmployee.department),
+    position: cleanString(input?.position ?? existingEmployee.position),
+    address: cleanString(input?.address ?? existingEmployee.address),
+    workplace: cleanString(input?.workplace ?? existingEmployee.workplace),
+    managerId: cleanString(input?.managerId ?? existingEmployee.managerId),
+    managerName: cleanString(input?.managerName ?? existingEmployee.managerName),
+    employmentStatus: cleanString(input?.employmentStatus ?? existingEmployee.employmentStatus) || "active",
+    startDate: dateValue(input?.startDate ?? existingEmployee.startDate),
+    employmentType: cleanString(input?.employmentType ?? existingEmployee.employmentType),
+    workload: numberValue(input?.workload ?? existingEmployee.workload, 1),
+    weeklyHours: numberValue(input?.weeklyHours ?? existingEmployee.weeklyHours, numberValue(input?.workload ?? existingEmployee.workload, 1) * 40),
+    vacationEntitlementDays: entitlement,
+    vacationUsedDays: used,
+    vacationPendingDays: pending,
+    vacationRemainingDays: numberValue(input?.vacationRemainingDays, entitlement - used - pending),
+    currentAbsenceStatus: cleanString(input?.currentAbsenceStatus ?? existingEmployee.currentAbsenceStatus) || "v práci",
+    sickDaysCurrentYear: numberValue(input?.sickDaysCurrentYear ?? existingEmployee.sickDaysCurrentYear, 0),
+    lastAbsenceDate: dateValue(input?.lastAbsenceDate ?? existingEmployee.lastAbsenceDate),
+    internalNote: cleanString(input?.internalNote ?? existingEmployee.internalNote),
+    isHrOnly,
+    sourceSystem: cleanString(input?.sourceSystem || existingEmployee.sourceSystem || EMPLOYEE_EXCEL_SOURCE),
+    sourceEmployeeKey: cleanString(input?.sourceEmployeeKey || existingEmployee.sourceEmployeeKey),
+    importedAt: now,
+    importedByUserId: cleanString(currentUser?.id),
+    createdAt: cleanString(existingEmployee.createdAt) || now,
+    updatedAt: now
+  };
+
+  await db
+    .prepare(`
+      INSERT INTO employee_cards (
+        id,
+        user_id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        role,
+        department,
+        position,
+        address,
+        workplace,
+        manager_id,
+        manager_name,
+        employment_status,
+        start_date,
+        employment_type,
+        workload,
+        weekly_hours,
+        vacation_entitlement_days,
+        vacation_used_days,
+        vacation_pending_days,
+        vacation_remaining_days,
+        current_absence_status,
+        sick_days_current_year,
+        last_absence_date,
+        internal_note,
+        is_hr_only,
+        source_system,
+        source_employee_key,
+        imported_at,
+        imported_by_user_id,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        first_name = excluded.first_name,
+        last_name = excluded.last_name,
+        email = excluded.email,
+        phone = excluded.phone,
+        role = excluded.role,
+        department = excluded.department,
+        position = excluded.position,
+        address = excluded.address,
+        workplace = excluded.workplace,
+        manager_id = excluded.manager_id,
+        manager_name = excluded.manager_name,
+        employment_status = excluded.employment_status,
+        start_date = excluded.start_date,
+        employment_type = excluded.employment_type,
+        workload = excluded.workload,
+        weekly_hours = excluded.weekly_hours,
+        vacation_entitlement_days = excluded.vacation_entitlement_days,
+        vacation_used_days = excluded.vacation_used_days,
+        vacation_pending_days = excluded.vacation_pending_days,
+        vacation_remaining_days = excluded.vacation_remaining_days,
+        current_absence_status = excluded.current_absence_status,
+        sick_days_current_year = excluded.sick_days_current_year,
+        last_absence_date = excluded.last_absence_date,
+        internal_note = excluded.internal_note,
+        is_hr_only = excluded.is_hr_only,
+        source_system = excluded.source_system,
+        source_employee_key = excluded.source_employee_key,
+        imported_at = excluded.imported_at,
+        imported_by_user_id = excluded.imported_by_user_id,
+        updated_at = excluded.updated_at
+    `)
+    .bind(
+      employee.id,
+      employee.userId,
+      nullableString(employee.firstName),
+      nullableString(employee.lastName),
+      nullableString(employee.email),
+      nullableString(employee.phone),
+      employee.role,
+      nullableString(employee.department),
+      nullableString(employee.position),
+      nullableString(employee.address),
+      nullableString(employee.workplace),
+      nullableString(employee.managerId),
+      nullableString(employee.managerName),
+      employee.employmentStatus,
+      nullableString(employee.startDate),
+      nullableString(employee.employmentType),
+      employee.workload,
+      employee.weeklyHours,
+      employee.vacationEntitlementDays,
+      employee.vacationUsedDays,
+      employee.vacationPendingDays,
+      employee.vacationRemainingDays,
+      employee.currentAbsenceStatus,
+      employee.sickDaysCurrentYear,
+      nullableString(employee.lastAbsenceDate),
+      nullableString(employee.internalNote),
+      employee.isHrOnly ? 1 : 0,
+      nullableString(employee.sourceSystem),
+      nullableString(employee.sourceEmployeeKey),
+      nullableString(employee.importedAt),
+      nullableString(employee.importedByUserId),
       employee.createdAt,
       employee.updatedAt
     )

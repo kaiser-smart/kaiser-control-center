@@ -404,6 +404,89 @@ const EMPLOYMENT_TYPE_SELECT_OPTIONS = [
 ];
 const EMPLOYEE_ABSENCE_STATUS_OPTIONS = ["v práci", "nemoc", "dovolená", "OČR", "lékař", "náhradní volno"];
 const DOCUMENT_TYPE_LABELS = ["Pracovní smlouva", "Dodatek", "Školení", "Lékařská prohlídka", "Ostatní"];
+const EMPLOYEE_HR_PROFILE_FIELD_GROUPS = [
+  {
+    title: "Identifikace",
+    fields: [
+      { key: "personalNumber", label: "Osobní číslo" },
+      { key: "dateOfBirth", label: "Datum narození", type: "date" },
+      { key: "birthNumber", label: "Rodné číslo" },
+      { key: "idCardNumber", label: "Číslo OP" },
+      { key: "idCardValidUntil", label: "Platnost OP do", type: "date" },
+      { key: "passportValidUntil", label: "Platnost pasu do", type: "date" },
+      { key: "healthInsuranceCompany", label: "Zdravotní pojišťovna" },
+      { key: "citizenship", label: "Státní občanství" }
+    ]
+  },
+  {
+    title: "Kontakt a adresa",
+    fields: [
+      { key: "personalEmail", label: "Osobní e-mail", type: "email" },
+      { key: "personalPhone", label: "Osobní telefon" },
+      { key: "street", label: "Ulice" },
+      { key: "houseNumber", label: "Číslo domu" },
+      { key: "municipality", label: "Obec" },
+      { key: "state", label: "Stát" },
+      { key: "contactStreet", label: "Kontaktní ulice" },
+      { key: "contactZip", label: "Kontaktní PSČ" },
+      { key: "contactCountry", label: "Kontaktní stát" }
+    ]
+  },
+  {
+    title: "Pracovní smlouva",
+    fields: [
+      { key: "company", label: "Společnost" },
+      { key: "workCenter", label: "Středisko" },
+      { key: "contractType", label: "Typ smlouvy" },
+      { key: "contractValidity", label: "Platnost smlouvy" },
+      { key: "contractStartDate", label: "Začátek prac. smlouvy", type: "date" },
+      { key: "probationEndDate", label: "Konec zkušební doby", type: "date" },
+      { key: "departureDate", label: "Datum odchodu", type: "date" },
+      { key: "dailyShiftHours", label: "Denní směna", type: "number", step: "0.25" },
+      { key: "fte", label: "FTE", type: "number", step: "0.1" },
+      { key: "hourlyRate", label: "Hodinová sazba", type: "number", step: "0.01" }
+    ]
+  },
+  {
+    title: "Finance",
+    fields: [
+      { key: "bankAccount", label: "Číslo účtu" },
+      { key: "accountPrefix", label: "Předčíslí účtu" },
+      { key: "iban", label: "IBAN" },
+      { key: "pensionContribution", label: "Penzijní připojištění", type: "number", step: "0.01" },
+      { key: "transportContribution", label: "Příspěvek na dopravu", type: "number", step: "0.01" },
+      { key: "otherBonus", label: "Další bonus", type: "number", step: "0.01" },
+      { key: "cost", label: "Náklad", type: "number", step: "0.01" },
+      { key: "currency", label: "Měna" }
+    ]
+  },
+  {
+    title: "Rodina, nouzový kontakt a ŘP",
+    fields: [
+      { key: "maritalStatus", label: "Rodinný stav" },
+      { key: "childrenCount", label: "Počet dětí", type: "number", step: "1" },
+      { key: "birthPlace", label: "Místo narození" },
+      { key: "emergencyContactName", label: "Jméno nouzového kontaktu" },
+      { key: "emergencyContactPhone", label: "Telefon nouzového kontaktu" },
+      { key: "driverLicenseNumber", label: "Číslo ŘP" },
+      { key: "driverLicenseGroups", label: "Skupiny ŘP" },
+      { key: "computerWork", label: "Práce s počítačem" },
+      { key: "emailNotificationsEnabled", label: "Povolit e-mailové notifikace", type: "boolean" }
+    ]
+  },
+  {
+    title: "Zdroj Excelu",
+    readonly: true,
+    fields: [
+      { key: "sourceFile", label: "Zdrojový soubor" },
+      { key: "sourceSheet", label: "Zdrojový list" },
+      { key: "sourceRow", label: "Zdrojový řádek", type: "number" },
+      { key: "excelName", label: "Původní jméno v Excelu" },
+      { key: "importedAt", label: "Importováno" },
+      { key: "updatedAt", label: "Naposledy změněno" }
+    ]
+  }
+];
 const MEDICAL_EXAM_REQUEST_TYPE_OPTIONS = [
   { value: "entry", label: "Vstupní prohlídka" },
   { value: "periodic", label: "Periodická preventivní prohlídka" },
@@ -791,7 +874,12 @@ const employeeCardState = {
   medicalExamDraft: null,
   documentUploading: false,
   documentsUploadStatus: "waiting",
-  documentsMissingEndpoint: "POST /api/employees/:id/documents"
+  documentsMissingEndpoint: "POST /api/employees/:id/documents",
+  importPreview: null,
+  importLoading: false,
+  importApplying: false,
+  importMessage: "",
+  importError: ""
 };
 
 const fleetImportPreviewState = {
@@ -2767,6 +2855,39 @@ function normalizeEmployeeCardNumber(value, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function employeeHrProfileFieldList() {
+  return EMPLOYEE_HR_PROFILE_FIELD_GROUPS.flatMap((group) => group.fields);
+}
+
+function normalizeEmployeeHrProfileValue(field, value) {
+  if (field.type === "number") {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+  if (field.type === "boolean") {
+    if (value === true || value === "true") {
+      return true;
+    }
+    if (value === false || value === "false") {
+      return false;
+    }
+    return null;
+  }
+  return normalizeEmployeeCardText(value);
+}
+
+function normalizeEmployeeHrProfileData(data) {
+  if (!data) {
+    return null;
+  }
+
+  const profile = {};
+  employeeHrProfileFieldList().forEach((field) => {
+    profile[field.key] = normalizeEmployeeHrProfileValue(field, data[field.key]);
+  });
+  return profile;
+}
+
 function normalizeEmployeeCardFormData(data) {
   if (!data) {
     return null;
@@ -2799,7 +2920,8 @@ function normalizeEmployeeCardFormData(data) {
     currentAbsenceStatus: normalizeEmployeeCardText(data.currentAbsenceStatus) || "v práci",
     sickDaysCurrentYear: normalizeEmployeeCardNumber(data.sickDaysCurrentYear),
     lastAbsenceDate: normalizeEmployeeCardText(data.lastAbsenceDate),
-    internalNote: normalizeEmployeeCardText(data.internalNote)
+    internalNote: normalizeEmployeeCardText(data.internalNote),
+    ...(data.hrProfile ? { hrProfile: normalizeEmployeeHrProfileData(data.hrProfile) } : {})
   };
 }
 
@@ -2828,6 +2950,14 @@ function employeeCardFormValue(form, name) {
   return employeeCardFormField(form, name)?.value ?? "";
 }
 
+function employeeHrProfileFormData(form) {
+  const profile = {};
+  employeeHrProfileFieldList().forEach((field) => {
+    profile[field.key] = employeeCardFormValue(form, `hrProfile.${field.key}`);
+  });
+  return profile;
+}
+
 function employeeCardFormData(form) {
   const source = employeeCardState.employee || {};
   const entitlement = Number(employeeCardFormValue(form, "vacationEntitlementDays") || 0);
@@ -2835,6 +2965,9 @@ function employeeCardFormData(form) {
   const pending = Number(employeeCardFormValue(form, "vacationPendingDays") || 0);
   const managerId = employeeCardFormValue(form, "managerId");
   const manager = managerId ? employeeCardState.employees.find((item) => item.id === managerId) : null;
+  const hrProfile = form.querySelector("[data-employee-hr-profile-fields]")
+    ? employeeHrProfileFormData(form)
+    : null;
 
   return {
     ...source,
@@ -2861,7 +2994,8 @@ function employeeCardFormData(form) {
     currentAbsenceStatus: employeeCardFormValue(form, "currentAbsenceStatus") || "v práci",
     sickDaysCurrentYear: Number(employeeCardFormValue(form, "sickDaysCurrentYear") || 0),
     lastAbsenceDate: employeeCardFormValue(form, "lastAbsenceDate"),
-    internalNote: employeeCardFormValue(form, "internalNote").trim()
+    internalNote: employeeCardFormValue(form, "internalNote").trim(),
+    ...(hrProfile ? { hrProfile } : {})
   };
 }
 
@@ -5799,6 +5933,192 @@ function employeeCardReadonlyValue(label, value) {
   `;
 }
 
+function employeeHrProfileField(profile, field, disabled, readonly = false) {
+  const value = profile?.[field.key] ?? "";
+  const name = `hrProfile.${field.key}`;
+  const isDisabled = disabled || readonly;
+
+  if (field.type === "boolean") {
+    return employeeCardField(field.label, employeeCardSelect(name, [
+      { value: "", label: "Neuvedeno" },
+      { value: "true", label: "Ano" },
+      { value: "false", label: "Ne" }
+    ], value === true ? "true" : value === false ? "false" : "", isDisabled));
+  }
+
+  return employeeCardField(field.label, employeeCardInput(name, value ?? "", {
+    type: field.type || "text",
+    step: field.step,
+    min: field.min,
+    disabled: isDisabled
+  }));
+}
+
+function employeeHrProfileSection(employee, canEdit) {
+  if (!canEdit) {
+    return "";
+  }
+
+  if (employee.hrProfileApiStatus !== "ready") {
+    return `
+      <section class="employee-card-section employee-card-section--wide">
+        <div class="employee-card-section__head">
+          <div>
+            <h2>HR položky z Excelu</h2>
+            <p>Citlivá HR data čekají na DB migraci employee_hr_profiles.</p>
+          </div>
+          <span class="employee-card-status employee-card-status--waiting">Čeká na API</span>
+        </div>
+      </section>
+    `;
+  }
+
+  const profile = employee.hrProfile || {};
+  const groups = EMPLOYEE_HR_PROFILE_FIELD_GROUPS.map((group) => `
+    <section class="employee-hr-profile-group">
+      <h3>${escapeHtml(group.title)}</h3>
+      <div class="employee-card-fields" data-employee-hr-profile-fields>
+        ${group.fields.map((field) => employeeHrProfileField(profile, field, !canEdit, Boolean(group.readonly))).join("")}
+      </div>
+    </section>
+  `).join("");
+
+  return `
+    <section class="employee-card-section employee-card-section--wide employee-hr-profile-section">
+      <div class="employee-card-section__head">
+        <div>
+          <h2>HR položky z Excelu</h2>
+          <p>Oddělený personální profil. Nezakládá login a neposílá žádné notifikace.</p>
+        </div>
+        <span class="employee-card-status employee-card-status--ready">API aktivní</span>
+      </div>
+      <p class="employee-card-api-note">
+        Obsahuje citlivé údaje z HR exportu. Zobrazují se jen rolím, které mohou kartu upravovat.
+      </p>
+      <div class="employee-hr-profile-groups">
+        ${groups}
+      </div>
+    </section>
+  `;
+}
+
+function employeeImportIssueLabel(issue) {
+  const labels = {
+    "missing-name": "chybí jméno",
+    "missing-work-email": "chybí pracovní e-mail",
+    "manager-not-matched": "nenalezen nadřízený",
+    "name-needs-review": "jméno k revizi"
+  };
+  return labels[issue] || issue;
+}
+
+function employeeImportActionLabel(action) {
+  if (action === "create") {
+    return "Nová karta";
+  }
+  if (action === "update") {
+    return "Aktualizace";
+  }
+  return "Přeskočit";
+}
+
+function employeeImportPreviewTable(preview) {
+  if (!preview) {
+    return "";
+  }
+
+  const summary = preview.summary || {};
+  const rows = Array.isArray(preview.rows) ? preview.rows : [];
+  const columns = Array.isArray(preview.columnMappings) ? preview.columnMappings : [];
+
+  return `
+    <div class="employee-import-summary" aria-label="Souhrn importu zaměstnanců">
+      <article><span>Excel řádků</span><strong>${escapeHtml(summary.excelRows ?? 0)}</strong></article>
+      <article><span>V aplikaci</span><strong>${escapeHtml(summary.currentEmployees ?? 0)}</strong></article>
+      <article><span>Spárováno</span><strong>${escapeHtml(summary.matchedCount ?? 0)}</strong></article>
+      <article><span>Nové karty</span><strong>${escapeHtml(summary.createCount ?? 0)}</strong></article>
+      <article><span>Jen v aplikaci</span><strong>${escapeHtml(summary.appOnlyCount ?? 0)}</strong></article>
+      <article><span>Citlivých polí</span><strong>${escapeHtml(summary.sensitiveFieldCount ?? 0)}</strong></article>
+    </div>
+    <div class="employee-import-columns">
+      ${columns.map((column) => `
+        <span class="${column.sensitive ? "employee-import-column employee-import-column--sensitive" : "employee-import-column"}">
+          ${escapeHtml(column.excelColumn)} → ${escapeHtml(column.target)}
+        </span>
+      `).join("")}
+    </div>
+    <div class="absence-table-wrap">
+      <table class="absence-table employee-card-table">
+        <thead>
+          <tr>
+            <th>Řádek</th>
+            <th>Akce</th>
+            <th>Excel</th>
+            <th>Karta</th>
+            <th>Nadřízený</th>
+            <th>Problémy</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              <td data-label="Řádek">${escapeHtml(row.sourceRow)}</td>
+              <td data-label="Akce">${escapeHtml(employeeImportActionLabel(row.action))}</td>
+              <td data-label="Excel">
+                <strong>${escapeHtml(row.excelName || row.displayName || "bez jména")}</strong>
+                <span>${escapeHtml(row.matchMethod ? `match: ${row.matchMethod}` : "bez párování")}</span>
+              </td>
+              <td data-label="Karta">${escapeHtml(row.currentEmployeeName || row.employeeId || "nová karta")}</td>
+              <td data-label="Nadřízený">${escapeHtml(row.managerMatched ? row.managerName : (row.managerName ? `${row.managerName} · nenalezen` : "neuvedeno"))}</td>
+              <td data-label="Problémy">${escapeHtml((row.issues || []).map(employeeImportIssueLabel).join(", ") || "bez problému")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function employeeExcelImportSection(canEdit) {
+  if (!canEdit) {
+    return "";
+  }
+
+  const preview = employeeCardState.importPreview;
+  return `
+    <section class="employee-card-section employee-card-section--wide employee-import-section">
+      <div class="employee-card-section__head">
+        <div>
+          <h2>Import zaměstnanců z Excelu</h2>
+          <p>Preview nejdřív porovná Excel proti kartám. Import nezakládá přístupové účty.</p>
+        </div>
+        <span class="employee-card-status ${preview ? "employee-card-status--ready" : "employee-card-status--waiting"}">
+          ${preview ? "Preview připraveno" : "Čeká na Excel"}
+        </span>
+      </div>
+      ${employeeCardState.importMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.importMessage)}</p>` : ""}
+      ${employeeCardState.importError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.importError)}</p>` : ""}
+      <form class="employee-import-form" data-employee-import-form>
+        <label class="employee-document-upload-form__file">
+          <span>Excel zaměstnanců</span>
+          <input name="file" type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+        </label>
+        <button class="secondary-link" type="submit" ${employeeCardState.importLoading ? "disabled" : ""}>
+          ${employeeCardState.importLoading ? "Načítám preview..." : "Porovnat s aplikací"}
+        </button>
+        <button class="primary-action" type="button" data-employee-import-apply ${!preview || employeeCardState.importApplying ? "disabled" : ""}>
+          ${employeeCardState.importApplying ? "Importuji..." : "Naimportovat podle preview"}
+        </button>
+      </form>
+      ${preview ? employeeImportPreviewTable(preview) : `
+        <p class="employee-card-api-note">
+          Data se neukládají do prohlížeče. Soubor se posílá backendu jen pro preview nebo potvrzený import.
+        </p>
+      `}
+    </section>
+  `;
+}
+
 function employeeMedicalExamStatusBadge(state) {
   const tone = state?.statusTone || "waiting";
   const label = state?.statusLabel || "Chybí údaje";
@@ -6182,6 +6502,7 @@ function employeeCardContent(employeeId, user) {
       ${employeeCardState.message ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.message)}</p>` : ""}
       ${employeeCardState.error ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.error)}</p>` : ""}
       ${employeeCardKpis(formEmployee)}
+      ${employeeExcelImportSection(canEdit)}
 
       <form class="employee-card-form" data-employee-card-form data-employee-id="${escapeHtml(employee.id)}">
         <div class="employee-card-grid">
@@ -6274,6 +6595,7 @@ function employeeCardContent(employeeId, user) {
               </label>
             </section>
           ` : '<input type="hidden" name="internalNote" value="" />'}
+          ${employeeHrProfileSection(formEmployee, canEdit)}
         </div>
 
         ${canEdit ? `
@@ -15306,7 +15628,7 @@ async function loadEmployeeList(options = {}) {
   if (
     authState.status !== "authenticated" ||
     !authState.user ||
-    employeeCardState.employeesLoaded ||
+    (employeeCardState.employeesLoaded && options.force !== true) ||
     employeeCardState.employeesLoading ||
     !hasPermission(currentUser(), "absence", "view")
   ) {
@@ -17622,6 +17944,92 @@ async function saveEmployeeDocumentUpload(form) {
   }
 }
 
+async function submitEmployeeExcelImportPreview(form) {
+  if (!canEditEmployeeCards()) {
+    employeeCardState.importError = "Nemáte oprávnění importovat zaměstnance.";
+    render();
+    return;
+  }
+
+  const file = form.elements.file?.files?.[0] || null;
+  if (!file) {
+    employeeCardState.importError = "Vyberte Excel export zaměstnanců.";
+    employeeCardState.importMessage = "";
+    render();
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+  employeeCardState.importLoading = true;
+  employeeCardState.importError = "";
+  employeeCardState.importMessage = "Porovnávám Excel proti Kartě zaměstnance...";
+  render();
+
+  try {
+    const result = await apiJson("/api/employees/import-preview", {
+      method: "POST",
+      body: formData
+    });
+    employeeCardState.importPreview = result.preview || null;
+    employeeCardState.importMessage = "Preview importu je připravené. Zkontrolujte počty a akce.";
+    employeeCardState.importError = "";
+  } catch (error) {
+    console.error("smart_odpady_employee_import_preview_failed", error);
+    employeeCardState.importPreview = null;
+    employeeCardState.importError = error.message || "Preview importu se nepodařilo připravit.";
+    employeeCardState.importMessage = "";
+  } finally {
+    employeeCardState.importLoading = false;
+    render();
+  }
+}
+
+async function applyEmployeeExcelImport() {
+  if (!canEditEmployeeCards()) {
+    employeeCardState.importError = "Nemáte oprávnění importovat zaměstnance.";
+    render();
+    return;
+  }
+
+  const form = document.querySelector("[data-employee-import-form]");
+  const file = form?.elements.file?.files?.[0] || null;
+  if (!file || !employeeCardState.importPreview) {
+    employeeCardState.importError = "Nejdřív načtěte preview a ponechte vybraný stejný Excel.";
+    employeeCardState.importMessage = "";
+    render();
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+  employeeCardState.importApplying = true;
+  employeeCardState.importError = "";
+  employeeCardState.importMessage = "Importuji zaměstnance do cloudové DB...";
+  render();
+
+  try {
+    const result = await apiJson("/api/employees/import", {
+      method: "POST",
+      body: formData
+    });
+    const summary = result.result?.summary || {};
+    employeeCardState.importMessage = `Import dokončen: vytvořeno ${summary.createdCount || 0}, aktualizováno ${summary.updatedCount || 0}, přeskočeno ${summary.skippedCount || 0}.`;
+    employeeCardState.importError = "";
+    employeeCardState.importPreview = null;
+    employeeCardState.employeesLoaded = false;
+    employeeCardState.employee = null;
+    await loadEmployeeList({ force: true, renderAfter: false });
+  } catch (error) {
+    console.error("smart_odpady_employee_import_failed", error);
+    employeeCardState.importError = error.message || "Import zaměstnanců se nepodařilo uložit.";
+    employeeCardState.importMessage = "";
+  } finally {
+    employeeCardState.importApplying = false;
+    render();
+  }
+}
+
 function canEditAccessUsers() {
   const user = currentUser();
   return hasPermission(user, "users", "edit") || hasPermission(user, "users", "manage");
@@ -18181,6 +18589,13 @@ document.addEventListener("submit", async (event) => {
   if (accessRoleForm) {
     event.preventDefault();
     saveAccessRoleForm(accessRoleForm);
+    return;
+  }
+
+  const employeeImportForm = event.target.closest("[data-employee-import-form]");
+  if (employeeImportForm) {
+    event.preventDefault();
+    await submitEmployeeExcelImportPreview(employeeImportForm);
     return;
   }
 
@@ -18798,6 +19213,13 @@ document.addEventListener("click", async (event) => {
   if (employeeFocusEdit) {
     const firstInput = document.querySelector("[data-employee-card-form] input:not([disabled]), [data-employee-card-form] select:not([disabled]), [data-employee-card-form] textarea:not([disabled])");
     firstInput?.focus();
+    return;
+  }
+
+  const employeeImportApply = event.target.closest("[data-employee-import-apply]");
+  if (employeeImportApply) {
+    event.preventDefault();
+    await applyEmployeeExcelImport();
     return;
   }
 

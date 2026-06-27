@@ -8079,6 +8079,7 @@ body:has(.ai-assistant-promo-modal) {
 .employee-card-field input,
 .employee-card-field select,
 .employee-card-field textarea,
+.employee-import-form input,
 .employee-work-history-form input,
 .employee-work-history-form textarea,
 .employee-medical-exam-form input,
@@ -8102,6 +8103,7 @@ body:has(.ai-assistant-promo-modal) {
 .employee-card-field input,
 .employee-card-field select,
 .employee-card-field textarea,
+.employee-import-form input,
 .employee-work-history-form input,
 .employee-work-history-form textarea,
 .employee-medical-exam-form input,
@@ -8119,7 +8121,8 @@ body:has(.ai-assistant-promo-modal) {
 
 .employee-card-field input:disabled,
 .employee-card-field select:disabled,
-.employee-card-field textarea:disabled {
+.employee-card-field textarea:disabled,
+.employee-import-form input:disabled {
   background: #f6f8f4;
   color: var(--muted);
   cursor: not-allowed;
@@ -8424,6 +8427,101 @@ body:has(.ai-assistant-promo-modal) {
   min-width: 680px;
 }
 
+.employee-import-section,
+.employee-hr-profile-section {
+  border-color: #d9e8cf;
+}
+
+.employee-import-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.employee-import-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.employee-import-form label span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.employee-import-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.employee-import-summary article {
+  display: grid;
+  gap: 5px;
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #f8fbf4;
+}
+
+.employee-import-summary span,
+.employee-hr-profile-group h3 {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.employee-import-summary strong {
+  font-size: 1.45rem;
+}
+
+.employee-import-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.employee-import-column {
+  padding: 6px 9px;
+  border: 1px solid #dfe8d8;
+  border-radius: 999px;
+  background: #f7fbf3;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.employee-import-column--sensitive {
+  border-color: #f2d6a7;
+  background: #fffaf0;
+  color: #715014;
+}
+
+.employee-hr-profile-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.employee-hr-profile-group {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e4ecdd;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.employee-hr-profile-group h3 {
+  margin: 0;
+}
+
 @media (max-width: 860px) {
   .tracking-layout,
   .tracking-section,
@@ -8490,6 +8588,17 @@ body:has(.ai-assistant-promo-modal) {
 
   .employee-document-upload-form {
     grid-template-columns: 1fr;
+  }
+
+  .employee-import-form,
+  .employee-import-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-import-form .primary-action,
+  .employee-import-form .secondary-link {
+    width: 100%;
+    justify-content: center;
   }
 
   .fleet-import-panel,
