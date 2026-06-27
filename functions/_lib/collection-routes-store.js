@@ -224,6 +224,7 @@ const WASTE_TYPE_MAP = new Map([
 
 const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "5x7", "1x14", "1x30"]);
 const ALLOWED_CONTAINER_VOLUMES = new Set([30, 60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500]);
+const ALLOWED_CONTAINER_VOLUME_PATTERN = "30|60|80|120|240|360|660|770|1100|1500|2500";
 const VISTOS_ROUTE_WASTE_CODES = new Set(["150101", "150102", "150106", "200102", "200108", "200139", "200201", "200301"]);
 const VISTOS_COLLECTION_TEXT_ALIASES = [
   {
@@ -849,9 +850,11 @@ function normalizeContainerVolume(value) {
       known: Number.isFinite(volume) && ALLOWED_CONTAINER_VOLUMES.has(volume)
     };
   }
-  const preferredVolume = raw.match(/\b(60|80|120|240|360|660|770|1100|1500|2500)\s*(?:l|lt|ltr|litru|litr|litry)?\b/i);
-  const directVolume = raw.match(/^\s*(60|80|120|240|360|660|770|1100|1500|2500)\s*$/);
-  const match = preferredVolume || directVolume || raw.match(/\d+/);
+  const countedVolume = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const prefixedVolume = raw.match(new RegExp(`\\b(?:P|POP|POPEL|KONT|KONTEJNER)\\.?\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
+  const preferredVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const directVolume = raw.match(new RegExp(`^\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*$`));
+  const match = countedVolume || prefixedVolume || preferredVolume || directVolume || raw.match(/\d+/);
   const volume = match ? Number(match[1] || match[0]) : 0;
   return {
     volume,
@@ -860,7 +863,9 @@ function normalizeContainerVolume(value) {
 }
 
 function normalizeContainerCount(value) {
-  const count = Math.max(0, Math.round(numericValue(cleanString(value).replace(",", "."), 0)));
+  const raw = cleanString(value).replace(",", ".");
+  const countedVolume = raw.match(new RegExp(`^\\s*(\\d+)\\s*[x×]\\s*(?:${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const count = Math.max(0, Math.round(countedVolume ? Number(countedVolume[1]) : numericValue(raw, 0)));
   return count || 1;
 }
 
@@ -1141,7 +1146,7 @@ function inferVistosContainer(contractRow, product) {
   return {
     volume: volume.volume,
     known: volume.known,
-    count: normalizeContainerCount(quantitySource),
+    count: normalizeContainerCount(quantitySource || raw),
     type: cleanString(product?.Typnadoby || "container")
   };
 }
@@ -1531,7 +1536,7 @@ function mappedManualRow(rawRow, rowNumber) {
     wasteCode: waste.wasteCode,
     frequency: frequency.frequency,
     containerVolume: container.volume,
-    containerCount: normalizeContainerCount(rawCount),
+    containerCount: normalizeContainerCount(rawCount || rawVolume),
     note: readMappedField(rawRow, "note"),
     contact: readMappedField(rawRow, "contact"),
     phone: readMappedField(rawRow, "phone"),

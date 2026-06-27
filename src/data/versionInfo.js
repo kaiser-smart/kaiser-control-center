@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.144"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.145"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: objem nádob z obchodních textů",
+    text: "Parser Vistos Komunál preview rozpozná bezpečné zápisy jako 2x240, P240, P120, kont.1100 nebo 1100ltr jako objem a počet nádob bez hádání typu odpadu."
+  },
   {
     title: "Trasy svozu: alias GASTRO 30 l",
     text: "Vistos Komunál preview mapuje obchodní text GASTRO 30 l jako svozový BIO odpad 200108 s četností 1x7 a nádobou 30 l."
