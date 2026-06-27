@@ -1252,6 +1252,36 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       message: issue.message
     })))
     .slice(0, 80);
+  const severityRank = { error: 3, warning: 2, info: 1 };
+  const issueSummaryByType = new Map();
+  for (const row of mappedRows) {
+    for (const issue of row.issues) {
+      const issueType = cleanString(issue?.type || "data_issue") || "data_issue";
+      const severity = cleanString(issue?.severity || "warning") || "warning";
+      const message = cleanString(issue?.message || "Datový problém import preview.");
+      const existing = issueSummaryByType.get(issueType) || {
+        issueType,
+        severity,
+        message,
+        count: 0
+      };
+      existing.count += 1;
+      if ((severityRank[severity] || 0) > (severityRank[existing.severity] || 0)) {
+        existing.severity = severity;
+      }
+      if (!existing.message && message) {
+        existing.message = message;
+      }
+      issueSummaryByType.set(issueType, existing);
+    }
+  }
+  const issueSummaryRows = Array.from(issueSummaryByType.values())
+    .sort((left, right) => (
+      right.count - left.count ||
+      (severityRank[right.severity] || 0) - (severityRank[left.severity] || 0) ||
+      left.issueType.localeCompare(right.issueType)
+    ))
+    .slice(0, 50);
 
   return {
     filename: "vistos-komunal-preview.json",
@@ -1275,6 +1305,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     contractPreviewRows,
     sitePreviewRows,
     issuePreviewRows,
+    issueSummaryRows,
     metadata: {
       filter: VISTOS_KOMUNAL_CONTRACT_FILTER,
       filterDiagnostics,
@@ -1489,6 +1520,7 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
     siteCount: preview.summary.siteCount,
     containerCount: preview.summary.containerCount,
     previewRows: preview.previewRows,
+    issueSummaryRows: preview.issueSummaryRows,
     persistedRowCount: rowsToPersist.length,
     persistedRowsLimit: maxPersistRows,
     createsOperationalRoutes: false,
@@ -1911,6 +1943,12 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
       issueType: "vistos-komunal-empty-preview",
       severity: "warning",
       message: loaded.preview.metadata?.filterDiagnostics?.zeroResultReason || "Vistos Komunál preview skončilo bez smluv."
+    }];
+    loaded.preview.issueSummaryRows = [{
+      issueType: "vistos-komunal-empty-preview",
+      severity: "warning",
+      message: loaded.preview.metadata?.filterDiagnostics?.zeroResultReason || "Vistos Komunál preview skončilo bez smluv.",
+      count: 1
     }];
     loaded.preview.metadata.mappingStats.issues = loaded.preview.issuePreviewRows.length;
     loaded.preview.summary.issueCount = loaded.preview.issuePreviewRows.length;

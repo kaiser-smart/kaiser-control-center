@@ -9936,6 +9936,110 @@ function collectionRoutesKommunalIssueRows(metadata = {}) {
   }));
 }
 
+function collectionRoutesKommunalIssueAction(issueType = "", severity = "warning") {
+  const type = String(issueType || "").trim();
+
+  if ([
+    "missing-customer",
+    "missing-loading-address",
+    "missing-contract-items"
+  ].includes(type)) {
+    return "Opravit zdrojová data ve Vistosu.";
+  }
+
+  if ([
+    "unknown-product",
+    "unknown-waste-type",
+    "unknown-frequency",
+    "missing-container-volume",
+    "item-not-collection-mappable"
+  ].includes(type)) {
+    return "Doplnit mapovací pravidla preview.";
+  }
+
+  if ([
+    "inactive-contract-range",
+    "inactive-contract-row-flag",
+    "future-contract-row-start-date",
+    "expired-contract-row-end-date",
+    "missing-contract-row-start-date"
+  ].includes(type)) {
+    return "Ponechat jako datovou kontrolu, neblokuje Fázi 1E.";
+  }
+
+  if ([
+    "multiple-sites-contract",
+    "possible-site-duplicate"
+  ].includes(type)) {
+    return "Zkontrolovat stanoviště a adresní vazby.";
+  }
+
+  if (severity === "error") {
+    return "Prověřit zdrojová data před dalším mapováním.";
+  }
+
+  return "Zařadit do následné datové kontroly.";
+}
+
+function collectionRoutesKommunalIssuePriority(issueType = "", severity = "warning") {
+  const type = String(issueType || "").trim();
+  if (severity === "error" || ["missing-customer", "missing-loading-address"].includes(type)) {
+    return "vysoká";
+  }
+  if ([
+    "unknown-product",
+    "unknown-waste-type",
+    "unknown-frequency",
+    "missing-container-volume",
+    "item-not-collection-mappable",
+    "missing-contract-items"
+  ].includes(type)) {
+    return "mapování";
+  }
+  if ([
+    "inactive-contract-range",
+    "inactive-contract-row-flag",
+    "future-contract-row-start-date",
+    "expired-contract-row-end-date",
+    "missing-contract-row-start-date"
+  ].includes(type)) {
+    return "diagnostika";
+  }
+  return severity || "info";
+}
+
+function collectionRoutesKommunalIssueSummaryRows(metadata = {}) {
+  const sourceRows = Array.isArray(metadata.issueSummaryRows) && metadata.issueSummaryRows.length
+    ? metadata.issueSummaryRows
+    : collectionRoutesKommunalIssueRows(metadata).reduce((rows, issue) => {
+      const issueType = issue.issueType || issue.type || "data_issue";
+      const existing = rows.find((row) => row.issueType === issueType);
+      if (existing) {
+        existing.count += 1;
+        return rows;
+      }
+      rows.push({
+        issueType,
+        severity: issue.severity || "warning",
+        message: issue.message || "Datový problém import preview.",
+        count: 1
+      });
+      return rows;
+    }, []);
+
+  return sourceRows
+    .map((row) => ({
+      issueType: row.issueType || row.type || "data_issue",
+      count: collectionRoutesMetricValue(row.count, 0),
+      severity: row.severity || "warning",
+      priority: collectionRoutesKommunalIssuePriority(row.issueType || row.type, row.severity),
+      action: collectionRoutesKommunalIssueAction(row.issueType || row.type, row.severity),
+      message: row.message || "Datový problém import preview."
+    }))
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 50);
+}
+
 function collectionRoutesMetricValue(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -10233,6 +10337,7 @@ function collectionRoutesVistosKommunalSection(user) {
   const contractRows = collectionRoutesKommunalContractRows(metadata);
   const siteRows = collectionRoutesKommunalSiteRows(metadata);
   const issueRows = collectionRoutesKommunalIssueRows(metadata);
+  const issueSummaryRows = collectionRoutesKommunalIssueSummaryRows(metadata);
   const diagnosticRows = collectionRoutesKommunalFilterDiagnosticRows(metadata);
   const firstContract = contractRows[0] || null;
   const apiStatus = batch?.apiStatus || collectionRoutesPilotState.apiStatus;
@@ -10290,6 +10395,13 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Počet", value: (row) => row.value },
         { label: "Poznámka", value: (row) => row.note }
       ], diagnosticRows, "Po načtení Vistos Komunál preview se zde zobrazí diagnostika filtrů.")}
+
+      ${collectionRoutesPreviewTable("Souhrn problémů podle typu", [
+        { label: "Typ", value: (row) => row.issueType },
+        { label: "Počet", value: (row) => row.count },
+        { label: "Priorita", value: (row) => row.priority },
+        { label: "Doporučený postup", value: (row) => row.action }
+      ], issueSummaryRows, "Po načtení preview se zde zobrazí souhrn problémů podle typu.")}
 
       ${firstContract ? `
         <div class="collection-routes-detail-grid" aria-label="Detail jedné smlouvy">
