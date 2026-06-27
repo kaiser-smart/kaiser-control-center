@@ -2210,6 +2210,49 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
   });
 }
 
+export async function createCollectionRoutesVistosKommunalPreviewExport(env, {
+  issueType = "",
+  limit = 5000
+} = {}) {
+  const loaded = await loadVistosKommunalPreviewData(env);
+
+  if (!loaded.configured) {
+    throw new CollectionRoutesStoreError(loaded.message, 503, "vistos_api_not_configured");
+  }
+
+  const preview = loaded.preview || {};
+  const type = cleanString(issueType);
+  const maxRows = Math.max(1, Math.min(Number(limit) || 5000, 10000));
+  const allRows = Array.isArray(preview.rows) ? preview.rows : [];
+  const rows = allRows
+    .filter((row) => {
+      if (!type) {
+        return true;
+      }
+      return (row.issues || []).some((issue) => cleanString(issue?.type) === type);
+    })
+    .slice(0, maxRows);
+
+  return {
+    status: "preview-export",
+    apiStatus: loaded.apiStatus || "ready",
+    phase: VISTOS_KOMUNAL_PHASE,
+    mode: "vistos-komunal-preview-export",
+    source: "vistos",
+    sourceMode: "vistos-komunal-preview",
+    issueType: type,
+    rowCount: rows.length,
+    totalPreviewRows: allRows.length,
+    createsOperationalRoutes: false,
+    sendsEmailOrSms: false,
+    startsAutomation: false,
+    summary: preview.summary || {},
+    issueSummaryRows: preview.issueSummaryRows || [],
+    metadata: preview.metadata || {},
+    rows
+  };
+}
+
 export function collectionRoutesDbError(error) {
   const message = cleanString(error?.message);
   if (message.includes("no such table")) {
