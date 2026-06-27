@@ -1282,6 +1282,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       left.issueType.localeCompare(right.issueType)
     ))
     .slice(0, 50);
+  const mappingGapRows = buildVistosKommunalMappingGapRows(mappedRows);
 
   return {
     filename: "vistos-komunal-preview.json",
@@ -1306,6 +1307,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     sitePreviewRows,
     issuePreviewRows,
     issueSummaryRows,
+    mappingGapRows,
     metadata: {
       filter: VISTOS_KOMUNAL_CONTRACT_FILTER,
       filterDiagnostics,
@@ -1489,6 +1491,105 @@ function manualRowSummary(row) {
   };
 }
 
+function kommunalMappingGapReason(issueTypes) {
+  const reasons = [];
+  if (issueTypes.has("unknown-waste-type")) {
+    reasons.push("neznámý typ odpadu");
+  }
+  if (issueTypes.has("unknown-frequency")) {
+    reasons.push("neznámá četnost");
+  }
+  if (issueTypes.has("missing-container-volume")) {
+    reasons.push("chybí objem nádoby");
+  }
+  if (issueTypes.has("unknown-product")) {
+    reasons.push("neznámý produkt");
+  }
+  if (issueTypes.has("missing-contract-items")) {
+    reasons.push("smlouva nemá položky");
+  }
+  if (!reasons.length && issueTypes.has("item-not-collection-mappable")) {
+    reasons.push("nevypadá jako svoz odpadu");
+  }
+  return reasons.join(", ") || "datová kontrola";
+}
+
+function kommunalMappingGapAction(issueTypes) {
+  if (issueTypes.has("missing-contract-items")) {
+    return "Zkontrolovat, zda má smlouva ve Vistosu svozové položky.";
+  }
+  if (issueTypes.has("unknown-waste-type") || issueTypes.has("unknown-frequency") || issueTypes.has("missing-container-volume")) {
+    return "Doplnit mapovací pravidlo pro odpad, četnost nebo objem.";
+  }
+  if (issueTypes.has("unknown-product")) {
+    return "Doplnit produkt do mapování Vistos položek.";
+  }
+  return "Rozhodnout, jestli jde o svoz odpadu, nebo položku označit jako nesvozovou.";
+}
+
+function buildVistosKommunalMappingGapRows(mappedRows) {
+  const rowsByKey = new Map();
+
+  for (const row of mappedRows) {
+    const issueTypes = new Set((row.issues || []).map((issue) => cleanString(issue?.type)).filter(Boolean));
+    if (!issueTypes.has("item-not-collection-mappable")) {
+      continue;
+    }
+
+    const label = firstNonEmpty(row.productName, row.rowName, row.note, row.productId, row.sourceId, "Bez názvu položky");
+    const key = normalizeLookupKey(label) || normalizeLookupKey(row.productId) || normalizeLookupKey(row.sourceId) || `row-${row.rowNumber}`;
+    const existing = rowsByKey.get(key) || {
+      label,
+      count: 0,
+      reasonCounts: new Map(),
+      sampleContracts: [],
+      sampleCustomers: new Set(),
+      sampleRowNames: new Set(),
+      sampleNotes: new Set(),
+      issueTypes: new Set()
+    };
+
+    existing.count += 1;
+    const reason = kommunalMappingGapReason(issueTypes);
+    existing.reasonCounts.set(reason, (existing.reasonCounts.get(reason) || 0) + 1);
+    for (const issueType of issueTypes) {
+      existing.issueTypes.add(issueType);
+    }
+    if (row.contractNumber && existing.sampleContracts.length < 3 && !existing.sampleContracts.includes(row.contractNumber)) {
+      existing.sampleContracts.push(row.contractNumber);
+    }
+    if (row.customerName && existing.sampleCustomers.size < 3) {
+      existing.sampleCustomers.add(row.customerName);
+    }
+    if (row.rowName && existing.sampleRowNames.size < 3) {
+      existing.sampleRowNames.add(row.rowName);
+    }
+    if (row.note && existing.sampleNotes.size < 2) {
+      existing.sampleNotes.add(row.note);
+    }
+    rowsByKey.set(key, existing);
+  }
+
+  return Array.from(rowsByKey.values())
+    .map((row) => {
+      const topReason = Array.from(row.reasonCounts.entries())
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "cs"))[0]?.[0] || "datová kontrola";
+      return {
+        label: row.label,
+        count: row.count,
+        reason: topReason,
+        action: kommunalMappingGapAction(row.issueTypes),
+        sampleContracts: row.sampleContracts,
+        sampleCustomers: Array.from(row.sampleCustomers),
+        sampleRowNames: Array.from(row.sampleRowNames),
+        sampleNotes: Array.from(row.sampleNotes),
+        issueTypes: Array.from(row.issueTypes).sort()
+      };
+    })
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "cs"))
+    .slice(0, 30);
+}
+
 async function persistCollectionRoutesImportPreview(env, user, preview, {
   phase,
   mode,
@@ -1521,6 +1622,7 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
     containerCount: preview.summary.containerCount,
     previewRows: preview.previewRows,
     issueSummaryRows: preview.issueSummaryRows,
+    mappingGapRows: preview.mappingGapRows,
     persistedRowCount: rowsToPersist.length,
     persistedRowsLimit: maxPersistRows,
     createsOperationalRoutes: false,

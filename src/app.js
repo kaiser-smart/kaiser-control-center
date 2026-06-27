@@ -10173,6 +10173,107 @@ function collectionRoutesKommunalIssueOverview(issueSummaryRows = [], issueCount
   `;
 }
 
+function collectionRoutesTextKey(value = "") {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("cs")
+    .replace(/\s+/g, " ");
+}
+
+function collectionRoutesKommunalMappingReason(issueTypes = []) {
+  const types = new Set(issueTypes);
+  const reasons = [];
+  if (types.has("unknown-waste-type")) {
+    reasons.push("neznámý typ odpadu");
+  }
+  if (types.has("unknown-frequency")) {
+    reasons.push("neznámá četnost");
+  }
+  if (types.has("missing-container-volume")) {
+    reasons.push("chybí objem nádoby");
+  }
+  if (types.has("unknown-product")) {
+    reasons.push("neznámý produkt");
+  }
+  if (types.has("missing-contract-items")) {
+    reasons.push("smlouva nemá položky");
+  }
+  if (!reasons.length && types.has("item-not-collection-mappable")) {
+    reasons.push("nevypadá jako svoz odpadu");
+  }
+  return reasons.join(", ") || "datová kontrola";
+}
+
+function collectionRoutesKommunalMappingAction(issueTypes = []) {
+  const types = new Set(issueTypes);
+  if (types.has("missing-contract-items")) {
+    return "Zkontrolovat, zda má smlouva ve Vistosu svozové položky.";
+  }
+  if (types.has("unknown-waste-type") || types.has("unknown-frequency") || types.has("missing-container-volume")) {
+    return "Doplnit mapovací pravidlo pro odpad, četnost nebo objem.";
+  }
+  if (types.has("unknown-product")) {
+    return "Doplnit produkt do mapování Vistos položek.";
+  }
+  return "Rozhodnout, jestli jde o svoz odpadu, nebo položku označit jako nesvozovou.";
+}
+
+function collectionRoutesKommunalMappingGapRows(metadata = {}) {
+  if (Array.isArray(metadata.mappingGapRows) && metadata.mappingGapRows.length) {
+    return metadata.mappingGapRows.map((row) => ({
+      label: row.label || "Bez názvu položky",
+      count: collectionRoutesMetricValue(row.count, 0),
+      reason: row.reason || collectionRoutesKommunalMappingReason(row.issueTypes || []),
+      action: row.action || collectionRoutesKommunalMappingAction(row.issueTypes || []),
+      example: Array.isArray(row.sampleContracts) && row.sampleContracts.length
+        ? row.sampleContracts.join(", ")
+        : Array.isArray(row.sampleCustomers) && row.sampleCustomers.length
+          ? row.sampleCustomers.join(", ")
+          : "-"
+    })).slice(0, 30);
+  }
+
+  const rowsByKey = new Map();
+  collectionRoutesPilotState.kommunalPreviewRows.forEach((row) => {
+    const issues = Array.isArray(row.issues) ? row.issues : [];
+    const issueTypes = issues.map((issue) => issue.issueType || issue.type).filter(Boolean);
+    if (!issueTypes.includes("item-not-collection-mappable")) {
+      return;
+    }
+    const summary = collectionRoutesImportRowSummary(row);
+    const label = [summary.productName, summary.rowName, summary.note, summary.productId, summary.sourceId]
+      .map((value) => String(value || "").trim())
+      .find(Boolean) || "Bez názvu položky";
+    const key = collectionRoutesTextKey(label) || String(row.id || row.rowNumber || label);
+    const existing = rowsByKey.get(key) || {
+      label,
+      count: 0,
+      issueTypes: new Set(),
+      sampleContracts: []
+    };
+    existing.count += 1;
+    issueTypes.forEach((type) => existing.issueTypes.add(type));
+    if (summary.contractNumber && existing.sampleContracts.length < 3 && !existing.sampleContracts.includes(summary.contractNumber)) {
+      existing.sampleContracts.push(summary.contractNumber);
+    }
+    rowsByKey.set(key, existing);
+  });
+
+  return Array.from(rowsByKey.values())
+    .map((row) => {
+      const issueTypes = Array.from(row.issueTypes);
+      return {
+        label: row.label,
+        count: row.count,
+        reason: collectionRoutesKommunalMappingReason(issueTypes),
+        action: collectionRoutesKommunalMappingAction(issueTypes),
+        example: row.sampleContracts.length ? row.sampleContracts.join(", ") : "-"
+      };
+    })
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "cs"))
+    .slice(0, 30);
+}
+
 function collectionRoutesMetricValue(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -10471,6 +10572,7 @@ function collectionRoutesVistosKommunalSection(user) {
   const siteRows = collectionRoutesKommunalSiteRows(metadata);
   const issueRows = collectionRoutesKommunalIssueRows(metadata);
   const issueSummaryRows = collectionRoutesKommunalIssueSummaryRows(metadata);
+  const mappingGapRows = collectionRoutesKommunalMappingGapRows(metadata);
   const diagnosticRows = collectionRoutesKommunalFilterDiagnosticRows(metadata);
   const firstContract = contractRows[0] || null;
   const apiStatus = batch?.apiStatus || collectionRoutesPilotState.apiStatus;
@@ -10525,11 +10627,13 @@ function collectionRoutesVistosKommunalSection(user) {
 
       ${collectionRoutesKommunalIssueOverview(issueSummaryRows, issueCount, hasPreviewData)}
 
-      ${collectionRoutesPreviewTable("Diagnostika filtrů", [
-        { label: "Krok", value: (row) => row.label },
-        { label: "Počet", value: (row) => row.value },
-        { label: "Poznámka", value: (row) => row.note }
-      ], diagnosticRows, "Po načtení Vistos Komunál preview se zde zobrazí diagnostika filtrů.")}
+      ${collectionRoutesPreviewTable("Vzorky položek k namapování", [
+        { label: "Text z Vistosu", value: (row) => row.label },
+        { label: "Počet", value: (row) => row.count },
+        { label: "Proč to nejde", value: (row) => row.reason },
+        { label: "Příklad smlouvy", value: (row) => row.example },
+        { label: "Co doplnit", value: (row) => row.action }
+      ], mappingGapRows, "Po dalším načtení preview se zde zobrazí nejčastější Vistos položky, podle kterých doplnit mapovací pravidla.")}
 
       ${collectionRoutesPreviewTable("Souhrn: co řešit dál", [
         { label: "Co znamená", value: (row) => row.issueLabel },
@@ -10537,6 +10641,12 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Skupina", value: (row) => row.priority },
         { label: "Co s tím", value: (row) => row.action }
       ], issueSummaryRows, "Po načtení preview se zde zobrazí lidský souhrn toho, co řešit dál.")}
+
+      ${collectionRoutesPreviewTable("Diagnostika filtrů", [
+        { label: "Krok", value: (row) => row.label },
+        { label: "Počet", value: (row) => row.value },
+        { label: "Poznámka", value: (row) => row.note }
+      ], diagnosticRows, "Po načtení Vistos Komunál preview se zde zobrazí diagnostika filtrů.")}
 
       ${firstContract ? `
         <div class="collection-routes-detail-grid" aria-label="Detail jedné smlouvy">
