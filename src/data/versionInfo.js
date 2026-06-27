@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.154"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.155"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -21,8 +21,12 @@ export const versionInfo = {
 
 export const versionNews = [
   {
-    title: "Trasy svozu: párování Excel tras na Vistos",
-    text: "Optimalizační read-only náhled si po nahrání dispečerských Excelů načte plný Vistos párovací export, doplní chybějící odpad/objem/počet do paměťového náhledu a exportuje původní, Vistos i výsledné párovací sloupce."
+    title: "Trasy svozu: Vistos jako hlavní zdroj tras",
+    text: "Vistos Komunál preview teď v UI jasně vede hlavní tok jako Vistos → read-only návrh svozových skupin. Dispečerské Excely jsou označené jen jako jednorázová historická kalibrace, ne každodenní provozní vstup."
+  },
+  {
+    title: "Trasy svozu: historická kalibrace Excel tras",
+    text: "Jednorázová kalibrace z dispečerských Excelů si načte plný Vistos párovací export, doplní chybějící odpad/objem/počet do paměťového náhledu a exportuje původní, Vistos i výsledné párovací sloupce."
   },
   {
     title: "Trasy svozu: kontrola kvality importu tras",
@@ -33,8 +37,8 @@ export const versionNews = [
     text: "Optimalizační read-only náhled umí zpracovat i staré binární .xls soubory dispečinku a vícelistové workbooky bez ruční konverze."
   },
   {
-    title: "Trasy svozu: read-only optimalizační náhled",
-    text: "Vistos Komunál preview umí nahrát dispečerské trasy jako .xlsx/CSV, připravit pracovní návrh Brno/Blansko pro vozidla A/B/C a vyexportovat párovací sloupce bez vytvoření ostrých tras."
+    title: "Trasy svozu: read-only historická kalibrace",
+    text: "Vistos Komunál preview umí jednorázově porovnat dispečerské trasy jako .xls/.xlsx/CSV s Vistos daty pro oblast Brno/Blansko a vyexportovat párovací sloupce bez vytvoření ostrých tras."
   },
   {
     title: "Trasy svozu: pracovní návrh svozových skupin",

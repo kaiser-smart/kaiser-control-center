@@ -11135,7 +11135,7 @@ function collectionRoutesVistosKommunalSection(user) {
       ${canImport ? `
         <form class="collection-routes-import-form" data-collection-routes-kommunal-preview-form>
           <button class="primary-action" type="submit" ${collectionRoutesPilotState.kommunalPreviewLoading ? "disabled" : ""}>
-            ${collectionRoutesPilotState.kommunalPreviewLoading ? "Načítám Komunál preview..." : "Načíst aktivní Komunál smlouvy z Vistosu"}
+            ${collectionRoutesPilotState.kommunalPreviewLoading ? "Načítám Vistos a skládám návrh..." : "Sestavit read-only návrh svozů z Vistosu"}
           </button>
         </form>
       ` : `
@@ -11149,30 +11149,30 @@ function collectionRoutesVistosKommunalSection(user) {
       ${collectionRoutesKommunalIssueOverview(issueSummaryRows, issueCount, hasPreviewData)}
 
       <div class="collection-routes-phase-note">
-        <strong>Optimalizační náhled z 13 dispečerských Excelů je pouze read-only pilot.</strong>
-        <span>Nahrané soubory se neukládají do databáze ani do prohlížeče. Slouží jen k výpočtu pracovního návrhu Brno/Blansko a párování proti právě načtenému Vistos preview.</span>
+        <strong>Hlavní provozní tok je Vistos → návrh svozů. Excel není ranní provozní vstup.</strong>
+        <span>13 dispečerských Excelů slouží jen jako jednorázová historická kalibrace dnešního ručního systému. Nahrané soubory se neukládají do databáze ani do prohlížeče.</span>
       </div>
 
       ${canImport ? `
         <form class="collection-routes-import-form collection-routes-import-form--file" data-collection-routes-route-optimization-form>
           <label>
-            <span>Excel/CSV trasy dispečinku</span>
+            <span>Jednorázové historické Excel/CSV podklady</span>
             <input type="file" name="files" accept=".xlsx,.csv,.tsv,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values" multiple>
           </label>
           <button class="primary-action" type="submit" ${collectionRoutesPilotState.routeOptimizationLoading ? "disabled" : ""}>
-            ${collectionRoutesPilotState.routeOptimizationLoading ? "Počítám návrh tras..." : "Připravit optimalizační návrh"}
+            ${collectionRoutesPilotState.routeOptimizationLoading ? "Porovnávám historické trasy..." : "Porovnat historické Excely s Vistosem"}
           </button>
         </form>
-        <p class="module-feedback__notice">Podporuje .xls, .xlsx a CSV. Náhled se po zpracování neukládá jako ostrá trasa.</p>
+        <p class="module-feedback__notice">Podporuje .xls, .xlsx a CSV. Je to kalibrace a kontrola proti starému dispečerskému systému, ne každodenní provozní postup.</p>
       ` : `
-        <p class="module-feedback__notice">Optimalizační náhled tras může spustit pouze admin.</p>
+        <p class="module-feedback__notice">Historickou kalibraci Excel podkladů může spustit pouze admin.</p>
       `}
 
       ${collectionRoutesPilotState.routeOptimizationMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.routeOptimizationMessage)}</p>` : ""}
       ${collectionRoutesPilotState.routeOptimizationError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.routeOptimizationError)}</p>` : ""}
       ${collectionRoutesRouteOptimizationSummaryCards(routeOptimizationPreview, routeOptimizationRows)}
 
-      ${collectionRoutesPreviewTable("Optimalizační návrh tras", [
+      ${collectionRoutesPreviewTable("Historická kalibrace tras z Excelů", [
         { label: "Den", value: (row) => row.suggestedDay },
         { label: "Vozidlo", value: (row) => `${row.vehicleCode || "-"} ${row.vehicleRegistration || ""}` },
         { label: "Původní trasa", value: (row) => `${row.sourceRoute || "-"} · ${row.originalDay || "-"} · ${row.originalWeek || "-"}` },
@@ -11193,11 +11193,11 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Vistos zákazník", value: (row) => row.vistosCustomerName || "-" },
         { label: "Vistos adresa", value: (row) => row.vistosAddressRaw || "-" },
         { label: "Jistota", value: (row) => `${row.confidence || "-"} / ${row.vistosMatchConfidence || "-"} / skóre ${row.vistosMatchScore || 0}` }
-      ], routeOptimizationRows, "Nahrajte dispečerské trasy jako .xls, .xlsx nebo CSV. Náhled zůstane pouze read-only a nevytvoří ostré trasy.", `
+      ], routeOptimizationRows, "Pro běžný provoz nejdřív sestavte návrh z Vistosu. Historické Excely nahrávejte jen jednorázově pro kalibraci a porovnání.", `
         <button class="secondary-link" type="button" data-collection-routes-export-optimization>Export do Excelu</button>
       `)}
 
-      ${collectionRoutesPreviewTable("Pracovní návrh svozů", [
+      ${collectionRoutesPreviewTable("Pracovní návrh svozů z Vistosu", [
         { label: "Odpad", value: (row) => `${row.wasteType || "-"}${row.wasteCode ? ` / ${row.wasteCode}` : ""}` },
         { label: "Četnost", value: (row) => row.frequency },
         { label: "Nádoba", value: (row) => row.containerVolume ? `${row.containerVolume} l` : "-" },
@@ -11206,7 +11206,7 @@ function collectionRoutesVistosKommunalSection(user) {
         { label: "Položky", value: (row) => row.itemCount },
         { label: "Příklad stanoviště", value: (row) => Array.isArray(row.sampleSites) && row.sampleSites.length ? row.sampleSites.join(", ") : "-" },
         { label: "Příklad smlouvy", value: (row) => Array.isArray(row.sampleContracts) && row.sampleContracts.length ? row.sampleContracts.join(", ") : "-" }
-      ], routeDraftRows, "Po načtení preview se zde zobrazí bezpečný read-only návrh svozových skupin z už mapovatelných položek.", `
+      ], routeDraftRows, "Po načtení Vistos preview se zde zobrazí hlavní read-only návrh svozových skupin z mapovatelných položek. Tohle je budoucí provozní směr.", `
         <button class="secondary-link" type="button" data-collection-routes-export-route-draft>Export do Excelu</button>
       `)}
 
@@ -12943,7 +12943,7 @@ async function submitCollectionRoutesRouteOptimizationPreview(form) {
   const user = currentUser();
 
   if (!collectionRoutesCanRunImportPreview(user)) {
-    collectionRoutesPilotState.routeOptimizationError = "Optimalizační náhled tras může spustit pouze admin.";
+    collectionRoutesPilotState.routeOptimizationError = "Historickou kalibraci Excel podkladů může spustit pouze admin.";
     collectionRoutesPilotState.routeOptimizationMessage = "";
     render();
     return;
@@ -12952,7 +12952,7 @@ async function submitCollectionRoutesRouteOptimizationPreview(form) {
   const fileInput = form.querySelector("input[type='file'][name='files']");
   const files = Array.from(fileInput?.files || []);
   if (!files.length) {
-    collectionRoutesPilotState.routeOptimizationError = "Vyberte alespoň jeden .xls, .xlsx nebo CSV soubor tras.";
+    collectionRoutesPilotState.routeOptimizationError = "Vyberte alespoň jeden historický .xls, .xlsx nebo CSV soubor tras pro jednorázovou kalibraci.";
     collectionRoutesPilotState.routeOptimizationMessage = "";
     render();
     return;
@@ -12978,7 +12978,7 @@ async function submitCollectionRoutesRouteOptimizationPreview(form) {
     const summary = preview.summary || {};
     collectionRoutesPilotState.routeOptimizationPreview = preview;
     collectionRoutesPilotState.routeOptimizationMessage =
-      `Optimalizační read-only náhled načetl ${summary.parsedFileCount || 0} souborů a připravil ${summary.rowCount || 0} řádků. Načítám Vistos párování.`;
+      `Historická kalibrace načetla ${summary.parsedFileCount || 0} souborů a připravila ${summary.rowCount || 0} porovnávacích řádků. Načítám Vistos párování.`;
     collectionRoutesPilotState.routeOptimizationError = "";
     collectionRoutesPilotState.activeTab = "vistos-komunal";
     render();
@@ -12988,10 +12988,10 @@ async function submitCollectionRoutesRouteOptimizationPreview(form) {
     const filledCount = pairedRows.filter((row) => Array.isArray(row.vistosFilledFields) && row.vistosFilledFields.length).length;
     const pairingRowsCount = collectionRoutesRouteOptimizationCandidateRows().length;
     collectionRoutesPilotState.routeOptimizationMessage =
-      `Optimalizační read-only náhled načetl ${summary.parsedFileCount || 0} souborů a připravil ${summary.rowCount || 0} řádků. Vistos párování: ${pairedCount} spárováno, ${filledCount} doplněno z ${pairingRowsCount} Vistos řádků. Ostré trasy nebyly vytvořené.`;
+      `Historická kalibrace načetla ${summary.parsedFileCount || 0} souborů a připravila ${summary.rowCount || 0} porovnávacích řádků. Vistos párování: ${pairedCount} spárováno, ${filledCount} doplněno z ${pairingRowsCount} Vistos řádků. Ostré trasy nebyly vytvořené.`;
   } catch (error) {
     collectionRoutesPilotState.routeOptimizationPreview = null;
-    collectionRoutesPilotState.routeOptimizationError = error.payload?.error || error.message || "Optimalizační náhled tras se nepodařilo zpracovat.";
+    collectionRoutesPilotState.routeOptimizationError = error.payload?.error || error.message || "Historickou kalibraci tras se nepodařilo zpracovat.";
     collectionRoutesPilotState.routeOptimizationMessage = "";
   } finally {
     collectionRoutesPilotState.routeOptimizationLoading = false;
@@ -15502,13 +15502,13 @@ function exportCollectionRoutesRouteOptimization() {
   const rows = collectionRoutesRouteOptimizationRows();
   if (!rows.length) {
     collectionRoutesPilotState.routeOptimizationMessage = "";
-    collectionRoutesPilotState.routeOptimizationError = "Není co exportovat pro optimalizační návrh. Nejdřív nahrajte dispečerské trasy jako .xls, .xlsx nebo CSV.";
+    collectionRoutesPilotState.routeOptimizationError = "Není co exportovat pro historickou kalibraci. Pro běžný provoz nejdřív načtěte Vistos; historické Excely nahrávejte jen pro jednorázové porovnání.";
     render();
     return;
   }
 
   const date = new Date().toISOString().slice(0, 10);
-  downloadCsv(`trasy-svozu-optimalizacni-navrh-${date}.csv`, collectionRoutesRouteOptimizationCsv(rows));
+  downloadCsv(`trasy-svozu-historicka-kalibrace-${date}.csv`, collectionRoutesRouteOptimizationCsv(rows));
 }
 
 function fleetCsvCell(value) {
