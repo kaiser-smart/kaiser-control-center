@@ -76,6 +76,9 @@ let mockCollectionRouteSites = [];
 let mockCollectionRouteImportRows = [];
 let mockCollectionRouteServices = [];
 let mockCollectionRouteContainers = [];
+let mockCollectionRouteSourceBatches = [];
+let mockCollectionRouteSourceFiles = [];
+let mockCollectionRouteSourceRows = [];
 
 const mockVehicleWimSites = [
   ["wim-d0-0781-modletice-jesenice", "D0", "km 78,1 / cca km 79", "mezi Modleticemi a Jesenici", "Cernosice", "vpravo + vlevo", "active", "v provozu", 49.9706, 14.5288, 2],
@@ -507,6 +510,121 @@ function currentDevUser(request) {
   }
 
   return mockUsers.find((user) => user.id === session.userId && user.status === "active") || null;
+}
+
+function normalizeRouteSourceText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]+/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function routeSourceDay(value) {
+  const text = normalizeRouteSourceText(value);
+  if (text.includes("PONDELI")) return "PO";
+  if (text.includes("UTERY")) return "ÚT";
+  if (text.includes("STREDA")) return "ST";
+  if (text.includes("CTVRTEK")) return "ČT";
+  if (text.includes("PATEK")) return "PÁ";
+  return "";
+}
+
+function routeSourceWeek(value) {
+  const text = normalizeRouteSourceText(value);
+  if (text.includes("1X30") || text.includes("MESIC")) return "měsíční / 1x30";
+  if (text.includes("SUDE") || text.includes("SUDY")) return "sudý týden";
+  if (text.includes("LICHE") || text.includes("LICHY")) return "lichý týden";
+  return "každý týden";
+}
+
+function routeSourceFieldLooksOperational(value) {
+  const text = normalizeRouteSourceText(value);
+  return Boolean(
+    text &&
+    !/^\d+$/.test(text) &&
+    !/\b(SUDY|SUDE|LICHY|LICHE|PONDELI|UTERY|STREDA|CTVRTEK|PATEK|DPI|PLI|FKU|MAP)\b/.test(text) &&
+    !/\b(1X7|2X7|3X7|5X7|1X14|1X30|KONT|LTR|LITR|SKO|PAPIR|PLAST|SKLO|BIO)\b/.test(text)
+  );
+}
+
+function routeSourceDerivedFields(row) {
+  const parts = String(row.originalText || "").split("|").map((part) => part.trim()).filter(Boolean);
+  const operationalParts = parts.filter(routeSourceFieldLooksOperational);
+  const customerName = operationalParts[0] || "";
+  const addressText = operationalParts.find((part) => /[,0-9]/.test(part) && part !== customerName) || operationalParts[1] || "";
+  const note = parts.find((part) => /\b(pozn|pozastav|vyraz|vyřaz|konec|volat|klic|klíč|kontakt|brana|brána)\b/i.test(part)) || "";
+  const issues = Array.isArray(row.qualityIssues) ? row.qualityIssues : [];
+  let mappingStatus = "nenamapováno";
+  let mappingIssue = "čeká na Vistos match";
+
+  if (!customerName || !addressText) {
+    mappingStatus = "chybí adresa";
+    mappingIssue = "chybí zákazník nebo adresa z Excel řádku";
+  } else if (issues.includes("missing-container-volume")) {
+    mappingStatus = "chybí nádoba";
+    mappingIssue = "chybí nebo není jistý objem nádoby";
+  } else if (!row.frequency || row.frequency === "-") {
+    mappingStatus = "chybí frekvence";
+    mappingIssue = "chybí četnost svozu";
+  } else if (issues.includes("needs-vistos-waste-type") || issues.includes("source-note-cancelled-or-stopped")) {
+    mappingStatus = "nejasné";
+    mappingIssue = "typ odpadu nebo platnost řádku vyžaduje kontrolu";
+  }
+
+  return { customerName, addressText, note, mappingStatus, mappingIssue };
+}
+
+function routeSourceSummary(rows = []) {
+  const summary = {
+    rowCount: rows.length,
+    containerCount: 0,
+    estimatedMinutes: 0,
+    estimatedTons: 0,
+    dayCounts: {},
+    weekCounts: {},
+    vehicleCounts: {},
+    wasteCounts: {},
+    mappingCounts: {},
+    createsOperationalRoutes: false,
+    sendsEmailOrSms: false,
+    startsAutomation: false
+  };
+
+  for (const row of rows) {
+    summary.containerCount += Number(row.containerCount || 0);
+    summary.estimatedMinutes += Number(row.estimatedServiceMinutes || 0);
+    summary.estimatedTons += Number(row.estimatedWeightTons || 0);
+    summary.dayCounts[row.dayCode || "-"] = (summary.dayCounts[row.dayCode || "-"] || 0) + 1;
+    summary.weekCounts[row.weekMode || "-"] = (summary.weekCounts[row.weekMode || "-"] || 0) + 1;
+    summary.vehicleCounts[row.vehicleCode || "-"] = (summary.vehicleCounts[row.vehicleCode || "-"] || 0) + 1;
+    summary.wasteCounts[row.wasteType || "ostatní / neznámé"] = (summary.wasteCounts[row.wasteType || "ostatní / neznámé"] || 0) + 1;
+    summary.mappingCounts[row.mappingStatus || "-"] = (summary.mappingCounts[row.mappingStatus || "-"] || 0) + 1;
+  }
+  summary.estimatedTons = Number(summary.estimatedTons.toFixed(3));
+  return summary;
+}
+
+function mockFilteredRouteSourceRows(query) {
+  const latestBatchId = mockCollectionRouteSourceBatches[0]?.id || "";
+  const batchId = query.get("batchId") || latestBatchId;
+  const day = query.get("day") || "all";
+  const week = query.get("week") || "all";
+  const vehicle = query.get("vehicle") || "all";
+  const waste = query.get("waste") || "all";
+  const mappingStatus = query.get("mappingStatus") || "all";
+  const limit = Math.max(1, Math.min(Number(query.get("limit")) || 500, 2000));
+
+  return mockCollectionRouteSourceRows
+    .filter((row) => row.batchId === batchId)
+    .filter((row) => day === "all" || row.dayCode === day)
+    .filter((row) => week === "all" || row.weekMode === week)
+    .filter((row) => vehicle === "all" || row.vehicleCode === vehicle)
+    .filter((row) => waste === "all" || (waste === "ostatní" ? !["SKO", "BIO", "PAPIR", "PLAST", "SKLO"].includes(row.wasteType) : row.wasteType === waste))
+    .filter((row) => mappingStatus === "all" || row.mappingStatus === mappingStatus)
+    .slice(0, limit);
 }
 
 function findMockUser(id) {
@@ -1836,6 +1954,191 @@ async function handleApi(request, response) {
         apiStatus: "waiting"
       });
     }
+    return true;
+  }
+
+  if (url.pathname === "/api/collection-routes/svozove-trasy/import" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+
+    if (normalizeRole(user.role) !== "admin") {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    try {
+      const { files } = await readMultipartFormData(request);
+      const uploadFiles = Array.from(files.values())
+        .filter((file) => file?.buffer?.length)
+        .map((file) => {
+          if (file.buffer.length > COLLECTION_ROUTE_OPTIMIZATION_MAX_FILE_SIZE_BYTES) {
+            const error = new Error(`Soubor ${file.name || ""} je příliš velký. Maximum je 8 MB.`);
+            error.status = 400;
+            throw error;
+          }
+          return {
+            buffer: file.buffer,
+            filename: file.name,
+            contentType: file.type
+          };
+        });
+
+      if (!uploadFiles.length) {
+        sendJson(response, 400, { error: "Nahrajte 13 Excel souborů svozových tras." });
+        return true;
+      }
+
+      const parsed = await buildCollectionRouteOptimizationPreview({ files: uploadFiles });
+      const batchId = `collection-route-source-batch-${randomUUID()}`;
+      const createdAt = new Date().toISOString();
+      const fileIds = new Map();
+      const sourceFiles = (parsed.parsedFiles || []).map((file) => {
+        const item = {
+          id: `collection-route-source-file-${randomUUID()}`,
+          batchId,
+          filename: file.filename,
+          dayCode: routeSourceDay(file.filename),
+          weekMode: routeSourceWeek(file.filename),
+          vehicleCode: normalizeRouteSourceText(file.filename).includes("FLORIAN") ? "C" : "",
+          sheetCount: file.sheetCount || 0,
+          sourceRowCount: file.sourceRowCount || 0,
+          routeRowCount: file.plannedRowCount || 0,
+          metadata: { sheets: file.sheets || [], source: "13-excel", createsOperationalRoutes: false },
+          createdAt
+        };
+        fileIds.set(file.filename, item.id);
+        return item;
+      });
+      const seen = new Set();
+      const sourceRows = [];
+      for (const row of parsed.rows || []) {
+        const key = [row.sourceFile, row.sheetName, row.sourceRowNumber, row.originalText].join("\u0001");
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const derived = routeSourceDerivedFields(row);
+        sourceRows.push({
+          id: `collection-route-source-row-${randomUUID()}`,
+          batchId,
+          fileId: fileIds.get(row.sourceFile) || "",
+          routeOrder: sourceRows.length + 1,
+          sourceFile: row.sourceFile || "",
+          sourceSheet: row.sheetName || "",
+          sourceRowNumber: row.sourceRowNumber || 0,
+          originalText: row.originalText || "",
+          dayCode: routeSourceDay(row.originalText) || (row.originalDay && row.originalDay !== "-" ? row.originalDay : "") || routeSourceDay(`${row.sourceFile} ${row.sheetName}`) || row.suggestedDay || "",
+          weekMode: routeSourceWeek(row.originalText) !== "každý týden"
+            ? routeSourceWeek(row.originalText)
+            : row.originalWeek && row.originalWeek !== "-"
+              ? row.originalWeek
+              : routeSourceWeek(`${row.sourceFile} ${row.sheetName}`),
+          vehicleCode: row.vehicleCode || "",
+          wasteType: row.wasteType === "-" ? "" : row.wasteType || "",
+          wasteCode: row.wasteCode === "-" ? "" : row.wasteCode || "",
+          frequency: row.frequency || "",
+          containerVolume: row.containerVolume || 0,
+          containerCount: row.containerCount || 0,
+          customerName: derived.customerName,
+          addressText: derived.addressText,
+          note: derived.note,
+          mappingStatus: derived.mappingStatus,
+          mappingIssue: derived.mappingIssue,
+          status: "preview",
+          estimatedServiceMinutes: row.estimatedServiceMinutes || 0,
+          estimatedWeightTons: row.estimatedWeightTons || 0,
+          metadata: {
+            sourceRoute: row.sourceRoute,
+            qualityStatus: row.qualityStatus,
+            qualityIssues: row.qualityIssues || [],
+            confidence: row.confidence,
+            vehicleSource: "working-draft",
+            createsOperationalRoutes: false,
+            sendsEmailOrSms: false,
+            startsAutomation: false
+          },
+          createdAt
+        });
+      }
+      const summary = routeSourceSummary(sourceRows);
+      const batch = {
+        id: batchId,
+        source: "13-excel",
+        status: "preview",
+        message: `Načteno ${sourceFiles.length} Excel souborů a ${sourceRows.length} zdrojových řádků. Ostré trasy nevznikly.`,
+        fileCount: sourceFiles.length,
+        rowCount: sourceRows.length,
+        issueCount: sourceRows.filter((row) => row.mappingStatus !== "namapováno").length,
+        createdByUserId: user.id,
+        createdAt,
+        metadata: {
+          phase: "svozove-trasy-source-preview",
+          source: "13-excel",
+          summary,
+          createsOperationalRoutes: false,
+          sendsEmailOrSms: false,
+          startsAutomation: false
+        }
+      };
+
+      mockCollectionRouteSourceBatches.unshift(batch);
+      mockCollectionRouteSourceFiles = [...sourceFiles, ...mockCollectionRouteSourceFiles.filter((file) => file.batchId !== batchId)];
+      mockCollectionRouteSourceRows = [...sourceRows, ...mockCollectionRouteSourceRows.filter((row) => row.batchId !== batchId)];
+      sendJson(response, 200, {
+        preview: {
+          batch,
+          files: sourceFiles,
+          rows: sourceRows.slice(0, 200),
+          summary,
+          apiStatus: "ready"
+        },
+        apiStatus: "ready"
+      });
+    } catch (error) {
+      sendJson(response, error.status || 400, {
+        error: error.message || "Import Svozových tras z 13 Excelů se nepodařilo zpracovat.",
+        apiStatus: "waiting"
+      });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/collection-routes/svozove-trasy/batches" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    sendJson(response, 200, { batches: mockCollectionRouteSourceBatches.slice(0, 10), apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/collection-routes/svozove-trasy/routes" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const batchId = url.searchParams.get("batchId") || mockCollectionRouteSourceBatches[0]?.id || "";
+    const rows = mockFilteredRouteSourceRows(url.searchParams);
+    sendJson(response, 200, {
+      batch: mockCollectionRouteSourceBatches.find((item) => item.id === batchId) || null,
+      files: mockCollectionRouteSourceFiles.filter((item) => item.batchId === batchId),
+      rows,
+      summary: routeSourceSummary(rows),
+      apiStatus: "ready"
+    });
     return true;
   }
 

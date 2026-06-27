@@ -1772,6 +1772,10 @@ h1 {
   align-items: end;
 }
 
+.collection-routes-route-filter--wide label {
+  flex: 1 1 150px;
+}
+
 .collection-routes-route-filter label {
   display: grid;
   gap: 6px;

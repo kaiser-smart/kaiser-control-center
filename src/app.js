@@ -215,6 +215,7 @@ const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
 const COLLECTION_ROUTES_TABS = [
   { id: "dashboard", label: "Dashboard", targetId: "collection-routes-dashboard" },
+  { id: "svozove-trasy", label: "Svozové trasy", targetId: "collection-routes-source-routes" },
   { id: "vistos-komunal", label: "Vistos Komunál preview", targetId: "collection-routes-vistos-komunal" },
   { id: "manual-import", label: "Ruční import preview", targetId: "collection-routes-manual-import" },
   { id: "import", label: "Import preview", targetId: "collection-routes-import" },
@@ -608,6 +609,21 @@ const collectionRoutesPilotState = {
   routeOptimizationMessage: "",
   routeOptimizationSelectedDay: "PO",
   routeOptimizationSelectedVehicle: "A",
+  sourceImportLoading: false,
+  sourceImportMessage: "",
+  sourceImportError: "",
+  sourceBatches: [],
+  sourceFiles: [],
+  sourceRows: [],
+  sourceSummary: null,
+  sourceSelectedBatchId: "",
+  sourceFilters: {
+    day: "all",
+    week: "all",
+    vehicle: "all",
+    waste: "all",
+    mappingStatus: "all"
+  },
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -11494,6 +11510,207 @@ function collectionRoutesPreviewTable(title, columns, rows, emptyText, actionsHt
   `;
 }
 
+function collectionRoutesSourceFilterValue(name) {
+  return collectionRoutesPilotState.sourceFilters?.[name] || "all";
+}
+
+function collectionRoutesSourceLabel(value, fallback = "-") {
+  return value === "all" ? "vše" : escapeHtml(value || fallback);
+}
+
+function collectionRoutesSourceVehicleLabel(value) {
+  if (value === "A") return "Auto A";
+  if (value === "B") return "Auto B";
+  if (value === "C") return "Auto C";
+  return value === "all" ? "všechna auta" : value || "-";
+}
+
+function collectionRoutesSourceSummaryCards() {
+  const summary = collectionRoutesPilotState.sourceSummary || {};
+  const latestBatch = collectionRoutesPilotState.sourceBatches.find((batch) => batch.id === collectionRoutesPilotState.sourceSelectedBatchId) ||
+    collectionRoutesPilotState.sourceBatches[0] ||
+    null;
+  return `
+    <div class="collection-routes-stats" aria-label="Souhrn Svozových tras z 13 Excelů">
+      <article><span>Zdroj</span><strong>13 Excelů</strong></article>
+      <article><span>Import</span><strong>${escapeHtml(formatDateTime(latestBatch?.createdAt) || "čeká")}</strong></article>
+      <article><span>Řádky ve filtru</span><strong>${collectionRoutesMetricValue(summary.rowCount || collectionRoutesPilotState.sourceRows.length)}</strong></article>
+      <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(summary.containerCount)}</strong></article>
+      <article><span>Odhad času</span><strong>${collectionRoutesMetricValue(summary.estimatedMinutes)} min</strong></article>
+      <article><span>Odhad hmotnosti</span><strong>${collectionRoutesMetricValue(summary.estimatedTons)} t</strong></article>
+      <article><span>Vistos match</span><strong>read-only</strong></article>
+      <article><span>Ostré trasy</span><strong>NE</strong></article>
+    </div>
+  `;
+}
+
+function collectionRoutesSourceImportCards() {
+  const batches = collectionRoutesPilotState.sourceBatches;
+  if (!batches.length) {
+    return collectionRoutesEmptyState(
+      "13 Excelů zatím nejsou uložené přes API.",
+      "Nahrajte historické soubory v této sekci. Řádky se uloží do D1 jako read-only zdroj pro Svozové trasy, ne do prohlížeče."
+    );
+  }
+
+  return `
+    <div class="collection-routes-list">
+      ${batches.map((batch) => `
+        <article class="collection-routes-list-item">
+          <div>
+            <strong>${escapeHtml(batch.source || "13-excel")}</strong>
+            <span>${escapeHtml(formatDateTime(batch.createdAt) || "-")} · ${escapeHtml(batch.status || "preview")}</span>
+          </div>
+          <p>${escapeHtml(batch.message || "Import bez zprávy.")}</p>
+          <dl>
+            <div><dt>Soubory</dt><dd>${escapeHtml(batch.fileCount ?? 0)}</dd></div>
+            <div><dt>Řádky</dt><dd>${escapeHtml(batch.rowCount ?? 0)}</dd></div>
+            <div><dt>Kontrola</dt><dd>${escapeHtml(batch.issueCount ?? 0)}</dd></div>
+          </dl>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function collectionRoutesSourceFilters() {
+  const selectedBatchId = collectionRoutesPilotState.sourceSelectedBatchId || collectionRoutesPilotState.sourceBatches[0]?.id || "";
+  return `
+    <div class="collection-routes-route-filter collection-routes-route-filter--wide" aria-label="Filtry Svozových tras z 13 Excelů">
+      <label>
+        <span>Import</span>
+        <select data-collection-routes-source-filter="batch">
+          ${collectionRoutesPilotState.sourceBatches.length ? collectionRoutesPilotState.sourceBatches.map((batch) => `
+            <option value="${escapeHtml(batch.id)}" ${batch.id === selectedBatchId ? "selected" : ""}>${escapeHtml(formatDateTime(batch.createdAt) || batch.id)}</option>
+          `).join("") : `<option value="">čeká na import</option>`}
+        </select>
+      </label>
+      <label>
+        <span>Den</span>
+        <select data-collection-routes-source-filter="day">
+          ${[
+            ["all", "vše"],
+            ["PO", "pondělí"],
+            ["ÚT", "úterý"],
+            ["ST", "středa"],
+            ["ČT", "čtvrtek"],
+            ["PÁ", "pátek"]
+          ].map(([value, label]) => `<option value="${escapeHtml(value)}" ${collectionRoutesSourceFilterValue("day") === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+        </select>
+      </label>
+      <label>
+        <span>Týden</span>
+        <select data-collection-routes-source-filter="week">
+          ${["all", "sudý týden", "lichý týden", "každý týden", "měsíční / 1x30"].map((value) => `
+            <option value="${escapeHtml(value)}" ${collectionRoutesSourceFilterValue("week") === value ? "selected" : ""}>${collectionRoutesSourceLabel(value)}</option>
+          `).join("")}
+        </select>
+      </label>
+      <label>
+        <span>Auto</span>
+        <select data-collection-routes-source-filter="vehicle">
+          ${["all", "A", "B", "C"].map((value) => `
+            <option value="${escapeHtml(value)}" ${collectionRoutesSourceFilterValue("vehicle") === value ? "selected" : ""}>${escapeHtml(collectionRoutesSourceVehicleLabel(value))}</option>
+          `).join("")}
+        </select>
+      </label>
+      <label>
+        <span>Odpad</span>
+        <select data-collection-routes-source-filter="waste">
+          ${[
+            ["all", "vše"],
+            ["SKO", "SKO"],
+            ["BIO", "BIO"],
+            ["PAPIR", "PAPÍR"],
+            ["PLAST", "PLAST"],
+            ["SKLO", "SKLO"],
+            ["ostatní", "ostatní / neznámé"]
+          ].map(([value, label]) => `<option value="${escapeHtml(value)}" ${collectionRoutesSourceFilterValue("waste") === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+        </select>
+      </label>
+      <label>
+        <span>Mapování</span>
+        <select data-collection-routes-source-filter="mappingStatus">
+          ${["all", "namapováno", "nenamapováno", "nejasné", "duplicita", "chybí adresa", "chybí nádoba", "chybí frekvence"].map((value) => `
+            <option value="${escapeHtml(value)}" ${collectionRoutesSourceFilterValue("mappingStatus") === value ? "selected" : ""}>${collectionRoutesSourceLabel(value)}</option>
+          `).join("")}
+        </select>
+      </label>
+    </div>
+  `;
+}
+
+function collectionRoutesSourceRouteTitle() {
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  return [
+    filters.day && filters.day !== "all" ? filters.day : "všechny dny",
+    filters.week && filters.week !== "all" ? filters.week : "všechny týdny",
+    collectionRoutesSourceVehicleLabel(filters.vehicle || "all")
+  ].join(" / ");
+}
+
+function collectionRoutesSourceRoutesSection(user) {
+  const canImport = collectionRoutesCanRunImportPreview(user);
+  const rows = collectionRoutesPilotState.sourceRows;
+  return `
+    <section class="collection-routes-panel" id="collection-routes-source-routes" aria-labelledby="collection-routes-source-routes-title">
+      <div class="collection-routes-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Zdroj 13 Excelů</p>
+          <h2 id="collection-routes-source-routes-title">Svozové trasy</h2>
+          <p>Praktická read-only sekce z historických dispečerských Excelů. Vistos slouží pouze jako mapování a kontrola, ne jako zdroj dalších zákazníků.</p>
+        </div>
+        <span class="employee-card-status employee-card-status--waiting">Read-only zdroj</span>
+      </div>
+
+      <div class="collection-routes-phase-note collection-routes-source-block collection-routes-source-block--excel">
+        <strong>13 Excelů je vstupní rozsah pro tuto sekci.</strong>
+        <span>Řádky drží původní soubor, list, řádek a pořadí. Vistos match nesmí přidat zákazníky mimo tento zdroj. Auto A/B/C je zatím pracovní označení, ne ostré přiřazení řidiči.</span>
+      </div>
+
+      ${canImport ? `
+        <form class="collection-routes-import-form collection-routes-import-form--file" data-collection-routes-source-import-form>
+          <label>
+            <span>13 Excel souborů svozových tras</span>
+            <input type="file" name="files" accept=".xlsx,.csv,.tsv,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values" multiple>
+          </label>
+          <button class="primary-action" type="submit" ${collectionRoutesPilotState.sourceImportLoading ? "disabled" : ""}>
+            ${collectionRoutesPilotState.sourceImportLoading ? "Ukládám read-only zdroj..." : "Nahrát 13 Excelů do Svozových tras"}
+          </button>
+        </form>
+      ` : `
+        <p class="module-feedback__notice">Import 13 Excelů může spustit pouze admin.</p>
+      `}
+
+      ${collectionRoutesPilotState.sourceImportMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.sourceImportMessage)}</p>` : ""}
+      ${collectionRoutesPilotState.sourceImportError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.sourceImportError)}</p>` : ""}
+
+      ${collectionRoutesSourceImportCards()}
+      ${collectionRoutesSourceFilters()}
+      ${collectionRoutesSourceSummaryCards()}
+
+      <div class="collection-routes-preview-block__actions">
+        <button class="secondary-link" type="button" data-collection-routes-source-export-csv ${rows.length ? "" : "disabled"}>Vybranou trasu do CSV</button>
+        <button class="primary-action" type="button" data-collection-routes-source-print-pdf ${rows.length ? "" : "disabled"}>Vybranou trasu do PDF</button>
+      </div>
+
+      ${collectionRoutesPreviewTable(`Svozové trasy: ${collectionRoutesSourceRouteTitle()}`, [
+        { label: "Pořadí", value: (row) => row.routeOrder },
+        { label: "Zákazník", value: (row) => row.customerName },
+        { label: "Stanoviště / adresa", value: (row) => row.addressText },
+        { label: "Odpad", value: (row) => row.wasteType || "ostatní / neznámé" },
+        { label: "Nádoba", value: (row) => row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "-" },
+        { label: "Frekvence", value: (row) => row.frequency },
+        { label: "Poznámka", value: (row) => row.note },
+        { label: "Zdroj", value: (row) => `${row.sourceFile || "-"} / ${row.sourceSheet || "-"} / ř. ${row.sourceRowNumber || "-"}` },
+        { label: "Vistos match", value: (row) => row.mappingStatus },
+        { label: "Problém", value: (row) => row.mappingIssue },
+        { label: "Ostrá trasa", value: () => "NE" }
+      ], rows, "Nahrajte 13 Excelů nebo upravte filtr. Tato tabulka nesmí tahat zákazníky mimo Excel zdroj.")}
+    </section>
+  `;
+}
+
 function collectionRoutesVistosKommunalSection(user) {
   const canImport = collectionRoutesCanRunImportPreview(user);
   const batch = collectionRoutesLatestBatchByMode("vistos-komunal-preview");
@@ -11964,6 +12181,9 @@ function collectionRoutesActiveSection(user) {
   const activeTab = activeCollectionRoutesTabId();
   if (activeTab === "manual-import") {
     return collectionRoutesManualImportSection(user);
+  }
+  if (activeTab === "svozove-trasy") {
+    return collectionRoutesSourceRoutesSection(user);
   }
   if (activeTab === "vistos-komunal") {
     return collectionRoutesVistosKommunalSection(user);
@@ -13235,6 +13455,51 @@ async function apiJson(path, options = {}) {
   return payload;
 }
 
+function collectionRoutesSourceRoutesApiUrl() {
+  const params = new URLSearchParams();
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  if (collectionRoutesPilotState.sourceSelectedBatchId) {
+    params.set("batchId", collectionRoutesPilotState.sourceSelectedBatchId);
+  }
+  params.set("day", filters.day || "all");
+  params.set("week", filters.week || "all");
+  params.set("vehicle", filters.vehicle || "all");
+  params.set("waste", filters.waste || "all");
+  params.set("mappingStatus", filters.mappingStatus || "all");
+  params.set("limit", "1000");
+  return `/api/collection-routes/svozove-trasy/routes?${params.toString()}`;
+}
+
+function collectionRoutesApplySourceRoutesPayload(payload = {}) {
+  collectionRoutesPilotState.sourceFiles = Array.isArray(payload.files) ? payload.files : [];
+  collectionRoutesPilotState.sourceRows = Array.isArray(payload.rows) ? payload.rows : [];
+  collectionRoutesPilotState.sourceSummary = payload.summary || null;
+  if (payload.batch?.id) {
+    collectionRoutesPilotState.sourceSelectedBatchId = payload.batch.id;
+  } else if (!collectionRoutesPilotState.sourceSelectedBatchId && collectionRoutesPilotState.sourceBatches[0]?.id) {
+    collectionRoutesPilotState.sourceSelectedBatchId = collectionRoutesPilotState.sourceBatches[0].id;
+  }
+}
+
+async function loadCollectionRoutesSourceRoutes(options = {}) {
+  if (!authState.user || !collectionRoutesCanViewPilot(currentUser())) {
+    return;
+  }
+  try {
+    const payload = await apiJson(collectionRoutesSourceRoutesApiUrl());
+    collectionRoutesApplySourceRoutesPayload(payload);
+    collectionRoutesPilotState.sourceImportError = "";
+  } catch (error) {
+    collectionRoutesPilotState.sourceRows = [];
+    collectionRoutesPilotState.sourceFiles = [];
+    collectionRoutesPilotState.sourceSummary = null;
+    collectionRoutesPilotState.sourceImportError = error.payload?.error || "Svozové trasy z 13 Excelů se teď nepodařilo načíst.";
+  }
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
 async function loadCollectionRoutesPilot(options = {}) {
   if (!authState.user || collectionRoutesPilotState.loading || !collectionRoutesCanViewPilot(currentUser())) {
     return;
@@ -13247,14 +13512,26 @@ async function loadCollectionRoutesPilot(options = {}) {
   collectionRoutesPilotState.error = "";
 
   try {
-    const [batchesResult, sitesResult, issuesResult] = await Promise.all([
+    const [batchesResult, sitesResult, issuesResult, sourceBatchesResult, sourceRoutesResult] = await Promise.all([
       apiJson("/api/collection-routes/import-batches?limit=20"),
       apiJson("/api/collection-routes/sites?limit=100"),
-      apiJson("/api/collection-routes/location-issues?limit=100")
+      apiJson("/api/collection-routes/location-issues?limit=100"),
+      apiJson("/api/collection-routes/svozove-trasy/batches?limit=10").catch((error) => ({ sourceError: error })),
+      apiJson(collectionRoutesSourceRoutesApiUrl()).catch((error) => ({ sourceError: error }))
     ]);
     collectionRoutesPilotState.batches = Array.isArray(batchesResult.batches) ? batchesResult.batches : [];
     collectionRoutesPilotState.sites = Array.isArray(sitesResult.sites) ? sitesResult.sites : [];
     collectionRoutesPilotState.issues = Array.isArray(issuesResult.issues) ? issuesResult.issues : [];
+    collectionRoutesPilotState.sourceBatches = Array.isArray(sourceBatchesResult.batches) ? sourceBatchesResult.batches : [];
+    if (sourceBatchesResult.sourceError || sourceRoutesResult.sourceError) {
+      const sourceError = sourceBatchesResult.sourceError || sourceRoutesResult.sourceError;
+      collectionRoutesPilotState.sourceImportError = sourceError.payload?.error || "Svozové trasy z 13 Excelů čekají na migraci/API.";
+      collectionRoutesPilotState.sourceRows = [];
+      collectionRoutesPilotState.sourceFiles = [];
+      collectionRoutesPilotState.sourceSummary = null;
+    } else {
+      collectionRoutesApplySourceRoutesPayload(sourceRoutesResult);
+    }
     collectionRoutesPilotState.kommunalPreviewRows = [];
     collectionRoutesPilotState.kommunalPreviewIssues = [];
     collectionRoutesPilotState.kommunalPreviewDetailError = "";
@@ -13282,6 +13559,10 @@ async function loadCollectionRoutesPilot(options = {}) {
     collectionRoutesPilotState.batches = [];
     collectionRoutesPilotState.sites = [];
     collectionRoutesPilotState.issues = [];
+    collectionRoutesPilotState.sourceBatches = [];
+    collectionRoutesPilotState.sourceFiles = [];
+    collectionRoutesPilotState.sourceRows = [];
+    collectionRoutesPilotState.sourceSummary = null;
     collectionRoutesPilotState.kommunalPreviewRows = [];
     collectionRoutesPilotState.kommunalPreviewIssues = [];
     collectionRoutesPilotState.kommunalPreviewDetailError = "";
@@ -13421,6 +13702,210 @@ async function submitCollectionRoutesKommunalPreview(form) {
     collectionRoutesPilotState.kommunalPreviewLoading = false;
     render();
   }
+}
+
+async function submitCollectionRoutesSourceImport(form) {
+  const user = currentUser();
+
+  if (!collectionRoutesCanRunImportPreview(user)) {
+    collectionRoutesPilotState.sourceImportError = "Import 13 Excelů může spustit pouze admin.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    return;
+  }
+
+  const fileInput = form.querySelector("input[type='file'][name='files']");
+  const files = Array.from(fileInput?.files || []);
+  if (!files.length) {
+    collectionRoutesPilotState.sourceImportError = "Vyberte 13 historických Excel souborů svozových tras.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    return;
+  }
+
+  const formData = new FormData();
+  files.forEach((file, index) => {
+    formData.append(`file-${index + 1}`, file, file.name);
+  });
+
+  collectionRoutesPilotState.sourceImportLoading = true;
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/collection-routes/svozove-trasy/import", {
+      method: "POST",
+      body: formData
+    });
+    const preview = result.preview || {};
+    collectionRoutesPilotState.sourceImportMessage = preview.batch?.message ||
+      `Načteno ${preview.summary?.fileCount || files.length} souborů a ${preview.summary?.rowCount || 0} řádků. Ostré trasy nevznikly.`;
+    collectionRoutesPilotState.sourceSelectedBatchId = preview.batch?.id || "";
+    collectionRoutesPilotState.activeTab = "svozove-trasy";
+    const batchesResult = await apiJson("/api/collection-routes/svozove-trasy/batches?limit=10");
+    collectionRoutesPilotState.sourceBatches = Array.isArray(batchesResult.batches) ? batchesResult.batches : [];
+    await loadCollectionRoutesSourceRoutes({ renderAfter: false });
+  } catch (error) {
+    collectionRoutesPilotState.sourceImportError = error.payload?.error || error.message || "Import 13 Excelů se nepodařilo uložit.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+  } finally {
+    collectionRoutesPilotState.sourceImportLoading = false;
+    render();
+  }
+}
+
+async function updateCollectionRoutesSourceFilter(select) {
+  const key = select.dataset.collectionRoutesSourceFilter || "";
+  if (key === "batch") {
+    collectionRoutesPilotState.sourceSelectedBatchId = select.value || "";
+  } else if (key && collectionRoutesPilotState.sourceFilters) {
+    collectionRoutesPilotState.sourceFilters[key] = select.value || "all";
+  }
+  await loadCollectionRoutesSourceRoutes({ renderAfter: true });
+}
+
+function collectionRoutesSourceRowsCsv(rows = collectionRoutesPilotState.sourceRows) {
+  const headers = [
+    "Poradi",
+    "Den",
+    "Tyden",
+    "Auto",
+    "Zakaznik",
+    "Stanoviste/adresa",
+    "Odpad",
+    "Kod odpadu",
+    "Nadoba l",
+    "Pocet nadob",
+    "Frekvence",
+    "Poznamka",
+    "Zdrojovy Excel",
+    "Zdrojovy list",
+    "Zdrojovy radek",
+    "Vistos match stav",
+    "Problem mapovani",
+    "Odhad minut",
+    "Odhad tun",
+    "Ostra trasa"
+  ];
+  const lines = [
+    "sep=;",
+    collectionRoutesExcelCsvLine(headers),
+    ...rows.map((row) => collectionRoutesExcelCsvLine([
+      row.routeOrder,
+      row.dayCode,
+      row.weekMode,
+      collectionRoutesSourceVehicleLabel(row.vehicleCode),
+      row.customerName,
+      row.addressText,
+      row.wasteType || "ostatní / neznámé",
+      row.wasteCode,
+      row.containerVolume,
+      row.containerCount,
+      row.frequency,
+      row.note,
+      row.sourceFile,
+      row.sourceSheet,
+      row.sourceRowNumber,
+      row.mappingStatus,
+      row.mappingIssue,
+      row.estimatedServiceMinutes,
+      row.estimatedWeightTons,
+      "NE"
+    ]))
+  ];
+  return `\uFEFF${lines.join("\n")}`;
+}
+
+function exportCollectionRoutesSourceCsv() {
+  const rows = collectionRoutesPilotState.sourceRows;
+  if (!rows.length) {
+    collectionRoutesPilotState.sourceImportError = "Není co exportovat. Nahrajte 13 Excelů nebo upravte filtr.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    return;
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  downloadCsv(`svozove-trasy-13-excelu-${date}.csv`, collectionRoutesSourceRowsCsv(rows));
+}
+
+function printCollectionRoutesSourcePdf() {
+  const rows = collectionRoutesPilotState.sourceRows;
+  if (!rows.length) {
+    collectionRoutesPilotState.sourceImportError = "Není co tisknout do PDF. Nahrajte 13 Excelů nebo upravte filtr.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    return;
+  }
+
+  const summary = collectionRoutesPilotState.sourceSummary || {};
+  const title = `Svozová trasa ${collectionRoutesSourceRouteTitle()}`;
+  const generatedAt = formatDateTime(new Date().toISOString()) || new Date().toISOString();
+  const html = `<!doctype html>
+    <html lang="cs">
+      <head>
+        <meta charset="utf-8">
+        <title>${escapeHtml(title)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #172033; margin: 24px; }
+          h1 { font-size: 22px; margin: 0 0 8px; }
+          .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+          .meta div { border: 1px solid #cfd7e6; padding: 8px; }
+          .meta span { display: block; color: #5d6b82; font-size: 11px; text-transform: uppercase; }
+          .meta strong { display: block; font-size: 14px; margin-top: 4px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { border: 1px solid #d8deea; padding: 5px; vertical-align: top; text-align: left; }
+          th { background: #eef3f8; }
+          .note { margin: 12px 0; font-size: 12px; color: #40506a; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(title)}</h1>
+        <p class="note">Read-only PDF náhled z 13 Excelů. Nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.</p>
+        <div class="meta">
+          <div><span>Datum generování</span><strong>${escapeHtml(generatedAt)}</strong></div>
+          <div><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(collectionRoutesPilotState.sourceFilters.vehicle || "all"))}</strong></div>
+          <div><span>Řádky</span><strong>${escapeHtml(summary.rowCount || rows.length)}</strong></div>
+          <div><span>Nádoby</span><strong>${escapeHtml(summary.containerCount || 0)}</strong></div>
+          <div><span>Odhad času</span><strong>${escapeHtml(summary.estimatedMinutes || 0)} min</strong></div>
+          <div><span>Odhad hmotnosti</span><strong>${escapeHtml(summary.estimatedTons || 0)} t</strong></div>
+          <div><span>Zdroj</span><strong>13 Excelů</strong></div>
+          <div><span>Vistos</span><strong>read-only match stav</strong></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Zákazník</th><th>Adresa</th><th>Odpad</th><th>Nádoba</th><th>Frekvence</th><th>Poznámka</th><th>Vistos</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.routeOrder || "-")}</td>
+                <td>${escapeHtml(row.customerName || "-")}</td>
+                <td>${escapeHtml(row.addressText || "-")}</td>
+                <td>${escapeHtml(row.wasteType || "ostatní / neznámé")}</td>
+                <td>${escapeHtml(row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "-")}</td>
+                <td>${escapeHtml(row.frequency || "-")}</td>
+                <td>${escapeHtml(row.note || "")}</td>
+                <td>${escapeHtml(row.mappingStatus || "-")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </body>
+    </html>`;
+
+  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+  if (!printWindow) {
+    collectionRoutesPilotState.sourceImportError = "Prohlížeč zablokoval PDF náhled. Povolte vyskakovací okno pro tisk.";
+    render();
+    return;
+  }
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
 }
 
 async function submitCollectionRoutesRouteOptimizationPreview(form) {
@@ -17453,6 +17938,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const collectionRoutesSourceImportForm = event.target.closest("[data-collection-routes-source-import-form]");
+  if (collectionRoutesSourceImportForm) {
+    event.preventDefault();
+    await submitCollectionRoutesSourceImport(collectionRoutesSourceImportForm);
+    return;
+  }
+
   const collectionRoutesManualImportForm = event.target.closest("[data-collection-routes-manual-import-form]");
   if (collectionRoutesManualImportForm) {
     event.preventDefault();
@@ -17609,7 +18101,7 @@ document.addEventListener("input", (event) => {
   }
 });
 
-document.addEventListener("change", (event) => {
+document.addEventListener("change", async (event) => {
   const appearanceImport = event.target.closest("[data-appearance-import]");
   if (appearanceImport) {
     importAppearanceSettings(appearanceImport);
@@ -17659,6 +18151,12 @@ document.addEventListener("change", (event) => {
   if (collectionRoutesOptimizedVehicleFilter) {
     collectionRoutesPilotState.routeOptimizationSelectedVehicle = collectionRoutesOptimizedVehicleFilter.value || "A";
     render();
+    return;
+  }
+
+  const collectionRoutesSourceFilter = event.target.closest("[data-collection-routes-source-filter]");
+  if (collectionRoutesSourceFilter) {
+    await updateCollectionRoutesSourceFilter(collectionRoutesSourceFilter);
     return;
   }
 
@@ -18166,6 +18664,18 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesOptimizationExport = event.target.closest("[data-collection-routes-export-optimization]");
   if (collectionRoutesOptimizationExport) {
     exportCollectionRoutesRouteOptimization();
+    return;
+  }
+
+  const collectionRoutesSourceExportCsv = event.target.closest("[data-collection-routes-source-export-csv]");
+  if (collectionRoutesSourceExportCsv) {
+    exportCollectionRoutesSourceCsv();
+    return;
+  }
+
+  const collectionRoutesSourcePrintPdf = event.target.closest("[data-collection-routes-source-print-pdf]");
+  if (collectionRoutesSourcePrintPdf) {
+    printCollectionRoutesSourcePdf();
     return;
   }
 
