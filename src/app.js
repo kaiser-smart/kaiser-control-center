@@ -887,6 +887,7 @@ const employeeCardState = {
   formDraft: null,
   medicalExamDraft: null,
   documentUploading: false,
+  documentDeletingId: "",
   documentsUploadStatus: "waiting",
   documentsMissingEndpoint: "POST /api/employees/:id/documents",
   documentImportPreview: null,
@@ -6645,9 +6646,22 @@ function employeeDocumentsSection(employee, canEdit) {
           </td>
           <td data-label="Platnost">${escapeHtml(document.expiresAt ? formatAbsenceDate(document.expiresAt) : "neuvedeno")}</td>
           <td data-label="Stav">
-            ${document.fileUrl
-              ? `<a href="${escapeHtml(document.fileUrl)}" target="_blank" rel="noopener noreferrer">Stáhnout</a>`
-              : '<span class="employee-card-status employee-card-status--waiting">Čeká na API</span>'}
+            <span class="employee-document-actions">
+              ${document.fileUrl
+                ? `<a href="${escapeHtml(document.fileUrl)}" target="_blank" rel="noopener noreferrer">Stáhnout</a>`
+                : '<span class="employee-card-status employee-card-status--waiting">Čeká na API</span>'}
+              ${canEdit ? `
+                <button
+                  class="secondary-link secondary-link--compact employee-document-delete"
+                  type="button"
+                  data-employee-document-delete="${escapeHtml(document.id || "")}"
+                  data-employee-document-name="${escapeHtml(document.name || "dokument")}"
+                  ${employeeCardState.documentDeletingId === document.id ? "disabled" : ""}
+                >
+                  ${employeeCardState.documentDeletingId === document.id ? "Mažu..." : "Smazat"}
+                </button>
+              ` : ""}
+            </span>
           </td>
         </tr>
       `).join("")
@@ -16255,6 +16269,7 @@ async function loadEmployeeCard(employeeId, options = {}) {
     employeeCardState.medicalExamApiStatus = "waiting";
     employeeCardState.formDraft = null;
     employeeCardState.documentUploading = false;
+    employeeCardState.documentDeletingId = "";
   }
 
   if (options.renderBefore !== false) {
@@ -18516,6 +18531,49 @@ async function saveEmployeeDocumentUpload(form) {
   }
 }
 
+async function deleteEmployeeDocumentFromCard(documentId, documentName = "dokument") {
+  if (!employeeCardState.employee?.id || !canEditEmployeeCards()) {
+    employeeCardState.error = "Nemáte oprávnění mazat dokumenty.";
+    render();
+    return;
+  }
+
+  const cleanDocumentId = String(documentId || "").trim();
+  if (!cleanDocumentId) {
+    employeeCardState.error = "Dokument nelze smazat, chybí jeho ID.";
+    render();
+    return;
+  }
+
+  const label = String(documentName || "dokument").trim() || "dokument";
+  if (!window.confirm(`Opravdu smazat dokument "${label}"?`)) {
+    return;
+  }
+
+  employeeCardState.documentDeletingId = cleanDocumentId;
+  employeeCardState.message = "Mažu dokument...";
+  employeeCardState.error = "";
+  render();
+
+  try {
+    await apiJson(
+      `/api/employees/${encodeURIComponent(employeeCardState.employee.id)}/documents/${encodeURIComponent(cleanDocumentId)}`,
+      { method: "DELETE" }
+    );
+
+    employeeCardState.documents = employeeCardState.documents.filter((document) => document.id !== cleanDocumentId);
+    employeeCardState.message = "Dokument byl smazán.";
+    employeeCardState.error = "";
+  } catch (error) {
+    console.error("smart_odpady_employee_document_delete_failed", error);
+    employeeCardState.error = error.message || "Dokument se nepodařilo smazat.";
+    employeeCardState.message = "";
+  } finally {
+    employeeCardState.documentDeletingId = "";
+    render();
+  }
+}
+
 function employeeDocumentImportFormData(form, fallbackFiles = []) {
   const selectedFiles = Array.from(form?.elements.files?.files || []);
   const files = selectedFiles.length ? selectedFiles : Array.from(fallbackFiles || []);
@@ -19910,6 +19968,16 @@ document.addEventListener("click", async (event) => {
   if (employeeDocumentImportApply) {
     event.preventDefault();
     await applyEmployeeDocumentImport();
+    return;
+  }
+
+  const employeeDocumentDelete = event.target.closest("[data-employee-document-delete]");
+  if (employeeDocumentDelete) {
+    event.preventDefault();
+    await deleteEmployeeDocumentFromCard(
+      employeeDocumentDelete.dataset.employeeDocumentDelete,
+      employeeDocumentDelete.dataset.employeeDocumentName
+    );
     return;
   }
 

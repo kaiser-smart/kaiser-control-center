@@ -9073,6 +9073,17 @@ body:has(.ai-assistant-promo-modal) {
   font-weight: 800;
 }
 
+.employee-document-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.employee-document-delete {
+  color: #b42318;
+}
+
 .employee-card-api-note {
   padding: 10px 12px;
   border: 1px solid #ffe0a8;

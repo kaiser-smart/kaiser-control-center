@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Karta zaměstnance: ruční smazání dokumentu",
+    text: "Dokumenty v kartě zaměstnance mají pro oprávněné role malé tlačítko Smazat, které používá chráněné backend API a po potvrzení odstraní soubor i záznam."
+  },
+  {
     title: "Datová schránka: detail zprávy",
     text: "Přijaté a odeslané zprávy mají read-only detail z interního API, včetně metadat, příloh a posledního AI vyhodnocení bez aktivace ISDS."
   },
