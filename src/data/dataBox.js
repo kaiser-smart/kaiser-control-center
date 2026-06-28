@@ -13,7 +13,7 @@ export const DATA_BOX_STATUS_CARDS = [
   {
     label: "Stav funkce",
     value: "Funkční přes API",
-    note: "Cloud API a D1 model bez ostrého čtení, zápisu nebo odesílání do ISDS."
+    note: "Cloud API a D1 model s ručním read-only sync endpointem pro metadata ISDS."
   },
   {
     label: "Zdroj dat",
@@ -22,8 +22,8 @@ export const DATA_BOX_STATUS_CARDS = [
   },
   {
     label: "ISDS napojení",
-    value: "neaktivní",
-    note: "SOAP/WSDL adapter bude až v další fázi."
+    value: "ruční read-only",
+    note: "SOAP/WSDL adapter čte pouze seznam obálek po ručním spuštění a až po nastavení secrets."
   },
   {
     label: "Oprávnění",
@@ -46,7 +46,7 @@ export const DATA_BOX_PHASES = [
   {
     title: "Fáze 3",
     status: "Read-only pilot",
-    description: "Backend adapter pro přijaté/odeslané zprávy, deduplikace a ruční synchronizace."
+    description: "Backend adapter pro seznam přijatých/odeslaných obálek, deduplikace a ruční synchronizace metadat."
   },
   {
     title: "Fáze 4",
@@ -71,13 +71,13 @@ export const DATA_BOX_INTEGRATION_POINTS = [
 export const DATA_BOX_REALITY_ITEMS = [
   {
     label: "Co opravdu funguje",
-    value: "Chráněné čtecí API",
-    note: "Frontend čte stav, metadata zpráv a log běhů přes backend. Data jsou pouze v D1, pokud je binding a migrace v produkci hotová."
+    value: "Chráněné API + ruční sync",
+    note: "Frontend čte stav, metadata zpráv a log běhů přes backend. Ruční sync zapíše log a po secrets načte jen ISDS obálky."
   },
   {
     label: "Co zatím nefunguje",
-    value: "ISDS je vypnuté",
-    note: "Nečte se ostrá datová schránka, nestahují se přílohy, neposílají se odpovědi a neběží automatická synchronizace."
+    value: "Bez secrets žádné ostré čtení",
+    note: "Nestahují se přílohy ani obsah zpráv, neposílají se odpovědi a neběží automatická synchronizace."
   },
   {
     label: "Když nikdo neotevře aplikaci",
@@ -95,11 +95,11 @@ export const DATA_BOX_EXISTING_ENDPOINTS = [
   "GET /api/data-box/status",
   "GET /api/data-box/messages",
   "GET /api/data-box/messages/:id",
-  "GET /api/data-box/sync-runs"
+  "GET /api/data-box/sync-runs",
+  "POST /api/data-box/sync"
 ];
 
 export const DATA_BOX_FUTURE_ENDPOINTS = [
-  "POST /api/data-box/sync",
   "GET /api/data-box/messages/:id/attachments/:attachmentId",
   "POST /api/data-box/messages/:id/ai-evaluate",
   "POST /api/data-box/outbox/drafts",

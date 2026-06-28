@@ -734,6 +734,9 @@ const dataBoxState = {
   status: null,
   messages: [],
   syncRuns: [],
+  syncLoading: false,
+  syncMessage: "",
+  syncError: "",
   selectedMessageId: "",
   selectedMessage: null,
   detailLoading: false,
@@ -13134,7 +13137,9 @@ function dataBoxStatusLabel(value) {
     inactive: "neaktivní",
     waiting: "čeká",
     ready: "aktivní",
-    pilot: "pilot"
+    configured: "nakonfigurováno",
+    pilot: "pilot",
+    error: "chyba"
   };
   return labels[String(value || "").trim().toLowerCase()] || String(value || "čeká");
 }
@@ -13149,7 +13154,7 @@ function dataBoxStatusCards() {
     label: "Stav funkce",
     value: apiReady ? "Funkční přes API" : (dataBoxState.loading ? "načítám API" : "UI návrh"),
     note: apiReady
-      ? "Frontend čte metadata z cloud API a D1. ISDS zůstává vypnuté."
+      ? "Frontend čte metadata z cloud API a umí spustit ruční read-only sync přes backend."
       : (dataBoxState.error || "Bez ostrého čtení, zápisu nebo odesílání do ISDS.")
   };
   cards[1] = {
@@ -13252,7 +13257,7 @@ function dataBoxMessageRows(direction) {
       <td>${escapeHtml(dataBoxMessageActor(message))}</td>
       <td>${escapeHtml(message.subject || "(bez předmětu)")}</td>
       <td>${escapeHtml(message.status || "-")}</td>
-      <td>${escapeHtml(String(message.attachmentsCount || 0))}</td>
+      <td>${escapeHtml(message.attachmentsCount ? String(message.attachmentsCount) : (message.hasAttachments ? "ano" : "0"))}</td>
       <td>${escapeHtml(dataBoxAiStatusLabel(message.aiStatus))}</td>
       <td>
         <button
@@ -13471,6 +13476,7 @@ function dataBoxArchitecturePanel() {
   const status = dataBoxState.status || {};
   const summary = status.summary || {};
   const lastSync = summary.lastSyncAt ? formatDateTime(summary.lastSyncAt) : "zatím neproběhla";
+  const isdsConfigured = Boolean(status.isds?.configured);
 
   return `
     <section class="data-box-panel" id="overview" aria-labelledby="data-box-overview-title">
@@ -13479,7 +13485,7 @@ function dataBoxArchitecturePanel() {
           <h2 id="data-box-overview-title">Provozní realita</h2>
           <p>Rozpad na fáze a cílové cloudové části, aby UI nevypadalo jako ostré ISDS napojení.</p>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">ISDS neaktivní</span>
+        <span class="employee-card-status ${isdsConfigured ? "employee-card-status--ready" : "employee-card-status--waiting"}">${escapeHtml(isdsConfigured ? "ruční ISDS sync" : "čeká na secrets")}</span>
       </div>
       <div class="data-box-warning" role="status">
         <strong>Poslední synchronizace: ${escapeHtml(lastSync)}</strong>
@@ -13535,6 +13541,15 @@ function dataBoxArchitecturePanel() {
 function dataBoxSyncRunsPanel() {
   const statusClass = dataBoxState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
   const statusLabel = dataBoxState.apiStatus === "ready" ? "D1 log připraven" : "čeká na D1";
+  const user = currentUser();
+  const canSync = dataBoxState.apiStatus === "ready"
+    && hasPermission(user, DATA_BOX_MODULE_KEY, "manage")
+    && ["admin", "management"].includes(normalizeRole(user?.role));
+  const syncDisabled = !canSync || dataBoxState.syncLoading;
+  const syncLabel = dataBoxState.syncLoading ? "Spouštím sync..." : "Spustit ruční sync";
+  const syncMessage = dataBoxState.syncError
+    ? `<div class="data-box-sync-message data-box-sync-message--error" role="alert">${escapeHtml(dataBoxState.syncError)}</div>`
+    : (dataBoxState.syncMessage ? `<div class="data-box-sync-message" role="status">${escapeHtml(dataBoxState.syncMessage)}</div>` : "");
   const rows = dataBoxState.syncRuns.length
     ? dataBoxState.syncRuns.map((run) => `
       <tr>
@@ -13557,10 +13572,17 @@ function dataBoxSyncRunsPanel() {
       <div class="data-box-panel__head">
         <div>
           <h2 id="data-box-sync-title">Log synchronizaci</h2>
-          <p>Evidence budoucích ručních nebo cloudových běhů. V této fázi se žádná ISDS synchronizace nespouští.</p>
+          <p>Ruční read-only sync načte pouze seznam obálek z ISDS přes backend. Přílohy, obsah zpráv, odesílání a automatický cron zůstávají vypnuté.</p>
         </div>
         <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
       </div>
+      <div class="data-box-sync-actions">
+        <button class="primary-action" type="button" data-data-box-sync ${syncDisabled ? "disabled" : ""}>
+          ${escapeHtml(syncLabel)}
+        </button>
+        <span>${escapeHtml(canSync ? "Bez Cloudflare secrets se zapíše pouze bezpečný stav konfigurace." : "Ruční sync může spustit pouze admin nebo management s oprávněním manage.")}</span>
+      </div>
+      ${syncMessage}
       <div class="data-box-table-wrap">
         <table class="data-box-table">
           <thead>
@@ -13609,7 +13631,7 @@ function dataBoxPage(moduleItem, user) {
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">SMART ODPADY / DATOVÁ SCHRÁNKA</div>
           <h1 id="module-title">Datová schránka</h1>
-          <p>Pilotní rozhraní pro budoucí ISDS integraci. Teď je to bezpečný UI návrh bez ostrého čtení, zápisu, odesílání a bez uložených přístupových údajů.</p>
+          <p>Pilotní rozhraní pro ISDS integraci. Ruční sync běží přes backend a bez schválených Cloudflare secrets zapíše jen bezpečný stav konfigurace.</p>
           <div class="module-detail__status">
             <span>Stav</span>
             <strong>${escapeHtml(heroStatus)}</strong>
@@ -13617,8 +13639,8 @@ function dataBoxPage(moduleItem, user) {
           <div class="data-box-safe-actions" aria-label="Neaktivní provozní akce">
             <article>
               <span>Synchronizace</span>
-              <strong>vypnuto</strong>
-              <small>Čeká na samostatný ISDS adapter a schválené secrets.</small>
+              <strong>ručně</strong>
+              <small>Čte jen seznam obálek, přílohy ani obsah zpráv nestahuje.</small>
             </article>
             <article>
               <span>Odesílání</span>
@@ -13635,7 +13657,7 @@ function dataBoxPage(moduleItem, user) {
       </section>
 
       <section class="data-box-warning" role="status">
-        <strong>ISDS integrace není aktivní.</strong>
+        <strong>ISDS secrets nejsou v repozitáři.</strong>
         <span>Frontend nevolá datové schránky, neukládá provozní data lokálně a neobsahuje žádné certifikáty, hesla ani tokeny.</span>
       </section>
 
@@ -15223,6 +15245,9 @@ function resetDataBoxState() {
   dataBoxState.status = null;
   dataBoxState.messages = [];
   dataBoxState.syncRuns = [];
+  dataBoxState.syncLoading = false;
+  dataBoxState.syncMessage = "";
+  dataBoxState.syncError = "";
   dataBoxState.selectedMessageId = "";
   dataBoxState.selectedMessage = null;
   dataBoxState.detailLoading = false;
@@ -15327,6 +15352,33 @@ async function loadDataBoxMessageDetail(messageId) {
 
   render();
   scrollDataBoxMessageDetailIntoView();
+}
+
+async function runDataBoxManualSync() {
+  if (dataBoxState.syncLoading) {
+    return;
+  }
+
+  dataBoxState.syncLoading = true;
+  dataBoxState.syncError = "";
+  dataBoxState.syncMessage = "Spouštím ruční read-only sync...";
+  render();
+
+  try {
+    const result = await apiJson("/api/data-box/sync", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    dataBoxState.syncMessage = result.message || result.sync?.message || "Ruční sync doběhl.";
+    await loadDataBoxData({ force: true, renderAfter: false });
+  } catch (error) {
+    dataBoxState.syncError = error?.payload?.error || error?.message || "Ruční sync se nepodařilo spustit.";
+    await loadDataBoxData({ force: true, renderAfter: false }).catch(() => {});
+  } finally {
+    dataBoxState.syncLoading = false;
+  }
+
+  render();
 }
 
 async function loadVehicleTrackingStatus(options = {}) {
@@ -20333,6 +20385,12 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedMessage = null;
     dataBoxState.detailError = "";
     render();
+    return;
+  }
+
+  const dataBoxSyncButton = event.target.closest("[data-data-box-sync]");
+  if (dataBoxSyncButton) {
+    void runDataBoxManualSync();
     return;
   }
 

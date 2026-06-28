@@ -1,3 +1,5 @@
+import { dataBoxIsdsStatus, fetchDataBoxMessageMetadata } from "./data-box-isds-client.js";
+
 const DATA_BOX_DB_BINDING = "SMART_ODPADY_DB";
 const DATA_BOX_DOCUMENTS_BINDING = "SMART_ODPADY_DOCUMENTS";
 const MESSAGE_DIRECTIONS = new Set(["received", "sent"]);
@@ -53,6 +55,26 @@ function limitValue(value, fallback = 50, max = 100) {
     return fallback;
   }
   return Math.min(Math.floor(number), max);
+}
+
+function idValue(prefix) {
+  const suffix = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${suffix}`;
+}
+
+function safeIdPart(value) {
+  return cleanString(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function messageRecordId(direction, isdsMessageId) {
+  const safeMessageId = safeIdPart(isdsMessageId) || idValue("isds-message");
+  return `data-box-${normalizeDirection(direction) || "message"}-${safeMessageId}`;
 }
 
 function normalizeDirection(value) {
@@ -194,9 +216,220 @@ async function primaryDataBox(db) {
   };
 }
 
+async function ensurePrimaryDataBox(db) {
+  const existing = await primaryDataBox(db);
+  if (existing.id) {
+    return existing;
+  }
+
+  await db
+    .prepare(`
+      INSERT INTO data_boxes (
+        id,
+        label,
+        mode,
+        status,
+        last_sync_status,
+        last_sync_message
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      "kaiser-primary",
+      "Kaiser Smart Datova schranka",
+      "pilot",
+      "inactive",
+      "waiting",
+      "ISDS integrace neni aktivni."
+    )
+    .run();
+
+  return primaryDataBox(db);
+}
+
+async function syncRunById(db, runId) {
+  const row = await db.prepare("SELECT * FROM data_box_sync_runs WHERE id = ? LIMIT 1").bind(runId).first();
+  return rowToSyncRun(row);
+}
+
+async function createSyncRun(db, dataBox, currentUser, startedAt) {
+  const runId = idValue("data-box-sync");
+  await db
+    .prepare(`
+      INSERT INTO data_box_sync_runs (
+        id,
+        data_box_id,
+        trigger_type,
+        started_at,
+        status,
+        dedupe_key,
+        created_by_user_id
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      runId,
+      dataBox.id || null,
+      "manual",
+      startedAt,
+      "running",
+      `manual:${dataBox.id || "primary"}:${startedAt}:${runId}`,
+      cleanString(currentUser?.id)
+    )
+    .run();
+  return runId;
+}
+
+async function finishSyncRun(db, runId, patch) {
+  await db
+    .prepare(`
+      UPDATE data_box_sync_runs
+      SET
+        finished_at = ?,
+        status = ?,
+        messages_found = ?,
+        messages_created = ?,
+        messages_updated = ?,
+        attachments_found = ?,
+        error_code = ?,
+        message = ?
+      WHERE id = ?
+    `)
+    .bind(
+      patch.finishedAt,
+      patch.status,
+      numberValue(patch.messagesFound),
+      numberValue(patch.messagesCreated),
+      numberValue(patch.messagesUpdated),
+      numberValue(patch.attachmentsFound),
+      cleanString(patch.errorCode),
+      cleanString(patch.message),
+      runId
+    )
+    .run();
+  return syncRunById(db, runId);
+}
+
+async function updateDataBoxSyncState(db, dataBoxId, patch) {
+  if (!dataBoxId) {
+    return;
+  }
+
+  await db
+    .prepare(`
+      UPDATE data_boxes
+      SET
+        mode = ?,
+        status = ?,
+        last_sync_at = ?,
+        last_sync_status = ?,
+        last_sync_message = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    .bind(
+      patch.mode,
+      patch.status,
+      patch.lastSyncAt,
+      patch.lastSyncStatus,
+      patch.lastSyncMessage,
+      dataBoxId
+    )
+    .run();
+}
+
+async function upsertMessageMetadata(db, dataBoxId, message) {
+  const isdsMessageId = cleanString(message.isdsMessageId);
+  if (!dataBoxId || !isdsMessageId) {
+    return "skipped";
+  }
+
+  const existing = await db
+    .prepare("SELECT id FROM data_box_messages WHERE data_box_id = ? AND isds_message_id = ? LIMIT 1")
+    .bind(dataBoxId, isdsMessageId)
+    .first();
+
+  const values = [
+    dataBoxId,
+    isdsMessageId,
+    normalizeDirection(message.direction) || "received",
+    cleanString(message.subject),
+    cleanString(message.senderName),
+    cleanString(message.senderBoxId),
+    cleanString(message.recipientName),
+    cleanString(message.recipientBoxId),
+    cleanString(message.deliveredAt),
+    cleanString(message.acceptedAt),
+    cleanString(message.status || "metadata"),
+    cleanString(message.priority || "normal"),
+    message.hasAttachments ? 1 : 0,
+    numberValue(message.attachmentsCount),
+    cleanString(message.source || "isds_metadata"),
+    cleanString(message.isdsState)
+  ];
+
+  if (existing?.id) {
+    await db
+      .prepare(`
+        UPDATE data_box_messages
+        SET
+          data_box_id = ?,
+          isds_message_id = ?,
+          direction = ?,
+          subject = ?,
+          sender_name = ?,
+          sender_box_id = ?,
+          recipient_name = ?,
+          recipient_box_id = ?,
+          delivered_at = ?,
+          accepted_at = ?,
+          status = ?,
+          priority = ?,
+          has_attachments = ?,
+          attachments_count = ?,
+          source = ?,
+          isds_state = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      .bind(...values, existing.id)
+      .run();
+    return "updated";
+  }
+
+  await db
+    .prepare(`
+      INSERT INTO data_box_messages (
+        id,
+        data_box_id,
+        isds_message_id,
+        direction,
+        subject,
+        sender_name,
+        sender_box_id,
+        recipient_name,
+        recipient_box_id,
+        delivered_at,
+        accepted_at,
+        status,
+        priority,
+        has_attachments,
+        attachments_count,
+        source,
+        isds_state
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(messageRecordId(message.direction, isdsMessageId), ...values)
+    .run();
+
+  return "created";
+}
+
 export async function getDataBoxStatus(env) {
   const db = dataBoxDatabase(env);
   const storageStatus = dataBoxStorageStatus(env);
+  const isdsStatus = dataBoxIsdsStatus(env);
 
   if (!db) {
     return {
@@ -205,6 +438,7 @@ export async function getDataBoxStatus(env) {
       integrationStatus: "inactive",
       isdsActive: false,
       mode: "pilot",
+      isds: isdsStatus,
       dataBox: null,
       summary: { received: 0, sent: 0, attachments: 0, syncRuns: 0, lastSyncAt: "" },
       message: "Cloud D1 binding SMART_ODPADY_DB zatim neni dostupny."
@@ -232,9 +466,10 @@ export async function getDataBoxStatus(env) {
     return {
       apiStatus: "ready",
       storageStatus,
-      integrationStatus: dataBox.status || "inactive",
-      isdsActive: false,
+      integrationStatus: isdsStatus.configured ? "configured" : (dataBox.status || "inactive"),
+      isdsActive: isdsStatus.configured,
       mode: dataBox.mode || "pilot",
+      isds: isdsStatus,
       dataBox,
       summary: {
         received: numberValue(summaryRow?.received),
@@ -243,9 +478,99 @@ export async function getDataBoxStatus(env) {
         syncRuns: numberValue(syncRow?.sync_runs),
         lastSyncAt: cleanString(syncRow?.last_sync_at || dataBox.lastSyncAt)
       },
-      message: dataBox.lastSyncMessage || "ISDS integrace neni aktivni."
+      message: dataBox.lastSyncMessage || (
+        isdsStatus.configured
+          ? "ISDS read-only konfigurace je nastavena. Sync se spousti jen rucne."
+          : "ISDS integrace neni aktivni."
+      )
     };
   } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function runDataBoxManualSync(env, currentUser) {
+  const db = dataBoxDatabase(env, true);
+  const startedAt = new Date().toISOString();
+
+  try {
+    const dataBox = await ensurePrimaryDataBox(db);
+    const runId = await createSyncRun(db, dataBox, currentUser, startedAt);
+
+    try {
+      const result = await fetchDataBoxMessageMetadata(env);
+      let messagesCreated = 0;
+      let messagesUpdated = 0;
+      let attachmentsFound = 0;
+
+      for (const message of result.messages) {
+        const writeState = await upsertMessageMetadata(db, dataBox.id, message);
+        if (writeState === "created") messagesCreated += 1;
+        if (writeState === "updated") messagesUpdated += 1;
+        if (message.hasAttachments) attachmentsFound += 1;
+      }
+
+      const finishedAt = new Date().toISOString();
+      const message = `Read-only ISDS sync ulozil metadata: ${result.messages.length} obalek, ${messagesCreated} novych, ${messagesUpdated} aktualizovanych.`;
+      const sync = await finishSyncRun(db, runId, {
+        finishedAt,
+        status: "success",
+        messagesFound: result.messages.length,
+        messagesCreated,
+        messagesUpdated,
+        attachmentsFound,
+        errorCode: "",
+        message
+      });
+
+      await updateDataBoxSyncState(db, dataBox.id, {
+        mode: "read-only-pilot",
+        status: "ready",
+        lastSyncAt: finishedAt,
+        lastSyncStatus: "success",
+        lastSyncMessage: message
+      });
+
+      return {
+        apiStatus: "ready",
+        sync,
+        isds: result.config,
+        message
+      };
+    } catch (error) {
+      const finishedAt = new Date().toISOString();
+      const isConfigMissing = error?.code === "data_box_isds_not_configured";
+      const status = isConfigMissing ? "configuration_missing" : "failed";
+      const errorCode = cleanString(error?.code || "data_box_isds_sync_failed");
+      const message = cleanString(error?.message || "ISDS synchronizace se nepodarila.");
+      const sync = await finishSyncRun(db, runId, {
+        finishedAt,
+        status,
+        messagesFound: 0,
+        messagesCreated: 0,
+        messagesUpdated: 0,
+        attachmentsFound: 0,
+        errorCode,
+        message
+      });
+
+      await updateDataBoxSyncState(db, dataBox.id, {
+        mode: "read-only-pilot",
+        status: isConfigMissing ? "inactive" : "error",
+        lastSyncAt: finishedAt,
+        lastSyncStatus: status,
+        lastSyncMessage: message
+      });
+
+      return {
+        apiStatus: "ready",
+        sync,
+        isds: dataBoxIsdsStatus(env),
+        message
+      };
+    }
+  } catch (error) {
+    if (error instanceof DataBoxStoreError) throw error;
     throw dbError(error);
   }
 }

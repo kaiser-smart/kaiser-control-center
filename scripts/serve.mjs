@@ -89,6 +89,7 @@ let mockCollectionRouteContainers = [];
 let mockCollectionRouteSourceBatches = [];
 let mockCollectionRouteSourceFiles = [];
 let mockCollectionRouteSourceRows = [];
+let mockDataBoxSyncRuns = [];
 
 const mockVehicleWimSites = [
   ["wim-d0-0781-modletice-jesenice", "D0", "km 78,1 / cca km 79", "mezi Modleticemi a Jesenici", "Cernosice", "vpravo + vlevo", "active", "v provozu", 49.9706, 14.5288, 2],
@@ -857,7 +858,13 @@ function canViewMockDataBox(currentUser) {
   return hasPermission(currentUser, "data-box", "view");
 }
 
+function canManageMockDataBox(currentUser) {
+  return ["admin", "management"].includes(normalizeRole(currentUser?.role))
+    && hasPermission(currentUser, "data-box", "manage");
+}
+
 function mockDataBoxStatusPayload() {
+  const latestRun = mockDataBoxSyncRuns[0] || null;
   return {
     apiStatus: "ready",
     storageStatus: "waiting",
@@ -870,9 +877,9 @@ function mockDataBoxStatusPayload() {
       isdsId: "",
       mode: "pilot",
       status: "inactive",
-      lastSyncAt: "",
-      lastSyncStatus: "waiting",
-      lastSyncMessage: "ISDS integrace neni aktivni.",
+      lastSyncAt: latestRun?.startedAt || "",
+      lastSyncStatus: latestRun?.status || "waiting",
+      lastSyncMessage: latestRun?.message || "ISDS integrace neni aktivni.",
       createdAt: "",
       updatedAt: ""
     },
@@ -880,10 +887,21 @@ function mockDataBoxStatusPayload() {
       received: 0,
       sent: 0,
       attachments: 0,
-      syncRuns: 0,
-      lastSyncAt: ""
+      syncRuns: mockDataBoxSyncRuns.length,
+      lastSyncAt: latestRun?.startedAt || ""
     },
-    message: "Lokalni dev API je pripravene, ostre ISDS napojeni neni aktivni."
+    isds: {
+      enabled: false,
+      configured: false,
+      mode: "local-dev",
+      baseUrl: "https://ws1.datovka.gov.cz",
+      infoEndpointUrl: "https://ws1.datovka.gov.cz/DS/dx",
+      hasUsername: false,
+      hasPassword: false,
+      missing: ["DATA_BOX_ISDS_ENABLED", "DATA_BOX_ISDS_USERNAME", "DATA_BOX_ISDS_PASSWORD"],
+      documentationStatus: "official-isds-wsdl-3.11-2026-06-26"
+    },
+    message: latestRun?.message || "Lokalni dev API je pripravene, ostre ISDS napojeni neni aktivni."
   };
 }
 
@@ -2502,6 +2520,40 @@ async function handleApi(request, response) {
     return true;
   }
 
+  const dataBoxModuleRulesMatch = /^\/api\/modules\/data-box\/(rules|automation-runs)$/.exec(url.pathname);
+  if (dataBoxModuleRulesMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+
+    if (dataBoxModuleRulesMatch[1] === "automation-runs") {
+      sendJson(response, 200, { runs: [], runnerRuns: [], apiStatus: "ready" });
+      return true;
+    }
+
+    sendJson(response, 200, { rules: [], apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/modules/data-box/rules" && request.method !== "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    sendJson(response, 403, {
+      error: "Datova schranka ma v lokalnim mocku pravidla pouze read-only.",
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/vehicles" && request.method === "GET") {
     const user = currentDevUser(request);
     if (!user) {
@@ -2645,7 +2697,46 @@ async function handleApi(request, response) {
       return true;
     }
 
-    sendJson(response, 200, { runs: [], apiStatus: "ready" });
+    sendJson(response, 200, { runs: mockDataBoxSyncRuns, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box/sync" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canManageMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni spustit synchronizaci Datove schranky." });
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const run = {
+      id: `data-box-sync-${randomUUID()}`,
+      dataBoxId: "kaiser-primary",
+      triggerType: "manual",
+      startedAt: now,
+      finishedAt: now,
+      status: "configuration_missing",
+      messagesFound: 0,
+      messagesCreated: 0,
+      messagesUpdated: 0,
+      attachmentsFound: 0,
+      errorCode: "data_box_isds_not_configured",
+      message: "Lokalni dev server nema ISDS secrets. Ostry sync se nespustil.",
+      dedupeKey: `manual:kaiser-primary:${now}`,
+      createdByUserId: user.id || ""
+    };
+    mockDataBoxSyncRuns = [run, ...mockDataBoxSyncRuns].slice(0, 50);
+
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      sync: run,
+      isds: mockDataBoxStatusPayload().isds,
+      message: run.message
+    });
     return true;
   }
 

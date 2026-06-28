@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.194"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.195"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datová schránka: ruční read-only sync",
+    text: "Modul Datová schránka má chráněný backendový endpoint pro ruční synchronizaci seznamu obálek ISDS, zapisuje log běhu do D1 a bez Cloudflare secrets bezpečně skončí stavem konfigurace."
+  },
   {
     title: "Karta zaměstnance: potvrzení mazání bez dialogu",
     text: "Smazání dokumentu se potvrzuje druhým kliknutím přímo v řádku dokumentu, aby se úklid nezasekl na systémovém potvrzovacím okně."

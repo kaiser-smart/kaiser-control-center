@@ -7531,6 +7531,35 @@ body:has(.ai-assistant-promo-modal) {
   font-size: 1.18rem;
 }
 
+.data-box-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.data-box-sync-actions span,
+.data-box-sync-message {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.data-box-sync-message {
+  padding: 10px 12px;
+  border: 1px solid rgba(111, 157, 135, 0.28);
+  border-radius: 8px;
+  background: #f7faf8;
+  color: var(--steel);
+}
+
+.data-box-sync-message--error {
+  border-color: rgba(171, 62, 50, 0.28);
+  background: #fff7f5;
+  color: #87382f;
+}
+
 .data-box-table-wrap {
   overflow-x: auto;
 }
