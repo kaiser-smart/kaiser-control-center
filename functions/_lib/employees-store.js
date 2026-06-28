@@ -1014,6 +1014,38 @@ export async function getEmployeeDocument(env, employeeId, documentId) {
   return document;
 }
 
+export async function deleteEmployeeDocument(env, employeeId, documentId) {
+  const db = employeeDatabase(env, true);
+  const document = await getEmployeeDocument(env, employeeId, documentId);
+
+  if (document.storageKey) {
+    await employeeDocumentsBucket(env, true).delete(document.storageKey);
+  }
+
+  const deleteFileStatement = db
+    .prepare(`
+      DELETE FROM employee_document_files
+      WHERE document_id = ? AND employee_id = ?
+    `)
+    .bind(documentId, employeeId);
+
+  const deleteDocumentStatement = db
+    .prepare(`
+      DELETE FROM employee_documents
+      WHERE id = ? AND employee_id = ?
+    `)
+    .bind(documentId, employeeId);
+
+  if (typeof db.batch === "function") {
+    await db.batch([deleteFileStatement, deleteDocumentStatement]);
+  } else {
+    await deleteFileStatement.run();
+    await deleteDocumentStatement.run();
+  }
+
+  return document;
+}
+
 export async function saveEmployeeDocument(env, employeeId, input) {
   const db = employeeDatabase(env, true);
   const now = new Date().toISOString();
