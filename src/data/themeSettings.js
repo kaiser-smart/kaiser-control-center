@@ -1,10 +1,14 @@
+const LEGACY_GREENISH_BACKGROUND = "#f7f9f4";
+const NEUTRAL_SURFACE_BACKGROUND = "#f7f8f9";
+const NEUTRAL_SURFACE_ACCENT = "#7f8892";
+
 export const DEFAULT_THEME_SETTINGS = {
   paletteMode: "manual",
   logoUrl: "/logo-kaiser.svg",
   primaryColor: "#75bd25",
   secondaryColor: "#3f4a45",
   accentColor: "#2f7d4c",
-  backgroundColor: "#f7f9f4",
+  backgroundColor: NEUTRAL_SURFACE_BACKGROUND,
   cardColor: "#ffffff",
   textColor: "#1f2921",
   mutedTextColor: "#667064",
@@ -38,7 +42,7 @@ export const THEME_LABELS = {
   },
   backgroundStyle: {
     solid: "Jednobarevné",
-    "soft-green-gradient": "Jemný zelený gradient",
+    "soft-green-gradient": "Jemný šedý gradient",
     neutral: "Světlé neutrální"
   },
   cardShadow: {
@@ -129,6 +133,11 @@ function cleanColor(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : fallback;
 }
 
+function cleanBackgroundColor(value, fallback) {
+  const color = cleanColor(value, fallback);
+  return color === LEGACY_GREENISH_BACKGROUND ? fallback : color;
+}
+
 function oneOf(value, allowed, fallback) {
   return allowed.includes(value) ? value : fallback;
 }
@@ -161,7 +170,7 @@ export function normalizeThemeSettings(input = {}, options = {}) {
     : {
       secondaryColor: cleanColor(input.secondaryColor, fallback.secondaryColor),
       accentColor: cleanColor(input.accentColor, fallback.accentColor),
-      backgroundColor: cleanColor(input.backgroundColor, fallback.backgroundColor),
+      backgroundColor: cleanBackgroundColor(input.backgroundColor, fallback.backgroundColor),
       cardColor: cleanColor(input.cardColor, fallback.cardColor),
       textColor: cleanColor(input.textColor, fallback.textColor),
       mutedTextColor: cleanColor(input.mutedTextColor, fallback.mutedTextColor)
@@ -225,7 +234,7 @@ export function themeBackground(settings) {
     return `linear-gradient(180deg, #ffffff 0%, ${settings.backgroundColor} 100%)`;
   }
 
-  return `linear-gradient(145deg, color-mix(in srgb, ${settings.primaryColor} 16%, transparent) 0%, transparent 36%), ${settings.backgroundColor}`;
+  return `linear-gradient(145deg, color-mix(in srgb, ${NEUTRAL_SURFACE_ACCENT} 16%, transparent) 0%, transparent 36%), ${settings.backgroundColor}`;
 }
 
 export function themeSettingsToCssProperties(input = {}) {

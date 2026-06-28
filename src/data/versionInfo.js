@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.178"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.179"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vzhled: sede povrchy misto zeleneho nadechu",
+    text: "Dynamicky theme surface uz nepouziva zelenou primarni barvu v pozadi; stary zelenkavy default #f7f9f4 se meni na neutralni sedy povrch."
+  },
   {
     title: "HP: kompaktnejsi uvodni blok",
     text: "Uvodni cast homepage je nizsi diky mensim mezeram, kompaktnimu titulku a mensim stavovym kartam, aby moduly zacinaly vyse."
