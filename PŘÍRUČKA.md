@@ -702,6 +702,41 @@ Nesmí vznikat:
 - tlačítka mimo obrazovku,
 - rozbité mobilní menu.
 
+### Povinné barevné schéma, písmo a čitelnost modulů
+
+Při vývoji každého modulu je nutné respektovat barevné schéma z Nastavení aplikace.
+
+Moduly mají používat existující theme proměnné / `module-theme-scope` a hlavní firemní barvy z nastavení. Nový modul nesmí zavádět náhodnou vlastní paletu, pokud to Radim/Martin výslovně neschválí.
+
+Výchozí font Kaiser Control Center je Quicksand.
+
+Quicksand se nesmí přetěžovat tučným řezem. Tučné písmo používat jen pro:
+- hlavní nadpisy,
+- krátké štítky,
+- důležitý status,
+- primární akce.
+
+Netučné nebo jen lehce zvýrazněné mají být:
+- vysvětlující texty pod nadpisy,
+- popisy karet,
+- odstavce typu provozní realita / chráněné čtecí API,
+- tabulkové řádky s provozními daty,
+- data přijatých a odeslaných zpráv.
+
+Správný vzor:
+
+```text
+Provozní realita
+Rozpad na fáze a cílové cloudové části, aby UI nevypadalo jako ostré ISDS napojení.
+
+Chráněné čtecí API
+Frontend čte stav, metadata zpráv a log běhů přes backend. Data jsou pouze v D1, pokud je binding a migrace v produkci hotová.
+```
+
+Nadpis může být tučný. Popis pod ním má být netučný a čitelný.
+
+V Datové schránce jsou firemní boxy samostatné chlívky. Po kliknutí na konkrétní schránku, například `KS`, musí uživatel zůstat čistě v kontextu této jedné DS. Nemá zůstat v nejasném pohledu všech boxů, pokud je vybraná jedna schránka.
+
 ## 6. GitHub
 
 Hlavní firemní GitHub organizace je:

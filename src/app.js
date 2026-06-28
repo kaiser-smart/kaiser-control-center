@@ -13291,47 +13291,93 @@ function dataBoxAccountStats(account, accountStatusMap = dataBoxAccountStatusMap
   };
 }
 
+function dataBoxAccountStatusClass(stats) {
+  if (stats.lastRun?.status === "success") {
+    return "data-box-account-card__status--ready";
+  }
+  return stats.lastRun ? "data-box-account-card__status--error" : "data-box-account-card__status--waiting";
+}
+
+function dataBoxAccountSummary(stats) {
+  return `${stats.received} přijatých · ${stats.sent} odeslaných`;
+}
+
+function dataBoxAccountButton(account, stats) {
+  return `
+    <button
+      class="data-box-account-card"
+      type="button"
+      data-data-box-account="${escapeHtml(account.id)}"
+      aria-label="${escapeHtml(`Otevřít datovou schránku ${account.label}`)}"
+    >
+      <span class="data-box-account-card__mark">${escapeHtml(account.shortLabel)}</span>
+      <strong>${escapeHtml(account.label)}</strong>
+      <small>${escapeHtml(dataBoxAccountSummary(stats))}</small>
+      <span class="data-box-account-card__status ${dataBoxAccountStatusClass(stats)}">
+        ${escapeHtml(stats.statusLabel)}
+      </span>
+    </button>
+  `;
+}
+
+function dataBoxAccountWorkspace(account, stats) {
+  return `
+    <article class="data-box-account-workspace">
+      <span class="data-box-account-card__mark">${escapeHtml(account.shortLabel)}</span>
+      <div class="data-box-account-workspace__body">
+        <strong>${escapeHtml(account.label)}</strong>
+        <small>${escapeHtml(dataBoxAccountSummary(stats))}</small>
+      </div>
+      <span class="data-box-account-card__status ${dataBoxAccountStatusClass(stats)}">
+        ${escapeHtml(stats.statusLabel)}
+      </span>
+      <ul class="data-box-account-workspace__facts" aria-label="Souhrn datové schránky">
+        <li>
+          <span>Přijaté</span>
+          <strong>${escapeHtml(String(stats.received))}</strong>
+        </li>
+        <li>
+          <span>Odeslané</span>
+          <strong>${escapeHtml(String(stats.sent))}</strong>
+        </li>
+      </ul>
+    </article>
+  `;
+}
+
 function dataBoxAccountsSwitcher() {
   const activeAccount = dataBoxSelectedAccount();
   const accountStatusMap = dataBoxAccountStatusMap();
+
+  if (activeAccount) {
+    const stats = dataBoxAccountStats(activeAccount, accountStatusMap);
+
+    return `
+      <section class="data-box-accounts data-box-accounts--selected" aria-labelledby="data-box-accounts-title">
+        <div class="data-box-accounts__head">
+          <div>
+            <h2 id="data-box-accounts-title">${escapeHtml(activeAccount.label)}</h2>
+            <p>Chlívek ${escapeHtml(activeAccount.shortLabel)}. Zprávy a log níže patří pouze této datové schránce.</p>
+          </div>
+          <button class="secondary-link" type="button" data-data-box-account-reset>
+            Zpět na všechny schránky
+          </button>
+        </div>
+        ${dataBoxAccountWorkspace(activeAccount, stats)}
+      </section>
+    `;
+  }
 
   return `
     <section class="data-box-accounts" aria-labelledby="data-box-accounts-title">
       <div class="data-box-accounts__head">
         <div>
           <h2 id="data-box-accounts-title">Datové schránky</h2>
-          <p>${escapeHtml(activeAccount ? `Chlívek: ${activeAccount.label}` : "Všechny schránky")}</p>
+          <p>Vyber firemní chlívek.</p>
         </div>
-        ${activeAccount ? `
-          <button class="secondary-link" type="button" data-data-box-account-reset>
-            Zobrazit všechny
-          </button>
-        ` : ""}
       </div>
       <div class="data-box-account-grid">
-        ${DATA_BOX_ACCOUNT_BOXES.map((account) => {
-          const stats = dataBoxAccountStats(account, accountStatusMap);
-          const isActive = activeAccount?.id === account.id;
-          const statusClass = stats.lastRun?.status === "success"
-            ? "data-box-account-card__status--ready"
-            : (stats.lastRun ? "data-box-account-card__status--error" : "data-box-account-card__status--waiting");
-
-          return `
-            <button
-              class="data-box-account-card ${isActive ? "data-box-account-card--active" : ""}"
-              type="button"
-              data-data-box-account="${escapeHtml(account.id)}"
-              aria-pressed="${isActive ? "true" : "false"}"
-            >
-              <span class="data-box-account-card__mark">${escapeHtml(account.shortLabel)}</span>
-              <strong>${escapeHtml(account.label)}</strong>
-              <small>${escapeHtml(`${stats.received} přijatých · ${stats.sent} odeslaných`)}</small>
-              <span class="data-box-account-card__status ${statusClass}">
-                ${escapeHtml(stats.statusLabel)}
-              </span>
-            </button>
-          `;
-        }).join("")}
+        ${DATA_BOX_ACCOUNT_BOXES.map((account) => dataBoxAccountButton(account, dataBoxAccountStats(account, accountStatusMap))).join("")}
       </div>
     </section>
   `;
@@ -20641,7 +20687,7 @@ document.addEventListener("click", async (event) => {
   const dataBoxAccountButton = event.target.closest("[data-data-box-account]");
   if (dataBoxAccountButton) {
     const nextAccountId = dataBoxAccountButton.dataset.dataBoxAccount || "";
-    dataBoxState.selectedDataBoxId = dataBoxState.selectedDataBoxId === nextAccountId ? "" : nextAccountId;
+    dataBoxState.selectedDataBoxId = nextAccountId;
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
     dataBoxState.detailError = "";
