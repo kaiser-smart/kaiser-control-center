@@ -89,7 +89,8 @@ await writeFile(path.join(dist, "_redirects"), [
   "/dovolena-nemoc/* /index.html 200",
   "/vozovy-park/* /index.html 200",
   "/sledovani-vozidel/* /index.html 200",
-  "/datova-schranka* /index.html 200",
+  "/datova-schranka /datova-schranka/index.html 200",
+  "/datova-schranka/* /datova-schranka/index.html 200",
   "/design/neumorphic* /index.html 200"
 ].join("\n") + "\n");
 
