@@ -888,6 +888,7 @@ const employeeCardState = {
   medicalExamDraft: null,
   documentUploading: false,
   documentDeletingId: "",
+  documentPendingDeleteId: "",
   documentsUploadStatus: "waiting",
   documentsMissingEndpoint: "POST /api/employees/:id/documents",
   documentImportPreview: null,
@@ -6658,7 +6659,11 @@ function employeeDocumentsSection(employee, canEdit) {
                   data-employee-document-name="${escapeHtml(document.name || "dokument")}"
                   ${employeeCardState.documentDeletingId === document.id ? "disabled" : ""}
                 >
-                  ${employeeCardState.documentDeletingId === document.id ? "Mažu..." : "Smazat"}
+                  ${employeeCardState.documentDeletingId === document.id
+                    ? "Mažu..."
+                    : employeeCardState.documentPendingDeleteId === document.id
+                      ? "Potvrdit smazání"
+                      : "Smazat"}
                 </button>
               ` : ""}
             </span>
@@ -16270,6 +16275,7 @@ async function loadEmployeeCard(employeeId, options = {}) {
     employeeCardState.formDraft = null;
     employeeCardState.documentUploading = false;
     employeeCardState.documentDeletingId = "";
+    employeeCardState.documentPendingDeleteId = "";
   }
 
   if (options.renderBefore !== false) {
@@ -18545,12 +18551,17 @@ async function deleteEmployeeDocumentFromCard(documentId, documentName = "dokume
     return;
   }
 
-  const label = String(documentName || "dokument").trim() || "dokument";
-  if (!window.confirm(`Opravdu smazat dokument "${label}"?`)) {
+  if (employeeCardState.documentPendingDeleteId !== cleanDocumentId) {
+    const label = String(documentName || "dokument").trim() || "dokument";
+    employeeCardState.documentPendingDeleteId = cleanDocumentId;
+    employeeCardState.message = `Pro smazání dokumentu "${label}" klikněte ještě jednou na Potvrdit smazání.`;
+    employeeCardState.error = "";
+    render();
     return;
   }
 
   employeeCardState.documentDeletingId = cleanDocumentId;
+  employeeCardState.documentPendingDeleteId = "";
   employeeCardState.message = "Mažu dokument...";
   employeeCardState.error = "";
   render();
