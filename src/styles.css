@@ -8032,6 +8032,228 @@ body:has(.ai-assistant-promo-modal) {
   text-underline-offset: 3px;
 }
 
+.employee-overview {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
+}
+
+.employee-overview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.employee-overview__head h2 {
+  margin: 4px 0 8px;
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+
+.employee-overview__head p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.employee-overview__head-actions,
+.employee-card-header__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-overview__head-actions {
+  justify-content: flex-end;
+}
+
+.employee-overview__stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.employee-overview__stats article {
+  display: grid;
+  gap: 6px;
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #f8fbf4;
+}
+
+.employee-overview__stats span,
+.employee-overview__filters span,
+.employee-overview-card dt,
+.employee-overview__meta {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.employee-overview__stats strong {
+  color: var(--ink);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.employee-overview__filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(130px, 0.8fr)) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid #e3eadf;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.employee-overview__filters label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.employee-overview__filters input,
+.employee-overview__filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+}
+
+.employee-overview__filters input {
+  padding: 0 12px;
+}
+
+.employee-overview__filters select {
+  padding: 0 10px;
+}
+
+.employee-overview__filters .text-action {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.employee-overview__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.employee-overview__note {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.employee-overview__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+  max-height: 620px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.employee-overview-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.employee-overview-card--active {
+  border-color: rgba(117, 189, 37, 0.42);
+  background: #fbfdf9;
+}
+
+.employee-overview-card__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.employee-overview-card h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.employee-overview-card p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.employee-overview-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 180px;
+}
+
+.employee-overview-card__details {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.employee-overview-card__details div {
+  min-width: 0;
+}
+
+.employee-overview-card dt,
+.employee-overview-card dd {
+  margin: 0;
+}
+
+.employee-overview-card dd {
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.employee-overview-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.employee-overview-card__actions .secondary-link,
+.employee-overview-card__actions .text-action {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 0.82rem;
+}
+
 .employee-card {
   display: grid;
   gap: 16px;
@@ -8249,6 +8471,8 @@ body:has(.ai-assistant-promo-modal) {
   font-size: 0.72rem;
   font-weight: 900;
   text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .employee-card-status--ready {
@@ -8259,6 +8483,40 @@ body:has(.ai-assistant-promo-modal) {
 .employee-card-status--waiting {
   background: #fff5e5;
   color: #8a5a00;
+}
+
+.employee-card-status--neutral {
+  background: #f1f4ef;
+  color: #5f6b5f;
+}
+
+.employee-card-status--inactive {
+  background: #edf0ec;
+  color: #687166;
+}
+
+.employee-card-status--warning {
+  background: #fff5e5;
+  color: #8a5a00;
+}
+
+.employee-card-status--danger {
+  background: #fff0f0;
+  color: #9b2c2c;
+}
+
+.employee-card-status--vacation {
+  background: #eef6ff;
+  color: #24557a;
+}
+
+.employee-card-status--info {
+  background: #eef4f6;
+  color: #2d5c67;
+}
+
+.employee-card-status--absence {
+  text-transform: none;
 }
 
 .employee-medical-exam-section {
@@ -11633,13 +11891,27 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 @media (max-width: 980px) {
+  .employee-overview__head,
   .employee-card-header {
     display: grid;
   }
 
+  .employee-overview__head-actions,
   .employee-card-header__actions {
     justify-content: flex-start;
     max-width: none;
+  }
+
+  .employee-overview__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .employee-overview__filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .employee-overview__search {
+    grid-column: 1 / -1;
   }
 
   .employee-card-kpis {
@@ -11652,20 +11924,51 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 @media (max-width: 640px) {
+  .employee-overview,
   .employee-card-header,
   .employee-card-section {
     padding: 16px;
   }
 
+  .employee-overview__head h2,
   .employee-card-header h2 {
     font-size: 1.8rem;
   }
 
+  .employee-overview__stats,
+  .employee-overview__filters,
   .employee-card-kpis,
   .employee-card-fields,
   .employee-work-history-form,
   .employee-medical-exam-form .employee-card-fields {
     grid-template-columns: 1fr;
+  }
+
+  .employee-overview__list {
+    grid-template-columns: 1fr;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .employee-overview-card__main,
+  .employee-overview-card__details {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-overview-card__badges {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .employee-overview__head-actions .primary-action,
+  .employee-overview__filters .text-action,
+  .employee-overview-card__actions .secondary-link,
+  .employee-overview-card__actions .text-action,
+  .employee-card-header__actions a,
+  .employee-card-header__actions button {
+    width: 100%;
+    justify-content: center;
   }
 
   .employee-card-kpi {
@@ -11683,9 +11986,18 @@ body:has(.ai-assistant-promo-modal) {
     gap: 12px;
   }
 
+  .employee-overview,
   .employee-card-header,
   .employee-card-section {
     padding: 14px;
+  }
+
+  .employee-overview__stats article {
+    min-height: 68px;
+  }
+
+  .employee-overview-card {
+    padding: 12px;
   }
 
   .employee-card-kpi strong {

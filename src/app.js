@@ -879,7 +879,12 @@ const employeeCardState = {
   importLoading: false,
   importApplying: false,
   importMessage: "",
-  importError: ""
+  importError: "",
+  overviewSearch: "",
+  overviewStatusFilter: "all",
+  overviewDepartmentFilter: "all",
+  overviewRoleFilter: "all",
+  overviewAbsenceFilter: "all"
 };
 
 const fleetImportPreviewState = {
@@ -2790,6 +2795,340 @@ function employeeOptionList(selectedId) {
     .join("");
 }
 
+function employeeRoleLabel(roleId) {
+  const role = ROLE_DEFINITIONS.find((item) => item.id === normalizeRole(roleId));
+  return role?.label || roleLabel(roleId) || "Role neuvedena";
+}
+
+function employeeEmploymentStatusLabel(status) {
+  const normalized = String(status || "active").trim() || "active";
+  return EMPLOYMENT_STATUS_OPTIONS.find((option) => option.value === normalized)?.label || normalized;
+}
+
+function employeeStatusBadge(label, tone = "neutral", extraClass = "") {
+  const className = ["employee-card-status", `employee-card-status--${tone}`, extraClass]
+    .filter(Boolean)
+    .join(" ");
+
+  return `<span class="${className}">${escapeHtml(label)}</span>`;
+}
+
+function employeeEmploymentStatusBadge(employee) {
+  const status = employee?.employmentStatus || "active";
+  return employeeStatusBadge(
+    employeeEmploymentStatusLabel(status),
+    status === "inactive" ? "inactive" : "ready"
+  );
+}
+
+function employeeCurrentAbsenceLabel(status) {
+  const normalized = String(status || "").trim();
+  return normalized || "v práci";
+}
+
+function employeeCurrentAbsenceTone(status) {
+  const normalized = employeeCurrentAbsenceLabel(status).toLowerCase();
+
+  if (normalized === "v práci" || normalized === "v praci") {
+    return "neutral";
+  }
+
+  if (normalized.includes("nemoc")) {
+    return "danger";
+  }
+
+  if (normalized.includes("dovolen")) {
+    return "vacation";
+  }
+
+  if (normalized.includes("očr") || normalized.includes("ocr")) {
+    return "warning";
+  }
+
+  return "info";
+}
+
+function employeeCurrentAbsenceBadge(status) {
+  const label = employeeCurrentAbsenceLabel(status);
+  return employeeStatusBadge(label, employeeCurrentAbsenceTone(label), "employee-card-status--absence");
+}
+
+function employeeHasCurrentAbsence(employee) {
+  return employeeCurrentAbsenceTone(employee?.currentAbsenceStatus) !== "neutral";
+}
+
+function employeeVacationPendingDays(employee) {
+  const pending = Number(employee?.vacationPendingDays ?? 0);
+  return Number.isFinite(pending) ? pending : 0;
+}
+
+function employeeHasPlannedVacation(employee) {
+  return employeeVacationPendingDays(employee) > 0;
+}
+
+function employeeHasIncompleteData(employee) {
+  return !String(employee?.email || "").trim() ||
+    !String(employee?.department || "").trim() ||
+    !String(employee?.position || "").trim();
+}
+
+function employeeOverviewSourceEmployees(selectedEmployee = employeeCardState.employee) {
+  const employees = new Map();
+
+  employeeCardState.employees.forEach((employee) => {
+    if (employee?.id) {
+      employees.set(employee.id, employee);
+    }
+  });
+
+  if (selectedEmployee?.id) {
+    employees.set(selectedEmployee.id, {
+      ...employees.get(selectedEmployee.id),
+      ...selectedEmployee
+    });
+  }
+
+  return [...employees.values()].sort((a, b) => employeeFullName(a).localeCompare(employeeFullName(b), "cs"));
+}
+
+function employeeOverviewSearchText(employee) {
+  return normalizeAccessSearchText([
+    employeeFullName(employee),
+    employee?.email,
+    employee?.phone,
+    employee?.department,
+    employee?.position,
+    employeeRoleLabel(employee?.role),
+    employeeEmploymentStatusLabel(employee?.employmentStatus),
+    employeeCurrentAbsenceLabel(employee?.currentAbsenceStatus),
+    employee?.managerName
+  ].join(" "));
+}
+
+function employeeOverviewMatchesFilters(employee) {
+  const query = normalizeAccessSearchText(employeeCardState.overviewSearch);
+  const status = employeeCardState.overviewStatusFilter;
+  const department = employeeCardState.overviewDepartmentFilter;
+  const role = employeeCardState.overviewRoleFilter;
+  const absence = employeeCardState.overviewAbsenceFilter;
+  const normalizedDepartment = String(employee?.department || "").trim() || "neuvedeno";
+  const normalizedRole = normalizeRole(employee?.role);
+  const normalizedStatus = employee?.employmentStatus || "active";
+  const matchesQuery = !query || employeeOverviewSearchText(employee).includes(query);
+  const matchesStatus = status === "all" || normalizedStatus === status;
+  const matchesDepartment = department === "all" || normalizedDepartment === department;
+  const matchesRole = role === "all" || normalizedRole === role;
+  const matchesAbsence = absence === "all" ||
+    (absence === "current" && employeeHasCurrentAbsence(employee)) ||
+    (absence === "work" && !employeeHasCurrentAbsence(employee)) ||
+    (absence === "planned-vacation" && employeeHasPlannedVacation(employee)) ||
+    (absence === "incomplete" && employeeHasIncompleteData(employee));
+
+  return matchesQuery && matchesStatus && matchesDepartment && matchesRole && matchesAbsence;
+}
+
+function employeeOverviewFilteredEmployees(selectedEmployee) {
+  return employeeOverviewSourceEmployees(selectedEmployee).filter(employeeOverviewMatchesFilters);
+}
+
+function employeeOverviewSummary(employees) {
+  return {
+    total: employees.length,
+    active: employees.filter((employee) => employee.employmentStatus !== "inactive").length,
+    inactive: employees.filter((employee) => employee.employmentStatus === "inactive").length,
+    absent: employees.filter(employeeHasCurrentAbsence).length,
+    plannedVacation: employees.filter(employeeHasPlannedVacation).length,
+    incomplete: employees.filter(employeeHasIncompleteData).length
+  };
+}
+
+function employeeOverviewOptionList(options, selected, allLabel = "Vše") {
+  return [
+    `<option value="all" ${selected === "all" ? "selected" : ""}>${escapeHtml(allLabel)}</option>`,
+    ...options.map((option) => `
+      <option value="${escapeHtml(option.value)}" ${option.value === selected ? "selected" : ""}>
+        ${escapeHtml(option.label)}
+      </option>
+    `)
+  ].join("");
+}
+
+function employeeOverviewUniqueOptions(employees, getter, labelGetter = (value) => value) {
+  const values = new Map();
+
+  employees.forEach((employee) => {
+    const value = String(getter(employee) || "").trim() || "neuvedeno";
+    values.set(value, labelGetter(value, employee));
+  });
+
+  return [...values.entries()]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, "cs"));
+}
+
+function employeeOverviewCard(employee, selectedEmployeeId, visible = true) {
+  const name = employeeFullName(employee);
+  const department = String(employee.department || "").trim() || "neuvedeno";
+  const role = normalizeRole(employee.role);
+  const pendingDays = employeeVacationPendingDays(employee);
+  const searchText = employeeOverviewSearchText(employee);
+  const isSelected = employee.id === selectedEmployeeId;
+  const detailLabel = isSelected ? "Otevřeno" : "Detail";
+
+  return `
+    <article
+      class="employee-overview-card ${isSelected ? "employee-overview-card--active" : ""}"
+      data-employee-overview-card
+      data-employee-overview-search="${escapeHtml(searchText)}"
+      data-employee-status="${escapeHtml(employee.employmentStatus || "active")}"
+      data-employee-department="${escapeHtml(department)}"
+      data-employee-role="${escapeHtml(role)}"
+      data-employee-absence-current="${employeeHasCurrentAbsence(employee) ? "1" : "0"}"
+      data-employee-vacation-planned="${employeeHasPlannedVacation(employee) ? "1" : "0"}"
+      data-employee-incomplete="${employeeHasIncompleteData(employee) ? "1" : "0"}"
+      ${visible ? "" : "hidden"}
+    >
+      <div class="employee-overview-card__main">
+        <div>
+          <h3>${escapeHtml(name)}</h3>
+          <p>${escapeHtml(employee.position || employeeRoleLabel(role))} · ${escapeHtml(department)}</p>
+        </div>
+        <div class="employee-overview-card__badges">
+          ${employeeEmploymentStatusBadge(employee)}
+          ${employeeCurrentAbsenceBadge(employee.currentAbsenceStatus)}
+          ${employeeHasIncompleteData(employee) ? employeeStatusBadge("Neúplné údaje", "warning") : ""}
+        </div>
+      </div>
+      <dl class="employee-overview-card__details">
+        <div>
+          <dt>Dovolená</dt>
+          <dd>${escapeHtml(formatAbsenceDays(employee.vacationRemainingDays ?? 0))}</dd>
+        </div>
+        <div>
+          <dt>Čeká</dt>
+          <dd>${escapeHtml(formatAbsenceDays(pendingDays))}</dd>
+        </div>
+        <div>
+          <dt>Role</dt>
+          <dd>${escapeHtml(employeeRoleLabel(role))}</dd>
+        </div>
+        <div>
+          <dt>Kontakt</dt>
+          <dd>${escapeHtml(employee.email || employee.phone || "neuvedeno")}</dd>
+        </div>
+      </dl>
+      <div class="employee-overview-card__actions">
+        <a class="${isSelected ? "text-action" : "secondary-link"}" href="${routeHref(employeeCardRoute(employee.id))}" data-link>
+          ${escapeHtml(detailLabel)}
+        </a>
+        <button class="secondary-link" type="button" data-employee-open-requests="${escapeHtml(employee.id)}">
+          Žádosti
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function employeeOverviewSection(selectedEmployee, user) {
+  const employees = employeeOverviewSourceEmployees(selectedEmployee);
+  const filtered = employeeOverviewFilteredEmployees(selectedEmployee);
+  const summary = employeeOverviewSummary(employees);
+  const departmentOptions = employeeOverviewUniqueOptions(employees, (employee) => employee.department);
+  const roleOptions = employeeOverviewUniqueOptions(
+    employees,
+    (employee) => normalizeRole(employee.role),
+    (value) => employeeRoleLabel(value)
+  );
+  const selectedId = selectedEmployee?.id || "";
+  const loadingNote = employeeCardState.employeesLoading
+    ? '<p class="employee-overview__note">Načítám seznam zaměstnanců...</p>'
+    : "";
+  const emptyState = !employeeCardState.employeesLoading && !employees.length
+    ? '<p class="absence-empty">Seznam zaměstnanců se zatím nepodařilo načíst.</p>'
+    : "";
+
+  return `
+    <section class="employee-overview" aria-labelledby="employee-overview-title" data-employee-overview-panel>
+      <div class="employee-overview__head">
+        <div>
+          <p class="module-detail__eyebrow">Zaměstnanci</p>
+          <h2 id="employee-overview-title">Přehled zaměstnanců</h2>
+          <p>Rychlé vyhledání lidí, stavů dovolené a aktuální nepřítomnosti.</p>
+        </div>
+        <div class="employee-overview__head-actions">
+          ${employeeCardApiBadge()}
+          ${hasPermission(user, "absence", "create") ? `<a class="primary-action" href="${routeHref(ABSENCE_QUICK_ROUTE)}" data-link>Rychlé zadání</a>` : ""}
+        </div>
+      </div>
+
+      <div class="employee-overview__stats" aria-label="Souhrn zaměstnanců">
+        <article><span>Celkem</span><strong>${escapeHtml(summary.total)}</strong></article>
+        <article><span>Aktivní</span><strong>${escapeHtml(summary.active)}</strong></article>
+        <article><span>Mimo práci</span><strong>${escapeHtml(summary.absent)}</strong></article>
+        <article><span>Čeká dovolená</span><strong>${escapeHtml(summary.plannedVacation)}</strong></article>
+        <article><span>Ke kontrole</span><strong>${escapeHtml(summary.incomplete)}</strong></article>
+      </div>
+
+      <form class="employee-overview__filters" data-employee-overview-filters>
+        <label class="employee-overview__search">
+          <span>Vyhledat zaměstnance</span>
+          <input
+            type="search"
+            value="${escapeHtml(employeeCardState.overviewSearch)}"
+            placeholder="Jméno, oddělení, role, kontakt..."
+            data-employee-overview-search
+          />
+        </label>
+        <label>
+          <span>Stav</span>
+          <select data-employee-overview-status>
+            ${employeeOverviewOptionList([
+              { value: "active", label: "Aktivní" },
+              { value: "inactive", label: "Neaktivní" }
+            ], employeeCardState.overviewStatusFilter)}
+          </select>
+        </label>
+        <label>
+          <span>Oddělení</span>
+          <select data-employee-overview-department>
+            ${employeeOverviewOptionList(departmentOptions, employeeCardState.overviewDepartmentFilter)}
+          </select>
+        </label>
+        <label>
+          <span>Role</span>
+          <select data-employee-overview-role>
+            ${employeeOverviewOptionList(roleOptions, employeeCardState.overviewRoleFilter)}
+          </select>
+        </label>
+        <label>
+          <span>Absence</span>
+          <select data-employee-overview-absence>
+            ${employeeOverviewOptionList([
+              { value: "current", label: "Aktuální absence" },
+              { value: "work", label: "V práci" },
+              { value: "planned-vacation", label: "Čeká dovolená" },
+              { value: "incomplete", label: "Neúplné údaje" }
+            ], employeeCardState.overviewAbsenceFilter)}
+          </select>
+        </label>
+        <button class="text-action" type="button" data-employee-overview-reset>Vymazat filtry</button>
+      </form>
+
+      <div class="employee-overview__meta">
+        <span data-employee-overview-count>
+          ${filtered.length === employees.length ? `Celkem ${employees.length}` : `Zobrazeno ${filtered.length} z ${employees.length}`}
+        </span>
+      </div>
+      ${loadingNote}
+      ${emptyState}
+      <p class="absence-empty" data-employee-overview-empty-search ${filtered.length ? "hidden" : ""}>Filtrům neodpovídá žádný zaměstnanec.</p>
+      <div class="employee-overview__list">
+        ${employees.map((employee) => employeeOverviewCard(employee, selectedId, employeeOverviewMatchesFilters(employee))).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function normalizeAbsenceEmployeeOption(employee) {
   const id = String(employee?.id || employee?.userId || "").trim();
 
@@ -3529,6 +3868,87 @@ function updateAccessUsersSearch(input) {
       ? `Zobrazeno ${visibleCount} z ${rows.length}`
       : `Celkem ${rows.length}`;
   }
+}
+
+function updateEmployeeOverviewFilters(panelOrField) {
+  const panel = panelOrField?.matches?.("[data-employee-overview-panel]")
+    ? panelOrField
+    : panelOrField?.closest("[data-employee-overview-panel]");
+  const cards = [...(panel?.querySelectorAll("[data-employee-overview-card]") || [])];
+  const searchInput = panel?.querySelector("[data-employee-overview-search]");
+  const statusSelect = panel?.querySelector("[data-employee-overview-status]");
+  const departmentSelect = panel?.querySelector("[data-employee-overview-department]");
+  const roleSelect = panel?.querySelector("[data-employee-overview-role]");
+  const absenceSelect = panel?.querySelector("[data-employee-overview-absence]");
+  const emptyNode = panel?.querySelector("[data-employee-overview-empty-search]");
+  const countNode = panel?.querySelector("[data-employee-overview-count]");
+  const query = normalizeAccessSearchText(searchInput?.value || "");
+  const status = statusSelect?.value || "all";
+  const department = departmentSelect?.value || "all";
+  const role = roleSelect?.value || "all";
+  const absence = absenceSelect?.value || "all";
+  let visibleCount = 0;
+
+  employeeCardState.overviewSearch = searchInput?.value || "";
+  employeeCardState.overviewStatusFilter = status;
+  employeeCardState.overviewDepartmentFilter = department;
+  employeeCardState.overviewRoleFilter = role;
+  employeeCardState.overviewAbsenceFilter = absence;
+
+  cards.forEach((card) => {
+    const matchesQuery = !query || String(card.dataset.employeeOverviewSearch || "").includes(query);
+    const matchesStatus = status === "all" || card.dataset.employeeStatus === status;
+    const matchesDepartment = department === "all" || card.dataset.employeeDepartment === department;
+    const matchesRole = role === "all" || card.dataset.employeeRole === role;
+    const matchesAbsence = absence === "all" ||
+      (absence === "current" && card.dataset.employeeAbsenceCurrent === "1") ||
+      (absence === "work" && card.dataset.employeeAbsenceCurrent !== "1") ||
+      (absence === "planned-vacation" && card.dataset.employeeVacationPlanned === "1") ||
+      (absence === "incomplete" && card.dataset.employeeIncomplete === "1");
+    const matches = matchesQuery && matchesStatus && matchesDepartment && matchesRole && matchesAbsence;
+
+    card.hidden = !matches;
+
+    if (matches) {
+      visibleCount += 1;
+    }
+  });
+
+  if (emptyNode) {
+    emptyNode.hidden = visibleCount > 0 || cards.length === 0;
+  }
+
+  if (countNode) {
+    countNode.textContent = visibleCount === cards.length
+      ? `Celkem ${cards.length}`
+      : `Zobrazeno ${visibleCount} z ${cards.length}`;
+  }
+}
+
+function resetEmployeeOverviewFilters(button) {
+  const panel = button?.closest("[data-employee-overview-panel]");
+
+  if (!panel) {
+    return;
+  }
+
+  const searchInput = panel.querySelector("[data-employee-overview-search]");
+  const statusSelect = panel.querySelector("[data-employee-overview-status]");
+  const departmentSelect = panel.querySelector("[data-employee-overview-department]");
+  const roleSelect = panel.querySelector("[data-employee-overview-role]");
+  const absenceSelect = panel.querySelector("[data-employee-overview-absence]");
+
+  if (searchInput) {
+    searchInput.value = "";
+  }
+  [statusSelect, departmentSelect, roleSelect, absenceSelect].forEach((select) => {
+    if (select) {
+      select.value = "all";
+    }
+  });
+
+  updateEmployeeOverviewFilters(panel);
+  searchInput?.focus();
 }
 
 function updateModuleRulesFilters(panelOrField) {
@@ -5865,6 +6285,7 @@ function employeeCardApiBadge() {
 function employeeCardKpis(employee) {
   const balance = employeeCardState.vacationBalance || employee;
   const absence = employeeCardState.absence || {};
+  const currentAbsenceStatus = employeeCurrentAbsenceLabel(employee.currentAbsenceStatus || absence.currentAbsenceStatus || "v práci");
 
   return `
     <div class="employee-card-kpis" aria-label="Přehled zaměstnance">
@@ -5882,7 +6303,7 @@ function employeeCardKpis(employee) {
       </article>
       <article class="employee-card-kpi">
         <span>Aktuální stav</span>
-        <strong>${escapeHtml(absence.status || employee.currentAbsenceStatus || "v práci")}</strong>
+        <strong>${escapeHtml(currentAbsenceStatus)}</strong>
       </article>
     </div>
   `;
@@ -6482,17 +6903,24 @@ function employeeCardContent(employeeId, user) {
 
   return `
     <section class="employee-card" aria-labelledby="employee-card-title">
+      ${employeeOverviewSection(formEmployee, user)}
       <div class="employee-card-header">
         <div>
           <p class="module-detail__eyebrow">Karta zaměstnance</p>
           <h2 id="employee-card-title">${escapeHtml(employeeFullName(formEmployee))}</h2>
-          <p>${escapeHtml(formEmployee.position || roleLabel(formEmployee.role))} · ${escapeHtml(formEmployee.department || "bez oddělení")}</p>
+          <p>${escapeHtml(formEmployee.position || employeeRoleLabel(formEmployee.role))} · ${escapeHtml(formEmployee.department || "bez oddělení")}</p>
+          <div class="employee-card-header__badges">
+            ${employeeEmploymentStatusBadge(formEmployee)}
+            ${employeeCurrentAbsenceBadge(formEmployee.currentAbsenceStatus)}
+            ${employeeHasIncompleteData(formEmployee) ? employeeStatusBadge("Neúplné údaje", "warning") : ""}
+          </div>
         </div>
         <div class="employee-card-header__actions">
           ${employeeCardApiBadge()}
           <select class="employee-card-switcher" data-employee-card-select aria-label="Vybrat zaměstnance">
             ${employeeOptionList(employee.id)}
           </select>
+          ${hasPermission(user, "absence", "create") ? `<a class="secondary-link" href="${routeHref(ABSENCE_QUICK_ROUTE)}" data-link>Nová absence</a>` : ""}
           <button class="secondary-link" type="button" data-employee-open-requests="${escapeHtml(employee.id)}">
             Otevřít žádosti zaměstnance
           </button>
@@ -6502,7 +6930,6 @@ function employeeCardContent(employeeId, user) {
       ${employeeCardState.message ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.message)}</p>` : ""}
       ${employeeCardState.error ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.error)}</p>` : ""}
       ${employeeCardKpis(formEmployee)}
-      ${employeeExcelImportSection(canEdit)}
 
       <form class="employee-card-form" data-employee-card-form data-employee-id="${escapeHtml(employee.id)}">
         <div class="employee-card-grid">
@@ -6610,6 +7037,8 @@ function employeeCardContent(employeeId, user) {
           </div>
         ` : ""}
       </form>
+
+      ${employeeExcelImportSection(canEdit)}
 
       ${employeeMedicalExamSection(employee, canEditMedicalExam)}
 
@@ -18592,6 +19021,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const employeeOverviewFilters = event.target.closest("[data-employee-overview-filters]");
+  if (employeeOverviewFilters) {
+    event.preventDefault();
+    updateEmployeeOverviewFilters(employeeOverviewFilters);
+    return;
+  }
+
   const employeeImportForm = event.target.closest("[data-employee-import-form]");
   if (employeeImportForm) {
     event.preventDefault();
@@ -18767,6 +19203,12 @@ document.addEventListener("input", (event) => {
     return;
   }
 
+  const employeeOverviewSearch = event.target.closest("[data-employee-overview-search]");
+  if (employeeOverviewSearch) {
+    updateEmployeeOverviewFilters(employeeOverviewSearch);
+    return;
+  }
+
   const quickNote = event.target.closest("[data-quick-note]");
   if (quickNote) {
     quickAbsenceState.note = quickNote.value;
@@ -18854,6 +19296,12 @@ document.addEventListener("change", async (event) => {
   const moduleRulesFilter = event.target.closest("[data-module-rules-type-filter], [data-module-rules-status-filter]");
   if (moduleRulesFilter) {
     updateModuleRulesFilters(moduleRulesFilter);
+    return;
+  }
+
+  const employeeOverviewField = event.target.closest("[data-employee-overview-status], [data-employee-overview-department], [data-employee-overview-role], [data-employee-overview-absence]");
+  if (employeeOverviewField) {
+    updateEmployeeOverviewFilters(employeeOverviewField);
     return;
   }
 
@@ -19206,6 +19654,12 @@ document.addEventListener("click", async (event) => {
   const editAccessRole = event.target.closest("[data-access-edit-role]");
   if (editAccessRole) {
     guardedAccessAction(() => selectAccessRole(editAccessRole.dataset.accessEditRole));
+    return;
+  }
+
+  const employeeOverviewReset = event.target.closest("[data-employee-overview-reset]");
+  if (employeeOverviewReset) {
+    resetEmployeeOverviewFilters(employeeOverviewReset);
     return;
   }
 
