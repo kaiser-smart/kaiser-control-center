@@ -13149,6 +13149,8 @@ function dataBoxStatusCards() {
   const summary = status.summary || {};
   const apiReady = dataBoxState.apiStatus === "ready";
   const storageReady = dataBoxState.storageStatus === "ready";
+  const configuredDataBoxes = Number(status.isds?.configuredAccounts || summary.configuredDataBoxes || 0);
+  const dataBoxesCount = Number(summary.dataBoxes || status.isds?.accountCount || configuredDataBoxes || 0);
   const cards = DATA_BOX_STATUS_CARDS.map((item) => ({ ...item }));
   cards[0] = {
     label: "Stav funkce",
@@ -13161,13 +13163,13 @@ function dataBoxStatusCards() {
     label: "Zdroj dat",
     value: apiReady ? "Cloudflare D1" : "čeká na API",
     note: apiReady
-      ? `${Number(summary.received || 0)} přijatých, ${Number(summary.sent || 0)} odeslaných, ${Number(summary.attachments || 0)} příloh.`
+      ? `${Number(summary.received || 0)} přijatých, ${Number(summary.sent || 0)} odeslaných, ${Number(summary.attachments || 0)} příloh, ${dataBoxesCount} schránek v D1.`
       : "Cílově cloud backend, D1 metadata a R2 přílohy."
   };
   cards[2] = {
     label: "ISDS napojení",
     value: dataBoxStatusLabel(dataBoxState.integrationStatus),
-    note: status.message || "SOAP/WSDL adapter bude až v další fázi."
+    note: status.message || (configuredDataBoxes ? `${configuredDataBoxes} DS účtů čeká na ruční sync.` : "SOAP/WSDL adapter čeká na Cloudflare secrets.")
   };
   cards[3] = {
     label: "Úložiště příloh",
@@ -13254,6 +13256,7 @@ function dataBoxMessageRows(direction) {
     <tr>
       <td>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "-")}</td>
       <td>${escapeHtml(dataBoxDirectionLabel(message.direction))}</td>
+      <td>${escapeHtml(message.dataBoxLabel || message.dataBoxId || "-")}</td>
       <td>${escapeHtml(dataBoxMessageActor(message))}</td>
       <td>${escapeHtml(message.subject || "(bez předmětu)")}</td>
       <td>${escapeHtml(message.status || "-")}</td>
@@ -13282,7 +13285,7 @@ function dataBoxMessageTable(title, direction) {
       <div class="data-box-panel__head">
         <div>
           <h2 id="data-box-${escapeHtml(direction)}-title">${escapeHtml(title)}</h2>
-          <p>Seznam čte pouze metadata z interního API. Ostré ISDS připojení není v této fázi aktivní.</p>
+          <p>Seznam čte pouze metadata z interního API. ISDS synchronizace běží jen ručně a read-only.</p>
         </div>
         <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
       </div>
@@ -13404,6 +13407,7 @@ function dataBoxMessageDetailPanel() {
       </div>
       <div class="data-box-detail-grid">
         ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
+        ${dataBoxDetailField("Schránka", message.dataBoxLabel || message.dataBoxId)}
         ${dataBoxDetailField(actorLabel, actorValue)}
         ${dataBoxDetailField("Stav", message.status)}
         ${dataBoxDetailField("Priorita", message.priority)}
@@ -13477,6 +13481,10 @@ function dataBoxArchitecturePanel() {
   const summary = status.summary || {};
   const lastSync = summary.lastSyncAt ? formatDateTime(summary.lastSyncAt) : "zatím neproběhla";
   const isdsConfigured = Boolean(status.isds?.configured);
+  const configuredDataBoxes = Number(status.isds?.configuredAccounts || summary.configuredDataBoxes || 0);
+  const isdsBadge = isdsConfigured
+    ? (configuredDataBoxes > 1 ? `${configuredDataBoxes} DS účtů` : "ruční ISDS sync")
+    : "čeká na secrets";
 
   return `
     <section class="data-box-panel" id="overview" aria-labelledby="data-box-overview-title">
@@ -13485,7 +13493,7 @@ function dataBoxArchitecturePanel() {
           <h2 id="data-box-overview-title">Provozní realita</h2>
           <p>Rozpad na fáze a cílové cloudové části, aby UI nevypadalo jako ostré ISDS napojení.</p>
         </div>
-        <span class="employee-card-status ${isdsConfigured ? "employee-card-status--ready" : "employee-card-status--waiting"}">${escapeHtml(isdsConfigured ? "ruční ISDS sync" : "čeká na secrets")}</span>
+        <span class="employee-card-status ${isdsConfigured ? "employee-card-status--ready" : "employee-card-status--waiting"}">${escapeHtml(isdsBadge)}</span>
       </div>
       <div class="data-box-warning" role="status">
         <strong>Poslední synchronizace: ${escapeHtml(lastSync)}</strong>
@@ -13542,6 +13550,7 @@ function dataBoxSyncRunsPanel() {
   const statusClass = dataBoxState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
   const statusLabel = dataBoxState.apiStatus === "ready" ? "D1 log připraven" : "čeká na D1";
   const user = currentUser();
+  const configuredDataBoxes = Number(dataBoxState.status?.isds?.configuredAccounts || 0);
   const canSync = dataBoxState.apiStatus === "ready"
     && hasPermission(user, DATA_BOX_MODULE_KEY, "manage")
     && ["admin", "management"].includes(normalizeRole(user?.role));
@@ -13554,6 +13563,7 @@ function dataBoxSyncRunsPanel() {
     ? dataBoxState.syncRuns.map((run) => `
       <tr>
         <td>${escapeHtml(formatDateTime(run.startedAt) || "-")}</td>
+        <td>${escapeHtml(run.dataBoxLabel || run.dataBoxId || "-")}</td>
         <td>${escapeHtml(run.triggerType || "-")}</td>
         <td>${escapeHtml(run.status || "-")}</td>
         <td>${escapeHtml(String(run.messagesFound || 0))}</td>
@@ -13563,7 +13573,7 @@ function dataBoxSyncRunsPanel() {
     `).join("")
     : `
       <tr>
-        <td colspan="6">Žádný běh synchronizace zatím není zapsaný. Cloud automatizace a ISDS adapter nejsou aktivní.</td>
+        <td colspan="7">Žádný běh synchronizace zatím není zapsaný. Cloud automatizace a pravidelný ISDS runner nejsou aktivní.</td>
       </tr>
     `;
 
@@ -13580,7 +13590,7 @@ function dataBoxSyncRunsPanel() {
         <button class="primary-action" type="button" data-data-box-sync ${syncDisabled ? "disabled" : ""}>
           ${escapeHtml(syncLabel)}
         </button>
-        <span>${escapeHtml(canSync ? "Bez Cloudflare secrets se zapíše pouze bezpečný stav konfigurace." : "Ruční sync může spustit pouze admin nebo management s oprávněním manage.")}</span>
+        <span>${escapeHtml(canSync ? (configuredDataBoxes ? `Ruční sync projde ${configuredDataBoxes} nastavených DS účtů.` : "Bez Cloudflare secrets se zapíše pouze bezpečný stav konfigurace.") : "Ruční sync může spustit pouze admin nebo management s oprávněním manage.")}</span>
       </div>
       ${syncMessage}
       <div class="data-box-table-wrap">
@@ -13588,6 +13598,7 @@ function dataBoxSyncRunsPanel() {
           <thead>
             <tr>
               <th>Start</th>
+              <th>Schránka</th>
               <th>Typ</th>
               <th>Stav</th>
               <th>Nalezeno</th>

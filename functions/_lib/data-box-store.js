@@ -1,4 +1,8 @@
-import { dataBoxIsdsStatus, fetchDataBoxMessageMetadata } from "./data-box-isds-client.js";
+import {
+  dataBoxIsdsAccountConfigs,
+  dataBoxIsdsStatus,
+  fetchDataBoxMessageMetadata
+} from "./data-box-isds-client.js";
 
 const DATA_BOX_DB_BINDING = "SMART_ODPADY_DB";
 const DATA_BOX_DOCUMENTS_BINDING = "SMART_ODPADY_DOCUMENTS";
@@ -72,9 +76,10 @@ function safeIdPart(value) {
     .slice(0, 80);
 }
 
-function messageRecordId(direction, isdsMessageId) {
+function messageRecordId(dataBoxId, direction, isdsMessageId) {
+  const safeDataBoxId = safeIdPart(dataBoxId) || "primary";
   const safeMessageId = safeIdPart(isdsMessageId) || idValue("isds-message");
-  return `data-box-${normalizeDirection(direction) || "message"}-${safeMessageId}`;
+  return `data-box-${safeDataBoxId}-${normalizeDirection(direction) || "message"}-${safeMessageId}`;
 }
 
 function normalizeDirection(value) {
@@ -121,6 +126,8 @@ function rowToMessage(row) {
   return {
     id: cleanString(row.id),
     dataBoxId: cleanString(row.data_box_id),
+    dataBoxLabel: cleanString(row.data_box_label),
+    dataBoxIsdsId: cleanString(row.data_box_isds_id),
     isdsMessageId: cleanString(row.isds_message_id),
     direction: normalizeDirection(row.direction) || "received",
     subject: cleanString(row.subject),
@@ -185,6 +192,7 @@ function rowToSyncRun(row) {
   return {
     id: cleanString(row.id),
     dataBoxId: cleanString(row.data_box_id),
+    dataBoxLabel: cleanString(row.data_box_label),
     triggerType: cleanString(row.trigger_type),
     startedAt: cleanString(row.started_at),
     finishedAt: cleanString(row.finished_at),
@@ -245,6 +253,62 @@ async function ensurePrimaryDataBox(db) {
     .run();
 
   return primaryDataBox(db);
+}
+
+async function listDataBoxes(db) {
+  const result = await db
+    .prepare("SELECT * FROM data_boxes ORDER BY created_at ASC, label ASC")
+    .all();
+  return (result.results || []).map(rowToBox);
+}
+
+function accountDataBoxId(account) {
+  const explicit = cleanString(account?.id);
+  if (explicit) {
+    return explicit;
+  }
+
+  return Number(account?.slot) === 1 ? "kaiser-primary" : `kaiser-data-box-${Number(account?.slot) || "extra"}`;
+}
+
+async function ensureDataBoxForAccount(db, account) {
+  const dataBoxId = accountDataBoxId(account);
+  const label = cleanString(account?.label) || "Datova schranka";
+  const isdsId = cleanString(account?.isdsId);
+
+  await db
+    .prepare(`
+      INSERT INTO data_boxes (
+        id,
+        label,
+        isds_id,
+        mode,
+        status,
+        last_sync_status,
+        last_sync_message
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        label = excluded.label,
+        isds_id = CASE
+          WHEN excluded.isds_id <> '' THEN excluded.isds_id
+          ELSE data_boxes.isds_id
+        END,
+        updated_at = CURRENT_TIMESTAMP
+    `)
+    .bind(
+      dataBoxId,
+      label,
+      isdsId,
+      "read-only-pilot",
+      "waiting",
+      "waiting",
+      "Ceka na prvni rucni read-only sync."
+    )
+    .run();
+
+  const row = await db.prepare("SELECT * FROM data_boxes WHERE id = ? LIMIT 1").bind(dataBoxId).first();
+  return rowToBox(row);
 }
 
 async function syncRunById(db, runId) {
@@ -420,7 +484,7 @@ async function upsertMessageMetadata(db, dataBoxId, message) {
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    .bind(messageRecordId(message.direction, isdsMessageId), ...values)
+    .bind(messageRecordId(dataBoxId, message.direction, isdsMessageId), ...values)
     .run();
 
   return "created";
@@ -446,7 +510,8 @@ export async function getDataBoxStatus(env) {
   }
 
   try {
-    const dataBox = await primaryDataBox(db);
+    const dataBoxes = await listDataBoxes(db);
+    const dataBox = dataBoxes[0] || await primaryDataBox(db);
     const summaryRow = await db
       .prepare(`
         SELECT
@@ -471,21 +536,112 @@ export async function getDataBoxStatus(env) {
       mode: dataBox.mode || "pilot",
       isds: isdsStatus,
       dataBox,
+      dataBoxes,
       summary: {
         received: numberValue(summaryRow?.received),
         sent: numberValue(summaryRow?.sent),
         attachments: numberValue(summaryRow?.attachments),
+        dataBoxes: dataBoxes.length,
+        configuredDataBoxes: numberValue(isdsStatus.configuredAccounts),
         syncRuns: numberValue(syncRow?.sync_runs),
         lastSyncAt: cleanString(syncRow?.last_sync_at || dataBox.lastSyncAt)
       },
-      message: dataBox.lastSyncMessage || (
-        isdsStatus.configured
-          ? "ISDS read-only konfigurace je nastavena. Sync se spousti jen rucne."
-          : "ISDS integrace neni aktivni."
-      )
+      message: dataBox.lastSyncAt && dataBox.lastSyncMessage
+        ? dataBox.lastSyncMessage
+        : (
+          isdsStatus.configured
+            ? `ISDS read-only konfigurace je nastavena pro ${numberValue(isdsStatus.configuredAccounts)} datovych schranek. Sync se spousti jen rucne.`
+            : "ISDS integrace neni aktivni."
+        )
     };
   } catch (error) {
     throw dbError(error);
+  }
+}
+
+async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
+  const dataBox = await ensureDataBoxForAccount(db, account);
+  const runId = await createSyncRun(db, dataBox, currentUser, startedAt);
+
+  try {
+    const result = await fetchDataBoxMessageMetadata(env, account);
+    let messagesCreated = 0;
+    let messagesUpdated = 0;
+    let attachmentsFound = 0;
+
+    for (const message of result.messages) {
+      const writeState = await upsertMessageMetadata(db, dataBox.id, message);
+      if (writeState === "created") messagesCreated += 1;
+      if (writeState === "updated") messagesUpdated += 1;
+      if (message.hasAttachments) attachmentsFound += 1;
+    }
+
+    const finishedAt = new Date().toISOString();
+    const message = `${dataBox.label}: read-only ISDS sync ulozil metadata: ${result.messages.length} obalek, ${messagesCreated} novych, ${messagesUpdated} aktualizovanych.`;
+    const sync = await finishSyncRun(db, runId, {
+      finishedAt,
+      status: "success",
+      messagesFound: result.messages.length,
+      messagesCreated,
+      messagesUpdated,
+      attachmentsFound,
+      errorCode: "",
+      message
+    });
+
+    await updateDataBoxSyncState(db, dataBox.id, {
+      mode: "read-only-pilot",
+      status: "ready",
+      lastSyncAt: finishedAt,
+      lastSyncStatus: "success",
+      lastSyncMessage: message
+    });
+
+    return {
+      status: "success",
+      dataBox,
+      sync,
+      messagesFound: result.messages.length,
+      messagesCreated,
+      messagesUpdated,
+      attachmentsFound,
+      message
+    };
+  } catch (error) {
+    const finishedAt = new Date().toISOString();
+    const isConfigMissing = error?.code === "data_box_isds_not_configured";
+    const status = isConfigMissing ? "configuration_missing" : "failed";
+    const errorCode = cleanString(error?.code || "data_box_isds_sync_failed");
+    const message = `${dataBox.label}: ${cleanString(error?.message || "ISDS synchronizace se nepodarila.")}`;
+    const sync = await finishSyncRun(db, runId, {
+      finishedAt,
+      status,
+      messagesFound: 0,
+      messagesCreated: 0,
+      messagesUpdated: 0,
+      attachmentsFound: 0,
+      errorCode,
+      message
+    });
+
+    await updateDataBoxSyncState(db, dataBox.id, {
+      mode: "read-only-pilot",
+      status: isConfigMissing ? "inactive" : "error",
+      lastSyncAt: finishedAt,
+      lastSyncStatus: status,
+      lastSyncMessage: message
+    });
+
+    return {
+      status,
+      dataBox,
+      sync,
+      messagesFound: 0,
+      messagesCreated: 0,
+      messagesUpdated: 0,
+      attachmentsFound: 0,
+      message
+    };
   }
 }
 
@@ -494,81 +650,52 @@ export async function runDataBoxManualSync(env, currentUser) {
   const startedAt = new Date().toISOString();
 
   try {
-    const dataBox = await ensurePrimaryDataBox(db);
-    const runId = await createSyncRun(db, dataBox, currentUser, startedAt);
-
-    try {
-      const result = await fetchDataBoxMessageMetadata(env);
-      let messagesCreated = 0;
-      let messagesUpdated = 0;
-      let attachmentsFound = 0;
-
-      for (const message of result.messages) {
-        const writeState = await upsertMessageMetadata(db, dataBox.id, message);
-        if (writeState === "created") messagesCreated += 1;
-        if (writeState === "updated") messagesUpdated += 1;
-        if (message.hasAttachments) attachmentsFound += 1;
-      }
-
-      const finishedAt = new Date().toISOString();
-      const message = `Read-only ISDS sync ulozil metadata: ${result.messages.length} obalek, ${messagesCreated} novych, ${messagesUpdated} aktualizovanych.`;
-      const sync = await finishSyncRun(db, runId, {
-        finishedAt,
-        status: "success",
-        messagesFound: result.messages.length,
-        messagesCreated,
-        messagesUpdated,
-        attachmentsFound,
-        errorCode: "",
-        message
-      });
-
-      await updateDataBoxSyncState(db, dataBox.id, {
-        mode: "read-only-pilot",
-        status: "ready",
-        lastSyncAt: finishedAt,
-        lastSyncStatus: "success",
-        lastSyncMessage: message
-      });
-
-      return {
-        apiStatus: "ready",
-        sync,
-        isds: result.config,
-        message
+    const accounts = dataBoxIsdsAccountConfigs(env);
+    if (!accounts.length) {
+      const fallbackAccount = dataBoxIsdsStatus(env).accounts?.[0] || {
+        id: "kaiser-primary",
+        slot: 1,
+        label: "Kaiser Smart Datova schranka",
+        configured: false
       };
-    } catch (error) {
-      const finishedAt = new Date().toISOString();
-      const isConfigMissing = error?.code === "data_box_isds_not_configured";
-      const status = isConfigMissing ? "configuration_missing" : "failed";
-      const errorCode = cleanString(error?.code || "data_box_isds_sync_failed");
-      const message = cleanString(error?.message || "ISDS synchronizace se nepodarila.");
-      const sync = await finishSyncRun(db, runId, {
-        finishedAt,
-        status,
-        messagesFound: 0,
-        messagesCreated: 0,
-        messagesUpdated: 0,
-        attachmentsFound: 0,
-        errorCode,
-        message
-      });
-
-      await updateDataBoxSyncState(db, dataBox.id, {
-        mode: "read-only-pilot",
-        status: isConfigMissing ? "inactive" : "error",
-        lastSyncAt: finishedAt,
-        lastSyncStatus: status,
-        lastSyncMessage: message
-      });
-
+      const result = await syncDataBoxAccount(db, env, fallbackAccount, currentUser, startedAt);
       return {
         apiStatus: "ready",
-        sync,
+        sync: result.sync,
+        syncRuns: [result.sync],
         isds: dataBoxIsdsStatus(env),
-        message
+        message: result.message
       };
     }
+
+    const results = [];
+    for (const account of accounts) {
+      results.push(await syncDataBoxAccount(db, env, account, currentUser, startedAt));
+    }
+
+    const totals = results.reduce((sum, result) => ({
+      messagesFound: sum.messagesFound + result.messagesFound,
+      messagesCreated: sum.messagesCreated + result.messagesCreated,
+      messagesUpdated: sum.messagesUpdated + result.messagesUpdated,
+      attachmentsFound: sum.attachmentsFound + result.attachmentsFound
+    }), {
+      messagesFound: 0,
+      messagesCreated: 0,
+      messagesUpdated: 0,
+      attachmentsFound: 0
+    });
+    const failedCount = results.filter((result) => result.status !== "success").length;
+    const message = failedCount
+      ? `Rucni read-only sync prosel ${results.length} datovych schranek s chybami: ${totals.messagesFound} obalek, ${totals.messagesCreated} novych, ${totals.messagesUpdated} aktualizovanych, ${failedCount} chyb.`
+      : `Rucni read-only sync prosel ${results.length} datovych schranek: ${totals.messagesFound} obalek, ${totals.messagesCreated} novych, ${totals.messagesUpdated} aktualizovanych.`;
+
+    return {
+      apiStatus: "ready",
+      sync: results[0]?.sync || null,
+      syncRuns: results.map((result) => result.sync),
+      isds: dataBoxIsdsStatus(env),
+      message
+    };
   } catch (error) {
     if (error instanceof DataBoxStoreError) throw error;
     throw dbError(error);
@@ -584,11 +711,11 @@ export async function listDataBoxMessages(env, filters = {}) {
   const bindings = [];
 
   if (direction) {
-    where.push("direction = ?");
+    where.push("m.direction = ?");
     bindings.push(direction);
   }
   if (status) {
-    where.push("status = ?");
+    where.push("m.status = ?");
     bindings.push(status);
   }
 
@@ -597,10 +724,14 @@ export async function listDataBoxMessages(env, filters = {}) {
   try {
     const result = await db
       .prepare(`
-        SELECT *
-        FROM data_box_messages
+        SELECT
+          m.*,
+          b.label AS data_box_label,
+          b.isds_id AS data_box_isds_id
+        FROM data_box_messages m
+        LEFT JOIN data_boxes b ON b.id = m.data_box_id
         ${whereSql}
-        ORDER BY COALESCE(delivered_at, accepted_at, stored_at) DESC, stored_at DESC
+        ORDER BY COALESCE(m.delivered_at, m.accepted_at, m.stored_at) DESC, m.stored_at DESC
         LIMIT ?
       `)
       .bind(...bindings, limit)
@@ -616,7 +747,16 @@ export async function getDataBoxMessage(env, id) {
   const messageId = cleanString(id);
 
   try {
-    const row = await db.prepare("SELECT * FROM data_box_messages WHERE id = ? LIMIT 1").bind(messageId).first();
+    const row = await db.prepare(`
+      SELECT
+        m.*,
+        b.label AS data_box_label,
+        b.isds_id AS data_box_isds_id
+      FROM data_box_messages m
+      LEFT JOIN data_boxes b ON b.id = m.data_box_id
+      WHERE m.id = ?
+      LIMIT 1
+    `).bind(messageId).first();
     if (!row) {
       throw new DataBoxStoreError("Zprava nebyla nalezena.", 404, "data_box_message_not_found");
     }
@@ -648,9 +788,12 @@ export async function listDataBoxSyncRuns(env, filters = {}) {
   try {
     const result = await db
       .prepare(`
-        SELECT *
-        FROM data_box_sync_runs
-        ORDER BY started_at DESC
+        SELECT
+          r.*,
+          b.label AS data_box_label
+        FROM data_box_sync_runs r
+        LEFT JOIN data_boxes b ON b.id = r.data_box_id
+        ORDER BY r.started_at DESC
         LIMIT ?
       `)
       .bind(limit)

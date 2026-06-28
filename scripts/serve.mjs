@@ -887,6 +887,8 @@ function mockDataBoxStatusPayload() {
       received: 0,
       sent: 0,
       attachments: 0,
+      dataBoxes: 1,
+      configuredDataBoxes: 0,
       syncRuns: mockDataBoxSyncRuns.length,
       lastSyncAt: latestRun?.startedAt || ""
     },
@@ -899,6 +901,26 @@ function mockDataBoxStatusPayload() {
       hasUsername: false,
       hasPassword: false,
       missing: ["DATA_BOX_ISDS_ENABLED", "DATA_BOX_ISDS_USERNAME", "DATA_BOX_ISDS_PASSWORD"],
+      configuredAccounts: 0,
+      accountCount: 1,
+      maxAccounts: 6,
+      accounts: [{
+        slot: 1,
+        id: "kaiser-primary",
+        label: "Kaiser Smart Datova schranka",
+        isdsId: "",
+        enabled: false,
+        configured: false,
+        mode: "local-dev",
+        baseUrl: "https://ws1.datovka.gov.cz",
+        infoEndpointUrl: "https://ws1.datovka.gov.cz/DS/dx",
+        hasUsername: false,
+        hasPassword: false,
+        missing: ["DATA_BOX_ISDS_ENABLED", "DATA_BOX_ISDS_USERNAME", "DATA_BOX_ISDS_PASSWORD"],
+        limit: 50,
+        lookbackDays: 30,
+        documentationStatus: "official-isds-wsdl-3.11-2026-06-26"
+      }],
       documentationStatus: "official-isds-wsdl-3.11-2026-06-26"
     },
     message: latestRun?.message || "Lokalni dev API je pripravene, ostre ISDS napojeni neni aktivni."
@@ -2716,6 +2738,7 @@ async function handleApi(request, response) {
     const run = {
       id: `data-box-sync-${randomUUID()}`,
       dataBoxId: "kaiser-primary",
+      dataBoxLabel: "Kaiser Smart Datova schranka",
       triggerType: "manual",
       startedAt: now,
       finishedAt: now,

@@ -23,7 +23,7 @@ export const DATA_BOX_STATUS_CARDS = [
   {
     label: "ISDS napojení",
     value: "ruční read-only",
-    note: "SOAP/WSDL adapter čte pouze seznam obálek po ručním spuštění a až po nastavení secrets."
+    note: "SOAP/WSDL adapter projde nastavené DS účty, čte pouze seznam obálek po ručním spuštění a až po nastavení secrets."
   },
   {
     label: "Oprávnění",
@@ -46,7 +46,7 @@ export const DATA_BOX_PHASES = [
   {
     title: "Fáze 3",
     status: "Read-only pilot",
-    description: "Backend adapter pro seznam přijatých/odeslaných obálek, deduplikace a ruční synchronizace metadat."
+    description: "Backend adapter pro seznam přijatých/odeslaných obálek napříč nastavenými DS účty, deduplikace a ruční synchronizace metadat."
   },
   {
     title: "Fáze 4",
@@ -72,7 +72,7 @@ export const DATA_BOX_REALITY_ITEMS = [
   {
     label: "Co opravdu funguje",
     value: "Chráněné API + ruční sync",
-    note: "Frontend čte stav, metadata zpráv a log běhů přes backend. Ruční sync zapíše log a po secrets načte jen ISDS obálky."
+    note: "Frontend čte stav, metadata zpráv a log běhů přes backend. Ruční sync zapíše log a po secrets načte jen ISDS obálky z nastavených DS účtů."
   },
   {
     label: "Co zatím nefunguje",
@@ -109,6 +109,7 @@ export const DATA_BOX_FUTURE_ENDPOINTS = [
 export const DATA_BOX_EMPTY_MESSAGE_COLUMNS = [
   "Datum",
   "Směr",
+  "Schránka",
   "Odesílatel / příjemce",
   "Předmět",
   "Stav",
