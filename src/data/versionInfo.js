@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.181"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.182"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "HP: nizsi header bez zmenseni loga",
+    text: "Header homepage je zhruba o tretinu kompaktnejsi diky mensim mezeram, subtitle vedle loga na desktopu a nizsim stavovym kartam; velikost loga zustala stejna."
+  },
   {
     title: "HP: sjednoceny padding",
     text: "Homepage shell ma globalni padding 20 px ze vsech stran, aby obsah nebyl nalepeny na okraje a header zustal kompaktni."
