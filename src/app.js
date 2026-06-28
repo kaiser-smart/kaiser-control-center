@@ -740,7 +740,7 @@ const dataBoxState = {
   messages: [],
   syncRuns: [],
   selectedDataBoxId: "",
-  activeTab: "overview",
+  activeTab: "received",
   syncLoading: false,
   syncMessage: "",
   syncError: "",
@@ -13725,11 +13725,8 @@ const DATA_BOX_QUICK_FILTERS = [
   { id: "all", label: "Vše" },
   { id: "new", label: "Nové" },
   { id: "unresolved", label: "Nevyřízené" },
-  { id: "urgent", label: "Urgentní" },
   { id: "deadlines", label: "Lhůty" },
-  { id: "attachments", label: "S přílohou" },
-  { id: "done", label: "Vyřízené" },
-  { id: "errors", label: "Chyby" }
+  { id: "attachments", label: "S přílohou" }
 ];
 
 const DATA_BOX_STATUS_OPTIONS = [
@@ -13837,43 +13834,20 @@ function dataBoxAccountSummary(stats) {
 function dataBoxAccountButton(account, stats) {
   return `
     <button
-      class="data-box-account-card"
+      class="data-box-account-chip"
       type="button"
       data-data-box-account="${escapeHtml(account.id)}"
       aria-label="${escapeHtml(`Otevřít datovou schránku ${account.label}`)}"
     >
-      <span class="data-box-account-card__mark">${escapeHtml(account.shortLabel)}</span>
-      <strong>${escapeHtml(account.label)}</strong>
-      <small>${escapeHtml(dataBoxAccountSummary(stats))}</small>
+      <span class="data-box-account-chip__mark">${escapeHtml(account.shortLabel)}</span>
+      <span class="data-box-account-chip__body">
+        <strong>${escapeHtml(account.label)}</strong>
+        <small>${escapeHtml(dataBoxAccountSummary(stats))}</small>
+      </span>
       <span class="data-box-account-card__status ${dataBoxAccountStatusClass(stats)}">
         ${escapeHtml(stats.statusLabel)}
       </span>
     </button>
-  `;
-}
-
-function dataBoxAccountWorkspace(account, stats) {
-  return `
-    <article class="data-box-account-workspace">
-      <span class="data-box-account-card__mark">${escapeHtml(account.shortLabel)}</span>
-      <div class="data-box-account-workspace__body">
-        <strong>${escapeHtml(account.label)}</strong>
-        <small>${escapeHtml(dataBoxAccountSummary(stats))}</small>
-      </div>
-      <span class="data-box-account-card__status ${dataBoxAccountStatusClass(stats)}">
-        ${escapeHtml(stats.statusLabel)}
-      </span>
-      <ul class="data-box-account-workspace__facts" aria-label="Souhrn datové schránky">
-        <li>
-          <span>Přijaté</span>
-          <strong>${escapeHtml(String(stats.received))}</strong>
-        </li>
-        <li>
-          <span>Odeslané</span>
-          <strong>${escapeHtml(String(stats.sent))}</strong>
-        </li>
-      </ul>
-    </article>
   `;
 }
 
@@ -13885,30 +13859,26 @@ function dataBoxAccountsSwitcher() {
     const stats = dataBoxAccountStats(activeAccount, accountStatusMap);
 
     return `
-      <section class="data-box-accounts data-box-accounts--selected" aria-labelledby="data-box-accounts-title">
-        <div class="data-box-accounts__head">
-          <div>
-            <h2 id="data-box-accounts-title">${escapeHtml(activeAccount.label)}</h2>
-            <p>Chlívek ${escapeHtml(activeAccount.shortLabel)}. Zprávy a log níže patří pouze této datové schránce.</p>
-          </div>
-          <button class="secondary-link" type="button" data-data-box-account-reset>
-            Zpět na všechny schránky
-          </button>
+      <section class="data-box-account-strip data-box-account-strip--selected" aria-labelledby="data-box-accounts-title">
+        <div class="data-box-account-strip__label">
+          <span>Schránka</span>
+          <strong id="data-box-accounts-title">${escapeHtml(activeAccount.label)}</strong>
+          <small>${escapeHtml(dataBoxAccountSummary(stats))} · ${escapeHtml(stats.statusLabel)}</small>
         </div>
-        ${dataBoxAccountWorkspace(activeAccount, stats)}
+        <button class="secondary-link" type="button" data-data-box-account-reset>
+          Všechny schránky
+        </button>
       </section>
     `;
   }
 
   return `
-    <section class="data-box-accounts" aria-labelledby="data-box-accounts-title">
-      <div class="data-box-accounts__head">
-        <div>
-          <h2 id="data-box-accounts-title">Datové schránky</h2>
-          <p>Vyber firemní chlívek.</p>
-        </div>
+    <section class="data-box-account-strip" aria-labelledby="data-box-accounts-title">
+      <div class="data-box-account-strip__label">
+        <span>Schránka</span>
+        <strong id="data-box-accounts-title">Všechny</strong>
       </div>
-      <div class="data-box-account-grid">
+      <div class="data-box-account-strip__chips">
         ${DATA_BOX_ACCOUNT_BOXES.map((account) => dataBoxAccountButton(account, dataBoxAccountStats(account, accountStatusMap))).join("")}
       </div>
     </section>
@@ -14018,8 +13988,6 @@ function dataBoxHeaderActions(user) {
       <button class="primary-action" type="button" data-data-box-sync ${syncDisabled ? "disabled" : ""}>
         ${escapeHtml(syncLabel)}
       </button>
-      <button class="secondary-link" type="button" disabled>Export přehledu</button>
-      <button class="secondary-link" type="button" data-data-box-tab="rules">Nastavení</button>
     </div>
   `;
 }
@@ -14027,7 +13995,7 @@ function dataBoxHeaderActions(user) {
 function dataBoxTabs() {
   const activeTab = DATA_BOX_TABS.some((tab) => tab.id === dataBoxState.activeTab)
     ? dataBoxState.activeTab
-    : "overview";
+    : "received";
 
   return `
     <div class="data-box-tabs" role="tablist" aria-label="Menu modulu Datová schránka">
@@ -14049,7 +14017,7 @@ function dataBoxTabs() {
 function dataBoxActivePanel(user) {
   const activeTab = DATA_BOX_TABS.some((tab) => tab.id === dataBoxState.activeTab)
     ? dataBoxState.activeTab
-    : "overview";
+    : "received";
 
   if (activeTab === "received") {
     return `
@@ -14481,13 +14449,10 @@ function dataBoxOperationalKpis(direction = "received") {
   const metrics = dataBoxInboxMetrics(direction);
   const active = dataBoxState.messageFilters.quick || "all";
   const cards = [
-    { label: "Nové zprávy", value: metrics.newCount, note: "Nepřečtené nebo bez interního stavu.", filter: "new", tone: "info" },
-    { label: "Nevyřízené", value: metrics.unresolved, note: "Vše kromě vyřízených a archivovaných.", filter: "unresolved", tone: "warning" },
-    { label: "Urgentní", value: metrics.urgent, note: "Urgence odvozená z metadat a předmětu.", filter: "urgent", tone: metrics.urgent ? "urgent" : "muted" },
-    { label: "Lhůta do 3 dnů", value: metrics.deadline3, note: "Pouze zprávy s explicitní lhůtou.", filter: "deadlines", tone: metrics.deadline3 ? "deadline" : "muted" },
-    { label: "S přílohou", value: metrics.attachments, note: "Příloha je jen metadata, ne veřejný soubor.", filter: "attachments", tone: "info" },
-    { label: "Vyřízené týden", value: metrics.doneWeek, note: "Vyřízené podle dostupného stavu.", filter: "done", tone: "done" },
-    { label: "Chyby sync", value: metrics.errors, note: "Chyby zpráv nebo posledních běhů.", filter: "errors", tone: metrics.errors ? "error" : "muted" }
+    { label: "Nové", value: metrics.newCount, note: "K řešení", filter: "new", tone: "info" },
+    { label: "Nevyřízené", value: metrics.unresolved, note: "Otevřené", filter: "unresolved", tone: "warning" },
+    { label: "Lhůty", value: metrics.deadline3, note: "Do 3 dnů", filter: "deadlines", tone: metrics.deadline3 ? "deadline" : "muted" },
+    { label: "Chyby", value: metrics.errors, note: "Sync / stav", filter: "errors", tone: metrics.errors ? "error" : "muted" }
   ];
 
   return `
@@ -14530,24 +14495,13 @@ function dataBoxFilterOptions(options, selected) {
 
 function dataBoxMessageFilters(direction) {
   const filters = dataBoxState.messageFilters;
-  const messages = dataBoxMessagesForDirection(direction);
 
   return `
     <form class="data-box-filters" data-data-box-filters>
       <label>
-        <span>Hledat</span>
-        <input name="query" value="${escapeHtml(filters.query)}" placeholder="Odesílatel, předmět, ID..." data-data-box-filter />
-      </label>
-      <label>
         <span>Stav</span>
         <select name="status" data-data-box-filter>
           ${dataBoxFilterOptions(DATA_BOX_STATUS_OPTIONS, filters.status)}
-        </select>
-      </label>
-      <label>
-        <span>Priorita</span>
-        <select name="priority" data-data-box-filter>
-          ${dataBoxFilterOptions(DATA_BOX_PRIORITY_OPTIONS, filters.priority)}
         </select>
       </label>
       <label>
@@ -14573,18 +14527,13 @@ function dataBoxMessageFilters(direction) {
         </select>
       </label>
       <label>
-        <span>Přiřazeno</span>
-        <select name="assigned" data-data-box-filter>
-          ${dataBoxAssigneeOptions(messages)}
+        <span>Nevyřízené</span>
+        <select name="quick" data-data-box-filter>
+          ${dataBoxFilterOptions([
+            ["all", "Vše"],
+            ["unresolved", "Jen nevyřízené"]
+          ], filters.quick === "unresolved" ? "unresolved" : "all")}
         </select>
-      </label>
-      <label>
-        <span>Datum od</span>
-        <input name="dateFrom" type="date" value="${escapeHtml(filters.dateFrom)}" data-data-box-filter />
-      </label>
-      <label>
-        <span>Datum do</span>
-        <input name="dateTo" type="date" value="${escapeHtml(filters.dateTo)}" data-data-box-filter />
       </label>
     </form>
   `;
@@ -14681,11 +14630,10 @@ function dataBoxInboxNoticeMarkup(notice) {
 
 function dataBoxMessageCard(message, selected) {
   const status = dataBoxWorkflowStatus(message);
-  const priority = dataBoxMessagePriority(message);
   const deadline = dataBoxDeadlineInfo(message);
   const attachmentCount = dataBoxAttachmentCount(message);
   const deliveredAt = formatDateTime(dataBoxMessageTimestamp(message));
-  const nextStep = dataBoxMessageNextStep(message);
+  const deadlineLabel = deadline.date ? deadline.label : "bez lhůty";
 
   return `
     <article class="data-box-message-card ${selected ? "data-box-message-card--selected" : ""}">
@@ -14696,23 +14644,21 @@ function dataBoxMessageCard(message, selected) {
         aria-pressed="${selected ? "true" : "false"}"
       >
         <span class="data-box-message-card__top">
-          ${dataBoxBadge(status.label, status.tone)}
-          ${dataBoxBadge(priority.label, priority.tone)}
+          <span class="data-box-message-card__actor">${escapeHtml(dataBoxMessageActor(message))}</span>
+          <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
         </span>
         <strong>${escapeHtml(message.subject || "(bez předmětu)")}</strong>
-        <span class="data-box-message-card__actor">${escapeHtml(dataBoxMessageActor(message))}</span>
         <span class="data-box-message-card__meta">
-          <span>${escapeHtml(deliveredAt)}</span>
+          ${dataBoxBadge(status.label, status.tone)}
           <span>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</span>
           <span>${escapeHtml(attachmentCount ? `${attachmentCount} příloh` : "bez příloh")}</span>
+          <span class="data-box-message-card__deadline data-box-message-card__deadline--${escapeHtml(deadline.tone)}">
+            ${escapeHtml(deadlineLabel)}
+          </span>
         </span>
-        <span class="data-box-message-card__deadline data-box-message-card__deadline--${escapeHtml(deadline.tone)}">
-          ${escapeHtml(deadline.label)}
-        </span>
-        <span class="data-box-message-card__step">${escapeHtml(nextStep)}</span>
       </button>
       <div class="data-box-message-card__actions">
-        <span>${escapeHtml(dataBoxMessageAssigneeLabel(message))}</span>
+        <span>${escapeHtml(dataBoxMessageNextStep(message))}</span>
         <button
           class="secondary-link"
           type="button"
@@ -14759,7 +14705,6 @@ function dataBoxReadingPane(message, direction) {
   }
 
   const status = dataBoxWorkflowStatus(message);
-  const priority = dataBoxMessagePriority(message);
   const deadline = dataBoxDeadlineInfo(message);
   const actorLabel = message.direction === "sent" ? "Příjemce" : "Odesílatel";
   const attachments = Array.isArray(message.attachments) ? message.attachments : [];
@@ -14784,15 +14729,12 @@ function dataBoxReadingPane(message, direction) {
       </div>
       <div class="data-box-reading-pane__badges">
         ${dataBoxBadge(status.label, status.tone)}
-        ${dataBoxBadge(priority.label, priority.tone)}
-        ${deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : dataBoxBadge("Bez lhůty", "muted")}
+        ${deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : ""}
       </div>
       <dl class="data-box-reading-facts">
         <div><dt>${escapeHtml(actorLabel)}</dt><dd>${escapeHtml(dataBoxMessageActor(message))}</dd></div>
-        <div><dt>ID zprávy</dt><dd>${escapeHtml(message.id || "neuvedeno")}</dd></div>
         <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(dataBoxMessageTimestamp(message)))}</dd></div>
-        <div><dt>Přečteno / převzato</dt><dd>${escapeHtml(formatDateTime(message.readAt || message.acceptedAt))}</dd></div>
-        <div><dt>Odpovědná osoba</dt><dd>${escapeHtml(dataBoxMessageAssigneeLabel(message))}</dd></div>
+        <div><dt>Schránka</dt><dd>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</dd></div>
         <div><dt>Přílohy</dt><dd>${escapeHtml(attachmentCount ? `${attachmentCount} v metadatech` : "Bez příloh")}</dd></div>
       </dl>
       <section class="data-box-reading-section">
@@ -14811,14 +14753,6 @@ function dataBoxReadingPane(message, direction) {
         <h4>Interní poznámky a historie</h4>
         <p>Bez interních poznámek v dostupných metadatech. Zápis poznámek čeká na potvrzené API.</p>
       </section>
-      <div class="data-box-reading-actions" aria-label="Read-only akce zprávy">
-        <button class="secondary-link" type="button" disabled>Označit v řešení</button>
-        <button class="secondary-link" type="button" disabled>Označit vyřízené</button>
-        <button class="secondary-link" type="button" disabled>Přiřadit osobě</button>
-        <button class="secondary-link" type="button" disabled>Přidat poznámku</button>
-        <button class="secondary-link" type="button" disabled>Stáhnout přílohy</button>
-        <button class="secondary-link" type="button" disabled>Export detailu</button>
-      </div>
     </aside>
   `;
 }
@@ -14834,14 +14768,15 @@ function dataBoxMessageInbox(title, direction) {
   const notice = dataBoxInboxNotice(direction, allRows, rows);
 
   return `
-    <section class="data-box-panel" id="data-box-${escapeHtml(direction)}-panel" aria-labelledby="data-box-${escapeHtml(direction)}-title">
+    <section class="data-box-panel data-box-message-inbox" id="data-box-${escapeHtml(direction)}-panel" aria-labelledby="data-box-${escapeHtml(direction)}-title">
       <div class="data-box-panel__head">
         <div>
           <h2 id="data-box-${escapeHtml(direction)}-title">${escapeHtml(sectionTitle)}</h2>
-          <p>Pracovní inbox čte pouze metadata z interního API. Z této obrazovky se nic neposílá ani nemaže.</p>
+          <p>Read-only pracovní inbox. Z této obrazovky se nic neposílá ani nemaže.</p>
         </div>
         <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
       </div>
+      ${dataBoxOperationalKpis(direction)}
       ${dataBoxQuickFilters()}
       ${dataBoxMessageFilters(direction)}
       <div class="data-box-workbench">
@@ -14870,10 +14805,7 @@ function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
         <li>
           <strong>${escapeHtml(`${expectedCount} příloh v metadatech`)}</strong>
           <span>Přesné názvy souborů nejsou v tomto pohledu dostupné.</span>
-          <div class="data-box-attachment-actions">
-            <button class="secondary-link" type="button" disabled>Zobrazit</button>
-            <button class="secondary-link" type="button" disabled>Stáhnout</button>
-          </div>
+          <em class="data-box-attachment-note">Přílohy nejsou veřejné. Zobrazení a stažení čeká na chráněné API.</em>
         </li>
       `;
     }
@@ -14889,10 +14821,7 @@ function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
         formatFileSize(attachment.sizeBytes),
         attachment.status || ""
       ].filter(Boolean).join(" · ") || "metadata")}</span>
-      <div class="data-box-attachment-actions">
-        <button class="secondary-link" type="button" disabled>Zobrazit</button>
-        <button class="secondary-link" type="button" disabled>Stáhnout</button>
-      </div>
+      <em class="data-box-attachment-note">Příloha není dostupná přes veřejné URL.</em>
     </li>
   `).join("");
 }
@@ -14986,15 +14915,9 @@ function dataBoxMessageDetailPanel() {
           </section>
         </div>
       </div>
-      <aside class="data-box-detail-actions" aria-label="Akce zprávy">
-        <button class="secondary-link" type="button" disabled>Označit v řešení</button>
-        <button class="secondary-link" type="button" disabled>Označit vyřízené</button>
-        <button class="secondary-link" type="button" disabled>Přiřadit osobě</button>
-        <button class="secondary-link" type="button" disabled>Přidat poznámku</button>
-        <button class="secondary-link" type="button" disabled>Odpovědět</button>
-        <button class="secondary-link" type="button" disabled>Přeposlat</button>
-        <button class="secondary-link" type="button" disabled>Export detailu</button>
-        <p>Akce čekají na potvrzené API a ruční potvrzení. Z této obrazovky se zatím nic neodesílá, nemaže ani nezveřejňuje.</p>
+      <aside class="data-box-detail-actions" aria-label="Bezpečnost detailu zprávy">
+        <strong>Read-only režim</strong>
+        <p>Akce odpovědět, přeposlat, změnit stav, přiřadit osobu a stáhnout přílohy čekají na potvrzené API a ruční potvrzení. Z této obrazovky se zatím nic neodesílá, nemaže ani nezveřejňuje.</p>
       </aside>
     `;
   } else {
@@ -15218,6 +15141,7 @@ function dataBoxRulesAutomation(user) {
 function dataBoxPage(moduleItem, user) {
   ensureDataBoxData();
   const connection = dataBoxConnectionState();
+  const filters = dataBoxState.messageFilters;
 
   return `
     <main class="app-shell module-page module-theme-scope data-box-page" ${moduleThemeStyleAttribute()}>
@@ -15227,46 +15151,23 @@ function dataBoxPage(moduleItem, user) {
         <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
       </nav>
 
-      <section class="module-detail data-box-hero" aria-labelledby="module-title">
-        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
-        <div class="module-detail__body">
-          <div class="module-detail__eyebrow">SMART ODPADY / DATOVÁ SCHRÁNKA</div>
+      <section class="data-box-inbox-header" aria-labelledby="module-title">
+        <div class="data-box-inbox-header__title">
           <h1 id="module-title">Datová schránka</h1>
           <p>Příchozí datové zprávy, lhůty, přílohy a stav vyřízení.</p>
-          <div class="module-detail__status">
-            <span>Stav</span>
+          <div class="data-box-inbox-header__status data-box-inbox-header__status--${escapeHtml(connection.tone)}">
             <strong>${escapeHtml(connection.label)}</strong>
-            <small>${escapeHtml(connection.note)}</small>
-          </div>
-          ${dataBoxHeaderActions(user)}
-          <div class="data-box-safe-actions" aria-label="Neaktivní provozní akce">
-            <article>
-              <span>Synchronizace</span>
-              <strong>ručně</strong>
-              <small>Čte jen seznam obálek, přílohy ani obsah zpráv nestahuje.</small>
-            </article>
-            <article>
-              <span>Odesílání</span>
-              <strong>blokováno</strong>
-              <small>Žádná odpověď se z frontendu ani API neposílá.</small>
-            </article>
-            <article>
-              <span>Automatizace</span>
-              <strong>neběží</strong>
-              <small>Není worker, cron ani queue.</small>
-            </article>
+            <span>${escapeHtml(connection.note)}</span>
           </div>
         </div>
+        <label class="data-box-header-search">
+          <span>Hledat</span>
+          <input name="query" value="${escapeHtml(filters.query)}" placeholder="Odesílatel, předmět, ID..." data-data-box-filter />
+        </label>
+        ${dataBoxHeaderActions(user)}
       </section>
 
-      <section class="data-box-warning" role="status">
-        <strong>ISDS secrets nejsou v repozitáři.</strong>
-        <span>Frontend nevolá datové schránky, neukládá provozní data lokálně a neobsahuje žádné certifikáty, hesla ani tokeny.</span>
-      </section>
-
-      ${dataBoxStatusCards()}
       ${dataBoxAccountsSwitcher()}
-      ${dataBoxOperationalKpis("received")}
       ${dataBoxTabs()}
       ${dataBoxActivePanel(user)}
       ${moduleFeedbackBoxFor(moduleItem, user, {
@@ -16843,7 +16744,7 @@ function resetDataBoxState() {
   dataBoxState.messages = [];
   dataBoxState.syncRuns = [];
   dataBoxState.selectedDataBoxId = "";
-  dataBoxState.activeTab = "overview";
+  dataBoxState.activeTab = "received";
   dataBoxState.syncLoading = false;
   dataBoxState.syncMessage = "";
   dataBoxState.syncError = "";
@@ -22121,7 +22022,7 @@ document.addEventListener("click", async (event) => {
 
   const dataBoxTab = event.target.closest("[data-data-box-tab]");
   if (dataBoxTab) {
-    dataBoxState.activeTab = dataBoxTab.dataset.dataBoxTab || "overview";
+    dataBoxState.activeTab = dataBoxTab.dataset.dataBoxTab || "received";
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
     dataBoxState.selectedPreviewMessageId = "";
