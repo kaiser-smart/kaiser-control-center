@@ -859,15 +859,15 @@ h1 {
 
 .status-badge {
   position: absolute;
-  bottom: -6px;
-  left: 50%;
+  bottom: -14px;
+  left: 63%;
   display: inline-flex;
   transform: translateX(-50%);
   align-items: center;
   justify-content: center;
   white-space: nowrap;
   pointer-events: none;
-  padding: 5px 8px;
+  padding: 5px 5px;
   border: 1px solid rgba(117, 189, 37, 0.18);
   border-radius: 999px;
   background: #f2faea;
@@ -11684,7 +11684,7 @@ body:has(.absence-page--employee-card) {
   }
 
   .status-badge {
-    padding: 4px 7px;
+    padding: 5px 5px;
     font-size: 0.63rem;
   }
 
