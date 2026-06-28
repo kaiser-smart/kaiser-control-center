@@ -9128,8 +9128,66 @@ body:has(.ai-assistant-promo-modal) {
 
 .employee-import-section,
 .employee-document-import-section,
+.employee-pinya-preview-section,
 .employee-hr-profile-section {
   border-color: #d9e8cf;
+}
+
+.employee-pinya-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.employee-pinya-preview-actions span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.employee-pinya-preview-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.employee-pinya-preview-summary article {
+  display: grid;
+  gap: 5px;
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #f8fbf4;
+}
+
+.employee-pinya-preview-summary span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.employee-pinya-preview-summary strong {
+  color: var(--ink);
+  font-size: 1.45rem;
+}
+
+.employee-pinya-preview-blockers {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 12px 12px 12px 28px;
+  border: 1px solid #ffd3d0;
+  border-radius: 8px;
+  background: #fff7f6;
+  color: #8a1f16;
+  font-weight: 800;
 }
 
 .employee-import-form,
@@ -12634,6 +12692,10 @@ body:has(.absence-page--employee-card) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .employee-pinya-preview-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .employee-card-grid {
     grid-template-columns: 1fr;
   }
@@ -12658,6 +12720,7 @@ body:has(.absence-page--employee-card) {
   .employee-card-fields,
   .employee-hr-profile-groups,
   .employee-hr-profile-group .employee-card-fields,
+  .employee-pinya-preview-summary,
   .employee-medical-exam-overview,
   .employee-work-history-form,
   .employee-medical-exam-form .employee-card-fields {

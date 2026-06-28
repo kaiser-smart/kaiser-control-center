@@ -900,6 +900,10 @@ const employeeCardState = {
   documentImportApplying: false,
   documentImportMessage: "",
   documentImportError: "",
+  pinyaDocumentsPreview: null,
+  pinyaDocumentsPreviewLoading: false,
+  pinyaDocumentsPreviewMessage: "",
+  pinyaDocumentsPreviewError: "",
   importPreview: null,
   importLoading: false,
   importApplying: false,
@@ -6439,6 +6443,72 @@ function employeeDocumentImportSection(canEdit) {
   `;
 }
 
+function employeePinyaDocumentsPreviewSummary(summary = {}) {
+  const items = [
+    ["Smart zaměstnanci", summary.smartEmployeeCount || 0],
+    ["Pinya zaměstnanci", summary.pinyaEmployeeCount || 0],
+    ["Spárováno", summary.matchedCount || 0],
+    ["Dokumenty", summary.documentCount || 0]
+  ];
+
+  return `
+    <div class="employee-pinya-preview-summary">
+      ${items.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function employeePinyaDocumentsPreviewSection(canEdit) {
+  if (!canEdit) {
+    return "";
+  }
+
+  const preview = employeeCardState.pinyaDocumentsPreview;
+  const blockers = Array.isArray(preview?.blockers) ? preview.blockers : [];
+  const statusClass = preview?.integrationStatus === "ready"
+    ? "employee-card-status--ready"
+    : preview
+      ? "employee-card-status--blocked"
+      : "employee-card-status--waiting";
+  const statusLabel = preview?.integrationStatus === "ready"
+    ? "Připraveno"
+    : preview
+      ? "Blokováno"
+      : "Nenačteno";
+
+  return `
+    <section class="employee-card-section employee-card-section--wide employee-pinya-preview-section">
+      <div class="employee-card-section__head">
+        <div>
+          <h2>Dokumenty z Pinya</h2>
+          <p>Read-only preview stavu napojení. Bez stažení souborů a bez zápisu do úložiště.</p>
+        </div>
+        <span class="employee-card-status ${statusClass}">${statusLabel}</span>
+      </div>
+      ${employeeCardState.pinyaDocumentsPreviewMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.pinyaDocumentsPreviewMessage)}</p>` : ""}
+      ${employeeCardState.pinyaDocumentsPreviewError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.pinyaDocumentsPreviewError)}</p>` : ""}
+      <div class="employee-pinya-preview-actions">
+        <button class="secondary-link" type="button" data-employee-pinya-documents-preview-load ${employeeCardState.pinyaDocumentsPreviewLoading ? "disabled" : ""}>
+          ${employeeCardState.pinyaDocumentsPreviewLoading ? "Načítám..." : "Načíst stav"}
+        </button>
+        <span>${preview?.mode ? escapeHtml(preview.mode) : "Čeká na ověření"}</span>
+      </div>
+      ${preview ? employeePinyaDocumentsPreviewSummary(preview.summary) : ""}
+      ${preview?.message ? `<p class="employee-card-api-note">${escapeHtml(preview.message)}</p>` : ""}
+      ${blockers.length ? `
+        <ul class="employee-pinya-preview-blockers">
+          ${blockers.map((blocker) => `<li>${escapeHtml(blocker)}</li>`).join("")}
+        </ul>
+      ` : ""}
+    </section>
+  `;
+}
+
 function employeeMedicalExamStatusBadge(state) {
   const tone = state?.statusTone || "waiting";
   const label = state?.statusLabel || "Chybí údaje";
@@ -6973,6 +7043,7 @@ function employeeCardContent(employeeId, user) {
 
       ${employeeMedicalExamSection(employee, canEditMedicalExam)}
       ${employeeExcelImportSection(canEdit)}
+      ${employeePinyaDocumentsPreviewSection(canEdit)}
       ${employeeDocumentImportSection(canEdit)}
 
       <div class="employee-card-grid employee-card-grid--bottom">
@@ -18658,6 +18729,34 @@ function employeeDocumentImportFormData(form, fallbackFiles = []) {
   return { files, formData };
 }
 
+async function loadEmployeePinyaDocumentsPreview() {
+  if (!canEditEmployeeCards()) {
+    employeeCardState.pinyaDocumentsPreviewError = "Nemáte oprávnění zobrazit Pinya preview dokumentů.";
+    render();
+    return;
+  }
+
+  employeeCardState.pinyaDocumentsPreviewLoading = true;
+  employeeCardState.pinyaDocumentsPreviewMessage = "Načítám read-only stav Pinya preview...";
+  employeeCardState.pinyaDocumentsPreviewError = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/employees/pinya-documents/preview-status");
+    employeeCardState.pinyaDocumentsPreview = result;
+    employeeCardState.pinyaDocumentsPreviewMessage = result.message || "Pinya preview stav je načtený.";
+    employeeCardState.pinyaDocumentsPreviewError = "";
+  } catch (error) {
+    console.error("smart_odpady_employee_pinya_documents_preview_failed", error);
+    employeeCardState.pinyaDocumentsPreview = null;
+    employeeCardState.pinyaDocumentsPreviewError = error.message || "Pinya preview stav se nepodařilo načíst.";
+    employeeCardState.pinyaDocumentsPreviewMessage = "";
+  } finally {
+    employeeCardState.pinyaDocumentsPreviewLoading = false;
+    render();
+  }
+}
+
 async function submitEmployeeDocumentImportPreview(form) {
   if (!canEditEmployeeCards()) {
     employeeCardState.documentImportError = "Nemáte oprávnění importovat dokumenty zaměstnanců.";
@@ -20035,6 +20134,13 @@ document.addEventListener("click", async (event) => {
   if (employeeImportApply) {
     event.preventDefault();
     await applyEmployeeExcelImport();
+    return;
+  }
+
+  const employeePinyaDocumentsPreviewLoad = event.target.closest("[data-employee-pinya-documents-preview-load]");
+  if (employeePinyaDocumentsPreviewLoad) {
+    event.preventDefault();
+    await loadEmployeePinyaDocumentsPreview();
     return;
   }
 
