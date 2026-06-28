@@ -9060,13 +9060,15 @@ body:has(.ai-assistant-promo-modal) {
 
 .employee-hr-profile-groups {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .employee-hr-profile-group {
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
   border: 1px solid #e4ecdd;
   border-radius: 8px;
   background: #fbfdf9;
@@ -9074,6 +9076,26 @@ body:has(.ai-assistant-promo-modal) {
 
 .employee-hr-profile-group h3 {
   margin: 0;
+}
+
+.employee-hr-profile-group .employee-card-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.employee-hr-profile-group .employee-card-field {
+  gap: 4px;
+}
+
+.employee-hr-profile-group .employee-card-field > span {
+  font-size: 0.68rem;
+}
+
+.employee-hr-profile-group .employee-card-field input,
+.employee-hr-profile-group .employee-card-field select {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
 }
 
 .absence-page .employee-hr-profile-group h3 {
@@ -12427,6 +12449,11 @@ body:has(.absence-page--employee-card) {
   .employee-card-grid {
     grid-template-columns: 1fr;
   }
+
+  .employee-hr-profile-groups,
+  .employee-hr-profile-group .employee-card-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -12441,6 +12468,8 @@ body:has(.absence-page--employee-card) {
 
   .employee-card-kpis,
   .employee-card-fields,
+  .employee-hr-profile-groups,
+  .employee-hr-profile-group .employee-card-fields,
   .employee-medical-exam-overview,
   .employee-work-history-form,
   .employee-medical-exam-form .employee-card-fields {
