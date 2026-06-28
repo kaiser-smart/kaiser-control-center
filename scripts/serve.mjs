@@ -39,6 +39,12 @@ import {
   createEmployeeExcelImportPreview
 } from "../functions/_lib/employee-excel-import.js";
 import {
+  EMPLOYEE_DOCUMENT_IMPORT_MAX_FILE_SIZE_BYTES,
+  EMPLOYEE_DOCUMENT_IMPORT_MAX_FILES,
+  EMPLOYEE_DOCUMENT_IMPORT_MAX_TOTAL_BYTES,
+  buildEmployeeDocumentImportPreview
+} from "../functions/_lib/employee-document-import.js";
+import {
   TcarsClientError,
   loadFleetVehiclesPayload,
   loadTcarsStatusPayload,
@@ -3565,6 +3571,156 @@ async function handleApi(request, response) {
       error: "Lokální preview server nemá D1 databázi. Ostrý import spusťte až po cloudové migraci.",
       apiStatus: "waiting"
     });
+    return true;
+  }
+
+  if (url.pathname === "/api/employees/documents/import-preview" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "edit") || !canEditMockEmployee(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění importovat dokumenty zaměstnanců." });
+      return true;
+    }
+
+    try {
+      const { files } = await readMultipartFormData(request);
+      const importFiles = [...files.values()]
+        .filter((file) => file?.buffer?.length)
+        .map((file) => ({
+          ...file,
+          size: file.buffer.length
+        }));
+      const totalSize = importFiles.reduce((total, file) => total + file.size, 0);
+
+      if (!importFiles.length) {
+        sendJson(response, 400, { error: "Nahrajte dokumenty exportované nebo stažené z Pinya.", apiStatus: "ready" });
+        return true;
+      }
+      if (importFiles.length > EMPLOYEE_DOCUMENT_IMPORT_MAX_FILES) {
+        sendJson(response, 400, { error: `Najednou nahrajte nejvýše ${EMPLOYEE_DOCUMENT_IMPORT_MAX_FILES} souborů.`, apiStatus: "ready" });
+        return true;
+      }
+      const tooLarge = importFiles.find((file) => file.size > EMPLOYEE_DOCUMENT_IMPORT_MAX_FILE_SIZE_BYTES);
+      if (tooLarge) {
+        sendJson(response, 400, { error: `Soubor ${tooLarge.name || ""} je příliš velký. Maximum je 10 MB.`, apiStatus: "ready" });
+        return true;
+      }
+      if (totalSize > EMPLOYEE_DOCUMENT_IMPORT_MAX_TOTAL_BYTES) {
+        sendJson(response, 400, { error: "Soubory jsou dohromady příliš velké. Maximum je 80 MB.", apiStatus: "ready" });
+        return true;
+      }
+
+      const preview = buildEmployeeDocumentImportPreview(importFiles, visibleMockEmployees(user));
+      sendJson(response, 200, { preview, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Preview importu dokumentů se teď nepodařilo připravit.",
+        apiStatus: "waiting"
+      });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/employees/documents/import" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "edit") || !canEditMockEmployee(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění importovat dokumenty zaměstnanců." });
+      return true;
+    }
+
+    try {
+      const { files } = await readMultipartFormData(request);
+      const importFiles = [...files.values()]
+        .filter((file) => file?.buffer?.length)
+        .map((file) => ({
+          ...file,
+          size: file.buffer.length
+        }));
+      const totalSize = importFiles.reduce((total, file) => total + file.size, 0);
+
+      if (!importFiles.length) {
+        sendJson(response, 400, { error: "Nahrajte dokumenty exportované nebo stažené z Pinya.", apiStatus: "ready" });
+        return true;
+      }
+      if (importFiles.length > EMPLOYEE_DOCUMENT_IMPORT_MAX_FILES) {
+        sendJson(response, 400, { error: `Najednou nahrajte nejvýše ${EMPLOYEE_DOCUMENT_IMPORT_MAX_FILES} souborů.`, apiStatus: "ready" });
+        return true;
+      }
+      const tooLarge = importFiles.find((file) => file.size > EMPLOYEE_DOCUMENT_IMPORT_MAX_FILE_SIZE_BYTES);
+      if (tooLarge) {
+        sendJson(response, 400, { error: `Soubor ${tooLarge.name || ""} je příliš velký. Maximum je 10 MB.`, apiStatus: "ready" });
+        return true;
+      }
+      if (totalSize > EMPLOYEE_DOCUMENT_IMPORT_MAX_TOTAL_BYTES) {
+        sendJson(response, 400, { error: "Soubory jsou dohromady příliš velké. Maximum je 80 MB.", apiStatus: "ready" });
+        return true;
+      }
+
+      const preview = buildEmployeeDocumentImportPreview(importFiles, visibleMockEmployees(user));
+      const documents = [];
+      let skippedCount = 0;
+
+      for (const row of preview.rows) {
+        const file = importFiles[row.index];
+        if (!file || row.status !== "ready" || !row.employeeId) {
+          skippedCount += 1;
+          continue;
+        }
+
+        const now = new Date().toISOString();
+        const documentId = `employee-document-${randomUUID()}`;
+        const document = {
+          id: documentId,
+          employeeId: row.employeeId,
+          type: row.documentType || "Ostatní",
+          name: row.documentName || file.name || "Dokument",
+          fileUrl: `/api/employees/${encodeURIComponent(row.employeeId)}/documents/${encodeURIComponent(documentId)}`,
+          contentType: file.type || "application/octet-stream",
+          sizeBytes: file.buffer.length,
+          uploadedAt: now,
+          uploadedByUserId: user.id,
+          expiresAt: "",
+          note: `Hromadný import dokumentů z Pinya exportu. Párování: ${row.matchMethod || "název souboru"}.`,
+          employeeName: row.employeeName,
+          importStatus: "imported"
+        };
+
+        mockEmployeeDocumentFiles.set(documentId, {
+          employeeId: row.employeeId,
+          name: document.name,
+          type: document.contentType,
+          buffer: file.buffer
+        });
+        mockEmployeeDocuments.set(row.employeeId, [document, ...(mockEmployeeDocuments.get(row.employeeId) || [])]);
+        documents.push(document);
+      }
+
+      sendJson(response, 201, {
+        result: {
+          preview,
+          documents,
+          summary: {
+            ...preview.summary,
+            importedCount: documents.length,
+            skippedCount
+          },
+          apiStatus: "ready"
+        },
+        apiStatus: "ready"
+      });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Import dokumentů se teď nepodařilo uložit.",
+        apiStatus: "waiting"
+      });
+    }
     return true;
   }
 

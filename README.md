@@ -88,6 +88,8 @@ Frontend nevolá Twilio přímo. API vrstva je připravená ve složce `function
 - `GET /api/employees/:id/documents`
 - `POST /api/employees/:id/documents`
 - `GET /api/employees/:id/documents/:documentId`
+- `POST /api/employees/documents/import-preview`
+- `POST /api/employees/documents/import`
 - `GET /api/theme-settings`
 - `PATCH /api/theme-settings`
 - `GET /api/absence-settings`
@@ -217,6 +219,8 @@ smart-odpady-documents
 ```
 
 Metadata dokumentů zůstávají v D1 tabulkách `employee_documents` a `employee_document_files`. Samotné soubory se ukládají do R2 a stahují se přes chráněný endpoint `/api/employees/:id/documents/:documentId`, aby se ověřilo přihlášení a oprávnění. Pokud R2 binding chybí, upload vrátí bezpečnou konfigurační chybu a nepředstírá uložení.
+
+Hromadný import dokumentů z Pinya nepřihlašuje aplikaci do Pinya. Pracuje se soubory, které uživatel z Pinya ručně stáhne nebo exportuje, připraví preview párování podle názvu souboru a uloží jen jednoznačně spárované dokumenty do stejného R2 úložiště.
 
 ## Nastavení vzhledu
 

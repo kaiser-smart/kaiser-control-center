@@ -8283,6 +8283,7 @@ body:has(.ai-assistant-promo-modal) {
 .employee-card-header,
 .employee-card-section,
 .employee-card-kpi {
+  min-width: 0;
   border: 1px solid rgba(35, 40, 33, 0.08);
   border-radius: 8px;
   background: #ffffff;
@@ -8295,6 +8296,12 @@ body:has(.ai-assistant-promo-modal) {
   justify-content: space-between;
   gap: 18px;
   padding: 22px;
+}
+
+.employee-card-header > *,
+.employee-card-section > *,
+.employee-card-kpi > * {
+  min-width: 0;
 }
 
 .employee-card-header h2 {
@@ -8434,6 +8441,8 @@ body:has(.ai-assistant-promo-modal) {
 
 .employee-card-section__head {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
@@ -8608,6 +8617,11 @@ body:has(.ai-assistant-promo-modal) {
 .employee-card-status--waiting {
   background: #fff5e5;
   color: #8a5a00;
+}
+
+.employee-card-status--blocked {
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 .employee-card-request-link {
@@ -8982,11 +8996,13 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 .employee-import-section,
+.employee-document-import-section,
 .employee-hr-profile-section {
   border-color: #d9e8cf;
 }
 
-.employee-import-form {
+.employee-import-form,
+.employee-document-import-form {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto;
   gap: 12px;
@@ -8997,24 +9013,32 @@ body:has(.ai-assistant-promo-modal) {
   background: #fbfdf9;
 }
 
-.employee-import-form label {
+.employee-import-form label,
+.employee-document-import-form label {
   display: grid;
   gap: 6px;
 }
 
-.employee-import-form label span {
+.employee-import-form label span,
+.employee-document-import-form label span {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 900;
 }
 
-.employee-import-summary {
+.employee-import-summary,
+.employee-document-import-summary {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
-.employee-import-summary article {
+.employee-document-import-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.employee-import-summary article,
+.employee-document-import-summary article {
   display: grid;
   gap: 5px;
   min-height: 78px;
@@ -9025,6 +9049,7 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 .employee-import-summary span,
+.employee-document-import-summary span,
 .employee-hr-profile-group h3 {
   color: var(--muted);
   font-size: 0.74rem;
@@ -9032,8 +9057,17 @@ body:has(.ai-assistant-promo-modal) {
   text-transform: uppercase;
 }
 
-.employee-import-summary strong {
+.employee-import-summary strong,
+.employee-document-import-summary strong {
   font-size: 1.45rem;
+}
+
+.employee-document-import-table {
+  min-width: 820px;
+}
+
+.employee-document-import-note {
+  margin: 0;
 }
 
 .employee-import-columns {
@@ -9152,6 +9186,19 @@ body:has(.ai-assistant-promo-modal) {
   }
 }
 
+@media (max-width: 900px) {
+  .employee-document-import-form,
+  .employee-document-import-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-document-import-form .primary-action,
+  .employee-document-import-form .secondary-link {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 720px) {
   .absence-approval-card__main,
   .absence-approval-card__details {
@@ -9171,12 +9218,16 @@ body:has(.ai-assistant-promo-modal) {
   }
 
   .employee-import-form,
-  .employee-import-summary {
+  .employee-import-summary,
+  .employee-document-import-form,
+  .employee-document-import-summary {
     grid-template-columns: 1fr;
   }
 
   .employee-import-form .primary-action,
-  .employee-import-form .secondary-link {
+  .employee-import-form .secondary-link,
+  .employee-document-import-form .primary-action,
+  .employee-document-import-form .secondary-link {
     width: 100%;
     justify-content: center;
   }
@@ -10880,6 +10931,8 @@ body:has(.absence-page--employee-card) {
 .absence-page .employee-import-form,
 .absence-page .employee-import-summary article,
 .absence-page .employee-import-column,
+.absence-page .employee-document-import-form,
+.absence-page .employee-document-import-summary article,
 .absence-page .employee-hr-profile-group {
   border-color: var(--color-border);
 }
@@ -10897,6 +10950,8 @@ body:has(.absence-page--employee-card) {
 .absence-page .employee-import-form,
 .absence-page .employee-import-summary article,
 .absence-page .employee-import-column,
+.absence-page .employee-document-import-form,
+.absence-page .employee-document-import-summary article,
 .absence-page .employee-hr-profile-group {
   background: var(--color-surface);
 }
@@ -10960,6 +11015,7 @@ body:has(.absence-page--employee-card) {
 .absence-page .employee-card-field select,
 .absence-page .employee-card-field textarea,
 .absence-page .employee-import-form input,
+.absence-page .employee-document-import-form input,
 .absence-page .employee-work-history-form input,
 .absence-page .employee-work-history-form textarea,
 .absence-page .employee-medical-exam-form input,
@@ -10973,7 +11029,8 @@ body:has(.absence-page--employee-card) {
 .absence-page .employee-card-field input:disabled,
 .absence-page .employee-card-field select:disabled,
 .absence-page .employee-card-field textarea:disabled,
-.absence-page .employee-import-form input:disabled {
+.absence-page .employee-import-form input:disabled,
+.absence-page .employee-document-import-form input:disabled {
   background: var(--color-surface);
   color: var(--color-muted);
 }

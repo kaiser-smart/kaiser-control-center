@@ -883,6 +883,12 @@ const employeeCardState = {
   documentUploading: false,
   documentsUploadStatus: "waiting",
   documentsMissingEndpoint: "POST /api/employees/:id/documents",
+  documentImportPreview: null,
+  documentImportFiles: [],
+  documentImportLoading: false,
+  documentImportApplying: false,
+  documentImportMessage: "",
+  documentImportError: "",
   importPreview: null,
   importLoading: false,
   importApplying: false,
@@ -6298,6 +6304,130 @@ function employeeExcelImportSection(canEdit) {
   `;
 }
 
+function employeeDocumentImportStatus(row) {
+  if (row.status === "ready") {
+    return {
+      label: "Připraveno",
+      className: "employee-card-status employee-card-status--ready"
+    };
+  }
+
+  if (row.status === "review") {
+    return {
+      label: "Ruční kontrola",
+      className: "employee-card-status employee-card-status--waiting"
+    };
+  }
+
+  return {
+    label: "Bez shody",
+    className: "employee-card-status employee-card-status--blocked"
+  };
+}
+
+function employeeDocumentImportPreviewTable(preview) {
+  if (!preview) {
+    return "";
+  }
+
+  const rows = Array.isArray(preview.rows) ? preview.rows : [];
+  const summary = preview.summary || {};
+  const readyRows = rows.filter((row) => row.status === "ready");
+
+  return `
+    <div class="employee-document-import-summary" aria-label="Souhrn importu dokumentů">
+      <article><span>Souborů</span><strong>${escapeHtml(summary.fileCount ?? 0)}</strong></article>
+      <article><span>Připraveno</span><strong>${escapeHtml(summary.readyCount ?? 0)}</strong></article>
+      <article><span>Ke kontrole</span><strong>${escapeHtml(summary.reviewCount ?? 0)}</strong></article>
+      <article><span>Bez shody</span><strong>${escapeHtml(summary.unmatchedCount ?? 0)}</strong></article>
+      <article><span>Velikost</span><strong>${escapeHtml(formatFileSize(summary.totalSizeBytes) || "0 B")}</strong></article>
+    </div>
+    <div class="absence-table-wrap">
+      <table class="absence-table employee-card-table employee-document-import-table">
+        <thead>
+          <tr>
+            <th>Soubor</th>
+            <th>Zaměstnanec</th>
+            <th>Typ</th>
+            <th>Stav</th>
+            <th>Kandidáti</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => {
+            const status = employeeDocumentImportStatus(row);
+            const candidates = (row.candidates || [])
+              .slice(0, 3)
+              .map((candidate) => `${candidate.employeeName} (${candidate.score})`)
+              .join(", ");
+            return `
+              <tr>
+                <td data-label="Soubor">
+                  <span class="employee-document-name">
+                    <strong>${escapeHtml(row.filename || "Soubor")}</strong>
+                    ${formatFileSize(row.sizeBytes) ? `<span>${escapeHtml(formatFileSize(row.sizeBytes))}</span>` : ""}
+                  </span>
+                </td>
+                <td data-label="Zaměstnanec">${escapeHtml(row.employeeName || "nenalezeno")}</td>
+                <td data-label="Typ">${escapeHtml(row.documentType || "Ostatní")}</td>
+                <td data-label="Stav"><span class="${status.className}">${escapeHtml(status.label)}</span></td>
+                <td data-label="Kandidáti">${escapeHtml(candidates || "bez kandidátů")}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${readyRows.length ? `
+      <p class="employee-card-api-note employee-document-import-note">
+        Uloží se jen soubory se stavem Připraveno. Ruční kontrola a Bez shody se přeskočí.
+      </p>
+    ` : ""}
+  `;
+}
+
+function employeeDocumentImportSection(canEdit) {
+  if (!canEdit) {
+    return "";
+  }
+
+  const preview = employeeCardState.documentImportPreview;
+  const readyCount = preview?.summary?.readyCount || 0;
+
+  return `
+    <section class="employee-card-section employee-card-section--wide employee-document-import-section">
+      <div class="employee-card-section__head">
+        <div>
+          <h2>Hromadný import dokumentů z Pinya</h2>
+          <p>Vyberte soubory stažené nebo exportované z Pinya. Aplikace je podle názvu spáruje se zaměstnanci.</p>
+        </div>
+        <span class="employee-card-status ${preview ? "employee-card-status--ready" : "employee-card-status--waiting"}">
+          ${preview ? "Preview připraveno" : "Čeká na soubory"}
+        </span>
+      </div>
+      ${employeeCardState.documentImportMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.documentImportMessage)}</p>` : ""}
+      ${employeeCardState.documentImportError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.documentImportError)}</p>` : ""}
+      <form class="employee-document-import-form" data-employee-document-import-form>
+        <label class="employee-document-upload-form__file">
+          <span>Dokumenty z Pinya</span>
+          <input name="files" type="file" multiple required />
+        </label>
+        <button class="secondary-link" type="submit" ${employeeCardState.documentImportLoading ? "disabled" : ""}>
+          ${employeeCardState.documentImportLoading ? "Páruji..." : "Spárovat soubory"}
+        </button>
+        <button class="primary-action" type="button" data-employee-document-import-apply ${!readyCount || employeeCardState.documentImportApplying ? "disabled" : ""}>
+          ${employeeCardState.documentImportApplying ? "Ukládám..." : "Uložit připravené dokumenty"}
+        </button>
+      </form>
+      ${preview ? employeeDocumentImportPreviewTable(preview) : `
+        <p class="employee-card-api-note">
+          Přímé napojení do Pinya tu není. Tato část bezpečně ukládá soubory, které z Pinya stáhnete ručně.
+        </p>
+      `}
+    </section>
+  `;
+}
+
 function employeeMedicalExamStatusBadge(state) {
   const tone = state?.statusTone || "waiting";
   const label = state?.statusLabel || "Chybí údaje";
@@ -6815,6 +6945,7 @@ function employeeCardContent(employeeId, user) {
 
       ${employeeMedicalExamSection(employee, canEditMedicalExam)}
       ${employeeExcelImportSection(canEdit)}
+      ${employeeDocumentImportSection(canEdit)}
 
       <div class="employee-card-grid employee-card-grid--bottom">
         ${employeeAbsenceWorkflowSection(employee)}
@@ -18165,6 +18296,110 @@ async function saveEmployeeDocumentUpload(form) {
   }
 }
 
+function employeeDocumentImportFormData(form, fallbackFiles = []) {
+  const selectedFiles = Array.from(form?.elements.files?.files || []);
+  const files = selectedFiles.length ? selectedFiles : Array.from(fallbackFiles || []);
+  const formData = new FormData();
+  files.forEach((file, index) => {
+    formData.append(`file-${index + 1}`, file, file.name);
+  });
+  return { files, formData };
+}
+
+async function submitEmployeeDocumentImportPreview(form) {
+  if (!canEditEmployeeCards()) {
+    employeeCardState.documentImportError = "Nemáte oprávnění importovat dokumenty zaměstnanců.";
+    render();
+    return;
+  }
+
+  const { files, formData } = employeeDocumentImportFormData(form);
+  if (!files.length) {
+    employeeCardState.documentImportError = "Vyberte dokumenty stažené nebo exportované z Pinya.";
+    employeeCardState.documentImportMessage = "";
+    render();
+    return;
+  }
+
+  employeeCardState.documentImportFiles = files;
+  employeeCardState.documentImportLoading = true;
+  employeeCardState.documentImportError = "";
+  employeeCardState.documentImportMessage = "Páruji dokumenty podle názvů souborů...";
+  render();
+
+  try {
+    const result = await apiJson("/api/employees/documents/import-preview", {
+      method: "POST",
+      body: formData
+    });
+    const preview = result.preview || null;
+    const summary = preview?.summary || {};
+    employeeCardState.documentImportPreview = preview;
+    employeeCardState.documentImportMessage = `Preview připraveno: ${summary.readyCount || 0} připraveno, ${summary.reviewCount || 0} ke kontrole, ${summary.unmatchedCount || 0} bez shody.`;
+    employeeCardState.documentImportError = "";
+  } catch (error) {
+    console.error("smart_odpady_employee_document_import_preview_failed", error);
+    employeeCardState.documentImportPreview = null;
+    employeeCardState.documentImportFiles = [];
+    employeeCardState.documentImportError = error.message || "Preview importu dokumentů se nepodařilo připravit.";
+    employeeCardState.documentImportMessage = "";
+  } finally {
+    employeeCardState.documentImportLoading = false;
+    render();
+  }
+}
+
+async function applyEmployeeDocumentImport() {
+  if (!canEditEmployeeCards()) {
+    employeeCardState.documentImportError = "Nemáte oprávnění importovat dokumenty zaměstnanců.";
+    render();
+    return;
+  }
+
+  const form = document.querySelector("[data-employee-document-import-form]");
+  const { files, formData } = employeeDocumentImportFormData(form, employeeCardState.documentImportFiles);
+  if (!files.length || !employeeCardState.documentImportPreview) {
+    employeeCardState.documentImportError = "Nejdřív načtěte preview dokumentů.";
+    employeeCardState.documentImportMessage = "";
+    render();
+    return;
+  }
+
+  employeeCardState.documentImportApplying = true;
+  employeeCardState.documentImportError = "";
+  employeeCardState.documentImportMessage = "Ukládám připravené dokumenty do cloudového úložiště...";
+  render();
+
+  try {
+    const response = await apiJson("/api/employees/documents/import", {
+      method: "POST",
+      body: formData
+    });
+    const result = response.result || {};
+    const summary = result.summary || {};
+    const currentEmployeeId = employeeCardState.employee?.id || "";
+    const currentEmployeeDocuments = (result.documents || []).filter((document) => document.employeeId === currentEmployeeId);
+
+    if (currentEmployeeDocuments.length) {
+      employeeCardState.documents = [...currentEmployeeDocuments, ...employeeCardState.documents];
+    }
+
+    employeeCardState.documentsUploadStatus = "ready";
+    employeeCardState.documentsMissingEndpoint = "";
+    employeeCardState.documentImportPreview = null;
+    employeeCardState.documentImportFiles = [];
+    employeeCardState.documentImportMessage = `Import dokončen: uloženo ${summary.importedCount || 0}, přeskočeno ${summary.skippedCount || 0}.`;
+    employeeCardState.documentImportError = "";
+  } catch (error) {
+    console.error("smart_odpady_employee_document_import_failed", error);
+    employeeCardState.documentImportError = error.message || "Import dokumentů se nepodařilo uložit.";
+    employeeCardState.documentImportMessage = "";
+  } finally {
+    employeeCardState.documentImportApplying = false;
+    render();
+  }
+}
+
 async function submitEmployeeExcelImportPreview(form) {
   if (!canEditEmployeeCards()) {
     employeeCardState.importError = "Nemáte oprávnění importovat zaměstnance.";
@@ -18820,6 +19055,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const employeeDocumentImportForm = event.target.closest("[data-employee-document-import-form]");
+  if (employeeDocumentImportForm) {
+    event.preventDefault();
+    await submitEmployeeDocumentImportPreview(employeeDocumentImportForm);
+    return;
+  }
+
   const employeeCardForm = event.target.closest("[data-employee-card-form]");
   if (employeeCardForm) {
     event.preventDefault();
@@ -19441,6 +19683,13 @@ document.addEventListener("click", async (event) => {
   if (employeeImportApply) {
     event.preventDefault();
     await applyEmployeeExcelImport();
+    return;
+  }
+
+  const employeeDocumentImportApply = event.target.closest("[data-employee-document-import-apply]");
+  if (employeeDocumentImportApply) {
+    event.preventDefault();
+    await applyEmployeeDocumentImport();
     return;
   }
 
