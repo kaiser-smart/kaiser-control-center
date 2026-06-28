@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.175"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.176"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "HP: odstraneny zeleny podklad karet",
+    text: "Homepage ma sjednocene neutralni sede pozadi i u mekkych kartovych ploch, aby se nevracel zelenkavy odstin typu #e5f0d7."
+  },
   {
     title: "HP: neutralni sede pozadi",
     text: "Homepage ma misto zelenkaveho pozadi neutralni sedy gradient, aby uvodni obrazovka pusobila klidneji a firemni zelena zustala jen jako akcni akcent."
