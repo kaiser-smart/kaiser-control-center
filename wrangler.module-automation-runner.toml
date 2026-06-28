@@ -1,0 +1,17 @@
+name = "kaiser-module-automation-runner"
+main = "workers/module-automation-runner.js"
+compatibility_date = "2026-06-26"
+workers_dev = false
+
+[vars]
+MODULE_AUTOMATION_MODULE_KEY = "absence"
+MODULE_AUTOMATION_TIME_ZONE = "Europe/Prague"
+MODULE_AUTOMATION_MODE = "dry-run"
+
+[[d1_databases]]
+binding = "SMART_ODPADY_DB"
+database_name = "smart-odpady"
+database_id = "6d9ab099-fa10-4245-b06b-e146b63450a9"
+
+[triggers]
+crons = ["15 3 * * *"]

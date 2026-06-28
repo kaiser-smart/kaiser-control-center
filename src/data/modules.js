@@ -1,4 +1,5 @@
 import {
+  AbsenceIcon,
   CollectionRoutesIcon,
   CostsIcon,
   DashboardIcon,
@@ -28,14 +29,36 @@ export const modules = [
   {
     id: "fleet",
     title: "Vozový park",
-    description: "Evidence vozidel, stav techniky, STK, revize a historie.",
+    description: "Evidence vozidel, technického stavu, STK, revizí, pojištění, závad a servisní historie.",
     route: "/vozovy-park",
     dashboardRoute: "/vozovy-park/dashboard",
     icon: FleetIcon,
-    status: "skeleton",
+    status: "ROZPRACOVÁN",
     active: true,
     disabled: false,
     order: 2
+  },
+  {
+    id: "vehicle-tracking",
+    title: "Sledování vozidel",
+    description: "Online poloha vozidel, historie jízd, trasy, zastávky a provozní stav v terénu.",
+    route: "/sledovani-vozidel",
+    icon: FleetIcon,
+    status: "ROZPRACOVÁN",
+    active: true,
+    disabled: false,
+    order: 2.5
+  },
+  {
+    id: "data-box",
+    title: "Datová schránka",
+    description: "Pilotní modul pro přijaté a odeslané datové zprávy, audit, AI vyhodnocení a budoucí cloud synchronizaci ISDS.",
+    route: "/datova-schranka",
+    icon: ReportsIcon,
+    status: "ROZPRACOVÁN",
+    active: true,
+    disabled: false,
+    order: 2.7
   },
   {
     id: "driver-reports",
@@ -75,11 +98,11 @@ export const modules = [
   {
     id: "collection-routes",
     title: "Trasy svozu",
-    description: "Denní svozové trasy, zastávky, nádoby a navigace.",
+    description: "Read-only pilot pro ruční import preview a backendový Vistos API discovery bez ostrých tras.",
     route: "/trasy-svozu",
     dashboardRoute: "/trasy-svozu/dashboard",
     icon: CollectionRoutesIcon,
-    status: "skeleton",
+    status: "Read-only pilot",
     active: true,
     disabled: false,
     order: 6
@@ -133,6 +156,18 @@ export const modules = [
     order: 10
   },
   {
+    id: "absence",
+    title: "Dovolená / Nemoc",
+    description: "Žádosti, schvalování, zůstatky, kalendář a měsíční report nepřítomností.",
+    route: "/dovolena-nemoc",
+    dashboardRoute: "/dovolena-nemoc/dashboard",
+    icon: AbsenceIcon,
+    status: "mock data",
+    active: true,
+    disabled: false,
+    order: 14
+  },
+  {
     id: "users",
     title: "Uživatelé a role",
     description: "Řidiči, garážmistři, management, admin a oprávnění.",
@@ -142,7 +177,7 @@ export const modules = [
     status: "skeleton",
     active: true,
     disabled: false,
-    order: 11
+    order: 12
   },
   {
     id: "settings",
@@ -154,7 +189,7 @@ export const modules = [
     status: "skeleton",
     active: true,
     disabled: false,
-    order: 12
+    order: 13
   }
 ];
 
