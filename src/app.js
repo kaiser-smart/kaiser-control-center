@@ -179,7 +179,6 @@ import {
   vehicleTrackingStatusTone
 } from "./data/vehicleTracking.js";
 import {
-  DATA_BOX_EMPTY_MESSAGE_COLUMNS,
   DATA_BOX_EXISTING_ENDPOINTS,
   DATA_BOX_FUTURE_ENDPOINTS,
   DATA_BOX_INTEGRATION_POINTS,
@@ -743,6 +742,18 @@ const dataBoxState = {
   selectedMessage: null,
   detailLoading: false,
   detailError: "",
+  selectedPreviewMessageId: "",
+  messageFilters: {
+    query: "",
+    status: "all",
+    priority: "all",
+    deadline: "all",
+    attachment: "all",
+    assigned: "all",
+    quick: "all",
+    dateFrom: "",
+    dateTo: ""
+  },
   error: ""
 };
 const quickAbsenceState = {
@@ -13226,6 +13237,38 @@ const DATA_BOX_ACCOUNT_BOXES = [
   { id: "kaiser-data-box-6", shortLabel: "KN", label: "Kaisermanův nadační fond" }
 ];
 
+const DATA_BOX_QUICK_FILTERS = [
+  { id: "all", label: "Vše" },
+  { id: "new", label: "Nové" },
+  { id: "unresolved", label: "Nevyřízené" },
+  { id: "urgent", label: "Urgentní" },
+  { id: "deadlines", label: "Lhůty" },
+  { id: "attachments", label: "S přílohou" },
+  { id: "done", label: "Vyřízené" },
+  { id: "errors", label: "Chyby" }
+];
+
+const DATA_BOX_STATUS_OPTIONS = [
+  ["all", "Všechny stavy"],
+  ["new", "Nová"],
+  ["read", "Přečtená"],
+  ["unresolved", "Nevyřízená"],
+  ["in_progress", "V řešení"],
+  ["waiting", "Čeká na podklady"],
+  ["done", "Vyřízená"],
+  ["archived", "Archivovaná"],
+  ["error", "Chyba / nejasné"]
+];
+
+const DATA_BOX_PRIORITY_OPTIONS = [
+  ["all", "Všechny priority"],
+  ["normal", "Normální"],
+  ["important", "Důležité"],
+  ["urgent", "Urgentní"],
+  ["deadline", "Lhůta"],
+  ["legal", "Právní / úřední"]
+];
+
 function dataBoxAccountById(dataBoxId) {
   const id = String(dataBoxId || "").trim();
   return DATA_BOX_ACCOUNT_BOXES.find((account) => account.id === id) || null;
@@ -13252,12 +13295,16 @@ function dataBoxAccountMessages(accountId) {
   return dataBoxState.messages.filter((message) => message.dataBoxId === accountId);
 }
 
-function dataBoxFilteredMessages(direction) {
+function dataBoxMessagesForDirection(direction) {
   const selectedAccount = dataBoxSelectedAccount();
   return dataBoxState.messages.filter((message) => (
     message.direction === direction
     && (!selectedAccount || message.dataBoxId === selectedAccount.id)
   ));
+}
+
+function dataBoxFilteredMessages(direction) {
+  return dataBoxMessagesForDirection(direction).filter((message) => dataBoxMessageMatchesFilters(message));
 }
 
 function dataBoxFilteredSyncRuns() {
@@ -13432,6 +13479,67 @@ function dataBoxStatusCards() {
   `;
 }
 
+function dataBoxLastSyncLabel() {
+  const summary = dataBoxState.status?.summary || {};
+  const lastRun = dataBoxFilteredSyncRuns()[0] || dataBoxState.syncRuns[0] || null;
+  const value = summary.lastSyncAt || lastRun?.finishedAt || lastRun?.startedAt || "";
+  return value ? formatDateTime(value) : "zatím neproběhla";
+}
+
+function dataBoxConnectionState() {
+  if (dataBoxState.error) {
+    return {
+      label: "Chyba napojení",
+      tone: "error",
+      note: dataBoxState.error
+    };
+  }
+
+  if (dataBoxState.loading && !dataBoxState.loaded) {
+    return {
+      label: "Načítám",
+      tone: "info",
+      note: "Probíhá čtení chráněného API."
+    };
+  }
+
+  if (dataBoxState.apiStatus === "ready" && dataBoxState.status?.isds?.configured) {
+    return {
+      label: "Napojeno",
+      tone: "ready",
+      note: `Poslední synchronizace: ${dataBoxLastSyncLabel()}`
+    };
+  }
+
+  return {
+    label: "Čeká na konfiguraci",
+    tone: "waiting",
+    note: dataBoxState.status?.message || "ISDS účet nebo cloud stav zatím není kompletní."
+  };
+}
+
+function dataBoxCanManualSync(user) {
+  return dataBoxState.apiStatus === "ready"
+    && hasPermission(user, DATA_BOX_MODULE_KEY, "manage")
+    && ["admin", "management"].includes(normalizeRole(user?.role));
+}
+
+function dataBoxHeaderActions(user) {
+  const canSync = dataBoxCanManualSync(user);
+  const syncDisabled = !canSync || dataBoxState.syncLoading;
+  const syncLabel = dataBoxState.syncLoading ? "Načítám..." : "Načíst nové zprávy";
+
+  return `
+    <div class="data-box-hero-actions" aria-label="Akce modulu Datová schránka">
+      <button class="primary-action" type="button" data-data-box-sync ${syncDisabled ? "disabled" : ""}>
+        ${escapeHtml(syncLabel)}
+      </button>
+      <button class="secondary-link" type="button" disabled>Export přehledu</button>
+      <button class="secondary-link" type="button" data-data-box-tab="rules">Nastavení</button>
+    </div>
+  `;
+}
+
 function dataBoxTabs() {
   const activeTab = DATA_BOX_TABS.some((tab) => tab.id === dataBoxState.activeTab)
     ? dataBoxState.activeTab
@@ -13461,14 +13569,14 @@ function dataBoxActivePanel(user) {
 
   if (activeTab === "received") {
     return `
-      ${dataBoxMessageTable("Přijaté zprávy", "received")}
+      ${dataBoxMessageInbox("Přijaté zprávy", "received")}
       ${dataBoxMessageDetailPanel()}
     `;
   }
 
   if (activeTab === "sent") {
     return `
-      ${dataBoxMessageTable("Odeslané zprávy", "sent")}
+      ${dataBoxMessageInbox("Odeslané zprávy", "sent")}
       ${dataBoxMessageDetailPanel()}
     `;
   }
@@ -13497,6 +13605,352 @@ function dataBoxMessageActor(message) {
   return message.senderName || message.senderBoxId || "-";
 }
 
+function dataBoxSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function dataBoxDateValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dataBoxMessageTimestamp(message) {
+  return message.deliveredAt || message.acceptedAt || message.storedAt || message.createdAt || "";
+}
+
+function dataBoxMessageDeadlineDate(message) {
+  return dataBoxDateValue(
+    message.deadlineAt
+    || message.dueAt
+    || message.responseDeadlineAt
+    || message.legalDeadlineAt
+    || message.expiresAt
+  );
+}
+
+function dataBoxDaysUntil(date) {
+  if (!date) {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86400000);
+}
+
+function dataBoxDeadlineInfo(message) {
+  const deadline = dataBoxMessageDeadlineDate(message);
+  if (!deadline) {
+    return {
+      date: null,
+      label: "Bez lhůty",
+      tone: "muted",
+      days: null
+    };
+  }
+
+  const days = dataBoxDaysUntil(deadline);
+  if (days !== null && days < 0) {
+    return {
+      date: deadline,
+      label: `Po lhůtě ${formatDateTime(deadline)}`,
+      tone: "error",
+      days
+    };
+  }
+
+  if (days === 0) {
+    return {
+      date: deadline,
+      label: "Lhůta dnes",
+      tone: "urgent",
+      days
+    };
+  }
+
+  if (days !== null && days <= 3) {
+    return {
+      date: deadline,
+      label: `Lhůta za ${days} dny`,
+      tone: "urgent",
+      days
+    };
+  }
+
+  return {
+    date: deadline,
+    label: `Lhůta ${formatDateTime(deadline)}`,
+    tone: "deadline",
+    days
+  };
+}
+
+function dataBoxHasAttachments(message) {
+  return Boolean(message.hasAttachments || Number(message.attachmentsCount || 0) > 0 || (Array.isArray(message.attachments) && message.attachments.length));
+}
+
+function dataBoxAttachmentCount(message) {
+  if (Array.isArray(message.attachments) && message.attachments.length) {
+    return message.attachments.length;
+  }
+
+  return Number(message.attachmentsCount || (message.hasAttachments ? 1 : 0));
+}
+
+function dataBoxWorkflowStatus(message) {
+  const status = dataBoxSearchText(message.processingStatus || message.workflowStatus || message.status || "");
+  const aiStatus = dataBoxSearchText(message.aiStatus || "");
+
+  if (status.includes("chyba") || status.includes("error") || status.includes("nejas") || aiStatus.includes("failed")) {
+    return { id: "error", label: "Chyba / nejasné", tone: "error" };
+  }
+
+  if (status.includes("archiv")) {
+    return { id: "archived", label: "Archivovaná", tone: "muted" };
+  }
+
+  if (status.includes("vyriz") || status.includes("hotovo") || status.includes("done") || status.includes("closed")) {
+    return { id: "done", label: "Vyřízená", tone: "done" };
+  }
+
+  if (status.includes("podklad") || status.includes("ceka") || status.includes("waiting")) {
+    return { id: "waiting", label: "Čeká na podklady", tone: "warning" };
+  }
+
+  if (status.includes("resen") || status.includes("progress")) {
+    return { id: "in_progress", label: "V řešení", tone: "info" };
+  }
+
+  if (status.includes("nevyriz") || status.includes("open") || status.includes("todo")) {
+    return { id: "unresolved", label: "Nevyřízená", tone: "warning" };
+  }
+
+  if (message.readAt || message.acceptedAt) {
+    return { id: "read", label: "Přečtená", tone: "info" };
+  }
+
+  return { id: "new", label: "Nová", tone: "new" };
+}
+
+function dataBoxMessagePriority(message) {
+  const source = dataBoxSearchText([
+    message.priority,
+    message.subject,
+    message.senderName,
+    message.senderBoxId,
+    message.latestAiEvaluation?.priority,
+    message.latestAiEvaluation?.label
+  ].filter(Boolean).join(" "));
+  const deadline = dataBoxDeadlineInfo(message);
+
+  if (source.includes("urgent") || source.includes("kritick") || source.includes("ihned") || source.includes("exekuc")) {
+    return { id: "urgent", label: "Urgentní", tone: "urgent" };
+  }
+
+  if (deadline.date && deadline.days !== null && deadline.days <= 3) {
+    return { id: "deadline", label: "Lhůta", tone: "deadline" };
+  }
+
+  if (source.includes("lhuta") || source.includes("deadline")) {
+    return { id: "deadline", label: "Lhůta", tone: "deadline" };
+  }
+
+  if (
+    source.includes("soud")
+    || source.includes("urad")
+    || source.includes("minister")
+    || source.includes("financni")
+    || source.includes("registr smluv")
+    || source.includes("digitalni a informacni agentura")
+  ) {
+    return { id: "legal", label: "Právní / úřední", tone: "legal" };
+  }
+
+  if (source.includes("dulezit") || source.includes("important") || source.includes("smlouv")) {
+    return { id: "important", label: "Důležité", tone: "important" };
+  }
+
+  return { id: "normal", label: "Normální", tone: "normal" };
+}
+
+function dataBoxMessageAssigneeValue(message) {
+  return message.assignedToId
+    || message.assignedToEmail
+    || message.assignedToName
+    || message.responsiblePerson
+    || message.responsibleName
+    || message.ownerName
+    || "";
+}
+
+function dataBoxMessageAssigneeLabel(message) {
+  return dataBoxMessageAssigneeValue(message) || "Nepřiřazeno";
+}
+
+function dataBoxMessageNextStep(message) {
+  const status = dataBoxWorkflowStatus(message);
+  const priority = dataBoxMessagePriority(message);
+  const deadline = dataBoxDeadlineInfo(message);
+
+  if (status.id === "done" || status.id === "archived") {
+    return "Bez další akce.";
+  }
+
+  if (status.id === "error") {
+    return "Prověřit metadata a poslední synchronizaci.";
+  }
+
+  if (deadline.date && deadline.days !== null && deadline.days <= 3) {
+    return "Zkontrolovat lhůtu a předat odpovědné osobě.";
+  }
+
+  if (priority.id === "urgent" || priority.id === "legal") {
+    return "Prioritně otevřít detail a rozhodnout další postup.";
+  }
+
+  if (dataBoxHasAttachments(message)) {
+    return "Zkontrolovat dostupnost a obsah příloh.";
+  }
+
+  return "Přiřadit odpovědnou osobu nebo označit k řešení.";
+}
+
+function dataBoxMessageMatchesDateFilter(message) {
+  const filters = dataBoxState.messageFilters;
+  const timestamp = dataBoxDateValue(dataBoxMessageTimestamp(message));
+  if (!timestamp && (filters.dateFrom || filters.dateTo)) {
+    return false;
+  }
+
+  if (filters.dateFrom) {
+    const from = new Date(`${filters.dateFrom}T00:00:00`);
+    if (timestamp < from) {
+      return false;
+    }
+  }
+
+  if (filters.dateTo) {
+    const to = new Date(`${filters.dateTo}T23:59:59`);
+    if (timestamp > to) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function dataBoxMessageMatchesQuickFilter(message) {
+  const quick = dataBoxState.messageFilters.quick || "all";
+  const status = dataBoxWorkflowStatus(message);
+  const deadline = dataBoxDeadlineInfo(message);
+
+  if (quick === "new") {
+    return status.id === "new";
+  }
+
+  if (quick === "unresolved") {
+    return !["done", "archived"].includes(status.id);
+  }
+
+  if (quick === "urgent") {
+    return dataBoxMessagePriority(message).id === "urgent";
+  }
+
+  if (quick === "deadlines") {
+    return Boolean(deadline.date);
+  }
+
+  if (quick === "attachments") {
+    return dataBoxHasAttachments(message);
+  }
+
+  if (quick === "done") {
+    return status.id === "done";
+  }
+
+  if (quick === "errors") {
+    return status.id === "error";
+  }
+
+  return true;
+}
+
+function dataBoxMessageMatchesFilters(message) {
+  const filters = dataBoxState.messageFilters;
+  const status = dataBoxWorkflowStatus(message);
+  const priority = dataBoxMessagePriority(message);
+  const deadline = dataBoxDeadlineInfo(message);
+  const assignee = dataBoxMessageAssigneeValue(message);
+  const haystack = dataBoxSearchText([
+    dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel),
+    dataBoxMessageActor(message),
+    message.subject,
+    message.id,
+    message.status,
+    message.senderBoxId,
+    message.recipientBoxId
+  ].join(" "));
+
+  if (filters.query && !haystack.includes(dataBoxSearchText(filters.query))) {
+    return false;
+  }
+
+  if (filters.status !== "all" && status.id !== filters.status) {
+    return false;
+  }
+
+  if (filters.priority !== "all" && priority.id !== filters.priority) {
+    return false;
+  }
+
+  if (filters.deadline === "with" && !deadline.date) {
+    return false;
+  }
+
+  if (filters.deadline === "due_3" && (!deadline.date || deadline.days === null || deadline.days > 3)) {
+    return false;
+  }
+
+  if (filters.deadline === "overdue" && (!deadline.date || deadline.days === null || deadline.days >= 0)) {
+    return false;
+  }
+
+  if (filters.deadline === "none" && deadline.date) {
+    return false;
+  }
+
+  if (filters.attachment === "with" && !dataBoxHasAttachments(message)) {
+    return false;
+  }
+
+  if (filters.attachment === "without" && dataBoxHasAttachments(message)) {
+    return false;
+  }
+
+  if (filters.assigned === "assigned" && !assignee) {
+    return false;
+  }
+
+  if (filters.assigned === "unassigned" && assignee) {
+    return false;
+  }
+
+  if (!["all", "assigned", "unassigned"].includes(filters.assigned) && assignee !== filters.assigned) {
+    return false;
+  }
+
+  return dataBoxMessageMatchesDateFilter(message) && dataBoxMessageMatchesQuickFilter(message);
+}
+
 function dataBoxAiStatusLabel(value) {
   const labels = {
     not_evaluated: "nevyhodnoceno",
@@ -13511,85 +13965,406 @@ function dataBoxDirectionLabel(value) {
   return value === "sent" ? "odeslaná" : "přijatá";
 }
 
-function dataBoxMessageRows(direction) {
+function dataBoxInboxMetrics(direction) {
+  const messages = dataBoxMessagesForDirection(direction);
+  const syncErrors = dataBoxFilteredSyncRuns().filter((run) => String(run.status || "").toLowerCase() === "failed").length;
+  const now = Date.now();
+  const weekAgo = now - (7 * 86400000);
+
+  return {
+    newCount: messages.filter((message) => dataBoxWorkflowStatus(message).id === "new").length,
+    unresolved: messages.filter((message) => !["done", "archived"].includes(dataBoxWorkflowStatus(message).id)).length,
+    urgent: messages.filter((message) => dataBoxMessagePriority(message).id === "urgent").length,
+    deadline3: messages.filter((message) => {
+      const deadline = dataBoxDeadlineInfo(message);
+      return deadline.date && deadline.days !== null && deadline.days <= 3;
+    }).length,
+    attachments: messages.filter((message) => dataBoxHasAttachments(message)).length,
+    doneWeek: messages.filter((message) => {
+      if (dataBoxWorkflowStatus(message).id !== "done") {
+        return false;
+      }
+
+      const date = dataBoxDateValue(message.resolvedAt || message.completedAt || message.updatedAt || dataBoxMessageTimestamp(message));
+      return date ? date.getTime() >= weekAgo : false;
+    }).length,
+    errors: messages.filter((message) => dataBoxWorkflowStatus(message).id === "error").length + syncErrors,
+    total: messages.length
+  };
+}
+
+function dataBoxOperationalKpis(direction = "received") {
+  const metrics = dataBoxInboxMetrics(direction);
+  const active = dataBoxState.messageFilters.quick || "all";
+  const cards = [
+    { label: "Nové zprávy", value: metrics.newCount, note: "Nepřečtené nebo bez interního stavu.", filter: "new", tone: "info" },
+    { label: "Nevyřízené", value: metrics.unresolved, note: "Vše kromě vyřízených a archivovaných.", filter: "unresolved", tone: "warning" },
+    { label: "Urgentní", value: metrics.urgent, note: "Urgence odvozená z metadat a předmětu.", filter: "urgent", tone: metrics.urgent ? "urgent" : "muted" },
+    { label: "Lhůta do 3 dnů", value: metrics.deadline3, note: "Pouze zprávy s explicitní lhůtou.", filter: "deadlines", tone: metrics.deadline3 ? "deadline" : "muted" },
+    { label: "S přílohou", value: metrics.attachments, note: "Příloha je jen metadata, ne veřejný soubor.", filter: "attachments", tone: "info" },
+    { label: "Vyřízené týden", value: metrics.doneWeek, note: "Vyřízené podle dostupného stavu.", filter: "done", tone: "done" },
+    { label: "Chyby sync", value: metrics.errors, note: "Chyby zpráv nebo posledních běhů.", filter: "errors", tone: metrics.errors ? "error" : "muted" }
+  ];
+
+  return `
+    <section class="data-box-kpi-grid" aria-label="Pracovní souhrn datové schránky">
+      ${cards.map((card) => `
+        <button
+          class="data-box-kpi data-box-kpi--${escapeHtml(card.tone)} ${active === card.filter ? "data-box-kpi--active" : ""}"
+          type="button"
+          data-data-box-quick-filter="${escapeHtml(card.filter)}"
+        >
+          <span>${escapeHtml(card.label)}</span>
+          <strong>${escapeHtml(String(card.value))}</strong>
+          <small>${escapeHtml(card.note)}</small>
+        </button>
+      `).join("")}
+    </section>
+  `;
+}
+
+function dataBoxAssigneeOptions(messages) {
+  const values = [...new Set(messages.map((message) => dataBoxMessageAssigneeValue(message)).filter(Boolean))];
+  const selected = dataBoxState.messageFilters.assigned;
+  const base = [
+    ["all", "Všichni"],
+    ["assigned", "Jen přiřazené"],
+    ["unassigned", "Nepřiřazeno"]
+  ];
+  const dynamic = values.map((value) => [value, value]);
+
+  return [...base, ...dynamic].map(([value, label]) => `
+    <option value="${escapeHtml(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(label)}</option>
+  `).join("");
+}
+
+function dataBoxFilterOptions(options, selected) {
+  return options.map(([value, label]) => `
+    <option value="${escapeHtml(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(label)}</option>
+  `).join("");
+}
+
+function dataBoxMessageFilters(direction) {
+  const filters = dataBoxState.messageFilters;
+  const messages = dataBoxMessagesForDirection(direction);
+
+  return `
+    <form class="data-box-filters" data-data-box-filters>
+      <label>
+        <span>Hledat</span>
+        <input name="query" value="${escapeHtml(filters.query)}" placeholder="Odesílatel, předmět, ID..." data-data-box-filter />
+      </label>
+      <label>
+        <span>Stav</span>
+        <select name="status" data-data-box-filter>
+          ${dataBoxFilterOptions(DATA_BOX_STATUS_OPTIONS, filters.status)}
+        </select>
+      </label>
+      <label>
+        <span>Priorita</span>
+        <select name="priority" data-data-box-filter>
+          ${dataBoxFilterOptions(DATA_BOX_PRIORITY_OPTIONS, filters.priority)}
+        </select>
+      </label>
+      <label>
+        <span>Lhůta</span>
+        <select name="deadline" data-data-box-filter>
+          ${dataBoxFilterOptions([
+            ["all", "Všechny"],
+            ["with", "Jen s lhůtou"],
+            ["due_3", "Do 3 dnů"],
+            ["overdue", "Po lhůtě"],
+            ["none", "Bez lhůty"]
+          ], filters.deadline)}
+        </select>
+      </label>
+      <label>
+        <span>Přílohy</span>
+        <select name="attachment" data-data-box-filter>
+          ${dataBoxFilterOptions([
+            ["all", "Všechny"],
+            ["with", "S přílohou"],
+            ["without", "Bez příloh"]
+          ], filters.attachment)}
+        </select>
+      </label>
+      <label>
+        <span>Přiřazeno</span>
+        <select name="assigned" data-data-box-filter>
+          ${dataBoxAssigneeOptions(messages)}
+        </select>
+      </label>
+      <label>
+        <span>Datum od</span>
+        <input name="dateFrom" type="date" value="${escapeHtml(filters.dateFrom)}" data-data-box-filter />
+      </label>
+      <label>
+        <span>Datum do</span>
+        <input name="dateTo" type="date" value="${escapeHtml(filters.dateTo)}" data-data-box-filter />
+      </label>
+    </form>
+  `;
+}
+
+function dataBoxQuickFilters() {
+  const active = dataBoxState.messageFilters.quick || "all";
+  return `
+    <div class="data-box-quick-filters" aria-label="Rychlé filtry">
+      ${DATA_BOX_QUICK_FILTERS.map((filter) => `
+        <button
+          class="data-box-quick-filter ${active === filter.id ? "data-box-quick-filter--active" : ""}"
+          type="button"
+          data-data-box-quick-filter="${escapeHtml(filter.id)}"
+        >
+          ${escapeHtml(filter.label)}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function dataBoxBadge(label, tone = "muted") {
+  return `<span class="data-box-badge data-box-badge--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function dataBoxInboxNotice(direction, allRows, filteredRows) {
+  if (!hasPermission(currentUser(), DATA_BOX_MODULE_KEY, "view")) {
+    return {
+      tone: "error",
+      title: "Bez oprávnění",
+      text: "K datové schránce nemáte oprávnění."
+    };
+  }
+
   if (dataBoxState.loading && !dataBoxState.loaded) {
-    return `
-      <tr>
-        <td colspan="${DATA_BOX_EMPTY_MESSAGE_COLUMNS.length}">Načítám metadata z cloud API...</td>
-      </tr>
-    `;
+    return {
+      tone: "info",
+      title: "Načítám datové zprávy...",
+      text: "Metadata se čtou z chráněného backend API."
+    };
   }
 
   if (dataBoxState.error) {
-    return `
-      <tr>
-        <td colspan="${DATA_BOX_EMPTY_MESSAGE_COLUMNS.length}">${escapeHtml(dataBoxState.error)}</td>
-      </tr>
-    `;
+    return {
+      tone: "error",
+      title: "Datovou schránku se nepodařilo načíst.",
+      text: "Zkontrolujte konfiguraci nebo zkuste akci opakovat."
+    };
   }
 
-  const selectedAccount = dataBoxSelectedAccount();
-  const rows = dataBoxFilteredMessages(direction);
-  if (!rows.length) {
-    return `
-      <tr>
-        <td colspan="${DATA_BOX_EMPTY_MESSAGE_COLUMNS.length}">
-          ${escapeHtml(selectedAccount
-            ? `V chlívku ${selectedAccount.label} zatím není načtená žádná ${direction === "sent" ? "odeslaná" : "přijatá"} zpráva.`
-            : "Žádná ostrá zpráva není načtena. Frontend nevolá ISDS a neobsahuje provozní data.")}
-        </td>
-      </tr>
-    `;
+  if (dataBoxState.apiStatus !== "ready") {
+    return {
+      tone: "warning",
+      title: "Datová schránka zatím není nakonfigurovaná.",
+      text: "Čeká se na cloud API, D1 nebo bezpečné nastavení ISDS účtů."
+    };
   }
 
-  return rows.map((message) => `
-    <tr>
-      <td>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "-")}</td>
-      <td>${escapeHtml(dataBoxDirectionLabel(message.direction))}</td>
-      <td>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</td>
-      <td>${escapeHtml(dataBoxMessageActor(message))}</td>
-      <td>${escapeHtml(message.subject || "(bez předmětu)")}</td>
-      <td>${escapeHtml(message.status || "-")}</td>
-      <td>${escapeHtml(message.attachmentsCount ? String(message.attachmentsCount) : (message.hasAttachments ? "ano" : "0"))}</td>
-      <td>${escapeHtml(dataBoxAiStatusLabel(message.aiStatus))}</td>
-      <td>
+  if (!allRows.length) {
+    const selectedAccount = dataBoxSelectedAccount();
+    return {
+      tone: "muted",
+      title: "V datové schránce nejsou žádné zprávy k zobrazení.",
+      text: selectedAccount
+        ? `Chlívek ${selectedAccount.label} zatím nemá načtené ${direction === "sent" ? "odeslané" : "přijaté"} zprávy.`
+        : "Frontend neobsahuje falešná provozní data a nevolá ISDS přímo."
+    };
+  }
+
+  if (!filteredRows.length) {
+    return {
+      tone: "muted",
+      title: "Filtrům neodpovídá žádná zpráva.",
+      text: "Uprav hledání, rychlý filtr nebo datumové omezení."
+    };
+  }
+
+  return null;
+}
+
+function dataBoxInboxNoticeMarkup(notice) {
+  if (!notice) {
+    return "";
+  }
+
+  return `
+    <div class="data-box-inbox-empty data-box-inbox-empty--${escapeHtml(notice.tone)}" role="${notice.tone === "error" ? "alert" : "status"}">
+      <strong>${escapeHtml(notice.title)}</strong>
+      <span>${escapeHtml(notice.text)}</span>
+    </div>
+  `;
+}
+
+function dataBoxMessageCard(message, selected) {
+  const status = dataBoxWorkflowStatus(message);
+  const priority = dataBoxMessagePriority(message);
+  const deadline = dataBoxDeadlineInfo(message);
+  const attachmentCount = dataBoxAttachmentCount(message);
+  const deliveredAt = formatDateTime(dataBoxMessageTimestamp(message));
+  const nextStep = dataBoxMessageNextStep(message);
+
+  return `
+    <article class="data-box-message-card ${selected ? "data-box-message-card--selected" : ""}">
+      <button
+        class="data-box-message-card__select"
+        type="button"
+        data-data-box-preview-message="${escapeHtml(message.id)}"
+        aria-pressed="${selected ? "true" : "false"}"
+      >
+        <span class="data-box-message-card__top">
+          ${dataBoxBadge(status.label, status.tone)}
+          ${dataBoxBadge(priority.label, priority.tone)}
+        </span>
+        <strong>${escapeHtml(message.subject || "(bez předmětu)")}</strong>
+        <span class="data-box-message-card__actor">${escapeHtml(dataBoxMessageActor(message))}</span>
+        <span class="data-box-message-card__meta">
+          <span>${escapeHtml(deliveredAt)}</span>
+          <span>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</span>
+          <span>${escapeHtml(attachmentCount ? `${attachmentCount} příloh` : "bez příloh")}</span>
+        </span>
+        <span class="data-box-message-card__deadline data-box-message-card__deadline--${escapeHtml(deadline.tone)}">
+          ${escapeHtml(deadline.label)}
+        </span>
+        <span class="data-box-message-card__step">${escapeHtml(nextStep)}</span>
+      </button>
+      <div class="data-box-message-card__actions">
+        <span>${escapeHtml(dataBoxMessageAssigneeLabel(message))}</span>
         <button
           class="secondary-link"
           type="button"
           data-data-box-message-detail="${escapeHtml(message.id)}"
           aria-controls="data-box-message-detail"
+          aria-haspopup="dialog"
         >
           Detail
         </button>
-      </td>
-    </tr>
-  `).join("");
+      </div>
+    </article>
+  `;
 }
 
-function dataBoxMessageTable(title, direction) {
+function dataBoxSelectedPreviewMessage(rows) {
+  if (!rows.length) {
+    return null;
+  }
+
+  return rows.find((message) => message.id === dataBoxState.selectedPreviewMessageId) || rows[0];
+}
+
+function dataBoxMessageContentPreview(message) {
+  const text = message.bodyText
+    || message.plainText
+    || message.text
+    || message.contentPreview
+    || message.annotation
+    || "";
+
+  return text || "Náhled obsahu není v metadatech dostupný. Pro úplný detail se používá chráněné backend API.";
+}
+
+function dataBoxReadingPane(message, direction) {
+  if (!message) {
+    return `
+      <aside class="data-box-reading-pane" aria-label="Detail zprávy">
+        <div class="data-box-reading-pane__empty">
+          <strong>Vyber zprávu</strong>
+          <span>${escapeHtml(direction === "sent" ? "Detail odeslané zprávy se zobrazí tady." : "Detail přijaté zprávy se zobrazí tady.")}</span>
+        </div>
+      </aside>
+    `;
+  }
+
+  const status = dataBoxWorkflowStatus(message);
+  const priority = dataBoxMessagePriority(message);
+  const deadline = dataBoxDeadlineInfo(message);
+  const actorLabel = message.direction === "sent" ? "Příjemce" : "Odesílatel";
+  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+  const attachmentCount = dataBoxAttachmentCount(message);
+
+  return `
+    <aside class="data-box-reading-pane" aria-label="Detail vybrané zprávy">
+      <div class="data-box-reading-pane__head">
+        <div>
+          <span>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</span>
+          <h3>${escapeHtml(message.subject || "(bez předmětu)")}</h3>
+        </div>
+        <button
+          class="secondary-link"
+          type="button"
+          data-data-box-message-detail="${escapeHtml(message.id)}"
+          aria-controls="data-box-message-detail"
+          aria-haspopup="dialog"
+        >
+          Otevřít detail
+        </button>
+      </div>
+      <div class="data-box-reading-pane__badges">
+        ${dataBoxBadge(status.label, status.tone)}
+        ${dataBoxBadge(priority.label, priority.tone)}
+        ${deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : dataBoxBadge("Bez lhůty", "muted")}
+      </div>
+      <dl class="data-box-reading-facts">
+        <div><dt>${escapeHtml(actorLabel)}</dt><dd>${escapeHtml(dataBoxMessageActor(message))}</dd></div>
+        <div><dt>ID zprávy</dt><dd>${escapeHtml(message.id || "neuvedeno")}</dd></div>
+        <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(dataBoxMessageTimestamp(message)))}</dd></div>
+        <div><dt>Přečteno / převzato</dt><dd>${escapeHtml(formatDateTime(message.readAt || message.acceptedAt))}</dd></div>
+        <div><dt>Odpovědná osoba</dt><dd>${escapeHtml(dataBoxMessageAssigneeLabel(message))}</dd></div>
+        <div><dt>Přílohy</dt><dd>${escapeHtml(attachmentCount ? `${attachmentCount} v metadatech` : "Bez příloh")}</dd></div>
+      </dl>
+      <section class="data-box-reading-section">
+        <h4>Obsah / náhled</h4>
+        <p>${escapeHtml(dataBoxMessageContentPreview(message))}</p>
+      </section>
+      <section class="data-box-reading-section">
+        <h4>Doporučený další krok</h4>
+        <p>${escapeHtml(dataBoxMessageNextStep(message))}</p>
+      </section>
+      <section class="data-box-reading-section">
+        <h4>Přílohy</h4>
+        <ul class="data-box-attachment-list">${dataBoxAttachmentRows(attachments, attachmentCount)}</ul>
+      </section>
+      <section class="data-box-reading-section">
+        <h4>Interní poznámky a historie</h4>
+        <p>Bez interních poznámek v dostupných metadatech. Zápis poznámek čeká na potvrzené API.</p>
+      </section>
+      <div class="data-box-reading-actions" aria-label="Read-only akce zprávy">
+        <button class="secondary-link" type="button" disabled>Označit v řešení</button>
+        <button class="secondary-link" type="button" disabled>Označit vyřízené</button>
+        <button class="secondary-link" type="button" disabled>Přiřadit osobě</button>
+        <button class="secondary-link" type="button" disabled>Přidat poznámku</button>
+        <button class="secondary-link" type="button" disabled>Stáhnout přílohy</button>
+        <button class="secondary-link" type="button" disabled>Export detailu</button>
+      </div>
+    </aside>
+  `;
+}
+
+function dataBoxMessageInbox(title, direction) {
   const statusClass = dataBoxState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
   const statusLabel = dataBoxState.apiStatus === "ready" ? "API aktivní" : (dataBoxState.loading ? "načítám API" : "čeká na API");
   const selectedAccount = dataBoxSelectedAccount();
   const sectionTitle = selectedAccount ? `${title}: ${selectedAccount.label}` : title;
+  const allRows = dataBoxMessagesForDirection(direction);
+  const rows = dataBoxFilteredMessages(direction);
+  const selectedPreview = dataBoxSelectedPreviewMessage(rows);
+  const notice = dataBoxInboxNotice(direction, allRows, rows);
 
   return `
     <section class="data-box-panel" id="data-box-${escapeHtml(direction)}-panel" aria-labelledby="data-box-${escapeHtml(direction)}-title">
       <div class="data-box-panel__head">
         <div>
           <h2 id="data-box-${escapeHtml(direction)}-title">${escapeHtml(sectionTitle)}</h2>
-          <p>Seznam čte pouze metadata z interního API. ISDS synchronizace běží jen ručně a read-only.</p>
+          <p>Pracovní inbox čte pouze metadata z interního API. Z této obrazovky se nic neposílá ani nemaže.</p>
         </div>
         <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
       </div>
-      <div class="data-box-table-wrap">
-        <table class="data-box-table">
-          <thead>
-            <tr>${DATA_BOX_EMPTY_MESSAGE_COLUMNS.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr>
-          </thead>
-          <tbody>
-            ${dataBoxMessageRows(direction)}
-          </tbody>
-        </table>
+      ${dataBoxQuickFilters()}
+      ${dataBoxMessageFilters(direction)}
+      <div class="data-box-workbench">
+        <div class="data-box-message-list" aria-label="${escapeHtml(sectionTitle)}">
+          ${notice ? dataBoxInboxNoticeMarkup(notice) : rows.map((message) => dataBoxMessageCard(message, selectedPreview?.id === message.id)).join("")}
+        </div>
+        ${dataBoxReadingPane(notice ? null : selectedPreview, direction)}
       </div>
     </section>
   `;
@@ -13604,8 +14379,21 @@ function dataBoxDetailField(label, value) {
   `;
 }
 
-function dataBoxAttachmentRows(attachments = []) {
+function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
   if (!attachments.length) {
+    if (expectedCount > 0) {
+      return `
+        <li>
+          <strong>${escapeHtml(`${expectedCount} příloh v metadatech`)}</strong>
+          <span>Přesné názvy souborů nejsou v tomto pohledu dostupné.</span>
+          <div class="data-box-attachment-actions">
+            <button class="secondary-link" type="button" disabled>Zobrazit</button>
+            <button class="secondary-link" type="button" disabled>Stáhnout</button>
+          </div>
+        </li>
+      `;
+    }
+
     return `<li>Bez příloh v metadatech.</li>`;
   }
 
@@ -13617,6 +14405,10 @@ function dataBoxAttachmentRows(attachments = []) {
         formatFileSize(attachment.sizeBytes),
         attachment.status || ""
       ].filter(Boolean).join(" · ") || "metadata")}</span>
+      <div class="data-box-attachment-actions">
+        <button class="secondary-link" type="button" disabled>Zobrazit</button>
+        <button class="secondary-link" type="button" disabled>Stáhnout</button>
+      </div>
     </li>
   `).join("");
 }
@@ -13639,102 +14431,123 @@ function dataBoxMessageDetailPanel() {
   const selectedId = dataBoxState.selectedMessageId;
 
   if (!selectedId) {
-    return `
-      <section class="data-box-panel data-box-message-detail" id="data-box-message-detail" aria-labelledby="data-box-message-detail-title">
-        <div class="data-box-panel__head">
-          <div>
-            <h2 id="data-box-message-detail-title">Detail zprávy</h2>
-            <p>Vyberte Detail u přijaté nebo odeslané zprávy. Detail čte pouze metadata z interního API.</p>
-          </div>
-          <span class="employee-card-status employee-card-status--waiting">read-only</span>
-        </div>
-      </section>
-    `;
-  }
-
-  if (dataBoxState.detailLoading) {
-    return `
-      <section class="data-box-panel data-box-message-detail" id="data-box-message-detail" aria-labelledby="data-box-message-detail-title">
-        <div class="data-box-panel__head">
-          <div>
-            <h2 id="data-box-message-detail-title">Detail zprávy</h2>
-            <p>Načítám detail zprávy z cloud API...</p>
-          </div>
-          <span class="employee-card-status employee-card-status--waiting">načítám</span>
-        </div>
-      </section>
-    `;
-  }
-
-  if (dataBoxState.detailError) {
-    return `
-      <section class="data-box-panel data-box-message-detail" id="data-box-message-detail" aria-labelledby="data-box-message-detail-title">
-        <div class="data-box-panel__head">
-          <div>
-            <h2 id="data-box-message-detail-title">Detail zprávy</h2>
-            <p>${escapeHtml(dataBoxState.detailError)}</p>
-          </div>
-          <button class="secondary-link" type="button" data-data-box-message-detail-close>Zavřít</button>
-        </div>
-      </section>
-    `;
-  }
-
-  if (!message) {
     return "";
   }
 
-  const actorLabel = message.direction === "sent" ? "Příjemce" : "Odesílatel";
-  const actorValue = dataBoxMessageActor(message);
-  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+  let content = "";
+
+  if (dataBoxState.detailLoading) {
+    content = `
+      <div class="data-box-detail-modal__empty">
+        <strong>Načítám detail zprávy...</strong>
+        <span>Metadata se čtou z chráněného backend API.</span>
+      </div>
+    `;
+  } else if (dataBoxState.detailError) {
+    content = `
+      <div class="data-box-detail-modal__empty" role="alert">
+        <strong>Detail se nepodařilo načíst.</strong>
+        <span>${escapeHtml(dataBoxState.detailError)}</span>
+      </div>
+    `;
+  } else if (message) {
+    const actorLabel = message.direction === "sent" ? "Příjemce" : "Odesílatel";
+    const actorValue = dataBoxMessageActor(message);
+    const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    const deadline = dataBoxDeadlineInfo(message);
+    const workflow = dataBoxWorkflowStatus(message);
+    const priority = dataBoxMessagePriority(message);
+
+    content = `
+      <div class="data-box-detail-modal__main">
+        <div class="data-box-detail-grid">
+          ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
+          ${dataBoxDetailField("Schránka", dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}
+          ${dataBoxDetailField(actorLabel, actorValue)}
+          ${dataBoxDetailField("Stav", workflow.label)}
+          ${dataBoxDetailField("Priorita", priority.label)}
+          ${dataBoxDetailField("Doručeno", formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt))}
+          ${dataBoxDetailField("Přečteno", formatDateTime(message.readAt))}
+          ${dataBoxDetailField("Lhůta", deadline.date ? deadline.label : "bez lhůty")}
+          ${dataBoxDetailField("ID zprávy", message.id)}
+          ${dataBoxDetailField("ISDS stav", message.isdsState || message.status)}
+          ${dataBoxDetailField("Odpovědná osoba", dataBoxMessageAssigneeLabel(message))}
+        </div>
+        <div class="data-box-detail-subject">
+          <span>Předmět</span>
+          <strong>${escapeHtml(message.subject || "(bez předmětu)")}</strong>
+        </div>
+        <div class="data-box-detail-subject">
+          <span>Obsah / náhled</span>
+          <strong>${escapeHtml(dataBoxMessageContentPreview(message))}</strong>
+        </div>
+        <div class="data-box-detail-columns">
+          <section>
+            <h3>Přílohy</h3>
+            <ul>${dataBoxAttachmentRows(attachments, dataBoxAttachmentCount(message))}</ul>
+          </section>
+          <section>
+            <h3>AI vyhodnocení</h3>
+            <p>${escapeHtml(dataBoxAiEvaluationDetail(message.latestAiEvaluation))}</p>
+            ${message.latestAiEvaluation?.summary ? `<p>${escapeHtml(message.latestAiEvaluation.summary)}</p>` : ""}
+            ${message.latestAiEvaluation?.suggestedAction ? `<p>${escapeHtml(message.latestAiEvaluation.suggestedAction)}</p>` : ""}
+          </section>
+          <section>
+            <h3>Interní poznámky</h3>
+            <p>Bez interních poznámek v dostupných metadatech.</p>
+          </section>
+          <section>
+            <h3>Doporučený další krok</h3>
+            <p>${escapeHtml(dataBoxMessageNextStep(message))}</p>
+          </section>
+        </div>
+      </div>
+      <aside class="data-box-detail-actions" aria-label="Akce zprávy">
+        <button class="secondary-link" type="button" disabled>Označit v řešení</button>
+        <button class="secondary-link" type="button" disabled>Označit vyřízené</button>
+        <button class="secondary-link" type="button" disabled>Přiřadit osobě</button>
+        <button class="secondary-link" type="button" disabled>Přidat poznámku</button>
+        <button class="secondary-link" type="button" disabled>Odpovědět</button>
+        <button class="secondary-link" type="button" disabled>Přeposlat</button>
+        <button class="secondary-link" type="button" disabled>Export detailu</button>
+        <p>Akce čekají na potvrzené API a ruční potvrzení. Z této obrazovky se zatím nic neodesílá, nemaže ani nezveřejňuje.</p>
+      </aside>
+    `;
+  } else {
+    content = `
+      <div class="data-box-detail-modal__empty">
+        <strong>Detail není dostupný.</strong>
+        <span>Vyberte zprávu z tabulky znovu.</span>
+      </div>
+    `;
+  }
 
   return `
-    <section class="data-box-panel data-box-message-detail" id="data-box-message-detail" aria-labelledby="data-box-message-detail-title">
-      <div class="data-box-panel__head">
-        <div>
-          <h2 id="data-box-message-detail-title">Detail zprávy</h2>
-          <p>Read-only metadata z backendu. ISDS synchronizace, stahování příloh a odesílání zůstávají vypnuté.</p>
+    <div class="data-box-detail-overlay" role="presentation">
+      <button
+        class="data-box-detail-backdrop"
+        type="button"
+        data-data-box-message-detail-close
+        aria-label="Zavřít detail zprávy"
+      ></button>
+      <section
+        class="data-box-detail-modal"
+        id="data-box-message-detail"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="data-box-message-detail-title"
+      >
+        <div class="data-box-detail-modal__head">
+          <div>
+            <span>Datová zpráva</span>
+            <h2 id="data-box-message-detail-title">Detail zprávy</h2>
+          </div>
+          <button class="secondary-link" type="button" data-data-box-message-detail-close>Zavřít</button>
         </div>
-        <button class="secondary-link" type="button" data-data-box-message-detail-close>Zavřít</button>
-      </div>
-      <div class="data-box-detail-grid">
-        ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
-        ${dataBoxDetailField("Schránka", dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}
-        ${dataBoxDetailField(actorLabel, actorValue)}
-        ${dataBoxDetailField("Stav", message.status)}
-        ${dataBoxDetailField("Priorita", message.priority)}
-        ${dataBoxDetailField("Doručeno", formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt))}
-        ${dataBoxDetailField("Přečteno", formatDateTime(message.readAt))}
-        ${dataBoxDetailField("ISDS stav", message.isdsState)}
-        ${dataBoxDetailField("Zdroj", message.source)}
-      </div>
-      <div class="data-box-detail-subject">
-        <span>Předmět</span>
-        <strong>${escapeHtml(message.subject || "(bez předmětu)")}</strong>
-      </div>
-      <div class="data-box-detail-columns">
-        <section>
-          <h3>Přílohy</h3>
-          <ul>${dataBoxAttachmentRows(attachments)}</ul>
-        </section>
-        <section>
-          <h3>AI vyhodnocení</h3>
-          <p>${escapeHtml(dataBoxAiEvaluationDetail(message.latestAiEvaluation))}</p>
-          ${message.latestAiEvaluation?.summary ? `<p>${escapeHtml(message.latestAiEvaluation.summary)}</p>` : ""}
-          ${message.latestAiEvaluation?.suggestedAction ? `<p>${escapeHtml(message.latestAiEvaluation.suggestedAction)}</p>` : ""}
-        </section>
-      </div>
-    </section>
+        ${content}
+      </section>
+    </div>
   `;
-}
-
-function scrollDataBoxMessageDetailIntoView() {
-  window.requestAnimationFrame(() => {
-    document.getElementById("data-box-message-detail")?.scrollIntoView({
-      block: "start",
-      behavior: "smooth"
-    });
-  });
 }
 
 function dataBoxAiPanel() {
@@ -13843,11 +14656,9 @@ function dataBoxSyncRunsPanel() {
   const statusLabel = dataBoxState.apiStatus === "ready" ? "D1 log připraven" : "čeká na D1";
   const user = currentUser();
   const configuredDataBoxes = Number(dataBoxState.status?.isds?.configuredAccounts || 0);
-  const canSync = dataBoxState.apiStatus === "ready"
-    && hasPermission(user, DATA_BOX_MODULE_KEY, "manage")
-    && ["admin", "management"].includes(normalizeRole(user?.role));
+  const canSync = dataBoxCanManualSync(user);
   const syncDisabled = !canSync || dataBoxState.syncLoading;
-  const syncLabel = dataBoxState.syncLoading ? "Spouštím sync..." : "Spustit ruční sync";
+  const syncLabel = dataBoxState.syncLoading ? "Načítám..." : "Načíst nové zprávy";
   const syncMessage = dataBoxState.syncError
     ? `<div class="data-box-sync-message data-box-sync-message--error" role="alert">${escapeHtml(dataBoxState.syncError)}</div>`
     : (dataBoxState.syncMessage ? `<div class="data-box-sync-message" role="status">${escapeHtml(dataBoxState.syncMessage)}</div>` : "");
@@ -13922,8 +14733,7 @@ function dataBoxRulesAutomation(user) {
 
 function dataBoxPage(moduleItem, user) {
   ensureDataBoxData();
-  const apiReady = dataBoxState.apiStatus === "ready";
-  const heroStatus = apiReady ? "Funkční přes API" : "UI návrh / čeká na API";
+  const connection = dataBoxConnectionState();
 
   return `
     <main class="app-shell module-page module-theme-scope data-box-page" ${moduleThemeStyleAttribute()}>
@@ -13938,11 +14748,13 @@ function dataBoxPage(moduleItem, user) {
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">SMART ODPADY / DATOVÁ SCHRÁNKA</div>
           <h1 id="module-title">Datová schránka</h1>
-          <p>Pilotní rozhraní pro ISDS integraci. Ruční sync běží přes backend a bez schválených Cloudflare secrets zapíše jen bezpečný stav konfigurace.</p>
+          <p>Příchozí datové zprávy, lhůty, přílohy a stav vyřízení.</p>
           <div class="module-detail__status">
             <span>Stav</span>
-            <strong>${escapeHtml(heroStatus)}</strong>
+            <strong>${escapeHtml(connection.label)}</strong>
+            <small>${escapeHtml(connection.note)}</small>
           </div>
+          ${dataBoxHeaderActions(user)}
           <div class="data-box-safe-actions" aria-label="Neaktivní provozní akce">
             <article>
               <span>Synchronizace</span>
@@ -13970,6 +14782,7 @@ function dataBoxPage(moduleItem, user) {
 
       ${dataBoxStatusCards()}
       ${dataBoxAccountsSwitcher()}
+      ${dataBoxOperationalKpis("received")}
       ${dataBoxTabs()}
       ${dataBoxActivePanel(user)}
       ${moduleFeedbackBoxFor(moduleItem, user, {
@@ -15554,6 +16367,18 @@ function resetDataBoxState() {
   dataBoxState.selectedMessage = null;
   dataBoxState.detailLoading = false;
   dataBoxState.detailError = "";
+  dataBoxState.selectedPreviewMessageId = "";
+  dataBoxState.messageFilters = {
+    query: "",
+    status: "all",
+    priority: "all",
+    deadline: "all",
+    attachment: "all",
+    assigned: "all",
+    quick: "all",
+    dateFrom: "",
+    dateTo: ""
+  };
   dataBoxState.error = "";
 }
 
@@ -15640,7 +16465,6 @@ async function loadDataBoxMessageDetail(messageId) {
   dataBoxState.detailLoading = true;
   dataBoxState.detailError = "";
   render();
-  scrollDataBoxMessageDetailIntoView();
 
   try {
     const result = await apiJson(`/api/data-box/messages/${encodeURIComponent(id)}`);
@@ -15653,7 +16477,6 @@ async function loadDataBoxMessageDetail(messageId) {
   }
 
   render();
-  scrollDataBoxMessageDetailIntoView();
 }
 
 async function runDataBoxManualSync() {
@@ -15680,6 +16503,20 @@ async function runDataBoxManualSync() {
     dataBoxState.syncLoading = false;
   }
 
+  render();
+}
+
+function updateDataBoxMessageFilter(field) {
+  const name = field?.name;
+  if (!name || !Object.prototype.hasOwnProperty.call(dataBoxState.messageFilters, name)) {
+    return;
+  }
+
+  dataBoxState.messageFilters = {
+    ...dataBoxState.messageFilters,
+    [name]: field.value || ""
+  };
+  dataBoxState.selectedPreviewMessageId = "";
   render();
 }
 
@@ -19949,6 +20786,12 @@ document.addEventListener("input", (event) => {
   if (feedbackCreateField) {
     const form = feedbackCreateField.closest("[data-feedback-create-form]");
     updateFeedbackCreateDraft(form);
+    return;
+  }
+
+  const dataBoxFilter = event.target.closest("[data-data-box-filter]");
+  if (dataBoxFilter && dataBoxFilter.name === "query") {
+    updateDataBoxMessageFilter(dataBoxFilter);
   }
 });
 
@@ -20069,6 +20912,12 @@ document.addEventListener("change", async (event) => {
     if (form) {
       applyNotificationFilters(form);
     }
+    return;
+  }
+
+  const dataBoxFilter = event.target.closest("[data-data-box-filter]");
+  if (dataBoxFilter) {
+    updateDataBoxMessageFilter(dataBoxFilter);
     return;
   }
 });
@@ -20710,6 +21559,28 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const dataBoxQuickFilter = event.target.closest("[data-data-box-quick-filter]");
+  if (dataBoxQuickFilter) {
+    dataBoxState.messageFilters = {
+      ...dataBoxState.messageFilters,
+      quick: dataBoxQuickFilter.dataset.dataBoxQuickFilter || "all"
+    };
+    dataBoxState.activeTab = "received";
+    dataBoxState.selectedPreviewMessageId = "";
+    dataBoxState.selectedMessageId = "";
+    dataBoxState.selectedMessage = null;
+    dataBoxState.detailError = "";
+    render();
+    return;
+  }
+
+  const dataBoxPreviewMessage = event.target.closest("[data-data-box-preview-message]");
+  if (dataBoxPreviewMessage) {
+    dataBoxState.selectedPreviewMessageId = dataBoxPreviewMessage.dataset.dataBoxPreviewMessage || "";
+    render();
+    return;
+  }
+
   const dataBoxMessageDetail = event.target.closest("[data-data-box-message-detail]");
   if (dataBoxMessageDetail) {
     void loadDataBoxMessageDetail(dataBoxMessageDetail.dataset.dataBoxMessageDetail || "");
@@ -20730,6 +21601,7 @@ document.addEventListener("click", async (event) => {
     dataBoxState.activeTab = dataBoxTab.dataset.dataBoxTab || "overview";
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
+    dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.detailError = "";
     if (normalizePath(window.location.pathname) === DATA_BOX_ROUTE && window.location.hash) {
       window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
@@ -20745,6 +21617,7 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedDataBoxId = nextAccountId;
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
+    dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.detailError = "";
     render();
     return;
@@ -20755,6 +21628,7 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedDataBoxId = "";
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
+    dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.detailError = "";
     render();
     return;
@@ -20794,6 +21668,17 @@ document.addEventListener("click", async (event) => {
 
   event.preventDefault();
   guardedAccessAction(() => navigateToUrl(link.href));
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !dataBoxState.selectedMessageId) {
+    return;
+  }
+
+  dataBoxState.selectedMessageId = "";
+  dataBoxState.selectedMessage = null;
+  dataBoxState.detailError = "";
+  render();
 });
 
 window.addEventListener("beforeunload", (event) => accessUnsavedChangesGuard.beforeUnload(event));

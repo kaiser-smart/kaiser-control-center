@@ -1249,3 +1249,41 @@ Při každé změně Šarloty ověřit:
 - build projde,
 - `node --check` projde,
 - `git diff --check` projde.
+
+## 17. Datová schránka a UI pravidla
+
+### 17.1 Bezpečné předávání hesel / Cloudflare secrets
+
+- Hesla, tokeny a secrets se nikdy nevypisují do chatu, shellu, logu ani screenshotu.
+- U Datové schránky je bezpečný postup zadávání Cloudflare secrets po jednom:
+  1. Cloudflare Pages projekt.
+  2. Add variable.
+  3. Secret.
+  4. Název proměnné.
+  5. Radim vloží hodnotu sám.
+  6. Save.
+- Tento postup opakovat pro `DATA_BOX_ISDS_USERNAME_2` až `DATA_BOX_ISDS_USERNAME_6` a `DATA_BOX_ISDS_PASSWORD_2` až `DATA_BOX_ISDS_PASSWORD_6`.
+- Hromadný `.env` import nepoužívat, pokud Radim výslovně nepotvrdí konkrétní bezpečný postup.
+- Po změně Cloudflare secrets je nutný nový deployment, jinak se změny nemusí projevit v produkci.
+
+### 17.2 Vzhled modulů
+
+- Při vývoji každého modulu respektovat barevné schéma v Nastavení.
+- Nehardcodovat dominantní modulové barvy mimo existující theme proměnné, pokud to není výslovně potvrzené.
+- Výchozí font UI je Quicksand.
+- Nadpisy mohou být výraznější, ale běžný obsah a tabulkové řádky nemají být zbytečně tučné.
+- Před dokončením vizuální změny ověřit desktop, notebook, tablet a mobil.
+
+### 17.3 Datová schránka jako pracovní inbox
+
+- Datová schránka není obyčejná tabulka.
+- Firemní datové schránky mají být klikací boxy vedle sebe:
+  - Kaiser servis,
+  - Kaiser technology,
+  - Nanolab plus,
+  - Nanolab shop,
+  - LeFleur,
+  - Kaisermanův nadační fond.
+- Po kliknutí na konkrétní box je uživatel v chlívku dané DS a vidí jen data této schránky.
+- Detail zprávy má být pracovní read-only detail nebo okno pro řešení zprávy.
+- Bez potvrzeného API nesmí UI předstírat funkční odpověď, přeposlání, mazání, změnu stavu ani stahování příloh.
