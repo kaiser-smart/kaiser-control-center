@@ -9187,6 +9187,11 @@ body:has(.ai-assistant-promo-modal) {
   gap: 10px;
 }
 
+.absence-command-actions--hero {
+  grid-column: auto;
+  justify-content: flex-end;
+}
+
 .absence-kpis {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -9195,6 +9200,11 @@ body:has(.ai-assistant-promo-modal) {
 
 .absence-kpis--operations {
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.absence-kpis--compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .absence-kpi,
@@ -9211,6 +9221,19 @@ body:has(.ai-assistant-promo-modal) {
   gap: 7px;
   min-height: 118px;
   padding: 16px;
+}
+
+.absence-kpis--compact .absence-kpi {
+  min-height: 82px;
+  padding: 12px 14px;
+}
+
+.absence-kpis--compact .absence-kpi strong {
+  font-size: 1.8rem;
+}
+
+.absence-kpis--compact .absence-kpi small {
+  font-size: 0.72rem;
 }
 
 .absence-kpi--button {
@@ -9319,8 +9342,63 @@ body:has(.ai-assistant-promo-modal) {
   align-items: start;
 }
 
+.absence-workspace--app {
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.55fr);
+  gap: 14px;
+}
+
 .absence-workspace .absence-panel {
   margin-top: 0;
+}
+
+.absence-dashboard--app {
+  gap: 12px;
+}
+
+.absence-panel--primary-list,
+.absence-panel--quick {
+  min-width: 0;
+}
+
+.absence-side-rail {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.absence-panel--quick {
+  margin-top: 0;
+  padding: 16px;
+}
+
+.absence-panel--quick h2 {
+  font-size: 1.05rem;
+}
+
+.absence-panel--quick .absence-command-actions {
+  grid-column: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.absence-panels--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.absence-calendar-app {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.absence-calendar__event {
+  display: block;
+  width: 100%;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
 
 .absence-today-grid {
@@ -11730,6 +11808,15 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 @media (max-width: 720px) {
+  .absence-page .absence-hero--app {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .absence-command-actions--hero {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
   .absence-command-center {
     padding: 16px;
   }
@@ -11742,7 +11829,9 @@ body:has(.ai-assistant-promo-modal) {
   }
 
   .absence-kpis--operations,
+  .absence-kpis--compact,
   .absence-today-grid,
+  .absence-panels--compact,
   .absence-detail-grid {
     grid-template-columns: 1fr;
   }
@@ -12522,8 +12611,25 @@ body:has(.absence-page--employee-card) {
   box-shadow: none;
 }
 
+.absence-page .absence-hero--app {
+  grid-template-columns: 44px minmax(0, 1fr) minmax(360px, auto);
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0 14px;
+}
+
+.absence-page .absence-hero--app .module-detail__icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+}
+
 .absence-page .absence-hero .module-detail__icon {
   display: none;
+}
+
+.absence-page .absence-hero--app .module-detail__icon {
+  display: grid;
 }
 
 .absence-page .absence-hero h1 {
@@ -12533,10 +12639,22 @@ body:has(.absence-page--employee-card) {
   line-height: 1.03;
 }
 
+.absence-page .absence-hero--app h1 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.05;
+}
+
 .absence-page .absence-hero p {
   max-width: 760px;
   color: var(--color-muted);
   font-size: 1.15rem;
+}
+
+.absence-page .absence-hero--app p {
+  margin-top: 4px;
+  font-size: 0.92rem;
+  line-height: 1.35;
 }
 
 .absence-page .absence-hero__meta {
@@ -12555,11 +12673,11 @@ body:has(.absence-page--employee-card) {
 
 .absence-page .absence-tabs {
   gap: 10px;
-  padding: 12px;
+  padding: 8px;
   border-color: var(--color-border);
-  border-radius: var(--radius-card);
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 12px 34px rgba(31, 41, 33, 0.07);
+  box-shadow: none;
 }
 
 .absence-page .absence-tab,
@@ -12570,8 +12688,8 @@ body:has(.absence-page--employee-card) {
 }
 
 .absence-page .absence-tab {
-  min-height: 44px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 12px;
 }
 
 .absence-page .absence-tab--active {
@@ -12582,16 +12700,10 @@ body:has(.absence-page--employee-card) {
 }
 
 .absence-page .absence-dashboard {
-  padding: 18px;
-  border: 1px solid var(--color-border);
-  border-radius: 22px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-primary) 16%, transparent),
-      color-mix(in srgb, var(--color-bg) 42%, transparent) 340px
-    ),
-    var(--color-bg);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .absence-page .absence-kpi,
@@ -12607,8 +12719,13 @@ body:has(.absence-page--employee-card) {
 .absence-page .absence-kpi {
   position: relative;
   overflow: hidden;
-  min-height: 132px;
-  padding: 20px;
+  min-height: 96px;
+  padding: 14px;
+}
+
+.absence-page .absence-kpis--compact .absence-kpi {
+  min-height: 82px;
+  padding: 12px 14px;
 }
 
 .absence-page .absence-kpi::before {
@@ -14176,6 +14293,10 @@ body:has(.absence-page--employee-card) {
 
   .absence-page .absence-hero h1 {
     font-size: 40px;
+  }
+
+  .absence-page .absence-hero--app h1 {
+    font-size: 28px;
   }
 
   .absence-hero p {

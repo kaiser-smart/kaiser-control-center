@@ -15,14 +15,14 @@ export const ABSENCE_STATUSES = [
 ];
 export const ABSENCE_APPROVAL_TYPES = new Set(["Dovolená", "Lékař", "OČR", "Náhradní volno"]);
 export const ABSENCE_TABS = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "quick", label: "Rychlé zadání" },
-  { id: "my", label: "Moje žádosti" },
-  { id: "new", label: "Nová žádost" },
-  { id: "approval", label: "Ke schválení" },
+  { id: "dashboard", label: "Dnes" },
   { id: "calendar", label: "Kalendář" },
-  { id: "employee-card", label: "Karta zaměstnance" },
+  { id: "my", label: "Žádosti" },
+  { id: "employee-card", label: "Zaměstnanci" },
+  { id: "approval", label: "Schvalování" },
   { id: "reports", label: "Reporty" },
+  { id: "quick", label: "Rychlé zadání" },
+  { id: "new", label: "Nová žádost" },
   { id: "rules-automation", label: "Seznam pravidel a automatizace" },
   { id: "settings", label: "Nastavení" }
 ];
