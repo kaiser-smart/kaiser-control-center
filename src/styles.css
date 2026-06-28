@@ -7729,9 +7729,11 @@ body:has(.ai-assistant-promo-modal) {
   box-shadow: var(--shadow);
 }
 
-.absence-hero h1 {
-  margin-top: 8px;
-  font-size: clamp(2rem, 5vw, 3.6rem);
+.absence-page .absence-hero h1 {
+  margin: 6px 0 0;
+  font-size: 44px;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
 }
 
 .absence-hero p {
@@ -7813,10 +7815,93 @@ body:has(.ai-assistant-promo-modal) {
   margin-top: 18px;
 }
 
+.absence-command-center,
+.absence-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.42fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.absence-command-center {
+  padding: 20px;
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
+}
+
+.absence-command-center h2 {
+  margin: 4px 0 8px;
+  font-size: clamp(1.5rem, 2.4vw, 2.15rem);
+  line-height: 1.1;
+}
+
+.absence-command-center p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.absence-command-center__eyebrow,
+.absence-data-status span,
+.absence-today-stack > span,
+.absence-detail-panel span,
+.absence-detail-grid span,
+.absence-detail-next span,
+.absence-detail-note span,
+.absence-timeline__head {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.absence-data-status {
+  display: grid;
+  gap: 7px;
+  align-content: center;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #f8fbf4;
+}
+
+.absence-data-status strong {
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.absence-data-status--danger {
+  border-color: #f0cbc7;
+  background: #fff5f3;
+}
+
+.absence-data-status--waiting {
+  border-color: #f1dca7;
+  background: #fff9ea;
+}
+
+.absence-command-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .absence-kpis {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
+}
+
+.absence-kpis--operations {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .absence-kpi,
@@ -7835,9 +7920,52 @@ body:has(.ai-assistant-promo-modal) {
   padding: 16px;
 }
 
+.absence-kpi--button {
+  width: 100%;
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  text-align: left;
+  cursor: pointer;
+}
+
+.absence-kpi--button:hover,
+.absence-kpi--button:focus-visible {
+  border-color: rgba(117, 189, 37, 0.45);
+  box-shadow: 0 12px 32px rgba(31, 41, 33, 0.1);
+}
+
 .absence-kpi strong {
   font-size: 2.05rem;
   line-height: 1;
+}
+
+.absence-kpi small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.absence-kpi--vacation {
+  background: #f0f8ec;
+}
+
+.absence-kpi--illness,
+.absence-kpi--danger {
+  background: #fff3f0;
+}
+
+.absence-kpi--pending,
+.absence-kpi--warning {
+  background: #fff8e6;
+}
+
+.absence-kpi--doctor {
+  background: #f0f5f8;
+}
+
+.absence-kpi--ok,
+.absence-kpi--balance {
+  background: #f7fbf3;
 }
 
 .absence-kpi--action .primary-action {
@@ -7886,6 +8014,237 @@ body:has(.ai-assistant-promo-modal) {
   color: var(--muted);
   font-weight: 700;
   line-height: 1.45;
+}
+
+.absence-panel--today,
+.absence-panel--timeline,
+.absence-panel--worklist {
+  grid-column: 1 / -1;
+}
+
+.absence-workspace {
+  align-items: start;
+}
+
+.absence-workspace .absence-panel {
+  margin-top: 0;
+}
+
+.absence-today-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.absence-today-stack {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.absence-today-stack strong {
+  color: var(--ink);
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.absence-today-stack ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.absence-today-stack li {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.absence-today-stack b,
+.absence-today-stack small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.absence-today-stack small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.absence-today-stack p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.absence-today-stack--vacation {
+  background: #f0f8ec;
+}
+
+.absence-today-stack--illness {
+  background: #fff3f0;
+}
+
+.absence-today-stack--doctor {
+  background: #f0f5f8;
+}
+
+.absence-today-stack--pending,
+.absence-today-stack--warning {
+  background: #fff8e6;
+}
+
+.absence-detail-panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin-top: 0;
+  padding: 18px;
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
+}
+
+.absence-detail-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.absence-detail-panel__head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.absence-detail-panel__head strong {
+  font-size: 1.08rem;
+}
+
+.absence-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.absence-detail-grid article,
+.absence-detail-note,
+.absence-detail-next {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.absence-detail-grid strong,
+.absence-detail-note p,
+.absence-detail-note li,
+.absence-detail-next strong {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.absence-detail-note ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.absence-detail-next {
+  border-color: #d7e7cc;
+  background: #f7fbf3;
+}
+
+.absence-timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.absence-timeline {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) repeat(var(--absence-days), minmax(104px, 1fr));
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.absence-timeline__head,
+.absence-timeline__employee,
+.absence-timeline__cell {
+  min-width: 0;
+  padding: 10px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.absence-timeline__head {
+  background: #eef4e9;
+  color: var(--steel);
+}
+
+.absence-timeline__employee {
+  background: #fbfcfa;
+  font-weight: 900;
+}
+
+.absence-timeline__cell {
+  min-height: 46px;
+}
+
+.absence-timeline__event {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.absence-timeline__event--vacation {
+  background: #edf8e7;
+  color: var(--kaiser-green-dark);
+}
+
+.absence-timeline__event--illness {
+  background: #fff0ee;
+  color: #9a2d24;
+}
+
+.absence-timeline__event--doctor,
+.absence-timeline__event--care {
+  background: #eef2f6;
+  color: #3f607f;
+}
+
+.absence-timeline__event--timeoff {
+  background: #f7f0e5;
+  color: #8c6121;
+}
+
+.absence-timeline__free {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .module-rules-panel {
@@ -10059,12 +10418,90 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 @media (max-width: 1180px) {
+  .absence-command-center,
+  .absence-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .absence-kpis--operations {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .absence-today-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .absence-approval-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
+  .absence-command-center {
+    padding: 16px;
+  }
+
+  .absence-command-actions,
+  .absence-command-actions .primary-action,
+  .absence-command-actions .secondary-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .absence-kpis--operations,
+  .absence-today-grid,
+  .absence-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .absence-kpi {
+    min-height: 96px;
+  }
+
+  .absence-timeline {
+    grid-template-columns: minmax(128px, 0.7fr) repeat(var(--absence-days), minmax(94px, 1fr));
+  }
+
+  .absence-panel--worklist .absence-table {
+    min-width: 0;
+  }
+
+  .absence-panel--worklist .absence-table thead {
+    display: none;
+  }
+
+  .absence-panel--worklist .absence-table,
+  .absence-panel--worklist .absence-table tbody,
+  .absence-panel--worklist .absence-table tr,
+  .absence-panel--worklist .absence-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .absence-panel--worklist .absence-table tr {
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  .absence-panel--worklist .absence-table td {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .absence-panel--worklist .absence-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
   .absence-approval-list {
     grid-template-columns: 1fr;
   }
@@ -10323,12 +10760,29 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 .absence-filters {
-  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.2fr) minmax(150px, 1fr) auto;
+  grid-template-columns: repeat(5, minmax(130px, 1fr)) minmax(150px, 0.8fr) auto;
   align-items: end;
   padding: 14px;
   border: 1px solid rgba(35, 40, 33, 0.08);
   border-radius: 8px;
   background: #fbfcfa;
+}
+
+.absence-filter-check {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.absence-filter-check input {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
 }
 
 .absence-filter-button {
@@ -10782,7 +11236,7 @@ body:has(.absence-page--employee-card) {
 .absence-page .absence-hero h1 {
   margin-top: 8px;
   color: var(--color-text);
-  font-size: clamp(3rem, 7vw, 5.4rem);
+  font-size: 44px;
   line-height: 1.03;
 }
 
@@ -12424,11 +12878,11 @@ body:has(.absence-page--employee-card) {
   }
 
   .absence-hero h1 {
-    font-size: clamp(1.55rem, 8vw, 2.1rem);
+    font-size: 34px;
   }
 
   .absence-page .absence-hero h1 {
-    font-size: clamp(2.15rem, 12vw, 3.2rem);
+    font-size: 40px;
   }
 
   .absence-hero p {
