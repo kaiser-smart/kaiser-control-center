@@ -630,9 +630,14 @@ const absenceUiState = {
   tab: "dashboard",
   message: "",
   error: "",
+  rangeFilter: "this-week",
+  statusFilter: "",
   typeFilter: "",
   employeeFilter: "",
+  departmentFilter: "",
+  problemOnly: false,
   monthFilter: currentMonthKey(),
+  detailRequestId: "",
   actionLoadingId: "",
   rejectRequestId: "",
   rejectReason: ""
@@ -653,7 +658,8 @@ const absenceApiState = {
   pendingLoaded: false,
   pendingLoading: false,
   error: "",
-  apiStatus: "waiting"
+  apiStatus: "waiting",
+  loadedAt: ""
 };
 const moduleRulesState = {
   moduleKey: "absence",
@@ -4740,30 +4746,308 @@ function permissionInlineNotice() {
   `;
 }
 
+function absenceDateValue(value) {
+  return Number(String(value || "").replaceAll("-", ""));
+}
+
+function addAbsenceDays(date, days) {
+  const next = new Date(date);
+  next.setHours(12, 0, 0, 0);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function absenceWeekStart(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(12, 0, 0, 0);
+  const mondayOffset = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - mondayOffset);
+  return start;
+}
+
+function absenceRangeForFilter(rangeFilter = absenceUiState.rangeFilter) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+
+  if (rangeFilter === "today") {
+    const iso = toIsoDate(today);
+    return { from: iso, to: iso, label: "Dnes" };
+  }
+
+  if (rangeFilter === "next-week") {
+    const start = addAbsenceDays(absenceWeekStart(today), 7);
+    const end = addAbsenceDays(start, 6);
+    return { from: toIsoDate(start), to: toIsoDate(end), label: "Příští týden" };
+  }
+
+  if (rangeFilter === "this-month") {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1, 12);
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12);
+    return { from: toIsoDate(start), to: toIsoDate(end), label: "Tento měsíc" };
+  }
+
+  const start = absenceWeekStart(today);
+  const end = addAbsenceDays(start, 6);
+  return { from: toIsoDate(start), to: toIsoDate(end), label: "Tento týden" };
+}
+
+function requestOverlapsRange(request, range) {
+  if (!range?.from || !range?.to) {
+    return true;
+  }
+
+  return absenceDateValue(request.dateFrom) <= absenceDateValue(range.to) &&
+    absenceDateValue(request.dateTo || request.dateFrom) >= absenceDateValue(range.from);
+}
+
+function isActiveAbsenceRequest(request) {
+  return ["Čeká na schválení", "Schváleno", "Evidováno"].includes(requestStatusLabel(request));
+}
+
+function isProblemAbsenceRequest(request) {
+  return Boolean(
+    !request.employeeId ||
+    !request.employeeName ||
+    !request.dateFrom ||
+    !request.dateTo ||
+    !request.type ||
+    !request.status ||
+    requestStatusLabel(request) === "Čeká na schválení"
+  );
+}
+
+function absenceDepartmentOptions(user) {
+  const departments = new Set();
+
+  absenceSelectableEmployees(user).forEach((employee) => {
+    if (employee.department) {
+      departments.add(employee.department);
+    }
+    if (employee.team) {
+      departments.add(employee.team);
+    }
+  });
+
+  normalizedApiAbsenceRequests(absenceApiState.requests).forEach((request) => {
+    if (request.department) {
+      departments.add(request.department);
+    }
+    if (request.team) {
+      departments.add(request.team);
+    }
+  });
+
+  return [...departments]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "cs"))
+    .map((department) => ({ value: department, label: department }));
+}
+
+function absenceFilteredRequests(user) {
+  const displayState = absenceDisplayState();
+  const range = absenceRangeForFilter();
+  return visibleAbsenceRequests(displayState, user)
+    .filter((request) => requestOverlapsRange(request, range))
+    .filter((request) => !absenceUiState.typeFilter || requestTypeLabel(request) === absenceUiState.typeFilter)
+    .filter((request) => !absenceUiState.statusFilter || requestStatusLabel(request) === absenceUiState.statusFilter)
+    .filter((request) => !absenceUiState.employeeFilter || request.employeeId === absenceUiState.employeeFilter)
+    .filter((request) => !absenceUiState.departmentFilter || request.department === absenceUiState.departmentFilter || request.team === absenceUiState.departmentFilter)
+    .filter((request) => !absenceUiState.problemOnly || isProblemAbsenceRequest(request))
+    .sort((a, b) => String(a.dateFrom || "").localeCompare(String(b.dateFrom || "")) || String(a.employeeName || "").localeCompare(String(b.employeeName || ""), "cs"));
+}
+
+function absenceAvailabilityToday(user) {
+  const today = toIsoDate(new Date());
+  const displayState = absenceDisplayState();
+  const employees = absenceSelectableEmployees(user).filter((employee) => employee.employmentStatus !== "inactive");
+  const todayRequests = visibleAbsenceRequests(displayState, user)
+    .filter((request) => isActiveAbsenceRequest(request) && requestOverlapsDate(request, today));
+  const byEmployee = new Map();
+
+  todayRequests.forEach((request) => {
+    if (!byEmployee.has(request.employeeId)) {
+      byEmployee.set(request.employeeId, []);
+    }
+    byEmployee.get(request.employeeId).push(request);
+  });
+
+  const availability = {
+    working: [],
+    vacation: [],
+    sick: [],
+    other: [],
+    pending: [],
+    issues: []
+  };
+
+  employees.forEach((employee) => {
+    const requests = byEmployee.get(employee.id) || [];
+    const primary = requests[0] || null;
+
+    if (!primary) {
+      availability.working.push(employee);
+      return;
+    }
+
+    if (requestStatusLabel(primary) === "Čeká na schválení") {
+      availability.pending.push(primary);
+    }
+
+    const type = requestTypeLabel(primary);
+    if (type === "Dovolená") {
+      availability.vacation.push(primary);
+    } else if (type === "Nemoc") {
+      availability.sick.push(primary);
+    } else {
+      availability.other.push(primary);
+    }
+  });
+
+  todayRequests.filter(isProblemAbsenceRequest).forEach((request) => availability.issues.push(request));
+
+  return availability;
+}
+
+function absenceOperationRisk(availability) {
+  const visibleEmployees = absenceSelectableEmployees(currentUser()).filter((employee) => employee.employmentStatus !== "inactive");
+  const total = visibleEmployees.length || 0;
+  const out = availability.vacation.length + availability.sick.length + availability.other.length;
+  const working = Math.max(0, total - out);
+  const ratio = total ? out / total : 0;
+
+  if (!total) {
+    return { label: "Čeká na data", value: "—", tone: "waiting", note: "Nejdřív načíst zaměstnance." };
+  }
+
+  if (working < 3 || ratio >= 0.25) {
+    return { label: "Riziko provozu", value: out, tone: "danger", note: `${working} lidí v práci z ${total}.` };
+  }
+
+  if (ratio >= 0.15) {
+    return { label: "Sledovat", value: out, tone: "warning", note: `${out} lidí mimo práci dnes.` };
+  }
+
+  return { label: "Bez rizika", value: out, tone: "ok", note: `${working} lidí v práci.` };
+}
+
+function absenceDataStatus() {
+  if (absenceApiState.loading || absenceApiState.pendingLoading || employeeCardState.employeesLoading) {
+    return { label: "Načítám", tone: "waiting", detail: "Načítám přehled dovolených a nemocí…" };
+  }
+
+  if (absenceApiState.error) {
+    return { label: "Chyba načtení", tone: "danger", detail: "Přehled se nepodařilo načíst. Zkuste akci opakovat." };
+  }
+
+  if (absenceApiState.loaded) {
+    return {
+      label: "Načteno",
+      tone: "ok",
+      detail: absenceApiState.loadedAt ? `Poslední aktualizace ${formatDateTime(absenceApiState.loadedAt)}` : "Data načtena z cloud API."
+    };
+  }
+
+  return { label: "Čeká na data", tone: "waiting", detail: "Čeká na první načtení z cloud API." };
+}
+
+function absenceKpiButton({ label, value, note = "", tone = "", filter = {} }) {
+  return `
+    <button
+      class="absence-kpi absence-kpi--button ${tone ? `absence-kpi--${escapeHtml(tone)}` : ""}"
+      type="button"
+      data-absence-dashboard-filter="${escapeHtml(JSON.stringify(filter))}"
+    >
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      ${note ? `<small>${escapeHtml(note)}</small>` : ""}
+    </button>
+  `;
+}
+
+function absenceEmployeeStack(title, items, emptyText, options = {}) {
+  const list = items.slice(0, options.limit || 6);
+  return `
+    <article class="absence-today-stack absence-today-stack--${escapeHtml(options.tone || "neutral")}">
+      <span>${escapeHtml(title)}</span>
+      <strong>${escapeHtml(items.length)}</strong>
+      ${list.length ? `
+        <ul>
+          ${list.map((item) => {
+            const name = item.employeeName || item.name || "Zaměstnanec";
+            const detail = item.dateFrom ? `${requestTypeLabel(item)} · ${absenceTermLabel(item)}` : (item.department || item.team || "v práci");
+            return `<li><b>${employeeNameLink(item.employeeId || item.id, name)}</b><small>${escapeHtml(detail)}</small></li>`;
+          }).join("")}
+        </ul>
+      ` : `<p>${escapeHtml(emptyText)}</p>`}
+    </article>
+  `;
+}
+
 function absenceFilterPanel(user, mode = "calendar") {
   const employeeOptions = absenceSelectableEmployees(user).map((employee) => ({
     value: employee.id,
     label: employee.name
   }));
+  const statusOptions = [
+    "Čeká na schválení",
+    "Schváleno",
+    "Zamítnuto",
+    "Evidováno",
+    "Zrušeno"
+  ];
 
   return `
     <form class="absence-filters" data-absence-filter-form data-mode="${escapeHtml(mode)}">
+      ${mode === "dashboard" ? `
+        <label>
+          <span>Období</span>
+          <select name="range" data-absence-filter>
+            ${optionList([
+              { value: "today", label: "Dnes" },
+              { value: "this-week", label: "Tento týden" },
+              { value: "next-week", label: "Příští týden" },
+              { value: "this-month", label: "Tento měsíc" }
+            ], absenceUiState.rangeFilter)}
+          </select>
+        </label>
+      ` : `
+        <label>
+          <span>Měsíc</span>
+          <input name="month" type="month" value="${escapeHtml(absenceUiState.monthFilter)}" data-absence-filter />
+        </label>
+      `}
       <label>
         <span>Typ</span>
         <select name="type" data-absence-filter>
           ${optionList(ABSENCE_TYPES, absenceUiState.typeFilter)}
         </select>
       </label>
+      ${mode === "dashboard" ? `
+        <label>
+          <span>Stav</span>
+          <select name="status" data-absence-filter>
+            ${optionList(statusOptions, absenceUiState.statusFilter)}
+          </select>
+        </label>
+      ` : ""}
       <label>
         <span>Zaměstnanec</span>
         <select name="employeeId" data-absence-filter>
           ${optionList(employeeOptions, absenceUiState.employeeFilter)}
         </select>
       </label>
-      <label>
-        <span>Měsíc</span>
-        <input name="month" type="month" value="${escapeHtml(absenceUiState.monthFilter)}" data-absence-filter />
-      </label>
+      ${mode === "dashboard" ? `
+        <label>
+          <span>Oddělení / role</span>
+          <select name="department" data-absence-filter>
+            ${optionList(absenceDepartmentOptions(user), absenceUiState.departmentFilter)}
+          </select>
+        </label>
+        <label class="absence-filter-check">
+          <input name="problemOnly" type="checkbox" value="1" ${absenceUiState.problemOnly ? "checked" : ""} data-absence-filter />
+          <span>Jen problémové</span>
+        </label>
+      ` : ""}
       <button class="secondary-link absence-filter-button" type="submit">Filtrovat</button>
     </form>
   `;
@@ -4878,6 +5162,14 @@ function absenceApprovalCards(requests, user, emptyText) {
 }
 
 function absenceRequestsTable(requests, user, emptyText, showActions = true) {
+  if (absenceApiState.loading) {
+    return '<p class="absence-empty">Načítám přehled dovolených a nemocí…</p>';
+  }
+
+  if (absenceApiState.error) {
+    return '<p class="absence-empty">Přehled se nepodařilo načíst. Zkuste akci opakovat.</p>';
+  }
+
   if (!requests.length) {
     return `<p class="absence-empty">${emptyText}</p>`;
   }
@@ -4889,32 +5181,102 @@ function absenceRequestsTable(requests, user, emptyText, showActions = true) {
           <tr>
             <th>Zaměstnanec</th>
             <th>Typ</th>
-            <th>Termín</th>
+            <th>Od</th>
+            <th>Do</th>
             <th>Rozsah</th>
             <th>Stav</th>
+            <th>Schvaluje</th>
+            <th>Poznámka / zdroj</th>
             ${showActions ? "<th>Akce</th>" : ""}
           </tr>
         </thead>
         <tbody>
           ${requests.map((request) => `
-            <tr>
+            <tr class="${absenceUiState.detailRequestId === request.id ? "absence-table-row--selected" : ""}">
               <td data-label="Zaměstnanec">
                 <strong>${employeeNameLink(request.employeeId, request.employeeName)}</strong>
                 <span>${escapeHtml(request.team || request.department || "Provoz")}</span>
               </td>
               <td data-label="Typ">${absenceTypeBadge(request.type)}</td>
-              <td data-label="Termín">
-                <strong>${escapeHtml(absenceTermLabel(request))}</strong>
-                <span>${isHourlyDoctorRequest(request) ? "hodinově" : (request.halfDayFrom || request.halfDayTo ? "obsahuje půlden" : "celý den")}</span>
-              </td>
+              <td data-label="Od"><strong>${escapeHtml(formatAbsenceDate(request.dateFrom))}</strong></td>
+              <td data-label="Do"><strong>${escapeHtml(formatAbsenceDate(request.dateTo || request.dateFrom))}</strong></td>
               <td data-label="Rozsah">${escapeHtml(absenceDurationLabel(request))}</td>
               <td data-label="Stav">${absenceStatusBadge(request.status)}</td>
-              ${showActions ? `<td data-label="Akce">${absenceRequestActions(request, user)}</td>` : ""}
+              <td data-label="Schvaluje">${escapeHtml(request.managerName || request.approverName || "neuvedeno")}</td>
+              <td data-label="Poznámka / zdroj">
+                <strong>${escapeHtml(request.note || "bez poznámky")}</strong>
+                <span>${escapeHtml(request.source || request.importSource || "cloud API")}</span>
+              </td>
+              ${showActions ? `
+                <td data-label="Akce">
+                  <div class="absence-actions">
+                    <button class="absence-icon-button" type="button" data-absence-detail="${escapeHtml(request.id)}">Detail</button>
+                    ${absenceRequestActions(request, user)}
+                  </div>
+                </td>
+              ` : ""}
             </tr>
           `).join("")}
         </tbody>
       </table>
     </div>
+  `;
+}
+
+function absenceDetailPanel(request, user) {
+  if (!request) {
+    return `
+      <section class="absence-detail-panel">
+        <strong>Detail absence</strong>
+        <p>Vyberte záznam v seznamu. Uvidíte termín, stav, schvalovatele, poznámku a další doporučený krok.</p>
+      </section>
+    `;
+  }
+
+  const nextStep = requestStatusLabel(request) === "Čeká na schválení"
+    ? (canApproveAbsence(request, user) ? "Schválit nebo zamítnout žádost." : "Čeká na schválení odpovědnou osobou.")
+    : requestStatusLabel(request) === "Zamítnuto"
+      ? "Zkontrolovat důvod zamítnutí a případně založit novou žádost."
+      : "Záznam je evidovaný. Sledujte kolizi v plánování směn.";
+
+  const history = Array.isArray(request.history) ? request.history : [];
+
+  return `
+    <section class="absence-detail-panel">
+      <div class="absence-detail-panel__head">
+        <div>
+          <span>Detail absence</span>
+          <strong>${employeeNameLink(request.employeeId, request.employeeName)}</strong>
+        </div>
+        <button class="text-action" type="button" data-absence-detail="">Zavřít</button>
+      </div>
+      <div class="absence-detail-grid">
+        <article><span>Typ</span><strong>${absenceTypeBadge(request.type)}</strong></article>
+        <article><span>Termín</span><strong>${escapeHtml(absenceTermLabel(request))}</strong></article>
+        <article><span>Rozsah</span><strong>${escapeHtml(absenceDurationLabel(request))}</strong></article>
+        <article><span>Stav</span><strong>${absenceStatusBadge(request.status)}</strong></article>
+        <article><span>Zadal</span><strong>${escapeHtml(request.createdByName || request.employeeName || "neuvedeno")}</strong></article>
+        <article><span>Schvaluje</span><strong>${escapeHtml(request.managerName || request.approverName || "neuvedeno")}</strong></article>
+        <article><span>Datum žádosti</span><strong>${escapeHtml(formatDateTime(request.submittedAt || request.createdAt))}</strong></article>
+        <article><span>Zdroj</span><strong>${escapeHtml(request.source || request.importSource || "cloud API")}</strong></article>
+      </div>
+      <div class="absence-detail-note">
+        <span>Poznámka</span>
+        <p>${escapeHtml(request.note || "Bez poznámky.")}</p>
+      </div>
+      <div class="absence-detail-note">
+        <span>Historie změn</span>
+        ${history.length ? `
+          <ul>
+            ${history.slice(0, 4).map((item) => `<li>${escapeHtml(formatDateTime(item.changedAt || item.createdAt))} · ${escapeHtml(item.note || item.status || "změna")}</li>`).join("")}
+          </ul>
+        ` : "<p>Historie není v tomto přehledu k dispozici.</p>"}
+      </div>
+      <div class="absence-detail-next">
+        <span>Další krok</span>
+        <strong>${escapeHtml(nextStep)}</strong>
+      </div>
+    </section>
   `;
 }
 
@@ -4940,6 +5302,61 @@ function absenceMiniList(items, user, emptyText) {
   `;
 }
 
+function absenceTimeline(user, range) {
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = addAbsenceDays(new Date(`${range.from}T12:00:00`), index);
+    return {
+      iso: toIsoDate(date),
+      label: new Intl.DateTimeFormat("cs-CZ", { weekday: "short", day: "numeric", month: "numeric" }).format(date)
+    };
+  });
+  const requests = visibleAbsenceRequests(absenceDisplayState(), user)
+    .filter((request) => isActiveAbsenceRequest(request) && requestOverlapsRange(request, range));
+  const employeeIds = new Set(requests.map((request) => request.employeeId));
+  const employees = absenceSelectableEmployees(user)
+    .filter((employee) => employeeIds.has(employee.id))
+    .slice(0, 14);
+
+  return `
+    <section class="absence-panel absence-panel--timeline">
+      <div class="absence-panel__head">
+        <div>
+          <h2>Týdenní dostupnost</h2>
+          <p>${escapeHtml(range.label)} · řádky zaměstnanců, barevné bloky absencí.</p>
+        </div>
+        <a class="secondary-link" href="${routeHref(absenceRouteForTab("calendar"))}" data-link>Měsíční kalendář</a>
+      </div>
+      <div class="absence-timeline-legend">
+        ${ABSENCE_TYPES.map((type) => `<span class="absence-type absence-type--${ABSENCE_TYPE_TONES[type] || "vacation"}">${escapeHtml(type)}</span>`).join("")}
+      </div>
+      ${employees.length ? `
+        <div class="absence-timeline" style="--absence-days: ${days.length};">
+          <div class="absence-timeline__head">Zaměstnanec</div>
+          ${days.map((day) => `<div class="absence-timeline__head">${escapeHtml(day.label)}</div>`).join("")}
+          ${employees.map((employee) => {
+            const rowRequests = requests.filter((request) => request.employeeId === employee.id);
+            return `
+              <div class="absence-timeline__employee">${employeeNameLink(employee.id, employee.name)}</div>
+              ${days.map((day) => {
+                const dayRequest = rowRequests.find((request) => requestOverlapsDate(request, day.iso));
+                return `
+                  <div class="absence-timeline__cell">
+                    ${dayRequest ? `
+                      <button class="absence-timeline__event absence-timeline__event--${ABSENCE_TYPE_TONES[dayRequest.type] || "vacation"}" type="button" data-absence-detail="${escapeHtml(dayRequest.id)}">
+                        ${escapeHtml(requestTypeLabel(dayRequest))}
+                      </button>
+                    ` : '<span class="absence-timeline__free">v práci</span>'}
+                  </div>
+                `;
+              }).join("")}
+            `;
+          }).join("")}
+        </div>
+      ` : '<p class="absence-empty">V tomto týdnu nejsou žádné absence.</p>'}
+    </section>
+  `;
+}
+
 function absenceDashboard(user) {
   const displayState = absenceDisplayState();
   const summary = absenceSummary(displayState, user);
@@ -4948,60 +5365,126 @@ function absenceDashboard(user) {
   const pending = absenceApiState.pendingLoaded
     ? normalizedApiAbsenceRequests(absenceApiState.pendingRequests)
     : approvalAbsenceRequests(displayState, user);
+  const availability = absenceAvailabilityToday(user);
+  const risk = absenceOperationRisk(availability);
+  const range = absenceRangeForFilter();
+  const filteredRequests = absenceFilteredRequests(user);
+  const today = toIsoDate(new Date());
+  const thisWeek = absenceRangeForFilter("this-week");
+  const nextWeek = absenceRangeForFilter("next-week");
+  const visibleRequests = visibleAbsenceRequests(displayState, user);
+  const activeToday = visibleRequests.filter((request) => isActiveAbsenceRequest(request) && requestOverlapsDate(request, today));
+  const vacationToday = activeToday.filter((request) => requestTypeLabel(request) === "Dovolená");
+  const sickToday = activeToday.filter((request) => requestTypeLabel(request) === "Nemoc");
+  const otherToday = activeToday.filter((request) => !["Dovolená", "Nemoc"].includes(requestTypeLabel(request)));
+  const thisWeekCount = visibleRequests.filter((request) => isActiveAbsenceRequest(request) && requestOverlapsRange(request, thisWeek)).length;
+  const nextWeekCount = visibleRequests.filter((request) => isActiveAbsenceRequest(request) && requestOverlapsRange(request, nextWeek)).length;
+  const incompleteCount = visibleRequests.filter(isProblemAbsenceRequest).length;
+  const selectedRequest = filteredRequests.find((request) => request.id === absenceUiState.detailRequestId) ||
+    pending.find((request) => request.id === absenceUiState.detailRequestId) ||
+    filteredRequests.find(isProblemAbsenceRequest) ||
+    pending[0] ||
+    filteredRequests[0] ||
+    null;
+  const dataStatus = absenceDataStatus();
   const quickRequestButton = hasPermission(user, "absence", "create")
-    ? `<a class="primary-action" href="${routeHref(ABSENCE_QUICK_ROUTE)}" data-link>+ Rychle zadat</a>`
+    ? `<a class="primary-action" href="${routeHref(ABSENCE_QUICK_ROUTE)}" data-link>Nová žádost</a>`
     : "";
   const newRequestButton = hasPermission(user, "absence", "create")
-    ? '<button class="primary-action" type="button" data-absence-tab="new">Nová žádost</button>'
+    ? '<button class="secondary-link" type="button" data-absence-tab="new">Přidat nemoc</button>'
+    : "";
+  const exportButton = hasPermission(user, "absence", "export")
+    ? '<button class="secondary-link" type="button" data-absence-export-csv>Export přehledu</button>'
     : "";
 
   return `
     <section class="absence-dashboard" aria-label="Dashboard Dovolená / Nemoc">
-      <div class="absence-kpis">
-        <article class="absence-kpi">
-          <span>Čeká na schválení</span>
-          <strong>${summary.pendingCount}</strong>
-        </article>
-        <article class="absence-kpi">
-          <span>Lidé mimo práci dnes</span>
-          <strong>${summary.peopleOutToday.length}</strong>
-        </article>
-        <article class="absence-kpi">
-          <span>Dovolená tento měsíc</span>
-          <strong>${summary.approvedVacationThisMonth}</strong>
-        </article>
-        <article class="absence-kpi">
-          <span>Nemoc tento měsíc</span>
-          <strong>${summary.illnessThisMonth}</strong>
-        </article>
-        <article class="absence-kpi absence-kpi--action">
+      <section class="absence-command-center">
+        <div>
+          <span class="absence-command-center__eyebrow">Provozní stav</span>
+          <h2>Dostupnost lidí dnes a další kroky</h2>
+          <p>Přehled pro vedení, kancelář, dispečink a HR nad existujícími žádostmi a kartami zaměstnanců.</p>
+        </div>
+        <div class="absence-data-status absence-data-status--${escapeHtml(dataStatus.tone)}">
+          <span>${escapeHtml(dataStatus.label)}</span>
+          <strong>${escapeHtml(dataStatus.detail)}</strong>
+        </div>
+        <div class="absence-command-actions">
+          ${quickRequestButton}
+          ${newRequestButton}
+          ${exportButton}
+          ${canUseAbsenceTab(user, "settings") ? `<a class="secondary-link" href="${routeHref(absenceRouteForTab("settings"))}" data-link>Nastavení</a>` : ""}
+        </div>
+      </section>
+
+      <div class="absence-kpis absence-kpis--operations">
+        ${absenceKpiButton({ label: "Dnes nepřítomní", value: activeToday.length, note: "všechny aktivní absence", tone: "neutral", filter: { range: "today" } })}
+        ${absenceKpiButton({ label: "Na dovolené", value: vacationToday.length, note: "dnes", tone: "vacation", filter: { range: "today", type: "Dovolená" } })}
+        ${absenceKpiButton({ label: "Nemocní", value: sickToday.length, note: "dnes", tone: "illness", filter: { range: "today", type: "Nemoc" } })}
+        ${absenceKpiButton({ label: "Jiná absence", value: otherToday.length, note: "lékař, OČR, volno", tone: "doctor", filter: { range: "today" } })}
+        ${absenceKpiButton({ label: "Čeká na schválení", value: summary.pendingCount, note: "vyžaduje rozhodnutí", tone: "pending", filter: { status: "Čeká na schválení" } })}
+        ${absenceKpiButton({ label: "Tento týden absence", value: thisWeekCount, note: "aktivní záznamy", tone: "neutral", filter: { range: "this-week" } })}
+        ${absenceKpiButton({ label: "Příští týden absence", value: nextWeekCount, note: "plánované vytížení", tone: "neutral", filter: { range: "next-week" } })}
+        ${absenceKpiButton({ label: risk.label, value: risk.value, note: risk.note, tone: risk.tone, filter: { range: "today" } })}
+        ${absenceKpiButton({ label: "Neúplné údaje", value: incompleteCount, note: "ke kontrole", tone: "warning", filter: { problemOnly: true } })}
+        <article class="absence-kpi absence-kpi--balance">
           <span>Moje zbývající dovolená</span>
           <strong>${escapeHtml(vacationRemaining)}</strong>
-          <div class="absence-quick-actions">
-            ${quickRequestButton}
-            ${newRequestButton}
-          </div>
+          <small>osobní zůstatek</small>
         </article>
       </div>
 
-      <div class="absence-panels">
-        <section class="absence-panel absence-panel--approval-dashboard">
+      <section class="absence-panel absence-panel--today">
+        <div class="absence-panel__head">
+          <div>
+            <h2>Dnes</h2>
+            <p>Rychlé rozdělení lidí podle dostupnosti a čekajících věcí.</p>
+          </div>
+        </div>
+        <div class="absence-today-grid">
+          ${absenceEmployeeStack("V práci", availability.working, "Bez načtených zaměstnanců.", { tone: "working", limit: 8 })}
+          ${absenceEmployeeStack("Dovolená", availability.vacation, "Nikdo není na dovolené.", { tone: "vacation" })}
+          ${absenceEmployeeStack("Nemoc", availability.sick, "Nikdo není nemocný.", { tone: "illness" })}
+          ${absenceEmployeeStack("Ostatní absence", availability.other, "Žádná jiná absence.", { tone: "doctor" })}
+          ${absenceEmployeeStack("Čeká na schválení", availability.pending, "Nic nečeká.", { tone: "pending" })}
+          ${absenceEmployeeStack("Problémové záznamy", availability.issues, "Bez problému.", { tone: "warning" })}
+        </div>
+      </section>
+
+      ${absenceTimeline(user, range)}
+
+      <div class="absence-workspace">
+        <section class="absence-panel absence-panel--worklist">
           <div class="absence-panel__head">
-            <h2>Žádosti čekající na schválení</h2>
+            <div>
+              <h2>Pracovní seznam absencí</h2>
+              <p>${escapeHtml(range.label)} · ${filteredRequests.length} záznamů po filtrech.</p>
+            </div>
+          </div>
+          ${absenceFilterPanel(user, "dashboard")}
+          ${absenceRequestsTable(filteredRequests, user, absenceApiState.loaded ? "Filtrům neodpovídá žádný záznam." : "V tomto období nejsou žádné absence.")}
+        </section>
+        ${absenceDetailPanel(selectedRequest, user)}
+      </div>
+
+      <div class="absence-panels">
+        <section class="absence-panel">
+          <div class="absence-panel__head">
+            <div>
+              <h2>Urgentní</h2>
+              <p>Žádosti, které mají další krok.</p>
+            </div>
           </div>
           ${absenceRequestsTable(pending, user, "Teď tu není nic ke schválení.")}
         </section>
         <section class="absence-panel">
           <div class="absence-panel__head">
-            <h2>Nadcházející nepřítomnosti</h2>
+            <div>
+              <h2>Nadcházející nepřítomnosti</h2>
+              <p>Nejbližší schválené nebo evidované absence.</p>
+            </div>
           </div>
           ${absenceMiniList(summary.upcoming, user, "Zatím nejsou naplánované žádné další nepřítomnosti.")}
-        </section>
-        <section class="absence-panel">
-          <div class="absence-panel__head">
-            <h2>Mimo práci dnes</h2>
-          </div>
-          ${absenceMiniList(summary.peopleOutToday, user, "Dnes podle evidence nikdo nechybí.")}
         </section>
       </div>
     </section>
@@ -7132,6 +7615,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
     : "";
   const tabs = absenceTabsForUser(user);
   const isQuickTab = activeTab === "quick";
+  const heroDataStatus = isQuickTab ? null : absenceDataStatus();
   const pageClass = [
     "app-shell",
     "module-page",
@@ -7154,12 +7638,12 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
         <div>
           <div class="module-detail__eyebrow">SMART ODPADY / DOVOLENÁ A NEMOC</div>
           <h1 id="absence-title">${isQuickTab ? "Rychlé zadání" : "Dovolená / Nemoc"}</h1>
-          <p>${isQuickTab ? "Vyberte typ, datum a odešlete." : "Jedno místo pro žádosti o dovolenou, nemoc, lékaře, OČR a náhradní volno."}</p>
+          <p>${isQuickTab ? "Vyberte typ, datum a odešlete." : "Přehled absencí, dovolených, nemocí a dostupnosti zaměstnanců."}</p>
         </div>
         ${isQuickTab ? "" : `<div class="absence-hero__meta">
-          <span>Report</span>
-          <strong>${ABSENCE_REPORT_EMAIL}</strong>
-          <small>${ABSENCE_REPORT_DAY}. den v měsíci · ${ABSENCE_REPORT_TIME}</small>
+          <span>Stav dat</span>
+          <strong>${escapeHtml(heroDataStatus.label)}</strong>
+          <small>${escapeHtml(heroDataStatus.detail)}</small>
         </div>`}
       </section>
 
@@ -17176,6 +17660,7 @@ async function loadAbsenceRequests(options = {}) {
     absenceApiState.requests = Array.isArray(result.requests) ? result.requests : [];
     absenceApiState.apiStatus = result.apiStatus || "ready";
     absenceApiState.loaded = true;
+    absenceApiState.loadedAt = new Date().toISOString();
   } catch (error) {
     absenceApiState.apiStatus = error.payload?.apiStatus || "waiting";
     absenceApiState.error = error.payload?.error || "Žádosti se teď nepodařilo načíst.";
@@ -19327,8 +19812,12 @@ async function saveAbsenceSettings(targetOrForm) {
 }
 
 function applyAbsenceFilters(form) {
+  absenceUiState.rangeFilter = form.elements.range?.value || absenceUiState.rangeFilter || "this-week";
   absenceUiState.typeFilter = form.elements.type?.value || "";
+  absenceUiState.statusFilter = form.elements.status?.value || "";
   absenceUiState.employeeFilter = form.elements.employeeId?.value || "";
+  absenceUiState.departmentFilter = form.elements.department?.value || "";
+  absenceUiState.problemOnly = Boolean(form.elements.problemOnly?.checked);
   absenceUiState.monthFilter = form.elements.month?.value || currentMonthKey();
   render();
 }
@@ -19492,13 +19981,19 @@ function exportAbsenceCsv() {
   }
 
   const displayState = absenceDisplayState();
-  const requests = filterAbsenceRequests(visibleAbsenceRequests(displayState, user), {
-    type: absenceUiState.typeFilter,
-    employeeId: absenceUiState.employeeFilter,
-    month: absenceUiState.monthFilter
-  });
+  const dashboardActive = normalizePath(window.location.pathname) === absenceRouteForTab("dashboard");
+  const requests = dashboardActive
+    ? absenceFilteredRequests(user)
+    : filterAbsenceRequests(visibleAbsenceRequests(displayState, user), {
+        type: absenceUiState.typeFilter,
+        employeeId: absenceUiState.employeeFilter,
+        month: absenceUiState.monthFilter
+      });
+  const filenameSuffix = dashboardActive
+    ? absenceRangeForFilter().label.toLowerCase().replace(/\s+/g, "-")
+    : absenceUiState.monthFilter;
 
-  downloadCsv(`dovolena-nemoc-${absenceUiState.monthFilter}.csv`, absenceRequestsToCsv(requests));
+  downloadCsv(`dovolena-nemoc-${filenameSuffix}.csv`, absenceRequestsToCsv(requests));
 }
 
 function generateAbsenceMonthlyReport() {
@@ -21309,6 +21804,34 @@ document.addEventListener("click", async (event) => {
       moduleRuleToggle.dataset.moduleRuleToggle || "",
       moduleRuleToggle.dataset.nextStatus || "inactive"
     );
+    return;
+  }
+
+  const absenceDashboardFilter = event.target.closest("[data-absence-dashboard-filter]");
+  if (absenceDashboardFilter) {
+    event.preventDefault();
+    let filter = {};
+    try {
+      filter = JSON.parse(absenceDashboardFilter.dataset.absenceDashboardFilter || "{}");
+    } catch {
+      filter = {};
+    }
+    absenceUiState.rangeFilter = filter.range || absenceUiState.rangeFilter || "this-week";
+    absenceUiState.typeFilter = filter.type || "";
+    absenceUiState.statusFilter = filter.status || "";
+    absenceUiState.employeeFilter = filter.employeeId || "";
+    absenceUiState.departmentFilter = filter.department || "";
+    absenceUiState.problemOnly = Boolean(filter.problemOnly);
+    absenceUiState.detailRequestId = "";
+    render();
+    return;
+  }
+
+  const absenceDetail = event.target.closest("[data-absence-detail]");
+  if (absenceDetail) {
+    event.preventDefault();
+    absenceUiState.detailRequestId = absenceDetail.dataset.absenceDetail || "";
+    render();
     return;
   }
 
