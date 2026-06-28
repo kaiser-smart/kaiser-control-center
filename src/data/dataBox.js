@@ -5,7 +5,7 @@ export const DATA_BOX_TABS = [
   { id: "overview", label: "Přehled" },
   { id: "received", label: "Přijaté zprávy" },
   { id: "sent", label: "Odeslané zprávy" },
-  { id: "ai", label: "AI vyhodnocení" },
+  { id: "ai", label: "Návrh vyřízení" },
   { id: "rules", label: "Seznam pravidel a automatizace" }
 ];
 
