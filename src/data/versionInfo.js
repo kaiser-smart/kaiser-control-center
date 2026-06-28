@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.196"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.197"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datová schránka: firemní chlívky",
+    text: "Modul Datová schránka má šest klikacích boxů pro Kaiser servis, Kaiser technology, Nanolab plus, Nanolab shop, LeFleur a Kaisermanův nadační fond; klik přepne zprávy i log synchronizace do vybrané schránky."
+  },
   {
     title: "Datová schránka: více DS účtů",
     text: "Ruční read-only sync nově projde původní datovou schránku a až pět dalších sad Cloudflare secrets, metadata ukládá odděleně podle schránky a log ukazuje, kterého DS účtu se běh týkal."

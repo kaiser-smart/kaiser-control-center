@@ -734,6 +734,7 @@ const dataBoxState = {
   status: null,
   messages: [],
   syncRuns: [],
+  selectedDataBoxId: "",
   syncLoading: false,
   syncMessage: "",
   syncError: "",
@@ -13215,6 +13216,127 @@ function dataBoxStatusLabel(value) {
   return labels[String(value || "").trim().toLowerCase()] || String(value || "čeká");
 }
 
+const DATA_BOX_ACCOUNT_BOXES = [
+  { id: "kaiser-primary", shortLabel: "KS", label: "Kaiser servis" },
+  { id: "kaiser-data-box-2", shortLabel: "KT", label: "Kaiser technology" },
+  { id: "kaiser-data-box-3", shortLabel: "NP", label: "Nanolab plus" },
+  { id: "kaiser-data-box-4", shortLabel: "NS", label: "Nanolab shop" },
+  { id: "kaiser-data-box-5", shortLabel: "LF", label: "LeFleur" },
+  { id: "kaiser-data-box-6", shortLabel: "KN", label: "Kaisermanův nadační fond" }
+];
+
+function dataBoxAccountById(dataBoxId) {
+  const id = String(dataBoxId || "").trim();
+  return DATA_BOX_ACCOUNT_BOXES.find((account) => account.id === id) || null;
+}
+
+function dataBoxDisplayName(dataBoxId, fallback = "") {
+  return dataBoxAccountById(dataBoxId)?.label || fallback || dataBoxId || "-";
+}
+
+function dataBoxSelectedAccount() {
+  return dataBoxAccountById(dataBoxState.selectedDataBoxId);
+}
+
+function dataBoxAccountStatusMap() {
+  const accounts = dataBoxState.status?.isds?.accounts;
+  if (!Array.isArray(accounts)) {
+    return new Map();
+  }
+
+  return new Map(accounts.map((account) => [String(account.id || ""), account]));
+}
+
+function dataBoxAccountMessages(accountId) {
+  return dataBoxState.messages.filter((message) => message.dataBoxId === accountId);
+}
+
+function dataBoxFilteredMessages(direction) {
+  const selectedAccount = dataBoxSelectedAccount();
+  return dataBoxState.messages.filter((message) => (
+    message.direction === direction
+    && (!selectedAccount || message.dataBoxId === selectedAccount.id)
+  ));
+}
+
+function dataBoxFilteredSyncRuns() {
+  const selectedAccount = dataBoxSelectedAccount();
+  return dataBoxState.syncRuns.filter((run) => !selectedAccount || run.dataBoxId === selectedAccount.id);
+}
+
+function dataBoxRunStatusLabel(status) {
+  const labels = {
+    success: "sync OK",
+    failed: "chyba",
+    configuration_missing: "chybí konfigurace"
+  };
+  return labels[String(status || "").trim().toLowerCase()] || "čeká";
+}
+
+function dataBoxAccountStats(account, accountStatusMap = dataBoxAccountStatusMap()) {
+  const messages = dataBoxAccountMessages(account.id);
+  const runs = dataBoxState.syncRuns.filter((run) => run.dataBoxId === account.id);
+  const lastRun = runs[0] || null;
+  const status = accountStatusMap.get(account.id);
+  const received = messages.filter((message) => message.direction === "received").length;
+  const sent = messages.filter((message) => message.direction === "sent").length;
+  const configured = Boolean(status?.configured || messages.length || runs.length);
+
+  return {
+    configured,
+    lastRun,
+    received,
+    sent,
+    statusLabel: lastRun ? dataBoxRunStatusLabel(lastRun.status) : (configured ? "čeká na sync" : "nenastaveno")
+  };
+}
+
+function dataBoxAccountsSwitcher() {
+  const activeAccount = dataBoxSelectedAccount();
+  const accountStatusMap = dataBoxAccountStatusMap();
+
+  return `
+    <section class="data-box-accounts" aria-labelledby="data-box-accounts-title">
+      <div class="data-box-accounts__head">
+        <div>
+          <h2 id="data-box-accounts-title">Datové schránky</h2>
+          <p>${escapeHtml(activeAccount ? `Chlívek: ${activeAccount.label}` : "Všechny schránky")}</p>
+        </div>
+        ${activeAccount ? `
+          <button class="secondary-link" type="button" data-data-box-account-reset>
+            Zobrazit všechny
+          </button>
+        ` : ""}
+      </div>
+      <div class="data-box-account-grid">
+        ${DATA_BOX_ACCOUNT_BOXES.map((account) => {
+          const stats = dataBoxAccountStats(account, accountStatusMap);
+          const isActive = activeAccount?.id === account.id;
+          const statusClass = stats.lastRun?.status === "success"
+            ? "data-box-account-card__status--ready"
+            : (stats.lastRun ? "data-box-account-card__status--error" : "data-box-account-card__status--waiting");
+
+          return `
+            <button
+              class="data-box-account-card ${isActive ? "data-box-account-card--active" : ""}"
+              type="button"
+              data-data-box-account="${escapeHtml(account.id)}"
+              aria-pressed="${isActive ? "true" : "false"}"
+            >
+              <span class="data-box-account-card__mark">${escapeHtml(account.shortLabel)}</span>
+              <strong>${escapeHtml(account.label)}</strong>
+              <small>${escapeHtml(`${stats.received} přijatých · ${stats.sent} odeslaných`)}</small>
+              <span class="data-box-account-card__status ${statusClass}">
+                ${escapeHtml(stats.statusLabel)}
+              </span>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function dataBoxStatusCards() {
   const status = dataBoxState.status || {};
   const summary = status.summary || {};
@@ -13312,12 +13434,15 @@ function dataBoxMessageRows(direction) {
     `;
   }
 
-  const rows = dataBoxState.messages.filter((message) => message.direction === direction);
+  const selectedAccount = dataBoxSelectedAccount();
+  const rows = dataBoxFilteredMessages(direction);
   if (!rows.length) {
     return `
       <tr>
         <td colspan="${DATA_BOX_EMPTY_MESSAGE_COLUMNS.length}">
-          Žádná ostrá zpráva není načtena. Frontend nevolá ISDS a neobsahuje provozní data.
+          ${escapeHtml(selectedAccount
+            ? `V chlívku ${selectedAccount.label} zatím není načtená žádná ${direction === "sent" ? "odeslaná" : "přijatá"} zpráva.`
+            : "Žádná ostrá zpráva není načtena. Frontend nevolá ISDS a neobsahuje provozní data.")}
         </td>
       </tr>
     `;
@@ -13327,7 +13452,7 @@ function dataBoxMessageRows(direction) {
     <tr>
       <td>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "-")}</td>
       <td>${escapeHtml(dataBoxDirectionLabel(message.direction))}</td>
-      <td>${escapeHtml(message.dataBoxLabel || message.dataBoxId || "-")}</td>
+      <td>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</td>
       <td>${escapeHtml(dataBoxMessageActor(message))}</td>
       <td>${escapeHtml(message.subject || "(bez předmětu)")}</td>
       <td>${escapeHtml(message.status || "-")}</td>
@@ -13350,12 +13475,14 @@ function dataBoxMessageRows(direction) {
 function dataBoxMessageTable(title, direction) {
   const statusClass = dataBoxState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
   const statusLabel = dataBoxState.apiStatus === "ready" ? "API aktivní" : (dataBoxState.loading ? "načítám API" : "čeká na API");
+  const selectedAccount = dataBoxSelectedAccount();
+  const sectionTitle = selectedAccount ? `${title}: ${selectedAccount.label}` : title;
 
   return `
     <section class="data-box-panel" id="${escapeHtml(direction)}" aria-labelledby="data-box-${escapeHtml(direction)}-title">
       <div class="data-box-panel__head">
         <div>
-          <h2 id="data-box-${escapeHtml(direction)}-title">${escapeHtml(title)}</h2>
+          <h2 id="data-box-${escapeHtml(direction)}-title">${escapeHtml(sectionTitle)}</h2>
           <p>Seznam čte pouze metadata z interního API. ISDS synchronizace běží jen ručně a read-only.</p>
         </div>
         <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
@@ -13478,7 +13605,7 @@ function dataBoxMessageDetailPanel() {
       </div>
       <div class="data-box-detail-grid">
         ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
-        ${dataBoxDetailField("Schránka", message.dataBoxLabel || message.dataBoxId)}
+        ${dataBoxDetailField("Schránka", dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}
         ${dataBoxDetailField(actorLabel, actorValue)}
         ${dataBoxDetailField("Stav", message.status)}
         ${dataBoxDetailField("Priorita", message.priority)}
@@ -13630,11 +13757,13 @@ function dataBoxSyncRunsPanel() {
   const syncMessage = dataBoxState.syncError
     ? `<div class="data-box-sync-message data-box-sync-message--error" role="alert">${escapeHtml(dataBoxState.syncError)}</div>`
     : (dataBoxState.syncMessage ? `<div class="data-box-sync-message" role="status">${escapeHtml(dataBoxState.syncMessage)}</div>` : "");
-  const rows = dataBoxState.syncRuns.length
-    ? dataBoxState.syncRuns.map((run) => `
+  const selectedAccount = dataBoxSelectedAccount();
+  const filteredSyncRuns = dataBoxFilteredSyncRuns();
+  const rows = filteredSyncRuns.length
+    ? filteredSyncRuns.map((run) => `
       <tr>
         <td>${escapeHtml(formatDateTime(run.startedAt) || "-")}</td>
-        <td>${escapeHtml(run.dataBoxLabel || run.dataBoxId || "-")}</td>
+        <td>${escapeHtml(dataBoxDisplayName(run.dataBoxId, run.dataBoxLabel))}</td>
         <td>${escapeHtml(run.triggerType || "-")}</td>
         <td>${escapeHtml(run.status || "-")}</td>
         <td>${escapeHtml(String(run.messagesFound || 0))}</td>
@@ -13644,7 +13773,9 @@ function dataBoxSyncRunsPanel() {
     `).join("")
     : `
       <tr>
-        <td colspan="7">Žádný běh synchronizace zatím není zapsaný. Cloud automatizace a pravidelný ISDS runner nejsou aktivní.</td>
+        <td colspan="7">${escapeHtml(selectedAccount
+          ? `Pro chlívek ${selectedAccount.label} zatím není zapsaný žádný běh synchronizace.`
+          : "Žádný běh synchronizace zatím není zapsaný. Cloud automatizace a pravidelný ISDS runner nejsou aktivní.")}</td>
       </tr>
     `;
 
@@ -13744,6 +13875,7 @@ function dataBoxPage(moduleItem, user) {
       </section>
 
       ${dataBoxStatusCards()}
+      ${dataBoxAccountsSwitcher()}
       ${dataBoxTabs()}
       ${dataBoxArchitecturePanel()}
       ${dataBoxMessageTable("Přijaté zprávy", "received")}
@@ -15327,6 +15459,7 @@ function resetDataBoxState() {
   dataBoxState.status = null;
   dataBoxState.messages = [];
   dataBoxState.syncRuns = [];
+  dataBoxState.selectedDataBoxId = "";
   dataBoxState.syncLoading = false;
   dataBoxState.syncMessage = "";
   dataBoxState.syncError = "";
@@ -20498,6 +20631,27 @@ document.addEventListener("click", async (event) => {
 
   const dataBoxMessageDetailClose = event.target.closest("[data-data-box-message-detail-close]");
   if (dataBoxMessageDetailClose) {
+    dataBoxState.selectedMessageId = "";
+    dataBoxState.selectedMessage = null;
+    dataBoxState.detailError = "";
+    render();
+    return;
+  }
+
+  const dataBoxAccountButton = event.target.closest("[data-data-box-account]");
+  if (dataBoxAccountButton) {
+    const nextAccountId = dataBoxAccountButton.dataset.dataBoxAccount || "";
+    dataBoxState.selectedDataBoxId = dataBoxState.selectedDataBoxId === nextAccountId ? "" : nextAccountId;
+    dataBoxState.selectedMessageId = "";
+    dataBoxState.selectedMessage = null;
+    dataBoxState.detailError = "";
+    render();
+    return;
+  }
+
+  const dataBoxAccountReset = event.target.closest("[data-data-box-account-reset]");
+  if (dataBoxAccountReset) {
+    dataBoxState.selectedDataBoxId = "";
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
     dataBoxState.detailError = "";

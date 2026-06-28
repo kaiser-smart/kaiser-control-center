@@ -7511,6 +7511,120 @@ body:has(.ai-assistant-promo-modal) {
   background: #dfece6;
 }
 
+.data-box-accounts {
+  display: grid;
+  gap: 12px;
+}
+
+.data-box-accounts__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.data-box-accounts__head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.16rem;
+}
+
+.data-box-accounts__head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.data-box-account-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.data-box-account-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  min-height: 148px;
+  padding: 14px;
+  border: 1px solid rgba(40, 55, 47, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 14px 34px rgba(38, 48, 42, 0.07);
+  cursor: pointer;
+}
+
+.data-box-account-card:hover,
+.data-box-account-card:focus-visible {
+  border-color: rgba(63, 115, 91, 0.46);
+  background: #f7faf8;
+  outline: none;
+}
+
+.data-box-account-card--active {
+  border-color: rgba(63, 115, 91, 0.72);
+  background: #eef6f1;
+  box-shadow: 0 18px 38px rgba(51, 96, 75, 0.14);
+}
+
+.data-box-account-card__mark {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 8px;
+  background: #28372f;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.data-box-account-card strong {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.22;
+  overflow-wrap: anywhere;
+}
+
+.data-box-account-card small {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.data-box-account-card__status {
+  align-self: end;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: #eef2ef;
+  color: var(--steel);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.data-box-account-card__status--ready {
+  background: #dff1e7;
+  color: #2f6f50;
+}
+
+.data-box-account-card__status--error {
+  background: #ffe9e3;
+  color: #87382f;
+}
+
+.data-box-account-card__status--waiting {
+  background: #eef2ef;
+  color: var(--muted);
+}
+
 .data-box-panel {
   display: grid;
   gap: 16px;
@@ -14002,6 +14116,10 @@ body:has(.absence-page--employee-card) {
 }
 
 @media (max-width: 1023px) {
+  .data-box-account-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .data-box-status-grid,
   .data-box-phase-grid,
   .data-box-ai-grid,
@@ -14018,6 +14136,14 @@ body:has(.absence-page--employee-card) {
 }
 
 @media (max-width: 720px) {
+  .data-box-accounts__head {
+    display: grid;
+  }
+
+  .data-box-account-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .data-box-panel__head {
     display: grid;
   }
@@ -14043,6 +14169,16 @@ body:has(.absence-page--employee-card) {
 
   .data-box-panel {
     padding: 14px;
+  }
+}
+
+@media (max-width: 430px) {
+  .data-box-account-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .data-box-account-card {
+    min-height: 126px;
   }
 }
 

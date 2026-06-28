@@ -819,6 +819,35 @@ Zastav se pouze tehdy, když:
 - není jasné, která produkční služba je zdroj pravdy,
 - Cloudflare / GitHub vyžaduje ruční potvrzení vlastníka účtu.
 
+### Bezpečné předávání hesel a Cloudflare secrets
+
+Pokud je potřeba nastavit heslo, token nebo jiný secret:
+- nikdy ho nevkládat do chatu,
+- nikdy ho nevkládat přímo do shell příkazu,
+- nikdy ho neukládat do repozitáře, `.env` souboru nebo logu,
+- nepoužívat hromadný `.env` import, pokud není opravdu nutný a předem schválený,
+- preferovat ukládání po jednom přes `wrangler pages secret put <NAME> --project-name <PROJECT>`,
+- hodnotu zadá Radim/Martin do skrytého macOS dialogu nebo interaktivního promptu,
+- Codex smí ve výstupu ukázat pouze název secretu a potvrzení uložení, nikdy hodnotu,
+- po uložení ověřit jen seznam názvů přes `wrangler pages secret list`,
+- po změně Cloudflare Pages secrets udělat redeploy produkce,
+- po redeploy ověřit `buildMeta` a relevantní chráněné endpointy.
+
+Bezpečný vzor pro více secrets:
+
+```text
+1. Codex připraví přesný seznam názvů secrets.
+2. Radim/Martin potvrdí změnu secrets.
+3. Codex spustí ukládání po jednom.
+4. Pro každý secret vyskočí skrytý dialog / prompt.
+5. Radim/Martin vloží hodnotu mimo chat.
+6. Codex ověří pouze název secretu jako uložený.
+7. Po všech secrets Codex spustí redeploy.
+8. Codex ověří produkci.
+```
+
+Pokud se Cloudflare UI chová nespolehlivě, nepokračovat opakováním stejného formuláře. Přepnout na výše uvedený CLI postup.
+
 ## 7. Na projektu pracují
 
 Na projektu pracují:
