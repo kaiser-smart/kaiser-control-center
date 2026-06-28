@@ -10848,6 +10848,312 @@ body:has(.data-box-page) {
   }
 }
 
+/* Datova schranka: layout reset. Funkcni prvky zustavaji, specialni rozlozeni a grafika ne. */
+body:has(.data-box-page) {
+  background: var(--theme-bg, var(--page));
+}
+
+.data-box-page {
+  width: min(1080px, calc(100% - 32px));
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.data-box-page::before {
+  content: none;
+}
+
+.data-box-inbox-header,
+.data-box-account-strip,
+.data-box-tabs,
+.data-box-panel,
+.data-box-message-inbox,
+.data-box-reading-pane,
+.data-box-side-pane,
+.data-box-side-card,
+.data-box-message-card,
+.data-box-inbox-empty,
+.data-box-notification-strip,
+.data-box-detail-modal,
+.data-box-detail-actions,
+.data-box-detail-field,
+.data-box-detail-subject,
+.data-box-detail-columns section,
+.data-box-reading-facts div,
+.data-box-reading-section,
+.data-box-attachment-list li {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.data-box-inbox-header {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--theme-border, var(--line));
+}
+
+.data-box-inbox-header h1 {
+  font-size: 1.55rem;
+}
+
+.data-box-inbox-header__status,
+.data-box-inbox-header__context {
+  width: auto;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.data-box-inbox-header__status span,
+.data-box-inbox-header__context span {
+  display: block;
+}
+
+.data-box-hero-actions {
+  justify-content: flex-start;
+}
+
+.data-box-hero-actions .primary-action {
+  min-height: 36px;
+}
+
+.data-box-account-strip {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--theme-border, var(--line));
+}
+
+.data-box-account-strip__label {
+  min-width: 0;
+}
+
+.data-box-account-strip__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.data-box-account-chip {
+  min-width: 0;
+  min-height: 34px;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid var(--theme-border, var(--line));
+  background: transparent;
+  box-shadow: none;
+}
+
+.data-box-account-chip:hover,
+.data-box-account-chip:focus-visible,
+.data-box-account-chip--active,
+.data-box-account-chip[aria-pressed="true"] {
+  border-color: var(--theme-primary, var(--kaiser-green));
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.data-box-account-chip__mark {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--theme-primary, var(--kaiser-green));
+}
+
+.data-box-account-card__status {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.data-box-tabs {
+  gap: 8px;
+  padding: 0 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--theme-border, var(--line));
+}
+
+.data-box-tab {
+  min-height: 30px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.data-box-tab:hover,
+.data-box-tab:focus-visible,
+.data-box-tab--active {
+  border-color: var(--theme-primary, var(--kaiser-green));
+  background: transparent;
+  box-shadow: none;
+}
+
+.data-box-workbench {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.data-box-message-inbox,
+.data-box-reading-pane,
+.data-box-side-pane {
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.data-box-panel,
+.data-box-message-inbox,
+.data-box-reading-pane {
+  padding: 0;
+  border: 0;
+}
+
+.data-box-panel__head {
+  min-height: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--theme-border, var(--line));
+}
+
+.data-box-inbox-search,
+.data-box-quick-filters,
+.data-box-filters {
+  margin-top: 8px;
+}
+
+.data-box-inbox-search input,
+.data-box-filters input,
+.data-box-filters select {
+  border: 1px solid var(--theme-border, var(--line));
+  border-radius: 0;
+  background: var(--theme-card, var(--card));
+  box-shadow: none;
+}
+
+.data-box-quick-filter,
+.data-box-kpi {
+  border: 1px solid var(--theme-border, var(--line));
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.data-box-quick-filter:hover,
+.data-box-quick-filter:focus-visible,
+.data-box-quick-filter--active,
+.data-box-kpi:hover,
+.data-box-kpi:focus-visible,
+.data-box-kpi--active {
+  border-color: var(--theme-primary, var(--kaiser-green));
+  background: transparent;
+  box-shadow: none;
+}
+
+.data-box-message-list {
+  gap: 0;
+  padding-right: 0;
+}
+
+.data-box-message-card {
+  border: 0;
+  border-bottom: 1px solid var(--theme-border, var(--line));
+}
+
+.data-box-message-card:hover,
+.data-box-message-card--selected {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.data-box-message-card--selected::before {
+  content: none;
+}
+
+.data-box-message-card__select {
+  padding: 10px 0;
+}
+
+.data-box-message-card__select:hover,
+.data-box-message-card__select:focus-visible,
+.data-box-message-card--selected .data-box-message-card__select {
+  background: transparent;
+}
+
+.data-box-badge,
+.data-box-priority {
+  box-shadow: none;
+}
+
+.data-box-reading-pane,
+.data-box-side-pane {
+  padding: 0;
+}
+
+.data-box-reading-facts,
+.data-box-detail-grid,
+.data-box-detail-columns,
+.data-box-side-pane .data-box-kpi-grid {
+  grid-template-columns: 1fr;
+}
+
+.data-box-reading-facts div,
+.data-box-reading-section,
+.data-box-attachment-list li,
+.data-box-side-card,
+.data-box-action-list li,
+.data-box-detail-field,
+.data-box-detail-subject,
+.data-box-detail-columns section,
+.data-box-detail-actions {
+  padding: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--theme-border, var(--line));
+}
+
+.data-box-inbox-empty {
+  min-height: 0;
+  padding: 10px 0;
+  border: 0;
+}
+
+.data-box-detail-backdrop {
+  background: rgba(24, 31, 27, 0.35);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.data-box-detail-modal {
+  grid-template-columns: 1fr;
+  border-radius: 0;
+}
+
+@media (max-width: 1180px),
+  (max-width: 1023px),
+  (max-width: 720px) {
+  .data-box-workbench,
+  .data-box-inbox-header,
+  .data-box-reading-facts,
+  .data-box-filters,
+  .data-box-side-pane .data-box-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .absence-hero {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr) minmax(220px, 300px);

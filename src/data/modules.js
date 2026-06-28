@@ -52,7 +52,7 @@ export const modules = [
   {
     id: "data-box",
     title: "Datová schránka",
-    description: "Pilotní modul pro přijaté a odeslané datové zprávy, audit, AI vyhodnocení a budoucí cloud synchronizaci ISDS.",
+    description: "Přijaté a odeslané datové zprávy, lhůty, přílohy a stav vyřízení.",
     route: "/datova-schranka",
     icon: ReportsIcon,
     status: "ROZPRACOVÁN",

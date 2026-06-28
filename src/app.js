@@ -179,14 +179,8 @@ import {
   vehicleTrackingStatusTone
 } from "./data/vehicleTracking.js";
 import {
-  DATA_BOX_EXISTING_ENDPOINTS,
-  DATA_BOX_FUTURE_ENDPOINTS,
-  DATA_BOX_INTEGRATION_POINTS,
   DATA_BOX_MODULE_KEY,
-  DATA_BOX_PHASES,
-  DATA_BOX_REALITY_ITEMS,
   DATA_BOX_ROUTE,
-  DATA_BOX_STATUS_CARDS,
   DATA_BOX_TABS
 } from "./data/dataBox.js";
 
@@ -14017,54 +14011,6 @@ function dataBoxAccountsSwitcher() {
   `;
 }
 
-function dataBoxStatusCards() {
-  const status = dataBoxState.status || {};
-  const summary = status.summary || {};
-  const apiReady = dataBoxState.apiStatus === "ready";
-  const storageReady = dataBoxState.storageStatus === "ready";
-  const configuredDataBoxes = Number(status.isds?.configuredAccounts || summary.configuredDataBoxes || 0);
-  const dataBoxesCount = Number(summary.dataBoxes || status.isds?.accountCount || configuredDataBoxes || 0);
-  const cards = DATA_BOX_STATUS_CARDS.map((item) => ({ ...item }));
-  cards[0] = {
-    label: "Stav funkce",
-    value: apiReady ? "Funkční přes API" : (dataBoxState.loading ? "načítám API" : "UI návrh"),
-    note: apiReady
-      ? "Frontend čte metadata z cloud API a umí spustit ruční read-only sync přes backend."
-      : (dataBoxState.error || "Bez ostrého čtení, zápisu nebo odesílání do ISDS.")
-  };
-  cards[1] = {
-    label: "Zdroj dat",
-    value: apiReady ? "Cloudflare D1" : "čeká na API",
-    note: apiReady
-      ? `${Number(summary.received || 0)} přijatých, ${Number(summary.sent || 0)} odeslaných, ${Number(summary.attachments || 0)} příloh, ${dataBoxesCount} schránek v D1.`
-      : "Cílově cloud backend, D1 metadata a R2 přílohy."
-  };
-  cards[2] = {
-    label: "ISDS napojení",
-    value: dataBoxStatusLabel(dataBoxState.integrationStatus),
-    note: status.message || (configuredDataBoxes ? `${configuredDataBoxes} DS účtů čeká na ruční sync.` : "SOAP/WSDL adapter čeká na Cloudflare secrets.")
-  };
-  cards[3] = {
-    label: "Úložiště příloh",
-    value: storageReady ? "R2 připraveno" : "čeká na R2",
-    note: storageReady
-      ? "Metadata jsou v D1, soubory budou v R2 přes backend."
-      : "Přílohy se zatím nenačítají ani neukládají."
-  };
-
-  return `
-    <div class="data-box-status-grid" aria-label="Stav modulu Datová schránka">
-      ${cards.map((item) => `
-        <article>
-          <span>${escapeHtml(item.label)}</span>
-          <strong>${escapeHtml(item.value)}</strong>
-          <small>${escapeHtml(item.note)}</small>
-        </article>
-      `).join("")}
-    </div>
-  `;
-}
-
 function dataBoxLastSyncLabel() {
   const summary = dataBoxState.status?.summary || {};
   const lastRun = dataBoxFilteredSyncRuns()[0] || dataBoxState.syncRuns[0] || null;
@@ -14085,7 +14031,7 @@ function dataBoxConnectionState() {
     return {
       label: "Načítám",
       tone: "info",
-      note: "Probíhá čtení chráněného API."
+      note: "Načítám zprávy."
     };
   }
 
@@ -14098,9 +14044,9 @@ function dataBoxConnectionState() {
   }
 
   return {
-    label: "Čeká na konfiguraci",
+    label: "Není nastaveno",
     tone: "waiting",
-    note: "Čeká na bezpečné nastavení."
+    note: "Zprávy zatím nejdou načíst."
   };
 }
 
@@ -14121,39 +14067,6 @@ function dataBoxHeaderActions(user) {
         ${escapeHtml(syncLabel)}
       </button>
     </div>
-  `;
-}
-
-function dataBoxNotificationsStrip() {
-  const connection = dataBoxConnectionState();
-  const status = dataBoxState.status || {};
-  const notificationStatus = status.notifications?.enabled
-    ? "Zapnuto přes backend"
-    : "Není aktivní";
-  const scheduleStatus = status.isds?.scheduledSyncEnabled
-    ? "Cloud plán aktivní"
-    : "Read-only návrh";
-
-  return `
-    <section class="data-box-notification-strip" aria-label="Notifikace a stahování">
-      <div>
-        <span>Notifikace a stahování</span>
-        <strong>${escapeHtml(notificationStatus)}</strong>
-      </div>
-      <div>
-        <span>Poslední synchronizace</span>
-        <strong>${escapeHtml(dataBoxLastSyncLabel())}</strong>
-      </div>
-      <div>
-        <span>Plán stahování</span>
-        <strong>Stahovat DS každých 30 minut</strong>
-        <small>${escapeHtml(scheduleStatus)} · cron se nespouští z frontendu</small>
-      </div>
-      <div>
-        <span>ISDS</span>
-        <strong>${escapeHtml(connection.label)}</strong>
-      </div>
-    </section>
   `;
 }
 
@@ -14198,10 +14111,6 @@ function dataBoxActivePanel(user) {
     `;
   }
 
-  if (activeTab === "ai") {
-    return dataBoxAiPanel();
-  }
-
   if (activeTab === "rules") {
     return `
       ${dataBoxSyncRunsPanel()}
@@ -14211,7 +14120,10 @@ function dataBoxActivePanel(user) {
     `;
   }
 
-  return dataBoxArchitecturePanel();
+  return `
+    ${dataBoxMessageInbox("Přijaté zprávy", "received")}
+    ${dataBoxMessageDetailPanel()}
+  `;
 }
 
 function dataBoxMessageActor(message) {
@@ -14562,11 +14474,11 @@ function dataBoxMessageNextStep(message) {
   }
 
   if (dataBoxMessageHasAttachmentProblem(message)) {
-    return "Opravit otevírání příloh nebo prověřit metadata přílohy.";
+    return "Opravit otevírání příloh.";
   }
 
   if (status.id === "error" || priority.id === "error") {
-    return "Prověřit metadata a poslední synchronizaci.";
+    return "Prověřit poslední načtení.";
   }
 
   if (source.includes("zverejneni") && source.includes("registr smluv")) {
@@ -14786,11 +14698,9 @@ function dataBoxOperationalKpis(direction = "received") {
   const metrics = dataBoxInboxMetrics(direction);
   const active = dataBoxState.messageFilters.quick || "all";
   const urgentOrDeadline = Math.max(metrics.urgent, metrics.deadline3);
-  const vaultLabel = Number.isFinite(metrics.vaultCapacity) ? `${Math.round(metrics.vaultCapacity)} %` : "není v datech";
   const cards = [
     { label: "Nepřečtené", value: metrics.newCount, note: "Nové obálky", filter: "new", tone: "info" },
     { label: "Urgentní / lhůty", value: urgentOrDeadline, note: "Návrh priority", filter: urgentOrDeadline ? "urgent" : "deadlines", tone: urgentOrDeadline ? "urgent" : "muted" },
-    { label: "Kapacita trezoru", value: vaultLabel, note: "Read-only stav", filter: "all", tone: Number.isFinite(metrics.vaultCapacity) && metrics.vaultCapacity >= 90 ? "warning" : "muted" },
     { label: direction === "sent" ? "Odeslané" : "Zpracované", value: metrics.sentOrDone, note: direction === "sent" ? "V seznamu" : "Vyřízené", filter: direction === "sent" ? "all" : "done", tone: "done" }
   ];
 
@@ -14940,15 +14850,15 @@ function dataBoxInboxNotice(direction, allRows, filteredRows) {
     return {
       tone: "error",
       title: "Datovou schránku se nepodařilo načíst.",
-      text: "Zkontrolujte konfiguraci nebo zkuste akci opakovat."
+      text: "Zkus akci opakovat."
     };
   }
 
   if (dataBoxState.apiStatus !== "ready") {
     return {
       tone: "warning",
-      title: "Datová schránka zatím není nakonfigurovaná.",
-      text: "Čeká na bezpečné nastavení."
+      title: "Datová schránka zatím není nastavená.",
+      text: "Zprávy nejdou načíst."
     };
   }
 
@@ -14956,9 +14866,9 @@ function dataBoxInboxNotice(direction, allRows, filteredRows) {
     const selectedAccount = dataBoxSelectedAccount();
     return {
       tone: "muted",
-      title: "V datové schránce nejsou žádné zprávy k zobrazení.",
+      title: "Zprávy zatím nejsou načtené.",
       text: selectedAccount
-        ? `${selectedAccount.label} zatím nemá načtené ${direction === "sent" ? "odeslané" : "přijaté"} zprávy.`
+        ? `${selectedAccount.label}: spusť načtení.`
         : "Vyber schránku nebo spusť načtení."
     };
   }
@@ -14985,6 +14895,15 @@ function dataBoxInboxNoticeMarkup(notice) {
       <span>${escapeHtml(notice.text)}</span>
     </div>
   `;
+}
+
+function dataBoxInboxIsEmptyState(notice, allRows) {
+  return Boolean(notice) && (
+    dataBoxState.apiStatus !== "ready"
+    || dataBoxState.loading
+    || dataBoxState.error
+    || !allRows.length
+  );
 }
 
 function dataBoxMessageCard(message, selected) {
@@ -15038,7 +14957,7 @@ function dataBoxSelectedPreviewMessage(rows) {
 function dataBoxMessageContentPreview(message) {
   const text = dataBoxMessageRawPreview(message);
 
-  return text || "Náhled obsahu není dostupný.";
+  return text || "Náhled není dostupný.";
 }
 
 function dataBoxReadingPane(message, direction) {
@@ -15088,8 +15007,8 @@ function dataBoxReadingPane(message, direction) {
         <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(dataBoxMessageTimestamp(message)))}</dd></div>
         <div><dt>Schránka</dt><dd>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</dd></div>
         <div><dt>Typ</dt><dd>${escapeHtml(type.label)}</dd></div>
-        <div><dt>Návrh priority</dt><dd>${escapeHtml(priority.label)} · heuristika</dd></div>
-        <div><dt>Přílohy</dt><dd>${escapeHtml(attachmentCount ? `${attachmentCount} v metadatech` : "Bez příloh")}</dd></div>
+        <div><dt>Priorita</dt><dd>${escapeHtml(priority.label)}</dd></div>
+        <div><dt>Přílohy</dt><dd>${escapeHtml(attachmentCount ? `${attachmentCount}` : "Bez příloh")}</dd></div>
       </dl>
       <section class="data-box-reading-section data-box-reading-section--content">
         <h4>Obsah / náhled</h4>
@@ -15105,7 +15024,7 @@ function dataBoxReadingPane(message, direction) {
 
 function dataBoxSupportTasks(message) {
   if (!message) {
-    return ["Vyber zprávu", "Zkontroluj stav ISDS", "Sleduj lhůty"];
+    return ["Vyber zprávu", "Sleduj lhůty"];
   }
 
   const attachmentCount = dataBoxAttachmentCount(message);
@@ -15121,19 +15040,15 @@ function dataBoxSupportTasks(message) {
   }
 
   tasks.push(dataBoxMessageNextStep(message));
-  tasks.push("Čeká na ruční kontrolu");
 
   return [...new Set(tasks)].slice(0, 4);
 }
 
 function dataBoxSupportPane(message, direction) {
   const connection = dataBoxConnectionState();
-  const status = dataBoxState.status || {};
   const metrics = dataBoxInboxMetrics(direction);
   const selectedAccount = dataBoxSelectedAccount();
   const context = dataBoxActiveContextLabel();
-  const notificationStatus = status.notifications?.enabled ? "Zapnuto" : "Není aktivní";
-  const scheduleStatus = status.isds?.scheduledSyncEnabled ? "Cloud plán aktivní" : "Pouze návrh";
   const vaultLabel = Number.isFinite(metrics.vaultCapacity) ? `${Math.round(metrics.vaultCapacity)} %` : "není v datech";
   const nextStep = message ? dataBoxMessageNextStep(message) : "Vyber zprávu ze seznamu.";
 
@@ -15142,7 +15057,6 @@ function dataBoxSupportPane(message, direction) {
       <section class="data-box-side-card data-box-side-card--next">
         <span>Návrh vyřízení</span>
         <strong>${escapeHtml(nextStep)}</strong>
-        <small>Návrh z metadat, ne právní závěr.</small>
       </section>
       <section class="data-box-side-card">
         <span>Typické úkony</span>
@@ -15159,32 +15073,40 @@ function dataBoxSupportPane(message, direction) {
           <div><dt>Schránka</dt><dd>${escapeHtml(selectedAccount ? selectedAccount.label : context.title)}</dd></div>
         </dl>
       </section>
-      <section class="data-box-side-card">
-        <span>Datový trezor</span>
-        <strong>${escapeHtml(vaultLabel)}</strong>
-        <small>${Number.isFinite(metrics.vaultCapacity) && metrics.vaultCapacity >= 90 ? "Doporučení: předat Radimovi." : "Kapacita pouze read-only."}</small>
-      </section>
-      <section class="data-box-side-card">
-        <span>Notifikace a stahování</span>
-        <dl class="data-box-side-status">
-          <div><dt>Notifikace</dt><dd>${escapeHtml(notificationStatus)}</dd></div>
-          <div><dt>Plán</dt><dd>30 minut</dd></div>
-          <div><dt>Režim</dt><dd>${escapeHtml(scheduleStatus)}</dd></div>
-        </dl>
-      </section>
+      ${Number.isFinite(metrics.vaultCapacity) && metrics.vaultCapacity >= 90 ? `
+        <section class="data-box-side-card">
+          <span>Datový trezor</span>
+          <strong>${escapeHtml(vaultLabel)}</strong>
+          <small>Doporučení: předat Radimovi.</small>
+        </section>
+      ` : ""}
     </aside>
   `;
 }
 
 function dataBoxMessageInbox(title, direction) {
   const statusClass = dataBoxState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
-  const statusLabel = dataBoxState.apiStatus === "ready" ? "API aktivní" : (dataBoxState.loading ? "načítám API" : "čeká na API");
+  const statusLabel = dataBoxState.apiStatus === "ready" ? "Načteno" : (dataBoxState.loading ? "Načítám" : "Nenastaveno");
   const selectedAccount = dataBoxSelectedAccount();
   const sectionTitle = selectedAccount ? `${title}: ${selectedAccount.label}` : title;
   const allRows = dataBoxMessagesForDirection(direction);
   const rows = dataBoxFilteredMessages(direction);
   const selectedPreview = dataBoxSelectedPreviewMessage(rows);
   const notice = dataBoxInboxNotice(direction, allRows, rows);
+  const emptyState = dataBoxInboxIsEmptyState(notice, allRows);
+
+  if (emptyState) {
+    return `
+      <section class="data-box-panel data-box-message-inbox data-box-message-inbox--empty" id="data-box-${escapeHtml(direction)}-panel" aria-labelledby="data-box-${escapeHtml(direction)}-title">
+        <div class="data-box-panel__head">
+          <div>
+            <h2 id="data-box-${escapeHtml(direction)}-title">${escapeHtml(sectionTitle)}</h2>
+          </div>
+        </div>
+        ${dataBoxInboxNoticeMarkup(notice)}
+      </section>
+    `;
+  }
 
   return `
     <div class="data-box-workbench" id="data-box-${escapeHtml(direction)}-panel">
@@ -15202,8 +15124,8 @@ function dataBoxMessageInbox(title, direction) {
           ${notice ? dataBoxInboxNoticeMarkup(notice) : rows.map((message) => dataBoxMessageCard(message, selectedPreview?.id === message.id)).join("")}
         </div>
       </section>
-      ${dataBoxReadingPane(notice ? null : selectedPreview, direction)}
-      ${dataBoxSupportPane(notice ? null : selectedPreview, direction)}
+      ${notice ? "" : dataBoxReadingPane(selectedPreview, direction)}
+      ${notice ? "" : dataBoxSupportPane(selectedPreview, direction)}
     </div>
   `;
 }
@@ -15222,14 +15144,14 @@ function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
     if (expectedCount > 0) {
       return `
         <li>
-          <strong>${escapeHtml(`${expectedCount} příloh v metadatech`)}</strong>
-          <span>Přesné názvy souborů nejsou v tomto pohledu dostupné.</span>
-          <em class="data-box-attachment-note">Přílohy nejsou veřejné. Zobrazení a stažení čeká na chráněné API.</em>
+          <strong>${escapeHtml(`${expectedCount} příloh`)}</strong>
+          <span>Názvy souborů zatím nejsou dostupné.</span>
+          <em class="data-box-attachment-note">Přílohy zatím nejdou otevřít.</em>
         </li>
       `;
     }
 
-    return `<li>Bez příloh v metadatech.</li>`;
+    return `<li>Bez příloh.</li>`;
   }
 
   return attachments.map((attachment) => `
@@ -15239,15 +15161,15 @@ function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
         attachment.contentType || "",
         formatFileSize(attachment.sizeBytes),
         attachment.status || ""
-      ].filter(Boolean).join(" · ") || "metadata")}</span>
-      <em class="data-box-attachment-note">Příloha není dostupná přes veřejné URL.</em>
+      ].filter(Boolean).join(" · ") || "bez detailu")}</span>
+      <em class="data-box-attachment-note">Příloha zatím nejde otevřít.</em>
     </li>
   `).join("");
 }
 
 function dataBoxAiEvaluationDetail(evaluation) {
   if (!evaluation) {
-    return "Bez uloženého AI návrhu v dostupných metadatech.";
+    return "";
   }
 
   return [
@@ -15255,7 +15177,7 @@ function dataBoxAiEvaluationDetail(evaluation) {
     evaluation.priority ? `priorita: ${evaluation.priority}` : "",
     evaluation.status ? `stav: ${evaluation.status}` : "",
     evaluation.confidence !== null && evaluation.confidence !== undefined ? `jistota: ${evaluation.confidence}` : ""
-  ].filter(Boolean).join(" · ") || "Návrh vyřízení bez detailu.";
+  ].filter(Boolean).join(" · ");
 }
 
 function dataBoxMessageDetailPanel() {
@@ -15272,7 +15194,7 @@ function dataBoxMessageDetailPanel() {
     content = `
       <div class="data-box-detail-modal__empty">
         <strong>Načítám detail zprávy...</strong>
-        <span>Metadata se čtou z chráněného backend API.</span>
+        <span>Načítám detail.</span>
       </div>
     `;
   } else if (dataBoxState.detailError) {
@@ -15298,13 +15220,12 @@ function dataBoxMessageDetailPanel() {
           ${dataBoxDetailField("Schránka", dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}
           ${dataBoxDetailField(actorLabel, actorValue)}
           ${dataBoxDetailField("Stav", workflow.label)}
-          ${dataBoxDetailField("Návrh priority", `${priority.label} · heuristika`)}
+          ${dataBoxDetailField("Priorita", priority.label)}
           ${dataBoxDetailField("Typ zprávy", messageType.label)}
           ${dataBoxDetailField("Doručeno", formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt))}
           ${dataBoxDetailField("Přečteno", formatDateTime(message.readAt))}
           ${dataBoxDetailField("Lhůta", deadline.date ? deadline.label : "bez lhůty")}
           ${dataBoxDetailField("ID zprávy", message.id)}
-          ${dataBoxDetailField("ISDS stav", message.isdsState || message.status)}
           ${dataBoxDetailField("Odpovědná osoba", dataBoxMessageAssigneeLabel(message))}
         </div>
         <div class="data-box-detail-subject">
@@ -15323,7 +15244,7 @@ function dataBoxMessageDetailPanel() {
           <section>
             <h3>Návrh vyřízení</h3>
             <p>${escapeHtml(dataBoxMessageNextStep(message))}</p>
-            <p>${escapeHtml(dataBoxAiEvaluationDetail(message.latestAiEvaluation))}</p>
+            ${dataBoxAiEvaluationDetail(message.latestAiEvaluation) ? `<p>${escapeHtml(dataBoxAiEvaluationDetail(message.latestAiEvaluation))}</p>` : ""}
             ${message.latestAiEvaluation?.summary ? `<p>${escapeHtml(message.latestAiEvaluation.summary)}</p>` : ""}
             ${message.latestAiEvaluation?.suggestedAction ? `<p>${escapeHtml(message.latestAiEvaluation.suggestedAction)}</p>` : ""}
           </section>
@@ -15333,13 +15254,13 @@ function dataBoxMessageDetailPanel() {
           </section>
           <section>
             <h3>Typické úkony</h3>
-            <p>Zkontrolovat lhůtu, projít přílohy, ověřit odpovědnou osobu a další krok řešit až po ručním potvrzení.</p>
+            <p>Zkontrolovat lhůtu, projít přílohy a ověřit odpovědnou osobu.</p>
           </section>
         </div>
       </div>
       <aside class="data-box-detail-actions" aria-label="Bezpečnost detailu zprávy">
-        <strong>Read-only režim</strong>
-        <p>Akce odpovědět, přeposlat, změnit stav, přiřadit osobu a stáhnout přílohy čekají na potvrzené API a ruční potvrzení. Z této obrazovky se zatím nic neodesílá, nemaže ani nezveřejňuje.</p>
+        <strong>Bez odeslání</strong>
+        <p>Z této obrazovky se zatím nic neodesílá, nemaže ani nemění.</p>
       </aside>
     `;
   } else {
@@ -15379,110 +15300,9 @@ function dataBoxMessageDetailPanel() {
   `;
 }
 
-function dataBoxAiPanel() {
-  return `
-    <section class="data-box-panel" id="data-box-ai-panel" aria-labelledby="data-box-ai-title">
-      <div class="data-box-panel__head">
-        <div>
-          <h2 id="data-box-ai-title">Návrh vyřízení</h2>
-          <p>Budoucí backendové vyhodnocení obsahu zprávy, příloh a doporučeného postupu s lidským potvrzením.</p>
-        </div>
-        <span class="employee-card-status employee-card-status--waiting">návrh</span>
-      </div>
-      <div class="data-box-ai-grid">
-        <article>
-          <span>Vstup</span>
-          <strong>metadata + text + přílohy</strong>
-          <small>Po extrakci v backendu, bez posílání secrets do frontendu.</small>
-        </article>
-        <article>
-          <span>Výstup</span>
-          <strong>štítek, priorita, návrh akce</strong>
-          <small>Výsledek se uloží s confidence a audit stopou.</small>
-        </article>
-        <article>
-          <span>Bezpečnost</span>
-          <strong>ruční potvrzení</strong>
-          <small>AI nesmí samo odeslat odpověď ani měnit stav zprávy.</small>
-        </article>
-      </div>
-    </section>
-  `;
-}
-
-function dataBoxArchitecturePanel() {
-  const status = dataBoxState.status || {};
-  const summary = status.summary || {};
-  const lastSync = summary.lastSyncAt ? formatDateTime(summary.lastSyncAt) : "zatím neproběhla";
-  const isdsConfigured = Boolean(status.isds?.configured);
-  const configuredDataBoxes = Number(status.isds?.configuredAccounts || summary.configuredDataBoxes || 0);
-  const isdsBadge = isdsConfigured
-    ? (configuredDataBoxes > 1 ? `${configuredDataBoxes} DS účtů` : "ruční ISDS sync")
-    : "čeká na secrets";
-
-  return `
-    <section class="data-box-panel" id="data-box-overview-panel" aria-labelledby="data-box-overview-title">
-      <div class="data-box-panel__head">
-        <div>
-          <h2 id="data-box-overview-title">Provozní realita</h2>
-          <p>Rozpad na fáze a cílové cloudové části, aby UI nevypadalo jako ostré ISDS napojení.</p>
-        </div>
-        <span class="employee-card-status ${isdsConfigured ? "employee-card-status--ready" : "employee-card-status--waiting"}">${escapeHtml(isdsBadge)}</span>
-      </div>
-      <div class="data-box-warning" role="status">
-        <strong>Poslední synchronizace: ${escapeHtml(lastSync)}</strong>
-        <span>${escapeHtml(status.message || "ISDS integrace není aktivní. Připravený je pouze vlastní cloudový model dat.")}</span>
-      </div>
-      <div class="data-box-reality-grid" aria-label="Co v modulu Datová schránka skutečně funguje">
-        ${DATA_BOX_REALITY_ITEMS.map((item) => `
-          <article>
-            <span>${escapeHtml(item.label)}</span>
-            <strong>${escapeHtml(item.value)}</strong>
-            <small>${escapeHtml(item.note)}</small>
-          </article>
-        `).join("")}
-      </div>
-      <div class="data-box-phase-grid">
-        ${DATA_BOX_PHASES.map((phase) => `
-          <article>
-            <span>${escapeHtml(phase.title)}</span>
-            <strong>${escapeHtml(phase.status)}</strong>
-            <p>${escapeHtml(phase.description)}</p>
-          </article>
-        `).join("")}
-      </div>
-      <div class="data-box-architecture-grid">
-        <section>
-          <h3>Cloud části</h3>
-          <dl>
-            ${DATA_BOX_INTEGRATION_POINTS.map(([label, value]) => `
-              <div>
-                <dt>${escapeHtml(label)}</dt>
-                <dd>${escapeHtml(value)}</dd>
-              </div>
-            `).join("")}
-          </dl>
-        </section>
-        <section>
-          <h3>Existující čtecí API</h3>
-          <ul>
-            ${DATA_BOX_EXISTING_ENDPOINTS.map((endpoint) => `<li><code>${escapeHtml(endpoint)}</code></li>`).join("")}
-          </ul>
-        </section>
-        <section>
-          <h3>Další fáze API</h3>
-          <ul>
-            ${DATA_BOX_FUTURE_ENDPOINTS.map((endpoint) => `<li><code>${escapeHtml(endpoint)}</code></li>`).join("")}
-          </ul>
-        </section>
-      </div>
-    </section>
-  `;
-}
-
 function dataBoxSyncRunsPanel() {
   const statusClass = dataBoxState.apiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting";
-  const statusLabel = dataBoxState.apiStatus === "ready" ? "D1 log připraven" : "čeká na D1";
+  const statusLabel = dataBoxState.apiStatus === "ready" ? "Log připraven" : "Čeká na nastavení";
   const user = currentUser();
   const configuredDataBoxes = Number(dataBoxState.status?.isds?.configuredAccounts || 0);
   const canSync = dataBoxCanManualSync(user);
@@ -15508,8 +15328,8 @@ function dataBoxSyncRunsPanel() {
     : `
       <tr>
         <td colspan="7">${escapeHtml(selectedAccount
-          ? `Pro chlívek ${selectedAccount.label} zatím není zapsaný žádný běh synchronizace.`
-          : "Žádný běh synchronizace zatím není zapsaný. Cloud automatizace a pravidelný ISDS runner nejsou aktivní.")}</td>
+          ? `${selectedAccount.label} zatím nemá zapsané žádné načtení.`
+          : "Zatím není zapsané žádné načtení zpráv.")}</td>
       </tr>
     `;
 
@@ -15518,7 +15338,7 @@ function dataBoxSyncRunsPanel() {
       <div class="data-box-panel__head">
         <div>
           <h2 id="data-box-sync-title">Log synchronizaci</h2>
-          <p>Ruční read-only sync načte pouze seznam obálek z ISDS přes backend. Přílohy, obsah zpráv, odesílání a automatický cron zůstávají vypnuté.</p>
+          <p>Přehled ručního načtení zpráv.</p>
         </div>
         <span class="employee-card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
       </div>
@@ -15526,7 +15346,7 @@ function dataBoxSyncRunsPanel() {
         <button class="primary-action" type="button" data-data-box-sync ${syncDisabled ? "disabled" : ""}>
           ${escapeHtml(syncLabel)}
         </button>
-        <span>${escapeHtml(canSync ? (configuredDataBoxes ? `Ruční sync projde ${configuredDataBoxes} nastavených DS účtů.` : "Bez Cloudflare secrets se zapíše pouze bezpečný stav konfigurace.") : "Ruční sync může spustit pouze admin nebo management s oprávněním manage.")}</span>
+        <span>${escapeHtml(canSync ? (configuredDataBoxes ? `Načtení projde ${configuredDataBoxes} schránek.` : "Schránky zatím nejsou nastavené.") : "Načtení může spustit pouze oprávněný uživatel.")}</span>
       </div>
       ${syncMessage}
       <div class="data-box-table-wrap">
@@ -15538,8 +15358,8 @@ function dataBoxSyncRunsPanel() {
               <th>Typ</th>
               <th>Stav</th>
               <th>Nalezeno</th>
-              <th>Vytvoreno</th>
-              <th>Zprava</th>
+              <th>Nové</th>
+              <th>Zpráva</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -15555,8 +15375,8 @@ function dataBoxRulesAutomation(user) {
     moduleKey: DATA_BOX_MODULE_KEY,
     moduleName: "Datová schránka",
     user,
-    description: "Cloud evidence pravidel a automatizací pro budoucí synchronizaci, třídění a notifikace Datové schránky.",
-    cloudNote: "V této fázi se žádná ISDS automatizace nespouští. Pravidla jsou jen evidence a příprava pro budoucí cloud runner."
+    description: "Pravidla pro třídění, upozornění a práci se zprávami.",
+    cloudNote: "Automatické zpracování zatím neběží. Pravidla jsou jen evidence."
   });
 }
 
@@ -15564,6 +15384,14 @@ function dataBoxPage(moduleItem, user) {
   ensureDataBoxData();
   const connection = dataBoxConnectionState();
   const context = dataBoxActiveContextLabel();
+  const hasMessages = dataBoxState.messages.length > 0;
+  const feedbackBox = hasMessages
+    ? moduleFeedbackBoxFor(moduleItem, user, {
+      moduleId: DATA_BOX_MODULE_KEY,
+      moduleName: "Datová schránka",
+      placeholder: "Např. chybí filtr podle odesílatele, priorita, vazba na zákazníka nebo typ návrhu vyřízení..."
+    })
+    : "";
 
   return `
     <main class="app-shell module-page module-theme-scope data-box-page" ${moduleThemeStyleAttribute()}>
@@ -15576,7 +15404,7 @@ function dataBoxPage(moduleItem, user) {
       <section class="data-box-inbox-header" aria-labelledby="module-title">
         <div class="data-box-inbox-header__title">
           <h1 id="module-title">Datová schránka</h1>
-          <p>Příchozí datové zprávy, lhůty, přílohy a stav vyřízení.</p>
+          <p>Přijaté a odeslané zprávy, lhůty a přílohy.</p>
           <div class="data-box-inbox-header__status data-box-inbox-header__status--${escapeHtml(connection.tone)}">
             <strong>${escapeHtml(connection.label)}</strong>
             <span>${escapeHtml(connection.note)}</span>
@@ -15592,11 +15420,7 @@ function dataBoxPage(moduleItem, user) {
       ${dataBoxAccountsSwitcher()}
       ${dataBoxTabs()}
       ${dataBoxActivePanel(user)}
-      ${moduleFeedbackBoxFor(moduleItem, user, {
-        moduleId: DATA_BOX_MODULE_KEY,
-        moduleName: "Datová schránka",
-        placeholder: "Např. chybí filtr podle odesílatele, priorita, vazba na zákazníka nebo typ návrhu vyřízení..."
-      })}
+      ${feedbackBox}
     </main>
   `;
 }
@@ -17295,7 +17119,7 @@ async function runDataBoxManualSync() {
 
   dataBoxState.syncLoading = true;
   dataBoxState.syncError = "";
-  dataBoxState.syncMessage = "Spouštím ruční read-only sync...";
+  dataBoxState.syncMessage = "Načítám nové zprávy...";
   render();
 
   try {
@@ -17303,10 +17127,10 @@ async function runDataBoxManualSync() {
       method: "POST",
       body: JSON.stringify({})
     });
-    dataBoxState.syncMessage = result.message || result.sync?.message || "Ruční sync doběhl.";
+    dataBoxState.syncMessage = result.message || result.sync?.message || "Načtení doběhlo.";
     await loadDataBoxData({ force: true, renderAfter: false });
   } catch (error) {
-    dataBoxState.syncError = error?.payload?.error || error?.message || "Ruční sync se nepodařilo spustit.";
+    dataBoxState.syncError = error?.payload?.error || error?.message || "Načtení se nepodařilo spustit.";
     await loadDataBoxData({ force: true, renderAfter: false }).catch(() => {});
   } finally {
     dataBoxState.syncLoading = false;
