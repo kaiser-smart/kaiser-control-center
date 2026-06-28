@@ -430,7 +430,7 @@ const EMPLOYEE_HR_PROFILE_FIELD_GROUPS = [
       { key: "state", label: "Stát" },
       { key: "contactStreet", label: "Kontaktní ulice" },
       { key: "contactZip", label: "Kontaktní PSČ" },
-      { key: "contactCountry", label: "Kontaktní stát" }
+      { key: "contactCountry", label: "Země" }
     ]
   },
   {
@@ -471,7 +471,6 @@ const EMPLOYEE_HR_PROFILE_FIELD_GROUPS = [
       { key: "emergencyContactPhone", label: "Telefon nouzového kontaktu" },
       { key: "driverLicenseNumber", label: "Číslo ŘP" },
       { key: "driverLicenseGroups", label: "Skupiny ŘP" },
-      { key: "computerWork", label: "Práce s počítačem" },
       { key: "emailNotificationsEnabled", label: "Povolit e-mailové notifikace", type: "boolean" }
     ]
   },
@@ -2915,7 +2914,7 @@ function normalizeEmployeeCardFormData(data) {
     role: normalizeRole(data.role),
     department: normalizeEmployeeCardText(data.department),
     position: normalizeEmployeeCardText(data.position),
-    address: normalizeEmployeeCardText(data.address),
+    address: employeeResidenceAddress(data),
     workplace: normalizeEmployeeCardText(data.workplace),
     managerId: normalizeEmployeeCardText(data.managerId),
     employmentStatus: normalizeEmployeeCardText(data.employmentStatus) || "active",
@@ -2952,6 +2951,24 @@ function employeeCardDraftFor(employee) {
   };
 }
 
+function employeeResidenceAddress(employee) {
+  const directAddress = normalizeEmployeeCardText(employee?.address);
+  if (directAddress) {
+    return directAddress;
+  }
+
+  const profile = employee?.hrProfile || {};
+  const streetLine = [profile.street, profile.houseNumber]
+    .map(normalizeEmployeeCardText)
+    .filter(Boolean)
+    .join(" ");
+  const country = normalizeEmployeeCardText(profile.country || profile.contactCountry || profile.state);
+  return [streetLine, profile.municipality, country]
+    .map(normalizeEmployeeCardText)
+    .filter(Boolean)
+    .join(", ");
+}
+
 function employeeCardFormField(form, name) {
   return form.elements.namedItem?.(name) || form.querySelector(`[name="${name}"]`);
 }
@@ -2961,7 +2978,7 @@ function employeeCardFormValue(form, name) {
 }
 
 function employeeHrProfileFormData(form) {
-  const profile = {};
+  const profile = { ...(employeeCardState.employee?.hrProfile || {}) };
   employeeHrProfileFieldList().forEach((field) => {
     profile[field.key] = employeeCardFormValue(form, `hrProfile.${field.key}`);
   });
@@ -2988,7 +3005,7 @@ function employeeCardFormData(form) {
     role: normalizeRole(employeeCardFormValue(form, "role") || source.role),
     department: employeeCardFormValue(form, "department").trim(),
     position: employeeCardFormValue(form, "position").trim(),
-    address: employeeCardFormValue(form, "address").trim(),
+    address: employeeCardFormValue(form, "address").trim() || employeeResidenceAddress(source),
     workplace: employeeCardFormValue(form, "workplace").trim(),
     managerId,
     managerName: managerId ? employeeFullName(manager) : "",
@@ -3004,7 +3021,9 @@ function employeeCardFormData(form) {
     currentAbsenceStatus: employeeCardFormValue(form, "currentAbsenceStatus") || "v práci",
     sickDaysCurrentYear: Number(employeeCardFormValue(form, "sickDaysCurrentYear") || 0),
     lastAbsenceDate: employeeCardFormValue(form, "lastAbsenceDate"),
-    internalNote: employeeCardFormValue(form, "internalNote").trim(),
+    internalNote: employeeCardFormField(form, "internalNote")
+      ? employeeCardFormValue(form, "internalNote").trim()
+      : (source.internalNote || ""),
     ...(hrProfile ? { hrProfile } : {})
   };
 }
@@ -3148,7 +3167,9 @@ function employeeMedicalExamFormData(form) {
     medicalDoctorName: employeeCardFormValue(form, "medicalDoctorName"),
     medicalFacilityAddress: employeeCardFormValue(form, "medicalFacilityAddress"),
     medicalFacilityCompanyId: employeeCardFormValue(form, "medicalFacilityCompanyId"),
-    note: employeeCardFormValue(form, "note"),
+    note: employeeCardFormField(form, "note")
+      ? employeeCardFormValue(form, "note")
+      : (source.note || ""),
     notificationEnabled: employeeCardFormValue(form, "notificationEnabled") !== "false"
   };
 }
@@ -6406,10 +6427,6 @@ function employeeMedicalExamSection(employee, canEdit) {
             <span>Stav termínu</span>
             ${employeeMedicalExamStatusBadge(exam)}
           </div>
-          <label class="employee-card-field employee-card-field--wide">
-            <span>Poznámka</span>
-            <textarea name="note" rows="3" ${disabled ? "disabled" : ""}>${escapeHtml(exam.note || "")}</textarea>
-          </label>
           ${employeeCardField("Jméno zařízení", employeeCardInput("medicalFacilityName", exam.medicalFacilityName || "", { disabled }))}
           ${employeeCardField("Posuzující lékař", employeeCardInput("medicalDoctorName", exam.medicalDoctorName || "", { disabled }))}
           ${employeeCardField("Sídlo zařízení", employeeCardInput("medicalFacilityAddress", exam.medicalFacilityAddress || "", { disabled }))}
@@ -6473,10 +6490,6 @@ function employeeDocumentsSection(employee, canEdit) {
         <label class="employee-document-upload-form__file">
           <span>Soubor</span>
           <input name="file" type="file" required />
-        </label>
-        <label class="employee-document-upload-form__note">
-          <span>Poznámka</span>
-          <textarea name="note" rows="2" placeholder="Volitelná interní poznámka"></textarea>
         </label>
         <button class="primary-action" type="submit" ${employeeCardState.documentUploading ? "disabled" : ""}>
           ${employeeCardState.documentUploading ? "Nahrávám..." : "Přidat dokument"}
@@ -6555,12 +6568,11 @@ function employeeWorkHistorySection(employee, canEdit) {
           <td data-label="Do">${escapeHtml(item.dateTo ? formatAbsenceDate(item.dateTo) : "dosud")}</td>
           <td data-label="Pozice">${escapeHtml(item.position || "neuvedeno")}</td>
           <td data-label="Oddělení">${escapeHtml(item.department || "neuvedeno")}</td>
-          <td data-label="Poznámka">${escapeHtml(item.note || "")}</td>
         </tr>
       `).join("")
     : `
       <tr>
-        <td colspan="5">Zatím tu není žádná pracovní historie.</td>
+        <td colspan="4">Zatím tu není žádná pracovní historie.</td>
       </tr>
     `;
 
@@ -6569,7 +6581,7 @@ function employeeWorkHistorySection(employee, canEdit) {
       <div class="employee-card-section__head">
         <div>
           <h2>Pracovní historie</h2>
-          <p>Přehled pracovních pozic, oddělení a poznámek v čase.</p>
+          <p>Přehled pracovních pozic a oddělení v čase.</p>
         </div>
       </div>
       <div class="absence-table-wrap">
@@ -6580,7 +6592,6 @@ function employeeWorkHistorySection(employee, canEdit) {
               <th>Do</th>
               <th>Pozice</th>
               <th>Oddělení</th>
-              <th>Poznámka</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -6592,10 +6603,6 @@ function employeeWorkHistorySection(employee, canEdit) {
           ${employeeCardField("Datum do", employeeCardInput("dateTo", "", { type: "date" }))}
           ${employeeCardField("Pozice", employeeCardInput("position", employee.position || ""))}
           ${employeeCardField("Oddělení", employeeCardInput("department", employee.department || ""))}
-          <label class="employee-card-field employee-card-field--wide">
-            <span>Poznámka</span>
-            <textarea name="note" rows="3" placeholder="Poznámka k pracovní historii"></textarea>
-          </label>
           <button class="secondary-link" type="submit" ${employeeCardState.workHistorySaving ? "disabled" : ""}>
             ${employeeCardState.workHistorySaving ? "Ukládám..." : "Přidat pracovní historii"}
           </button>
@@ -6691,7 +6698,6 @@ function employeeCardContent(employeeId, user) {
 
   const canEdit = canEditEmployeeCards(user);
   const canEditMedicalExam = canManageEmployeeMedicalExams(user);
-  const canSeeNote = canSeeEmployeeInternalNote(user);
   const disabled = !canEdit || employeeCardState.saving;
   const formEmployee = employeeCardDraftFor(employee);
 
@@ -6731,7 +6737,7 @@ function employeeCardContent(employeeId, user) {
               ${employeeCardField("Role", employeeCardSelect("role", ROLE_DEFINITIONS.map((role) => ({ value: role.id, label: role.label })), normalizeRole(formEmployee.role), disabled))}
               ${employeeCardField("Oddělení", employeeCardInput("department", formEmployee.department, { disabled }))}
               ${employeeCardField("Pracovní pozice", employeeCardInput("position", formEmployee.position, { disabled }))}
-              ${employeeCardField("Bydliště", employeeCardInput("address", formEmployee.address || "", { disabled }))}
+              ${employeeCardField("Bydliště", employeeCardInput("address", employeeResidenceAddress(formEmployee), { disabled }))}
               ${employeeCardField("Místo výkonu práce", employeeCardInput("workplace", formEmployee.workplace || "", { disabled }))}
               ${employeeCardField("Stav zaměstnance", employeeCardSelect("employmentStatus", EMPLOYMENT_STATUS_OPTIONS, formEmployee.employmentStatus || "active", disabled))}
               ${employeeCardField("Datum nástupu", employeeCardInput("startDate", formEmployee.startDate, { type: "date", disabled }))}
@@ -6791,20 +6797,6 @@ function employeeCardContent(employeeId, user) {
             </div>
           </section>
 
-          ${canSeeNote ? `
-            <section class="employee-card-section employee-card-section--wide">
-              <div class="employee-card-section__head">
-                <div>
-                  <h2>Poznámky</h2>
-                  <p>Interní poznámka kanceláře a managementu.</p>
-                </div>
-              </div>
-              <label class="employee-card-field employee-card-field--wide">
-                <span>Interní poznámka</span>
-                <textarea name="internalNote" rows="4" ${disabled ? "disabled" : ""}>${escapeHtml(formEmployee.internalNote || "")}</textarea>
-              </label>
-            </section>
-          ` : '<input type="hidden" name="internalNote" value="" />'}
           ${employeeHrProfileSection(formEmployee, canEdit)}
         </div>
 
@@ -18111,7 +18103,7 @@ async function saveEmployeeWorkHistory(form) {
         dateTo: form.elements.dateTo.value,
         position: form.elements.position.value.trim(),
         department: form.elements.department.value.trim(),
-        note: form.elements.note.value.trim()
+        note: form.elements.note?.value.trim() || ""
       })
     });
 

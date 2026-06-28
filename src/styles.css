@@ -8954,8 +8954,7 @@ body:has(.ai-assistant-promo-modal) {
   width: 100%;
 }
 
-.employee-document-upload-form__file,
-.employee-document-upload-form__note {
+.employee-document-upload-form__file {
   grid-column: span 2;
 }
 
@@ -9075,6 +9074,10 @@ body:has(.ai-assistant-promo-modal) {
 
 .employee-hr-profile-group h3 {
   margin: 0;
+}
+
+.absence-page .employee-hr-profile-group h3 {
+  color: var(--color-primary-dark);
 }
 
 @media (max-width: 860px) {
@@ -9489,8 +9492,7 @@ body:has(.ai-assistant-promo-modal) {
     justify-content: center;
   }
 
-  .employee-document-upload-form__file,
-  .employee-document-upload-form__note {
+  .employee-document-upload-form__file {
     grid-column: auto;
   }
 
@@ -9686,7 +9688,9 @@ body:has(.ai-assistant-promo-modal) {
 
 .absence-approval-list {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  align-items: start;
 }
 
 .absence-approval-card {
@@ -9701,7 +9705,7 @@ body:has(.ai-assistant-promo-modal) {
 .absence-approval-card__main,
 .absence-approval-card__details {
   display: grid;
-  grid-template-columns: minmax(190px, 1.25fr) minmax(110px, 0.7fr) minmax(170px, 1fr) minmax(120px, 0.7fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -9726,7 +9730,7 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 .absence-approval-card__details {
-  grid-template-columns: minmax(220px, 1.3fr) repeat(2, minmax(150px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   padding: 12px;
   border: 1px solid var(--line);
@@ -9745,10 +9749,18 @@ body:has(.ai-assistant-promo-modal) {
 }
 
 .absence-approval-card__actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   align-items: center;
+}
+
+.absence-approval-card__actions .primary-action,
+.absence-approval-card__actions .secondary-link,
+.absence-approval-card__actions .absence-icon-button,
+.absence-approval-card__actions .text-action {
+  width: 100%;
+  justify-content: center;
 }
 
 .absence-reject-box {
@@ -9784,7 +9796,17 @@ body:has(.ai-assistant-promo-modal) {
   resize: vertical;
 }
 
+@media (max-width: 1180px) {
+  .absence-approval-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 720px) {
+  .absence-approval-list {
+    grid-template-columns: 1fr;
+  }
+
   .absence-approval-card {
     min-width: 0;
     padding: 14px;
@@ -10822,6 +10844,8 @@ body:has(.absence-page--employee-card) {
 .absence-page .employee-card-header,
 .absence-page .employee-card-section,
 .absence-page .employee-card-kpi,
+.absence-page .absence-approval-card,
+.absence-page .absence-approval-card__details,
 .absence-page .employee-vacation-overview,
 .absence-page .employee-vacation-overview__stats span,
 .absence-page .employee-card-readonly,
@@ -10861,6 +10885,7 @@ body:has(.absence-page--employee-card) {
 .absence-page .module-rules-detail,
 .absence-page .module-rules-audit li,
 .absence-page .module-rules-runs li,
+.absence-page .absence-approval-card,
 .absence-page .employee-card-header,
 .absence-page .employee-card-section,
 .absence-page .employee-card-kpi,
@@ -10868,6 +10893,10 @@ body:has(.absence-page--employee-card) {
 .absence-page .employee-medical-exam-overview article,
 .absence-page .employee-medical-exam-pdf {
   background: var(--color-card);
+}
+
+.absence-page .absence-approval-card__details {
+  background: var(--color-surface);
 }
 
 .absence-page .employee-medical-exam-section {
@@ -10896,6 +10925,12 @@ body:has(.absence-page--employee-card) {
   border-color: var(--color-primary-border);
   background: var(--color-primary-soft);
   color: var(--color-primary-dark);
+}
+
+.absence-page .absence-icon-button--reject {
+  border-color: rgba(239, 68, 68, 0.28);
+  background: rgba(239, 68, 68, 0.1);
+  color: #991b1b;
 }
 
 .absence-page .employee-card-switcher,

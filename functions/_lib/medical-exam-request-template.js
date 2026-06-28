@@ -58,6 +58,24 @@ function employeeName(employee) {
     "Zaměstnanec";
 }
 
+function employeeResidenceAddress(employee) {
+  const directAddress = cleanString(employee?.address);
+  if (directAddress) {
+    return directAddress;
+  }
+
+  const profile = employee?.hrProfile || {};
+  const streetLine = [profile.street, profile.houseNumber]
+    .map(cleanString)
+    .filter(Boolean)
+    .join(" ");
+  const country = cleanString(profile.country || profile.contactCountry || profile.state);
+  return [streetLine, profile.municipality, country]
+    .map(cleanString)
+    .filter(Boolean)
+    .join(", ");
+}
+
 function dateLabel(value) {
   const cleaned = cleanString(value);
   const match = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -135,7 +153,7 @@ export function renderMedicalExamRequestDocument({ employee, exam, mode = "downl
       margin: 0;
       background: #eef3ec;
       color: #111;
-      font-family: Arial, "Helvetica Neue", sans-serif;
+      font-family: "Quicksand", Arial, "Helvetica Neue", sans-serif;
       font-size: 12px;
       line-height: 1.28;
     }
@@ -306,7 +324,7 @@ export function renderMedicalExamRequestDocument({ employee, exam, mode = "downl
 
     <section class="section">
       ${field("Jméno zaměstnance", employeeName(employee))}
-      ${field("Bydliště", employee?.address || "")}
+      ${field("Bydliště", employeeResidenceAddress(employee))}
       ${field("Datum narození", dateLabel(exam?.dateOfBirth))}
     </section>
 
