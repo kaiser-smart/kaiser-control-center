@@ -14907,13 +14907,13 @@ function dataBoxInboxIsEmptyState(notice, allRows) {
 }
 
 function dataBoxMessageCard(message, selected) {
-  const status = dataBoxWorkflowStatus(message);
   const priority = dataBoxMessagePriority(message);
-  const type = dataBoxMessageType(message);
-  const deadline = dataBoxDeadlineInfo(message);
   const attachmentCount = dataBoxAttachmentCount(message);
   const deliveredAt = formatDateTime(dataBoxMessageTimestamp(message));
-  const deadlineLabel = deadline.date ? deadline.label : "bez lhůty";
+  const actorValue = dataBoxMessageActor(message);
+  const actor = actorValue && actorValue !== "-" ? actorValue : "Neznámý odesílatel";
+  const subject = String(message.subject || message.title || "").trim() || "Bez předmětu";
+  const attachmentLabel = attachmentCount ? `Příloha${attachmentCount > 1 ? ` ${attachmentCount}` : ""}` : "";
 
   return `
     <article class="data-box-message-card data-box-message-card--priority-${escapeHtml(priority.id)} ${selected ? "data-box-message-card--selected" : ""}">
@@ -14924,22 +14924,13 @@ function dataBoxMessageCard(message, selected) {
         aria-pressed="${selected ? "true" : "false"}"
       >
         <span class="data-box-message-card__top">
-          <span class="data-box-message-card__actor">${escapeHtml(dataBoxMessageActor(message))}</span>
+          <span class="data-box-message-card__actor">${escapeHtml(actor)}</span>
           <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
         </span>
-        <span class="data-box-message-card__priority">
+        <span class="data-box-message-card__subject">${escapeHtml(subject)}</span>
+        <span class="data-box-message-card__extras" aria-label="Doplňkové informace">
           ${dataBoxPriorityBadge(priority)}
-          <span>${escapeHtml(type.label)}</span>
-        </span>
-        <strong>${escapeHtml(message.subject || "(bez předmětu)")}</strong>
-        <span class="data-box-message-card__preview">${escapeHtml(dataBoxMessageContentPreview(message))}</span>
-        <span class="data-box-message-card__meta">
-          ${dataBoxBadge(status.label, status.tone)}
-          <span>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</span>
-          <span>${escapeHtml(attachmentCount ? `${attachmentCount} příloh` : "bez příloh")}</span>
-          <span class="data-box-message-card__deadline data-box-message-card__deadline--${escapeHtml(deadline.tone)}">
-            ${escapeHtml(deadlineLabel)}
-          </span>
+          ${attachmentCount ? `<span class="data-box-message-card__attachment" title="${escapeHtml(attachmentLabel)}" aria-label="${escapeHtml(attachmentLabel)}">Příloha</span>` : ""}
         </span>
       </button>
     </article>
