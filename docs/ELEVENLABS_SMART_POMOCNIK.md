@@ -30,9 +30,16 @@ ELEVENLABS_AGENT_ID_SARLOTA=
 ELEVENLABS_AGENT_ID_MAREK=
 ELEVENLABS_API_KEY=
 AI_TOOLS_API_BASE_URL=
+OPENAI_API_KEY=
+OPENAI_MODEL=
+VOICE_ASSISTANT_OPENAI_MODEL=gpt-4o-mini
+VOICE_ASSISTANT_WEBHOOK_TOKEN=
+SARLOTA_BUSINESS_HOURS_JSON=
 ```
 
-`ELEVENLABS_API_KEY` nesmí být ve frontendu.
+`ELEVENLABS_API_KEY`, `OPENAI_API_KEY` ani `VOICE_ASSISTANT_WEBHOOK_TOKEN`
+nesmí být ve frontendu. Nastavují se jako Cloudflare Pages secrets nebo
+server-side env hodnoty.
 
 ## ElevenLabs agent Šarlota
 
@@ -53,8 +60,12 @@ Jazyk: `cs-CZ`
 První zpráva:
 
 ```text
-Jsem Šarlota. Pomůžu vám ve Smart odpadech.
+{{intro_announcement}}
 ```
+
+Šarlota tyká, mluví v ženském rodě a odpovídá stručně. First message nesmí
+skládat pozdrav dvakrát; `intro_announcement` posílá aplikace přes dynamic
+variables.
 
 ## ElevenLabs agent Marek
 
@@ -111,12 +122,70 @@ Webhook tools směřovat na produkční API:
 - `POST /api/ai/absence/{id}/approve`
 - `POST /api/ai/absence/{id}/reject`
 - `POST /api/ai/feedback`
+- `POST /api/voice/sarlota`
 
 Personální nástroje jsou read-only. ElevenLabs nemá přímý přístup do databáze;
 všechna data jdou přes backend endpointy a jejich oprávnění podle přihlášeného
 uživatele. Do odpovědí pro Šarlotu se neposílají API klíče, signed URL tokeny,
 dokumenty zaměstnanců, interní poznámky ani kontaktní údaje, pokud nejsou pro
 konkrétní potvrzený scénář nutné.
+
+### Serverový webhook Šarloty
+
+Endpoint:
+
+```text
+POST /api/voice/sarlota
+```
+
+Produkční URL:
+
+```text
+https://kaiser-control-center.pages.dev/api/voice/sarlota
+```
+
+Webhook z ElevenLabs musí posílat jeden z těchto autentizačních údajů:
+
+- přihlášenou Smart odpady session cookie, pokud volání jde z aplikace,
+- nebo serverový header `Authorization: Bearer <VOICE_ASSISTANT_WEBHOOK_TOKEN>`.
+
+Při serverovém webhooku musí payload obsahovat identitu Smart odpady uživatele:
+
+```json
+{
+  "user_id": "{{user_id}}",
+  "message": "{{user_message}}"
+}
+```
+
+`user_id` se posílá v dynamic variables z endpointu signed URL. ElevenLabs není
+zdroj pravdy pro oprávnění; backend si uživatele znovu ověří.
+
+Základní payload pro ElevenLabs tool:
+
+```json
+{
+  "user_id": "{{user_id}}",
+  "conversation_id": "{{conversation_id}}",
+  "message": "{{user_message}}",
+  "intent": "{{intent}}",
+  "parameters": {
+    "orderNumber": "{{order_number}}",
+    "trackingNumber": "{{tracking_number}}",
+    "phone": "{{phone}}",
+    "link": "{{link}}",
+    "smsConsent": false,
+    "product": "{{product}}",
+    "issue": "{{issue}}"
+  }
+}
+```
+
+Endpoint vrací `text` / `reply` pro ElevenLabs a současně stav nástroje:
+`verified`, `preparedActions`, `missingInternalApi`, `businessHours` a `callLog`.
+Stav objednávky, tracking, SMS, reklamace a předání Jarce jsou vedené jako
+backend nástroje; pokud pro danou akci ještě neexistuje ověřené interní API,
+Šarlota to označí jako neověřené a připraví předání kolegyni Jarce.
 
 Zápisové endpointy vyžadují potvrzení:
 
@@ -139,6 +208,8 @@ GET /api/ai/elevenlabs/signed-url?assistant=marek
 ```
 
 Endpoint používá `ELEVENLABS_API_KEY` pouze na backendu a vrací dočasný `signedUrl`.
+Dynamic variables obsahují i `user_id`, aby serverový webhook `/api/voice/sarlota`
+mohl ověřit identitu přihlášeného uživatele Smart odpady.
 
 ## Log AI akcí
 

@@ -278,6 +278,7 @@ export function userDynamicVariablesForAi(user) {
   const userGreeting = userGreetingForAi(user) || "Jsem připravená.";
 
   return {
+    user_id: truncateAiDynamicVariable(user?.id || "unknown", 120),
     user_name: truncateAiDynamicVariable(user?.name || "Uživatel", 120),
     user_first_name: truncateAiDynamicVariable(userFirstName, 80),
     user_first_name_vocative: truncateAiDynamicVariable(userFirstNameVocative, 80),
