@@ -15175,7 +15175,7 @@ function dataBoxAiEvaluationDetail(evaluation) {
 }
 
 function dataBoxMessageDetailPanel() {
-  return "";
+  return dataBoxMessageDetailOverlayMarkup();
 }
 
 function dataBoxMessageDetailOverlayMarkup() {
@@ -17087,24 +17087,31 @@ function ensureDataBoxData() {
 
 async function loadDataBoxMessageDetail(messageId) {
   const id = String(messageId || "").trim();
-  if (!id || dataBoxState.detailLoading) {
+  if (!id) {
     return;
   }
 
+  dataBoxState.selectedPreviewMessageId = id;
   dataBoxState.selectedMessageId = id;
-  dataBoxState.selectedMessage = null;
+  dataBoxState.selectedMessage = dataBoxState.selectedMessage?.id === id ? dataBoxState.selectedMessage : null;
   dataBoxState.detailLoading = true;
   dataBoxState.detailError = "";
   render();
 
   try {
     const result = await apiJson(`/api/data-box/messages/${encodeURIComponent(id)}`);
-    dataBoxState.selectedMessage = result.message || null;
+    if (dataBoxState.selectedMessageId === id) {
+      dataBoxState.selectedMessage = result.message || null;
+    }
   } catch (error) {
-    dataBoxState.selectedMessage = null;
-    dataBoxState.detailError = error?.payload?.error || error?.message || "Detail zprávy se teď nepodařilo načíst.";
+    if (dataBoxState.selectedMessageId === id) {
+      dataBoxState.selectedMessage = null;
+      dataBoxState.detailError = error?.payload?.error || error?.message || "Detail zprávy se teď nepodařilo načíst.";
+    }
   } finally {
-    dataBoxState.detailLoading = false;
+    if (dataBoxState.selectedMessageId === id) {
+      dataBoxState.detailLoading = false;
+    }
   }
 
   render();
@@ -22279,13 +22286,13 @@ document.addEventListener("click", async (event) => {
   const dataBoxPreviewMessage = event.target.closest("[data-data-box-preview-message]");
   if (dataBoxPreviewMessage) {
     const messageId = dataBoxPreviewMessage.dataset.dataBoxPreviewMessage || "";
-    void loadDataBoxMessageInlineDetail(messageId);
+    void loadDataBoxMessageDetail(messageId);
     return;
   }
 
   const dataBoxMessageDetail = event.target.closest("[data-data-box-message-detail]");
   if (dataBoxMessageDetail) {
-    void loadDataBoxMessageInlineDetail(dataBoxMessageDetail.dataset.dataBoxMessageDetail || "");
+    void loadDataBoxMessageDetail(dataBoxMessageDetail.dataset.dataBoxMessageDetail || "");
     return;
   }
 

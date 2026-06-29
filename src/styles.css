@@ -17482,6 +17482,114 @@ body:has(.absence-page--employee-card) {
   }
 }
 
+.data-box-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 24, 20, 0.48);
+  pointer-events: auto;
+}
+
+.data-box-detail-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.data-box-detail-modal {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 16px;
+  width: min(1040px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--theme-border, var(--line));
+  border-radius: 10px;
+  background: var(--theme-card, #ffffff);
+  box-shadow: 0 24px 80px rgba(23, 31, 27, 0.32);
+  pointer-events: auto;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.data-box-detail-modal__head {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--theme-border, var(--line));
+}
+
+.data-box-detail-modal__head h2 {
+  margin: 3px 0 0;
+  color: var(--data-box-text, var(--text));
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.data-box-detail-modal__head span {
+  color: var(--data-box-muted, var(--muted));
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.data-box-detail-modal__main {
+  min-width: 0;
+}
+
+.data-box-detail-actions {
+  align-self: start;
+  border-top: 0;
+  border-left: 1px solid var(--theme-border, var(--line));
+  padding: 0 0 0 16px;
+}
+
+.data-box-detail-modal__empty {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  min-height: 180px;
+  place-content: center;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .data-box-detail-overlay {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .data-box-detail-modal {
+    grid-template-columns: 1fr;
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+    padding: 12px;
+  }
+
+  .data-box-detail-modal__head {
+    display: grid;
+  }
+
+  .data-box-detail-actions {
+    border-left: 0;
+    border-top: 1px solid var(--theme-border, var(--line));
+    padding: 12px 0 0;
+  }
+}
+
 /* AI voice assistant: final mobile-first app shell. */
 .ai-voice-assistant-panel {
   left: 50%;
