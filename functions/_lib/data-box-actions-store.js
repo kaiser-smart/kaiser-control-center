@@ -548,6 +548,110 @@ export async function confirmDataBoxAction(env, actionId, payload = {}, currentU
   );
 }
 
+function ensureDraftAction(action) {
+  if (!action?.id) {
+    throw new DataBoxActionError("Koncept akce nebyl nalezen.", 404, "data_box_action_missing");
+  }
+
+  if (!["prepared", "requires_confirmation", "confirmed"].includes(action.status)) {
+    throw new DataBoxActionError("Tuto akci už nejde upravit.", 409, "data_box_action_not_editable");
+  }
+}
+
+function normalizeActionType(value, fallback = "review") {
+  const type = cleanString(value || fallback).toLowerCase();
+  return ["archive", "email", "reply", "review", "ai_boost"].includes(type) ? type : fallback;
+}
+
+export async function updateDataBoxActionDraft(env, actionId, payload = {}, currentUser = {}) {
+  const db = database(env, true);
+  const action = await getAction(db, cleanString(actionId));
+  ensureDraftAction(action);
+
+  const actionType = normalizeActionType(payload.actionType, action.actionType || "review");
+  const recipient = actionType === "email"
+    ? normalizeEmail(payload.recipient || payload.recipientEmail || action.recipient)
+    : cleanString(payload.recipient || action.recipient);
+
+  if (actionType === "email" && !recipient) {
+    throw new DataBoxActionError("E-mailový návrh musí mít platného příjemce.", 400, "data_box_action_recipient_missing");
+  }
+
+  const subject = cleanString(payload.subject || action.subject || "Datová zpráva");
+  const bodyPreview = cleanString(payload.bodyPreview || payload.body || action.bodyPreview || "");
+  const editNote = cleanString(payload.editNote || payload.reason || "");
+  const now = new Date().toISOString();
+
+  const result = {
+    ...(action.result || {}),
+    recommendedAction: actionType,
+    reason: bodyPreview || action.result?.reason || "",
+    lastEditedAt: now,
+    lastEditedBy: cleanString(currentUser?.id),
+    editNote
+  };
+
+  await db
+    .prepare(`
+      UPDATE data_box_actions
+      SET
+        action_type = ?,
+        status = 'requires_confirmation',
+        recipient = ?,
+        subject = ?,
+        body_preview = ?,
+        result_json = ?,
+        error_code = NULL,
+        error_message = NULL,
+        updated_at = ?
+      WHERE id = ?
+    `)
+    .bind(
+      actionType,
+      nullableString(recipient),
+      nullableString(subject),
+      nullableString(bodyPreview.slice(0, 500)),
+      safeJson(result),
+      now,
+      action.id
+    )
+    .run();
+
+  return {
+    action: await getAction(db, action.id),
+    status: "requires_confirmation",
+    apiStatus: "ready",
+    notice: "AI Boost návrh byl upraven a čeká na potvrzení."
+  };
+}
+
+export async function rejectDataBoxActionDraft(env, actionId, payload = {}, currentUser = {}) {
+  const db = database(env, true);
+  const action = await getAction(db, cleanString(actionId));
+  ensureDraftAction(action);
+
+  const reason = cleanString(payload.reason || "Zamítnuto uživatelem.");
+  const updatedAction = await updateAction(db, action.id, {
+    status: "skipped",
+    provider: "Kaiser Smart",
+    result: {
+      ...(action.result || {}),
+      rejectedAt: new Date().toISOString(),
+      rejectedBy: cleanString(currentUser?.id),
+      reason
+    },
+    errorCode: "",
+    errorMessage: reason
+  });
+
+  return {
+    action: updatedAction,
+    status: "skipped",
+    apiStatus: "ready",
+    notice: "AI Boost návrh byl zamítnut."
+  };
+}
+
 export async function listDataBoxActions(env, filters = {}) {
   const db = database(env, true);
   const limit = Math.min(Math.max(Number(filters.limit || 100), 1), 200);

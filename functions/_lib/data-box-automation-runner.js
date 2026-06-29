@@ -69,8 +69,15 @@ function messageMatchesRule(message, rule) {
     message.isdsMessageId,
     message.id
   ]);
+  const mailboxCondition = conditions.mailboxId || conditions.dataBoxId || conditions.mailboxIds || conditions.dataBoxIds || "";
+  const mailboxIds = Array.isArray(mailboxCondition)
+    ? mailboxCondition.map(cleanString).filter(Boolean)
+    : cleanString(mailboxCondition)
+      ? [cleanString(mailboxCondition)]
+      : [];
 
-  return containsAny(sender, conditions.anySender || conditions.senderContains)
+  return (!mailboxIds.length || mailboxIds.includes(cleanString(message.dataBoxId)))
+    && containsAny(sender, conditions.anySender || conditions.senderContains)
     && containsAny(text, conditions.anyText || conditions.textContains || conditions.subjectContains);
 }
 

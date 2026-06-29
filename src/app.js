@@ -669,6 +669,7 @@ const moduleRulesState = {
   message: "",
   formOpen: false,
   editingId: "",
+  prefillDraft: null,
   formType: "rule",
   selectedId: "",
   searchQuery: "",
@@ -746,6 +747,7 @@ const dataBoxState = {
   aiBoostLoading: false,
   aiBoostError: "",
   aiBoostMessage: "",
+  aiBoostEditingId: "",
   selectedDataBoxId: "kaiser-primary",
   activeTab: "received",
   syncLoading: false,
@@ -6155,6 +6157,16 @@ function moduleRuleFormDraft() {
   const existing = moduleRulesState.rules.find((item) => item.id === moduleRulesState.editingId);
   if (existing) {
     return existing;
+  }
+
+  if (moduleRulesState.prefillDraft) {
+    const type = moduleRulesState.formType === "automation" ? "automation" : "rule";
+    return {
+      ...moduleRulesState.prefillDraft,
+      id: "",
+      type,
+      isAutomation: type === "automation"
+    };
   }
 
   const type = moduleRulesState.formType === "automation" ? "automation" : "rule";
@@ -15497,6 +15509,33 @@ function dataBoxAiBoostStatusLabel(action = {}) {
   return labels[String(action.status || "").toLowerCase()] || action.status || "Koncept";
 }
 
+function dataBoxAiBoostWorkTag(action = {}) {
+  const actionType = String(action.actionType || action.result?.recommendedAction || "review").toLowerCase();
+  const status = String(action.status || "").toLowerCase();
+  const recipient = String(action.recipient || "").toLowerCase();
+
+  if (["sent", "archived"].includes(status)) return "Hotovo";
+  if (status === "skipped") return "Zamítnuto";
+  if (["blocked", "failed"].includes(status)) return "Chyba";
+  if (recipient.includes("faktury@")) return "Faktury";
+  if (recipient.includes("dispecer@")) return "Dispečink";
+  if (actionType === "email") return "E-mail";
+  if (actionType === "archive") return "Archiv";
+  if (actionType === "reply") return "Odpověď DS";
+  return dataBoxAiBoostIsWaiting(action) ? "K potvrzení" : "Nejisté";
+}
+
+function dataBoxAiBoostWorkTags(action = {}) {
+  const tags = [dataBoxAiBoostWorkTag(action)];
+  if (dataBoxAiBoostIsWaiting(action)) {
+    tags.unshift("K potvrzení");
+  }
+  if (Number(action.result?.confidence || 0) && Number(action.result?.confidence || 0) < 0.7) {
+    tags.push("Nejisté");
+  }
+  return [...new Set(tags)].slice(0, 4);
+}
+
 function dataBoxAiBoostCanConfirm(action = {}) {
   return ["archive", "email"].includes(String(action.actionType || "").toLowerCase())
     && ["prepared", "requires_confirmation", "confirmed"].includes(String(action.status || "").toLowerCase());
@@ -15508,6 +15547,19 @@ function dataBoxAiBoostIsWaiting(action = {}) {
 
 function dataBoxAiBoostIsDone(action = {}) {
   return ["sent", "archived", "blocked", "failed", "skipped"].includes(String(action.status || "").toLowerCase());
+}
+
+function dataBoxAiBoostActionTypeOptions(selected = "review") {
+  const options = [
+    ["archive", "Archivovat"],
+    ["email", "Připravit e-mail"],
+    ["reply", "Připravit odpověď DS"],
+    ["review", "Vyřídit ručně"]
+  ];
+
+  return options
+    .map(([value, label]) => `<option value="${escapeHtml(value)}"${selected === value ? " selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
 }
 
 function dataBoxAiBoostMessage(action = {}) {
@@ -15548,6 +15600,45 @@ function dataBoxAiBoostMappingWarnings(actions = []) {
     .slice(0, 4);
 }
 
+function dataBoxAiBoostEditForm(action = {}) {
+  if (String(dataBoxState.aiBoostEditingId || "") !== String(action.id || "")) {
+    return "";
+  }
+
+  const actionType = String(action.actionType || action.result?.recommendedAction || "review").toLowerCase();
+  return `
+    <form class="data-box-ai-boost-edit" data-data-box-ai-edit-form data-action-id="${escapeHtml(action.id || "")}">
+      <label>
+        <span>Akce</span>
+        <select name="actionType" required>
+          ${dataBoxAiBoostActionTypeOptions(actionType)}
+        </select>
+      </label>
+      <label>
+        <span>Příjemce / cíl</span>
+        <input name="recipient" value="${escapeHtml(action.recipient || "")}" placeholder="např. faktury@kaiserservis.cz" />
+      </label>
+      <label>
+        <span>Předmět</span>
+        <input name="subject" value="${escapeHtml(action.subject || "")}" />
+      </label>
+      <label class="employee-card-field--wide">
+        <span>Důvod / text e-mailu</span>
+        <textarea name="bodyPreview" rows="4">${escapeHtml(action.bodyPreview || action.result?.reason || "")}</textarea>
+      </label>
+      <label class="employee-card-field--wide">
+        <span>Poznámka k úpravě</span>
+        <input name="editNote" value="" placeholder="Proč měním návrh" />
+      </label>
+      <div class="data-box-ai-boost-edit__actions">
+        <button class="primary-action" type="submit" ${dataBoxState.aiBoostLoading ? "disabled" : ""}>Uložit upravený návrh</button>
+        <button class="secondary-link" type="button" data-data-box-ai-edit-close ${dataBoxState.aiBoostLoading ? "disabled" : ""}>Zrušit</button>
+      </div>
+      <p>Uložení návrh neodesílá. Jen upraví koncept, který bude dál čekat na potvrzení.</p>
+    </form>
+  `;
+}
+
 function dataBoxAiBoostCard(action = {}) {
   const message = dataBoxAiBoostMessage(action);
   const title = message?.subject || action.subject || "Datová zpráva";
@@ -15564,6 +15655,9 @@ function dataBoxAiBoostCard(action = {}) {
     <article class="data-box-ai-boost-card data-box-ai-boost-card--${escapeHtml(status || "concept")} data-box-ai-boost-card--${escapeHtml(actionType || "review")}">
       <div class="data-box-ai-boost-card__main">
         <span class="data-box-ai-boost-card__eyebrow">AI Boost · ${escapeHtml(dataBoxAiBoostStatusLabel(action))}</span>
+        <div class="data-box-ai-boost-tags">
+          ${dataBoxAiBoostWorkTags(action).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}
+        </div>
         <h3>${escapeHtml(title)}</h3>
         <p>${escapeHtml(sender)}${company ? ` · ${escapeHtml(company)}` : ""}</p>
         <strong>${escapeHtml(dataBoxAiBoostActionLabel(action))}</strong>
@@ -15578,13 +15672,75 @@ function dataBoxAiBoostCard(action = {}) {
         <button class="secondary-link" type="button" data-data-box-ai-open="${escapeHtml(action.messageId || "")}">
           Otevřít zprávu
         </button>
+        ${dataBoxAiBoostIsWaiting(action) ? `
+          <button class="secondary-link" type="button" data-data-box-ai-edit="${escapeHtml(action.id || "")}">
+            Upravit návrh
+          </button>
+          <button class="secondary-link" type="button" data-data-box-ai-reject="${escapeHtml(action.id || "")}" ${dataBoxState.aiBoostLoading ? "disabled" : ""}>
+            Zamítnout
+          </button>
+          <button class="secondary-link" type="button" data-data-box-ai-rule-from-action="${escapeHtml(action.id || "")}">
+            Vytvořit pravidlo
+          </button>
+        ` : ""}
         ${canConfirm ? `
           <button class="primary-action" type="button" data-data-box-ai-confirm="${escapeHtml(action.id)}" ${dataBoxState.aiBoostLoading ? "disabled" : ""}>
             ${escapeHtml(confirmLabel)}
           </button>
         ` : ""}
       </div>
+      ${dataBoxAiBoostEditForm(action)}
     </article>
+  `;
+}
+
+function dataBoxAiBoostNewActionForm() {
+  const mailboxes = DATA_BOX_ACCOUNT_BOXES
+    .map((account) => `<option value="${escapeHtml(account.id)}">${escapeHtml(account.label || account.shortName || account.id)}</option>`)
+    .join("");
+
+  return `
+    <details class="data-box-ai-boost-new-action">
+      <summary>
+        <span>Přidat akci / naučit AI Boost</span>
+        <strong>Nové pravidlo</strong>
+      </summary>
+      <form data-data-box-ai-rule-draft-form>
+        <label>
+          <span>Když přijde od</span>
+          <input name="senderContains" placeholder="např. Exekutor Jícha" />
+        </label>
+        <label>
+          <span>A obsahuje</span>
+          <input name="textContains" placeholder="např. 203 Ex, Usnesení" />
+        </label>
+        <label>
+          <span>Pro DS</span>
+          <select name="mailboxId">
+            <option value="">Libovolná DS</option>
+            ${mailboxes}
+          </select>
+        </label>
+        <label>
+          <span>Navrhni akci</span>
+          <select name="actionType">
+            ${dataBoxAiBoostActionTypeOptions("email")}
+          </select>
+        </label>
+        <label>
+          <span>Příjemce / cíl</span>
+          <input name="recipient" placeholder="např. tehlarova@gtbrno.cz" />
+        </label>
+        <label class="employee-card-field--wide">
+          <span>Název pravidla</span>
+          <input name="title" placeholder="např. Exekutor Jícha poslat GT Brno" required />
+        </label>
+        <div class="data-box-ai-boost-edit__actions">
+          <button class="primary-action" type="submit">Připravit pravidlo</button>
+        </div>
+        <p>Pravidlo se ještě neuloží. Otevře se formulář pravidel, kde ho zkontroluješ a uložíš do cloud DB.</p>
+      </form>
+    </details>
   `;
 }
 
@@ -15656,6 +15812,15 @@ function dataBoxAiBoostPanel(user) {
       ` : ""}
       ${dataBoxState.aiBoostError ? `<div class="data-box-action-feedback data-box-action-feedback--error" role="alert">${escapeHtml(dataBoxState.aiBoostError)}</div>` : ""}
       ${dataBoxState.aiBoostMessage ? `<div class="data-box-action-feedback data-box-action-feedback--success" role="status">${escapeHtml(dataBoxState.aiBoostMessage)}</div>` : ""}
+      ${dataBoxAiBoostNewActionForm()}
+      ${dataBoxAiBoostGroupSection({
+        title: "Čeká na potvrzení",
+        countLabel: `${waitingActions.length} návrhů čeká na rozhodnutí`,
+        emptyTitle: "Nic nečeká na potvrzení.",
+        emptyText: "Nové návrhy se objeví po běhu pravidel nebo AI Boostu.",
+        actions: waitingActions,
+        canManage
+      })}
       ${dataBoxAiBoostGroupSection({
         title: "E-maily k odeslání",
         countLabel: `${waitingEmailActions.length} čeká na potvrzení`,
@@ -18918,6 +19083,187 @@ async function confirmDataBoxAiBoostGroup(actionType) {
   }
 }
 
+async function saveDataBoxAiBoostEditForm(form) {
+  const actionId = String(form.dataset.actionId || "").trim();
+  if (!actionId || dataBoxState.aiBoostLoading) {
+    return;
+  }
+
+  const formData = new FormData(form);
+  dataBoxState.aiBoostLoading = true;
+  dataBoxState.aiBoostError = "";
+  dataBoxState.aiBoostMessage = "Ukládám upravený AI Boost návrh...";
+  render();
+
+  try {
+    const result = await apiJson(`/api/data-box/actions/${encodeURIComponent(actionId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        actionType: String(formData.get("actionType") || "").trim(),
+        recipient: String(formData.get("recipient") || "").trim(),
+        subject: String(formData.get("subject") || "").trim(),
+        bodyPreview: String(formData.get("bodyPreview") || "").trim(),
+        editNote: String(formData.get("editNote") || "").trim()
+      })
+    });
+    dataBoxState.aiBoostEditingId = "";
+    dataBoxState.aiBoostMessage = result.notice || "AI Boost návrh byl upraven.";
+    dataBoxState.aiBoostError = "";
+    await loadDataBoxData({ force: true, renderAfter: false });
+    dataBoxState.activeTab = "ai-boost";
+  } catch (error) {
+    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "AI Boost návrh se nepodařilo upravit.";
+    dataBoxState.aiBoostMessage = "";
+  } finally {
+    dataBoxState.aiBoostLoading = false;
+    render();
+  }
+}
+
+async function rejectDataBoxAiBoostAction(actionId) {
+  const id = String(actionId || "").trim();
+  if (!id || dataBoxState.aiBoostLoading) {
+    return;
+  }
+
+  const reason = window.prompt("Proč návrh zamítáme?", "Návrh není správný.");
+  if (reason === null) {
+    return;
+  }
+
+  dataBoxState.aiBoostLoading = true;
+  dataBoxState.aiBoostError = "";
+  dataBoxState.aiBoostMessage = "Zamítám AI Boost návrh...";
+  render();
+
+  try {
+    const result = await apiJson(`/api/data-box/actions/${encodeURIComponent(id)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason: String(reason || "").trim() || "Zamítnuto uživatelem." })
+    });
+    dataBoxState.aiBoostEditingId = "";
+    dataBoxState.aiBoostMessage = result.notice || "AI Boost návrh byl zamítnut.";
+    dataBoxState.aiBoostError = "";
+    await loadDataBoxData({ force: true, renderAfter: false });
+    dataBoxState.activeTab = "ai-boost";
+  } catch (error) {
+    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "AI Boost návrh se nepodařilo zamítnout.";
+    dataBoxState.aiBoostMessage = "";
+  } finally {
+    dataBoxState.aiBoostLoading = false;
+    render();
+  }
+}
+
+function dataBoxAiBoostRulePayloadFromForm(form) {
+  const formData = new FormData(form);
+  const senderContains = String(formData.get("senderContains") || "").trim();
+  const textContains = String(formData.get("textContains") || "").trim();
+  const mailboxId = String(formData.get("mailboxId") || "").trim();
+  const actionType = String(formData.get("actionType") || "email").trim();
+  const recipient = String(formData.get("recipient") || "").trim();
+  const title = String(formData.get("title") || "").trim();
+  const conditions = {
+    anySender: senderContains ? senderContains.split(",").map((item) => item.trim()).filter(Boolean) : [],
+    anyText: textContains ? textContains.split(",").map((item) => item.trim()).filter(Boolean) : []
+  };
+  if (mailboxId) {
+    conditions.mailboxId = mailboxId;
+  }
+
+  const actions = actionType === "archive"
+    ? { type: "ARCHIVE", requiresConfirmation: true }
+    : actionType === "email"
+      ? { type: "SEND_EMAIL", recipients: recipient.split(",").map((item) => item.trim()).filter(Boolean), requiresConfirmation: true }
+      : { type: "REVIEW", target: recipient || "manual", requiresConfirmation: true };
+
+  return {
+    title,
+    description: "Vytvořeno z AI Boost návrhu. Ostrá akce vyžaduje potvrzení uživatele.",
+    type: "rule",
+    status: "draft",
+    conditionsJson: JSON.stringify(conditions, null, 2),
+    actionsJson: JSON.stringify(actions, null, 2),
+    isAutomation: false,
+    triggerType: "event",
+    scheduleCron: "",
+    eventName: "data_box_message_received",
+    cloudRunner: "data-box-cloud-runner"
+  };
+}
+
+function createDataBoxAiBoostRuleDraft(form) {
+  try {
+    const draft = dataBoxAiBoostRulePayloadFromForm(form);
+    if (!draft.title) {
+      throw new Error("Vyplň název pravidla.");
+    }
+    moduleRulesState.moduleKey = DATA_BOX_MODULE_KEY;
+    moduleRulesState.formOpen = true;
+    moduleRulesState.formType = "rule";
+    moduleRulesState.editingId = "";
+    moduleRulesState.prefillDraft = draft;
+    moduleRulesState.message = "Zkontroluj návrh pravidla a ulož ho do cloud DB.";
+    moduleRulesState.error = "";
+    dataBoxState.activeTab = "rules";
+    void loadModuleRules(DATA_BOX_MODULE_KEY, { renderAfter: false });
+    render();
+  } catch (error) {
+    dataBoxState.aiBoostError = error.message || "Návrh pravidla se nepodařilo připravit.";
+    dataBoxState.aiBoostMessage = "";
+    render();
+  }
+}
+
+function createDataBoxAiBoostRuleDraftFromAction(actionId) {
+  const action = dataBoxState.aiBoostActions.find((item) => String(item.id || "") === String(actionId || ""));
+  const message = dataBoxAiBoostMessage(action);
+  if (!action?.id) {
+    dataBoxState.aiBoostError = "AI Boost návrh nebyl nalezen.";
+    dataBoxState.aiBoostMessage = "";
+    render();
+    return;
+  }
+
+  const actionType = String(action.actionType || action.result?.recommendedAction || "review").toLowerCase();
+  const conditions = {
+    anySender: message ? [dataBoxMessageActor(message)] : [],
+    anyText: [message?.subject || action.subject || ""].filter(Boolean)
+  };
+  if (message?.dataBoxId) {
+    conditions.mailboxId = message.dataBoxId;
+  }
+
+  const actions = actionType === "archive"
+    ? { type: "ARCHIVE", requiresConfirmation: true }
+    : actionType === "email"
+      ? { type: "SEND_EMAIL", recipients: action.recipient ? [action.recipient] : [], requiresConfirmation: true }
+      : { type: "REVIEW", target: action.recipient || "manual", requiresConfirmation: true };
+
+  moduleRulesState.moduleKey = DATA_BOX_MODULE_KEY;
+  moduleRulesState.formOpen = true;
+  moduleRulesState.formType = "rule";
+  moduleRulesState.editingId = "";
+  moduleRulesState.prefillDraft = {
+    title: `${dataBoxAiBoostActionLabel(action)}: ${message?.senderName || message?.subject || action.subject || "Datová zpráva"}`.slice(0, 140),
+    description: "Vytvořeno z upraveného AI Boost konceptu. Ostrá akce vyžaduje potvrzení uživatele.",
+    type: "rule",
+    status: "draft",
+    conditionsJson: JSON.stringify(conditions, null, 2),
+    actionsJson: JSON.stringify(actions, null, 2),
+    isAutomation: false,
+    triggerType: "event",
+    scheduleCron: "",
+    eventName: "data_box_message_received",
+    cloudRunner: "data-box-cloud-runner"
+  };
+  moduleRulesState.message = "Zkontroluj návrh pravidla a ulož ho do cloud DB.";
+  moduleRulesState.error = "";
+  dataBoxState.activeTab = "rules";
+  void loadModuleRules(DATA_BOX_MODULE_KEY, { renderAfter: false });
+  render();
+}
+
 function openDataBoxAiBoostMessage(messageId) {
   const id = String(messageId || "").trim();
   if (!id) {
@@ -20136,6 +20482,7 @@ function resetModuleRulesState() {
   moduleRulesState.message = "";
   moduleRulesState.formOpen = false;
   moduleRulesState.editingId = "";
+  moduleRulesState.prefillDraft = null;
   moduleRulesState.formType = "rule";
   moduleRulesState.selectedId = "";
   moduleRulesState.searchQuery = "";
@@ -20274,6 +20621,7 @@ function openModuleRuleForm(type = "rule", id = "") {
   moduleRulesState.formOpen = true;
   moduleRulesState.formType = type === "automation" ? "automation" : "rule";
   moduleRulesState.editingId = id;
+  moduleRulesState.prefillDraft = null;
   moduleRulesState.error = "";
   moduleRulesState.message = "";
   render();
@@ -20282,6 +20630,7 @@ function openModuleRuleForm(type = "rule", id = "") {
 function closeModuleRuleForm() {
   moduleRulesState.formOpen = false;
   moduleRulesState.editingId = "";
+  moduleRulesState.prefillDraft = null;
   moduleRulesState.error = "";
   render();
 }
@@ -23283,6 +23632,20 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const dataBoxAiEditForm = event.target.closest("[data-data-box-ai-edit-form]");
+  if (dataBoxAiEditForm) {
+    event.preventDefault();
+    await saveDataBoxAiBoostEditForm(dataBoxAiEditForm);
+    return;
+  }
+
+  const dataBoxAiRuleDraftForm = event.target.closest("[data-data-box-ai-rule-draft-form]");
+  if (dataBoxAiRuleDraftForm) {
+    event.preventDefault();
+    createDataBoxAiBoostRuleDraft(dataBoxAiRuleDraftForm);
+    return;
+  }
+
   const feedbackCreateForm = event.target.closest("[data-feedback-create-form]");
   if (feedbackCreateForm) {
     event.preventDefault();
@@ -24353,6 +24716,32 @@ document.addEventListener("click", async (event) => {
   const dataBoxAiConfirmGroup = event.target.closest("[data-data-box-ai-confirm-group]");
   if (dataBoxAiConfirmGroup) {
     void confirmDataBoxAiBoostGroup(dataBoxAiConfirmGroup.dataset.dataBoxAiConfirmGroup || "");
+    return;
+  }
+
+  const dataBoxAiEdit = event.target.closest("[data-data-box-ai-edit]");
+  if (dataBoxAiEdit) {
+    dataBoxState.aiBoostEditingId = dataBoxAiEdit.dataset.dataBoxAiEdit || "";
+    render();
+    return;
+  }
+
+  const dataBoxAiEditClose = event.target.closest("[data-data-box-ai-edit-close]");
+  if (dataBoxAiEditClose) {
+    dataBoxState.aiBoostEditingId = "";
+    render();
+    return;
+  }
+
+  const dataBoxAiReject = event.target.closest("[data-data-box-ai-reject]");
+  if (dataBoxAiReject) {
+    void rejectDataBoxAiBoostAction(dataBoxAiReject.dataset.dataBoxAiReject || "");
+    return;
+  }
+
+  const dataBoxAiRuleFromAction = event.target.closest("[data-data-box-ai-rule-from-action]");
+  if (dataBoxAiRuleFromAction) {
+    createDataBoxAiBoostRuleDraftFromAction(dataBoxAiRuleFromAction.dataset.dataBoxAiRuleFromAction || "");
     return;
   }
 
