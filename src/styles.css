@@ -19597,22 +19597,8 @@ body:has(.data-box-page) .data-box-side-status__ai small {
   }
 
   body:has(.data-box-page) .data-box-inbox-search,
-  body:has(.data-box-page) .data-box-inbox-search input {
-    width: 100%;
-    min-width: 0;
-  }
-
   body:has(.data-box-page) .data-box-quick-filters {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 3px;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  body:has(.data-box-page) .data-box-quick-filter {
-    flex: 0 0 auto;
-    white-space: nowrap;
+    display: none !important;
   }
 
   body:has(.data-box-page) .data-box-panel__head {
