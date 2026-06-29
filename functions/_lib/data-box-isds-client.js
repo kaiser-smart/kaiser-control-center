@@ -296,6 +296,10 @@ function messageListRequestXml(direction, config) {
   `;
 }
 
+function messageDownloadRequestXml(messageId) {
+  return `<v20:dmID>${xmlEscape(messageId)}</v20:dmID>`;
+}
+
 function soapFaultMessage(xml) {
   return tagValue(xml, "faultstring") || tagValue(xml, "faultcode") || tagValue(xml, "dmStatusMessage");
 }
@@ -388,6 +392,90 @@ async function fetchMessageList(config, direction) {
   return tagBlocks(xml, "dmRecord")
     .map((block) => parseMessageRecord(block, direction))
     .filter((message) => message.isdsMessageId);
+}
+
+function base64ToBytes(value) {
+  const normalized = cleanString(value).replace(/\s+/g, "");
+  if (!normalized) {
+    return new Uint8Array();
+  }
+
+  if (typeof atob === "function") {
+    const binary = atob(normalized);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  }
+
+  return new Uint8Array(Buffer.from(normalized, "base64"));
+}
+
+function parseAttachmentRecord(block, index) {
+  const encodedContent = tagValue(block, "dmEncodedContent");
+  let bytes = new Uint8Array();
+  try {
+    bytes = base64ToBytes(encodedContent);
+  } catch {
+    bytes = new Uint8Array();
+  }
+  const filename = tagValue(block, "dmFileDescr") || `priloha-${index + 1}`;
+  const contentType = tagAttribute(block, "dmFile", "dmMimeType") || "application/octet-stream";
+  const fileMetaType = tagAttribute(block, "dmFile", "dmFileMetaType");
+  const fileGuid = tagAttribute(block, "dmFile", "dmFileGuid")
+    || tagAttribute(block, "dmFile", "dmFileId")
+    || tagValue(block, "dmFileGuid");
+
+  return {
+    index,
+    fileGuid,
+    filename,
+    contentType,
+    fileMetaType,
+    sizeBytes: bytes.byteLength,
+    bytes
+  };
+}
+
+function parseMessageAttachments(xml) {
+  return tagBlocks(xml, "dmFile")
+    .map((block, index) => parseAttachmentRecord(block, index))
+    .filter((attachment) => attachment.filename || attachment.sizeBytes > 0);
+}
+
+export async function fetchDataBoxMessageAttachments(env = {}, account = null, message = {}) {
+  const config = account || isdsConfig(env);
+  ensureIsdsConfig(config);
+
+  const messageId = cleanString(message.isdsMessageId || message.dmID || message.id);
+  if (!messageId) {
+    throw new DataBoxIsdsError("Chybi ISDS ID zpravy pro stazeni priloh.", 400, "data_box_isds_message_id_missing");
+  }
+
+  const operations = cleanString(message.direction).toLowerCase() === "sent"
+    ? ["SignedSentMessageDownload", "MessageDownload", "SignedMessageDownload", "GetMessage"]
+    : ["MessageDownload", "SignedMessageDownload", "GetMessage"];
+  let lastError = null;
+
+  for (const operation of operations) {
+    try {
+      const xml = await soapRequest(config, operation, messageDownloadRequestXml(messageId));
+      const attachments = parseMessageAttachments(xml);
+      return {
+        fetchedAt: new Date().toISOString(),
+        operation,
+        messageId,
+        attachmentsCount: attachments.length,
+        attachments,
+        config: publicAccountStatus(config)
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new DataBoxIsdsError("ISDS detail zpravy se nepodarilo nacist.", 502, "data_box_isds_message_download_failed");
 }
 
 export async function fetchDataBoxMessageMetadata(env = {}, account = null) {

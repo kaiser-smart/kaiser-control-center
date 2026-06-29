@@ -1,6 +1,7 @@
 import {
   dataBoxIsdsAccountConfigs,
   dataBoxIsdsStatus,
+  fetchDataBoxMessageAttachments,
   fetchDataBoxMessageMetadata
 } from "./data-box-isds-client.js";
 
@@ -74,6 +75,56 @@ function safeIdPart(value) {
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
+}
+
+function safeFilename(value, fallback = "priloha") {
+  return cleanString(value || fallback)
+    .replace(/[\r\n"]/g, "")
+    .replace(/[/:\\]+/g, "-")
+    .trim()
+    .slice(0, 180) || fallback;
+}
+
+function contentDispositionFilename(name) {
+  return `inline; filename*=UTF-8''${encodeURIComponent(safeFilename(name, "priloha"))}`;
+}
+
+function attachmentRecordId(messageId, attachment, index = 0) {
+  const suffix = safeIdPart(attachment?.fileGuid || attachment?.filename || `attachment-${index + 1}`) || `attachment-${index + 1}`;
+  return `data-box-attachment-${safeIdPart(messageId) || "message"}-${Number(index) + 1}-${suffix}`;
+}
+
+function dataBoxAttachmentStorageKey(dataBoxId, message, attachmentId, filename) {
+  const boxPart = safeIdPart(dataBoxId) || "primary";
+  const messagePart = safeIdPart(message?.isdsMessageId || message?.id) || "message";
+  return `data-box/${boxPart}/${messagePart}/${safeIdPart(attachmentId) || "attachment"}-${safeFilename(filename)}`;
+}
+
+function dataBoxAttachmentOpenUrl(attachment) {
+  if (!attachment?.storageKey || cleanString(attachment?.status) !== "stored") {
+    return "";
+  }
+
+  return `/api/data-box/messages/${encodeURIComponent(attachment.messageId)}/attachments/${encodeURIComponent(attachment.id)}`;
+}
+
+function bytesToArrayBuffer(bytes) {
+  if (bytes instanceof ArrayBuffer) {
+    return bytes;
+  }
+
+  if (ArrayBuffer.isView(bytes)) {
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
+
+  return new Uint8Array().buffer;
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytesToArrayBuffer(bytes));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function messageRecordId(dataBoxId, direction, isdsMessageId) {
@@ -151,7 +202,7 @@ function rowToMessage(row) {
 }
 
 function rowToAttachment(row) {
-  return {
+  const attachment = {
     id: cleanString(row.id),
     messageId: cleanString(row.message_id),
     filename: cleanString(row.filename),
@@ -161,6 +212,10 @@ function rowToAttachment(row) {
     checksumSha256: cleanString(row.checksum_sha256),
     status: cleanString(row.status || "metadata_only"),
     createdAt: cleanString(row.created_at)
+  };
+  return {
+    ...attachment,
+    openUrl: dataBoxAttachmentOpenUrl(attachment)
   };
 }
 
@@ -490,6 +545,201 @@ async function upsertMessageMetadata(db, dataBoxId, message) {
   return "created";
 }
 
+async function attachmentSyncState(db, messageId) {
+  const row = await db
+    .prepare(`
+      SELECT
+        COUNT(*) AS total_count,
+        SUM(CASE WHEN status = 'stored' AND storage_key <> '' THEN 1 ELSE 0 END) AS stored_count,
+        SUM(CASE WHEN status = 'download_failed' THEN 1 ELSE 0 END) AS failed_count,
+        SUM(CASE WHEN status = 'metadata_only' THEN 1 ELSE 0 END) AS metadata_count
+      FROM data_box_attachments
+      WHERE message_id = ?
+    `)
+    .bind(messageId)
+    .first();
+
+  return {
+    totalCount: numberValue(row?.total_count),
+    storedCount: numberValue(row?.stored_count),
+    failedCount: numberValue(row?.failed_count),
+    metadataCount: numberValue(row?.metadata_count)
+  };
+}
+
+async function updateMessageAttachmentCount(db, messageId, attachmentsCount) {
+  await db
+    .prepare(`
+      UPDATE data_box_messages
+      SET
+        has_attachments = ?,
+        attachments_count = ?,
+        source = CASE
+          WHEN source = 'isds_metadata' THEN 'isds_detail'
+          ELSE source
+        END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    .bind(attachmentsCount > 0 ? 1 : 0, numberValue(attachmentsCount), messageId)
+    .run();
+}
+
+async function upsertDataBoxAttachment(db, attachment) {
+  await db
+    .prepare(`
+      INSERT INTO data_box_attachments (
+        id,
+        message_id,
+        filename,
+        content_type,
+        size_bytes,
+        storage_key,
+        checksum_sha256,
+        status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        filename = excluded.filename,
+        content_type = excluded.content_type,
+        size_bytes = excluded.size_bytes,
+        storage_key = excluded.storage_key,
+        checksum_sha256 = excluded.checksum_sha256,
+        status = excluded.status
+    `)
+    .bind(
+      cleanString(attachment.id),
+      cleanString(attachment.messageId),
+      safeFilename(attachment.filename, "priloha"),
+      cleanString(attachment.contentType || "application/octet-stream"),
+      numberValue(attachment.sizeBytes),
+      cleanString(attachment.storageKey),
+      cleanString(attachment.checksumSha256),
+      cleanString(attachment.status || "metadata_only")
+    )
+    .run();
+}
+
+async function syncDataBoxMessageAttachments(db, env, account, dataBox, message, messageId) {
+  const existingState = await attachmentSyncState(db, messageId);
+  if (
+    existingState.totalCount > 0
+    && existingState.storedCount === existingState.totalCount
+    && existingState.failedCount === 0
+    && existingState.metadataCount === 0
+  ) {
+    return {
+      checked: 0,
+      downloaded: 0,
+      failed: 0,
+      metadataOnly: 0,
+      skipped: existingState.totalCount
+    };
+  }
+
+  let detail;
+  try {
+    detail = await fetchDataBoxMessageAttachments(env, account, message);
+  } catch (error) {
+    const errorCode = cleanString(error?.code || "data_box_attachment_detail_failed");
+    console.warn("data_box.attachment_check", {
+      messageId,
+      attachmentsCount: 0,
+      downloadStatus: "error",
+      errorCode,
+      checkedAt: new Date().toISOString()
+    });
+    return {
+      checked: 0,
+      downloaded: 0,
+      failed: 1,
+      metadataOnly: 0,
+      skipped: 0,
+      errorCode
+    };
+  }
+
+  const attachments = detail.attachments || [];
+  const bucket = dataBoxDocumentsBucket(env);
+  let downloaded = 0;
+  let failed = 0;
+  let metadataOnly = 0;
+
+  await updateMessageAttachmentCount(db, messageId, attachments.length);
+
+  for (const attachment of attachments) {
+    const attachmentId = attachmentRecordId(messageId, attachment, attachment.index);
+    const filename = safeFilename(attachment.filename, `priloha-${Number(attachment.index || 0) + 1}`);
+    const contentType = cleanString(attachment.contentType || "application/octet-stream");
+    const storageKey = dataBoxAttachmentStorageKey(dataBox.id, message, attachmentId, filename);
+    let status = "metadata_only";
+    let savedStorageKey = "";
+    let checksumSha256 = "";
+    let errorCode = "";
+
+    try {
+      if (!bucket) {
+        errorCode = "data_box_storage_missing";
+      } else if (!attachment.bytes?.byteLength) {
+        errorCode = "data_box_attachment_content_missing";
+      } else {
+        const body = bytesToArrayBuffer(attachment.bytes);
+        checksumSha256 = await sha256Hex(body);
+        await bucket.put(storageKey, body, {
+          httpMetadata: { contentType },
+          customMetadata: {
+            module: "data-box",
+            messageId,
+            isdsMessageId: cleanString(message.isdsMessageId),
+            filename
+          }
+        });
+        status = "stored";
+        savedStorageKey = storageKey;
+        downloaded += 1;
+      }
+    } catch (error) {
+      status = "download_failed";
+      errorCode = cleanString(error?.code || error?.name || "data_box_attachment_store_failed");
+      failed += 1;
+    }
+
+    if (status === "metadata_only") {
+      metadataOnly += 1;
+    }
+
+    await upsertDataBoxAttachment(db, {
+      id: attachmentId,
+      messageId,
+      filename,
+      contentType,
+      sizeBytes: attachment.sizeBytes,
+      storageKey: savedStorageKey,
+      checksumSha256,
+      status
+    });
+
+    console.info("data_box.attachment_check", {
+      messageId,
+      attachmentsCount: attachments.length,
+      filename,
+      sizeBytes: numberValue(attachment.sizeBytes),
+      mimeType: contentType,
+      downloadStatus: status === "stored" ? "ok" : status,
+      errorCode,
+      downloadedAt: new Date().toISOString()
+    });
+  }
+
+  return {
+    checked: attachments.length,
+    downloaded,
+    failed,
+    metadataOnly,
+    skipped: 0
+  };
+}
+
 export async function getDataBoxStatus(env) {
   const db = dataBoxDatabase(env);
   const storageStatus = dataBoxStorageStatus(env);
@@ -568,16 +818,31 @@ async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
     let messagesCreated = 0;
     let messagesUpdated = 0;
     let attachmentsFound = 0;
+    let attachmentsChecked = 0;
+    let attachmentsDownloaded = 0;
+    let attachmentsFailed = 0;
+    let attachmentsMetadataOnly = 0;
 
     for (const message of result.messages) {
       const writeState = await upsertMessageMetadata(db, dataBox.id, message);
       if (writeState === "created") messagesCreated += 1;
       if (writeState === "updated") messagesUpdated += 1;
-      if (message.hasAttachments) attachmentsFound += 1;
+      if (message.hasAttachments) {
+        attachmentsFound += 1;
+        const localMessageId = messageRecordId(dataBox.id, message.direction, message.isdsMessageId);
+        const attachmentResult = await syncDataBoxMessageAttachments(db, env, account, dataBox, message, localMessageId);
+        attachmentsChecked += numberValue(attachmentResult.checked);
+        attachmentsDownloaded += numberValue(attachmentResult.downloaded);
+        attachmentsFailed += numberValue(attachmentResult.failed);
+        attachmentsMetadataOnly += numberValue(attachmentResult.metadataOnly);
+      }
     }
 
     const finishedAt = new Date().toISOString();
-    const message = `${dataBox.label}: read-only ISDS sync ulozil metadata: ${result.messages.length} obalek, ${messagesCreated} novych, ${messagesUpdated} aktualizovanych.`;
+    const attachmentSummary = attachmentsFound
+      ? ` Prilohy: ${attachmentsDownloaded} ulozenych, ${attachmentsMetadataOnly} jen metadata, ${attachmentsFailed} chyb.`
+      : "";
+    const message = `${dataBox.label}: read-only ISDS sync ulozil metadata: ${result.messages.length} obalek, ${messagesCreated} novych, ${messagesUpdated} aktualizovanych.${attachmentSummary}`;
     const sync = await finishSyncRun(db, runId, {
       finishedAt,
       status: "success",
@@ -605,6 +870,10 @@ async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
       messagesCreated,
       messagesUpdated,
       attachmentsFound,
+      attachmentsChecked,
+      attachmentsDownloaded,
+      attachmentsFailed,
+      attachmentsMetadataOnly,
       message
     };
   } catch (error) {
@@ -779,6 +1048,50 @@ export async function getDataBoxMessage(env, id) {
     if (error instanceof DataBoxStoreError) throw error;
     throw dbError(error);
   }
+}
+
+export async function getDataBoxAttachmentFile(env, messageId, attachmentId) {
+  const db = dataBoxDatabase(env, true);
+  const bucket = dataBoxDocumentsBucket(env);
+  if (!bucket) {
+    throw new DataBoxStoreError(
+      "Uloziste priloh Datove schranky neni nastavene. Pridejte Cloudflare R2 binding SMART_ODPADY_DOCUMENTS.",
+      503,
+      "data_box_storage_missing"
+    );
+  }
+
+  const row = await db
+    .prepare(`
+      SELECT *
+      FROM data_box_attachments
+      WHERE id = ? AND message_id = ?
+      LIMIT 1
+    `)
+    .bind(cleanString(attachmentId), cleanString(messageId))
+    .first();
+  const attachment = rowToAttachment(row);
+  if (!attachment?.id) {
+    throw new DataBoxStoreError("Priloha nebyla nalezena.", 404, "data_box_attachment_not_found");
+  }
+  if (attachment.status !== "stored" || !attachment.storageKey) {
+    throw new DataBoxStoreError("Priloha zatim neni ulozena a nejde otevrit.", 409, "data_box_attachment_not_stored");
+  }
+
+  const object = await bucket.get(attachment.storageKey);
+  if (!object) {
+    throw new DataBoxStoreError("Priloha je evidovana, ale soubor nebyl nalezen v cloudovem ulozisti.", 404, "data_box_attachment_object_missing");
+  }
+
+  return {
+    attachment,
+    body: object.body,
+    headers: {
+      "Content-Type": attachment.contentType || object.httpMetadata?.contentType || "application/octet-stream",
+      "Content-Disposition": contentDispositionFilename(attachment.filename),
+      "Cache-Control": "no-store"
+    }
+  };
 }
 
 export async function listDataBoxSyncRuns(env, filters = {}) {
