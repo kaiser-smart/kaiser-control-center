@@ -13,16 +13,18 @@ const PASSWORD_TARGETS = [
     shortLabel: "K TECH",
     usernameSecret: "DATA_BOX_ISDS_USERNAME_2",
     passwordSecret: "DATA_BOX_ISDS_PASSWORD_2",
-    isdsIdSecret: "DATA_BOX_ISDS_ID_2"
+    isdsIdSecret: "DATA_BOX_ISDS_ID_2",
+    requestedIsdsId: "3rw2ez"
   },
   {
-    slot: 6,
-    id: "kaiser-data-box-6",
-    label: "Kaisermanův nadační fond",
-    shortLabel: "KNF",
-    usernameSecret: "DATA_BOX_ISDS_USERNAME_6",
-    passwordSecret: "DATA_BOX_ISDS_PASSWORD_6",
-    isdsIdSecret: "DATA_BOX_ISDS_ID_6"
+    slot: 3,
+    id: "kaiser-data-box-3",
+    label: "Nanolab plus",
+    shortLabel: "NANO+",
+    usernameSecret: "DATA_BOX_ISDS_USERNAME_3",
+    passwordSecret: "DATA_BOX_ISDS_PASSWORD_3",
+    isdsIdSecret: "DATA_BOX_ISDS_ID_3",
+    requestedIsdsId: "322p6i"
   }
 ];
 
@@ -156,7 +158,7 @@ function statusCards(env, results = []) {
         <dl>
           <div><dt>Login</dt><dd>${escapeHtml(status.hasUsername ? status.usernameLabel : `Chybí ${status.usernameSecret}`)}</dd></div>
           <div><dt>Heslo</dt><dd>${escapeHtml(status.passwordLabel)}</dd></div>
-          <div><dt>ID DS</dt><dd>${escapeHtml(status.isdsIdLabel)}</dd></div>
+          <div><dt>ID DS</dt><dd>${escapeHtml(status.isdsIdLabel)} · požadované: <code>${escapeHtml(status.requestedIsdsId)}</code></dd></div>
           <div><dt>Cloudflare secret</dt><dd><code>${escapeHtml(status.passwordSecret)}</code></dd></div>
         </dl>
         ${result ? `<p class="result result--${escapeHtml(result.status)}">${escapeHtml(result.message)}</p>` : ""}
@@ -217,7 +219,7 @@ function page(env, options = {}) {
     <main>
       <section class="hero">
         <span class="eyebrow">Datová schránka</span>
-        <h1>Hesla KT a KNF</h1>
+        <h1>Hesla KT a Nanolab plus</h1>
         <p>Bezpečný admin formulář pro ověření hesel. Hesla se neukládají do kódu, localStorage ani odpovědi stránky.</p>
         <p><a href="${appUrl}">Zpět do Datové schránky</a></p>
       </section>
@@ -231,8 +233,8 @@ function page(env, options = {}) {
             <input name="password_2" type="password" autocomplete="new-password" placeholder="DATA_BOX_ISDS_PASSWORD_2" />
           </label>
           <label>
-            Heslo KNF
-            <input name="password_6" type="password" autocomplete="new-password" placeholder="DATA_BOX_ISDS_PASSWORD_6" />
+            Heslo Nanolab plus
+            <input name="password_3" type="password" autocomplete="new-password" placeholder="DATA_BOX_ISDS_PASSWORD_3" />
           </label>
         </div>
         <div class="actions">
@@ -241,8 +243,10 @@ function page(env, options = {}) {
         </div>
         <p class="hint">Uložení do Cloudflare secrets musí proběhnout přes bezpečný Cloudflare mechanismus. Tato stránka hesla nevypisuje a po odeslání je nevrací zpět.</p>
         <div class="command">
+          <code>wrangler pages secret put DATA_BOX_ISDS_ID_2 --project-name kaiser-control-center # 3rw2ez</code>
+          <code>wrangler pages secret put DATA_BOX_ISDS_ID_3 --project-name kaiser-control-center # 322p6i</code>
           <code>wrangler pages secret put DATA_BOX_ISDS_PASSWORD_2 --project-name kaiser-control-center</code>
-          <code>wrangler pages secret put DATA_BOX_ISDS_PASSWORD_6 --project-name kaiser-control-center</code>
+          <code>wrangler pages secret put DATA_BOX_ISDS_PASSWORD_3 --project-name kaiser-control-center</code>
         </div>
       </form>
     </main>
@@ -268,15 +272,15 @@ export async function onRequestPost({ request, env }) {
   const form = await request.formData();
   const action = cleanString(form.get("action"));
   const password2 = cleanString(form.get("password_2"));
-  const password6 = cleanString(form.get("password_6"));
+  const password3 = cleanString(form.get("password_3"));
 
   if (action === "test") {
     const tests = [];
     if (password2) {
       tests.push(await testTarget(env, PASSWORD_TARGETS[0], password2));
     }
-    if (password6) {
-      tests.push(await testTarget(env, PASSWORD_TARGETS[1], password6));
+    if (password3) {
+      tests.push(await testTarget(env, PASSWORD_TARGETS[1], password3));
     }
     if (!tests.length) {
       return html(page(env, { error: "Vyplňte aspoň jedno heslo pro test." }), 400);
