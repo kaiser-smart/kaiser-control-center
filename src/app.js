@@ -832,13 +832,14 @@ const assistantPromoDefaultState = {
 const assistantPromoState = { ...assistantPromoDefaultState };
 const AI_ASSISTANT_WELCOME_AUTOSHOW_ENABLED = false;
 const AI_ASSISTANT_PROMO_AUTOSHOW_ENABLED = false;
+const AI_ASSISTANT_LAUNCHER_DEFAULT_VISIBLE = true;
 
 let aiAssistantMessageId = 0;
 const aiAssistantState = {
   welcomeVisible: AI_ASSISTANT_WELCOME_AUTOSHOW_ENABLED,
   welcomeAnimate: AI_ASSISTANT_WELCOME_AUTOSHOW_ENABLED,
   chatOpen: false,
-  launcherVisible: false,
+  launcherVisible: AI_ASSISTANT_LAUNCHER_DEFAULT_VISIBLE,
   mode: "text",
   selectedAssistantId: DEFAULT_AI_ASSISTANT_ID,
   avatarAssetStatus: Object.fromEntries(AI_ASSISTANTS.map((assistant) => [assistant.id, "unknown"])),
@@ -1937,7 +1938,7 @@ function resetAiAssistantSession() {
   aiAssistantState.welcomeVisible = AI_ASSISTANT_WELCOME_AUTOSHOW_ENABLED;
   aiAssistantState.welcomeAnimate = AI_ASSISTANT_WELCOME_AUTOSHOW_ENABLED;
   aiAssistantState.chatOpen = false;
-  aiAssistantState.launcherVisible = false;
+  aiAssistantState.launcherVisible = AI_ASSISTANT_LAUNCHER_DEFAULT_VISIBLE;
   aiAssistantState.mode = "text";
   aiAssistantState.selectedAssistantId = DEFAULT_AI_ASSISTANT_ID;
   aiAssistantState.input = "";
