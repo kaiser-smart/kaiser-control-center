@@ -5,6 +5,7 @@ import { AiAssistantPromoModal } from "./components/AiAssistantPromoModal.js";
 import { AiConfirmationModal } from "./components/AiConfirmationModal.js";
 import { AiWelcomeModal } from "./components/AiWelcomeModal.js";
 import { ElevenLabsAssistantProvider } from "./ElevenLabsAssistantProvider.js";
+import { OpenAiRealtimeAssistantProvider } from "./OpenAiRealtimeAssistantProvider.js";
 import { VersionBackupInfo } from "./components/VersionBackupInfo.js";
 import { VersionNewsInfo } from "./components/VersionNewsInfo.js";
 import { ModuleFeedbackBox } from "./components/ModuleFeedbackBox.js";
@@ -921,6 +922,14 @@ const elevenLabsAssistant = ElevenLabsAssistantProvider({
     confirm: (payload) => requestAiConfirmation(payload),
     toast: (payload) => showAiToast(payload),
     highlight: (payload) => showAiHighlight(payload),
+    requestJson: (path, options) => apiJson(path, options)
+  }
+});
+
+const openAiRealtimeAssistant = OpenAiRealtimeAssistantProvider({
+  tools: {
+    navigate: (route) => navigateFromAiAssistant(route),
+    canUseRoute: (route) => canUseAiRoute(route),
     requestJson: (path, options) => apiJson(path, options)
   }
 });
@@ -1961,6 +1970,7 @@ function resolveAiConfirmation(confirmed) {
 function resetAiAssistantSession() {
   speechRecognition.stop({ status: false });
   elevenLabsAssistant.stopVoiceAudio?.();
+  openAiRealtimeAssistant.stopVoiceAudio?.();
   clearAiVoiceStateTimer();
   void releaseAiVoiceWakeLock({ renderAfter: false });
   aiAssistantState.welcomeVisible = AI_ASSISTANT_WELCOME_AUTOSHOW_ENABLED;
@@ -2038,6 +2048,7 @@ function openAiAssistant(mode = "text", options = {}) {
 
   if (nextMode !== "voice") {
     elevenLabsAssistant.stopVoiceAudio?.();
+    openAiRealtimeAssistant.stopVoiceAudio?.();
     aiAssistantState.sarlotaDeepLinkQuickStart = false;
     clearSarlotaDeepLinkUrl();
   }
@@ -2074,6 +2085,7 @@ function dismissAiAssistantWelcome() {
 function closeAiAssistant() {
   stopAiVoiceDemo({ renderAfter: false });
   elevenLabsAssistant.stopVoiceAudio?.();
+  openAiRealtimeAssistant.stopVoiceAudio?.();
   clearAiVoiceStateTimer();
   void releaseAiVoiceWakeLock({ renderAfter: false });
   cancelAiTextRequest();
@@ -2284,6 +2296,192 @@ async function startAiVoiceRecognition() {
   speechRecognition.stop({ status: false });
   const requestId = ++aiTextRequestId;
   elevenLabsAssistant.stopVoiceAudio?.();
+  openAiRealtimeAssistant.stopVoiceAudio?.();
+  resetAiVoiceHapticSession();
+  clearAiVoiceWeakInputNotice();
+  const assistant = selectedAiAssistant();
+  aiAssistantState.demoStatus = "";
+  aiAssistantState.voiceNotice = "";
+  aiAssistantState.voiceTranscript = "";
+  aiAssistantState.voiceAnswer = "";
+  aiAssistantState.isListening = false;
+  aiAssistantState.elevenLabsStatus = "OpenAI hlas Šarloty se připravuje.";
+  setAiVoiceUiState("connecting", AI_VOICE_CONNECTING_LABEL, ["Připojuji", "Mikrofon", "OpenAI hlas"]);
+  renderAiAssistantLayerOnly();
+
+  try {
+    const result = await openAiRealtimeAssistant.startVoiceConversation(assistant.id, {
+      onAudioWarning: (message) => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.voiceNotice = message;
+        renderAiAssistantLayerOnly();
+      },
+      onConnected: (session) => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.elevenLabsConfigured = true;
+        aiAssistantState.elevenLabsConfiguredByAssistant[assistant.id] = true;
+        aiAssistantState.elevenLabsStatus = `OpenAI hlas ${session.assistantName || assistant.name} je připojený.`;
+        setAiVoiceUiState("ready", AI_VOICE_READY_LABEL, ["Připojeno", "Mikrofon", "OpenAI hlas"]);
+        triggerAiVoiceSessionHaptic("connected");
+        renderAiAssistantLayerOnly();
+      },
+      onListening: () => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.isListening = true;
+        clearAiVoiceWeakInputNotice();
+        setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, ["Poslouchám", "Mikrofon aktivní", "OpenAI hlas"]);
+        triggerAiVoiceSessionHaptic("listening");
+        renderAiAssistantLayerOnly();
+      },
+      onInputLevel: (event) => {
+        if (requestId !== aiTextRequestId || !aiAssistantState.isListening) {
+          return;
+        }
+
+        if (event.speaking && aiAssistantState.voiceUiState !== "userSpeaking") {
+          setAiVoiceUiState("userSpeaking", AI_VOICE_USER_SPEAKING_LABEL, ["Mluv teď", "Mikrofon aktivní", "OpenAI hlas"]);
+          renderAiAssistantLayerOnly();
+          return;
+        }
+
+        if (!event.speaking && aiAssistantState.voiceUiState === "userSpeaking") {
+          setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Zpracovávám", "Čeká na odpověď", "OpenAI hlas"]);
+          renderAiAssistantLayerOnly();
+        }
+      },
+      onReady: () => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.isListening = true;
+        setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, ["Poslouchám", "Mluv teď", "OpenAI hlas"]);
+        renderAiAssistantLayerOnly();
+      },
+      onUserTranscript: (event) => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.isListening = false;
+        clearAiVoiceWeakInputNotice();
+        aiAssistantState.voiceTranscript = event.text || "";
+        setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Zpracovávám", "Čeká na odpověď", "OpenAI hlas"]);
+        renderAiAssistantLayerOnly();
+      },
+      onAgentResponse: (event) => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.isListening = false;
+        aiAssistantState.voiceAnswer = event.text || "";
+        setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Šarlota odpovídá", "Zvuk přehrávám", "OpenAI hlas"]);
+        renderAiAssistantLayerOnly();
+      },
+      onAudio: () => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Zvuk přehrávám", "OpenAI hlas", "Realtime"]);
+        renderAiAssistantLayerOnly();
+      },
+      onToolResult: (event) => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.voiceNotice = event.text || "";
+        aiAssistantState.voiceTags = [
+          event.status === "created" ? "Zapsáno" : "Nástroj",
+          "KSO backend",
+          "OpenAI hlas"
+        ];
+        renderAiAssistantLayerOnly();
+      },
+      onDisconnected: () => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.isListening = false;
+        aiAssistantState.voiceStatus = AI_VOICE_DISCONNECTED_LABEL;
+        aiAssistantState.voiceUiState = "disconnected";
+        aiAssistantState.voiceNotice = "OpenAI hlasové spojení se přerušilo. Klepni na Obnovit spojení.";
+        aiAssistantState.voiceTags = ["Odpojeno", "Obnovit spojení", "OpenAI hlas"];
+        void releaseAiVoiceWakeLock({ renderAfter: false });
+        renderAiAssistantLayerOnly();
+      },
+      onError: (error) => {
+        if (requestId !== aiTextRequestId) {
+          return;
+        }
+        aiAssistantState.voiceStatus = error?.status || AI_VOICE_ERROR_LABEL;
+        aiAssistantState.voiceUiState = "error";
+        aiAssistantState.voiceNotice = error?.message || "OpenAI hlasový režim vrátil chybu.";
+        aiAssistantState.voiceTags = ["Chyba hlasu", "Zkusit znovu", "OpenAI hlas"];
+        triggerAiVoiceSessionHaptic("problem");
+        void releaseAiVoiceWakeLock({ renderAfter: false });
+        renderAiAssistantLayerOnly();
+      }
+    });
+
+    if (requestId !== aiTextRequestId) {
+      return;
+    }
+
+    aiAssistantState.elevenLabsStatus = `OpenAI hlas ${result.assistantName || assistant.name} je připravený.`;
+    aiAssistantState.voiceNotice = "";
+    setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, [
+      "Poslouchám",
+      result.voice ? `Hlas ${result.voice}` : "OpenAI hlas",
+      result.model || "Realtime"
+    ]);
+    renderAiAssistantLayerOnly();
+  } catch (error) {
+    if (requestId !== aiTextRequestId) {
+      return;
+    }
+
+    aiAssistantState.isListening = false;
+    if (error?.code === "voice_stopped") {
+      aiAssistantState.voiceStatus = AI_VOICE_MUTED_LABEL;
+      aiAssistantState.voiceUiState = "muted";
+      aiAssistantState.voiceTags = ["Mikrofon vypnutý", "Klepni", "Připraven"];
+      void releaseAiVoiceWakeLock({ renderAfter: false });
+      renderAiAssistantLayerOnly();
+      return;
+    }
+
+    if (error?.code === "voice_microphone_denied" || String(error?.message || "").includes("Mikrofon není povolený")) {
+      aiAssistantState.elevenLabsStatus = AI_VOICE_MICROPHONE_DENIED_LABEL;
+      aiAssistantState.voiceStatus = AI_VOICE_MICROPHONE_DENIED_LABEL;
+      aiAssistantState.voiceUiState = "microphoneDenied";
+      aiAssistantState.voiceNotice = "Povol mikrofon pro tento web a zkus to znovu.";
+      aiAssistantState.voiceTags = ["Mikrofon blokován", "Zkusit znovu", "Bez odeslání"];
+      triggerAiVoiceSessionHaptic("problem");
+      void releaseAiVoiceWakeLock({ renderAfter: false });
+      renderAiAssistantLayerOnly();
+      return;
+    }
+
+    aiAssistantState.elevenLabsStatus = error?.payload?.error || aiAssistantState.elevenLabsStatus || "OpenAI hlas není připravený.";
+    aiAssistantState.voiceStatus = error?.payload?.error || error?.message || AI_VOICE_ERROR_LABEL;
+    aiAssistantState.voiceUiState = "error";
+    aiAssistantState.voiceNotice = error?.payload?.error || error?.message || "OpenAI hlasový režim Šarloty se nepodařilo spustit.";
+    aiAssistantState.voiceTags = ["Chyba hlasu", "Zkusit znovu", "OpenAI hlas"];
+    triggerAiVoiceSessionHaptic("problem");
+    void releaseAiVoiceWakeLock({ renderAfter: false });
+    renderAiAssistantLayerOnly();
+  }
+}
+
+async function startElevenLabsVoiceRecognition() {
+  stopAiVoiceDemo({ renderAfter: false });
+  speechRecognition.stop({ status: false });
+  const requestId = ++aiTextRequestId;
+  elevenLabsAssistant.stopVoiceAudio?.();
   resetAiVoiceHapticSession();
   clearAiVoiceWeakInputNotice();
   const assistant = selectedAiAssistant();
@@ -2480,6 +2678,7 @@ function stopAiVoiceRecognition() {
   stopAiVoiceDemo({ renderAfter: false });
   aiTextRequestId += 1;
   elevenLabsAssistant.stopVoiceAudio?.();
+  openAiRealtimeAssistant.stopVoiceAudio?.();
   clearAiVoiceStateTimer();
   clearAiVoiceWeakInputNotice();
   speechRecognition.stop();

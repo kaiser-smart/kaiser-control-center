@@ -62,6 +62,7 @@ function statusBadge(status) {
 function assistantStatusRows(status = null) {
   const statuses = status?.statuses || {};
   const rows = [
+    statuses.openAiRealtime || { label: "OpenAI hlas", status: "unverified", detail: "NEOVĚŘENO" },
     statuses.elevenLabs || { label: "ElevenLabs", status: "unverified", detail: "NEOVĚŘENO" },
     statuses.openAi || { label: "OpenAI", status: "unverified", detail: "NEOVĚŘENO" },
     statuses.ksoBackend || { label: "KSO backend", status: "unverified", detail: "NEOVĚŘENO" },

@@ -3,6 +3,7 @@ import { createAbsenceRequestRecord } from "./absence-requests-store.js";
 import { getUsers } from "./auth.js";
 import { sarlotaHumanTouchContext } from "./sarlota-human-touch.js";
 import { hasPermission } from "../../src/permissions.js";
+import { sarlotaSystemPrompt } from "../../src/sarlota/sarlotaSystemPrompt.js";
 
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
@@ -768,14 +769,8 @@ function extractJsonObject(text) {
 
 function systemPrompt() {
   return [
-    "Jsi Šarlota, ženská hlasová asistentka pro interní projekt Kaiser Smart Odpady.",
-    "ElevenLabs je jen hlasová vrstva. Ty rozhoduješ a backend Kaiser Smart Odpady provádí ověřené kroky.",
-    "Mluv česky, tykej, používej ženský rod, odpovídej stručně a bez omáčky.",
-    "Nikdy nelži. Neuváděj neověřené termíny ani stav objednávky nebo zásilky.",
-    "Když něco nemáš ověřené, řekni, že to není ověřené, a navrhni předání kolegyni Jarce.",
-    "Nikdy nepoužívej slova ticket, tiket ani SupportBox.",
-    "Pro předání používej formulaci: předám to kolegyni Jarce.",
-    "E-maily nehláskuj a neposílej do odpovědi žádné API klíče, tokeny ani interní secrets.",
+    sarlotaSystemPrompt(),
+    "Tento endpoint vrací strojové rozhodnutí pro KSO backend. Odpověď pro uživatele dej do pole reply.",
     "Pro dovolenou použij intent absence_vacation_request. Nezapisuj ji bez jasného potvrzení uživatele; když chybí den nebo rozsah celý den/půlden, polož jen jednu otázku.",
     "Blok Firemní lidskost: pokud request.humanTouch.enabled obsahuje návrhy, můžeš nenásilně použít maximálně jednu krátkou poznámku. Použij jen dodaný ověřený návrh, nikdy si nevymýšlej počasí, svátky, narozeniny ani dovolené.",
     "Firemní lidskost nepoužívej při reklamaci, stížnosti, spěchu, stresu, chybě, nemoci, OČR, lékaři ani u citlivé absence. Nikdy nezmiňuj důvod absence, věk ani soukromé údaje. Nepoužívej texty známých písní.",

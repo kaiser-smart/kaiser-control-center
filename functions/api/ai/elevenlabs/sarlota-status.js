@@ -395,6 +395,17 @@ function panelStatusDetail(status, { ok = "OK", error = "chyba", unverified = "N
 export async function sarlotaPanelStatusPayload(env, user) {
   const status = await sarlotaStatusPayload(env, user);
   const openAiServerConfigured = Boolean(cleanString(env?.OPENAI_API_KEY));
+  const openAiRealtimeModel = cleanString(
+    env?.SARLOTA_OPENAI_REALTIME_MODEL ||
+    env?.OPENAI_REALTIME_MODEL ||
+    env?.VOICE_ASSISTANT_OPENAI_REALTIME_MODEL ||
+    "gpt-realtime-2"
+  );
+  const openAiRealtimeVoice = cleanString(
+    env?.SARLOTA_OPENAI_REALTIME_VOICE ||
+    env?.OPENAI_REALTIME_VOICE ||
+    "marin"
+  );
   const elevenLabsStatus = panelStatusValue(status.elevenLabs?.status, {
     configured: status.elevenLabs?.configured,
     upstreamVerified: status.elevenLabs?.upstreamVerified
@@ -434,6 +445,13 @@ export async function sarlotaPanelStatusPayload(env, user) {
           error: "chybí server-side OPENAI_API_KEY",
           unverified: "NEOVĚŘENO"
         })
+      },
+      openAiRealtime: {
+        label: "OpenAI hlas",
+        status: openAiServerConfigured ? "ok" : "error",
+        detail: openAiServerConfigured
+          ? `OK, Realtime připravené server-side (${openAiRealtimeModel}, hlas ${openAiRealtimeVoice})`
+          : "chybí server-side OPENAI_API_KEY"
       },
       ksoBackend: {
         label: "KSO backend",
@@ -477,6 +495,7 @@ export async function sarlotaPanelStatusPayload(env, user) {
     checks: {
       signedUrlEndpoint: "/api/ai/elevenlabs/signed-url?assistant=sarlota",
       voiceEndpoint: "/api/voice/sarlota",
+      openAiRealtimeEndpoint: "/api/sarlota/realtime-session",
       signedUrlOmitted: true,
       secretsOmitted: true,
       dynamicVariableValuesOmitted: true,

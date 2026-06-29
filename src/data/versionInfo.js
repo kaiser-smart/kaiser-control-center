@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.230"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.231"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: OpenAI hlasový pilot",
+    text: "Panel Šarloty má nový OpenAI Realtime hlasový režim bez ElevenLabs jako prostředníka. Mikrofon se spouští až po klepnutí, API klíč zůstává server-side a pilotní zápis dovolené dál prochází přes bezpečný KSO backend."
+  },
   {
     title: "Šarlota: velký mikrofon na černém pozadí",
     text: "Hlasový panel Šarloty používá nový dodaný mikrofon a tmavý mikrofonový prostor, aby byla hlavní hlasová akce na mobilu výrazná hned na první pohled."
