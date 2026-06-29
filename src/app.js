@@ -746,6 +746,10 @@ const dataBoxState = {
   replyDraftText: "",
   replyDraftError: "",
   selectedPreviewMessageId: "",
+  messagePagination: {
+    pageSize: 10,
+    currentPage: 1
+  },
   messageFilters: {
     query: "",
     status: "all",
@@ -13812,6 +13816,8 @@ const DATA_BOX_QUICK_FILTERS = [
   { id: "errors", label: "Chyby" }
 ];
 
+const DATA_BOX_PAGE_SIZES = [10, 20, 30];
+
 const DATA_BOX_STATUS_OPTIONS = [
   ["all", "Všechny stavy"],
   ["new", "Nová"],
@@ -13915,6 +13921,100 @@ function dataBoxMessagesForDirection(direction) {
 
 function dataBoxFilteredMessages(direction) {
   return dataBoxMessagesForDirection(direction).filter((message) => dataBoxMessageMatchesFilters(message));
+}
+
+function dataBoxHasActiveMessageFilters() {
+  const filters = dataBoxState.messageFilters;
+  return Boolean(
+    filters.query
+    || filters.status !== "all"
+    || filters.priority !== "all"
+    || filters.type !== "all"
+    || filters.deadline !== "all"
+    || filters.attachment !== "all"
+    || filters.dataBox !== "all"
+    || filters.assigned !== "all"
+    || filters.quick !== "all"
+    || filters.dateFrom
+    || filters.dateTo
+  );
+}
+
+function resetDataBoxPagination() {
+  dataBoxState.messagePagination = {
+    ...dataBoxState.messagePagination,
+    currentPage: 1
+  };
+}
+
+function dataBoxPaginationForRows(rows) {
+  const pageSize = DATA_BOX_PAGE_SIZES.includes(Number(dataBoxState.messagePagination.pageSize))
+    ? Number(dataBoxState.messagePagination.pageSize)
+    : DATA_BOX_PAGE_SIZES[0];
+  const totalRows = rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(
+    Math.max(1, Number(dataBoxState.messagePagination.currentPage) || 1),
+    totalPages
+  );
+  if (
+    dataBoxState.messagePagination.pageSize !== pageSize
+    || dataBoxState.messagePagination.currentPage !== currentPage
+  ) {
+    dataBoxState.messagePagination = { pageSize, currentPage };
+  }
+  const startIndex = (currentPage - 1) * pageSize;
+  const visibleRows = rows.slice(startIndex, startIndex + pageSize);
+
+  return {
+    pageSize,
+    totalRows,
+    totalPages,
+    currentPage,
+    startIndex,
+    visibleRows
+  };
+}
+
+function dataBoxPaginationInfoMarkup(allRows, filteredRows, pagination) {
+  if (!filteredRows.length) {
+    return "Žádné zprávy k zobrazení";
+  }
+
+  const start = pagination.startIndex + 1;
+  const end = pagination.startIndex + pagination.visibleRows.length;
+  const suffix = dataBoxHasActiveMessageFilters() ? "vyfiltrovaných zpráv" : "zpráv";
+  return `Zobrazeno ${start}–${end} z ${filteredRows.length} ${suffix}`;
+}
+
+function dataBoxInboxPaginationMarkup(allRows, filteredRows, pagination) {
+  const previousDisabled = pagination.currentPage <= 1;
+  const nextDisabled = pagination.currentPage >= pagination.totalPages || !filteredRows.length;
+  const info = dataBoxPaginationInfoMarkup(allRows, filteredRows, pagination);
+
+  return `
+    <div class="data-box-inbox-footer" aria-label="Stránkování zpráv">
+      <p class="data-box-inbox-count">${escapeHtml(info)}</p>
+      <div class="data-box-page-size" aria-label="Počet zpráv na stránku">
+        <span>Na stránku:</span>
+        ${DATA_BOX_PAGE_SIZES.map((size) => `
+          <button
+            class="data-box-page-size__button ${pagination.pageSize === size ? "data-box-page-size__button--active" : ""}"
+            type="button"
+            data-data-box-page-size="${escapeHtml(String(size))}"
+            aria-pressed="${pagination.pageSize === size ? "true" : "false"}"
+          >
+            ${escapeHtml(String(size))}
+          </button>
+        `).join("")}
+      </div>
+      <div class="data-box-pagination" aria-label="Přepínání stránek">
+        <button class="secondary-link" type="button" data-data-box-page="prev" ${previousDisabled ? "disabled" : ""}>Předchozí</button>
+        <span>Strana ${escapeHtml(String(pagination.currentPage))} z ${escapeHtml(String(pagination.totalPages))}</span>
+        <button class="secondary-link" type="button" data-data-box-page="next" ${nextDisabled ? "disabled" : ""}>Další</button>
+      </div>
+    </div>
+  `;
 }
 
 function dataBoxFilteredSyncRuns() {
@@ -14135,7 +14235,42 @@ function dataBoxAiSortingInfo(direction) {
     <section class="data-box-side-card data-box-side-card--ai">
       <span>AI třídění</span>
       <strong>${escapeHtml(label)}</strong>
-      <small>${escapeHtml(note)}</small>
+      <small>${escapeHtml(note)} Priority jsou read-only: urgentní, právní, info, běžné nebo chyba.</small>
+    </section>
+  `;
+}
+
+function dataBoxStatusAndSyncCard(connection, selectedAccount, context) {
+  return `
+    <section class="data-box-side-card data-box-side-card--status-sync">
+      <span>Stav a synchronizace</span>
+      <div class="data-box-side-health data-box-side-health--${escapeHtml(dataBoxStatusTone(connection))}">
+        ${dataBoxStatusRing(connection)}
+        <strong>${escapeHtml(connection.label)}</strong>
+      </div>
+      ${dataBoxErrorNotice(connection)}
+      <dl class="data-box-side-status">
+        <div><dt>Poslední synchronizace</dt><dd>${escapeHtml(dataBoxLastSyncLabel())}</dd></div>
+        <div><dt>Plán načítání</dt><dd>Read-only každých 30 minut</dd></div>
+        <div><dt>Schránka</dt><dd>${escapeHtml(selectedAccount ? selectedAccount.label : context.title)}</dd></div>
+      </dl>
+      <small>Stav vychází z logu synchronizace. Tato obrazovka nespouští cron ani žádné odesílání.</small>
+    </section>
+  `;
+}
+
+function dataBoxVaultCard(metrics) {
+  const hasCapacity = Number.isFinite(metrics.vaultCapacity);
+  const capacityLabel = hasCapacity ? `${Math.round(metrics.vaultCapacity)} %` : "Kapacita není v datech";
+  const capacityNote = hasCapacity && metrics.vaultCapacity >= 90
+    ? "Kapacita Datového trezoru je téměř naplněná."
+    : "Stažené zprávy zůstávají u nás pro přijaté i odeslané zprávy.";
+
+  return `
+    <section class="data-box-side-card data-box-side-card--vault">
+      <span>Datový trezor</span>
+      <strong>${escapeHtml(capacityLabel)}</strong>
+      <small>${escapeHtml(capacityNote)}</small>
     </section>
   `;
 }
@@ -14997,6 +15132,7 @@ function dataBoxInboxIsEmptyState(notice, allRows) {
 }
 
 function dataBoxMessageCard(message, selected) {
+  const status = dataBoxWorkflowStatus(message);
   const priority = dataBoxMessagePriority(message);
   const attachmentCount = dataBoxAttachmentCount(message);
   const deliveredAt = formatDateTime(dataBoxMessageTimestamp(message));
@@ -15004,9 +15140,10 @@ function dataBoxMessageCard(message, selected) {
   const actor = actorValue && actorValue !== "-" ? actorValue : "Neznámý odesílatel";
   const subject = String(message.subject || message.title || "").trim() || "Bez předmětu";
   const attachmentLabel = attachmentCount ? `Příloha${attachmentCount > 1 ? ` ${attachmentCount}` : ""}` : "";
+  const unread = status.id === "new";
 
   return `
-    <article class="data-box-message-card data-box-message-card--priority-${escapeHtml(priority.id)} ${selected ? "data-box-message-card--selected" : ""}">
+    <article class="data-box-message-card data-box-message-card--priority-${escapeHtml(priority.id)} ${selected ? "data-box-message-card--selected" : ""} ${unread ? "data-box-message-card--unread" : ""}">
       <button
         class="data-box-message-card__select"
         type="button"
@@ -15014,6 +15151,7 @@ function dataBoxMessageCard(message, selected) {
         aria-pressed="${selected ? "true" : "false"}"
       >
         <span class="data-box-message-card__top">
+          ${unread ? `<span class="data-box-message-card__unread-dot" title="Nepřečtená zpráva" aria-label="Nepřečtená zpráva"></span>` : ""}
           <span class="data-box-message-card__actor">${escapeHtml(actor)}</span>
           <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
         </span>
@@ -15034,7 +15172,10 @@ function dataBoxSelectedPreviewMessage(rows) {
 
   const selectedId = dataBoxState.selectedMessageId || dataBoxState.selectedPreviewMessageId;
 
-  if (dataBoxState.selectedMessage?.id === selectedId) {
+  if (
+    dataBoxState.selectedMessage?.id === selectedId
+    && rows.some((message) => String(message.id) === String(selectedId))
+  ) {
     return dataBoxState.selectedMessage;
   }
 
@@ -15064,7 +15205,6 @@ function dataBoxReadingPane(message, direction) {
   const type = dataBoxMessageType(message);
   const deadline = dataBoxDeadlineInfo(message);
   const actorLabel = message.direction === "sent" ? "Příjemce" : "Odesílatel";
-  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
   const attachmentCount = dataBoxAttachmentCount(message);
 
   return `
@@ -15094,6 +15234,11 @@ function dataBoxReadingPane(message, direction) {
         ${dataBoxBadge(status.label, status.tone)}
         ${deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : ""}
       </div>
+      ${dataBoxAttachmentsSection(message)}
+      <section class="data-box-reading-section data-box-reading-section--content">
+        <h4>Obsah / náhled</h4>
+        <p>${escapeHtml(dataBoxMessageContentPreview(message))}</p>
+      </section>
       <dl class="data-box-reading-facts">
         <div><dt>${escapeHtml(actorLabel)}</dt><dd>${escapeHtml(dataBoxMessageActor(message))}</dd></div>
         <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(dataBoxMessageTimestamp(message)))}</dd></div>
@@ -15102,14 +15247,6 @@ function dataBoxReadingPane(message, direction) {
         <div><dt>Priorita</dt><dd>${escapeHtml(priority.label)}</dd></div>
         <div><dt>Přílohy</dt><dd>${escapeHtml(attachmentCount ? `${attachmentCount}` : "Bez příloh")}</dd></div>
       </dl>
-      <section class="data-box-reading-section data-box-reading-section--content">
-        <h4>Obsah / náhled</h4>
-        <p>${escapeHtml(dataBoxMessageContentPreview(message))}</p>
-      </section>
-      <section class="data-box-reading-section data-box-reading-section--attachments">
-        <h4>Přílohy</h4>
-        <ul class="data-box-attachment-list">${dataBoxAttachmentRows(attachments, attachmentCount)}</ul>
-      </section>
     </aside>
   `;
 }
@@ -15141,7 +15278,6 @@ function dataBoxSupportPane(message, direction) {
   const metrics = dataBoxInboxMetrics(direction);
   const selectedAccount = dataBoxSelectedAccount();
   const context = dataBoxActiveContextLabel();
-  const vaultLabel = Number.isFinite(metrics.vaultCapacity) ? `${Math.round(metrics.vaultCapacity)} %` : "není v datech";
   const nextStep = message ? dataBoxMessageNextStep(message) : "Vyber zprávu ze seznamu.";
 
   return `
@@ -15150,34 +15286,15 @@ function dataBoxSupportPane(message, direction) {
         <span>Návrh vyřízení</span>
         <strong>${escapeHtml(nextStep)}</strong>
       </section>
-      ${dataBoxAiSortingInfo(direction)}
       <section class="data-box-side-card">
         <span>Typické úkony</span>
         <ul class="data-box-action-list">
           ${dataBoxSupportTasks(message).map((task) => `<li>${escapeHtml(task)}</li>`).join("")}
         </ul>
       </section>
-      ${dataBoxOperationalKpis(direction)}
-      <section class="data-box-side-card">
-        <span>Stav ISDS</span>
-        <div class="data-box-side-health data-box-side-health--${escapeHtml(dataBoxStatusTone(connection))}">
-          ${dataBoxStatusRing(connection)}
-          <strong>${escapeHtml(connection.label)}</strong>
-        </div>
-        <dl class="data-box-side-status">
-          <div><dt>Napojení</dt><dd>${escapeHtml(connection.label)}</dd></div>
-          <div><dt>Synchronizace</dt><dd>${escapeHtml(dataBoxLastSyncLabel())}</dd></div>
-          <div><dt>Schránka</dt><dd>${escapeHtml(selectedAccount ? selectedAccount.label : context.title)}</dd></div>
-        </dl>
-      </section>
-      ${dataBoxAutoSyncInfo()}
-      ${Number.isFinite(metrics.vaultCapacity) && metrics.vaultCapacity >= 90 ? `
-        <section class="data-box-side-card">
-          <span>Datový trezor</span>
-          <strong>${escapeHtml(vaultLabel)}</strong>
-          <small>Doporučení: předat Radimovi.</small>
-        </section>
-      ` : ""}
+      ${dataBoxStatusAndSyncCard(connection, selectedAccount, context)}
+      ${dataBoxVaultCard(metrics)}
+      ${dataBoxAiSortingInfo(direction)}
     </aside>
   `;
 }
@@ -15189,7 +15306,9 @@ function dataBoxMessageInbox(title, direction) {
   const sectionTitle = selectedAccount ? `${title}: ${selectedAccount.label}` : title;
   const allRows = dataBoxMessagesForDirection(direction);
   const rows = dataBoxFilteredMessages(direction);
-  const selectedPreview = dataBoxSelectedPreviewMessage(rows);
+  const pagination = dataBoxPaginationForRows(rows);
+  const visibleRows = pagination.visibleRows;
+  const selectedPreview = dataBoxSelectedPreviewMessage(visibleRows);
   const notice = dataBoxInboxNotice(direction, allRows, rows);
   const emptyState = dataBoxInboxIsEmptyState(notice, allRows);
 
@@ -15202,6 +15321,7 @@ function dataBoxMessageInbox(title, direction) {
           </div>
         </div>
         ${dataBoxInboxNoticeMarkup(notice)}
+        ${dataBoxState.apiStatus === "ready" ? dataBoxInboxPaginationMarkup(allRows, rows, pagination) : ""}
       </section>
     `;
   }
@@ -15218,8 +15338,9 @@ function dataBoxMessageInbox(title, direction) {
         ${dataBoxInboxSearch()}
         ${dataBoxQuickFilters()}
         <div class="data-box-message-list" aria-label="${escapeHtml(sectionTitle)}">
-          ${notice ? dataBoxInboxNoticeMarkup(notice) : rows.map((message) => dataBoxMessageCard(message, selectedPreview?.id === message.id)).join("")}
+          ${notice ? dataBoxInboxNoticeMarkup(notice) : visibleRows.map((message) => dataBoxMessageCard(message, selectedPreview?.id === message.id)).join("")}
         </div>
+        ${dataBoxInboxPaginationMarkup(allRows, rows, pagination)}
       </section>
       ${notice ? "" : dataBoxReadingPane(selectedPreview, direction)}
       ${notice ? "" : dataBoxSupportPane(selectedPreview, direction)}
@@ -15296,32 +15417,173 @@ function dataBoxReplyDraftPanel(message) {
   `;
 }
 
+function dataBoxAttachmentCountLabel(count) {
+  if (!count) {
+    return "Bez příloh";
+  }
+
+  if (count === 1) {
+    return "1 příloha";
+  }
+
+  if (count >= 2 && count <= 4) {
+    return `${count} přílohy`;
+  }
+
+  return `${count} příloh`;
+}
+
+function dataBoxAttachmentTypeLabel(attachment) {
+  const name = String(attachment?.filename || "").toLowerCase();
+  const type = String(attachment?.contentType || "").toLowerCase();
+  const extension = name.includes(".") ? name.split(".").pop() : "";
+
+  if (type.includes("pdf") || extension === "pdf") return "PDF";
+  if (type.includes("word") || ["doc", "docx"].includes(extension)) return "DOCX";
+  if (type.includes("xml") || extension === "xml") return "XML";
+  if (type.includes("excel") || type.includes("spreadsheet") || ["xls", "xlsx"].includes(extension)) return "XLSX";
+  if (type.includes("image") || ["png", "jpg", "jpeg", "webp", "gif"].includes(extension)) return "IMG";
+  if (type.includes("zip") || extension === "zip") return "ZIP";
+  if (type.includes("text") || extension === "txt") return "TXT";
+  return extension ? extension.toUpperCase() : "Soubor";
+}
+
+function dataBoxAttachmentOpenUrl(attachment) {
+  const url = String(attachment?.fileUrl || attachment?.openUrl || attachment?.downloadUrl || attachment?.url || "").trim();
+  if (!url) {
+    return "";
+  }
+
+  return url.startsWith("/") || /^https?:\/\//i.test(url) ? url : "";
+}
+
+function dataBoxAttachmentHasError(attachment) {
+  const source = dataBoxSearchText([
+    attachment?.status,
+    attachment?.error,
+    attachment?.errorMessage
+  ].filter(Boolean).join(" "));
+  return source.includes("chyba")
+    || source.includes("error")
+    || source.includes("failed")
+    || source.includes("nelze")
+    || source.includes("nejde");
+}
+
+function dataBoxAttachmentStatusLabel(attachment) {
+  const status = dataBoxSearchText(attachment?.status || "");
+
+  if (dataBoxAttachmentHasError(attachment)) {
+    return "Chyba otevření";
+  }
+
+  if (status.includes("pending") || status.includes("ceka") || status.includes("waiting")) {
+    return "Čeká na stažení";
+  }
+
+  if (dataBoxAttachmentOpenUrl(attachment) || attachment?.storageKey || status.includes("stored") || status.includes("saved") || status.includes("ready")) {
+    return "Uloženo u nás";
+  }
+
+  return "Jen metadata";
+}
+
+function dataBoxAttachmentErrorMarkup(attachment) {
+  if (!dataBoxAttachmentHasError(attachment)) {
+    return "";
+  }
+
+  return `
+    <p class="data-box-attachment-error" role="alert">
+      <strong>Přílohu se nepodařilo otevřít.</strong>
+      <span>Zkontrolujte, zda byla příloha správně stažena z datové schránky.</span>
+    </p>
+  `;
+}
+
+function dataBoxAttachmentActionMarkup(attachment) {
+  const url = dataBoxAttachmentOpenUrl(attachment);
+
+  if (url && !dataBoxAttachmentHasError(attachment)) {
+    return `
+      <a class="primary-action data-box-attachment-open" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+        Otevřít
+      </a>
+    `;
+  }
+
+  return `
+    <button class="primary-action data-box-attachment-open" type="button" disabled>
+      Otevřít
+    </button>
+    <small>Otevřít není dostupné bez bezpečně napojeného souboru.</small>
+  `;
+}
+
+function dataBoxAttachmentRowMarkup(attachment) {
+  const filename = attachment?.filename || "Příloha bez názvu";
+  const meta = [
+    dataBoxAttachmentTypeLabel(attachment),
+    formatFileSize(attachment?.sizeBytes),
+    dataBoxAttachmentStatusLabel(attachment)
+  ].filter(Boolean).join(" · ");
+
+  return `
+    <li class="data-box-attachment-item">
+      <span class="data-box-attachment-item__type" aria-hidden="true">${escapeHtml(dataBoxAttachmentTypeLabel(attachment))}</span>
+      <div class="data-box-attachment-item__body">
+        <strong>${escapeHtml(filename)}</strong>
+        <span>${escapeHtml(meta)}</span>
+        ${dataBoxAttachmentErrorMarkup(attachment)}
+      </div>
+      <div class="data-box-attachment-actions">
+        ${dataBoxAttachmentActionMarkup(attachment)}
+      </div>
+    </li>
+  `;
+}
+
 function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
   if (!attachments.length) {
     if (expectedCount > 0) {
       return `
-        <li>
-          <strong>${escapeHtml(`${expectedCount} příloh`)}</strong>
-          <span>Názvy souborů zatím nejsou dostupné.</span>
-          <em class="data-box-attachment-note">Přílohy zatím nejdou otevřít.</em>
+        <li class="data-box-attachment-item data-box-attachment-item--metadata">
+          <span class="data-box-attachment-item__type" aria-hidden="true">?</span>
+          <div class="data-box-attachment-item__body">
+            <strong>${escapeHtml(dataBoxAttachmentCountLabel(expectedCount))}</strong>
+            <span>Jen metadata · názvy souborů zatím nejsou dostupné.</span>
+            <em class="data-box-attachment-note">Přílohy zatím nejdou otevřít.</em>
+          </div>
+          <div class="data-box-attachment-actions">
+            <button class="primary-action data-box-attachment-open" type="button" disabled>Otevřít</button>
+            <small>Otevření vyžaduje bezpečně stažený soubor.</small>
+          </div>
         </li>
       `;
     }
 
-    return `<li>Bez příloh.</li>`;
+    return `<li class="data-box-attachment-empty">Tato zpráva nemá přílohy.</li>`;
   }
 
-  return attachments.map((attachment) => `
-    <li>
-      <strong>${escapeHtml(attachment.filename || "Příloha bez názvu")}</strong>
-      <span>${escapeHtml([
-        attachment.contentType || "",
-        formatFileSize(attachment.sizeBytes),
-        attachment.status || ""
-      ].filter(Boolean).join(" · ") || "bez detailu")}</span>
-      <em class="data-box-attachment-note">Příloha zatím nejde otevřít.</em>
-    </li>
-  `).join("");
+  return attachments.map((attachment) => dataBoxAttachmentRowMarkup(attachment)).join("");
+}
+
+function dataBoxAttachmentsSection(message) {
+  const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
+  const attachmentCount = dataBoxAttachmentCount(message || {});
+
+  return `
+    <section class="data-box-reading-section data-box-reading-section--attachments data-box-attachments-priority" aria-label="Přílohy zprávy">
+      <div class="data-box-attachments-head">
+        <div>
+          <h4>Přílohy</h4>
+          <strong>${escapeHtml(dataBoxAttachmentCountLabel(attachmentCount))}</strong>
+        </div>
+        <span>Nejdůležitější obsah zprávy bývá v příloze.</span>
+      </div>
+      <ul class="data-box-attachment-list">${dataBoxAttachmentRows(attachments, attachmentCount)}</ul>
+    </section>
+  `;
 }
 
 function dataBoxAiEvaluationDetail(evaluation) {
@@ -15368,7 +15630,6 @@ function dataBoxMessageDetailOverlayMarkup() {
   } else if (message) {
     const actorLabel = message.direction === "sent" ? "Příjemce" : "Odesílatel";
     const actorValue = dataBoxMessageActor(message);
-    const attachments = Array.isArray(message.attachments) ? message.attachments : [];
     const deadline = dataBoxDeadlineInfo(message);
     const workflow = dataBoxWorkflowStatus(message);
     const priority = dataBoxMessagePriority(message);
@@ -15377,32 +15638,34 @@ function dataBoxMessageDetailOverlayMarkup() {
     content = `
       <div class="data-box-detail-modal__body">
         <div class="data-box-detail-modal__main">
-        <div class="data-box-detail-grid">
-          ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
-          ${dataBoxDetailField("Schránka", dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}
-          ${dataBoxDetailField(actorLabel, actorValue)}
-          ${dataBoxDetailField("Stav", workflow.label)}
-          ${dataBoxDetailField("Priorita", priority.label)}
-          ${dataBoxDetailField("Typ zprávy", messageType.label)}
-          ${dataBoxDetailField("Doručeno", formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt))}
-          ${dataBoxDetailField("Přečteno", formatDateTime(message.readAt))}
-          ${dataBoxDetailField("Lhůta", deadline.date ? deadline.label : "bez lhůty")}
-          ${dataBoxDetailField("ID zprávy", message.id)}
-          ${dataBoxDetailField("Odpovědná osoba", dataBoxMessageAssigneeLabel(message))}
-        </div>
-        <div class="data-box-detail-subject">
-          <span>Předmět</span>
-          <strong>${escapeHtml(message.subject || "(bez předmětu)")}</strong>
-        </div>
+        <section class="data-box-detail-summary">
+          <span>${escapeHtml(actorLabel)}</span>
+          <strong>${escapeHtml(actorValue || "neuvedeno")}</strong>
+          <h3>${escapeHtml(message.subject || "(bez předmětu)")}</h3>
+          <p>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "bez data")} · ${escapeHtml(priority.label)} · ${escapeHtml(workflow.label)}</p>
+        </section>
+        ${dataBoxAttachmentsSection(message)}
         <div class="data-box-detail-subject">
           <span>Obsah / náhled</span>
           <strong>${escapeHtml(dataBoxMessageContentPreview(message))}</strong>
         </div>
+        <details class="data-box-technical-details">
+          <summary>Technické detaily zprávy</summary>
+          <div class="data-box-detail-grid">
+            ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
+            ${dataBoxDetailField("Schránka", dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}
+            ${dataBoxDetailField(actorLabel, actorValue)}
+            ${dataBoxDetailField("Stav", workflow.label)}
+            ${dataBoxDetailField("Priorita", priority.label)}
+            ${dataBoxDetailField("Typ zprávy", messageType.label)}
+            ${dataBoxDetailField("Doručeno", formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt))}
+            ${dataBoxDetailField("Přečteno", formatDateTime(message.readAt))}
+            ${dataBoxDetailField("Lhůta", deadline.date ? deadline.label : "bez lhůty")}
+            ${dataBoxDetailField("ID zprávy", message.id)}
+            ${dataBoxDetailField("Odpovědná osoba", dataBoxMessageAssigneeLabel(message))}
+          </div>
+        </details>
         <div class="data-box-detail-columns">
-          <section>
-            <h3>Přílohy</h3>
-            <ul>${dataBoxAttachmentRows(attachments, dataBoxAttachmentCount(message))}</ul>
-          </section>
           <section>
             <h3>Návrh vyřízení</h3>
             <p>${escapeHtml(dataBoxMessageNextStep(message))}</p>
@@ -17173,6 +17436,10 @@ function resetDataBoxState() {
   dataBoxState.replyDraftText = "";
   dataBoxState.replyDraftError = "";
   dataBoxState.selectedPreviewMessageId = "";
+  dataBoxState.messagePagination = {
+    pageSize: 10,
+    currentPage: 1
+  };
   dataBoxState.messageFilters = {
     query: "",
     status: "all",
@@ -17390,6 +17657,7 @@ function updateDataBoxMessageFilter(field) {
     ...dataBoxState.messageFilters,
     [name]: field.value || ""
   };
+  resetDataBoxPagination();
   dataBoxState.selectedPreviewMessageId = "";
   render();
 }
@@ -22484,7 +22752,49 @@ document.addEventListener("click", async (event) => {
       ...dataBoxState.messageFilters,
       quick: dataBoxQuickFilter.dataset.dataBoxQuickFilter || "all"
     };
+    resetDataBoxPagination();
     dataBoxState.activeTab = "received";
+    dataBoxState.selectedPreviewMessageId = "";
+    dataBoxState.selectedMessageId = "";
+    dataBoxState.selectedMessage = null;
+    dataBoxState.detailError = "";
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftText = "";
+    dataBoxState.replyDraftError = "";
+    render();
+    return;
+  }
+
+  const dataBoxPageSize = event.target.closest("[data-data-box-page-size]");
+  if (dataBoxPageSize) {
+    const nextPageSize = Number(dataBoxPageSize.dataset.dataBoxPageSize);
+    if (DATA_BOX_PAGE_SIZES.includes(nextPageSize)) {
+      dataBoxState.messagePagination = {
+        pageSize: nextPageSize,
+        currentPage: 1
+      };
+      dataBoxState.selectedPreviewMessageId = "";
+      dataBoxState.selectedMessageId = "";
+      dataBoxState.selectedMessage = null;
+      dataBoxState.detailError = "";
+      dataBoxState.replyDraftOpen = false;
+      dataBoxState.replyDraftText = "";
+      dataBoxState.replyDraftError = "";
+      render();
+    }
+    return;
+  }
+
+  const dataBoxPageButton = event.target.closest("[data-data-box-page]");
+  if (dataBoxPageButton) {
+    const direction = dataBoxPageButton.dataset.dataBoxPage;
+    const nextPage = direction === "next"
+      ? Number(dataBoxState.messagePagination.currentPage || 1) + 1
+      : Number(dataBoxState.messagePagination.currentPage || 1) - 1;
+    dataBoxState.messagePagination = {
+      ...dataBoxState.messagePagination,
+      currentPage: Math.max(1, nextPage)
+    };
     dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
@@ -22538,6 +22848,7 @@ document.addEventListener("click", async (event) => {
   const dataBoxTab = event.target.closest("[data-data-box-tab]");
   if (dataBoxTab) {
     dataBoxState.activeTab = dataBoxTab.dataset.dataBoxTab || "received";
+    resetDataBoxPagination();
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
     dataBoxState.selectedPreviewMessageId = "";
@@ -22557,6 +22868,7 @@ document.addEventListener("click", async (event) => {
   if (dataBoxAccountButton) {
     const nextAccountId = dataBoxAccountButton.dataset.dataBoxAccount || "";
     dataBoxState.selectedDataBoxId = nextAccountId;
+    resetDataBoxPagination();
     dataBoxState.messageFilters = {
       ...dataBoxState.messageFilters,
       dataBox: "all"
@@ -22575,6 +22887,7 @@ document.addEventListener("click", async (event) => {
   const dataBoxAccountReset = event.target.closest("[data-data-box-account-reset]");
   if (dataBoxAccountReset) {
     dataBoxState.selectedDataBoxId = "";
+    resetDataBoxPagination();
     dataBoxState.messageFilters = {
       ...dataBoxState.messageFilters,
       dataBox: "all"

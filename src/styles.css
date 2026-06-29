@@ -18864,6 +18864,258 @@ body:has(.data-box-page) .data-box-reply-draft small {
   line-height: 1.35;
 }
 
+body:has(.data-box-page) .data-box-message-card__unread-dot {
+  position: absolute;
+  inset: 16px auto auto 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--theme-accent, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent, #2563eb) 16%, transparent);
+}
+
+body:has(.data-box-page) .data-box-message-card--unread .data-box-message-card__actor {
+  padding-left: 16px;
+}
+
+body:has(.data-box-page) .data-box-inbox-footer {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--theme-border, var(--line));
+}
+
+body:has(.data-box-page) .data-box-inbox-count {
+  margin: 0;
+  color: var(--data-box-text, var(--text));
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+body:has(.data-box-page) .data-box-page-size,
+body:has(.data-box-page) .data-box-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+body:has(.data-box-page) .data-box-page-size span,
+body:has(.data-box-page) .data-box-pagination span {
+  color: var(--data-box-muted, var(--muted));
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+body:has(.data-box-page) .data-box-page-size__button {
+  min-height: 34px;
+  min-width: 42px;
+  border: 1px solid var(--theme-border, var(--line));
+  background: var(--theme-card, #ffffff);
+  color: var(--data-box-text, var(--text));
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+body:has(.data-box-page) .data-box-page-size__button:hover,
+body:has(.data-box-page) .data-box-page-size__button:focus-visible,
+body:has(.data-box-page) .data-box-page-size__button--active {
+  border-color: var(--theme-primary, var(--kaiser-green));
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 9%, #ffffff);
+}
+
+body:has(.data-box-page) .data-box-pagination .secondary-link[disabled],
+body:has(.data-box-page) .data-box-attachment-actions button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+body:has(.data-box-page) .data-box-attachments-priority {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 28%, var(--theme-border, var(--line)));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 5%, var(--theme-card, #ffffff));
+}
+
+body:has(.data-box-page) .data-box-attachments-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+body:has(.data-box-page) .data-box-attachments-head h4 {
+  margin: 0 0 3px;
+  font-size: 1.04rem;
+  font-weight: 800;
+}
+
+body:has(.data-box-page) .data-box-attachments-head strong {
+  display: block;
+  font-size: 0.92rem;
+}
+
+body:has(.data-box-page) .data-box-attachments-head span {
+  max-width: 28ch;
+  color: var(--data-box-muted, var(--muted));
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: right;
+}
+
+body:has(.data-box-page) .data-box-attachment-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body:has(.data-box-page) .data-box-attachment-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--theme-border, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 88%, transparent);
+}
+
+body:has(.data-box-page) .data-box-attachment-item__type {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 22%, var(--theme-border, var(--line)));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 8%, #ffffff);
+  color: var(--theme-primary, var(--kaiser-green));
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+body:has(.data-box-page) .data-box-attachment-item__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+body:has(.data-box-page) .data-box-attachment-item__body strong {
+  overflow: hidden;
+  color: var(--data-box-text, var(--text));
+  font-size: 0.98rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.data-box-page) .data-box-attachment-item__body span,
+body:has(.data-box-page) .data-box-attachment-note,
+body:has(.data-box-page) .data-box-attachment-actions small {
+  color: var(--data-box-muted, var(--muted));
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+body:has(.data-box-page) .data-box-attachment-actions {
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+}
+
+body:has(.data-box-page) .data-box-attachment-open {
+  min-height: 36px;
+  min-width: 92px;
+  justify-content: center;
+}
+
+body:has(.data-box-page) .data-box-attachment-error {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(180, 35, 24, 0.28);
+  border-radius: 8px;
+  background: rgba(180, 35, 24, 0.06);
+  color: #7a271a;
+}
+
+body:has(.data-box-page) .data-box-attachment-error strong,
+body:has(.data-box-page) .data-box-attachment-error span {
+  color: inherit;
+  font-size: 0.86rem;
+  line-height: 1.3;
+}
+
+body:has(.data-box-page) .data-box-attachment-empty {
+  padding: 12px;
+  border: 1px solid var(--theme-border, var(--line));
+  border-radius: 8px;
+  color: var(--data-box-muted, var(--muted));
+  font-weight: 700;
+}
+
+body:has(.data-box-page) .data-box-detail-summary {
+  display: grid;
+  gap: 5px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--theme-border, var(--line));
+}
+
+body:has(.data-box-page) .data-box-detail-summary span {
+  color: var(--data-box-muted, var(--muted));
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+body:has(.data-box-page) .data-box-detail-summary strong,
+body:has(.data-box-page) .data-box-detail-summary h3,
+body:has(.data-box-page) .data-box-detail-summary p {
+  margin: 0;
+}
+
+body:has(.data-box-page) .data-box-detail-summary h3 {
+  font-size: 1.22rem;
+  line-height: 1.25;
+}
+
+body:has(.data-box-page) .data-box-detail-summary p {
+  color: var(--data-box-muted, var(--muted));
+  font-weight: 700;
+}
+
+body:has(.data-box-page) .data-box-technical-details {
+  border-top: 1px solid var(--theme-border, var(--line));
+  padding-top: 10px;
+}
+
+body:has(.data-box-page) .data-box-technical-details summary {
+  cursor: pointer;
+  color: var(--data-box-text, var(--text));
+  font-weight: 800;
+}
+
+body:has(.data-box-page) .data-box-technical-details .data-box-detail-grid {
+  margin-top: 10px;
+}
+
+body:has(.data-box-page) .data-box-side-card--status-sync,
+body:has(.data-box-page) .data-box-side-card--vault {
+  padding: 12px;
+  border: 1px solid var(--theme-border, var(--line));
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 76%, transparent);
+}
+
 @media (max-width: 720px) {
   body:has(.data-box-page) .data-box-detail-overlay {
     align-items: stretch;
@@ -18889,6 +19141,41 @@ body:has(.data-box-page) .data-box-reply-draft small {
   body:has(.data-box-page) .data-box-detail-actions,
   body:has(.data-box-page) .data-box-reply-draft__head {
     display: grid;
+  }
+
+  body:has(.data-box-page) .data-box-attachments-head,
+  body:has(.data-box-page) .data-box-page-size,
+  body:has(.data-box-page) .data-box-pagination {
+    align-items: stretch;
+  }
+
+  body:has(.data-box-page) .data-box-attachments-head,
+  body:has(.data-box-page) .data-box-attachment-item,
+  body:has(.data-box-page) .data-box-attachment-actions {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  body:has(.data-box-page) .data-box-attachments-head {
+    display: grid;
+  }
+
+  body:has(.data-box-page) .data-box-attachments-head span {
+    max-width: none;
+    text-align: left;
+  }
+
+  body:has(.data-box-page) .data-box-attachment-item {
+    display: grid;
+  }
+
+  body:has(.data-box-page) .data-box-attachment-item__type {
+    width: max-content;
+    min-width: 44px;
+  }
+
+  body:has(.data-box-page) .data-box-attachment-open {
+    width: 100%;
   }
 
   body:has(.data-box-page) .data-box-reply-draft__facts {
