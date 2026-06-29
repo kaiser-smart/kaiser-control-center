@@ -1,6 +1,7 @@
 const DEFAULT_ISDS_BASE_URL = "https://ws1.datovka.gov.cz";
 const TEST_ISDS_BASE_URL = "https://ws1.datovka-test.gov.cz";
 const ISDS_INFO_PATH = "/DS/dx";
+const ISDS_MESSAGE_PATH = "/DS/dz";
 const ISDS_NAMESPACE = "http://isds.czechpoint.cz/v20";
 const ISDS_TIMEOUT_MS = 25000;
 const DEFAULT_LIMIT = 50;
@@ -128,6 +129,7 @@ function accountConfig(env = {}, slot) {
     mode: modeFromEnv(env),
     baseUrl,
     infoEndpointUrl: `${baseUrl}${ISDS_INFO_PATH}`,
+    messageEndpointUrl: `${baseUrl}${ISDS_MESSAGE_PATH}`,
     hasUsername: Boolean(username),
     hasPassword: Boolean(password),
     missing,
@@ -337,9 +339,9 @@ async function withTimeout(task, timeoutMs = ISDS_TIMEOUT_MS) {
   }
 }
 
-async function soapRequest(config, operation, innerXml) {
+async function soapRequest(config, operation, innerXml, endpointUrl = config.infoEndpointUrl) {
   const body = soapEnvelope(operation, innerXml);
-  const response = await withTimeout((signal) => fetch(config.infoEndpointUrl, {
+  const response = await withTimeout((signal) => fetch(endpointUrl, {
     method: "POST",
     headers: {
       Authorization: authHeader(config),
@@ -456,28 +458,36 @@ export async function fetchDataBoxMessageAttachments(env = {}, account = null, m
   const operations = cleanString(message.direction).toLowerCase() === "sent"
     ? ["SignedSentMessageDownload", "MessageDownload", "SignedMessageDownload", "GetMessage"]
     : ["MessageDownload", "SignedMessageDownload", "GetMessage"];
+  const endpointUrls = [
+    cleanString(config.messageEndpointUrl),
+    cleanString(config.infoEndpointUrl)
+  ].filter(Boolean);
   let lastError = null;
   const operationErrors = [];
 
-  for (const operation of operations) {
-    try {
-      const xml = await soapRequest(config, operation, messageDownloadRequestXml(messageId));
-      const attachments = parseMessageAttachments(xml);
-      return {
-        fetchedAt: new Date().toISOString(),
-        operation,
-        messageId,
-        attachmentsCount: attachments.length,
-        attachments,
-        config: publicAccountStatus(config)
-      };
-    } catch (error) {
-      lastError = error;
-      operationErrors.push({
-        operation,
-        code: cleanString(error?.code || error?.name || "data_box_isds_operation_failed"),
-        message: cleanString(error?.message || "ISDS operace selhala.").slice(0, 240)
-      });
+  for (const endpointUrl of endpointUrls) {
+    for (const operation of operations) {
+      try {
+        const xml = await soapRequest(config, operation, messageDownloadRequestXml(messageId), endpointUrl);
+        const attachments = parseMessageAttachments(xml);
+        return {
+          fetchedAt: new Date().toISOString(),
+          operation,
+          endpointUrl,
+          messageId,
+          attachmentsCount: attachments.length,
+          attachments,
+          config: publicAccountStatus(config)
+        };
+      } catch (error) {
+        lastError = error;
+        operationErrors.push({
+          endpoint: endpointUrl.replace(config.baseUrl, ""),
+          operation,
+          code: cleanString(error?.code || error?.name || "data_box_isds_operation_failed"),
+          message: cleanString(error?.message || "ISDS operace selhala.").slice(0, 240)
+        });
+      }
     }
   }
 

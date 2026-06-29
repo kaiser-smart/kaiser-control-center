@@ -651,7 +651,7 @@ async function syncDataBoxMessageAttachments(db, env, account, dataBox, message,
     const firstOperationError = Array.isArray(error?.operationErrors) ? error.operationErrors[0] : null;
     const errorMessage = shortDiagnostic(
       firstOperationError
-        ? `${firstOperationError.operation}: ${firstOperationError.message}`
+        ? `${firstOperationError.endpoint || ""} ${firstOperationError.operation}: ${firstOperationError.message}`
         : error?.message
     );
     console.warn("data_box.attachment_check", {
