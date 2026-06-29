@@ -7,7 +7,11 @@ export async function onRequestGet({ request, env }) {
 
   try {
     const url = new URL(request.url);
-    const actions = await listDataBoxActions(env, { limit: url.searchParams.get("limit") });
+    const actions = await listDataBoxActions(env, {
+      limit: url.searchParams.get("limit"),
+      actionType: url.searchParams.get("actionType"),
+      status: url.searchParams.get("status")
+    });
     return json({ actions, apiStatus: "ready" });
   } catch (error) {
     const result = dataBoxActionErrorResponse(error);

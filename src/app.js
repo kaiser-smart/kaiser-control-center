@@ -741,6 +741,11 @@ const dataBoxState = {
   status: null,
   messages: [],
   syncRuns: [],
+  aiBoostActions: [],
+  aiBoostLoaded: false,
+  aiBoostLoading: false,
+  aiBoostError: "",
+  aiBoostMessage: "",
   selectedDataBoxId: "kaiser-primary",
   activeTab: "received",
   syncLoading: false,
@@ -14486,6 +14491,10 @@ function dataBoxActivePanel(user) {
     `;
   }
 
+  if (activeTab === "ai-boost") {
+    return dataBoxAiBoostPanel(user);
+  }
+
   if (activeTab === "rules") {
     return `
       ${dataBoxSyncRunsPanel()}
@@ -15439,6 +15448,123 @@ function dataBoxSupportPane(message, direction) {
       ${dataBoxStatusAndSyncCard(connection, selectedAccount, context, direction)}
       ${dataBoxVaultCard(metrics)}
     </aside>
+  `;
+}
+
+function dataBoxActionIsAiBoost(action = {}) {
+  const result = action.result || {};
+  return result.source === "ai_boost"
+    || String(action.dedupeKey || "").includes("data-box:ai-boost:")
+    || String(action.actionType || "") === "ai_boost";
+}
+
+function dataBoxAiBoostActionLabel(action = {}) {
+  const recommended = String(action.result?.recommendedAction || action.actionType || "review").toLowerCase();
+  const labels = {
+    archive: "Archivovat",
+    email: "Poslat e-mailem",
+    reply: "Odpovědět",
+    review: "Zkontrolovat",
+    ai_boost: "Zkontrolovat"
+  };
+  return labels[recommended] || "Zkontrolovat";
+}
+
+function dataBoxAiBoostStatusLabel(action = {}) {
+  const labels = {
+    prepared: "Koncept",
+    requires_confirmation: "Čeká na potvrzení",
+    confirmed: "Potvrzeno",
+    sent: "Odesláno",
+    archived: "Archivováno",
+    blocked: "Blokováno",
+    failed: "Chyba",
+    skipped: "Přeskočeno"
+  };
+  return labels[String(action.status || "").toLowerCase()] || action.status || "Koncept";
+}
+
+function dataBoxAiBoostCanConfirm(action = {}) {
+  return ["archive", "email"].includes(String(action.actionType || "").toLowerCase())
+    && ["prepared", "requires_confirmation", "confirmed"].includes(String(action.status || "").toLowerCase());
+}
+
+function dataBoxAiBoostMessage(action = {}) {
+  return dataBoxMessageById(action.messageId) || dataBoxState.messages.find((message) => String(message.id || "") === String(action.messageId || "")) || null;
+}
+
+function dataBoxAiBoostCard(action = {}) {
+  const message = dataBoxAiBoostMessage(action);
+  const title = message?.subject || action.subject || "Datová zpráva";
+  const sender = message ? dataBoxMessageActor(message) : "Zpráva není v aktuálním výběru";
+  const company = message ? dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel) : action.dataBoxId || "";
+  const confidence = Number(action.result?.confidence || 0);
+  const confidenceLabel = confidence ? `${Math.round(confidence * 100)} % jistota` : "jistota neuvedena";
+  const canConfirm = dataBoxAiBoostCanConfirm(action);
+  const confirmLabel = action.actionType === "email" ? "Potvrdit e-mail" : "Potvrdit archivaci";
+
+  return `
+    <article class="data-box-ai-boost-card">
+      <div class="data-box-ai-boost-card__main">
+        <span class="data-box-ai-boost-card__eyebrow">AI Boost · ${escapeHtml(dataBoxAiBoostStatusLabel(action))}</span>
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(sender)}${company ? ` · ${escapeHtml(company)}` : ""}</p>
+        <strong>${escapeHtml(dataBoxAiBoostActionLabel(action))}</strong>
+        <p>${escapeHtml(action.bodyPreview || action.result?.reason || "AI Boost navrhl ruční kontrolu.")}</p>
+        <div class="data-box-ai-boost-card__meta">
+          ${action.recipient ? `<span>Příjemce: ${escapeHtml(action.recipient)}</span>` : ""}
+          <span>${escapeHtml(confidenceLabel)}</span>
+          <span>${escapeHtml(formatDateTime(action.createdAt) || "")}</span>
+        </div>
+      </div>
+      <div class="data-box-ai-boost-card__actions">
+        <button class="secondary-link" type="button" data-data-box-ai-open="${escapeHtml(action.messageId || "")}">
+          Otevřít zprávu
+        </button>
+        ${canConfirm ? `
+          <button class="primary-action" type="button" data-data-box-ai-confirm="${escapeHtml(action.id)}" ${dataBoxState.aiBoostLoading ? "disabled" : ""}>
+            ${escapeHtml(confirmLabel)}
+          </button>
+        ` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function dataBoxAiBoostPanel(user) {
+  const canManage = hasPermission(user, DATA_BOX_MODULE_KEY, "manage");
+  const actions = [...dataBoxState.aiBoostActions].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const waiting = actions.filter((action) => ["prepared", "requires_confirmation", "confirmed"].includes(String(action.status || "").toLowerCase())).length;
+  const completed = actions.filter((action) => ["sent", "archived"].includes(String(action.status || "").toLowerCase())).length;
+
+  return `
+    <section class="data-box-panel data-box-ai-boost-panel" aria-labelledby="data-box-ai-boost-title">
+      <div class="data-box-panel__head">
+        <div>
+          <span>Datová schránka</span>
+          <h2 id="data-box-ai-boost-title">AI Boost</h2>
+          <p>AI připravuje pouze koncepty. Archivace, e-mail nebo odpověď se provedou až po potvrzení uživatele.</p>
+        </div>
+        <button class="primary-action" type="button" data-data-box-ai-run ${!canManage || dataBoxState.aiBoostLoading ? "disabled" : ""}>
+          ${escapeHtml(dataBoxState.aiBoostLoading ? "Spouštím..." : "Spustit AI Boost")}
+        </button>
+      </div>
+      <div class="data-box-ai-boost-summary">
+        <div><span>Koncepty čekající na rozhodnutí</span><strong>${waiting}</strong></div>
+        <div><span>Potvrzené akce</span><strong>${completed}</strong></div>
+        <div><span>Režim</span><strong>read-only návrh · potvrzení ručně</strong></div>
+      </div>
+      ${dataBoxState.aiBoostError ? `<div class="data-box-action-feedback data-box-action-feedback--error" role="alert">${escapeHtml(dataBoxState.aiBoostError)}</div>` : ""}
+      ${dataBoxState.aiBoostMessage ? `<div class="data-box-action-feedback data-box-action-feedback--success" role="status">${escapeHtml(dataBoxState.aiBoostMessage)}</div>` : ""}
+      <div class="data-box-ai-boost-list">
+        ${actions.length ? actions.map(dataBoxAiBoostCard).join("") : `
+          <div class="data-box-ai-boost-empty">
+            <strong>Zatím nejsou připravené žádné AI Boost koncepty.</strong>
+            <span>Spusť AI Boost. Pokud chybí server-side AI konfigurace, zobrazí se přesná chyba.</span>
+          </div>
+        `}
+      </div>
+    </section>
   `;
 }
 
@@ -18181,6 +18307,11 @@ function resetDataBoxState() {
   dataBoxState.status = null;
   dataBoxState.messages = [];
   dataBoxState.syncRuns = [];
+  dataBoxState.aiBoostActions = [];
+  dataBoxState.aiBoostLoaded = false;
+  dataBoxState.aiBoostLoading = false;
+  dataBoxState.aiBoostError = "";
+  dataBoxState.aiBoostMessage = "";
   dataBoxState.selectedDataBoxId = DATA_BOX_DEFAULT_ACCOUNT_ID;
   dataBoxState.activeTab = "received";
   dataBoxState.syncLoading = false;
@@ -18254,14 +18385,18 @@ async function loadDataBoxData(options = {}) {
     dataBoxState.integrationStatus = status.integrationStatus || "inactive";
     dataBoxState.messages = [];
     dataBoxState.syncRuns = [];
+    dataBoxState.aiBoostActions = [];
 
     if (dataBoxState.apiStatus === "ready") {
-      const [messagesResult, syncRunsResult] = await Promise.all([
+      const [messagesResult, syncRunsResult, actionsResult] = await Promise.all([
         apiJson("/api/data-box/messages?limit=100"),
-        apiJson("/api/data-box/sync-runs?limit=50")
+        apiJson("/api/data-box/sync-runs?limit=50"),
+        apiJson("/api/data-box/actions?limit=200")
       ]);
       dataBoxState.messages = messagesResult.messages || [];
       dataBoxState.syncRuns = syncRunsResult.runs || [];
+      dataBoxState.aiBoostActions = (actionsResult.actions || []).filter(dataBoxActionIsAiBoost);
+      dataBoxState.aiBoostLoaded = true;
     }
 
     dataBoxState.loaded = true;
@@ -18269,6 +18404,7 @@ async function loadDataBoxData(options = {}) {
     dataBoxState.status = null;
     dataBoxState.messages = [];
     dataBoxState.syncRuns = [];
+    dataBoxState.aiBoostActions = [];
     dataBoxState.apiStatus = error?.payload?.apiStatus || "waiting";
     dataBoxState.error = error?.payload?.error || error?.message || "Datovou schránku se teď nepodařilo načíst.";
     dataBoxState.loaded = true;
@@ -18515,6 +18651,83 @@ async function sendDataBoxReplyAction(messageId) {
     dataBoxState.actionLoading = "";
     render();
   }
+}
+
+async function runDataBoxAiBoostAction() {
+  if (dataBoxState.aiBoostLoading) {
+    return;
+  }
+
+  dataBoxState.aiBoostLoading = true;
+  dataBoxState.aiBoostError = "";
+  dataBoxState.aiBoostMessage = "AI Boost připravuje koncepty...";
+  render();
+
+  try {
+    const result = await apiJson("/api/data-box/ai-boost/run", {
+      method: "POST",
+      body: JSON.stringify({ limit: 30 })
+    });
+    dataBoxState.aiBoostMessage = result.message || `AI Boost připravil ${Number(result.created || 0)} konceptů.`;
+    dataBoxState.aiBoostError = "";
+    await loadDataBoxData({ force: true, renderAfter: false });
+    dataBoxState.activeTab = "ai-boost";
+  } catch (error) {
+    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "AI Boost se nepodařilo spustit.";
+    dataBoxState.aiBoostMessage = "";
+  } finally {
+    dataBoxState.aiBoostLoading = false;
+    render();
+  }
+}
+
+async function confirmDataBoxAiBoostAction(actionId) {
+  const id = String(actionId || "").trim();
+  if (!id || dataBoxState.aiBoostLoading) {
+    return;
+  }
+  const action = dataBoxState.aiBoostActions.find((item) => String(item.id || "") === id);
+  const label = dataBoxAiBoostActionLabel(action);
+  const subject = action?.subject || "AI Boost koncept";
+
+  if (!window.confirm(`Potvrdit AI Boost koncept?\n\nAkce: ${label}\nZpráva: ${subject}\n\nBez potvrzení se nic neprovede.`)) {
+    return;
+  }
+
+  dataBoxState.aiBoostLoading = true;
+  dataBoxState.aiBoostError = "";
+  dataBoxState.aiBoostMessage = "Potvrzuji AI Boost koncept...";
+  render();
+
+  try {
+    const result = await apiJson(`/api/data-box/actions/${encodeURIComponent(id)}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ confirmed: true })
+    });
+    dataBoxState.aiBoostMessage = result.notice || "AI Boost koncept byl potvrzen.";
+    dataBoxState.aiBoostError = "";
+    await loadDataBoxData({ force: true, renderAfter: false });
+    dataBoxState.activeTab = "ai-boost";
+  } catch (error) {
+    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "AI Boost koncept se nepodařilo potvrdit.";
+    dataBoxState.aiBoostMessage = "";
+  } finally {
+    dataBoxState.aiBoostLoading = false;
+    render();
+  }
+}
+
+function openDataBoxAiBoostMessage(messageId) {
+  const id = String(messageId || "").trim();
+  if (!id) {
+    return;
+  }
+  const message = dataBoxMessageById(id);
+  if (message?.dataBoxId) {
+    dataBoxState.selectedDataBoxId = message.dataBoxId;
+  }
+  dataBoxState.activeTab = "received";
+  void loadDataBoxMessageDetail(id);
 }
 
 async function loadDataBoxMessageInlineDetail(messageId) {
@@ -23921,6 +24134,24 @@ document.addEventListener("click", async (event) => {
   const dataBoxReplySend = event.target.closest("[data-data-box-reply-send]");
   if (dataBoxReplySend) {
     void sendDataBoxReplyAction(dataBoxReplySend.dataset.dataBoxReplySend || "");
+    return;
+  }
+
+  const dataBoxAiRun = event.target.closest("[data-data-box-ai-run]");
+  if (dataBoxAiRun) {
+    void runDataBoxAiBoostAction();
+    return;
+  }
+
+  const dataBoxAiConfirm = event.target.closest("[data-data-box-ai-confirm]");
+  if (dataBoxAiConfirm) {
+    void confirmDataBoxAiBoostAction(dataBoxAiConfirm.dataset.dataBoxAiConfirm || "");
+    return;
+  }
+
+  const dataBoxAiOpen = event.target.closest("[data-data-box-ai-open]");
+  if (dataBoxAiOpen) {
+    openDataBoxAiBoostMessage(dataBoxAiOpen.dataset.dataBoxAiOpen || "");
     return;
   }
 

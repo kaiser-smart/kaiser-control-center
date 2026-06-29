@@ -90,6 +90,7 @@ let mockCollectionRouteSourceBatches = [];
 let mockCollectionRouteSourceFiles = [];
 let mockCollectionRouteSourceRows = [];
 let mockDataBoxSyncRuns = [];
+let mockDataBoxActions = [];
 
 const mockVehicleWimSites = [
   ["wim-d0-0781-modletice-jesenice", "D0", "km 78,1 / cca km 79", "mezi Modleticemi a Jesenici", "Cernosice", "vpravo + vlevo", "active", "v provozu", 49.9706, 14.5288, 2],
@@ -2759,7 +2760,81 @@ async function handleApi(request, response) {
       return true;
     }
 
-    sendJson(response, 200, { actions: [], apiStatus: "ready" });
+    sendJson(response, 200, { actions: mockDataBoxActions, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box/ai-boost/run" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canManageMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni spustit AI Boost Datove schranky." });
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const action = {
+      id: `mock-ai-boost-${randomUUID()}`,
+      messageId: "mock-data-box-message",
+      dataBoxId: "kaiser-primary",
+      actionType: "ai_boost",
+      status: "requires_confirmation",
+      recipient: "",
+      subject: "Lokální AI Boost koncept",
+      bodyPreview: "Lokální mock: AI Boost by připravil koncept k ruční kontrole. Bez OpenAI secretu nic neposílá.",
+      dedupeKey: `data-box:ai-boost:mock:${now}`,
+      result: {
+        source: "ai_boost",
+        provider: "local-mock",
+        recommendedAction: "review",
+        reason: "Lokální mock pro ověření záložky AI Boost.",
+        confidence: 0.7,
+        requiresConfirmation: true
+      },
+      createdAt: now,
+      updatedAt: now
+    };
+    mockDataBoxActions = [action, ...mockDataBoxActions].slice(0, 50);
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      status: "prepared",
+      provider: "local-mock",
+      created: 1,
+      actions: [action],
+      message: "Lokální mock připravil 1 AI Boost koncept. Nic se neodeslalo."
+    });
+    return true;
+  }
+
+  const dataBoxActionConfirmMatch = /^\/api\/data-box\/actions\/([^/]+)\/confirm$/.exec(url.pathname);
+  if (dataBoxActionConfirmMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canManageMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni potvrdit AI Boost koncept." });
+      return true;
+    }
+
+    const actionId = decodeURIComponent(dataBoxActionConfirmMatch[1] || "");
+    const action = mockDataBoxActions.find((item) => item.id === actionId);
+    if (!action) {
+      sendJson(response, 404, { error: "Koncept akce nebyl nalezen.", apiStatus: "ready" });
+      return true;
+    }
+    action.status = action.actionType === "archive" ? "archived" : action.actionType === "email" ? "sent" : "skipped";
+    action.updatedAt = new Date().toISOString();
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      status: action.status,
+      action,
+      notice: "Lokální mock: koncept byl potvrzen bez ostrého odeslání."
+    });
     return true;
   }
 

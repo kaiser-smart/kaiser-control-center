@@ -459,17 +459,123 @@ export async function prepareDataBoxAction(env, message, actionType, input = {},
   });
 }
 
+export async function confirmDataBoxAction(env, actionId, payload = {}, currentUser = {}) {
+  ensureConfirmed(payload);
+  const db = database(env, true);
+  const action = await getAction(db, cleanString(actionId));
+
+  if (!action?.id) {
+    throw new DataBoxActionError("Koncept akce nebyl nalezen.", 404, "data_box_action_missing");
+  }
+
+  if (!["prepared", "requires_confirmation", "confirmed"].includes(action.status)) {
+    throw new DataBoxActionError("Tuto akci už nejde potvrdit.", 409, "data_box_action_not_confirmable");
+  }
+
+  const message = await loadMessage(env, action.messageId);
+
+  if (action.actionType === "archive") {
+    await db
+      .prepare("UPDATE data_box_messages SET status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(message.id)
+      .run();
+    const updatedAction = await updateAction(db, action.id, {
+      status: "archived",
+      provider: "Kaiser Smart",
+      result: {
+        source: action.result?.source || "manual_confirmation",
+        previousStatus: message.status,
+        archivedAt: new Date().toISOString(),
+        confirmedBy: cleanString(currentUser?.id)
+      }
+    });
+
+    return {
+      action: updatedAction,
+      message: await loadMessage(env, message.id),
+      status: "archived",
+      apiStatus: "ready",
+      notice: "AI Boost koncept byl potvrzen a zpráva byla archivována."
+    };
+  }
+
+  if (action.actionType === "email") {
+    const recipientEmail = normalizeEmail(action.recipient);
+    if (!recipientEmail) {
+      throw new DataBoxActionError("Nelze potvrdit e-mail: chybí platný příjemce.", 400, "data_box_email_recipient_missing");
+    }
+
+    const result = await sendDataBoxForwardNotification(env, message, {
+      recipientEmail,
+      subject: action.subject || message.subject || "Datová zpráva",
+      body: action.bodyPreview || action.result?.reason || "",
+      fromName: "Kaiser Smart"
+    });
+    const nextStatus = result.status === "sent" ? "sent" : result.status === "skipped" ? "blocked" : "failed";
+    const updatedAction = await updateAction(db, action.id, {
+      status: nextStatus,
+      provider: "SendGrid",
+      result: {
+        ...(action.result || {}),
+        sendResult: result,
+        confirmedBy: cleanString(currentUser?.id)
+      },
+      errorCode: result.status === "sent" ? "" : "data_box_email_send_failed",
+      errorMessage: result.errorMessage || ""
+    });
+
+    if (nextStatus !== "sent") {
+      throw new DataBoxActionError(
+        result.errorMessage || "E-mail se nepodařilo odeslat.",
+        result.status === "skipped" ? 503 : 502,
+        "data_box_email_send_failed"
+      );
+    }
+
+    return {
+      action: updatedAction,
+      message,
+      status: "sent",
+      apiStatus: "ready",
+      notice: "AI Boost koncept byl potvrzen a e-mail byl odeslán."
+    };
+  }
+
+  throw new DataBoxActionError(
+    "Tento typ AI Boost konceptu zatím nejde potvrdit přímo. Otevřete zprávu a dokončete akci v detailu.",
+    409,
+    "data_box_action_confirm_unsupported"
+  );
+}
+
 export async function listDataBoxActions(env, filters = {}) {
   const db = database(env, true);
   const limit = Math.min(Math.max(Number(filters.limit || 100), 1), 200);
+  const actionType = cleanString(filters.actionType || "");
+  const status = cleanString(filters.status || "");
+  const clauses = [];
+  const bindings = [];
+
+  if (actionType) {
+    clauses.push("action_type = ?");
+    bindings.push(actionType);
+  }
+
+  if (status) {
+    clauses.push("status = ?");
+    bindings.push(status);
+  }
+
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const result = await db
     .prepare(`
       SELECT *
       FROM data_box_actions
+      ${where}
       ORDER BY created_at DESC
       LIMIT ?
     `)
-    .bind(limit)
+    .bind(...bindings, limit)
     .all();
   return (result.results || []).map(rowToAction);
 }
