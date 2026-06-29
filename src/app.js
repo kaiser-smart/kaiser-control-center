@@ -15489,8 +15489,50 @@ function dataBoxAiBoostCanConfirm(action = {}) {
     && ["prepared", "requires_confirmation", "confirmed"].includes(String(action.status || "").toLowerCase());
 }
 
+function dataBoxAiBoostIsWaiting(action = {}) {
+  return ["prepared", "requires_confirmation", "confirmed"].includes(String(action.status || "").toLowerCase());
+}
+
+function dataBoxAiBoostIsDone(action = {}) {
+  return ["sent", "archived", "blocked", "failed", "skipped"].includes(String(action.status || "").toLowerCase());
+}
+
 function dataBoxAiBoostMessage(action = {}) {
   return dataBoxMessageById(action.messageId) || dataBoxState.messages.find((message) => String(message.id || "") === String(action.messageId || "")) || null;
+}
+
+function dataBoxAiBoostSourceKey(action = {}) {
+  const message = dataBoxAiBoostMessage(action);
+  const isdsId = String(message?.isdsMessageId || action.result?.isdsMessageId || "").trim();
+  if (isdsId) {
+    return `isds:${isdsId}`;
+  }
+
+  const subject = String(message?.subject || action.subject || "").trim().toLowerCase();
+  const sender = String(message ? dataBoxMessageActor(message) : action.result?.sender || "").trim().toLowerCase();
+  return subject && sender ? `content:${sender}:${subject}` : "";
+}
+
+function dataBoxAiBoostMappingWarnings(actions = []) {
+  const groups = new Map();
+
+  actions.forEach((action) => {
+    const key = dataBoxAiBoostSourceKey(action);
+    const message = dataBoxAiBoostMessage(action);
+    const dataBoxId = String(message?.dataBoxId || action.dataBoxId || "").trim();
+    if (!key || !dataBoxId) return;
+
+    const group = groups.get(key) || {
+      subject: message?.subject || action.subject || "Datová zpráva",
+      mailboxes: new Map()
+    };
+    group.mailboxes.set(dataBoxId, dataBoxDisplayName(dataBoxId, message?.dataBoxLabel || dataBoxId));
+    groups.set(key, group);
+  });
+
+  return Array.from(groups.values())
+    .filter((group) => group.mailboxes.size > 1)
+    .slice(0, 4);
 }
 
 function dataBoxAiBoostCard(action = {}) {
@@ -15502,9 +15544,11 @@ function dataBoxAiBoostCard(action = {}) {
   const confidenceLabel = confidence ? `${Math.round(confidence * 100)} % jistota` : "jistota neuvedena";
   const canConfirm = dataBoxAiBoostCanConfirm(action);
   const confirmLabel = action.actionType === "email" ? "Potvrdit e-mail" : "Potvrdit archivaci";
+  const status = String(action.status || "").toLowerCase();
+  const actionType = String(action.actionType || "").toLowerCase();
 
   return `
-    <article class="data-box-ai-boost-card">
+    <article class="data-box-ai-boost-card data-box-ai-boost-card--${escapeHtml(status || "concept")} data-box-ai-boost-card--${escapeHtml(actionType || "review")}">
       <div class="data-box-ai-boost-card__main">
         <span class="data-box-ai-boost-card__eyebrow">AI Boost · ${escapeHtml(dataBoxAiBoostStatusLabel(action))}</span>
         <h3>${escapeHtml(title)}</h3>
@@ -15534,8 +15578,12 @@ function dataBoxAiBoostCard(action = {}) {
 function dataBoxAiBoostPanel(user) {
   const canManage = hasPermission(user, DATA_BOX_MODULE_KEY, "manage");
   const actions = [...dataBoxState.aiBoostActions].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-  const waiting = actions.filter((action) => ["prepared", "requires_confirmation", "confirmed"].includes(String(action.status || "").toLowerCase())).length;
-  const completed = actions.filter((action) => ["sent", "archived"].includes(String(action.status || "").toLowerCase())).length;
+  const waitingActions = actions.filter(dataBoxAiBoostIsWaiting);
+  const historyActions = actions.filter(dataBoxAiBoostIsDone);
+  const waitingArchive = waitingActions.filter((action) => String(action.actionType || "").toLowerCase() === "archive").length;
+  const waitingEmail = waitingActions.filter((action) => String(action.actionType || "").toLowerCase() === "email").length;
+  const completed = historyActions.filter((action) => ["sent", "archived"].includes(String(action.status || "").toLowerCase())).length;
+  const mappingWarnings = dataBoxAiBoostMappingWarnings(actions);
 
   return `
     <section class="data-box-panel data-box-ai-boost-panel" aria-labelledby="data-box-ai-boost-title">
@@ -15550,20 +15598,48 @@ function dataBoxAiBoostPanel(user) {
         </button>
       </div>
       <div class="data-box-ai-boost-summary">
-        <div><span>Koncepty čekající na rozhodnutí</span><strong>${waiting}</strong></div>
+        <div><span>Čeká na rozhodnutí</span><strong>${waitingActions.length}</strong></div>
+        <div><span>Archivace čekají</span><strong>${waitingArchive}</strong></div>
+        <div><span>E-maily čekají</span><strong>${waitingEmail}</strong></div>
         <div><span>Potvrzené akce</span><strong>${completed}</strong></div>
         <div><span>Režim</span><strong>read-only návrh · potvrzení ručně</strong></div>
       </div>
+      ${mappingWarnings.length ? `
+        <div class="data-box-action-feedback data-box-action-feedback--warning" role="status">
+          <strong>Kontrola mapování DS</strong>
+          <span>AI Boost vidí podobné zprávy ve více schránkách: ${mappingWarnings.map((group) => `${escapeHtml(group.subject)} (${Array.from(group.mailboxes.values()).map(escapeHtml).join(" / ")})`).join("; ")}. Před potvrzením e-mailů doporučuji ověřit diagnostiku DS.</span>
+        </div>
+      ` : ""}
       ${dataBoxState.aiBoostError ? `<div class="data-box-action-feedback data-box-action-feedback--error" role="alert">${escapeHtml(dataBoxState.aiBoostError)}</div>` : ""}
       ${dataBoxState.aiBoostMessage ? `<div class="data-box-action-feedback data-box-action-feedback--success" role="status">${escapeHtml(dataBoxState.aiBoostMessage)}</div>` : ""}
-      <div class="data-box-ai-boost-list">
-        ${actions.length ? actions.map(dataBoxAiBoostCard).join("") : `
+      <section class="data-box-ai-boost-section" aria-label="AI Boost koncepty čekající na rozhodnutí">
+        <div class="data-box-ai-boost-section__head">
+          <h3>Čeká na rozhodnutí</h3>
+          <span>${waitingActions.length} konceptů</span>
+        </div>
+        <div class="data-box-ai-boost-list">
+          ${waitingActions.length ? waitingActions.map(dataBoxAiBoostCard).join("") : `
+            <div class="data-box-ai-boost-empty">
+              <strong>Nic nečeká na rozhodnutí.</strong>
+              <span>Nové koncepty připraví tlačítko Spustit AI Boost nebo cloudová pravidla.</span>
+            </div>
+          `}
+        </div>
+      </section>
+      <details class="data-box-ai-boost-history" ${waitingActions.length ? "" : "open"}>
+        <summary>
+          <span>Hotovo / historie</span>
+          <strong>${historyActions.length}</strong>
+        </summary>
+        <div class="data-box-ai-boost-list">
+          ${historyActions.length ? historyActions.map(dataBoxAiBoostCard).join("") : `
           <div class="data-box-ai-boost-empty">
-            <strong>Zatím nejsou připravené žádné AI Boost koncepty.</strong>
-            <span>Spusť AI Boost. Pokud chybí server-side AI konfigurace, zobrazí se přesná chyba.</span>
+            <strong>Historie je zatím prázdná.</strong>
+            <span>Po potvrzení se tady zobrazí archivované, odeslané nebo zablokované akce.</span>
           </div>
-        `}
-      </div>
+          `}
+        </div>
+      </details>
     </section>
   `;
 }
