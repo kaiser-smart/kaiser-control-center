@@ -14393,7 +14393,7 @@ function dataBoxAiSortingInfo(direction) {
   `;
 }
 
-function dataBoxStatusAndSyncCard(connection, selectedAccount, context, direction) {
+function dataBoxStatusAndSyncCard(connection, selectedAccount, context, direction, metrics = {}) {
   return `
     <section class="data-box-side-card data-box-side-card--status-sync">
       <span>Stav a synchronizace</span>
@@ -14407,25 +14407,25 @@ function dataBoxStatusAndSyncCard(connection, selectedAccount, context, directio
         <div><dt>Plán načítání</dt><dd>Read-only každých 30 minut</dd></div>
         <div><dt>Schránka</dt><dd>${escapeHtml(selectedAccount ? selectedAccount.label : context.title)}</dd></div>
         ${dataBoxAiSortingInfo(direction)}
+        ${dataBoxVaultInfo(metrics)}
       </dl>
       <small>Stav vychází z logu synchronizace. Tato obrazovka nespouští cron ani žádné odesílání.</small>
     </section>
   `;
 }
 
-function dataBoxVaultCard(metrics) {
+function dataBoxVaultInfo(metrics) {
   const hasCapacity = Number.isFinite(metrics.vaultCapacity);
-  const capacityLabel = hasCapacity ? `${Math.round(metrics.vaultCapacity)} %` : "Kapacita není v datech";
+  const capacityLabel = hasCapacity ? `${Math.round(metrics.vaultCapacity)} %` : "kapacita není v datech";
   const capacityNote = hasCapacity && metrics.vaultCapacity >= 90
-    ? "Kapacita Datového trezoru je téměř naplněná."
-    : "Stažené zprávy zůstávají u nás pro přijaté i odeslané zprávy.";
+    ? "kapacita Datového trezoru je téměř naplněná"
+    : "zprávy zůstávají uložené u nás";
 
   return `
-    <section class="data-box-side-card data-box-side-card--vault">
-      <span>Datový trezor</span>
-      <strong>${escapeHtml(capacityLabel)}</strong>
-      <small>${escapeHtml(capacityNote)}</small>
-    </section>
+    <div class="data-box-side-status__vault">
+      <dt>Trezor</dt>
+      <dd><strong>${escapeHtml(capacityNote)} · ${escapeHtml(capacityLabel)}</strong></dd>
+    </div>
   `;
 }
 
@@ -15370,14 +15370,20 @@ function dataBoxReadingPane(message, direction) {
   const type = dataBoxMessageType(message);
   const deadline = dataBoxDeadlineInfo(message);
   const actorLabel = message.direction === "sent" ? "Příjemce" : "Odesílatel";
+  const actorValue = dataBoxMessageActor(message);
+  const mailboxLabel = dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel);
+  const deliveredAt = formatDateTime(dataBoxMessageTimestamp(message));
   const attachmentCount = dataBoxAttachmentCount(message);
 
   return `
     <aside class="data-box-reading-pane" aria-label="Detail vybrané zprávy">
       <div class="data-box-reading-pane__head">
         <div>
-          <span>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</span>
+          <span>${escapeHtml(mailboxLabel)}</span>
           <h3>${escapeHtml(message.subject || "(bez předmětu)")}</h3>
+          <p class="data-box-reading-pane__meta">
+            Doručeno: ${escapeHtml(deliveredAt || "bez data")} · ${escapeHtml(actorLabel)}: ${escapeHtml(actorValue || "neuvedeno")}
+          </p>
         </div>
       </div>
       ${dataBoxMessageSafeActions(message, { includeDetail: true })}
@@ -15392,14 +15398,18 @@ function dataBoxReadingPane(message, direction) {
         <h4>Obsah / náhled</h4>
         <p>${escapeHtml(dataBoxMessageContentPreview(message))}</p>
       </section>
-      <dl class="data-box-reading-facts">
-        <div><dt>${escapeHtml(actorLabel)}</dt><dd>${escapeHtml(dataBoxMessageActor(message))}</dd></div>
-        <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(dataBoxMessageTimestamp(message)))}</dd></div>
-        <div><dt>Schránka</dt><dd>${escapeHtml(dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}</dd></div>
-        <div><dt>Typ</dt><dd>${escapeHtml(type.label)}</dd></div>
-        <div><dt>Priorita</dt><dd>${escapeHtml(priority.label)}</dd></div>
-        <div><dt>Přílohy</dt><dd>${escapeHtml(attachmentCount ? `${attachmentCount}` : "Bez příloh")}</dd></div>
-      </dl>
+      <details class="data-box-technical-details data-box-technical-details--reading">
+        <summary>Technické údaje</summary>
+        <div class="data-box-detail-grid">
+          ${dataBoxDetailField(actorLabel, actorValue)}
+          ${dataBoxDetailField("Doručeno", deliveredAt)}
+          ${dataBoxDetailField("Schránka", mailboxLabel)}
+          ${dataBoxDetailField("Typ", type.label)}
+          ${dataBoxDetailField("Priorita", priority.label)}
+          ${dataBoxDetailField("Přílohy", attachmentCount ? `${attachmentCount}` : "Bez příloh")}
+          ${dataBoxDetailField("ID zprávy", message.id)}
+        </div>
+      </details>
     </aside>
   `;
 }
@@ -15445,8 +15455,7 @@ function dataBoxSupportPane(message, direction) {
           ${dataBoxSupportTasks(message).map((task) => `<li>${escapeHtml(task)}</li>`).join("")}
         </ul>
       </section>
-      ${dataBoxStatusAndSyncCard(connection, selectedAccount, context, direction)}
-      ${dataBoxVaultCard(metrics)}
+      ${dataBoxStatusAndSyncCard(connection, selectedAccount, context, direction, metrics)}
     </aside>
   `;
 }
