@@ -742,6 +742,9 @@ const dataBoxState = {
   selectedMessage: null,
   detailLoading: false,
   detailError: "",
+  replyDraftOpen: false,
+  replyDraftText: "",
+  replyDraftError: "",
   selectedPreviewMessageId: "",
   messageFilters: {
     query: "",
@@ -13953,6 +13956,10 @@ function dataBoxAccountStatusClass(stats) {
   return stats.lastRun ? "data-box-account-card__status--error" : "data-box-account-card__status--waiting";
 }
 
+function dataBoxAccountConnectionClass(stats) {
+  return stats.configured ? "data-box-account-chip--connected" : "data-box-account-chip--disconnected";
+}
+
 function dataBoxAccountSummary(stats) {
   return `${stats.received} přijatých · ${stats.sent} odeslaných`;
 }
@@ -13960,7 +13967,7 @@ function dataBoxAccountSummary(stats) {
 function dataBoxAccountButton(account, stats) {
   return `
     <button
-      class="data-box-account-chip"
+      class="data-box-account-chip ${dataBoxAccountConnectionClass(stats)}"
       type="button"
       data-data-box-account="${escapeHtml(account.id)}"
       aria-label="${escapeHtml(`Otevřít datovou schránku ${account.label}`)}"
@@ -14074,6 +14081,18 @@ function dataBoxStatusRing(connection) {
       title="${escapeHtml(label)}"
       aria-label="${escapeHtml(label)}"
     ></span>
+  `;
+}
+
+function dataBoxHeaderStatusMarkup(connection) {
+  return `
+    <div class="data-box-inbox-header__status data-box-inbox-header__status--${escapeHtml(connection.tone)}">
+      <span class="data-box-status-main">
+        <strong>${escapeHtml(connection.label)}</strong>
+        ${dataBoxStatusRing(connection)}
+      </span>
+      <span>${escapeHtml(connection.note)}</span>
+    </div>
   `;
 }
 
@@ -15062,6 +15081,13 @@ function dataBoxReadingPane(message, direction) {
         >
           Načíst detail
         </button>
+        <button
+          class="secondary-link"
+          type="button"
+          data-data-box-message-reply="${escapeHtml(message.id)}"
+        >
+          Odpovědět
+        </button>
       </div>
       <div class="data-box-reading-pane__badges">
         ${dataBoxPriorityBadge(priority)}
@@ -15210,6 +15236,66 @@ function dataBoxDetailField(label, value) {
   `;
 }
 
+function dataBoxReplyRecipient(message) {
+  if (message.direction === "sent") {
+    return dataBoxMessageActor(message) || message.recipientBoxId || "Příjemce není v metadatech";
+  }
+
+  return message.senderName || message.senderBoxId || "Odesílatel není v metadatech";
+}
+
+function dataBoxReplySubject(message) {
+  const subject = String(message.subject || message.title || "").trim() || "Bez předmětu";
+  return subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`;
+}
+
+function dataBoxReplyDraftPanel(message) {
+  if (!message || !dataBoxState.replyDraftOpen) {
+    return "";
+  }
+
+  return `
+    <section class="data-box-reply-draft" aria-labelledby="data-box-reply-title">
+      <div class="data-box-reply-draft__head">
+        <div>
+          <span>Návrh odpovědi</span>
+          <h3 id="data-box-reply-title">Odpověď na zprávu</h3>
+        </div>
+        <button class="secondary-link" type="button" data-data-box-reply-close>Zavřít návrh</button>
+      </div>
+      ${dataBoxState.replyDraftError ? `
+        <div class="data-box-reply-draft__error" role="alert">${escapeHtml(dataBoxState.replyDraftError)}</div>
+      ` : ""}
+      <dl class="data-box-reply-draft__facts">
+        <div><dt>Komu</dt><dd>${escapeHtml(dataBoxReplyRecipient(message))}</dd></div>
+        <div><dt>Původní zpráva</dt><dd>${escapeHtml(message.id || "neuvedeno")}</dd></div>
+        <div><dt>Předmět</dt><dd>${escapeHtml(dataBoxReplySubject(message))}</dd></div>
+        <div><dt>Stav</dt><dd>Návrh / nelze odeslat</dd></div>
+      </dl>
+      <label class="data-box-reply-draft__text">
+        <span>Text odpovědi</span>
+        <textarea
+          data-data-box-reply-text
+          rows="8"
+          placeholder="Napište pracovní návrh odpovědi..."
+        >${escapeHtml(dataBoxState.replyDraftText)}</textarea>
+      </label>
+      <div class="data-box-reply-draft__attachments">
+        <strong>Přílohy k odpovědi</strong>
+        <span>Přidávání příloh k odpovědi zatím není napojené.</span>
+      </div>
+      <div class="data-box-reply-draft__warning" role="status">
+        Odeslání odpovědi zatím není napojené. Návrh je pouze pracovní.
+      </div>
+      <div class="data-box-reply-draft__actions">
+        <button class="secondary-link" type="button" disabled>Zkontrolovat odpověď</button>
+        <button class="primary-action" type="button" disabled>Odeslat odpověď</button>
+      </div>
+      <small>Odeslání vyžaduje schválený backend krok a samostatný potvrzovací modal.</small>
+    </section>
+  `;
+}
+
 function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
   if (!attachments.length) {
     if (expectedCount > 0) {
@@ -15289,7 +15375,8 @@ function dataBoxMessageDetailOverlayMarkup() {
     const messageType = dataBoxMessageType(message);
 
     content = `
-      <div class="data-box-detail-modal__main">
+      <div class="data-box-detail-modal__body">
+        <div class="data-box-detail-modal__main">
         <div class="data-box-detail-grid">
           ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
           ${dataBoxDetailField("Schránka", dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}
@@ -15332,11 +15419,22 @@ function dataBoxMessageDetailOverlayMarkup() {
             <p>Zkontrolovat lhůtu, projít přílohy a ověřit odpovědnou osobu.</p>
           </section>
         </div>
+        ${dataBoxReplyDraftPanel(message)}
       </div>
-      <aside class="data-box-detail-actions" aria-label="Bezpečnost detailu zprávy">
-        <strong>Bez odeslání</strong>
-        <p>Z této obrazovky se zatím nic neodesílá, nemaže ani nemění.</p>
-      </aside>
+      </div>
+      <div class="data-box-detail-actions" aria-label="Akce detailu zprávy">
+        <div>
+          <strong>Bez odeslání</strong>
+          <p>Z této obrazovky se zatím nic neodesílá, nemaže ani nemění.</p>
+        </div>
+        <button
+          class="secondary-link"
+          type="button"
+          data-data-box-message-reply="${escapeHtml(message.id)}"
+        >
+          Odpovědět
+        </button>
+      </div>
     `;
   } else {
     content = `
@@ -15480,11 +15578,7 @@ function dataBoxPage(moduleItem, user) {
         <div class="data-box-inbox-header__title">
           <h1 id="module-title">Datová schránka</h1>
           <p>Přijaté a odeslané zprávy, lhůty a přílohy.</p>
-          <div class="data-box-inbox-header__status data-box-inbox-header__status--${escapeHtml(connection.tone)}">
-            ${dataBoxStatusRing(connection)}
-            <strong>${escapeHtml(connection.label)}</strong>
-            <span>${escapeHtml(connection.note)}</span>
-          </div>
+          ${dataBoxHeaderStatusMarkup(connection)}
           ${dataBoxErrorNotice(connection)}
           <div class="data-box-inbox-header__context">
             <strong>${escapeHtml(context.title)}</strong>
@@ -17075,6 +17169,9 @@ function resetDataBoxState() {
   dataBoxState.selectedMessage = null;
   dataBoxState.detailLoading = false;
   dataBoxState.detailError = "";
+  dataBoxState.replyDraftOpen = false;
+  dataBoxState.replyDraftText = "";
+  dataBoxState.replyDraftError = "";
   dataBoxState.selectedPreviewMessageId = "";
   dataBoxState.messageFilters = {
     query: "",
@@ -17164,17 +17261,24 @@ function ensureDataBoxData() {
   void loadDataBoxData();
 }
 
-async function loadDataBoxMessageDetail(messageId) {
+async function loadDataBoxMessageDetail(messageId, options = {}) {
   const id = String(messageId || "").trim();
   if (!id) {
     return;
   }
 
+  const openReply = Boolean(options.openReply);
+  const sameMessage = String(dataBoxState.selectedMessageId || "") === id;
   dataBoxState.selectedPreviewMessageId = id;
   dataBoxState.selectedMessageId = id;
   dataBoxState.selectedMessage = dataBoxState.selectedMessage?.id === id ? dataBoxState.selectedMessage : null;
   dataBoxState.detailLoading = true;
   dataBoxState.detailError = "";
+  dataBoxState.replyDraftOpen = openReply;
+  dataBoxState.replyDraftError = "";
+  if (!sameMessage || !openReply) {
+    dataBoxState.replyDraftText = "";
+  }
   render();
 
   try {
@@ -17186,11 +17290,32 @@ async function loadDataBoxMessageDetail(messageId) {
     if (dataBoxState.selectedMessageId === id) {
       dataBoxState.selectedMessage = null;
       dataBoxState.detailError = error?.payload?.error || error?.message || "Detail zprávy se teď nepodařilo načíst.";
+      dataBoxState.replyDraftError = openReply ? "Návrh odpovědi se nepodařilo připravit." : "";
     }
   } finally {
     if (dataBoxState.selectedMessageId === id) {
       dataBoxState.detailLoading = false;
     }
+  }
+
+  render();
+}
+
+function openDataBoxReplyDraft(messageId) {
+  const id = String(messageId || "").trim();
+  if (!id) {
+    dataBoxState.replyDraftOpen = true;
+    dataBoxState.replyDraftError = "Návrh odpovědi se nepodařilo připravit.";
+    render();
+    return;
+  }
+
+  dataBoxState.replyDraftOpen = true;
+  dataBoxState.replyDraftError = "";
+
+  if (String(dataBoxState.selectedMessageId || "") !== id || String(dataBoxState.selectedMessage?.id || "") !== id) {
+    void loadDataBoxMessageDetail(id, { openReply: true });
+    return;
   }
 
   render();
@@ -21552,6 +21677,12 @@ document.addEventListener("input", (event) => {
   const dataBoxFilter = event.target.closest("[data-data-box-filter]");
   if (dataBoxFilter && dataBoxFilter.name === "query") {
     updateDataBoxMessageFilter(dataBoxFilter);
+    return;
+  }
+
+  const dataBoxReplyText = event.target.closest("[data-data-box-reply-text]");
+  if (dataBoxReplyText) {
+    dataBoxState.replyDraftText = dataBoxReplyText.value;
   }
 });
 
@@ -22358,6 +22489,9 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
     dataBoxState.detailError = "";
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftText = "";
+    dataBoxState.replyDraftError = "";
     render();
     return;
   }
@@ -22375,11 +22509,28 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const dataBoxMessageReply = event.target.closest("[data-data-box-message-reply]");
+  if (dataBoxMessageReply) {
+    openDataBoxReplyDraft(dataBoxMessageReply.dataset.dataBoxMessageReply || "");
+    return;
+  }
+
+  const dataBoxReplyClose = event.target.closest("[data-data-box-reply-close]");
+  if (dataBoxReplyClose) {
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftError = "";
+    render();
+    return;
+  }
+
   const dataBoxMessageDetailClose = event.target.closest("[data-data-box-message-detail-close]");
   if (dataBoxMessageDetailClose) {
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
     dataBoxState.detailError = "";
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftText = "";
+    dataBoxState.replyDraftError = "";
     render();
     return;
   }
@@ -22391,6 +22542,9 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedMessage = null;
     dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.detailError = "";
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftText = "";
+    dataBoxState.replyDraftError = "";
     if (normalizePath(window.location.pathname) === DATA_BOX_ROUTE && window.location.hash) {
       window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
       lastRenderedUrl = window.location.href;
@@ -22411,6 +22565,9 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedMessage = null;
     dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.detailError = "";
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftText = "";
+    dataBoxState.replyDraftError = "";
     render();
     return;
   }
@@ -22426,6 +22583,9 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedMessage = null;
     dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.detailError = "";
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftText = "";
+    dataBoxState.replyDraftError = "";
     render();
     return;
   }
@@ -22474,6 +22634,9 @@ document.addEventListener("keydown", (event) => {
   dataBoxState.selectedMessageId = "";
   dataBoxState.selectedMessage = null;
   dataBoxState.detailError = "";
+  dataBoxState.replyDraftOpen = false;
+  dataBoxState.replyDraftText = "";
+  dataBoxState.replyDraftError = "";
   render();
 });
 
