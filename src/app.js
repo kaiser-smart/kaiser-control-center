@@ -14942,11 +14942,13 @@ function dataBoxSelectedPreviewMessage(rows) {
     return null;
   }
 
-  if (dataBoxState.selectedMessage?.id === dataBoxState.selectedPreviewMessageId) {
+  const selectedId = dataBoxState.selectedMessageId || dataBoxState.selectedPreviewMessageId;
+
+  if (dataBoxState.selectedMessage?.id === selectedId) {
     return dataBoxState.selectedMessage;
   }
 
-  return rows.find((message) => message.id === dataBoxState.selectedPreviewMessageId) || rows[0];
+  return rows.find((message) => String(message.id) === String(selectedId)) || rows[0];
 }
 
 function dataBoxMessageContentPreview(message) {
@@ -15173,6 +15175,10 @@ function dataBoxAiEvaluationDetail(evaluation) {
 }
 
 function dataBoxMessageDetailPanel() {
+  return "";
+}
+
+function dataBoxMessageDetailOverlayMarkup() {
   const message = dataBoxState.selectedMessage;
   const selectedId = dataBoxState.selectedMessageId;
 
@@ -17111,7 +17117,7 @@ async function loadDataBoxMessageInlineDetail(messageId) {
   }
 
   dataBoxState.selectedPreviewMessageId = id;
-  dataBoxState.selectedMessageId = "";
+  dataBoxState.selectedMessageId = id;
   dataBoxState.selectedMessage = dataBoxState.selectedMessage?.id === id ? dataBoxState.selectedMessage : null;
   dataBoxState.detailLoading = true;
   dataBoxState.detailError = "";
@@ -17119,16 +17125,16 @@ async function loadDataBoxMessageInlineDetail(messageId) {
 
   try {
     const result = await apiJson(`/api/data-box/messages/${encodeURIComponent(id)}`);
-    if (dataBoxState.selectedPreviewMessageId === id && !dataBoxState.selectedMessageId) {
+    if (dataBoxState.selectedMessageId === id) {
       dataBoxState.selectedMessage = result.message || null;
     }
   } catch (error) {
-    if (dataBoxState.selectedPreviewMessageId === id && !dataBoxState.selectedMessageId) {
+    if (dataBoxState.selectedMessageId === id) {
       dataBoxState.selectedMessage = null;
       dataBoxState.detailError = error?.payload?.error || error?.message || "Detail zprávy se teď nepodařilo načíst.";
     }
   } finally {
-    if (dataBoxState.selectedPreviewMessageId === id && !dataBoxState.selectedMessageId) {
+    if (dataBoxState.selectedMessageId === id) {
       dataBoxState.detailLoading = false;
     }
   }

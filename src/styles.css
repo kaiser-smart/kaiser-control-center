@@ -11064,16 +11064,27 @@ body:has(.data-box-page) {
 }
 
 .data-box-message-list {
+  position: relative;
   gap: 0;
   padding-right: 0;
+  z-index: 2;
 }
 
 .data-box-message-card {
+  position: relative;
+  z-index: 2;
   border: 0;
   border-bottom: 1px solid var(--theme-border, var(--line));
+  cursor: pointer;
+  pointer-events: auto;
 }
 
+.data-box-message-inbox::before,
+.data-box-message-inbox::after,
+.data-box-message-list::before,
+.data-box-message-list::after,
 .data-box-message-card::before,
+.data-box-message-card::after,
 .data-box-message-card--selected::before,
 .data-box-message-card--priority-urgent::before,
 .data-box-message-card--priority-legal::before,
@@ -11081,6 +11092,8 @@ body:has(.data-box-page) {
 .data-box-message-card--priority-info::before {
   display: none;
   content: none;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .data-box-message-card:hover,
@@ -11102,7 +11115,10 @@ body:has(.data-box-page) {
   display: block;
   min-height: 58px;
   padding: 12px 128px 12px 0;
+  cursor: pointer;
+  pointer-events: auto;
   text-align: left;
+  z-index: 2;
 }
 
 .data-box-message-card__select:hover,
