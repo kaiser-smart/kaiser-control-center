@@ -747,7 +747,7 @@ const dataBoxState = {
   replyDraftError: "",
   selectedPreviewMessageId: "",
   messagePagination: {
-    pageSize: 10,
+    pageSize: 5,
     currentPage: 1
   },
   messageFilters: {
@@ -13816,7 +13816,7 @@ const DATA_BOX_QUICK_FILTERS = [
   { id: "errors", label: "Chyby" }
 ];
 
-const DATA_BOX_PAGE_SIZES = [10, 20, 30];
+const DATA_BOX_PAGE_SIZES = [5, 10, 20, 30, 50, 100];
 
 const DATA_BOX_STATUS_OPTIONS = [
   ["all", "Všechny stavy"],
@@ -14039,8 +14039,8 @@ function dataBoxInboxPaginationMarkup(allRows, filteredRows, pagination) {
   return `
     <div class="data-box-inbox-footer" aria-label="Stránkování zpráv">
       <p class="data-box-inbox-count">${escapeHtml(info)}</p>
-      <div class="data-box-page-size" aria-label="Počet zpráv na stránku">
-        <span>Na stránku:</span>
+      <div class="data-box-page-size" aria-label="Zpráv na stránku">
+        <span>Zpráv na stránku:</span>
         ${DATA_BOX_PAGE_SIZES.map((size) => `
           <button
             class="data-box-page-size__button ${pagination.pageSize === size ? "data-box-page-size__button--active" : ""}"
@@ -14269,22 +14269,24 @@ function dataBoxAiSortingInfo(direction) {
   const evaluated = messages.filter((message) => message.latestAiEvaluation).length;
   const failed = messages.filter((message) => dataBoxSearchText(message.aiStatus || message.latestAiEvaluation?.status || "").includes("failed")).length;
   const label = messages.length
-    ? `${evaluated} z ${messages.length} zpráv má AI metadata`
-    : "AI metadata nejsou v datech";
+    ? `${evaluated} / ${messages.length} · read-only · nic samo neodesílá ani nemaže`
+    : "AI metadata nejsou v datech · read-only · nic samo neodesílá ani nemaže";
   const note = failed
     ? `${failed} zpráv má chybu vyhodnocení.`
-    : "Třídění je pouze informační, nic samo neodesílá ani nemaže.";
+    : "Třídění je pouze informační.";
 
   return `
-    <section class="data-box-side-card data-box-side-card--ai">
-      <span>AI třídění</span>
-      <strong>${escapeHtml(label)}</strong>
-      <small>${escapeHtml(note)} Priority jsou read-only: urgentní, právní, info, běžné nebo chyba.</small>
-    </section>
+    <div class="data-box-side-status__ai">
+      <dt>AI třídění</dt>
+      <dd>
+        <strong>${escapeHtml(label)}</strong>
+        <small>${escapeHtml(note)} Priority jsou read-only: urgentní, právní, info, běžné nebo chyba.</small>
+      </dd>
+    </div>
   `;
 }
 
-function dataBoxStatusAndSyncCard(connection, selectedAccount, context) {
+function dataBoxStatusAndSyncCard(connection, selectedAccount, context, direction) {
   return `
     <section class="data-box-side-card data-box-side-card--status-sync">
       <span>Stav a synchronizace</span>
@@ -14297,6 +14299,7 @@ function dataBoxStatusAndSyncCard(connection, selectedAccount, context) {
         <div><dt>Poslední synchronizace</dt><dd>${escapeHtml(dataBoxLastSyncLabel())}</dd></div>
         <div><dt>Plán načítání</dt><dd>Read-only každých 30 minut</dd></div>
         <div><dt>Schránka</dt><dd>${escapeHtml(selectedAccount ? selectedAccount.label : context.title)}</dd></div>
+        ${dataBoxAiSortingInfo(direction)}
       </dl>
       <small>Stav vychází z logu synchronizace. Tato obrazovka nespouští cron ani žádné odesílání.</small>
     </section>
@@ -15340,9 +15343,8 @@ function dataBoxSupportPane(message, direction) {
           ${dataBoxSupportTasks(message).map((task) => `<li>${escapeHtml(task)}</li>`).join("")}
         </ul>
       </section>
-      ${dataBoxStatusAndSyncCard(connection, selectedAccount, context)}
+      ${dataBoxStatusAndSyncCard(connection, selectedAccount, context, direction)}
       ${dataBoxVaultCard(metrics)}
-      ${dataBoxAiSortingInfo(direction)}
     </aside>
   `;
 }
@@ -17485,7 +17487,7 @@ function resetDataBoxState() {
   dataBoxState.replyDraftError = "";
   dataBoxState.selectedPreviewMessageId = "";
   dataBoxState.messagePagination = {
-    pageSize: 10,
+    pageSize: 5,
     currentPage: 1
   };
   dataBoxState.messageFilters = {
