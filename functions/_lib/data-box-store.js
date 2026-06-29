@@ -165,8 +165,20 @@ function observedDataBoxIds(messages = []) {
   return Array.from(seen);
 }
 
-function assertAccountMessageSource(account, messages = []) {
+function configuredAccountIsdsId(account) {
   const expectedIsdsId = cleanString(account?.isdsId);
+  const username = cleanString(account?.username);
+  const slot = Number(account?.slot || 0);
+
+  if (slot > 1 && expectedIsdsId && username && expectedIsdsId === username) {
+    return "";
+  }
+
+  return expectedIsdsId;
+}
+
+function assertAccountMessageSource(account, messages = [], knownObservedIds = new Set()) {
+  const expectedIsdsId = configuredAccountIsdsId(account);
   const observedIds = observedDataBoxIds(messages);
   const slot = Number(account?.slot || 0);
   const label = cleanString(account?.label || account?.id || "Datova schranka");
@@ -179,11 +191,11 @@ function assertAccountMessageSource(account, messages = []) {
     );
   }
 
-  if (!expectedIsdsId && slot > 1 && observedIds.length) {
+  if (!expectedIsdsId && slot > 1 && observedIds.length && knownObservedIds.has(observedIds[0])) {
     throw new DataBoxStoreError(
-      `${label}: chybi DATA_BOX_ISDS_ID_${slot} pro kontrolu mapovani. Sync by mohl ulozit zpravy pod spatnou firmu, proto byl zastaven.`,
+      `${label}: ISDS vratilo stejne ID schranky (${observedIds[0]}) jako jina nakonfigurovana DS. Sync byl zastaven kvuli ochrane pred michanim firem.`,
       409,
-      "data_box_isds_id_missing"
+      "data_box_isds_mapping_duplicate"
     );
   }
 
@@ -893,13 +905,13 @@ export async function getDataBoxStatus(env) {
   }
 }
 
-async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
+async function syncDataBoxAccount(db, env, account, currentUser, startedAt, knownObservedIds = new Set()) {
   const dataBox = await ensureDataBoxForAccount(db, account);
   const runId = await createSyncRun(db, dataBox, currentUser, startedAt);
 
   try {
     const result = await fetchDataBoxMessageMetadata(env, account);
-    const sourceCheck = assertAccountMessageSource(account, result.messages);
+    const sourceCheck = assertAccountMessageSource(account, result.messages, knownObservedIds);
     const verifiedIsdsId = sourceCheck.expectedIsdsId || sourceCheck.observedIsdsId;
     if (verifiedIsdsId) {
       await updateDataBoxIsdsId(db, dataBox.id, verifiedIsdsId);
@@ -971,6 +983,7 @@ async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
       attachmentsDownloaded,
       attachmentsFailed,
       attachmentsMetadataOnly,
+      observedIsdsId: sourceCheck.observedIsdsId || verifiedIsdsId,
       message
     };
   } catch (error) {
@@ -1035,8 +1048,13 @@ export async function runDataBoxManualSync(env, currentUser) {
     }
 
     const results = [];
+    const knownObservedIds = new Set();
     for (const account of accounts) {
-      results.push(await syncDataBoxAccount(db, env, account, currentUser, startedAt));
+      const result = await syncDataBoxAccount(db, env, account, currentUser, startedAt, knownObservedIds);
+      if (result.observedIsdsId) {
+        knownObservedIds.add(result.observedIsdsId);
+      }
+      results.push(result);
     }
 
     const totals = results.reduce((sum, result) => ({

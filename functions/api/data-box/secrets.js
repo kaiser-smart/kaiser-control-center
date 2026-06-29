@@ -15,7 +15,7 @@ const PASSWORD_TARGETS = [
     passwordSecret: "DATA_BOX_ISDS_PASSWORD_2",
     isdsIdSecret: "DATA_BOX_ISDS_ID_2",
     requestedUsername: "3rw2ez",
-    requestedIsdsId: "3rw2ez"
+    requestedIsdsId: ""
   },
   {
     slot: 3,
@@ -26,7 +26,7 @@ const PASSWORD_TARGETS = [
     passwordSecret: "DATA_BOX_ISDS_PASSWORD_3",
     isdsIdSecret: "DATA_BOX_ISDS_ID_3",
     requestedUsername: "322p6i",
-    requestedIsdsId: "322p6i"
+    requestedIsdsId: ""
   }
 ];
 
@@ -128,7 +128,10 @@ function observedDataBoxIds(messages = []) {
 
 function testResultMessage(config, result) {
   const observedIds = observedDataBoxIds(result.messages || []);
-  const expectedIsdsId = cleanString(config.isdsId);
+  const rawExpectedIsdsId = cleanString(config.isdsId);
+  const expectedIsdsId = rawExpectedIsdsId && rawExpectedIsdsId !== cleanString(config.username)
+    ? rawExpectedIsdsId
+    : "";
   const counts = `${Number(result.receivedCount || 0)} přijatých, ${Number(result.sentCount || 0)} odeslaných`;
 
   if (observedIds.length > 1) {
@@ -208,7 +211,7 @@ function statusCards(env, results = []) {
         <dl>
           <div><dt>Login</dt><dd>${escapeHtml(status.hasUsername ? status.usernameLabel : `Chybí ${status.usernameSecret}`)} · požadovaný: <code>${escapeHtml(status.requestedUsername)}</code></dd></div>
           <div><dt>Heslo</dt><dd>${escapeHtml(status.passwordLabel)}</dd></div>
-          <div><dt>ID DS</dt><dd>${escapeHtml(status.isdsIdLabel)} · požadované: <code>${escapeHtml(status.requestedIsdsId)}</code></dd></div>
+          <div><dt>ID DS</dt><dd>${escapeHtml(status.isdsIdLabel)} · pokud není známé, doplní se z ISDS při syncu</dd></div>
           <div><dt>Cloudflare secret</dt><dd><code>${escapeHtml(status.passwordSecret)}</code></dd></div>
         </dl>
         ${result ? `<p class="result result--${escapeHtml(result.status)}">${escapeHtml(result.message)}</p>` : ""}
@@ -284,7 +287,7 @@ function page(env, options = {}) {
           </label>
           <label>
             ID DS Kaiser technology
-            <input name="isds_id_2" value="${escapeHtml(PASSWORD_TARGETS[0].requestedIsdsId)}" autocomplete="off" />
+            <input name="isds_id_2" value="${escapeHtml(PASSWORD_TARGETS[0].requestedIsdsId)}" autocomplete="off" placeholder="volitelné - sync doplní z ISDS" />
           </label>
           <label>
             Heslo Kaiser technology
@@ -298,7 +301,7 @@ function page(env, options = {}) {
           </label>
           <label>
             ID DS Nanolab plus
-            <input name="isds_id_3" value="${escapeHtml(PASSWORD_TARGETS[1].requestedIsdsId)}" autocomplete="off" />
+            <input name="isds_id_3" value="${escapeHtml(PASSWORD_TARGETS[1].requestedIsdsId)}" autocomplete="off" placeholder="volitelné - sync doplní z ISDS" />
           </label>
           <label>
             Heslo Nanolab plus
@@ -313,9 +316,9 @@ function page(env, options = {}) {
         <p class="hint">Uložení do Cloudflare secrets musí proběhnout přes bezpečný Cloudflare mechanismus. Tato stránka hesla nevypisuje a po odeslání je nevrací zpět.</p>
         <div class="command">
           <code>wrangler pages secret put DATA_BOX_ISDS_USERNAME_2 --project-name kaiser-control-center # 3rw2ez</code>
-          <code>wrangler pages secret put DATA_BOX_ISDS_ID_2 --project-name kaiser-control-center # 3rw2ez</code>
+          <code>wrangler pages secret put DATA_BOX_ISDS_ID_2 --project-name kaiser-control-center # volitelné, sync umí doplnit z ISDS</code>
           <code>wrangler pages secret put DATA_BOX_ISDS_USERNAME_3 --project-name kaiser-control-center # 322p6i</code>
-          <code>wrangler pages secret put DATA_BOX_ISDS_ID_3 --project-name kaiser-control-center # 322p6i</code>
+          <code>wrangler pages secret put DATA_BOX_ISDS_ID_3 --project-name kaiser-control-center # volitelné, sync umí doplnit z ISDS</code>
           <code>wrangler pages secret put DATA_BOX_ISDS_PASSWORD_2 --project-name kaiser-control-center</code>
           <code>wrangler pages secret put DATA_BOX_ISDS_PASSWORD_3 --project-name kaiser-control-center</code>
         </div>
