@@ -48,6 +48,24 @@ Bez potvrzení Radima/Martina nesmí implementovat.
 
 Pokud Radim/Martin po návrhu výslovně potvrdí konkrétní bezpečný cíl, například `souhlas`, `ano`, `pokračuj`, `uprav` nebo `nastav to`, může Codex/vývojář pokračovat samostatně v jednom logickém programovacím celku.
 
+#### Význam potvrzení `ano`
+
+Radimovo/Martinovo `ano` znamená potvrzení aktuálně navrženého nebo právě položeného kroku v daném kontextu.
+
+Pokud Codex/vývojář čeká na potvrzení a Radim/Martin odpoví `ano`, bere se to jako:
+- souhlasím,
+- pokračuj,
+- oprav,
+- nastav,
+- spusť povolené kontroly/testy/build,
+- commitni,
+- pushni,
+- zveřejni/nasaď, pokud se Codex/vývojář ptal na zveřejnění nebo pokud je zveřejnění výslovnou součástí schváleného kroku.
+
+Codex/vývojář se po `ano` nesmí znovu ptát na totéž potvrzení jinými slovy.
+
+`Ano` ale samo o sobě neruší bezpečnostní zákazy této příručky. Pokud krok obsahuje DB/migrace, Cloudflare secrets/bindings, ostré odesílání datových zpráv/e-mailů/SMS, mazání produkčních dat, cron/automatizace/worker, hard reset nebo force push, musí být tato riziková akce v návrhu výslovně pojmenovaná a potvrzená.
+
 Platí jen pro:
 - read-only analýzu, diagnostiku a ověření,
 - UI nebo textové úpravy bez změny oprávnění,
