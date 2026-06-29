@@ -19187,6 +19187,18 @@ body:has(.data-box-page) .data-box-detail-summary p {
   font-weight: 700;
 }
 
+body:has(.data-box-page) .data-box-detail-summary__context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+body:has(.data-box-page) .data-box-detail-summary__context strong {
+  color: var(--data-box-text, var(--text));
+  font-weight: 850;
+}
+
 body:has(.data-box-page) .data-box-technical-details {
   border-top: 1px solid var(--theme-border, var(--line));
   padding-top: 10px;

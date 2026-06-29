@@ -13942,6 +13942,24 @@ function dataBoxSelectedAccount() {
   return dataBoxAccountById(dataBoxState.selectedDataBoxId);
 }
 
+function dataBoxMessageFitsSelectedAccount(message) {
+  const selectedAccount = dataBoxSelectedAccount();
+  if (!selectedAccount || !message) {
+    return true;
+  }
+
+  return String(message.dataBoxId || "") === String(selectedAccount.id);
+}
+
+function dataBoxSelectedAccountMismatchMessage() {
+  const selectedAccount = dataBoxSelectedAccount();
+  if (!selectedAccount) {
+    return "Zpráva nepatří do aktuálního pohledu.";
+  }
+
+  return `Zpráva nepatří do aktuálně vybrané schránky ${selectedAccount.label}.`;
+}
+
 function dataBoxAccountStatusMap() {
   const accounts = dataBoxState.status?.isds?.accounts;
   if (!Array.isArray(accounts)) {
@@ -15566,7 +15584,7 @@ function dataBoxAttachmentActionMarkup(attachment) {
     <button class="primary-action data-box-attachment-open" type="button" disabled>
       Otevřít
     </button>
-    <small>Otevřít není dostupné bez bezpečně napojeného souboru.</small>
+    <small>Příloha nemá platný odkaz pro bezpečné otevření.</small>
   `;
 }
 
@@ -15606,7 +15624,7 @@ function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
           </div>
           <div class="data-box-attachment-actions">
             <button class="primary-action data-box-attachment-open" type="button" disabled>Otevřít</button>
-            <small>Otevření vyžaduje bezpečně stažený soubor.</small>
+            <small>Platný odkaz pro otevření není k dispozici.</small>
           </div>
         </li>
       `;
@@ -15684,6 +15702,7 @@ function dataBoxMessageDetailOverlayMarkup() {
     const workflow = dataBoxWorkflowStatus(message);
     const priority = dataBoxMessagePriority(message);
     const messageType = dataBoxMessageType(message);
+    const mailboxLabel = dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel);
 
     content = `
       <div class="data-box-detail-modal__body">
@@ -15692,6 +15711,7 @@ function dataBoxMessageDetailOverlayMarkup() {
           <span>${escapeHtml(actorLabel)}</span>
           <strong>${escapeHtml(actorValue || "neuvedeno")}</strong>
           <h3>${escapeHtml(message.subject || "(bez předmětu)")}</h3>
+          <p class="data-box-detail-summary__context">Schránka: <strong>${escapeHtml(mailboxLabel)}</strong></p>
           <p>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "bez data")} · ${escapeHtml(priority.label)} · ${escapeHtml(workflow.label)}</p>
         </section>
         ${dataBoxAttachmentsSection(message)}
@@ -15703,7 +15723,7 @@ function dataBoxMessageDetailOverlayMarkup() {
           <summary>Technické detaily zprávy</summary>
           <div class="data-box-detail-grid">
             ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
-            ${dataBoxDetailField("Schránka", dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel))}
+            ${dataBoxDetailField("Schránka", mailboxLabel)}
             ${dataBoxDetailField(actorLabel, actorValue)}
             ${dataBoxDetailField("Stav", workflow.label)}
             ${dataBoxDetailField("Priorita", priority.label)}
@@ -17586,6 +17606,21 @@ async function loadDataBoxMessageDetail(messageId, options = {}) {
 
   const openReply = Boolean(options.openReply);
   const sameMessage = String(dataBoxState.selectedMessageId || "") === id;
+  const summaryMessage = dataBoxState.messages.find((message) => String(message.id || "") === id) || null;
+
+  if (summaryMessage && !dataBoxMessageFitsSelectedAccount(summaryMessage)) {
+    dataBoxState.selectedPreviewMessageId = id;
+    dataBoxState.selectedMessageId = id;
+    dataBoxState.selectedMessage = null;
+    dataBoxState.detailLoading = false;
+    dataBoxState.detailError = dataBoxSelectedAccountMismatchMessage();
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftText = "";
+    dataBoxState.replyDraftError = "";
+    render();
+    return;
+  }
+
   dataBoxState.selectedPreviewMessageId = id;
   dataBoxState.selectedMessageId = id;
   dataBoxState.selectedMessage = dataBoxState.selectedMessage?.id === id ? dataBoxState.selectedMessage : null;
@@ -17601,7 +17636,17 @@ async function loadDataBoxMessageDetail(messageId, options = {}) {
   try {
     const result = await apiJson(`/api/data-box/messages/${encodeURIComponent(id)}`);
     if (dataBoxState.selectedMessageId === id) {
-      dataBoxState.selectedMessage = result.message || null;
+      const detailMessage = result.message || null;
+      if (detailMessage && !dataBoxMessageFitsSelectedAccount(detailMessage)) {
+        dataBoxState.detailLoading = false;
+        dataBoxState.selectedMessage = null;
+        dataBoxState.detailError = dataBoxSelectedAccountMismatchMessage();
+        dataBoxState.replyDraftOpen = false;
+        dataBoxState.replyDraftText = "";
+        dataBoxState.replyDraftError = "";
+      } else {
+        dataBoxState.selectedMessage = detailMessage;
+      }
     }
   } catch (error) {
     if (dataBoxState.selectedMessageId === id) {
@@ -17644,6 +17689,18 @@ async function loadDataBoxMessageInlineDetail(messageId) {
     return;
   }
 
+  const summaryMessage = dataBoxState.messages.find((message) => String(message.id || "") === id) || null;
+
+  if (summaryMessage && !dataBoxMessageFitsSelectedAccount(summaryMessage)) {
+    dataBoxState.selectedPreviewMessageId = id;
+    dataBoxState.selectedMessageId = id;
+    dataBoxState.selectedMessage = null;
+    dataBoxState.detailLoading = false;
+    dataBoxState.detailError = dataBoxSelectedAccountMismatchMessage();
+    render();
+    return;
+  }
+
   dataBoxState.selectedPreviewMessageId = id;
   dataBoxState.selectedMessageId = id;
   dataBoxState.selectedMessage = dataBoxState.selectedMessage?.id === id ? dataBoxState.selectedMessage : null;
@@ -17654,7 +17711,14 @@ async function loadDataBoxMessageInlineDetail(messageId) {
   try {
     const result = await apiJson(`/api/data-box/messages/${encodeURIComponent(id)}`);
     if (dataBoxState.selectedMessageId === id) {
-      dataBoxState.selectedMessage = result.message || null;
+      const detailMessage = result.message || null;
+      if (detailMessage && !dataBoxMessageFitsSelectedAccount(detailMessage)) {
+        dataBoxState.detailLoading = false;
+        dataBoxState.selectedMessage = null;
+        dataBoxState.detailError = dataBoxSelectedAccountMismatchMessage();
+      } else {
+        dataBoxState.selectedMessage = detailMessage;
+      }
     }
   } catch (error) {
     if (dataBoxState.selectedMessageId === id) {
