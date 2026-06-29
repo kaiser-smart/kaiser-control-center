@@ -742,6 +742,8 @@ const dataBoxState = {
   selectedMessage: null,
   detailLoading: false,
   detailError: "",
+  attachmentNotice: "",
+  attachmentError: "",
   replyDraftOpen: false,
   replyDraftText: "",
   replyDraftError: "",
@@ -15563,6 +15565,26 @@ function dataBoxAttachmentTypeLabel(attachment) {
   return extension ? extension.toUpperCase() : "Soubor";
 }
 
+function dataBoxAttachmentExtension(filename = "") {
+  const name = String(filename || "").toLowerCase();
+  return name.includes(".") ? name.split(".").pop() : "";
+}
+
+function dataBoxAttachmentCanPreview(filename = "", contentType = "") {
+  const extension = dataBoxAttachmentExtension(filename);
+  const type = String(contentType || "").toLowerCase();
+
+  if (type.includes("html") || type.includes("svg") || ["html", "htm", "svg"].includes(extension)) {
+    return false;
+  }
+
+  return type.includes("pdf")
+    || type.startsWith("image/")
+    || type.startsWith("text/")
+    || type.includes("xml")
+    || ["pdf", "png", "jpg", "jpeg", "webp", "gif", "txt", "xml"].includes(extension);
+}
+
 function dataBoxAttachmentOpenUrl(attachment) {
   const url = String(attachment?.fileUrl || attachment?.openUrl || attachment?.downloadUrl || attachment?.url || "").trim();
   if (!url) {
@@ -15616,20 +15638,55 @@ function dataBoxAttachmentErrorMarkup(attachment) {
   `;
 }
 
+function dataBoxAttachmentNoticeMarkup() {
+  const error = String(dataBoxState.attachmentError || "").trim();
+  const notice = String(dataBoxState.attachmentNotice || "").trim();
+
+  if (error) {
+    return `
+      <p class="data-box-attachment-error" role="alert">
+        <strong>${escapeHtml(error)}</strong>
+        <span>Zkontrolujte, zda byla příloha správně stažena z datové schránky.</span>
+      </p>
+    `;
+  }
+
+  if (!notice) {
+    return "";
+  }
+
+  return `<p class="data-box-attachment-notice" role="status">${escapeHtml(notice)}</p>`;
+}
+
 function dataBoxAttachmentActionMarkup(attachment) {
   const url = dataBoxAttachmentOpenUrl(attachment);
+  const filename = attachment?.filename || "priloha";
+  const contentType = attachment?.contentType || "";
 
   if (url && !dataBoxAttachmentHasError(attachment)) {
     return `
-      <a class="primary-action data-box-attachment-open" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
-        Otevřít
+      <button
+        class="primary-action data-box-attachment-open"
+        type="button"
+        data-data-box-attachment-open="${escapeHtml(url)}"
+        data-data-box-attachment-filename="${escapeHtml(filename)}"
+        data-data-box-attachment-content-type="${escapeHtml(contentType)}"
+      >
+        Otevřít nyní
+      </button>
+      <a
+        class="secondary-link data-box-attachment-download"
+        href="${escapeHtml(url)}"
+        download="${escapeHtml(filename)}"
+      >
+        Stáhnout
       </a>
     `;
   }
 
   return `
     <button class="primary-action data-box-attachment-open" type="button" disabled>
-      Otevřít
+      Otevřít nyní
     </button>
     <small>Příloha nemá platný odkaz pro bezpečné otevření.</small>
   `;
@@ -15670,7 +15727,7 @@ function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
             <em class="data-box-attachment-note">Přílohy zatím nejdou otevřít.</em>
           </div>
           <div class="data-box-attachment-actions">
-            <button class="primary-action data-box-attachment-open" type="button" disabled>Otevřít</button>
+            <button class="primary-action data-box-attachment-open" type="button" disabled>Otevřít nyní</button>
             <small>Platný odkaz pro otevření není k dispozici.</small>
           </div>
         </li>
@@ -15696,9 +15753,166 @@ function dataBoxAttachmentsSection(message) {
         </div>
         <span>Nejdůležitější obsah zprávy bývá v příloze.</span>
       </div>
+      ${dataBoxAttachmentNoticeMarkup()}
       <ul class="data-box-attachment-list">${dataBoxAttachmentRows(attachments, attachmentCount)}</ul>
     </section>
   `;
+}
+
+function resetDataBoxAttachmentFeedback() {
+  dataBoxState.attachmentNotice = "";
+  dataBoxState.attachmentError = "";
+}
+
+function dataBoxAttachmentIsSameOriginUrl(url) {
+  try {
+    return new URL(url, window.location.href).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function dataBoxAttachmentWriteWindowMessage(previewWindow, message) {
+  if (!previewWindow || previewWindow.closed) {
+    return;
+  }
+
+  try {
+    previewWindow.document.title = "Příloha datové zprávy";
+    previewWindow.document.body.innerHTML = `
+      <main style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1f2a22;">
+        <strong>${escapeHtml(message)}</strong>
+      </main>
+    `;
+  } catch {
+    // Jen fallback pro okno přílohy; čitelná hláška zůstává i v hlavním UI.
+  }
+}
+
+async function dataBoxAttachmentErrorMessage(response) {
+  const fallback = "Přílohu se nepodařilo stáhnout.";
+  const type = String(response.headers.get("Content-Type") || "").toLowerCase();
+
+  if (type.includes("application/json")) {
+    try {
+      const payload = await response.clone().json();
+      return payload?.error || payload?.message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  try {
+    const text = String(await response.clone().text() || "").trim();
+    return text && text.length <= 220 ? text : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function fetchDataBoxAttachmentBlob(url) {
+  const response = await fetch(url, { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(await dataBoxAttachmentErrorMessage(response));
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    contentType: response.headers.get("Content-Type") || blob.type || ""
+  };
+}
+
+function dataBoxAttachmentBlobWithType(blob, contentType) {
+  if (!blob || blob.type || !contentType) {
+    return blob;
+  }
+
+  return blob.slice(0, blob.size, contentType);
+}
+
+async function openDataBoxAttachment(target) {
+  const url = String(target?.dataset?.dataBoxAttachmentOpen || "").trim();
+  const filename = String(target?.dataset?.dataBoxAttachmentFilename || "priloha").trim() || "priloha";
+  const contentTypeHint = String(target?.dataset?.dataBoxAttachmentContentType || "").trim();
+
+  if (!url) {
+    dataBoxState.attachmentNotice = "";
+    dataBoxState.attachmentError = "Příloha není dostupná.";
+    render();
+    return;
+  }
+
+  const canPreviewHint = dataBoxAttachmentCanPreview(filename, contentTypeHint);
+  const previewWindow = canPreviewHint ? window.open("about:blank", "_blank") : null;
+  if (previewWindow) {
+    previewWindow.opener = null;
+    dataBoxAttachmentWriteWindowMessage(previewWindow, "Připravuji přílohu...");
+  }
+
+  dataBoxState.attachmentNotice = "Připravuji přílohu...";
+  dataBoxState.attachmentError = "";
+  render();
+
+  if (!dataBoxAttachmentIsSameOriginUrl(url)) {
+    const opened = previewWindow || window.open(url, "_blank", "noopener,noreferrer");
+    if (opened) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.location.href = url;
+      }
+      dataBoxState.attachmentNotice = "Příloha byla otevřena v nové kartě.";
+      dataBoxState.attachmentError = "";
+    } else {
+      dataBoxState.attachmentNotice = "";
+      dataBoxState.attachmentError = "Přílohu se nepodařilo otevřít automaticky.";
+    }
+    render();
+    return;
+  }
+
+  try {
+    const { blob, contentType } = await fetchDataBoxAttachmentBlob(url);
+    const previewType = contentType || contentTypeHint;
+    const canPreview = dataBoxAttachmentCanPreview(filename, previewType);
+    const typedBlob = dataBoxAttachmentBlobWithType(blob, previewType);
+
+    if (canPreview) {
+      const objectUrl = URL.createObjectURL(typedBlob);
+      const opened = previewWindow || window.open(objectUrl, "_blank", "noopener,noreferrer");
+
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.location.href = objectUrl;
+      } else if (!opened) {
+        downloadBlob(filename, typedBlob);
+        URL.revokeObjectURL(objectUrl);
+        dataBoxState.attachmentNotice = "Přílohu se nepodařilo otevřít automaticky. Soubor byl stažen.";
+        dataBoxState.attachmentError = "";
+        render();
+        return;
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      dataBoxState.attachmentNotice = "Příloha byla otevřena v nové kartě.";
+      dataBoxState.attachmentError = "";
+      render();
+      return;
+    }
+
+    if (previewWindow && !previewWindow.closed) {
+      previewWindow.close();
+    }
+    downloadBlob(filename, typedBlob);
+    dataBoxState.attachmentNotice = "Tento typ souboru se nemusí otevřít přímo v prohlížeči. Soubor byl stažen.";
+    dataBoxState.attachmentError = "";
+  } catch (error) {
+    if (previewWindow && !previewWindow.closed) {
+      dataBoxAttachmentWriteWindowMessage(previewWindow, "Přílohu se nepodařilo otevřít.");
+    }
+    dataBoxState.attachmentNotice = "";
+    dataBoxState.attachmentError = error?.message || "Přílohu se nepodařilo stáhnout.";
+  }
+
+  render();
 }
 
 function dataBoxAiEvaluationDetail(evaluation) {
@@ -17655,6 +17869,7 @@ async function loadDataBoxMessageDetail(messageId, options = {}) {
   const openReply = Boolean(options.openReply);
   const sameMessage = String(dataBoxState.selectedMessageId || "") === id;
   const summaryMessage = dataBoxState.messages.find((message) => String(message.id || "") === id) || null;
+  resetDataBoxAttachmentFeedback();
 
   if (summaryMessage && !dataBoxMessageFitsSelectedAccount(summaryMessage)) {
     dataBoxState.selectedPreviewMessageId = id;
@@ -17738,6 +17953,7 @@ async function loadDataBoxMessageInlineDetail(messageId) {
   }
 
   const summaryMessage = dataBoxState.messages.find((message) => String(message.id || "") === id) || null;
+  resetDataBoxAttachmentFeedback();
 
   if (summaryMessage && !dataBoxMessageFitsSelectedAccount(summaryMessage)) {
     dataBoxState.selectedPreviewMessageId = id;
@@ -19967,6 +20183,21 @@ function downloadText(filename, text, type = "text/plain;charset=utf-8") {
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadBlob(filename, blob) {
+  if (!blob) {
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename || "priloha";
   document.body.append(link);
   link.click();
   link.remove();
@@ -22965,6 +23196,13 @@ document.addEventListener("click", async (event) => {
     dataBoxState.replyDraftText = "";
     dataBoxState.replyDraftError = "";
     render();
+    return;
+  }
+
+  const dataBoxAttachmentOpen = event.target.closest("[data-data-box-attachment-open]");
+  if (dataBoxAttachmentOpen) {
+    event.preventDefault();
+    void openDataBoxAttachment(dataBoxAttachmentOpen);
     return;
   }
 

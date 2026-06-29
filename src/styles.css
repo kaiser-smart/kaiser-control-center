@@ -18918,8 +18918,13 @@ body:has(.data-box-page) .data-box-message-card__unread-dot {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent, #2563eb) 16%, transparent);
 }
 
+body:has(.data-box-page) .data-box-message-card__actor {
+  font-weight: 400;
+}
+
 body:has(.data-box-page) .data-box-message-card--unread .data-box-message-card__actor {
   padding-left: 16px;
+  font-weight: 800;
 }
 
 body:has(.data-box-page) .data-box-message-card__select {
@@ -19174,6 +19179,11 @@ body:has(.data-box-page) .data-box-attachment-actions {
   justify-items: end;
 }
 
+body:has(.data-box-page) .data-box-attachment-actions .secondary-link {
+  min-height: 32px;
+  padding: 6px 12px;
+}
+
 body:has(.data-box-page) .data-box-attachment-open {
   min-height: 36px;
   min-width: 92px;
@@ -19196,6 +19206,17 @@ body:has(.data-box-page) .data-box-attachment-error span {
   color: inherit;
   font-size: 0.86rem;
   line-height: 1.3;
+}
+
+body:has(.data-box-page) .data-box-attachment-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 24%, var(--theme-border, var(--line)));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 7%, #ffffff);
+  color: var(--data-box-text, var(--text));
+  font-size: 0.9rem;
+  font-weight: 750;
 }
 
 body:has(.data-box-page) .data-box-attachment-empty {
