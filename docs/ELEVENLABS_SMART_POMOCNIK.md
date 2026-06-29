@@ -213,7 +213,9 @@ Dynamic variables obsahují i `user_id`, aby serverový webhook `/api/voice/sarl
 mohl ověřit identitu přihlášeného uživatele Smart odpady.
 
 `sarlota-status` je interní read-only kontrola pro panel v Nastavení. Nevrací
-signed URL, API klíče, tokeny ani hodnoty osobních dynamic variables.
+signed URL, API klíče, tokeny, prompt ani hodnoty osobních dynamic variables.
+Pokud má backend `ELEVENLABS_API_KEY` a Agent ID, ověří agenta read-only přes
+ElevenLabs API a vrátí pouze odvozené stavy pro first message, model a tools.
 
 ## Log AI akcí
 

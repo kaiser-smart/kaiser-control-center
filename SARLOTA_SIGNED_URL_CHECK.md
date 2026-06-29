@@ -4,6 +4,8 @@ Datum kontroly: 2026-06-29
 
 Auditový soubor `SARLOTA_ELEVENLABS_DIRECT_AUDIT.md` jsem v aktuálním worktree nenašel. Kontrola proto navazuje na zadání auditu a na aktuální zdrojový stav projektu.
 
+Aktualizace: stavový endpoint `GET /api/ai/elevenlabs/sarlota-status` nově při dostupné serverové konfiguraci čte ElevenLabs agenta read-only přes `GET /v1/convai/agents/:agent_id`. Do UI a odpovědi vrací jen odvozené stavy, názvy tools a model, nevrací prompt, API key, signed URL, tokeny ani celý agent config.
+
 ## 1. Endpoint existuje
 
 OK. Endpoint existuje v `functions/api/ai/elevenlabs/signed-url.js`.
@@ -118,7 +120,7 @@ search_user
 get_user_access_summary
 ```
 
-NEOVĚŘENO zůstává skutečné nastavení tools v ElevenLabs dashboardu / ElevenLabs API, protože Tools tab v dashboardu podle auditu spadl a v tomto běhu nebyl použit živý read-only ElevenLabs API přístup.
+Status endpoint nově umí ověřit skutečné nastavení tools v ElevenLabs přes read-only API, pokud má backend k dispozici `ELEVENLABS_API_KEY` a Agent ID. Pokud API není dostupné, panel ponechá stav `NEOVĚŘENO` nebo `chyba` podle odpovědi API.
 
 ## 7. Co je OK
 
@@ -134,12 +136,13 @@ NEOVĚŘENO zůstává skutečné nastavení tools v ElevenLabs dashboardu / Ele
 - Přidaný stavový endpoint `/api/ai/elevenlabs/sarlota-status` nevrací signed URL ani secrety.
 - Přidaný panel `Šarlota` je read-only.
 - Lokální tool names sedí mezi kódem a dokumentací.
+- Status endpoint má připravené read-only ověření ElevenLabs agenta pro model, first message a tools.
 
 ## 8. Co je NEOVĚŘENO
 
-- Živé nastavení agenta `Chytré odpadky – Šarlota` v ElevenLabs dashboardu.
-- Jestli má ElevenLabs agent opravdu model `GPT-5.1`.
-- Jestli jsou tools v ElevenLabs dashboardu skutečně založené a aktivní.
+- Živé nastavení agenta `Chytré odpadky – Šarlota` v ElevenLabs dashboardu zůstává závislé na dostupném read-only API volání z backendu.
+- Jestli má ElevenLabs agent opravdu model `GPT-5.1` zůstává `NEOVĚŘENO`, dokud produkční status endpoint úspěšně nepřečte agenta.
+- Jestli jsou tools v ElevenLabs dashboardu skutečně založené a aktivní zůstává `NEOVĚŘENO`, dokud produkční status endpoint úspěšně nepřečte agenta.
 - Jestli produkční Cloudflare secrets obsahují správný `ELEVENLABS_API_KEY`.
 - Jestli produkční Cloudflare env obsahuje správné Agent ID pro `ELEVENLABS_AGENT_ID_SARLOTA`.
 - Živý call na ElevenLabs signed-url API nebyl proveden, aby se nevypisovala signed URL ani se nemanipulovalo se secret konfigurací.

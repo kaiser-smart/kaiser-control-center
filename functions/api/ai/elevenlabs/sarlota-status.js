@@ -5,6 +5,8 @@ import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClient
 
 const SARLOTA_AGENT_NAME = "Chytré odpadky – Šarlota";
 const OPENAI_MODEL_EXPECTED_IN_ELEVENLABS = "GPT-5.1";
+const OPENAI_MODEL_EXPECTED_NORMALIZED = "gpt51";
+const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const SARLOTA_ASSISTANT = {
   id: "sarlota",
   name: "Šarlota",
@@ -43,6 +45,14 @@ function cleanString(value) {
   return String(value ?? "").trim();
 }
 
+function normalizeStatusText(value) {
+  return cleanString(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase();
+}
+
 function agentIdFor(env) {
   return SARLOTA_ASSISTANT.agentEnvKeys
     .map((key) => cleanString(env?.[key]))
@@ -51,6 +61,170 @@ function agentIdFor(env) {
 
 function missingRequiredVariables(dynamicVariables) {
   return REQUIRED_DYNAMIC_VARIABLES.filter((key) => !cleanString(dynamicVariables?.[key]));
+}
+
+function getPathValue(source, path) {
+  return path.reduce((value, key) => {
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+
+    return value[key];
+  }, source);
+}
+
+function walkObject(value, visitor, path = []) {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => walkObject(item, visitor, [...path, index]));
+    return;
+  }
+
+  Object.entries(value).forEach(([key, child]) => {
+    visitor(child, key, path);
+    walkObject(child, visitor, [...path, key]);
+  });
+}
+
+function stringValuesByKey(source, keys) {
+  const normalizedKeys = new Set(keys.map(normalizeStatusText));
+  const values = [];
+
+  walkObject(source, (value, key) => {
+    if (typeof value === "string" && normalizedKeys.has(normalizeStatusText(key))) {
+      values.push(cleanString(value));
+    }
+  });
+
+  return values.filter(Boolean);
+}
+
+function firstMessageFromAgent(agentConfig) {
+  const priorityPaths = [
+    ["conversation_config", "agent", "first_message"],
+    ["conversation_config", "agent", "firstMessage"],
+    ["conversation_config", "agent", "prompt", "first_message"],
+    ["conversation_config", "agent", "prompt", "firstMessage"]
+  ];
+
+  for (const path of priorityPaths) {
+    const value = cleanString(getPathValue(agentConfig, path));
+    if (value) {
+      return value;
+    }
+  }
+
+  return stringValuesByKey(agentConfig, ["first_message", "firstMessage"])[0] || "";
+}
+
+function modelFromAgent(agentConfig) {
+  const priorityPaths = [
+    ["conversation_config", "agent", "prompt", "llm"],
+    ["conversation_config", "agent", "prompt", "model"],
+    ["conversation_config", "agent", "prompt", "model_id"],
+    ["conversation_config", "agent", "llm"],
+    ["conversation_config", "agent", "model"]
+  ];
+
+  for (const path of priorityPaths) {
+    const value = cleanString(getPathValue(agentConfig, path));
+    if (value) {
+      return value;
+    }
+  }
+
+  return stringValuesByKey(agentConfig, ["llm", "model", "model_id"])
+    .find((value) => normalizeStatusText(value).includes("gpt")) || "";
+}
+
+function collectToolName(tool, names) {
+  if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
+    return;
+  }
+
+  const name = cleanString(tool.name || tool.tool_name || tool.toolName);
+  if (name) {
+    names.add(name);
+  }
+}
+
+function toolNamesFromAgent(agentConfig) {
+  const names = new Set();
+
+  walkObject(agentConfig, (value, key) => {
+    if (Array.isArray(value) && normalizeStatusText(key).includes("tool")) {
+      value.forEach((item) => collectToolName(item, names));
+    }
+
+    if (value && typeof value === "object" && normalizeStatusText(key).includes("tool")) {
+      collectToolName(value, names);
+    }
+  });
+
+  return [...names].sort((a, b) => a.localeCompare(b, "cs"));
+}
+
+function safeAgentNameMatches(agentConfig) {
+  return cleanString(agentConfig?.name) === SARLOTA_AGENT_NAME;
+}
+
+async function readElevenLabsAgentConfig({ apiKey, agentId }) {
+  if (!apiKey || !agentId) {
+    return {
+      verified: false,
+      status: "unverified",
+      reason: "missing_configuration"
+    };
+  }
+
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${encodeURIComponent(agentId)}`, {
+      method: "GET",
+      headers: {
+        "xi-api-key": apiKey,
+        Accept: "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      return {
+        verified: false,
+        status: "error",
+        upstreamStatus: response.status,
+        reason: "agent_read_failed"
+      };
+    }
+
+    const agentConfig = await response.json();
+    const observedModel = modelFromAgent(agentConfig);
+    const modelMatches = normalizeStatusText(observedModel) === OPENAI_MODEL_EXPECTED_NORMALIZED;
+    const firstMessage = firstMessageFromAgent(agentConfig);
+    const firstMessageMatches = cleanString(firstMessage) === FIRST_MESSAGE_TEMPLATE;
+    const configuredToolNames = toolNamesFromAgent(agentConfig);
+    const toolComparison = compareToolNames(configuredToolNames);
+
+    return {
+      verified: true,
+      status: "ok",
+      agentNameMatches: safeAgentNameMatches(agentConfig),
+      observedModel,
+      modelMatches,
+      firstMessageMatches,
+      configuredToolNames,
+      missingTools: toolComparison.missingTools,
+      extraTools: toolComparison.extraTools,
+      toolsMatch: toolComparison.missingTools.length === 0
+    };
+  } catch {
+    return {
+      verified: false,
+      status: "error",
+      reason: "agent_read_failed"
+    };
+  }
 }
 
 function compareToolNames(actualNames) {
@@ -79,8 +253,13 @@ function radimVocativeFixtureOk() {
 
 export async function sarlotaStatusPayload(env, user) {
   const apiKeyPresent = Boolean(cleanString(env?.ELEVENLABS_API_KEY));
-  const agentIdPresent = Boolean(agentIdFor(env));
+  const agentId = agentIdFor(env);
+  const agentIdPresent = Boolean(agentId);
   const configured = apiKeyPresent && agentIdPresent;
+  const elevenLabsAgentConfig = await readElevenLabsAgentConfig({
+    apiKey: cleanString(env?.ELEVENLABS_API_KEY),
+    agentId
+  });
   const introAnnouncement = await sarlotaIntroAnnouncementForAi(env, user, SARLOTA_ASSISTANT);
   const dynamicVariables = {
     ...userDynamicVariablesForAi(user),
@@ -95,6 +274,20 @@ export async function sarlotaStatusPayload(env, user) {
   const currentUserIsRadim = normalizeAiSearch(userFirstName) === "radim";
   const currentVocativePresent = Boolean(cleanString(dynamicVariables.user_first_name_vocative));
   const radimFixtureOk = radimVocativeFixtureOk();
+  const liveAgentVerified = Boolean(elevenLabsAgentConfig.verified);
+  const liveAgentError = elevenLabsAgentConfig.status === "error";
+  const liveAgentNameStatus = liveAgentVerified
+    ? (elevenLabsAgentConfig.agentNameMatches ? "ok" : "error")
+    : "ok";
+  const firstMessageStatus = cleanString(dynamicVariables.intro_announcement)
+    ? (liveAgentVerified ? (elevenLabsAgentConfig.firstMessageMatches ? "ok" : "error") : "ok")
+    : "error";
+  const toolsStatus = liveAgentVerified
+    ? (elevenLabsAgentConfig.toolsMatch && toolComparison.matchesDocumentation ? "ok" : "error")
+    : (toolComparison.matchesDocumentation ? "unverified" : "error");
+  const modelStatus = liveAgentVerified
+    ? (elevenLabsAgentConfig.modelMatches ? "ok" : "error")
+    : (liveAgentError ? "error" : "unverified");
 
   return {
     generatedAt: new Date().toISOString(),
@@ -105,20 +298,25 @@ export async function sarlotaStatusPayload(env, user) {
     agent: {
       assistantId: "sarlota",
       name: SARLOTA_AGENT_NAME,
-      status: "ok"
+      status: liveAgentNameStatus,
+      verifiedInElevenLabs: liveAgentVerified
     },
     elevenLabs: {
-      status: configured ? "configured" : "error",
+      status: configured ? (liveAgentError ? "error" : "configured") : "error",
       configured,
       apiKeyPresent,
       agentIdPresent,
-      upstreamVerified: false
+      upstreamVerified: liveAgentVerified,
+      readOnlyAgentCheckStatus: elevenLabsAgentConfig.status,
+      upstreamStatus: elevenLabsAgentConfig.upstreamStatus || null
     },
     firstMessage: {
-      status: cleanString(dynamicVariables.intro_announcement) ? "ok" : "error",
+      status: firstMessageStatus,
       variable: "intro_announcement",
-      template: "{{intro_announcement}}",
-      source: "dynamic_variables"
+      template: FIRST_MESSAGE_TEMPLATE,
+      source: "dynamic_variables",
+      verifiedInElevenLabs: liveAgentVerified,
+      matchesElevenLabsAgent: liveAgentVerified ? elevenLabsAgentConfig.firstMessageMatches : null
     },
     personalization: {
       status: missingVariables.length ? "error" : "ok",
@@ -135,19 +333,23 @@ export async function sarlotaStatusPayload(env, user) {
       radimFixtureOk
     },
     openAiModelInElevenLabs: {
-      status: "unverified",
+      status: modelStatus,
       expectedModel: OPENAI_MODEL_EXPECTED_IN_ELEVENLABS,
-      verifiedInElevenLabs: false
+      observedModel: liveAgentVerified ? cleanString(elevenLabsAgentConfig.observedModel) : "",
+      verifiedInElevenLabs: liveAgentVerified
     },
     tools: {
-      status: toolComparison.matchesDocumentation ? "unverified" : "error",
+      status: toolsStatus,
       localSchemaStatus: toolComparison.matchesDocumentation ? "ok" : "error",
-      verifiedInElevenLabs: false,
-      verificationMethod: "local_client_schema_vs_documentation",
+      verifiedInElevenLabs: liveAgentVerified,
+      verificationMethod: liveAgentVerified
+        ? "elevenlabs_read_only_agent_api_and_local_client_schema"
+        : "local_client_schema_vs_documentation",
       expectedToolNames: EXPECTED_CLIENT_TOOL_NAMES,
-      configuredClientToolNames: clientToolNames,
-      missingTools: toolComparison.missingTools,
-      extraTools: toolComparison.extraTools
+      configuredClientToolNames: liveAgentVerified ? elevenLabsAgentConfig.configuredToolNames : clientToolNames,
+      localClientToolNames: clientToolNames,
+      missingTools: liveAgentVerified ? elevenLabsAgentConfig.missingTools : toolComparison.missingTools,
+      extraTools: liveAgentVerified ? elevenLabsAgentConfig.extraTools : toolComparison.extraTools
     },
     signedUrlEndpoint: {
       status: configured ? "ok" : "error",

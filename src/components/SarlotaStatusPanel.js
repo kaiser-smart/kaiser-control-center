@@ -47,10 +47,53 @@ function toolDetail(tools = null) {
     return "neověřeno";
   }
 
-  const localStatus = tools.localSchemaStatus === "ok" ? "lokální schémata OK" : "lokální schémata mají rozdíl";
   const count = Array.isArray(tools.configuredClientToolNames) ? tools.configuredClientToolNames.length : 0;
+  const missingCount = Array.isArray(tools.missingTools) ? tools.missingTools.length : 0;
+
+  if (tools.verifiedInElevenLabs && tools.status === "ok") {
+    return `ElevenLabs OK, ${count} toolů ověřeno`;
+  }
+
+  if (tools.verifiedInElevenLabs && missingCount) {
+    return `ElevenLabs chyba, chybí ${missingCount} toolů`;
+  }
+
+  const localStatus = tools.localSchemaStatus === "ok" ? "lokální schémata OK" : "lokální schémata mají rozdíl";
 
   return `${localStatus}, ElevenLabs dashboard neověřen, ${count} toolů v kódu`;
+}
+
+function modelDetail(model = null) {
+  if (!model) {
+    return "GPT-5.1 / neověřeno";
+  }
+
+  const expected = model.expectedModel || "GPT-5.1";
+  if (model.verifiedInElevenLabs && model.status === "ok") {
+    return `${expected} ověřeno v ElevenLabs`;
+  }
+
+  if (model.verifiedInElevenLabs && model.status === "error") {
+    return `očekáváno ${expected}, v ElevenLabs nesedí`;
+  }
+
+  return `${expected} / neověřeno`;
+}
+
+function firstMessageDetail(firstMessage = null) {
+  if (!firstMessage) {
+    return "intro_announcement";
+  }
+
+  if (firstMessage.verifiedInElevenLabs && firstMessage.status === "ok") {
+    return "intro_announcement ověřeno v ElevenLabs";
+  }
+
+  if (firstMessage.verifiedInElevenLabs && firstMessage.status === "error") {
+    return "first message v ElevenLabs nesedí";
+  }
+
+  return firstMessage.variable || "intro_announcement";
 }
 
 export function SarlotaStatusPanel({
@@ -61,7 +104,9 @@ export function SarlotaStatusPanel({
   const data = status || {};
   const generatedAt = data.generatedAt ? new Date(data.generatedAt).toLocaleString("cs-CZ") : "neověřeno";
   const elevenLabsDetail = data.elevenLabs
-    ? (data.elevenLabs.configured ? "server má potřebnou konfiguraci" : "chybí serverová konfigurace")
+    ? (data.elevenLabs.upstreamVerified
+      ? "agent ověřen read-only přes ElevenLabs API"
+      : (data.elevenLabs.configured ? "server má potřebnou konfiguraci" : "chybí serverová konfigurace"))
     : "neověřeno";
   const vocativeDetail = data.vocative
     ? (data.vocative.radimFixtureOk ? "test vocativu OK" : "čeká na ověření")
@@ -73,10 +118,10 @@ export function SarlotaStatusPanel({
       elevenLabsDetail
     ),
     statusRow("Agent", data.agent?.status || "unverified", data.agent?.name || "Chytré odpadky – Šarlota"),
-    statusRow("První zpráva", data.firstMessage?.status || "unverified", data.firstMessage?.variable || "intro_announcement"),
+    statusRow("První zpráva", data.firstMessage?.status || "unverified", firstMessageDetail(data.firstMessage)),
     statusRow("Personalizace", data.personalization?.status || "unverified", data.personalization?.source || "přihlášený uživatel"),
     statusRow("Vocativ uživatele", data.vocative?.status || "unverified", vocativeDetail),
-    statusRow("OpenAI model v EL", data.openAiModelInElevenLabs?.status || "unverified", `${data.openAiModelInElevenLabs?.expectedModel || "GPT-5.1"} / neověřeno`),
+    statusRow("OpenAI model v EL", data.openAiModelInElevenLabs?.status || "unverified", modelDetail(data.openAiModelInElevenLabs)),
     statusRow("Tools", data.tools?.status || "unverified", toolDetail(data.tools)),
     statusRow(
       "Signed-url endpoint",
