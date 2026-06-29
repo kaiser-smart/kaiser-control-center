@@ -149,6 +149,58 @@ function normalizeStatus(value) {
   return MESSAGE_STATUSES.has(status) ? status : "";
 }
 
+function messageObservedDataBoxId(message) {
+  const direction = normalizeDirection(message?.direction) || "received";
+  return cleanString(direction === "sent" ? message?.senderBoxId : message?.recipientBoxId);
+}
+
+function observedDataBoxIds(messages = []) {
+  const seen = new Set();
+  for (const message of messages) {
+    const observedId = messageObservedDataBoxId(message);
+    if (observedId) {
+      seen.add(observedId);
+    }
+  }
+  return Array.from(seen);
+}
+
+function assertAccountMessageSource(account, messages = []) {
+  const expectedIsdsId = cleanString(account?.isdsId);
+  const observedIds = observedDataBoxIds(messages);
+  const slot = Number(account?.slot || 0);
+  const label = cleanString(account?.label || account?.id || "Datova schranka");
+
+  if (observedIds.length > 1) {
+    throw new DataBoxStoreError(
+      `${label}: ISDS vratilo zpravy pro vice datovych schranek (${observedIds.join(", ")}). Zkontrolujte login, heslo a DATA_BOX_ISDS_ID_${slot || ""}.`,
+      409,
+      "data_box_isds_mapping_ambiguous"
+    );
+  }
+
+  if (!expectedIsdsId && slot > 1 && observedIds.length) {
+    throw new DataBoxStoreError(
+      `${label}: chybi DATA_BOX_ISDS_ID_${slot} pro kontrolu mapovani. Sync by mohl ulozit zpravy pod spatnou firmu, proto byl zastaven.`,
+      409,
+      "data_box_isds_id_missing"
+    );
+  }
+
+  if (expectedIsdsId && observedIds.length && !observedIds.includes(expectedIsdsId)) {
+    throw new DataBoxStoreError(
+      `${label}: prihlaseni vratilo jinou datovou schranku (${observedIds[0]}) nez ocekavana DATA_BOX_ISDS_ID_${slot || ""} (${expectedIsdsId}). Zkontrolujte login, heslo a ID schranky.`,
+      409,
+      "data_box_isds_mapping_mismatch"
+    );
+  }
+
+  return {
+    expectedIsdsId,
+    observedIsdsId: observedIds[0] || ""
+  };
+}
+
 function dbError(error) {
   const message = cleanString(error?.message);
   if (message.includes("no such table")) {
@@ -460,6 +512,24 @@ async function updateDataBoxSyncState(db, dataBoxId, patch) {
       patch.lastSyncMessage,
       dataBoxId
     )
+    .run();
+}
+
+async function updateDataBoxIsdsId(db, dataBoxId, isdsId) {
+  const normalizedIsdsId = cleanString(isdsId);
+  if (!dataBoxId || !normalizedIsdsId) {
+    return;
+  }
+
+  await db
+    .prepare(`
+      UPDATE data_boxes
+      SET
+        isds_id = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    .bind(normalizedIsdsId, dataBoxId)
     .run();
 }
 
@@ -829,6 +899,12 @@ async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
 
   try {
     const result = await fetchDataBoxMessageMetadata(env, account);
+    const sourceCheck = assertAccountMessageSource(account, result.messages);
+    const verifiedIsdsId = sourceCheck.expectedIsdsId || sourceCheck.observedIsdsId;
+    if (verifiedIsdsId) {
+      await updateDataBoxIsdsId(db, dataBox.id, verifiedIsdsId);
+    }
+
     let messagesCreated = 0;
     let messagesUpdated = 0;
     let attachmentsFound = 0;

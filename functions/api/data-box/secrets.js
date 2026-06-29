@@ -112,6 +112,52 @@ function accountConfigForTest(env, target, overrides = {}) {
   };
 }
 
+function observedDataBoxIdForMessage(message) {
+  const direction = cleanString(message?.direction).toLowerCase();
+  return cleanString(direction === "sent" ? message?.senderBoxId : message?.recipientBoxId);
+}
+
+function observedDataBoxIds(messages = []) {
+  const ids = new Set();
+  for (const message of messages) {
+    const id = observedDataBoxIdForMessage(message);
+    if (id) ids.add(id);
+  }
+  return Array.from(ids);
+}
+
+function testResultMessage(config, result) {
+  const observedIds = observedDataBoxIds(result.messages || []);
+  const expectedIsdsId = cleanString(config.isdsId);
+  const counts = `${Number(result.receivedCount || 0)} přijatých, ${Number(result.sentCount || 0)} odeslaných`;
+
+  if (observedIds.length > 1) {
+    return {
+      status: "error",
+      message: `Přihlášení proběhlo, ale ISDS vrátilo více ID schránek: ${observedIds.join(", ")}. Zkontrolujte login a ID DS.`
+    };
+  }
+
+  if (expectedIsdsId && observedIds.length && observedIds[0] !== expectedIsdsId) {
+    return {
+      status: "error",
+      message: `Přihlášení proběhlo, ale vrací jinou DS (${observedIds[0]}) než zadané ID DS (${expectedIsdsId}). Heslo může být správné, ale účet/ID nejsou spárované.`
+    };
+  }
+
+  if (!expectedIsdsId && observedIds.length) {
+    return {
+      status: "ok",
+      message: `Přihlášení OK. Test přečetl metadata: ${counts}. Vrácené ID DS: ${observedIds[0]}.`
+    };
+  }
+
+  return {
+    status: "ok",
+    message: `Přihlášení OK. Test přečetl metadata: ${counts}.`
+  };
+}
+
 async function testTarget(env, target, overrides) {
   const config = accountConfigForTest(env, target, overrides);
   if (!config.hasUsername) {
@@ -131,10 +177,11 @@ async function testTarget(env, target, overrides) {
 
   try {
     const result = await fetchDataBoxMessageMetadata(env, config);
+    const checked = testResultMessage(config, result);
     return {
       target,
-      status: "ok",
-      message: `Přihlášení OK. Test přečetl metadata: ${Number(result.receivedCount || 0)} přijatých, ${Number(result.sentCount || 0)} odeslaných.`
+      status: checked.status,
+      message: checked.message
     };
   } catch (error) {
     return {
@@ -262,6 +309,7 @@ function page(env, options = {}) {
           <button type="submit" name="action" value="test">Otestovat zadaná hesla</button>
           <button class="secondary" type="submit" name="action" value="prepare">Připravit uložení do Cloudflare</button>
         </div>
+        <p class="hint">ID DS slouží ke kontrole, že login a heslo opravdu patří ke správné firmě. Když zadané ID nesedí, test zobrazí vrácené ID DS a sync se bezpečně zastaví místo uložení cizích zpráv.</p>
         <p class="hint">Uložení do Cloudflare secrets musí proběhnout přes bezpečný Cloudflare mechanismus. Tato stránka hesla nevypisuje a po odeslání je nevrací zpět.</p>
         <div class="command">
           <code>wrangler pages secret put DATA_BOX_ISDS_USERNAME_2 --project-name kaiser-control-center # 3rw2ez</code>
