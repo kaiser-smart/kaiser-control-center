@@ -457,6 +457,7 @@ export async function fetchDataBoxMessageAttachments(env = {}, account = null, m
     ? ["SignedSentMessageDownload", "MessageDownload", "SignedMessageDownload", "GetMessage"]
     : ["MessageDownload", "SignedMessageDownload", "GetMessage"];
   let lastError = null;
+  const operationErrors = [];
 
   for (const operation of operations) {
     try {
@@ -472,10 +473,17 @@ export async function fetchDataBoxMessageAttachments(env = {}, account = null, m
       };
     } catch (error) {
       lastError = error;
+      operationErrors.push({
+        operation,
+        code: cleanString(error?.code || error?.name || "data_box_isds_operation_failed"),
+        message: cleanString(error?.message || "ISDS operace selhala.").slice(0, 240)
+      });
     }
   }
 
-  throw lastError || new DataBoxIsdsError("ISDS detail zpravy se nepodarilo nacist.", 502, "data_box_isds_message_download_failed");
+  const finalError = lastError || new DataBoxIsdsError("ISDS detail zpravy se nepodarilo nacist.", 502, "data_box_isds_message_download_failed");
+  finalError.operationErrors = operationErrors;
+  throw finalError;
 }
 
 export async function fetchDataBoxMessageMetadata(env = {}, account = null) {

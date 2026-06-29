@@ -127,6 +127,12 @@ async function sha256Hex(bytes) {
     .join("");
 }
 
+function shortDiagnostic(value, maxLength = 180) {
+  return cleanString(value)
+    .replace(/\s+/g, " ")
+    .slice(0, maxLength);
+}
+
 function messageRecordId(dataBoxId, direction, isdsMessageId) {
   const safeDataBoxId = safeIdPart(dataBoxId) || "primary";
   const safeMessageId = safeIdPart(isdsMessageId) || idValue("isds-message");
@@ -642,11 +648,18 @@ async function syncDataBoxMessageAttachments(db, env, account, dataBox, message,
     detail = await fetchDataBoxMessageAttachments(env, account, message);
   } catch (error) {
     const errorCode = cleanString(error?.code || "data_box_attachment_detail_failed");
+    const firstOperationError = Array.isArray(error?.operationErrors) ? error.operationErrors[0] : null;
+    const errorMessage = shortDiagnostic(
+      firstOperationError
+        ? `${firstOperationError.operation}: ${firstOperationError.message}`
+        : error?.message
+    );
     console.warn("data_box.attachment_check", {
       messageId,
       attachmentsCount: 0,
       downloadStatus: "error",
       errorCode,
+      errorMessage,
       checkedAt: new Date().toISOString()
     });
     return {
@@ -655,7 +668,8 @@ async function syncDataBoxMessageAttachments(db, env, account, dataBox, message,
       failed: 1,
       metadataOnly: 0,
       skipped: 0,
-      errorCode
+      errorCode,
+      errorMessage
     };
   }
 
@@ -822,6 +836,7 @@ async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
     let attachmentsDownloaded = 0;
     let attachmentsFailed = 0;
     let attachmentsMetadataOnly = 0;
+    let firstAttachmentError = "";
 
     for (const message of result.messages) {
       const writeState = await upsertMessageMetadata(db, dataBox.id, message);
@@ -835,6 +850,9 @@ async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
         attachmentsDownloaded += numberValue(attachmentResult.downloaded);
         attachmentsFailed += numberValue(attachmentResult.failed);
         attachmentsMetadataOnly += numberValue(attachmentResult.metadataOnly);
+        if (!firstAttachmentError && attachmentResult.errorMessage) {
+          firstAttachmentError = shortDiagnostic(`${attachmentResult.errorCode}: ${attachmentResult.errorMessage}`, 220);
+        }
       }
     }
 
@@ -842,7 +860,10 @@ async function syncDataBoxAccount(db, env, account, currentUser, startedAt) {
     const attachmentSummary = attachmentsFound
       ? ` Prilohy: ${attachmentsDownloaded} ulozenych, ${attachmentsMetadataOnly} jen metadata, ${attachmentsFailed} chyb.`
       : "";
-    const message = `${dataBox.label}: read-only ISDS sync ulozil metadata: ${result.messages.length} obalek, ${messagesCreated} novych, ${messagesUpdated} aktualizovanych.${attachmentSummary}`;
+    const attachmentErrorSummary = firstAttachmentError
+      ? ` Prvni chyba priloh: ${firstAttachmentError}.`
+      : "";
+    const message = `${dataBox.label}: read-only ISDS sync ulozil metadata: ${result.messages.length} obalek, ${messagesCreated} novych, ${messagesUpdated} aktualizovanych.${attachmentSummary}${attachmentErrorSummary}`;
     const sync = await finishSyncRun(db, runId, {
       finishedAt,
       status: "success",
