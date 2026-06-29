@@ -15458,6 +15458,10 @@ function dataBoxActionIsAiBoost(action = {}) {
     || String(action.actionType || "") === "ai_boost";
 }
 
+function dataBoxActionShouldShowInAiBoost(action = {}) {
+  return dataBoxActionIsAiBoost(action) || dataBoxAiBoostIsWaiting(action);
+}
+
 function dataBoxAiBoostActionLabel(action = {}) {
   const recommended = String(action.result?.recommendedAction || action.actionType || "review").toLowerCase();
   const labels = {
@@ -15591,7 +15595,7 @@ function dataBoxAiBoostPanel(user) {
         <div>
           <span>Datová schránka</span>
           <h2 id="data-box-ai-boost-title">AI Boost</h2>
-          <p>AI připravuje pouze koncepty. Archivace, e-mail nebo odpověď se provedou až po potvrzení uživatele.</p>
+          <p>AI a pravidla připravují pouze koncepty. Archivace, e-mail nebo odpověď se provedou až po potvrzení uživatele.</p>
         </div>
         <button class="primary-action" type="button" data-data-box-ai-run ${!canManage || dataBoxState.aiBoostLoading ? "disabled" : ""}>
           ${escapeHtml(dataBoxState.aiBoostLoading ? "Spouštím..." : "Spustit AI Boost")}
@@ -18471,7 +18475,7 @@ async function loadDataBoxData(options = {}) {
       ]);
       dataBoxState.messages = messagesResult.messages || [];
       dataBoxState.syncRuns = syncRunsResult.runs || [];
-      dataBoxState.aiBoostActions = (actionsResult.actions || []).filter(dataBoxActionIsAiBoost);
+      dataBoxState.aiBoostActions = (actionsResult.actions || []).filter(dataBoxActionShouldShowInAiBoost);
       dataBoxState.aiBoostLoaded = true;
     }
 
