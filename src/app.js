@@ -15110,7 +15110,6 @@ function dataBoxMessageInbox(title, direction) {
         </div>
         ${dataBoxInboxSearch()}
         ${dataBoxQuickFilters()}
-        ${dataBoxMessageFilters(direction)}
         <div class="data-box-message-list" aria-label="${escapeHtml(sectionTitle)}">
           ${notice ? dataBoxInboxNoticeMarkup(notice) : rows.map((message) => dataBoxMessageCard(message, selectedPreview?.id === message.id)).join("")}
         </div>
@@ -22239,8 +22238,9 @@ document.addEventListener("click", async (event) => {
 
   const dataBoxPreviewMessage = event.target.closest("[data-data-box-preview-message]");
   if (dataBoxPreviewMessage) {
-    dataBoxState.selectedPreviewMessageId = dataBoxPreviewMessage.dataset.dataBoxPreviewMessage || "";
-    render();
+    const messageId = dataBoxPreviewMessage.dataset.dataBoxPreviewMessage || "";
+    dataBoxState.selectedPreviewMessageId = messageId;
+    void loadDataBoxMessageDetail(messageId);
     return;
   }
 

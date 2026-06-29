@@ -11073,15 +11073,28 @@ body:has(.data-box-page) {
   border-bottom: 1px solid var(--theme-border, var(--line));
 }
 
+.data-box-message-card::before,
+.data-box-message-card--selected::before,
+.data-box-message-card--priority-urgent::before,
+.data-box-message-card--priority-legal::before,
+.data-box-message-card--priority-error::before,
+.data-box-message-card--priority-info::before {
+  display: none;
+  content: none;
+}
+
 .data-box-message-card:hover,
 .data-box-message-card--selected {
-  background: transparent;
   box-shadow: none;
   transform: none;
 }
 
-.data-box-message-card--selected::before {
-  content: none;
+.data-box-message-card:hover {
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 5%, transparent);
+}
+
+.data-box-message-card--selected {
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 9%, transparent);
 }
 
 .data-box-message-card__select {
