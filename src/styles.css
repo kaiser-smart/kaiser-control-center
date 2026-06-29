@@ -18962,7 +18962,7 @@ body:has(.data-box-page) .data-box-message-card__extras {
 body:has(.data-box-page) .data-box-message-card__extras {
   display: inline-flex;
   flex: 0 0 auto;
-  max-width: 46%;
+  max-width: 56%;
   min-width: 0;
   gap: 6px;
   align-items: center;
@@ -18990,7 +18990,7 @@ body:has(.data-box-page) .data-box-company-badge {
   display: inline-flex;
   flex: 0 0 auto;
   min-height: 21px;
-  max-width: 82px;
+  max-width: 116px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -19407,7 +19407,7 @@ body:has(.data-box-page) .data-box-side-status__ai small {
   }
 
   body:has(.data-box-page) .data-box-company-badge {
-    max-width: 58px;
+    max-width: 64px;
     padding-inline: 6px;
   }
 

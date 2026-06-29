@@ -13798,15 +13798,25 @@ function dataBoxStatusLabel(value) {
 }
 
 const DATA_BOX_ACCOUNT_BOXES = [
-  { id: "kaiser-primary", shortLabel: "KS", label: "Kaiser servis" },
-  { id: "kaiser-data-box-2", shortLabel: "KT", label: "Kaiser technology" },
-  { id: "kaiser-data-box-3", shortLabel: "NP", label: "Nanolab plus" },
-  { id: "kaiser-data-box-4", shortLabel: "NS", label: "Nanolab shop" },
-  { id: "kaiser-data-box-5", shortLabel: "LF", label: "LeFleur" },
-  { id: "kaiser-data-box-6", shortLabel: "KN", label: "Kaisermanův nadační fond" }
+  { id: "kaiser-primary", shortLabel: "KS", label: "Kaiser servis", badgeLabel: "KAISER", badgeTone: "kaiser" },
+  { id: "kaiser-data-box-2", shortLabel: "KT", label: "Kaiser technology", badgeLabel: "K TECH", badgeTone: "kaiser" },
+  { id: "kaiser-data-box-3", shortLabel: "NP", label: "Nanolab plus", badgeLabel: "NANO+", badgeTone: "nanolab" },
+  { id: "kaiser-data-box-4", shortLabel: "NS", label: "Nanolab shop", badgeLabel: "NANO SHOP", badgeTone: "nanolab" },
+  { id: "kaiser-data-box-5", shortLabel: "LF", label: "LeFleur", badgeLabel: "LEFLEUR", badgeTone: "lefleur" },
+  { id: "kaiser-data-box-6", shortLabel: "KN", label: "Kaisermanův nadační fond", badgeLabel: "KNF", badgeTone: "fond" }
 ];
 
 const DATA_BOX_DEFAULT_ACCOUNT_ID = "kaiser-primary";
+const DATA_BOX_BADGE_LABEL_OVERRIDES = new Map([
+  ["kaiser servis", "KAISER"],
+  ["kaiser technology", "K TECH"],
+  ["nanolab plus", "NANO+"],
+  ["nanolab shop", "NANO SHOP"],
+  ["nanolab", "NANOLAB"],
+  ["gm development", "GM DEV"],
+  ["kaisermanuv nadacni fond", "KNF"],
+  ["mane", "MANE"]
+]);
 
 const DATA_BOX_QUICK_FILTERS = [
   { id: "all", label: "Vše" },
@@ -13860,35 +13870,52 @@ function dataBoxDisplayName(dataBoxId, fallback = "") {
   return dataBoxAccountById(dataBoxId)?.label || fallback || dataBoxId || "-";
 }
 
-function dataBoxCompanyBadge(message = {}) {
-  const displayName = dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel);
-  const source = dataBoxSearchText([
-    message.dataBoxId,
-    message.dataBoxLabel,
-    displayName
-  ].filter(Boolean).join(" "));
+function dataBoxCompactBadgeLabel(value, fallback = "") {
+  const source = String(value || "").replace(/\s+/g, " ").trim();
+  const fallbackLabel = String(fallback || "").trim().toUpperCase();
 
   if (!source) {
+    return fallbackLabel;
+  }
+
+  const override = DATA_BOX_BADGE_LABEL_OVERRIDES.get(dataBoxSearchText(source));
+  if (override) {
+    return override;
+  }
+
+  const upper = source.toUpperCase();
+  if (upper.length <= 16) {
+    return upper;
+  }
+
+  const initials = source
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return initials || upper.slice(0, 16) || fallbackLabel;
+}
+
+function dataBoxCompanyBadge(message = {}) {
+  const account = dataBoxAccountById(message.dataBoxId);
+  const displayName = account?.label
+    || message.mailboxLabel
+    || message.dataBoxLabel
+    || message.dataBoxName
+    || message.companyName
+    || "";
+  const label = account?.badgeLabel || dataBoxCompactBadgeLabel(displayName, account?.shortLabel || "");
+
+  if (!label) {
     return null;
   }
 
-  if (source.includes("nanolab")) {
-    return { label: "NANOLAB", tone: "nanolab" };
-  }
-
-  if (source.includes("lefleur")) {
-    return { label: "LEFLEUR", tone: "lefleur" };
-  }
-
-  if (source.includes("nadacni") || source.includes("fond")) {
-    return { label: "FOND", tone: "fond" };
-  }
-
-  if (source.includes("kaiser")) {
-    return { label: "KAISER", tone: "kaiser" };
-  }
-
-  return null;
+  return {
+    label,
+    tone: account?.badgeTone || "default"
+  };
 }
 
 function dataBoxCompanyBadgeMarkup(message) {
@@ -15214,14 +15241,14 @@ function dataBoxMessageCard(message, selected) {
         <span class="data-box-message-card__top">
           ${unread ? `<span class="data-box-message-card__unread-dot" title="Nepřečtená zpráva" aria-label="Nepřečtená zpráva"></span>` : ""}
           <span class="data-box-message-card__actor">${escapeHtml(actor)}</span>
-          ${companyBadge}
         </span>
         <span class="data-box-message-card__bottom">
           <span class="data-box-message-card__subject">${escapeHtml(subject)}</span>
           <span class="data-box-message-card__extras" aria-label="Doplňkové informace">
-            <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
             ${dataBoxPriorityBadge(priority)}
             ${attachmentCount ? `<span class="data-box-message-card__attachment" title="${escapeHtml(attachmentLabel)}" aria-label="${escapeHtml(attachmentLabel)}">Příloha</span>` : ""}
+            ${companyBadge}
+            <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
           </span>
         </span>
       </button>
