@@ -17482,6 +17482,165 @@ body:has(.absence-page--employee-card) {
   }
 }
 
+/* Datova schranka: operational clarity pass. */
+body:has(.data-box-page) .data-box-message-inbox,
+body:has(.data-box-page) .data-box-message-list {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+body:has(.data-box-page) .data-box-message-list,
+body:has(.data-box-page) .data-box-message-card,
+body:has(.data-box-page) .data-box-message-card__select {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+body:has(.data-box-page) .data-box-page::before,
+body:has(.data-box-page) .data-box-page::after,
+body:has(.data-box-page) .data-box-inbox-header::before,
+body:has(.data-box-page) .data-box-inbox-header::after,
+body:has(.data-box-page) .data-box-message-inbox::before,
+body:has(.data-box-page) .data-box-message-inbox::after,
+body:has(.data-box-page) .data-box-message-list::before,
+body:has(.data-box-page) .data-box-message-list::after,
+body:has(.data-box-page) .data-box-message-list *::before,
+body:has(.data-box-page) .data-box-message-list *::after,
+body:has(.data-box-page) .decorative-bg,
+body:has(.data-box-page) .glass-orb,
+body:has(.data-box-page) .inbox-orb,
+body:has(.data-box-page) .ds-blob,
+body:has(.data-box-page) .ds-decoration {
+  display: none !important;
+  content: none !important;
+  pointer-events: none !important;
+}
+
+body:has(.data-box-page) .data-box-message-card {
+  border-left: 0 !important;
+}
+
+body:has(.data-box-page) .data-box-inbox-header__status {
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content);
+  gap: 2px 8px;
+  align-items: center;
+}
+
+body:has(.data-box-page) .data-box-inbox-header__status > span:not(.data-box-status-ring) {
+  grid-column: 2;
+}
+
+.data-box-status-ring {
+  position: relative;
+  display: inline-block;
+  grid-row: span 2;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: #8a958b;
+  box-shadow: 0 0 0 3px rgba(138, 149, 139, 0.14);
+  flex: 0 0 auto;
+}
+
+.data-box-status-ring::after {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+  content: "";
+  opacity: 0.24;
+  animation: data-box-status-pulse 1.5s ease-out infinite;
+}
+
+.data-box-status-ring--ready {
+  color: var(--theme-primary, var(--kaiser-green));
+  background: var(--theme-primary, var(--kaiser-green));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 16%, transparent);
+}
+
+.data-box-status-ring--error {
+  color: #b42318;
+  background: #b42318;
+  box-shadow: 0 0 0 4px rgba(180, 35, 24, 0.15);
+}
+
+.data-box-status-ring--waiting::after {
+  animation: none;
+}
+
+.data-box-error-notice {
+  display: grid;
+  gap: 3px;
+  max-width: 62ch;
+  padding: 8px 10px;
+  border: 1px solid rgba(180, 35, 24, 0.28);
+  background: rgba(180, 35, 24, 0.06);
+  color: #7a271a;
+}
+
+.data-box-error-notice strong {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.data-box-error-notice span {
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.data-box-side-health {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.data-box-side-health strong {
+  color: var(--data-box-text, var(--text));
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+body:has(.data-box-page) .data-box-side-card--ai,
+body:has(.data-box-page) .data-box-side-card--sync {
+  padding: 10px;
+  border: 1px solid var(--theme-border, var(--line));
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 72%, transparent);
+}
+
+body:has(.data-box-page) .data-box-side-card--ai {
+  border-color: color-mix(in srgb, var(--theme-secondary, var(--kaiser-green)) 24%, var(--theme-border, var(--line)));
+}
+
+body:has(.data-box-page) .data-box-side-card--sync {
+  border-color: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 28%, var(--theme-border, var(--line)));
+}
+
+@keyframes data-box-status-pulse {
+  0% {
+    opacity: 0.32;
+    transform: scale(0.74);
+  }
+
+  70% {
+    opacity: 0;
+    transform: scale(1.85);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-box-status-ring::after {
+    animation: none;
+  }
+}
+
 .data-box-detail-overlay {
   position: fixed;
   inset: 0;
@@ -18434,4 +18593,32 @@ body:has(.absence-page--employee-card) {
   .ai-voice-assistant-panel--state-processing .ai-voice-assistant-panel__mic-loader {
     animation: none;
   }
+}
+
+/* Datova schranka: final inbox safety overrides. */
+body:has(.data-box-page) .data-box-message-inbox,
+body:has(.data-box-page) .data-box-message-list {
+  isolation: isolate;
+  overflow: hidden !important;
+}
+
+body:has(.data-box-page) .data-box-message-list,
+body:has(.data-box-page) .data-box-message-card,
+body:has(.data-box-page) .data-box-message-card__select {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+body:has(.data-box-page) .data-box-page::before,
+body:has(.data-box-page) .data-box-page::after,
+body:has(.data-box-page) .data-box-message-inbox::before,
+body:has(.data-box-page) .data-box-message-inbox::after,
+body:has(.data-box-page) .data-box-message-list::before,
+body:has(.data-box-page) .data-box-message-list::after,
+body:has(.data-box-page) .data-box-message-list *::before,
+body:has(.data-box-page) .data-box-message-list *::after {
+  display: none !important;
+  content: none !important;
+  pointer-events: none !important;
 }

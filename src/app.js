@@ -14050,6 +14050,77 @@ function dataBoxConnectionState() {
   };
 }
 
+function dataBoxStatusTone(connection) {
+  if (connection.tone === "error" || dataBoxState.syncError) {
+    return "error";
+  }
+
+  if (connection.tone === "ready") {
+    return "ready";
+  }
+
+  return "waiting";
+}
+
+function dataBoxStatusRing(connection) {
+  const tone = dataBoxStatusTone(connection);
+  const label = tone === "error"
+    ? "Chyba načtení"
+    : (tone === "ready" ? "Synchronizace funguje" : "Čeká na konfiguraci");
+
+  return `
+    <span
+      class="data-box-status-ring data-box-status-ring--${escapeHtml(tone)}"
+      title="${escapeHtml(label)}"
+      aria-label="${escapeHtml(label)}"
+    ></span>
+  `;
+}
+
+function dataBoxErrorNotice(connection) {
+  const message = dataBoxState.syncError || (connection.tone === "error" ? connection.note : "");
+  if (!message) {
+    return "";
+  }
+
+  return `
+    <div class="data-box-error-notice" role="alert">
+      <strong>Chyba načtení</strong>
+      <span>${escapeHtml(message)}</span>
+    </div>
+  `;
+}
+
+function dataBoxAutoSyncInfo() {
+  return `
+    <section class="data-box-side-card data-box-side-card--sync">
+      <span>Automatické načítání</span>
+      <strong>Read-only plán: každých 30 minut</strong>
+      <small>Stav vychází z logu synchronizace. Tato obrazovka nespouští cron ani žádné odesílání.</small>
+    </section>
+  `;
+}
+
+function dataBoxAiSortingInfo(direction) {
+  const messages = dataBoxMessagesForDirection(direction);
+  const evaluated = messages.filter((message) => message.latestAiEvaluation).length;
+  const failed = messages.filter((message) => dataBoxSearchText(message.aiStatus || message.latestAiEvaluation?.status || "").includes("failed")).length;
+  const label = messages.length
+    ? `${evaluated} z ${messages.length} zpráv má AI metadata`
+    : "AI metadata nejsou v datech";
+  const note = failed
+    ? `${failed} zpráv má chybu vyhodnocení.`
+    : "Třídění je pouze informační, nic samo neodesílá ani nemaže.";
+
+  return `
+    <section class="data-box-side-card data-box-side-card--ai">
+      <span>AI třídění</span>
+      <strong>${escapeHtml(label)}</strong>
+      <small>${escapeHtml(note)}</small>
+    </section>
+  `;
+}
+
 function dataBoxCanManualSync(user) {
   return dataBoxState.apiStatus === "ready"
     && hasPermission(user, DATA_BOX_MODULE_KEY, "manage")
@@ -15053,6 +15124,7 @@ function dataBoxSupportPane(message, direction) {
         <span>Návrh vyřízení</span>
         <strong>${escapeHtml(nextStep)}</strong>
       </section>
+      ${dataBoxAiSortingInfo(direction)}
       <section class="data-box-side-card">
         <span>Typické úkony</span>
         <ul class="data-box-action-list">
@@ -15062,12 +15134,17 @@ function dataBoxSupportPane(message, direction) {
       ${dataBoxOperationalKpis(direction)}
       <section class="data-box-side-card">
         <span>Stav ISDS</span>
+        <div class="data-box-side-health data-box-side-health--${escapeHtml(dataBoxStatusTone(connection))}">
+          ${dataBoxStatusRing(connection)}
+          <strong>${escapeHtml(connection.label)}</strong>
+        </div>
         <dl class="data-box-side-status">
           <div><dt>Napojení</dt><dd>${escapeHtml(connection.label)}</dd></div>
           <div><dt>Synchronizace</dt><dd>${escapeHtml(dataBoxLastSyncLabel())}</dd></div>
           <div><dt>Schránka</dt><dd>${escapeHtml(selectedAccount ? selectedAccount.label : context.title)}</dd></div>
         </dl>
       </section>
+      ${dataBoxAutoSyncInfo()}
       ${Number.isFinite(metrics.vaultCapacity) && metrics.vaultCapacity >= 90 ? `
         <section class="data-box-side-card">
           <span>Datový trezor</span>
@@ -15404,9 +15481,11 @@ function dataBoxPage(moduleItem, user) {
           <h1 id="module-title">Datová schránka</h1>
           <p>Přijaté a odeslané zprávy, lhůty a přílohy.</p>
           <div class="data-box-inbox-header__status data-box-inbox-header__status--${escapeHtml(connection.tone)}">
+            ${dataBoxStatusRing(connection)}
             <strong>${escapeHtml(connection.label)}</strong>
             <span>${escapeHtml(connection.note)}</span>
           </div>
+          ${dataBoxErrorNotice(connection)}
           <div class="data-box-inbox-header__context">
             <strong>${escapeHtml(context.title)}</strong>
             <span>${escapeHtml(context.text)}</span>
