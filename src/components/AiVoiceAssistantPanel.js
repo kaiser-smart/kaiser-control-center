@@ -117,7 +117,7 @@ export function AiVoiceAssistantPanel({
   const statusText = demoStatus || (normalizedVoiceStatus && normalizedVoiceStatus !== "Připraven"
     ? normalizedVoiceStatus
     : fallbackStatus);
-  const microphonePath = assistant?.microphonePath || "src/assets/smart-helper-microphone.png";
+  const microphonePath = assistant?.microphonePath || "/avatars/sarlota-microphone-black.png";
   const transcriptText = String(voiceTranscript || "").trim();
   const answerText = String(voiceAnswer || "").trim();
   const noticeText = String(voiceNotice || "").trim();
@@ -174,11 +174,21 @@ export function AiVoiceAssistantPanel({
   const tags = Array.isArray(voiceTags) && voiceTags.length
     ? voiceTags
     : ["Připraven", "Bez odeslání", "Čeká na hlas"];
-  const showQuickStart = quickStart && normalizedVoiceUiState === "idle" && !voiceBusy && !demoPlaying;
+  const showTopVoiceLaunch = mode === "voice";
+  const topLaunchText = demoPlaying
+    ? "Ukázka běží"
+    : voiceBusy
+      ? primaryActionText
+      : "Spustit hlas";
+  const topLaunchHint = demoPlaying
+    ? "Ukázku zastavíš tlačítkem Zastavit."
+    : voiceBusy
+      ? statusHint
+      : "Mikrofon se spustí až po klepnutí.";
 
   return `
     <section
-      class="ai-voice-assistant-panel ai-voice-assistant-panel--state-${escapeHtml(normalizedVoiceUiState)} ${showQuickStart ? "ai-voice-assistant-panel--quick-start" : ""} ${listening ? "ai-voice-assistant-panel--listening" : ""} ${demoPlaying ? "ai-voice-assistant-panel--demo-playing" : ""} ${speakerClass}"
+      class="ai-voice-assistant-panel ai-voice-assistant-panel--state-${escapeHtml(normalizedVoiceUiState)} ${showTopVoiceLaunch ? "ai-voice-assistant-panel--quick-start" : ""} ${quickStart ? "ai-voice-assistant-panel--deep-link" : ""} ${listening ? "ai-voice-assistant-panel--listening" : ""} ${demoPlaying ? "ai-voice-assistant-panel--demo-playing" : ""} ${speakerClass}"
       role="dialog"
       aria-modal="false"
       aria-labelledby="ai-voice-assistant-title"
@@ -199,12 +209,12 @@ export function AiVoiceAssistantPanel({
       </header>
 
       <div class="ai-voice-assistant-panel__body">
-        ${showQuickStart ? `
+        ${showTopVoiceLaunch ? `
           <div class="ai-voice-assistant-panel__quick-start" aria-label="Rychlé spuštění Šarloty">
-            <button class="ai-voice-assistant-panel__quick-start-button" type="button" data-ai-start-voice>
-              Spustit hlas
+            <button class="ai-voice-assistant-panel__quick-start-button" type="button" data-ai-start-voice ${voiceBusy || demoPlaying ? "disabled" : ""}>
+              ${escapeHtml(topLaunchText)}
             </button>
-            <p>Mikrofon se spustí až po klepnutí.</p>
+            <p>${escapeHtml(topLaunchHint)}</p>
           </div>
         ` : ""}
 

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.228"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.230"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,14 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: velký mikrofon na černém pozadí",
+    text: "Hlasový panel Šarloty používá nový dodaný mikrofon a tmavý mikrofonový prostor, aby byla hlavní hlasová akce na mobilu výrazná hned na první pohled."
+  },
+  {
+    title: "HP a Šarlota: mobilní TOP responsive",
+    text: "Úvodní stránka má pevnější mobilní rozložení bez horizontálního posunu a panel Šarloty má velké tlačítko Spustit hlas přímo nahoře. Stav připojení je kompaktnější, aby na iPhonu nezabral celé okno."
+  },
   {
     title: "Šarlota: rychlý start na iPhonu",
     text: "Po otevření /sarlota z Akčního tlačítka se nahoře zobrazí velké tlačítko Spustit hlas. Mikrofon se dál nespouští automaticky a čeká na klepnutí."

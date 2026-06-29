@@ -28,6 +28,7 @@ body {
   position: relative;
   min-height: 100%;
   margin: 0;
+  overflow-x: hidden;
   font-family:
     "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
@@ -53,7 +54,7 @@ body:has(.home-hero) {
 
 body:has(.home-hero) .app-shell {
   width: min(1240px, calc(100% - 30px));
-  padding: 20px;
+  padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
 }
 
 body:has(.home-hero) .user-bar {
@@ -287,6 +288,8 @@ a {
 
 .home-hero {
   display: flex;
+  width: 100%;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
@@ -296,6 +299,7 @@ a {
 
 .home-hero__main {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   align-items: center;
   gap: 16px;
@@ -750,6 +754,7 @@ h1 {
 .module-card {
   position: relative;
   display: flex;
+  min-width: 0;
   gap: 15px;
   height: 100%;
   overflow: hidden;
@@ -801,6 +806,7 @@ h1 {
   position: relative;
   display: flex;
   flex: 0 0 48px;
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   gap: 8px;
@@ -822,10 +828,12 @@ h1 {
 
 .module-card__header {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
 }
 
 .module-card__title {
+  min-width: 0;
   overflow-wrap: normal;
   word-break: normal;
   hyphens: none;
@@ -16177,6 +16185,11 @@ body:has(.absence-page--employee-card) {
     padding: 28px 0 38px;
   }
 
+  body:has(.home-hero) .app-shell {
+    width: min(1180px, calc(100% - 18px));
+    padding: calc(10px + env(safe-area-inset-top)) 0 calc(26px + env(safe-area-inset-bottom));
+  }
+
   .user-bar {
     align-items: flex-start;
     justify-content: space-between;
@@ -16193,22 +16206,27 @@ body:has(.absence-page--employee-card) {
   }
 
   .home-hero {
-    gap: 8px;
+    width: 100%;
+    gap: 10px;
     padding-bottom: 10px;
   }
 
   .home-hero__main {
     display: grid;
-    gap: 4px;
+    width: 100%;
+    gap: 5px;
+    justify-items: start;
   }
 
   .home-status {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+    gap: 8px;
   }
 
   .home-status__item {
     min-width: 0;
-    flex: 1 1 0;
     padding: 7px 10px;
   }
 
@@ -16282,6 +16300,7 @@ body:has(.absence-page--employee-card) {
   .home-subtitle {
     max-width: 100%;
     font-size: 0.95rem;
+    line-height: 1.26;
   }
 
   .home-brand-logo img {
@@ -16298,6 +16317,7 @@ body:has(.absence-page--employee-card) {
     flex-direction: column;
     align-items: center;
     gap: 8px;
+    min-height: 118px;
     padding: 12px 8px;
     text-align: center;
   }
@@ -16326,7 +16346,7 @@ body:has(.absence-page--employee-card) {
   .module-card__title {
     font-size: 0.9rem;
     line-height: 1.2;
-    overflow-wrap: normal;
+    overflow-wrap: break-word;
     text-wrap: balance;
   }
 
@@ -17863,6 +17883,7 @@ body:has(.data-box-page) .data-box-side-card--sync {
   height: min(860px, calc(100dvh - 32px));
   min-height: min(660px, calc(100dvh - 32px));
   max-height: calc(100dvh - 32px);
+  min-width: 0;
   overflow: hidden;
   border: 1px solid rgba(216, 226, 211, 0.96);
   border-radius: 28px;
@@ -17970,8 +17991,9 @@ body:has(.data-box-page) .data-box-side-card--sync {
   grid-auto-flow: row;
   grid-auto-rows: max-content;
   align-content: start;
-  gap: 12px;
+  gap: 11px;
   min-height: 0;
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -17992,8 +18014,19 @@ body:has(.data-box-page) .data-box-side-card--sync {
 .ai-voice-assistant-panel__stage {
   display: grid;
   gap: 8px;
+  width: min(100%, 430px);
   min-width: 0;
+  justify-self: center;
   justify-items: center;
+  padding: 14px 12px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(36, 122, 255, 0.34), transparent 40%),
+    linear-gradient(180deg, #080b12 0%, #020306 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 18px 40px rgba(6, 10, 18, 0.18);
   text-align: center;
 }
 
@@ -18010,10 +18043,10 @@ body:has(.data-box-page) .data-box-side-card--sync {
 .ai-voice-assistant-panel__mic {
   position: relative;
   display: grid;
-  width: clamp(168px, min(58vw, 34dvh), 244px);
-  min-width: 168px;
-  height: clamp(168px, min(58vw, 34dvh), 244px);
-  min-height: 168px;
+  width: clamp(218px, min(68vw, 34dvh), 318px);
+  min-width: 218px;
+  height: clamp(218px, min(68vw, 34dvh), 318px);
+  min-height: 218px;
   aspect-ratio: 1;
   place-items: center;
   overflow: hidden;
@@ -18032,7 +18065,7 @@ body:has(.data-box-page) .data-box-side-card--sync {
   position: absolute;
   inset: 8%;
   z-index: 1;
-  border: 2px solid rgba(159, 213, 31, 0.26);
+  border: 2px solid rgba(107, 182, 255, 0.42);
   border-radius: 30%;
   opacity: 0.18;
   pointer-events: none;
@@ -18046,7 +18079,7 @@ body:has(.data-box-page) .data-box-side-card--sync {
   height: 100%;
   object-fit: contain;
   filter: none;
-  transform: scale(1.62);
+  transform: scale(1.06);
 }
 
 .ai-voice-assistant-panel__mic-loader {
@@ -18181,7 +18214,7 @@ body:has(.data-box-page) .data-box-side-card--sync {
 .ai-voice-assistant-panel__status {
   min-height: 28px;
   margin: 0;
-  color: #273029;
+  color: #f5f8ff;
   font-size: clamp(1.08rem, 4vw, 1.28rem);
   font-weight: 780;
   letter-spacing: 0;
@@ -18190,7 +18223,7 @@ body:has(.data-box-page) .data-box-side-card--sync {
 
 .ai-voice-assistant-panel__hint {
   margin: 0;
-  color: #67716a;
+  color: #b9c2cf;
   font-size: 0.9rem;
   font-weight: 520;
   line-height: 1.32;
@@ -18199,7 +18232,7 @@ body:has(.data-box-page) .data-box-side-card--sync {
 .ai-voice-assistant-panel__wake-lock {
   max-width: min(100%, 360px);
   margin: 0;
-  color: #526059;
+  color: #c8d1dc;
   font-size: 0.82rem;
   font-weight: 650;
   line-height: 1.28;
@@ -18323,6 +18356,9 @@ body:has(.data-box-page) .data-box-side-card--sync {
 }
 
 .ai-voice-assistant-panel__quick-start {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: grid;
   width: min(100%, 430px);
   justify-self: center;
@@ -18332,6 +18368,7 @@ body:has(.data-box-page) .data-box-side-card--sync {
   border: 1px solid rgba(117, 189, 37, 0.22);
   border-radius: 16px;
   background: #f7ffe9;
+  box-shadow: 0 12px 24px rgba(31, 41, 33, 0.08);
 }
 
 .ai-voice-assistant-panel__quick-start-button {
@@ -18344,6 +18381,12 @@ body:has(.data-box-page) .data-box-side-card--sync {
   font-size: 1.1rem;
   font-weight: 850;
   box-shadow: 0 16px 34px rgba(117, 189, 37, 0.24);
+}
+
+.ai-voice-assistant-panel__quick-start-button:disabled {
+  cursor: default;
+  opacity: 0.72;
+  box-shadow: none;
 }
 
 .ai-voice-assistant-panel__quick-start p {
@@ -18359,9 +18402,9 @@ body:has(.data-box-page) .data-box-side-card--sync {
   display: grid;
   width: min(100%, 390px);
   justify-self: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
-  padding: 10px;
+  padding: 9px;
   border: 1px solid rgba(216, 226, 211, 0.9);
   border-radius: 14px;
   background: #ffffff;
@@ -18407,10 +18450,15 @@ body:has(.data-box-page) .data-box-side-card--sync {
   display: grid;
   gap: 6px;
   min-width: 0;
+  max-height: min(248px, 30dvh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  overscroll-behavior: contain;
 }
 
 .ai-voice-assistant-panel__status-row {
-  padding: 7px 8px;
+  padding: 7px 8px 6px;
   border-radius: 10px;
   background: #f8faf6;
 }
@@ -18471,9 +18519,10 @@ body:has(.data-box-page) .data-box-side-card--sync {
   gap: 10px;
   align-items: center;
   justify-content: center;
-  padding: 13px 18px 16px;
+  padding: 13px 18px max(16px, calc(14px + env(safe-area-inset-bottom)));
   border-top: 1px solid rgba(216, 226, 211, 0.92);
   background: #ffffff;
+  box-shadow: 0 -10px 24px rgba(31, 41, 33, 0.06);
 }
 
 .ai-voice-assistant-panel__primary {
@@ -18540,13 +18589,14 @@ body:has(.data-box-page) .data-box-side-card--sync {
   .ai-voice-assistant-panel {
     left: 0;
     top: 0;
-    width: 100vw;
-    max-width: 100vw;
+    width: 100dvw;
+    max-width: 100dvw;
     height: 100dvh;
     min-height: 100dvh;
     max-height: 100dvh;
     border: 0;
     border-radius: 0;
+    overflow-x: hidden;
     transform: none;
   }
 
@@ -18555,36 +18605,52 @@ body:has(.data-box-page) .data-box-side-card--sync {
   }
 
   .ai-voice-assistant-panel__body {
-    gap: 10px;
-    padding: 10px 12px 12px;
+    gap: 9px;
+    padding: 9px 12px 10px;
   }
 
   .ai-voice-assistant-panel__quick-start {
     width: 100%;
-    padding: 10px;
+    padding: 9px;
+    border-radius: 14px;
   }
 
   .ai-voice-assistant-panel__quick-start-button {
-    min-height: 78px;
+    min-height: 72px;
     font-size: 1.08rem;
   }
 
+  .ai-voice-assistant-panel__system-status,
+  .ai-voice-assistant-panel__conversation,
+  .ai-voice-assistant-panel__notice,
+  .ai-voice-assistant-panel__demo-line,
+  .ai-voice-assistant-panel__tags {
+    width: 100%;
+  }
+
+  .ai-voice-assistant-panel__status-grid {
+    max-height: min(216px, 27dvh);
+  }
+
   .ai-voice-assistant-panel__actions {
-    padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+    padding: 10px 12px max(14px, calc(12px + env(safe-area-inset-bottom)));
   }
 
   .ai-voice-assistant-panel__primary {
-    flex: 1 1 176px;
+    width: 100%;
     min-height: 60px;
   }
 
   .ai-voice-assistant-panel__text-fallback {
-    flex: 1 1 142px;
+    width: 100%;
     min-height: 52px;
   }
 
   .ai-voice-assistant-panel__stop {
-    flex: 0 0 auto;
+    grid-column: 1 / -1;
+    width: 100%;
     min-height: 52px;
   }
 }
@@ -18608,16 +18674,30 @@ body:has(.data-box-page) .data-box-side-card--sync {
     padding: 8px 10px 10px;
   }
 
+  .ai-voice-assistant-panel__quick-start-button {
+    min-height: 66px;
+    font-size: 1rem;
+  }
+
+  .ai-voice-assistant-panel__status-grid {
+    max-height: 178px;
+  }
+
+  .ai-voice-assistant-panel__actions {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
   .ai-voice-assistant-panel__voice-control {
     grid-template-columns: 24px auto 24px;
     gap: 6px;
   }
 
   .ai-voice-assistant-panel__mic {
-    width: clamp(150px, min(56vw, 30dvh), 186px);
-    min-width: 150px;
-    height: clamp(150px, min(56vw, 30dvh), 186px);
-    min-height: 150px;
+    width: clamp(186px, min(62vw, 30dvh), 218px);
+    min-width: 186px;
+    height: clamp(186px, min(62vw, 30dvh), 218px);
+    min-height: 186px;
   }
 
   .ai-voice-assistant-panel__wave span {
