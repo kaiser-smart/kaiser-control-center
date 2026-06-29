@@ -18878,6 +18878,104 @@ body:has(.data-box-page) .data-box-message-card--unread .data-box-message-card__
   padding-left: 16px;
 }
 
+body:has(.data-box-page) .data-box-message-card__select {
+  display: grid;
+  gap: 5px;
+  min-height: 62px;
+  padding: 12px 0;
+}
+
+body:has(.data-box-page) .data-box-message-card__top,
+body:has(.data-box-page) .data-box-message-card__bottom {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+body:has(.data-box-page) .data-box-message-card__top {
+  gap: 8px;
+}
+
+body:has(.data-box-page) .data-box-message-card__bottom {
+  gap: 10px;
+}
+
+body:has(.data-box-page) .data-box-message-card__actor,
+body:has(.data-box-page) .data-box-message-card__subject {
+  flex: 1 1 auto;
+}
+
+body:has(.data-box-page) .data-box-message-card__subject {
+  margin-top: 0;
+}
+
+body:has(.data-box-page) .data-box-message-card__date,
+body:has(.data-box-page) .data-box-message-card__extras {
+  position: static;
+  inset: auto;
+}
+
+body:has(.data-box-page) .data-box-message-card__extras {
+  display: inline-flex;
+  flex: 0 0 auto;
+  max-width: 46%;
+  min-width: 0;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+body:has(.data-box-page) .data-box-message-card__date {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+}
+
+body:has(.data-box-page) .data-box-message-card__extras .data-box-priority,
+body:has(.data-box-page) .data-box-message-card__attachment {
+  flex: 0 1 auto;
+  min-height: 20px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+body:has(.data-box-page) .data-box-company-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 21px;
+  max-width: 82px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 24%, var(--theme-border, var(--line)));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 8%, var(--theme-card, #ffffff));
+  color: var(--theme-primary, var(--kaiser-green));
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.data-box-page) .data-box-company-badge--nanolab {
+  border-color: color-mix(in srgb, var(--theme-accent, var(--kaiser-green)) 24%, var(--theme-border, var(--line)));
+  background: color-mix(in srgb, var(--theme-accent, var(--kaiser-green)) 8%, var(--theme-card, #ffffff));
+  color: var(--theme-accent, var(--kaiser-green));
+}
+
+body:has(.data-box-page) .data-box-company-badge--lefleur,
+body:has(.data-box-page) .data-box-company-badge--fond {
+  border-color: color-mix(in srgb, var(--theme-secondary, var(--kaiser-green)) 24%, var(--theme-border, var(--line)));
+  background: color-mix(in srgb, var(--theme-secondary, var(--kaiser-green)) 8%, var(--theme-card, #ffffff));
+  color: var(--theme-secondary, var(--kaiser-green));
+}
+
 body:has(.data-box-page) .data-box-inbox-footer {
   display: grid;
   gap: 10px;

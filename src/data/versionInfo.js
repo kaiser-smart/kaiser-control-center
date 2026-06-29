@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.212"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.213"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datová schránka: firemní příznaky ve zprávách",
+    text: "Řádky zpráv nově ukazují kompaktní příznak firmy nebo datové schránky, aby bylo hned vidět, zda zpráva patří Kaiseru, Nanolabu nebo další schránce."
+  },
   {
     title: "Datová schránka: endpoint příloh",
     text: "Stažení detailu zprávy a příloh používá samostatný ISDS endpoint pro datové zprávy, zatímco seznam obálek zůstává na informační službě."

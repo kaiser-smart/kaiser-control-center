@@ -13858,6 +13858,50 @@ function dataBoxDisplayName(dataBoxId, fallback = "") {
   return dataBoxAccountById(dataBoxId)?.label || fallback || dataBoxId || "-";
 }
 
+function dataBoxCompanyBadge(message = {}) {
+  const displayName = dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel);
+  const source = dataBoxSearchText([
+    message.dataBoxId,
+    message.dataBoxLabel,
+    displayName
+  ].filter(Boolean).join(" "));
+
+  if (!source) {
+    return null;
+  }
+
+  if (source.includes("nanolab")) {
+    return { label: "NANOLAB", tone: "nanolab" };
+  }
+
+  if (source.includes("lefleur")) {
+    return { label: "LEFLEUR", tone: "lefleur" };
+  }
+
+  if (source.includes("nadacni") || source.includes("fond")) {
+    return { label: "FOND", tone: "fond" };
+  }
+
+  if (source.includes("kaiser")) {
+    return { label: "KAISER", tone: "kaiser" };
+  }
+
+  return null;
+}
+
+function dataBoxCompanyBadgeMarkup(message) {
+  const company = dataBoxCompanyBadge(message);
+  if (!company) {
+    return "";
+  }
+
+  return `
+    <span class="data-box-company-badge data-box-company-badge--${escapeHtml(company.tone)}">
+      ${escapeHtml(company.label)}
+    </span>
+  `;
+}
+
 function dataBoxAccountStatus(dataBoxId) {
   const id = String(dataBoxId || "").trim();
   if (!id) {
@@ -15141,6 +15185,7 @@ function dataBoxMessageCard(message, selected) {
   const subject = String(message.subject || message.title || "").trim() || "Bez předmětu";
   const attachmentLabel = attachmentCount ? `Příloha${attachmentCount > 1 ? ` ${attachmentCount}` : ""}` : "";
   const unread = status.id === "new";
+  const companyBadge = dataBoxCompanyBadgeMarkup(message);
 
   return `
     <article class="data-box-message-card data-box-message-card--priority-${escapeHtml(priority.id)} ${selected ? "data-box-message-card--selected" : ""} ${unread ? "data-box-message-card--unread" : ""}">
@@ -15153,12 +15198,15 @@ function dataBoxMessageCard(message, selected) {
         <span class="data-box-message-card__top">
           ${unread ? `<span class="data-box-message-card__unread-dot" title="Nepřečtená zpráva" aria-label="Nepřečtená zpráva"></span>` : ""}
           <span class="data-box-message-card__actor">${escapeHtml(actor)}</span>
-          <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
+          ${companyBadge}
         </span>
-        <span class="data-box-message-card__subject">${escapeHtml(subject)}</span>
-        <span class="data-box-message-card__extras" aria-label="Doplňkové informace">
-          ${dataBoxPriorityBadge(priority)}
-          ${attachmentCount ? `<span class="data-box-message-card__attachment" title="${escapeHtml(attachmentLabel)}" aria-label="${escapeHtml(attachmentLabel)}">Příloha</span>` : ""}
+        <span class="data-box-message-card__bottom">
+          <span class="data-box-message-card__subject">${escapeHtml(subject)}</span>
+          <span class="data-box-message-card__extras" aria-label="Doplňkové informace">
+            <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
+            ${dataBoxPriorityBadge(priority)}
+            ${attachmentCount ? `<span class="data-box-message-card__attachment" title="${escapeHtml(attachmentLabel)}" aria-label="${escapeHtml(attachmentLabel)}">Příloha</span>` : ""}
+          </span>
         </span>
       </button>
     </article>
