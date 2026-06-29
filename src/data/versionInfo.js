@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.236"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.238"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,14 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: rychlé krátké odpovědi",
+    text: "Centrální pravidla Šarloty nově výslovně drží rychlé věcné odpovědi, jednu krátkou otázku najednou a zákaz opakování stejné otázky dokola."
+  },
+  {
+    title: "Šarlota: EL tool pro zápis dovolené",
+    text: "KSO frontend má připravený ElevenLabs client tool create_absence_request. Tool volá bezpečný backend Šarloty, který ověří oprávnění a bez výslovného potvrzení dovolenou nezapíše."
+  },
   {
     title: "Šarlota: výchozí hlas zpět na ElevenLabs",
     text: "Tlačítko Spustit hlas nově spouští stabilní ElevenLabs režim. OpenAI Realtime zůstává v kódu jako testovací cesta, ale není výchozí pro mobilní hovor."

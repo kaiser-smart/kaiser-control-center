@@ -46,7 +46,7 @@ server-side env hodnoty.
 Název:
 
 ```text
-Chytré odpadky – Šarlota
+Šarlota – Smart odpady
 ```
 
 Popis:
@@ -63,9 +63,28 @@ První zpráva:
 {{intro_announcement}}
 ```
 
-Šarlota tyká, mluví v ženském rodě a odpovídá stručně. First message nesmí
+Šarlota tyká, mluví v ženském rodě a odpovídá stručně. Má být rychlá, věcná,
+lidská a má pokládat vždy jen jednu krátkou otázku. Stejnou otázku neopakuje
+dokola; po odpovědi uživatele navazuje dalším krokem. First message nesmí
 skládat pozdrav dvakrát; `intro_announcement` posílá aplikace přes dynamic
 variables.
+
+Bezpečný rychlý profil v ElevenLabs:
+
+- first message: `{{intro_announcement}}`
+- language: Czech
+- LLM temperature: `0.25`
+- reasoning effort: `Low`
+- token limit: `180`
+- turn model: `Turn V3`
+- take turn after silence: `3 s`
+- end conversation after silence: `10 s`
+- max conversation duration: `600 s`
+- system tool `Skip turn`: zapnuto
+- voice: český ženský hlas na `V3 Conversational`
+
+U V3 Conversational dashboard neumožňuje nastavovat `Speed`, `Stability` ani
+`Similarity`; tyto hodnoty se proto neberou jako ověřené nastavení.
 
 ## ElevenLabs agent Marek
 
@@ -103,10 +122,37 @@ V ElevenLabs dashboardu založit client tools se stejnými názvy a parametry:
 - `open_employee_card`: `employeeId`, `query`
 - `get_employee_manager`: `employeeId`, `query`
 - `get_employee_absence_summary`: `employeeId`, `query`
+- `create_absence_request`: `dateFrom`, `dateTo`, `dayPart`, `confirmed`, `note`, `spokenSummary`
 - `search_user`: `query`, `limit`
 - `get_user_access_summary`: `userId`, `query`
 
 Názvy toolů i parametrů jsou case-sensitive.
+
+`create_absence_request` je zápisový client tool. Musí být nastavený tak, aby
+vracel výsledek zpět agentovi. KSO frontend jím volá `POST /api/voice/sarlota`
+a backend znovu ověřuje přihlášeného uživatele, oprávnění `absence:create`,
+datum, rozsah a potvrzení. Bez `confirmed: true` nesmí vzniknout zápis; backend
+vrátí jen potvrzovací otázku.
+
+Parametr `dayPart` používat jako:
+
+```text
+full_day
+half_day
+```
+
+Příklad parametrů pro potvrzený zápis:
+
+```json
+{
+  "dateFrom": "2026-07-01",
+  "dateTo": "2026-07-01",
+  "dayPart": "full_day",
+  "confirmed": true,
+  "note": "Zadáno hlasově přes Šarlotu.",
+  "spokenSummary": "Zapiš mi dovolenou 1. 7. na celý den."
+}
+```
 
 ## Webhook tools
 

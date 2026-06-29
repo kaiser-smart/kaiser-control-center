@@ -3,7 +3,7 @@ import { sarlotaIntroAnnouncementForAi } from "../../../_lib/ai-session-announce
 import { normalizeAiSearch, userDynamicVariablesForAi } from "../../../_lib/ai-people-summary.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
 
-const SARLOTA_AGENT_NAME = "Chytré odpadky – Šarlota";
+const SARLOTA_AGENT_NAME = "Šarlota – Smart odpady";
 const OPENAI_MODEL_EXPECTED_IN_ELEVENLABS = "GPT-5.1";
 const OPENAI_MODEL_EXPECTED_NORMALIZED = "gpt51";
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
@@ -26,20 +26,9 @@ const REQUIRED_DYNAMIC_VARIABLES = [
   "intro_announcement",
   "intro_announcement_enabled"
 ];
-const EXPECTED_CLIENT_TOOL_NAMES = [
-  "navigate_to",
-  "open_module",
-  "show_confirmation",
-  "show_toast",
-  "highlight_element",
-  "search_employee",
-  "get_employee_detail",
-  "open_employee_card",
-  "get_employee_manager",
-  "get_employee_absence_summary",
-  "search_user",
-  "get_user_access_summary"
-];
+const EXPECTED_CLIENT_TOOL_NAMES = ELEVENLABS_CLIENT_TOOL_SCHEMAS
+  .map((tool) => String(tool?.name ?? "").trim())
+  .filter(Boolean);
 
 function cleanString(value) {
   return String(value ?? "").trim();

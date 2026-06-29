@@ -149,6 +149,18 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
     ]
   },
   {
+    name: "create_absence_request",
+    description: "Zapíše potvrzenou žádost o dovolenou přes KSO backend. Backend ověřuje oprávnění a bez potvrzení nic nezapíše.",
+    parameters: [
+      { name: "dateFrom", type: "string", required: true },
+      { name: "dateTo", type: "string", required: false },
+      { name: "dayPart", type: "string", required: true },
+      { name: "confirmed", type: "boolean", required: true },
+      { name: "note", type: "string", required: false },
+      { name: "spokenSummary", type: "string", required: false }
+    ]
+  },
+  {
     name: "search_user",
     description: "Vyhledá uživatele podle jména nebo role, pouze pokud má přihlášený uživatel oprávnění.",
     parameters: [
@@ -273,6 +285,55 @@ export function createElevenLabsClientTools({
     return safeRequestJson(withQuery(path, params), { method: "GET" });
   }
 
+  async function postJson(path, payload = {}) {
+    return safeRequestJson(path, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function booleanToolValue(value) {
+    if (value === true || value === false) {
+      return value;
+    }
+
+    const normalized = normalizeKey(value);
+    if (["true", "ano", "jo", "yes", "confirmed", "potvrzeno", "souhlasim"].includes(normalized)) {
+      return true;
+    }
+
+    if (["false", "ne", "no", "cancelled", "zruseno", "storno"].includes(normalized)) {
+      return false;
+    }
+
+    return false;
+  }
+
+  function absenceDayPartValue(value, halfDay = null) {
+    if (halfDay === true) {
+      return "half_day";
+    }
+
+    if (halfDay === false) {
+      return "full_day";
+    }
+
+    const normalized = normalizeKey(value).replace(/[^a-z0-9]+/g, "_");
+    if (["half_day", "half", "pulden", "pul_dne", "puldne"].includes(normalized)) {
+      return "half_day";
+    }
+
+    if (["full_day", "full", "cely_den", "celodenni", "den"].includes(normalized)) {
+      return "full_day";
+    }
+
+    return "";
+  }
+
   async function employeeDetailFor(parameters = {}) {
     const identity = identityParameters(parameters, "employeeId");
 
@@ -323,6 +384,83 @@ export function createElevenLabsClientTools({
     }
 
     return userSummaryFor({ userId });
+  }
+
+  async function createAbsenceRequest(parameters = {}) {
+    const dateFrom = cleanString(
+      parameters.dateFrom ||
+      parameters.date_from ||
+      parameters.absenceDate ||
+      parameters.absence_date ||
+      parameters.date ||
+      parameters.startDate ||
+      parameters.start_date
+    );
+    const dateTo = cleanString(
+      parameters.dateTo ||
+      parameters.date_to ||
+      parameters.endDate ||
+      parameters.end_date ||
+      dateFrom
+    );
+    const dayPart = absenceDayPartValue(
+      parameters.dayPart || parameters.day_part || parameters.scope || parameters.range,
+      typeof parameters.halfDay === "boolean" ? parameters.halfDay : null
+    );
+    const confirmed = booleanToolValue(
+      parameters.confirmed ??
+      parameters.writeConfirmed ??
+      parameters.write_confirmed
+    );
+    const note = cleanString(parameters.note || parameters.absenceNote || parameters.absence_note || parameters.comment);
+    const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
+    const text = spokenSummary || [
+      "Zapiš dovolenou",
+      dateFrom,
+      dateTo && dateTo !== dateFrom ? `do ${dateTo}` : "",
+      dayPart === "half_day" ? "půlden" : dayPart === "full_day" ? "celý den" : "",
+      confirmed ? "ano, zapiš to" : ""
+    ].filter(Boolean).join(" ");
+
+    const result = await postJson("/api/voice/sarlota", {
+      transcript: text,
+      text,
+      intent: "absence_vacation_request",
+      parameters: {
+        type: "vacation",
+        dateFrom,
+        dateTo: dateTo || dateFrom,
+        dayPart,
+        confirmed,
+        writeConfirmed: confirmed,
+        note
+      },
+      context: {
+        requestedIntent: "absence_vacation_request",
+        absenceType: "vacation",
+        absenceDateFrom: dateFrom,
+        absenceDateTo: dateTo || dateFrom,
+        absenceDayPart: dayPart,
+        absenceConfirmed: confirmed
+      },
+      metadata: {
+        source: "elevenlabs_client_tool"
+      }
+    });
+
+    return {
+      ok: result.ok === true,
+      status: result.status || "unknown",
+      message: result.reply || result.text || "",
+      answerText: result.reply || result.text || "",
+      intent: result.intent || "absence_vacation_request",
+      verified: result.verified === true,
+      requiresConfirmation: result.status === "needs_confirmation",
+      preparedActions: Array.isArray(result.preparedActions) ? result.preparedActions : [],
+      absenceRequest: result.absenceRequest || null,
+      notificationsSent: result.notificationsSent === true,
+      apiStatus: result.apiStatus || "ready"
+    };
   }
 
   const tools = {
@@ -479,6 +617,10 @@ export function createElevenLabsClientTools({
         vacation: result.employee?.vacation || null,
         absence: result.employee?.absence || null
       };
+    },
+
+    async create_absence_request(parameters = {}) {
+      return createAbsenceRequest(parameters);
     },
 
     async search_user(parameters = {}) {

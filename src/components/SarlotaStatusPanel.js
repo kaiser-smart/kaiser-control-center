@@ -117,7 +117,7 @@ export function SarlotaStatusPanel({
       data.elevenLabs?.status || "unverified",
       elevenLabsDetail
     ),
-    statusRow("Agent", data.agent?.status || "unverified", data.agent?.name || "Chytré odpadky – Šarlota"),
+    statusRow("Agent", data.agent?.status || "unverified", data.agent?.name || "Šarlota – Smart odpady"),
     statusRow("První zpráva", data.firstMessage?.status || "unverified", firstMessageDetail(data.firstMessage)),
     statusRow("Personalizace", data.personalization?.status || "unverified", data.personalization?.source || "přihlášený uživatel"),
     statusRow("Vocativ uživatele", data.vocative?.status || "unverified", vocativeDetail),
