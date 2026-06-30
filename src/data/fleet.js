@@ -16,7 +16,8 @@ export const FLEET_API_ENDPOINTS = [
   "GET /api/vehicles/:id/documents",
   "POST /api/vehicles/:id/documents",
   "DELETE /api/vehicle-documents/:documentId",
-  "GET /api/vehicles/summary"
+  "GET /api/vehicles/summary",
+  "POST /api/fleet/vistos-vehicles-preview"
 ];
 
 export const FLEET_DASHBOARD_METRICS = [
@@ -114,6 +115,10 @@ export const FLEET_VEHICLE_FIELDS = [
   "tcarsVehicleId",
   "tcarsUnitId",
   "tcarsLicensePlate",
+  "vistosVehicleId",
+  "vistosVehicleName",
+  "vistosVehicleCategory",
+  "vistosVehicleStatus",
   "gpsProvider",
   "gpsUnitId",
   "note",

@@ -990,6 +990,13 @@ const fleetImportPreviewState = {
   error: ""
 };
 
+const fleetVistosVehiclePreviewState = {
+  loading: false,
+  preview: null,
+  message: "",
+  error: ""
+};
+
 const fleetVehiclesState = {
   loading: false,
   loaded: false,
@@ -8159,6 +8166,155 @@ function fleetImportRowsTable(preview) {
   `;
 }
 
+function fleetVistosVehiclePreviewStats(preview) {
+  const summary = preview?.summary || {};
+  const cards = [
+    ["Vistos konfigurace", preview?.apiStatus === "ready" ? "Cloud API aktivní" : preview?.apiStatus === "not_configured" ? "Čeká na secrets" : "Čeká na data"],
+    ["Vozidla", summary.total || 0],
+    ["Náhled řádků", summary.previewRows || 0],
+    ["SPZ", summary.withRegistrationPlate || 0],
+    ["GPS", summary.withGps || 0],
+    ["Ke kontrole", summary.needsReview || 0]
+  ];
+
+  return `
+    <div class="fleet-kpi-grid" aria-label="Souhrn Vistos Vehicle preview">
+      ${cards.map(([label, value]) => `
+        <article class="fleet-kpi">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+          <small>Read-only preview</small>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function fleetVistosVehiclePreviewDiagnostics(preview) {
+  const diagnostics = preview?.diagnostics || {};
+  const issueRows = (preview?.issues || []).map((issue) => `
+    <tr>
+      <td>${escapeHtml(issue.code)}</td>
+      <td>${escapeHtml(issue.count)}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="fleet-import-grid">
+      <section>
+        <h3>Diagnostika dotazu</h3>
+        <dl class="fleet-import-policy-list">
+          <div><dt>Entita</dt><dd>${escapeHtml(diagnostics.entity || "Vehicle")}</dd></div>
+          <div><dt>Celkem ve Vistos gridu</dt><dd>${escapeHtml(diagnostics.recordsTotal || 0)}</dd></div>
+          <div><dt>Po filtru</dt><dd>${escapeHtml(diagnostics.recordsFiltered || 0)}</dd></div>
+          <div><dt>Vrácené řádky</dt><dd>${escapeHtml(diagnostics.returnedRows || 0)}</dd></div>
+          <div><dt>Zdroj pravdy</dt><dd>Vozový park je master evidence vozidel.</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Problémy náhledu</h3>
+        ${issueRows ? `
+          <div class="fleet-import-table-wrap">
+            <table class="fleet-import-table">
+              <thead><tr><th>Typ</th><th>Počet</th></tr></thead>
+              <tbody>${issueRows}</tbody>
+            </table>
+          </div>
+        ` : `<p class="module-feedback__notice">Náhled nehlásí datové problémy v prvních řádcích.</p>`}
+      </section>
+    </div>
+  `;
+}
+
+function fleetVistosVehiclePreviewTable(preview) {
+  const rows = (preview?.vehicles || []).map((vehicle) => `
+    <tr>
+      <td>${escapeHtml(vehicle.vistosVehicleId || "-")}</td>
+      <td>${escapeHtml(vehicle.name || "-")}</td>
+      <td>${escapeHtml(vehicle.registrationPlate || "-")}</td>
+      <td>${escapeHtml(vehicle.vinMasked || "-")}</td>
+      <td>${escapeHtml(vehicle.category || vehicle.categoryId || "-")}</td>
+      <td>${escapeHtml(vehicle.status || vehicle.statusId || "-")}</td>
+      <td>${escapeHtml(vehicle.gps ? "validní" : "bez GPS")}</td>
+      <td>${escapeHtml(vehicle.mappingStatus || "-")}</td>
+    </tr>
+  `).join("");
+
+  if (!rows) {
+    return `
+      <div class="fleet-import-empty">
+        <strong>Bez dat z Vistos Vehicle</strong>
+        <span>Spusťte read-only preview, nebo nastavte Vistos secrets v Cloudflare.</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="fleet-import-table-wrap">
+      <table class="fleet-import-table">
+        <thead>
+          <tr>
+            <th>Vistos ID</th>
+            <th>Název</th>
+            <th>SPZ</th>
+            <th>VIN</th>
+            <th>Kategorie</th>
+            <th>Stav</th>
+            <th>GPS</th>
+            <th>Mapování</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function fleetVistosVehiclePreviewSection(user) {
+  const canImport = hasPermission(user, "fleet", "edit");
+  const preview = fleetVistosVehiclePreviewState.preview;
+
+  return `
+    <section class="fleet-import-panel" aria-labelledby="fleet-vistos-vehicle-title">
+      <div class="fleet-import-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Vistos / Vehicle</p>
+          <h2 id="fleet-vistos-vehicle-title">Vistos Vehicle preview</h2>
+          <p>Read-only náhled vozidel z Vistosu přes backend API. Vozový park zůstává master evidence vozidel.</p>
+        </div>
+        <span class="employee-card-status employee-card-status--waiting">READ-ONLY VISTOS PREVIEW</span>
+      </div>
+
+      <div class="fleet-import-empty">
+        <strong>Tento náhled nevytváří vozidla, nepřepisuje T-Cars data a nespouští automatizace.</strong>
+        <span>Ostatní moduly mají používat vazbu na Vozový park, ne vlastní duplicitní databázi vozidel.</span>
+      </div>
+
+      ${fleetVistosVehiclePreviewStats(preview)}
+
+      ${canImport ? `
+        <form class="fleet-import-form" data-fleet-vistos-vehicles-preview-form>
+          <button class="primary-action" type="submit" ${fleetVistosVehiclePreviewState.loading ? "disabled" : ""}>
+            ${fleetVistosVehiclePreviewState.loading ? "Načítám Vehicle preview..." : "Načíst vozidla z Vistosu"}
+          </button>
+        </form>
+      ` : `
+        <p class="module-feedback__notice">Pro spuštění Vistos Vehicle preview je potřeba oprávnění Vozový park / úpravy.</p>
+      `}
+
+      ${fleetVistosVehiclePreviewState.message ? `<p class="module-feedback__notice">${escapeHtml(fleetVistosVehiclePreviewState.message)}</p>` : ""}
+      ${fleetVistosVehiclePreviewState.error ? `<p class="module-feedback__error">${escapeHtml(fleetVistosVehiclePreviewState.error)}</p>` : ""}
+
+      ${preview ? fleetVistosVehiclePreviewDiagnostics(preview) : ""}
+
+      <section>
+        <h3>Tabulka vozidel z Vistosu</h3>
+        ${fleetVistosVehiclePreviewTable(preview)}
+      </section>
+    </section>
+  `;
+}
+
 function fleetVistosImportSection(user) {
   const canImport = hasPermission(user, "fleet", "edit");
   const preview = fleetImportPreviewState.preview;
@@ -8706,6 +8862,7 @@ function fleetSettingsSection(user, activeId) {
         </article>
       </div>
       ${fleetApiNotice("GET /api/vehicles/settings", FLEET_TAB_WAITING_MESSAGES.settings)}
+      ${fleetVistosVehiclePreviewSection(user)}
       ${fleetVistosImportSection(user)}
     </section>
   `;
@@ -22578,6 +22735,43 @@ async function submitFleetVistosImport(form) {
   }
 }
 
+async function submitFleetVistosVehiclePreview() {
+  const user = currentUser();
+
+  if (!hasPermission(user, "fleet", "edit")) {
+    fleetVistosVehiclePreviewState.error = "Nemáte oprávnění spustit Vistos Vehicle preview.";
+    fleetVistosVehiclePreviewState.message = "";
+    render();
+    return;
+  }
+
+  fleetVistosVehiclePreviewState.loading = true;
+  fleetVistosVehiclePreviewState.error = "";
+  fleetVistosVehiclePreviewState.message = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/fleet/vistos-vehicles-preview", {
+      method: "POST",
+      body: JSON.stringify({ source: "fleet-vistos-vehicle-preview" })
+    });
+    const preview = result.preview || null;
+    fleetVistosVehiclePreviewState.preview = preview;
+    if (preview?.apiStatus === "not_configured") {
+      fleetVistosVehiclePreviewState.message = "Vistos API není nakonfigurováno.";
+    } else if (preview?.apiStatus === "empty") {
+      fleetVistosVehiclePreviewState.message = "Vistos Vehicle preview nenašlo žádná aktivní vozidla.";
+    } else {
+      fleetVistosVehiclePreviewState.message = preview?.message || "Vistos Vehicle preview načteno.";
+    }
+  } catch (error) {
+    fleetVistosVehiclePreviewState.error = error?.payload?.error || error?.message || "Vistos Vehicle preview se teď nepodařilo spustit.";
+  } finally {
+    fleetVistosVehiclePreviewState.loading = false;
+    render();
+  }
+}
+
 function exportFleetImportPreviewCsv() {
   if (!fleetImportPreviewState.preview) {
     return;
@@ -24079,6 +24273,13 @@ document.addEventListener("submit", async (event) => {
   if (fleetVistosImportForm) {
     event.preventDefault();
     await submitFleetVistosImport(fleetVistosImportForm);
+    return;
+  }
+
+  const fleetVistosVehiclesPreviewForm = event.target.closest("[data-fleet-vistos-vehicles-preview-form]");
+  if (fleetVistosVehiclesPreviewForm) {
+    event.preventDefault();
+    await submitFleetVistosVehiclePreview();
     return;
   }
 

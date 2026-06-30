@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.245"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.246"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozový park: Vistos Vehicle preview",
+    text: "Vozový park má read-only náhled entity Vehicle z Vistosu přes backend API. Modul zůstává master evidencí vozidel a ostatní moduly mají používat vazbu na Vozový park."
+  },
   {
     title: "Šarlota: ženské zdrobnělé oslovení",
     text: "KSO backend posílá Šarlotě bezpečné oslovení user_first_name_friendly_vocative. U ověřených žen může zaznít Alenko, Marcelko, Jaruško nebo Lucko, u mužů zůstává běžný vocativ."

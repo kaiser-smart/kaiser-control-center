@@ -707,6 +707,86 @@ Proto tato pole zatim nepovazovat za povinna.
 - `currency_id` <- `ProductAccountPrice.Currency_FK`
 - `tax_included` <- `ProductAccountPrice.TaxIncluded`
 
+## Vozovy park / Vistos Vehicle
+
+### Zdroj pravdy
+
+`Vozovy park` je master evidence vozidel v Kaiser Smart / Smart odpady.
+
+Ostatni moduly nesmi vytvaret vlastni duplicitni databazi vozidel. Musi pouzivat
+ID nebo vazbu na Vozovy park. Vistos `Vehicle` je read-only zdroj pro preview,
+mapovani a budouci synchronizaci do Vozoveho parku.
+
+### Read-only preview
+
+Aktualni implementacni smer:
+
+- endpoint: `POST /api/fleet/vistos-vehicles-preview`
+- entita Vistos: `Vehicle`
+- stav: read-only preview
+- zapis do DB: NE
+- vytvareni vozidel: NE
+- zmena T-Cars dat: NE
+- automatizace: NE
+
+Preview pouziva backend Vistos Execute API pres Cloudflare secrets.
+Frontend Vistos nikdy nevola primo.
+
+### Filtr aktivnich vozidel
+
+Navrzeny filtr pro `GetPageParam`:
+
+```json
+{
+  "IsActive": true,
+  "Archived_IsNull": true,
+  "EliminatedDate_IsNull": true
+}
+```
+
+Pokud Vistos vrati prazdny vysledek, musi UI zobrazit diagnostiku poctu
+`recordsTotal`, `recordsFiltered`, poctu vracenych radku a pouzity filtr.
+
+### Sloupce Vehicle
+
+- `fleet_vehicle.vistos_vehicle_id` <- `Vehicle.Id`
+- `fleet_vehicle.vistos_vehicle_name` <- `Vehicle.Name`
+- `fleet_vehicle.registration_plate` <- `Vehicle.RegistrationPlate`
+- `fleet_vehicle.vin` <- `Vehicle.VIN` (v UI preview zkracovat/maskovat)
+- `fleet_vehicle.vistos_status_id` <- `Vehicle.Stavvozidla_FK_RecordId`
+- `fleet_vehicle.vistos_status_caption` <- `Vehicle.Stavvozidla_FK_Caption`
+- `fleet_vehicle.vistos_category_id` <- `Vehicle.CarCategory_FK_RecordId`
+- `fleet_vehicle.vistos_category_caption` <- `Vehicle.CarCategory_FK_Caption`
+- `fleet_vehicle.vistos_last_location` <- `Vehicle.c_LastLocation`
+- `fleet_vehicle.vistos_last_gps_lat` <- `Vehicle.c_LastGpsLocation1_Lat`
+- `fleet_vehicle.vistos_last_gps_lng` <- `Vehicle.c_LastGpsLocation1_Long`
+- `fleet_vehicle.vistos_last_position_sync_at` <- `Vehicle.LastPositionSyncDate`
+- `fleet_vehicle.vistos_gps_provider_id` <- `Vehicle.c_GpsProvider_FK_RecordId`
+- `fleet_vehicle.vistos_gps_provider_caption` <- `Vehicle.c_GpsProvider_FK_Caption`
+
+### Dulezite omezeni
+
+- Vistos `Vehicle` neni samostatny modul v Kaiser Smart.
+- T-Cars zustava zdroj realnych live GPS poloh ve `Sledovani vozidel`.
+- Vistos `Vehicle` je vhodny pro master metadata vozidla, kategorii, stav,
+  SPZ, VIN a pripadne posledni Vistos lokaci.
+- `Ridic_FK` je personalni vazba a nesmi se zapojit bez samostatneho schvaleni.
+- Ostry sync do Vozoveho parku potrebuje samostatnou fazi s DB modelem,
+  audit logem a konfliktnimi pravidly.
+
+### Budouci VehicleService
+
+Entita `VehicleService` je kandidat pro servisni historii Vozoveho parku:
+
+- `vehicle_service.vehicle_vistos_id` <- `VehicleService.Vehicle_FK_RecordId`
+- `vehicle_service.service_time` <- `VehicleService.ServiceTime`
+- `vehicle_service.service_time_end` <- `VehicleService.ServiceTimeEnd`
+- `vehicle_service.description` <- `VehicleService.Description`
+- `vehicle_service.type_id` <- `VehicleService.Type_FK_RecordId`
+- `vehicle_service.type_caption` <- `VehicleService.Type_FK_Caption`
+
+Toto zatim neni implementovane. Nejde o cloud automatizaci ani o ostry import.
+
 ## Co je overene
 
 - Login a read-only grid dotazy pres `GetPageParam`.
@@ -721,6 +801,8 @@ Proto tato pole zatim nepovazovat za povinna.
 - `Product.Quantity` vraci pocet / ks u overeneho produktu.
 - `Nakladkovaadresa_FK` je nejlepsi kandidat pro svozove misto.
 - FK pole mohou vracet `Lat` a `Long`.
+- `Vehicle` je ve Vistos profilu dostupna read-only entita podle predaneho
+  seznamu opravneni.
 
 ## Co neni overene
 
@@ -733,6 +815,11 @@ Proto tato pole zatim nepovazovat za povinna.
 - Ktera cenova tabulka je v praxi zdrojem ceny u vsech typu smluv.
 - Zda se cetnost vzdy spolehlive vraci ve strukturovanem poli, nebo se musi parsovat z nazvu produktu.
 - Zda `ServiceListItem` lepe odpovida realnym svozovym polozkam nez `ContractRow` u vsech smluv.
+- Zda filtr `Vehicle.IsActive + Archived_IsNull + EliminatedDate_IsNull` vrati
+  presne vsechna provozne aktivni vozidla.
+- Zda `VehicleService` profil vraci dostatek poli pro servisni historii.
+- Jak se maji resit konflikty mezi Vistos `Vehicle`, T-Cars a budouci DB
+  evidenci Vozoveho parku.
 
 ## Doporuceny dalsi discovery postup
 
@@ -744,6 +831,10 @@ Proto tato pole zatim nepovazovat za povinna.
 5. Overit smlouvu s vice polozkami a vice stanovisti.
 6. Overit aktivni smlouvy Komunal s plnou sadou poli pro svoz.
 7. Po vytvoreni SMS poli ve Vistosu overit jejich technicke nazvy pres `DbColumn`.
+8. Spustit `POST /api/fleet/vistos-vehicles-preview` a potvrdit pocty aktivnich
+   vozidel proti Vistos UI `#/Vehicle`.
+9. Navrhnout samostatny DB model pro Vozovy park jako master evidence pred
+   ostrym syncem z Vistosu.
 
 ## Zakazane pouziti
 
