@@ -63,6 +63,7 @@ Personalizace se bere z přihlášeného uživatele / profilu:
 - `requireUserPermission()` načte aktuálního uživatele ze session cookie.
 - `currentUser()` skládá uživatele z defaultních, kontaktních, env a uložených uživatelů.
 - `userDynamicVariablesForAi(user)` připraví jméno, křestní jméno, vocativ, roli, oprávnění, dostupné moduly, oddělení a pozici.
+- Pro ověřená ženská jména přidává i bezpečné zdrobnělé oslovení v `user_first_name_friendly_vocative`, například `Alenko`, `Marcelko`, `Jaruško` nebo `Lucko`; pro muže zůstává běžné oslovení.
 - `sarlotaIntroAnnouncementForAi(env, user, assistant)` přidá `intro_announcement` a stav jeho zapnutí.
 
 Požadované proměnné jsou připravené:
@@ -71,6 +72,8 @@ Požadované proměnné jsou připravené:
 user_name
 user_first_name
 user_first_name_vocative
+user_first_name_friendly_vocative
+user_first_name_addressing_style
 user_role
 available_modules
 user_permissions

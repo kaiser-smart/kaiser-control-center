@@ -26,6 +26,34 @@ const CZECH_VOCATIVE_NAMES = new Map([
   ["roman", "Romane"],
   ["tomas", "Tomáši"]
 ]);
+const CZECH_FEMALE_DIMINUTIVE_VOCATIVE_NAMES = new Map([
+  ["alena", "Alenko"],
+  ["andrea", "Andrejko"],
+  ["eva", "Evi"],
+  ["jana", "Jani"],
+  ["jarmila", "Jaruško"],
+  ["kristyna", "Kristýnko"],
+  ["lenka", "Leni"],
+  ["lucie", "Lucko"],
+  ["marcela", "Marcelko"],
+  ["marketa", "Markétko"],
+  ["petra", "Peťo"],
+  ["simona", "Simonko"],
+  ["silvie", "Silvi"],
+  ["ulyana", "Ulyanko"]
+]);
+const AI_NAME_PREFIX_TOKENS = new Set([
+  "bc",
+  "dis",
+  "ing",
+  "judr",
+  "mba",
+  "mgr",
+  "mudr",
+  "phd",
+  "phdr",
+  "rndr"
+]);
 
 export function cleanAiString(value) {
   return String(value ?? "").trim();
@@ -172,14 +200,28 @@ function permissionLine(moduleItem) {
   return `${moduleItem.moduleId}:${actions.join("/")}`;
 }
 
+function normalizeNameTokenForAi(value) {
+  return normalizeAiSearch(value).replace(/[^a-z]+/g, "");
+}
+
+function cleanNameTokenForAi(value) {
+  return cleanAiString(value).replace(/^[^A-Za-zÀ-ž]+|[^A-Za-zÀ-ž]+$/g, "");
+}
+
 function firstNameForAi(value) {
   const cleanedName = cleanAiString(value).replace(/\s+/g, " ");
-  return cleanedName.split(" ").filter(Boolean)[0] || "uživateli";
+  const nameToken = cleanedName
+    .split(" ")
+    .map(cleanNameTokenForAi)
+    .filter(Boolean)
+    .find((token) => !AI_NAME_PREFIX_TOKENS.has(normalizeNameTokenForAi(token)));
+
+  return nameToken || "uživateli";
 }
 
 function firstNameVocativeForAi(value) {
   const firstName = firstNameForAi(value);
-  const mappedName = CZECH_VOCATIVE_NAMES.get(normalizeAiSearch(firstName));
+  const mappedName = CZECH_VOCATIVE_NAMES.get(normalizeNameTokenForAi(firstName));
 
   if (mappedName) {
     return mappedName;
@@ -194,6 +236,24 @@ function firstNameVocativeForAi(value) {
   }
 
   return firstName;
+}
+
+function firstNameDiminutiveVocativeForAi(value) {
+  const firstName = firstNameForAi(value);
+  return CZECH_FEMALE_DIMINUTIVE_VOCATIVE_NAMES.get(normalizeNameTokenForAi(firstName)) || "";
+}
+
+function userAddressingForAi(value) {
+  const firstName = firstNameForAi(value);
+  const standardVocative = firstNameVocativeForAi(value);
+  const femaleDiminutiveVocative = firstNameDiminutiveVocativeForAi(value);
+
+  return {
+    firstName,
+    standardVocative,
+    friendlyVocative: femaleDiminutiveVocative || standardVocative,
+    style: femaleDiminutiveVocative ? "female_diminutive" : "standard"
+  };
 }
 
 function pragueHourForAi(date = new Date()) {
@@ -244,12 +304,12 @@ function userGreetingForAi(user, date = new Date()) {
     return "";
   }
 
-  const userFirstNameVocative = firstNameVocativeForAi(user?.name);
+  const userAddressing = userAddressingForAi(user?.name);
   const timeOfDayGreeting = timeOfDayGreetingForAi(date);
 
   return timeOfDayGreeting
-    ? `${timeOfDayGreeting}, ${userFirstNameVocative}.`
-    : `Ahoj, ${userFirstNameVocative}.`;
+    ? `${timeOfDayGreeting}, ${userAddressing.friendlyVocative}.`
+    : `Ahoj, ${userAddressing.friendlyVocative}.`;
 }
 
 export function introAnnouncementFallbackForAi(user, date = new Date()) {
@@ -273,7 +333,7 @@ export function userDynamicVariablesForAi(user) {
     .filter(Boolean)
     .join("; ");
   const userFirstName = firstNameForAi(user?.name);
-  const userFirstNameVocative = firstNameVocativeForAi(user?.name);
+  const userAddressing = userAddressingForAi(user?.name);
   const timeOfDayGreeting = timeOfDayGreetingForAi();
   const userGreeting = userGreetingForAi(user) || "Jsem připravená.";
 
@@ -281,7 +341,9 @@ export function userDynamicVariablesForAi(user) {
     user_id: truncateAiDynamicVariable(user?.id || "unknown", 120),
     user_name: truncateAiDynamicVariable(user?.name || "Uživatel", 120),
     user_first_name: truncateAiDynamicVariable(userFirstName, 80),
-    user_first_name_vocative: truncateAiDynamicVariable(userFirstNameVocative, 80),
+    user_first_name_vocative: truncateAiDynamicVariable(userAddressing.standardVocative, 80),
+    user_first_name_friendly_vocative: truncateAiDynamicVariable(userAddressing.friendlyVocative, 80),
+    user_first_name_addressing_style: truncateAiDynamicVariable(userAddressing.style, 40),
     time_of_day_greeting: truncateAiDynamicVariable(timeOfDayGreeting || "Ahoj", 80),
     user_greeting: truncateAiDynamicVariable(userGreeting, 140),
     user_role: truncateAiDynamicVariable(access.roleLabel || access.role || "Uživatel", 120),

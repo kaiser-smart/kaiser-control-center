@@ -17,6 +17,8 @@ const REQUIRED_DYNAMIC_VARIABLES = [
   "user_name",
   "user_first_name",
   "user_first_name_vocative",
+  "user_first_name_friendly_vocative",
+  "user_first_name_addressing_style",
   "user_role",
   "available_modules",
   "user_permissions",
@@ -251,6 +253,27 @@ function radimVocativeFixtureOk() {
   return cleanString(variables.user_first_name_vocative) === "Radime";
 }
 
+function femaleDiminutiveVocativeFixtureOk() {
+  const fixtures = [
+    ["Alena Čuříková", "Alenko"],
+    ["Marcela Opluštilová", "Marcelko"],
+    ["Jarmila Olšaníková", "Jaruško"],
+    ["Bc. Lucie Ježková, DiS.", "Lucko"]
+  ];
+
+  return fixtures.every(([name, expected]) => {
+    const variables = userDynamicVariablesForAi({
+      id: `fixture-${normalizeAiSearch(name)}`,
+      name,
+      role: "readonly",
+      status: "active"
+    });
+
+    return cleanString(variables.user_first_name_friendly_vocative) === expected
+      && cleanString(variables.user_first_name_addressing_style) === "female_diminutive";
+  });
+}
+
 function humanTouchDynamicVariables(humanTouch) {
   const suggestion = Array.isArray(humanTouch?.suggestions) ? humanTouch.suggestions[0] : null;
 
@@ -289,7 +312,9 @@ export async function sarlotaStatusPayload(env, user) {
   const userFirstName = cleanString(user?.name).split(/\s+/).filter(Boolean)[0] || "";
   const currentUserIsRadim = normalizeAiSearch(userFirstName) === "radim";
   const currentVocativePresent = Boolean(cleanString(dynamicVariables.user_first_name_vocative));
+  const currentFriendlyVocativePresent = Boolean(cleanString(dynamicVariables.user_first_name_friendly_vocative));
   const radimFixtureOk = radimVocativeFixtureOk();
+  const femaleDiminutiveFixtureOk = femaleDiminutiveVocativeFixtureOk();
   const liveAgentVerified = Boolean(elevenLabsAgentConfig.verified);
   const liveAgentError = elevenLabsAgentConfig.status === "error";
   const liveAgentNameStatus = liveAgentVerified
@@ -345,10 +370,12 @@ export async function sarlotaStatusPayload(env, user) {
       valuesReturnedToPanel: false
     },
     vocative: {
-      status: currentVocativePresent && radimFixtureOk ? "ok" : "error",
+      status: currentVocativePresent && currentFriendlyVocativePresent && radimFixtureOk && femaleDiminutiveFixtureOk ? "ok" : "error",
       currentUserVocativePresent: currentVocativePresent,
+      currentUserFriendlyVocativePresent: currentFriendlyVocativePresent,
       currentUserIsRadim,
-      radimFixtureOk
+      radimFixtureOk,
+      femaleDiminutiveFixtureOk
     },
     openAiModelInElevenLabs: {
       status: modelStatus,
@@ -505,7 +532,7 @@ export async function sarlotaPanelStatusPayload(env, user) {
         label: "Vocativ",
         status: vocativeStatus,
         detail: panelStatusDetail(vocativeStatus, {
-          ok: "OK",
+          ok: "OK, Radime i ženské zdrobnělé oslovení ověřené",
           error: "vocativ není ověřený"
         })
       }

@@ -1,6 +1,7 @@
 import { recordAiAction } from "./ai-action-log-store.js";
 import { createAbsenceRequestRecord } from "./absence-requests-store.js";
 import { getUsers } from "./auth.js";
+import { userDynamicVariablesForAi } from "./ai-people-summary.js";
 import { sarlotaHumanTouchContext } from "./sarlota-human-touch.js";
 import { hasPermission } from "../../src/permissions.js";
 import { sarlotaSystemPrompt } from "../../src/sarlota/sarlotaSystemPrompt.js";
@@ -1017,9 +1018,13 @@ function normalizeIntent(value) {
 }
 
 function publicUserContext(user) {
+  const dynamicVariables = userDynamicVariablesForAi(user);
+
   return compactObject({
     id: cleanString(user?.id),
     name: truncate(user?.name, 120),
+    friendlyVocative: truncate(dynamicVariables.user_first_name_friendly_vocative, 80),
+    addressingStyle: truncate(dynamicVariables.user_first_name_addressing_style, 40),
     role: cleanString(user?.role),
     department: truncate(user?.department, 120),
     position: truncate(user?.position, 120)
@@ -1072,6 +1077,8 @@ function contextFromPayload(payload) {
       payload.consent?.sms
     )),
     dynamicUserName: truncate(dynamicVariables.user_name, 120),
+    dynamicUserFriendlyVocative: truncate(dynamicVariables.user_first_name_friendly_vocative, 80),
+    dynamicUserAddressingStyle: truncate(dynamicVariables.user_first_name_addressing_style, 40),
     dynamicUserRole: truncate(dynamicVariables.user_role, 120),
     ...absenceContext
   });

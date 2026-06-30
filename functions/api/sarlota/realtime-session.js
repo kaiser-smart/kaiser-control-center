@@ -213,6 +213,8 @@ export async function onRequestPost({ request, env }) {
   const currentModule = cleanString(payload?.currentModule || payload?.module || "");
   const instructions = sarlotaRealtimePrompt({
     userName: dynamicVariables.user_name,
+    userFriendlyVocative: dynamicVariables.user_first_name_friendly_vocative,
+    userAddressingStyle: dynamicVariables.user_first_name_addressing_style,
     userRole: dynamicVariables.user_role,
     availableModules: dynamicVariables.available_modules,
     userPermissions: dynamicVariables.user_permissions,

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.244"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.245"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: ženské zdrobnělé oslovení",
+    text: "KSO backend posílá Šarlotě bezpečné oslovení user_first_name_friendly_vocative. U ověřených žen může zaznít Alenko, Marcelko, Jaruško nebo Lucko, u mužů zůstává běžný vocativ."
+  },
   {
     title: "Šarlota: Firemní lidskost v EL",
     text: "Signed-url endpoint pro ElevenLabs posílá bezpečné dynamické proměnné human_touch_enabled, human_touch_suggestion, human_touch_type a human_touch_source, aby Šarlota použila jen ověřené krátké odlehčení z KSO backendu."
