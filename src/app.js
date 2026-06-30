@@ -1041,7 +1041,11 @@ const employeeCardState = {
   importLoading: false,
   importApplying: false,
   importMessage: "",
-  importError: ""
+  importError: "",
+  addOpen: false,
+  addSaving: false,
+  addError: "",
+  addMessage: ""
 };
 
 const fleetImportPreviewState = {
@@ -3406,6 +3410,35 @@ function employeeCardFormData(form) {
       ? employeeCardFormValue(form, "internalNote").trim()
       : (source.internalNote || ""),
     ...(hrProfile ? { hrProfile } : {})
+  };
+}
+
+function employeeAddFormData(form) {
+  const data = new FormData(form);
+  const role = normalizeRole(data.get("role") || "ridic") || "ridic";
+  const entitlement = role === "ridic" ? 20 : 25;
+
+  return {
+    createMode: "hr_only",
+    isHrOnly: true,
+    sourceSystem: "manual-entry",
+    firstName: String(data.get("firstName") || "").trim(),
+    lastName: String(data.get("lastName") || "").trim(),
+    phone: String(data.get("phone") || "").trim(),
+    email: String(data.get("email") || "").trim(),
+    role,
+    department: String(data.get("department") || "").trim(),
+    position: String(data.get("position") || "").trim(),
+    startDate: String(data.get("startDate") || "").trim(),
+    employmentStatus: "active",
+    currentAbsenceStatus: "v práci",
+    workload: 1,
+    weeklyHours: 40,
+    vacationEntitlementDays: entitlement,
+    vacationUsedDays: 0,
+    vacationPendingDays: 0,
+    vacationRemainingDays: entitlement,
+    sickDaysCurrentYear: 0
   };
 }
 
@@ -5907,8 +5940,12 @@ function absenceEmployees(user) {
           <h2>Zaměstnanci</h2>
           <p>${employees.length ? `${employees.length} lidí` : "Bez načtených zaměstnanců."}</p>
         </div>
-        ${hasPermission(user, "absence", "create") ? `<a class="primary-action" href="${routeHref(absenceRouteForTab("new"))}" data-link>Nová absence</a>` : ""}
+        <div class="absence-panel__actions">
+          ${employeeAddButton(user)}
+          ${hasPermission(user, "absence", "create") ? `<a class="primary-action" href="${routeHref(absenceRouteForTab("new"))}" data-link>Nová absence</a>` : ""}
+        </div>
       </div>
+      ${employeeAddPanel(user)}
       ${employees.length ? `
         <div class="absence-table-wrap">
           <table class="absence-table absence-table--employees">
@@ -6981,6 +7018,81 @@ function employeeCardApiBadge() {
     : '<span class="employee-card-status employee-card-status--waiting">Čeká na API</span>';
 }
 
+function employeeAddButton(user, extraClass = "") {
+  if (!canEditEmployeeCards(user)) {
+    return "";
+  }
+
+  return `
+    <button class="employee-add-button ${escapeHtml(extraClass)}" type="button" data-employee-add-open>
+      <span>Přidat zaměstnance</span>
+    </button>
+  `;
+}
+
+function employeeAddPanel(user) {
+  if (!canEditEmployeeCards(user) || !employeeCardState.addOpen) {
+    return "";
+  }
+
+  const disabled = employeeCardState.addSaving ? "disabled" : "";
+
+  return `
+    <section class="employee-add-panel" aria-labelledby="employee-add-title">
+      <div class="employee-add-panel__header">
+        <div>
+          <span>HR karta</span>
+          <h2 id="employee-add-title">Přidat zaměstnance</h2>
+          <p>Rychlé založení interní karty. Nevytváří login a nic neodesílá.</p>
+        </div>
+        <button class="employee-add-panel__close" type="button" data-employee-add-close aria-label="Zavřít přidání zaměstnance">×</button>
+      </div>
+      ${employeeCardState.addError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.addError)}</p>` : ""}
+      ${employeeCardState.addMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.addMessage)}</p>` : ""}
+      <form class="employee-add-panel__form" data-employee-add-form>
+        <label>
+          <span>Jméno</span>
+          <input name="firstName" autocomplete="given-name" required ${disabled}>
+        </label>
+        <label>
+          <span>Příjmení</span>
+          <input name="lastName" autocomplete="family-name" required ${disabled}>
+        </label>
+        <label>
+          <span>Telefon</span>
+          <input name="phone" inputmode="tel" autocomplete="tel" ${disabled}>
+        </label>
+        <label>
+          <span>E-mail</span>
+          <input name="email" type="email" autocomplete="email" ${disabled}>
+        </label>
+        <label>
+          <span>Role</span>
+          ${employeeCardSelect("role", ROLE_DEFINITIONS.map((role) => ({ value: role.id, label: role.label })), "ridic", employeeCardState.addSaving)}
+        </label>
+        <label>
+          <span>Oddělení</span>
+          <input name="department" placeholder="Provoz" ${disabled}>
+        </label>
+        <label>
+          <span>Pozice</span>
+          <input name="position" placeholder="Řidič" ${disabled}>
+        </label>
+        <label>
+          <span>Datum nástupu</span>
+          <input name="startDate" type="date" ${disabled}>
+        </label>
+        <div class="employee-add-panel__actions">
+          <button class="primary-action" type="submit" ${disabled}>
+            ${employeeCardState.addSaving ? "Zakládám..." : "Založit kartu"}
+          </button>
+          <button class="secondary-link" type="button" data-employee-add-close ${disabled}>Zrušit</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
 function employeeCardKpis(employee) {
   const balance = employeeCardState.vacationBalance || employee;
   const absence = employeeCardState.absence || {};
@@ -7904,12 +8016,14 @@ function employeeCardContent(employeeId, user) {
           <p>${escapeHtml(formEmployee.position || roleLabel(formEmployee.role))} · ${escapeHtml(formEmployee.department || "bez oddělení")}</p>
         </div>
         <div class="employee-card-header__actions">
+          ${employeeAddButton(user, "employee-add-button--compact")}
           <select class="employee-card-switcher" data-employee-card-select aria-label="Vybrat zaměstnance">
             ${employeeOptionList(employee.id)}
           </select>
         </div>
       </div>
 
+      ${employeeAddPanel(user)}
       ${employeeCardState.message ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.message)}</p>` : ""}
       ${employeeCardState.error ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.error)}</p>` : ""}
       ${employeeCardKpis(formEmployee)}
@@ -17835,12 +17949,36 @@ function driverReportListItem(item) {
 function driverReportCreateForm(user) {
   const disabled = driverReportsState.saving || !driverReportCanCreate();
   return `
-    <form class="driver-report-form" data-driver-report-form>
-      <div class="driver-report-form__grid">
-        <label>
-          <span>Řidič</span>
-          <input name="driverName" value="${escapeHtml(user?.name || "")}" autocomplete="name" required ${disabled ? "disabled" : ""}>
+    <form class="driver-report-form driver-report-form--pitstop" data-driver-report-form>
+      <div class="driver-report-pitstop-banner" aria-hidden="true">
+        <span>Pitstop</span>
+        <strong>SPZ → závada → uložit</strong>
+      </div>
+
+      <div class="driver-report-quick-fields">
+        <label class="driver-report-license-field">
+          <span>Potvrďte SPZ vozidla</span>
+          <input name="licensePlate" placeholder="4B2 1234" autocapitalize="characters" required ${disabled ? "disabled" : ""}>
         </label>
+        <label>
+          <span>Co je poškozené</span>
+          <textarea name="defectDescription" rows="4" placeholder="Např. rozbité pravé zrcátko" required ${disabled ? "disabled" : ""}></textarea>
+        </label>
+      </div>
+
+      <div class="driver-report-pitstop-steps" aria-label="Rychlý postup hlášení">
+        <span>1 SPZ</span>
+        <span>2 fotka poškození</span>
+        <span>3 servis</span>
+      </div>
+
+      <details class="driver-report-more">
+        <summary>Doplnit vozidlo, VIN a řidiče</summary>
+        <div class="driver-report-form__grid">
+          <label>
+            <span>Řidič</span>
+            <input name="driverName" value="${escapeHtml(user?.name || "")}" autocomplete="name" ${disabled ? "disabled" : ""}>
+          </label>
         <label>
           <span>Telefon řidiče</span>
           <input name="driverPhone" value="${escapeHtml(user?.phone || "")}" inputmode="tel" autocomplete="tel" ${disabled ? "disabled" : ""}>
@@ -17848,10 +17986,6 @@ function driverReportCreateForm(user) {
         <label>
           <span>Vozidlo</span>
           <input name="vehicleName" placeholder="např. vozidlo / interní číslo" ${disabled ? "disabled" : ""}>
-        </label>
-        <label>
-          <span>SPZ</span>
-          <input name="licensePlate" placeholder="4B2 1234" autocapitalize="characters" required ${disabled ? "disabled" : ""}>
         </label>
         <label>
           <span>VIN</span>
@@ -17863,22 +17997,24 @@ function driverReportCreateForm(user) {
             ${optionList(DRIVER_REPORT_BRAND_OPTIONS, "jiné", "Vyberte značku")}
           </select>
         </label>
-      </div>
-      <label>
-        <span>Popis závady</span>
-        <textarea name="defectDescription" rows="4" placeholder="Potřebuji vyměnit poškozené pravé zrcátko." required ${disabled ? "disabled" : ""}></textarea>
-      </label>
-      <label>
-        <span>Poznámka</span>
-        <textarea name="note" rows="2" ${disabled ? "disabled" : ""}></textarea>
-      </label>
+        </div>
+      </details>
+
+      <details class="driver-report-more">
+        <summary>Přidat poznámku pro servis</summary>
+        <label>
+          <span>Poznámka</span>
+          <textarea name="note" rows="2" ${disabled ? "disabled" : ""}></textarea>
+        </label>
+      </details>
+
       <label class="driver-report-check">
         <input type="checkbox" name="handoffAfterCreate" checked ${disabled ? "disabled" : ""}>
         <span>Po uložení předat Patrikovi a informovat servis</span>
       </label>
-      <p class="driver-report-form-note">Řidič bude požádán o fotku poškození. Upload fotky bude přes cloudové úložiště v další fázi.</p>
-      <button class="primary-action" type="submit" ${disabled ? "disabled" : ""}>
-        ${driverReportsState.saving ? "Ukládám..." : "Uložit hlášení"}
+      <p class="driver-report-form-note">Stisknutím tlačítka potvrzujete SPZ. Šarlota si po uložení vyžádá fotku poškození.</p>
+      <button class="primary-action driver-report-pitstop-submit" type="submit" ${disabled ? "disabled" : ""}>
+        ${driverReportsState.saving ? "Ukládám..." : "Potvrdit SPZ a uložit"}
       </button>
     </form>
   `;
@@ -18097,8 +18233,6 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
       ${driverReportsState.message ? `<p class="module-feedback__notice" role="status">${escapeHtml(driverReportsState.message)}</p>` : ""}
       ${driverReportsState.permissions?.limitation ? `<p class="driver-report-limitation">${escapeHtml(driverReportsState.permissions.limitation)}</p>` : ""}
 
-      ${driverReportsSummaryCards(items)}
-
       <section class="driver-report-workspace" aria-label="Workflow náhradních dílů">
         <section class="driver-report-panel" aria-labelledby="driver-report-new-title">
           <div class="driver-report-panel__head">
@@ -18126,6 +18260,8 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
 
         ${driverReportDetail(selected)}
       </section>
+
+      ${driverReportsSummaryCards(items)}
       ${feedbackBox}
     </main>
   `;
@@ -23886,6 +24022,76 @@ function discardEmployeeCardDirtyChanges() {
   render();
 }
 
+function openEmployeeAddPanel() {
+  employeeCardState.addOpen = true;
+  employeeCardState.addError = "";
+  employeeCardState.addMessage = "";
+  render();
+  window.setTimeout(() => {
+    document.querySelector("[data-employee-add-form] input[name='firstName']")?.focus();
+  }, 0);
+}
+
+function closeEmployeeAddPanel() {
+  if (employeeCardState.addSaving) {
+    return;
+  }
+
+  employeeCardState.addOpen = false;
+  employeeCardState.addError = "";
+  employeeCardState.addMessage = "";
+  render();
+}
+
+async function submitEmployeeAddForm(form) {
+  if (!canEditEmployeeCards() || employeeCardState.addSaving) {
+    return;
+  }
+
+  const payload = employeeAddFormData(form);
+  if (!payload.firstName || !payload.lastName) {
+    employeeCardState.addError = "Doplňte jméno a příjmení zaměstnance.";
+    employeeCardState.addMessage = "";
+    render();
+    return;
+  }
+
+  employeeCardState.addSaving = true;
+  employeeCardState.addError = "";
+  employeeCardState.addMessage = "Zakládám kartu zaměstnance...";
+  render();
+
+  try {
+    const result = await apiJson("/api/employees", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    const employee = result.employee || null;
+    if (!employee?.id) {
+      throw new Error("API nevrátilo novou kartu zaměstnance.");
+    }
+
+    employeeCardState.employee = employee;
+    employeeCardState.formDraft = null;
+    employeeCardState.addOpen = false;
+    employeeCardState.addError = "";
+    employeeCardState.addMessage = "";
+    employeeCardState.addSaving = false;
+    employeeCardState.message = "Zaměstnanec byl založen.";
+    employeeCardState.error = "";
+    upsertEmployeeCardInList(employee);
+    navigateToUrl(routeHref(employeeCardRoute(employee.id)));
+  } catch (error) {
+    employeeCardState.addError = error.payload?.error || error.message || "Zaměstnance se nepodařilo založit.";
+    employeeCardState.addMessage = "";
+  } finally {
+    employeeCardState.addSaving = false;
+    if (employeeCardState.addOpen) {
+      render();
+    }
+  }
+}
+
 async function saveEmployeeMedicalExamChanges(target = currentEmployeeMedicalExamDirtyTarget()) {
   if (!target?.isDirty || !employeeCardState.employee?.id) {
     employeeCardState.medicalExamMessage = "Lékařské prohlídky nemají žádné změny k uložení.";
@@ -24894,6 +25100,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const employeeAddForm = event.target.closest("[data-employee-add-form]");
+  if (employeeAddForm) {
+    event.preventDefault();
+    await submitEmployeeAddForm(employeeAddForm);
+    return;
+  }
+
   const employeeCardForm = event.target.closest("[data-employee-card-form]");
   if (employeeCardForm) {
     event.preventDefault();
@@ -25613,6 +25826,20 @@ document.addEventListener("click", async (event) => {
   if (employeeFocusEdit) {
     const firstInput = document.querySelector("[data-employee-card-form] input:not([disabled]), [data-employee-card-form] select:not([disabled]), [data-employee-card-form] textarea:not([disabled])");
     firstInput?.focus();
+    return;
+  }
+
+  const employeeAddOpen = event.target.closest("[data-employee-add-open]");
+  if (employeeAddOpen) {
+    event.preventDefault();
+    openEmployeeAddPanel();
+    return;
+  }
+
+  const employeeAddClose = event.target.closest("[data-employee-add-close]");
+  if (employeeAddClose) {
+    event.preventDefault();
+    closeEmployeeAddPanel();
     return;
   }
 

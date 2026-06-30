@@ -12641,6 +12641,152 @@ body:has(.data-box-page) {
   max-width: 320px;
 }
 
+.absence-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.employee-add-button {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 52%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 10%, #ffffff);
+  color: var(--text);
+  padding: 0 15px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.employee-add-button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.employee-add-panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
+}
+
+.employee-add-panel__header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 16px 0;
+}
+
+.employee-add-panel__header span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 12%, #ffffff);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.employee-add-panel__header h2 {
+  margin: 8px 0 4px;
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.employee-add-panel__header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.employee-add-panel__close {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f9f4;
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.employee-add-panel .module-feedback__error,
+.employee-add-panel .module-feedback__notice {
+  margin: 0 16px;
+}
+
+.employee-add-panel__form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.employee-add-panel__form label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.employee-add-panel__form label span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.employee-add-panel__form input,
+.employee-add-panel__form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 800;
+}
+
+.employee-add-panel__form input:focus,
+.employee-add-panel__form select:focus,
+.employee-add-button:focus-visible,
+.employee-add-panel__close:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 24%, transparent);
+  outline-offset: 2px;
+}
+
+.employee-add-panel__actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .employee-card-switcher,
 .employee-card-field input,
 .employee-card-field select,
@@ -17057,6 +17203,14 @@ body:has(.absence-page--employee-card) {
     max-width: none;
   }
 
+  .absence-panel__actions {
+    justify-content: flex-start;
+  }
+
+  .employee-add-panel__form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .employee-card-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -17101,8 +17255,25 @@ body:has(.absence-page--employee-card) {
   }
 
   .employee-card-switcher,
-  .employee-card-header__actions .secondary-link {
+  .employee-card-header__actions .secondary-link,
+  .absence-panel__actions .primary-action,
+  .employee-add-button,
+  .employee-add-panel__actions .primary-action,
+  .employee-add-panel__actions .secondary-link {
     width: 100%;
+  }
+
+  .employee-add-panel__header {
+    padding: 14px 14px 0;
+  }
+
+  .employee-add-panel__form {
+    grid-template-columns: 1fr;
+    padding: 0 14px 14px;
+  }
+
+  .employee-add-panel__actions {
+    display: grid;
   }
 }
 
@@ -21321,6 +21492,9 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 
 .driver-reports-page {
   --driver-report-line: color-mix(in srgb, var(--theme-border, var(--line)) 82%, #ffffff);
+  --driver-report-pit: #151a1f;
+  --driver-report-pit-red: #e11d48;
+  --driver-report-pit-amber: #f3c544;
 }
 
 .driver-report-hero {
@@ -21343,7 +21517,7 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin: 0 0 18px;
+  margin: 18px 0 0;
 }
 
 .driver-report-summary article {
@@ -21422,6 +21596,139 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   display: grid;
   gap: 12px;
   padding: 14px 16px 16px;
+}
+
+.driver-report-form--pitstop {
+  position: relative;
+  gap: 14px;
+  overflow: hidden;
+  padding-top: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #ffffff 82%, var(--driver-report-pit-amber)) 0%, #ffffff 38%);
+}
+
+.driver-report-pitstop-banner {
+  position: relative;
+  display: grid;
+  min-height: 62px;
+  align-items: end;
+  gap: 2px;
+  margin: 0 -16px 2px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, var(--driver-report-pit) 0%, #303943 72%, var(--driver-report-pit-red) 100%);
+  color: #ffffff;
+  padding: 18px 16px 12px 16px;
+}
+
+.driver-report-pitstop-banner::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 10px;
+  background:
+    conic-gradient(#ffffff 25%, #111827 0 50%, #ffffff 0 75%, #111827 0) 0 0 / 18px 18px;
+  content: "";
+}
+
+.driver-report-pitstop-banner span,
+.driver-report-pitstop-banner strong {
+  position: relative;
+  z-index: 1;
+}
+
+.driver-report-pitstop-banner span {
+  color: var(--driver-report-pit-amber);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.driver-report-pitstop-banner strong {
+  color: #ffffff;
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  line-height: 1.15;
+}
+
+.driver-report-quick-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.82fr) minmax(220px, 1.18fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.driver-report-license-field input {
+  min-height: 58px;
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--driver-report-pit) 52%, var(--driver-report-line));
+  background:
+    linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, #ffffff 86%, var(--driver-report-pit-amber)) 100%);
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.driver-report-pitstop-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.driver-report-pitstop-steps span {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--driver-report-pit) 26%, var(--driver-report-line));
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.driver-report-more {
+  min-width: 0;
+  border: 1px solid var(--driver-report-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-bg, #f7f9f4) 52%, #ffffff);
+}
+
+.driver-report-more summary {
+  min-height: 44px;
+  cursor: pointer;
+  padding: 12px;
+  color: var(--text);
+  font-weight: 900;
+}
+
+.driver-report-more[open] summary {
+  border-bottom: 1px solid var(--driver-report-line);
+}
+
+.driver-report-more .driver-report-form__grid,
+.driver-report-more label {
+  padding: 12px;
+}
+
+.driver-report-more .driver-report-form__grid {
+  padding-bottom: 12px;
+}
+
+.driver-report-more label {
+  display: grid;
+  gap: 6px;
+}
+
+.driver-report-pitstop-submit {
+  min-height: 52px;
+  border-color: color-mix(in srgb, var(--driver-report-pit-red) 46%, var(--theme-primary, var(--kaiser-green)));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 82%, #ffffff) 0%, var(--driver-report-pit-red) 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.18);
 }
 
 .driver-report-form__grid,
@@ -21708,6 +22015,7 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 @media (max-width: 760px) {
   .driver-report-summary,
   .driver-report-workspace,
+  .driver-report-quick-fields,
   .driver-report-form__grid,
   .driver-report-detail-grid,
   .driver-report-inline-form,
@@ -21722,11 +22030,69 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
     grid-row: auto;
   }
 
+  .driver-report-hero {
+    align-items: start;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .driver-report-hero .module-detail__icon,
+  .driver-report-hero .module-detail__status,
+  .driver-report-hero__actions,
+  .driver-report-hero p {
+    display: none;
+  }
+
+  .driver-report-hero h1 {
+    margin: 0;
+    font-size: 1.45rem;
+    line-height: 1.1;
+  }
+
+  .driver-report-workspace {
+    gap: 12px;
+  }
+
   .driver-report-panel__head,
   .driver-report-detail__head,
   .driver-report-part__title {
     align-items: stretch;
     flex-direction: column;
+    padding: 12px;
+  }
+
+  .driver-report-form {
+    padding: 0 12px 12px;
+  }
+
+  .driver-report-pitstop-banner {
+    margin: 0 -12px 0;
+    padding: 18px 12px 12px;
+  }
+
+  .driver-report-license-field input {
+    min-height: 60px;
+    font-size: 1.3rem;
+  }
+
+  .driver-report-pitstop-steps {
+    gap: 6px;
+  }
+
+  .driver-report-pitstop-steps span {
+    min-height: 42px;
+    padding: 7px 6px;
+    font-size: 0.72rem;
+  }
+
+  .driver-report-more summary,
+  .driver-report-check,
+  .driver-report-form-note {
+    font-size: 0.9rem;
+  }
+
+  .driver-report-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .driver-report-actions .secondary-link,
@@ -21737,6 +22103,10 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   .driver-report-search .secondary-link {
     width: 100%;
     min-height: 44px;
+  }
+
+  .driver-report-form .driver-report-pitstop-submit {
+    min-height: 52px;
   }
 }
 

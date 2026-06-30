@@ -760,6 +760,20 @@ function splitEmployeeName(name) {
   };
 }
 
+function cleanMockString(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeManualMockEmployeeKey(value) {
+  return cleanMockString(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
 function sameMockId(left, right) {
   return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
 }
@@ -1541,6 +1555,96 @@ function mockEmployeeFromUser(user) {
   };
 }
 
+function mockEmployeeFromStoredCard(card) {
+  const id = cleanMockString(card?.id || card?.userId);
+  const nameParts = splitEmployeeName(`${card?.firstName || ""} ${card?.lastName || ""}`);
+  const role = normalizeRole(card?.role || "ridic");
+  const entitlement = Number(card?.vacationEntitlementDays ?? defaultVacationEntitlement({ role }));
+  const used = Number(card?.vacationUsedDays ?? 0);
+  const pending = Number(card?.vacationPendingDays ?? 0);
+
+  return {
+    id,
+    userId: cleanMockString(card?.userId) || id,
+    firstName: cleanMockString(card?.firstName) || nameParts.firstName,
+    lastName: cleanMockString(card?.lastName) || nameParts.lastName,
+    email: cleanMockString(card?.email),
+    phone: cleanMockString(card?.phone),
+    address: cleanMockString(card?.address),
+    role,
+    department: cleanMockString(card?.department),
+    position: cleanMockString(card?.position),
+    managerId: cleanMockString(card?.managerId),
+    managerName: cleanMockString(card?.managerName),
+    employmentStatus: cleanMockString(card?.employmentStatus) || "active",
+    startDate: cleanMockString(card?.startDate),
+    employmentType: cleanMockString(card?.employmentType),
+    workplace: cleanMockString(card?.workplace),
+    weeklyHours: Number(card?.weeklyHours ?? 40),
+    workload: Number(card?.workload ?? 1),
+    vacationEntitlementDays: Number.isFinite(entitlement) ? entitlement : defaultVacationEntitlement({ role }),
+    vacationUsedDays: Number.isFinite(used) ? used : 0,
+    vacationPendingDays: Number.isFinite(pending) ? pending : 0,
+    vacationRemainingDays: Number.isFinite(entitlement - used - pending)
+      ? entitlement - used - pending
+      : defaultVacationEntitlement({ role }),
+    currentAbsenceStatus: cleanMockString(card?.currentAbsenceStatus) || "v práci",
+    sickDaysCurrentYear: Number(card?.sickDaysCurrentYear ?? 0),
+    lastAbsenceDate: cleanMockString(card?.lastAbsenceDate),
+    internalNote: cleanMockString(card?.internalNote),
+    isHrOnly: card?.isHrOnly !== false,
+    sourceSystem: cleanMockString(card?.sourceSystem) || "manual-entry",
+    sourceEmployeeKey: cleanMockString(card?.sourceEmployeeKey),
+    createdAt: cleanMockString(card?.createdAt) || new Date().toISOString(),
+    updatedAt: cleanMockString(card?.updatedAt) || cleanMockString(card?.createdAt) || new Date().toISOString()
+  };
+}
+
+function createManualMockEmployee(currentUser, payload = {}) {
+  if (!canEditMockEmployee(currentUser)) {
+    const error = new Error("Nemáte oprávnění založit zaměstnance.");
+    error.status = 403;
+    throw error;
+  }
+
+  const firstName = cleanMockString(payload.firstName);
+  const lastName = cleanMockString(payload.lastName);
+  if (!firstName || !lastName) {
+    const error = new Error("Doplňte jméno a příjmení zaměstnance.");
+    error.status = 400;
+    throw error;
+  }
+
+  const base = normalizeManualMockEmployeeKey(`${firstName} ${lastName}`) || "zamestnanec";
+  const id = cleanMockString(payload.id || payload.userId) || `manual-${base}-${randomUUID().slice(0, 8)}`;
+  const role = normalizeRole(payload.role || "ridic");
+  const entitlement = Number(payload.vacationEntitlementDays ?? defaultVacationEntitlement({ role }));
+  const now = new Date().toISOString();
+  const employee = mockEmployeeFromStoredCard({
+    ...payload,
+    id,
+    userId: cleanMockString(payload.userId) || id,
+    firstName,
+    lastName,
+    role,
+    isHrOnly: true,
+    sourceSystem: cleanMockString(payload.sourceSystem) || "manual-entry",
+    sourceEmployeeKey: cleanMockString(payload.sourceEmployeeKey || payload.email || `${firstName} ${lastName}`),
+    employmentStatus: cleanMockString(payload.employmentStatus) || "active",
+    currentAbsenceStatus: cleanMockString(payload.currentAbsenceStatus) || "v práci",
+    workload: Number(payload.workload ?? 1),
+    weeklyHours: Number(payload.weeklyHours ?? 40),
+    vacationEntitlementDays: Number.isFinite(entitlement) ? entitlement : defaultVacationEntitlement({ role }),
+    vacationUsedDays: Number(payload.vacationUsedDays ?? 0),
+    vacationPendingDays: Number(payload.vacationPendingDays ?? 0),
+    createdAt: now,
+    updatedAt: now
+  });
+
+  mockEmployeeCards.set(employee.id, employee);
+  return employee;
+}
+
 function canViewMockEmployee(currentUser, employee) {
   const role = normalizeRole(currentUser?.role);
 
@@ -1644,8 +1748,18 @@ function saveMockMedicalExam(currentUser, employee, payload) {
 }
 
 function visibleMockEmployees(currentUser) {
-  return mockUsers
-    .map(mockEmployeeFromUser)
+  const userIds = new Set(mockUsers.map((user) => cleanMockString(user.id).toLowerCase()));
+  const manualEmployees = Array.from(mockEmployeeCards.values())
+    .filter((card) => {
+      const id = cleanMockString(card?.id || card?.userId).toLowerCase();
+      return id && !userIds.has(id);
+    })
+    .map(mockEmployeeFromStoredCard);
+
+  return [
+    ...mockUsers.map(mockEmployeeFromUser),
+    ...manualEmployees
+  ]
     .filter((employee) => canViewMockEmployee(currentUser, employee))
     .sort((a, b) => fullEmployeeName(a).localeCompare(fullEmployeeName(b), "cs"));
 }
@@ -1653,11 +1767,14 @@ function visibleMockEmployees(currentUser) {
 function findMockEmployee(currentUser, id) {
   const user = findMockUser(id);
 
-  if (!user) {
-    return null;
+  if (user) {
+    const employee = mockEmployeeFromUser(user);
+    return canViewMockEmployee(currentUser, employee) ? employee : null;
   }
 
-  const employee = mockEmployeeFromUser(user);
+  const card = Array.from(mockEmployeeCards.values())
+    .find((item) => sameMockId(item.id, id) || sameMockId(item.userId, id));
+  const employee = card ? mockEmployeeFromStoredCard(card) : null;
   return canViewMockEmployee(currentUser, employee) ? employee : null;
 }
 
@@ -4408,6 +4525,30 @@ async function handleApi(request, response) {
     }
 
     sendJson(response, 200, { employees: visibleMockEmployees(user), apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/employees" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "absence", "edit")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění založit zaměstnance." });
+      return true;
+    }
+
+    try {
+      const payload = await readJsonBody(request);
+      const employee = createManualMockEmployee(user, payload);
+      sendJson(response, 201, { employee, apiStatus: "ready" });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Zaměstnance se nepodařilo založit.",
+        apiStatus: "ready"
+      });
+    }
     return true;
   }
 
