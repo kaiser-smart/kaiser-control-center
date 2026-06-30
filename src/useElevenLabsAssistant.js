@@ -104,12 +104,16 @@ function isMicrophonePermissionDenied(error) {
 
 function createMicrophoneStartError(error) {
   const wrappedError = new Error(microphoneErrorMessage(error));
-  wrappedError.code = isMicrophonePermissionDenied(error)
-    ? "voice_microphone_denied"
-    : error?.code || "voice_microphone_error";
-  wrappedError.voiceReason = wrappedError.code === "voice_microphone_denied"
-    ? "microphone-permission-denied"
-    : "microphone-start-failed";
+  if (isMicrophonePermissionDenied(error)) {
+    wrappedError.code = "voice_microphone_denied";
+    wrappedError.voiceReason = "microphone-permission-denied";
+  } else if (error?.code === "voice_microphone_timeout") {
+    wrappedError.code = "voice_microphone_timeout";
+    wrappedError.voiceReason = "microphone-permission-timeout";
+  } else {
+    wrappedError.code = error?.code || "voice_microphone_error";
+    wrappedError.voiceReason = "microphone-start-failed";
+  }
   wrappedError.originalName = String(error?.name || "");
   return wrappedError;
 }
@@ -391,6 +395,11 @@ export function useElevenLabsAssistant({
     if (!response.ok) {
       const error = new Error(payload.error || "ElevenLabs session se nepodařilo připravit.");
       error.payload = payload;
+      error.code = String(payload.code || "").trim() ||
+        (response.status === 503 && payload.configured === false
+          ? "elevenlabs_not_configured"
+          : "elevenlabs_signed_url_failed");
+      error.httpStatus = response.status;
       throw error;
     }
 
@@ -696,7 +705,10 @@ export function useElevenLabsAssistant({
     }
 
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error("Mikrofon není v tomto prohlížeči dostupný.");
+      const error = new Error("Mikrofon není v tomto prohlížeči dostupný.");
+      error.code = "voice_microphone_unavailable";
+      error.voiceReason = "microphone-api-unavailable";
+      throw error;
     }
 
     closeTextSession("new-voice-stream-session");

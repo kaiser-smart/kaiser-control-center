@@ -391,6 +391,18 @@ const AI_VOICE_SPEAKING_LABEL = "Šarlota odpovídá…";
 const AI_VOICE_MUTED_LABEL = "Mikrofon je vypnutý";
 const AI_VOICE_MICROPHONE_DENIED_LABEL = "Mikrofon není povolený";
 const AI_VOICE_MICROPHONE_DENIED_NOTICE = "Povol mikrofon pro tento web v prohlížeči a potom klepni znovu na mikrofon.";
+const AI_VOICE_MICROPHONE_TIMEOUT_LABEL = "Čekám na povolení mikrofonu";
+const AI_VOICE_MICROPHONE_TIMEOUT_NOTICE = "V prohlížeči potvrď povolení mikrofonu. Pokud výzva zmizela, povol mikrofon v nastavení webu a klepni znovu.";
+const AI_VOICE_MICROPHONE_UNAVAILABLE_LABEL = "Mikrofon není dostupný";
+const AI_VOICE_MICROPHONE_UNAVAILABLE_NOTICE = "Tento prohlížeč nebo zařízení neposkytuje mikrofon. Otevři stránku v prohlížeči s podporou mikrofonu.";
+const AI_VOICE_MICROPHONE_START_FAILED_LABEL = "Mikrofon se nepodařilo spustit";
+const AI_VOICE_MICROPHONE_START_FAILED_NOTICE = "Zkontroluj, jestli mikrofon nepoužívá jiná aplikace, a potom klepni znovu.";
+const AI_VOICE_LOCAL_ELEVENLABS_LABEL = "Lokální hlas Šarloty není nastavený";
+const AI_VOICE_LOCAL_ELEVENLABS_NOTICE = "Lokální preview neumí spustit živý ElevenLabs hovor. Pro ostrý hlas použij produkci s přihlášením a povoleným mikrofonem.";
+const AI_VOICE_ELEVENLABS_CONFIG_LABEL = "ElevenLabs není nastavený";
+const AI_VOICE_ELEVENLABS_CONFIG_NOTICE = "Chybí serverová konfigurace ElevenLabs. Hlas nepoběží, dokud nebude nastavený API klíč a Agent ID.";
+const AI_VOICE_SIGNED_URL_ERROR_LABEL = "Hlas Šarloty není připravený";
+const AI_VOICE_SIGNED_URL_ERROR_NOTICE = "Nepodařilo se připravit ElevenLabs signed-url session. Zkus to znovu; pokud chyba trvá, zkontroluj stav Šarloty v nastavení.";
 const AI_VOICE_DISCONNECTED_LABEL = "Spojení se přerušilo. Klepni pro obnovení.";
 const AI_VOICE_ERROR_LABEL = "Nepodařilo se připojit mikrofon.";
 const AI_VOICE_WEAK_INPUT_NOTICE = "Mluv blíž k telefonu nebo zvyš hlasitost zařízení.";
@@ -1820,6 +1832,27 @@ function syncVoiceUiStateFromStatus(status) {
   }
 }
 
+function aiVoiceErrorCode(error = {}) {
+  return String(error?.code || error?.payload?.code || "").trim();
+}
+
+function setAiVoiceProblem({
+  elevenLabsStatus = "",
+  status = AI_VOICE_ERROR_LABEL,
+  notice = "",
+  tags = ["Chyba hlasu", "Zkusit znovu", "Bez odeslání"],
+  state = "error"
+} = {}) {
+  aiAssistantState.elevenLabsStatus = elevenLabsStatus || status;
+  aiAssistantState.voiceStatus = status;
+  aiAssistantState.voiceUiState = AI_VOICE_UI_STATES.includes(state) ? state : "error";
+  aiAssistantState.voiceNotice = notice || status;
+  aiAssistantState.voiceTags = tags;
+  triggerAiVoiceSessionHaptic("problem");
+  void releaseAiVoiceWakeLock({ renderAfter: false });
+  renderAiAssistantLayerOnly();
+}
+
 function resetAiVoiceConversation() {
   clearAiVoiceStateTimer();
   clearAiVoiceWeakInputNotice();
@@ -2550,42 +2583,94 @@ async function startElevenLabsVoiceRecognition() {
       return;
     }
 
-    if (error?.code === "voice_microphone_denied" || String(error?.message || "").includes("Mikrofon není povolený")) {
-      aiAssistantState.elevenLabsStatus = AI_VOICE_MICROPHONE_DENIED_LABEL;
-      aiAssistantState.voiceStatus = AI_VOICE_MICROPHONE_DENIED_LABEL;
-      aiAssistantState.voiceUiState = "microphoneDenied";
-      aiAssistantState.voiceNotice = AI_VOICE_MICROPHONE_DENIED_NOTICE;
-      aiAssistantState.voiceTags = ["Mikrofon blokován", "Zkusit znovu", "Bez odeslání"];
-      triggerAiVoiceSessionHaptic("problem");
-      void releaseAiVoiceWakeLock({ renderAfter: false });
-      renderAiAssistantLayerOnly();
+    const errorCode = aiVoiceErrorCode(error);
+
+    if (errorCode === "voice_microphone_denied" || String(error?.message || "").includes("Mikrofon není povolený")) {
+      setAiVoiceProblem({
+        status: AI_VOICE_MICROPHONE_DENIED_LABEL,
+        notice: AI_VOICE_MICROPHONE_DENIED_NOTICE,
+        tags: ["Mikrofon blokován", "Povol v prohlížeči", "Bez odeslání"],
+        state: "microphoneDenied"
+      });
+      return;
+    }
+
+    if (errorCode === "voice_microphone_timeout") {
+      setAiVoiceProblem({
+        status: AI_VOICE_MICROPHONE_TIMEOUT_LABEL,
+        notice: AI_VOICE_MICROPHONE_TIMEOUT_NOTICE,
+        tags: ["Čeká na povolení", "Povol mikrofon", "Bez odeslání"],
+        state: "microphoneDenied"
+      });
+      return;
+    }
+
+    if (errorCode === "voice_microphone_unavailable") {
+      setAiVoiceProblem({
+        status: AI_VOICE_MICROPHONE_UNAVAILABLE_LABEL,
+        notice: AI_VOICE_MICROPHONE_UNAVAILABLE_NOTICE,
+        tags: ["Mikrofon nedostupný", "Jiný prohlížeč", "Bez odeslání"]
+      });
+      return;
+    }
+
+    if (errorCode === "voice_microphone_error") {
+      setAiVoiceProblem({
+        status: AI_VOICE_MICROPHONE_START_FAILED_LABEL,
+        notice: error?.message || AI_VOICE_MICROPHONE_START_FAILED_NOTICE,
+        tags: ["Mikrofon nelze spustit", "Zkusit znovu", "Bez odeslání"]
+      });
+      return;
+    }
+
+    if (errorCode === "elevenlabs_local_unconfigured") {
+      setAiVoiceProblem({
+        status: AI_VOICE_LOCAL_ELEVENLABS_LABEL,
+        notice: AI_VOICE_LOCAL_ELEVENLABS_NOTICE,
+        tags: ["Lokální preview", "Bez ElevenLabs", "Produkce"]
+      });
+      return;
+    }
+
+    if (errorCode === "elevenlabs_not_configured") {
+      setAiVoiceProblem({
+        status: AI_VOICE_ELEVENLABS_CONFIG_LABEL,
+        notice: AI_VOICE_ELEVENLABS_CONFIG_NOTICE,
+        tags: ["Chybí konfigurace", "ElevenLabs", "Bez odeslání"]
+      });
+      return;
+    }
+
+    if (errorCode === "elevenlabs_signed_url_failed") {
+      setAiVoiceProblem({
+        status: AI_VOICE_SIGNED_URL_ERROR_LABEL,
+        notice: error?.payload?.error || error?.message || AI_VOICE_SIGNED_URL_ERROR_NOTICE,
+        tags: ["Signed URL chyba", "Zkusit znovu", "Bez odeslání"]
+      });
       return;
     }
 
     if (error?.code === "voice_disconnected") {
-      aiAssistantState.elevenLabsStatus = `ElevenLabs agent ${assistant.name} je odpojený.`;
-      aiAssistantState.voiceStatus = AI_VOICE_DISCONNECTED_LABEL;
-      aiAssistantState.voiceUiState = "disconnected";
-      aiAssistantState.voiceNotice = error?.message || "Spojení se Šarlotou se přerušilo. Zkontroluj mikrofon, oprávnění prohlížeče a klikni na Obnovit spojení.";
-      aiAssistantState.voiceTags = [
-        "Odpojeno",
-        error?.closeCode ? `Kód ${error.closeCode}` : "Obnovit spojení",
-        error?.voiceReason === "microphone-track-ended" ? "Mikrofon ukončen" : "Mikrofon vypnutý"
-      ];
-      triggerAiVoiceSessionHaptic("problem");
-      void releaseAiVoiceWakeLock({ renderAfter: false });
-      renderAiAssistantLayerOnly();
+      setAiVoiceProblem({
+        elevenLabsStatus: `ElevenLabs agent ${assistant.name} je odpojený.`,
+        status: AI_VOICE_DISCONNECTED_LABEL,
+        notice: error?.message || "Spojení se Šarlotou se přerušilo. Zkontroluj mikrofon, oprávnění prohlížeče a klikni na Obnovit spojení.",
+        tags: [
+          "Odpojeno",
+          error?.closeCode ? `Kód ${error.closeCode}` : "Obnovit spojení",
+          error?.voiceReason === "microphone-track-ended" ? "Mikrofon ukončen" : "Mikrofon vypnutý"
+        ],
+        state: "disconnected"
+      });
       return;
     }
 
-    aiAssistantState.elevenLabsStatus = error?.payload?.error || aiAssistantState.elevenLabsStatus || AI_STATUS_ELEVENLABS_WAITING;
-    aiAssistantState.voiceStatus = error?.payload?.error || error?.message || AI_VOICE_ERROR_LABEL;
-    aiAssistantState.voiceUiState = "error";
-    aiAssistantState.voiceNotice = error?.payload?.error || error?.message || "Hlasový režim Šarloty se nepodařilo spustit.";
-    aiAssistantState.voiceTags = ["Chyba hlasu", "Zkusit znovu", "Bez odeslání"];
-    triggerAiVoiceSessionHaptic("problem");
-    void releaseAiVoiceWakeLock({ renderAfter: false });
-    renderAiAssistantLayerOnly();
+    setAiVoiceProblem({
+      elevenLabsStatus: error?.payload?.error || aiAssistantState.elevenLabsStatus || AI_STATUS_ELEVENLABS_WAITING,
+      status: error?.payload?.error || error?.message || AI_VOICE_ERROR_LABEL,
+      notice: error?.payload?.error || error?.message || "Hlasový režim Šarloty se nepodařilo spustit.",
+      tags: ["Chyba hlasu", "Zkusit znovu", "Bez odeslání"]
+    });
   }
 }
 

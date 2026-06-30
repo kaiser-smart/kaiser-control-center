@@ -4447,6 +4447,7 @@ async function handleApi(request, response) {
     const assistant = url.searchParams.get("assistant") === "marek" ? "Marek" : "Šarlota";
     sendJson(response, 503, {
       error: "ElevenLabs není nastavený v lokálním vývojovém serveru.",
+      code: "elevenlabs_local_unconfigured",
       assistantId: assistant === "Marek" ? "marek" : "sarlota",
       assistantName: assistant,
       configured: false,
