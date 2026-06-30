@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.258"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.259"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -26,7 +26,7 @@ export const versionNews = [
   },
   {
     title: "Šarlota: jen ElevenLabs hlas",
-    text: "OpenAI Realtime hlasová větev byla odstraněná. Tlačítko Šarloty teď používá jednu hlasovou cestu přes ElevenLabs signed-url a KSO backend."
+    text: "Testovací hlasová větev byla odstraněná. Tlačítko Šarloty teď používá jednu hlasovou cestu přes ElevenLabs signed-url a KSO backend."
   },
   {
     title: "Šarlota: jasná chyba mikrofonu",
@@ -114,7 +114,7 @@ export const versionNews = [
   },
   {
     title: "Šarlota: výchozí hlas zpět na ElevenLabs",
-    text: "Tlačítko Spustit hlas spouští stabilní ElevenLabs režim. OpenAI Realtime hlasová testovací cesta už není v aplikaci."
+    text: "Tlačítko Spustit hlas spouští stabilní ElevenLabs režim. Testovací hlasová cesta už není v aplikaci."
   },
   {
     title: "Šarlota: velký mikrofon na černém pozadí",
