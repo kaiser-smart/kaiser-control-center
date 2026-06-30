@@ -18523,7 +18523,7 @@ function driverReportCreateForm(user) {
     <form class="driver-report-form driver-report-form--pitstop" data-driver-report-form>
       <div class="driver-report-pitstop-banner" aria-hidden="true">
         <span>Pitstop</span>
-        <strong>SPZ → závada → uložit</strong>
+        <strong>SPZ → hlášení → odeslat</strong>
       </div>
 
       <div class="driver-report-quick-fields">
@@ -18536,14 +18536,14 @@ function driverReportCreateForm(user) {
           ${driverReportPlateOverrideForm()}
         </label>
         <label>
-          <span>Co je poškozené</span>
-          <textarea name="defectDescription" rows="4" placeholder="Např. rozbité pravé zrcátko" required ${disabled ? "disabled" : ""}>${escapeHtml(draft.defectDescription)}</textarea>
+          <span>Co je potřeba na vozidle řešit</span>
+          <textarea name="defectDescription" rows="4" placeholder="Například výměna stěračů, pneumatik, oleje, závada, poškození nebo jiná servisní potřeba." required ${disabled ? "disabled" : ""}>${escapeHtml(draft.defectDescription)}</textarea>
         </label>
       </div>
 
       <div class="driver-report-pitstop-steps" aria-label="Rychlý postup hlášení">
         <span>1 SPZ</span>
-        <span>2 fotka poškození</span>
+        <span>2 popis / fotka</span>
         <span>3 servis</span>
       </div>
 
@@ -18587,9 +18587,9 @@ function driverReportCreateForm(user) {
         <input type="checkbox" name="handoffAfterCreate" ${draft.handoffAfterCreate ? "checked" : ""} ${disabled ? "disabled" : ""}>
         <span>Po uložení předat Patrikovi a informovat servis</span>
       </label>
-      <p class="driver-report-form-note">Stisknutím tlačítka potvrzujete SPZ. Šarlota si po uložení vyžádá fotku poškození.</p>
+      <p class="driver-report-form-note">Stisknutím tlačítka potvrzujete SPZ. Šarlota si po uložení může vyžádat fotku nebo doplnění hlášení.</p>
       <button class="primary-action driver-report-pitstop-submit" type="submit" data-driver-report-submit ${submitDisabled ? "disabled" : ""}>
-        ${driverReportsState.saving ? "Ukládám..." : "Potvrdit SPZ a uložit"}
+        ${driverReportsState.saving ? "Odesílám..." : "Odeslat hlášení"}
       </button>
     </form>
   `;
@@ -18750,8 +18750,8 @@ function driverReportDetail(item) {
         ${driverReportField("SPZ", item.licensePlate)}
         ${driverReportField("VIN", item.vin || "není dostupné")}
         ${driverReportField("Značka", item.vehicleBrandLabel)}
-        ${driverReportField("Typ závady", item.defectType)}
-        ${driverReportField("Fotka poškození", driverReportPhotoStatusLabel(item.damagePhotoStatus))}
+        ${driverReportField("Typ hlášení", item.defectType)}
+        ${driverReportField("Fotka / podklad", driverReportPhotoStatusLabel(item.damagePhotoStatus))}
       </div>
 
       <section class="driver-report-part" aria-label="Náhradní díl">
@@ -18806,7 +18806,7 @@ function driverReportsSummaryCards(items) {
   const arrived = items.filter((item) => item.status === "part_arrived").length;
   const scheduled = items.filter((item) => item.status === "service_scheduled").length;
   return `
-    <div class="driver-report-summary" aria-label="Souhrn ND hlášení">
+    <div class="driver-report-summary" aria-label="Souhrn servisních hlášení">
       <article><span>Čeká na díl</span><strong>${waiting}</strong></article>
       <article><span>Objednáno</span><strong>${ordered}</strong></article>
       <article><span>Díl dorazil</span><strong>${arrived}</strong></article>
@@ -18981,7 +18981,7 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">${isDashboard ? "Modulový dashboard" : "Modul"}</div>
           <h1 id="module-title">Hlášení řidičů</h1>
-          <p>Náhradní díly, objednání a přistavení vozidla do dílny. Objednací číslo zůstává neověřené, dokud ho nedoplní oprávněná role.</p>
+          <p>Řidič zde jednoduše nahlásí servisní potřebu, závadu, údržbu nebo jiný požadavek k vozidlu.</p>
           <div class="module-detail__status">
             <span>Stav</span>
             <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
@@ -18998,11 +18998,11 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
       ${driverReportsState.message ? `<p class="module-feedback__notice" role="status">${escapeHtml(driverReportsState.message)}</p>` : ""}
       ${driverReportsState.permissions?.limitation ? `<p class="driver-report-limitation">${escapeHtml(driverReportsState.permissions.limitation)}</p>` : ""}
 
-      <section class="driver-report-workspace" aria-label="Workflow náhradních dílů">
+      <section class="driver-report-workspace" aria-label="Workflow servisních hlášení">
         <section class="driver-report-panel" aria-labelledby="driver-report-new-title">
           <div class="driver-report-panel__head">
             <h2 id="driver-report-new-title">Nové hlášení</h2>
-            <span>ND</span>
+            <span>Servis</span>
           </div>
           ${driverReportCreateForm(user)}
         </section>
@@ -19013,7 +19013,7 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
             <span>${items.length}</span>
           </div>
           <form class="driver-report-search" data-driver-report-search-form>
-            <input name="search" value="${escapeHtml(driverReportsState.search)}" placeholder="Hledat SPZ, řidiče, díl">
+            <input name="search" value="${escapeHtml(driverReportsState.search)}" placeholder="Hledat SPZ, řidiče, požadavek">
             <button class="secondary-link" type="submit">Hledat</button>
           </form>
           <div class="driver-report-list">
@@ -19077,8 +19077,8 @@ async function submitDriverReportForm(form) {
     });
     driverReportsState.selected = result.request || null;
     driverReportsState.message = result.request?.status === "handed_to_ordering"
-      ? "Hlášení je uložené a předané k objednání."
-      : "Hlášení je uložené. Zkontrolujte stav notifikací.";
+      ? "Hlášení bylo odesláno a předané k objednání."
+      : "Hlášení bylo odesláno.";
     driverReportsState.draft = {
       licensePlate: "",
       defectDescription: "",
@@ -19106,7 +19106,7 @@ async function submitDriverReportForm(form) {
     driverReportsState.loaded = false;
     await loadDriverReports({ renderAfter: false, force: true });
   } catch (error) {
-    driverReportsState.error = error.payload?.error || "Hlášení se nepodařilo uložit.";
+    driverReportsState.error = error.payload?.error || "Hlášení se nepodařilo odeslat.";
   } finally {
     driverReportsState.saving = false;
     render();
