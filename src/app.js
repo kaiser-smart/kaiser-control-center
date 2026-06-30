@@ -403,6 +403,8 @@ const AI_VOICE_ELEVENLABS_CONFIG_LABEL = "ElevenLabs není nastavený";
 const AI_VOICE_ELEVENLABS_CONFIG_NOTICE = "Chybí serverová konfigurace ElevenLabs. Hlas nepoběží, dokud nebude nastavený API klíč a Agent ID.";
 const AI_VOICE_SIGNED_URL_ERROR_LABEL = "Hlas Šarloty není připravený";
 const AI_VOICE_SIGNED_URL_ERROR_NOTICE = "Nepodařilo se připravit ElevenLabs signed-url session. Zkus to znovu; pokud chyba trvá, zkontroluj stav Šarloty v nastavení.";
+const AI_VOICE_SERVER_ERROR_LABEL = "Server Šarloty není připravený";
+const AI_VOICE_SERVER_ERROR_NOTICE = "Serverovou přípravu hlasu se nepodařilo dokončit. Zkus to znovu; pokud chyba trvá, zkontroluj nastavení Šarloty.";
 const AI_VOICE_DISCONNECTED_LABEL = "Spojení se přerušilo. Klepni pro obnovení.";
 const AI_VOICE_ERROR_LABEL = "Nepodařilo se připojit mikrofon.";
 const AI_VOICE_WEAK_INPUT_NOTICE = "Mluv blíž k telefonu nebo zvyš hlasitost zařízení.";
@@ -2646,6 +2648,15 @@ async function startElevenLabsVoiceRecognition() {
         status: AI_VOICE_SIGNED_URL_ERROR_LABEL,
         notice: error?.payload?.error || error?.message || AI_VOICE_SIGNED_URL_ERROR_NOTICE,
         tags: ["Signed URL chyba", "Zkusit znovu", "Bez odeslání"]
+      });
+      return;
+    }
+
+    if (errorCode === "elevenlabs_server_error") {
+      setAiVoiceProblem({
+        status: AI_VOICE_SERVER_ERROR_LABEL,
+        notice: error?.payload?.error || error?.message || AI_VOICE_SERVER_ERROR_NOTICE,
+        tags: ["Serverová chyba", "Zkusit znovu", "Bez odeslání"]
       });
       return;
     }

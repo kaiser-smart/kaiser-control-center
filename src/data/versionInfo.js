@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.260"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.261"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: odolnější příprava hlasu",
+    text: "ElevenLabs signed-url endpoint nově vrací kontrolovaný JSON i při serverové chybě a volitelné kontexty Šarloty, jako vozidlo řidiče nebo firemní odlehčení, už nesmí shodit hlasovou session."
+  },
   {
     title: "Šarlota: přesná diagnostika hlasu",
     text: "Hlasový panel Šarloty nově jasně rozlišuje blokovaný mikrofon, čekání na povolení, nedostupný mikrofon, lokální preview bez ElevenLabs a chybu signed-url session."

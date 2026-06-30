@@ -531,12 +531,13 @@ export async function saveFleetVehicleDriverAssignment(env, user, vehicleId, pay
 }
 
 function vehicleTypeForHumanTouch(vehicle = {}) {
+  const safeVehicle = vehicle || {};
   const source = normalizeKey([
-    vehicle.vehicleType,
-    vehicle.bodyType,
-    vehicle.model,
-    vehicle.internalNumber,
-    vehicle.source
+    safeVehicle.vehicleType,
+    safeVehicle.bodyType,
+    safeVehicle.model,
+    safeVehicle.internalNumber,
+    safeVehicle.source
   ].join(" "));
 
   if (/cisterna|cisteren|tanker|adr/.test(source)) {

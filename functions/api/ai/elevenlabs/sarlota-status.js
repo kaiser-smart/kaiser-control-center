@@ -55,6 +55,10 @@ function cleanString(value) {
   return String(value ?? "").trim();
 }
 
+function safeErrorMessage(error) {
+  return cleanString(error?.message || error?.name || "unknown_error");
+}
+
 function normalizeStatusText(value) {
   return cleanString(value)
     .normalize("NFD")
@@ -293,6 +297,30 @@ function humanTouchDynamicVariables(humanTouch) {
   };
 }
 
+function fallbackDriverReportVehicleVariables() {
+  return {
+    driver_report_vehicle_status: "nenalezeno",
+    driver_report_vehicle_id: "",
+    driver_report_vehicle_name: "",
+    driver_report_vehicle_license_plate: "",
+    driver_report_vehicle_vin: "",
+    driver_report_vehicle_type: "",
+    driver_report_vehicle_context: "V Hlášení řidičů není vozidlo podle volajícího jistě identifikované. Zeptej se na SPZ vozidla."
+  };
+}
+
+async function optionalStatusContext(name, loader, fallback) {
+  try {
+    return await loader();
+  } catch (error) {
+    console.error("elevenlabs.status_optional_context_failed", {
+      context: name,
+      message: safeErrorMessage(error)
+    });
+    return typeof fallback === "function" ? fallback() : fallback;
+  }
+}
+
 export async function sarlotaStatusPayload(env, user) {
   const apiKeyPresent = Boolean(cleanString(env?.ELEVENLABS_API_KEY));
   const agentId = agentIdFor(env);
@@ -304,10 +332,18 @@ export async function sarlotaStatusPayload(env, user) {
   });
   const introAnnouncement = await sarlotaIntroAnnouncementForAi(env, user, SARLOTA_ASSISTANT);
   const userVariables = userDynamicVariablesForAi(user);
-  const humanTouch = await sarlotaHumanTouchContext(env, user, {
-    dynamic_variables: userVariables
-  });
-  const driverReportVehicleVariables = await driverReportVehicleDynamicVariables(env, user);
+  const humanTouch = await optionalStatusContext(
+    "human_touch",
+    () => sarlotaHumanTouchContext(env, user, {
+      dynamic_variables: userVariables
+    }),
+    { enabled: false, suggestions: [], sourceStatus: { status: "unavailable" } }
+  );
+  const driverReportVehicleVariables = await optionalStatusContext(
+    "driver_report_vehicle",
+    () => driverReportVehicleDynamicVariables(env, user),
+    fallbackDriverReportVehicleVariables
+  );
   const dynamicVariables = {
     ...userVariables,
     ...introAnnouncement.variables,
@@ -541,11 +577,22 @@ export async function sarlotaPanelStatusPayload(env, user) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const { user, response } = await requireUserPermission(env, request, "settings", "manage");
+  try {
+    const { user, response } = await requireUserPermission(env, request, "settings", "manage");
 
-  if (response) {
-    return response;
+    if (response) {
+      return response;
+    }
+
+    return json(await sarlotaStatusPayload(env, user));
+  } catch (error) {
+    console.error("elevenlabs.sarlota_status_failed", {
+      message: safeErrorMessage(error)
+    });
+    return json({
+      error: "Stav Šarloty se teď nepodařilo ověřit.",
+      code: "sarlota_status_failed",
+      apiStatus: "waiting"
+    }, 500);
   }
-
-  return json(await sarlotaStatusPayload(env, user));
 }

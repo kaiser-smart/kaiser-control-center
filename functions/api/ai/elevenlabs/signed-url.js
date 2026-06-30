@@ -4,7 +4,10 @@ import {
   recordSarlotaIntroAnnouncement,
   sarlotaIntroAnnouncementForAi
 } from "../../../_lib/ai-session-announcements.js";
-import { userDynamicVariablesForAi } from "../../../_lib/ai-people-summary.js";
+import {
+  introAnnouncementFallbackForAi,
+  userDynamicVariablesForAi
+} from "../../../_lib/ai-people-summary.js";
 import { driverReportVehicleDynamicVariables } from "../../../_lib/fleet-vehicles-store.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 
@@ -68,7 +71,8 @@ function diagnosticPayload({
   responseBody = "",
   assistant,
   apiKey,
-  agentId
+  agentId,
+  contextWarnings = []
 }) {
   return {
     upstreamStatus: responseFromElevenLabs?.status ?? null,
@@ -78,6 +82,7 @@ function diagnosticPayload({
     apiKeyPresent: Boolean(apiKey),
     agentIdPresent: Boolean(agentId),
     agentIdMasked: maskAgentId(agentId),
+    contextWarnings,
     endpoint: "get-signed-url"
   };
 }
@@ -94,14 +99,61 @@ function agentIdFor(env, assistant) {
     .find(Boolean) || "";
 }
 
+function safeErrorMessage(error) {
+  return cleanString(error?.message || error?.name || "unknown_error");
+}
+
+function fallbackHumanTouchVariables() {
+  return {
+    human_touch_enabled: "ne",
+    human_touch_suggestion: "",
+    human_touch_type: "",
+    human_touch_source: ""
+  };
+}
+
+function fallbackDriverReportVehicleVariables() {
+  return {
+    driver_report_vehicle_status: "nenalezeno",
+    driver_report_vehicle_id: "",
+    driver_report_vehicle_name: "",
+    driver_report_vehicle_license_plate: "",
+    driver_report_vehicle_vin: "",
+    driver_report_vehicle_type: "",
+    driver_report_vehicle_context: "V Hlášení řidičů není vozidlo podle volajícího jistě identifikované. Zeptej se na SPZ vozidla."
+  };
+}
+
+function fallbackIntroAnnouncement(user) {
+  return {
+    enabled: false,
+    variables: {
+      intro_announcement: introAnnouncementFallbackForAi(user),
+      intro_announcement_enabled: "ne",
+      intro_announcement_key: "fallback",
+      intro_announcement_until: "",
+      intro_announcement_limit: "0",
+      intro_announcement_remaining_after_this: "0"
+    }
+  };
+}
+
+async function optionalContext(name, loader, fallback, warnings) {
+  try {
+    return await loader();
+  } catch (error) {
+    console.error("elevenlabs.optional_context_failed", {
+      context: name,
+      message: safeErrorMessage(error)
+    });
+    warnings.push(name);
+    return typeof fallback === "function" ? fallback() : fallback;
+  }
+}
+
 async function sarlotaHumanTouchDynamicVariables(env, user, baseDynamicVariables, assistant) {
   if (assistant.id !== "sarlota") {
-    return {
-      human_touch_enabled: "ne",
-      human_touch_suggestion: "",
-      human_touch_type: "",
-      human_touch_source: ""
-    };
+    return fallbackHumanTouchVariables();
   }
 
   const humanTouch = await sarlotaHumanTouchContext(env, user, {
@@ -117,22 +169,30 @@ async function sarlotaHumanTouchDynamicVariables(env, user, baseDynamicVariables
   };
 }
 
-export async function onRequestGet({ request, env }) {
-  const { user, response } = await requireUserPermission(env, request, "dashboard", "view");
-
-  if (response) {
-    return response;
-  }
-
-  const assistant = assistantFor(request);
-  const debug = isDebugRequest(request);
+async function signedUrlPayload({ request, env, user, assistant, debug }) {
   const apiKey = cleanString(env.ELEVENLABS_API_KEY);
   const agentId = agentIdFor(env, assistant);
+  const contextWarnings = [];
   const userDynamicVariables = userDynamicVariablesForAi(user);
-  const introAnnouncement = await sarlotaIntroAnnouncementForAi(env, user, assistant);
-  const humanTouchVariables = await sarlotaHumanTouchDynamicVariables(env, user, userDynamicVariables, assistant);
+  const introAnnouncement = await optionalContext(
+    "intro_announcement",
+    () => sarlotaIntroAnnouncementForAi(env, user, assistant),
+    () => fallbackIntroAnnouncement(user),
+    contextWarnings
+  );
+  const humanTouchVariables = await optionalContext(
+    "human_touch",
+    () => sarlotaHumanTouchDynamicVariables(env, user, userDynamicVariables, assistant),
+    fallbackHumanTouchVariables,
+    contextWarnings
+  );
   const driverReportVehicleVariables = assistant.id === "sarlota"
-    ? await driverReportVehicleDynamicVariables(env, user)
+    ? await optionalContext(
+      "driver_report_vehicle",
+      () => driverReportVehicleDynamicVariables(env, user),
+      fallbackDriverReportVehicleVariables,
+      contextWarnings
+    )
     : {};
   const dynamicVariables = {
     ...userDynamicVariables,
@@ -177,7 +237,8 @@ export async function onRequestGet({ request, env }) {
         responseBody: responseBody || { error: "missing_signed_url" },
         assistant,
         apiKey,
-        agentId
+        agentId,
+        contextWarnings
       });
 
       console.error("elevenlabs.signed_url_failed", debugPayload);
@@ -207,10 +268,11 @@ export async function onRequestGet({ request, env }) {
       input: { assistantId: assistant.id },
       result: {
         configured: true,
-        userRole: dynamicVariables.user_role,
-        availableModulesLength: dynamicVariables.available_modules.length,
+        userRole: cleanString(dynamicVariables.user_role),
+        availableModulesLength: cleanString(dynamicVariables.available_modules).length,
         humanTouchEnabled: dynamicVariables.human_touch_enabled,
-        humanTouchType: dynamicVariables.human_touch_type
+        humanTouchType: dynamicVariables.human_touch_type,
+        contextWarnings
       },
       status: "ok"
     });
@@ -230,7 +292,8 @@ export async function onRequestGet({ request, env }) {
       responseBody: { error: error.message || "fetch_failed" },
       assistant,
       apiKey,
-      agentId
+      agentId,
+      contextWarnings
     });
 
     console.error("elevenlabs.signed_url_error", debugPayload);
@@ -250,5 +313,49 @@ export async function onRequestGet({ request, env }) {
       configured: true,
       apiStatus: "waiting"
     }, 502);
+  }
+}
+
+function signedUrlServerErrorResponse({ error, assistant, debug, stage }) {
+  const debugPayload = {
+    assistantId: assistant.id,
+    assistantName: assistant.name,
+    stage,
+    message: safeErrorMessage(error),
+    endpoint: "get-signed-url"
+  };
+
+  console.error("elevenlabs.signed_url_server_error", debugPayload);
+
+  return json({
+    error: "Hlas Šarloty se teď nepodařilo připravit na serveru.",
+    code: "elevenlabs_server_error",
+    assistantId: assistant.id,
+    assistantName: assistant.name,
+    configured: false,
+    apiStatus: "waiting",
+    ...(debug ? { debug: debugPayload } : {})
+  }, 500);
+}
+
+export async function onRequestGet({ request, env }) {
+  const assistant = assistantFor(request);
+  const debug = isDebugRequest(request);
+
+  try {
+    const { user, response } = await requireUserPermission(env, request, "dashboard", "view");
+
+    if (response) {
+      return response;
+    }
+
+    return await signedUrlPayload({ request, env, user, assistant, debug });
+  } catch (error) {
+    return signedUrlServerErrorResponse({
+      error,
+      assistant,
+      debug,
+      stage: "request"
+    });
   }
 }
