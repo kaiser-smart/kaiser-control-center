@@ -24,9 +24,7 @@ const FLEET_VISTOS_VEHICLE_COLUMNS = [
   "c_GpsProvider_FK"
 ];
 const FLEET_VISTOS_VEHICLE_ACTIVE_FILTER = {
-  IsActive: true,
-  Archived_IsNull: true,
-  EliminatedDate_IsNull: true
+  Stavvozidla_FK: [16541]
 };
 
 function clean(value) {

@@ -734,15 +734,19 @@ Frontend Vistos nikdy nevola primo.
 
 ### Filtr aktivnich vozidel
 
-Navrzeny filtr pro `GetPageParam`:
+Overeny filtr pro `GetPageParam`:
 
 ```json
 {
-  "IsActive": true,
-  "Archived_IsNull": true,
-  "EliminatedDate_IsNull": true
+  "Stavvozidla_FK": [16541]
 }
 ```
+
+Nepouzivat `IsActive`, `Archived_IsNull` ani `EliminatedDate_IsNull` jako
+tvrdy filtr preview. Podle Vistos podpory jsou to systemova/pocitana pole;
+`IsActive` se odviji od `StartingDate` a `EliminatedDate` a null filtr na
+vyrazeni muze vratit prazdny vysledek. Pro aktualni read-only preview aktivnich
+vozidel se pouziva stav vozidla `Stavvozidla_FK = [16541]`.
 
 Pokud Vistos vrati prazdny vysledek, musi UI zobrazit diagnostiku poctu
 `recordsTotal`, `recordsFiltered`, poctu vracenych radku a pouzity filtr.
@@ -803,6 +807,9 @@ Toto zatim neni implementovane. Nejde o cloud automatizaci ani o ostry import.
 - FK pole mohou vracet `Lat` a `Long`.
 - `Vehicle` je ve Vistos profilu dostupna read-only entita podle predaneho
   seznamu opravneni.
+- Aktivni `Vehicle` preview pouziva filtr `Stavvozidla_FK = [16541]`; systemove
+  filtry `IsActive`, `Archived_IsNull` a `EliminatedDate_IsNull` se pro preview
+  nepouzivaji.
 
 ## Co neni overene
 
@@ -815,8 +822,8 @@ Toto zatim neni implementovane. Nejde o cloud automatizaci ani o ostry import.
 - Ktera cenova tabulka je v praxi zdrojem ceny u vsech typu smluv.
 - Zda se cetnost vzdy spolehlive vraci ve strukturovanem poli, nebo se musi parsovat z nazvu produktu.
 - Zda `ServiceListItem` lepe odpovida realnym svozovym polozkam nez `ContractRow` u vsech smluv.
-- Zda filtr `Vehicle.IsActive + Archived_IsNull + EliminatedDate_IsNull` vrati
-  presne vsechna provozne aktivni vozidla.
+- Zda `Stavvozidla_FK = [16541]` presne odpovida vsem provozne aktivnim
+  vozidlum ve Vistos UI `#/Vehicle`.
 - Zda `VehicleService` profil vraci dostatek poli pro servisni historii.
 - Jak se maji resit konflikty mezi Vistos `Vehicle`, T-Cars a budouci DB
   evidenci Vozoveho parku.
