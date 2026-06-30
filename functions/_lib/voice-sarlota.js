@@ -1,6 +1,13 @@
 import { recordAiAction } from "./ai-action-log-store.js";
 import { createAbsenceRequestRecord } from "./absence-requests-store.js";
+import { createDriverPartRequest, handoffDriverPartRequest } from "./driver-part-requests-store.js";
 import { getUsers } from "./auth.js";
+import {
+  driverPartRequestMissingQuestion,
+  extractLicensePlate,
+  identifyProbablePartFromDescription,
+  normalizeLicensePlate
+} from "./driver-parts-catalog.js";
 import { userDynamicVariablesForAi } from "./ai-people-summary.js";
 import { sarlotaHumanTouchContext } from "./sarlota-human-touch.js";
 import { hasPermission } from "../../src/permissions.js";
@@ -20,6 +27,7 @@ const INTENTS = new Set([
   "complaint_return",
   "absence_request",
   "absence_vacation_request",
+  "driver_part_request",
   "call_log",
   "business_hours",
   "general",
@@ -894,6 +902,197 @@ function isAbsenceRequest(payload, speechText, context) {
   );
 }
 
+function driverPartParameters(payload = {}) {
+  return payload.parameters && typeof payload.parameters === "object" ? payload.parameters : {};
+}
+
+function driverPartContext(payload = {}) {
+  return payload.context && typeof payload.context === "object" ? payload.context : {};
+}
+
+function driverPartConfirmation(payload, speechText) {
+  return absenceConfirmation(payload, speechText);
+}
+
+function driverPartDescription(payload, speechText) {
+  const parameters = driverPartParameters(payload);
+  const context = driverPartContext(payload);
+  return truncate(firstNonEmpty(
+    parameters.defectDescription,
+    parameters.description,
+    parameters.issue,
+    context.defectDescription,
+    context.description,
+    context.issue,
+    payload.defectDescription,
+    payload.description,
+    payload.issue,
+    speechText
+  ), 520);
+}
+
+function driverPartDraftFromPayload(payload, speechText) {
+  const parameters = driverPartParameters(payload);
+  const context = driverPartContext(payload);
+  const description = driverPartDescription(payload, speechText);
+  const licensePlate = normalizeLicensePlate(firstNonEmpty(
+    parameters.licensePlate,
+    parameters.spz,
+    context.licensePlate,
+    context.spz,
+    payload.licensePlate,
+    payload.spz,
+    extractLicensePlate(description)
+  ));
+  const partMatch = identifyProbablePartFromDescription(description);
+
+  return compactObject({
+    driverName: firstNonEmpty(parameters.driverName, context.driverName, payload.driverName),
+    driverPhone: firstNonEmpty(parameters.driverPhone, context.driverPhone, payload.driverPhone),
+    vehicleName: firstNonEmpty(parameters.vehicleName, context.vehicleName, payload.vehicleName, licensePlate),
+    licensePlate,
+    vin: firstNonEmpty(parameters.vin, context.vin, payload.vin),
+    vehicleBrand: firstNonEmpty(parameters.vehicleBrand, context.vehicleBrand, payload.vehicleBrand),
+    defectDescription: description,
+    defectType: partMatch.defectType,
+    probablePart: partMatch.probablePart,
+    probablePartSide: partMatch.probablePartSide,
+    note: partMatch.note,
+    confirmation: driverPartConfirmation(payload, speechText),
+    needsPartSideClarification: partMatch.needsPartSideClarification
+  });
+}
+
+function isDriverPartRequestText(speechText) {
+  const normalized = normalizeKey(speechText);
+  if (/\bnahradni\s+volno\b/.test(normalized)) {
+    return false;
+  }
+
+  const hasPart = /\b(zrcatko|zpetne\s+zrcatko|nahradni\s+dil|dil|soucastka)\b/.test(normalized);
+  const hasReportVerb = /\b(potrebuju|potrebuji|chci|nahlas|nahla?sit|vymenit|rozbite|poskozene|praskle|ulomene)\b/.test(normalized);
+  return hasPart && hasReportVerb;
+}
+
+function isDriverPartRequest(payload, speechText, context) {
+  return (
+    context.requestedIntent === "driver_part_request" ||
+    normalizeIntent(payload.intent || payload.tool || payload.action) === "driver_part_request" ||
+    isDriverPartRequestText(speechText)
+  );
+}
+
+function driverPartSummaryMessage(draft) {
+  const part = draft.probablePart || "náhradní díl";
+  const vehicle = draft.licensePlate ? `na vozidle se SPZ ${draft.licensePlate}` : "bez SPZ";
+  return `Rozumím. Chceš nahlásit ${part} ${vehicle}. Potvrď prosím, že SPZ je správně, a pošli fotku poškození. Mám to uložit a předat k objednání dílu?`;
+}
+
+function driverPartPreparedAction(draft) {
+  return {
+    type: "driver_part_request",
+    action: "create_and_handoff",
+    requiresConfirmation: true,
+    confirmationPhrase: "ano",
+    notificationsSent: false,
+    parameters: compactObject({
+      driverName: draft.driverName,
+      driverPhone: draft.driverPhone,
+      vehicleName: draft.vehicleName,
+      licensePlate: draft.licensePlate,
+      vin: draft.vin,
+      vehicleBrand: draft.vehicleBrand,
+      defectDescription: draft.defectDescription,
+      probablePart: draft.probablePart,
+      probablePartSide: draft.probablePartSide,
+      damagePhotoStatus: "requested"
+    })
+  };
+}
+
+async function driverPartRequestTool(env, user, payload, context, speechText) {
+  if (!hasPermission(user, "driver-reports", "create")) {
+    return {
+      status: "forbidden",
+      verified: true,
+      message: "K tomu nemáš oprávnění.",
+      preparedActions: []
+    };
+  }
+
+  const draft = driverPartDraftFromPayload(payload, speechText);
+
+  if (draft.confirmation === "rejected") {
+    return {
+      status: "cancelled",
+      verified: true,
+      message: "Dobře, nezapsala jsem nic.",
+      preparedActions: []
+    };
+  }
+
+  const missingQuestion = driverPartRequestMissingQuestion({
+    description: draft.defectDescription,
+    licensePlate: draft.licensePlate
+  });
+  if (missingQuestion) {
+    return {
+      status: "needs_input",
+      verified: true,
+      message: missingQuestion,
+      preparedActions: []
+    };
+  }
+
+  if (draft.confirmation !== "confirmed") {
+    return {
+      status: "needs_confirmation",
+      verified: true,
+      message: driverPartSummaryMessage(draft),
+      preparedActions: [driverPartPreparedAction(draft)]
+    };
+  }
+
+  try {
+    let request = await createDriverPartRequest(env, user, {
+      ...draft,
+      driverName: draft.driverName || user?.name,
+      driverPhone: draft.driverPhone || user?.phone,
+      damagePhotoStatus: "requested",
+      damagePhotoNote: "Šarlota požádala řidiče o fotku poškození před uložením hlášení.",
+      source: "voice"
+    });
+    request = await handoffDriverPartRequest(env, user, request.id, { allowCreatorHandoff: true });
+
+    const handedOff = request.status === "handed_to_ordering";
+    return {
+      status: handedOff ? "created" : "created_notification_pending",
+      verified: true,
+      message: handedOff
+        ? "Hotovo. Hlášení jsem zapsala a předala k objednání dílu."
+        : "Hlášení jsem zapsala, ale předání není hotové. Zkontroluj prosím notifikace v detailu.",
+      preparedActions: [],
+      driverPartRequest: {
+        id: request.id,
+        reportId: request.reportId,
+        status: request.status,
+        licensePlate: request.licensePlate,
+        probablePart: request.probablePart
+      },
+      notificationsSent: handedOff
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      verified: false,
+      message: `${cleanString(error?.message) || "Hlášení se nepodařilo zapsat."} Nic jsem neodeslala.`,
+      preparedActions: [],
+      code: cleanString(error?.code || "driver_part_request_create_failed"),
+      apiStatus: error?.status === 503 ? "waiting" : "ready"
+    };
+  }
+}
+
 function absenceDraftFromPayload(payload, speechText) {
   const baseIso = pragueIsoDate();
   const type = requestedAbsenceType(payload) || inferAbsenceTypeFromText(speechText);
@@ -1007,6 +1206,13 @@ function normalizeIntent(value) {
     ocr: "absence_request",
     lekar: "absence_request",
     nepritomnost: "absence_request",
+    driver_part: "driver_part_request",
+    driver_part_request: "driver_part_request",
+    hlaseni_ridicu: "driver_part_request",
+    nahradni_dil: "driver_part_request",
+    nahradni_dily: "driver_part_request",
+    zrcatko: "driver_part_request",
+    servisni_pozadavek: "driver_part_request",
     log: "call_log",
     call_log: "call_log",
     hovor: "call_log",
@@ -1197,6 +1403,7 @@ function systemPrompt() {
     sarlotaSystemPrompt(),
     "Tento endpoint vrací strojové rozhodnutí pro KSO backend. Odpověď pro uživatele dej do pole reply.",
     "Pro zápis dovolené, nemoci, OČR, lékaře, náhradního volna, neplaceného volna nebo jiné nepřítomnosti použij intent absence_request. Nezapisuj bez jasného potvrzení uživatele; když něco chybí, polož jen jednu otázku.",
+    "Pro hlášení náhradního dílu z modulu Hlášení řidičů použij intent driver_part_request. Bez potvrzení nic nezapisuj ani neposílej; při chybějící SPZ nebo nejasné straně zrcátka polož jednu krátkou otázku.",
     "Blok Firemní lidskost: pokud request.humanTouch.enabled obsahuje návrhy, můžeš nenásilně použít maximálně jednu krátkou poznámku. Použij jen dodaný ověřený návrh, nikdy si nevymýšlej počasí, svátky, narozeniny ani dovolené.",
     "Firemní lidskost nepoužívej při reklamaci, stížnosti, spěchu, stresu, chybě, nemoci, OČR, lékaři ani u citlivé absence. Nikdy nezmiňuj důvod absence, věk ani soukromé údaje. Nepoužívej texty známých písní.",
     "Vrať výhradně JSON."
@@ -1226,7 +1433,7 @@ async function requestOpenAiDecision(env, input) {
             task: "Rozpoznej záměr volajícího a napiš krátkou odpověď Šarloty.",
             allowedIntents: Array.from(INTENTS),
             outputShape: {
-              intent: "order_status|tracking|sms_link|handoff_jarka|product_advice|complaint_return|absence_request|call_log|business_hours|general|unsupported",
+              intent: "order_status|tracking|sms_link|handoff_jarka|product_advice|complaint_return|absence_request|driver_part_request|call_log|business_hours|general|unsupported",
               reply: "1 až 2 krátké věty česky, tykání",
               needsHuman: true,
               humanTouchUsed: false,
@@ -1625,6 +1832,8 @@ async function executeTool(decision, context, businessHours, runtime = {}) {
       return absenceRequestTool(runtime.env, runtime.user, runtime.payload, context, runtime.speechText);
     case "absence_vacation_request":
       return absenceRequestTool(runtime.env, runtime.user, runtime.payload, context, runtime.speechText);
+    case "driver_part_request":
+      return driverPartRequestTool(runtime.env, runtime.user, runtime.payload, context, runtime.speechText);
     case "business_hours":
       return businessHoursTool(businessHours);
     case "call_log":
@@ -1684,6 +1893,7 @@ async function recordVoiceActionSafely(env, user, { input, context, businessHour
         preparedActions: toolResult.preparedActions?.length || 0,
         businessHours: businessHours.isBusinessHours,
         absenceRequestId: cleanString(toolResult.absenceRequest?.id),
+        driverPartRequestId: cleanString(toolResult.driverPartRequest?.id),
         notificationsSent: toolResult.notificationsSent === true,
         humanTouchUsed: decision.humanTouchUsed === true
       },
@@ -1720,6 +1930,7 @@ async function buildVoiceResponse(env, user, payload, { input, context, business
     needsHuman: Boolean(decision.needsHuman || toolResult.preparedActions?.some((action) => action.type === "handoff_jarka")),
     preparedActions: toolResult.preparedActions || [],
     absenceRequest: toolResult.absenceRequest || null,
+    driverPartRequest: toolResult.driverPartRequest || null,
     notificationsSent: toolResult.notificationsSent === true,
     missingInternalApi: toolResult.missingInternalApi || "",
     businessHours: toolResult.businessHours || businessHours,
@@ -1761,6 +1972,27 @@ export async function handleSarlotaVoiceRequest(env, user, payload = {}, options
       model: "kso-deterministic"
     };
     const toolResult = await absenceRequestTool(env, user, payload, context, speechText);
+
+    return buildVoiceResponse(env, user, payload, {
+      input,
+      context,
+      businessHours,
+      humanTouch: input.humanTouch,
+      decision,
+      toolResult
+    });
+  }
+
+  if (isDriverPartRequest(payload, speechText, context)) {
+    const decision = {
+      intent: "driver_part_request",
+      reply: "",
+      needsHuman: false,
+      humanTouchUsed: false,
+      confidence: 0.98,
+      model: "kso-deterministic"
+    };
+    const toolResult = await driverPartRequestTool(env, user, payload, context, speechText);
 
     return buildVoiceResponse(env, user, payload, {
       input,

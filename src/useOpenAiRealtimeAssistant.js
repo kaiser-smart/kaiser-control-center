@@ -228,6 +228,63 @@ export function useOpenAiRealtimeAssistant({
     };
   }
 
+  async function callDriverPartTool(args = {}, context = {}) {
+    const defectDescription = cleanString(args.defectDescription || args.defect_description || args.description || args.issue || args.spokenSummary);
+    const licensePlate = cleanString(args.licensePlate || args.license_plate || args.spz || args.plate);
+    const vehicleName = cleanString(args.vehicleName || args.vehicle_name || args.vehicle);
+    const vin = cleanString(args.vin || args.VIN);
+    const vehicleBrand = cleanString(args.vehicleBrand || args.vehicle_brand || args.brand);
+    const confirmed = args.confirmed === true;
+    const summary = cleanString(args.spokenSummary || args.summary);
+    const text = summary || [
+      defectDescription,
+      licensePlate ? `na autě ${licensePlate}` : "",
+      confirmed ? "ano" : ""
+    ].filter(Boolean).join(" ").trim();
+    const payload = {
+      transcript: text,
+      text,
+      intent: "driver_part_request",
+      parameters: {
+        defectDescription,
+        licensePlate,
+        vehicleName,
+        vin,
+        vehicleBrand,
+        confirmed
+      },
+      context: {
+        conversationId: context.conversationId || "",
+        requestedIntent: "driver_part_request",
+        defectDescription,
+        licensePlate,
+        vehicleName,
+        vin,
+        vehicleBrand,
+        confirmed
+      },
+      metadata: {
+        source: "openai_realtime",
+        callId: context.callId || ""
+      }
+    };
+    const result = await requester()("/api/voice/sarlota", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    return {
+      ok: result.ok === true,
+      status: result.status || "unknown",
+      answerText: result.reply || result.text || "",
+      intent: result.intent || "driver_part_request",
+      verified: result.verified === true,
+      requiresConfirmation: result.status === "needs_confirmation",
+      driverPartRequest: result.driverPartRequest || null,
+      notificationsSent: result.notificationsSent === true
+    };
+  }
+
   async function callOpenModuleTool(args = {}) {
     const route = routeForAiModule(args.moduleId);
     if (!route) {
@@ -277,6 +334,11 @@ export function useOpenAiRealtimeAssistant({
     try {
       if (name === "create_absence_request") {
         output = await callAbsenceTool(args, {
+          conversationId: session.conversationId,
+          callId
+        });
+      } else if (name === "create_driver_part_request") {
+        output = await callDriverPartTool(args, {
           conversationId: session.conversationId,
           callId
         });

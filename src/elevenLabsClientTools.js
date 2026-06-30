@@ -196,6 +196,19 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
     ]
   },
   {
+    name: "create_driver_part_request",
+    description: "Zapíše potvrzené hlášení náhradního dílu přes KSO backend. Bez potvrzení nic nezapíše ani neodešle.",
+    parameters: [
+      { name: "defectDescription", type: "string", required: true },
+      { name: "licensePlate", type: "string", required: false },
+      { name: "vehicleName", type: "string", required: false },
+      { name: "vin", type: "string", required: false },
+      { name: "vehicleBrand", type: "string", required: false },
+      { name: "confirmed", type: "boolean", required: true },
+      { name: "spokenSummary", type: "string", required: false }
+    ]
+  },
+  {
     name: "search_user",
     description: "Vyhledá uživatele podle jména nebo role, pouze pokud má přihlášený uživatel oprávnění.",
     parameters: [
@@ -553,6 +566,93 @@ export function createElevenLabsClientTools({
     };
   }
 
+  async function createDriverPartRequest(parameters = {}) {
+    const defectDescription = cleanString(
+      parameters.defectDescription ||
+      parameters.defect_description ||
+      parameters.description ||
+      parameters.issue ||
+      parameters.spokenSummary ||
+      parameters.summary
+    );
+    const licensePlate = cleanString(parameters.licensePlate || parameters.spz || parameters.plate);
+    const vehicleName = cleanString(parameters.vehicleName || parameters.vehicle || parameters.car);
+    const vin = cleanString(parameters.vin || parameters.VIN);
+    const vehicleBrand = cleanString(parameters.vehicleBrand || parameters.brand);
+    const confirmed = booleanToolValue(
+      parameters.confirmed ??
+      parameters.writeConfirmed ??
+      parameters.write_confirmed
+    );
+    const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
+    const text = spokenSummary || [
+      defectDescription,
+      licensePlate ? `na autě ${licensePlate}` : "",
+      confirmed ? "ano" : ""
+    ].filter(Boolean).join(" ");
+
+    let result;
+
+    try {
+      result = await postJson("/api/voice/sarlota", {
+        transcript: text,
+        text,
+        intent: "driver_part_request",
+        parameters: {
+          defectDescription,
+          licensePlate,
+          vehicleName,
+          vin,
+          vehicleBrand,
+          confirmed,
+          writeConfirmed: confirmed
+        },
+        context: {
+          requestedIntent: "driver_part_request",
+          defectDescription,
+          licensePlate,
+          vehicleName,
+          vin,
+          vehicleBrand,
+          confirmed
+        },
+        metadata: {
+          source: "elevenlabs_client_tool"
+        }
+      });
+    } catch (error) {
+      const message = cleanString(error?.payload?.error || error?.message) || "Hlášení se nepodařilo zapsat.";
+      return {
+        ok: false,
+        status: "request_failed",
+        message: `${message} Nic jsem neodeslala.`,
+        answerText: `${message} Nic jsem neodeslala.`,
+        intent: "driver_part_request",
+        verified: false,
+        requiresConfirmation: false,
+        preparedActions: [],
+        driverPartRequest: null,
+        notificationsSent: false,
+        apiStatus: error?.payload?.apiStatus || "waiting",
+        code: error?.payload?.code || "driver_part_request_failed"
+      };
+    }
+
+    return {
+      ok: result.ok === true,
+      status: result.status || "unknown",
+      message: result.reply || result.text || "",
+      answerText: result.reply || result.text || "",
+      intent: result.intent || "driver_part_request",
+      verified: result.verified === true,
+      requiresConfirmation: result.status === "needs_confirmation",
+      preparedActions: Array.isArray(result.preparedActions) ? result.preparedActions : [],
+      driverPartRequest: result.driverPartRequest || null,
+      notificationsSent: result.notificationsSent === true,
+      apiStatus: result.apiStatus || "ready"
+    };
+  }
+
   const tools = {
     async navigate_to(parameters = {}) {
       const result = guardedRoute(parameters.route);
@@ -711,6 +811,10 @@ export function createElevenLabsClientTools({
 
     async create_absence_request(parameters = {}) {
       return createAbsenceRequest(parameters);
+    },
+
+    async create_driver_part_request(parameters = {}) {
+      return createDriverPartRequest(parameters);
     },
 
     async search_user(parameters = {}) {

@@ -78,6 +78,10 @@ function employeeCardUrl(env, employeeId) {
   return `${appBaseUrl(env).replace(/\/+$/, "")}/dovolena-nemoc/zamestnanci/${encodeURIComponent(cleanString(employeeId))}`;
 }
 
+function driverPartRequestUrl(env, requestId) {
+  return `${appBaseUrl(env).replace(/\/+$/, "")}/hlaseni-ridicu?request=${encodeURIComponent(cleanString(requestId))}`;
+}
+
 function typeLabel(request) {
   return request?.typeLabel || TYPE_LABELS[request?.type] || cleanString(request?.type) || "Žádost";
 }
@@ -416,6 +420,60 @@ function renderMedicalExamReminderEmail({ exam, ctaUrl }) {
 </html>`;
 }
 
+function renderDriverPartOrderEmail({ request, ctaUrl }) {
+  const vin = cleanString(request.vin) || "není dostupné";
+  const side = cleanString(request.probablePartSideLabel) || cleanString(request.probablePartSide) || "neznámá strana";
+  const probablePart = cleanString(request.probablePart || request.verifiedPart) || "čeká na identifikaci";
+  const brand = cleanString(request.vehicleBrandLabel || request.vehicleBrand) || "jiné";
+  const damagePhoto = cleanString(request.damagePhotoStatus) === "attached"
+    ? "přiložena"
+    : cleanString(request.damagePhotoStatus) === "not_needed"
+      ? "nevyžadována"
+      : "vyžádána od řidiče, zatím bez přílohy";
+
+  return `<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kaiser Smart – objednat náhradní díl</title>
+</head>
+<body style="margin:0;padding:0;background:#f7f9f4;font-family:'Quicksand',Arial,Helvetica,sans-serif;color:#1f2921;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7f9f4;">
+    <tr>
+      <td align="center" style="padding:42px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:660px;background:#ffffff;border:1px solid #e1e6de;border-radius:16px;box-shadow:0 24px 64px rgba(31,41,33,0.14);overflow:hidden;">
+          <tr>
+            <td style="padding:40px 42px;">
+              <div style="display:inline-block;background:#75bd25;border-radius:14px;padding:12px 24px;color:#ffffff;font-size:28px;line-height:32px;font-weight:700;margin:0 0 34px 0;">kaiser.</div>
+              <h1 style="margin:0 0 12px 0;font-size:34px;line-height:40px;font-weight:800;color:#1f2921;">Objednat náhradní díl</h1>
+              <p style="margin:0 0 26px 0;font-size:18px;line-height:28px;font-weight:600;color:#647064;">Patriku, prosím ověř a objednej náhradní díl. Objednací číslo je nutné ověřit před objednáním, pokud není jisté.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fbf4;border:1px solid #dfe8d9;border-radius:14px;margin:0 0 24px 0;">
+                <tr><td style="padding:20px 22px;font-size:16px;line-height:24px;">
+                  <p style="margin:0 0 10px 0;"><strong>Řidič:</strong> ${htmlEscape(request.driverName)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Telefon:</strong> ${htmlEscape(request.driverPhone || "neuvedeno")}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Vozidlo:</strong> ${htmlEscape(request.vehicleName || request.licensePlate)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>SPZ:</strong> ${htmlEscape(request.licensePlate)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>VIN:</strong> ${htmlEscape(vin)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Značka:</strong> ${htmlEscape(brand)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Závada:</strong> ${htmlEscape(request.defectDescription)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Fotka poškození:</strong> ${htmlEscape(damagePhoto)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Pravděpodobný díl:</strong> ${htmlEscape(probablePart)}</p>
+                  <p style="margin:0;"><strong>Strana dílu:</strong> ${htmlEscape(side)}</p>
+                </td></tr>
+              </table>
+              <a href="${htmlEscape(ctaUrl)}" style="display:block;text-align:center;background:#75bd25;border-radius:14px;padding:18px 24px;color:#ffffff;font-size:18px;line-height:24px;font-weight:800;text-decoration:none;">Otevřít detail hlášení</a>
+              <p style="margin:28px 0 0 0;font-size:13px;line-height:20px;color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export async function logNotification(env, entry) {
   const db = notificationDatabase(env);
   if (!db) {
@@ -601,7 +659,15 @@ async function sendEmail(env, {
   }
 }
 
-async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "" }) {
+async function sendSms(env, {
+  type,
+  to,
+  body,
+  relatedEntityId,
+  recipientName = "",
+  moduleId = "dovolena-nemoc",
+  relatedEntityType = "absence_request"
+}) {
   const accountSid = cleanString(env.TWILIO_ACCOUNT_SID);
   const authToken = cleanString(env.TWILIO_AUTH_TOKEN);
   const messagingServiceSid = cleanString(env.TWILIO_MESSAGING_SERVICE_SID);
@@ -615,9 +681,11 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
         : "Chybí telefon příjemce."
       : missingSmsSettingsMessage({ accountSid, authToken, messagingServiceSid, recipientName: cleanRecipientName });
     await logNotification(env, {
+      moduleId,
       type,
       channel: "sms",
       recipient: normalizedTo || to,
+      relatedEntityType,
       relatedEntityId,
       status: "skipped",
       provider: "Twilio",
@@ -648,9 +716,11 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
     }
 
     await logNotification(env, {
+      moduleId,
       type,
       channel: "sms",
       recipient: normalizedTo,
+      relatedEntityType,
       relatedEntityId,
       status: "sent",
       provider: "Twilio",
@@ -660,9 +730,11 @@ async function sendSms(env, { type, to, body, relatedEntityId, recipientName = "
     return { status: "sent", recipientName: cleanRecipientName };
   } catch (error) {
     await logNotification(env, {
+      moduleId,
       type,
       channel: "sms",
       recipient: normalizedTo,
+      relatedEntityType,
       relatedEntityId,
       status: "failed",
       provider: "Twilio",
@@ -763,6 +835,59 @@ export async function sendMedicalExamReminderNotification(env, exam, options = {
     moduleId: "absence",
     relatedEntityType: "employee_medical_exam",
     messagePreview
+  });
+}
+
+export async function sendDriverPartOrderNotification(env, request, options = {}) {
+  const probablePart = cleanString(request.probablePart || request.verifiedPart) || "náhradní díl";
+  const subject = `Objednat náhradní díl – ${cleanString(request.licensePlate) || "SPZ"} – ${probablePart}`;
+
+  return sendEmail(env, {
+    type: "driver_part_order_email",
+    to: cleanString(options.recipientEmail || env.PARTS_ORDER_EMAIL || env.PATRICK_PARTS_EMAIL),
+    subject,
+    html: renderDriverPartOrderEmail({
+      request,
+      ctaUrl: driverPartRequestUrl(env, request.id)
+    }),
+    relatedEntityId: request.id,
+    recipientName: cleanString(options.recipientName || "Patrik Ištvánek"),
+    fromName: "Smart odpady",
+    moduleId: "driver-reports",
+    relatedEntityType: "driver_part_request",
+    messagePreview: `${cleanString(request.licensePlate)} – ${probablePart}`
+  });
+}
+
+export async function sendDriverPartServiceTechSms(env, request, options = {}) {
+  const shortUrl = driverPartRequestUrl(env, request.id);
+  const probablePart = cleanString(request.probablePart || request.verifiedPart) || "díl";
+  const body = `Nové hlášení ND: ${cleanString(request.licensePlate)} – ${probablePart}. Patrik má objednat díl. Detail: ${shortUrl}`;
+
+  return sendSms(env, {
+    type: "driver_part_service_tech_sms",
+    to: cleanString(options.recipientPhone || env.SERVICE_TECH_PHONE || env.KAMIL_SERVICE_PHONE),
+    body,
+    relatedEntityId: request.id,
+    recipientName: cleanString(options.recipientName || "Kamil"),
+    moduleId: "driver-reports",
+    relatedEntityType: "driver_part_request"
+  });
+}
+
+export async function sendDriverPartReadySms(env, request) {
+  const technician = cleanString(request.serviceTechnician);
+  const technicianText = !technician || technician.toLowerCase() === "kamil" ? "Kamilovi" : technician;
+  const body = `Díl pro vozidlo ${cleanString(request.licensePlate)} je připraven. Přistavte prosím vozidlo do dílny ke ${technicianText}: ${formatDate(request.serviceDate)} ${cleanString(request.serviceTime)}.`;
+
+  return sendSms(env, {
+    type: "driver_part_ready_driver_sms",
+    to: request.driverPhone,
+    body,
+    relatedEntityId: request.id,
+    recipientName: request.driverName,
+    moduleId: "driver-reports",
+    relatedEntityType: "driver_part_request"
   });
 }
 

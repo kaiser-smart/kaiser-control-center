@@ -11,7 +11,10 @@ const TYPES = new Set([
   "absence_sickness_recorded_email",
   "module_feedback_resolved_email",
   "version_news_email",
-  "employee_medical_exam_reminder"
+  "employee_medical_exam_reminder",
+  "driver_part_order_email",
+  "driver_part_service_tech_sms",
+  "driver_part_ready_driver_sms"
 ]);
 
 export class NotificationsStoreError extends Error {

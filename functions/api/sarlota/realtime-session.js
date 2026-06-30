@@ -128,6 +128,52 @@ function realtimeTools() {
     },
     {
       type: "function",
+      name: "create_driver_part_request",
+      description: [
+        "Zapíše potvrzené hlášení náhradního dílu z Hlášení řidičů přes backend.",
+        "Volej až po jasném potvrzení uživatele.",
+        "Když chybí SPZ nebo strana zrcátka, nejdřív se krátce zeptej a nástroj nevolej.",
+        "Nikdy si nevymýšlej objednací číslo dílu."
+      ].join(" "),
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          defectDescription: {
+            type: "string",
+            description: "Popis závady od řidiče."
+          },
+          licensePlate: {
+            type: "string",
+            description: "SPZ vozidla."
+          },
+          vehicleName: {
+            type: "string",
+            description: "Vozidlo nebo interní označení, pokud je známo."
+          },
+          vin: {
+            type: "string",
+            description: "VIN pouze pokud je dostupné z ověřeného zdroje nebo ho řidič řekl."
+          },
+          vehicleBrand: {
+            type: "string",
+            enum: ["mercedes", "daf", "man", "jiné"],
+            description: "Značka vozidla."
+          },
+          confirmed: {
+            type: "boolean",
+            description: "True jen když uživatel výslovně potvrdil zápis a předání."
+          },
+          spokenSummary: {
+            type: "string",
+            description: "Krátké shrnutí, které uživatel potvrdil."
+          }
+        },
+        required: ["defectDescription", "confirmed"]
+      }
+    },
+    {
+      type: "function",
       name: "open_kso_module",
       description: "Otevře bezpečně známý modul KSO v prohlížeči.",
       parameters: {

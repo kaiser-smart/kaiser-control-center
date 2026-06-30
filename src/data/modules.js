@@ -63,11 +63,11 @@ export const modules = [
   {
     id: "driver-reports",
     title: "Hlášení řidičů",
-    description: "Rychlé nahlášení závady: fotka, popis, odeslání.",
+    description: "Hlášení závad, náhradní díly, objednání a servisní plán.",
     route: "/hlaseni-ridicu",
     dashboardRoute: "/hlaseni-ridicu/dashboard",
     icon: DriverReportsIcon,
-    status: "skeleton",
+    status: "Funkční přes API",
     active: true,
     disabled: false,
     order: 3

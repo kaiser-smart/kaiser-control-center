@@ -92,7 +92,7 @@ export const ROLE_PERMISSIONS = {
     ...actions("dashboard", ["view"]),
     ...actions("fleet", ["view", "edit"]),
     ...actions("vehicle-tracking", ["view"]),
-    ...actions("driver-reports", ["view", "edit"]),
+    ...actions("driver-reports", ["view", "edit", "manage"]),
     ...actions("service-maintenance", ["view", "create", "edit", "manage"]),
     ...actions("tyres", ["view", "edit", "export"]),
     ...actions("costs", ["view", "export"]),

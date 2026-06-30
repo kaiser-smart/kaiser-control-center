@@ -51,6 +51,15 @@ import {
   loadTcarsVehiclesPayload,
   syncTcarsLocations,
 } from "../functions/_lib/tcars-client.js";
+import {
+  driverPartRequestInitialStatus,
+  extractLicensePlate,
+  identifyProbablePartFromDescription,
+  normalizeLicensePlate,
+  normalizeVehicleBrand,
+  partSideLabel,
+  vehicleBrandLabel
+} from "../functions/_lib/driver-parts-catalog.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { modules } from "../src/data/modules.js";
 import {
@@ -77,6 +86,7 @@ let mockEmployeeDocuments = new Map();
 let mockEmployeeDocumentFiles = new Map();
 let mockEmployeeMedicalExams = new Map();
 let mockAbsenceRequests = [];
+let mockDriverPartRequests = [];
 let mockModuleFeedback = [];
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
@@ -795,6 +805,399 @@ function addMockNotificationLog(input) {
 
   mockNotificationLogs = [item, ...mockNotificationLogs].slice(0, 500);
   return item;
+}
+
+const MOCK_DRIVER_PART_STATUS_LABELS = {
+  new_report: "Nové hlášení",
+  waiting_part_identification: "Čeká na identifikaci dílu",
+  part_identified: "Díl identifikován",
+  handed_to_ordering: "Předáno k objednání",
+  ordered: "Objednáno",
+  part_arrived: "Díl dorazil",
+  service_scheduled: "Servis naplánován",
+  completed: "Vyřízeno",
+  canceled: "Zrušeno"
+};
+
+function mockDriverClean(value) {
+  return String(value ?? "").trim();
+}
+
+function mockDriverCanManage(user) {
+  return isFullAccessRole(user) || hasPermission(user, "driver-reports", "manage") || hasPermission(user, "driver-reports", "edit");
+}
+
+function mockDriverCanCreate(user) {
+  return hasPermission(user, "driver-reports", "create");
+}
+
+function mockDriverPermissionSummary(user) {
+  const role = normalizeRole(user?.role);
+  return {
+    role,
+    canCreate: mockDriverCanCreate(user),
+    canManage: mockDriverCanManage(user),
+    limitation: role === "ridic"
+      ? "Řidič může vytvořit hlášení a sledovat vlastní stav. Objednání, doručení a servis řeší oprávněná role."
+      : ""
+  };
+}
+
+function mockDriverEvent(requestId, action, user, note, notification = null) {
+  return {
+    id: `driver-part-event-${randomUUID()}`,
+    requestId,
+    action,
+    actorUserId: user?.id || "",
+    actorName: user?.name || "",
+    createdAt: new Date().toISOString(),
+    before: null,
+    after: null,
+    note: note || "",
+    notificationChannel: notification?.channel || "",
+    notificationRecipient: notification?.recipient || "",
+    notificationStatus: notification?.status || "",
+    notificationError: notification?.errorMessage || ""
+  };
+}
+
+function mockDriverDetail(item) {
+  const status = mockDriverClean(item?.status) || "new_report";
+  return {
+    ...item,
+    vehicleBrandLabel: vehicleBrandLabel(item?.vehicleBrand),
+    probablePartSideLabel: partSideLabel(item?.probablePartSide),
+    statusLabel: MOCK_DRIVER_PART_STATUS_LABELS[status] || "Neznámý stav",
+    events: Array.isArray(item?.events) ? item.events : []
+  };
+}
+
+function findMockDriverRequest(id) {
+  const normalized = mockDriverClean(id).toLowerCase();
+  return mockDriverPartRequests.find((item) => (
+    mockDriverClean(item.id).toLowerCase() === normalized ||
+    mockDriverClean(item.reportId).toLowerCase() === normalized
+  ));
+}
+
+function mockDriverVisibleRequests(user) {
+  return mockDriverPartRequests
+    .filter((item) => mockDriverCanManage(user) || sameMockId(item.driverUserId, user?.id))
+    .sort((left, right) => String(right.reportedAt || right.createdAt).localeCompare(String(left.reportedAt || left.createdAt)))
+    .map(mockDriverDetail);
+}
+
+function mockDriverContactForUser(user) {
+  const employee = user ? mockEmployeeFromUser(user) : null;
+  return {
+    name: mockDriverClean(employee?.fullName || user?.name),
+    email: mockDriverClean(employee?.email || user?.email),
+    phone: mockDriverClean(employee?.phone || user?.phone),
+    userId: mockDriverClean(employee?.userId || user?.id)
+  };
+}
+
+function mockDriverPersonByName(query) {
+  const normalized = mockDriverClean(query)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return mockUsers.find((user) => [user.id, user.name, user.email].map(mockDriverClean).join(" ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .includes(normalized)) || null;
+}
+
+function mockDriverPartsRecipient() {
+  const patrik = findMockUser("patrik-istvanek") || mockDriverPersonByName("patrik istvanek");
+  const contact = mockDriverContactForUser(patrik);
+  return {
+    name: contact.name || "Patrik Ištvánek",
+    email: contact.email || process.env.PATRICK_PARTS_EMAIL || process.env.PARTS_ORDER_EMAIL || "local-mock-patrik@example.invalid",
+    userId: contact.userId
+  };
+}
+
+function mockDriverServiceTechRecipient() {
+  const kamil = mockDriverPersonByName("kamil");
+  const contact = mockDriverContactForUser(kamil);
+  return {
+    name: contact.name || "Kamil",
+    phone: contact.phone || process.env.KAMIL_SERVICE_PHONE || process.env.SERVICE_TECH_PHONE || "+420000000000",
+    userId: contact.userId
+  };
+}
+
+function createMockDriverPartRequest(user, payload = {}) {
+  const defectDescription = mockDriverClean(payload.defectDescription || payload.description || payload.speechText);
+  if (!defectDescription) {
+    const error = new Error("Vyplňte popis závady od řidiče.");
+    error.status = 400;
+    throw error;
+  }
+
+  const licensePlate = normalizeLicensePlate(payload.licensePlate || payload.spz || extractLicensePlate(defectDescription));
+  if (!licensePlate) {
+    const error = new Error("Chybí SPZ vozidla. Nejdřív doplňte vozidlo/SPZ.");
+    error.status = 400;
+    throw error;
+  }
+
+  const now = new Date().toISOString();
+  const partMatch = identifyProbablePartFromDescription(defectDescription);
+  const driverContact = mockDriverContactForUser(user);
+  const id = `driver-part-request-${randomUUID()}`;
+  const request = {
+    id,
+    reportId: `ND-${now.slice(0, 10).replaceAll("-", "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+    reportedAt: mockDriverClean(payload.reportedAt) || now,
+    driverUserId: mockDriverClean(payload.driverUserId || user?.id),
+    driverName: mockDriverClean(payload.driverName || payload.driver || driverContact.name || user?.name),
+    driverPhone: mockDriverClean(payload.driverPhone || payload.phone || driverContact.phone),
+    vehicleId: mockDriverClean(payload.vehicleId),
+    vehicleName: mockDriverClean(payload.vehicleName || payload.vehicle || licensePlate),
+    licensePlate,
+    vin: mockDriverClean(payload.vin),
+    vehicleBrand: normalizeVehicleBrand(payload.vehicleBrand || payload.brand),
+    defectType: mockDriverClean(payload.defectType || partMatch.defectType),
+    defectDescription,
+    damagePhotoStatus: mockDriverClean(payload.damagePhotoStatus || "requested"),
+    damagePhotoRequestedAt: mockDriverClean(payload.damagePhotoRequestedAt || now),
+    damagePhotoDocumentId: mockDriverClean(payload.damagePhotoDocumentId),
+    damagePhotoNote: mockDriverClean(payload.damagePhotoNote || "Šarlota / systém požádal řidiče o fotku poškození."),
+    probablePart: mockDriverClean(payload.probablePart || partMatch.probablePart),
+    probablePartSide: mockDriverClean(payload.probablePartSide || partMatch.probablePartSide || "unknown"),
+    partIdentificationStatus: mockDriverClean(payload.partIdentificationStatus || partMatch.partIdentificationStatus),
+    verifiedPart: mockDriverClean(payload.verifiedPart),
+    partOrderNumber: mockDriverClean(payload.partOrderNumber),
+    status: mockDriverClean(payload.status || driverPartRequestInitialStatus(partMatch)),
+    assignedToName: "",
+    assignedToEmail: "",
+    handedOffToPatrikAt: "",
+    kamilSmsSentAt: "",
+    orderedAt: "",
+    orderedByUserId: "",
+    deliveredAt: "",
+    deliveredByUserId: "",
+    serviceDate: "",
+    serviceTime: "",
+    serviceTechnician: "",
+    serviceNote: "",
+    driverSmsSentAt: "",
+    completedAt: "",
+    completedByUserId: "",
+    canceledAt: "",
+    canceledByUserId: "",
+    note: mockDriverClean(payload.note || partMatch.note),
+    patrikEmailStatus: "not_sent",
+    patrikEmailError: "",
+    kamilSmsStatus: "not_sent",
+    kamilSmsRecipient: "",
+    kamilSmsError: "",
+    driverSmsStatus: "not_sent",
+    driverSmsError: "",
+    source: mockDriverClean(payload.source || "manual"),
+    createdByUserId: user?.id || "",
+    createdAt: now,
+    updatedByUserId: user?.id || "",
+    updatedAt: now,
+    events: []
+  };
+  request.events.unshift(mockDriverEvent(id, "create", user, "Vytvořeno v lokálním preview modulu Hlášení řidičů."));
+  mockDriverPartRequests = [request, ...mockDriverPartRequests].slice(0, 100);
+  return request;
+}
+
+function updateMockDriverRequest(id, updater) {
+  const index = mockDriverPartRequests.findIndex((item) => sameMockId(item.id, id) || sameMockId(item.reportId, id));
+  if (index < 0) {
+    const error = new Error("Požadavek na náhradní díl nebyl nalezen.");
+    error.status = 404;
+    throw error;
+  }
+  const next = updater(mockDriverPartRequests[index]);
+  mockDriverPartRequests = [
+    ...mockDriverPartRequests.slice(0, index),
+    next,
+    ...mockDriverPartRequests.slice(index + 1)
+  ];
+  return next;
+}
+
+function handoffMockDriverPartRequest(user, id) {
+  if (!mockDriverCanManage(user)) {
+    const error = new Error("Nemáte oprávnění předat díl k objednání.");
+    error.status = 403;
+    throw error;
+  }
+  const patrik = mockDriverPartsRecipient();
+  const kamil = mockDriverServiceTechRecipient();
+  const now = new Date().toISOString();
+  addMockNotificationLog({
+    moduleId: "driver-reports",
+    relatedEntityType: "driver_part_request",
+    relatedEntityId: id,
+    channel: "email",
+    type: "driver_part_order_email",
+    status: "sent",
+    recipient: patrik.email,
+    recipientName: patrik.name,
+    subject: "Objednat náhradní díl",
+    messagePreview: "Lokální mock: e-mail Patrikovi by byl odeslán."
+  });
+  addMockNotificationLog({
+    moduleId: "driver-reports",
+    relatedEntityType: "driver_part_request",
+    relatedEntityId: id,
+    channel: "sms",
+    type: "driver_part_service_tech_sms",
+    status: "sent",
+    recipient: kamil.phone,
+    recipientName: kamil.name,
+    messagePreview: "Lokální mock: SMS Kamilovi by byla odeslána."
+  });
+  return updateMockDriverRequest(id, (item) => ({
+    ...item,
+    status: "handed_to_ordering",
+    assignedToName: patrik.name,
+    assignedToEmail: patrik.email,
+    handedOffToPatrikAt: now,
+    kamilSmsSentAt: now,
+    patrikEmailStatus: "sent",
+    patrikEmailError: "",
+    kamilSmsStatus: "sent",
+    kamilSmsRecipient: kamil.phone,
+    kamilSmsError: "",
+    updatedByUserId: user?.id || "",
+    updatedAt: now,
+    events: [
+      mockDriverEvent(item.id, "handoff_to_ordering", user, "Lokální mock: e-mail Patrikovi a SMS Kamilovi byly odeslány.", {
+        channel: "email+sms",
+        recipient: [patrik.email, kamil.phone].join(", "),
+        status: "sent"
+      }),
+      ...(item.events || [])
+    ]
+  }));
+}
+
+function markMockDriverPartOrdered(user, id, payload = {}) {
+  if (!mockDriverCanManage(user)) {
+    const error = new Error("Nemáte oprávnění označit díl jako objednaný.");
+    error.status = 403;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  return updateMockDriverRequest(id, (item) => ({
+    ...item,
+    status: "ordered",
+    verifiedPart: mockDriverClean(payload.verifiedPart || item.verifiedPart),
+    partOrderNumber: mockDriverClean(payload.partOrderNumber || item.partOrderNumber),
+    partIdentificationStatus: payload.verifiedPart || payload.partOrderNumber ? "verified" : item.partIdentificationStatus,
+    orderedAt: now,
+    orderedByUserId: user?.id || "",
+    note: mockDriverClean(payload.note || item.note),
+    updatedByUserId: user?.id || "",
+    updatedAt: now,
+    events: [mockDriverEvent(item.id, "mark_ordered", user, "Díl označen jako objednaný v lokálním preview."), ...(item.events || [])]
+  }));
+}
+
+function markMockDriverPartArrived(user, id, payload = {}) {
+  if (!mockDriverCanManage(user)) {
+    const error = new Error("Nemáte oprávnění označit doručení dílu.");
+    error.status = 403;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  return updateMockDriverRequest(id, (item) => ({
+    ...item,
+    status: "part_arrived",
+    deliveredAt: now,
+    deliveredByUserId: user?.id || "",
+    note: mockDriverClean(payload.note || item.note),
+    updatedByUserId: user?.id || "",
+    updatedAt: now,
+    events: [mockDriverEvent(item.id, "mark_part_arrived", user, "Díl dorazil v lokálním preview."), ...(item.events || [])]
+  }));
+}
+
+function scheduleMockDriverPartService(user, id, payload = {}) {
+  if (!mockDriverCanManage(user)) {
+    const error = new Error("Nemáte oprávnění plánovat servis.");
+    error.status = 403;
+    throw error;
+  }
+  const serviceDate = mockDriverClean(payload.serviceDate);
+  const serviceTime = mockDriverClean(payload.serviceTime);
+  if (!serviceDate || !serviceTime) {
+    const error = new Error("Nejdřív zadejte datum i čas přistavení do dílny.");
+    error.status = 400;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  return updateMockDriverRequest(id, (item) => {
+    if (item.status !== "part_arrived" && item.status !== "service_scheduled") {
+      const error = new Error("SMS řidiči lze poslat až po potvrzení doručení dílu.");
+      error.status = 400;
+      throw error;
+    }
+    addMockNotificationLog({
+      moduleId: "driver-reports",
+      relatedEntityType: "driver_part_request",
+      relatedEntityId: item.id,
+      channel: "sms",
+      type: "driver_part_ready_driver_sms",
+      status: "sent",
+      recipient: item.driverPhone,
+      recipientName: item.driverName,
+      messagePreview: "Lokální mock: SMS řidiči by byla odeslána."
+    });
+    return {
+      ...item,
+      status: "service_scheduled",
+      serviceDate,
+      serviceTime,
+      serviceTechnician: mockDriverClean(payload.serviceTechnician || item.serviceTechnician || "Kamil"),
+      serviceNote: mockDriverClean(payload.serviceNote || item.serviceNote),
+      driverSmsStatus: "sent",
+      driverSmsError: "",
+      driverSmsSentAt: now,
+      updatedByUserId: user?.id || "",
+      updatedAt: now,
+      events: [mockDriverEvent(item.id, "schedule_service", user, "Servis naplánován a SMS řidiči odeslána v lokálním preview.", {
+        channel: "sms",
+        recipient: item.driverPhone,
+        status: "sent"
+      }), ...(item.events || [])]
+    };
+  });
+}
+
+function closeMockDriverPartRequest(user, id, payload = {}) {
+  if (!mockDriverCanManage(user)) {
+    const error = new Error("Nemáte oprávnění uzavřít požadavek.");
+    error.status = 403;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const canceled = Boolean(payload.cancel || payload.status === "canceled");
+  return updateMockDriverRequest(id, (item) => ({
+    ...item,
+    status: canceled ? "canceled" : "completed",
+    completedAt: canceled ? item.completedAt : now,
+    completedByUserId: canceled ? item.completedByUserId : user?.id || "",
+    canceledAt: canceled ? now : item.canceledAt,
+    canceledByUserId: canceled ? user?.id || "" : item.canceledByUserId,
+    note: mockDriverClean(payload.note || item.note),
+    updatedByUserId: user?.id || "",
+    updatedAt: now,
+    events: [mockDriverEvent(item.id, canceled ? "cancel" : "complete", user, canceled ? "Požadavek zrušen v lokálním preview." : "Požadavek uzavřen jako vyřízený v lokálním preview."), ...(item.events || [])]
+  }));
 }
 
 function dateBoundary(value, end = false) {
@@ -1828,6 +2231,134 @@ async function handleApi(request, response) {
       })),
       apiStatus: "ready"
     });
+    return true;
+  }
+
+  if (url.pathname === "/api/driver-reports" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "driver-reports", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const search = mockDriverClean(url.searchParams.get("search")).toLowerCase();
+    const status = mockDriverClean(url.searchParams.get("status"));
+    let requests = mockDriverVisibleRequests(user);
+    if (status) {
+      requests = requests.filter((item) => item.status === status);
+    }
+    if (search) {
+      requests = requests.filter((item) => [
+        item.reportId,
+        item.driverName,
+        item.licensePlate,
+        item.defectDescription,
+        item.probablePart,
+        item.verifiedPart
+      ].map(mockDriverClean).join(" ").toLowerCase().includes(search));
+    }
+
+    sendJson(response, 200, {
+      requests,
+      permissions: mockDriverPermissionSummary(user),
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/driver-reports" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!mockDriverCanCreate(user) && !mockDriverCanManage(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění vytvořit hlášení řidiče." });
+      return true;
+    }
+
+    try {
+      const payload = await readJsonBody(request);
+      let item = createMockDriverPartRequest(user, payload);
+      if (payload.handoffAfterCreate) {
+        item = handoffMockDriverPartRequest(user, item.id);
+      }
+      sendJson(response, 201, {
+        request: mockDriverDetail(item),
+        permissions: mockDriverPermissionSummary(user),
+        apiStatus: "ready"
+      });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Hlášení se nepodařilo uložit.",
+        apiStatus: "ready"
+      });
+    }
+    return true;
+  }
+
+  const driverReportDetailMatch = /^\/api\/driver-reports\/([^/]+)$/.exec(url.pathname);
+  if (driverReportDetailMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const item = findMockDriverRequest(decodeURIComponent(driverReportDetailMatch[1]));
+    if (!item) {
+      sendJson(response, 404, { error: "Požadavek na náhradní díl nebyl nalezen.", apiStatus: "ready" });
+      return true;
+    }
+    if (!mockDriverCanManage(user) && !sameMockId(item.driverUserId, user.id)) {
+      sendJson(response, 403, { error: "K tomuto hlášení nemáte oprávnění.", apiStatus: "ready" });
+      return true;
+    }
+    sendJson(response, 200, {
+      request: mockDriverDetail(item),
+      permissions: mockDriverPermissionSummary(user),
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  const driverReportActionMatch = /^\/api\/driver-reports\/([^/]+)\/(handoff-patrik|ordered|part-arrived|schedule-service|complete|cancel)$/.exec(url.pathname);
+  if (driverReportActionMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+
+    try {
+      const id = decodeURIComponent(driverReportActionMatch[1]);
+      const action = driverReportActionMatch[2];
+      const payload = await readJsonBody(request);
+      const item = action === "handoff-patrik"
+        ? handoffMockDriverPartRequest(user, id)
+        : action === "ordered"
+          ? markMockDriverPartOrdered(user, id, payload)
+          : action === "part-arrived"
+            ? markMockDriverPartArrived(user, id, payload)
+            : action === "schedule-service"
+              ? scheduleMockDriverPartService(user, id, payload)
+              : action === "complete"
+                ? closeMockDriverPartRequest(user, id, payload)
+                : closeMockDriverPartRequest(user, id, { ...payload, cancel: true });
+      sendJson(response, 200, {
+        request: mockDriverDetail(item),
+        permissions: mockDriverPermissionSummary(user),
+        apiStatus: "ready"
+      });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        error: error.message || "Akce se nepodařila uložit.",
+        apiStatus: "ready"
+      });
+    }
     return true;
   }
 

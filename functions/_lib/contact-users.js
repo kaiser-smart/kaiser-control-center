@@ -169,6 +169,11 @@ export const CONTACT_USERS = [
     status: "active",
     department: "Provoz",
     position: "Řidič",
+    permissions: [
+      { moduleId: "driver-reports", action: "view", allowed: true },
+      { moduleId: "driver-reports", action: "edit", allowed: true },
+      { moduleId: "driver-reports", action: "manage", allowed: true }
+    ],
     createdAt: CONTACT_IMPORTED_AT,
     lastLoginAt: null
   },
