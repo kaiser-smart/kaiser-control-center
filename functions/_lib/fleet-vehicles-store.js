@@ -1,6 +1,7 @@
 import { getUsers, normalizeIdentifier } from "./auth.js";
 import { loadFleetVehiclesPayload as loadTcarsFleetVehiclesPayload } from "./tcars-client.js";
 import { createFleetVistosVehiclePreview } from "./fleet-vistos-vehicle-preview.js";
+import { listEmployeeCards } from "./employees-store.js";
 import { hasPermission, isUserActive, normalizeRole } from "../../src/permissions.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
@@ -207,6 +208,61 @@ function summaryWithAssignments(summary = {}, vehicles = []) {
   };
 }
 
+function employeeFullName(employee = {}) {
+  return [employee.firstName, employee.lastName].map(cleanString).filter(Boolean).join(" ")
+    || cleanString(employee.name)
+    || "Zaměstnanec";
+}
+
+function employeeCandidateSort(left, right) {
+  return employeeFullName(left).localeCompare(employeeFullName(right), "cs");
+}
+
+function isActiveEmployee(employee = {}) {
+  const status = normalizeKey(employee.employmentStatus || employee.status || "active");
+  return status !== "inactive" && status !== "neaktivni" && status !== "ukonceno";
+}
+
+function employeeToDriverCandidate(employee = {}) {
+  const id = cleanString(employee.id || employee.userId);
+
+  if (!id) {
+    return null;
+  }
+
+  return {
+    id,
+    userId: cleanString(employee.userId || employee.id),
+    name: employeeFullName(employee),
+    phone: cleanString(employee.phone),
+    email: cleanString(employee.email),
+    role: cleanString(employee.role),
+    position: cleanString(employee.position),
+    department: cleanString(employee.department),
+    source: "employees"
+  };
+}
+
+function driverCandidateMatchesId(candidate = {}, driverId = "") {
+  const target = cleanString(driverId);
+  return Boolean(target) && [candidate.id, candidate.userId].some((value) => cleanString(value) === target);
+}
+
+async function loadFleetDriverCandidates(env = {}, user = null) {
+  try {
+    const users = await getUsers(env);
+    const employees = await listEmployeeCards(env, users, user);
+    return employees
+      .filter(isActiveEmployee)
+      .sort(employeeCandidateSort)
+      .map(employeeToDriverCandidate)
+      .filter(Boolean);
+  } catch (error) {
+    console.error("fleet_vehicles.driver_candidates_failed", { message: safeErrorMessage(error) });
+    return [];
+  }
+}
+
 function numericOrNull(value) {
   const cleaned = cleanString(value).replace(/\s+/g, "").replace(",", ".");
   const number = Number(cleaned);
@@ -369,7 +425,7 @@ async function loadVistosFleetVehiclesPayload(env = {}, tcarsPayload = null) {
   }
 }
 
-export async function loadFleetVehiclesWithAssignments(env = {}) {
+export async function loadFleetVehiclesWithAssignments(env = {}, user = null) {
   const tcarsPayload = await loadTcarsFleetVehiclesPayload(env);
   const vistosPayload = await loadVistosFleetVehiclesPayload(env, tcarsPayload);
   const basePayload = vistosPayload.apiStatus === "ready" && vistosPayload.vehicles.length
@@ -385,12 +441,14 @@ export async function loadFleetVehiclesWithAssignments(env = {}) {
         ].filter(Boolean).join(" ")
       };
   const { assignments, assignmentApiStatus, assignmentMessage } = await loadAssignments(env);
+  const driverCandidates = await loadFleetDriverCandidates(env, user);
   const vehicles = (Array.isArray(basePayload?.vehicles) ? basePayload.vehicles : [])
     .map((vehicle) => mergeAssignment(vehicle, assignmentForVehicle(vehicle, assignments)));
 
   return {
     ...basePayload,
     vehicles,
+    driverCandidates,
     summary: summaryWithAssignments(basePayload?.summary, vehicles),
     assignmentApiStatus,
     assignmentMessage,
@@ -401,8 +459,8 @@ export async function loadFleetVehiclesWithAssignments(env = {}) {
   };
 }
 
-export async function getFleetVehicleWithAssignment(env = {}, vehicleId = "") {
-  const payload = await loadFleetVehiclesWithAssignments(env);
+export async function getFleetVehicleWithAssignment(env = {}, vehicleId = "", user = null) {
+  const payload = await loadFleetVehiclesWithAssignments(env, user);
   const vehicle = payload.vehicles.find((item) => vehicleMatchesId(item, vehicleId)) || null;
 
   if (!vehicle) {
@@ -415,37 +473,44 @@ export async function getFleetVehicleWithAssignment(env = {}, vehicleId = "") {
   };
 }
 
-function driverCandidateFromPayload(payload, users = []) {
+function employeeDriverCandidateFromPayload(payload = {}, driverCandidates = []) {
   const driverId = cleanString(payload.assignedDriverId || payload.driverUserId || payload.userId);
-  const driverName = cleanString(payload.assignedDriverName || payload.driverName || payload.name);
 
-  if (driverId) {
-    const byId = users.find((user) => cleanString(user.id) === driverId);
-    if (byId) {
-      return byId;
-    }
+  if (!driverId) {
+    return null;
   }
 
-  if (driverName) {
-    const normalized = normalizedDriverName(driverName);
-    return users.find((user) => normalizedDriverName(user.name) === normalized) || null;
-  }
-
-  return null;
+  return driverCandidates.find((candidate) => driverCandidateMatchesId(candidate, driverId)) || null;
 }
 
-function normalizeAssignmentInput(payload = {}, users = []) {
-  const driver = driverCandidateFromPayload(payload, users);
-  const assignedDriverId = cleanString(payload.assignedDriverId || payload.driverUserId || payload.userId || driver?.id);
-  const assignedDriverName = cleanString(driver?.name || payload.assignedDriverName || payload.driverName || payload.name);
-  const assignedDriverPhone = cleanString(driver?.phone || payload.assignedDriverPhone || payload.driverPhone || payload.phone);
-  const assignedDriverEmail = cleanString(driver?.email || payload.assignedDriverEmail || payload.driverEmail || payload.email);
+function normalizeAssignmentInput(payload = {}, driverCandidates = []) {
+  const driverId = cleanString(payload.assignedDriverId || payload.driverUserId || payload.userId);
+
+  if (!driverId) {
+    return {
+      assignedDriverId: "",
+      assignedDriverName: "",
+      assignedDriverPhone: "",
+      assignedDriverEmail: "",
+      note: ""
+    };
+  }
+
+  const driver = employeeDriverCandidateFromPayload(payload, driverCandidates);
+
+  if (!driver) {
+    throw new FleetVehiclesStoreError(
+      "Řidiče lze vybrat pouze ze seznamu zaměstnanců.",
+      400,
+      "fleet_driver_employee_required"
+    );
+  }
 
   return {
-    assignedDriverId,
-    assignedDriverName,
-    assignedDriverPhone,
-    assignedDriverEmail,
+    assignedDriverId: cleanString(driver.id),
+    assignedDriverName: cleanString(driver.name),
+    assignedDriverPhone: cleanString(driver.phone),
+    assignedDriverEmail: cleanString(driver.email),
     note: cleanString(payload.note)
   };
 }
@@ -460,10 +525,10 @@ function isEmptyAssignment(assignment) {
 
 export async function saveFleetVehicleDriverAssignment(env, user, vehicleId, payload = {}) {
   const db = database(env, true);
-  const vehiclePayload = await getFleetVehicleWithAssignment(env, vehicleId);
+  const vehiclePayload = await getFleetVehicleWithAssignment(env, vehicleId, user);
   const vehicle = vehiclePayload.vehicle;
-  const users = await getUsers(env);
-  const assignment = normalizeAssignmentInput(payload, users);
+  const driverCandidates = await loadFleetDriverCandidates(env, user);
+  const assignment = normalizeAssignmentInput(payload, driverCandidates);
   const primaryVehicleId = cleanString(vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId || vehicleId);
   const plate = cleanString(vehicle.licensePlate || vehicle.tcarsLicensePlate);
   const now = new Date().toISOString();
@@ -524,7 +589,7 @@ export async function saveFleetVehicleDriverAssignment(env, user, vehicleId, pay
         .run();
     }
 
-    return getFleetVehicleWithAssignment(env, primaryVehicleId);
+    return getFleetVehicleWithAssignment(env, primaryVehicleId, user);
   } catch (error) {
     throw fleetStoreError(error);
   }

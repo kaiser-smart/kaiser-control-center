@@ -1098,6 +1098,7 @@ const fleetVehiclesState = {
   loading: false,
   loaded: false,
   vehicles: [],
+  driverCandidates: [],
   summary: null,
   apiStatus: "waiting",
   provider: "",
@@ -8901,28 +8902,72 @@ function fleetVehicleById(vehicleId) {
 }
 
 function fleetDriverUsers() {
-  return allAccessUsers()
-    .filter((user) => isUserActive(user))
-    .filter((user) => ["ridic", "garazmistr", "dispecer"].includes(normalizeRole(user.role)) || /řidi|ridic/i.test(`${user.position || ""} ${user.department || ""}`))
+  const candidates = Array.isArray(fleetVehiclesState.driverCandidates) ? fleetVehiclesState.driverCandidates : [];
+
+  if (candidates.length) {
+    return candidates
+      .filter((employee) => employee?.id)
+      .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "cs"));
+  }
+
+  return employeeCardState.employees
+    .filter((employee) => employee?.id)
+    .filter((employee) => employee.employmentStatus !== "inactive")
+    .map((employee) => ({
+      id: employee.id,
+      userId: employee.userId || employee.id,
+      name: employeeFullName(employee),
+      phone: employee.phone || "",
+      email: employee.email || "",
+      role: employee.role || "",
+      position: employee.position || "",
+      department: employee.department || "",
+      source: "employees"
+    }))
     .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "cs"));
+}
+
+function fleetDriverOptionLabel(driver) {
+  const meta = [driver.position, driver.department].map((value) => String(value || "").trim()).filter(Boolean).join(" · ");
+  return meta ? `${driver.name || driver.id} (${meta})` : (driver.name || driver.id || "Zaměstnanec");
 }
 
 function fleetDriverOptions(selectedDriverId = "") {
   const selected = String(selectedDriverId || "").trim();
-  const users = fleetDriverUsers();
+  const drivers = fleetDriverUsers();
 
-  if (!users.length) {
-    return `<option value="">Řidiče lze zadat ručně</option>`;
+  if (!drivers.length) {
+    return `<option value="">Nejdřív doplňte zaměstnance</option>`;
   }
 
   return [
-    `<option value="">Bez vazby na uživatele / ručně</option>`,
-    ...users.map((user) => `
-      <option value="${escapeHtml(user.id)}" ${String(user.id || "") === selected ? "selected" : ""}>
-        ${escapeHtml(user.name || user.id)}
+    `<option value="" ${!selected ? "selected" : ""}>Bez přiřazeného řidiče</option>`,
+    ...drivers.map((driver) => `
+      <option value="${escapeHtml(driver.id)}" ${String(driver.id || "") === selected || String(driver.userId || "") === selected ? "selected" : ""}>
+        ${escapeHtml(fleetDriverOptionLabel(driver))}
       </option>
     `)
   ].join("");
+}
+
+function fleetDriverSelectedInfo(vehicle) {
+  const driverId = String(vehicle?.assignedDriverId || "").trim();
+  const selected = driverId
+    ? fleetDriverUsers().find((driver) => String(driver.id || "") === driverId || String(driver.userId || "") === driverId)
+    : null;
+  const name = selected?.name || vehicle?.assignedDriverName || "";
+
+  if (!name) {
+    return `<p class="fleet-assignment-readonly">Řidič zatím není přiřazený. Vyberte ho pouze ze seznamu zaměstnanců.</p>`;
+  }
+
+  return `
+    <p class="fleet-assignment-readonly">
+      Vybraný zaměstnanec: <strong>${escapeHtml(name)}</strong>
+      ${selected?.phone ? ` · ${escapeHtml(selected.phone)}` : ""}
+      ${selected?.email ? ` · ${escapeHtml(selected.email)}` : ""}
+    </p>
+  `;
 }
 
 function fleetDriverAssignmentSection(vehicle) {
@@ -8943,27 +8988,18 @@ function fleetDriverAssignmentSection(vehicle) {
       </div>
       <form class="fleet-driver-form" data-fleet-driver-assignment-form data-vehicle-id="${escapeHtml(vehicleId)}">
         <label>
-          <span>Uživatel řidiče</span>
+          <span>Řidič ze zaměstnanců</span>
           <select name="assignedDriverId" ${userCanEdit ? "" : "disabled"}>
             ${fleetDriverOptions(vehicle?.assignedDriverId)}
           </select>
-        </label>
-        <label>
-          <span>Řidič</span>
-          <input name="assignedDriverName" value="${escapeHtml(vehicle?.assignedDriverName || "")}" placeholder="Jméno řidiče" ${userCanEdit ? "" : "disabled"}>
-        </label>
-        <label>
-          <span>Telefon</span>
-          <input name="assignedDriverPhone" value="${escapeHtml(vehicle?.assignedDriverPhone || "")}" inputmode="tel" autocomplete="tel" placeholder="+420…" ${userCanEdit ? "" : "disabled"}>
-        </label>
-        <label>
-          <span>E-mail</span>
-          <input name="assignedDriverEmail" value="${escapeHtml(vehicle?.assignedDriverEmail || "")}" inputmode="email" autocomplete="email" placeholder="ridic@…" ${userCanEdit ? "" : "disabled"}>
         </label>
         <label class="fleet-driver-form__wide">
           <span>Poznámka</span>
           <input name="note" value="${escapeHtml(vehicle?.driverAssignmentNote || "")}" placeholder="Např. střídá vozidlo v týdnu" ${userCanEdit ? "" : "disabled"}>
         </label>
+        <div class="fleet-driver-form__wide">
+          ${fleetDriverSelectedInfo(vehicle)}
+        </div>
         ${userCanEdit ? `
           <button class="primary-action fleet-driver-form__submit" type="submit" ${saving ? "disabled" : ""}>
             ${saving ? "Ukládám…" : "Uložit řidiče"}
@@ -21234,6 +21270,7 @@ async function loadFleetVehicles(options = {}) {
   try {
     const result = await apiJson("/api/vehicles");
     fleetVehiclesState.vehicles = Array.isArray(result.vehicles) ? result.vehicles : [];
+    fleetVehiclesState.driverCandidates = Array.isArray(result.driverCandidates) ? result.driverCandidates : [];
     fleetVehiclesState.summary = result.summary || null;
     fleetVehiclesState.apiStatus = result.apiStatus || "waiting";
     fleetVehiclesState.provider = result.provider || "";
@@ -21244,6 +21281,7 @@ async function loadFleetVehicles(options = {}) {
     fleetVehiclesState.loaded = true;
   } catch (error) {
     fleetVehiclesState.vehicles = [];
+    fleetVehiclesState.driverCandidates = [];
     fleetVehiclesState.summary = null;
     fleetVehiclesState.apiStatus = "waiting";
     fleetVehiclesState.provider = "";
@@ -21328,9 +21366,6 @@ async function submitFleetDriverAssignment(form) {
   const formData = new FormData(form);
   const payload = {
     assignedDriverId: String(formData.get("assignedDriverId") || "").trim(),
-    assignedDriverName: String(formData.get("assignedDriverName") || "").trim(),
-    assignedDriverPhone: String(formData.get("assignedDriverPhone") || "").trim(),
-    assignedDriverEmail: String(formData.get("assignedDriverEmail") || "").trim(),
     note: String(formData.get("note") || "").trim()
   };
 

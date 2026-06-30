@@ -32,20 +32,21 @@ function errorResponse(error) {
 }
 
 export async function onRequestGet({ request, env, params }) {
-  const { response } = await requireUserPermission(env, request, "fleet", "view");
+  const { user, response } = await requireUserPermission(env, request, "fleet", "view");
 
   if (response) {
     return response;
   }
 
   try {
-    const payload = await getFleetVehicleWithAssignment(env, vehicleIdFromContext({ params }));
+    const payload = await getFleetVehicleWithAssignment(env, vehicleIdFromContext({ params }), user);
     return json({
       provider: payload.provider,
       source: payload.source,
       apiStatus: payload.apiStatus,
       assignmentApiStatus: payload.assignmentApiStatus,
       assignmentMessage: payload.assignmentMessage,
+      driverCandidates: payload.driverCandidates || [],
       vehicle: payload.vehicle
     });
   } catch (error) {

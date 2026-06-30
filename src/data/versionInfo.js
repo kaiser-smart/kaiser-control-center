@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.262"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.263"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozový park: řidič jen ze zaměstnanců",
+    text: "Přiřazení řidiče k vozidlu už nepoužívá ruční jméno, telefon ani e-mail. Řidič se vybírá pouze z existujících zaměstnanců a backend volbu ověřuje proti zaměstnaneckému seznamu."
+  },
   {
     title: "Hlášení řidičů: Pitstop detail a tykání Šarloty",
     text: "Detail hlášení v modulu Hlášení řidičů má Pitstop box grafiku. Repo-side texty Šarloty a ElevenLabs client tools jsou zpřísněné na tykání a PŘÍRUČKA nově vyžaduje fulltextovou kontrolu vykání u hlasové vrstvy."
