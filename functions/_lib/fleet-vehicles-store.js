@@ -929,6 +929,14 @@ export async function resolveFleetVehiclesForDriver(env, user, payload = {}) {
     }
   } catch (error) {
     console.info("fleet_vehicles.driver_vehicle_lookup_skipped", { message: safeErrorMessage(error) });
+    return {
+      status: "failed",
+      vehicle: null,
+      candidates: [],
+      question: "",
+      errorCode: "fleet_vehicle_lookup_failed",
+      message: "Vozidla se teď nepodařilo načíst."
+    };
   }
 
   return { status: "none", vehicle: null, candidates: [], question: "" };

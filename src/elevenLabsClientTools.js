@@ -210,6 +210,17 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
     ]
   },
   {
+    name: "get_driver_report_context",
+    description: "Read-only načte kontext Hlášení řidičů: přihlášeného řidiče, oprávnění a jeho přiřazená vozidla z Vozového parku. Nic nezapisuje.",
+    parameters: [
+      { name: "sessionId", type: "string", required: false },
+      { name: "conversationId", type: "string", required: false },
+      { name: "transcriptIntent", type: "string", required: false },
+      { name: "currentModule", type: "string", required: false },
+      { name: "forceReload", type: "boolean", required: false }
+    ]
+  },
+  {
     name: "search_user",
     description: "Vyhledá uživatele podle jména nebo role, pouze pokud má přihlášený uživatel oprávnění.",
     parameters: [
@@ -301,13 +312,17 @@ export function createElevenLabsClientTools({
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(payload.error || "Požadavek se nepodařilo dokončit.");
+      const error = new Error(payload.error || payload.message || "Požadavek se nepodařilo dokončit.");
+      error.payload = payload;
+      error.status = response.status;
+      throw error;
     }
 
     return payload;
   }
 
   const safeRequestJson = requestJson || defaultRequestJson;
+  const driverReportContextCache = new Map();
 
   function withQuery(path, params = {}) {
     const query = new URLSearchParams();
@@ -360,6 +375,105 @@ export function createElevenLabsClientTools({
     }
 
     return false;
+  }
+
+  function driverReportSessionKey(parameters = {}) {
+    return cleanString(
+      parameters.sessionId ||
+      parameters.session_id ||
+      parameters.conversationId ||
+      parameters.conversation_id ||
+      "active"
+    ) || "active";
+  }
+
+  function vehicleNamesForSpeech(vehicles = []) {
+    return vehicles
+      .map((vehicle) => cleanString(vehicle?.displayName || vehicle?.internalName || vehicle?.licensePlate))
+      .filter(Boolean);
+  }
+
+  function driverReportContextAnswer(result = {}, cached = false) {
+    const vehicles = Array.isArray(result.vehicles) ? result.vehicles : [];
+    const names = vehicleNamesForSpeech(vehicles);
+
+    if (cached && names.length === 1) {
+      return `Ano, mám je načtená. Vidím u tebe ${names[0]}. Mám to zapsat k němu?`;
+    }
+
+    if (cached && names.length > 1) {
+      return `Ano, mám je načtená. Vidím u tebe ${names.slice(0, 5).join(", ")}${names.length > 5 ? " a další" : ""}. Kterého se to týká?`;
+    }
+
+    return cleanString(result.message || result.fallbackQuestion) || "Vozidla se mi teď nepodařilo načíst. Řekni mi prosím typ, značku nebo SPZ.";
+  }
+
+  function cacheDriverReportContext(key, result) {
+    if (result?.ok !== true) {
+      return;
+    }
+
+    driverReportContextCache.set(key, {
+      ...result,
+      cachedAt: new Date().toISOString()
+    });
+  }
+
+  async function getDriverReportContext(parameters = {}) {
+    const sessionKey = driverReportSessionKey(parameters);
+    const forceReload = booleanToolValue(parameters.forceReload || parameters.force_reload);
+    const cached = driverReportContextCache.get(sessionKey);
+
+    if (cached && !forceReload) {
+      const answerText = driverReportContextAnswer(cached, true);
+      return {
+        ...cached,
+        cached: true,
+        sessionCacheKey: sessionKey,
+        message: answerText,
+        answerText
+      };
+    }
+
+    toast("Moment, načtu si vozidla.", { tone: "info" });
+
+    let result;
+    try {
+      result = await readJson("/api/ai/driver-reports/context", {
+        sessionId: cleanString(parameters.sessionId || parameters.session_id || parameters.conversationId || parameters.conversation_id),
+        transcriptIntent: cleanString(parameters.transcriptIntent || parameters.transcript_intent || parameters.intent || parameters.query),
+        currentModule: cleanString(parameters.currentModule || parameters.current_module || "hlaseni-ridicu")
+      });
+    } catch (error) {
+      const code = cleanString(error?.payload?.errorCode || error?.payload?.code || "DRIVER_REPORT_CONTEXT_FAILED");
+      const message = code === "UNAUTHENTICATED"
+        ? "Nejsi přihlášený. Přihlas se a zkus to znovu."
+        : code === "FORBIDDEN"
+          ? "K tomu nemáš oprávnění."
+          : "Vozidla se mi teď nepodařilo načíst. Řekni mi prosím typ, značku nebo SPZ.";
+      return {
+        ok: false,
+        module: "hlaseni-ridicu",
+        status: "failed",
+        cached: false,
+        sessionCacheKey: sessionKey,
+        errorCode: code,
+        message,
+        answerText: message,
+        apiStatus: error?.payload?.apiStatus || "waiting"
+      };
+    }
+
+    cacheDriverReportContext(sessionKey, result);
+    const answerText = driverReportContextAnswer(result, false);
+
+    return {
+      ...result,
+      cached: false,
+      sessionCacheKey: sessionKey,
+      message: answerText,
+      answerText
+    };
   }
 
   function absenceDayPartValue(value, halfDay = null) {
@@ -576,13 +690,14 @@ export function createElevenLabsClientTools({
       parameters.spokenSummary ||
       parameters.summary
     );
-    const licensePlate = cleanString(parameters.licensePlate || parameters.spz || parameters.plate);
-    const vehicleId = cleanString(parameters.vehicleId || parameters.vehicle_id);
-    const vehicleName = cleanString(parameters.vehicleName || parameters.vehicle || parameters.car);
-    const vin = cleanString(parameters.vin || parameters.VIN);
-    const vehicleBrand = cleanString(parameters.vehicleBrand || parameters.brand);
+    let licensePlate = cleanString(parameters.licensePlate || parameters.spz || parameters.plate);
+    let vehicleId = cleanString(parameters.vehicleId || parameters.vehicle_id);
+    let vehicleName = cleanString(parameters.vehicleName || parameters.vehicle || parameters.car);
+    let vin = cleanString(parameters.vin || parameters.VIN);
+    let vehicleBrand = cleanString(parameters.vehicleBrand || parameters.brand);
     const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
     const loadingMessage = "Moment, načtu si vozidla.";
+    const needsVehicleContext = !vehicleId && !licensePlate && !vehicleName;
     const basePayload = (confirmed = false, extraParameters = {}) => ({
       transcript: spokenSummary || [
         defectDescription,
@@ -622,7 +737,52 @@ export function createElevenLabsClientTools({
       }
     });
 
-    toast(loadingMessage, { tone: "info" });
+    if (needsVehicleContext) {
+      const contextResult = await getDriverReportContext({
+        ...parameters,
+        transcriptIntent: spokenSummary || defectDescription,
+        currentModule: "hlaseni-ridicu"
+      });
+
+      if (contextResult.ok !== true) {
+        return {
+          ...contextResult,
+          intent: "driver_part_request",
+          verified: false,
+          requiresConfirmation: false,
+          preparedActions: [],
+          driverPartRequest: null,
+          notificationsSent: false
+        };
+      }
+
+      const vehicles = Array.isArray(contextResult.vehicles) ? contextResult.vehicles : [];
+      if (vehicles.length === 1) {
+        const vehicle = vehicles[0];
+        vehicleId = cleanString(vehicle.vehicleId || vehicle.id);
+        vehicleName = cleanString(vehicle.displayName || vehicle.internalName || vehicle.model);
+        licensePlate = cleanString(vehicle.licensePlate);
+        vin = cleanString(vehicle.vin);
+        vehicleBrand = cleanString(vehicle.brand || vehicle.model);
+      } else {
+        return {
+          ok: true,
+          status: "needs_input",
+          message: contextResult.answerText || contextResult.message,
+          answerText: contextResult.answerText || contextResult.message,
+          intent: "driver_part_request",
+          verified: true,
+          requiresConfirmation: false,
+          preparedActions: [],
+          driverPartRequest: null,
+          notificationsSent: false,
+          apiStatus: contextResult.apiStatus || "ready",
+          driverReportContext: contextResult
+        };
+      }
+    } else {
+      toast(loadingMessage, { tone: "info" });
+    }
 
     let preparedResult;
 
@@ -898,6 +1058,10 @@ export function createElevenLabsClientTools({
 
     async create_driver_part_request(parameters = {}) {
       return createDriverPartRequest(parameters);
+    },
+
+    async get_driver_report_context(parameters = {}) {
+      return getDriverReportContext(parameters);
     },
 
     async search_user(parameters = {}) {

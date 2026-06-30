@@ -648,6 +648,44 @@ function mockFleetVehicleForUser(user) {
     )) || null;
 }
 
+async function mockFleetVehiclesForUser(user) {
+  const userId = String(user?.id || "").trim();
+  const userName = String(user?.name || "").trim().toLowerCase();
+  const payload = await loadDevFleetPayload();
+  const vehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
+  return vehicles.filter((vehicle) => (
+    (userId && String(vehicle.assignedDriverId || "").trim() === userId) ||
+    (userName && String(vehicle.assignedDriverName || "").trim().toLowerCase() === userName)
+  ));
+}
+
+function mockFleetVehicleVoiceLabel(vehicle = {}) {
+  const parts = [
+    vehicle.brand,
+    vehicle.model,
+    vehicle.internalNumber,
+    vehicle.vehicleType,
+    vehicle.bodyType,
+    vehicle.vistosVehicleCategory
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  return [...new Set(parts)].slice(0, 3).join(" ") || String(vehicle.licensePlate || vehicle.tcarsLicensePlate || "vozidlo").trim();
+}
+
+function mockDriverReportContextVehicle(vehicle = {}) {
+  return {
+    id: String(vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId || "").trim(),
+    vehicleId: String(vehicle.vehicleId || vehicle.id || vehicle.tcarsVehicleId || "").trim(),
+    displayName: mockFleetVehicleVoiceLabel(vehicle),
+    type: String(vehicle.vehicleType || vehicle.bodyType || vehicle.vistosVehicleCategory || "").trim(),
+    brand: String(vehicle.brand || "").trim(),
+    model: String(vehicle.model || vehicle.internalNumber || "").trim(),
+    internalName: String(vehicle.internalNumber || vehicle.vehicleName || vehicle.name || "").trim(),
+    licensePlate: String(vehicle.licensePlate || vehicle.tcarsLicensePlate || "").trim(),
+    vin: String(vehicle.vin || "").trim(),
+    assignmentHint: "přiřazené vozidlo"
+  };
+}
+
 function normalizeRouteSourceText(value) {
   return String(value ?? "")
     .normalize("NFD")
@@ -2680,6 +2718,75 @@ async function handleApi(request, response) {
         actions: ["view", "create", "edit", "delete", "approve", "export", "manage"]
           .filter((action) => hasPermission(user, moduleItem.id, action))
       })),
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/ai/driver-reports/context" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, {
+        ok: false,
+        module: "hlaseni-ridicu",
+        errorCode: "UNAUTHENTICATED",
+        message: "Nejsi přihlášený.",
+        fallbackQuestion: "Vozidla se mi teď nepodařilo načíst. Řekni mi prosím typ, značku nebo SPZ.",
+        apiStatus: "ready"
+      });
+      return true;
+    }
+
+    const permissions = {
+      canViewDriverReports: hasPermission(user, "driver-reports", "view"),
+      canCreateDriverReport: mockDriverCanCreate(user),
+      canViewFleet: hasPermission(user, "fleet", "view")
+    };
+
+    if (!permissions.canViewDriverReports || !permissions.canCreateDriverReport || !permissions.canViewFleet) {
+      sendJson(response, 403, {
+        ok: false,
+        module: "hlaseni-ridicu",
+        errorCode: "FORBIDDEN",
+        message: "K tomu nemáš oprávnění.",
+        permissions,
+        fallbackQuestion: "Vozidla se mi teď nepodařilo načíst. Řekni mi prosím typ, značku nebo SPZ.",
+        apiStatus: "ready"
+      });
+      return true;
+    }
+
+    const vehicles = (await mockFleetVehiclesForUser(user)).map(mockDriverReportContextVehicle);
+    const fallbackQuestion = vehicles.length > 1
+      ? `Vidím u tebe víc vozidel: ${vehicles.map((vehicle) => vehicle.displayName).slice(0, 5).join(", ")}. Kterého se to týká?`
+      : vehicles.length === 1
+        ? "Kterého vozidla se to týká?"
+        : "Nemám u tebe přiřazené vozidlo. Řekni mi prosím typ, značku nebo SPZ.";
+    const message = vehicles.length === 1
+      ? `Vidím u tebe ${vehicles[0].displayName}. Mám hlášení zapsat k němu?`
+      : vehicles.length > 1 ? fallbackQuestion : fallbackQuestion;
+
+    sendJson(response, 200, {
+      ok: true,
+      module: "hlaseni-ridicu",
+      currentModule: url.searchParams.get("currentModule") || "hlaseni-ridicu",
+      sessionId: url.searchParams.get("sessionId") || url.searchParams.get("conversationId") || "",
+      status: vehicles.length > 1 ? "multiple" : vehicles.length === 1 ? "single" : "none",
+      user: {
+        id: user.id,
+        name: user.name,
+        employeeId: user.id
+      },
+      driver: {
+        employeeId: user.id,
+        displayName: user.name,
+        source: "local_mock"
+      },
+      vehicles,
+      vehiclesCount: vehicles.length,
+      permissions,
+      fallbackQuestion,
+      message,
       apiStatus: "ready"
     });
     return true;

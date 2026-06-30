@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.271"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.272"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: kontext Hlášení řidičů",
+    text: "Šarlota má nový read-only tool get_driver_report_context pro načtení řidiče, oprávnění a přiřazených vozidel z Vozového parku před servisním hlášením. SPZ používá až jako fallback."
+  },
   {
     title: "Hlášení řidičů: servisní wording",
     text: "Texty modulu Hlášení řidičů jsou zobecněné na servisní potřeby, údržbu, závady, poškození a další požadavky k vozidlu bez změny logiky, API nebo práv."

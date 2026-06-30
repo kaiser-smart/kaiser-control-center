@@ -1020,10 +1020,11 @@ function isDriverPartRequestText(speechText) {
     return false;
   }
 
-  const hasPart = /\b(zrcatko|zpetne\s+zrcatko|nahradni\s+dil|dil|soucastka|svetlo|svetlomet|blinkr|smerovka|pneumatika|guma|sterac|rameno\s+sterace|blatnik|kryt\s+kola|naraznik)\b/.test(normalized);
+  const hasPart = /\b(zrcatko|zpetne\s+zrcatko|nahradni\s+dil|dil|soucastka|svetlo|svetlomet|blinkr|smerovka|pneumatika|pneu|guma|sterac|sterace|rameno\s+sterace|blatnik|kryt\s+kola|naraznik|brzda|brzdy|brzdove\s+desticky|kotouc|sklo|celni\s+sklo|predni\s+sklo|olej|motorovy\s+olej|filtr|vybava)\b/.test(normalized);
   const hasVehicleContext = /\b(auto|auta|autem|vozidlo|vozidle|vuz|voze|kabina|nakladak|mercedes|daf|man|spz)\b/.test(normalized);
-  const hasReportVerb = /\b(potrebuju|potrebuji|potreboval|chci|nahlas|nahla?sit|vymenit|oprav|opravu|servis|rozbite|rozbity|poskozene|poskozeny|praskle|ulomene|polamane|polamany|zlomene)\b/.test(normalized);
-  return (hasPart && hasReportVerb) || (hasVehicleContext && hasReportVerb && /\b(oprav|opravu|servis|rozbite|rozbity|poskozene|poskozeny|polamane|polamany)\b/.test(normalized));
+  const hasReportVerb = /\b(potrebuju|potrebuji|potreboval|chci|nahlas|nahla?sit|vymenit|vymena|oprav|opravu|servis|servisni|udrzba|kontrola|doplnit|rozbite|rozbity|poskozene|poskozeny|praskle|ulomene|polamane|polamany|zlomene|zavada|zavadu)\b/.test(normalized);
+  const hasLooseVehicleIssue = hasVehicleContext && /\b(neco\s+je|problem|nejde|nefunguje|resit|servis|zavada|zavadu|udrzba)\b/.test(normalized);
+  return (hasPart && hasReportVerb) || hasLooseVehicleIssue || (hasVehicleContext && hasReportVerb && /\b(oprav|opravu|servis|rozbite|rozbity|poskozene|poskozeny|polamane|polamany|udrzba|zavada|zavadu)\b/.test(normalized));
 }
 
 function isDriverPartRequest(payload, speechText, context) {
@@ -1533,7 +1534,7 @@ function systemPrompt() {
     sarlotaSystemPrompt(),
     "Tento endpoint vrací strojové rozhodnutí pro KSO backend. Odpověď pro uživatele dej do pole reply.",
     "Pro zápis dovolené, nemoci, OČR, lékaře, náhradního volna, neplaceného volna nebo jiné nepřítomnosti použij intent absence_request. Nezapisuj bez jasného potvrzení uživatele; když něco chybí, polož jen jednu otázku.",
-    "Pro hlášení náhradního dílu z modulu Hlášení řidičů použij intent driver_part_request. Když volající řekne, že chce opravu, servis nebo má něco rozbité/polámané na autě, ber to jako možné Hlášení řidičů, krátce potvrď `Moment, načtu si vozidla.` a nech backend načíst Vozový park. Bez potvrzení nic nezapisuj ani neposílej; při chybějícím nebo nejednoznačném vozidle se ptej nejdřív na typ, značku nebo interní název vozidla a SPZ chtěj až jako poslední možnost. Při nejasné straně zrcátka polož jednu krátkou otázku. Mercedes díl podle VIN označ jako ověřený jen při oficiálním výsledku nebo ručním potvrzení.",
+    "Pro servisní hlášení z modulu Hlášení řidičů použij intent driver_part_request. Když volající řekne, že chce opravu, servis, údržbu, závadu, poškození nebo jakoukoliv potřebu na vozidle, ber to jako Hlášení řidičů. V ElevenLabs hovoru má Šarlota nejdřív zavolat get_driver_report_context, nepředstírat načtení a až potom pokračovat nad skutečnými vozidly řidiče. Bez potvrzení nic nezapisuj ani neposílej; při chybějícím nebo nejednoznačném vozidle se ptej nejdřív na typ, značku nebo interní název vozidla a SPZ chtěj až jako poslední možnost. Při nejasné straně zrcátka polož jednu krátkou otázku. Mercedes díl podle VIN označ jako ověřený jen při oficiálním výsledku nebo ručním potvrzení.",
     "Blok Firemní lidskost: pokud request.humanTouch.enabled obsahuje návrhy, můžeš nenásilně použít maximálně jednu krátkou poznámku. Použij jen dodaný ověřený návrh, nikdy si nevymýšlej počasí, svátky, narozeniny ani dovolené.",
     "Firemní lidskost nepoužívej při reklamaci, stížnosti, spěchu, stresu, chybě, nemoci, OČR, lékaři ani u citlivé absence. Nikdy nezmiňuj důvod absence, věk ani soukromé údaje. Nepoužívej texty známých písní.",
     "Vrať výhradně JSON."
