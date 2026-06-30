@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.257"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.258"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozový park: funkční filtry seznamu",
+    text: "Seznam vozidel ve Vozovém parku má zapnuté lokální filtrování podle stavu, typu, řidiče, termínů, otevřených závad a fulltextového hledání nad read-only daty z Vistos master seznamu."
+  },
   {
     title: "Šarlota: jasná chyba mikrofonu",
     text: "Hlasový panel Šarloty na mobilu rozlišuje blokovaný mikrofon od obecné chyby. Když prohlížeč mikrofon nepovolí, zobrazí konkrétní stav a krátký návod k povolení mikrofonu pro web."

@@ -1106,7 +1106,15 @@ const fleetVehiclesState = {
 const fleetUiState = {
   message: "",
   error: "",
-  savingAssignmentVehicleId: ""
+  savingAssignmentVehicleId: "",
+  vehicleFilters: {
+    status: "all",
+    type: "all",
+    driver: "all",
+    terms: "all",
+    defects: "all",
+    search: ""
+  }
 };
 
 const vehicleTrackingDemoState = {
@@ -8741,44 +8749,58 @@ function fleetDashboardSection(activeId) {
 }
 
 function fleetFiltersSection() {
+  const filters = fleetUiState.vehicleFilters;
+  const typeOptions = fleetVehicleTypeOptions();
+  const driverOptions = fleetVehicleDriverOptions();
+
   return `
-    <form class="fleet-filters" aria-label="Filtry vozidel">
+    <form class="fleet-filters" aria-label="Filtry vozidel" data-fleet-filters>
       <label>
         <span>Stav</span>
-        <select disabled>
-          <option>Všechny stavy</option>
-          ${FLEET_STATUS_OPTIONS.map((status) => `<option>${escapeHtml(status.label)}</option>`).join("")}
+        <select name="status" data-fleet-filter>
+          <option value="all" ${filters.status === "all" ? "selected" : ""}>Všechny stavy</option>
+          ${FLEET_STATUS_OPTIONS.map((status) => `
+            <option value="${escapeHtml(status.value)}" ${filters.status === status.value ? "selected" : ""}>${escapeHtml(status.label)}</option>
+          `).join("")}
         </select>
       </label>
       <label>
         <span>Typ</span>
-        <select disabled>
-          <option>Všechny typy</option>
-          ${FLEET_VEHICLE_TYPES.map((type) => `<option>${escapeHtml(type)}</option>`).join("")}
+        <select name="type" data-fleet-filter>
+          <option value="all" ${filters.type === "all" ? "selected" : ""}>Všechny typy</option>
+          ${typeOptions.map((type) => `
+            <option value="${escapeHtml(type)}" ${filters.type === type ? "selected" : ""}>${escapeHtml(type)}</option>
+          `).join("")}
         </select>
       </label>
       <label>
         <span>Řidič</span>
-        <select disabled>
-          <option>${escapeHtml(FLEET_API_WAITING_LABEL)}</option>
+        <select name="driver" data-fleet-filter>
+          <option value="all" ${filters.driver === "all" ? "selected" : ""}>Všichni řidiči</option>
+          ${driverOptions.map((driver) => `
+            <option value="${escapeHtml(driver)}" ${filters.driver === driver ? "selected" : ""}>${escapeHtml(driver)}</option>
+          `).join("")}
         </select>
       </label>
       <label>
         <span>Termíny</span>
-        <select disabled>
-          <option>STK / revize / pojištění do 30 dnů</option>
+        <select name="terms" data-fleet-filter>
+          <option value="all" ${filters.terms === "all" ? "selected" : ""}>Všechny termíny</option>
+          <option value="due_30" ${filters.terms === "due_30" ? "selected" : ""}>STK / revize / pojištění do 30 dnů</option>
         </select>
       </label>
       <label>
         <span>Závady</span>
-        <select disabled>
-          <option>Otevřené závady</option>
+        <select name="defects" data-fleet-filter>
+          <option value="all" ${filters.defects === "all" ? "selected" : ""}>Všechny závady</option>
+          <option value="open" ${filters.defects === "open" ? "selected" : ""}>Otevřené závady</option>
         </select>
       </label>
       <label class="fleet-filter-search">
         <span>Hledat</span>
-        <input type="search" placeholder="SPZ, interní číslo, VIN, řidič" disabled>
+        <input name="search" type="search" value="${escapeHtml(filters.search)}" placeholder="Název, SPZ, VIN, řidič" data-fleet-filter>
       </label>
+      <button class="secondary-link" type="button" data-fleet-reset-filters>Reset</button>
     </form>
   `;
 }
@@ -8798,6 +8820,130 @@ function fleetVehicleCountValue(value) {
   }
 
   return Number.isFinite(Number(value)) ? String(value) : "—";
+}
+
+function fleetVehicleTypeOptions() {
+  const values = new Set(FLEET_VEHICLE_TYPES);
+
+  for (const vehicle of fleetVehiclesState.vehicles) {
+    const type = fleetVehicleDisplayValue(vehicle.vehicleType, "");
+    if (type) {
+      values.add(type);
+    }
+  }
+
+  return [...values].sort((left, right) => left.localeCompare(right, "cs"));
+}
+
+function fleetVehicleDriverOptions() {
+  const values = new Set();
+
+  for (const vehicle of fleetVehiclesState.vehicles) {
+    const driver = fleetVehicleDisplayValue(vehicle.assignedDriverName, "");
+    if (driver) {
+      values.add(driver);
+    }
+  }
+
+  return [...values].sort((left, right) => left.localeCompare(right, "cs"));
+}
+
+function fleetVehicleSearchText(vehicle = {}) {
+  return normalizeAccessSearchText([
+    vehicle.id,
+    vehicle.vehicleId,
+    vehicle.externalVehicleId,
+    vehicle.internalNumber,
+    vehicle.vistosVehicleId,
+    vehicle.vistosVehicleName,
+    vehicle.licensePlate,
+    vehicle.tcarsLicensePlate,
+    vehicle.vin,
+    vehicle.vehicleType,
+    vehicle.brand,
+    vehicle.model,
+    vehicle.assignedDriverName,
+    vehicle.vistosVehicleCategory,
+    vehicle.vistosVehicleStatus,
+    vehicle.source,
+    vehicle.telemetrySource
+  ].join(" "));
+}
+
+function fleetDateDueWithinDays(value, days = 30) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return false;
+  }
+
+  const date = new Date(raw.length <= 10 ? `${raw}T00:00:00` : raw);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const limit = new Date(today);
+  limit.setDate(limit.getDate() + days);
+
+  return date <= limit;
+}
+
+function fleetVehicleHasDueTerm(vehicle = {}) {
+  return FLEET_TERM_DEFINITIONS.some((definition) => fleetDateDueWithinDays(vehicle[definition.id]));
+}
+
+function fleetVehicleHasOpenDefect(vehicle = {}) {
+  const value = Number(vehicle.openDefects);
+  return Number.isFinite(value) && value > 0;
+}
+
+function fleetVehicleMatchesFilters(vehicle = {}) {
+  const filters = fleetUiState.vehicleFilters;
+  const status = String(filters.status || "all");
+  const type = String(filters.type || "all");
+  const driver = String(filters.driver || "all");
+  const terms = String(filters.terms || "all");
+  const defects = String(filters.defects || "all");
+  const query = normalizeAccessSearchText(filters.search || "");
+
+  if (status !== "all" && vehicle.status !== status) {
+    return false;
+  }
+
+  if (type !== "all" && fleetVehicleDisplayValue(vehicle.vehicleType, "") !== type) {
+    return false;
+  }
+
+  if (driver !== "all" && fleetVehicleDisplayValue(vehicle.assignedDriverName, "") !== driver) {
+    return false;
+  }
+
+  if (terms === "due_30" && !fleetVehicleHasDueTerm(vehicle)) {
+    return false;
+  }
+
+  if (defects === "open" && !fleetVehicleHasOpenDefect(vehicle)) {
+    return false;
+  }
+
+  return !query || fleetVehicleSearchText(vehicle).includes(query);
+}
+
+function fleetVehicleFiltersActive() {
+  const filters = fleetUiState.vehicleFilters;
+  return Boolean(
+    normalizeAccessSearchText(filters.search || "") ||
+    filters.status !== "all" ||
+    filters.type !== "all" ||
+    filters.driver !== "all" ||
+    filters.terms !== "all" ||
+    filters.defects !== "all"
+  );
+}
+
+function filteredFleetVehicles() {
+  return fleetVehiclesState.vehicles.filter(fleetVehicleMatchesFilters);
 }
 
 function fleetVehiclesSourceLabel() {
@@ -9021,8 +9167,18 @@ function fleetVehiclesTableBody() {
     `;
   }
 
-  if (fleetVehiclesState.apiStatus === "ready" && fleetVehiclesState.vehicles.length) {
-    return fleetVehiclesState.vehicles.map(fleetVehicleRow).join("");
+  const vehicles = filteredFleetVehicles();
+  if (fleetVehiclesState.apiStatus === "ready" && vehicles.length) {
+    return vehicles.map(fleetVehicleRow).join("");
+  }
+
+  if (fleetVehiclesState.apiStatus === "ready" && fleetVehiclesState.vehicles.length && fleetVehicleFiltersActive()) {
+    return `
+      <div class="fleet-table__empty" role="row">
+        <strong>Žádná vozidla neodpovídají filtrům</strong>
+        <span>Zkuste upravit hledání, stav, typ, řidiče nebo resetovat filtry.</span>
+      </div>
+    `;
   }
 
   return `
@@ -9034,6 +9190,12 @@ function fleetVehiclesTableBody() {
 }
 
 function fleetVehiclesSection(activeId) {
+  const visibleVehicles = filteredFleetVehicles();
+  const totalVehicles = fleetVehiclesState.vehicles.length;
+  const filterCountText = fleetVehiclesState.apiStatus === "ready"
+    ? (fleetVehicleFiltersActive() ? `Zobrazeno ${visibleVehicles.length} z ${totalVehicles}` : `Celkem ${totalVehicles}`)
+    : "";
+
   return `
     <section class="fleet-section" id="fleet-vehicles" aria-labelledby="fleet-vehicles-title" ${fleetPanelAttributes("vehicles", activeId)}>
       ${fleetSectionHeader(
@@ -9046,6 +9208,7 @@ function fleetVehiclesSection(activeId) {
       <p class="fleet-api-note">
         ${escapeHtml(fleetVehiclesStatusText())}
         <span>${escapeHtml(fleetVehiclesSourceDescription())} Přiřazení řidiče ukládá KSO do D1.</span>
+        ${filterCountText ? `<span>${escapeHtml(filterCountText)}</span>` : ""}
       </p>
       <div class="fleet-table" role="table" aria-label="Seznam vozidel">
         <div class="fleet-table__header" role="row">
@@ -21199,6 +21362,47 @@ async function loadFleetVehicles(options = {}) {
   }
 }
 
+function updateFleetVehicleFilter(field) {
+  const name = field?.name;
+  if (!name || !Object.prototype.hasOwnProperty.call(fleetUiState.vehicleFilters, name)) {
+    return;
+  }
+
+  fleetUiState.vehicleFilters = {
+    ...fleetUiState.vehicleFilters,
+    [name]: field.value || (name === "search" ? "" : "all")
+  };
+
+  const shouldRestoreSearchFocus = name === "search";
+  const selectionStart = shouldRestoreSearchFocus ? field.selectionStart : null;
+  const selectionEnd = shouldRestoreSearchFocus ? field.selectionEnd : null;
+  render();
+
+  if (shouldRestoreSearchFocus) {
+    requestAnimationFrame(() => {
+      const searchInput = document.querySelector("[data-fleet-filter][name='search']");
+      if (searchInput) {
+        searchInput.focus();
+        if (typeof searchInput.setSelectionRange === "function" && selectionStart !== null && selectionEnd !== null) {
+          searchInput.setSelectionRange(selectionStart, selectionEnd);
+        }
+      }
+    });
+  }
+}
+
+function resetFleetVehicleFilters() {
+  fleetUiState.vehicleFilters = {
+    status: "all",
+    type: "all",
+    driver: "all",
+    terms: "all",
+    defects: "all",
+    search: ""
+  };
+  render();
+}
+
 function updateFleetVehicleInState(vehicle) {
   if (!vehicle?.id) {
     return;
@@ -25641,6 +25845,12 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const fleetFiltersForm = event.target.closest("[data-fleet-filters]");
+  if (fleetFiltersForm) {
+    event.preventDefault();
+    return;
+  }
+
   const absenceRequestForm = event.target.closest("[data-absence-request-form]");
   if (absenceRequestForm) {
     event.preventDefault();
@@ -25753,6 +25963,12 @@ document.addEventListener("input", (event) => {
     return;
   }
 
+  const fleetFilterInput = event.target.closest("[data-fleet-filter]");
+  if (fleetFilterInput && fleetFilterInput.name === "search") {
+    updateFleetVehicleFilter(fleetFilterInput);
+    return;
+  }
+
   const quickNote = event.target.closest("[data-quick-note]");
   if (quickNote) {
     quickAbsenceState.note = quickNote.value;
@@ -25852,6 +26068,12 @@ document.addEventListener("change", async (event) => {
   const moduleRulesFilter = event.target.closest("[data-module-rules-type-filter], [data-module-rules-status-filter]");
   if (moduleRulesFilter) {
     updateModuleRulesFilters(moduleRulesFilter);
+    return;
+  }
+
+  const fleetFilter = event.target.closest("[data-fleet-filter]");
+  if (fleetFilter) {
+    updateFleetVehicleFilter(fleetFilter);
     return;
   }
 
@@ -26098,6 +26320,13 @@ document.addEventListener("click", async (event) => {
   if (fleetAction) {
     event.preventDefault();
     handleFleetAction(fleetAction);
+    return;
+  }
+
+  const fleetResetFilters = event.target.closest("[data-fleet-reset-filters]");
+  if (fleetResetFilters) {
+    event.preventDefault();
+    resetFleetVehicleFilters();
     return;
   }
 
