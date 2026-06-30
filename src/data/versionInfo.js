@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.243"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.244"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: Firemní lidskost v EL",
+    text: "Signed-url endpoint pro ElevenLabs posílá bezpečné dynamické proměnné human_touch_enabled, human_touch_suggestion, human_touch_type a human_touch_source, aby Šarlota použila jen ověřené krátké odlehčení z KSO backendu."
+  },
   {
     title: "Šarlota: hlasové nepřítomnosti",
     text: "Hlasová Šarlota v modulu Dovolená / Nemoc a Rychlé zadání nově připraví dovolenou, nemoc, OČR, lékaře, náhradní volno, neplacené volno i jinou nepřítomnost a zapisuje až po potvrzení přes KSO backend."

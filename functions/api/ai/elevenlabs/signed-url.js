@@ -5,6 +5,7 @@ import {
   sarlotaIntroAnnouncementForAi
 } from "../../../_lib/ai-session-announcements.js";
 import { userDynamicVariablesForAi } from "../../../_lib/ai-people-summary.js";
+import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 
 const ASSISTANTS = {
   sarlota: {
@@ -92,6 +93,29 @@ function agentIdFor(env, assistant) {
     .find(Boolean) || "";
 }
 
+async function sarlotaHumanTouchDynamicVariables(env, user, baseDynamicVariables, assistant) {
+  if (assistant.id !== "sarlota") {
+    return {
+      human_touch_enabled: "ne",
+      human_touch_suggestion: "",
+      human_touch_type: "",
+      human_touch_source: ""
+    };
+  }
+
+  const humanTouch = await sarlotaHumanTouchContext(env, user, {
+    dynamic_variables: baseDynamicVariables
+  });
+  const suggestion = Array.isArray(humanTouch.suggestions) ? humanTouch.suggestions[0] : null;
+
+  return {
+    human_touch_enabled: humanTouch.enabled && suggestion?.text ? "ano" : "ne",
+    human_touch_suggestion: suggestion?.text || "",
+    human_touch_type: suggestion?.type || "",
+    human_touch_source: suggestion?.source || ""
+  };
+}
+
 export async function onRequestGet({ request, env }) {
   const { user, response } = await requireUserPermission(env, request, "dashboard", "view");
 
@@ -103,10 +127,13 @@ export async function onRequestGet({ request, env }) {
   const debug = isDebugRequest(request);
   const apiKey = cleanString(env.ELEVENLABS_API_KEY);
   const agentId = agentIdFor(env, assistant);
+  const userDynamicVariables = userDynamicVariablesForAi(user);
   const introAnnouncement = await sarlotaIntroAnnouncementForAi(env, user, assistant);
+  const humanTouchVariables = await sarlotaHumanTouchDynamicVariables(env, user, userDynamicVariables, assistant);
   const dynamicVariables = {
-    ...userDynamicVariablesForAi(user),
-    ...introAnnouncement.variables
+    ...userDynamicVariables,
+    ...introAnnouncement.variables,
+    ...humanTouchVariables
   };
 
   if (!apiKey || !agentId) {
@@ -176,7 +203,9 @@ export async function onRequestGet({ request, env }) {
       result: {
         configured: true,
         userRole: dynamicVariables.user_role,
-        availableModulesLength: dynamicVariables.available_modules.length
+        availableModulesLength: dynamicVariables.available_modules.length,
+        humanTouchEnabled: dynamicVariables.human_touch_enabled,
+        humanTouchType: dynamicVariables.human_touch_type
       },
       status: "ok"
     });

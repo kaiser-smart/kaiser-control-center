@@ -80,6 +80,10 @@ time_of_day_greeting
 user_greeting
 intro_announcement
 intro_announcement_enabled
+human_touch_enabled
+human_touch_suggestion
+human_touch_type
+human_touch_source
 ```
 
 ## 5. Je pozdrav hardcoded?
@@ -130,6 +134,7 @@ Status endpoint nově umí ověřit skutečné nastavení tools v ElevenLabs př
 - Endpoint v mockované konfiguraci vrací `configured: true`.
 - Endpoint skládá `dynamicVariables` server-side.
 - `intro_announcement` je součástí `dynamicVariables`.
+- `human_touch_enabled`, `human_touch_suggestion`, `human_touch_type` a `human_touch_source` jsou připravené pro ElevenLabs prompt. Pokud backend nemá ověřený bezpečný návrh, `human_touch_enabled` je `ne` a návrh zůstává prázdný.
 - Test pro Radima vrací vocativ `Radime`.
 - Personalizace jde z přihlášeného uživatele / profilu.
 - Pozdrav vzniká v KSO backendu.

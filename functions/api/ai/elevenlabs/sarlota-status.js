@@ -1,6 +1,7 @@
 import { json, requireUserPermission } from "../../../_lib/auth.js";
 import { sarlotaIntroAnnouncementForAi } from "../../../_lib/ai-session-announcements.js";
 import { normalizeAiSearch, userDynamicVariablesForAi } from "../../../_lib/ai-people-summary.js";
+import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
 
 const SARLOTA_AGENT_NAME = "Šarlota – Smart odpady";
@@ -24,7 +25,17 @@ const REQUIRED_DYNAMIC_VARIABLES = [
   "time_of_day_greeting",
   "user_greeting",
   "intro_announcement",
-  "intro_announcement_enabled"
+  "intro_announcement_enabled",
+  "human_touch_enabled"
+];
+const OPTIONAL_DYNAMIC_VARIABLES = [
+  "human_touch_suggestion",
+  "human_touch_type",
+  "human_touch_source"
+];
+const EXPECTED_DYNAMIC_VARIABLES = [
+  ...REQUIRED_DYNAMIC_VARIABLES,
+  ...OPTIONAL_DYNAMIC_VARIABLES
 ];
 const EXPECTED_CLIENT_TOOL_NAMES = ELEVENLABS_CLIENT_TOOL_SCHEMAS
   .map((tool) => String(tool?.name ?? "").trim())
@@ -240,6 +251,17 @@ function radimVocativeFixtureOk() {
   return cleanString(variables.user_first_name_vocative) === "Radime";
 }
 
+function humanTouchDynamicVariables(humanTouch) {
+  const suggestion = Array.isArray(humanTouch?.suggestions) ? humanTouch.suggestions[0] : null;
+
+  return {
+    human_touch_enabled: humanTouch?.enabled && suggestion?.text ? "ano" : "ne",
+    human_touch_suggestion: suggestion?.text || "",
+    human_touch_type: suggestion?.type || "",
+    human_touch_source: suggestion?.source || ""
+  };
+}
+
 export async function sarlotaStatusPayload(env, user) {
   const apiKeyPresent = Boolean(cleanString(env?.ELEVENLABS_API_KEY));
   const agentId = agentIdFor(env);
@@ -250,9 +272,14 @@ export async function sarlotaStatusPayload(env, user) {
     agentId
   });
   const introAnnouncement = await sarlotaIntroAnnouncementForAi(env, user, SARLOTA_ASSISTANT);
+  const userVariables = userDynamicVariablesForAi(user);
+  const humanTouch = await sarlotaHumanTouchContext(env, user, {
+    dynamic_variables: userVariables
+  });
   const dynamicVariables = {
-    ...userDynamicVariablesForAi(user),
-    ...introAnnouncement.variables
+    ...userVariables,
+    ...introAnnouncement.variables,
+    ...humanTouchDynamicVariables(humanTouch)
   };
   const missingVariables = missingRequiredVariables(dynamicVariables);
   const clientToolNames = ELEVENLABS_CLIENT_TOOL_SCHEMAS
@@ -311,7 +338,9 @@ export async function sarlotaStatusPayload(env, user) {
       status: missingVariables.length ? "error" : "ok",
       source: "authenticated_user_profile",
       dynamicVariablesRequired: REQUIRED_DYNAMIC_VARIABLES,
-      dynamicVariablesPresent: REQUIRED_DYNAMIC_VARIABLES.filter((key) => !missingVariables.includes(key)),
+      dynamicVariablesOptional: OPTIONAL_DYNAMIC_VARIABLES,
+      dynamicVariablesExpected: EXPECTED_DYNAMIC_VARIABLES,
+      dynamicVariablesPresent: EXPECTED_DYNAMIC_VARIABLES.filter((key) => Object.prototype.hasOwnProperty.call(dynamicVariables, key)),
       missingVariables,
       valuesReturnedToPanel: false
     },
