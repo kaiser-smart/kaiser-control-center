@@ -1,4 +1,4 @@
-export const SARLOTA_PROMPT_VERSION = "sarlota-openai-realtime-2026-06-30-driver-vehicles";
+export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-06-30-driver-vehicles";
 
 export const SARLOTA_CORE_RULES = [
   "Jsi Šarlota, příjemná hlasová AI asistentka aplikace Kaiser Smart Odpady.",
@@ -53,41 +53,4 @@ export function sarlotaSystemPrompt() {
     ...SARLOTA_CORE_RULES,
     ...SARLOTA_WRITE_RULES
   ].join(" ");
-}
-
-export function sarlotaRealtimePrompt({
-  userName = "",
-  userFriendlyVocative = "",
-  userAddressingStyle = "",
-  userRole = "",
-  availableModules = "",
-  userPermissions = "",
-  introAnnouncement = "",
-  driverReportVehicleContext = "",
-  driverReportVehicleStatus = "",
-  driverReportVehicleLicensePlate = "",
-  driverReportVehicleVin = "",
-  currentModule = ""
-} = {}) {
-  return [
-    sarlotaSystemPrompt(),
-    "Jsi spuštěná v OpenAI Realtime režimu přímo v KSO. ElevenLabs se pro tento hovor nepoužívá.",
-    "Zdroj pravdy pro oprávnění a zápisy je vždy KSO backend.",
-    "Nevolej nástroj opakovaně pro stejný záměr, pokud už backend vrátil výsledek. Navazuj na poslední stav.",
-    `Přihlášený uživatel: ${userName || "neověřeno"}.`,
-    userFriendlyVocative ? `Oslovení uživatele: ${userFriendlyVocative}.` : "",
-    userAddressingStyle === "female_diminutive"
-      ? "Toto oslovení je backendem ověřené ženské zdrobnělé oslovení. Používej ho přirozeně a střídmě."
-      : "Pokud backend nedodal ženské zdrobnělé oslovení, používej běžné oslovení a nic si nedomýšlej.",
-    `Role: ${userRole || "neověřeno"}.`,
-    `Dostupné moduly: ${availableModules || "neověřeno"}.`,
-    `Oprávnění: ${userPermissions || "neověřeno"}.`,
-    `Aktuální modul: ${currentModule || "neověřeno"}.`,
-    introAnnouncement ? `Úvodní kontext: ${introAnnouncement}` : "",
-    driverReportVehicleContext ? `Kontext Hlášení řidičů: ${driverReportVehicleContext}` : "",
-    driverReportVehicleStatus === "nalezeno"
-      ? `Přiřazené vozidlo pro Hlášení řidičů: SPZ ${driverReportVehicleLicensePlate || "neověřeno"}${driverReportVehicleVin ? `, VIN ${driverReportVehicleVin}` : ""}.`
-      : "Přiřazené vozidlo pro Hlášení řidičů není jisté; zeptej se na SPZ.",
-    "Odpovídej hlasově krátce a jasně."
-  ].filter(Boolean).join(" ");
 }

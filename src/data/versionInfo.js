@@ -25,6 +25,10 @@ export const versionNews = [
     text: "Seznam vozidel ve Vozovém parku má zapnuté lokální filtrování podle stavu, typu, řidiče, termínů, otevřených závad a fulltextového hledání nad read-only daty z Vistos master seznamu."
   },
   {
+    title: "Šarlota: jen ElevenLabs hlas",
+    text: "OpenAI Realtime hlasová větev byla odstraněná. Tlačítko Šarloty teď používá jednu hlasovou cestu přes ElevenLabs signed-url a KSO backend."
+  },
+  {
     title: "Šarlota: jasná chyba mikrofonu",
     text: "Hlasový panel Šarloty na mobilu rozlišuje blokovaný mikrofon od obecné chyby. Když prohlížeč mikrofon nepovolí, zobrazí konkrétní stav a krátký návod k povolení mikrofonu pro web."
   },
@@ -110,27 +114,7 @@ export const versionNews = [
   },
   {
     title: "Šarlota: výchozí hlas zpět na ElevenLabs",
-    text: "Tlačítko Spustit hlas nově spouští stabilní ElevenLabs režim. OpenAI Realtime zůstává v kódu jako testovací cesta, ale není výchozí pro mobilní hovor."
-  },
-  {
-    title: "Šarlota: test hlasu Cedar",
-    text: "Výchozí OpenAI Realtime hlas Šarloty je pro test změněný z Marin na Cedar. Pokud je v produkčním prostředí nastavená proměnná SARLOTA_OPENAI_REALTIME_VOICE, má stále přednost před defaultem v kódu."
-  },
-  {
-    title: "Šarlota: návrat na první OpenAI hlas",
-    text: "Hlasový režim Šarloty je vrácený na první OpenAI Realtime pokus, který měl v testu dobrou latenci a mluvil. Pozdější stabilizační zásahy pro iPhone a deterministický zápis dovolené jsou dočasně vypnuté."
-  },
-  {
-    title: "Šarlota: stabilnější OpenAI hlas na iPhonu",
-    text: "OpenAI hlas zůstává hlavní režim, ale audio se předem odjišťuje pro iOS, UI rozlišuje přípravu a skutečné přehrávání zvuku a dovolená lépe rozpozná české fráze jako volno, celý den nebo jo zapiš."
-  },
-  {
-    title: "Šarlota: spolehlivější zápis dovolené hlasem",
-    text: "OpenAI hlas Šarloty má deterministický KSO tok pro dovolenou: přepis řeči s dovolenou, rozsahem nebo potvrzením jde rovnou do backendu, takže zápis není závislý na tom, jestli model sám zavolá tool."
-  },
-  {
-    title: "Šarlota: OpenAI hlasový pilot",
-    text: "Panel Šarloty má nový OpenAI Realtime hlasový režim bez ElevenLabs jako prostředníka. Mikrofon se spouští až po klepnutí, API klíč zůstává server-side a pilotní zápis dovolené dál prochází přes bezpečný KSO backend."
+    text: "Tlačítko Spustit hlas spouští stabilní ElevenLabs režim. OpenAI Realtime hlasová testovací cesta už není v aplikaci."
   },
   {
     title: "Šarlota: velký mikrofon na černém pozadí",
