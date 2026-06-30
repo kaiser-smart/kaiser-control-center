@@ -17,12 +17,118 @@ const INTENTS = new Set([
   "handoff_jarka",
   "product_advice",
   "complaint_return",
+  "absence_request",
   "absence_vacation_request",
   "call_log",
   "business_hours",
   "general",
   "unsupported"
 ]);
+
+const ABSENCE_TYPE_LABELS = {
+  vacation: "dovolenou",
+  sick: "nemoc",
+  doctor: "lékaře",
+  care: "OČR",
+  compensatory_leave: "náhradní volno",
+  unpaid_leave: "neplacené volno",
+  other: "jinou nepřítomnost"
+};
+
+const ABSENCE_TYPE_OPTIONS_TEXT = "Dovolená, nemoc, OČR, lékař, náhradní volno, neplacené volno, nebo jiná nepřítomnost.";
+
+const ABSENCE_TYPE_ALIASES = {
+  dovolena: "vacation",
+  dovolenou: "vacation",
+  vacation: "vacation",
+  leave: "vacation",
+  holiday: "vacation",
+  nemoc: "sick",
+  nemocny: "sick",
+  nemocna: "sick",
+  sick: "sick",
+  lekar: "doctor",
+  lekari: "doctor",
+  doktora: "doctor",
+  doktor: "doctor",
+  doctor: "doctor",
+  ocr: "care",
+  osetrovani: "care",
+  care: "care",
+  nahradni_volno: "compensatory_leave",
+  nahradni: "compensatory_leave",
+  compensatory_leave: "compensatory_leave",
+  neplacene_volno: "unpaid_leave",
+  neplacene: "unpaid_leave",
+  unpaid_leave: "unpaid_leave",
+  jina_nepritomnost: "other",
+  jina_absence: "other",
+  ostatni: "other",
+  other: "other"
+};
+
+const CZECH_MONTHS = {
+  leden: 1,
+  ledna: 1,
+  unor: 2,
+  unora: 2,
+  brezen: 3,
+  brezna: 3,
+  duben: 4,
+  dubna: 4,
+  kveten: 5,
+  kvetna: 5,
+  cerven: 6,
+  cervna: 6,
+  cervenec: 7,
+  cervence: 7,
+  srpen: 8,
+  srpna: 8,
+  zari: 9,
+  rijen: 10,
+  rijna: 10,
+  listopad: 11,
+  listopadu: 11,
+  prosinec: 12,
+  prosince: 12
+};
+
+const CZECH_HOUR_WORDS = {
+  pulnoc: "00:00",
+  nula: "00:00",
+  jednu: "01:00",
+  jedne: "01:00",
+  jedny: "01:00",
+  dva: "02:00",
+  dvou: "02:00",
+  dve: "02:00",
+  tri: "03:00",
+  ctyri: "04:00",
+  pet: "05:00",
+  sest: "06:00",
+  sedm: "07:00",
+  osm: "08:00",
+  devet: "09:00",
+  deset: "10:00",
+  deseti: "10:00",
+  desiti: "10:00",
+  jedenact: "11:00",
+  jedenacti: "11:00",
+  dvanact: "12:00",
+  dvanacti: "12:00",
+  trinact: "13:00",
+  trinacti: "13:00",
+  ctrnact: "14:00",
+  ctrnacti: "14:00",
+  patnact: "15:00",
+  patnacti: "15:00",
+  sestnact: "16:00",
+  sestnacti: "16:00",
+  sedmnact: "17:00",
+  sedmnacti: "17:00",
+  osmnact: "18:00",
+  osmnacti: "18:00"
+};
 
 export class VoiceSarlotaError extends Error {
   constructor(message, status = 400, code = "voice_sarlota_error") {
@@ -230,21 +336,85 @@ function czechDateFromMatch(day, month, year, baseIso) {
   return iso;
 }
 
+function aliasKey(value) {
+  return normalizeKey(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function czechMonthNumber(value) {
+  return CZECH_MONTHS[aliasKey(value)] || 0;
+}
+
+function czechMonthDate(day, monthName, year, baseIso) {
+  const month = czechMonthNumber(monthName);
+  if (!month) {
+    return "";
+  }
+
+  return czechDateFromMatch(day, month, year, baseIso);
+}
+
+function explicitCzechDateFromText(raw, baseIso) {
+  const normalized = normalizeKey(raw);
+  const monthNames = Object.keys(CZECH_MONTHS).join("|");
+  const wordMonth = normalized.match(new RegExp(`\\b(\\d{1,2})\\.?\\s+(${monthNames})(?:\\s+(\\d{2,4}))?\\b`));
+  if (wordMonth) {
+    return czechMonthDate(wordMonth[1], wordMonth[2], wordMonth[3], baseIso);
+  }
+
+  return "";
+}
+
+function dateRangeFromNaturalText(value, baseIso = pragueIsoDate()) {
+  const raw = cleanString(value);
+  const normalized = normalizeKey(raw);
+  const range = { dateFrom: "", dateTo: "" };
+
+  if (!raw) {
+    return range;
+  }
+
+  const monthNames = Object.keys(CZECH_MONTHS).join("|");
+  const sameMonthRange = normalized.match(new RegExp(`\\b(?:od\\s*)?(\\d{1,2})\\.?\\s*(?:az|do|-)\\s*(\\d{1,2})\\.?\\s+(${monthNames})(?:\\s+(\\d{2,4}))?\\b`));
+  if (sameMonthRange) {
+    const dateFrom = czechMonthDate(sameMonthRange[1], sameMonthRange[3], sameMonthRange[4], baseIso);
+    const dateTo = czechMonthDate(sameMonthRange[2], sameMonthRange[3], sameMonthRange[4], baseIso);
+    if (dateFrom || dateTo) {
+      return { dateFrom, dateTo: dateTo || dateFrom };
+    }
+  }
+
+  const fromToMatch = normalized.match(/\bod\s+(.+?)\s+(?:do|az)\s+(.+?)(?:\s|$)/);
+  if (fromToMatch) {
+    const dateFrom = dateFromNaturalText(fromToMatch[1], baseIso);
+    let dateTo = dateFromNaturalText(fromToMatch[2], baseIso);
+    while (dateFrom && dateTo && dateTo < dateFrom) {
+      dateTo = addIsoDays(dateTo, 7);
+    }
+    if (dateFrom || dateTo) {
+      return { dateFrom, dateTo: dateTo || dateFrom };
+    }
+  }
+
+  const explicitDate = explicitCzechDateFromText(raw, baseIso);
+  const singleDate = explicitDate || dateFromNaturalText(raw, baseIso);
+  return { dateFrom: singleDate, dateTo: singleDate };
+}
+
 function weekdayIsoFromText(normalizedText, baseIso) {
   const weekdays = [
-    ["pondeli", 1],
-    ["utery", 2],
-    ["streda", 3],
-    ["ctvrtek", 4],
-    ["patek", 5],
-    ["sobota", 6],
-    ["nedele", 7]
+    [["pondeli"], 1],
+    [["utery"], 2],
+    [["streda", "stredu", "stredy"], 3],
+    [["ctvrtek", "ctvrtka"], 4],
+    [["patek", "patku"], 5],
+    [["sobota", "sobotu"], 6],
+    [["nedele", "nedeli"], 7]
   ];
   const currentDate = new Date(`${baseIso}T12:00:00Z`);
   const currentWeekday = currentDate.getUTCDay() || 7;
 
-  for (const [word, weekday] of weekdays) {
-    if (!new RegExp(`\\b${word}\\b`).test(normalizedText)) {
+  for (const [words, weekday] of weekdays) {
+    if (!words.some((word) => new RegExp(`\\b${word}\\b`).test(normalizedText))) {
       continue;
     }
 
@@ -292,6 +462,11 @@ function dateFromNaturalText(value, baseIso = pragueIsoDate()) {
     return czechDateFromMatch(czechDateMatch[1], czechDateMatch[2], czechDateMatch[3], baseIso);
   }
 
+  const explicitDate = explicitCzechDateFromText(raw, baseIso);
+  if (explicitDate) {
+    return explicitDate;
+  }
+
   return weekdayIsoFromText(normalized, baseIso);
 }
 
@@ -327,13 +502,43 @@ function requestedAbsenceType(payload = {}) {
     payload.type,
     extractNestedValue(payload, ["absenceType", "absence_type", "type"])
   );
-  const normalized = normalizeKey(raw);
+  const normalized = aliasKey(raw);
+  const type = ABSENCE_TYPE_ALIASES[normalized] || normalized;
+  return ABSENCE_TYPE_LABELS[type] ? type : "";
+}
 
-  if (["dovolena", "vacation", "leave", "holiday"].includes(normalized)) {
+function inferAbsenceTypeFromText(speechText) {
+  const normalized = normalizeKey(speechText);
+
+  if (/\b(neplacene\s+volno|neplacenou|neplacene)\b/.test(normalized)) {
+    return "unpaid_leave";
+  }
+
+  if (/\b(nahradni\s+volno|nahradni)\b/.test(normalized)) {
+    return "compensatory_leave";
+  }
+
+  if (/\b(ocr|osetrovani)\b/.test(normalized)) {
+    return "care";
+  }
+
+  if (/\b(lekar|lekare|lekari|doktora|doktor)\b/.test(normalized)) {
+    return "doctor";
+  }
+
+  if (/\b(nemoc|nemocny|nemocna|marod)\b/.test(normalized)) {
+    return "sick";
+  }
+
+  if (/\b(dovolen)\w*/.test(normalized)) {
     return "vacation";
   }
 
-  return normalized;
+  if (/\b(jina\s+nepritomnost|jinou\s+nepritomnost|jina\s+absence|jinou\s+absenci|ostatni)\b/.test(normalized)) {
+    return "other";
+  }
+
+  return "";
 }
 
 function absenceDateValue(payload, keys) {
@@ -347,23 +552,85 @@ function absenceDateValue(payload, keys) {
 }
 
 function absenceDateFromPayload(payload, speechText, baseIso = pragueIsoDate()) {
-  return dateFromNaturalText(
+  const explicitValue = dateFromNaturalText(
     firstNonEmpty(
       absenceDateValue(payload, ["dateFrom", "date_from", "absenceDate", "absence_date", "date", "startDate", "start_date"]),
-      speechText
+      ""
     ),
     baseIso
   );
+
+  return explicitValue || dateRangeFromNaturalText(speechText, baseIso).dateFrom;
 }
 
 function absenceDateToFromPayload(payload, speechText, dateFrom, baseIso = pragueIsoDate()) {
-  return dateFromNaturalText(
+  const explicitValue = dateFromNaturalText(
     firstNonEmpty(
       absenceDateValue(payload, ["dateTo", "date_to", "endDate", "end_date"]),
       ""
     ),
     baseIso
-  ) || dateFrom || dateFromNaturalText(speechText, baseIso);
+  );
+  const range = dateRangeFromNaturalText(speechText, baseIso);
+  return explicitValue || range.dateTo || dateFrom || range.dateFrom;
+}
+
+function timeFromValue(value) {
+  const raw = cleanString(value);
+  const normalized = normalizeKey(raw);
+
+  if (!raw) {
+    return "";
+  }
+
+  const colonMatch = raw.match(/\b(\d{1,2})[:.](\d{2})\b/);
+  if (colonMatch) {
+    const hours = Number(colonMatch[1]);
+    const minutes = Number(colonMatch[2]);
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    }
+  }
+
+  const hourMatch = raw.match(/\b(\d{1,2})\b/);
+  if (hourMatch) {
+    const hours = Number(hourMatch[1]);
+    if (hours >= 0 && hours <= 23) {
+      return `${String(hours).padStart(2, "0")}:00`;
+    }
+  }
+
+  return CZECH_HOUR_WORDS[aliasKey(normalized)] || "";
+}
+
+function absenceTimeValue(payload, keys) {
+  const parameters = absenceParameters(payload);
+  const context = absenceContext(payload);
+
+  return firstNonEmpty(
+    ...keys.flatMap((key) => [parameters[key], context[key], payload[key]]),
+    extractNestedValue(payload, keys)
+  );
+}
+
+function absenceTimeRangeFromPayload(payload, speechText) {
+  const startExplicit = timeFromValue(absenceTimeValue(payload, ["startTime", "start_time", "timeFrom", "time_from"]));
+  const endExplicit = timeFromValue(absenceTimeValue(payload, ["endTime", "end_time", "timeTo", "time_to"]));
+
+  if (startExplicit || endExplicit) {
+    return { startTime: startExplicit, endTime: endExplicit };
+  }
+
+  const normalized = normalizeKey(speechText);
+  const rangeMatch = normalized.match(/\bod\s+(.+?)\s+do\s+(.+?)(?:\s|$)/);
+  if (!rangeMatch) {
+    return { startTime: "", endTime: "" };
+  }
+
+  return {
+    startTime: timeFromValue(rangeMatch[1]),
+    endTime: timeFromValue(rangeMatch[2])
+  };
 }
 
 function absenceDayPart(payload, speechText) {
@@ -443,8 +710,9 @@ function absenceConfirmation(payload, speechText) {
   }
 
   if (
-    /\b(ano|souhlasim|potvrzuji)\b.*\b(zapis|uloz|vytvor|odešli|odesli|posli)\b/.test(normalized) ||
-    /\b(zapis|uloz|vytvor)\b.*\b(to|dovolenou|zadost)\b/.test(normalized)
+    /^\s*(ano|jo|potvrzuji|souhlasim|uloz|zapis)\s*(to)?[\s.!?]*$/.test(normalized) ||
+    /\b(ano|jo|souhlasim|potvrzuji)\b.*\b(zapis|uloz|vytvor|odešli|odesli|posli)\b/.test(normalized) ||
+    /\b(zapis|uloz|vytvor)\s+to\b/.test(normalized)
   ) {
     return "confirmed";
   }
@@ -469,40 +737,180 @@ function absenceNote(payload) {
   ), 360);
 }
 
-function isVacationRequestText(speechText) {
-  const normalized = normalizeKey(speechText);
+function requestedAbsenceEmployeeId(payload = {}) {
+  const parameters = absenceParameters(payload);
+  const context = absenceContext(payload);
 
-  if (!/\bdovolen/.test(normalized)) {
+  return firstNonEmpty(
+    parameters.employeeId,
+    parameters.employee_id,
+    parameters.userId,
+    parameters.user_id,
+    context.employeeId,
+    context.employee_id,
+    payload.employeeId,
+    payload.employee_id,
+    extractNestedValue(payload, ["employeeId", "employee_id"])
+  );
+}
+
+function trimEmployeeQuery(value) {
+  return cleanString(value)
+    .replace(/[,.!?]+$/g, "")
+    .replace(/\b(od|do|na|dnes|zitra|pozitri|pondeli|utery|streda|ctvrtek|patek|sobota|nedele|dovolenou|nemoc|ocr|lekare|volno|nepritomnost)\b.*$/i, "")
+    .trim();
+}
+
+function employeeQueryFromSpeech(speechText) {
+  const raw = cleanString(speechText);
+
+  const explicit = raw.match(/\b(?:pro|zaměstnanci|zamestnanci)\s+([A-Za-zÀ-ž]+(?:\s+[A-Za-zÀ-ž]+)?)/i);
+  if (explicit) {
+    return trimEmployeeQuery(explicit[1]);
+  }
+
+  const dative = raw.match(/\b(?:dej|zadej|zapiš|zapis|nahlaš|nahlas)\s+([A-Za-zÀ-ž]+ovi|[A-Za-zÀ-ž]+ové|[A-Za-zÀ-ž]+oví)\b/i);
+  if (dative) {
+    return trimEmployeeQuery(dative[1]);
+  }
+
+  return "";
+}
+
+function requestedAbsenceEmployeeQuery(payload = {}, speechText = "") {
+  const parameters = absenceParameters(payload);
+  const context = absenceContext(payload);
+
+  return firstNonEmpty(
+    parameters.employeeName,
+    parameters.employee_name,
+    parameters.employee,
+    parameters.name,
+    parameters.query,
+    context.employeeName,
+    context.employee_name,
+    context.employee,
+    payload.employeeName,
+    payload.employee_name,
+    payload.employee,
+    extractNestedValue(payload, ["employeeName", "employee_name", "employee", "employeeQuery", "employee_query"]),
+    employeeQueryFromSpeech(speechText)
+  );
+}
+
+function stripCzechNameEnding(value) {
+  const normalized = aliasKey(value);
+  return normalized
+    .replace(/ovi$/u, "")
+    .replace(/ove$/u, "")
+    .replace(/ovou$/u, "")
+    .replace(/emu$/u, "")
+    .replace(/ho$/u, "")
+    .replace(/a$/u, "");
+}
+
+function userSearchText(user) {
+  return [
+    user?.id,
+    user?.name,
+    user?.fullName,
+    user?.email
+  ].map(aliasKey).filter(Boolean).join(" ");
+}
+
+function employeeMatchesQuery(user, query) {
+  const normalizedQuery = aliasKey(query);
+  const strippedQuery = stripCzechNameEnding(query);
+  const searchText = userSearchText(user);
+
+  if (!normalizedQuery && !strippedQuery) {
     return false;
   }
 
-  if (/\b(kolik|zustatek|zbyva|prehled|stav|cerpani)\b/.test(normalized)) {
+  return Boolean(
+    (normalizedQuery && searchText.includes(normalizedQuery)) ||
+    (strippedQuery && searchText.split(/\s+/).some((token) => token.startsWith(strippedQuery)))
+  );
+}
+
+function resolveAbsenceEmployee(users, currentUser, draft, speechText) {
+  const employeeId = cleanString(draft.employeeId);
+  const employeeQuery = cleanString(draft.employeeQuery);
+
+  if (employeeId) {
+    const employee = users.find((item) => cleanString(item.id).toLowerCase() === employeeId.toLowerCase());
+    return employee
+      ? { status: "resolved", employee }
+      : { status: "not_found", message: "Zaměstnance jsem nenašla. Řekni prosím celé jméno." };
+  }
+
+  if (employeeQuery) {
+    const matches = users.filter((item) => employeeMatchesQuery(item, employeeQuery));
+
+    if (matches.length === 1) {
+      return { status: "resolved", employee: matches[0] };
+    }
+
+    if (matches.length > 1) {
+      return {
+        status: "ambiguous",
+        message: `Našla jsem víc podobných lidí: ${matches.slice(0, 4).map((item) => cleanString(item.name || item.email || item.id)).join(", ")}. Koho přesně mám použít?`
+      };
+    }
+
+    return { status: "not_found", message: "Zaměstnance jsem nenašla. Řekni prosím celé jméno." };
+  }
+
+  const normalizedSpeech = normalizeKey(speechText);
+  if (/\b(pro|novakovi|horakovi|zamestnanci|ridici)\b/.test(normalizedSpeech)) {
+    return { status: "needs_input", message: "Pro koho to mám zapsat?" };
+  }
+
+  return { status: "resolved", employee: currentUser };
+}
+
+function isAbsenceRequestText(speechText) {
+  const normalized = normalizeKey(speechText);
+
+  if (!/\b(dovolen|nemoc|ocr|lekar|lekari|doktor|nahradni\s+volno|neplacene\s+volno|nepritomnost|absence|volno)\w*/.test(normalized)) {
+    return false;
+  }
+
+  if (/\b(kolik|zustatek|zbyva|prehled|stav|cerpani|kalendar)\b/.test(normalized)) {
     return false;
   }
 
   return /\b(chci|potrebuju|potreboval|vezmu|beru|naplanovat|zadat|zapis|vytvor|nahlas|cerpat|zadost)\b/.test(normalized);
 }
 
-function isAbsenceVacationRequest(payload, speechText, context) {
+function isAbsenceRequest(payload, speechText, context) {
   return (
+    context.requestedIntent === "absence_request" ||
     context.requestedIntent === "absence_vacation_request" ||
-    requestedAbsenceType(payload) === "vacation" ||
-    isVacationRequestText(speechText)
+    Boolean(requestedAbsenceType(payload)) ||
+    Boolean(inferAbsenceTypeFromText(speechText)) ||
+    isAbsenceRequestText(speechText)
   );
 }
 
 function absenceDraftFromPayload(payload, speechText) {
   const baseIso = pragueIsoDate();
+  const type = requestedAbsenceType(payload) || inferAbsenceTypeFromText(speechText);
   const dateFrom = absenceDateFromPayload(payload, speechText, baseIso);
   const dateTo = absenceDateToFromPayload(payload, speechText, dateFrom, baseIso);
-  const dayPart = absenceDayPart(payload, speechText);
+  const dayPart = absenceDayPart(payload, speechText) || (type === "doctor" ? "" : "full_day");
+  const timeRange = absenceTimeRangeFromPayload(payload, speechText);
 
   return compactObject({
-    type: "vacation",
+    type,
     dateFrom,
     dateTo: dateTo || dateFrom,
     dayPart,
+    startTime: timeRange.startTime,
+    endTime: timeRange.endTime,
     halfDay: dayPart === "half_day",
+    employeeId: requestedAbsenceEmployeeId(payload),
+    employeeQuery: requestedAbsenceEmployeeQuery(payload, speechText),
     note: absenceNote(payload),
     confirmation: absenceConfirmation(payload, speechText)
   });
@@ -513,10 +921,14 @@ function absenceContextFromPayload(payload) {
   const draft = absenceDraftFromPayload(payload, speechText);
 
   return compactObject({
-    absenceType: requestedAbsenceType(payload),
+    absenceType: draft.type || requestedAbsenceType(payload),
     absenceDateFrom: draft.dateFrom,
     absenceDateTo: draft.dateTo,
     absenceDayPart: draft.dayPart,
+    absenceStartTime: draft.startTime,
+    absenceEndTime: draft.endTime,
+    absenceEmployeeId: draft.employeeId,
+    absenceEmployeeQuery: draft.employeeQuery,
     absenceConfirmed: draft.confirmation === "confirmed",
     absenceRejected: draft.confirmation === "rejected"
   });
@@ -581,13 +993,19 @@ function normalizeIntent(value) {
     return: "complaint_return",
     vraceni: "complaint_return",
     complaint_return: "complaint_return",
-    absence: "absence_vacation_request",
+    absence: "absence_request",
+    absence_request: "absence_request",
+    absence_write: "absence_request",
     absence_vacation: "absence_vacation_request",
     absence_vacation_request: "absence_vacation_request",
-    dovolena: "absence_vacation_request",
-    dovolena_nemoc: "absence_vacation_request",
-    vacation: "absence_vacation_request",
-    leave_request: "absence_vacation_request",
+    dovolena: "absence_request",
+    dovolena_nemoc: "absence_request",
+    vacation: "absence_request",
+    leave_request: "absence_request",
+    nemoc: "absence_request",
+    ocr: "absence_request",
+    lekar: "absence_request",
+    nepritomnost: "absence_request",
     log: "call_log",
     call_log: "call_log",
     hovor: "call_log",
@@ -771,7 +1189,7 @@ function systemPrompt() {
   return [
     sarlotaSystemPrompt(),
     "Tento endpoint vrací strojové rozhodnutí pro KSO backend. Odpověď pro uživatele dej do pole reply.",
-    "Pro dovolenou použij intent absence_vacation_request. Nezapisuj ji bez jasného potvrzení uživatele; když chybí den nebo rozsah celý den/půlden, polož jen jednu otázku.",
+    "Pro zápis dovolené, nemoci, OČR, lékaře, náhradního volna, neplaceného volna nebo jiné nepřítomnosti použij intent absence_request. Nezapisuj bez jasného potvrzení uživatele; když něco chybí, polož jen jednu otázku.",
     "Blok Firemní lidskost: pokud request.humanTouch.enabled obsahuje návrhy, můžeš nenásilně použít maximálně jednu krátkou poznámku. Použij jen dodaný ověřený návrh, nikdy si nevymýšlej počasí, svátky, narozeniny ani dovolené.",
     "Firemní lidskost nepoužívej při reklamaci, stížnosti, spěchu, stresu, chybě, nemoci, OČR, lékaři ani u citlivé absence. Nikdy nezmiňuj důvod absence, věk ani soukromé údaje. Nepoužívej texty známých písní.",
     "Vrať výhradně JSON."
@@ -801,7 +1219,7 @@ async function requestOpenAiDecision(env, input) {
             task: "Rozpoznej záměr volajícího a napiš krátkou odpověď Šarloty.",
             allowedIntents: Array.from(INTENTS),
             outputShape: {
-              intent: "order_status|tracking|sms_link|handoff_jarka|product_advice|complaint_return|absence_vacation_request|call_log|business_hours|general|unsupported",
+              intent: "order_status|tracking|sms_link|handoff_jarka|product_advice|complaint_return|absence_request|call_log|business_hours|general|unsupported",
               reply: "1 až 2 krátké věty česky, tykání",
               needsHuman: true,
               humanTouchUsed: false,
@@ -983,6 +1401,27 @@ function absenceDayPartLabel(dayPart) {
   return dayPart === "half_day" ? "půlden" : "celý den";
 }
 
+function absenceTypeLabel(type) {
+  return ABSENCE_TYPE_LABELS[type] || "nepřítomnost";
+}
+
+function absenceDateRangeLabel(draft) {
+  if (draft.type === "doctor" && draft.startTime && draft.endTime) {
+    return `${formatCzechDate(draft.dateFrom)} od ${draft.startTime} do ${draft.endTime}`;
+  }
+
+  if (!draft.dateTo || draft.dateTo === draft.dateFrom) {
+    return `${formatCzechDate(draft.dateFrom)} jako ${absenceDayPartLabel(draft.dayPart)}`;
+  }
+
+  return `od ${formatCzechDate(draft.dateFrom)} do ${formatCzechDate(draft.dateTo)}`;
+}
+
+function absenceSummaryMessage(draft, employee) {
+  const employeeName = cleanString(employee?.name || employee?.email || "tebe");
+  return `Rozumím. Chceš zapsat ${absenceTypeLabel(draft.type)} pro ${employeeName} ${absenceDateRangeLabel(draft)}. Mám to uložit?`;
+}
+
 function publicAbsenceRequest(request) {
   return compactObject({
     id: cleanString(request?.id),
@@ -997,25 +1436,29 @@ function publicAbsenceRequest(request) {
   });
 }
 
-function absencePreparedAction(draft) {
+function absencePreparedAction(draft, employee) {
   return {
-    type: "absence_vacation_request",
+    type: "absence_request",
     action: "create",
     requiresConfirmation: true,
     confirmationPhrase: "ano, zapiš to",
     notificationsSent: false,
     parameters: compactObject({
-      type: "vacation",
+      type: draft.type,
+      employeeId: cleanString(employee?.id),
+      employeeName: cleanString(employee?.name),
       dateFrom: draft.dateFrom,
       dateTo: draft.dateTo || draft.dateFrom,
       halfDay: draft.dayPart === "half_day",
       dayPart: draft.dayPart,
+      startTime: draft.startTime,
+      endTime: draft.endTime,
       note: draft.note
     })
   };
 }
 
-async function absenceVacationTool(env, user, payload, context, speechText) {
+async function absenceRequestTool(env, user, payload, context, speechText) {
   if (!hasPermission(user, "absence", "create")) {
     return {
       status: "forbidden",
@@ -1036,56 +1479,93 @@ async function absenceVacationTool(env, user, payload, context, speechText) {
     };
   }
 
-  if (!draft.dateFrom) {
+  if (!draft.type) {
     return {
       status: "needs_input",
       verified: true,
-      message: "Na který den chceš dovolenou?",
+      message: `Jaký typ nepřítomnosti mám zapsat? ${ABSENCE_TYPE_OPTIONS_TEXT}`,
       preparedActions: []
     };
   }
 
-  if (!draft.dayPart) {
+  if (!ABSENCE_TYPE_LABELS[draft.type]) {
     return {
       status: "needs_input",
       verified: true,
-      message: "Na celý den, nebo půlden?",
-      preparedActions: [
-        {
-          type: "absence_vacation_request",
-          action: "collect_missing_scope",
-          parameters: compactObject({
-            type: "vacation",
-            dateFrom: draft.dateFrom,
-            dateTo: draft.dateTo || draft.dateFrom,
-            note: draft.note
-          })
-        }
-      ]
+      message: `Typ nepřítomnosti nemám jistý. Vyber prosím: ${ABSENCE_TYPE_OPTIONS_TEXT}`,
+      preparedActions: []
     };
   }
 
-  const dateLabel = formatCzechDate(draft.dateFrom);
-  const scopeLabel = absenceDayPartLabel(draft.dayPart);
+  if (!draft.dateFrom) {
+    return {
+      status: "needs_input",
+      verified: true,
+      message: `Od kdy má ${absenceTypeLabel(draft.type)} platit?`,
+      preparedActions: []
+    };
+  }
+
+  if (draft.type === "doctor" && !draft.startTime) {
+    return {
+      status: "needs_input",
+      verified: true,
+      message: "Od kolika hodin má lékař platit?",
+      preparedActions: []
+    };
+  }
+
+  if (draft.type === "doctor" && !draft.endTime) {
+    return {
+      status: "needs_input",
+      verified: true,
+      message: "Do kolika hodin má lékař trvat?",
+      preparedActions: []
+    };
+  }
+
+  const users = await getUsers(env);
+  const employeeResult = resolveAbsenceEmployee(users, user, draft, speechText);
+
+  if (employeeResult.status !== "resolved") {
+    return {
+      status: employeeResult.status,
+      verified: true,
+      message: employeeResult.message,
+      preparedActions: []
+    };
+  }
+
+  const employee = employeeResult.employee || user;
+
+  if (draft.type !== "doctor" && !draft.dayPart) {
+    return {
+      status: "needs_input",
+      verified: true,
+      message: "Je to na celý den, nebo jen část dne?",
+      preparedActions: []
+    };
+  }
 
   if (draft.confirmation !== "confirmed") {
     return {
       status: "needs_confirmation",
       verified: true,
-      message: `Mám zapsat dovolenou na ${dateLabel} jako ${scopeLabel}?`,
-      preparedActions: [absencePreparedAction(draft)]
+      message: absenceSummaryMessage(draft, employee),
+      preparedActions: [absencePreparedAction(draft, employee)]
     };
   }
 
   try {
-    const users = await getUsers(env);
     const request = await createAbsenceRequestRecord(env, users, user, {
-      employeeId: cleanString(user?.id),
-      type: "vacation",
+      employeeId: cleanString(employee?.id || user?.id),
+      type: draft.type,
       dateFrom: draft.dateFrom,
       dateTo: draft.dateTo || draft.dateFrom,
       halfDay: draft.dayPart === "half_day",
-      unit: "days",
+      unit: draft.type === "doctor" ? "hours" : "days",
+      startTime: draft.type === "doctor" ? draft.startTime : "",
+      endTime: draft.type === "doctor" ? draft.endTime : "",
       note: draft.note || "Zadáno hlasově přes Šarlotu."
     });
     const statusLabel = cleanString(request.statusLabel || request.status);
@@ -1093,7 +1573,7 @@ async function absenceVacationTool(env, user, payload, context, speechText) {
     return {
       status: "created",
       verified: true,
-      message: `Hotovo. Dovolenou jsem zapsala na ${dateLabel} jako ${scopeLabel}; stav je ${statusLabel}.`,
+      message: `Hotovo. Záznam je zapsaný; stav je ${statusLabel}.`,
       preparedActions: [],
       absenceRequest: publicAbsenceRequest(request),
       notificationsSent: false
@@ -1104,7 +1584,7 @@ async function absenceVacationTool(env, user, payload, context, speechText) {
       verified: false,
       message: `${cleanString(error?.message) || "Žádost se nepodařilo zapsat."} Nic jsem nezapsala.`,
       preparedActions: [],
-      code: cleanString(error?.code || "absence_vacation_create_failed"),
+      code: cleanString(error?.code || "absence_request_create_failed"),
       apiStatus: error?.status === 503 ? "waiting" : "ready"
     };
   }
@@ -1134,8 +1614,10 @@ async function executeTool(decision, context, businessHours, runtime = {}) {
       return productAdviceTool(decision, context);
     case "complaint_return":
       return complaintReturnTool(context);
+    case "absence_request":
+      return absenceRequestTool(runtime.env, runtime.user, runtime.payload, context, runtime.speechText);
     case "absence_vacation_request":
-      return absenceVacationTool(runtime.env, runtime.user, runtime.payload, context, runtime.speechText);
+      return absenceRequestTool(runtime.env, runtime.user, runtime.payload, context, runtime.speechText);
     case "business_hours":
       return businessHoursTool(businessHours);
     case "call_log":
@@ -1180,6 +1662,8 @@ async function recordVoiceActionSafely(env, user, { input, context, businessHour
         smsConsent: context.smsConsent,
         absenceDateFrom: context.absenceDateFrom,
         absenceDayPart: context.absenceDayPart,
+        absenceType: context.absenceType,
+        absenceEmployeeQuery: context.absenceEmployeeQuery,
         absenceConfirmed: context.absenceConfirmed,
         humanTouchAvailable: Boolean(humanTouch.enabled),
         humanTouchTypes: humanTouch.suggestions?.map((item) => item.type) || []
@@ -1260,16 +1744,16 @@ export async function handleSarlotaVoiceRequest(env, user, payload = {}, options
     authSource: cleanString(options.authSource || "unknown")
   };
 
-  if (isAbsenceVacationRequest(payload, speechText, context)) {
+  if (isAbsenceRequest(payload, speechText, context)) {
     const decision = {
-      intent: "absence_vacation_request",
+      intent: "absence_request",
       reply: "",
       needsHuman: false,
       humanTouchUsed: false,
       confidence: 0.98,
       model: "kso-deterministic"
     };
-    const toolResult = await absenceVacationTool(env, user, payload, context, speechText);
+    const toolResult = await absenceRequestTool(env, user, payload, context, speechText);
 
     return buildVoiceResponse(env, user, payload, {
       input,

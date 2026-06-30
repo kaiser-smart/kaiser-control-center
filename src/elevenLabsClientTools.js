@@ -71,6 +71,36 @@ export const AI_MODULE_ROUTE_MAP = {
   pripominky: "/pripominky"
 };
 
+const ABSENCE_TOOL_TYPE_ALIASES = {
+  dovolena: "vacation",
+  dovolenou: "vacation",
+  vacation: "vacation",
+  nemoc: "sick",
+  sick: "sick",
+  lekar: "doctor",
+  lekare: "doctor",
+  doctor: "doctor",
+  ocr: "care",
+  care: "care",
+  nahradni_volno: "compensatory_leave",
+  compensatory_leave: "compensatory_leave",
+  neplacene_volno: "unpaid_leave",
+  unpaid_leave: "unpaid_leave",
+  jina_nepritomnost: "other",
+  jina_absence: "other",
+  other: "other"
+};
+
+const ABSENCE_TOOL_TYPE_LABELS = {
+  vacation: "dovolenou",
+  sick: "nemoc",
+  doctor: "lékaře",
+  care: "OČR",
+  compensatory_leave: "náhradní volno",
+  unpaid_leave: "neplacené volno",
+  other: "jinou nepřítomnost"
+};
+
 export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   {
     name: "navigate_to",
@@ -150,11 +180,16 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "create_absence_request",
-    description: "Zapíše potvrzenou žádost o dovolenou přes KSO backend. Backend ověřuje oprávnění a bez potvrzení nic nezapíše.",
+    description: "Zapíše potvrzenou nepřítomnost přes KSO backend. Backend ověřuje oprávnění a bez potvrzení nic nezapíše.",
     parameters: [
+      { name: "type", type: "string", required: true },
+      { name: "employeeId", type: "string", required: false },
+      { name: "employeeName", type: "string", required: false },
       { name: "dateFrom", type: "string", required: true },
       { name: "dateTo", type: "string", required: false },
-      { name: "dayPart", type: "string", required: true },
+      { name: "dayPart", type: "string", required: false },
+      { name: "startTime", type: "string", required: false },
+      { name: "endTime", type: "string", required: false },
       { name: "confirmed", type: "boolean", required: true },
       { name: "note", type: "string", required: false },
       { name: "spokenSummary", type: "string", required: false }
@@ -334,6 +369,15 @@ export function createElevenLabsClientTools({
     return "";
   }
 
+  function absenceToolTypeValue(value) {
+    const normalized = normalizeKey(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    return ABSENCE_TOOL_TYPE_ALIASES[normalized] || normalized || "";
+  }
+
+  function absenceToolTypeLabel(type) {
+    return ABSENCE_TOOL_TYPE_LABELS[type] || "nepřítomnost";
+  }
+
   async function employeeDetailFor(parameters = {}) {
     const identity = identityParameters(parameters, "employeeId");
 
@@ -387,6 +431,20 @@ export function createElevenLabsClientTools({
   }
 
   async function createAbsenceRequest(parameters = {}) {
+    const type = absenceToolTypeValue(
+      parameters.type ||
+      parameters.absenceType ||
+      parameters.absence_type ||
+      "vacation"
+    );
+    const employeeId = cleanString(parameters.employeeId || parameters.employee_id || parameters.userId || parameters.user_id);
+    const employeeName = cleanString(
+      parameters.employeeName ||
+      parameters.employee_name ||
+      parameters.employee ||
+      parameters.name ||
+      parameters.query
+    );
     const dateFrom = cleanString(
       parameters.dateFrom ||
       parameters.date_from ||
@@ -406,7 +464,9 @@ export function createElevenLabsClientTools({
     const dayPart = absenceDayPartValue(
       parameters.dayPart || parameters.day_part || parameters.scope || parameters.range,
       typeof parameters.halfDay === "boolean" ? parameters.halfDay : null
-    );
+    ) || (type === "doctor" ? "" : "full_day");
+    const startTime = cleanString(parameters.startTime || parameters.start_time || parameters.timeFrom || parameters.time_from);
+    const endTime = cleanString(parameters.endTime || parameters.end_time || parameters.timeTo || parameters.time_to);
     const confirmed = booleanToolValue(
       parameters.confirmed ??
       parameters.writeConfirmed ??
@@ -415,9 +475,11 @@ export function createElevenLabsClientTools({
     const note = cleanString(parameters.note || parameters.absenceNote || parameters.absence_note || parameters.comment);
     const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
     const text = spokenSummary || [
-      "Zapiš dovolenou",
+      `Zapiš ${absenceToolTypeLabel(type)}`,
+      employeeName ? `pro ${employeeName}` : "",
       dateFrom,
       dateTo && dateTo !== dateFrom ? `do ${dateTo}` : "",
+      startTime && endTime ? `od ${startTime} do ${endTime}` : "",
       dayPart === "half_day" ? "půlden" : dayPart === "full_day" ? "celý den" : "",
       confirmed ? "ano, zapiš to" : ""
     ].filter(Boolean).join(" ");
@@ -428,22 +490,30 @@ export function createElevenLabsClientTools({
       result = await postJson("/api/voice/sarlota", {
         transcript: text,
         text,
-        intent: "absence_vacation_request",
+        intent: "absence_request",
         parameters: {
-          type: "vacation",
+          type,
+          employeeId,
+          employeeName,
           dateFrom,
           dateTo: dateTo || dateFrom,
           dayPart,
+          startTime,
+          endTime,
           confirmed,
           writeConfirmed: confirmed,
           note
         },
         context: {
-          requestedIntent: "absence_vacation_request",
-          absenceType: "vacation",
+          requestedIntent: "absence_request",
+          absenceType: type,
+          absenceEmployeeId: employeeId,
+          absenceEmployeeQuery: employeeName,
           absenceDateFrom: dateFrom,
           absenceDateTo: dateTo || dateFrom,
           absenceDayPart: dayPart,
+          absenceStartTime: startTime,
+          absenceEndTime: endTime,
           absenceConfirmed: confirmed
         },
         metadata: {
@@ -457,14 +527,14 @@ export function createElevenLabsClientTools({
         status: "request_failed",
         message: `${message} Nic jsem nezapsala.`,
         answerText: `${message} Nic jsem nezapsala.`,
-        intent: "absence_vacation_request",
+        intent: "absence_request",
         verified: false,
         requiresConfirmation: false,
         preparedActions: [],
         absenceRequest: null,
         notificationsSent: false,
         apiStatus: error?.payload?.apiStatus || "waiting",
-        code: error?.payload?.code || "absence_vacation_request_failed"
+        code: error?.payload?.code || "absence_request_failed"
       };
     }
 
@@ -473,7 +543,7 @@ export function createElevenLabsClientTools({
       status: result.status || "unknown",
       message: result.reply || result.text || "",
       answerText: result.reply || result.text || "",
-      intent: result.intent || "absence_vacation_request",
+      intent: result.intent || "absence_request",
       verified: result.verified === true,
       requiresConfirmation: result.status === "needs_confirmation",
       preparedActions: Array.isArray(result.preparedActions) ? result.preparedActions : [],

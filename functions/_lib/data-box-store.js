@@ -9,6 +9,7 @@ const DATA_BOX_DB_BINDING = "SMART_ODPADY_DB";
 const DATA_BOX_DOCUMENTS_BINDING = "SMART_ODPADY_DOCUMENTS";
 const MESSAGE_DIRECTIONS = new Set(["received", "sent"]);
 const MESSAGE_STATUSES = new Set(["new", "read", "archived", "draft", "sent", "failed"]);
+const MESSAGE_AI_STATUSES = new Set(["not_evaluated", "reviewed", "requires_confirmation", "done", "rejected", "failed"]);
 
 export class DataBoxStoreError extends Error {
   constructor(message, status = 400, code = "data_box_error") {
@@ -147,6 +148,11 @@ function normalizeDirection(value) {
 function normalizeStatus(value) {
   const status = cleanString(value).toLowerCase();
   return MESSAGE_STATUSES.has(status) ? status : "";
+}
+
+function normalizeAiStatus(value, fallback = "reviewed") {
+  const status = cleanString(value).toLowerCase();
+  return MESSAGE_AI_STATUSES.has(status) ? status : fallback;
 }
 
 function messageObservedDataBoxId(message) {
@@ -1121,6 +1127,38 @@ export async function listDataBoxMessages(env, filters = {}) {
       .bind(...bindings, limit)
       .all();
     return (result.results || []).map(rowToMessage);
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function updateDataBoxMessagesAiStatus(env, messageIds = [], status = "reviewed") {
+  const db = dataBoxDatabase(env, true);
+  const nextStatus = normalizeAiStatus(status);
+  const ids = [...new Set(
+    (Array.isArray(messageIds) ? messageIds : [messageIds])
+      .map(cleanString)
+      .filter(Boolean)
+  )].slice(0, 80);
+
+  try {
+    for (const id of ids) {
+      await db
+        .prepare(`
+          UPDATE data_box_messages
+          SET
+            ai_status = CASE
+              WHEN ? = 'reviewed' AND ai_status IN ('requires_confirmation', 'done', 'rejected', 'failed') THEN ai_status
+              WHEN ? = 'requires_confirmation' AND ai_status IN ('done', 'rejected') THEN ai_status
+              ELSE ?
+            END,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `)
+        .bind(nextStatus, nextStatus, nextStatus, id)
+        .run();
+    }
+    return { updated: ids.length, status: nextStatus };
   } catch (error) {
     throw dbError(error);
   }

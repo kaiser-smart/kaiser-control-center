@@ -5,7 +5,7 @@ import { recordAiAction } from "../../_lib/ai-action-log-store.js";
 
 const STATIC_PAGES = [
   { id: "home", title: "Hlavní stránka", route: "/", moduleId: "dashboard" },
-  { id: "absence-quick", title: "Rychlé zadání dovolené a nemoci", route: "/dovolena-nemoc/rychle-zadani", moduleId: "absence" },
+  { id: "absence-quick", title: "Rychlé zadání nepřítomnosti", route: "/dovolena-nemoc/rychle-zadani", moduleId: "absence" },
   { id: "absence-my", title: "Moje žádosti", route: "/dovolena-nemoc/moje-zadosti", moduleId: "absence" },
   { id: "absence-approval", title: "Žádosti ke schválení", route: "/dovolena-nemoc/ke-schvaleni", moduleId: "absence" },
   { id: "absence-calendar", title: "Kalendář nepřítomností", route: "/dovolena-nemoc/kalendar", moduleId: "absence" },
@@ -77,4 +77,3 @@ export async function onRequestGet({ request, env }) {
 
   return json(result);
 }
-

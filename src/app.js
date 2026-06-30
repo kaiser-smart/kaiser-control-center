@@ -263,7 +263,7 @@ const ABSENCE_TAB_ROUTES = {
 const quickAbsenceMenuItem = {
   id: "quick-absence",
   title: "Rychlé zadání",
-  description: "Dovolená, nemoc nebo lékař na pár kliknutí přímo z mobilu.",
+  description: "Nepřítomnost na pár kliknutí nebo hlasem přímo z mobilu.",
   route: QUICK_ABSENCE_ENTRY_ROUTE,
   icon: QuickAbsenceIcon,
   status: "ROZPRACOVÁN",
@@ -304,7 +304,7 @@ const NOTIFICATION_STATUS_OPTIONS = [
 const NOTIFICATION_TYPE_OPTIONS = Object.entries(NOTIFICATION_TYPE_LABELS)
   .map(([value, label]) => ({ value, label }));
 const AI_INITIAL_MESSAGE =
-  `${assistantById(DEFAULT_AI_ASSISTANT_ID).intro} Zeptej se mě na dovolenou, nemoc, pneumatiky, připomínky, uživatele nebo nastavení.`;
+  `${assistantById(DEFAULT_AI_ASSISTANT_ID).intro} Zeptej se mě na nepřítomnost, pneumatiky, připomínky, uživatele nebo nastavení.`;
 const AI_STATUS_READY = "Připraven";
 const AI_STATUS_DONE = "Hotovo";
 const AI_STATUS_DEMO = "Přehrávám ukázku…";
@@ -513,7 +513,9 @@ const QUICK_ABSENCE_TYPES = [
   { id: "sick", label: "Jsem nemocný", shortLabel: "Nemoc", marker: "N", status: "recorded" },
   { id: "doctor", label: "Jdu k lékaři", shortLabel: "Lékař", marker: "L", status: "pending_approval" },
   { id: "care", label: "OČR", shortLabel: "OČR", marker: "O", status: "pending_approval" },
-  { id: "compensatory_leave", label: "Náhradní volno", shortLabel: "Náhradní volno", marker: "NV", status: "pending_approval" }
+  { id: "compensatory_leave", label: "Náhradní volno", shortLabel: "Náhradní volno", marker: "NV", status: "pending_approval" },
+  { id: "unpaid_leave", label: "Neplacené volno", shortLabel: "Neplacené volno", marker: "NP", status: "pending_approval" },
+  { id: "other", label: "Jiná nepřítomnost", shortLabel: "Jiná nepřítomnost", marker: "J", status: "pending_approval" }
 ];
 const QUICK_ABSENCE_STATUSES = {
   pending: "Čeká na schválení",
@@ -1448,7 +1450,7 @@ function selectedAiAssistant() {
 }
 
 function aiAssistantIntroMessage(assistant = selectedAiAssistant()) {
-  return `${assistant.intro} Zeptej se mě na dovolenou, nemoc, pneumatiky, připomínky, uživatele nebo nastavení.`;
+  return `${assistant.intro} Zeptej se mě na nepřítomnost, pneumatiky, připomínky, uživatele nebo nastavení.`;
 }
 
 function clearAiVoiceStateTimer() {
@@ -4624,6 +4626,15 @@ function absenceSubmitLabel(type) {
   return "Odeslat žádost";
 }
 
+function sarlotaAbsenceVoiceButton(label = "Hlasem přes Šarlotu") {
+  return `
+    <button class="sarlota-absence-voice-button" type="button" data-absence-sarlota-voice>
+      <span aria-hidden="true">MIC</span>
+      <span>${escapeHtml(label)}</span>
+    </button>
+  `;
+}
+
 function quickAbsenceType(typeId = quickAbsenceState.type) {
   return QUICK_ABSENCE_TYPES.find((type) => type.id === typeId) || null;
 }
@@ -4759,6 +4770,7 @@ function quickAbsenceTypeStep() {
     <section id="co-potrebujete" class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-absence-title">
       <p class="quick-absence-kicker">Rychlé zadání</p>
       <h2 id="quick-absence-title">Co potřebujete nahlásit?</h2>
+      ${sarlotaAbsenceVoiceButton("Zadat hlasem")}
       <div class="quick-absence-types">
         ${QUICK_ABSENCE_TYPES.map((type) => `
           <button class="quick-absence-type" type="button" data-quick-type="${escapeHtml(type.id)}">
@@ -4967,7 +4979,7 @@ function quickAbsenceContent(user) {
         : quickAbsenceTypeStep();
 
   return `
-    <section class="quick-absence-shell" aria-label="Rychlé zadání dovolené a nemoci">
+    <section class="quick-absence-shell" aria-label="Rychlé zadání nepřítomnosti">
       ${content}
       ${quickAbsenceRecentSection()}
     </section>
@@ -5903,8 +5915,9 @@ function absenceNewRequest(user) {
       <div class="absence-panel__head">
         <div>
           <h2>Nová žádost</h2>
-          <p>Dovolená, lékař, OČR a náhradní volno jdou ke schválení. Nemoc se pouze eviduje.</p>
+          <p>Dovolená, lékař, OČR, náhradní volno, neplacené volno a jiná nepřítomnost jdou ke schválení. Nemoc se pouze eviduje.</p>
         </div>
+        ${sarlotaAbsenceVoiceButton()}
       </div>
       <form class="absence-form" data-absence-request-form>
         ${employeeLoadingNotice}
@@ -6146,6 +6159,14 @@ function absenceReports(user) {
         <article>
           <span>Náhradní volno</span>
           <strong>${formatAbsenceDays(totals["Náhradní volno"])}</strong>
+        </article>
+        <article>
+          <span>Neplacené volno</span>
+          <strong>${formatAbsenceDays(totals["Neplacené volno"])}</strong>
+        </article>
+        <article>
+          <span>Jiná nepřítomnost</span>
+          <strong>${formatAbsenceDays(totals["Jiná nepřítomnost"])}</strong>
         </article>
         <article>
           <span>Čekající žádosti</span>
@@ -15294,10 +15315,13 @@ function dataBoxMessageMatchesFilters(message) {
 
 function dataBoxAiStatusLabel(value) {
   const labels = {
-    not_evaluated: "nevyhodnoceno",
-    draft: "navrh",
-    done: "hotovo",
-    failed: "chyba"
+    not_evaluated: "Nevyhodnoceno",
+    draft: "Návrh",
+    reviewed: "AI Boost",
+    requires_confirmation: "Čeká na potvrzení",
+    done: "Hotovo",
+    rejected: "Zamítnuto",
+    failed: "Chyba"
   };
   return labels[String(value || "").trim().toLowerCase()] || String(value || "-");
 }
@@ -15483,6 +15507,138 @@ function dataBoxBadge(label, tone = "muted") {
   return `<span class="data-box-badge data-box-badge--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
 }
 
+function dataBoxFlagBadge(flag = {}) {
+  const tone = String(flag.tone || flag.id || "muted").toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  return `
+    <span
+      class="data-box-flag data-box-flag--${escapeHtml(tone)}"
+      ${flag.title ? `title="${escapeHtml(flag.title)}"` : ""}
+    >
+      ${escapeHtml(flag.label || "")}
+    </span>
+  `;
+}
+
+function dataBoxMessageAiBoostActions(message) {
+  const id = String(message?.id || "").trim();
+  if (!id) {
+    return [];
+  }
+
+  return dataBoxState.aiBoostActions
+    .filter((action) => String(action.messageId || "") === id && dataBoxActionShouldShowInAiBoost(action))
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+}
+
+function dataBoxPrimaryAiBoostAction(message) {
+  const actions = dataBoxMessageAiBoostActions(message);
+  return actions.find(dataBoxAiBoostIsWaiting) || actions[0] || null;
+}
+
+function dataBoxMessageHasAiBoostFlag(message) {
+  const aiStatus = String(message?.aiStatus || "not_evaluated").trim().toLowerCase();
+  return Boolean(aiStatus && aiStatus !== "not_evaluated")
+    || Boolean(message?.latestAiEvaluation)
+    || dataBoxMessageAiBoostActions(message).length > 0;
+}
+
+function dataBoxAiBoostRecommendedAction(action = {}) {
+  return String(action.result?.recommendedAction || action.actionType || "review").toLowerCase();
+}
+
+function dataBoxAiBoostActionFlag(action = {}) {
+  const actionType = dataBoxAiBoostRecommendedAction(action);
+  const labels = {
+    archive: "Archivace",
+    email: "E-mail",
+    reply: "Odpověď DS",
+    review: "Ruční kontrola",
+    ai_boost: "Ruční kontrola"
+  };
+  const label = labels[actionType] || "Ruční kontrola";
+  return { id: `action-${actionType}`, label, tone: actionType, title: "Doporučená akce AI Boostu" };
+}
+
+function dataBoxAiBoostStatusFlag(action = {}, message = null) {
+  const status = String(action.status || "").toLowerCase();
+  const aiStatus = String(message?.aiStatus || "").toLowerCase();
+  const labels = {
+    prepared: ["K potvrzení", "waiting"],
+    requires_confirmation: ["K potvrzení", "waiting"],
+    confirmed: ["K potvrzení", "waiting"],
+    sent: ["Odesláno", "done"],
+    archived: ["Archiv", "archived"],
+    skipped: ["Zamítnuto", "rejected"],
+    blocked: ["Chyba", "error"],
+    failed: ["Chyba", "error"]
+  };
+
+  if (labels[status]) {
+    const [label, tone] = labels[status];
+    return { id: `status-${status}`, label, tone, title: "Stav AI Boost akce" };
+  }
+
+  if (aiStatus === "requires_confirmation") {
+    return { id: "status-requires-confirmation", label: "K potvrzení", tone: "waiting", title: "Stav AI Boost akce" };
+  }
+  if (aiStatus === "done") {
+    return { id: "status-done", label: "Hotovo", tone: "done", title: "Stav AI Boost akce" };
+  }
+  if (aiStatus === "rejected") {
+    return { id: "status-rejected", label: "Zamítnuto", tone: "rejected", title: "Stav AI Boost akce" };
+  }
+  if (aiStatus === "failed") {
+    return { id: "status-failed", label: "Chyba", tone: "error", title: "Stav AI Boost akce" };
+  }
+
+  return null;
+}
+
+function dataBoxMessageFlags(message, options = {}) {
+  if (!message || !dataBoxMessageHasAiBoostFlag(message)) {
+    return [];
+  }
+
+  const detailed = Boolean(options.detailed);
+  const action = dataBoxPrimaryAiBoostAction(message);
+  const flags = [{ id: "ai-boost", label: "AI Boost", tone: "ai", title: "Zpráva prošla AI Boost vyhodnocením" }];
+  const statusFlag = action ? dataBoxAiBoostStatusFlag(action, message) : dataBoxAiBoostStatusFlag({}, message);
+  const isWaiting = action ? dataBoxAiBoostIsWaiting(action) : String(message.aiStatus || "").toLowerCase() === "requires_confirmation";
+  const isDone = action ? dataBoxAiBoostIsDone(action) : ["done", "rejected", "failed"].includes(String(message.aiStatus || "").toLowerCase());
+
+  if (action && (isWaiting || detailed || !isDone)) {
+    flags.push(dataBoxAiBoostActionFlag(action));
+  }
+  if (statusFlag) {
+    flags.push(statusFlag);
+  }
+  if (action && Number(action.result?.confidence || 0) && Number(action.result.confidence) < 0.7) {
+    flags.push({ id: "confidence-low", label: "Nejisté", tone: "warning", title: "AI Boost má nižší jistotu" });
+  }
+
+  const seen = new Set();
+  return flags.filter((flag) => {
+    const key = `${flag.id}:${flag.label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dataBoxMessageFlagsMarkup(message, options = {}) {
+  const limit = Number(options.limit || 3);
+  const flags = dataBoxMessageFlags(message, options).slice(0, limit);
+  if (!flags.length) {
+    return "";
+  }
+
+  return `
+    <span class="data-box-message-flags" aria-label="Příznaky zprávy">
+      ${flags.map(dataBoxFlagBadge).join("")}
+    </span>
+  `;
+}
+
 function dataBoxInboxNotice(direction, allRows, filteredRows) {
   if (!hasPermission(currentUser(), DATA_BOX_MODULE_KEY, "view")) {
     return {
@@ -15587,6 +15743,7 @@ function dataBoxMessageCard(message, selected) {
         <span class="data-box-message-card__bottom">
           <span class="data-box-message-card__subject">${escapeHtml(subject)}</span>
           <span class="data-box-message-card__extras" aria-label="Doplňkové informace">
+            ${dataBoxMessageFlagsMarkup(message, { limit: 3 })}
             ${dataBoxPriorityBadge(priority)}
             ${attachmentCount ? `<span class="data-box-message-card__attachment" title="${escapeHtml(attachmentLabel)}" aria-label="${escapeHtml(attachmentLabel)}">Příloha</span>` : ""}
             ${companyBadge}
@@ -15657,6 +15814,7 @@ function dataBoxReadingPane(message, direction) {
       ${dataBoxMessageSafeActions(message, { includeDetail: true })}
       ${dataBoxActionFeedbackMarkup()}
       <div class="data-box-reading-pane__badges">
+        ${dataBoxMessageFlagsMarkup(message, { limit: 6, detailed: true })}
         ${dataBoxPriorityBadge(priority)}
         ${dataBoxBadge(status.label, status.tone)}
         ${deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : ""}
@@ -15765,31 +15923,27 @@ function dataBoxAiBoostStatusLabel(action = {}) {
   return labels[String(action.status || "").toLowerCase()] || action.status || "Koncept";
 }
 
-function dataBoxAiBoostWorkTag(action = {}) {
-  const actionType = String(action.actionType || action.result?.recommendedAction || "review").toLowerCase();
-  const status = String(action.status || "").toLowerCase();
-  const recipient = String(action.recipient || "").toLowerCase();
-
-  if (["sent", "archived"].includes(status)) return "Hotovo";
-  if (status === "skipped") return "Zamítnuto";
-  if (["blocked", "failed"].includes(status)) return "Chyba";
-  if (recipient.includes("faktury@")) return "Faktury";
-  if (recipient.includes("dispecer@")) return "Dispečink";
-  if (actionType === "email") return "E-mail";
-  if (actionType === "archive") return "Archiv";
-  if (actionType === "reply") return "Odpověď DS";
-  return dataBoxAiBoostIsWaiting(action) ? "K potvrzení" : "Nejisté";
-}
-
 function dataBoxAiBoostWorkTags(action = {}) {
-  const tags = [dataBoxAiBoostWorkTag(action)];
-  if (dataBoxAiBoostIsWaiting(action)) {
-    tags.unshift("K potvrzení");
+  const tags = [{ id: "ai-boost", label: "AI Boost", tone: "ai" }];
+  const statusFlag = dataBoxAiBoostStatusFlag(action);
+
+  if (!dataBoxAiBoostIsDone(action)) {
+    tags.push(dataBoxAiBoostActionFlag(action));
+  }
+  if (statusFlag) {
+    tags.push(statusFlag);
   }
   if (Number(action.result?.confidence || 0) && Number(action.result?.confidence || 0) < 0.7) {
-    tags.push("Nejisté");
+    tags.push({ id: "confidence-low", label: "Nejisté", tone: "warning" });
   }
-  return [...new Set(tags)].slice(0, 4);
+
+  const seen = new Set();
+  return tags.filter((tag) => {
+    const key = `${tag.id}:${tag.label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 4);
 }
 
 function dataBoxAiBoostCanConfirm(action = {}) {
@@ -15912,7 +16066,7 @@ function dataBoxAiBoostCard(action = {}) {
       <div class="data-box-ai-boost-card__main">
         <span class="data-box-ai-boost-card__eyebrow">AI Boost · ${escapeHtml(dataBoxAiBoostStatusLabel(action))}</span>
         <div class="data-box-ai-boost-tags">
-          ${dataBoxAiBoostWorkTags(action).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}
+          ${dataBoxAiBoostWorkTags(action).map(dataBoxFlagBadge).join("")}
         </div>
         <h3>${escapeHtml(title)}</h3>
         <p>${escapeHtml(sender)}${company ? ` · ${escapeHtml(company)}` : ""}</p>
@@ -16856,6 +17010,7 @@ function dataBoxMessageDetailOverlayMarkup() {
           <h3>${escapeHtml(message.subject || "(bez předmětu)")}</h3>
           <p class="data-box-detail-summary__context">Schránka: <strong>${escapeHtml(mailboxLabel)}</strong></p>
           <p>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "bez data")} · ${escapeHtml(priority.label)} · ${escapeHtml(workflow.label)}</p>
+          ${dataBoxMessageFlagsMarkup(message, { limit: 6, detailed: true })}
         </section>
         ${dataBoxMessageSafeActions(message)}
         ${dataBoxActionFeedbackMarkup()}
@@ -24630,6 +24785,13 @@ document.addEventListener("click", async (event) => {
       setAbsenceNotice("");
       navigateToUrl(routeHref(absenceRouteForTab(resolvedTab)));
     });
+    return;
+  }
+
+  const absenceSarlotaVoice = event.target.closest("[data-absence-sarlota-voice]");
+  if (absenceSarlotaVoice) {
+    event.preventDefault();
+    openAiAssistant("voice");
     return;
   }
 

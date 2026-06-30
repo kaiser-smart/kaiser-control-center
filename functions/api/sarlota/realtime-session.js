@@ -67,14 +67,28 @@ function realtimeTools() {
       type: "function",
       name: "create_absence_request",
       description: [
-        "Zapíše potvrzenou žádost o dovolenou do Kaiser Smart Odpady přes backend.",
+        "Zapíše potvrzenou nepřítomnost do Kaiser Smart Odpady přes backend.",
+        "Podporuje dovolenou, nemoc, OČR, lékaře, náhradní volno, neplacené volno a jinou nepřítomnost.",
         "Volej až po jasném potvrzení uživatele.",
-        "Pokud chybí datum, rozsah nebo potvrzení, nejdřív se uživatele zeptej a nástroj nevolej."
+        "Pokud chybí typ, zaměstnanec, datum, čas u lékaře nebo potvrzení, nejdřív se uživatele zeptej a nástroj nevolej."
       ].join(" "),
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
+          type: {
+            type: "string",
+            enum: ["vacation", "sick", "doctor", "care", "compensatory_leave", "unpaid_leave", "other"],
+            description: "Typ nepřítomnosti."
+          },
+          employeeId: {
+            type: "string",
+            description: "ID zaměstnance, pokud ho znáš z ověřeného zdroje."
+          },
+          employeeName: {
+            type: "string",
+            description: "Jméno zaměstnance nebo jednoznačný dotaz na zaměstnance."
+          },
           dateFrom: {
             type: "string",
             description: "Datum začátku ve formátu YYYY-MM-DD."
@@ -86,7 +100,15 @@ function realtimeTools() {
           dayPart: {
             type: "string",
             enum: ["full_day", "half_day"],
-            description: "Rozsah dovolené."
+            description: "Rozsah běžné celodenní nepřítomnosti."
+          },
+          startTime: {
+            type: "string",
+            description: "Čas od ve formátu HH:MM. Použij hlavně u lékaře."
+          },
+          endTime: {
+            type: "string",
+            description: "Čas do ve formátu HH:MM. Použij hlavně u lékaře."
           },
           confirmed: {
             type: "boolean",
@@ -101,7 +123,7 @@ function realtimeTools() {
             description: "Krátké shrnutí, které uživatel potvrdil."
           }
         },
-        required: ["dateFrom", "dayPart", "confirmed"]
+        required: ["type", "dateFrom", "confirmed"]
       }
     },
     {

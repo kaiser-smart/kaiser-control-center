@@ -2,8 +2,8 @@ import { hasPermission, isFullAccessRole, normalizeRole } from "../../src/permis
 
 const ABSENCE_DB_BINDING = "SMART_ODPADY_DB";
 
-const REQUEST_TYPES = new Set(["vacation", "sick", "doctor", "care", "compensatory_leave"]);
-const APPROVAL_TYPES = new Set(["vacation", "doctor", "care", "compensatory_leave"]);
+const REQUEST_TYPES = new Set(["vacation", "sick", "doctor", "care", "compensatory_leave", "unpaid_leave", "other"]);
+const APPROVAL_TYPES = new Set(["vacation", "doctor", "care", "compensatory_leave", "unpaid_leave", "other"]);
 const REQUEST_STATUSES = new Set(["draft", "pending_approval", "approved", "rejected", "cancelled", "recorded"]);
 
 const TYPE_LABELS = {
@@ -11,7 +11,9 @@ const TYPE_LABELS = {
   sick: "Nemoc",
   doctor: "Lékař",
   care: "OČR",
-  compensatory_leave: "Náhradní volno"
+  compensatory_leave: "Náhradní volno",
+  unpaid_leave: "Neplacené volno",
+  other: "Jiná nepřítomnost"
 };
 
 const TYPE_ALIASES = {
@@ -23,7 +25,13 @@ const TYPE_ALIASES = {
   "očr": "care",
   ocr: "care",
   "náhradní volno": "compensatory_leave",
-  "nahradni volno": "compensatory_leave"
+  "nahradni volno": "compensatory_leave",
+  "neplacené volno": "unpaid_leave",
+  "neplacene volno": "unpaid_leave",
+  "jiná nepřítomnost": "other",
+  "jina nepritomnost": "other",
+  "jiná absence": "other",
+  "jina absence": "other"
 };
 
 const STATUS_LABELS = {

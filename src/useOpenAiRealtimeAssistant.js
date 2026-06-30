@@ -4,8 +4,45 @@ import { routeForAiModule } from "./elevenLabsClientTools.js";
 const OPENAI_REALTIME_WEBRTC_ENDPOINT = "https://api.openai.com/v1/realtime/calls";
 const VOICE_MICROPHONE_ERROR_CODE = "voice_microphone_denied";
 
+const ABSENCE_REALTIME_TYPE_ALIASES = {
+  dovolena: "vacation",
+  dovolenou: "vacation",
+  vacation: "vacation",
+  nemoc: "sick",
+  sick: "sick",
+  lekar: "doctor",
+  lekare: "doctor",
+  doctor: "doctor",
+  ocr: "care",
+  care: "care",
+  nahradni_volno: "compensatory_leave",
+  compensatory_leave: "compensatory_leave",
+  neplacene_volno: "unpaid_leave",
+  unpaid_leave: "unpaid_leave",
+  jina_nepritomnost: "other",
+  jina_absence: "other",
+  other: "other"
+};
+
+const ABSENCE_REALTIME_TYPE_LABELS = {
+  vacation: "dovolenou",
+  sick: "nemoc",
+  doctor: "lékaře",
+  care: "OČR",
+  compensatory_leave: "náhradní volno",
+  unpaid_leave: "neplacené volno",
+  other: "jinou nepřítomnost"
+};
+
 function cleanString(value) {
   return String(value ?? "").trim();
+}
+
+function normalizeKey(value) {
+  return cleanString(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function parseJson(value, fallback = {}) {
@@ -118,31 +155,55 @@ export function useOpenAiRealtimeAssistant({
   }
 
   async function callAbsenceTool(args = {}, context = {}) {
+    const typeKey = normalizeKey(args.type || args.absenceType || args.absence_type || "vacation")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    const type = ABSENCE_REALTIME_TYPE_ALIASES[typeKey] || typeKey || "vacation";
+    const employeeId = cleanString(args.employeeId || args.employee_id || args.userId || args.user_id);
+    const employeeName = cleanString(args.employeeName || args.employee_name || args.employee || args.name || args.query);
     const confirmed = args.confirmed === true;
     const dayPart = cleanString(args.dayPart);
     const dateFrom = cleanString(args.dateFrom);
     const dateTo = cleanString(args.dateTo || args.dateFrom);
+    const startTime = cleanString(args.startTime || args.start_time || args.timeFrom || args.time_from);
+    const endTime = cleanString(args.endTime || args.end_time || args.timeTo || args.time_to);
     const summary = cleanString(args.spokenSummary);
     const note = cleanString(args.note);
-    const text = summary || `Zapiš dovolenou ${dateFrom || ""} ${dayPart || ""}`.trim();
+    const text = summary || [
+      `Zapiš ${ABSENCE_REALTIME_TYPE_LABELS[type] || "nepřítomnost"}`,
+      employeeName ? `pro ${employeeName}` : "",
+      dateFrom || "",
+      dateTo && dateTo !== dateFrom ? `do ${dateTo}` : "",
+      startTime && endTime ? `od ${startTime} do ${endTime}` : "",
+      dayPart || "",
+      confirmed ? "ano, zapiš to" : ""
+    ].filter(Boolean).join(" ").trim();
     const payload = {
       transcript: text,
       text,
-      intent: "absence_vacation_request",
+      intent: "absence_request",
       parameters: {
-        type: "vacation",
+        type,
+        employeeId,
+        employeeName,
         dateFrom,
         dateTo,
         dayPart,
+        startTime,
+        endTime,
         confirmed,
         note
       },
       context: {
         conversationId: context.conversationId || "",
-        absenceType: "vacation",
+        absenceType: type,
+        absenceEmployeeId: employeeId,
+        absenceEmployeeQuery: employeeName,
         absenceDateFrom: dateFrom,
         absenceDateTo: dateTo,
         absenceDayPart: dayPart,
+        absenceStartTime: startTime,
+        absenceEndTime: endTime,
         absenceConfirmed: confirmed
       },
       metadata: {
@@ -159,7 +220,7 @@ export function useOpenAiRealtimeAssistant({
       ok: result.ok === true,
       status: result.status || "unknown",
       answerText: result.reply || result.text || "",
-      intent: result.intent || "absence_vacation_request",
+      intent: result.intent || "absence_request",
       verified: result.verified === true,
       requiresConfirmation: result.status === "needs_confirmation",
       absenceRequest: result.absenceRequest || null,

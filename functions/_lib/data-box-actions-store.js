@@ -1,4 +1,4 @@
-import { getDataBoxMessage } from "./data-box-store.js";
+import { getDataBoxMessage, updateDataBoxMessagesAiStatus } from "./data-box-store.js";
 import { sendDataBoxForwardNotification } from "./notification-service.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
@@ -479,6 +479,7 @@ export async function confirmDataBoxAction(env, actionId, payload = {}, currentU
       .prepare("UPDATE data_box_messages SET status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .bind(message.id)
       .run();
+    await updateDataBoxMessagesAiStatus(env, [message.id], "done");
     const updatedAction = await updateAction(db, action.id, {
       status: "archived",
       provider: "Kaiser Smart",
@@ -525,12 +526,14 @@ export async function confirmDataBoxAction(env, actionId, payload = {}, currentU
     });
 
     if (nextStatus !== "sent") {
+      await updateDataBoxMessagesAiStatus(env, [message.id], "failed");
       throw new DataBoxActionError(
         result.errorMessage || "E-mail se nepodařilo odeslat.",
         result.status === "skipped" ? 503 : 502,
         "data_box_email_send_failed"
       );
     }
+    await updateDataBoxMessagesAiStatus(env, [message.id], "done");
 
     return {
       action: updatedAction,
@@ -616,6 +619,7 @@ export async function updateDataBoxActionDraft(env, actionId, payload = {}, curr
       action.id
     )
     .run();
+  await updateDataBoxMessagesAiStatus(env, [action.messageId], "requires_confirmation");
 
   return {
     action: await getAction(db, action.id),
@@ -643,6 +647,7 @@ export async function rejectDataBoxActionDraft(env, actionId, payload = {}, curr
     errorCode: "",
     errorMessage: reason
   });
+  await updateDataBoxMessagesAiStatus(env, [action.messageId], "rejected");
 
   return {
     action: updatedAction,

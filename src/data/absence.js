@@ -4,7 +4,7 @@ export const ABSENCE_REPORT_EMAIL = "kancelar@kaiserservis.cz";
 export const ABSENCE_REPORT_DAY = 1;
 export const ABSENCE_REPORT_TIME = "06:00";
 
-export const ABSENCE_TYPES = ["Dovolená", "Nemoc", "Lékař", "OČR", "Náhradní volno"];
+export const ABSENCE_TYPES = ["Dovolená", "Nemoc", "Lékař", "OČR", "Náhradní volno", "Neplacené volno", "Jiná nepřítomnost"];
 export const ABSENCE_STATUSES = [
   "Rozpracováno",
   "Čeká na schválení",
@@ -13,7 +13,7 @@ export const ABSENCE_STATUSES = [
   "Zrušeno",
   "Evidováno"
 ];
-export const ABSENCE_APPROVAL_TYPES = new Set(["Dovolená", "Lékař", "OČR", "Náhradní volno"]);
+export const ABSENCE_APPROVAL_TYPES = new Set(["Dovolená", "Lékař", "OČR", "Náhradní volno", "Neplacené volno", "Jiná nepřítomnost"]);
 export const ABSENCE_TABS = [
   { id: "dashboard", label: "Dnes" },
   { id: "calendar", label: "Kalendář" },
@@ -49,11 +49,15 @@ export const ABSENCE_TYPE_TONES = {
   Lékař: "doctor",
   OČR: "care",
   "Náhradní volno": "timeoff",
+  "Neplacené volno": "unpaid",
+  "Jiná nepřítomnost": "other",
   vacation: "vacation",
   sick: "illness",
   doctor: "doctor",
   care: "care",
-  compensatory_leave: "timeoff"
+  compensatory_leave: "timeoff",
+  unpaid_leave: "unpaid",
+  other: "other"
 };
 
 export const ABSENCE_API_STATUS_LABELS = {
@@ -71,7 +75,9 @@ export const ABSENCE_API_TYPE_LABELS = {
   sick: "Nemoc",
   doctor: "Lékař",
   care: "OČR",
-  compensatory_leave: "Náhradní volno"
+  compensatory_leave: "Náhradní volno",
+  unpaid_leave: "Neplacené volno",
+  other: "Jiná nepřítomnost"
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -528,6 +534,8 @@ export function monthlyAbsenceReportToCsv(report, requests) {
     ["Lékař celkem hodin", doctorHours],
     ["OČR celkem dnů", totals.OČR],
     ["Náhradní volno celkem dnů", totals["Náhradní volno"]],
+    ["Neplacené volno celkem dnů", totals["Neplacené volno"]],
+    ["Jiná nepřítomnost celkem dnů", totals["Jiná nepřítomnost"]],
     ["Čekající žádosti", pendingCount],
     [],
     ["Zaměstnanec", "Typ", "Od", "Do", "Čas od", "Čas do", "Počet dnů", "Hodiny", "Stav"],

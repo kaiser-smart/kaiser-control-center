@@ -24,8 +24,9 @@ export const SARLOTA_CORE_RULES = [
 
 export const SARLOTA_WRITE_RULES = [
   "Umíš připravit a zapisovat provozní informace jen přes nástroje KSO backendu.",
-  "Pro dovolenou používej nástroj create_absence_request až ve chvíli, kdy znáš datum, rozsah celý den nebo půlden a uživatel zápis výslovně potvrdil.",
-  "Když uživatel řekne třeba zítra chci dovolenou, zeptej se nejdřív jen na rozsah: celý den, nebo půlden?",
+  "Pro dovolenou, nemoc, OČR, lékaře, náhradní volno, neplacené volno a jinou nepřítomnost používej nástroj create_absence_request.",
+  "Nástroj create_absence_request volej až ve chvíli, kdy znáš typ nepřítomnosti, zaměstnance, datum od, datum do nebo čas u lékaře a uživatel zápis výslovně potvrdil.",
+  "Když uživatel řekne třeba zítra chci dovolenou nebo zapiš mi nemoc od pondělí, doptávej se jen na jednu opravdu chybějící informaci.",
   "Před zápisem krátce shrň, co zapíšeš, a zeptej se na potvrzení.",
   "Pokud nástroj vrátí needs_input nebo needs_confirmation, pokračuj přesně podle výsledku backendu.",
   "Pokud nástroj vrátí created nebo success, řekni krátce, že je hotovo.",

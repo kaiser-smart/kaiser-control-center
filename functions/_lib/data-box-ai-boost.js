@@ -1,4 +1,4 @@
-import { listDataBoxMessages } from "./data-box-store.js";
+import { listDataBoxMessages, updateDataBoxMessagesAiStatus } from "./data-box-store.js";
 import { prepareDataBoxAction } from "./data-box-actions-store.js";
 import { listModuleRules } from "./module-rules-store.js";
 
@@ -216,6 +216,7 @@ export async function runDataBoxAiBoost(env, options = {}) {
     .slice(0, limit)
     .map(publicMessage)
     .filter((message) => message.id);
+  const evaluatedMessages = messages.slice(0, 20);
   const rules = (await listModuleRules(env, MODULE_KEY))
     .filter((rule) => rule.status === "active")
     .map(publicRule);
@@ -234,7 +235,7 @@ export async function runDataBoxAiBoost(env, options = {}) {
   let provider = "OpenAI";
 
   try {
-    recommendations = await requestAiRecommendations(env, messages.slice(0, 20), rules);
+    recommendations = await requestAiRecommendations(env, evaluatedMessages, rules);
   } catch (error) {
     if (error instanceof DataBoxAiBoostError && error.code === "data_box_ai_boost_missing_openai_key") {
       throw error;
@@ -243,13 +244,18 @@ export async function runDataBoxAiBoost(env, options = {}) {
       throw error;
     }
     provider = "rule-similarity-fallback";
-    recommendations = messages
+    recommendations = evaluatedMessages
       .map((message) => fallbackRecommendationForMessage(message, rules))
       .filter(Boolean);
   }
 
+  await updateDataBoxMessagesAiStatus(env, evaluatedMessages.map((message) => message.id), "reviewed");
+
   const byId = new Map(messages.map((message) => [message.id, message]));
   const createdActions = [];
+  const confirmationMessageIds = new Set();
+  const doneMessageIds = new Set();
+  const failedMessageIds = new Set();
 
   for (const recommendation of recommendations.slice(0, 12)) {
     const message = byId.get(cleanString(recommendation.messageId));
@@ -281,7 +287,19 @@ export async function runDataBoxAiBoost(env, options = {}) {
       }
     }, options.currentUser || {});
     createdActions.push(action);
+    const actionStatus = cleanString(action.status).toLowerCase();
+    if (["prepared", "requires_confirmation", "confirmed"].includes(actionStatus)) {
+      confirmationMessageIds.add(message.id);
+    } else if (["sent", "archived"].includes(actionStatus)) {
+      doneMessageIds.add(message.id);
+    } else if (["failed", "blocked"].includes(actionStatus)) {
+      failedMessageIds.add(message.id);
+    }
   }
+
+  await updateDataBoxMessagesAiStatus(env, Array.from(confirmationMessageIds), "requires_confirmation");
+  await updateDataBoxMessagesAiStatus(env, Array.from(doneMessageIds), "done");
+  await updateDataBoxMessagesAiStatus(env, Array.from(failedMessageIds), "failed");
 
   return {
     apiStatus: "ready",

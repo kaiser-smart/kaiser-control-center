@@ -18,7 +18,9 @@ const TYPE_LABELS = {
   sick: "Nemoc",
   doctor: "Lékař",
   care: "OČR",
-  compensatory_leave: "Náhradní volno"
+  compensatory_leave: "Náhradní volno",
+  unpaid_leave: "Neplacené volno",
+  other: "Jiná nepřítomnost"
 };
 
 function notificationDatabase(env) {

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.241"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.243"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,14 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: hlasové nepřítomnosti",
+    text: "Hlasová Šarlota v modulu Dovolená / Nemoc a Rychlé zadání nově připraví dovolenou, nemoc, OČR, lékaře, náhradní volno, neplacené volno i jinou nepřítomnost a zapisuje až po potvrzení přes KSO backend."
+  },
+  {
+    title: "Datová schránka: jasné AI Boost příznaky",
+    text: "Zprávy vyhodnocené AI Boostem mají samostatný příznak AI Boost a oddělené příznaky pro doporučenou akci i stav potvrzení, aby se nemíchalo Hotovo, E-mail, Faktury a Archiv do jedné nesrozumitelné bubliny."
+  },
   {
     title: "Šarlota: počasí a svátky",
     text: "Firemní lidskost Šarloty umí backendově načíst aktuální počasí pro Brno, české svátky, bezpečné narozeninové přání a schválené dovolené jako krátké ověřené odlehčení."
