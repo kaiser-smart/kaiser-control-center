@@ -141,6 +141,27 @@ function toolConfigChanged(currentTool, expectedTool) {
   }) !== JSON.stringify(expectedTool);
 }
 
+function upstreamErrorSummary(error) {
+  const detail = error?.payload?.detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .slice(0, 3)
+      .map((item) => {
+        const loc = Array.isArray(item?.loc) ? item.loc.join(".") : "";
+        const message = cleanString(item?.msg || item?.message || item?.type || "validation_error");
+        return loc ? `${loc}: ${message}` : message;
+      })
+      .filter(Boolean)
+      .join("; ");
+  }
+
+  if (typeof detail === "string") {
+    return cleanString(detail);
+  }
+
+  return cleanString(error?.payload?.message || error?.payload?.error || error?.message || "upstream_error");
+}
+
 function toolNamesFromAgent(agentConfig) {
   const names = new Set();
 
@@ -337,34 +358,54 @@ async function applyWorkspaceOperations(apiKey, operations) {
 
   for (const operation of operations) {
     if (operation.action === "create") {
-      const result = await elevenLabsRequest({
-        apiKey,
-        path: "/tools",
-        method: "POST",
-        body: { tool_config: operation.tool }
-      });
-      results.push({
-        action: "create",
-        name: operation.tool.name,
-        ok: true,
-        idPresent: Boolean(toolId(result) || toolId(result?.tool))
-      });
+      try {
+        const result = await elevenLabsRequest({
+          apiKey,
+          path: "/tools",
+          method: "POST",
+          body: { tool_config: operation.tool }
+        });
+        results.push({
+          action: "create",
+          name: operation.tool.name,
+          ok: true,
+          idPresent: Boolean(toolId(result) || toolId(result?.tool))
+        });
+      } catch (error) {
+        results.push({
+          action: "create",
+          name: operation.tool.name,
+          ok: false,
+          upstreamStatus: error.status || 0,
+          reason: upstreamErrorSummary(error)
+        });
+      }
       continue;
     }
 
     if (operation.action === "update" && operation.id) {
-      await elevenLabsRequest({
-        apiKey,
-        path: `/tools/${encodeURIComponent(operation.id)}`,
-        method: "PATCH",
-        body: { tool_config: operation.tool }
-      });
-      results.push({
-        action: "update",
-        name: operation.tool.name,
-        ok: true,
-        idPresent: true
-      });
+      try {
+        await elevenLabsRequest({
+          apiKey,
+          path: `/tools/${encodeURIComponent(operation.id)}`,
+          method: "PATCH",
+          body: { tool_config: operation.tool }
+        });
+        results.push({
+          action: "update",
+          name: operation.tool.name,
+          ok: true,
+          idPresent: true
+        });
+      } catch (error) {
+        results.push({
+          action: "update",
+          name: operation.tool.name,
+          ok: false,
+          upstreamStatus: error.status || 0,
+          reason: upstreamErrorSummary(error)
+        });
+      }
       continue;
     }
 
@@ -524,8 +565,16 @@ async function applyPayload(env) {
   const workspaceResults = await applyWorkspaceOperations(context.apiKey, plan.workspaceOperations);
   const failedWorkspaceResults = workspaceResults.filter((result) => !result.ok);
   if (failedWorkspaceResults.length) {
+    const firstFailure = failedWorkspaceResults[0];
+    const firstFailureText = [
+      firstFailure.action,
+      firstFailure.name,
+      firstFailure.upstreamStatus ? `HTTP ${firstFailure.upstreamStatus}` : "",
+      firstFailure.reason || ""
+    ].filter(Boolean).join(" ");
+
     return json({
-      error: "Některé ElevenLabs workspace tools nejde bezpečně vytvořit nebo upravit.",
+      error: `Některé ElevenLabs workspace tools nejde bezpečně vytvořit nebo upravit. První chyba: ${firstFailureText}`,
       code: "elevenlabs_workspace_tools_sync_failed",
       workspaceResults,
       apiStatus: "waiting"
