@@ -1,7 +1,7 @@
 import { recordAiAction } from "./ai-action-log-store.js";
 import { createAbsenceRequestRecord } from "./absence-requests-store.js";
 import { createDriverPartRequest, handoffDriverPartRequest } from "./driver-part-requests-store.js";
-import { resolveFleetVehiclesForDriver } from "./fleet-vehicles-store.js";
+import { resolveFleetVehiclesForDriver, validateFleetLicensePlate } from "./fleet-vehicles-store.js";
 import { getUsers } from "./auth.js";
 import {
   driverPartRequestMissingQuestion,
@@ -1021,8 +1021,9 @@ function isDriverPartRequestText(speechText) {
   }
 
   const hasPart = /\b(zrcatko|zpetne\s+zrcatko|nahradni\s+dil|dil|soucastka|svetlo|svetlomet|blinkr|smerovka|pneumatika|guma|sterac|rameno\s+sterace|blatnik|kryt\s+kola|naraznik)\b/.test(normalized);
-  const hasReportVerb = /\b(potrebuju|potrebuji|chci|nahlas|nahla?sit|vymenit|rozbite|poskozene|praskle|ulomene)\b/.test(normalized);
-  return hasPart && hasReportVerb;
+  const hasVehicleContext = /\b(auto|auta|autem|vozidlo|vozidle|vuz|voze|kabina|nakladak|mercedes|daf|man|spz)\b/.test(normalized);
+  const hasReportVerb = /\b(potrebuju|potrebuji|potreboval|chci|nahlas|nahla?sit|vymenit|oprav|opravu|servis|rozbite|rozbity|poskozene|poskozeny|praskle|ulomene|polamane|polamany|zlomene)\b/.test(normalized);
+  return (hasPart && hasReportVerb) || (hasVehicleContext && hasReportVerb && /\b(oprav|opravu|servis|rozbite|rozbity|poskozene|poskozeny|polamane|polamany)\b/.test(normalized));
 }
 
 function isDriverPartRequest(payload, speechText, context) {
@@ -1064,6 +1065,54 @@ function driverPartPreparedAction(draft) {
   };
 }
 
+async function validateDriverPartDraftLicensePlate(env, user, draft) {
+  if (!draft.licensePlate) {
+    return { valid: true, draft };
+  }
+
+  try {
+    const validation = await validateFleetLicensePlate(env, draft.licensePlate, user);
+
+    if (!validation.validFormat) {
+      return {
+        valid: false,
+        message: "SPZ nemá platný formát. Řekni mi ji prosím ještě jednou, nebo ji napiš ručně.",
+        candidates: validation.suggestions || []
+      };
+    }
+
+    if (!validation.exact) {
+      return {
+        valid: false,
+        message: "Tuhle SPZ v evidenci vozidel nevidím. Zkontroluj ji prosím.",
+        candidates: validation.suggestions || []
+      };
+    }
+
+    const vehicle = validation.vehicle || {};
+    return {
+      valid: true,
+      draft: compactObject({
+        ...draft,
+        vehicleId: firstNonEmpty(draft.vehicleId, vehicle.id, vehicle.vehicleId),
+        vehicleName: firstNonEmpty(draft.vehicleName, vehicle.internalNumber, vehicle.model, vehicle.licensePlate),
+        licensePlate: validation.normalized || draft.licensePlate,
+        vin: firstNonEmpty(draft.vin, vehicle.vin),
+        vehicleBrand: firstNonEmpty(draft.vehicleBrand, vehicle.brand, vehicle.model),
+        driverName: firstNonEmpty(draft.driverName, user?.name, vehicle.assignedDriverName),
+        driverPhone: firstNonEmpty(draft.driverPhone, user?.phone, vehicle.assignedDriverPhone)
+      })
+    };
+  } catch (error) {
+    console.info("voice_sarlota.driver_plate_validation_skipped", { message: cleanString(error?.message) });
+    return {
+      valid: false,
+      message: "SPZ se teď nepodařilo ověřit. Zkus ji prosím napsat ručně.",
+      candidates: []
+    };
+  }
+}
+
 async function driverPartRequestTool(env, user, payload, context, speechText) {
   if (!hasPermission(user, "driver-reports", "create")) {
     return {
@@ -1074,7 +1123,7 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
     };
   }
 
-  const draft = await enrichDriverPartDraftWithAssignedVehicle(
+  let draft = await enrichDriverPartDraftWithAssignedVehicle(
     env,
     user,
     driverPartDraftFromPayload(payload, speechText),
@@ -1099,6 +1148,18 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
       vehicleCandidates: draft.assignedVehicleCandidates || []
     };
   }
+
+  const plateValidation = await validateDriverPartDraftLicensePlate(env, user, draft);
+  if (!plateValidation.valid) {
+    return {
+      status: "needs_input",
+      verified: true,
+      message: plateValidation.message,
+      preparedActions: [],
+      vehicleCandidates: plateValidation.candidates || []
+    };
+  }
+  draft = plateValidation.draft;
 
   const missingQuestion = driverPartRequestMissingQuestion({
     description: draft.defectDescription,
@@ -1472,7 +1533,7 @@ function systemPrompt() {
     sarlotaSystemPrompt(),
     "Tento endpoint vrací strojové rozhodnutí pro KSO backend. Odpověď pro uživatele dej do pole reply.",
     "Pro zápis dovolené, nemoci, OČR, lékaře, náhradního volna, neplaceného volna nebo jiné nepřítomnosti použij intent absence_request. Nezapisuj bez jasného potvrzení uživatele; když něco chybí, polož jen jednu otázku.",
-    "Pro hlášení náhradního dílu z modulu Hlášení řidičů použij intent driver_part_request. Bez potvrzení nic nezapisuj ani neposílej; při chybějícím nebo nejednoznačném vozidle se ptej nejdřív na typ, značku nebo interní název vozidla a SPZ chtěj až jako poslední možnost. Při nejasné straně zrcátka polož jednu krátkou otázku. Mercedes díl podle VIN označ jako ověřený jen při oficiálním výsledku nebo ručním potvrzení.",
+    "Pro hlášení náhradního dílu z modulu Hlášení řidičů použij intent driver_part_request. Když volající řekne, že chce opravu, servis nebo má něco rozbité/polámané na autě, ber to jako možné Hlášení řidičů, krátce potvrď `Moment, načtu si vozidla.` a nech backend načíst Vozový park. Bez potvrzení nic nezapisuj ani neposílej; při chybějícím nebo nejednoznačném vozidle se ptej nejdřív na typ, značku nebo interní název vozidla a SPZ chtěj až jako poslední možnost. Při nejasné straně zrcátka polož jednu krátkou otázku. Mercedes díl podle VIN označ jako ověřený jen při oficiálním výsledku nebo ručním potvrzení.",
     "Blok Firemní lidskost: pokud request.humanTouch.enabled obsahuje návrhy, můžeš nenásilně použít maximálně jednu krátkou poznámku. Použij jen dodaný ověřený návrh, nikdy si nevymýšlej počasí, svátky, narozeniny ani dovolené.",
     "Firemní lidskost nepoužívej při reklamaci, stížnosti, spěchu, stresu, chybě, nemoci, OČR, lékaři ani u citlivé absence. Nikdy nezmiňuj důvod absence, věk ani soukromé údaje. Nepoužívej texty známých písní.",
     "Vrať výhradně JSON."

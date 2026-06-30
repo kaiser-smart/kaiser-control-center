@@ -22065,6 +22065,120 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   text-transform: uppercase;
 }
 
+.driver-report-license-field {
+  min-width: 0;
+}
+
+.driver-report-plate-feedback,
+.driver-report-plate-override {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.driver-report-plate-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.driver-report-plate-card {
+  min-width: 0;
+  border: 1px solid var(--driver-report-line);
+  border-radius: 8px;
+  padding: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.driver-report-plate-card > strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.92rem;
+}
+
+.driver-report-plate-card--success {
+  border-color: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 44%, var(--driver-report-line));
+  background: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 12%, #ffffff);
+  color: #253121;
+}
+
+.driver-report-plate-card--error {
+  border-color: #e7b36a;
+  background: #fff8ec;
+  color: #5b3420;
+}
+
+.driver-report-plate-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.driver-report-plate-card div {
+  min-width: 0;
+}
+
+.driver-report-plate-card dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.driver-report-plate-card dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.driver-report-plate-suggestions {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.driver-report-plate-suggestions > strong {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.driver-report-plate-suggestion {
+  display: grid;
+  width: 100%;
+  min-height: 44px;
+  min-width: 0;
+  gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--driver-report-pit) 22%, var(--driver-report-line));
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px 10px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.driver-report-plate-suggestion span {
+  color: var(--driver-report-pit);
+  font-weight: 900;
+}
+
+.driver-report-plate-suggestion small {
+  color: var(--muted);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.driver-report-plate-override {
+  border: 1px dashed color-mix(in srgb, #e7b36a 70%, var(--driver-report-line));
+  border-radius: 8px;
+  background: #fffaf0;
+  padding: 10px;
+}
+
 .driver-report-pitstop-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -22629,6 +22743,10 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   .driver-report-license-field input {
     min-height: 60px;
     font-size: 1.3rem;
+  }
+
+  .driver-report-plate-card dl {
+    grid-template-columns: 1fr;
   }
 
   .driver-report-pitstop-steps {

@@ -582,12 +582,96 @@ export function createElevenLabsClientTools({
     const vin = cleanString(parameters.vin || parameters.VIN);
     const vehicleBrand = cleanString(parameters.vehicleBrand || parameters.brand);
     const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
+    const loadingMessage = "Moment, načtu si vozidla.";
+    const basePayload = (confirmed = false, extraParameters = {}) => ({
+      transcript: spokenSummary || [
+        defectDescription,
+        licensePlate ? `na autě ${licensePlate}` : "",
+        confirmed ? "ano" : ""
+      ].filter(Boolean).join(" "),
+      text: spokenSummary || [
+        defectDescription,
+        licensePlate ? `na autě ${licensePlate}` : "",
+        confirmed ? "ano" : ""
+      ].filter(Boolean).join(" "),
+      intent: "driver_part_request",
+      parameters: {
+        defectDescription,
+        licensePlate,
+        vehicleId,
+        vehicleName,
+        vin,
+        vehicleBrand,
+        ...extraParameters,
+        confirmed,
+        writeConfirmed: confirmed
+      },
+      context: {
+        requestedIntent: "driver_part_request",
+        defectDescription,
+        licensePlate,
+        vehicleId,
+        vehicleName,
+        vin,
+        vehicleBrand,
+        ...extraParameters,
+        confirmed
+      },
+      metadata: {
+        source: "elevenlabs_client_tool"
+      }
+    });
+
+    toast(loadingMessage, { tone: "info" });
+
+    let preparedResult;
+
+    try {
+      preparedResult = await postJson("/api/voice/sarlota", basePayload(false));
+    } catch (error) {
+      const message = cleanString(error?.payload?.error || error?.message) || "Hlášení se nepodařilo připravit.";
+      return {
+        ok: false,
+        status: "request_failed",
+        message: `${message} Nic jsem neodeslala.`,
+        answerText: `${message} Nic jsem neodeslala.`,
+        intent: "driver_part_request",
+        verified: false,
+        requiresConfirmation: false,
+        preparedActions: [],
+        driverPartRequest: null,
+        notificationsSent: false,
+        apiStatus: error?.payload?.apiStatus || "waiting",
+        code: error?.payload?.code || "driver_part_request_prepare_failed"
+      };
+    }
+
+    if (preparedResult.status !== "needs_confirmation") {
+      return {
+        ok: preparedResult.ok === true,
+        status: preparedResult.status || "unknown",
+        message: preparedResult.reply || preparedResult.text || preparedResult.message || "",
+        answerText: preparedResult.reply || preparedResult.text || preparedResult.message || "",
+        intent: preparedResult.intent || "driver_part_request",
+        verified: preparedResult.verified === true,
+        requiresConfirmation: false,
+        preparedActions: Array.isArray(preparedResult.preparedActions) ? preparedResult.preparedActions : [],
+        driverPartRequest: preparedResult.driverPartRequest || null,
+        notificationsSent: preparedResult.notificationsSent === true,
+        apiStatus: preparedResult.apiStatus || "ready"
+      };
+    }
+
+    const preparedAction = Array.isArray(preparedResult.preparedActions)
+      ? preparedResult.preparedActions.find((action) => action?.type === "driver_part_request") || preparedResult.preparedActions[0]
+      : null;
+    const preparedParameters = preparedAction?.parameters || {};
     const confirmationMessage = [
       "Šarlota chce vytvořit hlášení náhradního dílu a předat ho k objednání.",
-      defectDescription ? `Závada: ${defectDescription}` : "",
-      licensePlate ? `SPZ: ${licensePlate}` : "Vozidlo se doplní z přiřazení řidiče, pokud je jednoznačné.",
-      vehicleName ? `Vozidlo: ${vehicleName}` : "",
-      vin ? `VIN: ${vin}` : "",
+      preparedParameters.defectDescription ? `Závada: ${preparedParameters.defectDescription}` : (defectDescription ? `Závada: ${defectDescription}` : ""),
+      preparedParameters.licensePlate ? `SPZ: ${preparedParameters.licensePlate}` : "Vozidlo se doplní z přiřazení řidiče, pokud je jednoznačné.",
+      preparedParameters.vehicleName ? `Vozidlo: ${preparedParameters.vehicleName}` : "",
+      preparedParameters.vin ? `VIN: ${preparedParameters.vin}` : (vin ? `VIN: ${vin}` : ""),
       "Bez potvrzení se nic neuloží ani neodešle."
     ].filter(Boolean).join("\n");
     const popupConfirmed = await confirm({
@@ -614,43 +698,11 @@ export function createElevenLabsClientTools({
     }
 
     const confirmed = Boolean(popupConfirmed);
-    const text = spokenSummary || [
-      defectDescription,
-      licensePlate ? `na autě ${licensePlate}` : "",
-      confirmed ? "ano" : ""
-    ].filter(Boolean).join(" ");
 
     let result;
 
     try {
-      result = await postJson("/api/voice/sarlota", {
-        transcript: text,
-        text,
-        intent: "driver_part_request",
-        parameters: {
-          defectDescription,
-          licensePlate,
-          vehicleId,
-          vehicleName,
-          vin,
-          vehicleBrand,
-          confirmed,
-          writeConfirmed: confirmed
-        },
-        context: {
-          requestedIntent: "driver_part_request",
-          defectDescription,
-          licensePlate,
-          vehicleId,
-          vehicleName,
-          vin,
-          vehicleBrand,
-          confirmed
-        },
-        metadata: {
-          source: "elevenlabs_client_tool"
-        }
-      });
+      result = await postJson("/api/voice/sarlota", basePayload(confirmed, preparedParameters));
     } catch (error) {
       const message = cleanString(error?.payload?.error || error?.message) || "Hlášení se nepodařilo zapsat.";
       return {

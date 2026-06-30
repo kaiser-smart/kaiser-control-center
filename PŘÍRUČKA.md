@@ -1348,6 +1348,18 @@ First message:
 - Pokud potvrzovací okno nejde zobrazit, Šarlota nesmí akci provést; musí ji ponechat jako návrh nebo říct, že čeká na ruční potvrzení.
 - Potvrzovací okno musí být použitelné na mobilu a nesmí skrýt důležité údaje ani hlavní riziko akce.
 
+### 17.7.1 Kontextové načtení dat před akcí
+
+- Když Šarlota z hlasu detekuje, co volající potřebuje, má nejdřív krátce potvrdit, že si načte relevantní data, například:
+  `Moment, načtu si vozidla.`
+- Potom si má přes backend KSO načíst zdroj pravdy pro daný modul a až následně pokračovat v dialogu.
+- Pro Hlášení řidičů platí: pokud volající řekne, že chce opravu, servis nebo má něco rozbité/polámané na autě, jde o možné Hlášení řidičů.
+- Šarlota v takovém případě načítá Vozový park a přiřazená vozidla řidiče.
+- Pokud má řidič více vozidel, Šarlota nesmí automaticky vybrat první vozidlo.
+- Vozidla má vyjmenovat lidsky podle typu, značky, interního názvu nebo popisu vozidla.
+- SPZ je až technický fallback, když vozidlo nejde bezpečně vybrat podle typu, značky nebo interního názvu.
+- Pokud relevantní data nejdou načíst, Šarlota to řekne stručně a nespustí zápis ani notifikaci bez ručního potvrzení.
+
 ### 17.8 Testovací checklist pro Šarlotu
 
 Při každé změně Šarloty ověřit:
@@ -1374,6 +1386,7 @@ Při každé změně Šarloty ověřit:
 - Po uložení se musí ověřit, že agent stále používá správné dynamic variables, first message, nástroje a model.
 - Pokud není dostupný bezpečný read/write přístup k ElevenLabs, změnu neprovádět naslepo; připravit repo-side prompt/dynamic variables a jasně napsat, že upstream prompt v ElevenLabs nebyl uložen.
 - Synchronizace ElevenLabs client tools smí proběhnout jen přes chráněný backendový postup: nejdřív read-only návrh, potom explicitní `apply: true`, kontrola správného agenta Šarloty a ověření, že se nemění system prompt, first message ani model.
+- Synchronizace doplňkového prompt bloku smí proběhnout jen přes chráněný backendový postup: nejdřív read-only návrh, potom explicitní `apply: true`, kontrola správného agenta Šarloty a append pouze schváleného bloku bez změny first message, modelu a tools.
 
 ## 18. Datová schránka a UI pravidla
 

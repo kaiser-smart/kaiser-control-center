@@ -80,6 +80,22 @@ function modelDetail(model = null) {
   return `${expected} / neověřeno`;
 }
 
+function driverReportPromptDetail(prompt = null) {
+  if (!prompt) {
+    return "ElevenLabs prompt neověřen";
+  }
+
+  if (prompt.rulePresent === true) {
+    return "pravidlo oprava/vozidla je v ElevenLabs promptu";
+  }
+
+  if (prompt.rulePresent === false) {
+    return "pravidlo zatím v ElevenLabs promptu není";
+  }
+
+  return "ElevenLabs prompt neověřen";
+}
+
 function firstMessageDetail(firstMessage = null) {
   if (!firstMessage) {
     return "intro_announcement";
@@ -125,6 +141,7 @@ export function SarlotaStatusPanel({
     statusRow("Personalizace", data.personalization?.status || "unverified", data.personalization?.source || "přihlášený uživatel"),
     statusRow("Vocativ uživatele", data.vocative?.status || "unverified", vocativeDetail),
     statusRow("LLM model v EL", data.openAiModelInElevenLabs?.status || "unverified", modelDetail(data.openAiModelInElevenLabs)),
+    statusRow("Prompt Hlášení řidičů", data.driverReportPrompt?.status || "unverified", driverReportPromptDetail(data.driverReportPrompt)),
     statusRow("Tools", data.tools?.status || "unverified", toolDetail(data.tools)),
     statusRow(
       "Signed-url endpoint",
@@ -147,6 +164,9 @@ export function SarlotaStatusPanel({
           <button class="primary-action sarlota-status__sync" type="button" data-sarlota-tools-sync ${loading || syncing ? "disabled" : ""}>
             ${syncing ? "Synchronizuji..." : "Synchronizovat tools"}
           </button>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-prompt-sync ${loading || syncing ? "disabled" : ""}>
+            Doplnit prompt
+          </button>
         </div>
       </div>
       ${error ? `<p class="module-feedback__error" role="alert">${escapeHtml(error)}</p>` : ""}
@@ -156,7 +176,7 @@ export function SarlotaStatusPanel({
         ${rows}
       </dl>
       <p class="sarlota-status__meta">
-        Aktualizováno: ${escapeHtml(generatedAt)}. Synchronizace tools nemění prompt, první zprávu ani model.
+        Aktualizováno: ${escapeHtml(generatedAt)}. Tools a prompt se synchronizují odděleně; first message a model se nemění.
       </p>
     </section>
   `;

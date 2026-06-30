@@ -3,6 +3,14 @@ import { loadFleetVehiclesPayload as loadTcarsFleetVehiclesPayload } from "./tca
 import { createFleetVistosVehiclePreview } from "./fleet-vistos-vehicle-preview.js";
 import { listEmployeeCards } from "./employees-store.js";
 import { hasPermission, isUserActive, normalizeRole } from "../../src/permissions.js";
+import {
+  findSimilarLicensePlates,
+  findVehicleByLicensePlate,
+  licensePlateKey,
+  normalizeLicensePlate,
+  validateLicensePlateFormat,
+  vehicleLicensePlateValue
+} from "../../src/data/licensePlate.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
 
@@ -80,6 +88,53 @@ function fleetStoreError(error) {
     500,
     "fleet_vehicles_store_failed"
   );
+}
+
+function fleetVehicleLicensePlateSummary(vehicle = {}) {
+  return {
+    id: cleanString(vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId),
+    vehicleId: cleanString(vehicle.vehicleId || vehicle.id || vehicle.tcarsVehicleId),
+    licensePlate: normalizeLicensePlate(vehicleLicensePlateValue(vehicle)),
+    brand: cleanString(vehicle.brand),
+    model: cleanString(vehicle.model || vehicle.internalNumber),
+    vehicleType: cleanString(vehicle.vehicleType || vehicle.bodyType || vehicle.vistosVehicleCategory),
+    internalNumber: cleanString(vehicle.internalNumber),
+    vin: cleanString(vehicle.vin),
+    assignedDriverId: cleanString(vehicle.assignedDriverId),
+    assignedDriverName: cleanString(vehicle.assignedDriverName),
+    assignedDriverPhone: cleanString(vehicle.assignedDriverPhone),
+    source: cleanString(vehicle.source || vehicle.telemetrySource)
+  };
+}
+
+export async function validateFleetLicensePlate(env = {}, value = "", user = null) {
+  const normalized = normalizeLicensePlate(value);
+  const payload = await loadFleetVehiclesWithAssignments(env, user);
+  const vehicles = Array.isArray(payload?.vehicles) ? payload.vehicles : [];
+  const format = validateLicensePlateFormat(normalized, vehicles);
+  const vehicle = findVehicleByLicensePlate(normalized, vehicles);
+  const suggestions = findSimilarLicensePlates(normalized, vehicles, 5)
+    .map((item) => ({
+      ...fleetVehicleLicensePlateSummary(item.vehicle),
+      licensePlate: item.licensePlate,
+      distance: item.distance
+    }));
+
+  return {
+    input: cleanString(value),
+    normalized,
+    key: licensePlateKey(normalized),
+    validFormat: format.valid,
+    formatReason: format.reason,
+    exact: Boolean(vehicle),
+    vehicle: vehicle ? fleetVehicleLicensePlateSummary(vehicle) : null,
+    suggestions,
+    source: cleanString(payload?.source),
+    apiStatus: payload?.apiStatus || "ready",
+    message: vehicle
+      ? "Vozidlo nalezeno."
+      : format.message || "Tahle SPZ není ve Vozovém parku. Zkontrolujte ji prosím."
+  };
 }
 
 function rowToAssignment(row) {

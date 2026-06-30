@@ -4,6 +4,7 @@ import { driverReportVehicleDynamicVariables } from "../../../_lib/fleet-vehicle
 import { normalizeAiSearch, userDynamicVariablesForAi } from "../../../_lib/ai-people-summary.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
+import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
 
 const SARLOTA_AGENT_NAME = "Šarlota – Smart odpady";
 const SARLOTA_AGENT_NAME_ALIASES = [
@@ -13,6 +14,7 @@ const SARLOTA_AGENT_NAME_ALIASES = [
 const LLM_MODEL_EXPECTED_IN_ELEVENLABS = "Qwen3.5-397B-A17B";
 const LLM_MODEL_EXPECTED_NORMALIZED = "qwen35397ba17b";
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
+const DRIVER_REPORT_PROMPT_MARKER = "HLÁŠENÍ ŘIDIČŮ / VOZIDLA";
 const SARLOTA_ASSISTANT = {
   id: "sarlota",
   name: "Šarlota",
@@ -161,6 +163,33 @@ function modelFromAgent(agentConfig) {
     .find((value) => normalizeStatusText(value).includes("gpt")) || "";
 }
 
+function promptFromAgent(agentConfig) {
+  const priorityPaths = [
+    ["conversation_config", "agent", "prompt", "prompt"],
+    ["conversation_config", "agent", "prompt", "system_prompt"],
+    ["conversation_config", "agent", "prompt", "systemPrompt"],
+    ["conversation_config", "agent", "prompt", "text"],
+    ["conversation_config", "agent", "prompt", "content"]
+  ];
+
+  for (const path of priorityPaths) {
+    const value = getPathValue(agentConfig, path);
+    if (typeof value === "string" && cleanString(value)) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function driverReportPromptRuleMatches(agentConfig) {
+  const prompt = promptFromAgent(agentConfig);
+  return Boolean(prompt && (
+    prompt.includes(DRIVER_REPORT_PROMPT_MARKER) ||
+    prompt.includes(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE)
+  ));
+}
+
 function collectToolName(tool, names) {
   if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
     return;
@@ -225,6 +254,7 @@ async function readElevenLabsAgentConfig({ apiKey, agentId }) {
     const modelMatches = normalizeStatusText(observedModel) === LLM_MODEL_EXPECTED_NORMALIZED;
     const firstMessage = firstMessageFromAgent(agentConfig);
     const firstMessageMatches = cleanString(firstMessage) === FIRST_MESSAGE_TEMPLATE;
+    const driverReportPromptRulePresent = driverReportPromptRuleMatches(agentConfig);
     const configuredToolNames = toolNamesFromAgent(agentConfig);
     const toolComparison = compareToolNames(configuredToolNames);
 
@@ -235,6 +265,7 @@ async function readElevenLabsAgentConfig({ apiKey, agentId }) {
       observedModel,
       modelMatches,
       firstMessageMatches,
+      driverReportPromptRulePresent,
       configuredToolNames,
       missingTools: toolComparison.missingTools,
       extraTools: toolComparison.extraTools,
@@ -386,6 +417,9 @@ export async function sarlotaStatusPayload(env, user) {
   const modelStatus = liveAgentVerified
     ? (elevenLabsAgentConfig.modelMatches ? "ok" : "error")
     : (liveAgentError ? "error" : "unverified");
+  const driverReportPromptStatus = liveAgentVerified
+    ? (elevenLabsAgentConfig.driverReportPromptRulePresent ? "ok" : "error")
+    : (liveAgentError ? "error" : "unverified");
 
   return {
     generatedAt: new Date().toISOString(),
@@ -439,6 +473,12 @@ export async function sarlotaStatusPayload(env, user) {
       expectedModel: LLM_MODEL_EXPECTED_IN_ELEVENLABS,
       observedModel: liveAgentVerified ? cleanString(elevenLabsAgentConfig.observedModel) : "",
       verifiedInElevenLabs: liveAgentVerified
+    },
+    driverReportPrompt: {
+      status: driverReportPromptStatus,
+      rulePresent: liveAgentVerified ? elevenLabsAgentConfig.driverReportPromptRulePresent : null,
+      promptTextReturned: false,
+      syncEndpoint: "/api/ai/elevenlabs/sarlota-prompt-sync"
     },
     tools: {
       status: toolsStatus,

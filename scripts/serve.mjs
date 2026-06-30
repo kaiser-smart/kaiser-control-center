@@ -61,6 +61,13 @@ import {
   partSideLabel,
   vehicleBrandLabel
 } from "../functions/_lib/driver-parts-catalog.js";
+import {
+  findSimilarLicensePlates,
+  findVehicleByLicensePlate,
+  licensePlateKey,
+  validateLicensePlateFormat,
+  vehicleLicensePlateValue
+} from "../src/data/licensePlate.js";
 import { verifyMercedesPartForRequest } from "../functions/_lib/mercedes-parts-provider.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { modules } from "../src/data/modules.js";
@@ -952,6 +959,58 @@ function mockDriverCanCreate(user) {
   return hasPermission(user, "driver-reports", "create");
 }
 
+function mockDriverTruthyFlag(value) {
+  const normalized = mockDriverClean(value).toLowerCase();
+  return value === true || ["true", "1", "on", "yes", "ano"].includes(normalized);
+}
+
+function mockFleetPlateSummary(vehicle = {}) {
+  return {
+    id: mockDriverClean(vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId),
+    vehicleId: mockDriverClean(vehicle.vehicleId || vehicle.id || vehicle.tcarsVehicleId),
+    licensePlate: normalizeLicensePlate(vehicleLicensePlateValue(vehicle)),
+    brand: mockDriverClean(vehicle.brand),
+    model: mockDriverClean(vehicle.model || vehicle.internalNumber),
+    vehicleType: mockDriverClean(vehicle.vehicleType || vehicle.bodyType || vehicle.vistosVehicleCategory),
+    internalNumber: mockDriverClean(vehicle.internalNumber),
+    vin: mockDriverClean(vehicle.vin),
+    assignedDriverId: mockDriverClean(vehicle.assignedDriverId),
+    assignedDriverName: mockDriverClean(vehicle.assignedDriverName),
+    assignedDriverPhone: mockDriverClean(vehicle.assignedDriverPhone),
+    source: mockDriverClean(vehicle.source || vehicle.telemetrySource || "local_mock")
+  };
+}
+
+async function mockValidateDriverReportLicensePlate(value) {
+  const normalized = normalizeLicensePlate(value);
+  const payload = await loadDevFleetPayload();
+  const vehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
+  const format = validateLicensePlateFormat(normalized, vehicles);
+  const vehicle = findVehicleByLicensePlate(normalized, vehicles);
+  const suggestions = findSimilarLicensePlates(normalized, vehicles, 5)
+    .map((item) => ({
+      ...mockFleetPlateSummary(item.vehicle),
+      licensePlate: item.licensePlate,
+      distance: item.distance
+    }));
+
+  return {
+    input: mockDriverClean(value),
+    normalized,
+    key: licensePlateKey(normalized),
+    validFormat: format.valid,
+    formatReason: format.reason,
+    exact: Boolean(vehicle),
+    vehicle: vehicle ? mockFleetPlateSummary(vehicle) : null,
+    suggestions,
+    source: mockDriverClean(payload.source || "local_mock"),
+    apiStatus: "ready",
+    message: vehicle
+      ? "Vozidlo nalezeno."
+      : format.message || "Tahle SPZ není ve Vozovém parku. Zkontrolujte ji prosím."
+  };
+}
+
 function mockDriverPermissionSummary(user) {
   const role = normalizeRole(user?.role);
   return {
@@ -1056,7 +1115,7 @@ function mockDriverServiceTechRecipient() {
   };
 }
 
-function createMockDriverPartRequest(user, payload = {}) {
+async function createMockDriverPartRequest(user, payload = {}) {
   const defectDescription = mockDriverClean(payload.defectDescription || payload.description || payload.speechText);
   if (!defectDescription) {
     const error = new Error("Vyplňte popis závady od řidiče.");
@@ -1064,7 +1123,7 @@ function createMockDriverPartRequest(user, payload = {}) {
     throw error;
   }
 
-  const assignedVehicle = mockFleetVehicleForUser(user);
+  let assignedVehicle = mockFleetVehicleForUser(user);
   const licensePlate = normalizeLicensePlate(
     payload.licensePlate ||
     payload.spz ||
@@ -1078,6 +1137,40 @@ function createMockDriverPartRequest(user, payload = {}) {
     throw error;
   }
 
+  const wantsUnverifiedPlate = mockDriverTruthyFlag(payload.licensePlateUnverified || payload.licensePlateOverride);
+  const licensePlateOverrideNote = mockDriverClean(payload.licensePlateOverrideNote || payload.licensePlateExceptionNote);
+  const canUseUnverifiedPlate = wantsUnverifiedPlate && mockDriverCanManage(user);
+
+  if (wantsUnverifiedPlate && !mockDriverCanManage(user)) {
+    const error = new Error("SPZ bez ověření může uložit jen oprávněná role.");
+    error.status = 403;
+    throw error;
+  }
+
+  if (wantsUnverifiedPlate && !licensePlateOverrideNote) {
+    const error = new Error("Pro uložení neověřené SPZ doplňte povinnou poznámku.");
+    error.status = 400;
+    throw error;
+  }
+
+  const plateValidation = await mockValidateDriverReportLicensePlate(licensePlate);
+  if (!plateValidation.validFormat) {
+    const error = new Error("SPZ nemá platný formát. Zkontrolujte ji prosím.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!plateValidation.exact && !canUseUnverifiedPlate) {
+    const error = new Error("Tahle SPZ není ve Vozovém parku. Zkontrolujte ji prosím.");
+    error.status = 400;
+    error.details = {
+      normalized: plateValidation.normalized,
+      suggestions: plateValidation.suggestions
+    };
+    throw error;
+  }
+
+  assignedVehicle = plateValidation.vehicle || assignedVehicle;
   const now = new Date().toISOString();
   const partMatch = identifyProbablePartFromDescription(defectDescription);
   const driverContact = mockDriverContactForUser(user);
@@ -1139,7 +1232,10 @@ function createMockDriverPartRequest(user, payload = {}) {
     completedByUserId: "",
     canceledAt: "",
     canceledByUserId: "",
-    note: mockDriverClean(payload.note || partMatch.note),
+    note: [
+      mockDriverClean(payload.note || partMatch.note),
+      canUseUnverifiedPlate ? `SPZ neověřena: ${licensePlateOverrideNote}` : ""
+    ].filter(Boolean).join(" "),
     patrikEmailStatus: "not_sent",
     patrikEmailError: "",
     kamilSmsStatus: "not_sent",
@@ -1147,14 +1243,21 @@ function createMockDriverPartRequest(user, payload = {}) {
     kamilSmsError: "",
     driverSmsStatus: "not_sent",
     driverSmsError: "",
-    source: mockDriverClean(payload.source || "manual"),
+    source: canUseUnverifiedPlate
+      ? (mockDriverClean(payload.source) === "voice" ? "voice_unverified_plate" : "manual_unverified_plate")
+      : mockDriverClean(payload.source || "manual"),
     createdByUserId: user?.id || "",
     createdAt: now,
     updatedByUserId: user?.id || "",
     updatedAt: now,
     events: []
   };
-  request.events.unshift(mockDriverEvent(id, "create", user, "Vytvořeno v lokálním preview modulu Hlášení řidičů."));
+  request.events.unshift(mockDriverEvent(
+    id,
+    "create",
+    user,
+    `Vytvořeno v lokálním preview modulu Hlášení řidičů.${canUseUnverifiedPlate ? " SPZ nebyla ověřena ve Vozovém parku." : ""}`
+  ));
   mockDriverPartRequests = [request, ...mockDriverPartRequests].slice(0, 100);
   return request;
 }
@@ -2643,10 +2746,31 @@ async function handleApi(request, response) {
       return true;
     }
 
+    const plateValidation = await mockValidateDriverReportLicensePlate(licensePlate);
+    if (!plateValidation.validFormat || !plateValidation.exact) {
+      const reply = plateValidation.validFormat
+        ? "Tuhle SPZ v evidenci vozidel nevidím. Zkontroluj ji prosím."
+        : "SPZ nemá platný formát. Řekni mi ji prosím ještě jednou, nebo ji napiš ručně.";
+      sendJson(response, 200, {
+        ok: false,
+        status: "needs_input",
+        intent: "driver_part_request",
+        reply,
+        text: reply,
+        verified: true,
+        preparedActions: [],
+        notificationsSent: false,
+        candidates: plateValidation.suggestions,
+        apiStatus: "ready"
+      });
+      return true;
+    }
+
+    const resolvedVehicle = plateValidation.vehicle || assignedVehicle;
     const confirmed = parameters.confirmed === true || parameters.writeConfirmed === true;
     const partMatch = identifyProbablePartFromDescription(defectDescription);
     if (!confirmed) {
-      const intro = assignedVehicle ? "Auto mám načtené podle tebe. " : "";
+      const intro = resolvedVehicle ? "Auto mám načtené podle tebe. " : "";
       const reply = `${intro}Rozumím. Chceš nahlásit ${partMatch.probablePart || "náhradní díl"} na vozidle se SPZ ${licensePlate}. Potvrď prosím, že SPZ je správně, a pošli fotku poškození. Mám to uložit a předat k objednání dílu?`;
       sendJson(response, 200, {
         ok: false,
@@ -2664,10 +2788,10 @@ async function handleApi(request, response) {
             parameters: {
               defectDescription,
               licensePlate,
-              vehicleId: assignedVehicle?.id || "",
-              vehicleName: assignedVehicle?.internalNumber || assignedVehicle?.model || "",
-              vin: assignedVehicle?.vin || "",
-              vehicleBrand: assignedVehicle?.brand || ""
+              vehicleId: resolvedVehicle?.id || "",
+              vehicleName: resolvedVehicle?.internalNumber || resolvedVehicle?.model || "",
+              vin: resolvedVehicle?.vin || "",
+              vehicleBrand: resolvedVehicle?.brand || ""
             }
           }
         ],
@@ -2678,14 +2802,14 @@ async function handleApi(request, response) {
     }
 
     try {
-      let item = createMockDriverPartRequest(user, {
+      let item = await createMockDriverPartRequest(user, {
         ...parameters,
         defectDescription,
         licensePlate,
-        vehicleId: parameters.vehicleId || assignedVehicle?.id,
-        vehicleName: parameters.vehicleName || assignedVehicle?.internalNumber || assignedVehicle?.model,
-        vin: parameters.vin || assignedVehicle?.vin,
-        vehicleBrand: parameters.vehicleBrand || assignedVehicle?.brand,
+        vehicleId: parameters.vehicleId || resolvedVehicle?.id,
+        vehicleName: parameters.vehicleName || resolvedVehicle?.internalNumber || resolvedVehicle?.model,
+        vin: parameters.vin || resolvedVehicle?.vin,
+        vehicleBrand: parameters.vehicleBrand || resolvedVehicle?.brand,
         damagePhotoStatus: "requested",
         source: "voice"
       });
@@ -2723,6 +2847,29 @@ async function handleApi(request, response) {
         apiStatus: "ready"
       });
     }
+    return true;
+  }
+
+  if (url.pathname === "/api/driver-reports/license-plate" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!mockDriverCanCreate(user) && !mockDriverCanManage(user)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění vytvořit hlášení řidiče." });
+      return true;
+    }
+
+    const result = await mockValidateDriverReportLicensePlate(
+      url.searchParams.get("value") || url.searchParams.get("spz") || ""
+    );
+    sendJson(response, 200, {
+      ...result,
+      valid: result.validFormat && result.exact,
+      status: result.exact ? "found" : result.validFormat ? "not_found" : result.formatReason,
+      apiStatus: "ready"
+    });
     return true;
   }
 
@@ -2775,7 +2922,7 @@ async function handleApi(request, response) {
 
     try {
       const payload = await readJsonBody(request);
-      let item = createMockDriverPartRequest(user, payload);
+      let item = await createMockDriverPartRequest(user, payload);
       if (payload.handoffAfterCreate) {
         item = handoffMockDriverPartRequest(user, item.id);
       }
@@ -4515,6 +4662,47 @@ async function handleApi(request, response) {
         dynamicVariableValuesOmitted: true,
         noLiveToolsExecuted: true
       }
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/ai/elevenlabs/sarlota-prompt-sync" && ["GET", "POST"].includes(request.method)) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "settings", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění upravit prompt Šarloty." });
+      return true;
+    }
+
+    if (request.method === "POST") {
+      const payload = await readJsonBody(request);
+      if (payload?.apply !== true) {
+        sendJson(response, 409, {
+          error: "Synchronizace promptu vyžaduje potvrzení apply: true.",
+          code: "sarlota_prompt_sync_apply_required",
+          apiStatus: "waiting"
+        });
+        return true;
+      }
+    }
+
+    sendJson(response, request.method === "GET" ? 200 : 409, {
+      mode: request.method === "GET" ? "dry_run" : "local_mock",
+      ready: false,
+      status: "missing_configuration",
+      apiKeyPresent: false,
+      agentIdPresent: false,
+      message: "Lokální preview nemá ElevenLabs konfiguraci. Ostrý prompt se ukládá až přes produkční backend.",
+      safety: {
+        returnsPromptText: false,
+        willNotPatchFirstMessage: true,
+        willNotPatchModel: true,
+        willNotPatchTools: true
+      },
+      apiStatus: "waiting"
     });
     return true;
   }

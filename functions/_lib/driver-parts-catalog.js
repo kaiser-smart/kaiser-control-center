@@ -1,3 +1,15 @@
+import {
+  extractLicensePlate,
+  licensePlateKey,
+  normalizeLicensePlate
+} from "../../src/data/licensePlate.js";
+
+export {
+  extractLicensePlate,
+  licensePlateKey,
+  normalizeLicensePlate
+};
+
 const VEHICLE_BRANDS = new Set(["mercedes", "daf", "man", "jiné"]);
 const PART_VERIFICATION_STATUSES = new Set([
   "waiting_identification",
@@ -52,29 +64,6 @@ function normalizeText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-}
-
-export function normalizeLicensePlate(value) {
-  const compact = cleanString(value).toUpperCase().replace(/[^0-9A-Z]/g, "");
-  if (!compact) {
-    return "";
-  }
-
-  if (compact.length === 7) {
-    return `${compact.slice(0, 3)} ${compact.slice(3)}`;
-  }
-
-  return compact;
-}
-
-export function licensePlateKey(value) {
-  return normalizeLicensePlate(value).replace(/\s+/g, "");
-}
-
-export function extractLicensePlate(text) {
-  const normalized = cleanString(text).toUpperCase();
-  const match = normalized.match(/\b([0-9][A-Z][0-9]\s?[0-9]{4}|[0-9][A-Z]{2}\s?[0-9]{4}|[A-Z]{2,3}\s?[0-9]{3,4})\b/);
-  return normalizeLicensePlate(match?.[1] || "");
 }
 
 export function normalizeVehicleBrand(value) {

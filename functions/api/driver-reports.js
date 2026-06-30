@@ -9,7 +9,13 @@ import {
 
 function errorResponse(error, missingEndpoint = "GET /api/driver-reports") {
   if (error instanceof DriverPartRequestsStoreError) {
-    return json({ error: error.message, apiStatus: "waiting", code: error.code, missingEndpoint }, error.status);
+    return json({
+      error: error.message,
+      apiStatus: "waiting",
+      code: error.code,
+      missingEndpoint,
+      details: error.details || null
+    }, error.status);
   }
 
   console.error("driver_reports.failed", { message: error?.message });

@@ -121,6 +121,13 @@ import {
   fleetStatusTone
 } from "./data/fleet.js";
 import {
+  findSimilarLicensePlates,
+  findVehicleByLicensePlate,
+  normalizeLicensePlate,
+  validateLicensePlateFormat,
+  vehicleLicensePlateValue
+} from "./data/licensePlate.js";
+import {
   DEMO_VEHICLE_TRACKING_ALERT,
   DEMO_VEHICLE_TRACKING_ALERT_END_MS,
   DEMO_VEHICLE_TRACKING_ALERT_START_MS,
@@ -739,7 +746,32 @@ const driverReportsState = {
   apiStatus: "waiting",
   error: "",
   message: "",
-  search: ""
+  search: "",
+  draft: {
+    licensePlate: "",
+    defectDescription: "",
+    driverName: "",
+    driverPhone: "",
+    vehicleName: "",
+    vin: "",
+    vehicleBrand: "jiné",
+    note: "",
+    handoffAfterCreate: true,
+    licensePlateUnverified: false,
+    licensePlateOverrideNote: ""
+  },
+  plateValidation: {
+    input: "",
+    normalized: "",
+    status: "idle",
+    message: "",
+    vehicle: null,
+    suggestions: [],
+    validFormat: false,
+    exact: false,
+    loading: false
+  },
+  plateValidationRequestId: 0
 };
 
 let absenceState = loadAbsenceState();
@@ -18343,8 +18375,150 @@ function driverReportListItem(item) {
   `;
 }
 
+function driverReportDraftValue(name, fallback = "") {
+  const value = driverReportsState.draft?.[name];
+  return value === undefined || value === null ? fallback : value;
+}
+
+function driverReportDraftChecked(name, fallback = false) {
+  const value = driverReportsState.draft?.[name];
+  return value === undefined ? fallback : Boolean(value);
+}
+
+function driverReportVehicleSummaryValue(vehicle = {}, fields = []) {
+  return fields.map((field) => vehicle?.[field]).find((value) => String(value ?? "").trim()) || "";
+}
+
+function driverReportVehicleSummary(vehicle = {}) {
+  const plate = normalizeLicensePlate(vehicleLicensePlateValue(vehicle) || vehicle.licensePlate);
+  const brand = driverReportVehicleSummaryValue(vehicle, ["brand", "vehicleBrand"]);
+  const model = driverReportVehicleSummaryValue(vehicle, ["model", "internalNumber", "vehicleName"]);
+  const type = driverReportVehicleSummaryValue(vehicle, ["vehicleType", "bodyType", "vistosVehicleCategory"]);
+  const driver = driverReportVehicleSummaryValue(vehicle, ["assignedDriverName", "driverName"]);
+  const vin = driverReportVehicleSummaryValue(vehicle, ["vin"]);
+
+  return {
+    plate,
+    brand,
+    model,
+    type,
+    driver,
+    vin,
+    id: driverReportVehicleSummaryValue(vehicle, ["id", "vehicleId"])
+  };
+}
+
+function driverReportVehicleConfirmation(vehicle) {
+  if (!vehicle) {
+    return "";
+  }
+
+  const summary = driverReportVehicleSummary(vehicle);
+  return `
+    <div class="driver-report-plate-card driver-report-plate-card--success" role="status">
+      <strong>Vozidlo nalezeno</strong>
+      <dl>
+        <div><dt>SPZ</dt><dd>${escapeHtml(summary.plate)}</dd></div>
+        <div><dt>Značka</dt><dd>${escapeHtml(summary.brand || "neuvedeno")}</dd></div>
+        <div><dt>Model / typ</dt><dd>${escapeHtml([summary.model, summary.type].filter(Boolean).join(" / ") || "neuvedeno")}</dd></div>
+        <div><dt>Řidič</dt><dd>${escapeHtml(summary.driver || "nepřiřazen")}</dd></div>
+        <div><dt>VIN</dt><dd>${escapeHtml(summary.vin || "není dostupné")}</dd></div>
+      </dl>
+    </div>
+  `;
+}
+
+function driverReportPlateSuggestions(suggestions = []) {
+  if (!suggestions.length) {
+    return "";
+  }
+
+  return `
+    <div class="driver-report-plate-suggestions" aria-label="Podobné SPZ">
+      <strong>Podobné SPZ ve Vozovém parku</strong>
+      ${suggestions.map((item) => {
+        const vehicle = item.vehicle || item;
+        const summary = driverReportVehicleSummary({
+          ...vehicle,
+          licensePlate: item.licensePlate || vehicle.licensePlate
+        });
+        const title = [summary.brand, summary.model || summary.type].filter(Boolean).join(" · ");
+        return `
+          <button class="driver-report-plate-suggestion" type="button" data-driver-report-plate-suggestion="${escapeHtml(summary.plate)}">
+            <span>${escapeHtml(summary.plate)}</span>
+            <small>${escapeHtml(title || "Vozidlo")}${summary.driver ? ` · ${escapeHtml(summary.driver)}` : ""}</small>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function driverReportPlateValidationHtml(validation = driverReportsState.plateValidation) {
+  if (!validation || validation.status === "idle") {
+    return `<p class="driver-report-plate-help">SPZ ověřím proti Vozovému parku.</p>`;
+  }
+
+  if (validation.status === "validating" || validation.loading) {
+    return `<p class="driver-report-plate-help" role="status">Ověřuji SPZ ve Vozovém parku...</p>`;
+  }
+
+  if (validation.status === "found") {
+    return driverReportVehicleConfirmation(validation.vehicle);
+  }
+
+  const message = validation.message || "SPZ se nepodařilo ověřit.";
+  return `
+    <div class="driver-report-plate-card driver-report-plate-card--error" role="alert">
+      <strong>${escapeHtml(message)}</strong>
+      ${driverReportPlateSuggestions(validation.suggestions)}
+    </div>
+  `;
+}
+
+function driverReportCanSubmitCreateForm() {
+  if (driverReportsState.saving || !driverReportCanCreate()) {
+    return false;
+  }
+
+  const validation = driverReportsState.plateValidation || {};
+  if (validation.status === "found" && validation.validFormat && validation.exact) {
+    return true;
+  }
+
+  const canOverride = driverReportCanManage()
+    && validation.validFormat
+    && driverReportDraftChecked("licensePlateUnverified")
+    && String(driverReportDraftValue("licensePlateOverrideNote")).trim();
+
+  return Boolean(canOverride);
+}
+
+function driverReportPlateOverrideForm() {
+  if (!driverReportCanManage()) {
+    return "";
+  }
+
+  const checked = driverReportDraftChecked("licensePlateUnverified") ? "checked" : "";
+  const note = driverReportDraftValue("licensePlateOverrideNote");
+  return `
+    <div class="driver-report-plate-override">
+      <label class="driver-report-check">
+        <input type="checkbox" name="licensePlateUnverified" ${checked}>
+        <span>Uložit jako SPZ neověřena</span>
+      </label>
+      <label>
+        <span>Povinná poznámka k výjimce</span>
+        <input name="licensePlateOverrideNote" value="${escapeHtml(note)}" placeholder="Proč hlášení ukládáme bez nalezené SPZ">
+      </label>
+    </div>
+  `;
+}
+
 function driverReportCreateForm(user) {
   const disabled = driverReportsState.saving || !driverReportCanCreate();
+  const submitDisabled = !driverReportCanSubmitCreateForm();
+  const draft = driverReportsState.draft;
   return `
     <form class="driver-report-form driver-report-form--pitstop" data-driver-report-form>
       <div class="driver-report-pitstop-banner" aria-hidden="true">
@@ -18355,11 +18529,15 @@ function driverReportCreateForm(user) {
       <div class="driver-report-quick-fields">
         <label class="driver-report-license-field">
           <span>Potvrďte SPZ vozidla</span>
-          <input name="licensePlate" placeholder="4B2 1234" autocapitalize="characters" required ${disabled ? "disabled" : ""}>
+          <input name="licensePlate" value="${escapeHtml(draft.licensePlate)}" placeholder="Např. 4B2 1234" autocapitalize="characters" autocomplete="off" required ${disabled ? "disabled" : ""}>
+          <div class="driver-report-plate-feedback" data-driver-report-plate-feedback>
+            ${driverReportPlateValidationHtml()}
+          </div>
+          ${driverReportPlateOverrideForm()}
         </label>
         <label>
           <span>Co je poškozené</span>
-          <textarea name="defectDescription" rows="4" placeholder="Např. rozbité pravé zrcátko" required ${disabled ? "disabled" : ""}></textarea>
+          <textarea name="defectDescription" rows="4" placeholder="Např. rozbité pravé zrcátko" required ${disabled ? "disabled" : ""}>${escapeHtml(draft.defectDescription)}</textarea>
         </label>
       </div>
 
@@ -18374,24 +18552,24 @@ function driverReportCreateForm(user) {
         <div class="driver-report-form__grid">
           <label>
             <span>Řidič</span>
-            <input name="driverName" value="${escapeHtml(user?.name || "")}" autocomplete="name" ${disabled ? "disabled" : ""}>
+            <input name="driverName" value="${escapeHtml(draft.driverName || user?.name || "")}" autocomplete="name" ${disabled ? "disabled" : ""}>
           </label>
         <label>
           <span>Telefon řidiče</span>
-          <input name="driverPhone" value="${escapeHtml(user?.phone || "")}" inputmode="tel" autocomplete="tel" ${disabled ? "disabled" : ""}>
+          <input name="driverPhone" value="${escapeHtml(draft.driverPhone || user?.phone || "")}" inputmode="tel" autocomplete="tel" ${disabled ? "disabled" : ""}>
         </label>
         <label>
           <span>Vozidlo</span>
-          <input name="vehicleName" placeholder="např. vozidlo / interní číslo" ${disabled ? "disabled" : ""}>
+          <input name="vehicleName" value="${escapeHtml(draft.vehicleName)}" placeholder="např. vozidlo / interní číslo" ${disabled ? "disabled" : ""}>
         </label>
         <label>
           <span>VIN</span>
-          <input name="vin" placeholder="pokud je dostupné" autocapitalize="characters" ${disabled ? "disabled" : ""}>
+          <input name="vin" value="${escapeHtml(draft.vin)}" placeholder="pokud je dostupné" autocapitalize="characters" ${disabled ? "disabled" : ""}>
         </label>
         <label>
           <span>Značka</span>
           <select name="vehicleBrand" ${disabled ? "disabled" : ""}>
-            ${optionList(DRIVER_REPORT_BRAND_OPTIONS, "jiné", "Vyberte značku")}
+            ${optionList(DRIVER_REPORT_BRAND_OPTIONS, draft.vehicleBrand || "jiné", "Vyberte značku")}
           </select>
         </label>
         </div>
@@ -18401,16 +18579,16 @@ function driverReportCreateForm(user) {
         <summary>Přidat poznámku pro servis</summary>
         <label>
           <span>Poznámka</span>
-          <textarea name="note" rows="2" ${disabled ? "disabled" : ""}></textarea>
+          <textarea name="note" rows="2" ${disabled ? "disabled" : ""}>${escapeHtml(draft.note)}</textarea>
         </label>
       </details>
 
       <label class="driver-report-check">
-        <input type="checkbox" name="handoffAfterCreate" checked ${disabled ? "disabled" : ""}>
+        <input type="checkbox" name="handoffAfterCreate" ${draft.handoffAfterCreate ? "checked" : ""} ${disabled ? "disabled" : ""}>
         <span>Po uložení předat Patrikovi a informovat servis</span>
       </label>
       <p class="driver-report-form-note">Stisknutím tlačítka potvrzujete SPZ. Šarlota si po uložení vyžádá fotku poškození.</p>
-      <button class="primary-action driver-report-pitstop-submit" type="submit" ${disabled ? "disabled" : ""}>
+      <button class="primary-action driver-report-pitstop-submit" type="submit" data-driver-report-submit ${submitDisabled ? "disabled" : ""}>
         ${driverReportsState.saving ? "Ukládám..." : "Potvrdit SPZ a uložit"}
       </button>
     </form>
@@ -18637,8 +18815,155 @@ function driverReportsSummaryCards(items) {
   `;
 }
 
+function updateDriverReportSubmitState(form) {
+  const submit = form?.querySelector("[data-driver-report-submit]");
+  if (submit) {
+    submit.disabled = !driverReportCanSubmitCreateForm();
+  }
+}
+
+function updateDriverReportPlateFeedback(form) {
+  const feedback = form?.querySelector("[data-driver-report-plate-feedback]");
+  if (feedback) {
+    feedback.innerHTML = driverReportPlateValidationHtml();
+  }
+  updateDriverReportSubmitState(form);
+}
+
+function driverReportDraftFromFormElement(form) {
+  const data = new FormData(form);
+  driverReportsState.draft = {
+    ...driverReportsState.draft,
+    driverName: String(data.get("driverName") || ""),
+    driverPhone: String(data.get("driverPhone") || ""),
+    vehicleName: String(data.get("vehicleName") || ""),
+    licensePlate: String(data.get("licensePlate") || ""),
+    vin: String(data.get("vin") || ""),
+    vehicleBrand: String(data.get("vehicleBrand") || "jiné"),
+    defectDescription: String(data.get("defectDescription") || ""),
+    note: String(data.get("note") || ""),
+    handoffAfterCreate: data.get("handoffAfterCreate") === "on",
+    licensePlateUnverified: data.get("licensePlateUnverified") === "on",
+    licensePlateOverrideNote: String(data.get("licensePlateOverrideNote") || "")
+  };
+}
+
+function driverReportLocalPlateValidation(value) {
+  const vehicles = Array.isArray(fleetVehiclesState.vehicles) ? fleetVehiclesState.vehicles : [];
+  const format = validateLicensePlateFormat(value, vehicles);
+  const normalized = format.normalized || normalizeLicensePlate(value);
+
+  if (!normalized) {
+    return {
+      input: value,
+      normalized,
+      status: "empty",
+      message: "SPZ je povinná.",
+      vehicle: null,
+      suggestions: [],
+      validFormat: false,
+      exact: false,
+      loading: false
+    };
+  }
+
+  if (!format.valid) {
+    return {
+      input: value,
+      normalized,
+      status: "invalid_format",
+      message: format.message || "SPZ nemá platný formát.",
+      vehicle: null,
+      suggestions: findSimilarLicensePlates(normalized, vehicles, 5),
+      validFormat: false,
+      exact: false,
+      loading: false
+    };
+  }
+
+  const localVehicle = findVehicleByLicensePlate(normalized, vehicles);
+  if (localVehicle) {
+    return {
+      input: value,
+      normalized,
+      status: "found",
+      message: "Vozidlo nalezeno.",
+      vehicle: localVehicle,
+      suggestions: [],
+      validFormat: true,
+      exact: true,
+      loading: false
+    };
+  }
+
+  return {
+    input: value,
+    normalized,
+    status: "validating",
+    message: "Ověřuji SPZ ve Vozovém parku...",
+    vehicle: null,
+    suggestions: findSimilarLicensePlates(normalized, vehicles, 5),
+    validFormat: true,
+    exact: false,
+    loading: true
+  };
+}
+
+async function validateDriverReportLicensePlate(form, value) {
+  const local = driverReportLocalPlateValidation(value);
+  driverReportsState.plateValidation = local;
+  const input = form?.elements?.licensePlate;
+  if (input && local.normalized && input.value !== local.normalized) {
+    input.value = local.normalized;
+    driverReportsState.draft.licensePlate = local.normalized;
+  }
+  updateDriverReportPlateFeedback(form);
+
+  if (!local.validFormat || local.exact) {
+    return;
+  }
+
+  const requestId = driverReportsState.plateValidationRequestId + 1;
+  driverReportsState.plateValidationRequestId = requestId;
+
+  try {
+    const result = await apiJson(`/api/driver-reports/license-plate?value=${encodeURIComponent(local.normalized)}`);
+    if (requestId !== driverReportsState.plateValidationRequestId) {
+      return;
+    }
+
+    driverReportsState.plateValidation = {
+      input: value,
+      normalized: result.normalized || local.normalized,
+      status: result.exact === true ? "found" : result.status || "not_found",
+      message: result.message || (result.exact === true ? "Vozidlo nalezeno." : "Tahle SPZ není ve Vozovém parku."),
+      vehicle: result.vehicle || null,
+      suggestions: Array.isArray(result.suggestions) ? result.suggestions : [],
+      validFormat: result.validFormat === true,
+      exact: result.exact === true,
+      loading: false
+    };
+  } catch (error) {
+    if (requestId !== driverReportsState.plateValidationRequestId) {
+      return;
+    }
+
+    driverReportsState.plateValidation = {
+      ...local,
+      status: "lookup_failed",
+      message: error.payload?.error || "SPZ se teď nepodařilo ověřit.",
+      loading: false
+    };
+  }
+
+  updateDriverReportPlateFeedback(form);
+}
+
 function driverReportsPage(moduleItem, user, isDashboard = false) {
   ensureDriverReportsData();
+  if (hasPermission(user, "fleet", "view")) {
+    void loadFleetVehicles({ renderAfter: false });
+  }
   const items = driverReportsState.items;
   const selected = driverReportsState.selected;
   const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
@@ -18708,22 +19033,38 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
 }
 
 function driverReportFormData(form) {
+  driverReportDraftFromFormElement(form);
   const data = new FormData(form);
+  const validation = driverReportsState.plateValidation || {};
+  const vehicle = validation.vehicle || {};
   return {
     driverName: data.get("driverName"),
     driverPhone: data.get("driverPhone"),
-    vehicleName: data.get("vehicleName"),
-    licensePlate: data.get("licensePlate"),
-    vin: data.get("vin"),
-    vehicleBrand: data.get("vehicleBrand"),
+    vehicleName: data.get("vehicleName") || vehicle.internalNumber || vehicle.model || vehicle.vehicleName,
+    vehicleId: vehicle.id || vehicle.vehicleId || "",
+    licensePlate: validation.normalized || data.get("licensePlate"),
+    vin: data.get("vin") || vehicle.vin,
+    vehicleBrand: vehicle.brand || data.get("vehicleBrand") || "jiné",
     defectDescription: data.get("defectDescription"),
     note: data.get("note"),
     handoffAfterCreate: data.get("handoffAfterCreate") === "on",
+    licensePlateUnverified: data.get("licensePlateUnverified") === "on",
+    licensePlateOverrideNote: data.get("licensePlateOverrideNote"),
     source: "manual"
   };
 }
 
 async function submitDriverReportForm(form) {
+  driverReportDraftFromFormElement(form);
+  await validateDriverReportLicensePlate(form, driverReportsState.draft.licensePlate);
+
+  if (!driverReportCanSubmitCreateForm()) {
+    driverReportsState.error = driverReportsState.plateValidation?.message || "Nejdřív ověřte SPZ vozidla.";
+    updateDriverReportPlateFeedback(form);
+    render();
+    return;
+  }
+
   driverReportsState.saving = true;
   driverReportsState.error = "";
   driverReportsState.message = "";
@@ -18738,6 +19079,30 @@ async function submitDriverReportForm(form) {
     driverReportsState.message = result.request?.status === "handed_to_ordering"
       ? "Hlášení je uložené a předané k objednání."
       : "Hlášení je uložené. Zkontrolujte stav notifikací.";
+    driverReportsState.draft = {
+      licensePlate: "",
+      defectDescription: "",
+      driverName: authState.user?.name || "",
+      driverPhone: authState.user?.phone || "",
+      vehicleName: "",
+      vin: "",
+      vehicleBrand: "jiné",
+      note: "",
+      handoffAfterCreate: true,
+      licensePlateUnverified: false,
+      licensePlateOverrideNote: ""
+    };
+    driverReportsState.plateValidation = {
+      input: "",
+      normalized: "",
+      status: "idle",
+      message: "",
+      vehicle: null,
+      suggestions: [],
+      validFormat: false,
+      exact: false,
+      loading: false
+    };
     driverReportsState.loaded = false;
     await loadDriverReports({ renderAfter: false, force: true });
   } catch (error) {
@@ -22442,6 +22807,71 @@ async function syncSarlotaTools() {
   }
 }
 
+function sarlotaPromptSyncConfirmText(plan = {}) {
+  return [
+    "Doplnit pravidlo Hlášení řidičů do ElevenLabs promptu Šarloty?",
+    "",
+    `Cesta promptu: ${plan.prompt?.path || "nenalezena"}`,
+    `Pravidlo už je v promptu: ${plan.alreadyApplied ? "ano" : "ne"}`,
+    "",
+    "Doplní se jen blok Hlášení řidičů / Vozidla.",
+    "First message, model ani tools se nemění.",
+    "Bez potvrzení se nic neprovede."
+  ].join("\n");
+}
+
+async function syncSarlotaPrompt() {
+  if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user)) {
+    return;
+  }
+
+  sarlotaStatusState.syncing = true;
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Načítám aktuální ElevenLabs prompt Šarloty...";
+  render();
+
+  try {
+    const plan = await apiJson("/api/ai/elevenlabs/sarlota-prompt-sync");
+
+    if (plan.alreadyApplied) {
+      sarlotaStatusState.syncMessage = "Pravidlo už v ElevenLabs promptu je.";
+      await loadSarlotaStatus({ force: true, renderAfter: false });
+      return;
+    }
+
+    if (!plan.ready) {
+      sarlotaStatusState.syncError = "Prompt nejde bezpečně upravit. Zkontroluj název agenta, first message a cestu promptu.";
+      sarlotaStatusState.syncMessage = "";
+      return;
+    }
+
+    if (!window.confirm(sarlotaPromptSyncConfirmText(plan))) {
+      sarlotaStatusState.syncMessage = "Synchronizace promptu zrušena.";
+      return;
+    }
+
+    sarlotaStatusState.syncMessage = "Doplňuji ElevenLabs prompt...";
+    render();
+
+    const result = await apiJson("/api/ai/elevenlabs/sarlota-prompt-sync", {
+      method: "POST",
+      body: JSON.stringify({ apply: true })
+    });
+
+    sarlotaStatusState.syncMessage = result.status === "ok"
+      ? "ElevenLabs prompt Šarloty je doplněný."
+      : "Prompt byl uložen částečně, zkontroluj prosím stav Šarloty.";
+    await loadSarlotaStatus({ force: true, renderAfter: false });
+  } catch (error) {
+    console.error("smart_odpady_sarlota_prompt_sync_failed", error);
+    sarlotaStatusState.syncError = error.payload?.error || "Synchronizace promptu ElevenLabs se nepodařila.";
+    sarlotaStatusState.syncMessage = "";
+  } finally {
+    sarlotaStatusState.syncing = false;
+    render();
+  }
+}
+
 function ensureSarlotaPanelStatusData(options = {}) {
   if (!authState.user) {
     return;
@@ -25947,6 +26377,18 @@ document.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const driverReportField = event.target.closest("[data-driver-report-form] input, [data-driver-report-form] textarea, [data-driver-report-form] select");
+  if (driverReportField) {
+    const form = driverReportField.closest("[data-driver-report-form]");
+    driverReportDraftFromFormElement(form);
+    if (driverReportField.name === "licensePlate") {
+      void validateDriverReportLicensePlate(form, driverReportField.value);
+      return;
+    }
+    updateDriverReportSubmitState(form);
+    return;
+  }
+
   const aiInput = event.target.closest("[data-ai-input]");
   if (aiInput) {
     aiAssistantState.input = aiInput.value;
@@ -26035,6 +26477,18 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const driverReportField = event.target.closest("[data-driver-report-form] input, [data-driver-report-form] select, [data-driver-report-form] textarea");
+  if (driverReportField) {
+    const form = driverReportField.closest("[data-driver-report-form]");
+    driverReportDraftFromFormElement(form);
+    if (driverReportField.name === "licensePlate") {
+      await validateDriverReportLicensePlate(form, driverReportField.value);
+      return;
+    }
+    updateDriverReportPlateFeedback(form);
+    return;
+  }
+
   const appearanceImport = event.target.closest("[data-appearance-import]");
   if (appearanceImport) {
     importAppearanceSettings(appearanceImport);
@@ -26206,6 +26660,19 @@ document.addEventListener("pointerup", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const driverReportPlateSuggestion = event.target.closest("[data-driver-report-plate-suggestion]");
+  if (driverReportPlateSuggestion) {
+    event.preventDefault();
+    const form = driverReportPlateSuggestion.closest("[data-driver-report-form]");
+    const plate = driverReportPlateSuggestion.dataset.driverReportPlateSuggestion || "";
+    if (form?.elements?.licensePlate) {
+      form.elements.licensePlate.value = plate;
+      driverReportDraftFromFormElement(form);
+      await validateDriverReportLicensePlate(form, plate);
+    }
+    return;
+  }
+
   const systemCheckRefresh = event.target.closest("[data-system-check-refresh]");
   if (systemCheckRefresh) {
     event.preventDefault();
@@ -26224,6 +26691,13 @@ document.addEventListener("click", async (event) => {
   if (sarlotaToolsSync) {
     event.preventDefault();
     await syncSarlotaTools();
+    return;
+  }
+
+  const sarlotaPromptSync = event.target.closest("[data-sarlota-prompt-sync]");
+  if (sarlotaPromptSync) {
+    event.preventDefault();
+    await syncSarlotaPrompt();
     return;
   }
 

@@ -2,7 +2,8 @@ import { getUsers } from "./auth.js";
 import {
   loadFleetVehiclesWithAssignments,
   resolveFleetVehicleForDriver,
-  resolveFleetVehiclesForDriver
+  resolveFleetVehiclesForDriver,
+  validateFleetLicensePlate
 } from "./fleet-vehicles-store.js";
 import {
   extractLicensePlate,
@@ -50,11 +51,12 @@ export const DRIVER_PART_REQUEST_STATUS_LABELS = {
 };
 
 export class DriverPartRequestsStoreError extends Error {
-  constructor(message, status = 400, code = "driver_part_requests_error") {
+  constructor(message, status = 400, code = "driver_part_requests_error", details = null) {
     super(message);
     this.name = "DriverPartRequestsStoreError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -167,6 +169,18 @@ function sameId(left, right) {
   return cleanString(left).toLowerCase() === cleanString(right).toLowerCase();
 }
 
+function truthyFlag(value) {
+  const normalized = cleanString(value).toLowerCase();
+  return value === true || ["true", "1", "on", "yes", "ano"].includes(normalized);
+}
+
+function licensePlateValidationDetails(validation = null) {
+  return {
+    normalized: cleanString(validation?.normalized),
+    suggestions: Array.isArray(validation?.suggestions) ? validation.suggestions.slice(0, 5) : []
+  };
+}
+
 function normalizedSearch(value) {
   return cleanString(value)
     .normalize("NFD")
@@ -194,6 +208,8 @@ function rowToEvent(row) {
 
 function rowToRequest(row, events = []) {
   const status = normalizeStatus(row?.status);
+  const source = cleanString(row?.source || "manual");
+  const licensePlateVerified = !source.includes("unverified_plate");
   return {
     id: cleanString(row?.id),
     reportId: cleanString(row?.report_id),
@@ -262,7 +278,9 @@ function rowToRequest(row, events = []) {
     kamilSmsError: cleanString(row?.kamil_sms_error),
     driverSmsStatus: cleanString(row?.driver_sms_status || "not_sent"),
     driverSmsError: cleanString(row?.driver_sms_error),
-    source: cleanString(row?.source || "manual"),
+    source,
+    licensePlateVerified,
+    licensePlateValidationStatus: licensePlateVerified ? "SPZ ověřena" : "SPZ neověřena",
     createdByUserId: cleanString(row?.created_by_user_id),
     createdAt: cleanString(row?.created_at),
     updatedByUserId: cleanString(row?.updated_by_user_id),
@@ -502,7 +520,63 @@ export async function createDriverPartRequest(env, user, payload = {}) {
     assignedDriverVehicle?.tcarsLicensePlate ||
     extractLicensePlate(payload.defectDescription || payload.description || payload.speechText)
   );
-  const vehicle = await resolveVehicleFromFleet(env, licensePlate) || assignedDriverVehicle;
+  const wantsUnverifiedPlate = truthyFlag(payload.licensePlateUnverified || payload.licensePlateOverride);
+  const licensePlateOverrideNote = cleanString(payload.licensePlateOverrideNote || payload.licensePlateExceptionNote);
+  const canUseUnverifiedPlate = wantsUnverifiedPlate && canManageDriverPartRequests(user);
+
+  if (wantsUnverifiedPlate && !canManageDriverPartRequests(user)) {
+    throw new DriverPartRequestsStoreError(
+      "SPZ bez ověření může uložit jen oprávněná role.",
+      403,
+      "driver_part_license_plate_override_forbidden"
+    );
+  }
+
+  if (wantsUnverifiedPlate && !licensePlateOverrideNote) {
+    throw new DriverPartRequestsStoreError(
+      "Pro uložení neověřené SPZ doplňte povinnou poznámku.",
+      400,
+      "driver_part_license_plate_override_note_required"
+    );
+  }
+
+  let vehicle = assignedDriverVehicle;
+  let plateValidation = null;
+
+  if (licensePlate) {
+    try {
+      plateValidation = await validateFleetLicensePlate(env, licensePlate, user);
+    } catch (error) {
+      if (!canUseUnverifiedPlate) {
+        throw new DriverPartRequestsStoreError(
+          "SPZ se teď nepodařilo ověřit proti Vozovému parku. Zkuste to prosím znovu.",
+          error?.status || 503,
+          "driver_part_license_plate_lookup_failed"
+        );
+      }
+    }
+
+    if (plateValidation && !plateValidation.validFormat) {
+      throw new DriverPartRequestsStoreError(
+        "SPZ nemá platný formát. Zkontrolujte ji prosím.",
+        400,
+        "driver_part_license_plate_invalid_format",
+        licensePlateValidationDetails(plateValidation)
+      );
+    }
+
+    if (plateValidation && !plateValidation.exact && !canUseUnverifiedPlate) {
+      throw new DriverPartRequestsStoreError(
+        "Tahle SPZ není ve Vozovém parku. Zkontrolujte ji prosím.",
+        400,
+        "driver_part_license_plate_not_found",
+        licensePlateValidationDetails(plateValidation)
+      );
+    }
+
+    vehicle = plateValidation?.vehicle || vehicle;
+  }
+
   const driverContact = await resolvePersonContact(env, {
     userIds: [payload.driverUserId, user?.id],
     nameIncludes: [payload.driverName, payload.driver, user?.name],
@@ -510,7 +584,17 @@ export async function createDriverPartRequest(env, user, payload = {}) {
     fallbackEmail: cleanString(user?.email),
     fallbackPhone: cleanString(user?.phone)
   });
-  const item = normalizeCreatePayload(payload, user, vehicle, driverContact);
+  const createPayload = canUseUnverifiedPlate
+    ? {
+        ...payload,
+        note: [
+          cleanString(payload.note),
+          `SPZ neověřena: ${licensePlateOverrideNote}`
+        ].filter(Boolean).join(" "),
+        source: cleanString(payload.source) === "voice" ? "voice_unverified_plate" : "manual_unverified_plate"
+      }
+    : payload;
+  const item = normalizeCreatePayload(createPayload, user, vehicle, driverContact);
   const id = randomId("driver-part-request");
   const now = new Date();
   const createdAt = now.toISOString();
@@ -591,6 +675,7 @@ export async function createDriverPartRequest(env, user, payload = {}) {
         before: null,
         after,
         note: "Vytvořeno v modulu Hlášení řidičů."
+          + (canUseUnverifiedPlate ? " SPZ nebyla ověřena ve Vozovém parku." : "")
       })
     ]);
 
