@@ -753,6 +753,8 @@ Pokud Vistos vrati prazdny vysledek, musi UI zobrazit diagnostiku poctu
 
 ### Sloupce Vehicle
 
+#### Ověřené API sloupce
+
 - `fleet_vehicle.vistos_vehicle_id` <- `Vehicle.Id`
 - `fleet_vehicle.vistos_vehicle_name` <- `Vehicle.Name`
 - `fleet_vehicle.registration_plate` <- `Vehicle.RegistrationPlate`
@@ -767,6 +769,63 @@ Pokud Vistos vrati prazdny vysledek, musi UI zobrazit diagnostiku poctu
 - `fleet_vehicle.vistos_last_position_sync_at` <- `Vehicle.LastPositionSyncDate`
 - `fleet_vehicle.vistos_gps_provider_id` <- `Vehicle.c_GpsProvider_FK_RecordId`
 - `fleet_vehicle.vistos_gps_provider_caption` <- `Vehicle.c_GpsProvider_FK_Caption`
+- `fleet_vehicle.vistos_is_active` <- `Vehicle.IsActive` (diagnostika, ne tvrdy filtr)
+- `fleet_vehicle.vistos_archived_at` <- `Vehicle.Archived` (diagnostika, ne tvrdy filtr)
+- `fleet_vehicle.vistos_eliminated_at` <- `Vehicle.EliminatedDate`
+- `fleet_vehicle.odometer_km` <- `Vehicle.Odometer`
+- `fleet_vehicle.vistos_gps_km` <- `Vehicle.c_Km`
+- `fleet_vehicle.vistos_gps_updated_at` <- `Vehicle.c_DateUpdateGPS`
+- `fleet_vehicle.driver_vistos_id` <- `Vehicle.Ridic_FK_RecordId`
+- `fleet_vehicle.driver_vistos_caption` <- `Vehicle.Ridic_FK_Caption`
+
+#### Pole z Vistos UI / screenshotu k doplneni pres DbColumn
+
+Tato pole jsou videt ve Vistos UI vozidla, ale pred ostrym API mapovanim je
+nutne potvrdit jejich presny technicky nazev pres `DbColumn` nebo
+`GetSchemaEntity Vehicle`.
+
+- `fleet_vehicle.internal_vehicle_number` <- `Evidencni cislo vozidla`
+- `fleet_vehicle.owner_vistos_id` / `owner_caption` <- `Vlastnik vozidla`
+- `fleet_vehicle.purchased_from_1_id` / `purchased_from_1_caption` <- `Vozidlo zakoupeno od (1)`
+- `fleet_vehicle.purchased_from_2_id` / `purchased_from_2_caption` <- `Vozidlo zakoupeno od (2)`
+- `fleet_vehicle.leasing_provider_id` / `leasing_provider_caption` <- `Leasing`
+- `fleet_vehicle.purchase_price_without_vat` <- `Porizovaci cena Kc (bez DPH)`
+- `fleet_vehicle.purchase_date` <- `Datum zakoupeni`
+- `fleet_vehicle.sold_date` <- `Datum prodeje`
+- `fleet_vehicle.leasing_end_date` <- `Konec leasingu`
+- `fleet_vehicle.warranty_end_date` <- `Konec zaruky`
+- `fleet_vehicle.technical_inspection_valid_to` <- `Konec STK`
+- `fleet_vehicle.pressure_test_date` <- `Datum tlakove zkousky`
+- `fleet_vehicle.insurance_casco_company_id` / `insurance_casco_company_caption` <- `Pojistovna HAV`
+- `fleet_vehicle.insurance_liability_company_id` / `insurance_liability_company_caption` <- `Pojistovna POV`
+- `fleet_vehicle.insurance_casco_price` <- `Pojisteni cena Kc (HAV)`
+- `fleet_vehicle.insurance_liability_price` <- `Pojisteni cena Kc (POV)`
+- `fleet_vehicle.fuel_chip_id` <- `Tankovaci ID cip vozidlo`
+- `fleet_vehicle.fuel_tank_liters` <- `Objem nadrze PHM`
+- `fleet_vehicle.fuel_consumption_city` <- `Spotreba PH - mesto`
+- `fleet_vehicle.fuel_consumption_outside_city` <- `Spotreba PH - mimo mesto`
+- `fleet_vehicle.fuel_consumption_combined` <- `Spotreba PH - kombinace`
+- `fleet_vehicle.fuel_consumption_combined_1mth` <- `Spotreba PH - kombinace na 1Mth`
+- `fleet_vehicle.description` <- `Popis`
+- `fleet_vehicle.document_count` <- `Pocet dokumentu`
+- `fleet_vehicle.email_count` <- `Pocet e-mailu`
+- `fleet_vehicle.discussion_message_count` <- `Pocet zprav diskuze`
+- `fleet_vehicle.created_at` / `created_by` <- `Vytvoreno`, `Vytvoril`
+- `fleet_vehicle.modified_at` / `modified_by` <- `Zmeneno`, `Zmenil`
+- `fleet_vehicle.last_change_at` <- `Posledni zmena`
+
+#### Nakoupene dily / veci
+
+Sekce `Nakoupene dily/veci` je videt ve Vistos UI vozidla, ale zatim neni
+potvrzeno, zda jde o sloupce entity `Vehicle`, samostatnou entitu nebo detailni
+podtabulku. Pred implementaci je nutne overit:
+
+- nazev entity/projekce,
+- vazbu na `Vehicle.Id`,
+- sloupce `Datum`, `Firma`, `Cislo dokladu`, `Nazev`, `Co`, `Jednotkova cena`,
+  `Pocet`, `Sazba DPH`, `Jednotky`, `Zaklad dane`, `DPH`, `Celkem`,
+- zda se ma mapovat do `vehicle_parts`, servisni historie, nebo samostatneho
+  nakladoveho prehledu.
 
 ### Dulezite omezeni
 
