@@ -1165,9 +1165,85 @@ Minimální předání práce mezi Radimem a Martinem má obsahovat:
 - jestli se měnilo API / DB / secrets / produkční nastavení,
 - doporučený další krok.
 
-## 16. Šarlota / ElevenLabs – pravidla integrace
+## 16. Jednotná identita osob, uživatelů, zaměstnanců, řidičů a oprávnění
 
-### 16.1 Rozlišování stavů
+V Kaiser Smart musí být jasně oddělené tyto identity:
+
+- `Uživatel` = přihlášení do aplikace, OTP, role, oprávnění a přístup do modulů.
+- `Zaměstnanec` = skutečná osoba v HR evidenci, karta zaměstnance, dovolená/nemoc, lékařské prohlídky a pracovní údaje.
+- `Řidič` = zaměstnanec s řidičskou/provozní rolí nebo přiřazením k vozidlu.
+- `Vozidlo` = záznam ve Vozovém parku.
+- `Vistos osoba/řidič` = externí údaj z Vistosu, nikdy ne primární zdroj oprávnění.
+- `T-Cars vozidlo/GPS` = externí zdroj polohy a technických dat, nikdy ne zdroj oprávnění.
+
+### 16.1 Zdroje pravdy
+
+- Zdroj pravdy pro oprávnění je vždy `Uživatel`.
+- Zdroj pravdy pro osobu je `Zaměstnanec`.
+- Zdroj pravdy pro vozidlo je `Vozový park`.
+- Zdroj pravdy pro aktuální GPS/polohu vozidla je T-Cars.
+- Vistos je externí zdroj obchodních/provozních dat a může pomáhat s mapováním, ale nesmí řídit oprávnění v Kaiser Smart.
+
+### 16.2 Povinná vazba
+
+Dlouhodobý správný model je:
+
+`user.id -> user.employeeId -> employee.id -> vehicle assignment -> vehicle.id`
+
+Aplikace nesmí dlouhodobě spoléhat pouze na jméno, telefon nebo textové pole řidiče.
+
+### 16.3 Oprávnění
+
+Oprávnění se vždy ověřují přes:
+
+- `user.role`
+- `user.permissions`
+- backendové permission checky
+
+Nikdy se nesmí rozhodovat oprávnění podle:
+
+- názvu pracovní pozice,
+- textu ve Vistosu,
+- přiřazeného vozidla,
+- jména řidiče,
+- telefonního čísla,
+- pouze frontendového stavu.
+
+### 16.4 Vozový park a řidiči
+
+Vozový park je master evidence vozidel.
+
+Přiřazení řidiče k vozidlu má směřovat na zaměstnance, ne pouze na textové jméno nebo uživatele.
+
+Pokud má řidič přístup do aplikace, musí být propojen:
+
+- jako `Uživatel` kvůli přihlášení a oprávněním,
+- jako `Zaměstnanec` kvůli HR/provozní osobě,
+- jako `Řidič` přes přiřazení k vozidlu.
+
+### 16.5 Šarlota
+
+Šarlota musí používat přihlášeného uživatele jako zdroj oprávnění.
+
+Pro provozní kontext má Šarlota dohledat:
+
+1. přihlášeného uživatele,
+2. navázaného zaměstnance,
+3. případné přiřazené vozidlo z Vozového parku.
+
+Šarlota nesmí provádět akce jen podle toho, že někdo řekl jméno řidiče nebo SPZ.
+
+Pokud vazba `user -> employee -> vehicle` není jednoznačná, Šarlota se musí doptat nebo předat akci k ručnímu potvrzení.
+
+### 16.6 Externí systémy
+
+Vistos `Ridic_FK`, T-Cars řidič, telefon, SPZ nebo jméno lze používat jen jako pomocné mapovací údaje.
+
+Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
+
+## 17. Šarlota / ElevenLabs – pravidla integrace
+
+### 17.1 Rozlišování stavů
 
 - `microphoneDenied` používat výhradně pro zamítnutý nebo blokovaný mikrofon v prohlížeči.
 - `disconnected` používat výhradně pro skutečné přerušení ElevenLabs / WebSocket session.
@@ -1177,14 +1253,14 @@ Minimální předání práce mezi Radimem a Martinem má obsahovat:
 - UI má zobrazit jasnou českou hlášku:
   `Mikrofon není povolený. Povol mikrofon pro tento web a zkus to znovu.`
 
-### 16.2 Dynamic variables
+### 17.2 Dynamic variables
 
 - Každá proměnná použitá v ElevenLabs system promptu, first message nebo tool parametrech musí být vždy posílaná v `conversation_initiation_client_data`.
 - Povinné proměnné nesmí být `undefined`, `null` ani prázdný string.
 - Pro chybějící hodnoty musí existovat bezpečný fallback.
 - Pokud ElevenLabs vrátí chybu `1008 Missing required dynamic variables`, nejdřív zkontrolovat first message a dynamic variables payload.
 
-### 16.3 `intro_announcement`
+### 17.3 `intro_announcement`
 
 - `intro_announcement` je kompletní hotový úvodní text pro Šarlotu.
 - First message v ElevenLabs má používat pouze:
@@ -1210,7 +1286,7 @@ First message:
 {{user_greeting}} {{intro_announcement}} Co potřebuješ vyřešit?
 ```
 
-### 16.4 Denní pozdrav
+### 17.4 Denní pozdrav
 
 - Denní pozdrav generovat serverově nebo v aplikaci podle `Europe/Prague`.
 - Nepoužívat UTC bez převodu.
@@ -1223,7 +1299,7 @@ First message:
 - V 10:26 Šarlota nesmí říkat `Dobré ráno`.
 - Ve 13:07 má říkat `Dobré odpoledne`.
 
-### 16.5 Tykání
+### 17.5 Tykání
 
 - Šarlota uživateli tyká.
 - Oslovení bere z KSO backendu, neháda ho v ElevenLabs promptu.
@@ -1240,7 +1316,7 @@ First message:
   - `Chcete pokračovat?`
   - `K tomu nemáte oprávnění.`
 
-### 16.6 Stručnost
+### 17.6 Stručnost
 
 - Šarlota nemá opakovat `Jsem Šarlota`, pokud už ji uživatel spustil z aplikace.
 - Běžná odpověď má mít jednu krátkou větu, maximálně dvě.
@@ -1249,7 +1325,7 @@ First message:
 - Stejnou otázku neopakovat dokola; po odpovědi uživatele navázat dalším krokem.
 - Úvod nemá být dlouhý.
 
-### 16.7 Bezpečnost
+### 17.7 Bezpečnost
 
 - ElevenLabs nikdy není zdroj pravdy pro oprávnění.
 - Identita = přihlášený uživatel Smart odpady.
@@ -1264,7 +1340,7 @@ First message:
 - Pokud potvrzovací okno nejde zobrazit, Šarlota nesmí akci provést; musí ji ponechat jako návrh nebo říct, že čeká na ruční potvrzení.
 - Potvrzovací okno musí být použitelné na mobilu a nesmí skrýt důležité údaje ani hlavní riziko akce.
 
-### 16.8 Testovací checklist pro Šarlotu
+### 17.8 Testovací checklist pro Šarlotu
 
 Při každé změně Šarloty ověřit:
 
@@ -1282,7 +1358,7 @@ Při každé změně Šarloty ověřit:
 - `node --check` projde,
 - `git diff --check` projde.
 
-### 16.9 Úpravy promptu v ElevenLabs / externím AI nástroji
+### 17.9 Úpravy promptu v ElevenLabs / externím AI nástroji
 
 - Před úpravou system promptu, first message, tool promptu nebo Knowledge Base v ElevenLabs / externím AI nástroji se musí nejdřív načíst aktuální nastavení z produkčního zdroje.
 - Prompt se nesmí přepsat naslepo lokální verzí ani novým textem bez merge s aktuálním obsahem.
@@ -1290,9 +1366,9 @@ Při každé změně Šarloty ověřit:
 - Po uložení se musí ověřit, že agent stále používá správné dynamic variables, first message, nástroje a model.
 - Pokud není dostupný bezpečný read/write přístup k ElevenLabs, změnu neprovádět naslepo; připravit repo-side prompt/dynamic variables a jasně napsat, že upstream prompt v ElevenLabs nebyl uložen.
 
-## 17. Datová schránka a UI pravidla
+## 18. Datová schránka a UI pravidla
 
-### 17.1 Bezpečné předávání hesel / Cloudflare secrets
+### 18.1 Bezpečné předávání hesel / Cloudflare secrets
 
 - Hesla, tokeny a secrets se nikdy nevypisují do chatu, shellu, logu ani screenshotu.
 - U Datové schránky je bezpečný postup zadávání Cloudflare secrets po jednom:
@@ -1306,7 +1382,7 @@ Při každé změně Šarloty ověřit:
 - Hromadný `.env` import nepoužívat, pokud Radim výslovně nepotvrdí konkrétní bezpečný postup.
 - Po změně Cloudflare secrets je nutný nový deployment, jinak se změny nemusí projevit v produkci.
 
-### 17.2 Vzhled modulů
+### 18.2 Vzhled modulů
 
 - Při vývoji každého modulu respektovat barevné schéma v Nastavení.
 - Nehardcodovat dominantní modulové barvy mimo existující theme proměnné, pokud to není výslovně potvrzené.
@@ -1314,7 +1390,7 @@ Při každé změně Šarloty ověřit:
 - Nadpisy mohou být výraznější, ale běžný obsah a tabulkové řádky nemají být zbytečně tučné.
 - Před dokončením vizuální změny ověřit desktop, notebook, tablet a mobil.
 
-### 17.3 Datová schránka jako pracovní inbox
+### 18.3 Datová schránka jako pracovní inbox
 
 - Datová schránka není obyčejná tabulka.
 - Firemní datové schránky mají být klikací boxy vedle sebe:
