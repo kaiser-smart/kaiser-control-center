@@ -284,7 +284,7 @@ export function createElevenLabsClientTools({
     }
 
     if (!canUseRoute(normalizedRoute)) {
-      return { ok: false, error: "Nemáte oprávnění k této části aplikace.", route: normalizedRoute };
+      return { ok: false, error: "Nemáš oprávnění k této části aplikace.", route: normalizedRoute };
     }
 
     return { ok: true, route: normalizedRoute };
@@ -709,7 +709,7 @@ export function createElevenLabsClientTools({
     async show_confirmation(parameters = {}) {
       const confirmed = await confirm({
         title: cleanString(parameters.title) || "Potvrdit akci",
-        message: cleanString(parameters.message) || "Chcete pokračovat?",
+        message: cleanString(parameters.message) || "Chceš pokračovat?",
         confirmLabel: cleanString(parameters.confirmLabel) || "Potvrdit",
         cancelLabel: cleanString(parameters.cancelLabel) || "Zrušit"
       });

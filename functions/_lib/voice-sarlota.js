@@ -1519,12 +1519,26 @@ function sanitizeSarlotaReply(value) {
     .replace(/\bchcete\b/g, "chceš")
     .replace(/\bPotřebujete\b/g, "Potřebuješ")
     .replace(/\bpotřebujete\b/g, "potřebuješ")
+    .replace(/\bMáte\b/g, "Máš")
+    .replace(/\bmáte\b/g, "máš")
     .replace(/\bNemáte\b/g, "Nemáš")
     .replace(/\bnemáte\b/g, "nemáš")
     .replace(/\bZadejte\b/g, "Zadej")
     .replace(/\bzadejte\b/g, "zadej")
     .replace(/\bPošlete\b/g, "Pošli")
-    .replace(/\bpošlete\b/g, "pošli");
+    .replace(/\bpošlete\b/g, "pošli")
+    .replace(/\bŘekněte\b/g, "Řekni")
+    .replace(/\břekněte\b/g, "řekni")
+    .replace(/\bPotvrďte\b/g, "Potvrď")
+    .replace(/\bpotvrďte\b/g, "potvrď")
+    .replace(/\bVám\b/g, "Ti")
+    .replace(/\bvám\b/g, "ti")
+    .replace(/\bVás\b/g, "Tebe")
+    .replace(/\bvás\b/g, "tebe")
+    .replace(/\bVaše\b/g, "Tvoje")
+    .replace(/\bvaše\b/g, "tvoje")
+    .replace(/\bVáš\b/g, "Tvůj")
+    .replace(/\bváš\b/g, "tvůj");
 
   return text || "Tomu zatím nerozumím jistě. Předám to kolegyni Jarce.";
 }

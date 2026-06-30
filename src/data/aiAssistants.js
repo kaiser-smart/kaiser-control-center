@@ -8,7 +8,7 @@ export const AI_ASSISTANTS = [
     intro: "Hlasová asistence pro Smart odpady.",
     avatarPath: "",
     microphonePath: "/avatars/sarlota-microphone-black.png",
-    introVoiceLine: "Jsem Šarlota. Pomůžu vám ve Smart odpadech najít informace a připravit další krok.",
+    introVoiceLine: "Jsem Šarlota. Pomůžu ti ve Smart odpadech najít informace a připravit další krok.",
     agentIdEnv: "VITE_ELEVENLABS_AGENT_ID_SARLOTA"
   }
 ];

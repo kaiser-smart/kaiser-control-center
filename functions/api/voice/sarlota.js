@@ -84,7 +84,7 @@ export async function onRequestPost({ request, env }) {
   }
 
   if (!hasPermission(user, "dashboard", "view")) {
-    return json({ error: "Nemáte oprávnění používat Šarlotu." }, 403);
+    return json({ error: "Nemáš oprávnění používat Šarlotu." }, 403);
   }
 
   try {
