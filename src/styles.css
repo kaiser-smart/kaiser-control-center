@@ -16598,8 +16598,8 @@ body:has(.absence-page--employee-card) {
   }
 
   .app-shell {
-    width: min(100% - 28px, 1180px);
-    padding: 28px 0 38px;
+    width: min(100% - 16px, 1180px);
+    padding: calc(10px + env(safe-area-inset-top)) 0 calc(30px + env(safe-area-inset-bottom));
   }
 
   body:has(.home-hero) .app-shell {
@@ -16608,10 +16608,11 @@ body:has(.absence-page--employee-card) {
   }
 
   .user-bar {
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-    padding-bottom: 14px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
   }
 
   .user-bar__identity {
@@ -16619,7 +16620,21 @@ body:has(.absence-page--employee-card) {
   }
 
   .user-bar__name {
-    max-width: 56vw;
+    max-width: 100%;
+    font-size: 0.86rem;
+    line-height: 1.15;
+  }
+
+  .user-bar__role {
+    font-size: 0.66rem;
+    line-height: 1.1;
+  }
+
+  .logout-button {
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 0.78rem;
   }
 
   .home-hero {
@@ -16704,10 +16719,17 @@ body:has(.absence-page--employee-card) {
   }
 
   .kaiser-logo {
-    min-width: 94px;
-    height: 40px;
+    min-width: 82px;
+    height: 34px;
     border-radius: 8px;
-    font-size: 20px;
+    padding-inline: 13px;
+    font-size: 18px;
+  }
+
+  .kaiser-logo--small {
+    min-width: 76px;
+    height: 32px;
+    font-size: 16px;
   }
 
   h1 {
@@ -16777,32 +16799,87 @@ body:has(.absence-page--employee-card) {
   }
 
   .topbar {
-    align-items: flex-start;
-    padding-bottom: 24px;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 10px;
   }
 
   .back-button {
-    min-height: 38px;
+    min-height: 34px;
+    padding-inline: 12px;
+    font-size: 0.8rem;
   }
 
   .module-detail {
-    grid-template-columns: 1fr;
-    gap: 20px;
-    padding: 24px;
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 12px;
+  }
+
+  .module-detail > .module-detail__body:only-child {
+    grid-column: 1 / -1;
   }
 
   .module-detail h1 {
-    font-size: clamp(1.55rem, 7vw, 2.2rem);
+    margin-top: 3px;
+    overflow-wrap: anywhere;
+    font-size: clamp(1.32rem, 7.1vw, 1.75rem);
+    line-height: 1.04;
   }
 
   .module-detail__icon {
-    width: 68px;
-    height: 68px;
+    width: 46px;
+    height: 46px;
+    margin-top: 2px;
   }
 
   .module-detail__icon .module-icon__svg {
-    width: 34px;
-    height: 34px;
+    width: 25px;
+    height: 25px;
+  }
+
+  .module-detail__eyebrow {
+    overflow-wrap: anywhere;
+    font-size: 0.64rem;
+    line-height: 1.1;
+  }
+
+  .module-detail p {
+    display: -webkit-box;
+    max-width: 100%;
+    margin-top: 6px;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.82rem;
+    line-height: 1.28;
+  }
+
+  .module-detail__status {
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 6px 8px;
+  }
+
+  .module-detail__status span,
+  .module-detail__status strong {
+    font-size: 0.72rem;
+  }
+
+  .module-actions {
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .module-actions .primary-link,
+  .module-actions .secondary-link,
+  .module-actions button {
+    flex: 1 1 130px;
+    padding-inline: 10px;
+    font-size: 0.78rem;
   }
 
   .users-panel {
@@ -22266,6 +22343,7 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   }
 
   .driver-report-hero {
+    grid-template-columns: 1fr;
     align-items: start;
     gap: 8px;
     padding: 12px;

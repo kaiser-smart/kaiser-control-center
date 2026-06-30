@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.252"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.253"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Mobil: kompaktní hlavičky modulů",
+    text: "Společná mobilní hlavička modulů je nižší a čitelnější. Přihlášený uživatel, odhlášení, logo, návrat na HP a úvodní karta modulu už na telefonu nezaberou zbytečně velkou část první obrazovky."
+  },
   {
     title: "Vozový park: filtr Vistos Vehicle podle stavu",
     text: "Read-only Vehicle preview z Vistosu už nepoužívá systémové filtry IsActive, Archived_IsNull ani EliminatedDate_IsNull. Aktivní vozidla se načítají přes ověřený stav Stavvozidla_FK = 16541."
