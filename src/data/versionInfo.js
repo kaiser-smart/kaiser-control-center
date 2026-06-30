@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.264"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.265"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: stav Testování",
+    text: "Modul Hlášení řidičů je v seznamu modulů označený jako Testování, protože hlasové workflow a ND proces jsou připravené k provoznímu ověření."
+  },
   {
     title: "Šarlota: výběr z více vozidel řidiče",
     text: "Když má řidič přiřazených více vozidel, Šarlota nebere první auto ze seznamu. Vyjmenuje možnosti podle typu, značky nebo interního názvu a SPZ používá až jako poslední technický fallback."

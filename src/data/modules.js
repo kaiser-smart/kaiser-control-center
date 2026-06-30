@@ -67,7 +67,7 @@ export const modules = [
     route: "/hlaseni-ridicu",
     dashboardRoute: "/hlaseni-ridicu/dashboard",
     icon: DriverReportsIcon,
-    status: "Funkční přes API",
+    status: "Testování",
     active: true,
     disabled: false,
     order: 3
