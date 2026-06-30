@@ -16967,13 +16967,13 @@ function dataBoxSyncRunsPanel() {
   const rows = filteredSyncRuns.length
     ? filteredSyncRuns.map((run) => `
       <tr>
-        <td>${escapeHtml(formatDateTime(run.startedAt) || "-")}</td>
-        <td>${escapeHtml(dataBoxDisplayName(run.dataBoxId, run.dataBoxLabel))}</td>
-        <td>${escapeHtml(run.triggerType || "-")}</td>
-        <td>${escapeHtml(run.status || "-")}</td>
-        <td>${escapeHtml(String(run.messagesFound || 0))}</td>
-        <td>${escapeHtml(String(run.messagesCreated || 0))}</td>
-        <td>${escapeHtml(run.message || run.errorCode || "-")}</td>
+        <td data-label="Start">${escapeHtml(formatDateTime(run.startedAt) || "-")}</td>
+        <td data-label="Schránka">${escapeHtml(dataBoxDisplayName(run.dataBoxId, run.dataBoxLabel))}</td>
+        <td data-label="Typ">${escapeHtml(run.triggerType || "-")}</td>
+        <td data-label="Stav">${escapeHtml(run.status || "-")}</td>
+        <td data-label="Nalezeno">${escapeHtml(String(run.messagesFound || 0))}</td>
+        <td data-label="Nové">${escapeHtml(String(run.messagesCreated || 0))}</td>
+        <td data-label="Zpráva">${escapeHtml(run.message || run.errorCode || "-")}</td>
       </tr>
     `).join("")
     : `
