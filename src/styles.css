@@ -4882,6 +4882,17 @@ h1 {
   align-items: center;
 }
 
+.sarlota-status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.sarlota-status__sync {
+  min-height: 44px;
+}
+
 .sarlota-status__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -16260,6 +16271,14 @@ body:has(.absence-page--employee-card) {
 @media (max-width: 760px) {
   .sarlota-status__head {
     align-items: flex-start;
+  }
+
+  .sarlota-status__actions {
+    justify-content: stretch;
+  }
+
+  .sarlota-status__actions > button {
+    flex: 1 1 100%;
   }
 
   .sarlota-status__grid {

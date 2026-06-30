@@ -99,7 +99,10 @@ function firstMessageDetail(firstMessage = null) {
 export function SarlotaStatusPanel({
   status = null,
   loading = false,
-  error = ""
+  error = "",
+  syncing = false,
+  syncMessage = "",
+  syncError = ""
 } = {}) {
   const data = status || {};
   const generatedAt = data.generatedAt ? new Date(data.generatedAt).toLocaleString("cs-CZ") : "neověřeno";
@@ -137,16 +140,23 @@ export function SarlotaStatusPanel({
           <h2 id="sarlota-status-title">Šarlota</h2>
           <p>Read-only stav pro ElevenLabs agenta a signed-url napojení.</p>
         </div>
-        <button class="secondary-link" type="button" data-sarlota-status-refresh ${loading ? "disabled" : ""}>
-          ${loading ? "Načítám..." : "Obnovit"}
-        </button>
+        <div class="sarlota-status__actions">
+          <button class="secondary-link" type="button" data-sarlota-status-refresh ${loading || syncing ? "disabled" : ""}>
+            ${loading ? "Načítám..." : "Obnovit"}
+          </button>
+          <button class="primary-action sarlota-status__sync" type="button" data-sarlota-tools-sync ${loading || syncing ? "disabled" : ""}>
+            ${syncing ? "Synchronizuji..." : "Synchronizovat tools"}
+          </button>
+        </div>
       </div>
       ${error ? `<p class="module-feedback__error" role="alert">${escapeHtml(error)}</p>` : ""}
+      ${syncError ? `<p class="module-feedback__error" role="alert">${escapeHtml(syncError)}</p>` : ""}
+      ${syncMessage ? `<p class="module-feedback__success" role="status">${escapeHtml(syncMessage)}</p>` : ""}
       <dl class="sarlota-status__grid">
         ${rows}
       </dl>
       <p class="sarlota-status__meta">
-        Aktualizováno: ${escapeHtml(generatedAt)}. Panel nemění agenta, prompt, první zprávu ani tools.
+        Aktualizováno: ${escapeHtml(generatedAt)}. Synchronizace tools nemění prompt, první zprávu ani model.
       </p>
     </section>
   `;

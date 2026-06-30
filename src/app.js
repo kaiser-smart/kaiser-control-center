@@ -647,8 +647,11 @@ const themeState = {
 const sarlotaStatusState = {
   loaded: false,
   loading: false,
+  syncing: false,
   data: null,
-  error: ""
+  error: "",
+  syncMessage: "",
+  syncError: ""
 };
 const sarlotaPanelStatusState = {
   loaded: false,
@@ -4501,7 +4504,10 @@ function settingsManagementSection(user) {
     ${SarlotaStatusPanel({
       status: sarlotaStatusState.data,
       loading: sarlotaStatusState.loading,
-      error: sarlotaStatusState.error
+      error: sarlotaStatusState.error,
+      syncing: sarlotaStatusState.syncing,
+      syncMessage: sarlotaStatusState.syncMessage,
+      syncError: sarlotaStatusState.syncError
     })}
     ${AppearanceSettingsBox({
       draftSettings: themeState.draft,
@@ -22372,6 +22378,70 @@ async function loadSarlotaStatus(options = {}) {
   }
 }
 
+function sarlotaToolsSyncConfirmText(plan = {}) {
+  const operationsCount = Number(plan.workspaceTools?.operationsCount || 0);
+  const missingCount = Array.isArray(plan.agentTools?.missing) ? plan.agentTools.missing.length : 0;
+  const path = plan.agentTools?.path || "nenalezena";
+
+  return [
+    "Synchronizovat ElevenLabs client tools pro Šarlotu?",
+    "",
+    `Workspace operace: ${operationsCount}`,
+    `Chybějící tools v agentovi: ${missingCount}`,
+    `Cesta v agentovi: ${path}`,
+    "",
+    "Prompt, first message ani model se nemění.",
+    "Bez potvrzení se nic neprovede."
+  ].join("\n");
+}
+
+async function syncSarlotaTools() {
+  if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user)) {
+    return;
+  }
+
+  sarlotaStatusState.syncing = true;
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Načítám návrh synchronizace ElevenLabs tools...";
+  render();
+
+  try {
+    const plan = await apiJson("/api/ai/elevenlabs/sarlota-tools-sync");
+
+    if (!plan.ready) {
+      sarlotaStatusState.syncError = "Synchronizaci nejde bezpečně spustit. Zkontroluj název agenta, first message a dostupnost workspace tools.";
+      sarlotaStatusState.syncMessage = "";
+      return;
+    }
+
+    if (!window.confirm(sarlotaToolsSyncConfirmText(plan))) {
+      sarlotaStatusState.syncMessage = "Synchronizace zrušena.";
+      return;
+    }
+
+    sarlotaStatusState.syncMessage = "Synchronizuji ElevenLabs tools...";
+    render();
+
+    const result = await apiJson("/api/ai/elevenlabs/sarlota-tools-sync", {
+      method: "POST",
+      body: JSON.stringify({ apply: true })
+    });
+    const missingAfter = Array.isArray(result.verification?.missingTools) ? result.verification.missingTools.length : 0;
+
+    sarlotaStatusState.syncMessage = missingAfter
+      ? `Synchronizace proběhla částečně, zbývá ${missingAfter} tools.`
+      : "ElevenLabs tools jsou synchronizované.";
+    await loadSarlotaStatus({ force: true, renderAfter: false });
+  } catch (error) {
+    console.error("smart_odpady_sarlota_tools_sync_failed", error);
+    sarlotaStatusState.syncError = error.payload?.error || "Synchronizace ElevenLabs tools se nepodařila.";
+    sarlotaStatusState.syncMessage = "";
+  } finally {
+    sarlotaStatusState.syncing = false;
+    render();
+  }
+}
+
 function ensureSarlotaPanelStatusData(options = {}) {
   if (!authState.user) {
     return;
@@ -26147,6 +26217,13 @@ document.addEventListener("click", async (event) => {
   if (sarlotaStatusRefresh) {
     event.preventDefault();
     await loadSarlotaStatus({ force: true });
+    return;
+  }
+
+  const sarlotaToolsSync = event.target.closest("[data-sarlota-tools-sync]");
+  if (sarlotaToolsSync) {
+    event.preventDefault();
+    await syncSarlotaTools();
     return;
   }
 
