@@ -1068,6 +1068,9 @@ const fleetVehiclesState = {
   vehicles: [],
   summary: null,
   apiStatus: "waiting",
+  provider: "",
+  source: "",
+  telemetrySource: "",
   message: "",
   error: "",
   lastFetchedAt: ""
@@ -8678,7 +8681,7 @@ function fleetDashboardSection(activeId) {
       return "Chyba načtení";
     }
     if (isReady) {
-      return "T-Cars read-only";
+      return fleetVehiclesSourceLabel();
     }
     if (fleetVehiclesState.loading) {
       return "Načítám";
@@ -8692,7 +8695,7 @@ function fleetDashboardSection(activeId) {
         "fleet-dashboard-title",
         "Dashboard",
         "Centrální přehled provozního stavu vozidel a blížících se termínů.",
-        { badgeText: isReady ? "T-Cars read-only" : FLEET_API_WAITING_LABEL }
+        { badgeText: isReady ? fleetVehiclesSourceLabel() : FLEET_API_WAITING_LABEL }
       )}
       <div class="fleet-kpi-grid" aria-label="Přehled vozového parku">
         ${FLEET_DASHBOARD_METRICS.map((metric) => `
@@ -8704,7 +8707,7 @@ function fleetDashboardSection(activeId) {
         `).join("")}
       </div>
       ${isReady
-        ? `<p class="fleet-api-note">Dashboard používá stejný read-only zdroj jako seznam vozidel.<span>Zdroj: T-Cars přes GET /api/vehicles</span></p>`
+        ? `<p class="fleet-api-note">Dashboard používá stejný read-only zdroj jako seznam vozidel.<span>${escapeHtml(fleetVehiclesSourceDescription())}</span></p>`
         : fleetApiNotice("GET /api/vehicles/summary")}
     </section>
   `;
@@ -8768,6 +8771,31 @@ function fleetVehicleCountValue(value) {
   }
 
   return Number.isFinite(Number(value)) ? String(value) : "—";
+}
+
+function fleetVehiclesSourceLabel() {
+  const provider = String(fleetVehiclesState.provider || "").trim();
+  if (provider === "vistos") {
+    return "Vistos master";
+  }
+  if (provider === "tcars-fallback") {
+    return "T-Cars fallback";
+  }
+  if (provider === "tcars") {
+    return "T-Cars read-only";
+  }
+  return fleetVehiclesState.source || "Read-only API";
+}
+
+function fleetVehiclesSourceDescription() {
+  const provider = String(fleetVehiclesState.provider || "").trim();
+  if (provider === "vistos") {
+    return "Master údaje vozidel: Vistos Vehicle. T-Cars je jen doplňkový/GPS zdroj.";
+  }
+  if (provider === "tcars-fallback") {
+    return "Vistos Vehicle není dostupný, dočasně se zobrazuje T-Cars read-only.";
+  }
+  return "Read-only zdroj vozidel: chráněné Smart odpady API.";
 }
 
 function fleetVehicleKey(value) {
@@ -8882,11 +8910,13 @@ function fleetDriverAssignmentSection(vehicle) {
 function fleetVehicleFacts(vehicle) {
   const facts = [
     ["ID", vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId],
-    ["Interní číslo", vehicle.internalNumber],
+    ["Název", vehicle.internalNumber || vehicle.vistosVehicleName],
     ["SPZ", vehicle.licensePlate || vehicle.tcarsLicensePlate],
     ["VIN", vehicle.vin],
     ["Model", fleetVehicleModel(vehicle)],
-    ["Zdroj", vehicle.source || "T-Cars"],
+    ["Zdroj", vehicle.source || fleetVehiclesSourceLabel()],
+    ["Telemetrie", vehicle.telemetrySource],
+    ["Vistos ID", vehicle.vistosVehicleId],
     ["T-Cars ID", vehicle.tcarsVehicleId],
     ["Jednotka", vehicle.tcarsUnitId || vehicle.externalUnitId],
     ["Poslední změna", vehicle.lastChangedAt],
@@ -8907,23 +8937,23 @@ function fleetVehicleFacts(vehicle) {
 
 function fleetVehiclesStatusText() {
   if (fleetVehiclesState.loading) {
-    return "Načítám vozidla z T-Cars.";
+    return "Načítám vozidla z Vistos Vehicle.";
   }
   if (fleetVehiclesState.error) {
     return fleetVehiclesState.error;
   }
   if (fleetVehiclesState.apiStatus === "ready") {
     const fetchedAt = fleetVehiclesState.lastFetchedAt ? ` Poslední načtení: ${formatDateTime(fleetVehiclesState.lastFetchedAt)}.` : "";
-    return `${fleetVehiclesState.message || "Vozidla byla načtena z T-Cars read-only."}${fetchedAt}`;
+    return `${fleetVehiclesState.message || "Vozidla byla načtena přes read-only Smart odpady API."}${fetchedAt}`;
   }
   return fleetVehiclesState.message || "Seznam se načte z chráněného cloud API.";
 }
 
 function fleetVehicleRow(vehicle) {
   const cells = [
-    ["Interní číslo", vehicle.internalNumber],
+    ["Název", vehicle.internalNumber || vehicle.vistosVehicleName],
     ["SPZ", vehicle.licensePlate],
-    ["Typ", vehicle.vehicleType || vehicle.source || "T-Cars"],
+    ["Typ", vehicle.vehicleType || vehicle.source || fleetVehiclesSourceLabel()],
     ["Značka/model", fleetVehicleModel(vehicle)],
     ["Řidič", vehicle.assignedDriverName],
     ["Stav", fleetStatusLabel(vehicle.status)],
@@ -8950,7 +8980,7 @@ function fleetVehiclesTableBody() {
     return `
       <div class="fleet-table__empty" role="row">
         <strong>Načítám</strong>
-        <span>Čtu vozidla z T-Cars přes backend Smart odpady.</span>
+        <span>Čtu vozidla z Vistos Vehicle přes backend Smart odpady.</span>
       </div>
     `;
   }
@@ -8971,7 +9001,7 @@ function fleetVehiclesTableBody() {
   return `
     <div class="fleet-table__empty" role="row">
       <strong>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Bez vozidel" : FLEET_API_WAITING_LABEL)}</strong>
-      <span>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "T-Cars nevrátil žádná vozidla." : fleetVehiclesState.message || "Seznam se načte z cloud API. Produkční vozidla nejsou ve frontendu napevno.")}</span>
+      <span>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Vistos Vehicle nevrátil žádná vozidla." : fleetVehiclesState.message || "Seznam se načte z cloud API. Produkční vozidla nejsou ve frontendu napevno.")}</span>
     </div>
   `;
 }
@@ -8983,12 +9013,12 @@ function fleetVehiclesSection(activeId) {
         "fleet-vehicles-title",
         "Seznam vozidel",
         "Vozidla, STK, revize, závady a servisní historie na jednom místě.",
-        { badgeText: fleetVehiclesState.apiStatus === "ready" ? "T-Cars read-only" : FLEET_API_WAITING_LABEL }
+        { badgeText: fleetVehiclesState.apiStatus === "ready" ? fleetVehiclesSourceLabel() : FLEET_API_WAITING_LABEL }
       )}
       ${fleetFiltersSection()}
       <p class="fleet-api-note">
         ${escapeHtml(fleetVehiclesStatusText())}
-        <span>Read-only zdroj vozidel: T-Cars. Přiřazení řidiče ukládá KSO do D1.</span>
+        <span>${escapeHtml(fleetVehiclesSourceDescription())} Přiřazení řidiče ukládá KSO do D1.</span>
       </p>
       <div class="fleet-table" role="table" aria-label="Seznam vozidel">
         <div class="fleet-table__header" role="row">
@@ -9014,9 +9044,9 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
     : safeVehicleId;
   const detailTitle = vehicleLabel ? `Detail vozidla ${vehicleLabel}` : "Detail vozidla";
   const detailDescription = vehicle
-    ? "T-Cars údaje jsou read-only, přiřazení řidiče ukládá KSO do D1 pro Šarlotu a provozní párování."
+    ? "Master údaje vozidla jsou read-only z Vistos Vehicle. T-Cars zůstává doplňkový/GPS zdroj a přiřazení řidiče ukládá KSO do D1."
     : safeVehicleId
-      ? "Vozidlo zatím není v načteném seznamu. Zkuste obnovit seznam vozidel nebo zkontrolovat T-Cars."
+      ? "Vozidlo zatím není v načteném seznamu. Zkuste obnovit seznam vozidel nebo zkontrolovat Vistos Vehicle preview."
       : "Karta vozidla se otevře po výběru konkrétního záznamu z API.";
 
   return `
@@ -9072,7 +9102,7 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
         </div>
       </div>
       ${vehicle
-        ? `<p class="fleet-api-note">T-Cars údaje zůstávají read-only. Pole řidič je KSO vrstva pro přiřazení řidiče, Šarlotu a servisní párování.<span>GET/PATCH /api/vehicles/:id</span></p>`
+        ? `<p class="fleet-api-note">Vistos Vehicle zůstává read-only master zdroj. T-Cars se používá jen jako doplněk pro GPS/telemetrii. Pole řidič je KSO vrstva pro přiřazení řidiče, Šarlotu a servisní párování.<span>GET/PATCH /api/vehicles/:id</span></p>`
         : fleetApiNotice(safeVehicleId ? "GET/PATCH /api/vehicles/:id" : "GET /api/vehicles", FLEET_TAB_WAITING_MESSAGES.detail)}
     </section>
   `;
@@ -20989,6 +21019,9 @@ async function loadFleetVehicles(options = {}) {
     fleetVehiclesState.vehicles = Array.isArray(result.vehicles) ? result.vehicles : [];
     fleetVehiclesState.summary = result.summary || null;
     fleetVehiclesState.apiStatus = result.apiStatus || "waiting";
+    fleetVehiclesState.provider = result.provider || "";
+    fleetVehiclesState.source = result.source || "";
+    fleetVehiclesState.telemetrySource = result.telemetrySource || "";
     fleetVehiclesState.message = result.message || "";
     fleetVehiclesState.lastFetchedAt = result.lastFetchedAt || "";
     fleetVehiclesState.loaded = true;
@@ -20996,6 +21029,9 @@ async function loadFleetVehicles(options = {}) {
     fleetVehiclesState.vehicles = [];
     fleetVehiclesState.summary = null;
     fleetVehiclesState.apiStatus = "waiting";
+    fleetVehiclesState.provider = "";
+    fleetVehiclesState.source = "";
+    fleetVehiclesState.telemetrySource = "";
     fleetVehiclesState.error = error?.payload?.error || error?.message || "Vozidla se teď nepodařilo načíst.";
   } finally {
     fleetVehiclesState.loading = false;

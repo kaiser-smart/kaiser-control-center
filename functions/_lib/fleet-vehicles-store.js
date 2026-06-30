@@ -1,5 +1,6 @@
 import { getUsers, normalizeIdentifier } from "./auth.js";
 import { loadFleetVehiclesPayload as loadTcarsFleetVehiclesPayload } from "./tcars-client.js";
+import { createFleetVistosVehiclePreview } from "./fleet-vistos-vehicle-preview.js";
 import { hasPermission, isUserActive, normalizeRole } from "../../src/permissions.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
@@ -142,8 +143,8 @@ function assignmentForVehicle(vehicle, assignments) {
 function mergeAssignment(vehicle, assignment = null) {
   return {
     ...vehicle,
-    assignedDriverId: cleanString(assignment?.assignedDriverId),
-    assignedDriverName: cleanString(assignment?.assignedDriverName),
+    assignedDriverId: cleanString(assignment?.assignedDriverId || vehicle.assignedDriverId),
+    assignedDriverName: cleanString(assignment?.assignedDriverName || vehicle.assignedDriverName),
     assignedDriverPhone: cleanString(assignment?.assignedDriverPhone),
     assignedDriverEmail: cleanString(assignment?.assignedDriverEmail),
     driverAssignmentNote: cleanString(assignment?.note),
@@ -206,8 +207,183 @@ function summaryWithAssignments(summary = {}, vehicles = []) {
   };
 }
 
+function numericOrNull(value) {
+  const cleaned = cleanString(value).replace(/\s+/g, "").replace(",", ".");
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : null;
+}
+
+function statusFromVistosVehicle(vehicle = {}) {
+  const eliminated = cleanString(vehicle.eliminatedDate);
+  const status = normalizeKey(`${vehicle.status || ""} ${vehicle.statusId || ""}`);
+
+  if (eliminated || /vyrazen|zrusen|archiv/.test(status)) {
+    return "retired";
+  }
+
+  if (/servis/.test(status)) {
+    return "service";
+  }
+
+  if (/mimo|nepojizd|porucha/.test(status)) {
+    return "out_of_order";
+  }
+
+  return "active";
+}
+
+function fleetSummaryFromVehicles(vehicles = []) {
+  const active = vehicles.filter((vehicle) => vehicle.status === "active").length;
+  const retired = vehicles.filter((vehicle) => vehicle.status === "retired").length;
+  const inService = vehicles.filter((vehicle) => vehicle.status === "service").length;
+  const outOfOrder = vehicles.filter((vehicle) => vehicle.status === "out_of_order").length;
+
+  return {
+    total: vehicles.length,
+    active,
+    outOfOrder,
+    inService,
+    retired,
+    stkDue: 0,
+    revisionDue: 0,
+    insuranceDue: 0,
+    openDefects: 0
+  };
+}
+
+function tcarsByRegistrationPlate(vehicles = []) {
+  const byPlate = new Map();
+
+  for (const vehicle of vehicles) {
+    const plate = normalizedPlate(vehicle.licensePlate || vehicle.tcarsLicensePlate);
+    if (plate && !byPlate.has(plate)) {
+      byPlate.set(plate, vehicle);
+    }
+  }
+
+  return byPlate;
+}
+
+function fleetVehicleFromVistos(vehicle = {}, tcarsVehicle = null) {
+  const vistosVehicleId = cleanString(vehicle.vistosVehicleId);
+  const registrationPlate = cleanString(vehicle.registrationPlate);
+  const name = cleanString(vehicle.name || registrationPlate || vistosVehicleId);
+  const id = vistosVehicleId ? `vistos-${vistosVehicleId}` : `vistos-${normalizedPlate(registrationPlate || name)}`;
+  const tcarsId = cleanString(tcarsVehicle?.tcarsVehicleId);
+
+  return {
+    id,
+    vehicleId: id,
+    externalVehicleId: vistosVehicleId,
+    internalNumber: name,
+    licensePlate: registrationPlate || cleanString(tcarsVehicle?.licensePlate || tcarsVehicle?.tcarsLicensePlate),
+    vehicleType: cleanString(vehicle.category || tcarsVehicle?.vehicleType || "Vozidlo"),
+    brand: "",
+    model: name,
+    vin: cleanString(vehicle.vinMasked || tcarsVehicle?.vin),
+    year: "",
+    fuelType: "",
+    euroNorm: "",
+    bodyType: "",
+    department: "",
+    assignedDriverId: "",
+    assignedDriverName: cleanString(vehicle.driver),
+    status: statusFromVistosVehicle(vehicle),
+    mileageKm: numericOrNull(vehicle.odometerKm) ?? numericOrNull(vehicle.gpsKm),
+    stkValidTo: "",
+    emissionsValidTo: "",
+    tachographValidTo: "",
+    craneRevisionValidTo: "",
+    liftRevisionValidTo: "",
+    pressureEquipmentRevisionValidTo: "",
+    fireExtinguisherValidTo: "",
+    insuranceCompany: "",
+    insurancePolicyNumber: "",
+    insuranceValidTo: "",
+    openDefects: null,
+    tcarsVehicleId: tcarsId,
+    tcarsUnitId: cleanString(tcarsVehicle?.tcarsUnitId),
+    tcarsLicensePlate: cleanString(tcarsVehicle?.tcarsLicensePlate),
+    vistosVehicleId,
+    vistosVehicleName: name,
+    vistosVehicleCategory: cleanString(vehicle.category || vehicle.categoryId),
+    vistosVehicleStatus: cleanString(vehicle.status || vehicle.statusId),
+    vistosStartingDate: cleanString(vehicle.startingDate),
+    vistosEliminatedDate: cleanString(vehicle.eliminatedDate),
+    gpsProvider: tcarsId ? "tcars" : cleanString(vehicle.gpsProvider || "vistos"),
+    gpsUnitId: cleanString(tcarsVehicle?.tcarsUnitId),
+    telemetrySource: tcarsId ? "T-Cars read-only" : "Vistos Vehicle metadata",
+    source: "Vistos Vehicle master",
+    readOnly: true,
+    createdAt: "",
+    updatedAt: cleanString(vehicle.gpsUpdatedAt || vehicle.lastPositionSyncDate || tcarsVehicle?.updatedAt)
+  };
+}
+
+async function loadVistosFleetVehiclesPayload(env = {}, tcarsPayload = null) {
+  try {
+    const preview = await createFleetVistosVehiclePreview(env);
+    const tcarsVehicles = Array.isArray(tcarsPayload?.vehicles) ? tcarsPayload.vehicles : [];
+    const tcarsByPlate = tcarsByRegistrationPlate(tcarsVehicles);
+    const vehicles = (Array.isArray(preview?.vehicles) ? preview.vehicles : []).map((vehicle) => {
+      const match = tcarsByPlate.get(normalizedPlate(vehicle.registrationPlate));
+      return fleetVehicleFromVistos(vehicle, match);
+    });
+    const ready = preview?.apiStatus === "ready" && vehicles.length > 0;
+
+    return {
+      provider: "vistos",
+      source: "Vistos Vehicle master",
+      apiStatus: ready ? "ready" : preview?.apiStatus || "waiting",
+      configured: preview?.apiStatus !== "not_configured",
+      readOnly: true,
+      createsFleetRecords: false,
+      startsAutomation: false,
+      sendsEmailOrSms: false,
+      vehicles,
+      summary: fleetSummaryFromVehicles(vehicles),
+      message: ready
+        ? "Vozidla byla načtena z Vistos Vehicle jako master evidence. T-Cars se používá jen jako doplňkový/GPS zdroj."
+        : preview?.message || "Vistos Vehicle master seznam zatím není dostupný.",
+      lastFetchedAt: preview?.loadedAt || new Date().toISOString(),
+      diagnostics: preview?.diagnostics || null,
+      vistosPreviewStatus: preview?.apiStatus || "waiting",
+      tcarsApiStatus: tcarsPayload?.apiStatus || "waiting"
+    };
+  } catch (error) {
+    console.error("fleet_vehicles.vistos_master_failed", { message: safeErrorMessage(error) });
+    return {
+      provider: "vistos",
+      source: "Vistos Vehicle master",
+      apiStatus: "waiting",
+      configured: false,
+      readOnly: true,
+      createsFleetRecords: false,
+      startsAutomation: false,
+      sendsEmailOrSms: false,
+      vehicles: [],
+      summary: fleetSummaryFromVehicles([]),
+      message: "Vistos Vehicle master seznam se teď nepodařilo načíst.",
+      waitingReason: "vistos_vehicle_read_failed"
+    };
+  }
+}
+
 export async function loadFleetVehiclesWithAssignments(env = {}) {
-  const basePayload = await loadTcarsFleetVehiclesPayload(env);
+  const tcarsPayload = await loadTcarsFleetVehiclesPayload(env);
+  const vistosPayload = await loadVistosFleetVehiclesPayload(env, tcarsPayload);
+  const basePayload = vistosPayload.apiStatus === "ready" && vistosPayload.vehicles.length
+    ? vistosPayload
+    : {
+        ...tcarsPayload,
+        provider: "tcars-fallback",
+        source: "T-Cars fallback",
+        message: [
+          "Vistos Vehicle master seznam není dostupný, dočasně zobrazuji T-Cars read-only.",
+          cleanString(vistosPayload?.message),
+          cleanString(tcarsPayload?.message)
+        ].filter(Boolean).join(" ")
+      };
   const { assignments, assignmentApiStatus, assignmentMessage } = await loadAssignments(env);
   const vehicles = (Array.isArray(basePayload?.vehicles) ? basePayload.vehicles : [])
     .map((vehicle) => mergeAssignment(vehicle, assignmentForVehicle(vehicle, assignments)));

@@ -50,7 +50,7 @@ export const FLEET_VEHICLE_TYPES = [
 ];
 
 export const FLEET_LIST_COLUMNS = [
-  "Interní číslo",
+  "Název",
   "SPZ",
   "Typ",
   "Značka/model",
@@ -121,8 +121,11 @@ export const FLEET_VEHICLE_FIELDS = [
   "vistosVehicleName",
   "vistosVehicleCategory",
   "vistosVehicleStatus",
+  "vistosStartingDate",
+  "vistosEliminatedDate",
   "gpsProvider",
   "gpsUnitId",
+  "telemetrySource",
   "note",
   "createdAt",
   "updatedAt"

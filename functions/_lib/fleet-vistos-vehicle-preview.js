@@ -15,12 +15,17 @@ const FLEET_VISTOS_VEHICLE_COLUMNS = [
   "VIN",
   "IsActive",
   "Archived",
+  "StartingDate",
   "EliminatedDate",
+  "Odometer",
+  "c_Km",
   "Stavvozidla_FK",
   "CarCategory_FK",
   "c_LastGpsLocation1",
   "c_LastLocation",
   "LastPositionSyncDate",
+  "c_DateUpdateGPS",
+  "Ridic_FK",
   "c_GpsProvider_FK"
 ];
 const FLEET_VISTOS_VEHICLE_ACTIVE_FILTER = {
@@ -96,19 +101,29 @@ function vehicleIssueCodes(vehicle) {
 }
 
 function mapVehicle(row) {
+  const vin = firstValue(row, ["VIN", "Vin"]);
   const vehicle = {
     vistosVehicleId: firstValue(row, ["Id", "VehicleId"]),
     name: firstValue(row, ["Name", "Caption"]),
     registrationPlate: firstValue(row, ["RegistrationPlate", "RegistrationNumber", "SPZ"]),
-    vinMasked: shortVin(firstValue(row, ["VIN", "Vin"])),
+    vinMasked: shortVin(vin),
     categoryId: recordId(row, "CarCategory_FK"),
     category: caption(row, "CarCategory_FK"),
     statusId: recordId(row, "Stavvozidla_FK"),
     status: caption(row, "Stavvozidla_FK"),
+    isActive: firstValue(row, ["IsActive"]),
+    archivedAt: firstValue(row, ["Archived"]),
+    startingDate: firstValue(row, ["StartingDate"]),
+    eliminatedDate: firstValue(row, ["EliminatedDate"]),
+    odometerKm: firstValue(row, ["Odometer"]),
+    gpsKm: firstValue(row, ["c_Km"]),
     gpsProviderId: recordId(row, "c_GpsProvider_FK"),
     gpsProvider: caption(row, "c_GpsProvider_FK"),
+    driverId: recordId(row, "Ridic_FK"),
+    driver: caption(row, "Ridic_FK"),
     lastLocation: firstValue(row, ["c_LastLocation"]),
     lastPositionSyncDate: firstValue(row, ["LastPositionSyncDate"]),
+    gpsUpdatedAt: firstValue(row, ["c_DateUpdateGPS"]),
     gps: gpsFromRow(row),
     sourceEntity: "Vehicle",
     mappingTarget: "fleet",
