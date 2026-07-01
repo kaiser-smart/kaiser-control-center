@@ -924,6 +924,7 @@ const dataBoxState = {
   actionNotice: "",
   actionError: "",
   selectedPreviewMessageId: "",
+  selectedBulkMessageIds: [],
   messagePagination: {
     pageSize: 10,
     currentPage: 1
@@ -15072,6 +15073,7 @@ function updateDataBoxSearchFilter(field) {
   };
   resetDataBoxPagination();
   dataBoxState.selectedPreviewMessageId = "";
+  clearDataBoxBulkSelection();
   clearDataBoxSearchRenderTimer();
   dataBoxSearchRenderTimer = window.setTimeout(() => {
     dataBoxSearchRenderTimer = null;
@@ -15107,6 +15109,46 @@ function dataBoxPaginationForRows(rows) {
     startIndex,
     visibleRows
   };
+}
+
+function dataBoxBulkSelectionSet() {
+  return new Set((dataBoxState.selectedBulkMessageIds || []).map((id) => String(id || "")));
+}
+
+function clearDataBoxBulkSelection() {
+  dataBoxState.selectedBulkMessageIds = [];
+}
+
+function dataBoxSelectedBulkMessages() {
+  const selectedIds = dataBoxBulkSelectionSet();
+  if (!selectedIds.size) {
+    return [];
+  }
+
+  return dataBoxState.messages.filter((message) => selectedIds.has(String(message.id || "")));
+}
+
+function dataBoxBulkArchiveToolbar(direction, view = "") {
+  if (direction !== "received" || view === "archive") {
+    return "";
+  }
+
+  const selectedCount = dataBoxSelectedBulkMessages().filter((message) => dataBoxWorkflowStatus(message).id !== "archived").length;
+  if (!selectedCount) {
+    return "";
+  }
+
+  const busy = dataBoxState.actionLoading === "bulk-archive";
+  return `
+    <div class="data-box-bulk-actions" role="region" aria-label="Hromadné akce se zprávami">
+      <strong>Vybráno ${selectedCount} ${selectedCount === 1 ? "zpráva" : selectedCount < 5 ? "zprávy" : "zpráv"}</strong>
+      <span>Archivace nemění stav přečteno/nepřečteno.</span>
+      <button class="primary-action" type="button" data-data-box-bulk-archive ${busy ? "disabled" : ""}>
+        ${busy ? "Archivuji..." : "Archivovat vybrané"}
+      </button>
+      <button class="secondary-link" type="button" data-data-box-bulk-clear ${busy ? "disabled" : ""}>Zrušit výběr</button>
+    </div>
+  `;
 }
 
 function dataBoxPaginationInfoMarkup(allRows, filteredRows, pagination) {
@@ -16399,9 +16441,19 @@ function dataBoxMessageCard(message, selected) {
   const attachmentLabel = attachmentCount ? `Příloha${attachmentCount > 1 ? ` ${attachmentCount}` : ""}` : "";
   const unread = readState.id === "new";
   const companyBadge = dataBoxCompanyBadgeMarkup(message);
+  const bulkSelected = dataBoxBulkSelectionSet().has(String(message.id || ""));
 
   return `
-    <article class="data-box-message-card ${selected ? "data-box-message-card--selected" : ""} ${unread ? "data-box-message-card--unread" : ""}">
+    <article class="data-box-message-card ${selected ? "data-box-message-card--selected" : ""} ${bulkSelected ? "data-box-message-card--bulk-selected" : ""} ${unread ? "data-box-message-card--unread" : ""}">
+      <label class="data-box-message-card__bulk" title="Vybrat zprávu pro hromadnou akci">
+        <input
+          type="checkbox"
+          data-data-box-bulk-message="${escapeHtml(message.id)}"
+          ${bulkSelected ? "checked" : ""}
+          aria-label="Vybrat zprávu ${escapeHtml(subject)}"
+        >
+        <span>Vybrat</span>
+      </label>
       <button
         class="data-box-message-card__select"
         type="button"
@@ -17285,6 +17337,7 @@ function dataBoxMessageInbox(title, direction, view = "") {
         </div>
         ${dataBoxInboxSearch()}
         ${dataBoxQuickFilters()}
+        ${dataBoxBulkArchiveToolbar(direction, view)}
         <div class="data-box-message-list" aria-label="${escapeHtml(sectionTitle)}">
           ${notice ? dataBoxInboxNoticeMarkup(notice) : visibleRows.map((message) => dataBoxMessageCard(message, String(message.id) === activeMessageId)).join("")}
         </div>
@@ -21090,6 +21143,7 @@ function resetDataBoxState() {
   dataBoxState.actionNotice = "";
   dataBoxState.actionError = "";
   dataBoxState.selectedPreviewMessageId = "";
+  dataBoxState.selectedBulkMessageIds = [];
   dataBoxState.messagePagination = {
     pageSize: DATA_BOX_DEFAULT_PAGE_SIZE,
     currentPage: 1
@@ -21327,6 +21381,76 @@ async function archiveDataBoxMessageAction(messageId) {
     dataBoxState.actionLoading = "";
     render();
   }
+}
+
+async function archiveSelectedDataBoxMessagesAction() {
+  const selectedMessages = dataBoxSelectedBulkMessages()
+    .filter((message) => message.direction === "received" && dataBoxWorkflowStatus(message).id !== "archived");
+  if (!selectedMessages.length) {
+    dataBoxState.actionNotice = "";
+    dataBoxState.actionError = "Nejsou vybrané žádné zprávy k archivaci.";
+    render();
+    return;
+  }
+
+  if (!window.confirm(`Archivovat ${selectedMessages.length} vybraných zpráv? Stav přečteno/nepřečteno se tím nezmění.`)) {
+    return;
+  }
+
+  resetDataBoxActionFeedback();
+  dataBoxState.actionLoading = "bulk-archive";
+  render();
+
+  const archivedIds = [];
+  const failures = [];
+
+  for (const message of selectedMessages) {
+    const id = String(message.id || "");
+    try {
+      await apiJson(`/api/data-box/messages/${encodeURIComponent(id)}/archive`, {
+        method: "POST",
+        body: JSON.stringify({ confirmed: true })
+      });
+      archivedIds.push(id);
+    } catch (error) {
+      failures.push({
+        id,
+        error: error?.payload?.error || error?.message || "Archivace se nepodařila."
+      });
+    }
+  }
+
+  const archivedSet = new Set(archivedIds);
+  dataBoxState.selectedBulkMessageIds = (dataBoxState.selectedBulkMessageIds || [])
+    .filter((id) => !archivedSet.has(String(id || "")));
+
+  if (archivedSet.has(String(dataBoxState.selectedMessageId || ""))) {
+    dataBoxState.selectedMessageId = "";
+    dataBoxState.selectedMessage = null;
+    dataBoxState.selectedPreviewMessageId = "";
+    clearDataBoxBulkSelection();
+    dataBoxState.detailError = "";
+    dataBoxState.replyDraftOpen = false;
+    dataBoxState.replyDraftText = "";
+    dataBoxState.replyDraftError = "";
+  }
+
+  try {
+    await loadDataBoxData({ force: true, renderAfter: false });
+  } catch {
+    // Ponecháme výsledek archivace viditelný i když následné obnovení seznamu selže.
+  }
+
+  if (failures.length) {
+    dataBoxState.actionError = `${failures.length} z ${selectedMessages.length} zpráv se nepodařilo archivovat. První chyba: ${failures[0].error}`;
+    dataBoxState.actionNotice = archivedIds.length ? `${archivedIds.length} zpráv bylo archivováno.` : "";
+  } else {
+    dataBoxState.actionNotice = archivedIds.length === 1 ? "1 zpráva byla archivována." : `${archivedIds.length} zpráv bylo archivováno.`;
+    dataBoxState.actionError = "";
+  }
+
+  dataBoxState.actionLoading = "";
+  render();
 }
 
 async function emailDataBoxMessageAction(messageId) {
@@ -27683,6 +27807,7 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
+    clearDataBoxBulkSelection();
     dataBoxState.detailError = "";
     dataBoxState.replyDraftOpen = false;
     dataBoxState.replyDraftText = "";
@@ -27702,6 +27827,7 @@ document.addEventListener("click", async (event) => {
       dataBoxState.selectedPreviewMessageId = "";
       dataBoxState.selectedMessageId = "";
       dataBoxState.selectedMessage = null;
+      clearDataBoxBulkSelection();
       dataBoxState.detailError = "";
       dataBoxState.replyDraftOpen = false;
       dataBoxState.replyDraftText = "";
@@ -27724,6 +27850,7 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedPreviewMessageId = "";
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
+    clearDataBoxBulkSelection();
     dataBoxState.detailError = "";
     dataBoxState.replyDraftOpen = false;
     dataBoxState.replyDraftText = "";
@@ -27736,6 +27863,33 @@ document.addEventListener("click", async (event) => {
   if (dataBoxAttachmentOpen) {
     event.preventDefault();
     void openDataBoxAttachment(dataBoxAttachmentOpen);
+    return;
+  }
+
+  const dataBoxBulkMessage = event.target.closest("[data-data-box-bulk-message]");
+  if (dataBoxBulkMessage) {
+    const messageId = String(dataBoxBulkMessage.dataset.dataBoxBulkMessage || "");
+    const selectedIds = dataBoxBulkSelectionSet();
+    if (dataBoxBulkMessage.checked) {
+      selectedIds.add(messageId);
+    } else {
+      selectedIds.delete(messageId);
+    }
+    dataBoxState.selectedBulkMessageIds = Array.from(selectedIds).filter(Boolean);
+    render();
+    return;
+  }
+
+  const dataBoxBulkArchive = event.target.closest("[data-data-box-bulk-archive]");
+  if (dataBoxBulkArchive) {
+    void archiveSelectedDataBoxMessagesAction();
+    return;
+  }
+
+  const dataBoxBulkClear = event.target.closest("[data-data-box-bulk-clear]");
+  if (dataBoxBulkClear) {
+    clearDataBoxBulkSelection();
+    render();
     return;
   }
 
@@ -27886,6 +28040,7 @@ document.addEventListener("click", async (event) => {
     dataBoxState.selectedMessageId = "";
     dataBoxState.selectedMessage = null;
     dataBoxState.selectedPreviewMessageId = "";
+    clearDataBoxBulkSelection();
     dataBoxState.detailError = "";
     dataBoxState.replyDraftOpen = false;
     dataBoxState.replyDraftText = "";
