@@ -1352,7 +1352,7 @@ First message:
 ### 17.7.1 Kontextové načtení dat před akcí
 
 - Když Šarlota z hlasu detekuje, co volající potřebuje, má nejdřív krátce potvrdit, že si načte relevantní data, například:
-  `Rozumím. Podívám se do Smart systému.`
+  `Rozumím. Podívám se do systému.`
 - Potom si má přes backend KSO načíst zdroj pravdy pro daný modul a až následně pokračovat v dialogu.
 - Pro Hlášení řidičů platí: pokud volající řekne, že chce opravu, servis nebo má něco rozbité/polámané na autě, jde o možné Hlášení řidičů.
 - Šarlota v takovém případě načítá Vozový park a přiřazená vozidla řidiče přes backend.
