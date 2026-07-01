@@ -1,11 +1,11 @@
 import { json, readJson, requireUserPermission } from "../../../_lib/auth.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
+import {
+  assistantConfigFromRequest,
+  assistantPublicMetadata,
+  resolveElevenLabsAssistantConfig
+} from "../../../../src/elevenLabsAssistants.js";
 
-const SARLOTA_AGENT_NAME = "Šarlota – Smart odpady";
-const SARLOTA_AGENT_NAME_ALIASES = [
-  SARLOTA_AGENT_NAME,
-  "Chytré odpadky – Šarlota"
-];
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const DIAGNOSTIC_IDENTITY_ONLY_MODE = "diagnostic_identity_only";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/convai";
@@ -22,12 +22,6 @@ function cleanString(value) {
 
 function safeErrorMessage(error) {
   return cleanString(error?.message || error?.name || "unknown_error");
-}
-
-function agentIdFor(env) {
-  return ["ELEVENLABS_AGENT_ID_SARLOTA", "VITE_ELEVENLABS_AGENT_ID_SARLOTA"]
-    .map((key) => cleanString(env?.[key]))
-    .find(Boolean) || "";
 }
 
 function deepClone(value) {
@@ -273,16 +267,17 @@ async function elevenLabsRequest({ apiKey, path, method = "GET", body = null }) 
   return payload;
 }
 
-async function readLiveContext(env) {
+async function readLiveContext(env, assistantConfig) {
   const apiKey = cleanString(env?.ELEVENLABS_API_KEY);
-  const agentId = agentIdFor(env);
+  const agentId = assistantConfig?.agentId || "";
 
   if (!apiKey || !agentId) {
     return {
       ok: false,
       status: "missing_configuration",
       apiKeyPresent: Boolean(apiKey),
-      agentIdPresent: Boolean(agentId)
+      agentIdPresent: Boolean(agentId),
+      assistant: assistantConfig ? assistantPublicMetadata(assistantConfig) : null
     };
   }
 
@@ -298,6 +293,7 @@ async function readLiveContext(env) {
     ok: true,
     apiKey,
     agentId,
+    assistantConfig,
     agentConfig,
     workspaceTools: toolsPayload.__toolsReadError ? [] : workspaceToolList(toolsPayload),
     workspaceToolsReadStatus: toolsPayload.__toolsReadError ? "error" : "ok",
@@ -305,7 +301,7 @@ async function readLiveContext(env) {
   };
 }
 
-function buildSyncPlan(agentConfig, workspaceTools) {
+function buildSyncPlan(agentConfig, workspaceTools, assistantConfig) {
   const expected = expectedTools();
   const expectedNames = expected.map((tool) => tool.name);
   const workspaceByName = new Map();
@@ -338,7 +334,7 @@ function buildSyncPlan(agentConfig, workspaceTools) {
   const configuredAgentToolNames = toolNamesFromAgent(agentConfig);
   const configuredAgentToolNameSet = new Set(configuredAgentToolNames);
   const missingAgentTools = expectedNames.filter((name) => !configuredAgentToolNameSet.has(name));
-  const agentNameMatches = SARLOTA_AGENT_NAME_ALIASES.includes(cleanString(agentConfig?.name));
+  const agentNameMatches = (assistantConfig?.expectedAgentNames || []).includes(cleanString(agentConfig?.name));
   const firstMessage = firstMessageFromAgent(agentConfig);
   const firstMessageMatches = firstMessage === FIRST_MESSAGE_TEMPLATE;
 
@@ -521,8 +517,18 @@ function buildDiagnosticIdentityOnlyPatch(agentConfig) {
   };
 }
 
-async function diagnosticIdentityOnlyPlanPayload(env) {
-  const context = await readLiveContext(env);
+async function diagnosticIdentityOnlyPlanPayload(env, assistantConfig) {
+  if (assistantConfig?.assistantKey !== "sarlota") {
+    return {
+      mode: DIAGNOSTIC_IDENTITY_ONLY_MODE,
+      ready: false,
+      status: "diagnostic_not_allowed",
+      assistant: assistantPublicMetadata(assistantConfig),
+      message: "Diagnostické odpojení tools je povolené jen pro ostrou Šarlotu."
+    };
+  }
+
+  const context = await readLiveContext(env, assistantConfig);
   if (!context.ok) {
     return {
       mode: DIAGNOSTIC_IDENTITY_ONLY_MODE,
@@ -530,19 +536,21 @@ async function diagnosticIdentityOnlyPlanPayload(env) {
       status: context.status,
       apiKeyPresent: context.apiKeyPresent,
       agentIdPresent: context.agentIdPresent,
+      assistant: context.assistant || null,
       message: "Chybí serverová ElevenLabs konfigurace."
     };
   }
 
-  const plan = buildSyncPlan(context.agentConfig, context.workspaceTools);
+  const plan = buildSyncPlan(context.agentConfig, context.workspaceTools, assistantConfig);
   const patch = buildDiagnosticIdentityOnlyPatch(context.agentConfig);
 
   return {
     mode: DIAGNOSTIC_IDENTITY_ONLY_MODE,
     ready: plan.agentNameMatches && plan.firstMessageMatches && patch.ok,
     generatedAt: new Date().toISOString(),
+    assistant: assistantPublicMetadata(assistantConfig),
     agent: {
-      expectedName: SARLOTA_AGENT_NAME,
+      expectedName: assistantConfig.displayName,
       nameMatches: plan.agentNameMatches,
       firstMessage: FIRST_MESSAGE_TEMPLATE,
       firstMessageMatches: plan.firstMessageMatches
@@ -576,12 +584,12 @@ async function diagnosticIdentityOnlyPlanPayload(env) {
   };
 }
 
-async function planPayload(env, mode = "") {
+async function planPayload(env, assistantConfig, mode = "") {
   if (mode === DIAGNOSTIC_IDENTITY_ONLY_MODE) {
-    return diagnosticIdentityOnlyPlanPayload(env);
+    return diagnosticIdentityOnlyPlanPayload(env, assistantConfig);
   }
 
-  const context = await readLiveContext(env);
+  const context = await readLiveContext(env, assistantConfig);
   if (!context.ok) {
     return {
       mode: "dry_run",
@@ -589,18 +597,20 @@ async function planPayload(env, mode = "") {
       status: context.status,
       apiKeyPresent: context.apiKeyPresent,
       agentIdPresent: context.agentIdPresent,
+      assistant: context.assistant || null,
       message: "Chybí serverová ElevenLabs konfigurace."
     };
   }
 
-  const plan = buildSyncPlan(context.agentConfig, context.workspaceTools);
+  const plan = buildSyncPlan(context.agentConfig, context.workspaceTools, assistantConfig);
 
   return {
     mode: "dry_run",
     ready: plan.agentNameMatches && plan.firstMessageMatches && context.workspaceToolsReadStatus === "ok",
     generatedAt: new Date().toISOString(),
+    assistant: assistantPublicMetadata(assistantConfig),
     agent: {
-      expectedName: SARLOTA_AGENT_NAME,
+      expectedName: assistantConfig.displayName,
       nameMatches: plan.agentNameMatches,
       firstMessage: FIRST_MESSAGE_TEMPLATE,
       firstMessageMatches: plan.firstMessageMatches
@@ -631,17 +641,27 @@ async function planPayload(env, mode = "") {
   };
 }
 
-async function applyDiagnosticIdentityOnlyPayload(env) {
-  const context = await readLiveContext(env);
-  if (!context.ok) {
+async function applyDiagnosticIdentityOnlyPayload(env, assistantConfig, user = null) {
+  if (assistantConfig?.assistantKey !== "sarlota") {
     return json({
-      error: "ElevenLabs konfigurace není dostupná.",
-      code: context.status,
+      error: "Diagnostické odpojení tools je povolené jen pro ostrou Šarlotu.",
+      code: "DIAGNOSTIC_NOT_ALLOWED",
+      ...assistantPublicMetadata(assistantConfig),
       apiStatus: "waiting"
     }, 409);
   }
 
-  const plan = buildSyncPlan(context.agentConfig, context.workspaceTools);
+  const context = await readLiveContext(env, assistantConfig);
+  if (!context.ok) {
+    return json({
+      error: "ElevenLabs konfigurace není dostupná.",
+      code: context.status,
+      assistant: assistantPublicMetadata(assistantConfig),
+      apiStatus: "waiting"
+    }, 409);
+  }
+
+  const plan = buildSyncPlan(context.agentConfig, context.workspaceTools, assistantConfig);
   if (!plan.agentNameMatches || !plan.firstMessageMatches) {
     return json({
       error: "ElevenLabs agent nevypadá jako bezpečná Šarlota konfigurace.",
@@ -743,21 +763,39 @@ async function applyDiagnosticIdentityOnlyPayload(env) {
   }, verifiedNames.length ? 207 : 200);
 }
 
-async function applyPayload(env, mode = "") {
-  if (mode === DIAGNOSTIC_IDENTITY_ONLY_MODE) {
-    return applyDiagnosticIdentityOnlyPayload(env);
-  }
-
-  const context = await readLiveContext(env);
-  if (!context.ok) {
+async function applyPayload(env, assistantConfig, mode = "", user = null) {
+  if (!assistantConfig?.toolsSyncAllowed) {
     return json({
-      error: "ElevenLabs konfigurace není dostupná.",
-      code: context.status,
+      error: "Tools sync pro tohoto asistenta není povolený.",
+      code: "TOOLS_SYNC_NOT_ALLOWED",
+      ...assistantPublicMetadata(assistantConfig),
       apiStatus: "waiting"
     }, 409);
   }
 
-  let plan = buildSyncPlan(context.agentConfig, context.workspaceTools);
+  if (mode === DIAGNOSTIC_IDENTITY_ONLY_MODE) {
+    return applyDiagnosticIdentityOnlyPayload(env, assistantConfig, user);
+  }
+
+  const context = await readLiveContext(env, assistantConfig);
+  if (!context.ok) {
+    return json({
+      error: "ElevenLabs konfigurace není dostupná.",
+      code: context.status,
+      assistant: assistantPublicMetadata(assistantConfig),
+      apiStatus: "waiting"
+    }, 409);
+  }
+  console.info("elevenlabs.sarlota_tools_sync", {
+    assistantKey: assistantConfig.assistantKey,
+    agentIdMasked: assistantPublicMetadata(assistantConfig).assistantAgentIdMasked,
+    userId: cleanString(user?.id),
+    timestamp: new Date().toISOString(),
+    action: mode === DIAGNOSTIC_IDENTITY_ONLY_MODE ? "tools-diagnostic" : "tools-sync",
+    apply: true
+  });
+
+  let plan = buildSyncPlan(context.agentConfig, context.workspaceTools, assistantConfig);
   if (context.workspaceToolsReadStatus !== "ok") {
     return json({
       error: "ElevenLabs workspace tools nejde bezpečně přečíst, takže synchronizaci nespouštím.",
@@ -798,7 +836,7 @@ async function applyPayload(env, mode = "") {
 
   const refreshedToolsPayload = await elevenLabsRequest({ apiKey: context.apiKey, path: "/tools" });
   const refreshedWorkspaceTools = workspaceToolList(refreshedToolsPayload);
-  plan = buildSyncPlan(context.agentConfig, refreshedWorkspaceTools);
+  plan = buildSyncPlan(context.agentConfig, refreshedWorkspaceTools, assistantConfig);
 
   const agentPatch = buildAgentPatch(context.agentConfig, refreshedWorkspaceTools, plan.expectedNames);
   if (!agentPatch.ok) {
@@ -887,8 +925,17 @@ export async function onRequestGet({ request, env }) {
       return response;
     }
 
+    const assistantConfig = assistantConfigFromRequest(request, env);
+    if (!assistantConfig) {
+      return json({
+        error: "Neznámý ElevenLabs assistant key.",
+        code: "INVALID_ASSISTANT_KEY",
+        apiStatus: "waiting"
+      }, 400);
+    }
+
     const mode = cleanString(new URL(request.url).searchParams.get("mode"));
-    return json(await planPayload(env, mode));
+    return json(await planPayload(env, assistantConfig, mode));
   } catch (error) {
     console.error("elevenlabs.sarlota_tools_sync_plan_failed", {
       message: safeErrorMessage(error),
@@ -904,13 +951,22 @@ export async function onRequestGet({ request, env }) {
 
 export async function onRequestPost({ request, env }) {
   try {
-    const { response } = await requireUserPermission(env, request, "settings", "manage");
+    const { user, response } = await requireUserPermission(env, request, "settings", "manage");
 
     if (response) {
       return response;
     }
 
     const payload = await readJson(request);
+    const assistantConfig = resolveElevenLabsAssistantConfig(payload?.assistant || "sarlota", env);
+    if (!assistantConfig) {
+      return json({
+        error: "Neznámý ElevenLabs assistant key.",
+        code: "INVALID_ASSISTANT_KEY",
+        apiStatus: "waiting"
+      }, 400);
+    }
+
     if (payload?.apply !== true) {
       return json({
         error: "Synchronizace vyžaduje potvrzení apply: true.",
@@ -920,7 +976,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     const mode = cleanString(payload?.mode);
-    return await applyPayload(env, mode);
+    return await applyPayload(env, assistantConfig, mode, user);
   } catch (error) {
     console.error("elevenlabs.sarlota_tools_sync_apply_failed", {
       message: safeErrorMessage(error),

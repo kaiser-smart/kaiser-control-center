@@ -3,6 +3,7 @@
 Fáze 1 připravuje dvě identity:
 
 - `Šarlota` - výchozí Smart pomocník
+- `Šarlota Smart 2 – test` - oddělený testovací Smart pomocník
 - `Marek` - zástupce Smart pomocníka
 
 ## Assety
@@ -20,6 +21,7 @@ Ve frontendu mohou být jen veřejná Agent ID:
 
 ```env
 VITE_ELEVENLABS_AGENT_ID_SARLOTA=
+VITE_ELEVENLABS_AGENT_ID_SARLOTA_SMART_2=
 VITE_ELEVENLABS_AGENT_ID_MAREK=
 ```
 
@@ -27,6 +29,7 @@ Backend / Cloudflare Secrets:
 
 ```env
 ELEVENLABS_AGENT_ID_SARLOTA=
+ELEVENLABS_AGENT_ID_SARLOTA_SMART_2=
 ELEVENLABS_AGENT_ID_MAREK=
 ELEVENLABS_API_KEY=
 AI_TOOLS_API_BASE_URL=
@@ -47,6 +50,26 @@ SARLOTA_HUMAN_TOUCH_JSON=
 `ELEVENLABS_API_KEY`, `OPENAI_API_KEY` ani `VOICE_ASSISTANT_WEBHOOK_TOKEN`
 nesmí být ve frontendu. Nastavují se jako Cloudflare Pages secrets nebo
 server-side env hodnoty.
+
+Assistant routing:
+
+- `sarlota` používá `ELEVENLABS_AGENT_ID_SARLOTA`.
+- `sarlota-smart-2` používá `ELEVENLABS_AGENT_ID_SARLOTA_SMART_2`.
+- `marek` používá `ELEVENLABS_AGENT_ID_MAREK`.
+
+Endpointy `signed-url`, `sarlota-status`, `sarlota-tools-sync` a
+`sarlota-prompt-sync` přijímají query/body parametr `assistant`. Neznámý klíč
+vrací `INVALID_ASSISTANT_KEY`; chybějící Agent ID vrací
+`ELEVENLABS_AGENT_ID_MISSING`. Sync tools i promptu musí být izolovaný podle
+vybraného asistenta. Marek nemá povolený sync promptu Šarloty.
+
+Signed-url dynamic variables navíc posílají:
+
+```text
+{{assistant_key}}
+{{assistant_display_name}}
+{{assistant_is_test}}
+```
 
 Počasí pro Šarlotu se načítá server-side přes Open-Meteo bez API klíče.
 Výchozí poloha je Brno. Pokud počasí není dostupné do krátkého timeoutu,
@@ -164,6 +187,18 @@ Bezpečný rychlý profil v ElevenLabs:
 
 U V3 Conversational dashboard neumožňuje nastavovat `Speed`, `Stability` ani
 `Similarity`; tyto hodnoty se proto neberou jako ověřené nastavení.
+
+## ElevenLabs agent Šarlota Smart 2 – test
+
+Název:
+
+```text
+Šarlota Smart 2 – test
+```
+
+Používá stejný bezpečný prompt a stejné client tools jako Šarlota, ale vlastní
+Agent ID z `ELEVENLABS_AGENT_ID_SARLOTA_SMART_2`. Testovací sync se nesmí
+dotknout produkční Šarloty a produkční sync se nesmí dotknout Smart 2.
 
 ## ElevenLabs agent Marek
 

@@ -1,3 +1,5 @@
+import { ELEVENLABS_ASSISTANT_CONFIGS } from "../elevenLabsAssistants.js";
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -284,11 +286,24 @@ export function SarlotaStatusPanel({
   syncing = false,
   syncMessage = "",
   syncError = "",
+  selectedAssistantKey = "sarlota",
   voiceDiagnostics = {}
 } = {}) {
   const data = status || {};
+  const selectedConfig = ELEVENLABS_ASSISTANT_CONFIGS[selectedAssistantKey] || ELEVENLABS_ASSISTANT_CONFIGS.sarlota;
   const omitDriverReportVehicleContext = voiceDiagnostics.omitDriverReportVehicleContext === true;
   const generatedAt = data.generatedAt ? new Date(data.generatedAt).toLocaleString("cs-CZ") : "neověřeno";
+  const assistantLabel = data.agent?.assistantDisplayName || selectedConfig.displayName;
+  const assistantBadge = selectedConfig.isProduction
+    ? `<span class="sarlota-status__badge sarlota-status__badge--ok">PRODUKCE</span>`
+    : selectedConfig.isTest
+      ? `<span class="sarlota-status__badge sarlota-status__badge--waiting">TEST</span>`
+      : `<span class="sarlota-status__badge sarlota-status__badge--unverified">ASISTENT</span>`;
+  const assistantOptions = Object.values(ELEVENLABS_ASSISTANT_CONFIGS).map((assistant) => `
+    <option value="${escapeHtml(assistant.assistantKey)}" ${assistant.assistantKey === selectedConfig.assistantKey ? "selected" : ""}>
+      ${escapeHtml(assistant.displayName)}
+    </option>
+  `).join("");
   const elevenLabsDetail = data.elevenLabs
     ? (data.elevenLabs.upstreamVerified
       ? "agent ověřen read-only přes ElevenLabs API"
@@ -298,12 +313,14 @@ export function SarlotaStatusPanel({
     ? (data.vocative.radimFixtureOk ? "test vocativu OK" : "čeká na ověření")
     : "neověřeno";
   const rows = [
+    statusRow("Assistant key", data.agent?.assistantKey ? "ok" : "unverified", data.agent?.assistantKey || selectedConfig.assistantKey),
+    statusRow("Agent ID", data.agent?.assistantAgentIdPresent ? "ok" : "error", data.agent?.assistantAgentIdMasked || `${selectedConfig.envVariableName} chybí`),
     statusRow(
       "ElevenLabs",
       data.elevenLabs?.status || "unverified",
       elevenLabsDetail
     ),
-    statusRow("Agent", data.agent?.status || "unverified", data.agent?.name || "Šarlota – Smart odpady"),
+    statusRow("Agent", data.agent?.status || "unverified", data.agent?.name || assistantLabel),
     statusRow("První zpráva", data.firstMessage?.status || "unverified", firstMessageDetail(data.firstMessage)),
     statusRow("Personalizace", data.personalization?.status || "unverified", data.personalization?.source || "přihlášený uživatel"),
     statusRow("Vocativ uživatele", data.vocative?.status || "unverified", vocativeDetail),
@@ -322,32 +339,43 @@ export function SarlotaStatusPanel({
     statusRow(
       "Signed-url endpoint",
       data.signedUrlEndpoint?.status || "unverified",
-      data.signedUrlEndpoint?.exists ? "/api/ai/elevenlabs/signed-url?assistant=sarlota" : "neověřeno"
+      data.signedUrlEndpoint?.exists ? (data.signedUrlEndpoint?.pathForAssistant || `/api/ai/elevenlabs/signed-url?assistant=${selectedConfig.assistantKey}`) : "neověřeno"
     )
   ].join("");
+  const promptSyncDisabled = loading || syncing || data.driverReportPrompt?.syncAllowed === false || selectedConfig.promptSyncAllowed === false;
+  const diagnosticSyncDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota";
 
   return `
     <section class="sarlota-status users-panel" aria-labelledby="sarlota-status-title">
       <div class="users-panel__head sarlota-status__head">
         <div>
           <h2 id="sarlota-status-title">Šarlota</h2>
-          <p>Read-only stav pro ElevenLabs agenta a signed-url napojení.</p>
+          <p>Read-only stav pro ElevenLabs agenta a signed-url napojení. ${assistantBadge}</p>
         </div>
         <div class="sarlota-status__actions">
+          <label class="sarlota-status__assistant-select">
+            <span>Asistent</span>
+            <select data-sarlota-assistant-select ${loading || syncing ? "disabled" : ""}>
+              ${assistantOptions}
+            </select>
+          </label>
           <button class="secondary-link" type="button" data-sarlota-status-refresh ${loading || syncing ? "disabled" : ""}>
             ${loading ? "Načítám..." : "Obnovit"}
           </button>
           <button class="primary-action sarlota-status__sync" type="button" data-sarlota-tools-sync ${loading || syncing ? "disabled" : ""}>
             ${syncing ? "Synchronizuji..." : "Synchronizovat tools"}
           </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-diagnostic ${loading || syncing ? "disabled" : ""}>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-diagnostic ${diagnosticSyncDisabled ? "disabled" : ""}>
             Diagnostika: odpojit tools
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-vehicle-context-diagnostic ${loading || syncing ? "disabled" : ""}>
             ${omitDriverReportVehicleContext ? "Vypnout test bez vozidel" : "Test: bez vozidel v hlasu"}
           </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-prompt-sync ${loading || syncing ? "disabled" : ""}>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-prompt-sync ${promptSyncDisabled ? "disabled" : ""}>
             Doplnit prompt
+          </button>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-test-call ${loading || syncing ? "disabled" : ""}>
+            Testovací hovor
           </button>
         </div>
       </div>

@@ -137,6 +137,7 @@ export function AiVoiceAssistantPanel({
   const showStatus = Boolean(statusText);
   const hasError = ["microphoneDenied", "disconnected", "error"].includes(normalizedVoiceUiState);
   const normalizedVoiceNotice = String(voiceNotice || "").trim();
+  const testLabel = assistant?.isTest ? `TEST: ${assistantName}` : "";
 
   return `
     <section
@@ -154,6 +155,9 @@ export function AiVoiceAssistantPanel({
 
       <div class="ai-voice-assistant-panel__body">
         <div class="ai-voice-assistant-panel__stage">
+          ${testLabel ? `
+            <p class="ai-voice-assistant-panel__test-label">${escapeHtml(testLabel)}</p>
+          ` : ""}
           <div class="ai-voice-assistant-panel__voice-control">
             <button
               class="ai-voice-assistant-panel__mic"

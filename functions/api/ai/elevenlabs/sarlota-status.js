@@ -4,12 +4,12 @@ import { normalizeAiSearch, userDynamicVariablesForAi } from "../../../_lib/ai-p
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
 import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
+import {
+  assistantConfigFromRequest,
+  assistantPublicMetadata,
+  resolveElevenLabsAssistantConfig
+} from "../../../../src/elevenLabsAssistants.js";
 
-const SARLOTA_AGENT_NAME = "Šarlota – Smart odpady";
-const SARLOTA_AGENT_NAME_ALIASES = [
-  SARLOTA_AGENT_NAME,
-  "Chytré odpadky – Šarlota"
-];
 const LLM_MODEL_EXPECTED_IN_ELEVENLABS = "Qwen3.5-397B-A17B";
 const LLM_MODEL_EXPECTED_NORMALIZED = "qwen35397ba17b";
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
@@ -23,14 +23,16 @@ const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
   "SPZ chtěj až jako " + "poslední možnost",
   "typ, značku nebo " + "interní název",
   "auto " + "3 brzdí divně",
+  "Ford " + "Transit",
+  "Škoda " + "Octavia",
+  "Fiat " + "Ducato",
+  "Tatra",
+  "1A2 " + "3456",
+  "1AB " + "2345",
+  "3A4 " + "5678",
   "Zapíšu bezpečnostní závadu k vozidlu " + "3",
   "Hotovo, závada je " + "zapsaná"
 ];
-const SARLOTA_ASSISTANT = {
-  id: "sarlota",
-  name: "Šarlota",
-  agentEnvKeys: ["ELEVENLABS_AGENT_ID_SARLOTA", "VITE_ELEVENLABS_AGENT_ID_SARLOTA"]
-};
 const REQUIRED_DYNAMIC_VARIABLES = [
   "user_name",
   "user_first_name",
@@ -120,12 +122,6 @@ function normalizeStatusText(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/gi, "")
     .toLowerCase();
-}
-
-function agentIdFor(env) {
-  return SARLOTA_ASSISTANT.agentEnvKeys
-    .map((key) => cleanString(env?.[key]))
-    .find(Boolean) || "";
 }
 
 function missingRequiredVariables(dynamicVariables) {
@@ -437,12 +433,12 @@ function collectKnowledgeEntriesFromAgent(agentConfig) {
     .slice(0, 40);
 }
 
-function safeAgentNameMatches(agentConfig) {
+function safeAgentNameMatches(agentConfig, assistantConfig) {
   const agentName = cleanString(agentConfig?.name);
-  return SARLOTA_AGENT_NAME_ALIASES.includes(agentName);
+  return (assistantConfig?.expectedAgentNames || []).includes(agentName);
 }
 
-async function readElevenLabsAgentConfig({ apiKey, agentId }) {
+async function readElevenLabsAgentConfig({ apiKey, agentId, assistantConfig }) {
   if (!apiKey || !agentId) {
     return {
       verified: false,
@@ -474,7 +470,9 @@ async function readElevenLabsAgentConfig({ apiKey, agentId }) {
     const modelMatches = normalizeStatusText(observedModel) === LLM_MODEL_EXPECTED_NORMALIZED;
     const firstMessage = firstMessageFromAgent(agentConfig);
     const firstMessageMatches = cleanString(firstMessage) === FIRST_MESSAGE_TEMPLATE;
-    const driverReportPromptRulePresent = driverReportPromptRuleMatches(agentConfig);
+    const driverReportPromptRulePresent = assistantConfig?.promptSyncAllowed === true
+      ? driverReportPromptRuleMatches(agentConfig)
+      : false;
     const driverReportPromptForbidden = driverReportPromptForbiddenPhrases(agentConfig);
     const configuredToolNames = toolNamesFromAgent(agentConfig);
     const configuredToolEntries = collectToolEntriesFromAgent(agentConfig);
@@ -484,7 +482,7 @@ async function readElevenLabsAgentConfig({ apiKey, agentId }) {
     return {
       verified: true,
       status: "ok",
-      agentNameMatches: safeAgentNameMatches(agentConfig),
+      agentNameMatches: safeAgentNameMatches(agentConfig, assistantConfig),
       observedModel,
       modelMatches,
       firstMessageMatches,
@@ -625,16 +623,26 @@ async function optionalStatusContext(name, loader, fallback) {
   }
 }
 
-export async function sarlotaStatusPayload(env, user) {
+export async function sarlotaStatusPayload(env, user, assistantConfig = resolveElevenLabsAssistantConfig("sarlota", env)) {
+  if (!assistantConfig) {
+    return {
+      generatedAt: new Date().toISOString(),
+      error: "Neznámý ElevenLabs assistant key.",
+      code: "INVALID_ASSISTANT_KEY",
+      apiStatus: "waiting"
+    };
+  }
+
   const apiKeyPresent = Boolean(cleanString(env?.ELEVENLABS_API_KEY));
-  const agentId = agentIdFor(env);
+  const agentId = assistantConfig.agentId;
   const agentIdPresent = Boolean(agentId);
   const configured = apiKeyPresent && agentIdPresent;
   const elevenLabsAgentConfig = await readElevenLabsAgentConfig({
     apiKey: cleanString(env?.ELEVENLABS_API_KEY),
-    agentId
+    agentId,
+    assistantConfig
   });
-  const introAnnouncement = await sarlotaIntroAnnouncementForAi(env, user, SARLOTA_ASSISTANT);
+  const introAnnouncement = await sarlotaIntroAnnouncementForAi(env, user, assistantConfig);
   const userVariables = userDynamicVariablesForAi(user);
   const humanTouch = await optionalStatusContext(
     "human_touch",
@@ -676,18 +684,20 @@ export async function sarlotaStatusPayload(env, user) {
     ? (elevenLabsAgentConfig.modelMatches ? "ok" : "error")
     : (liveAgentError ? "error" : "unverified");
   const driverReportPromptStatus = liveAgentVerified
-    ? (elevenLabsAgentConfig.driverReportPromptRulePresent && !elevenLabsAgentConfig.driverReportPromptForbidden?.length ? "ok" : "error")
+    ? (assistantConfig.promptSyncAllowed === true
+      ? (elevenLabsAgentConfig.driverReportPromptRulePresent && !elevenLabsAgentConfig.driverReportPromptForbidden?.length ? "ok" : "error")
+      : "unverified")
     : (liveAgentError ? "error" : "unverified");
 
   return {
     generatedAt: new Date().toISOString(),
     panel: {
-      title: "Šarlota",
+      title: assistantConfig.shortName,
       readOnly: true
     },
     agent: {
-      assistantId: "sarlota",
-      name: SARLOTA_AGENT_NAME,
+      ...assistantPublicMetadata(assistantConfig),
+      name: assistantConfig.displayName,
       status: liveAgentNameStatus,
       verifiedInElevenLabs: liveAgentVerified
     },
@@ -737,7 +747,8 @@ export async function sarlotaStatusPayload(env, user) {
       rulePresent: liveAgentVerified ? elevenLabsAgentConfig.driverReportPromptRulePresent : null,
       forbiddenPhrasesPresent: liveAgentVerified ? (elevenLabsAgentConfig.driverReportPromptForbidden || []) : [],
       promptTextReturned: false,
-      syncEndpoint: "/api/ai/elevenlabs/sarlota-prompt-sync"
+      syncAllowed: assistantConfig.promptSyncAllowed === true,
+      syncEndpoint: `/api/ai/elevenlabs/sarlota-prompt-sync?assistant=${encodeURIComponent(assistantConfig.assistantKey)}`
     },
     tools: {
       status: toolsStatus,
@@ -766,6 +777,8 @@ export async function sarlotaStatusPayload(env, user) {
       exists: true,
       method: "GET",
       path: "/api/ai/elevenlabs/signed-url?assistant=sarlota",
+      assistantKey: assistantConfig.assistantKey,
+      pathForAssistant: `/api/ai/elevenlabs/signed-url?assistant=${encodeURIComponent(assistantConfig.assistantKey)}`,
       configured,
       returnsConfiguredBoolean: true,
       dynamicVariablesChecked: true,
@@ -803,7 +816,8 @@ function panelStatusDetail(status, { ok = "OK", error = "chyba", unverified = "N
 }
 
 export async function sarlotaPanelStatusPayload(env, user) {
-  const status = await sarlotaStatusPayload(env, user);
+  const assistantConfig = resolveElevenLabsAssistantConfig("sarlota", env);
+  const status = await sarlotaStatusPayload(env, user, assistantConfig);
   const openAiServerConfigured = Boolean(cleanString(env?.OPENAI_API_KEY));
   const elevenLabsStatus = panelStatusValue(status.elevenLabs?.status, {
     configured: status.elevenLabs?.configured,
@@ -885,7 +899,7 @@ export async function sarlotaPanelStatusPayload(env, user) {
       }
     },
     checks: {
-      signedUrlEndpoint: "/api/ai/elevenlabs/signed-url?assistant=sarlota",
+      signedUrlEndpoint: `/api/ai/elevenlabs/signed-url?assistant=${encodeURIComponent(assistantConfig.assistantKey)}`,
       voiceEndpoint: "/api/voice/sarlota",
       signedUrlOmitted: true,
       secretsOmitted: true,
@@ -903,7 +917,16 @@ export async function onRequestGet({ request, env }) {
       return response;
     }
 
-    return json(await sarlotaStatusPayload(env, user));
+    const assistantConfig = assistantConfigFromRequest(request, env);
+    if (!assistantConfig) {
+      return json({
+        error: "Neznámý ElevenLabs assistant key.",
+        code: "INVALID_ASSISTANT_KEY",
+        apiStatus: "waiting"
+      }, 400);
+    }
+
+    return json(await sarlotaStatusPayload(env, user, assistantConfig));
   } catch (error) {
     console.error("elevenlabs.sarlota_status_failed", {
       message: safeErrorMessage(error)

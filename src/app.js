@@ -14,6 +14,7 @@ import { QuickAbsenceIcon, ReportsIcon } from "./components/icons/index.js";
 import { useSpeechRecognition } from "./useSpeechRecognition.js";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard.js";
 import { AI_ASSISTANTS, DEFAULT_AI_ASSISTANT_ID, assistantById } from "./data/aiAssistants.js";
+import { ELEVENLABS_ASSISTANT_CONFIGS, isValidElevenLabsAssistantKey } from "./elevenLabsAssistants.js";
 import { normalizeAiRoute } from "./elevenLabsClientTools.js";
 import {
   ABSENCE_REPORT_DAY,
@@ -655,6 +656,7 @@ const sarlotaStatusState = {
   loaded: false,
   loading: false,
   syncing: false,
+  assistantKey: "sarlota",
   data: null,
   error: "",
   syncMessage: "",
@@ -1063,7 +1065,7 @@ const speechRecognition = useSpeechRecognition({
 
 const elevenLabsAssistant = ElevenLabsAssistantProvider({
   signedUrlOptions: (assistantId, sessionContext = {}) => ({
-    omitDriverReportVehicleContext: assistantId === "sarlota" &&
+    omitDriverReportVehicleContext: ["sarlota", "sarlota-smart-2"].includes(assistantId) &&
       sessionContext.interfaceMode === "voice" &&
       sarlotaVoiceDiagnosticsState.omitDriverReportVehicleContext
   }),
@@ -2246,8 +2248,9 @@ function openAiAssistant(mode = "text", options = {}) {
   aiAssistantState.mode = nextMode;
   aiAssistantState.sarlotaDeepLinkQuickStart = nextMode === "voice" && Boolean(options.sarlotaDeepLinkQuickStart);
   if (aiAssistantState.mode === "voice") {
-    aiAssistantState.selectedAssistantId = DEFAULT_AI_ASSISTANT_ID;
-    const assistant = assistantById(DEFAULT_AI_ASSISTANT_ID);
+    const requestedAssistant = assistantById(options.assistantId || aiAssistantState.selectedAssistantId || DEFAULT_AI_ASSISTANT_ID);
+    aiAssistantState.selectedAssistantId = requestedAssistant.id;
+    const assistant = requestedAssistant;
     aiAssistantState.elevenLabsStatus = aiAssistantState.elevenLabsConfiguredByAssistant[assistant.id]
       ? `ElevenLabs agent ${assistant.name} je nakonfigurovaný.`
       : AI_STATUS_ELEVENLABS_WAITING;
@@ -4556,6 +4559,7 @@ function settingsManagementSection(user) {
       syncing: sarlotaStatusState.syncing,
       syncMessage: sarlotaStatusState.syncMessage,
       syncError: sarlotaStatusState.syncError,
+      selectedAssistantKey: sarlotaStatusState.assistantKey,
       voiceDiagnostics: sarlotaVoiceDiagnosticsState
     })}
     ${AppearanceSettingsBox({
@@ -23173,6 +23177,22 @@ function ensureSarlotaStatusData(options = {}) {
   }
 }
 
+function selectedSarlotaAssistantConfig() {
+  return ELEVENLABS_ASSISTANT_CONFIGS[sarlotaStatusState.assistantKey] || ELEVENLABS_ASSISTANT_CONFIGS.sarlota;
+}
+
+function sarlotaAssistantApiQuery(extra = {}) {
+  const params = new URLSearchParams({
+    assistant: selectedSarlotaAssistantConfig().assistantKey
+  });
+  Object.entries(extra).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  });
+  return params.toString();
+}
+
 async function loadSarlotaStatus(options = {}) {
   if (!authState.user || sarlotaStatusState.loading || !canManageAppearanceSettings(authState.user)) {
     return;
@@ -23182,7 +23202,7 @@ async function loadSarlotaStatus(options = {}) {
   sarlotaStatusState.error = "";
 
   try {
-    const result = await apiJson("/api/ai/elevenlabs/sarlota-status");
+    const result = await apiJson(`/api/ai/elevenlabs/sarlota-status?${sarlotaAssistantApiQuery()}`);
     sarlotaStatusState.data = result;
     sarlotaStatusState.loaded = true;
   } catch (error) {
@@ -23203,9 +23223,10 @@ function sarlotaToolsSyncConfirmText(plan = {}) {
   const operationsCount = Number(plan.workspaceTools?.operationsCount || 0);
   const missingCount = Array.isArray(plan.agentTools?.missing) ? plan.agentTools.missing.length : 0;
   const path = plan.agentTools?.path || "nenalezena";
+  const assistantName = plan.assistant?.assistantDisplayName || selectedSarlotaAssistantConfig().displayName;
 
   return [
-    "Synchronizovat ElevenLabs client tools pro Šarlotu?",
+    `Synchronizovat ElevenLabs client tools pro asistenta ${assistantName}?`,
     "",
     `Workspace operace: ${operationsCount}`,
     `Chybějící tools v agentovi: ${missingCount}`,
@@ -23227,7 +23248,7 @@ async function syncSarlotaTools() {
   render();
 
   try {
-    const plan = await apiJson("/api/ai/elevenlabs/sarlota-tools-sync");
+    const plan = await apiJson(`/api/ai/elevenlabs/sarlota-tools-sync?${sarlotaAssistantApiQuery()}`);
 
     if (!plan.ready) {
       sarlotaStatusState.syncError = "Synchronizaci nejde bezpečně spustit. Zkontroluj název agenta, first message a dostupnost workspace tools.";
@@ -23245,7 +23266,7 @@ async function syncSarlotaTools() {
 
     const result = await apiJson("/api/ai/elevenlabs/sarlota-tools-sync", {
       method: "POST",
-      body: JSON.stringify({ apply: true })
+      body: JSON.stringify({ apply: true, assistant: selectedSarlotaAssistantConfig().assistantKey })
     });
     const missingAfter = Array.isArray(result.verification?.missingTools) ? result.verification.missingTools.length : 0;
 
@@ -23290,6 +23311,12 @@ async function diagnosticSarlotaToolsIdentityOnly() {
   if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user)) {
     return;
   }
+  if (selectedSarlotaAssistantConfig().assistantKey !== "sarlota") {
+    sarlotaStatusState.syncError = "Diagnostické odpojení tools je povolené jen pro ostrou Šarlotu.";
+    sarlotaStatusState.syncMessage = "";
+    render();
+    return;
+  }
 
   sarlotaStatusState.syncing = true;
   sarlotaStatusState.syncError = "";
@@ -23298,7 +23325,7 @@ async function diagnosticSarlotaToolsIdentityOnly() {
 
   try {
     const mode = "diagnostic_identity_only";
-    const plan = await apiJson(`/api/ai/elevenlabs/sarlota-tools-sync?mode=${encodeURIComponent(mode)}`);
+    const plan = await apiJson(`/api/ai/elevenlabs/sarlota-tools-sync?${sarlotaAssistantApiQuery({ mode })}`);
 
     if (!plan.ready) {
       sarlotaStatusState.syncError = "Diagnostiku nejde bezpečně spustit. Zkontroluj název agenta, first message a cestu tools.";
@@ -23316,7 +23343,7 @@ async function diagnosticSarlotaToolsIdentityOnly() {
 
     const result = await apiJson("/api/ai/elevenlabs/sarlota-tools-sync", {
       method: "POST",
-      body: JSON.stringify({ apply: true, mode })
+      body: JSON.stringify({ apply: true, mode, assistant: selectedSarlotaAssistantConfig().assistantKey })
     });
     const remainingCount = Array.isArray(result.verification?.configuredAgentToolNames)
       ? result.verification.configuredAgentToolNames.length
@@ -23349,9 +23376,40 @@ function toggleSarlotaVoiceVehicleContextDiagnostic() {
   render();
 }
 
+function selectSarlotaAssistant(assistantKey) {
+  const normalized = String(assistantKey || "").trim();
+  if (!isValidElevenLabsAssistantKey(normalized) || normalized === sarlotaStatusState.assistantKey) {
+    return;
+  }
+
+  sarlotaStatusState.assistantKey = normalized;
+  sarlotaStatusState.loaded = false;
+  sarlotaStatusState.data = null;
+  sarlotaStatusState.error = "";
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "";
+  void loadSarlotaStatus({ force: true });
+}
+
+function startSarlotaAssistantTestCall() {
+  const assistantConfig = selectedSarlotaAssistantConfig();
+  openAiAssistant("voice", {
+    assistantId: assistantConfig.assistantKey,
+    renderAfter: false
+  });
+  aiAssistantState.voiceNotice = assistantConfig.isTest
+    ? `Testovací hovor: ${assistantConfig.displayName}`
+    : `Hovor: ${assistantConfig.displayName}`;
+  aiAssistantState.voiceTags = assistantConfig.isTest
+    ? ["TEST", assistantConfig.displayName, "Bez odeslání"]
+    : [assistantConfig.displayName, "Bez odeslání"];
+  renderAiAssistantLayerOnly();
+}
+
 function sarlotaPromptSyncConfirmText(plan = {}) {
+  const assistantName = plan.assistant?.assistantDisplayName || selectedSarlotaAssistantConfig().displayName;
   return [
-    "Doplnit bezpečné pravidlo Hlášení řidičů do ElevenLabs promptu Šarloty?",
+    `Doplnit bezpečné pravidlo Hlášení řidičů do ElevenLabs promptu asistenta ${assistantName}?`,
     "",
     `Cesta promptu: ${plan.prompt?.path || "nenalezena"}`,
     `Pravidlo už je v promptu: ${plan.alreadyApplied ? "ano" : "ne"}`,
@@ -23375,7 +23433,7 @@ async function syncSarlotaPrompt() {
   render();
 
   try {
-    const plan = await apiJson("/api/ai/elevenlabs/sarlota-prompt-sync");
+    const plan = await apiJson(`/api/ai/elevenlabs/sarlota-prompt-sync?${sarlotaAssistantApiQuery()}`);
 
     if (plan.alreadyApplied) {
       sarlotaStatusState.syncMessage = "Pravidlo už v ElevenLabs promptu je.";
@@ -23399,7 +23457,7 @@ async function syncSarlotaPrompt() {
 
     const result = await apiJson("/api/ai/elevenlabs/sarlota-prompt-sync", {
       method: "POST",
-      body: JSON.stringify({ apply: true })
+      body: JSON.stringify({ apply: true, assistant: selectedSarlotaAssistantConfig().assistantKey })
     });
 
     sarlotaStatusState.syncMessage = result.status === "ok"
@@ -27039,6 +27097,12 @@ document.addEventListener("change", async (event) => {
     return;
   }
 
+  const sarlotaAssistantSelect = event.target.closest("[data-sarlota-assistant-select]");
+  if (sarlotaAssistantSelect) {
+    selectSarlotaAssistant(sarlotaAssistantSelect.value);
+    return;
+  }
+
   const appearanceImport = event.target.closest("[data-appearance-import]");
   if (appearanceImport) {
     importAppearanceSettings(appearanceImport);
@@ -27268,6 +27332,13 @@ document.addEventListener("click", async (event) => {
   if (sarlotaPromptSync) {
     event.preventDefault();
     await syncSarlotaPrompt();
+    return;
+  }
+
+  const sarlotaTestCall = event.target.closest("[data-sarlota-test-call]");
+  if (sarlotaTestCall) {
+    event.preventDefault();
+    startSarlotaAssistantTestCall();
     return;
   }
 

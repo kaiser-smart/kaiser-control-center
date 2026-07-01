@@ -10,19 +10,12 @@ import {
 } from "../../../_lib/ai-people-summary.js";
 import { driverReportVehicleDynamicVariables } from "../../../_lib/fleet-vehicles-store.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
+import {
+  assistantConfigFromRequest,
+  assistantPublicMetadata,
+  maskElevenLabsAgentId
+} from "../../../../src/elevenLabsAssistants.js";
 
-const ASSISTANTS = {
-  sarlota: {
-    id: "sarlota",
-    name: "Šarlota",
-    agentEnvKeys: ["ELEVENLABS_AGENT_ID_SARLOTA", "VITE_ELEVENLABS_AGENT_ID_SARLOTA"]
-  },
-  marek: {
-    id: "marek",
-    name: "Marek",
-    agentEnvKeys: ["ELEVENLABS_AGENT_ID_MAREK", "VITE_ELEVENLABS_AGENT_ID_MAREK"]
-  }
-};
 const DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE = "identity_no_driver_vehicles";
 
 function cleanString(value) {
@@ -35,7 +28,7 @@ function isDebugRequest(request) {
 }
 
 function shouldOmitDriverReportVehicleContext(request, assistant) {
-  if (assistant.id !== "sarlota") {
+  if (assistant.assistantType !== "sarlota") {
     return false;
   }
 
@@ -49,16 +42,7 @@ function shouldOmitDriverReportVehicleContext(request, assistant) {
 }
 
 function maskAgentId(agentId) {
-  const value = cleanString(agentId);
-  if (!value) {
-    return null;
-  }
-
-  if (value.length <= 12) {
-    return `${value.slice(0, 4)}…${value.slice(-2)}`;
-  }
-
-  return `${value.slice(0, 10)}…${value.slice(-4)}`;
+  return maskElevenLabsAgentId(agentId) || null;
 }
 
 function safeExcerpt(value, { apiKey = "", agentId = "" } = {}) {
@@ -93,25 +77,13 @@ function diagnosticPayload({
     upstreamStatus: responseFromElevenLabs?.status ?? null,
     upstreamStatusText: responseFromElevenLabs?.statusText || "",
     upstreamBodyExcerpt: safeExcerpt(responseBody, { apiKey, agentId }),
-    assistantId: assistant.id,
+    assistantId: assistant.assistantKey,
     apiKeyPresent: Boolean(apiKey),
     agentIdPresent: Boolean(agentId),
     agentIdMasked: maskAgentId(agentId),
     contextWarnings,
     endpoint: "get-signed-url"
   };
-}
-
-function assistantFor(request) {
-  const url = new URL(request.url);
-  const assistantId = cleanString(url.searchParams.get("assistant") || "sarlota").toLowerCase();
-  return ASSISTANTS[assistantId] || ASSISTANTS.sarlota;
-}
-
-function agentIdFor(env, assistant) {
-  return assistant.agentEnvKeys
-    .map((key) => cleanString(env?.[key]))
-    .find(Boolean) || "";
 }
 
 function safeErrorMessage(error) {
@@ -170,7 +142,7 @@ async function optionalContext(name, loader, fallback, warnings) {
 }
 
 async function sarlotaHumanTouchDynamicVariables(env, user, baseDynamicVariables, assistant) {
-  if (assistant.id !== "sarlota") {
+  if (assistant.assistantType !== "sarlota") {
     return fallbackHumanTouchVariables();
   }
 
@@ -189,7 +161,7 @@ async function sarlotaHumanTouchDynamicVariables(env, user, baseDynamicVariables
 
 async function signedUrlPayload({ request, env, user, assistant, debug }) {
   const apiKey = cleanString(env.ELEVENLABS_API_KEY);
-  const agentId = agentIdFor(env, assistant);
+  const agentId = assistant.agentId;
   const contextWarnings = [];
   const omitDriverReportVehicleContext = shouldOmitDriverReportVehicleContext(request, assistant);
   const userDynamicVariables = userDynamicVariablesForAi(user);
@@ -205,7 +177,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
     fallbackHumanTouchVariables,
     contextWarnings
   );
-  const driverReportVehicleVariables = assistant.id === "sarlota" && !omitDriverReportVehicleContext
+  const driverReportVehicleVariables = assistant.assistantType === "sarlota" && !omitDriverReportVehicleContext
     ? await optionalContext(
       "driver_report_vehicle",
       () => driverReportVehicleDynamicVariables(env, user),
@@ -220,14 +192,27 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
     ...userDynamicVariables,
     ...introAnnouncement.variables,
     ...humanTouchVariables,
-    ...driverReportVehicleVariables
+    ...driverReportVehicleVariables,
+    assistant_key: assistant.assistantKey,
+    assistant_display_name: assistant.displayName,
+    assistant_is_test: assistant.isTest ? "true" : "false"
   };
 
-  if (!apiKey || !agentId) {
+  if (!agentId) {
     return json({
-      error: "ElevenLabs není nastavený. Doplňte ELEVENLABS_API_KEY a Agent ID pro vybraného asistenta.",
-      assistantId: assistant.id,
-      assistantName: assistant.name,
+      error: `Chybí Agent ID pro asistenta ${assistant.displayName}.`,
+      code: "ELEVENLABS_AGENT_ID_MISSING",
+      ...assistantPublicMetadata(assistant),
+      configured: false,
+      apiStatus: "waiting"
+    }, 503);
+  }
+
+  if (!apiKey) {
+    return json({
+      error: "ElevenLabs není nastavený. Doplňte ELEVENLABS_API_KEY.",
+      code: "ELEVENLABS_API_KEY_MISSING",
+      ...assistantPublicMetadata(assistant),
       configured: false,
       apiStatus: "waiting"
     }, 503);
@@ -275,20 +260,19 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
 
       return json({
         error: "ElevenLabs session se nepodařilo připravit.",
-        assistantId: assistant.id,
-        assistantName: assistant.name,
+        ...assistantPublicMetadata(assistant),
         configured: true,
         apiStatus: "waiting"
       }, 502);
     }
 
     await recordAiAction(env, user, {
-      assistantId: assistant.id,
-      assistantName: assistant.name,
+      assistantId: assistant.assistantKey,
+      assistantName: assistant.displayName,
       actionType: "session",
       toolName: "elevenlabs_signed_url",
       input: {
-        assistantId: assistant.id,
+        assistantId: assistant.assistantKey,
         diagnosticMode: omitDriverReportVehicleContext ? DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE : ""
       },
       result: {
@@ -298,7 +282,8 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
         humanTouchEnabled: dynamicVariables.human_touch_enabled,
         humanTouchType: dynamicVariables.human_touch_type,
         driverReportVehicleContextOmitted: omitDriverReportVehicleContext,
-        contextWarnings
+        contextWarnings,
+        assistantIsTest: assistant.isTest === true
       },
       status: "ok"
     });
@@ -307,8 +292,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
     return json({
       signedUrl: payload.signed_url,
       conversationId: payload.conversation_id || "",
-      assistantId: assistant.id,
-      assistantName: assistant.name,
+      ...assistantPublicMetadata(assistant),
       dynamicVariables,
       diagnostics: {
         diagnosticMode: omitDriverReportVehicleContext ? DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE : "",
@@ -338,8 +322,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
 
     return json({
       error: "ElevenLabs teď neodpověděl.",
-      assistantId: assistant.id,
-      assistantName: assistant.name,
+      ...assistantPublicMetadata(assistant),
       configured: true,
       apiStatus: "waiting"
     }, 502);
@@ -348,8 +331,8 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
 
 function signedUrlServerErrorResponse({ error, assistant, debug, stage }) {
   const debugPayload = {
-    assistantId: assistant.id,
-    assistantName: assistant.name,
+    assistantId: assistant.assistantKey,
+    assistantName: assistant.displayName,
     stage,
     message: safeErrorMessage(error),
     endpoint: "get-signed-url"
@@ -360,8 +343,7 @@ function signedUrlServerErrorResponse({ error, assistant, debug, stage }) {
   return json({
     error: "Hlas Šarloty se teď nepodařilo připravit na serveru.",
     code: "elevenlabs_server_error",
-    assistantId: assistant.id,
-    assistantName: assistant.name,
+    ...assistantPublicMetadata(assistant),
     configured: false,
     apiStatus: "waiting",
     ...(debug ? { debug: debugPayload } : {})
@@ -369,7 +351,14 @@ function signedUrlServerErrorResponse({ error, assistant, debug, stage }) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const assistant = assistantFor(request);
+  const assistant = assistantConfigFromRequest(request, env);
+  if (!assistant) {
+    return json({
+      error: "Neznámý ElevenLabs assistant key.",
+      code: "INVALID_ASSISTANT_KEY",
+      apiStatus: "waiting"
+    }, 400);
+  }
   const debug = isDebugRequest(request);
 
   try {

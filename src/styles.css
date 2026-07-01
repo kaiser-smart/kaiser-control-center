@@ -4910,6 +4910,28 @@ h1 {
   justify-content: flex-end;
 }
 
+.sarlota-status__assistant-select {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid rgba(35, 40, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sarlota-status__assistant-select select {
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
 .sarlota-status__sync {
   min-height: 44px;
 }
@@ -18203,6 +18225,18 @@ body:has(.absence-page--employee-card) {
   color: #3d4740;
   font-size: clamp(1rem, 4vw, 1.18rem);
   font-weight: 400;
+}
+
+.ai-voice-assistant-panel__test-label {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(143, 91, 22, 0.28);
+  border-radius: 999px;
+  background: #fff8ec;
+  color: #6c430d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .ai-voice-assistant-panel__notice {

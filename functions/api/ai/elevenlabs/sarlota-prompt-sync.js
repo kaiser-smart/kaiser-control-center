@@ -1,11 +1,11 @@
 import { json, readJson, requireUserPermission } from "../../../_lib/auth.js";
 import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
+import {
+  assistantConfigFromRequest,
+  assistantPublicMetadata,
+  resolveElevenLabsAssistantConfig
+} from "../../../../src/elevenLabsAssistants.js";
 
-const SARLOTA_AGENT_NAME = "Šarlota – Smart odpady";
-const SARLOTA_AGENT_NAME_ALIASES = [
-  SARLOTA_AGENT_NAME,
-  "Chytré odpadky – Šarlota"
-];
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/convai";
 const PROMPT_RULE_MARKER = "HLÁŠENÍ ŘIDIČŮ / VOZIDLA";
@@ -45,12 +45,6 @@ function cleanString(value) {
 
 function safeErrorMessage(error) {
   return cleanString(error?.message || error?.name || "unknown_error");
-}
-
-function agentIdFor(env) {
-  return ["ELEVENLABS_AGENT_ID_SARLOTA", "VITE_ELEVENLABS_AGENT_ID_SARLOTA"]
-    .map((key) => cleanString(env?.[key]))
-    .find(Boolean) || "";
 }
 
 function getPathValue(source, path) {
@@ -184,16 +178,17 @@ async function elevenLabsRequest({ apiKey, path, method = "GET", body = null }) 
   return payload;
 }
 
-async function readLiveContext(env) {
+async function readLiveContext(env, assistantConfig) {
   const apiKey = cleanString(env?.ELEVENLABS_API_KEY);
-  const agentId = agentIdFor(env);
+  const agentId = assistantConfig?.agentId || "";
 
   if (!apiKey || !agentId) {
     return {
       ok: false,
       status: "missing_configuration",
       apiKeyPresent: Boolean(apiKey),
-      agentIdPresent: Boolean(agentId)
+      agentIdPresent: Boolean(agentId),
+      assistant: assistantConfig ? assistantPublicMetadata(assistantConfig) : null
     };
   }
 
@@ -206,7 +201,8 @@ async function readLiveContext(env) {
     ok: true,
     apiKey,
     agentId,
-    agentConfig
+    agentConfig,
+    assistantConfig
   };
 }
 
@@ -218,13 +214,14 @@ function buildPlan(context) {
       status: context.status,
       apiKeyPresent: context.apiKeyPresent,
       agentIdPresent: context.agentIdPresent,
+      assistant: context.assistant || null,
       message: "Chybí serverová ElevenLabs konfigurace."
     };
   }
 
   const promptPath = promptPathFromAgent(context.agentConfig);
   const firstMessage = firstMessageFromAgent(context.agentConfig);
-  const agentNameMatches = SARLOTA_AGENT_NAME_ALIASES.includes(cleanString(context.agentConfig?.name));
+  const agentNameMatches = (context.assistantConfig?.expectedAgentNames || []).includes(cleanString(context.agentConfig?.name));
   const firstMessageMatches = firstMessage === FIRST_MESSAGE_TEMPLATE;
   const hasCurrentRule = promptPath ? promptHasCurrentRule(promptPath.value) : false;
   const hasLegacyRule = promptPath ? promptHasLegacyRule(promptPath.value) : false;
@@ -237,8 +234,9 @@ function buildPlan(context) {
     ready: agentNameMatches && firstMessageMatches && promptNeedsPatch,
     alreadyApplied: hasCurrentRule && !hasLegacyRule && !hasLegacyUnsafeExample,
     generatedAt: new Date().toISOString(),
+    assistant: assistantPublicMetadata(context.assistantConfig),
     agent: {
-      expectedName: SARLOTA_AGENT_NAME,
+      expectedName: context.assistantConfig?.displayName || "",
       nameMatches: agentNameMatches,
       firstMessage: FIRST_MESSAGE_TEMPLATE,
       firstMessageMatches
@@ -276,15 +274,33 @@ function upstreamErrorSummary(error) {
   return cleanString(error?.payload?.message || error?.payload?.error || error?.message || "upstream_error");
 }
 
-async function applyPayload(env) {
-  const context = await readLiveContext(env);
+async function applyPayload(env, assistantConfig, user = null) {
+  if (!assistantConfig?.promptSyncAllowed) {
+    return json({
+      error: "Prompt Šarloty pro tohoto asistenta není povolený.",
+      code: "PROMPT_SYNC_NOT_ALLOWED",
+      ...assistantPublicMetadata(assistantConfig),
+      apiStatus: "waiting"
+    }, 409);
+  }
+
+  const context = await readLiveContext(env, assistantConfig);
   if (!context.ok) {
     return json({
       error: "ElevenLabs konfigurace není dostupná.",
       code: context.status,
+      assistant: assistantPublicMetadata(assistantConfig),
       apiStatus: "waiting"
     }, 409);
   }
+  console.info("elevenlabs.sarlota_prompt_sync", {
+    assistantKey: assistantConfig.assistantKey,
+    agentIdMasked: assistantPublicMetadata(assistantConfig).assistantAgentIdMasked,
+    userId: cleanString(user?.id),
+    timestamp: new Date().toISOString(),
+    action: "prompt-sync",
+    apply: true
+  });
 
   const plan = buildPlan(context);
   if (plan.alreadyApplied) {
@@ -377,7 +393,26 @@ export async function onRequestGet({ request, env }) {
       return response;
     }
 
-    return json(buildPlan(await readLiveContext(env)));
+    const assistantConfig = assistantConfigFromRequest(request, env);
+    if (!assistantConfig) {
+      return json({
+        error: "Neznámý ElevenLabs assistant key.",
+        code: "INVALID_ASSISTANT_KEY",
+        apiStatus: "waiting"
+      }, 400);
+    }
+
+    if (!assistantConfig.promptSyncAllowed) {
+      return json({
+        mode: "dry_run",
+        ready: false,
+        status: "prompt_sync_not_allowed",
+        assistant: assistantPublicMetadata(assistantConfig),
+        message: "Prompt Šarloty pro tohoto asistenta není povolený."
+      });
+    }
+
+    return json(buildPlan(await readLiveContext(env, assistantConfig)));
   } catch (error) {
     console.error("elevenlabs.sarlota_prompt_sync_plan_failed", {
       message: safeErrorMessage(error),
@@ -393,13 +428,22 @@ export async function onRequestGet({ request, env }) {
 
 export async function onRequestPost({ request, env }) {
   try {
-    const { response } = await requireUserPermission(env, request, "settings", "manage");
+    const { user, response } = await requireUserPermission(env, request, "settings", "manage");
 
     if (response) {
       return response;
     }
 
     const payload = await readJson(request);
+    const assistantConfig = resolveElevenLabsAssistantConfig(payload?.assistant || "sarlota", env);
+    if (!assistantConfig) {
+      return json({
+        error: "Neznámý ElevenLabs assistant key.",
+        code: "INVALID_ASSISTANT_KEY",
+        apiStatus: "waiting"
+      }, 400);
+    }
+
     if (payload?.apply !== true) {
       return json({
         error: "Synchronizace promptu vyžaduje potvrzení apply: true.",
@@ -408,7 +452,7 @@ export async function onRequestPost({ request, env }) {
       }, 409);
     }
 
-    return await applyPayload(env);
+    return await applyPayload(env, assistantConfig, user);
   } catch (error) {
     console.error("elevenlabs.sarlota_prompt_sync_failed", {
       message: safeErrorMessage(error),

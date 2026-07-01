@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.282"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.283"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota Smart 2: oddělený testovací agent",
+    text: "Nastavení Šarloty umí přepnout mezi produkční Šarlotou, testovací Šarlotou Smart 2 a Markem. Status, signed-url, tools sync, prompt sync i testovací hovor používají vybraný assistant key a vlastní Agent ID."
+  },
   {
     title: "Šarlota: ověřený seznam vozidel",
     text: "Hlášení řidičů používá ověřený backend seznam jako první volbu. Když seznam není bezpečný nebo je dlouhý, otevře picker v aplikaci; značka, typ nebo SPZ jsou už jen nouzová cesta."

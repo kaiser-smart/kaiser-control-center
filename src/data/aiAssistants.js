@@ -9,7 +9,33 @@ export const AI_ASSISTANTS = [
     avatarPath: "",
     microphonePath: "/avatars/sarlota-microphone-black.png",
     introVoiceLine: "Jsem Šarlota. Pomůžu ti ve Smart odpadech najít informace a připravit další krok.",
-    agentIdEnv: "VITE_ELEVENLABS_AGENT_ID_SARLOTA"
+    agentIdEnv: "VITE_ELEVENLABS_AGENT_ID_SARLOTA",
+    isProduction: true,
+    isTest: false
+  },
+  {
+    id: "sarlota-smart-2",
+    name: "Šarlota Smart 2",
+    role: "Testovací Smart asistentka",
+    intro: "Testovací hlasová asistence pro Smart odpady.",
+    avatarPath: "",
+    microphonePath: "/avatars/sarlota-microphone-black.png",
+    introVoiceLine: "Jsem Šarlota Smart 2. Testovací prostředí pro Smart odpady.",
+    agentIdEnv: "VITE_ELEVENLABS_AGENT_ID_SARLOTA_SMART_2",
+    isProduction: false,
+    isTest: true
+  },
+  {
+    id: "marek",
+    name: "Marek",
+    role: "Testovací asistent",
+    intro: "Testovací hlasový asistent.",
+    avatarPath: "",
+    microphonePath: "/avatars/sarlota-microphone-black.png",
+    introVoiceLine: "Jsem Marek. Testovací asistent.",
+    agentIdEnv: "VITE_ELEVENLABS_AGENT_ID_MAREK",
+    isProduction: false,
+    isTest: false
   }
 ];
 

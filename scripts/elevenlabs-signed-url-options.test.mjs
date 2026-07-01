@@ -5,7 +5,7 @@ import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
 const requestedPaths = [];
 const assistant = useElevenLabsAssistant({
   signedUrlOptions: (assistantId, sessionContext = {}) => ({
-    omitDriverReportVehicleContext: assistantId === "sarlota" && sessionContext.interfaceMode === "voice"
+    omitDriverReportVehicleContext: ["sarlota", "sarlota-smart-2"].includes(assistantId) && sessionContext.interfaceMode === "voice"
   }),
   fetchJson: async (path) => {
     requestedPaths.push(path);
@@ -21,6 +21,14 @@ const assistant = useElevenLabsAssistant({
 await assistant.prepareSignedUrl("sarlota", { interfaceMode: "voice" });
 assert.match(requestedPaths.at(-1), /assistant=sarlota/);
 assert.match(requestedPaths.at(-1), /diagnosticMode=identity_no_driver_vehicles/);
+
+await assistant.prepareSignedUrl("sarlota-smart-2", { interfaceMode: "voice" });
+assert.match(requestedPaths.at(-1), /assistant=sarlota-smart-2/);
+assert.match(requestedPaths.at(-1), /diagnosticMode=identity_no_driver_vehicles/);
+
+await assistant.prepareSignedUrl("marek", { interfaceMode: "voice" });
+assert.match(requestedPaths.at(-1), /assistant=marek/);
+assert.doesNotMatch(requestedPaths.at(-1), /diagnosticMode=/);
 
 await assistant.prepareSignedUrl("sarlota", { interfaceMode: "text" });
 assert.match(requestedPaths.at(-1), /assistant=sarlota/);
