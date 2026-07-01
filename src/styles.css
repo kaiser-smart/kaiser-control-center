@@ -773,6 +773,27 @@ h1 {
     box-shadow 160ms ease;
 }
 
+.data-box-unread-corner-badge {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  min-width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #d7262f;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(215, 38, 47, 0.24);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .module-card::before {
   position: absolute;
   inset: 0 auto 0 0;
@@ -20187,6 +20208,24 @@ body:has(.data-box-page) .data-box-account-chip--active.data-box-account-chip--d
   box-shadow: 0 8px 20px color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 12%, transparent);
 }
 
+body:has(.data-box-page) .data-box-account-chip {
+  position: relative;
+  padding-right: 44px;
+}
+
+body:has(.data-box-page) .data-box-account-chip .data-box-unread-corner-badge {
+  top: -7px;
+  right: -7px;
+}
+
+body:has(.data-box-page) .data-box-account-chip__body small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 body:has(.data-box-page) .data-box-workbench {
   align-items: start;
 }
@@ -21780,7 +21819,15 @@ body:has(.data-box-page) .data-box-side-status__ai small {
     max-width: 132px;
     min-height: 38px;
     gap: 6px;
-    padding: 6px 8px;
+    padding: 6px 28px 6px 8px;
+  }
+
+  body:has(.data-box-page) .data-box-account-chip .data-box-unread-corner-badge {
+    top: -6px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    font-size: 0.66rem;
   }
 
   body:has(.data-box-page) .data-box-account-chip__mark {

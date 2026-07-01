@@ -4368,6 +4368,7 @@ function loginPage() {
 }
 
 function homePage(user) {
+  ensureDataBoxData();
   const modulesForUser = hasPermission(user, "absence", "create")
     ? [quickAbsenceMenuItem, ...menuModules(user)]
     : menuModules(user);
@@ -4380,6 +4381,7 @@ function homePage(user) {
             <span class="module-icon">${renderModuleIcon(moduleItem)}</span>
             ${statusBadge(moduleItem)}
           </span>
+          ${moduleItem.id === DATA_BOX_MODULE_KEY ? dataBoxUnreadCornerBadge(dataBoxTotalUnreadCount(), "Nové datové zprávy") : ""}
           <span class="module-card__content">
             <span class="module-card__header">
               <span class="module-card__title">${moduleItem.title}</span>
@@ -15208,6 +15210,45 @@ function dataBoxFilteredSyncRuns() {
   return dataBoxState.syncRuns.filter((run) => !selectedAccount || run.dataBoxId === selectedAccount.id);
 }
 
+function dataBoxMessageIsTrash(message) {
+  const source = dataBoxSearchText([
+    message.processingStatus,
+    message.workflowStatus,
+    message.status,
+    message.folder,
+    message.category,
+    message.isdsState
+  ].filter(Boolean).join(" "));
+
+  return source.includes("kos")
+    || source.includes("trash")
+    || source.includes("deleted")
+    || source.includes("smaz")
+    || source.includes("odstran");
+}
+
+function dataBoxTotalUnreadCount() {
+  return dataBoxState.messages.filter((message) => (
+    message.direction === "received"
+    && dataBoxTechnicalReadState(message).id === "new"
+    && dataBoxWorkflowStatus(message).id !== "archived"
+    && !dataBoxMessageIsTrash(message)
+  )).length;
+}
+
+function dataBoxUnreadCornerBadge(count, label = "Nové zprávy") {
+  const value = Number(count) || 0;
+  if (value <= 0) {
+    return "";
+  }
+
+  return `
+    <span class="data-box-unread-corner-badge" title="${escapeHtml(label)}" aria-label="${escapeHtml(`${label}: ${value}`)}">
+      ${escapeHtml(value > 99 ? "99+" : String(value))}
+    </span>
+  `;
+}
+
 function dataBoxRunStatusLabel(status) {
   const labels = {
     success: "sync OK",
@@ -15224,6 +15265,14 @@ function dataBoxAccountStats(account, accountStatusMap = dataBoxAccountStatusMap
   const status = accountStatusMap.get(account.id);
   const received = messages.filter((message) => message.direction === "received").length;
   const sent = messages.filter((message) => message.direction === "sent").length;
+  const archive = messages.filter((message) => message.direction === "received" && dataBoxWorkflowStatus(message).id === "archived").length;
+  const trash = messages.filter((message) => message.direction === "received" && dataBoxMessageIsTrash(message)).length;
+  const unread = messages.filter((message) => (
+    message.direction === "received"
+    && dataBoxTechnicalReadState(message).id === "new"
+    && dataBoxWorkflowStatus(message).id !== "archived"
+    && !dataBoxMessageIsTrash(message)
+  )).length;
   const configured = Boolean(status?.configured || messages.length || runs.length);
 
   return {
@@ -15231,6 +15280,9 @@ function dataBoxAccountStats(account, accountStatusMap = dataBoxAccountStatusMap
     lastRun,
     received,
     sent,
+    archive,
+    trash,
+    unread,
     statusLabel: lastRun ? dataBoxRunStatusLabel(lastRun.status) : (configured ? "čeká na sync" : "nenastaveno")
   };
 }
@@ -15247,7 +15299,7 @@ function dataBoxAccountConnectionClass(stats) {
 }
 
 function dataBoxAccountSummary(stats) {
-  return `${stats.received} přijatých · ${stats.sent} odeslaných`;
+  return `${stats.received} přijatých · ${stats.sent} odeslaných · Archiv ${stats.archive || 0} · Koš ${stats.trash || 0}`;
 }
 
 function dataBoxAccountButton(account, stats, active = false) {
@@ -15264,6 +15316,7 @@ function dataBoxAccountButton(account, stats, active = false) {
         <strong>${escapeHtml(account.label)}</strong>
         <small>${escapeHtml(dataBoxAccountSummary(stats))}</small>
       </span>
+      ${dataBoxUnreadCornerBadge(stats.unread, `Nové zprávy: ${account.label}`)}
       <span class="data-box-account-card__status ${dataBoxAccountStatusClass(stats)}">
         ${escapeHtml(stats.statusLabel)}
       </span>
@@ -16916,20 +16969,10 @@ function dataBoxAiBoostCheckResults() {
 }
 
 function dataBoxAiBoostRulePreviewMarkup(rule = {}) {
-  const extras = Array.isArray(rule.extraConditions) && rule.extraConditions.length
-    ? `<span>Ještě hledá: ${rule.extraConditions.map((item) => `„${escapeHtml(item)}“`).join(" nebo ")}</span>`
-    : "";
   return `
     <article class="data-box-ai-boost-rule-card">
       <p>${escapeHtml(dataBoxAiBoostRuleSentence(rule))}</p>
-      <div>
-        <span>${escapeHtml(rule.source || "Pracovní návrh")}</span>
-        <span>${escapeHtml(dataBoxAiBoostScopeChoiceLabel(rule.scope || "anywhere"))}</span>
-        <span>${escapeHtml(dataBoxAiBoostSafetyChoiceLabel(rule.safetyMode || "suggestion"))}</span>
-        ${extras}
-      </div>
       <div class="data-box-ai-boost-rule-card__actions">
-        <button class="secondary-link" type="button" data-data-box-ai-run>Vyzkoušet</button>
         <button class="secondary-link" type="button" data-data-box-ai-rule-edit="${escapeHtml(rule.id || "")}">Upravit</button>
         <button class="secondary-link" type="button" data-data-box-ai-rule-disable="${escapeHtml(rule.id || "")}">Vypnout</button>
       </div>
@@ -17003,44 +17046,28 @@ function dataBoxAiBoostEditForm(action = {}) {
   `;
 }
 
+function dataBoxAiBoostActionSentence(action = {}) {
+  const message = dataBoxAiBoostMessage(action);
+  const condition = message?.subject || action.subject || dataBoxAiBoostRuleConditionLabel(action) || "této zprávě";
+  return `Když zpráva odpovídá „${condition}“, AI Boost navrhne „${dataBoxAiBoostActionLabel(action)}“. Nic se neodešle ani nesmaže bez potvrzení.`;
+}
+
 function dataBoxAiBoostCard(action = {}) {
   const message = dataBoxAiBoostMessage(action);
   const title = message?.subject || action.subject || "Datová zpráva";
-  const confidence = Number(action.result?.confidence || 0);
-  const confidenceLabel = confidence ? `${Math.round(confidence * 100)} % jistota` : "jistota neuvedena";
   const canConfirm = dataBoxAiBoostCanConfirm(action);
   const confirmLabel = action.actionType === "email" ? "Potvrdit e-mail" : "Potvrdit archivaci";
   const status = String(action.status || "").toLowerCase();
   const actionType = String(action.actionType || "").toLowerCase();
-  const safetyLabel = dataBoxAiBoostSafetyLabel(action);
 
   return `
     <article class="data-box-ai-boost-card data-box-ai-boost-card--${escapeHtml(status || "concept")} data-box-ai-boost-card--${escapeHtml(actionType || "review")}">
       <div class="data-box-ai-boost-card__main">
-        <span class="data-box-ai-boost-card__eyebrow">Stav: ${escapeHtml(dataBoxAiBoostStatusLabel(action))}</span>
-        <div class="data-box-ai-boost-tags">
-          ${dataBoxAiBoostWorkTags(action).map(dataBoxFlagBadge).join("")}
-        </div>
         <h3>${escapeHtml(title)}</h3>
-        <dl class="data-box-ai-boost-rule-facts">
-          <div>
-            <dt>Kdy se použije</dt>
-            <dd>${escapeHtml(dataBoxAiBoostRuleConditionLabel(action))}</dd>
-          </div>
-          <div>
-            <dt>Co navrhne</dt>
-            <dd>${escapeHtml(dataBoxAiBoostActionLabel(action))}</dd>
-          </div>
-          <div>
-            <dt>Bezpečnost</dt>
-            <dd>${escapeHtml(safetyLabel)}</dd>
-          </div>
-        </dl>
-        <p>${escapeHtml(action.bodyPreview || action.result?.reason || "AI Boost jen navrhl další krok. Rozhodnutí zůstává na uživateli.")}</p>
+        <p>${escapeHtml(dataBoxAiBoostActionSentence(action))}</p>
         <div class="data-box-ai-boost-card__meta">
-          ${action.recipient ? `<span>Příjemce: ${escapeHtml(action.recipient)}</span>` : ""}
-          <span>${escapeHtml(confidenceLabel)}</span>
-          <span>${escapeHtml(formatDateTime(action.createdAt) || "")}</span>
+          <span>${escapeHtml(dataBoxAiBoostStatusLabel(action))}</span>
+          <span>Bez potvrzení se nic neprovede.</span>
         </div>
       </div>
       <div class="data-box-ai-boost-card__actions">
@@ -17083,7 +17110,7 @@ function dataBoxAiBoostNewActionForm() {
       <div class="data-box-ai-boost-wizard__head">
         <span>Vytvořit pravidlo</span>
         <h3 id="data-box-ai-create-title">Když zpráva obsahuje X → navrhni Y</h3>
-        <p>Pravidlo nejdřív vznikne jako pracovní návrh. Nic se automaticky nesmaže, neodešle ani nepošle e-mailem.</p>
+        <p>Stačí vyplnit, co má zpráva obsahovat a jaký návrh má AI Boost ukázat. Bez potvrzení se nic nemaže ani neposílá.</p>
       </div>
       <form data-data-box-ai-rule-draft-form data-editing-rule-id="${escapeHtml(editingRule?.id || "")}">
         <section class="data-box-ai-boost-step">
@@ -17176,7 +17203,7 @@ function dataBoxAiBoostNewActionForm() {
           ${editingRule ? `<button class="secondary-link" type="button" data-data-box-ai-rule-edit-cancel>Zrušit úpravu</button>` : ""}
         </div>
       </form>
-      <p class="data-box-ai-boost-pilot-note">Pravidlo je zatím pracovní návrh v tomto rozhraní. Trvalé uložení vyžaduje backend.</p>
+      <p class="data-box-ai-boost-pilot-note">Bez potvrzení uživatele se nic neodešle, nesmaže ani nespustí automaticky.</p>
     </section>
   `;
 }
@@ -17210,35 +17237,13 @@ function dataBoxAiBoostGroupSection({ title, countLabel, emptyTitle, emptyText, 
 }
 
 function dataBoxAiBoostPanel(user) {
-  const canManage = hasPermission(user, DATA_BOX_MODULE_KEY, "manage");
   const actions = [...dataBoxState.aiBoostActions].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const waitingActions = actions.filter(dataBoxAiBoostIsWaiting);
-  const historyActions = actions.filter(dataBoxAiBoostIsDone);
-  const mappingWarnings = dataBoxAiBoostMappingWarnings(actions);
   const rules = dataBoxAiBoostVisibleRules();
-  const localResults = dataBoxAiBoostCheckResults();
-  const resultCount = waitingActions.length || localResults.length;
 
   return `
     <section class="data-box-panel data-box-ai-boost-panel" aria-labelledby="data-box-ai-boost-title">
-      <div class="data-box-ai-boost-hero">
-        <div class="data-box-ai-boost-hero__copy">
-          <h2 id="data-box-ai-boost-title">AI Boost</h2>
-          <p>AI Boost pomáhá poznat typ datové zprávy a navrhnout další krok. Sám nic nemaže, neposílá ani neodesílá bez potvrzení.</p>
-        </div>
-        <div class="data-box-ai-boost-hero__actions" aria-label="Hlavní akce AI Boostu">
-          <button class="primary-action" type="button" data-data-box-ai-run ${!canManage || dataBoxState.aiBoostLoading ? "disabled" : ""}>
-            ${escapeHtml(dataBoxState.aiBoostLoading ? "Kontroluji..." : "Zkontrolovat zprávy")}
-          </button>
-        </div>
-      </div>
-      <p class="data-box-ai-boost-safe-line">Princip: když zpráva obsahuje X → AI Boost navrhne Y → nic se nemaže ani neposílá bez potvrzení.</p>
-      ${mappingWarnings.length ? `
-        <div class="data-box-action-feedback data-box-action-feedback--warning" role="status">
-          <strong>Kontrola mapování DS</strong>
-          <span>AI Boost vidí podobné zprávy ve více schránkách: ${mappingWarnings.map((group) => `${escapeHtml(group.subject)} (${Array.from(group.mailboxes.values()).map(escapeHtml).join(" / ")})`).join("; ")}. Před potvrzením e-mailů doporučuji ověřit diagnostiku DS.</span>
-        </div>
-      ` : ""}
+      <p class="data-box-ai-boost-safe-line" id="data-box-ai-boost-title">Když zpráva obsahuje X → AI Boost navrhne Y → nic se nemaže ani neposílá bez potvrzení.</p>
       ${dataBoxState.aiBoostError ? `<div class="data-box-action-feedback data-box-action-feedback--error" role="alert">${escapeHtml(dataBoxState.aiBoostError)}</div>` : ""}
       ${dataBoxState.aiBoostMessage ? `<div class="data-box-action-feedback data-box-action-feedback--success" role="status">${escapeHtml(dataBoxState.aiBoostMessage)}</div>` : ""}
       ${dataBoxAiBoostNewActionForm()}
@@ -17253,56 +17258,23 @@ function dataBoxAiBoostPanel(user) {
           ${rules.length ? rules.map(dataBoxAiBoostRulePreviewMarkup).join("") : `
             <div class="data-box-ai-boost-empty">
               <strong>Zatím tu není žádné pravidlo.</strong>
-              <span>Pravidlo můžeš připravit níže v jednoduchém průvodci.</span>
+              <span>Vyplň nahoře větu Když zpráva obsahuje X → navrhni Y.</span>
             </div>
           `}
         </div>
       </section>
-      <section class="data-box-ai-boost-section data-box-ai-boost-section--results" id="data-box-ai-results" aria-labelledby="data-box-ai-results-title">
-        <div class="data-box-ai-boost-section__head">
-          <div>
-            <h3 id="data-box-ai-results-title">Zkontrolovat zprávy</h3>
-            <span>${resultCount ? `AI Boost našel ${resultCount} zpráv, na které sedí pravidla.` : "AI Boost zatím nenašel zprávy k rozhodnutí."}</span>
+      ${waitingActions.length ? `
+        <section class="data-box-ai-boost-section data-box-ai-boost-section--results" id="data-box-ai-results" aria-labelledby="data-box-ai-results-title">
+          <div class="data-box-ai-boost-section__head">
+            <div>
+              <h3 id="data-box-ai-results-title">Čeká na potvrzení</h3>
+              <span>${waitingActions.length} návrhů. Bez potvrzení se nic neprovede.</span>
+            </div>
           </div>
-        </div>
-        ${waitingActions.length ? `
           <div class="data-box-ai-boost-list">
             ${waitingActions.map(dataBoxAiBoostCard).join("")}
           </div>
-        ` : localResults.length ? `
-          <div class="data-box-ai-boost-result-list">
-            ${localResults.map(({ rule, message }) => `
-              <article class="data-box-ai-boost-result">
-                <h4>${escapeHtml(message.subject || message.title || "Datová zpráva")}</h4>
-                <p>Sedí pravidlo: ${escapeHtml(rule.title || "AI Boost pravidlo")}</p>
-                <p>Návrh: ${escapeHtml(dataBoxAiBoostActionChoiceLabel(rule.actionType || "archive"))}</p>
-                <p>Bezpečnost: ${escapeHtml(dataBoxAiBoostSafetyChoiceLabel(rule.safetyMode || "suggestion"))}, nic se nemaže.</p>
-                <button class="secondary-link" type="button" data-data-box-ai-open="${escapeHtml(message.id || "")}">Otevřít zprávu</button>
-              </article>
-            `).join("")}
-          </div>
-        ` : `
-          <div class="data-box-ai-boost-empty">
-            <strong>Žádná zpráva nečeká na rozhodnutí.</strong>
-            <span>Vytvoř jednoduché pravidlo nebo klikni na Zkontrolovat zprávy.</span>
-          </div>
-        `}
-      </section>
-      ${actions.length ? `
-        <details class="data-box-ai-boost-history" ${waitingActions.length ? "" : "open"}>
-          <summary>
-            <span>Hotovo / historie</span>
-            <strong>${historyActions.length}</strong>
-          </summary>
-          <div class="data-box-ai-boost-list">
-            ${historyActions.length ? historyActions.map(dataBoxAiBoostCard).join("") : `
-            <div class="data-box-ai-boost-empty">
-              <strong>Historie je zatím prázdná.</strong>
-              <span>Po potvrzení se tady zobrazí archivované, odeslané nebo zablokované akce.</span>
-            </div>
-            `}
-          </div>
-        </details>
+        </section>
       ` : ""}
     </section>
   `;
