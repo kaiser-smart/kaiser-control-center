@@ -925,7 +925,7 @@ const dataBoxState = {
   actionError: "",
   selectedPreviewMessageId: "",
   messagePagination: {
-    pageSize: 5,
+    pageSize: 10,
     currentPage: 1
   },
   messageFilters: {
@@ -14819,6 +14819,7 @@ const DATA_BOX_QUICK_FILTERS = [
 ];
 
 const DATA_BOX_PAGE_SIZES = [5, 10, 20, 30, 50, 100];
+const DATA_BOX_DEFAULT_PAGE_SIZE = 10;
 
 const DATA_BOX_STATUS_OPTIONS = [
   ["all", "Všechny stavy"],
@@ -15082,7 +15083,7 @@ function updateDataBoxSearchFilter(field) {
 function dataBoxPaginationForRows(rows) {
   const pageSize = DATA_BOX_PAGE_SIZES.includes(Number(dataBoxState.messagePagination.pageSize))
     ? Number(dataBoxState.messagePagination.pageSize)
-    : DATA_BOX_PAGE_SIZES[0];
+    : DATA_BOX_DEFAULT_PAGE_SIZE;
   const totalRows = rows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const currentPage = Math.min(
@@ -21092,7 +21093,7 @@ function resetDataBoxState() {
   dataBoxState.actionError = "";
   dataBoxState.selectedPreviewMessageId = "";
   dataBoxState.messagePagination = {
-    pageSize: 5,
+    pageSize: DATA_BOX_DEFAULT_PAGE_SIZE,
     currentPage: 1
   };
   dataBoxState.messageFilters = {
