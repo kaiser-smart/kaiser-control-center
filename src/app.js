@@ -14832,15 +14832,6 @@ const DATA_BOX_STATUS_OPTIONS = [
   ["error", "Chyba / nejasné"]
 ];
 
-const DATA_BOX_PRIORITY_OPTIONS = [
-  ["all", "Všechny priority"],
-  ["urgent", "Urgentní"],
-  ["legal", "Právní"],
-  ["info", "Info"],
-  ["normal", "Běžné"],
-  ["error", "Chyba"]
-];
-
 const DATA_BOX_TYPE_OPTIONS = [
   ["all", "Všechny typy"],
   ["official", "Úřad / řízení"],
@@ -15028,10 +15019,7 @@ function dataBoxHasActiveMessageFilters() {
   return Boolean(
     filters.query
     || filters.status !== "all"
-    || filters.priority !== "all"
     || filters.type !== "all"
-    || filters.deadline !== "all"
-    || filters.attachment !== "all"
     || filters.dataBox !== "all"
     || filters.assigned !== "all"
     || filters.quick !== "all"
@@ -15969,9 +15957,7 @@ function dataBoxMessageMatchesFilters(message) {
   const filters = dataBoxState.messageFilters;
   const status = dataBoxWorkflowStatus(message);
   const readState = dataBoxTechnicalReadState(message);
-  const priority = dataBoxMessagePriority(message);
   const type = dataBoxMessageType(message);
-  const deadline = dataBoxDeadlineInfo(message);
   const assignee = dataBoxMessageAssigneeValue(message);
   const haystack = dataBoxMessageSearchHaystack(message);
 
@@ -15991,39 +15977,11 @@ function dataBoxMessageMatchesFilters(message) {
     return false;
   }
 
-  if (filters.priority !== "all" && priority.id !== filters.priority) {
-    return false;
-  }
-
   if (filters.type !== "all" && type.id !== filters.type) {
     return false;
   }
 
   if (!dataBoxSelectedAccount() && filters.dataBox !== "all" && message.dataBoxId !== filters.dataBox) {
-    return false;
-  }
-
-  if (filters.deadline === "with" && !deadline.date) {
-    return false;
-  }
-
-  if (filters.deadline === "due_3" && (!deadline.date || deadline.days === null || deadline.days > 3)) {
-    return false;
-  }
-
-  if (filters.deadline === "overdue" && (!deadline.date || deadline.days === null || deadline.days >= 0)) {
-    return false;
-  }
-
-  if (filters.deadline === "none" && deadline.date) {
-    return false;
-  }
-
-  if (filters.attachment === "with" && !dataBoxHasAttachments(message)) {
-    return false;
-  }
-
-  if (filters.attachment === "without" && dataBoxHasAttachments(message)) {
     return false;
   }
 
@@ -16163,34 +16121,6 @@ function dataBoxMessageFilters(direction) {
         <span>Stav</span>
         <select name="status" data-data-box-filter>
           ${dataBoxFilterOptions(DATA_BOX_STATUS_OPTIONS, filters.status)}
-        </select>
-      </label>
-      <label>
-        <span>Priorita</span>
-        <select name="priority" data-data-box-filter>
-          ${dataBoxFilterOptions(DATA_BOX_PRIORITY_OPTIONS, filters.priority)}
-        </select>
-      </label>
-      <label>
-        <span>Lhůta</span>
-        <select name="deadline" data-data-box-filter>
-          ${dataBoxFilterOptions([
-            ["all", "Všechny"],
-            ["with", "Jen s lhůtou"],
-            ["due_3", "Do 3 dnů"],
-            ["overdue", "Po lhůtě"],
-            ["none", "Bez lhůty"]
-          ], filters.deadline)}
-        </select>
-      </label>
-      <label>
-        <span>Přílohy</span>
-        <select name="attachment" data-data-box-filter>
-          ${dataBoxFilterOptions([
-            ["all", "Všechny"],
-            ["with", "S přílohou"],
-            ["without", "Bez příloh"]
-          ], filters.attachment)}
         </select>
       </label>
     </form>
