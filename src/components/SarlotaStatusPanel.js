@@ -264,6 +264,10 @@ function vehicleContextDetail(context = null) {
     return "neověřeno";
   }
 
+  if (context.omittedByDefault === true) {
+    return "běžná signed-url neposílá driver_report_vehicle_*";
+  }
+
   const count = Number(context.optionsCount || 0);
   return `${context.status || "neověřeno"}, ${count} možností ze signed-url dynamic variables`;
 }
@@ -308,7 +312,7 @@ export function SarlotaStatusPanel({
       omitDriverReportVehicleContext ? "configured" : "ok",
       omitDriverReportVehicleContext
         ? "zapnuto pro další novou hlasovou session, driver_report_vehicle_* se nepošle"
-        : "vypnuto, hlas dostává standardní signed-url dynamic variables"
+        : "vypnuto, běžná signed-url už driver_report_vehicle_* neposílá"
     ),
     statusRow(
       "Signed-url endpoint",

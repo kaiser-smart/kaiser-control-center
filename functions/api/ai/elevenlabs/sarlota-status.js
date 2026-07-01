@@ -1,6 +1,5 @@
 import { json, requireUserPermission } from "../../../_lib/auth.js";
 import { sarlotaIntroAnnouncementForAi } from "../../../_lib/ai-session-announcements.js";
-import { driverReportVehicleDynamicVariables } from "../../../_lib/fleet-vehicles-store.js";
 import { normalizeAiSearch, userDynamicVariablesForAi } from "../../../_lib/ai-people-summary.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
@@ -558,6 +557,22 @@ function fallbackDriverReportVehicleVariables() {
 }
 
 function driverReportVehicleStatusSummary(variables) {
+  if (variables?.omittedByDefault === true) {
+    return {
+      status: "vynecháno",
+      source: "signed_url_default_omitted",
+      optionsCount: 0,
+      optionsPreview: "Běžná signed-url cesta neposílá driver_report_vehicle_*.",
+      singleVehiclePreview: "",
+      hasSelectionQuestion: false,
+      hasContext: false,
+      fullVinReturned: false,
+      signedUrlReturned: false,
+      secretsReturned: false,
+      omittedByDefault: true
+    };
+  }
+
   const status = cleanString(variables?.driver_report_vehicle_status) || "neověřeno";
   const optionsCount = Number.parseInt(cleanString(variables?.driver_report_vehicle_options_count), 10);
   const options = safeShortText(variables?.driver_report_vehicle_options, 240);
@@ -607,11 +622,7 @@ export async function sarlotaStatusPayload(env, user) {
     }),
     { enabled: false, suggestions: [], sourceStatus: { status: "unavailable" } }
   );
-  const driverReportVehicleVariables = await optionalStatusContext(
-    "driver_report_vehicle",
-    () => driverReportVehicleDynamicVariables(env, user),
-    fallbackDriverReportVehicleVariables
-  );
+  const driverReportVehicleVariables = { omittedByDefault: true };
   const dynamicVariables = {
     ...userVariables,
     ...introAnnouncement.variables,
