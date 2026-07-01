@@ -57,6 +57,40 @@ const PASSENGER_VEHICLE_KINDS = new Set([
   "car"
 ]);
 
+const TWO_FACTOR_PATTERNS = [
+  "2fa",
+  "mfa",
+  "2 faktor",
+  "two factor",
+  "two-factor",
+  "multi factor",
+  "multi-factor",
+  "verification code",
+  "security code",
+  "authentication code",
+  "one time code",
+  "one-time code",
+  "email code",
+  "e-mail code",
+  "sent to your email",
+  "verify your identity",
+  "identity verification",
+  "authenticator",
+  "overovaci kod",
+  "bezpecnostni kod",
+  "kod z emailu",
+  "potvrdte prihlaseni",
+  "bestaetigungscode",
+  "bestatigungscode",
+  "sicherheitscode",
+  "authentifizierungscode",
+  "verifizierungscode",
+  "einmalcode",
+  "zweifaktor",
+  "per e mail",
+  "per email"
+];
+
 export function cleanString(value) {
   return String(value ?? "").trim();
 }
@@ -103,8 +137,23 @@ export function normalizeVehicleKind(value) {
     .replace(/^_+|_+$/g, "");
 }
 
+function normalizeDetectionText(value) {
+  return cleanString(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function isPassengerVehicleKind(value) {
   return PASSENGER_VEHICLE_KINDS.has(normalizeVehicleKind(value));
+}
+
+export function detectTwoFactorChallengeText(value) {
+  const text = normalizeDetectionText(value);
+  return TWO_FACTOR_PATTERNS.some((pattern) => text.includes(normalizeDetectionText(pattern)));
 }
 
 function parseArgs(argv = []) {
@@ -198,6 +247,20 @@ async function readSafeResult(page, config) {
     title: redactSensitive(title, [config.vin]),
     url: redactSensitive(url, [config.vin]),
     textPreview: redactedText.replace(/\s+/g, " ").slice(0, 700)
+  };
+}
+
+async function readTwoFactorChallenge(page, config) {
+  const title = await page.title().catch(() => "");
+  const url = page.url();
+  const bodyText = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
+  if (!detectTwoFactorChallengeText(`${title}\n${url}\n${bodyText}`)) {
+    return null;
+  }
+  return {
+    title: redactSensitive(title, [config.companyId, config.username, config.password, config.vin]),
+    url: redactSensitive(url, [config.companyId, config.username, config.password, config.vin]),
+    note: "2FA obsah stránky není ukládaný do výsledku kvůli možným citlivým údajům."
   };
 }
 
@@ -322,6 +385,17 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
       clickFirst(page, SUBMIT_SELECTORS, "Login")
     ]);
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
+
+    const twoFactorChallenge = await readTwoFactorChallenge(page, config);
+    if (twoFactorChallenge) {
+      return finished({
+        ok: false,
+        status: "manual_action_required",
+        errorCode: "PARTSLINK24_2FA_REQUIRED",
+        result: twoFactorChallenge,
+        message: "partslink24 vyžaduje 2FA ověření e-mailem. Runner kód nečte ani nezadává automaticky."
+      });
+    }
 
     const vinSelector = await fillFirst(page, VIN_SEARCH_SELECTORS, config.vin, "VIN search");
     await page.keyboard.press("Enter");

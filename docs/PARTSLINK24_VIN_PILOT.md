@@ -24,6 +24,8 @@ Runner proto vyžaduje typ vozidla. Pokud typ chybí nebo není osobní, vrátí
 - Objednat náhradní díl.
 - Potvrdit jakoukoliv placenou nebo provozní akci.
 - Měnit data v partslink24.
+- Automaticky číst e-mailovou schránku kvůli 2FA kódu.
+- Automaticky zadávat 2FA kód.
 - Ukládat heslo, cookies nebo session tokeny do repozitáře, UI, logu nebo artefaktu.
 - Pořizovat screenshoty s přihlášenými údaji bez samostatného potvrzení.
 - Tvrdit, že je integrace produkčně hotová.
@@ -66,6 +68,19 @@ PARTSLINK24_COMPANY_ID/USERNAME/PASSWORD jsou nastavené jako GitHub secrets
 ```
 
 Pozor: hodnota zadaná do `workflow_dispatch` inputu může být vidět v GitHub UI běhu. Pro ostrý VIN používej tento režim až po schválení pilotního testu; produkční Fáze 1 má přijímat VIN přes backend KSO, ne přes ručně vyplňovaný workflow input.
+
+## 2FA přes e-mail
+
+Pokud partslink24 po přihlášení vyžádá 2FA / ověřovací kód z e-mailu, runner musí skončit bezpečným stavem:
+
+```text
+status=manual_action_required
+errorCode=PARTSLINK24_2FA_REQUIRED
+```
+
+Runner nesmí číst e-mail, ukládat 2FA kód, zadávat 2FA kód ani ukládat session cookies bez samostatně schváleného řešení.
+
+Dokud nebude 2FA postup ověřený, live pilot nesmí tvrdit, že partslink24 vyhledání funguje stabilně.
 
 Lokální preflight bez přihlášení:
 

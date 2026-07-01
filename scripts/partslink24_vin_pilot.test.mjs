@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  detectTwoFactorChallengeText,
   isPassengerVehicleKind,
   maskVin,
   normalizeVehicleKind,
@@ -14,6 +15,10 @@ assert.equal(maskVin("ABC1234"), "*******");
 assert.equal(normalizeVehicleKind("osobní"), "osobni");
 assert.equal(isPassengerVehicleKind("osobní"), true);
 assert.equal(isPassengerVehicleKind("nákladní"), false);
+assert.equal(detectTwoFactorChallengeText("Zadej ověřovací kód z e-mailu."), true);
+assert.equal(detectTwoFactorChallengeText("Enter the verification code sent to your email."), true);
+assert.equal(detectTwoFactorChallengeText("Bitte geben Sie den Sicherheitscode ein."), true);
+assert.equal(detectTwoFactorChallengeText("Vítej ve vyhledávání VIN."), false);
 assert.equal(parseBoolean("true"), true);
 assert.equal(parseBoolean("0"), false);
 assert.equal(redactSensitive("login admin pass dummy-password VIN WDB12345678901234", [
