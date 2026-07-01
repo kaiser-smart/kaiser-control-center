@@ -737,6 +737,7 @@ const driverReportsState = {
   permissions: {
     canCreate: false,
     canManage: false,
+    canSearchPartslink24: false,
     limitation: ""
   },
   loaded: false,
@@ -2921,6 +2922,7 @@ const permissionActionLabels = {
   approve: "schválit",
   export: "export",
   manage: "správa",
+  "parts-search": "vyhledat ND",
   "*": "vše"
 };
 
@@ -18528,6 +18530,10 @@ function driverReportCanCreate() {
   return Boolean(driverReportsState.permissions?.canCreate);
 }
 
+function driverReportCanSearchPartslink24() {
+  return Boolean(driverReportsState.permissions?.canSearchPartslink24 || driverReportCanManage());
+}
+
 function ensureDriverReportsData(options = {}) {
   if (!authState.user || driverReportsState.loading) {
     return;
@@ -18690,6 +18696,51 @@ function driverReportMercedesPartSection(item) {
         ${driverReportCopyField("OE číslo", item.oePartNumber || item.partOrderNumber)}
       </div>
       ${driverReportMercedesLinks(item)}
+    </section>
+  `;
+}
+
+function driverReportPartslink24StatusLabel(status) {
+  const normalized = String(status || "").trim();
+  if (normalized === "manual_dispatch_required") return "Vyžaduje ruční spuštění";
+  if (normalized === "manual_review_required") return "Vyžaduje ruční kontrolu";
+  if (normalized === "dry_run_ready") return "Dry-run připraven";
+  if (normalized === "configuration_missing") return "Nenakonfigurováno";
+  if (normalized === "blocked") return "Blokováno";
+  if (normalized === "failed") return "Chyba";
+  return normalized || "Zatím bez hledání";
+}
+
+function driverReportPartslink24Section(item) {
+  const eligibility = item.partslink24Eligibility || {};
+  const latest = item.partslink24VinSearch || null;
+  const canSearch = driverReportCanSearchPartslink24() && eligibility.canSearchPartslink24 === true;
+  const allowed = canSearch && eligibility.allowed === true;
+  const loading = driverReportsState.actionLoading === `${item.id}:partslink24-vin`;
+  const statusText = latest
+    ? driverReportPartslink24StatusLabel(latest.status)
+    : driverReportPartslink24StatusLabel("");
+  const message = latest?.message || eligibility.message || "Pilotní vyhledání je dostupné jen pro osobní vozidla s VIN.";
+  const workflowUrl = latest?.workflowUrl || "";
+
+  return `
+    <section class="driver-report-part driver-report-partslink24" aria-label="Náhradní díly podle VIN">
+      <div class="driver-report-part__title">
+        <div>
+          <h3>Náhradní díly podle VIN</h3>
+          <span>Read-only pilot · osobní vozidla</span>
+        </div>
+        ${allowed ? `<button class="secondary-link" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>${loading ? "Připravuji..." : "Vyhledat ND podle VIN"}</button>` : ""}
+      </div>
+      <div class="driver-report-detail-grid">
+        ${driverReportField("Vozidlo", item.vehicleName || item.licensePlate)}
+        ${driverReportField("VIN", eligibility.vinMasked || (item.vin ? "uložené ve Vozovém parku" : "není dostupné"))}
+        ${driverReportField("Rozsah pilotu", eligibility.vehicleKind === "osobni" ? "osobní vozidlo" : "mimo pilot / neověřeno")}
+        ${driverReportField("Stav posledního hledání", statusText)}
+      </div>
+      <p class="driver-report-note">${escapeHtml(message)}</p>
+      <p class="driver-report-note">Pilotní vyhledání přes partslink24. Nic se neobjednává, nic se nepotvrzuje a ostré pokračování probíhá ručně přes schválený runner.</p>
+      ${workflowUrl ? `<div class="driver-report-part-links"><a class="secondary-link" href="${escapeHtml(workflowUrl)}" target="_blank" rel="noopener noreferrer">Otevřít GitHub Actions runner</a></div>` : ""}
     </section>
   `;
 }
@@ -19127,6 +19178,7 @@ function driverReportDetail(item) {
       </section>
 
       ${driverReportMercedesPartSection(item)}
+      ${driverReportPartslink24Section(item)}
 
       <div class="driver-report-notifications" aria-label="Stavy notifikací">
         ${driverReportNotificationPill("E-mail Patrikovi", item.patrikEmailStatus, item.patrikEmailError)}
@@ -19537,6 +19589,36 @@ async function runDriverReportAction(requestId, action, payload = {}) {
     await loadDriverReports({ renderAfter: false, force: true });
   } catch (error) {
     driverReportsState.error = error.payload?.error || "Akce se nepodařila uložit.";
+  } finally {
+    driverReportsState.actionLoading = "";
+    render();
+  }
+}
+
+async function runDriverReportPartslink24Search(requestId) {
+  if (!requestId || driverReportsState.actionLoading) {
+    return;
+  }
+
+  driverReportsState.actionLoading = `${requestId}:partslink24-vin`;
+  driverReportsState.error = "";
+  driverReportsState.message = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/driver-reports/partslink24/search-by-vin", {
+      method: "POST",
+      body: JSON.stringify({ requestId })
+    });
+    driverReportsState.selected = {
+      ...(driverReportsState.selected || {}),
+      partslink24VinSearch: result.audit || null,
+      partslink24Eligibility: result.eligibility || driverReportsState.selected?.partslink24Eligibility || null
+    };
+    driverReportsState.message = result.message || "partslink24 pilotní požadavek byl auditovaný.";
+    await loadDriverReportDetail(requestId, { renderAfter: false });
+  } catch (error) {
+    driverReportsState.error = error.payload?.error || "Vyhledání přes partslink24 se nepodařilo připravit.";
   } finally {
     driverReportsState.actionLoading = "";
     render();
@@ -27194,6 +27276,13 @@ document.addEventListener("click", async (event) => {
       driverReportAction.dataset.requestId || "",
       driverReportAction.dataset.driverReportAction || ""
     );
+    return;
+  }
+
+  const driverReportPartslink24Search = event.target.closest("[data-driver-report-partslink24-search]");
+  if (driverReportPartslink24Search) {
+    event.preventDefault();
+    await runDriverReportPartslink24Search(driverReportPartslink24Search.dataset.requestId || "");
     return;
   }
 

@@ -23012,6 +23012,14 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   background: color-mix(in srgb, var(--theme-card, #ffffff) 86%, #dcebed);
 }
 
+.driver-report-partslink24 {
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 90%, var(--theme-primary, var(--kaiser-green)));
+}
+
+.driver-report-partslink24 .driver-report-part__title span {
+  color: color-mix(in srgb, var(--driver-report-pit) 68%, var(--theme-primary, var(--kaiser-green)));
+}
+
 .driver-report-copy-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -17,6 +17,11 @@ import {
 } from "./driver-parts-catalog.js";
 import { verifyMercedesPartForRequest } from "./mercedes-parts-provider.js";
 import {
+  canUsePartslink24VinSearch,
+  latestPartslink24VinSearchForRequest,
+  partslink24EligibilityForDriverPartRequest
+} from "./partslink24-search-store.js";
+import {
   sendDriverPartOrderNotification,
   sendDriverPartReadySms,
   sendDriverPartServiceTechSms
@@ -510,9 +515,13 @@ export async function listDriverPartRequests(env, user, options = {}) {
 export async function getDriverPartRequest(env, user, id) {
   try {
     const { db, item } = await requestForUser(env, id, user);
+    const partslink24Eligibility = await partslink24EligibilityForDriverPartRequest(env, user, item);
+    const partslink24VinSearch = await latestPartslink24VinSearchForRequest(env, item.id);
     return {
       ...item,
-      events: await eventsForRequest(db, item.id)
+      events: await eventsForRequest(db, item.id),
+      partslink24Eligibility,
+      partslink24VinSearch
     };
   } catch (error) {
     if (error instanceof DriverPartRequestsStoreError) throw error;
@@ -1452,6 +1461,7 @@ export function driverPartRequestPermissionSummary(user) {
     role,
     canCreate: canCreateDriverPartRequest(user),
     canManage: canManageDriverPartRequests(user),
+    canSearchPartslink24: canUsePartslink24VinSearch(user),
     limitation: role === "ridic"
       ? "Řidič může vytvořit hlášení a sledovat vlastní stav. Objednání, doručení a servis řeší oprávněná role."
       : ""

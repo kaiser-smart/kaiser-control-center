@@ -97,6 +97,8 @@ let mockEmployeeMedicalExams = new Map();
 let mockAbsenceRequests = [];
 let mockDriverPartRequests = [];
 let mockFleetAssignments = new Map();
+let mockPartslink24Searches = [];
+const mockPartslink24WorkflowUrl = "https://github.com/kaiser-smart/kaiser-control-center/actions/workflows/partslink24-vin-pilot.yml";
 let mockModuleFeedback = [];
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
@@ -564,6 +566,21 @@ function mockFleetVehicleFixtures() {
       active: true,
       status: "active",
       source: "Lokální mock T-Cars"
+    },
+    {
+      id: "local-passenger-bmw",
+      vehicleId: "local-passenger-bmw",
+      externalProvider: "local",
+      externalVehicleId: "local-passenger-bmw",
+      licensePlate: "1AB 2345",
+      internalNumber: "BMW osobní",
+      model: "BMW 5",
+      brand: "BMW",
+      vehicleType: "Osobní vozidlo",
+      vin: "WBA5K91050D895073",
+      active: true,
+      status: "active",
+      source: "Lokální mock Vozový park"
     }
   ];
 }
@@ -997,9 +1014,154 @@ function mockDriverCanCreate(user) {
   return hasPermission(user, "driver-reports", "create");
 }
 
+function mockDriverCanSearchPartslink24(user) {
+  return mockDriverCanManage(user) || hasPermission(user, "driver-reports", "parts-search");
+}
+
 function mockDriverTruthyFlag(value) {
   const normalized = mockDriverClean(value).toLowerCase();
   return value === true || ["true", "1", "on", "yes", "ano"].includes(normalized);
+}
+
+function mockPartslink24MaskVin(value) {
+  const vin = mockDriverClean(value).replace(/\s+/g, "").toUpperCase();
+  if (!vin) return "";
+  if (vin.length <= 7) return "*".repeat(vin.length);
+  return `${vin.slice(0, 3)}${"*".repeat(Math.max(4, vin.length - 7))}${vin.slice(-4)}`;
+}
+
+function mockPartslink24Kind(value) {
+  return mockDriverClean(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function mockPartslink24IsPassenger(value) {
+  return ["osobni", "osobni_auto", "osobni_automobil", "osobni_vozidlo", "oa", "m1", "car", "passenger", "passenger_car"]
+    .includes(mockPartslink24Kind(value));
+}
+
+function mockPartslink24VehicleForItem(item = {}) {
+  const ref = mockDriverClean(item.vehicleId || item.licensePlate);
+  return mockFleetVehicleFixtures()
+    .map(mockFleetAssignmentFor)
+    .find((vehicle) => mockFleetVehicleMatches(vehicle, ref)) || null;
+}
+
+function mockPartslink24Eligibility(user, item = {}) {
+  const vehicle = mockPartslink24VehicleForItem(item);
+  const canSearchPartslink24 = mockDriverCanSearchPartslink24(user);
+  const vin = mockDriverClean(vehicle?.vin || item.vin);
+  const kind = mockPartslink24Kind(vehicle?.vehicleType || vehicle?.bodyType || vehicle?.vistosVehicleCategory);
+
+  if (!canSearchPartslink24) {
+    return {
+      canSearchPartslink24,
+      allowed: false,
+      vehicleKind: kind,
+      vinMasked: mockPartslink24MaskVin(vin),
+      errorCode: "PARTSLINK24_FORBIDDEN",
+      message: "K vyhledání náhradních dílů nemáš oprávnění."
+    };
+  }
+
+  if (!vin) {
+    return {
+      canSearchPartslink24,
+      allowed: false,
+      vehicleKind: kind,
+      vinMasked: "",
+      errorCode: "PARTSLINK24_VIN_MISSING",
+      message: "U vozidla není uložené VIN. Doplň VIN ve Vozovém parku."
+    };
+  }
+
+  if (!mockPartslink24IsPassenger(kind)) {
+    return {
+      canSearchPartslink24,
+      allowed: false,
+      vehicleKind: kind || "neznamy",
+      vinMasked: mockPartslink24MaskVin(vin),
+      errorCode: "PARTSLINK24_ONLY_PASSENGER_VEHICLES",
+      message: "partslink24 pilot je teď povolený jen pro osobní vozidla. Nákladní vozidla jsou mimo tento pilot."
+    };
+  }
+
+  return {
+    canSearchPartslink24,
+    allowed: true,
+    vehicleKind: "osobni",
+    vinMasked: mockPartslink24MaskVin(vin),
+    errorCode: "",
+    message: "Osobní vozidlo má VIN a může jít do read-only pilotu partslink24."
+  };
+}
+
+function mockCreatePartslink24Search(user, item = {}) {
+  const eligibility = mockPartslink24Eligibility(user, item);
+  if (!eligibility.canSearchPartslink24) {
+    const error = new Error("K vyhledání náhradních dílů nemáš oprávnění.");
+    error.status = 403;
+    throw error;
+  }
+  if (!eligibility.allowed) {
+    const error = new Error(eligibility.message);
+    error.status = eligibility.errorCode === "PARTSLINK24_ONLY_PASSENGER_VEHICLES" ? 400 : 409;
+    error.details = eligibility;
+    throw error;
+  }
+
+  const vehicle = mockPartslink24VehicleForItem(item) || {};
+  const vin = mockDriverClean(vehicle.vin || item.vin).replace(/\s+/g, "").toUpperCase();
+  const vinMasked = mockPartslink24MaskVin(vin);
+  const recent = mockPartslink24Searches.find((search) => (
+    sameMockId(search.requestId, item.id) &&
+    search.vinMasked === vinMasked &&
+    Date.now() - Date.parse(search.createdAt || "") < 3 * 60 * 1000
+  ));
+  const workflow = {
+    url: mockPartslink24WorkflowUrl,
+    inputs: {
+      vin,
+      vehicle_id: mockDriverClean(vehicle.id || vehicle.vehicleId || item.vehicleId),
+      vehicle_kind: "osobni",
+      request_id: mockDriverClean(item.id),
+      dry_run: false,
+      allow_live_login: true
+    }
+  };
+
+  if (recent) {
+    return { audit: recent, eligibility, workflow, reusedRecent: true };
+  }
+
+  const now = new Date().toISOString();
+  const audit = {
+    id: `partslink24-search-${randomUUID()}`,
+    requestId: mockDriverClean(item.id),
+    vehicleId: mockDriverClean(vehicle.id || vehicle.vehicleId || item.vehicleId),
+    vehicleName: mockDriverClean(vehicle.internalNumber || vehicle.model || item.vehicleName),
+    licensePlate: mockDriverClean(vehicle.licensePlate || vehicle.tcarsLicensePlate || item.licensePlate),
+    vinMasked,
+    vehicleKind: "osobni",
+    status: "manual_dispatch_required",
+    errorCode: "",
+    message: "Read-only pilot je auditovaný v KSO. Pokračování probíhá ručním spuštěním GitHub Actions workflow partslink24 VIN pilot; nic se neobjednává.",
+    workflowUrl: mockPartslink24WorkflowUrl,
+    workflowInputs: { ...workflow.inputs, vin: vinMasked },
+    result: null,
+    runnerKind: "github_actions_manual",
+    createdByUserId: mockDriverClean(user?.id),
+    createdByName: mockDriverClean(user?.name),
+    createdAt: now,
+    updatedAt: now
+  };
+  mockPartslink24Searches = [audit, ...mockPartslink24Searches].slice(0, 100);
+
+  return { audit, eligibility, workflow, reusedRecent: false };
 }
 
 function mockFleetPlateSummary(vehicle = {}) {
@@ -1055,6 +1217,7 @@ function mockDriverPermissionSummary(user) {
     role,
     canCreate: mockDriverCanCreate(user),
     canManage: mockDriverCanManage(user),
+    canSearchPartslink24: mockDriverCanSearchPartslink24(user),
     limitation: role === "ridic"
       ? "Řidič může vytvořit hlášení a sledovat vlastní stav. Objednání, doručení a servis řeší oprávněná role."
       : ""
@@ -1079,8 +1242,9 @@ function mockDriverEvent(requestId, action, user, note, notification = null) {
   };
 }
 
-function mockDriverDetail(item) {
+function mockDriverDetail(item, user = null) {
   const status = mockDriverClean(item?.status) || "new_report";
+  const latestPartslink24Search = mockPartslink24Searches.find((search) => sameMockId(search.requestId, item?.id)) || null;
   return {
     ...item,
     vehicleBrandLabel: vehicleBrandLabel(item?.vehicleBrand),
@@ -1089,7 +1253,9 @@ function mockDriverDetail(item) {
     partVerificationSource: mockDriverClean(item?.partVerificationSource),
     priceBoostStatus: mockDriverClean(item?.priceBoostStatus || "not_requested"),
     statusLabel: MOCK_DRIVER_PART_STATUS_LABELS[status] || "Neznámý stav",
-    events: Array.isArray(item?.events) ? item.events : []
+    events: Array.isArray(item?.events) ? item.events : [],
+    partslink24Eligibility: mockPartslink24Eligibility(user, item),
+    partslink24VinSearch: latestPartslink24Search
   };
 }
 
@@ -1105,7 +1271,7 @@ function mockDriverVisibleRequests(user) {
   return mockDriverPartRequests
     .filter((item) => mockDriverCanManage(user) || sameMockId(item.driverUserId, user?.id))
     .sort((left, right) => String(right.reportedAt || right.createdAt).localeCompare(String(left.reportedAt || left.createdAt)))
-    .map(mockDriverDetail);
+    .map((item) => mockDriverDetail(item, user));
 }
 
 function mockDriverContactForUser(user) {
@@ -3034,13 +3200,61 @@ async function handleApi(request, response) {
         item = handoffMockDriverPartRequest(user, item.id);
       }
       sendJson(response, 201, {
-        request: mockDriverDetail(item),
+        request: mockDriverDetail(item, user),
         permissions: mockDriverPermissionSummary(user),
         apiStatus: "ready"
       });
     } catch (error) {
       sendJson(response, error.status || 500, {
         error: error.message || "Hlášení se nepodařilo uložit.",
+        apiStatus: "ready"
+      });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/driver-reports/partslink24/search-by-vin" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno.", apiStatus: "ready" });
+      return true;
+    }
+    if (!hasPermission(user, "driver-reports", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění.", apiStatus: "ready" });
+      return true;
+    }
+
+    try {
+      const payload = await readJsonBody(request);
+      const item = findMockDriverRequest(payload.requestId || payload.request_id || payload.id);
+      if (!item) {
+        sendJson(response, 404, { error: "Požadavek na náhradní díl nebyl nalezen.", apiStatus: "ready" });
+        return true;
+      }
+      if (!mockDriverCanManage(user) && !sameMockId(item.driverUserId, user.id)) {
+        sendJson(response, 403, { error: "K tomuto hlášení nemáte oprávnění.", apiStatus: "ready" });
+        return true;
+      }
+
+      const result = mockCreatePartslink24Search(user, item);
+      sendJson(response, 200, {
+        ok: true,
+        status: result.audit.status,
+        message: result.reusedRecent
+          ? "Stejný partslink24 pilotní požadavek už byl před chvílí připravený. Nepřipravuji duplicitní běh."
+          : result.audit.message,
+        audit: result.audit,
+        eligibility: result.eligibility,
+        workflow: result.workflow,
+        permissions: mockDriverPermissionSummary(user),
+        apiStatus: "ready"
+      });
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        ok: false,
+        error: error.message || "Vyhledání přes partslink24 se nepodařilo připravit.",
+        message: error.message || "Vyhledání přes partslink24 se nepodařilo připravit.",
+        details: error.details || null,
         apiStatus: "ready"
       });
     }
@@ -3064,7 +3278,7 @@ async function handleApi(request, response) {
       return true;
     }
     sendJson(response, 200, {
-      request: mockDriverDetail(item),
+      request: mockDriverDetail(item, user),
       permissions: mockDriverPermissionSummary(user),
       apiStatus: "ready"
     });
@@ -3099,7 +3313,7 @@ async function handleApi(request, response) {
                     ? closeMockDriverPartRequest(user, id, payload)
                     : closeMockDriverPartRequest(user, id, { ...payload, cancel: true });
       sendJson(response, 200, {
-        request: mockDriverDetail(item),
+        request: mockDriverDetail(item, user),
         permissions: mockDriverPermissionSummary(user),
         apiStatus: "ready"
       });

@@ -1,4 +1,4 @@
-export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export", "manage"];
+export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export", "manage", "parts-search"];
 export const PERMISSION_MODULES = [
   "dashboard",
   "fleet",
@@ -92,7 +92,7 @@ export const ROLE_PERMISSIONS = {
     ...actions("dashboard", ["view"]),
     ...actions("fleet", ["view", "edit"]),
     ...actions("vehicle-tracking", ["view"]),
-    ...actions("driver-reports", ["view", "edit", "manage"]),
+    ...actions("driver-reports", ["view", "edit", "manage", "parts-search"]),
     ...actions("service-maintenance", ["view", "create", "edit", "manage"]),
     ...actions("tyres", ["view", "edit", "export"]),
     ...actions("costs", ["view", "export"]),
@@ -104,7 +104,7 @@ export const ROLE_PERMISSIONS = {
     ...actions("dashboard", ["view"]),
     ...actions("fleet", ["view"]),
     ...actions("vehicle-tracking", ["view"]),
-    ...actions("driver-reports", ["view"]),
+    ...actions("driver-reports", ["view", "parts-search"]),
     ...actions("collection-routes", ["view", "edit", "manage"]),
     ...actions("sampling-routes", ["view", "edit", "manage"]),
     ...actions("costs", ["view"]),

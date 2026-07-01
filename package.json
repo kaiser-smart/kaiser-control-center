@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.273",
+  "version": "0.1.274",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "lint": "node scripts/check-syntax.mjs",
     "test:driver-reports": "node scripts/driver-report-context.test.mjs",
     "test:partslink24": "node scripts/partslink24_vin_pilot.test.mjs",
+    "test:partslink24:kso": "node scripts/partslink24_kso_phase1.test.mjs",
     "partslink24:vin-pilot": "node scripts/partslink24_vin_pilot.mjs",
     "typecheck": "node scripts/check-syntax.mjs --typecheck",
     "preview": "node scripts/serve.mjs dist"

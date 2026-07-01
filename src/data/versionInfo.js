@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.273"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.274"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: partslink24 VIN pilot",
+    text: "Detail hlášení má read-only pilot pro vyhledání náhradních dílů podle VIN přes partslink24 pouze pro osobní vozidla. KSO ukládá audit s maskovaným VIN a nepředstírá plnou automatizaci; pokračování běží ručně přes schválený GitHub Actions runner."
+  },
   {
     title: "Šarlota: kontext Hlášení řidičů",
     text: "Šarlota má nový read-only tool get_driver_report_context pro načtení řidiče, oprávnění a přiřazených vozidel z Vozového parku před servisním hlášením. SPZ používá až jako fallback."
