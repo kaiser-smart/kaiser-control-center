@@ -8,6 +8,8 @@ const SECRET_NAMES = [
 ];
 const LOGIN_READY_TIMEOUT_MS = 30000;
 const FIELD_READY_TIMEOUT_MS = 15000;
+const ATTENTION_RELOAD_TIMEOUT_MS = 10000;
+const ATTENTION_RELOAD_MAX_ATTEMPTS = 2;
 const DIAGNOSTIC_TEXT_LIMIT = 900;
 const DIAGNOSTIC_CONTROL_LIMIT = 35;
 
@@ -62,6 +64,12 @@ const SUBMIT_SELECTORS = [
   "button:has-text('Přihlásit')",
   "button:has-text('Sign in')",
   "a:has-text('Login')"
+];
+
+const ATTENTION_RELOAD_SELECTORS = [
+  "a:has-text('Reload')",
+  "button:has-text('Reload')",
+  "input[type='submit'][value*='Reload' i]"
 ];
 
 const VIN_SEARCH_SELECTORS = [
@@ -203,6 +211,17 @@ export function detectTwoFactorChallengeText(value) {
   return TWO_FACTOR_PATTERNS.some((pattern) => text.includes(normalizeDetectionText(pattern)));
 }
 
+export function detectPartslink24AttentionReloadText(value) {
+  const text = normalizeDetectionText(value);
+  return text.includes("attention please read carefully")
+    && (
+      text.includes("reload")
+      || text.includes("bookmark")
+      || text.includes("main domain")
+      || text.includes("forwarded")
+    );
+}
+
 function parseArgs(argv = []) {
   const result = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -335,6 +354,68 @@ async function waitForFirstVisibleLocator(page, selectors, timeoutMs = FIELD_REA
     found = await findFirstVisibleLocator(page, selectors);
   }
   return found;
+}
+
+async function readCombinedPageText(page) {
+  const title = await page.title().catch(() => "");
+  const url = page.url();
+  const bodyText = (await Promise.all(pageSearchTargets(page)
+    .map((target) => target.target.locator("body").innerText({ timeout: 2000 }).catch(() => ""))))
+    .join("\n");
+  return `${title}\n${url}\n${bodyText}`;
+}
+
+async function isPartslink24AttentionReloadPage(page) {
+  return detectPartslink24AttentionReloadText(await readCombinedPageText(page));
+}
+
+async function resolvePartslink24AttentionReloadGate(page, config) {
+  const attempts = [];
+  for (let attempt = 1; attempt <= ATTENTION_RELOAD_MAX_ATTEMPTS; attempt += 1) {
+    if (!await isPartslink24AttentionReloadPage(page)) {
+      return {
+        resolved: attempts.length > 0,
+        attempts
+      };
+    }
+
+    const found = await waitForFirstVisibleLocator(page, ATTENTION_RELOAD_SELECTORS, ATTENTION_RELOAD_TIMEOUT_MS);
+    if (!found) {
+      throw new Partslink24PilotError(
+        "partslink24 zobrazil mezistránku Reload, ale odkaz Reload se nepodařilo najít.",
+        "PARTSLINK24_RELOAD_GATE_NOT_RESOLVED",
+        await collectSafePageDiagnostics(page, config)
+      );
+    }
+
+    const beforeUrl = page.url();
+    await Promise.all([
+      page.waitForLoadState("domcontentloaded", { timeout: ATTENTION_RELOAD_TIMEOUT_MS }).catch(() => null),
+      found.locator.click({ timeout: 5000 })
+    ]);
+    await page.waitForLoadState("networkidle", { timeout: ATTENTION_RELOAD_TIMEOUT_MS }).catch(() => null);
+
+    attempts.push({
+      attempt,
+      selector: found.selector,
+      target: found.target,
+      beforeUrl: safePreview(beforeUrl, config, 500),
+      afterUrl: safePreview(page.url(), config, 500)
+    });
+  }
+
+  if (await isPartslink24AttentionReloadPage(page)) {
+    throw new Partslink24PilotError(
+      "partslink24 mezistránka Reload se nepodařila bezpečně překročit.",
+      "PARTSLINK24_RELOAD_GATE_NOT_RESOLVED",
+      await collectSafePageDiagnostics(page, config)
+    );
+  }
+
+  return {
+    resolved: attempts.length > 0,
+    attempts
+  };
 }
 
 function fieldErrorCode(label) {
@@ -539,6 +620,7 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
 
   let browser;
   let page;
+  let reloadGate = null;
   try {
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
@@ -549,6 +631,7 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
     page.setDefaultTimeout(15000);
     await page.goto(PARTSLINK24_START_URL, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => null);
+    reloadGate = await resolvePartslink24AttentionReloadGate(page, config);
     const loginReadiness = await waitForLoginForm(page, config);
     const companyField = await fillFirst(page, COMPANY_SELECTORS, config.companyId, "Company ID", config, LOGIN_READY_TIMEOUT_MS);
     const usernameField = await fillFirst(page, USERNAME_SELECTORS, config.username, "User name", config);
@@ -565,6 +648,7 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
         ok: false,
         status: "manual_action_required",
         errorCode: "PARTSLINK24_2FA_REQUIRED",
+        reloadGate,
         result: twoFactorChallenge,
         message: "partslink24 vyžaduje 2FA ověření e-mailem. Runner kód nečte ani nezadává automaticky."
       });
@@ -579,6 +663,7 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
       ok: true,
       status: "manual_review_required",
       errorCode: "",
+      reloadGate,
       loginReadiness,
       loginTargets: {
         company: companyField.target,
@@ -597,6 +682,7 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
       errorCode: error?.errorCode || "PARTSLINK24_BROWSER_PILOT_FAILED",
       message: "Pilotní vyhledání ve partslink24 selhalo.",
       error: safeErrorMessage(error, config),
+      reloadGate,
       diagnostic: error?.diagnostic || (page ? await collectSafePageDiagnostics(page, config).catch(() => null) : null)
     });
   } finally {

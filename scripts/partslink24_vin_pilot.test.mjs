@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  detectPartslink24AttentionReloadText,
   detectTwoFactorChallengeText,
   isPassengerVehicleKind,
   maskVin,
@@ -20,6 +21,8 @@ assert.equal(detectTwoFactorChallengeText("Zadej ověřovací kód z e-mailu."),
 assert.equal(detectTwoFactorChallengeText("Enter the verification code sent to your email."), true);
 assert.equal(detectTwoFactorChallengeText("Bitte geben Sie den Sicherheitscode ein."), true);
 assert.equal(detectTwoFactorChallengeText("Vítej ve vyhledávání VIN."), false);
+assert.equal(detectPartslink24AttentionReloadText("Attention - Please read carefully. This site may appear because you are using a bookmark. Reload the page using the main domain."), true);
+assert.equal(detectPartslink24AttentionReloadText("partslink24 user login Company ID User name Password"), false);
 assert.equal(parseBoolean("true"), true);
 assert.equal(parseBoolean("0"), false);
 assert.equal(redactSensitive("login admin pass dummy-password VIN WDB12345678901234", [

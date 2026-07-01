@@ -93,6 +93,8 @@ Pokud live pilot nenajde login formulář, login tlačítko nebo VIN pole, vrát
 
 Diagnostika nesmí obsahovat hodnoty polí, heslo, cookies, session tokeny, screenshoty ani celé HTML stránky. Hodnoty `PARTSLINK24_COMPANY_ID`, `PARTSLINK24_USERNAME`, `PARTSLINK24_PASSWORD` a VIN se před výpisem redigují.
 
+partslink24 může před loginem zobrazit mezistránku `Attention - Please read carefully` s odkazem `Reload`. Runner ji smí v read-only pilotu bezpečně překročit přes `Reload`, maximálně dvakrát. Pokud po tom login formulář stále není dostupný, běh skončí chybou `PARTSLINK24_RELOAD_GATE_NOT_RESOLVED` nebo `PARTSLINK24_LOGIN_FORM_NOT_FOUND`.
+
 Lokální preflight bez přihlášení:
 
 ```bash
