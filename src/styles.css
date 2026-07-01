@@ -20362,6 +20362,26 @@ body:has(.data-box-page) .data-box-ai-boost-edit {
   margin-top: 10px;
 }
 
+body:has(.data-box-page) .data-box-ai-boost-new-action fieldset {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 16%, var(--theme-border, var(--line)));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 94%, var(--theme-bg-surface, #f6faf4));
+}
+
+body:has(.data-box-page) .data-box-ai-boost-new-action legend {
+  padding: 0 6px;
+  color: var(--data-box-text, var(--text));
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
 body:has(.data-box-page) .data-box-ai-boost-new-action label,
 body:has(.data-box-page) .data-box-ai-boost-edit label {
   display: grid;
@@ -20468,6 +20488,33 @@ body:has(.data-box-page) .data-box-ai-boost-card p {
 body:has(.data-box-page) .data-box-ai-boost-card h3 {
   font-size: 1.08rem;
   line-height: 1.25;
+}
+
+body:has(.data-box-page) .data-box-ai-boost-rule-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+body:has(.data-box-page) .data-box-ai-boost-rule-facts div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-bg-surface, #f6faf4) 78%, var(--theme-card, #ffffff));
+}
+
+body:has(.data-box-page) .data-box-ai-boost-rule-facts dt {
+  color: var(--theme-muted, var(--muted));
+  font-size: 0.74rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+body:has(.data-box-page) .data-box-ai-boost-rule-facts dd {
+  margin: 0;
+  color: var(--data-box-text, var(--text));
+  font-weight: 720;
 }
 
 body:has(.data-box-page) .data-box-ai-boost-card p {
@@ -21460,6 +21507,10 @@ body:has(.data-box-page) .data-box-side-status__ai small {
 
   body:has(.data-box-page) .data-box-ai-boost-new-action form,
   body:has(.data-box-page) .data-box-ai-boost-edit {
+    grid-template-columns: 1fr;
+  }
+
+  body:has(.data-box-page) .data-box-ai-boost-new-action fieldset {
     grid-template-columns: 1fr;
   }
 

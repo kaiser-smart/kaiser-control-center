@@ -16645,13 +16645,13 @@ function dataBoxActionShouldShowInAiBoost(action = {}) {
 function dataBoxAiBoostActionLabel(action = {}) {
   const recommended = String(action.result?.recommendedAction || action.actionType || "review").toLowerCase();
   const labels = {
-    archive: "Archivovat",
-    email: "Poslat e-mailem",
-    reply: "Odpovědět",
-    review: "Zkontrolovat",
-    ai_boost: "Zkontrolovat"
+    archive: "Archivovat / neřešit",
+    email: "Připravit e-mail",
+    reply: "Připravit odpověď",
+    review: "Čeká na ruční kontrolu",
+    ai_boost: "Čeká na ruční kontrolu"
   };
-  return labels[recommended] || "Zkontrolovat";
+  return labels[recommended] || "Čeká na ruční kontrolu";
 }
 
 function dataBoxAiBoostStatusLabel(action = {}) {
@@ -16733,10 +16733,13 @@ function dataBoxAiBoostIsDone(action = {}) {
 
 function dataBoxAiBoostActionTypeOptions(selected = "review") {
   const options = [
-    ["archive", "Archivovat"],
+    ["archive", "Archivovat / neřešit"],
     ["email", "Připravit e-mail"],
     ["reply", "Připravit odpověď DS"],
-    ["review", "Vyřídit ručně"]
+    ["urgent", "Označit jako urgentní"],
+    ["legal", "Označit jako právní"],
+    ["attachment", "Zkontrolovat přílohu"],
+    ["review", "Čeká na ruční kontrolu"]
   ];
 
   return options
@@ -16782,6 +16785,31 @@ function dataBoxAiBoostMappingWarnings(actions = []) {
     .slice(0, 4);
 }
 
+function dataBoxAiBoostRuleConditionLabel(action = {}) {
+  const message = dataBoxAiBoostMessage(action);
+  const sender = message ? dataBoxMessageActor(message) : action.result?.sender || "";
+  const subject = message?.subject || action.subject || "";
+  const mailbox = message ? dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel) : action.dataBoxId || "";
+  const pieces = [
+    sender ? `odesílatel: ${sender}` : "",
+    subject ? `zpráva: ${subject}` : "",
+    mailbox ? `schránka: ${mailbox}` : ""
+  ].filter(Boolean);
+
+  return pieces.length ? pieces.join(" · ") : "Podmínka není v datech jasně popsaná.";
+}
+
+function dataBoxAiBoostSafetyLabel(action = {}) {
+  const type = String(action.actionType || action.result?.recommendedAction || "review").toLowerCase();
+  if (["email", "reply"].includes(type)) {
+    return "Vyžaduje potvrzení. Bez potvrzení se nic neodešle.";
+  }
+  if (type === "archive") {
+    return "Vyžaduje potvrzení. Archivace není mazání.";
+  }
+  return "Jen návrh. AI Boost nic sám neprovede.";
+}
+
 function dataBoxAiBoostEditForm(action = {}) {
   if (String(dataBoxState.aiBoostEditingId || "") !== String(action.id || "")) {
     return "";
@@ -16824,26 +16852,37 @@ function dataBoxAiBoostEditForm(action = {}) {
 function dataBoxAiBoostCard(action = {}) {
   const message = dataBoxAiBoostMessage(action);
   const title = message?.subject || action.subject || "Datová zpráva";
-  const sender = message ? dataBoxMessageActor(message) : "Zpráva není v aktuálním výběru";
-  const company = message ? dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel) : action.dataBoxId || "";
   const confidence = Number(action.result?.confidence || 0);
   const confidenceLabel = confidence ? `${Math.round(confidence * 100)} % jistota` : "jistota neuvedena";
   const canConfirm = dataBoxAiBoostCanConfirm(action);
   const confirmLabel = action.actionType === "email" ? "Potvrdit e-mail" : "Potvrdit archivaci";
   const status = String(action.status || "").toLowerCase();
   const actionType = String(action.actionType || "").toLowerCase();
+  const safetyLabel = dataBoxAiBoostSafetyLabel(action);
 
   return `
     <article class="data-box-ai-boost-card data-box-ai-boost-card--${escapeHtml(status || "concept")} data-box-ai-boost-card--${escapeHtml(actionType || "review")}">
       <div class="data-box-ai-boost-card__main">
-        <span class="data-box-ai-boost-card__eyebrow">AI Boost · ${escapeHtml(dataBoxAiBoostStatusLabel(action))}</span>
+        <span class="data-box-ai-boost-card__eyebrow">Stav: ${escapeHtml(dataBoxAiBoostStatusLabel(action))}</span>
         <div class="data-box-ai-boost-tags">
           ${dataBoxAiBoostWorkTags(action).map(dataBoxFlagBadge).join("")}
         </div>
         <h3>${escapeHtml(title)}</h3>
-        <p>${escapeHtml(sender)}${company ? ` · ${escapeHtml(company)}` : ""}</p>
-        <strong>${escapeHtml(dataBoxAiBoostActionLabel(action))}</strong>
-        <p>${escapeHtml(action.bodyPreview || action.result?.reason || "AI Boost navrhl ruční kontrolu.")}</p>
+        <dl class="data-box-ai-boost-rule-facts">
+          <div>
+            <dt>Kdy se použije</dt>
+            <dd>${escapeHtml(dataBoxAiBoostRuleConditionLabel(action))}</dd>
+          </div>
+          <div>
+            <dt>Co navrhne</dt>
+            <dd>${escapeHtml(dataBoxAiBoostActionLabel(action))}</dd>
+          </div>
+          <div>
+            <dt>Bezpečnost</dt>
+            <dd>${escapeHtml(safetyLabel)}</dd>
+          </div>
+        </dl>
+        <p>${escapeHtml(action.bodyPreview || action.result?.reason || "AI Boost jen navrhl další krok. Rozhodnutí zůstává na uživateli.")}</p>
         <div class="data-box-ai-boost-card__meta">
           ${action.recipient ? `<span>Příjemce: ${escapeHtml(action.recipient)}</span>` : ""}
           <span>${escapeHtml(confidenceLabel)}</span>
@@ -16884,35 +16923,53 @@ function dataBoxAiBoostNewActionForm() {
   return `
     <details class="data-box-ai-boost-new-action">
       <summary>
-        <span>Přidat akci / naučit AI Boost</span>
-        <strong>Nové pravidlo</strong>
+        <span>Vytvořit jednoduché pravidlo</span>
+        <strong>Průvodce 1-2-3</strong>
       </summary>
       <form data-data-box-ai-rule-draft-form>
-        <label>
-          <span>Když přijde od</span>
-          <input name="senderContains" placeholder="např. Exekutor Jícha" />
-        </label>
-        <label>
-          <span>A obsahuje</span>
-          <input name="textContains" placeholder="např. 203 Ex, Usnesení" />
-        </label>
-        <label>
-          <span>Pro DS</span>
-          <select name="mailboxId">
-            <option value="">Libovolná DS</option>
-            ${mailboxes}
-          </select>
-        </label>
-        <label>
-          <span>Navrhni akci</span>
-          <select name="actionType">
-            ${dataBoxAiBoostActionTypeOptions("email")}
-          </select>
-        </label>
-        <label>
-          <span>Příjemce / cíl</span>
-          <input name="recipient" placeholder="např. tehlarova@gtbrno.cz" />
-        </label>
+        <fieldset>
+          <legend>1. Kdy se má pravidlo spustit?</legend>
+          <label>
+            <span>Odesílatel obsahuje</span>
+            <input name="senderContains" placeholder="např. Exekutor Jícha" />
+          </label>
+          <label>
+            <span>Zpráva obsahuje</span>
+            <input name="textContains" placeholder="např. 203 Ex, Usnesení, faktura" />
+          </label>
+          <label>
+            <span>Datová schránka je</span>
+            <select name="mailboxId">
+              <option value="">Libovolná DS</option>
+              ${mailboxes}
+            </select>
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>2. Co má AI Boost navrhnout?</legend>
+          <label>
+            <span>Návrh pro uživatele</span>
+            <select name="actionType">
+              ${dataBoxAiBoostActionTypeOptions("review")}
+            </select>
+          </label>
+          <label>
+            <span>Příjemce / cíl, pokud je potřeba</span>
+            <input name="recipient" placeholder="např. faktury@kaiserservis.cz" />
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>3. Co se smí udělat automaticky?</legend>
+          <label>
+            <span>Bezpečný režim</span>
+            <select name="safetyMode">
+              <option value="suggestion" selected>Jen zobrazit návrh</option>
+              <option value="label">Přidat štítek</option>
+              <option value="done">Označit jako vyřízené</option>
+            </select>
+          </label>
+          <p>Mazání, e-maily a odpovědi DS se nikdy neprovedou bez potvrzení uživatele.</p>
+        </fieldset>
         <label class="employee-card-field--wide">
           <span>Název pravidla</span>
           <input name="title" placeholder="např. Exekutor Jícha poslat GT Brno" required />
@@ -16920,7 +16977,7 @@ function dataBoxAiBoostNewActionForm() {
         <div class="data-box-ai-boost-edit__actions">
           <button class="primary-action" type="submit">Připravit pravidlo</button>
         </div>
-        <p>Pravidlo se ještě neuloží. Otevře se formulář pravidel, kde ho zkontroluješ a uložíš do cloud DB.</p>
+        <p>Toto je zatím návrh pravidla. Automatické provedení není aktivní, dokud ho výslovně nepotvrdíš v nastavení pravidel.</p>
       </form>
     </details>
   `;
@@ -16973,18 +17030,18 @@ function dataBoxAiBoostPanel(user) {
         <div>
           <span>Datová schránka</span>
           <h2 id="data-box-ai-boost-title">AI Boost</h2>
-          <p>AI a pravidla připravují pouze koncepty. Archivace, e-mail nebo odpověď se provedou až po potvrzení uživatele.</p>
+          <p>AI Boost pomáhá rozpoznat typ zprávy a navrhnout další krok. Mazání, odpovědi a e-maily se nikdy neprovedou bez potvrzení.</p>
         </div>
         <button class="primary-action" type="button" data-data-box-ai-run ${!canManage || dataBoxState.aiBoostLoading ? "disabled" : ""}>
-          ${escapeHtml(dataBoxState.aiBoostLoading ? "Spouštím..." : "Spustit AI Boost")}
+          ${escapeHtml(dataBoxState.aiBoostLoading ? "Kontroluji..." : "Zkontrolovat zprávy")}
         </button>
       </div>
       <div class="data-box-ai-boost-summary">
         <div><span>Čeká na rozhodnutí</span><strong>${waitingActions.length}</strong></div>
-        <div><span>Archivace čekají</span><strong>${waitingArchive}</strong></div>
-        <div><span>E-maily čekají</span><strong>${waitingEmail}</strong></div>
-        <div><span>Potvrzené akce</span><strong>${completed}</strong></div>
-        <div><span>Režim</span><strong>read-only návrh · potvrzení ručně</strong></div>
+        <div><span>Návrh archivace</span><strong>${waitingArchive}</strong></div>
+        <div><span>Návrh e-mailu</span><strong>${waitingEmail}</strong></div>
+        <div><span>Hotovo po potvrzení</span><strong>${completed}</strong></div>
+        <div><span>Bezpečnost</span><strong>jen návrh · potvrzení ručně</strong></div>
       </div>
       ${mappingWarnings.length ? `
         <div class="data-box-action-feedback data-box-action-feedback--warning" role="status">
@@ -16999,7 +17056,7 @@ function dataBoxAiBoostPanel(user) {
         title: "Čeká na potvrzení",
         countLabel: `${waitingActions.length} návrhů čeká na rozhodnutí`,
         emptyTitle: "Nic nečeká na potvrzení.",
-        emptyText: "Nové návrhy se objeví po běhu pravidel nebo AI Boostu.",
+        emptyText: "Nové návrhy se objeví po kontrole zpráv.",
         actions: waitingActions,
         canManage
       })}
@@ -17007,7 +17064,7 @@ function dataBoxAiBoostPanel(user) {
         title: "E-maily k odeslání",
         countLabel: `${waitingEmailActions.length} čeká na potvrzení`,
         emptyTitle: "Žádný e-mail nečeká.",
-        emptyText: "E-mailové koncepty se objeví až po shodě pravidla nebo AI Boost doporučení.",
+        emptyText: "E-mailové návrhy se objeví jen jako koncepty k potvrzení.",
         actions: waitingEmailActions,
         batchType: "email",
         batchLabel: "Potvrdit všechny e-maily",
@@ -17017,7 +17074,7 @@ function dataBoxAiBoostPanel(user) {
         title: "Archivace k potvrzení",
         countLabel: `${waitingArchiveActions.length} čeká na potvrzení`,
         emptyTitle: "Žádná archivace nečeká.",
-        emptyText: "Archivace se provede až po ručním potvrzení.",
+        emptyText: "Archivace se provede až po ručním potvrzení. Není to mazání.",
         actions: waitingArchiveActions,
         batchType: "archive",
         batchLabel: "Potvrdit všechny archivace",
@@ -18077,7 +18134,7 @@ function systemCheckDataBoxItems(data) {
     { label: "Filtr DS jede podle mailboxId", status: "OK", detail: "Seznam filtruje podle `message.dataBoxId === activeAccount.id`." },
     { label: "Stránkování default 5", status: "OK", detail: "Výchozí velikost stránky je 5." },
     { label: "Hledání dovolí více znaků", status: "OK", detail: "Search stav je samostatný a nerestartuje DS filtr." },
-    { label: "Přečtené/netučné a nepřečtené/tučné", status: "OK", detail: "Řádek používá stav workflow `new` pro tučné zobrazení." },
+    { label: "Přečtené/netučné a nepřečtené/tučné", status: "OK", detail: "Řádek používá oddělený technický stav přečtení, ne pracovní stav vyřízení." },
     { label: "Příznak DS je před datem", status: "OK", detail: "Badge firmy je v druhém řádku před datem." },
     { label: "Otevřít nyní není stejné jako Stáhnout", status: "OK", detail: "Otevřít používá blob/object URL, Stáhnout používá odkaz s download." },
     {
@@ -21432,6 +21489,7 @@ function dataBoxAiBoostRulePayloadFromForm(form) {
   const actionType = String(formData.get("actionType") || "email").trim();
   const recipient = String(formData.get("recipient") || "").trim();
   const title = String(formData.get("title") || "").trim();
+  const safetyMode = String(formData.get("safetyMode") || "suggestion").trim();
   const conditions = {
     anySender: senderContains ? senderContains.split(",").map((item) => item.trim()).filter(Boolean) : [],
     anyText: textContains ? textContains.split(",").map((item) => item.trim()).filter(Boolean) : []
@@ -21444,11 +21502,13 @@ function dataBoxAiBoostRulePayloadFromForm(form) {
     ? { type: "ARCHIVE", requiresConfirmation: true }
     : actionType === "email"
       ? { type: "SEND_EMAIL", recipients: recipient.split(",").map((item) => item.trim()).filter(Boolean), requiresConfirmation: true }
-      : { type: "REVIEW", target: recipient || "manual", requiresConfirmation: true };
+      : actionType === "reply"
+        ? { type: "REPLY", target: recipient || "original_sender", requiresConfirmation: true }
+        : { type: "REVIEW", target: recipient || actionType || "manual", requiresConfirmation: true, safetyMode };
 
   return {
     title,
-    description: "Vytvořeno z AI Boost návrhu. Ostrá akce vyžaduje potvrzení uživatele.",
+    description: "Vytvořeno v jednoduchém AI Boost průvodci. Ostrá akce vyžaduje potvrzení uživatele.",
     type: "rule",
     status: "draft",
     conditionsJson: JSON.stringify(conditions, null, 2),
