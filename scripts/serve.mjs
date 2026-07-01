@@ -2761,7 +2761,7 @@ async function handleApi(request, response) {
       ? `Vidím u tebe víc vozidel: ${vehicles.map((vehicle) => vehicle.displayName).slice(0, 5).join(", ")}. Kterého se to týká?`
       : vehicles.length === 1
         ? "Kterého vozidla se to týká?"
-        : "Nemám u tebe přiřazené vozidlo. Řekni mi prosím typ, značku nebo SPZ.";
+        : "Nemám u tebe teď přiřazené žádné vozidlo. Můžeš mi říct SPZ, ke které chceš závadu nahlásit?";
     const message = vehicles.length === 1
       ? `Vidím u tebe ${vehicles[0].displayName}. Mám hlášení zapsat k němu?`
       : vehicles.length > 1 ? fallbackQuestion : fallbackQuestion;

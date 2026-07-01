@@ -7,6 +7,7 @@ import {
   driverPartRequestMissingQuestion,
   extractLicensePlate,
   identifyProbablePartFromDescription,
+  licensePlateKey,
   normalizeLicensePlate
 } from "./driver-parts-catalog.js";
 import { userDynamicVariablesForAi } from "./ai-people-summary.js";
@@ -1036,6 +1037,10 @@ function isDriverPartRequest(payload, speechText, context) {
 }
 
 function driverPartSummaryMessage(draft) {
+  if (draft.manualVehicleReview) {
+    return "Tuhle SPZ nemám u tebe přiřazenou, ale můžu závadu zapsat k ruční kontrole dispečera. Je to tak správně?";
+  }
+
   const part = draft.probablePart || "náhradní díl";
   const vehicleName = draft.vehicleName ? `na vozidle ${draft.vehicleName}` : "";
   const vehicle = vehicleName || (draft.licensePlate ? `na vozidle se SPZ ${draft.licensePlate}` : "bez jasně vybraného vozidla");
@@ -1061,9 +1066,19 @@ function driverPartPreparedAction(draft) {
       defectDescription: draft.defectDescription,
       probablePart: draft.probablePart,
       probablePartSide: draft.probablePartSide,
-      damagePhotoStatus: "requested"
+      damagePhotoStatus: "requested",
+      manualVehicleReview: draft.manualVehicleReview === true
     })
   };
+}
+
+function vehicleListContainsLicensePlate(vehicles = [], licensePlate = "") {
+  const key = licensePlateKey(licensePlate);
+  if (!key) {
+    return false;
+  }
+
+  return vehicles.some((vehicle) => licensePlateKey(vehicle?.licensePlate || vehicle?.tcarsLicensePlate) === key);
 }
 
 async function validateDriverPartDraftLicensePlate(env, user, draft) {
@@ -1091,6 +1106,22 @@ async function validateDriverPartDraftLicensePlate(env, user, draft) {
     }
 
     const vehicle = validation.vehicle || {};
+    let assignedMatch = null;
+    try {
+      assignedMatch = await resolveFleetVehiclesForDriver(env, user, {
+        ...draft,
+        strictDriverAssignment: true
+      });
+    } catch (error) {
+      console.info("voice_sarlota.driver_plate_assignment_lookup_skipped", { message: cleanString(error?.message) });
+    }
+    const assignedVehicles = [
+      assignedMatch?.vehicle,
+      ...(Array.isArray(assignedMatch?.candidates) ? assignedMatch.candidates : [])
+    ].filter(Boolean);
+    const assignedToDriver = vehicleListContainsLicensePlate(assignedVehicles, validation.normalized || draft.licensePlate);
+    const manualVehicleReview = !assignedToDriver;
+
     return {
       valid: true,
       draft: compactObject({
@@ -1101,7 +1132,9 @@ async function validateDriverPartDraftLicensePlate(env, user, draft) {
         vin: firstNonEmpty(draft.vin, vehicle.vin),
         vehicleBrand: firstNonEmpty(draft.vehicleBrand, vehicle.brand, vehicle.model),
         driverName: firstNonEmpty(draft.driverName, user?.name, vehicle.assignedDriverName),
-        driverPhone: firstNonEmpty(draft.driverPhone, user?.phone, vehicle.assignedDriverPhone)
+        driverPhone: firstNonEmpty(draft.driverPhone, user?.phone, vehicle.assignedDriverPhone),
+        manualVehicleReview,
+        vehicleAssignmentStatus: manualVehicleReview ? "manual_review" : "assigned_to_driver"
       })
     };
   } catch (error) {

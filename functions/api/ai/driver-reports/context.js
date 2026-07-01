@@ -10,7 +10,7 @@ import { hasPermission } from "../../../../src/permissions.js";
 
 const MODULE_ID = "hlaseni-ridicu";
 const MODULE_KEY = "driver-reports";
-const NO_VEHICLE_QUESTION = "Nemám u tebe přiřazené vozidlo. Řekni mi prosím typ, značku nebo SPZ.";
+const NO_VEHICLE_QUESTION = "Nemám u tebe teď přiřazené žádné vozidlo. Můžeš mi říct SPZ, ke které chceš závadu nahlásit?";
 const LOAD_FAILED_QUESTION = "Vozidla se mi teď nepodařilo načíst. Řekni mi prosím typ, značku nebo SPZ.";
 
 function cleanString(value) {
@@ -35,17 +35,35 @@ function sameContact(left, right) {
   return Boolean(leftValue && rightValue && leftValue === rightValue);
 }
 
+function uniqueEmployeeMatch(employees = [], predicate) {
+  const matches = employees.filter(predicate);
+  return matches.length === 1 ? matches[0] : null;
+}
+
 async function driverEmployeeFor(env, user) {
   try {
     const users = await getUsers(env);
     const employees = await listEmployeeCards(env, users, user);
-    return employees.find((employee) => (
+
+    const exactIdMatch = employees.find((employee) => (
       sameValue(employee.userId, user.id) ||
-      sameValue(employee.id, user.id) ||
-      sameContact(employee.email, user.email) ||
-      sameContact(employee.phone, user.phone) ||
-      sameValue(fullEmployeeName(employee), user.name)
-    )) || null;
+      sameValue(employee.id, user.id)
+    ));
+    if (exactIdMatch) {
+      return exactIdMatch;
+    }
+
+    const emailMatch = uniqueEmployeeMatch(employees, (employee) => sameContact(employee.email, user.email));
+    if (emailMatch) {
+      return emailMatch;
+    }
+
+    const phoneMatch = uniqueEmployeeMatch(employees, (employee) => sameContact(employee.phone, user.phone));
+    if (phoneMatch) {
+      return phoneMatch;
+    }
+
+    return uniqueEmployeeMatch(employees, (employee) => sameValue(fullEmployeeName(employee), user.name));
   } catch (error) {
     console.info("driver_reports.context_employee_lookup_skipped", { message: cleanString(error?.message) });
     return null;
@@ -130,13 +148,18 @@ export async function onRequestGet({ request, env }) {
   const sessionId = cleanString(url.searchParams.get("sessionId") || url.searchParams.get("conversationId"));
   const currentModule = cleanString(url.searchParams.get("currentModule")) || MODULE_ID;
   const employee = await driverEmployeeFor(env, user);
-  const employeeId = cleanString(employee?.id || employee?.userId || user.id);
+  const employeeId = cleanString(employee?.id || user.id);
+  const driverUserId = cleanString(employee?.userId || user.id);
+  const driverIds = [employee?.id, employee?.userId, user.id].map(cleanString).filter(Boolean);
   const driverName = fullEmployeeName(employee) || cleanString(user.name);
 
   let match;
   try {
     match = await resolveFleetVehiclesForDriver(env, user, {
-      driverUserId: cleanString(employee?.userId || user.id),
+      strictDriverAssignment: true,
+      driverIds,
+      driverEmployeeId: employeeId,
+      driverUserId,
       driverName,
       driverPhone: cleanString(employee?.phone || user.phone),
       transcriptIntent,
@@ -152,11 +175,28 @@ export async function onRequestGet({ request, env }) {
   }
 
   const vehicles = vehicleContextItems(match);
+  const emptyReason = vehicles.length
+    ? ""
+    : employee ? "NO_DRIVER_VEHICLES" : "DRIVER_NOT_MAPPED";
   const fallbackQuestion = vehicles.length > 1
     ? (match.question || fleetVehicleSelectionQuestion(vehicles))
     : vehicles.length === 1
       ? "Kterého vozidla se to týká?"
       : NO_VEHICLE_QUESTION;
+  const diagnostics = {
+    userId: cleanString(user.id),
+    employeeId,
+    driverUserId,
+    driverMapped: Boolean(employee),
+    identitySource: cleanString(match?.identity?.source || (employee ? "employees" : "auth_user")),
+    dataSource: cleanString(match?.dataSource),
+    vehiclesCount: vehicles.length,
+    fallbackUsed: match?.fallbackUsed === true,
+    mockData: match?.mockData === true,
+    emptyReason
+  };
+
+  console.info("driver_reports.context_vehicle_lookup", diagnostics);
 
   return json({
     ok: true,
@@ -164,6 +204,7 @@ export async function onRequestGet({ request, env }) {
     currentModule,
     sessionId,
     status: match?.status || "none",
+    errorCode: emptyReason,
     user: {
       id: cleanString(user.id),
       name: cleanString(user.name),
@@ -172,13 +213,14 @@ export async function onRequestGet({ request, env }) {
     driver: {
       employeeId,
       displayName: driverName,
-      source: employee ? "employees" : "auth_user"
+      source: diagnostics.identitySource
     },
     vehicles,
     vehiclesCount: vehicles.length,
     permissions,
     fallbackQuestion,
     message: responseMessage(vehicles, fallbackQuestion),
+    diagnostics,
     apiStatus: "ready"
   });
 }

@@ -1,7 +1,6 @@
 import { getUsers } from "./auth.js";
 import {
   loadFleetVehiclesWithAssignments,
-  resolveFleetVehicleForDriver,
   resolveFleetVehiclesForDriver,
   validateFleetLicensePlate
 } from "./fleet-vehicles-store.js";
@@ -210,6 +209,7 @@ function rowToRequest(row, events = []) {
   const status = normalizeStatus(row?.status);
   const source = cleanString(row?.source || "manual");
   const licensePlateVerified = !source.includes("unverified_plate");
+  const manualVehicleReview = driverPartRequestSourceHasManualVehicleReview(source);
   return {
     id: cleanString(row?.id),
     reportId: cleanString(row?.report_id),
@@ -279,14 +279,43 @@ function rowToRequest(row, events = []) {
     driverSmsStatus: cleanString(row?.driver_sms_status || "not_sent"),
     driverSmsError: cleanString(row?.driver_sms_error),
     source,
+    manualVehicleReview,
     licensePlateVerified,
-    licensePlateValidationStatus: licensePlateVerified ? "SPZ ověřena" : "SPZ neověřena",
+    licensePlateValidationStatus: manualVehicleReview
+      ? "SPZ ověřena, vozidlo vyžaduje ruční kontrolu"
+      : licensePlateVerified ? "SPZ ověřena" : "SPZ neověřena",
     createdByUserId: cleanString(row?.created_by_user_id),
     createdAt: cleanString(row?.created_at),
     updatedByUserId: cleanString(row?.updated_by_user_id),
     updatedAt: cleanString(row?.updated_at),
     events
   };
+}
+
+function matchContainsLicensePlate(match = {}, licensePlate = "") {
+  const key = licensePlateKey(licensePlate);
+  if (!key) {
+    return false;
+  }
+
+  const vehicles = [
+    match.vehicle,
+    ...(Array.isArray(match.candidates) ? match.candidates : [])
+  ].filter(Boolean);
+
+  return vehicles.some((vehicle) => licensePlateKey(vehicle.licensePlate || vehicle.tcarsLicensePlate) === key);
+}
+
+export function driverPartRequestNeedsManualVehicleReview(assignedDriverMatch = {}, licensePlate = "", plateValidation = null) {
+  return Boolean(
+    licensePlate &&
+    plateValidation?.exact === true &&
+    !matchContainsLicensePlate(assignedDriverMatch, licensePlate)
+  );
+}
+
+export function driverPartRequestSourceHasManualVehicleReview(source = "") {
+  return cleanString(source).includes("manual_vehicle_review");
 }
 
 function eventStatement(db, { requestId, action, user, before, after, note, notification = null }) {
@@ -503,7 +532,10 @@ export async function createDriverPartRequest(env, user, payload = {}) {
     payload.spz ||
     extractLicensePlate(rawDescription)
   );
-  const assignedDriverMatch = await resolveFleetVehiclesForDriver(env, user, payload);
+  const assignedDriverMatch = await resolveFleetVehiclesForDriver(env, user, {
+    ...payload,
+    strictDriverAssignment: true
+  });
   if (!payloadLicensePlate && assignedDriverMatch.status === "multiple") {
     throw new DriverPartRequestsStoreError(
       assignedDriverMatch.question || "Máš přiřazených více vozidel. Nejdřív vyber typ nebo značku vozidla.",
@@ -512,7 +544,7 @@ export async function createDriverPartRequest(env, user, payload = {}) {
     );
   }
 
-  const assignedDriverVehicle = assignedDriverMatch.vehicle || await resolveFleetVehicleForDriver(env, user, payload);
+  const assignedDriverVehicle = assignedDriverMatch.vehicle || null;
   const licensePlate = normalizeLicensePlate(
     payload.licensePlate ||
     payload.spz ||
@@ -577,6 +609,8 @@ export async function createDriverPartRequest(env, user, payload = {}) {
     vehicle = plateValidation?.vehicle || vehicle;
   }
 
+  const manualVehicleReview = driverPartRequestNeedsManualVehicleReview(assignedDriverMatch, licensePlate, plateValidation);
+
   const driverContact = await resolvePersonContact(env, {
     userIds: [payload.driverUserId, user?.id],
     nameIncludes: [payload.driverName, payload.driver, user?.name],
@@ -593,6 +627,16 @@ export async function createDriverPartRequest(env, user, payload = {}) {
         ].filter(Boolean).join(" "),
         source: cleanString(payload.source) === "voice" ? "voice_unverified_plate" : "manual_unverified_plate"
       }
+    : manualVehicleReview
+      ? {
+          ...payload,
+          manualVehicleReview: true,
+          note: [
+            cleanString(payload.note),
+            "SPZ existuje ve Vozovém parku, ale není přiřazená aktuálnímu řidiči. Vyžaduje ruční kontrolu dispečera."
+          ].filter(Boolean).join(" "),
+          source: cleanString(payload.source) === "voice" ? "voice_manual_vehicle_review" : "manual_vehicle_review"
+        }
     : payload;
   const item = normalizeCreatePayload(createPayload, user, vehicle, driverContact);
   const id = randomId("driver-part-request");

@@ -1,4 +1,4 @@
-import { getUsers, normalizeIdentifier } from "./auth.js";
+import { getUsers, isProduction, normalizeIdentifier } from "./auth.js";
 import { loadFleetVehiclesPayload as loadTcarsFleetVehiclesPayload } from "./tcars-client.js";
 import { createFleetVistosVehiclePreview } from "./fleet-vistos-vehicle-preview.js";
 import { listEmployeeCards } from "./employees-store.js";
@@ -59,6 +59,29 @@ function normalizedPlate(value) {
 
 function normalizedDriverName(value) {
   return normalizeKey(value).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function sameLookupValue(left, right) {
+  const leftValue = cleanString(left).toLowerCase();
+  const rightValue = cleanString(right).toLowerCase();
+  return Boolean(leftValue && rightValue && leftValue === rightValue);
+}
+
+function uniqueLookupValues(values = []) {
+  const result = [];
+  const seen = new Set();
+
+  for (const value of values.flat()) {
+    const cleaned = cleanString(value);
+    const key = cleaned.toLowerCase();
+    if (!cleaned || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(cleaned);
+  }
+
+  return result;
 }
 
 function safeErrorMessage(error) {
@@ -301,6 +324,62 @@ function employeeToDriverCandidate(employee = {}) {
 function driverCandidateMatchesId(candidate = {}, driverId = "") {
   const target = cleanString(driverId);
   return Boolean(target) && [candidate.id, candidate.userId].some((value) => cleanString(value) === target);
+}
+
+function uniqueDriverCandidateMatch(candidates = [], predicate) {
+  const matches = candidates.filter(predicate);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function driverCandidateMatchesUserId(candidate = {}, user = {}) {
+  return [candidate.id, candidate.userId].some((value) => sameLookupValue(value, user?.id));
+}
+
+function driverCandidateMatchesUserEmail(candidate = {}, user = {}) {
+  return Boolean(
+    normalizeIdentifier(candidate.email) &&
+    normalizeIdentifier(candidate.email) === normalizeIdentifier(user?.email)
+  );
+}
+
+function driverCandidateMatchesUserPhone(candidate = {}, user = {}) {
+  return Boolean(
+    normalizeIdentifier(candidate.phone) &&
+    normalizeIdentifier(candidate.phone) === normalizeIdentifier(user?.phone)
+  );
+}
+
+function driverLookupIdentity(payload = {}, user = {}, driverCandidates = []) {
+  const explicitIds = uniqueLookupValues([
+    payload.driverIds,
+    payload.driverId,
+    payload.driverEmployeeId,
+    payload.employeeId,
+    payload.assignedDriverId,
+    payload.driverUserId,
+    payload.userId
+  ]);
+  const explicitMatch = explicitIds.length
+    ? driverCandidates.find((candidate) => explicitIds.some((id) => driverCandidateMatchesId(candidate, id)))
+    : null;
+  const userMatch = explicitMatch ||
+    uniqueDriverCandidateMatch(driverCandidates, (candidate) => driverCandidateMatchesUserId(candidate, user)) ||
+    uniqueDriverCandidateMatch(driverCandidates, (candidate) => driverCandidateMatchesUserEmail(candidate, user)) ||
+    uniqueDriverCandidateMatch(driverCandidates, (candidate) => driverCandidateMatchesUserPhone(candidate, user)) ||
+    null;
+  const ids = uniqueLookupValues([
+    explicitIds,
+    userMatch ? [userMatch.id, userMatch.userId] : [],
+    user?.id
+  ]);
+
+  return {
+    ids,
+    employeeId: cleanString(userMatch?.id),
+    userId: cleanString(userMatch?.userId || user?.id),
+    displayName: cleanString(userMatch?.name || user?.name),
+    source: userMatch ? userMatch.source || "employees" : "auth_user"
+  };
 }
 
 async function loadFleetDriverCandidates(env = {}, user = null) {
@@ -742,33 +821,74 @@ function withDriverVehicleMeta(vehicle, confidence, extra = {}) {
   };
 }
 
-function driverVehicleCandidateMatches(vehicles = [], payload = {}, user = {}) {
-  const driverUserId = cleanString(payload.driverUserId || payload.userId || user?.id);
+function isActiveFleetVehicleForDriverReports(vehicle = {}) {
+  if (vehicle.active === false) {
+    return false;
+  }
+
+  const status = normalizeKey([
+    vehicle.status,
+    vehicle.vistosVehicleStatus,
+    vehicle.vehicleStatus
+  ].join(" "));
+
+  return !/(retired|inactive|archiv|vyrazen|vyrazeno|zrusen|zruseno|neaktiv)/.test(status);
+}
+
+export function fleetPayloadUsesMockData(payload = {}) {
+  const sourceText = normalizeKey([
+    payload.provider,
+    payload.source,
+    payload.message
+  ].join(" ")).replace(/[_-]+/g, " ");
+  return /\b(mock|demo|local dev|lokalni mock|lokalni dev)\b/.test(sourceText);
+}
+
+export function shouldBlockFleetPayloadForDriverReports(env = {}, payload = {}) {
+  return isProduction(env) && fleetPayloadUsesMockData(payload);
+}
+
+export function driverVehicleCandidateMatches(vehicles = [], payload = {}, user = {}) {
+  const strictDriverAssignment = payload.strictDriverAssignment === true;
+  const driverIds = uniqueLookupValues([
+    payload.driverIds,
+    payload.driverId,
+    payload.driverEmployeeId,
+    payload.employeeId,
+    payload.assignedDriverId,
+    payload.driverUserId,
+    payload.userId,
+    user?.id
+  ]);
   const driverPhone = normalizeIdentifier(payload.driverPhone || payload.phone || user?.phone);
   const driverName = normalizedDriverName(payload.driverName || payload.name || user?.name);
 
-  if (driverUserId) {
-    const matches = vehicles.filter((vehicle) => cleanString(vehicle.assignedDriverId) === driverUserId);
+  if (driverIds.length) {
+    const matches = vehicles.filter((vehicle) => driverIds.some((driverId) => sameLookupValue(vehicle.assignedDriverId, driverId)));
     if (matches.length) {
-      return { matches, confidence: "assigned_driver_id" };
+      return { matches, confidence: "assigned_driver_id", fallbackUsed: false, lookupReason: "driver_id" };
     }
+  }
+
+  if (strictDriverAssignment) {
+    return { matches: [], confidence: "", fallbackUsed: false, lookupReason: "strict_driver_id_no_match" };
   }
 
   if (driverPhone) {
     const matches = vehicles.filter((vehicle) => normalizeIdentifier(vehicle.assignedDriverPhone) === driverPhone);
     if (matches.length) {
-      return { matches, confidence: "assigned_driver_phone" };
+      return { matches, confidence: "assigned_driver_phone", fallbackUsed: true, lookupReason: "driver_phone" };
     }
   }
 
   if (driverName) {
     const matches = vehicles.filter((vehicle) => normalizedDriverName(vehicle.assignedDriverName) === driverName);
     if (matches.length) {
-      return { matches, confidence: "assigned_driver_name" };
+      return { matches, confidence: "assigned_driver_name", fallbackUsed: true, lookupReason: "driver_name" };
     }
   }
 
-  return { matches: [], confidence: "" };
+  return { matches: [], confidence: "", fallbackUsed: false, lookupReason: "no_match" };
 }
 
 function vehicleSelectionHint(payload = {}) {
@@ -891,9 +1011,44 @@ export async function resolveFleetVehiclesForDriver(env, user, payload = {}) {
 
   try {
     const fleet = await loadFleetVehiclesWithAssignments(env);
-    const vehicles = Array.isArray(fleet.vehicles) ? fleet.vehicles : [];
-    const { matches, confidence } = driverVehicleCandidateMatches(vehicles, payload, user);
-    const candidates = matches.map((vehicle) => withDriverVehicleMeta(vehicle, confidence));
+    const dataSource = cleanString(fleet.provider || fleet.source);
+    const mockData = fleetPayloadUsesMockData(fleet);
+    const identity = driverLookupIdentity(payload, user, Array.isArray(fleet.driverCandidates) ? fleet.driverCandidates : []);
+    const vehicles = (Array.isArray(fleet.vehicles) ? fleet.vehicles : []).filter(isActiveFleetVehicleForDriverReports);
+
+    if (shouldBlockFleetPayloadForDriverReports(env, fleet)) {
+      console.error("fleet_vehicles.driver_context_mock_data_blocked", {
+        userId: cleanString(user?.id),
+        identitySource: identity.source,
+        dataSource
+      });
+      return {
+        status: "failed",
+        vehicle: null,
+        candidates: [],
+        question: "",
+        errorCode: "mock_vehicle_data_in_production",
+        message: "Vozidla se teď nepodařilo bezpečně načíst.",
+        dataSource,
+        mockData: true,
+        identity
+      };
+    }
+
+    const { matches, confidence, fallbackUsed, lookupReason } = driverVehicleCandidateMatches(vehicles, {
+      ...payload,
+      driverIds: identity.ids
+    }, user);
+    const candidates = matches.map((vehicle) => withDriverVehicleMeta(vehicle, confidence, {
+      driverVehicleLookupReason: lookupReason
+    }));
+    const baseMeta = {
+      dataSource,
+      mockData,
+      fallbackUsed,
+      lookupReason,
+      identity
+    };
 
     if (candidates.length === 1) {
       return {
@@ -901,7 +1056,8 @@ export async function resolveFleetVehiclesForDriver(env, user, payload = {}) {
         vehicle: candidates[0],
         candidates,
         question: "",
-        labels: fleetVehicleOptionLabels(candidates)
+        labels: fleetVehicleOptionLabels(candidates),
+        ...baseMeta
       };
     }
 
@@ -915,7 +1071,8 @@ export async function resolveFleetVehiclesForDriver(env, user, payload = {}) {
           }),
           candidates,
           question: "",
-          labels: fleetVehicleOptionLabels(candidates)
+          labels: fleetVehicleOptionLabels(candidates),
+          ...baseMeta
         };
       }
 
@@ -924,9 +1081,18 @@ export async function resolveFleetVehiclesForDriver(env, user, payload = {}) {
         vehicle: null,
         candidates,
         question: fleetVehicleSelectionQuestion(candidates),
-        labels: fleetVehicleOptionLabels(candidates)
+        labels: fleetVehicleOptionLabels(candidates),
+        ...baseMeta
       };
     }
+
+    return {
+      status: payload.strictDriverAssignment === true && !candidates.length ? "no_driver_vehicles" : "none",
+      vehicle: null,
+      candidates: [],
+      question: "",
+      ...baseMeta
+    };
   } catch (error) {
     console.info("fleet_vehicles.driver_vehicle_lookup_skipped", { message: safeErrorMessage(error) });
     return {
@@ -938,8 +1104,6 @@ export async function resolveFleetVehiclesForDriver(env, user, payload = {}) {
       message: "Vozidla se teď nepodařilo načíst."
     };
   }
-
-  return { status: "none", vehicle: null, candidates: [], question: "" };
 }
 
 export async function resolveFleetVehicleForDriver(env, user, payload = {}) {
@@ -993,8 +1157,8 @@ export async function driverReportVehicleDynamicVariables(env, user) {
       driver_report_vehicle_type: "",
       driver_report_vehicle_options_count: "0",
       driver_report_vehicle_options: "",
-      driver_report_vehicle_selection_question: "Na kterém vozidle to je? Řekni mi prosím typ, značku nebo SPZ.",
-      driver_report_vehicle_context: "V Hlášení řidičů není vozidlo podle volajícího jistě identifikované. Neodlehčuj a zeptej se nejdřív na typ nebo značku vozidla; SPZ chtěj až jako poslední možnost."
+      driver_report_vehicle_selection_question: "Nemám u tebe teď přiřazené žádné vozidlo. Můžeš mi říct SPZ, ke které chceš závadu nahlásit?",
+      driver_report_vehicle_context: "V Hlášení řidičů není vozidlo podle volajícího jistě přiřazené. Neříkej, že máš vozidla načtená, a požádej o SPZ pro ruční ověření."
     };
   }
 

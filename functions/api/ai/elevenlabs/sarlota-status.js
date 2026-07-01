@@ -346,8 +346,8 @@ function fallbackDriverReportVehicleVariables() {
     driver_report_vehicle_type: "",
     driver_report_vehicle_options_count: "0",
     driver_report_vehicle_options: "",
-    driver_report_vehicle_selection_question: "Na kterém vozidle to je? Řekni mi prosím typ, značku nebo SPZ.",
-    driver_report_vehicle_context: "V Hlášení řidičů není vozidlo podle volajícího jistě identifikované. Zeptej se nejdřív na typ nebo značku vozidla; SPZ chtěj až jako poslední možnost."
+    driver_report_vehicle_selection_question: "Nemám u tebe teď přiřazené žádné vozidlo. Můžeš mi říct SPZ, ke které chceš závadu nahlásit?",
+    driver_report_vehicle_context: "V Hlášení řidičů není vozidlo podle volajícího jistě přiřazené. Neříkej, že máš vozidla načtená, a požádej o SPZ pro ruční ověření."
   };
 }
 
