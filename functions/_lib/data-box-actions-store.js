@@ -228,12 +228,29 @@ export async function archiveDataBoxMessage(env, messageId, payload = {}, curren
   const existing = await existingActionByDedupe(db, dedupeKey);
 
   if (existing) {
+    await db
+      .prepare("UPDATE data_box_messages SET status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(message.id)
+      .run();
+    await updateDataBoxMessagesAiStatus(env, [message.id], "done");
+    const updatedAction = await updateAction(db, existing.id, {
+      status: "archived",
+      provider: existing.provider || "Kaiser Smart",
+      providerMessageId: existing.providerMessageId || "",
+      result: {
+        ...(existing.result || {}),
+        previousStatus: message.status,
+        archivedAt: new Date().toISOString(),
+        confirmedBy: cleanString(currentUser?.id)
+      }
+    });
+
     return {
-      action: existing,
-      message,
-      status: "skipped",
+      action: updatedAction,
+      message: await loadMessage(env, message.id),
+      status: "archived",
       apiStatus: "ready",
-      notice: "Tato zpráva už byla archivována nebo má připravenou archivaci."
+      notice: "Zpráva byla archivována."
     };
   }
 
