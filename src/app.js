@@ -14813,10 +14813,8 @@ const DATA_BOX_BADGE_LABEL_OVERRIDES = new Map([
 const DATA_BOX_QUICK_FILTERS = [
   { id: "all", label: "Vše" },
   { id: "new", label: "Nepřečtené" },
-  { id: "urgent", label: "Urgentní" },
-  { id: "legal", label: "Právní" },
-  { id: "attachments", label: "S přílohou" },
-  { id: "deadlines", label: "Lhůty" },
+  { id: "unresolved", label: "Nevyřízené" },
+  { id: "ai_waiting", label: "Čeká na potvrzení" },
   { id: "errors", label: "Chyby" }
 ];
 
@@ -15943,7 +15941,6 @@ function dataBoxMessageMatchesQuickFilter(message) {
   const quick = dataBoxState.messageFilters.quick || "all";
   const status = dataBoxWorkflowStatus(message);
   const readState = dataBoxTechnicalReadState(message);
-  const deadline = dataBoxDeadlineInfo(message);
 
   if (quick === "new") {
     return readState.id === "new";
@@ -15953,20 +15950,8 @@ function dataBoxMessageMatchesQuickFilter(message) {
     return !["done", "archived"].includes(status.id);
   }
 
-  if (quick === "urgent") {
-    return dataBoxMessagePriority(message).id === "urgent";
-  }
-
-  if (quick === "legal") {
-    return dataBoxMessagePriority(message).id === "legal";
-  }
-
-  if (quick === "deadlines") {
-    return Boolean(deadline.date);
-  }
-
-  if (quick === "attachments") {
-    return dataBoxHasAttachments(message);
+  if (quick === "ai_waiting") {
+    return dataBoxMessageNeedsAiBoostConfirmation(message);
   }
 
   if (quick === "done") {
@@ -16089,6 +16074,7 @@ function dataBoxInboxMetrics(direction) {
   return {
     newCount: messages.filter((message) => dataBoxTechnicalReadState(message).id === "new").length,
     unresolved: messages.filter((message) => !["done", "archived"].includes(dataBoxWorkflowStatus(message).id)).length,
+    aiWaiting: messages.filter((message) => dataBoxMessageNeedsAiBoostConfirmation(message)).length,
     urgent: messages.filter((message) => dataBoxMessagePriority(message).id === "urgent").length,
     deadline3: messages.filter((message) => {
       const deadline = dataBoxDeadlineInfo(message);
@@ -16117,10 +16103,9 @@ function dataBoxInboxMetrics(direction) {
 function dataBoxOperationalKpis(direction = "received") {
   const metrics = dataBoxInboxMetrics(direction);
   const active = dataBoxState.messageFilters.quick || "all";
-  const urgentOrDeadline = Math.max(metrics.urgent, metrics.deadline3);
   const cards = [
     { label: "Nepřečtené", value: metrics.newCount, note: "Nové obálky", filter: "new", tone: "info" },
-    { label: "Urgentní / lhůty", value: urgentOrDeadline, note: "Návrh priority", filter: urgentOrDeadline ? "urgent" : "deadlines", tone: urgentOrDeadline ? "urgent" : "muted" },
+    { label: "Čeká na potvrzení", value: metrics.aiWaiting, note: "AI návrhy", filter: "ai_waiting", tone: metrics.aiWaiting ? "urgent" : "muted" },
     { label: direction === "sent" ? "Odeslané" : "Zpracované", value: metrics.sentOrDone, note: direction === "sent" ? "V seznamu" : "Vyřízené", filter: direction === "sent" ? "all" : "done", tone: "done" }
   ];
 
@@ -16279,6 +16264,15 @@ function dataBoxPrimaryAiBoostAction(message) {
   return actions.find(dataBoxAiBoostIsWaiting) || actions[0] || null;
 }
 
+function dataBoxMessageNeedsAiBoostConfirmation(message) {
+  const action = dataBoxPrimaryAiBoostAction(message);
+  if (action && dataBoxAiBoostIsWaiting(action)) {
+    return true;
+  }
+
+  return String(message?.aiStatus || "").trim().toLowerCase() === "requires_confirmation";
+}
+
 function dataBoxMessageHasAiBoostFlag(message) {
   const aiStatus = String(message?.aiStatus || "not_evaluated").trim().toLowerCase();
   return Boolean(aiStatus && aiStatus !== "not_evaluated")
@@ -16345,15 +16339,18 @@ function dataBoxMessageFlags(message, options = {}) {
 
   const detailed = Boolean(options.detailed);
   const action = dataBoxPrimaryAiBoostAction(message);
-  const flags = [{ id: "ai-boost", label: "AI Boost", tone: "ai", title: "Zpráva prošla AI Boost vyhodnocením" }];
+  const flags = [];
   const statusFlag = action ? dataBoxAiBoostStatusFlag(action, message) : dataBoxAiBoostStatusFlag({}, message);
   const isWaiting = action ? dataBoxAiBoostIsWaiting(action) : String(message.aiStatus || "").toLowerCase() === "requires_confirmation";
   const isDone = action ? dataBoxAiBoostIsDone(action) : ["done", "rejected", "failed"].includes(String(message.aiStatus || "").toLowerCase());
 
-  if (action && (isWaiting || detailed || !isDone)) {
+  if (isWaiting) {
+    flags.push({ id: "ai-waiting", label: "Čeká na potvrzení", tone: "waiting-pulse", title: "AI Boost připravil návrh a čeká na ruční potvrzení." });
+  }
+  if (action && (isWaiting || detailed || (!isDone && statusFlag))) {
     flags.push(dataBoxAiBoostActionFlag(action));
   }
-  if (statusFlag) {
+  if (statusFlag && (!isWaiting && (detailed || statusFlag.tone === "error"))) {
     flags.push(statusFlag);
   }
   if (action && Number(action.result?.confidence || 0) && Number(action.result.confidence) < 0.7) {
@@ -16463,7 +16460,6 @@ function dataBoxInboxIsEmptyState(notice, allRows) {
 function dataBoxMessageCard(message, selected) {
   const status = dataBoxWorkflowStatus(message);
   const readState = dataBoxTechnicalReadState(message);
-  const priority = dataBoxMessagePriority(message);
   const attachmentCount = dataBoxAttachmentCount(message);
   const deliveredAt = formatDateTime(dataBoxMessageTimestamp(message));
   const actorValue = dataBoxMessageActor(message);
@@ -16474,7 +16470,7 @@ function dataBoxMessageCard(message, selected) {
   const companyBadge = dataBoxCompanyBadgeMarkup(message);
 
   return `
-    <article class="data-box-message-card data-box-message-card--priority-${escapeHtml(priority.id)} ${selected ? "data-box-message-card--selected" : ""} ${unread ? "data-box-message-card--unread" : ""}">
+    <article class="data-box-message-card ${selected ? "data-box-message-card--selected" : ""} ${unread ? "data-box-message-card--unread" : ""}">
       <button
         class="data-box-message-card__select"
         type="button"
@@ -16490,7 +16486,6 @@ function dataBoxMessageCard(message, selected) {
           <span class="data-box-message-card__extras" aria-label="Doplňkové informace">
             ${dataBoxMessageFlagsMarkup(message, { limit: 3 })}
             ${dataBoxBadge(status.label, status.tone)}
-            ${dataBoxPriorityBadge(priority)}
             ${attachmentCount ? `<span class="data-box-message-card__attachment" title="${escapeHtml(attachmentLabel)}" aria-label="${escapeHtml(attachmentLabel)}">Příloha</span>` : ""}
             ${companyBadge}
             <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
@@ -16561,7 +16556,6 @@ function dataBoxReadingPane(message, direction) {
       ${dataBoxActionFeedbackMarkup()}
       <div class="data-box-reading-pane__badges">
         ${dataBoxMessageFlagsMarkup(message, { limit: 6, detailed: true })}
-        ${dataBoxPriorityBadge(priority)}
         ${dataBoxBadge(status.label, status.tone)}
         ${dataBoxBadge(readState.label, readState.tone)}
         ${deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : ""}
@@ -16699,7 +16693,7 @@ function dataBoxAiBoostRecommendationSection(message) {
 }
 
 function dataBoxAiBoostWorkTags(action = {}) {
-  const tags = [{ id: "ai-boost", label: "AI Boost", tone: "ai" }];
+  const tags = [{ id: "ai-boost", label: "AI návrh", tone: "ai" }];
   const statusFlag = dataBoxAiBoostStatusFlag(action);
 
   if (!dataBoxAiBoostIsDone(action)) {
@@ -18055,7 +18049,7 @@ function dataBoxMessageDetailOverlayMarkup() {
           <strong>${escapeHtml(actorValue || "neuvedeno")}</strong>
           <h3>${escapeHtml(message.subject || "(bez předmětu)")}</h3>
           <p class="data-box-detail-summary__context">Schránka: <strong>${escapeHtml(mailboxLabel)}</strong></p>
-          <p>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "bez data")} · ${escapeHtml(priority.label)} · ${escapeHtml(workflow.label)} · ${escapeHtml(readState.label)}</p>
+          <p>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "bez data")} · ${escapeHtml(workflow.label)} · ${escapeHtml(readState.label)}</p>
           ${dataBoxMessageFlagsMarkup(message, { limit: 6, detailed: true })}
         </section>
         ${dataBoxMessageSafeActions(message)}

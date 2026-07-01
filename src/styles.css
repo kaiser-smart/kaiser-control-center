@@ -9474,6 +9474,34 @@ body:has(.data-box-page) {
   border-color: color-mix(in srgb, var(--data-box-warning) 24%, var(--data-box-border));
 }
 
+.data-box-flag--waiting-pulse {
+  background: color-mix(in srgb, var(--data-box-warning) 18%, var(--data-box-panel));
+  color: var(--data-box-warning);
+  border-color: color-mix(in srgb, var(--data-box-warning) 34%, var(--data-box-border));
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--data-box-warning) 28%, transparent);
+  animation: data-box-ai-waiting-pulse 1.8s ease-out infinite;
+}
+
+@keyframes data-box-ai-waiting-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--data-box-warning) 30%, transparent);
+  }
+
+  70% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--data-box-warning) 0%, transparent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--data-box-warning) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-box-flag--waiting-pulse {
+    animation: none;
+  }
+}
+
 .data-box-flag--done {
   background: color-mix(in srgb, var(--data-box-primary) 10%, var(--data-box-panel));
   color: var(--data-box-success);
