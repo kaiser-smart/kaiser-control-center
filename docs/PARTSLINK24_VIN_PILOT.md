@@ -95,6 +95,8 @@ Diagnostika nesmí obsahovat hodnoty polí, heslo, cookies, session tokeny, scre
 
 partslink24 může před loginem zobrazit mezistránku `Attention - Please read carefully` s odkazem `Reload`. Runner ji smí v read-only pilotu bezpečně překročit přes `Reload`, maximálně dvakrát. Pokud po tom login formulář stále není dostupný, běh skončí chybou `PARTSLINK24_RELOAD_GATE_NOT_RESOLVED` nebo `PARTSLINK24_LOGIN_FORM_NOT_FOUND`.
 
+Pokud `Reload` otevře veřejnou marketingovou stránku partslink24 bez login formuláře, runner smí zkusit jen jednoznačné login odkazy nebo tlačítka (`Login`, `Log in`, `Sign in`, `Anmelden`, `Přihlásit`, případně prvek s login v `href`/`id`/`class`). Nesmí klikat na značky, katalogy, subscription ani jiné nejasné odkazy. Když jasný vstup do loginu nenajde, skončí bezpečně stavem `PARTSLINK24_LOGIN_ENTRY_NOT_FOUND` a vrátí redigovanou diagnostiku s prioritizovanými kandidáty ovládacích prvků.
+
 Lokální preflight bez přihlášení:
 
 ```bash

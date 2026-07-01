@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { fileURLToPath } from "node:url";
+
 const PARTSLINK24_START_URL = "https://www.partslink24.com/partslink24/startup.do";
 const SECRET_NAMES = [
   "PARTSLINK24_COMPANY_ID",
@@ -11,7 +13,10 @@ const FIELD_READY_TIMEOUT_MS = 15000;
 const ATTENTION_RELOAD_TIMEOUT_MS = 10000;
 const ATTENTION_RELOAD_MAX_ATTEMPTS = 2;
 const DIAGNOSTIC_TEXT_LIMIT = 900;
-const DIAGNOSTIC_CONTROL_LIMIT = 35;
+const DIAGNOSTIC_CONTROL_SCAN_LIMIT = 300;
+const DIAGNOSTIC_CONTROL_LIMIT = 80;
+const LOGIN_ENTRY_TIMEOUT_MS = 8000;
+const LOGIN_ENTRY_MAX_ATTEMPTS = 2;
 
 const COMPANY_SELECTORS = [
   "input[name='company']",
@@ -64,6 +69,26 @@ const SUBMIT_SELECTORS = [
   "button:has-text('Přihlásit')",
   "button:has-text('Sign in')",
   "a:has-text('Login')"
+];
+
+const LOGIN_ENTRY_SELECTORS = [
+  "a[href*='login' i]",
+  "a[id*='login' i]",
+  "a[class*='login' i]",
+  "button[id*='login' i]",
+  "button[class*='login' i]",
+  "a:has-text('Login')",
+  "a:has-text('Log in')",
+  "a:has-text('Sign in')",
+  "a:has-text('Anmelden')",
+  "a:has-text('Přihlásit')",
+  "a:has-text('Prihlasit')",
+  "button:has-text('Login')",
+  "button:has-text('Log in')",
+  "button:has-text('Sign in')",
+  "button:has-text('Anmelden')",
+  "button:has-text('Přihlásit')",
+  "button:has-text('Prihlasit')"
 ];
 
 const ATTENTION_RELOAD_SELECTORS = [
@@ -222,6 +247,43 @@ export function detectPartslink24AttentionReloadText(value) {
     );
 }
 
+export function detectPartslink24PublicLandingText(value) {
+  const text = normalizeDetectionText(value);
+  return text.includes("your advantages at a glance")
+    && text.includes("subscription")
+    && (
+      text.includes("faq contact")
+      || text.includes("legal notice")
+      || text.includes("privacy")
+    );
+}
+
+export function isPartslink24LoginControlCandidate(control = {}) {
+  const text = normalizeDetectionText([
+    control.tag,
+    control.type,
+    control.name,
+    control.id,
+    control.placeholder,
+    control.ariaLabel,
+    control.role,
+    control.text,
+    control.hrefPath
+  ].filter(Boolean).join(" "));
+
+  return [
+    "login",
+    "log in",
+    "sign in",
+    "sign-in",
+    "anmelden",
+    "prihlasit",
+    "connexion",
+    "accedi",
+    "iniciar sesion"
+  ].some((pattern) => text.includes(normalizeDetectionText(pattern)));
+}
+
 function parseArgs(argv = []) {
   const result = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -288,23 +350,46 @@ function pageSearchTargets(page) {
 async function readControlCandidates(target, config) {
   const controls = await target.evaluate((limit) => Array.from(document.querySelectorAll("input, textarea, select, button, a"))
     .slice(0, limit)
-    .map((element) => ({
-      tag: element.tagName.toLowerCase(),
-      type: element.getAttribute("type") || "",
-      name: element.getAttribute("name") || "",
-      id: element.getAttribute("id") || "",
-      placeholder: element.getAttribute("placeholder") || "",
-      ariaLabel: element.getAttribute("aria-label") || "",
-      autocomplete: element.getAttribute("autocomplete") || "",
-      role: element.getAttribute("role") || "",
-      text: (element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 90)
-    })), DIAGNOSTIC_CONTROL_LIMIT).catch(() => []);
+    .map((element, index) => {
+      let hrefPath = "";
+      if (element.tagName.toLowerCase() === "a") {
+        try {
+          const parsed = new URL(element.href, window.location.href);
+          hrefPath = `${parsed.origin}${parsed.pathname}`;
+        } catch {
+          hrefPath = (element.getAttribute("href") || "").replace(/[?#].*$/, "");
+        }
+      }
 
-  return controls.map((control) => Object.fromEntries(
-    Object.entries(control)
-      .map(([key, value]) => [key, safePreview(value, config, 140)])
-      .filter(([, value]) => value)
-  ));
+      return {
+        index,
+        visible: Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length),
+        tag: element.tagName.toLowerCase(),
+        type: element.getAttribute("type") || "",
+        name: element.getAttribute("name") || "",
+        id: element.getAttribute("id") || "",
+        placeholder: element.getAttribute("placeholder") || "",
+        ariaLabel: element.getAttribute("aria-label") || "",
+        autocomplete: element.getAttribute("autocomplete") || "",
+        role: element.getAttribute("role") || "",
+        hrefPath,
+        text: (element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 90)
+      };
+    }), DIAGNOSTIC_CONTROL_SCAN_LIMIT).catch(() => []);
+
+  const decoratedControls = controls.map((control) => ({
+    ...control,
+    likelyLoginEntry: isPartslink24LoginControlCandidate(control)
+  }));
+  const likelyControls = decoratedControls.filter((control) => control.visible && control.likelyLoginEntry);
+  const otherControls = decoratedControls.filter((control) => !likelyControls.includes(control));
+  return [...likelyControls, ...otherControls]
+    .slice(0, DIAGNOSTIC_CONTROL_LIMIT)
+    .map((control) => Object.fromEntries(
+      Object.entries(control)
+        .map(([key, value]) => [key, typeof value === "boolean" ? String(value) : safePreview(value, config, 140)])
+        .filter(([, value]) => value)
+    ));
 }
 
 async function collectSafePageDiagnostics(page, config) {
@@ -418,6 +503,67 @@ async function resolvePartslink24AttentionReloadGate(page, config) {
   };
 }
 
+async function probeLoginForm(page) {
+  const company = await findFirstVisibleLocator(page, COMPANY_SELECTORS);
+  const username = await findFirstVisibleLocator(page, USERNAME_SELECTORS);
+  const password = await findFirstVisibleLocator(page, PASSWORD_SELECTORS);
+  return {
+    ready: Boolean(company || username || password),
+    companyFound: Boolean(company),
+    usernameFound: Boolean(username),
+    passwordFound: Boolean(password)
+  };
+}
+
+async function resolvePartslink24LoginEntry(page, config) {
+  const attempts = [];
+  let loginReadiness = await probeLoginForm(page);
+  if (loginReadiness.ready) {
+    return {
+      resolved: false,
+      attempts,
+      loginReadiness
+    };
+  }
+
+  for (let attempt = 1; attempt <= LOGIN_ENTRY_MAX_ATTEMPTS; attempt += 1) {
+    const found = await waitForFirstVisibleLocator(page, LOGIN_ENTRY_SELECTORS, LOGIN_ENTRY_TIMEOUT_MS);
+    if (!found) {
+      break;
+    }
+
+    const beforeUrl = page.url();
+    await Promise.all([
+      page.waitForLoadState("domcontentloaded", { timeout: LOGIN_ENTRY_TIMEOUT_MS }).catch(() => null),
+      found.locator.click({ timeout: 5000 })
+    ]);
+    await page.waitForLoadState("networkidle", { timeout: LOGIN_ENTRY_TIMEOUT_MS }).catch(() => null);
+
+    attempts.push({
+      attempt,
+      selector: found.selector,
+      target: found.target,
+      beforeUrl: safePreview(beforeUrl, config, 500),
+      afterUrl: safePreview(page.url(), config, 500)
+    });
+
+    loginReadiness = await probeLoginForm(page);
+    if (loginReadiness.ready) {
+      return {
+        resolved: true,
+        attempts,
+        loginReadiness
+      };
+    }
+  }
+
+  return {
+    resolved: false,
+    attempts,
+    loginReadiness: null
+  };
+}
+
 function fieldErrorCode(label) {
   if (["Company ID", "User name", "Password"].includes(label)) {
     return "PARTSLINK24_LOGIN_FORM_NOT_FOUND";
@@ -465,26 +611,31 @@ async function clickFirst(page, selectors, label, config, timeoutMs = FIELD_READ
   );
 }
 
-async function waitForLoginForm(page, config) {
+async function waitForLoginForm(page, config, extraDiagnostic = {}) {
   const deadline = Date.now() + LOGIN_READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const company = await findFirstVisibleLocator(page, COMPANY_SELECTORS);
-    const username = await findFirstVisibleLocator(page, USERNAME_SELECTORS);
-    const password = await findFirstVisibleLocator(page, PASSWORD_SELECTORS);
-    if (company || username || password) {
-      return {
-        companyFound: Boolean(company),
-        usernameFound: Boolean(username),
-        passwordFound: Boolean(password)
-      };
+    const loginReadiness = await probeLoginForm(page);
+    if (loginReadiness.ready) {
+      return loginReadiness;
     }
     await page.waitForLoadState("domcontentloaded", { timeout: 3000 }).catch(() => null);
     await page.waitForTimeout(750);
   }
+
+  const pageText = await readCombinedPageText(page).catch(() => "");
+  const publicLandingDetected = detectPartslink24PublicLandingText(pageText);
   throw new Partslink24PilotError(
-    "partslink24 login formulář se nepodařilo najít.",
-    "PARTSLINK24_LOGIN_FORM_NOT_FOUND",
-    await collectSafePageDiagnostics(page, config)
+    publicLandingDetected
+      ? "partslink24 zobrazil veřejnou stránku, ale jednoznačný vstup do loginu se nepodařilo najít."
+      : "partslink24 login formulář se nepodařilo najít.",
+    publicLandingDetected
+      ? "PARTSLINK24_LOGIN_ENTRY_NOT_FOUND"
+      : "PARTSLINK24_LOGIN_FORM_NOT_FOUND",
+    {
+      ...await collectSafePageDiagnostics(page, config),
+      publicLandingDetected,
+      ...extraDiagnostic
+    }
   );
 }
 
@@ -632,7 +783,8 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
     await page.goto(PARTSLINK24_START_URL, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => null);
     reloadGate = await resolvePartslink24AttentionReloadGate(page, config);
-    const loginReadiness = await waitForLoginForm(page, config);
+    const loginEntry = await resolvePartslink24LoginEntry(page, config);
+    const loginReadiness = loginEntry.loginReadiness || await waitForLoginForm(page, config, { loginEntry });
     const companyField = await fillFirst(page, COMPANY_SELECTORS, config.companyId, "Company ID", config, LOGIN_READY_TIMEOUT_MS);
     const usernameField = await fillFirst(page, USERNAME_SELECTORS, config.username, "User name", config);
     const passwordField = await fillFirst(page, PASSWORD_SELECTORS, config.password, "Password", config);
@@ -664,6 +816,7 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
       status: "manual_review_required",
       errorCode: "",
       reloadGate,
+      loginEntry,
       loginReadiness,
       loginTargets: {
         company: companyField.target,
@@ -693,7 +846,7 @@ export async function runPartslink24VinPilot(options = {}, env = process.env) {
 }
 
 function isMainModule() {
-  return import.meta.url === `file://${process.argv[1]}`;
+  return process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 }
 
 if (isMainModule()) {

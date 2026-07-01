@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 
 import {
   detectPartslink24AttentionReloadText,
+  detectPartslink24PublicLandingText,
   detectTwoFactorChallengeText,
+  isPartslink24LoginControlCandidate,
   isPassengerVehicleKind,
   maskVin,
   normalizeVehicleKind,
@@ -23,6 +25,11 @@ assert.equal(detectTwoFactorChallengeText("Bitte geben Sie den Sicherheitscode e
 assert.equal(detectTwoFactorChallengeText("Vítej ve vyhledávání VIN."), false);
 assert.equal(detectPartslink24AttentionReloadText("Attention - Please read carefully. This site may appear because you are using a bookmark. Reload the page using the main domain."), true);
 assert.equal(detectPartslink24AttentionReloadText("partslink24 user login Company ID User name Password"), false);
+assert.equal(detectPartslink24PublicLandingText("Subscription Help FAQ / Contact T&C Legal Notice Privacy Your advantages at a glance"), true);
+assert.equal(detectPartslink24PublicLandingText("Attention - Please read carefully. Reload the page using the main domain."), false);
+assert.equal(isPartslink24LoginControlCandidate({ tag: "a", text: "Login" }), true);
+assert.equal(isPartslink24LoginControlCandidate({ tag: "a", id: "customer-login-link", hrefPath: "https://www.partslink24.com/partslink24/user/login.do" }), true);
+assert.equal(isPartslink24LoginControlCandidate({ tag: "a", text: "Subscription" }), false);
 assert.equal(parseBoolean("true"), true);
 assert.equal(parseBoolean("0"), false);
 assert.equal(redactSensitive("login admin pass dummy-password VIN WDB12345678901234", [
