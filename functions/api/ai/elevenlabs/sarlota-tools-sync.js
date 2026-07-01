@@ -496,36 +496,27 @@ function buildAgentPatch(agentConfig, workspaceTools, expectedNames) {
 }
 
 function buildDiagnosticIdentityOnlyPatch(agentConfig) {
-  const toolArray = findAgentToolArray(agentConfig);
-  if (!toolArray) {
+  const nextConfig = deepClone(agentConfig);
+  const clearedPaths = [];
+
+  for (const path of SAFE_AGENT_TOOL_PATHS) {
+    const value = getPathValue(nextConfig, path);
+    if (Array.isArray(value) && setPathValue(nextConfig, path, [])) {
+      clearedPaths.push(path.join("."));
+    }
+  }
+
+  if (!clearedPaths.length) {
     return {
       ok: false,
       reason: "agent_tool_attachment_path_not_found"
     };
   }
 
-  if (toolArray.kind === "tool_ids" && toolArray.pathText === "conversation_config.agent.prompt.tool_ids") {
-    return {
-      ok: true,
-      path: toolArray.pathText,
-      requestBody: {
-        conversation_config: {
-          agent: {
-            prompt: {
-              tool_ids: []
-            }
-          }
-        }
-      }
-    };
-  }
-
-  const nextConfig = deepClone(agentConfig);
-  setPathValue(nextConfig, toolArray.path, []);
-
   return {
     ok: true,
-    path: toolArray.pathText,
+    path: clearedPaths.join(", "),
+    clearedPaths,
     requestBody: { conversation_config: nextConfig.conversation_config }
   };
 }
