@@ -82,6 +82,17 @@ Runner nesmí číst e-mail, ukládat 2FA kód, zadávat 2FA kód ani ukládat s
 
 Dokud nebude 2FA postup ověřený, live pilot nesmí tvrdit, že partslink24 vyhledání funguje stabilně.
 
+## Bezpečná diagnostika live pilotu
+
+Pokud live pilot nenajde login formulář, login tlačítko nebo VIN pole, vrátí redigovanou diagnostiku:
+
+- title a URL stránky,
+- krátký textový náhled stránky,
+- počet frame/iframe,
+- metadata viditelných ovládacích prvků.
+
+Diagnostika nesmí obsahovat hodnoty polí, heslo, cookies, session tokeny, screenshoty ani celé HTML stránky. Hodnoty `PARTSLINK24_COMPANY_ID`, `PARTSLINK24_USERNAME`, `PARTSLINK24_PASSWORD` a VIN se před výpisem redigují.
+
 Lokální preflight bez přihlášení:
 
 ```bash
