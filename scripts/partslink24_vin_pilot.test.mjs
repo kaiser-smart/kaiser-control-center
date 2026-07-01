@@ -7,7 +7,8 @@ import {
   normalizeVehicleKind,
   parseBoolean,
   redactSensitive,
-  runPartslink24VinPilot
+  runPartslink24VinPilot,
+  safePreview
 } from "./partslink24_vin_pilot.mjs";
 
 assert.equal(maskVin("WDB12345678901234"), "WDB**********1234");
@@ -26,6 +27,12 @@ assert.equal(redactSensitive("login admin pass dummy-password VIN WDB12345678901
   "dummy-password",
   "WDB12345678901234"
 ]), "login [REDACTED] pass [REDACTED] VIN [REDACTED]");
+assert.equal(safePreview("company cz-879576 user admin pass dummy-password VIN WDB12345678901234", {
+  companyId: "cz-879576",
+  username: "admin",
+  password: "dummy-password",
+  vin: "WDB12345678901234"
+}), "company [REDACTED] user [REDACTED] pass [REDACTED] VIN [REDACTED]");
 
 {
   const result = await runPartslink24VinPilot({}, {
