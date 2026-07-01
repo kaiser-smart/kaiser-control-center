@@ -255,7 +255,7 @@ export function driverPartRequestMissingQuestion(input = {}) {
   const partMatch = identifyProbablePartFromDescription(description);
 
   if (!licensePlate) {
-    return "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.";
+    return "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
   }
 
   if (partMatch.needsPartSideClarification) {

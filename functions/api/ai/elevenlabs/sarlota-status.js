@@ -14,10 +14,10 @@ const LLM_MODEL_EXPECTED_IN_ELEVENLABS = "Qwen3.5-397B-A17B";
 const LLM_MODEL_EXPECTED_NORMALIZED = "qwen35397ba17b";
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const DRIVER_REPORT_PROMPT_MARKER = "HLÁŠENÍ ŘIDIČŮ / VOZIDLA";
-const DRIVER_REPORT_PROMPT_REQUIRED_PHRASE = "V hlasovém flow nikdy neříkej konkrétní vozidlo";
+const DRIVER_REPORT_PROMPT_REQUIRED_PHRASE = "Vozidla smíš v hlasu vyjmenovat pouze tehdy";
 const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
   "Moment, načtu si " + "vozidla",
-  "Vozidla smíš " + "vyjmenovat",
+  "V hlasovém flow nikdy neříkej " + "konkrétní vozidlo",
   "Mám u tebe ověřené " + "tyto vozy",
   "Vyjmenuj " + "možnosti",
   "SPZ chtěj až jako " + "poslední možnost",
@@ -572,8 +572,8 @@ function fallbackDriverReportVehicleVariables() {
     driver_report_vehicle_type: "",
     driver_report_vehicle_options_count: "0",
     driver_report_vehicle_options: "",
-    driver_report_vehicle_selection_question: "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.",
-    driver_report_vehicle_context: "V Hlášení řidičů neříkej nahlas konkrétní vozidla. Otevři výběr v aplikaci, nebo požádej o SPZ."
+    driver_report_vehicle_selection_question: "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.",
+    driver_report_vehicle_context: "V Hlášení řidičů použij ověřený backend seznam, bezpečný výběr v aplikaci, nebo nouzově značku, typ či SPZ."
   };
 }
 

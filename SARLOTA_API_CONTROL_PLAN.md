@@ -113,7 +113,7 @@ Input:
 {
   "sessionId": "sarlota-session-id",
   "userId": "user-id",
-  "transcript": "Zapiš závadu, auto 3 brzdí divně.",
+  "transcript": "Zapiš závadu, auto brzdí divně.",
   "currentModule": "vozovy-park",
   "metadata": {
     "source": "elevenlabs",
@@ -126,7 +126,7 @@ Output:
 
 ```json
 {
-  "answerText": "Rozumím. Zapíšu bezpečnostní závadu k vozidlu 3. Chceš doplnit ještě krátkou poznámku?",
+  "answerText": "Rozumím. Podívám se do Smart systému.",
   "intent": "create_vehicle_issue",
   "action": "prepare",
   "requiresConfirmation": true,
@@ -345,13 +345,15 @@ Pravidlo:
 Příklad:
 
 ```text
-Uživatel: Zapiš závadu, auto 3 brzdí divně.
-Šarlota: Rozumím. Zapíšu bezpečnostní závadu k vozidlu 3. Chceš doplnit ještě krátkou poznámku?
-Uživatel: Ne.
-Šarlota: Mám to takhle zapsat?
+Uživatel: Zapiš závadu, auto brzdí divně.
+Šarlota: Rozumím. Podívám se do Smart systému.
+Backend: tool get_driver_report_context -> vehiclesVerified true, 2 vozidla
+Šarlota: Máš pod sebou Mercedes Atego, SPZ 1A1 1111, Mercedes Sprinter, SPZ 2A2 2222. Kterého vozidla se závada týká?
+Uživatel: Sprinter.
+Šarlota: Zapíšu závadu: vozidlo má problém s brzdami. Potvrzuješ?
 Uživatel: Ano.
-Backend: tool create_vehicle_issue -> success
-Šarlota: Hotovo, závada je zapsaná.
+Backend: tool create_driver_part_request -> requires_confirmation
+Šarlota: Otevřela jsem potvrzení v aplikaci.
 ```
 
 Když tool selže:

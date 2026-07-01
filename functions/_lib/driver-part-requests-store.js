@@ -547,7 +547,7 @@ export async function createDriverPartRequest(env, user, payload = {}) {
   );
   if (voiceSource && !explicitVehicleId && !explicitManualPlate) {
     throw new DriverPartRequestsStoreError(
-      "Vyberte vozidlo v aplikaci, nebo doplňte SPZ vozidla.",
+      "Vyberte vozidlo v aplikaci, nebo doplňte značku, typ či SPZ vozidla.",
       400,
       "VEHICLE_SPZ_REQUIRED"
     );

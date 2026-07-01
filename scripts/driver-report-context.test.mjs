@@ -47,6 +47,20 @@ const vehicles = [
   }
 ];
 
+function safeVoiceVehicle(id, displayName, spz) {
+  return {
+    id,
+    vehicleId: id,
+    displayName,
+    spz,
+    licensePlate: spz,
+    assignedToCurrentDriver: true,
+    existsInFleet: true,
+    active: true,
+    source: "fleet_db"
+  };
+}
+
 function findInFakeDom(nodes, predicate) {
   for (const node of nodes || []) {
     if (predicate(node)) {
@@ -233,8 +247,8 @@ async function withFakeDriverPickerDom(callback) {
         { id: "fake", displayName: "Nesmí být řečeno", licensePlate: "5A4 8912" }
       ],
       vehiclesCount: 1,
-      vehicleLookupMode: "manual_spz_required",
-      messageForAssistant: "Nemám u tebe teď bezpečně ověřené žádné přiřazené vozidlo. Řekni mi prosím SPZ vozidla.",
+      vehicleLookupMode: "picker_or_manual",
+      messageForAssistant: "Nemám teď bezpečně ověřený seznam tvých vozidel. Otevřu ti výběr v aplikaci.",
       apiStatus: "ready"
     })
   });
@@ -243,9 +257,10 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.ok, true);
   assert.equal(result.vehiclesVerified, false);
   assert.deepEqual(result.vehicles, []);
-  assert.match(result.answerText, /Vyber|Otevřu|SPZ/);
+  assert.match(result.answerText, /Otevřu|výběr/);
   assert.equal(result.answerText.includes("Nesmí být řečeno"), false);
   assert.equal(result.answerText.includes("5A4 8912"), false);
+  assert.equal(result.vehicleOrdinalSelectionAllowed, false);
 }
 
 {
@@ -260,24 +275,100 @@ async function withFakeDriverPickerDom(callback) {
       vehiclesVerified: true,
       vehiclePickerAvailable: true,
       vehicles: [
-        { id: "vehicle-radim-1", displayName: "Utajený vůz", licensePlate: "1A1 1111" }
+        safeVoiceVehicle("vehicle-radim-1", "Mercedes Atego", "1A1 1111"),
+        safeVoiceVehicle("vehicle-radim-2", "Mercedes Sprinter", "2A2 2222")
       ],
-      vehiclesCount: 1,
-      vehicleLookupMode: "verified_ui_picker",
-      messageForAssistant: "Otevřu ti výběr vozidla v aplikaci.",
+      vehiclesCount: 2,
+      vehicleLookupMode: "verified_vehicle_list",
+      messageForAssistant: "Máš pod sebou Mercedes Atego, SPZ 1A1 1111, Mercedes Sprinter, SPZ 2A2 2222. Kterého vozidla se závada týká?",
       apiStatus: "ready"
     })
   });
   const result = await tools.get_driver_report_context({ sessionId: "voice-radim-verified" });
 
   assert.equal(result.ok, true);
-  assert.equal(result.vehiclesVerified, false);
+  assert.equal(result.vehiclesVerified, true);
   assert.equal(result.vehiclePickerAvailable, true);
-  assert.deepEqual(result.vehicles, []);
+  assert.equal(result.vehiclesCount, 2);
+  assert.equal(result.vehicleOrdinalSelectionAllowed, true);
+  assert.equal(result.answerText.includes("Mercedes Atego"), true);
+  assert.equal(result.answerText.includes("1A1 1111"), true);
+  assert.equal(result.answerText.includes("Mercedes Sprinter"), true);
+  assert.equal(result.answerText.includes("2A2 2222"), true);
+  assert.equal(result.answerText.includes(["Mercedes Sprinter", "SPZ", "5A4 8912"].join(" ")), false);
+}
+
+{
+  const tools = createElevenLabsClientTools({
+    requestJson: async () => ({
+      ok: true,
+      module: "hlaseni-ridicu",
+      userName: "Radim",
+      userResolved: true,
+      employeeResolved: true,
+      driverResolved: true,
+      vehiclesVerified: true,
+      vehiclePickerAvailable: true,
+      vehicles: [
+        safeVoiceVehicle("vehicle-radim-1", "Mercedes Atego", "1A1 1111"),
+        safeVoiceVehicle("vehicle-radim-2", "Mercedes Sprinter", "2A2 2222"),
+        safeVoiceVehicle("vehicle-radim-3", "Mercedes Econic", "3A3 3333"),
+        safeVoiceVehicle("vehicle-radim-4", "Mercedes Arocs", "4A4 4444")
+      ],
+      vehiclesCount: 4,
+      vehicleLookupMode: "verified_picker_recommended",
+      apiStatus: "ready"
+    })
+  });
+  const result = await tools.get_driver_report_context({ sessionId: "voice-radim-many" });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.vehiclesVerified, true);
   assert.equal(result.vehiclesCount, 0);
-  assert.match(result.answerText, /výběr vozidla v aplikaci/);
-  assert.equal(result.answerText.includes("Utajený vůz"), false);
+  assert.deepEqual(result.vehicles, []);
+  assert.match(result.answerText, /víc vozidel/);
+  assert.match(result.answerText, /výběr v aplikaci/);
+  assert.equal(result.answerText.includes("Mercedes Atego"), false);
   assert.equal(result.answerText.includes("1A1 1111"), false);
+  assert.equal(result.vehicleOrdinalSelectionAllowed, false);
+}
+
+{
+  const previousConsoleError = console.error;
+  const errors = [];
+  console.error = (...args) => errors.push(args);
+  try {
+    const tools = createElevenLabsClientTools({
+      requestJson: async () => ({
+        ok: true,
+        module: "hlaseni-ridicu",
+        userName: "Radim",
+        userResolved: true,
+        employeeResolved: true,
+        driverResolved: true,
+        vehiclesVerified: true,
+        vehiclePickerAvailable: true,
+        vehicles: [
+          {
+            ...safeVoiceVehicle("demo-vehicle", "Demo Mercedes", "9Z9 9999"),
+            source: "local_mock"
+          }
+        ],
+        vehiclesCount: 1,
+        apiStatus: "ready"
+      })
+    });
+    const result = await tools.get_driver_report_context({ sessionId: "voice-radim-demo" });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.vehiclesVerified, false);
+    assert.deepEqual(result.vehicles, []);
+    assert.equal(result.answerText.includes("Demo Mercedes"), false);
+    assert.equal(result.answerText.includes("9Z9 9999"), false);
+    assert.equal(errors.some((entry) => String(entry[0]).includes("driver_reports.client_unsafe_vehicle_list_blocked")), true);
+  } finally {
+    console.error = previousConsoleError;
+  }
 }
 
 {
@@ -297,7 +388,7 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.ok, false);
   assert.equal(result.status, "needs_input");
   assert.equal(result.code, "VEHICLE_SPZ_REQUIRED");
-  assert.equal(result.message, "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.");
+  assert.equal(result.message, "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.");
 }
 
 {
@@ -313,7 +404,7 @@ async function withFakeDriverPickerDom(callback) {
         vehiclesVerified: true,
         vehiclePickerAvailable: true,
         vehicles: [
-          { id: "vehicle-radim-1", displayName: "Utajený vůz", licensePlate: "1A1 1111" }
+          safeVoiceVehicle("vehicle-radim-1", "Utajený vůz", "1A1 1111")
         ],
         vehiclesCount: 1,
         apiStatus: "ready"
@@ -331,7 +422,7 @@ async function withFakeDriverPickerDom(callback) {
     const pending = await tools.get_driver_vehicle_picker_selection({ sessionId: "picker-open-test" });
     assert.equal(pending.ok, false);
     assert.equal(pending.status, "needs_input");
-    assert.equal(pending.answerText, "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.");
+    assert.equal(pending.answerText, "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.");
 
     const option = find((node) => node.className === "ai-driver-vehicle-picker__option" && !node.disabled);
     assert.ok(option);
@@ -347,6 +438,15 @@ async function withFakeDriverPickerDom(callback) {
 
 {
   const tools = createElevenLabsClientTools();
+  const result = await tools.get_driver_vehicle_picker_selection({ sessionId: "no-current-picker" });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errorCode, "VEHICLE_SPZ_REQUIRED");
+  assert.equal(result.answerText, "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.");
+}
+
+{
+  const tools = createElevenLabsClientTools();
   const result = await tools.highlight_element({
     selector: "[data-driver-report-vehicle]",
     message: "Toto vozidlo"
@@ -355,6 +455,7 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.ok, false);
   assert.equal(result.errorCode, "DRIVER_VEHICLE_PICKER_REQUIRED");
   assert.deepEqual(result.vehicles, []);
+  assert.equal(result.message.includes("značku, typ nebo SPZ"), true);
 }
 
 console.log("driver-report-context tests passed");

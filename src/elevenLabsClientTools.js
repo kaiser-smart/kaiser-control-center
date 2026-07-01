@@ -101,9 +101,10 @@ const ABSENCE_TOOL_TYPE_LABELS = {
   other: "jinou nepřítomnost"
 };
 
-const DRIVER_REPORT_PICKER_MESSAGE = "Otevřu ti výběr vozidla v aplikaci.";
-const DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.";
-const DRIVER_REPORT_PICKER_FAILED_MESSAGE = "Výběr vozidla se mi teď nepodařilo otevřít. Řekni mi prosím SPZ vozidla.";
+const DRIVER_REPORT_CONTEXT_LOADING_MESSAGE = "Rozumím. Podívám se do Smart systému.";
+const DRIVER_REPORT_PICKER_MESSAGE = "Otevřu ti výběr v aplikaci.";
+const DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
+const DRIVER_REPORT_PICKER_FAILED_MESSAGE = "Výběr se mi nepodařilo otevřít. Řekni mi prosím značku, typ nebo SPZ vozidla.";
 const DRIVER_REPORT_VEHICLE_SELECTED_MESSAGE = "Vozidlo je vybrané v aplikaci.";
 
 export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
@@ -220,7 +221,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "create_driver_part_request",
-    description: "Zapíše potvrzené hlášení náhradního dílu přes KSO backend. Vyžaduje vehicleId z get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. Bez potvrzení nic nezapíše ani neodešle.",
+    description: "Zapíše potvrzené hlášení náhradního dílu přes KSO backend. Vyžaduje vehicleId z ověřeného seznamu, get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. Bez potvrzení nic nezapíše ani neodešle.",
     parameters: [
       { name: "defectDescription", type: "string", required: true },
       { name: "licensePlate", type: "string", required: false },
@@ -236,7 +237,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "get_driver_report_context",
-    description: "Read-only ověří kontext Hlášení řidičů: přihlášeného řidiče a oprávnění. Do hlasového LLM nevrací seznam vozidel; pro výběr použij show_driver_vehicle_picker. Nic nezapisuje.",
+    description: "Read-only ověří kontext Hlášení řidičů: přihlášeného řidiče, oprávnění a bezpečně ověřená vozidla. Vozidla vrací jen při vehiclesVerified true; jinak otevři show_driver_vehicle_picker. Nic nezapisuje.",
     parameters: [
       { name: "sessionId", type: "string", required: false },
       { name: "conversationId", type: "string", required: false },
@@ -429,12 +430,87 @@ export function createElevenLabsClientTools({
   }
 
   function driverReportContextAnswer(result = {}) {
+    const vehicles = Array.isArray(result?.vehicles) ? result.vehicles : [];
+
+    if (result?.vehiclesVerified === true && vehicles.length) {
+      return verifiedVehicleListAnswer(vehicles);
+    }
+
+    if (cleanString(result?.vehicleLookupMode) === "verified_picker_recommended") {
+      return cleanString(result.messageForAssistant || result.message) ||
+        "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci.";
+    }
+
     if (result?.vehiclePickerAvailable === true || result?.driverResolved === true) {
-      return DRIVER_REPORT_PICKER_MESSAGE;
+      return vehicles.length > 3
+        ? "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci."
+        : DRIVER_REPORT_PICKER_MESSAGE;
     }
 
     return cleanString(result.messageForAssistant || result.fallbackQuestion || result.message) ||
       DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE;
+  }
+
+  function isSafeDriverReportVehicle(vehicle = {}) {
+    return Boolean(
+      cleanString(vehicle.vehicleId || vehicle.id) &&
+      cleanString(vehicle.displayName) &&
+      cleanString(vehicle.spz || vehicle.licensePlate) &&
+      vehicle.assignedToCurrentDriver === true &&
+      vehicle.existsInFleet === true &&
+      vehicle.active === true &&
+      cleanString(vehicle.source) === "fleet_db"
+    );
+  }
+
+  function normalizeSafeDriverReportVehicle(vehicle = {}) {
+    const vehicleId = cleanString(vehicle.vehicleId || vehicle.id);
+    const spz = cleanString(vehicle.spz || vehicle.licensePlate);
+
+    return {
+      vehicleId,
+      id: vehicleId,
+      displayName: cleanString(vehicle.displayName),
+      spz,
+      licensePlate: spz,
+      assignedToCurrentDriver: true,
+      existsInFleet: true,
+      active: true,
+      source: "fleet_db"
+    };
+  }
+
+  function safeDriverReportVehicles(result = {}) {
+    const vehicles = Array.isArray(result.vehicles) ? result.vehicles : [];
+    if (result.vehiclesVerified !== true || !vehicles.length) {
+      return [];
+    }
+
+    const unsafeCount = vehicles.filter((vehicle) => !isSafeDriverReportVehicle(vehicle)).length;
+    if (unsafeCount > 0) {
+      console.error?.("driver_reports.client_unsafe_vehicle_list_blocked", {
+        vehiclesCount: vehicles.length,
+        unsafeCount,
+        vehiclesVerified: result.vehiclesVerified === true
+      });
+      return [];
+    }
+
+    return vehicles.map(normalizeSafeDriverReportVehicle);
+  }
+
+  function verifiedVehicleListAnswer(vehicles = []) {
+    if (vehicles.length > 3) {
+      return "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci.";
+    }
+
+    const options = vehicles
+      .map((vehicle) => `${vehicle.displayName}, SPZ ${vehicle.spz || vehicle.licensePlate}`)
+      .join(", ");
+
+    return options
+      ? `Máš pod sebou ${options}. Kterého vozidla se závada týká?`
+      : DRIVER_REPORT_PICKER_MESSAGE;
   }
 
   function safeDriverReportDiagnostics(diagnostics = null) {
@@ -447,18 +523,21 @@ export function createElevenLabsClientTools({
       driverResolved: diagnostics.driverResolved === true,
       vehiclePickerAvailable: diagnostics.vehiclePickerAvailable === true,
       vehicleLookupMode: cleanString(diagnostics.vehicleLookupMode),
-      vehicleListReturned: false,
+      vehicleListReturned: diagnostics.vehicleListReturned === true,
       fallbackUsed: diagnostics.fallbackUsed === true,
       mockData: diagnostics.mockData === true,
-      emptyReason: cleanString(diagnostics.emptyReason)
+      emptyReason: cleanString(diagnostics.emptyReason),
+      unsafeVoiceVehicleCount: Number(diagnostics.unsafeVoiceVehicleCount || 0)
     };
   }
 
   function assistantSafeDriverReportContext(result = {}, parameters = {}) {
-    const vehiclePickerAvailable = result.vehiclePickerAvailable === true ||
-      (result.vehiclesVerified === true && Array.isArray(result.vehicles) && result.vehicles.length > 0);
-    const messageForAssistant = vehiclePickerAvailable
-      ? DRIVER_REPORT_PICKER_MESSAGE
+    const vehicles = safeDriverReportVehicles(result);
+    const vehiclesVerified = result.vehiclesVerified === true && vehicles.length > 0;
+    const exposeVehicleListToVoice = vehiclesVerified && vehicles.length <= 3;
+    const vehiclePickerAvailable = result.vehiclePickerAvailable === true || vehiclesVerified;
+    const messageForAssistant = vehiclesVerified
+      ? verifiedVehicleListAnswer(vehicles)
       : cleanString(result.messageForAssistant || result.message || result.fallbackQuestion) || DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE;
 
     return {
@@ -466,22 +545,25 @@ export function createElevenLabsClientTools({
       module: result.module || "hlaseni-ridicu",
       currentModule: result.currentModule || "hlaseni-ridicu",
       sessionId: result.sessionId || cleanString(parameters.sessionId || parameters.session_id || parameters.conversationId || parameters.conversation_id),
-      status: result.status || (vehiclePickerAvailable ? "ui_picker_or_manual_spz" : "manual_spz_required"),
+      status: result.status || (vehiclesVerified ? "verified_vehicle_list" : "picker_or_manual"),
       userName: result.userName || result.user?.name || "",
       userResolved: result.userResolved === true,
       employeeResolved: result.employeeResolved === true,
       driverResolved: result.driverResolved === true || vehiclePickerAvailable,
-      vehiclesVerified: false,
+      vehiclesVerified,
       vehiclePickerAvailable,
-      vehicleLookupMode: vehiclePickerAvailable ? "ui_picker_or_manual_spz" : "manual_spz_required",
+      vehicleLookupMode: vehiclesVerified
+        ? (vehicles.length > 3 ? "verified_picker_recommended" : "verified_vehicle_list")
+        : "picker_or_manual",
       errorCode: result.errorCode || "",
       user: result.user || null,
       driver: result.driver ? {
         employeeId: cleanString(result.driver.employeeId),
         source: cleanString(result.driver.source)
       } : null,
-      vehicles: [],
-      vehiclesCount: 0,
+      vehicles: exposeVehicleListToVoice ? vehicles : [],
+      vehiclesCount: exposeVehicleListToVoice ? vehicles.length : 0,
+      vehicleOrdinalSelectionAllowed: exposeVehicleListToVoice,
       permissions: result.permissions || {},
       fallbackQuestion: messageForAssistant,
       message: messageForAssistant,
@@ -590,7 +672,7 @@ export function createElevenLabsClientTools({
       };
     }
 
-    toast({ type: "info", message: "Ověřuji kontext Hlášení řidičů." });
+    toast({ type: "info", message: DRIVER_REPORT_CONTEXT_LOADING_MESSAGE });
 
     let result;
     try {
@@ -605,7 +687,7 @@ export function createElevenLabsClientTools({
         ? "Nejsi přihlášený. Přihlas se a zkus to znovu."
         : code === "FORBIDDEN"
           ? "K tomu nemáš oprávnění."
-        : "Vozidlo se mi teď nepodařilo ověřit. Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.";
+        : "Vozidlo se mi teď nepodařilo ověřit. Otevřu ti výběr v aplikaci.";
       return {
         ok: false,
         module: "hlaseni-ridicu",
@@ -616,7 +698,7 @@ export function createElevenLabsClientTools({
         vehiclesVerified: false,
         vehicles: [],
         vehiclesCount: 0,
-        vehicleLookupMode: "manual_spz_required",
+        vehicleLookupMode: "picker_or_manual",
         vehiclePickerAvailable: false,
         cached: false,
         sessionCacheKey: sessionKey,
@@ -897,9 +979,8 @@ export function createElevenLabsClientTools({
     }
 
     cacheDriverReportPickerContext(sessionKey, result);
-    const vehicles = result.vehiclesVerified === true && Array.isArray(result.vehicles)
-      ? result.vehicles.filter((vehicle) => cleanString(vehicle?.id || vehicle?.vehicleId))
-      : [];
+    const vehicles = safeDriverReportVehicles(result)
+      .filter((vehicle) => cleanString(vehicle?.id || vehicle?.vehicleId));
 
     if (!vehicles.length) {
       return {
@@ -947,7 +1028,7 @@ export function createElevenLabsClientTools({
       vehicles: [],
       vehiclesCount: 0,
       message: DRIVER_REPORT_PICKER_MESSAGE,
-      messageForAssistant: "Výběr vozidla je otevřený v aplikaci. Pokud uživatel řekne `toto`, `vybráno` nebo chce pokračovat, zavolej get_driver_vehicle_picker_selection. Pokud nevrátí vehicleId, řekni: Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.",
+      messageForAssistant: "Výběr vozidla je otevřený v aplikaci. Pokud uživatel řekne `toto`, `vybráno` nebo chce pokračovat, zavolej get_driver_vehicle_picker_selection. Pokud nevrátí vehicleId, řekni: Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.",
       answerText: DRIVER_REPORT_PICKER_MESSAGE,
       apiStatus: result.apiStatus || "ready",
       ...toolDiagnosticFields("show_driver_vehicle_picker", "succeeded", [calledDiagnostic])
@@ -1493,7 +1574,7 @@ export function createElevenLabsClientTools({
           ok: false,
           errorCode: "DRIVER_VEHICLE_PICKER_REQUIRED",
           message: DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE,
-          messageForAssistant: "Vozidlo nejde vybrat slovem toto ani zvýrazněním. Otevři výběr vozidla v aplikaci, nebo požádej o SPZ vozidla.",
+          messageForAssistant: "Vozidlo nejde vybrat slovem toto ani zvýrazněním. Otevři výběr vozidla v aplikaci, nebo požádej o značku, typ nebo SPZ vozidla.",
           vehiclesVerified: false,
           vehicles: [],
           vehiclesCount: 0

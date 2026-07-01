@@ -10,12 +10,13 @@ const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/convai";
 const PROMPT_RULE_MARKER = "HLÁŠENÍ ŘIDIČŮ / VOZIDLA";
 const LEGACY_PROMPT_RULE_MARKERS = [
+  "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL",
   "HLÁŠENÍ ŘIDIČŮ / VOZIDLA / OVĚŘENÁ VOZIDLA ONLY",
   "HLÁŠENÍ ŘIDIČŮ / VOZIDLA"
 ];
 const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
   "Moment, načtu si " + "vozidla",
-  "Vozidla smíš " + "vyjmenovat",
+  "V hlasovém flow nikdy neříkej " + "konkrétní vozidlo",
   "Mám u tebe ověřené " + "tyto vozy",
   "Vyjmenuj " + "možnosti",
   "SPZ chtěj až jako " + "poslední možnost",
@@ -88,7 +89,7 @@ function promptPathFromAgent(agentConfig) {
 function promptHasCurrentRule(promptText) {
   return cleanString(promptText).includes(PROMPT_RULE_MARKER)
     && cleanString(promptText).includes(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE)
-    && cleanString(promptText).includes("V hlasovém flow nikdy neříkej konkrétní vozidlo");
+    && cleanString(promptText).includes("Vozidla smíš v hlasu vyjmenovat pouze tehdy");
 }
 
 function forbiddenPromptPhrases(promptText) {

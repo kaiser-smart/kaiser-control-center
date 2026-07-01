@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.281"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.282"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: ověřený seznam vozidel",
+    text: "Hlášení řidičů používá ověřený backend seznam jako první volbu. Když seznam není bezpečný nebo je dlouhý, otevře picker v aplikaci; značka, typ nebo SPZ jsou už jen nouzová cesta."
+  },
   {
     title: "Šarlota: picker se opravdu otevírá",
     text: "Tool show_driver_vehicle_picker už vrací úspěch hned po zobrazení UI pickeru, nečeká potichu na kliknutí. Výběr vozidla se ověřuje samostatně a bez potvrzeného vehicleId nebo SPZ vrací jednotný VEHICLE_SPZ_REQUIRED."

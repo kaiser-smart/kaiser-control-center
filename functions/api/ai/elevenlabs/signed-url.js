@@ -137,8 +137,8 @@ function fallbackDriverReportVehicleVariables() {
     driver_report_vehicle_type: "",
     driver_report_vehicle_options_count: "0",
     driver_report_vehicle_options: "",
-    driver_report_vehicle_selection_question: "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.",
-    driver_report_vehicle_context: "V Hlášení řidičů neříkej nahlas konkrétní vozidla. Otevři výběr v aplikaci, nebo požádej o SPZ."
+    driver_report_vehicle_selection_question: "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.",
+    driver_report_vehicle_context: "V Hlášení řidičů použij ověřený backend seznam, bezpečný výběr v aplikaci, nebo nouzově značku, typ či SPZ."
   };
 }
 

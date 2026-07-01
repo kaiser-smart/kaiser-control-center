@@ -1347,17 +1347,21 @@ First message:
 - Hlasové `ano` smí připravit návrh a otevřít potvrzovací okno, ale akce se provede až po kliknutí nebo tapnutí na potvrzovací tlačítko v UI.
 - Pokud potvrzovací okno nejde zobrazit, Šarlota nesmí akci provést; musí ji ponechat jako návrh nebo říct, že čeká na ruční potvrzení.
 - Potvrzovací okno musí být použitelné na mobilu a nesmí skrýt důležité údaje ani hlavní riziko akce.
+- U hlasu počítat s tím, že řidič si obvykle pamatuje svoje RČ, datum narození nebo telefonní číslo, ale často si nepamatuje SPZ. SPZ proto nesmí být hlavní cesta výběru vozidla.
 
 ### 17.7.1 Kontextové načtení dat před akcí
 
 - Když Šarlota z hlasu detekuje, co volající potřebuje, má nejdřív krátce potvrdit, že si načte relevantní data, například:
-  `Moment, načtu si vozidla.`
+  `Rozumím. Podívám se do Smart systému.`
 - Potom si má přes backend KSO načíst zdroj pravdy pro daný modul a až následně pokračovat v dialogu.
 - Pro Hlášení řidičů platí: pokud volající řekne, že chce opravu, servis nebo má něco rozbité/polámané na autě, jde o možné Hlášení řidičů.
-- Šarlota v takovém případě načítá Vozový park a přiřazená vozidla řidiče.
+- Šarlota v takovém případě načítá Vozový park a přiřazená vozidla řidiče přes backend.
+- Hlavní cesta je bezpečně ověřený backend seznam s `vehiclesVerified: true`.
+- Pokud jsou ověřená maximálně 3 vozidla, Šarlota je může stručně vyjmenovat podle ověřeného názvu a SPZ.
+- Pokud jsou ověřená více než 3 vozidla, Šarlota nečte dlouhý seznam a otevře výběr vozidla v aplikaci.
+- Pokud seznam není bezpečně ověřený, Šarlota nesmí říct žádné konkrétní vozidlo a otevře výběr v aplikaci.
+- Pokud výběr v aplikaci nejde použít, náhradní cesta je ruční značka, typ nebo SPZ.
 - Pokud má řidič více vozidel, Šarlota nesmí automaticky vybrat první vozidlo.
-- Vozidla má vyjmenovat lidsky podle typu, značky, interního názvu nebo popisu vozidla.
-- SPZ je až technický fallback, když vozidlo nejde bezpečně vybrat podle typu, značky nebo interního názvu.
 - Pokud relevantní data nejdou načíst, Šarlota to řekne stručně a nespustí zápis ani notifikaci bez ručního potvrzení.
 
 ### 17.8 Testovací checklist pro Šarlotu

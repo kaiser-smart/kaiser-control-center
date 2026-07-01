@@ -692,17 +692,23 @@ function mockFleetVehicleVoiceLabel(vehicle = {}) {
 }
 
 function mockDriverReportContextVehicle(vehicle = {}) {
+  const spz = String(vehicle.licensePlate || vehicle.tcarsLicensePlate || "").trim();
   return {
     id: String(vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId || "").trim(),
     vehicleId: String(vehicle.vehicleId || vehicle.id || vehicle.tcarsVehicleId || "").trim(),
     displayName: mockFleetVehicleVoiceLabel(vehicle),
+    spz,
     type: String(vehicle.vehicleType || vehicle.bodyType || vehicle.vistosVehicleCategory || "").trim(),
     brand: String(vehicle.brand || "").trim(),
     model: String(vehicle.model || vehicle.internalNumber || "").trim(),
     internalName: String(vehicle.internalNumber || vehicle.vehicleName || vehicle.name || "").trim(),
-    licensePlate: String(vehicle.licensePlate || vehicle.tcarsLicensePlate || "").trim(),
+    licensePlate: spz,
     vin: String(vehicle.vin || "").trim(),
-    assignmentHint: "přiřazené vozidlo"
+    assignmentHint: "přiřazené vozidlo",
+    source: "fleet_db",
+    assignedToCurrentDriver: true,
+    existsInFleet: true,
+    active: true
   };
 }
 
@@ -2900,7 +2906,7 @@ async function handleApi(request, response) {
         module: "hlaseni-ridicu",
         errorCode: "UNAUTHENTICATED",
         message: "Nejsi přihlášený.",
-        fallbackQuestion: "Vozidlo se mi teď nepodařilo ověřit. Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.",
+        fallbackQuestion: "Vozidlo se mi teď nepodařilo ověřit. Otevřu ti výběr v aplikaci.",
         apiStatus: "ready"
       });
       return true;
@@ -2919,22 +2925,21 @@ async function handleApi(request, response) {
         errorCode: "FORBIDDEN",
         message: "K tomu nemáš oprávnění.",
         permissions,
-        fallbackQuestion: "Vozidlo se mi teď nepodařilo ověřit. Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.",
+        fallbackQuestion: "Vozidlo se mi teď nepodařilo ověřit. Otevřu ti výběr v aplikaci.",
         apiStatus: "ready"
       });
       return true;
     }
 
-    const includeVehiclePicker = ["true", "1", "ano", "vehicle_picker"].includes(
-      String(url.searchParams.get("includeVehiclePicker") || url.searchParams.get("vehiclePicker") || url.searchParams.get("mode") || "").trim().toLowerCase()
-    );
     const rawVehicles = (await mockFleetVehiclesForUser(user)).map(mockDriverReportContextVehicle);
-    const vehicles = includeVehiclePicker ? rawVehicles : [];
+    const vehicles = rawVehicles;
     const fallbackQuestion = rawVehicles.length
-      ? "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla."
-      : "Vozidlo se mi teď nepodařilo ověřit. Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni SPZ vozidla.";
+      ? "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla."
+      : "Vozidlo se mi teď nepodařilo ověřit. Otevřu ti výběr v aplikaci.";
     const message = rawVehicles.length
-      ? "Otevřu ti výběr vozidla v aplikaci."
+      ? (rawVehicles.length > 3
+        ? "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci."
+        : `Máš pod sebou ${rawVehicles.map((vehicle) => `${vehicle.displayName}, SPZ ${vehicle.spz}`).join(", ")}. Kterého vozidla se závada týká?`)
       : fallbackQuestion;
 
     sendJson(response, 200, {
@@ -2953,9 +2958,9 @@ async function handleApi(request, response) {
         displayName: user.name,
         source: "local_mock"
       },
-      vehiclesVerified: includeVehiclePicker && rawVehicles.length > 0,
+      vehiclesVerified: rawVehicles.length > 0,
       vehiclePickerAvailable: rawVehicles.length > 0,
-      vehicleLookupMode: rawVehicles.length ? (includeVehiclePicker ? "verified_ui_picker" : "ui_picker_or_manual_spz") : "manual_spz_required",
+      vehicleLookupMode: rawVehicles.length ? (rawVehicles.length > 3 ? "verified_picker_recommended" : "verified_vehicle_list") : "picker_or_manual",
       vehicles,
       vehiclesCount: vehicles.length,
       permissions,
