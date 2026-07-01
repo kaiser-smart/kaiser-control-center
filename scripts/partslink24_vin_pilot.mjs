@@ -19,9 +19,12 @@ const LOGIN_ENTRY_TIMEOUT_MS = 8000;
 const LOGIN_ENTRY_MAX_ATTEMPTS = 2;
 
 const COMPANY_SELECTORS = [
+  "input[name='accountLogin']",
+  "input[id='login-id']",
   "input[name='company']",
   "input[name='companyId']",
   "input[name='companyID']",
+  "input[name*='account' i]",
   "input[name*='company' i]",
   "input[name='customerNumber']",
   "input[name*='customer' i]",
@@ -61,6 +64,9 @@ const PASSWORD_SELECTORS = [
 ];
 
 const SUBMIT_SELECTORS = [
+  "input[id='hidden-login']",
+  "input[type='submit'][id*='login' i]",
+  "a[id='login-btn']",
   "button[type='submit']",
   "input[type='submit']",
   "button:has-text('Login')",
@@ -72,6 +78,8 @@ const SUBMIT_SELECTORS = [
 ];
 
 const LOGIN_ENTRY_SELECTORS = [
+  "input[id='hidden-login']",
+  "input[type='submit'][id*='login' i]",
   "a[href*='login' i]",
   "a[id*='login' i]",
   "a[class*='login' i]",
