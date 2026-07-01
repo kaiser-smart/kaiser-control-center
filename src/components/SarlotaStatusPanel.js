@@ -42,6 +42,141 @@ function statusRow(label, status, detail = "") {
   `;
 }
 
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function shortList(items, emptyText = "nic") {
+  const values = safeArray(items)
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+
+  if (!values.length) {
+    return escapeHtml(emptyText);
+  }
+
+  return values
+    .slice(0, 12)
+    .map((item) => `<code>${escapeHtml(item)}</code>`)
+    .join(" ");
+}
+
+function diagnosticLine(label, value) {
+  return `
+    <div class="sarlota-status__diagnostic-line">
+      <dt>${escapeHtml(label)}</dt>
+      <dd>${value || escapeHtml("neověřeno")}</dd>
+    </div>
+  `;
+}
+
+function toolEntryLabel(entry) {
+  const label = String(entry?.label || entry?.name || entry?.type || "tool").trim();
+  const type = String(entry?.type || "").trim();
+  const id = entry?.idMasked ? `, id ${entry.idMasked}` : "";
+  const path = entry?.path ? `, ${entry.path}` : "";
+
+  return `${label}${type ? ` (${type}${id})` : id}${path}`;
+}
+
+function toolDiagnostics(tools = null) {
+  if (!tools) {
+    return "";
+  }
+
+  const configured = safeArray(tools.configuredClientToolNames);
+  const missing = safeArray(tools.missingTools);
+  const extra = safeArray(tools.extraTools);
+  const entries = safeArray(tools.configuredToolEntries);
+  const entryText = entries.length
+    ? entries.slice(0, 12).map((entry) => `<li>${escapeHtml(toolEntryLabel(entry))}</li>`).join("")
+    : "<li>žádné tool entries z live agenta</li>";
+
+  return `
+    <section class="sarlota-status__diagnostic">
+      <h3>ElevenLabs tools detail</h3>
+      <dl>
+        ${diagnosticLine("V agentovi", escapeHtml(`${configured.length} toolů`))}
+        ${diagnosticLine("Chybí KSO tools", shortList(missing, "nechybí"))}
+        ${diagnosticLine("Extra tools", shortList(extra, "žádné"))}
+      </dl>
+      <ul class="sarlota-status__diagnostic-list">
+        ${entryText}
+      </ul>
+    </section>
+  `;
+}
+
+function knowledgeDiagnostics(knowledgeBase = null) {
+  if (!knowledgeBase) {
+    return "";
+  }
+
+  const entries = safeArray(knowledgeBase.entries);
+  const entryText = entries.length
+    ? entries.slice(0, 12).map((entry) => {
+      const id = entry.idMasked ? `, id ${entry.idMasked}` : "";
+      const path = entry.path ? `, ${entry.path}` : "";
+      return `<li>${escapeHtml(`${entry.label || "knowledge"} (${entry.type || "unknown"}${id})${path}`)}</li>`;
+    }).join("")
+    : "<li>žádné Knowledge Base položky v agent konfiguraci nenalezené</li>";
+
+  return `
+    <section class="sarlota-status__diagnostic">
+      <h3>ElevenLabs Knowledge Base</h3>
+      <dl>
+        ${diagnosticLine("Stav", escapeHtml(knowledgeBase.verifiedInElevenLabs ? "ověřeno read-only z agent konfigurace" : "neověřeno"))}
+        ${diagnosticLine("Obsah dokumentů", escapeHtml(knowledgeBase.contentReturned ? "vrácen" : "nevrací se"))}
+      </dl>
+      <ul class="sarlota-status__diagnostic-list">
+        ${entryText}
+      </ul>
+    </section>
+  `;
+}
+
+function vehicleContextDiagnostics(context = null) {
+  if (!context) {
+    return "";
+  }
+
+  const options = context.optionsPreview || context.singleVehiclePreview || "žádný ověřený text";
+
+  return `
+    <section class="sarlota-status__diagnostic">
+      <h3>Hlasový kontext vozidel</h3>
+      <dl>
+        ${diagnosticLine("Zdroj", escapeHtml(context.source || "signed_url_dynamic_variables"))}
+        ${diagnosticLine("Stav", escapeHtml(context.status || "neověřeno"))}
+        ${diagnosticLine("Počet možností", escapeHtml(String(context.optionsCount ?? 0)))}
+        ${diagnosticLine("Náhled", escapeHtml(options))}
+        ${diagnosticLine("Bezpečnost", escapeHtml("signed URL, secrets a celé VIN se nevrací"))}
+      </dl>
+    </section>
+  `;
+}
+
+function diagnosticDetails(data) {
+  const details = [
+    toolDiagnostics(data.tools),
+    knowledgeDiagnostics(data.knowledgeBase),
+    vehicleContextDiagnostics(data.driverReportVehicleContext)
+  ].filter(Boolean).join("");
+
+  if (!details) {
+    return "";
+  }
+
+  return `
+    <details class="sarlota-status__details" open>
+      <summary>Diagnostický detail bez změn v ElevenLabs</summary>
+      <div class="sarlota-status__diagnostics">
+        ${details}
+      </div>
+    </details>
+  `;
+}
+
 function toolDetail(tools = null) {
   if (!tools) {
     return "neověřeno";
@@ -112,6 +247,27 @@ function firstMessageDetail(firstMessage = null) {
   return firstMessage.variable || "intro_announcement";
 }
 
+function knowledgeBaseDetail(knowledgeBase = null) {
+  if (!knowledgeBase) {
+    return "neověřeno";
+  }
+
+  if (!knowledgeBase.verifiedInElevenLabs) {
+    return "Knowledge Base neověřená";
+  }
+
+  return `${knowledgeBase.entriesCount || 0} položek v agent konfiguraci, obsah se nevrací`;
+}
+
+function vehicleContextDetail(context = null) {
+  if (!context) {
+    return "neověřeno";
+  }
+
+  const count = Number(context.optionsCount || 0);
+  return `${context.status || "neověřeno"}, ${count} možností ze signed-url dynamic variables`;
+}
+
 export function SarlotaStatusPanel({
   status = null,
   loading = false,
@@ -143,6 +299,8 @@ export function SarlotaStatusPanel({
     statusRow("LLM model v EL", data.openAiModelInElevenLabs?.status || "unverified", modelDetail(data.openAiModelInElevenLabs)),
     statusRow("Prompt Hlášení řidičů", data.driverReportPrompt?.status || "unverified", driverReportPromptDetail(data.driverReportPrompt)),
     statusRow("Tools", data.tools?.status || "unverified", toolDetail(data.tools)),
+    statusRow("Knowledge Base", data.knowledgeBase?.status || "unverified", knowledgeBaseDetail(data.knowledgeBase)),
+    statusRow("Kontext vozidel", data.driverReportVehicleContext?.status ? "ok" : "unverified", vehicleContextDetail(data.driverReportVehicleContext)),
     statusRow(
       "Signed-url endpoint",
       data.signedUrlEndpoint?.status || "unverified",
@@ -178,6 +336,7 @@ export function SarlotaStatusPanel({
       <dl class="sarlota-status__grid">
         ${rows}
       </dl>
+      ${diagnosticDetails(data)}
       <p class="sarlota-status__meta">
         Aktualizováno: ${escapeHtml(generatedAt)}. Tools a prompt se synchronizují odděleně; first message a model se nemění.
       </p>

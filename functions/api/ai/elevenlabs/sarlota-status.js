@@ -68,6 +68,41 @@ function safeErrorMessage(error) {
   return cleanString(error?.message || error?.name || "unknown_error");
 }
 
+function normalizePathPart(value) {
+  return String(value ?? "").trim();
+}
+
+function pathText(path) {
+  return path
+    .map((part) => normalizePathPart(part))
+    .filter(Boolean)
+    .join(".");
+}
+
+function maskOpaqueId(value) {
+  const text = cleanString(value);
+  if (!text) {
+    return "";
+  }
+
+  if (text.length <= 10) {
+    return `${text.slice(0, 3)}...${text.slice(-2)}`;
+  }
+
+  return `${text.slice(0, 6)}...${text.slice(-4)}`;
+}
+
+function safeShortText(value, limit = 120) {
+  const text = cleanString(value)
+    .replace(/\s+/g, " ");
+
+  if (text.length <= limit) {
+    return text;
+  }
+
+  return `${text.slice(0, limit - 1)}...`;
+}
+
 function normalizeStatusText(value) {
   return cleanString(value)
     .normalize("NFD")
@@ -217,6 +252,173 @@ function toolNamesFromAgent(agentConfig) {
   return [...names].sort((a, b) => a.localeCompare(b, "cs"));
 }
 
+function toolIdentity(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      name: "",
+      type: "",
+      id: ""
+    };
+  }
+
+  const config = value.tool_config || value.toolConfig || value;
+
+  return {
+    name: cleanString(config.name || value.name || value.tool_name || value.toolName),
+    type: cleanString(config.type || value.type || value.tool_type || value.toolType),
+    id: cleanString(config.id || value.id || value.tool_id || value.toolId)
+  };
+}
+
+function collectToolEntriesFromAgent(agentConfig) {
+  const entries = [];
+  const seen = new Set();
+
+  walkObject(agentConfig, (value, key, parentPath) => {
+    const currentPath = [...parentPath, key];
+    const keyLooksLikeTool = normalizeStatusText(key).includes("tool");
+
+    if (Array.isArray(value) && keyLooksLikeTool) {
+      value.forEach((item, index) => {
+        const itemPath = [...currentPath, index];
+        if (typeof item === "string" && cleanString(item)) {
+          entries.push({
+            label: maskOpaqueId(item),
+            name: "",
+            type: "tool_id",
+            idMasked: maskOpaqueId(item),
+            idPresent: true,
+            path: pathText(itemPath),
+            keys: []
+          });
+          return;
+        }
+
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          return;
+        }
+
+        const identity = toolIdentity(item);
+        if (!identity.name && !identity.type && !identity.id) {
+          return;
+        }
+
+        entries.push({
+          label: identity.name || maskOpaqueId(identity.id) || identity.type || "tool",
+          name: identity.name,
+          type: identity.type || "unknown",
+          idMasked: maskOpaqueId(identity.id),
+          idPresent: Boolean(identity.id),
+          path: pathText(itemPath),
+          keys: Object.keys(item).sort().slice(0, 12)
+        });
+      });
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value) && keyLooksLikeTool) {
+      const identity = toolIdentity(value);
+      if (!identity.name && !identity.type && !identity.id) {
+        return;
+      }
+
+      entries.push({
+        label: identity.name || maskOpaqueId(identity.id) || identity.type || "tool",
+        name: identity.name,
+        type: identity.type || "unknown",
+        idMasked: maskOpaqueId(identity.id),
+        idPresent: Boolean(identity.id),
+        path: pathText(currentPath),
+        keys: Object.keys(value).sort().slice(0, 12)
+      });
+    }
+  });
+
+  return entries
+    .filter((entry) => {
+      const key = `${entry.path}|${entry.label}|${entry.type}|${entry.idMasked}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 40);
+}
+
+function collectKnowledgeEntriesFromAgent(agentConfig) {
+  const entries = [];
+  const seen = new Set();
+
+  walkObject(agentConfig, (value, key, parentPath) => {
+    const normalizedKey = normalizeStatusText(key);
+    if (!normalizedKey.includes("knowledge")) {
+      return;
+    }
+
+    const currentPath = [...parentPath, key];
+
+    if (Array.isArray(value)) {
+      value.slice(0, 20).forEach((item, index) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          if (cleanString(item)) {
+            entries.push({
+              label: safeShortText(item, 80),
+              type: typeof item,
+              idMasked: "",
+              path: pathText([...currentPath, index]),
+              keys: []
+            });
+          }
+          return;
+        }
+
+        const label = safeShortText(item.name || item.title || item.label || item.id || item.document_id || item.documentId || "knowledge", 80);
+        entries.push({
+          label,
+          type: cleanString(item.type || item.kind || "knowledge"),
+          idMasked: maskOpaqueId(item.id || item.document_id || item.documentId),
+          path: pathText([...currentPath, index]),
+          keys: Object.keys(item).sort().slice(0, 12)
+        });
+      });
+      return;
+    }
+
+    if (value && typeof value === "object") {
+      const label = safeShortText(value.name || value.title || value.label || value.id || value.document_id || value.documentId || "knowledge", 80);
+      entries.push({
+        label,
+        type: cleanString(value.type || value.kind || "knowledge"),
+        idMasked: maskOpaqueId(value.id || value.document_id || value.documentId),
+        path: pathText(currentPath),
+        keys: Object.keys(value).sort().slice(0, 12)
+      });
+      return;
+    }
+
+    if (cleanString(value)) {
+      entries.push({
+        label: safeShortText(value, 80),
+        type: typeof value,
+        idMasked: "",
+        path: pathText(currentPath),
+        keys: []
+      });
+    }
+  });
+
+  return entries
+    .filter((entry) => {
+      const key = `${entry.path}|${entry.label}|${entry.type}|${entry.idMasked}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 40);
+}
+
 function safeAgentNameMatches(agentConfig) {
   const agentName = cleanString(agentConfig?.name);
   return SARLOTA_AGENT_NAME_ALIASES.includes(agentName);
@@ -256,6 +458,8 @@ async function readElevenLabsAgentConfig({ apiKey, agentId }) {
     const firstMessageMatches = cleanString(firstMessage) === FIRST_MESSAGE_TEMPLATE;
     const driverReportPromptRulePresent = driverReportPromptRuleMatches(agentConfig);
     const configuredToolNames = toolNamesFromAgent(agentConfig);
+    const configuredToolEntries = collectToolEntriesFromAgent(agentConfig);
+    const knowledgeEntries = collectKnowledgeEntriesFromAgent(agentConfig);
     const toolComparison = compareToolNames(configuredToolNames);
 
     return {
@@ -267,6 +471,8 @@ async function readElevenLabsAgentConfig({ apiKey, agentId }) {
       firstMessageMatches,
       driverReportPromptRulePresent,
       configuredToolNames,
+      configuredToolEntries,
+      knowledgeEntries,
       missingTools: toolComparison.missingTools,
       extraTools: toolComparison.extraTools,
       toolsMatch: toolComparison.missingTools.length === 0
@@ -348,6 +554,26 @@ function fallbackDriverReportVehicleVariables() {
     driver_report_vehicle_options: "",
     driver_report_vehicle_selection_question: "Nemám u tebe teď přiřazené žádné vozidlo. Můžeš mi říct SPZ, ke které chceš závadu nahlásit?",
     driver_report_vehicle_context: "V Hlášení řidičů není vozidlo podle volajícího jistě přiřazené. Neříkej, že máš vozidla načtená, a požádej o SPZ pro ruční ověření."
+  };
+}
+
+function driverReportVehicleStatusSummary(variables) {
+  const status = cleanString(variables?.driver_report_vehicle_status) || "neověřeno";
+  const optionsCount = Number.parseInt(cleanString(variables?.driver_report_vehicle_options_count), 10);
+  const options = safeShortText(variables?.driver_report_vehicle_options, 240);
+  const singleVehicle = safeShortText(variables?.driver_report_vehicle_name, 160);
+
+  return {
+    status,
+    source: "signed_url_dynamic_variables",
+    optionsCount: Number.isFinite(optionsCount) ? optionsCount : 0,
+    optionsPreview: options,
+    singleVehiclePreview: singleVehicle,
+    hasSelectionQuestion: Boolean(cleanString(variables?.driver_report_vehicle_selection_question)),
+    hasContext: Boolean(cleanString(variables?.driver_report_vehicle_context)),
+    fullVinReturned: false,
+    signedUrlReturned: false,
+    secretsReturned: false
   };
 }
 
@@ -489,10 +715,19 @@ export async function sarlotaStatusPayload(env, user) {
         : "local_client_schema_vs_documentation",
       expectedToolNames: EXPECTED_CLIENT_TOOL_NAMES,
       configuredClientToolNames: liveAgentVerified ? elevenLabsAgentConfig.configuredToolNames : clientToolNames,
+      configuredToolEntries: liveAgentVerified ? elevenLabsAgentConfig.configuredToolEntries : [],
       localClientToolNames: clientToolNames,
       missingTools: liveAgentVerified ? elevenLabsAgentConfig.missingTools : toolComparison.missingTools,
       extraTools: liveAgentVerified ? elevenLabsAgentConfig.extraTools : toolComparison.extraTools
     },
+    knowledgeBase: {
+      status: liveAgentVerified ? "ok" : (liveAgentError ? "error" : "unverified"),
+      verifiedInElevenLabs: liveAgentVerified,
+      entries: liveAgentVerified ? elevenLabsAgentConfig.knowledgeEntries : [],
+      entriesCount: liveAgentVerified ? elevenLabsAgentConfig.knowledgeEntries.length : 0,
+      contentReturned: false
+    },
+    driverReportVehicleContext: driverReportVehicleStatusSummary(driverReportVehicleVariables),
     signedUrlEndpoint: {
       status: configured ? "ok" : "error",
       exists: true,

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.275"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.276"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: detail ElevenLabs diagnostiky",
+    text: "Panel Nastavení zobrazuje read-only detail live ElevenLabs tools, Knowledge Base položek a hlasového kontextu vozidel. Diagnostika nevrací signed URL, secrets, cookies ani prompt text a nemění nastavení agenta."
+  },
   {
     title: "Šarlota: diagnostické odpojení tools",
     text: "Nastavení Šarloty má chráněný diagnostický režim, který dočasně odpojí ElevenLabs client tools od agenta, nechá identitu přes signed-url dynamic variables a umožní rollback běžnou synchronizací tools."

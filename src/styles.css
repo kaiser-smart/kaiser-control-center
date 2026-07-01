@@ -4974,6 +4974,98 @@ h1 {
   background: color-mix(in srgb, var(--theme-card) 86%, var(--theme-bg-surface));
 }
 
+.sarlota-status__details {
+  border: 1px solid rgba(35, 40, 33, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.sarlota-status__details summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.sarlota-status__diagnostics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.sarlota-status__diagnostic {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  border-radius: 8px;
+  background: rgba(247, 249, 244, 0.72);
+}
+
+.sarlota-status__diagnostic h3 {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.sarlota-status__diagnostic dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.sarlota-status__diagnostic-line {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sarlota-status__diagnostic-line dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.sarlota-status__diagnostic-line dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.sarlota-status__diagnostic-line code {
+  display: inline-block;
+  margin: 0 4px 4px 0;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #eef4e9;
+  color: #2d4e1a;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.sarlota-status__diagnostic-list {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.module-theme-scope .sarlota-status__details,
+.module-theme-scope .sarlota-status__diagnostic {
+  border-color: var(--theme-border);
+  background: color-mix(in srgb, var(--theme-card) 90%, var(--theme-bg-surface));
+}
+
 .appearance-scope-badge {
   align-self: start;
   padding: 7px 10px;
@@ -16319,6 +16411,10 @@ body:has(.absence-page--employee-card) {
   }
 
   .sarlota-status__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sarlota-status__diagnostics {
     grid-template-columns: 1fr;
   }
 
