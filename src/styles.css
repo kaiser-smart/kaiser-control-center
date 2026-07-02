@@ -2118,6 +2118,15 @@ h1 {
   flex: 1 1 150px;
 }
 
+.collection-routes-route-filter--smart {
+  align-items: end;
+}
+
+.collection-routes-route-filter--smart .primary-action {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
 .collection-routes-route-filter label {
   display: grid;
   gap: 6px;

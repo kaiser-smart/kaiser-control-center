@@ -95,6 +95,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - ROZPRACOVANO - read-only PDF/tiskovy nahled aktualniho filtru Svozovych tras obsahuje souhrn, zdrojovy Excel/list/radek a Vistos match problem.
 - ROZPRACOVANO - read-only ridicsky tiskovy nahled aktualniho filtru ukazuje prakticky seznam zastavek bez navigace, GPS, T-Cars, potvrzovani svozu a ostre trasy.
 - ROZPRACOVANO - chytry filtr Auto A/B/C dnes, zitra a pozitri nastavuje den, sudy/lichy tyden a auto pro tiskovy nahled; trasu neplanuje a nic nezapisuje.
+- ROZPRACOVANO - chytry filtr pro tisk ma samostatne volby Termin, Auto a Odpad; odpadovy filtr zustava soucasti tiskove trasy.
 - NEZACATO - skutecny offline ridicsky balicek pro vypadek internetu bude samostatna faze.
 
 ## Automatizace
