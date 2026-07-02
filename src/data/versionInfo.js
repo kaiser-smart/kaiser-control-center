@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.299"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.300"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: méně zbylých oprav",
+    text: "Parser zdrojových 13 Excelů lépe drží zákazníka/adresu u názvů obsahujících BIO, čistí telefonní poznámky v adrese a bere překlep 1100 tr jako 1100 ltr. Jde o read-only preview bez změny Excelů a bez ostrých tras."
+  },
   {
     title: "Trasy svozu: oprava zákazníka a adresy",
     text: "Parser 13 Excelů už u firem s čárkou v názvu nebere právní formu jako adresu a samostatnou adresu začínající městem neukazuje jako zákazníka. Jde o read-only preview import bez změny zdrojových Excelů a bez ostrých tras."

@@ -734,9 +734,25 @@ function routeModeFromWeek(weekMode) {
   return "každý týden";
 }
 
+function sourcePartHasLegalSuffix(value) {
+  const text = normalizeText(value);
+  const compact = compactText(value);
+  const tokens = text.split(/\s+/).filter(Boolean);
+  return Boolean(
+    ROUTE_SOURCE_LEGAL_SUFFIXES.has(compact) ||
+    compact.endsWith("SRO") ||
+    compact.endsWith("AS") ||
+    tokens.some((token) => ROUTE_SOURCE_LEGAL_SUFFIXES.has(token)) ||
+    /\bS\s+R\s+O\b/.test(text) ||
+    /\bA\s+S\b/.test(text) ||
+    /\bSPOL\b/.test(text)
+  );
+}
+
 function fieldLooksOperational(value) {
   const text = normalizeText(value);
   const compact = compactText(value);
+  const hasLegalSuffix = sourcePartHasLegalSuffix(value);
   return Boolean(
     text &&
     !/^\d+$/.test(text) &&
@@ -748,7 +764,7 @@ function fieldLooksOperational(value) {
     !ROUTE_SOURCE_SALES_CODES.has(compact) &&
     !/^(SUDY|SUDE|LICHY|LICHE|PONDELI|UTERY|STREDA|CTVRTEK|PATEK|KONTAKT|DPI|PLI|FKU|PCE|PPA|ROP|MAP)$/.test(text) &&
     !/\b(SUDY|SUDE|LICHY|LICHE|PONDELI|UTERY|STREDA|CTVRTEK|PATEK|DPI|PLI|FKU|PCE|PPA|ROP|MAP)\b/.test(text) &&
-    !/\b(1X7|2X7|3X7|5X7|1X14|1X30|KONT|LTR|LITR|SKO|PAPIR|PLAST|SKLO|BIO)\b/.test(text)
+    (!/\b(1X7|2X7|3X7|5X7|1X14|1X30|KONT|LTR|LITR|SKO|PAPIR|PLAST|SKLO|BIO)\b/.test(text) || hasLegalSuffix)
   );
 }
 
@@ -793,10 +809,27 @@ function looksLikeAddressCandidate(value) {
   return addressCandidateScore(value) >= 2;
 }
 
+function looksLikeLooseAddressCandidate(value) {
+  const text = normalizeText(value);
+  if (!text || sourcePartLooksOnlyAddressHint(value) || sourcePartLooksOnlyLegalSuffix(value)) {
+    return false;
+  }
+  if (looksLikeAddressCandidate(value)) {
+    return true;
+  }
+  const tokens = textTokens(value).filter((token) =>
+    !["SKO", "PAPIR", "PLAST", "SKLO", "BIO", "KONT", "LTR", "LITR", "NADOBA", "NADOBY", "POPELNICE"].includes(token)
+  );
+  return tokens.length >= 1 && !sourcePartLooksContactOrNote(value);
+}
+
 function sourcePartLooksLikeServiceOnly(value) {
   const text = normalizeText(value);
   if (!text) {
     return true;
+  }
+  if (sourcePartHasLegalSuffix(value)) {
+    return false;
   }
   const hasServiceToken = /\b(1X7|2X7|3X7|5X7|1X14|1X30|KONT|LTR|LITR|SKO|PAPIR|PLAST|SKLO|BIO|NADOBA|NADOBY|POPELNICE)\b/.test(text);
   const hasSpecificAddress = looksLikeAddressCandidate(value);
@@ -824,6 +857,29 @@ function sourceSplitHasRealCustomerAndAddress(split) {
   );
 }
 
+function cleanAddressPart(value) {
+  return cleanString(value)
+    .replace(/\b(TEL|TELEFON|MOBIL|KONTAKT)\b[\s.:/-]*.*$/i, "")
+    .replace(/\s*,\s*$/, "");
+}
+
+function sourcePartLooksLikeCustomerLead(value) {
+  const text = normalizeText(value);
+  const compact = compactText(value);
+  return Boolean(
+    text &&
+    !/^\d+$/.test(text) &&
+    !/^[0-9+\s./-]{6,}$/.test(text) &&
+    !ROUTE_SOURCE_SALES_CODES.has(compact) &&
+    !ROUTE_SOURCE_NON_CUSTOMER_TOKENS.has(text) &&
+    !ROUTE_SOURCE_NON_CUSTOMER_TOKENS.has(compact) &&
+    !sourcePartLooksOnlyLegalSuffix(value) &&
+    !sourcePartLooksOnlyAddressHint(value) &&
+    !sourcePartLooksLikeServiceOnly(value) &&
+    !/^(SUDY|SUDE|LICHY|LICHE|PONDELI|UTERY|STREDA|CTVRTEK|PATEK|KONTAKT|DPI|PLI|FKU|PCE|PPA|ROP|MAP)$/.test(text)
+  );
+}
+
 function splitCombinedCustomerAddress(value) {
   const text = cleanString(value);
   if (!text) {
@@ -831,11 +887,14 @@ function splitCombinedCustomerAddress(value) {
   }
 
   const commaParts = text.split(",").map(cleanString).filter(Boolean);
-  const commaRest = commaParts.slice(1).join(", ");
-  const commaRestLooksLikeAddress = looksLikeAddressCandidate(commaRest) && !sourcePartLooksOnlyLegalSuffix(commaRest);
+  const commaRest = cleanAddressPart(commaParts.slice(1).join(", "));
+  const commaRestLooksLikeAddress = (
+    looksLikeAddressCandidate(commaRest) ||
+    looksLikeLooseAddressCandidate(commaRest)
+  ) && !sourcePartLooksOnlyLegalSuffix(commaRest);
   if (
     commaParts.length >= 2 &&
-    fieldLooksOperational(commaParts[0]) &&
+    sourcePartLooksLikeCustomerLead(commaParts[0]) &&
     commaRestLooksLikeAddress &&
     !sourcePartLooksOnlyAddressHint(commaParts[0])
   ) {
@@ -877,7 +936,6 @@ function sourcePartLooksLikeCustomerAddress(value) {
     !text ||
     /^\d+$/.test(normalized) ||
     ROUTE_SOURCE_SALES_CODES.has(compact) ||
-    sourcePartLooksContactOrNote(text) ||
     sourcePartLooksLikeServiceOnly(text)
   ) {
     return false;

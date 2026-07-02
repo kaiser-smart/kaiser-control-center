@@ -897,7 +897,7 @@ function containerVolumeFromText(value) {
   if (prefixed) {
     return { volume: Number(prefixed[1]) || 0, count: 1, source: "prefixed-volume" };
   }
-  const suffixed = normalized.match(new RegExp(`\\b${CONTAINER_VOLUME_PATTERN}\\s*(?:L|LT|LTR|LITR|LITRU)\\b`));
+  const suffixed = normalized.match(new RegExp(`\\b${CONTAINER_VOLUME_PATTERN}\\s*(?:L|LT|LTR|LITR|LITRU|TR)\\b`));
   if (suffixed) {
     return { volume: Number(suffixed[1]) || 0, count: 1, source: "literal-volume" };
   }
@@ -928,6 +928,10 @@ function inferContainer(text, cells = []) {
     return containerResult(parsed.volume, parsed.count || 1, parsed.source);
   }
   return { containerCount: 0, containerVolume: 0, containerIssue: "missing-container-volume", containerSource: "" };
+}
+
+export function __inferCollectionRouteContainerForTest(text, cells = []) {
+  return inferContainer(text, cells);
 }
 
 function inferRegion(text, waste) {

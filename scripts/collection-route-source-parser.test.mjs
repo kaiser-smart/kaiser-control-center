@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collection-route-optimization-preview.js";
 import { __deriveCollectionRouteSourceFieldsForTest } from "../functions/_lib/collection-route-sources-store.js";
 
 function derive(originalText) {
@@ -35,4 +36,33 @@ function derive(originalText) {
   assert.equal(row.customerName, "");
   assert.equal(row.addressText, "Brno, Úlehlova 18 DOS");
   assert.equal(row.mappingStatus, "chybí adresa");
+}
+
+{
+  const row = derive("1 | Bio-Cirkle s.r.o. | Brno, Trnkova 117 | sudá středa | 1x7 | P240 | 1 | DPI");
+  assert.equal(row.customerName, "Bio-Cirkle s.r.o.");
+  assert.equal(row.addressText, "Brno, Trnkova 117");
+}
+
+{
+  const row = derive("SKO | LIDL, Šumavská 519/35, Brno , TEL.: ZÁVORA - 737993372 | 2x1100");
+  assert.equal(row.customerName, "LIDL");
+  assert.equal(row.addressText, "Šumavská 519/35, Brno");
+}
+
+{
+  const row = derive("SKO | Café Plaček, Minoritská | 2x 240 ltr | 3x7");
+  assert.equal(row.customerName, "Café Plaček");
+  assert.equal(row.addressText, "Minoritská");
+}
+
+{
+  const container = __inferCollectionRouteContainerForTest("37 | TIERRA VERDE s.r.o. | 1100 tr - SKO | 2", [
+    "37",
+    "TIERRA VERDE s.r.o.",
+    "1100 tr - SKO",
+    "2"
+  ]);
+  assert.equal(container.containerVolume, 1100);
+  assert.equal(container.containerCount, 2);
 }
