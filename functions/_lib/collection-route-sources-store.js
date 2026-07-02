@@ -140,6 +140,15 @@ const ROUTE_SOURCE_SALES_CODES = new Set([
   "PPA",
   "ROP"
 ]);
+const ROUTE_SOURCE_LEGAL_SUFFIXES = new Set([
+  "SRO",
+  "SPOLSRO",
+  "SPOLSRRO",
+  "AS",
+  "VOS",
+  "ZS",
+  "OPS"
+]);
 
 export class CollectionRouteSourcesError extends Error {
   constructor(message, status = 400, code = "collection_route_sources_error") {
@@ -798,6 +807,23 @@ function sourcePartLooksLikeServiceOnly(value) {
   return hasServiceToken && (!hasSpecificAddress || nonServiceAlphaTokens.length === 0) && nonServiceAlphaTokens.length <= 1;
 }
 
+function sourcePartLooksOnlyLegalSuffix(value) {
+  return ROUTE_SOURCE_LEGAL_SUFFIXES.has(compactText(value));
+}
+
+function sourcePartLooksOnlyAddressHint(value) {
+  const tokens = normalizeText(value).split(/\s+/).filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => ROUTE_SOURCE_ADDRESS_HINTS.has(token));
+}
+
+function sourceSplitHasRealCustomerAndAddress(split) {
+  return Boolean(
+    split?.customerName &&
+    split?.addressText &&
+    normalizeText(split.customerName) !== normalizeText(split.addressText)
+  );
+}
+
 function splitCombinedCustomerAddress(value) {
   const text = cleanString(value);
   if (!text) {
@@ -806,9 +832,13 @@ function splitCombinedCustomerAddress(value) {
 
   const commaParts = text.split(",").map(cleanString).filter(Boolean);
   const commaRest = commaParts.slice(1).join(", ");
-  const commaRestCompact = compactText(commaRest);
-  const commaRestIsOnlyLegalSuffix = ["SRO", "SPOLSRRO", "AS", "VOS"].includes(commaRestCompact);
-  if (commaParts.length >= 2 && fieldLooksOperational(commaParts[0]) && !commaRestIsOnlyLegalSuffix) {
+  const commaRestLooksLikeAddress = looksLikeAddressCandidate(commaRest) && !sourcePartLooksOnlyLegalSuffix(commaRest);
+  if (
+    commaParts.length >= 2 &&
+    fieldLooksOperational(commaParts[0]) &&
+    commaRestLooksLikeAddress &&
+    !sourcePartLooksOnlyAddressHint(commaParts[0])
+  ) {
     return {
       customerName: commaParts[0],
       addressText: commaRest
@@ -828,7 +858,7 @@ function splitCombinedCustomerAddress(value) {
 
   if (looksLikeAddressCandidate(text)) {
     return {
-      customerName: text,
+      customerName: "",
       addressText: text
     };
   }
@@ -853,7 +883,7 @@ function sourcePartLooksLikeCustomerAddress(value) {
     return false;
   }
   const split = splitCombinedCustomerAddress(text);
-  return Boolean(split.customerName && split.addressText);
+  return sourceSplitHasRealCustomerAndAddress(split);
 }
 
 function sourceMappingFromFields(row, { customerName = "", addressText = "", salesCode = "" } = {}) {
@@ -973,6 +1003,18 @@ function deriveFieldsWithInheritedStop(row, context = {}) {
     continuationRow: true,
     inheritedStop: previousStop
   };
+}
+
+export function __deriveCollectionRouteSourceFieldsForTest(row = {}, context = {}) {
+  return deriveFieldsWithInheritedStop({
+    originalText: "",
+    qualityIssues: [],
+    frequency: "1x7",
+    containerVolume: 1100,
+    containerCount: 1,
+    wasteType: "SKO",
+    ...row
+  }, context);
 }
 
 function rowToSourceBatch(row) {

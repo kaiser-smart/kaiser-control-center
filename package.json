@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.298",
+  "version": "0.1.299",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "test:elevenlabs": "node scripts/elevenlabs-signed-url-options.test.mjs",
     "test:elevenlabs-assistants": "node scripts/elevenlabs-assistant-config.test.mjs",
     "test:driver-reports": "node scripts/driver-report-context.test.mjs",
+    "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs",
     "test:partslink24": "node scripts/partslink24_vin_pilot.test.mjs",
     "test:partslink24:kso": "node scripts/partslink24_kso_phase1.test.mjs",
     "partslink24:vin-pilot": "node scripts/partslink24_vin_pilot.mjs",
