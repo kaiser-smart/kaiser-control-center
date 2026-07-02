@@ -14465,6 +14465,7 @@ function collectionRoutesSourceDriverPreviewPanel({ showNotice = true, showActio
       { label: "Pořadí", value: (row) => row.routeOrder },
       { label: "Zákazník", value: (row) => row.customerName },
       { label: "Adresa", value: (row) => row.addressText },
+      { label: "Odpad", value: (row) => collectionRoutesSourceWasteLabel(row.wasteType || row.wasteCode) },
       { label: "Nádoba", value: (row) => collectionRoutesSourceDriverContainerLabel(row) },
       { label: "Počet", value: (row) => row.containerCount || (row.containerVolume ? 1 : "-") },
       { label: "Poznámka", value: (row) => row.note },
@@ -21891,12 +21892,13 @@ function printCollectionRoutesSourceDriverPreview() {
           th { background: #eef3f8; }
           tr { break-inside: avoid; page-break-inside: avoid; }
           .col-order { width: 5%; }
-          .col-customer { width: 17%; }
-          .col-address { width: 24%; }
+          .col-customer { width: 15%; }
+          .col-address { width: 21%; }
+          .col-waste { width: 9%; }
           .col-container { width: 10%; }
           .col-count { width: 6%; }
-          .col-note { width: 20%; }
-          .col-problem { width: 18%; }
+          .col-note { width: 17%; }
+          .col-problem { width: 17%; }
           .print-actions { margin: 0 0 12px; display: flex; gap: 8px; }
           .print-actions button { border: 1px solid #93a4bc; background: #172033; color: #fff; padding: 7px 10px; border-radius: 4px; cursor: pointer; }
           @media print {
@@ -21928,6 +21930,7 @@ function printCollectionRoutesSourceDriverPreview() {
               <th class="col-order">#</th>
               <th class="col-customer">Zákazník</th>
               <th class="col-address">Adresa</th>
+              <th class="col-waste">Odpad</th>
               <th class="col-container">Nádoba</th>
               <th class="col-count">Počet</th>
               <th class="col-note">Poznámka</th>
@@ -21940,6 +21943,7 @@ function printCollectionRoutesSourceDriverPreview() {
                 <td>${escapeHtml(row.routeOrder || "-")}</td>
                 <td>${escapeHtml(row.customerName || "-")}</td>
                 <td>${escapeHtml(row.addressText || "-")}</td>
+                <td>${escapeHtml(collectionRoutesSourceWasteLabel(row.wasteType || row.wasteCode))}</td>
                 <td>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</td>
                 <td>${escapeHtml(row.containerCount || (row.containerVolume ? 1 : "-"))}</td>
                 <td>${escapeHtml(row.note || "")}</td>
