@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.287"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.288"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota Smart 2: smazání test agenta",
+    text: "Nastavení má chráněnou admin akci pro smazání pouze testovacího ElevenLabs agenta Smart 2. Produkční Šarlota se touto akcí nemění."
+  },
   {
     title: "Šarlota Smart 2: model podle produkční Šarloty",
     text: "Oprava základu Smart 2 přebírá přesná modelová pole z produkčního agenta Šarloty, aby ElevenLabs nedostal neplatný tvar hodnoty."

@@ -23342,6 +23342,60 @@ async function repairSarlotaSmart2Base() {
   }
 }
 
+function sarlotaSmart2DeleteConfirmText() {
+  return [
+    "Smazat ElevenLabs agenta Šarlota Smart 2 – test?",
+    "",
+    "Smaže se jen testovací Smart 2 agent.",
+    "Produkční Šarlota se nemaže.",
+    "Cloudflare secret zatím zůstane nastavený a bude potřeba ho přepsat novým čistým Agent ID.",
+    "",
+    "Do potvrzení napiš přesně: VYMAZAT"
+  ].join("\n");
+}
+
+async function deleteSarlotaSmart2Agent() {
+  if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user)) {
+    return;
+  }
+
+  if (selectedSarlotaAssistantConfig().assistantKey !== "sarlota-smart-2") {
+    sarlotaStatusState.syncError = "Mazání je povolené jen pro Šarlotu Smart 2.";
+    sarlotaStatusState.syncMessage = "";
+    render();
+    return;
+  }
+
+  const confirmText = window.prompt(sarlotaSmart2DeleteConfirmText(), "");
+  if (confirmText !== "VYMAZAT") {
+    sarlotaStatusState.syncMessage = "Mazání Smart 2 zrušeno.";
+    sarlotaStatusState.syncError = "";
+    render();
+    return;
+  }
+
+  sarlotaStatusState.syncing = true;
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Mažu testovacího agenta Smart 2...";
+  render();
+
+  try {
+    await apiJson("/api/ai/elevenlabs/sarlota-smart-2-delete", {
+      method: "POST",
+      body: JSON.stringify({ apply: true, confirm: "VYMAZAT" })
+    });
+    sarlotaStatusState.syncMessage = "Smart 2 agent je smazaný. Teď je potřeba založit čistého nového agenta a přepsat Agent ID.";
+    await loadSarlotaStatus({ force: true, renderAfter: false });
+  } catch (error) {
+    console.error("smart_odpady_sarlota_smart_2_delete_failed", error);
+    sarlotaStatusState.syncError = error.payload?.error || "Smazání Smart 2 agenta se nepodařilo.";
+    sarlotaStatusState.syncMessage = "";
+  } finally {
+    sarlotaStatusState.syncing = false;
+    render();
+  }
+}
+
 function sarlotaToolsDiagnosticConfirmText(plan = {}) {
   const configuredCount = Number(plan.agentTools?.configuredCount || plan.backup?.configuredCount || 0);
   const path = plan.agentTools?.path || "nenalezena";
@@ -27376,6 +27430,13 @@ document.addEventListener("click", async (event) => {
   if (sarlotaSmart2Repair) {
     event.preventDefault();
     await repairSarlotaSmart2Base();
+    return;
+  }
+
+  const sarlotaSmart2Delete = event.target.closest("[data-sarlota-smart-2-delete]");
+  if (sarlotaSmart2Delete) {
+    event.preventDefault();
+    await deleteSarlotaSmart2Agent();
     return;
   }
 

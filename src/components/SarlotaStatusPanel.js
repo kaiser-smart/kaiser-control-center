@@ -345,6 +345,7 @@ export function SarlotaStatusPanel({
   const promptSyncDisabled = loading || syncing || data.driverReportPrompt?.syncAllowed === false || selectedConfig.promptSyncAllowed === false;
   const diagnosticSyncDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota";
   const smart2RepairDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota-smart-2";
+  const smart2DeleteDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota-smart-2";
 
   return `
     <section class="sarlota-status users-panel" aria-labelledby="sarlota-status-title">
@@ -368,6 +369,9 @@ export function SarlotaStatusPanel({
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-repair ${smart2RepairDisabled ? "disabled" : ""}>
             Opravit Smart 2 základ
+          </button>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-delete ${smart2DeleteDisabled ? "disabled" : ""}>
+            Smazat Smart 2
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-diagnostic ${diagnosticSyncDisabled ? "disabled" : ""}>
             Diagnostika: odpojit tools
