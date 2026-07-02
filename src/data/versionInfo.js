@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.299"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.301"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,14 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: hlavní záložka jen pro tisk",
+    text: "Záložka Svozové trasy je uklizená na praktický read-only tiskový filtr Termín / Auto / Odpad, souhrn a řidičský náhled. Technická správa importů, Vistos match a kontrolní tabulky zůstávají ve Správě dat tras."
+  },
+  {
+    title: "Trasy svozu: řidičský tisk obsahuje odpad",
+    text: "Řidičský tiskový náhled a tisk do PDF mají samostatný sloupec Odpad, nádobu, frekvenci, poznámku a kontrolní stav bez navigace, GPS, T-Cars, SMS/e-mailů a ostrých tras."
+  },
   {
     title: "Trasy svozu: oprava zákazníka a adresy",
     text: "Parser 13 Excelů už u firem s čárkou v názvu nebere právní formu jako adresu a samostatnou adresu začínající městem neukazuje jako zákazníka. Jde o read-only preview import bez změny zdrojových Excelů a bez ostrých tras."

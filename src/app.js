@@ -14015,6 +14015,7 @@ function collectionRoutesSourceWasteLabel(value) {
     "200101": "PAPÍR",
     "200139": "PLAST",
     "200102": "SKLO",
+    all: "vše",
     ostatní: "ostatní / neznámé",
     "-": "ostatní / neznámé",
     "": "ostatní / neznámé"
@@ -14043,6 +14044,11 @@ function collectionRoutesSourceSelectedBatch() {
   return collectionRoutesPilotState.sourceBatches.find((batch) => batch.id === collectionRoutesPilotState.sourceSelectedBatchId) ||
     collectionRoutesPilotState.sourceBatches[0] ||
     null;
+}
+
+function collectionRoutesSourceSelectedBatchLabel() {
+  const selectedBatch = collectionRoutesSourceSelectedBatch();
+  return formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "čeká na import";
 }
 
 function collectionRoutesSourceSourceLabel(row) {
@@ -14077,6 +14083,11 @@ function collectionRoutesSourceDriverContainerLabel(row) {
   }
   const count = row.containerCount || 1;
   return row.containerVolume ? `${count}× ${row.containerVolume} l` : `${count}× nádoba`;
+}
+
+function collectionRoutesSourceDriverWasteLabel(row) {
+  const waste = collectionRoutesSourceWasteLabel(row?.wasteType || row?.wasteCode || "ostatní");
+  return row?.wasteCode ? `${waste} (${row.wasteCode})` : waste;
 }
 
 function collectionRoutesSourceDriverProblemLabel(row) {
@@ -14128,6 +14139,7 @@ function collectionRoutesSourceRouteSummaryCards() {
   const summary = collectionRoutesPilotState.sourceSummary || {};
   const wasteCounts = summary.wasteCounts || {};
   const filters = collectionRoutesPilotState.sourceFilters || {};
+  const selectedWaste = collectionRoutesSourceWasteLabel(filters.waste || "all");
   const wasteBreakdown = collectionRoutesSourceCountBreakdown(
     wasteCounts,
     ["SKO", "BIO", "PAPIR", "PLAST", "SKLO", "ostatní / neznámé", "ostatní", "-"],
@@ -14137,9 +14149,10 @@ function collectionRoutesSourceRouteSummaryCards() {
     <div class="collection-routes-stats collection-routes-stats--route" aria-label="Souhrn aktuální trasy">
       <article><span>Termín</span><strong>${escapeHtml(collectionRoutesSourceDayLabel(filters.day || "all"))} / ${escapeHtml(collectionRoutesSourceWeekLabel(filters.week || "all"))}</strong></article>
       <article><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}</strong></article>
+      <article><span>Odpadový filtr</span><strong>${escapeHtml(selectedWaste)}</strong></article>
       <article><span>Zastávky</span><strong>${collectionRoutesMetricValue(summary.rowCount || collectionRoutesPilotState.sourceRows.length)}</strong></article>
       <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(summary.containerCount)}</strong></article>
-      <article><span>Odpad</span><strong>${escapeHtml(wasteBreakdown)}</strong></article>
+      <article><span>Odpady v trase</span><strong>${escapeHtml(wasteBreakdown)}</strong></article>
       <article><span>Odhad času</span><strong>${collectionRoutesMetricValue(summary.estimatedMinutes)} min</strong></article>
     </div>
   `;
@@ -14315,23 +14328,28 @@ function collectionRoutesSourceDriverPreviewPanel({ showNotice = true, showActio
     ? `<p class="module-feedback__notice">Zobrazeno prvních ${escapeHtml(cappedRows.length)} zastávek v řidičském náhledu. Tisk pro řidiče vezme celý aktuálně načtený filtr.</p>`
     : "";
 
+  const noticeHtml = showNotice ? `
+    <div class="collection-routes-driver-preview__notice">
+      <strong>Řidičský náhled trasy</strong>
+      <span>Read-only tiskový podklad z aktuálního filtru. Bez navigace, GPS, T-Cars, potvrzování svozu a ostré trasy.</span>
+    </div>
+  ` : "";
+
   return `
-    ${showNotice ? `
-      <div class="collection-routes-phase-note collection-routes-source-review-note" id="collection-routes-source-driver-preview">
-        <strong>Řidičský náhled trasy.</strong>
-        <span>Read-only tiskový podklad z aktuálního filtru. Ukazuje jen praktické údaje pro jízdu a kontrolu zastávek; bez navigace, GPS, T-Cars, potvrzování svozu a ostré trasy.</span>
-      </div>
-    ` : `<span id="collection-routes-source-driver-preview"></span>`}
-    ${collectionRoutesPreviewTable(`Řidičský náhled: ${collectionRoutesSourceRouteTitle()}`, [
-      { label: "Pořadí", value: (row) => row.routeOrder },
-      { label: "Zákazník", value: (row) => row.customerName },
-      { label: "Adresa", value: (row) => row.addressText },
-      { label: "Nádoba", value: (row) => collectionRoutesSourceDriverContainerLabel(row) },
-      { label: "Počet", value: (row) => row.containerCount || (row.containerVolume ? 1 : "-") },
-      { label: "Poznámka", value: (row) => row.note },
-      { label: "Stav / problém", value: (row) => collectionRoutesSourceDriverProblemLabel(row) }
-    ], cappedRows, "Nahrajte 13 Excelů nebo upravte filtr. Řidičský náhled je jen read-only výstup aktuálního filtru.", actionsHtml)}
-    ${extraNotice}
+    <div class="collection-routes-driver-preview" id="collection-routes-source-driver-preview">
+      ${noticeHtml}
+      ${collectionRoutesPreviewTable(`Zastávky k tisku: ${collectionRoutesSourceRouteTitle()}`, [
+        { label: "Pořadí", value: (row) => row.routeOrder },
+        { label: "Zákazník", value: (row) => row.customerName },
+        { label: "Adresa", value: (row) => row.addressText },
+        { label: "Odpad", value: (row) => collectionRoutesSourceDriverWasteLabel(row) },
+        { label: "Nádoba", value: (row) => collectionRoutesSourceDriverContainerLabel(row) },
+        { label: "Frekvence", value: (row) => row.frequency || "-" },
+        { label: "Poznámka", value: (row) => row.note },
+        { label: "Kontrola", value: (row) => collectionRoutesSourceDriverProblemLabel(row) }
+      ], cappedRows, "Nahrajte 13 Excelů nebo upravte filtr. Řidičský náhled je jen read-only výstup aktuálního filtru.", actionsHtml)}
+      ${extraNotice}
+    </div>
   `;
 }
 
@@ -14521,15 +14539,25 @@ function collectionRoutesSourceSmartFilterPanel() {
   const selectedWaste = collectionRoutesSourceSmartSelectedWaste();
   const selectedOption = options.find((option) => option.key === selectedDayKey) || today;
   const selectedWasteLabel = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.find(([value]) => value === selectedWaste)?.[1] || "vše";
+  const selectedRouteLabel = [
+    collectionRoutesSourceVehicleLabel(selectedVehicle),
+    selectedOption ? `${selectedOption.label}: ${selectedOption.dayLabel} ${selectedOption.dateLabel}` : "termín",
+    selectedWasteLabel
+  ].filter(Boolean).join(" / ");
   return `
-    <div class="collection-routes-print-filter" id="collection-routes-source-smart-filter">
+    <div class="collection-routes-print-filter collection-routes-print-filter--driver" id="collection-routes-source-smart-filter">
       <div class="collection-routes-print-filter__head">
         <div>
-          <p class="module-feedback__eyebrow">Chytrý filtr</p>
-          <h3>${escapeHtml(collectionRoutesSourceVehicleLabel(selectedVehicle))} / ${escapeHtml(selectedOption?.label || "dnes")} / ${escapeHtml(selectedWasteLabel)}</h3>
-          <span>Dnes: ${escapeHtml(today.dayLabel)} ${escapeHtml(today.dateLabel)} / ${escapeHtml(today.weekMode)}</span>
+          <p class="module-feedback__eyebrow">Tisk trasy</p>
+          <h3>${escapeHtml(selectedRouteLabel)}</h3>
+          <span>Vyber termín, auto a odpad. Smart ukáže trasu ze 13 Excelů v původním pořadí.</span>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">13 Excelů</span>
+        <span class="employee-card-status employee-card-status--waiting">read-only</span>
+      </div>
+      <div class="collection-routes-print-filter__today">
+        <strong>Dnes</strong>
+        <span>${escapeHtml(today.dayLabel)} ${escapeHtml(today.dateLabel)} / ${escapeHtml(today.weekMode)}</span>
+        <span>Import: ${escapeHtml(collectionRoutesSourceSelectedBatchLabel())}</span>
       </div>
       <div class="collection-routes-route-filter collection-routes-route-filter--wide collection-routes-route-filter--smart" data-collection-routes-source-smart-panel>
         <label>
@@ -14559,11 +14587,11 @@ function collectionRoutesSourceSmartFilterPanel() {
           </select>
         </label>
         <div class="collection-routes-print-filter__actions">
-          <button class="secondary-link" type="button" data-collection-routes-source-print-driver ${collectionRoutesPilotState.sourceRows.length ? "" : "disabled"}>
+          <button class="primary-action" type="button" data-collection-routes-source-print-driver ${collectionRoutesPilotState.sourceRows.length ? "" : "disabled"}>
             Tisk pro řidiče
           </button>
-          <button class="primary-action" type="button" data-collection-routes-source-print-pdf ${collectionRoutesPilotState.sourceRows.length ? "" : "disabled"}>
-            PDF trasy
+          <button class="secondary-link" type="button" data-collection-routes-source-print-pdf ${collectionRoutesPilotState.sourceRows.length ? "" : "disabled"}>
+            Detailní PDF
           </button>
         </div>
       </div>
@@ -14582,23 +14610,23 @@ function collectionRoutesSourceRouteTitle() {
 
 function collectionRoutesSourceRoutesSection() {
   return `
-    <section class="collection-routes-panel" id="collection-routes-source-routes" aria-labelledby="collection-routes-source-routes-title">
+    <section class="collection-routes-panel collection-routes-panel--driver-print" id="collection-routes-source-routes" aria-labelledby="collection-routes-source-routes-title">
       <div class="collection-routes-panel__head">
         <div>
-          <p class="module-feedback__eyebrow">Trasy k tisku</p>
+          <p class="module-feedback__eyebrow">Provozní tisk</p>
           <h2 id="collection-routes-source-routes-title">Svozové trasy</h2>
-          <p>Vyber termín, auto a odpad. Náhled drží pořadí z původních 13 Excelů.</p>
+          <p>Jen filtr, souhrn a tiskový náhled pro řidiče. Importy a kontrolní tabulky jsou ve Správě dat tras.</p>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">Read-only tisk</span>
+        <span class="employee-card-status employee-card-status--waiting">bez ostré trasy</span>
       </div>
 
       ${collectionRoutesPilotState.sourceImportError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.sourceImportError)}</p>` : ""}
       ${collectionRoutesPilotState.sourceBatches.length ? "" : `
-        <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Import je ve Správě dat tras.</p>
+        <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Nejdřív je potřeba import ve Správě dat tras.</p>
       `}
       ${collectionRoutesSourceSmartFilterPanel()}
       ${collectionRoutesSourceRouteSummaryCards()}
-      ${collectionRoutesSourceDriverPreviewPanel({ showNotice: false, showActions: false })}
+      ${collectionRoutesSourceDriverPreviewPanel({ showNotice: true, showActions: false })}
     </section>
   `;
 }
@@ -15191,7 +15219,7 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">SMART ODPADY / TRASY SVOZU</div>
           <h1 id="collection-routes-title">${escapeHtml(title)}</h1>
-          <p>Bezpečný pilot pro Vistos discovery, import preview a kontrolu stanovišť v oblasti Brno / Blansko.</p>
+          <p>Pracovní tisk svozových tras ze 13 Excelů. Vistos slouží jen jako read-only mapování a kontrola.</p>
           <div class="module-detail__status">
             <span>Stav</span>
             <strong>Read-only pilot</strong>
@@ -15199,10 +15227,12 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
         </div>
       </section>
 
-      <div class="collection-routes-warning" role="status">
-        <strong>${COLLECTION_ROUTES_PHASE_NOTICE}</strong>
-        <span>Žádná provozní data nejsou uložená v prohlížeči a žádná vymyšlená data nejsou zobrazena jako realita.</span>
-      </div>
+      ${activeTab === "svozove-trasy" ? "" : `
+        <div class="collection-routes-warning" role="status">
+          <strong>${COLLECTION_ROUTES_PHASE_NOTICE}</strong>
+          <span>Žádná provozní data nejsou uložená v prohlížeči a žádná vymyšlená data nejsou zobrazena jako realita.</span>
+        </div>
+      `}
 
       <nav class="collection-routes-tabs" aria-label="Sekce Tras svozu" role="tablist">
         ${COLLECTION_ROUTES_TABS.map((tab) => `
@@ -21681,6 +21711,7 @@ function printCollectionRoutesSourceDriverPreview() {
   const title = `Řidičský náhled ${collectionRoutesSourceRouteTitle()}`;
   const generatedAt = formatDateTime(new Date().toISOString()) || new Date().toISOString();
   const batchLabel = formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "aktuální import";
+  const selectedWaste = collectionRoutesSourceWasteLabel(filters.waste || "all");
   const html = `<!doctype html>
     <html lang="cs">
       <head>
@@ -21692,22 +21723,23 @@ function printCollectionRoutesSourceDriverPreview() {
           body { font-family: Arial, sans-serif; color: #172033; margin: 18px; }
           h1 { font-size: 24px; margin: 0 0 6px; }
           .subtitle { color: #40506a; font-size: 12px; margin: 0 0 12px; }
-          .meta { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+          .meta { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
           .meta div { border: 1px solid #cfd7e6; padding: 7px; min-height: 44px; }
           .meta span { display: block; color: #5d6b82; font-size: 10px; text-transform: uppercase; }
           .meta strong { display: block; font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
           .safety { border: 1px solid #d8deea; background: #f7f9fc; color: #40506a; margin: 12px 0; padding: 8px; font-size: 11px; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9.5px; }
           th, td { border: 1px solid #d8deea; padding: 5px; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
           th { background: #eef3f8; }
           tr { break-inside: avoid; page-break-inside: avoid; }
-          .col-order { width: 5%; }
-          .col-customer { width: 17%; }
-          .col-address { width: 24%; }
-          .col-container { width: 10%; }
-          .col-count { width: 6%; }
-          .col-note { width: 20%; }
-          .col-problem { width: 18%; }
+          .col-order { width: 4%; }
+          .col-customer { width: 16%; }
+          .col-address { width: 22%; }
+          .col-waste { width: 9%; }
+          .col-container { width: 9%; }
+          .col-frequency { width: 8%; }
+          .col-note { width: 18%; }
+          .col-problem { width: 14%; }
           .print-actions { margin: 0 0 12px; display: flex; gap: 8px; }
           .print-actions button { border: 1px solid #93a4bc; background: #172033; color: #fff; padding: 7px 10px; border-radius: 4px; cursor: pointer; }
           @media print {
@@ -21728,8 +21760,10 @@ function printCollectionRoutesSourceDriverPreview() {
           <div><span>Den</span><strong>${escapeHtml(collectionRoutesSourceDayLabel(filters.day || "all"))}</strong></div>
           <div><span>Týden</span><strong>${escapeHtml(collectionRoutesSourceWeekLabel(filters.week || "all"))}</strong></div>
           <div><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}</strong></div>
+          <div><span>Odpad</span><strong>${escapeHtml(selectedWaste)}</strong></div>
           <div><span>Zastávky</span><strong>${escapeHtml(summary.rowCount || rows.length)}</strong></div>
           <div><span>Nádoby</span><strong>${escapeHtml(summary.containerCount || 0)}</strong></div>
+          <div><span>Čas</span><strong>${escapeHtml(summary.estimatedMinutes || 0)} min</strong></div>
           <div><span>Import</span><strong>${escapeHtml(batchLabel)}</strong></div>
         </div>
         <p class="safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů a automatizací. Vistos je jen read-only mapování řádků ze 13 Excelů.</p>
@@ -21739,8 +21773,9 @@ function printCollectionRoutesSourceDriverPreview() {
               <th class="col-order">#</th>
               <th class="col-customer">Zákazník</th>
               <th class="col-address">Adresa</th>
+              <th class="col-waste">Odpad</th>
               <th class="col-container">Nádoba</th>
-              <th class="col-count">Počet</th>
+              <th class="col-frequency">Frekvence</th>
               <th class="col-note">Poznámka</th>
               <th class="col-problem">Stav / problém</th>
             </tr>
@@ -21751,8 +21786,9 @@ function printCollectionRoutesSourceDriverPreview() {
                 <td>${escapeHtml(row.routeOrder || "-")}</td>
                 <td>${escapeHtml(row.customerName || "-")}</td>
                 <td>${escapeHtml(row.addressText || "-")}</td>
+                <td>${escapeHtml(collectionRoutesSourceDriverWasteLabel(row))}</td>
                 <td>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</td>
-                <td>${escapeHtml(row.containerCount || (row.containerVolume ? 1 : "-"))}</td>
+                <td>${escapeHtml(row.frequency || "-")}</td>
                 <td>${escapeHtml(row.note || "")}</td>
                 <td>${escapeHtml(collectionRoutesSourceDriverProblemLabel(row))}</td>
               </tr>

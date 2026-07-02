@@ -2137,6 +2137,21 @@ h1 {
   background: #f7fbf2;
 }
 
+.collection-routes-panel--driver-print {
+  gap: 16px;
+  border-color: rgba(117, 189, 37, 0.18);
+  background: #ffffff;
+}
+
+.collection-routes-print-filter--driver {
+  gap: 16px;
+  padding: clamp(16px, 2vw, 22px);
+  border-color: rgba(40, 112, 74, 0.26);
+  background:
+    linear-gradient(180deg, #f4fbf1 0%, #ffffff 100%);
+  box-shadow: inset 0 0 0 1px rgba(117, 189, 37, 0.08);
+}
+
 .collection-routes-print-filter__head {
   display: flex;
   gap: 14px;
@@ -2156,6 +2171,27 @@ h1 {
   margin-top: 4px;
   color: var(--steel);
   font-weight: 700;
+}
+
+.collection-routes-print-filter--driver .collection-routes-print-filter__head h3 {
+  font-size: clamp(1.25rem, 2.2vw, 1.75rem);
+}
+
+.collection-routes-print-filter__today {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(66, 80, 74, 0.1);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-routes-print-filter__today strong {
+  color: var(--ink);
 }
 
 .collection-routes-print-filter__actions {
@@ -2286,6 +2322,39 @@ h1 {
 
 .collection-routes-preview-table tr:last-child td {
   border-bottom: 0;
+}
+
+.collection-routes-driver-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.collection-routes-driver-preview__notice {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 10px;
+  background: #f7faf6;
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-routes-driver-preview__notice strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.collection-routes-panel--driver-print .collection-routes-preview-table {
+  border-radius: 10px;
+}
+
+.collection-routes-panel--driver-print .collection-routes-preview-table table {
+  font-size: 0.82rem;
+}
+
+.collection-routes-panel--driver-print .collection-routes-preview-table th {
+  background: #eef7ea;
 }
 
 .tracking-tabs {
@@ -14239,7 +14308,8 @@ body:has(.data-box-page) {
 
   .collection-routes-panel__head,
   .collection-routes-import-form,
-  .collection-routes-print-filter__head {
+  .collection-routes-print-filter__head,
+  .collection-routes-print-filter__today {
     display: grid;
     grid-template-columns: 1fr;
   }
