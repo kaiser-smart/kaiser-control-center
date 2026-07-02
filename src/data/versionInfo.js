@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.302"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.303"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,14 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: hlavní záložka jen pro tisk",
+    text: "Záložka Svozové trasy je uklizená na praktický read-only tiskový filtr Termín / Auto / Odpad, souhrn a řidičský náhled. Technická správa importů, Vistos match a kontrolní tabulky zůstávají v Diagnostice tras."
+  },
+  {
+    title: "Trasy svozu: řidičský tisk obsahuje odpad",
+    text: "Řidičský tiskový náhled a tisk do PDF mají samostatný sloupec Odpad, nádobu, frekvenci, poznámku a kontrolní stav bez navigace, GPS, T-Cars, SMS/e-mailů a ostrých tras."
+  },
   {
     title: "Trasy svozu: sloupec Odpad v tisku",
     text: "Řidičský náhled a tisk tras mají samostatný sloupec Odpad vedle adresy, nádoby, počtu a poznámky. Jde jen o read-only UI výstup nad aktuálním filtrem."
@@ -38,7 +46,7 @@ export const versionNews = [
   },
   {
     title: "Trasy svozu: čistý tiskový filtr",
-    text: "Hlavní záložka Svozové trasy je uklizená pro uživatele na Termín, Auto, Odpad, Tisk/PDF, provozní souhrn a řidičský náhled. Importy, Vistos match a kontrolní tabulky jsou přesunuté do Správy dat tras."
+    text: "Hlavní záložka Svozové trasy je uklizená pro uživatele na Termín, Auto, Odpad, Tisk/PDF, provozní souhrn a řidičský náhled. Importy, Vistos match a kontrolní tabulky jsou přesunuté do Diagnostiky tras."
   },
   {
     title: "Trasy svozu: čitelnější chytrý filtr",
