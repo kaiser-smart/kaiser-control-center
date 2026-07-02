@@ -38,6 +38,7 @@ const PROMPT_PATHS = [
   ["conversation_config", "agent", "prompt", "text"],
   ["conversation_config", "agent", "prompt", "content"]
 ];
+const DEFAULT_PROMPT_PATH = ["conversation_config", "agent", "prompt", "prompt"];
 
 function cleanString(value) {
   return String(value ?? "").trim();
@@ -78,6 +79,14 @@ function promptPathFromAgent(agentConfig) {
   }
 
   return null;
+}
+
+function writablePromptPathFromAgent(agentConfig) {
+  return promptPathFromAgent(agentConfig) || {
+    path: DEFAULT_PROMPT_PATH,
+    pathText: DEFAULT_PROMPT_PATH.join("."),
+    value: ""
+  };
 }
 
 function promptHasCurrentRule(promptText) {
@@ -219,15 +228,15 @@ function buildPlan(context) {
     };
   }
 
-  const promptPath = promptPathFromAgent(context.agentConfig);
+  const promptPath = writablePromptPathFromAgent(context.agentConfig);
   const firstMessage = firstMessageFromAgent(context.agentConfig);
   const agentNameMatches = (context.assistantConfig?.expectedAgentNames || []).includes(cleanString(context.agentConfig?.name));
   const firstMessageMatches = firstMessage === FIRST_MESSAGE_TEMPLATE;
-  const hasCurrentRule = promptPath ? promptHasCurrentRule(promptPath.value) : false;
-  const hasLegacyRule = promptPath ? promptHasLegacyRule(promptPath.value) : false;
-  const hasLegacyUnsafeExample = promptPath ? promptHasLegacyUnsafeDriverReportExample(promptPath.value) : false;
-  const forbiddenPhrases = promptPath ? forbiddenPromptPhrases(promptPath.value) : [];
-  const promptNeedsPatch = Boolean(promptPath) && (!hasCurrentRule || hasLegacyRule || hasLegacyUnsafeExample);
+  const hasCurrentRule = promptHasCurrentRule(promptPath.value);
+  const hasLegacyRule = promptHasLegacyRule(promptPath.value);
+  const hasLegacyUnsafeExample = promptHasLegacyUnsafeDriverReportExample(promptPath.value);
+  const forbiddenPhrases = forbiddenPromptPhrases(promptPath.value);
+  const promptNeedsPatch = !hasCurrentRule || hasLegacyRule || hasLegacyUnsafeExample;
 
   return {
     mode: "dry_run",
@@ -242,8 +251,8 @@ function buildPlan(context) {
       firstMessageMatches
     },
     prompt: {
-      path: promptPath?.pathText || "",
-      currentLength: promptPath?.value?.length || 0,
+      path: promptPath.pathText,
+      currentLength: promptPath.value.length,
       currentRulePresent: hasCurrentRule,
       legacyRulePresent: hasLegacyRule,
       forbiddenPhrasesPresent: forbiddenPhrases,
@@ -328,7 +337,7 @@ async function applyPayload(env, assistantConfig, user = null) {
     }, 409);
   }
 
-  const promptPath = promptPathFromAgent(context.agentConfig);
+  const promptPath = writablePromptPathFromAgent(context.agentConfig);
   const cleanedPrompt = stripLegacyDriverReportExamples(stripDriverReportPromptBlocks(promptPath.value));
   const nextPrompt = `${cleanedPrompt}${PROMPT_RULE_BLOCK}`;
   const patchBody = bodyForPromptPatch(promptPath.path, nextPrompt);
