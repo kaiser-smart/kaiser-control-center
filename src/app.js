@@ -21825,6 +21825,210 @@ function printCollectionRoutesHtml(html, errorMessage) {
   }, 100);
 }
 
+function collectionRoutesSourcePrintStyles(mode = "detail") {
+  const isDriver = mode === "driver";
+  return `
+          @page { size: A4 landscape; margin: ${isDriver ? "8mm" : "9mm"}; }
+          * { box-sizing: border-box; }
+          html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body {
+            margin: 0;
+            background: #ffffff;
+            color: #172033;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: ${isDriver ? "9.4px" : "8.6px"};
+            line-height: 1.25;
+          }
+          .print-page { width: 100%; }
+          .print-actions { margin: 0 0 10px; display: flex; gap: 8px; }
+          .print-actions button {
+            border: 1px solid #93a4bc;
+            background: #172033;
+            color: #ffffff;
+            padding: 7px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+          }
+          .print-header {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 148px;
+            gap: 12px;
+            align-items: start;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #7bbd32;
+          }
+          .print-kicker {
+            margin: 0 0 3px;
+            color: #5f6f82;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0;
+            text-transform: uppercase;
+          }
+          h1 {
+            margin: 0;
+            color: #172033;
+            font-size: ${isDriver ? "20px" : "18px"};
+            line-height: 1.08;
+          }
+          .print-subtitle {
+            max-width: 870px;
+            margin: 5px 0 0;
+            color: #40506a;
+            font-size: ${isDriver ? "10.2px" : "9.4px"};
+          }
+          .print-route-state {
+            display: grid;
+            gap: 5px;
+            justify-items: stretch;
+          }
+          .print-route-chip {
+            border: 1px solid #cfd7e6;
+            border-left: 4px solid #7bbd32;
+            padding: 5px 7px;
+            color: #172033;
+            font-size: 9px;
+            font-weight: 700;
+          }
+          .print-summary {
+            display: grid;
+            grid-template-columns: repeat(${isDriver ? 9 : 12}, minmax(0, 1fr));
+            gap: 5px;
+            margin: 8px 0;
+          }
+          .print-summary-card {
+            min-height: 34px;
+            border: 1px solid #d8deea;
+            background: #fbfdf8;
+            padding: 5px 6px;
+          }
+          .print-summary-card--wide { grid-column: span ${isDriver ? 3 : 4}; }
+          .print-summary-card--double { grid-column: span 2; }
+          .print-summary-card span {
+            display: block;
+            color: #657488;
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+          }
+          .print-summary-card strong {
+            display: block;
+            margin-top: 2px;
+            color: #172033;
+            font-size: ${isDriver ? "11px" : "9.4px"};
+            overflow-wrap: anywhere;
+          }
+          .print-safety {
+            margin: 7px 0 8px;
+            border: 1px solid #d8deea;
+            background: #f7f9fc;
+            color: #40506a;
+            padding: 6px 7px;
+            font-size: 8.8px;
+          }
+          .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          .print-table thead { display: table-header-group; }
+          .print-table tr { break-inside: avoid; page-break-inside: avoid; }
+          .print-table th,
+          .print-table td {
+            border: 1px solid #d8deea;
+            padding: ${isDriver ? "4px 4px" : "3px 4px"};
+            vertical-align: top;
+            text-align: left;
+            overflow-wrap: anywhere;
+          }
+          .print-table th {
+            background: #eef3f8;
+            color: #172033;
+            font-size: ${isDriver ? "8.8px" : "7.8px"};
+            text-transform: uppercase;
+          }
+          .print-table tbody tr:nth-child(even) td { background: #fbfcf7; }
+          .print-main { display: block; font-weight: 700; color: #172033; }
+          .print-muted { display: block; margin-top: 2px; color: #526176; font-size: 0.9em; }
+          .print-status-badge {
+            display: inline-block;
+            margin-bottom: 3px;
+            border: 1px solid #cfd7e6;
+            padding: 1px 4px;
+            color: #172033;
+            font-weight: 700;
+          }
+          .print-status-badge--ok { border-color: #8dc45a; background: #f3faed; }
+          .print-status-badge--problem { border-color: #e1a34c; background: #fff7e8; }
+          .print-status-badge--neutral { border-color: #b6c4d8; background: #f7f9fc; }
+          .print-table--detail .col-order { width: 4%; }
+          .print-table--detail .col-stop { width: 20%; }
+          .print-table--detail .col-service { width: 12%; }
+          .print-table--detail .col-note { width: 11%; }
+          .print-table--detail .col-source { width: 13%; }
+          .print-table--detail .col-vistos { width: 18%; }
+          .print-table--detail .col-issue { width: 22%; }
+          .print-table--driver .col-order { width: 4%; }
+          .print-table--driver .col-stop { width: 31%; }
+          .print-table--driver .col-waste { width: 10%; }
+          .print-table--driver .col-container { width: 10%; }
+          .print-table--driver .col-frequency { width: 8%; }
+          .print-table--driver .col-note { width: 22%; }
+          .print-table--driver .col-problem { width: 15%; }
+          @media screen {
+            body { padding: 18px; background: #eef3f8; }
+            .print-page {
+              background: #ffffff;
+              box-shadow: 0 8px 30px rgba(23, 32, 51, 0.16);
+              padding: 9mm;
+            }
+          }
+          @media print {
+            body { margin: 0; }
+            .print-actions { display: none; }
+          }
+        `;
+}
+
+function collectionRoutesSourcePrintSummaryCard(label, value, options = {}) {
+  const className = [
+    "print-summary-card",
+    options.wide ? "print-summary-card--wide" : "",
+    options.double ? "print-summary-card--double" : ""
+  ].filter(Boolean).join(" ");
+  return `
+    <div class="${className}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `;
+}
+
+function collectionRoutesSourcePrintStatusTone(row) {
+  const status = collectionRoutesSourceNormalizedVistosStatus(row);
+  if (status === "namapováno") {
+    return "ok";
+  }
+  if (COLLECTION_ROUTES_SOURCE_PROBLEM_STATUSES.has(status)) {
+    return "problem";
+  }
+  return "neutral";
+}
+
+function collectionRoutesSourcePrintStatusBadge(row) {
+  const tone = collectionRoutesSourcePrintStatusTone(row);
+  return `<span class="print-status-badge print-status-badge--${tone}">${escapeHtml(collectionRoutesSourceVistosStatus(row))}</span>`;
+}
+
+function collectionRoutesSourcePrintServiceLabel(row) {
+  return [
+    collectionRoutesSourceDriverWasteLabel(row),
+    collectionRoutesSourceDriverContainerLabel(row),
+    row?.frequency || "-"
+  ].filter(Boolean).join(" · ");
+}
+
 function printCollectionRoutesSourcePdf() {
   const rows = collectionRoutesSourceDisplayRows();
   if (!rows.length) {
@@ -21853,74 +22057,55 @@ function printCollectionRoutesSourcePdf() {
     ["SKO", "BIO", "PAPIR", "PLAST", "SKLO", "ostatní / neznámé", "ostatní", "-"],
     collectionRoutesSourceWasteLabel
   );
+  const selectedWaste = collectionRoutesSourceWasteLabel(filters.waste || "all");
   const html = `<!doctype html>
     <html lang="cs">
       <head>
         <meta charset="utf-8">
         <title>${escapeHtml(title)}</title>
         <style>
-          @page { size: A4 landscape; margin: 10mm; }
-          * { box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; color: #172033; margin: 18px; }
-          h1 { font-size: 22px; margin: 0 0 6px; }
-          .subtitle { color: #40506a; font-size: 12px; margin: 0 0 12px; }
-          .meta { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
-          .meta div { border: 1px solid #cfd7e6; padding: 7px; min-height: 44px; }
-          .meta .wide { grid-column: span 3; }
-          .meta .full { grid-column: 1 / -1; }
-          .meta span { display: block; color: #5d6b82; font-size: 10px; text-transform: uppercase; }
-          .meta strong { display: block; font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
-          .safety { border: 1px solid #d8deea; background: #f7f9fc; color: #40506a; margin: 12px 0; padding: 8px; font-size: 11px; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.5px; }
-          th, td { border: 1px solid #d8deea; padding: 4px; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
-          th { background: #eef3f8; }
-          tr { break-inside: avoid; page-break-inside: avoid; }
-          .col-order { width: 4%; }
-          .col-customer { width: 13%; }
-          .col-address { width: 14%; }
-          .col-service { width: 10%; }
-          .col-note { width: 11%; }
-          .col-source { width: 13%; }
-          .col-vistos { width: 15%; }
-          .col-issue { width: 20%; }
-          .print-actions { margin: 0 0 12px; display: flex; gap: 8px; }
-          .print-actions button { border: 1px solid #93a4bc; background: #172033; color: #fff; padding: 7px 10px; border-radius: 4px; cursor: pointer; }
-          @media print {
-            body { margin: 0; }
-            .print-actions { display: none; }
-          }
+          ${collectionRoutesSourcePrintStyles("detail")}
         </style>
       </head>
       <body>
-        <div class="print-actions">
-          <button type="button" onclick="window.print()">Tisk / uložit jako PDF</button>
-          <button type="button" onclick="window.close()">Zavřít</button>
-        </div>
-        <h1>${escapeHtml(title)}</h1>
-        <p class="subtitle">Read-only PDF náhled z aktuálního filtru Svozových tras. Pořadí je podle zdrojového Excelu, ne optimalizace.</p>
-        <div class="meta">
-          <div><span>Datum generování</span><strong>${escapeHtml(generatedAt)}</strong></div>
-          <div><span>Den</span><strong>${escapeHtml(collectionRoutesSourceDayLabel(filters.day || "all"))}</strong></div>
-          <div><span>Týden</span><strong>${escapeHtml(collectionRoutesSourceWeekLabel(filters.week || "all"))}</strong></div>
-          <div><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}</strong></div>
-          <div><span>Řádky</span><strong>${escapeHtml(summary.rowCount || rows.length)}</strong></div>
-          <div><span>Nádoby</span><strong>${escapeHtml(summary.containerCount || 0)}</strong></div>
-          <div><span>Odhad času</span><strong>${escapeHtml(summary.estimatedMinutes || 0)} min</strong></div>
-          <div><span>Odhad hmotnosti</span><strong>${escapeHtml(summary.estimatedTons || 0)} t</strong></div>
-          <div><span>Zdroj</span><strong>13 Excelů</strong></div>
-          <div><span>Import</span><strong>${escapeHtml(batchLabel)}</strong></div>
-          <div class="wide"><span>Batch</span><strong>${escapeHtml(batchId)}</strong></div>
-          <div class="wide"><span>Mapování</span><strong>${escapeHtml(mappingBreakdown)}</strong></div>
-          <div class="wide"><span>Odpady</span><strong>${escapeHtml(wasteBreakdown)}</strong></div>
-          <div class="wide"><span>Vistos</span><strong>read-only match, bez rozšíření rozsahu mimo 13 Excelů</strong></div>
-        </div>
-        <p class="safety">Nevytváří ostré trasy, neposílá SMS/e-maily, nespouští automatizace a nepřepisuje původní dispečerské pořadí.</p>
-        <table>
+        <main class="print-page print-page--detail">
+          <div class="print-actions">
+            <button type="button" onclick="window.print()">Tisk / uložit jako PDF</button>
+          </div>
+          <header class="print-header">
+            <div>
+              <p class="print-kicker">Svozové trasy · detailní PDF</p>
+              <h1>${escapeHtml(title)}</h1>
+              <p class="print-subtitle">Read-only podklad z aktuálního filtru. Pořadí je podle zdrojového Excelu; nejde o AI optimalizaci ani ostrou trasu.</p>
+            </div>
+            <div class="print-route-state">
+              <span class="print-route-chip">Zdroj: 13 Excelů</span>
+              <span class="print-route-chip">Vistos: read-only</span>
+              <span class="print-route-chip">Ostrá trasa: NE</span>
+            </div>
+          </header>
+          <section class="print-summary print-summary--detail" aria-label="Souhrn trasy">
+            ${collectionRoutesSourcePrintSummaryCard("Datum generování", generatedAt)}
+            ${collectionRoutesSourcePrintSummaryCard("Den", collectionRoutesSourceDayLabel(filters.day || "all"))}
+            ${collectionRoutesSourcePrintSummaryCard("Týden", collectionRoutesSourceWeekLabel(filters.week || "all"))}
+            ${collectionRoutesSourcePrintSummaryCard("Auto", collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}
+            ${collectionRoutesSourcePrintSummaryCard("Filtr odpadu", selectedWaste)}
+            ${collectionRoutesSourcePrintSummaryCard("Zastávky", collectionRoutesMetricValue(summary.rowCount || rows.length))}
+            ${collectionRoutesSourcePrintSummaryCard("Nádoby", collectionRoutesMetricValue(summary.containerCount || 0))}
+            ${collectionRoutesSourcePrintSummaryCard("Odhad času", `${collectionRoutesMetricValue(summary.estimatedMinutes || 0)} min`)}
+            ${collectionRoutesSourcePrintSummaryCard("Hmotnost", `${collectionRoutesMetricValue(summary.estimatedTons || 0)} t`)}
+            ${collectionRoutesSourcePrintSummaryCard("Import", batchLabel)}
+            ${collectionRoutesSourcePrintSummaryCard("Batch", batchId, { double: true })}
+            ${collectionRoutesSourcePrintSummaryCard("Mapování", mappingBreakdown, { wide: true })}
+            ${collectionRoutesSourcePrintSummaryCard("Odpady v trase", wasteBreakdown, { wide: true })}
+            ${collectionRoutesSourcePrintSummaryCard("Vistos", "read-only match bez rozšíření rozsahu mimo 13 Excelů", { wide: true })}
+          </section>
+          <p class="print-safety">Nevytváří ostré trasy, neposílá SMS/e-maily, nespouští automatizace a nepřepisuje původní dispečerské pořadí.</p>
+          <table class="print-table print-table--detail">
           <thead>
             <tr>
               <th class="col-order">#</th>
-              <th class="col-customer">Zákazník</th>
-              <th class="col-address">Adresa</th>
+              <th class="col-stop">Zákazník / adresa</th>
               <th class="col-service">Odpad / nádoba / frekvence</th>
               <th class="col-note">Poznámka</th>
               <th class="col-source">Zdroj Excel</th>
@@ -21932,21 +22117,26 @@ function printCollectionRoutesSourcePdf() {
             ${rows.map((row) => `
               <tr>
                 <td>${escapeHtml(row.routeOrder || "-")}</td>
-                <td>${escapeHtml(row.customerName || "-")}</td>
-                <td>${escapeHtml(row.addressText || "-")}</td>
-                <td>${escapeHtml([
-                  row.wasteType || "ostatní / neznámé",
-                  row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "bez nádoby",
-                  row.frequency || "bez frekvence"
-                ].join(" · "))}</td>
+                <td>
+                  <span class="print-main">${escapeHtml(row.customerName || "-")}</span>
+                  <span class="print-muted">${escapeHtml(row.addressText || "-")}</span>
+                </td>
+                <td>${escapeHtml(collectionRoutesSourcePrintServiceLabel(row))}</td>
                 <td>${escapeHtml(row.note || "")}</td>
-                <td>${escapeHtml(collectionRoutesSourceSourceLabel(row))}</td>
-                <td>${escapeHtml(`${collectionRoutesSourceVistosStatus(row)} · ${collectionRoutesSourceVistosDetail(row)}`)}</td>
-                <td>${escapeHtml(collectionRoutesSourceVistosIssue(row))}</td>
+                <td>
+                  <span class="print-main">${escapeHtml(row.sourceFile || "-")}</span>
+                  <span class="print-muted">${escapeHtml(`${row.sourceSheet || "-"} / ř. ${row.sourceRowNumber || "-"}`)}</span>
+                </td>
+                <td>
+                  ${collectionRoutesSourcePrintStatusBadge(row)}
+                  <span class="print-muted">${escapeHtml(collectionRoutesSourceVistosDetail(row))}</span>
+                </td>
+                <td>${escapeHtml(collectionRoutesSourceVistosIssue(row) || "-")}</td>
               </tr>
             `).join("")}
           </tbody>
-        </table>
+          </table>
+        </main>
       </body>
     </html>`;
 
@@ -21978,61 +22168,43 @@ function printCollectionRoutesSourceDriverPreview() {
         <meta charset="utf-8">
         <title>${escapeHtml(title)}</title>
         <style>
-          @page { size: A4 landscape; margin: 10mm; }
-          * { box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; color: #172033; margin: 18px; }
-          h1 { font-size: 24px; margin: 0 0 6px; }
-          .subtitle { color: #40506a; font-size: 12px; margin: 0 0 12px; }
-          .meta { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
-          .meta div { border: 1px solid #cfd7e6; padding: 7px; min-height: 44px; }
-          .meta span { display: block; color: #5d6b82; font-size: 10px; text-transform: uppercase; }
-          .meta strong { display: block; font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
-          .safety { border: 1px solid #d8deea; background: #f7f9fc; color: #40506a; margin: 12px 0; padding: 8px; font-size: 11px; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9.5px; }
-          th, td { border: 1px solid #d8deea; padding: 5px; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
-          th { background: #eef3f8; }
-          tr { break-inside: avoid; page-break-inside: avoid; }
-          .col-order { width: 4%; }
-          .col-customer { width: 16%; }
-          .col-address { width: 22%; }
-          .col-waste { width: 9%; }
-          .col-container { width: 9%; }
-          .col-frequency { width: 8%; }
-          .col-note { width: 18%; }
-          .col-problem { width: 14%; }
-          .print-actions { margin: 0 0 12px; display: flex; gap: 8px; }
-          .print-actions button { border: 1px solid #93a4bc; background: #172033; color: #fff; padding: 7px 10px; border-radius: 4px; cursor: pointer; }
-          @media print {
-            body { margin: 0; }
-            .print-actions { display: none; }
-          }
+          ${collectionRoutesSourcePrintStyles("driver")}
         </style>
       </head>
       <body>
-        <div class="print-actions">
-          <button type="button" onclick="window.print()">Tisk / uložit jako PDF</button>
-          <button type="button" onclick="window.close()">Zavřít</button>
-        </div>
-        <h1>${escapeHtml(title)}</h1>
-        <p class="subtitle">Read-only tiskový podklad z aktuálního filtru. Pořadí je podle zdrojového Excelu; nejde o optimalizovanou ani ostrou trasu.</p>
-        <div class="meta">
-          <div><span>Datum</span><strong>${escapeHtml(generatedAt)}</strong></div>
-          <div><span>Den</span><strong>${escapeHtml(collectionRoutesSourceDayLabel(filters.day || "all"))}</strong></div>
-          <div><span>Týden</span><strong>${escapeHtml(collectionRoutesSourceWeekLabel(filters.week || "all"))}</strong></div>
-          <div><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}</strong></div>
-          <div><span>Odpad</span><strong>${escapeHtml(selectedWaste)}</strong></div>
-          <div><span>Zastávky</span><strong>${escapeHtml(summary.rowCount || rows.length)}</strong></div>
-          <div><span>Nádoby</span><strong>${escapeHtml(summary.containerCount || 0)}</strong></div>
-          <div><span>Čas</span><strong>${escapeHtml(summary.estimatedMinutes || 0)} min</strong></div>
-          <div><span>Import</span><strong>${escapeHtml(batchLabel)}</strong></div>
-        </div>
-        <p class="safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů a automatizací. Vistos je jen read-only mapování řádků ze 13 Excelů.</p>
-        <table>
+        <main class="print-page print-page--driver">
+          <div class="print-actions">
+            <button type="button" onclick="window.print()">Tisk / uložit jako PDF</button>
+          </div>
+          <header class="print-header">
+            <div>
+              <p class="print-kicker">Svozové trasy · tisk pro řidiče</p>
+              <h1>${escapeHtml(title)}</h1>
+              <p class="print-subtitle">Read-only tiskový podklad z aktuálního filtru. Pořadí je podle zdrojového Excelu; nejde o optimalizovanou ani ostrou trasu.</p>
+            </div>
+            <div class="print-route-state">
+              <span class="print-route-chip">Zdroj: 13 Excelů</span>
+              <span class="print-route-chip">Ostrá trasa: NE</span>
+              <span class="print-route-chip">Navigace/GPS: NE</span>
+            </div>
+          </header>
+          <section class="print-summary print-summary--driver" aria-label="Souhrn pro řidiče">
+            ${collectionRoutesSourcePrintSummaryCard("Datum", generatedAt)}
+            ${collectionRoutesSourcePrintSummaryCard("Den", collectionRoutesSourceDayLabel(filters.day || "all"))}
+            ${collectionRoutesSourcePrintSummaryCard("Týden", collectionRoutesSourceWeekLabel(filters.week || "all"))}
+            ${collectionRoutesSourcePrintSummaryCard("Auto", collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}
+            ${collectionRoutesSourcePrintSummaryCard("Odpad", selectedWaste)}
+            ${collectionRoutesSourcePrintSummaryCard("Zastávky", collectionRoutesMetricValue(summary.rowCount || rows.length))}
+            ${collectionRoutesSourcePrintSummaryCard("Nádoby", collectionRoutesMetricValue(summary.containerCount || 0))}
+            ${collectionRoutesSourcePrintSummaryCard("Čas", `${collectionRoutesMetricValue(summary.estimatedMinutes || 0)} min`)}
+            ${collectionRoutesSourcePrintSummaryCard("Import", batchLabel)}
+          </section>
+          <p class="print-safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů a automatizací. Vistos je jen read-only mapování řádků ze 13 Excelů.</p>
+          <table class="print-table print-table--driver">
           <thead>
             <tr>
               <th class="col-order">#</th>
-              <th class="col-customer">Zákazník</th>
-              <th class="col-address">Adresa</th>
+              <th class="col-stop">Zastávka</th>
               <th class="col-waste">Odpad</th>
               <th class="col-container">Nádoba</th>
               <th class="col-frequency">Frekvence</th>
@@ -22044,17 +22216,23 @@ function printCollectionRoutesSourceDriverPreview() {
             ${rows.map((row) => `
               <tr>
                 <td>${escapeHtml(row.routeOrder || "-")}</td>
-                <td>${escapeHtml(row.customerName || "-")}</td>
-                <td>${escapeHtml(row.addressText || "-")}</td>
+                <td>
+                  <span class="print-main">${escapeHtml(row.customerName || "-")}</span>
+                  <span class="print-muted">${escapeHtml(row.addressText || "-")}</span>
+                </td>
                 <td>${escapeHtml(collectionRoutesSourceDriverWasteLabel(row))}</td>
                 <td>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</td>
                 <td>${escapeHtml(row.frequency || "-")}</td>
                 <td>${escapeHtml(row.note || "")}</td>
-                <td>${escapeHtml(collectionRoutesSourceDriverProblemLabel(row))}</td>
+                <td>
+                  ${collectionRoutesSourcePrintStatusBadge(row)}
+                  <span class="print-muted">${escapeHtml(collectionRoutesSourceDriverProblemLabel(row))}</span>
+                </td>
               </tr>
             `).join("")}
           </tbody>
-        </table>
+          </table>
+        </main>
       </body>
     </html>`;
 

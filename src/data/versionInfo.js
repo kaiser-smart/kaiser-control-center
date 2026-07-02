@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.304"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.305"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: čitelnější A4 tisk",
+    text: "Detailní PDF a Tisk pro řidiče mají kompaktní A4 landscape hlavičku, souhrn trasy, opakovanou hlavičku tabulky a čitelnější rozložení zastávky, odpadu, nádoby, frekvence, poznámky a kontrolního stavu."
+  },
   {
     title: "Trasy svozu: Safari tisk bez popupu",
     text: "Detailní PDF a Tisk pro řidiče už netisknou přes nové vyskakovací okno. Smart používá interní tiskový rám, takže Safari nemusí povolovat popup pro read-only tiskovou trasu."
