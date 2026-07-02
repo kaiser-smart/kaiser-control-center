@@ -53,6 +53,24 @@ export function isValidElevenLabsAssistantKey(value) {
   return Object.prototype.hasOwnProperty.call(ELEVENLABS_ASSISTANT_CONFIGS, cleanAssistantKey(value));
 }
 
+export function normalizeElevenLabsAgentName(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[‐‑‒–—―−]/g, "-")
+    .toLowerCase()
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function elevenLabsAgentNameMatchesExpected(agentName, assistantConfig = {}) {
+  const normalizedAgentName = normalizeElevenLabsAgentName(agentName);
+  return Boolean(normalizedAgentName) && (assistantConfig.expectedAgentNames || [])
+    .map((name) => normalizeElevenLabsAgentName(name))
+    .includes(normalizedAgentName);
+}
+
 export function resolveElevenLabsAssistantConfig(assistantKey = "sarlota", env = {}) {
   const normalizedKey = cleanAssistantKey(assistantKey || "sarlota") || "sarlota";
   const baseConfig = ELEVENLABS_ASSISTANT_CONFIGS[normalizedKey];

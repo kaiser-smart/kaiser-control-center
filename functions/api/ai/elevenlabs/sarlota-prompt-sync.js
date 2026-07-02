@@ -2,6 +2,7 @@ import { json, readJson, requireUserPermission } from "../../../_lib/auth.js";
 import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
 import {
   assistantConfigFromRequest,
+  elevenLabsAgentNameMatchesExpected,
   assistantPublicMetadata,
   resolveElevenLabsAssistantConfig
 } from "../../../../src/elevenLabsAssistants.js";
@@ -230,7 +231,7 @@ function buildPlan(context) {
 
   const promptPath = writablePromptPathFromAgent(context.agentConfig);
   const firstMessage = firstMessageFromAgent(context.agentConfig);
-  const agentNameMatches = (context.assistantConfig?.expectedAgentNames || []).includes(cleanString(context.agentConfig?.name));
+  const agentNameMatches = elevenLabsAgentNameMatchesExpected(context.agentConfig?.name, context.assistantConfig);
   const firstMessageMatches = firstMessage === FIRST_MESSAGE_TEMPLATE;
   const hasCurrentRule = promptHasCurrentRule(promptPath.value);
   const hasLegacyRule = promptHasLegacyRule(promptPath.value);

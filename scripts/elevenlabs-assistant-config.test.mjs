@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   assistantPublicMetadata,
+  elevenLabsAgentNameMatchesExpected,
   isValidElevenLabsAssistantKey,
   resolveElevenLabsAssistantConfig
 } from "../src/elevenLabsAssistants.js";
@@ -25,6 +26,9 @@ assert.equal(smart2.agentId, "agent-smart-2");
 assert.equal(smart2.envVariableName, "ELEVENLABS_AGENT_ID_SARLOTA_SMART_2");
 assert.equal(smart2.isTest, true);
 assert.equal(smart2.promptSyncAllowed, true);
+assert.equal(elevenLabsAgentNameMatchesExpected("Šarlota Smart 2 - test", smart2), true);
+assert.equal(elevenLabsAgentNameMatchesExpected("Sarlota Smart 2 – test", smart2), true);
+assert.equal(elevenLabsAgentNameMatchesExpected("Nanolab production", smart2), false);
 
 const marek = resolveElevenLabsAssistantConfig("marek", env);
 assert.equal(marek.assistantKey, "marek");

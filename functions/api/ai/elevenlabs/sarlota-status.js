@@ -6,6 +6,7 @@ import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClient
 import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
 import {
   assistantConfigFromRequest,
+  elevenLabsAgentNameMatchesExpected,
   assistantPublicMetadata,
   resolveElevenLabsAssistantConfig
 } from "../../../../src/elevenLabsAssistants.js";
@@ -435,7 +436,7 @@ function collectKnowledgeEntriesFromAgent(agentConfig) {
 
 function safeAgentNameMatches(agentConfig, assistantConfig) {
   const agentName = cleanString(agentConfig?.name);
-  return (assistantConfig?.expectedAgentNames || []).includes(agentName);
+  return elevenLabsAgentNameMatchesExpected(agentName, assistantConfig);
 }
 
 async function readElevenLabsAgentConfig({ apiKey, agentId, assistantConfig }) {

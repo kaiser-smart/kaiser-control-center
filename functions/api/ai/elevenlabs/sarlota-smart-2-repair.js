@@ -1,6 +1,7 @@
 import { json, readJson, requireUserPermission } from "../../../_lib/auth.js";
 import {
   assistantPublicMetadata,
+  elevenLabsAgentNameMatchesExpected,
   maskElevenLabsAgentId,
   resolveElevenLabsAssistantConfig
 } from "../../../../src/elevenLabsAssistants.js";
@@ -142,7 +143,7 @@ async function repairSmart2(env, user) {
     path: `/agents/${encodeURIComponent(assistantConfig.agentId)}`
   });
   const agentName = cleanString(agentConfig?.name);
-  const nameMatches = (assistantConfig.expectedAgentNames || []).includes(agentName);
+  const nameMatches = elevenLabsAgentNameMatchesExpected(agentName, assistantConfig);
 
   if (!nameMatches) {
     return json({
