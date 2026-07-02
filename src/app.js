@@ -21750,6 +21750,81 @@ async function updateCollectionRoutesSourceSmartFilter(control) {
   await applyCollectionRoutesSourceSmartFilter(nextDayKey, vehicle, waste, status, customDate);
 }
 
+const COLLECTION_ROUTES_PRINT_FRAME_ID = "collection-routes-print-frame";
+
+function removeCollectionRoutesPrintFrame(frame) {
+  if (frame?.parentNode) {
+    frame.parentNode.removeChild(frame);
+  }
+}
+
+function printCollectionRoutesHtml(html, errorMessage) {
+  document.getElementById(COLLECTION_ROUTES_PRINT_FRAME_ID)?.remove();
+
+  const frame = document.createElement("iframe");
+  frame.id = COLLECTION_ROUTES_PRINT_FRAME_ID;
+  frame.title = "Tisk svozové trasy";
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.position = "fixed";
+  frame.style.right = "0";
+  frame.style.bottom = "0";
+  frame.style.width = "1px";
+  frame.style.height = "1px";
+  frame.style.border = "0";
+  frame.style.opacity = "0";
+  frame.style.pointerEvents = "none";
+
+  document.body.appendChild(frame);
+
+  const frameWindow = frame.contentWindow;
+  const frameDocument = frame.contentDocument || frameWindow?.document;
+
+  if (!frameWindow || !frameDocument) {
+    removeCollectionRoutesPrintFrame(frame);
+    collectionRoutesPilotState.sourceImportError = errorMessage;
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    return;
+  }
+
+  let printed = false;
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) {
+      return;
+    }
+    cleaned = true;
+    setTimeout(() => removeCollectionRoutesPrintFrame(frame), 300);
+  };
+  const startPrint = () => {
+    if (printed) {
+      return;
+    }
+    printed = true;
+    try {
+      frameWindow.onafterprint = cleanup;
+      frameWindow.focus();
+      frameWindow.print();
+      setTimeout(cleanup, 120000);
+    } catch (error) {
+      removeCollectionRoutesPrintFrame(frame);
+      collectionRoutesPilotState.sourceImportError = errorMessage;
+      collectionRoutesPilotState.sourceImportMessage = "";
+      render();
+    }
+  };
+
+  frame.onload = startPrint;
+  frameDocument.open();
+  frameDocument.write(html);
+  frameDocument.close();
+  setTimeout(() => {
+    if (frameDocument.readyState === "complete") {
+      startPrint();
+    }
+  }, 100);
+}
+
 function printCollectionRoutesSourcePdf() {
   const rows = collectionRoutesSourceDisplayRows();
   if (!rows.length) {
@@ -21875,16 +21950,10 @@ function printCollectionRoutesSourcePdf() {
       </body>
     </html>`;
 
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
-  if (!printWindow) {
-    collectionRoutesPilotState.sourceImportError = "Prohlížeč zablokoval PDF náhled. Povolte vyskakovací okno pro tisk.";
-    render();
-    return;
-  }
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+  printCollectionRoutesHtml(
+    html,
+    "Tisk PDF se nepodařilo spustit přímo v prohlížeči. Zkus kliknout znovu nebo použij systémový tisk."
+  );
 }
 
 function printCollectionRoutesSourceDriverPreview() {
@@ -21989,16 +22058,10 @@ function printCollectionRoutesSourceDriverPreview() {
       </body>
     </html>`;
 
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
-  if (!printWindow) {
-    collectionRoutesPilotState.sourceImportError = "Prohlížeč zablokoval řidičský tiskový náhled. Povolte vyskakovací okno pro tisk.";
-    render();
-    return;
-  }
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+  printCollectionRoutesHtml(
+    html,
+    "Tisk pro řidiče se nepodařilo spustit přímo v prohlížeči. Zkus kliknout znovu nebo použij systémový tisk."
+  );
 }
 
 async function submitCollectionRoutesRouteOptimizationPreview(form) {
