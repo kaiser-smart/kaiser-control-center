@@ -89,7 +89,8 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## PDF offline
 
-- NEZACATO - PDF trasy pro vypadek internetu bude samostatna faze.
+- ROZPRACOVANO - read-only PDF/tiskovy nahled aktualniho filtru Svozovych tras obsahuje souhrn, zdrojovy Excel/list/radek a Vistos match problem.
+- NEZACATO - skutecny offline ridicsky balicek pro vypadek internetu bude samostatna faze.
 
 ## Automatizace
 
@@ -99,5 +100,5 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 ## Produkce
 
 - ROZPRACOVANO - produkcni read-only pilot existuje.
-- ROZPRACOVANO - Faze 1E ma byt overena po nasazeni.
+- OVERENO - Faze 1E read-only import 13 Excelu a Vistos match byly overeny na produkci pro batch z 2026-07-02.
 - NEZACATO - produkcni ostry import / planovani / notifikace.

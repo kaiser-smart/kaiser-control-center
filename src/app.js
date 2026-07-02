@@ -13884,6 +13884,76 @@ function collectionRoutesSourceVehicleLabel(value) {
   return value === "all" ? "všechna auta" : value || "-";
 }
 
+function collectionRoutesSourceDayLabel(value) {
+  const labels = {
+    PO: "pondělí",
+    "ÚT": "úterý",
+    ST: "středa",
+    "ČT": "čtvrtek",
+    "PÁ": "pátek"
+  };
+  return value === "all" ? "všechny dny" : labels[value] || value || "-";
+}
+
+function collectionRoutesSourceWeekLabel(value) {
+  return value === "all" ? "všechny týdny" : value || "-";
+}
+
+function collectionRoutesSourceWasteLabel(value) {
+  const labels = {
+    SKO: "SKO",
+    BIO: "BIO",
+    PAPIR: "PAPÍR",
+    PLAST: "PLAST",
+    SKLO: "SKLO",
+    "200301": "SKO",
+    "200201": "BIO",
+    "200108": "BIO",
+    "200101": "PAPÍR",
+    "200139": "PLAST",
+    "200102": "SKLO",
+    ostatní: "ostatní / neznámé",
+    "-": "ostatní / neznámé",
+    "": "ostatní / neznámé"
+  };
+  return labels[value] || value || "ostatní / neznámé";
+}
+
+function collectionRoutesSourceStatusLabel(value) {
+  return value || "-";
+}
+
+function collectionRoutesSourceCountBreakdown(counts = {}, preferredOrder = [], formatter = (value) => value) {
+  const entries = Object.entries(counts || {}).filter(([, count]) => Number(count) > 0);
+  const ordered = [
+    ...preferredOrder
+      .filter((key) => Object.prototype.hasOwnProperty.call(counts, key))
+      .map((key) => [key, counts[key]]),
+    ...entries.filter(([key]) => !preferredOrder.includes(key)).sort(([left], [right]) => left.localeCompare(right, "cs"))
+  ];
+  return ordered.length
+    ? ordered.map(([key, count]) => `${formatter(key)}: ${collectionRoutesMetricValue(count)}`).join(" · ")
+    : "-";
+}
+
+function collectionRoutesSourceSelectedBatch() {
+  return collectionRoutesPilotState.sourceBatches.find((batch) => batch.id === collectionRoutesPilotState.sourceSelectedBatchId) ||
+    collectionRoutesPilotState.sourceBatches[0] ||
+    null;
+}
+
+function collectionRoutesSourceSourceLabel(row) {
+  return `${row?.sourceFile || "-"} / ${row?.sourceSheet || "-"} / ř. ${row?.sourceRowNumber || "-"}`;
+}
+
+function collectionRoutesSourceVistosDetail(row) {
+  return [
+    collectionRoutesSourceVistosContract(row),
+    collectionRoutesSourceVistosCustomer(row),
+    collectionRoutesSourceVistosSite(row)
+  ].filter((value) => value && value !== "-").join(" · ") || "-";
+}
+
 function collectionRoutesSourceVistosStatus(row) {
   return row?.vistosMatchStatus || row?.mappingStatus || "-";
 }
@@ -20978,43 +21048,97 @@ function printCollectionRoutesSourcePdf() {
   }
 
   const summary = collectionRoutesPilotState.sourceSummary || {};
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const selectedBatch = collectionRoutesSourceSelectedBatch();
+  const mappingCounts = summary.mappingCounts || {};
+  const wasteCounts = summary.wasteCounts || {};
   const title = `Svozová trasa ${collectionRoutesSourceRouteTitle()}`;
   const generatedAt = formatDateTime(new Date().toISOString()) || new Date().toISOString();
+  const batchLabel = formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "aktuální import";
+  const batchId = selectedBatch?.id || collectionRoutesPilotState.sourceSelectedBatchId || "-";
+  const mappingBreakdown = collectionRoutesSourceCountBreakdown(
+    mappingCounts,
+    ["namapováno", "nejasné", "nenamapováno", "chybí adresa", "chybí nádoba", "chybí frekvence", "duplicita"],
+    collectionRoutesSourceStatusLabel
+  );
+  const wasteBreakdown = collectionRoutesSourceCountBreakdown(
+    wasteCounts,
+    ["SKO", "BIO", "PAPIR", "PLAST", "SKLO", "ostatní / neznámé", "ostatní", "-"],
+    collectionRoutesSourceWasteLabel
+  );
   const html = `<!doctype html>
     <html lang="cs">
       <head>
         <meta charset="utf-8">
         <title>${escapeHtml(title)}</title>
         <style>
-          body { font-family: Arial, sans-serif; color: #172033; margin: 24px; }
-          h1 { font-size: 22px; margin: 0 0 8px; }
-          .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
-          .meta div { border: 1px solid #cfd7e6; padding: 8px; }
-          .meta span { display: block; color: #5d6b82; font-size: 11px; text-transform: uppercase; }
-          .meta strong { display: block; font-size: 14px; margin-top: 4px; }
-          table { width: 100%; border-collapse: collapse; font-size: 11px; }
-          th, td { border: 1px solid #d8deea; padding: 5px; vertical-align: top; text-align: left; }
+          @page { size: A4 landscape; margin: 10mm; }
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; color: #172033; margin: 18px; }
+          h1 { font-size: 22px; margin: 0 0 6px; }
+          .subtitle { color: #40506a; font-size: 12px; margin: 0 0 12px; }
+          .meta { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+          .meta div { border: 1px solid #cfd7e6; padding: 7px; min-height: 44px; }
+          .meta .wide { grid-column: span 3; }
+          .meta .full { grid-column: 1 / -1; }
+          .meta span { display: block; color: #5d6b82; font-size: 10px; text-transform: uppercase; }
+          .meta strong { display: block; font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
+          .safety { border: 1px solid #d8deea; background: #f7f9fc; color: #40506a; margin: 12px 0; padding: 8px; font-size: 11px; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.5px; }
+          th, td { border: 1px solid #d8deea; padding: 4px; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
           th { background: #eef3f8; }
-          .note { margin: 12px 0; font-size: 12px; color: #40506a; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
+          .col-order { width: 4%; }
+          .col-customer { width: 13%; }
+          .col-address { width: 14%; }
+          .col-service { width: 10%; }
+          .col-note { width: 11%; }
+          .col-source { width: 13%; }
+          .col-vistos { width: 15%; }
+          .col-issue { width: 20%; }
+          .print-actions { margin: 0 0 12px; display: flex; gap: 8px; }
+          .print-actions button { border: 1px solid #93a4bc; background: #172033; color: #fff; padding: 7px 10px; border-radius: 4px; cursor: pointer; }
+          @media print {
+            body { margin: 0; }
+            .print-actions { display: none; }
+          }
         </style>
       </head>
       <body>
+        <div class="print-actions">
+          <button type="button" onclick="window.print()">Tisk / uložit jako PDF</button>
+          <button type="button" onclick="window.close()">Zavřít</button>
+        </div>
         <h1>${escapeHtml(title)}</h1>
-        <p class="note">Read-only PDF náhled z 13 Excelů. Nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.</p>
+        <p class="subtitle">Read-only PDF náhled z aktuálního filtru Svozových tras. Pořadí je podle zdrojového Excelu, ne optimalizace.</p>
         <div class="meta">
           <div><span>Datum generování</span><strong>${escapeHtml(generatedAt)}</strong></div>
-          <div><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(collectionRoutesPilotState.sourceFilters.vehicle || "all"))}</strong></div>
+          <div><span>Den</span><strong>${escapeHtml(collectionRoutesSourceDayLabel(filters.day || "all"))}</strong></div>
+          <div><span>Týden</span><strong>${escapeHtml(collectionRoutesSourceWeekLabel(filters.week || "all"))}</strong></div>
+          <div><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}</strong></div>
           <div><span>Řádky</span><strong>${escapeHtml(summary.rowCount || rows.length)}</strong></div>
           <div><span>Nádoby</span><strong>${escapeHtml(summary.containerCount || 0)}</strong></div>
           <div><span>Odhad času</span><strong>${escapeHtml(summary.estimatedMinutes || 0)} min</strong></div>
           <div><span>Odhad hmotnosti</span><strong>${escapeHtml(summary.estimatedTons || 0)} t</strong></div>
           <div><span>Zdroj</span><strong>13 Excelů</strong></div>
-          <div><span>Vistos</span><strong>read-only match stav</strong></div>
+          <div><span>Import</span><strong>${escapeHtml(batchLabel)}</strong></div>
+          <div class="wide"><span>Batch</span><strong>${escapeHtml(batchId)}</strong></div>
+          <div class="wide"><span>Mapování</span><strong>${escapeHtml(mappingBreakdown)}</strong></div>
+          <div class="wide"><span>Odpady</span><strong>${escapeHtml(wasteBreakdown)}</strong></div>
+          <div class="wide"><span>Vistos</span><strong>read-only match, bez rozšíření rozsahu mimo 13 Excelů</strong></div>
         </div>
+        <p class="safety">Nevytváří ostré trasy, neposílá SMS/e-maily, nespouští automatizace a nepřepisuje původní dispečerské pořadí.</p>
         <table>
           <thead>
             <tr>
-              <th>#</th><th>Zákazník</th><th>Adresa</th><th>Odpad</th><th>Nádoba</th><th>Frekvence</th><th>Poznámka</th><th>Vistos</th><th>Smlouva</th>
+              <th class="col-order">#</th>
+              <th class="col-customer">Zákazník</th>
+              <th class="col-address">Adresa</th>
+              <th class="col-service">Odpad / nádoba / frekvence</th>
+              <th class="col-note">Poznámka</th>
+              <th class="col-source">Zdroj Excel</th>
+              <th class="col-vistos">Vistos stav / detail</th>
+              <th class="col-issue">Problém mapování</th>
             </tr>
           </thead>
           <tbody>
@@ -21023,12 +21147,15 @@ function printCollectionRoutesSourcePdf() {
                 <td>${escapeHtml(row.routeOrder || "-")}</td>
                 <td>${escapeHtml(row.customerName || "-")}</td>
                 <td>${escapeHtml(row.addressText || "-")}</td>
-                <td>${escapeHtml(row.wasteType || "ostatní / neznámé")}</td>
-                <td>${escapeHtml(row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "-")}</td>
-                <td>${escapeHtml(row.frequency || "-")}</td>
+                <td>${escapeHtml([
+                  row.wasteType || "ostatní / neznámé",
+                  row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "bez nádoby",
+                  row.frequency || "bez frekvence"
+                ].join(" · "))}</td>
                 <td>${escapeHtml(row.note || "")}</td>
-                <td>${escapeHtml(collectionRoutesSourceVistosStatus(row))}</td>
-                <td>${escapeHtml(collectionRoutesSourceVistosContract(row))}</td>
+                <td>${escapeHtml(collectionRoutesSourceSourceLabel(row))}</td>
+                <td>${escapeHtml(`${collectionRoutesSourceVistosStatus(row)} · ${collectionRoutesSourceVistosDetail(row)}`)}</td>
+                <td>${escapeHtml(collectionRoutesSourceVistosIssue(row))}</td>
               </tr>
             `).join("")}
           </tbody>
