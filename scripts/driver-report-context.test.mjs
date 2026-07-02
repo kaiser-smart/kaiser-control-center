@@ -289,12 +289,13 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.ok, true);
   assert.equal(result.vehiclesVerified, true);
   assert.equal(result.vehiclePickerAvailable, true);
-  assert.equal(result.vehiclesCount, 2);
-  assert.equal(result.vehicleOrdinalSelectionAllowed, true);
-  assert.equal(result.answerText.includes("Mercedes Atego"), true);
-  assert.equal(result.answerText.includes("1A1 1111"), true);
-  assert.equal(result.answerText.includes("Mercedes Sprinter"), true);
-  assert.equal(result.answerText.includes("2A2 2222"), true);
+  assert.equal(result.vehiclesCount, 0);
+  assert.equal(result.vehicleOrdinalSelectionAllowed, false);
+  assert.match(result.answerText, /víc vozidel/);
+  assert.equal(result.answerText.includes("Mercedes Atego"), false);
+  assert.equal(result.answerText.includes("1A1 1111"), false);
+  assert.equal(result.answerText.includes("Mercedes Sprinter"), false);
+  assert.equal(result.answerText.includes("2A2 2222"), false);
   assert.equal(result.answerText.includes(["Mercedes Sprinter", "SPZ", "5A4 8912"].join(" ")), false);
 }
 

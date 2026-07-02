@@ -3,6 +3,7 @@ import {
   FleetVehiclesStoreError,
   validateFleetLicensePlate
 } from "../../_lib/fleet-vehicles-store.js";
+import { hasPermission } from "../../../src/permissions.js";
 
 function errorResponse(error) {
   if (error instanceof FleetVehiclesStoreError) {
@@ -25,6 +26,10 @@ export async function onRequestGet({ request, env }) {
 
   if (response) {
     return response;
+  }
+
+  if (!hasPermission(user, "fleet", "view")) {
+    return json({ error: "K tomu nemáš oprávnění.", code: "FORBIDDEN", apiStatus: "ready" }, 403);
   }
 
   try {

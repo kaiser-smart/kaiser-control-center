@@ -41,6 +41,56 @@ function cleanString(value) {
   return String(value ?? "").trim();
 }
 
+function parseJson(value, fallback = null) {
+  if (value && typeof value === "object") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(cleanString(value));
+  } catch {
+    return fallback;
+  }
+}
+
+function testFleetPayloadFromEnv(env = {}) {
+  if (isProduction(env)) {
+    return null;
+  }
+
+  const enabled = cleanString(env.SARLOTA_DRIVER_REPORTS_MOCK_MODE).toLowerCase() === "true" ||
+    cleanString(env.APP_ENV).toLowerCase() === "test" ||
+    cleanString(env.NODE_ENV).toLowerCase() === "test";
+
+  if (!enabled || !cleanString(env.SARLOTA_DRIVER_REPORTS_TEST_FLEET_JSON)) {
+    return null;
+  }
+
+  const payload = parseJson(env.SARLOTA_DRIVER_REPORTS_TEST_FLEET_JSON, null);
+  if (!payload || typeof payload !== "object") {
+    console.error("fleet_vehicles.test_fixture_invalid", { message: "SARLOTA_DRIVER_REPORTS_TEST_FLEET_JSON is not valid JSON" });
+    return null;
+  }
+
+  return {
+    provider: cleanString(payload.provider || "fleet_db"),
+    source: cleanString(payload.source || "fleet_db"),
+    apiStatus: cleanString(payload.apiStatus || "ready"),
+    configured: true,
+    readOnly: true,
+    createsFleetRecords: false,
+    startsAutomation: false,
+    sendsEmailOrSms: false,
+    vehicles: Array.isArray(payload.vehicles) ? payload.vehicles : [],
+    driverCandidates: Array.isArray(payload.driverCandidates) ? payload.driverCandidates : [],
+    summary: payload.summary || fleetSummaryFromVehicles(Array.isArray(payload.vehicles) ? payload.vehicles : []),
+    message: cleanString(payload.message || "Testovací vozový park pro Šarlotu."),
+    assignmentApiStatus: "ready",
+    assignmentMessage: "Testovací přiřazení řidičů bez D1.",
+    testFixture: true
+  };
+}
+
 function nullableString(value) {
   const cleaned = cleanString(value);
   return cleaned || null;
@@ -560,6 +610,20 @@ async function loadVistosFleetVehiclesPayload(env = {}, tcarsPayload = null) {
 }
 
 export async function loadFleetVehiclesWithAssignments(env = {}, user = null) {
+  const testPayload = testFleetPayloadFromEnv(env);
+  if (testPayload) {
+    return {
+      ...testPayload,
+      driverCandidates: testPayload.driverCandidates.length
+        ? testPayload.driverCandidates
+        : await loadFleetDriverCandidates(env, user),
+      message: [
+        cleanString(testPayload.message),
+        cleanString(testPayload.assignmentMessage)
+      ].filter(Boolean).join(" ")
+    };
+  }
+
   const tcarsPayload = await loadTcarsFleetVehiclesPayload(env);
   const vistosPayload = await loadVistosFleetVehiclesPayload(env, tcarsPayload);
   const basePayload = vistosPayload.apiStatus === "ready" && vistosPayload.vehicles.length

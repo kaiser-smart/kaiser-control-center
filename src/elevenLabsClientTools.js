@@ -106,6 +106,7 @@ const DRIVER_REPORT_PICKER_MESSAGE = "Otevřu ti výběr v aplikaci.";
 const DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
 const DRIVER_REPORT_PICKER_FAILED_MESSAGE = "Výběr se mi nepodařilo otevřít. Řekni mi prosím značku, typ nebo SPZ vozidla.";
 const DRIVER_REPORT_VEHICLE_SELECTED_MESSAGE = "Vozidlo je vybrané v aplikaci.";
+const DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ nebo vyber vozidlo v aplikaci.";
 
 export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   {
@@ -253,6 +254,15 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
       { name: "spz", type: "string", required: true },
       { name: "sessionId", type: "string", required: false },
       { name: "conversationId", type: "string", required: false }
+    ]
+  },
+  {
+    name: "get_driver_reports_summary",
+    description: "Read-only vrátí stručný hlasově bezpečný souhrn posledních hlášení řidiče. Maximálně 5 položek, bez VIN, telefonů a citlivých poznámek.",
+    parameters: [
+      { name: "limit", type: "number", required: false },
+      { name: "status", type: "string", required: false },
+      { name: "search", type: "string", required: false }
     ]
   },
   {
@@ -429,6 +439,11 @@ export function createElevenLabsClientTools({
     return cleanString(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
 
+  function truncateForAssistant(value, max = 160) {
+    const text = cleanString(value).replace(/\s+/g, " ");
+    return text.length > max ? `${text.slice(0, Math.max(0, max - 1)).trim()}…` : text;
+  }
+
   function driverReportContextAnswer(result = {}) {
     const vehicles = Array.isArray(result?.vehicles) ? result.vehicles : [];
 
@@ -442,13 +457,13 @@ export function createElevenLabsClientTools({
     }
 
     if (result?.vehiclePickerAvailable === true || result?.driverResolved === true) {
-      return vehicles.length > 3
+      return vehicles.length > 1
         ? "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci."
-        : DRIVER_REPORT_PICKER_MESSAGE;
+        : DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
     }
 
     return cleanString(result.messageForAssistant || result.fallbackQuestion || result.message) ||
-      DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE;
+      DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
   }
 
   function isSafeDriverReportVehicle(vehicle = {}) {
@@ -473,6 +488,7 @@ export function createElevenLabsClientTools({
       displayName: cleanString(vehicle.displayName),
       spz,
       licensePlate: spz,
+      vinPresent: vehicle.vinPresent === true || Boolean(cleanString(vehicle.vinMasked || vehicle.vin)),
       assignedToCurrentDriver: true,
       existsInFleet: true,
       active: true,
@@ -500,16 +516,16 @@ export function createElevenLabsClientTools({
   }
 
   function verifiedVehicleListAnswer(vehicles = []) {
-    if (vehicles.length > 3) {
+    if (vehicles.length !== 1) {
       return "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci.";
     }
 
-    const options = vehicles
-      .map((vehicle) => `${vehicle.displayName}, SPZ ${vehicle.spz || vehicle.licensePlate}`)
-      .join(", ");
+    const vehicle = vehicles[0];
+    const label = cleanString(vehicle.displayName);
+    const plate = cleanString(vehicle.spz || vehicle.licensePlate);
 
-    return options
-      ? `Máš pod sebou ${options}. Kterého vozidla se závada týká?`
+    return label && plate
+      ? `Mám bezpečně ověřené tvoje vozidlo ${label}, SPZ ${plate}. Týká se závada tohohle vozidla?`
       : DRIVER_REPORT_PICKER_MESSAGE;
   }
 
@@ -534,11 +550,11 @@ export function createElevenLabsClientTools({
   function assistantSafeDriverReportContext(result = {}, parameters = {}) {
     const vehicles = safeDriverReportVehicles(result);
     const vehiclesVerified = result.vehiclesVerified === true && vehicles.length > 0;
-    const exposeVehicleListToVoice = vehiclesVerified && vehicles.length <= 3;
+    const exposeVehicleListToVoice = vehiclesVerified && vehicles.length === 1;
     const vehiclePickerAvailable = result.vehiclePickerAvailable === true || vehiclesVerified;
     const messageForAssistant = vehiclesVerified
       ? verifiedVehicleListAnswer(vehicles)
-      : cleanString(result.messageForAssistant || result.message || result.fallbackQuestion) || DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE;
+      : cleanString(result.messageForAssistant || result.message || result.fallbackQuestion) || DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
 
     return {
       ok: result.ok === true,
@@ -553,7 +569,7 @@ export function createElevenLabsClientTools({
       vehiclesVerified,
       vehiclePickerAvailable,
       vehicleLookupMode: vehiclesVerified
-        ? (vehicles.length > 3 ? "verified_picker_recommended" : "verified_vehicle_list")
+        ? (vehicles.length === 1 ? "verified_vehicle_single" : "verified_picker_recommended")
         : "picker_or_manual",
       errorCode: result.errorCode || "",
       user: result.user || null,
@@ -563,7 +579,7 @@ export function createElevenLabsClientTools({
       } : null,
       vehicles: exposeVehicleListToVoice ? vehicles : [],
       vehiclesCount: exposeVehicleListToVoice ? vehicles.length : 0,
-      vehicleOrdinalSelectionAllowed: exposeVehicleListToVoice,
+      vehicleOrdinalSelectionAllowed: false,
       permissions: result.permissions || {},
       fallbackQuestion: messageForAssistant,
       message: messageForAssistant,
@@ -814,6 +830,89 @@ export function createElevenLabsClientTools({
     };
   }
 
+  function clampDriverReportSummaryLimit(value) {
+    const number = Number(value || 3);
+    if (!Number.isFinite(number)) {
+      return 3;
+    }
+    return Math.max(1, Math.min(5, Math.round(number)));
+  }
+
+  function driverReportSummaryItem(item = {}) {
+    return {
+      id: cleanString(item.id),
+      reportId: cleanString(item.reportId),
+      status: cleanString(item.status),
+      reportedAt: cleanString(item.reportedAt || item.createdAt),
+      licensePlate: cleanString(item.licensePlate),
+      probablePart: cleanString(item.probablePart || item.defectType),
+      defectDescription: truncateForAssistant(item.defectDescription, 140),
+      notificationsSent: item.patrikEmailStatus === "sent" && item.kamilSmsStatus === "sent"
+    };
+  }
+
+  function driverReportsSummaryAnswer(items = []) {
+    if (!items.length) {
+      return "Nemáš uložené žádné hlášení řidiče.";
+    }
+
+    const summaries = items.map((item) => {
+      const part = item.probablePart || "závada";
+      const plate = item.licensePlate ? `SPZ ${item.licensePlate}` : "bez SPZ v odpovědi";
+      return `${item.reportId || item.id}: ${plate}, ${part}, stav ${item.status || "nezjištěn"}`;
+    });
+
+    return `Tvoje poslední hlášení: ${summaries.join("; ")}.`;
+  }
+
+  async function getDriverReportsSummary(parameters = {}) {
+    const limit = clampDriverReportSummaryLimit(parameters.limit);
+    const status = cleanString(parameters.status);
+    const search = cleanString(parameters.search || parameters.query);
+
+    let result;
+    try {
+      result = await readJson("/api/driver-reports", {
+        ...(status ? { status } : {}),
+        ...(search ? { search } : {})
+      });
+    } catch (error) {
+      const code = cleanString(error?.payload?.code || error?.payload?.errorCode || "DRIVER_REPORTS_SUMMARY_FAILED");
+      const message = code === "UNAUTHENTICATED"
+        ? "Nejsi přihlášený."
+        : code === "FORBIDDEN"
+          ? "K tomu nemáš oprávnění."
+          : "Poslední hlášení se mi teď nepodařilo načíst.";
+      return {
+        ok: false,
+        status: "failed",
+        code,
+        items: [],
+        count: 0,
+        message,
+        answerText: message,
+        apiStatus: error?.payload?.apiStatus || "waiting"
+      };
+    }
+
+    const items = (Array.isArray(result.requests) ? result.requests : [])
+      .slice(0, limit)
+      .map(driverReportSummaryItem);
+    const answerText = driverReportsSummaryAnswer(items);
+
+    return {
+      ok: true,
+      status: "ready",
+      items,
+      count: items.length,
+      limit,
+      permissions: result.permissions || {},
+      message: answerText,
+      answerText,
+      apiStatus: result.apiStatus || "ready"
+    };
+  }
+
   function driverVehiclePickerLabel(vehicle = {}) {
     return cleanString(
       vehicle.displayName ||
@@ -827,7 +926,7 @@ export function createElevenLabsClientTools({
   function driverVehiclePickerMeta(vehicle = {}) {
     return [
       cleanString(vehicle.licensePlate),
-      cleanString(vehicle.vin) ? "VIN uložené" : "",
+      vehicle.vinPresent === true || cleanString(vehicle.vinMasked || vehicle.vin) ? "VIN uložené" : "",
       cleanString(vehicle.assignmentHint)
     ].filter(Boolean).join(" · ");
   }
@@ -1358,7 +1457,9 @@ export function createElevenLabsClientTools({
         vehicleSelectionSource,
         ...extraParameters,
         confirmed,
-        writeConfirmed: confirmed
+        writeConfirmed: confirmed,
+        confirmationSource: confirmed ? cleanString(extraParameters.confirmationSource || "kso-ui") : "",
+        confirmationId: confirmed ? cleanString(extraParameters.confirmationId) : ""
       },
       context: {
         requestedIntent: "driver_part_request",
@@ -1372,10 +1473,13 @@ export function createElevenLabsClientTools({
         vehicleBrand,
         vehicleSelectionSource,
         ...extraParameters,
-        confirmed
+        confirmed,
+        confirmationSource: confirmed ? cleanString(extraParameters.confirmationSource || "kso-ui") : "",
+        confirmationId: confirmed ? cleanString(extraParameters.confirmationId) : ""
       },
       metadata: {
-        source: "elevenlabs_client_tool"
+        source: "elevenlabs_client_tool",
+        confirmationSource: confirmed ? cleanString(extraParameters.confirmationSource || "kso-ui") : ""
       }
     });
 
@@ -1447,7 +1551,7 @@ export function createElevenLabsClientTools({
       preparedParameters.vehicleId ? "Vozidlo: vybrané v aplikaci" : "",
       preparedParameters.licensePlate ? `SPZ: ${preparedParameters.licensePlate}` : "",
       preparedParameters.vehicleName ? `Vozidlo: ${preparedParameters.vehicleName}` : "",
-      preparedParameters.vin ? `VIN: ${preparedParameters.vin}` : (vin ? `VIN: ${vin}` : ""),
+      preparedParameters.vin || vin ? "VIN: uložené v systému" : "",
       "Bez potvrzení se nic neuloží ani neodešle."
     ].filter(Boolean).join("\n");
     const popupConfirmed = await confirm({
@@ -1474,11 +1578,16 @@ export function createElevenLabsClientTools({
     }
 
     const confirmed = Boolean(popupConfirmed);
+    const confirmationId = cleanString(preparedAction?.confirmationId || preparedParameters.confirmationId);
 
     let result;
 
     try {
-      result = await postJson("/api/voice/sarlota", basePayload(confirmed, preparedParameters));
+      result = await postJson("/api/voice/sarlota", basePayload(confirmed, {
+        ...preparedParameters,
+        confirmationSource: "kso-ui",
+        confirmationId
+      }));
     } catch (error) {
       const message = cleanString(error?.payload?.error || error?.message) || "Hlášení se nepodařilo zapsat.";
       return {
@@ -1702,6 +1811,10 @@ export function createElevenLabsClientTools({
 
     async validate_driver_vehicle_spz(parameters = {}) {
       return validateDriverVehicleSpz(parameters);
+    },
+
+    async get_driver_reports_summary(parameters = {}) {
+      return getDriverReportsSummary(parameters);
     },
 
     async search_user(parameters = {}) {

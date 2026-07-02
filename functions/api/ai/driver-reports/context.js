@@ -78,8 +78,22 @@ function vehicleTypeLabel(vehicle = {}) {
   return cleanString(vehicle.vehicleType || vehicle.bodyType || vehicle.vistosVehicleCategory || vehicle.type);
 }
 
+function maskedVin(value = "") {
+  const vin = cleanString(value).replace(/\s+/g, "").toUpperCase();
+  if (!vin) {
+    return "";
+  }
+
+  if (vin.length <= 8) {
+    return `${vin.slice(0, 2)}***${vin.slice(-2)}`;
+  }
+
+  return `${vin.slice(0, 3)}**********${vin.slice(-4)}`;
+}
+
 function vehicleContextItem(vehicle = {}, displayName = "") {
   const spz = cleanString(vehicle.licensePlate || vehicle.tcarsLicensePlate);
+  const vin = cleanString(vehicle.vin);
   const sourcePayload = {
     provider: vehicle.provider,
     source: vehicle.source || vehicle.telemetrySource || vehicle.dataSource,
@@ -97,7 +111,8 @@ function vehicleContextItem(vehicle = {}, displayName = "") {
     model: cleanString(vehicle.model || vehicle.internalNumber),
     internalName: cleanString(vehicle.internalNumber || vehicle.vehicleName || vehicle.name),
     licensePlate: spz,
-    vin: cleanString(vehicle.vin),
+    vinPresent: Boolean(vin),
+    vinMasked: maskedVin(vin),
     assignmentHint: "přiřazené vozidlo",
     source: safeSource,
     assignedToCurrentDriver: true,
@@ -130,16 +145,13 @@ function isSafeVoiceVehicle(vehicle = {}) {
 }
 
 function vehicleListMessage(vehicles = []) {
-  if (vehicles.length > 3) {
+  if (vehicles.length !== 1) {
     return "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci.";
   }
 
-  const options = vehicles
-    .map((vehicle) => `${vehicle.displayName}, SPZ ${vehicle.spz}`)
-    .join(", ");
-
-  return options
-    ? `Máš pod sebou ${options}. Kterého vozidla se závada týká?`
+  const vehicle = vehicles[0];
+  return vehicle?.displayName && vehicle?.spz
+    ? `Mám bezpečně ověřené tvoje vozidlo ${vehicle.displayName}, SPZ ${vehicle.spz}. Týká se závada tohohle vozidla?`
     : NO_VERIFIED_VEHICLE_QUESTION;
 }
 
