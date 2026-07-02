@@ -13958,6 +13958,12 @@ function collectionRoutesSourceVistosStatus(row) {
   return row?.vistosMatchStatus || row?.mappingStatus || "-";
 }
 
+function collectionRoutesSourceNormalizedVistosStatus(row) {
+  return String(collectionRoutesSourceVistosStatus(row) || "")
+    .trim()
+    .toLowerCase();
+}
+
 function collectionRoutesSourceVistosIssue(row) {
   return row?.vistosIssue || row?.mappingIssue || "-";
 }
@@ -14093,8 +14099,114 @@ function collectionRoutesSourceReviewDecision(row) {
 
 function collectionRoutesSourceReviewRows() {
   return collectionRoutesPilotState.sourceRows.filter((row) =>
-    String(collectionRoutesSourceVistosStatus(row) || "").toLowerCase() === "nejasné"
+    collectionRoutesSourceNormalizedVistosStatus(row) === "nejasné"
   );
+}
+
+const COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES = [
+  "chybí adresa",
+  "chybí nádoba",
+  "chybí frekvence",
+  "nenamapováno"
+];
+
+function collectionRoutesSourceRepairRows(statuses = COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES) {
+  const allowed = new Set(statuses.map((status) => String(status || "").toLowerCase()));
+  return collectionRoutesPilotState.sourceRows.filter((row) =>
+    allowed.has(collectionRoutesSourceNormalizedVistosStatus(row))
+  );
+}
+
+function collectionRoutesSourceRepairStats(rows = collectionRoutesSourceRepairRows()) {
+  return rows.reduce((stats, row) => {
+    const status = collectionRoutesSourceNormalizedVistosStatus(row) || "neznámé";
+    stats[status] = (stats[status] || 0) + 1;
+    return stats;
+  }, {});
+}
+
+function collectionRoutesSourceRepairProblem(row) {
+  const status = collectionRoutesSourceNormalizedVistosStatus(row);
+  if (status === "chybí adresa") {
+    return "Řádek nemá použitelnou adresu pro Vistos match.";
+  }
+  if (status === "chybí nádoba") {
+    return "Řádek nemá jednoznačný objem nebo počet nádob.";
+  }
+  if (status === "chybí frekvence") {
+    return "Řádek nemá jednoznačnou četnost svozu.";
+  }
+  if (status === "nenamapováno") {
+    return collectionRoutesSourceVistosIssue(row) || "Vistos nenašel spolehlivou shodu v kandidátech.";
+  }
+  return collectionRoutesSourceVistosIssue(row) || "Řádek vyžaduje kontrolu.";
+}
+
+function collectionRoutesSourceRepairDecision(row) {
+  const status = collectionRoutesSourceNormalizedVistosStatus(row);
+  if (status === "chybí adresa") {
+    return "Doplnit nebo sjednotit adresu ve zdrojovém Excelu, potom znovu import + Vistos match.";
+  }
+  if (status === "chybí nádoba") {
+    return "Doplnit objem a počet nádob ve zdrojovém Excelu, potom znovu import + Vistos match.";
+  }
+  if (status === "chybí frekvence") {
+    return "Doplnit četnost svozu ve zdrojovém Excelu, potom znovu import + Vistos match.";
+  }
+  if (status === "nenamapováno") {
+    return "Zkontrolovat zákazníka, adresu, odpad, nádobu a frekvenci proti Vistosu; případně opravit Excel.";
+  }
+  return "Ručně zkontrolovat zdrojový řádek a ponechat původní trasu beze změny.";
+}
+
+function collectionRoutesSourceRepairPanel() {
+  const repairRows = collectionRoutesSourceRepairRows();
+  const cappedRows = repairRows.slice(0, 250);
+  const stats = collectionRoutesSourceRepairStats(repairRows);
+  const actionsHtml = `
+    <button class="secondary-link" type="button" data-collection-routes-source-focus-po-a-repair>
+      PO / Auto A: k opravě
+    </button>
+    ${COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES.map((status) => `
+      <button class="secondary-link" type="button" data-collection-routes-source-focus-repair-status="${escapeHtml(status)}">
+        ${escapeHtml(collectionRoutesSourceStatusLabel(status))}
+      </button>
+    `).join("")}
+    <button class="secondary-link" type="button" data-collection-routes-source-export-repair ${repairRows.length ? "" : "disabled"}>
+      Problémové do CSV
+    </button>
+  `;
+  const statText = COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES
+    .map((status) => `${collectionRoutesSourceStatusLabel(status)}: ${collectionRoutesMetricValue(stats[status] || 0)}`)
+    .join(" · ");
+  const extraNotice = repairRows.length > cappedRows.length
+    ? `<p class="module-feedback__notice">Zobrazeno prvních ${escapeHtml(cappedRows.length)} řádků k opravě v aktuálním filtru. Export vezme celý aktuálně načtený filtr.</p>`
+    : "";
+
+  return `
+    <div class="collection-routes-phase-note collection-routes-source-review-note" id="collection-routes-source-repair-panel">
+      <strong>Řádky k opravě ve zdrojových 13 Excelech.</strong>
+      <span>Read-only kontrolní panel nad aktuálním filtrem. Opravy patří do zdrojových Excelů; Smart tady nic nepřepisuje, nemaže a nevytváří ostré trasy.</span>
+      <span>${escapeHtml(statText)}</span>
+    </div>
+    ${collectionRoutesPreviewTable(`Řádky k opravě v aktuálním filtru: ${collectionRoutesMetricValue(repairRows.length)}`, [
+      { label: "Pořadí", value: (row) => row.routeOrder },
+      { label: "Stav", value: (row) => collectionRoutesSourceVistosStatus(row) },
+      { label: "Zákazník", value: (row) => row.customerName },
+      { label: "Stanoviště / adresa", value: (row) => row.addressText },
+      { label: "Odpad / nádoba / frekvence", value: (row) => [
+        row.wasteType || "ostatní / neznámé",
+        row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "bez nádoby",
+        row.frequency || "bez frekvence"
+      ].join(" · ") },
+      { label: "Vistos kandidát", value: (row) => collectionRoutesSourceBestCandidateLabel(row) },
+      { label: "Problém", value: (row) => collectionRoutesSourceRepairProblem(row) },
+      { label: "Doporučená oprava", value: (row) => collectionRoutesSourceRepairDecision(row) },
+      { label: "Zdroj", value: (row) => collectionRoutesSourceSourceLabel(row) },
+      { label: "Ostrá trasa", value: () => "NE" }
+    ], cappedRows, "V aktuálním filtru nejsou řádky k opravě podle těchto stavů.", actionsHtml)}
+    ${extraNotice}
+  `;
 }
 
 function collectionRoutesSourceReviewPanel() {
@@ -14282,6 +14394,7 @@ function collectionRoutesSourceRoutesSection(user) {
       ${collectionRoutesSourceImportCards()}
       ${collectionRoutesSourceFilters()}
       ${collectionRoutesSourceSummaryCards()}
+      ${collectionRoutesSourceRepairPanel()}
       ${collectionRoutesSourceReviewPanel()}
 
       <div class="collection-routes-preview-block__actions">
@@ -21023,6 +21136,64 @@ function exportCollectionRoutesSourceReviewCsv() {
   downloadCsv(`svozove-trasy-nejasne-vistos-${date}.csv`, collectionRoutesSourceReviewRowsCsv(rows));
 }
 
+function collectionRoutesSourceRepairRowsCsv(rows = collectionRoutesSourceRepairRows()) {
+  const headers = [
+    "Poradi",
+    "Den",
+    "Tyden",
+    "Auto",
+    "Stav",
+    "Zakaznik",
+    "Stanoviste/adresa",
+    "Odpad",
+    "Nadoba",
+    "Frekvence",
+    "Vistos kandidat",
+    "Problem",
+    "Doporucena oprava",
+    "Zdrojovy Excel",
+    "Zdrojovy list",
+    "Zdrojovy radek",
+    "Ostra trasa"
+  ];
+  const lines = [
+    "sep=;",
+    collectionRoutesExcelCsvLine(headers),
+    ...rows.map((row) => collectionRoutesExcelCsvLine([
+      row.routeOrder,
+      row.dayCode,
+      row.weekMode,
+      collectionRoutesSourceVehicleLabel(row.vehicleCode),
+      collectionRoutesSourceVistosStatus(row),
+      row.customerName,
+      row.addressText,
+      row.wasteType || "ostatní / neznámé",
+      row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "",
+      row.frequency,
+      collectionRoutesSourceBestCandidateLabel(row),
+      collectionRoutesSourceRepairProblem(row),
+      collectionRoutesSourceRepairDecision(row),
+      row.sourceFile,
+      row.sourceSheet,
+      row.sourceRowNumber,
+      "NE"
+    ]))
+  ];
+  return `\uFEFF${lines.join("\n")}`;
+}
+
+function exportCollectionRoutesSourceRepairCsv() {
+  const rows = collectionRoutesSourceRepairRows();
+  if (!rows.length) {
+    collectionRoutesPilotState.sourceImportError = "V aktuálním filtru nejsou žádné řádky k opravě.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    return;
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  downloadCsv(`svozove-trasy-radky-k-oprave-${date}.csv`, collectionRoutesSourceRepairRowsCsv(rows));
+}
+
 async function focusCollectionRoutesSourcePoAReview() {
   collectionRoutesPilotState.sourceFilters = {
     ...(collectionRoutesPilotState.sourceFilters || {}),
@@ -21036,6 +21207,36 @@ async function focusCollectionRoutesSourcePoAReview() {
   collectionRoutesPilotState.sourceImportMessage = "Filtr přepnutý na PO / všechny týdny / Auto A / nejasné Vistos match řádky.";
   await loadCollectionRoutesSourceRoutes({ renderAfter: true });
   document.getElementById("collection-routes-source-review-panel")?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+async function focusCollectionRoutesSourcePoARepair() {
+  collectionRoutesPilotState.sourceFilters = {
+    ...(collectionRoutesPilotState.sourceFilters || {}),
+    day: "PO",
+    week: "all",
+    vehicle: "A",
+    waste: "all",
+    mappingStatus: "all"
+  };
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = "Filtr přepnutý na PO / všechny týdny / Auto A. Panel ukazuje jen řádky k opravě.";
+  await loadCollectionRoutesSourceRoutes({ renderAfter: true });
+  document.getElementById("collection-routes-source-repair-panel")?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+async function focusCollectionRoutesSourceRepairStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES.includes(normalized)) {
+    return;
+  }
+  collectionRoutesPilotState.sourceFilters = {
+    ...(collectionRoutesPilotState.sourceFilters || {}),
+    mappingStatus: normalized
+  };
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = `Filtr přepnutý na stav: ${collectionRoutesSourceStatusLabel(normalized)}.`;
+  await loadCollectionRoutesSourceRoutes({ renderAfter: true });
+  document.getElementById("collection-routes-source-repair-panel")?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 function printCollectionRoutesSourcePdf() {
@@ -28143,9 +28344,27 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const collectionRoutesSourceRepairFocus = event.target.closest("[data-collection-routes-source-focus-po-a-repair]");
+  if (collectionRoutesSourceRepairFocus) {
+    await focusCollectionRoutesSourcePoARepair();
+    return;
+  }
+
+  const collectionRoutesSourceRepairStatusFocus = event.target.closest("[data-collection-routes-source-focus-repair-status]");
+  if (collectionRoutesSourceRepairStatusFocus) {
+    await focusCollectionRoutesSourceRepairStatus(collectionRoutesSourceRepairStatusFocus.dataset.collectionRoutesSourceFocusRepairStatus || "");
+    return;
+  }
+
   const collectionRoutesSourceReviewExport = event.target.closest("[data-collection-routes-source-export-review]");
   if (collectionRoutesSourceReviewExport) {
     exportCollectionRoutesSourceReviewCsv();
+    return;
+  }
+
+  const collectionRoutesSourceRepairExport = event.target.closest("[data-collection-routes-source-export-repair]");
+  if (collectionRoutesSourceRepairExport) {
+    exportCollectionRoutesSourceRepairCsv();
     return;
   }
 

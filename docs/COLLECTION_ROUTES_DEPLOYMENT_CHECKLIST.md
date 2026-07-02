@@ -28,16 +28,19 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 - ROZPRACOVANO - preview uklada stanoviste do pilotnich tabulek.
 - ROZPRACOVANO - chybejici poloha jde do datovych problemu.
+- ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici adresy ve zdrojovych 13 Excelech.
 - NEZACATO - rucni potvrzeni GPS polohy.
 
 ## Nadoby
 
 - ROZPRACOVANO - preview se pokousi odvodit objem a pocet z produktu/polozky.
+- ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici nadoby ve zdrojovych 13 Excelech.
 - BLOKOVANO - presne strukturovane pole nadoby musi byt potvrzene na datech.
 
 ## Cetnosti
 
 - ROZPRACOVANO - preview odvozuje `1x7`, `2x7`, `3x7`, `5x7`, `1x14`, `1x30`.
+- ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici frekvenci ve zdrojovych 13 Excelech.
 - BLOKOVANO - rozpor PAPIR `1x30` vs. "1x tydne" musi potvrdit Radim/Martin.
 
 ## Kontakty
