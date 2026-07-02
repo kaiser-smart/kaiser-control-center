@@ -2122,9 +2122,48 @@ h1 {
   align-items: end;
 }
 
-.collection-routes-route-filter--smart .primary-action {
+.collection-routes-route-filter--smart .primary-action,
+.collection-routes-route-filter--smart .secondary-link {
   flex: 0 0 auto;
   min-height: 44px;
+}
+
+.collection-routes-print-filter {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(117, 189, 37, 0.22);
+  border-radius: 14px;
+  background: #f7fbf2;
+}
+
+.collection-routes-print-filter__head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.collection-routes-print-filter__head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(1.08rem, 1.8vw, 1.4rem);
+  line-height: 1.2;
+}
+
+.collection-routes-print-filter__head span:not(.employee-card-status) {
+  display: block;
+  margin-top: 4px;
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-routes-print-filter__actions {
+  display: flex;
+  flex: 1 1 260px;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .collection-routes-route-filter label {
@@ -14199,7 +14238,8 @@ body:has(.data-box-page) {
   }
 
   .collection-routes-panel__head,
-  .collection-routes-import-form {
+  .collection-routes-import-form,
+  .collection-routes-print-filter__head {
     display: grid;
     grid-template-columns: 1fr;
   }
@@ -14223,6 +14263,8 @@ body:has(.data-box-page) {
   .collection-routes-tabs a,
   .collection-routes-source-switch__link,
   .collection-routes-import-form .primary-action,
+  .collection-routes-print-filter__actions .primary-action,
+  .collection-routes-print-filter__actions .secondary-link,
   .collection-routes-preview-block__actions .primary-action,
   .collection-routes-preview-block__actions .secondary-link {
     width: 100%;

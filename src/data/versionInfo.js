@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.297"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.298"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: čistý tiskový filtr",
+    text: "Hlavní záložka Svozové trasy je uklizená pro uživatele na Termín, Auto, Odpad, Tisk/PDF, provozní souhrn a řidičský náhled. Importy, Vistos match a kontrolní tabulky jsou přesunuté do Správy dat tras."
+  },
   {
     title: "Trasy svozu: čitelnější chytrý filtr",
     text: "Chytrý filtr pro tisk tras je zjednodušený na Termín, Auto a Odpad místo devíti tlačítek. Odpad se už při chytrém filtrování neresetuje na vše a řidičský tisk používá aktuální odpadový filtr."
