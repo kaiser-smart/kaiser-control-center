@@ -268,7 +268,7 @@ async function testVoiceCreateConfirmationGuards() {
 
   const action = prepared.preparedActions[0];
   assert.equal(action.requiresConfirmation, true);
-  assert.equal(action.confirmationSourceRequired.includes("kso-ui"), true);
+  assert.deepEqual(action.confirmationSourceRequired, ["kso-ui"]);
   assert.match(action.confirmationId, /^driver-part-confirm-/);
 
   const forged = await prepareVoiceCreate(env, {
@@ -279,7 +279,20 @@ async function testVoiceCreateConfirmationGuards() {
   assert.equal(forged.status, "needs_confirmation");
   assert.equal(forged.driverPartRequest, null);
   assert.equal(forged.notificationsSent, false);
-  assert.match(forged.reply, /Potvrzení není bezpečně ověřené/);
+  assert.equal(forged.reply, "Potvrď to prosím v aplikaci.");
+
+  const voiceExplicit = await prepareVoiceCreate(env, {
+    parameters: {
+      ...action.parameters,
+      confirmed: true,
+      confirmationSource: "voice-explicit",
+      confirmationId: action.confirmationId
+    }
+  });
+  assert.equal(voiceExplicit.status, "needs_confirmation");
+  assert.equal(voiceExplicit.driverPartRequest, null);
+  assert.equal(voiceExplicit.notificationsSent, false);
+  assert.equal(voiceExplicit.reply, "Potvrď to prosím v aplikaci.");
 
   const confirmed = await prepareVoiceCreate(env, {
     parameters: {

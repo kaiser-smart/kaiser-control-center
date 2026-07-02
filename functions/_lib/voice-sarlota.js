@@ -49,7 +49,7 @@ const ABSENCE_TYPE_LABELS = {
 const ABSENCE_TYPE_OPTIONS_TEXT = "Dovolená, nemoc, OČR, lékař, náhradní volno, neplacené volno, nebo jiná nepřítomnost.";
 const DRIVER_VEHICLE_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
 const DRIVER_VEHICLE_UNVERIFIED_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ nebo vyber vozidlo v aplikaci.";
-const DRIVER_PART_CONFIRMATION_SOURCES = new Set(["kso-ui", "voice-explicit"]);
+const DRIVER_PART_CONFIRMATION_SOURCES = new Set(["kso-ui"]);
 
 const ABSENCE_TYPE_ALIASES = {
   dovolena: "vacation",
@@ -1136,7 +1136,7 @@ function driverPartPreparedAction(draft, user) {
     action: "create_and_handoff",
     requiresConfirmation: true,
     confirmationPhrase: "ano",
-    confirmationSourceRequired: ["kso-ui", "voice-explicit"],
+    confirmationSourceRequired: ["kso-ui"],
     confirmationId: driverPartConfirmationId(user, draft),
     notificationsSent: false,
     parameters: compactObject({
@@ -1340,7 +1340,7 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
     return {
       status: "needs_confirmation",
       verified: true,
-      message: "Potvrzení není bezpečně ověřené. Potvrď to prosím v aplikaci.",
+      message: "Potvrď to prosím v aplikaci.",
       preparedActions: [driverPartPreparedAction(draft, user)],
       code: "driver_part_confirmation_untrusted"
     };
