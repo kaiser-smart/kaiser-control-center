@@ -2,7 +2,7 @@ import { recordAiAction } from "./ai-action-log-store.js";
 import { createAbsenceRequestRecord } from "./absence-requests-store.js";
 import { createDriverPartRequest, handoffDriverPartRequest } from "./driver-part-requests-store.js";
 import { resolveFleetVehiclesForDriver, validateFleetLicensePlate } from "./fleet-vehicles-store.js";
-import { getUsers } from "./auth.js";
+import { getUsers, isProduction } from "./auth.js";
 import {
   driverPartRequestMissingQuestion,
   extractLicensePlate,
@@ -48,6 +48,8 @@ const ABSENCE_TYPE_LABELS = {
 
 const ABSENCE_TYPE_OPTIONS_TEXT = "Dovolená, nemoc, OČR, lékař, náhradní volno, neplacené volno, nebo jiná nepřítomnost.";
 const DRIVER_VEHICLE_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
+const DRIVER_VEHICLE_UNVERIFIED_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
+const DRIVER_PART_CONFIRMATION_SOURCES = new Set(["kso-ui"]);
 
 const ABSENCE_TYPE_ALIASES = {
   dovolena: "vacation",
@@ -228,6 +230,15 @@ function compactObject(value) {
       return entryValue !== undefined && entryValue !== null && entryValue !== "";
     })
   );
+}
+
+function stableHash(value) {
+  const text = cleanString(value);
+  let hash = 5381;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) + hash) ^ text.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function openAiConfig(env) {
@@ -1043,6 +1054,72 @@ function isDriverPartRequest(payload, speechText, context) {
   );
 }
 
+function driverPartConfirmationId(user, draft = {}) {
+  return `driver-part-confirm-${stableHash(JSON.stringify({
+    userId: cleanString(user?.id),
+    vehicleId: cleanString(draft.vehicleId),
+    licensePlate: cleanString(draft.licensePlate),
+    defectDescription: cleanString(draft.defectDescription),
+    probablePart: cleanString(draft.probablePart),
+    manualVehicleReview: draft.manualVehicleReview === true
+  }))}`;
+}
+
+function driverPartConfirmationMeta(payload = {}) {
+  const parameters = driverPartParameters(payload);
+  const context = driverPartContext(payload);
+  const metadata = payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {};
+
+  return {
+    source: cleanString(
+      parameters.confirmationSource ||
+      parameters.confirmation_source ||
+      context.confirmationSource ||
+      context.confirmation_source ||
+      payload.confirmationSource ||
+      payload.confirmation_source ||
+      metadata.confirmationSource ||
+      metadata.confirmation_source
+    ),
+    id: cleanString(
+      parameters.confirmationId ||
+      parameters.confirmation_id ||
+      context.confirmationId ||
+      context.confirmation_id ||
+      payload.confirmationId ||
+      payload.confirmation_id ||
+      metadata.confirmationId ||
+      metadata.confirmation_id
+    )
+  };
+}
+
+function driverPartConfirmationTrusted(payload, user, draft) {
+  const meta = driverPartConfirmationMeta(payload);
+  const expectedId = driverPartConfirmationId(user, draft);
+  return DRIVER_PART_CONFIRMATION_SOURCES.has(meta.source) && meta.id && meta.id === expectedId;
+}
+
+function driverPartMockModeEnabled(env = {}, payload = {}) {
+  if (isProduction(env)) {
+    return false;
+  }
+
+  return cleanString(env.SARLOTA_DRIVER_REPORTS_MOCK_MODE).toLowerCase() === "true" ||
+    boolValue(payload.mockMode || payload.mock_mode || payload.metadata?.mockMode || payload.metadata?.mock_mode);
+}
+
+function mockDriverPartRequest(user, draft = {}) {
+  const id = `mock-driver-part-${stableHash(`${cleanString(user?.id)}:${cleanString(draft.licensePlate)}:${cleanString(draft.defectDescription)}`)}`;
+  return {
+    id,
+    reportId: `MOCK-${stableHash(id).toUpperCase()}`,
+    status: "mock_created",
+    licensePlate: cleanString(draft.licensePlate),
+    probablePart: cleanString(draft.probablePart || "náhradní díl")
+  };
+}
+
 function driverPartSummaryMessage(draft) {
   if (draft.manualVehicleReview) {
     return "Tuhle SPZ nemám u tebe přiřazenou, ale můžu závadu zapsat k ruční kontrole dispečera. Je to tak správně?";
@@ -1053,12 +1130,14 @@ function driverPartSummaryMessage(draft) {
   return `Rozumím. Chceš nahlásit ${part} ${vehicle}. Potvrď prosím, že vozidlo sedí, a pošli fotku poškození. Mám to uložit a předat k objednání dílu?`;
 }
 
-function driverPartPreparedAction(draft) {
+function driverPartPreparedAction(draft, user) {
   return {
     type: "driver_part_request",
     action: "create_and_handoff",
     requiresConfirmation: true,
     confirmationPhrase: "ano",
+    confirmationSourceRequired: ["kso-ui"],
+    confirmationId: driverPartConfirmationId(user, draft),
     notificationsSent: false,
     parameters: compactObject({
       driverName: draft.driverName,
@@ -1189,7 +1268,7 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
     return {
       status: "needs_input",
       verified: true,
-      message: DRIVER_VEHICLE_PICKER_OR_SPZ_MESSAGE,
+      message: DRIVER_VEHICLE_UNVERIFIED_MESSAGE,
       preparedActions: []
     };
   }
@@ -1253,7 +1332,30 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
       status: "needs_confirmation",
       verified: true,
       message: driverPartSummaryMessage(draft),
-      preparedActions: [driverPartPreparedAction(draft)]
+      preparedActions: [driverPartPreparedAction(draft, user)]
+    };
+  }
+
+  if (!driverPartConfirmationTrusted(payload, user, draft)) {
+    return {
+      status: "needs_confirmation",
+      verified: true,
+      message: "Potvrď to prosím v aplikaci.",
+      preparedActions: [driverPartPreparedAction(draft, user)],
+      code: "driver_part_confirmation_untrusted"
+    };
+  }
+
+  if (driverPartMockModeEnabled(env, payload)) {
+    const request = mockDriverPartRequest(user, draft);
+    return {
+      status: "created_mock",
+      verified: true,
+      message: "Mock hotovo. Hlášení by se vytvořilo v KSO, ale nic jsem neuložila ani neodeslala.",
+      preparedActions: [],
+      driverPartRequest: request,
+      notificationsSent: false,
+      mockMode: true
     };
   }
 

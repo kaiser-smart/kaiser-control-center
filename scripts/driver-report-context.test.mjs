@@ -10,6 +10,15 @@ import {
   driverPartRequestSourceHasManualVehicleReview
 } from "../functions/_lib/driver-part-requests-store.js";
 import { createElevenLabsClientTools } from "../src/elevenLabsClientTools.js";
+import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSystemPrompt.js";
+
+const UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
+const VEHICLE_QUESTION_PHRASES = [
+  "Jaký tam jsou vozidla?",
+  "Jaký tam mám?",
+  "Ty tam vidíš co?",
+  "Který vozidla mám přiřazený?"
+];
 
 const radimUser = {
   id: "user-radim",
@@ -248,7 +257,7 @@ async function withFakeDriverPickerDom(callback) {
       ],
       vehiclesCount: 1,
       vehicleLookupMode: "picker_or_manual",
-      messageForAssistant: "Nemám teď bezpečně ověřený seznam tvých vozidel. Otevřu ti výběr v aplikaci.",
+      messageForAssistant: UNVERIFIED_VEHICLE_MESSAGE,
       apiStatus: "ready"
     })
   });
@@ -257,7 +266,7 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.ok, true);
   assert.equal(result.vehiclesVerified, false);
   assert.deepEqual(result.vehicles, []);
-  assert.match(result.answerText, /Otevřu|výběr/);
+  assert.equal(result.answerText, UNVERIFIED_VEHICLE_MESSAGE);
   assert.equal(result.answerText.includes("Nesmí být řečeno"), false);
   assert.equal(result.answerText.includes("5A4 8912"), false);
   assert.equal(result.vehicleOrdinalSelectionAllowed, false);
@@ -280,7 +289,7 @@ async function withFakeDriverPickerDom(callback) {
       ],
       vehiclesCount: 2,
       vehicleLookupMode: "verified_vehicle_list",
-      messageForAssistant: "Máš pod sebou Mercedes Atego, SPZ 1A1 1111, Mercedes Sprinter, SPZ 2A2 2222. Kterého vozidla se závada týká?",
+      messageForAssistant: "Vidím u tebe Mercedes Atego SPZ 1A1 1111 a Mercedes Sprinter SPZ 2A2 2222. Kterého se závada týká?",
       apiStatus: "ready"
     })
   });
@@ -296,6 +305,7 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.answerText.includes("Mercedes Sprinter"), true);
   assert.equal(result.answerText.includes("2A2 2222"), true);
   assert.equal(result.answerText.includes(["Mercedes Sprinter", "SPZ", "5A4 8912"].join(" ")), false);
+  assert.match(result.answerText, /Kterého se závada týká/);
 }
 
 {
@@ -316,7 +326,7 @@ async function withFakeDriverPickerDom(callback) {
         safeVoiceVehicle("vehicle-radim-4", "Mercedes Arocs", "4A4 4444")
       ],
       vehiclesCount: 4,
-      vehicleLookupMode: "verified_picker_recommended",
+      vehicleLookupMode: "verified_vehicle_list",
       apiStatus: "ready"
     })
   });
@@ -324,13 +334,58 @@ async function withFakeDriverPickerDom(callback) {
 
   assert.equal(result.ok, true);
   assert.equal(result.vehiclesVerified, true);
-  assert.equal(result.vehiclesCount, 0);
-  assert.deepEqual(result.vehicles, []);
-  assert.match(result.answerText, /víc vozidel/);
-  assert.match(result.answerText, /výběr v aplikaci/);
-  assert.equal(result.answerText.includes("Mercedes Atego"), false);
-  assert.equal(result.answerText.includes("1A1 1111"), false);
-  assert.equal(result.vehicleOrdinalSelectionAllowed, false);
+  assert.equal(result.vehiclesCount, 4);
+  assert.equal(result.vehicles.length, 4);
+  assert.match(result.answerText, /Mercedes Atego/);
+  assert.match(result.answerText, /1A1 1111/);
+  assert.match(result.answerText, /Mercedes Arocs/);
+  assert.match(result.answerText, /4A4 4444/);
+  assert.match(result.answerText, /Kterého se závada týká/);
+  assert.equal(result.vehicleOrdinalSelectionAllowed, true);
+}
+
+{
+  for (const phrase of VEHICLE_QUESTION_PHRASES) {
+    let requestedPath = "";
+    const tools = createElevenLabsClientTools({
+      requestJson: async (path) => {
+        requestedPath = path;
+        return {
+          ok: true,
+          module: "hlaseni-ridicu",
+          userName: "Radim",
+          userResolved: true,
+          employeeResolved: true,
+          driverResolved: true,
+          vehiclesVerified: true,
+          vehiclePickerAvailable: true,
+          vehicles: [
+            safeVoiceVehicle("vehicle-radim-1", "Avia", "3AB 1234"),
+            safeVoiceVehicle("vehicle-radim-2", "MAN", "4BC 5678")
+          ],
+          vehiclesCount: 2,
+          vehicleLookupMode: "verified_vehicle_list",
+          apiStatus: "ready"
+        };
+      }
+    });
+
+    const result = await tools.get_driver_report_context({
+      sessionId: `vehicle-question-${VEHICLE_QUESTION_PHRASES.indexOf(phrase)}`,
+      transcriptIntent: phrase
+    });
+    const requestedUrl = new URL(requestedPath, "https://kso.test");
+
+    assert.match(requestedPath, /\/api\/ai\/driver-reports\/context/);
+    assert.equal(requestedUrl.searchParams.get("transcriptIntent"), phrase);
+    assert.equal(result.vehiclesVerified, true);
+    assert.equal(result.vehiclesCount, 2);
+    assert.match(result.answerText, /Avia/);
+    assert.match(result.answerText, /SPZ 3AB 1234/);
+    assert.match(result.answerText, /MAN/);
+    assert.match(result.answerText, /SPZ 4BC 5678/);
+    assert.match(result.answerText, /Kterého se závada týká/);
+  }
 }
 
 {
@@ -456,6 +511,16 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.errorCode, "DRIVER_VEHICLE_PICKER_REQUIRED");
   assert.deepEqual(result.vehicles, []);
   assert.equal(result.message.includes("značku, typ nebo SPZ"), true);
+}
+
+{
+  for (const phrase of VEHICLE_QUESTION_PHRASES) {
+    assert.equal(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE.includes(phrase), true);
+  }
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /vždy nejdřív zavolej get_driver_report_context/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /show_driver_vehicle_picker nesmí být první krok/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej VIN/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nevidím bezpečně přiřazené vozidlo\. Nadiktuj mi prosím SPZ\./);
 }
 
 console.log("driver-report-context tests passed");

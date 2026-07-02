@@ -106,6 +106,7 @@ const DRIVER_REPORT_PICKER_MESSAGE = "Otevřu ti výběr v aplikaci.";
 const DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
 const DRIVER_REPORT_PICKER_FAILED_MESSAGE = "Výběr se mi nepodařilo otevřít. Řekni mi prosím značku, typ nebo SPZ vozidla.";
 const DRIVER_REPORT_VEHICLE_SELECTED_MESSAGE = "Vozidlo je vybrané v aplikaci.";
+const DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
 
 export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   {
@@ -146,7 +147,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "show_driver_vehicle_picker",
-    description: "Otevře bezpečný výběr vozidla v aplikaci pro Hlášení řidičů. Vrací úspěch hned po zobrazení pickeru; v hlasové odpovědi nikdy nejmenuje vozidla.",
+    description: "Otevře bezpečný výběr vozidla v aplikaci pro Hlášení řidičů. Nepoužívej jako první krok pro dotaz na vozidla; nejdřív vždy zavolej get_driver_report_context. Picker je fallback nebo UI pomoc po backend kontrole.",
     parameters: [
       { name: "sessionId", type: "string", required: false },
       { name: "conversationId", type: "string", required: false },
@@ -237,7 +238,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "get_driver_report_context",
-    description: "Read-only ověří kontext Hlášení řidičů: přihlášeného řidiče, oprávnění a bezpečně ověřená vozidla. Vozidla vrací jen při vehiclesVerified true; jinak otevři show_driver_vehicle_picker. Nic nezapisuje.",
+    description: "Read-only ověří kontext Hlášení řidičů: přihlášeného řidiče, oprávnění a bezpečně ověřená vozidla. Pro dotaz na vozidla volej vždy jako první. Když vrátí vehiclesVerified true a vehicles, smíš říct typ/název a SPZ bez VIN. Jinak požádej o SPZ. Nic nezapisuje.",
     parameters: [
       { name: "sessionId", type: "string", required: false },
       { name: "conversationId", type: "string", required: false },
@@ -436,19 +437,8 @@ export function createElevenLabsClientTools({
       return verifiedVehicleListAnswer(vehicles);
     }
 
-    if (cleanString(result?.vehicleLookupMode) === "verified_picker_recommended") {
-      return cleanString(result.messageForAssistant || result.message) ||
-        "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci.";
-    }
-
-    if (result?.vehiclePickerAvailable === true || result?.driverResolved === true) {
-      return vehicles.length > 3
-        ? "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci."
-        : DRIVER_REPORT_PICKER_MESSAGE;
-    }
-
     return cleanString(result.messageForAssistant || result.fallbackQuestion || result.message) ||
-      DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE;
+      DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
   }
 
   function isSafeDriverReportVehicle(vehicle = {}) {
@@ -499,18 +489,32 @@ export function createElevenLabsClientTools({
     return vehicles.map(normalizeSafeDriverReportVehicle);
   }
 
-  function verifiedVehicleListAnswer(vehicles = []) {
-    if (vehicles.length > 3) {
-      return "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci.";
+  function joinCzechList(items = []) {
+    const values = items.map(cleanString).filter(Boolean);
+    if (values.length <= 1) {
+      return values[0] || "";
     }
 
-    const options = vehicles
-      .map((vehicle) => `${vehicle.displayName}, SPZ ${vehicle.spz || vehicle.licensePlate}`)
-      .join(", ");
+    return `${values.slice(0, -1).join(", ")} a ${values[values.length - 1]}`;
+  }
 
-    return options
-      ? `Máš pod sebou ${options}. Kterého vozidla se závada týká?`
-      : DRIVER_REPORT_PICKER_MESSAGE;
+  function driverReportVehiclePhrase(vehicle = {}) {
+    const label = cleanString(vehicle.displayName);
+    const plate = cleanString(vehicle.spz || vehicle.licensePlate);
+    return [label, plate ? `SPZ ${plate}` : ""].filter(Boolean).join(" ");
+  }
+
+  function verifiedVehicleListAnswer(vehicles = []) {
+    const options = vehicles.map(driverReportVehiclePhrase).filter(Boolean);
+    if (!options.length) {
+      return DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
+    }
+
+    if (options.length === 1) {
+      return `Mám bezpečně ověřené tvoje vozidlo ${options[0]}. Týká se závada tohohle vozidla?`;
+    }
+
+    return `Vidím u tebe ${joinCzechList(options)}. Kterého se závada týká?`;
   }
 
   function safeDriverReportDiagnostics(diagnostics = null) {
@@ -534,11 +538,11 @@ export function createElevenLabsClientTools({
   function assistantSafeDriverReportContext(result = {}, parameters = {}) {
     const vehicles = safeDriverReportVehicles(result);
     const vehiclesVerified = result.vehiclesVerified === true && vehicles.length > 0;
-    const exposeVehicleListToVoice = vehiclesVerified && vehicles.length <= 3;
+    const exposeVehicleListToVoice = vehiclesVerified;
     const vehiclePickerAvailable = result.vehiclePickerAvailable === true || vehiclesVerified;
     const messageForAssistant = vehiclesVerified
       ? verifiedVehicleListAnswer(vehicles)
-      : cleanString(result.messageForAssistant || result.message || result.fallbackQuestion) || DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE;
+      : cleanString(result.messageForAssistant || result.message || result.fallbackQuestion) || DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
 
     return {
       ok: result.ok === true,
@@ -553,7 +557,7 @@ export function createElevenLabsClientTools({
       vehiclesVerified,
       vehiclePickerAvailable,
       vehicleLookupMode: vehiclesVerified
-        ? (vehicles.length > 3 ? "verified_picker_recommended" : "verified_vehicle_list")
+        ? "verified_vehicle_list"
         : "picker_or_manual",
       errorCode: result.errorCode || "",
       user: result.user || null,
@@ -563,7 +567,7 @@ export function createElevenLabsClientTools({
       } : null,
       vehicles: exposeVehicleListToVoice ? vehicles : [],
       vehiclesCount: exposeVehicleListToVoice ? vehicles.length : 0,
-      vehicleOrdinalSelectionAllowed: exposeVehicleListToVoice,
+      vehicleOrdinalSelectionAllowed: vehicles.length > 1,
       permissions: result.permissions || {},
       fallbackQuestion: messageForAssistant,
       message: messageForAssistant,
