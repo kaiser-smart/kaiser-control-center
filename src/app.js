@@ -223,8 +223,8 @@ const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
 const COLLECTION_ROUTES_TABS = [
   { id: "dashboard", label: "Dashboard", targetId: "collection-routes-dashboard" },
-  { id: "svozove-trasy", label: "Svozové trasy", targetId: "collection-routes-source-routes" },
-  { id: "source-data", label: "Správa dat tras", targetId: "collection-routes-source-data" },
+  { id: "svozove-trasy", label: "Trasy svozu", targetId: "collection-routes-source-routes" },
+  { id: "source-data", label: "Diagnostika tras", targetId: "collection-routes-source-data" },
   { id: "vistos-komunal", label: "Vistos Komunál preview", targetId: "collection-routes-vistos-komunal" },
   { id: "manual-import", label: "Ruční import preview", targetId: "collection-routes-manual-import" },
   { id: "import", label: "Import preview", targetId: "collection-routes-import" },
@@ -889,6 +889,9 @@ const collectionRoutesPilotState = {
     waste: "all",
     mappingStatus: "all"
   },
+  sourceSmartDayKey: "all",
+  sourceSmartCustomDate: "",
+  sourceSmartStatus: "all",
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -13924,6 +13927,24 @@ const COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS = [
   ["ostatní", "ostatní / neznámé"]
 ];
 
+const COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS = [
+  ["all", "vše"],
+  ["problemove", "jen problémové"],
+  ["namapováno", "namapováno"],
+  ["nejasné", "nejasné"],
+  ["nenamapováno", "nenamapováno"],
+  ["chybí adresa", "chybí adresa"],
+  ["chybí nádoba", "chybí nádoba"],
+  ["chybí frekvence", "chybí frekvence"],
+  ["duplicita", "duplicita"]
+];
+
+const COLLECTION_ROUTES_SOURCE_PROBLEM_STATUSES = new Set(
+  COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS
+    .map(([value]) => value)
+    .filter((value) => !["all", "problemove", "namapováno"].includes(value))
+);
+
 function collectionRoutesSourcePragueDateParts(offsetDays = 0, now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Prague",
@@ -13961,29 +13982,94 @@ function collectionRoutesSourceDateLabel(dateParts) {
   return `${dateParts.day}. ${dateParts.month}. ${dateParts.year}`;
 }
 
+function collectionRoutesSourceDatePartsFromIso(value) {
+  const normalized = String(value || "").trim();
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return {
+    year,
+    month,
+    day,
+    weekday: date.getUTCDay()
+  };
+}
+
+function collectionRoutesSourceSmartOptionFromDate(definition, dateParts) {
+  const dayCode = COLLECTION_ROUTES_SOURCE_WORKDAY_CODES[dateParts.weekday] || "";
+  const weekMode = collectionRoutesSourceWeekModeForDate(dateParts);
+  return {
+    ...definition,
+    dateParts,
+    dateLabel: collectionRoutesSourceDateLabel(dateParts),
+    dayCode,
+    dayLabel: dayCode ? collectionRoutesSourceDayLabel(dayCode) : "víkend",
+    weekMode,
+    disabled: !dayCode
+  };
+}
+
 function collectionRoutesSourceSmartDateOptions() {
-  return COLLECTION_ROUTES_SOURCE_SMART_DAY_DEFS.map((definition) => {
-    const dateParts = collectionRoutesSourcePragueDateParts(definition.offsetDays);
-    const dayCode = COLLECTION_ROUTES_SOURCE_WORKDAY_CODES[dateParts.weekday] || "";
-    const weekMode = collectionRoutesSourceWeekModeForDate(dateParts);
-    return {
-      ...definition,
-      dateParts,
-      dateLabel: collectionRoutesSourceDateLabel(dateParts),
-      dayCode,
-      dayLabel: dayCode ? collectionRoutesSourceDayLabel(dayCode) : "víkend",
-      weekMode,
-      disabled: !dayCode
-    };
-  });
+  const relativeOptions = COLLECTION_ROUTES_SOURCE_SMART_DAY_DEFS.map((definition) =>
+    collectionRoutesSourceSmartOptionFromDate(definition, collectionRoutesSourcePragueDateParts(definition.offsetDays))
+  );
+  const customDateParts = collectionRoutesSourceDatePartsFromIso(collectionRoutesPilotState.sourceSmartCustomDate);
+  const customOption = customDateParts
+    ? collectionRoutesSourceSmartOptionFromDate({ key: "custom", label: "vlastní datum" }, customDateParts)
+    : {
+        key: "custom",
+        label: "vlastní datum",
+        dateParts: null,
+        dateLabel: "vyber datum",
+        dayCode: "",
+        dayLabel: "čeká",
+        weekMode: "",
+        disabled: true
+      };
+  return [{
+    key: "all",
+    label: "všechny pracovní dny",
+    dateParts: null,
+    dateLabel: "",
+    dayCode: "all",
+    dayLabel: "všechny dny",
+    weekMode: "all",
+    disabled: false
+  }, ...relativeOptions, customOption];
 }
 
 function collectionRoutesSourceShortWeekLabel(value) {
   return String(value || "").replace(" týden", "") || "-";
 }
 
+function collectionRoutesSourceSmartDateOptionLabel(option) {
+  if (option.key === "all") {
+    return option.label;
+  }
+  if (option.key === "custom" && !option.dateParts) {
+    return "vlastní datum: vyber datum";
+  }
+  return `${option.label}: ${option.dayLabel} ${option.dateLabel} / ${collectionRoutesSourceShortWeekLabel(option.weekMode)}`;
+}
+
 function collectionRoutesSourceSmartSelectedDayKey(options = collectionRoutesSourceSmartDateOptions()) {
   const filters = collectionRoutesPilotState.sourceFilters || {};
+  const stateKey = collectionRoutesPilotState.sourceSmartDayKey;
+  if (stateKey && options.some((option) => option.key === stateKey && !option.disabled)) {
+    return stateKey;
+  }
   const selected = options.find((option) =>
     !option.disabled &&
     filters.day === option.dayCode &&
@@ -13994,12 +14080,64 @@ function collectionRoutesSourceSmartSelectedDayKey(options = collectionRoutesSou
 
 function collectionRoutesSourceSmartSelectedVehicle() {
   const vehicle = collectionRoutesSourceFilterValue("vehicle");
-  return ["A", "B", "C"].includes(vehicle) ? vehicle : "A";
+  return ["all", "A", "B", "C"].includes(vehicle) ? vehicle : "all";
 }
 
 function collectionRoutesSourceSmartSelectedWaste() {
   const waste = collectionRoutesSourceFilterValue("waste");
   return COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.some(([value]) => value === waste) ? waste : "all";
+}
+
+function collectionRoutesSourceSmartSelectedStatus() {
+  const status = collectionRoutesPilotState.sourceSmartStatus || collectionRoutesSourceFilterValue("mappingStatus");
+  return COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.some(([value]) => value === status) ? status : "all";
+}
+
+function collectionRoutesSourceApiMappingStatus(smartStatus) {
+  return smartStatus === "problemove" ? "all" : smartStatus || "all";
+}
+
+function collectionRoutesSourceStatusMatchesSmartFilter(row, smartStatus = collectionRoutesSourceSmartSelectedStatus()) {
+  const normalized = collectionRoutesSourceNormalizedVistosStatus(row);
+  if (!smartStatus || smartStatus === "all") {
+    return true;
+  }
+  if (smartStatus === "problemove") {
+    return COLLECTION_ROUTES_SOURCE_PROBLEM_STATUSES.has(normalized);
+  }
+  return normalized === smartStatus;
+}
+
+function collectionRoutesSourceDisplayRows() {
+  const smartStatus = collectionRoutesSourceSmartSelectedStatus();
+  return collectionRoutesPilotState.sourceRows.filter((row) =>
+    collectionRoutesSourceStatusMatchesSmartFilter(row, smartStatus)
+  );
+}
+
+function collectionRoutesSourceRowsMetrics(rows = []) {
+  return rows.reduce((summary, row) => {
+    const containerCount = Number(row?.containerCount || 0);
+    const estimatedMinutes = Number(row?.estimatedServiceMinutes || 0);
+    const estimatedTons = Number(row?.estimatedWeightTons || 0);
+    const waste = row?.wasteType || row?.wasteCode || "ostatní / neznámé";
+    const status = collectionRoutesSourceNormalizedVistosStatus(row) || "-";
+
+    summary.rowCount += 1;
+    summary.containerCount += Number.isFinite(containerCount) ? containerCount : 0;
+    summary.estimatedMinutes += Number.isFinite(estimatedMinutes) ? estimatedMinutes : 0;
+    summary.estimatedTons += Number.isFinite(estimatedTons) ? estimatedTons : 0;
+    summary.wasteCounts[waste] = (summary.wasteCounts[waste] || 0) + 1;
+    summary.mappingCounts[status] = (summary.mappingCounts[status] || 0) + 1;
+    return summary;
+  }, {
+    rowCount: 0,
+    containerCount: 0,
+    estimatedMinutes: 0,
+    estimatedTons: 0,
+    wasteCounts: {},
+    mappingCounts: {}
+  });
 }
 
 function collectionRoutesSourceWasteLabel(value) {
@@ -14124,10 +14262,11 @@ function collectionRoutesSourceSummaryCards() {
   `;
 }
 
-function collectionRoutesSourceRouteSummaryCards() {
-  const summary = collectionRoutesPilotState.sourceSummary || {};
+function collectionRoutesSourceRouteSummaryCards(rows = collectionRoutesSourceDisplayRows()) {
+  const summary = collectionRoutesSourceRowsMetrics(rows);
   const wasteCounts = summary.wasteCounts || {};
   const filters = collectionRoutesPilotState.sourceFilters || {};
+  const smartStatus = collectionRoutesSourceSmartSelectedStatus();
   const wasteBreakdown = collectionRoutesSourceCountBreakdown(
     wasteCounts,
     ["SKO", "BIO", "PAPIR", "PLAST", "SKLO", "ostatní / neznámé", "ostatní", "-"],
@@ -14137,7 +14276,8 @@ function collectionRoutesSourceRouteSummaryCards() {
     <div class="collection-routes-stats collection-routes-stats--route" aria-label="Souhrn aktuální trasy">
       <article><span>Termín</span><strong>${escapeHtml(collectionRoutesSourceDayLabel(filters.day || "all"))} / ${escapeHtml(collectionRoutesSourceWeekLabel(filters.week || "all"))}</strong></article>
       <article><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}</strong></article>
-      <article><span>Zastávky</span><strong>${collectionRoutesMetricValue(summary.rowCount || collectionRoutesPilotState.sourceRows.length)}</strong></article>
+      <article><span>Stav</span><strong>${escapeHtml(COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.find(([value]) => value === smartStatus)?.[1] || "vše")}</strong></article>
+      <article><span>Zastávky</span><strong>${collectionRoutesMetricValue(summary.rowCount)}</strong></article>
       <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(summary.containerCount)}</strong></article>
       <article><span>Odpad</span><strong>${escapeHtml(wasteBreakdown)}</strong></article>
       <article><span>Odhad času</span><strong>${collectionRoutesMetricValue(summary.estimatedMinutes)} min</strong></article>
@@ -14303,8 +14443,7 @@ function collectionRoutesSourceRepairDecision(row) {
   return "Ručně zkontrolovat zdrojový řádek a ponechat původní trasu beze změny.";
 }
 
-function collectionRoutesSourceDriverPreviewPanel({ showNotice = true, showActions = true } = {}) {
-  const rows = collectionRoutesPilotState.sourceRows;
+function collectionRoutesSourceDriverPreviewPanel({ showNotice = true, showActions = true, rows = collectionRoutesSourceDisplayRows() } = {}) {
   const cappedRows = rows.slice(0, 300);
   const actionsHtml = showActions ? `
     <button class="primary-action" type="button" data-collection-routes-source-print-driver ${rows.length ? "" : "disabled"}>
@@ -14515,21 +14654,24 @@ function collectionRoutesSourceFilters() {
 
 function collectionRoutesSourceSmartFilterPanel() {
   const options = collectionRoutesSourceSmartDateOptions();
-  const today = options[0];
+  const today = options.find((option) => option.key === "today") || options[0];
   const selectedDayKey = collectionRoutesSourceSmartSelectedDayKey(options);
   const selectedVehicle = collectionRoutesSourceSmartSelectedVehicle();
   const selectedWaste = collectionRoutesSourceSmartSelectedWaste();
+  const selectedStatus = collectionRoutesSourceSmartSelectedStatus();
   const selectedOption = options.find((option) => option.key === selectedDayKey) || today;
   const selectedWasteLabel = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.find(([value]) => value === selectedWaste)?.[1] || "vše";
+  const selectedStatusLabel = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.find(([value]) => value === selectedStatus)?.[1] || "vše";
+  const rows = collectionRoutesSourceDisplayRows();
   return `
-    <div class="collection-routes-print-filter" id="collection-routes-source-smart-filter">
+    <div class="collection-routes-print-filter collection-routes-print-filter--driver" id="collection-routes-source-smart-filter">
       <div class="collection-routes-print-filter__head">
         <div>
-          <p class="module-feedback__eyebrow">Chytrý filtr</p>
-          <h3>${escapeHtml(collectionRoutesSourceVehicleLabel(selectedVehicle))} / ${escapeHtml(selectedOption?.label || "dnes")} / ${escapeHtml(selectedWasteLabel)}</h3>
-          <span>Dnes: ${escapeHtml(today.dayLabel)} ${escapeHtml(today.dateLabel)} / ${escapeHtml(today.weekMode)}</span>
+          <p class="module-feedback__eyebrow">Filtr pro tisk</p>
+          <h3>${escapeHtml(collectionRoutesSourceVehicleLabel(selectedVehicle))} · ${escapeHtml(selectedOption?.label || "dnes")} · ${escapeHtml(selectedWasteLabel)} · ${escapeHtml(selectedStatusLabel)}</h3>
+          <span>Dnes: ${escapeHtml(today.dayLabel)} ${escapeHtml(today.dateLabel)} / ${escapeHtml(today.weekMode)}. Pořadí drží zdrojový Excel.</span>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">13 Excelů</span>
+        <span class="employee-card-status employee-card-status--waiting">${collectionRoutesMetricValue(rows.length)} zastávek</span>
       </div>
       <div class="collection-routes-route-filter collection-routes-route-filter--wide collection-routes-route-filter--smart" data-collection-routes-source-smart-panel>
         <label>
@@ -14537,15 +14679,23 @@ function collectionRoutesSourceSmartFilterPanel() {
           <select data-collection-routes-source-smart-filter="day">
             ${options.map((option) => `
               <option value="${escapeHtml(option.key)}" ${option.key === selectedDayKey ? "selected" : ""} ${option.disabled ? "disabled" : ""}>
-                ${escapeHtml(`${option.label}: ${option.dayLabel} ${option.dateLabel} / ${collectionRoutesSourceShortWeekLabel(option.weekMode)}`)}
+                ${escapeHtml(collectionRoutesSourceSmartDateOptionLabel(option))}
               </option>
             `).join("")}
           </select>
         </label>
         <label>
+          <span>Vlastní datum</span>
+          <input
+            type="date"
+            value="${escapeHtml(collectionRoutesPilotState.sourceSmartCustomDate || "")}"
+            data-collection-routes-source-smart-filter="customDate"
+          >
+        </label>
+        <label>
           <span>Auto</span>
           <select data-collection-routes-source-smart-filter="vehicle">
-            ${["A", "B", "C"].map((vehicle) => `
+            ${["all", "A", "B", "C"].map((vehicle) => `
               <option value="${escapeHtml(vehicle)}" ${vehicle === selectedVehicle ? "selected" : ""}>${escapeHtml(collectionRoutesSourceVehicleLabel(vehicle))}</option>
             `).join("")}
           </select>
@@ -14558,11 +14708,19 @@ function collectionRoutesSourceSmartFilterPanel() {
             `).join("")}
           </select>
         </label>
+        <label>
+          <span>Stav</span>
+          <select data-collection-routes-source-smart-filter="status">
+            ${COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.map(([value, label]) => `
+              <option value="${escapeHtml(value)}" ${value === selectedStatus ? "selected" : ""}>${escapeHtml(label)}</option>
+            `).join("")}
+          </select>
+        </label>
         <div class="collection-routes-print-filter__actions">
-          <button class="secondary-link" type="button" data-collection-routes-source-print-driver ${collectionRoutesPilotState.sourceRows.length ? "" : "disabled"}>
+          <button class="secondary-link" type="button" data-collection-routes-source-print-driver ${rows.length ? "" : "disabled"}>
             Tisk pro řidiče
           </button>
-          <button class="primary-action" type="button" data-collection-routes-source-print-pdf ${collectionRoutesPilotState.sourceRows.length ? "" : "disabled"}>
+          <button class="primary-action" type="button" data-collection-routes-source-print-pdf ${rows.length ? "" : "disabled"}>
             PDF trasy
           </button>
         </div>
@@ -14581,24 +14739,24 @@ function collectionRoutesSourceRouteTitle() {
 }
 
 function collectionRoutesSourceRoutesSection() {
+  const rows = collectionRoutesSourceDisplayRows();
   return `
     <section class="collection-routes-panel" id="collection-routes-source-routes" aria-labelledby="collection-routes-source-routes-title">
       <div class="collection-routes-panel__head">
         <div>
           <p class="module-feedback__eyebrow">Trasy k tisku</p>
-          <h2 id="collection-routes-source-routes-title">Svozové trasy</h2>
-          <p>Vyber termín, auto a odpad. Náhled drží pořadí z původních 13 Excelů.</p>
+          <h2 id="collection-routes-source-routes-title">Trasy svozu</h2>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">Read-only tisk</span>
+        <span class="employee-card-status employee-card-status--waiting">13 Excelů</span>
       </div>
 
       ${collectionRoutesPilotState.sourceImportError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.sourceImportError)}</p>` : ""}
       ${collectionRoutesPilotState.sourceBatches.length ? "" : `
-        <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Import je ve Správě dat tras.</p>
+        <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Import je v Diagnostice tras.</p>
       `}
       ${collectionRoutesSourceSmartFilterPanel()}
-      ${collectionRoutesSourceRouteSummaryCards()}
-      ${collectionRoutesSourceDriverPreviewPanel({ showNotice: false, showActions: false })}
+      ${collectionRoutesSourceRouteSummaryCards(rows)}
+      ${collectionRoutesSourceDriverPreviewPanel({ showNotice: false, showActions: false, rows })}
     </section>
   `;
 }
@@ -14611,8 +14769,7 @@ function collectionRoutesSourceDataSection(user) {
       <div class="collection-routes-panel__head">
         <div>
           <p class="module-feedback__eyebrow">Interní správa</p>
-          <h2 id="collection-routes-source-data-title">Správa dat tras</h2>
-          <p>Importy, Vistos match, kontrolní tabulky a zdrojové řádky. Tohle je pracovní správa, ne řidičský pohled.</p>
+          <h2 id="collection-routes-source-data-title">Diagnostika tras</h2>
         </div>
         <span class="employee-card-status employee-card-status--waiting">Read-only kontrola</span>
       </div>
@@ -14640,11 +14797,18 @@ function collectionRoutesSourceDataSection(user) {
       ${collectionRoutesPilotState.sourceImportError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.sourceImportError)}</p>` : ""}
       ${collectionRoutesSourceVistosMatchStatus()}
 
-      ${collectionRoutesSourceImportCards()}
-      ${collectionRoutesSourceFilters()}
-      ${collectionRoutesSourceSummaryCards()}
-      ${collectionRoutesSourceRepairPanel()}
-      ${collectionRoutesSourceReviewPanel()}
+      <details class="collection-routes-diagnostics" open>
+        <summary>Importy a kontrolní filtry</summary>
+        ${collectionRoutesSourceImportCards()}
+        ${collectionRoutesSourceFilters()}
+        ${collectionRoutesSourceSummaryCards()}
+      </details>
+
+      <details class="collection-routes-diagnostics">
+        <summary>Řádky k opravě a nejasné Vistos match řádky</summary>
+        ${collectionRoutesSourceRepairPanel()}
+        ${collectionRoutesSourceReviewPanel()}
+      </details>
 
       <div class="collection-routes-preview-block__actions">
         <button class="secondary-link" type="button" data-collection-routes-source-vistos-match ${(collectionRoutesPilotState.sourceBatches.length && canImport && !collectionRoutesPilotState.sourceVistosMatchLoading) ? "" : "disabled"}>
@@ -21255,6 +21419,14 @@ async function updateCollectionRoutesSourceFilter(select) {
     collectionRoutesPilotState.sourceSelectedBatchId = select.value || "";
   } else if (key && collectionRoutesPilotState.sourceFilters) {
     collectionRoutesPilotState.sourceFilters[key] = select.value || "all";
+    if (key === "mappingStatus") {
+      collectionRoutesPilotState.sourceSmartStatus = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.some(([value]) => value === select.value)
+        ? select.value
+        : "all";
+    }
+    if (["day", "week"].includes(key)) {
+      collectionRoutesPilotState.sourceSmartDayKey = "";
+    }
   }
   await loadCollectionRoutesSourceRoutes({ renderAfter: true });
 }
@@ -21490,30 +21662,39 @@ async function focusCollectionRoutesSourceRepairStatus(status) {
   document.getElementById("collection-routes-source-repair-panel")?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
-async function applyCollectionRoutesSourceSmartFilter(dayKey, vehicle, waste = "all") {
+async function applyCollectionRoutesSourceSmartFilter(dayKey, vehicle, waste = "all", smartStatus = "all", customDate = "") {
+  if (dayKey === "custom") {
+    collectionRoutesPilotState.sourceSmartCustomDate = String(customDate || collectionRoutesPilotState.sourceSmartCustomDate || "").trim();
+  }
   const option = collectionRoutesSourceSmartDateOptions().find((item) => item.key === dayKey);
-  if (!option || !["A", "B", "C"].includes(vehicle)) {
+  if (!option || !["all", "A", "B", "C"].includes(vehicle)) {
     return;
   }
   const safeWaste = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.some(([value]) => value === waste) ? waste : "all";
+  const safeStatus = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.some(([value]) => value === smartStatus) ? smartStatus : "all";
   const wasteLabel = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.find(([value]) => value === safeWaste)?.[1] || "vše";
+  const statusLabel = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.find(([value]) => value === safeStatus)?.[1] || "vše";
   if (option.disabled) {
-    collectionRoutesPilotState.sourceImportError = `${option.label} ${option.dateLabel} je víkend. Svozové trasy z 13 Excelů teď obsahují pracovní dny pondělí až pátek.`;
+    collectionRoutesPilotState.sourceImportError = option.key === "custom"
+      ? "Vyber pracovní datum od pondělí do pátku."
+      : `${option.label} ${option.dateLabel} je víkend. Svozové trasy z 13 Excelů teď obsahují pracovní dny pondělí až pátek.`;
     collectionRoutesPilotState.sourceImportMessage = "";
     render();
     return;
   }
+  collectionRoutesPilotState.sourceSmartDayKey = dayKey;
+  collectionRoutesPilotState.sourceSmartStatus = safeStatus;
   collectionRoutesPilotState.sourceFilters = {
     ...(collectionRoutesPilotState.sourceFilters || {}),
     day: option.dayCode,
     week: option.weekMode,
     vehicle,
     waste: safeWaste,
-    mappingStatus: "all"
+    mappingStatus: collectionRoutesSourceApiMappingStatus(safeStatus)
   };
   collectionRoutesPilotState.sourceImportError = "";
   collectionRoutesPilotState.sourceImportMessage =
-    `Chytrý filtr: ${collectionRoutesSourceVehicleLabel(vehicle)} / ${option.label} ${option.dateLabel} / ${option.dayCode} / ${option.weekMode} / odpad ${wasteLabel}. Teď můžeš dát Tisk pro řidiče.`;
+    `Filtr: ${collectionRoutesSourceVehicleLabel(vehicle)} / ${option.label} ${option.dateLabel} / ${option.dayCode} / ${option.weekMode} / odpad ${wasteLabel} / stav ${statusLabel}.`;
   await loadCollectionRoutesSourceRoutes({ renderAfter: true });
   document.getElementById("collection-routes-source-driver-preview")?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
@@ -21526,11 +21707,19 @@ async function updateCollectionRoutesSourceSmartFilter(control) {
     collectionRoutesSourceSmartSelectedVehicle();
   const waste = panel?.querySelector('[data-collection-routes-source-smart-filter="waste"]')?.value ||
     collectionRoutesSourceSmartSelectedWaste();
-  await applyCollectionRoutesSourceSmartFilter(dayKey, vehicle, waste);
+  const status = panel?.querySelector('[data-collection-routes-source-smart-filter="status"]')?.value ||
+    collectionRoutesSourceSmartSelectedStatus();
+  const customDate = panel?.querySelector('[data-collection-routes-source-smart-filter="customDate"]')?.value ||
+    collectionRoutesPilotState.sourceSmartCustomDate ||
+    "";
+  const nextDayKey = control.dataset.collectionRoutesSourceSmartFilter === "customDate" && customDate
+    ? "custom"
+    : dayKey;
+  await applyCollectionRoutesSourceSmartFilter(nextDayKey, vehicle, waste, status, customDate);
 }
 
 function printCollectionRoutesSourcePdf() {
-  const rows = collectionRoutesPilotState.sourceRows;
+  const rows = collectionRoutesSourceDisplayRows();
   if (!rows.length) {
     collectionRoutesPilotState.sourceImportError = "Není co tisknout do PDF. Nahrajte 13 Excelů nebo upravte filtr.";
     collectionRoutesPilotState.sourceImportMessage = "";
@@ -21538,7 +21727,7 @@ function printCollectionRoutesSourcePdf() {
     return;
   }
 
-  const summary = collectionRoutesPilotState.sourceSummary || {};
+  const summary = collectionRoutesSourceRowsMetrics(rows);
   const filters = collectionRoutesPilotState.sourceFilters || {};
   const selectedBatch = collectionRoutesSourceSelectedBatch();
   const mappingCounts = summary.mappingCounts || {};
@@ -21667,7 +21856,7 @@ function printCollectionRoutesSourcePdf() {
 }
 
 function printCollectionRoutesSourceDriverPreview() {
-  const rows = collectionRoutesPilotState.sourceRows;
+  const rows = collectionRoutesSourceDisplayRows();
   if (!rows.length) {
     collectionRoutesPilotState.sourceImportError = "Není co tisknout pro řidiče. Nahrajte 13 Excelů nebo upravte filtr.";
     collectionRoutesPilotState.sourceImportMessage = "";
@@ -21675,7 +21864,7 @@ function printCollectionRoutesSourceDriverPreview() {
     return;
   }
 
-  const summary = collectionRoutesPilotState.sourceSummary || {};
+  const summary = collectionRoutesSourceRowsMetrics(rows);
   const filters = collectionRoutesPilotState.sourceFilters || {};
   const selectedBatch = collectionRoutesSourceSelectedBatch();
   const title = `Řidičský náhled ${collectionRoutesSourceRouteTitle()}`;

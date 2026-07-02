@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.300"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.301"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: hlavní filtr pro tisk",
+    text: "Hlavní záložka Trasy svozu je uklizená na běžný pracovní filtr termín, vlastní datum, auto, odpad, stav, PDF a tisk pro řidiče. Importy, kontroly a Vistos diagnostika jsou mimo hlavní tiskový pohled."
+  },
   {
     title: "Trasy svozu: méně zbylých oprav",
     text: "Parser zdrojových 13 Excelů lépe drží zákazníka/adresu u názvů obsahujících BIO, čistí telefonní poznámky v adrese a bere překlep 1100 tr jako 1100 ltr. Jde o read-only preview bez změny Excelů a bez ostrých tras."
