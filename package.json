@@ -12,6 +12,7 @@
     "test:elevenlabs-assistants": "node scripts/elevenlabs-assistant-config.test.mjs",
     "test:driver-reports": "node scripts/driver-report-context.test.mjs",
     "test:sarlota-driver-reports": "node scripts/sarlota-driver-reports-e2e-mock.test.mjs",
+    "test:sarlota-caller-identity": "node scripts/sarlota-caller-identity-runtime.test.mjs",
     "test:sarlota-voice-smoke": "node scripts/sarlota-voice-smoke.test.mjs",
     "sarlota:chat-harness": "node scripts/sarlota-chat-harness.mjs",
     "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs",
