@@ -253,12 +253,13 @@ function buildPlan(context) {
   const hasLegacyRule = promptHasLegacyRule(promptPath.value);
   const hasLegacyUnsafeExample = promptHasLegacyUnsafeDriverReportExample(promptPath.value);
   const forbiddenPhrases = forbiddenPromptPhrases(promptPath.value);
-  const promptNeedsPatch = !hasCurrentRule || hasLegacyRule || hasLegacyUnsafeExample;
+  const hasForbiddenPhrases = forbiddenPhrases.length > 0;
+  const promptNeedsPatch = !hasCurrentRule || hasLegacyRule || hasLegacyUnsafeExample || hasForbiddenPhrases;
 
   return {
     mode: "dry_run",
     ready: agentNameMatches && firstMessageMatches && promptNeedsPatch,
-    alreadyApplied: hasCurrentRule && !hasLegacyRule && !hasLegacyUnsafeExample,
+    alreadyApplied: hasCurrentRule && !hasLegacyRule && !hasLegacyUnsafeExample && !hasForbiddenPhrases,
     generatedAt: new Date().toISOString(),
     assistant: assistantPublicMetadata(context.assistantConfig),
     agent: {
@@ -275,7 +276,8 @@ function buildPlan(context) {
       forbiddenPhrasesPresent: forbiddenPhrases,
       willAppendDriverReportVehicleRule: promptNeedsPatch,
       willRemoveLegacyDriverReportVehicleRule: hasLegacyRule,
-      willRemoveLegacyUnsafeExample: hasLegacyUnsafeExample
+      willRemoveLegacyUnsafeExample: hasLegacyUnsafeExample,
+      willRemoveForbiddenDriverReportPhrases: hasForbiddenPhrases
     },
     safety: {
       returnsPromptText: false,
@@ -498,6 +500,7 @@ export const __test = {
   PROMPT_RULE_REQUIRED_PHRASE,
   forbiddenPromptPhrases,
   lineHasForbiddenPromptPhrase,
+  buildPlan,
   promptHasCurrentRule,
   promptHasLegacyRule,
   stripDriverReportPromptBlocks

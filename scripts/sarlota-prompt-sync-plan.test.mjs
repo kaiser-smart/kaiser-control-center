@@ -63,4 +63,38 @@ import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSyst
   assert.deepEqual(promptSyncTest.forbiddenPromptPhrases(stripped), []);
 }
 
+{
+  const promptWithCurrentRuleAndStalePhrase = [
+    "Jsi Šarlota.",
+    SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
+    "Starý zbytek: Ford Transit, SPZ 1A2 3456."
+  ].join("\n");
+  const plan = promptSyncTest.buildPlan({
+    ok: true,
+    assistantConfig: {
+      assistantKey: "sarlota",
+      displayName: "Šarlota – Smart odpady",
+      expectedAgentNames: ["Šarlota – Smart odpady"]
+    },
+    agentConfig: {
+      name: "Šarlota – Smart odpady",
+      conversation_config: {
+        agent: {
+          first_message: "{{intro_announcement}}",
+          prompt: {
+            prompt: promptWithCurrentRuleAndStalePhrase
+          }
+        }
+      }
+    }
+  });
+
+  assert.equal(plan.prompt.currentRulePresent, true);
+  assert.deepEqual(plan.prompt.forbiddenPhrasesPresent, ["Ford Transit", "1A2 3456"]);
+  assert.equal(plan.alreadyApplied, false);
+  assert.equal(plan.ready, true);
+  assert.equal(plan.prompt.willAppendDriverReportVehicleRule, true);
+  assert.equal(plan.prompt.willRemoveForbiddenDriverReportPhrases, true);
+}
+
 console.log("sarlota prompt sync plan tests passed");
