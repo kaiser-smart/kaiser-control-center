@@ -1,5 +1,5 @@
 const DEFAULT_APP_BASE_URL = "https://kaiser-control-center.pages.dev";
-const DEFAULT_VOICE_WEBHOOK_TOKEN_ENV_LABEL = "VOICE_ASSISTANT_WEBHOOK_TOKEN";
+const DEFAULT_VOICE_WEBHOOK_TOKEN_ENV_LABEL = "voice_assistant_webhook_token";
 
 function cleanString(value) {
   return String(value ?? "").trim();
@@ -19,7 +19,7 @@ export function elevenLabsWebhookBaseUrl(env = {}) {
 }
 
 export function elevenLabsVoiceWebhookTokenEnvLabel(env = {}) {
-  return cleanString(env.ELEVENLABS_VOICE_WEBHOOK_TOKEN_ENV_LABEL) || DEFAULT_VOICE_WEBHOOK_TOKEN_ENV_LABEL;
+  return cleanString(env.ELEVENLABS_VOICE_WEBHOOK_TOKEN_ENV_LABEL).toLowerCase() || DEFAULT_VOICE_WEBHOOK_TOKEN_ENV_LABEL;
 }
 
 export const ELEVENLABS_WEBHOOK_TOOL_SCHEMAS = [

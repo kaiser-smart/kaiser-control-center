@@ -351,14 +351,14 @@ async function testVoiceWebhookContext() {
 function testElevenLabsWebhookToolSchema() {
   const [tool] = elevenLabsWebhookToolConfigs({
     APP_BASE_URL: "https://kso.example.test/",
-    ELEVENLABS_VOICE_WEBHOOK_TOKEN_ENV_LABEL: "KSO_TEST_VOICE_TOKEN"
+    ELEVENLABS_VOICE_WEBHOOK_TOKEN_ENV_LABEL: "kso_test_voice_token"
   });
 
   assert.equal(tool.type, "webhook");
   assert.equal(tool.name, "get_driver_report_context");
   assert.equal(tool.api_schema.url, "https://kso.example.test/api/voice/driver-report-context");
   assert.equal(tool.api_schema.method, "POST");
-  assert.equal(tool.api_schema.request_headers["x-voice-assistant-token"].env_var_label, "KSO_TEST_VOICE_TOKEN");
+  assert.equal(tool.api_schema.request_headers["x-voice-assistant-token"].env_var_label, "kso_test_voice_token");
   assert.equal(tool.api_schema.request_body_schema.properties.user_id.dynamic_variable, "user_id");
   assert.equal(tool.api_schema.request_body_schema.properties.conversation_id.dynamic_variable, "conversation_id");
   assert.equal(tool.api_schema.request_body_schema.properties.currentModule.constant_value, "hlaseni-ridicu");

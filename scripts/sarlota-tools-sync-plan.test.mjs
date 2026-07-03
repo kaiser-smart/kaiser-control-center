@@ -9,7 +9,7 @@ import {
 
 const env = {
   APP_BASE_URL: "https://kso.example.test",
-  ELEVENLABS_VOICE_WEBHOOK_TOKEN_ENV_LABEL: "KSO_TEST_VOICE_TOKEN"
+  ELEVENLABS_VOICE_WEBHOOK_TOKEN_ENV_LABEL: "kso_test_voice_token"
 };
 
 const assistantConfig = {
@@ -63,8 +63,21 @@ const legacyClientWorkspaceTool = {
   assert.equal(driverContextTools[0].type, "webhook");
   assert.equal(driverContextTools[0].api_schema.url, "https://kso.example.test/api/voice/driver-report-context");
   assert.equal(driverContextTools[0].api_schema.response_filter.mode, "allow");
-  assert.equal(JSON.stringify(driverContextTools[0]).includes("KSO_TEST_VOICE_TOKEN"), true);
+  assert.equal(JSON.stringify(driverContextTools[0]).includes("kso_test_voice_token"), true);
   assert.equal(JSON.stringify(driverContextTools[0]).includes("sk_"), false);
+}
+
+{
+  const tools = expectedTools({
+    APP_BASE_URL: "https://kso.example.test",
+    ELEVENLABS_VOICE_WEBHOOK_TOKEN_ENV_LABEL: "KSO_TEST_VOICE_TOKEN"
+  });
+  const driverContextTool = tools.find((tool) => tool.name === "get_driver_report_context");
+
+  assert.equal(
+    driverContextTool.api_schema.request_headers["x-voice-assistant-token"].env_var_label,
+    "kso_test_voice_token"
+  );
 }
 
 {
@@ -78,7 +91,7 @@ const legacyClientWorkspaceTool = {
   assert.equal(update.action, "update");
   assert.equal(update.id, "tool-driver-context");
   assert.equal(update.tool.type, "webhook");
-  assert.equal(update.tool.api_schema.request_headers["x-voice-assistant-token"].env_var_label, "KSO_TEST_VOICE_TOKEN");
+  assert.equal(update.tool.api_schema.request_headers["x-voice-assistant-token"].env_var_label, "kso_test_voice_token");
 }
 
 {
