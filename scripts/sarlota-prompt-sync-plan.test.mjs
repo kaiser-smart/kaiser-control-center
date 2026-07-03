@@ -112,4 +112,11 @@ import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSyst
   assert.equal(promptSyncTest.promptHasCurrentRule(stripped), false);
 }
 
+{
+  assert.equal(
+    promptSyncTest.upstreamErrorSummary({ code: "ELEVENLABS_REQUEST_TIMEOUT" }),
+    "ElevenLabs API neodpovědělo včas."
+  );
+}
+
 console.log("sarlota prompt sync plan tests passed");

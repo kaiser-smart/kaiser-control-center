@@ -9,6 +9,7 @@ import {
 
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/convai";
+const ELEVENLABS_REQUEST_TIMEOUT_MS = 15000;
 const PROMPT_RULE_MARKER = "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL";
 const LEGACY_PROMPT_RULE_MARKERS = [
   "HLÁŠENÍ ŘIDIČŮ / VOZIDLA / OVĚŘENÁ VOZIDLA ONLY",
@@ -187,15 +188,37 @@ function bodyForPromptPatch(path, nextPrompt) {
 }
 
 async function elevenLabsRequest({ apiKey, path, method = "GET", body = null }) {
-  const response = await fetch(`${ELEVENLABS_API_BASE}${path}`, {
-    method,
-    headers: {
-      "xi-api-key": apiKey,
-      Accept: "application/json",
-      ...(body ? { "Content-Type": "application/json" } : {})
-    },
-    body: body ? JSON.stringify(body) : null
-  });
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeout = controller
+    ? setTimeout(() => controller.abort(), ELEVENLABS_REQUEST_TIMEOUT_MS)
+    : null;
+  let response;
+
+  try {
+    response = await fetch(`${ELEVENLABS_API_BASE}${path}`, {
+      method,
+      headers: {
+        "xi-api-key": apiKey,
+        Accept: "application/json",
+        ...(body ? { "Content-Type": "application/json" } : {})
+      },
+      body: body ? JSON.stringify(body) : null,
+      ...(controller ? { signal: controller.signal } : {})
+    });
+  } catch (error) {
+    if (error?.name === "AbortError" || cleanString(error?.message) === "elevenlabs_request_timeout") {
+      const timeoutError = new Error("elevenlabs_request_timeout");
+      timeoutError.code = "ELEVENLABS_REQUEST_TIMEOUT";
+      timeoutError.status = 504;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -294,6 +317,10 @@ function buildPlan(context) {
 }
 
 function upstreamErrorSummary(error) {
+  if (error?.code === "ELEVENLABS_REQUEST_TIMEOUT") {
+    return "ElevenLabs API neodpovědělo včas.";
+  }
+
   const detail = error?.payload?.detail;
   if (Array.isArray(detail)) {
     return detail
@@ -507,5 +534,6 @@ export const __test = {
   buildPlan,
   promptHasCurrentRule,
   promptHasLegacyRule,
-  stripDriverReportPromptBlocks
+  stripDriverReportPromptBlocks,
+  upstreamErrorSummary
 };
