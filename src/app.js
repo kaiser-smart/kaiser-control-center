@@ -14009,6 +14009,23 @@ function collectionRoutesSourceDatePartsFromIso(value) {
   };
 }
 
+function collectionRoutesSourceSameDateParts(left, right) {
+  return !!left && !!right &&
+    left.year === right.year &&
+    left.month === right.month &&
+    left.day === right.day;
+}
+
+function collectionRoutesSourceNextWorkdayDateParts() {
+  for (let offsetDays = 1; offsetDays <= 10; offsetDays += 1) {
+    const dateParts = collectionRoutesSourcePragueDateParts(offsetDays);
+    if (COLLECTION_ROUTES_SOURCE_WORKDAY_CODES[dateParts.weekday]) {
+      return dateParts;
+    }
+  }
+  return null;
+}
+
 function collectionRoutesSourceSmartOptionFromDate(definition, dateParts) {
   const dayCode = COLLECTION_ROUTES_SOURCE_WORKDAY_CODES[dateParts.weekday] || "";
   const weekMode = collectionRoutesSourceWeekModeForDate(dateParts);
@@ -14027,6 +14044,13 @@ function collectionRoutesSourceSmartDateOptions() {
   const relativeOptions = COLLECTION_ROUTES_SOURCE_SMART_DAY_DEFS.map((definition) =>
     collectionRoutesSourceSmartOptionFromDate(definition, collectionRoutesSourcePragueDateParts(definition.offsetDays))
   );
+  const nextWorkdayParts = collectionRoutesSourceNextWorkdayDateParts();
+  const hasVisibleNextWorkday = nextWorkdayParts && relativeOptions.some((option) =>
+    !option.disabled && collectionRoutesSourceSameDateParts(option.dateParts, nextWorkdayParts)
+  );
+  const nextWorkdayOptions = nextWorkdayParts && !hasVisibleNextWorkday
+    ? [collectionRoutesSourceSmartOptionFromDate({ key: "next-workday", label: "další pracovní den" }, nextWorkdayParts)]
+    : [];
   const customDateParts = collectionRoutesSourceDatePartsFromIso(collectionRoutesPilotState.sourceSmartCustomDate);
   const customOption = customDateParts
     ? collectionRoutesSourceSmartOptionFromDate({ key: "custom", label: "vlastní datum" }, customDateParts)
@@ -14049,7 +14073,7 @@ function collectionRoutesSourceSmartDateOptions() {
     dayLabel: "všechny dny",
     weekMode: "all",
     disabled: false
-  }, ...relativeOptions, customOption];
+  }, ...relativeOptions, ...nextWorkdayOptions, customOption];
 }
 
 function collectionRoutesSourceShortWeekLabel(value) {
