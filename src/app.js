@@ -14302,9 +14302,6 @@ function collectionRoutesSourceSummaryCards() {
 function collectionRoutesSourceRouteSummaryCards(rows = collectionRoutesSourceDisplayRows()) {
   const summary = collectionRoutesSourceRowsMetrics(rows);
   const wasteCounts = summary.wasteCounts || {};
-  const filters = collectionRoutesPilotState.sourceFilters || {};
-  const smartStatus = collectionRoutesSourceSmartSelectedStatus();
-  const selectedWaste = collectionRoutesSourceWasteLabel(filters.waste || "all");
   const wasteBreakdown = collectionRoutesSourceCountBreakdown(
     wasteCounts,
     ["SKO", "BIO", "PAPIR", "PLAST", "SKLO", "ostatní / neznámé", "ostatní", "-"],
@@ -14312,14 +14309,10 @@ function collectionRoutesSourceRouteSummaryCards(rows = collectionRoutesSourceDi
   );
   return `
     <div class="collection-routes-stats collection-routes-stats--route" aria-label="Souhrn aktuální trasy">
-      <article><span>Termín</span><strong>${escapeHtml(collectionRoutesSourceDayLabel(filters.day || "all"))} / ${escapeHtml(collectionRoutesSourceWeekLabel(filters.week || "all"))}</strong></article>
-      <article><span>Auto</span><strong>${escapeHtml(collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}</strong></article>
-      <article><span>Odpadový filtr</span><strong>${escapeHtml(selectedWaste)}</strong></article>
-      <article><span>Stav</span><strong>${escapeHtml(COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.find(([value]) => value === smartStatus)?.[1] || "vše")}</strong></article>
       <article><span>Zastávky</span><strong>${collectionRoutesMetricValue(summary.rowCount)}</strong></article>
       <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(summary.containerCount)}</strong></article>
-      <article><span>Odpady v trase</span><strong>${escapeHtml(wasteBreakdown)}</strong></article>
       <article><span>Odhad času</span><strong>${collectionRoutesMetricValue(summary.estimatedMinutes)} min</strong></article>
+      <article><span>Odpady</span><strong>${escapeHtml(wasteBreakdown)}</strong></article>
     </div>
   `;
 }
@@ -15020,29 +15013,32 @@ function collectionRoutesSourceSmartFilterPanel() {
   const selectedOption = options.find((option) => option.key === selectedDayKey) || today;
   const selectedWasteLabel = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.find(([value]) => value === selectedWaste)?.[1] || "vše";
   const selectedStatusLabel = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.find(([value]) => value === selectedStatus)?.[1] || "vše";
+  const selectedDateLabel = selectedOption ? collectionRoutesSourceSmartDateOptionLabel(selectedOption) : "termín";
   const selectedRouteLabel = [
     collectionRoutesSourceVehicleLabel(selectedVehicle),
-    selectedOption ? `${selectedOption.label}: ${selectedOption.dayLabel} ${selectedOption.dateLabel}` : "termín",
-    selectedWasteLabel,
-    selectedStatus !== "all" ? selectedStatusLabel : null
+    selectedDateLabel,
+    selectedWasteLabel
   ].filter(Boolean).join(" / ");
   const rows = collectionRoutesSourceDisplayRows();
   return `
     <div class="collection-routes-print-filter collection-routes-print-filter--driver" id="collection-routes-source-smart-filter">
       <div class="collection-routes-print-filter__head">
         <div>
-          <p class="module-feedback__eyebrow">Tisk trasy</p>
+          <p class="module-feedback__eyebrow">Filtr trasy</p>
           <h3>${escapeHtml(selectedRouteLabel)}</h3>
-          <span>Vyber termín, auto, odpad a stav. Smart ukáže trasu ze 13 Excelů v původním pořadí.</span>
+          <span>Vyber auto, termín a odpad. Smart ukáže pořadí zastávek z aktuálních 13 Excelů.</span>
         </div>
         <span class="employee-card-status employee-card-status--waiting">${collectionRoutesMetricValue(rows.length)} zastávek</span>
       </div>
-      <div class="collection-routes-print-filter__today">
-        <strong>Dnes</strong>
-        <span>${escapeHtml(today.dayLabel)} ${escapeHtml(today.dateLabel)} / ${escapeHtml(today.weekMode)}</span>
-        <span>Import: ${escapeHtml(collectionRoutesSourceSelectedBatchLabel())}</span>
-      </div>
       <div class="collection-routes-route-filter collection-routes-route-filter--wide collection-routes-route-filter--smart" data-collection-routes-source-smart-panel>
+        <label>
+          <span>Auto</span>
+          <select data-collection-routes-source-smart-filter="vehicle">
+            ${["all", "A", "B", "C"].map((vehicle) => `
+              <option value="${escapeHtml(vehicle)}" ${vehicle === selectedVehicle ? "selected" : ""}>${escapeHtml(collectionRoutesSourceVehicleLabel(vehicle))}</option>
+            `).join("")}
+          </select>
+        </label>
         <label>
           <span>Termín</span>
           <select data-collection-routes-source-smart-filter="day">
@@ -15054,20 +15050,12 @@ function collectionRoutesSourceSmartFilterPanel() {
           </select>
         </label>
         <label>
-          <span>Vlastní datum</span>
+          <span>Datum</span>
           <input
             type="date"
             value="${escapeHtml(collectionRoutesPilotState.sourceSmartCustomDate || "")}"
             data-collection-routes-source-smart-filter="customDate"
           >
-        </label>
-        <label>
-          <span>Auto</span>
-          <select data-collection-routes-source-smart-filter="vehicle">
-            ${["all", "A", "B", "C"].map((vehicle) => `
-              <option value="${escapeHtml(vehicle)}" ${vehicle === selectedVehicle ? "selected" : ""}>${escapeHtml(collectionRoutesSourceVehicleLabel(vehicle))}</option>
-            `).join("")}
-          </select>
         </label>
         <label>
           <span>Odpad</span>
@@ -15078,7 +15066,7 @@ function collectionRoutesSourceSmartFilterPanel() {
           </select>
         </label>
         <label>
-          <span>Stav</span>
+          <span>Kontrola</span>
           <select data-collection-routes-source-smart-filter="status">
             ${COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.map(([value, label]) => `
               <option value="${escapeHtml(value)}" ${value === selectedStatus ? "selected" : ""}>${escapeHtml(label)}</option>
@@ -15093,6 +15081,11 @@ function collectionRoutesSourceSmartFilterPanel() {
             Detailní PDF
           </button>
         </div>
+      </div>
+      <div class="collection-routes-print-filter__context" aria-label="Aktuální nastavení trasy">
+        <span>Dnes: ${escapeHtml(today.dayLabel)} ${escapeHtml(today.dateLabel)} / ${escapeHtml(today.weekMode)}</span>
+        <span>Kontrola: ${escapeHtml(selectedStatusLabel)}</span>
+        <span>Import: ${escapeHtml(collectionRoutesSourceSelectedBatchLabel())}</span>
       </div>
     </div>
   `;
@@ -15113,11 +15106,11 @@ function collectionRoutesSourceRoutesSection() {
     <section class="collection-routes-panel collection-routes-panel--driver-print" id="collection-routes-source-routes" aria-labelledby="collection-routes-source-routes-title">
       <div class="collection-routes-panel__head">
         <div>
-          <p class="module-feedback__eyebrow">Provozní tisk</p>
+          <p class="module-feedback__eyebrow">Svozové trasy</p>
           <h2 id="collection-routes-source-routes-title">Svozové trasy</h2>
-          <p>Jen filtr, souhrn a tiskový náhled pro řidiče. Importy a kontrolní tabulky jsou v Diagnostice tras.</p>
+          <p>Pracovní filtr a tisk trasy pro aktuální import 13 Excelů.</p>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">bez ostré trasy</span>
+        <span class="employee-card-status employee-card-status--waiting">${collectionRoutesMetricValue(rows.length)} zastávek</span>
       </div>
 
       ${collectionRoutesPilotState.sourceImportError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.sourceImportError)}</p>` : ""}
@@ -15125,12 +15118,8 @@ function collectionRoutesSourceRoutesSection() {
         <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Nejdřív je potřeba import v Diagnostice tras.</p>
       `}
       ${collectionRoutesSourceSmartFilterPanel()}
-      ${collectionRoutesSourceDriverModePanel(rows)}
       ${collectionRoutesSourceRouteSummaryCards(rows)}
-      <details class="collection-routes-driver-details">
-        <summary>Detailní tabulka pro kontrolu</summary>
-        ${collectionRoutesSourceDriverPreviewPanel({ showNotice: true, showActions: false, rows })}
-      </details>
+      ${collectionRoutesSourceDriverPreviewPanel({ showNotice: false, showActions: false, rows })}
     </section>
   `;
 }
@@ -15716,6 +15705,7 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
 
   const title = isDashboard ? "Dashboard Trasy svozu" : "Trasy svozu";
   const activeTab = activeCollectionRoutesTabId();
+  const isSourceRoutesTab = activeTab === "svozove-trasy";
   return `
     <main class="app-shell module-page module-theme-scope collection-routes-page" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
@@ -15724,20 +15714,22 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
         <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
       </nav>
 
+      ${isSourceRoutesTab ? "" : `
       <section class="module-detail collection-routes-hero" aria-labelledby="collection-routes-title">
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">SMART ODPADY / TRASY SVOZU</div>
           <h1 id="collection-routes-title">${escapeHtml(title)}</h1>
-          <p>Pracovní tisk svozových tras ze 13 Excelů. Vistos slouží jen jako read-only mapování a kontrola.</p>
+          <p>Správa importů, kontrol a read-only mapování pro svozové trasy.</p>
           <div class="module-detail__status">
             <span>Stav</span>
             <strong>Read-only pilot</strong>
           </div>
         </div>
       </section>
+      `}
 
-      ${activeTab === "svozove-trasy" ? "" : `
+      ${isSourceRoutesTab ? "" : `
         <div class="collection-routes-warning" role="status">
           <strong>${COLLECTION_ROUTES_PHASE_NOTICE}</strong>
           <span>Žádná provozní data nejsou uložená v prohlížeči a žádná vymyšlená data nejsou zobrazena jako realita.</span>

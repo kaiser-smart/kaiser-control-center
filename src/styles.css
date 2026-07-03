@@ -1979,6 +1979,20 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.collection-routes-stats--route {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.collection-routes-stats--route article {
+  min-height: 82px;
+  border-color: rgba(66, 80, 74, 0.1);
+  background: #ffffff;
+}
+
+.collection-routes-stats--route strong {
+  font-size: clamp(1rem, 1.5vw, 1.18rem);
+}
+
 .collection-routes-import-form {
   display: flex;
   flex-wrap: wrap;
@@ -2192,6 +2206,25 @@ h1 {
 
 .collection-routes-print-filter__today strong {
   color: var(--ink);
+}
+
+.collection-routes-print-filter__context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.collection-routes-print-filter__context span {
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(66, 80, 74, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  overflow-wrap: anywhere;
 }
 
 .collection-routes-print-filter__actions {
