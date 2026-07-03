@@ -892,6 +892,8 @@ const collectionRoutesPilotState = {
   sourceSmartDayKey: "all",
   sourceSmartCustomDate: "",
   sourceSmartStatus: "all",
+  sourceDriverSelectedRowKey: "",
+  sourceDriverListExpanded: false,
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -14456,6 +14458,170 @@ function collectionRoutesSourceRepairDecision(row) {
   return "Ručně zkontrolovat zdrojový řádek a ponechat původní trasu beze změny.";
 }
 
+function collectionRoutesSourceDriverRowKey(row, index = 0) {
+  return [
+    row?.sourceFile || "",
+    row?.sourceSheet || "",
+    row?.sourceRowNumber || "",
+    row?.routeOrder || "",
+    index
+  ].map((value) => String(value || "").trim()).join("::");
+}
+
+function collectionRoutesSourceDriverSelectedIndex(rows = collectionRoutesSourceDisplayRows()) {
+  if (!rows.length) {
+    return -1;
+  }
+  const selectedKey = collectionRoutesPilotState.sourceDriverSelectedRowKey;
+  const selectedIndex = selectedKey
+    ? rows.findIndex((row, index) => collectionRoutesSourceDriverRowKey(row, index) === selectedKey)
+    : -1;
+  return selectedIndex >= 0 ? selectedIndex : 0;
+}
+
+function collectionRoutesSourceDriverVisibleRows(rows, selectedIndex) {
+  const limit = collectionRoutesPilotState.sourceDriverListExpanded ? rows.length : 80;
+  const visible = rows.slice(0, limit).map((row, index) => ({ row, index }));
+  if (selectedIndex >= limit) {
+    visible.push({ row: rows[selectedIndex], index: selectedIndex, pinned: true });
+  }
+  return visible;
+}
+
+function collectionRoutesSourceDriverStopTitle(row) {
+  return row?.customerName || row?.addressText || `Zastávka ${row?.routeOrder || "-"}`;
+}
+
+function collectionRoutesSourceDriverStopSubtitle(row) {
+  return [
+    row?.addressText,
+    collectionRoutesSourceDriverWasteLabel(row),
+    collectionRoutesSourceDriverContainerLabel(row)
+  ].filter((value) => value && value !== "-").join(" · ") || "-";
+}
+
+function collectionRoutesSourceDriverModeMeta(label, value) {
+  return `
+    <article>
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "-")}</strong>
+    </article>
+  `;
+}
+
+function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisplayRows()) {
+  if (!rows.length) {
+    return `
+      <div class="collection-routes-driver-mode collection-routes-driver-mode--empty" id="collection-routes-source-driver-mode">
+        <div class="collection-routes-driver-mode__head">
+          <div>
+            <p class="module-feedback__eyebrow">Řidičský režim</p>
+            <h3>Čeká na trasu</h3>
+            <span>Vyber termín, auto a odpad. Režim je pouze read-only a nic nepotvrzuje.</span>
+          </div>
+          <span class="employee-card-status employee-card-status--waiting">bez ostré trasy</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const selectedIndex = collectionRoutesSourceDriverSelectedIndex(rows);
+  const selectedRow = rows[selectedIndex] || rows[0];
+  const visibleRows = collectionRoutesSourceDriverVisibleRows(rows, selectedIndex);
+  const progressValue = Math.max(1, selectedIndex + 1);
+  const progressPercent = Math.round((progressValue / rows.length) * 100);
+  const issue = collectionRoutesSourceDriverProblemLabel(selectedRow);
+  const note = selectedRow?.note || "";
+  const hasHiddenRows = rows.length > visibleRows.length || (!collectionRoutesPilotState.sourceDriverListExpanded && rows.length > 80);
+
+  return `
+    <div class="collection-routes-driver-mode" id="collection-routes-source-driver-mode">
+      <div class="collection-routes-driver-mode__head">
+        <div>
+          <p class="module-feedback__eyebrow">Řidičský režim</p>
+          <h3>${escapeHtml(collectionRoutesSourceRouteTitle())}</h3>
+          <span>Read-only náhled pro jízdu. Bez navigace, GPS, T-Cars, potvrzování svozu a ostré trasy.</span>
+        </div>
+        <span class="employee-card-status employee-card-status--waiting">${escapeHtml(progressValue)} / ${escapeHtml(rows.length)}</span>
+      </div>
+
+      <div class="collection-routes-driver-mode__active" aria-label="Aktuální zastávka">
+        <div class="collection-routes-driver-mode__stop">
+          <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || progressValue)}</span>
+          <div>
+            <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
+            <p>${escapeHtml(selectedRow.addressText || "-")}</p>
+          </div>
+        </div>
+        <div class="collection-routes-driver-mode__facts">
+          ${collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow))}
+          ${collectionRoutesSourceDriverModeMeta("Nádoba", collectionRoutesSourceDriverContainerLabel(selectedRow))}
+          ${collectionRoutesSourceDriverModeMeta("Frekvence", selectedRow.frequency || "-")}
+          ${collectionRoutesSourceDriverModeMeta("Stav", collectionRoutesSourceVistosStatus(selectedRow))}
+          ${collectionRoutesSourceDriverModeMeta("Zdroj", `${selectedRow.sourceFile || "-"} / ř. ${selectedRow.sourceRowNumber || "-"}`)}
+        </div>
+        <div class="collection-routes-driver-mode__note">
+          <strong>Poznámka</strong>
+          <span>${escapeHtml(note || "Bez poznámky.")}</span>
+        </div>
+        <div class="collection-routes-driver-mode__note collection-routes-driver-mode__note--check">
+          <strong>Kontrola</strong>
+          <span>${escapeHtml(issue || "-")}</span>
+        </div>
+      </div>
+
+      <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
+        <span style="width: ${escapeHtml(progressPercent)}%"></span>
+      </div>
+
+      <div class="collection-routes-driver-mode__controls" aria-label="Ovládání read-only řidičského náhledu">
+        <button class="secondary-link" type="button" data-collection-routes-source-driver-prev ${selectedIndex <= 0 ? "disabled" : ""}>
+          Předchozí
+        </button>
+        <button class="primary-action" type="button" data-collection-routes-source-driver-next ${selectedIndex >= rows.length - 1 ? "disabled" : ""}>
+          Další zastávka
+        </button>
+        <button class="secondary-link" type="button" data-collection-routes-source-print-driver>
+          Tisk pro řidiče
+        </button>
+      </div>
+
+      <div class="collection-routes-driver-mode__warning">
+        <strong>Read-only</strong>
+        <span>Tady se nic neodškrtává, neukládá, neposílá a nepotvrzuje. Slouží jen pro přehled trasy z aktuálního filtru.</span>
+      </div>
+
+      <div class="collection-routes-driver-mode__list-head">
+        <strong>Seznam zastávek</strong>
+        <button class="secondary-link" type="button" data-collection-routes-source-driver-toggle-list>
+          ${collectionRoutesPilotState.sourceDriverListExpanded ? "Zkrátit seznam" : "Zobrazit celý seznam"}
+        </button>
+      </div>
+      <div class="collection-routes-driver-mode__list">
+        ${visibleRows.map(({ row, index, pinned }) => {
+          const key = collectionRoutesSourceDriverRowKey(row, index);
+          const active = index === selectedIndex;
+          return `
+            <button
+              class="collection-routes-driver-stop ${active ? "collection-routes-driver-stop--active" : ""}"
+              type="button"
+              data-collection-routes-source-driver-stop="${escapeHtml(key)}"
+              aria-current="${active ? "step" : "false"}"
+            >
+              <span class="collection-routes-driver-stop__order">${escapeHtml(row.routeOrder || index + 1)}</span>
+              <span>
+                <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</strong>
+                <small>${escapeHtml(collectionRoutesSourceDriverStopSubtitle(row))}${pinned ? " · vybraná mimo zkrácený seznam" : ""}</small>
+              </span>
+            </button>
+          `;
+        }).join("")}
+      </div>
+      ${hasHiddenRows ? `<p class="module-feedback__notice">Seznam je zkrácený pro rychlost práce. Tisk a navigace tlačítky Předchozí/Další pracují s celým aktuálním filtrem.</p>` : ""}
+    </div>
+  `;
+}
+
 function collectionRoutesSourceDriverPreviewPanel({ showNotice = true, showActions = true, rows = collectionRoutesSourceDisplayRows() } = {}) {
   const cappedRows = rows.slice(0, 300);
   const actionsHtml = showActions ? `
@@ -14786,6 +14952,7 @@ function collectionRoutesSourceRoutesSection() {
       `}
       ${collectionRoutesSourceSmartFilterPanel()}
       ${collectionRoutesSourceRouteSummaryCards(rows)}
+      ${collectionRoutesSourceDriverModePanel(rows)}
       ${collectionRoutesSourceDriverPreviewPanel({ showNotice: true, showActions: false, rows })}
     </section>
   `;
@@ -21748,6 +21915,51 @@ async function updateCollectionRoutesSourceSmartFilter(control) {
     ? "custom"
     : dayKey;
   await applyCollectionRoutesSourceSmartFilter(nextDayKey, vehicle, waste, status, customDate);
+}
+
+function focusCollectionRoutesSourceDriverMode() {
+  setTimeout(() => {
+    document.getElementById("collection-routes-source-driver-mode")?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, 0);
+}
+
+function selectCollectionRoutesSourceDriverIndex(index) {
+  const rows = collectionRoutesSourceDisplayRows();
+  if (!rows.length) {
+    collectionRoutesPilotState.sourceDriverSelectedRowKey = "";
+    render();
+    return;
+  }
+  const safeIndex = Math.max(0, Math.min(rows.length - 1, Number(index) || 0));
+  collectionRoutesPilotState.sourceDriverSelectedRowKey = collectionRoutesSourceDriverRowKey(rows[safeIndex], safeIndex);
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = `Řidičský režim: zastávka ${safeIndex + 1} z ${rows.length}.`;
+  render();
+  focusCollectionRoutesSourceDriverMode();
+}
+
+function moveCollectionRoutesSourceDriverSelection(delta) {
+  const rows = collectionRoutesSourceDisplayRows();
+  if (!rows.length) {
+    return;
+  }
+  const selectedIndex = collectionRoutesSourceDriverSelectedIndex(rows);
+  selectCollectionRoutesSourceDriverIndex(selectedIndex + delta);
+}
+
+function selectCollectionRoutesSourceDriverStop(rowKey) {
+  const rows = collectionRoutesSourceDisplayRows();
+  const index = rows.findIndex((row, rowIndex) => collectionRoutesSourceDriverRowKey(row, rowIndex) === rowKey);
+  if (index < 0) {
+    return;
+  }
+  selectCollectionRoutesSourceDriverIndex(index);
+}
+
+function toggleCollectionRoutesSourceDriverList() {
+  collectionRoutesPilotState.sourceDriverListExpanded = !collectionRoutesPilotState.sourceDriverListExpanded;
+  render();
+  focusCollectionRoutesSourceDriverMode();
 }
 
 const COLLECTION_ROUTES_PRINT_FRAME_ID = "collection-routes-print-frame";
@@ -29255,6 +29467,30 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesSourcePrintDriver = event.target.closest("[data-collection-routes-source-print-driver]");
   if (collectionRoutesSourcePrintDriver) {
     printCollectionRoutesSourceDriverPreview();
+    return;
+  }
+
+  const collectionRoutesSourceDriverPrev = event.target.closest("[data-collection-routes-source-driver-prev]");
+  if (collectionRoutesSourceDriverPrev) {
+    moveCollectionRoutesSourceDriverSelection(-1);
+    return;
+  }
+
+  const collectionRoutesSourceDriverNext = event.target.closest("[data-collection-routes-source-driver-next]");
+  if (collectionRoutesSourceDriverNext) {
+    moveCollectionRoutesSourceDriverSelection(1);
+    return;
+  }
+
+  const collectionRoutesSourceDriverStop = event.target.closest("[data-collection-routes-source-driver-stop]");
+  if (collectionRoutesSourceDriverStop) {
+    selectCollectionRoutesSourceDriverStop(collectionRoutesSourceDriverStop.dataset.collectionRoutesSourceDriverStop || "");
+    return;
+  }
+
+  const collectionRoutesSourceDriverToggleList = event.target.closest("[data-collection-routes-source-driver-toggle-list]");
+  if (collectionRoutesSourceDriverToggleList) {
+    toggleCollectionRoutesSourceDriverList();
     return;
   }
 
