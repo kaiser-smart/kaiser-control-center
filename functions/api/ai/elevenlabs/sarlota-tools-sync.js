@@ -4,6 +4,7 @@ import { elevenLabsWebhookToolConfigs } from "../../../../src/elevenLabsWebhookT
 import {
   assistantConfigFromRequest,
   assistantPublicMetadata,
+  elevenLabsAgentNameMatchesExpected,
   resolveElevenLabsAssistantConfig
 } from "../../../../src/elevenLabsAssistants.js";
 
@@ -363,7 +364,7 @@ export function buildSyncPlan(agentConfig, workspaceTools, assistantConfig, env 
   const configuredAgentToolNames = toolNamesFromAgent(agentConfig);
   const configuredAgentToolNameSet = new Set(configuredAgentToolNames);
   const missingAgentTools = expectedNames.filter((name) => !configuredAgentToolNameSet.has(name));
-  const agentNameMatches = (assistantConfig?.expectedAgentNames || []).includes(cleanString(agentConfig?.name));
+  const agentNameMatches = elevenLabsAgentNameMatchesExpected(agentConfig?.name, assistantConfig);
   const firstMessage = firstMessageFromAgent(agentConfig);
   const firstMessageMatches = firstMessage === FIRST_MESSAGE_TEMPLATE;
 

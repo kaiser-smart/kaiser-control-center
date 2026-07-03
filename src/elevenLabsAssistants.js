@@ -8,7 +8,7 @@ export const ELEVENLABS_ASSISTANT_CONFIGS = {
     envVariableName: "ELEVENLABS_AGENT_ID_SARLOTA",
     frontendEnvVariableName: "VITE_ELEVENLABS_AGENT_ID_SARLOTA",
     agentEnvKeys: ["ELEVENLABS_AGENT_ID_SARLOTA", "VITE_ELEVENLABS_AGENT_ID_SARLOTA"],
-    expectedAgentNames: ["Šarlota – Smart odpady", "Chytré odpadky – Šarlota"],
+    expectedAgentNames: ["Šarlota – Smart odpady", "Kaiser | Šarlota – Smart odpady", "Chytré odpadky – Šarlota"],
     isProduction: true,
     isTest: false,
     promptSyncAllowed: true,

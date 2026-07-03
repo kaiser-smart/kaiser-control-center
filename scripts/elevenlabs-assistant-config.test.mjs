@@ -19,6 +19,8 @@ assert.equal(sarlota.agentId, "agent-prod");
 assert.equal(sarlota.envVariableName, "ELEVENLABS_AGENT_ID_SARLOTA");
 assert.equal(sarlota.isProduction, true);
 assert.equal(sarlota.promptSyncAllowed, true);
+assert.equal(elevenLabsAgentNameMatchesExpected("Kaiser | Šarlota - Smart odpady", sarlota), true);
+assert.equal(elevenLabsAgentNameMatchesExpected("Kaiser | Sarlota – Smart odpady", sarlota), true);
 
 const smart2 = resolveElevenLabsAssistantConfig("sarlota-smart-2", env);
 assert.equal(smart2.assistantKey, "sarlota-smart-2");

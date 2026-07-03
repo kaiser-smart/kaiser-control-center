@@ -13,12 +13,12 @@ const env = {
 
 const assistantConfig = {
   assistantKey: "sarlota",
-  displayName: "Kaiser | Šarlota - Smart odpady",
-  expectedAgentNames: ["Kaiser | Šarlota - Smart odpady"]
+  displayName: "Šarlota – Smart odpady",
+  expectedAgentNames: ["Kaiser | Šarlota – Smart odpady"]
 };
 
 const agentConfig = {
-  name: "Kaiser | Šarlota - Smart odpady",
+  name: "Kaiser | Sarlota - Smart odpady",
   conversation_config: {
     agent: {
       first_message: "{{intro_announcement}}",

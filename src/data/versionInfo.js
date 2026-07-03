@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Šarlota: bezpečnější synchronizace tools",
+    text: "ElevenLabs tools sync používá stejnou normalizovanou kontrolu názvu produkční Šarloty jako read-only status panel. Prompt, model, first message, databáze ani secrets se tím nemění."
+  },
+  {
     title: "Trasy svozu: tabletový řidičský displej",
     text: "Řidičský režim ve Svozových trasách má větší aktuální zastávku, větší dotyková tlačítka a tabletové rozložení pro 11\" 16:10 displej. Zůstává read-only bez navigace, GPS, T-Cars, SMS/e-mailů a ostrých tras."
   },
