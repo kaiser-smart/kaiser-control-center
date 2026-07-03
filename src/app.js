@@ -14535,6 +14535,56 @@ function collectionRoutesSourceDriverModeMeta(label, value) {
   `;
 }
 
+function collectionRoutesSourceDriverVehiclePlate(value) {
+  const plates = {
+    A: "3BN 3558",
+    B: "1BP 8373",
+    C: "3BE 2831"
+  };
+  return plates[value] || (value === "all" ? "všechna vozidla" : "-");
+}
+
+function collectionRoutesSourceDriverTimeLabel(date = new Date()) {
+  return date.toLocaleTimeString("cs-CZ", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function collectionRoutesSourceDriverEtaLabel(minutes) {
+  const safeMinutes = Number(minutes || 0);
+  if (!Number.isFinite(safeMinutes) || safeMinutes <= 0) {
+    return "-";
+  }
+  if (safeMinutes > 720) {
+    return `${collectionRoutesMetricValue(Math.round(safeMinutes))} min`;
+  }
+  return collectionRoutesSourceDriverTimeLabel(new Date(Date.now() + (safeMinutes * 60 * 1000)));
+}
+
+function collectionRoutesSourceDriverMetricCard(label, value, tone = "default") {
+  return `
+    <article class="collection-routes-driver-status-card collection-routes-driver-status-card--${escapeHtml(tone)}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "-")}</strong>
+    </article>
+  `;
+}
+
+function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "default") {
+  return `
+    <button
+      class="collection-routes-driver-action collection-routes-driver-action--${escapeHtml(tone)}"
+      type="button"
+      data-collection-routes-driver-readonly-action="${escapeHtml(action)}"
+      aria-label="${escapeHtml(`${label} - read-only pilot`)}"
+    >
+      ${escapeHtml(label)}
+      <small>pilot</small>
+    </button>
+  `;
+}
+
 function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisplayRows()) {
   if (!rows.length) {
     return `
@@ -14558,39 +14608,70 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const progressPercent = Math.round((progressValue / rows.length) * 100);
   const issue = collectionRoutesSourceDriverProblemLabel(selectedRow);
   const note = selectedRow?.note || "";
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const vehicle = filters.vehicle || selectedRow?.vehicleCode || "all";
+  const dayLabel = collectionRoutesSourceDayLabel(filters.day || selectedRow?.dayCode || "all");
+  const weekLabel = collectionRoutesSourceWeekLabel(filters.week || selectedRow?.weekMode || "all");
+  const driverName = selectedRow?.driverName || selectedRow?.driver || "řidič nepřiřazen";
+  const appConnectivity = (typeof navigator !== "undefined" && navigator.onLine === false) ? "offline" : "online";
+  const completedCount = Math.max(0, progressValue - 1);
+  const remainingCount = Math.max(0, rows.length - progressValue);
+  const remainingMetrics = collectionRoutesSourceRowsMetrics(rows.slice(selectedIndex + 1));
+  const currentServiceLabel = [
+    collectionRoutesSourceDriverWasteLabel(selectedRow),
+    collectionRoutesSourceDriverContainerLabel(selectedRow)
+  ].filter((value) => value && value !== "-").join(" | ") || "-";
   const isExpanded = collectionRoutesPilotState.sourceDriverListExpanded;
   const hasHiddenRows = rows.length > visibleRows.length || (!isExpanded && rows.length > COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT);
   const listLabel = isExpanded
     ? `Všechny zastávky (${collectionRoutesMetricValue(rows.length)})`
-    : `Okolí aktuální zastávky (${collectionRoutesMetricValue(visibleRows.length)})`;
+    : `Další zastávky (${collectionRoutesMetricValue(visibleRows.length)})`;
 
   return `
     <div class="collection-routes-driver-mode ${isExpanded ? "collection-routes-driver-mode--expanded" : ""}" id="collection-routes-source-driver-mode">
-      <div class="collection-routes-driver-mode__head">
-        <div>
-          <p class="module-feedback__eyebrow">Řidičský displej</p>
-          <h3>${escapeHtml(collectionRoutesSourceRouteTitle())}</h3>
-          <span>Velký read-only náhled aktuální trasy ze 13 Excelů.</span>
+      <div class="collection-routes-driver-mode__topbar" aria-label="Stav řidičského režimu">
+        <div class="collection-routes-driver-mode__identity">
+          <span>Řidičský režim</span>
+          <strong>${escapeHtml(dayLabel)} / ${escapeHtml(weekLabel)} | ${escapeHtml(collectionRoutesSourceVehicleLabel(vehicle))} | ${escapeHtml(collectionRoutesSourceDriverVehiclePlate(vehicle))}</strong>
+          <small>${escapeHtml(driverName)} · zdroj 13 Excelů</small>
         </div>
-        <span class="employee-card-status employee-card-status--waiting">${escapeHtml(progressValue)} / ${escapeHtml(rows.length)}</span>
+        <div class="collection-routes-driver-mode__signals" aria-label="Technický stav">
+          <span class="collection-routes-driver-signal collection-routes-driver-signal--online">${escapeHtml(appConnectivity)}</span>
+          <span>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</span>
+          <span>tablet</span>
+          <span>GPS vypnuto</span>
+        </div>
       </div>
+
+      <nav class="collection-routes-driver-mode__tabs" aria-label="Řidičské obrazovky">
+        <button class="collection-routes-driver-tab collection-routes-driver-tab--active" type="button">Dnes</button>
+        ${collectionRoutesSourceDriverReadonlyButton("Mapa", "map", "tab")}
+        ${collectionRoutesSourceDriverReadonlyButton("Seznam", "list", "tab")}
+        ${collectionRoutesSourceDriverReadonlyButton("Hlášení", "report", "tab")}
+      </nav>
+      ${collectionRoutesPilotState.sourceImportMessage ? `
+        <div class="collection-routes-driver-mode__pilot-state" role="status">
+          ${escapeHtml(collectionRoutesPilotState.sourceImportMessage)}
+        </div>
+      ` : ""}
 
       <div class="collection-routes-driver-mode__dashboard">
         <div class="collection-routes-driver-mode__main">
-          <div class="collection-routes-driver-mode__active" aria-label="Aktuální zastávka">
+          <section class="collection-routes-driver-mode__active" aria-label="Další zastávka">
             <div class="collection-routes-driver-mode__stop">
               <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || progressValue)}</span>
               <div>
+                <span class="collection-routes-driver-mode__kicker">Další zastávka</span>
                 <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
                 <p>${escapeHtml(selectedRow.addressText || "-")}</p>
+                <strong>${escapeHtml(currentServiceLabel)}</strong>
               </div>
             </div>
             <div class="collection-routes-driver-mode__facts">
               ${collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow))}
               ${collectionRoutesSourceDriverModeMeta("Nádoba", collectionRoutesSourceDriverContainerLabel(selectedRow))}
               ${collectionRoutesSourceDriverModeMeta("Frekvence", selectedRow.frequency || "-")}
-              ${collectionRoutesSourceDriverModeMeta("Stav", collectionRoutesSourceVistosStatus(selectedRow))}
-              ${collectionRoutesSourceDriverModeMeta("Zdroj", `${selectedRow.sourceFile || "-"} / ř. ${selectedRow.sourceRowNumber || "-"}`)}
+              ${collectionRoutesSourceDriverModeMeta("Kontrola", collectionRoutesSourceVistosStatus(selectedRow))}
             </div>
             <div class="collection-routes-driver-mode__note">
               <strong>Poznámka</strong>
@@ -14600,7 +14681,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
               <strong>Kontrola</strong>
               <span>${escapeHtml(issue || "-")}</span>
             </div>
-          </div>
+          </section>
 
           <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
             <span style="width: ${escapeHtml(progressPercent)}%"></span>
@@ -14610,16 +14691,25 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
             <button class="secondary-link" type="button" data-collection-routes-source-driver-prev ${selectedIndex <= 0 ? "disabled" : ""}>
               Předchozí
             </button>
-            <button class="primary-action" type="button" data-collection-routes-source-driver-next ${selectedIndex >= rows.length - 1 ? "disabled" : ""}>
-              Další zastávka
+            <button class="primary-action collection-routes-driver-action collection-routes-driver-action--next" type="button" data-collection-routes-source-driver-next ${selectedIndex >= rows.length - 1 ? "disabled" : ""}>
+              Další
             </button>
-            <button class="secondary-link" type="button" data-collection-routes-source-print-driver>
-              Tisk pro řidiče
-            </button>
+          </div>
+
+          <div class="collection-routes-driver-mode__primary-actions" aria-label="Hlavní akce řidiče">
+            ${collectionRoutesSourceDriverReadonlyButton("Navigovat", "navigate", "navigate")}
+            ${collectionRoutesSourceDriverReadonlyButton("Hotovo", "done", "done")}
+            ${collectionRoutesSourceDriverReadonlyButton("Problém", "problem", "problem")}
           </div>
         </div>
 
         <aside class="collection-routes-driver-mode__queue" aria-label="Zastávky v trase">
+          <div class="collection-routes-driver-mode__status-grid" aria-label="Stav trasy">
+            ${collectionRoutesSourceDriverMetricCard("Hotovo", `${collectionRoutesMetricValue(completedCount)} / ${collectionRoutesMetricValue(rows.length)}`, "done")}
+            ${collectionRoutesSourceDriverMetricCard("Zbývá", collectionRoutesMetricValue(remainingCount), "plan")}
+            ${collectionRoutesSourceDriverMetricCard("Odhad konec", collectionRoutesSourceDriverEtaLabel(remainingMetrics.estimatedMinutes), "time")}
+            ${collectionRoutesSourceDriverMetricCard("Nádoby dál", collectionRoutesMetricValue(remainingMetrics.containerCount || 0), "capacity")}
+          </div>
           <div class="collection-routes-driver-mode__list-head">
             <strong>${escapeHtml(listLabel)}</strong>
             <button class="secondary-link" type="button" data-collection-routes-source-driver-toggle-list>
@@ -14649,9 +14739,23 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
         </aside>
       </div>
 
+      <div class="collection-routes-driver-mode__problem-grid" aria-label="Rychlé hlášení problému">
+        <strong>Problémový dialog (pilot)</strong>
+        <div>
+          ${["Nádoba není venku", "Přeplněno", "Překážka", "Špatná adresa", "Zákazník odmítl", "Jiné", "Vyfotit", "Odeslat dispečinku"].map((label) => collectionRoutesSourceDriverReadonlyButton(label, `problem:${label}`, "problem-soft")).join("")}
+        </div>
+      </div>
+
+      <div class="collection-routes-driver-mode__bottom-bar" aria-label="Nouzová lišta">
+        ${collectionRoutesSourceDriverReadonlyButton("Musím vysypat", "dump", "dump")}
+        ${collectionRoutesSourceDriverReadonlyButton("Přestávka", "break", "break")}
+        ${collectionRoutesSourceDriverReadonlyButton("Hlášení dispečinku", "dispatch", "dispatch")}
+        ${collectionRoutesSourceDriverReadonlyButton("Šarlota", "sarlota", "sarlota")}
+      </div>
+
       <div class="collection-routes-driver-mode__warning">
         <strong>Read-only</strong>
-        <span>Nepotvrzuje svoz, nespouští GPS, T-Cars, navigaci ani ostrou trasu.</span>
+        <span>Akce jsou zatím pouze UI prototyp. Nepotvrzuje svoz, nespouští GPS, T-Cars, navigaci, SMS/e-maily ani ostrou trasu.</span>
       </div>
       ${hasHiddenRows ? `<p class="module-feedback__notice">Seznam je zkrácený, aby záložka zůstala přehledná. Tisk a tlačítka Předchozí/Další pracují s celým aktuálním filtrem.</p>` : ""}
     </div>
@@ -21997,6 +22101,27 @@ function selectCollectionRoutesSourceDriverStop(rowKey) {
 
 function toggleCollectionRoutesSourceDriverList() {
   collectionRoutesPilotState.sourceDriverListExpanded = !collectionRoutesPilotState.sourceDriverListExpanded;
+  render();
+  focusCollectionRoutesSourceDriverMode();
+}
+
+function handleCollectionRoutesSourceDriverReadonlyAction(action) {
+  const normalized = String(action || "").split(":")[0];
+  const messages = {
+    navigate: "Navigace je zatím read-only prototyp. Nespouští GPS ani externí navigaci.",
+    done: "Hotovo je zatím read-only prototyp. Svoz se nepotvrzuje ani neukládá.",
+    problem: "Problém je zatím read-only prototyp. Nic se neposílá dispečinku.",
+    map: "Mapa je zatím read-only prototyp. GPS ani T-Cars nejsou spuštěné.",
+    list: "Seznam je zatím read-only prototyp. Trasa se nemění.",
+    report: "Hlášení je zatím read-only prototyp. Nic se neodesílá.",
+    dump: "Musím vysypat je zatím read-only prototyp. Nic se neposílá dispečinku.",
+    break: "Přestávka je zatím read-only prototyp. Nic se neukládá.",
+    dispatch: "Hlášení dispečinku je zatím read-only prototyp. Nic se neposílá.",
+    sarlota: "Šarlota v řidičském režimu je zatím read-only prototyp."
+  };
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = messages[normalized] ||
+    "Akce je zatím read-only prototyp. Nic se neukládá ani neposílá.";
   render();
   focusCollectionRoutesSourceDriverMode();
 }
@@ -29506,6 +29631,12 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesSourcePrintDriver = event.target.closest("[data-collection-routes-source-print-driver]");
   if (collectionRoutesSourcePrintDriver) {
     printCollectionRoutesSourceDriverPreview();
+    return;
+  }
+
+  const collectionRoutesDriverReadonlyAction = event.target.closest("[data-collection-routes-driver-readonly-action]");
+  if (collectionRoutesDriverReadonlyAction) {
+    handleCollectionRoutesSourceDriverReadonlyAction(collectionRoutesDriverReadonlyAction.dataset.collectionRoutesDriverReadonlyAction || "");
     return;
   }
 
