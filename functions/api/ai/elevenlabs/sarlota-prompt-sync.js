@@ -141,17 +141,21 @@ function stripLegacyDriverReportExamples(promptText) {
 function stripDriverReportPromptBlocks(promptText) {
   const lines = String(promptText ?? "").split(/\r?\n/);
   const output = [];
-  let skipLegacyRuleLine = false;
+  const removableRuleMarkers = new Set([
+    PROMPT_RULE_MARKER,
+    ...LEGACY_PROMPT_RULE_MARKERS
+  ]);
+  let skipRuleLine = false;
 
   for (const line of lines) {
     const trimmed = cleanString(line);
-    if (LEGACY_PROMPT_RULE_MARKERS.includes(trimmed)) {
-      skipLegacyRuleLine = true;
+    if (removableRuleMarkers.has(trimmed)) {
+      skipRuleLine = true;
       continue;
     }
 
-    if (skipLegacyRuleLine) {
-      skipLegacyRuleLine = false;
+    if (skipRuleLine) {
+      skipRuleLine = false;
       continue;
     }
 

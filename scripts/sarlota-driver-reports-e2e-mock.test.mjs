@@ -360,7 +360,8 @@ function testElevenLabsWebhookToolSchema() {
   assert.equal(tool.api_schema.method, "POST");
   assert.equal(tool.api_schema.request_headers["x-voice-assistant-token"].env_var_label, "kso_test_voice_token");
   assert.equal(tool.api_schema.request_body_schema.properties.user_id.dynamic_variable, "user_id");
-  assert.equal(tool.api_schema.request_body_schema.properties.conversation_id.dynamic_variable, "conversation_id");
+  assert.equal(tool.api_schema.request_body_schema.properties.conversation_id, undefined);
+  assert.equal(JSON.stringify(tool).includes("\"dynamic_variable\":\"conversation_id\""), false);
   assert.equal(tool.api_schema.request_body_schema.properties.currentModule.constant_value, "hlaseni-ridicu");
   assert.deepEqual(tool.api_schema.request_body_schema.required, ["user_id"]);
   assert.equal(tool.api_schema.response_filter.mode, "allow");

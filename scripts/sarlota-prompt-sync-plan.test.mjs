@@ -97,4 +97,19 @@ import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSyst
   assert.equal(plan.prompt.willRemoveForbiddenDriverReportPhrases, true);
 }
 
+{
+  const duplicatedCurrentRulePrompt = [
+    "Jsi Šarlota.",
+    promptSyncTest.PROMPT_RULE_MARKER,
+    SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
+    "Bezpečný zbytek promptu."
+  ].join("\n");
+  const stripped = promptSyncTest.stripDriverReportPromptBlocks(duplicatedCurrentRulePrompt);
+
+  assert.equal(stripped.includes(promptSyncTest.PROMPT_RULE_MARKER), false);
+  assert.equal(stripped.includes(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE), false);
+  assert.equal(stripped.includes("Bezpečný zbytek promptu."), true);
+  assert.equal(promptSyncTest.promptHasCurrentRule(stripped), false);
+}
+
 console.log("sarlota prompt sync plan tests passed");

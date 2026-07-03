@@ -36,12 +36,6 @@ export const ELEVENLABS_WEBHOOK_TOOL_SCHEMAS = [
         dynamicVariable: "user_id"
       },
       {
-        name: "conversation_id",
-        type: "string",
-        required: false,
-        dynamicVariable: "conversation_id"
-      },
-      {
         name: "transcriptIntent",
         type: "string",
         required: false,

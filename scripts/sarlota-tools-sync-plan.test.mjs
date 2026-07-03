@@ -63,6 +63,7 @@ const legacyClientWorkspaceTool = {
   assert.equal(driverContextTools[0].type, "webhook");
   assert.equal(driverContextTools[0].api_schema.url, "https://kso.example.test/api/voice/driver-report-context");
   assert.equal(driverContextTools[0].api_schema.response_filter.mode, "allow");
+  assert.equal(JSON.stringify(driverContextTools[0]).includes("\"dynamic_variable\":\"conversation_id\""), false);
   assert.equal(JSON.stringify(driverContextTools[0]).includes("kso_test_voice_token"), true);
   assert.equal(JSON.stringify(driverContextTools[0]).includes("sk_"), false);
 }
