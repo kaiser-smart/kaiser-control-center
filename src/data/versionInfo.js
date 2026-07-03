@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.316"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.317"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: oprava přepínače Mapa / GPS",
+    text: "Přepínač v hlavní záložce Svozové trasy správně otevře read-only pohled Mapa / GPS a už se nevrací zpět na tiskový přehled."
+  },
   {
     title: "Trasy svozu: Fáze 2A GPS připravenost",
     text: "Hlavní záložka Svozové trasy má třetí read-only zobrazení Mapa / GPS. Ukazuje GPS připravenost aktuálního filtru, mapovatelné adresy, řádky k ověření a chybějící adresy bez geokódování, T-Cars, navigace, SMS/e-mailů, automatizací a ostrých tras."

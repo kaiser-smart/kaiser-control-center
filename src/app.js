@@ -22355,15 +22355,21 @@ function focusCollectionRoutesSourceDriverMode() {
 }
 
 function setCollectionRoutesSourceRouteView(view) {
-  const nextView = view === "driver" ? "driver" : "print";
+  const nextView = ["driver", "map"].includes(view) ? view : "print";
   collectionRoutesPilotState.sourceRouteView = nextView;
   collectionRoutesPilotState.sourceImportError = "";
-  collectionRoutesPilotState.sourceImportMessage = nextView === "driver"
-    ? "Zobrazený Řidičský displej je pouze read-only pilot. Nic nepotvrzuje, nespouští navigaci ani ostrou trasu."
-    : "";
+  collectionRoutesPilotState.sourceImportMessage = {
+    driver: "Zobrazený Řidičský displej je pouze read-only pilot. Nic nepotvrzuje, nespouští navigaci ani ostrou trasu.",
+    map: "Zobrazení Mapa / GPS je pouze read-only připravenost. Negeokóduje, nespouští navigaci ani ostrou trasu."
+  }[nextView] || "";
   render();
   if (nextView === "driver") {
     focusCollectionRoutesSourceDriverMode();
+  }
+  if (nextView === "map") {
+    setTimeout(() => {
+      document.getElementById("collection-routes-source-map-readiness")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 0);
   }
 }
 
