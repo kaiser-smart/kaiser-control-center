@@ -222,17 +222,20 @@ const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
 const COLLECTION_ROUTES_TABS = [
-  { id: "dashboard", label: "Dashboard", targetId: "collection-routes-dashboard" },
-  { id: "svozove-trasy", label: "Trasy svozu", targetId: "collection-routes-source-routes" },
-  { id: "source-data", label: "Diagnostika tras", targetId: "collection-routes-source-data" },
-  { id: "vistos-komunal", label: "Vistos Komunál preview", targetId: "collection-routes-vistos-komunal" },
-  { id: "manual-import", label: "Ruční import preview", targetId: "collection-routes-manual-import" },
-  { id: "import", label: "Import preview", targetId: "collection-routes-import" },
-  { id: "sites", label: "Seznam stanovišť", targetId: "collection-routes-sites" },
-  { id: "location-issues", label: "K doplnění polohy", targetId: "collection-routes-location-issues" },
-  { id: "site-detail", label: "Detail stanoviště", targetId: "collection-routes-site-detail" },
-  { id: "rules", label: "Seznam pravidel a automatizace", targetId: "module-rules-title" }
+  { id: "svozove-trasy", label: "Svozové trasy", targetId: "collection-routes-source-routes" },
+  { id: "sites", label: "Stanoviště", targetId: "collection-routes-sites" },
+  { id: "rules", label: "Pravidla", targetId: "module-rules-title" },
+  { id: "internal", label: "Interní správa", targetId: "collection-routes-internal", adminOnly: true }
 ];
+const COLLECTION_ROUTES_LEGACY_TAB_TARGETS = {
+  "collection-routes-dashboard": "internal",
+  "collection-routes-source-data": "internal",
+  "collection-routes-vistos-komunal": "internal",
+  "collection-routes-manual-import": "internal",
+  "collection-routes-import": "internal",
+  "collection-routes-location-issues": "internal",
+  "collection-routes-site-detail": "sites"
+};
 const DESIGN_NEUMORPHIC_ROUTE = "/design/neumorphic";
 const FLEET_ACTION_WAITING_MESSAGES = {
   addVehicle: "Čeká na API pro přidání vozidla.",
@@ -12189,6 +12192,14 @@ function collectionRoutesCanRunImportPreview(user) {
   return normalizeRole(user?.role) === "admin";
 }
 
+function collectionRoutesCanViewInternalTab(user) {
+  return collectionRoutesCanRunImportPreview(user);
+}
+
+function collectionRoutesVisibleTabs(user) {
+  return COLLECTION_ROUTES_TABS.filter((tab) => !tab.adminOnly || collectionRoutesCanViewInternalTab(user));
+}
+
 function isCollectionRoutesTabId(tabId) {
   return COLLECTION_ROUTES_TABS.some((tab) => tab.id === tabId);
 }
@@ -12196,7 +12207,7 @@ function isCollectionRoutesTabId(tabId) {
 function collectionRoutesTabFromHash(hash = window.location.hash) {
   const cleanHash = String(hash || "").replace(/^#/, "");
   const tab = COLLECTION_ROUTES_TABS.find((item) => item.targetId === cleanHash);
-  return tab?.id || "";
+  return tab?.id || COLLECTION_ROUTES_LEGACY_TAB_TARGETS[cleanHash] || "";
 }
 
 function activeCollectionRoutesTabId() {
@@ -12205,7 +12216,7 @@ function activeCollectionRoutesTabId() {
     collectionRoutesPilotState.activeTab = hashTab;
   }
   if (!isCollectionRoutesTabId(collectionRoutesPilotState.activeTab)) {
-    collectionRoutesPilotState.activeTab = "dashboard";
+    collectionRoutesPilotState.activeTab = "svozove-trasy";
   }
   return collectionRoutesPilotState.activeTab;
 }
@@ -15372,7 +15383,7 @@ function collectionRoutesSourceRoutesSection() {
 
       ${collectionRoutesPilotState.sourceImportError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.sourceImportError)}</p>` : ""}
       ${collectionRoutesPilotState.sourceBatches.length ? "" : `
-        <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Nejdřív je potřeba import v Diagnostice tras.</p>
+        <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Nejdřív je potřeba import v Interní správě.</p>
       `}
       ${collectionRoutesSourceSmartFilterPanel()}
       ${collectionRoutesSourceRouteSummaryCards(rows)}
@@ -15928,36 +15939,80 @@ function collectionRoutesRulesSection(user) {
   });
 }
 
+function collectionRoutesInternalSection(user) {
+  return `
+    <section class="collection-routes-internal" id="collection-routes-internal" aria-labelledby="collection-routes-internal-title">
+      <div class="collection-routes-internal__head">
+        <div>
+          <p class="module-feedback__eyebrow">Admin / interní správa</p>
+          <h2 id="collection-routes-internal-title">Interní správa svozových tras</h2>
+          <p>Importy, diagnostika, Vistos-only pilot a technické kontroly jsou mimo hlavní pracovní záložku.</p>
+        </div>
+        <span class="employee-card-status employee-card-status--waiting">read-only / admin</span>
+      </div>
+      <div class="collection-routes-internal__links" aria-label="Rychlá interní navigace">
+        <a href="#collection-routes-source-data">Zdroj 13 Excelů</a>
+        <a href="#collection-routes-vistos-komunal">Vistos-only pilot</a>
+        <a href="#collection-routes-location-issues">Poloha</a>
+        <a href="#collection-routes-manual-import">Import preview</a>
+      </div>
+      <div class="collection-routes-phase-note">
+        <strong>Interní správa nevytváří ostré trasy.</strong>
+        <span>Slouží pro import, read-only párování a kontrolu dat. Běžná práce řidiče/dispečera zůstává v záložce Svozové trasy.</span>
+      </div>
+    </section>
+
+    <details class="collection-routes-internal-group" open>
+      <summary>
+        <span>Stav modulu</span>
+        <small>read-only souhrn, ostré trasy NE</small>
+      </summary>
+      ${collectionRoutesDashboardSection()}
+    </details>
+
+    <details class="collection-routes-internal-group" open>
+      <summary>
+        <span>Zdroj 13 Excelů</span>
+        <small>import, filtry, Vistos match, řádky k opravě</small>
+      </summary>
+      ${collectionRoutesSourceDataSection(user)}
+    </details>
+
+    <details class="collection-routes-internal-group">
+      <summary>
+        <span>Vistos-only pilot a historická kalibrace</span>
+        <small>samostatný Vistos náhled, ne pracovní trasa z 13 Excelů</small>
+      </summary>
+      ${collectionRoutesVistosKommunalSection(user)}
+    </details>
+
+    <details class="collection-routes-internal-group">
+      <summary>
+        <span>Poloha a staré import preview</span>
+        <small>nejasné adresy, ruční JSON/CSV a Vistos API discovery</small>
+      </summary>
+      ${collectionRoutesLocationIssuesSection()}
+      ${collectionRoutesManualImportSection(user)}
+      ${collectionRoutesImportSection(user)}
+    </details>
+  `;
+}
+
 function collectionRoutesActiveSection(user) {
   const activeTab = activeCollectionRoutesTabId();
-  if (activeTab === "manual-import") {
-    return collectionRoutesManualImportSection(user);
-  }
   if (activeTab === "svozove-trasy") {
     return collectionRoutesSourceRoutesSection(user);
   }
-  if (activeTab === "source-data") {
-    return collectionRoutesSourceDataSection(user);
-  }
-  if (activeTab === "vistos-komunal") {
-    return collectionRoutesVistosKommunalSection(user);
-  }
-  if (activeTab === "import") {
-    return collectionRoutesImportSection(user);
-  }
   if (activeTab === "sites") {
-    return collectionRoutesSitesSection();
-  }
-  if (activeTab === "location-issues") {
-    return collectionRoutesLocationIssuesSection();
-  }
-  if (activeTab === "site-detail") {
-    return collectionRoutesSiteDetailSection();
+    return `${collectionRoutesSitesSection()}${collectionRoutesPilotState.selectedSiteId ? collectionRoutesSiteDetailSection() : ""}`;
   }
   if (activeTab === "rules") {
     return collectionRoutesRulesSection(user);
   }
-  return collectionRoutesDashboardSection();
+  if (activeTab === "internal") {
+    return collectionRoutesInternalSection(user);
+  }
+  return collectionRoutesSourceRoutesSection(user);
 }
 
 function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
@@ -15966,7 +16021,12 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
   }
 
   const title = isDashboard ? "Dashboard Trasy svozu" : "Trasy svozu";
-  const activeTab = activeCollectionRoutesTabId();
+  let activeTab = activeCollectionRoutesTabId();
+  const visibleTabs = collectionRoutesVisibleTabs(user);
+  if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+    activeTab = "svozove-trasy";
+    collectionRoutesPilotState.activeTab = activeTab;
+  }
   const isSourceRoutesTab = activeTab === "svozove-trasy";
   return `
     <main class="app-shell module-page module-theme-scope collection-routes-page" ${moduleThemeStyleAttribute()}>
@@ -15999,9 +16059,9 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
       `}
 
       <nav class="collection-routes-tabs" aria-label="Sekce Tras svozu" role="tablist">
-        ${COLLECTION_ROUTES_TABS.map((tab) => `
+        ${visibleTabs.map((tab) => `
           <button
-            class="collection-routes-tab ${tab.id === activeTab ? "collection-routes-tab--active" : ""}"
+            class="collection-routes-tab ${tab.adminOnly ? "collection-routes-tab--admin" : ""} ${tab.id === activeTab ? "collection-routes-tab--active" : ""}"
             type="button"
             role="tab"
             aria-selected="${tab.id === activeTab ? "true" : "false"}"
@@ -21921,7 +21981,7 @@ async function submitCollectionRoutesKommunalPreview(form) {
     collectionRoutesPilotState.message = summary.message ||
       collectionRoutesKommunalPreviewSubmitMessage(summary, collectionRoutesPilotState.apiStatus);
     collectionRoutesPilotState.error = "";
-    collectionRoutesPilotState.activeTab = "vistos-komunal";
+    collectionRoutesPilotState.activeTab = "internal";
     await loadCollectionRoutesPilot({ renderAfter: false, force: true });
   } catch (error) {
     const submitError = error.payload?.apiStatus === "not_configured"
@@ -22966,7 +23026,7 @@ async function submitCollectionRoutesRouteOptimizationPreview(form) {
     collectionRoutesPilotState.routeOptimizationMessage =
       `Historická kalibrace načetla ${summary.parsedFileCount || 0} souborů a připravila ${summary.rowCount || 0} porovnávacích řádků. Načítám Vistos párování.`;
     collectionRoutesPilotState.routeOptimizationError = "";
-    collectionRoutesPilotState.activeTab = "vistos-komunal";
+    collectionRoutesPilotState.activeTab = "internal";
     render();
     await loadCollectionRoutesKommunalPairingRows({ force: true, renderAfter: false });
     const pairedRows = collectionRoutesRouteOptimizationRows();
@@ -23037,7 +23097,7 @@ async function selectCollectionRouteSite(siteId) {
   }
 
   collectionRoutesPilotState.selectedSiteId = id;
-  collectionRoutesPilotState.activeTab = "site-detail";
+  collectionRoutesPilotState.activeTab = "sites";
   collectionRoutesPilotState.error = "";
   render();
 
@@ -29407,7 +29467,7 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesTab = event.target.closest("[data-collection-routes-tab]");
   if (collectionRoutesTab) {
     event.preventDefault();
-    setCollectionRoutesActiveTab(collectionRoutesTab.dataset.collectionRoutesTab || "dashboard");
+    setCollectionRoutesActiveTab(collectionRoutesTab.dataset.collectionRoutesTab || "svozove-trasy");
     return;
   }
 

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.317"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.318"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: uklizené záložky",
+    text: "Hlavní navigace modulu je zjednodušená na Svozové trasy, Stanoviště a Pravidla. Importy, diagnostika, Vistos-only pilot a staré preview jsou schované v admin záložce Interní správa."
+  },
   {
     title: "Trasy svozu: oprava přepínače Mapa / GPS",
     text: "Přepínač v hlavní záložce Svozové trasy správně otevře read-only pohled Mapa / GPS a už se nevrací zpět na tiskový přehled."

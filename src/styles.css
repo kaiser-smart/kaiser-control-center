@@ -1843,6 +1843,10 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  padding: 6px;
+  border: 1px solid rgba(66, 80, 74, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .collection-routes-tabs a,
@@ -1861,11 +1865,100 @@ h1 {
   line-height: 1.2;
 }
 
+.collection-routes-tab--admin {
+  margin-left: auto;
+  color: var(--steel);
+}
+
 .collection-routes-tab--active {
   border-color: rgba(117, 189, 37, 0.34);
   background: #f0f8e8;
   color: #315f12;
   box-shadow: inset 0 0 0 1px rgba(117, 189, 37, 0.18);
+}
+
+.collection-routes-internal {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 8px;
+  background: #fbfcf8;
+}
+
+.collection-routes-internal__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.collection-routes-internal__head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.collection-routes-internal__head p {
+  margin: 6px 0 0;
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-routes-internal__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.collection-routes-internal__links a {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.collection-routes-internal-group {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.collection-routes-internal-group summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.collection-routes-internal-group summary small {
+  color: var(--steel);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.collection-routes-internal-group > .collection-routes-panel {
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .collection-routes-tab--admin {
+    margin-left: 0;
+  }
 }
 
 .collection-routes-panel {
