@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.310"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.311"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: tmavý řidičský režim",
+    text: "Řidičský displej ve Svozových trasách má tmavý kabinový režim pro tablet: velkou další zastávku, stav trasy, barevné read-only akce, spodní lištu a problémový dialog. Jde jen o UI/read-only pilot bez GPS, T-Cars, navigace, potvrzení svozu, SMS/e-mailů a ostrých tras."
+  },
   {
     title: "Šarlota: bezpečnější synchronizace tools",
     text: "ElevenLabs tools sync používá stejnou normalizovanou kontrolu názvu produkční Šarloty jako read-only status panel. Prompt, model, first message, databáze ani secrets se tím nemění."
