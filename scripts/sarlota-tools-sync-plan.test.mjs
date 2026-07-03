@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   buildAgentPatch,
   buildSyncPlan,
-  expectedTools
+  expectedTools,
+  safeElevenLabsErrorDetail
 } from "../functions/api/ai/elevenlabs/sarlota-tools-sync.js";
 
 const env = {
@@ -90,6 +91,43 @@ const legacyClientWorkspaceTool = {
   assert.equal(driverContextTools.length, 1);
   assert.equal(driverContextTools[0].type, "webhook");
   assert.equal(driverContextTools[0].api_schema.response_filter.mode, "allow");
+}
+
+{
+  const error = new Error("elevenlabs_request_failed");
+  error.status = 400;
+  error.payload = {
+    detail: [
+      {
+        loc: ["body", "tool_config", "api_schema", "request_headers", "x-voice-assistant-token", "env_var_label"],
+        msg: "Environment variable VOICE_ASSISTANT_WEBHOOK_TOKEN was not found"
+      }
+    ],
+    api_key: "REDACTION_TEST_VALUE",
+    authorization: "Bearer FAKE_BEARER_VALUE_FOR_REDACTION_TEST",
+    signed_url: "wss://signed.example.invalid/REDACTION_TEST_PATH"
+  };
+  error.rawBody = JSON.stringify({
+    detail: error.payload.detail,
+    api_key: "REDACTION_TEST_RAW_API_VALUE",
+    token: "REDACTION_TEST_RAW_TOKEN_VALUE",
+    authorization: "Bearer REDACTION_TEST_RAW_AUTH_VALUE",
+    signed_url: "wss://signed.example.invalid/REDACTION_TEST_PATH"
+  });
+
+  const detail = safeElevenLabsErrorDetail(error);
+  const serialized = JSON.stringify(detail);
+
+  assert.equal(detail.category, "secret");
+  assert.match(detail.summary, /request_headers/);
+  assert.match(detail.detail, /Environment variable VOICE_ASSISTANT_WEBHOOK_TOKEN/);
+  assert.equal(serialized.includes("REDACTION_TEST_VALUE"), false);
+  assert.equal(serialized.includes("REDACTION_TEST_RAW_API_VALUE"), false);
+  assert.equal(serialized.includes("REDACTION_TEST_RAW_TOKEN_VALUE"), false);
+  assert.equal(serialized.includes("REDACTION_TEST_RAW_AUTH_VALUE"), false);
+  assert.equal(serialized.includes("wss://signed.example.invalid/REDACTION_TEST_PATH"), false);
+  assert.equal(serialized.includes("Bearer FAKE_BEARER_VALUE_FOR_REDACTION_TEST"), false);
+  assert.ok(detail.detail.length <= 900);
 }
 
 console.log("sarlota tools sync plan tests passed");

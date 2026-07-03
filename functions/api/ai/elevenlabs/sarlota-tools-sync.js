@@ -12,6 +12,9 @@ const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const DIAGNOSTIC_IDENTITY_ONLY_MODE = "diagnostic_identity_only";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/convai";
 const WEBHOOK_TOOL_NAMES = new Set(["get_driver_report_context"]);
+const SAFE_UPSTREAM_DETAIL_LIMIT = 900;
+const SAFE_UPSTREAM_SUMMARY_LIMIT = 360;
+const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /(api[-_]?key|authorization|bearer|password|secret|signed[-_]?url|signedurl|token|xi[-_]?api[-_]?key)/i;
 const SAFE_AGENT_TOOL_PATHS = [
   ["conversation_config", "agent", "prompt", "tool_ids"],
   ["conversation_config", "agent", "prompt", "tools"],
@@ -25,6 +28,82 @@ function cleanString(value) {
 
 function safeErrorMessage(error) {
   return cleanString(error?.message || error?.name || "unknown_error");
+}
+
+function truncateDiagnosticText(value, limit = SAFE_UPSTREAM_DETAIL_LIMIT) {
+  const text = cleanString(value).replace(/\s+/g, " ");
+  if (text.length <= limit) {
+    return text;
+  }
+
+  return `${text.slice(0, Math.max(0, limit - 1))}…`;
+}
+
+function redactDiagnosticText(value) {
+  return cleanString(value)
+    .replace(/("(?:api[-_]?key|authorization|bearer|password|secret|signed[-_]?url|signedurl|token|xi[-_]?api[-_]?key)"\s*:\s*")[^"]*(")/gi, "$1[redacted]$2")
+    .replace(/\b(?:authorization|x-voice-assistant-token|xi-api-key|api[-_]?key|secret|token|signed[-_]?url)\s*[:=]\s*[^\s,;]+/gi, (match) => {
+      const separatorIndex = Math.max(match.indexOf(":"), match.indexOf("="));
+      return separatorIndex >= 0 ? `${match.slice(0, separatorIndex + 1)} [redacted]` : "[redacted]";
+    })
+    .replace(/\bsk_[A-Za-z0-9_-]{12,}\b/g, "[redacted-api-key]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{8,}/gi, "Bearer [redacted]")
+    .replace(/\bwss:\/\/[^\s"']+/gi, "[redacted-signed-url]")
+    .replace(/\bhttps:\/\/api\.elevenlabs\.io\/[^\s"']+/gi, "[redacted-elevenlabs-url]");
+}
+
+function redactDiagnosticPayload(value, key = "", depth = 0) {
+  if (depth > 6) {
+    return "[redacted-depth-limit]";
+  }
+
+  if (value == null) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return SENSITIVE_DIAGNOSTIC_KEY_PATTERN.test(key)
+      ? "[redacted]"
+      : redactDiagnosticText(value);
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 10).map((item) => redactDiagnosticPayload(item, key, depth + 1));
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).slice(0, 30).map(([childKey, child]) => [
+      childKey,
+      SENSITIVE_DIAGNOSTIC_KEY_PATTERN.test(childKey)
+        ? "[redacted]"
+        : redactDiagnosticPayload(child, childKey, depth + 1)
+    ])
+  );
+}
+
+function safeJsonStringify(value) {
+  try {
+    return JSON.stringify(value);
+  } catch (_) {
+    return "";
+  }
+}
+
+function parseJsonPayload(text) {
+  const cleanText = cleanString(text);
+  if (!cleanText) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(cleanText);
+  } catch (_) {
+    return {};
+  }
 }
 
 function deepClone(value) {
@@ -160,7 +239,7 @@ function toolConfigChanged(currentTool, expectedTool) {
 function upstreamErrorSummary(error) {
   const detail = error?.payload?.detail;
   if (Array.isArray(detail)) {
-    return detail
+    const summary = detail
       .slice(0, 3)
       .map((item) => {
         const loc = Array.isArray(item?.loc) ? item.loc.join(".") : "";
@@ -169,13 +248,50 @@ function upstreamErrorSummary(error) {
       })
       .filter(Boolean)
       .join("; ");
+
+    return truncateDiagnosticText(redactDiagnosticText(summary), SAFE_UPSTREAM_SUMMARY_LIMIT);
   }
 
   if (typeof detail === "string") {
-    return cleanString(detail);
+    return truncateDiagnosticText(redactDiagnosticText(detail), SAFE_UPSTREAM_SUMMARY_LIMIT);
   }
 
-  return cleanString(error?.payload?.message || error?.payload?.error || error?.message || "upstream_error");
+  return truncateDiagnosticText(
+    redactDiagnosticText(error?.payload?.message || error?.payload?.error || error?.message || "upstream_error"),
+    SAFE_UPSTREAM_SUMMARY_LIMIT
+  );
+}
+
+function classifyElevenLabsError(text) {
+  const normalized = cleanString(text).toLowerCase();
+  if (!normalized) {
+    return "unknown";
+  }
+
+  if (/(env_var|environment variable|auth|authorization|secret|api key|permission|unauthorized|forbidden)/i.test(normalized)) {
+    return "secret";
+  }
+
+  if (/(validation|schema|loc|field required|required|invalid|unexpected|extra fields|value_error|type_error)/i.test(normalized)) {
+    return "payload";
+  }
+
+  return "unknown";
+}
+
+export function safeElevenLabsErrorDetail(error) {
+  const redactedPayload = redactDiagnosticPayload(error?.payload || {});
+  const payloadPreview = safeJsonStringify(redactedPayload);
+  const rawPreview = error?.rawBody ? redactDiagnosticText(error.rawBody) : "";
+  const responsePreview = truncateDiagnosticText(rawPreview || payloadPreview || "", SAFE_UPSTREAM_DETAIL_LIMIT);
+  const summary = upstreamErrorSummary(error);
+  const classificationSource = `${summary} ${responsePreview}`;
+
+  return {
+    summary,
+    detail: responsePreview,
+    category: classifyElevenLabsError(classificationSource)
+  };
 }
 
 function toolNamesFromAgent(agentConfig) {
@@ -276,12 +392,14 @@ async function elevenLabsRequest({ apiKey, path, method = "GET", body = null }) 
     },
     body: body ? JSON.stringify(body) : null
   });
-  const payload = await response.json().catch(() => ({}));
+  const rawBody = await response.text().catch(() => "");
+  const payload = parseJsonPayload(rawBody);
 
   if (!response.ok) {
     const error = new Error("elevenlabs_request_failed");
     error.status = response.status;
     error.payload = payload;
+    error.rawBody = rawBody;
     throw error;
   }
 
@@ -405,12 +523,15 @@ async function applyWorkspaceOperations(apiKey, operations) {
           idPresent: Boolean(toolId(result) || toolId(result?.tool))
         });
       } catch (error) {
+        const diagnostic = safeElevenLabsErrorDetail(error);
         results.push({
           action: "create",
           name: operation.tool.name,
           ok: false,
           upstreamStatus: error.status || 0,
-          reason: upstreamErrorSummary(error)
+          reason: diagnostic.summary,
+          diagnosticCategory: diagnostic.category,
+          diagnosticDetail: diagnostic.detail
         });
       }
       continue;
@@ -431,12 +552,15 @@ async function applyWorkspaceOperations(apiKey, operations) {
           idPresent: true
         });
       } catch (error) {
+        const diagnostic = safeElevenLabsErrorDetail(error);
         results.push({
           action: "update",
           name: operation.tool.name,
           ok: false,
           upstreamStatus: error.status || 0,
-          reason: upstreamErrorSummary(error)
+          reason: diagnostic.summary,
+          diagnosticCategory: diagnostic.category,
+          diagnosticDetail: diagnostic.detail
         });
       }
       continue;
@@ -854,7 +978,8 @@ async function applyPayload(env, assistantConfig, mode = "", user = null) {
       firstFailure.action,
       firstFailure.name,
       firstFailure.upstreamStatus ? `HTTP ${firstFailure.upstreamStatus}` : "",
-      firstFailure.reason || ""
+      firstFailure.reason || "",
+      firstFailure.diagnosticDetail ? `Detail: ${firstFailure.diagnosticDetail}` : ""
     ].filter(Boolean).join(" ");
 
     return json({
