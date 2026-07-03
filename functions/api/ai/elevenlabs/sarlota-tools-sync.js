@@ -204,7 +204,7 @@ function toolType(value) {
 
 function toolId(value) {
   if (!value || typeof value !== "object") {
-    return "";
+    return cleanString(value);
   }
 
   return cleanString(value.id || value.tool_id || value.toolId);
@@ -603,6 +603,11 @@ export function buildAgentPatch(agentConfig, workspaceTools, expectedNames, env 
     const expectedIds = expectedNames
       .map((name) => workspaceIdsByName.get(name))
       .filter(Boolean);
+    const expectedIdSet = new Set(expectedIds);
+    const existingIds = toolArray.value
+      .map((value) => toolId(value))
+      .filter(Boolean);
+    const prunedToolIdsCount = existingIds.filter((id) => !expectedIdSet.has(id)).length;
 
     if (expectedIds.length !== expectedNames.length) {
       return {
@@ -611,19 +616,15 @@ export function buildAgentPatch(agentConfig, workspaceTools, expectedNames, env 
       };
     }
 
-    const existingIds = toolArray.value
-      .map((value) => cleanString(value))
-      .filter(Boolean);
-    const mergedIds = [...new Set([...existingIds, ...expectedIds])];
-
     return {
       ok: true,
       path: toolArray.pathText,
+      prunedToolIdsCount,
       requestBody: {
         conversation_config: {
           agent: {
             prompt: {
-              tool_ids: mergedIds
+              tool_ids: expectedIds
             }
           }
         }
@@ -1024,6 +1025,7 @@ async function applyPayload(env, assistantConfig, mode = "", user = null) {
       agentPatch: {
         applied: false,
         path: agentPatch.path,
+        prunedToolIdsCount: agentPatch.prunedToolIdsCount || 0,
         promptChanged: false,
         firstMessageChanged: false,
         modelChanged: false
@@ -1062,6 +1064,7 @@ async function applyPayload(env, assistantConfig, mode = "", user = null) {
     agentPatch: {
       applied: true,
       path: agentPatch.path,
+      prunedToolIdsCount: agentPatch.prunedToolIdsCount || 0,
       promptChanged: false,
       firstMessageChanged: false,
       modelChanged: false

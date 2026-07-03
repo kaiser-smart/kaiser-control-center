@@ -108,6 +108,42 @@ const legacyClientWorkspaceTool = {
 }
 
 {
+  const expected = expectedTools(env);
+  const workspaceTools = expected.map((tool, index) => ({
+    id: `tool_expected_${index}_${tool.name}`,
+    tool_config: tool
+  }));
+  const expectedIds = workspaceTools.map((tool) => tool.id);
+  const staleConversationIdToolId = "tool_stale_driver_context_conversation_id";
+  const staleExtraToolId = "tool_stale_extra";
+  const agentWithToolIds = {
+    ...agentConfig,
+    conversation_config: {
+      agent: {
+        first_message: "{{intro_announcement}}",
+        prompt: {
+          tool_ids: [
+            staleConversationIdToolId,
+            workspaceTools[0].id,
+            staleExtraToolId
+          ]
+        }
+      }
+    }
+  };
+
+  const patch = buildAgentPatch(agentWithToolIds, workspaceTools, expected.map((tool) => tool.name), env);
+  const nextToolIds = patch.requestBody.conversation_config.agent.prompt.tool_ids;
+
+  assert.equal(patch.ok, true);
+  assert.equal(patch.path, "conversation_config.agent.prompt.tool_ids");
+  assert.equal(patch.prunedToolIdsCount, 2);
+  assert.deepEqual(nextToolIds, expectedIds);
+  assert.equal(nextToolIds.includes(staleConversationIdToolId), false);
+  assert.equal(nextToolIds.includes(staleExtraToolId), false);
+}
+
+{
   const error = new Error("elevenlabs_request_failed");
   error.status = 400;
   error.payload = {
