@@ -2375,7 +2375,7 @@ h1 {
   gap: 14px;
   padding: clamp(14px, 2vw, 20px);
   border: 1px solid color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 28%, rgba(66, 80, 74, 0.14));
-  border-radius: 16px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg, #ffffff 0%, #f7fbf1 100%);
   box-shadow: 0 14px 32px rgba(31, 50, 35, 0.08);
@@ -2421,7 +2421,7 @@ h1 {
 .collection-routes-driver-mode__warning {
   min-width: 0;
   border: 1px solid rgba(66, 80, 74, 0.12);
-  border-radius: 14px;
+  border-radius: 8px;
   background: #ffffff;
 }
 
@@ -2439,7 +2439,7 @@ h1 {
   min-height: 62px;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--theme-primary, var(--kaiser-green));
   color: #ffffff;
   font-size: clamp(1.25rem, 2.5vw, 1.8rem);
@@ -2475,7 +2475,7 @@ h1 {
   min-width: 0;
   padding: 10px;
   border: 1px solid rgba(66, 80, 74, 0.08);
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fbfdf8;
 }
 
@@ -2564,6 +2564,9 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  max-height: min(52vh, 560px);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .collection-routes-driver-stop {
@@ -2575,7 +2578,7 @@ h1 {
   min-height: 62px;
   padding: 9px;
   border: 1px solid rgba(66, 80, 74, 0.12);
-  border-radius: 12px;
+  border-radius: 8px;
   background: #ffffff;
   color: var(--steel);
   font: inherit;
@@ -2601,7 +2604,7 @@ h1 {
   min-height: 38px;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(117, 189, 37, 0.14);
   color: var(--ink);
   font-weight: 900;
@@ -2626,7 +2629,7 @@ h1 {
 }
 
 .collection-routes-panel--driver-print .collection-routes-preview-table {
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .collection-routes-panel--driver-print .collection-routes-preview-table table {
@@ -2635,6 +2638,28 @@ h1 {
 
 .collection-routes-panel--driver-print .collection-routes-preview-table th {
   background: #eef7ea;
+}
+
+.collection-routes-driver-details {
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.collection-routes-driver-details summary {
+  min-height: 46px;
+  padding: 12px 14px;
+  color: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.collection-routes-driver-details[open] summary {
+  border-bottom: 1px solid rgba(66, 80, 74, 0.1);
+}
+
+.collection-routes-driver-details .collection-routes-driver-preview {
+  padding: 12px;
 }
 
 .tracking-tabs {

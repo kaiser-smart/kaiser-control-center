@@ -14408,6 +14408,7 @@ const COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES = [
   "chybí frekvence",
   "nenamapováno"
 ];
+const COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT = 12;
 
 function collectionRoutesSourceRepairRows(statuses = COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES) {
   const allowed = new Set(statuses.map((status) => String(status || "").toLowerCase()));
@@ -14480,7 +14481,7 @@ function collectionRoutesSourceDriverSelectedIndex(rows = collectionRoutesSource
 }
 
 function collectionRoutesSourceDriverVisibleRows(rows, selectedIndex) {
-  const limit = collectionRoutesPilotState.sourceDriverListExpanded ? rows.length : 80;
+  const limit = collectionRoutesPilotState.sourceDriverListExpanded ? rows.length : COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT;
   const visible = rows.slice(0, limit).map((row, index) => ({ row, index }));
   if (selectedIndex >= limit) {
     visible.push({ row: rows[selectedIndex], index: selectedIndex, pinned: true });
@@ -14532,15 +14533,19 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const progressPercent = Math.round((progressValue / rows.length) * 100);
   const issue = collectionRoutesSourceDriverProblemLabel(selectedRow);
   const note = selectedRow?.note || "";
-  const hasHiddenRows = rows.length > visibleRows.length || (!collectionRoutesPilotState.sourceDriverListExpanded && rows.length > 80);
+  const isExpanded = collectionRoutesPilotState.sourceDriverListExpanded;
+  const hasHiddenRows = rows.length > visibleRows.length || (!isExpanded && rows.length > COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT);
+  const listLabel = isExpanded
+    ? `Všechny zastávky (${collectionRoutesMetricValue(rows.length)})`
+    : `Nejbližší zastávky (${collectionRoutesMetricValue(Math.min(rows.length, COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT))})`;
 
   return `
-    <div class="collection-routes-driver-mode" id="collection-routes-source-driver-mode">
+    <div class="collection-routes-driver-mode ${isExpanded ? "collection-routes-driver-mode--expanded" : ""}" id="collection-routes-source-driver-mode">
       <div class="collection-routes-driver-mode__head">
         <div>
           <p class="module-feedback__eyebrow">Řidičský režim</p>
           <h3>${escapeHtml(collectionRoutesSourceRouteTitle())}</h3>
-          <span>Read-only náhled pro jízdu. Bez navigace, GPS, T-Cars, potvrzování svozu a ostré trasy.</span>
+          <span>Praktický read-only náhled pro jízdu a tisk. Bez navigace, GPS, T-Cars, potvrzování svozu a ostré trasy.</span>
         </div>
         <span class="employee-card-status employee-card-status--waiting">${escapeHtml(progressValue)} / ${escapeHtml(rows.length)}</span>
       </div>
@@ -14592,9 +14597,9 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
       </div>
 
       <div class="collection-routes-driver-mode__list-head">
-        <strong>Seznam zastávek</strong>
+        <strong>${escapeHtml(listLabel)}</strong>
         <button class="secondary-link" type="button" data-collection-routes-source-driver-toggle-list>
-          ${collectionRoutesPilotState.sourceDriverListExpanded ? "Zkrátit seznam" : "Zobrazit celý seznam"}
+          ${isExpanded ? "Zkrátit seznam" : `Zobrazit všech ${collectionRoutesMetricValue(rows.length)}`}
         </button>
       </div>
       <div class="collection-routes-driver-mode__list">
@@ -14617,7 +14622,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           `;
         }).join("")}
       </div>
-      ${hasHiddenRows ? `<p class="module-feedback__notice">Seznam je zkrácený pro rychlost práce. Tisk a navigace tlačítky Předchozí/Další pracují s celým aktuálním filtrem.</p>` : ""}
+      ${hasHiddenRows ? `<p class="module-feedback__notice">Seznam je zkrácený, aby záložka zůstala přehledná. Tisk a tlačítka Předchozí/Další pracují s celým aktuálním filtrem.</p>` : ""}
     </div>
   `;
 }
@@ -14951,9 +14956,12 @@ function collectionRoutesSourceRoutesSection() {
         <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Nejdřív je potřeba import v Diagnostice tras.</p>
       `}
       ${collectionRoutesSourceSmartFilterPanel()}
-      ${collectionRoutesSourceRouteSummaryCards(rows)}
       ${collectionRoutesSourceDriverModePanel(rows)}
-      ${collectionRoutesSourceDriverPreviewPanel({ showNotice: true, showActions: false, rows })}
+      ${collectionRoutesSourceRouteSummaryCards(rows)}
+      <details class="collection-routes-driver-details">
+        <summary>Detailní tabulka pro kontrolu</summary>
+        ${collectionRoutesSourceDriverPreviewPanel({ showNotice: true, showActions: false, rows })}
+      </details>
     </section>
   `;
 }
@@ -21895,7 +21903,7 @@ async function applyCollectionRoutesSourceSmartFilter(dayKey, vehicle, waste = "
   collectionRoutesPilotState.sourceImportMessage =
     `Filtr: ${collectionRoutesSourceVehicleLabel(vehicle)} / ${option.label} ${option.dateLabel} / ${option.dayCode} / ${option.weekMode} / odpad ${wasteLabel} / stav ${statusLabel}.`;
   await loadCollectionRoutesSourceRoutes({ renderAfter: true });
-  document.getElementById("collection-routes-source-driver-preview")?.scrollIntoView({ block: "start", behavior: "smooth" });
+  document.getElementById("collection-routes-source-driver-mode")?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 async function updateCollectionRoutesSourceSmartFilter(control) {

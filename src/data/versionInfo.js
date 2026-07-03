@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.306"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.307"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: uklizený řidičský režim",
+    text: "Hlavní záložka Svozové trasy dává řidičský režim hned pod filtr, zkracuje seznam zastávek pro přehlednost a detailní tabulku schovává do rozbalovací kontroly. Zůstává read-only bez navigace, GPS, T-Cars, SMS/e-mailů a ostrých tras."
+  },
   {
     title: "Trasy svozu: read-only řidičský režim",
     text: "Svozové trasy mají v aplikaci read-only řidičský režim nad aktuálním filtrem: aktuální zastávka, předchozí/další, seznam zastávek a tisk. Režim nic nepotvrzuje, neukládá, nespouští navigaci, GPS, T-Cars, SMS/e-maily ani ostré trasy."
