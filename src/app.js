@@ -234,6 +234,7 @@ const COLLECTION_ROUTES_TABS = [
   { id: "rules", label: "Seznam pravidel a automatizace", targetId: "module-rules-title" }
 ];
 const DESIGN_NEUMORPHIC_ROUTE = "/design/neumorphic";
+const DESIGN_THEME_SYSTEM_ROUTE = "/design/theme-system";
 const FLEET_ACTION_WAITING_MESSAGES = {
   addVehicle: "Čeká na API pro přidání vozidla.",
   detail: "Čeká na API pro detail vozidla.",
@@ -1550,6 +1551,150 @@ function neumorphicPreviewPage(user) {
           </div>
         </article>
       </section>
+    </main>
+  `;
+}
+
+function themeSystemPreviewPage() {
+  const routeItems = [
+    { index: "01", title: "Ranní svoz", meta: "14 stanovišť - 2 upozornění", active: true },
+    { index: "02", title: "Servis vozidla", meta: "Actros 2551 - kontrola dokumentů" },
+    { index: "03", title: "WIM kontrola", meta: "Poslední průjezd - bez překročení" }
+  ];
+  const routeMarkup = routeItems
+    .map((item) => `
+      <article class="list-card${item.active ? " list-card-active" : ""}"${item.active ? ' aria-current="true"' : ""}>
+        <span class="list-index">${escapeHtml(item.index)}</span>
+        <span>
+          <strong class="list-title">${escapeHtml(item.title)}</strong>
+          <small class="list-meta">${escapeHtml(item.meta)}</small>
+        </span>
+      </article>
+    `)
+    .join("");
+
+  return `
+    <main class="theme-system smart-tablet-ui theme-preview-page" data-theme-preview>
+      <div class="app-shell">
+        <aside class="app-sidebar" aria-label="Navigace náhledu">
+          <a class="nav-item nav-item-active" href="${routeHref(DESIGN_THEME_SYSTEM_ROUTE)}" data-link aria-current="page">
+            <span class="nav-icon">S</span>
+            <span class="nav-label">Souhrn</span>
+          </a>
+          <span class="nav-item">
+            <span class="nav-icon">V</span>
+            <span class="nav-label">Vozidla</span>
+          </span>
+          <span class="nav-item">
+            <span class="nav-icon">T</span>
+            <span class="nav-label">Trasy</span>
+          </span>
+          <span class="nav-item">
+            <span class="nav-icon">N</span>
+              <span class="nav-label">Nahlášení</span>
+          </span>
+          <a class="nav-item" href="${routeHref("/")}" data-link>
+            <span class="nav-icon">A</span>
+            <span class="nav-label">Aplikace</span>
+          </a>
+        </aside>
+
+        <section class="app-content" aria-labelledby="theme-preview-title">
+          <header class="app-header">
+            <div>
+              <p class="field-label">Náhledový design systém</p>
+              <h1 id="theme-preview-title">Smart Odpady - tabletový vzhled</h1>
+              <p>Izolovaná ukázka nové CSS vrstvy pro ladění vzhledu, barev a ikon.</p>
+            </div>
+            <div class="theme-preview-toolbar" aria-label="Stav nahledu">
+              <span class="status-badge status-online">Online</span>
+              <span class="status-badge status-gps">GPS aktivni</span>
+            </div>
+          </header>
+
+          <section class="theme-dashboard-grid">
+            <div class="theme-dashboard-main">
+              <article class="app-card is-active">
+                <div class="theme-card-head">
+                  <div>
+                    <p class="field-label">Dnesni provoz</p>
+                    <h2>Přehled pro řidiče</h2>
+                  </div>
+                  <button class="btn btn-primary" type="button">Zahájit trasu</button>
+                </div>
+
+                <div class="theme-metric-grid">
+                  <div class="soft-cell">
+                    <span class="theme-metric-value">8</span>
+                    <span class="theme-metric-label">vozidel v provozu</span>
+                  </div>
+                  <div class="soft-cell">
+                    <span class="theme-metric-value">42</span>
+                    <span class="theme-metric-label">naplánovaných bodů</span>
+                  </div>
+                  <div class="soft-cell">
+                    <span class="theme-metric-value">96%</span>
+                    <span class="theme-metric-label">stav spojení</span>
+                  </div>
+                </div>
+
+                <div class="theme-map-surface" aria-label="Ukazka mapoveho panelu">
+                  <span class="theme-map-route"></span>
+                  <span class="theme-map-node theme-map-node-main" style="--x: 26%; --y: 56%;">1</span>
+                  <span class="theme-map-node" style="--x: 52%; --y: 38%;">2</span>
+                  <span class="theme-map-node theme-map-node-warning" style="--x: 72%; --y: 64%;">3</span>
+                </div>
+              </article>
+
+              <section class="quick-actions" aria-label="Rychle akce">
+                <button class="quick-action quick-action-success" type="button">
+                  <span>
+                    <strong>Příjezd potvrzen</strong>
+                    <small>Velké dotykové tlačítko</small>
+                  </span>
+                </button>
+                <button class="quick-action quick-action-warning" type="button">
+                  <span>
+                    <strong>Nahlásit problém</strong>
+                    <small>Decentní varovný stav</small>
+                  </span>
+                </button>
+                <button class="quick-action quick-action-info" type="button">
+                  <span>
+                    <strong>Detail vozidla</strong>
+                    <small>Napojení ikon se doladí později</small>
+                  </span>
+                </button>
+              </section>
+            </div>
+
+            <aside class="theme-dashboard-side">
+              <article class="app-panel">
+                <div class="theme-card-head">
+                  <div>
+                    <p class="field-label">Aktuální práce</p>
+                    <h2>Fronta úkolů</h2>
+                  </div>
+                  <button class="btn btn-icon" type="button" aria-label="Obnovit">R</button>
+                </div>
+                <div class="theme-list-stack">
+                  ${routeMarkup}
+                </div>
+              </article>
+
+              <article class="soft-card">
+                <p class="field-label">Formulare</p>
+                <label class="field-label" for="theme-preview-note">Poznámka řidiče</label>
+                <textarea class="textarea" id="theme-preview-note" rows="4" readonly>Ukázka vstupního pole bez ukládání dat.</textarea>
+                <div class="theme-button-row">
+                  <button class="btn btn-secondary" type="button">Zpět</button>
+                  <button class="btn btn-success" type="button">Uložit návrh</button>
+                </div>
+              </article>
+            </aside>
+          </section>
+        </section>
+      </div>
     </main>
   `;
 }
@@ -25894,6 +26039,12 @@ function renderAuthenticatedApp(user) {
   if (path === DESIGN_NEUMORPHIC_ROUTE) {
     app.innerHTML = neumorphicPreviewPage(user);
     document.title = `Neumorphic varianta | ${APP_NAME}`;
+    return;
+  }
+
+  if (path === DESIGN_THEME_SYSTEM_ROUTE) {
+    app.innerHTML = themeSystemPreviewPage();
+    document.title = `Tabletovy vzhled | ${APP_NAME}`;
     return;
   }
 
