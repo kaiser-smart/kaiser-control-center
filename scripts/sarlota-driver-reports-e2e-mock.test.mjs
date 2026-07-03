@@ -338,6 +338,28 @@ async function testVoiceWebhookContext() {
   {
     const env = envFor({ vehicles: [vehicle()] });
     const { status, payload } = await voiceWebhookContextPayload(env, {
+      parameters: {
+        user_id: "driver-radim",
+        conversation_id: "conv-parameters-user-id",
+        transcriptIntent: "Jaký tam mám vozidla?"
+      }
+    });
+
+    assert.equal(status, 200);
+    assert.equal(payload.source, "kso_voice_webhook");
+    assert.equal(payload.toolName, "get_driver_report_context");
+    assert.equal(payload.vehiclesVerified, true);
+    assert.equal(payload.vehiclesCount, 1);
+    assert.equal(payload.vehicles[0].displayName, "Mercedes Atego");
+    assert.equal(payload.vehicles[0].licensePlate, "1AB 2345");
+    assert.match(payload.assistantMessage, /Mercedes Atego/);
+    assert.match(payload.assistantMessage, /SPZ 1AB 2345/);
+    assert.equal(payload.assistantMessage.includes("WDB"), false);
+  }
+
+  {
+    const env = envFor({ vehicles: [vehicle()] });
+    const { status, payload } = await voiceWebhookContextPayload(env, {
       user_id: "driver-radim"
     }, {
       "x-voice-assistant-token": "wrong-token"

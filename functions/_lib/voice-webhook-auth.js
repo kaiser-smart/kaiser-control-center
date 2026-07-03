@@ -22,9 +22,13 @@ function requestWebhookToken(request) {
 }
 
 export function payloadUserId(payload = {}) {
+  const parameters = payload.parameters || payload.params || {};
+
   return cleanString(
     payload.userId
     || payload.user_id
+    || parameters.userId
+    || parameters.user_id
     || payload.metadata?.userId
     || payload.metadata?.user_id
     || payload.dynamicVariables?.user_id

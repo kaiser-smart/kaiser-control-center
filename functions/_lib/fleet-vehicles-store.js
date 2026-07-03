@@ -932,6 +932,21 @@ export function driverVehicleCandidateMatches(vehicles = [], payload = {}, user 
   }
 
   if (strictDriverAssignment) {
+    if ((payload.verifiedDriverNameAssignment === true || payload.allowVerifiedDriverNameAssignment === true) && driverName) {
+      const matches = vehicles.filter((vehicle) => (
+        !cleanString(vehicle.assignedDriverId) &&
+        normalizedDriverName(vehicle.assignedDriverName) === driverName
+      ));
+      if (matches.length) {
+        return {
+          matches,
+          confidence: "verified_assigned_driver_name",
+          fallbackUsed: false,
+          lookupReason: "verified_driver_name"
+        };
+      }
+    }
+
     return { matches: [], confidence: "", fallbackUsed: false, lookupReason: "strict_driver_id_no_match" };
   }
 

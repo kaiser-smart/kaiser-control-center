@@ -209,6 +209,7 @@ async function testKsoSessionUserControlsVehicleLookup() {
         internalNumber: "Phone-only trap",
         licensePlate: "8ZZ 9999",
         assignedDriverId: "",
+        assignedDriverName: "",
         assignedDriverPhone: "731 000 001"
       })
     ]
@@ -290,6 +291,7 @@ async function testNoAssignedVehicleDoesNotFallBackToPhone() {
         internalNumber: "Phone-only trap",
         licensePlate: "8ZZ 9999",
         assignedDriverId: "",
+        assignedDriverName: "",
         assignedDriverPhone: "731 000 001"
       })
     ]
@@ -301,6 +303,69 @@ async function testNoAssignedVehicleDoesNotFallBackToPhone() {
   assert.equal(payload.vehiclesCount, 0);
   assert.equal(payload.errorCode, "NO_DRIVER_VEHICLES");
   assertNoTrapVehicle(payload);
+}
+
+async function testVerifiedEmployeeNameCanResolveVistosAssignedVehicles() {
+  const env = envFor({
+    vehicles: [
+      vehicle({
+        id: "vistos-radim-cls",
+        vehicleId: "vistos-radim-cls",
+        internalNumber: "Mercedes CLS 400 d 4matic",
+        licensePlate: "2BB 8251",
+        assignedDriverId: "",
+        assignedDriverName: "Radim Caller",
+        assignedDriverPhone: "",
+        source: "Vistos Vehicle master"
+      }),
+      vehicle({
+        id: "vistos-radim-eqs",
+        vehicleId: "vistos-radim-eqs",
+        internalNumber: "Mercedes EQS SUV",
+        licensePlate: "EL324CD",
+        assignedDriverId: "",
+        assignedDriverName: "Radim Caller",
+        assignedDriverPhone: "",
+        source: "Vistos Vehicle master"
+      }),
+      vehicle({
+        id: "vistos-radim-no-plate",
+        vehicleId: "vistos-radim-no-plate",
+        internalNumber: "Čtyřkolka SEGWAY",
+        licensePlate: "",
+        assignedDriverId: "",
+        assignedDriverName: "Radim Caller",
+        assignedDriverPhone: "",
+        source: "Vistos Vehicle master"
+      }),
+      vehicle({
+        id: "vehicle-conflicting-id",
+        vehicleId: "vehicle-conflicting-id",
+        internalNumber: "Wrong ID trap",
+        licensePlate: "9ZZ 9999",
+        assignedDriverId: "employee-other",
+        assignedDriverName: "Radim Caller"
+      })
+    ]
+  });
+
+  const { status, payload } = await contextPayload(env, radimUser);
+
+  assert.equal(status, 200);
+  assert.equal(payload.user.id, "user-radim");
+  assert.equal(payload.driver.employeeId, "employee-radim");
+  assert.equal(payload.vehiclesVerified, true);
+  assert.equal(payload.vehiclesCount, 2);
+  assert.deepEqual(payload.vehicles.map((item) => item.vehicleId).sort(), ["vistos-radim-cls", "vistos-radim-eqs"]);
+  assert.equal(payload.diagnostics.vehiclesCountBeforeFilter, 3);
+  assert.equal(payload.diagnostics.vehiclesCountAfterFilter, 2);
+  assert.equal(payload.diagnostics.unsafeVoiceVehicleCount, 1);
+  assert.match(payload.messageForAssistant, /Mercedes CLS 400 d 4matic/);
+  assert.match(payload.messageForAssistant, /2BB 8251/);
+  assert.match(payload.messageForAssistant, /Mercedes EQS SUV/);
+  assert.match(payload.messageForAssistant, /EL324CD/);
+  assert.equal(JSON.stringify(payload).includes("Čtyřkolka SEGWAY"), false);
+  assertNoTrapVehicle(payload.vehicles);
 }
 
 async function testUnknownAndForbiddenCallerStates() {
@@ -340,6 +405,7 @@ async function testManualSpzFallbackUsesFleetReadOnly() {
 await testKsoSessionUserControlsVehicleLookup();
 await testMultipleVehiclesAreSpokenOnlyWhenVerified();
 await testNoAssignedVehicleDoesNotFallBackToPhone();
+await testVerifiedEmployeeNameCanResolveVistosAssignedVehicles();
 await testUnknownAndForbiddenCallerStates();
 await testManualSpzFallbackUsesFleetReadOnly();
 

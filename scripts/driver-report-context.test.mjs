@@ -224,6 +224,64 @@ async function withFakeDriverPickerDom(callback) {
 }
 
 {
+  const result = driverVehicleCandidateMatches([
+    {
+      id: "vistos-radim-1",
+      licensePlate: "2BB 8251",
+      model: "Mercedes CLS",
+      assignedDriverId: "",
+      assignedDriverName: "Radim Opluštil",
+      status: "active"
+    },
+    {
+      id: "vistos-radim-2",
+      licensePlate: "EL324CD",
+      model: "Mercedes EQS",
+      assignedDriverId: "",
+      assignedDriverName: "Radim Opluštil",
+      status: "active"
+    },
+    {
+      id: "conflicting-id",
+      licensePlate: "9ZZ 9999",
+      model: "Cizí vozidlo",
+      assignedDriverId: "employee-other",
+      assignedDriverName: "Radim Opluštil",
+      status: "active"
+    }
+  ], {
+    strictDriverAssignment: true,
+    driverIds: ["radim-oplustil"],
+    driverName: "Radim Opluštil",
+    verifiedDriverNameAssignment: true
+  }, { id: "radim-oplustil", name: "Radim Opluštil" });
+
+  assert.equal(result.lookupReason, "verified_driver_name");
+  assert.equal(result.fallbackUsed, false);
+  assert.deepEqual(result.matches.map((vehicle) => vehicle.id).sort(), ["vistos-radim-1", "vistos-radim-2"]);
+}
+
+{
+  const result = driverVehicleCandidateMatches([
+    {
+      id: "name-only-untrusted",
+      licensePlate: "2BB 8251",
+      model: "Mercedes CLS",
+      assignedDriverId: "",
+      assignedDriverName: "Radim Opluštil",
+      status: "active"
+    }
+  ], {
+    strictDriverAssignment: true,
+    driverIds: ["radim-oplustil"],
+    driverName: "Radim Opluštil"
+  }, { id: "radim-oplustil", name: "Radim Opluštil" });
+
+  assert.equal(result.lookupReason, "strict_driver_id_no_match");
+  assert.deepEqual(result.matches, []);
+}
+
+{
   assert.equal(fleetPayloadUsesMockData({ provider: "local_mock", source: "Lokální mock T-Cars" }), true);
   assert.equal(shouldBlockFleetPayloadForDriverReports({ APP_ENV: "production" }, { provider: "local_mock" }), true);
   assert.equal(shouldBlockFleetPayloadForDriverReports({ APP_ENV: "development" }, { provider: "local_mock" }), false);

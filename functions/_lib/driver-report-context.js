@@ -261,6 +261,7 @@ export async function driverReportContextForUser(env, user, options = {}) {
       driverUserId,
       driverName,
       driverPhone: cleanString(employee?.phone || user.phone),
+      verifiedDriverNameAssignment: Boolean(employee),
       transcriptIntent,
       currentModule
     });
@@ -274,15 +275,14 @@ export async function driverReportContextForUser(env, user, options = {}) {
   }
 
   const rawVehicles = vehicleContextItems(match);
-  const unsafeVoiceVehicleCount = rawVehicles.filter((vehicle) => !isSafeVoiceVehicle(vehicle)).length;
+  const safeVoiceVehicles = rawVehicles.filter(isSafeVoiceVehicle);
+  const unsafeVoiceVehicleCount = rawVehicles.length - safeVoiceVehicles.length;
   const vehiclesAreSafelyVerified = Boolean(
     employee &&
-    rawVehicles.length > 0 &&
-    unsafeVoiceVehicleCount === 0 &&
+    safeVoiceVehicles.length > 0 &&
     match?.fallbackUsed !== true &&
     match?.mockData !== true &&
-    match?.status !== "failed" &&
-    rawVehicles.every(isSafeVoiceVehicle)
+    match?.status !== "failed"
   );
 
   if (rawVehicles.length && !vehiclesAreSafelyVerified) {
@@ -296,7 +296,7 @@ export async function driverReportContextForUser(env, user, options = {}) {
     });
   }
 
-  const vehicles = vehiclesAreSafelyVerified ? rawVehicles : [];
+  const vehicles = vehiclesAreSafelyVerified ? safeVoiceVehicles : [];
   const emptyReason = vehiclesAreSafelyVerified
     ? ""
     : employee ? "NO_DRIVER_VEHICLES" : "DRIVER_NOT_MAPPED";
