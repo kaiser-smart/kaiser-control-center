@@ -1,0 +1,112 @@
+# Smart design projekt
+
+Tento dokument je navazovací záznam pro samostatnou designovou větev Smart Odpady. Slouží k tomu, aby šlo příště pokračovat v návrhu vzhledu bez hledání kontextu od nuly.
+
+## Stav
+
+- Název pracovního projektu: Smart design
+- Větev v GitHubu: `codex/design-preview-2026-07`
+- Produkční `main`: neměnit v rámci designového experimentu
+- Veřejný design náhled: https://kaiser-smart-design-preview.pages.dev/
+- Cloudflare Pages projekt pro veřejný náhled: `kaiser-smart-design-preview`
+- Účel veřejné URL: pouze hodnocení vizuální stránky kolegy, kteří nepracují na kódu
+
+## Bezpečnostní hranice
+
+- Neměnit produkci Smart Odpady.
+- Neměnit `main` bez samostatného schválení.
+- Neměnit API, databázi, Cloudflare bindings, secrets ani oprávnění.
+- Nepřidávat provozní data do náhledu.
+- Veřejný design náhled musí zůstat statický: HTML/CSS, bez aplikačního JavaScriptu a bez API.
+- Náhled může obsahovat ukázkový text a orientační UI prvky, ale nesmí vypadat jako živý provozní systém.
+
+## Co už vzniklo
+
+- Nová CSS vrstva v `src/styles/theme.css`.
+- Opt-in design scope přes `.theme-system` a `.smart-tablet-ui`.
+- Náhledová route v aplikaci: `/design/theme-system`.
+- Build skript zná route `/design/theme-system`.
+- Veřejný samostatný Cloudflare Pages náhled bez přihlášení.
+
+## Dotčené soubory
+
+- `src/styles/theme.css`
+  - centrální theme proměnné
+  - light/dark mode
+  - komponentové třídy pro karty, panely, tlačítka, navigaci, badge, formuláře, seznamy a rychlé akce
+- `src/app.js`
+  - route `/design/theme-system`
+  - statický náhled tabletového UI
+- `scripts/build.mjs`
+  - zařazení preview routy do statického buildu
+- `index.html`
+  - napojení `src/styles/theme.css`
+
+## Aktuální hodnocení
+
+Náhled je zachovaný jako první pracovní pokus, ale zatím není finální. Směr je použitelný pro další iteraci, ne pro převzetí do produkční aplikace.
+
+Co zatím není ono:
+
+- celkový vizuální charakter ještě nepůsobí dostatečně jako finální Smart Odpady
+- ikonografie není dořešená
+- layout je spíš demonstrační než produktový
+- barvy, kontrasty a karty bude potřeba dál ladit podle reálných obrazovek
+
+## Jak příště navázat
+
+1. Checkout větve:
+
+   ```bash
+   git fetch origin
+   git checkout codex/design-preview-2026-07
+   git pull
+   ```
+
+2. Přečíst:
+
+   - `PŘÍRUČKA.md`
+   - `docs/SMART_DESIGN_PROJECT.md`
+
+3. Spustit lokálně:
+
+   ```bash
+   npm run build
+   npm run dev
+   ```
+
+4. Otevřít náhled:
+
+   ```text
+   /design/theme-system
+   ```
+
+5. Po další iteraci znovu nasadit pouze veřejný statický design náhled na:
+
+   ```text
+   https://kaiser-smart-design-preview.pages.dev/
+   ```
+
+## Doporučený další krok
+
+Další iterace by měla řešit pouze vizuální stránku:
+
+- zjednodušit layout
+- doladit tvary karet
+- připravit reálnější tabletovou obrazovku pro řidiče
+- doplnit pracovní sadu ikon vozidel
+- porovnat light a dark mode
+- zachovat vše jako náhled mimo produkci
+
+## Co nedělat v další iteraci
+
+- nepřepisovat stávající obrazovky Smart Odpady
+- neměnit produkční data
+- nenapojovat API
+- neměnit autentizaci
+- nenasazovat do produkce Smart Odpady
+- nemazat starý vzhled
+
+## Poznámka k veřejnému náhledu
+
+Veřejná URL slouží jen pro designovou zpětnou vazbu. Pokud bude potřeba náhled aktualizovat, musí zůstat oddělený od hlavního projektu Smart Odpady a nesmí obcházet Cloudflare Access na chráněných preview URL hlavní aplikace.
