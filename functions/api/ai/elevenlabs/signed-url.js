@@ -22,6 +22,19 @@ function cleanString(value) {
   return String(value ?? "").trim();
 }
 
+function fallbackConversationId() {
+  return `kso-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function dynamicVariablesWithConversationId(dynamicVariables = {}, conversationId = "", fallbackId = "") {
+  const safeConversationId = cleanString(conversationId) || cleanString(fallbackId) || fallbackConversationId();
+
+  return {
+    ...(dynamicVariables && typeof dynamicVariables === "object" && !Array.isArray(dynamicVariables) ? dynamicVariables : {}),
+    conversation_id: safeConversationId
+  };
+}
+
 function isDebugRequest(request) {
   const url = new URL(request.url);
   return cleanString(url.searchParams.get("debug")) === "codex";
@@ -289,11 +302,14 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
     });
     await recordSarlotaIntroAnnouncement(env, user, assistant, introAnnouncement);
 
+    const conversationId = cleanString(payload.conversation_id);
+    const dynamicVariablesForRuntime = dynamicVariablesWithConversationId(dynamicVariables, conversationId);
+
     return json({
       signedUrl: payload.signed_url,
-      conversationId: payload.conversation_id || "",
+      conversationId,
       ...assistantPublicMetadata(assistant),
-      dynamicVariables,
+      dynamicVariables: dynamicVariablesForRuntime,
       diagnostics: {
         diagnosticMode: omitDriverReportVehicleContext ? DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE : "",
         driverReportVehicleContextOmitted: omitDriverReportVehicleContext

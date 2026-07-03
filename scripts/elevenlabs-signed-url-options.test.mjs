@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 
+import { dynamicVariablesWithConversationId } from "../functions/api/ai/elevenlabs/signed-url.js";
 import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
+
+{
+  const variables = dynamicVariablesWithConversationId({ user_id: "radim-oplustil" }, "conv_123");
+  assert.equal(variables.user_id, "radim-oplustil");
+  assert.equal(variables.conversation_id, "conv_123");
+}
+
+{
+  const variables = dynamicVariablesWithConversationId({ user_id: "radim-oplustil" }, "", "kso-session-fallback");
+  assert.equal(variables.conversation_id, "kso-session-fallback");
+}
 
 const requestedPaths = [];
 const assistant = useElevenLabsAssistant({
