@@ -120,6 +120,13 @@ body:has(.smart-tablet-ui) {
   box-sizing: border-box;
 }
 
+:where(.theme-system, .smart-tablet-ui) button,
+:where(.theme-system, .smart-tablet-ui) input,
+:where(.theme-system, .smart-tablet-ui) textarea,
+:where(.theme-system, .smart-tablet-ui) select {
+  font-family: var(--theme-font-main);
+}
+
 :where(.theme-system, .smart-tablet-ui) :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
