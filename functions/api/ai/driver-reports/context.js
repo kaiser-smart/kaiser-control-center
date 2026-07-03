@@ -14,6 +14,7 @@ const VEHICLE_CONTEXT_LOADING_MESSAGE = "Rozumím. Podívám se do Smart systém
 const VEHICLE_PICKER_MESSAGE = "Otevřu ti výběr v aplikaci.";
 const VEHICLE_PICKER_OR_MANUAL_QUESTION = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
 const NO_VERIFIED_VEHICLE_QUESTION = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
+const NO_VERIFIED_ASSIGNED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
 const PICKER_FAILED_QUESTION = "Výběr se mi nepodařilo otevřít. Řekni mi prosím značku, typ nebo SPZ vozidla.";
 const LOAD_FAILED_QUESTION = "Vozidlo se mi teď nepodařilo ověřit. Otevřu ti výběr v aplikaci.";
 
@@ -184,7 +185,9 @@ function errorPayload(errorCode, message, status = 400, extra = {}) {
     vehiclesCount: 0,
     vehicleLookupMode: "picker_or_manual",
     errorCode,
+    reason: errorCode,
     message,
+    assistantMessage: message,
     messageForAssistant: message,
     fallbackQuestion: LOAD_FAILED_QUESTION,
     apiStatus: status >= 500 ? "waiting" : "ready",
@@ -267,6 +270,9 @@ export async function onRequestGet({ request, env }) {
   const emptyReason = vehiclesAreSafelyVerified
     ? ""
     : employee ? "NO_DRIVER_VEHICLES" : "DRIVER_NOT_MAPPED";
+  const reason = vehiclesAreSafelyVerified
+    ? ""
+    : NO_VERIFIED_ASSIGNED_VEHICLES_REASON;
   const fallbackQuestion = vehiclesAreSafelyVerified
     ? VEHICLE_PICKER_OR_MANUAL_QUESTION
     : NO_VERIFIED_VEHICLE_QUESTION;
@@ -276,6 +282,7 @@ export async function onRequestGet({ request, env }) {
   const messageForAssistant = vehiclesAreSafelyVerified
     ? vehicleListMessage(vehicles)
     : NO_VERIFIED_VEHICLE_QUESTION;
+  const assistantMessage = messageForAssistant;
   const diagnostics = {
     userId: cleanString(user.id),
     userName: cleanString(user.name),
@@ -306,6 +313,7 @@ export async function onRequestGet({ request, env }) {
     sessionId,
     status: match?.status || "none",
     errorCode: emptyReason,
+    reason,
     userName: cleanString(user.name),
     userResolved: true,
     employeeResolved: Boolean(employee),
@@ -330,6 +338,7 @@ export async function onRequestGet({ request, env }) {
     loadingMessage: VEHICLE_CONTEXT_LOADING_MESSAGE,
     pickerFallbackQuestion: PICKER_FAILED_QUESTION,
     message: messageForAssistant,
+    assistantMessage,
     messageForAssistant,
     diagnostics,
     apiStatus: "ready"

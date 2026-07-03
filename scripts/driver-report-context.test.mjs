@@ -19,6 +19,7 @@ const VEHICLE_QUESTION_PHRASES = [
   "Ty tam vidíš co?",
   "Který vozidla mám přiřazený?"
 ];
+const NO_VERIFIED_ASSIGNED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
 
 const radimUser = {
   id: "user-radim",
@@ -266,10 +267,34 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.ok, true);
   assert.equal(result.vehiclesVerified, false);
   assert.deepEqual(result.vehicles, []);
+  assert.equal(result.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
+  assert.equal(result.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
   assert.equal(result.answerText, UNVERIFIED_VEHICLE_MESSAGE);
   assert.equal(result.answerText.includes("Nesmí být řečeno"), false);
   assert.equal(result.answerText.includes("5A4 8912"), false);
   assert.equal(result.vehicleOrdinalSelectionAllowed, false);
+}
+
+for (const [name, payload] of [
+  ["empty object", {}],
+  ["generic string", "Tool called successfully."],
+  ["generic message", { ok: true, message: "Tool called successfully." }],
+  ["explicitly unverified", { ok: true, vehiclesVerified: false, vehicles: [] }]
+]) {
+  const tools = createElevenLabsClientTools({
+    requestJson: async () => payload
+  });
+  const result = await tools.get_driver_report_context({ sessionId: `voice-radim-${name}` });
+
+  assert.equal(result.ok, true, name);
+  assert.equal(result.vehiclesVerified, false, name);
+  assert.deepEqual(result.vehicles, [], name);
+  assert.equal(result.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON, name);
+  assert.equal(result.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE, name);
+  assert.equal(result.answerText, UNVERIFIED_VEHICLE_MESSAGE, name);
+  assert.equal(result.answerText.includes("Ford Transit"), false, name);
+  assert.equal(result.answerText.includes("5A4 8921"), false, name);
+  assert.equal(result.answerText.includes("1A2 3456"), false, name);
 }
 
 {
@@ -289,6 +314,7 @@ async function withFakeDriverPickerDom(callback) {
       ],
       vehiclesCount: 2,
       vehicleLookupMode: "verified_vehicle_list",
+      assistantMessage: "Backend věta se nesmí slepě přebírat, pokud by obsahovala VIN WDB12345678901234.",
       messageForAssistant: "Vidím u tebe Mercedes Atego SPZ 1A1 1111 a Mercedes Sprinter SPZ 2A2 2222. Kterého se závada týká?",
       apiStatus: "ready"
     })
@@ -299,11 +325,15 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.vehiclesVerified, true);
   assert.equal(result.vehiclePickerAvailable, true);
   assert.equal(result.vehiclesCount, 2);
+  assert.equal(result.vehicles.length, 2);
   assert.equal(result.vehicleOrdinalSelectionAllowed, true);
-  assert.equal(result.answerText.includes("Mercedes Atego"), true);
-  assert.equal(result.answerText.includes("1A1 1111"), true);
-  assert.equal(result.answerText.includes("Mercedes Sprinter"), true);
-  assert.equal(result.answerText.includes("2A2 2222"), true);
+  assert.match(result.answerText, /Mercedes Atego/);
+  assert.match(result.answerText, /SPZ 1A1 1111/);
+  assert.match(result.answerText, /Mercedes Sprinter/);
+  assert.match(result.answerText, /SPZ 2A2 2222/);
+  assert.match(result.answerText, /Kterého se závada týká/);
+  assert.equal(result.assistantMessage, result.answerText);
+  assert.equal(result.answerText.includes("WDB12345678901234"), false);
   assert.equal(result.answerText.includes(["Mercedes Sprinter", "SPZ", "5A4 8912"].join(" ")), false);
   assert.match(result.answerText, /Kterého se závada týká/);
 }
@@ -337,10 +367,15 @@ async function withFakeDriverPickerDom(callback) {
   assert.equal(result.vehiclesCount, 4);
   assert.equal(result.vehicles.length, 4);
   assert.match(result.answerText, /Mercedes Atego/);
-  assert.match(result.answerText, /1A1 1111/);
+  assert.match(result.answerText, /SPZ 1A1 1111/);
+  assert.match(result.answerText, /Mercedes Sprinter/);
+  assert.match(result.answerText, /SPZ 2A2 2222/);
+  assert.match(result.answerText, /Mercedes Econic/);
+  assert.match(result.answerText, /SPZ 3A3 3333/);
   assert.match(result.answerText, /Mercedes Arocs/);
-  assert.match(result.answerText, /4A4 4444/);
-  assert.match(result.answerText, /Kterého se závada týká/);
+  assert.match(result.answerText, /SPZ 4A4 4444/);
+  assert.equal(result.answerText.includes("VIN"), false);
+  assert.equal(result.assistantMessage, result.answerText);
   assert.equal(result.vehicleOrdinalSelectionAllowed, true);
 }
 
@@ -385,6 +420,8 @@ async function withFakeDriverPickerDom(callback) {
     assert.match(result.answerText, /MAN/);
     assert.match(result.answerText, /SPZ 4BC 5678/);
     assert.match(result.answerText, /Kterého se závada týká/);
+    assert.equal(result.assistantMessage, result.answerText);
+    assert.equal(result.answerText.includes("VIN"), false);
   }
 }
 
@@ -418,6 +455,7 @@ async function withFakeDriverPickerDom(callback) {
     assert.equal(result.ok, true);
     assert.equal(result.vehiclesVerified, false);
     assert.deepEqual(result.vehicles, []);
+    assert.equal(result.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
     assert.equal(result.answerText.includes("Demo Mercedes"), false);
     assert.equal(result.answerText.includes("9Z9 9999"), false);
     assert.equal(errors.some((entry) => String(entry[0]).includes("driver_reports.client_unsafe_vehicle_list_blocked")), true);

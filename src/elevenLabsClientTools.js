@@ -107,6 +107,7 @@ const DRIVER_REPORT_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikac
 const DRIVER_REPORT_PICKER_FAILED_MESSAGE = "Výběr se mi nepodařilo otevřít. Řekni mi prosím značku, typ nebo SPZ vozidla.";
 const DRIVER_REPORT_VEHICLE_SELECTED_MESSAGE = "Vozidlo je vybrané v aplikaci.";
 const DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
+const DRIVER_REPORT_NO_VERIFIED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
 
 export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   {
@@ -238,7 +239,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "get_driver_report_context",
-    description: "Read-only ověří kontext Hlášení řidičů: přihlášeného řidiče, oprávnění a bezpečně ověřená vozidla. Pro dotaz na vozidla volej vždy jako první. Když vrátí vehiclesVerified true a vehicles, smíš říct typ/název a SPZ bez VIN. Jinak požádej o SPZ. Nic nezapisuje.",
+    description: "Read-only ověří kontext Hlášení řidičů: přihlášeného řidiče, oprávnění a bezpečně ověřená přiřazená vozidla. Pro dotaz na vozidla volej vždy jako první. V hlasu čti jen assistantMessage/answerText z výsledku; nikdy si nedoplňuj vozidlo ani SPZ. Nic nezapisuje.",
     parameters: [
       { name: "sessionId", type: "string", required: false },
       { name: "conversationId", type: "string", required: false },
@@ -430,15 +431,27 @@ export function createElevenLabsClientTools({
     return cleanString(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
 
-  function driverReportContextAnswer(result = {}) {
-    const vehicles = Array.isArray(result?.vehicles) ? result.vehicles : [];
+  function truncateForAssistant(value, max = 160) {
+    const text = cleanString(value).replace(/\s+/g, " ");
+    return text.length > max ? `${text.slice(0, Math.max(0, max - 1)).trim()}…` : text;
+  }
 
-    if (result?.vehiclesVerified === true && vehicles.length) {
-      return verifiedVehicleListAnswer(vehicles);
+  function driverReportContextSource(result = {}) {
+    return result && typeof result === "object" && !Array.isArray(result)
+      ? result
+      : { message: cleanString(result) };
+  }
+
+  function driverReportContextAnswer(result = {}) {
+    const source = driverReportContextSource(result);
+    const vehicles = safeDriverReportVehicles(source);
+
+    if (source.vehiclesVerified === true && vehicles.length) {
+      return cleanString(source.assistantMessage || source.messageForAssistant) ||
+        verifiedVehicleListAnswer(vehicles);
     }
 
-    return cleanString(result.messageForAssistant || result.fallbackQuestion || result.message) ||
-      DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
+    return DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
   }
 
   function isSafeDriverReportVehicle(vehicle = {}) {
@@ -536,44 +549,51 @@ export function createElevenLabsClientTools({
   }
 
   function assistantSafeDriverReportContext(result = {}, parameters = {}) {
-    const vehicles = safeDriverReportVehicles(result);
-    const vehiclesVerified = result.vehiclesVerified === true && vehicles.length > 0;
+    const source = driverReportContextSource(result);
+    const vehicles = safeDriverReportVehicles(source);
+    const vehiclesVerified = source.vehiclesVerified === true && vehicles.length > 0;
     const exposeVehicleListToVoice = vehiclesVerified;
-    const vehiclePickerAvailable = result.vehiclePickerAvailable === true || vehiclesVerified;
-    const messageForAssistant = vehiclesVerified
+    const vehiclePickerAvailable = vehiclesVerified;
+    const assistantMessage = vehiclesVerified
       ? verifiedVehicleListAnswer(vehicles)
-      : cleanString(result.messageForAssistant || result.message || result.fallbackQuestion) || DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
+      : DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE;
+    const reason = vehiclesVerified
+      ? cleanString(source.reason)
+      : DRIVER_REPORT_NO_VERIFIED_VEHICLES_REASON;
 
     return {
-      ok: result.ok === true,
-      module: result.module || "hlaseni-ridicu",
-      currentModule: result.currentModule || "hlaseni-ridicu",
-      sessionId: result.sessionId || cleanString(parameters.sessionId || parameters.session_id || parameters.conversationId || parameters.conversation_id),
-      status: result.status || (vehiclesVerified ? "verified_vehicle_list" : "picker_or_manual"),
-      userName: result.userName || result.user?.name || "",
-      userResolved: result.userResolved === true,
-      employeeResolved: result.employeeResolved === true,
-      driverResolved: result.driverResolved === true || vehiclePickerAvailable,
+      ok: source.ok !== false,
+      module: source.module || "hlaseni-ridicu",
+      currentModule: source.currentModule || "hlaseni-ridicu",
+      sessionId: source.sessionId || cleanString(parameters.sessionId || parameters.session_id || parameters.conversationId || parameters.conversation_id),
+      status: source.status || (vehiclesVerified ? "verified_vehicle_list" : "picker_or_manual"),
+      userName: source.userName || source.user?.name || "",
+      userResolved: source.userResolved === true,
+      employeeResolved: source.employeeResolved === true,
+      driverResolved: vehiclesVerified,
       vehiclesVerified,
       vehiclePickerAvailable,
       vehicleLookupMode: vehiclesVerified
         ? "verified_vehicle_list"
         : "picker_or_manual",
-      errorCode: result.errorCode || "",
-      user: result.user || null,
-      driver: result.driver ? {
-        employeeId: cleanString(result.driver.employeeId),
-        source: cleanString(result.driver.source)
+      errorCode: cleanString(source.errorCode || (!vehiclesVerified ? reason : "")),
+      reason,
+      user: source.user || null,
+      driver: source.driver ? {
+        employeeId: cleanString(source.driver.employeeId),
+        source: cleanString(source.driver.source)
       } : null,
       vehicles: exposeVehicleListToVoice ? vehicles : [],
       vehiclesCount: exposeVehicleListToVoice ? vehicles.length : 0,
       vehicleOrdinalSelectionAllowed: vehicles.length > 1,
-      permissions: result.permissions || {},
-      fallbackQuestion: messageForAssistant,
-      message: messageForAssistant,
-      messageForAssistant,
-      diagnostics: safeDriverReportDiagnostics(result.diagnostics),
-      apiStatus: result.apiStatus || "ready"
+      permissions: source.permissions || {},
+      fallbackQuestion: assistantMessage,
+      message: assistantMessage,
+      assistantMessage,
+      messageForAssistant: assistantMessage,
+      answerText: assistantMessage,
+      diagnostics: safeDriverReportDiagnostics(source.diagnostics),
+      apiStatus: source.apiStatus || "ready"
     };
   }
 
@@ -672,6 +692,8 @@ export function createElevenLabsClientTools({
         cached: true,
         sessionCacheKey: sessionKey,
         message: answerText,
+        assistantMessage: answerText,
+        messageForAssistant: answerText,
         answerText
       };
     }
@@ -707,15 +729,17 @@ export function createElevenLabsClientTools({
         cached: false,
         sessionCacheKey: sessionKey,
         errorCode: code,
+        reason: code,
         message,
+        assistantMessage: message,
         messageForAssistant: message,
         answerText: message,
         apiStatus: error?.payload?.apiStatus || "waiting"
       };
     }
 
-    cacheDriverReportPickerContext(sessionKey, result);
     const normalizedResult = assistantSafeDriverReportContext(result, parameters);
+    cacheDriverReportPickerContext(sessionKey, normalizedResult);
     cacheDriverReportContext(sessionKey, normalizedResult);
     const answerText = driverReportContextAnswer(normalizedResult);
 

@@ -7,6 +7,7 @@ import { createElevenLabsClientTools } from "../src/elevenLabsClientTools.js";
 
 const TEST_URL = "https://kso.test";
 const UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
+const NO_VERIFIED_ASSIGNED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
 const VEHICLE_QUESTION_PHRASES = [
   "Jaký tam jsou vozidla?",
   "Jaký tam mám?",
@@ -98,6 +99,13 @@ async function prepareVoiceCreate(env, payload = {}) {
   }, { authSource: "test" });
 }
 
+function assertNoVehicleLeak(text = "") {
+  assert.equal(text.includes("Ford Transit"), false);
+  assert.equal(text.includes("5A4 8921"), false);
+  assert.equal(text.includes("1A2 3456"), false);
+  assert.equal(text.includes("WDB"), false);
+}
+
 {
   const env = envFor();
   const { status, payload } = await contextPayload(env);
@@ -105,6 +113,8 @@ async function prepareVoiceCreate(env, payload = {}) {
   assert.equal(status, 200);
   assert.equal(payload.vehiclesVerified, false);
   assert.equal(payload.vehiclesCount, 0);
+  assert.equal(payload.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
+  assert.equal(payload.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
   assert.equal(payload.messageForAssistant, UNVERIFIED_VEHICLE_MESSAGE);
 }
 
@@ -134,6 +144,7 @@ async function prepareVoiceCreate(env, payload = {}) {
   assert.match(payload.messageForAssistant, /SPZ 1AB 2345/);
   assert.match(payload.messageForAssistant, /Mercedes Sprinter/);
   assert.match(payload.messageForAssistant, /SPZ 2AB 2345/);
+  assert.equal(payload.assistantMessage, payload.messageForAssistant);
   assert.equal(payload.messageForAssistant.includes("WDB"), false);
 
   const tools = createElevenLabsClientTools({
@@ -155,6 +166,7 @@ async function prepareVoiceCreate(env, payload = {}) {
     });
     assert.equal(toolResult.vehiclesVerified, true);
     assert.equal(toolResult.vehiclesCount, 2);
+    assert.equal(toolResult.assistantMessage, toolResult.answerText);
     assert.match(toolResult.answerText, /Kterého se závada týká/);
     assert.equal(toolResult.answerText.includes("WDB"), false);
   }
@@ -171,6 +183,8 @@ async function prepareVoiceCreate(env, payload = {}) {
   assert.equal(status, 200);
   assert.equal(payload.vehiclesVerified, false);
   assert.deepEqual(payload.vehicles, []);
+  assert.equal(payload.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
+  assert.equal(payload.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
   assert.equal(payload.messageForAssistant.includes("1AB 2345"), false);
 }
 
@@ -212,6 +226,65 @@ async function prepareVoiceCreate(env, payload = {}) {
   assert.equal(confirmed.notificationsSent, false);
   assert.equal(confirmed.driverPartRequest.status, "mock_created");
   assert.match(confirmed.reply, /Mock hotovo/);
+}
+
+{
+  const tools = createElevenLabsClientTools({
+    requestJson: async () => ({
+      ok: true,
+      module: "hlaseni-ridicu",
+      userName: "Radim",
+      userResolved: true,
+      employeeResolved: true,
+      driverResolved: false,
+      vehiclesVerified: false,
+      vehiclePickerAvailable: false,
+      vehicles: [
+        {
+          id: "fake",
+          vehicleId: "fake",
+          displayName: "Ford Transit",
+          licensePlate: "5A4 8921",
+          spz: "5A4 8921",
+          vin: "WDBFAKEVIN0000000",
+          assignedToCurrentDriver: true,
+          existsInFleet: true,
+          active: true,
+          source: "fleet_db"
+        }
+      ],
+      vehiclesCount: 1,
+      messageForAssistant: "Tool called successfully.",
+      apiStatus: "ready"
+    })
+  });
+  const result = await tools.get_driver_report_context({ sessionId: "hallucination-guard" });
+
+  assert.equal(result.vehiclesVerified, false);
+  assert.deepEqual(result.vehicles, []);
+  assert.equal(result.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
+  assert.equal(result.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
+  assert.equal(result.answerText, UNVERIFIED_VEHICLE_MESSAGE);
+  assertNoVehicleLeak(result.answerText);
+}
+
+for (const [name, payload] of [
+  ["empty object", {}],
+  ["generic string", "Tool called successfully."],
+  ["generic response message", { ok: true, message: "Tool called successfully." }],
+  ["vehicles verified false", { ok: true, vehiclesVerified: false, vehicles: [] }]
+]) {
+  const tools = createElevenLabsClientTools({
+    requestJson: async () => payload
+  });
+  const result = await tools.get_driver_report_context({ sessionId: `hallucination-guard-${name}` });
+
+  assert.equal(result.vehiclesVerified, false, name);
+  assert.deepEqual(result.vehicles, [], name);
+  assert.equal(result.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON, name);
+  assert.equal(result.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE, name);
+  assert.equal(result.answerText, UNVERIFIED_VEHICLE_MESSAGE, name);
+  assertNoVehicleLeak(result.answerText);
 }
 
 console.log("sarlota driver reports e2e mock tests passed");
