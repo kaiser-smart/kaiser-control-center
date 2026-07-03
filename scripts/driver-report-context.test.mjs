@@ -597,6 +597,25 @@ for (const [name, payload] of [
 }
 
 {
+  let requested = false;
+  const tools = createElevenLabsClientTools({
+    requestJson: async () => {
+      requested = true;
+      throw new Error("validate_driver_vehicle_spz must not call backend for partial SPZ fragments");
+    }
+  });
+  const result = await tools.validate_driver_vehicle_spz({ spz: "CCD" });
+
+  assert.equal(requested, false);
+  assert.equal(result.ok, false);
+  assert.equal(result.errorCode, "SPZ_INCOMPLETE");
+  assert.equal(result.spzValidated, false);
+  assert.equal(result.existsInFleet, false);
+  assert.equal(result.vehiclePickerAvailable, true);
+  assert.equal(result.answerText, "Tohle není úplná SPZ. Nadiktuj mi prosím celou SPZ, nebo ti otevřu výběr vozidla v aplikaci.");
+}
+
+{
   await withFakeDriverPickerDom(async ({ find }) => {
     const posts = [];
     const tools = createElevenLabsClientTools({
@@ -766,6 +785,9 @@ for (const [name, payload] of [
   }
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /vždy nejdřív zavolej get_driver_report_context/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /show_driver_vehicle_picker nesmí být první krok/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Pokud get_driver_report_context selže/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /hned zavolej show_driver_vehicle_picker/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Pokud řekne jen fragment SPZ/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej VIN/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nevidím bezpečně přiřazené vozidlo\. Nadiktuj mi prosím SPZ\./);
 }

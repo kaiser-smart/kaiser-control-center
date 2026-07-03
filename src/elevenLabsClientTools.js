@@ -774,6 +774,29 @@ export function createElevenLabsClientTools({
       };
     }
 
+    const spzKey = licensePlateCompareKey(spz);
+    if (spzKey.length < 5) {
+      const message = "Tohle není úplná SPZ. Nadiktuj mi prosím celou SPZ, nebo ti otevřu výběr vozidla v aplikaci.";
+      return {
+        ok: false,
+        status: "needs_input",
+        errorCode: "SPZ_INCOMPLETE",
+        spzNormalized: "",
+        spzManual: "",
+        spzValidated: false,
+        existsInFleet: false,
+        assignedToCurrentDriver: false,
+        vehicleVerified: false,
+        vehiclesVerified: false,
+        vehicleId: null,
+        manualVehicleReview: true,
+        vehiclePickerAvailable: true,
+        messageForAssistant: message,
+        answerText: message,
+        apiStatus: "ready"
+      };
+    }
+
     let validation;
     try {
       validation = await readJson("/api/driver-reports/license-plate", { spz });
