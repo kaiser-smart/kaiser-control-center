@@ -3,6 +3,7 @@ import { sarlotaIntroAnnouncementForAi } from "../../../_lib/ai-session-announce
 import { normalizeAiSearch, userDynamicVariablesForAi } from "../../../_lib/ai-people-summary.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import { driverReportContextForUser } from "../../../_lib/driver-report-context.js";
+import { onRequestPost as driverReportContextVoiceWebhook } from "../../voice/driver-report-context.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
 import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
 import {
@@ -683,6 +684,78 @@ async function backendDriverReportContextForStatus(env, user) {
   }
 }
 
+async function voiceWebhookSelfCheckForStatus(env, user) {
+  const tokenPresent = Boolean(cleanString(env?.VOICE_ASSISTANT_WEBHOOK_TOKEN || env?.ELEVENLABS_WEBHOOK_TOKEN));
+
+  if (!tokenPresent) {
+    return {
+      status: "error",
+      source: "server_side_voice_webhook_self_check",
+      tokenPresent: false,
+      httpStatus: 0,
+      vehiclesVerified: false,
+      vehiclesCount: 0,
+      assistantMessage: "Cloudflare webhook token není nastavený.",
+      reason: "VOICE_WEBHOOK_TOKEN_MISSING",
+      fullVinReturned: false,
+      signedUrlReturned: false,
+      secretsReturned: false
+    };
+  }
+
+  try {
+    const response = await driverReportContextVoiceWebhook({
+      request: new Request("https://kaiser-control-center.pages.dev/api/voice/driver-report-context", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-voice-assistant-token": cleanString(env.VOICE_ASSISTANT_WEBHOOK_TOKEN || env.ELEVENLABS_WEBHOOK_TOKEN)
+        },
+        body: JSON.stringify({
+          parameters: {
+            user_id: cleanString(user?.id),
+            transcriptIntent: "Jaký tam mám vozidla?"
+          }
+        })
+      }),
+      env
+    });
+    const payload = await response.json();
+    const vehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
+
+    return {
+      status: response.ok && payload.vehiclesVerified === true ? "ok" : (response.status >= 500 ? "error" : "unverified"),
+      source: "server_side_voice_webhook_self_check",
+      tokenPresent: true,
+      httpStatus: response.status,
+      vehiclesVerified: payload.vehiclesVerified === true,
+      vehiclesCount: vehicles.length,
+      assistantMessage: safeShortText(payload.assistantMessage || payload.answerText || payload.error, 240),
+      reason: cleanString(payload.reason || payload.errorCode || payload.code),
+      fullVinReturned: false,
+      signedUrlReturned: false,
+      secretsReturned: false
+    };
+  } catch (error) {
+    console.error("elevenlabs.status_voice_webhook_self_check_failed", {
+      message: safeErrorMessage(error)
+    });
+    return {
+      status: "error",
+      source: "server_side_voice_webhook_self_check",
+      tokenPresent: true,
+      httpStatus: 500,
+      vehiclesVerified: false,
+      vehiclesCount: 0,
+      assistantMessage: "Webhook self-test se teď nepodařilo provést.",
+      reason: "VOICE_WEBHOOK_SELF_CHECK_FAILED",
+      fullVinReturned: false,
+      signedUrlReturned: false,
+      secretsReturned: false
+    };
+  }
+}
+
 async function optionalStatusContext(name, loader, fallback) {
   try {
     return await loader();
@@ -726,6 +799,9 @@ export async function sarlotaStatusPayload(env, user, assistantConfig = resolveE
   const driverReportVehicleVariables = { omittedByDefault: true };
   const backendDriverReportContext = assistantConfig.assistantType === "sarlota"
     ? await backendDriverReportContextForStatus(env, user)
+    : null;
+  const voiceWebhookSelfCheck = assistantConfig.assistantType === "sarlota"
+    ? await voiceWebhookSelfCheckForStatus(env, user)
     : null;
   const dynamicVariables = {
     ...userVariables,
@@ -848,6 +924,7 @@ export async function sarlotaStatusPayload(env, user, assistantConfig = resolveE
     },
     driverReportVehicleContext: driverReportVehicleStatusSummary(driverReportVehicleVariables),
     backendDriverReportContext,
+    voiceWebhookSelfCheck,
     signedUrlEndpoint: {
       status: configured ? "ok" : "error",
       exists: true,

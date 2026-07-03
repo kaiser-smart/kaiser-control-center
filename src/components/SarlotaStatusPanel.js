@@ -185,12 +185,35 @@ function backendVehicleContextDiagnostics(context = null) {
   `;
 }
 
+function voiceWebhookSelfCheckDiagnostics(check = null) {
+  if (!check) {
+    return "";
+  }
+
+  return `
+    <section class="sarlota-status__diagnostic">
+      <h3>Webhook self-test</h3>
+      <dl>
+        ${diagnosticLine("Zdroj", escapeHtml(check.source || "server_side_voice_webhook_self_check"))}
+        ${diagnosticLine("Token v Cloudflare", escapeHtml(check.tokenPresent ? "ano" : "ne"))}
+        ${diagnosticLine("HTTP", escapeHtml(String(check.httpStatus || 0)))}
+        ${diagnosticLine("vehiclesVerified", escapeHtml(check.vehiclesVerified ? "true" : "false"))}
+        ${diagnosticLine("Počet vozidel", escapeHtml(String(check.vehiclesCount ?? 0)))}
+        ${diagnosticLine("Odpověď", escapeHtml(check.assistantMessage || ""))}
+        ${diagnosticLine("Důvod", escapeHtml(check.reason || ""))}
+        ${diagnosticLine("Bezpečnost", escapeHtml("hodnota tokenu, VIN, secrets a signed URL se nevrací"))}
+      </dl>
+    </section>
+  `;
+}
+
 function diagnosticDetails(data) {
   const details = [
     toolDiagnostics(data.tools),
     knowledgeDiagnostics(data.knowledgeBase),
     vehicleContextDiagnostics(data.driverReportVehicleContext),
-    backendVehicleContextDiagnostics(data.backendDriverReportContext)
+    backendVehicleContextDiagnostics(data.backendDriverReportContext),
+    voiceWebhookSelfCheckDiagnostics(data.voiceWebhookSelfCheck)
   ].filter(Boolean).join("");
 
   if (!details) {
@@ -319,6 +342,18 @@ function backendVehicleContextDetail(context = null) {
   return `${context.reason || "bez ověřených vozidel"} · ${context.assistantMessage || "fallback"}`;
 }
 
+function voiceWebhookSelfCheckDetail(check = null) {
+  if (!check) {
+    return "webhook self-test neověřen";
+  }
+
+  if (check.vehiclesVerified === true) {
+    return `HTTP ${check.httpStatus || 0}, ${check.vehiclesCount || 0} ověřených vozidel`;
+  }
+
+  return `HTTP ${check.httpStatus || 0}, ${check.reason || check.assistantMessage || "neověřeno"}`;
+}
+
 export function SarlotaStatusPanel({
   status = null,
   loading = false,
@@ -370,6 +405,7 @@ export function SarlotaStatusPanel({
     statusRow("Knowledge Base", data.knowledgeBase?.status || "unverified", knowledgeBaseDetail(data.knowledgeBase)),
     statusRow("Kontext vozidel", data.driverReportVehicleContext?.status ? "ok" : "unverified", vehicleContextDetail(data.driverReportVehicleContext)),
     statusRow("Backend kontext vozidel", data.backendDriverReportContext?.status || "unverified", backendVehicleContextDetail(data.backendDriverReportContext)),
+    statusRow("Webhook self-test", data.voiceWebhookSelfCheck?.status || "unverified", voiceWebhookSelfCheckDetail(data.voiceWebhookSelfCheck)),
     statusRow(
       "Hlasový test bez vozidel",
       omitDriverReportVehicleContext ? "configured" : "ok",
