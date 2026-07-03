@@ -158,11 +158,39 @@ function vehicleContextDiagnostics(context = null) {
   `;
 }
 
+function backendVehicleContextDiagnostics(context = null) {
+  if (!context) {
+    return "";
+  }
+
+  const diagnostics = context.diagnostics || {};
+  const preview = context.vehiclesPreview || context.assistantMessage || "žádný ověřený text";
+
+  return `
+    <section class="sarlota-status__diagnostic">
+      <h3>Backend kontext vozidel</h3>
+      <dl>
+        ${diagnosticLine("Zdroj", escapeHtml(context.source || "driver_report_context_backend"))}
+        ${diagnosticLine("HTTP", escapeHtml(String(context.httpStatus || 0)))}
+        ${diagnosticLine("vehiclesVerified", escapeHtml(context.vehiclesVerified ? "true" : "false"))}
+        ${diagnosticLine("Počet vozidel", escapeHtml(String(context.vehiclesCount ?? 0)))}
+        ${diagnosticLine("Náhled", escapeHtml(preview))}
+        ${diagnosticLine("Důvod", escapeHtml(context.reason || ""))}
+        ${diagnosticLine("Data source", escapeHtml(diagnostics.dataSource || ""))}
+        ${diagnosticLine("Před/po filtru", escapeHtml(`${diagnostics.vehiclesCountBeforeFilter ?? 0}/${diagnostics.vehiclesCountAfterFilter ?? 0}`))}
+        ${diagnosticLine("Unsafe vynecháno", escapeHtml(String(diagnostics.unsafeVoiceVehicleCount ?? 0)))}
+        ${diagnosticLine("Bezpečnost", escapeHtml("bez VIN, bez secrets, bez signed URL"))}
+      </dl>
+    </section>
+  `;
+}
+
 function diagnosticDetails(data) {
   const details = [
     toolDiagnostics(data.tools),
     knowledgeDiagnostics(data.knowledgeBase),
-    vehicleContextDiagnostics(data.driverReportVehicleContext)
+    vehicleContextDiagnostics(data.driverReportVehicleContext),
+    backendVehicleContextDiagnostics(data.backendDriverReportContext)
   ].filter(Boolean).join("");
 
   if (!details) {
@@ -279,6 +307,18 @@ function vehicleContextDetail(context = null) {
   return `${context.status || "neověřeno"}, ${count} možností ze signed-url dynamic variables`;
 }
 
+function backendVehicleContextDetail(context = null) {
+  if (!context) {
+    return "backend kontext neověřen";
+  }
+
+  if (context.vehiclesVerified === true) {
+    return `${context.vehiclesCount || 0} ověřených vozidel z backendu`;
+  }
+
+  return `${context.reason || "bez ověřených vozidel"} · ${context.assistantMessage || "fallback"}`;
+}
+
 export function SarlotaStatusPanel({
   status = null,
   loading = false,
@@ -329,6 +369,7 @@ export function SarlotaStatusPanel({
     statusRow("Tools", data.tools?.status || "unverified", toolDetail(data.tools)),
     statusRow("Knowledge Base", data.knowledgeBase?.status || "unverified", knowledgeBaseDetail(data.knowledgeBase)),
     statusRow("Kontext vozidel", data.driverReportVehicleContext?.status ? "ok" : "unverified", vehicleContextDetail(data.driverReportVehicleContext)),
+    statusRow("Backend kontext vozidel", data.backendDriverReportContext?.status || "unverified", backendVehicleContextDetail(data.backendDriverReportContext)),
     statusRow(
       "Hlasový test bez vozidel",
       omitDriverReportVehicleContext ? "configured" : "ok",

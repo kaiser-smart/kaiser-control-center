@@ -2,6 +2,7 @@ import { json, requireUserPermission } from "../../../_lib/auth.js";
 import { sarlotaIntroAnnouncementForAi } from "../../../_lib/ai-session-announcements.js";
 import { normalizeAiSearch, userDynamicVariablesForAi } from "../../../_lib/ai-people-summary.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
+import { driverReportContextForUser } from "../../../_lib/driver-report-context.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
 import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
 import {
@@ -612,6 +613,76 @@ function driverReportVehicleStatusSummary(variables) {
   };
 }
 
+function backendDriverVehiclePhrase(vehicle = {}) {
+  const label = cleanString(vehicle.displayName || vehicle.internalName || vehicle.model || vehicle.vehicleId);
+  const plate = cleanString(vehicle.licensePlate || vehicle.spz);
+  return [label, plate ? `SPZ ${plate}` : ""].filter(Boolean).join(" ");
+}
+
+function backendDriverReportContextSummary(result = {}) {
+  const status = Number(result.status || 0);
+  const payload = result.payload && typeof result.payload === "object" ? result.payload : {};
+  const vehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
+  const vehiclesVerified = payload.vehiclesVerified === true;
+  const vehiclePhrases = vehicles
+    .map(backendDriverVehiclePhrase)
+    .filter(Boolean);
+
+  return {
+    status: vehiclesVerified ? "ok" : (status >= 500 ? "error" : "unverified"),
+    source: "driver_report_context_backend",
+    httpStatus: status || 0,
+    vehiclesVerified,
+    vehiclesCount: vehicles.length,
+    vehiclesPreview: safeShortText(vehiclePhrases.join(", "), 240),
+    assistantMessage: safeShortText(payload.assistantMessage || payload.answerText || "", 240),
+    reason: cleanString(payload.reason || payload.errorCode),
+    employeeResolved: payload.employeeResolved === true,
+    driverResolved: payload.driverResolved === true,
+    diagnostics: {
+      dataSource: safeShortText(payload.diagnostics?.dataSource, 80),
+      identitySource: safeShortText(payload.diagnostics?.identitySource, 80),
+      vehiclesCountBeforeFilter: Number(payload.diagnostics?.vehiclesCountBeforeFilter || 0),
+      vehiclesCountAfterFilter: Number(payload.diagnostics?.vehiclesCountAfterFilter || 0),
+      unsafeVoiceVehicleCount: Number(payload.diagnostics?.unsafeVoiceVehicleCount || 0),
+      emptyReason: cleanString(payload.diagnostics?.emptyReason)
+    },
+    fullVinReturned: false,
+    signedUrlReturned: false,
+    secretsReturned: false
+  };
+}
+
+async function backendDriverReportContextForStatus(env, user) {
+  try {
+    return backendDriverReportContextSummary(await driverReportContextForUser(env, user, {
+      transcriptIntent: "Jaký tam mám vozidla?",
+      currentModule: "hlaseni-ridicu",
+      sessionId: "sarlota-status-backend-context"
+    }));
+  } catch (error) {
+    console.error("elevenlabs.status_driver_report_context_failed", {
+      message: safeErrorMessage(error)
+    });
+    return {
+      status: "error",
+      source: "driver_report_context_backend",
+      httpStatus: 500,
+      vehiclesVerified: false,
+      vehiclesCount: 0,
+      vehiclesPreview: "",
+      assistantMessage: "Backend kontext vozidel se teď nepodařilo ověřit.",
+      reason: "STATUS_CONTEXT_FAILED",
+      employeeResolved: false,
+      driverResolved: false,
+      diagnostics: {},
+      fullVinReturned: false,
+      signedUrlReturned: false,
+      secretsReturned: false
+    };
+  }
+}
+
 async function optionalStatusContext(name, loader, fallback) {
   try {
     return await loader();
@@ -653,6 +724,9 @@ export async function sarlotaStatusPayload(env, user, assistantConfig = resolveE
     { enabled: false, suggestions: [], sourceStatus: { status: "unavailable" } }
   );
   const driverReportVehicleVariables = { omittedByDefault: true };
+  const backendDriverReportContext = assistantConfig.assistantType === "sarlota"
+    ? await backendDriverReportContextForStatus(env, user)
+    : null;
   const dynamicVariables = {
     ...userVariables,
     ...introAnnouncement.variables,
@@ -773,6 +847,7 @@ export async function sarlotaStatusPayload(env, user, assistantConfig = resolveE
       contentReturned: false
     },
     driverReportVehicleContext: driverReportVehicleStatusSummary(driverReportVehicleVariables),
+    backendDriverReportContext,
     signedUrlEndpoint: {
       status: configured ? "ok" : "error",
       exists: true,
