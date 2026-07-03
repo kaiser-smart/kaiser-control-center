@@ -25483,8 +25483,11 @@ async function syncSarlotaPrompt() {
 
   try {
     const plan = await apiJson(`/api/ai/elevenlabs/sarlota-prompt-sync?${sarlotaAssistantApiQuery()}`);
+    const forbiddenPromptPhrases = Array.isArray(plan.prompt?.forbiddenPhrasesPresent)
+      ? plan.prompt.forbiddenPhrasesPresent
+      : [];
 
-    if (plan.alreadyApplied) {
+    if (plan.alreadyApplied && !forbiddenPromptPhrases.length) {
       sarlotaStatusState.syncMessage = "Pravidlo už v ElevenLabs promptu je.";
       await loadSarlotaStatus({ force: true, renderAfter: false });
       return;

@@ -5,7 +5,10 @@ import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import { driverReportContextForUser } from "../../../_lib/driver-report-context.js";
 import { onRequestPost as driverReportContextVoiceWebhook } from "../../voice/driver-report-context.js";
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
-import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
+import {
+  driverReportPromptForbiddenPhrases as forbiddenDriverReportPromptPhrases,
+  driverReportPromptHasCurrentRule
+} from "../../../../src/sarlota/sarlotaPromptSafety.js";
 import {
   assistantConfigFromRequest,
   elevenLabsAgentNameMatchesExpected,
@@ -16,26 +19,6 @@ import {
 const LLM_MODEL_EXPECTED_IN_ELEVENLABS = "Qwen3.5-397B-A17B";
 const LLM_MODEL_EXPECTED_NORMALIZED = "qwen35397ba17b";
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
-const DRIVER_REPORT_PROMPT_MARKER = "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL";
-const DRIVER_REPORT_PROMPT_REQUIRED_PHRASE = "Konkrétní vozidla smíš v hlasu říct pouze tehdy";
-const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
-  "Moment, načtu si " + "vozidla",
-  "V hlasovém flow nikdy neříkej " + "konkrétní vozidlo",
-  "Mám u tebe ověřené " + "tyto vozy",
-  "Vyjmenuj " + "možnosti",
-  "SPZ chtěj až jako " + "poslední možnost",
-  "typ, značku nebo " + "interní název",
-  "auto " + "3 brzdí divně",
-  "Ford " + "Transit",
-  "Škoda " + "Octavia",
-  "Fiat " + "Ducato",
-  "Tatra",
-  "1A2 " + "3456",
-  "1AB " + "2345",
-  "3A4 " + "5678",
-  "Zapíšu bezpečnostní závadu k vozidlu " + "3",
-  "Hotovo, závada je " + "zapsaná"
-];
 const REQUIRED_DYNAMIC_VARIABLES = [
   "user_name",
   "user_first_name",
@@ -228,18 +211,11 @@ function promptFromAgent(agentConfig) {
 }
 
 function driverReportPromptRuleMatches(agentConfig) {
-  const prompt = promptFromAgent(agentConfig);
-  return Boolean(
-    prompt &&
-    prompt.includes(DRIVER_REPORT_PROMPT_MARKER) &&
-    prompt.includes(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE) &&
-    prompt.includes(DRIVER_REPORT_PROMPT_REQUIRED_PHRASE)
-  );
+  return driverReportPromptHasCurrentRule(promptFromAgent(agentConfig));
 }
 
 function driverReportPromptForbiddenPhrases(agentConfig) {
-  const prompt = promptFromAgent(agentConfig).toLowerCase();
-  return FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES.filter((phrase) => prompt.includes(phrase.toLowerCase()));
+  return forbiddenDriverReportPromptPhrases(promptFromAgent(agentConfig));
 }
 
 function collectToolName(tool, names) {

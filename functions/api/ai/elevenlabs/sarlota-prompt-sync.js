@@ -1,5 +1,17 @@
 import { json, readJson, requireUserPermission } from "../../../_lib/auth.js";
-import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
+import {
+  DRIVER_REPORT_PROMPT_LEGACY_RULE_MARKERS,
+  DRIVER_REPORT_PROMPT_REQUIRED_PHRASE,
+  DRIVER_REPORT_PROMPT_RULE_MARKER,
+  driverReportPromptForbiddenPhrases,
+  driverReportPromptHasCurrentRule,
+  driverReportPromptHasLegacyRule,
+  driverReportPromptHasLegacyUnsafeExample,
+  driverReportPromptLineHasForbiddenPhrase,
+  driverReportPromptRuleBlock,
+  stripDriverReportPromptBlocks,
+  stripLegacyDriverReportExamples
+} from "../../../../src/sarlota/sarlotaPromptSafety.js";
 import {
   assistantConfigFromRequest,
   elevenLabsAgentNameMatchesExpected,
@@ -10,36 +22,10 @@ import {
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/convai";
 const ELEVENLABS_REQUEST_TIMEOUT_MS = 15000;
-const PROMPT_RULE_MARKER = "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL";
-const LEGACY_PROMPT_RULE_MARKERS = [
-  "HLÁŠENÍ ŘIDIČŮ / VOZIDLA / OVĚŘENÁ VOZIDLA ONLY",
-  "HLÁŠENÍ ŘIDIČŮ / VOZIDLA"
-];
-const PROMPT_RULE_REQUIRED_PHRASE = "Konkrétní vozidla smíš v hlasu říct pouze tehdy";
-const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
-  "Moment, načtu si " + "vozidla",
-  "V hlasovém flow nikdy neříkej " + "konkrétní vozidlo",
-  "Mám u tebe ověřené " + "tyto vozy",
-  "Vyjmenuj " + "možnosti",
-  "SPZ chtěj až jako " + "poslední možnost",
-  "typ, značku nebo " + "interní název",
-  "auto " + "3 brzdí divně",
-  "Ford " + "Transit",
-  "Škoda " + "Octavia",
-  "Fiat " + "Ducato",
-  "Tatra",
-  "1A2 " + "3456",
-  "1AB " + "2345",
-  "3A4 " + "5678",
-  "Zapíšu bezpečnostní závadu k vozidlu " + "3",
-  "Hotovo, závada je " + "zapsaná"
-];
-const PROMPT_RULE_BLOCK = [
-  "",
-  PROMPT_RULE_MARKER,
-  SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
-  ""
-].join("\n");
+const PROMPT_RULE_MARKER = DRIVER_REPORT_PROMPT_RULE_MARKER;
+const LEGACY_PROMPT_RULE_MARKERS = DRIVER_REPORT_PROMPT_LEGACY_RULE_MARKERS;
+const PROMPT_RULE_REQUIRED_PHRASE = DRIVER_REPORT_PROMPT_REQUIRED_PHRASE;
+const PROMPT_RULE_BLOCK = driverReportPromptRuleBlock();
 const PROMPT_PATHS = [
   ["conversation_config", "agent", "prompt", "prompt"],
   ["conversation_config", "agent", "prompt", "system_prompt"],
@@ -99,75 +85,23 @@ function writablePromptPathFromAgent(agentConfig) {
 }
 
 function promptHasCurrentRule(promptText) {
-  return cleanString(promptText).includes(PROMPT_RULE_MARKER)
-    && cleanString(promptText).includes(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE)
-    && cleanString(promptText).includes(PROMPT_RULE_REQUIRED_PHRASE);
+  return driverReportPromptHasCurrentRule(promptText);
 }
 
 function forbiddenPromptPhrases(promptText) {
-  const text = cleanString(promptText).toLowerCase();
-  return FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES.filter((phrase) => text.includes(phrase.toLowerCase()));
+  return driverReportPromptForbiddenPhrases(promptText);
 }
 
 function promptHasLegacyUnsafeDriverReportExample(promptText) {
-  return forbiddenPromptPhrases(promptText).some((phrase) => [
-    "auto " + "3 brzdí divně",
-    "Zapíšu bezpečnostní závadu k vozidlu " + "3",
-    "Hotovo, závada je " + "zapsaná"
-  ].includes(phrase));
+  return driverReportPromptHasLegacyUnsafeExample(promptText);
 }
 
 function promptHasLegacyRule(promptText) {
-  const text = cleanString(promptText);
-  return LEGACY_PROMPT_RULE_MARKERS.some((marker) => text.includes(marker)) &&
-    forbiddenPromptPhrases(text).length > 0;
+  return driverReportPromptHasLegacyRule(promptText);
 }
 
 function lineHasForbiddenPromptPhrase(line) {
-  const text = cleanString(line).toLowerCase();
-  return FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES.some((phrase) => text.includes(phrase.toLowerCase()));
-}
-
-function stripLegacyDriverReportExamples(promptText) {
-  const pattern = new RegExp([
-    String.raw`(?:\n\s*)?Uživatel:\s*[„"]Zapiš závadu,\s*auto\s*3\s*brzdí divně\.[“”"]`,
-    String.raw`\s*Odpověď:\s*[„"]Rozumím\.\s*Zapíšu bezpečnostní závadu k vozidlu\s*3\.\s*Chceš doplnit ještě krátkou poznámku\?[“”"]`,
-    String.raw`\s*Uživatel:\s*[„"]Ne\.[“”"]`,
-    String.raw`\s*Odpověď:\s*[„"]Hotovo,\s*závada je zapsaná\.[“”"]`
-  ].join(""), "giu");
-
-  return String(promptText ?? "").replace(pattern, "\n").trimEnd();
-}
-
-function stripDriverReportPromptBlocks(promptText) {
-  const lines = String(promptText ?? "").split(/\r?\n/);
-  const output = [];
-  const removableRuleMarkers = new Set([
-    PROMPT_RULE_MARKER,
-    ...LEGACY_PROMPT_RULE_MARKERS
-  ]);
-  let skipRuleLine = false;
-
-  for (const line of lines) {
-    const trimmed = cleanString(line);
-    if (removableRuleMarkers.has(trimmed)) {
-      skipRuleLine = true;
-      continue;
-    }
-
-    if (skipRuleLine) {
-      skipRuleLine = false;
-      continue;
-    }
-
-    if (lineHasForbiddenPromptPhrase(line)) {
-      continue;
-    }
-
-    output.push(line);
-  }
-
-  return output.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+  return driverReportPromptLineHasForbiddenPhrase(line);
 }
 
 function bodyForPromptPatch(path, nextPrompt) {
