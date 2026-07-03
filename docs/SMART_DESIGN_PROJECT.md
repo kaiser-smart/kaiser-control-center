@@ -56,14 +56,13 @@ Tento dokument je navazovací záznam pro samostatnou designovou větev Smart Od
 
 Náhled je zachovaný jako pracovní pokus, ale zatím není finální. Směr je použitelný pro další iteraci, ne pro převzetí do produkční aplikace.
 
-Aktuální směr po druhé iteraci:
+Aktuální směr po poslední iteraci:
 
-- měkčí fyzické ovládací prvky
-- slider inspirovaný dodanou Pug/SCSS referencí
-- switch prvky inspirované slider v1/v2 referencí
-- kruhový dial inspirovaný teplotním ovladačem
-- aktivní modrý stav pro ovládací prvky
-- Kaiser zelená zůstává spíš jako pozitivní/provozní stav
+- pracovat pouze s jedním typem měkkého přepínače podle dodané reference
+- sladit přepínač do kovově šedé palety náhledu
+- používat pouze font Quicksand
+- písmenové zástupce ikon nahrazovat jednoduchými inline SVG ikonami
+- Kaiser zelená zůstává jen jako tlumený aktivní stav přepínače / pozitivní provozní stav
 
 Co zatím není ono:
 

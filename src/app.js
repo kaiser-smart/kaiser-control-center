@@ -1555,16 +1555,33 @@ function neumorphicPreviewPage(user) {
   `;
 }
 
+function themePreviewIcon(name) {
+  const icons = {
+    dashboard: '<path d="M4 13h7V4H4z"></path><path d="M13 20h7V4h-7z"></path><path d="M4 20h7v-5H4z"></path>',
+    truck: '<path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle>',
+    route: '<circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 6h4a4 4 0 0 1 0 8h-1a4 4 0 0 0 0 8h5"></path>',
+    warning: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4"></path><path d="M12 17h.01"></path>',
+    marker: '<path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"></path><circle cx="12" cy="10" r="2.5"></circle>',
+    container: '<path d="M4 8h16v9H4z"></path><path d="M7 8v9M11 8v9M15 8v9"></path>',
+    service: '<path d="M14 6l4 4"></path><path d="M16 4l4 4-9 9H7v-4z"></path><path d="M5 19h14"></path>',
+    app: '<path d="M5 5h6v6H5z"></path><path d="M13 5h6v6h-6z"></path><path d="M5 13h6v6H5z"></path><path d="M13 13h6v6h-6z"></path>',
+    check: '<path d="M20 6L9 17l-5-5"></path>',
+    plus: '<path d="M12 5v14"></path><path d="M5 12h14"></path>'
+  };
+
+  return `<svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[name] || icons.marker}</svg>`;
+}
+
 function themeSystemPreviewPage() {
   const routeItems = [
-    { index: "01", title: "Lisovací vůz", meta: "Svoz směsného odpadu - aktivní trasa", active: true },
-    { index: "02", title: "Nosič kontejnerů", meta: "Připraveno pro ikonu hákového nosiče" },
-    { index: "03", title: "Servisní dodávka", meta: "Doprovodné vozidlo - nižší priorita" }
+    { icon: "truck", title: "Lisovací vůz", meta: "Svoz směsného odpadu - aktivní trasa", active: true },
+    { icon: "container", title: "Nosič kontejnerů", meta: "Připraveno pro ikonu hákového nosiče" },
+    { icon: "service", title: "Servisní dodávka", meta: "Doprovodné vozidlo - nižší priorita" }
   ];
   const routeMarkup = routeItems
     .map((item) => `
       <article class="list-card${item.active ? " list-card-active" : ""}"${item.active ? ' aria-current="true"' : ""}>
-        <span class="list-index">${escapeHtml(item.index)}</span>
+        <span class="list-index">${themePreviewIcon(item.icon)}</span>
         <span>
           <strong class="list-title">${escapeHtml(item.title)}</strong>
           <small class="list-meta">${escapeHtml(item.meta)}</small>
@@ -1575,39 +1592,30 @@ function themeSystemPreviewPage() {
 
   return `
     <main class="theme-system smart-tablet-ui theme-preview-page" data-theme-preview>
-      <svg class="theme-volume-defs" width="0" height="0" aria-hidden="true" focusable="false">
-        <symbol id="theme-volume-icon" viewBox="0 -48 98 96">
-          <g class="theme-volume-shape">
-            <path d="M60 22a25 25 0 0 0 0-44"></path>
-            <path d="M24-11h-19v22h19l20 20v-62z"></path>
-          </g>
-          <path class="theme-volume-wave" d="M65 40a43 43 0 0 0 0-80"></path>
-        </symbol>
-      </svg>
       <div class="app-shell">
         <aside class="app-sidebar" aria-label="Navigace náhledu">
           <a class="nav-item nav-item-active" href="${routeHref(DESIGN_THEME_SYSTEM_ROUTE)}" data-link aria-current="page">
-            <span class="nav-icon">S</span>
+            <span class="nav-icon">${themePreviewIcon("dashboard")}</span>
             <span class="nav-label">Souhrn</span>
           </a>
           <span class="nav-item">
-            <span class="nav-icon">V</span>
+            <span class="nav-icon">${themePreviewIcon("truck")}</span>
             <span class="nav-label">Vozidla</span>
           </span>
           <span class="nav-item">
-            <span class="nav-icon">T</span>
+            <span class="nav-icon">${themePreviewIcon("route")}</span>
             <span class="nav-label">Trasy</span>
           </span>
           <span class="nav-item">
-            <span class="nav-icon">N</span>
+            <span class="nav-icon">${themePreviewIcon("warning")}</span>
               <span class="nav-label">Nahlášení</span>
           </span>
           <span class="nav-item">
-            <span class="nav-icon">I</span>
+            <span class="nav-icon">${themePreviewIcon("marker")}</span>
             <span class="nav-label">Ikony</span>
           </span>
           <a class="nav-item" href="${routeHref("/")}" data-link>
-            <span class="nav-icon">A</span>
+            <span class="nav-icon">${themePreviewIcon("app")}</span>
             <span class="nav-label">Aplikace</span>
           </a>
         </aside>
@@ -1641,12 +1649,12 @@ function themeSystemPreviewPage() {
                     <span class="theme-dial-ring theme-dial-ring-a"></span>
                     <span class="theme-dial-ring theme-dial-ring-b"></span>
                     <span class="theme-vehicle-core">
-                      <strong>L</strong>
+                      <span class="theme-large-icon">${themePreviewIcon("truck")}</span>
                       <small>lis</small>
                     </span>
-                    <span class="theme-dial-node theme-dial-node-a">GPS</span>
-                    <span class="theme-dial-node theme-dial-node-b">WIM</span>
-                    <span class="theme-dial-node theme-dial-node-c">OK</span>
+                    <span class="theme-dial-node theme-dial-node-a">${themePreviewIcon("marker")}</span>
+                    <span class="theme-dial-node theme-dial-node-b">${themePreviewIcon("warning")}</span>
+                    <span class="theme-dial-node theme-dial-node-c">${themePreviewIcon("check")}</span>
                   </div>
 
                   <div class="theme-control-panel">
@@ -1665,24 +1673,32 @@ function themeSystemPreviewPage() {
                       </div>
                     </div>
 
-                    <div class="theme-volume-control" role="group" aria-label="Intenzita mapového zvýraznění" style="--val: 40%;">
-                      <svg class="theme-volume-ico" style="--ico: 0;" aria-hidden="true"><use href="#theme-volume-icon"></use></svg>
-                      <input type="range" min="0" max="100" value="40" list="theme-volume-marks" data-theme-volume>
-                      <svg class="theme-volume-ico" style="--ico: 1;" aria-hidden="true"><use href="#theme-volume-icon"></use></svg>
-                      <datalist id="theme-volume-marks">
-                        <option value="0"></option>
-                        <option value="40"></option>
-                        <option value="100"></option>
-                      </datalist>
+                    <div class="theme-switch-board" aria-label="Ukázka sjednocených přepínačů">
+                      <label class="theme-toggle-row theme-toggle-row-compact">
+                        <span>
+                          <strong>Trasa aktivní</strong>
+                          <small>Kovově šedý switch podle reference</small>
+                        </span>
+                        <input class="theme-switch-input" type="checkbox" checked>
+                        <span class="theme-switch" aria-hidden="true"></span>
+                      </label>
+                      <label class="theme-toggle-row theme-toggle-row-compact">
+                        <span>
+                          <strong>Zvýraznit ikony</strong>
+                          <small>Stejný tvar, tlumený aktivní stav</small>
+                        </span>
+                        <input class="theme-switch-input" type="checkbox">
+                        <span class="theme-switch" aria-hidden="true"></span>
+                      </label>
                     </div>
                   </div>
                 </div>
 
                 <div class="theme-map-surface" aria-label="Ukazka mapoveho panelu">
                   <span class="theme-map-route"></span>
-                  <span class="theme-map-node theme-map-node-main" style="--x: 26%; --y: 56%;">L</span>
-                  <span class="theme-map-node" style="--x: 52%; --y: 38%;">K</span>
-                  <span class="theme-map-node theme-map-node-warning" style="--x: 72%; --y: 64%;">!</span>
+                  <span class="theme-map-node theme-map-node-main" style="--x: 26%; --y: 56%;">${themePreviewIcon("truck")}</span>
+                  <span class="theme-map-node" style="--x: 52%; --y: 38%;">${themePreviewIcon("container")}</span>
+                  <span class="theme-map-node theme-map-node-warning" style="--x: 72%; --y: 64%;">${themePreviewIcon("warning")}</span>
                 </div>
               </article>
 
@@ -1715,7 +1731,7 @@ function themeSystemPreviewPage() {
                     <p class="field-label">Typy vozidel</p>
                     <h2>Pracovní sada ikon</h2>
                   </div>
-                  <button class="btn btn-icon" type="button" aria-label="Obnovit">+</button>
+                  <button class="btn btn-icon" type="button" aria-label="Přidat">${themePreviewIcon("plus")}</button>
                 </div>
                 <div class="theme-list-stack">
                   ${routeMarkup}
@@ -1728,18 +1744,18 @@ function themeSystemPreviewPage() {
                   <label class="theme-toggle-row">
                     <span>
                       <strong>Denní režim</strong>
-                      <small>Switch podle slider v2</small>
+                      <small>Jeden sjednocený přepínač</small>
                     </span>
                     <input class="theme-switch-input" type="checkbox" checked>
-                    <span class="theme-switch theme-switch-v2" aria-hidden="true"></span>
+                    <span class="theme-switch" aria-hidden="true"></span>
                   </label>
                   <label class="theme-toggle-row">
                     <span>
                       <strong>Výrazné ikony</strong>
-                      <small>Měkčí fyzický přepínač</small>
+                      <small>Stejný kovově šedý styl</small>
                     </span>
                     <input class="theme-switch-input" type="checkbox">
-                    <span class="theme-switch theme-switch-v1" aria-hidden="true"></span>
+                    <span class="theme-switch" aria-hidden="true"></span>
                   </label>
                 </div>
                 <label class="field-label" for="theme-preview-note">Co se tímto směrem testuje</label>
@@ -29246,20 +29262,6 @@ document.addEventListener("pointerup", (event) => {
   handleVehicleTrackingTcarsSelectEvent(event);
   handleVehicleTrackingWimSelectEvent(event);
 }, true);
-
-document.addEventListener("input", (event) => {
-  const themeVolumeInput = event.target.closest("[data-theme-volume]");
-  if (!themeVolumeInput) {
-    return;
-  }
-
-  const themeVolumeGroup = themeVolumeInput.closest(".theme-volume-control");
-  if (!themeVolumeGroup) {
-    return;
-  }
-
-  themeVolumeGroup.style.setProperty("--val", `${Number(themeVolumeInput.value) || 0}%`);
-});
 
 document.addEventListener("click", async (event) => {
   const driverReportPlateSuggestion = event.target.closest("[data-driver-report-plate-suggestion]");

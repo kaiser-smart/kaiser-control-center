@@ -811,12 +811,6 @@ body:has(.smart-tablet-ui) {
   color: #1F2937;
 }
 
-@property --sel {
-  syntax: "<number>";
-  initial-value: 0;
-  inherits: true;
-}
-
 :where(.theme-system, .smart-tablet-ui) {
   --neo-bg: #eceef4;
   --neo-panel: #e3e5ed;
@@ -826,7 +820,9 @@ body:has(.smart-tablet-ui) {
   --neo-ink: #4b5565;
   --neo-blue: #286be1;
   --neo-blue-soft: rgba(40, 107, 225, 0.16);
-  --neo-green: #56c66d;
+  --neo-green: #6fc98a;
+  --neo-switch-off: #d7dae0;
+  --neo-switch-on: #70c98c;
   --neo-shadow: 0.5em 0.5em 1em var(--neo-dark), -0.5em -0.5em 1em var(--neo-light);
   --neo-shadow-small: 0.28em 0.28em 0.62em var(--neo-dark), -0.28em -0.28em 0.62em var(--neo-light);
   --neo-inset: inset 0.12em 0.12em 0.3em rgba(0, 0, 0, 0.12), inset -0.12em -0.12em 0.24em rgba(255, 255, 255, 0.72);
@@ -891,6 +887,42 @@ body:has(.theme-preview-page) {
   box-shadow: var(--neo-inset);
 }
 
+:where(.theme-system, .smart-tablet-ui) .theme-icon {
+  display: block;
+  width: 1.25em;
+  height: 1.25em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+:where(.theme-system, .smart-tablet-ui) .nav-icon .theme-icon,
+:where(.theme-system, .smart-tablet-ui) .list-index .theme-icon,
+:where(.theme-system, .smart-tablet-ui) .btn-icon .theme-icon {
+  width: 21px;
+  height: 21px;
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-large-icon {
+  display: grid;
+  place-items: center;
+  color: var(--neo-ink);
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-large-icon .theme-icon {
+  width: clamp(3rem, 6vw, 4.8rem);
+  height: clamp(3rem, 6vw, 4.8rem);
+  stroke-width: 1.35;
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-map-node .theme-icon,
+:where(.theme-system, .smart-tablet-ui) .theme-dial-node .theme-icon {
+  width: 1.45rem;
+  height: 1.45rem;
+}
+
 :where(.theme-system, .smart-tablet-ui) .btn-primary {
   border-color: rgba(40, 107, 225, 0.24);
   background: linear-gradient(145deg, #5f91ff 0%, var(--neo-blue) 100%);
@@ -939,7 +971,8 @@ body:has(.theme-preview-page) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-dial-ring-a {
-  background: radial-gradient(100% 100% at 50% 100%, hsl(193, 82%, 58%), hsl(268, 72%, 58%));
+  background:
+    radial-gradient(100% 100% at 50% 100%, rgba(111, 201, 138, 0.34), rgba(96, 108, 128, 0.20) 58%, rgba(226, 229, 236, 0.88));
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-dial-ring-b {
@@ -1005,144 +1038,15 @@ body:has(.theme-preview-page) {
   color: var(--neo-green);
 }
 
-:where(.theme-system, .smart-tablet-ui) .theme-volume-defs {
-  position: absolute;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control {
-  --sel: 0;
-  --not-sel: calc(1 - var(--sel));
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) max-content;
-  align-items: center;
-  gap: 1em;
-  width: 100%;
-  padding: 1.35em 1em;
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  border-radius: 1.35em;
-  background: var(--neo-panel);
-  box-shadow: var(--neo-shadow);
-  transition: transform 0.3s ease;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control::after {
-  content: "";
-  grid-area: 1 / 2;
-  position: relative;
-  left: var(--val, 40%);
-  width: 2.75em;
-  height: 2.75em;
-  margin-left: -1.375em;
-  border-radius: 50%;
-  opacity: var(--not-sel);
-  background:
-    radial-gradient(closest-side, transparent 0.875em, rgba(40, 107, 225, 0.32) calc(100% - 1px), transparent)
-    50% / 100% 100% no-repeat;
-  pointer-events: none;
-  transition: background-size 0.3s ease, opacity 0.3s ease 0.3s;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control:focus-within {
-  --sel: 1;
-  transform: scale(0.965);
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-ico {
-  width: 1.75em;
-  height: 1.75em;
-  color: var(--neo-ink);
-  opacity: 0.72;
-  transition: opacity 0.3s ease, color 0.3s ease;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control:focus-within .theme-volume-ico {
-  color: var(--neo-blue);
-  opacity: 0.9;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-shape {
-  fill: currentColor;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-wave {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 10;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: var(--ico, 1);
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control input[type="range"] {
-  grid-area: 1 / 2;
-  width: 100%;
-  min-width: 0;
-  background: transparent;
-  cursor: ew-resize;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control input[type="range"]:focus {
-  outline: none;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control input[type="range"]::-webkit-slider-runnable-track {
-  height: 0.375em;
-  border-radius: 0.1875em;
-  background: linear-gradient(90deg, var(--neo-blue) var(--val, 40%), transparent 0);
-  box-shadow: -0.25em -0.25em 0.5em #f0f0f0, 0.25em 0.25em 0.5em #d7d7d7;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control input[type="range"]::-moz-range-track {
-  height: 0.375em;
-  border-radius: 0.1875em;
-  background: transparent;
-  box-shadow: -0.25em -0.25em 0.5em #f0f0f0, 0.25em 0.25em 0.5em #d7d7d7;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control input[type="range"]::-moz-range-progress {
-  height: 0.375em;
-  border-radius: 0.1875em 0 0 0.1875em;
-  background: var(--neo-blue);
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control input[type="range"]::-webkit-slider-thumb {
-  width: 1.75em;
-  height: 1.75em;
-  margin-top: -0.6875em;
-  border: 0;
-  border-radius: 50%;
-  background: #eef2f8;
-  box-shadow: -0.25em -0.25em 0.5em #f0f0f0, 0.25em 0.25em 0.5em #d7d7d7;
-  cursor: ew-resize;
-  transition: background 0.3s ease;
-  -webkit-appearance: none;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control input[type="range"]::-moz-range-thumb {
-  width: 1.75em;
-  height: 1.75em;
-  border: 0;
-  border-radius: 50%;
-  background: #eef2f8;
-  box-shadow: -0.25em -0.25em 0.5em #f0f0f0, 0.25em 0.25em 0.5em #d7d7d7;
-  cursor: ew-resize;
-  transition: background 0.3s ease;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control:focus-within input[type="range"]::-webkit-slider-thumb {
-  background: var(--neo-blue);
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-volume-control:focus-within input[type="range"]::-moz-range-thumb {
-  background: var(--neo-blue);
-}
-
 :where(.theme-system, .smart-tablet-ui) .theme-toggle-stack {
   display: grid;
   gap: 14px;
   margin-bottom: 18px;
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-switch-board {
+  display: grid;
+  gap: 14px;
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-toggle-row {
@@ -1156,6 +1060,10 @@ body:has(.theme-preview-page) {
   background: var(--neo-panel);
   box-shadow: var(--neo-inset);
   color: var(--text-main);
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-toggle-row-compact {
+  min-height: 76px;
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-toggle-row strong,
@@ -1186,81 +1094,66 @@ body:has(.theme-preview-page) {
 :where(.theme-system, .smart-tablet-ui) .theme-switch {
   position: relative;
   display: block;
-  width: 5.5em;
-  height: 3em;
-  border-radius: 1.5em;
-  background: linear-gradient(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0)), #ddd;
+  flex: 0 0 auto;
+  width: 5.45em;
+  height: 3.05em;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: linear-gradient(145deg, #d3d6de 0%, #eceef3 100%);
   box-shadow:
-    0 0.07em 0.1em -0.1em rgba(0, 0, 0, 0.4) inset,
-    0 0.05em 0.08em -0.01em rgba(255, 255, 255, 0.7);
-  transition: 350ms ease;
+    inset 0.12em 0.16em 0.24em rgba(0, 0, 0, 0.15),
+    inset -0.12em -0.14em 0.22em rgba(255, 255, 255, 0.70),
+    0.16em 0.22em 0.42em rgba(91, 99, 116, 0.18),
+    -0.12em -0.14em 0.26em rgba(255, 255, 255, 0.78);
+  transition: background 220ms ease, box-shadow 220ms ease;
   cursor: pointer;
 }
 
+:where(.theme-system, .smart-tablet-ui) .theme-switch::before,
 :where(.theme-system, .smart-tablet-ui) .theme-switch::after {
   content: "";
   position: absolute;
-  width: 2em;
-  height: 2em;
-  top: 0.5em;
-  left: 0.5em;
-  border-radius: 50%;
-  background: linear-gradient(#f5f5f5 10%, #eee);
-  box-shadow:
-    0 0.1em 0.15em -0.05em rgba(255, 255, 255, 0.9) inset,
-    0 0.22em 0.22em -0.12em rgba(0, 0, 0, 0.42);
-  transition: 250ms ease-in-out;
 }
 
-:where(.theme-system, .smart-tablet-ui) .theme-switch-v1::before {
-  content: "";
-  position: absolute;
-  width: 1em;
-  height: 1em;
-  top: 1em;
-  left: 6em;
-  border-radius: 50%;
-  background: linear-gradient(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.1)), #ddd;
+:where(.theme-system, .smart-tablet-ui) .theme-switch::before {
+  inset: 0.64em 0.72em;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #cfd3da 0%, var(--neo-switch-off) 100%);
   box-shadow:
-    0 0.08em 0.15em -0.1em rgba(0, 0, 0, 0.5) inset,
-    0 0.05em 0.08em -0.01em rgba(255, 255, 255, 0.7),
-    -7.25em 0 0 -0.25em rgba(0, 0, 0, 0.3);
-  transition: 250ms ease-in;
+    inset 0.08em 0.12em 0.2em rgba(0, 0, 0, 0.20),
+    inset -0.07em -0.08em 0.12em rgba(255, 255, 255, 0.58);
+  transition: background 220ms ease;
 }
 
-:where(.theme-system, .smart-tablet-ui) .theme-switch-v2::before {
-  content: "";
-  position: absolute;
-  width: 4em;
-  height: 1.5em;
-  top: 0.75em;
-  left: 0.75em;
-  border-radius: 0.75em;
-  background: linear-gradient(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.1)), #d0d0d0;
+:where(.theme-system, .smart-tablet-ui) .theme-switch::after {
+  top: 0.42em;
+  left: 0.48em;
+  width: 2.18em;
+  height: 2.18em;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ffffff 0%, #eef0f3 100%);
   box-shadow:
-    0 0.08em 0.15em -0.1em rgba(0, 0, 0, 0.5) inset,
-    0 0.05em 0.08em -0.01em rgba(255, 255, 255, 0.7),
-    0 0 0 0 rgba(76, 204, 102, 0.7) inset;
-  transition: 250ms ease-in-out;
+    inset 0 0.08em 0.12em rgba(255, 255, 255, 0.96),
+    0.18em 0.24em 0.34em rgba(73, 82, 98, 0.30),
+    -0.08em -0.1em 0.18em rgba(255, 255, 255, 0.92);
+  transition: left 240ms ease, box-shadow 220ms ease;
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-switch-input:checked + .theme-switch::before {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--neo-switch-on) 92%, #f4f6f8) 0%, var(--neo-switch-on) 100%);
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-switch-input:checked + .theme-switch::after {
-  left: 3em;
+  left: 2.78em;
 }
 
-:where(.theme-system, .smart-tablet-ui) .theme-switch-input:checked + .theme-switch-v1::before {
-  background: linear-gradient(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.1)), var(--neo-green);
+:where(.theme-system, .smart-tablet-ui) .theme-switch-input:focus-visible + .theme-switch {
   box-shadow:
-    0 0.08em 0.15em -0.1em rgba(0, 0, 0, 0.5) inset,
-    0 0.05em 0.08em -0.01em rgba(255, 255, 255, 0.7),
-    -7.25em 0 0 -0.25em rgba(0, 0, 0, 0.12);
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-switch-input:checked + .theme-switch-v2::before {
-  box-shadow:
-    0 0.08em 0.15em -0.1em rgba(0, 0, 0, 0.5) inset,
-    0 0.05em 0.08em -0.01em rgba(255, 255, 255, 0.7),
-    3em 0 0 0 rgba(76, 204, 102, 0.7) inset;
+    0 0 0 4px rgba(111, 201, 138, 0.24),
+    inset 0.12em 0.16em 0.24em rgba(0, 0, 0, 0.15),
+    inset -0.12em -0.14em 0.22em rgba(255, 255, 255, 0.70),
+    0.16em 0.22em 0.42em rgba(91, 99, 116, 0.18),
+    -0.12em -0.14em 0.26em rgba(255, 255, 255, 0.78);
 }
 
 @media (max-width: 1024px) {

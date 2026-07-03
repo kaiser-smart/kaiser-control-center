@@ -11,35 +11,25 @@
   <link rel="stylesheet" href="./theme.css">
 </head>
 <body class="theme-system smart-tablet-ui theme-preview-page">
-  <svg class="theme-volume-defs" width="0" height="0" aria-hidden="true" focusable="false">
-    <symbol id="theme-volume-icon" viewBox="0 -48 98 96">
-      <g class="theme-volume-shape">
-        <path d="M60 22a25 25 0 0 0 0-44"></path>
-        <path d="M24-11h-19v22h19l20 20v-62z"></path>
-      </g>
-      <path class="theme-volume-wave" d="M65 40a43 43 0 0 0 0-80"></path>
-    </symbol>
-  </svg>
-
   <main class="app-shell">
     <aside class="app-sidebar" aria-label="Navigace náhledu">
-      <span class="nav-item nav-item-active" aria-current="page"><span class="nav-icon">S</span><span class="nav-label">Souhrn</span></span>
-      <span class="nav-item"><span class="nav-icon">V</span><span class="nav-label">Vozidla</span></span>
-      <span class="nav-item"><span class="nav-icon">T</span><span class="nav-label">Trasy</span></span>
-      <span class="nav-item"><span class="nav-icon">N</span><span class="nav-label">Nahlášení</span></span>
-      <span class="nav-item"><span class="nav-icon">I</span><span class="nav-label">Ikony</span></span>
+      <span class="nav-item nav-item-active" aria-current="page"><span class="nav-icon"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h7V4H4z"></path><path d="M13 20h7V4h-7z"></path><path d="M4 20h7v-5H4z"></path></svg></span><span class="nav-label">Souhrn</span></span>
+      <span class="nav-item"><span class="nav-icon"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg></span><span class="nav-label">Vozidla</span></span>
+      <span class="nav-item"><span class="nav-icon"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 6h4a4 4 0 0 1 0 8h-1a4 4 0 0 0 0 8h5"></path></svg></span><span class="nav-label">Trasy</span></span>
+      <span class="nav-item"><span class="nav-icon"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4"></path><path d="M12 17h.01"></path></svg></span><span class="nav-label">Nahlášení</span></span>
+      <span class="nav-item"><span class="nav-icon"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></span><span class="nav-label">Ikony</span></span>
     </aside>
 
     <section class="app-content" aria-labelledby="theme-preview-title">
       <header class="app-header">
         <div>
-          <p class="field-label">Smart design / pokus 02</p>
-          <h1 id="theme-preview-title">Měkké ovládání pro tablet řidiče</h1>
-          <p>Statický designový prototyp bez API, bez provozních dat a bez napojení na produkční aplikaci.</p>
+          <p class="field-label">Smart design / switch focus</p>
+          <h1 id="theme-preview-title">Kovově šedé ovládání pro tablet</h1>
+          <p>Statický designový prototyp bez API a bez provozních dat. Tato verze pracuje jen s jedním typem měkkého přepínače.</p>
         </div>
         <div class="theme-preview-toolbar" aria-label="Stav náhledu">
           <span class="status-badge status-online">Veřejný náhled</span>
-          <span class="status-badge status-gps">Bez API</span>
+          <span class="status-badge status-gps">Quicksand</span>
         </div>
       </header>
 
@@ -49,7 +39,7 @@
             <div class="theme-card-head">
               <div>
                 <p class="field-label">Aktivní obrazovka</p>
-                <h2>Ranní svoz - ovládací panel</h2>
+                <h2>Ranní svoz - přepínače a ikony</h2>
               </div>
               <button class="btn btn-primary" type="button">Potvrdit další bod</button>
             </div>
@@ -58,75 +48,67 @@
               <div class="theme-vehicle-dial" aria-label="Ukázka zvýraznění vozidla">
                 <span class="theme-dial-ring theme-dial-ring-a"></span>
                 <span class="theme-dial-ring theme-dial-ring-b"></span>
-                <span class="theme-vehicle-core"><strong>L</strong><small>lis</small></span>
-                <span class="theme-dial-node theme-dial-node-a">GPS</span>
-                <span class="theme-dial-node theme-dial-node-b">WIM</span>
-                <span class="theme-dial-node theme-dial-node-c">OK</span>
+                <span class="theme-vehicle-core">
+                  <span class="theme-large-icon"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg></span>
+                  <small>lis</small>
+                </span>
+                <span class="theme-dial-node theme-dial-node-a"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></span>
+                <span class="theme-dial-node theme-dial-node-b"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4"></path><path d="M12 17h.01"></path></svg></span>
+                <span class="theme-dial-node theme-dial-node-c"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg></span>
               </div>
 
               <div class="theme-control-panel">
                 <div class="theme-metric-grid">
                   <div class="soft-cell"><span class="theme-metric-value">14</span><span class="theme-metric-label">bodů na trase</span></div>
                   <div class="soft-cell"><span class="theme-metric-value">3</span><span class="theme-metric-label">typy vozidel</span></div>
-                  <div class="soft-cell"><span class="theme-metric-value">40</span><span class="theme-metric-label">intenzita náhledu</span></div>
+                  <div class="soft-cell"><span class="theme-metric-value">1</span><span class="theme-metric-label">sjednocený switch</span></div>
                 </div>
 
-                <div class="theme-volume-control" role="group" aria-label="Intenzita mapového zvýraznění" style="--val: 40%;">
-                  <svg class="theme-volume-ico" style="--ico: 0;" aria-hidden="true"><use href="#theme-volume-icon"></use></svg>
-                  <input type="range" min="0" max="100" value="40" data-theme-volume>
-                  <svg class="theme-volume-ico" style="--ico: 1;" aria-hidden="true"><use href="#theme-volume-icon"></use></svg>
+                <div class="theme-switch-board" aria-label="Ukázka sjednocených přepínačů">
+                  <label class="theme-toggle-row theme-toggle-row-compact"><span><strong>Trasa aktivní</strong><small>Kovově šedý switch podle reference</small></span><input class="theme-switch-input" type="checkbox" checked><span class="theme-switch" aria-hidden="true"></span></label>
+                  <label class="theme-toggle-row theme-toggle-row-compact"><span><strong>Zvýraznit ikony</strong><small>Stejný tvar, tlumený aktivní stav</small></span><input class="theme-switch-input" type="checkbox"><span class="theme-switch" aria-hidden="true"></span></label>
                 </div>
               </div>
             </div>
 
             <div class="theme-map-surface" aria-label="Ukázka mapového panelu">
               <span class="theme-map-route"></span>
-              <span class="theme-map-node theme-map-node-main" style="--x: 26%; --y: 56%;">L</span>
-              <span class="theme-map-node" style="--x: 52%; --y: 38%;">K</span>
-              <span class="theme-map-node theme-map-node-warning" style="--x: 72%; --y: 64%;">!</span>
+              <span class="theme-map-node theme-map-node-main" style="--x: 26%; --y: 56%;"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg></span>
+              <span class="theme-map-node" style="--x: 52%; --y: 38%;"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v9H4z"></path><path d="M7 8v9M11 8v9M15 8v9"></path></svg></span>
+              <span class="theme-map-node theme-map-node-warning" style="--x: 72%; --y: 64%;"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"></path><path d="M12 10v4"></path><path d="M12 17h.01"></path></svg></span>
             </div>
           </article>
 
           <section class="quick-actions" aria-label="Rychlé akce">
             <button class="quick-action quick-action-success" type="button"><span><strong>Hotovo na stanovišti</strong><small>Měkký stisk bez ostrých hran</small></span></button>
             <button class="quick-action quick-action-warning" type="button"><span><strong>Nahlásit překážku</strong><small>Varování zůstává tlumené</small></span></button>
-            <button class="quick-action quick-action-info" type="button"><span><strong>Vybrat typ ikony</strong><small>Pro další ladění vozidel</small></span></button>
+            <button class="quick-action quick-action-info" type="button"><span><strong>Vybrat typ ikony</strong><small>Zástupná SVG ikonografie</small></span></button>
           </section>
         </div>
 
         <aside class="theme-dashboard-side">
           <article class="app-panel">
-            <div class="theme-card-head"><div><p class="field-label">Typy vozidel</p><h2>Pracovní sada ikon</h2></div><button class="btn btn-icon" type="button" aria-label="Přidat">+</button></div>
+            <div class="theme-card-head"><div><p class="field-label">Typy vozidel</p><h2>Pracovní sada ikon</h2></div><button class="btn btn-icon" type="button" aria-label="Přidat"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></button></div>
             <div class="theme-list-stack">
-              <article class="list-card list-card-active" aria-current="true"><span class="list-index">01</span><span><strong class="list-title">Lisovací vůz</strong><small class="list-meta">Svoz směsného odpadu - aktivní trasa</small></span></article>
-              <article class="list-card"><span class="list-index">02</span><span><strong class="list-title">Nosič kontejnerů</strong><small class="list-meta">Připraveno pro ikonu hákového nosiče</small></span></article>
-              <article class="list-card"><span class="list-index">03</span><span><strong class="list-title">Servisní dodávka</strong><small class="list-meta">Doprovodné vozidlo - nižší priorita</small></span></article>
+              <article class="list-card list-card-active" aria-current="true"><span class="list-index"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg></span><span><strong class="list-title">Lisovací vůz</strong><small class="list-meta">Svoz směsného odpadu - aktivní trasa</small></span></article>
+              <article class="list-card"><span class="list-index"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v9H4z"></path><path d="M7 8v9M11 8v9M15 8v9"></path></svg></span><span><strong class="list-title">Nosič kontejnerů</strong><small class="list-meta">Připraveno pro ikonu hákového nosiče</small></span></article>
+              <article class="list-card"><span class="list-index"><svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l4 4"></path><path d="M16 4l4 4-9 9H7v-4z"></path><path d="M5 19h14"></path></svg></span><span><strong class="list-title">Servisní dodávka</strong><small class="list-meta">Doprovodné vozidlo - nižší priorita</small></span></article>
             </div>
           </article>
 
           <article class="soft-card">
-            <p class="field-label">Poznámka k návrhu</p>
+            <p class="field-label">Přepínač podle reference</p>
             <div class="theme-toggle-stack" aria-label="Ukázky přepínačů">
-              <label class="theme-toggle-row"><span><strong>Denní režim</strong><small>Switch podle slider v2</small></span><input class="theme-switch-input" type="checkbox" checked><span class="theme-switch theme-switch-v2" aria-hidden="true"></span></label>
-              <label class="theme-toggle-row"><span><strong>Výrazné ikony</strong><small>Měkčí fyzický přepínač</small></span><input class="theme-switch-input" type="checkbox"><span class="theme-switch theme-switch-v1" aria-hidden="true"></span></label>
+              <label class="theme-toggle-row"><span><strong>Denní režim</strong><small>Jeden sjednocený přepínač</small></span><input class="theme-switch-input" type="checkbox" checked><span class="theme-switch" aria-hidden="true"></span></label>
+              <label class="theme-toggle-row"><span><strong>Výrazné ikony</strong><small>Stejný kovově šedý styl</small></span><input class="theme-switch-input" type="checkbox"><span class="theme-switch" aria-hidden="true"></span></label>
             </div>
             <label class="field-label" for="theme-preview-note">Co se tímto směrem testuje</label>
-            <textarea class="textarea" id="theme-preview-note" rows="4" readonly>Měkčí plastický styl podle slider reference. Zatím jen vizuální návrh, bez dat a bez produkční logiky.</textarea>
+            <textarea class="textarea" id="theme-preview-note" rows="4" readonly>Jen jedna varianta přepínače podle dodané reference, sladěná do kovově šedého UI. Ikony jsou zatím pouze zástupné.</textarea>
             <div class="theme-button-row"><button class="btn btn-secondary" type="button">Ztlumit</button><button class="btn btn-success" type="button">Směr OK</button></div>
           </article>
         </aside>
       </section>
     </section>
   </main>
-
-  <script>
-    document.addEventListener("input", (event) => {
-      const input = event.target.closest("[data-theme-volume]");
-      if (!input) return;
-      const group = input.closest(".theme-volume-control");
-      if (!group) return;
-      group.style.setProperty("--val", `${Number(input.value) || 0}%`);
-    });
-  </script>
 </body>
 </html>
