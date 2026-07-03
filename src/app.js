@@ -14505,12 +14505,13 @@ function collectionRoutesSourceDriverSelectedIndex(rows = collectionRoutesSource
 }
 
 function collectionRoutesSourceDriverVisibleRows(rows, selectedIndex) {
-  const limit = collectionRoutesPilotState.sourceDriverListExpanded ? rows.length : COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT;
-  const visible = rows.slice(0, limit).map((row, index) => ({ row, index }));
-  if (selectedIndex >= limit) {
-    visible.push({ row: rows[selectedIndex], index: selectedIndex, pinned: true });
+  if (collectionRoutesPilotState.sourceDriverListExpanded) {
+    return rows.map((row, index) => ({ row, index }));
   }
-  return visible;
+  const limit = Math.min(rows.length, COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT);
+  const safeSelectedIndex = Math.max(0, Math.min(rows.length - 1, selectedIndex));
+  const start = Math.max(0, Math.min(safeSelectedIndex - 2, rows.length - limit));
+  return rows.slice(start, start + limit).map((row, index) => ({ row, index: start + index }));
 }
 
 function collectionRoutesSourceDriverStopTitle(row) {
@@ -14561,90 +14562,96 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const hasHiddenRows = rows.length > visibleRows.length || (!isExpanded && rows.length > COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT);
   const listLabel = isExpanded
     ? `Všechny zastávky (${collectionRoutesMetricValue(rows.length)})`
-    : `Nejbližší zastávky (${collectionRoutesMetricValue(Math.min(rows.length, COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT))})`;
+    : `Okolí aktuální zastávky (${collectionRoutesMetricValue(visibleRows.length)})`;
 
   return `
     <div class="collection-routes-driver-mode ${isExpanded ? "collection-routes-driver-mode--expanded" : ""}" id="collection-routes-source-driver-mode">
       <div class="collection-routes-driver-mode__head">
         <div>
-          <p class="module-feedback__eyebrow">Řidičský režim</p>
+          <p class="module-feedback__eyebrow">Řidičský displej</p>
           <h3>${escapeHtml(collectionRoutesSourceRouteTitle())}</h3>
-          <span>Praktický read-only náhled pro jízdu a tisk. Bez navigace, GPS, T-Cars, potvrzování svozu a ostré trasy.</span>
+          <span>Velký read-only náhled aktuální trasy ze 13 Excelů.</span>
         </div>
         <span class="employee-card-status employee-card-status--waiting">${escapeHtml(progressValue)} / ${escapeHtml(rows.length)}</span>
       </div>
 
-      <div class="collection-routes-driver-mode__active" aria-label="Aktuální zastávka">
-        <div class="collection-routes-driver-mode__stop">
-          <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || progressValue)}</span>
-          <div>
-            <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
-            <p>${escapeHtml(selectedRow.addressText || "-")}</p>
+      <div class="collection-routes-driver-mode__dashboard">
+        <div class="collection-routes-driver-mode__main">
+          <div class="collection-routes-driver-mode__active" aria-label="Aktuální zastávka">
+            <div class="collection-routes-driver-mode__stop">
+              <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || progressValue)}</span>
+              <div>
+                <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
+                <p>${escapeHtml(selectedRow.addressText || "-")}</p>
+              </div>
+            </div>
+            <div class="collection-routes-driver-mode__facts">
+              ${collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow))}
+              ${collectionRoutesSourceDriverModeMeta("Nádoba", collectionRoutesSourceDriverContainerLabel(selectedRow))}
+              ${collectionRoutesSourceDriverModeMeta("Frekvence", selectedRow.frequency || "-")}
+              ${collectionRoutesSourceDriverModeMeta("Stav", collectionRoutesSourceVistosStatus(selectedRow))}
+              ${collectionRoutesSourceDriverModeMeta("Zdroj", `${selectedRow.sourceFile || "-"} / ř. ${selectedRow.sourceRowNumber || "-"}`)}
+            </div>
+            <div class="collection-routes-driver-mode__note">
+              <strong>Poznámka</strong>
+              <span>${escapeHtml(note || "Bez poznámky.")}</span>
+            </div>
+            <div class="collection-routes-driver-mode__note collection-routes-driver-mode__note--check">
+              <strong>Kontrola</strong>
+              <span>${escapeHtml(issue || "-")}</span>
+            </div>
+          </div>
+
+          <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
+            <span style="width: ${escapeHtml(progressPercent)}%"></span>
+          </div>
+
+          <div class="collection-routes-driver-mode__controls" aria-label="Ovládání read-only řidičského náhledu">
+            <button class="secondary-link" type="button" data-collection-routes-source-driver-prev ${selectedIndex <= 0 ? "disabled" : ""}>
+              Předchozí
+            </button>
+            <button class="primary-action" type="button" data-collection-routes-source-driver-next ${selectedIndex >= rows.length - 1 ? "disabled" : ""}>
+              Další zastávka
+            </button>
+            <button class="secondary-link" type="button" data-collection-routes-source-print-driver>
+              Tisk pro řidiče
+            </button>
           </div>
         </div>
-        <div class="collection-routes-driver-mode__facts">
-          ${collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow))}
-          ${collectionRoutesSourceDriverModeMeta("Nádoba", collectionRoutesSourceDriverContainerLabel(selectedRow))}
-          ${collectionRoutesSourceDriverModeMeta("Frekvence", selectedRow.frequency || "-")}
-          ${collectionRoutesSourceDriverModeMeta("Stav", collectionRoutesSourceVistosStatus(selectedRow))}
-          ${collectionRoutesSourceDriverModeMeta("Zdroj", `${selectedRow.sourceFile || "-"} / ř. ${selectedRow.sourceRowNumber || "-"}`)}
-        </div>
-        <div class="collection-routes-driver-mode__note">
-          <strong>Poznámka</strong>
-          <span>${escapeHtml(note || "Bez poznámky.")}</span>
-        </div>
-        <div class="collection-routes-driver-mode__note collection-routes-driver-mode__note--check">
-          <strong>Kontrola</strong>
-          <span>${escapeHtml(issue || "-")}</span>
-        </div>
-      </div>
 
-      <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
-        <span style="width: ${escapeHtml(progressPercent)}%"></span>
-      </div>
-
-      <div class="collection-routes-driver-mode__controls" aria-label="Ovládání read-only řidičského náhledu">
-        <button class="secondary-link" type="button" data-collection-routes-source-driver-prev ${selectedIndex <= 0 ? "disabled" : ""}>
-          Předchozí
-        </button>
-        <button class="primary-action" type="button" data-collection-routes-source-driver-next ${selectedIndex >= rows.length - 1 ? "disabled" : ""}>
-          Další zastávka
-        </button>
-        <button class="secondary-link" type="button" data-collection-routes-source-print-driver>
-          Tisk pro řidiče
-        </button>
+        <aside class="collection-routes-driver-mode__queue" aria-label="Zastávky v trase">
+          <div class="collection-routes-driver-mode__list-head">
+            <strong>${escapeHtml(listLabel)}</strong>
+            <button class="secondary-link" type="button" data-collection-routes-source-driver-toggle-list>
+              ${isExpanded ? "Zkrátit seznam" : `Zobrazit všech ${collectionRoutesMetricValue(rows.length)}`}
+            </button>
+          </div>
+          <div class="collection-routes-driver-mode__list">
+            ${visibleRows.map(({ row, index }) => {
+              const key = collectionRoutesSourceDriverRowKey(row, index);
+              const active = index === selectedIndex;
+              return `
+                <button
+                  class="collection-routes-driver-stop ${active ? "collection-routes-driver-stop--active" : ""}"
+                  type="button"
+                  data-collection-routes-source-driver-stop="${escapeHtml(key)}"
+                  aria-current="${active ? "step" : "false"}"
+                >
+                  <span class="collection-routes-driver-stop__order">${escapeHtml(row.routeOrder || index + 1)}</span>
+                  <span>
+                    <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</strong>
+                    <small>${escapeHtml(collectionRoutesSourceDriverStopSubtitle(row))}</small>
+                  </span>
+                </button>
+              `;
+            }).join("")}
+          </div>
+        </aside>
       </div>
 
       <div class="collection-routes-driver-mode__warning">
         <strong>Read-only</strong>
-        <span>Tady se nic neodškrtává, neukládá, neposílá a nepotvrzuje. Slouží jen pro přehled trasy z aktuálního filtru.</span>
-      </div>
-
-      <div class="collection-routes-driver-mode__list-head">
-        <strong>${escapeHtml(listLabel)}</strong>
-        <button class="secondary-link" type="button" data-collection-routes-source-driver-toggle-list>
-          ${isExpanded ? "Zkrátit seznam" : `Zobrazit všech ${collectionRoutesMetricValue(rows.length)}`}
-        </button>
-      </div>
-      <div class="collection-routes-driver-mode__list">
-        ${visibleRows.map(({ row, index, pinned }) => {
-          const key = collectionRoutesSourceDriverRowKey(row, index);
-          const active = index === selectedIndex;
-          return `
-            <button
-              class="collection-routes-driver-stop ${active ? "collection-routes-driver-stop--active" : ""}"
-              type="button"
-              data-collection-routes-source-driver-stop="${escapeHtml(key)}"
-              aria-current="${active ? "step" : "false"}"
-            >
-              <span class="collection-routes-driver-stop__order">${escapeHtml(row.routeOrder || index + 1)}</span>
-              <span>
-                <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</strong>
-                <small>${escapeHtml(collectionRoutesSourceDriverStopSubtitle(row))}${pinned ? " · vybraná mimo zkrácený seznam" : ""}</small>
-              </span>
-            </button>
-          `;
-        }).join("")}
+        <span>Nepotvrzuje svoz, nespouští GPS, T-Cars, navigaci ani ostrou trasu.</span>
       </div>
       ${hasHiddenRows ? `<p class="module-feedback__notice">Seznam je zkrácený, aby záložka zůstala přehledná. Tisk a tlačítka Předchozí/Další pracují s celým aktuálním filtrem.</p>` : ""}
     </div>

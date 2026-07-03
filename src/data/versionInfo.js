@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.308"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.309"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: tabletový řidičský displej",
+    text: "Řidičský režim ve Svozových trasách má větší aktuální zastávku, větší dotyková tlačítka a tabletové rozložení pro 11\" 16:10 displej. Zůstává read-only bez navigace, GPS, T-Cars, SMS/e-mailů a ostrých tras."
+  },
   {
     title: "Trasy svozu: další pracovní den ve filtru",
     text: "Chytrý filtr v hlavní záložce Svozové trasy doplňuje volbu další pracovní den, když zítra nebo pozítří vychází na víkend. Tisk a řidičský režim zůstávají read-only bez navigace, GPS, T-Cars, SMS/e-mailů a ostrých tras."

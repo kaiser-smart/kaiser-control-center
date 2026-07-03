@@ -2397,7 +2397,7 @@ h1 {
 .collection-routes-driver-mode__head h3 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(1.2rem, 2vw, 1.65rem);
+  font-size: 1.55rem;
   line-height: 1.16;
 }
 
@@ -2413,6 +2413,23 @@ h1 {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
   gap: 12px;
+}
+
+.collection-routes-driver-mode__dashboard {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.collection-routes-driver-mode__main,
+.collection-routes-driver-mode__queue {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.collection-routes-driver-mode__queue {
+  align-content: start;
 }
 
 .collection-routes-driver-mode__stop,
@@ -2442,14 +2459,14 @@ h1 {
   border-radius: 8px;
   background: var(--theme-primary, var(--kaiser-green));
   color: #ffffff;
-  font-size: clamp(1.25rem, 2.5vw, 1.8rem);
+  font-size: 1.65rem;
   font-weight: 900;
 }
 
 .collection-routes-driver-mode__stop h4 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(1.35rem, 2.6vw, 2rem);
+  font-size: 1.9rem;
   line-height: 1.12;
   overflow-wrap: anywhere;
 }
@@ -2457,7 +2474,7 @@ h1 {
 .collection-routes-driver-mode__stop p {
   margin: 8px 0 0;
   color: var(--steel);
-  font-size: clamp(1rem, 1.8vw, 1.18rem);
+  font-size: 1.12rem;
   font-weight: 750;
   overflow-wrap: anywhere;
 }
@@ -2534,7 +2551,10 @@ h1 {
 
 .collection-routes-driver-mode__controls .primary-action,
 .collection-routes-driver-mode__controls .secondary-link {
-  min-height: 46px;
+  min-height: 56px;
+  padding: 12px 18px;
+  font-size: 1rem;
+  font-weight: 900;
 }
 
 .collection-routes-driver-mode__warning {
@@ -2586,6 +2606,196 @@ h1 {
   cursor: pointer;
 }
 
+@media (min-width: 960px) and (max-width: 1400px) and (orientation: landscape) {
+  .collection-routes-panel--driver-print {
+    gap: 12px;
+  }
+
+  .collection-routes-print-filter--driver {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .collection-routes-print-filter__head {
+    align-items: center;
+  }
+
+  .collection-routes-print-filter__today {
+    padding: 8px 10px;
+  }
+
+  .collection-routes-route-filter--smart label {
+    min-width: 160px;
+  }
+
+  .collection-routes-route-filter--smart select,
+  .collection-routes-route-filter--smart input[type="date"] {
+    min-height: 50px;
+  }
+
+  .collection-routes-driver-mode {
+    gap: 12px;
+    min-height: calc(100vh - 210px);
+    padding: 14px;
+  }
+
+  .collection-routes-driver-mode__head {
+    align-items: center;
+  }
+
+  .collection-routes-driver-mode__head h3 {
+    font-size: 1.75rem;
+  }
+
+  .collection-routes-driver-mode__dashboard {
+    grid-template-columns: minmax(0, 1.38fr) minmax(340px, 0.62fr);
+    align-items: start;
+  }
+
+  .collection-routes-driver-mode__main {
+    min-height: calc(100vh - 300px);
+  }
+
+  .collection-routes-driver-mode__active {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-driver-mode__stop {
+    min-height: 214px;
+    align-content: center;
+    padding: 22px;
+  }
+
+  .collection-routes-driver-mode__order {
+    min-width: 78px;
+    min-height: 78px;
+    font-size: 1.95rem;
+  }
+
+  .collection-routes-driver-mode__stop h4 {
+    font-size: 2.45rem;
+  }
+
+  .collection-routes-driver-mode__stop p {
+    font-size: 1.34rem;
+  }
+
+  .collection-routes-driver-mode__facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .collection-routes-driver-mode__facts article {
+    min-height: 72px;
+  }
+
+  .collection-routes-driver-mode__facts strong,
+  .collection-routes-driver-mode__note span {
+    font-size: 1rem;
+  }
+
+  .collection-routes-driver-mode__controls {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr) minmax(0, 0.9fr);
+  }
+
+  .collection-routes-driver-mode__controls .primary-action,
+  .collection-routes-driver-mode__controls .secondary-link {
+    width: 100%;
+    min-height: 72px;
+    justify-content: center;
+    font-size: 1.12rem;
+  }
+
+  .collection-routes-driver-mode__queue {
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 245px);
+    overflow: hidden;
+  }
+
+  .collection-routes-driver-mode__list-head {
+    align-items: center;
+  }
+
+  .collection-routes-driver-mode__list-head .secondary-link {
+    min-height: 50px;
+  }
+
+  .collection-routes-driver-mode__list {
+    grid-template-columns: 1fr;
+    max-height: calc(100vh - 330px);
+  }
+
+  .collection-routes-driver-stop {
+    min-height: 76px;
+    padding: 12px;
+  }
+}
+
+@media (min-width: 720px) and (max-width: 920px) and (orientation: portrait) {
+  .collection-routes-print-filter--driver,
+  .collection-routes-driver-mode {
+    padding: 14px;
+  }
+
+  .collection-routes-driver-mode__head h3 {
+    font-size: 1.6rem;
+  }
+
+  .collection-routes-driver-mode__dashboard,
+  .collection-routes-driver-mode__active,
+  .collection-routes-driver-mode__list-head {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-driver-mode__stop {
+    min-height: 210px;
+    align-content: center;
+    padding: 20px;
+  }
+
+  .collection-routes-driver-mode__order {
+    min-width: 76px;
+    min-height: 76px;
+    font-size: 1.9rem;
+  }
+
+  .collection-routes-driver-mode__stop h4 {
+    font-size: 2.2rem;
+  }
+
+  .collection-routes-driver-mode__stop p {
+    font-size: 1.26rem;
+  }
+
+  .collection-routes-driver-mode__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collection-routes-driver-mode__controls {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-driver-mode__controls .primary-action,
+  .collection-routes-driver-mode__controls .secondary-link {
+    width: 100%;
+    min-height: 68px;
+    justify-content: center;
+    font-size: 1.08rem;
+  }
+
+  .collection-routes-driver-mode__list {
+    grid-template-columns: 1fr;
+    max-height: 46vh;
+  }
+
+  .collection-routes-driver-stop {
+    min-height: 76px;
+    padding: 12px;
+  }
+}
+
 .collection-routes-driver-stop:hover,
 .collection-routes-driver-stop:focus-visible {
   border-color: color-mix(in srgb, var(--theme-primary, var(--kaiser-green)) 46%, rgba(66, 80, 74, 0.18));
@@ -2626,6 +2836,30 @@ h1 {
   font-weight: 700;
   line-height: 1.3;
   overflow-wrap: anywhere;
+}
+
+@media (min-width: 960px) and (max-width: 1400px) and (orientation: landscape) {
+  .collection-routes-driver-stop__order {
+    min-width: 46px;
+    min-height: 46px;
+    font-size: 1rem;
+  }
+
+  .collection-routes-driver-stop strong {
+    font-size: 1rem;
+  }
+
+  .collection-routes-driver-stop small {
+    font-size: 0.86rem;
+  }
+}
+
+@media (min-width: 720px) and (max-width: 920px) and (orientation: portrait) {
+  .collection-routes-driver-stop__order {
+    min-width: 46px;
+    min-height: 46px;
+    font-size: 1rem;
+  }
 }
 
 .collection-routes-panel--driver-print .collection-routes-preview-table {
@@ -14616,6 +14850,7 @@ body:has(.data-box-page) {
   .collection-routes-print-filter__head,
   .collection-routes-print-filter__today,
   .collection-routes-driver-mode__head,
+  .collection-routes-driver-mode__dashboard,
   .collection-routes-driver-mode__active,
   .collection-routes-driver-mode__list-head {
     display: grid;
