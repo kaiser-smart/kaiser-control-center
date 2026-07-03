@@ -14,8 +14,8 @@ import {
 const LLM_MODEL_EXPECTED_IN_ELEVENLABS = "Qwen3.5-397B-A17B";
 const LLM_MODEL_EXPECTED_NORMALIZED = "qwen35397ba17b";
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
-const DRIVER_REPORT_PROMPT_MARKER = "HLÁŠENÍ ŘIDIČŮ / VOZIDLA";
-const DRIVER_REPORT_PROMPT_REQUIRED_PHRASE = "Vozidla smíš v hlasu vyjmenovat pouze tehdy";
+const DRIVER_REPORT_PROMPT_MARKER = "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL";
+const DRIVER_REPORT_PROMPT_REQUIRED_PHRASE = "Konkrétní vozidla smíš v hlasu říct pouze tehdy";
 const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
   "Moment, načtu si " + "vozidla",
   "V hlasovém flow nikdy neříkej " + "konkrétní vozidlo",

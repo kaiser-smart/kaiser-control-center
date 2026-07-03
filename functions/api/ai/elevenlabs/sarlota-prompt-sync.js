@@ -9,12 +9,12 @@ import {
 
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/convai";
-const PROMPT_RULE_MARKER = "HLÁŠENÍ ŘIDIČŮ / VOZIDLA";
+const PROMPT_RULE_MARKER = "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL";
 const LEGACY_PROMPT_RULE_MARKERS = [
-  "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL",
   "HLÁŠENÍ ŘIDIČŮ / VOZIDLA / OVĚŘENÁ VOZIDLA ONLY",
   "HLÁŠENÍ ŘIDIČŮ / VOZIDLA"
 ];
+const PROMPT_RULE_REQUIRED_PHRASE = "Konkrétní vozidla smíš v hlasu říct pouze tehdy";
 const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
   "Moment, načtu si " + "vozidla",
   "V hlasovém flow nikdy neříkej " + "konkrétní vozidlo",
@@ -93,7 +93,7 @@ function writablePromptPathFromAgent(agentConfig) {
 function promptHasCurrentRule(promptText) {
   return cleanString(promptText).includes(PROMPT_RULE_MARKER)
     && cleanString(promptText).includes(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE)
-    && cleanString(promptText).includes("Vozidla smíš v hlasu vyjmenovat pouze tehdy");
+    && cleanString(promptText).includes(PROMPT_RULE_REQUIRED_PHRASE);
 }
 
 function forbiddenPromptPhrases(promptText) {
@@ -475,3 +475,13 @@ export async function onRequestPost({ request, env }) {
     }, 500);
   }
 }
+
+export const __test = {
+  PROMPT_RULE_MARKER,
+  LEGACY_PROMPT_RULE_MARKERS,
+  PROMPT_RULE_REQUIRED_PHRASE,
+  forbiddenPromptPhrases,
+  promptHasCurrentRule,
+  promptHasLegacyRule,
+  stripDriverReportPromptBlocks
+};
