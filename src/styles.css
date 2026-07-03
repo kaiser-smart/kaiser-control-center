@@ -2235,6 +2235,37 @@ h1 {
   justify-content: flex-end;
 }
 
+.collection-routes-view-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.collection-routes-view-switch .primary-action,
+.collection-routes-view-switch .secondary-link {
+  display: grid;
+  min-height: 58px;
+  align-content: center;
+  justify-items: start;
+  gap: 2px;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.collection-routes-view-switch small {
+  color: currentColor;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 0.76;
+}
+
+@media (max-width: 680px) {
+  .collection-routes-view-switch {
+    grid-template-columns: 1fr;
+  }
+}
+
 .collection-routes-route-filter label {
   display: grid;
   gap: 6px;

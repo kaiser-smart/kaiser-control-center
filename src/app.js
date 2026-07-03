@@ -894,6 +894,7 @@ const collectionRoutesPilotState = {
   sourceSmartStatus: "all",
   sourceDriverSelectedRowKey: "",
   sourceDriverListExpanded: false,
+  sourceRouteView: "print",
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -15100,8 +15101,36 @@ function collectionRoutesSourceRouteTitle() {
   ].join(" / ");
 }
 
+function collectionRoutesSourceRouteView() {
+  return collectionRoutesPilotState.sourceRouteView === "driver" ? "driver" : "print";
+}
+
+function collectionRoutesSourceRouteViewSwitch(rows = collectionRoutesSourceDisplayRows()) {
+  const selectedView = collectionRoutesSourceRouteView();
+  const options = [
+    ["print", "Přehled k tisku", "Tabulka zastávek pro kontrolu a tisk"],
+    ["driver", "Řidičský displej", "Kabinový read-only režim pro tablet"]
+  ];
+  return `
+    <div class="collection-routes-view-switch" aria-label="Zobrazení trasy">
+      ${options.map(([value, label, description]) => `
+        <button
+          class="${selectedView === value ? "primary-action" : "secondary-link"}"
+          type="button"
+          data-collection-routes-source-view="${escapeHtml(value)}"
+          aria-pressed="${selectedView === value ? "true" : "false"}"
+        >
+          <span>${escapeHtml(label)}</span>
+          <small>${escapeHtml(description)}</small>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
 function collectionRoutesSourceRoutesSection() {
   const rows = collectionRoutesSourceDisplayRows();
+  const routeView = collectionRoutesSourceRouteView();
   return `
     <section class="collection-routes-panel collection-routes-panel--driver-print" id="collection-routes-source-routes" aria-labelledby="collection-routes-source-routes-title">
       <div class="collection-routes-panel__head">
@@ -15119,7 +15148,10 @@ function collectionRoutesSourceRoutesSection() {
       `}
       ${collectionRoutesSourceSmartFilterPanel()}
       ${collectionRoutesSourceRouteSummaryCards(rows)}
-      ${collectionRoutesSourceDriverPreviewPanel({ showNotice: false, showActions: false, rows })}
+      ${collectionRoutesSourceRouteViewSwitch(rows)}
+      ${routeView === "driver"
+        ? collectionRoutesSourceDriverModePanel(rows)
+        : collectionRoutesSourceDriverPreviewPanel({ showNotice: false, showActions: false, rows })}
     </section>
   `;
 }
@@ -22090,6 +22122,19 @@ function focusCollectionRoutesSourceDriverMode() {
   setTimeout(() => {
     document.getElementById("collection-routes-source-driver-mode")?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, 0);
+}
+
+function setCollectionRoutesSourceRouteView(view) {
+  const nextView = view === "driver" ? "driver" : "print";
+  collectionRoutesPilotState.sourceRouteView = nextView;
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = nextView === "driver"
+    ? "Zobrazený Řidičský displej je pouze read-only pilot. Nic nepotvrzuje, nespouští navigaci ani ostrou trasu."
+    : "";
+  render();
+  if (nextView === "driver") {
+    focusCollectionRoutesSourceDriverMode();
+  }
 }
 
 function selectCollectionRoutesSourceDriverIndex(index) {
@@ -29657,6 +29702,12 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesSourcePrintDriver = event.target.closest("[data-collection-routes-source-print-driver]");
   if (collectionRoutesSourcePrintDriver) {
     printCollectionRoutesSourceDriverPreview();
+    return;
+  }
+
+  const collectionRoutesSourceView = event.target.closest("[data-collection-routes-source-view]");
+  if (collectionRoutesSourceView) {
+    setCollectionRoutesSourceRouteView(collectionRoutesSourceView.dataset.collectionRoutesSourceView || "print");
     return;
   }
 
