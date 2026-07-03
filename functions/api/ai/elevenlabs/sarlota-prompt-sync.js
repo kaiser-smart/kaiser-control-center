@@ -23,6 +23,13 @@ const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
   "SPZ chtěj až jako " + "poslední možnost",
   "typ, značku nebo " + "interní název",
   "auto " + "3 brzdí divně",
+  "Ford " + "Transit",
+  "Škoda " + "Octavia",
+  "Fiat " + "Ducato",
+  "Tatra",
+  "1A2 " + "3456",
+  "1AB " + "2345",
+  "3A4 " + "5678",
   "Zapíšu bezpečnostní závadu k vozidlu " + "3",
   "Hotovo, závada je " + "zapsaná"
 ];
@@ -115,6 +122,11 @@ function promptHasLegacyRule(promptText) {
     forbiddenPromptPhrases(text).length > 0;
 }
 
+function lineHasForbiddenPromptPhrase(line) {
+  const text = cleanString(line).toLowerCase();
+  return FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES.some((phrase) => text.includes(phrase.toLowerCase()));
+}
+
 function stripLegacyDriverReportExamples(promptText) {
   const pattern = new RegExp([
     String.raw`(?:\n\s*)?Uživatel:\s*[„"]Zapiš závadu,\s*auto\s*3\s*brzdí divně\.[“”"]`,
@@ -129,24 +141,28 @@ function stripLegacyDriverReportExamples(promptText) {
 function stripDriverReportPromptBlocks(promptText) {
   const lines = String(promptText ?? "").split(/\r?\n/);
   const output = [];
-  let skipRuleLine = false;
+  let skipLegacyRuleLine = false;
 
   for (const line of lines) {
     const trimmed = cleanString(line);
     if (LEGACY_PROMPT_RULE_MARKERS.includes(trimmed)) {
-      skipRuleLine = true;
+      skipLegacyRuleLine = true;
       continue;
     }
 
-    if (skipRuleLine) {
-      skipRuleLine = false;
+    if (skipLegacyRuleLine) {
+      skipLegacyRuleLine = false;
+      continue;
+    }
+
+    if (lineHasForbiddenPromptPhrase(line)) {
       continue;
     }
 
     output.push(line);
   }
 
-  return output.join("\n").trimEnd();
+  return output.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 
 function bodyForPromptPatch(path, nextPrompt) {
@@ -481,6 +497,7 @@ export const __test = {
   LEGACY_PROMPT_RULE_MARKERS,
   PROMPT_RULE_REQUIRED_PHRASE,
   forbiddenPromptPhrases,
+  lineHasForbiddenPromptPhrase,
   promptHasCurrentRule,
   promptHasLegacyRule,
   stripDriverReportPromptBlocks
