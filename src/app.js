@@ -14432,7 +14432,7 @@ const COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES = [
   "chybí frekvence",
   "nenamapováno"
 ];
-const COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT = 12;
+const COLLECTION_ROUTES_DRIVER_VISIBLE_STOP_LIMIT = 8;
 
 function collectionRoutesSourceRepairRows(statuses = COLLECTION_ROUTES_SOURCE_REPAIR_STATUSES) {
   const allowed = new Set(statuses.map((status) => String(status || "").toLowerCase()));
@@ -14571,6 +14571,30 @@ function collectionRoutesSourceDriverMetricCard(label, value, tone = "default") 
   `;
 }
 
+function collectionRoutesSourceDriverNextStopCard(row, order) {
+  if (!row) {
+    return `
+      <aside class="collection-routes-driver-mode__next-stop collection-routes-driver-mode__next-stop--done">
+        <span>Dál</span>
+        <strong>Konec trasy</strong>
+        <small>V aktuálním filtru už není další zastávka.</small>
+      </aside>
+    `;
+  }
+  const serviceLabel = [
+    collectionRoutesSourceDriverWasteLabel(row),
+    collectionRoutesSourceDriverContainerLabel(row)
+  ].filter((value) => value && value !== "-").join(" · ") || "-";
+  return `
+    <aside class="collection-routes-driver-mode__next-stop">
+      <span>Dál</span>
+      <strong>#${escapeHtml(row.routeOrder || order)} ${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</strong>
+      <small>${escapeHtml(row.addressText || "-")}</small>
+      <em>${escapeHtml(serviceLabel)}</em>
+    </aside>
+  `;
+}
+
 function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "default") {
   return `
     <button
@@ -14617,6 +14641,8 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const completedCount = Math.max(0, progressValue - 1);
   const remainingCount = Math.max(0, rows.length - progressValue);
   const remainingMetrics = collectionRoutesSourceRowsMetrics(rows.slice(selectedIndex + 1));
+  const etaLabel = collectionRoutesSourceDriverEtaLabel(remainingMetrics.estimatedMinutes);
+  const nextRow = rows[selectedIndex + 1] || null;
   const currentServiceLabel = [
     collectionRoutesSourceDriverWasteLabel(selectedRow),
     collectionRoutesSourceDriverContainerLabel(selectedRow)
@@ -14636,6 +14662,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           <small>${escapeHtml(driverName)} · zdroj 13 Excelů</small>
         </div>
         <div class="collection-routes-driver-mode__signals" aria-label="Technický stav">
+          <span class="collection-routes-driver-signal collection-routes-driver-signal--readonly">read-only</span>
           <span class="collection-routes-driver-signal collection-routes-driver-signal--online">${escapeHtml(appConnectivity)}</span>
           <span>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</span>
           <span>tablet</span>
@@ -14658,16 +14685,23 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
       <div class="collection-routes-driver-mode__dashboard">
         <div class="collection-routes-driver-mode__main">
           <section class="collection-routes-driver-mode__active" aria-label="Další zastávka">
-            <div class="collection-routes-driver-mode__stop">
-              <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || progressValue)}</span>
-              <div>
-                <span class="collection-routes-driver-mode__kicker">Další zastávka</span>
-                <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
-                <p>${escapeHtml(selectedRow.addressText || "-")}</p>
-                <strong>${escapeHtml(currentServiceLabel)}</strong>
-              </div>
+            <div class="collection-routes-driver-mode__route-pulse" aria-label="Postup trasy">
+              <strong>${escapeHtml(progressValue)} / ${escapeHtml(rows.length)}</strong>
+              <span>${escapeHtml(collectionRoutesMetricValue(remainingCount))} zbývá · konec ${escapeHtml(etaLabel)}</span>
             </div>
-            <div class="collection-routes-driver-mode__facts">
+            <div class="collection-routes-driver-mode__hero-grid">
+              <div class="collection-routes-driver-mode__stop">
+                <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || progressValue)}</span>
+                <div>
+                  <span class="collection-routes-driver-mode__kicker">Teď</span>
+                  <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
+                  <p>${escapeHtml(selectedRow.addressText || "-")}</p>
+                  <strong>${escapeHtml(currentServiceLabel)}</strong>
+                </div>
+              </div>
+              ${collectionRoutesSourceDriverNextStopCard(nextRow, selectedIndex + 2)}
+            </div>
+            <div class="collection-routes-driver-mode__facts collection-routes-driver-mode__facts--primary">
               ${collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow))}
               ${collectionRoutesSourceDriverModeMeta("Nádoba", collectionRoutesSourceDriverContainerLabel(selectedRow))}
               ${collectionRoutesSourceDriverModeMeta("Frekvence", selectedRow.frequency || "-")}
@@ -14707,7 +14741,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           <div class="collection-routes-driver-mode__status-grid" aria-label="Stav trasy">
             ${collectionRoutesSourceDriverMetricCard("Hotovo", `${collectionRoutesMetricValue(completedCount)} / ${collectionRoutesMetricValue(rows.length)}`, "done")}
             ${collectionRoutesSourceDriverMetricCard("Zbývá", collectionRoutesMetricValue(remainingCount), "plan")}
-            ${collectionRoutesSourceDriverMetricCard("Odhad konec", collectionRoutesSourceDriverEtaLabel(remainingMetrics.estimatedMinutes), "time")}
+            ${collectionRoutesSourceDriverMetricCard("Odhad konec", etaLabel, "time")}
             ${collectionRoutesSourceDriverMetricCard("Nádoby dál", collectionRoutesMetricValue(remainingMetrics.containerCount || 0), "capacity")}
           </div>
           <div class="collection-routes-driver-mode__list-head">

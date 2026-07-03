@@ -3479,6 +3479,7 @@ h1 {
 @media (max-width: 719px) {
   .collection-routes-driver-mode__topbar,
   .collection-routes-driver-mode__dashboard,
+  .collection-routes-driver-mode__hero-grid,
   .collection-routes-driver-mode__tabs,
   .collection-routes-driver-mode__primary-actions,
   .collection-routes-driver-mode__bottom-bar,
@@ -3496,6 +3497,200 @@ h1 {
 
   .collection-routes-driver-mode__stop h4 {
     font-size: 1.8rem;
+  }
+}
+
+.collection-routes-driver-signal--readonly {
+  border-color: rgba(255, 191, 71, 0.48) !important;
+  background: rgba(255, 191, 71, 0.13) !important;
+  color: var(--driver-amber) !important;
+}
+
+.collection-routes-driver-mode__route-pulse {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(123, 211, 63, 0.32);
+  border-radius: 8px;
+  background: rgba(123, 211, 63, 0.1);
+}
+
+.collection-routes-driver-mode__route-pulse strong {
+  color: var(--driver-green);
+  font-size: 1.28rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.collection-routes-driver-mode__route-pulse span {
+  color: #d8e3dc;
+  font-size: 0.95rem;
+  font-weight: 820;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.collection-routes-driver-mode__hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.42fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.collection-routes-driver-mode__next-stop {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  min-width: 0;
+  min-height: 210px;
+  padding: 16px;
+  border: 1px solid rgba(72, 166, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(72, 166, 255, 0.1);
+  color: var(--driver-text);
+}
+
+.collection-routes-driver-mode__next-stop span {
+  color: var(--driver-blue);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.collection-routes-driver-mode__next-stop strong {
+  color: var(--driver-text);
+  font-size: 1.16rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.collection-routes-driver-mode__next-stop small,
+.collection-routes-driver-mode__next-stop em {
+  color: var(--driver-muted);
+  font-size: 0.9rem;
+  font-style: normal;
+  font-weight: 760;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.collection-routes-driver-mode__next-stop em {
+  color: #dceeff;
+}
+
+.collection-routes-driver-mode__next-stop--done {
+  border-color: rgba(123, 211, 63, 0.32);
+  background: rgba(123, 211, 63, 0.1);
+}
+
+.collection-routes-driver-mode__next-stop--done span,
+.collection-routes-driver-mode__next-stop--done strong {
+  color: var(--driver-green);
+}
+
+.collection-routes-driver-mode__facts--primary article {
+  min-height: 82px;
+}
+
+.collection-routes-driver-mode__facts--primary strong {
+  font-size: 1.12rem;
+}
+
+.collection-routes-driver-action small {
+  display: none;
+}
+
+.collection-routes-driver-mode__tabs .collection-routes-driver-action,
+.collection-routes-driver-tab {
+  min-height: 48px;
+}
+
+.collection-routes-driver-action {
+  min-height: 64px;
+  font-size: 1.02rem;
+}
+
+.collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
+  min-height: 98px;
+  font-size: 1.22rem;
+}
+
+.collection-routes-driver-mode__problem-grid {
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.collection-routes-driver-mode__problem-grid > div {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.collection-routes-driver-mode__problem-grid .collection-routes-driver-action {
+  min-height: 56px;
+}
+
+@media (min-width: 960px) and (max-width: 1400px) and (orientation: landscape) {
+  .collection-routes-driver-mode__dashboard {
+    grid-template-columns: minmax(0, 1.34fr) minmax(300px, 0.66fr);
+  }
+
+  .collection-routes-driver-mode__hero-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 0.38fr);
+  }
+
+  .collection-routes-driver-mode__stop,
+  .collection-routes-driver-mode__next-stop {
+    min-height: 250px;
+  }
+
+  .collection-routes-driver-mode__stop h4 {
+    font-size: 2.95rem;
+  }
+
+  .collection-routes-driver-mode__stop p {
+    font-size: 1.42rem;
+  }
+
+  .collection-routes-driver-mode__next-stop strong {
+    font-size: 1.28rem;
+  }
+
+  .collection-routes-driver-mode__facts--primary article {
+    min-height: 88px;
+  }
+
+  .collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
+    min-height: 104px;
+  }
+
+  .collection-routes-driver-mode__bottom-bar .collection-routes-driver-action {
+    min-height: 82px;
+  }
+}
+
+@media (min-width: 720px) and (max-width: 920px) and (orientation: portrait) {
+  .collection-routes-driver-mode__hero-grid,
+  .collection-routes-driver-mode__problem-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-driver-mode__next-stop {
+    min-height: 150px;
+  }
+
+  .collection-routes-driver-mode__route-pulse {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-driver-mode__route-pulse span {
+    text-align: left;
+  }
+
+  .collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
+    min-height: 92px;
   }
 }
 
