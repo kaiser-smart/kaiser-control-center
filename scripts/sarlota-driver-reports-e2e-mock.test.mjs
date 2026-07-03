@@ -10,7 +10,14 @@ import {
 } from "../functions/_lib/fleet-vehicles-store.js";
 import { createElevenLabsClientTools } from "../src/elevenLabsClientTools.js";
 
-const UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ nebo vyber vozidlo v aplikaci.";
+const UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
+const NO_VERIFIED_ASSIGNED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
+const VEHICLE_QUESTION_PHRASES = [
+  "Jaký tam jsou vozidla?",
+  "Jaký tam mám?",
+  "Ty tam vidíš co?",
+  "Který vozidla mám přiřazený?"
+];
 const TEST_URL = "https://kso.test";
 
 const baseUser = {
@@ -143,7 +150,9 @@ async function testVehiclePairingContext() {
     assert.equal(status, 200);
     assert.equal(payload.vehiclesVerified, false);
     assert.equal(payload.vehiclesCount, 0);
-    assert.equal(payload.messageForAssistant, "Nemám teď bezpečně ověřený seznam tvých vozidel. Otevřu ti výběr v aplikaci.");
+    assert.equal(payload.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
+    assert.equal(payload.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
+    assert.equal(payload.messageForAssistant, UNVERIFIED_VEHICLE_MESSAGE);
   }
 
   {
@@ -157,7 +166,9 @@ async function testVehiclePairingContext() {
     assert.equal(payload.vehicles[0].vin, undefined);
     assert.equal(payload.vehicles[0].vinPresent, true);
     assert.match(payload.vehicles[0].vinMasked, /^WDB/);
+    assert.equal(payload.assistantMessage, payload.messageForAssistant);
     assert.match(payload.messageForAssistant, /Mercedes Atego|SPZ 1AB 2345/);
+    assert.equal(payload.messageForAssistant.includes("WDB12345678901234"), false);
   }
 
   {
@@ -179,7 +190,13 @@ async function testVehiclePairingContext() {
     assert.equal(status, 200);
     assert.equal(payload.vehiclesVerified, true);
     assert.equal(payload.vehiclesCount, 2);
-    assert.match(payload.messageForAssistant, /víc vozidel|výběr v aplikaci/);
+    assert.match(payload.messageForAssistant, /Mercedes Atego/);
+    assert.match(payload.messageForAssistant, /SPZ 1AB 2345/);
+    assert.match(payload.messageForAssistant, /Mercedes Sprinter/);
+    assert.match(payload.messageForAssistant, /SPZ 2AB 2345/);
+    assert.match(payload.messageForAssistant, /Kterého se závada týká/);
+    assert.equal(payload.assistantMessage, payload.messageForAssistant);
+    assert.equal(payload.messageForAssistant.includes("WDB"), false);
 
     const tools = createElevenLabsClientTools({
       requestJson: async () => payload
@@ -187,13 +204,38 @@ async function testVehiclePairingContext() {
     const toolResult = await tools.get_driver_report_context({ sessionId: "multi-vehicle-test" });
 
     assert.equal(toolResult.vehiclesVerified, true);
-    assert.equal(toolResult.vehiclesCount, 0);
-    assert.deepEqual(toolResult.vehicles, []);
-    assert.match(toolResult.answerText, /víc vozidel|výběr v aplikaci/);
-    assert.equal(toolResult.answerText.includes("Mercedes Atego"), false);
-    assert.equal(toolResult.answerText.includes("1AB 2345"), false);
-    assert.equal(toolResult.answerText.includes("Mercedes Sprinter"), false);
-    assert.equal(toolResult.answerText.includes("2AB 2345"), false);
+    assert.equal(toolResult.vehiclesCount, 2);
+    assert.equal(toolResult.vehicles.length, 2);
+    assert.equal(toolResult.vehicleOrdinalSelectionAllowed, true);
+    assert.match(toolResult.answerText, /Mercedes Atego/);
+    assert.match(toolResult.answerText, /SPZ 1AB 2345/);
+    assert.match(toolResult.answerText, /Mercedes Sprinter/);
+    assert.match(toolResult.answerText, /SPZ 2AB 2345/);
+    assert.match(toolResult.answerText, /Kterého se závada týká/);
+    assert.equal(toolResult.assistantMessage, toolResult.answerText);
+    assert.equal(toolResult.answerText.includes("WDB"), false);
+
+    for (const [index, phrase] of VEHICLE_QUESTION_PHRASES.entries()) {
+      const phrasePayload = await contextPayload(env, baseUser, { transcriptIntent: phrase });
+      assert.equal(phrasePayload.payload.vehiclesVerified, true);
+      assert.equal(phrasePayload.payload.vehiclesCount, 2);
+      assert.match(phrasePayload.payload.messageForAssistant, /Mercedes Atego/);
+      assert.match(phrasePayload.payload.messageForAssistant, /SPZ 1AB 2345/);
+      assert.match(phrasePayload.payload.messageForAssistant, /Mercedes Sprinter/);
+      assert.match(phrasePayload.payload.messageForAssistant, /SPZ 2AB 2345/);
+      assert.equal(phrasePayload.payload.assistantMessage, phrasePayload.payload.messageForAssistant);
+      assert.equal(phrasePayload.payload.messageForAssistant.includes("WDB"), false);
+
+      const phraseToolResult = await tools.get_driver_report_context({
+        sessionId: `vehicle-question-${index}`,
+        transcriptIntent: phrase
+      });
+      assert.equal(phraseToolResult.vehiclesVerified, true);
+      assert.equal(phraseToolResult.vehiclesCount, 2);
+      assert.match(phraseToolResult.answerText, /Kterého se závada týká/);
+      assert.equal(phraseToolResult.assistantMessage, phraseToolResult.answerText);
+      assert.equal(phraseToolResult.answerText.includes("WDB"), false);
+    }
   }
 
   {
@@ -208,6 +250,8 @@ async function testVehiclePairingContext() {
     assert.equal(status, 200);
     assert.equal(payload.vehiclesVerified, false);
     assert.deepEqual(payload.vehicles, []);
+    assert.equal(payload.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
+    assert.equal(payload.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
     assert.equal(payload.messageForAssistant.includes("1AB 2345"), false);
   }
 
@@ -220,6 +264,8 @@ async function testVehiclePairingContext() {
     assert.equal(status, 200);
     assert.equal(payload.vehiclesVerified, false);
     assert.deepEqual(payload.vehicles, []);
+    assert.equal(payload.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
+    assert.equal(payload.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
   }
 }
 
@@ -360,8 +406,70 @@ async function testClientToolsNoHallucinationAndSummary() {
 
     assert.equal(result.vehiclesVerified, false);
     assert.deepEqual(result.vehicles, []);
+    assert.equal(result.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
     assert.equal(result.answerText, UNVERIFIED_VEHICLE_MESSAGE);
     assertNoVehicleLeak(result.answerText);
+  }
+
+  for (const [name, payload] of [
+    ["empty object", {}],
+    ["generic string", "Tool called successfully."],
+    ["generic response message", { ok: true, message: "Tool called successfully." }],
+    ["vehicles verified false", { ok: true, vehiclesVerified: false, vehicles: [] }]
+  ]) {
+    const tools = createElevenLabsClientTools({
+      requestJson: async () => payload
+    });
+    const result = await tools.get_driver_report_context({ sessionId: `hallucination-guard-${name}` });
+
+    assert.equal(result.vehiclesVerified, false, name);
+    assert.deepEqual(result.vehicles, [], name);
+    assert.equal(result.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON, name);
+    assert.equal(result.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE, name);
+    assert.equal(result.answerText, UNVERIFIED_VEHICLE_MESSAGE, name);
+    assert.equal(result.answerText.includes("Ford Transit"), false, name);
+    assert.equal(result.answerText.includes("5A4 8921"), false, name);
+    assert.equal(result.answerText.includes("1A2 3456"), false, name);
+  }
+
+  {
+    const tools = createElevenLabsClientTools({
+      requestJson: async () => ({
+        ok: true,
+        module: "hlaseni-ridicu",
+        userName: "Radim",
+        userResolved: true,
+        employeeResolved: true,
+        driverResolved: true,
+        vehiclesVerified: true,
+        vehiclePickerAvailable: true,
+        vehicles: [
+          {
+            id: "vehicle-1",
+            vehicleId: "vehicle-1",
+            displayName: "Mercedes Atego",
+            licensePlate: "1AB 2345",
+            spz: "1AB 2345",
+            vinMasked: "WDB**********1234",
+            assignedToCurrentDriver: true,
+            existsInFleet: true,
+            active: true,
+            source: "fleet_db"
+          }
+        ],
+        vehiclesCount: 1,
+        assistantMessage: "Vidím VIN WDB12345678901234 a tohle se nesmí přečíst.",
+        apiStatus: "ready"
+      })
+    });
+    const result = await tools.get_driver_report_context({ sessionId: "one-verified-vehicle" });
+
+    assert.equal(result.vehiclesVerified, true);
+    assert.equal(result.vehiclesCount, 1);
+    assert.equal(result.assistantMessage, result.answerText);
+    assert.match(result.answerText, /Mercedes Atego/);
+    assert.match(result.answerText, /SPZ 1AB 2345/);
+    assert.equal(result.answerText.includes("WDB"), false);
   }
 
   {

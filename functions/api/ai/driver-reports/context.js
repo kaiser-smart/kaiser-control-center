@@ -13,7 +13,8 @@ const MODULE_KEY = "driver-reports";
 const VEHICLE_CONTEXT_LOADING_MESSAGE = "Rozumím. Podívám se do Smart systému.";
 const VEHICLE_PICKER_MESSAGE = "Otevřu ti výběr v aplikaci.";
 const VEHICLE_PICKER_OR_MANUAL_QUESTION = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
-const NO_VERIFIED_VEHICLE_QUESTION = "Nemám teď bezpečně ověřený seznam tvých vozidel. Otevřu ti výběr v aplikaci.";
+const NO_VERIFIED_VEHICLE_QUESTION = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
+const NO_VERIFIED_ASSIGNED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
 const PICKER_FAILED_QUESTION = "Výběr se mi nepodařilo otevřít. Řekni mi prosím značku, typ nebo SPZ vozidla.";
 const LOAD_FAILED_QUESTION = "Vozidlo se mi teď nepodařilo ověřit. Otevřu ti výběr v aplikaci.";
 
@@ -144,15 +145,32 @@ function isSafeVoiceVehicle(vehicle = {}) {
   );
 }
 
-function vehicleListMessage(vehicles = []) {
-  if (vehicles.length !== 1) {
-    return "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci.";
+function joinCzechList(items = []) {
+  const values = items.map(cleanString).filter(Boolean);
+  if (values.length <= 1) {
+    return values[0] || "";
   }
 
-  const vehicle = vehicles[0];
-  return vehicle?.displayName && vehicle?.spz
-    ? `Mám bezpečně ověřené tvoje vozidlo ${vehicle.displayName}, SPZ ${vehicle.spz}. Týká se závada tohohle vozidla?`
-    : NO_VERIFIED_VEHICLE_QUESTION;
+  return `${values.slice(0, -1).join(", ")} a ${values[values.length - 1]}`;
+}
+
+function vehicleVoicePhrase(vehicle = {}) {
+  const label = cleanString(vehicle.displayName);
+  const plate = cleanString(vehicle.spz || vehicle.licensePlate);
+  return [label, plate ? `SPZ ${plate}` : ""].filter(Boolean).join(" ");
+}
+
+function vehicleListMessage(vehicles = []) {
+  const options = vehicles.map(vehicleVoicePhrase).filter(Boolean);
+  if (!options.length) {
+    return NO_VERIFIED_VEHICLE_QUESTION;
+  }
+
+  if (options.length === 1) {
+    return `Mám bezpečně ověřené tvoje vozidlo ${options[0]}. Týká se závada tohohle vozidla?`;
+  }
+
+  return `Vidím u tebe ${joinCzechList(options)}. Kterého se závada týká?`;
 }
 
 function errorPayload(errorCode, message, status = 400, extra = {}) {
@@ -167,7 +185,9 @@ function errorPayload(errorCode, message, status = 400, extra = {}) {
     vehiclesCount: 0,
     vehicleLookupMode: "picker_or_manual",
     errorCode,
+    reason: errorCode,
     message,
+    assistantMessage: message,
     messageForAssistant: message,
     fallbackQuestion: LOAD_FAILED_QUESTION,
     apiStatus: status >= 500 ? "waiting" : "ready",
@@ -250,15 +270,19 @@ export async function onRequestGet({ request, env }) {
   const emptyReason = vehiclesAreSafelyVerified
     ? ""
     : employee ? "NO_DRIVER_VEHICLES" : "DRIVER_NOT_MAPPED";
+  const reason = vehiclesAreSafelyVerified
+    ? ""
+    : NO_VERIFIED_ASSIGNED_VEHICLES_REASON;
   const fallbackQuestion = vehiclesAreSafelyVerified
     ? VEHICLE_PICKER_OR_MANUAL_QUESTION
     : NO_VERIFIED_VEHICLE_QUESTION;
   const vehicleLookupMode = vehiclesAreSafelyVerified
-    ? (vehicles.length > 3 ? "verified_picker_recommended" : "verified_vehicle_list")
+    ? "verified_vehicle_list"
     : "picker_or_manual";
   const messageForAssistant = vehiclesAreSafelyVerified
     ? vehicleListMessage(vehicles)
     : NO_VERIFIED_VEHICLE_QUESTION;
+  const assistantMessage = messageForAssistant;
   const diagnostics = {
     userId: cleanString(user.id),
     userName: cleanString(user.name),
@@ -289,6 +313,7 @@ export async function onRequestGet({ request, env }) {
     sessionId,
     status: match?.status || "none",
     errorCode: emptyReason,
+    reason,
     userName: cleanString(user.name),
     userResolved: true,
     employeeResolved: Boolean(employee),
@@ -313,6 +338,7 @@ export async function onRequestGet({ request, env }) {
     loadingMessage: VEHICLE_CONTEXT_LOADING_MESSAGE,
     pickerFallbackQuestion: PICKER_FAILED_QUESTION,
     message: messageForAssistant,
+    assistantMessage,
     messageForAssistant,
     diagnostics,
     apiStatus: "ready"
