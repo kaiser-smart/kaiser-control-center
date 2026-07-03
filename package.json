@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
+    "build:smart-design": "node scripts/build-smart-design-preview.mjs",
     "build:sites": "node scripts/build.mjs && node scripts/build-sites.mjs",
     "lint": "node scripts/check-syntax.mjs",
     "test:elevenlabs": "node scripts/elevenlabs-signed-url-options.test.mjs",

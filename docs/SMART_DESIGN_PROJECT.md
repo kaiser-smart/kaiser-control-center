@@ -10,6 +10,8 @@ Tento dokument je navazovací záznam pro samostatnou designovou větev Smart Od
 - Veřejný design náhled: https://kaiser-smart-design-preview.pages.dev/
 - Cloudflare Pages projekt pro veřejný náhled: `kaiser-smart-design-preview`
 - Účel veřejné URL: pouze hodnocení vizuální stránky kolegy, kteří nepracují na kódu
+- Zdroj veřejného statického náhledu v repu: `design/smart-design-preview/index.html`
+- Build veřejného statického náhledu: `npm run build:smart-design`
 
 ## Bezpečnostní hranice
 
@@ -27,6 +29,8 @@ Tento dokument je navazovací záznam pro samostatnou designovou větev Smart Od
 - Náhledová route v aplikaci: `/design/theme-system`.
 - Build skript zná route `/design/theme-system`.
 - Veřejný samostatný Cloudflare Pages náhled bez přihlášení.
+- Samostatný statický zdroj veřejného náhledu v `design/smart-design-preview/`.
+- Druhá designová iterace podle neumorfních slider/switch/dial referencí.
 
 ## Dotčené soubory
 
@@ -41,14 +45,29 @@ Tento dokument je navazovací záznam pro samostatnou designovou větev Smart Od
   - zařazení preview routy do statického buildu
 - `index.html`
   - napojení `src/styles/theme.css`
+- `design/smart-design-preview/index.html`
+  - statický veřejný HTML náhled bez napojení na Smart Odpady aplikaci
+- `scripts/build-smart-design-preview.mjs`
+  - sestavení veřejného statického náhledu do `dist-smart-design-preview`
+- `package.json`
+  - příkaz `build:smart-design`
 
 ## Aktuální hodnocení
 
-Náhled je zachovaný jako první pracovní pokus, ale zatím není finální. Směr je použitelný pro další iteraci, ne pro převzetí do produkční aplikace.
+Náhled je zachovaný jako pracovní pokus, ale zatím není finální. Směr je použitelný pro další iteraci, ne pro převzetí do produkční aplikace.
+
+Aktuální směr po druhé iteraci:
+
+- měkčí fyzické ovládací prvky
+- slider inspirovaný dodanou Pug/SCSS referencí
+- switch prvky inspirované slider v1/v2 referencí
+- kruhový dial inspirovaný teplotním ovladačem
+- aktivní modrý stav pro ovládací prvky
+- Kaiser zelená zůstává spíš jako pozitivní/provozní stav
 
 Co zatím není ono:
 
-- celkový vizuální charakter ještě nepůsobí dostatečně jako finální Smart Odpady
+- celkový vizuální charakter je pořád pracovní a nemusí být finální Smart Odpady
 - ikonografie není dořešená
 - layout je spíš demonstrační než produktový
 - barvy, kontrasty a karty bude potřeba dál ladit podle reálných obrazovek
@@ -85,6 +104,12 @@ Co zatím není ono:
 
    ```text
    https://kaiser-smart-design-preview.pages.dev/
+   ```
+
+   Sestavení statického náhledu:
+
+   ```bash
+   npm run build:smart-design
    ```
 
 ## Doporučený další krok

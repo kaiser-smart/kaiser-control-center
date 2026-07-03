@@ -1557,9 +1557,9 @@ function neumorphicPreviewPage(user) {
 
 function themeSystemPreviewPage() {
   const routeItems = [
-    { index: "01", title: "Ranní svoz", meta: "14 stanovišť - 2 upozornění", active: true },
-    { index: "02", title: "Servis vozidla", meta: "Actros 2551 - kontrola dokumentů" },
-    { index: "03", title: "WIM kontrola", meta: "Poslední průjezd - bez překročení" }
+    { index: "01", title: "Lisovací vůz", meta: "Svoz směsného odpadu - aktivní trasa", active: true },
+    { index: "02", title: "Nosič kontejnerů", meta: "Připraveno pro ikonu hákového nosiče" },
+    { index: "03", title: "Servisní dodávka", meta: "Doprovodné vozidlo - nižší priorita" }
   ];
   const routeMarkup = routeItems
     .map((item) => `
@@ -1575,6 +1575,15 @@ function themeSystemPreviewPage() {
 
   return `
     <main class="theme-system smart-tablet-ui theme-preview-page" data-theme-preview>
+      <svg class="theme-volume-defs" width="0" height="0" aria-hidden="true" focusable="false">
+        <symbol id="theme-volume-icon" viewBox="0 -48 98 96">
+          <g class="theme-volume-shape">
+            <path d="M60 22a25 25 0 0 0 0-44"></path>
+            <path d="M24-11h-19v22h19l20 20v-62z"></path>
+          </g>
+          <path class="theme-volume-wave" d="M65 40a43 43 0 0 0 0-80"></path>
+        </symbol>
+      </svg>
       <div class="app-shell">
         <aside class="app-sidebar" aria-label="Navigace náhledu">
           <a class="nav-item nav-item-active" href="${routeHref(DESIGN_THEME_SYSTEM_ROUTE)}" data-link aria-current="page">
@@ -1593,6 +1602,10 @@ function themeSystemPreviewPage() {
             <span class="nav-icon">N</span>
               <span class="nav-label">Nahlášení</span>
           </span>
+          <span class="nav-item">
+            <span class="nav-icon">I</span>
+            <span class="nav-label">Ikony</span>
+          </span>
           <a class="nav-item" href="${routeHref("/")}" data-link>
             <span class="nav-icon">A</span>
             <span class="nav-label">Aplikace</span>
@@ -1602,67 +1615,94 @@ function themeSystemPreviewPage() {
         <section class="app-content" aria-labelledby="theme-preview-title">
           <header class="app-header">
             <div>
-              <p class="field-label">Náhledový design systém</p>
-              <h1 id="theme-preview-title">Smart Odpady - tabletový vzhled</h1>
-              <p>Izolovaná ukázka nové CSS vrstvy pro ladění vzhledu, barev a ikon.</p>
+              <p class="field-label">Smart design / pokus 02</p>
+              <h1 id="theme-preview-title">Měkké ovládání pro tablet řidiče</h1>
+              <p>Neumorfní návrh podle referenčního slideru: klidné plochy, zapuštěné prvky, výrazný modrý aktivní stav.</p>
             </div>
-            <div class="theme-preview-toolbar" aria-label="Stav nahledu">
-              <span class="status-badge status-online">Online</span>
-              <span class="status-badge status-gps">GPS aktivni</span>
+            <div class="theme-preview-toolbar" aria-label="Stav náhledu">
+              <span class="status-badge status-online">Statický náhled</span>
+              <span class="status-badge status-gps">Bez API</span>
             </div>
           </header>
 
           <section class="theme-dashboard-grid">
             <div class="theme-dashboard-main">
-              <article class="app-card is-active">
+              <article class="app-card theme-hero-card is-active">
                 <div class="theme-card-head">
                   <div>
-                    <p class="field-label">Dnesni provoz</p>
-                    <h2>Přehled pro řidiče</h2>
+                    <p class="field-label">Aktivní obrazovka</p>
+                    <h2>Ranní svoz - ovládací panel</h2>
                   </div>
-                  <button class="btn btn-primary" type="button">Zahájit trasu</button>
+                  <button class="btn btn-primary" type="button">Potvrdit další bod</button>
                 </div>
 
-                <div class="theme-metric-grid">
-                  <div class="soft-cell">
-                    <span class="theme-metric-value">8</span>
-                    <span class="theme-metric-label">vozidel v provozu</span>
+                <div class="theme-control-grid">
+                  <div class="theme-vehicle-dial" aria-label="Ukázka zvýraznění vozidla">
+                    <span class="theme-dial-ring theme-dial-ring-a"></span>
+                    <span class="theme-dial-ring theme-dial-ring-b"></span>
+                    <span class="theme-vehicle-core">
+                      <strong>L</strong>
+                      <small>lis</small>
+                    </span>
+                    <span class="theme-dial-node theme-dial-node-a">GPS</span>
+                    <span class="theme-dial-node theme-dial-node-b">WIM</span>
+                    <span class="theme-dial-node theme-dial-node-c">OK</span>
                   </div>
-                  <div class="soft-cell">
-                    <span class="theme-metric-value">42</span>
-                    <span class="theme-metric-label">naplánovaných bodů</span>
-                  </div>
-                  <div class="soft-cell">
-                    <span class="theme-metric-value">96%</span>
-                    <span class="theme-metric-label">stav spojení</span>
+
+                  <div class="theme-control-panel">
+                    <div class="theme-metric-grid">
+                      <div class="soft-cell">
+                        <span class="theme-metric-value">14</span>
+                        <span class="theme-metric-label">bodů na trase</span>
+                      </div>
+                      <div class="soft-cell">
+                        <span class="theme-metric-value">3</span>
+                        <span class="theme-metric-label">typy vozidel</span>
+                      </div>
+                      <div class="soft-cell">
+                        <span class="theme-metric-value">40</span>
+                        <span class="theme-metric-label">intenzita náhledu</span>
+                      </div>
+                    </div>
+
+                    <div class="theme-volume-control" role="group" aria-label="Intenzita mapového zvýraznění" style="--val: 40%;">
+                      <svg class="theme-volume-ico" style="--ico: 0;" aria-hidden="true"><use href="#theme-volume-icon"></use></svg>
+                      <input type="range" min="0" max="100" value="40" list="theme-volume-marks" data-theme-volume>
+                      <svg class="theme-volume-ico" style="--ico: 1;" aria-hidden="true"><use href="#theme-volume-icon"></use></svg>
+                      <datalist id="theme-volume-marks">
+                        <option value="0"></option>
+                        <option value="40"></option>
+                        <option value="100"></option>
+                      </datalist>
+                    </div>
                   </div>
                 </div>
 
                 <div class="theme-map-surface" aria-label="Ukazka mapoveho panelu">
                   <span class="theme-map-route"></span>
-                  <span class="theme-map-node theme-map-node-main" style="--x: 26%; --y: 56%;">1</span>
-                  <span class="theme-map-node" style="--x: 52%; --y: 38%;">2</span>
-                  <span class="theme-map-node theme-map-node-warning" style="--x: 72%; --y: 64%;">3</span>
+                  <span class="theme-map-node theme-map-node-main" style="--x: 26%; --y: 56%;">L</span>
+                  <span class="theme-map-node" style="--x: 52%; --y: 38%;">K</span>
+                  <span class="theme-map-node theme-map-node-warning" style="--x: 72%; --y: 64%;">!</span>
                 </div>
               </article>
 
               <section class="quick-actions" aria-label="Rychle akce">
                 <button class="quick-action quick-action-success" type="button">
                   <span>
-                    <strong>Příjezd potvrzen</strong>
-                    <small>Velké dotykové tlačítko</small>
+                    <strong>Hotovo na stanovišti</strong>
+                    <small>Měkký stisk bez ostrých hran</small>
                   </span>
                 </button>
                 <button class="quick-action quick-action-warning" type="button">
                   <span>
-                    <strong>Nahlásit problém</strong>
-                    <small>Decentní varovný stav</small>
+                    <strong>Nahlásit překážku</strong>
+                    <small>Varování zůstává tlumené</small>
                   </span>
                 </button>
                 <button class="quick-action quick-action-info" type="button">
                   <span>
-                    <strong>Detail vozidla</strong>
-                    <small>Napojení ikon se doladí později</small>
+                    <strong>Vybrat typ ikony</strong>
+                    <small>Pro další ladění vozidel</small>
                   </span>
                 </button>
               </section>
@@ -1672,10 +1712,10 @@ function themeSystemPreviewPage() {
               <article class="app-panel">
                 <div class="theme-card-head">
                   <div>
-                    <p class="field-label">Aktuální práce</p>
-                    <h2>Fronta úkolů</h2>
+                    <p class="field-label">Typy vozidel</p>
+                    <h2>Pracovní sada ikon</h2>
                   </div>
-                  <button class="btn btn-icon" type="button" aria-label="Obnovit">R</button>
+                  <button class="btn btn-icon" type="button" aria-label="Obnovit">+</button>
                 </div>
                 <div class="theme-list-stack">
                   ${routeMarkup}
@@ -1683,12 +1723,30 @@ function themeSystemPreviewPage() {
               </article>
 
               <article class="soft-card">
-                <p class="field-label">Formulare</p>
-                <label class="field-label" for="theme-preview-note">Poznámka řidiče</label>
-                <textarea class="textarea" id="theme-preview-note" rows="4" readonly>Ukázka vstupního pole bez ukládání dat.</textarea>
+                <p class="field-label">Poznámka k návrhu</p>
+                <div class="theme-toggle-stack" aria-label="Ukázky přepínačů">
+                  <label class="theme-toggle-row">
+                    <span>
+                      <strong>Denní režim</strong>
+                      <small>Switch podle slider v2</small>
+                    </span>
+                    <input class="theme-switch-input" type="checkbox" checked>
+                    <span class="theme-switch theme-switch-v2" aria-hidden="true"></span>
+                  </label>
+                  <label class="theme-toggle-row">
+                    <span>
+                      <strong>Výrazné ikony</strong>
+                      <small>Měkčí fyzický přepínač</small>
+                    </span>
+                    <input class="theme-switch-input" type="checkbox">
+                    <span class="theme-switch theme-switch-v1" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <label class="field-label" for="theme-preview-note">Co se tímto směrem testuje</label>
+                <textarea class="textarea" id="theme-preview-note" rows="4" readonly>Měkčí plastický styl podle slider reference. Zatím jen vizuální návrh, bez dat a bez produkční logiky.</textarea>
                 <div class="theme-button-row">
-                  <button class="btn btn-secondary" type="button">Zpět</button>
-                  <button class="btn btn-success" type="button">Uložit návrh</button>
+                  <button class="btn btn-secondary" type="button">Ztlumit</button>
+                  <button class="btn btn-success" type="button">Směr OK</button>
                 </div>
               </article>
             </aside>
@@ -29188,6 +29246,20 @@ document.addEventListener("pointerup", (event) => {
   handleVehicleTrackingTcarsSelectEvent(event);
   handleVehicleTrackingWimSelectEvent(event);
 }, true);
+
+document.addEventListener("input", (event) => {
+  const themeVolumeInput = event.target.closest("[data-theme-volume]");
+  if (!themeVolumeInput) {
+    return;
+  }
+
+  const themeVolumeGroup = themeVolumeInput.closest(".theme-volume-control");
+  if (!themeVolumeGroup) {
+    return;
+  }
+
+  themeVolumeGroup.style.setProperty("--val", `${Number(themeVolumeInput.value) || 0}%`);
+});
 
 document.addEventListener("click", async (event) => {
   const driverReportPlateSuggestion = event.target.closest("[data-driver-report-plate-suggestion]");
