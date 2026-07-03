@@ -14167,6 +14167,231 @@ function collectionRoutesSourceRowsMetrics(rows = []) {
   });
 }
 
+function collectionRoutesSourceCoordinateValue(value) {
+  const number = Number(String(value ?? "").trim().replace(",", "."));
+  return Number.isFinite(number) ? number : null;
+}
+
+function collectionRoutesSourceCoordinatesFrom(source = {}) {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+  const latitude = collectionRoutesSourceCoordinateValue(
+    source.latitude ?? source.lat ?? source.gpsLatitude ?? source.gpsLat ?? source.Latitude ?? source.Lat
+  );
+  const longitude = collectionRoutesSourceCoordinateValue(
+    source.longitude ?? source.lng ?? source.lon ?? source.gpsLongitude ?? source.gpsLng ?? source.Longitude ?? source.Long
+  );
+  if (latitude === null || longitude === null) {
+    return null;
+  }
+  if (latitude === 0 || longitude === 0 || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+    return null;
+  }
+  return { latitude, longitude };
+}
+
+function collectionRoutesSourceCoordinates(row = {}) {
+  const metadata = row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const matchMetadata = collectionRoutesSourceVistosMetadata(row);
+  return collectionRoutesSourceCoordinatesFrom(row) ||
+    collectionRoutesSourceCoordinatesFrom(metadata) ||
+    collectionRoutesSourceCoordinatesFrom(metadata.gps) ||
+    collectionRoutesSourceCoordinatesFrom(metadata.location) ||
+    collectionRoutesSourceCoordinatesFrom(matchMetadata) ||
+    collectionRoutesSourceCoordinatesFrom(matchMetadata.candidate) ||
+    collectionRoutesSourceCoordinatesFrom(matchMetadata.matchDetails) ||
+    null;
+}
+
+function collectionRoutesSourceMapReadiness(row = {}) {
+  const coordinates = collectionRoutesSourceCoordinates(row);
+  const status = collectionRoutesSourceNormalizedVistosStatus(row);
+  const sourceAddress = String(row?.addressText || "").trim();
+  const vistosAddress = String(row?.vistosAddressText || row?.vistosSiteName || "").trim();
+  const hasAddress = Boolean(sourceAddress || vistosAddress);
+  const hasSourceAddress = Boolean(sourceAddress);
+
+  if (coordinates) {
+    return {
+      code: "gps-ready",
+      label: "GPS připraveno",
+      tone: "ready",
+      detail: "Řádek má použitelné souřadnice. Stále jde jen o read-only náhled.",
+      coordinates
+    };
+  }
+
+  if (!hasAddress || status === "chybí adresa") {
+    return {
+      code: "missing-address",
+      label: "chybí adresa",
+      tone: "danger",
+      detail: "Bez spolehlivé adresy se zastávka nesmí poslat do mapy ani navigace.",
+      coordinates: null
+    };
+  }
+
+  if (status === "namapováno" && hasSourceAddress) {
+    return {
+      code: "address-ready",
+      label: "mapovatelné adresou",
+      tone: "ok",
+      detail: "Adresa a Vistos match vypadají připraveně pro budoucí geokódování nebo ruční potvrzení GPS.",
+      coordinates: null
+    };
+  }
+
+  if (status === "nejasné" || status === "nenamapováno") {
+    return {
+      code: "review",
+      label: "ověřit před mapou",
+      tone: "warning",
+      detail: "Adresa existuje, ale Vistos match není jistý. Před GPS/navigací je potřeba ruční kontrola.",
+      coordinates: null
+    };
+  }
+
+  return {
+    code: "address-only",
+    label: "adresa bez GPS",
+    tone: "neutral",
+    detail: "Zastávka má textovou adresu, ale nemá potvrzenou GPS polohu.",
+    coordinates: null
+  };
+}
+
+function collectionRoutesSourceMapReadinessSummary(rows = []) {
+  return rows.reduce((summary, row) => {
+    const readiness = collectionRoutesSourceMapReadiness(row);
+    summary.total += 1;
+    summary.counts[readiness.code] = (summary.counts[readiness.code] || 0) + 1;
+    if (readiness.code === "gps-ready") summary.gpsReady += 1;
+    if (readiness.code === "address-ready") summary.addressReady += 1;
+    if (readiness.code === "review" || readiness.code === "address-only") summary.needsReview += 1;
+    if (readiness.code === "missing-address") summary.missingAddress += 1;
+    return summary;
+  }, {
+    total: 0,
+    gpsReady: 0,
+    addressReady: 0,
+    needsReview: 0,
+    missingAddress: 0,
+    counts: {}
+  });
+}
+
+function collectionRoutesSourceMapReadinessPercent(value, total) {
+  const safeTotal = Number(total || 0);
+  const safeValue = Number(value || 0);
+  if (!safeTotal || !Number.isFinite(safeTotal) || !Number.isFinite(safeValue)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round((safeValue / safeTotal) * 100)));
+}
+
+function collectionRoutesSourceMapReadinessCard(label, value, detail, tone = "neutral") {
+  return `
+    <article class="collection-routes-map-readiness__card collection-routes-map-readiness__card--${escapeHtml(tone)}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(detail)}</small>
+    </article>
+  `;
+}
+
+function collectionRoutesSourceCoordinateLabel(row) {
+  const coordinates = collectionRoutesSourceCoordinates(row);
+  return coordinates
+    ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`
+    : "bez GPS";
+}
+
+function collectionRoutesSourceMapReadinessPanel(rows = collectionRoutesSourceDisplayRows()) {
+  const summary = collectionRoutesSourceMapReadinessSummary(rows);
+  const gpsPercent = collectionRoutesSourceMapReadinessPercent(summary.gpsReady, summary.total);
+  const addressPercent = collectionRoutesSourceMapReadinessPercent(summary.gpsReady + summary.addressReady, summary.total);
+  const cappedRows = rows.slice(0, 140);
+  const extraNotice = rows.length > cappedRows.length
+    ? `<p class="module-feedback__notice">Zobrazeno prvních ${escapeHtml(cappedRows.length)} zastávek v GPS přehledu. Souhrny počítají celý aktuální filtr.</p>`
+    : "";
+
+  if (!rows.length) {
+    return `
+      <div class="collection-routes-map-readiness collection-routes-map-readiness--empty" id="collection-routes-source-map-readiness">
+        <div class="collection-routes-map-readiness__head">
+          <div>
+            <p class="module-feedback__eyebrow">Fáze 2A · read-only</p>
+            <h3>Mapa / GPS připravenost</h3>
+            <span>Vyber trasu. Panel pouze vyhodnotí připravenost zastávek pro budoucí mapu.</span>
+          </div>
+          <span class="employee-card-status employee-card-status--waiting">bez navigace</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="collection-routes-map-readiness" id="collection-routes-source-map-readiness">
+      <div class="collection-routes-map-readiness__head">
+        <div>
+          <p class="module-feedback__eyebrow">Fáze 2A · read-only</p>
+          <h3>Mapa / GPS připravenost</h3>
+          <span>Kontrola aktuálního filtru pro budoucí mapu. Negeokóduje, nespouští T-Cars ani navigaci.</span>
+        </div>
+        <span class="employee-card-status employee-card-status--waiting">ostrá trasa NE</span>
+      </div>
+
+      <div class="collection-routes-map-readiness__progress" aria-label="GPS připravenost trasy">
+        <div>
+          <span>GPS hotovo</span>
+          <strong>${escapeHtml(gpsPercent)} %</strong>
+        </div>
+        <div class="collection-routes-map-readiness__bar">
+          <span style="width: ${escapeHtml(gpsPercent)}%"></span>
+          <em style="width: ${escapeHtml(addressPercent)}%"></em>
+        </div>
+        <p>Plná barva = potvrzená GPS, světlá část = adresa vhodná k budoucímu ověření. Není to navigace.</p>
+      </div>
+
+      <div class="collection-routes-map-readiness__cards" aria-label="Souhrn GPS připravenosti">
+        ${collectionRoutesSourceMapReadinessCard("Zastávky", collectionRoutesMetricValue(summary.total), "aktuální filtr", "neutral")}
+        ${collectionRoutesSourceMapReadinessCard("GPS souřadnice", collectionRoutesMetricValue(summary.gpsReady), "lze vykreslit bez hádání", "ready")}
+        ${collectionRoutesSourceMapReadinessCard("Mapovatelné adresou", collectionRoutesMetricValue(summary.addressReady), "čeká na geokódování nebo ruční GPS", "ok")}
+        ${collectionRoutesSourceMapReadinessCard("K ověření", collectionRoutesMetricValue(summary.needsReview), "nejasný match nebo adresa bez GPS", "warning")}
+        ${collectionRoutesSourceMapReadinessCard("Chybí adresa", collectionRoutesMetricValue(summary.missingAddress), "nelze mapovat", "danger")}
+      </div>
+
+      <div class="collection-routes-map-readiness__route" aria-label="Read-only linie připravenosti zastávek">
+        ${cappedRows.slice(0, 80).map((row, index) => {
+          const readiness = collectionRoutesSourceMapReadiness(row);
+          return `
+            <span
+              class="collection-routes-map-readiness__stop collection-routes-map-readiness__stop--${escapeHtml(readiness.tone)}"
+              title="${escapeHtml(`#${row.routeOrder || index + 1} ${collectionRoutesSourceDriverStopTitle(row)} · ${readiness.label}`)}"
+            >
+              ${escapeHtml(row.routeOrder || index + 1)}
+            </span>
+          `;
+        }).join("")}
+      </div>
+
+      ${collectionRoutesPreviewTable(`GPS připravenost: ${collectionRoutesSourceRouteTitle()}`, [
+        { label: "Pořadí", value: (row) => row.routeOrder },
+        { label: "Zákazník", value: (row) => row.customerName || "-" },
+        { label: "Adresa", value: (row) => row.addressText || row.vistosAddressText || "-" },
+        { label: "Stav mapy", value: (row) => collectionRoutesSourceMapReadiness(row).label },
+        { label: "GPS", value: (row) => collectionRoutesSourceCoordinateLabel(row) },
+        { label: "Důvod", value: (row) => collectionRoutesSourceMapReadiness(row).detail },
+        { label: "Vistos", value: (row) => collectionRoutesSourceVistosStatus(row) },
+        { label: "Zdroj", value: (row) => collectionRoutesSourceSourceLabel(row) },
+        { label: "Ostrá navigace", value: () => "NE" }
+      ], cappedRows, "V aktuálním filtru nejsou řádky pro GPS připravenost.")}
+      ${extraNotice}
+    </div>
+  `;
+}
+
 function collectionRoutesSourceWasteLabel(value) {
   const labels = {
     SKO: "SKO",
@@ -15102,14 +15327,17 @@ function collectionRoutesSourceRouteTitle() {
 }
 
 function collectionRoutesSourceRouteView() {
-  return collectionRoutesPilotState.sourceRouteView === "driver" ? "driver" : "print";
+  return ["driver", "map"].includes(collectionRoutesPilotState.sourceRouteView)
+    ? collectionRoutesPilotState.sourceRouteView
+    : "print";
 }
 
 function collectionRoutesSourceRouteViewSwitch(rows = collectionRoutesSourceDisplayRows()) {
   const selectedView = collectionRoutesSourceRouteView();
   const options = [
     ["print", "Přehled k tisku", "Tabulka zastávek pro kontrolu a tisk"],
-    ["driver", "Řidičský displej", "Kabinový read-only režim pro tablet"]
+    ["driver", "Řidičský displej", "Kabinový read-only režim pro tablet"],
+    ["map", "Mapa / GPS", "Připravenost trasy bez navigace"]
   ];
   return `
     <div class="collection-routes-view-switch" aria-label="Zobrazení trasy">
@@ -15151,7 +15379,9 @@ function collectionRoutesSourceRoutesSection() {
       ${collectionRoutesSourceRouteViewSwitch(rows)}
       ${routeView === "driver"
         ? collectionRoutesSourceDriverModePanel(rows)
-        : collectionRoutesSourceDriverPreviewPanel({ showNotice: false, showActions: false, rows })}
+        : routeView === "map"
+          ? collectionRoutesSourceMapReadinessPanel(rows)
+          : collectionRoutesSourceDriverPreviewPanel({ showNotice: false, showActions: false, rows })}
     </section>
   `;
 }

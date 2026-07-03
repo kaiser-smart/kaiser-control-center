@@ -393,6 +393,10 @@ Po každém dokončeném úkolu, kroku, fázi, testu, nasazení nebo závěrečn
 
 Codex/vývojář nesmí skončit pouze reportem typu `hotovo/nehotovo` bez doporučení, co má následovat.
 
+Pokud se Radim/Martin zeptá `co dál`, `další krok`, `dle checklistu`, `pokračujme podle checklistu` nebo podobně, musí Codex/vývojář odpovědět nejdřív konkrétním doporučeným dalším krokem, ne obecným shrnutím. Odpověď musí říct, zda jde o implementaci, test, nasazení, analýzu, opravu nebo čekání, a zda krok potřebuje potvrzení.
+
+Codex/vývojář musí další krok navrhnout vždy i v krátké odpovědi mimo závěrečný report, pokud právě dokončil práci, ověřil produkci, našel blokaci nebo předává řízení zpět Radimovi/Martinovi.
+
 Povinný návrh dalšího kroku musí obsahovat:
 
 1. Doporučený další krok

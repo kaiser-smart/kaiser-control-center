@@ -56,6 +56,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 ## Geokodovani
 
 - NEZACATO - Google geokodovani neni ve Fazi 1E povolene.
+- HOTOVO - Faze 2A ukazuje read-only GPS/mapovou pripravenost aktualniho filtru bez geokodovani, bez zapisu GPS a bez navigace.
 - NEZACATO - fronta rucniho potvrzeni polohy.
 
 ## Planovani tras
@@ -75,6 +76,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 ## T-Cars
 
 - NEZACATO - Faze 1E nevola T-Cars.
+- NEZACATO - Faze 2A stale nevola T-Cars; ukazuje jen pripravenost zastavek z 13 Excelu.
 - NEZACATO - alert vychyleni z trasy.
 
 ## Notifikace
