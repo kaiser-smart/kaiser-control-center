@@ -3,12 +3,14 @@ import assert from "node:assert/strict";
 import { createSessionCookie } from "../functions/_lib/auth.js";
 import { handleSarlotaVoiceRequest } from "../functions/_lib/voice-sarlota.js";
 import { onRequestGet as getDriverReportContext } from "../functions/api/ai/driver-reports/context.js";
+import { onRequestPost as getDriverReportContextVoiceWebhook } from "../functions/api/voice/driver-report-context.js";
 import { onRequestGet as getDriverReportLicensePlate } from "../functions/api/driver-reports/license-plate.js";
 import {
   resolveFleetVehiclesForDriver,
   validateFleetLicensePlate
 } from "../functions/_lib/fleet-vehicles-store.js";
 import { createElevenLabsClientTools } from "../src/elevenLabsClientTools.js";
+import { elevenLabsWebhookToolConfigs } from "../src/elevenLabsWebhookTools.js";
 
 const UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
 const NO_VERIFIED_ASSIGNED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
@@ -99,6 +101,26 @@ async function contextPayload(env, user = baseUser, params = {}) {
   return { status: response.status, payload };
 }
 
+async function voiceWebhookContextPayload(env, payload = {}, headers = {}) {
+  const response = await getDriverReportContextVoiceWebhook({
+    request: new Request(`${TEST_URL}/api/voice/driver-report-context`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-voice-assistant-token": "voice-test-token",
+        ...headers
+      },
+      body: JSON.stringify(payload)
+    }),
+    env: {
+      ...env,
+      VOICE_ASSISTANT_WEBHOOK_TOKEN: "voice-test-token"
+    }
+  });
+  const responsePayload = await response.json();
+  return { status: response.status, payload: responsePayload };
+}
+
 async function licensePlatePayload(env, user = baseUser, value = "1AB2345") {
   const cookie = await createSessionCookie(env, user);
   const url = new URL("/api/driver-reports/license-plate", TEST_URL);
@@ -165,7 +187,7 @@ async function testVehiclePairingContext() {
     assert.equal(payload.vehicles[0].licensePlate, "1AB 2345");
     assert.equal(payload.vehicles[0].vin, undefined);
     assert.equal(payload.vehicles[0].vinPresent, true);
-    assert.match(payload.vehicles[0].vinMasked, /^WDB/);
+    assert.equal(payload.vehicles[0].vinMasked, undefined);
     assert.equal(payload.assistantMessage, payload.messageForAssistant);
     assert.match(payload.messageForAssistant, /Mercedes Atego|SPZ 1AB 2345/);
     assert.equal(payload.messageForAssistant.includes("WDB12345678901234"), false);
@@ -267,6 +289,91 @@ async function testVehiclePairingContext() {
     assert.equal(payload.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
     assert.equal(payload.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
   }
+}
+
+async function testVoiceWebhookContext() {
+  {
+    const env = envFor();
+    const { status, payload } = await voiceWebhookContextPayload(env, {
+      dynamic_variables: { user_id: "driver-radim" },
+      conversation_id: "conv-no-vehicles",
+      transcriptIntent: "Jaký tam mám vozidla?"
+    });
+
+    assert.equal(status, 200);
+    assert.equal(payload.source, "kso_voice_webhook");
+    assert.equal(payload.toolName, "get_driver_report_context");
+    assert.equal(payload.vehiclesVerified, false);
+    assert.deepEqual(payload.vehicles, []);
+    assert.equal(payload.reason, NO_VERIFIED_ASSIGNED_VEHICLES_REASON);
+    assert.equal(payload.assistantMessage, UNVERIFIED_VEHICLE_MESSAGE);
+    assert.equal(payload.answerText, UNVERIFIED_VEHICLE_MESSAGE);
+    assert.equal(payload.answerText.includes("Ford Transit"), false);
+    assert.equal(payload.answerText.includes("5A4 8921"), false);
+    assert.equal(payload.answerText.includes("1A2 3456"), false);
+  }
+
+  {
+    const env = envFor({ vehicles: [vehicle()] });
+    const { status, payload } = await voiceWebhookContextPayload(env, {
+      user_id: "driver-radim",
+      conversation_id: "conv-one-vehicle",
+      transcriptIntent: "Potřebuju nahlásit závadu na vozidle."
+    });
+
+    assert.equal(status, 200);
+    assert.equal(payload.source, "kso_voice_webhook");
+    assert.equal(payload.toolName, "get_driver_report_context");
+    assert.equal(payload.vehiclesVerified, true);
+    assert.equal(payload.vehiclesCount, 1);
+    assert.equal(payload.vehicles[0].displayName, "Mercedes Atego");
+    assert.equal(payload.vehicles[0].licensePlate, "1AB 2345");
+    assert.equal(payload.vehicles[0].vin, undefined);
+    assert.equal(payload.vehicles[0].vinMasked, undefined);
+    assert.match(payload.assistantMessage, /Mercedes Atego/);
+    assert.match(payload.assistantMessage, /SPZ 1AB 2345/);
+    assert.equal(payload.assistantMessage.includes("WDB"), false);
+  }
+
+  {
+    const env = envFor({ vehicles: [vehicle()] });
+    const { status, payload } = await voiceWebhookContextPayload(env, {
+      user_id: "driver-radim"
+    }, {
+      "x-voice-assistant-token": "wrong-token"
+    });
+
+    assert.equal(status, 401);
+    assert.equal(payload.error, "Nepřihlášeno.");
+  }
+}
+
+function testElevenLabsWebhookToolSchema() {
+  const [tool] = elevenLabsWebhookToolConfigs({
+    APP_BASE_URL: "https://kso.example.test/",
+    ELEVENLABS_VOICE_WEBHOOK_TOKEN_ENV_LABEL: "KSO_TEST_VOICE_TOKEN"
+  });
+
+  assert.equal(tool.type, "webhook");
+  assert.equal(tool.name, "get_driver_report_context");
+  assert.equal(tool.api_schema.url, "https://kso.example.test/api/voice/driver-report-context");
+  assert.equal(tool.api_schema.method, "POST");
+  assert.equal(tool.api_schema.request_headers["x-voice-assistant-token"].env_var_label, "KSO_TEST_VOICE_TOKEN");
+  assert.equal(tool.api_schema.request_body_schema.properties.user_id.dynamic_variable, "user_id");
+  assert.equal(tool.api_schema.request_body_schema.properties.conversation_id.dynamic_variable, "conversation_id");
+  assert.equal(tool.api_schema.request_body_schema.properties.currentModule.constant_value, "hlaseni-ridicu");
+  assert.deepEqual(tool.api_schema.request_body_schema.required, ["user_id"]);
+  assert.equal(tool.api_schema.response_filter.mode, "allow");
+  assert.deepEqual(tool.api_schema.response_filter.filters, [
+    "vehiclesVerified",
+    "vehicles",
+    "vehiclesCount",
+    "reason",
+    "assistantMessage",
+    "answerText"
+  ]);
+  assert.equal(JSON.stringify(tool).includes("voice-test-token"), false);
+  assert.equal(JSON.stringify(tool).includes("sk_"), false);
 }
 
 async function testFleetSpzValidationAndPermissions() {
@@ -523,6 +630,8 @@ async function testClientToolsNoHallucinationAndSummary() {
 }
 
 await testVehiclePairingContext();
+await testVoiceWebhookContext();
+testElevenLabsWebhookToolSchema();
 await testFleetSpzValidationAndPermissions();
 await testVoiceCreateConfirmationGuards();
 await testClientToolsNoHallucinationAndSummary();

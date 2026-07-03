@@ -3088,11 +3088,11 @@ async function handleApi(request, response) {
     const vehicles = rawVehicles;
     const fallbackQuestion = rawVehicles.length
       ? "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla."
-      : "Vozidlo se mi teď nepodařilo ověřit. Otevřu ti výběr v aplikaci.";
+      : "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
     const message = rawVehicles.length
-      ? (rawVehicles.length > 3
-        ? "Máš pod sebou víc vozidel. Otevřu ti výběr v aplikaci."
-        : `Máš pod sebou ${rawVehicles.map((vehicle) => `${vehicle.displayName}, SPZ ${vehicle.spz}`).join(", ")}. Kterého vozidla se závada týká?`)
+      ? (rawVehicles.length === 1
+        ? `Mám bezpečně ověřené tvoje vozidlo ${rawVehicles[0].displayName} SPZ ${rawVehicles[0].spz}. Týká se závada tohohle vozidla?`
+        : `Vidím u tebe ${rawVehicles.map((vehicle) => `${vehicle.displayName} SPZ ${vehicle.spz}`).join(", ")}. Kterého se závada týká?`)
       : fallbackQuestion;
 
     sendJson(response, 200, {
@@ -3113,7 +3113,7 @@ async function handleApi(request, response) {
       },
       vehiclesVerified: rawVehicles.length > 0,
       vehiclePickerAvailable: rawVehicles.length > 0,
-      vehicleLookupMode: rawVehicles.length ? (rawVehicles.length > 3 ? "verified_picker_recommended" : "verified_vehicle_list") : "picker_or_manual",
+      vehicleLookupMode: rawVehicles.length ? "verified_vehicle_list" : "picker_or_manual",
       vehicles,
       vehiclesCount: vehicles.length,
       permissions,

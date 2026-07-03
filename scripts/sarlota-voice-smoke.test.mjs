@@ -83,13 +83,21 @@ function assertNoSecret(value = "") {
 }
 
 {
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Konkrétní vozidlo smíš v hlasu říct pouze tehdy/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Jaký tam jsou vozidla\?/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Jaký tam mám\?/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Ty tam vidíš co\?/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Který vozidla mám přiřazený\?/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /vždy nejdřív zavolej get_driver_report_context/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /show_driver_vehicle_picker nesmí být první krok/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Konkrétní vozidla smíš v hlasu říct pouze tehdy/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /vehiclesVerified: true/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /právě jedno vozidlo/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /jedno nebo více vozidel/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej VIN v hlasu/);
   assert.match(
     SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
-    /Nevidím bezpečně přiřazené vozidlo\. Nadiktuj mi prosím SPZ nebo vyber vozidlo v aplikaci\./
+    /Nevidím bezpečně přiřazené vozidlo\. Nadiktuj mi prosím SPZ\./
   );
+  assert.doesNotMatch(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Konkrétní vozidlo smíš[^.]*právě jedno vozidlo/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej, že je hotovo/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej, že je něco předané Patrikovi nebo Kamilovi/);
 }

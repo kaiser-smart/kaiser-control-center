@@ -243,7 +243,7 @@ async function testKsoSessionUserControlsVehicleLookup() {
   assertNoTrapVehicle(directMatch.candidates);
 }
 
-async function testMultipleVehiclesForcePickerWithoutVoiceLeak() {
+async function testMultipleVehiclesAreSpokenOnlyWhenVerified() {
   const env = envFor({
     vehicles: [
       vehicle(),
@@ -260,6 +260,10 @@ async function testMultipleVehiclesForcePickerWithoutVoiceLeak() {
 
   assert.equal(payload.vehiclesVerified, true);
   assert.equal(payload.vehiclesCount, 2);
+  assert.match(payload.messageForAssistant, /Mercedes Atego/);
+  assert.match(payload.messageForAssistant, /1AB 2345/);
+  assert.match(payload.messageForAssistant, /Mercedes Sprinter/);
+  assert.match(payload.messageForAssistant, /2AB 2345/);
 
   const tools = createElevenLabsClientTools({
     requestJson: async () => payload
@@ -267,11 +271,14 @@ async function testMultipleVehiclesForcePickerWithoutVoiceLeak() {
   const toolResult = await tools.get_driver_report_context({ sessionId: "caller-identity-multiple" });
 
   assert.equal(toolResult.vehiclesVerified, true);
-  assert.equal(toolResult.vehiclesCount, 0);
-  assert.deepEqual(toolResult.vehicles, []);
-  assert.match(toolResult.answerText, /vyber|výběr|vic|víc/i);
-  assert.equal(toolResult.answerText.includes("1AB 2345"), false);
-  assert.equal(toolResult.answerText.includes("2AB 2345"), false);
+  assert.equal(toolResult.vehiclesCount, 2);
+  assert.equal(toolResult.vehicles.length, 2);
+  assert.equal(toolResult.vehicleOrdinalSelectionAllowed, true);
+  assert.match(toolResult.answerText, /Mercedes Atego/);
+  assert.match(toolResult.answerText, /1AB 2345/);
+  assert.match(toolResult.answerText, /Mercedes Sprinter/);
+  assert.match(toolResult.answerText, /2AB 2345/);
+  assert.equal(toolResult.answerText.includes("VIN"), false);
 }
 
 async function testNoAssignedVehicleDoesNotFallBackToPhone() {
@@ -331,7 +338,7 @@ async function testManualSpzFallbackUsesFleetReadOnly() {
 }
 
 await testKsoSessionUserControlsVehicleLookup();
-await testMultipleVehiclesForcePickerWithoutVoiceLeak();
+await testMultipleVehiclesAreSpokenOnlyWhenVerified();
 await testNoAssignedVehicleDoesNotFallBackToPhone();
 await testUnknownAndForbiddenCallerStates();
 await testManualSpzFallbackUsesFleetReadOnly();

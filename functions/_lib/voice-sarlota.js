@@ -48,7 +48,7 @@ const ABSENCE_TYPE_LABELS = {
 
 const ABSENCE_TYPE_OPTIONS_TEXT = "Dovolená, nemoc, OČR, lékař, náhradní volno, neplacené volno, nebo jiná nepřítomnost.";
 const DRIVER_VEHICLE_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
-const DRIVER_VEHICLE_UNVERIFIED_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ nebo vyber vozidlo v aplikaci.";
+const DRIVER_VEHICLE_UNVERIFIED_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
 const DRIVER_PART_CONFIRMATION_SOURCES = new Set(["kso-ui"]);
 
 const ABSENCE_TYPE_ALIASES = {
