@@ -1502,11 +1502,36 @@ export function createElevenLabsClientTools({
     }
 
     const confirmed = Boolean(popupConfirmed);
+    const confirmationId = cleanString(preparedAction?.confirmationId || preparedResult.confirmationId);
+
+    if (!confirmationId) {
+      return {
+        ok: false,
+        status: "confirmation_missing",
+        message: "Chybí bezpečné potvrzení z aplikace. Nic jsem nezapsala ani neodeslala.",
+        answerText: "Chybí bezpečné potvrzení z aplikace. Nic jsem nezapsala ani neodeslala.",
+        intent: "driver_part_request",
+        verified: false,
+        requiresConfirmation: false,
+        preparedActions: [],
+        driverPartRequest: null,
+        notificationsSent: false,
+        apiStatus: "ready",
+        code: "driver_part_confirmation_id_missing"
+      };
+    }
+    const trustedParameters = {
+      ...preparedParameters,
+      confirmationSource: "kso-ui",
+      confirmation_source: "kso-ui",
+      confirmationId,
+      confirmation_id: confirmationId
+    };
 
     let result;
 
     try {
-      result = await postJson("/api/voice/sarlota", basePayload(confirmed, preparedParameters));
+      result = await postJson("/api/voice/sarlota", basePayload(confirmed, trustedParameters));
     } catch (error) {
       const message = cleanString(error?.payload?.error || error?.message) || "Hlášení se nepodařilo zapsat.";
       return {
@@ -1525,16 +1550,40 @@ export function createElevenLabsClientTools({
       };
     }
 
+    const status = result.status || "unknown";
+    const message = cleanString(result.reply || result.text || result.message) ||
+      (status === "needs_confirmation"
+        ? "Potvrď to prosím v aplikaci."
+        : "Hlášení se nepodařilo zapsat. Nic jsem neodeslala.");
+    const driverPartRequest = result.driverPartRequest || null;
+    const created = ["created", "created_notification_pending", "created_mock"].includes(status);
+    if (created && !cleanString(driverPartRequest?.reportId)) {
+      return {
+        ok: false,
+        status: "write_unverified",
+        message: "Backend nepotvrdil číslo hlášení. Nic nepotvrzuju jako zapsané.",
+        answerText: "Backend nepotvrdil číslo hlášení. Nic nepotvrzuju jako zapsané.",
+        intent: result.intent || "driver_part_request",
+        verified: result.verified === true,
+        requiresConfirmation: false,
+        preparedActions: [],
+        driverPartRequest: null,
+        notificationsSent: false,
+        apiStatus: result.apiStatus || "ready",
+        code: "driver_part_report_id_missing"
+      };
+    }
+
     return {
-      ok: result.ok === true,
-      status: result.status || "unknown",
-      message: result.reply || result.text || "",
-      answerText: result.reply || result.text || "",
+      ok: result.ok === true && created,
+      status,
+      message,
+      answerText: message,
       intent: result.intent || "driver_part_request",
       verified: result.verified === true,
-      requiresConfirmation: result.status === "needs_confirmation",
+      requiresConfirmation: status === "needs_confirmation",
       preparedActions: Array.isArray(result.preparedActions) ? result.preparedActions : [],
-      driverPartRequest: result.driverPartRequest || null,
+      driverPartRequest,
       notificationsSent: result.notificationsSent === true,
       apiStatus: result.apiStatus || "ready"
     };

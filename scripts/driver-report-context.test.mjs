@@ -597,6 +597,157 @@ for (const [name, payload] of [
 }
 
 {
+  await withFakeDriverPickerDom(async ({ find }) => {
+    const posts = [];
+    const tools = createElevenLabsClientTools({
+      confirm: async () => true,
+      requestJson: async (path, options = {}) => {
+        if ((options.method || "GET") === "GET" && path.startsWith("/api/ai/driver-reports/context")) {
+          return {
+            ok: true,
+            module: "hlaseni-ridicu",
+            userName: "Radim",
+            userResolved: true,
+            employeeResolved: true,
+            driverResolved: true,
+            vehiclesVerified: true,
+            vehiclePickerAvailable: true,
+            vehicles: [
+              safeVoiceVehicle("vehicle-radim-1", "Svoz 1", "1A1 1111")
+            ],
+            vehiclesCount: 1,
+            apiStatus: "ready"
+          };
+        }
+
+        if ((options.method || "GET") === "POST" && path === "/api/voice/sarlota") {
+          const payload = JSON.parse(options.body || "{}");
+          posts.push(payload);
+
+          if (posts.length === 1) {
+            return {
+              ok: true,
+              status: "needs_confirmation",
+              verified: true,
+              message: "Potvrď to prosím v aplikaci.",
+              preparedActions: [
+                {
+                  type: "driver_part_request",
+                  confirmationId: "driver-part-confirm-safe",
+                  parameters: {
+                    vehicleId: "vehicle-radim-1",
+                    defectDescription: "poškozené přední sklo",
+                    licensePlate: "1A1 1111"
+                  }
+                }
+              ]
+            };
+          }
+
+          return {
+            ok: true,
+            status: "created",
+            verified: true,
+            reply: "Hotovo. Hlášení jsem zapsala a předala k objednání dílu.",
+            driverPartRequest: {
+              id: "driver-part-1",
+              reportId: "ND-TEST-1",
+              status: "handed_to_ordering",
+              licensePlate: "1A1 1111",
+              probablePart: "přední sklo"
+            },
+            notificationsSent: true
+          };
+        }
+
+        throw new Error(`Unexpected request ${options.method || "GET"} ${path}`);
+      }
+    });
+
+    const opened = await tools.show_driver_vehicle_picker({ sessionId: "picker-write-test" });
+    assert.equal(opened.ok, true);
+    const option = find((node) => node.className === "ai-driver-vehicle-picker__option" && !node.disabled);
+    assert.ok(option);
+    option.eventHandlers.click();
+
+    const selected = await tools.get_driver_vehicle_picker_selection({ sessionId: "picker-write-test" });
+    assert.equal(selected.ok, true);
+    assert.equal(selected.vehicleId, "vehicle-radim-1");
+
+    const result = await tools.create_driver_part_request({
+      sessionId: "picker-write-test",
+      defectDescription: "poškozené přední sklo",
+      confirmed: true,
+      spokenSummary: "Zapíšu závadu poškozené přední sklo k vybranému vozidlu."
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.status, "created");
+    assert.equal(result.driverPartRequest.reportId, "ND-TEST-1");
+    assert.equal(posts.length, 2);
+    assert.equal(posts[1].parameters.confirmed, true);
+    assert.equal(posts[1].parameters.confirmationSource, "kso-ui");
+    assert.equal(posts[1].parameters.confirmation_source, "kso-ui");
+    assert.equal(posts[1].parameters.confirmationId, "driver-part-confirm-safe");
+    assert.equal(posts[1].parameters.confirmation_id, "driver-part-confirm-safe");
+    assert.equal(posts[1].context.confirmationSource, "kso-ui");
+    assert.equal(posts[1].context.confirmationId, "driver-part-confirm-safe");
+  });
+}
+
+{
+  const tools = createElevenLabsClientTools({
+    confirm: async () => true,
+    requestJson: async (path, options = {}) => {
+      assert.equal(path, "/api/voice/sarlota");
+      const payload = JSON.parse(options.body || "{}");
+
+      if (payload.parameters.confirmed !== true) {
+        return {
+          ok: true,
+          status: "needs_confirmation",
+          verified: true,
+          message: "Potvrď to prosím v aplikaci.",
+          preparedActions: [
+            {
+              type: "driver_part_request",
+              confirmationId: "driver-part-confirm-no-report-id",
+              parameters: {
+                vehicleId: "vehicle-radim-1",
+                defectDescription: "poškozené přední sklo"
+              }
+            }
+          ]
+        };
+      }
+
+      return {
+        ok: true,
+        status: "created",
+        verified: true,
+        message: "Hotovo.",
+        driverPartRequest: {
+          id: "driver-part-missing-report-id",
+          status: "handed_to_ordering"
+        },
+        notificationsSent: true
+      };
+    }
+  });
+
+  const result = await tools.create_driver_part_request({
+    vehicleId: "vehicle-radim-1",
+    defectDescription: "poškozené přední sklo",
+    confirmed: true
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "write_unverified");
+  assert.equal(result.code, "driver_part_report_id_missing");
+  assert.equal(result.answerText, "Backend nepotvrdil číslo hlášení. Nic nepotvrzuju jako zapsané.");
+}
+
+{
   const tools = createElevenLabsClientTools();
   const result = await tools.highlight_element({
     selector: "[data-driver-report-vehicle]",
