@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.323"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.324"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: kombinace odpadu ve filtru",
+    text: "Filtr Odpad ve Svozových trasách umí vybrat více odpadů najednou, například SKO + PLAST. Tisk, PDF, řidičský displej i interní CSV export používají stejnou kombinaci bez změny DB, Vistosu nebo ostrých tras."
+  },
   {
     title: "Šarlota: kontrolní voice zápis",
     text: "Panel Šarloty má chráněný admin test, který přes backend připraví a potvrdí hlasové Hlášení řidičů stejnou logikou jako /api/voice/sarlota. Test používá in-page výběr vozidla, vyžaduje potvrzení kso-ui a už vytvořené hlášení neoznačí jako neúspěch jen kvůli následnému předání."
