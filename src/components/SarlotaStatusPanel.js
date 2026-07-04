@@ -423,6 +423,7 @@ export function SarlotaStatusPanel({
   const diagnosticSyncDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota";
   const smart2RepairDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota-smart-2";
   const smart2DeleteDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota-smart-2";
+  const voiceWriteTestDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota";
 
   return `
     <section class="sarlota-status users-panel" aria-labelledby="sarlota-status-title">
@@ -459,6 +460,9 @@ export function SarlotaStatusPanel({
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-prompt-sync ${promptSyncDisabled ? "disabled" : ""}>
             Doplnit prompt
           </button>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-voice-write-test ${voiceWriteTestDisabled ? "disabled" : ""}>
+            Kontrolní voice zápis
+          </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-test-call ${loading || syncing ? "disabled" : ""}>
             Testovací hovor
           </button>
@@ -472,7 +476,7 @@ export function SarlotaStatusPanel({
       </dl>
       ${diagnosticDetails(data)}
       <p class="sarlota-status__meta">
-        Aktualizováno: ${escapeHtml(generatedAt)}. Tools a prompt se synchronizují odděleně; Smart 2 základ opravuje jen first message a model. Hlasový test bez vozidel je jen v této otevřené stránce.
+        Aktualizováno: ${escapeHtml(generatedAt)}. Tools a prompt se synchronizují odděleně; Smart 2 základ opravuje jen first message a model. Hlasový test bez vozidel je jen v této otevřené stránce. Kontrolní voice zápis vytvoří testovací hlášení až po potvrzení.
       </p>
     </section>
   `;

@@ -216,6 +216,7 @@ const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
 const SARLOTA_ROUTE = "/sarlota";
 const SARLOTA_OPEN_QUERY_VALUE = "sarlota";
 const SARLOTA_PANEL_STATUS_ENDPOINT = "/api/ai/elevenlabs/sarlota-panel-status";
+const SARLOTA_VOICE_WRITE_TEST_ENDPOINT = "/api/ai/elevenlabs/sarlota-voice-write-test";
 const FEEDBACK_ROUTE = "/pripominky";
 const FLEET_ROUTE = "/vozovy-park";
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
@@ -25690,6 +25691,113 @@ async function syncSarlotaPrompt() {
   }
 }
 
+function sarlotaVoiceWriteTestVehicleId(plan = {}) {
+  const vehicles = Array.isArray(plan.vehicles) ? plan.vehicles : [];
+  if (!vehicles.length) {
+    return "";
+  }
+
+  if (vehicles.length === 1) {
+    return vehicles[0].vehicleId || "";
+  }
+
+  const vehicleList = vehicles
+    .map((vehicle, index) => `${index + 1}. ${vehicle.label || vehicle.vehicleId}`)
+    .join("\n");
+  const answer = window.prompt([
+    "Vyber vozidlo pro kontrolní voice zápis:",
+    "",
+    vehicleList,
+    "",
+    "Zadej číslo vozidla."
+  ].join("\n"), "1");
+  const index = Number.parseInt(String(answer || "").trim(), 10) - 1;
+
+  return vehicles[index]?.vehicleId || "";
+}
+
+function sarlotaVoiceWriteTestConfirmText(plan = {}, vehicleId = "") {
+  const vehicle = Array.isArray(plan.vehicles)
+    ? plan.vehicles.find((item) => item.vehicleId === vehicleId)
+    : null;
+  return [
+    "Spustit kontrolní voice zápis Hlášení řidičů?",
+    "",
+    "Server použije stejnou backend logiku jako /api/voice/sarlota.",
+    "Potvrzení bude trusted source kso-ui.",
+    "Vytvoří se produkční testovací hlášení řidičů.",
+    "Podle stejné logiky Šarloty se může spustit i předání/notifikace.",
+    vehicle?.label ? `Vozidlo: ${vehicle.label}` : "",
+    `Popis: ${plan.defaultDefectDescription || "testovací hlasový zápis"}`,
+    "",
+    `Pro potvrzení napiš přesně: ${plan.confirmPhrase || "ZAPSAT TEST"}`
+  ].filter(Boolean).join("\n");
+}
+
+async function runSarlotaVoiceWriteTest() {
+  if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user)) {
+    return;
+  }
+
+  if (selectedSarlotaAssistantConfig().assistantKey !== "sarlota") {
+    sarlotaStatusState.syncError = "Kontrolní voice zápis je povolený jen pro ostrou Šarlotu.";
+    sarlotaStatusState.syncMessage = "";
+    render();
+    return;
+  }
+
+  sarlotaStatusState.syncing = true;
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Načítám plán kontrolního voice zápisu...";
+  render();
+
+  try {
+    const plan = await apiJson(SARLOTA_VOICE_WRITE_TEST_ENDPOINT);
+    if (!plan.ready) {
+      sarlotaStatusState.syncError = plan.message || "Kontrolní voice zápis nejde spustit, chybí ověřené vozidlo.";
+      sarlotaStatusState.syncMessage = "";
+      return;
+    }
+
+    const vehicleId = sarlotaVoiceWriteTestVehicleId(plan);
+    if (!vehicleId) {
+      sarlotaStatusState.syncMessage = "Kontrolní voice zápis zrušen.";
+      return;
+    }
+
+    const confirmText = window.prompt(sarlotaVoiceWriteTestConfirmText(plan, vehicleId), "");
+    if (confirmText !== plan.confirmPhrase) {
+      sarlotaStatusState.syncMessage = "Kontrolní voice zápis zrušen.";
+      return;
+    }
+
+    sarlotaStatusState.syncMessage = "Spouštím kontrolní voice zápis...";
+    render();
+
+    const result = await apiJson(SARLOTA_VOICE_WRITE_TEST_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify({
+        apply: true,
+        confirm: plan.confirmPhrase,
+        vehicleId,
+        defectDescription: plan.defaultDefectDescription
+      })
+    });
+
+    sarlotaStatusState.syncMessage = result.reportId
+      ? `Kontrolní voice zápis vytvořil hlášení ${result.reportId}. Stav: ${result.status}.`
+      : `Kontrolní voice zápis doběhl se stavem ${result.status}.`;
+    await loadSarlotaStatus({ force: true, renderAfter: false });
+  } catch (error) {
+    console.error("smart_odpady_sarlota_voice_write_test_failed", error);
+    sarlotaStatusState.syncError = error.payload?.error || "Kontrolní voice zápis se nepodařil.";
+    sarlotaStatusState.syncMessage = "";
+  } finally {
+    sarlotaStatusState.syncing = false;
+    render();
+  }
+}
+
 function ensureSarlotaPanelStatusData(options = {}) {
   if (!authState.user) {
     return;
@@ -29568,6 +29676,13 @@ document.addEventListener("click", async (event) => {
   if (sarlotaPromptSync) {
     event.preventDefault();
     await syncSarlotaPrompt();
+    return;
+  }
+
+  const sarlotaVoiceWriteTest = event.target.closest("[data-sarlota-voice-write-test]");
+  if (sarlotaVoiceWriteTest) {
+    event.preventDefault();
+    await runSarlotaVoiceWriteTest();
     return;
   }
 
