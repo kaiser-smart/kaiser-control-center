@@ -354,6 +354,52 @@ function voiceWebhookSelfCheckDetail(check = null) {
   return `HTTP ${check.httpStatus || 0}, ${check.reason || check.assistantMessage || "neověřeno"}`;
 }
 
+function voiceWriteTestControls(test = {}, syncing = false) {
+  const plan = test.plan || null;
+  if (!plan?.ready) {
+    return "";
+  }
+
+  const vehicles = safeArray(plan.vehicles).filter((vehicle) => vehicle?.vehicleId);
+  const selectedVehicleId = test.selectedVehicleId || (vehicles.length === 1 ? vehicles[0].vehicleId : "");
+  const vehicleOptions = vehicles.map((vehicle) => `
+    <option value="${escapeHtml(vehicle.vehicleId)}" ${vehicle.vehicleId === selectedVehicleId ? "selected" : ""}>
+      ${escapeHtml(vehicle.label || vehicle.vehicleId)}
+    </option>
+  `).join("");
+  const selectionHelp = vehicles.length > 1
+    ? `${vehicles.length} ověřená vozidla z backendu`
+    : "1 ověřené vozidlo z backendu";
+
+  return `
+    <form class="sarlota-status__voice-write" data-sarlota-voice-write-form>
+      <div>
+        <h3>Kontrolní voice zápis</h3>
+        <p>${escapeHtml(selectionHelp)}. Bez potvrzení se nic nezapíše.</p>
+      </div>
+      <label>
+        <span>Vozidlo</span>
+        <select name="vehicleId" data-sarlota-voice-write-vehicle ${syncing ? "disabled" : ""}>
+          <option value="">Vyber vozidlo</option>
+          ${vehicleOptions}
+        </select>
+      </label>
+      <label>
+        <span>Potvrzení</span>
+        <input name="confirm" data-sarlota-voice-write-confirm type="text" autocomplete="off" placeholder="${escapeHtml(plan.confirmPhrase || "ZAPSAT TEST")}" ${syncing ? "disabled" : ""}>
+      </label>
+      <div class="sarlota-status__voice-write-actions">
+        <button class="primary-action" type="submit" data-sarlota-voice-write-submit ${syncing ? "disabled" : ""}>
+          Provést zápis
+        </button>
+        <button class="secondary-link" type="button" data-sarlota-voice-write-cancel ${syncing ? "disabled" : ""}>
+          Zrušit
+        </button>
+      </div>
+    </form>
+  `;
+}
+
 export function SarlotaStatusPanel({
   status = null,
   loading = false,
@@ -362,7 +408,8 @@ export function SarlotaStatusPanel({
   syncMessage = "",
   syncError = "",
   selectedAssistantKey = "sarlota",
-  voiceDiagnostics = {}
+  voiceDiagnostics = {},
+  voiceWriteTest = {}
 } = {}) {
   const data = status || {};
   const selectedConfig = ELEVENLABS_ASSISTANT_CONFIGS[selectedAssistantKey] || ELEVENLABS_ASSISTANT_CONFIGS.sarlota;
@@ -471,6 +518,7 @@ export function SarlotaStatusPanel({
       ${error ? `<p class="module-feedback__error" role="alert">${escapeHtml(error)}</p>` : ""}
       ${syncError ? `<p class="module-feedback__error" role="alert">${escapeHtml(syncError)}</p>` : ""}
       ${syncMessage ? `<p class="module-feedback__success" role="status">${escapeHtml(syncMessage)}</p>` : ""}
+      ${voiceWriteTestControls(voiceWriteTest, syncing)}
       <dl class="sarlota-status__grid">
         ${rows}
       </dl>

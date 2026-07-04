@@ -697,7 +697,11 @@ const sarlotaStatusState = {
   data: null,
   error: "",
   syncMessage: "",
-  syncError: ""
+  syncError: "",
+  voiceWriteTest: {
+    plan: null,
+    selectedVehicleId: ""
+  }
 };
 const sarlotaVoiceDiagnosticsState = {
   omitDriverReportVehicleContext: false
@@ -4656,7 +4660,8 @@ function settingsManagementSection(user) {
       syncMessage: sarlotaStatusState.syncMessage,
       syncError: sarlotaStatusState.syncError,
       selectedAssistantKey: sarlotaStatusState.assistantKey,
-      voiceDiagnostics: sarlotaVoiceDiagnosticsState
+      voiceDiagnostics: sarlotaVoiceDiagnosticsState,
+      voiceWriteTest: sarlotaStatusState.voiceWriteTest
     })}
     ${AppearanceSettingsBox({
       draftSettings: themeState.draft,
@@ -25691,47 +25696,33 @@ async function syncSarlotaPrompt() {
   }
 }
 
-function sarlotaVoiceWriteTestVehicleId(plan = {}) {
-  const vehicles = Array.isArray(plan.vehicles) ? plan.vehicles : [];
-  if (!vehicles.length) {
-    return "";
-  }
-
-  if (vehicles.length === 1) {
-    return vehicles[0].vehicleId || "";
-  }
-
-  const vehicleList = vehicles
-    .map((vehicle, index) => `${index + 1}. ${vehicle.label || vehicle.vehicleId}`)
-    .join("\n");
-  const answer = window.prompt([
-    "Vyber vozidlo pro kontrolní voice zápis:",
-    "",
-    vehicleList,
-    "",
-    "Zadej číslo vozidla."
-  ].join("\n"), "1");
-  const index = Number.parseInt(String(answer || "").trim(), 10) - 1;
-
-  return vehicles[index]?.vehicleId || "";
+function resetSarlotaVoiceWriteTest() {
+  sarlotaStatusState.voiceWriteTest = {
+    plan: null,
+    selectedVehicleId: ""
+  };
 }
 
-function sarlotaVoiceWriteTestConfirmText(plan = {}, vehicleId = "") {
-  const vehicle = Array.isArray(plan.vehicles)
-    ? plan.vehicles.find((item) => item.vehicleId === vehicleId)
-    : null;
-  return [
-    "Spustit kontrolní voice zápis Hlášení řidičů?",
-    "",
-    "Server použije stejnou backend logiku jako /api/voice/sarlota.",
-    "Potvrzení bude trusted source kso-ui.",
-    "Vytvoří se produkční testovací hlášení řidičů.",
-    "Podle stejné logiky Šarloty se může spustit i předání/notifikace.",
-    vehicle?.label ? `Vozidlo: ${vehicle.label}` : "",
-    `Popis: ${plan.defaultDefectDescription || "testovací hlasový zápis"}`,
-    "",
-    `Pro potvrzení napiš přesně: ${plan.confirmPhrase || "ZAPSAT TEST"}`
-  ].filter(Boolean).join("\n");
+function verifiedVoiceWriteVehicle(plan = {}, vehicleId = "") {
+  const vehicles = Array.isArray(plan.vehicles) ? plan.vehicles : [];
+  const selectedVehicleId = String(vehicleId || "").trim();
+  return vehicles.find((vehicle) => vehicle?.vehicleId === selectedVehicleId) || null;
+}
+
+function sarlotaVoiceWriteTestFormValues() {
+  const form = document.querySelector("[data-sarlota-voice-write-form]");
+  if (!form) {
+    return { vehicleId: "", confirm: "" };
+  }
+
+  return {
+    vehicleId: String(form.querySelector("[data-sarlota-voice-write-vehicle]")?.value || "").trim(),
+    confirm: String(form.querySelector("[data-sarlota-voice-write-confirm]")?.value || "").trim()
+  };
+}
+
+function setSarlotaVoiceWriteSelectedVehicle(vehicleId) {
+  sarlotaStatusState.voiceWriteTest.selectedVehicleId = String(vehicleId || "").trim();
 }
 
 async function runSarlotaVoiceWriteTest() {
@@ -25749,6 +25740,7 @@ async function runSarlotaVoiceWriteTest() {
   sarlotaStatusState.syncing = true;
   sarlotaStatusState.syncError = "";
   sarlotaStatusState.syncMessage = "Načítám plán kontrolního voice zápisu...";
+  resetSarlotaVoiceWriteTest();
   render();
 
   try {
@@ -25759,21 +25751,59 @@ async function runSarlotaVoiceWriteTest() {
       return;
     }
 
-    const vehicleId = sarlotaVoiceWriteTestVehicleId(plan);
-    if (!vehicleId) {
-      sarlotaStatusState.syncMessage = "Kontrolní voice zápis zrušen.";
-      return;
-    }
-
-    const confirmText = window.prompt(sarlotaVoiceWriteTestConfirmText(plan, vehicleId), "");
-    if (confirmText !== plan.confirmPhrase) {
-      sarlotaStatusState.syncMessage = "Kontrolní voice zápis zrušen.";
-      return;
-    }
-
-    sarlotaStatusState.syncMessage = "Spouštím kontrolní voice zápis...";
+    const vehicles = Array.isArray(plan.vehicles) ? plan.vehicles : [];
+    sarlotaStatusState.voiceWriteTest = {
+      plan,
+      selectedVehicleId: vehicles.length === 1 ? (vehicles[0]?.vehicleId || "") : ""
+    };
+    sarlotaStatusState.syncError = "";
+    sarlotaStatusState.syncMessage = "Vyber ověřené vozidlo a potvrď kontrolní zápis frází ZAPSAT TEST.";
+  } catch (error) {
+    console.error("smart_odpady_sarlota_voice_write_test_failed", error);
+    sarlotaStatusState.syncError = error.payload?.error || "Kontrolní voice zápis se nepodařil.";
+    sarlotaStatusState.syncMessage = "";
+  } finally {
+    sarlotaStatusState.syncing = false;
     render();
+  }
+}
 
+async function submitSarlotaVoiceWriteTest() {
+  if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user)) {
+    return;
+  }
+
+  const plan = sarlotaStatusState.voiceWriteTest.plan;
+  if (!plan?.ready) {
+    sarlotaStatusState.syncError = "Nejdřív načti plán kontrolního voice zápisu.";
+    sarlotaStatusState.syncMessage = "";
+    render();
+    return;
+  }
+
+  const { vehicleId, confirm } = sarlotaVoiceWriteTestFormValues();
+  const vehicle = verifiedVoiceWriteVehicle(plan, vehicleId);
+  if (!vehicle) {
+    sarlotaStatusState.syncError = "Vyber konkrétní ověřené vozidlo z backendu.";
+    sarlotaStatusState.syncMessage = "";
+    render();
+    return;
+  }
+
+  if (confirm !== plan.confirmPhrase) {
+    sarlotaStatusState.syncError = `Pro zápis napiš přesně ${plan.confirmPhrase}.`;
+    sarlotaStatusState.syncMessage = "";
+    render();
+    return;
+  }
+
+  sarlotaStatusState.syncing = true;
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Spouštím kontrolní voice zápis...";
+  setSarlotaVoiceWriteSelectedVehicle(vehicleId);
+  render();
+
+  try {
     const result = await apiJson(SARLOTA_VOICE_WRITE_TEST_ENDPOINT, {
       method: "POST",
       body: JSON.stringify({
@@ -25784,6 +25814,7 @@ async function runSarlotaVoiceWriteTest() {
       })
     });
 
+    resetSarlotaVoiceWriteTest();
     sarlotaStatusState.syncMessage = result.reportId
       ? `Kontrolní voice zápis vytvořil hlášení ${result.reportId}. Stav: ${result.status}.`
       : `Kontrolní voice zápis doběhl se stavem ${result.status}.`;
@@ -25796,6 +25827,13 @@ async function runSarlotaVoiceWriteTest() {
     sarlotaStatusState.syncing = false;
     render();
   }
+}
+
+function cancelSarlotaVoiceWriteTest() {
+  resetSarlotaVoiceWriteTest();
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Kontrolní voice zápis zrušen.";
+  render();
 }
 
 function ensureSarlotaPanelStatusData(options = {}) {
@@ -29286,6 +29324,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const sarlotaVoiceWriteForm = event.target.closest("[data-sarlota-voice-write-form]");
+  if (sarlotaVoiceWriteForm) {
+    event.preventDefault();
+    await submitSarlotaVoiceWriteTest();
+    return;
+  }
+
   const form = event.target.closest("[data-auth-form]");
 
   if (!form) {
@@ -29424,6 +29469,12 @@ document.addEventListener("change", async (event) => {
   const sarlotaAssistantSelect = event.target.closest("[data-sarlota-assistant-select]");
   if (sarlotaAssistantSelect) {
     selectSarlotaAssistant(sarlotaAssistantSelect.value);
+    return;
+  }
+
+  const sarlotaVoiceWriteVehicle = event.target.closest("[data-sarlota-voice-write-vehicle]");
+  if (sarlotaVoiceWriteVehicle) {
+    setSarlotaVoiceWriteSelectedVehicle(sarlotaVoiceWriteVehicle.value);
     return;
   }
 
@@ -29683,6 +29734,20 @@ document.addEventListener("click", async (event) => {
   if (sarlotaVoiceWriteTest) {
     event.preventDefault();
     await runSarlotaVoiceWriteTest();
+    return;
+  }
+
+  const sarlotaVoiceWriteCancel = event.target.closest("[data-sarlota-voice-write-cancel]");
+  if (sarlotaVoiceWriteCancel) {
+    event.preventDefault();
+    cancelSarlotaVoiceWriteTest();
+    return;
+  }
+
+  const sarlotaVoiceWriteSubmit = event.target.closest("[data-sarlota-voice-write-submit]");
+  if (sarlotaVoiceWriteSubmit) {
+    event.preventDefault();
+    await submitSarlotaVoiceWriteTest();
     return;
   }
 

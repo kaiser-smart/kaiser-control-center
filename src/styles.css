@@ -7017,6 +7017,63 @@ h1 {
   line-height: 1.45;
 }
 
+.sarlota-status__voice-write {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(35, 40, 33, 0.1);
+  border-radius: 8px;
+  background: rgba(247, 249, 244, 0.72);
+}
+
+.sarlota-status__voice-write h3,
+.sarlota-status__voice-write p {
+  margin: 0;
+}
+
+.sarlota-status__voice-write h3 {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.sarlota-status__voice-write p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.sarlota-status__voice-write label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.sarlota-status__voice-write select,
+.sarlota-status__voice-write input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid rgba(35, 40, 33, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.sarlota-status__voice-write-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .module-theme-scope .sarlota-status__row {
   border-color: var(--theme-border);
   background: color-mix(in srgb, var(--theme-card) 86%, var(--theme-bg-surface));
@@ -7109,7 +7166,8 @@ h1 {
 }
 
 .module-theme-scope .sarlota-status__details,
-.module-theme-scope .sarlota-status__diagnostic {
+.module-theme-scope .sarlota-status__diagnostic,
+.module-theme-scope .sarlota-status__voice-write {
   border-color: var(--theme-border);
   background: color-mix(in srgb, var(--theme-card) 90%, var(--theme-bg-surface));
 }
@@ -18579,6 +18637,18 @@ body:has(.absence-page--employee-card) {
 
   .sarlota-status__diagnostics {
     grid-template-columns: 1fr;
+  }
+
+  .sarlota-status__voice-write {
+    grid-template-columns: 1fr;
+  }
+
+  .sarlota-status__voice-write-actions {
+    justify-content: stretch;
+  }
+
+  .sarlota-status__voice-write-actions button {
+    flex: 1 1 100%;
   }
 
   .sarlota-status__row dd {
