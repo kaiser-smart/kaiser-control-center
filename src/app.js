@@ -825,6 +825,14 @@ const driverReportsState = {
   error: "",
   message: "",
   search: "",
+  activeTab: "reports",
+  filters: {
+    status: "",
+    type: "",
+    partsOnly: false,
+    actionOnly: false,
+    date: ""
+  },
   draft: {
     licensePlate: "",
     defectDescription: "",
@@ -20454,15 +20462,11 @@ function driverReportsApplyListPayload(result) {
       : driverReportsState.items.find((item) => item.id === requestedId || item.reportId === requestedId) || driverReportsState.selected;
   }
 
-  if (!driverReportsState.selected && driverReportsState.items[0]) {
-    driverReportsState.selected = driverReportsState.items[0];
-  }
-
   if (
     driverReportsState.selected &&
     !driverReportsState.items.some((item) => item.id === driverReportsState.selected.id)
   ) {
-    driverReportsState.selected = driverReportsState.items[0] || null;
+    driverReportsState.selected = null;
   }
 }
 
@@ -20680,13 +20684,17 @@ function driverReportPartslink24Section(item) {
   const searchButton = allowed
     ? `<button class="secondary-link" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>${loading ? "Připravuji..." : "Ověřit díl podle VIN"}</button>`
     : "";
+  const showProviderLinks = allowed === true;
+  const handoffStatus = pilot.patrikEmailStatus === "sent"
+    ? "email_sent"
+    : allowed ? "email_ready" : pilotStatus;
   const providerActions = [
     searchButton,
-    `<a class="secondary-link" href="${escapeHtml(partslink24Url)}" target="_blank" rel="noopener noreferrer">Otevřít Partslink24</a>`,
-    item.mercedesManualPortalUrl || item.vehicleBrand === "mercedes"
+    showProviderLinks ? `<a class="secondary-link" href="${escapeHtml(partslink24Url)}" target="_blank" rel="noopener noreferrer">Otevřít Partslink24</a>` : "",
+    showProviderLinks && (item.mercedesManualPortalUrl || item.vehicleBrand === "mercedes")
       ? `<a class="secondary-link" href="${escapeHtml(item.mercedesManualPortalUrl || "https://webpartstruck-cloud.mercedes-benz-trucks.com/webparts/")}" target="_blank" rel="noopener noreferrer">Otevřít WebParts</a>`
       : "",
-    item.mercedesMyPartsHubUrl || item.vehicleBrand === "mercedes"
+    showProviderLinks && (item.mercedesMyPartsHubUrl || item.vehicleBrand === "mercedes")
       ? `<a class="secondary-link" href="${escapeHtml(item.mercedesMyPartsHubUrl || "https://mypartshub.daimlertruck.com")}" target="_blank" rel="noopener noreferrer">Otevřít MyPartsHub</a>`
       : "",
     workflowUrl ? `<a class="secondary-link" href="${escapeHtml(workflowUrl)}" target="_blank" rel="noopener noreferrer">Otevřít runner</a>` : ""
@@ -20746,8 +20754,10 @@ function driverReportPartslink24Section(item) {
         )}
         ${driverReportVinPilotStep(
           "5. Předání Patrikovi",
-          pilot.patrikEmailStatus === "sent" ? "email_sent" : "email_ready",
-          "Pilotní návrh AI Boost. Nic nebylo objednáno. Patrik musí vše ručně ověřit před nákupem.",
+          handoffStatus,
+          allowed
+            ? "Pilotní návrh AI Boost. Nic nebylo objednáno. Patrik musí vše ručně ověřit před nákupem."
+            : "Předání Patrikovi se zpřístupní až po bezpečném ověření vozidla, VIN a dílu.",
           [
             driverReportField("E-mail Patrikovi", driverReportNotificationLabel(item.patrikEmailStatus)),
             driverReportField("CC Radim", pilot.pilotCcStatus === "sent_or_included_by_backend" ? "pilotní CC / backend notifikace" : "čeká na odeslání"),
@@ -20771,31 +20781,373 @@ function driverReportPartslink24Section(item) {
   `;
 }
 
-function driverReportListItem(item) {
-  const active = driverReportsState.selected?.id === item.id;
-  const title = item.licensePlate || item.vehicleName || item.reportId;
-  const part = item.probablePart || item.verifiedPart || item.defectType || "náhradní díl";
-  const vehicle = item.vehicleName && item.vehicleName !== item.licensePlate ? item.vehicleName : "";
+function driverReportShortText(value, max = 72) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "neuvedeno";
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function driverReportIsArchived(item) {
+  return ["completed", "canceled"].includes(item.status);
+}
+
+function driverReportIsPartRelated(item) {
+  const text = [
+    item.defectType,
+    item.probablePart,
+    item.verifiedPart,
+    item.partName,
+    item.oePartNumber,
+    item.partAiDetectedName,
+    item.partAiSkipReason,
+    item.partVinPilot?.status
+  ].join(" ").toLowerCase();
+  return Boolean(
+    text.includes("díl") ||
+    text.includes("zrc") ||
+    text.includes("sklo") ||
+    text.includes("svět") ||
+    text.includes("náraz") ||
+    text.includes("blat") ||
+    text.includes("čidlo") ||
+    item.partAiCandidate === true ||
+    item.partVinPilot ||
+    item.partslink24Eligibility ||
+    item.oePartNumber ||
+    item.partName
+  );
+}
+
+function driverReportNeedsAction(item) {
+  if (driverReportIsArchived(item)) return false;
+  if (["new_report", "waiting_part_identification", "part_identified", "handed_to_ordering", "ordered", "part_arrived"].includes(item.status)) {
+    return true;
+  }
+  const pilotStatus = item.partVinPilot?.status || "";
+  return ["waiting_vin", "manual_verification_required", "ready_for_vin_verification", "provider_not_configured", "waiting_verified_oe", "email_ready"].includes(pilotStatus);
+}
+
+function driverReportDateKey(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function driverReportIsToday(value) {
+  return driverReportDateKey(value) === new Date().toISOString().slice(0, 10);
+}
+
+function driverReportPartName(item) {
+  return item.partAiDetectedName || item.probablePart || item.verifiedPart || item.partName || "neuvedeno";
+}
+
+function driverReportPartStatus(item) {
+  const status = item.partVinPilot?.status
+    || (item.partAiSkipReason ? item.partAiSkipReason : "")
+    || (item.oePartNumber || item.partName ? "email_ready" : "")
+    || (item.vin ? "ready_for_vin_verification" : "waiting_vin");
+  return status;
+}
+
+function driverReportVehicleLabel(item) {
+  return item.vehicleName || item.vehicleBrandLabel || "neuvedeno";
+}
+
+function driverReportVinLabel(item) {
+  return item.partslink24Eligibility?.vinMasked || item.partVinPilot?.vinMasked || (item.vin ? "uložené" : "chybí");
+}
+
+function driverReportNextStep(item) {
+  if (item.status === "completed") return "Hotovo";
+  if (item.status === "canceled") return "Zrušeno";
+  if (item.status === "part_arrived") return "Naplánovat servis";
+  if (item.status === "ordered") return "Čekat na díl";
+  if (item.status === "handed_to_ordering") return "Patrik ověřuje";
+  if (item.partVinPilot?.status === "waiting_vin") return "Doplnit VIN";
+  if (item.partVinPilot?.status === "manual_verification_required") return "Ruční kontrola";
+  if (item.partAiSkipReason) return "Neřešit AI pilotem";
+  if (driverReportIsPartRelated(item)) return "Ověřit díl";
+  return "Doplnit hlášení";
+}
+
+function driverReportPartNextStep(item) {
+  const status = driverReportPartStatus(item);
+  if (status === "maintenance_or_consumable" || status === "ambiguous_fault") return "Nespouštět";
+  if (status === "out_of_pilot") return "Mimo pilot";
+  if (status === "waiting_vin") return "Doplnit VIN";
+  if (status === "manual_verification_required") return "Ruční kontrola";
+  if (status === "provider_not_configured") return "Nastavit provider";
+  if (item.oePartNumber || item.partName) return "Předat Patrikovi";
+  if (item.partVinPilot?.status === "ready_for_vin_verification") return "Ověřit podle VIN";
+  return driverReportNextStep(item);
+}
+
+function driverReportTypeOptions(items) {
+  return [...new Set(items.map((item) => String(item.defectType || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "cs"));
+}
+
+function driverReportMatchesCurrentFilters(item, options = {}) {
+  const filters = driverReportsState.filters || {};
+  const query = String(driverReportsState.search || "").trim().toLowerCase();
+  const haystack = [
+    item.reportId,
+    item.licensePlate,
+    item.vehicleName,
+    item.driverName,
+    item.driverPhone,
+    item.defectType,
+    item.defectDescription,
+    item.probablePart,
+    item.partAiDetectedName,
+    item.verifiedPart,
+    item.partName,
+    item.oePartNumber
+  ].join(" ").toLowerCase();
+
+  if (query && !haystack.includes(query)) return false;
+  if (filters.status && item.status !== filters.status) return false;
+  if (filters.type && item.defectType !== filters.type) return false;
+  if (filters.partsOnly && !driverReportIsPartRelated(item)) return false;
+  if (filters.actionOnly && !driverReportNeedsAction(item)) return false;
+  if (filters.date && driverReportDateKey(item.reportedAt) !== filters.date) return false;
+  if (options.partsOnly && !driverReportIsPartRelated(item)) return false;
+  if (options.archive === true && !driverReportIsArchived(item)) return false;
+  if (options.archive === false && driverReportIsArchived(item)) return false;
+  return true;
+}
+
+function driverReportVisibleItems(items, tab = driverReportsState.activeTab) {
+  if (tab === "parts") {
+    return items.filter((item) => driverReportMatchesCurrentFilters(item, { partsOnly: true, archive: false }));
+  }
+  if (tab === "archive") {
+    return items.filter((item) => driverReportMatchesCurrentFilters(item, { archive: true }));
+  }
+  return items.filter((item) => driverReportMatchesCurrentFilters(item, { archive: false }));
+}
+
+function driverReportTabButton(tab, label, count) {
+  const active = driverReportsState.activeTab === tab;
   return `
-    <button class="driver-report-item ${active ? "driver-report-item--active" : ""}" type="button" data-driver-report-select="${escapeHtml(item.id)}">
-      <span class="driver-report-item__top">
-        <span class="driver-report-item__lane">Pitstop</span>
-        <strong>${escapeHtml(title)}</strong>
-        <span class="driver-report-badge driver-report-badge--${escapeHtml(driverReportStatusTone(item.status))}">
-          ${escapeHtml(driverReportBadgeLabel(item.status))}
-        </span>
-      </span>
-      <span class="driver-report-item__part">${escapeHtml(part)}</span>
-      <span class="driver-report-item__meta">
-        <small>${escapeHtml(item.driverName || "řidič")}</small>
-        ${vehicle ? `<small>${escapeHtml(vehicle)}</small>` : ""}
-        <small>${escapeHtml(formatDateTime(item.reportedAt))}</small>
-      </span>
-      <span class="driver-report-item__footer">
-        <small>${escapeHtml(item.reportId || "ND")}</small>
-        <small>${escapeHtml(driverReportStatusLabel(item.status))}</small>
-      </span>
+    <button class="driver-report-tab ${active ? "driver-report-tab--active" : ""}" type="button" data-driver-report-tab="${escapeHtml(tab)}" aria-pressed="${active ? "true" : "false"}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(count))}</strong>
     </button>
+  `;
+}
+
+function driverReportTabs(items) {
+  const reports = items.filter((item) => !driverReportIsArchived(item)).length;
+  const parts = items.filter((item) => !driverReportIsArchived(item) && driverReportIsPartRelated(item)).length;
+  const archive = items.filter(driverReportIsArchived).length;
+  return `
+    <div class="driver-report-tabs" role="tablist" aria-label="Pohled hlášení řidičů">
+      ${driverReportTabButton("reports", "Hlášení", reports)}
+      ${driverReportTabButton("parts", "Náhradní díly", parts)}
+      ${driverReportTabButton("archive", "Archiv", archive)}
+    </div>
+  `;
+}
+
+function driverReportFilters(items) {
+  const filters = driverReportsState.filters || {};
+  const statusOptions = Object.entries(DRIVER_REPORT_STATUS_LABELS)
+    .map(([value, label]) => `<option value="${escapeHtml(value)}" ${filters.status === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
+  const typeOptions = driverReportTypeOptions(items)
+    .map((type) => `<option value="${escapeHtml(type)}" ${filters.type === type ? "selected" : ""}>${escapeHtml(type)}</option>`)
+    .join("");
+
+  return `
+    <form class="driver-report-filters" data-driver-report-search-form>
+      <label>
+        <span>Hledat</span>
+        <input name="search" value="${escapeHtml(driverReportsState.search)}" placeholder="SPZ, řidič, vozidlo, díl">
+      </label>
+      <label>
+        <span>Stav</span>
+        <select name="status">
+          <option value="">Všechny stavy</option>
+          ${statusOptions}
+        </select>
+      </label>
+      <label>
+        <span>Typ</span>
+        <select name="type">
+          <option value="">Všechny typy</option>
+          ${typeOptions}
+        </select>
+      </label>
+      <label>
+        <span>Datum</span>
+        <input type="date" name="date" value="${escapeHtml(filters.date || "")}">
+      </label>
+      <label class="driver-report-filter-check">
+        <input type="checkbox" name="partsOnly" ${filters.partsOnly ? "checked" : ""}>
+        <span>Pouze náhradní díly</span>
+      </label>
+      <label class="driver-report-filter-check">
+        <input type="checkbox" name="actionOnly" ${filters.actionOnly ? "checked" : ""}>
+        <span>Pouze čeká na akci</span>
+      </label>
+      <button class="secondary-link" type="submit">Filtrovat</button>
+    </form>
+  `;
+}
+
+function driverReportRowActions(item) {
+  const loading = driverReportsState.actionLoading;
+  const canManage = driverReportCanManage();
+  const canHandoff = canManage && (!["handed_to_ordering", "ordered", "part_arrived", "service_scheduled", "completed", "canceled"].includes(item.status) || item.patrikEmailStatus !== "sent");
+  const canArrived = canManage && ["ordered", "handed_to_ordering"].includes(item.status);
+  const canComplete = canManage && ["part_arrived", "service_scheduled"].includes(item.status);
+  return `
+    <div class="driver-report-row-actions">
+      <button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Otevřít</button>
+      ${canManage ? `<button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Doplnit</button>` : ""}
+      ${canHandoff ? `<button class="text-action" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Předat servisu</button>` : ""}
+      ${canComplete ? `<button class="text-action" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Vyřízeno</button>` : ""}
+      ${canArrived ? `<button class="text-action" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Díl dorazil</button>` : ""}
+    </div>
+  `;
+}
+
+function driverReportCanRunVinPilot(item) {
+  const eligibility = item.partslink24Eligibility || {};
+  return driverReportCanSearchPartslink24()
+    && eligibility.canSearchPartslink24 === true
+    && eligibility.allowed === true;
+}
+
+function driverReportPartRowActions(item) {
+  const loading = driverReportsState.actionLoading;
+  const canManage = driverReportCanManage();
+  const canRunVin = driverReportCanRunVinPilot(item);
+  const partStatus = driverReportPartStatus(item);
+  const blockedHandoffStatuses = [
+    "maintenance_or_consumable",
+    "ambiguous_fault",
+    "out_of_pilot",
+    "waiting_vin",
+    "manual_verification_required",
+    "provider_not_configured",
+    "waiting_part_identification"
+  ];
+  const hasVerifiedPartForHandoff = Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partVinPilot?.status === "email_ready" || item.patrikEmailStatus === "sent");
+  const canHandoff = canManage
+    && hasVerifiedPartForHandoff
+    && !blockedHandoffStatuses.includes(partStatus);
+  return `
+    <div class="driver-report-row-actions">
+      <button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Otevřít</button>
+      ${canRunVin ? `<button class="text-action" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Ověřit podle VIN</button>` : ""}
+      ${canRunVin ? `<a class="text-action" href="https://www.partslink24.com/partslink24/startup.do" target="_blank" rel="noopener noreferrer">Partslink24</a>` : ""}
+      ${canHandoff ? `<button class="text-action" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Odeslat Patrikovi</button>` : ""}
+      ${canManage && ["ordered", "handed_to_ordering"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Díl dorazil</button>` : ""}
+      ${canManage && ["part_arrived", "service_scheduled"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Vyřízeno</button>` : ""}
+      ${canManage && !["completed", "canceled"].includes(item.status) ? `<button class="text-action text-action--danger" type="button" data-driver-report-action="cancel" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Zrušit</button>` : ""}
+    </div>
+  `;
+}
+
+function driverReportTableEmpty(message) {
+  return `<p class="driver-report-empty driver-report-empty--table">${escapeHtml(message)}</p>`;
+}
+
+function driverReportQueueRows(items) {
+  return items.map((item) => `
+    <tr class="${driverReportsState.selected?.id === item.id ? "driver-report-table-row--active" : ""}" data-driver-report-select="${escapeHtml(item.id)}" tabindex="0">
+      <td data-label="Stav"><span class="driver-report-status driver-report-status--${escapeHtml(driverReportStatusTone(item.status))}">${escapeHtml(driverReportStatusLabel(item.status))}</span></td>
+      <td data-label="Datum">${escapeHtml(formatDateTime(item.reportedAt))}</td>
+      <td data-label="SPZ"><strong>${escapeHtml(item.licensePlate || "neuvedeno")}</strong></td>
+      <td data-label="Vozidlo">${escapeHtml(driverReportShortText(driverReportVehicleLabel(item), 34))}</td>
+      <td data-label="Řidič">${escapeHtml(driverReportShortText(item.driverName, 32))}</td>
+      <td data-label="Typ">${escapeHtml(driverReportShortText(item.defectType, 24))}</td>
+      <td data-label="Popis">${escapeHtml(driverReportShortText(item.defectDescription || item.note, 76))}</td>
+      <td data-label="Další krok">${escapeHtml(driverReportNextStep(item))}</td>
+      <td data-label="Akce">${driverReportRowActions(item)}</td>
+    </tr>
+  `).join("");
+}
+
+function driverReportPartsRows(items) {
+  return items.map((item) => {
+    const status = driverReportPartStatus(item);
+    return `
+      <tr class="${driverReportsState.selected?.id === item.id ? "driver-report-table-row--active" : ""}" data-driver-report-select="${escapeHtml(item.id)}" tabindex="0">
+        <td data-label="Stav"><span class="driver-report-status driver-report-status--${escapeHtml(driverReportVinPilotTone(status))}">${escapeHtml(driverReportVinPilotLabel(status))}</span></td>
+        <td data-label="Datum">${escapeHtml(formatDateTime(item.reportedAt))}</td>
+        <td data-label="SPZ"><strong>${escapeHtml(item.licensePlate || "neuvedeno")}</strong></td>
+        <td data-label="Vozidlo">${escapeHtml(driverReportShortText(driverReportVehicleLabel(item), 32))}</td>
+        <td data-label="VIN">${escapeHtml(driverReportVinLabel(item))}</td>
+        <td data-label="Díl">${escapeHtml(driverReportShortText(driverReportPartName(item), 38))}</td>
+        <td data-label="Strana">${escapeHtml(driverReportSideLabel(item.partAiDetectedSide || item.probablePartSide))}</td>
+        <td data-label="OE">${escapeHtml(item.oePartNumber || "neuvedeno")}</td>
+        <td data-label="Ověřený díl">${escapeHtml(driverReportShortText(item.partName || item.verifiedPart, 34))}</td>
+        <td data-label="Zdroj">${escapeHtml(driverReportPartSourceLabel(item.partVerificationSource || item.partVinPilot?.providerName))}</td>
+        <td data-label="Patrik">${escapeHtml(driverReportNotificationLabel(item.patrikEmailStatus))}</td>
+        <td data-label="Další krok">${escapeHtml(driverReportPartNextStep(item))}</td>
+        <td data-label="Akce">${driverReportPartRowActions(item)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function driverReportQueueTable(items) {
+  if (!items.length) {
+    return driverReportTableEmpty("Žádná hlášení neodpovídají filtrům.");
+  }
+  return `
+    <div class="driver-report-table-wrap" role="region" aria-label="Řádkový seznam hlášení" tabindex="0">
+      <table class="driver-report-table driver-report-table--reports">
+        <thead>
+          <tr>
+            <th>Stav</th>
+            <th>Datum</th>
+            <th>SPZ</th>
+            <th>Vozidlo</th>
+            <th>Řidič</th>
+            <th>Typ</th>
+            <th>Popis</th>
+            <th>Další krok</th>
+            <th>Akce</th>
+          </tr>
+        </thead>
+        <tbody>${driverReportQueueRows(items)}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function driverReportPartsTable(items) {
+  if (!items.length) {
+    return driverReportTableEmpty("Žádné náhradní díly neodpovídají filtrům.");
+  }
+  return `
+    <div class="driver-report-table-wrap" role="region" aria-label="Servisní fronta náhradních dílů" tabindex="0">
+      <table class="driver-report-table driver-report-table--parts">
+        <thead>
+          <tr>
+            <th>Stav</th>
+            <th>Datum</th>
+            <th>SPZ</th>
+            <th>Vozidlo</th>
+            <th>VIN</th>
+            <th>Díl</th>
+            <th>Strana</th>
+            <th>OE číslo</th>
+            <th>Ověřený díl</th>
+            <th>Zdroj</th>
+            <th>Patrik</th>
+            <th>Další krok</th>
+            <th>Akce</th>
+          </tr>
+        </thead>
+        <tbody>${driverReportPartsRows(items)}</tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -20939,10 +21291,11 @@ function driverReportPlateOverrideForm() {
   `;
 }
 
-function driverReportCreateForm(user) {
+function driverReportCreateForm(user, options = {}) {
   const disabled = driverReportsState.saving || !driverReportCanCreate();
   const submitDisabled = !driverReportCanSubmitCreateForm();
   const draft = driverReportsState.draft;
+  const mobileMode = options.mobile === true;
   return `
     <form class="driver-report-form driver-report-form--pitstop" data-driver-report-form>
       <div class="driver-report-pitstop-banner" aria-hidden="true">
@@ -20971,46 +21324,50 @@ function driverReportCreateForm(user) {
         <span>3 servis</span>
       </div>
 
-      <details class="driver-report-more">
-        <summary>Doplnit vozidlo, VIN a řidiče</summary>
-        <div class="driver-report-form__grid">
+      ${mobileMode ? `
+        <p class="driver-report-form-note driver-report-form-note--photo">Fotku nebo podklad může řidič doplnit po odeslání podle pokynu Šarloty nebo dispečera.</p>
+      ` : `
+        <details class="driver-report-more">
+          <summary>Doplnit vozidlo, VIN a řidiče</summary>
+          <div class="driver-report-form__grid">
+            <label>
+              <span>Řidič</span>
+              <input name="driverName" value="${escapeHtml(draft.driverName || user?.name || "")}" autocomplete="name" ${disabled ? "disabled" : ""}>
+            </label>
           <label>
-            <span>Řidič</span>
-            <input name="driverName" value="${escapeHtml(draft.driverName || user?.name || "")}" autocomplete="name" ${disabled ? "disabled" : ""}>
+            <span>Telefon řidiče</span>
+            <input name="driverPhone" value="${escapeHtml(draft.driverPhone || user?.phone || "")}" inputmode="tel" autocomplete="tel" ${disabled ? "disabled" : ""}>
           </label>
-        <label>
-          <span>Telefon řidiče</span>
-          <input name="driverPhone" value="${escapeHtml(draft.driverPhone || user?.phone || "")}" inputmode="tel" autocomplete="tel" ${disabled ? "disabled" : ""}>
-        </label>
-        <label>
-          <span>Vozidlo</span>
-          <input name="vehicleName" value="${escapeHtml(draft.vehicleName)}" placeholder="např. vozidlo / interní číslo" ${disabled ? "disabled" : ""}>
-        </label>
-        <label>
-          <span>VIN</span>
-          <input name="vin" value="${escapeHtml(draft.vin)}" placeholder="pokud je dostupné" autocapitalize="characters" ${disabled ? "disabled" : ""}>
-        </label>
-        <label>
-          <span>Značka</span>
-          <select name="vehicleBrand" ${disabled ? "disabled" : ""}>
-            ${optionList(DRIVER_REPORT_BRAND_OPTIONS, draft.vehicleBrand || "jiné", "Vyberte značku")}
-          </select>
-        </label>
-        </div>
-      </details>
+          <label>
+            <span>Vozidlo</span>
+            <input name="vehicleName" value="${escapeHtml(draft.vehicleName)}" placeholder="např. vozidlo / interní číslo" ${disabled ? "disabled" : ""}>
+          </label>
+          <label>
+            <span>VIN</span>
+            <input name="vin" value="${escapeHtml(draft.vin)}" placeholder="pokud je dostupné" autocapitalize="characters" ${disabled ? "disabled" : ""}>
+          </label>
+          <label>
+            <span>Značka</span>
+            <select name="vehicleBrand" ${disabled ? "disabled" : ""}>
+              ${optionList(DRIVER_REPORT_BRAND_OPTIONS, draft.vehicleBrand || "jiné", "Vyberte značku")}
+            </select>
+          </label>
+          </div>
+        </details>
 
-      <details class="driver-report-more">
-        <summary>Přidat poznámku pro servis</summary>
-        <label>
-          <span>Poznámka</span>
-          <textarea name="note" rows="2" ${disabled ? "disabled" : ""}>${escapeHtml(draft.note)}</textarea>
-        </label>
-      </details>
+        <details class="driver-report-more">
+          <summary>Přidat poznámku pro servis</summary>
+          <label>
+            <span>Poznámka</span>
+            <textarea name="note" rows="2" ${disabled ? "disabled" : ""}>${escapeHtml(draft.note)}</textarea>
+          </label>
+        </details>
 
-      <label class="driver-report-check">
-        <input type="checkbox" name="handoffAfterCreate" ${draft.handoffAfterCreate ? "checked" : ""} ${disabled ? "disabled" : ""}>
-        <span>Po uložení předat Patrikovi a informovat servis</span>
-      </label>
+        <label class="driver-report-check">
+          <input type="checkbox" name="handoffAfterCreate" ${draft.handoffAfterCreate ? "checked" : ""} ${disabled ? "disabled" : ""}>
+          <span>Po uložení předat Patrikovi a informovat servis</span>
+        </label>
+      `}
       <p class="driver-report-form-note">Stisknutím tlačítka potvrzujete SPZ. Šarlota si po uložení může vyžádat fotku nebo doplnění hlášení.</p>
       <button class="primary-action driver-report-pitstop-submit" type="submit" data-driver-report-submit ${submitDisabled ? "disabled" : ""}>
         ${driverReportsState.saving ? "Odesílám..." : "Odeslat hlášení"}
@@ -21109,6 +21466,17 @@ function driverReportActionButtons(item) {
   }
 
   const loading = driverReportsState.actionLoading;
+  const partStatus = driverReportPartStatus(item);
+  const blockedHandoffStatuses = [
+    "maintenance_or_consumable",
+    "ambiguous_fault",
+    "out_of_pilot",
+    "waiting_vin",
+    "manual_verification_required",
+    "provider_not_configured",
+    "waiting_part_identification"
+  ];
+  const hasVerifiedPartForHandoff = Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partVinPilot?.status === "email_ready" || item.patrikEmailStatus === "sent");
   const canHandoff = !["handed_to_ordering", "ordered", "part_arrived", "service_scheduled", "completed", "canceled"].includes(item.status)
     || item.patrikEmailStatus !== "sent"
     || item.kamilSmsStatus !== "sent";
@@ -21118,7 +21486,7 @@ function driverReportActionButtons(item) {
 
   return `
     <div class="driver-report-actions">
-      <button class="secondary-link" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${canHandoff && !loading ? "" : "disabled"}>Předat Patrikovi</button>
+      <button class="secondary-link" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${canHandoff && hasVerifiedPartForHandoff && !blockedHandoffStatuses.includes(partStatus) && !loading ? "" : "disabled"}>Předat Patrikovi</button>
       <button class="secondary-link" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${canArrived && !loading ? "" : "disabled"}>Díl dorazil</button>
       <button class="secondary-link" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${canComplete && !loading ? "" : "disabled"}>Vyřízeno</button>
       <button class="text-action" type="button" data-driver-report-action="cancel" data-request-id="${escapeHtml(item.id)}" ${canCancel && !loading ? "" : "disabled"}>Zrušit</button>
@@ -21144,100 +21512,165 @@ function driverReportHistory(events = []) {
   `;
 }
 
-function driverReportDetail(item) {
-  if (!item) {
-    return `
-      <section class="driver-report-detail driver-report-detail--empty">
-        <h2>Detail hlášení</h2>
-        <p>Zatím není vybrané žádné hlášení.</p>
-      </section>
-    `;
-  }
-
+function driverReportDrawerSection(title, body, className = "") {
   return `
-    <section class="driver-report-detail" aria-labelledby="driver-report-detail-title">
-      <div class="driver-report-detail__head">
-        <div>
-          <span class="driver-report-eyebrow">${escapeHtml(item.reportId)}</span>
-          <h2 id="driver-report-detail-title">${escapeHtml(item.licensePlate)} · ${escapeHtml(item.probablePart || item.defectType)}</h2>
-        </div>
-        <span class="driver-report-status driver-report-status--${escapeHtml(driverReportStatusTone(item.status))}">
-          ${escapeHtml(driverReportStatusLabel(item.status))}
-        </span>
-      </div>
-
-      <div class="driver-report-detail-grid">
-        ${driverReportField("Datum hlášení", formatDateTime(item.reportedAt))}
-        ${driverReportField("Řidič", item.driverName)}
-        ${driverReportField("Telefon řidiče", item.driverPhone)}
-        ${driverReportField("Vozidlo", item.vehicleName)}
-        ${driverReportField("SPZ", item.licensePlate)}
-        ${driverReportField("VIN", item.vin || "není dostupné")}
-        ${driverReportField("Značka", item.vehicleBrandLabel)}
-        ${driverReportField("Typ hlášení", item.defectType)}
-        ${driverReportField("Fotka / podklad", driverReportPhotoStatusLabel(item.damagePhotoStatus))}
-      </div>
-
-      <section class="driver-report-part" aria-label="Náhradní díl">
-        <div class="driver-report-part__title">
-          <h3>Náhradní díl</h3>
-          <span>${escapeHtml(driverReportPartVerificationLabel(item.partVerificationStatus || item.partIdentificationStatus))}</span>
-        </div>
-        <div class="driver-report-detail-grid">
-          ${driverReportField("Pravděpodobný díl", item.probablePart)}
-          ${driverReportField("Strana", item.probablePartSideLabel || driverReportSideLabel(item.probablePartSide))}
-          ${driverReportField("Ověřený díl", item.verifiedPart)}
-          ${driverReportField("Objednací číslo", item.partOrderNumber)}
-          ${driverReportField("OE číslo", item.oePartNumber)}
-          ${driverReportField("Název dílu", item.partName)}
-          ${driverReportField("Zdroj ověření", driverReportPartSourceLabel(item.partVerificationSource))}
-          ${driverReportField("Stav ověření", driverReportPartVerificationLabel(item.partVerificationStatus || item.partIdentificationStatus))}
-          ${driverReportField("Komu předáno", item.assignedToName)}
-          ${driverReportField("Datum předání Patrikovi", item.handedOffToPatrikAt ? formatDateTime(item.handedOffToPatrikAt) : "")}
-          ${driverReportField("Datum SMS Kamilovi", item.kamilSmsSentAt ? formatDateTime(item.kamilSmsSentAt) : "")}
-          ${driverReportField("Datum objednání", item.orderedAt ? formatDateTime(item.orderedAt) : "")}
-          ${driverReportField("Datum doručení dílu", item.deliveredAt ? formatDateTime(item.deliveredAt) : "")}
-          ${driverReportField("Termín přistavení", item.serviceDate && item.serviceTime ? `${item.serviceDate} ${item.serviceTime}` : "")}
-        </div>
-        <p class="driver-report-description">${escapeHtml(item.defectDescription)}</p>
-        ${item.note ? `<p class="driver-report-note">${escapeHtml(item.note)}</p>` : ""}
-      </section>
-
-      ${driverReportMercedesPartSection(item)}
-      ${driverReportPartslink24Section(item)}
-
-      <div class="driver-report-notifications" aria-label="Stavy notifikací">
-        ${driverReportNotificationPill("E-mail Patrikovi", item.patrikEmailStatus, item.patrikEmailError)}
-        ${driverReportNotificationPill("SMS Kamilovi", item.kamilSmsStatus, item.kamilSmsError)}
-        ${driverReportNotificationPill("SMS řidiči", item.driverSmsStatus, item.driverSmsError)}
-      </div>
-
-      ${driverReportActionButtons(item)}
-      ${driverReportManualPartForm(item)}
-      ${driverReportOrderForm(item)}
-      ${driverReportServiceForm(item)}
-
-      <section class="driver-report-history-block" aria-label="Historie akcí">
-        <h3>Historie akcí</h3>
-        ${driverReportHistory(item.events)}
-      </section>
+    <section class="driver-report-drawer-section ${escapeHtml(className)}">
+      <h3>${escapeHtml(title)}</h3>
+      ${body}
     </section>
   `;
 }
 
-function driverReportsSummaryCards(items) {
-  const waiting = items.filter((item) => ["new_report", "waiting_part_identification", "part_identified", "handed_to_ordering"].includes(item.status)).length;
-  const ordered = items.filter((item) => item.status === "ordered").length;
-  const arrived = items.filter((item) => item.status === "part_arrived").length;
-  const scheduled = items.filter((item) => item.status === "service_scheduled").length;
+function driverReportMercedesCompactActions(item) {
+  if (item.vehicleBrand !== "mercedes") {
+    return "";
+  }
+  const loading = driverReportsState.actionLoading;
   return `
-    <div class="driver-report-summary" aria-label="Souhrn servisních hlášení">
-      <article><span>Čeká na díl</span><strong>${waiting}</strong></article>
-      <article><span>Objednáno</span><strong>${ordered}</strong></article>
-      <article><span>Díl dorazil</span><strong>${arrived}</strong></article>
-      <article><span>Servis naplánován</span><strong>${scheduled}</strong></article>
+    <div class="driver-report-drawer-actions driver-report-drawer-actions--compact">
+      ${driverReportCanManage() ? `<button class="secondary-link" type="button" data-driver-report-action="verify-mercedes" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Ověřit díl Mercedes</button>` : ""}
+      ${driverReportMercedesLinks(item)}
     </div>
   `;
+}
+
+function driverReportPartDetail(item) {
+  if (!driverReportIsPartRelated(item)) {
+    return "";
+  }
+
+  return driverReportDrawerSection("Náhradní díl", `
+    <div class="driver-report-detail-grid">
+      ${driverReportField("Detekovaný díl", item.partAiDetectedName || item.probablePart)}
+      ${driverReportField("Strana", item.probablePartSideLabel || driverReportSideLabel(item.partAiDetectedSide || item.probablePartSide))}
+      ${driverReportField("Jistota AI", item.partAiConfidence)}
+      ${driverReportField("OE číslo", item.oePartNumber)}
+      ${driverReportField("Ověřený název", item.partName || item.verifiedPart)}
+      ${driverReportField("Objednací číslo", item.partOrderNumber)}
+      ${driverReportField("Zdroj ověření", driverReportPartSourceLabel(item.partVerificationSource))}
+      ${driverReportField("Stav ověření", driverReportPartVerificationLabel(item.partVerificationStatus || item.partIdentificationStatus))}
+      ${driverReportField("Cenový průzkum", driverReportPriceBoostLabel(item.priceBoostStatus))}
+      ${driverReportField("E-mail Patrikovi", driverReportNotificationLabel(item.patrikEmailStatus))}
+      ${driverReportField("Ruční poznámka", item.note)}
+    </div>
+    ${driverReportPartslink24Section(item)}
+    ${driverReportMercedesCompactActions(item)}
+    ${driverReportManualPartForm(item)}
+    ${driverReportOrderForm(item)}
+  `, "driver-report-drawer-section--part");
+}
+
+function driverReportDetail(item) {
+  if (!item) {
+    return "";
+  }
+
+  return `
+    <aside class="driver-report-drawer" aria-labelledby="driver-report-detail-title">
+      <div class="driver-report-drawer__head">
+        <div>
+          <span class="driver-report-eyebrow">${escapeHtml(item.reportId)}</span>
+          <h2 id="driver-report-detail-title">${escapeHtml(item.licensePlate || "Bez SPZ")} · ${escapeHtml(driverReportShortText(item.probablePart || item.defectType, 42))}</h2>
+        </div>
+        <button class="driver-report-drawer__close" type="button" data-driver-report-close-detail aria-label="Zavřít detail">×</button>
+      </div>
+
+      <div class="driver-report-drawer__body">
+        ${driverReportDrawerSection("Základní informace", `
+          <div class="driver-report-detail-grid">
+            ${driverReportField("Datum", formatDateTime(item.reportedAt))}
+            ${driverReportField("Stav", driverReportStatusLabel(item.status))}
+            ${driverReportField("Řidič", item.driverName)}
+            ${driverReportField("Telefon", item.driverPhone)}
+            ${driverReportField("SPZ", item.licensePlate)}
+            ${driverReportField("Vozidlo", item.vehicleName)}
+            ${driverReportField("VIN", item.vin || "není dostupné")}
+            ${driverReportField("Značka", item.vehicleBrandLabel)}
+            ${driverReportField("Fotka / podklad", driverReportPhotoStatusLabel(item.damagePhotoStatus))}
+          </div>
+        `)}
+
+        ${driverReportDrawerSection("Text hlášení", `
+          <p class="driver-report-description">${escapeHtml(item.defectDescription || "Bez popisu")}</p>
+          ${item.note ? `<p class="driver-report-note">${escapeHtml(item.note)}</p>` : ""}
+        `)}
+
+        ${driverReportPartDetail(item)}
+
+        ${driverReportDrawerSection("Notifikace a akce", `
+          <div class="driver-report-notifications" aria-label="Stavy notifikací">
+            ${driverReportNotificationPill("E-mail Patrikovi", item.patrikEmailStatus, item.patrikEmailError)}
+            ${driverReportNotificationPill("SMS Kamilovi", item.kamilSmsStatus, item.kamilSmsError)}
+            ${driverReportNotificationPill("SMS řidiči", item.driverSmsStatus, item.driverSmsError)}
+          </div>
+          ${driverReportActionButtons(item)}
+          ${driverReportServiceForm(item)}
+        `)}
+
+        ${driverReportDrawerSection("Historie", driverReportHistory(item.events), "driver-report-drawer-section--history")}
+      </div>
+    </aside>
+  `;
+}
+
+function driverReportsSummaryCards(items) {
+  const open = items.filter((item) => !driverReportIsArchived(item)).length;
+  const waitingPart = items.filter((item) => ["waiting_part_identification", "part_identified", "handed_to_ordering", "ordered"].includes(item.status)).length;
+  const waitingVin = items.filter((item) => item.partVinPilot?.status === "waiting_vin" || (driverReportIsPartRelated(item) && !item.vin && !driverReportIsArchived(item))).length;
+  const handedToPatrik = items.filter((item) => item.patrikEmailStatus === "sent" || item.handedOffToPatrikAt || item.status === "handed_to_ordering").length;
+  const doneToday = items.filter((item) => item.status === "completed" && driverReportIsToday(item.completedAt || item.updatedAt || item.reportedAt)).length;
+  return `
+    <div class="driver-report-summary" aria-label="Souhrn servisních hlášení">
+      <article><span>Otevřená hlášení</span><strong>${open}</strong></article>
+      <article><span>Čeká na díl</span><strong>${waitingPart}</strong></article>
+      <article><span>Čeká na VIN</span><strong>${waitingVin}</strong></article>
+      <article><span>Předáno Patrikovi</span><strong>${handedToPatrik}</strong></article>
+      <article><span>Vyřízeno dnes</span><strong>${doneToday}</strong></article>
+    </div>
+  `;
+}
+
+function driverReportDesktopEntryCard() {
+  const mobileUrl = `${window.location.origin}${routeHref(DRIVER_REPORT_ROUTE)}#nove-hlaseni`;
+  return `
+    <section class="driver-report-mobile-card" aria-label="Mobilní vstup pro řidiče">
+      <div>
+        <h2>Nové hlášení je pro mobil řidiče</h2>
+        <p>Řidič zadá SPZ, popis problému a fotku. Servisní fronta a náhradní díly zůstávají jen v pracovním pohledu.</p>
+      </div>
+      <div class="driver-report-mobile-card__actions">
+        <a class="secondary-link" href="${escapeHtml(routeHref(DRIVER_REPORT_ROUTE))}#nove-hlaseni" data-link>Otevřít mobilní formulář</a>
+        <button class="secondary-link" type="button" data-driver-report-copy-mobile-link="${escapeHtml(mobileUrl)}">Zkopírovat odkaz</button>
+      </div>
+      <div class="driver-report-qr-placeholder" aria-label="QR kód pro řidiče">
+        <span>QR</span>
+        <small>mobilní formulář</small>
+      </div>
+    </section>
+  `;
+}
+
+function driverReportMobileEntry(user) {
+  return `
+    <section class="driver-report-mobile-entry" id="nove-hlaseni" aria-labelledby="driver-report-mobile-title">
+      <div class="driver-report-panel__head">
+        <h2 id="driver-report-mobile-title">Nové hlášení</h2>
+        <span>Mobilní vstup</span>
+      </div>
+      ${driverReportCreateForm(user, { mobile: true })}
+    </section>
+  `;
+}
+
+function driverReportActiveQueue(items) {
+  const visible = driverReportVisibleItems(items);
+  if (driverReportsState.activeTab === "parts") {
+    return driverReportPartsTable(visible);
+  }
+  if (driverReportsState.activeTab === "archive") {
+    return driverReportQueueTable(visible);
+  }
+  return driverReportQueueTable(visible);
 }
 
 function updateDriverReportSubmitState(form) {
@@ -21392,6 +21825,7 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
   const items = driverReportsState.items;
   const selected = driverReportsState.selected;
   const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
+  const activeItems = driverReportVisibleItems(items);
 
   return `
     <main class="app-shell module-page module-theme-scope driver-reports-page" ${moduleThemeStyleAttribute()}>
@@ -21423,35 +21857,28 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
       ${driverReportsState.message ? `<p class="module-feedback__notice" role="status">${escapeHtml(driverReportsState.message)}</p>` : ""}
       ${driverReportsState.permissions?.limitation ? `<p class="driver-report-limitation">${escapeHtml(driverReportsState.permissions.limitation)}</p>` : ""}
 
-      <section class="driver-report-workspace" aria-label="Workflow servisních hlášení">
-        <section class="driver-report-panel" aria-labelledby="driver-report-new-title">
-          <div class="driver-report-panel__head">
-            <h2 id="driver-report-new-title">Nové hlášení</h2>
-            <span>Servis</span>
-          </div>
-          ${driverReportCreateForm(user)}
-        </section>
+      ${driverReportsSummaryCards(items)}
 
-        <section class="driver-report-panel driver-report-list-panel" aria-labelledby="driver-report-list-title">
-          <div class="driver-report-panel__head">
-            <h2 id="driver-report-list-title">Seznam hlášení</h2>
-            <span>${items.length}</span>
-          </div>
-          <form class="driver-report-search" data-driver-report-search-form>
-            <input name="search" value="${escapeHtml(driverReportsState.search)}" placeholder="Hledat SPZ, řidiče, požadavek">
-            <button class="secondary-link" type="submit">Hledat</button>
-          </form>
-          <div class="driver-report-list">
-            ${driverReportsState.loading && !items.length ? `<p class="driver-report-empty">Načítám hlášení...</p>` : ""}
-            ${!driverReportsState.loading && !items.length ? `<p class="driver-report-empty">Žádné hlášení zatím není uložené.</p>` : ""}
-            ${items.map(driverReportListItem).join("")}
-          </div>
-        </section>
+      ${driverReportMobileEntry(user)}
 
+      <section class="driver-report-desktop-workspace" aria-label="Pracovní fronta Hlášení řidičů">
+        ${driverReportDesktopEntryCard()}
+        ${driverReportTabs(items)}
+        ${driverReportFilters(items)}
+        <section class="driver-report-queue-panel" aria-labelledby="driver-report-queue-title">
+          <div class="driver-report-queue-head">
+            <div>
+              <h2 id="driver-report-queue-title">${driverReportsState.activeTab === "parts" ? "Náhradní díly" : driverReportsState.activeTab === "archive" ? "Archiv" : "Hlášení"}</h2>
+              <p>${driverReportsState.activeTab === "parts" ? "Servisní fronta Patrika: VIN, díl, OE, cenový průzkum a další krok." : "Pracovní fronta dispečera a servisu v kompaktních řádcích."}</p>
+            </div>
+            <span>${escapeHtml(String(activeItems.length))} řádků</span>
+          </div>
+          ${driverReportsState.loading && !items.length ? `<p class="driver-report-empty driver-report-empty--table">Načítám hlášení...</p>` : ""}
+          ${!driverReportsState.loading ? driverReportActiveQueue(items) : ""}
+        </section>
         ${driverReportDetail(selected)}
       </section>
 
-      ${driverReportsSummaryCards(items)}
       ${feedbackBox}
     </main>
   `;
@@ -21654,8 +22081,37 @@ async function runDriverReportPartslink24Search(requestId) {
 async function submitDriverReportSearch(form) {
   const data = new FormData(form);
   driverReportsState.search = String(data.get("search") || "").trim();
+  driverReportsState.filters = {
+    status: String(data.get("status") || ""),
+    type: String(data.get("type") || ""),
+    partsOnly: data.get("partsOnly") === "on",
+    actionOnly: data.get("actionOnly") === "on",
+    date: String(data.get("date") || "")
+  };
   driverReportsState.loaded = false;
   await loadDriverReports({ force: true });
+}
+
+function setDriverReportTab(tab) {
+  driverReportsState.activeTab = ["reports", "parts", "archive"].includes(tab) ? tab : "reports";
+  driverReportsState.selected = null;
+  render();
+}
+
+function closeDriverReportDetail() {
+  driverReportsState.selected = null;
+  render();
+}
+
+async function copyDriverReportMobileLink(link) {
+  try {
+    await navigator.clipboard.writeText(link);
+    driverReportsState.message = "Odkaz na mobilní formulář je zkopírovaný.";
+    driverReportsState.error = "";
+  } catch {
+    driverReportsState.error = "Odkaz se nepodařilo zkopírovat. Zkopíruj ho prosím ručně z adresního řádku.";
+  }
+  render();
 }
 
 function modulePage(moduleItem, user, isDashboard = false) {
@@ -30467,10 +30923,10 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  const driverReportSelect = event.target.closest("[data-driver-report-select]");
-  if (driverReportSelect) {
+  const driverReportTab = event.target.closest("[data-driver-report-tab]");
+  if (driverReportTab) {
     event.preventDefault();
-    await selectDriverReport(driverReportSelect.dataset.driverReportSelect || "");
+    setDriverReportTab(driverReportTab.dataset.driverReportTab || "reports");
     return;
   }
 
@@ -30488,6 +30944,31 @@ document.addEventListener("click", async (event) => {
   if (driverReportPartslink24Search) {
     event.preventDefault();
     await runDriverReportPartslink24Search(driverReportPartslink24Search.dataset.requestId || "");
+    return;
+  }
+
+  const driverReportCloseDetail = event.target.closest("[data-driver-report-close-detail]");
+  if (driverReportCloseDetail) {
+    event.preventDefault();
+    closeDriverReportDetail();
+    return;
+  }
+
+  const driverReportCopyMobileLink = event.target.closest("[data-driver-report-copy-mobile-link]");
+  if (driverReportCopyMobileLink) {
+    event.preventDefault();
+    await copyDriverReportMobileLink(driverReportCopyMobileLink.dataset.driverReportCopyMobileLink || window.location.href);
+    return;
+  }
+
+  if (event.target.closest(".driver-report-row-actions a[href]")) {
+    return;
+  }
+
+  const driverReportSelect = event.target.closest("[data-driver-report-select]");
+  if (driverReportSelect) {
+    event.preventDefault();
+    await selectDriverReport(driverReportSelect.dataset.driverReportSelect || "");
     return;
   }
 
