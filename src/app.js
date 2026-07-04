@@ -15049,6 +15049,14 @@ function collectionRoutesSourceSelectedBatchLabel() {
   return formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "čeká na import";
 }
 
+function collectionRoutesSourceBatchSourceLabel(batch = collectionRoutesSourceSelectedBatch()) {
+  const source = String(batch?.metadata?.source || batch?.source || "").trim();
+  if (source.includes("repair-workbook")) {
+    return "13 Excelů: opravný sešit";
+  }
+  return "13 Excelů";
+}
+
 function collectionRoutesSourceSourceLabel(row) {
   return `${row?.sourceFile || "-"} / ${row?.sourceSheet || "-"} / ř. ${row?.sourceRowNumber || "-"}`;
 }
@@ -15121,7 +15129,7 @@ function collectionRoutesSourceSummaryCards() {
     null;
   return `
     <div class="collection-routes-stats" aria-label="Souhrn Svozových tras z 13 Excelů">
-      <article><span>Zdroj</span><strong>13 Excelů</strong></article>
+      <article><span>Zdroj</span><strong>${escapeHtml(collectionRoutesSourceBatchSourceLabel(latestBatch))}</strong></article>
       <article><span>Import</span><strong>${escapeHtml(formatDateTime(latestBatch?.createdAt) || "čeká")}</strong></article>
       <article><span>Řádky ve filtru</span><strong>${collectionRoutesMetricValue(summary.rowCount || rows.length)}</strong></article>
       <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(summary.containerCount)}</strong></article>
@@ -15764,7 +15772,7 @@ function collectionRoutesSourceImportCards() {
       ${batches.map((batch) => `
         <article class="collection-routes-list-item">
           <div>
-            <strong>${escapeHtml(batch.source || "13-excel")}</strong>
+            <strong>${escapeHtml(collectionRoutesSourceBatchSourceLabel(batch))}</strong>
             <span>${escapeHtml(formatDateTime(batch.createdAt) || "-")} · ${escapeHtml(batch.status || "preview")}</span>
           </div>
           <p>${escapeHtml(batch.message || "Import bez zprávy.")}</p>
@@ -16033,17 +16041,17 @@ function collectionRoutesSourceDataSection(user) {
 
       <div class="collection-routes-phase-note collection-routes-source-block collection-routes-source-block--excel">
         <strong>13 Excelů je vstupní rozsah pro tuto sekci.</strong>
-        <span>Řádky drží původní soubor, list, řádek a pořadí. Vistos match je ruční read-only kontrola nad těmito řádky a nesmí přidat zákazníky mimo tento zdroj.</span>
+        <span>Řádky drží původní soubor, list, řádek a pořadí. Import umí původních 13 Excelů i jeden opravný sešit ze Smartu; Vistos match je read-only kontrola a nesmí přidat zákazníky mimo tento zdroj.</span>
       </div>
 
       ${canImport ? `
         <form class="collection-routes-import-form collection-routes-import-form--file" data-collection-routes-source-import-form>
           <label>
-            <span>13 Excel souborů svozových tras</span>
+            <span>13 Excelů nebo jeden opravný sešit</span>
             <input type="file" name="files" accept=".xlsx,.csv,.tsv,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values" multiple>
           </label>
           <button class="primary-action" type="submit" ${collectionRoutesPilotState.sourceImportLoading ? "disabled" : ""}>
-            ${collectionRoutesPilotState.sourceImportLoading ? "Ukládám read-only zdroj..." : "Nahrát 13 Excelů do Svozových tras"}
+            ${collectionRoutesPilotState.sourceImportLoading ? "Ukládám read-only zdroj..." : "Nahrát zdroj do Svozových tras"}
           </button>
         </form>
       ` : `
