@@ -682,12 +682,134 @@ h1 {
   font-weight: 900;
 }
 
+.home-module-sections {
+  display: grid;
+  gap: 26px;
+  padding: 16px 0 0;
+}
+
+.module-section {
+  --section-accent: #4b766e;
+  --section-accent-soft: #e8f1ef;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.module-section__header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding-left: 12px;
+  border-left: 4px solid var(--section-accent);
+}
+
+.module-section__header h2 {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.06rem;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.module-section__grid,
 .module-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   grid-auto-rows: 1fr;
   gap: 16px;
   align-items: stretch;
+}
+
+.module-section__grid .module-card {
+  --accent: var(--section-accent);
+  --accent-soft: var(--section-accent-soft);
+}
+
+.module-section--quick-operations {
+  --accent: #75bd25;
+  --section-accent: #75bd25;
+  --section-accent-soft: #edf8e7;
+  gap: 18px;
+}
+
+.module-section--quick-operations .module-section__grid {
+  gap: 18px;
+}
+
+.module-section--quick-operations .module-card {
+  padding: 18px;
+  border-color: rgba(117, 189, 37, 0.16);
+}
+
+.module-section--quick-operations .module-card::before {
+  width: 7px;
+}
+
+.module-section--quick-operations .module-card__title {
+  font-size: 1.08rem;
+}
+
+.module-section--vehicles-service {
+  --section-accent: #3d7d6f;
+  --section-accent-soft: #e7f3f0;
+}
+
+.module-section--customers-routes {
+  --section-accent: #3f6f9f;
+  --section-accent-soft: #e8f0f8;
+}
+
+.module-section--documents-admin {
+  --section-accent: #6f6b9f;
+  --section-accent-soft: #efeff8;
+}
+
+.module-section--finance-costs {
+  --section-accent: #8c764f;
+  --section-accent-soft: #f3efe6;
+}
+
+.module-section--system {
+  --section-accent: #63706a;
+  --section-accent-soft: #edf0ee;
+  margin-top: 6px;
+}
+
+.module-section--system .module-section__header {
+  border-left-color: rgba(99, 112, 106, 0.45);
+}
+
+.module-section--system .module-section__header h2 {
+  color: #5d6762;
+  font-size: 0.98rem;
+}
+
+.module-section--system .module-section__grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 12px;
+}
+
+.module-section--system .module-card {
+  padding: 14px;
+  border-color: rgba(36, 45, 34, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(247, 249, 245, 0.94) 100%),
+    var(--card);
+  box-shadow: 0 10px 22px rgba(36, 45, 34, 0.06);
+}
+
+.module-section--system .module-card::before {
+  width: 3px;
+}
+
+.module-section--system .module-icon {
+  opacity: 0.84;
+}
+
+.module-grid {
   padding: 12px 0 0;
 }
 
@@ -907,6 +1029,13 @@ h1 {
   box-shadow: 0 6px 14px rgba(79, 141, 20, 0.14);
 }
 
+.status-badge--done {
+  border-color: rgba(117, 189, 37, 0.2);
+  background: #f2faea;
+  color: var(--kaiser-green-dark);
+  box-shadow: 0 6px 14px rgba(79, 141, 20, 0.14);
+}
+
 .status-badge--progress {
   border-color: rgba(176, 122, 42, 0.22);
   background: #fff4df;
@@ -914,11 +1043,32 @@ h1 {
   box-shadow: 0 6px 14px rgba(176, 122, 42, 0.13);
 }
 
-.status-badge--new {
+.status-badge--testing {
+  border-color: rgba(63, 111, 159, 0.22);
+  background: #eaf2fb;
+  color: #315c86;
+  box-shadow: 0 6px 14px rgba(63, 111, 159, 0.13);
+}
+
+.status-badge--readonly {
+  border-color: rgba(75, 118, 110, 0.22);
+  background: #e8f1ef;
+  color: #315b54;
+  box-shadow: 0 6px 14px rgba(75, 118, 110, 0.12);
+}
+
+.status-badge--unverified {
   border-color: rgba(77, 90, 86, 0.18);
   background: #f4f6f2;
   color: #4f5b55;
   box-shadow: 0 6px 14px rgba(77, 90, 86, 0.1);
+}
+
+.status-badge--admin {
+  border-color: rgba(36, 45, 34, 0.16);
+  background: #eef1ed;
+  color: #4a534e;
+  box-shadow: 0 6px 14px rgba(36, 45, 34, 0.09);
 }
 
 .topbar {
@@ -18316,6 +18466,7 @@ body:has(.absence-page--employee-card) {
     padding-bottom: 0;
   }
 
+  .module-section__grid,
   .module-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -18973,6 +19124,27 @@ body:has(.absence-page--employee-card) {
     height: clamp(60px, 17vw, 78px);
   }
 
+  .home-module-sections {
+    gap: 20px;
+  }
+
+  .module-section {
+    gap: 10px;
+  }
+
+  .module-section__header h2 {
+    font-size: 1rem;
+  }
+
+  .module-section--quick-operations {
+    gap: 12px;
+  }
+
+  .module-section--quick-operations .module-card {
+    padding: 13px 9px;
+  }
+
+  .module-section__grid,
   .module-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;

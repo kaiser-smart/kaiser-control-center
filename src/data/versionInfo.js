@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.318"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.319"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "HP: operační rozcestník",
+    text: "Homepage je rozdělená do bloků Dnes / Rychlý provoz, Vozidla a servis, Zákazníci a trasy, Dokumenty a administrativa, Finance a náklady a Systém. Karty si zachovávají původní routing a stavové badge jsou sjednocené."
+  },
   {
     title: "Trasy svozu: uklizené záložky",
     text: "Hlavní navigace modulu je zjednodušená na Svozové trasy, Stanoviště a Pravidla. Importy, diagnostika, Vistos-only pilot a staré preview jsou schované v admin záložce Interní správa."
