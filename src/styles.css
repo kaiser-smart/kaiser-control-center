@@ -4653,6 +4653,40 @@ h1 {
   color: #513708;
 }
 
+.tracking-demo-map-badge {
+  position: absolute;
+  z-index: 6;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  max-width: min(560px, calc(100% - 28px));
+  min-height: 34px;
+  align-items: center;
+  padding: 7px 11px;
+  border: 1px solid #ffbd57;
+  border-radius: 999px;
+  background: rgba(255, 247, 223, 0.96);
+  color: #6d4300;
+  font-size: 0.78rem;
+  font-weight: 950;
+  line-height: 1.25;
+  box-shadow: 0 12px 28px rgba(80, 56, 12, 0.16);
+  pointer-events: none;
+}
+
+.tracking-demo-watermark {
+  position: absolute;
+  z-index: 2;
+  right: 22px;
+  bottom: 18px;
+  color: rgba(113, 80, 20, 0.16);
+  font-size: clamp(3.2rem, 12vw, 8rem);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
 .tracking-source-panel {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
@@ -4663,6 +4697,26 @@ h1 {
   border: 1px solid #dfe8d8;
   border-radius: 8px;
   background: #fbfdf9;
+}
+
+.tracking-source-panel--demo {
+  border-color: #ffd78a;
+  background: #fffaf0;
+}
+
+.tracking-source-panel--live {
+  border-color: rgba(117, 189, 37, 0.42);
+  background: #f7fbf3;
+}
+
+.tracking-source-panel--waiting {
+  border-color: #dfe8d8;
+  background: #fbfdf9;
+}
+
+.tracking-source-panel--error {
+  border-color: #ffc18f;
+  background: #fff7ef;
 }
 
 .tracking-source-panel h2,
@@ -4681,6 +4735,118 @@ h1 {
   color: var(--muted);
   font-weight: 800;
   line-height: 1.45;
+}
+
+.tracking-source-current {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracking-source-current strong,
+.tracking-source-current span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-source-current strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.tracking-source-current span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.tracking-source-current--demo {
+  border-color: #ffd78a;
+  background: #fff7df;
+}
+
+.tracking-source-current--error {
+  border-color: #ffc18f;
+  background: #fff1e8;
+}
+
+.tracking-source-overview {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.tracking-source-overview article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracking-source-overview span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tracking-source-overview strong {
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.tracking-source-alerts,
+.tracking-tcars-warnings {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tracking-source-alert {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #ffd78a;
+  border-radius: 8px;
+  background: #fff7df;
+  color: #715014;
+}
+
+.tracking-source-alert--error {
+  border-color: #f0a2a2;
+  background: #fff3f3;
+  color: #8b1e1e;
+}
+
+.tracking-source-alert strong,
+.tracking-source-alert span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-source-alert strong {
+  font-weight: 950;
+}
+
+.tracking-source-alert span {
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.4;
 }
 
 .tracking-source-modes {
@@ -5707,6 +5873,11 @@ h1 {
   background: #fff7ef;
 }
 
+.tracking-tcars-state--warning {
+  border-color: #ffd78a;
+  background: #fffaf0;
+}
+
 .tracking-tcars-mode-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5739,6 +5910,16 @@ h1 {
   border: 1px solid #dfe8d8;
   border-radius: 8px;
   background: #fbfdf9;
+}
+
+.tracking-tcars-live--error {
+  border-color: #ffc18f;
+  background: #fff7ef;
+}
+
+.tracking-tcars-live--waiting {
+  border-color: #ffd78a;
+  background: #fffaf0;
 }
 
 .tracking-tcars-live__head {
@@ -5802,6 +5983,106 @@ h1 {
   font-size: 0.78rem;
   font-weight: 900;
   line-height: 1.2;
+}
+
+.tracking-geofencing-draft {
+  grid-column: 1 / -1;
+}
+
+.tracking-geofencing-notice {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #ffd78a;
+  border-radius: 8px;
+  background: #fff7df;
+  color: #715014;
+}
+
+.tracking-geofencing-notice strong,
+.tracking-geofencing-notice span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-geofencing-notice strong {
+  color: #513708;
+  font-weight: 950;
+}
+
+.tracking-geofencing-notice span {
+  font-weight: 850;
+  line-height: 1.42;
+}
+
+.tracking-geofencing-grid,
+.tracking-geofencing-runner {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tracking-geofencing-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.tracking-geofencing-card,
+.tracking-geofencing-runner article {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracking-geofencing-card--proposal {
+  border-color: rgba(117, 189, 37, 0.34);
+  background: #f3faef;
+}
+
+.tracking-geofencing-card--blocked {
+  border-color: #ffd78a;
+  background: #fffaf0;
+}
+
+.tracking-geofencing-card span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tracking-geofencing-card strong,
+.tracking-geofencing-runner h3,
+.tracking-geofencing-runner p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracking-geofencing-card strong {
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 950;
+}
+
+.tracking-geofencing-runner {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tracking-geofencing-runner h3 {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.tracking-geofencing-runner p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.42;
 }
 
 .tracking-tcars-map-layout {
@@ -6376,6 +6657,12 @@ h1 {
   border-color: #f0a2a2;
   background: #fff3f3;
   color: #8b1e1e;
+}
+
+.tracking-wim-state--safe {
+  border-color: #cde4bf;
+  background: #f6fbf2;
+  color: #356d22;
 }
 
 .tracking-wim-state strong,
@@ -16394,6 +16681,7 @@ body:has(.data-box-page) {
   .tracking-section__head,
   .tracking-source-panel,
   .tracking-source-modes,
+  .tracking-source-overview,
   .tracking-filters,
   .tracking-history-filters,
   .tracking-detail-grid,
@@ -16405,6 +16693,8 @@ body:has(.data-box-page) {
   .tracking-tcars-location-list,
   .tracking-tcars-invalid__head,
   .tracking-tcars-invalid-list,
+  .tracking-geofencing-grid,
+  .tracking-geofencing-runner,
   .tracking-wim-layer__head,
   .tracking-wim-map-panel__head,
   .tracking-wim-summary,
@@ -16761,6 +17051,7 @@ body:has(.data-box-page) {
   .tracking-section__head,
   .tracking-source-panel,
   .tracking-source-modes,
+  .tracking-source-overview,
   .tracking-filters,
   .tracking-history-filters,
   .tracking-detail-grid,
@@ -16770,6 +17061,8 @@ body:has(.data-box-page) {
   .tracking-tcars-map-layout,
   .tracking-tcars-invalid__head,
   .tracking-tcars-invalid-list,
+  .tracking-geofencing-grid,
+  .tracking-geofencing-runner,
   .tracking-wim-layer__head,
   .tracking-wim-map-panel__head,
   .tracking-wim-summary,

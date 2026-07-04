@@ -205,7 +205,7 @@ export async function listVehicleWimAlertEvents(env, limit = 50) {
     return {
       apiStatus: "ready",
       mode: "read-only-pilot",
-      message: "Ostre SMS ani app alerty se zatim neposilaji. Tabulka je pripravena pro budouci cloud runner.",
+      message: "Geofencing alerty jsou připravené pouze jako návrh. Ostré notifikace nejsou aktivní. Tabulka je pripravena pro budouci cloud runner.",
       events: (result.results || []).map(rowToAlertEvent)
     };
   } catch (error) {

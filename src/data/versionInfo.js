@@ -25,6 +25,10 @@ export const versionNews = [
     text: "Filtr Odpad ve Svozových trasách umí vybrat více odpadů najednou, například SKO + PLAST. Tisk, PDF, řidičský displej i interní CSV export používají stejnou kombinaci bez změny DB, Vistosu nebo ostrých tras."
   },
   {
+    title: "Sledovani vozidel: demo/live stabilizace",
+    text: "Modul Sledovani vozidel vyrazne oddeluje demo rezim od T-Cars read-only rezimu, zobrazuje bezpecny souhrn zdroje dat, upozorneni na zastarale polohy a pripravuje geofencing 15 km pouze jako navrh bez ostrych notifikaci."
+  },
+  {
     title: "Šarlota: kontrolní voice zápis",
     text: "Panel Šarloty má chráněný admin test, který přes backend připraví a potvrdí hlasové Hlášení řidičů stejnou logikou jako /api/voice/sarlota. Test používá in-page výběr vozidla, vyžaduje potvrzení kso-ui a už vytvořené hlášení neoznačí jako neúspěch jen kvůli následnému předání."
   },
