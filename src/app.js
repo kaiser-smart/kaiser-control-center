@@ -925,6 +925,7 @@ const collectionRoutesPilotState = {
     mappingStatus: "all"
   },
   sourceSmartDayKey: "all",
+  sourceSmartDefaultApplied: false,
   sourceSmartCustomDate: "",
   sourceSmartStatus: "all",
   sourceDriverSelectedRowKey: "",
@@ -14141,10 +14142,27 @@ function collectionRoutesSourceSmartDateOptions() {
     collectionRoutesSourceSmartOptionFromDate(definition, collectionRoutesSourcePragueDateParts(definition.offsetDays))
   );
   const nextWorkdayParts = collectionRoutesSourceNextWorkdayDateParts();
+  const shouldPromoteNextWorkday = nextWorkdayParts && relativeOptions.some((option) =>
+    ["today", "tomorrow"].includes(option.key) && option.disabled
+  );
+  const promotedNextWorkdayOption = shouldPromoteNextWorkday
+    ? collectionRoutesSourceSmartOptionFromDate({
+        key: "next-workday",
+        label: "nejbližší pracovní svoz",
+        promoted: true
+      }, nextWorkdayParts)
+    : null;
+  const visibleRelativeOptions = promotedNextWorkdayOption
+    ? relativeOptions.filter((option) =>
+        option.disabled || !collectionRoutesSourceSameDateParts(option.dateParts, promotedNextWorkdayOption.dateParts)
+      )
+    : relativeOptions;
   const hasVisibleNextWorkday = nextWorkdayParts && relativeOptions.some((option) =>
     !option.disabled && collectionRoutesSourceSameDateParts(option.dateParts, nextWorkdayParts)
   );
-  const nextWorkdayOptions = nextWorkdayParts && !hasVisibleNextWorkday
+  const nextWorkdayOptions = promotedNextWorkdayOption
+    ? [promotedNextWorkdayOption]
+    : nextWorkdayParts && !hasVisibleNextWorkday
     ? [collectionRoutesSourceSmartOptionFromDate({ key: "next-workday", label: "další pracovní den" }, nextWorkdayParts)]
     : [];
   const customDateParts = collectionRoutesSourceDatePartsFromIso(collectionRoutesPilotState.sourceSmartCustomDate);
@@ -14169,7 +14187,7 @@ function collectionRoutesSourceSmartDateOptions() {
     dayLabel: "všechny dny",
     weekMode: "all",
     disabled: false
-  }, ...relativeOptions, ...nextWorkdayOptions, customOption];
+  }, ...nextWorkdayOptions, ...visibleRelativeOptions, customOption];
 }
 
 function collectionRoutesSourceShortWeekLabel(value) {
@@ -14183,7 +14201,61 @@ function collectionRoutesSourceSmartDateOptionLabel(option) {
   if (option.key === "custom" && !option.dateParts) {
     return "vlastní datum: vyber datum";
   }
+  if (option.disabled && option.dayLabel === "víkend") {
+    return `${option.label}: víkend ${option.dateLabel} / bez svozu`;
+  }
   return `${option.label}: ${option.dayLabel} ${option.dateLabel} / ${collectionRoutesSourceShortWeekLabel(option.weekMode)}`;
+}
+
+function collectionRoutesSourcePromotedNextWorkdayOption(options = collectionRoutesSourceSmartDateOptions()) {
+  return options.find((option) => option.key === "next-workday" && option.promoted && !option.disabled) || null;
+}
+
+function collectionRoutesSourceWeekendWorkdayNotice(options = collectionRoutesSourceSmartDateOptions()) {
+  const today = options.find((option) => option.key === "today");
+  const tomorrow = options.find((option) => option.key === "tomorrow");
+  const promoted = collectionRoutesSourcePromotedNextWorkdayOption(options);
+  if (!promoted || (!today?.disabled && !tomorrow?.disabled)) {
+    return "";
+  }
+
+  const lead = today?.disabled && tomorrow?.disabled
+    ? "Dnes ani zítra není pracovní svoz."
+    : today?.disabled
+      ? "Dnes není pracovní svoz."
+      : "Zítra není pracovní svoz.";
+  const promotedLabel = `${promoted.dayLabel} ${promoted.dateLabel} / ${promoted.weekMode}`;
+  return `
+    <div class="collection-routes-print-filter__workday-notice" role="note">
+      <strong>${escapeHtml(lead)}</strong>
+      <span>Nejbližší pracovní trasa je ${escapeHtml(promotedLabel)}.</span>
+    </div>
+  `;
+}
+
+function collectionRoutesSourceMaybeApplySmartDefaultFilters() {
+  if (collectionRoutesPilotState.sourceSmartDefaultApplied) {
+    return;
+  }
+  collectionRoutesPilotState.sourceSmartDefaultApplied = true;
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const options = collectionRoutesSourceSmartDateOptions();
+  const today = options.find((option) => option.key === "today");
+  const promoted = collectionRoutesSourcePromotedNextWorkdayOption(options);
+  const hasDateFilter = (filters.day || "all") !== "all" || (filters.week || "all") !== "all";
+  if (!today?.disabled || !promoted || hasDateFilter) {
+    return;
+  }
+
+  collectionRoutesPilotState.sourceSmartDayKey = promoted.key;
+  collectionRoutesPilotState.sourceFilters = {
+    ...filters,
+    day: promoted.dayCode,
+    week: promoted.weekMode,
+    vehicle: filters.vehicle || "all",
+    waste: filters.waste || "all",
+    mappingStatus: filters.mappingStatus || "all"
+  };
 }
 
 function collectionRoutesSourceSmartSelectedDayKey(options = collectionRoutesSourceSmartDateOptions()) {
@@ -15327,6 +15399,7 @@ function collectionRoutesSourceFilters() {
 function collectionRoutesSourceSmartFilterPanel() {
   const options = collectionRoutesSourceSmartDateOptions();
   const today = options.find((option) => option.key === "today") || options[0];
+  const workdayNotice = collectionRoutesSourceWeekendWorkdayNotice(options);
   const selectedDayKey = collectionRoutesSourceSmartSelectedDayKey(options);
   const selectedVehicle = collectionRoutesSourceSmartSelectedVehicle();
   const selectedWaste = collectionRoutesSourceSmartSelectedWaste();
@@ -15351,6 +15424,7 @@ function collectionRoutesSourceSmartFilterPanel() {
         </div>
         <span class="employee-card-status employee-card-status--waiting">${collectionRoutesMetricValue(rows.length)} zastávek</span>
       </div>
+      ${workdayNotice}
       <div class="collection-routes-route-filter collection-routes-route-filter--wide collection-routes-route-filter--smart" data-collection-routes-source-smart-panel>
         <label>
           <span>Auto</span>
@@ -21842,6 +21916,7 @@ async function apiJson(path, options = {}) {
 }
 
 function collectionRoutesSourceRoutesApiUrl() {
+  collectionRoutesSourceMaybeApplySmartDefaultFilters();
   const params = new URLSearchParams();
   const filters = collectionRoutesPilotState.sourceFilters || {};
   if (collectionRoutesPilotState.sourceSelectedBatchId) {
@@ -22449,13 +22524,18 @@ async function applyCollectionRoutesSourceSmartFilter(dayKey, vehicle, waste = "
   const wasteLabel = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.find(([value]) => value === safeWaste)?.[1] || "vše";
   const statusLabel = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.find(([value]) => value === safeStatus)?.[1] || "vše";
   if (option.disabled) {
+    const promoted = collectionRoutesSourcePromotedNextWorkdayOption();
+    const promotedMessage = promoted
+      ? ` Nejbližší pracovní trasa je ${promoted.dayLabel} ${promoted.dateLabel} / ${promoted.weekMode}.`
+      : "";
     collectionRoutesPilotState.sourceImportError = option.key === "custom"
       ? "Vyber pracovní datum od pondělí do pátku."
-      : `${option.label} ${option.dateLabel} je víkend. Svozové trasy z 13 Excelů teď obsahují pracovní dny pondělí až pátek.`;
+      : `${option.label} ${option.dateLabel} je víkend a není běžná trasa k tisku.${promotedMessage}`;
     collectionRoutesPilotState.sourceImportMessage = "";
     render();
     return;
   }
+  collectionRoutesPilotState.sourceSmartDefaultApplied = true;
   collectionRoutesPilotState.sourceSmartDayKey = dayKey;
   collectionRoutesPilotState.sourceSmartStatus = safeStatus;
   collectionRoutesPilotState.sourceFilters = {

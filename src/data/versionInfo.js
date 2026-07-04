@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.319"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.320"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: víkendový chytrý filtr",
+    text: "Chytrý filtr už u víkendu nenabízí dnešek nebo zítřek jako běžnou trasu k tisku. Pokud je dnes víkend, Smart rovnou zvýrazní a nastaví nejbližší pracovní svoz z aktuálních 13 Excelů."
+  },
   {
     title: "HP: operační rozcestník",
     text: "Homepage je rozdělená do bloků Dnes / Rychlý provoz, Vozidla a servis, Zákazníci a trasy, Dokumenty a administrativa, Finance a náklady a Systém. Karty si zachovávají původní routing a stavové badge jsou sjednocené."
