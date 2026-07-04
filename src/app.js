@@ -279,6 +279,38 @@ const quickAbsenceMenuItem = {
   disabled: false,
   order: 0
 };
+const HOME_MODULE_SECTIONS = [
+  {
+    id: "quick-operations",
+    title: "Dnes / Rychlý provoz",
+    moduleIds: ["dashboard", "quick-absence", "collection-routes", "driver-reports"]
+  },
+  {
+    id: "vehicles-service",
+    title: "Vozidla a servis",
+    moduleIds: ["fleet", "vehicle-tracking", "service-maintenance", "tyres"]
+  },
+  {
+    id: "customers-routes",
+    title: "Zákazníci a trasy",
+    moduleIds: ["vistos", "sampling-routes"]
+  },
+  {
+    id: "documents-admin",
+    title: "Dokumenty a administrativa",
+    moduleIds: ["data-box", "absence", "reports", "feedback"]
+  },
+  {
+    id: "finance-costs",
+    title: "Finance a náklady",
+    moduleIds: ["costs"]
+  },
+  {
+    id: "system",
+    title: "Systém",
+    moduleIds: ["users", "settings", "system-check"]
+  }
+];
 const NOTIFICATION_CHANNEL_LABELS = {
   email: "E-mail",
   sms: "SMS"
@@ -1366,7 +1398,7 @@ function renderModuleIcon(moduleItem) {
 function statusBadge(moduleItem) {
   const label = moduleStatusLabel(moduleItem);
 
-  if (!label || label === "SPRÁVA") {
+  if (!label) {
     return "";
   }
 
@@ -1389,6 +1421,67 @@ function menuModules(user) {
 
 function routeForModuleCard(moduleItem, user) {
   return moduleItem.route;
+}
+
+function homeModuleCard(moduleItem, user) {
+  return `
+    <a class="module-card" href="${routeHref(routeForModuleCard(moduleItem, user))}" data-link>
+      <span class="module-card__media">
+        <span class="module-icon">${renderModuleIcon(moduleItem)}</span>
+        ${statusBadge(moduleItem)}
+      </span>
+      ${moduleItem.id === DATA_BOX_MODULE_KEY ? dataBoxUnreadCornerBadge(dataBoxTotalUnreadCount(), "Nové datové zprávy") : ""}
+      <span class="module-card__content">
+        <span class="module-card__header">
+          <span class="module-card__title">${moduleItem.title}</span>
+        </span>
+        <span class="module-card__description">${moduleItem.description}</span>
+      </span>
+    </a>
+  `;
+}
+
+function homeModuleSections(modulesForUser, user) {
+  const modulesById = new Map(modulesForUser.map((moduleItem) => [moduleItem.id, moduleItem]));
+  const usedIds = new Set();
+
+  return HOME_MODULE_SECTIONS
+    .map((section) => {
+      const items = section.moduleIds
+        .map((moduleId) => {
+          const moduleItem = modulesById.get(moduleId);
+          if (moduleItem) {
+            usedIds.add(moduleId);
+          }
+          return moduleItem;
+        })
+        .filter(Boolean);
+
+      if (section.id === "system") {
+        for (const moduleItem of modulesForUser) {
+          if (!usedIds.has(moduleItem.id)) {
+            items.push(moduleItem);
+            usedIds.add(moduleItem.id);
+          }
+        }
+      }
+
+      if (!items.length) {
+        return "";
+      }
+
+      return `
+        <section class="module-section module-section--${escapeHtml(section.id)}" aria-labelledby="module-section-${escapeHtml(section.id)}">
+          <div class="module-section__header">
+            <h2 id="module-section-${escapeHtml(section.id)}">${escapeHtml(section.title)}</h2>
+          </div>
+          <div class="module-section__grid">
+            ${items.map((moduleItem) => homeModuleCard(moduleItem, user)).join("")}
+          </div>
+        </section>
+      `;
+    })
+    .join("");
 }
 
 const NEUMORPHIC_ACCENTS = [
@@ -1565,24 +1658,33 @@ function moduleFeedbackItems(moduleId, user) {
 function moduleStatusLabel(moduleItem) {
   return {
     HOTOVO: "Hotovo",
+    Testování: "Testování",
     "připraveno": "Rozpracováno",
-    skeleton: "Nový",
+    skeleton: "Rozpracováno",
     "mock data": "Rozpracováno",
     ROZPRACOVÁN: "Rozpracováno",
-    správa: ""
+    "Read-only pilot": "Read-only",
+    NEOVĚŘENO: "Neověřeno",
+    správa: "Správa"
   }[moduleItem?.status] || moduleItem?.status || "";
 }
 
 function moduleStatusTone(moduleItem) {
-  if (moduleItem?.status === "HOTOVO") {
-    return "done";
-  }
+  return {
+    HOTOVO: "done",
+    Testování: "testing",
+    "Read-only pilot": "readonly",
+    NEOVĚŘENO: "unverified",
+    správa: "admin",
+    skeleton: "progress",
+    "připraveno": "progress",
+    "mock data": "progress",
+    ROZPRACOVÁN: "progress"
+  }[moduleItem?.status] || "progress";
+}
 
-  if (moduleItem?.status === "skeleton") {
-    return "new";
-  }
-
-  return "progress";
+function moduleStatusIsComplete(moduleItem) {
+  return moduleStatusLabel(moduleItem) === "Hotovo";
 }
 
 function moduleFeedbackBoxFor(moduleItem, user, options = {}) {
@@ -4381,26 +4483,8 @@ function homePage(user) {
   const modulesForUser = hasPermission(user, "absence", "create")
     ? [quickAbsenceMenuItem, ...menuModules(user)]
     : menuModules(user);
-  const completedCount = modulesForUser.filter((moduleItem) => moduleItem.status === "HOTOVO").length;
-  const cards = modulesForUser
-    .map(
-      (moduleItem) => `
-        <a class="module-card" href="${routeHref(routeForModuleCard(moduleItem, user))}" data-link>
-          <span class="module-card__media">
-            <span class="module-icon">${renderModuleIcon(moduleItem)}</span>
-            ${statusBadge(moduleItem)}
-          </span>
-          ${moduleItem.id === DATA_BOX_MODULE_KEY ? dataBoxUnreadCornerBadge(dataBoxTotalUnreadCount(), "Nové datové zprávy") : ""}
-          <span class="module-card__content">
-            <span class="module-card__header">
-              <span class="module-card__title">${moduleItem.title}</span>
-            </span>
-            <span class="module-card__description">${moduleItem.description}</span>
-          </span>
-        </a>
-      `
-    )
-    .join("");
+  const completedCount = modulesForUser.filter(moduleStatusIsComplete).length;
+  const moduleSections = homeModuleSections(modulesForUser, user);
 
   return `
     <main class="app-shell module-theme-scope" ${moduleThemeStyleAttribute()}>
@@ -4426,9 +4510,9 @@ function homePage(user) {
           </span>
         </div>
       </section>
-      <section class="module-grid" aria-label="Hlavní moduly">
-        ${cards}
-      </section>
+      <div class="home-module-sections" aria-label="Hlavní moduly">
+        ${moduleSections}
+      </div>
       ${VersionNewsInfo()}
       ${VersionBackupInfo()}
     </main>
