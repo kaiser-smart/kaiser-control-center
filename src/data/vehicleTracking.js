@@ -10,11 +10,16 @@ export const VEHICLE_TRACKING_TCAR_WAITING = "T-Cars napojení čeká na konfigu
 export const VEHICLE_TRACKING_TCAR_UNAVAILABLE = "T-Cars není aktuálně dostupný.";
 export const VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING = "Chybí API dokumentace T-Cars. Prosím dodat dokumentaci nebo potvrdit způsob napojení.";
 export const VEHICLE_TRACKING_TCAR_LAST_KNOWN = "Poslední známá poloha";
+export const VEHICLE_TRACKING_DEMO_MODE_WARNING = "DEMO REŽIM – vozidla na mapě nejsou reálná GPS data.";
+export const VEHICLE_TRACKING_REAL_DATA_UNVERIFIED = "Reálná T-Cars data zatím nejsou v produkci ověřena.";
+export const VEHICLE_TRACKING_STALE_POSITION_WARNING = "Pozice vozidel nemusí být aktuální.";
+export const VEHICLE_TRACKING_API_ERROR_MODE_WARNING = "T-Cars API se nepodařilo načíst. Demo mapa se nezapíná automaticky a zůstává oddělená v demo režimu.";
 export const VEHICLE_TRACKING_TABLET_ROLE = "Primární poloha vozidla je z T-Cars jednotky. Android tablet slouží jako vozidlový terminál.";
 export const VEHICLE_TRACKING_ICON_FOLDER = "/vehicles/icons/";
 export const VEHICLE_TRACKING_WIM_WAITING = "WIM vrstva ceka na D1 migraci nebo API.";
 export const VEHICLE_TRACKING_WIM_PLACEHOLDER_ICON = "Docasna WIM ikona je placeholder. Finalni graficky asset doda Radim nebo Martin.";
 export const VEHICLE_TRACKING_WIM_ALERT_PILOT = "15km SMS a app alert jsou zatim evidovany jako navrh automatizace bez ostreho odesilani.";
+export const VEHICLE_TRACKING_GEOFENCING_NOTICE = "Geofencing alerty jsou připravené pouze jako návrh. Ostré notifikace nejsou aktivní.";
 export const VEHICLE_TRACKING_ICON_WAITING = "Ikony dodány a připraveny v mapě.";
 
 export const VEHICLE_TRACKING_ICON_FORMATS = [

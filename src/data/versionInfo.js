@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.323"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.324"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Sledovani vozidel: demo/live stabilizace",
+    text: "Modul Sledovani vozidel vyrazne oddeluje demo rezim od T-Cars read-only rezimu, zobrazuje bezpecny souhrn zdroje dat, upozorneni na zastarale polohy a pripravuje geofencing 15 km pouze jako navrh bez ostrych notifikaci."
+  },
   {
     title: "Šarlota: kontrolní voice zápis",
     text: "Panel Šarloty má chráněný admin test, který přes backend připraví a potvrdí hlasové Hlášení řidičů stejnou logikou jako /api/voice/sarlota. Test používá in-page výběr vozidla, vyžaduje potvrzení kso-ui a už vytvořené hlášení neoznačí jako neúspěch jen kvůli následnému předání."

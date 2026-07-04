@@ -153,9 +153,12 @@ import {
   VEHICLE_ICON_BY_TYPE,
   VEHICLE_TRACKING_API_ENDPOINTS,
   VEHICLE_TRACKING_API_ERROR,
+  VEHICLE_TRACKING_API_ERROR_MODE_WARNING,
+  VEHICLE_TRACKING_DEMO_MODE_WARNING,
   VEHICLE_TRACKING_SOURCE_MODES,
   VEHICLE_TRACKING_EMPTY,
   VEHICLE_TRACKING_FILTERS,
+  VEHICLE_TRACKING_GEOFENCING_NOTICE,
   VEHICLE_TRACKING_GPS_WAITING,
   VEHICLE_TRACKING_ICON_FOLDER,
   VEHICLE_TRACKING_ICON_FORMATS,
@@ -168,6 +171,8 @@ import {
   VEHICLE_TRACKING_ROUTE,
   VEHICLE_TRACKING_STATUS_FIELDS,
   VEHICLE_TRACKING_STATUS_OPTIONS,
+  VEHICLE_TRACKING_REAL_DATA_UNVERIFIED,
+  VEHICLE_TRACKING_STALE_POSITION_WARNING,
   VEHICLE_TRACKING_TABLET_ROLE,
   VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING,
   VEHICLE_TRACKING_TCAR_LAST_KNOWN,
@@ -1271,6 +1276,7 @@ const vehicleTrackingLiveState = {
   wimSummary: null,
   wimSource: null,
   wimAlertEvents: [],
+  wimAlertError: "",
   selectedWimSiteId: "",
   selectedLocationId: "",
   googleMapNode: null,
@@ -9791,13 +9797,48 @@ function vehicleTrackingTabs(activeView = "map", sourceMode = vehicleTrackingAct
 
 function vehicleTrackingSourceModePanel() {
   const activeMode = vehicleTrackingActiveSourceMode();
+  const status = vehicleTrackingLiveState.status || {};
+  const summary = vehicleTrackingTcarsStatusSummary(status, vehicleTrackingLiveState.error);
+  const modeLabel = activeMode === "demo" ? "DEMO REŽIM" : vehicleTrackingTcarsDataModeLabel(summary);
+  const panelTone = activeMode === "demo"
+    ? "demo"
+    : vehicleTrackingLiveState.error
+      ? "error"
+      : summary.apiStatus === "ready" && summary.isLive && summary.liveVerified
+        ? "live"
+        : "waiting";
+  const overviewItems = activeMode === "demo"
+    ? [
+      { label: "Režim", value: "Demo data" },
+      { label: "Demo vozidla", value: String(DEMO_VEHICLE_TRACKING_VEHICLES.length) },
+      { label: "Živá GPS data", value: "Ne" },
+      { label: "Notifikace", value: "Vypnuté" }
+    ]
+    : [
+      { label: "Režim", value: vehicleTrackingTcarsDataModeLabel(summary) },
+      { label: "Vozidla celkem", value: String(summary.vehiclesTotal) },
+      { label: "Platná poloha", value: String(summary.validLocationCount) },
+      { label: "Bez platné / zastaralé", value: String(summary.withoutValidLocationCount) },
+      { label: "Poslední aktualizace", value: summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "neuvedeno" }
+    ];
+  const operationalMessages = activeMode === "demo"
+    ? [{
+      tone: "warning",
+      title: VEHICLE_TRACKING_DEMO_MODE_WARNING,
+      text: "Demo mapa je oddělená od T-Cars režimu a nesmí být brána jako ostrý provozní dohled."
+    }]
+    : vehicleTrackingTcarsOperationalMessages(status, vehicleTrackingLiveState.error);
 
   return `
-    <section class="tracking-source-panel" aria-labelledby="tracking-source-title">
+    <section class="tracking-source-panel tracking-source-panel--${escapeHtml(panelTone)}" aria-labelledby="tracking-source-title">
       <div>
         <p class="module-detail__eyebrow">Zdroj polohy</p>
         <h2 id="tracking-source-title">T-Cars je primární GPS zdroj</h2>
         <p>${escapeHtml(VEHICLE_TRACKING_TABLET_ROLE)}</p>
+        <div class="tracking-source-current tracking-source-current--${escapeHtml(panelTone)}">
+          <strong>${escapeHtml(modeLabel)}</strong>
+          <span>${escapeHtml(activeMode === "demo" ? VEHICLE_TRACKING_DEMO_MODE_WARNING : "T-Cars stav se načítá pouze přes Smart odpady API.")}</span>
+        </div>
       </div>
       <div class="tracking-source-modes" role="group" aria-label="Režim sledování vozidel">
         ${VEHICLE_TRACKING_SOURCE_MODES.map((mode) => {
@@ -9812,7 +9853,7 @@ function vehicleTrackingSourceModePanel() {
           if (isFallback) {
             return `
             <button
-              class="tracking-source-mode ${isActive ? "tracking-source-mode--active" : ""} ${isFallback ? "tracking-source-mode--passive" : ""}"
+              class="tracking-source-mode tracking-source-mode--${escapeHtml(mode.id)} ${isActive ? "tracking-source-mode--active" : ""} ${isFallback ? "tracking-source-mode--passive" : ""}"
               type="button"
               data-tracking-source-mode="${escapeHtml(mode.id)}"
               aria-pressed="${isActive ? "true" : "false"}"
@@ -9825,7 +9866,7 @@ function vehicleTrackingSourceModePanel() {
 
           return `
             <a
-              class="tracking-source-mode ${isActive ? "tracking-source-mode--active" : ""}"
+              class="tracking-source-mode tracking-source-mode--${escapeHtml(mode.id)} ${isActive ? "tracking-source-mode--active" : ""}"
               href="${escapeHtml(vehicleTrackingSourceModeHash(mode.id))}"
               data-tracking-source-mode="${escapeHtml(mode.id)}"
               aria-pressed="${isActive ? "true" : "false"}"
@@ -9835,6 +9876,24 @@ function vehicleTrackingSourceModePanel() {
           `;
         }).join("")}
       </div>
+      <div class="tracking-source-overview" aria-label="Souhrn zdroje dat">
+        ${overviewItems.map((item) => `
+          <article>
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(item.value)}</strong>
+          </article>
+        `).join("")}
+      </div>
+      ${operationalMessages.length ? `
+        <div class="tracking-source-alerts" aria-label="Bezpečné provozní hlášky">
+          ${operationalMessages.map((message) => `
+            <article class="tracking-source-alert tracking-source-alert--${escapeHtml(message.tone)}">
+              <strong>${escapeHtml(message.title)}</strong>
+              <span>${escapeHtml(message.text)}</span>
+            </article>
+          `).join("")}
+        </div>
+      ` : ""}
     </section>
   `;
 }
@@ -10144,12 +10203,10 @@ function vehicleTrackingDemoControls() {
 }
 
 function vehicleTrackingDemoBanner() {
-  const [title, description] = DEMO_VEHICLE_TRACKING_NOTICE.split(" – ");
-
   return `
     <section class="tracking-demo-banner" aria-label="Označení demo režimu">
-      <strong>${escapeHtml(title)}</strong>
-      <span>${escapeHtml(description || DEMO_VEHICLE_TRACKING_NOTICE)}</span>
+      <strong>${escapeHtml(VEHICLE_TRACKING_DEMO_MODE_WARNING)}</strong>
+      <span>${escapeHtml("Ukázkový pohyb, rychlosti, trasy i výstrahy jsou simulované a nejsou propojené s T-Cars.")}</span>
     </section>
   `;
 }
@@ -10216,6 +10273,8 @@ function vehicleTrackingMapSection(visibleVehicles, selectedVehicle) {
       ${vehicleTrackingDemoScenarioPanel(elapsedMs)}
       ${hasGoogleMapsKey ? "" : vehicleTrackingDemoMapNotice()}
       <div class="tracking-map-shell tracking-demo-map ${hasGoogleMapsKey ? "tracking-demo-map--google" : "tracking-demo-map--fallback"}" data-tracking-demo-map aria-label="Demo mapový pohled sledování vozidel">
+        <div class="tracking-demo-watermark" aria-hidden="true">DEMO</div>
+        <div class="tracking-demo-map-badge" role="status">${escapeHtml(VEHICLE_TRACKING_DEMO_MODE_WARNING)}</div>
         ${hasGoogleMapsKey
           ? `<div class="tracking-google-map" data-tracking-google-map aria-label="Google mapa demo sledování vozidel"></div>`
           : `
@@ -10379,24 +10438,54 @@ function vehicleTrackingDetailSection(selectedVehicle) {
   `;
 }
 
-const VEHICLE_TRACKING_TCARS_MAX_GPS_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const VEHICLE_TRACKING_TCARS_DEFAULT_STALE_GPS_AGE_MS = 30 * 60 * 1000;
 const VEHICLE_TRACKING_TCARS_MARKER_ICON_SRC = "/vehicles/icons/osobni.png";
+
+function vehicleTrackingTcarsSummaryNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : fallback;
+}
+
+function vehicleTrackingTcarsStaleThresholdMs(status = vehicleTrackingLiveState.status || {}) {
+  const seconds = Number(status.summary?.staleAfterSeconds || status.staleAfterSeconds || 0);
+  return seconds > 0
+    ? seconds * 1000
+    : VEHICLE_TRACKING_TCARS_DEFAULT_STALE_GPS_AGE_MS;
+}
+
+function vehicleTrackingTcarsDataModeLabel(summary = {}) {
+  if (summary.isDemo || summary.dataMode === "demo") {
+    return "Demo data";
+  }
+
+  if (summary.apiStatus === "error") {
+    return "Chyba API";
+  }
+
+  if (summary.isLive || summary.dataMode === "live-readonly") {
+    return "Živý read-only zdroj";
+  }
+
+  return "Čeká na živá data";
+}
 
 function vehicleTrackingTcarsConfigItems(status = {}) {
   const config = status.config || {};
-  const locationGroups = vehicleTrackingTcarsLocationGroups(status);
+  const summary = vehicleTrackingTcarsStatusSummary(status);
   return [
     { label: "T-Cars konfigurace", value: status.configured ? "Nastavená" : "Čeká na Cloudflare Secrets" },
+    { label: "Zdroj dat", value: vehicleTrackingTcarsDataModeLabel(summary) },
     { label: "API URL", value: config.baseUrl || "https://webservice.t-cars.cz/v2/" },
     { label: "SOAP endpoint", value: config.endpointUrl || "https://webservice.t-cars.cz/v2/index.php" },
     { label: "Zákaznické číslo", value: config.hasCustomerNumber ? "Uloženo v Cloudflare" : "Čeká na TCARS_CUSTOMER_NUMBER" },
     { label: "Přístupy", value: config.hasCredentials ? "Uloženo v Cloudflare" : "Čeká na TCARS_USERNAME / TCARS_PASSWORD nebo TCARS_API_TOKEN" },
     { label: "API režim", value: config.apiMode || "Čeká na TCARS_API_MODE" },
     { label: "API dokumentace", value: config.documentationStatus === "verified-wsdl" ? "WSDL ověřeno" : "Chybí" },
-    { label: "Načtená vozidla", value: String(locationGroups.vehicleCount) },
-    { label: "Aktuální polohy", value: String(locationGroups.validLocations.length) },
-    { label: "Bez validní polohy", value: String(locationGroups.invalidVehicles.length) },
-    { label: "Poslední načtení", value: status.lastFetchedAt ? formatDateTime(status.lastFetchedAt) : "Zatím neproběhlo" },
+    { label: "Vozidla celkem", value: String(summary.vehiclesTotal) },
+    { label: "Platná aktuální poloha", value: String(summary.validLocationCount) },
+    { label: "Bez platné / zastaralé polohy", value: String(summary.withoutValidLocationCount) },
+    { label: "Zastaralé polohy", value: String(summary.staleLocationCount) },
+    { label: "Poslední aktualizace", value: summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "Zatím neproběhlo" },
     { label: "Interval načítání", value: `${status.pollIntervalSeconds || 60} s` },
     { label: "Zdroj", value: status.source || "T-Cars jednotka" }
   ];
@@ -10495,8 +10584,8 @@ function vehicleTrackingTcarsInvalidReason(location = {}) {
     return "Neplatná poloha z T-Cars";
   }
 
-  if (Date.now() - gpsDate.getTime() > VEHICLE_TRACKING_TCARS_MAX_GPS_AGE_MS) {
-    return "Neplatná poloha z T-Cars";
+  if (Date.now() - gpsDate.getTime() > vehicleTrackingTcarsStaleThresholdMs()) {
+    return VEHICLE_TRACKING_STALE_POSITION_WARNING;
   }
 
   return "";
@@ -10578,6 +10667,93 @@ function vehicleTrackingTcarsLocationGroups(status = {}) {
     validLocations,
     vehicleCount: vehicles.length || allLocations.length
   };
+}
+
+function vehicleTrackingTcarsStatusSummary(status = vehicleTrackingLiveState.status || {}, error = vehicleTrackingLiveState.error || "") {
+  const locationGroups = vehicleTrackingTcarsLocationGroups(status || {});
+  const apiSummary = status?.summary || {};
+  const dataMode = String(status?.dataMode || apiSummary.dataMode || (status?.apiStatus === "ready" ? "live-readonly" : "waiting"));
+  const apiStatus = error ? "error" : (status?.apiStatus || "waiting");
+  const vehiclesTotal = vehicleTrackingTcarsSummaryNumber(
+    apiSummary.vehiclesTotal,
+    locationGroups.vehicleCount
+  );
+  const validLocationCount = vehicleTrackingTcarsSummaryNumber(
+    apiSummary.validLocationCount,
+    locationGroups.validLocations.length
+  );
+  const invalidLocationCount = vehicleTrackingTcarsSummaryNumber(
+    apiSummary.invalidLocationCount,
+    locationGroups.invalidVehicles.filter((item) => item._invalidReason !== VEHICLE_TRACKING_STALE_POSITION_WARNING).length
+  );
+  const staleLocationCount = vehicleTrackingTcarsSummaryNumber(
+    apiSummary.staleLocationCount,
+    locationGroups.invalidVehicles.filter((item) => item._invalidReason === VEHICLE_TRACKING_STALE_POSITION_WARNING).length
+  );
+  const withoutValidLocationCount = vehicleTrackingTcarsSummaryNumber(
+    apiSummary.withoutValidLocationCount,
+    Math.max(0, vehiclesTotal - validLocationCount)
+  );
+  const isDemo = status?.isDemo === true || apiSummary.isDemo === true || dataMode === "demo";
+  const isLive = status?.isLive === true || apiSummary.isLive === true || dataMode === "live-readonly";
+  const liveVerified = status?.liveVerified === true || apiSummary.liveVerified === true;
+
+  return {
+    apiStatus,
+    dataMode,
+    isDemo,
+    isLive,
+    liveVerified,
+    vehiclesTotal,
+    validLocationCount,
+    invalidLocationCount,
+    staleLocationCount,
+    withoutValidLocationCount,
+    lastUpdatedAt: status?.lastUpdatedAt || apiSummary.lastUpdatedAt || status?.lastFetchedAt || "",
+    hasStalePositions: apiSummary.hasStalePositions === true || staleLocationCount > 0,
+    notificationsEnabled: status?.notificationsEnabled === true || apiSummary.notificationsEnabled === true,
+    geofencing: {
+      alertDistanceKm: apiSummary.geofencing?.alertDistanceKm || status?.geofencing?.alertDistanceKm || 15,
+      status: apiSummary.geofencing?.status || status?.geofencing?.status || "draft",
+      mode: apiSummary.geofencing?.mode || status?.geofencing?.mode || "proposal-only",
+      cloudRunner: apiSummary.geofencing?.cloudRunner || status?.geofencing?.cloudRunner || "not-active",
+      auditLog: apiSummary.geofencing?.auditLog || status?.geofencing?.auditLog || "required-before-live",
+      permissionCheck: apiSummary.geofencing?.permissionCheck || status?.geofencing?.permissionCheck || "required-before-live",
+      liveModeRequired: apiSummary.geofencing?.liveModeRequired !== false,
+      notificationsEnabled: apiSummary.geofencing?.notificationsEnabled === true || status?.geofencing?.notificationsEnabled === true
+    }
+  };
+}
+
+function vehicleTrackingTcarsOperationalMessages(status = vehicleTrackingLiveState.status || {}, error = vehicleTrackingLiveState.error || "") {
+  const summary = vehicleTrackingTcarsStatusSummary(status, error);
+  const messages = [];
+
+  if (error) {
+    messages.push({
+      tone: "error",
+      title: VEHICLE_TRACKING_API_ERROR_MODE_WARNING,
+      text: "Zůstáváte v T-Cars režimu s chybou API. Demo režim je dostupný jen po ručním přepnutí."
+    });
+  }
+
+  if (summary.apiStatus !== "ready" || !summary.isLive || !summary.liveVerified) {
+    messages.push({
+      tone: "warning",
+      title: VEHICLE_TRACKING_REAL_DATA_UNVERIFIED,
+      text: "Panel zobrazuje jen bezpečný read-only stav a nepoužívá demo data jako náhradu živého dohledu."
+    });
+  }
+
+  if (summary.hasStalePositions) {
+    messages.push({
+      tone: "warning",
+      title: VEHICLE_TRACKING_STALE_POSITION_WARNING,
+      text: "Zastaralé polohy jsou oddělené od aktuálních markerů a nepočítají se jako živý dohled."
+    });
+  }
+
+  return messages;
 }
 
 function vehicleTrackingTcarsMapBounds(locations = []) {
@@ -11074,6 +11250,9 @@ function vehicleTrackingWimLayerPanel() {
   const source = vehicleTrackingLiveState.wimSource || {};
   const message = error || (loading ? "Nacitam WIM mista z API..." : VEHICLE_TRACKING_WIM_ALERT_PILOT);
   const badge = vehicleTrackingLiveState.wimApiStatus === "ready" ? "Read-only API" : "Ceka na D1";
+  const alertLogMessage = vehicleTrackingLiveState.wimAlertError
+    ? `Alert log: ${vehicleTrackingLiveState.wimAlertError}`
+    : `${VEHICLE_TRACKING_GEOFENCING_NOTICE} Evidovano udalosti: ${vehicleTrackingLiveState.wimAlertEvents.length}.`;
 
   return `
     <section class="tracking-wim-layer" id="tracking-wim-sites" aria-labelledby="tracking-wim-title">
@@ -11087,6 +11266,10 @@ function vehicleTrackingWimLayerPanel() {
       <div class="tracking-wim-state ${error ? "tracking-wim-state--error" : ""}" role="${error ? "alert" : "status"}">
         <strong>${escapeHtml(message)}</strong>
         <span>${escapeHtml(VEHICLE_TRACKING_WIM_PLACEHOLDER_ICON)}</span>
+      </div>
+      <div class="tracking-wim-state ${vehicleTrackingLiveState.wimAlertError ? "tracking-wim-state--error" : "tracking-wim-state--safe"}" role="${vehicleTrackingLiveState.wimAlertError ? "alert" : "status"}">
+        <strong>${escapeHtml(alertLogMessage)}</strong>
+        <span>SMS, push ani app notifikace se z teto vrstvy neposilaji.</span>
       </div>
       <div class="tracking-wim-summary">
         ${vehicleTrackingWimSummaryItems(summary).map((item) => `
@@ -11136,6 +11319,8 @@ function vehicleTrackingTcarsMapSection(status = {}) {
   const locationGroups = vehicleTrackingTcarsLocationGroups(status);
   const locations = locationGroups.validLocations;
   const selectedLocation = vehicleTrackingTcarsSelectedLocation(locations);
+  const summary = vehicleTrackingTcarsStatusSummary(status, vehicleTrackingLiveState.error);
+  const operationalMessages = vehicleTrackingTcarsOperationalMessages(status, vehicleTrackingLiveState.error);
 
   if (loading && !locationGroups.allLocations.length) {
     return `
@@ -11156,22 +11341,35 @@ function vehicleTrackingTcarsMapSection(status = {}) {
   }
 
   return `
-    <div class="tracking-tcars-live">
+    <div class="tracking-tcars-live tracking-tcars-live--${escapeHtml(summary.apiStatus)}">
       <div class="tracking-tcars-live__head">
         <div>
           <h3>T-Cars mapa vozidel</h3>
+          <p>${escapeHtml(summary.isLive && summary.liveVerified ? "Read-only živé polohy z T-Cars API." : VEHICLE_TRACKING_REAL_DATA_UNVERIFIED)}</p>
         </div>
-        <span>${escapeHtml(`${locations.length} validních`)}</span>
+        <span>${escapeHtml(`${summary.validLocationCount} aktuálních`)}</span>
       </div>
+      ${operationalMessages.length ? `
+        <div class="tracking-tcars-warnings" aria-label="Provozní upozornění T-Cars">
+          ${operationalMessages.map((message) => `
+            <article class="tracking-source-alert tracking-source-alert--${escapeHtml(message.tone)}">
+              <strong>${escapeHtml(message.title)}</strong>
+              <span>${escapeHtml(message.text)}</span>
+            </article>
+          `).join("")}
+        </div>
+      ` : ""}
       <div
         class="tracking-tcars-map-summary"
-        data-tracking-tcars-total="${escapeHtml(locationGroups.vehicleCount)}"
-        data-tracking-tcars-valid="${escapeHtml(locations.length)}"
-        data-tracking-tcars-invalid="${escapeHtml(locationGroups.invalidVehicles.length)}"
+        data-tracking-tcars-total="${escapeHtml(summary.vehiclesTotal)}"
+        data-tracking-tcars-valid="${escapeHtml(summary.validLocationCount)}"
+        data-tracking-tcars-invalid="${escapeHtml(summary.withoutValidLocationCount)}"
       >
-        <span>Načtená vozidla: ${escapeHtml(locationGroups.vehicleCount)}</span>
-        <span>Aktuální polohy: ${escapeHtml(locations.length)}</span>
-        <span>Bez validní polohy: ${escapeHtml(locationGroups.invalidVehicles.length)}</span>
+        <span>Vozidla celkem: ${escapeHtml(summary.vehiclesTotal)}</span>
+        <span>Platná aktuální poloha: ${escapeHtml(summary.validLocationCount)}</span>
+        <span>Bez platné / zastaralé polohy: ${escapeHtml(summary.withoutValidLocationCount)}</span>
+        <span>Zastaralé polohy: ${escapeHtml(summary.staleLocationCount)}</span>
+        <span>Poslední aktualizace: ${escapeHtml(summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "neuvedeno")}</span>
       </div>
       ${hasGoogleMapsKey ? `
         <div class="tracking-tcars-map-layout">
@@ -11179,8 +11377,8 @@ function vehicleTrackingTcarsMapSection(status = {}) {
             <div class="tracking-google-map tracking-tcars-google-map" data-tracking-tcars-google-map aria-label="Google mapa T-Cars poloh"></div>
             ${locations.length ? "" : `
               <div class="tracking-tcars-map-overlay" role="status">
-                <strong>Nejsou dostupné žádné validní GPS polohy.</strong>
-                <span>Mapa je centrovaná na Brno.</span>
+                <strong>${escapeHtml(vehicleTrackingLiveState.error ? "T-Cars API se nepodařilo načíst." : "Nejsou dostupné žádné validní GPS polohy.")}</strong>
+                <span>${escapeHtml(vehicleTrackingLiveState.error ? "Demo mapa se nezapíná automaticky. Zkontrolujte API stav výše." : "Mapa je centrovaná na Brno.")}</span>
               </div>
             `}
           </div>
@@ -11228,9 +11426,13 @@ function vehicleTrackingTcarsStatusSection() {
   const loading = vehicleTrackingLiveState.loading && !vehicleTrackingLiveState.loaded;
   const error = vehicleTrackingLiveState.error;
   const message = error || status.message || VEHICLE_TRACKING_TCAR_WAITING;
-  const badge = status.configured ? "T-CARS" : "Čeká na konfiguraci";
+  const summary = vehicleTrackingTcarsStatusSummary(status, error);
+  const badge = error
+    ? "Chyba API"
+    : summary.isLive
+      ? "T-CARS read-only"
+      : "Čeká na live data";
   const itemRows = vehicleTrackingTcarsConfigItems(status);
-  const locationGroups = vehicleTrackingTcarsLocationGroups(status);
 
   return `
     <section class="tracking-section tracking-tcars-section" id="tracking-tcars-status" aria-labelledby="tracking-tcars-status-title">
@@ -11240,9 +11442,11 @@ function vehicleTrackingTcarsStatusSection() {
         "Frontend volá pouze vlastní Smart odpady API. T-Cars přístupy zůstávají v backendu.",
         { badgeText: badge }
       )}
-      <div class="tracking-tcars-state ${error ? "tracking-tcars-state--error" : ""}" role="${error ? "alert" : "status"}">
+      <div class="tracking-tcars-state ${error ? "tracking-tcars-state--error" : ""} ${summary.hasStalePositions ? "tracking-tcars-state--warning" : ""}" role="${error ? "alert" : "status"}">
         <strong>${escapeHtml(loading ? VEHICLE_TRACKING_LOADING : message)}</strong>
         <span>${escapeHtml(status.tabletRole || VEHICLE_TRACKING_TABLET_ROLE)}</span>
+        <small>${escapeHtml(`Zdroj dat: ${vehicleTrackingTcarsDataModeLabel(summary)} · poslední aktualizace: ${summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "neuvedeno"}`)}</small>
+        <small>${escapeHtml(`Vozidla celkem: ${summary.vehiclesTotal} · platná aktuální poloha: ${summary.validLocationCount} · bez platné / zastaralé polohy: ${summary.withoutValidLocationCount}`)}</small>
         ${status.config?.documentationStatus === "missing" ? `<small>${escapeHtml(VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING)}</small>` : ""}
       </div>
       <div class="tracking-detail-grid tracking-detail-grid--compact">
@@ -11252,7 +11456,7 @@ function vehicleTrackingTcarsStatusSection() {
       <div class="tracking-tcars-mode-grid">
         <article>
           <h3>T-Cars data</h3>
-          <p>${escapeHtml(status.apiStatus === "ready" ? `Načteno vozidel: ${locationGroups.vehicleCount}, validních poloh: ${locationGroups.validLocations.length}, bez validní polohy: ${locationGroups.invalidVehicles.length}.` : status.configured ? "Čeká na úspěšné read-only načtení T-Cars." : VEHICLE_TRACKING_TCAR_WAITING)}</p>
+          <p>${escapeHtml(status.apiStatus === "ready" ? `Vozidla celkem: ${summary.vehiclesTotal}, platná aktuální poloha: ${summary.validLocationCount}, bez platné / zastaralé polohy: ${summary.withoutValidLocationCount}.` : status.configured ? "Čeká na úspěšné read-only načtení T-Cars." : VEHICLE_TRACKING_TCAR_WAITING)}</p>
         </article>
         <article>
           <h3>Fallback</h3>
@@ -11350,6 +11554,53 @@ function vehicleTrackingIconSpecSection() {
         <code>${escapeHtml(JSON.stringify(VEHICLE_ICON_BY_TYPE))}</code>
       </div>
     </div>
+  `;
+}
+
+function vehicleTrackingGeofencingDraftPanel() {
+  const statusSummary = vehicleTrackingTcarsStatusSummary(vehicleTrackingLiveState.status || {}, vehicleTrackingLiveState.error);
+  const wimSummary = vehicleTrackingLiveState.wimSummary || {};
+  const alertDistanceKm = statusSummary.geofencing.alertDistanceKm || wimSummary.alertDistanceKm || 15;
+  const guardItems = [
+    { label: "15km pravidlo", value: `${alertDistanceKm} km od WIM bodu`, tone: "proposal" },
+    { label: "Cloud runner", value: "Není aktivní", tone: "blocked" },
+    { label: "Audit log", value: "Povinný před live", tone: "blocked" },
+    { label: "Oprávnění", value: "Kontrola musí být backendem", tone: "blocked" },
+    { label: "Live režim", value: "Musí být jasně zapnutý", tone: "blocked" },
+    { label: "SMS / app alert", value: "Vypnuto", tone: "blocked" }
+  ];
+
+  return `
+    <section class="tracking-section tracking-geofencing-draft" id="tracking-geofencing" aria-labelledby="tracking-geofencing-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-geofencing-title",
+        "Geofencing alerty",
+        "Příprava budoucího 15km upozornění u WIM vah bez ostrého odesílání.",
+        { badgeText: "Návrh bez notifikací" }
+      )}
+      <div class="tracking-geofencing-notice" role="status">
+        <strong>${escapeHtml(VEHICLE_TRACKING_GEOFENCING_NOTICE)}</strong>
+        <span>Bez cloud runneru, audit logu, kontroly oprávnění a jasného zapnutí live režimu se nesmí odeslat SMS, push ani app notifikace.</span>
+      </div>
+      <div class="tracking-geofencing-grid" aria-label="Bezpečnostní podmínky geofencingu">
+        ${guardItems.map((item) => `
+          <article class="tracking-geofencing-card tracking-geofencing-card--${escapeHtml(item.tone)}">
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(item.value)}</strong>
+          </article>
+        `).join("")}
+      </div>
+      <div class="tracking-geofencing-runner">
+        <article>
+          <h3>Budoucí cloud runner</h3>
+          <p>Samostatný worker/cron bude smět vyhodnocovat vzdálenost až po schváleném live režimu, perimetru a deduplikaci alertů.</p>
+        </article>
+        <article>
+          <h3>Audit a oprávnění</h3>
+          <p>Každý budoucí alert musí mít auditní záznam, kontrolu role/oprávnění a informaci, kdo live režim zapnul.</p>
+        </article>
+      </div>
+    </section>
   `;
 }
 
@@ -12278,6 +12529,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
           ${vehicleTrackingTcarsStatusSection()}
           ${vehicleTrackingTcarsPairingSection()}
         `}
+        ${vehicleTrackingGeofencingDraftPanel()}
         ${vehicleTrackingApiSection()}
         <div id="tracking-rules">
           ${vehicleTrackingRulesAutomation(user)}
@@ -23623,6 +23875,7 @@ function resetVehicleTrackingLiveState() {
   vehicleTrackingLiveState.wimSummary = null;
   vehicleTrackingLiveState.wimSource = null;
   vehicleTrackingLiveState.wimAlertEvents = [];
+  vehicleTrackingLiveState.wimAlertError = "";
   vehicleTrackingLiveState.selectedWimSiteId = "";
   vehicleTrackingLiveState.selectedLocationId = "";
 }
@@ -24422,17 +24675,21 @@ async function loadVehicleTrackingWimSites(options = {}) {
 
   vehicleTrackingLiveState.wimLoading = true;
   vehicleTrackingLiveState.wimError = "";
+  vehicleTrackingLiveState.wimAlertError = "";
 
   try {
-    const [sitesResult, alertsResult] = await Promise.all([
-      apiJson("/api/vehicle-tracking/wim-sites"),
-      apiJson("/api/vehicle-tracking/wim-alerts")
-    ]);
+    const sitesResult = await apiJson("/api/vehicle-tracking/wim-sites");
     vehicleTrackingLiveState.wimSites = Array.isArray(sitesResult.sites) ? sitesResult.sites : [];
     vehicleTrackingLiveState.wimSummary = sitesResult.summary || null;
     vehicleTrackingLiveState.wimSource = sitesResult.source || null;
     vehicleTrackingLiveState.wimApiStatus = sitesResult.apiStatus || "ready";
-    vehicleTrackingLiveState.wimAlertEvents = Array.isArray(alertsResult.events) ? alertsResult.events : [];
+    try {
+      const alertsResult = await apiJson("/api/vehicle-tracking/wim-alerts");
+      vehicleTrackingLiveState.wimAlertEvents = Array.isArray(alertsResult.events) ? alertsResult.events : [];
+    } catch (alertError) {
+      vehicleTrackingLiveState.wimAlertEvents = [];
+      vehicleTrackingLiveState.wimAlertError = alertError?.payload?.error || alertError?.message || "WIM alert log zatim neni dostupny.";
+    }
     vehicleTrackingLiveState.wimLoaded = true;
     if (
       vehicleTrackingLiveState.selectedWimSiteId &&
@@ -24448,6 +24705,8 @@ async function loadVehicleTrackingWimSites(options = {}) {
     vehicleTrackingLiveState.wimSummary = null;
     vehicleTrackingLiveState.wimSource = null;
     vehicleTrackingLiveState.wimApiStatus = error?.payload?.apiStatus || "waiting";
+    vehicleTrackingLiveState.wimAlertEvents = [];
+    vehicleTrackingLiveState.wimAlertError = "";
     vehicleTrackingLiveState.wimError = error?.payload?.error || error?.message || VEHICLE_TRACKING_WIM_WAITING;
   } finally {
     vehicleTrackingLiveState.wimLoading = false;

@@ -4476,7 +4476,7 @@ async function handleApi(request, response) {
     sendJson(response, 200, {
       apiStatus: "ready",
       mode: "read-only-pilot",
-      message: "Ostre SMS ani app alerty se v dev mocku neposilaji.",
+      message: "Geofencing alerty jsou připravené pouze jako návrh. Ostré notifikace nejsou aktivní.",
       events: []
     });
     return true;

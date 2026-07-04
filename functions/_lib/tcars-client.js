@@ -4,6 +4,7 @@ const TCARS_SOAP_ACTION_BASE = "https://webservice.t-cars.cz/v2/index.php";
 const TCARS_MIN_POLL_INTERVAL_SECONDS = 30;
 const TCARS_DEFAULT_POLL_INTERVAL_SECONDS = 60;
 const TCARS_REQUEST_TIMEOUT_MS = 15000;
+const TCARS_STALE_LOCATION_SECONDS = 30 * 60;
 
 export class TcarsClientError extends Error {
   constructor(message, status = 503, code = "tcars_unavailable") {
@@ -16,6 +17,120 @@ export class TcarsClientError extends Error {
 
 function present(value) {
   return String(value || "").trim() !== "";
+}
+
+function numberValue(value, fallback = null) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function gpsDateValue(item = {}) {
+  return item.lastGpsAt || item.gpsAt || item.positionAt || item.updatedAt || item.receivedAt || "";
+}
+
+function gpsDate(item = {}) {
+  const value = gpsDateValue(item);
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isCoordinateValid(item = {}) {
+  const latitude = numberValue(item.latitude);
+  const longitude = numberValue(item.longitude);
+  return latitude !== null
+    && longitude !== null
+    && latitude !== 0
+    && longitude !== 0
+    && Math.abs(latitude) <= 90
+    && Math.abs(longitude) <= 180;
+}
+
+function locationKey(item = {}) {
+  const vehicle = item.vehicle || {};
+  return String(
+    item.externalVehicleId
+      || item.tcarsVehicleId
+      || item.vehicleId
+      || item.licensePlate
+      || item.internalNumber
+      || vehicle.externalVehicleId
+      || vehicle.tcarsVehicleId
+      || vehicle.vehicleId
+      || vehicle.licensePlate
+      || vehicle.internalNumber
+      || item.id
+      || vehicle.id
+      || ""
+  ).trim().toLowerCase();
+}
+
+function latestTimestamp(items = []) {
+  const latest = items
+    .map((item) => gpsDate(item))
+    .filter(Boolean)
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  return latest ? latest.toISOString() : "";
+}
+
+function summarizeTcarsData(vehicles = [], locations = [], options = {}) {
+  const staleAfterSeconds = Number(options.staleAfterSeconds || TCARS_STALE_LOCATION_SECONDS);
+  const nowMs = Number(options.nowMs || Date.now());
+  const vehicleKeys = new Set((Array.isArray(vehicles) ? vehicles : []).map(locationKey).filter(Boolean));
+  const validLocations = [];
+  const staleLocations = [];
+  const invalidLocations = [];
+
+  for (const location of Array.isArray(locations) ? locations : []) {
+    const date = gpsDate(location);
+    if (!isCoordinateValid(location) || !date || date.getFullYear() <= 1900) {
+      invalidLocations.push(location);
+      continue;
+    }
+
+    const ageSeconds = Math.max(0, Math.round((nowMs - date.getTime()) / 1000));
+    if (ageSeconds > staleAfterSeconds) {
+      staleLocations.push(location);
+      continue;
+    }
+
+    validLocations.push(location);
+  }
+
+  const validKeys = new Set(validLocations.map(locationKey).filter(Boolean));
+  const staleKeys = new Set(staleLocations.map(locationKey).filter(Boolean));
+  const invalidKeys = new Set(invalidLocations.map(locationKey).filter(Boolean));
+  const totalVehicles = vehicleKeys.size || new Set((Array.isArray(locations) ? locations : []).map(locationKey).filter(Boolean)).size || (vehicles.length || locations.length || 0);
+  const withoutValidLocationCount = Math.max(0, totalVehicles - validKeys.size);
+
+  return {
+    dataMode: options.dataMode || "waiting",
+    isDemo: false,
+    isLive: options.dataMode === "live-readonly",
+    liveVerified: options.dataMode === "live-readonly" && validLocations.length > 0,
+    vehiclesTotal: totalVehicles,
+    validLocationCount: validLocations.length,
+    staleLocationCount: staleLocations.length,
+    invalidLocationCount: Math.max(invalidLocations.length, invalidKeys.size),
+    withoutValidLocationCount,
+    lastUpdatedAt: latestTimestamp(locations),
+    staleAfterSeconds,
+    hasStalePositions: staleLocations.length > 0,
+    notificationsEnabled: false,
+    geofencing: {
+      alertDistanceKm: 15,
+      status: "draft",
+      mode: "proposal-only",
+      cloudRunner: "not-active",
+      auditLog: "required-before-live",
+      permissionCheck: "required-before-live",
+      liveModeRequired: true,
+      notificationsEnabled: false
+    }
+  };
 }
 
 function xmlEscape(value) {
@@ -383,12 +498,25 @@ export async function fetchTcarsPositions(env = {}) {
 }
 
 function tcarsErrorPayload(basePayload, error) {
+  const summary = {
+    ...(basePayload.summary || summarizeTcarsData([], [], { dataMode: "waiting" })),
+    dataMode: "waiting",
+    isLive: false,
+    liveVerified: false,
+    hasStalePositions: false
+  };
+
   return {
     ...basePayload,
     apiStatus: "waiting",
+    dataMode: "waiting",
+    isDemo: false,
+    isLive: false,
+    liveVerified: false,
     waitingReason: error?.code || "tcars_read_failed",
     message: "Nepodařilo se načíst data z T-Cars.",
-    errorCode: error?.code || "tcars_read_failed"
+    errorCode: error?.code || "tcars_read_failed",
+    summary
   };
 }
 
@@ -401,6 +529,10 @@ export function tcarsStatusPayload(env = {}) {
   return {
     provider: "tcars",
     mode: config.configured ? "tcars" : "waiting",
+    dataMode: "waiting",
+    isDemo: false,
+    isLive: false,
+    liveVerified: false,
     apiStatus: "waiting",
     configured: config.configured,
     waitingReason,
@@ -413,6 +545,8 @@ export function tcarsStatusPayload(env = {}) {
     vehicles: [],
     locations: [],
     lastKnownLocations: [],
+    lastUpdatedAt: "",
+    summary: summarizeTcarsData([], [], { dataMode: "waiting" }),
     fallback: {
       enabled: false,
       message: "Poslední známá poloha zatím není k dispozici."
@@ -443,10 +577,18 @@ export async function loadTcarsStatusPayload(env = {}) {
       fetchTcarsPositions(env)
     ]);
     const fetchedAt = new Date().toISOString();
+    const summary = summarizeTcarsData(vehicles, locations, {
+      dataMode: "live-readonly",
+      nowMs: Date.now()
+    });
 
     return {
       ...basePayload,
       mode: "tcars",
+      dataMode: "live-readonly",
+      isDemo: false,
+      isLive: true,
+      liveVerified: summary.liveVerified,
       apiStatus: "ready",
       waitingReason: "",
       message: "T-Cars data byla načtena přes read-only SOAP API.",
@@ -454,6 +596,8 @@ export async function loadTcarsStatusPayload(env = {}) {
       locations,
       lastKnownLocations: locations,
       lastFetchedAt: fetchedAt,
+      lastUpdatedAt: summary.lastUpdatedAt || fetchedAt,
+      summary,
       fallback: {
         enabled: false,
         message: locations.length ? "Fallback není aktivní, T-Cars data jsou dostupná." : "T-Cars nevrátil aktuální polohy."
