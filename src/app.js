@@ -21135,7 +21135,7 @@ function driverReportPartsTable(items) {
             <th>SPZ</th>
             <th>Vozidlo</th>
             <th>VIN</th>
-            <th>Díl</th>
+            <th>Detekovaný díl</th>
             <th>Strana</th>
             <th>OE číslo</th>
             <th>Ověřený díl</th>
