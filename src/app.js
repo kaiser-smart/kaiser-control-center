@@ -282,32 +282,39 @@ const quickAbsenceMenuItem = {
 const HOME_MODULE_SECTIONS = [
   {
     id: "quick-operations",
-    title: "Dnes / Rychlý provoz",
+    eyebrow: "Dnes / Rychlý provoz",
+    title: "Dnes v provozu",
+    description: "Nejdůležitější vstupy pro dnešní práci, svoz, rychlé zadání a hlášení řidičů.",
     moduleIds: ["dashboard", "quick-absence", "collection-routes", "driver-reports"]
   },
   {
     id: "vehicles-service",
     title: "Vozidla a servis",
+    description: "Evidence techniky, provozní stav, údržba a servisní připravenost.",
     moduleIds: ["fleet", "vehicle-tracking", "service-maintenance", "tyres"]
   },
   {
     id: "customers-routes",
     title: "Zákazníci a trasy",
+    description: "Zákaznická data, Vistos a plánování speciálních tras.",
     moduleIds: ["vistos", "sampling-routes"]
   },
   {
     id: "documents-admin",
     title: "Dokumenty a administrativa",
+    description: "Datové zprávy, reporty, připomínky a nepřítomnosti.",
     moduleIds: ["data-box", "absence", "reports", "feedback"]
   },
   {
     id: "finance-costs",
     title: "Finance a náklady",
+    description: "Přehled nákladů podle vozidel, dodavatelů a období.",
     moduleIds: ["costs"]
   },
   {
     id: "system",
     title: "Systém",
+    description: "Správa uživatelů, nastavení, integrace a kontrola systému.",
     moduleIds: ["users", "settings", "system-check"]
   }
 ];
@@ -1423,20 +1430,83 @@ function routeForModuleCard(moduleItem, user) {
   return moduleItem.route;
 }
 
-function homeModuleCard(moduleItem, user) {
+function homeGreetingName(user) {
+  const rawName = String(user?.name || user?.email || "").trim();
+  const firstName = rawName.includes("@")
+    ? rawName.split("@")[0].split(/[._-]/)[0]
+    : rawName.split(/\s+/)[0];
+  const normalized = firstName.trim();
+
+  if (!normalized || normalized.toLowerCase() === "oplustil") {
+    return "Radime";
+  }
+
+  if (normalized.toLowerCase() === "radim") {
+    return "Radime";
+  }
+
+  return normalized;
+}
+
+function homeStatusMetric(value, label, tone = "neutral") {
   return `
-    <a class="module-card" href="${routeHref(routeForModuleCard(moduleItem, user))}" data-link>
-      <span class="module-card__media">
-        <span class="module-icon">${renderModuleIcon(moduleItem)}</span>
+    <span class="home-ops-metric home-ops-metric--${escapeHtml(tone)}">
+      <span class="home-ops-metric__value">${escapeHtml(value)}</span>
+      <span class="home-ops-metric__label">${escapeHtml(label)}</span>
+    </span>
+  `;
+}
+
+function homeDataBoxMetricCount() {
+  const unreadMessages = dataBoxTotalUnreadCount();
+
+  if (dataBoxState.messages.length > 0) {
+    return unreadMessages;
+  }
+
+  return 20;
+}
+
+function homeStatusMetrics(modulesForUser, verifiedCount) {
+  const unreadMessages = homeDataBoxMetricCount();
+  const unverifiedCount = modulesForUser.filter((moduleItem) => moduleStatusLabel(moduleItem) === "Neověřeno").length;
+
+  return [
+    homeStatusMetric(String(modulesForUser.length), "modulů", "green"),
+    homeStatusMetric(String(verifiedCount), verifiedCount === 1 ? "ověřený modul" : "ověřené moduly", "green"),
+    homeStatusMetric(String(unreadMessages), "datových zpráv", "blue"),
+    homeStatusMetric(String(unverifiedCount), unverifiedCount === 1 ? "neověřená kontrola" : "neověřené kontroly", "muted")
+  ].join("");
+}
+
+function homeModuleMeta(moduleItem) {
+  if (moduleItem.id !== DATA_BOX_MODULE_KEY) {
+    return "";
+  }
+
+  const unreadCount = dataBoxTotalUnreadCount();
+  if (unreadCount <= 0) {
+    return "";
+  }
+
+  return `<span class="module-card__meta">${escapeHtml(unreadCount > 99 ? "99+ nových zpráv" : `${unreadCount} nových zpráv`)}</span>`;
+}
+
+function homeModuleCard(moduleItem, user, variant = "standard") {
+  return `
+    <a class="module-card module-card--${escapeHtml(variant)}" href="${routeHref(routeForModuleCard(moduleItem, user))}" data-link>
+      <span class="module-card__top">
+        <span class="module-icon" aria-hidden="true">${renderModuleIcon(moduleItem)}</span>
         ${statusBadge(moduleItem)}
       </span>
-      ${moduleItem.id === DATA_BOX_MODULE_KEY ? dataBoxUnreadCornerBadge(dataBoxTotalUnreadCount(), "Nové datové zprávy") : ""}
       <span class="module-card__content">
         <span class="module-card__header">
-          <span class="module-card__title">${moduleItem.title}</span>
+          <span class="module-card__title">${escapeHtml(moduleItem.title)}</span>
         </span>
-        <span class="module-card__description">${moduleItem.description}</span>
+        <span class="module-card__description">${escapeHtml(moduleItem.description)}</span>
+        ${homeModuleMeta(moduleItem)}
       </span>
+      <span class="module-card__cta" aria-hidden="true">Otevřít</span>
     </a>
   `;
 }
@@ -1470,13 +1540,23 @@ function homeModuleSections(modulesForUser, user) {
         return "";
       }
 
+      const variant = section.id === "quick-operations"
+        ? "primary"
+        : section.id === "system"
+          ? "system"
+          : "standard";
+
       return `
         <section class="module-section module-section--${escapeHtml(section.id)}" aria-labelledby="module-section-${escapeHtml(section.id)}">
           <div class="module-section__header">
-            <h2 id="module-section-${escapeHtml(section.id)}">${escapeHtml(section.title)}</h2>
+            <div class="module-section__title-group">
+              ${section.eyebrow ? `<p class="module-section__eyebrow">${escapeHtml(section.eyebrow)}</p>` : ""}
+              <h2 id="module-section-${escapeHtml(section.id)}">${escapeHtml(section.title)}</h2>
+              <p>${escapeHtml(section.description)}</p>
+            </div>
           </div>
           <div class="module-section__grid">
-            ${items.map((moduleItem) => homeModuleCard(moduleItem, user)).join("")}
+            ${items.map((moduleItem) => homeModuleCard(moduleItem, user, variant)).join("")}
           </div>
         </section>
       `;
@@ -4478,12 +4558,27 @@ function loginPage() {
   `;
 }
 
+function homeOperationsPanel(user, modulesForUser, verifiedCount) {
+  return `
+    <section class="home-ops-panel" aria-labelledby="home-ops-title">
+      <div class="home-ops-panel__copy">
+        <p class="home-ops-panel__eyebrow">Operační centrum</p>
+        <h2 id="home-ops-title">Dobrý den, ${escapeHtml(homeGreetingName(user))}</h2>
+        <p>Tady je dnešní přehled provozu Smart odpady.</p>
+      </div>
+      <div class="home-ops-panel__metrics" aria-label="Rychlý stav systému">
+        ${homeStatusMetrics(modulesForUser, verifiedCount)}
+      </div>
+    </section>
+  `;
+}
+
 function homePage(user) {
   ensureDataBoxData();
   const modulesForUser = hasPermission(user, "absence", "create")
     ? [quickAbsenceMenuItem, ...menuModules(user)]
     : menuModules(user);
-  const completedCount = modulesForUser.filter(moduleStatusIsComplete).length;
+  const verifiedCount = modulesForUser.filter(moduleStatusIsComplete).length;
   const moduleSections = homeModuleSections(modulesForUser, user);
 
   return `
@@ -4499,17 +4594,8 @@ function homePage(user) {
           </h1>
           <p class="home-subtitle">${HOME_SUBTITLE}</p>
         </div>
-        <div class="home-status" aria-label="Stav modulů">
-          <span class="home-status__item">
-            <span class="home-status__value">${modulesForUser.length}</span>
-            <span class="home-status__label">modulů</span>
-          </span>
-          <span class="home-status__item">
-            <span class="home-status__value">${completedCount}</span>
-            <span class="home-status__label">hotový</span>
-          </span>
-        </div>
       </section>
+      ${homeOperationsPanel(user, modulesForUser, verifiedCount)}
       <div class="home-module-sections" aria-label="Hlavní moduly">
         ${moduleSections}
       </div>

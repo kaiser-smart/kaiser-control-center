@@ -1,6 +1,6 @@
 import { versionInfo, versionNews } from "../data/versionInfo.js";
 
-const VERSION_NEWS_PAGE_SIZE = 25;
+const VERSION_NEWS_PAGE_SIZE = 5;
 
 function escapeHtml(value) {
   return String(value ?? "")
