@@ -9800,6 +9800,11 @@ function vehicleTrackingSourceModePanel() {
   const status = vehicleTrackingLiveState.status || {};
   const summary = vehicleTrackingTcarsStatusSummary(status, vehicleTrackingLiveState.error);
   const modeLabel = activeMode === "demo" ? "DEMO REŽIM" : vehicleTrackingTcarsDataModeLabel(summary);
+  const modeDescription = activeMode === "demo"
+    ? VEHICLE_TRACKING_DEMO_MODE_WARNING
+    : summary.isLive || summary.dataMode === "live-readonly"
+      ? VEHICLE_TRACKING_READONLY_EXPLANATION
+      : "T-Cars stav se načítá pouze přes Smart odpady API.";
   const panelTone = activeMode === "demo"
     ? "demo"
     : vehicleTrackingLiveState.error
@@ -9815,10 +9820,10 @@ function vehicleTrackingSourceModePanel() {
       { label: "Notifikace", value: "Vypnuté" }
     ]
     : [
-      { label: "Režim", value: vehicleTrackingTcarsDataModeLabel(summary) },
+      { label: "Režim", value: vehicleTrackingTcarsDataModeLabel(summary), note: summary.isLive || summary.dataMode === "live-readonly" ? VEHICLE_TRACKING_READONLY_EXPLANATION : "" },
       { label: "Vozidla celkem", value: String(summary.vehiclesTotal) },
       { label: "Platná poloha", value: String(summary.validLocationCount) },
-      { label: "Bez platné / zastaralé", value: String(summary.withoutValidLocationCount) },
+      { label: "Bez aktuální polohy", value: String(summary.withoutValidLocationCount), note: VEHICLE_TRACKING_MISSING_CURRENT_POSITION_EXPLANATION },
       { label: "Poslední aktualizace", value: summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "neuvedeno" }
     ];
   const operationalMessages = activeMode === "demo"
@@ -9837,7 +9842,7 @@ function vehicleTrackingSourceModePanel() {
         <p>${escapeHtml(VEHICLE_TRACKING_TABLET_ROLE)}</p>
         <div class="tracking-source-current tracking-source-current--${escapeHtml(panelTone)}">
           <strong>${escapeHtml(modeLabel)}</strong>
-          <span>${escapeHtml(activeMode === "demo" ? VEHICLE_TRACKING_DEMO_MODE_WARNING : "T-Cars stav se načítá pouze přes Smart odpady API.")}</span>
+          <span>${escapeHtml(modeDescription)}</span>
         </div>
       </div>
       <div class="tracking-source-modes" role="group" aria-label="Režim sledování vozidel">
@@ -9881,6 +9886,7 @@ function vehicleTrackingSourceModePanel() {
           <article>
             <span>${escapeHtml(item.label)}</span>
             <strong>${escapeHtml(item.value)}</strong>
+            ${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}
           </article>
         `).join("")}
       </div>
@@ -10439,6 +10445,8 @@ function vehicleTrackingDetailSection(selectedVehicle) {
 }
 
 const VEHICLE_TRACKING_TCARS_DEFAULT_STALE_GPS_AGE_MS = 30 * 60 * 1000;
+const VEHICLE_TRACKING_READONLY_EXPLANATION = "Data pouze čteme. Systém zatím neposílá žádné pokyny, SMS ani notifikace.";
+const VEHICLE_TRACKING_MISSING_CURRENT_POSITION_EXPLANATION = "Vozidlo nemá platnou GPS pozici nebo je poloha zastaralá.";
 const VEHICLE_TRACKING_TCARS_MARKER_ICON_SRC = "/vehicles/icons/osobni.png";
 
 function vehicleTrackingTcarsSummaryNumber(value, fallback = 0) {
@@ -10483,7 +10491,7 @@ function vehicleTrackingTcarsConfigItems(status = {}) {
     { label: "API dokumentace", value: config.documentationStatus === "verified-wsdl" ? "WSDL ověřeno" : "Chybí" },
     { label: "Vozidla celkem", value: String(summary.vehiclesTotal) },
     { label: "Platná aktuální poloha", value: String(summary.validLocationCount) },
-    { label: "Bez platné / zastaralé polohy", value: String(summary.withoutValidLocationCount) },
+    { label: "Bez aktuální polohy", value: String(summary.withoutValidLocationCount) },
     { label: "Zastaralé polohy", value: String(summary.staleLocationCount) },
     { label: "Poslední aktualizace", value: summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "Zatím neproběhlo" },
     { label: "Interval načítání", value: `${status.pollIntervalSeconds || 60} s` },
@@ -11367,7 +11375,7 @@ function vehicleTrackingTcarsMapSection(status = {}) {
       >
         <span>Vozidla celkem: ${escapeHtml(summary.vehiclesTotal)}</span>
         <span>Platná aktuální poloha: ${escapeHtml(summary.validLocationCount)}</span>
-        <span>Bez platné / zastaralé polohy: ${escapeHtml(summary.withoutValidLocationCount)}</span>
+        <span>Bez aktuální polohy: ${escapeHtml(summary.withoutValidLocationCount)}</span>
         <span>Zastaralé polohy: ${escapeHtml(summary.staleLocationCount)}</span>
         <span>Poslední aktualizace: ${escapeHtml(summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "neuvedeno")}</span>
       </div>
@@ -11446,7 +11454,7 @@ function vehicleTrackingTcarsStatusSection() {
         <strong>${escapeHtml(loading ? VEHICLE_TRACKING_LOADING : message)}</strong>
         <span>${escapeHtml(status.tabletRole || VEHICLE_TRACKING_TABLET_ROLE)}</span>
         <small>${escapeHtml(`Zdroj dat: ${vehicleTrackingTcarsDataModeLabel(summary)} · poslední aktualizace: ${summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "neuvedeno"}`)}</small>
-        <small>${escapeHtml(`Vozidla celkem: ${summary.vehiclesTotal} · platná aktuální poloha: ${summary.validLocationCount} · bez platné / zastaralé polohy: ${summary.withoutValidLocationCount}`)}</small>
+        <small>${escapeHtml(`Vozidla celkem: ${summary.vehiclesTotal} · platná aktuální poloha: ${summary.validLocationCount} · bez aktuální polohy: ${summary.withoutValidLocationCount}`)}</small>
         ${status.config?.documentationStatus === "missing" ? `<small>${escapeHtml(VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING)}</small>` : ""}
       </div>
       <div class="tracking-detail-grid tracking-detail-grid--compact">
@@ -11456,7 +11464,7 @@ function vehicleTrackingTcarsStatusSection() {
       <div class="tracking-tcars-mode-grid">
         <article>
           <h3>T-Cars data</h3>
-          <p>${escapeHtml(status.apiStatus === "ready" ? `Vozidla celkem: ${summary.vehiclesTotal}, platná aktuální poloha: ${summary.validLocationCount}, bez platné / zastaralé polohy: ${summary.withoutValidLocationCount}.` : status.configured ? "Čeká na úspěšné read-only načtení T-Cars." : VEHICLE_TRACKING_TCAR_WAITING)}</p>
+          <p>${escapeHtml(status.apiStatus === "ready" ? `Vozidla celkem: ${summary.vehiclesTotal}, platná aktuální poloha: ${summary.validLocationCount}, bez aktuální polohy: ${summary.withoutValidLocationCount}.` : status.configured ? "Čeká na úspěšné read-only načtení T-Cars." : VEHICLE_TRACKING_TCAR_WAITING)}</p>
         </article>
         <article>
           <h3>Fallback</h3>

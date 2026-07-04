@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.324"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.325"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Sledovani vozidel: srozumitelnejsi T-Cars UX",
+    text: "Panel Sledovani vozidel ma lidstejsi popisky T-Cars GPS zdroje, vysvetleni read-only rezimu a jasnejsi statistiku vozidel bez aktualni polohy."
+  },
   {
     title: "Sledovani vozidel: demo/live stabilizace",
     text: "Modul Sledovani vozidel vyrazne oddeluje demo rezim od T-Cars read-only rezimu, zobrazuje bezpecny souhrn zdroje dat, upozorneni na zastarale polohy a pripravuje geofencing 15 km pouze jako navrh bez ostrych notifikaci."
