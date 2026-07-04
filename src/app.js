@@ -426,6 +426,8 @@ const DRIVER_REPORT_PRICE_BOOST_LABELS = {
   waiting_verified_part: "Připraveno po potvrzení kompatibility",
   running: "Vyhledává cenové kandidáty",
   candidates_found: "Kandidáti k ověření",
+  no_results: "Bez ověřených nabídek",
+  provider_not_configured: "Cenový průzkum není nastaven",
   failed: "Chyba průzkumu",
   skipped: "Neprovádí se"
 };
@@ -20698,6 +20700,8 @@ function driverReportPartslink24Section(item) {
   ].filter(Boolean).join("");
   const canPatrikHandoff = driverReportCanHandoffToPatrik(item);
   const handoffBlockReason = driverReportPatrikHandoffBlockReason(item);
+  const canRunPrice = driverReportCanRunPriceBoost(item);
+  const priceLoading = driverReportsState.actionLoading === `${item.id}:price-boost`;
   const ccStatus = pilot.pilotCcStatus || "not_sent";
   const ccLabel = ccStatus === "sent_or_included_by_backend"
     ? "pilotní CC / backend notifikace"
@@ -20758,7 +20762,10 @@ function driverReportPartslink24Section(item) {
           [
             driverReportField("Stav", driverReportPriceBoostLabel(item.priceBoostStatus)),
             driverReportField("Poslední hledání", item.priceBoostCheckedAt ? formatDateTime(item.priceBoostCheckedAt) : "")
-          ].join("") + driverReportInternetOffers(item)
+          ].join("") + driverReportInternetOffers(item),
+          canRunPrice
+            ? `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${priceLoading ? "disabled" : ""}>${priceLoading ? "Vyhledávám..." : "Spustit cenový průzkum"}</button>`
+            : ""
         )}
         ${driverReportVinPilotStep(
           "5. Předání Patrikovi",
@@ -20889,6 +20896,9 @@ function driverReportPartNextStep(item) {
   if (status === "manual_verification_required") return "Ruční kontrola";
   if (status === "provider_not_configured") return "Nastavit provider";
   if (driverReportHasVerifiedPartForPatrikHandoff(item)) {
+    if (driverReportCanRunPriceBoost(item) && ["not_requested", "waiting_verified_part", ""].includes(String(item.priceBoostStatus || ""))) {
+      return "Cenový průzkum";
+    }
     const blockReason = driverReportPatrikHandoffBlockReason(item);
     return driverReportCanHandoffToPatrik(item)
       ? "Předat Patrikovi"
@@ -21055,16 +21065,24 @@ function driverReportCanHandoffToPatrik(item) {
   return !driverReportPatrikHandoffBlockReason(item);
 }
 
+function driverReportCanRunPriceBoost(item) {
+  if (!driverReportCanManage()) return false;
+  if (["ordered", "part_arrived", "service_scheduled", "completed", "canceled"].includes(item.status)) return false;
+  return !driverReportPatrikHandoffBlockReason(item);
+}
+
 function driverReportPartRowActions(item) {
   const loading = driverReportsState.actionLoading;
   const canManage = driverReportCanManage();
   const canRunVin = driverReportCanRunVinPilot(item);
+  const canRunPrice = driverReportCanRunPriceBoost(item);
   const canHandoff = driverReportCanHandoffToPatrik(item);
   return `
     <div class="driver-report-row-actions">
       <button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Otevřít</button>
       ${canRunVin ? `<button class="text-action" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Ověřit podle VIN</button>` : ""}
       ${canRunVin ? `<a class="text-action" href="https://www.partslink24.com/partslink24/startup.do" target="_blank" rel="noopener noreferrer">Partslink24</a>` : ""}
+      ${canRunPrice ? `<button class="text-action" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Cenový průzkum</button>` : ""}
       ${canHandoff ? `<button class="text-action" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Odeslat Patrikovi</button>` : ""}
       ${canManage && ["ordered", "handed_to_ordering"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Díl dorazil</button>` : ""}
       ${canManage && ["part_arrived", "service_scheduled"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Vyřízeno</button>` : ""}
@@ -21488,12 +21506,14 @@ function driverReportActionButtons(item) {
 
   const loading = driverReportsState.actionLoading;
   const canHandoff = driverReportCanHandoffToPatrik(item);
+  const canRunPrice = driverReportCanRunPriceBoost(item);
   const canArrived = ["ordered", "handed_to_ordering"].includes(item.status);
   const canComplete = item.status === "service_scheduled";
   const canCancel = !["completed", "canceled"].includes(item.status);
 
   return `
     <div class="driver-report-actions">
+      <button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${canRunPrice && !loading ? "" : "disabled"}>Cenový průzkum</button>
       <button class="secondary-link" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${canHandoff && !loading ? "" : "disabled"}>Předat Patrikovi</button>
       <button class="secondary-link" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${canArrived && !loading ? "" : "disabled"}>Díl dorazil</button>
       <button class="secondary-link" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${canComplete && !loading ? "" : "disabled"}>Vyřízeno</button>
@@ -22017,6 +22037,7 @@ async function selectDriverReport(id) {
 
 function driverReportActionEndpoint(action) {
   if (action === "handoff") return "handoff-patrik";
+  if (action === "price-boost") return "price-boost";
   if (action === "verify-mercedes") return "verify-mercedes-part";
   if (action === "arrived") return "part-arrived";
   if (action === "complete") return "complete";

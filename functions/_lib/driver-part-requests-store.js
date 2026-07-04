@@ -26,6 +26,10 @@ import {
   partslink24EligibilityForDriverPartRequest
 } from "./partslink24-search-store.js";
 import {
+  isDriverPartPriceSearchConfigured,
+  runDriverPartPriceSearch
+} from "./driver-part-price-search.js";
+import {
   sendDriverPartOrderNotification,
   sendDriverPartReadySms
 } from "./notification-service.js";
@@ -1122,6 +1126,67 @@ function driverPartRequestPatrikHandoffEligibility(item = {}) {
   };
 }
 
+async function saveDriverPartPriceBoostResult(db, user, item, result) {
+  const after = {
+    ...item,
+    priceBoostStatus: cleanString(result.status || "failed"),
+    priceBoostNote: cleanString(result.message),
+    priceBoostCheckedAt: cleanString(result.checkedAt || new Date().toISOString()),
+    priceBoostResultJson: cleanString(result.resultJson),
+    updatedAt: new Date().toISOString()
+  };
+
+  await db.batch([
+    db
+      .prepare(`
+        UPDATE driver_part_requests
+        SET
+          price_boost_status = ?,
+          price_boost_note = ?,
+          price_boost_checked_at = ?,
+          price_boost_result_json = ?,
+          updated_by_user_id = ?,
+          updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(
+        after.priceBoostStatus,
+        nullableString(after.priceBoostNote),
+        nullableString(after.priceBoostCheckedAt),
+        nullableString(after.priceBoostResultJson),
+        nullableString(user?.id),
+        after.updatedAt,
+        item.id
+      ),
+    eventStatement(db, {
+      requestId: item.id,
+      action: "price_boost_search",
+      user,
+      before: item,
+      after,
+      note: after.priceBoostNote || "Cenový průzkum byl zapsaný do hlášení."
+    })
+  ]);
+
+  return after;
+}
+
+export async function runDriverPartPriceBoost(env, user, id) {
+  if (!canManageDriverPartRequests(user)) {
+    throw new DriverPartRequestsStoreError("Nemáte oprávnění spustit cenový průzkum.", 403, "driver_part_price_boost_forbidden");
+  }
+
+  const { db, item } = await requestForUser(env, id, user);
+  const result = await runDriverPartPriceSearch(env, item);
+
+  try {
+    await saveDriverPartPriceBoostResult(db, user, item, result);
+    return getDriverPartRequest(env, user, item.id);
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
 export async function handoffDriverPartRequest(env, user, id, options = {}) {
   if (!canManageDriverPartRequests(user) && options.allowCreatorHandoff !== true) {
     throw new DriverPartRequestsStoreError("Nemáte oprávnění předat díl Patrikovi k ověření.", 403, "driver_part_handoff_forbidden");
@@ -1133,11 +1198,32 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
     throw new DriverPartRequestsStoreError(eligibility.message, 400, eligibility.code);
   }
 
+  let itemForEmail = item;
+  const shouldRunPriceBoost = options.skipPriceBoost !== true
+    && item.priceBoostStatus !== "candidates_found"
+    && item.priceBoostStatus !== "no_results"
+    && item.priceBoostStatus !== "provider_not_configured"
+    && item.priceBoostStatus !== "failed";
+  if (shouldRunPriceBoost || (options.runPriceBoost === true && item.priceBoostStatus !== "candidates_found")) {
+    const priceResult = await runDriverPartPriceSearch(env, item);
+    try {
+      itemForEmail = await saveDriverPartPriceBoostResult(db, user, item, priceResult);
+    } catch (error) {
+      throw dbError(error);
+    }
+  } else if (!isDriverPartPriceSearchConfigured(env) && !item.priceBoostStatus) {
+    itemForEmail = {
+      ...item,
+      priceBoostStatus: "provider_not_configured",
+      priceBoostNote: "Cenový průzkum není nastavený. E-mail Patrikovi obsahuje ruční postup."
+    };
+  }
+
   const patrik = await partsRecipient(env);
   const ccEmail = pilotCcEmail(env);
-  const emailResult = item.patrikEmailStatus === "sent"
+  const emailResult = itemForEmail.patrikEmailStatus === "sent"
     ? { status: "sent", recipientName: patrik.name, cc: ccEmail ? [ccEmail] : [], reused: true }
-    : await sendDriverPartOrderNotification(env, item, {
+    : await sendDriverPartOrderNotification(env, itemForEmail, {
       recipientEmail: patrik.email,
       recipientName: patrik.name,
       ccEmail
@@ -1147,7 +1233,7 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
   const nextStatus = emailOk ? "handed_to_ordering" : item.status;
   const now = new Date().toISOString();
   const after = {
-    ...item,
+    ...itemForEmail,
     status: nextStatus,
     assignedToName: patrik.name,
     assignedToEmail: patrik.email,
@@ -1185,10 +1271,10 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
           item.id
         ),
       eventStatement(db, {
-        requestId: item.id,
+        requestId: itemForEmail.id,
         action: nextStatus === "handed_to_ordering" ? "handoff_to_ordering" : "handoff_failed",
         user,
-        before: item,
+        before: itemForEmail,
         after,
         note: nextStatus === "handed_to_ordering"
           ? "E-mail Patrikovi byl odeslán. Pilotní CC je zahrnuté, pokud je nastavené. SMS Kamilovi se v tomto kroku neposílá."

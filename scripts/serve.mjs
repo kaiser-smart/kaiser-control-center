@@ -69,6 +69,7 @@ import {
   vehicleLicensePlateValue
 } from "../src/data/licensePlate.js";
 import { verifyMercedesPartForRequest } from "../functions/_lib/mercedes-parts-provider.js";
+import { runDriverPartPriceSearch } from "../functions/_lib/driver-part-price-search.js";
 import { DEFAULT_THEME_SETTINGS, normalizeThemeSettings } from "../src/data/themeSettings.js";
 import { modules } from "../src/data/modules.js";
 import {
@@ -1699,6 +1700,32 @@ function handoffMockDriverPartRequest(user, id) {
       }),
       ...(item.events || [])
     ]
+  }));
+}
+
+async function runMockDriverPartPriceBoost(user, id) {
+  if (!mockDriverCanManage(user)) {
+    const error = new Error("Nemáte oprávnění spustit cenový průzkum.");
+    error.status = 403;
+    throw error;
+  }
+  const current = findMockDriverRequest(id);
+  if (!current) {
+    const error = new Error("Požadavek na náhradní díl nebyl nalezen.");
+    error.status = 404;
+    throw error;
+  }
+
+  const result = await runDriverPartPriceSearch(process.env, current);
+  return updateMockDriverRequest(id, (item) => ({
+    ...item,
+    priceBoostStatus: mockDriverClean(result.status || "failed"),
+    priceBoostNote: mockDriverClean(result.message),
+    priceBoostCheckedAt: mockDriverClean(result.checkedAt || new Date().toISOString()),
+    priceBoostResultJson: mockDriverClean(result.resultJson),
+    updatedByUserId: user?.id || "",
+    updatedAt: new Date().toISOString(),
+    events: [mockDriverEvent(item.id, "price_boost_search", user, result.message || "Cenový průzkum byl zapsaný do hlášení."), ...(item.events || [])]
   }));
 }
 
@@ -3457,7 +3484,7 @@ async function handleApi(request, response) {
     return true;
   }
 
-  const driverReportActionMatch = /^\/api\/driver-reports\/([^/]+)\/(handoff-patrik|ordered|part-arrived|schedule-service|complete|cancel|verify-mercedes-part|manual-part)$/.exec(url.pathname);
+  const driverReportActionMatch = /^\/api\/driver-reports\/([^/]+)\/(handoff-patrik|ordered|part-arrived|schedule-service|complete|cancel|verify-mercedes-part|manual-part|price-boost)$/.exec(url.pathname);
   if (driverReportActionMatch && request.method === "POST") {
     const user = currentDevUser(request);
     if (!user) {
@@ -3481,6 +3508,8 @@ async function handleApi(request, response) {
                 ? await verifyMockMercedesDriverPartRequest(user, id)
                 : action === "manual-part"
                   ? updateMockDriverPartManualVerification(user, id, payload)
+                  : action === "price-boost"
+                    ? await runMockDriverPartPriceBoost(user, id)
                   : action === "complete"
                     ? closeMockDriverPartRequest(user, id, payload)
                     : closeMockDriverPartRequest(user, id, { ...payload, cancel: true });

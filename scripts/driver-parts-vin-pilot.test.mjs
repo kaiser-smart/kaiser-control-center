@@ -7,6 +7,10 @@ import {
 import { __test as driverPartRequestInternals } from "../functions/_lib/driver-part-requests-store.js";
 import { __test as notificationInternals } from "../functions/_lib/notification-service.js";
 import { partslink24EligibilityForVehicle } from "../functions/_lib/partslink24-search-store.js";
+import {
+  driverPartPriceSearchEligibility,
+  runDriverPartPriceSearch
+} from "../functions/_lib/driver-part-price-search.js";
 
 const adminUser = {
   id: "radim-oplustil",
@@ -168,6 +172,66 @@ function passengerVehicle(overrides = {}) {
   const eligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item);
   assert.equal(eligibility.allowed, true);
   assert.equal(driverPartRequestInternals.driverPartRequestHasVerifiedPartForHandoff(item), true);
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    probablePart: "výfuk / díl výfuku"
+  };
+  const eligibility = driverPartPriceSearchEligibility(item);
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.code, "driver_part_price_verified_part_required");
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    probablePart: "výfuk / díl výfuku",
+    oePartNumber: "A 257 490 12 00",
+    partName: "tlumič výfuku"
+  };
+  const result = await runDriverPartPriceSearch({}, item);
+  assert.equal(result.status, "provider_not_configured");
+  assert.match(result.message, /Cenový průzkum není nastavený/);
+  assert.deepEqual(result.offers, []);
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    probablePart: "výfuk / díl výfuku",
+    oePartNumber: "A 257 490 12 00",
+    partName: "tlumič výfuku"
+  };
+  const result = await runDriverPartPriceSearch({
+    PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({
+      offers: [
+        { title: "Tlumič výfuku A 257 490 12 00", price: "4 900 Kč", seller: "Dodavatel C", url: "https://example.test/c" },
+        { title: "Použitý tlumič výfuku A 257 490 12 00 bazar", price: "900 Kč", seller: "Bazoš", url: "https://bazos.test/a" },
+        { title: "Tlumič výfuku A 257 490 12 00", price: "3 800 Kč", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Tlumič výfuku A 257 490 12 00 skladem", price: "4 100 Kč", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Nerelevantní koberečky", price: "100 Kč", seller: "Dodavatel X", url: "https://example.test/x" },
+        { title: "Tlumič výfuku A 257 490 12 00", price: "5 200 Kč", seller: "Dodavatel D", url: "https://example.test/d" }
+      ]
+    })
+  }, item);
+  assert.equal(result.status, "candidates_found");
+  assert.equal(result.offers.length, 3);
+  assert.deepEqual(result.offers.map((offer) => offer.seller), ["Dodavatel A", "Dodavatel B", "Dodavatel C"]);
+  assert.equal(result.offers.some((offer) => /bazo/i.test(offer.seller)), false);
 }
 
 {
