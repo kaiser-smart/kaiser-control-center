@@ -497,6 +497,87 @@ async function testVoiceCreateConfirmationGuards() {
   assert.equal(missingVehicle.reply, UNVERIFIED_VEHICLE_MESSAGE);
 }
 
+async function testVoiceCreateFromPickerVehicleId() {
+  const env = envFor({
+    vehicles: [
+      vehicle(),
+      vehicle({
+        id: "vehicle-2",
+        vehicleId: "vehicle-2",
+        internalNumber: "Mercedes Sprinter",
+        model: "Sprinter",
+        licensePlate: "2AB 2345",
+        vin: "WDB22222222222222"
+      }),
+      vehicle({
+        id: "vehicle-3",
+        vehicleId: "vehicle-3",
+        internalNumber: "MAN TGL",
+        model: "TGL",
+        licensePlate: "3AB 2345",
+        vin: "WMA33333333333333"
+      }),
+      vehicle({
+        id: "vehicle-4",
+        vehicleId: "vehicle-4",
+        internalNumber: "Avia",
+        model: "D90",
+        licensePlate: "4AB 2345",
+        vin: "TNA44444444444444"
+      })
+    ]
+  });
+
+  const selectedMatch = await resolveFleetVehiclesForDriver(env, baseUser, {
+    vehicleId: "vehicle-2"
+  });
+  assert.equal(selectedMatch.status, "selected");
+  assert.equal(selectedMatch.vehicle.id, "vehicle-2");
+  assert.equal(selectedMatch.vehicle.licensePlate, "2AB 2345");
+
+  const prepared = await handleSarlotaVoiceRequest(env, baseUser, {
+    mockMode: true,
+    intent: "driver_part_request",
+    text: "Chci nahlásit prasklé přední sklo.",
+    parameters: {
+      defectDescription: "prasklé přední sklo",
+      vehicleId: "vehicle-2"
+    },
+    context: {
+      requestedIntent: "driver_part_request"
+    }
+  }, { authSource: "test" });
+
+  assert.equal(prepared.status, "needs_confirmation");
+  assert.equal(prepared.driverPartRequest, null);
+  assert.equal(prepared.preparedActions.length, 1);
+  assert.equal(prepared.preparedActions[0].parameters.vehicleId, "vehicle-2");
+  assert.equal(prepared.preparedActions[0].parameters.licensePlate, "2AB 2345");
+  assert.equal(prepared.reply.includes("WDB22222222222222"), false);
+
+  const action = prepared.preparedActions[0];
+  const confirmed = await handleSarlotaVoiceRequest(env, baseUser, {
+    mockMode: true,
+    intent: "driver_part_request",
+    text: "ano",
+    parameters: {
+      defectDescription: "prasklé přední sklo",
+      vehicleId: "vehicle-2",
+      confirmed: true,
+      confirmationSource: "kso-ui",
+      confirmationId: action.confirmationId
+    },
+    context: {
+      requestedIntent: "driver_part_request"
+    }
+  }, { authSource: "test" });
+
+  assert.equal(confirmed.status, "created_mock");
+  assert.equal(confirmed.driverPartRequest.status, "mock_created");
+  assert.equal(confirmed.driverPartRequest.licensePlate, "2AB 2345");
+  assert.equal(confirmed.notificationsSent, false);
+}
+
 async function testClientToolsNoHallucinationAndSummary() {
   {
     const tools = createElevenLabsClientTools({
@@ -605,6 +686,7 @@ await testVoiceWebhookContext();
 testElevenLabsWebhookToolSchema();
 await testFleetSpzValidationAndPermissions();
 await testVoiceCreateConfirmationGuards();
+await testVoiceCreateFromPickerVehicleId();
 await testClientToolsNoHallucinationAndSummary();
 
 console.log("sarlota driver reports e2e mock tests passed");

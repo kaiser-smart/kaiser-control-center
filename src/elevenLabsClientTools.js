@@ -672,9 +672,14 @@ export function createElevenLabsClientTools({
 
   function cacheDriverVehiclePickerSelection(key, payload = {}) {
     const sessionKey = cleanString(key) || "active";
+    const vehicle = payload.vehicle && typeof payload.vehicle === "object" ? payload.vehicle : {};
+    const vehicleId = cleanString(payload.vehicleId || vehicle.vehicleId || vehicle.id);
+    const licensePlate = cleanString(vehicle.licensePlate || vehicle.spz);
     driverReportVehiclePickerSelectionCache.set(sessionKey, {
       status: cleanString(payload.status || "selected"),
-      vehicleId: cleanString(payload.vehicleId || payload.vehicle?.vehicleId || payload.vehicle?.id),
+      vehicleId,
+      licensePlate,
+      vehicleName: cleanString(vehicle.displayName || vehicle.vehicleName || vehicle.name),
       vehicleSelectionSource: "backend_ui_picker",
       selectedAt: new Date().toISOString()
     });
@@ -974,6 +979,8 @@ export function createElevenLabsClientTools({
         vehicle: {
           id: vehicleId,
           vehicleId,
+          displayName: cleanString(vehicle?.displayName),
+          licensePlate: cleanString(vehicle?.licensePlate || vehicle?.spz),
           assignedToCurrentDriver: vehicle?.assignedToCurrentDriver === true,
           existsInFleet: vehicle?.existsInFleet === true
         }
@@ -1096,6 +1103,8 @@ export function createElevenLabsClientTools({
         ok: true,
         status: "selected",
         intent: "driver_part_request",
+        nextTool: "create_driver_part_request",
+        nextAction: "call_create_driver_part_request",
         vehicleId: selection.vehicleId,
         vehicleVerified: true,
         vehiclesVerified: false,
@@ -1103,7 +1112,11 @@ export function createElevenLabsClientTools({
         vehicles: [],
         vehiclesCount: 0,
         message: DRIVER_REPORT_VEHICLE_SELECTED_MESSAGE,
-        messageForAssistant: "Vozidlo je vybrané v aplikaci. Nepojmenovávej ho nahlas; pokračuj potvrzením závady.",
+        createDriverPartRequestParameters: {
+          vehicleId: selection.vehicleId,
+          vehicleSelectionSource: selection.vehicleSelectionSource || "backend_ui_picker"
+        },
+        messageForAssistant: "Vozidlo je vybrané v aplikaci. Nepojmenovávej ho nahlas. Pokud už znáš popis závady, hned zavolej create_driver_part_request s vehicleId z tohoto výsledku; samotný výběr vozidla ještě není zápis.",
         answerText: DRIVER_REPORT_VEHICLE_SELECTED_MESSAGE,
         apiStatus: "ready",
         ...toolDiagnosticFields("get_driver_vehicle_picker_selection", "succeeded", [calledDiagnostic])
@@ -1378,6 +1391,12 @@ export function createElevenLabsClientTools({
     if (!vehicleId && cachedSelection?.vehicleId) {
       vehicleId = cachedSelection.vehicleId;
       vehicleSelectionSource = cachedSelection.vehicleSelectionSource || "backend_ui_picker";
+    }
+    if (!licensePlate && cachedSelection?.licensePlate) {
+      licensePlate = cachedSelection.licensePlate;
+    }
+    if (!vehicleName && cachedSelection?.vehicleName) {
+      vehicleName = cachedSelection.vehicleName;
     }
     const vehicleSelectionValid = Boolean(vehicleId || licensePlate);
     if (vehicleSelectionValid) {

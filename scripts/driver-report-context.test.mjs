@@ -583,6 +583,9 @@ for (const [name, payload] of [
     assert.equal(selected.ok, true);
     assert.equal(selected.status, "selected");
     assert.equal(selected.vehicleId, "vehicle-radim-1");
+    assert.equal(selected.nextTool, "create_driver_part_request");
+    assert.equal(selected.nextAction, "call_create_driver_part_request");
+    assert.equal(selected.createDriverPartRequestParameters.vehicleId, "vehicle-radim-1");
     assert.deepEqual(selected.vehicles, []);
   });
 }
@@ -704,7 +707,12 @@ for (const [name, payload] of [
     assert.equal(result.status, "created");
     assert.equal(result.driverPartRequest.reportId, "ND-TEST-1");
     assert.equal(posts.length, 2);
+    assert.equal(posts[0].parameters.vehicleId, "vehicle-radim-1");
+    assert.equal(posts[0].parameters.licensePlate, "1A1 1111");
+    assert.equal(posts[0].parameters.spzValidated, true);
     assert.equal(posts[1].parameters.confirmed, true);
+    assert.equal(posts[1].parameters.vehicleId, "vehicle-radim-1");
+    assert.equal(posts[1].parameters.licensePlate, "1A1 1111");
     assert.equal(posts[1].parameters.confirmationSource, "kso-ui");
     assert.equal(posts[1].parameters.confirmation_source, "kso-ui");
     assert.equal(posts[1].parameters.confirmationId, "driver-part-confirm-safe");

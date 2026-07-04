@@ -1029,8 +1029,7 @@ function vehicleSearchTerms(vehicle = {}) {
 }
 
 function selectDriverVehicleFromCandidates(candidates = [], payload = {}) {
-  const hint = vehicleSelectionHint(payload);
-  if (!hint || !candidates.length) {
+  if (!candidates.length) {
     return null;
   }
 
@@ -1050,6 +1049,11 @@ function selectDriverVehicleFromCandidates(candidates = [], payload = {}) {
     if (byPlate) {
       return byPlate;
     }
+  }
+
+  const hint = vehicleSelectionHint(payload);
+  if (!hint) {
+    return null;
   }
 
   const ordinalIndex = vehicleOrdinalIndex(hint);
