@@ -33,6 +33,10 @@ export const versionNews = [
     text: "Chytrý filtr už u víkendu nenabízí dnešek nebo zítřek jako běžnou trasu k tisku. Pokud je dnes víkend, Smart rovnou zvýrazní a nastaví nejbližší pracovní svoz z aktuálních 13 Excelů."
   },
   {
+    title: "HP: prémiový operační dashboard",
+    text: "Homepage má horní operační panel, výrazný blok Dnes v provozu, popsané sekce, sjednocené karty s CTA Otevřít a klidnější changelog."
+  },
+  {
     title: "HP: operační rozcestník",
     text: "Homepage je rozdělená do bloků Dnes / Rychlý provoz, Vozidla a servis, Zákazníci a trasy, Dokumenty a administrativa, Finance a náklady a Systém. Karty si zachovávají původní routing a stavové badge jsou sjednocené."
   },
