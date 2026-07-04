@@ -1127,7 +1127,7 @@ function driverPartSummaryMessage(draft) {
 
   const part = draft.probablePart || "náhradní díl";
   const vehicle = draft.vehicleId || draft.licensePlate ? "na vybraném vozidle" : "bez jasně vybraného vozidla";
-  return `Rozumím. Chceš nahlásit ${part} ${vehicle}. Potvrď prosím, že vozidlo sedí, a pošli fotku poškození. Mám to uložit a předat k objednání dílu?`;
+  return `Rozumím. Chceš nahlásit ${part} ${vehicle}. Potvrď prosím, že vozidlo sedí, a pošli fotku poškození. Mám to uložit a předat Patrikovi k ověření dílu?`;
 }
 
 function driverPartPreparedAction(draft, user) {
@@ -1390,7 +1390,7 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
       status: handedOff ? "created" : "created_notification_pending",
       verified: true,
       message: handedOff
-        ? "Hotovo. Hlášení jsem zapsala a předala k objednání dílu."
+        ? "Hotovo. Hlášení jsem zapsala a předala Patrikovi k ověření dílu. Nic nebylo automaticky objednáno."
         : "Hlášení jsem zapsala, ale předání není hotové. Zkontroluj prosím notifikace v detailu.",
       preparedActions: [],
       driverPartRequest: {

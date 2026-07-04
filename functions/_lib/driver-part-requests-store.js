@@ -27,8 +27,7 @@ import {
 } from "./partslink24-search-store.js";
 import {
   sendDriverPartOrderNotification,
-  sendDriverPartReadySms,
-  sendDriverPartServiceTechSms
+  sendDriverPartReadySms
 } from "./notification-service.js";
 import { hasPermission, isFullAccessRole, normalizeRole } from "../../src/permissions.js";
 
@@ -50,7 +49,7 @@ export const DRIVER_PART_REQUEST_STATUS_LABELS = {
   new_report: "Nové hlášení",
   waiting_part_identification: "Čeká na identifikaci dílu",
   part_identified: "Díl identifikován",
-  handed_to_ordering: "Předáno k objednání",
+  handed_to_ordering: "Předáno Patrikovi k ověření",
   ordered: "Objednáno",
   part_arrived: "Díl dorazil",
   service_scheduled: "Servis naplánován",
@@ -705,7 +704,7 @@ export async function getDriverPartRequest(env, user, id) {
         providerCheckedAt: partslink24VinSearch?.createdAt || "",
         internetOffers: [],
         patrikEmailStatus: item.patrikEmailStatus || "not_sent",
-        pilotCcStatus: item.patrikEmailStatus === "sent" ? "sent_or_included_by_backend" : "not_sent",
+        pilotCcStatus: pilotCcStatus(env, item),
         resolutionStatus: item.status
       }
     };
@@ -1063,15 +1062,7 @@ async function partsRecipient(env) {
     userIds: ["patrik-istvanek"],
     nameIncludes: ["patrik istvanek"],
     fallbackName: "Patrik Ištvánek",
-    fallbackEmail: cleanString(env.PATRICK_PARTS_EMAIL || env.PARTS_ORDER_EMAIL)
-  });
-}
-
-async function serviceTechRecipient(env) {
-  return resolvePersonContact(env, {
-    nameIncludes: ["kamil"],
-    fallbackName: "Kamil",
-    fallbackPhone: cleanString(env.KAMIL_SERVICE_PHONE || env.SERVICE_TECH_PHONE)
+    fallbackEmail: cleanString(env.PARTS_PATRIK_EMAIL || env.PARTS_PATRICK_EMAIL || env.PATRICK_PARTS_EMAIL || env.PARTS_ORDER_EMAIL)
   });
 }
 
@@ -1079,37 +1070,81 @@ function notificationSent(result) {
   return NOTIFICATION_DONE_STATUSES.has(cleanString(result?.status));
 }
 
+function pilotCcEmail(env) {
+  return cleanString(env.PARTS_PILOT_CC_EMAIL || "oplustil@kaiserservis.cz");
+}
+
+function pilotCcStatus(env, item = {}) {
+  const configured = Boolean(pilotCcEmail(env));
+  if (item.patrikEmailStatus === "sent") {
+    return configured ? "sent_or_included_by_backend" : "not_configured";
+  }
+  return configured ? "not_sent" : "not_configured";
+}
+
+function driverPartRequestHasVerifiedPartForHandoff(item = {}) {
+  return Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partOrderNumber);
+}
+
+function driverPartRequestPatrikHandoffEligibility(item = {}) {
+  if (!item.licensePlate || !item.vehicleName) {
+    return {
+      allowed: false,
+      code: "driver_part_vehicle_required",
+      message: "Bez SPZ nebo vozidla nelze odeslat e-mail Patrikovi."
+    };
+  }
+  if (item.licensePlateVerified !== true || item.manualVehicleReview === true) {
+    return {
+      allowed: false,
+      code: "driver_part_vehicle_not_verified",
+      message: "Vozidlo není bezpečně ověřené proti Vozovému parku. Nejdřív proveď ruční kontrolu."
+    };
+  }
+  if (!item.vin) {
+    return {
+      allowed: false,
+      code: "driver_part_vin_required",
+      message: "Bez VIN nelze předat díl Patrikovi v pilotu podle VIN."
+    };
+  }
+  if (!driverPartRequestHasVerifiedPartForHandoff(item)) {
+    return {
+      allowed: false,
+      code: "driver_part_verified_part_required",
+      message: "Nejdřív ověř díl nebo OE číslo. Pravděpodobný díl nestačí pro e-mail Patrikovi."
+    };
+  }
+  return {
+    allowed: true,
+    code: "",
+    message: ""
+  };
+}
+
 export async function handoffDriverPartRequest(env, user, id, options = {}) {
   if (!canManageDriverPartRequests(user) && options.allowCreatorHandoff !== true) {
-    throw new DriverPartRequestsStoreError("Nemáte oprávnění předat díl k objednání.", 403, "driver_part_handoff_forbidden");
+    throw new DriverPartRequestsStoreError("Nemáte oprávnění předat díl Patrikovi k ověření.", 403, "driver_part_handoff_forbidden");
   }
 
   const { db, item } = await requestForUser(env, id, user);
-  if (!item.licensePlate || !item.vehicleName) {
-    throw new DriverPartRequestsStoreError("Bez SPZ nebo vozidla nelze odeslat e-mail k objednání.", 400, "driver_part_vehicle_required");
-  }
-  if (!item.probablePart && !item.verifiedPart) {
-    throw new DriverPartRequestsStoreError("Nejdřív doplňte pravděpodobný nebo ověřený díl.", 400, "driver_part_probable_part_required");
+  const eligibility = driverPartRequestPatrikHandoffEligibility(item);
+  if (!eligibility.allowed) {
+    throw new DriverPartRequestsStoreError(eligibility.message, 400, eligibility.code);
   }
 
   const patrik = await partsRecipient(env);
-  const kamil = await serviceTechRecipient(env);
+  const ccEmail = pilotCcEmail(env);
   const emailResult = item.patrikEmailStatus === "sent"
-    ? { status: "sent", recipientName: patrik.name, reused: true }
+    ? { status: "sent", recipientName: patrik.name, cc: ccEmail ? [ccEmail] : [], reused: true }
     : await sendDriverPartOrderNotification(env, item, {
       recipientEmail: patrik.email,
-      recipientName: patrik.name
-    });
-  const smsResult = item.kamilSmsStatus === "sent"
-    ? { status: "sent", recipientName: kamil.name, reused: true }
-    : await sendDriverPartServiceTechSms(env, item, {
-      recipientPhone: kamil.phone,
-      recipientName: kamil.name
+      recipientName: patrik.name,
+      ccEmail
     });
 
   const emailOk = notificationSent(emailResult);
-  const smsOk = notificationSent(smsResult);
-  const nextStatus = emailOk && smsOk ? "handed_to_ordering" : item.status;
+  const nextStatus = emailOk ? "handed_to_ordering" : item.status;
   const now = new Date().toISOString();
   const after = {
     ...item,
@@ -1118,11 +1153,7 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
     assignedToEmail: patrik.email,
     patrikEmailStatus: emailResult.status,
     patrikEmailError: emailResult.errorMessage || "",
-    kamilSmsStatus: smsResult.status,
-    kamilSmsRecipient: kamil.phone,
-    kamilSmsError: smsResult.errorMessage || "",
     handedOffToPatrikAt: emailOk ? (item.handedOffToPatrikAt || now) : item.handedOffToPatrikAt,
-    kamilSmsSentAt: smsOk ? (item.kamilSmsSentAt || now) : item.kamilSmsSentAt,
     updatedAt: now
   };
 
@@ -1136,12 +1167,8 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
             assigned_to_name = ?,
             assigned_to_email = ?,
             handed_off_to_patrik_at = ?,
-            kamil_sms_sent_at = ?,
             patrik_email_status = ?,
             patrik_email_error = ?,
-            kamil_sms_status = ?,
-            kamil_sms_recipient = ?,
-            kamil_sms_error = ?,
             updated_by_user_id = ?,
             updated_at = ?
           WHERE id = ?
@@ -1151,12 +1178,8 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
           nullableString(patrik.name),
           nullableString(patrik.email),
           nullableString(after.handedOffToPatrikAt),
-          nullableString(after.kamilSmsSentAt),
           cleanString(emailResult.status || "failed"),
           nullableString(emailResult.errorMessage),
-          cleanString(smsResult.status || "failed"),
-          nullableString(kamil.phone),
-          nullableString(smsResult.errorMessage),
           nullableString(user?.id),
           now,
           item.id
@@ -1168,13 +1191,13 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
         before: item,
         after,
         note: nextStatus === "handed_to_ordering"
-          ? "E-mail Patrikovi a SMS Kamilovi byly odeslány."
-          : "Předání není hotové, některá notifikace neodešla.",
+          ? "E-mail Patrikovi byl odeslán. Pilotní CC je zahrnuté, pokud je nastavené. SMS Kamilovi se v tomto kroku neposílá."
+          : "Předání není hotové, e-mail Patrikovi neodešel.",
         notification: {
-          channel: "email+sms",
-          recipient: [patrik.email, kamil.phone].filter(Boolean).join(", "),
+          channel: "email",
+          recipient: [patrik.email, ccEmail ? `cc: ${ccEmail}` : ""].filter(Boolean).join(", "),
           status: nextStatus === "handed_to_ordering" ? "sent" : "failed",
-          errorMessage: [emailResult.errorMessage, smsResult.errorMessage].filter(Boolean).join(" | ")
+          errorMessage: cleanString(emailResult.errorMessage)
         }
       })
     ]);
@@ -1706,5 +1729,8 @@ export function driverPartRequestPermissionSummary(user) {
 
 export const __test = {
   driverPartVinPilotState,
+  driverPartRequestHasVerifiedPartForHandoff,
+  driverPartRequestPatrikHandoffEligibility,
+  pilotCcStatus,
   normalizeCreatePayload
 };

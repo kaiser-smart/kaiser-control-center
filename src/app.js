@@ -346,7 +346,7 @@ const NOTIFICATION_TYPE_LABELS = {
   module_feedback_resolved_email: "Připomínka vyřešena",
   version_news_email: "Co je nového",
   employee_medical_exam_reminder: "Lékařská prohlídka",
-  driver_part_order_email: "ND objednání e-mail",
+  driver_part_order_email: "ND ověření e-mail",
   driver_part_service_tech_sms: "ND SMS servis",
   driver_part_ready_driver_sms: "ND SMS řidiči"
 };
@@ -367,7 +367,7 @@ const DRIVER_REPORT_STATUS_LABELS = {
   new_report: "Nové hlášení",
   waiting_part_identification: "Čeká na identifikaci dílu",
   part_identified: "Díl identifikován",
-  handed_to_ordering: "Předáno k objednání",
+  handed_to_ordering: "Předáno Patrikovi k ověření",
   ordered: "Objednáno",
   part_arrived: "Díl dorazil",
   service_scheduled: "Servis naplánován",
@@ -15047,6 +15047,14 @@ function collectionRoutesSourceSelectedBatchLabel() {
   return formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "čeká na import";
 }
 
+function collectionRoutesSourceBatchSourceLabel(batch = collectionRoutesSourceSelectedBatch()) {
+  const source = String(batch?.metadata?.source || batch?.source || "").trim();
+  if (source.includes("repair-workbook")) {
+    return "13 Excelů: opravný sešit";
+  }
+  return "13 Excelů";
+}
+
 function collectionRoutesSourceSourceLabel(row) {
   return `${row?.sourceFile || "-"} / ${row?.sourceSheet || "-"} / ř. ${row?.sourceRowNumber || "-"}`;
 }
@@ -15119,7 +15127,7 @@ function collectionRoutesSourceSummaryCards() {
     null;
   return `
     <div class="collection-routes-stats" aria-label="Souhrn Svozových tras z 13 Excelů">
-      <article><span>Zdroj</span><strong>13 Excelů</strong></article>
+      <article><span>Zdroj</span><strong>${escapeHtml(collectionRoutesSourceBatchSourceLabel(latestBatch))}</strong></article>
       <article><span>Import</span><strong>${escapeHtml(formatDateTime(latestBatch?.createdAt) || "čeká")}</strong></article>
       <article><span>Řádky ve filtru</span><strong>${collectionRoutesMetricValue(summary.rowCount || rows.length)}</strong></article>
       <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(summary.containerCount)}</strong></article>
@@ -15762,7 +15770,7 @@ function collectionRoutesSourceImportCards() {
       ${batches.map((batch) => `
         <article class="collection-routes-list-item">
           <div>
-            <strong>${escapeHtml(batch.source || "13-excel")}</strong>
+            <strong>${escapeHtml(collectionRoutesSourceBatchSourceLabel(batch))}</strong>
             <span>${escapeHtml(formatDateTime(batch.createdAt) || "-")} · ${escapeHtml(batch.status || "preview")}</span>
           </div>
           <p>${escapeHtml(batch.message || "Import bez zprávy.")}</p>
@@ -16031,17 +16039,17 @@ function collectionRoutesSourceDataSection(user) {
 
       <div class="collection-routes-phase-note collection-routes-source-block collection-routes-source-block--excel">
         <strong>13 Excelů je vstupní rozsah pro tuto sekci.</strong>
-        <span>Řádky drží původní soubor, list, řádek a pořadí. Vistos match je ruční read-only kontrola nad těmito řádky a nesmí přidat zákazníky mimo tento zdroj.</span>
+        <span>Řádky drží původní soubor, list, řádek a pořadí. Import umí původních 13 Excelů i jeden opravný sešit ze Smartu; Vistos match je read-only kontrola a nesmí přidat zákazníky mimo tento zdroj.</span>
       </div>
 
       ${canImport ? `
         <form class="collection-routes-import-form collection-routes-import-form--file" data-collection-routes-source-import-form>
           <label>
-            <span>13 Excel souborů svozových tras</span>
+            <span>13 Excelů nebo jeden opravný sešit</span>
             <input type="file" name="files" accept=".xlsx,.csv,.tsv,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values" multiple>
           </label>
           <button class="primary-action" type="submit" ${collectionRoutesPilotState.sourceImportLoading ? "disabled" : ""}>
-            ${collectionRoutesPilotState.sourceImportLoading ? "Ukládám read-only zdroj..." : "Nahrát 13 Excelů do Svozových tras"}
+            ${collectionRoutesPilotState.sourceImportLoading ? "Ukládám read-only zdroj..." : "Nahrát zdroj do Svozových tras"}
           </button>
         </form>
       ` : `
@@ -20685,9 +20693,6 @@ function driverReportPartslink24Section(item) {
     ? `<button class="secondary-link" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>${loading ? "Připravuji..." : "Ověřit díl podle VIN"}</button>`
     : "";
   const showProviderLinks = allowed === true;
-  const handoffStatus = pilot.patrikEmailStatus === "sent"
-    ? "email_sent"
-    : allowed ? "email_ready" : pilotStatus;
   const providerActions = [
     searchButton,
     showProviderLinks ? `<a class="secondary-link" href="${escapeHtml(partslink24Url)}" target="_blank" rel="noopener noreferrer">Otevřít Partslink24</a>` : "",
@@ -20699,6 +20704,17 @@ function driverReportPartslink24Section(item) {
       : "",
     workflowUrl ? `<a class="secondary-link" href="${escapeHtml(workflowUrl)}" target="_blank" rel="noopener noreferrer">Otevřít runner</a>` : ""
   ].filter(Boolean).join("");
+  const canPatrikHandoff = driverReportCanHandoffToPatrik(item);
+  const handoffBlockReason = driverReportPatrikHandoffBlockReason(item);
+  const ccStatus = pilot.pilotCcStatus || "not_sent";
+  const ccLabel = ccStatus === "sent_or_included_by_backend"
+    ? "pilotní CC / backend notifikace"
+    : ccStatus === "not_configured"
+      ? "není nastaveno"
+      : "čeká na odeslání";
+  const handoffStatus = pilot.patrikEmailStatus === "sent"
+    ? "email_sent"
+    : canPatrikHandoff ? "email_ready" : "waiting_verified_oe";
 
   return `
     <section class="driver-report-part driver-report-partslink24" aria-label="Náhradní díl podle VIN">
@@ -20755,12 +20771,12 @@ function driverReportPartslink24Section(item) {
         ${driverReportVinPilotStep(
           "5. Předání Patrikovi",
           handoffStatus,
-          allowed
+          canPatrikHandoff
             ? "Pilotní návrh AI Boost. Nic nebylo objednáno. Patrik musí vše ručně ověřit před nákupem."
-            : "Předání Patrikovi se zpřístupní až po bezpečném ověření vozidla, VIN a dílu.",
+            : (handoffBlockReason || "Předání Patrikovi se zpřístupní až po bezpečném ověření vozidla, VIN a dílu."),
           [
             driverReportField("E-mail Patrikovi", driverReportNotificationLabel(item.patrikEmailStatus)),
-            driverReportField("CC Radim", pilot.pilotCcStatus === "sent_or_included_by_backend" ? "pilotní CC / backend notifikace" : "čeká na odeslání"),
+            driverReportField("CC Radim", ccLabel),
             driverReportField("Předáno", item.handedOffToPatrikAt ? formatDateTime(item.handedOffToPatrikAt) : "")
           ].join("")
         )}
@@ -20810,6 +20826,8 @@ function driverReportIsPartRelated(item) {
     text.includes("náraz") ||
     text.includes("blat") ||
     text.includes("čidlo") ||
+    text.includes("výfuk") ||
+    text.includes("vyfuk") ||
     item.partAiCandidate === true ||
     item.partVinPilot ||
     item.partslink24Eligibility ||
@@ -20878,7 +20896,12 @@ function driverReportPartNextStep(item) {
   if (status === "waiting_vin") return "Doplnit VIN";
   if (status === "manual_verification_required") return "Ruční kontrola";
   if (status === "provider_not_configured") return "Nastavit provider";
-  if (item.oePartNumber || item.partName) return "Předat Patrikovi";
+  if (driverReportHasVerifiedPartForPatrikHandoff(item)) {
+    const blockReason = driverReportPatrikHandoffBlockReason(item);
+    return driverReportCanHandoffToPatrik(item)
+      ? "Předat Patrikovi"
+      : blockReason || "Čeká na oprávněné předání";
+  }
   if (item.partVinPilot?.status === "ready_for_vin_verification") return "Ověřit podle VIN";
   return driverReportNextStep(item);
 }
@@ -21000,14 +21023,14 @@ function driverReportFilters(items) {
 function driverReportRowActions(item) {
   const loading = driverReportsState.actionLoading;
   const canManage = driverReportCanManage();
-  const canHandoff = canManage && (!["handed_to_ordering", "ordered", "part_arrived", "service_scheduled", "completed", "canceled"].includes(item.status) || item.patrikEmailStatus !== "sent");
+  const canHandoff = driverReportCanHandoffToPatrik(item);
   const canArrived = canManage && ["ordered", "handed_to_ordering"].includes(item.status);
   const canComplete = canManage && ["part_arrived", "service_scheduled"].includes(item.status);
   return `
     <div class="driver-report-row-actions">
       <button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Otevřít</button>
       ${canManage ? `<button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Doplnit</button>` : ""}
-      ${canHandoff ? `<button class="text-action" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Předat servisu</button>` : ""}
+      ${canHandoff ? `<button class="text-action" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Předat Patrikovi</button>` : ""}
       ${canComplete ? `<button class="text-action" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Vyřízeno</button>` : ""}
       ${canArrived ? `<button class="text-action" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Díl dorazil</button>` : ""}
     </div>
@@ -21021,24 +21044,30 @@ function driverReportCanRunVinPilot(item) {
     && eligibility.allowed === true;
 }
 
+function driverReportHasVerifiedPartForPatrikHandoff(item) {
+  return Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partOrderNumber);
+}
+
+function driverReportPatrikHandoffBlockReason(item) {
+  if (!item.licensePlate || !item.vehicleName) return "Předání čeká na doplnění SPZ a vozidla.";
+  if (item.licensePlateVerified !== true || item.manualVehicleReview === true) return "Předání čeká na ruční ověření vozidla proti Vozovému parku.";
+  if (!item.vin) return "Předání čeká na VIN.";
+  if (!driverReportHasVerifiedPartForPatrikHandoff(item)) return "Předání čeká na ověřený díl nebo OE číslo.";
+  return "";
+}
+
+function driverReportCanHandoffToPatrik(item) {
+  if (!driverReportCanManage()) return false;
+  const blockedStatuses = ["handed_to_ordering", "ordered", "part_arrived", "service_scheduled", "completed", "canceled"];
+  if (blockedStatuses.includes(item.status) && item.patrikEmailStatus === "sent") return false;
+  return !driverReportPatrikHandoffBlockReason(item);
+}
+
 function driverReportPartRowActions(item) {
   const loading = driverReportsState.actionLoading;
   const canManage = driverReportCanManage();
   const canRunVin = driverReportCanRunVinPilot(item);
-  const partStatus = driverReportPartStatus(item);
-  const blockedHandoffStatuses = [
-    "maintenance_or_consumable",
-    "ambiguous_fault",
-    "out_of_pilot",
-    "waiting_vin",
-    "manual_verification_required",
-    "provider_not_configured",
-    "waiting_part_identification"
-  ];
-  const hasVerifiedPartForHandoff = Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partVinPilot?.status === "email_ready" || item.patrikEmailStatus === "sent");
-  const canHandoff = canManage
-    && hasVerifiedPartForHandoff
-    && !blockedHandoffStatuses.includes(partStatus);
+  const canHandoff = driverReportCanHandoffToPatrik(item);
   return `
     <div class="driver-report-row-actions">
       <button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Otevřít</button>
@@ -21365,7 +21394,7 @@ function driverReportCreateForm(user, options = {}) {
 
         <label class="driver-report-check">
           <input type="checkbox" name="handoffAfterCreate" ${draft.handoffAfterCreate ? "checked" : ""} ${disabled ? "disabled" : ""}>
-          <span>Po uložení předat Patrikovi a informovat servis</span>
+          <span>Po uložení předat Patrikovi k ověření</span>
         </label>
       `}
       <p class="driver-report-form-note">Stisknutím tlačítka potvrzujete SPZ. Šarlota si po uložení může vyžádat fotku nebo doplnění hlášení.</p>
@@ -21466,27 +21495,14 @@ function driverReportActionButtons(item) {
   }
 
   const loading = driverReportsState.actionLoading;
-  const partStatus = driverReportPartStatus(item);
-  const blockedHandoffStatuses = [
-    "maintenance_or_consumable",
-    "ambiguous_fault",
-    "out_of_pilot",
-    "waiting_vin",
-    "manual_verification_required",
-    "provider_not_configured",
-    "waiting_part_identification"
-  ];
-  const hasVerifiedPartForHandoff = Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partVinPilot?.status === "email_ready" || item.patrikEmailStatus === "sent");
-  const canHandoff = !["handed_to_ordering", "ordered", "part_arrived", "service_scheduled", "completed", "canceled"].includes(item.status)
-    || item.patrikEmailStatus !== "sent"
-    || item.kamilSmsStatus !== "sent";
+  const canHandoff = driverReportCanHandoffToPatrik(item);
   const canArrived = ["ordered", "handed_to_ordering"].includes(item.status);
   const canComplete = item.status === "service_scheduled";
   const canCancel = !["completed", "canceled"].includes(item.status);
 
   return `
     <div class="driver-report-actions">
-      <button class="secondary-link" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${canHandoff && hasVerifiedPartForHandoff && !blockedHandoffStatuses.includes(partStatus) && !loading ? "" : "disabled"}>Předat Patrikovi</button>
+      <button class="secondary-link" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${canHandoff && !loading ? "" : "disabled"}>Předat Patrikovi</button>
       <button class="secondary-link" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${canArrived && !loading ? "" : "disabled"}>Díl dorazil</button>
       <button class="secondary-link" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${canComplete && !loading ? "" : "disabled"}>Vyřízeno</button>
       <button class="text-action" type="button" data-driver-report-action="cancel" data-request-id="${escapeHtml(item.id)}" ${canCancel && !loading ? "" : "disabled"}>Zrušit</button>
@@ -21600,9 +21616,9 @@ function driverReportDetail(item) {
         ${driverReportDrawerSection("Notifikace a akce", `
           <div class="driver-report-notifications" aria-label="Stavy notifikací">
             ${driverReportNotificationPill("E-mail Patrikovi", item.patrikEmailStatus, item.patrikEmailError)}
-            ${driverReportNotificationPill("SMS Kamilovi", item.kamilSmsStatus, item.kamilSmsError)}
             ${driverReportNotificationPill("SMS řidiči", item.driverSmsStatus, item.driverSmsError)}
           </div>
+          <p class="driver-report-note">Fáze 2 posílá jen e-mail Patrikovi s pilotním CC Radimovi. SMS Kamilovi se v tomto kroku neposílá.</p>
           ${driverReportActionButtons(item)}
           ${driverReportServiceForm(item)}
         `)}
@@ -21929,7 +21945,7 @@ async function submitDriverReportForm(form) {
     });
     driverReportsState.selected = result.request || null;
     driverReportsState.message = result.request?.status === "handed_to_ordering"
-      ? "Hlášení bylo odesláno a předané k objednání."
+      ? "Hlášení bylo odesláno a předané Patrikovi k ověření."
       : "Hlášení bylo odesláno.";
     driverReportsState.draft = {
       licensePlate: "",

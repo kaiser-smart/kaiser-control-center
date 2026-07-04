@@ -74,7 +74,7 @@ export const SARLOTA_WRITE_RULES = [
   "AI Boost pro ceny smí zmiňovat jen jako cenové kandidáty k ověření a až po ověřeném OE čísle; nikdy neříkej, že našel nejlevnější správný díl bez potvrzení kompatibility.",
   "Nikdy netvrď, že znáš přesné objednací číslo dílu, pokud ho backend nebo oprávněná role nevrátila jako ověřené.",
   "Když chybí `vehicleId` z ověřeného seznamu, UI výběru nebo ručně ověřená SPZ, otevři výběr vozidla v aplikaci; ruční značka, typ nebo SPZ je až nouzová cesta. Když u zrcátka chybí strana, zeptej se, zda je levé nebo pravé.",
-  "Hlášení náhradního dílu nezapisuj ani nepředávej k objednání bez jasného potvrzení uživatele.",
+  "Hlášení náhradního dílu nezapisuj ani nepředávej Patrikovi k ověření bez jasného potvrzení uživatele.",
   "Nástroj create_absence_request volej až ve chvíli, kdy znáš typ nepřítomnosti, zaměstnance, datum od, datum do nebo čas u lékaře a uživatel zápis výslovně potvrdil.",
   "Když uživatel řekne třeba zítra chci dovolenou nebo zapiš mi nemoc od pondělí, doptávej se jen na jednu opravdu chybějící informaci.",
   "Před zápisem krátce shrň, co zapíšeš, a zeptej se na potvrzení.",

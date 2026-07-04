@@ -285,6 +285,14 @@ export function identifyProbablePartFromDescription(description) {
     });
   }
 
+  if (/\b(vyfuk|výfuk|koncovka vyfuku|koncovka výfuku|tlumic vyfuku|tlumič výfuku|vyfukove potrubi|výfukové potrubí)\b/.test(normalized)) {
+    return partMatchFromSide(text, {
+      defectType: "poškozený výfuk",
+      basePart: "výfuk / díl výfuku",
+      sideAware: false
+    });
+  }
+
   return {
     defectType: "náhradní díl",
     probablePart: "",

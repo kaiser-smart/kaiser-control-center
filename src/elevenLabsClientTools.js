@@ -1558,7 +1558,7 @@ export function createElevenLabsClientTools({
       : null;
     const preparedParameters = preparedAction?.parameters || {};
     const confirmationMessage = [
-      "Šarlota chce vytvořit hlášení náhradního dílu a předat ho k objednání.",
+      "Šarlota chce vytvořit hlášení náhradního dílu a předat ho Patrikovi k ověření.",
       preparedParameters.defectDescription ? `Závada: ${preparedParameters.defectDescription}` : (defectDescription ? `Závada: ${defectDescription}` : ""),
       preparedParameters.vehicleId ? "Vozidlo: vybrané v aplikaci" : "",
       preparedParameters.licensePlate ? `SPZ: ${preparedParameters.licensePlate}` : "",

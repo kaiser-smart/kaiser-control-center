@@ -1156,7 +1156,7 @@ const MOCK_DRIVER_PART_STATUS_LABELS = {
   new_report: "Nové hlášení",
   waiting_part_identification: "Čeká na identifikaci dílu",
   part_identified: "Díl identifikován",
-  handed_to_ordering: "Předáno k objednání",
+  handed_to_ordering: "Předáno Patrikovi k ověření",
   ordered: "Objednáno",
   part_arrived: "Díl dorazil",
   service_scheduled: "Servis naplánován",
@@ -1646,12 +1646,28 @@ function updateMockDriverRequest(id, updater) {
 
 function handoffMockDriverPartRequest(user, id) {
   if (!mockDriverCanManage(user)) {
-    const error = new Error("Nemáte oprávnění předat díl k objednání.");
+    const error = new Error("Nemáte oprávnění předat díl Patrikovi k ověření.");
     error.status = 403;
     throw error;
   }
+  const current = mockDriverPartRequests.find((item) => sameMockId(item.id, id) || sameMockId(item.reportId, id));
+  if (!current?.licensePlate || !current?.vehicleName || current.licensePlateVerified !== true || current.manualVehicleReview === true) {
+    const error = new Error("Vozidlo není bezpečně ověřené proti Vozovému parku. Nejdřív proveď ruční kontrolu.");
+    error.status = 400;
+    throw error;
+  }
+  if (!current.vin) {
+    const error = new Error("Bez VIN nelze předat díl Patrikovi v pilotu podle VIN.");
+    error.status = 400;
+    throw error;
+  }
+  if (!current.oePartNumber && !current.partName && !current.verifiedPart && !current.partOrderNumber) {
+    const error = new Error("Nejdřív ověř díl nebo OE číslo. Pravděpodobný díl nestačí pro e-mail Patrikovi.");
+    error.status = 400;
+    throw error;
+  }
   const patrik = mockDriverPartsRecipient();
-  const kamil = mockDriverServiceTechRecipient();
+  const ccEmail = mockDriverClean(process.env.PARTS_PILOT_CC_EMAIL || "oplustil@kaiserservis.cz");
   const now = new Date().toISOString();
   addMockNotificationLog({
     moduleId: "driver-reports",
@@ -1662,19 +1678,8 @@ function handoffMockDriverPartRequest(user, id) {
     status: "sent",
     recipient: patrik.email,
     recipientName: patrik.name,
-    subject: "Objednat náhradní díl",
-    messagePreview: "Lokální mock: e-mail Patrikovi by byl odeslán."
-  });
-  addMockNotificationLog({
-    moduleId: "driver-reports",
-    relatedEntityType: "driver_part_request",
-    relatedEntityId: id,
-    channel: "sms",
-    type: "driver_part_service_tech_sms",
-    status: "sent",
-    recipient: kamil.phone,
-    recipientName: kamil.name,
-    messagePreview: "Lokální mock: SMS Kamilovi by byla odeslána."
+    subject: "Náhradní díl k ověření",
+    messagePreview: `Lokální mock: e-mail Patrikovi by byl odeslán${ccEmail ? `, CC ${ccEmail}` : ""}.`
   });
   return updateMockDriverRequest(id, (item) => ({
     ...item,
@@ -1682,18 +1687,14 @@ function handoffMockDriverPartRequest(user, id) {
     assignedToName: patrik.name,
     assignedToEmail: patrik.email,
     handedOffToPatrikAt: now,
-    kamilSmsSentAt: now,
     patrikEmailStatus: "sent",
     patrikEmailError: "",
-    kamilSmsStatus: "sent",
-    kamilSmsRecipient: kamil.phone,
-    kamilSmsError: "",
     updatedByUserId: user?.id || "",
     updatedAt: now,
     events: [
-      mockDriverEvent(item.id, "handoff_to_ordering", user, "Lokální mock: e-mail Patrikovi a SMS Kamilovi byly odeslány.", {
-        channel: "email+sms",
-        recipient: [patrik.email, kamil.phone].join(", "),
+      mockDriverEvent(item.id, "handoff_to_ordering", user, "Lokální mock: e-mail Patrikovi by byl odeslán. SMS Kamilovi se v tomto kroku neposílá.", {
+        channel: "email",
+        recipient: [patrik.email, ccEmail ? `cc: ${ccEmail}` : ""].filter(Boolean).join(", "),
         status: "sent"
       }),
       ...(item.events || [])
@@ -3215,7 +3216,7 @@ async function handleApi(request, response) {
     const confirmed = parameters.confirmed === true || parameters.writeConfirmed === true;
     const partMatch = identifyProbablePartFromDescription(defectDescription);
     if (!confirmed) {
-      const reply = `Rozumím. Chceš nahlásit ${partMatch.probablePart || "náhradní díl"} na vybraném vozidle. Potvrď prosím, že vozidlo sedí, a pošli fotku poškození. Mám to uložit a předat k objednání dílu?`;
+      const reply = `Rozumím. Chceš nahlásit ${partMatch.probablePart || "náhradní díl"} na vybraném vozidle. Potvrď prosím, že vozidlo sedí, a pošli fotku poškození. Mám to uložit a předat Patrikovi k ověření dílu?`;
       sendJson(response, 200, {
         ok: false,
         status: "needs_confirmation",
@@ -3260,7 +3261,7 @@ async function handleApi(request, response) {
       item = handoffMockDriverPartRequest(user, item.id);
       const handedOff = item.status === "handed_to_ordering";
       const reply = handedOff
-        ? "Hotovo. Hlášení jsem zapsala a předala k objednání dílu."
+        ? "Hotovo. Hlášení jsem zapsala a předala Patrikovi k ověření dílu. Nic nebylo automaticky objednáno."
         : "Hlášení jsem zapsala, ale předání není hotové. Zkontroluj prosím notifikace v detailu.";
       sendJson(response, 200, {
         ok: true,

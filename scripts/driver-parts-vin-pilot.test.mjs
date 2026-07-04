@@ -5,6 +5,7 @@ import {
   identifyProbablePartFromDescription
 } from "../functions/_lib/driver-parts-catalog.js";
 import { __test as driverPartRequestInternals } from "../functions/_lib/driver-part-requests-store.js";
+import { __test as notificationInternals } from "../functions/_lib/notification-service.js";
 import { partslink24EligibilityForVehicle } from "../functions/_lib/partslink24-search-store.js";
 
 const adminUser = {
@@ -55,6 +56,13 @@ function passengerVehicle(overrides = {}) {
 }
 
 {
+  const match = identifyProbablePartFromDescription("Prasklý výfuk");
+  assert.equal(driverPartAiCandidateFromMatch(match), true);
+  assert.equal(match.probablePart, "výfuk / díl výfuku");
+  assert.equal(match.confidence, "high");
+}
+
+{
   const eligibility = partslink24EligibilityForVehicle(adminUser, passengerVehicle({
     vehicleType: "nákladní vozidlo",
     bodyType: "N3"
@@ -101,6 +109,87 @@ function passengerVehicle(overrides = {}) {
   assert.equal(payload.partsProviderStatus, "waiting_vin_pilot");
   assert.equal(payload.priceBoostStatus, "waiting_verified_part");
   assert.match(payload.partLookupQuery, /přední sklo/);
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "",
+    probablePart: "přední sklo",
+    oePartNumber: "A 257 670 01 00"
+  };
+  const eligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item);
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.code, "driver_part_vin_required");
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    probablePart: "přední sklo"
+  };
+  const eligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item);
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.code, "driver_part_verified_part_required");
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: false,
+    manualVehicleReview: true,
+    vin: "WDD2573211A123456",
+    probablePart: "přední sklo",
+    oePartNumber: "A 257 670 01 00"
+  };
+  const eligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item);
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.code, "driver_part_vehicle_not_verified");
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    probablePart: "přední sklo",
+    oePartNumber: "A 257 670 01 00"
+  };
+  const eligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item);
+  assert.equal(eligibility.allowed, true);
+  assert.equal(driverPartRequestInternals.driverPartRequestHasVerifiedPartForHandoff(item), true);
+}
+
+{
+  assert.deepEqual(
+    notificationInternals.emailRecipients("oplustil@kaiserservis.cz; invalid; patrik@example.test,oplustil@kaiserservis.cz"),
+    ["oplustil@kaiserservis.cz", "patrik@example.test"]
+  );
+  assert.deepEqual(
+    notificationInternals.parseDriverPartOffers(JSON.stringify({
+      offers: [
+        { title: "Výfuk", price: "1 990 Kč", seller: "Dodavatel", url: "https://example.test", availability: "skladem" },
+        { title: "Druhá nabídka", priceText: "2 200 Kč" },
+        { title: "Třetí nabídka", priceText: "2 500 Kč" },
+        { title: "Čtvrtá nabídka", priceText: "3 000 Kč" }
+      ]
+    })).length,
+    3
+  );
+  assert.equal(
+    driverPartRequestInternals.pilotCcStatus({ PARTS_PILOT_CC_EMAIL: "oplustil@kaiserservis.cz" }, { patrikEmailStatus: "sent" }),
+    "sent_or_included_by_backend"
+  );
 }
 
 console.log("driver parts VIN pilot tests passed");
