@@ -591,6 +591,51 @@ for (const [name, payload] of [
 }
 
 {
+  await withFakeDriverPickerDom(async ({ find }) => {
+    const tools = createElevenLabsClientTools({
+      requestJson: async () => ({
+        ok: true,
+        module: "hlaseni-ridicu",
+        userName: "Radim",
+        userResolved: true,
+        employeeResolved: true,
+        driverResolved: true,
+        vehiclesVerified: true,
+        vehiclePickerAvailable: true,
+        vehicles: [
+          safeVoiceVehicle("vehicle-radim-1", "Utajený vůz", "1A1 1111")
+        ],
+        vehiclesCount: 1,
+        apiStatus: "ready"
+      })
+    });
+
+    const opened = await tools.show_driver_vehicle_picker({ sessionId: "picker-session-a" });
+    assert.equal(opened.ok, true);
+    const option = find((node) => node.className === "ai-driver-vehicle-picker__option" && !node.disabled);
+    assert.ok(option);
+    option.eventHandlers.click();
+
+    const selectedWithoutSession = await tools.get_driver_vehicle_picker_selection({});
+    assert.equal(selectedWithoutSession.ok, true);
+    assert.equal(selectedWithoutSession.status, "selected");
+    assert.equal(selectedWithoutSession.vehicleId, "vehicle-radim-1");
+
+    const selectedWithDifferentSession = await tools.get_driver_vehicle_picker_selection({ sessionId: "picker-session-b" });
+    assert.equal(selectedWithDifferentSession.ok, true);
+    assert.equal(selectedWithDifferentSession.status, "selected");
+    assert.equal(selectedWithDifferentSession.vehicleId, "vehicle-radim-1");
+
+    const reopened = await tools.show_driver_vehicle_picker({ sessionId: "picker-session-new" });
+    assert.equal(reopened.ok, true);
+    const stale = await tools.get_driver_vehicle_picker_selection({});
+    assert.equal(stale.ok, false);
+    assert.equal(stale.status, "needs_input");
+    assert.notEqual(stale.vehicleId, "vehicle-radim-1");
+  });
+}
+
+{
   const tools = createElevenLabsClientTools();
   const result = await tools.get_driver_vehicle_picker_selection({ sessionId: "no-current-picker" });
 

@@ -108,6 +108,7 @@ const DRIVER_REPORT_PICKER_FAILED_MESSAGE = "Výběr se mi nepodařilo otevřít
 const DRIVER_REPORT_VEHICLE_SELECTED_MESSAGE = "Vozidlo je vybrané v aplikaci.";
 const DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
 const DRIVER_REPORT_NO_VERIFIED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
+const DRIVER_REPORT_VEHICLE_PICKER_SELECTION_TTL_MS = 5 * 60 * 1000;
 
 export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   {
@@ -363,6 +364,7 @@ export function createElevenLabsClientTools({
   const driverReportVehiclePickerCache = new Map();
   const driverReportVehiclePickerOpenCache = new Map();
   const driverReportVehiclePickerSelectionCache = new Map();
+  let driverReportVehiclePickerLatestSelection = null;
 
   function withQuery(path, params = {}) {
     const query = new URLSearchParams();
@@ -619,6 +621,45 @@ export function createElevenLabsClientTools({
     });
   }
 
+  function clearDriverVehiclePickerSelectionCache() {
+    driverReportVehiclePickerSelectionCache.clear();
+    driverReportVehiclePickerLatestSelection = null;
+  }
+
+  function isFreshDriverVehiclePickerSelection(selection = {}) {
+    if (!selection?.vehicleId) {
+      return false;
+    }
+
+    const selectedAt = new Date(selection.selectedAt || 0).getTime();
+    if (!Number.isFinite(selectedAt) || selectedAt <= 0) {
+      return false;
+    }
+
+    return Date.now() - selectedAt <= DRIVER_REPORT_VEHICLE_PICKER_SELECTION_TTL_MS;
+  }
+
+  function resolveDriverVehiclePickerSelection(key = "") {
+    const sessionKey = cleanString(key) || "active";
+    const candidates = [
+      driverReportVehiclePickerSelectionCache.get(sessionKey),
+      sessionKey === "active" ? null : driverReportVehiclePickerSelectionCache.get("active"),
+      driverReportVehiclePickerLatestSelection
+    ].filter(Boolean);
+
+    const selection = candidates.find(isFreshDriverVehiclePickerSelection) || null;
+    if (!selection) {
+      if (driverReportVehiclePickerSelectionCache.has(sessionKey)) {
+        driverReportVehiclePickerSelectionCache.delete(sessionKey);
+      }
+      if (!isFreshDriverVehiclePickerSelection(driverReportVehiclePickerLatestSelection)) {
+        driverReportVehiclePickerLatestSelection = null;
+      }
+    }
+
+    return selection;
+  }
+
   function driverVehiclePickerDiagnostic(toolName, status, detail = {}) {
     const statusText = status === "succeeded"
       ? "succeeded"
@@ -675,14 +716,18 @@ export function createElevenLabsClientTools({
     const vehicle = payload.vehicle && typeof payload.vehicle === "object" ? payload.vehicle : {};
     const vehicleId = cleanString(payload.vehicleId || vehicle.vehicleId || vehicle.id);
     const licensePlate = cleanString(vehicle.licensePlate || vehicle.spz);
-    driverReportVehiclePickerSelectionCache.set(sessionKey, {
+    const selection = {
       status: cleanString(payload.status || "selected"),
       vehicleId,
       licensePlate,
       vehicleName: cleanString(vehicle.displayName || vehicle.vehicleName || vehicle.name),
       vehicleSelectionSource: "backend_ui_picker",
       selectedAt: new Date().toISOString()
-    });
+    };
+
+    driverReportVehiclePickerSelectionCache.set(sessionKey, selection);
+    driverReportVehiclePickerSelectionCache.set("active", selection);
+    driverReportVehiclePickerLatestSelection = selection;
   }
 
   async function getDriverReportContext(parameters = {}) {
@@ -902,6 +947,7 @@ export function createElevenLabsClientTools({
     }
 
     removeExistingDriverVehiclePicker();
+    clearDriverVehiclePickerSelectionCache();
 
     let settled = false;
     let timeout = null;
@@ -1096,7 +1142,7 @@ export function createElevenLabsClientTools({
   function getDriverVehiclePickerSelection(parameters = {}) {
     const sessionKey = driverReportSessionKey(parameters);
     const calledDiagnostic = driverVehiclePickerDiagnostic("get_driver_vehicle_picker_selection", "called", { sessionKey });
-    const selection = driverReportVehiclePickerSelectionCache.get(sessionKey);
+    const selection = resolveDriverVehiclePickerSelection(sessionKey);
 
     if (selection?.vehicleId) {
       return {
@@ -1387,7 +1433,7 @@ export function createElevenLabsClientTools({
     let vehicleBrand = cleanString(parameters.vehicleBrand || parameters.brand);
     let vehicleSelectionSource = cleanString(parameters.vehicleSelectionSource || parameters.vehicle_selection_source);
     const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
-    const cachedSelection = driverReportVehiclePickerSelectionCache.get(sessionKey);
+    const cachedSelection = resolveDriverVehiclePickerSelection(sessionKey);
     if (!vehicleId && cachedSelection?.vehicleId) {
       vehicleId = cachedSelection.vehicleId;
       vehicleSelectionSource = cachedSelection.vehicleSelectionSource || "backend_ui_picker";
