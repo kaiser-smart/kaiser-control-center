@@ -55,8 +55,10 @@ body:has(.home-hero) .app-shell {
   padding: calc(20px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));
 }
 
-body:has(.home-hero) .user-bar {
-  padding-bottom: 4px;
+body:has(.home-hero) .home-hero > .user-bar {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 4px 0 0;
 }
 
 body:has(.home-hero) .module-card {
@@ -286,7 +288,7 @@ a {
   display: flex;
   width: 100%;
   min-width: 0;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
   padding: 0 0 8px;
@@ -368,6 +370,10 @@ h1 {
   color: var(--muted);
   font-size: 0.98rem;
   line-height: 1.28;
+}
+
+.home-hero > .user-bar .user-bar__name {
+  max-width: min(28vw, 280px);
 }
 
 .home-status {
@@ -19091,9 +19097,16 @@ body:has(.absence-page--employee-card) {
 
 @media (max-width: 980px) {
   .home-hero {
-    flex-direction: column;
     align-items: flex-start;
-    gap: 18px;
+    gap: 14px;
+  }
+
+  .home-hero__main {
+    gap: 12px;
+  }
+
+  .home-subtitle {
+    max-width: 320px;
   }
 
   .home-ops-panel {
@@ -19670,9 +19683,16 @@ body:has(.absence-page--employee-card) {
   }
 
   .home-hero {
+    flex-direction: column;
+    align-items: stretch;
     width: 100%;
     gap: 10px;
     padding-bottom: 10px;
+  }
+
+  .home-hero > .user-bar {
+    width: 100%;
+    padding-top: 0;
   }
 
   .home-hero__main {

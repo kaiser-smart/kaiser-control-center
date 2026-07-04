@@ -4618,7 +4618,6 @@ function homePage(user) {
 
   return `
     <main class="app-shell module-theme-scope" ${moduleThemeStyleAttribute()}>
-      ${userBar(user)}
       <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero__main">
           <h1 id="home-title" class="home-brand-title">
@@ -4629,6 +4628,7 @@ function homePage(user) {
           </h1>
           <p class="home-subtitle">${HOME_SUBTITLE}</p>
         </div>
+        ${userBar(user)}
       </section>
       ${homeOperationsPanel(user, modulesForUser, verifiedCount)}
       <div class="home-module-sections" aria-label="Hlavní moduly">

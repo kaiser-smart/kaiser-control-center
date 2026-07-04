@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.325"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.326"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "HP: kompaktnejsi horni lista",
+    text: "Logo Smart odpady, popis systemu a prihlaseny admin jsou na homepage v jednom hornim radku, aby uvodni cast zabirala mene vysky."
+  },
   {
     title: "Trasy svozu: kombinace odpadu ve filtru",
     text: "Filtr Odpad ve Svozových trasách umí vybrat více odpadů najednou, například SKO + PLAST. Tisk, PDF, řidičský displej i interní CSV export používají stejnou kombinaci bez změny DB, Vistosu nebo ostrých tras."
