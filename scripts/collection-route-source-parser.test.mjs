@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 
 import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collection-route-optimization-preview.js";
-import { __deriveCollectionRouteSourceFieldsForTest } from "../functions/_lib/collection-route-sources-store.js";
+import {
+  __buildCollectionRouteRepairWorkbookForTest,
+  __deriveCollectionRouteSourceFieldsForTest
+} from "../functions/_lib/collection-route-sources-store.js";
 
 function derive(originalText) {
   return __deriveCollectionRouteSourceFieldsForTest({ originalText });
@@ -65,4 +68,80 @@ function derive(originalText) {
   ]);
   assert.equal(container.containerVolume, 1100);
   assert.equal(container.containerCount, 2);
+}
+
+{
+  const payload = __buildCollectionRouteRepairWorkbookForTest({
+    sheets: [
+      {
+        sheetName: "VSECHNY RADKY",
+        rows: [
+          ["Vsechny aktualni zdrojove radky"],
+          ["Cervene bunky jsou jen kontrola"],
+          [
+            "Priorita",
+            "Co opravit",
+            "Doporucena oprava",
+            "Zakaznik",
+            "Stanoviste / adresa",
+            "Odpad",
+            "Nadoba",
+            "Frekvence",
+            "Den",
+            "Tyden",
+            "Auto",
+            "Poradi",
+            "Vistos stav",
+            "Vistos smlouva",
+            "Vistos zakaznik",
+            "Vistos stanoviste",
+            "Problem",
+            "Zdrojovy Excel",
+            "Zdrojovy list",
+            "Zdrojovy radek",
+            "Poznamka",
+            "Ostra trasa"
+          ],
+          [
+            "2",
+            "Vistos match / identifikace",
+            "Zkontrolovat",
+            "PEPCO Bystrc",
+            "náměstí 28.dubna 1069/2",
+            "PAPÍR",
+            "1× 1100 l",
+            "1x7",
+            "pondělí",
+            "lichý týden",
+            "Auto A",
+            "611",
+            "nenamapováno",
+            "-",
+            "-",
+            "-",
+            "čeká na Vistos match",
+            "Pondělí LICHÉ AI.xls",
+            "List1",
+            "33",
+            "klíč u rampy",
+            "NE"
+          ]
+        ]
+      }
+    ]
+  });
+
+  assert.equal(payload.batch.source, "13-excel-repair-workbook");
+  assert.equal(payload.files.length, 1);
+  assert.equal(payload.rows.length, 1);
+  assert.equal(payload.rows[0].sourceFile, "Pondělí LICHÉ AI.xls");
+  assert.equal(payload.rows[0].sourceSheet, "List1");
+  assert.equal(payload.rows[0].sourceRowNumber, 33);
+  assert.equal(payload.rows[0].dayCode, "PO");
+  assert.equal(payload.rows[0].weekMode, "lichý týden");
+  assert.equal(payload.rows[0].vehicleCode, "A");
+  assert.equal(payload.rows[0].wasteType, "PAPIR");
+  assert.equal(payload.rows[0].wasteCode, "200101");
+  assert.equal(payload.rows[0].containerVolume, 1100);
+  assert.equal(payload.rows[0].containerCount, 1);
 }

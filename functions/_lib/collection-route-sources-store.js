@@ -1,4 +1,7 @@
-import { buildCollectionRouteOptimizationPreview } from "./collection-route-optimization-preview.js";
+import {
+  buildCollectionRouteOptimizationPreview,
+  parseSpreadsheetRows
+} from "./collection-route-optimization-preview.js";
 import {
   CollectionRoutesStoreError,
   createCollectionRoutesVistosKommunalPreviewExport
@@ -12,6 +15,30 @@ const VISTOS_SOURCE_MATCH_MAX_ROWS = 5000;
 const VISTOS_SOURCE_MATCH_MAX_CANDIDATES = 10000;
 const VISTOS_SOURCE_MATCH_MAX_CANDIDATE_POOL = 220;
 const VISTOS_SOURCE_MATCH_COMMON_TOKEN_LIMIT = 550;
+const COLLECTION_ROUTE_REPAIR_WORKBOOK_SOURCE = "13-excel-repair-workbook";
+const COLLECTION_ROUTE_REPAIR_WORKBOOK_SHEET_KEY = "VSECHNYRADKY";
+const COLLECTION_ROUTE_REPAIR_WORKBOOK_REQUIRED_HEADERS = [
+  "ZDROJOVYEXCEL",
+  "ZDROJOVYLIST",
+  "ZDROJOVYRADEK",
+  "ZAKAZNIK",
+  "STANOVISTEADRESA",
+  "ODPAD",
+  "NADOBA",
+  "FREKVENCE",
+  "DEN",
+  "TYDEN",
+  "AUTO",
+  "PORADI"
+];
+const COLLECTION_ROUTE_SOURCE_SERVICE_MINUTES_BY_VOLUME = { 110: 3, 120: 3, 240: 3, 1100: 5 };
+const COLLECTION_ROUTE_SOURCE_WASTE_WEIGHTS_TONS = {
+  SKO: { 1100: 0.06, 240: 0.015, 120: 0.006, 110: 0.006 },
+  PAPIR: { 1100: 0.02, 240: 0.004, 120: 0.002, 110: 0.002 },
+  PLAST: { 1100: 0.02, 240: 0.004, 120: 0.002, 110: 0.002 },
+  SKLO: { 1100: 0.014, 240: 0.003, 120: 0.002, 110: 0.002 },
+  BIO: { 1100: 0.02, 240: 0.004, 120: 0.002, 110: 0.002, 30: 0.001 }
+};
 const VISTOS_MATCH_ADDRESS_NOISE_TOKENS = new Set([
   "CS",
   "CP",
@@ -734,6 +761,389 @@ function routeModeFromWeek(weekMode) {
   return "každý týden";
 }
 
+function displayValue(value) {
+  const text = cleanString(value);
+  return text === "-" ? "" : text;
+}
+
+function repairHeaderKey(value) {
+  return compactText(value);
+}
+
+function repairHeaderMap(row = []) {
+  const map = new Map();
+  row.forEach((cell, index) => {
+    const key = repairHeaderKey(cell);
+    if (key && !map.has(key)) {
+      map.set(key, index);
+    }
+  });
+  return map;
+}
+
+function repairRowCell(row = [], headerMap, label) {
+  const index = headerMap.get(repairHeaderKey(label));
+  return index === undefined ? "" : cleanString(row[index]);
+}
+
+function findRepairWorkbookSheet(parsed) {
+  const sheets = Array.isArray(parsed?.sheets) && parsed.sheets.length
+    ? parsed.sheets
+    : [{ sheetName: parsed?.sheetName || "", rows: parsed?.rows || [] }];
+  const sheet = sheets.find((item) => repairHeaderKey(item.sheetName) === COLLECTION_ROUTE_REPAIR_WORKBOOK_SHEET_KEY);
+  if (!sheet) {
+    return null;
+  }
+  const rows = Array.isArray(sheet.rows) ? sheet.rows : [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const headerMap = repairHeaderMap(rows[index]);
+    const hasRequiredHeaders = COLLECTION_ROUTE_REPAIR_WORKBOOK_REQUIRED_HEADERS.every((key) => headerMap.has(key));
+    if (hasRequiredHeaders) {
+      return { sheet, rows, headerIndex: index, headerMap };
+    }
+  }
+  return null;
+}
+
+function repairDayCode(value) {
+  const text = normalizeText(value);
+  if (["PO", "PONDELI"].includes(text)) return "PO";
+  if (["UT", "UTERY"].includes(text)) return "ÚT";
+  if (["ST", "STREDA"].includes(text)) return "ST";
+  if (["CT", "CTVRT", "CTVTEK", "CTVREK", "CTVRTKY", "CTVRTKA", "CTVRT", "CTVTRTEK"].includes(text)) return "ČT";
+  if (["PA", "PATEK"].includes(text)) return "PÁ";
+  return dayFromText(value);
+}
+
+function repairWeekMode(value) {
+  const text = normalizeText(value);
+  if (text.includes("1X30") || text.includes("MESIC")) return "měsíční / 1x30";
+  if (text.includes("SUDE") || text.includes("SUDY") || text.includes("SUDA")) return "sudý týden";
+  if (text.includes("LICHE") || text.includes("LICHY") || text.includes("LICHA")) return "lichý týden";
+  if (text.includes("KAZD") || text.includes("TYDEN")) return "každý týden";
+  return "každý týden";
+}
+
+function repairVehicleCode(value) {
+  const direct = vehicleFromText(value);
+  if (direct) {
+    return direct;
+  }
+  const text = normalizeText(value);
+  if (text === "A") return "A";
+  if (text === "B") return "B";
+  if (text === "C") return "C";
+  return "";
+}
+
+function repairWaste(value) {
+  const text = normalizeText(value);
+  if (text.includes("PAPIR") || text.includes("200101") || text.includes("150101")) {
+    return { wasteType: "PAPIR", wasteCode: text.includes("150101") ? "150101" : "200101" };
+  }
+  if (text.includes("PLAST") || text.includes("200139") || text.includes("150102")) {
+    return { wasteType: "PLAST", wasteCode: text.includes("150102") ? "150102" : "200139" };
+  }
+  if (text.includes("SKLO") || text.includes("200102")) {
+    return { wasteType: "SKLO", wasteCode: "200102" };
+  }
+  if (text.includes("BIO") || text.includes("GASTRO") || text.includes("200201") || text.includes("200108")) {
+    return { wasteType: "BIO", wasteCode: text.includes("200108") || text.includes("GASTRO") ? "200108" : "200201" };
+  }
+  if (text.includes("SKO") || text.includes("SMES") || text.includes("KOMUNAL") || text.includes("200301")) {
+    return { wasteType: "SKO", wasteCode: "200301" };
+  }
+  return { wasteType: "", wasteCode: "" };
+}
+
+function repairContainer(value) {
+  const text = cleanString(value).replace(/×/g, "x");
+  if (!text || text === "-") {
+    return { containerCount: 0, containerVolume: 0 };
+  }
+  const counted = text.match(/\b([1-9]\d?)\s*x\s*(30|60|80|110|120|240|360|660|770|1100|1500|2500|5000)\b/i);
+  if (counted) {
+    return {
+      containerCount: Number(counted[1]) || 0,
+      containerVolume: Number(counted[2]) || 0
+    };
+  }
+  const volume = text.match(/\b(30|60|80|110|120|240|360|660|770|1100|1500|2500|5000)\s*(?:l|lt|ltr|litr|litrů)?\b/i);
+  if (volume) {
+    return {
+      containerCount: 1,
+      containerVolume: Number(volume[1]) || 0
+    };
+  }
+  return { containerCount: 0, containerVolume: 0 };
+}
+
+function repairFrequency(value) {
+  if (!displayValue(value)) {
+    return "";
+  }
+  const compact = normalizeText(value).replace(/\s+/g, "");
+  const match = compact.match(/\b([1235])X(7|14|30)\b/);
+  if (match) {
+    return `${match[1]}x${match[2]}`;
+  }
+  if (compact.includes("MESIC")) return "1x30";
+  if (compact.includes("OBTYDEN")) return "1x14";
+  if (compact.includes("TYDNE")) return "1x7";
+  return displayValue(value);
+}
+
+function repairMappingStatus(value, row = {}) {
+  const key = repairHeaderKey(value);
+  const statuses = {
+    NAMAPOVANO: "namapováno",
+    NEJASNE: "nejasné",
+    NENAMAPOVANO: "nenamapováno",
+    DUPLICITA: "duplicita",
+    CHYBIADRESA: "chybí adresa",
+    CHYBINADOBA: "chybí nádoba",
+    CHYBIFREKVENCE: "chybí frekvence"
+  };
+  if (statuses[key]) {
+    return statuses[key];
+  }
+  if (!row.customerName || !row.addressText) {
+    return "chybí adresa";
+  }
+  if (!row.containerVolume || !row.containerCount) {
+    return "chybí nádoba";
+  }
+  if (!row.frequency) {
+    return "chybí frekvence";
+  }
+  return "nenamapováno";
+}
+
+function repairMappingIssue(status, problem) {
+  const text = displayValue(problem);
+  if (text) {
+    return text;
+  }
+  if (status === "chybí adresa") return "chybí zákazník nebo adresa z opravného sešitu";
+  if (status === "chybí nádoba") return "chybí nebo není jistý objem nádoby";
+  if (status === "chybí frekvence") return "chybí četnost svozu";
+  if (status === "nejasné") return "Vistos match vyžaduje ruční kontrolu.";
+  if (status === "duplicita") return "duplicitní řádek vyžaduje ruční kontrolu";
+  if (status === "namapováno") return "Vistos match z opravného sešitu; při novém běhu se ověří znovu.";
+  return "čeká na Vistos match";
+}
+
+function sourceEstimatedServiceMinutes(volume, count) {
+  if (!Number(volume) || !Number(count)) {
+    return 0;
+  }
+  return (COLLECTION_ROUTE_SOURCE_SERVICE_MINUTES_BY_VOLUME[volume] || (volume >= 1000 ? 5 : 3)) *
+    Math.max(1, Number(count) || 1);
+}
+
+function sourceEstimatedWeightTons(wasteType, volume, count) {
+  if (!Number(volume) || !Number(count)) {
+    return 0;
+  }
+  const weight = COLLECTION_ROUTE_SOURCE_WASTE_WEIGHTS_TONS[wasteType]?.[volume] || 0;
+  return Math.round(weight * Math.max(1, Number(count) || 1) * 1000) / 1000;
+}
+
+function buildRepairWorkbookOriginalText(row) {
+  return [
+    row.routeOrder,
+    row.customerName,
+    row.addressText,
+    row.wasteType || "ostatní / neznámé",
+    row.containerVolume ? `${row.containerCount || 1}× ${row.containerVolume} l` : "",
+    row.frequency,
+    row.note
+  ].filter(Boolean).join(" | ");
+}
+
+function buildRepairWorkbookImportPayloadFromParsed(parsed, {
+  batchId = randomId("collection-route-source-batch"),
+  createdAt = nowIso(),
+  uploadedFilename = "opravny-sesit.xlsx",
+  user = null
+} = {}) {
+  const repairSheet = findRepairWorkbookSheet(parsed);
+  if (!repairSheet) {
+    return null;
+  }
+
+  const sourceRows = [];
+  const fileStats = new Map();
+  const dataRows = repairSheet.rows.slice(repairSheet.headerIndex + 1);
+  for (const row of dataRows) {
+    const sourceFile = displayValue(repairRowCell(row, repairSheet.headerMap, "Zdrojovy Excel"));
+    const sourceSheet = displayValue(repairRowCell(row, repairSheet.headerMap, "Zdrojovy list")) || "List1";
+    const sourceRowNumber = numericValue(repairRowCell(row, repairSheet.headerMap, "Zdrojovy radek"));
+    const customerName = displayValue(repairRowCell(row, repairSheet.headerMap, "Zakaznik"));
+    const addressText = displayValue(repairRowCell(row, repairSheet.headerMap, "Stanoviste / adresa"));
+    const routeOrder = numericValue(repairRowCell(row, repairSheet.headerMap, "Poradi"), sourceRows.length + 1);
+    const frequency = repairFrequency(repairRowCell(row, repairSheet.headerMap, "Frekvence"));
+    const waste = repairWaste(repairRowCell(row, repairSheet.headerMap, "Odpad"));
+    const container = repairContainer(repairRowCell(row, repairSheet.headerMap, "Nadoba"));
+    const note = displayValue(repairRowCell(row, repairSheet.headerMap, "Poznamka"));
+    const rowBasis = {
+      customerName,
+      addressText,
+      containerVolume: container.containerVolume,
+      containerCount: container.containerCount,
+      frequency
+    };
+    const mappingStatus = repairMappingStatus(repairRowCell(row, repairSheet.headerMap, "Vistos stav"), rowBasis);
+    const mappingIssue = repairMappingIssue(mappingStatus, repairRowCell(row, repairSheet.headerMap, "Problem"));
+    const safeSourceFile = sourceFile || "Neznámý zdroj z opravného sešitu";
+    const fileId = fileStats.get(safeSourceFile)?.id || randomId("collection-route-source-file");
+    const routeRow = {
+      id: randomId("collection-route-source-row"),
+      batchId,
+      fileId,
+      routeOrder,
+      sourceFile: safeSourceFile,
+      sourceSheet,
+      sourceRowNumber,
+      originalText: "",
+      dayCode: repairDayCode(repairRowCell(row, repairSheet.headerMap, "Den")) ||
+        dayFromText(`${safeSourceFile} ${sourceSheet}`),
+      weekMode: repairWeekMode(repairRowCell(row, repairSheet.headerMap, "Tyden")),
+      vehicleCode: repairVehicleCode(repairRowCell(row, repairSheet.headerMap, "Auto")) ||
+        vehicleFromText(safeSourceFile),
+      wasteType: waste.wasteType,
+      wasteCode: waste.wasteCode,
+      frequency,
+      containerVolume: container.containerVolume,
+      containerCount: container.containerCount,
+      customerName,
+      addressText,
+      note,
+      mappingStatus,
+      mappingIssue,
+      status: "preview",
+      estimatedServiceMinutes: sourceEstimatedServiceMinutes(container.containerVolume, container.containerCount),
+      estimatedWeightTons: sourceEstimatedWeightTons(waste.wasteType, container.containerVolume, container.containerCount),
+      metadata: {
+        source: COLLECTION_ROUTE_REPAIR_WORKBOOK_SOURCE,
+        repairWorkbookFilename: uploadedFilename,
+        repairSheetName: repairSheet.sheet.sheetName,
+        repairPriority: displayValue(repairRowCell(row, repairSheet.headerMap, "Priorita")),
+        repairCategory: displayValue(repairRowCell(row, repairSheet.headerMap, "Co opravit")),
+        repairRecommendation: displayValue(repairRowCell(row, repairSheet.headerMap, "Doporucena oprava")),
+        previousVistosStatus: displayValue(repairRowCell(row, repairSheet.headerMap, "Vistos stav")),
+        previousVistosContract: displayValue(repairRowCell(row, repairSheet.headerMap, "Vistos smlouva")),
+        previousVistosCustomer: displayValue(repairRowCell(row, repairSheet.headerMap, "Vistos zakaznik")),
+        previousVistosSite: displayValue(repairRowCell(row, repairSheet.headerMap, "Vistos stanoviste")),
+        originalStrictSource: {
+          sourceFile: safeSourceFile,
+          sourceSheet,
+          sourceRowNumber
+        },
+        sourceScope: "13-excel-only",
+        createsOperationalRoutes: false,
+        sendsEmailOrSms: false,
+        startsAutomation: false
+      },
+      createdAt
+    };
+    routeRow.originalText = buildRepairWorkbookOriginalText(routeRow).slice(0, 1000);
+
+    if (!routeRow.originalText || (!sourceFile && !customerName && !addressText)) {
+      continue;
+    }
+
+    sourceRows.push(routeRow);
+    const stats = fileStats.get(safeSourceFile) || {
+      id: fileId,
+      filename: safeSourceFile,
+      sheets: new Set(),
+      sourceRowCount: 0,
+      routeRowCount: 0
+    };
+    stats.sheets.add(sourceSheet);
+    stats.sourceRowCount += 1;
+    stats.routeRowCount += 1;
+    fileStats.set(safeSourceFile, stats);
+  }
+
+  if (!sourceRows.length) {
+    throw new CollectionRouteSourcesError(
+      "Opravný sešit má list VSECHNY RADKY, ale neobsahuje žádné použitelné řádky.",
+      400,
+      "collection_route_sources_repair_workbook_empty"
+    );
+  }
+
+  const sourceFiles = [...fileStats.values()].map((file) => ({
+    id: file.id,
+    batchId,
+    filename: file.filename,
+    dayCode: dayFromText(file.filename),
+    weekMode: routeModeFromWeek(weekFromSourceContext(file.filename)),
+    vehicleCode: vehicleFromText(file.filename),
+    sheetCount: file.sheets.size,
+    sourceRowCount: file.sourceRowCount,
+    routeRowCount: file.routeRowCount,
+    metadata: {
+      sheets: [...file.sheets].map((sheetName) => ({ sheetName })),
+      source: COLLECTION_ROUTE_REPAIR_WORKBOOK_SOURCE,
+      repairWorkbookFilename: uploadedFilename,
+      createsOperationalRoutes: false,
+      sendsEmailOrSms: false,
+      startsAutomation: false
+    },
+    createdAt
+  }));
+  const limitedRows = sourceRows.slice(0, COLLECTION_ROUTE_SOURCE_MAX_ROWS);
+  const summary = sourceSummary(sourceFiles, limitedRows);
+  const issueCount = limitedRows.filter((row) => row.mappingStatus !== "namapováno").length;
+  const batch = {
+    id: batchId,
+    source: COLLECTION_ROUTE_REPAIR_WORKBOOK_SOURCE,
+    status: "preview",
+    message: `Načten opravný sešit z 13 Excelů: ${sourceFiles.length} zdrojových souborů a ${limitedRows.length} řádků. Ostré trasy nevznikly.`,
+    fileCount: sourceFiles.length,
+    rowCount: limitedRows.length,
+    issueCount,
+    createdByUserId: cleanString(user?.id),
+    createdAt,
+    metadata: {
+      phase: "svozove-trasy-repair-workbook-preview",
+      source: COLLECTION_ROUTE_REPAIR_WORKBOOK_SOURCE,
+      repairWorkbookFilename: uploadedFilename,
+      sourceSheet: repairSheet.sheet.sheetName,
+      summary,
+      createsOperationalRoutes: false,
+      sendsEmailOrSms: false,
+      startsAutomation: false
+    }
+  };
+
+  return {
+    batch,
+    files: sourceFiles,
+    rows: limitedRows,
+    summary,
+    apiStatus: "ready"
+  };
+}
+
+async function buildRepairWorkbookImportPayload(file, options = {}) {
+  const parsed = await parseSpreadsheetRows(file);
+  return buildRepairWorkbookImportPayloadFromParsed(parsed, options);
+}
+
+export function __buildCollectionRouteRepairWorkbookForTest(parsed, options = {}) {
+  return buildRepairWorkbookImportPayloadFromParsed(parsed, {
+    batchId: "test-batch",
+    createdAt: "2026-07-04T00:00:00.000Z",
+    uploadedFilename: "test-opravny-sesit.xlsx",
+    user: { id: "test-user" },
+    ...options
+  });
+}
+
 function sourcePartHasLegalSuffix(value) {
   const text = normalizeText(value);
   const compact = compactText(value);
@@ -1317,54 +1727,74 @@ export async function createCollectionRouteSourceImport(env, user, { files = [] 
     throw new CollectionRouteSourcesError("Nahrajte 13 Excel souborů svozových tras.", 400, "collection_route_sources_no_files");
   }
 
-  const preview = await buildCollectionRouteOptimizationPreview({ files: safeFiles });
   const batchId = randomId("collection-route-source-batch");
   const createdAt = nowIso();
-  const fileIds = new Map();
-  const sourceFiles = (preview.parsedFiles || []).map((file) => {
-    const id = randomId("collection-route-source-file");
-    fileIds.set(file.filename, id);
-    return {
-      id,
+  let payload = null;
+  if (safeFiles.length === 1) {
+    payload = await buildRepairWorkbookImportPayload(safeFiles[0], {
       batchId,
-      filename: file.filename,
-      dayCode: dayFromText(file.filename),
-      weekMode: weekFromText(file.filename),
-      vehicleCode: vehicleFromText(file.filename),
-      sheetCount: numericValue(file.sheetCount),
-      sourceRowCount: numericValue(file.sourceRowCount),
-      routeRowCount: numericValue(file.plannedRowCount),
-      metadata: {
-        sheets: file.sheets || [],
+      createdAt,
+      uploadedFilename: cleanString(safeFiles[0]?.filename || safeFiles[0]?.name || "opravny-sesit.xlsx"),
+      user
+    });
+  }
+
+  if (!payload) {
+    const preview = await buildCollectionRouteOptimizationPreview({ files: safeFiles });
+    const fileIds = new Map();
+    const sourceFiles = (preview.parsedFiles || []).map((file) => {
+      const id = randomId("collection-route-source-file");
+      fileIds.set(file.filename, id);
+      return {
+        id,
+        batchId,
+        filename: file.filename,
+        dayCode: dayFromText(file.filename),
+        weekMode: weekFromText(file.filename),
+        vehicleCode: vehicleFromText(file.filename),
+        sheetCount: numericValue(file.sheetCount),
+        sourceRowCount: numericValue(file.sourceRowCount),
+        routeRowCount: numericValue(file.plannedRowCount),
+        metadata: {
+          sheets: file.sheets || [],
+          source: "13-excel",
+          createsOperationalRoutes: false
+        },
+        createdAt
+      };
+    });
+    const sourceRows = buildSourceRows(preview, batchId, fileIds).slice(0, COLLECTION_ROUTE_SOURCE_MAX_ROWS);
+    const summary = sourceSummary(sourceFiles, sourceRows);
+    const issueCount = sourceRows.filter((row) => row.mappingStatus !== "nenamapováno").length;
+    payload = {
+      batch: {
+        id: batchId,
         source: "13-excel",
-        createsOperationalRoutes: false
+        status: "preview",
+        message: `Načteno ${sourceFiles.length} Excel souborů a ${sourceRows.length} zdrojových řádků. Ostré trasy nevznikly.`,
+        fileCount: sourceFiles.length,
+        rowCount: sourceRows.length,
+        issueCount,
+        createdByUserId: cleanString(user?.id),
+        createdAt,
+        metadata: {
+          phase: "svozove-trasy-source-preview",
+          source: "13-excel",
+          summary,
+          unsupportedFiles: preview.unsupportedFiles || [],
+          createsOperationalRoutes: false,
+          sendsEmailOrSms: false,
+          startsAutomation: false
+        }
       },
-      createdAt
-    };
-  });
-  const sourceRows = buildSourceRows(preview, batchId, fileIds).slice(0, COLLECTION_ROUTE_SOURCE_MAX_ROWS);
-  const summary = sourceSummary(sourceFiles, sourceRows);
-  const issueCount = sourceRows.filter((row) => row.mappingStatus !== "nenamapováno").length;
-  const batch = {
-    id: batchId,
-    source: "13-excel",
-    status: "preview",
-    message: `Načteno ${sourceFiles.length} Excel souborů a ${sourceRows.length} zdrojových řádků. Ostré trasy nevznikly.`,
-    fileCount: sourceFiles.length,
-    rowCount: sourceRows.length,
-    issueCount,
-    createdByUserId: cleanString(user?.id),
-    createdAt,
-    metadata: {
-      phase: "svozove-trasy-source-preview",
-      source: "13-excel",
+      files: sourceFiles,
+      rows: sourceRows,
       summary,
-      unsupportedFiles: preview.unsupportedFiles || [],
-      createsOperationalRoutes: false,
-      sendsEmailOrSms: false,
-      startsAutomation: false
-    }
-  };
+      apiStatus: "ready"
+    };
+  }
+
+  const { batch, files: sourceFiles, rows: sourceRows, summary } = payload;
 
   try {
     await db.prepare(`
@@ -1448,7 +1878,7 @@ export async function createCollectionRouteSourceImport(env, user, { files = [] 
     files: sourceFiles,
     rows: sourceRows.slice(0, 200),
     summary,
-    apiStatus: "ready"
+    apiStatus: payload.apiStatus || "ready"
   };
 }
 
