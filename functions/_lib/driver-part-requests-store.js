@@ -6,13 +6,17 @@ import {
 } from "./fleet-vehicles-store.js";
 import {
   extractLicensePlate,
+  driverPartAiCandidateFromMatch,
+  driverPartAiSkipReasonLabel,
   identifyProbablePartFromDescription,
   driverPartRequestInitialStatus,
   licensePlateKey,
   normalizeLicensePlate,
+  normalizePartAiStatus,
   normalizePartVerificationStatus,
   normalizeVehicleBrand,
   partSideLabel,
+  partLookupQueryFromRequest,
   vehicleBrandLabel
 } from "./driver-parts-catalog.js";
 import { verifyMercedesPartForRequest } from "./mercedes-parts-provider.js";
@@ -215,6 +219,15 @@ function rowToRequest(row, events = []) {
   const source = cleanString(row?.source || "manual");
   const licensePlateVerified = !source.includes("unverified_plate");
   const manualVehicleReview = driverPartRequestSourceHasManualVehicleReview(source);
+  const partMatch = identifyProbablePartFromDescription(row?.defect_description);
+  const storedProbablePart = cleanString(row?.probable_part);
+  const partAiCandidate = Boolean(storedProbablePart || driverPartAiCandidateFromMatch(partMatch));
+  const partAiSkipReason = partAiCandidate
+    ? ""
+    : cleanString(partMatch.aiSkipReason || "part_not_clear");
+  const partAiStatus = partAiCandidate
+    ? "manual_verification_required"
+    : normalizePartAiStatus(partMatch.aiPilotStatus || partAiSkipReason, "manual_verification_required");
   return {
     id: cleanString(row?.id),
     reportId: cleanString(row?.report_id),
@@ -238,6 +251,13 @@ function rowToRequest(row, events = []) {
     probablePartSide: cleanString(row?.probable_part_side || "unknown"),
     probablePartSideLabel: partSideLabel(row?.probable_part_side),
     partIdentificationStatus: cleanString(row?.part_identification_status),
+    partAiStatus,
+    partAiCandidate,
+    partAiSkipReason,
+    partAiSkipReasonLabel: driverPartAiSkipReasonLabel(partAiSkipReason),
+    partAiDetectedName: storedProbablePart || cleanString(partMatch.probablePart),
+    partAiDetectedSide: cleanString(row?.probable_part_side || partMatch.probablePartSide || "unknown"),
+    partAiConfidence: partAiCandidate ? cleanString(partMatch.confidence || "medium") : "none",
     verifiedPart: cleanString(row?.verified_part),
     partOrderNumber: cleanString(row?.part_order_number),
     oePartNumber: cleanString(row?.oe_part_number),
@@ -294,6 +314,110 @@ function rowToRequest(row, events = []) {
     updatedByUserId: cleanString(row?.updated_by_user_id),
     updatedAt: cleanString(row?.updated_at),
     events
+  };
+}
+
+function driverPartVinPilotState(item = {}, eligibility = null, latestSearch = null) {
+  const hasVerifiedPart = Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partOrderNumber);
+  const hasProviderResult = Boolean(item.partsProviderStatus || latestSearch?.status);
+  const emailSent = item.patrikEmailStatus === "sent";
+  const handedToPatrik = Boolean(item.handedOffToPatrikAt || emailSent);
+
+  if (!item.partAiCandidate) {
+    return {
+      status: normalizePartAiStatus(item.partAiStatus || item.partAiSkipReason, "manual_verification_required"),
+      candidate: false,
+      skipReason: item.partAiSkipReason,
+      message: "AI Boost nespustil hledání, protože hlášení není jednoznačný požadavek na konkrétní díl."
+    };
+  }
+
+  if (item.manualVehicleReview || !item.licensePlateVerified) {
+    return {
+      status: "manual_verification_required",
+      candidate: true,
+      skipReason: "vehicle_not_verified",
+      message: "SPZ nebo přiřazení vozidla vyžaduje ruční kontrolu."
+    };
+  }
+
+  if (eligibility?.errorCode === "PARTSLINK24_ONLY_PASSENGER_VEHICLES") {
+    return {
+      status: "out_of_pilot",
+      candidate: true,
+      skipReason: "out_of_pilot",
+      message: "Pilot náhradních dílů podle VIN je zatím povolený jen pro osobní vozidla."
+    };
+  }
+
+  if (eligibility?.errorCode === "PARTSLINK24_VIN_MISSING") {
+    return {
+      status: "waiting_vin",
+      candidate: true,
+      skipReason: "missing_vin",
+      message: "U vozidla není uložené VIN. Doplň VIN ve Vozovém parku."
+    };
+  }
+
+  if (eligibility && eligibility.allowed !== true) {
+    return {
+      status: "manual_verification_required",
+      candidate: true,
+      skipReason: eligibility.errorCode === "PARTSLINK24_VEHICLE_NOT_FOUND" ? "vehicle_not_verified" : "part_not_clear",
+      message: eligibility.message || "Pilot čeká na ruční ověření."
+    };
+  }
+
+  if (emailSent) {
+    return {
+      status: "email_sent",
+      candidate: true,
+      skipReason: "",
+      message: "E-mail Patrikovi byl odeslaný. Nic nebylo automaticky objednáno."
+    };
+  }
+
+  if (handedToPatrik) {
+    return {
+      status: "handed_to_patrik",
+      candidate: true,
+      skipReason: "",
+      message: "Hlášení je předané Patrikovi k ručnímu ověření a nákupu."
+    };
+  }
+
+  if (hasVerifiedPart) {
+    return {
+      status: item.priceBoostStatus === "waiting_verified_part" ? "waiting_verified_oe" : "email_ready",
+      candidate: true,
+      skipReason: "",
+      message: "Díl má ručně nebo providerem doplněné ověření. Cenový průzkum a nákup zůstávají ruční pilot."
+    };
+  }
+
+  if (item.partsProviderStatus === "not_configured" || item.partsProviderStatus === "api_not_available" || latestSearch?.status === "configuration_missing") {
+    return {
+      status: "provider_not_configured",
+      candidate: true,
+      skipReason: "",
+      message: "Partslink24 není nastaven. Ověření zatím probíhá ručně."
+    };
+  }
+
+  if (hasProviderResult) {
+    return {
+      status: "manual_verification_required",
+      candidate: true,
+      skipReason: "",
+      message: item.partsProviderMessage || latestSearch?.message || "Výsledek provideru vyžaduje ruční ověření."
+    };
+  }
+
+  return {
+    status: "ready_for_vin_verification",
+    candidate: true,
+    skipReason: "",
+    message: "Konkrétní díl je rozpoznaný. Pokud jde o osobní vozidlo s VIN, lze spustit read-only ověření podle VIN."
   };
 }
 
@@ -437,6 +561,33 @@ function normalizeCreatePayload(payload, user, vehicle, driverContact = null) {
 
   const vehicleName = cleanString(payload.vehicleName || vehicle?.internalNumber || vehicle?.model || licensePlate);
   const brand = normalizeVehicleBrand(payload.vehicleBrand || payload.brand || vehicle?.brand || vehicle?.model);
+  const probablePart = cleanString(payload.probablePart || partMatch.probablePart);
+  const partAiCandidate = Boolean(probablePart && driverPartAiCandidateFromMatch(partMatch));
+  const partLookupQuery = cleanString(payload.partLookupQuery || partLookupQueryFromRequest({
+    probablePart,
+    defectType: cleanString(payload.defectType || partMatch.defectType),
+    defectDescription: rawDescription,
+    probablePartSide: partMatch.probablePartSide
+  }));
+  const partVerificationStatus = normalizePartVerificationStatus(
+    payload.partVerificationStatus || (partAiCandidate ? "probable_part" : partMatch.partIdentificationStatus)
+  );
+  const partsProviderStatus = cleanString(payload.partsProviderStatus || (
+    partAiCandidate ? "waiting_vin_pilot" : "not_applicable"
+  ));
+  const partsProviderMessage = cleanString(payload.partsProviderMessage || (
+    partAiCandidate
+      ? "AI Boost rozpoznal konkrétní díl. Ověření podle VIN je read-only pilot a čeká na ruční spuštění."
+      : partMatch.note
+  ));
+  const priceBoostStatus = cleanString(payload.priceBoostStatus || (
+    partAiCandidate ? "waiting_verified_part" : "not_requested"
+  ));
+  const priceBoostNote = cleanString(payload.priceBoostNote || (
+    partAiCandidate
+      ? "Cenový průzkum čeká na ověřené OE číslo. Nic se automaticky neobjedná."
+      : "Cenový průzkum se nespustil, protože hlášení není jednoznačný požadavek na konkrétní díl."
+  ));
 
   return {
     reportedAt: cleanString(payload.reportedAt) || new Date().toISOString(),
@@ -454,11 +605,27 @@ function normalizeCreatePayload(payload, user, vehicle, driverContact = null) {
     damagePhotoRequestedAt: cleanString(payload.damagePhotoRequestedAt || new Date().toISOString()),
     damagePhotoDocumentId: cleanString(payload.damagePhotoDocumentId),
     damagePhotoNote: cleanString(payload.damagePhotoNote || "Šarlota / systém požádal řidiče o fotku poškození."),
-    probablePart: cleanString(payload.probablePart || partMatch.probablePart),
+    probablePart,
     probablePartSide: cleanString(payload.probablePartSide || partMatch.probablePartSide || "unknown"),
     partIdentificationStatus: cleanString(payload.partIdentificationStatus || partMatch.partIdentificationStatus),
     verifiedPart: cleanString(payload.verifiedPart),
     partOrderNumber: cleanString(payload.partOrderNumber),
+    oePartNumber: cleanString(payload.oePartNumber || payload.oeNumber),
+    partName: cleanString(payload.partName),
+    partVerificationStatus,
+    partVerificationSource: cleanString(payload.partVerificationSource),
+    partsProviderId: cleanString(payload.partsProviderId || (partAiCandidate ? "partslink24" : "")),
+    partsProviderStatus,
+    partsProviderMessage,
+    partsProviderError: cleanString(payload.partsProviderError),
+    partLookupQuery,
+    partLookupResultJson: cleanString(payload.partLookupResultJson),
+    mercedesManualPortalUrl: cleanString(payload.mercedesManualPortalUrl),
+    mercedesMyPartsHubUrl: cleanString(payload.mercedesMyPartsHubUrl),
+    priceBoostStatus,
+    priceBoostNote,
+    priceBoostCheckedAt: cleanString(payload.priceBoostCheckedAt),
+    priceBoostResultJson: cleanString(payload.priceBoostResultJson),
     status: normalizeStatus(payload.status, driverPartRequestInitialStatus(partMatch)),
     note: cleanString(payload.note || partMatch.note),
     source: cleanString(payload.source || "manual")
@@ -519,11 +686,28 @@ export async function getDriverPartRequest(env, user, id) {
     const { db, item } = await requestForUser(env, id, user);
     const partslink24Eligibility = await partslink24EligibilityForDriverPartRequest(env, user, item);
     const partslink24VinSearch = await latestPartslink24VinSearchForRequest(env, item.id);
+    const partVinPilot = driverPartVinPilotState(item, partslink24Eligibility, partslink24VinSearch);
     return {
       ...item,
       events: await eventsForRequest(db, item.id),
       partslink24Eligibility,
-      partslink24VinSearch
+      partslink24VinSearch,
+      partVinPilot: {
+        ...partVinPilot,
+        detectedName: item.partAiDetectedName || item.probablePart,
+        detectedSide: item.partAiDetectedSide || item.probablePartSide,
+        confidence: item.partAiConfidence || "none",
+        vehicleInPilot: partslink24Eligibility?.allowed === true,
+        vehicleKind: partslink24Eligibility?.vehicleKind || "",
+        vinMasked: partslink24Eligibility?.vinMasked || "",
+        providerStatus: item.partsProviderStatus || partslink24VinSearch?.status || "",
+        providerName: item.partsProviderId || "partslink24",
+        providerCheckedAt: partslink24VinSearch?.createdAt || "",
+        internetOffers: [],
+        patrikEmailStatus: item.patrikEmailStatus || "not_sent",
+        pilotCcStatus: item.patrikEmailStatus === "sent" ? "sent_or_included_by_backend" : "not_sent",
+        resolutionStatus: item.status
+      }
     };
   } catch (error) {
     if (error instanceof DriverPartRequestsStoreError) throw error;
@@ -701,6 +885,22 @@ export async function createDriverPartRequest(env, user, payload = {}) {
             part_identification_status,
             verified_part,
             part_order_number,
+            oe_part_number,
+            part_name,
+            part_verification_status,
+            part_verification_source,
+            parts_provider_id,
+            parts_provider_status,
+            parts_provider_message,
+            parts_provider_error,
+            part_lookup_query,
+            part_lookup_result_json,
+            mercedes_manual_portal_url,
+            mercedes_mypartshub_url,
+            price_boost_status,
+            price_boost_note,
+            price_boost_checked_at,
+            price_boost_result_json,
             status,
             note,
             source,
@@ -708,7 +908,7 @@ export async function createDriverPartRequest(env, user, payload = {}) {
             created_at,
             updated_by_user_id,
             updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .bind(
           id,
@@ -733,6 +933,22 @@ export async function createDriverPartRequest(env, user, payload = {}) {
           item.partIdentificationStatus,
           nullableString(item.verifiedPart),
           nullableString(item.partOrderNumber),
+          nullableString(item.oePartNumber),
+          nullableString(item.partName),
+          item.partVerificationStatus,
+          nullableString(item.partVerificationSource),
+          nullableString(item.partsProviderId),
+          nullableString(item.partsProviderStatus),
+          nullableString(item.partsProviderMessage),
+          nullableString(item.partsProviderError),
+          nullableString(item.partLookupQuery),
+          nullableString(item.partLookupResultJson),
+          nullableString(item.mercedesManualPortalUrl),
+          nullableString(item.mercedesMyPartsHubUrl),
+          item.priceBoostStatus,
+          nullableString(item.priceBoostNote),
+          nullableString(item.priceBoostCheckedAt),
+          nullableString(item.priceBoostResultJson),
           item.status,
           nullableString(item.note),
           item.source,
@@ -1487,3 +1703,8 @@ export function driverPartRequestPermissionSummary(user) {
       : ""
   };
 }
+
+export const __test = {
+  driverPartVinPilotState,
+  normalizeCreatePayload
+};

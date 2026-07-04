@@ -21,6 +21,24 @@ const PART_VERIFICATION_STATUSES = new Set([
   "verification_error",
   "not_applicable"
 ]);
+const PART_AI_STATUSES = new Set([
+  "waiting_part_identification",
+  "manual_verification_required",
+  "maintenance_or_consumable",
+  "ambiguous_fault",
+  "out_of_pilot",
+  "waiting_vin",
+  "ready_for_vin_verification",
+  "provider_not_configured",
+  "waiting_verified_oe",
+  "email_ready",
+  "email_sent",
+  "handed_to_patrik",
+  "ordered_manually",
+  "part_arrived",
+  "completed",
+  "canceled"
+]);
 
 export const PART_CATALOG_SOURCES = [
   {
@@ -150,9 +168,54 @@ function partMatchFromSide(description, config) {
   };
 }
 
+function skipPartMatch(reason, message, status = "waiting_manual_verification") {
+  const maintenance = reason === "maintenance_or_consumable";
+  return {
+    defectType: maintenance ? "běžná údržba / provozní materiál" : "neurčitá závada",
+    probablePart: "",
+    probablePartBase: "",
+    probablePartSide: "unknown",
+    probablePartSideLabel: "neznámá strana",
+    sideSource: "",
+    confidence: "none",
+    partIdentificationStatus: status,
+    needsPartSideClarification: false,
+    needsManualVerification: true,
+    aiPartCandidate: false,
+    aiSkipReason: reason,
+    aiPilotStatus: reason,
+    verifiedPart: "",
+    partOrderNumber: "",
+    note: message
+  };
+}
+
 export function identifyProbablePartFromDescription(description) {
   const text = cleanString(description);
   const normalized = normalizeText(text);
+
+  if (/\b(servis|udrzba|kontrola|olej|oleje|kapalina|kapaliny|filtr|filtry|zarovka|zarovky|sterac|sterace|stirac|stirace|pneumatika|pneumatiky|guma|gumy|provozni material|adblue)\b/.test(normalized)) {
+    return skipPartMatch(
+      "maintenance_or_consumable",
+      "AI Boost nespustil hledání, protože jde o běžnou údržbu nebo provozní materiál.",
+      "not_applicable"
+    );
+  }
+
+  if (/\b(neco|něco|piska|píská|vibruje|divne|divně|nejde nastartovat|nestartuje|sviti kontrolka|svítí kontrolka|kontrolka|brzdi divne|brzdí divně|podvozek)\b/.test(normalized)) {
+    return skipPartMatch(
+      "ambiguous_fault",
+      "AI Boost nespustil hledání, protože hlášení není jednoznačný požadavek na konkrétní díl."
+    );
+  }
+
+  if (/\b(predni sklo|přední sklo|celni sklo|čelní sklo|sklo)\b/.test(normalized)) {
+    return partMatchFromSide(text, {
+      defectType: "poškozené sklo",
+      basePart: normalized.includes("zadni") || normalized.includes("zadní") ? "zadní sklo" : "přední sklo",
+      sideAware: false
+    });
+  }
 
   if (normalized.includes("zrcatko") || normalized.includes("zpetne zrcat")) {
     return partMatchFromSide(text, {
@@ -174,19 +237,19 @@ export function identifyProbablePartFromDescription(description) {
     });
   }
 
-  if (/\b(pneumatika|guma|kolo)\b/.test(normalized)) {
+  if (/\b(kolo|disk)\b/.test(normalized)) {
     return partMatchFromSide(text, {
-      defectType: "poškozená pneumatika",
-      basePart: "pneumatika",
+      defectType: "poškozené kolo",
+      basePart: normalized.includes("disk") ? "disk kola" : "kolo",
       sideAware: false
     });
   }
 
-  if (/\b(sterac|stěrač|rameno sterace|rameno stěrače)\b/.test(normalized)) {
+  if (/\b(klika|madlo dveri|madlo dveří)\b/.test(normalized)) {
     return partMatchFromSide(text, {
-      defectType: "poškozený stěrač",
-      basePart: normalized.includes("rameno") ? "rameno stěrače" : "stěrač",
-      sideAware: false
+      defectType: "poškozená klika dveří",
+      basePart: normalized.includes("ridice") || normalized.includes("řidiče") ? "klika dveří řidiče" : "klika dveří",
+      sideAware: true
     });
   }
 
@@ -206,6 +269,22 @@ export function identifyProbablePartFromDescription(description) {
     });
   }
 
+  if (/\b(kapota|haubna)\b/.test(normalized)) {
+    return partMatchFromSide(text, {
+      defectType: "poškozená kapota",
+      basePart: "kapota",
+      sideAware: false
+    });
+  }
+
+  if (/\b(cidlo abs|čidlo abs|abs senzor|senzor abs)\b/.test(normalized)) {
+    return partMatchFromSide(text, {
+      defectType: "vadné čidlo ABS",
+      basePart: "čidlo ABS",
+      sideAware: true
+    });
+  }
+
   return {
     defectType: "náhradní díl",
     probablePart: "",
@@ -217,6 +296,9 @@ export function identifyProbablePartFromDescription(description) {
     partIdentificationStatus: "waiting_manual_verification",
     needsPartSideClarification: false,
     needsManualVerification: true,
+    aiPartCandidate: false,
+    aiSkipReason: "ambiguous_fault",
+    aiPilotStatus: "ambiguous_fault",
     verifiedPart: "",
     partOrderNumber: "",
     note: "Díl zatím nebyl bezpečně rozpoznán. Čeká na ruční ověření."
@@ -235,6 +317,26 @@ export function partLookupQueryFromRequest(request = {}) {
     request.defectDescription,
     partSideLabel(request.probablePartSide)
   ].map(cleanString).filter(Boolean).join(" ");
+}
+
+export function driverPartAiCandidateFromMatch(partMatch = {}) {
+  return Boolean(partMatch.probablePart && partMatch.aiPartCandidate !== false);
+}
+
+export function normalizePartAiStatus(value, fallback = "waiting_part_identification") {
+  const normalized = cleanString(value);
+  return PART_AI_STATUSES.has(normalized) ? normalized : fallback;
+}
+
+export function driverPartAiSkipReasonLabel(reason = "") {
+  const normalized = cleanString(reason);
+  if (normalized === "maintenance_or_consumable") return "běžná údržba / provozní materiál";
+  if (normalized === "ambiguous_fault") return "neurčitá závada";
+  if (normalized === "out_of_pilot") return "mimo pilot";
+  if (normalized === "missing_vin") return "chybí VIN";
+  if (normalized === "vehicle_not_verified") return "vozidlo není bezpečně ověřené";
+  if (normalized === "part_not_clear") return "díl není jednoznačný";
+  return normalized || "neuvedeno";
 }
 
 export function driverPartRequestInitialStatus(partMatch) {

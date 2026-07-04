@@ -404,17 +404,36 @@ const DRIVER_REPORT_PART_VERIFICATION_LABELS = {
 };
 const DRIVER_REPORT_PART_SOURCE_LABELS = {
   daimler: "Daimler / Mercedes-Benz Trucks",
+  partslink24: "Partslink24",
   manual: "Ručně",
   internal: "Interní databáze Kaiser",
   tecdoc: "TecDoc / TecAlliance"
 };
 const DRIVER_REPORT_PRICE_BOOST_LABELS = {
-  not_requested: "Čeká na ověřený díl",
+  not_requested: "Čeká na ověřené OE číslo",
   waiting_verified_part: "Připraveno po potvrzení kompatibility",
   running: "Vyhledává cenové kandidáty",
   candidates_found: "Kandidáti k ověření",
   failed: "Chyba průzkumu",
   skipped: "Neprovádí se"
+};
+const DRIVER_REPORT_VIN_PILOT_LABELS = {
+  waiting_part_identification: "Čeká na identifikaci dílu",
+  manual_verification_required: "Čeká na ruční ověření",
+  maintenance_or_consumable: "Nespouštět",
+  ambiguous_fault: "Neurčitá závada",
+  out_of_pilot: "Mimo pilot",
+  waiting_vin: "Čeká na VIN",
+  ready_for_vin_verification: "Připraveno k ověření",
+  provider_not_configured: "Partslink24 není nastaven",
+  waiting_verified_oe: "Čeká na ověřené OE číslo",
+  email_ready: "E-mail připraven",
+  email_sent: "E-mail odeslán",
+  handed_to_patrik: "Předáno Patrikovi",
+  ordered_manually: "Objednáno ručně",
+  part_arrived: "Díl dorazil",
+  completed: "Vyřízeno",
+  canceled: "Zrušeno"
 };
 const AI_INITIAL_MESSAGE =
   `${assistantById(DEFAULT_AI_ASSISTANT_ID).intro} Zeptej se mě na nepřítomnost, pneumatiky, připomínky, uživatele nebo nastavení.`;
@@ -14032,6 +14051,11 @@ const COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS = [
   ["ostatní", "ostatní / neznámé"]
 ];
 
+const COLLECTION_ROUTES_SOURCE_WASTE_VALUES = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS
+  .map(([value]) => value)
+  .filter((value) => value !== "all");
+const COLLECTION_ROUTES_SOURCE_KNOWN_WASTE_VALUES = new Set(["SKO", "BIO", "PAPIR", "PLAST", "SKLO"]);
+
 const COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS = [
   ["all", "vše"],
   ["problemove", "jen problémové"],
@@ -14259,7 +14283,7 @@ function collectionRoutesSourceMaybeApplySmartDefaultFilters() {
     day: promoted.dayCode,
     week: promoted.weekMode,
     vehicle: filters.vehicle || "all",
-    waste: filters.waste || "all",
+    waste: collectionRoutesSourceWasteFilterValue(filters.waste || "all"),
     mappingStatus: filters.mappingStatus || "all"
   };
 }
@@ -14284,8 +14308,62 @@ function collectionRoutesSourceSmartSelectedVehicle() {
 }
 
 function collectionRoutesSourceSmartSelectedWaste() {
-  const waste = collectionRoutesSourceFilterValue("waste");
-  return COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.some(([value]) => value === waste) ? waste : "all";
+  return collectionRoutesSourceWasteFilterValue(collectionRoutesSourceFilterValue("waste"));
+}
+
+function collectionRoutesSourceWasteValues(value) {
+  const rawValues = Array.isArray(value)
+    ? value
+    : String(value || "all").split(",");
+  const selected = rawValues
+    .map((item) => String(item || "").trim())
+    .filter((item) => item && item !== "all" && COLLECTION_ROUTES_SOURCE_WASTE_VALUES.includes(item));
+  return COLLECTION_ROUTES_SOURCE_WASTE_VALUES.filter((value) => selected.includes(value));
+}
+
+function collectionRoutesSourceWasteFilterValue(value) {
+  const values = collectionRoutesSourceWasteValues(value);
+  return values.length ? values.join(",") : "all";
+}
+
+function collectionRoutesSourceWasteFilterLabel(value) {
+  const values = collectionRoutesSourceWasteValues(value);
+  if (!values.length) {
+    return "vše";
+  }
+  return values
+    .map((item) => collectionRoutesSourceWasteLabel(item))
+    .join(" + ");
+}
+
+function collectionRoutesSourceWasteApiValue(value) {
+  const values = collectionRoutesSourceWasteValues(value);
+  return values.length === 1 ? values[0] : "all";
+}
+
+function collectionRoutesSourceRowWasteFilterValue(row) {
+  const wasteType = String(row?.wasteType || "").trim();
+  if (COLLECTION_ROUTES_SOURCE_KNOWN_WASTE_VALUES.has(wasteType)) {
+    return wasteType;
+  }
+  const wasteCode = String(row?.wasteCode || "").trim();
+  const codeToWaste = {
+    "200301": "SKO",
+    "200201": "BIO",
+    "200108": "BIO",
+    "200101": "PAPIR",
+    "200139": "PLAST",
+    "200102": "SKLO"
+  };
+  return codeToWaste[wasteCode] || "ostatní";
+}
+
+function collectionRoutesSourceWasteMatchesFilter(row, wasteFilter = collectionRoutesSourceFilterValue("waste")) {
+  const selectedValues = collectionRoutesSourceWasteValues(wasteFilter);
+  if (!selectedValues.length) {
+    return true;
+  }
+  return selectedValues.includes(collectionRoutesSourceRowWasteFilterValue(row));
 }
 
 function collectionRoutesSourceSmartSelectedStatus() {
@@ -14311,6 +14389,7 @@ function collectionRoutesSourceStatusMatchesSmartFilter(row, smartStatus = colle
 function collectionRoutesSourceDisplayRows() {
   const smartStatus = collectionRoutesSourceSmartSelectedStatus();
   return collectionRoutesPilotState.sourceRows.filter((row) =>
+    collectionRoutesSourceWasteMatchesFilter(row) &&
     collectionRoutesSourceStatusMatchesSmartFilter(row, smartStatus)
   );
 }
@@ -14678,7 +14757,8 @@ function collectionRoutesSourceVistosSite(row) {
 }
 
 function collectionRoutesSourceSummaryCards() {
-  const summary = collectionRoutesPilotState.sourceSummary || {};
+  const rows = collectionRoutesSourceDisplayRows();
+  const summary = collectionRoutesSourceRowsMetrics(rows);
   const mappingCounts = summary.mappingCounts || {};
   const latestBatch = collectionRoutesPilotState.sourceBatches.find((batch) => batch.id === collectionRoutesPilotState.sourceSelectedBatchId) ||
     collectionRoutesPilotState.sourceBatches[0] ||
@@ -14687,7 +14767,7 @@ function collectionRoutesSourceSummaryCards() {
     <div class="collection-routes-stats" aria-label="Souhrn Svozových tras z 13 Excelů">
       <article><span>Zdroj</span><strong>13 Excelů</strong></article>
       <article><span>Import</span><strong>${escapeHtml(formatDateTime(latestBatch?.createdAt) || "čeká")}</strong></article>
-      <article><span>Řádky ve filtru</span><strong>${collectionRoutesMetricValue(summary.rowCount || collectionRoutesPilotState.sourceRows.length)}</strong></article>
+      <article><span>Řádky ve filtru</span><strong>${collectionRoutesMetricValue(summary.rowCount || rows.length)}</strong></article>
       <article><span>Nádoby</span><strong>${collectionRoutesMetricValue(summary.containerCount)}</strong></article>
       <article><span>Odhad času</span><strong>${collectionRoutesMetricValue(summary.estimatedMinutes)} min</strong></article>
       <article><span>Odhad hmotnosti</span><strong>${collectionRoutesMetricValue(summary.estimatedTons)} t</strong></article>
@@ -15343,6 +15423,33 @@ function collectionRoutesSourceImportCards() {
   `;
 }
 
+function collectionRoutesSourceWasteMultiFilter({ selectedWaste = collectionRoutesSourceFilterValue("waste"), smart = false } = {}) {
+  const selectedValues = collectionRoutesSourceWasteValues(selectedWaste);
+  const controlAttribute = smart
+    ? "data-collection-routes-source-smart-waste-option"
+    : "data-collection-routes-source-waste-option";
+  return `
+    <div class="collection-routes-waste-multi" role="group" aria-label="Filtr odpadu">
+      ${COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.map(([value, label]) => {
+        const checked = value === "all"
+          ? selectedValues.length === 0
+          : selectedValues.includes(value);
+        return `
+          <label class="collection-routes-waste-chip ${checked ? "collection-routes-waste-chip--active" : ""}">
+            <input
+              type="checkbox"
+              value="${escapeHtml(value)}"
+              ${controlAttribute}
+              ${checked ? "checked" : ""}
+            >
+            <span>${escapeHtml(label)}</span>
+          </label>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 function collectionRoutesSourceFilters() {
   const selectedBatchId = collectionRoutesPilotState.sourceSelectedBatchId || collectionRoutesPilotState.sourceBatches[0]?.id || "";
   return `
@@ -15384,12 +15491,10 @@ function collectionRoutesSourceFilters() {
           `).join("")}
         </select>
       </label>
-      <label>
+      <div class="collection-routes-field collection-routes-field--waste">
         <span>Odpad</span>
-        <select data-collection-routes-source-filter="waste">
-          ${COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.map(([value, label]) => `<option value="${escapeHtml(value)}" ${collectionRoutesSourceFilterValue("waste") === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-        </select>
-      </label>
+        ${collectionRoutesSourceWasteMultiFilter()}
+      </div>
       <label>
         <span>Mapování</span>
         <select data-collection-routes-source-filter="mappingStatus">
@@ -15411,7 +15516,7 @@ function collectionRoutesSourceSmartFilterPanel() {
   const selectedWaste = collectionRoutesSourceSmartSelectedWaste();
   const selectedStatus = collectionRoutesSourceSmartSelectedStatus();
   const selectedOption = options.find((option) => option.key === selectedDayKey) || today;
-  const selectedWasteLabel = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.find(([value]) => value === selectedWaste)?.[1] || "vše";
+  const selectedWasteLabel = collectionRoutesSourceWasteFilterLabel(selectedWaste);
   const selectedStatusLabel = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.find(([value]) => value === selectedStatus)?.[1] || "vše";
   const selectedDateLabel = selectedOption ? collectionRoutesSourceSmartDateOptionLabel(selectedOption) : "termín";
   const selectedRouteLabel = [
@@ -15458,14 +15563,10 @@ function collectionRoutesSourceSmartFilterPanel() {
             data-collection-routes-source-smart-filter="customDate"
           >
         </label>
-        <label>
+        <div class="collection-routes-field collection-routes-field--waste">
           <span>Odpad</span>
-          <select data-collection-routes-source-smart-filter="waste">
-            ${COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.map(([value, label]) => `
-              <option value="${escapeHtml(value)}" ${value === selectedWaste ? "selected" : ""}>${escapeHtml(label)}</option>
-            `).join("")}
-          </select>
-        </label>
+          ${collectionRoutesSourceWasteMultiFilter({ selectedWaste, smart: true })}
+        </div>
         <label>
           <span>Kontrola</span>
           <select data-collection-routes-source-smart-filter="status">
@@ -15563,7 +15664,7 @@ function collectionRoutesSourceRoutesSection() {
 
 function collectionRoutesSourceDataSection(user) {
   const canImport = collectionRoutesCanRunImportPreview(user);
-  const rows = collectionRoutesPilotState.sourceRows;
+  const rows = collectionRoutesSourceDisplayRows();
   return `
     <section class="collection-routes-panel" id="collection-routes-source-data" aria-labelledby="collection-routes-source-data-title">
       <div class="collection-routes-panel__head">
@@ -19951,6 +20052,19 @@ function driverReportPriceBoostLabel(status) {
   return DRIVER_REPORT_PRICE_BOOST_LABELS[status] || status || "Čeká na ověřený díl";
 }
 
+function driverReportVinPilotLabel(status) {
+  return DRIVER_REPORT_VIN_PILOT_LABELS[status] || status || "Čeká na ruční ověření";
+}
+
+function driverReportVinPilotTone(status) {
+  const normalized = String(status || "").trim();
+  if (["email_sent", "handed_to_patrik", "completed", "part_arrived"].includes(normalized)) return "done";
+  if (["ready_for_vin_verification", "email_ready", "waiting_verified_oe"].includes(normalized)) return "ready";
+  if (["provider_not_configured", "waiting_vin", "manual_verification_required", "ambiguous_fault", "maintenance_or_consumable", "out_of_pilot"].includes(normalized)) return "waiting";
+  if (["canceled"].includes(normalized)) return "cancel";
+  return "progress";
+}
+
 function driverReportNotificationLabel(status) {
   const normalized = String(status || "not_sent").trim();
   if (normalized === "sent") return "Odesláno";
@@ -20148,36 +20262,165 @@ function driverReportPartslink24StatusLabel(status) {
   return normalized || "Zatím bez hledání";
 }
 
+function driverReportVinPilotStep(title, status, body = "", fields = "", actions = "") {
+  return `
+    <div class="driver-report-vin-step driver-report-vin-step--${escapeHtml(driverReportVinPilotTone(status))}">
+      <div class="driver-report-vin-step__head">
+        <h4>${escapeHtml(title)}</h4>
+        <span>${escapeHtml(driverReportVinPilotLabel(status))}</span>
+      </div>
+      ${body ? `<p>${escapeHtml(body)}</p>` : ""}
+      ${fields ? `<div class="driver-report-vin-step__fields">${fields}</div>` : ""}
+      ${actions ? `<div class="driver-report-part-links">${actions}</div>` : ""}
+    </div>
+  `;
+}
+
+function driverReportInternetOffers(item) {
+  const pilotOffers = Array.isArray(item.partVinPilot?.internetOffers) ? item.partVinPilot.internetOffers : [];
+  let offers = pilotOffers;
+  if (!offers.length && item.priceBoostResultJson) {
+    try {
+      const parsed = JSON.parse(item.priceBoostResultJson);
+      offers = Array.isArray(parsed?.offers)
+        ? parsed.offers
+        : Array.isArray(parsed?.candidates) ? parsed.candidates : [];
+    } catch {
+      offers = [];
+    }
+  }
+
+  if (!offers.length) {
+    return `<p class="driver-report-note">Cenový průzkum čeká na ověřené OE číslo. Nic nebylo objednáno.</p>`;
+  }
+
+  return `
+    <ol class="driver-report-offers">
+      ${offers.slice(0, 3).map((offer) => `
+        <li>
+          <strong>${escapeHtml(offer.title || offer.name || "nabídka")}</strong>
+          <span>${escapeHtml(offer.price || offer.priceText || "cena neuvedena")}</span>
+          <small>${escapeHtml([offer.seller || offer.vendor, offer.availability].filter(Boolean).join(" · ") || "ověřit ručně")}</small>
+          ${offer.url ? `<a href="${escapeHtml(offer.url)}" target="_blank" rel="noopener noreferrer">Otevřít nabídku</a>` : ""}
+        </li>
+      `).join("")}
+    </ol>
+  `;
+}
+
 function driverReportPartslink24Section(item) {
   const eligibility = item.partslink24Eligibility || {};
   const latest = item.partslink24VinSearch || null;
+  const pilot = item.partVinPilot || {};
   const canSearch = driverReportCanSearchPartslink24() && eligibility.canSearchPartslink24 === true;
   const allowed = canSearch && eligibility.allowed === true;
   const loading = driverReportsState.actionLoading === `${item.id}:partslink24-vin`;
+  const pilotStatus = pilot.status || (allowed ? "ready_for_vin_verification" : "manual_verification_required");
   const statusText = latest
     ? driverReportPartslink24StatusLabel(latest.status)
     : driverReportPartslink24StatusLabel("");
-  const message = latest?.message || eligibility.message || "Pilotní vyhledání je dostupné jen pro osobní vozidla s VIN.";
+  const message = pilot.message || latest?.message || eligibility.message || "Pilotní vyhledání je dostupné jen pro osobní vozidla s VIN.";
   const workflowUrl = latest?.workflowUrl || "";
+  const partslink24Url = "https://www.partslink24.com/partslink24/startup.do";
+  const vinStatus = pilotStatus === "waiting_vin"
+    ? "waiting_vin"
+    : pilot.vehicleInPilot ? "ready_for_vin_verification" : pilotStatus;
+  const partStatus = pilot.candidate === false
+    ? pilotStatus
+    : item.partAiDetectedName || item.probablePart ? "ready_for_vin_verification" : "manual_verification_required";
+  const providerStatus = item.oePartNumber || item.partName
+    ? "email_ready"
+    : pilotStatus === "provider_not_configured" ? "provider_not_configured" : pilotStatus;
+  const searchButton = allowed
+    ? `<button class="secondary-link" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>${loading ? "Připravuji..." : "Ověřit díl podle VIN"}</button>`
+    : "";
+  const providerActions = [
+    searchButton,
+    `<a class="secondary-link" href="${escapeHtml(partslink24Url)}" target="_blank" rel="noopener noreferrer">Otevřít Partslink24</a>`,
+    item.mercedesManualPortalUrl || item.vehicleBrand === "mercedes"
+      ? `<a class="secondary-link" href="${escapeHtml(item.mercedesManualPortalUrl || "https://webpartstruck-cloud.mercedes-benz-trucks.com/webparts/")}" target="_blank" rel="noopener noreferrer">Otevřít WebParts</a>`
+      : "",
+    item.mercedesMyPartsHubUrl || item.vehicleBrand === "mercedes"
+      ? `<a class="secondary-link" href="${escapeHtml(item.mercedesMyPartsHubUrl || "https://mypartshub.daimlertruck.com")}" target="_blank" rel="noopener noreferrer">Otevřít MyPartsHub</a>`
+      : "",
+    workflowUrl ? `<a class="secondary-link" href="${escapeHtml(workflowUrl)}" target="_blank" rel="noopener noreferrer">Otevřít runner</a>` : ""
+  ].filter(Boolean).join("");
 
   return `
-    <section class="driver-report-part driver-report-partslink24" aria-label="Náhradní díly podle VIN">
+    <section class="driver-report-part driver-report-partslink24" aria-label="Náhradní díl podle VIN">
       <div class="driver-report-part__title">
         <div>
-          <h3>Náhradní díly podle VIN</h3>
-          <span>Read-only pilot · osobní vozidla</span>
+          <h3>Náhradní díl podle VIN</h3>
+          <span>${escapeHtml(driverReportVinPilotLabel(pilotStatus))} · read-only pilot</span>
         </div>
-        ${allowed ? `<button class="secondary-link" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>${loading ? "Připravuji..." : "Vyhledat ND podle VIN"}</button>` : ""}
       </div>
-      <div class="driver-report-detail-grid">
-        ${driverReportField("Vozidlo", item.vehicleName || item.licensePlate)}
-        ${driverReportField("VIN", eligibility.vinMasked || (item.vin ? "uložené ve Vozovém parku" : "není dostupné"))}
-        ${driverReportField("Rozsah pilotu", eligibility.vehicleKind === "osobni" ? "osobní vozidlo" : "mimo pilot / neověřeno")}
-        ${driverReportField("Stav posledního hledání", statusText)}
+      <div class="driver-report-vin-steps">
+        ${driverReportVinPilotStep(
+          "1. Identifikace vozidla",
+          vinStatus,
+          eligibility.message || "",
+          [
+            driverReportField("Vozidlo", item.vehicleName || item.licensePlate),
+            driverReportField("SPZ", item.licensePlate),
+            driverReportField("VIN", eligibility.vinMasked || (item.vin ? "uložené ve Vozovém parku" : "není dostupné")),
+            driverReportField("Rozsah pilotu", pilot.vehicleInPilot ? "osobní vozidlo" : driverReportVinPilotLabel(pilotStatus))
+          ].join("")
+        )}
+        ${driverReportVinPilotStep(
+          "2. Detekce dílu",
+          partStatus,
+          pilot.candidate === false ? message : "AI Boost našel kandidáta dílu. Výsledek je návrh, ne objednávka.",
+          [
+            driverReportField("Pravděpodobný díl", item.partAiDetectedName || item.probablePart),
+            driverReportField("Strana", driverReportSideLabel(item.partAiDetectedSide || item.probablePartSide)),
+            driverReportField("Jistota", item.partAiConfidence || "neuvedeno"),
+            driverReportField("Důvod přeskočení", item.partAiSkipReasonLabel || "")
+          ].join("")
+        )}
+        ${driverReportVinPilotStep(
+          "3. Ověření podle VIN",
+          providerStatus,
+          item.partsProviderMessage || latest?.message || "Ověření podle VIN je read-only pilot. Nic se v Partslink24 neobjednává.",
+          [
+            driverReportField("OE číslo", item.oePartNumber || item.partOrderNumber),
+            driverReportField("Název dílu", item.partName || item.verifiedPart),
+            driverReportField("Zdroj ověření", driverReportPartSourceLabel(item.partVerificationSource || pilot.providerName)),
+            driverReportField("Stav provideru", item.partsProviderStatus === "not_configured" ? "Partslink24 není nastaven" : (statusText || driverReportVinPilotLabel(providerStatus)))
+          ].join(""),
+          providerActions
+        )}
+        ${driverReportVinPilotStep(
+          "4. Cenový průzkum",
+          item.priceBoostStatus === "candidates_found" ? "email_ready" : "waiting_verified_oe",
+          item.priceBoostNote || "Cenový průzkum čeká na ověřené OE číslo.",
+          [
+            driverReportField("Stav", driverReportPriceBoostLabel(item.priceBoostStatus)),
+            driverReportField("Poslední hledání", item.priceBoostCheckedAt ? formatDateTime(item.priceBoostCheckedAt) : "")
+          ].join("") + driverReportInternetOffers(item)
+        )}
+        ${driverReportVinPilotStep(
+          "5. Předání Patrikovi",
+          pilot.patrikEmailStatus === "sent" ? "email_sent" : "email_ready",
+          "Pilotní návrh AI Boost. Nic nebylo objednáno. Patrik musí vše ručně ověřit před nákupem.",
+          [
+            driverReportField("E-mail Patrikovi", driverReportNotificationLabel(item.patrikEmailStatus)),
+            driverReportField("CC Radim", pilot.pilotCcStatus === "sent_or_included_by_backend" ? "pilotní CC / backend notifikace" : "čeká na odeslání"),
+            driverReportField("Předáno", item.handedOffToPatrikAt ? formatDateTime(item.handedOffToPatrikAt) : "")
+          ].join("")
+        )}
+        ${driverReportVinPilotStep(
+          "6. Stav vyřízení",
+          pilotStatus,
+          "Rozhodnutí o nákupu, objednání a uzavření zůstává ruční proces.",
+          [
+            driverReportField("Stav hlášení", driverReportStatusLabel(item.status)),
+            driverReportField("Ruční poznámka", item.note),
+            driverReportField("Poslední ověření", pilot.providerCheckedAt ? formatDateTime(pilot.providerCheckedAt) : "")
+          ].join("")
+        )}
       </div>
       <p class="driver-report-note">${escapeHtml(message)}</p>
-      <p class="driver-report-note">Pilotní vyhledání přes partslink24. Nic se neobjednává, nic se nepotvrzuje a ostré pokračování probíhá ručně přes schválený runner.</p>
-      ${workflowUrl ? `<div class="driver-report-part-links"><a class="secondary-link" href="${escapeHtml(workflowUrl)}" target="_blank" rel="noopener noreferrer">Otevřít GitHub Actions runner</a></div>` : ""}
+      <p class="driver-report-note">AI najde kandidáta, člověk ověří VIN/OE, cenový průzkum je návrh a Patrik ručně rozhodne. Nic se nikdy automaticky neobjedná.</p>
     </section>
   `;
 }
@@ -21931,9 +22174,9 @@ function collectionRoutesSourceRoutesApiUrl() {
   params.set("day", filters.day || "all");
   params.set("week", filters.week || "all");
   params.set("vehicle", filters.vehicle || "all");
-  params.set("waste", filters.waste || "all");
+  params.set("waste", collectionRoutesSourceWasteApiValue(filters.waste || "all"));
   params.set("mappingStatus", filters.mappingStatus || "all");
-  params.set("limit", "1000");
+  params.set("limit", "2000");
   return `/api/collection-routes/svozove-trasy/routes?${params.toString()}`;
 }
 
@@ -22286,7 +22529,31 @@ async function updateCollectionRoutesSourceFilter(select) {
   await loadCollectionRoutesSourceRoutes({ renderAfter: true });
 }
 
-function collectionRoutesSourceRowsCsv(rows = collectionRoutesPilotState.sourceRows) {
+function collectionRoutesSourceWasteValueFromControls(root, selector, changedControl = null) {
+  if (changedControl?.value === "all" && changedControl.checked) {
+    return "all";
+  }
+  const selected = Array.from(root?.querySelectorAll(`${selector}:checked`) || [])
+    .map((input) => input.value)
+    .filter((value) => value !== "all");
+  return collectionRoutesSourceWasteFilterValue(selected);
+}
+
+async function updateCollectionRoutesSourceWasteFilter(input) {
+  const panel = input.closest(".collection-routes-waste-multi") || document;
+  const waste = collectionRoutesSourceWasteValueFromControls(
+    panel,
+    "[data-collection-routes-source-waste-option]",
+    input
+  );
+  collectionRoutesPilotState.sourceFilters = {
+    ...(collectionRoutesPilotState.sourceFilters || {}),
+    waste
+  };
+  await loadCollectionRoutesSourceRoutes({ renderAfter: true });
+}
+
+function collectionRoutesSourceRowsCsv(rows = collectionRoutesSourceDisplayRows()) {
   const headers = [
     "Poradi",
     "Den",
@@ -22345,7 +22612,7 @@ function collectionRoutesSourceRowsCsv(rows = collectionRoutesPilotState.sourceR
 }
 
 function exportCollectionRoutesSourceCsv() {
-  const rows = collectionRoutesPilotState.sourceRows;
+  const rows = collectionRoutesSourceDisplayRows();
   if (!rows.length) {
     collectionRoutesPilotState.sourceImportError = "Není co exportovat. Nahrajte 13 Excelů nebo upravte filtr.";
     collectionRoutesPilotState.sourceImportMessage = "";
@@ -22525,9 +22792,9 @@ async function applyCollectionRoutesSourceSmartFilter(dayKey, vehicle, waste = "
   if (!option || !["all", "A", "B", "C"].includes(vehicle)) {
     return;
   }
-  const safeWaste = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.some(([value]) => value === waste) ? waste : "all";
+  const safeWaste = collectionRoutesSourceWasteFilterValue(waste);
   const safeStatus = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.some(([value]) => value === smartStatus) ? smartStatus : "all";
-  const wasteLabel = COLLECTION_ROUTES_SOURCE_WASTE_FILTER_OPTIONS.find(([value]) => value === safeWaste)?.[1] || "vše";
+  const wasteLabel = collectionRoutesSourceWasteFilterLabel(safeWaste);
   const statusLabel = COLLECTION_ROUTES_SOURCE_SMART_STATUS_OPTIONS.find(([value]) => value === safeStatus)?.[1] || "vše";
   if (option.disabled) {
     const promoted = collectionRoutesSourcePromotedNextWorkdayOption();
@@ -22565,8 +22832,11 @@ async function updateCollectionRoutesSourceSmartFilter(control) {
     collectionRoutesSourceSmartSelectedDayKey();
   const vehicle = panel?.querySelector('[data-collection-routes-source-smart-filter="vehicle"]')?.value ||
     collectionRoutesSourceSmartSelectedVehicle();
-  const waste = panel?.querySelector('[data-collection-routes-source-smart-filter="waste"]')?.value ||
-    collectionRoutesSourceSmartSelectedWaste();
+  const waste = collectionRoutesSourceWasteValueFromControls(
+    panel,
+    "[data-collection-routes-source-smart-waste-option]",
+    control.matches?.("[data-collection-routes-source-smart-waste-option]") ? control : null
+  ) || collectionRoutesSourceSmartSelectedWaste();
   const status = panel?.querySelector('[data-collection-routes-source-smart-filter="status"]')?.value ||
     collectionRoutesSourceSmartSelectedStatus();
   const customDate = panel?.querySelector('[data-collection-routes-source-smart-filter="customDate"]')?.value ||
@@ -22970,7 +23240,7 @@ function printCollectionRoutesSourcePdf() {
     ["SKO", "BIO", "PAPIR", "PLAST", "SKLO", "ostatní / neznámé", "ostatní", "-"],
     collectionRoutesSourceWasteLabel
   );
-  const selectedWaste = collectionRoutesSourceWasteLabel(filters.waste || "all");
+  const selectedWaste = collectionRoutesSourceWasteFilterLabel(filters.waste || "all");
   const html = `<!doctype html>
     <html lang="cs">
       <head>
@@ -23074,7 +23344,7 @@ function printCollectionRoutesSourceDriverPreview() {
   const title = `Řidičský náhled ${collectionRoutesSourceRouteTitle()}`;
   const generatedAt = formatDateTime(new Date().toISOString()) || new Date().toISOString();
   const batchLabel = formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "aktuální import";
-  const selectedWaste = collectionRoutesSourceWasteLabel(filters.waste || "all");
+  const selectedWaste = collectionRoutesSourceWasteFilterLabel(filters.waste || "all");
   const html = `<!doctype html>
     <html lang="cs">
       <head>
@@ -29539,6 +29809,18 @@ document.addEventListener("change", async (event) => {
   if (collectionRoutesOptimizedVehicleFilter) {
     collectionRoutesPilotState.routeOptimizationSelectedVehicle = collectionRoutesOptimizedVehicleFilter.value || "A";
     render();
+    return;
+  }
+
+  const collectionRoutesSourceWasteOption = event.target.closest("[data-collection-routes-source-waste-option]");
+  if (collectionRoutesSourceWasteOption) {
+    await updateCollectionRoutesSourceWasteFilter(collectionRoutesSourceWasteOption);
+    return;
+  }
+
+  const collectionRoutesSourceSmartWasteOption = event.target.closest("[data-collection-routes-source-smart-waste-option]");
+  if (collectionRoutesSourceSmartWasteOption) {
+    await updateCollectionRoutesSourceSmartFilter(collectionRoutesSourceSmartWasteOption);
     return;
   }
 
