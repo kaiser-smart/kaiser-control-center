@@ -29,8 +29,10 @@ function safeVehicleLabel(vehicle = {}) {
 }
 
 function safeVehicleForUi(vehicle = {}) {
+  const vehicleName = cleanString(vehicle.displayName || vehicle.internalName || vehicle.model || vehicle.type || vehicle.licensePlate || vehicle.spz);
   return compactObject({
     vehicleId: cleanString(vehicle.vehicleId || vehicle.id),
+    vehicleName,
     label: safeVehicleLabel(vehicle),
     licensePlate: cleanString(vehicle.licensePlate || vehicle.spz)
   });
@@ -100,9 +102,11 @@ function driverPartAction(result = {}) {
     : null;
 }
 
-function voicePayload({ vehicleId, defectDescription, confirmed = false, action = null }) {
+function voicePayload({ vehicleId, vehicleName, licensePlate, defectDescription, confirmed = false, action = null }) {
   const confirmationId = cleanString(action?.confirmationId);
   const actionParameters = action?.parameters && typeof action.parameters === "object" ? action.parameters : {};
+  const selectedLicensePlate = cleanString(licensePlate);
+  const selectedVehicleName = cleanString(vehicleName);
   const confirmedParameters = confirmed
     ? {
         confirmationSource: "kso-ui",
@@ -128,6 +132,11 @@ function voicePayload({ vehicleId, defectDescription, confirmed = false, action 
       ...actionParameters,
       defectDescription,
       vehicleId,
+      vehicleName: selectedVehicleName,
+      licensePlate: selectedLicensePlate,
+      spz: selectedLicensePlate,
+      spzManual: selectedLicensePlate,
+      spzValidated: Boolean(selectedLicensePlate),
       vehicleSelectionSource: "kso-admin-voice-write-test",
       diagnosticVoiceWriteTest: true,
       ...confirmedParameters,
@@ -139,6 +148,11 @@ function voicePayload({ vehicleId, defectDescription, confirmed = false, action 
       currentModule: "hlaseni-ridicu",
       defectDescription,
       vehicleId,
+      vehicleName: selectedVehicleName,
+      licensePlate: selectedLicensePlate,
+      spz: selectedLicensePlate,
+      spzManual: selectedLicensePlate,
+      spzValidated: Boolean(selectedLicensePlate),
       vehicleSelectionSource: "kso-admin-voice-write-test",
       diagnosticVoiceWriteTest: true,
       ...confirmedParameters,
@@ -230,6 +244,8 @@ export async function onRequestPost({ request, env }) {
     user,
     voicePayload({
       vehicleId: selectedVehicle.vehicleId,
+      vehicleName: selectedVehicle.vehicleName,
+      licensePlate: selectedVehicle.licensePlate,
       defectDescription,
       confirmed: false
     }),
@@ -251,6 +267,8 @@ export async function onRequestPost({ request, env }) {
     user,
     voicePayload({
       vehicleId: selectedVehicle.vehicleId,
+      vehicleName: selectedVehicle.vehicleName,
+      licensePlate: selectedVehicle.licensePlate,
       defectDescription,
       confirmed: true,
       action

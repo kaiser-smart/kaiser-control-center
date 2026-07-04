@@ -25817,7 +25817,7 @@ async function submitSarlotaVoiceWriteTest() {
     resetSarlotaVoiceWriteTest();
     sarlotaStatusState.syncMessage = result.reportId
       ? `Kontrolní voice zápis vytvořil hlášení ${result.reportId}. Stav: ${result.status}.`
-      : `Kontrolní voice zápis doběhl se stavem ${result.status}.`;
+      : `Kontrolní voice zápis doběhl se stavem ${result.status}.${result.message ? ` ${result.message}` : ""}`;
     await loadSarlotaStatus({ force: true, renderAfter: false });
   } catch (error) {
     console.error("smart_odpady_sarlota_voice_write_test_failed", error);

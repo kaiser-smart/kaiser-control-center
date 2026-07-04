@@ -101,6 +101,8 @@ async function postPlan(env, body = {}) {
   assert.equal(payload.vehiclesVerified, true);
   assert.equal(payload.vehiclesCount, 1);
   assert.equal(payload.requiresVehicleSelection, false);
+  assert.equal(payload.vehicles[0].vehicleName, "Mercedes Atego");
+  assert.equal(payload.vehicles[0].licensePlate, "1AB 2345");
   assert.equal(payload.effects.usesVoiceHandler, true);
   assert.equal(payload.effects.confirmationSource, "kso-ui");
   assert.equal(payload.effects.returnsVin, false);

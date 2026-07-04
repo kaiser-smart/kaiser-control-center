@@ -1359,8 +1359,9 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
     };
   }
 
+  let request = null;
   try {
-    let request = await createDriverPartRequest(env, user, {
+    request = await createDriverPartRequest(env, user, {
       ...draft,
       driverName: draft.driverName || user?.name,
       driverPhone: draft.driverPhone || user?.phone,
@@ -1370,6 +1371,18 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
       damagePhotoNote: "Šarlota požádala řidiče o fotku poškození před uložením hlášení.",
       source: "voice"
     });
+  } catch (error) {
+    return {
+      status: "failed",
+      verified: false,
+      message: `${cleanString(error?.message) || "Hlášení se nepodařilo zapsat."} Nic jsem neodeslala.`,
+      preparedActions: [],
+      code: cleanString(error?.code || "driver_part_request_create_failed"),
+      apiStatus: error?.status === 503 ? "waiting" : "ready"
+    };
+  }
+
+  try {
     request = await handoffDriverPartRequest(env, user, request.id, { allowCreatorHandoff: true });
 
     const handedOff = request.status === "handed_to_ordering";
@@ -1390,12 +1403,25 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
       notificationsSent: handedOff
     };
   } catch (error) {
+    console.info("voice_sarlota.driver_part_handoff_pending", {
+      reportId: cleanString(request?.reportId),
+      code: cleanString(error?.code || "driver_part_request_handoff_failed"),
+      message: cleanString(error?.message)
+    });
     return {
-      status: "failed",
-      verified: false,
-      message: `${cleanString(error?.message) || "Hlášení se nepodařilo zapsat."} Nic jsem neodeslala.`,
+      status: "created_notification_pending",
+      verified: true,
+      message: "Hlášení jsem zapsala, ale předání není hotové. Zkontroluj prosím detail v Hlášení řidičů.",
       preparedActions: [],
-      code: cleanString(error?.code || "driver_part_request_create_failed"),
+      driverPartRequest: {
+        id: request.id,
+        reportId: request.reportId,
+        status: request.status,
+        licensePlate: request.licensePlate,
+        probablePart: request.probablePart
+      },
+      notificationsSent: false,
+      code: cleanString(error?.code || "driver_part_request_handoff_failed"),
       apiStatus: error?.status === 503 ? "waiting" : "ready"
     };
   }
