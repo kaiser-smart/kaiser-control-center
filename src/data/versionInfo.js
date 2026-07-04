@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.324"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.325"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -23,6 +23,10 @@ export const versionNews = [
   {
     title: "Trasy svozu: kombinace odpadu ve filtru",
     text: "Filtr Odpad ve Svozových trasách umí vybrat více odpadů najednou, například SKO + PLAST. Tisk, PDF, řidičský displej i interní CSV export používají stejnou kombinaci bez změny DB, Vistosu nebo ostrých tras."
+  },
+  {
+    title: "Sledovani vozidel: srozumitelnejsi T-Cars UX",
+    text: "Panel Sledovani vozidel ma lidstejsi popisky T-Cars GPS zdroje, vysvetleni read-only rezimu a jasnejsi statistiku vozidel bez aktualni polohy."
   },
   {
     title: "Sledovani vozidel: demo/live stabilizace",

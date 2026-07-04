@@ -12,7 +12,7 @@ export const VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING = "Chybí API dokum
 export const VEHICLE_TRACKING_TCAR_LAST_KNOWN = "Poslední známá poloha";
 export const VEHICLE_TRACKING_DEMO_MODE_WARNING = "DEMO REŽIM – vozidla na mapě nejsou reálná GPS data.";
 export const VEHICLE_TRACKING_REAL_DATA_UNVERIFIED = "Reálná T-Cars data zatím nejsou v produkci ověřena.";
-export const VEHICLE_TRACKING_STALE_POSITION_WARNING = "Pozice vozidel nemusí být aktuální.";
+export const VEHICLE_TRACKING_STALE_POSITION_WARNING = "Pozice některých vozidel nemusí být aktuální.";
 export const VEHICLE_TRACKING_API_ERROR_MODE_WARNING = "T-Cars API se nepodařilo načíst. Demo mapa se nezapíná automaticky a zůstává oddělená v demo režimu.";
 export const VEHICLE_TRACKING_TABLET_ROLE = "Primární poloha vozidla je z T-Cars jednotky. Android tablet slouží jako vozidlový terminál.";
 export const VEHICLE_TRACKING_ICON_FOLDER = "/vehicles/icons/";
@@ -133,7 +133,7 @@ export const VEHICLE_TRACKING_SOURCE_MODES = [
   {
     id: "tcars",
     label: "T-Cars",
-    badge: "T-CARS – poloha z vozidlové jednotky",
+    badge: "T-Cars – poloha z GPS jednotky ve vozidle",
     description: "Používá vlastní Smart odpady API, které bude serverově napojené na T-Cars."
   },
   {

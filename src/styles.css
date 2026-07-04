@@ -4808,6 +4808,13 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.tracking-source-overview small {
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
 .tracking-source-alerts,
 .tracking-tcars-warnings {
   display: grid;
