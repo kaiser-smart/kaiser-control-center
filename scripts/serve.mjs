@@ -1645,13 +1645,37 @@ function updateMockDriverRequest(id, updater) {
   return next;
 }
 
-function handoffMockDriverPartRequest(user, id) {
+function mockDriverPriceOffers(item = {}) {
+  try {
+    const parsed = JSON.parse(mockDriverClean(item.priceBoostResultJson) || "{}");
+    const offers = Array.isArray(parsed?.offers)
+      ? parsed.offers
+      : Array.isArray(parsed?.candidates) ? parsed.candidates : [];
+    return offers
+      .filter((offer) => mockDriverClean(offer?.url) && (mockDriverClean(offer?.title) || mockDriverClean(offer?.seller)))
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
+function mockDriverHasPartSeedForPatrik(item = {}) {
+  return Boolean(
+    item.oePartNumber ||
+    item.partName ||
+    item.verifiedPart ||
+    item.partOrderNumber ||
+    (item.partAiCandidate === true && mockDriverClean(item.probablePart || item.partAiDetectedName))
+  );
+}
+
+async function handoffMockDriverPartRequest(user, id) {
   if (!mockDriverCanManage(user)) {
     const error = new Error("Nemáte oprávnění předat díl Patrikovi k ověření.");
     error.status = 403;
     throw error;
   }
-  const current = mockDriverPartRequests.find((item) => sameMockId(item.id, id) || sameMockId(item.reportId, id));
+  let current = mockDriverPartRequests.find((item) => sameMockId(item.id, id) || sameMockId(item.reportId, id));
   if (!current?.licensePlate || !current?.vehicleName || current.licensePlateVerified !== true || current.manualVehicleReview === true) {
     const error = new Error("Vozidlo není bezpečně ověřené proti Vozovému parku. Nejdřív proveď ruční kontrolu.");
     error.status = 400;
@@ -1662,8 +1686,16 @@ function handoffMockDriverPartRequest(user, id) {
     error.status = 400;
     throw error;
   }
-  if (!current.oePartNumber && !current.partName && !current.verifiedPart && !current.partOrderNumber) {
-    const error = new Error("Nejdřív ověř díl nebo OE číslo. Pravděpodobný díl nestačí pro e-mail Patrikovi.");
+  if (!mockDriverHasPartSeedForPatrik(current)) {
+    const error = new Error("Nejdřív musí být jasně rozpoznaný nebo ověřený díl.");
+    error.status = 400;
+    throw error;
+  }
+  if (mockDriverPriceOffers(current).length < 3) {
+    current = await runMockDriverPartPriceBoost(user, id);
+  }
+  if (mockDriverPriceOffers(current).length < 3) {
+    const error = new Error("AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. E-mail Patrikovi neposílám bez odkazů.");
     error.status = 400;
     throw error;
   }
@@ -1716,7 +1748,9 @@ async function runMockDriverPartPriceBoost(user, id) {
     throw error;
   }
 
-  const result = await runDriverPartPriceSearch(process.env, current);
+  const result = await runDriverPartPriceSearch(process.env, current, {
+    allowProbablePartSeed: true
+  });
   return updateMockDriverRequest(id, (item) => ({
     ...item,
     priceBoostStatus: mockDriverClean(result.status || "failed"),
@@ -3285,11 +3319,16 @@ async function handleApi(request, response) {
         damagePhotoStatus: "requested",
         source: "voice"
       });
-      item = handoffMockDriverPartRequest(user, item.id);
+      try {
+        item = await handoffMockDriverPartRequest(user, item.id);
+      } catch (handoffError) {
+        item = findMockDriverRequest(item.id) || item;
+        item.patrikEmailError = handoffError?.message || "Předání Patrikovi čeká na 3 odkazy.";
+      }
       const handedOff = item.status === "handed_to_ordering";
       const reply = handedOff
         ? "Hotovo. Hlášení jsem zapsala a předala Patrikovi k ověření dílu. Nic nebylo automaticky objednáno."
-        : "Hlášení jsem zapsala, ale předání není hotové. Zkontroluj prosím notifikace v detailu.";
+        : "Hlášení jsem zapsala, ale e-mail Patrikovi čeká na 3 cenové odkazy. Nic nebylo automaticky objednáno.";
       sendJson(response, 200, {
         ok: true,
         status: handedOff ? "created" : "created_notification_pending",
@@ -3395,12 +3434,19 @@ async function handleApi(request, response) {
     try {
       const payload = await readJsonBody(request);
       let item = await createMockDriverPartRequest(user, payload);
+      let warning = "";
       if (payload.handoffAfterCreate) {
-        item = handoffMockDriverPartRequest(user, item.id);
+        try {
+          item = await handoffMockDriverPartRequest(user, item.id);
+        } catch (handoffError) {
+          warning = handoffError?.message || "Předání Patrikovi čeká na 3 odkazy.";
+          item = findMockDriverRequest(item.id) || item;
+        }
       }
       sendJson(response, 201, {
         request: mockDriverDetail(item, user),
         permissions: mockDriverPermissionSummary(user),
+        warning,
         apiStatus: "ready"
       });
     } catch (error) {
@@ -3497,7 +3543,7 @@ async function handleApi(request, response) {
       const action = driverReportActionMatch[2];
       const payload = await readJsonBody(request);
       const item = action === "handoff-patrik"
-        ? handoffMockDriverPartRequest(user, id)
+        ? await handoffMockDriverPartRequest(user, id)
         : action === "ordered"
           ? markMockDriverPartOrdered(user, id, payload)
           : action === "part-arrived"

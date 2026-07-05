@@ -20959,7 +20959,7 @@ function driverReportPartNextStep(item) {
   if (status === "waiting_vin") return "Doplnit VIN";
   if (status === "manual_verification_required") return "Ruční kontrola";
   if (status === "provider_not_configured") return "Nastavit provider";
-  if (driverReportHasVerifiedPartForPatrikHandoff(item)) {
+  if (driverReportHasPartSeedForPatrikHandoff(item)) {
     if (driverReportCanRunPriceBoost(item) && ["not_requested", "waiting_verified_part", ""].includes(String(item.priceBoostStatus || ""))) {
       return "Cenový průzkum";
     }
@@ -21114,11 +21114,23 @@ function driverReportHasVerifiedPartForPatrikHandoff(item) {
   return Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partOrderNumber);
 }
 
+function driverReportHasPilotPartCandidateForPatrikHandoff(item) {
+  return Boolean(
+    item.partAiCandidate === true &&
+    String(item.probablePart || item.partAiDetectedName || "").trim()
+  );
+}
+
+function driverReportHasPartSeedForPatrikHandoff(item) {
+  return driverReportHasVerifiedPartForPatrikHandoff(item) ||
+    driverReportHasPilotPartCandidateForPatrikHandoff(item);
+}
+
 function driverReportPatrikHandoffBlockReason(item) {
   if (!item.licensePlate || !item.vehicleName) return "Předání čeká na doplnění SPZ a vozidla.";
   if (item.licensePlateVerified !== true || item.manualVehicleReview === true) return "Předání čeká na ruční ověření vozidla proti Vozovému parku.";
   if (!item.vin) return "Předání čeká na VIN.";
-  if (!driverReportHasVerifiedPartForPatrikHandoff(item)) return "Předání čeká na ověřený díl nebo OE číslo.";
+  if (!driverReportHasPartSeedForPatrikHandoff(item)) return "Předání čeká na jasně rozpoznaný nebo ověřený díl.";
   if (!driverReportHasRequiredPriceOffers(item)) return "Předání čeká na 3 cenové nabídky s odkazy.";
   return "";
 }
@@ -21136,7 +21148,7 @@ function driverReportCanRunPriceBoost(item) {
   if (!item.licensePlate || !item.vehicleName) return false;
   if (item.licensePlateVerified !== true || item.manualVehicleReview === true) return false;
   if (!item.vin) return false;
-  if (!driverReportHasVerifiedPartForPatrikHandoff(item)) return false;
+  if (!driverReportHasPartSeedForPatrikHandoff(item)) return false;
   return true;
 }
 
@@ -22039,7 +22051,9 @@ async function submitDriverReportForm(form) {
       body: JSON.stringify(driverReportFormData(form))
     });
     driverReportsState.selected = result.request || null;
-    driverReportsState.message = result.request?.status === "handed_to_ordering"
+    driverReportsState.message = result.warning
+      ? `Hlášení bylo odesláno. ${result.warning}`
+      : result.request?.status === "handed_to_ordering"
       ? "Hlášení bylo odesláno a předané Patrikovi k ověření."
       : "Hlášení bylo odesláno.";
     driverReportsState.draft = {

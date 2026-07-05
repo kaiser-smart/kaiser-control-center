@@ -1404,13 +1404,15 @@ async function saveDriverPartPriceBoostResult(db, user, item, result) {
   return after;
 }
 
-export async function runDriverPartPriceBoost(env, user, id) {
+export async function runDriverPartPriceBoost(env, user, id, options = {}) {
   if (!canManageDriverPartRequests(user)) {
     throw new DriverPartRequestsStoreError("Nemáte oprávnění spustit cenový průzkum.", 403, "driver_part_price_boost_forbidden");
   }
 
   const { db, item } = await requestForUser(env, id, user);
-  const result = await runDriverPartPriceSearch(env, item);
+  const result = await runDriverPartPriceSearch(env, item, {
+    allowProbablePartSeed: options.allowProbablePartSeed === true
+  });
 
   try {
     await saveDriverPartPriceBoostResult(db, user, item, result);

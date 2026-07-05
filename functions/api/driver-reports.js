@@ -3,6 +3,7 @@ import {
   DriverPartRequestsStoreError,
   createDriverPartRequest,
   driverPartRequestPermissionSummary,
+  getDriverPartRequest,
   handoffDriverPartRequest,
   listDriverPartRequests
 } from "../_lib/driver-part-requests-store.js";
@@ -55,15 +56,32 @@ export async function onRequestPost({ request, env }) {
   try {
     const payload = await readJson(request);
     let partRequest = await createDriverPartRequest(env, user, payload);
+    let handoffWarning = "";
+    let handoffCode = "";
     if (payload.handoffAfterCreate === true) {
-      partRequest = await handoffDriverPartRequest(env, user, partRequest.id, {
-        allowCreatorHandoff: true,
-        allowProbablePartHandoff: true,
-        runPriceBoost: true,
-        requirePriceOffersForHandoff: true
-      });
+      try {
+        partRequest = await handoffDriverPartRequest(env, user, partRequest.id, {
+          allowCreatorHandoff: true,
+          allowProbablePartHandoff: true,
+          runPriceBoost: true,
+          requirePriceOffersForHandoff: true
+        });
+      } catch (handoffError) {
+        handoffWarning = handoffError?.message || "Předání Patrikovi se zatím nepodařilo dokončit.";
+        handoffCode = handoffError?.code || "driver_part_handoff_pending";
+        try {
+          partRequest = await getDriverPartRequest(env, user, partRequest.id);
+        } catch {
+          // The create already succeeded; keep the original item if refresh is unavailable.
+        }
+      }
     }
-    return json({ request: partRequest, apiStatus: "ready" }, 201);
+    return json({
+      request: partRequest,
+      apiStatus: "ready",
+      warning: handoffWarning,
+      code: handoffCode
+    }, 201);
   } catch (error) {
     return errorResponse(error, "POST /api/driver-reports");
   }
