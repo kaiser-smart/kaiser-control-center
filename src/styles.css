@@ -9691,11 +9691,12 @@ body:has(.ai-assistant-promo-modal) {
 .ai-driver-vehicle-picker-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 74;
+  z-index: 1300;
   display: grid;
   place-items: center;
   padding: 20px;
   background: rgba(248, 250, 246, 0.82);
+  pointer-events: auto;
 }
 
 .ai-driver-vehicle-picker {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   driverVehicleCandidateMatches,
@@ -20,6 +21,7 @@ const VEHICLE_QUESTION_PHRASES = [
   "Který vozidla mám přiřazený?"
 ];
 const NO_VERIFIED_ASSIGNED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
+const stylesSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
 const radimUser = {
   id: "user-radim",
@@ -69,6 +71,15 @@ function safeVoiceVehicle(id, displayName, spz) {
     active: true,
     source: "fleet_db"
   };
+}
+
+function cssMaxZIndex(selector) {
+  const values = [...stylesSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((match) => match[1].split(",").map((item) => item.trim()).includes(selector))
+    .map((match) => match[2].match(/z-index:\s*(-?\d+)/)?.[1])
+    .filter(Boolean)
+    .map(Number);
+  return values.length ? Math.max(...values) : null;
 }
 
 function findInFakeDom(nodes, predicate) {
@@ -633,6 +644,22 @@ for (const [name, payload] of [
     assert.equal(stale.status, "needs_input");
     assert.notEqual(stale.vehicleId, "vehicle-radim-1");
   });
+}
+
+{
+  const pickerLayer = cssMaxZIndex(".ai-driver-vehicle-picker-backdrop");
+  const toastLayer = cssMaxZIndex(".ai-assistant-toast");
+  const promoLayer = cssMaxZIndex(".ai-assistant-promo-backdrop");
+  const unsavedLayer = cssMaxZIndex(".unsaved-changes-backdrop");
+  const dataBoxLayer = cssMaxZIndex(".data-box-detail-overlay");
+
+  assert.equal(Number.isFinite(pickerLayer), true);
+  assert.equal(pickerLayer >= 1300, true);
+  assert.equal(pickerLayer > toastLayer, true);
+  assert.equal(pickerLayer > promoLayer, true);
+  assert.equal(pickerLayer > unsavedLayer, true);
+  assert.equal(pickerLayer > dataBoxLayer, true);
+  assert.match(stylesSource, /\.ai-driver-vehicle-picker-backdrop\s*\{[\s\S]*?pointer-events:\s*auto/);
 }
 
 {
