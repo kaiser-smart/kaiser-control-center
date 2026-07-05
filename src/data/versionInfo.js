@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Trasy svozu: řidičský tablet",
+    text: "Svozové trasy mají přímo ve filtru tlačítko Řidičský tablet. Otevře kabinový read-only režim aktuální trasy z 13 Excelů bez potvrzování svozu, GPS, T-Cars, navigace, SMS/e-mailů, automatizací a ostrých tras."
+  },
+  {
     title: "Šarlota: ostrý hlasový průchod Hlášení řidičů",
     text: "Výběr vozidla v KSO popupu se bere jako aplikační potvrzení pro hlasové hlášení. Šarlota po ověřeném vozidle a konkrétním dílu může spustit AI Boost cenový průzkum a poslat pilotní e-mail Patrikovi s CC Radimovi; nic se automaticky neobjednává."
   },

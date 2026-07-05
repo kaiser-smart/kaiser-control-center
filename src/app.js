@@ -15451,7 +15451,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
       <div class="collection-routes-driver-mode collection-routes-driver-mode--empty" id="collection-routes-source-driver-mode">
         <div class="collection-routes-driver-mode__head">
           <div>
-            <p class="module-feedback__eyebrow">Řidičský režim</p>
+            <p class="module-feedback__eyebrow">Řidičský tablet</p>
             <h3>Čeká na trasu</h3>
             <span>Vyber termín, auto a odpad. Režim je pouze read-only a nic nepotvrzuje.</span>
           </div>
@@ -15493,7 +15493,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
     <div class="collection-routes-driver-mode ${isExpanded ? "collection-routes-driver-mode--expanded" : ""}" id="collection-routes-source-driver-mode">
       <div class="collection-routes-driver-mode__topbar" aria-label="Stav řidičského režimu">
         <div class="collection-routes-driver-mode__identity">
-          <span>Řidičský režim</span>
+          <span>Řidičský tablet</span>
           <strong>${escapeHtml(dayLabel)} / ${escapeHtml(weekLabel)} | ${escapeHtml(collectionRoutesSourceVehicleLabel(vehicle))} | ${escapeHtml(collectionRoutesSourceDriverVehiclePlate(vehicle))}</strong>
           <small>${escapeHtml(driverName)} · zdroj 13 Excelů</small>
         </div>
@@ -15940,6 +15940,9 @@ function collectionRoutesSourceSmartFilterPanel() {
           </select>
         </label>
         <div class="collection-routes-print-filter__actions">
+          <button class="secondary-link" type="button" data-collection-routes-source-view="driver" ${rows.length ? "" : "disabled"}>
+            Řidičský tablet
+          </button>
           <button class="primary-action" type="button" data-collection-routes-source-print-driver ${rows.length ? "" : "disabled"}>
             Tisk pro řidiče
           </button>
@@ -15980,7 +15983,7 @@ function collectionRoutesSourceRouteViewSwitch(rows = collectionRoutesSourceDisp
   const selectedView = collectionRoutesSourceRouteView();
   const options = [
     ["print", "Přehled k tisku", "Tabulka zastávek pro kontrolu a tisk"],
-    ["driver", "Řidičský displej", "Kabinový read-only režim pro tablet"],
+    ["driver", "Řidičský tablet", "Kabinový read-only režim pro řidiče"],
     ["map", "Mapa / GPS", "Připravenost trasy bez navigace"]
   ];
   return `
@@ -23728,7 +23731,7 @@ function setCollectionRoutesSourceRouteView(view) {
   collectionRoutesPilotState.sourceRouteView = nextView;
   collectionRoutesPilotState.sourceImportError = "";
   collectionRoutesPilotState.sourceImportMessage = {
-    driver: "Zobrazený Řidičský displej je pouze read-only pilot. Nic nepotvrzuje, nespouští navigaci ani ostrou trasu.",
+    driver: "Zobrazený Řidičský tablet je pouze read-only pilot. Nic nepotvrzuje, nespouští navigaci ani ostrou trasu.",
     map: "Zobrazení Mapa / GPS je pouze read-only připravenost. Negeokóduje, nespouští navigaci ani ostrou trasu."
   }[nextView] || "";
   render();
@@ -23752,7 +23755,7 @@ function selectCollectionRoutesSourceDriverIndex(index) {
   const safeIndex = Math.max(0, Math.min(rows.length - 1, Number(index) || 0));
   collectionRoutesPilotState.sourceDriverSelectedRowKey = collectionRoutesSourceDriverRowKey(rows[safeIndex], safeIndex);
   collectionRoutesPilotState.sourceImportError = "";
-  collectionRoutesPilotState.sourceImportMessage = `Řidičský režim: zastávka ${safeIndex + 1} z ${rows.length}.`;
+  collectionRoutesPilotState.sourceImportMessage = `Řidičský tablet: zastávka ${safeIndex + 1} z ${rows.length}.`;
   render();
   focusCollectionRoutesSourceDriverMode();
 }

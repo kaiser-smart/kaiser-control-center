@@ -71,7 +71,8 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Ridicsky tablet
 
-- NEZACATO - tabletovy rezim bude samostatna faze.
+- ROZPRACOVANO - Faze 2C ma v hlavni zalozce Svozove trasy tlacitko Ridicsky tablet a read-only kabinovy rezim aktualniho filtru; nic nepotvrzuje, nezapisuje, nespousti GPS, T-Cars, navigaci, SMS/e-maily, automatizace ani ostre trasy.
+- NEZACATO - ostry tabletovy rezim s potvrzovanim svozu, fotkami, GPS stopou, offline synchronizaci a dispecerskym auditem.
 
 ## T-Cars
 
@@ -99,7 +100,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - HOTOVO - read-only ridicsky tiskovy nahled aktualniho filtru ukazuje prakticky seznam zastavek vcetne odpadu, nadoby, frekvence a poznamky bez navigace, GPS, T-Cars, potvrzovani svozu a ostre trasy.
 - HOTOVO - chytry filtr Auto A/B/C dnes, zitra a pozitri nastavuje den, sudy/lichy tyden a auto pro tiskovy nahled; trasu neplanuje a nic nezapisuje.
 - HOTOVO - chytry filtr pro tisk ma samostatne volby Termin, Auto a Odpad; odpadovy filtr zustava soucasti tiskove trasy.
-- ROZPRACOVANO - Faze 2B pripravuje frontendovy offline ridicsky balicek aktualniho filtru jako samostatny HTML soubor bez navigace, GPS, T-Cars, potvrzovani svozu, SMS/e-mailu, automatizaci a ostrych tras.
+- OVERENO - Faze 2B ma frontendovy offline ridicsky balicek aktualniho filtru jako samostatny HTML soubor; Radim overil tisk, detailni PDF a offline balicek v produkci 2026-07-05. Bez navigace, GPS, T-Cars, potvrzovani svozu, SMS/e-mailu, automatizaci a ostrych tras.
 
 ## Automatizace
 
