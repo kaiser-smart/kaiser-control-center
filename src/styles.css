@@ -25261,9 +25261,16 @@ body:has(.tracking-page--soft-metal-preview) {
   --tracking-bluegrey: #637c8a;
   --tracking-graphite: #4b5550;
   width: min(1360px, calc(100% - 28px));
+  box-sizing: border-box;
   background: linear-gradient(145deg, rgba(245, 246, 246, 0.7) 0%, rgba(221, 226, 228, 0.66) 100%);
   color: var(--text-main);
   font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.tracking-page--soft-metal-preview *,
+.tracking-page--soft-metal-preview *::before,
+.tracking-page--soft-metal-preview *::after {
+  box-sizing: border-box;
 }
 
 .tracking-page--soft-metal-preview .topbar,
@@ -27051,6 +27058,42 @@ body:has(.tracking-page--soft-metal-preview) {
     grid-template-columns: var(--sidebar-width-compact) minmax(0, 1fr);
   }
 
+  .tracking-page--soft-metal-preview .tracking-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-section--map,
+  .tracking-page--soft-metal-preview .tracking-demo-detail-section,
+  .tracking-page--soft-metal-preview .tracking-demo-api-section,
+  .tracking-page--soft-metal-preview .tracking-tcars-section,
+  .tracking-page--soft-metal-preview .tracking-layout > #tracking-rules {
+    grid-column: auto;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-map-section {
+    order: 1;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-list-section {
+    order: 2;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-detail-section {
+    order: 3;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-api-section {
+    order: 4;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-layout > #tracking-rules {
+    order: 5;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tracking-page--soft-metal-preview .tracking-preview-sidebar {
     width: var(--sidebar-width-compact);
   }
@@ -27093,6 +27136,13 @@ body:has(.tracking-page--soft-metal-preview) {
     grid-template-columns: 1fr;
   }
 
+  .tracking-page--soft-metal-preview .tracking-layout > *,
+  .tracking-page--soft-metal-preview .tracking-section {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .tracking-page--soft-metal-preview .tracking-preview-sidebar {
     position: fixed;
     inset: auto max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
@@ -27105,6 +27155,7 @@ body:has(.tracking-page--soft-metal-preview) {
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--expanded,
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)),
   .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact {
     width: auto;
   }
@@ -27137,6 +27188,10 @@ body:has(.tracking-page--soft-metal-preview) {
   .tracking-page--soft-metal-preview .tracking-preview-nav-item__icon {
     width: 44px;
     height: 44px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-list {
+    grid-template-columns: 1fr;
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-live-strip {
