@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.335"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.336"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: klidnější řidičský displej",
+    text: "Řidičský tablet má jednodušší kabinový pohled: větší aktuální zastávku, dominantní akce Navigovat / Hotovo / Problém, skrytý problémový panel až po kliknutí a nesmyslný odhad času se nezobrazuje jako dlouhé minuty. Stále jde jen o read-only pilot bez ostrých tras a hlášení."
+  },
   {
     title: "Šarlota: KSO výběr vozidla odemyká předání",
     text: "Hlasové hlášení s vozidlem vybraným v KSO popupu se už nevrací do ruční kontroly vozidla. KSO výběr se zapisuje jako aplikační potvrzení, takže jasný díl může pokračovat do AI Boost cen a e-mailu Patrikovi; nic se automaticky neobjednává."

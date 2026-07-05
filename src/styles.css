@@ -4469,6 +4469,362 @@ h1 {
   }
 }
 
+.collection-routes-driver-mode {
+  gap: 10px;
+  padding: 12px;
+  background: #0d1113;
+}
+
+.collection-routes-driver-mode__topbar {
+  padding: 8px 10px;
+  border-color: rgba(210, 226, 217, 0.14);
+  background: #0a0e10;
+}
+
+.collection-routes-driver-mode__identity {
+  gap: 4px 10px;
+}
+
+.collection-routes-driver-mode__identity span {
+  padding: 3px 8px;
+  border: 1px solid rgba(123, 211, 63, 0.36);
+  border-radius: 999px;
+  background: rgba(123, 211, 63, 0.11);
+  font-size: 0.72rem;
+}
+
+.collection-routes-driver-mode__identity strong {
+  font-size: 1.08rem;
+}
+
+.collection-routes-driver-mode__identity small {
+  font-size: 0.7rem;
+}
+
+.collection-routes-driver-mode__signals {
+  gap: 6px;
+}
+
+.collection-routes-driver-mode__signals span {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-color: rgba(210, 226, 217, 0.14);
+  background: #11171a;
+  font-size: 0.7rem;
+}
+
+.collection-routes-driver-mode__tabs {
+  gap: 8px;
+}
+
+.collection-routes-driver-mode__tabs .collection-routes-driver-action,
+.collection-routes-driver-tab {
+  min-height: 42px;
+  border-color: rgba(210, 226, 217, 0.14);
+  font-size: 0.92rem;
+}
+
+.collection-routes-driver-mode__pilot-state {
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+.collection-routes-driver-mode__dashboard {
+  grid-template-columns: minmax(0, 1.42fr) minmax(300px, 0.58fr);
+  gap: 10px;
+}
+
+.collection-routes-driver-mode__active,
+.collection-routes-driver-mode__queue,
+.collection-routes-driver-mode__warning {
+  border-color: rgba(210, 226, 217, 0.14);
+  background: #12181b;
+}
+
+.collection-routes-driver-mode__active {
+  gap: 8px;
+  padding: 10px;
+}
+
+.collection-routes-driver-mode__route-pulse {
+  padding: 8px 10px;
+  border-color: rgba(123, 211, 63, 0.22);
+  background: rgba(123, 211, 63, 0.08);
+}
+
+.collection-routes-driver-mode__hero-grid {
+  grid-template-columns: 1fr;
+}
+
+.collection-routes-driver-mode__stop {
+  min-height: 280px;
+  padding: 22px;
+  border-color: rgba(210, 226, 217, 0.12);
+  background: #192126;
+}
+
+.collection-routes-driver-mode__order {
+  min-width: 94px;
+  min-height: 94px;
+  font-size: 2.25rem;
+}
+
+.collection-routes-driver-mode__stop h4 {
+  display: -webkit-box;
+  max-width: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 3rem;
+}
+
+.collection-routes-driver-mode__stop p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 1.34rem;
+}
+
+.collection-routes-driver-mode__stop strong {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 191, 71, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 191, 71, 0.1);
+  font-size: 1.22rem;
+}
+
+.collection-routes-driver-mode__stop small {
+  display: block;
+  margin-top: 10px;
+  color: var(--driver-muted);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.collection-routes-driver-mode__facts {
+  padding: 0;
+  background: transparent;
+}
+
+.collection-routes-driver-mode__facts--primary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.collection-routes-driver-mode__facts article {
+  min-height: 68px;
+  border-color: rgba(210, 226, 217, 0.12);
+  background: #101619;
+}
+
+.collection-routes-driver-mode__facts--primary article {
+  min-height: 72px;
+}
+
+.collection-routes-driver-mode__note {
+  min-height: 0;
+  padding: 10px 12px;
+  border-color: rgba(210, 226, 217, 0.12);
+  background: #101619;
+}
+
+.collection-routes-driver-mode__primary-actions {
+  gap: 10px;
+}
+
+.collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
+  min-height: 112px;
+  border-width: 2px;
+  font-size: 1.35rem;
+}
+
+.collection-routes-driver-action--done {
+  border-color: #9bea58;
+  background: #7bd33f;
+  color: #081108;
+  box-shadow: 0 12px 28px rgba(123, 211, 63, 0.2);
+}
+
+.collection-routes-driver-action--navigate {
+  border-color: rgba(72, 166, 255, 0.7);
+  background: rgba(72, 166, 255, 0.22);
+}
+
+.collection-routes-driver-action--problem,
+.collection-routes-driver-action--problem-soft {
+  border-color: rgba(255, 107, 98, 0.62);
+  background: rgba(255, 107, 98, 0.18);
+}
+
+.collection-routes-driver-mode__controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collection-routes-driver-mode__controls .primary-action,
+.collection-routes-driver-mode__controls .secondary-link {
+  min-height: 50px;
+  font-size: 0.98rem;
+}
+
+.collection-routes-driver-mode__progress {
+  height: 8px;
+}
+
+.collection-routes-driver-mode__queue {
+  gap: 10px;
+  padding: 10px;
+}
+
+.collection-routes-driver-mode__status-grid {
+  gap: 8px;
+}
+
+.collection-routes-driver-status-card {
+  min-height: 66px;
+  padding: 9px;
+  border-color: rgba(210, 226, 217, 0.12);
+  background: #101619;
+}
+
+.collection-routes-driver-status-card strong {
+  font-size: 1.08rem;
+}
+
+.collection-routes-driver-mode__list {
+  gap: 8px;
+  max-height: 430px;
+}
+
+.collection-routes-driver-stop {
+  min-height: 78px;
+  padding: 10px;
+  border-color: rgba(210, 226, 217, 0.12);
+}
+
+.collection-routes-driver-stop strong {
+  font-size: 1.02rem;
+}
+
+.collection-routes-driver-stop small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.collection-routes-driver-mode__problem-grid {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  padding: 12px;
+  border: 1px solid rgba(255, 107, 98, 0.32);
+  border-radius: 8px;
+  background: #171214;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+}
+
+.collection-routes-driver-mode__problem-grid > div:first-child {
+  display: grid;
+  gap: 6px;
+  align-content: center;
+  min-width: 0;
+}
+
+.collection-routes-driver-mode__problem-grid > div:first-child span {
+  color: var(--driver-muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.collection-routes-driver-mode__problem-grid > div:last-child {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collection-routes-driver-mode__problem-grid .collection-routes-driver-action {
+  min-height: 64px;
+  font-size: 0.95rem;
+}
+
+.collection-routes-driver-mode__bottom-bar {
+  gap: 8px;
+}
+
+.collection-routes-driver-mode__bottom-bar .collection-routes-driver-action {
+  min-height: 58px;
+  border-color: rgba(210, 226, 217, 0.14);
+  font-size: 0.92rem;
+}
+
+.collection-routes-driver-mode__warning {
+  padding: 8px 10px;
+  font-size: 0.88rem;
+}
+
+@media (min-width: 960px) and (max-width: 1400px) and (orientation: landscape) {
+  .collection-routes-driver-mode__dashboard {
+    grid-template-columns: minmax(0, 1.5fr) minmax(290px, 0.5fr);
+  }
+
+  .collection-routes-driver-mode__stop {
+    min-height: 310px;
+  }
+
+  .collection-routes-driver-mode__stop h4 {
+    font-size: 3.15rem;
+  }
+
+  .collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
+    min-height: 116px;
+  }
+
+  .collection-routes-driver-mode__list {
+    max-height: calc(100vh - 390px);
+  }
+}
+
+@media (min-width: 720px) and (max-width: 920px) and (orientation: portrait) {
+  .collection-routes-driver-mode__dashboard,
+  .collection-routes-driver-mode__problem-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-driver-mode__stop {
+    min-height: 260px;
+  }
+
+  .collection-routes-driver-mode__primary-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-driver-mode__problem-grid > div:last-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 719px) {
+  .collection-routes-driver-mode__primary-actions,
+  .collection-routes-driver-mode__problem-grid,
+  .collection-routes-driver-mode__problem-grid > div:last-child {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-driver-mode__stop h4 {
+    font-size: 2rem;
+  }
+
+  .collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
+    min-height: 82px;
+  }
+}
+
 .collection-routes-panel--driver-print .collection-routes-preview-table {
   border-radius: 8px;
 }
