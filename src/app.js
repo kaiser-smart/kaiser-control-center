@@ -984,6 +984,9 @@ const collectionRoutesPilotState = {
   sourceDriverListExpanded: false,
   sourceDriverProblemPanelOpen: false,
   sourceDriverRouteDone: false,
+  sourceDriverDoneConfirmOpen: false,
+  sourceDriverDonePending: false,
+  sourceDriverSoundsEnabled: true,
   sourceRouteView: "print",
   selectedSiteId: "",
   selectedSiteDetail: null,
@@ -15466,17 +15469,125 @@ const COLLECTION_ROUTES_DRIVER_ACTION_ICONS = {
   close: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l14 14"/><path d="M23 9L9 23"/></svg>`
 };
 
+let collectionRoutesDriverAudioContext = null;
+
+function collectionRoutesSourceDriverSoundsEnabled() {
+  return collectionRoutesPilotState.sourceDriverSoundsEnabled !== false;
+}
+
+function collectionRoutesSourceDriverSoundIconHtml(enabled) {
+  return enabled
+    ? `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13h6l7-6v18l-7-6H6v-6z"/><path d="M23 11a7 7 0 0 1 0 10"/><path d="M26 8a11 11 0 0 1 0 16"/></svg>`
+    : `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13h6l7-6v18l-7-6H6v-6z"/><path d="M23 12l6 8"/><path d="M29 12l-6 8"/></svg>`;
+}
+
+function collectionRoutesSourceDriverSoundToggleHtml() {
+  const enabled = collectionRoutesSourceDriverSoundsEnabled();
+  return `
+    <button
+      class="collection-routes-driver-sound-toggle ${enabled ? "" : "collection-routes-driver-sound-toggle--off"}"
+      type="button"
+      data-collection-routes-driver-sound-toggle
+      aria-pressed="${enabled ? "true" : "false"}"
+      aria-label="${enabled ? "Vypnout zvuky tabletu" : "Zapnout zvuky tabletu"}"
+    >
+      <span class="collection-routes-driver-sound-toggle__icon" aria-hidden="true">${collectionRoutesSourceDriverSoundIconHtml(enabled)}</span>
+      <span>Zvuky</span>
+      <strong>${enabled ? "zap" : "vyp"}</strong>
+    </button>
+  `;
+}
+
+function collectionRoutesSourceDriverTonePlan(type) {
+  if (type === "success") {
+    return [
+      { frequency: 540, start: 0, duration: 0.065, gain: 0.032, wave: "sine" },
+      { frequency: 760, start: 0.07, duration: 0.095, gain: 0.038, wave: "sine" }
+    ];
+  }
+  if (type === "warning") {
+    return [
+      { frequency: 270, start: 0, duration: 0.11, gain: 0.032, wave: "triangle" },
+      { frequency: 210, start: 0.08, duration: 0.08, gain: 0.022, wave: "triangle" }
+    ];
+  }
+  if (type === "error") {
+    return [
+      { frequency: 155, start: 0, duration: 0.07, gain: 0.028, wave: "square" }
+    ];
+  }
+  return [
+    { frequency: 640, start: 0, duration: 0.055, gain: 0.026, wave: "sine" }
+  ];
+}
+
+function playCollectionRoutesDriverSound(type = "tap") {
+  if (!collectionRoutesSourceDriverSoundsEnabled() || typeof window === "undefined") {
+    return;
+  }
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    return;
+  }
+  try {
+    collectionRoutesDriverAudioContext = collectionRoutesDriverAudioContext || new AudioContextClass();
+    const context = collectionRoutesDriverAudioContext;
+    if (context.state === "suspended") {
+      context.resume().catch(() => {});
+    }
+    const now = context.currentTime;
+    collectionRoutesSourceDriverTonePlan(type).forEach((tone) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const startAt = now + tone.start;
+      const endAt = startAt + tone.duration;
+      oscillator.type = tone.wave;
+      oscillator.frequency.setValueAtTime(tone.frequency, startAt);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(tone.gain, startAt + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, endAt);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startAt);
+      oscillator.stop(endAt + 0.025);
+    });
+  } catch (error) {
+    console.warn("Zvuk řidičského tabletu se nepodařilo přehrát.", error);
+  }
+}
+
+function collectionRoutesSourceDriverReadonlySoundType(action) {
+  const rawAction = String(action || "");
+  const normalized = rawAction.split(":")[0];
+  if (!normalized) {
+    return "error";
+  }
+  if (normalized === "done-confirm") {
+    return "success";
+  }
+  if (normalized === "done") {
+    return "tap";
+  }
+  if (normalized === "problem" || rawAction.startsWith("problem:")) {
+    return "warning";
+  }
+  if (normalized === "problem-close" || normalized === "done-cancel" || normalized === "navigate" || normalized === "sarlota") {
+    return "tap";
+  }
+  return "tap";
+}
+
 function collectionRoutesSourceDriverActionIconKey(label, action, tone) {
   if (tone === "sarlota") {
     return "sarlota";
   }
-  if (action === "problem-close") {
+  if (action === "problem-close" || action === "done-cancel") {
     return "close";
   }
   if (action === "problem") {
     return "problem";
   }
-  if (action === "done" || tone === "done") {
+  if (action === "done" || action === "done-confirm" || tone === "done") {
     return "done";
   }
   if (action === "navigate" || tone === "navigate") {
@@ -15584,6 +15695,8 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const currentTaskLabel = currentServiceLabel === "-" ? "Proveď svoz podle trasy" : currentServiceLabel;
   const isExpanded = collectionRoutesPilotState.sourceDriverListExpanded;
   const isProblemPanelOpen = Boolean(collectionRoutesPilotState.sourceDriverProblemPanelOpen);
+  const isDoneConfirmOpen = Boolean(collectionRoutesPilotState.sourceDriverDoneConfirmOpen);
+  const isDonePending = Boolean(collectionRoutesPilotState.sourceDriverDonePending);
   const hasMeaningfulNote = Boolean(String(note || "").trim());
   const routeDayLabel = dayLabel === "všechny dny" ? "Den není vybraný" : dayLabel;
   const routeWeekLabel = weekLabel === "všechny týdny" ? "Týden není vybraný" : weekLabel;
@@ -15612,6 +15725,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           <small>${escapeHtml(routeVehicleLabel)} · ${escapeHtml(routeDriverLabel)}</small>
         </div>
         <div class="collection-routes-driver-mode__signals" aria-label="Čas">
+          ${collectionRoutesSourceDriverSoundToggleHtml()}
           <span>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</span>
         </div>
       </div>
@@ -15651,6 +15765,20 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           <div class="collection-routes-driver-mode__primary-actions" aria-label="Hlavní akce řidiče">
             ${collectionRoutesSourceDriverReadonlyButton("HOTOVO", "done", "done")}
           </div>
+
+          ${isDoneConfirmOpen ? `
+            <div class="collection-routes-driver-mode__confirm" role="dialog" aria-label="Potvrzení obsloužení stanoviště">
+              <div>
+                <strong>${isDonePending ? "Ukládám..." : "Potvrdit obsloužení stanoviště?"}</strong>
+                <span>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</span>
+                <small>${escapeHtml([selectedRow.addressText, currentServiceLabel].filter(Boolean).join(" · "))}</small>
+              </div>
+              <div>
+                ${collectionRoutesSourceDriverReadonlyButton("Zpět", "done-cancel", "tab")}
+                ${collectionRoutesSourceDriverReadonlyButton(isDonePending ? "Ukládám..." : "Potvrdit HOTOVO", "done-confirm", "done")}
+              </div>
+            </div>
+          ` : ""}
 
           <div class="collection-routes-driver-mode__support-actions" aria-label="Vedlejší akce řidiče">
             ${collectionRoutesSourceDriverReadonlyButton("Navigovat na další stanoviště", "navigate", "navigate")}
@@ -23965,12 +24093,16 @@ function selectCollectionRoutesSourceDriverIndex(index, message = "") {
   if (!rows.length) {
     collectionRoutesPilotState.sourceDriverSelectedRowKey = "";
     collectionRoutesPilotState.sourceDriverRouteDone = false;
+    collectionRoutesPilotState.sourceDriverDoneConfirmOpen = false;
+    collectionRoutesPilotState.sourceDriverDonePending = false;
     render();
     return;
   }
   const safeIndex = Math.max(0, Math.min(rows.length - 1, Number(index) || 0));
   collectionRoutesPilotState.sourceDriverSelectedRowKey = collectionRoutesSourceDriverRowKey(rows[safeIndex], safeIndex);
   collectionRoutesPilotState.sourceDriverProblemPanelOpen = false;
+  collectionRoutesPilotState.sourceDriverDoneConfirmOpen = false;
+  collectionRoutesPilotState.sourceDriverDonePending = false;
   collectionRoutesPilotState.sourceDriverRouteDone = message === "Trasa dokončena.";
   collectionRoutesPilotState.sourceImportError = "";
   collectionRoutesPilotState.sourceImportMessage = message;
@@ -23997,7 +24129,7 @@ function completeCollectionRoutesSourceDriverStop() {
     selectCollectionRoutesSourceDriverIndex(selectedIndex, "Trasa dokončena.");
     return;
   }
-  selectCollectionRoutesSourceDriverIndex(selectedIndex + 1, "Hotovo. Pokračuj na další zastávku.");
+  selectCollectionRoutesSourceDriverIndex(selectedIndex + 1, "Hotovo uloženo. Pokračuj na další zastávku.");
 }
 
 function skipCollectionRoutesSourceDriverStop() {
@@ -24011,6 +24143,72 @@ function skipCollectionRoutesSourceDriverStop() {
     return;
   }
   selectCollectionRoutesSourceDriverIndex(selectedIndex + 1, "Zastávka přeskočena.");
+}
+
+function openCollectionRoutesSourceDriverDoneConfirm() {
+  if (collectionRoutesPilotState.sourceDriverDonePending) {
+    playCollectionRoutesDriverSound("error");
+    collectionRoutesPilotState.sourceImportError = "Počkej, předchozí potvrzení se ještě zpracovává.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    focusCollectionRoutesSourceDriverMode();
+    return;
+  }
+  if (collectionRoutesPilotState.sourceDriverDoneConfirmOpen) {
+    playCollectionRoutesDriverSound("error");
+    collectionRoutesPilotState.sourceImportError = "Nejdřív potvrď, nebo zavři otevřené potvrzení HOTOVO.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    focusCollectionRoutesSourceDriverMode();
+    return;
+  }
+  playCollectionRoutesDriverSound("tap");
+  collectionRoutesPilotState.sourceDriverProblemPanelOpen = false;
+  collectionRoutesPilotState.sourceDriverDoneConfirmOpen = true;
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = "Potvrď HOTOVO pro aktuální stanoviště.";
+  render();
+  focusCollectionRoutesSourceDriverMode();
+}
+
+function cancelCollectionRoutesSourceDriverDoneConfirm() {
+  playCollectionRoutesDriverSound("tap");
+  collectionRoutesPilotState.sourceDriverDoneConfirmOpen = false;
+  collectionRoutesPilotState.sourceDriverDonePending = false;
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = "";
+  render();
+  focusCollectionRoutesSourceDriverMode();
+}
+
+function confirmCollectionRoutesSourceDriverDone() {
+  if (!collectionRoutesPilotState.sourceDriverDoneConfirmOpen) {
+    playCollectionRoutesDriverSound("error");
+    collectionRoutesPilotState.sourceImportError = "Nejdřív otevři potvrzení přes HOTOVO.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    focusCollectionRoutesSourceDriverMode();
+    return;
+  }
+  if (collectionRoutesPilotState.sourceDriverDonePending) {
+    playCollectionRoutesDriverSound("error");
+    collectionRoutesPilotState.sourceImportError = "";
+    collectionRoutesPilotState.sourceImportMessage = "Ukládám, další kliky jsou dočasně zamčené.";
+    render();
+    focusCollectionRoutesSourceDriverMode();
+    return;
+  }
+  playCollectionRoutesDriverSound("success");
+  collectionRoutesPilotState.sourceDriverDonePending = true;
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = "Ukládám...";
+  render();
+  focusCollectionRoutesSourceDriverMode();
+  setTimeout(() => {
+    collectionRoutesPilotState.sourceDriverDonePending = false;
+    collectionRoutesPilotState.sourceDriverDoneConfirmOpen = false;
+    completeCollectionRoutesSourceDriverStop();
+  }, 950);
 }
 
 function selectCollectionRoutesSourceDriverStop(rowKey) {
@@ -24031,10 +24229,21 @@ function toggleCollectionRoutesSourceDriverList() {
 function handleCollectionRoutesSourceDriverReadonlyAction(action) {
   const normalized = String(action || "").split(":")[0];
   if (normalized === "done") {
-    completeCollectionRoutesSourceDriverStop();
+    openCollectionRoutesSourceDriverDoneConfirm();
     return;
   }
+  if (normalized === "done-confirm") {
+    confirmCollectionRoutesSourceDriverDone();
+    return;
+  }
+  if (normalized === "done-cancel") {
+    cancelCollectionRoutesSourceDriverDoneConfirm();
+    return;
+  }
+  playCollectionRoutesDriverSound(collectionRoutesSourceDriverReadonlySoundType(action));
   if (normalized === "problem") {
+    collectionRoutesPilotState.sourceDriverDoneConfirmOpen = false;
+    collectionRoutesPilotState.sourceDriverDonePending = false;
     collectionRoutesPilotState.sourceDriverProblemPanelOpen = true;
   }
   if (normalized === "problem-close") {
@@ -32204,6 +32413,21 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const collectionRoutesDriverSoundToggle = event.target.closest("[data-collection-routes-driver-sound-toggle]");
+  if (collectionRoutesDriverSoundToggle) {
+    const wasEnabled = collectionRoutesSourceDriverSoundsEnabled();
+    if (wasEnabled) {
+      playCollectionRoutesDriverSound("tap");
+    }
+    collectionRoutesPilotState.sourceDriverSoundsEnabled = !wasEnabled;
+    if (!wasEnabled) {
+      playCollectionRoutesDriverSound("tap");
+    }
+    render();
+    focusCollectionRoutesSourceDriverMode();
+    return;
+  }
+
   const collectionRoutesDriverReadonlyAction = event.target.closest("[data-collection-routes-driver-readonly-action]");
   if (collectionRoutesDriverReadonlyAction) {
     handleCollectionRoutesSourceDriverReadonlyAction(collectionRoutesDriverReadonlyAction.dataset.collectionRoutesDriverReadonlyAction || "");
@@ -32224,12 +32448,14 @@ document.addEventListener("click", async (event) => {
 
   const collectionRoutesSourceDriverStop = event.target.closest("[data-collection-routes-source-driver-stop]");
   if (collectionRoutesSourceDriverStop) {
+    playCollectionRoutesDriverSound("tap");
     selectCollectionRoutesSourceDriverStop(collectionRoutesSourceDriverStop.dataset.collectionRoutesSourceDriverStop || "");
     return;
   }
 
   const collectionRoutesSourceDriverToggleList = event.target.closest("[data-collection-routes-source-driver-toggle-list]");
   if (collectionRoutesSourceDriverToggleList) {
+    playCollectionRoutesDriverSound("tap");
     toggleCollectionRoutesSourceDriverList();
     return;
   }
