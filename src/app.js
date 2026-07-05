@@ -1600,7 +1600,7 @@ function themeSystemPreviewPage() {
     <main class="theme-system smart-tablet-ui theme-preview-page" data-theme-preview>
       <div class="app-shell">
         <aside class="app-sidebar sidebar--compact" aria-label="Navigace náhledu">
-          <input class="sidebar-state-input" type="checkbox" id="sidebar-state-theme" aria-label="Rozšířit levé menu">
+          <input class="sidebar-state-input" type="checkbox" id="sidebar-state-theme" aria-label="Přepnout levé menu" checked>
           <div class="sidebar-header">
             <span class="sidebar-brand">
               <span class="sidebar-brand-mark">${themePreviewIcon("dashboard")}</span>
