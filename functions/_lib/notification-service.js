@@ -79,6 +79,28 @@ function parseDriverPartOffers(value) {
   }
 }
 
+function driverPartOrderEmailOffers(request = {}) {
+  return parseDriverPartOffers(request.priceBoostResultJson)
+    .filter((offer) => offer.url && (offer.title || offer.seller))
+    .slice(0, 3);
+}
+
+function driverPartOrderEmailReadiness(request = {}, requiredOfferCount = 3) {
+  const offers = driverPartOrderEmailOffers(request);
+  const missingOfferCount = Math.max(0, Number(requiredOfferCount || 3) - offers.length);
+
+  return {
+    allowed: missingOfferCount === 0,
+    offers,
+    offerCount: offers.length,
+    requiredOfferCount: Number(requiredOfferCount || 3),
+    missingOfferCount,
+    message: missingOfferCount === 0
+      ? "E-mail Patrikovi obsahuje 3 cenové nabídky s odkazy."
+      : "E-mail Patrikovi neodeslán: chybí 3 cenové nabídky s odkazy."
+  };
+}
+
 function randomId(prefix) {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()
@@ -464,7 +486,7 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
   const verificationStatus = cleanString(request.partVerificationStatus || request.partIdentificationStatus) || "čeká na ověření";
   const providerMessage = cleanString(request.partsProviderMessage)
     || "Pilotní návrh AI Boost. Nic nebylo objednáno. Prosím ručně ověřit OE číslo a dostupnost před nákupem.";
-  const offers = parseDriverPartOffers(request.priceBoostResultJson);
+  const offers = driverPartOrderEmailOffers(request);
   const priceBoostFallback = cleanString(request.priceBoostNote)
     || "AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. Nic nebylo objednáno.";
   const offersHtml = offers.length
@@ -917,6 +939,17 @@ export async function sendMedicalExamReminderNotification(env, exam, options = {
 export async function sendDriverPartOrderNotification(env, request, options = {}) {
   const probablePart = cleanString(request.probablePart || request.verifiedPart) || "náhradní díl";
   const subject = `Náhradní díl k ověření: ${cleanString(request.licensePlate) || "SPZ"} – ${probablePart}`;
+  const readiness = driverPartOrderEmailReadiness(request);
+
+  if (!readiness.allowed) {
+    return {
+      status: "skipped",
+      errorMessage: readiness.message,
+      offerCount: readiness.offerCount,
+      requiredOfferCount: readiness.requiredOfferCount,
+      missingOfferCount: readiness.missingOfferCount
+    };
+  }
 
   return sendEmail(env, {
     type: "driver_part_order_email",
@@ -1057,5 +1090,7 @@ export async function sendMedicalExamReminders(env, exams) {
 
 export const __test = {
   emailRecipients,
+  driverPartOrderEmailOffers,
+  driverPartOrderEmailReadiness,
   parseDriverPartOffers
 };

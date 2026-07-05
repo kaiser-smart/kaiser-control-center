@@ -5,7 +5,10 @@ import {
   identifyProbablePartFromDescription
 } from "../functions/_lib/driver-parts-catalog.js";
 import { __test as driverPartRequestInternals } from "../functions/_lib/driver-part-requests-store.js";
-import { __test as notificationInternals } from "../functions/_lib/notification-service.js";
+import {
+  sendDriverPartOrderNotification,
+  __test as notificationInternals
+} from "../functions/_lib/notification-service.js";
 import { partslink24EligibilityForVehicle } from "../functions/_lib/partslink24-search-store.js";
 import {
   driverPartPriceSearchEligibility,
@@ -505,6 +508,37 @@ function passengerVehicle(overrides = {}) {
 }
 
 {
+  const skippedEmail = await sendDriverPartOrderNotification({}, {
+    id: "driver-report-no-links",
+    licensePlate: "2BB 8251",
+    probablePart: "přední sklo",
+    priceBoostResultJson: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A" },
+        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "" }
+      ]
+    })
+  }, {
+    recipientEmail: "patrik@example.test",
+    ccEmail: "oplustil@kaiserservis.cz"
+  });
+  assert.equal(skippedEmail.status, "skipped");
+  assert.equal(skippedEmail.offerCount, 0);
+  assert.equal(skippedEmail.requiredOfferCount, 3);
+  assert.match(skippedEmail.errorMessage, /chybí 3 cenové nabídky s odkazy/);
+
+  const emailReady = notificationInternals.driverPartOrderEmailReadiness({
+    priceBoostResultJson: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+      ]
+    })
+  });
+  assert.equal(emailReady.allowed, true);
+  assert.equal(emailReady.offerCount, 3);
+
   assert.deepEqual(
     notificationInternals.emailRecipients("oplustil@kaiserservis.cz; invalid; patrik@example.test,oplustil@kaiserservis.cz"),
     ["oplustil@kaiserservis.cz", "patrik@example.test"]
