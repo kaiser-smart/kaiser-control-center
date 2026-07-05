@@ -1383,7 +1383,11 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
   }
 
   try {
-    request = await handoffDriverPartRequest(env, user, request.id, { allowCreatorHandoff: true });
+    request = await handoffDriverPartRequest(env, user, request.id, {
+      allowCreatorHandoff: true,
+      allowProbablePartHandoff: true,
+      runPriceBoost: true
+    });
 
     const handedOff = request.status === "handed_to_ordering";
     return {

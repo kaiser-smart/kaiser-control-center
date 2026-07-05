@@ -224,7 +224,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "create_driver_part_request",
-    description: "Zapíše potvrzené hlášení náhradního dílu přes KSO backend. Vyžaduje vehicleId z ověřeného seznamu, get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. Bez potvrzení nic nezapíše ani neodešle.",
+    description: "Zapíše potvrzené hlášení náhradního dílu přes KSO backend. Vyžaduje vehicleId z ověřeného seznamu, get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. VehicleId z get_driver_vehicle_picker_selection je KSO UI potvrzení vozidla. Bez potvrzení nic nezapíše ani neodešle.",
     parameters: [
       { name: "defectDescription", type: "string", required: true },
       { name: "licensePlate", type: "string", required: false },
@@ -1566,12 +1566,17 @@ export function createElevenLabsClientTools({
       preparedParameters.vin ? `VIN: ${preparedParameters.vin}` : (vin ? `VIN: ${vin}` : ""),
       "Bez potvrzení se nic neuloží ani neodešle."
     ].filter(Boolean).join("\n");
-    const popupConfirmed = await confirm({
-      title: "Potvrdit hlášení řidiče",
-      message: confirmationMessage,
-      confirmLabel: "Uložit a předat",
-      cancelLabel: "Zrušit"
-    });
+    const selectedByKsoPicker = cachedSelection?.vehicleId &&
+      cleanString(preparedParameters.vehicleId || vehicleId) === cachedSelection.vehicleId &&
+      cleanString(cachedSelection.vehicleSelectionSource) === "backend_ui_picker";
+    const popupConfirmed = selectedByKsoPicker
+      ? true
+      : await confirm({
+        title: "Potvrdit hlášení řidiče",
+        message: confirmationMessage,
+        confirmLabel: "Uložit a předat",
+        cancelLabel: "Zrušit"
+      });
 
     if (!popupConfirmed) {
       return {

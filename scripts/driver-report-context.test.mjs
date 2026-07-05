@@ -666,8 +666,12 @@ for (const [name, payload] of [
 {
   await withFakeDriverPickerDom(async ({ find }) => {
     const posts = [];
+    let confirmCalls = 0;
     const tools = createElevenLabsClientTools({
-      confirm: async () => true,
+      confirm: async () => {
+        confirmCalls += 1;
+        return true;
+      },
       requestJson: async (path, options = {}) => {
         if ((options.method || "GET") === "GET" && path.startsWith("/api/ai/driver-reports/context")) {
           return {
@@ -764,6 +768,7 @@ for (const [name, payload] of [
     assert.equal(posts[1].parameters.confirmation_id, "driver-part-confirm-safe");
     assert.equal(posts[1].context.confirmationSource, "kso-ui");
     assert.equal(posts[1].context.confirmationId, "driver-part-confirm-safe");
+    assert.equal(confirmCalls, 0);
   });
 }
 

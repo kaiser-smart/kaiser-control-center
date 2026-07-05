@@ -233,11 +233,49 @@ function passengerVehicle(overrides = {}) {
     licensePlateVerified: true,
     manualVehicleReview: false,
     vin: "WDD2573211A123456",
+    partAiCandidate: true,
     probablePart: "výfuk / díl výfuku"
   };
   const eligibility = driverPartPriceSearchEligibility(item);
   assert.equal(eligibility.allowed, false);
   assert.equal(eligibility.code, "driver_part_price_verified_part_required");
+
+  const voicePilotPriceEligibility = driverPartPriceSearchEligibility(item, { allowProbablePartSeed: true });
+  assert.equal(voicePilotPriceEligibility.allowed, true);
+
+  const handoffEligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item);
+  assert.equal(handoffEligibility.allowed, false);
+  assert.equal(handoffEligibility.code, "driver_part_verified_part_required");
+
+  const voicePilotHandoffEligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item, {
+    allowProbablePartHandoff: true
+  });
+  assert.equal(voicePilotHandoffEligibility.allowed, true);
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    partAiCandidate: true,
+    probablePart: "výfuk / díl výfuku"
+  };
+  const result = await runDriverPartPriceSearch({
+    PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({
+      offers: [
+        { title: "Nový výfuk díl výfuku Mercedes CLS", price: "5 900 Kč", seller: "Dodavatel C", url: "https://example.test/c" },
+        { title: "Použitý výfuk díl výfuku Mercedes CLS bazar", price: "1 200 Kč", seller: "Bazoš", url: "https://bazos.test/a" },
+        { title: "Výfuk díl výfuku Mercedes CLS", price: "4 800 Kč", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Díl výfuku výfuk Mercedes CLS skladem", price: "5 100 Kč", seller: "Dodavatel B", url: "https://example.test/b" }
+      ]
+    })
+  }, item, { allowProbablePartSeed: true });
+  assert.equal(result.status, "candidates_found");
+  assert.equal(result.offers.length, 3);
+  assert.deepEqual(result.offers.map((offer) => offer.seller), ["Dodavatel A", "Dodavatel B", "Dodavatel C"]);
 }
 
 {

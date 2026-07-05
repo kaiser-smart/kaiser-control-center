@@ -1176,7 +1176,13 @@ function driverPartRequestHasVerifiedPartForHandoff(item = {}) {
   return Boolean(item.oePartNumber || item.partName || item.verifiedPart || item.partOrderNumber);
 }
 
-function driverPartRequestPatrikHandoffEligibility(item = {}) {
+function driverPartRequestHasPilotPartCandidateForHandoff(item = {}, options = {}) {
+  return options.allowProbablePartHandoff === true &&
+    item.partAiCandidate === true &&
+    Boolean(cleanString(item.probablePart || item.partAiDetectedName));
+}
+
+function driverPartRequestPatrikHandoffEligibility(item = {}, options = {}) {
   if (!item.licensePlate || !item.vehicleName) {
     return {
       allowed: false,
@@ -1198,7 +1204,7 @@ function driverPartRequestPatrikHandoffEligibility(item = {}) {
       message: "Bez VIN nelze předat díl Patrikovi v pilotu podle VIN."
     };
   }
-  if (!driverPartRequestHasVerifiedPartForHandoff(item)) {
+  if (!driverPartRequestHasVerifiedPartForHandoff(item) && !driverPartRequestHasPilotPartCandidateForHandoff(item, options)) {
     return {
       allowed: false,
       code: "driver_part_verified_part_required",
@@ -1279,7 +1285,7 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
   }
 
   const { db, item } = await requestForUser(env, id, user);
-  const eligibility = driverPartRequestPatrikHandoffEligibility(item);
+  const eligibility = driverPartRequestPatrikHandoffEligibility(item, options);
   if (!eligibility.allowed) {
     throw new DriverPartRequestsStoreError(eligibility.message, 400, eligibility.code);
   }
@@ -1291,7 +1297,9 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
     && item.priceBoostStatus !== "provider_not_configured"
     && item.priceBoostStatus !== "failed";
   if (shouldRunPriceBoost || (options.runPriceBoost === true && item.priceBoostStatus !== "candidates_found")) {
-    const priceResult = await runDriverPartPriceSearch(env, item);
+    const priceResult = await runDriverPartPriceSearch(env, item, {
+      allowProbablePartSeed: options.allowProbablePartHandoff === true
+    });
     try {
       itemForEmail = await saveDriverPartPriceBoostResult(db, user, item, priceResult);
     } catch (error) {

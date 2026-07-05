@@ -90,7 +90,11 @@ export function isDriverPartPriceSearchConfigured(env = {}) {
   return Boolean(config.endpoint || config.mockJson || config.openAiApiKey);
 }
 
-export function driverPartPriceSearchEligibility(request = {}) {
+function canUseProbablePartPriceSeed(request = {}, options = {}) {
+  return options.allowProbablePartSeed === true && Boolean(cleanString(request.probablePart || request.partAiDetectedName));
+}
+
+export function driverPartPriceSearchEligibility(request = {}, options = {}) {
   if (!request.licensePlate || !request.vehicleName) {
     return {
       allowed: false,
@@ -112,7 +116,7 @@ export function driverPartPriceSearchEligibility(request = {}) {
       message: "Cenový průzkum čeká na VIN."
     };
   }
-  if (!driverPartHasVerifiedPriceSeed(request)) {
+  if (!driverPartHasVerifiedPriceSeed(request) && !canUseProbablePartPriceSeed(request, options)) {
     return {
       allowed: false,
       code: "driver_part_price_verified_part_required",
@@ -332,7 +336,7 @@ async function fetchOpenAiWebSearchOffers(config, request, query, signal, fetchI
 }
 
 export async function runDriverPartPriceSearch(env = {}, request = {}, options = {}) {
-  const eligibility = driverPartPriceSearchEligibility(request);
+  const eligibility = driverPartPriceSearchEligibility(request, options);
   const now = new Date().toISOString();
   const query = driverPartPriceSearchQuery(request);
   const fetchImpl = options.fetchImpl || fetch;
