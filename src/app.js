@@ -424,10 +424,10 @@ const DRIVER_REPORT_PART_SOURCE_LABELS = {
 const DRIVER_REPORT_PRICE_BOOST_LABELS = {
   not_requested: "Čeká na ověřené OE číslo",
   waiting_verified_part: "Připraveno po potvrzení kompatibility",
-  running: "Vyhledává cenové kandidáty",
+  running: "AI Boost hledá nabídky",
   candidates_found: "Kandidáti k ověření",
   no_results: "Bez ověřených nabídek",
-  provider_not_configured: "Cenový průzkum není nastaven",
+  provider_not_configured: "AI Boost není nastaven",
   failed: "Chyba průzkumu",
   skipped: "Neprovádí se"
 };
@@ -20651,7 +20651,10 @@ function driverReportInternetOffers(item) {
   }
 
   if (!offers.length) {
-    return `<p class="driver-report-note">Cenový průzkum čeká na ověřené OE číslo. Nic nebylo objednáno.</p>`;
+    const text = item.priceBoostStatus === "provider_not_configured"
+      ? "AI Boost web-search zatím není nastavený. Bez klíče nebo provideru se web neprohledá."
+      : "AI Boost zatím cenový průzkum nespustil nebo nenašel bezpečně relevantní nabídky. Nic nebylo objednáno.";
+    return `<p class="driver-report-note">${escapeHtml(text)}</p>`;
   }
 
   return `
@@ -20710,6 +20713,9 @@ function driverReportPartslink24Section(item) {
   const handoffBlockReason = driverReportPatrikHandoffBlockReason(item);
   const canRunPrice = driverReportCanRunPriceBoost(item);
   const priceLoading = driverReportsState.actionLoading === `${item.id}:price-boost`;
+  const priceActions = canRunPrice
+    ? `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${priceLoading ? "disabled" : ""}>${priceLoading ? "AI Boost hledá..." : "Spustit AI Boost"}</button>`
+    : "";
   const ccStatus = pilot.pilotCcStatus || "not_sent";
   const ccLabel = ccStatus === "sent_or_included_by_backend"
     ? "pilotní CC / backend notifikace"
@@ -20766,14 +20772,12 @@ function driverReportPartslink24Section(item) {
         ${driverReportVinPilotStep(
           "4. Cenový průzkum",
           item.priceBoostStatus === "candidates_found" ? "email_ready" : "waiting_verified_oe",
-          item.priceBoostNote || "Cenový průzkum čeká na ověřené OE číslo.",
+          item.priceBoostNote || "AI Boost prohledá web přes serverový web-search a uloží max. 3 nabídky k ručnímu ověření. Nic neobjednává.",
           [
             driverReportField("Stav", driverReportPriceBoostLabel(item.priceBoostStatus)),
             driverReportField("Poslední hledání", item.priceBoostCheckedAt ? formatDateTime(item.priceBoostCheckedAt) : "")
           ].join("") + driverReportInternetOffers(item),
-          canRunPrice
-            ? `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${priceLoading ? "disabled" : ""}>${priceLoading ? "Vyhledávám..." : "Spustit cenový průzkum"}</button>`
-            : ""
+          priceActions
         )}
         ${driverReportVinPilotStep(
           "5. Předání Patrikovi",
@@ -21090,7 +21094,7 @@ function driverReportPartRowActions(item) {
       <button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Otevřít</button>
       ${canRunVin ? `<button class="text-action" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Ověřit podle VIN</button>` : ""}
       ${canRunVin ? `<a class="text-action" href="https://www.partslink24.com/partslink24/startup.do" target="_blank" rel="noopener noreferrer">Partslink24</a>` : ""}
-      ${canRunPrice ? `<button class="text-action" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Cenový průzkum</button>` : ""}
+      ${canRunPrice ? `<button class="text-action" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>AI Boost ceny</button>` : ""}
       ${canHandoff ? `<button class="text-action" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Odeslat Patrikovi</button>` : ""}
       ${canManage && ["ordered", "handed_to_ordering"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Díl dorazil</button>` : ""}
       ${canManage && ["part_arrived", "service_scheduled"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Vyřízeno</button>` : ""}
@@ -21521,7 +21525,7 @@ function driverReportActionButtons(item) {
 
   return `
     <div class="driver-report-actions">
-      <button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${canRunPrice && !loading ? "" : "disabled"}>Cenový průzkum</button>
+      <button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${canRunPrice && !loading ? "" : "disabled"}>Spustit AI Boost</button>
       <button class="secondary-link" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${canHandoff && !loading ? "" : "disabled"}>Předat Patrikovi</button>
       <button class="secondary-link" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${canArrived && !loading ? "" : "disabled"}>Díl dorazil</button>
       <button class="secondary-link" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${canComplete && !loading ? "" : "disabled"}>Vyřízeno</button>

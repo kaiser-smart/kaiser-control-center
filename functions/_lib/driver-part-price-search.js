@@ -61,19 +61,33 @@ function parseNumber(value) {
 }
 
 function providerConfig(env = {}) {
+  const endpoint = cleanString(env.PARTS_PRICE_SEARCH_ENDPOINT || env.PARTS_PRICE_SEARCH_API_URL);
+  const mockJson = cleanString(env.PARTS_PRICE_SEARCH_MOCK_JSON);
+  const openAiApiKey = cleanString(
+    env.PARTS_PRICE_SEARCH_OPENAI_API_KEY ||
+    env.AI_BOOST_OPENAI_API_KEY ||
+    env.OPENAI_API_KEY
+  );
+  const provider = cleanString(
+    env.PARTS_PRICE_SEARCH_PROVIDER ||
+    env.PARTS_SEARCH_PROVIDER ||
+    (endpoint ? "custom" : openAiApiKey ? "openai_web_search" : "custom")
+  );
   return {
-    endpoint: cleanString(env.PARTS_PRICE_SEARCH_ENDPOINT || env.PARTS_PRICE_SEARCH_API_URL),
+    endpoint,
     apiKey: cleanString(env.PARTS_PRICE_SEARCH_API_KEY || env.PARTS_SEARCH_API_KEY),
-    provider: cleanString(env.PARTS_PRICE_SEARCH_PROVIDER || env.PARTS_SEARCH_PROVIDER || "custom"),
+    provider,
     allowUsed: truthy(env.PARTS_PRICE_SEARCH_ALLOW_USED),
     timeoutMs: Math.max(1000, Number(env.PARTS_PRICE_SEARCH_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS),
-    mockJson: cleanString(env.PARTS_PRICE_SEARCH_MOCK_JSON)
+    mockJson,
+    openAiApiKey,
+    openAiModel: cleanString(env.PARTS_PRICE_SEARCH_OPENAI_MODEL || env.OPENAI_MODEL || "gpt-5.5")
   };
 }
 
 export function isDriverPartPriceSearchConfigured(env = {}) {
   const config = providerConfig(env);
-  return Boolean(config.endpoint || config.mockJson);
+  return Boolean(config.endpoint || config.mockJson || config.openAiApiKey);
 }
 
 export function driverPartPriceSearchEligibility(request = {}) {
@@ -191,13 +205,47 @@ function safeErrorDetail(error) {
   return truncate(cleanString(error?.message || error), 220);
 }
 
-async function fetchProviderOffers(config, request, query, signal) {
+function extractOpenAiOutputText(payload = {}) {
+  if (typeof payload.output_text === "string") return payload.output_text;
+  const texts = [];
+  for (const outputItem of Array.isArray(payload.output) ? payload.output : []) {
+    if (typeof outputItem?.text === "string") {
+      texts.push(outputItem.text);
+    }
+    for (const contentItem of Array.isArray(outputItem?.content) ? outputItem.content : []) {
+      if (typeof contentItem?.text === "string") texts.push(contentItem.text);
+      if (typeof contentItem?.content === "string") texts.push(contentItem.content);
+    }
+  }
+  return texts.join("\n").trim();
+}
+
+function parseJsonObjectFromText(text) {
+  const normalized = cleanString(text);
+  if (!normalized) return {};
+  try {
+    return JSON.parse(normalized);
+  } catch {
+    const start = normalized.indexOf("{");
+    const end = normalized.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(normalized.slice(start, end + 1));
+      } catch {
+        return {};
+      }
+    }
+  }
+  return {};
+}
+
+async function fetchProviderOffers(config, request, query, signal, fetchImpl = fetch) {
   const headers = { "Content-Type": "application/json" };
   if (config.apiKey) {
     headers.Authorization = `Bearer ${config.apiKey}`;
   }
 
-  const response = await fetch(config.endpoint, {
+  const response = await fetchImpl(config.endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -227,10 +275,67 @@ async function fetchProviderOffers(config, request, query, signal) {
   return payload;
 }
 
+async function fetchOpenAiWebSearchOffers(config, request, query, signal, fetchImpl = fetch) {
+  const response = await fetchImpl("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.openAiApiKey}`
+    },
+    body: JSON.stringify({
+      model: config.openAiModel,
+      tools: [{
+        type: "web_search",
+        search_context_size: "low",
+        user_location: {
+          type: "approximate",
+          country: "CZ",
+          timezone: "Europe/Prague"
+        }
+      }],
+      input: [
+        "Najdi nejlevnejsi relevantni dostupne nove nabidky nahradniho dilu v CR nebo EU.",
+        "Jde o pilot AI Boost pro servisni overeni. Nic neobjednavej.",
+        `Dotaz: ${query}`,
+        `OE cislo: ${cleanString(request.oePartNumber || request.partOrderNumber) || "neuvedeno"}`,
+        `Dil: ${cleanString(request.partName || request.verifiedPart || request.probablePart) || "neuvedeno"}`,
+        `Vozidlo: ${cleanString(request.vehicleName) || "neuvedeno"}`,
+        "Neposilam VIN ani SPZ. Neber bazar, pouzite dily, vrakoviste, marketplace ani podezrele vysledky.",
+        "Vrat pouze validni JSON bez komentare ve tvaru:",
+        "{\"offers\":[{\"title\":\"\",\"price\":\"\",\"seller\":\"\",\"url\":\"\",\"availability\":\"\",\"note\":\"\"}]}",
+        "Pokud nemas jistou cenu a URL, nabidku vynech. Maximalne 5 nabidek."
+      ].join("\n")
+    }),
+    signal
+  });
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { text: truncate(text, 800) };
+  }
+
+  if (!response.ok) {
+    const detail = payload?.error?.message || payload?.error || payload?.message || text;
+    throw new Error(`openai web search ${response.status}: ${truncate(detail, 160)}`);
+  }
+
+  const outputText = extractOpenAiOutputText(payload);
+  const parsed = parseJsonObjectFromText(outputText);
+  return {
+    ...parsed,
+    provider: "openai_web_search",
+    outputText: truncate(outputText, 500)
+  };
+}
+
 export async function runDriverPartPriceSearch(env = {}, request = {}, options = {}) {
   const eligibility = driverPartPriceSearchEligibility(request);
   const now = new Date().toISOString();
   const query = driverPartPriceSearchQuery(request);
+  const fetchImpl = options.fetchImpl || fetch;
 
   if (!eligibility.allowed) {
     return {
@@ -246,8 +351,8 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
   }
 
   const config = providerConfig(env);
-  if (!config.endpoint && !config.mockJson) {
-    const message = "Cenový průzkum není nastavený. Doplň PARTS_PRICE_SEARCH_ENDPOINT nebo proveď průzkum ručně.";
+  if (!config.endpoint && !config.mockJson && !config.openAiApiKey) {
+    const message = "AI Boost web-search není nastavený. Chybí OPENAI_API_KEY nebo PARTS_PRICE_SEARCH_ENDPOINT.";
     return {
       ok: false,
       status: "provider_not_configured",
@@ -265,9 +370,13 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
     const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
     let payload = null;
     try {
-      payload = config.mockJson
-        ? JSON.parse(config.mockJson)
-        : await fetchProviderOffers(config, request, query, controller.signal);
+      if (config.mockJson) {
+        payload = JSON.parse(config.mockJson);
+      } else if (config.endpoint) {
+        payload = await fetchProviderOffers(config, request, query, controller.signal, fetchImpl);
+      } else {
+        payload = await fetchOpenAiWebSearchOffers(config, request, query, controller.signal, fetchImpl);
+      }
     } finally {
       clearTimeout(timeoutId);
     }
@@ -276,28 +385,29 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
     const offers = selectDriverPartOffers(rawOffers, request, { allowUsed: config.allowUsed });
     const status = offers.length ? "candidates_found" : "no_results";
     const message = offers.length
-      ? `Cenový průzkum našel ${offers.length} nabídky k ručnímu ověření. Nic nebylo objednáno.`
-      : "Cenový průzkum nenašel 3 bezpečně relevantní nabídky. Pokračuj ručně.";
+      ? `AI Boost našel ${offers.length} nabídky k ručnímu ověření. Nic nebylo objednáno.`
+      : "AI Boost nenašel 3 bezpečně relevantní nabídky. Pokračuj ručně.";
+    const provider = config.mockJson ? "mock" : config.endpoint ? config.provider : "openai_web_search";
 
     return {
       ok: offers.length > 0,
       status,
       checkedAt: now,
       query,
-      provider: config.provider,
+      provider,
       offers,
       message,
       resultJson: safeJson({
         ok: offers.length > 0,
-        provider: config.provider,
+        provider,
         query,
         offers,
         checkedAt: now,
-        note: "Pilotní cenový průzkum. Nic nebylo objednáno."
+        note: "Pilotní AI Boost cenový průzkum. Nic nebylo objednáno."
       })
     };
   } catch (error) {
-    const message = `Cenový průzkum selhal: ${safeErrorDetail(error)}. Pokračuj ručně.`;
+    const message = `AI Boost cenový průzkum selhal: ${safeErrorDetail(error)}. Pokračuj ručně.`;
     return {
       ok: false,
       status: "failed",
@@ -321,7 +431,9 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
 export const __test = {
   driverPartHasVerifiedPriceSeed,
   providerConfig,
+  extractOpenAiOutputText,
   normalizeDriverPartOffer,
+  parseJsonObjectFromText,
   parseNumber,
   selectDriverPartOffers
 };

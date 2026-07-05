@@ -201,7 +201,7 @@ function passengerVehicle(overrides = {}) {
   };
   const result = await runDriverPartPriceSearch({}, item);
   assert.equal(result.status, "provider_not_configured");
-  assert.match(result.message, /Cenový průzkum není nastavený/);
+  assert.match(result.message, /AI Boost web-search není nastavený/);
   assert.deepEqual(result.offers, []);
 }
 
@@ -232,6 +232,52 @@ function passengerVehicle(overrides = {}) {
   assert.equal(result.offers.length, 3);
   assert.deepEqual(result.offers.map((offer) => offer.seller), ["Dodavatel A", "Dodavatel B", "Dodavatel C"]);
   assert.equal(result.offers.some((offer) => /bazo/i.test(offer.seller)), false);
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    probablePart: "výfuk / díl výfuku",
+    oePartNumber: "A 257 490 12 00",
+    partName: "tlumič výfuku"
+  };
+  let requestSnapshot = null;
+  const result = await runDriverPartPriceSearch({
+    OPENAI_API_KEY: "test-openai-key",
+    PARTS_PRICE_SEARCH_OPENAI_MODEL: "gpt-test"
+  }, item, {
+    fetchImpl: async (url, options) => {
+      requestSnapshot = { url, options, body: JSON.parse(options.body) };
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            output_text: JSON.stringify({
+              offers: [
+                { title: "Tlumič výfuku A 257 490 12 00", price: "3 700 Kč", seller: "AI Dodavatel A", url: "https://example.test/ai-a", availability: "skladem" },
+                { title: "Tlumič výfuku A 257 490 12 00", price: "3 950 Kč", seller: "AI Dodavatel B", url: "https://example.test/ai-b" },
+                { title: "Tlumič výfuku A 257 490 12 00", price: "4 250 Kč", seller: "AI Dodavatel C", url: "https://example.test/ai-c" }
+              ]
+            })
+          });
+        }
+      };
+    }
+  });
+  assert.equal(requestSnapshot.url, "https://api.openai.com/v1/responses");
+  assert.equal(requestSnapshot.body.tools[0].type, "web_search");
+  assert.equal(requestSnapshot.body.model, "gpt-test");
+  assert.match(requestSnapshot.options.headers.Authorization, /^Bearer /);
+  assert.doesNotMatch(requestSnapshot.body.input, /WDD2573211A123456|2BB 8251/);
+  assert.equal(result.status, "candidates_found");
+  assert.equal(result.provider, "openai_web_search");
+  assert.equal(result.offers.length, 3);
+  assert.deepEqual(result.offers.map((offer) => offer.seller), ["AI Dodavatel A", "AI Dodavatel B", "AI Dodavatel C"]);
 }
 
 {
