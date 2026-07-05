@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   driverPartAiCandidateFromMatch,
@@ -20,6 +21,7 @@ const adminUser = {
   name: "Radim Oplustil",
   role: "admin"
 };
+const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 
 function passengerVehicle(overrides = {}) {
   return {
@@ -34,6 +36,13 @@ function passengerVehicle(overrides = {}) {
     model: "CLS",
     ...overrides
   };
+}
+
+{
+  assert.match(
+    appSource,
+    /result\.request\?\.status === "handed_to_ordering" && result\.request\?\.patrikEmailStatus === "sent"/
+  );
 }
 
 {

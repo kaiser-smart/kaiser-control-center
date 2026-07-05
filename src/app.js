@@ -22111,7 +22111,7 @@ async function submitDriverReportForm(form) {
     driverReportsState.selected = result.request || null;
     driverReportsState.message = result.warning
       ? `Hlášení bylo odesláno. ${result.warning}`
-      : result.request?.status === "handed_to_ordering"
+      : result.request?.status === "handed_to_ordering" && result.request?.patrikEmailStatus === "sent"
       ? "Hlášení bylo odesláno a předané Patrikovi k ověření."
       : "Hlášení bylo odesláno.";
     driverReportsState.draft = {
