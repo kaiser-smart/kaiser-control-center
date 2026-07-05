@@ -195,6 +195,25 @@ function passengerVehicle(overrides = {}) {
 }
 
 {
+  assert.equal(
+    driverPartRequestInternals.driverPartRequestHasTrustedKsoVehicleSelection({
+      source: "voice",
+      vehicleId: "vehicle-passenger-1",
+      vehicleSelectionSource: "backend_ui_picker"
+    }),
+    true
+  );
+  assert.equal(
+    driverPartRequestInternals.driverPartRequestHasTrustedKsoVehicleSelection({
+      source: "voice",
+      vehicleId: "vehicle-passenger-1",
+      vehicleSelectionSource: "voice-explicit"
+    }),
+    false
+  );
+}
+
+{
   const source = driverPartRequestInternals.driverPartRequestConfirmVehicleSource("manual_unverified_plate");
   assert.equal(source, "manual_unverified_plate_vehicle_confirmed");
   const item = {

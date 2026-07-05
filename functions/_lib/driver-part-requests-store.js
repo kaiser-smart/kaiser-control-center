@@ -482,6 +482,14 @@ export function driverPartRequestSourceHasManualVehicleReview(source = "") {
   return cleanString(source).includes("manual_vehicle_review");
 }
 
+function driverPartRequestHasTrustedKsoVehicleSelection(payload = {}, explicitVehicleId = "") {
+  const source = cleanString(payload.source);
+  const selectionSource = cleanString(payload.vehicleSelectionSource || payload.vehicle_selection_source);
+  return source.startsWith("voice") &&
+    Boolean(cleanString(explicitVehicleId || payload.vehicleId || payload.vehicle_id)) &&
+    selectionSource === "backend_ui_picker";
+}
+
 function driverPartRequestConfirmVehicleSource(source = "") {
   const current = cleanString(source) || "manual";
   const confirmed = current.includes("manual_vehicle_review")
@@ -911,7 +919,10 @@ export async function createDriverPartRequest(env, user, payload = {}) {
     vehicle = plateValidation?.vehicle || vehicle;
   }
 
-  const manualVehicleReview = driverPartRequestNeedsManualVehicleReview(assignedDriverMatch, licensePlate, plateValidation);
+  const trustedKsoVehicleSelection = driverPartRequestHasTrustedKsoVehicleSelection(payload, explicitVehicleId);
+  const manualVehicleReview = trustedKsoVehicleSelection
+    ? false
+    : driverPartRequestNeedsManualVehicleReview(assignedDriverMatch, licensePlate, plateValidation);
 
   const driverContact = await resolvePersonContact(env, {
     userIds: [payload.driverUserId, user?.id],
@@ -929,6 +940,15 @@ export async function createDriverPartRequest(env, user, payload = {}) {
         ].filter(Boolean).join(" "),
         source: cleanString(payload.source) === "voice" ? "voice_unverified_plate" : "manual_unverified_plate"
       }
+    : trustedKsoVehicleSelection
+      ? {
+          ...payload,
+          note: [
+            cleanString(payload.note),
+            "Vozidlo potvrzeno výběrem v KSO aplikaci."
+          ].filter(Boolean).join(" "),
+          source: driverPartRequestConfirmVehicleSource(payload.source || "voice")
+        }
     : manualVehicleReview
       ? {
           ...payload,
@@ -1940,6 +1960,7 @@ export const __test = {
   driverPartVinPilotState,
   driverPartRequestConfirmVehicleSource,
   driverPartRequestHasVerifiedPartForHandoff,
+  driverPartRequestHasTrustedKsoVehicleSelection,
   driverPartRequestPatrikHandoffEligibility,
   driverPartRequestSourceHasManualVehicleReview,
   pilotCcStatus,

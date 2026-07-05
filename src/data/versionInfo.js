@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.334"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.335"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: KSO výběr vozidla odemyká předání",
+    text: "Hlasové hlášení s vozidlem vybraným v KSO popupu se už nevrací do ruční kontroly vozidla. KSO výběr se zapisuje jako aplikační potvrzení, takže jasný díl může pokračovat do AI Boost cen a e-mailu Patrikovi; nic se automaticky neobjednává."
+  },
   {
     title: "Trasy svozu: návrh Fáze 2D",
     text: "Checklist a dokumentace popisují budoucí ostrý řidičský tablet: denní trasy, stop audit, offline synchronizaci, GPS/T-Cars brány a dispečerský dohled. Jde jen o návrh bez DB migrací, zápisů, navigace, SMS/e-mailů a automatizací."

@@ -971,6 +971,14 @@ function driverPartDraftFromPayload(payload, speechText) {
     driverPhone: firstNonEmpty(parameters.driverPhone, context.driverPhone, payload.driverPhone),
     vehicleId: firstNonEmpty(parameters.vehicleId, context.vehicleId, payload.vehicleId),
     vehicleName: firstNonEmpty(parameters.vehicleName, context.vehicleName, payload.vehicleName, licensePlate),
+    vehicleSelectionSource: firstNonEmpty(
+      parameters.vehicleSelectionSource,
+      parameters.vehicle_selection_source,
+      context.vehicleSelectionSource,
+      context.vehicle_selection_source,
+      payload.vehicleSelectionSource,
+      payload.vehicle_selection_source
+    ),
     licensePlate,
     vin: firstNonEmpty(parameters.vin, context.vin, payload.vin),
     vehicleBrand: firstNonEmpty(parameters.vehicleBrand, context.vehicleBrand, payload.vehicleBrand),
@@ -1144,6 +1152,7 @@ function driverPartPreparedAction(draft, user) {
       driverPhone: draft.driverPhone,
       vehicleId: draft.vehicleId,
       vehicleName: draft.vehicleName,
+      vehicleSelectionSource: draft.vehicleSelectionSource,
       licensePlate: draft.licensePlate,
       vin: draft.vin,
       vehicleBrand: draft.vehicleBrand,
@@ -1367,6 +1376,7 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
       driverPhone: draft.driverPhone || user?.phone,
       spzManual: draft.licensePlate,
       spzValidated: Boolean(draft.licensePlate),
+      vehicleSelectionSource: draft.vehicleSelectionSource,
       damagePhotoStatus: "requested",
       damagePhotoNote: "Šarlota požádala řidiče o fotku poškození před uložením hlášení.",
       source: "voice"
