@@ -15436,6 +15436,9 @@ function collectionRoutesSourceDriverNextStopCard(row, order) {
 }
 
 function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "default") {
+  const iconHtml = tone === "sarlota"
+    ? `<span class="collection-routes-driver-action__icon" aria-hidden="true">Š</span>`
+    : "";
   return `
     <button
       class="collection-routes-driver-action collection-routes-driver-action--${escapeHtml(tone)}"
@@ -15443,7 +15446,8 @@ function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "defau
       data-collection-routes-driver-readonly-action="${escapeHtml(action)}"
       aria-label="${escapeHtml(label)}"
     >
-      ${escapeHtml(label)}
+      ${iconHtml}
+      <span class="collection-routes-driver-action__label">${escapeHtml(label)}</span>
     </button>
   `;
 }
@@ -15554,18 +15558,15 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           </div>
 
           <div class="collection-routes-driver-mode__support-actions" aria-label="Vedlejší akce řidiče">
-            ${collectionRoutesSourceDriverReadonlyButton("Navigovat", "navigate", "navigate")}
+            ${collectionRoutesSourceDriverReadonlyButton("Navigovat na adresu", "navigate", "navigate")}
             ${collectionRoutesSourceDriverReadonlyButton(isProblemPanelOpen ? "Problém otevřen" : "Problém", "problem", "problem")}
           </div>
 
           <div class="collection-routes-driver-mode__controls" aria-label="Ovládání trasy">
             <button class="secondary-link" type="button" data-collection-routes-source-driver-prev ${selectedIndex <= 0 ? "disabled" : ""}>
-              Předchozí
+              Předchozí zastávka
             </button>
-            <button class="secondary-link" type="button" data-collection-routes-source-driver-next ${selectedIndex >= rows.length - 1 ? "disabled" : ""}>
-              Přeskočit zastávku
-            </button>
-            ${collectionRoutesSourceDriverReadonlyButton("Volat dispečink", "dispatch", "dispatch")}
+            ${collectionRoutesSourceDriverReadonlyButton("Zpráva dispečinku", "dispatch", "dispatch")}
             ${collectionRoutesSourceDriverReadonlyButton("Šarlota", "sarlota", "sarlota")}
           </div>
 
@@ -15614,10 +15615,10 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
         <div class="collection-routes-driver-mode__problem-grid" aria-label="Rychlé hlášení problému">
           <div>
             <strong>Co se stalo?</strong>
-            <span>Vyber problém. Když je potřeba rychlé řešení, volej dispečink.</span>
+            <span>Vyber problém. Když je potřeba rychlé řešení, pošli zprávu dispečinku.</span>
           </div>
           <div>
-            ${["Nádoba není venku", "Přeplněno", "Přístup blokovaný", "Špatná adresa", "Nádoba poškozená", "Jiné", "Volat dispečink"].map((label) => collectionRoutesSourceDriverReadonlyButton(label, `problem:${label}`, "problem-soft")).join("")}
+            ${["Nádoba není venku", "Přeplněno", "Přístup blokovaný", "Špatná adresa", "Nádoba poškozená", "Jiné", "Zpráva dispečinku"].map((label) => collectionRoutesSourceDriverReadonlyButton(label, `problem:${label}`, "problem-soft")).join("")}
             ${collectionRoutesSourceDriverReadonlyButton("Zavřít", "problem-close", "tab")}
           </div>
         </div>
@@ -23943,13 +23944,13 @@ function handleCollectionRoutesSourceDriverReadonlyAction(action) {
     collectionRoutesPilotState.sourceDriverProblemPanelOpen = false;
   }
   const messages = {
-    navigate: "Navigace bude zapnutá v další fázi.",
+    navigate: "Navigace na adresu bude zapnutá v další fázi.",
     problem: "Vyber, co se stalo.",
     "problem-close": "",
     map: "Mapa bude zapnutá v další fázi.",
     list: "",
     report: "Hlášení otevři přes volbu Problém.",
-    dispatch: "Zavolej dispečink telefonem.",
+    dispatch: "Zpráva dispečinku bude zapnutá v další fázi.",
     sarlota: "Šarlota bude zapnutá v další fázi."
   };
   collectionRoutesPilotState.sourceImportError = "";

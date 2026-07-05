@@ -3783,6 +3783,26 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.collection-routes-driver-action__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(220, 255, 250, 0.62);
+  border-radius: 999px;
+  background: rgba(84, 211, 194, 0.2);
+  color: #ecfffb;
+  font-size: 0.88rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.collection-routes-driver-action__label {
+  display: block;
+  min-width: 0;
+}
+
 .collection-routes-driver-action small {
   display: block;
   font-size: 0.62rem;
@@ -3939,7 +3959,7 @@ h1 {
 
 .collection-routes-driver-mode__controls {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -4019,6 +4039,8 @@ h1 {
   border-color: rgba(84, 211, 194, 0.54);
   background: rgba(84, 211, 194, 0.15);
   color: #dcfffa;
+  flex-direction: row;
+  gap: 8px;
 }
 
 .collection-routes-driver-action--tab {
@@ -4706,7 +4728,7 @@ h1 {
 }
 
 .collection-routes-driver-mode__controls {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
