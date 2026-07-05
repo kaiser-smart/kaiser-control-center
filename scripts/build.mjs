@@ -81,21 +81,6 @@ await writeFile(
   path.join(dist, "src/data/runtimeConfig.js"),
   runtimeConfigModuleSource()
 );
-await writeFile(
-  path.join(dist, "index.js"),
-  [
-    "export default {",
-    "  fetch(request, env) {",
-    "    return env.ASSETS.fetch(request);",
-    "  }",
-    "};",
-    ""
-  ].join("\n")
-);
-if (await fileExists(path.join(root, ".openai/hosting.json"))) {
-  await mkdir(path.join(dist, ".openai"), { recursive: true });
-  await copyFile(path.join(root, ".openai/hosting.json"), path.join(dist, ".openai/hosting.json"));
-}
 if (await fileExists(publicDir)) {
   await copyDir(publicDir, dist);
 }
