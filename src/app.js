@@ -1581,14 +1581,14 @@ function themePreviewIconFile(file) {
 
 function themeSystemPreviewPage() {
   const routeItems = [
-    { icon: "truck", title: "KS-407 lisovací vůz", meta: "Trasa 12 - směsný odpad, 82 % hotovo", active: true },
-    { icon: "container", title: "KS-318 nosič kontejnerů", meta: "Čeká na potvrzení dalšího stanoviště" },
-    { icon: "service", title: "KS-204 servisní dodávka", meta: "Pohotovost pro hlášené překážky" }
+    { icon: "truck", tone: "green", title: "KS-407 lisovací vůz", meta: "Trasa 12 - směsný odpad, 82 % hotovo", active: true },
+    { icon: "container", tone: "bluegrey", title: "KS-318 nosič kontejnerů", meta: "Čeká na potvrzení dalšího stanoviště" },
+    { icon: "service", tone: "red", title: "KS-204 servisní dodávka", meta: "Pohotovost pro hlášené překážky" }
   ];
   const routeMarkup = routeItems
     .map((item) => `
       <article class="list-card${item.active ? " list-card-active" : ""}"${item.active ? ' aria-current="true"' : ""}>
-        <span class="list-index">${themePreviewIcon(item.icon)}</span>
+        <span class="list-index icon-tone-${item.tone}">${themePreviewIcon(item.icon)}</span>
         <span>
           <strong class="list-title">${escapeHtml(item.title)}</strong>
           <small class="list-meta">${escapeHtml(item.meta)}</small>
@@ -1603,37 +1603,37 @@ function themeSystemPreviewPage() {
           <input class="sidebar-state-input" type="checkbox" id="sidebar-state-theme" aria-label="Přepnout levé menu" checked>
           <div class="sidebar-header">
             <span class="sidebar-brand">
-              <span class="sidebar-brand-mark">${themePreviewIcon("dashboard")}</span>
+              <span class="sidebar-brand-mark icon-tone-green">${themePreviewIcon("dashboard")}</span>
               <span class="sidebar-brand-text">Smart</span>
             </span>
-            <label class="sidebar-toggle" for="sidebar-state-theme" title="Přepnout menu">
+            <label class="sidebar-toggle icon-tone-graphite" for="sidebar-state-theme" title="Přepnout menu">
               ${themePreviewIcon("plus")}
               <span class="sidebar-toggle-label">Menu</span>
             </label>
           </div>
           <nav class="sidebar-nav" aria-label="Moduly">
             <a class="nav-item nav-item-active" href="${routeHref(DESIGN_THEME_SYSTEM_ROUTE)}" data-link aria-current="page" title="Souhrn">
-              <span class="nav-icon">${themePreviewIcon("dashboard")}</span>
+              <span class="nav-icon icon-tone-green">${themePreviewIcon("dashboard")}</span>
               <span class="nav-label">Souhrn</span>
             </a>
             <span class="nav-item" title="Vozidla">
-              <span class="nav-icon">${themePreviewIcon("truck")}</span>
+              <span class="nav-icon icon-tone-bluegrey">${themePreviewIcon("truck")}</span>
               <span class="nav-label">Vozidla</span>
             </span>
             <span class="nav-item" title="Trasy">
-              <span class="nav-icon">${themePreviewIcon("route")}</span>
+              <span class="nav-icon icon-tone-teal">${themePreviewIcon("route")}</span>
               <span class="nav-label">Trasy</span>
             </span>
             <span class="nav-item" title="Nahlášení">
-              <span class="nav-icon">${themePreviewIcon("warning")}</span>
+              <span class="nav-icon icon-tone-amber">${themePreviewIcon("warning")}</span>
               <span class="nav-label">Nahlášení</span>
             </span>
             <span class="nav-item" title="Nastavení">
-              <span class="nav-icon">${themePreviewIcon("marker")}</span>
+              <span class="nav-icon icon-tone-graphite">${themePreviewIcon("marker")}</span>
               <span class="nav-label">Nastavení</span>
             </span>
             <a class="nav-item" href="${routeHref("/")}" data-link title="Aplikace">
-              <span class="nav-icon">${themePreviewIcon("app")}</span>
+              <span class="nav-icon icon-tone-bluegrey">${themePreviewIcon("app")}</span>
               <span class="nav-label">Aplikace</span>
             </a>
           </nav>
@@ -1668,18 +1668,18 @@ function themeSystemPreviewPage() {
                     <span class="theme-dial-ring theme-dial-ring-a"></span>
                     <span class="theme-dial-ring theme-dial-ring-b"></span>
                     <span class="theme-vehicle-core">
-                      <span class="theme-large-icon">${themePreviewIcon("truck")}</span>
+                      <span class="theme-large-icon icon-tone-bluegrey">${themePreviewIcon("truck")}</span>
                       <small>lis</small>
                     </span>
-                    <span class="theme-dial-node theme-dial-node-a">${themePreviewIcon("marker")}</span>
-                    <span class="theme-dial-node theme-dial-node-b">${themePreviewIcon("warning")}</span>
-                    <span class="theme-dial-node theme-dial-node-c">${themePreviewIcon("check")}</span>
+                    <span class="theme-dial-node theme-dial-node-a icon-tone-teal">${themePreviewIcon("marker")}</span>
+                    <span class="theme-dial-node theme-dial-node-b icon-tone-amber">${themePreviewIcon("warning")}</span>
+                    <span class="theme-dial-node theme-dial-node-c icon-tone-green">${themePreviewIcon("check")}</span>
                   </div>
 
                   <div class="theme-control-panel">
                     <div class="theme-metric-grid">
                       <div class="soft-cell theme-metric-card is-active">
-                        <span class="theme-metric-icon">${themePreviewIcon("route")}</span>
+                        <span class="theme-metric-icon icon-tone-green">${themePreviewIcon("route")}</span>
                         <span class="theme-metric-copy">
                           <span class="theme-metric-value">82%</span>
                           <span class="theme-metric-label">splněno</span>
@@ -1687,7 +1687,7 @@ function themeSystemPreviewPage() {
                         </span>
                       </div>
                       <div class="soft-cell theme-metric-card">
-                        <span class="theme-metric-icon">${themePreviewIcon("truck")}</span>
+                        <span class="theme-metric-icon icon-tone-bluegrey">${themePreviewIcon("truck")}</span>
                         <span class="theme-metric-copy">
                           <span class="theme-metric-value">3</span>
                           <span class="theme-metric-label">vozidla</span>
@@ -1695,7 +1695,7 @@ function themeSystemPreviewPage() {
                         </span>
                       </div>
                       <div class="soft-cell theme-metric-card">
-                        <span class="theme-metric-icon">${themePreviewIcon("warning")}</span>
+                        <span class="theme-metric-icon icon-tone-amber">${themePreviewIcon("warning")}</span>
                         <span class="theme-metric-copy">
                           <span class="theme-metric-value">2</span>
                           <span class="theme-metric-label">události</span>
@@ -1727,29 +1727,29 @@ function themeSystemPreviewPage() {
 
                 <div class="theme-map-surface" aria-label="Ukazka mapoveho panelu">
                   <span class="theme-map-route"></span>
-                  <span class="theme-map-node theme-map-node-main" style="--x: 26%; --y: 56%;">${themePreviewIcon("truck")}</span>
-                  <span class="theme-map-node" style="--x: 52%; --y: 38%;">${themePreviewIcon("container")}</span>
-                  <span class="theme-map-node theme-map-node-warning" style="--x: 72%; --y: 64%;">${themePreviewIcon("warning")}</span>
+                  <span class="theme-map-node theme-map-node-main icon-tone-green" style="--x: 26%; --y: 56%;">${themePreviewIcon("truck")}</span>
+                  <span class="theme-map-node icon-tone-teal" style="--x: 52%; --y: 38%;">${themePreviewIcon("container")}</span>
+                  <span class="theme-map-node theme-map-node-warning icon-tone-amber" style="--x: 72%; --y: 64%;">${themePreviewIcon("warning")}</span>
                 </div>
               </article>
 
               <section class="quick-actions" aria-label="Rychle akce">
                 <button class="quick-action quick-action-success" type="button">
-                  <span class="quick-icon">${themePreviewIcon("actionDone")}</span>
+                  <span class="quick-icon icon-tone-green">${themePreviewIcon("actionDone")}</span>
                   <span>
                     <strong>Potvrdit obsluhu</strong>
                     <small>Uzavře aktuální bod trasy</small>
                   </span>
                 </button>
                 <button class="quick-action quick-action-warning" type="button">
-                  <span class="quick-icon">${themePreviewIcon("actionWarning")}</span>
+                  <span class="quick-icon icon-tone-amber">${themePreviewIcon("actionWarning")}</span>
                   <span>
                     <strong>Nahlásit překážku</strong>
                     <small>Přidá událost pro dispečink</small>
                   </span>
                 </button>
                 <button class="quick-action quick-action-info" type="button">
-                  <span class="quick-icon">${themePreviewIcon("actionIcons")}</span>
+                  <span class="quick-icon icon-tone-graphite">${themePreviewIcon("actionIcons")}</span>
                   <span>
                     <strong>Přidat poznámku</strong>
                     <small>Krátký záznam k trase</small>
