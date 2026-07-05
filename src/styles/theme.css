@@ -8,6 +8,7 @@
   --brand-accent-soft: color-mix(in srgb, var(--brand-accent) 12%, #edf1f5);
 
   --semantic-success: var(--brand-accent);
+  --semantic-info: #4f6f8a;
   --semantic-warning: #d97706;
   --semantic-danger: #dc2626;
 
@@ -37,9 +38,9 @@
   --status-danger-bg: color-mix(in srgb, var(--semantic-danger) 10%, var(--surface-soft));
   --status-danger-border: color-mix(in srgb, var(--semantic-danger) 28%, transparent);
   --status-danger-text: #9f1d1d;
-  --status-info-bg: var(--brand-accent-soft);
-  --status-info-border: color-mix(in srgb, var(--brand-accent) 28%, transparent);
-  --status-info-text: #3f7f13;
+  --status-info-bg: color-mix(in srgb, var(--semantic-info) 11%, var(--surface-soft));
+  --status-info-border: color-mix(in srgb, var(--semantic-info) 26%, transparent);
+  --status-info-text: #435f78;
 
   --border-soft: rgba(52, 64, 82, 0.12);
   --border-medium: rgba(52, 64, 82, 0.20);
@@ -47,9 +48,9 @@
   --border-highlight: rgba(255, 255, 255, 0.64);
   --border-accent: color-mix(in srgb, var(--brand-accent) 42%, transparent);
 
-  --shadow-raised: 9px 9px 20px rgba(67, 77, 92, 0.18), -9px -9px 20px rgba(255, 255, 255, 0.76);
-  --shadow-raised-sm: 6px 6px 14px rgba(67, 77, 92, 0.16), -6px -6px 14px rgba(255, 255, 255, 0.72);
-  --shadow-soft: 0 14px 32px rgba(31, 41, 55, 0.12);
+  --shadow-raised: 7px 7px 16px rgba(67, 77, 92, 0.16), -7px -7px 16px rgba(255, 255, 255, 0.74);
+  --shadow-raised-sm: 4px 4px 11px rgba(67, 77, 92, 0.14), -4px -4px 11px rgba(255, 255, 255, 0.70);
+  --shadow-soft: 0 10px 24px rgba(31, 41, 55, 0.10);
   --shadow-inset: inset 3px 3px 7px rgba(65, 73, 88, 0.17), inset -3px -3px 7px rgba(255, 255, 255, 0.74);
   --shadow-inset-sm: inset 2px 2px 5px rgba(65, 73, 88, 0.16), inset -2px -2px 5px rgba(255, 255, 255, 0.70);
   --shadow-accent: 0 10px 22px color-mix(in srgb, var(--brand-accent) 24%, transparent);
@@ -64,35 +65,35 @@
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
-  --space-lg: 16px;
-  --space-xl: 22px;
-  --space-2xl: 30px;
+  --space-lg: 14px;
+  --space-xl: 18px;
+  --space-2xl: 24px;
 
-  --container-max: 1360px;
-  --sidebar-width-compact: 84px;
-  --sidebar-width-expanded: 232px;
+  --container-max: 1440px;
+  --sidebar-width-compact: 72px;
+  --sidebar-width-expanded: 224px;
   --sidebar-current-width: var(--sidebar-width-compact);
-  --sidebar-item-height: 56px;
+  --sidebar-item-height: 50px;
   --sidebar-item-radius: var(--radius-md);
-  --sidebar-icon-size: 22px;
-  --sidebar-icon-holder: 42px;
-  --sidebar-icon-holder-half: 21px;
-  --sidebar-padding: var(--space-md);
-  --sidebar-item-padding: 6px;
-  --sidebar-item-gap: var(--space-md);
+  --sidebar-icon-size: 21px;
+  --sidebar-icon-holder: 38px;
+  --sidebar-icon-holder-half: 19px;
+  --sidebar-padding: 10px;
+  --sidebar-item-padding: 5px;
+  --sidebar-item-gap: 10px;
   --sidebar-hover-bg: var(--surface-soft);
   --sidebar-active-bg: var(--surface-active);
   --sidebar-transition: 240ms ease;
-  --control-height: 48px;
-  --control-height-lg: 56px;
+  --control-height: 42px;
+  --control-height-lg: 48px;
   --nav-item-height: var(--sidebar-item-height);
   --icon-size: 22px;
   --icon-size-sm: 18px;
   --icon-size-lg: 58px;
-  --icon-holder: 44px;
-  --icon-holder-half: 22px;
-  --switch-width: 78px;
-  --switch-height: 42px;
+  --icon-holder: 38px;
+  --icon-holder-half: 19px;
+  --switch-width: 64px;
+  --switch-height: 34px;
 
   --font-main: "Quicksand", system-ui, sans-serif;
   --font-weight-regular: 500;
@@ -111,7 +112,7 @@ body:has(.smart-tablet-ui) {
   color: var(--text-main);
   background:
     radial-gradient(circle at 16% 8%, rgba(255, 255, 255, 0.72), transparent 23rem),
-    radial-gradient(circle at 86% 10%, color-mix(in srgb, var(--brand-accent) 9%, transparent), transparent 21rem),
+    radial-gradient(circle at 86% 10%, rgba(255, 255, 255, 0.36), transparent 21rem),
     linear-gradient(145deg, var(--bg-app-top) 0%, var(--bg-app) 55%, var(--bg-app-bottom) 100%);
   font-family: var(--font-main);
 }
@@ -120,7 +121,7 @@ body:has(.smart-tablet-ui) {
   min-height: 100%;
   color: var(--text-main);
   font-family: var(--font-main);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: var(--font-weight-regular);
   letter-spacing: 0;
   background: transparent;
@@ -155,28 +156,28 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) h1 {
   color: var(--text-strong);
-  font-size: clamp(1.55rem, 2.2vw, 2rem);
+  font-size: clamp(1.32rem, 1.65vw, 1.62rem);
   font-weight: var(--font-weight-strong);
   line-height: 1.12;
 }
 
 :where(.theme-system, .smart-tablet-ui) h2 {
   color: var(--text-strong);
-  font-size: clamp(1.18rem, 1.55vw, 1.45rem);
+  font-size: clamp(1.05rem, 1.25vw, 1.22rem);
   font-weight: var(--font-weight-strong);
   line-height: 1.16;
 }
 
 :where(.theme-system, .smart-tablet-ui) h3 {
   color: var(--text-strong);
-  font-size: 1.02rem;
+  font-size: 0.98rem;
   font-weight: var(--font-weight-strong);
   line-height: 1.2;
 }
 
 :where(.theme-system, .smart-tablet-ui) p {
   color: var(--text-muted);
-  font-size: 0.96rem;
+  font-size: 0.9rem;
   font-weight: var(--font-weight-medium);
   line-height: 1.5;
 }
@@ -184,11 +185,11 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .app-shell {
   display: grid;
   grid-template-columns: var(--sidebar-current-width) minmax(0, 1fr);
-  gap: var(--space-xl);
+  gap: var(--space-lg);
   width: min(100%, var(--container-max));
   min-height: 100vh;
   margin-inline: auto;
-  padding: clamp(var(--space-lg), 2vw, var(--space-2xl));
+  padding: clamp(var(--space-md), 1.55vw, var(--space-2xl));
   transition: grid-template-columns var(--sidebar-transition);
 }
 
@@ -213,13 +214,13 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .app-sidebar {
   position: sticky;
-  top: clamp(var(--space-lg), 2vw, var(--space-2xl));
+  top: clamp(var(--space-md), 1.55vw, var(--space-2xl));
   align-self: start;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
   width: var(--sidebar-current-width);
-  min-height: calc(100vh - 2 * clamp(var(--space-lg), 2vw, var(--space-2xl)));
+  min-height: calc(100vh - 2 * clamp(var(--space-md), 1.55vw, var(--space-2xl)));
   overflow: hidden;
   padding: var(--sidebar-padding);
   border-radius: var(--radius-xl);
@@ -234,7 +235,7 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .theme-dashboard-side,
 :where(.theme-system, .smart-tablet-ui) .theme-list-stack {
   display: grid;
-  gap: var(--space-lg);
+  gap: var(--space-md);
   min-width: 0;
 }
 
@@ -243,26 +244,26 @@ body:has(.smart-tablet-ui) {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-xl);
-  min-height: 78px;
-  padding: var(--space-lg) var(--space-xl);
+  min-height: 66px;
+  padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-lg);
 }
 
 :where(.theme-system, .smart-tablet-ui) .app-card,
 :where(.theme-system, .smart-tablet-ui) .soft-card {
   border-radius: var(--radius-xl);
-  padding: clamp(var(--space-lg), 2vw, var(--space-2xl));
+  padding: var(--space-lg);
 }
 
 :where(.theme-system, .smart-tablet-ui) .app-panel {
   border-radius: var(--radius-lg);
-  padding: var(--space-xl);
+  padding: var(--space-lg);
 }
 
 :where(.theme-system, .smart-tablet-ui) .soft-cell {
-  min-height: 88px;
+  min-height: 74px;
   border-radius: var(--radius-md);
-  padding: var(--space-lg);
+  padding: var(--space-md);
 }
 
 :where(.theme-system, .smart-tablet-ui) .app-card.is-active,
@@ -281,13 +282,13 @@ body:has(.smart-tablet-ui) {
   gap: var(--space-sm);
   min-height: var(--control-height);
   min-width: var(--control-height);
-  padding: 0 var(--space-xl);
+  padding: 0 var(--space-lg);
   border: 1px solid var(--border-highlight);
   border-radius: var(--radius-md);
   background: var(--surface-gradient);
   box-shadow: var(--shadow-raised-sm);
   color: var(--text-strong);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: var(--font-weight-strong);
   line-height: 1;
   text-decoration: none;
@@ -455,6 +456,14 @@ body:has(.smart-tablet-ui) {
   color: var(--brand-accent);
 }
 
+:where(.theme-system, .smart-tablet-ui) .nav-item-active .nav-icon,
+:where(.theme-system, .smart-tablet-ui) .nav-item[aria-current="page"] .nav-icon,
+:where(.theme-system, .smart-tablet-ui) .theme-metric-card.is-active .theme-metric-icon {
+  border-color: var(--border-accent);
+  background: var(--brand-accent);
+  box-shadow: var(--shadow-accent);
+}
+
 :where(.theme-system, .smart-tablet-ui) .nav-item[aria-disabled="true"],
 :where(.theme-system, .smart-tablet-ui) .nav-item-disabled {
   cursor: not-allowed;
@@ -573,8 +582,8 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .theme-large-icon {
   display: grid;
   place-items: center;
-  width: clamp(96px, 12vw, 132px);
-  height: clamp(96px, 12vw, 132px);
+  width: clamp(58px, 7vw, 78px);
+  height: clamp(58px, 7vw, 78px);
   border: 1px solid var(--border-highlight);
   border-radius: 50%;
   background: var(--surface-gradient);
@@ -583,21 +592,21 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .theme-large-icon .theme-icon-img,
 :where(.theme-system, .smart-tablet-ui) .theme-large-icon .theme-icon {
-  width: clamp(54px, 7vw, 78px);
-  height: clamp(54px, 7vw, 78px);
+  width: clamp(32px, 4.2vw, 48px);
+  height: clamp(32px, 4.2vw, 48px);
 }
 
 :where(.theme-system, .smart-tablet-ui) .status-badge {
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
-  min-height: 30px;
-  padding: 0 var(--space-md);
+  min-height: 28px;
+  padding: 0 10px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
   background: var(--surface-soft);
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: var(--font-weight-strong);
   line-height: 1;
   white-space: nowrap;
@@ -631,16 +640,16 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .status-gps {
-  border-color: var(--status-info-border);
-  background: var(--status-info-bg);
-  color: var(--status-info-text);
+  border-color: var(--status-success-border);
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
 }
 
 :where(.theme-system, .smart-tablet-ui) .field-label {
   display: block;
   margin-bottom: var(--space-xs);
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: var(--font-weight-strong);
   line-height: 1.2;
   text-transform: uppercase;
@@ -666,7 +675,7 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .textarea {
-  min-height: 116px;
+  min-height: 92px;
   padding-block: var(--space-md);
   line-height: 1.45;
   resize: vertical;
@@ -689,7 +698,7 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-card-head {
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-card-head h2 {
@@ -698,15 +707,15 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .theme-dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.42fr) minmax(300px, 0.58fr);
-  gap: var(--space-lg);
+  grid-template-columns: minmax(0, 1.5fr) minmax(296px, 0.5fr);
+  gap: var(--space-md);
   align-items: start;
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-control-grid {
   display: grid;
-  grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr);
-  gap: clamp(var(--space-lg), 2.5vw, var(--space-2xl));
+  grid-template-columns: minmax(188px, 0.56fr) minmax(0, 1.44fr);
+  gap: var(--space-lg);
   align-items: center;
 }
 
@@ -720,24 +729,55 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .theme-metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-md);
+  gap: var(--space-sm);
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-metric-card {
+  display: grid;
+  grid-template-columns: var(--icon-holder) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-metric-icon {
+  display: inline-grid;
+  place-items: center;
+  width: var(--icon-holder);
+  height: var(--icon-holder);
+  border: 1px solid var(--border-highlight);
+  border-radius: var(--sidebar-item-radius);
+  background: var(--surface-inset-gradient);
+  box-shadow: var(--shadow-inset-sm);
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-metric-copy {
+  min-width: 0;
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-metric-value {
   display: block;
   color: var(--text-strong);
-  font-size: clamp(1.55rem, 3vw, 2.35rem);
+  font-size: clamp(1.24rem, 2vw, 1.62rem);
   font-weight: var(--font-weight-strong);
   line-height: 1;
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-metric-label {
   display: block;
-  margin-top: var(--space-sm);
+  margin-top: 3px;
   color: var(--text-muted);
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: var(--font-weight-bold);
   line-height: 1.28;
+}
+
+:where(.theme-system, .smart-tablet-ui) .theme-metric-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.24;
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-vehicle-dial,
@@ -749,7 +789,7 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .theme-vehicle-dial {
   position: relative;
-  width: min(100%, 16rem);
+  width: min(100%, 12.75rem);
   aspect-ratio: 1;
   margin-inline: auto;
   background: var(--surface-gradient);
@@ -765,7 +805,7 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .theme-dial-ring {
   inset: 13%;
   background:
-    radial-gradient(100% 100% at 50% 100%, color-mix(in srgb, var(--brand-accent) 22%, transparent), rgba(96, 108, 128, 0.18) 58%, rgba(226, 229, 236, 0.88));
+    radial-gradient(100% 100% at 50% 100%, color-mix(in srgb, var(--brand-accent) 18%, transparent), rgba(96, 108, 128, 0.16) 58%, rgba(226, 229, 236, 0.88));
   opacity: 0.62;
 }
 
@@ -797,14 +837,14 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-dial-node {
-  width: 3rem;
-  height: 3rem;
+  width: var(--icon-holder);
+  height: var(--icon-holder);
   color: var(--text-strong);
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-dial-node-a {
   top: 8%;
-  left: calc(50% - 1.5rem);
+  left: calc(50% - var(--icon-holder-half));
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-dial-node-b {
@@ -823,18 +863,18 @@ body:has(.smart-tablet-ui) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-lg);
-  min-height: 76px;
-  padding: var(--space-md) var(--space-lg);
+  gap: var(--space-md);
+  min-height: 62px;
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border-highlight);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface-inset-gradient);
   box-shadow: var(--shadow-inset-sm);
   color: var(--text-main);
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-toggle-row-compact {
-  min-height: 70px;
+  min-height: 58px;
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-toggle-row strong,
@@ -844,14 +884,14 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .theme-toggle-row strong {
   color: var(--text-strong);
-  font-size: 0.96rem;
+  font-size: 0.9rem;
   font-weight: var(--font-weight-strong);
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-toggle-row small {
   margin-top: var(--space-xs);
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: var(--font-weight-bold);
   line-height: 1.28;
 }
@@ -885,7 +925,7 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-switch::before {
-  inset: 11px 14px;
+  inset: 9px 12px;
   border-radius: var(--radius-pill);
   background: var(--surface-pressed);
   box-shadow: var(--shadow-inset-sm);
@@ -893,10 +933,10 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-switch::after {
-  top: 5px;
-  left: 6px;
-  width: 30px;
-  height: 30px;
+  top: 4px;
+  left: 5px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--surface-raised);
   box-shadow: var(--shadow-raised-sm);
@@ -908,7 +948,7 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-switch-input:checked + .theme-switch::after {
-  left: 41px;
+  left: 35px;
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-switch-input:focus-visible + .theme-switch {
@@ -917,8 +957,8 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .theme-map-surface {
   position: relative;
-  min-height: 292px;
-  margin-top: var(--space-lg);
+  min-height: 214px;
+  margin-top: var(--space-md);
   overflow: hidden;
   border: 1px solid var(--border-highlight);
   border-radius: var(--radius-xl);
@@ -953,7 +993,7 @@ body:has(.smart-tablet-ui) {
   left: 18%;
   right: 18%;
   top: 52%;
-  height: 7px;
+  height: 6px;
   border-radius: var(--radius-pill);
   background: var(--brand-accent);
   box-shadow: var(--shadow-accent);
@@ -986,9 +1026,9 @@ body:has(.smart-tablet-ui) {
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-md);
   align-items: center;
-  min-height: 72px;
-  padding: var(--space-md);
-  border-radius: var(--radius-lg);
+  min-height: 62px;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
   transition:
     border-color var(--transition-fast),
     box-shadow var(--transition-fast),
@@ -1016,7 +1056,7 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .list-title {
   display: block;
   color: var(--text-strong);
-  font-size: 0.96rem;
+  font-size: 0.9rem;
   font-weight: var(--font-weight-strong);
   line-height: 1.2;
 }
@@ -1025,7 +1065,7 @@ body:has(.smart-tablet-ui) {
   display: block;
   margin-top: var(--space-xs);
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: var(--font-weight-bold);
   line-height: 1.32;
 }
@@ -1033,17 +1073,17 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .quick-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 
 :where(.theme-system, .smart-tablet-ui) .quick-action {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-md);
+  gap: var(--space-sm);
   align-items: center;
-  min-height: 86px;
-  padding: var(--space-md);
-  border-radius: var(--radius-lg);
+  min-height: 72px;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
   text-align: left;
   transition:
     border-color var(--transition-fast),
@@ -1078,7 +1118,7 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .quick-action strong {
   display: block;
   color: var(--text-strong);
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   font-weight: var(--font-weight-strong);
   line-height: 1.2;
 }
@@ -1087,31 +1127,9 @@ body:has(.smart-tablet-ui) {
   display: block;
   margin-top: var(--space-xs);
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: var(--font-weight-bold);
   line-height: 1.3;
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-icon-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-sm);
-  margin-top: var(--space-lg);
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-icon-tile {
-  display: grid;
-  place-items: center;
-  min-height: 58px;
-  border: 1px solid var(--border-highlight);
-  border-radius: var(--radius-md);
-  background: var(--surface-inset-gradient);
-  box-shadow: var(--shadow-inset-sm);
-}
-
-:where(.theme-system, .smart-tablet-ui) .theme-icon-tile .theme-icon-img {
-  width: 32px;
-  height: 32px;
 }
 
 @media (max-width: 1120px) {

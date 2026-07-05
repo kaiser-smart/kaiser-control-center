@@ -1581,9 +1581,9 @@ function themePreviewIconFile(file) {
 
 function themeSystemPreviewPage() {
   const routeItems = [
-    { icon: "truck", title: "Lisovací vůz", meta: "Svoz směsného odpadu - aktivní trasa", active: true },
-    { icon: "container", title: "Nosič kontejnerů", meta: "Připraveno pro ikonu hákového nosiče" },
-    { icon: "service", title: "Servisní dodávka", meta: "Doprovodné vozidlo - nižší priorita" }
+    { icon: "truck", title: "KS-407 lisovací vůz", meta: "Trasa 12 - směsný odpad, 82 % hotovo", active: true },
+    { icon: "container", title: "KS-318 nosič kontejnerů", meta: "Čeká na potvrzení dalšího stanoviště" },
+    { icon: "service", title: "KS-204 servisní dodávka", meta: "Pohotovost pro hlášené překážky" }
   ];
   const routeMarkup = routeItems
     .map((item) => `
@@ -1596,11 +1596,6 @@ function themeSystemPreviewPage() {
       </article>
     `)
     .join("");
-  const iconGalleryMarkup = Array.from({ length: 16 }, (_, index) => {
-    const file = `${String(index + 1).padStart(3, "0")}.svg`;
-    return `<span class="theme-icon-tile">${themePreviewIconFile(file)}</span>`;
-  }).join("");
-
   return `
     <main class="theme-system smart-tablet-ui theme-preview-page" data-theme-preview>
       <div class="app-shell">
@@ -1633,9 +1628,9 @@ function themeSystemPreviewPage() {
               <span class="nav-icon">${themePreviewIcon("warning")}</span>
               <span class="nav-label">Nahlášení</span>
             </span>
-            <span class="nav-item" title="Ikony">
+            <span class="nav-item" title="Nastavení">
               <span class="nav-icon">${themePreviewIcon("marker")}</span>
-              <span class="nav-label">Ikony</span>
+              <span class="nav-label">Nastavení</span>
             </span>
             <a class="nav-item" href="${routeHref("/")}" data-link title="Aplikace">
               <span class="nav-icon">${themePreviewIcon("app")}</span>
@@ -1647,13 +1642,13 @@ function themeSystemPreviewPage() {
         <section class="app-content" aria-labelledby="theme-preview-title">
           <header class="app-header">
             <div>
-              <p class="field-label">Smart design / systém 01</p>
-              <h1 id="theme-preview-title">Kompaktní soft-metal systém</h1>
-              <p>Designový náhled sjednocuje tokeny, karty, tlačítka, switche a ikonové obálky bez změny aplikační logiky.</p>
+              <p class="field-label">Smart odpady / dispečink</p>
+              <h1 id="theme-preview-title">Provozní dashboard</h1>
+              <p>Stav svozu, vozidel a událostí pro dnešní ranní směnu.</p>
             </div>
             <div class="theme-preview-toolbar" aria-label="Stav náhledu">
-              <span class="status-badge status-online">Statický náhled</span>
-              <span class="status-badge status-gps">#75bd25</span>
+              <span class="status-badge status-online">Online provoz</span>
+              <span class="status-badge status-gps">GPS přesné</span>
             </div>
           </header>
 
@@ -1662,10 +1657,10 @@ function themeSystemPreviewPage() {
               <article class="app-card theme-hero-card is-active">
                 <div class="theme-card-head">
                   <div>
-                    <p class="field-label">Aktivní obrazovka</p>
-                    <h2>Ranní svoz - konzistentní ovládání</h2>
+                    <p class="field-label">Aktivní trasa</p>
+                    <h2>Trasa 12 - ranní svoz</h2>
                   </div>
-                  <button class="btn btn-primary" type="button">Potvrdit další bod</button>
+                  <button class="btn btn-primary" type="button">Potvrdit bod</button>
                 </div>
 
                 <div class="theme-control-grid">
@@ -1683,33 +1678,45 @@ function themeSystemPreviewPage() {
 
                   <div class="theme-control-panel">
                     <div class="theme-metric-grid">
-                      <div class="soft-cell">
-                        <span class="theme-metric-value">14</span>
-                        <span class="theme-metric-label">bodů na trase</span>
+                      <div class="soft-cell theme-metric-card is-active">
+                        <span class="theme-metric-icon">${themePreviewIcon("route")}</span>
+                        <span class="theme-metric-copy">
+                          <span class="theme-metric-value">82%</span>
+                          <span class="theme-metric-label">splněno</span>
+                          <small class="theme-metric-note">14 z 18 bodů</small>
+                        </span>
                       </div>
-                      <div class="soft-cell">
-                        <span class="theme-metric-value">3</span>
-                        <span class="theme-metric-label">typy vozidel</span>
+                      <div class="soft-cell theme-metric-card">
+                        <span class="theme-metric-icon">${themePreviewIcon("truck")}</span>
+                        <span class="theme-metric-copy">
+                          <span class="theme-metric-value">3</span>
+                          <span class="theme-metric-label">vozidla</span>
+                          <small class="theme-metric-note">2 aktivní, 1 záloha</small>
+                        </span>
                       </div>
-                      <div class="soft-cell">
-                        <span class="theme-metric-value">1</span>
-                        <span class="theme-metric-label">systémový switch</span>
+                      <div class="soft-cell theme-metric-card">
+                        <span class="theme-metric-icon">${themePreviewIcon("warning")}</span>
+                        <span class="theme-metric-copy">
+                          <span class="theme-metric-value">2</span>
+                          <span class="theme-metric-label">události</span>
+                          <small class="theme-metric-note">1 čeká na reakci</small>
+                        </span>
                       </div>
                     </div>
 
-                    <div class="theme-switch-board" aria-label="Ukázka sjednocených přepínačů">
+                    <div class="theme-switch-board" aria-label="Nastavení aktivní trasy">
                       <label class="theme-toggle-row theme-toggle-row-compact">
                         <span>
-                          <strong>Trasa aktivní</strong>
-                          <small>ON stav používá plochý akcent #75bd25</small>
+                          <strong>Svoz aktivní</strong>
+                          <small>Řidič přijímá další stanoviště</small>
                         </span>
                         <input class="theme-switch-input" type="checkbox" checked>
                         <span class="theme-switch" aria-hidden="true"></span>
                       </label>
                       <label class="theme-toggle-row theme-toggle-row-compact">
                         <span>
-                          <strong>Zvýraznit ikony</strong>
-                          <small>Stejný kovově šedý switch ve všech blocích</small>
+                          <strong>Upozornění dispečera</strong>
+                          <small>Hlášení překážek jde do fronty</small>
                         </span>
                         <input class="theme-switch-input" type="checkbox">
                         <span class="theme-switch" aria-hidden="true"></span>
@@ -1730,22 +1737,22 @@ function themeSystemPreviewPage() {
                 <button class="quick-action quick-action-success" type="button">
                   <span class="quick-icon">${themePreviewIcon("actionDone")}</span>
                   <span>
-                    <strong>Hotovo na stanovišti</strong>
-                    <small>Jednotný holder, radius a stín</small>
+                    <strong>Potvrdit obsluhu</strong>
+                    <small>Uzavře aktuální bod trasy</small>
                   </span>
                 </button>
                 <button class="quick-action quick-action-warning" type="button">
                   <span class="quick-icon">${themePreviewIcon("actionWarning")}</span>
                   <span>
                     <strong>Nahlásit překážku</strong>
-                    <small>Varování je čitelné, ne křiklavé</small>
+                    <small>Přidá událost pro dispečink</small>
                   </span>
                 </button>
                 <button class="quick-action quick-action-info" type="button">
                   <span class="quick-icon">${themePreviewIcon("actionIcons")}</span>
                   <span>
-                    <strong>Vybrat typ ikony</strong>
-                    <small>Ikony lze měnit bez zásahu do layoutu</small>
+                    <strong>Přidat poznámku</strong>
+                    <small>Krátký záznam k trase</small>
                   </span>
                 </button>
               </section>
@@ -1755,44 +1762,47 @@ function themeSystemPreviewPage() {
               <article class="app-panel">
                 <div class="theme-card-head">
                   <div>
-                    <p class="field-label">Typy vozidel</p>
-                    <h2>Pracovní sada ikon</h2>
+                    <p class="field-label">Vozidla ve směně</p>
+                    <h2>Aktuální stav</h2>
                   </div>
-                  <button class="btn btn-icon" type="button" aria-label="Přidat">${themePreviewIcon("plus")}</button>
+                  <button class="btn btn-icon" type="button" aria-label="Přidat záznam">${themePreviewIcon("plus")}</button>
                 </div>
                 <div class="theme-list-stack">
                   ${routeMarkup}
                 </div>
-                <div class="theme-icon-grid" aria-label="Importovaná sada ikon">
-                  ${iconGalleryMarkup}
-                </div>
               </article>
 
               <article class="soft-card">
-                <p class="field-label">Systémový přepínač</p>
-                <div class="theme-toggle-stack" aria-label="Ukázky přepínačů">
+                <div class="theme-card-head">
+                  <div>
+                    <p class="field-label">Nastavení směny</p>
+                    <h2>Provozní režim</h2>
+                  </div>
+                  <span class="status-badge status-warning">1 událost</span>
+                </div>
+                <div class="theme-toggle-stack" aria-label="Nastavení směny">
                   <label class="theme-toggle-row">
                     <span>
                       <strong>Denní režim</strong>
-                      <small>Jeden rozměr a jeden ON/OFF model</small>
+                      <small>Světlé tabletové rozhraní</small>
                     </span>
                     <input class="theme-switch-input" type="checkbox" checked>
                     <span class="theme-switch" aria-hidden="true"></span>
                   </label>
                   <label class="theme-toggle-row">
                     <span>
-                      <strong>Výrazné ikony</strong>
-                      <small>Kovový track, plochý zelený ON stav</small>
+                      <strong>Automatická synchronizace</strong>
+                      <small>Aktualizace stavu vozidel</small>
                     </span>
                     <input class="theme-switch-input" type="checkbox">
                     <span class="theme-switch" aria-hidden="true"></span>
                   </label>
                 </div>
-                <label class="field-label" for="theme-preview-note">Co se tímto směrem testuje</label>
-                <textarea class="textarea" id="theme-preview-note" rows="4" readonly>Aktuální směr je zkompaktněný do tokenů a opakovatelných komponent. Ikony jsou stále pracovní sada, ale jejich velikosti a obálky jsou sjednocené.</textarea>
+                <label class="field-label" for="theme-preview-note">Poznámka dispečera</label>
+                <textarea class="textarea" id="theme-preview-note" rows="3" readonly>Ulice Pod Hájem: zaparkované vozidlo u nádoby. Řidič čeká na potvrzení objízdného bodu.</textarea>
                 <div class="theme-button-row">
-                  <button class="btn btn-secondary" type="button">Ztlumit</button>
-                  <button class="btn btn-success" type="button">Směr OK</button>
+                  <button class="btn btn-secondary" type="button">Zavřít směnu</button>
+                  <button class="btn btn-success" type="button">Uložit stav</button>
                 </div>
               </article>
             </aside>
