@@ -16,6 +16,19 @@ const PASSENGER_VEHICLE_KINDS = new Set([
   "passenger_car",
   "car"
 ]);
+const PASSENGER_MODEL_MARKERS = [
+  /\bmercedes\s+cls\b/i,
+  /\bmercedes\s+eqs\b/i,
+  /\bmercedes\s+eqe\b/i,
+  /\bmercedes\s+eqa\b/i,
+  /\bmercedes\s+eqb\b/i,
+  /\bmercedes\s+eqc\b/i,
+  /\bmercedes\s+glc\b/i,
+  /\bmercedes\s+gle\b/i,
+  /\bmercedes\s+cla\b/i,
+  /\bmercedes\s+gla\b/i,
+  /\bmercedes\s+glb\b/i
+];
 
 export class Partslink24SearchStoreError extends Error {
   constructor(message, status = 400, code = "partslink24_search_error", details = null) {
@@ -124,13 +137,34 @@ function vehicleKindCandidates(vehicle = {}) {
   ].map(cleanString).filter(Boolean);
 }
 
+function inferredPassengerVehicleKind(vehicle = {}) {
+  const text = [
+    vehicle.internalNumber,
+    vehicle.vehicleName,
+    vehicle.name,
+    vehicle.model,
+    vehicle.description
+  ].map(cleanString).filter(Boolean).join(" ");
+
+  if (!text) {
+    return "";
+  }
+
+  return PASSENGER_MODEL_MARKERS.some((pattern) => pattern.test(text)) ? "osobni" : "";
+}
+
 export function partslink24VehicleKind(vehicle = {}) {
   const direct = vehicleKindCandidates(vehicle).find(isPartslink24PassengerVehicle);
   if (direct) {
     return normalizePartslink24VehicleKind(direct);
   }
 
-  return normalizePartslink24VehicleKind(vehicleKindCandidates(vehicle)[0] || "");
+  const firstCandidate = vehicleKindCandidates(vehicle)[0];
+  if (firstCandidate) {
+    return normalizePartslink24VehicleKind(firstCandidate);
+  }
+
+  return inferredPassengerVehicleKind(vehicle);
 }
 
 export function canUsePartslink24VinSearch(user) {

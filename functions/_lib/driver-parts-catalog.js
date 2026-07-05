@@ -101,7 +101,7 @@ export function normalizeVehicleBrand(value) {
 
 export function vehicleBrandLabel(value) {
   const brand = normalizeVehicleBrand(value);
-  if (brand === "mercedes") return "Mercedes-Benz Trucks";
+  if (brand === "mercedes") return "Mercedes-Benz";
   if (brand === "daf") return "DAF";
   if (brand === "man") return "MAN";
   return "jiné";

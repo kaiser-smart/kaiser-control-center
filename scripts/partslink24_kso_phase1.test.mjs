@@ -40,6 +40,42 @@ assert.equal(canUsePartslink24VinSearch(driverUser), false);
 }
 
 {
+  const clsVehicle = {
+    id: "vehicle-cls",
+    internalNumber: "Mercedes CLS 400 d 4matic",
+    vin: "WDD2573211A012438"
+  };
+  const eligibility = partslink24EligibilityForVehicle(dispatcherUser, clsVehicle);
+  assert.equal(partslink24VehicleKind(clsVehicle), "osobni");
+  assert.equal(eligibility.allowed, true);
+  assert.equal(eligibility.vehicleKind, "osobni");
+}
+
+{
+  const eqsVehicle = {
+    id: "vehicle-eqs",
+    model: "Mercedes EQS SUV",
+    vin: "WDD29712345678901"
+  };
+  const eligibility = partslink24EligibilityForVehicle(dispatcherUser, eqsVehicle);
+  assert.equal(partslink24VehicleKind(eqsVehicle), "osobni");
+  assert.equal(eligibility.allowed, true);
+}
+
+{
+  const explicitTruck = {
+    id: "vehicle-truck-cls-text",
+    vehicleType: "nákladní",
+    internalNumber: "Mercedes CLS 400 d 4matic",
+    vin: "WDD2573211A012438"
+  };
+  const eligibility = partslink24EligibilityForVehicle(dispatcherUser, explicitTruck);
+  assert.equal(partslink24VehicleKind(explicitTruck), "nakladni");
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.errorCode, "PARTSLINK24_ONLY_PASSENGER_VEHICLES");
+}
+
+{
   const eligibility = partslink24EligibilityForVehicle(dispatcherUser, {
     id: "vehicle-truck",
     vehicleType: "nákladní",
