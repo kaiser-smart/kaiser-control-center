@@ -43,6 +43,10 @@
   --icon-amber: #c98121;
   --icon-red: #c9583a;
   --icon-graphite: #4b5550;
+  --icon-holder-sm: 42px;
+  --icon-holder-md: 52px;
+  --icon-holder-lg: 64px;
+  --icon-holder-xl: 96px;
 }
 
 * {
@@ -26308,5 +26312,821 @@ body:has(.tracking-page--soft-metal-preview) {
   .tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
     max-width: 38px;
     max-height: 38px;
+  }
+}
+
+/* Branch-only refinement: bring the real tracking module closer to the approved soft-metal preview. */
+.tracking-page--soft-metal-preview {
+  --sidebar-width-compact: 88px;
+  --sidebar-width-expanded: 256px;
+  --sidebar-item-height: 58px;
+  --sidebar-item-radius: var(--radius-md);
+  --sidebar-icon-size: 30px;
+  --sidebar-icon-holder: 50px;
+  --sidebar-padding: 12px;
+  --sidebar-item-padding: 7px;
+  --sidebar-item-gap: 12px;
+  --sidebar-transition: 240ms ease;
+  --icon-sm: 22px;
+  --icon-md: 30px;
+  --icon-lg: 38px;
+  --icon-xl: 58px;
+  --icon-holder-sm: 44px;
+  --icon-holder-md: 54px;
+  --icon-holder-lg: 66px;
+  --icon-holder-xl: 98px;
+  --icon-green: #75bd25;
+  --icon-teal: #2e8f83;
+  --icon-bluegrey: #637c8a;
+  --icon-amber: #c98121;
+  --icon-red: #c9583a;
+  --icon-graphite: #4b5550;
+  --icon-filter-green: invert(61%) sepia(67%) saturate(562%) hue-rotate(49deg) brightness(92%) contrast(91%);
+  --icon-filter-teal: invert(43%) sepia(19%) saturate(1124%) hue-rotate(127deg) brightness(90%) contrast(90%);
+  --icon-filter-bluegrey: invert(41%) sepia(18%) saturate(637%) hue-rotate(165deg) brightness(89%) contrast(86%);
+  --icon-filter-amber: invert(51%) sepia(75%) saturate(712%) hue-rotate(358deg) brightness(88%) contrast(88%);
+  --icon-filter-red: invert(42%) sepia(21%) saturate(1114%) hue-rotate(314deg) brightness(88%) contrast(89%);
+  --icon-filter-graphite: invert(20%) sepia(18%) saturate(1027%) hue-rotate(173deg) brightness(88%) contrast(88%);
+  --tracking-panel-bg: linear-gradient(145deg, #ffffff 0%, #f3f5f4 52%, #e9eeeb 100%);
+  --tracking-card-bg: linear-gradient(145deg, #ffffff 0%, #f6f8f7 58%, #eef2ef 100%);
+  --tracking-inset-bg: linear-gradient(145deg, #e8edea 0%, #f8faf8 100%);
+  --tracking-soft-shadow: 14px 16px 34px rgba(38, 48, 43, 0.12), -9px -9px 24px rgba(255, 255, 255, 0.9);
+  --tracking-soft-shadow-sm: 9px 11px 23px rgba(38, 48, 43, 0.09), -6px -6px 18px rgba(255, 255, 255, 0.86);
+  --tracking-inset-shadow: inset 5px 5px 12px rgba(38, 48, 43, 0.09), inset -5px -5px 14px rgba(255, 255, 255, 0.9);
+  --tracking-control-height: 46px;
+  width: min(1500px, calc(100% - 28px));
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width-expanded) minmax(0, 1fr);
+  gap: clamp(var(--space-lg), 2vw, 30px);
+  align-items: start;
+  transition: grid-template-columns var(--sidebar-transition);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-shell:has(.tracking-preview-sidebar__state:not(:checked)) {
+  grid-template-columns: var(--sidebar-width-compact) minmax(0, 1fr);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-shell:has(.tracking-preview-sidebar.sidebar--compact) {
+  grid-template-columns: var(--sidebar-width-compact) minmax(0, 1fr);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-content {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-lg);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  width: var(--sidebar-width-expanded);
+  min-height: calc(100vh - 32px);
+  flex-direction: column;
+  gap: var(--space-md);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xl);
+  background: var(--tracking-panel-bg);
+  padding: var(--sidebar-padding);
+  box-shadow: var(--tracking-soft-shadow);
+  transition:
+    width var(--sidebar-transition),
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) {
+  width: var(--sidebar-width-compact);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact {
+  width: var(--sidebar-width-compact);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--expanded {
+  width: var(--sidebar-width-expanded);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-icon-holder);
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__brand,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle,
+.tracking-page--soft-metal-preview .tracking-preview-nav-item {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  border-radius: var(--sidebar-item-radius);
+  color: var(--tracking-graphite);
+  text-decoration: none;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__brand {
+  grid-template-columns: var(--sidebar-icon-holder) minmax(0, 1fr);
+  min-height: var(--sidebar-item-height);
+  gap: var(--sidebar-item-gap);
+  padding: var(--sidebar-item-padding);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle {
+  width: var(--sidebar-icon-holder);
+  min-height: var(--sidebar-icon-holder);
+  justify-content: center;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-raised) 86%, transparent);
+  cursor: pointer;
+  box-shadow: var(--tracking-soft-shadow-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__nav {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-item {
+  grid-template-columns: var(--sidebar-icon-holder) minmax(0, 1fr);
+  min-height: var(--sidebar-item-height);
+  gap: var(--sidebar-item-gap);
+  border: 1px solid transparent;
+  padding: var(--sidebar-item-padding);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-sidebar__head,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-sidebar__brand,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-nav-item {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-sidebar__toggle {
+  justify-self: center;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-sidebar__brand-text,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-sidebar__toggle-label,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-nav-item__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-sidebar__head,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-sidebar__brand,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-nav-item {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-sidebar__brand-text,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-sidebar__toggle-label,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-nav-item__label,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-item:hover,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__brand:hover,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle:hover {
+  border-color: color-mix(in srgb, var(--icon-green) 26%, var(--border-soft));
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-soft));
+  box-shadow: var(--tracking-soft-shadow-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-item--active,
+.tracking-page--soft-metal-preview .tracking-preview-nav-item[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--icon-green) 42%, var(--border-soft));
+  background: color-mix(in srgb, var(--icon-green) 11%, var(--surface-raised));
+  box-shadow: var(--tracking-inset-shadow);
+  color: var(--text-main);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-text,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle-label,
+.tracking-page--soft-metal-preview .tracking-preview-nav-item__label {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-page--soft-metal-preview .theme-icon-img {
+  display: block;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  object-fit: contain;
+  filter: var(--icon-filter, var(--icon-filter-graphite));
+}
+
+.tracking-page--soft-metal-preview .icon-tone-green {
+  --icon-color: var(--icon-green);
+  --icon-bg: color-mix(in srgb, var(--icon-green) 13%, var(--surface-raised));
+  --icon-border: color-mix(in srgb, var(--icon-green) 34%, transparent);
+  --icon-filter: var(--icon-filter-green);
+}
+
+.tracking-page--soft-metal-preview .icon-tone-teal {
+  --icon-color: var(--icon-teal);
+  --icon-bg: color-mix(in srgb, var(--icon-teal) 12%, var(--surface-raised));
+  --icon-border: color-mix(in srgb, var(--icon-teal) 30%, transparent);
+  --icon-filter: var(--icon-filter-teal);
+}
+
+.tracking-page--soft-metal-preview .icon-tone-bluegrey {
+  --icon-color: var(--icon-bluegrey);
+  --icon-bg: color-mix(in srgb, var(--icon-bluegrey) 12%, var(--surface-raised));
+  --icon-border: color-mix(in srgb, var(--icon-bluegrey) 28%, transparent);
+  --icon-filter: var(--icon-filter-bluegrey);
+}
+
+.tracking-page--soft-metal-preview .icon-tone-amber {
+  --icon-color: var(--icon-amber);
+  --icon-bg: color-mix(in srgb, var(--icon-amber) 13%, var(--surface-raised));
+  --icon-border: color-mix(in srgb, var(--icon-amber) 34%, transparent);
+  --icon-filter: var(--icon-filter-amber);
+}
+
+.tracking-page--soft-metal-preview .icon-tone-red {
+  --icon-color: var(--icon-red);
+  --icon-bg: color-mix(in srgb, var(--icon-red) 11%, var(--surface-raised));
+  --icon-border: color-mix(in srgb, var(--icon-red) 30%, transparent);
+  --icon-filter: var(--icon-filter-red);
+}
+
+.tracking-page--soft-metal-preview .icon-tone-graphite {
+  --icon-color: var(--icon-graphite);
+  --icon-bg: color-mix(in srgb, var(--icon-graphite) 8%, var(--surface-raised));
+  --icon-border: color-mix(in srgb, var(--icon-graphite) 22%, transparent);
+  --icon-filter: var(--icon-filter-graphite);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-mark,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle,
+.tracking-page--soft-metal-preview .tracking-preview-nav-item__icon,
+.tracking-page--soft-metal-preview .tracking-preview-metric__icon,
+.tracking-page--soft-metal-preview .tracking-preview-live-strip__icon,
+.tracking-page--soft-metal-preview .tracking-source-mode__icon,
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--icon-border, var(--border-soft));
+  background: var(--icon-bg, var(--surface-raised));
+  color: var(--icon-color, var(--tracking-graphite));
+  box-shadow: var(--tracking-soft-shadow-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-mark,
+.tracking-page--soft-metal-preview .tracking-preview-nav-item__icon {
+  width: var(--sidebar-icon-holder);
+  height: var(--sidebar-icon-holder);
+  border-radius: var(--radius-md);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric__icon,
+.tracking-page--soft-metal-preview .tracking-source-mode__icon {
+  width: var(--icon-holder-lg);
+  height: var(--icon-holder-lg);
+  border-radius: var(--radius-lg);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-live-strip__icon,
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__icon {
+  width: var(--icon-holder-md);
+  height: var(--icon-holder-md);
+  border-radius: var(--radius-md);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric__icon .theme-icon-img,
+.tracking-page--soft-metal-preview .tracking-source-mode__icon .theme-icon-img {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric,
+.tracking-page--soft-metal-preview .tracking-preview-live-strip,
+.tracking-page--soft-metal-preview .tracking-demo-scenario {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--tracking-card-bg);
+  box-shadow: var(--tracking-soft-shadow-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric {
+  display: grid;
+  grid-template-columns: var(--icon-holder-lg) minmax(0, 1fr);
+  min-height: 112px;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric--active {
+  border-color: color-mix(in srgb, var(--icon-green) 42%, var(--border-soft));
+  background: color-mix(in srgb, var(--icon-green) 8%, var(--surface-raised));
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric__copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric__value {
+  color: var(--text-main);
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric__label {
+  color: var(--tracking-graphite);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-metric small {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-live-strip {
+  display: grid;
+  grid-template-columns: var(--icon-holder-md) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-live-strip strong,
+.tracking-page--soft-metal-preview .tracking-preview-live-strip span {
+  display: block;
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-live-strip strong {
+  color: var(--text-main);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-live-strip > div > span {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-live-strip__states {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .topbar,
+.tracking-page--soft-metal-preview .module-detail,
+.tracking-page--soft-metal-preview .tracking-section,
+.tracking-page--soft-metal-preview .tracking-source-panel,
+.tracking-page--soft-metal-preview .tracking-tcars-live,
+.tracking-page--soft-metal-preview .tracking-tcars-state,
+.tracking-page--soft-metal-preview .tracking-wim-layer,
+.tracking-page--soft-metal-preview .tracking-wim-map-panel,
+.tracking-page--soft-metal-preview .tracking-icon-spec,
+.tracking-page--soft-metal-preview .module-feedback {
+  border-radius: var(--radius-xl);
+  background: var(--tracking-panel-bg);
+  box-shadow: var(--tracking-soft-shadow);
+}
+
+.tracking-page--soft-metal-preview .topbar {
+  margin: 0;
+}
+
+.tracking-page--soft-metal-preview .kaiser-logo {
+  background: var(--icon-green);
+  box-shadow: var(--tracking-soft-shadow-sm);
+}
+
+.tracking-page--soft-metal-preview .module-detail {
+  gap: var(--space-xl);
+  padding: clamp(var(--space-xl), 2.4vw, 34px);
+}
+
+.tracking-page--soft-metal-preview .module-detail__icon {
+  width: var(--icon-holder-xl);
+  height: var(--icon-holder-xl);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--icon-green) 12%, var(--surface-raised));
+  box-shadow: var(--tracking-inset-shadow);
+}
+
+.tracking-page--soft-metal-preview .module-detail__icon svg,
+.tracking-page--soft-metal-preview .module-detail__icon img {
+  width: var(--icon-xl);
+  height: var(--icon-xl);
+}
+
+.tracking-page--soft-metal-preview .module-detail h1 {
+  font-size: clamp(1.55rem, 2.1vw, 2.15rem);
+}
+
+.tracking-page--soft-metal-preview .tracking-layout {
+  grid-template-columns: minmax(0, 1.5fr) minmax(360px, 0.88fr);
+  gap: clamp(var(--space-lg), 2vw, 30px);
+}
+
+.tracking-page--soft-metal-preview .tracking-section {
+  gap: var(--space-lg);
+  padding: clamp(var(--space-xl), 2vw, 32px);
+}
+
+.tracking-page--soft-metal-preview .tracking-section h2 {
+  font-size: 1.26rem;
+}
+
+.tracking-page--soft-metal-preview .tracking-source-panel {
+  grid-template-columns: minmax(250px, 0.72fr) minmax(0, 1.28fr);
+  gap: var(--space-lg);
+  margin: 0;
+  padding: var(--space-xl);
+}
+
+.tracking-page--soft-metal-preview .tracking-source-mode {
+  display: grid;
+  grid-template-columns: var(--icon-holder-lg) minmax(0, 1fr);
+  min-height: 124px;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: var(--tracking-card-bg);
+}
+
+.tracking-page--soft-metal-preview .tracking-source-mode__copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.tracking-page--soft-metal-preview .tracking-source-mode strong {
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.tracking-page--soft-metal-preview .tracking-source-mode--active {
+  background: color-mix(in srgb, var(--icon-green) 10%, var(--surface-raised));
+}
+
+.tracking-page--soft-metal-preview .tracking-source-mode--passive {
+  background: color-mix(in srgb, var(--icon-graphite) 6%, var(--surface-raised));
+}
+
+.tracking-page--soft-metal-preview .primary-action,
+.tracking-page--soft-metal-preview .primary-link {
+  min-height: var(--tracking-control-height);
+  border-color: color-mix(in srgb, var(--icon-green) 64%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--icon-green);
+  color: #ffffff;
+  box-shadow: var(--tracking-soft-shadow-sm);
+}
+
+.tracking-page--soft-metal-preview .secondary-link,
+.tracking-page--soft-metal-preview .back-button,
+.tracking-page--soft-metal-preview .tracking-tab,
+.tracking-page--soft-metal-preview .tracking-demo-filter {
+  min-height: var(--tracking-control-height);
+  background: var(--tracking-card-bg);
+  box-shadow: var(--tracking-soft-shadow-sm);
+}
+
+.tracking-page--soft-metal-preview :is(.secondary-link, .back-button, .tracking-tab, .tracking-demo-filter):hover {
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-soft));
+}
+
+.tracking-page--soft-metal-preview .tracking-tab--active,
+.tracking-page--soft-metal-preview .tracking-demo-filter--active {
+  background: color-mix(in srgb, var(--icon-green) 11%, var(--surface-raised));
+}
+
+.tracking-page--soft-metal-preview .tracking-badge,
+.tracking-page--soft-metal-preview .tracking-status,
+.tracking-page--soft-metal-preview .tracking-demo-data-badge,
+.tracking-page--soft-metal-preview .tracking-tcars-live__head > span,
+.tracking-page--soft-metal-preview .tracking-tcars-map-summary span,
+.tracking-page--soft-metal-preview .tracking-wim-layer__head > span,
+.tracking-page--soft-metal-preview .tracking-wim-map-panel__head > span,
+.tracking-page--soft-metal-preview .tracking-tcars-invalid__head > span,
+.tracking-page--soft-metal-preview .tracking-icon-spec__head > span {
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 11px;
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+}
+
+.tracking-page--soft-metal-preview .tracking-status::before {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card,
+.tracking-page--soft-metal-preview .tracking-detail-grid article,
+.tracking-page--soft-metal-preview .tracking-trip-summary article,
+.tracking-page--soft-metal-preview .tracking-integration-grid article,
+.tracking-page--soft-metal-preview .tracking-tcars-mode-grid article,
+.tracking-page--soft-metal-preview .tracking-tcars-location-card,
+.tracking-page--soft-metal-preview .tracking-tcars-location-detail,
+.tracking-page--soft-metal-preview .tracking-wim-summary article,
+.tracking-page--soft-metal-preview .tracking-wim-site-card,
+.tracking-page--soft-metal-preview .tracking-wim-detail,
+.tracking-page--soft-metal-preview .tracking-wim-empty,
+.tracking-page--soft-metal-preview .tracking-map-placeholder,
+.tracking-page--soft-metal-preview .tracking-route-placeholder,
+.tracking-page--soft-metal-preview .tracking-empty,
+.tracking-page--soft-metal-preview .tracking-pairing-note,
+.tracking-page--soft-metal-preview .tracking-table-shell,
+.tracking-page--soft-metal-preview .tracking-field-chips span,
+.tracking-page--soft-metal-preview .tracking-icon-spec__files li,
+.tracking-page--soft-metal-preview .tracking-icon-spec__mapping {
+  border-radius: var(--radius-lg);
+  background: var(--tracking-card-bg);
+  box-shadow: var(--tracking-soft-shadow-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card {
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__title {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: var(--icon-holder-md) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__title > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__title strong {
+  color: var(--text-main);
+  font-size: 1.05rem;
+  line-height: 1.1;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__title span span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card--selected {
+  background: color-mix(in srgb, var(--icon-green) 9%, var(--surface-raised));
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card--alert {
+  background: color-mix(in srgb, var(--icon-red) 9%, var(--surface-raised));
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-image--card {
+  height: 166px;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-status {
+  gap: 8px;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-status > span:not(.tracking-status) {
+  min-height: 30px;
+  border: 1px solid color-mix(in srgb, var(--icon-graphite) 14%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--icon-graphite) 6%, var(--surface-raised));
+  padding: 6px 10px;
+  color: var(--tracking-graphite);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.tracking-page--soft-metal-preview .tracking-map-shell,
+.tracking-page--soft-metal-preview .tracking-demo-map,
+.tracking-page--soft-metal-preview .tracking-tcars-map,
+.tracking-page--soft-metal-preview .tracking-wim-map,
+.tracking-page--soft-metal-preview .tracking-route-placeholder,
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-image--detail {
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(90deg, rgba(76, 86, 80, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(76, 86, 80, 0.07) 1px, transparent 1px),
+    var(--tracking-inset-bg);
+  box-shadow: var(--tracking-inset-shadow);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker {
+  width: 106px;
+  min-width: 106px;
+  height: 80px;
+  min-height: 80px;
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker__asset {
+  width: 68px;
+  height: 68px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
+  max-width: 64px;
+  max-height: 64px;
+}
+
+.tracking-page--soft-metal-preview :is(.primary-action, .primary-link, .secondary-link, .back-button, .tracking-tab, .tracking-demo-filter, .tracking-source-mode, .tracking-demo-vehicle-card, .tracking-tcars-location-card, .tracking-wim-site-card):hover {
+  transform: none;
+}
+
+@media (max-width: 1220px) {
+  .tracking-page--soft-metal-preview .tracking-preview-shell {
+    grid-template-columns: var(--sidebar-width-compact) minmax(0, 1fr);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar {
+    width: var(--sidebar-width-compact);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar__head,
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand,
+  .tracking-page--soft-metal-preview .tracking-preview-nav-item {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-text,
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle-label,
+  .tracking-page--soft-metal-preview .tracking-preview-nav-item__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .tracking-page--soft-metal-preview {
+    width: calc(100% - 16px);
+    padding-bottom: 94px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-shell,
+  .tracking-page--soft-metal-preview .tracking-preview-content,
+  .tracking-page--soft-metal-preview .tracking-preview-metrics,
+  .tracking-page--soft-metal-preview .tracking-preview-live-strip,
+  .tracking-page--soft-metal-preview .tracking-source-panel,
+  .tracking-page--soft-metal-preview .tracking-source-modes {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar {
+    position: fixed;
+    inset: auto max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    z-index: 40;
+    width: auto;
+    min-height: 0;
+    padding: 8px;
+    border-radius: var(--radius-xl);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar__head {
+    display: none;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar__nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-nav-item {
+    grid-template-columns: 1fr;
+    min-height: 56px;
+    justify-items: center;
+    padding: 5px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-nav-item__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-nav-item__icon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-live-strip {
+    align-items: start;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-live-strip__states {
+    justify-content: flex-start;
+  }
+
+  .tracking-page--soft-metal-preview .module-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .module-detail__icon {
+    width: var(--icon-holder-lg);
+    height: var(--icon-holder-lg);
+  }
+
+  .tracking-page--soft-metal-preview .module-detail__icon svg,
+  .tracking-page--soft-metal-preview .module-detail__icon img {
+    width: var(--icon-lg);
+    height: var(--icon-lg);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-card__head,
+  .tracking-page--soft-metal-preview .tracking-preview-live-strip__states {
+    display: grid;
+  }
+}
+
+@media (max-width: 430px) {
+  .tracking-page--soft-metal-preview .tracking-preview-metric {
+    grid-template-columns: var(--icon-holder-md) minmax(0, 1fr);
+    min-height: 96px;
+    padding: var(--space-md);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-metric__icon,
+  .tracking-page--soft-metal-preview .tracking-source-mode__icon {
+    width: var(--icon-holder-md);
+    height: var(--icon-holder-md);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-metric__icon .theme-icon-img,
+  .tracking-page--soft-metal-preview .tracking-source-mode__icon .theme-icon-img {
+    width: var(--icon-md);
+    height: var(--icon-md);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-source-mode {
+    grid-template-columns: var(--icon-holder-md) minmax(0, 1fr);
+    min-height: 96px;
+    padding: var(--space-md);
   }
 }

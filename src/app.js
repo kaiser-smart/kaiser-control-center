@@ -9906,6 +9906,151 @@ function vehicleTrackingAction(label, href = "") {
   return `<a class="secondary-link" href="${routeHref(href)}" data-link>${escapeHtml(label)}</a>`;
 }
 
+function vehicleTrackingPreviewIconTone(tone = "") {
+  if (tone === "moving") {
+    return "green";
+  }
+  if (tone === "service" || tone === "no-signal") {
+    return "amber";
+  }
+  if (tone === "off-route" || tone === "out-of-order") {
+    return "red";
+  }
+  if (tone === "stopped") {
+    return "bluegrey";
+  }
+  return "graphite";
+}
+
+function vehicleTrackingPreviewSourceIcon(modeId = "") {
+  if (modeId === "tcars") {
+    return { icon: "route", tone: "teal" };
+  }
+  if (modeId === "fallback") {
+    return { icon: "service", tone: "amber" };
+  }
+  return { icon: "truck", tone: "green" };
+}
+
+function vehicleTrackingPreviewSidebar(activeView = "map", sourceMode = vehicleTrackingActiveSourceMode()) {
+  const items = sourceMode === "tcars"
+    ? [
+      { id: "tcars-status", label: "T-Cars stav", href: "#tracking-tcars-status", icon: "route", tone: "teal" },
+      { id: "wim-sites", label: "WIM váhy", href: "#tracking-wim-sites", icon: "marker", tone: "amber" },
+      { id: "tcars-pairing", label: "Párování", href: "#tracking-tcars-pairing", icon: "truck", tone: "bluegrey" },
+      { id: "rules", label: "Pravidla", href: "#tracking-rules", icon: "check", tone: "green" },
+      { id: "api", label: "API", href: "#tracking-api", icon: "service", tone: "graphite" }
+    ]
+    : [
+      { id: "map", label: "Mapa", href: "#tracking-map", icon: "marker", tone: "teal" },
+      { id: "list", label: "Vozidla", href: "#tracking-list", icon: "truck", tone: "bluegrey" },
+      { id: "detail", label: "Detail", href: "#tracking-detail", icon: "container", tone: "green" },
+      { id: "api", label: "API", href: "#tracking-api", icon: "service", tone: "graphite" },
+      { id: "rules", label: "Pravidla", href: "#tracking-rules", icon: "check", tone: "amber" }
+    ];
+
+  return `
+    <aside class="tracking-preview-sidebar sidebar--expanded" aria-label="Navigace modulu Sledování vozidel" data-tracking-preview-sidebar>
+      <input class="tracking-preview-sidebar__state sr-only" type="checkbox" id="tracking-preview-sidebar-state" checked data-tracking-preview-sidebar-state>
+      <div class="tracking-preview-sidebar__head">
+        <a class="tracking-preview-sidebar__brand" href="${routeHref("/")}" data-link aria-label="Smart odpady">
+          <span class="tracking-preview-sidebar__brand-mark icon-tone-green">${themePreviewIcon("dashboard")}</span>
+          <span class="tracking-preview-sidebar__brand-text">Smart</span>
+        </a>
+        <label class="tracking-preview-sidebar__toggle icon-tone-graphite" for="tracking-preview-sidebar-state" title="Přepnout menu">
+          ${themePreviewIcon("plus")}
+          <span class="tracking-preview-sidebar__toggle-label">Menu</span>
+        </label>
+      </div>
+      <nav class="tracking-preview-sidebar__nav" aria-label="Sekce modulu">
+        ${items.map((item) => `
+          <a class="tracking-preview-nav-item ${item.id === activeView ? "tracking-preview-nav-item--active" : ""}" href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}" ${item.id === activeView ? 'aria-current="page"' : ""}>
+            <span class="tracking-preview-nav-item__icon icon-tone-${escapeHtml(item.tone)}">${themePreviewIcon(item.icon)}</span>
+            <span class="tracking-preview-nav-item__label">${escapeHtml(item.label)}</span>
+          </a>
+        `).join("")}
+      </nav>
+    </aside>
+  `;
+}
+
+function vehicleTrackingPreviewDashboardMetrics(visibleVehicles = []) {
+  const elapsedMs = vehicleTrackingDemoCurrentElapsed();
+  const summaries = visibleVehicles.map((vehicle) => vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs));
+  const movingCount = summaries.filter((summary) => summary.tone === "moving").length;
+  const alertCount = summaries.filter((summary) => ["off-route", "out-of-order", "service", "no-signal"].includes(summary.tone)).length;
+  const routeCount = new Set(visibleVehicles.map((vehicle) => vehicle.routeName).filter(Boolean)).size;
+  const selectedVehicle = vehicleTrackingDemoSelectedVehicle(vehicleTrackingDemoState.selectedVehicleId, visibleVehicles) || visibleVehicles[0];
+  const selectedSummary = selectedVehicle ? vehicleTrackingDemoVehicleSummary(selectedVehicle, elapsedMs) : null;
+  const selectedTone = vehicleTrackingPreviewIconTone(selectedSummary?.tone);
+  const metrics = [
+    {
+      label: "Vozidla online",
+      value: String(visibleVehicles.length),
+      note: `${movingCount} v pohybu`,
+      icon: "truck",
+      tone: "bluegrey"
+    },
+    {
+      label: "Aktivní trasy",
+      value: String(routeCount || 0),
+      note: "aktuální směna",
+      icon: "route",
+      tone: "teal"
+    },
+    {
+      label: "Upozornění",
+      value: String(alertCount),
+      note: alertCount ? "vyžaduje kontrolu" : "bez kritické události",
+      icon: alertCount ? "warning" : "check",
+      tone: alertCount ? "amber" : "green"
+    },
+    {
+      label: selectedVehicle ? selectedVehicle.internalNumber : "Vybrané vozidlo",
+      value: selectedSummary ? `${selectedSummary.speedNow} km/h` : "—",
+      note: selectedSummary ? selectedSummary.statusLabel : "není vybráno",
+      icon: "marker",
+      tone: selectedTone
+    }
+  ];
+
+  return `
+    <section class="tracking-preview-metrics" aria-label="Aktuální stav sledování vozidel">
+      ${metrics.map((metric, index) => `
+        <article class="tracking-preview-metric ${index === 0 ? "tracking-preview-metric--active" : ""}">
+          <span class="tracking-preview-metric__icon icon-tone-${escapeHtml(metric.tone)}">${themePreviewIcon(metric.icon)}</span>
+          <span class="tracking-preview-metric__copy">
+            <span class="tracking-preview-metric__value">${escapeHtml(metric.value)}</span>
+            <span class="tracking-preview-metric__label">${escapeHtml(metric.label)}</span>
+            <small>${escapeHtml(metric.note)}</small>
+          </span>
+        </article>
+      `).join("")}
+    </section>
+  `;
+}
+
+function vehicleTrackingPreviewOperationalStrip(visibleVehicles = []) {
+  const elapsedMs = vehicleTrackingDemoCurrentElapsed();
+  const summaries = visibleVehicles.map((vehicle) => vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs));
+  const offRouteCount = summaries.filter((summary) => summary.tone === "off-route").length;
+  const movingCount = summaries.filter((summary) => summary.tone === "moving").length;
+
+  return `
+    <section class="tracking-preview-live-strip" aria-label="Provozní stav modulu">
+      <span class="tracking-preview-live-strip__icon icon-tone-green">${themePreviewIcon("route")}</span>
+      <div>
+        <strong>Veřejný pracovní náhled sledování vozidel</strong>
+        <span>Demo datová sada simuluje dispečerský provoz bez přístupu k reálným GPS datům.</span>
+      </div>
+      <div class="tracking-preview-live-strip__states" aria-label="Souhrn provozu">
+        <span class="tracking-status tracking-status--moving">${escapeHtml(`${movingCount} v pohybu`)}</span>
+        <span class="tracking-status tracking-status--${offRouteCount ? "off-route" : "moving"}">${escapeHtml(offRouteCount ? `${offRouteCount} mimo trasu` : "trasy v pořádku")}</span>
+      </div>
+    </section>
+  `;
+}
+
 function vehicleTrackingSourceModeMeta(modeId) {
   return VEHICLE_TRACKING_SOURCE_MODES.find((mode) => mode.id === modeId) || VEHICLE_TRACKING_SOURCE_MODES[0];
 }
@@ -9986,10 +10131,14 @@ function vehicleTrackingSourceModePanel() {
         ${VEHICLE_TRACKING_SOURCE_MODES.map((mode) => {
           const isFallback = mode.id === "fallback";
           const isActive = mode.id === activeMode;
+          const sourceIcon = vehicleTrackingPreviewSourceIcon(mode.id);
           const content = `
+              <span class="tracking-source-mode__icon icon-tone-${escapeHtml(sourceIcon.tone)}">${themePreviewIcon(sourceIcon.icon)}</span>
+              <span class="tracking-source-mode__copy">
               <strong>${escapeHtml(mode.label)}</strong>
               <span>${escapeHtml(mode.badge)}</span>
               <small>${escapeHtml(mode.description)}</small>
+              </span>
           `;
 
           if (isFallback) {
@@ -10454,13 +10603,17 @@ function vehicleTrackingDemoVehicleImage(vehicle, className = "") {
 function vehicleTrackingDemoVehicleCard(vehicle, selectedVehicle, elapsedMs) {
   const summary = vehicleTrackingDemoVehicleSummary(vehicle, elapsedMs);
   const isSelected = selectedVehicle?.id === vehicle.id;
+  const iconTone = vehicleTrackingPreviewIconTone(summary.tone);
 
   return `
     <article class="tracking-demo-vehicle-card ${summary.isOffRoute ? "tracking-demo-vehicle-card--alert" : ""} ${isSelected ? "tracking-demo-vehicle-card--selected" : ""}" data-tracking-demo-card="${escapeHtml(vehicle.id)}">
       <div class="tracking-demo-vehicle-card__head">
-        <div>
-          <strong>${escapeHtml(vehicle.internalNumber)}</strong>
-          <span>${escapeHtml(vehicle.licensePlate)}</span>
+        <div class="tracking-demo-vehicle-card__title">
+          <span class="tracking-demo-vehicle-card__icon icon-tone-${escapeHtml(iconTone)}">${themePreviewIcon("truck")}</span>
+          <span>
+            <strong>${escapeHtml(vehicle.internalNumber)}</strong>
+            <span>${escapeHtml(vehicle.licensePlate)}</span>
+          </span>
         </div>
         <span class="tracking-demo-data-badge">Demo data</span>
       </div>
@@ -12425,6 +12578,13 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   }
   const isSoftMetalPreview = context.designPreview === "soft-metal";
   const pageClass = `app-shell module-page module-theme-scope tracking-page${isSoftMetalPreview ? " tracking-page--soft-metal-preview" : ""}`;
+  const previewShellStart = isSoftMetalPreview
+    ? `<div class="tracking-preview-shell">${vehicleTrackingPreviewSidebar(view, sourceMode)}<div class="tracking-preview-content">`
+    : "";
+  const previewShellEnd = isSoftMetalPreview ? "</div></div>" : "";
+  const trackingModeNotice = sourceMode === "demo"
+    ? (isSoftMetalPreview ? vehicleTrackingPreviewOperationalStrip(visibleVehicles) : vehicleTrackingDemoBanner())
+    : "";
   const compareAction = isSoftMetalPreview
     ? `<a class="secondary-link tracking-preview-compare" href="${routeHref(VEHICLE_TRACKING_BASE_ROUTE)}" data-link>Původní zobrazení</a>`
     : "";
@@ -12432,6 +12592,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   return `
     <main class="${pageClass}" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
+      ${previewShellStart}
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
         <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
@@ -12456,7 +12617,8 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
       </section>
 
       ${vehicleTrackingSourceModePanel()}
-      ${sourceMode === "demo" ? vehicleTrackingDemoBanner() : ""}
+      ${isSoftMetalPreview ? vehicleTrackingPreviewDashboardMetrics(visibleVehicles) : ""}
+      ${trackingModeNotice}
       ${vehicleTrackingTabs(view, sourceMode)}
       <div class="tracking-layout tracking-demo-layout">
         ${sourceMode === "demo" ? `
@@ -12477,6 +12639,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
         moduleName: "Sledování vozidel",
         placeholder: "Např. chybí GPS provider, filtr, stav vozidla nebo typ historie jízd…"
       })}
+      ${previewShellEnd}
     </main>
   `;
 }
@@ -29187,6 +29350,14 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const trackingPreviewSidebarState = event.target.closest("[data-tracking-preview-sidebar-state]");
+  if (trackingPreviewSidebarState) {
+    const sidebar = trackingPreviewSidebarState.closest("[data-tracking-preview-sidebar]");
+    sidebar?.classList.toggle("sidebar--expanded", trackingPreviewSidebarState.checked);
+    sidebar?.classList.toggle("sidebar--compact", !trackingPreviewSidebarState.checked);
+    return;
+  }
+
   const driverReportField = event.target.closest("[data-driver-report-form] input, [data-driver-report-form] select, [data-driver-report-form] textarea");
   if (driverReportField) {
     const form = driverReportField.closest("[data-driver-report-form]");
