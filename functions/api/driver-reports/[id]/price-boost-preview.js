@@ -28,7 +28,7 @@ export async function onRequestPost({ request, env, params }) {
 
   try {
     const preview = await previewDriverPartPriceBoost(env, user, routeId(request, params), {
-      allowProbablePartSeed: true
+      allowProbablePartSeed: false
     });
     return json({ preview, apiStatus: "ready" });
   } catch (error) {

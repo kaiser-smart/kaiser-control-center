@@ -25,6 +25,7 @@ export async function onRequestPost({ request, env, params }) {
     const partRequest = await handoffDriverPartRequest(env, user, routeId(request, params), {
       allowProbablePartHandoff: true,
       runPriceBoost: true,
+      requireVinPartVerification: true,
       requirePriceOffersForHandoff: true
     });
     return json({ request: partRequest, apiStatus: "ready" });

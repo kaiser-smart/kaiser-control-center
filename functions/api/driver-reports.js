@@ -64,6 +64,7 @@ export async function onRequestPost({ request, env }) {
           allowCreatorHandoff: true,
           allowProbablePartHandoff: true,
           runPriceBoost: true,
+          requireVinPartVerification: true,
           requirePriceOffersForHandoff: true
         });
       } catch (handoffError) {

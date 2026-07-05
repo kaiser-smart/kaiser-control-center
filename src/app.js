@@ -21188,7 +21188,7 @@ function driverReportPatrikHandoffBlockReason(item) {
   if (!item.licensePlate || !item.vehicleName) return "Předání čeká na doplnění SPZ a vozidla.";
   if (item.licensePlateVerified !== true || item.manualVehicleReview === true) return "Předání čeká na ruční ověření vozidla proti Vozovému parku.";
   if (!item.vin) return "Předání čeká na VIN.";
-  if (!driverReportHasPartSeedForPatrikHandoff(item)) return "Předání čeká na jasně rozpoznaný nebo ověřený díl.";
+  if (!driverReportHasVerifiedPartForPatrikHandoff(item)) return "Předání čeká na ověřený díl/OE podle VIN. Pravděpodobný díl nestačí pro e-mail Patrikovi.";
   if (!driverReportHasRequiredPriceOffers(item)) return "Předání čeká na 3 cenové nabídky s odkazy.";
   return "";
 }
@@ -21206,7 +21206,7 @@ function driverReportCanRunPriceBoost(item) {
   if (!item.licensePlate || !item.vehicleName) return false;
   if (item.licensePlateVerified !== true || item.manualVehicleReview === true) return false;
   if (!item.vin) return false;
-  if (!driverReportHasPartSeedForPatrikHandoff(item)) return false;
+  if (!driverReportHasVerifiedPartForPatrikHandoff(item)) return false;
   return true;
 }
 

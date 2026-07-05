@@ -28,7 +28,7 @@ export async function onRequestPost({ request, env, params }) {
 
   try {
     const partRequest = await runDriverPartPriceBoost(env, user, routeId(request, params), {
-      allowProbablePartSeed: true
+      allowProbablePartSeed: false
     });
     return json({ request: partRequest, apiStatus: "ready" });
   } catch (error) {

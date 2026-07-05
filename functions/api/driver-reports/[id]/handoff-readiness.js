@@ -28,7 +28,8 @@ export async function onRequestGet({ request, env, params }) {
 
   try {
     const readiness = await getDriverPartHandoffReadiness(env, user, routeId(request, params), {
-      allowProbablePartHandoff: true
+      allowProbablePartHandoff: true,
+      requireVinPartVerification: true
     });
     return json({ readiness, apiStatus: "ready" });
   } catch (error) {

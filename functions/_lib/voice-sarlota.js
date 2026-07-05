@@ -1245,6 +1245,7 @@ function voiceDriverPartHandoffOptions() {
     allowCreatorHandoff: true,
     allowProbablePartHandoff: true,
     runPriceBoost: true,
+    requireVinPartVerification: true,
     requirePriceOffersForHandoff: true
   };
 }

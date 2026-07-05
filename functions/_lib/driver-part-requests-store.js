@@ -1287,12 +1287,142 @@ function driverPartRequestPatrikPriceHandoffEligibility(item = {}, options = {})
   };
 }
 
+async function driverPartVerificationProviderResult(env, item = {}) {
+  const isMercedes = normalizeVehicleBrand(item.vehicleBrand) === "mercedes";
+  const providerResult = isMercedes
+    ? await verifyMercedesPartForRequest(env, item)
+    : {
+      status: "not_applicable",
+      partVerificationStatus: "not_applicable",
+      partVerificationSource: "",
+      partsProviderId: "",
+      partsProviderStatus: "skipped_non_mercedes",
+      partsProviderMessage: "Vozidlo není Mercedes-Benz Trucks. Díl se předává Patrikovi k ručnímu ověření podle běžného procesu.",
+      partsProviderError: "",
+      mercedesManualPortalUrl: "",
+      mercedesMyPartsHubUrl: "",
+      partLookupQuery: item.probablePart || item.defectDescription,
+      resultJson: ""
+    };
+
+  return { isMercedes, providerResult };
+}
+
+function driverPartVerificationAfter(user, item = {}, providerResult = {}) {
+  const now = new Date().toISOString();
+  const partVerificationStatus = normalizePartVerificationStatus(providerResult.partVerificationStatus);
+  const verifiedPart = cleanString(providerResult.verifiedPart || item.verifiedPart);
+  const oePartNumber = cleanString(providerResult.oePartNumber || item.oePartNumber);
+  const partName = cleanString(providerResult.partName || item.partName);
+  const partOrderNumber = cleanString(providerResult.partOrderNumber || item.partOrderNumber || oePartNumber);
+  const partsProviderStatus = cleanString(providerResult.partsProviderStatus || providerResult.providerStatus);
+  const partsProviderMessage = cleanString(providerResult.partsProviderMessage || providerResult.providerMessage);
+  const partIdentificationStatus = partVerificationStatus === "verified_daimler"
+    ? "verified_daimler"
+    : partVerificationStatus === "not_applicable"
+      ? item.partIdentificationStatus
+      : "waiting_manual_verification";
+
+  return {
+    after: {
+      ...item,
+      verifiedPart,
+      partOrderNumber,
+      oePartNumber,
+      partName,
+      partVerificationStatus,
+      partVerificationSource: providerResult.partVerificationSource,
+      partIdentificationStatus,
+      partsProviderId: providerResult.partsProviderId,
+      partsProviderStatus,
+      partsProviderMessage,
+      partsProviderError: providerResult.partsProviderError,
+      partLookupQuery: providerResult.partLookupQuery,
+      partLookupResultJson: providerResult.resultJson,
+      mercedesManualPortalUrl: providerResult.mercedesManualPortalUrl,
+      mercedesMyPartsHubUrl: providerResult.mercedesMyPartsHubUrl,
+      priceBoostStatus: oePartNumber || partOrderNumber ? "waiting_verified_part" : "not_requested",
+      priceBoostNote: oePartNumber || partOrderNumber
+        ? "AI Boost cenový průzkum smí běžet až po potvrzení kompatibility člověkem."
+        : "AI Boost cenový průzkum čeká na ověřené OE číslo.",
+      updatedAt: now
+    },
+    now,
+    partsProviderMessage
+  };
+}
+
+async function saveDriverPartVerificationResult(db, user, item = {}, providerResult = {}, isMercedes = false) {
+  const { after, now, partsProviderMessage } = driverPartVerificationAfter(user, item, providerResult);
+
+  await db.batch([
+    db
+      .prepare(`
+        UPDATE driver_part_requests
+        SET
+          verified_part = ?,
+          part_order_number = ?,
+          oe_part_number = ?,
+          part_name = ?,
+          part_identification_status = ?,
+          part_verification_status = ?,
+          part_verification_source = ?,
+          parts_provider_id = ?,
+          parts_provider_status = ?,
+          parts_provider_message = ?,
+          parts_provider_error = ?,
+          part_lookup_query = ?,
+          part_lookup_result_json = ?,
+          mercedes_manual_portal_url = ?,
+          mercedes_mypartshub_url = ?,
+          price_boost_status = ?,
+          price_boost_note = ?,
+          updated_by_user_id = ?,
+          updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(
+        nullableString(after.verifiedPart),
+        nullableString(after.partOrderNumber),
+        nullableString(after.oePartNumber),
+        nullableString(after.partName),
+        after.partIdentificationStatus,
+        after.partVerificationStatus,
+        nullableString(after.partVerificationSource),
+        nullableString(after.partsProviderId),
+        nullableString(after.partsProviderStatus),
+        nullableString(after.partsProviderMessage),
+        nullableString(after.partsProviderError),
+        nullableString(after.partLookupQuery),
+        nullableString(after.partLookupResultJson),
+        nullableString(after.mercedesManualPortalUrl),
+        nullableString(after.mercedesMyPartsHubUrl),
+        after.priceBoostStatus,
+        nullableString(after.priceBoostNote),
+        nullableString(user?.id),
+        now,
+        item.id
+      ),
+    eventStatement(db, {
+      requestId: item.id,
+      action: isMercedes ? "verify_mercedes_part" : "skip_mercedes_part_verification",
+      user,
+      before: item,
+      after,
+      note: partsProviderMessage || "Ověření dílu bylo zapsáno do historie."
+    })
+  ]);
+
+  return after;
+}
+
 function readinessBlocker(code, message) {
   return { code: cleanString(code), message: cleanString(message) };
 }
 
 async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, options = {}) {
-  const allowProbablePartHandoff = options.allowProbablePartHandoff !== false;
+  const requireVinPartVerification = options.requireVinPartVerification === true;
+  const allowProbablePartHandoff = requireVinPartVerification ? false : options.allowProbablePartHandoff !== false;
   const baseEligibility = driverPartRequestPatrikHandoffEligibility(item, { allowProbablePartHandoff });
   const priceEligibility = driverPartRequestPatrikPriceHandoffEligibility(item, {
     requirePriceOffersForHandoff: true
@@ -1351,6 +1481,7 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
     vinPresent: Boolean(cleanString(item.vin)),
     partVerified: driverPartRequestHasVerifiedPartForHandoff(item),
     probablePartAllowed: allowProbablePartHandoff && driverPartRequestHasPilotPartCandidateForHandoff(item, { allowProbablePartHandoff: true }),
+    vinPartVerificationRequired: requireVinPartVerification,
     priceOfferCount: priceOffers.length,
     requiredPriceOfferCount: 3,
     missingPriceOfferCount: Math.max(0, 3 - priceOffers.length),
@@ -1380,7 +1511,8 @@ async function driverPartRequestPriceSearchPreviewForItem(env, user, item = {}, 
     priceBoostResultJson: cleanString(result.resultJson)
   };
   const readiness = await driverPartRequestHandoffReadinessForItem(env, user, itemWithPreview, {
-    allowProbablePartHandoff: true
+    allowProbablePartHandoff: true,
+    requireVinPartVerification: true
   });
 
   return {
@@ -1478,36 +1610,54 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
   }
 
   const { db, item } = await requestForUser(env, id, user);
-  const eligibility = driverPartRequestPatrikHandoffEligibility(item, options);
+  let itemForHandoff = item;
+
+  if (
+    options.requireVinPartVerification === true &&
+    !driverPartRequestHasVerifiedPartForHandoff(itemForHandoff) &&
+    driverPartRequestHasPilotPartCandidateForHandoff(itemForHandoff, { allowProbablePartHandoff: true })
+  ) {
+    const { isMercedes, providerResult } = await driverPartVerificationProviderResult(env, itemForHandoff);
+    try {
+      itemForHandoff = await saveDriverPartVerificationResult(db, user, itemForHandoff, providerResult, isMercedes);
+    } catch (error) {
+      throw dbError(error);
+    }
+  }
+
+  const eligibility = driverPartRequestPatrikHandoffEligibility(itemForHandoff, {
+    ...options,
+    allowProbablePartHandoff: options.requireVinPartVerification === true ? false : options.allowProbablePartHandoff
+  });
   if (!eligibility.allowed) {
     throw new DriverPartRequestsStoreError(eligibility.message, 400, eligibility.code);
   }
 
-  let itemForEmail = item;
+  let itemForEmail = itemForHandoff;
   const missingRequiredPriceOffers = options.requirePriceOffersForHandoff === true
-    && !driverPartRequestHasRequiredPriceOffers(item, 3);
+    && !driverPartRequestHasRequiredPriceOffers(itemForHandoff, 3);
   const shouldRunPriceBoost = options.skipPriceBoost !== true
     && (
       missingRequiredPriceOffers ||
       (
-        item.priceBoostStatus !== "candidates_found"
-        && item.priceBoostStatus !== "no_results"
-        && item.priceBoostStatus !== "provider_not_configured"
-        && item.priceBoostStatus !== "failed"
+        itemForHandoff.priceBoostStatus !== "candidates_found"
+        && itemForHandoff.priceBoostStatus !== "no_results"
+        && itemForHandoff.priceBoostStatus !== "provider_not_configured"
+        && itemForHandoff.priceBoostStatus !== "failed"
       )
     );
-  if (shouldRunPriceBoost || (options.runPriceBoost === true && (item.priceBoostStatus !== "candidates_found" || missingRequiredPriceOffers))) {
-    const priceResult = await runDriverPartPriceSearch(env, item, {
+  if (shouldRunPriceBoost || (options.runPriceBoost === true && (itemForHandoff.priceBoostStatus !== "candidates_found" || missingRequiredPriceOffers))) {
+    const priceResult = await runDriverPartPriceSearch(env, itemForHandoff, {
       allowProbablePartSeed: options.allowProbablePartHandoff === true
     });
     try {
-      itemForEmail = await saveDriverPartPriceBoostResult(db, user, item, priceResult);
+      itemForEmail = await saveDriverPartPriceBoostResult(db, user, itemForHandoff, priceResult);
     } catch (error) {
       throw dbError(error);
     }
-  } else if (!isDriverPartPriceSearchConfigured(env) && !item.priceBoostStatus) {
+  } else if (!isDriverPartPriceSearchConfigured(env) && !itemForHandoff.priceBoostStatus) {
     itemForEmail = {
-      ...item,
+      ...itemForHandoff,
       priceBoostStatus: "provider_not_configured",
       priceBoostNote: "Cenový průzkum není nastavený. E-mail Patrikovi obsahuje ruční postup."
     };
@@ -1538,7 +1688,7 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
     assignedToEmail: patrik.email,
     patrikEmailStatus: emailResult.status,
     patrikEmailError: emailResult.errorMessage || "",
-    handedOffToPatrikAt: emailOk ? (item.handedOffToPatrikAt || now) : item.handedOffToPatrikAt,
+    handedOffToPatrikAt: emailOk ? (itemForEmail.handedOffToPatrikAt || now) : itemForEmail.handedOffToPatrikAt,
     updatedAt: now
   };
 
@@ -1690,117 +1840,10 @@ export async function verifyMercedesDriverPartRequest(env, user, id) {
   }
 
   const { db, item } = await requestForUser(env, id, user);
-  const now = new Date().toISOString();
-  const isMercedes = normalizeVehicleBrand(item.vehicleBrand) === "mercedes";
-  const providerResult = isMercedes
-    ? await verifyMercedesPartForRequest(env, item)
-    : {
-      status: "not_applicable",
-      partVerificationStatus: "not_applicable",
-      partVerificationSource: "",
-      partsProviderId: "",
-      partsProviderStatus: "skipped_non_mercedes",
-      partsProviderMessage: "Vozidlo není Mercedes-Benz Trucks. Díl se předává Patrikovi k ručnímu ověření podle běžného procesu.",
-      partsProviderError: "",
-      mercedesManualPortalUrl: "",
-      mercedesMyPartsHubUrl: "",
-      partLookupQuery: item.probablePart || item.defectDescription,
-      resultJson: ""
-    };
-
-  const partVerificationStatus = normalizePartVerificationStatus(providerResult.partVerificationStatus);
-  const verifiedPart = cleanString(providerResult.verifiedPart || item.verifiedPart);
-  const oePartNumber = cleanString(providerResult.oePartNumber || item.oePartNumber);
-  const partName = cleanString(providerResult.partName || item.partName);
-  const partOrderNumber = cleanString(providerResult.partOrderNumber || item.partOrderNumber || oePartNumber);
-  const partIdentificationStatus = partVerificationStatus === "verified_daimler"
-    ? "verified_daimler"
-    : partVerificationStatus === "not_applicable"
-      ? item.partIdentificationStatus
-      : "waiting_manual_verification";
-  const after = {
-    ...item,
-    verifiedPart,
-    partOrderNumber,
-    oePartNumber,
-    partName,
-    partVerificationStatus,
-    partVerificationSource: providerResult.partVerificationSource,
-    partIdentificationStatus,
-    partsProviderId: providerResult.partsProviderId,
-    partsProviderStatus: providerResult.partsProviderStatus,
-    partsProviderMessage: providerResult.partsProviderMessage,
-    partsProviderError: providerResult.partsProviderError,
-    partLookupQuery: providerResult.partLookupQuery,
-    partLookupResultJson: providerResult.resultJson,
-    mercedesManualPortalUrl: providerResult.mercedesManualPortalUrl,
-    mercedesMyPartsHubUrl: providerResult.mercedesMyPartsHubUrl,
-    priceBoostStatus: oePartNumber || partOrderNumber ? "waiting_verified_part" : "not_requested",
-    priceBoostNote: oePartNumber || partOrderNumber
-      ? "AI Boost cenový průzkum smí běžet až po potvrzení kompatibility člověkem."
-      : "AI Boost cenový průzkum čeká na ověřené OE číslo.",
-    updatedAt: now
-  };
+  const { isMercedes, providerResult } = await driverPartVerificationProviderResult(env, item);
 
   try {
-    await db.batch([
-      db
-        .prepare(`
-          UPDATE driver_part_requests
-          SET
-            verified_part = ?,
-            part_order_number = ?,
-            oe_part_number = ?,
-            part_name = ?,
-            part_identification_status = ?,
-            part_verification_status = ?,
-            part_verification_source = ?,
-            parts_provider_id = ?,
-            parts_provider_status = ?,
-            parts_provider_message = ?,
-            parts_provider_error = ?,
-            part_lookup_query = ?,
-            part_lookup_result_json = ?,
-            mercedes_manual_portal_url = ?,
-            mercedes_mypartshub_url = ?,
-            price_boost_status = ?,
-            price_boost_note = ?,
-            updated_by_user_id = ?,
-            updated_at = ?
-          WHERE id = ?
-        `)
-        .bind(
-          nullableString(verifiedPart),
-          nullableString(partOrderNumber),
-          nullableString(oePartNumber),
-          nullableString(partName),
-          partIdentificationStatus,
-          partVerificationStatus,
-          nullableString(providerResult.partVerificationSource),
-          nullableString(providerResult.partsProviderId),
-          nullableString(providerResult.partsProviderStatus),
-          nullableString(providerResult.partsProviderMessage),
-          nullableString(providerResult.partsProviderError),
-          nullableString(providerResult.partLookupQuery),
-          nullableString(providerResult.resultJson),
-          nullableString(providerResult.mercedesManualPortalUrl),
-          nullableString(providerResult.mercedesMyPartsHubUrl),
-          after.priceBoostStatus,
-          nullableString(after.priceBoostNote),
-          nullableString(user?.id),
-          now,
-          item.id
-        ),
-      eventStatement(db, {
-        requestId: item.id,
-        action: isMercedes ? "verify_mercedes_part" : "skip_mercedes_part_verification",
-        user,
-        before: item,
-        after,
-        note: providerResult.partsProviderMessage || "Ověření dílu bylo zapsáno do historie."
-      })
-    ]);
-
+    await saveDriverPartVerificationResult(db, user, item, providerResult, isMercedes);
     return getDriverPartRequest(env, user, item.id);
   } catch (error) {
     throw dbError(error);

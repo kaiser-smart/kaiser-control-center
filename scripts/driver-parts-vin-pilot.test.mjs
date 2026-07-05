@@ -5,7 +5,11 @@ import {
   driverPartAiCandidateFromMatch,
   identifyProbablePartFromDescription
 } from "../functions/_lib/driver-parts-catalog.js";
-import { __test as driverPartRequestInternals } from "../functions/_lib/driver-part-requests-store.js";
+import {
+  handoffDriverPartRequest,
+  verifyMercedesDriverPartRequest,
+  __test as driverPartRequestInternals
+} from "../functions/_lib/driver-part-requests-store.js";
 import {
   sendDriverPartOrderNotification,
   __test as notificationInternals
@@ -35,6 +39,322 @@ function passengerVehicle(overrides = {}) {
     brand: "Mercedes",
     model: "CLS",
     ...overrides
+  };
+}
+
+function driverPartRequestRow(overrides = {}) {
+  return {
+    id: "driver-part-request-e2e",
+    report_id: "ND-TEST-E2E",
+    reported_at: "2026-07-05T12:44:00.000Z",
+    driver_user_id: "radim-oplustil",
+    driver_name: "Radim Opluštil",
+    driver_phone: "604 542 004",
+    vehicle_id: "vehicle-passenger-1",
+    vehicle_name: "Mercedes CLS 400 d 4matic",
+    license_plate: "2BB 8251",
+    vin: "WDD2573211A123456",
+    vehicle_brand: "mercedes",
+    defect_type: "poškozené sklo",
+    defect_description: "prasklé přední sklo",
+    damage_photo_status: "requested",
+    damage_photo_requested_at: "2026-07-05T12:44:00.000Z",
+    damage_photo_document_id: "",
+    damage_photo_note: "Šarlota požádala řidiče o fotku poškození.",
+    probable_part: "přední sklo",
+    probable_part_side: "unknown",
+    part_identification_status: "probable_part",
+    verified_part: "",
+    part_order_number: "",
+    oe_part_number: "",
+    part_name: "",
+    part_verification_status: "probable_part",
+    part_verification_source: "",
+    parts_provider_id: "partslink24",
+    parts_provider_status: "waiting_vin_pilot",
+    parts_provider_message: "AI Boost rozpoznal konkrétní díl.",
+    parts_provider_error: "",
+    part_lookup_query: "přední sklo",
+    part_lookup_result_json: "",
+    mercedes_manual_portal_url: "",
+    mercedes_mypartshub_url: "",
+    price_boost_status: "waiting_verified_part",
+    price_boost_note: "Cenový průzkum čeká na ověřené OE číslo.",
+    price_boost_checked_at: "",
+    price_boost_result_json: "",
+    status: "part_identified",
+    assigned_to_name: "",
+    assigned_to_email: "",
+    handed_off_to_patrik_at: "",
+    kamil_sms_sent_at: "",
+    ordered_at: "",
+    ordered_by_user_id: "",
+    delivered_at: "",
+    delivered_by_user_id: "",
+    service_date: "",
+    service_time: "",
+    service_technician: "",
+    service_note: "",
+    driver_sms_sent_at: "",
+    completed_at: "",
+    completed_by_user_id: "",
+    canceled_at: "",
+    canceled_by_user_id: "",
+    note: "",
+    patrik_email_status: "not_sent",
+    patrik_email_error: "",
+    kamil_sms_status: "not_sent",
+    kamil_sms_recipient: "",
+    kamil_sms_error: "",
+    driver_sms_status: "not_sent",
+    driver_sms_error: "",
+    source: "voice_vehicle_confirmed",
+    created_by_user_id: "radim-oplustil",
+    created_at: "2026-07-05T12:44:00.000Z",
+    updated_by_user_id: "radim-oplustil",
+    updated_at: "2026-07-05T12:44:00.000Z",
+    ...overrides
+  };
+}
+
+function createDriverPartTestDb(initialRows = []) {
+  const state = {
+    requests: new Map(initialRows.map((row) => [row.id, { ...row }])),
+    events: [],
+    notificationLogs: []
+  };
+
+  function normalizedSql(sql) {
+    return String(sql || "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  function requestByIdOrReportId(id, reportId = id) {
+    return [...state.requests.values()].find((row) => row.id === id || row.report_id === reportId) || null;
+  }
+
+  function statement(sql) {
+    return {
+      sql,
+      params: [],
+      bind(...params) {
+        this.params = params;
+        return this;
+      },
+      async first() {
+        const compactSql = normalizedSql(sql);
+        if (compactSql.includes("from driver_part_requests")) {
+          return requestByIdOrReportId(this.params[0], this.params[1]);
+        }
+        if (compactSql.includes("from driver_report_partslink24_searches")) {
+          return null;
+        }
+        return null;
+      },
+      async all() {
+        const compactSql = normalizedSql(sql);
+        if (compactSql.startsWith("pragma table_info(notification_logs)")) {
+          return {
+            results: [
+              "module_id",
+              "subject",
+              "message_preview",
+              "provider",
+              "provider_message_id",
+              "attempts",
+              "updated_at"
+            ].map((name) => ({ name }))
+          };
+        }
+        if (compactSql.includes("from driver_part_request_events")) {
+          return {
+            results: state.events
+              .filter((event) => event.request_id === this.params[0])
+              .slice()
+              .reverse()
+          };
+        }
+        return { results: [] };
+      },
+      async run() {
+        const compactSql = normalizedSql(sql);
+        if (compactSql.includes("update driver_part_requests set price_boost_status")) {
+          const [
+            priceBoostStatus,
+            priceBoostNote,
+            priceBoostCheckedAt,
+            priceBoostResultJson,
+            updatedByUserId,
+            updatedAt,
+            id
+          ] = this.params;
+          const row = state.requests.get(id);
+          Object.assign(row, {
+            price_boost_status: priceBoostStatus,
+            price_boost_note: priceBoostNote || "",
+            price_boost_checked_at: priceBoostCheckedAt || "",
+            price_boost_result_json: priceBoostResultJson || "",
+            updated_by_user_id: updatedByUserId || "",
+            updated_at: updatedAt
+          });
+          return { success: true };
+        }
+        if (compactSql.includes("update driver_part_requests set status = ?")) {
+          const [
+            status,
+            assignedToName,
+            assignedToEmail,
+            handedOffToPatrikAt,
+            patrikEmailStatus,
+            patrikEmailError,
+            updatedByUserId,
+            updatedAt,
+            id
+          ] = this.params;
+          const row = state.requests.get(id);
+          Object.assign(row, {
+            status,
+            assigned_to_name: assignedToName || "",
+            assigned_to_email: assignedToEmail || "",
+            handed_off_to_patrik_at: handedOffToPatrikAt || "",
+            patrik_email_status: patrikEmailStatus || "",
+            patrik_email_error: patrikEmailError || "",
+            updated_by_user_id: updatedByUserId || "",
+            updated_at: updatedAt
+          });
+          return { success: true };
+        }
+        if (compactSql.includes("update driver_part_requests set verified_part")) {
+          const [
+            verifiedPart,
+            partOrderNumber,
+            oePartNumber,
+            partName,
+            partIdentificationStatus,
+            partVerificationStatus,
+            partVerificationSource,
+            partsProviderId,
+            partsProviderStatus,
+            partsProviderMessage,
+            partsProviderError,
+            partLookupQuery,
+            partLookupResultJson,
+            mercedesManualPortalUrl,
+            mercedesMyPartsHubUrl,
+            priceBoostStatus,
+            priceBoostNote,
+            updatedByUserId,
+            updatedAt,
+            id
+          ] = this.params;
+          const row = state.requests.get(id);
+          Object.assign(row, {
+            verified_part: verifiedPart || "",
+            part_order_number: partOrderNumber || "",
+            oe_part_number: oePartNumber || "",
+            part_name: partName || "",
+            part_identification_status: partIdentificationStatus || "",
+            part_verification_status: partVerificationStatus || "",
+            part_verification_source: partVerificationSource || "",
+            parts_provider_id: partsProviderId || "",
+            parts_provider_status: partsProviderStatus || "",
+            parts_provider_message: partsProviderMessage || "",
+            parts_provider_error: partsProviderError || "",
+            part_lookup_query: partLookupQuery || "",
+            part_lookup_result_json: partLookupResultJson || "",
+            mercedes_manual_portal_url: mercedesManualPortalUrl || "",
+            mercedes_mypartshub_url: mercedesMyPartsHubUrl || "",
+            price_boost_status: priceBoostStatus || "",
+            price_boost_note: priceBoostNote || "",
+            updated_by_user_id: updatedByUserId || "",
+            updated_at: updatedAt
+          });
+          return { success: true };
+        }
+        if (compactSql.includes("insert into driver_part_request_events")) {
+          const [
+            id,
+            requestId,
+            action,
+            actorUserId,
+            actorName,
+            createdAt,
+            beforeJson,
+            afterJson,
+            note,
+            notificationChannel,
+            notificationRecipient,
+            notificationStatus,
+            notificationError
+          ] = this.params;
+          state.events.push({
+            id,
+            request_id: requestId,
+            action,
+            actor_user_id: actorUserId || "",
+            actor_name: actorName || "",
+            created_at: createdAt,
+            before_json: beforeJson || "",
+            after_json: afterJson || "",
+            note: note || "",
+            notification_channel: notificationChannel || "",
+            notification_recipient: notificationRecipient || "",
+            notification_status: notificationStatus || "",
+            notification_error: notificationError || ""
+          });
+          return { success: true };
+        }
+        if (compactSql.includes("insert into notification_logs")) {
+          state.notificationLogs.push({
+            id: this.params[0],
+            type: this.params[2],
+            channel: this.params[3],
+            recipient: this.params[4],
+            status: this.params[7],
+            subject: this.params[9],
+            provider: this.params[11],
+            providerMessageId: this.params[12]
+          });
+          return { success: true };
+        }
+        return { success: true };
+      }
+    };
+  }
+
+  return {
+    state,
+    prepare(sql) {
+      return statement(sql);
+    },
+    async batch(statements) {
+      const results = [];
+      for (const prepared of statements) {
+        results.push(await prepared.run());
+      }
+      return results;
+    }
+  };
+}
+
+function driverPartTestEnv(db, offers) {
+  return {
+    APP_ENV: "test",
+    AUTH_USERS_JSON: JSON.stringify([
+      { id: "patrik-istvanek", name: "Patrik Ištvánek", email: "patrik@example.test", role: "servis" }
+    ]),
+    SARLOTA_DRIVER_REPORTS_TEST_FLEET_JSON: JSON.stringify({
+      vehicles: [passengerVehicle()],
+      driverCandidates: [{ id: "radim-oplustil", userId: "radim-oplustil", name: "Radim Opluštil" }]
+    }),
+    SMART_ODPADY_DB: db,
+    PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({ offers }),
+    EMAIL_PROVIDER: "sendgrid",
+    SENDGRID_API_KEY: "test-sendgrid-key",
+    EMAIL_FROM: "robot@example.test",
+    PARTS_ORDER_EMAIL: "patrik@example.test",
+    PARTS_PILOT_CC_EMAIL: "oplustil@kaiserservis.cz",
+    MERCEDES_PARTS_PROVIDER_ENABLED: "true",
+    MERCEDES_PARTS_API_BASE_URL: "https://mercedes.example.test"
   };
 }
 
@@ -541,6 +861,35 @@ function passengerVehicle(overrides = {}) {
   assert.equal(probablePartWithThreeOffers.probablePartAllowed, true);
   assert.equal(probablePartWithThreeOffers.priceOfferCount, 3);
 
+  const probablePartWithVinVerificationRequired = await driverPartRequestInternals.driverPartRequestHandoffReadinessForItem({
+    OPENAI_API_KEY: "test-openai-key",
+    PARTS_ORDER_EMAIL: "patrik@example.test"
+  }, adminUser, {
+    partAiCandidate: true,
+    probablePart: "přední sklo",
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    priceBoostStatus: "candidates_found",
+    priceBoostResultJson: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+      ]
+    })
+  }, { allowProbablePartHandoff: true, requireVinPartVerification: true });
+  assert.equal(probablePartWithVinVerificationRequired.canSendEmail, false);
+  assert.equal(probablePartWithVinVerificationRequired.partVerified, false);
+  assert.equal(probablePartWithVinVerificationRequired.probablePartAllowed, false);
+  assert.equal(probablePartWithVinVerificationRequired.priceOfferCount, 3);
+  assert.equal(
+    probablePartWithVinVerificationRequired.blockers.some((blocker) => blocker.code === "driver_part_verified_part_required"),
+    true
+  );
+
   const preview = await driverPartRequestInternals.driverPartRequestPriceSearchPreviewForItem({
     PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({
       offers: [
@@ -563,11 +912,13 @@ function passengerVehicle(overrides = {}) {
   assert.equal(preview.persisted, false);
   assert.equal(preview.emailSent, false);
   assert.equal(preview.offers.length, 3);
-  assert.equal(preview.readiness.canSendEmail, true);
-  assert.equal(preview.readiness.emailPreview.offerCount, 3);
-  assert.match(preview.readiness.emailPreview.subject, /Náhradní díl k ověření: 2BB 8251/);
-  assert.match(preview.readiness.emailPreview.html, /3 nejlevnější nabídky/);
-  assert.match(preview.readiness.emailPreview.html, /https:\/\/example\.test\/a/);
+  assert.equal(preview.readiness.canSendEmail, false);
+  assert.equal(preview.readiness.vinPartVerificationRequired, true);
+  assert.equal(preview.readiness.emailPreview, null);
+  assert.equal(
+    preview.readiness.blockers.some((blocker) => blocker.code === "driver_part_verified_part_required"),
+    true
+  );
 }
 
 {
@@ -657,6 +1008,61 @@ function passengerVehicle(overrides = {}) {
   assert.equal(emailHtml.includes("probable_part"), false);
   assert.ok(emailHtml.indexOf("3 nejlevnější nabídky") < emailHtml.indexOf("Řidič:"));
 
+  let sendGridRequest = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    sendGridRequest = { url, options, body: JSON.parse(options.body) };
+    return {
+      ok: true,
+      status: 202,
+      headers: {
+        get(name) {
+          return String(name).toLowerCase() === "x-message-id" ? "sendgrid-test-message" : "";
+        }
+      }
+    };
+  };
+  try {
+    const sentEmail = await sendDriverPartOrderNotification({
+      EMAIL_PROVIDER: "sendgrid",
+      SENDGRID_API_KEY: "test-sendgrid-key",
+      EMAIL_FROM: "robot@example.test"
+    }, {
+      id: "driver-report-email-send",
+      driverName: "Radim Opluštil",
+      driverPhone: "604 542 004",
+      vehicleName: "Mercedes CLS 400 d 4matic",
+      licensePlate: "2BB 8251",
+      vin: "WDD2573211A123456",
+      defectDescription: "prasklé přední sklo",
+      probablePart: "přední sklo",
+      priceBoostResultJson: JSON.stringify({
+        offers: [
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+          { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
+          { title: "Sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+        ]
+      })
+    }, {
+      recipientEmail: "patrik@example.test",
+      ccEmail: "oplustil@kaiserservis.cz"
+    });
+
+    assert.equal(sentEmail.status, "sent");
+    assert.equal(sendGridRequest.url, "https://api.sendgrid.com/v3/mail/send");
+    assert.equal(sendGridRequest.body.personalizations[0].to[0].email, "patrik@example.test");
+    assert.equal(sendGridRequest.body.personalizations[0].cc[0].email, "oplustil@kaiserservis.cz");
+    assert.match(sendGridRequest.body.subject, /Náhradní díl k ověření: 2BB 8251/);
+    const sentHtml = sendGridRequest.body.content[0].value;
+    assert.match(sentHtml, /3 nejlevnější nabídky/);
+    assert.match(sentHtml, /https:\/\/example\.test\/a/);
+    assert.match(sentHtml, /https:\/\/example\.test\/b/);
+    assert.match(sentHtml, /https:\/\/example\.test\/c/);
+    assert.doesNotMatch(sentHtml, /probable_part|waiting_verified_part/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
   assert.deepEqual(
     notificationInternals.emailRecipients("oplustil@kaiserservis.cz; invalid; patrik@example.test,oplustil@kaiserservis.cz"),
     ["oplustil@kaiserservis.cz", "patrik@example.test"]
@@ -676,6 +1082,257 @@ function passengerVehicle(overrides = {}) {
     driverPartRequestInternals.pilotCcStatus({ PARTS_PILOT_CC_EMAIL: "oplustil@kaiserservis.cz" }, { patrikEmailStatus: "sent" }),
     "sent_or_included_by_backend"
   );
+}
+
+{
+  const verifyDb = createDriverPartTestDb([driverPartRequestRow({
+    id: "driver-part-request-mercedes-verify"
+  })]);
+  let mercedesRequest = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    mercedesRequest = { url, options, body: JSON.parse(options.body) };
+    return {
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify({
+          verified: true,
+          parts: [{
+            partNumber: "A 257 670 00 01",
+            name: "Přední sklo Mercedes CLS"
+          }]
+        });
+      }
+    };
+  };
+  let verified = null;
+  try {
+    verified = await verifyMercedesDriverPartRequest({
+      ...driverPartTestEnv(verifyDb, []),
+      MERCEDES_PARTS_PROVIDER_ENABLED: "true",
+      MERCEDES_PARTS_API_BASE_URL: "https://mercedes.example.test"
+    }, adminUser, "driver-part-request-mercedes-verify");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const row = verifyDb.state.requests.get("driver-part-request-mercedes-verify");
+  assert.equal(mercedesRequest.url, "https://mercedes.example.test/parts/search-by-vin");
+  assert.equal(mercedesRequest.body.vin, "WDD2573211A123456");
+  assert.match(mercedesRequest.body.query, /přední sklo/);
+  assert.equal(row.oe_part_number, "A 257 670 00 01");
+  assert.equal(row.part_name, "Přední sklo Mercedes CLS");
+  assert.equal(row.part_verification_status, "verified_daimler");
+  assert.equal(row.part_verification_source, "daimler");
+  assert.equal(row.parts_provider_status, "verified");
+  assert.equal(row.price_boost_status, "waiting_verified_part");
+  assert.equal(verified.oePartNumber, "A 257 670 00 01");
+  assert.equal(verified.partName, "Přední sklo Mercedes CLS");
+  assert.equal(verifyDb.state.events.some((event) => event.action === "verify_mercedes_part"), true);
+}
+
+{
+  const missingProviderDb = createDriverPartTestDb([driverPartRequestRow({
+    id: "driver-part-request-missing-provider"
+  })]);
+  let externalCalled = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    externalCalled = true;
+    throw new Error("Bez ověřeného OE se nesmí volat externí cenový ani e-mailový provider.");
+  };
+  try {
+    await assert.rejects(
+      () => handoffDriverPartRequest(
+        {
+          ...driverPartTestEnv(missingProviderDb, [
+            { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+            { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
+            { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+          ]),
+          MERCEDES_PARTS_PROVIDER_ENABLED: "",
+          MERCEDES_PARTS_API_BASE_URL: ""
+        },
+        adminUser,
+        "driver-part-request-missing-provider",
+        {
+          allowCreatorHandoff: true,
+          allowProbablePartHandoff: true,
+          runPriceBoost: true,
+          requireVinPartVerification: true,
+          requirePriceOffersForHandoff: true
+        }
+      ),
+      (error) => {
+        assert.equal(error.code, "driver_part_verified_part_required");
+        assert.match(error.message, /ověř díl nebo OE/);
+        return true;
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const row = missingProviderDb.state.requests.get("driver-part-request-missing-provider");
+  assert.equal(externalCalled, false);
+  assert.equal(row.status, "part_identified");
+  assert.equal(row.patrik_email_status, "not_sent");
+  assert.equal(row.oe_part_number, "");
+  assert.equal(row.part_verification_status, "waiting_manual_verification");
+  assert.equal(row.parts_provider_status, "not_configured");
+  assert.equal(row.price_boost_status, "not_requested");
+  assert.equal(missingProviderDb.state.events.some((event) => event.action === "handoff_to_ordering"), false);
+}
+
+{
+  const twoOfferDb = createDriverPartTestDb([driverPartRequestRow({
+    id: "driver-part-request-two-offers"
+  })]);
+  let sendGridCalled = false;
+  let mercedesCalled = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("mercedes.example.test")) {
+      mercedesCalled = true;
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            verified: true,
+            parts: [{
+              partNumber: "A 257 670 00 01",
+              name: "Přední sklo Mercedes CLS"
+            }]
+          });
+        }
+      };
+    }
+    sendGridCalled = true;
+    throw new Error("SendGrid nemá být volaný bez 3 odkazů.");
+  };
+  try {
+    await assert.rejects(
+      () => handoffDriverPartRequest(
+        driverPartTestEnv(twoOfferDb, [
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+          { title: "Přední sklo čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
+        ]),
+        adminUser,
+        "driver-part-request-two-offers",
+        {
+          allowCreatorHandoff: true,
+          allowProbablePartHandoff: true,
+          runPriceBoost: true,
+          requireVinPartVerification: true,
+          requirePriceOffersForHandoff: true
+        }
+      ),
+      (error) => {
+        assert.equal(error.code, "driver_part_price_offers_required");
+        assert.match(error.message, /3 bezpečně relevantní nabídky/);
+        return true;
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const row = twoOfferDb.state.requests.get("driver-part-request-two-offers");
+  assert.equal(mercedesCalled, true);
+  assert.equal(sendGridCalled, false);
+  assert.equal(row.status, "part_identified");
+  assert.equal(row.patrik_email_status, "not_sent");
+  assert.equal(row.oe_part_number, "A 257 670 00 01");
+  assert.equal(row.part_verification_status, "verified_daimler");
+  assert.equal(row.price_boost_status, "partial_results");
+  assert.equal(JSON.parse(row.price_boost_result_json).offers.length, 2);
+  assert.equal(twoOfferDb.state.events.some((event) => event.action === "handoff_to_ordering"), false);
+}
+
+{
+  const threeOfferDb = createDriverPartTestDb([driverPartRequestRow({
+    id: "driver-part-request-three-offers"
+  })]);
+  let sendGridRequest = null;
+  let mercedesCalled = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes("mercedes.example.test")) {
+      mercedesCalled = true;
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            verified: true,
+            parts: [{
+              partNumber: "A 257 670 00 01",
+              name: "Přední sklo Mercedes CLS"
+            }]
+          });
+        }
+      };
+    }
+    sendGridRequest = { url, options, body: JSON.parse(options.body) };
+    return {
+      ok: true,
+      status: 202,
+      headers: {
+        get(name) {
+          return String(name).toLowerCase() === "x-message-id" ? "sendgrid-handoff-test" : "";
+        }
+      }
+    };
+  };
+  let handedOff = null;
+  try {
+    handedOff = await handoffDriverPartRequest(
+      driverPartTestEnv(threeOfferDb, [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+        { title: "Použité přední sklo Mercedes CLS bazar", seller: "Bazoš", price: "3 000 Kč", url: "https://bazos.test/a" },
+        { title: "Přední sklo čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
+      ]),
+      adminUser,
+      "driver-part-request-three-offers",
+      {
+        allowCreatorHandoff: true,
+        allowProbablePartHandoff: true,
+        runPriceBoost: true,
+        requireVinPartVerification: true,
+        requirePriceOffersForHandoff: true
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const row = threeOfferDb.state.requests.get("driver-part-request-three-offers");
+  const savedOffers = JSON.parse(row.price_boost_result_json).offers;
+  assert.equal(handedOff.status, "handed_to_ordering");
+  assert.equal(handedOff.patrikEmailStatus, "sent");
+  assert.equal(mercedesCalled, true);
+  assert.equal(row.status, "handed_to_ordering");
+  assert.equal(row.patrik_email_status, "sent");
+  assert.equal(row.oe_part_number, "A 257 670 00 01");
+  assert.equal(row.part_verification_status, "verified_daimler");
+  assert.equal(row.price_boost_status, "candidates_found");
+  assert.equal(savedOffers.length, 3);
+  assert.deepEqual(savedOffers.map((offer) => offer.seller), ["Dodavatel A", "Dodavatel B", "Dodavatel C"]);
+  assert.equal(savedOffers.some((offer) => /bazo/i.test(offer.seller)), false);
+  assert.equal(sendGridRequest.url, "https://api.sendgrid.com/v3/mail/send");
+  assert.equal(sendGridRequest.body.personalizations[0].to[0].email, "patrik@example.test");
+  assert.equal(sendGridRequest.body.personalizations[0].cc[0].email, "oplustil@kaiserservis.cz");
+  const sentHtml = sendGridRequest.body.content[0].value;
+  assert.match(sentHtml, /3 nejlevnější nabídky/);
+  assert.match(sentHtml, /https:\/\/example\.test\/a/);
+  assert.match(sentHtml, /https:\/\/example\.test\/b/);
+  assert.match(sentHtml, /https:\/\/example\.test\/c/);
+  assert.doesNotMatch(sentHtml, /bazos|probable_part|waiting_verified_part/i);
+  assert.equal(threeOfferDb.state.events.some((event) => event.action === "handoff_to_ordering"), true);
+  assert.equal(threeOfferDb.state.notificationLogs.some((entry) => entry.status === "sent"), true);
 }
 
 console.log("driver parts VIN pilot tests passed");

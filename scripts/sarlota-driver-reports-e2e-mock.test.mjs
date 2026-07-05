@@ -583,6 +583,7 @@ function testVoiceHandoffRequiresPriceLinks() {
   assert.equal(options.allowCreatorHandoff, true);
   assert.equal(options.allowProbablePartHandoff, true);
   assert.equal(options.runPriceBoost, true);
+  assert.equal(options.requireVinPartVerification, true);
   assert.equal(options.requirePriceOffersForHandoff, true);
 }
 
