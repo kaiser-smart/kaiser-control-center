@@ -10040,8 +10040,8 @@ function vehicleTrackingPreviewOperationalStrip(visibleVehicles = []) {
     <section class="tracking-preview-live-strip" aria-label="Provozní stav modulu">
       <span class="tracking-preview-live-strip__icon icon-tone-green">${themePreviewIcon("route")}</span>
       <div>
-        <strong>Veřejný pracovní náhled sledování vozidel</strong>
-        <span>Demo datová sada simuluje dispečerský provoz bez přístupu k reálným GPS datům.</span>
+        <strong>Provozní stav sledování vozidel</strong>
+        <span>Dispečer vidí pohyb vozidel, stav tras a odchylky bez přepínání mimo mapu.</span>
       </div>
       <div class="tracking-preview-live-strip__states" aria-label="Souhrn provozu">
         <span class="tracking-status tracking-status--moving">${escapeHtml(`${movingCount} v pohybu`)}</span>
@@ -12585,6 +12585,9 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   const trackingModeNotice = sourceMode === "demo"
     ? (isSoftMetalPreview ? vehicleTrackingPreviewOperationalStrip(visibleVehicles) : vehicleTrackingDemoBanner())
     : "";
+  const fleetAction = isSoftMetalPreview
+    ? `<a class="primary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Otevřít Vozový park</a>`
+    : vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE);
   const compareAction = isSoftMetalPreview
     ? `<a class="secondary-link tracking-preview-compare" href="${routeHref(VEHICLE_TRACKING_BASE_ROUTE)}" data-link>Původní zobrazení</a>`
     : "";
@@ -12603,13 +12606,13 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">SMART ODPADY / SLEDOVÁNÍ VOZIDEL</div>
           <h1 id="module-title">Sledování vozidel</h1>
-          <p>Primární poloha vozidel bude z T-Cars jednotek. Demo režim zůstává jako bezpečná ukázka bez reálných GPS dat.</p>
+          <p>Dispečerský přehled polohy vozidel, tras a odchylek. Veřejný náhled používá bezpečnou ukázkovou datovou sadu bez reálných GPS dat.</p>
           <div class="module-detail__status">
             <span>Stav</span>
             <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
           </div>
           <div class="module-actions">
-            ${vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE)}
+            ${fleetAction}
             ${vehicleTrackingAction("Správa GPS napojení")}
           </div>
           ${compareAction ? `<div class="tracking-preview-actions">${compareAction}</div>` : ""}

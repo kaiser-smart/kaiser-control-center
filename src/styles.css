@@ -26317,12 +26317,12 @@ body:has(.tracking-page--soft-metal-preview) {
 
 /* Branch-only refinement: bring the real tracking module closer to the approved soft-metal preview. */
 .tracking-page--soft-metal-preview {
-  --sidebar-width-compact: 88px;
-  --sidebar-width-expanded: 256px;
+  --sidebar-width-compact: 84px;
+  --sidebar-width-expanded: 244px;
   --sidebar-item-height: 58px;
   --sidebar-item-radius: var(--radius-md);
   --sidebar-icon-size: 30px;
-  --sidebar-icon-holder: 50px;
+  --sidebar-icon-holder: 48px;
   --sidebar-padding: 12px;
   --sidebar-item-padding: 7px;
   --sidebar-item-gap: 12px;
@@ -26350,8 +26350,8 @@ body:has(.tracking-page--soft-metal-preview) {
   --tracking-panel-bg: linear-gradient(145deg, #ffffff 0%, #f3f5f4 52%, #e9eeeb 100%);
   --tracking-card-bg: linear-gradient(145deg, #ffffff 0%, #f6f8f7 58%, #eef2ef 100%);
   --tracking-inset-bg: linear-gradient(145deg, #e8edea 0%, #f8faf8 100%);
-  --tracking-soft-shadow: 14px 16px 34px rgba(38, 48, 43, 0.12), -9px -9px 24px rgba(255, 255, 255, 0.9);
-  --tracking-soft-shadow-sm: 9px 11px 23px rgba(38, 48, 43, 0.09), -6px -6px 18px rgba(255, 255, 255, 0.86);
+  --tracking-soft-shadow: 12px 14px 30px rgba(38, 48, 43, 0.11), -8px -8px 22px rgba(255, 255, 255, 0.88);
+  --tracking-soft-shadow-sm: 8px 10px 20px rgba(38, 48, 43, 0.08), -5px -5px 16px rgba(255, 255, 255, 0.84);
   --tracking-inset-shadow: inset 5px 5px 12px rgba(38, 48, 43, 0.09), inset -5px -5px 14px rgba(255, 255, 255, 0.9);
   --tracking-control-height: 46px;
   width: min(1500px, calc(100% - 28px));
@@ -26515,8 +26515,8 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item--active,
 .tracking-page--soft-metal-preview .tracking-preview-nav-item[aria-current="page"] {
-  border-color: color-mix(in srgb, var(--icon-green) 42%, var(--border-soft));
-  background: color-mix(in srgb, var(--icon-green) 11%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--icon-green) 34%, var(--border-soft));
+  background: color-mix(in srgb, var(--icon-green) 9%, var(--surface-raised));
   box-shadow: var(--tracking-inset-shadow);
   color: var(--text-main);
 }
@@ -26650,8 +26650,8 @@ body:has(.tracking-page--soft-metal-preview) {
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric--active {
-  border-color: color-mix(in srgb, var(--icon-green) 42%, var(--border-soft));
-  background: color-mix(in srgb, var(--icon-green) 8%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--icon-green) 34%, var(--border-soft));
+  background: color-mix(in srgb, var(--icon-green) 7%, var(--surface-raised));
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric__copy {
@@ -26740,12 +26740,12 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .module-detail {
   gap: var(--space-xl);
-  padding: clamp(var(--space-xl), 2.4vw, 34px);
+  padding: clamp(22px, 2.1vw, 30px);
 }
 
 .tracking-page--soft-metal-preview .module-detail__icon {
-  width: var(--icon-holder-xl);
-  height: var(--icon-holder-xl);
+  width: 88px;
+  height: 88px;
   border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--icon-green) 12%, var(--surface-raised));
   box-shadow: var(--tracking-inset-shadow);
@@ -26753,8 +26753,8 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .module-detail__icon svg,
 .tracking-page--soft-metal-preview .module-detail__icon img {
-  width: var(--icon-xl);
-  height: var(--icon-xl);
+  width: 52px;
+  height: 52px;
 }
 
 .tracking-page--soft-metal-preview .module-detail h1 {
@@ -26804,7 +26804,7 @@ body:has(.tracking-page--soft-metal-preview) {
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--active {
-  background: color-mix(in srgb, var(--icon-green) 10%, var(--surface-raised));
+  background: color-mix(in srgb, var(--icon-green) 8%, var(--surface-raised));
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--passive {
@@ -27041,9 +27041,15 @@ body:has(.tracking-page--soft-metal-preview) {
     inset: auto max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
     z-index: 40;
     width: auto;
+    max-width: none;
     min-height: 0;
-    padding: 8px;
+    padding: 7px;
     border-radius: var(--radius-xl);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--expanded,
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact {
+    width: auto;
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-sidebar__head {
@@ -27057,9 +27063,9 @@ body:has(.tracking-page--soft-metal-preview) {
 
   .tracking-page--soft-metal-preview .tracking-preview-nav-item {
     grid-template-columns: 1fr;
-    min-height: 56px;
+    min-height: 54px;
     justify-items: center;
-    padding: 5px;
+    padding: 4px;
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-nav-item__label {
@@ -27072,8 +27078,8 @@ body:has(.tracking-page--soft-metal-preview) {
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-nav-item__icon {
-    width: 46px;
-    height: 46px;
+    width: 44px;
+    height: 44px;
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-live-strip {
