@@ -1604,31 +1604,44 @@ function themeSystemPreviewPage() {
   return `
     <main class="theme-system smart-tablet-ui theme-preview-page" data-theme-preview>
       <div class="app-shell">
-        <aside class="app-sidebar" aria-label="Navigace náhledu">
-          <a class="nav-item nav-item-active" href="${routeHref(DESIGN_THEME_SYSTEM_ROUTE)}" data-link aria-current="page">
-            <span class="nav-icon">${themePreviewIcon("dashboard")}</span>
-            <span class="nav-label">Souhrn</span>
-          </a>
-          <span class="nav-item">
-            <span class="nav-icon">${themePreviewIcon("truck")}</span>
-            <span class="nav-label">Vozidla</span>
-          </span>
-          <span class="nav-item">
-            <span class="nav-icon">${themePreviewIcon("route")}</span>
-            <span class="nav-label">Trasy</span>
-          </span>
-          <span class="nav-item">
-            <span class="nav-icon">${themePreviewIcon("warning")}</span>
+        <aside class="app-sidebar sidebar--compact" aria-label="Navigace náhledu">
+          <input class="sidebar-state-input" type="checkbox" id="sidebar-state-theme" aria-label="Rozšířit levé menu">
+          <div class="sidebar-header">
+            <span class="sidebar-brand">
+              <span class="sidebar-brand-mark">${themePreviewIcon("dashboard")}</span>
+              <span class="sidebar-brand-text">Smart</span>
+            </span>
+            <label class="sidebar-toggle" for="sidebar-state-theme" title="Přepnout menu">
+              ${themePreviewIcon("plus")}
+              <span class="sidebar-toggle-label">Menu</span>
+            </label>
+          </div>
+          <nav class="sidebar-nav" aria-label="Moduly">
+            <a class="nav-item nav-item-active" href="${routeHref(DESIGN_THEME_SYSTEM_ROUTE)}" data-link aria-current="page" title="Souhrn">
+              <span class="nav-icon">${themePreviewIcon("dashboard")}</span>
+              <span class="nav-label">Souhrn</span>
+            </a>
+            <span class="nav-item" title="Vozidla">
+              <span class="nav-icon">${themePreviewIcon("truck")}</span>
+              <span class="nav-label">Vozidla</span>
+            </span>
+            <span class="nav-item" title="Trasy">
+              <span class="nav-icon">${themePreviewIcon("route")}</span>
+              <span class="nav-label">Trasy</span>
+            </span>
+            <span class="nav-item" title="Nahlášení">
+              <span class="nav-icon">${themePreviewIcon("warning")}</span>
               <span class="nav-label">Nahlášení</span>
-          </span>
-          <span class="nav-item">
-            <span class="nav-icon">${themePreviewIcon("marker")}</span>
-            <span class="nav-label">Ikony</span>
-          </span>
-          <a class="nav-item" href="${routeHref("/")}" data-link>
-            <span class="nav-icon">${themePreviewIcon("app")}</span>
-            <span class="nav-label">Aplikace</span>
-          </a>
+            </span>
+            <span class="nav-item" title="Ikony">
+              <span class="nav-icon">${themePreviewIcon("marker")}</span>
+              <span class="nav-label">Ikony</span>
+            </span>
+            <a class="nav-item" href="${routeHref("/")}" data-link title="Aplikace">
+              <span class="nav-icon">${themePreviewIcon("app")}</span>
+              <span class="nav-label">Aplikace</span>
+            </a>
+          </nav>
         </aside>
 
         <section class="app-content" aria-labelledby="theme-preview-title">

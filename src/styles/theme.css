@@ -69,10 +69,23 @@
   --space-2xl: 30px;
 
   --container-max: 1360px;
-  --sidebar-width: 96px;
+  --sidebar-width-compact: 84px;
+  --sidebar-width-expanded: 232px;
+  --sidebar-current-width: var(--sidebar-width-compact);
+  --sidebar-item-height: 56px;
+  --sidebar-item-radius: var(--radius-md);
+  --sidebar-icon-size: 22px;
+  --sidebar-icon-holder: 42px;
+  --sidebar-icon-holder-half: 21px;
+  --sidebar-padding: var(--space-md);
+  --sidebar-item-padding: 6px;
+  --sidebar-item-gap: var(--space-md);
+  --sidebar-hover-bg: var(--surface-soft);
+  --sidebar-active-bg: var(--surface-active);
+  --sidebar-transition: 240ms ease;
   --control-height: 48px;
   --control-height-lg: 56px;
-  --nav-item-height: 68px;
+  --nav-item-height: var(--sidebar-item-height);
   --icon-size: 22px;
   --icon-size-sm: 18px;
   --icon-size-lg: 58px;
@@ -170,12 +183,18 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .app-shell {
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-current-width) minmax(0, 1fr);
   gap: var(--space-xl);
   width: min(100%, var(--container-max));
   min-height: 100vh;
   margin-inline: auto;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl));
+  transition: grid-template-columns var(--sidebar-transition);
+}
+
+:where(.theme-system, .smart-tablet-ui) .app-shell:has(.sidebar-state-input:checked),
+:where(.theme-system, .smart-tablet-ui) .app-shell:has(.sidebar--expanded) {
+  --sidebar-current-width: var(--sidebar-width-expanded);
 }
 
 :where(.theme-system, .smart-tablet-ui) .app-sidebar,
@@ -196,11 +215,18 @@ body:has(.smart-tablet-ui) {
   position: sticky;
   top: clamp(var(--space-lg), 2vw, var(--space-2xl));
   align-self: start;
-  display: grid;
-  gap: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: var(--sidebar-current-width);
   min-height: calc(100vh - 2 * clamp(var(--space-lg), 2vw, var(--space-2xl)));
-  padding: var(--space-md);
+  overflow: hidden;
+  padding: var(--sidebar-padding);
   border-radius: var(--radius-xl);
+  transition:
+    width var(--sidebar-transition),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
 }
 
 :where(.theme-system, .smart-tablet-ui) .app-content,
@@ -321,17 +347,89 @@ body:has(.smart-tablet-ui) {
   padding: 0;
 }
 
+:where(.theme-system, .smart-tablet-ui) .sidebar-state-input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sidebar-item-gap);
+  min-height: var(--sidebar-item-height);
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sidebar-item-gap);
+  min-width: 0;
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-brand-mark,
+:where(.theme-system, .smart-tablet-ui) .sidebar-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: var(--sidebar-icon-holder);
+  height: var(--sidebar-icon-holder);
+  border: 1px solid var(--border-highlight);
+  border-radius: var(--sidebar-item-radius);
+  background: var(--surface-inset-gradient);
+  box-shadow: var(--shadow-inset-sm);
+  color: var(--text-strong);
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-brand-text,
+:where(.theme-system, .smart-tablet-ui) .sidebar-toggle-label {
+  color: var(--text-strong);
+  font-size: 0.92rem;
+  font-weight: var(--font-weight-strong);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-toggle {
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-toggle:hover {
+  border-color: var(--border-medium);
+  background: var(--sidebar-hover-bg);
+  box-shadow: var(--shadow-raised-sm);
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-state-input:focus-visible + .sidebar-header .sidebar-toggle {
+  box-shadow: var(--focus-ring), var(--shadow-inset-sm);
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-nav {
+  display: grid;
+  gap: var(--space-sm);
+}
+
 :where(.theme-system, .smart-tablet-ui) .nav-item {
   display: grid;
-  place-items: center;
-  gap: var(--space-xs);
+  grid-template-columns: var(--sidebar-icon-holder);
+  align-items: center;
+  justify-content: center;
+  gap: 0;
   min-height: var(--nav-item-height);
-  padding: var(--space-sm);
+  padding: var(--sidebar-item-padding);
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: var(--sidebar-item-radius);
   color: var(--text-muted);
   text-align: center;
   text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
   transition:
     background var(--transition-fast),
     border-color var(--transition-fast),
@@ -341,17 +439,29 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .nav-item:hover {
   border-color: var(--border-highlight);
-  background: var(--surface-soft);
+  background: var(--sidebar-hover-bg);
   color: var(--text-main);
   box-shadow: var(--shadow-raised-sm);
+}
+
+:where(.theme-system, .smart-tablet-ui) .nav-item:focus-visible {
+  border-color: var(--border-accent);
+  box-shadow: var(--focus-ring), var(--shadow-raised-sm);
 }
 
 :where(.theme-system, .smart-tablet-ui) .nav-item-active,
 :where(.theme-system, .smart-tablet-ui) .nav-item[aria-current="page"] {
   border-color: var(--border-accent);
-  background: var(--surface-active);
+  background: var(--sidebar-active-bg);
   box-shadow: var(--shadow-inset-sm);
   color: var(--brand-accent);
+}
+
+:where(.theme-system, .smart-tablet-ui) .nav-item[aria-disabled="true"],
+:where(.theme-system, .smart-tablet-ui) .nav-item-disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  box-shadow: none;
 }
 
 :where(.theme-system, .smart-tablet-ui) .nav-icon,
@@ -361,20 +471,78 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .theme-map-node {
   display: inline-grid;
   place-items: center;
-  width: var(--icon-holder);
-  height: var(--icon-holder);
+  width: var(--sidebar-icon-holder);
+  height: var(--sidebar-icon-holder);
   border: 1px solid var(--border-highlight);
-  border-radius: var(--radius-md);
+  border-radius: var(--sidebar-item-radius);
   background: var(--surface-inset-gradient);
   box-shadow: var(--shadow-inset-sm);
   color: var(--text-strong);
 }
 
 :where(.theme-system, .smart-tablet-ui) .nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   color: currentColor;
-  font-size: 0.75rem;
+  font-size: 0.88rem;
   font-weight: var(--font-weight-strong);
-  line-height: 1.15;
+  line-height: 1.2;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity var(--sidebar-transition);
+}
+
+:where(.theme-system, .smart-tablet-ui) .sidebar-brand-text,
+:where(.theme-system, .smart-tablet-ui) .sidebar-toggle-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  opacity: 0;
+}
+
+:where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .sidebar-header,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .sidebar-header {
+  justify-content: space-between;
+}
+
+:where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .nav-item,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .nav-item {
+  grid-template-columns: var(--sidebar-icon-holder) minmax(0, 1fr);
+  justify-content: stretch;
+  gap: var(--sidebar-item-gap);
+  padding-inline: var(--space-sm) var(--space-md);
+  text-align: left;
+}
+
+:where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .nav-label,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .nav-label,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .sidebar-brand-text,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .sidebar-brand-text,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .sidebar-toggle-label,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .sidebar-toggle-label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  opacity: 1;
+}
+
+:where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .sidebar-toggle,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .sidebar-toggle {
+  display: inline-flex;
+  justify-content: center;
+  width: auto;
+  padding-inline: var(--space-md);
+  gap: var(--space-sm);
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-icon,
@@ -791,8 +959,8 @@ body:has(.smart-tablet-ui) {
   left: var(--x);
   top: var(--y);
   z-index: 1;
-  margin-left: calc(-1 * var(--icon-holder-half));
-  margin-top: calc(-1 * var(--icon-holder-half));
+  margin-left: calc(-1 * var(--sidebar-icon-holder-half));
+  margin-top: calc(-1 * var(--sidebar-icon-holder-half));
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-map-node-main {
@@ -952,18 +1120,65 @@ body:has(.smart-tablet-ui) {
 
 @media (max-width: 900px) {
   :where(.theme-system, .smart-tablet-ui) .app-shell {
-    grid-template-columns: 1fr;
+    --sidebar-current-width: var(--sidebar-width-compact);
+    grid-template-columns: var(--sidebar-width-compact) minmax(0, 1fr);
     padding: var(--space-lg);
   }
 
   :where(.theme-system, .smart-tablet-ui) .app-sidebar {
-    position: static;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(78px, 1fr);
-    min-height: auto;
-    overflow-x: auto;
-    padding: var(--space-sm);
-    border-radius: var(--radius-lg);
+    width: var(--sidebar-width-compact);
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .sidebar-toggle {
+    display: none;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar .sidebar-header {
+    justify-content: center;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar .nav-item {
+    grid-template-columns: var(--sidebar-icon-holder);
+    justify-content: center;
+    gap: 0;
+    padding: var(--sidebar-item-padding);
+    text-align: center;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .nav-item,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .nav-item {
+    grid-template-columns: var(--sidebar-icon-holder);
+    justify-content: center;
+    gap: 0;
+    padding: var(--sidebar-item-padding);
+    text-align: center;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar .nav-label,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar .sidebar-brand-text,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar .sidebar-toggle-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    opacity: 0;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .nav-label,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .sidebar-brand-text,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .sidebar-toggle-label,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .nav-label,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .sidebar-brand-text,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .sidebar-toggle-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    opacity: 0;
   }
 
   :where(.theme-system, .smart-tablet-ui) .theme-control-grid,
@@ -975,6 +1190,59 @@ body:has(.smart-tablet-ui) {
 @media (max-width: 720px) {
   :where(.theme-system, .smart-tablet-ui) {
     font-size: 14px;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .app-shell {
+    display: block;
+    width: 100%;
+    min-height: 100vh;
+    padding: var(--space-lg) var(--space-lg) calc(var(--sidebar-item-height) + 42px);
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar {
+    position: fixed;
+    inset: auto var(--space-md) var(--space-md);
+    z-index: 20;
+    width: auto;
+    min-height: auto;
+    padding: var(--space-sm);
+    border-radius: var(--radius-lg);
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .sidebar-header {
+    display: none;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .sidebar-nav {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(52px, 1fr);
+    gap: var(--space-xs);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .nav-item {
+    min-height: 52px;
+    min-width: 52px;
+    padding: var(--space-xs);
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .nav-item,
+  :where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .nav-item {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: var(--space-xs);
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .nav-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  :where(.theme-system, .smart-tablet-ui) .nav-icon .theme-icon-img {
+    width: 20px;
+    height: 20px;
   }
 
   :where(.theme-system, .smart-tablet-ui) .app-header,

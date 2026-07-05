@@ -12,12 +12,25 @@
 </head>
 <body class="theme-system smart-tablet-ui theme-preview-page">
   <main class="app-shell">
-    <aside class="app-sidebar" aria-label="Navigace náhledu">
-      <span class="nav-item nav-item-active" aria-current="page"><span class="nav-icon"><img class="theme-icon-img" src="./icons/001.svg" alt="" aria-hidden="true"></span><span class="nav-label">Souhrn</span></span>
-      <span class="nav-item"><span class="nav-icon"><img class="theme-icon-img" src="./icons/002.svg" alt="" aria-hidden="true"></span><span class="nav-label">Vozidla</span></span>
-      <span class="nav-item"><span class="nav-icon"><img class="theme-icon-img" src="./icons/003.svg" alt="" aria-hidden="true"></span><span class="nav-label">Trasy</span></span>
-      <span class="nav-item"><span class="nav-icon"><img class="theme-icon-img" src="./icons/004.svg" alt="" aria-hidden="true"></span><span class="nav-label">Nahlášení</span></span>
-      <span class="nav-item"><span class="nav-icon"><img class="theme-icon-img" src="./icons/005.svg" alt="" aria-hidden="true"></span><span class="nav-label">Ikony</span></span>
+    <aside class="app-sidebar sidebar--compact" aria-label="Navigace náhledu">
+      <input class="sidebar-state-input" type="checkbox" id="sidebar-state-preview" aria-label="Rozšířit levé menu">
+      <div class="sidebar-header">
+        <span class="sidebar-brand">
+          <span class="sidebar-brand-mark"><img class="theme-icon-img" src="./icons/001.svg" alt="" aria-hidden="true"></span>
+          <span class="sidebar-brand-text">Smart</span>
+        </span>
+        <label class="sidebar-toggle" for="sidebar-state-preview" title="Přepnout menu">
+          <img class="theme-icon-img" src="./icons/016.svg" alt="" aria-hidden="true">
+          <span class="sidebar-toggle-label">Menu</span>
+        </label>
+      </div>
+      <nav class="sidebar-nav" aria-label="Moduly">
+        <span class="nav-item nav-item-active" aria-current="page" title="Souhrn"><span class="nav-icon"><img class="theme-icon-img" src="./icons/001.svg" alt="" aria-hidden="true"></span><span class="nav-label">Souhrn</span></span>
+        <span class="nav-item" title="Vozidla"><span class="nav-icon"><img class="theme-icon-img" src="./icons/002.svg" alt="" aria-hidden="true"></span><span class="nav-label">Vozidla</span></span>
+        <span class="nav-item" title="Trasy"><span class="nav-icon"><img class="theme-icon-img" src="./icons/003.svg" alt="" aria-hidden="true"></span><span class="nav-label">Trasy</span></span>
+        <span class="nav-item" title="Nahlášení"><span class="nav-icon"><img class="theme-icon-img" src="./icons/004.svg" alt="" aria-hidden="true"></span><span class="nav-label">Nahlášení</span></span>
+        <span class="nav-item" title="Ikony"><span class="nav-icon"><img class="theme-icon-img" src="./icons/005.svg" alt="" aria-hidden="true"></span><span class="nav-label">Ikony</span></span>
+      </nav>
     </aside>
 
     <section class="app-content" aria-labelledby="theme-preview-title">
