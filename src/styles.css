@@ -3666,6 +3666,7 @@ h1 {
 .collection-routes-driver-mode__dashboard,
 .collection-routes-driver-mode__status-grid,
 .collection-routes-driver-mode__primary-actions,
+.collection-routes-driver-mode__support-actions,
 .collection-routes-driver-mode__bottom-bar,
 .collection-routes-driver-mode__problem-grid > div {
   display: grid;
@@ -3885,6 +3886,16 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.collection-routes-driver-mode__task-label {
+  display: block;
+  margin: 12px 0 5px;
+  color: var(--driver-muted);
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .collection-routes-driver-mode__facts {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 10px;
@@ -3928,18 +3939,19 @@ h1 {
 
 .collection-routes-driver-mode__controls {
   display: grid;
-  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 .collection-routes-driver-mode__controls .primary-action,
-.collection-routes-driver-mode__controls .secondary-link {
-  min-height: 70px;
+.collection-routes-driver-mode__controls .secondary-link,
+.collection-routes-driver-mode__controls .collection-routes-driver-action {
+  min-height: 54px;
   border-color: var(--driver-line);
   border-radius: 8px;
   background: var(--driver-panel);
   color: var(--driver-text);
-  font-size: 1.08rem;
+  font-size: 0.92rem;
 }
 
 .collection-routes-driver-mode__controls .primary-action {
@@ -3948,12 +3960,21 @@ h1 {
 }
 
 .collection-routes-driver-mode__primary-actions {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
-  min-height: 88px;
-  font-size: 1.18rem;
+  min-height: 138px;
+  font-size: 1.72rem;
+}
+
+.collection-routes-driver-mode__support-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.collection-routes-driver-mode__support-actions .collection-routes-driver-action {
+  min-height: 76px;
+  font-size: 1.06rem;
 }
 
 .collection-routes-driver-action--navigate {
@@ -3963,9 +3984,10 @@ h1 {
 }
 
 .collection-routes-driver-action--done {
-  border-color: rgba(123, 211, 63, 0.58);
-  background: rgba(123, 211, 63, 0.18);
-  color: var(--driver-green);
+  border-color: #9bea58;
+  background: var(--driver-green);
+  color: #071107;
+  box-shadow: 0 14px 32px rgba(123, 211, 63, 0.26);
 }
 
 .collection-routes-driver-action--problem,
@@ -4225,7 +4247,8 @@ h1 {
   }
 
   .collection-routes-driver-mode__tabs,
-  .collection-routes-driver-mode__primary-actions,
+  .collection-routes-driver-mode__support-actions,
+  .collection-routes-driver-mode__controls,
   .collection-routes-driver-mode__bottom-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4246,7 +4269,8 @@ h1 {
   .collection-routes-driver-action,
   .collection-routes-driver-tab,
   .collection-routes-driver-mode__controls .primary-action,
-  .collection-routes-driver-mode__controls .secondary-link {
+  .collection-routes-driver-mode__controls .secondary-link,
+  .collection-routes-driver-mode__controls .collection-routes-driver-action {
     min-height: 68px;
   }
 }
@@ -4257,6 +4281,7 @@ h1 {
   .collection-routes-driver-mode__hero-grid,
   .collection-routes-driver-mode__tabs,
   .collection-routes-driver-mode__primary-actions,
+  .collection-routes-driver-mode__support-actions,
   .collection-routes-driver-mode__bottom-bar,
   .collection-routes-driver-mode__problem-grid > div,
   .collection-routes-driver-mode__facts,
@@ -4597,6 +4622,16 @@ h1 {
   font-size: 1.22rem;
 }
 
+.collection-routes-driver-mode__task-label {
+  display: block;
+  margin: 12px 0 5px;
+  color: var(--driver-muted);
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .collection-routes-driver-mode__stop small {
   display: block;
   margin-top: 10px;
@@ -4632,13 +4667,24 @@ h1 {
 }
 
 .collection-routes-driver-mode__primary-actions {
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
 .collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
-  min-height: 112px;
+  min-height: 138px;
   border-width: 2px;
-  font-size: 1.35rem;
+  font-size: 1.72rem;
+}
+
+.collection-routes-driver-mode__support-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.collection-routes-driver-mode__support-actions .collection-routes-driver-action {
+  min-height: 76px;
+  font-size: 1.06rem;
 }
 
 .collection-routes-driver-action--done {
@@ -4660,14 +4706,15 @@ h1 {
 }
 
 .collection-routes-driver-mode__controls {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
 .collection-routes-driver-mode__controls .primary-action,
-.collection-routes-driver-mode__controls .secondary-link {
-  min-height: 50px;
-  font-size: 0.98rem;
+.collection-routes-driver-mode__controls .secondary-link,
+.collection-routes-driver-mode__controls .collection-routes-driver-action {
+  min-height: 54px;
+  font-size: 0.92rem;
 }
 
 .collection-routes-driver-mode__progress {
