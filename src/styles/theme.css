@@ -73,8 +73,7 @@
   --shadow-soft: 0 10px 24px rgba(31, 41, 55, 0.10);
   --shadow-inset: inset 3px 3px 7px rgba(65, 73, 88, 0.17), inset -3px -3px 7px rgba(255, 255, 255, 0.74);
   --shadow-inset-sm: inset 2px 2px 5px rgba(65, 73, 88, 0.16), inset -2px -2px 5px rgba(255, 255, 255, 0.70);
-  --shadow-accent: 0 10px 22px color-mix(in srgb, var(--brand-accent) 24%, transparent);
-  --focus-ring: 0 0 0 4px color-mix(in srgb, var(--brand-accent) 24%, transparent);
+  --focus-ring: 0 0 0 3px rgba(52, 64, 82, 0.24);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -301,7 +300,7 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .soft-cell.is-active {
   border-color: var(--border-accent);
   background: var(--surface-active);
-  box-shadow: var(--shadow-raised-sm), var(--shadow-accent);
+  box-shadow: var(--shadow-raised-sm);
 }
 
 :where(.theme-system, .smart-tablet-ui) .btn {
@@ -350,7 +349,7 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .btn-success {
   border-color: var(--border-accent);
   background: var(--brand-accent);
-  box-shadow: var(--shadow-accent);
+  box-shadow: var(--shadow-raised-sm);
   color: var(--brand-accent-contrast);
 }
 
@@ -358,7 +357,7 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .btn-success:hover {
   background: color-mix(in srgb, var(--brand-accent) 92%, #000000);
   border-color: var(--border-accent);
-  box-shadow: var(--shadow-accent), var(--shadow-raised-sm);
+  box-shadow: var(--shadow-raised);
 }
 
 :where(.theme-system, .smart-tablet-ui) .btn-secondary {
@@ -743,7 +742,6 @@ body:has(.smart-tablet-ui) {
   height: 8px;
   border-radius: var(--radius-pill);
   background: currentColor;
-  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 14%, transparent);
 }
 
 :where(.theme-system, .smart-tablet-ui) .status-online {
@@ -1122,7 +1120,6 @@ body:has(.smart-tablet-ui) {
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--brand-accent);
-  box-shadow: var(--shadow-accent);
   transform: rotate(-8deg);
 }
 
@@ -1171,7 +1168,7 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .list-card[aria-current="true"] {
   border-color: var(--border-accent);
   background: var(--surface-active);
-  box-shadow: var(--shadow-raised-sm), var(--shadow-accent);
+  box-shadow: var(--shadow-raised-sm);
 }
 
 :where(.theme-system, .smart-tablet-ui) .list-card-active .list-index,
