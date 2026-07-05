@@ -72,6 +72,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 ## Ridicsky tablet
 
 - ROZPRACOVANO - Faze 2C ma v hlavni zalozce Svozove trasy tlacitko Ridicsky tablet a read-only kabinovy rezim aktualniho filtru; nic nepotvrzuje, nezapisuje, nespousti GPS, T-Cars, navigaci, SMS/e-maily, automatizace ani ostre trasy.
+- ROZPRACOVANO - Faze 2D ma dokumentovany navrh ostreho tabletoveho rezimu vcetne DB/API/auditu/offline sync/GPS/T-Cars bran, ale bez implementace zapisu.
 - NEZACATO - ostry tabletovy rezim s potvrzovanim svozu, fotkami, GPS stopou, offline synchronizaci a dispecerskym auditem.
 
 ## T-Cars
@@ -106,6 +107,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 - NEZACATO - pro Trasy svozu zatim zadny cron/worker/queue.
 - NEZACATO - pred ostrou automatizaci musi existovat cloud runner, dedupe a audit.
+- BLOKOVANO - Faze 2D ostrych zapisu vyzaduje samostatne potvrzeni DB migraci, API smlouvy, roli, auditnich pravidel a konfliktni logiky.
 
 ## Produkce
 
