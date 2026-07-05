@@ -482,6 +482,21 @@ export function driverPartRequestSourceHasManualVehicleReview(source = "") {
   return cleanString(source).includes("manual_vehicle_review");
 }
 
+function driverPartRequestConfirmVehicleSource(source = "") {
+  const current = cleanString(source) || "manual";
+  const confirmed = current.includes("manual_vehicle_review")
+    ? current.replaceAll("manual_vehicle_review", "vehicle_confirmed")
+    : `${current}_vehicle_confirmed`;
+  return confirmed === "vehicle_confirmed" ? "manual_vehicle_confirmed" : confirmed;
+}
+
+function appendUniqueNote(note = "", addition = "") {
+  const current = cleanString(note);
+  const next = cleanString(addition);
+  if (!next || current.includes(next)) return current;
+  return [current, next].filter(Boolean).join(" ");
+}
+
 function eventStatement(db, { requestId, action, user, before, after, note, notification = null }) {
   return db
     .prepare(`
@@ -1586,13 +1601,34 @@ export async function updateDriverPartManualVerification(env, user, id, payload 
 
   const { db, item } = await requestForUser(env, id, user);
   const now = new Date().toISOString();
+  const confirmVehicle = truthyFlag(payload.vehicleManuallyConfirmed || payload.vehicleConfirmed || payload.confirmVehicle);
+  if (confirmVehicle) {
+    if (!item.licensePlate || !item.vehicleName) {
+      throw new DriverPartRequestsStoreError(
+        "Bez SPZ nebo názvu vozidla nejde vozidlo ručně potvrdit.",
+        400,
+        "driver_part_manual_vehicle_required"
+      );
+    }
+    if (item.licensePlateVerified !== true) {
+      throw new DriverPartRequestsStoreError(
+        "SPZ není ověřená ve Vozovém parku. Nejdřív oprav SPZ nebo vozidlo.",
+        400,
+        "driver_part_manual_vehicle_plate_not_verified"
+      );
+    }
+  }
   const verifiedPart = cleanString(payload.verifiedPart || item.verifiedPart);
   const oePartNumber = cleanString(payload.oePartNumber || payload.oeNumber || item.oePartNumber);
   const partName = cleanString(payload.partName || item.partName);
   const partOrderNumber = cleanString(payload.partOrderNumber || item.partOrderNumber || oePartNumber);
   const hasManualData = Boolean(verifiedPart || oePartNumber || partName || partOrderNumber);
   const partVerificationStatus = hasManualData ? "verified_manual" : "waiting_manual_verification";
-  const note = cleanString(payload.note || item.note);
+  const source = confirmVehicle ? driverPartRequestConfirmVehicleSource(item.source) : item.source;
+  const note = appendUniqueNote(
+    payload.note || item.note,
+    confirmVehicle ? "Vozidlo ručně potvrzeno dispečerem proti Vozovému parku." : ""
+  );
   const after = {
     ...item,
     verifiedPart,
@@ -1607,6 +1643,9 @@ export async function updateDriverPartManualVerification(env, user, id, payload 
     priceBoostNote: hasManualData
       ? "AI Boost cenový průzkum smí běžet až po potvrzení kompatibility člověkem."
       : item.priceBoostNote,
+    source,
+    manualVehicleReview: driverPartRequestSourceHasManualVehicleReview(source),
+    licensePlateVerified: !source.includes("unverified_plate"),
     updatedAt: now
   };
 
@@ -1626,6 +1665,7 @@ export async function updateDriverPartManualVerification(env, user, id, payload 
             note = ?,
             price_boost_status = ?,
             price_boost_note = ?,
+            source = ?,
             updated_by_user_id = ?,
             updated_at = ?
           WHERE id = ?
@@ -1641,6 +1681,7 @@ export async function updateDriverPartManualVerification(env, user, id, payload 
           nullableString(note),
           after.priceBoostStatus,
           nullableString(after.priceBoostNote),
+          after.source,
           nullableString(user?.id),
           now,
           item.id
@@ -1651,9 +1692,12 @@ export async function updateDriverPartManualVerification(env, user, id, payload 
         user,
         before: item,
         after,
-        note: hasManualData
-          ? "Díl byl ručně ověřen nebo doplněn oprávněnou osobou."
-          : "Díl zůstává k ručnímu ověření."
+        note: [
+          confirmVehicle ? "Vozidlo bylo ručně potvrzeno proti Vozovému parku." : "",
+          hasManualData
+            ? "Díl byl ručně ověřen nebo doplněn oprávněnou osobou."
+            : "Díl zůstává k ručnímu ověření."
+        ].filter(Boolean).join(" ")
       })
     ]);
 
@@ -1886,8 +1930,10 @@ export function driverPartRequestPermissionSummary(user) {
 
 export const __test = {
   driverPartVinPilotState,
+  driverPartRequestConfirmVehicleSource,
   driverPartRequestHasVerifiedPartForHandoff,
   driverPartRequestPatrikHandoffEligibility,
+  driverPartRequestSourceHasManualVehicleReview,
   pilotCcStatus,
   driverPartVehicleDisplayName,
   driverPartVehicleNameLooksLikePlate,

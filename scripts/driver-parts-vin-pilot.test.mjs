@@ -178,6 +178,40 @@ function passengerVehicle(overrides = {}) {
 }
 
 {
+  const source = driverPartRequestInternals.driverPartRequestConfirmVehicleSource("voice_manual_vehicle_review");
+  assert.equal(source, "voice_vehicle_confirmed");
+  assert.equal(driverPartRequestInternals.driverPartRequestSourceHasManualVehicleReview(source), false);
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: !source.includes("unverified_plate"),
+    manualVehicleReview: driverPartRequestInternals.driverPartRequestSourceHasManualVehicleReview(source),
+    vin: "WDD2573211A123456",
+    probablePart: "výfuk / díl výfuku",
+    oePartNumber: "A 257 490 12 00"
+  };
+  const eligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item);
+  assert.equal(eligibility.allowed, true);
+}
+
+{
+  const source = driverPartRequestInternals.driverPartRequestConfirmVehicleSource("manual_unverified_plate");
+  assert.equal(source, "manual_unverified_plate_vehicle_confirmed");
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: !source.includes("unverified_plate"),
+    manualVehicleReview: driverPartRequestInternals.driverPartRequestSourceHasManualVehicleReview(source),
+    vin: "WDD2573211A123456",
+    probablePart: "výfuk / díl výfuku",
+    oePartNumber: "A 257 490 12 00"
+  };
+  const eligibility = driverPartRequestInternals.driverPartRequestPatrikHandoffEligibility(item);
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.code, "driver_part_vehicle_not_verified");
+}
+
+{
   const item = {
     licensePlate: "2BB 8251",
     vehicleName: "Mercedes CLS",

@@ -21471,8 +21471,22 @@ function driverReportManualPartForm(item) {
     return "";
   }
 
+  const canConfirmVehicle = item.licensePlateVerified === true && item.manualVehicleReview === true;
+  const vehicleReviewNote = item.licensePlateVerified !== true
+    ? "SPZ není ověřená ve Vozovém parku. Nejdřív oprav SPZ nebo vozidlo."
+    : item.manualVehicleReview === true
+      ? "Vozidlo vyžaduje ruční kontrolu. Po potvrzení vozidla a dílu se zpřístupní AI Boost ceny a e-mail Patrikovi."
+      : "";
+
   return `
     <form class="driver-report-inline-form" data-driver-report-manual-part-form data-request-id="${escapeHtml(item.id)}">
+      ${vehicleReviewNote ? `<p class="driver-report-note">${escapeHtml(vehicleReviewNote)}</p>` : ""}
+      ${canConfirmVehicle ? `
+        <label class="driver-report-check">
+          <input type="checkbox" name="vehicleManuallyConfirmed">
+          <span>Vozidlo jsem ručně zkontroloval proti Vozovému parku</span>
+        </label>
+      ` : ""}
       <label>
         <span>OE číslo</span>
         <input name="oePartNumber" value="${escapeHtml(item.oePartNumber)}" placeholder="ručně ověřené OE číslo">
@@ -22035,7 +22049,8 @@ async function submitDriverReportManualPartForm(form) {
     verifiedPart: data.get("verifiedPart"),
     oePartNumber: data.get("oePartNumber"),
     partName: data.get("partName"),
-    note: data.get("note")
+    note: data.get("note"),
+    vehicleManuallyConfirmed: data.get("vehicleManuallyConfirmed") === "on"
   });
 }
 
