@@ -77,6 +77,7 @@
   --icon-size-sm: 18px;
   --icon-size-lg: 58px;
   --icon-holder: 44px;
+  --icon-holder-half: 22px;
   --switch-width: 78px;
   --switch-height: 42px;
 
@@ -268,7 +269,6 @@ body:has(.smart-tablet-ui) {
   user-select: none;
   touch-action: manipulation;
   transition:
-    transform var(--transition-fast),
     border-color var(--transition-fast),
     background var(--transition-fast),
     box-shadow var(--transition-fast),
@@ -276,13 +276,11 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .btn:hover {
-  transform: translateY(-1px);
   border-color: var(--border-medium);
   box-shadow: var(--shadow-raised);
 }
 
 :where(.theme-system, .smart-tablet-ui) .btn:active {
-  transform: translateY(1px);
   box-shadow: var(--shadow-inset-sm);
 }
 
@@ -290,7 +288,6 @@ body:has(.smart-tablet-ui) {
 :where(.theme-system, .smart-tablet-ui) .btn[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.55;
-  transform: none;
 }
 
 :where(.theme-system, .smart-tablet-ui) .btn-primary,
@@ -339,12 +336,10 @@ body:has(.smart-tablet-ui) {
     background var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast),
-    transform var(--transition-fast),
     box-shadow var(--transition-fast);
 }
 
 :where(.theme-system, .smart-tablet-ui) .nav-item:hover {
-  transform: translateY(-1px);
   border-color: var(--border-highlight);
   background: var(--surface-soft);
   color: var(--text-main);
@@ -635,8 +630,7 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .theme-dial-node-a {
   top: 8%;
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(50% - 1.5rem);
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-dial-node-b {
@@ -797,7 +791,8 @@ body:has(.smart-tablet-ui) {
   left: var(--x);
   top: var(--y);
   z-index: 1;
-  transform: translate(-50%, -50%);
+  margin-left: calc(-1 * var(--icon-holder-half));
+  margin-top: calc(-1 * var(--icon-holder-half));
 }
 
 :where(.theme-system, .smart-tablet-ui) .theme-map-node-main {
@@ -821,14 +816,12 @@ body:has(.smart-tablet-ui) {
   padding: var(--space-md);
   border-radius: var(--radius-lg);
   transition:
-    transform var(--transition-fast),
     border-color var(--transition-fast),
     box-shadow var(--transition-fast),
     background var(--transition-fast);
 }
 
 :where(.theme-system, .smart-tablet-ui) .list-card:hover {
-  transform: translateY(-1px);
   border-color: var(--border-medium);
   box-shadow: var(--shadow-raised);
 }
@@ -879,19 +872,16 @@ body:has(.smart-tablet-ui) {
   border-radius: var(--radius-lg);
   text-align: left;
   transition:
-    transform var(--transition-fast),
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
 }
 
 :where(.theme-system, .smart-tablet-ui) .quick-action:hover {
-  transform: translateY(-1px);
   border-color: var(--border-medium);
   box-shadow: var(--shadow-raised);
 }
 
 :where(.theme-system, .smart-tablet-ui) .quick-action:active {
-  transform: translateY(1px);
   box-shadow: var(--shadow-inset-sm);
 }
 
