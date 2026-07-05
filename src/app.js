@@ -15946,12 +15946,16 @@ function collectionRoutesSourceSmartFilterPanel() {
           <button class="secondary-link" type="button" data-collection-routes-source-print-pdf ${rows.length ? "" : "disabled"}>
             Detailní PDF
           </button>
+          <button class="secondary-link" type="button" data-collection-routes-source-offline-package ${rows.length ? "" : "disabled"}>
+            Offline balíček
+          </button>
         </div>
       </div>
       <div class="collection-routes-print-filter__context" aria-label="Aktuální nastavení trasy">
         <span>Dnes: ${escapeHtml(today.dayLabel)} ${escapeHtml(today.dateLabel)} / ${escapeHtml(today.weekMode)}</span>
         <span>Kontrola: ${escapeHtml(selectedStatusLabel)}</span>
         <span>Import: ${escapeHtml(collectionRoutesSourceSelectedBatchLabel())}</span>
+        <span>Offline: samostatný soubor bez GPS a bez zápisu</span>
       </div>
     </div>
   `;
@@ -24268,6 +24272,405 @@ function printCollectionRoutesSourceDriverPreview() {
   );
 }
 
+function collectionRoutesSourceOfflineFilenamePart(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 70) || "trasa";
+}
+
+function collectionRoutesSourceOfflinePackageFilename() {
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const parts = [
+    "svozova-trasa-offline",
+    collectionRoutesSourceOfflineFilenamePart(collectionRoutesSourceVehicleLabel(filters.vehicle || "all")),
+    collectionRoutesSourceOfflineFilenamePart(collectionRoutesSourceDayLabel(filters.day || "all")),
+    collectionRoutesSourceOfflineFilenamePart(collectionRoutesSourceWeekLabel(filters.week || "all")),
+    new Date().toISOString().slice(0, 10)
+  ].filter(Boolean);
+  return `${parts.join("-")}.html`;
+}
+
+function collectionRoutesSourceOfflinePackageStyles() {
+  return `
+    * { box-sizing: border-box; }
+    html {
+      -webkit-text-size-adjust: 100%;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+    body {
+      margin: 0;
+      background: #edf4e8;
+      color: #172033;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.35;
+    }
+    .offline-shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+    .offline-top {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      border-bottom: 4px solid #7bbd32;
+      background: #ffffff;
+      padding: 16px 18px;
+      box-shadow: 0 10px 24px rgba(23, 32, 51, 0.12);
+    }
+    .offline-kicker {
+      margin: 0 0 4px;
+      color: #587052;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      color: #172033;
+      font-size: clamp(24px, 3.2vw, 42px);
+      line-height: 1.05;
+    }
+    .offline-subtitle {
+      margin: 7px 0 0;
+      color: #40506a;
+      font-size: 15px;
+    }
+    .offline-actions {
+      display: grid;
+      gap: 8px;
+      min-width: 190px;
+    }
+    .offline-actions button {
+      border: 0;
+      border-radius: 8px;
+      background: #172033;
+      color: #ffffff;
+      padding: 12px 14px;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .offline-badge {
+      display: inline-flex;
+      justify-content: center;
+      border: 1px solid #cfd7e6;
+      border-left: 5px solid #7bbd32;
+      background: #f7fbf4;
+      padding: 8px 10px;
+      color: #172033;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .offline-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .offline-summary .print-summary-card,
+    .offline-stop,
+    .offline-safety,
+    .offline-table-wrap {
+      border: 1px solid #d8deea;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 8px 22px rgba(23, 32, 51, 0.08);
+    }
+    .offline-summary .print-summary-card {
+      min-height: 78px;
+      padding: 12px;
+    }
+    .offline-summary .print-summary-card span {
+      display: block;
+      color: #657488;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .offline-summary .print-summary-card strong {
+      display: block;
+      margin-top: 5px;
+      color: #172033;
+      font-size: 21px;
+      overflow-wrap: anywhere;
+    }
+    .offline-safety {
+      margin: 0 0 14px;
+      padding: 12px 14px;
+      background: #f7f9fc;
+      color: #40506a;
+      font-weight: 700;
+    }
+    .offline-list {
+      display: grid;
+      gap: 10px;
+    }
+    .offline-stop {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 12px;
+      padding: 14px;
+      break-inside: avoid;
+    }
+    .offline-order {
+      display: grid;
+      place-items: center;
+      min-height: 76px;
+      border-radius: 8px;
+      background: #172033;
+      color: #ffffff;
+      font-size: 30px;
+      font-weight: 900;
+    }
+    .offline-stop h2 {
+      margin: 0;
+      color: #172033;
+      font-size: clamp(20px, 2.4vw, 30px);
+      line-height: 1.12;
+    }
+    .offline-address {
+      margin: 5px 0 10px;
+      color: #40506a;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .offline-facts {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .offline-facts article {
+      border: 1px solid #d8deea;
+      border-radius: 6px;
+      background: #fbfdf8;
+      padding: 8px;
+    }
+    .offline-facts span {
+      display: block;
+      color: #657488;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .offline-facts strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 16px;
+      overflow-wrap: anywhere;
+    }
+    .offline-note {
+      margin: 10px 0 0;
+      border-left: 4px solid #7bbd32;
+      background: #f7fbf4;
+      padding: 9px 10px;
+      color: #40506a;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .offline-table-wrap {
+      margin-top: 18px;
+      overflow: auto;
+    }
+    .offline-table-wrap h2 {
+      margin: 0;
+      padding: 14px;
+      font-size: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      font-size: 13px;
+    }
+    th,
+    td {
+      border-top: 1px solid #d8deea;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    th {
+      background: #eef3f8;
+      color: #172033;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    @media (max-width: 760px) {
+      .offline-shell { padding: 10px; }
+      .offline-top { position: static; grid-template-columns: 1fr; padding: 14px; }
+      .offline-actions { grid-template-columns: 1fr 1fr; min-width: 0; }
+      .offline-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .offline-stop { grid-template-columns: 58px minmax(0, 1fr); padding: 11px; }
+      .offline-order { min-height: 58px; font-size: 23px; }
+      .offline-address { font-size: 16px; }
+      .offline-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .offline-facts strong { font-size: 15px; }
+    }
+    @media print {
+      body { background: #ffffff; }
+      .offline-shell { max-width: none; padding: 0; }
+      .offline-top { position: static; box-shadow: none; }
+      .offline-actions { display: none; }
+      .offline-summary .print-summary-card,
+      .offline-stop,
+      .offline-safety,
+      .offline-table-wrap { box-shadow: none; }
+      .offline-stop { page-break-inside: avoid; }
+    }
+  `;
+}
+
+function collectionRoutesSourceOfflineFact(label, value) {
+  return `
+    <article>
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "-")}</strong>
+    </article>
+  `;
+}
+
+function collectionRoutesSourceOfflineStop(row, index) {
+  return `
+    <article class="offline-stop">
+      <div class="offline-order">${escapeHtml(row.routeOrder || index + 1)}</div>
+      <div>
+        <h2>${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</h2>
+        <p class="offline-address">${escapeHtml(row.addressText || "-")}</p>
+        <div class="offline-facts">
+          ${collectionRoutesSourceOfflineFact("Odpad", collectionRoutesSourceDriverWasteLabel(row))}
+          ${collectionRoutesSourceOfflineFact("Nádoba", collectionRoutesSourceDriverContainerLabel(row))}
+          ${collectionRoutesSourceOfflineFact("Frekvence", row.frequency || "-")}
+          ${collectionRoutesSourceOfflineFact("Kontrola", collectionRoutesSourceVistosStatus(row))}
+        </div>
+        <p class="offline-note">${escapeHtml(row.note || collectionRoutesSourceDriverProblemLabel(row) || "Bez poznámky.")}</p>
+      </div>
+    </article>
+  `;
+}
+
+function collectionRoutesSourceOfflinePackageHtml(rows = collectionRoutesSourceDisplayRows()) {
+  const summary = collectionRoutesSourceRowsMetrics(rows);
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const selectedBatch = collectionRoutesSourceSelectedBatch();
+  const title = `Offline balíček ${collectionRoutesSourceRouteTitle()}`;
+  const generatedAt = formatDateTime(new Date().toISOString()) || new Date().toISOString();
+  const selectedWaste = collectionRoutesSourceWasteFilterLabel(filters.waste || "all");
+  const batchLabel = formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "aktuální import";
+  const vehicle = collectionRoutesSourceVehicleLabel(filters.vehicle || "all");
+  const day = collectionRoutesSourceDayLabel(filters.day || "all");
+  const week = collectionRoutesSourceWeekLabel(filters.week || "all");
+
+  return `<!doctype html>
+    <html lang="cs">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>${escapeHtml(title)}</title>
+        <style>${collectionRoutesSourceOfflinePackageStyles()}</style>
+      </head>
+      <body>
+        <main class="offline-shell">
+          <header class="offline-top">
+            <div>
+              <p class="offline-kicker">Svozové trasy · offline balíček</p>
+              <h1>${escapeHtml(title)}</h1>
+              <p class="offline-subtitle">Samostatný read-only soubor z aktuálního filtru. Funguje bez internetu, nic nepotvrzuje a nic neodesílá.</p>
+            </div>
+            <div class="offline-actions">
+              <button type="button" onclick="window.print()">Tisk / PDF</button>
+              <span class="offline-badge">Ostrá trasa: NE</span>
+            </div>
+          </header>
+
+          <section class="offline-summary" aria-label="Souhrn offline balíčku">
+            ${collectionRoutesSourcePrintSummaryCard("Vygenerováno", generatedAt)}
+            ${collectionRoutesSourcePrintSummaryCard("Auto", vehicle)}
+            ${collectionRoutesSourcePrintSummaryCard("Den", day)}
+            ${collectionRoutesSourcePrintSummaryCard("Týden", week)}
+            ${collectionRoutesSourcePrintSummaryCard("Odpad", selectedWaste)}
+            ${collectionRoutesSourcePrintSummaryCard("Zastávky", collectionRoutesMetricValue(summary.rowCount || rows.length))}
+            ${collectionRoutesSourcePrintSummaryCard("Nádoby", collectionRoutesMetricValue(summary.containerCount || 0))}
+            ${collectionRoutesSourcePrintSummaryCard("Odhad času", `${collectionRoutesMetricValue(summary.estimatedMinutes || 0)} min`)}
+            ${collectionRoutesSourcePrintSummaryCard("Import", batchLabel)}
+            ${collectionRoutesSourcePrintSummaryCard("Zdroj", collectionRoutesSourceBatchSourceLabel(selectedBatch))}
+            ${collectionRoutesSourcePrintSummaryCard("GPS", "NE")}
+            ${collectionRoutesSourcePrintSummaryCard("T-Cars", "NE")}
+          </section>
+
+          <p class="offline-safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů, automatizací a ostrých tras. Pořadí zastávek je podle aktuálního zdroje 13 Excelů / opravného sešitu.</p>
+
+          <section class="offline-list" aria-label="Zastávky offline trasy">
+            ${rows.map((row, index) => collectionRoutesSourceOfflineStop(row, index)).join("")}
+          </section>
+
+          <section class="offline-table-wrap" aria-label="Zdrojové řádky">
+            <h2>Zdrojové řádky a Vistos kontrola</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Zákazník</th>
+                  <th>Adresa</th>
+                  <th>Odpad</th>
+                  <th>Nádoba</th>
+                  <th>Frekvence</th>
+                  <th>Zdroj</th>
+                  <th>Vistos</th>
+                  <th>Problém</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map((row, index) => `
+                  <tr>
+                    <td>${escapeHtml(row.routeOrder || index + 1)}</td>
+                    <td>${escapeHtml(row.customerName || "-")}</td>
+                    <td>${escapeHtml(row.addressText || "-")}</td>
+                    <td>${escapeHtml(collectionRoutesSourceDriverWasteLabel(row))}</td>
+                    <td>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</td>
+                    <td>${escapeHtml(row.frequency || "-")}</td>
+                    <td>${escapeHtml(collectionRoutesSourceSourceLabel(row))}</td>
+                    <td>${escapeHtml(collectionRoutesSourceVistosDetail(row))}</td>
+                    <td>${escapeHtml(collectionRoutesSourceDriverProblemLabel(row))}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </section>
+        </main>
+      </body>
+    </html>`;
+}
+
+function exportCollectionRoutesSourceOfflinePackage() {
+  const rows = collectionRoutesSourceDisplayRows();
+  if (!rows.length) {
+    collectionRoutesPilotState.sourceImportError = "Není co uložit do offline balíčku. Nahrajte 13 Excelů nebo upravte filtr.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    return;
+  }
+
+  downloadText(
+    collectionRoutesSourceOfflinePackageFilename(),
+    collectionRoutesSourceOfflinePackageHtml(rows),
+    "text/html;charset=utf-8"
+  );
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = "Offline balíček pro řidiče je stažený jako samostatný HTML soubor. Nevytvořila se ostrá trasa.";
+  render();
+}
+
 async function submitCollectionRoutesRouteOptimizationPreview(form) {
   const user = currentUser();
 
@@ -31502,6 +31905,12 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesSourcePrintDriver = event.target.closest("[data-collection-routes-source-print-driver]");
   if (collectionRoutesSourcePrintDriver) {
     printCollectionRoutesSourceDriverPreview();
+    return;
+  }
+
+  const collectionRoutesSourceOfflinePackage = event.target.closest("[data-collection-routes-source-offline-package]");
+  if (collectionRoutesSourceOfflinePackage) {
+    exportCollectionRoutesSourceOfflinePackage();
     return;
   }
 

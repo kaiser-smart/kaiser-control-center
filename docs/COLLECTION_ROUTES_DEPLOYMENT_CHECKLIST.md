@@ -99,7 +99,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - HOTOVO - read-only ridicsky tiskovy nahled aktualniho filtru ukazuje prakticky seznam zastavek vcetne odpadu, nadoby, frekvence a poznamky bez navigace, GPS, T-Cars, potvrzovani svozu a ostre trasy.
 - HOTOVO - chytry filtr Auto A/B/C dnes, zitra a pozitri nastavuje den, sudy/lichy tyden a auto pro tiskovy nahled; trasu neplanuje a nic nezapisuje.
 - HOTOVO - chytry filtr pro tisk ma samostatne volby Termin, Auto a Odpad; odpadovy filtr zustava soucasti tiskove trasy.
-- NEZACATO - skutecny offline ridicsky balicek pro vypadek internetu bude samostatna faze.
+- ROZPRACOVANO - Faze 2B pripravuje frontendovy offline ridicsky balicek aktualniho filtru jako samostatny HTML soubor bez navigace, GPS, T-Cars, potvrzovani svozu, SMS/e-mailu, automatizaci a ostrych tras.
 
 ## Automatizace
 

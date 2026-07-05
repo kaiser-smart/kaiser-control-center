@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.330"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.331"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: offline balíček pro řidiče",
+    text: "Svozové trasy umí z aktuálního filtru stáhnout samostatný HTML offline balíček pro tablet řidiče. Obsahuje souhrn a zastávky ze 13 Excelů bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů, automatizací a ostrých tras."
+  },
   {
     title: "Trasy svozu: opravný sešit 13 Excelů",
     text: "Interní import Svozových tras rozpozná jeden opravný sešit exportovaný ze Smartu, vezme z něj list VSECHNY RADKY a zachová původní zdrojový Excel, list, řádek, den, týden, auto, odpad, nádobu a frekvenci. Vistos match zůstává read-only a nevytváří ostré trasy."
