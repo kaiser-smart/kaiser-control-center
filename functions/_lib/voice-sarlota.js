@@ -2450,3 +2450,7 @@ export function voiceSarlotaErrorResponse(error) {
     status: error?.status || 500
   };
 }
+
+export const __test = {
+  voiceDriverPartHandoffOptions
+};

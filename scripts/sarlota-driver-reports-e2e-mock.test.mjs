@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createSessionCookie } from "../functions/_lib/auth.js";
-import { handleSarlotaVoiceRequest } from "../functions/_lib/voice-sarlota.js";
+import { handleSarlotaVoiceRequest, __test as voiceSarlotaInternals } from "../functions/_lib/voice-sarlota.js";
 import { onRequestGet as getDriverReportContext } from "../functions/api/ai/driver-reports/context.js";
 import { onRequestPost as getDriverReportContextVoiceWebhook } from "../functions/api/voice/driver-report-context.js";
 import { onRequestGet as getDriverReportLicensePlate } from "../functions/api/driver-reports/license-plate.js";
@@ -578,6 +578,14 @@ async function testVoiceCreateFromPickerVehicleId() {
   assert.equal(confirmed.notificationsSent, false);
 }
 
+function testVoiceHandoffRequiresPriceLinks() {
+  const options = voiceSarlotaInternals.voiceDriverPartHandoffOptions();
+  assert.equal(options.allowCreatorHandoff, true);
+  assert.equal(options.allowProbablePartHandoff, true);
+  assert.equal(options.runPriceBoost, true);
+  assert.equal(options.requirePriceOffersForHandoff, true);
+}
+
 async function testClientToolsNoHallucinationAndSummary() {
   {
     const tools = createElevenLabsClientTools({
@@ -687,6 +695,7 @@ testElevenLabsWebhookToolSchema();
 await testFleetSpzValidationAndPermissions();
 await testVoiceCreateConfirmationGuards();
 await testVoiceCreateFromPickerVehicleId();
+testVoiceHandoffRequiresPriceLinks();
 await testClientToolsNoHallucinationAndSummary();
 
 console.log("sarlota driver reports e2e mock tests passed");
