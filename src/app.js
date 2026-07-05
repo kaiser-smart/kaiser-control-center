@@ -252,6 +252,7 @@ const FLEET_TAB_WAITING_MESSAGES = {
   settings: "Čeká na API pro nastavení vozového parku."
 };
 const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
+const VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE = `${VEHICLE_TRACKING_BASE_ROUTE}/soft-metal-preview`;
 const ABSENCE_ROUTE = "/dovolena-nemoc";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
 const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
@@ -12386,9 +12387,14 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   if (selectedVehicle) {
     vehicleTrackingDemoState.selectedVehicleId = selectedVehicle.id;
   }
+  const isSoftMetalPreview = context.designPreview === "soft-metal";
+  const pageClass = `app-shell module-page module-theme-scope tracking-page${isSoftMetalPreview ? " tracking-page--soft-metal-preview" : ""}`;
+  const compareAction = isSoftMetalPreview
+    ? `<a class="secondary-link tracking-preview-compare" href="${routeHref(VEHICLE_TRACKING_BASE_ROUTE)}" data-link>Původní zobrazení</a>`
+    : "";
 
   return `
-    <main class="app-shell module-page module-theme-scope tracking-page" ${moduleThemeStyleAttribute()}>
+    <main class="${pageClass}" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
@@ -12409,6 +12415,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
             ${vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE)}
             ${vehicleTrackingAction("Správa GPS napojení")}
           </div>
+          ${compareAction ? `<div class="tracking-preview-actions">${compareAction}</div>` : ""}
         </div>
       </section>
 
@@ -26239,6 +26246,24 @@ function renderAuthenticatedApp(user) {
     app.innerHTML = fleetModulePage(moduleItem, user, { vehicleId: fleetVehicleId });
     document.title = `Detail vozidla | ${APP_NAME}`;
     loadFleetVehicles();
+    return;
+  }
+
+  if (path === VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE) {
+    if (!canViewModule(user, "vehicle-tracking")) {
+      app.innerHTML = forbiddenPage(user);
+      document.title = `Bez oprávnění | ${APP_NAME}`;
+      return;
+    }
+
+    const moduleItem = orderedModules.find((item) => item.id === "vehicle-tracking");
+    app.innerHTML = vehicleTrackingPage(moduleItem, user, { view: "map", designPreview: "soft-metal" });
+    document.title = `Soft-metal preview sledování vozidel | ${APP_NAME}`;
+    if (vehicleTrackingActiveSourceMode() === "tcars") {
+      loadVehicleTrackingStatus();
+      loadVehicleTrackingWimSites();
+      queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
+    }
     return;
   }
 

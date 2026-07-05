@@ -68,6 +68,7 @@ const routes = new Set([
   "/dovolena-nemoc/nastaveni",
   "/design/neumorphic",
   "/design/theme-system",
+  "/sledovani-vozidel/soft-metal-preview",
   ...modules.map((moduleItem) => moduleItem.route),
   ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)
 ]);

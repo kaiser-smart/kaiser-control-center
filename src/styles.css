@@ -13,6 +13,36 @@
   --shadow: 0 18px 42px rgba(36, 45, 34, 0.12);
   --shadow-card: 0 12px 28px rgba(36, 45, 34, 0.08);
   --shadow-card-hover: 0 18px 38px rgba(36, 45, 34, 0.14);
+  --brand-primary: var(--kaiser-green);
+  --brand-accent: #75bd25;
+  --bg-app: #eef1f0;
+  --surface-soft: #f4f6f4;
+  --surface-raised: #ffffff;
+  --surface-inset: #e5e9e6;
+  --text-main: var(--ink);
+  --text-muted: var(--muted);
+  --border-soft: rgba(66, 80, 74, 0.16);
+  --shadow-raised: 10px 12px 26px rgba(38, 48, 43, 0.10), -8px -8px 22px rgba(255, 255, 255, 0.86);
+  --shadow-inset: inset 4px 4px 10px rgba(38, 48, 43, 0.08), inset -4px -4px 10px rgba(255, 255, 255, 0.84);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 14px;
+  --space-lg: 18px;
+  --space-xl: 24px;
+  --icon-sm: 18px;
+  --icon-md: 26px;
+  --icon-lg: 38px;
+  --icon-xl: 56px;
+  --icon-green: #75bd25;
+  --icon-teal: #2e8f83;
+  --icon-bluegrey: #637c8a;
+  --icon-amber: #c98121;
+  --icon-red: #c9583a;
+  --icon-graphite: #4b5550;
 }
 
 * {
@@ -25187,5 +25217,828 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   .absence-table td::before {
     width: auto;
     font-size: 0.72rem;
+  }
+}
+
+/* Branch-only module preview: Sledovani vozidel soft-metal validation. */
+body:has(.tracking-page--soft-metal-preview) {
+  background:
+    linear-gradient(180deg, #fbfcfb 0%, #eef1f0 56%, #e3e8e5 100%);
+}
+
+.tracking-page--soft-metal-preview {
+  --brand-primary: #75bd25;
+  --brand-accent: #75bd25;
+  --bg-app: #eef1f0;
+  --surface: #f9faf8;
+  --surface-soft: #f3f5f3;
+  --surface-raised: #ffffff;
+  --surface-inset: #e5e9e6;
+  --text-main: #1f2921;
+  --text-muted: #657064;
+  --border-soft: rgba(67, 78, 72, 0.17);
+  --shadow-raised: 10px 12px 26px rgba(38, 48, 43, 0.10), -8px -8px 22px rgba(255, 255, 255, 0.86);
+  --shadow-raised-hover: 13px 15px 30px rgba(38, 48, 43, 0.12), -8px -8px 22px rgba(255, 255, 255, 0.9);
+  --shadow-inset: inset 4px 4px 10px rgba(38, 48, 43, 0.08), inset -4px -4px 10px rgba(255, 255, 255, 0.84);
+  --tracking-metal-bg: linear-gradient(180deg, #fbfcfb 0%, #f1f4f2 100%);
+  --tracking-metal-inset-bg: linear-gradient(180deg, #e9eeeb 0%, #f6f8f6 100%);
+  --tracking-accent-soft: color-mix(in srgb, var(--brand-accent) 12%, transparent);
+  --tracking-accent-border: color-mix(in srgb, var(--brand-accent) 44%, var(--border-soft));
+  --tracking-warning: #c98121;
+  --tracking-danger: #c9583a;
+  --tracking-bluegrey: #637c8a;
+  --tracking-graphite: #4b5550;
+  width: min(1360px, calc(100% - 28px));
+  color: var(--text-main);
+  font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.tracking-page--soft-metal-preview .topbar,
+.tracking-page--soft-metal-preview .module-detail,
+.tracking-page--soft-metal-preview .tracking-section,
+.tracking-page--soft-metal-preview .tracking-source-panel,
+.tracking-page--soft-metal-preview .tracking-demo-scenario,
+.tracking-page--soft-metal-preview .tracking-tcars-live,
+.tracking-page--soft-metal-preview .tracking-tcars-state,
+.tracking-page--soft-metal-preview .tracking-wim-layer,
+.tracking-page--soft-metal-preview .tracking-wim-map-panel,
+.tracking-page--soft-metal-preview .tracking-icon-spec,
+.tracking-page--soft-metal-preview .module-feedback {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--tracking-metal-bg);
+  box-shadow: var(--shadow-raised);
+}
+
+.tracking-page--soft-metal-preview .topbar {
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .module-detail {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+}
+
+.tracking-page--soft-metal-preview .module-detail__icon {
+  width: 68px;
+  height: 68px;
+  border: 1px solid var(--tracking-accent-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--brand-accent) 12%, #ffffff);
+  color: var(--brand-accent);
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .module-detail__eyebrow,
+.tracking-page--soft-metal-preview .tracking-source-mode span {
+  color: var(--brand-accent);
+}
+
+.tracking-page--soft-metal-preview .module-detail h1 {
+  font-size: clamp(1.55rem, 2.8vw, 2.2rem);
+  line-height: 1.1;
+}
+
+.tracking-page--soft-metal-preview .module-detail p,
+.tracking-page--soft-metal-preview .tracking-section p,
+.tracking-page--soft-metal-preview .tracking-source-panel p,
+.tracking-page--soft-metal-preview .tracking-tcars-live__head p,
+.tracking-page--soft-metal-preview .tracking-wim-layer__head p,
+.tracking-page--soft-metal-preview .tracking-wim-source,
+.tracking-page--soft-metal-preview .tracking-wim-note,
+.tracking-page--soft-metal-preview .tracking-tcars-map-note {
+  color: var(--text-muted);
+  font-weight: 750;
+}
+
+.tracking-page--soft-metal-preview .module-detail__status,
+.tracking-page--soft-metal-preview .tracking-preview-actions {
+  margin-top: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .primary-action,
+.tracking-page--soft-metal-preview .primary-link {
+  min-height: 42px;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 64%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--brand-accent);
+  color: #ffffff;
+  box-shadow: 0 7px 16px rgba(38, 48, 43, 0.12);
+}
+
+.tracking-page--soft-metal-preview .secondary-link,
+.tracking-page--soft-metal-preview .back-button,
+.tracking-page--soft-metal-preview .tracking-tab,
+.tracking-page--soft-metal-preview .tracking-demo-filter,
+.tracking-page--soft-metal-preview .tracking-source-mode {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-soft));
+  color: var(--tracking-graphite);
+  box-shadow: none;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
+}
+
+.tracking-page--soft-metal-preview :is(.primary-action, .primary-link, .secondary-link, .back-button, .tracking-tab, .tracking-demo-filter, .tracking-source-mode, .tracking-demo-vehicle-card, .tracking-tcars-location-card, .tracking-wim-site-card):hover {
+  transform: none;
+}
+
+.tracking-page--soft-metal-preview :is(.secondary-link, .back-button, .tracking-tab, .tracking-demo-filter, .tracking-source-mode):hover {
+  border-color: color-mix(in srgb, var(--brand-accent) 24%, var(--border-soft));
+  background: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-raised));
+  box-shadow: var(--shadow-raised);
+  color: var(--text-main);
+}
+
+.tracking-page--soft-metal-preview :is(.primary-action, .primary-link):hover,
+.tracking-page--soft-metal-preview :is(.primary-action, .primary-link):focus-visible {
+  background: var(--brand-accent);
+  color: #ffffff;
+  box-shadow: 0 9px 18px rgba(38, 48, 43, 0.14);
+  transform: none;
+}
+
+.tracking-page--soft-metal-preview :is(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand-accent) 34%, transparent);
+  outline-offset: 3px;
+}
+
+.tracking-page--soft-metal-preview .tracking-tabs,
+.tracking-page--soft-metal-preview .tracking-demo-controls,
+.tracking-page--soft-metal-preview .tracking-demo-filterbar,
+.tracking-page--soft-metal-preview .tracking-status-legend,
+.tracking-page--soft-metal-preview .tracking-actions {
+  gap: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-tab,
+.tracking-page--soft-metal-preview .tracking-demo-filter {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.82rem;
+}
+
+.tracking-page--soft-metal-preview .tracking-tab--active,
+.tracking-page--soft-metal-preview .tracking-demo-filter--active {
+  border-color: var(--tracking-accent-border);
+  background: color-mix(in srgb, var(--brand-accent) 13%, #ffffff);
+  color: color-mix(in srgb, var(--brand-accent) 74%, #1f2921);
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .tracking-layout {
+  grid-template-columns: minmax(0, 1.42fr) minmax(330px, 0.82fr);
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.tracking-page--soft-metal-preview .tracking-section {
+  gap: var(--space-md);
+  padding: var(--space-xl);
+}
+
+.tracking-page--soft-metal-preview .tracking-section__head {
+  gap: var(--space-md);
+}
+
+.tracking-page--soft-metal-preview .tracking-section h2 {
+  font-size: 1.2rem;
+}
+
+.tracking-page--soft-metal-preview .tracking-section h3,
+.tracking-page--soft-metal-preview .tracking-source-panel h2,
+.tracking-page--soft-metal-preview .tracking-tcars-live__head h3,
+.tracking-page--soft-metal-preview .tracking-wim-layer__head h3 {
+  font-size: 1rem;
+}
+
+.tracking-page--soft-metal-preview .tracking-source-panel {
+  grid-template-columns: minmax(260px, 0.82fr) minmax(0, 1.18fr);
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+  padding: var(--space-lg);
+}
+
+.tracking-page--soft-metal-preview .tracking-source-mode {
+  min-height: 110px;
+  padding: var(--space-md);
+}
+
+.tracking-page--soft-metal-preview .tracking-source-mode--active {
+  border-color: var(--tracking-accent-border);
+  background: color-mix(in srgb, var(--brand-accent) 12%, #ffffff);
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .tracking-source-mode--passive {
+  background: color-mix(in srgb, var(--surface-inset) 52%, #ffffff);
+  opacity: 0.78;
+}
+
+.tracking-page--soft-metal-preview .tracking-badge,
+.tracking-page--soft-metal-preview .tracking-status,
+.tracking-page--soft-metal-preview .tracking-demo-data-badge,
+.tracking-page--soft-metal-preview .tracking-tcars-live__head > span,
+.tracking-page--soft-metal-preview .tracking-tcars-map-summary span,
+.tracking-page--soft-metal-preview .tracking-wim-layer__head > span,
+.tracking-page--soft-metal-preview .tracking-wim-map-panel__head > span,
+.tracking-page--soft-metal-preview .tracking-tcars-invalid__head > span,
+.tracking-page--soft-metal-preview .tracking-icon-spec__head > span {
+  min-height: 30px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+  color: var(--tracking-graphite);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.tracking-page--soft-metal-preview .tracking-badge--demo,
+.tracking-page--soft-metal-preview .tracking-demo-data-badge,
+.tracking-page--soft-metal-preview .tracking-demo-banner,
+.tracking-page--soft-metal-preview .tracking-demo-map-notice,
+.tracking-page--soft-metal-preview .tracking-demo-api-note,
+.tracking-page--soft-metal-preview .tracking-api-note,
+.tracking-page--soft-metal-preview .tracking-tcars-map-overlay,
+.tracking-page--soft-metal-preview .tracking-tcars-map-fallback,
+.tracking-page--soft-metal-preview .tracking-tcars-invalid,
+.tracking-page--soft-metal-preview .tracking-tcars-invalid-card,
+.tracking-page--soft-metal-preview .tracking-wim-state,
+.tracking-page--soft-metal-preview .tracking-wim-map-empty {
+  border-color: color-mix(in srgb, var(--tracking-warning) 30%, var(--border-soft));
+  background: color-mix(in srgb, var(--tracking-warning) 10%, #ffffff);
+  color: color-mix(in srgb, var(--tracking-warning) 70%, #1f2921);
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-status--moving {
+  border-color: color-mix(in srgb, var(--brand-accent) 34%, var(--border-soft));
+  background: color-mix(in srgb, var(--brand-accent) 16%, #ffffff);
+  color: color-mix(in srgb, var(--brand-accent) 72%, #1f2921);
+}
+
+.tracking-page--soft-metal-preview .tracking-status--stopped {
+  border-color: color-mix(in srgb, var(--tracking-bluegrey) 28%, var(--border-soft));
+  background: color-mix(in srgb, var(--tracking-bluegrey) 13%, #ffffff);
+  color: color-mix(in srgb, var(--tracking-bluegrey) 76%, #1f2921);
+}
+
+.tracking-page--soft-metal-preview .tracking-status--service,
+.tracking-page--soft-metal-preview .tracking-status--no-signal {
+  border-color: color-mix(in srgb, var(--tracking-warning) 32%, var(--border-soft));
+  background: color-mix(in srgb, var(--tracking-warning) 14%, #ffffff);
+  color: color-mix(in srgb, var(--tracking-warning) 76%, #1f2921);
+}
+
+.tracking-page--soft-metal-preview .tracking-status--off-route,
+.tracking-page--soft-metal-preview .tracking-status--out-of-order {
+  border-color: color-mix(in srgb, var(--tracking-danger) 32%, var(--border-soft));
+  background: color-mix(in srgb, var(--tracking-danger) 12%, #ffffff);
+  color: color-mix(in srgb, var(--tracking-danger) 78%, #1f2921);
+}
+
+.tracking-page--soft-metal-preview .tracking-status--off,
+.tracking-page--soft-metal-preview .tracking-status--offline,
+.tracking-page--soft-metal-preview .tracking-status--waiting {
+  border-color: color-mix(in srgb, var(--tracking-graphite) 18%, var(--border-soft));
+  background: color-mix(in srgb, var(--tracking-graphite) 8%, #ffffff);
+  color: var(--tracking-graphite);
+}
+
+.tracking-page--soft-metal-preview .tracking-map-shell,
+.tracking-page--soft-metal-preview .tracking-demo-map,
+.tracking-page--soft-metal-preview .tracking-tcars-map,
+.tracking-page--soft-metal-preview .tracking-wim-map,
+.tracking-page--soft-metal-preview .tracking-route-placeholder,
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-image--detail {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(90deg, rgba(76, 86, 80, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(76, 86, 80, 0.07) 1px, transparent 1px),
+    linear-gradient(180deg, #f6f8f6 0%, #e8ece9 100%);
+  background-size: 56px 56px, 56px 56px, auto;
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-map--google,
+.tracking-page--soft-metal-preview .tracking-tcars-map--google {
+  background: #e8ece9;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-road {
+  background: rgba(76, 86, 80, 0.18);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-route-segment {
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-route-segment--planned,
+.tracking-page--soft-metal-preview .tracking-demo-route-segment--moving {
+  background: var(--brand-accent);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-route-segment--stopped {
+  background: var(--tracking-bluegrey);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-route-segment--service {
+  background: var(--tracking-warning);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-route-segment--no-signal,
+.tracking-page--soft-metal-preview .tracking-demo-route-segment--off-route {
+  background: var(--tracking-danger);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-route-segment--offline {
+  background: var(--tracking-graphite);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-alert {
+  border: 1px solid color-mix(in srgb, var(--tracking-danger) 44%, var(--border-soft));
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text-main);
+  box-shadow: var(--shadow-raised);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-alert--active,
+.tracking-page--soft-metal-preview .tracking-demo-marker--alert,
+.tracking-page--soft-metal-preview .tracking-google-marker--alert,
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--alert .tracking-vehicle-marker__asset {
+  animation: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-alert strong {
+  color: var(--text-main);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-alert span {
+  color: var(--text-muted);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-alert__symbol,
+.tracking-page--soft-metal-preview .tracking-vehicle-marker__alert {
+  background: var(--tracking-danger);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-marker,
+.tracking-page--soft-metal-preview .tracking-google-marker {
+  width: 94px;
+  min-width: 94px;
+  height: 72px;
+  min-height: 72px;
+  filter: drop-shadow(0 13px 18px rgba(38, 48, 43, 0.18));
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-marker--selected,
+.tracking-page--soft-metal-preview .tracking-demo-marker--selected:hover {
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 15px 20px rgba(38, 48, 43, 0.22));
+}
+
+.tracking-page--soft-metal-preview .tracking-google-marker--selected {
+  filter: drop-shadow(0 15px 20px rgba(38, 48, 43, 0.22));
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker {
+  width: 94px;
+  min-width: 94px;
+  height: 72px;
+  min-height: 72px;
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker__asset {
+  width: 62px;
+  height: 62px;
+  border-width: 2px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-raised);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
+  max-width: 58px;
+  max-height: 58px;
+}
+
+.tracking-page--soft-metal-preview .tracking-map-vehicle-label {
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 7px 13px rgba(38, 48, 43, 0.14);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--moving,
+.tracking-page--soft-metal-preview .tracking-demo-marker--moving,
+.tracking-page--soft-metal-preview .tracking-google-marker--moving {
+  color: var(--brand-accent);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--stopped,
+.tracking-page--soft-metal-preview .tracking-demo-marker--stopped,
+.tracking-page--soft-metal-preview .tracking-google-marker--stopped {
+  color: var(--tracking-bluegrey);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--service,
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--no-signal,
+.tracking-page--soft-metal-preview .tracking-demo-marker--service,
+.tracking-page--soft-metal-preview .tracking-demo-marker--no-signal,
+.tracking-page--soft-metal-preview .tracking-google-marker--service,
+.tracking-page--soft-metal-preview .tracking-google-marker--no-signal {
+  color: var(--tracking-warning);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--off-route,
+.tracking-page--soft-metal-preview .tracking-demo-marker--off-route,
+.tracking-page--soft-metal-preview .tracking-demo-marker--alert,
+.tracking-page--soft-metal-preview .tracking-google-marker--off-route,
+.tracking-page--soft-metal-preview .tracking-google-marker--alert {
+  color: var(--tracking-danger);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--offline,
+.tracking-page--soft-metal-preview .tracking-demo-marker--offline,
+.tracking-page--soft-metal-preview .tracking-google-marker--offline {
+  color: var(--tracking-graphite);
+}
+
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--selected .tracking-vehicle-marker__asset,
+.tracking-page--soft-metal-preview .tracking-vehicle-marker--alert .tracking-vehicle-marker__asset {
+  border-color: currentColor;
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+  box-shadow: var(--shadow-raised);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-list,
+.tracking-page--soft-metal-preview .tracking-tcars-location-list,
+.tracking-page--soft-metal-preview .tracking-tcars-invalid-list,
+.tracking-page--soft-metal-preview .tracking-wim-list {
+  gap: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card,
+.tracking-page--soft-metal-preview .tracking-detail-grid article,
+.tracking-page--soft-metal-preview .tracking-trip-summary article,
+.tracking-page--soft-metal-preview .tracking-integration-grid article,
+.tracking-page--soft-metal-preview .tracking-tcars-mode-grid article,
+.tracking-page--soft-metal-preview .tracking-tcars-location-card,
+.tracking-page--soft-metal-preview .tracking-tcars-location-detail,
+.tracking-page--soft-metal-preview .tracking-wim-summary article,
+.tracking-page--soft-metal-preview .tracking-wim-site-card,
+.tracking-page--soft-metal-preview .tracking-wim-detail,
+.tracking-page--soft-metal-preview .tracking-wim-empty,
+.tracking-page--soft-metal-preview .tracking-map-placeholder,
+.tracking-page--soft-metal-preview .tracking-route-placeholder,
+.tracking-page--soft-metal-preview .tracking-empty,
+.tracking-page--soft-metal-preview .tracking-pairing-note,
+.tracking-page--soft-metal-preview .tracking-table-shell,
+.tracking-page--soft-metal-preview .tracking-field-chips span,
+.tracking-page--soft-metal-preview .tracking-icon-spec__files li,
+.tracking-page--soft-metal-preview .tracking-icon-spec__mapping {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-soft));
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card {
+  padding: var(--space-md);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card--selected,
+.tracking-page--soft-metal-preview .tracking-tcars-location-card--selected,
+.tracking-page--soft-metal-preview .tracking-wim-site-card--selected,
+.tracking-page--soft-metal-preview .tracking-wim-map-point--selected,
+.tracking-page--soft-metal-preview .tracking-tcars-google-pin--selected,
+.tracking-page--soft-metal-preview .tracking-wim-google-pin--selected {
+  border-color: var(--tracking-accent-border);
+  background: color-mix(in srgb, var(--brand-accent) 10%, #ffffff);
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card--alert,
+.tracking-page--soft-metal-preview .tracking-demo-detail-alert,
+.tracking-page--soft-metal-preview .tracking-tcars-state--error,
+.tracking-page--soft-metal-preview .tracking-wim-state--error {
+  border-color: color-mix(in srgb, var(--tracking-danger) 38%, var(--border-soft));
+  background: color-mix(in srgb, var(--tracking-danger) 10%, #ffffff);
+  color: color-mix(in srgb, var(--tracking-danger) 76%, #1f2921);
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-image {
+  border-color: var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--tracking-metal-inset-bg);
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-image--card {
+  height: 146px;
+  padding: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-image--detail {
+  height: clamp(210px, 29vw, 290px);
+}
+
+.tracking-page--soft-metal-preview .tracking-detail-grid,
+.tracking-page--soft-metal-preview .tracking-trip-summary,
+.tracking-page--soft-metal-preview .tracking-integration-grid,
+.tracking-page--soft-metal-preview .tracking-tcars-mode-grid,
+.tracking-page--soft-metal-preview .tracking-wim-summary {
+  gap: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-detail-grid article,
+.tracking-page--soft-metal-preview .tracking-trip-summary article,
+.tracking-page--soft-metal-preview .tracking-integration-grid article,
+.tracking-page--soft-metal-preview .tracking-wim-summary article {
+  min-height: 82px;
+  padding: var(--space-md);
+}
+
+.tracking-page--soft-metal-preview .tracking-detail-grid span,
+.tracking-page--soft-metal-preview .tracking-trip-summary span,
+.tracking-page--soft-metal-preview .tracking-wim-summary span,
+.tracking-page--soft-metal-preview .tracking-table th,
+.tracking-page--soft-metal-preview .tracking-list-table__head span,
+.tracking-page--soft-metal-preview .tracking-history-table__head span {
+  color: var(--text-muted);
+  font-size: 0.69rem;
+  font-weight: 850;
+}
+
+.tracking-page--soft-metal-preview .tracking-detail-grid strong,
+.tracking-page--soft-metal-preview .tracking-trip-summary strong,
+.tracking-page--soft-metal-preview .tracking-wim-summary strong {
+  color: var(--text-main);
+  font-size: 0.98rem;
+}
+
+.tracking-page--soft-metal-preview .tracking-filters,
+.tracking-page--soft-metal-preview .tracking-history-filters {
+  gap: var(--space-sm);
+}
+
+.tracking-page--soft-metal-preview .tracking-filters input,
+.tracking-page--soft-metal-preview .tracking-history-filters input {
+  min-height: 42px;
+  border-color: var(--border-soft);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-soft));
+  color: var(--text-main);
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .tracking-list-table,
+.tracking-page--soft-metal-preview .tracking-history-table,
+.tracking-page--soft-metal-preview .tracking-table-shell {
+  overflow: hidden;
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .tracking-list-table__head,
+.tracking-page--soft-metal-preview .tracking-history-table__head,
+.tracking-page--soft-metal-preview .tracking-table th {
+  background: color-mix(in srgb, var(--surface-inset) 70%, #ffffff);
+}
+
+.tracking-page--soft-metal-preview .tracking-table td {
+  border-bottom-color: color-mix(in srgb, var(--border-soft) 74%, transparent);
+  color: var(--tracking-graphite);
+}
+
+.tracking-page--soft-metal-preview .tracking-tcars-map-overlay {
+  box-shadow: 0 12px 24px rgba(38, 48, 43, 0.12);
+}
+
+.tracking-page--soft-metal-preview .tracking-tcars-google-marker,
+.tracking-page--soft-metal-preview .tracking-wim-google-marker {
+  filter: drop-shadow(0 12px 17px rgba(38, 48, 43, 0.18));
+}
+
+.tracking-page--soft-metal-preview .tracking-tcars-google-marker--selected {
+  transform: translate(-50%, -50%);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-google-marker--selected {
+  transform: translate(-50%, -100%);
+}
+
+.tracking-page--soft-metal-preview .tracking-tcars-google-pin,
+.tracking-page--soft-metal-preview .tracking-wim-google-pin,
+.tracking-page--soft-metal-preview .tracking-wim-map-point {
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 18px rgba(38, 48, 43, 0.14);
+}
+
+.tracking-page--soft-metal-preview .tracking-tcars-google-pin {
+  grid-template-columns: 40px minmax(0, 1fr);
+  min-width: 132px;
+  max-width: 150px;
+  border-color: var(--brand-accent);
+}
+
+.tracking-page--soft-metal-preview .tracking-tcars-google-pin__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--brand-accent) 14%, #ffffff);
+}
+
+.tracking-page--soft-metal-preview .tracking-tcars-google-pin__fallback {
+  background: var(--brand-accent);
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-google-pin,
+.tracking-page--soft-metal-preview .tracking-wim-map-point {
+  grid-template-columns: 40px minmax(0, 1fr);
+  min-width: 112px;
+  max-width: 140px;
+  border-color: var(--tracking-warning);
+  color: var(--text-main);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-google-pin__icon,
+.tracking-page--soft-metal-preview .tracking-wim-map-point__icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--tracking-warning);
+  color: #ffffff;
+  font-size: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-google-pin__icon::before,
+.tracking-page--soft-metal-preview .tracking-wim-map-point__icon::before {
+  display: block;
+  width: 19px;
+  height: 14px;
+  border: 2px solid #ffffff;
+  border-top-width: 4px;
+  border-radius: 4px;
+  content: "";
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-point::after {
+  border-top-color: var(--tracking-warning);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-point--moving {
+  border-color: var(--brand-accent);
+  background: color-mix(in srgb, var(--brand-accent) 10%, #ffffff);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-point--moving::after {
+  border-top-color: var(--brand-accent);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-point--moving .tracking-wim-map-point__icon {
+  background: var(--brand-accent);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-point--service {
+  border-color: var(--tracking-warning);
+  background: color-mix(in srgb, var(--tracking-warning) 10%, #ffffff);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-point--waiting,
+.tracking-page--soft-metal-preview .tracking-wim-map-point--off-route {
+  border-color: var(--tracking-bluegrey);
+  background: color-mix(in srgb, var(--tracking-bluegrey) 9%, #ffffff);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-point--waiting::after,
+.tracking-page--soft-metal-preview .tracking-wim-map-point--off-route::after {
+  border-top-color: var(--tracking-bluegrey);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-point--waiting .tracking-wim-map-point__icon,
+.tracking-page--soft-metal-preview .tracking-wim-map-point--off-route .tracking-wim-map-point__icon {
+  background: var(--tracking-bluegrey);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map__country,
+.tracking-page--soft-metal-preview .tracking-demo-empty-map {
+  border-color: var(--border-soft);
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: var(--shadow-inset);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map__label,
+.tracking-page--soft-metal-preview .tracking-demo-place {
+  border-color: var(--border-soft);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text-muted);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-legend span {
+  color: var(--tracking-graphite);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-legend__dot--active {
+  background: var(--brand-accent);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-legend__dot--service {
+  background: var(--tracking-warning);
+}
+
+.tracking-page--soft-metal-preview .tracking-wim-map-legend__dot--planned {
+  background: var(--tracking-bluegrey);
+}
+
+.tracking-page--soft-metal-preview .tracking-disabled-action:disabled {
+  background: color-mix(in srgb, var(--tracking-graphite) 9%, #ffffff);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+@media (max-width: 900px) {
+  .tracking-page--soft-metal-preview {
+    width: min(100% - 20px, 760px);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-layout,
+  .tracking-page--soft-metal-preview .tracking-source-panel,
+  .tracking-page--soft-metal-preview .tracking-source-modes,
+  .tracking-page--soft-metal-preview .tracking-detail-grid,
+  .tracking-page--soft-metal-preview .tracking-detail-grid--compact,
+  .tracking-page--soft-metal-preview .tracking-trip-layout,
+  .tracking-page--soft-metal-preview .tracking-tcars-mode-grid,
+  .tracking-page--soft-metal-preview .tracking-tcars-location-list,
+  .tracking-page--soft-metal-preview .tracking-tcars-invalid-list,
+  .tracking-page--soft-metal-preview .tracking-wim-summary,
+  .tracking-page--soft-metal-preview .tracking-wim-grid,
+  .tracking-page--soft-metal-preview .tracking-wim-list,
+  .tracking-page--soft-metal-preview .tracking-integration-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-source-mode {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .tracking-page--soft-metal-preview .module-detail,
+  .tracking-page--soft-metal-preview .tracking-section,
+  .tracking-page--soft-metal-preview .tracking-source-panel {
+    padding: var(--space-lg);
+  }
+
+  .tracking-page--soft-metal-preview .module-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-tabs,
+  .tracking-page--soft-metal-preview .tracking-demo-filterbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-map,
+  .tracking-page--soft-metal-preview .tracking-tcars-map,
+  .tracking-page--soft-metal-preview .tracking-wim-map {
+    min-height: 340px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-marker,
+  .tracking-page--soft-metal-preview .tracking-google-marker,
+  .tracking-page--soft-metal-preview .tracking-vehicle-marker {
+    width: 76px;
+    min-width: 76px;
+    height: 58px;
+    min-height: 58px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-vehicle-marker__asset {
+    width: 48px;
+    height: 48px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
+    max-width: 44px;
+    max-height: 44px;
   }
 }
