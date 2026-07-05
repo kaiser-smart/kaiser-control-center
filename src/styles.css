@@ -25227,25 +25227,33 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 /* Branch-only module preview: Sledovani vozidel soft-metal validation. */
 body:has(.tracking-page--soft-metal-preview) {
   background:
-    linear-gradient(180deg, #fbfcfb 0%, #eef1f0 56%, #e3e8e5 100%);
+    linear-gradient(145deg, #e9ecee 0%, #eef0f1 42%, #d8dde0 100%);
 }
 
 .tracking-page--soft-metal-preview {
   --brand-primary: #75bd25;
   --brand-accent: #75bd25;
-  --bg-app: #eef1f0;
-  --surface: #f9faf8;
-  --surface-soft: #f3f5f3;
-  --surface-raised: #ffffff;
-  --surface-inset: #e5e9e6;
+  --bg-app: #e7eaec;
+  --bg-app-deep: #d8dde0;
+  --surface: #eef0f1;
+  --surface-soft: #f3f4f4;
+  --surface-raised: #f1f3f3;
+  --surface-inset: #dde2e4;
+  --surface-sunken: #d4dadd;
+  --metal-gradient: linear-gradient(145deg, #f5f6f6 0%, #e3e7e9 48%, #d9dee1 100%);
+  --metal-gradient-soft: linear-gradient(145deg, #f3f5f5 0%, #e9edef 52%, #dfe4e6 100%);
+  --metal-gradient-inset: linear-gradient(145deg, #d5dbde 0%, #edf0f1 100%);
+  --metal-gradient-control: linear-gradient(145deg, #f0f2f2 0%, #e4e8ea 54%, #dce1e3 100%);
   --text-main: #1f2921;
-  --text-muted: #657064;
-  --border-soft: rgba(67, 78, 72, 0.17);
-  --shadow-raised: 10px 12px 26px rgba(38, 48, 43, 0.10), -8px -8px 22px rgba(255, 255, 255, 0.86);
-  --shadow-raised-hover: 13px 15px 30px rgba(38, 48, 43, 0.12), -8px -8px 22px rgba(255, 255, 255, 0.9);
-  --shadow-inset: inset 4px 4px 10px rgba(38, 48, 43, 0.08), inset -4px -4px 10px rgba(255, 255, 255, 0.84);
-  --tracking-metal-bg: linear-gradient(180deg, #fbfcfb 0%, #f1f4f2 100%);
-  --tracking-metal-inset-bg: linear-gradient(180deg, #e9eeeb 0%, #f6f8f6 100%);
+  --text-muted: #5f6b70;
+  --border-soft: rgba(91, 105, 112, 0.2);
+  --border-highlight: rgba(255, 255, 255, 0.72);
+  --highlight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  --shadow-raised: 10px 12px 28px rgba(90, 104, 112, 0.18), -8px -8px 22px rgba(255, 255, 255, 0.82);
+  --shadow-raised-hover: 11px 13px 30px rgba(90, 104, 112, 0.2), -8px -8px 22px rgba(255, 255, 255, 0.84);
+  --shadow-inset: inset 6px 6px 14px rgba(90, 104, 112, 0.16), inset -6px -6px 14px rgba(255, 255, 255, 0.72);
+  --tracking-metal-bg: var(--metal-gradient);
+  --tracking-metal-inset-bg: var(--metal-gradient-inset);
   --tracking-accent-soft: color-mix(in srgb, var(--brand-accent) 12%, transparent);
   --tracking-accent-border: color-mix(in srgb, var(--brand-accent) 44%, var(--border-soft));
   --tracking-warning: #c98121;
@@ -25253,6 +25261,7 @@ body:has(.tracking-page--soft-metal-preview) {
   --tracking-bluegrey: #637c8a;
   --tracking-graphite: #4b5550;
   width: min(1360px, calc(100% - 28px));
+  background: linear-gradient(145deg, rgba(245, 246, 246, 0.7) 0%, rgba(221, 226, 228, 0.66) 100%);
   color: var(--text-main);
   font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -25271,7 +25280,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   background: var(--tracking-metal-bg);
-  box-shadow: var(--shadow-raised);
+  box-shadow: var(--shadow-raised), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .topbar {
@@ -25290,7 +25299,7 @@ body:has(.tracking-page--soft-metal-preview) {
   height: 68px;
   border: 1px solid var(--tracking-accent-border);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--brand-accent) 12%, #ffffff);
+  background: color-mix(in srgb, var(--brand-accent) 12%, var(--surface-raised));
   color: var(--brand-accent);
   box-shadow: var(--shadow-inset);
 }
@@ -25397,7 +25406,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-tab--active,
 .tracking-page--soft-metal-preview .tracking-demo-filter--active {
   border-color: var(--tracking-accent-border);
-  background: color-mix(in srgb, var(--brand-accent) 13%, #ffffff);
+  background: color-mix(in srgb, var(--brand-accent) 13%, var(--surface-raised));
   color: color-mix(in srgb, var(--brand-accent) 74%, #1f2921);
   box-shadow: var(--shadow-inset);
 }
@@ -25442,12 +25451,12 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .tracking-source-mode--active {
   border-color: var(--tracking-accent-border);
-  background: color-mix(in srgb, var(--brand-accent) 12%, #ffffff);
+  background: color-mix(in srgb, var(--brand-accent) 12%, var(--surface-raised));
   box-shadow: var(--shadow-inset);
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--passive {
-  background: color-mix(in srgb, var(--surface-inset) 52%, #ffffff);
+  background: color-mix(in srgb, var(--surface-inset) 52%, var(--surface-raised));
   opacity: 0.78;
 }
 
@@ -25482,34 +25491,34 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-wim-state,
 .tracking-page--soft-metal-preview .tracking-wim-map-empty {
   border-color: color-mix(in srgb, var(--tracking-warning) 30%, var(--border-soft));
-  background: color-mix(in srgb, var(--tracking-warning) 10%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-warning) 10%, transparent);
   color: color-mix(in srgb, var(--tracking-warning) 70%, #1f2921);
   box-shadow: none;
 }
 
 .tracking-page--soft-metal-preview .tracking-status--moving {
   border-color: color-mix(in srgb, var(--brand-accent) 34%, var(--border-soft));
-  background: color-mix(in srgb, var(--brand-accent) 16%, #ffffff);
+  background: color-mix(in srgb, var(--brand-accent) 16%, transparent);
   color: color-mix(in srgb, var(--brand-accent) 72%, #1f2921);
 }
 
 .tracking-page--soft-metal-preview .tracking-status--stopped {
   border-color: color-mix(in srgb, var(--tracking-bluegrey) 28%, var(--border-soft));
-  background: color-mix(in srgb, var(--tracking-bluegrey) 13%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-bluegrey) 13%, transparent);
   color: color-mix(in srgb, var(--tracking-bluegrey) 76%, #1f2921);
 }
 
 .tracking-page--soft-metal-preview .tracking-status--service,
 .tracking-page--soft-metal-preview .tracking-status--no-signal {
   border-color: color-mix(in srgb, var(--tracking-warning) 32%, var(--border-soft));
-  background: color-mix(in srgb, var(--tracking-warning) 14%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-warning) 14%, transparent);
   color: color-mix(in srgb, var(--tracking-warning) 76%, #1f2921);
 }
 
 .tracking-page--soft-metal-preview .tracking-status--off-route,
 .tracking-page--soft-metal-preview .tracking-status--out-of-order {
   border-color: color-mix(in srgb, var(--tracking-danger) 32%, var(--border-soft));
-  background: color-mix(in srgb, var(--tracking-danger) 12%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-danger) 12%, transparent);
   color: color-mix(in srgb, var(--tracking-danger) 78%, #1f2921);
 }
 
@@ -25517,7 +25526,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-status--offline,
 .tracking-page--soft-metal-preview .tracking-status--waiting {
   border-color: color-mix(in srgb, var(--tracking-graphite) 18%, var(--border-soft));
-  background: color-mix(in srgb, var(--tracking-graphite) 8%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-graphite) 8%, transparent);
   color: var(--tracking-graphite);
 }
 
@@ -25532,7 +25541,7 @@ body:has(.tracking-page--soft-metal-preview) {
   background:
     linear-gradient(90deg, rgba(76, 86, 80, 0.08) 1px, transparent 1px),
     linear-gradient(180deg, rgba(76, 86, 80, 0.07) 1px, transparent 1px),
-    linear-gradient(180deg, #f6f8f6 0%, #e8ece9 100%);
+    var(--metal-gradient-inset);
   background-size: 56px 56px, 56px 56px, auto;
   box-shadow: var(--shadow-inset);
 }
@@ -25575,9 +25584,9 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-demo-alert {
   border: 1px solid color-mix(in srgb, var(--tracking-danger) 44%, var(--border-soft));
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.94);
+  background: color-mix(in srgb, var(--tracking-danger) 12%, var(--surface-raised));
   color: var(--text-main);
-  box-shadow: var(--shadow-raised);
+  box-shadow: var(--shadow-raised), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-alert--active,
@@ -25632,8 +25641,8 @@ body:has(.tracking-page--soft-metal-preview) {
   width: 62px;
   height: 62px;
   border-width: 2px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow-raised);
+  background: var(--tracking-control-bg);
+  box-shadow: var(--shadow-raised), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
@@ -25642,8 +25651,9 @@ body:has(.tracking-page--soft-metal-preview) {
 }
 
 .tracking-page--soft-metal-preview .tracking-map-vehicle-label {
-  border-color: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 7px 13px rgba(38, 48, 43, 0.14);
+  border-color: var(--border-highlight);
+  background: color-mix(in srgb, var(--surface-raised) 78%, transparent);
+  box-shadow: 0 7px 13px rgba(90, 104, 112, 0.14);
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker--moving,
@@ -25732,7 +25742,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-tcars-google-pin--selected,
 .tracking-page--soft-metal-preview .tracking-wim-google-pin--selected {
   border-color: var(--tracking-accent-border);
-  background: color-mix(in srgb, var(--brand-accent) 10%, #ffffff);
+  background: color-mix(in srgb, var(--brand-accent) 10%, var(--surface-raised));
   box-shadow: var(--shadow-inset);
 }
 
@@ -25741,7 +25751,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-tcars-state--error,
 .tracking-page--soft-metal-preview .tracking-wim-state--error {
   border-color: color-mix(in srgb, var(--tracking-danger) 38%, var(--border-soft));
-  background: color-mix(in srgb, var(--tracking-danger) 10%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-danger) 10%, var(--surface-raised));
   color: color-mix(in srgb, var(--tracking-danger) 76%, #1f2921);
   box-shadow: none;
 }
@@ -25821,7 +25831,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-list-table__head,
 .tracking-page--soft-metal-preview .tracking-history-table__head,
 .tracking-page--soft-metal-preview .tracking-table th {
-  background: color-mix(in srgb, var(--surface-inset) 70%, #ffffff);
+  background: color-mix(in srgb, var(--surface-inset) 70%, var(--surface-raised));
 }
 
 .tracking-page--soft-metal-preview .tracking-table td {
@@ -25850,8 +25860,8 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-wim-google-pin,
 .tracking-page--soft-metal-preview .tracking-wim-map-point {
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 18px rgba(38, 48, 43, 0.14);
+  background: var(--tracking-control-bg);
+  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-tcars-google-pin {
@@ -25865,7 +25875,7 @@ body:has(.tracking-page--soft-metal-preview) {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--brand-accent) 14%, #ffffff);
+  background: color-mix(in srgb, var(--brand-accent) 14%, var(--surface-raised));
 }
 
 .tracking-page--soft-metal-preview .tracking-tcars-google-pin__fallback {
@@ -25910,7 +25920,7 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .tracking-wim-map-point--moving {
   border-color: var(--brand-accent);
-  background: color-mix(in srgb, var(--brand-accent) 10%, #ffffff);
+  background: color-mix(in srgb, var(--brand-accent) 10%, var(--surface-raised));
 }
 
 .tracking-page--soft-metal-preview .tracking-wim-map-point--moving::after {
@@ -25923,13 +25933,13 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .tracking-wim-map-point--service {
   border-color: var(--tracking-warning);
-  background: color-mix(in srgb, var(--tracking-warning) 10%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-warning) 10%, var(--surface-raised));
 }
 
 .tracking-page--soft-metal-preview .tracking-wim-map-point--waiting,
 .tracking-page--soft-metal-preview .tracking-wim-map-point--off-route {
   border-color: var(--tracking-bluegrey);
-  background: color-mix(in srgb, var(--tracking-bluegrey) 9%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-bluegrey) 9%, var(--surface-raised));
 }
 
 .tracking-page--soft-metal-preview .tracking-wim-map-point--waiting::after,
@@ -25945,14 +25955,14 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-wim-map__country,
 .tracking-page--soft-metal-preview .tracking-demo-empty-map {
   border-color: var(--border-soft);
-  background: rgba(255, 255, 255, 0.58);
+  background: color-mix(in srgb, var(--surface-raised) 58%, transparent);
   box-shadow: var(--shadow-inset);
 }
 
 .tracking-page--soft-metal-preview .tracking-wim-map__label,
 .tracking-page--soft-metal-preview .tracking-demo-place {
   border-color: var(--border-soft);
-  background: rgba(255, 255, 255, 0.78);
+  background: color-mix(in srgb, var(--surface-raised) 78%, transparent);
   color: var(--text-muted);
 }
 
@@ -25973,7 +25983,7 @@ body:has(.tracking-page--soft-metal-preview) {
 }
 
 .tracking-page--soft-metal-preview .tracking-disabled-action:disabled {
-  background: color-mix(in srgb, var(--tracking-graphite) 9%, #ffffff);
+  background: color-mix(in srgb, var(--tracking-graphite) 9%, var(--surface-raised));
   color: var(--text-muted);
   box-shadow: none;
 }
@@ -26093,7 +26103,7 @@ body:has(.tracking-page--soft-metal-preview) {
 @media (max-width: 520px) {
   body:has(.tracking-page--soft-metal-preview) {
     background:
-      linear-gradient(180deg, #fbfcfb 0%, #eef1f0 62%, #e4e9e6 100%);
+      linear-gradient(145deg, #e9ecee 0%, #eef0f1 50%, #d8dde0 100%);
   }
 
   .tracking-page--soft-metal-preview {
@@ -26347,12 +26357,14 @@ body:has(.tracking-page--soft-metal-preview) {
   --icon-filter-amber: invert(51%) sepia(75%) saturate(712%) hue-rotate(358deg) brightness(88%) contrast(88%);
   --icon-filter-red: invert(42%) sepia(21%) saturate(1114%) hue-rotate(314deg) brightness(88%) contrast(89%);
   --icon-filter-graphite: invert(20%) sepia(18%) saturate(1027%) hue-rotate(173deg) brightness(88%) contrast(88%);
-  --tracking-panel-bg: linear-gradient(145deg, #ffffff 0%, #f3f5f4 52%, #e9eeeb 100%);
-  --tracking-card-bg: linear-gradient(145deg, #ffffff 0%, #f6f8f7 58%, #eef2ef 100%);
-  --tracking-inset-bg: linear-gradient(145deg, #e8edea 0%, #f8faf8 100%);
-  --tracking-soft-shadow: 12px 14px 30px rgba(38, 48, 43, 0.11), -8px -8px 22px rgba(255, 255, 255, 0.88);
-  --tracking-soft-shadow-sm: 8px 10px 20px rgba(38, 48, 43, 0.08), -5px -5px 16px rgba(255, 255, 255, 0.84);
-  --tracking-inset-shadow: inset 5px 5px 12px rgba(38, 48, 43, 0.09), inset -5px -5px 14px rgba(255, 255, 255, 0.9);
+  --tracking-shell-bg: linear-gradient(145deg, rgba(245, 246, 246, 0.78) 0%, rgba(221, 226, 228, 0.7) 100%);
+  --tracking-panel-bg: var(--metal-gradient);
+  --tracking-card-bg: var(--metal-gradient-soft);
+  --tracking-control-bg: var(--metal-gradient-control);
+  --tracking-inset-bg: var(--metal-gradient-inset);
+  --tracking-soft-shadow: 12px 14px 30px rgba(90, 104, 112, 0.17), -8px -8px 22px rgba(255, 255, 255, 0.82);
+  --tracking-soft-shadow-sm: 7px 9px 18px rgba(90, 104, 112, 0.14), -5px -5px 14px rgba(255, 255, 255, 0.74);
+  --tracking-inset-shadow: inset 6px 6px 14px rgba(90, 104, 112, 0.16), inset -6px -6px 14px rgba(255, 255, 255, 0.72);
   --tracking-control-height: 46px;
   width: min(1500px, calc(100% - 28px));
 }
@@ -26377,6 +26389,11 @@ body:has(.tracking-page--soft-metal-preview) {
   display: grid;
   min-width: 0;
   gap: var(--space-lg);
+  border: 1px solid color-mix(in srgb, var(--border-soft) 82%, transparent);
+  border-radius: calc(var(--radius-xl) + 4px);
+  background: var(--tracking-shell-bg);
+  padding: clamp(var(--space-md), 1.5vw, var(--space-lg));
+  box-shadow: var(--shadow-inset);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar {
@@ -26392,7 +26409,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-radius: var(--radius-xl);
   background: var(--tracking-panel-bg);
   padding: var(--sidebar-padding);
-  box-shadow: var(--tracking-soft-shadow);
+  box-shadow: var(--tracking-soft-shadow), var(--highlight-edge);
   transition:
     width var(--sidebar-transition),
     box-shadow 180ms ease,
@@ -26446,7 +26463,7 @@ body:has(.tracking-page--soft-metal-preview) {
   min-height: var(--sidebar-icon-holder);
   justify-content: center;
   border: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--surface-raised) 86%, transparent);
+  background: var(--tracking-control-bg);
   cursor: pointer;
   box-shadow: var(--tracking-soft-shadow-sm);
 }
@@ -26509,7 +26526,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand:hover,
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle:hover {
   border-color: color-mix(in srgb, var(--icon-green) 26%, var(--border-soft));
-  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-soft));
+  background: var(--tracking-control-bg);
   box-shadow: var(--tracking-soft-shadow-sm);
 }
 
@@ -26542,42 +26559,42 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .icon-tone-green {
   --icon-color: var(--icon-green);
-  --icon-bg: color-mix(in srgb, var(--icon-green) 13%, var(--surface-raised));
+  --icon-bg: var(--tracking-control-bg);
   --icon-border: color-mix(in srgb, var(--icon-green) 34%, transparent);
   --icon-filter: var(--icon-filter-green);
 }
 
 .tracking-page--soft-metal-preview .icon-tone-teal {
   --icon-color: var(--icon-teal);
-  --icon-bg: color-mix(in srgb, var(--icon-teal) 12%, var(--surface-raised));
+  --icon-bg: var(--tracking-control-bg);
   --icon-border: color-mix(in srgb, var(--icon-teal) 30%, transparent);
   --icon-filter: var(--icon-filter-teal);
 }
 
 .tracking-page--soft-metal-preview .icon-tone-bluegrey {
   --icon-color: var(--icon-bluegrey);
-  --icon-bg: color-mix(in srgb, var(--icon-bluegrey) 12%, var(--surface-raised));
+  --icon-bg: var(--tracking-control-bg);
   --icon-border: color-mix(in srgb, var(--icon-bluegrey) 28%, transparent);
   --icon-filter: var(--icon-filter-bluegrey);
 }
 
 .tracking-page--soft-metal-preview .icon-tone-amber {
   --icon-color: var(--icon-amber);
-  --icon-bg: color-mix(in srgb, var(--icon-amber) 13%, var(--surface-raised));
+  --icon-bg: var(--tracking-control-bg);
   --icon-border: color-mix(in srgb, var(--icon-amber) 34%, transparent);
   --icon-filter: var(--icon-filter-amber);
 }
 
 .tracking-page--soft-metal-preview .icon-tone-red {
   --icon-color: var(--icon-red);
-  --icon-bg: color-mix(in srgb, var(--icon-red) 11%, var(--surface-raised));
+  --icon-bg: var(--tracking-control-bg);
   --icon-border: color-mix(in srgb, var(--icon-red) 30%, transparent);
   --icon-filter: var(--icon-filter-red);
 }
 
 .tracking-page--soft-metal-preview .icon-tone-graphite {
   --icon-color: var(--icon-graphite);
-  --icon-bg: color-mix(in srgb, var(--icon-graphite) 8%, var(--surface-raised));
+  --icon-bg: var(--tracking-control-bg);
   --icon-border: color-mix(in srgb, var(--icon-graphite) 22%, transparent);
   --icon-filter: var(--icon-filter-graphite);
 }
@@ -26637,7 +26654,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   background: var(--tracking-card-bg);
-  box-shadow: var(--tracking-soft-shadow-sm);
+  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric {
@@ -26652,6 +26669,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-preview-metric--active {
   border-color: color-mix(in srgb, var(--icon-green) 34%, var(--border-soft));
   background: color-mix(in srgb, var(--icon-green) 7%, var(--surface-raised));
+  box-shadow: var(--tracking-inset-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric__copy {
@@ -26724,9 +26742,10 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-wim-map-panel,
 .tracking-page--soft-metal-preview .tracking-icon-spec,
 .tracking-page--soft-metal-preview .module-feedback {
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-xl);
   background: var(--tracking-panel-bg);
-  box-shadow: var(--tracking-soft-shadow);
+  box-shadow: var(--tracking-soft-shadow), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .topbar {
@@ -26747,7 +26766,7 @@ body:has(.tracking-page--soft-metal-preview) {
   width: 88px;
   height: 88px;
   border-radius: var(--radius-xl);
-  background: color-mix(in srgb, var(--icon-green) 12%, var(--surface-raised));
+  background: var(--tracking-inset-bg);
   box-shadow: var(--tracking-inset-shadow);
 }
 
@@ -26790,6 +26809,7 @@ body:has(.tracking-page--soft-metal-preview) {
   gap: var(--space-md);
   padding: var(--space-lg);
   background: var(--tracking-card-bg);
+  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode__copy {
@@ -26805,6 +26825,7 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .tracking-source-mode--active {
   background: color-mix(in srgb, var(--icon-green) 8%, var(--surface-raised));
+  box-shadow: var(--tracking-inset-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--passive {
@@ -26826,17 +26847,31 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-tab,
 .tracking-page--soft-metal-preview .tracking-demo-filter {
   min-height: var(--tracking-control-height);
-  background: var(--tracking-card-bg);
-  box-shadow: var(--tracking-soft-shadow-sm);
+  background: var(--tracking-control-bg);
+  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview :is(.secondary-link, .back-button, .tracking-tab, .tracking-demo-filter):hover {
-  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-soft));
+  background: var(--metal-gradient-soft);
+  box-shadow: 9px 11px 22px rgba(90, 104, 112, 0.15), -5px -5px 14px rgba(255, 255, 255, 0.76), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-tab--active,
 .tracking-page--soft-metal-preview .tracking-demo-filter--active {
   background: color-mix(in srgb, var(--icon-green) 11%, var(--surface-raised));
+  box-shadow: var(--tracking-inset-shadow);
+}
+
+.tracking-page--soft-metal-preview .tracking-tabs,
+.tracking-page--soft-metal-preview .tracking-demo-filterbar,
+.tracking-page--soft-metal-preview .tracking-demo-controls,
+.tracking-page--soft-metal-preview .tracking-status-legend,
+.tracking-page--soft-metal-preview .tracking-actions {
+  border: 1px solid color-mix(in srgb, var(--border-soft) 84%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--tracking-inset-bg);
+  padding: 7px;
+  box-shadow: var(--tracking-inset-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-badge,
@@ -26850,8 +26885,10 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-icon-spec__head > span {
   gap: 7px;
   min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 88%, transparent);
   padding: 6px 11px;
-  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+  box-shadow: none;
 }
 
 .tracking-page--soft-metal-preview .tracking-status::before {
@@ -26883,9 +26920,10 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-field-chips span,
 .tracking-page--soft-metal-preview .tracking-icon-spec__files li,
 .tracking-page--soft-metal-preview .tracking-icon-spec__mapping {
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   background: var(--tracking-card-bg);
-  box-shadow: var(--tracking-soft-shadow-sm);
+  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card {
@@ -26928,10 +26966,12 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card--selected {
   background: color-mix(in srgb, var(--icon-green) 9%, var(--surface-raised));
+  box-shadow: var(--tracking-inset-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card--alert {
   background: color-mix(in srgb, var(--icon-red) 9%, var(--surface-raised));
+  box-shadow: var(--tracking-inset-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-image--card {
@@ -26967,6 +27007,22 @@ body:has(.tracking-page--soft-metal-preview) {
   box-shadow: var(--tracking-inset-shadow);
 }
 
+.tracking-page--soft-metal-preview .tracking-demo-map-section {
+  background: var(--tracking-panel-bg);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-list-section {
+  background: var(--metal-gradient-soft);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-map-notice,
+.tracking-page--soft-metal-preview .tracking-demo-api-note,
+.tracking-page--soft-metal-preview .tracking-api-note {
+  border-color: color-mix(in srgb, var(--icon-amber) 32%, var(--border-soft));
+  background: color-mix(in srgb, var(--icon-amber) 11%, transparent);
+  box-shadow: none;
+}
+
 .tracking-page--soft-metal-preview .tracking-vehicle-marker {
   width: 106px;
   min-width: 106px;
@@ -26977,7 +27033,8 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-vehicle-marker__asset {
   width: 68px;
   height: 68px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--tracking-control-bg);
+  box-shadow: var(--tracking-soft-shadow-sm);
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
