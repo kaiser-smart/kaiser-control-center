@@ -1286,6 +1286,79 @@ function driverPartRequestPatrikPriceHandoffEligibility(item = {}, options = {})
   };
 }
 
+function readinessBlocker(code, message) {
+  return { code: cleanString(code), message: cleanString(message) };
+}
+
+async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, options = {}) {
+  const allowProbablePartHandoff = options.allowProbablePartHandoff !== false;
+  const baseEligibility = driverPartRequestPatrikHandoffEligibility(item, { allowProbablePartHandoff });
+  const priceEligibility = driverPartRequestPatrikPriceHandoffEligibility(item, {
+    requirePriceOffersForHandoff: true
+  });
+  const priceOffers = driverPartRequestPriceOffers(item);
+  const priceSearchConfigured = isDriverPartPriceSearchConfigured(env);
+  const patrik = await partsRecipient(env);
+  const recipientConfigured = Boolean(cleanString(patrik.email));
+  const ccConfigured = Boolean(pilotCcEmail(env));
+  const blockers = [];
+
+  if (!baseEligibility.allowed) {
+    blockers.push(readinessBlocker(baseEligibility.code, baseEligibility.message));
+  }
+  if (baseEligibility.allowed && !priceSearchConfigured && !priceEligibility.allowed) {
+    blockers.push(readinessBlocker(
+      "driver_part_price_search_not_configured",
+      "AI Boost web-search není nastavený. Chybí OPENAI_API_KEY nebo PARTS_PRICE_SEARCH_ENDPOINT."
+    ));
+  }
+  if (baseEligibility.allowed && !priceEligibility.allowed) {
+    blockers.push(readinessBlocker(priceEligibility.code, priceEligibility.message));
+  }
+  if (baseEligibility.allowed && priceEligibility.allowed && !recipientConfigured) {
+    blockers.push(readinessBlocker(
+      "driver_part_patrik_email_missing",
+      "Chybí e-mail Patrika nebo cílový e-mail pro náhradní díly."
+    ));
+  }
+
+  const canRunPriceBoost = canManageDriverPartRequests(user)
+    && baseEligibility.allowed
+    && priceSearchConfigured
+    && !driverPartRequestHasRequiredPriceOffers(item, 3);
+  const canSendEmail = canManageDriverPartRequests(user)
+    && baseEligibility.allowed
+    && priceEligibility.allowed
+    && recipientConfigured;
+
+  return {
+    ok: canSendEmail,
+    status: canSendEmail ? "email_ready" : canRunPriceBoost ? "price_search_ready" : "waiting",
+    canRunPriceBoost,
+    canSendEmail,
+    priceSearchConfigured,
+    recipientConfigured,
+    ccConfigured,
+    vehicleVerified: item.licensePlateVerified === true && item.manualVehicleReview !== true,
+    vinPresent: Boolean(cleanString(item.vin)),
+    partVerified: driverPartRequestHasVerifiedPartForHandoff(item),
+    probablePartAllowed: allowProbablePartHandoff && driverPartRequestHasPilotPartCandidateForHandoff(item, { allowProbablePartHandoff: true }),
+    priceOfferCount: priceOffers.length,
+    requiredPriceOfferCount: 3,
+    missingPriceOfferCount: Math.max(0, 3 - priceOffers.length),
+    priceOffers,
+    blockers,
+    message: canSendEmail
+      ? "E-mail Patrikovi je připravený: vozidlo, VIN, díl i 3 odkazy jsou splněné."
+      : blockers[0]?.message || "Předání Patrikovi zatím čeká na doplnění podmínek."
+  };
+}
+
+export async function getDriverPartHandoffReadiness(env, user, id, options = {}) {
+  const { item } = await requestForUser(env, id, user);
+  return driverPartRequestHandoffReadinessForItem(env, user, item, options);
+}
+
 async function saveDriverPartPriceBoostResult(db, user, item, result) {
   const after = {
     ...item,
@@ -2022,6 +2095,7 @@ export const __test = {
   driverPartRequestHasVerifiedPartForHandoff,
   driverPartRequestHasRequiredPriceOffers,
   driverPartRequestHasTrustedKsoVehicleSelection,
+  driverPartRequestHandoffReadinessForItem,
   driverPartRequestPatrikHandoffEligibility,
   driverPartRequestPatrikPriceHandoffEligibility,
   driverPartRequestSourceHasManualVehicleReview,

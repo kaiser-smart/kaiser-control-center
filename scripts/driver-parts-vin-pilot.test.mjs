@@ -471,6 +471,37 @@ function passengerVehicle(overrides = {}) {
   assert.equal(driverPartRequestInternals.driverPartRequestPriceOffers(itemWithOffers).length, 3);
   const vinPilotEmailReady = driverPartRequestInternals.driverPartVinPilotState(itemWithOffers, { allowed: true });
   assert.equal(vinPilotEmailReady.status, "email_ready");
+
+  const readinessWithTwoOffers = await driverPartRequestInternals.driverPartRequestHandoffReadinessForItem({
+    OPENAI_API_KEY: "test-openai-key",
+    PARTS_ORDER_EMAIL: "patrik@example.test"
+  }, adminUser, {
+    ...itemWithTwoOffers,
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    vin: "WDD2573211A123456"
+  }, { allowProbablePartHandoff: true });
+  assert.equal(readinessWithTwoOffers.canSendEmail, false);
+  assert.equal(readinessWithTwoOffers.canRunPriceBoost, true);
+  assert.equal(readinessWithTwoOffers.status, "price_search_ready");
+  assert.equal(readinessWithTwoOffers.priceOfferCount, 2);
+  assert.equal(readinessWithTwoOffers.missingPriceOfferCount, 1);
+  assert.equal(readinessWithTwoOffers.blockers.some((blocker) => blocker.code === "driver_part_price_offers_required"), true);
+
+  const readinessWithThreeOffers = await driverPartRequestInternals.driverPartRequestHandoffReadinessForItem({
+    OPENAI_API_KEY: "test-openai-key",
+    PARTS_ORDER_EMAIL: "patrik@example.test"
+  }, adminUser, {
+    ...itemWithOffers,
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    vin: "WDD2573211A123456"
+  }, { allowProbablePartHandoff: true });
+  assert.equal(readinessWithThreeOffers.ok, true);
+  assert.equal(readinessWithThreeOffers.canSendEmail, true);
+  assert.equal(readinessWithThreeOffers.status, "email_ready");
+  assert.equal(readinessWithThreeOffers.priceOfferCount, 3);
+  assert.equal(readinessWithThreeOffers.blockers.length, 0);
 }
 
 {
