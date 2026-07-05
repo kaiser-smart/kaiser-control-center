@@ -356,15 +356,13 @@ body:has(.smart-tablet-ui) {
 }
 
 :where(.theme-system, .smart-tablet-ui) .sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sidebar-item-gap);
+  display: grid;
+  place-items: center;
   min-height: var(--sidebar-item-height);
 }
 
 :where(.theme-system, .smart-tablet-ui) .sidebar-brand {
-  display: flex;
+  display: none;
   align-items: center;
   gap: var(--sidebar-item-gap);
   min-width: 0;
@@ -509,7 +507,15 @@ body:has(.smart-tablet-ui) {
 
 :where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .sidebar-header,
 :where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .sidebar-header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: var(--sidebar-item-gap);
+}
+
+:where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .sidebar-brand,
+:where(.theme-system, .smart-tablet-ui) .app-sidebar:has(.sidebar-state-input:checked) .sidebar-brand {
+  display: flex;
 }
 
 :where(.theme-system, .smart-tablet-ui) .app-sidebar.sidebar--expanded .nav-item,
@@ -1129,12 +1135,8 @@ body:has(.smart-tablet-ui) {
     width: var(--sidebar-width-compact);
   }
 
-  :where(.theme-system, .smart-tablet-ui) .sidebar-toggle {
-    display: none;
-  }
-
   :where(.theme-system, .smart-tablet-ui) .app-sidebar .sidebar-header {
-    justify-content: center;
+    display: none;
   }
 
   :where(.theme-system, .smart-tablet-ui) .app-sidebar .nav-item {
