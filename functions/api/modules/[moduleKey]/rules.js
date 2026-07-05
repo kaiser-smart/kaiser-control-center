@@ -22,12 +22,13 @@ function moduleRulesError(error) {
 }
 
 function moduleRulesReadOnlyPilotResponse(key) {
-  if (key !== "collection-routes") {
+  if (!["collection-routes", "receivables"].includes(key)) {
     return null;
   }
 
+  const moduleName = key === "receivables" ? "Pohledávky" : "Trasy svozu";
   return json({
-    error: "Trasy svozu jsou ve Fázi 1A pouze read-only pilot. Pravidla ani automatizace se teď nesmí měnit.",
+    error: `${moduleName} jsou ve Fázi 1A pouze read-only pilot. Pravidla ani automatizace se teď nesmí měnit.`,
     apiStatus: "ready"
   }, 403);
 }

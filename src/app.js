@@ -22398,6 +22398,484 @@ async function copyDriverReportMobileLink(link) {
   render();
 }
 
+const RECEIVABLES_SOURCE_CARDS = [
+  {
+    label: "Vistos InvoiceIssued",
+    value: "čeká na API mapping",
+    detail: "Faktury, VS, splatnost, částky, PDF faktur a stav úhrady musí jít jen přes backend."
+  },
+  {
+    label: "Vistos Company",
+    value: "čeká na API mapping",
+    detail: "Firma, IČO, DIČ, kontakty a preferovaná osoba pro jeden balíček faktur zákazníka."
+  },
+  {
+    label: "Banka / KB",
+    value: "PDF parser v další fázi",
+    detail: "Výpisy mají použitelný vzor příchozích úhrad, ale parser musí běžet serverově a s confidence frontou."
+  },
+  {
+    label: "eISIR",
+    value: "nenapojeno",
+    detail: "Denní kontrola insolvencí bude až cloud automatizace s logem běhu a incidentem."
+  }
+];
+
+const RECEIVABLES_KPI_CARDS = [
+  ["Celkem po splatnosti", "čeká na Vistos"],
+  ["1-15 dní", "čeká na ledger"],
+  ["16-30 dní", "čeká na ledger"],
+  ["31-45 dní", "čeká na ledger"],
+  ["46-60 dní", "čeká na ledger"],
+  ["Po 60 dnech", "čeká na právní pravidlo"],
+  ["Přislíbené úhrady", "čeká na inbox"],
+  ["Dnes ke kontrole", "čeká na AI frontu"],
+  ["Insolvenční nálezy", "čeká na eISIR"],
+  ["Predikce 7 / 14 / 30 dní", "čeká na model"]
+];
+
+const RECEIVABLES_PACKAGE_COLUMNS = [
+  "Zákazník",
+  "IČO",
+  "Rating",
+  "Skóre",
+  "Otevřená částka",
+  "Faktur",
+  "Nejstarší splatnost",
+  "Max. dnů po splatnosti",
+  "Částečně uhrazeno",
+  "Poslední kontakt",
+  "Další akce",
+  "Stav"
+];
+
+const RECEIVABLES_RATING_ROWS = [
+  ["A", "90-100", "minimum připomínek, vztahově klidný režim"],
+  ["B", "75-89", "běžná přátelská připomínka po splatnosti"],
+  ["C", "55-74", "pečlivější sledování a jemná vícekanálová komunikace"],
+  ["D", "35-54", "vyšší interní priorita, tón zůstává přátelský"],
+  ["E", "0-34", "průběžná interní příprava podkladů"],
+  ["INSOLVENCE", "stop", "stop automatizace, incident a Markéta"]
+];
+
+const RECEIVABLES_GUARDRAILS = [
+  "Nikdy neposílat mimo pracovní den a nikdy po 16:00.",
+  "Nikdy neposlat více než jeden outbound kontakt zákazníkovi za den.",
+  "Více otevřených faktur stejného zákazníka vždy řešit jako jeden balíček.",
+  "Pokud je aktivní slib úhrady, čekat do slíbeného data + 1 pracovní den.",
+  "Negativní odpověď, spor, právní hrozba nebo insolvence zastaví automat a předá případ Markétě.",
+  "AI nikdy nepřitvrzuje tón, mění jen interní prioritu a kanál.",
+  "Zákaznický text nesmí obsahovat zakázaná slova z guardrail seznamu.",
+  "Po 60 dnech bez úhrady se nepřitvrzuje komunikace, pouze se připraví interní právní balíček."
+];
+
+const RECEIVABLES_CADENCE_ROWS = [
+  ["D-3", "jen C-E nebo vyšší částka", "jemný e-mail před splatností"],
+  ["D+1", "všechny relevantní ratingy", "e-mail s přehledem otevřených faktur"],
+  ["D+5", "podle historie", "e-mail nebo SMS"],
+  ["D+10", "jen opt-in a bez reakce", "WhatsApp / SMS"],
+  ["D+15", "vyšší částka nebo horší rating", "Šarlota jako zákaznická péče"],
+  ["D+25", "bez reakce", "osobnější e-mail s nabídkou doplnění"],
+  ["D+40", "interně", "tichá příprava podkladů"],
+  ["D+55", "poslední přátelská rekapitulace", "balíček otevřených faktur"],
+  ["D+60", "stop autonomie", "Markéta a právní balíček"]
+];
+
+const RECEIVABLES_LEGAL_PACKAGE = [
+  "customer_name, ico, dic, sídlo a kontaktní osoby",
+  "všechny otevřené faktury a PDF faktur",
+  "datum vystavení, splatnost, částka, uhrazeno a zbývá",
+  "spárované i částečné bankovní transakce",
+  "komunikační historie, odpovědi a sliby úhrady",
+  "spory, AI poznámky, insolvenční kontrola a časová osa"
+];
+
+const RECEIVABLES_BANNED_WORDS = [
+  "dluh",
+  "dlužník",
+  "vymáhání",
+  "sankce",
+  "penále",
+  "exekuce",
+  "právní kroky",
+  "poslední výzva",
+  "okamžitě uhraďte"
+];
+
+function receivablesStatusPill(label, tone = "waiting") {
+  return `<span class="receivables-pill receivables-pill--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function receivablesKpiGrid() {
+  return `
+    <div class="receivables-kpi-grid" aria-label="KPI pohledávek">
+      ${RECEIVABLES_KPI_CARDS.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function receivablesSourceGrid() {
+  return `
+    <section class="receivables-panel" id="receivables-sources" aria-labelledby="receivables-sources-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Datové zdroje</p>
+          <h2 id="receivables-sources-title">Zdroj pravdy a stav napojení</h2>
+          <p>V této fázi se žádný externí systém nevolá. Tohle je cílový contract pro další backendovou fázi.</p>
+        </div>
+        ${receivablesStatusPill("read-only", "safe")}
+      </div>
+      <div class="receivables-source-grid">
+        ${RECEIVABLES_SOURCE_CARDS.map((item) => `
+          <article>
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(item.value)}</strong>
+            <p>${escapeHtml(item.detail)}</p>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function receivablesRealityPanel() {
+  return `
+    <section class="receivables-panel receivables-panel--reality" id="receivables-reality" aria-labelledby="receivables-reality-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Provozní realita</p>
+          <h2 id="receivables-reality-title">Co v pilotu opravdu funguje</h2>
+          <p>Pilot ukazuje cílovou strukturu a bezpečnostní mantinely. Nejde o ostrou správu pohledávek.</p>
+        </div>
+        ${receivablesStatusPill("UI návrh / read-only pilot", "warning")}
+      </div>
+      <div class="receivables-reality-grid">
+        <article>
+          <span>Ukládání dat</span>
+          <strong>žádné provozní ukládání</strong>
+          <p>Neexistuje nová DB tabulka, migrace ani ledger faktur. Provozní data nesmí být v localStorage/sessionStorage/IndexedDB.</p>
+        </article>
+        <article>
+          <span>Automatizace</span>
+          <strong>neběží</strong>
+          <p>Žádný worker, cron ani queue pro pohledávky zatím není vytvořený.</p>
+        </article>
+        <article>
+          <span>Outbound komunikace</span>
+          <strong>vypnuto</strong>
+          <p>E-mail, SMS, WhatsApp a Šarlota jsou jen návrh budoucí orchestrace.</p>
+        </article>
+        <article>
+          <span>Import banky</span>
+          <strong>další fáze</strong>
+          <p>PDF výpisy se musí zpracovat serverovým parserem s audit logem a frontou nespárovaných plateb.</p>
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesPackageTable() {
+  return `
+    <section class="receivables-panel" id="receivables-packages" aria-labelledby="receivables-packages-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Bundle logic</p>
+          <h2 id="receivables-packages-title">Balíčky otevřených faktur</h2>
+          <p>Jeden zákazník = jeden balíček. Více faktur se nikdy nesmí řešit oddělenými zprávami.</p>
+        </div>
+        ${receivablesStatusPill("čeká na Invoice Ledger", "waiting")}
+      </div>
+      <div class="receivables-table-wrap">
+        <table class="receivables-table">
+          <thead>
+            <tr>${RECEIVABLES_PACKAGE_COLUMNS.map((label) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="${RECEIVABLES_PACKAGE_COLUMNS.length}">
+                Čeká na backendový ledger z Vistosu a bankovního párování. Pilot nezobrazuje vymyšlené zákazníky ani částky.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesRatingPanel() {
+  return `
+    <section class="receivables-panel" id="receivables-rating" aria-labelledby="receivables-rating-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Rating</p>
+          <h2 id="receivables-rating-title">Platební morálka</h2>
+          <p>Skóre se bude počítat denně a po každé nové faktuře, úhradě, odpovědi nebo insolvenční změně.</p>
+        </div>
+        ${receivablesStatusPill("vzorec připraven jako návrh", "safe")}
+      </div>
+      <div class="receivables-formula">
+        <strong>payment_morality_score</strong>
+        <span>100 - zpoždění - p90 zpoždění - nevčas uhrazená částka - aktuální poměr po splatnosti - částečné úhrady - nesplněné sliby - spory - nespárované platby</span>
+      </div>
+      <div class="receivables-table-wrap">
+        <table class="receivables-table receivables-table--compact">
+          <thead>
+            <tr>
+              <th>Rating</th>
+              <th>Skóre</th>
+              <th>Chování systému</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${RECEIVABLES_RATING_ROWS.map(([rating, score, behavior]) => `
+              <tr>
+                <td><strong>${escapeHtml(rating)}</strong></td>
+                <td>${escapeHtml(score)}</td>
+                <td>${escapeHtml(behavior)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesAiBoosterPanel() {
+  return `
+    <section class="receivables-panel" id="receivables-ai" aria-labelledby="receivables-ai-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">AI Booster</p>
+          <h2 id="receivables-ai-title">Doporučení další akce</h2>
+          <p>AI bude navrhovat kanál, čas a text. Tvrdá pravidla mají vždy přednost.</p>
+        </div>
+        ${receivablesStatusPill("žádný model neběží", "waiting")}
+      </div>
+      <div class="receivables-ai-grid">
+        <article>
+          <span>Optimalizace</span>
+          <strong>pravděpodobnost úhrady × otevřená částka</strong>
+          <p>Minus obtěžování, vztahové riziko, cena kanálu a compliance riziko.</p>
+        </article>
+        <article>
+          <span>Výstup</span>
+          <strong>action, scheduled_at, channel, template, reason</strong>
+          <p>Každé doporučení musí mít confidence a příznak, zda potřebuje schválení člověkem.</p>
+        </article>
+        <article>
+          <span>Interní eskalace</span>
+          <strong>priorita ano, tón ne</strong>
+          <p>Tón zákaznické komunikace se nepřitvrzuje ani u horšího ratingu.</p>
+        </article>
+      </div>
+      <div class="receivables-guardrail-box">
+        <strong>Zakázaná zákaznická slova</strong>
+        <div>${RECEIVABLES_BANNED_WORDS.map((word) => `<span>${escapeHtml(word)}</span>`).join("")}</div>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesCommunicationPanel() {
+  return `
+    <section class="receivables-panel" id="receivables-communication" aria-labelledby="receivables-communication-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Komunikace</p>
+          <h2 id="receivables-communication-title">Přátelská cadence a kanály</h2>
+          <p>Odesílání raději 09:00-15:30, tvrdý stop po 16:00. SMS/WhatsApp jen podle souhlasů a poskytovatele.</p>
+        </div>
+        ${receivablesStatusPill("outbound vypnutý", "warning")}
+      </div>
+      <div class="receivables-table-wrap">
+        <table class="receivables-table receivables-table--compact">
+          <thead>
+            <tr>
+              <th>Den</th>
+              <th>Podmínka</th>
+              <th>Akce</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${RECEIVABLES_CADENCE_ROWS.map(([day, condition, action]) => `
+              <tr>
+                <td><strong>${escapeHtml(day)}</strong></td>
+                <td>${escapeHtml(condition)}</td>
+                <td>${escapeHtml(action)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesLegalPanel() {
+  return `
+    <section class="receivables-panel" id="receivables-legal" aria-labelledby="receivables-legal-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">D+60</p>
+          <h2 id="receivables-legal-title">Právní balíček bez přitvrzení tónu</h2>
+          <p>Po 60 dnech se ukončí autonomie a interně se připraví podklady pro Markétu a právní kancelář.</p>
+        </div>
+        ${receivablesStatusPill("generátor neexistuje", "waiting")}
+      </div>
+      <div class="receivables-legal-grid">
+        ${RECEIVABLES_LEGAL_PACKAGE.map((item) => `
+          <article>
+            <strong>${escapeHtml(item)}</strong>
+          </article>
+        `).join("")}
+      </div>
+      <div class="receivables-output-strip" aria-label="Cílové výstupy právního balíčku">
+        <span>ZIP pro právní kancelář</span>
+        <span>PDF souhrn</span>
+        <span>interní JSON case file</span>
+        <span>e-mail Markétě</span>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesGuardrailsPanel() {
+  return `
+    <section class="receivables-panel" id="receivables-guardrails" aria-labelledby="receivables-guardrails-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Guardrails</p>
+          <h2 id="receivables-guardrails-title">Tvrdá pravidla před AI</h2>
+          <p>Bez těchto pravidel se nesmí spustit žádná ostrá automatizace.</p>
+        </div>
+        ${receivablesStatusPill("povinné pro Fázi 2", "safe")}
+      </div>
+      <ul class="receivables-rule-list">
+        ${RECEIVABLES_GUARDRAILS.map((rule) => `<li>${escapeHtml(rule)}</li>`).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+function receivablesArchitecturePanel() {
+  const steps = [
+    "Vistos Sync",
+    "Invoice Ledger",
+    "Bank Payment Matcher",
+    "Customer Rating Engine",
+    "AI Booster Decision Engine",
+    "Communication Orchestrator",
+    "Inbox Intelligence",
+    "Timeline + Dashboard",
+    "Legal Package Generator"
+  ];
+
+  return `
+    <section class="receivables-panel" id="receivables-architecture" aria-labelledby="receivables-architecture-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Architektura</p>
+          <h2 id="receivables-architecture-title">Cílový tok bez ostrého běhu</h2>
+          <p>Každý krok bude potřebovat backend, audit log a dedupe klíč. Frontend sám nic nespouští.</p>
+        </div>
+        ${receivablesStatusPill("návrh", "safe")}
+      </div>
+      <ol class="receivables-flow">
+        ${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+      </ol>
+    </section>
+  `;
+}
+
+function receivablesRulesSection(user) {
+  ensureModuleRulesData(RECEIVABLES_MODULE_KEY);
+  return moduleRulesAutomationPanel({
+    moduleKey: RECEIVABLES_MODULE_KEY,
+    moduleName: "Pohledávky",
+    user,
+    description: "Read-only evidence budoucích pravidel a automatizací modulu Pohledávky. Pravidla se ve Fázi 1A nesmí měnit.",
+    cloudNote: "Fáze 1A nemá worker, cron, queue ani ostré outbound akce. Zápis pravidel je záměrně blokovaný.",
+    readOnly: true
+  });
+}
+
+function receivablesPage(moduleItem, user, isDashboard = false) {
+  const title = isDashboard ? "Dashboard Pohledávky" : "Pohledávky";
+  return `
+    <main class="app-shell module-page module-theme-scope receivables-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+
+      <section class="module-detail receivables-hero" aria-labelledby="receivables-title">
+        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        <div class="module-detail__body">
+          <div class="module-detail__eyebrow">SMART ODPADY / FINANCE</div>
+          <h1 id="receivables-title">${escapeHtml(title)}</h1>
+          <p>Read-only pilot pro autonomní správu otevřených faktur jako jednoho zákaznického balíčku.</p>
+          <div class="module-detail__status">
+            <span>Stav</span>
+            <strong>Read-only pilot</strong>
+          </div>
+        </div>
+      </section>
+
+      <div class="receivables-warning" role="status">
+        <strong>${RECEIVABLES_PHASE_NOTICE}</strong>
+        <span>Fáze 2 musí dodat backendový ledger, D1/R2 podle dat, integrace, audit log, dedupe a cloudové plánování.</span>
+      </div>
+
+      <nav class="receivables-tabs" aria-label="Sekce Pohledávek">
+        <a href="#receivables-overview">Přehled</a>
+        <a href="#receivables-sources">Zdroje</a>
+        <a href="#receivables-packages">Balíčky</a>
+        <a href="#receivables-ai">AI Booster</a>
+        <a href="#receivables-communication">Komunikace</a>
+        <a href="#receivables-legal">D+60</a>
+        <a href="#module-rules-title">Pravidla</a>
+      </nav>
+
+      <section class="receivables-panel" id="receivables-overview" aria-labelledby="receivables-overview-title">
+        <div class="receivables-panel__head">
+          <div>
+            <p class="module-feedback__eyebrow">Manažerský dashboard</p>
+            <h2 id="receivables-overview-title">Hlavní přehled</h2>
+            <p>KPI zatím neukazují částky, protože neexistuje schválený Invoice Ledger ani bankovní matcher.</p>
+          </div>
+          ${receivablesStatusPill("bez ostrých dat", "warning")}
+        </div>
+        ${receivablesKpiGrid()}
+      </section>
+
+      ${receivablesRealityPanel()}
+      ${receivablesSourceGrid()}
+      ${receivablesPackageTable()}
+      ${receivablesRatingPanel()}
+      ${receivablesAiBoosterPanel()}
+      ${receivablesCommunicationPanel()}
+      ${receivablesLegalPanel()}
+      ${receivablesGuardrailsPanel()}
+      ${receivablesArchitecturePanel()}
+      ${receivablesRulesSection(user)}
+      ${moduleFeedbackBoxFor(moduleItem, user, {
+        moduleId: RECEIVABLES_MODULE_KEY,
+        moduleName: "Pohledávky",
+        placeholder: "Např. doplnit Vistos pole, KB párování, Markétin e-mail nebo hranici významné pohledávky..."
+      })}
+    </main>
+  `;
+}
+
 function modulePage(moduleItem, user, isDashboard = false) {
   if (moduleItem.id === "absence") {
     return absenceModulePage(moduleItem, user, isDashboard);
@@ -22417,6 +22895,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
 
   if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
     return collectionRoutesModulePage(moduleItem, user, isDashboard);
+  }
+
+  if (moduleItem.id === RECEIVABLES_MODULE_KEY) {
+    return receivablesPage(moduleItem, user, isDashboard);
   }
 
   if (moduleItem.id === DATA_BOX_MODULE_KEY) {

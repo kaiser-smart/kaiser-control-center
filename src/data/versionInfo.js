@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.353"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.354"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: read-only pilot",
+    text: "Nový modul Pohledávky ukazuje bezpečný návrh balíčků otevřených faktur, ratingu platební morálky, AI Boosteru, guardrails a právního předání. Zatím neposílá e-maily/SMS/WhatsApp, nespouští Šarlotu, nemá DB ledger ani cloud automatizaci."
+  },
   {
     title: "Trasy svozu: ikony řidičského tabletu",
     text: "Řidičský tablet má jednoduché čitelné ikony u hlavních akcí HOTOVO, Navigovat na další stanoviště, Problém, Šarlota a u voleb v problémovém dialogu. Jde jen o UI/read-only pilot bez ostrých akcí."
