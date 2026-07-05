@@ -1557,19 +1557,26 @@ function neumorphicPreviewPage(user) {
 
 function themePreviewIcon(name) {
   const icons = {
-    dashboard: '<path d="M4 13h7V4H4z"></path><path d="M13 20h7V4h-7z"></path><path d="M4 20h7v-5H4z"></path>',
-    truck: '<path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle>',
-    route: '<circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 6h4a4 4 0 0 1 0 8h-1a4 4 0 0 0 0 8h5"></path>',
-    warning: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4"></path><path d="M12 17h.01"></path>',
-    marker: '<path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"></path><circle cx="12" cy="10" r="2.5"></circle>',
-    container: '<path d="M4 8h16v9H4z"></path><path d="M7 8v9M11 8v9M15 8v9"></path>',
-    service: '<path d="M14 6l4 4"></path><path d="M16 4l4 4-9 9H7v-4z"></path><path d="M5 19h14"></path>',
-    app: '<path d="M5 5h6v6H5z"></path><path d="M13 5h6v6h-6z"></path><path d="M5 13h6v6H5z"></path><path d="M13 13h6v6h-6z"></path>',
-    check: '<path d="M20 6L9 17l-5-5"></path>',
-    plus: '<path d="M12 5v14"></path><path d="M5 12h14"></path>'
+    dashboard: "001.svg",
+    truck: "006.svg",
+    route: "003.svg",
+    warning: "004.svg",
+    marker: "007.svg",
+    container: "010.svg",
+    service: "013.svg",
+    app: "005.svg",
+    check: "009.svg",
+    plus: "016.svg",
+    actionDone: "013.svg",
+    actionWarning: "014.svg",
+    actionIcons: "015.svg"
   };
 
-  return `<svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[name] || icons.marker}</svg>`;
+  return themePreviewIconFile(icons[name] || icons.marker);
+}
+
+function themePreviewIconFile(file) {
+  return `<img class="theme-icon-img" src="/design-icons/${file}" alt="" aria-hidden="true" loading="lazy">`;
 }
 
 function themeSystemPreviewPage() {
@@ -1589,6 +1596,10 @@ function themeSystemPreviewPage() {
       </article>
     `)
     .join("");
+  const iconGalleryMarkup = Array.from({ length: 16 }, (_, index) => {
+    const file = `${String(index + 1).padStart(3, "0")}.svg`;
+    return `<span class="theme-icon-tile">${themePreviewIconFile(file)}</span>`;
+  }).join("");
 
   return `
     <main class="theme-system smart-tablet-ui theme-preview-page" data-theme-preview>
@@ -1623,13 +1634,13 @@ function themeSystemPreviewPage() {
         <section class="app-content" aria-labelledby="theme-preview-title">
           <header class="app-header">
             <div>
-              <p class="field-label">Smart design / pokus 02</p>
-              <h1 id="theme-preview-title">Měkké ovládání pro tablet řidiče</h1>
-              <p>Neumorfní návrh podle referenčního slideru: klidné plochy, zapuštěné prvky, výrazný modrý aktivní stav.</p>
+              <p class="field-label">Smart design / systém 01</p>
+              <h1 id="theme-preview-title">Kompaktní soft-metal systém</h1>
+              <p>Designový náhled sjednocuje tokeny, karty, tlačítka, switche a ikonové obálky bez změny aplikační logiky.</p>
             </div>
             <div class="theme-preview-toolbar" aria-label="Stav náhledu">
               <span class="status-badge status-online">Statický náhled</span>
-              <span class="status-badge status-gps">Bez API</span>
+              <span class="status-badge status-gps">#75bd25</span>
             </div>
           </header>
 
@@ -1639,7 +1650,7 @@ function themeSystemPreviewPage() {
                 <div class="theme-card-head">
                   <div>
                     <p class="field-label">Aktivní obrazovka</p>
-                    <h2>Ranní svoz - ovládací panel</h2>
+                    <h2>Ranní svoz - konzistentní ovládání</h2>
                   </div>
                   <button class="btn btn-primary" type="button">Potvrdit další bod</button>
                 </div>
@@ -1668,8 +1679,8 @@ function themeSystemPreviewPage() {
                         <span class="theme-metric-label">typy vozidel</span>
                       </div>
                       <div class="soft-cell">
-                        <span class="theme-metric-value">40</span>
-                        <span class="theme-metric-label">intenzita náhledu</span>
+                        <span class="theme-metric-value">1</span>
+                        <span class="theme-metric-label">systémový switch</span>
                       </div>
                     </div>
 
@@ -1677,7 +1688,7 @@ function themeSystemPreviewPage() {
                       <label class="theme-toggle-row theme-toggle-row-compact">
                         <span>
                           <strong>Trasa aktivní</strong>
-                          <small>Kovově šedý switch podle reference</small>
+                          <small>ON stav používá plochý akcent #75bd25</small>
                         </span>
                         <input class="theme-switch-input" type="checkbox" checked>
                         <span class="theme-switch" aria-hidden="true"></span>
@@ -1685,7 +1696,7 @@ function themeSystemPreviewPage() {
                       <label class="theme-toggle-row theme-toggle-row-compact">
                         <span>
                           <strong>Zvýraznit ikony</strong>
-                          <small>Stejný tvar, tlumený aktivní stav</small>
+                          <small>Stejný kovově šedý switch ve všech blocích</small>
                         </span>
                         <input class="theme-switch-input" type="checkbox">
                         <span class="theme-switch" aria-hidden="true"></span>
@@ -1704,21 +1715,24 @@ function themeSystemPreviewPage() {
 
               <section class="quick-actions" aria-label="Rychle akce">
                 <button class="quick-action quick-action-success" type="button">
+                  <span class="quick-icon">${themePreviewIcon("actionDone")}</span>
                   <span>
                     <strong>Hotovo na stanovišti</strong>
-                    <small>Měkký stisk bez ostrých hran</small>
+                    <small>Jednotný holder, radius a stín</small>
                   </span>
                 </button>
                 <button class="quick-action quick-action-warning" type="button">
+                  <span class="quick-icon">${themePreviewIcon("actionWarning")}</span>
                   <span>
                     <strong>Nahlásit překážku</strong>
-                    <small>Varování zůstává tlumené</small>
+                    <small>Varování je čitelné, ne křiklavé</small>
                   </span>
                 </button>
                 <button class="quick-action quick-action-info" type="button">
+                  <span class="quick-icon">${themePreviewIcon("actionIcons")}</span>
                   <span>
                     <strong>Vybrat typ ikony</strong>
-                    <small>Pro další ladění vozidel</small>
+                    <small>Ikony lze měnit bez zásahu do layoutu</small>
                   </span>
                 </button>
               </section>
@@ -1736,15 +1750,18 @@ function themeSystemPreviewPage() {
                 <div class="theme-list-stack">
                   ${routeMarkup}
                 </div>
+                <div class="theme-icon-grid" aria-label="Importovaná sada ikon">
+                  ${iconGalleryMarkup}
+                </div>
               </article>
 
               <article class="soft-card">
-                <p class="field-label">Poznámka k návrhu</p>
+                <p class="field-label">Systémový přepínač</p>
                 <div class="theme-toggle-stack" aria-label="Ukázky přepínačů">
                   <label class="theme-toggle-row">
                     <span>
                       <strong>Denní režim</strong>
-                      <small>Jeden sjednocený přepínač</small>
+                      <small>Jeden rozměr a jeden ON/OFF model</small>
                     </span>
                     <input class="theme-switch-input" type="checkbox" checked>
                     <span class="theme-switch" aria-hidden="true"></span>
@@ -1752,14 +1769,14 @@ function themeSystemPreviewPage() {
                   <label class="theme-toggle-row">
                     <span>
                       <strong>Výrazné ikony</strong>
-                      <small>Stejný kovově šedý styl</small>
+                      <small>Kovový track, plochý zelený ON stav</small>
                     </span>
                     <input class="theme-switch-input" type="checkbox">
                     <span class="theme-switch" aria-hidden="true"></span>
                   </label>
                 </div>
                 <label class="field-label" for="theme-preview-note">Co se tímto směrem testuje</label>
-                <textarea class="textarea" id="theme-preview-note" rows="4" readonly>Měkčí plastický styl podle slider reference. Zatím jen vizuální návrh, bez dat a bez produkční logiky.</textarea>
+                <textarea class="textarea" id="theme-preview-note" rows="4" readonly>Aktuální směr je zkompaktněný do tokenů a opakovatelných komponent. Ikony jsou stále pracovní sada, ale jejich velikosti a obálky jsou sjednocené.</textarea>
                 <div class="theme-button-row">
                   <button class="btn btn-secondary" type="button">Ztlumit</button>
                   <button class="btn btn-success" type="button">Směr OK</button>
