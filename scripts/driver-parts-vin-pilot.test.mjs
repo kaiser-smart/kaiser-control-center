@@ -390,6 +390,40 @@ function passengerVehicle(overrides = {}) {
 }
 
 {
+  const itemWithoutOffers = {
+    priceBoostStatus: "failed",
+    priceBoostNote: "AI Boost cenový průzkum selhal: The operation was aborted. Pokračuj ručně.",
+    priceBoostResultJson: JSON.stringify({
+      ok: false,
+      offers: []
+    })
+  };
+  const priceEligibility = driverPartRequestInternals.driverPartRequestPatrikPriceHandoffEligibility(itemWithoutOffers, {
+    requirePriceOffersForHandoff: true
+  });
+  assert.equal(priceEligibility.allowed, false);
+  assert.equal(priceEligibility.code, "driver_part_price_offers_required");
+  assert.equal(driverPartRequestInternals.driverPartRequestHasRequiredPriceOffers(itemWithoutOffers), false);
+
+  const itemWithOffers = {
+    priceBoostStatus: "candidates_found",
+    priceBoostResultJson: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+      ]
+    })
+  };
+  const priceEligibilityWithOffers = driverPartRequestInternals.driverPartRequestPatrikPriceHandoffEligibility(itemWithOffers, {
+    requirePriceOffersForHandoff: true
+  });
+  assert.equal(priceEligibilityWithOffers.allowed, true);
+  assert.equal(driverPartRequestInternals.driverPartRequestHasRequiredPriceOffers(itemWithOffers), true);
+  assert.equal(driverPartRequestInternals.driverPartRequestPriceOffers(itemWithOffers).length, 3);
+}
+
+{
   assert.deepEqual(
     notificationInternals.emailRecipients("oplustil@kaiserservis.cz; invalid; patrik@example.test,oplustil@kaiserservis.cz"),
     ["oplustil@kaiserservis.cz", "patrik@example.test"]

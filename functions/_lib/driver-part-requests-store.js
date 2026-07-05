@@ -1202,6 +1202,21 @@ function driverPartRequestHasPilotPartCandidateForHandoff(item = {}, options = {
     Boolean(cleanString(item.probablePart || item.partAiDetectedName));
 }
 
+function driverPartRequestPriceOffers(item = {}) {
+  const parsed = parseJson(item.priceBoostResultJson, {});
+  const offers = Array.isArray(parsed?.offers)
+    ? parsed.offers
+    : Array.isArray(parsed?.candidates) ? parsed.candidates : [];
+
+  return offers
+    .filter((offer) => cleanString(offer?.url) && (cleanString(offer?.title) || cleanString(offer?.seller)))
+    .slice(0, 3);
+}
+
+function driverPartRequestHasRequiredPriceOffers(item = {}, requiredCount = 3) {
+  return driverPartRequestPriceOffers(item).length >= requiredCount;
+}
+
 function driverPartRequestPatrikHandoffEligibility(item = {}, options = {}) {
   if (!item.licensePlate || !item.vehicleName) {
     return {
@@ -1235,6 +1250,30 @@ function driverPartRequestPatrikHandoffEligibility(item = {}, options = {}) {
     allowed: true,
     code: "",
     message: ""
+  };
+}
+
+function driverPartRequestPatrikPriceHandoffEligibility(item = {}, options = {}) {
+  if (options.requirePriceOffersForHandoff !== true) {
+    return {
+      allowed: true,
+      code: "",
+      message: ""
+    };
+  }
+
+  if (driverPartRequestHasRequiredPriceOffers(item, 3)) {
+    return {
+      allowed: true,
+      code: "",
+      message: ""
+    };
+  }
+
+  return {
+    allowed: false,
+    code: "driver_part_price_offers_required",
+    message: "AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. E-mail Patrikovi neposílám bez odkazů."
   };
 }
 
@@ -1331,6 +1370,11 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
       priceBoostStatus: "provider_not_configured",
       priceBoostNote: "Cenový průzkum není nastavený. E-mail Patrikovi obsahuje ruční postup."
     };
+  }
+
+  const priceEligibility = driverPartRequestPatrikPriceHandoffEligibility(itemForEmail, options);
+  if (!priceEligibility.allowed) {
+    throw new DriverPartRequestsStoreError(priceEligibility.message, 400, priceEligibility.code);
   }
 
   const patrik = await partsRecipient(env);
@@ -1960,9 +2004,12 @@ export const __test = {
   driverPartVinPilotState,
   driverPartRequestConfirmVehicleSource,
   driverPartRequestHasVerifiedPartForHandoff,
+  driverPartRequestHasRequiredPriceOffers,
   driverPartRequestHasTrustedKsoVehicleSelection,
   driverPartRequestPatrikHandoffEligibility,
+  driverPartRequestPatrikPriceHandoffEligibility,
   driverPartRequestSourceHasManualVehicleReview,
+  driverPartRequestPriceOffers,
   pilotCcStatus,
   driverPartVehicleDisplayName,
   driverPartVehicleNameLooksLikePlate,

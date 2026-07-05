@@ -1240,7 +1240,34 @@ async function validateDriverPartDraftLicensePlate(env, user, draft) {
   }
 }
 
-async function driverPartRequestTool(env, user, payload, context, speechText) {
+function voiceDriverPartHandoffOptions() {
+  return {
+    allowCreatorHandoff: true,
+    allowProbablePartHandoff: true,
+    runPriceBoost: true,
+    requirePriceOffersForHandoff: true
+  };
+}
+
+function scheduleVoiceDriverPartHandoff(waitUntil, env, user, request) {
+  if (typeof waitUntil !== "function") {
+    return false;
+  }
+
+  waitUntil(
+    handoffDriverPartRequest(env, user, request.id, voiceDriverPartHandoffOptions()).catch((error) => {
+      console.info("voice_sarlota.driver_part_handoff_async_failed", {
+        reportId: cleanString(request?.reportId),
+        code: cleanString(error?.code || "driver_part_request_handoff_failed"),
+        message: cleanString(error?.message)
+      });
+    })
+  );
+
+  return true;
+}
+
+async function driverPartRequestTool(env, user, payload, context, speechText, options = {}) {
   if (!hasPermission(user, "driver-reports", "create")) {
     return {
       status: "forbidden",
@@ -1392,12 +1419,27 @@ async function driverPartRequestTool(env, user, payload, context, speechText) {
     };
   }
 
+  const scheduledHandoff = scheduleVoiceDriverPartHandoff(options.waitUntil, env, user, request);
+  if (scheduledHandoff) {
+    return {
+      status: "created_notification_pending",
+      verified: true,
+      message: "Hlášení jsem zapsala. AI Boost teď hledá tři nabídky a e-mail Patrikovi odejde až s odkazy. Nic nebylo automaticky objednáno.",
+      preparedActions: [],
+      driverPartRequest: {
+        id: request.id,
+        reportId: request.reportId,
+        status: request.status,
+        licensePlate: request.licensePlate,
+        probablePart: request.probablePart
+      },
+      notificationsSent: false,
+      priceSearchPending: true
+    };
+  }
+
   try {
-    request = await handoffDriverPartRequest(env, user, request.id, {
-      allowCreatorHandoff: true,
-      allowProbablePartHandoff: true,
-      runPriceBoost: true
-    });
+    request = await handoffDriverPartRequest(env, user, request.id, voiceDriverPartHandoffOptions());
 
     const handedOff = request.status === "handed_to_ordering";
     return {
@@ -2354,7 +2396,9 @@ export async function handleSarlotaVoiceRequest(env, user, payload = {}, options
       confidence: 0.98,
       model: "kso-deterministic"
     };
-    const toolResult = await driverPartRequestTool(env, user, payload, context, speechText);
+    const toolResult = await driverPartRequestTool(env, user, payload, context, speechText, {
+      waitUntil: options.waitUntil
+    });
 
     return buildVoiceResponse(env, user, payload, {
       input,

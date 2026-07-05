@@ -1,4 +1,4 @@
-const DEFAULT_TIMEOUT_MS = 12000;
+const DEFAULT_TIMEOUT_MS = 25000;
 const MAX_OFFERS = 3;
 const BLOCKED_USED_MARKERS = [
   "bazar",

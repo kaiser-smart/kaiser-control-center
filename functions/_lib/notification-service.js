@@ -465,6 +465,8 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
   const providerMessage = cleanString(request.partsProviderMessage)
     || "Pilotní návrh AI Boost. Nic nebylo objednáno. Prosím ručně ověřit OE číslo a dostupnost před nákupem.";
   const offers = parseDriverPartOffers(request.priceBoostResultJson);
+  const priceBoostFallback = cleanString(request.priceBoostNote)
+    || "AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. Nic nebylo objednáno.";
   const offersHtml = offers.length
     ? `
               <h2 style="margin:26px 0 12px 0;font-size:22px;line-height:28px;font-weight:800;color:#1f2921;">Cenový průzkum</h2>
@@ -482,7 +484,7 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
               </ol>`
     : `
               <h2 style="margin:26px 0 12px 0;font-size:22px;line-height:28px;font-weight:800;color:#1f2921;">Cenový průzkum</h2>
-              <p style="margin:0 0 24px 0;font-size:15px;line-height:23px;color:#647064;">Čeká na ověřené OE číslo nebo ruční potvrzení kompatibility. Nic nebylo objednáno.</p>`;
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:23px;color:#647064;">${htmlEscape(priceBoostFallback)}</p>`;
   const damagePhoto = cleanString(request.damagePhotoStatus) === "attached"
     ? "přiložena"
     : cleanString(request.damagePhotoStatus) === "not_needed"

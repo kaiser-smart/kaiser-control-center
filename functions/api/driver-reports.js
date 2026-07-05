@@ -56,7 +56,12 @@ export async function onRequestPost({ request, env }) {
     const payload = await readJson(request);
     let partRequest = await createDriverPartRequest(env, user, payload);
     if (payload.handoffAfterCreate === true) {
-      partRequest = await handoffDriverPartRequest(env, user, partRequest.id, { allowCreatorHandoff: true });
+      partRequest = await handoffDriverPartRequest(env, user, partRequest.id, {
+        allowCreatorHandoff: true,
+        allowProbablePartHandoff: true,
+        runPriceBoost: true,
+        requirePriceOffersForHandoff: true
+      });
     }
     return json({ request: partRequest, apiStatus: "ready" }, 201);
   } catch (error) {

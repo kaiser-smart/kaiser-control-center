@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.336"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.337"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: e-mail Patrikovi až s odkazy",
+    text: "AI Boost už nesmí označit náhradní díl jako předaný Patrikovi, pokud cenový průzkum nedodal tři bezpečné nabídky s odkazy. Hlasové hlášení se zapíše rychle a web-search běží serverově; e-mail odejde až s odkazy a nic se automaticky neobjednává."
+  },
   {
     title: "Trasy svozu: klidnější řidičský displej",
     text: "Řidičský tablet má jednodušší kabinový pohled: větší aktuální zastávku, dominantní akce Navigovat / Hotovo / Problém, skrytý problémový panel až po kliknutí a nesmyslný odhad času se nezobrazuje jako dlouhé minuty. Stále jde jen o read-only pilot bez ostrých tras a hlášení."
