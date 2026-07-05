@@ -20744,7 +20744,7 @@ function driverReportPartslink24Section(item) {
           vinStatus,
           eligibility.message || "",
           [
-            driverReportField("Vozidlo", item.vehicleName || item.licensePlate),
+            driverReportField("Vozidlo", driverReportVehicleLabel(item)),
             driverReportField("SPZ", item.licensePlate),
             driverReportField("VIN", eligibility.vinMasked || (item.vin ? "uložené ve Vozovém parku" : "není dostupné")),
             driverReportField("Rozsah pilotu", pilot.vehicleInPilot ? "osobní vozidlo" : driverReportVinPilotLabel(pilotStatus))
@@ -20883,8 +20883,15 @@ function driverReportPartStatus(item) {
   return status;
 }
 
+function driverReportVehicleNameLooksLikePlate(value, licensePlate = "") {
+  const valueKey = normalizeLicensePlate(value).replace(/\s+/g, "");
+  const plateKey = normalizeLicensePlate(licensePlate).replace(/\s+/g, "");
+  return Boolean(valueKey && plateKey && valueKey === plateKey);
+}
+
 function driverReportVehicleLabel(item) {
-  return item.vehicleName || item.vehicleBrandLabel || "neuvedeno";
+  const vehicleName = driverReportVehicleNameLooksLikePlate(item.vehicleName, item.licensePlate) ? "" : item.vehicleName;
+  return vehicleName || item.vehicleBrandLabel || "neuvedeno";
 }
 
 function driverReportVinLabel(item) {
@@ -21627,7 +21634,7 @@ function driverReportDetail(item) {
             ${driverReportField("Řidič", item.driverName)}
             ${driverReportField("Telefon", item.driverPhone)}
             ${driverReportField("SPZ", item.licensePlate)}
-            ${driverReportField("Vozidlo", item.vehicleName)}
+            ${driverReportField("Vozidlo", driverReportVehicleLabel(item))}
             ${driverReportField("VIN", item.vin || "není dostupné")}
             ${driverReportField("Značka", item.vehicleBrandLabel)}
             ${driverReportField("Fotka / podklad", driverReportPhotoStatusLabel(item.damagePhotoStatus))}

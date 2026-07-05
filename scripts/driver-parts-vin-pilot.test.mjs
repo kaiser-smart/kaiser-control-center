@@ -113,6 +113,24 @@ function passengerVehicle(overrides = {}) {
   assert.equal(payload.partsProviderStatus, "waiting_vin_pilot");
   assert.equal(payload.priceBoostStatus, "waiting_verified_part");
   assert.match(payload.partLookupQuery, /přední sklo/);
+  assert.equal(payload.vehicleName, "Mercedes CLS 400 d 4matic");
+}
+
+{
+  const payload = driverPartRequestInternals.normalizeCreatePayload(
+    {
+      defectDescription: "Prasklý výfuk",
+      licensePlate: "2BB 8251",
+      vehicleName: "2BB 8251",
+      driverName: "Radim Oplustil"
+    },
+    adminUser,
+    passengerVehicle(),
+    null
+  );
+  assert.equal(payload.vehicleName, "Mercedes CLS 400 d 4matic");
+  assert.equal(driverPartRequestInternals.driverPartVehicleNameLooksLikePlate("2BB 8251", "2BB8251"), true);
+  assert.equal(driverPartRequestInternals.driverPartVehicleDisplayName({ vehicleName: "2BB 8251" }, passengerVehicle(), "2BB8251"), "Mercedes CLS 400 d 4matic");
 }
 
 {

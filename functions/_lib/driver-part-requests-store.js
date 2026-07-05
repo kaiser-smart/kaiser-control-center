@@ -96,6 +96,38 @@ function nullableString(value) {
   return cleaned || null;
 }
 
+function driverPartVehicleNameLooksLikePlate(value, licensePlate = "") {
+  const valueKey = licensePlateKey(value);
+  const plateKey = licensePlateKey(licensePlate);
+  return Boolean(valueKey && plateKey && valueKey === plateKey);
+}
+
+function driverPartVehicleNameCandidate(value, licensePlate = "") {
+  const cleaned = cleanString(value);
+  if (!cleaned || driverPartVehicleNameLooksLikePlate(cleaned, licensePlate)) {
+    return "";
+  }
+  return cleaned;
+}
+
+function driverPartVehicleDisplayName(payload = {}, vehicle = null, licensePlate = "") {
+  const brandModel = [vehicle?.brand, vehicle?.model].map(cleanString).filter(Boolean).join(" ");
+  return [
+    vehicle?.internalNumber,
+    vehicle?.vehicleName,
+    vehicle?.name,
+    brandModel,
+    vehicle?.model,
+    payload.vehicleName,
+    payload.vehicle,
+    payload.vehicleLabel,
+    payload.vehicleDisplayName,
+    payload.vehicleInternalNumber,
+    payload.vehicleType
+  ].map((value) => driverPartVehicleNameCandidate(value, licensePlate)).find(Boolean)
+    || cleanString(payload.vehicleName || payload.vehicle || vehicle?.internalNumber || vehicle?.model || licensePlate);
+}
+
 function randomId(prefix) {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()
@@ -537,6 +569,43 @@ async function resolveVehicleFromFleet(env, licensePlate) {
   }
 }
 
+async function enrichDriverPartRequestVehicleNames(env, items = []) {
+  const list = Array.isArray(items) ? items : [];
+  const needsFleet = list.some((item) => !item.vehicleName || driverPartVehicleNameLooksLikePlate(item.vehicleName, item.licensePlate));
+  if (!needsFleet) {
+    return list;
+  }
+
+  try {
+    const payload = await loadFleetVehiclesWithAssignments(env);
+    const vehicles = Array.isArray(payload?.vehicles) ? payload.vehicles : [];
+    return list.map((item) => {
+      if (!item || (item.vehicleName && !driverPartVehicleNameLooksLikePlate(item.vehicleName, item.licensePlate))) {
+        return item;
+      }
+
+      const vehicle = vehicles.find((candidate) => {
+        const candidateIds = [
+          candidate.id,
+          candidate.vehicleId,
+          candidate.tcarsVehicleId,
+          candidate.externalVehicleId
+        ].map(cleanString).filter(Boolean);
+        return (item.vehicleId && candidateIds.includes(item.vehicleId))
+          || licensePlateKey(candidate.licensePlate || candidate.tcarsLicensePlate) === licensePlateKey(item.licensePlate);
+      });
+
+      const vehicleName = driverPartVehicleDisplayName({}, vehicle, item.licensePlate);
+      return vehicleName && !driverPartVehicleNameLooksLikePlate(vehicleName, item.licensePlate)
+        ? { ...item, vehicleName }
+        : item;
+    });
+  } catch (error) {
+    console.info("driver_part_requests.vehicle_name_enrichment_skipped", { message: cleanString(error?.message) });
+    return list;
+  }
+}
+
 function normalizeCreatePayload(payload, user, vehicle, driverContact = null) {
   const rawDescription = cleanString(payload.defectDescription || payload.description || payload.speechText);
   if (!rawDescription) {
@@ -562,7 +631,7 @@ function normalizeCreatePayload(payload, user, vehicle, driverContact = null) {
     throw new DriverPartRequestsStoreError("Chybí řidič hlášení.", 400, "driver_part_driver_required");
   }
 
-  const vehicleName = cleanString(payload.vehicleName || vehicle?.internalNumber || vehicle?.model || licensePlate);
+  const vehicleName = driverPartVehicleDisplayName(payload, vehicle, licensePlate);
   const brand = normalizeVehicleBrand(payload.vehicleBrand || payload.brand || vehicle?.brand || vehicle?.model);
   const probablePart = cleanString(payload.probablePart || partMatch.probablePart);
   const partAiCandidate = Boolean(probablePart && driverPartAiCandidateFromMatch(partMatch));
@@ -678,7 +747,8 @@ export async function listDriverPartRequests(env, user, options = {}) {
       .bind(...binds)
       .all();
 
-    return (result.results || []).map((row) => rowToRequest(row));
+    const items = (result.results || []).map((row) => rowToRequest(row));
+    return enrichDriverPartRequestVehicleNames(env, items);
   } catch (error) {
     throw dbError(error);
   }
@@ -686,7 +756,8 @@ export async function listDriverPartRequests(env, user, options = {}) {
 
 export async function getDriverPartRequest(env, user, id) {
   try {
-    const { db, item } = await requestForUser(env, id, user);
+    const { db, item: rawItem } = await requestForUser(env, id, user);
+    const [item] = await enrichDriverPartRequestVehicleNames(env, [rawItem]);
     const partslink24Eligibility = await partslink24EligibilityForDriverPartRequest(env, user, item);
     const partslink24VinSearch = await latestPartslink24VinSearchForRequest(env, item.id);
     const partVinPilot = driverPartVinPilotState(item, partslink24Eligibility, partslink24VinSearch);
@@ -1818,5 +1889,7 @@ export const __test = {
   driverPartRequestHasVerifiedPartForHandoff,
   driverPartRequestPatrikHandoffEligibility,
   pilotCcStatus,
+  driverPartVehicleDisplayName,
+  driverPartVehicleNameLooksLikePlate,
   normalizeCreatePayload
 };
