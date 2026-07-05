@@ -26483,6 +26483,31 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   font-weight: 900;
 }
 
+.driver-report-email-preview {
+  grid-column: 1 / -1;
+  border: 1px solid color-mix(in srgb, var(--driver-report-line) 82%, transparent);
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.driver-report-email-preview summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: var(--driver-report-pit);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.driver-report-email-preview iframe {
+  display: block;
+  width: 100%;
+  min-height: 520px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--driver-report-line) 82%, transparent);
+  background: #f7f9f4;
+}
+
 .driver-report-copy-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

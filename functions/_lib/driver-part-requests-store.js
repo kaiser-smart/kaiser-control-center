@@ -30,6 +30,7 @@ import {
   runDriverPartPriceSearch
 } from "./driver-part-price-search.js";
 import {
+  buildDriverPartOrderEmailPreview,
   sendDriverPartOrderNotification,
   sendDriverPartReadySms
 } from "./notification-service.js";
@@ -1330,6 +1331,13 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
     && baseEligibility.allowed
     && priceEligibility.allowed
     && recipientConfigured;
+  const emailPreview = canSendEmail
+    ? buildDriverPartOrderEmailPreview(env, item, {
+      recipientEmail: patrik.email,
+      recipientName: patrik.name,
+      ccEmail: pilotCcEmail(env)
+    })
+    : null;
 
   return {
     ok: canSendEmail,
@@ -1347,6 +1355,7 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
     requiredPriceOfferCount: 3,
     missingPriceOfferCount: Math.max(0, 3 - priceOffers.length),
     priceOffers,
+    emailPreview,
     blockers,
     message: canSendEmail
       ? "E-mail Patrikovi je připravený: vozidlo, VIN, díl i 3 odkazy jsou splněné."

@@ -20725,6 +20725,7 @@ function driverReportPricePreviewBlock(item) {
 
   const offers = Array.isArray(preview.offers) ? preview.offers : [];
   const readiness = preview.readiness || {};
+  const emailPreview = readiness.emailPreview || {};
   return `
     <div class="driver-report-preview-result">
       <p class="driver-report-note">
@@ -20748,6 +20749,22 @@ function driverReportPricePreviewBlock(item) {
             </li>
           `).join("")}
         </ol>
+      ` : ""}
+      ${emailPreview.html ? `
+        <details class="driver-report-email-preview" open>
+          <summary>Náhled e-mailu Patrikovi bez odeslání</summary>
+          <div class="driver-report-detail-grid">
+            ${driverReportField("Komu", emailPreview.to)}
+            ${driverReportField("CC", emailPreview.cc)}
+            ${driverReportField("Předmět", emailPreview.subject)}
+            ${driverReportField("Nabídky v e-mailu", `${emailPreview.offerCount || 0} / ${emailPreview.requiredOfferCount || 3}`)}
+          </div>
+          <iframe
+            title="Náhled e-mailu Patrikovi"
+            sandbox=""
+            srcdoc="${escapeHtml(emailPreview.html)}"
+          ></iframe>
+        </details>
       ` : ""}
     </div>
   `;

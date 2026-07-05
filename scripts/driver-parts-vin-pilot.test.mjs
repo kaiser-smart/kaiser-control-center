@@ -555,6 +555,10 @@ function passengerVehicle(overrides = {}) {
   assert.equal(preview.emailSent, false);
   assert.equal(preview.offers.length, 3);
   assert.equal(preview.readiness.canSendEmail, true);
+  assert.equal(preview.readiness.emailPreview.offerCount, 3);
+  assert.match(preview.readiness.emailPreview.subject, /Náhradní díl k ověření: 2BB 8251/);
+  assert.match(preview.readiness.emailPreview.html, /3 nejlevnější nabídky/);
+  assert.match(preview.readiness.emailPreview.html, /https:\/\/example\.test\/a/);
 }
 
 {
@@ -588,6 +592,32 @@ function passengerVehicle(overrides = {}) {
   });
   assert.equal(emailReady.allowed, true);
   assert.equal(emailReady.offerCount, 3);
+
+  const emailPreview = notificationInternals.buildDriverPartOrderEmailPreview({
+    PARTS_ORDER_EMAIL: "patrik@example.test",
+    PARTS_PILOT_CC_EMAIL: "oplustil@kaiserservis.cz"
+  }, {
+    id: "driver-report-email-preview",
+    driverName: "Radim Opluštil",
+    driverPhone: "604 542 004",
+    vehicleName: "Mercedes CLS 400 d 4matic",
+    licensePlate: "2BB 8251",
+    vin: "WDD2573211A123456",
+    defectDescription: "prasklé přední sklo",
+    probablePart: "přední sklo",
+    priceBoostResultJson: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
+        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+      ]
+    })
+  });
+  assert.equal(emailPreview.allowed, true);
+  assert.equal(emailPreview.to, "patrik@example.test");
+  assert.equal(emailPreview.cc, "oplustil@kaiserservis.cz");
+  assert.equal(emailPreview.offerCount, 3);
+  assert.match(emailPreview.html, /3 nejlevnější nabídky/);
 
   const emailHtml = notificationInternals.renderDriverPartOrderEmail({
     request: {

@@ -562,6 +562,41 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
 </html>`;
 }
 
+function driverPartEmailPartName(request = {}) {
+  return cleanString(request.partName || request.verifiedPart || request.probablePart) || "náhradní díl";
+}
+
+function driverPartOrderEmailSubject(request = {}) {
+  return `Náhradní díl k ověření: ${cleanString(request.licensePlate) || "SPZ"} – ${driverPartEmailPartName(request)}`;
+}
+
+export function buildDriverPartOrderEmailPreview(env = {}, request, options = {}) {
+  const readiness = driverPartOrderEmailReadiness(request);
+  const recipientEmail = cleanString(options.recipientEmail || env.PARTS_PATRIK_EMAIL || env.PARTS_PATRICK_EMAIL || env.PATRICK_PARTS_EMAIL || env.PARTS_ORDER_EMAIL);
+  const ccEmail = cleanString(options.ccEmail || env.PARTS_PILOT_CC_EMAIL || "oplustil@kaiserservis.cz");
+  const recipientName = cleanString(options.recipientName || "Patrik Ištvánek");
+  const subject = driverPartOrderEmailSubject(request);
+
+  return {
+    allowed: readiness.allowed,
+    subject,
+    to: recipientEmail,
+    cc: ccEmail,
+    recipientName,
+    offerCount: readiness.offerCount,
+    requiredOfferCount: readiness.requiredOfferCount,
+    missingOfferCount: readiness.missingOfferCount,
+    message: readiness.message,
+    html: readiness.allowed
+      ? renderDriverPartOrderEmail({
+        request,
+        ctaUrl: driverPartRequestUrl(env, request.id),
+        patrikUrl: patrikProfileUrl(env)
+      })
+      : ""
+  };
+}
+
 export async function logNotification(env, entry) {
   const db = notificationDatabase(env);
   if (!db) {
@@ -935,32 +970,27 @@ export async function sendMedicalExamReminderNotification(env, exam, options = {
 }
 
 export async function sendDriverPartOrderNotification(env, request, options = {}) {
-  const probablePart = cleanString(request.probablePart || request.verifiedPart) || "náhradní díl";
-  const subject = `Náhradní díl k ověření: ${cleanString(request.licensePlate) || "SPZ"} – ${probablePart}`;
-  const readiness = driverPartOrderEmailReadiness(request);
+  const probablePart = driverPartEmailPartName(request);
+  const emailPreview = buildDriverPartOrderEmailPreview(env, request, options);
 
-  if (!readiness.allowed) {
+  if (!emailPreview.allowed) {
     return {
       status: "skipped",
-      errorMessage: readiness.message,
-      offerCount: readiness.offerCount,
-      requiredOfferCount: readiness.requiredOfferCount,
-      missingOfferCount: readiness.missingOfferCount
+      errorMessage: emailPreview.message,
+      offerCount: emailPreview.offerCount,
+      requiredOfferCount: emailPreview.requiredOfferCount,
+      missingOfferCount: emailPreview.missingOfferCount
     };
   }
 
   return sendEmail(env, {
     type: "driver_part_order_email",
-    to: cleanString(options.recipientEmail || env.PARTS_PATRIK_EMAIL || env.PARTS_PATRICK_EMAIL || env.PATRICK_PARTS_EMAIL || env.PARTS_ORDER_EMAIL),
-    cc: cleanString(options.ccEmail || env.PARTS_PILOT_CC_EMAIL || "oplustil@kaiserservis.cz"),
-    subject,
-    html: renderDriverPartOrderEmail({
-      request,
-      ctaUrl: driverPartRequestUrl(env, request.id),
-      patrikUrl: patrikProfileUrl(env)
-    }),
+    to: emailPreview.to,
+    cc: emailPreview.cc,
+    subject: emailPreview.subject,
+    html: emailPreview.html,
     relatedEntityId: request.id,
-    recipientName: cleanString(options.recipientName || "Patrik Ištvánek"),
+    recipientName: emailPreview.recipientName,
     fromName: "Smart odpady",
     moduleId: "driver-reports",
     relatedEntityType: "driver_part_request",
@@ -1088,6 +1118,7 @@ export async function sendMedicalExamReminders(env, exams) {
 
 export const __test = {
   emailRecipients,
+  buildDriverPartOrderEmailPreview,
   driverPartOrderEmailOffers,
   driverPartOrderEmailReadiness,
   parseDriverPartOffers,
