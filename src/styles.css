@@ -25974,6 +25974,54 @@ body:has(.tracking-page--soft-metal-preview) {
   box-shadow: none;
 }
 
+@media (max-width: 1180px) {
+  .tracking-page--soft-metal-preview {
+    width: min(100% - 24px, 1040px);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-section--map,
+  .tracking-page--soft-metal-preview .tracking-demo-detail-section,
+  .tracking-page--soft-metal-preview .tracking-demo-api-section,
+  .tracking-page--soft-metal-preview .tracking-tcars-section,
+  .tracking-page--soft-metal-preview .tracking-layout > #tracking-rules {
+    grid-column: auto;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-map-section {
+    order: 1;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-list-section {
+    order: 2;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-detail-section {
+    order: 3;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-api-section {
+    order: 4;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-layout > #tracking-rules {
+    order: 5;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-map-shell,
+  .tracking-page--soft-metal-preview .tracking-demo-map,
+  .tracking-page--soft-metal-preview .tracking-tcars-map {
+    min-height: 420px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
   .tracking-page--soft-metal-preview {
     width: min(100% - 20px, 760px);
@@ -25998,9 +26046,68 @@ body:has(.tracking-page--soft-metal-preview) {
   .tracking-page--soft-metal-preview .tracking-source-mode {
     min-height: 0;
   }
+
+  .tracking-page--soft-metal-preview .module-detail {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-controls .primary-action,
+  .tracking-page--soft-metal-preview .tracking-demo-controls .secondary-link,
+  .tracking-page--soft-metal-preview .tracking-demo-filter,
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-card .secondary-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-status-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-page--soft-metal-preview .tracking-status-legend .tracking-status {
+    justify-content: flex-start;
+    white-space: normal;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-wim-list {
+    max-height: none;
+    padding-right: 0;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-table-shell,
+  .tracking-page--soft-metal-preview .tracking-list-table,
+  .tracking-page--soft-metal-preview .tracking-history-table {
+    overflow-x: auto;
+  }
 }
 
 @media (max-width: 520px) {
+  body:has(.tracking-page--soft-metal-preview) {
+    background:
+      linear-gradient(180deg, #fbfcfb 0%, #eef1f0 62%, #e4e9e6 100%);
+  }
+
+  .tracking-page--soft-metal-preview {
+    width: calc(100% - 14px);
+  }
+
+  .tracking-page--soft-metal-preview .topbar {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+  }
+
+  .tracking-page--soft-metal-preview .topbar .back-button,
+  .tracking-page--soft-metal-preview .topbar .logout-button {
+    width: 100%;
+    justify-content: center;
+  }
+
   .tracking-page--soft-metal-preview .module-detail,
   .tracking-page--soft-metal-preview .tracking-section,
   .tracking-page--soft-metal-preview .tracking-source-panel {
@@ -26011,10 +26118,76 @@ body:has(.tracking-page--soft-metal-preview) {
     grid-template-columns: 1fr;
   }
 
+  .tracking-page--soft-metal-preview .module-detail__icon {
+    width: 58px;
+    height: 58px;
+  }
+
+  .tracking-page--soft-metal-preview .module-detail h1 {
+    font-size: 1.42rem;
+  }
+
+  .tracking-page--soft-metal-preview .module-actions,
+  .tracking-page--soft-metal-preview .tracking-preview-actions,
+  .tracking-page--soft-metal-preview .tracking-demo-alert__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .module-actions .primary-link,
+  .tracking-page--soft-metal-preview .module-actions .secondary-link,
+  .tracking-page--soft-metal-preview .tracking-preview-actions .secondary-link,
+  .tracking-page--soft-metal-preview .tracking-demo-alert__actions .secondary-link {
+    width: 100%;
+    justify-content: center;
+  }
+
   .tracking-page--soft-metal-preview .tracking-tabs,
   .tracking-page--soft-metal-preview .tracking-demo-filterbar {
     display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-controls,
+  .tracking-page--soft-metal-preview .tracking-status-legend {
     grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-tab,
+  .tracking-page--soft-metal-preview .tracking-demo-filter,
+  .tracking-page--soft-metal-preview .tracking-status {
+    min-height: 42px;
+    white-space: normal;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-section__head,
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-card__head,
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-meta,
+  .tracking-page--soft-metal-preview .tracking-demo-detail-title {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-list {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-status {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-status > span {
+    justify-content: flex-start;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-alert {
+    inset: 10px;
+    grid-template-columns: 1fr;
+    align-content: center;
+    gap: var(--space-sm);
+    padding: var(--space-md);
   }
 
   .tracking-page--soft-metal-preview .tracking-demo-map,
@@ -26040,5 +26213,100 @@ body:has(.tracking-page--soft-metal-preview) {
   .tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
     max-width: 44px;
     max-height: 44px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-map-vehicle-label {
+    min-height: 18px;
+    padding: 0 5px;
+    font-size: 0.58rem;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-place,
+  .tracking-page--soft-metal-preview .tracking-wim-map__label {
+    max-width: 92px;
+    font-size: 0.58rem;
+    white-space: normal;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-tcars-google-pin {
+    grid-template-columns: 34px minmax(0, 1fr);
+    min-width: 112px;
+    max-width: 126px;
+    font-size: 0.58rem;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-tcars-google-pin__icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-wim-google-pin,
+  .tracking-page--soft-metal-preview .tracking-wim-map-point {
+    grid-template-columns: 32px minmax(0, 1fr);
+    min-width: 88px;
+    max-width: 112px;
+    padding: 6px;
+    font-size: 0.57rem;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-wim-google-pin__icon,
+  .tracking-page--soft-metal-preview .tracking-wim-map-point__icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-wim-google-pin__icon::before,
+  .tracking-page--soft-metal-preview .tracking-wim-map-point__icon::before {
+    width: 15px;
+    height: 11px;
+    border-width: 2px;
+    border-top-width: 3px;
+  }
+}
+
+@media (max-width: 390px) {
+  .tracking-page--soft-metal-preview {
+    width: calc(100% - 10px);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-tabs,
+  .tracking-page--soft-metal-preview .tracking-demo-filterbar,
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-status {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .module-detail,
+  .tracking-page--soft-metal-preview .tracking-section,
+  .tracking-page--soft-metal-preview .tracking-source-panel {
+    padding: var(--space-md);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-map,
+  .tracking-page--soft-metal-preview .tracking-tcars-map,
+  .tracking-page--soft-metal-preview .tracking-wim-map {
+    min-height: 300px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-vehicle-image--card {
+    height: 122px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-demo-marker,
+  .tracking-page--soft-metal-preview .tracking-google-marker,
+  .tracking-page--soft-metal-preview .tracking-vehicle-marker {
+    width: 66px;
+    min-width: 66px;
+    height: 52px;
+    min-height: 52px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-vehicle-marker__asset {
+    width: 42px;
+    height: 42px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
+    max-width: 38px;
+    max-height: 38px;
   }
 }
