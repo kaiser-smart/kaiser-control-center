@@ -481,7 +481,7 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
   const probablePart = cleanString(request.partName || request.verifiedPart || request.probablePart) || "čeká na identifikaci";
   const oePartNumber = cleanString(request.oePartNumber || request.partOrderNumber) || "čeká na ověření";
   const providerMessage = cleanString(request.partsProviderMessage)
-    || "Pilotní návrh AI Boost. Nic nebylo objednáno. Prosím ručně ověřit OE číslo a dostupnost před nákupem.";
+    || "AI návrh kde můžeš objednat";
   const offers = driverPartOrderEmailOffers(request);
   const offersHtml = offers.length
     ? `
@@ -523,7 +523,7 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
             <td style="padding:40px 42px;">
               <div style="display:inline-block;background:#75bd25;border-radius:14px;padding:12px 24px;color:#ffffff;font-size:28px;line-height:32px;font-weight:700;margin:0 0 34px 0;">kaiser.</div>
               <h1 style="margin:0 0 12px 0;font-size:34px;line-height:40px;font-weight:800;color:#1f2921;">Náhradní díl k ověření</h1>
-              <p style="margin:0 0 26px 0;font-size:18px;line-height:28px;font-weight:600;color:#647064;">Patriku, AI Boost našel návrh dílu a cenové nabídky. Prosím ručně ověř kompatibilitu před nákupem. Nic nebylo objednáno.</p>
+              <p style="margin:0 0 26px 0;font-size:18px;line-height:28px;font-weight:600;color:#647064;">AI návrh kde můžeš objednat</p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eef7e6;border:1px solid #cfe7c2;border-radius:14px;margin:0 0 24px 0;">
                 <tr><td style="padding:20px 22px;font-size:17px;line-height:25px;">
                   <p style="margin:0 0 10px 0;"><strong>Vozidlo:</strong> ${htmlEscape(request.vehicleName || request.licensePlate || "neuvedeno")}</p>
@@ -549,7 +549,7 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
               </table>
               <a href="${htmlEscape(ctaUrl)}" style="display:block;text-align:center;background:#75bd25;border-radius:14px;padding:18px 24px;color:#ffffff;font-size:18px;line-height:24px;font-weight:800;text-decoration:none;">Otevřít detail hlášení</a>
               <p style="margin:18px 0 0 0;font-size:15px;line-height:23px;color:#647064;">${htmlEscape(providerMessage)}</p>
-              <p style="margin:12px 0 0 0;font-size:15px;line-height:23px;font-weight:700;color:#1f2921;">Pilotní návrh AI Boost. Nic nebylo objednáno. Prosím ručně ověřit před nákupem.</p>
+              <p style="margin:12px 0 0 0;font-size:15px;line-height:23px;font-weight:700;color:#1f2921;">AI návrh kde můžeš objednat</p>
               <p style="margin:12px 0 0 0;font-size:14px;line-height:21px;color:#647064;">Profil Patrika: <a href="${htmlEscape(patrikUrl)}" style="color:#4f8f18;text-decoration:underline;">${htmlEscape(patrikUrl)}</a></p>
               <p style="margin:28px 0 0 0;font-size:13px;line-height:20px;color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
             </td>
@@ -1001,7 +1001,7 @@ export async function sendDriverPartOrderNotification(env, request, options = {}
 export async function sendDriverPartServiceTechSms(env, request, options = {}) {
   const shortUrl = driverPartRequestUrl(env, request.id);
   const probablePart = cleanString(request.probablePart || request.verifiedPart) || "díl";
-  const body = `Nové hlášení ND: ${cleanString(request.licensePlate)} – ${probablePart}. Patrik má díl ručně ověřit, nic nebylo objednáno. Detail: ${shortUrl}`;
+  const body = `Nové hlášení ND: ${cleanString(request.licensePlate)} – ${probablePart}. AI návrh kde můžeš objednat. Detail: ${shortUrl}`;
 
   return sendSms(env, {
     type: "driver_part_service_tech_sms",

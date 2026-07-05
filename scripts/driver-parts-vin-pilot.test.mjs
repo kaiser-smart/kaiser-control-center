@@ -1055,6 +1055,8 @@ function driverPartTestEnv(db, offers) {
     assert.match(sendGridRequest.body.subject, /Náhradní díl k ověření: 2BB 8251/);
     const sentHtml = sendGridRequest.body.content[0].value;
     assert.match(sentHtml, /3 nejlevnější nabídky/);
+    assert.match(sentHtml, /AI návrh kde můžeš objednat/);
+    assert.doesNotMatch(sentHtml, /nic nebylo objednáno/i);
     assert.match(sentHtml, /https:\/\/example\.test\/a/);
     assert.match(sentHtml, /https:\/\/example\.test\/b/);
     assert.match(sentHtml, /https:\/\/example\.test\/c/);
