@@ -297,6 +297,7 @@ async function fetchOpenAiWebSearchOffers(config, request, query, signal, fetchI
           timezone: "Europe/Prague"
         }
       }],
+      tool_choice: "required",
       input: [
         "Najdi nejlevnejsi relevantni dostupne nove nabidky nahradniho dilu v CR nebo EU.",
         "Jde o pilot AI Boost pro servisni overeni. Nic neobjednavej.",

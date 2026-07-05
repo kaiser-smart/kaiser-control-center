@@ -408,6 +408,7 @@ function passengerVehicle(overrides = {}) {
   });
   assert.equal(requestSnapshot.url, "https://api.openai.com/v1/responses");
   assert.equal(requestSnapshot.body.tools[0].type, "web_search");
+  assert.equal(requestSnapshot.body.tool_choice, "required");
   assert.equal(requestSnapshot.body.model, "gpt-test");
   assert.match(requestSnapshot.options.headers.Authorization, /^Bearer /);
   assert.doesNotMatch(requestSnapshot.body.input, /WDD2573211A123456|2BB 8251/);
