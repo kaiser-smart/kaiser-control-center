@@ -4645,8 +4645,8 @@ h1 {
 }
 
 .collection-routes-driver-mode__stop {
-  min-height: 280px;
-  padding: 22px;
+  min-height: 246px;
+  padding: 18px;
   border-color: rgba(210, 226, 217, 0.12);
   background: #192126;
 }
@@ -4663,7 +4663,7 @@ h1 {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  font-size: 3rem;
+  font-size: 2.82rem;
 }
 
 .collection-routes-driver-mode__stop p {
@@ -4741,7 +4741,7 @@ h1 {
 }
 
 .collection-routes-driver-mode__support-actions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(150px, 1fr);
   gap: 10px;
 }
 
@@ -4766,6 +4766,14 @@ h1 {
 .collection-routes-driver-action--problem-soft {
   border-color: rgba(255, 107, 98, 0.62);
   background: rgba(255, 107, 98, 0.18);
+}
+
+.collection-routes-driver-action--sarlota {
+  border-color: rgba(84, 211, 194, 0.68);
+  background: rgba(84, 211, 194, 0.2);
+  color: #dcfffa;
+  flex-direction: row;
+  gap: 8px;
 }
 
 .collection-routes-driver-mode__controls {
@@ -4880,11 +4888,11 @@ h1 {
   }
 
   .collection-routes-driver-mode__stop {
-    min-height: 310px;
+    min-height: 268px;
   }
 
   .collection-routes-driver-mode__stop h4 {
-    font-size: 3.15rem;
+    font-size: 2.95rem;
   }
 
   .collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
@@ -4902,6 +4910,10 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .collection-routes-driver-mode__support-actions {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(140px, 1fr);
+  }
+
   .collection-routes-driver-mode__stop {
     min-height: 260px;
   }
@@ -4917,6 +4929,7 @@ h1 {
 
 @media (max-width: 719px) {
   .collection-routes-driver-mode__primary-actions,
+  .collection-routes-driver-mode__support-actions,
   .collection-routes-driver-mode__problem-grid,
   .collection-routes-driver-mode__problem-grid > div:last-child {
     grid-template-columns: 1fr;

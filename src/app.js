@@ -15382,7 +15382,16 @@ function collectionRoutesSourceDriverVehiclePlate(value) {
     B: "1BP 8373",
     C: "3BE 2831"
   };
-  return plates[value] || (value === "all" ? "všechna vozidla" : "-");
+  return plates[value] || "-";
+}
+
+function collectionRoutesSourceDriverVehicleRouteLabel(value) {
+  if (!value || value === "all") {
+    return "Auto není vybrané";
+  }
+  const vehicleLabel = collectionRoutesSourceVehicleLabel(value);
+  const plate = collectionRoutesSourceDriverVehiclePlate(value);
+  return [vehicleLabel, plate !== "-" ? plate : ""].filter(Boolean).join(" · ") || "Auto není vybrané";
 }
 
 function collectionRoutesSourceDriverTimeLabel(date = new Date()) {
@@ -15498,7 +15507,9 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const isExpanded = collectionRoutesPilotState.sourceDriverListExpanded;
   const isProblemPanelOpen = Boolean(collectionRoutesPilotState.sourceDriverProblemPanelOpen);
   const hasMeaningfulNote = Boolean(String(note || "").trim());
-  const routeDayLabel = dayLabel === "všechny dny" ? "Dnes" : dayLabel;
+  const routeDayLabel = dayLabel === "všechny dny" ? "Den není vybraný" : dayLabel;
+  const routeWeekLabel = weekLabel === "všechny týdny" ? "Týden není vybraný" : weekLabel;
+  const routeVehicleLabel = collectionRoutesSourceDriverVehicleRouteLabel(vehicle);
   const routeDriverLabel = driverName && driverName !== "řidič nepřiřazen" ? driverName : "Řidič nepřiřazen";
   const driverFactsHtml = [
     collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow)),
@@ -15519,8 +15530,8 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
       <div class="collection-routes-driver-mode__topbar" aria-label="Stav řidičského režimu">
         <div class="collection-routes-driver-mode__identity">
           <span>Řidičský tablet</span>
-          <strong>${escapeHtml(routeDayLabel)} | ${escapeHtml(collectionRoutesSourceVehicleLabel(vehicle))} | ${escapeHtml(collectionRoutesSourceDriverVehiclePlate(vehicle))} | ${escapeHtml(routeDriverLabel)}</strong>
-          <small>${escapeHtml(weekLabel)}</small>
+          <strong>${escapeHtml(routeDayLabel)} · ${escapeHtml(routeWeekLabel)}</strong>
+          <small>${escapeHtml(routeVehicleLabel)} · ${escapeHtml(routeDriverLabel)}</small>
         </div>
         <div class="collection-routes-driver-mode__signals" aria-label="Čas">
           <span>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</span>
@@ -15544,7 +15555,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
               <div class="collection-routes-driver-mode__stop">
                 <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || progressValue)}</span>
                 <div>
-                  <span class="collection-routes-driver-mode__kicker">Teď jsi tady</span>
+                  <span class="collection-routes-driver-mode__kicker">Další stanoviště</span>
                   <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
                   <p>${escapeHtml(selectedRow.addressText || "-")}</p>
                   <span class="collection-routes-driver-mode__task-label">Úkol</span>
@@ -15566,9 +15577,6 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           <div class="collection-routes-driver-mode__support-actions" aria-label="Vedlejší akce řidiče">
             ${collectionRoutesSourceDriverReadonlyButton("Navigovat na další stanoviště", "navigate", "navigate")}
             ${collectionRoutesSourceDriverReadonlyButton(isProblemPanelOpen ? "Problém otevřen" : "Problém", "problem", "problem")}
-          </div>
-
-          <div class="collection-routes-driver-mode__controls" aria-label="Ovládání trasy">
             ${collectionRoutesSourceDriverReadonlyButton("Šarlota", "sarlota", "sarlota")}
           </div>
 
