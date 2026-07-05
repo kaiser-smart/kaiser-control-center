@@ -25277,7 +25277,7 @@ body:has(.tracking-page--soft-metal-preview) {
   --tracking-accent-border: var(--state-success-border);
   width: min(1360px, calc(100% - 28px));
   box-sizing: border-box;
-  background: linear-gradient(145deg, rgba(246, 248, 248, 0.7) 0%, rgba(214, 222, 226, 0.7) 100%);
+  background: transparent;
   color: var(--text-main);
   font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -26413,13 +26413,13 @@ body:has(.tracking-page--soft-metal-preview) {
   --icon-filter-amber: invert(51%) sepia(75%) saturate(712%) hue-rotate(358deg) brightness(88%) contrast(88%);
   --icon-filter-red: invert(42%) sepia(21%) saturate(1114%) hue-rotate(314deg) brightness(88%) contrast(89%);
   --icon-filter-graphite: invert(20%) sepia(18%) saturate(1027%) hue-rotate(173deg) brightness(88%) contrast(88%);
-  --tracking-shell-bg: linear-gradient(145deg, rgba(240, 244, 245, 0.78) 0%, rgba(207, 217, 222, 0.74) 100%);
+  --tracking-shell-bg: linear-gradient(145deg, rgba(232, 238, 240, 0.34) 0%, rgba(211, 220, 224, 0.24) 100%);
   --tracking-panel-bg: var(--metal-gradient);
   --tracking-card-bg: var(--metal-gradient-soft);
   --tracking-control-bg: var(--metal-gradient-control);
   --tracking-inset-bg: var(--metal-gradient-inset);
-  --tracking-soft-shadow: 11px 13px 29px rgba(78, 92, 100, 0.17), -8px -8px 22px rgba(255, 255, 255, 0.8);
-  --tracking-soft-shadow-sm: 7px 9px 18px rgba(78, 92, 100, 0.145), -5px -5px 14px rgba(255, 255, 255, 0.74);
+  --tracking-soft-shadow: 10px 12px 27px rgba(78, 92, 100, 0.155), -7px -7px 20px rgba(255, 255, 255, 0.78);
+  --tracking-soft-shadow-sm: 6px 8px 17px rgba(78, 92, 100, 0.13), -5px -5px 13px rgba(255, 255, 255, 0.72);
   --tracking-inset-shadow: inset 6px 6px 14px rgba(78, 92, 100, 0.17), inset -6px -6px 14px rgba(255, 255, 255, 0.72);
   --tracking-control-height: 46px;
   width: min(1500px, calc(100% - 28px));
@@ -26445,11 +26445,12 @@ body:has(.tracking-page--soft-metal-preview) {
   display: grid;
   min-width: 0;
   gap: var(--space-lg);
-  border: 1px solid color-mix(in srgb, var(--border-soft) 82%, transparent);
-  border-radius: calc(var(--radius-xl) + 4px);
+  border: 1px solid transparent;
+  border-top-color: color-mix(in srgb, var(--border-soft) 18%, transparent);
+  border-radius: var(--radius-xl);
   background: var(--tracking-shell-bg);
-  padding: clamp(var(--space-md), 1.5vw, var(--space-lg));
-  box-shadow: var(--shadow-inset);
+  padding: clamp(8px, 1vw, var(--space-md));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar {
@@ -26461,11 +26462,11 @@ body:has(.tracking-page--soft-metal-preview) {
   flex-direction: column;
   gap: var(--space-md);
   overflow: hidden;
-  border: 1px solid var(--border-soft);
+  border: 1px solid color-mix(in srgb, var(--border-soft) 76%, transparent);
   border-radius: var(--radius-xl);
   background: var(--tracking-panel-bg);
   padding: var(--sidebar-padding);
-  box-shadow: var(--tracking-soft-shadow), var(--highlight-edge);
+  box-shadow: 9px 11px 25px rgba(78, 92, 100, 0.145), -7px -7px 20px rgba(255, 255, 255, 0.76), var(--highlight-edge);
   transition:
     width var(--sidebar-transition),
     box-shadow 180ms ease,
@@ -26854,18 +26855,18 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .module-detail::after {
   position: absolute;
-  inset: 22px 26px 22px auto;
-  width: min(34%, 360px);
-  border: 1px solid color-mix(in srgb, var(--border-soft) 64%, transparent);
+  inset: 28px 30px 28px auto;
+  width: min(28%, 300px);
+  border: 1px solid color-mix(in srgb, var(--border-soft) 38%, transparent);
   border-radius: var(--radius-xl);
   background:
-    linear-gradient(135deg, transparent 0 38%, rgba(78, 92, 100, 0.12) 38% 40%, transparent 40% 100%),
-    linear-gradient(42deg, transparent 0 56%, rgba(78, 92, 100, 0.1) 56% 58%, transparent 58% 100%),
-    repeating-linear-gradient(90deg, rgba(78, 92, 100, 0.06) 0 1px, transparent 1px 34px),
-    repeating-linear-gradient(0deg, rgba(78, 92, 100, 0.05) 0 1px, transparent 1px 34px);
-  box-shadow: var(--tracking-inset-shadow);
+    linear-gradient(135deg, transparent 0 38%, rgba(78, 92, 100, 0.075) 38% 40%, transparent 40% 100%),
+    linear-gradient(42deg, transparent 0 56%, rgba(78, 92, 100, 0.065) 56% 58%, transparent 58% 100%),
+    repeating-linear-gradient(90deg, rgba(78, 92, 100, 0.04) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(0deg, rgba(78, 92, 100, 0.035) 0 1px, transparent 1px 34px);
+  box-shadow: inset 4px 4px 11px rgba(78, 92, 100, 0.09), inset -4px -4px 11px rgba(255, 255, 255, 0.5);
   content: "";
-  opacity: 0.7;
+  opacity: 0.48;
   pointer-events: none;
 }
 
