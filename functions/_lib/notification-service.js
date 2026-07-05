@@ -478,21 +478,15 @@ function renderMedicalExamReminderEmail({ exam, ctaUrl }) {
 function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
   const vin = cleanString(request.vin) || "není dostupné";
   const side = cleanString(request.probablePartSideLabel) || cleanString(request.probablePartSide) || "neznámá strana";
-  const probablePart = cleanString(request.probablePart || request.verifiedPart) || "čeká na identifikaci";
-  const brand = cleanString(request.vehicleBrandLabel || request.vehicleBrand) || "jiné";
+  const probablePart = cleanString(request.partName || request.verifiedPart || request.probablePart) || "čeká na identifikaci";
   const oePartNumber = cleanString(request.oePartNumber || request.partOrderNumber) || "čeká na ověření";
-  const partName = cleanString(request.partName || request.verifiedPart) || "čeká na ověření";
-  const verificationSource = cleanString(request.partVerificationSource) || "čeká na ověření";
-  const verificationStatus = cleanString(request.partVerificationStatus || request.partIdentificationStatus) || "čeká na ověření";
   const providerMessage = cleanString(request.partsProviderMessage)
     || "Pilotní návrh AI Boost. Nic nebylo objednáno. Prosím ručně ověřit OE číslo a dostupnost před nákupem.";
   const offers = driverPartOrderEmailOffers(request);
-  const priceBoostFallback = cleanString(request.priceBoostNote)
-    || "AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. Nic nebylo objednáno.";
   const offersHtml = offers.length
     ? `
-              <h2 style="margin:26px 0 12px 0;font-size:22px;line-height:28px;font-weight:800;color:#1f2921;">Cenový průzkum</h2>
-              <ol style="margin:0 0 24px 22px;padding:0;font-size:15px;line-height:23px;color:#1f2921;">
+              <h2 style="margin:26px 0 12px 0;font-size:24px;line-height:30px;font-weight:800;color:#1f2921;">3 nejlevnější nabídky</h2>
+              <ol style="margin:0 0 24px 22px;padding:0;font-size:16px;line-height:24px;color:#1f2921;">
                 ${offers.map((offer) => `
                   <li style="margin:0 0 12px 0;">
                     <strong>${htmlEscape(offer.title || "nabídka")}</strong><br>
@@ -506,7 +500,7 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
               </ol>`
     : `
               <h2 style="margin:26px 0 12px 0;font-size:22px;line-height:28px;font-weight:800;color:#1f2921;">Cenový průzkum</h2>
-              <p style="margin:0 0 24px 0;font-size:15px;line-height:23px;color:#647064;">${htmlEscape(priceBoostFallback)}</p>`;
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:23px;color:#647064;">E-mail nebyl připravený k odeslání, protože chybí 3 cenové nabídky s odkazy.</p>`;
   const damagePhoto = cleanString(request.damagePhotoStatus) === "attached"
     ? "přiložena"
     : cleanString(request.damagePhotoStatus) === "not_needed"
@@ -529,7 +523,16 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
             <td style="padding:40px 42px;">
               <div style="display:inline-block;background:#75bd25;border-radius:14px;padding:12px 24px;color:#ffffff;font-size:28px;line-height:32px;font-weight:700;margin:0 0 34px 0;">kaiser.</div>
               <h1 style="margin:0 0 12px 0;font-size:34px;line-height:40px;font-weight:800;color:#1f2921;">Náhradní díl k ověření</h1>
-              <p style="margin:0 0 26px 0;font-size:18px;line-height:28px;font-weight:600;color:#647064;">Patriku, prosím ručně ověř náhradní díl před případným nákupem. Pilot AI Boost nic neobjednal.</p>
+              <p style="margin:0 0 26px 0;font-size:18px;line-height:28px;font-weight:600;color:#647064;">Patriku, AI Boost našel návrh dílu a cenové nabídky. Prosím ručně ověř kompatibilitu před nákupem. Nic nebylo objednáno.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eef7e6;border:1px solid #cfe7c2;border-radius:14px;margin:0 0 24px 0;">
+                <tr><td style="padding:20px 22px;font-size:17px;line-height:25px;">
+                  <p style="margin:0 0 10px 0;"><strong>Vozidlo:</strong> ${htmlEscape(request.vehicleName || request.licensePlate || "neuvedeno")}</p>
+                  <p style="margin:0 0 10px 0;"><strong>SPZ / VIN:</strong> ${htmlEscape(request.licensePlate || "neuvedeno")} / ${htmlEscape(vin)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Závada:</strong> ${htmlEscape(request.defectDescription || "neuvedeno")}</p>
+                  <p style="margin:0;"><strong>Navržený díl:</strong> ${htmlEscape(probablePart)}${oePartNumber !== "čeká na ověření" ? `, OE ${htmlEscape(oePartNumber)}` : ""}</p>
+                </td></tr>
+              </table>
+              ${offersHtml}
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fbf4;border:1px solid #dfe8d9;border-radius:14px;margin:0 0 24px 0;">
                 <tr><td style="padding:20px 22px;font-size:16px;line-height:24px;">
                   <p style="margin:0 0 10px 0;"><strong>Řidič:</strong> ${htmlEscape(request.driverName)}</p>
@@ -537,18 +540,13 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
                   <p style="margin:0 0 10px 0;"><strong>Vozidlo:</strong> ${htmlEscape(request.vehicleName || request.licensePlate)}</p>
                   <p style="margin:0 0 10px 0;"><strong>SPZ:</strong> ${htmlEscape(request.licensePlate)}</p>
                   <p style="margin:0 0 10px 0;"><strong>VIN:</strong> ${htmlEscape(vin)}</p>
-                  <p style="margin:0 0 10px 0;"><strong>Značka:</strong> ${htmlEscape(brand)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Závada:</strong> ${htmlEscape(request.defectDescription)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Fotka poškození:</strong> ${htmlEscape(damagePhoto)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Pravděpodobný díl:</strong> ${htmlEscape(probablePart)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Strana dílu:</strong> ${htmlEscape(side)}</p>
-                  <p style="margin:0 0 10px 0;"><strong>OE číslo:</strong> ${htmlEscape(oePartNumber)}</p>
-                  <p style="margin:0 0 10px 0;"><strong>Název dílu:</strong> ${htmlEscape(partName)}</p>
-                  <p style="margin:0 0 10px 0;"><strong>Zdroj ověření:</strong> ${htmlEscape(verificationSource)}</p>
-                  <p style="margin:0;"><strong>Stav ověření:</strong> ${htmlEscape(verificationStatus)}</p>
+                  <p style="margin:0;"><strong>OE číslo:</strong> ${htmlEscape(oePartNumber)}</p>
                 </td></tr>
               </table>
-              ${offersHtml}
               <a href="${htmlEscape(ctaUrl)}" style="display:block;text-align:center;background:#75bd25;border-radius:14px;padding:18px 24px;color:#ffffff;font-size:18px;line-height:24px;font-weight:800;text-decoration:none;">Otevřít detail hlášení</a>
               <p style="margin:18px 0 0 0;font-size:15px;line-height:23px;color:#647064;">${htmlEscape(providerMessage)}</p>
               <p style="margin:12px 0 0 0;font-size:15px;line-height:23px;font-weight:700;color:#1f2921;">Pilotní návrh AI Boost. Nic nebylo objednáno. Prosím ručně ověřit před nákupem.</p>
@@ -1092,5 +1090,6 @@ export const __test = {
   emailRecipients,
   driverPartOrderEmailOffers,
   driverPartOrderEmailReadiness,
-  parseDriverPartOffers
+  parseDriverPartOffers,
+  renderDriverPartOrderEmail
 };

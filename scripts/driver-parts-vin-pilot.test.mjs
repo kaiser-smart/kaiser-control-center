@@ -589,6 +589,35 @@ function passengerVehicle(overrides = {}) {
   assert.equal(emailReady.allowed, true);
   assert.equal(emailReady.offerCount, 3);
 
+  const emailHtml = notificationInternals.renderDriverPartOrderEmail({
+    request: {
+      id: "driver-report-email-preview",
+      driverName: "Radim Opluštil",
+      driverPhone: "604 542 004",
+      vehicleName: "Mercedes CLS 400 d 4matic",
+      licensePlate: "2BB 8251",
+      vin: "WDD2573211A123456",
+      defectDescription: "prasklé přední sklo",
+      probablePart: "přední sklo",
+      partVerificationStatus: "probable_part",
+      priceBoostResultJson: JSON.stringify({
+        offers: [
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+          { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
+          { title: "Sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+        ]
+      })
+    },
+    ctaUrl: "https://kaiser-control-center.pages.dev/hlaseni-ridicu?request=driver-report-email-preview",
+    patrikUrl: "https://kaiser-control-center.pages.dev/dovolena-nemoc/zamestnanci/patrik-istvanek"
+  });
+  assert.match(emailHtml, /3 nejlevnější nabídky/);
+  assert.match(emailHtml, /https:\/\/example\.test\/a/);
+  assert.match(emailHtml, /https:\/\/example\.test\/b/);
+  assert.match(emailHtml, /https:\/\/example\.test\/c/);
+  assert.equal(emailHtml.includes("probable_part"), false);
+  assert.ok(emailHtml.indexOf("3 nejlevnější nabídky") < emailHtml.indexOf("Řidič:"));
+
   assert.deepEqual(
     notificationInternals.emailRecipients("oplustil@kaiserservis.cz; invalid; patrik@example.test,oplustil@kaiserservis.cz"),
     ["oplustil@kaiserservis.cz", "patrik@example.test"]
