@@ -980,6 +980,7 @@ const collectionRoutesPilotState = {
   sourceDriverSelectedRowKey: "",
   sourceDriverListExpanded: false,
   sourceDriverProblemPanelOpen: false,
+  sourceDriverRouteDone: false,
   sourceRouteView: "print",
   selectedSiteId: "",
   selectedSiteDetail: null,
@@ -15402,13 +15403,13 @@ function collectionRoutesSourceDriverEtaLabel(minutes) {
   return collectionRoutesSourceDriverTimeLabel(new Date(Date.now() + (safeMinutes * 60 * 1000)));
 }
 
-function collectionRoutesSourceDriverMetricCard(label, value, tone = "default") {
-  return `
-    <article class="collection-routes-driver-status-card collection-routes-driver-status-card--${escapeHtml(tone)}">
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value || "-")}</strong>
-    </article>
-  `;
+function collectionRoutesSourceDriverProgressPercent(completedCount, totalCount) {
+  const completed = Number(completedCount || 0);
+  const total = Number(totalCount || 0);
+  if (!Number.isFinite(completed) || !Number.isFinite(total) || total <= 0 || completed <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.max(1, Math.round((completed / total) * 100)));
 }
 
 function collectionRoutesSourceDriverNextStopCard(row, order) {
@@ -15472,18 +15473,23 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const selectedRow = rows[selectedIndex] || rows[0];
   const visibleRows = collectionRoutesSourceDriverVisibleRows(rows, selectedIndex);
   const progressValue = Math.max(1, selectedIndex + 1);
-  const progressPercent = Math.round((progressValue / rows.length) * 100);
   const note = selectedRow?.note || "";
   const filters = collectionRoutesPilotState.sourceFilters || {};
   const vehicle = filters.vehicle || selectedRow?.vehicleCode || "all";
   const dayLabel = collectionRoutesSourceDayLabel(filters.day || selectedRow?.dayCode || "all");
   const weekLabel = collectionRoutesSourceWeekLabel(filters.week || selectedRow?.weekMode || "all");
   const driverName = selectedRow?.driverName || selectedRow?.driver || "řidič nepřiřazen";
-  const completedCount = Math.max(0, progressValue - 1);
-  const remainingCount = Math.max(0, rows.length - progressValue);
+  const routeDone = Boolean(collectionRoutesPilotState.sourceDriverRouteDone)
+    && collectionRoutesPilotState.sourceDriverSelectedRowKey === collectionRoutesSourceDriverRowKey(rows[rows.length - 1], rows.length - 1);
+  const completedCount = routeDone ? rows.length : Math.max(0, progressValue - 1);
+  const remainingCount = Math.max(0, rows.length - completedCount);
+  const followingCount = Math.max(0, rows.length - progressValue);
+  const progressPercent = collectionRoutesSourceDriverProgressPercent(completedCount, rows.length);
+  const routeMetrics = collectionRoutesSourceRowsMetrics(rows);
   const remainingMetrics = collectionRoutesSourceRowsMetrics(rows.slice(selectedIndex + 1));
   const etaLabel = collectionRoutesSourceDriverEtaLabel(remainingMetrics.estimatedMinutes);
   const routeEtaText = etaLabel === "není dostupný" ? "odhad není dostupný" : `konec ${etaLabel}`;
+  const estimateText = etaLabel === "není dostupný" ? "není dostupný" : etaLabel;
   const currentServiceLabel = [
     collectionRoutesSourceDriverWasteLabel(selectedRow),
     collectionRoutesSourceDriverContainerLabel(selectedRow)
@@ -15532,7 +15538,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           <section class="collection-routes-driver-mode__active" aria-label="Další zastávka">
             <div class="collection-routes-driver-mode__route-pulse" aria-label="Postup trasy">
               <strong>${escapeHtml(progressValue)} / ${escapeHtml(rows.length)}</strong>
-              <span>${escapeHtml(collectionRoutesMetricValue(remainingCount))} zbývá · ${escapeHtml(routeEtaText)}</span>
+              <span>${escapeHtml(collectionRoutesMetricValue(followingCount))} dalších · ${escapeHtml(routeEtaText)}</span>
             </div>
             <div class="collection-routes-driver-mode__hero-grid">
               <div class="collection-routes-driver-mode__stop">
@@ -15558,15 +15564,11 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           </div>
 
           <div class="collection-routes-driver-mode__support-actions" aria-label="Vedlejší akce řidiče">
-            ${collectionRoutesSourceDriverReadonlyButton("Navigovat na adresu", "navigate", "navigate")}
+            ${collectionRoutesSourceDriverReadonlyButton("Navigovat na další stanoviště", "navigate", "navigate")}
             ${collectionRoutesSourceDriverReadonlyButton(isProblemPanelOpen ? "Problém otevřen" : "Problém", "problem", "problem")}
           </div>
 
           <div class="collection-routes-driver-mode__controls" aria-label="Ovládání trasy">
-            <button class="secondary-link" type="button" data-collection-routes-source-driver-prev ${selectedIndex <= 0 ? "disabled" : ""}>
-              Předchozí zastávka
-            </button>
-            ${collectionRoutesSourceDriverReadonlyButton("Zpráva dispečinku", "dispatch", "dispatch")}
             ${collectionRoutesSourceDriverReadonlyButton("Šarlota", "sarlota", "sarlota")}
           </div>
 
@@ -15575,12 +15577,19 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           </div>
         </div>
 
-        <aside class="collection-routes-driver-mode__queue" aria-label="Zastávky v trase">
-          <div class="collection-routes-driver-mode__status-grid" aria-label="Stav trasy">
-            ${collectionRoutesSourceDriverMetricCard("Hotovo", `${collectionRoutesMetricValue(completedCount)} / ${collectionRoutesMetricValue(rows.length)}`, "done")}
-            ${collectionRoutesSourceDriverMetricCard("Zbývá", collectionRoutesMetricValue(remainingCount), "plan")}
-            ${collectionRoutesSourceDriverMetricCard("Nádoby", collectionRoutesMetricValue(remainingMetrics.containerCount || 0), "capacity")}
-            ${collectionRoutesSourceDriverMetricCard("Odhad", etaLabel, "time")}
+        <aside class="collection-routes-driver-mode__queue" aria-label="Průběh a zastávky v trase">
+          <div class="collection-routes-driver-progress-card" aria-label="Průběh trasy">
+            <span>Průběh trasy</span>
+            <strong>Hotovo ${escapeHtml(progressPercent)} %</strong>
+            <small>${escapeHtml(collectionRoutesMetricValue(completedCount))} z ${escapeHtml(collectionRoutesMetricValue(rows.length))} stanovišť</small>
+            <div class="collection-routes-driver-progress-card__bar" aria-hidden="true">
+              <span style="width: ${escapeHtml(progressPercent)}%"></span>
+            </div>
+            <em>Zbývá ${escapeHtml(collectionRoutesMetricValue(remainingCount))}</em>
+            <dl>
+              <div><dt>Nádoby</dt><dd>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</dd></div>
+              <div><dt>Odhad</dt><dd>${escapeHtml(estimateText)}</dd></div>
+            </dl>
           </div>
           <div class="collection-routes-driver-mode__list-head">
             <strong>${escapeHtml(listLabel)}</strong>
@@ -15615,10 +15624,10 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
         <div class="collection-routes-driver-mode__problem-grid" aria-label="Rychlé hlášení problému">
           <div>
             <strong>Co se stalo?</strong>
-            <span>Vyber problém. Když je potřeba rychlé řešení, pošli zprávu dispečinku.</span>
+            <span>Vyber problém. Nic se zatím neodesílá bez potvrzeného backendu.</span>
           </div>
           <div>
-            ${["Nádoba není venku", "Přeplněno", "Přístup blokovaný", "Špatná adresa", "Nádoba poškozená", "Jiné", "Zpráva dispečinku"].map((label) => collectionRoutesSourceDriverReadonlyButton(label, `problem:${label}`, "problem-soft")).join("")}
+            ${["Nádoba není venku", "Přeplněno", "Překážka", "Špatná adresa", "Nelze obsloužit", "Nahlásit dispečinku", "Vyfotit", "Jiné"].map((label) => collectionRoutesSourceDriverReadonlyButton(label, `problem:${label}`, "problem-soft")).join("")}
             ${collectionRoutesSourceDriverReadonlyButton("Zavřít", "problem-close", "tab")}
           </div>
         </div>
@@ -23869,12 +23878,14 @@ function selectCollectionRoutesSourceDriverIndex(index, message = "") {
   const rows = collectionRoutesSourceDisplayRows();
   if (!rows.length) {
     collectionRoutesPilotState.sourceDriverSelectedRowKey = "";
+    collectionRoutesPilotState.sourceDriverRouteDone = false;
     render();
     return;
   }
   const safeIndex = Math.max(0, Math.min(rows.length - 1, Number(index) || 0));
   collectionRoutesPilotState.sourceDriverSelectedRowKey = collectionRoutesSourceDriverRowKey(rows[safeIndex], safeIndex);
   collectionRoutesPilotState.sourceDriverProblemPanelOpen = false;
+  collectionRoutesPilotState.sourceDriverRouteDone = message === "Trasa dokončena.";
   collectionRoutesPilotState.sourceImportError = "";
   collectionRoutesPilotState.sourceImportMessage = message;
   render();
@@ -23944,13 +23955,13 @@ function handleCollectionRoutesSourceDriverReadonlyAction(action) {
     collectionRoutesPilotState.sourceDriverProblemPanelOpen = false;
   }
   const messages = {
-    navigate: "Navigace na adresu bude zapnutá v další fázi.",
+    navigate: "Navigace na další stanoviště bude zapnutá v další fázi.",
     problem: "Vyber, co se stalo.",
     "problem-close": "",
     map: "Mapa bude zapnutá v další fázi.",
     list: "",
     report: "Hlášení otevři přes volbu Problém.",
-    dispatch: "Zpráva dispečinku bude zapnutá v další fázi.",
+    dispatch: "Hlášení dispečinku bude zapnuté v další fázi.",
     sarlota: "Šarlota bude zapnutá v další fázi."
   };
   collectionRoutesPilotState.sourceImportError = "";

@@ -3664,7 +3664,7 @@ h1 {
 .collection-routes-driver-mode__topbar,
 .collection-routes-driver-mode__tabs,
 .collection-routes-driver-mode__dashboard,
-.collection-routes-driver-mode__status-grid,
+.collection-routes-driver-progress-card,
 .collection-routes-driver-mode__primary-actions,
 .collection-routes-driver-mode__support-actions,
 .collection-routes-driver-mode__bottom-bar,
@@ -3699,7 +3699,8 @@ h1 {
 .collection-routes-driver-mode__identity small,
 .collection-routes-driver-mode__signals span,
 .collection-routes-driver-mode__facts span,
-.collection-routes-driver-status-card span,
+.collection-routes-driver-progress-card > span,
+.collection-routes-driver-progress-card dt,
 .collection-routes-driver-action small {
   color: var(--driver-muted);
   font-weight: 800;
@@ -3959,8 +3960,9 @@ h1 {
 
 .collection-routes-driver-mode__controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(190px, 280px);
   gap: 10px;
+  justify-content: start;
 }
 
 .collection-routes-driver-mode__controls .primary-action,
@@ -4051,37 +4053,70 @@ h1 {
   padding: 12px;
 }
 
-.collection-routes-driver-mode__status-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.collection-routes-driver-status-card {
+.collection-routes-driver-progress-card {
   display: grid;
-  gap: 5px;
-  min-height: 74px;
-  padding: 11px;
+  gap: 8px;
+  padding: 14px;
   border: 1px solid var(--driver-line);
   border-radius: 8px;
   background: #101619;
 }
 
-.collection-routes-driver-status-card strong {
-  color: var(--driver-text);
-  font-size: 1.2rem;
+.collection-routes-driver-progress-card strong {
+  color: var(--driver-green);
+  font-size: clamp(1.75rem, 3vw, 2.45rem);
   line-height: 1.12;
   overflow-wrap: anywhere;
 }
 
-.collection-routes-driver-status-card--done strong {
-  color: var(--driver-green);
+.collection-routes-driver-progress-card small,
+.collection-routes-driver-progress-card em {
+  color: var(--driver-text);
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.2;
 }
 
-.collection-routes-driver-status-card--time strong {
-  color: var(--driver-amber);
+.collection-routes-driver-progress-card__bar {
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(210, 226, 217, 0.12);
 }
 
-.collection-routes-driver-status-card--capacity strong {
-  color: var(--driver-cyan);
+.collection-routes-driver-progress-card__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--driver-green);
+}
+
+.collection-routes-driver-progress-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.collection-routes-driver-progress-card dl div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(210, 226, 217, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.collection-routes-driver-progress-card dt,
+.collection-routes-driver-progress-card dd {
+  margin: 0;
+}
+
+.collection-routes-driver-progress-card dd {
+  color: var(--driver-text);
+  font-size: 0.94rem;
+  font-weight: 850;
+  overflow-wrap: anywhere;
 }
 
 .collection-routes-driver-mode__list-head {
@@ -4270,9 +4305,12 @@ h1 {
 
   .collection-routes-driver-mode__tabs,
   .collection-routes-driver-mode__support-actions,
-  .collection-routes-driver-mode__controls,
   .collection-routes-driver-mode__bottom-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collection-routes-driver-mode__controls {
+    grid-template-columns: minmax(190px, 280px);
   }
 
   .collection-routes-driver-mode__problem-grid > div,
@@ -4307,7 +4345,6 @@ h1 {
   .collection-routes-driver-mode__bottom-bar,
   .collection-routes-driver-mode__problem-grid > div,
   .collection-routes-driver-mode__facts,
-  .collection-routes-driver-mode__status-grid,
   .collection-routes-driver-mode__controls {
     grid-template-columns: 1fr;
   }
@@ -4319,6 +4356,10 @@ h1 {
 
   .collection-routes-driver-mode__stop h4 {
     font-size: 1.8rem;
+  }
+
+  .collection-routes-driver-progress-card dl {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -4728,8 +4769,9 @@ h1 {
 }
 
 .collection-routes-driver-mode__controls {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(190px, 280px);
   gap: 8px;
+  justify-content: start;
 }
 
 .collection-routes-driver-mode__controls .primary-action,
@@ -4748,19 +4790,14 @@ h1 {
   padding: 10px;
 }
 
-.collection-routes-driver-mode__status-grid {
-  gap: 8px;
-}
-
-.collection-routes-driver-status-card {
-  min-height: 66px;
-  padding: 9px;
+.collection-routes-driver-progress-card {
+  padding: 12px;
   border-color: rgba(210, 226, 217, 0.12);
   background: #101619;
 }
 
-.collection-routes-driver-status-card strong {
-  font-size: 1.08rem;
+.collection-routes-driver-progress-card strong {
+  font-size: 1.85rem;
 }
 
 .collection-routes-driver-mode__list {

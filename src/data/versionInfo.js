@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.350"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.351"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -21,8 +21,12 @@ export const versionInfo = {
 
 export const versionNews = [
   {
-    title: "Trasy svozu: jasnější tlačítka řidiče",
-    text: "Řidičský tablet má konkrétní texty akcí: Navigovat na adresu, Předchozí zastávka a Zpráva dispečinku. Nejasné Přeskočit zastávku zmizelo a Šarlota má vlastní čitelnou ikonu."
+    title: "Trasy svozu: jednodušší řidičský tablet",
+    text: "Řidičský tablet nechává v hlavním toku jen HOTOVO, Navigovat na další stanoviště, Problém a Šarlotu. Matoucí sekundární akce zmizely z hlavní obrazovky a pravé KPI boxy nahradil jednoduchý průběh trasy Hotovo X %."
+  },
+  {
+    title: "Trasy svozu: zpřesnění tlačítek řidiče",
+    text: "Řidičský tablet dostal srozumitelnější popisky akcí a Šarlota vlastní čitelnou ikonu. Aktuální hlavní tok řidiče je zjednodušený v novince výše."
   },
   {
     title: "Šarlota: výběr vozidla je kliknutelný",
