@@ -253,6 +253,22 @@ const FLEET_TAB_WAITING_MESSAGES = {
 };
 const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
 const VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE = `${VEHICLE_TRACKING_BASE_ROUTE}/soft-metal-preview`;
+const VEHICLE_TRACKING_PUBLIC_PREVIEW_USER = {
+  id: "vehicle-tracking-soft-metal-preview",
+  name: "Veřejný design náhled",
+  email: "",
+  phone: "",
+  role: "readonly",
+  active: true,
+  status: "active",
+  previewOnly: true,
+  modules: ["vehicle-tracking"],
+  allowedModules: ["vehicle-tracking"],
+  deniedModules: [],
+  permissions: [
+    { moduleId: "vehicle-tracking", action: "view", allowed: true }
+  ]
+};
 const ABSENCE_ROUTE = "/dovolena-nemoc";
 const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
 const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
@@ -1268,6 +1284,10 @@ function normalizePath(pathname) {
   }
 
   return path.replace(/\/+$/, "") || "/";
+}
+
+function isVehicleTrackingSoftMetalPreviewPath(pathname = window.location.pathname) {
+  return normalizePath(pathname) === VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE;
 }
 
 function isCollectionRoutesPath(pathname = window.location.pathname) {
@@ -3166,13 +3186,17 @@ function optionList(options, selected, emptyLabel = "Vše") {
 }
 
 function userBar(user) {
+  const userAction = user?.previewOnly
+    ? '<span class="user-bar__role">Veřejný náhled</span>'
+    : '<button class="logout-button" type="button" data-logout>Odhlásit</button>';
+
   return `
     <div class="user-bar" aria-label="Přihlášený uživatel">
       <div class="user-bar__identity">
         <span class="user-bar__name">${escapeHtml(user.name || user.email || "Uživatel")}</span>
         <span class="user-bar__role">${escapeHtml(roleLabel(user.role))}</span>
       </div>
-      <button class="logout-button" type="button" data-logout>Odhlásit</button>
+      ${userAction}
     </div>
   `;
 }
@@ -3249,6 +3273,13 @@ function scrollToQuickAbsenceEntry() {
 
 function currentUser() {
   return withAccessContext(authState.user, {
+    ...accessState,
+    users: []
+  });
+}
+
+function publicVehicleTrackingPreviewUser() {
+  return withAccessContext(VEHICLE_TRACKING_PUBLIC_PREVIEW_USER, {
     ...accessState,
     users: []
   });
@@ -9894,6 +9925,11 @@ function vehicleTrackingSourceModeFromHash(hash = window.location.hash) {
 }
 
 function vehicleTrackingActiveSourceMode() {
+  if (isVehicleTrackingSoftMetalPreviewPath()) {
+    vehicleTrackingLiveState.sourceMode = "demo";
+    return "demo";
+  }
+
   const hashMode = vehicleTrackingSourceModeFromHash();
   if (hashMode) {
     vehicleTrackingLiveState.sourceMode = hashMode;
@@ -24134,6 +24170,19 @@ function handleVehicleTrackingSourceMode(mode) {
     return;
   }
 
+  if (isVehicleTrackingSoftMetalPreviewPath()) {
+    const previewHash = vehicleTrackingSourceModeHash("demo");
+    if (window.location.hash !== previewHash) {
+      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}${previewHash}`);
+      lastRenderedUrl = window.location.href;
+    }
+
+    vehicleTrackingLiveState.sourceMode = "demo";
+    clearVehicleTrackingTcarsGoogleMap();
+    render();
+    return;
+  }
+
   const nextHash = vehicleTrackingSourceModeHash(mode);
   if (window.location.hash !== nextHash) {
     window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}${nextHash}`);
@@ -24230,6 +24279,7 @@ function isAssistantPromoActive(dateString = assistantPromoDateString()) {
 function shouldAutoShowAssistantPromo() {
   const path = normalizePath(window.location.pathname);
   return AI_ASSISTANT_PROMO_AUTOSHOW_ENABLED &&
+    !isVehicleTrackingSoftMetalPreviewPath(path) &&
     !path.startsWith(FLEET_ROUTE) &&
     !isCollectionRoutesPath(path) &&
     !path.startsWith(ABSENCE_ROUTE);
@@ -26141,6 +26191,20 @@ function prepareSarlotaDeepLinkPanel() {
   return true;
 }
 
+function renderPublicVehicleTrackingPreview() {
+  vehicleTrackingLiveState.sourceMode = "demo";
+  clearVehicleTrackingTcarsGoogleMap();
+
+  const moduleItem = orderedModules.find((item) => item.id === "vehicle-tracking");
+  const user = publicVehicleTrackingPreviewUser();
+  app.innerHTML = vehicleTrackingPage(moduleItem, user, {
+    view: "map",
+    designPreview: "soft-metal",
+    publicPreview: true
+  });
+  document.title = `Veřejný soft-metal náhled sledování vozidel | ${APP_NAME}`;
+}
+
 function renderAuthenticatedApp(user) {
   const path = normalizePath(window.location.pathname);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
@@ -26250,20 +26314,7 @@ function renderAuthenticatedApp(user) {
   }
 
   if (path === VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE) {
-    if (!canViewModule(user, "vehicle-tracking")) {
-      app.innerHTML = forbiddenPage(user);
-      document.title = `Bez oprávnění | ${APP_NAME}`;
-      return;
-    }
-
-    const moduleItem = orderedModules.find((item) => item.id === "vehicle-tracking");
-    app.innerHTML = vehicleTrackingPage(moduleItem, user, { view: "map", designPreview: "soft-metal" });
-    document.title = `Soft-metal preview sledování vozidel | ${APP_NAME}`;
-    if (vehicleTrackingActiveSourceMode() === "tcars") {
-      loadVehicleTrackingStatus();
-      loadVehicleTrackingWimSites();
-      queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
-    }
+    renderPublicVehicleTrackingPreview();
     return;
   }
 
@@ -26357,6 +26408,11 @@ function renderAuthenticatedApp(user) {
 }
 
 function renderApp() {
+  if (isVehicleTrackingSoftMetalPreviewPath()) {
+    renderPublicVehicleTrackingPreview();
+    return;
+  }
+
   if (authState.status === "loading") {
     app.innerHTML = loadingPage();
     document.title = `Přihlášení | ${APP_NAME}`;
@@ -26382,12 +26438,15 @@ function renderApp() {
 
 function render() {
   try {
+    const publicSoftMetalPreview = isVehicleTrackingSoftMetalPreviewPath();
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
     renderApp();
-    app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
-    app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
-    syncAssistantPromoVideo();
+    if (!publicSoftMetalPreview) {
+      app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
+      app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
+      syncAssistantPromoVideo();
+    }
     syncVehicleTrackingDemoRuntime();
     if (aiAssistantState.welcomeVisible && aiAssistantState.welcomeAnimate) {
       aiAssistantState.welcomeAnimate = false;
