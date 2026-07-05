@@ -1354,9 +1354,50 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
   };
 }
 
+async function driverPartRequestPriceSearchPreviewForItem(env, user, item = {}, options = {}) {
+  if (!canManageDriverPartRequests(user)) {
+    throw new DriverPartRequestsStoreError("Nemáte oprávnění spustit kontrolní cenový průzkum.", 403, "driver_part_price_preview_forbidden");
+  }
+
+  const result = await runDriverPartPriceSearch(env, item, {
+    allowProbablePartSeed: options.allowProbablePartSeed === true,
+    fetchImpl: options.fetchImpl
+  });
+  const itemWithPreview = {
+    ...item,
+    priceBoostStatus: cleanString(result.status || "failed"),
+    priceBoostNote: cleanString(result.message),
+    priceBoostCheckedAt: cleanString(result.checkedAt),
+    priceBoostResultJson: cleanString(result.resultJson)
+  };
+  const readiness = await driverPartRequestHandoffReadinessForItem(env, user, itemWithPreview, {
+    allowProbablePartHandoff: true
+  });
+
+  return {
+    ok: result.ok === true,
+    status: cleanString(result.status),
+    provider: cleanString(result.provider),
+    query: cleanString(result.query),
+    checkedAt: cleanString(result.checkedAt),
+    message: cleanString(result.message),
+    offers: Array.isArray(result.offers) ? result.offers : [],
+    readiness,
+    persisted: false,
+    emailSent: false
+  };
+}
+
 export async function getDriverPartHandoffReadiness(env, user, id, options = {}) {
   const { item } = await requestForUser(env, id, user);
   return driverPartRequestHandoffReadinessForItem(env, user, item, options);
+}
+
+export async function previewDriverPartPriceBoost(env, user, id, options = {}) {
+  const { item } = await requestForUser(env, id, user);
+  return driverPartRequestPriceSearchPreviewForItem(env, user, item, {
+    allowProbablePartSeed: options.allowProbablePartSeed === true
+  });
 }
 
 async function saveDriverPartPriceBoostResult(db, user, item, result) {
@@ -2100,6 +2141,7 @@ export const __test = {
   driverPartRequestHandoffReadinessForItem,
   driverPartRequestPatrikHandoffEligibility,
   driverPartRequestPatrikPriceHandoffEligibility,
+  driverPartRequestPriceSearchPreviewForItem,
   driverPartRequestSourceHasManualVehicleReview,
   driverPartRequestPriceOffers,
   pilotCcStatus,

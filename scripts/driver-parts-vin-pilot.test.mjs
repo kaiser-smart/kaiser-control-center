@@ -530,6 +530,30 @@ function passengerVehicle(overrides = {}) {
   assert.equal(probablePartWithThreeOffers.partVerified, false);
   assert.equal(probablePartWithThreeOffers.probablePartAllowed, true);
   assert.equal(probablePartWithThreeOffers.priceOfferCount, 3);
+
+  const preview = await driverPartRequestInternals.driverPartRequestPriceSearchPreviewForItem({
+    PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+      ]
+    }),
+    PARTS_ORDER_EMAIL: "patrik@example.test"
+  }, adminUser, {
+    partAiCandidate: true,
+    probablePart: "přední sklo",
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456"
+  }, { allowProbablePartSeed: true });
+  assert.equal(preview.ok, true);
+  assert.equal(preview.persisted, false);
+  assert.equal(preview.emailSent, false);
+  assert.equal(preview.offers.length, 3);
+  assert.equal(preview.readiness.canSendEmail, true);
 }
 
 {

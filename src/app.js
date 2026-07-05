@@ -825,6 +825,7 @@ const driverReportsState = {
   loading: false,
   saving: false,
   actionLoading: "",
+  pricePreviewById: {},
   apiStatus: "waiting",
   error: "",
   message: "",
@@ -20716,6 +20717,42 @@ function driverReportInternetOffers(item) {
   `;
 }
 
+function driverReportPricePreviewBlock(item) {
+  const preview = driverReportsState.pricePreviewById?.[item.id];
+  if (!preview) {
+    return "";
+  }
+
+  const offers = Array.isArray(preview.offers) ? preview.offers : [];
+  const readiness = preview.readiness || {};
+  return `
+    <div class="driver-report-preview-result">
+      <p class="driver-report-note">
+        Kontrola bez uložení: ${escapeHtml(preview.message || "bez zprávy")}
+        ${readiness.canSendEmail ? " E-mail by šel odeslat až po uložení těchto odkazů." : ""}
+      </p>
+      <div class="driver-report-detail-grid">
+        ${driverReportField("Nabídky", `${offers.length} / 3`)}
+        ${driverReportField("Provider", preview.provider)}
+        ${driverReportField("Uloženo do hlášení", preview.persisted ? "ano" : "ne")}
+        ${driverReportField("E-mail odeslán", preview.emailSent ? "ano" : "ne")}
+      </div>
+      ${offers.length ? `
+        <ol class="driver-report-offers">
+          ${offers.slice(0, 3).map((offer) => `
+            <li>
+              <strong>${escapeHtml(offer.title || offer.name || "nabídka")}</strong>
+              <span>${escapeHtml(offer.price || offer.priceText || "cena neuvedena")}</span>
+              <small>${escapeHtml([offer.seller || offer.vendor, offer.availability].filter(Boolean).join(" · ") || "ověřit ručně")}</small>
+              ${offer.url ? `<a href="${escapeHtml(offer.url)}" target="_blank" rel="noopener noreferrer">Otevřít nabídku</a>` : ""}
+            </li>
+          `).join("")}
+        </ol>
+      ` : ""}
+    </div>
+  `;
+}
+
 function driverReportPartslink24Section(item) {
   const eligibility = item.partslink24Eligibility || {};
   const latest = item.partslink24VinSearch || null;
@@ -20758,8 +20795,12 @@ function driverReportPartslink24Section(item) {
   const handoffBlockReason = driverReportPatrikHandoffBlockReason(item);
   const canRunPrice = driverReportCanRunPriceBoost(item);
   const priceLoading = driverReportsState.actionLoading === `${item.id}:price-boost`;
+  const previewLoading = driverReportsState.actionLoading === `${item.id}:price-boost-preview`;
   const priceActions = canRunPrice
-    ? `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${priceLoading ? "disabled" : ""}>${priceLoading ? "AI Boost hledá..." : "Spustit AI Boost"}</button>`
+    ? [
+      `<button class="secondary-link" type="button" data-driver-report-price-preview data-request-id="${escapeHtml(item.id)}" ${previewLoading ? "disabled" : ""}>${previewLoading ? "Ověřuji..." : "Ověřit bez uložení"}</button>`,
+      `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${priceLoading ? "disabled" : ""}>${priceLoading ? "AI Boost hledá..." : "Spustit AI Boost"}</button>`
+    ].join("")
     : "";
   const ccStatus = pilot.pilotCcStatus || "not_sent";
   const ccLabel = ccStatus === "sent_or_included_by_backend"
@@ -20821,7 +20862,7 @@ function driverReportPartslink24Section(item) {
           [
             driverReportField("Stav", driverReportPriceBoostLabel(item.priceBoostStatus)),
             driverReportField("Poslední hledání", item.priceBoostCheckedAt ? formatDateTime(item.priceBoostCheckedAt) : "")
-          ].join("") + driverReportInternetOffers(item),
+          ].join("") + driverReportInternetOffers(item) + driverReportPricePreviewBlock(item),
           priceActions
         )}
         ${driverReportVinPilotStep(
@@ -22169,6 +22210,37 @@ async function runDriverReportAction(requestId, action, payload = {}) {
     await loadDriverReports({ renderAfter: false, force: true });
   } catch (error) {
     driverReportsState.error = error.payload?.error || "Akce se nepodařila uložit.";
+  } finally {
+    driverReportsState.actionLoading = "";
+    render();
+  }
+}
+
+async function runDriverReportPricePreview(requestId) {
+  if (!requestId || driverReportsState.actionLoading) {
+    return;
+  }
+
+  driverReportsState.actionLoading = `${requestId}:price-boost-preview`;
+  driverReportsState.error = "";
+  driverReportsState.message = "";
+  render();
+
+  try {
+    const result = await apiJson(`/api/driver-reports/${encodeURIComponent(requestId)}/price-boost-preview`, {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    driverReportsState.pricePreviewById = {
+      ...(driverReportsState.pricePreviewById || {}),
+      [requestId]: result.preview || null
+    };
+    const preview = result.preview || {};
+    driverReportsState.message = preview.ok
+      ? "Kontrolní AI Boost našel 3 odkazy. Výsledek zatím není uložený a e-mail neodešel."
+      : preview.message || "Kontrolní AI Boost zatím nenašel 3 odkazy.";
+  } catch (error) {
+    driverReportsState.error = error.payload?.error || "Kontrolní cenový průzkum se nepodařilo spustit.";
   } finally {
     driverReportsState.actionLoading = "";
     render();
@@ -31462,6 +31534,13 @@ document.addEventListener("click", async (event) => {
   if (driverReportTab) {
     event.preventDefault();
     setDriverReportTab(driverReportTab.dataset.driverReportTab || "reports");
+    return;
+  }
+
+  const driverReportPricePreview = event.target.closest("[data-driver-report-price-preview]");
+  if (driverReportPricePreview) {
+    event.preventDefault();
+    await runDriverReportPricePreview(driverReportPricePreview.dataset.requestId || "");
     return;
   }
 
