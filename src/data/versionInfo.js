@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.338"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.339"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: e-mail až po 3 odkazech",
+    text: "Servisní fronta a detail hlášení už neukazují předání Patrikovi jako připravené, dokud AI Boost nedodá tři cenové nabídky s odkazy. Jedna nebo dvě nabídky se uloží jako neúplný průzkum a e-mail se dál blokuje."
+  },
   {
     title: "Náhradní díly: osobní Mercedes ve VIN pilotu",
     text: "VIN pilot nově bezpečně rozpozná jasné osobní modely Mercedes CLS/EQS i když ve Vozovém parku chybí typ vozidla. Explicitně nákladní vozidla zůstávají mimo pilot a e-mail Patrikovi se bez tří cenových odkazů neodešle."

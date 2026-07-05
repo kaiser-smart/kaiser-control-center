@@ -422,11 +422,20 @@ function driverPartVinPilotState(item = {}, eligibility = null, latestSearch = n
   }
 
   if (hasVerifiedPart) {
+    if (!driverPartRequestHasRequiredPriceOffers(item, 3)) {
+      return {
+        status: "waiting_price_links",
+        candidate: true,
+        skipReason: "",
+        message: "Díl je ověřený, ale e-mail Patrikovi čeká na 3 cenové nabídky s odkazy."
+      };
+    }
+
     return {
-      status: item.priceBoostStatus === "waiting_verified_part" ? "waiting_verified_oe" : "email_ready",
+      status: "email_ready",
       candidate: true,
       skipReason: "",
-      message: "Díl má ručně nebo providerem doplněné ověření. Cenový průzkum a nákup zůstávají ruční pilot."
+      message: "Díl má ověření a AI Boost dodal 3 cenové nabídky s odkazy. Nákup zůstává ruční pilot."
     };
   }
 
@@ -1350,12 +1359,19 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
   }
 
   let itemForEmail = item;
+  const missingRequiredPriceOffers = options.requirePriceOffersForHandoff === true
+    && !driverPartRequestHasRequiredPriceOffers(item, 3);
   const shouldRunPriceBoost = options.skipPriceBoost !== true
-    && item.priceBoostStatus !== "candidates_found"
-    && item.priceBoostStatus !== "no_results"
-    && item.priceBoostStatus !== "provider_not_configured"
-    && item.priceBoostStatus !== "failed";
-  if (shouldRunPriceBoost || (options.runPriceBoost === true && item.priceBoostStatus !== "candidates_found")) {
+    && (
+      missingRequiredPriceOffers ||
+      (
+        item.priceBoostStatus !== "candidates_found"
+        && item.priceBoostStatus !== "no_results"
+        && item.priceBoostStatus !== "provider_not_configured"
+        && item.priceBoostStatus !== "failed"
+      )
+    );
+  if (shouldRunPriceBoost || (options.runPriceBoost === true && (item.priceBoostStatus !== "candidates_found" || missingRequiredPriceOffers))) {
     const priceResult = await runDriverPartPriceSearch(env, item, {
       allowProbablePartSeed: options.allowProbablePartHandoff === true
     });

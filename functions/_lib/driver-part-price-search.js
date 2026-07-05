@@ -387,14 +387,17 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
 
     const rawOffers = offersFromProviderPayload(payload);
     const offers = selectDriverPartOffers(rawOffers, request, { allowUsed: config.allowUsed });
-    const status = offers.length ? "candidates_found" : "no_results";
-    const message = offers.length
-      ? `AI Boost našel ${offers.length} nabídky k ručnímu ověření. Nic nebylo objednáno.`
-      : "AI Boost nenašel 3 bezpečně relevantní nabídky. Pokračuj ručně.";
+    const hasRequiredOffers = offers.length >= MAX_OFFERS;
+    const status = hasRequiredOffers ? "candidates_found" : offers.length ? "partial_results" : "no_results";
+    const message = hasRequiredOffers
+      ? "AI Boost našel 3 nabídky k ručnímu ověření. Nic nebylo objednáno."
+      : offers.length
+        ? `AI Boost našel jen ${offers.length} z 3 potřebných nabídek s odkazy. E-mail Patrikovi zatím neposílám.`
+        : "AI Boost nenašel 3 bezpečně relevantní nabídky. Pokračuj ručně.";
     const provider = config.mockJson ? "mock" : config.endpoint ? config.provider : "openai_web_search";
 
     return {
-      ok: offers.length > 0,
+      ok: hasRequiredOffers,
       status,
       checkedAt: now,
       query,
@@ -402,7 +405,7 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
       offers,
       message,
       resultJson: safeJson({
-        ok: offers.length > 0,
+        ok: hasRequiredOffers,
         provider,
         query,
         offers,

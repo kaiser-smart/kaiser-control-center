@@ -426,6 +426,7 @@ const DRIVER_REPORT_PRICE_BOOST_LABELS = {
   waiting_verified_part: "Připraveno po potvrzení kompatibility",
   running: "AI Boost hledá nabídky",
   candidates_found: "Kandidáti k ověření",
+  partial_results: "Neúplný průzkum",
   no_results: "Bez ověřených nabídek",
   provider_not_configured: "AI Boost není nastaven",
   failed: "Chyba průzkumu",
@@ -441,6 +442,7 @@ const DRIVER_REPORT_VIN_PILOT_LABELS = {
   ready_for_vin_verification: "Připraveno k ověření",
   provider_not_configured: "Partslink24 není nastaven",
   waiting_verified_oe: "Čeká na ověřené OE číslo",
+  waiting_price_links: "Čeká na 3 odkazy",
   email_ready: "E-mail připraven",
   email_sent: "E-mail odeslán",
   handed_to_patrik: "Předáno Patrikovi",
@@ -20450,6 +20452,7 @@ function driverReportVinPilotTone(status) {
   const normalized = String(status || "").trim();
   if (["email_sent", "handed_to_patrik", "completed", "part_arrived"].includes(normalized)) return "done";
   if (["ready_for_vin_verification", "email_ready", "waiting_verified_oe"].includes(normalized)) return "ready";
+  if (normalized === "waiting_price_links") return "pending";
   if (["provider_not_configured", "waiting_vin", "manual_verification_required", "ambiguous_fault", "maintenance_or_consumable", "out_of_pilot"].includes(normalized)) return "waiting";
   if (["canceled"].includes(normalized)) return "cancel";
   return "progress";
@@ -20662,7 +20665,7 @@ function driverReportVinPilotStep(title, status, body = "", fields = "", actions
   `;
 }
 
-function driverReportInternetOffers(item) {
+function driverReportPriceOffers(item) {
   const pilotOffers = Array.isArray(item.partVinPilot?.internetOffers) ? item.partVinPilot.internetOffers : [];
   let offers = pilotOffers;
   if (!offers.length && item.priceBoostResultJson) {
@@ -20675,6 +20678,22 @@ function driverReportInternetOffers(item) {
       offers = [];
     }
   }
+
+  return offers
+    .filter((offer) => {
+      const url = String(offer?.url || offer?.link || "").trim();
+      const title = String(offer?.title || offer?.name || offer?.seller || offer?.vendor || "").trim();
+      return Boolean(url && title);
+    })
+    .slice(0, 3);
+}
+
+function driverReportHasRequiredPriceOffers(item, requiredCount = 3) {
+  return driverReportPriceOffers(item).length >= requiredCount;
+}
+
+function driverReportInternetOffers(item) {
+  const offers = driverReportPriceOffers(item);
 
   if (!offers.length) {
     const text = item.priceBoostStatus === "provider_not_configured"
@@ -20718,7 +20737,7 @@ function driverReportPartslink24Section(item) {
     ? pilotStatus
     : item.partAiDetectedName || item.probablePart ? "ready_for_vin_verification" : "manual_verification_required";
   const providerStatus = item.oePartNumber || item.partName
-    ? "email_ready"
+    ? driverReportHasRequiredPriceOffers(item) ? "email_ready" : "waiting_price_links"
     : pilotStatus === "provider_not_configured" ? "provider_not_configured" : pilotStatus;
   const searchButton = allowed
     ? `<button class="secondary-link" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>${loading ? "Připravuji..." : "Ověřit díl podle VIN"}</button>`
@@ -20750,7 +20769,7 @@ function driverReportPartslink24Section(item) {
       : "čeká na odeslání";
   const handoffStatus = pilot.patrikEmailStatus === "sent"
     ? "email_sent"
-    : canPatrikHandoff ? "email_ready" : "waiting_verified_oe";
+    : canPatrikHandoff ? "email_ready" : "waiting_price_links";
 
   return `
     <section class="driver-report-part driver-report-partslink24" aria-label="Náhradní díl podle VIN">
@@ -20797,7 +20816,7 @@ function driverReportPartslink24Section(item) {
         )}
         ${driverReportVinPilotStep(
           "4. Cenový průzkum",
-          item.priceBoostStatus === "candidates_found" ? "email_ready" : "waiting_verified_oe",
+          driverReportHasRequiredPriceOffers(item) ? "email_ready" : "waiting_price_links",
           item.priceBoostNote || "AI Boost prohledá web přes serverový web-search a uloží max. 3 nabídky k ručnímu ověření. Nic neobjednává.",
           [
             driverReportField("Stav", driverReportPriceBoostLabel(item.priceBoostStatus)),
@@ -20879,7 +20898,7 @@ function driverReportNeedsAction(item) {
     return true;
   }
   const pilotStatus = item.partVinPilot?.status || "";
-  return ["waiting_vin", "manual_verification_required", "ready_for_vin_verification", "provider_not_configured", "waiting_verified_oe", "email_ready"].includes(pilotStatus);
+  return ["waiting_vin", "manual_verification_required", "ready_for_vin_verification", "provider_not_configured", "waiting_verified_oe", "waiting_price_links", "email_ready"].includes(pilotStatus);
 }
 
 function driverReportDateKey(value) {
@@ -20900,7 +20919,7 @@ function driverReportPartName(item) {
 function driverReportPartStatus(item) {
   const status = item.partVinPilot?.status
     || (item.partAiSkipReason ? item.partAiSkipReason : "")
-    || (item.oePartNumber || item.partName ? "email_ready" : "")
+    || (item.oePartNumber || item.partName ? (driverReportHasRequiredPriceOffers(item) ? "email_ready" : "waiting_price_links") : "")
     || (item.vin ? "ready_for_vin_verification" : "waiting_vin");
   return status;
 }
@@ -21100,6 +21119,7 @@ function driverReportPatrikHandoffBlockReason(item) {
   if (item.licensePlateVerified !== true || item.manualVehicleReview === true) return "Předání čeká na ruční ověření vozidla proti Vozovému parku.";
   if (!item.vin) return "Předání čeká na VIN.";
   if (!driverReportHasVerifiedPartForPatrikHandoff(item)) return "Předání čeká na ověřený díl nebo OE číslo.";
+  if (!driverReportHasRequiredPriceOffers(item)) return "Předání čeká na 3 cenové nabídky s odkazy.";
   return "";
 }
 
@@ -21113,7 +21133,11 @@ function driverReportCanHandoffToPatrik(item) {
 function driverReportCanRunPriceBoost(item) {
   if (!driverReportCanManage()) return false;
   if (["ordered", "part_arrived", "service_scheduled", "completed", "canceled"].includes(item.status)) return false;
-  return !driverReportPatrikHandoffBlockReason(item);
+  if (!item.licensePlate || !item.vehicleName) return false;
+  if (item.licensePlateVerified !== true || item.manualVehicleReview === true) return false;
+  if (!item.vin) return false;
+  if (!driverReportHasVerifiedPartForPatrikHandoff(item)) return false;
+  return true;
 }
 
 function driverReportPartRowActions(item) {

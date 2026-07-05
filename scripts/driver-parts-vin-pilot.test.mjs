@@ -304,6 +304,31 @@ function passengerVehicle(overrides = {}) {
     licensePlateVerified: true,
     manualVehicleReview: false,
     vin: "WDD2573211A123456",
+    probablePart: "přední sklo",
+    oePartNumber: "A 257 670 00 01",
+    partName: "přední sklo"
+  };
+  const result = await runDriverPartPriceSearch({
+    PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({
+      offers: [
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", price: "12 900 Kč", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo A 257 670 00 01 Mercedes CLS", price: "13 500 Kč", seller: "Dodavatel B", url: "https://example.test/b" }
+      ]
+    })
+  }, item);
+  assert.equal(result.status, "partial_results");
+  assert.equal(result.ok, false);
+  assert.equal(result.offers.length, 2);
+  assert.match(result.message, /jen 2 z 3/);
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
     probablePart: "výfuk / díl výfuku",
     oePartNumber: "A 257 490 12 00",
     partName: "tlumič výfuku"
@@ -405,7 +430,30 @@ function passengerVehicle(overrides = {}) {
   assert.equal(priceEligibility.code, "driver_part_price_offers_required");
   assert.equal(driverPartRequestInternals.driverPartRequestHasRequiredPriceOffers(itemWithoutOffers), false);
 
+  const itemWithTwoOffers = {
+    partAiCandidate: true,
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    oePartNumber: "A 257 670 00 01",
+    partName: "přední sklo",
+    priceBoostStatus: "partial_results",
+    priceBoostResultJson: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" }
+      ]
+    })
+  };
+  const vinPilotWaitingLinks = driverPartRequestInternals.driverPartVinPilotState(itemWithTwoOffers, { allowed: true });
+  assert.equal(vinPilotWaitingLinks.status, "waiting_price_links");
+  assert.equal(driverPartRequestInternals.driverPartRequestHasRequiredPriceOffers(itemWithTwoOffers), false);
+
   const itemWithOffers = {
+    partAiCandidate: true,
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    oePartNumber: "A 257 670 00 01",
+    partName: "přední sklo",
     priceBoostStatus: "candidates_found",
     priceBoostResultJson: JSON.stringify({
       offers: [
@@ -421,6 +469,8 @@ function passengerVehicle(overrides = {}) {
   assert.equal(priceEligibilityWithOffers.allowed, true);
   assert.equal(driverPartRequestInternals.driverPartRequestHasRequiredPriceOffers(itemWithOffers), true);
   assert.equal(driverPartRequestInternals.driverPartRequestPriceOffers(itemWithOffers).length, 3);
+  const vinPilotEmailReady = driverPartRequestInternals.driverPartVinPilotState(itemWithOffers, { allowed: true });
+  assert.equal(vinPilotEmailReady.status, "email_ready");
 }
 
 {
