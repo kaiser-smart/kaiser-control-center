@@ -224,6 +224,9 @@ const SARLOTA_PANEL_STATUS_ENDPOINT = "/api/ai/elevenlabs/sarlota-panel-status";
 const SARLOTA_VOICE_WRITE_TEST_ENDPOINT = "/api/ai/elevenlabs/sarlota-voice-write-test";
 const FEEDBACK_ROUTE = "/pripominky";
 const FLEET_ROUTE = "/vozovy-park";
+const RECEIVABLES_ROUTE = "/pohledavky";
+const RECEIVABLES_MODULE_KEY = "receivables";
+const RECEIVABLES_PHASE_NOTICE = "Pilot Pohledávek je pouze UI/read-only návrh. Neposílá e-maily, SMS, WhatsApp, nespouští Šarlotu, neběží cron a neukládá ostrá data.";
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
@@ -317,8 +320,8 @@ const HOME_MODULE_SECTIONS = [
   {
     id: "finance-costs",
     title: "Finance a náklady",
-    description: "Přehled nákladů podle vozidel, dodavatelů a období.",
-    moduleIds: ["costs"]
+    description: "Přehled nákladů, otevřených faktur a bezpečných finančních pilotů.",
+    moduleIds: ["costs", "receivables"]
   },
   {
     id: "system",
@@ -6573,6 +6576,9 @@ function moduleRuleModuleLabel(moduleKey) {
   }
   if (key === COLLECTION_ROUTES_MODULE_KEY) {
     return "Trasy svozu";
+  }
+  if (key === RECEIVABLES_MODULE_KEY) {
+    return "Pohledávky";
   }
   return key || "-";
 }
@@ -15445,10 +15451,82 @@ function collectionRoutesSourceDriverNextStopCard(row, order) {
   `;
 }
 
+const COLLECTION_ROUTES_DRIVER_ACTION_ICONS = {
+  done: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16.5l6 6L25 9.5"/></svg>`,
+  navigate: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M25 5L12.5 27l-2.2-9.3L3 14.5 25 5z"/><path d="M12.5 17.7L25 5"/></svg>`,
+  problem: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 5l13 22H3L16 5z"/><path d="M16 13v6"/><path d="M16 24h.01"/></svg>`,
+  "bin-missing": `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11h14l-1 15H10L9 11z"/><path d="M12 11V8h8v3"/><path d="M7 11h18"/><path d="M5 27L27 5"/></svg>`,
+  overflow: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 13h14l-1 13H10L9 13z"/><path d="M11 9h10"/><path d="M12 5h8"/><path d="M16 25V16"/><path d="M12.5 19.5L16 16l3.5 3.5"/></svg>`,
+  obstruction: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 5l8 22H8L16 5z"/><path d="M11 19h10"/><path d="M9.5 24h13"/></svg>`,
+  address: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 28s9-8.4 9-15a9 9 0 0 0-18 0c0 6.6 9 15 9 15z"/><path d="M14.5 11.5a2.2 2.2 0 1 1 3 2c-.9.4-1.5 1-1.5 2"/><path d="M16 20h.01"/></svg>`,
+  blocked: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="11"/><path d="M8.5 23.5l15-15"/></svg>`,
+  dispatch: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h20v13H12l-6 5V8z"/><path d="M11 13h10"/><path d="M11 17h7"/></svg>`,
+  camera: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h6l2-3h6l2 3h6v14H5V11z"/><circle cx="16" cy="18" r="5"/></svg>`,
+  more: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="16" r="1.5"/><circle cx="16" cy="16" r="1.5"/><circle cx="23" cy="16" r="1.5"/></svg>`,
+  close: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l14 14"/><path d="M23 9L9 23"/></svg>`
+};
+
+function collectionRoutesSourceDriverActionIconKey(label, action, tone) {
+  if (tone === "sarlota") {
+    return "sarlota";
+  }
+  if (action === "problem-close") {
+    return "close";
+  }
+  if (action === "problem") {
+    return "problem";
+  }
+  if (action === "done" || tone === "done") {
+    return "done";
+  }
+  if (action === "navigate" || tone === "navigate") {
+    return "navigate";
+  }
+  const normalizedLabel = String(label || "").toLowerCase();
+  if (normalizedLabel.includes("nádoba není")) {
+    return "bin-missing";
+  }
+  if (normalizedLabel.includes("přeplněno")) {
+    return "overflow";
+  }
+  if (normalizedLabel.includes("překážka")) {
+    return "obstruction";
+  }
+  if (normalizedLabel.includes("adresa")) {
+    return "address";
+  }
+  if (normalizedLabel.includes("nelze obsloužit")) {
+    return "blocked";
+  }
+  if (normalizedLabel.includes("dispečinku")) {
+    return "dispatch";
+  }
+  if (normalizedLabel.includes("vyfotit")) {
+    return "camera";
+  }
+  if (normalizedLabel.includes("jiné")) {
+    return "more";
+  }
+  return tone === "problem-soft" ? "problem" : "";
+}
+
+function collectionRoutesSourceDriverActionIconHtml(label, action, tone) {
+  const iconKey = collectionRoutesSourceDriverActionIconKey(label, action, tone);
+  if (!iconKey) {
+    return "";
+  }
+  if (iconKey === "sarlota") {
+    return `<span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--letter" aria-hidden="true">Š</span>`;
+  }
+  return `
+    <span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--${escapeHtml(iconKey)}" aria-hidden="true">
+      ${COLLECTION_ROUTES_DRIVER_ACTION_ICONS[iconKey] || COLLECTION_ROUTES_DRIVER_ACTION_ICONS.problem}
+    </span>
+  `;
+}
+
 function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "default") {
-  const iconHtml = tone === "sarlota"
-    ? `<span class="collection-routes-driver-action__icon" aria-hidden="true">Š</span>`
-    : "";
+  const iconHtml = collectionRoutesSourceDriverActionIconHtml(label, action, tone);
   return `
     <button
       class="collection-routes-driver-action collection-routes-driver-action--${escapeHtml(tone)}"

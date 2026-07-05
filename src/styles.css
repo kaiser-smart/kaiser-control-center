@@ -3776,8 +3776,8 @@ h1 {
 
 .collection-routes-driver-action {
   display: inline-flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-direction: row;
+  gap: 10px;
   align-items: center;
   justify-content: center;
   padding: 10px 12px;
@@ -3815,6 +3815,40 @@ h1 {
   outline: 0;
   border-color: var(--driver-line-strong);
   box-shadow: 0 0 0 3px rgba(123, 211, 63, 0.18);
+}
+
+.collection-routes-driver-action__icon svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.7;
+}
+
+.collection-routes-driver-action--done .collection-routes-driver-action__icon {
+  width: 42px;
+  height: 42px;
+  border-color: rgba(7, 17, 7, 0.34);
+  background: rgba(7, 17, 7, 0.12);
+  color: #071107;
+}
+
+.collection-routes-driver-action--done .collection-routes-driver-action__icon svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 3;
+}
+
+.collection-routes-driver-action--navigate .collection-routes-driver-action__icon {
+  border-color: rgba(220, 238, 255, 0.46);
+  background: rgba(72, 166, 255, 0.2);
+  color: #e8f4ff;
+}
+
+.collection-routes-driver-action--problem .collection-routes-driver-action__icon,
+.collection-routes-driver-action--problem-soft .collection-routes-driver-action__icon {
+  border-color: rgba(255, 214, 210, 0.48);
+  background: rgba(255, 107, 98, 0.18);
+  color: #ffe8e5;
 }
 
 .collection-routes-driver-mode__pilot-state {
@@ -4187,6 +4221,8 @@ h1 {
 .collection-routes-driver-mode__problem-grid .collection-routes-driver-action {
   min-height: 62px;
   font-size: 0.92rem;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .collection-routes-driver-mode__bottom-bar {
@@ -4738,6 +4774,7 @@ h1 {
   min-height: 138px;
   border-width: 2px;
   font-size: 1.72rem;
+  gap: 14px;
 }
 
 .collection-routes-driver-mode__support-actions {
@@ -4748,6 +4785,7 @@ h1 {
 .collection-routes-driver-mode__support-actions .collection-routes-driver-action {
   min-height: 76px;
   font-size: 1.06rem;
+  gap: 10px;
 }
 
 .collection-routes-driver-action--done {
@@ -4865,6 +4903,8 @@ h1 {
 .collection-routes-driver-mode__problem-grid .collection-routes-driver-action {
   min-height: 64px;
   font-size: 0.95rem;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .collection-routes-driver-mode__bottom-bar {
