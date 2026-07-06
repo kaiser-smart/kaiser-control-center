@@ -26470,49 +26470,51 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
 .tracking-page--soft-metal-preview {
   --sidebar-width-compact: 90px;
   --sidebar-width-expanded: 244px;
-  --sidebar-item-height: 58px;
-  --sidebar-compact-item-height: 40px;
-  --sidebar-item-radius: var(--radius-md);
-  --sidebar-icon-size: 42px;
+  --sidebar-item-height: 48px;
+  --sidebar-compact-item-height: 38px;
+  --sidebar-item-radius: var(--radius-sm);
+  --sidebar-icon-size: 28px;
   --sidebar-icon-holder: 48px;
   --sidebar-toggle-holder: calc(var(--sidebar-icon-holder) * 0.75);
   --sidebar-toggle-icon-size: calc(var(--sidebar-icon-size) * 0.75);
   --sidebar-padding: 12px;
   --sidebar-item-padding: 7px;
   --sidebar-item-gap: 12px;
-  --sidebar-compact-gap: 4px;
+  --sidebar-group-gap: 6px;
+  --sidebar-group-space: 14px;
+  --sidebar-compact-gap: 3px;
   --sidebar-compact-padding: 7px;
-  --sidebar-compact-nav-icon-size: 28px;
-  --sidebar-compact-nav-icon-column: 32px;
+  --sidebar-compact-nav-icon-size: 24px;
+  --sidebar-compact-nav-icon-column: 30px;
   --sidebar-transition: 240ms ease;
-  --sidebar-button-padding: 0 14px;
+  --sidebar-button-padding: 0 10px;
   --sidebar-button-gap: 10px;
-  --sidebar-nav-icon-size: 34px;
-  --sidebar-nav-icon-column: 40px;
-  --sidebar-button-bg: var(--tracking-control-bg);
-  --sidebar-button-border: color-mix(in srgb, var(--border-soft) 76%, transparent);
-  --sidebar-button-border-bottom: color-mix(in srgb, var(--border-soft) 82%, var(--text-main) 10%);
+  --sidebar-nav-icon-size: 22px;
+  --sidebar-nav-icon-column: 28px;
+  --sidebar-button-bg: color-mix(in srgb, var(--surface-control) 34%, transparent);
+  --sidebar-button-border: color-mix(in srgb, var(--border-soft) 44%, transparent);
+  --sidebar-button-border-bottom: color-mix(in srgb, var(--border-soft) 48%, transparent);
   --sidebar-button-color: var(--text-muted);
   --sidebar-button-icon-color: var(--icon-bluegrey);
   --sidebar-button-icon-filter: var(--icon-filter-bluegrey);
-  --sidebar-button-hover-bg: color-mix(in srgb, var(--brand-accent) 7%, var(--surface-control));
-  --sidebar-button-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
-  --sidebar-button-hover-border-bottom: color-mix(in srgb, var(--brand-accent) 32%, var(--text-main) 10%);
+  --sidebar-button-hover-bg: color-mix(in srgb, var(--surface-control) 58%, transparent);
+  --sidebar-button-hover-border: color-mix(in srgb, var(--brand-accent) 18%, var(--border-soft));
+  --sidebar-button-hover-border-bottom: color-mix(in srgb, var(--brand-accent) 20%, var(--border-soft));
   --sidebar-button-hover-color: var(--text-main);
-  --sidebar-button-hover-icon-color: var(--brand-accent);
-  --sidebar-button-hover-icon-filter: var(--icon-filter-brand);
+  --sidebar-button-hover-icon-color: var(--icon-graphite);
+  --sidebar-button-hover-icon-filter: var(--icon-filter-graphite);
   --sidebar-button-active-bg: var(--state-success-bg);
   --sidebar-button-active-border: var(--state-success-border);
-  --sidebar-button-active-border-bottom: color-mix(in srgb, var(--brand-accent) 42%, var(--text-main) 10%);
+  --sidebar-button-active-border-bottom: color-mix(in srgb, var(--brand-accent) 38%, var(--border-soft));
   --sidebar-button-active-color: var(--text-main);
   --sidebar-button-active-icon-color: var(--brand-accent);
   --sidebar-button-active-icon-filter: var(--icon-filter-brand);
-  --sidebar-button-shadow: var(--shadow-control);
-  --sidebar-button-hover-shadow: var(--shadow-inset-control);
-  --sidebar-button-active-shadow: var(--shadow-control-active);
-  --sidebar-button-edge-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border-soft) 74%, transparent);
-  --sidebar-button-hover-edge-shadow: inset 0 -1px 0 color-mix(in srgb, var(--brand-accent) 22%, var(--border-soft));
-  --sidebar-button-active-edge-shadow: inset 0 -1px 0 color-mix(in srgb, var(--brand-accent) 30%, var(--border-soft));
+  --sidebar-button-shadow: 0 0 0 0 transparent;
+  --sidebar-button-hover-shadow: inset 2px 2px 5px rgba(78, 92, 100, 0.08), inset -2px -2px 5px rgba(255, 255, 255, 0.38);
+  --sidebar-button-active-shadow: inset 3px 3px 8px rgba(78, 92, 100, 0.12), inset -2px -2px 7px rgba(255, 255, 255, 0.46);
+  --sidebar-button-edge-shadow: 0 0 0 0 transparent;
+  --sidebar-button-hover-edge-shadow: 0 0 0 0 transparent;
+  --sidebar-button-active-edge-shadow: 0 0 0 0 transparent;
   --sidebar-link-color: var(--sidebar-button-color);
   --sidebar-link-hover-color: var(--sidebar-button-hover-color);
   --sidebar-link-active-color: var(--sidebar-button-active-color);
@@ -26658,30 +26660,30 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --state-neutral-text: var(--text-muted);
   --tracking-accent-soft: var(--state-success-bg);
   --tracking-accent-border: var(--state-success-border);
-  --sidebar-button-bg: color-mix(in srgb, var(--surface-control) 82%, var(--surface-inset));
-  --sidebar-button-border: color-mix(in srgb, var(--border-soft) 74%, transparent);
-  --sidebar-button-border-bottom: color-mix(in srgb, var(--border-soft) 84%, var(--surface-soft) 10%);
+  --sidebar-button-bg: color-mix(in srgb, var(--surface-control) 46%, transparent);
+  --sidebar-button-border: color-mix(in srgb, var(--border-soft) 40%, transparent);
+  --sidebar-button-border-bottom: color-mix(in srgb, var(--border-soft) 44%, transparent);
   --sidebar-button-color: var(--text-muted);
   --sidebar-button-icon-color: var(--icon-bluegrey);
   --sidebar-button-icon-filter: var(--icon-filter-bluegrey);
-  --sidebar-button-hover-bg: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-inset));
-  --sidebar-button-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
-  --sidebar-button-hover-border-bottom: color-mix(in srgb, var(--brand-accent) 34%, var(--surface-soft) 8%);
+  --sidebar-button-hover-bg: color-mix(in srgb, var(--surface-control) 68%, var(--surface-inset));
+  --sidebar-button-hover-border: color-mix(in srgb, var(--brand-accent) 18%, var(--border-soft));
+  --sidebar-button-hover-border-bottom: color-mix(in srgb, var(--brand-accent) 20%, var(--border-soft));
   --sidebar-button-hover-color: var(--text-main);
-  --sidebar-button-hover-icon-color: var(--brand-accent);
-  --sidebar-button-hover-icon-filter: var(--icon-filter-brand);
+  --sidebar-button-hover-icon-color: var(--icon-graphite);
+  --sidebar-button-hover-icon-filter: var(--icon-filter-graphite);
   --sidebar-button-active-bg: var(--state-success-bg);
   --sidebar-button-active-border: var(--state-success-border);
-  --sidebar-button-active-border-bottom: color-mix(in srgb, var(--brand-accent) 46%, var(--surface-soft) 8%);
+  --sidebar-button-active-border-bottom: color-mix(in srgb, var(--brand-accent) 38%, var(--border-soft));
   --sidebar-button-active-color: var(--text-main);
   --sidebar-button-active-icon-color: var(--brand-accent);
   --sidebar-button-active-icon-filter: var(--icon-filter-brand);
-  --sidebar-button-shadow: var(--shadow-control);
-  --sidebar-button-hover-shadow: var(--shadow-inset-control);
-  --sidebar-button-active-shadow: var(--shadow-control-active);
-  --sidebar-button-edge-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border-soft) 78%, transparent);
-  --sidebar-button-hover-edge-shadow: inset 0 -1px 0 color-mix(in srgb, var(--brand-accent) 24%, var(--border-soft));
-  --sidebar-button-active-edge-shadow: inset 0 -1px 0 color-mix(in srgb, var(--brand-accent) 34%, var(--border-soft));
+  --sidebar-button-shadow: 0 0 0 0 transparent;
+  --sidebar-button-hover-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.18), inset -2px -2px 5px rgba(255, 255, 255, 0.024);
+  --sidebar-button-active-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.24), inset -2px -2px 7px rgba(255, 255, 255, 0.03);
+  --sidebar-button-edge-shadow: 0 0 0 0 transparent;
+  --sidebar-button-hover-edge-shadow: 0 0 0 0 transparent;
+  --sidebar-button-active-edge-shadow: 0 0 0 0 transparent;
   --sidebar-link-color: var(--sidebar-button-color);
   --sidebar-link-hover-color: var(--sidebar-button-hover-color);
   --sidebar-link-active-color: var(--sidebar-button-active-color);
@@ -26874,7 +26876,27 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   display: grid;
   min-height: 0;
   overflow: visible;
-  gap: var(--space-sm);
+  gap: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-group {
+  display: grid;
+  gap: var(--sidebar-group-gap);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-group + .tracking-preview-nav-group {
+  margin-top: var(--sidebar-group-space);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-group__label {
+  display: block;
+  padding: 0 10px 1px calc(10px + var(--sidebar-nav-icon-column) + var(--sidebar-button-gap));
+  color: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-news-panel {
@@ -26947,6 +26969,21 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 .tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-sidebar__nav,
 .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-sidebar__nav {
   gap: var(--sidebar-compact-gap);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-nav-group,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-nav-group {
+  gap: var(--sidebar-compact-gap);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-nav-group + .tracking-preview-nav-group,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-nav-group + .tracking-preview-nav-group {
+  margin-top: 5px;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-nav-group__label,
+.tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-nav-group__label {
+  display: none;
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-nav-item,
@@ -27022,9 +27059,9 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle-label,
 .tracking-page--soft-metal-preview .tracking-preview-nav-item__label {
   overflow: hidden;
-  color: var(--text-main);
-  font-size: 0.9rem;
-  font-weight: 850;
+  color: currentColor;
+  font-size: 0.84rem;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -28173,6 +28210,18 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
     justify-items: center;
   }
 
+  .tracking-page--soft-metal-preview .tracking-preview-nav-group {
+    gap: var(--sidebar-compact-gap);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-nav-group + .tracking-preview-nav-group {
+    margin-top: 5px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-nav-group__label {
+    display: none;
+  }
+
   .tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle-label,
   .tracking-page--soft-metal-preview .tracking-preview-nav-item__label {
     position: absolute;
@@ -28285,6 +28334,18 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   .tracking-page--soft-metal-preview .tracking-preview-sidebar__nav {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-nav-group {
+    display: contents;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-nav-group + .tracking-preview-nav-group {
+    margin-top: 0;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-nav-group__label {
+    display: none;
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-nav-item {
