@@ -12222,7 +12222,7 @@ function initializeVehicleTrackingGoogleMap(maps, node) {
     actualPolylines.set(vehicle.id, new maps.Polyline({
       path: [],
       map,
-      strokeColor: vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId ? "#dc5b1f" : "#2f7d4c",
+      strokeColor: vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId ? "#dc5b1f" : "#75bd25",
       strokeOpacity: 0.86,
       strokeWeight: vehicle.id === DEMO_VEHICLE_TRACKING_ALERT.vehicleId ? 5 : 3
     }));

@@ -25304,7 +25304,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --tracking-graphite: #4b5550;
   --state-success-bg: color-mix(in srgb, var(--brand-accent) 13%, transparent);
   --state-success-border: color-mix(in srgb, var(--brand-accent) 38%, var(--border-soft));
-  --state-success-text: color-mix(in srgb, var(--brand-accent) 76%, var(--text-main));
+  --state-success-text: var(--brand-accent);
   --state-warning-bg: color-mix(in srgb, var(--tracking-warning) 12%, transparent);
   --state-warning-border: color-mix(in srgb, var(--tracking-warning) 34%, var(--border-soft));
   --state-warning-text: color-mix(in srgb, var(--tracking-warning) 74%, var(--text-main));
@@ -26509,7 +26509,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --icon-holder-md: 54px;
   --icon-holder-lg: 66px;
   --icon-holder-xl: 98px;
-  --icon-green: #5fab1c;
+  --icon-green: var(--brand-accent);
   --icon-teal: #60747c;
   --icon-bluegrey: #60747c;
   --icon-amber: #66747a;
@@ -26526,7 +26526,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --icon-opacity-default: 0.82;
   --icon-opacity-active: 0.94;
   --icon-opacity-hero: 0.74;
-  --icon-filter-green: invert(55%) sepia(40%) saturate(823%) hue-rotate(45deg) brightness(90%) contrast(90%);
+  --icon-filter-green: var(--icon-filter-brand);
   --icon-filter-bluegrey: invert(44%) sepia(13%) saturate(617%) hue-rotate(155deg) brightness(88%) contrast(86%);
   --icon-filter-graphite: invert(27%) sepia(16%) saturate(735%) hue-rotate(156deg) brightness(90%) contrast(88%);
   --icon-filter-teal: var(--icon-filter-bluegrey);
@@ -26603,7 +26603,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --tracking-graphite: #c3cfda;
   --state-success-bg: color-mix(in srgb, var(--brand-accent) 14%, rgba(14, 21, 30, 0.94));
   --state-success-border: color-mix(in srgb, var(--brand-accent) 36%, rgba(177, 194, 207, 0.15));
-  --state-success-text: #97dc52;
+  --state-success-text: var(--brand-accent);
   --state-warning-bg: color-mix(in srgb, var(--tracking-warning) 15%, rgba(14, 21, 30, 0.94));
   --state-warning-border: color-mix(in srgb, var(--tracking-warning) 34%, rgba(177, 194, 207, 0.15));
   --state-warning-text: #edc779;
@@ -26645,7 +26645,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --sidebar-link-border: var(--sidebar-button-border);
   --sidebar-link-hover-border: var(--sidebar-button-hover-border);
   --sidebar-link-active-border: var(--sidebar-button-active-border);
-  --icon-green: #91d64c;
+  --icon-green: var(--brand-accent);
   --icon-teal: #a8bac7;
   --icon-bluegrey: #a8bac7;
   --icon-amber: #9dacb7;
@@ -26655,7 +26655,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --icon-opacity-default: 0.82;
   --icon-opacity-active: 0.96;
   --icon-opacity-hero: 0.82;
-  --icon-filter-green: invert(83%) sepia(48%) saturate(742%) hue-rotate(35deg) brightness(98%) contrast(91%);
+  --icon-filter-green: var(--icon-filter-brand);
   --icon-filter-bluegrey: invert(75%) sepia(12%) saturate(424%) hue-rotate(161deg) brightness(92%) contrast(86%);
   --icon-filter-graphite: invert(88%) sepia(9%) saturate(382%) hue-rotate(168deg) brightness(89%) contrast(88%);
   --icon-filter-teal: var(--icon-filter-bluegrey);
