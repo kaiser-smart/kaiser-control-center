@@ -26822,6 +26822,10 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
     border-color 180ms ease;
 }
 
+body:not([data-theme="dark"]) .tracking-page--soft-metal-preview .tracking-preview-sidebar {
+  background: #fff;
+}
+
 .tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) {
   width: var(--sidebar-width-compact);
 }
