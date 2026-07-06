@@ -27079,7 +27079,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 .tracking-page--soft-metal-preview .tracking-demo-scenario {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
-  background: #fafafb;
+  background: var(--tracking-card-bg);
   box-shadow: var(--shadow-card), var(--highlight-edge);
 }
 
