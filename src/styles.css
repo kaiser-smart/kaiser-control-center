@@ -27233,16 +27233,16 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--border-soft) 76%, transparent);
-  border-radius: var(--radius-md);
-  background: var(--tracking-control-bg);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-muted);
-  box-shadow: var(--shadow-control);
+  box-shadow: none;
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
-  width: 19px;
-  height: 19px;
+  width: 36px;
+  height: 36px;
   opacity: var(--icon-opacity-default);
 }
 
@@ -28178,8 +28178,8 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   }
 
   .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
-    width: 17px;
-    height: 17px;
+    width: 32px;
+    height: 32px;
   }
 
   .tracking-page--soft-metal-preview .tracking-home-link,
