@@ -12818,8 +12818,9 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
       ${topbar}
 
       <section class="module-detail tracking-hero" aria-labelledby="module-title">
-        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        ${isSoftMetalPreview ? "" : `<div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>`}
         <div class="module-detail__body">
+          ${isSoftMetalPreview ? `<div class="tracking-hero-decor-icon" aria-hidden="true">${renderModuleIcon(moduleItem)}</div>` : ""}
           <div class="module-detail__eyebrow">SMART ODPADY / SLEDOVÁNÍ VOZIDEL</div>
           <h1 id="module-title">Sledování vozidel</h1>
           <p>Dispečerský přehled polohy vozidel, tras a odchylek. Veřejný náhled používá bezpečnou ukázkovou datovou sadu bez reálných GPS dat.</p>

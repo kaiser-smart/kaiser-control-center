@@ -26567,6 +26567,9 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --tracking-control-height: 46px;
   --tracking-hero-icon-holder: 176px;
   --tracking-hero-icon-size: 108px;
+  --tracking-hero-decor-icon-size: clamp(86px, 6.4vw, 112px);
+  --tracking-hero-decor-icon-opacity: 0.38;
+  --tracking-hero-decor-icon-filter: var(--icon-filter-teal) saturate(0.46) brightness(1.03) contrast(0.82);
   --tracking-header-bg: var(--tracking-card-bg);
   --tracking-header-shadow: var(--shadow-card), var(--highlight-edge);
   width: min(1500px, calc(100% - 28px));
@@ -26701,6 +26704,8 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --tracking-soft-shadow: var(--shadow-panel);
   --tracking-soft-shadow-sm: var(--shadow-card);
   --tracking-inset-shadow: var(--shadow-inset);
+  --tracking-hero-decor-icon-opacity: 0.36;
+  --tracking-hero-decor-icon-filter: var(--icon-filter-teal) saturate(0.34) brightness(1.04) contrast(0.78);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-frame {
@@ -27506,7 +27511,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 
 .tracking-page--soft-metal-preview .module-detail {
   position: relative;
-  grid-template-columns: var(--tracking-hero-icon-holder) minmax(0, 0.98fr) minmax(300px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.72fr);
   overflow: hidden;
   gap: var(--space-xl);
   align-items: stretch;
@@ -27525,28 +27530,37 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 }
 
 .tracking-page--soft-metal-preview .module-detail__body {
+  position: relative;
+  min-width: 0;
   align-self: center;
+  padding-right: calc(var(--tracking-hero-decor-icon-size) + var(--space-lg));
 }
 
-.tracking-page--soft-metal-preview .module-detail__icon {
-  width: var(--tracking-hero-icon-holder);
-  height: var(--tracking-hero-icon-holder);
-  border-color: color-mix(in srgb, var(--icon-teal) 26%, var(--border-soft));
-  border-radius: var(--radius-xl);
-  background: var(--tracking-control-bg);
+.tracking-page--soft-metal-preview .tracking-hero-decor-icon {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  display: inline-flex;
+  width: var(--tracking-hero-decor-icon-size);
+  height: var(--tracking-hero-decor-icon-size);
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--icon-teal);
-  box-shadow: var(--shadow-card), var(--highlight-edge);
   cursor: default;
+  opacity: var(--tracking-hero-decor-icon-opacity);
   pointer-events: none;
 }
 
-.tracking-page--soft-metal-preview .module-detail__icon svg,
-.tracking-page--soft-metal-preview .module-detail__icon img {
-  width: var(--tracking-hero-icon-size);
-  height: var(--tracking-hero-icon-size);
-  opacity: var(--icon-opacity-hero);
-  filter: var(--icon-filter-teal) saturate(0.62) brightness(1) contrast(0.88);
-  transform: scale(var(--icon-hero-scale));
+.tracking-page--soft-metal-preview .tracking-hero-decor-icon svg,
+.tracking-page--soft-metal-preview .tracking-hero-decor-icon img {
+  width: 100%;
+  height: 100%;
+  filter: var(--tracking-hero-decor-icon-filter);
+  opacity: 1;
+  transform: none;
   transform-origin: center;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -27938,7 +27952,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   }
 
   .tracking-page--soft-metal-preview .module-detail {
-    grid-template-columns: var(--tracking-hero-icon-holder) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tracking-page--soft-metal-preview .tracking-hero-map {
@@ -28138,19 +28152,16 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
     grid-template-columns: 1fr;
   }
 
+  .tracking-page--soft-metal-preview .module-detail__body {
+    padding-right: 0;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-hero-decor-icon {
+    display: none;
+  }
+
   .tracking-page--soft-metal-preview .tracking-hero-map {
     min-height: 260px;
-  }
-
-  .tracking-page--soft-metal-preview .module-detail__icon {
-    width: 132px;
-    height: 132px;
-  }
-
-  .tracking-page--soft-metal-preview .module-detail__icon svg,
-  .tracking-page--soft-metal-preview .module-detail__icon img {
-    width: 72px;
-    height: 72px;
   }
 
   .tracking-page--soft-metal-preview .tracking-demo-vehicle-card__head,
