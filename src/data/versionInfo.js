@@ -25,6 +25,10 @@ export const versionNews = [
     text: "Modul Pohledávky má novou kontrolu Vistos → Ledger připravenost. Přihlášeně ověří entitu DirectoryWithBranch, vazbu InvoiceIssued.Customer_FK / CustomerBranch_FK, confidence HIGH/MEDIUM/LOW/NONE a data quality flagy. Výstup je pouze read-only preview bez ratingu reálných firem, KB plateb, zákaznické komunikace a ostrého zápisu do ledgeru."
   },
   {
+    title: "Sjednocení produkce: Šarlota a Vistos faktury",
+    text: "Produkční build sjednocuje opravy Šarloty pro hlasová hlášení řidičů, opravený kontrolní voice zápis a read-only mapování Vistos faktur z vedlejší větve. Bez DB migrací, secrets, SMS/e-mailů a bez objednávek dílů."
+  },
+  {
     title: "Pohledávky: přesné Vistos sloupce faktur",
     text: "Read-only Vistos preview nově zkouší Kaiser invoice sloupcovou sadu s poli InvoiceNumber, BankReference1-3, CustomerBranch_FK, Customer_FK, CustomerRegNumber, CustomerVatNumber, IssuedDate, DueDate, PriceWithoutTax, PriceWithTax, AmountPaid, RemainToPay, Status_FK a IsPaid. Stále bez D1 zápisu a bez komunikace zákazníkům."
   },
@@ -35,6 +39,10 @@ export const versionNews = [
   {
     title: "Šarlota: žádné falešné potvrzení hlášení",
     text: "Hlasová Šarlota má nově přísnější pravidlo: nesmí říct, že vytvořila servisní hlášení, pokud backendový tool nevrátí skutečné číslo hlášení. Bez reportId musí jasně říct, že zápis v aplikaci zatím nevidí."
+  },
+  {
+    title: "Šarlota: opravený kontrolní voice zápis",
+    text: "Kontrolní zápis v nastavení nově emuluje dokončený hlasový rozhovor bez poznámky, takže po potvrzení opravdu projde přes backendový voice handler až k vytvoření testovacího hlášení."
   },
   {
     title: "Hlášení řidičů: hlasový zápis po jedné poznámce",

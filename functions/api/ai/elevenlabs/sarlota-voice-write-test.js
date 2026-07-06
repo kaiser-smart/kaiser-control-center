@@ -107,6 +107,12 @@ function voicePayload({ vehicleId, vehicleName, licensePlate, defectDescription,
   const actionParameters = action?.parameters && typeof action.parameters === "object" ? action.parameters : {};
   const selectedLicensePlate = cleanString(licensePlate);
   const selectedVehicleName = cleanString(vehicleName);
+  const noteDeclinedParameters = {
+    driverNoteStatus: "declined",
+    driver_note_status: "declined",
+    driverNoteQuestionAsked: true,
+    driver_note_question_asked: true
+  };
   const confirmedParameters = confirmed
     ? {
         confirmationSource: "kso-ui",
@@ -139,6 +145,7 @@ function voicePayload({ vehicleId, vehicleName, licensePlate, defectDescription,
       spzValidated: Boolean(selectedLicensePlate),
       vehicleSelectionSource: "kso-admin-voice-write-test",
       diagnosticVoiceWriteTest: true,
+      ...noteDeclinedParameters,
       ...confirmedParameters,
       confirmed,
       writeConfirmed: confirmed
@@ -155,6 +162,7 @@ function voicePayload({ vehicleId, vehicleName, licensePlate, defectDescription,
       spzValidated: Boolean(selectedLicensePlate),
       vehicleSelectionSource: "kso-admin-voice-write-test",
       diagnosticVoiceWriteTest: true,
+      ...noteDeclinedParameters,
       ...confirmedParameters,
       confirmed
     },
