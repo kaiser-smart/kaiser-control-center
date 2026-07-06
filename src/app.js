@@ -14983,6 +14983,108 @@ function collectionRoutesSourceMapReadinessCard(label, value, detail, tone = "ne
   `;
 }
 
+function collectionRoutesSourceLocationReviewStatus(row = {}) {
+  const readiness = collectionRoutesSourceMapReadiness(row);
+  const vistosStatus = collectionRoutesSourceNormalizedVistosStatus(row);
+  if (readiness.code === "gps-ready") {
+    return {
+      code: "confirmed",
+      label: "GPS potvrzena",
+      tone: "ready",
+      action: "Bez zásahu. Řádek má použitelnou GPS pro budoucí mapový náhled."
+    };
+  }
+  if (readiness.code === "missing-address") {
+    return {
+      code: "missing-address",
+      label: "chybí adresa",
+      tone: "danger",
+      action: "Doplnit nebo potvrdit adresu ve zdrojových datech; bez adresy se GPS nesmí hádat."
+    };
+  }
+  if (readiness.code === "review" || vistosStatus === "nejasné" || vistosStatus === "nenamapováno") {
+    return {
+      code: "review",
+      label: "ověřit před GPS",
+      tone: "warning",
+      action: "Ručně zkontrolovat zákazníka, adresu a Vistos match. Až potom potvrdit polohu."
+    };
+  }
+  if (readiness.code === "address-ready") {
+    return {
+      code: "address-ready",
+      label: "adresa k potvrzení",
+      tone: "ok",
+      action: "Adresa vypadá použitelně. V další fázi ručně potvrdit GPS bod na mapě."
+    };
+  }
+  return {
+    code: "address-only",
+    label: "ručně potvrdit GPS",
+    tone: "neutral",
+    action: "Zastávka má textovou adresu bez potvrzené GPS. Připravit k ručnímu bodu na mapě."
+  };
+}
+
+function collectionRoutesSourceLocationReviewSummary(rows = []) {
+  return rows.reduce((summary, row) => {
+    const status = collectionRoutesSourceLocationReviewStatus(row);
+    summary.total += 1;
+    if (status.code !== "confirmed") summary.toReview += 1;
+    if (status.code === "missing-address") summary.missingAddress += 1;
+    if (status.code === "review") summary.needsMatchReview += 1;
+    if (status.code === "address-ready" || status.code === "address-only") summary.addressWithoutGps += 1;
+    summary.counts[status.code] = (summary.counts[status.code] || 0) + 1;
+    return summary;
+  }, {
+    total: 0,
+    toReview: 0,
+    missingAddress: 0,
+    needsMatchReview: 0,
+    addressWithoutGps: 0,
+    counts: {}
+  });
+}
+
+function collectionRoutesSourceLocationReviewPanel(rows = []) {
+  const summary = collectionRoutesSourceLocationReviewSummary(rows);
+  const reviewRows = rows.filter((row) => collectionRoutesSourceLocationReviewStatus(row).code !== "confirmed");
+  const cappedRows = reviewRows.slice(0, 80);
+  const extraNotice = reviewRows.length > cappedRows.length
+    ? `<p class="module-feedback__notice">Zobrazeno prvních ${escapeHtml(cappedRows.length)} stanovišť k ručnímu ověření. Souhrn počítá celý aktuální filtr.</p>`
+    : "";
+
+  return `
+    <section class="collection-routes-location-review" aria-label="Fronta ručního potvrzení polohy">
+      <div class="collection-routes-location-review__head">
+        <div>
+          <p class="module-feedback__eyebrow">Fáze 2A · read-only fronta</p>
+          <h3>Ruční potvrzení polohy</h3>
+          <span>Praktický seznam stanovišť, která je potřeba před mapou ručně potvrdit. Smart nic negeokóduje a nic neukládá.</span>
+        </div>
+        <span class="employee-card-status employee-card-status--waiting">GPS zápis NE</span>
+      </div>
+      <div class="collection-routes-location-review__cards" aria-label="Souhrn ruční kontroly polohy">
+        ${collectionRoutesSourceMapReadinessCard("K potvrzení", collectionRoutesMetricValue(summary.toReview), "čeká na člověka", "warning")}
+        ${collectionRoutesSourceMapReadinessCard("Chybí adresa", collectionRoutesMetricValue(summary.missingAddress), "nejdřív opravit zdroj", "danger")}
+        ${collectionRoutesSourceMapReadinessCard("Nejasný match", collectionRoutesMetricValue(summary.needsMatchReview), "ověřit proti Vistosu", "warning")}
+        ${collectionRoutesSourceMapReadinessCard("Adresa bez GPS", collectionRoutesMetricValue(summary.addressWithoutGps), "připravit bod na mapě", "ok")}
+      </div>
+      ${collectionRoutesPreviewTable(`Fronta polohy: ${collectionRoutesSourceRouteTitle()}`, [
+        { label: "Pořadí", value: (row) => row.routeOrder },
+        { label: "Zákazník", value: (row) => row.customerName || "-" },
+        { label: "Adresa", value: (row) => row.addressText || row.vistosAddressText || "-" },
+        { label: "Stav", value: (row) => collectionRoutesSourceLocationReviewStatus(row).label },
+        { label: "Doporučený krok", value: (row) => collectionRoutesSourceLocationReviewStatus(row).action },
+        { label: "Vistos", value: (row) => collectionRoutesSourceVistosStatus(row) },
+        { label: "Zdroj", value: (row) => collectionRoutesSourceSourceLabel(row) },
+        { label: "Zápis GPS", value: () => "NE" }
+      ], cappedRows, "V aktuálním filtru nejsou stanoviště k ručnímu potvrzení polohy.")}
+      ${extraNotice}
+    </section>
+  `;
+}
+
 function collectionRoutesSourceCoordinateLabel(row) {
   const coordinates = collectionRoutesSourceCoordinates(row);
   return coordinates
@@ -15071,6 +15173,7 @@ function collectionRoutesSourceMapReadinessPanel(rows = collectionRoutesSourceDi
         { label: "Ostrá navigace", value: () => "NE" }
       ], cappedRows, "V aktuálním filtru nejsou řádky pro GPS připravenost.")}
       ${extraNotice}
+      ${collectionRoutesSourceLocationReviewPanel(rows)}
     </div>
   `;
 }

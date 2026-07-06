@@ -29,7 +29,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - ROZPRACOVANO - preview uklada stanoviste do pilotnich tabulek.
 - ROZPRACOVANO - chybejici poloha jde do datovych problemu.
 - ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici adresy ve zdrojovych 13 Excelech.
-- NEZACATO - rucni potvrzeni GPS polohy.
+- ROZPRACOVANO - Svozove trasy maji read-only frontu rucniho potvrzeni polohy v Mapa / GPS; bez geokodovani, bez zapisu GPS a bez navigace.
 
 ## Nadoby
 
@@ -57,7 +57,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 - NEZACATO - Google geokodovani neni ve Fazi 1E povolene.
 - HOTOVO - Faze 2A ukazuje read-only GPS/mapovou pripravenost aktualniho filtru bez geokodovani, bez zapisu GPS a bez navigace.
-- NEZACATO - fronta rucniho potvrzeni polohy.
+- ROZPRACOVANO - fronta rucniho potvrzeni polohy ukazuje stanoviste k overeni podle aktualniho filtru; nic neuklada a nespousti geokodovani.
 
 ## Planovani tras
 

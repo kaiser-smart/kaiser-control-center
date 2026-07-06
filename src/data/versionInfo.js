@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.372"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.373"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: fronta ručního potvrzení polohy",
+    text: "Záložka Mapa / GPS má read-only frontu stanovišť k ručnímu ověření polohy podle aktuálního filtru. Nic negeokóduje, nezapisuje GPS, nespouští T-Cars, navigaci, SMS/e-maily ani automatizace."
+  },
   {
     title: "Sjednocení produkce: Šarlota a Vistos faktury",
     text: "Produkční build sjednocuje opravy Šarloty pro hlasová hlášení řidičů, opravený kontrolní voice zápis a read-only mapování Vistos faktur z vedlejší větve. Bez DB migrací, secrets, SMS/e-mailů a bez objednávek dílů."
