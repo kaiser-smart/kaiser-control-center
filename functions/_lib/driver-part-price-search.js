@@ -1,5 +1,12 @@
 const DEFAULT_TIMEOUT_MS = 25000;
 const MAX_OFFERS = 3;
+const STRONG_COMPATIBILITY_EVIDENCE = new Set([
+  "oe_number",
+  "provider_fitment",
+  "vin_fitment",
+  "official_catalog",
+  "verified_compatibility"
+]);
 const BLOCKED_USED_MARKERS = [
   "bazar",
   "bazos",
@@ -36,6 +43,67 @@ function normalizeText(value) {
 
 function compactIdentifier(value) {
   return normalizeText(value).replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeCompatibilityEvidence(value) {
+  const normalized = normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!normalized) return "";
+  if (["oe", "oem", "oe_number", "oem_number", "part_number"].includes(normalized)) return "oe_number";
+  if (["vin", "vin_fitment", "vin_match", "vin_verified"].includes(normalized)) return "vin_fitment";
+  if (["provider", "provider_fitment", "fitment", "vehicle_fitment", "fits_vehicle"].includes(normalized)) return "provider_fitment";
+  if (["catalog", "official_catalog", "official"].includes(normalized)) return "official_catalog";
+  if (["verified", "verified_compatibility", "compatibility_verified"].includes(normalized)) return "verified_compatibility";
+  if (normalized === "part_name_only") return "part_name_only";
+  return STRONG_COMPATIBILITY_EVIDENCE.has(normalized) ? normalized : "";
+}
+
+function explicitCompatibilityEvidence(rawOffer = {}, request = {}) {
+  const oeCompact = compactIdentifier(request.oePartNumber || request.partOrderNumber);
+  const offerOeCompact = compactIdentifier(
+    rawOffer.oeNumber ||
+    rawOffer.oe_number ||
+    rawOffer.oemNumber ||
+    rawOffer.oem_number ||
+    rawOffer.partNumber ||
+    rawOffer.part_number
+  );
+  if (oeCompact && offerOeCompact && offerOeCompact === oeCompact) {
+    return "oe_number";
+  }
+
+  const explicit = normalizeCompatibilityEvidence(
+    rawOffer.compatibilityEvidence ||
+    rawOffer.compatibility_evidence ||
+    rawOffer.fitmentEvidence ||
+    rawOffer.fitment_evidence ||
+    rawOffer.vehicleFitmentEvidence ||
+    rawOffer.vehicle_fitment_evidence ||
+    rawOffer.matchEvidence ||
+    rawOffer.match_evidence
+  );
+  if (explicit) {
+    return explicit;
+  }
+
+  if (
+    rawOffer.compatible === true ||
+    rawOffer.compatibleWithVin === true ||
+    rawOffer.compatible_with_vin === true ||
+    rawOffer.fitsVehicle === true ||
+    rawOffer.fits_vehicle === true ||
+    rawOffer.fitmentVerified === true ||
+    rawOffer.fitment_verified === true ||
+    rawOffer.vehicleCompatibilityVerified === true ||
+    rawOffer.vehicle_compatibility_verified === true
+  ) {
+    return "provider_fitment";
+  }
+
+  return "";
+}
+
+function hasStrongCompatibilityEvidence(offer = {}) {
+  return STRONG_COMPATIBILITY_EVIDENCE.has(cleanString(offer.compatibilityEvidence));
 }
 
 function safeJson(value) {
@@ -201,7 +269,13 @@ export function normalizeDriverPartOffer(rawOffer = {}, request = {}, options = 
   const oeMatch = oeCompact ? titleCompact.includes(oeCompact) : false;
   const wordMatches = partWords.filter((word) => haystack.includes(word)).length;
   const nameMatch = wordMatches >= Math.min(2, partWords.length || 2);
-  const relevant = oeCompact ? oeMatch : nameMatch;
+  const explicitEvidence = explicitCompatibilityEvidence(rawOffer, request);
+  const compatibilityEvidence = oeMatch
+    ? "oe_number"
+    : explicitEvidence || (nameMatch ? "part_name_only" : "");
+  const relevant = oeCompact
+    ? (oeMatch || hasStrongCompatibilityEvidence({ compatibilityEvidence }))
+    : (nameMatch || hasStrongCompatibilityEvidence({ compatibilityEvidence }));
 
   return {
     title,
@@ -216,20 +290,22 @@ export function normalizeDriverPartOffer(rawOffer = {}, request = {}, options = 
       : wordMatches
         ? "Shoda podle názvu dílu bez ověřeného OE čísla."
         : "",
-    compatibilityEvidence: oeMatch
-      ? "oe_number"
-      : nameMatch
-        ? "part_name_only"
-        : "",
+    compatibilityEvidence,
     blockedAsUsed,
     relevant
   };
 }
 
 export function selectDriverPartOffers(rawOffers = [], request = {}, options = {}) {
+  const requireCompatibilityEvidence = options.requireCompatibilityEvidence !== false;
   return rawOffers
     .map((offer) => normalizeDriverPartOffer(offer, request, options))
-    .filter((offer) => (offer.title || offer.url) && offer.relevant && !offer.blockedAsUsed)
+    .filter((offer) => (
+      (offer.title || offer.url) &&
+      offer.relevant &&
+      !offer.blockedAsUsed &&
+      (!requireCompatibilityEvidence || hasStrongCompatibilityEvidence(offer))
+    ))
     .sort((left, right) => {
       if (left.priceValue && right.priceValue) return left.priceValue - right.priceValue;
       if (left.priceValue) return -1;
@@ -302,6 +378,8 @@ async function fetchProviderOffers(config, request, query, signal, fetchImpl = f
       oeNumber: cleanString(request.oePartNumber || request.partOrderNumber),
       partName: cleanString(request.partName || request.verifiedPart || request.probablePart),
       requireOeNumber: Boolean(cleanString(request.oePartNumber || request.partOrderNumber)),
+      requireCompatibilityEvidence: true,
+      acceptedCompatibilityEvidence: [...STRONG_COMPATIBILITY_EVIDENCE],
       vehicleName: cleanString(request.vehicleName),
       vehicleFitment,
       country: "CZ",
@@ -357,10 +435,11 @@ async function fetchOpenAiWebSearchOffers(config, request, query, signal, fetchI
         `Rok/model/motorizace: ${[vehicleFitment.modelYear, vehicleFitment.model, vehicleFitment.engine].filter(Boolean).join(" ") || "neuvedeno"}`,
         cleanString(request.oePartNumber || request.partOrderNumber)
           ? "Kazda vracena nabidka musi na strance, v nazvu, URL nebo snippet/note explicitne obsahovat toto OE cislo. Bez OE cisla ji vynech."
-          : "Pokud chybi OE cislo, vrat jen nabidky s jasnou shodou nazvu dilu a uved v note proc je kandidat relevantni.",
+          : "Pokud chybi OE cislo, vrat jen nabidky s jasnym dukazem kompatibility pro uvedeny model/motorizaci z katalogu nebo stranky produktu. Pouha shoda nazvu dilu nestaci.",
+        "Do kazde nabidky pridej compatibilityEvidence: oe_number, provider_fitment, vin_fitment, official_catalog nebo verified_compatibility. Bez takove evidence nabidku vynech.",
         "Neposilam VIN ani SPZ. Neber bazar, pouzite dily, vrakoviste, marketplace ani podezrele vysledky.",
         "Vrat pouze validni JSON bez komentare ve tvaru:",
-        "{\"offers\":[{\"title\":\"\",\"price\":\"\",\"seller\":\"\",\"url\":\"\",\"availability\":\"\",\"note\":\"\"}]}",
+        "{\"offers\":[{\"title\":\"\",\"price\":\"\",\"seller\":\"\",\"url\":\"\",\"availability\":\"\",\"note\":\"\",\"compatibilityEvidence\":\"\"}]}",
         "Pokud nemas jistou cenu a URL, nabidku vynech. Maximalne 5 nabidek."
       ].join("\n")
     }),
@@ -444,10 +523,10 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
     const hasRequiredOffers = offers.length >= MAX_OFFERS;
     const status = hasRequiredOffers ? "candidates_found" : offers.length ? "partial_results" : "no_results";
     const message = hasRequiredOffers
-      ? "AI Boost našel 3 nabídky k ručnímu ověření. Nic nebylo objednáno."
+      ? "AI Boost našel 3 prokazatelně kompatibilní nabídky k ručnímu ověření. Nic nebylo objednáno."
       : offers.length
-        ? `AI Boost našel jen ${offers.length} z 3 potřebných nabídek s odkazy. E-mail Patrikovi zatím neposílám.`
-        : "AI Boost nenašel 3 bezpečně relevantní nabídky. Pokračuj ručně.";
+        ? `AI Boost našel jen ${offers.length} z 3 potřebných prokazatelně kompatibilních nabídek s odkazy. E-mail Patrikovi zatím neposílám.`
+        : "AI Boost nenašel 3 prokazatelně kompatibilní nabídky. Pokračuj ručně.";
     const provider = config.mockJson ? "mock" : config.endpoint ? config.provider : "openai_web_search";
 
     return {
@@ -496,6 +575,7 @@ export const __test = {
   extractOpenAiOutputText,
   vehicleFitmentFromRequest,
   normalizeDriverPartOffer,
+  hasStrongCompatibilityEvidence,
   parseJsonObjectFromText,
   parseNumber,
   selectDriverPartOffers

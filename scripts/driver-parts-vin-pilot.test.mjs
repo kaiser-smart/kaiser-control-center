@@ -715,10 +715,10 @@ function driverPartTestEnv(db, offers) {
   const result = await runDriverPartPriceSearch({
     PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({
       offers: [
-        { title: "Nový výfuk díl výfuku Mercedes CLS", price: "5 900 Kč", seller: "Dodavatel C", url: "https://example.test/c" },
-        { title: "Použitý výfuk díl výfuku Mercedes CLS bazar", price: "1 200 Kč", seller: "Bazoš", url: "https://bazos.test/a" },
-        { title: "Výfuk díl výfuku Mercedes CLS", price: "4 800 Kč", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Díl výfuku výfuk Mercedes CLS skladem", price: "5 100 Kč", seller: "Dodavatel B", url: "https://example.test/b" }
+        { title: "Nový výfuk díl výfuku Mercedes CLS", price: "5 900 Kč", seller: "Dodavatel C", url: "https://example.test/c", compatibilityEvidence: "provider_fitment" },
+        { title: "Použitý výfuk díl výfuku Mercedes CLS bazar", price: "1 200 Kč", seller: "Bazoš", url: "https://bazos.test/a", compatibilityEvidence: "provider_fitment" },
+        { title: "Výfuk díl výfuku Mercedes CLS", price: "4 800 Kč", seller: "Dodavatel A", url: "https://example.test/a", compatibilityEvidence: "provider_fitment" },
+        { title: "Díl výfuku výfuk Mercedes CLS skladem", price: "5 100 Kč", seller: "Dodavatel B", url: "https://example.test/b", compatibilityEvidence: "provider_fitment" }
       ]
     })
   }, item, { allowProbablePartSeed: true });
@@ -1045,9 +1045,9 @@ function driverPartTestEnv(db, offers) {
     priceBoostStatus: "candidates_found",
     priceBoostResultJson: JSON.stringify({
       offers: [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c", compatibilityEvidence: "provider_fitment" }
       ]
     })
   }, { allowProbablePartHandoff: true });
@@ -1070,9 +1070,9 @@ function driverPartTestEnv(db, offers) {
     priceBoostStatus: "candidates_found",
     priceBoostResultJson: JSON.stringify({
       offers: [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c", compatibilityEvidence: "provider_fitment" }
       ]
     })
   }, { allowProbablePartHandoff: true, requireVinPartVerification: true });
@@ -1088,9 +1088,9 @@ function driverPartTestEnv(db, offers) {
   const preview = await driverPartRequestInternals.driverPartRequestPriceSearchPreviewForItem({
     PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({
       offers: [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c", compatibilityEvidence: "provider_fitment" }
       ]
     }),
     PARTS_ORDER_EMAIL: "patrik@example.test"
@@ -1140,9 +1140,9 @@ function driverPartTestEnv(db, offers) {
     probablePart: "přední sklo",
     priceBoostResultJson: JSON.stringify({
       offers: [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c", compatibilityEvidence: "provider_fitment" }
       ]
     })
   });
@@ -1168,9 +1168,9 @@ function driverPartTestEnv(db, offers) {
     probablePart: "přední sklo",
     priceBoostResultJson: JSON.stringify({
       offers: [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b", compatibilityEvidence: "provider_fitment" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c", compatibilityEvidence: "provider_fitment" }
       ]
     })
   });
@@ -1198,9 +1198,9 @@ function driverPartTestEnv(db, offers) {
       partVerificationStatus: "probable_part",
       priceBoostResultJson: JSON.stringify({
         offers: [
-          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
-          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a", compatibilityEvidence: "provider_fitment" },
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b", compatibilityEvidence: "provider_fitment" },
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c", compatibilityEvidence: "provider_fitment" }
         ]
       })
     },
@@ -1253,9 +1253,9 @@ function driverPartTestEnv(db, offers) {
       probablePart: "přední sklo",
       priceBoostResultJson: JSON.stringify({
         offers: [
-          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
-          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a", compatibilityEvidence: "provider_fitment" },
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b", compatibilityEvidence: "provider_fitment" },
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c", compatibilityEvidence: "provider_fitment" }
         ]
       })
     }, {

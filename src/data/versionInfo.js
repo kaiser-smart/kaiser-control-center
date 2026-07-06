@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.365"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.366"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: odkazy jen s důkazem kompatibility",
+    text: "AI Boost a e-mail Patrikovi nově počítají mezi 3 nabídky jen položky s OE shodou, VIN/provider fitmentem nebo oficiálním katalogovým důkazem. Pouhá shoda názvu dílu už nestačí."
+  },
   {
     title: "Hlášení řidičů: úplnější e-mail Patrikovi",
     text: "Zpráva Patrikovi nově výslovně uvádí typ požadavku, servisní typ, stav hlášení, prioritu a poznámku řidiče. Odkazy v notifikaci se navíc znovu filtrují podle stejné kompatibilitní logiky jako cenový průzkum."

@@ -71,7 +71,12 @@ function parseDriverPartOffers(value) {
         seller: cleanString(offer.seller || offer.vendor),
         url: cleanString(offer.url),
         availability: cleanString(offer.availability),
-        note: cleanString(offer.note || offer.relevanceNote)
+        note: cleanString(offer.note || offer.relevanceNote),
+        compatibilityEvidence: cleanString(offer.compatibilityEvidence || offer.compatibility_evidence),
+        compatible: offer.compatible === true,
+        compatibleWithVin: offer.compatibleWithVin === true || offer.compatible_with_vin === true,
+        fitsVehicle: offer.fitsVehicle === true || offer.fits_vehicle === true,
+        oeNumber: cleanString(offer.oeNumber || offer.oe_number || offer.oemNumber || offer.oem_number || offer.partNumber || offer.part_number)
       }))
       .filter((offer) => offer.title || offer.price || offer.seller || offer.url)
       .slice(0, 3);
