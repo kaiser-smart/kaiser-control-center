@@ -9,6 +9,8 @@ const dist = path.join(root, "dist");
 const src = path.join(root, "src");
 const publicDir = path.join(root, "public");
 const template = await readFile(path.join(root, "index.html"), "utf8");
+const mainStyles = await readFile(path.join(src, "styles.css"), "utf8");
+const neumorphicPreviewStyles = await readFile(path.join(src, "neumorphic-preview.css"), "utf8");
 const buildMeta = await resolveBuildMeta(root);
 const assetVersion = encodeURIComponent(buildMeta.version || buildMeta.commit || buildMeta.backupDate || String(Date.now()));
 
@@ -19,9 +21,13 @@ function runtimeConfigModuleSource(env = process.env) {
 }
 
 function versionedTemplate() {
+  const inlineStyles = [
+    `<style data-inline-source="src/styles.css">\n${mainStyles.replaceAll("</style", "<\\/style")}\n</style>`,
+    `<style data-inline-source="src/neumorphic-preview.css">\n${neumorphicPreviewStyles.replaceAll("</style", "<\\/style")}\n</style>`
+  ].join("\n    ");
+
   return template
-    .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
-    .replace('href="src/neumorphic-preview.css"', `href="src/neumorphic-preview.css?v=${assetVersion}"`)
+    .replace('    <link rel="stylesheet" href="src/styles.css" />\n    <link rel="stylesheet" href="src/neumorphic-preview.css" />', `    ${inlineStyles}`)
     .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
 }
 
