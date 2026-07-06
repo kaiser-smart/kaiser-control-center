@@ -1,6 +1,6 @@
 import { recordAiAction } from "./ai-action-log-store.js";
 import { createAbsenceRequestRecord } from "./absence-requests-store.js";
-import { createDriverPartRequest, handoffDriverPartRequest } from "./driver-part-requests-store.js";
+import { createDriverPartRequest, processDriverPartRequestAfterVoiceCreate } from "./driver-part-requests-store.js";
 import { resolveFleetVehiclesForDriver, validateFleetLicensePlate } from "./fleet-vehicles-store.js";
 import { getUsers, isProduction } from "./auth.js";
 import {
@@ -983,6 +983,17 @@ function driverPartDraftFromPayload(payload, speechText) {
     vin: firstNonEmpty(parameters.vin, context.vin, payload.vin),
     vehicleBrand: firstNonEmpty(parameters.vehicleBrand, context.vehicleBrand, payload.vehicleBrand),
     defectDescription: description,
+    driverNote: firstNonEmpty(
+      parameters.driverNote,
+      parameters.driver_note,
+      parameters.note,
+      context.driverNote,
+      context.driver_note,
+      context.note,
+      payload.driverNote,
+      payload.driver_note,
+      payload.note
+    ),
     defectType: partMatch.defectType,
     probablePart: partMatch.probablePart,
     probablePartSide: partMatch.probablePartSide,
@@ -1135,13 +1146,13 @@ function driverPartSummaryMessage(draft) {
 
   const part = draft.probablePart || "náhradní díl";
   const vehicle = draft.vehicleId || draft.licensePlate ? "na vybraném vozidle" : "bez jasně vybraného vozidla";
-  return `Rozumím. Chceš nahlásit ${part} ${vehicle}. Potvrď prosím, že vozidlo sedí, a pošli fotku poškození. Mám to uložit a předat Patrikovi k ověření dílu?`;
+  return `Rozumím. Chceš vytvořit servisní hlášení ${vehicle}: ${draft.defectDescription || part}. Po uložení se díly a ceny vyřeší na pozadí. Mám hlášení uložit?`;
 }
 
 function driverPartPreparedAction(draft, user) {
   return {
     type: "driver_part_request",
-    action: "create_and_handoff",
+    action: "create_service_report",
     requiresConfirmation: true,
     confirmationPhrase: "ano",
     confirmationSourceRequired: ["kso-ui"],
@@ -1157,6 +1168,7 @@ function driverPartPreparedAction(draft, user) {
       vin: draft.vin,
       vehicleBrand: draft.vehicleBrand,
       defectDescription: draft.defectDescription,
+      driverNote: draft.driverNote,
       probablePart: draft.probablePart,
       probablePartSide: draft.probablePartSide,
       damagePhotoStatus: "requested",
@@ -1256,10 +1268,10 @@ function scheduleVoiceDriverPartHandoff(waitUntil, env, user, request) {
   }
 
   waitUntil(
-    handoffDriverPartRequest(env, user, request.id, voiceDriverPartHandoffOptions()).catch((error) => {
-      console.info("voice_sarlota.driver_part_handoff_async_failed", {
+    processDriverPartRequestAfterVoiceCreate(env, user, request.id, voiceDriverPartHandoffOptions()).catch((error) => {
+      console.info("voice_sarlota.driver_part_background_async_failed", {
         reportId: cleanString(request?.reportId),
-        code: cleanString(error?.code || "driver_part_request_handoff_failed"),
+        code: cleanString(error?.code || "driver_part_request_background_failed"),
         message: cleanString(error?.message)
       });
     })
@@ -1405,6 +1417,7 @@ async function driverPartRequestTool(env, user, payload, context, speechText, op
       spzManual: draft.licensePlate,
       spzValidated: Boolean(draft.licensePlate),
       vehicleSelectionSource: draft.vehicleSelectionSource,
+      driverNote: draft.driverNote,
       damagePhotoStatus: "requested",
       damagePhotoNote: "Šarlota požádala řidiče o fotku poškození před uložením hlášení.",
       source: "voice"
@@ -1425,63 +1438,44 @@ async function driverPartRequestTool(env, user, payload, context, speechText, op
     return {
       status: "created_notification_pending",
       verified: true,
-      message: "Hlášení jsem zapsala. AI Boost teď hledá tři nabídky a e-mail Patrikovi odejde až s odkazy. Nic nebylo automaticky objednáno.",
+      message: request.priority === "urgentní"
+        ? "Hlášení jsem vytvořila a předávám ho Patrikovi jako urgentní. Nic jsem neobjednala."
+        : "Hlášení jsem vytvořila a předávám ho na servisní kontrolu. Díly a ceny poběží až potom na pozadí.",
       preparedActions: [],
       driverPartRequest: {
         id: request.id,
         reportId: request.reportId,
         status: request.status,
         licensePlate: request.licensePlate,
-        probablePart: request.probablePart
+        probablePart: request.probablePart,
+        category: request.category,
+        serviceType: request.serviceType,
+        priority: request.priority
       },
       notificationsSent: false,
       priceSearchPending: true
     };
   }
 
-  try {
-    request = await handoffDriverPartRequest(env, user, request.id, voiceDriverPartHandoffOptions());
-
-    const handedOff = request.status === "handed_to_ordering";
-    return {
-      status: handedOff ? "created" : "created_notification_pending",
-      verified: true,
-      message: handedOff
-        ? "Hotovo. Hlášení jsem zapsala a předala Patrikovi k ověření dílu. Nic nebylo automaticky objednáno."
-        : "Hlášení jsem zapsala, ale předání není hotové. Zkontroluj prosím notifikace v detailu.",
-      preparedActions: [],
-      driverPartRequest: {
-        id: request.id,
-        reportId: request.reportId,
-        status: request.status,
-        licensePlate: request.licensePlate,
-        probablePart: request.probablePart
-      },
-      notificationsSent: handedOff
-    };
-  } catch (error) {
-    console.info("voice_sarlota.driver_part_handoff_pending", {
-      reportId: cleanString(request?.reportId),
-      code: cleanString(error?.code || "driver_part_request_handoff_failed"),
-      message: cleanString(error?.message)
-    });
-    return {
-      status: "created_notification_pending",
-      verified: true,
-      message: "Hlášení jsem zapsala, ale předání není hotové. Zkontroluj prosím detail v Hlášení řidičů.",
-      preparedActions: [],
-      driverPartRequest: {
-        id: request.id,
-        reportId: request.reportId,
-        status: request.status,
-        licensePlate: request.licensePlate,
-        probablePart: request.probablePart
-      },
-      notificationsSent: false,
-      code: cleanString(error?.code || "driver_part_request_handoff_failed"),
-      apiStatus: error?.status === 503 ? "waiting" : "ready"
-    };
-  }
+  return {
+    status: "created_notification_pending",
+    verified: true,
+    message: "Hlášení jsem vytvořila a předávám ho na servisní kontrolu. Pozadí se spustí v cloudu mimo hlasový hovor.",
+    preparedActions: [],
+    driverPartRequest: {
+      id: request.id,
+      reportId: request.reportId,
+      status: request.status,
+      licensePlate: request.licensePlate,
+      probablePart: request.probablePart,
+      category: request.category,
+      serviceType: request.serviceType,
+      priority: request.priority
+    },
+    notificationsSent: false,
+    priceSearchPending: false,
+    code: "driver_part_background_waituntil_unavailable"
+  };
 }
 
 function absenceDraftFromPayload(payload, speechText) {
@@ -1794,7 +1788,7 @@ function systemPrompt() {
     sarlotaSystemPrompt(),
     "Tento endpoint vrací strojové rozhodnutí pro KSO backend. Odpověď pro uživatele dej do pole reply.",
     "Pro zápis dovolené, nemoci, OČR, lékaře, náhradního volna, neplaceného volna nebo jiné nepřítomnosti použij intent absence_request. Nezapisuj bez jasného potvrzení uživatele; když něco chybí, polož jen jednu otázku.",
-    "Pro servisní hlášení z modulu Hlášení řidičů použij intent driver_part_request. Když volající řekne, že chce opravu, servis, údržbu, závadu, poškození nebo jakoukoliv potřebu na vozidle, ber to jako Hlášení řidičů. V ElevenLabs hovoru má Šarlota nejdřív říct `Rozumím. Podívám se do Smart systému.`, zavolat get_driver_report_context a pracovat jen s ověřeným backend seznamem. Když seznam není bezpečně ověřený nebo je dlouhý, otevři bezpečný výběr vozidla v aplikaci; značka, typ nebo SPZ jsou jen nouzová cesta. Bez potvrzení nic nezapisuj ani neposílej. Při nejasné straně zrcátka polož jednu krátkou otázku. Mercedes díl podle VIN označ jako ověřený jen při oficiálním výsledku nebo ručním potvrzení.",
+    "Pro servisní hlášení z modulu Hlášení řidičů použij intent driver_part_request. Když volající řekne, že chce opravu, servis, údržbu, závadu, poškození nebo jakoukoliv potřebu na vozidle, ber to jako Hlášení řidičů. V ElevenLabs hovoru má Šarlota nejdřív říct `Rozumím. Podívám se do Smart systému.`, zavolat get_driver_report_context a pracovat jen s ověřeným backend seznamem. Když seznam není bezpečně ověřený nebo je dlouhý, otevři bezpečný výběr vozidla v aplikaci; značka, typ nebo SPZ jsou jen nouzová cesta. Šarlota není servisní technik: přijme problém, položí nejvýše jednu krátkou otázku na poznámku řidiče, uloží hlášení a řekne, že ho předává na servisní kontrolu. Díl, VIN katalog, ceny a e-mail Patrikovi nesmí blokovat hlasový zápis; běží až potom na pozadí. Bez potvrzení v aplikaci nic nezapisuj ani neposílej. Mercedes díl podle VIN označ jako ověřený jen při oficiálním výsledku nebo ručním potvrzení.",
     "Blok Firemní lidskost: pokud request.humanTouch.enabled obsahuje návrhy, můžeš nenásilně použít maximálně jednu krátkou poznámku. Použij jen dodaný ověřený návrh, nikdy si nevymýšlej počasí, svátky, narozeniny ani dovolené.",
     "Firemní lidskost nepoužívej při reklamaci, stížnosti, spěchu, stresu, chybě, nemoci, OČR, lékaři ani u citlivé absence. Nikdy nezmiňuj důvod absence, věk ani soukromé údaje. Nepoužívej texty známých písní.",
     "Vrať výhradně JSON."

@@ -384,20 +384,47 @@ function driverPartTestEnv(db, offers) {
   const match = identifyProbablePartFromDescription("Něco píská na podvozku");
   assert.equal(driverPartAiCandidateFromMatch(match), false);
   assert.equal(match.aiSkipReason, "ambiguous_fault");
+  assert.equal(match.category, "nejasná závada");
+  assert.equal(match.backgroundAction, "diagnostics");
+  assert.equal(driverPartRequestInitialStatus(match), "waiting_diagnostics");
 }
 
 {
   const match = identifyProbablePartFromDescription("Výměna oleje");
-  assert.equal(driverPartAiCandidateFromMatch(match), false);
-  assert.equal(match.aiSkipReason, "maintenance_or_consumable");
+  assert.equal(driverPartAiCandidateFromMatch(match), true);
+  assert.equal(match.probablePart, "motorový olej podle specifikace + olejový filtr");
+  assert.equal(match.category, "jasný servisní úkon");
+  assert.equal(match.serviceType, "výměna oleje");
+  assert.equal(match.backgroundAction, "parts_search");
+  assert.equal(driverPartRequestInitialStatus(match), "part_identified");
 }
 
 {
   const match = identifyProbablePartFromDescription("výměna stěračů");
+  assert.equal(driverPartAiCandidateFromMatch(match), true);
+  assert.equal(match.probablePart, "přední stěrače");
+  assert.equal(match.category, "jasný servisní úkon");
+  assert.equal(match.serviceType, "výměna stěračů");
+  assert.equal(match.backgroundAction, "parts_search");
+  assert.equal(driverPartRequestInitialStatus(match), "part_identified");
+}
+
+{
+  const match = identifyProbablePartFromDescription("Auto špatně brzdí a pedál je měkký");
   assert.equal(driverPartAiCandidateFromMatch(match), false);
-  assert.equal(match.aiSkipReason, "maintenance_or_consumable");
-  assert.equal(match.aiPilotStatus, "maintenance_or_consumable");
-  assert.equal(driverPartRequestInitialStatus(match), "new_report");
+  assert.equal(match.aiSkipReason, "urgent_safety");
+  assert.equal(match.category, "bezpečnostní problém");
+  assert.equal(match.priority, "urgentní");
+  assert.equal(match.backgroundAction, "urgent_alert");
+  assert.equal(driverPartRequestInitialStatus(match), "ready_for_patrik");
+}
+
+{
+  const match = identifyProbablePartFromDescription("Potřebuju vyměnit brzdové destičky");
+  assert.equal(driverPartAiCandidateFromMatch(match), true);
+  assert.equal(match.needsPartSideClarification, true);
+  assert.equal(match.partIdentificationStatus, "probable_waiting_verification");
+  assert.equal(driverPartRequestInitialStatus(match), "waiting_part_identification");
 }
 
 {
@@ -455,6 +482,45 @@ function driverPartTestEnv(db, offers) {
   assert.equal(payload.priceBoostStatus, "waiting_verified_part");
   assert.match(payload.partLookupQuery, /přední sklo/);
   assert.equal(payload.vehicleName, "Mercedes CLS 400 d 4matic");
+}
+
+{
+  const payload = driverPartRequestInternals.normalizeCreatePayload(
+    {
+      defectDescription: "Něco vrže od předního kola",
+      driverNote: "Dělá to hlavně při zatáčení doprava.",
+      licensePlate: "2BB 8251",
+      driverName: "Radim Oplustil"
+    },
+    adminUser,
+    passengerVehicle(),
+    null
+  );
+  assert.equal(payload.status, "waiting_diagnostics");
+  assert.equal(payload.probablePart, "");
+  assert.equal(payload.partsProviderStatus, "not_applicable");
+  assert.equal(payload.priceBoostStatus, "not_requested");
+  assert.match(payload.note, /Poznámka řidiče: Dělá to hlavně při zatáčení doprava\./);
+  assert.match(payload.note, /Nelze spolehlivě určit konkrétní díl/);
+}
+
+{
+  const payload = driverPartRequestInternals.normalizeCreatePayload(
+    {
+      defectDescription: "Auto špatně brzdí, pedál je měkký",
+      driverNote: "Auto hůř zastavuje.",
+      licensePlate: "2BB 8251",
+      driverName: "Radim Oplustil"
+    },
+    adminUser,
+    passengerVehicle(),
+    null
+  );
+  assert.equal(payload.status, "ready_for_patrik");
+  assert.equal(payload.probablePart, "");
+  assert.equal(payload.partsProviderStatus, "not_applicable");
+  assert.match(payload.note, /Poznámka řidiče: Auto hůř zastavuje\./);
+  assert.match(payload.note, /Urgentní bezpečnostní problém/);
 }
 
 {

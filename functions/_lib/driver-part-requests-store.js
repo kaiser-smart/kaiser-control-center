@@ -31,6 +31,7 @@ import {
 } from "./driver-part-price-search.js";
 import {
   buildDriverPartOrderEmailPreview,
+  sendDriverPartUrgentNotification,
   sendDriverPartOrderNotification,
   sendDriverPartReadySms
 } from "./notification-service.js";
@@ -39,6 +40,12 @@ import { hasPermission, isFullAccessRole, normalizeRole } from "../../src/permis
 const DB_BINDING = "SMART_ODPADY_DB";
 const STATUSES = new Set([
   "new_report",
+  "waiting_diagnostics",
+  "searching_parts",
+  "searching_prices",
+  "ready_for_patrik",
+  "sent_to_patrik",
+  "waiting_decision",
   "waiting_part_identification",
   "part_identified",
   "handed_to_ordering",
@@ -52,6 +59,12 @@ const NOTIFICATION_DONE_STATUSES = new Set(["sent"]);
 
 export const DRIVER_PART_REQUEST_STATUS_LABELS = {
   new_report: "Nové hlášení",
+  waiting_diagnostics: "Čeká na diagnostiku",
+  searching_parts: "Vyhledávám díly",
+  searching_prices: "Vyhledávám ceny",
+  ready_for_patrik: "Připraveno pro Patrika",
+  sent_to_patrik: "Odesláno Patrikovi",
+  waiting_decision: "Čeká na rozhodnutí",
   waiting_part_identification: "Čeká na identifikaci dílu",
   part_identified: "Díl identifikován",
   handed_to_ordering: "Předáno Patrikovi k ověření",
@@ -294,6 +307,10 @@ function rowToRequest(row, events = []) {
     partAiDetectedName: storedProbablePart || cleanString(partMatch.probablePart),
     partAiDetectedSide: cleanString(row?.probable_part_side || partMatch.probablePartSide || "unknown"),
     partAiConfidence: partAiCandidate ? cleanString(partMatch.confidence || "medium") : "none",
+    category: cleanString(partMatch.category || "nejasná závada"),
+    serviceType: cleanString(partMatch.serviceType || row?.defect_type || "diagnostika"),
+    priority: cleanString(partMatch.priority || "běžné"),
+    backgroundAction: cleanString(partMatch.backgroundAction || "diagnostics"),
     verifiedPart: cleanString(row?.verified_part),
     partOrderNumber: cleanString(row?.part_order_number),
     oePartNumber: cleanString(row?.oe_part_number),
@@ -515,6 +532,32 @@ function appendUniqueNote(note = "", addition = "") {
   return [current, next].filter(Boolean).join(" ");
 }
 
+function createDriverRequestNote(payload = {}, partMatch = {}) {
+  const driverNote = cleanString(
+    payload.driverNote ||
+    payload.driver_note ||
+    payload.driverComment ||
+    payload.driver_comment ||
+    payload.additionalNote ||
+    payload.additional_note
+  );
+  const manualNote = cleanString(payload.note);
+  const systemNote = cleanString(partMatch.note);
+  const notes = [];
+
+  if (driverNote) {
+    notes.push(`Poznámka řidiče: ${driverNote}`);
+  }
+  if (manualNote && manualNote !== driverNote) {
+    notes.push(manualNote);
+  }
+  if (systemNote && !notes.some((note) => note.includes(systemNote))) {
+    notes.push(systemNote);
+  }
+
+  return notes.join(" ");
+}
+
 function eventStatement(db, { requestId, action, user, before, after, note, notification = null }) {
   return db
     .prepare(`
@@ -675,7 +718,7 @@ function normalizeCreatePayload(payload, user, vehicle, driverContact = null) {
     probablePartSide: partMatch.probablePartSide
   }));
   const partVerificationStatus = normalizePartVerificationStatus(
-    payload.partVerificationStatus || (partAiCandidate ? "probable_part" : partMatch.partIdentificationStatus)
+    payload.partVerificationStatus || partMatch.partIdentificationStatus
   );
   const partsProviderStatus = cleanString(payload.partsProviderStatus || (
     partAiCandidate ? "waiting_vin_pilot" : "not_applicable"
@@ -732,7 +775,7 @@ function normalizeCreatePayload(payload, user, vehicle, driverContact = null) {
     priceBoostCheckedAt: cleanString(payload.priceBoostCheckedAt),
     priceBoostResultJson: cleanString(payload.priceBoostResultJson),
     status: normalizeStatus(payload.status, driverPartRequestInitialStatus(partMatch)),
-    note: cleanString(payload.note || partMatch.note),
+    note: createDriverRequestNote(payload, partMatch),
     source: cleanString(payload.source || "manual")
   };
 }
@@ -1602,6 +1645,101 @@ export async function runDriverPartPriceBoost(env, user, id, options = {}) {
   } catch (error) {
     throw dbError(error);
   }
+}
+
+export async function sendDriverPartUrgentAlert(env, user, id) {
+  const { db, item } = await requestForUser(env, id, user);
+  const patrik = await partsRecipient(env);
+  const emailResult = item.patrikEmailStatus === "sent"
+    ? { status: "sent", recipientName: patrik.name, reused: true }
+    : await sendDriverPartUrgentNotification(env, item, {
+      recipientEmail: patrik.email,
+      recipientName: patrik.name
+    });
+  const emailOk = notificationSent(emailResult);
+  const now = new Date().toISOString();
+  const nextStatus = emailOk ? "sent_to_patrik" : "ready_for_patrik";
+  const after = {
+    ...item,
+    status: nextStatus,
+    assignedToName: patrik.name,
+    assignedToEmail: patrik.email,
+    patrikEmailStatus: emailResult.status,
+    patrikEmailError: emailResult.errorMessage || "",
+    handedOffToPatrikAt: emailOk ? (item.handedOffToPatrikAt || now) : item.handedOffToPatrikAt,
+    updatedAt: now
+  };
+
+  try {
+    await db.batch([
+      db
+        .prepare(`
+          UPDATE driver_part_requests
+          SET
+            status = ?,
+            assigned_to_name = ?,
+            assigned_to_email = ?,
+            handed_off_to_patrik_at = ?,
+            patrik_email_status = ?,
+            patrik_email_error = ?,
+            updated_by_user_id = ?,
+            updated_at = ?
+          WHERE id = ?
+        `)
+        .bind(
+          nextStatus,
+          nullableString(patrik.name),
+          nullableString(patrik.email),
+          nullableString(after.handedOffToPatrikAt),
+          cleanString(emailResult.status || "failed"),
+          nullableString(emailResult.errorMessage),
+          nullableString(user?.id),
+          now,
+          item.id
+        ),
+      eventStatement(db, {
+        requestId: item.id,
+        action: emailOk ? "urgent_alert_sent" : "urgent_alert_failed",
+        user,
+        before: item,
+        after,
+        note: emailOk
+          ? "Urgentní servisní hlášení bylo odesláno Patrikovi bez čekání na díly."
+          : "Urgentní servisní hlášení čeká na ruční předání Patrikovi.",
+        notification: {
+          channel: "email",
+          recipient: patrik.email,
+          status: cleanString(emailResult.status || "failed"),
+          errorMessage: cleanString(emailResult.errorMessage)
+        }
+      })
+    ]);
+
+    return getDriverPartRequest(env, user, item.id);
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function processDriverPartRequestAfterVoiceCreate(env, user, id, options = {}) {
+  const item = await getDriverPartRequest(env, user, id);
+
+  if (item.priority === "urgentní" || item.backgroundAction === "urgent_alert") {
+    return sendDriverPartUrgentAlert(env, user, item.id);
+  }
+
+  if (item.backgroundAction === "diagnostics" || item.status === "waiting_diagnostics") {
+    return item;
+  }
+
+  return handoffDriverPartRequest(env, user, item.id, {
+    allowCreatorHandoff: true,
+    allowProbablePartHandoff: true,
+    runPriceBoost: true,
+    requireVinPartVerification: true,
+    requirePriceOffersForHandoff: true,
+    ...options
+  });
 }
 
 export async function handoffDriverPartRequest(env, user, id, options = {}) {

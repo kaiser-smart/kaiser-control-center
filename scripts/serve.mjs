@@ -1155,6 +1155,12 @@ function addMockNotificationLog(input) {
 
 const MOCK_DRIVER_PART_STATUS_LABELS = {
   new_report: "Nové hlášení",
+  waiting_diagnostics: "Čeká na diagnostiku",
+  searching_parts: "Vyhledávám díly",
+  searching_prices: "Vyhledávám ceny",
+  ready_for_patrik: "Připraveno pro Patrika",
+  sent_to_patrik: "Odesláno Patrikovi",
+  waiting_decision: "Čeká na rozhodnutí",
   waiting_part_identification: "Čeká na identifikaci dílu",
   part_identified: "Díl identifikován",
   handed_to_ordering: "Předáno Patrikovi k ověření",
@@ -1540,6 +1546,9 @@ async function createMockDriverPartRequest(user, payload = {}) {
   assignedVehicle = plateValidation.vehicle || assignedVehicle;
   const now = new Date().toISOString();
   const partMatch = identifyProbablePartFromDescription(defectDescription);
+  const probablePart = mockDriverClean(payload.probablePart || partMatch.probablePart);
+  const partAiCandidate = Boolean(probablePart && partMatch.aiPartCandidate !== false);
+  const driverNote = mockDriverClean(payload.driverNote || payload.driver_note || payload.driverComment || payload.driver_comment);
   const driverContact = mockDriverContactForUser(user);
   const id = `driver-part-request-${randomUUID()}`;
   const request = {
@@ -1560,28 +1569,34 @@ async function createMockDriverPartRequest(user, payload = {}) {
     damagePhotoRequestedAt: mockDriverClean(payload.damagePhotoRequestedAt || now),
     damagePhotoDocumentId: mockDriverClean(payload.damagePhotoDocumentId),
     damagePhotoNote: mockDriverClean(payload.damagePhotoNote || "Šarlota / systém požádal řidiče o fotku poškození."),
-    probablePart: mockDriverClean(payload.probablePart || partMatch.probablePart),
+    probablePart,
     probablePartSide: mockDriverClean(payload.probablePartSide || partMatch.probablePartSide || "unknown"),
     partIdentificationStatus: mockDriverClean(payload.partIdentificationStatus || partMatch.partIdentificationStatus),
     verifiedPart: mockDriverClean(payload.verifiedPart),
     partOrderNumber: mockDriverClean(payload.partOrderNumber),
     oePartNumber: mockDriverClean(payload.oePartNumber),
     partName: mockDriverClean(payload.partName),
-    partVerificationStatus: mockDriverClean(payload.partVerificationStatus || "waiting_manual_verification"),
+    partVerificationStatus: mockDriverClean(payload.partVerificationStatus || partMatch.partIdentificationStatus || "waiting_manual_verification"),
     partVerificationSource: mockDriverClean(payload.partVerificationSource),
-    partsProviderId: "",
-    partsProviderStatus: "",
-    partsProviderMessage: "",
+    partsProviderId: partAiCandidate ? "partslink24" : "",
+    partsProviderStatus: partAiCandidate ? "waiting_vin_pilot" : "not_applicable",
+    partsProviderMessage: partAiCandidate ? "AI Boost rozpoznal konkrétní díl. Ověření podle VIN je read-only pilot." : partMatch.note,
     partsProviderError: "",
-    partLookupQuery: "",
+    partLookupQuery: [probablePart, partMatch.defectType, defectDescription].filter(Boolean).join(" "),
     partLookupResultJson: "",
     mercedesManualPortalUrl: process.env.MERCEDES_PARTS_MANUAL_PORTAL_URL || "https://webpartstruck-cloud.mercedes-benz-trucks.com/webparts/",
     mercedesMyPartsHubUrl: process.env.MERCEDES_MYPARTSHUB_URL || "https://mypartshub.daimlertruck.com",
-    priceBoostStatus: "not_requested",
-    priceBoostNote: "",
+    priceBoostStatus: partAiCandidate ? "waiting_verified_part" : "not_requested",
+    priceBoostNote: partAiCandidate
+      ? "Cenový průzkum čeká na ověřené OE číslo. Nic se automaticky neobjedná."
+      : "Cenový průzkum se nespustil, protože hlášení není jednoznačný požadavek na konkrétní díl.",
     priceBoostCheckedAt: "",
     priceBoostResultJson: "",
     status: mockDriverClean(payload.status || driverPartRequestInitialStatus(partMatch)),
+    category: mockDriverClean(partMatch.category || "nejasná závada"),
+    serviceType: mockDriverClean(partMatch.serviceType || partMatch.defectType || "diagnostika"),
+    priority: mockDriverClean(partMatch.priority || "běžné"),
+    backgroundAction: mockDriverClean(partMatch.backgroundAction || "diagnostics"),
     assignedToName: "",
     assignedToEmail: "",
     handedOffToPatrikAt: "",
@@ -1600,7 +1615,9 @@ async function createMockDriverPartRequest(user, payload = {}) {
     canceledAt: "",
     canceledByUserId: "",
     note: [
-      mockDriverClean(payload.note || partMatch.note),
+      driverNote ? `Poznámka řidiče: ${driverNote}` : "",
+      mockDriverClean(payload.note),
+      mockDriverClean(partMatch.note),
       canUseUnverifiedPlate ? `SPZ neověřena: ${licensePlateOverrideNote}` : ""
     ].filter(Boolean).join(" "),
     patrikEmailStatus: "not_sent",
@@ -3277,7 +3294,7 @@ async function handleApi(request, response) {
     const confirmed = parameters.confirmed === true || parameters.writeConfirmed === true;
     const partMatch = identifyProbablePartFromDescription(defectDescription);
     if (!confirmed) {
-      const reply = `Rozumím. Chceš nahlásit ${partMatch.probablePart || "náhradní díl"} na vybraném vozidle. Potvrď prosím, že vozidlo sedí, a pošli fotku poškození. Mám to uložit a předat Patrikovi k ověření dílu?`;
+      const reply = `Rozumím. Chceš vytvořit servisní hlášení na vybraném vozidle: ${defectDescription}. Po uložení se díly, ceny a případná zpráva Patrikovi vyřeší na pozadí. Mám hlášení uložit?`;
       sendJson(response, 200, {
         ok: false,
         status: "needs_confirmation",
@@ -3288,11 +3305,12 @@ async function handleApi(request, response) {
         preparedActions: [
           {
             type: "driver_part_request",
-            action: "create_and_handoff",
+            action: "create_service_report",
             requiresConfirmation: true,
             notificationsSent: false,
             parameters: {
               defectDescription,
+              driverNote: parameters.driverNote || parameters.driver_note || parameters.note || "",
               licensePlate,
               vehicleId: resolvedVehicle?.id || "",
               vehicleName: resolvedVehicle?.internalNumber || resolvedVehicle?.model || "",
@@ -3311,6 +3329,7 @@ async function handleApi(request, response) {
       let item = await createMockDriverPartRequest(user, {
         ...parameters,
         defectDescription,
+        driverNote: parameters.driverNote || parameters.driver_note || parameters.note || "",
         licensePlate,
         vehicleId: parameters.vehicleId || resolvedVehicle?.id,
         vehicleName: parameters.vehicleName || resolvedVehicle?.internalNumber || resolvedVehicle?.model,
@@ -3319,19 +3338,22 @@ async function handleApi(request, response) {
         damagePhotoStatus: "requested",
         source: "voice"
       });
-      try {
-        item = await handoffMockDriverPartRequest(user, item.id);
-      } catch (handoffError) {
-        item = findMockDriverRequest(item.id) || item;
-        item.patrikEmailError = handoffError?.message || "Předání Patrikovi čeká na 3 odkazy.";
+      const urgent = item.priority === "urgentní" || item.backgroundAction === "urgent_alert";
+      if (urgent) {
+        item = {
+          ...item,
+          status: "ready_for_patrik",
+          patrikEmailStatus: "queued_mock",
+          updatedAt: new Date().toISOString()
+        };
+        mockDriverPartRequests = mockDriverPartRequests.map((current) => current.id === item.id ? item : current);
       }
-      const handedOff = item.status === "handed_to_ordering";
-      const reply = handedOff
-        ? "Hotovo. Hlášení jsem zapsala a předala Patrikovi k ověření dílu. Nic nebylo automaticky objednáno."
-        : "Hlášení jsem zapsala, ale e-mail Patrikovi čeká na 3 cenové odkazy. Nic nebylo automaticky objednáno.";
+      const reply = urgent
+        ? "Hlášení jsem vytvořila a předávám ho Patrikovi jako urgentní. Nic jsem neobjednala."
+        : "Hlášení jsem vytvořila a předávám ho na servisní kontrolu. Díly a ceny poběží až potom na pozadí.";
       sendJson(response, 200, {
         ok: true,
-        status: handedOff ? "created" : "created_notification_pending",
+        status: "created_notification_pending",
         intent: "driver_part_request",
         reply,
         text: reply,
@@ -3343,9 +3365,13 @@ async function handleApi(request, response) {
           status: item.status,
           licensePlate: item.licensePlate,
           vin: item.vin,
-          probablePart: item.probablePart
+          probablePart: item.probablePart,
+          category: item.category,
+          serviceType: item.serviceType,
+          priority: item.priority
         },
-        notificationsSent: handedOff,
+        notificationsSent: false,
+        priceSearchPending: true,
         apiStatus: "ready"
       });
     } catch (error) {
@@ -3433,15 +3459,10 @@ async function handleApi(request, response) {
 
     try {
       const payload = await readJsonBody(request);
-      let item = await createMockDriverPartRequest(user, payload);
+      const item = await createMockDriverPartRequest(user, payload);
       let warning = "";
       if (payload.handoffAfterCreate) {
-        try {
-          item = await handoffMockDriverPartRequest(user, item.id);
-        } catch (handoffError) {
-          warning = handoffError?.message || "Předání Patrikovi čeká na 3 odkazy.";
-          item = findMockDriverRequest(item.id) || item;
-        }
+        warning = "Hlášení je vytvořené. Následné ověření dílů, cen nebo urgentní zpráva běží mimo hlasový zápis.";
       }
       sendJson(response, 201, {
         request: mockDriverDetail(item, user),

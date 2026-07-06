@@ -3,8 +3,7 @@ import {
   DriverPartRequestsStoreError,
   createDriverPartRequest,
   driverPartRequestPermissionSummary,
-  getDriverPartRequest,
-  handoffDriverPartRequest,
+  processDriverPartRequestAfterVoiceCreate,
   listDriverPartRequests
 } from "../_lib/driver-part-requests-store.js";
 
@@ -46,7 +45,7 @@ export async function onRequestGet({ request, env }) {
   }
 }
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil }) {
   const { user, response } = await requireUserPermission(env, request, "driver-reports", "create");
 
   if (response) {
@@ -55,26 +54,29 @@ export async function onRequestPost({ request, env }) {
 
   try {
     const payload = await readJson(request);
-    let partRequest = await createDriverPartRequest(env, user, payload);
+    const partRequest = await createDriverPartRequest(env, user, payload);
     let handoffWarning = "";
     let handoffCode = "";
     if (payload.handoffAfterCreate === true) {
-      try {
-        partRequest = await handoffDriverPartRequest(env, user, partRequest.id, {
+      if (typeof waitUntil === "function") {
+        waitUntil(processDriverPartRequestAfterVoiceCreate(env, user, partRequest.id, {
           allowCreatorHandoff: true,
           allowProbablePartHandoff: true,
           runPriceBoost: true,
           requireVinPartVerification: true,
           requirePriceOffersForHandoff: true
-        });
-      } catch (handoffError) {
-        handoffWarning = handoffError?.message || "Předání Patrikovi se zatím nepodařilo dokončit.";
-        handoffCode = handoffError?.code || "driver_part_handoff_pending";
-        try {
-          partRequest = await getDriverPartRequest(env, user, partRequest.id);
-        } catch {
-          // The create already succeeded; keep the original item if refresh is unavailable.
-        }
+        }).catch((error) => {
+          console.info("driver_reports.post_create_background_failed", {
+            reportId: partRequest.reportId,
+            code: error?.code || "driver_part_background_failed",
+            message: error?.message
+          });
+        }));
+        handoffWarning = "Hlášení je vytvořené. Následné ověření dílů, cen nebo urgentní zpráva běží na pozadí.";
+        handoffCode = "driver_part_background_scheduled";
+      } else {
+        handoffWarning = "Hlášení je vytvořené. Pozadí se spustí v cloudovém běhu mimo tento požadavek.";
+        handoffCode = "driver_part_background_waituntil_unavailable";
       }
     }
     return json({

@@ -14,6 +14,7 @@ const VEHICLE_BRANDS = new Set(["mercedes", "daf", "man", "jiné"]);
 const PART_VERIFICATION_STATUSES = new Set([
   "waiting_identification",
   "probable_part",
+  "probable_waiting_verification",
   "waiting_manual_verification",
   "verified_daimler",
   "verified_manual",
@@ -26,6 +27,7 @@ const PART_AI_STATUSES = new Set([
   "manual_verification_required",
   "maintenance_or_consumable",
   "ambiguous_fault",
+  "urgent_safety",
   "out_of_pilot",
   "waiting_vin",
   "ready_for_vin_verification",
@@ -162,16 +164,21 @@ function partMatchFromSide(description, config) {
       : "probable_part",
     needsPartSideClarification: Boolean(config.sideAware && side.side === "unknown"),
     needsManualVerification: true,
+    category: config.category || "jasný servisní úkon",
+    serviceType: config.serviceType || config.defectType,
+    priority: config.priority || "běžné",
+    backgroundAction: config.backgroundAction || "parts_search",
     verifiedPart: "",
     partOrderNumber: "",
     note: "Objednací číslo dílu musí ověřit nákup nebo servis podle VIN/katalogu."
   };
 }
 
-function skipPartMatch(reason, message, status = "waiting_manual_verification") {
+function skipPartMatch(reason, message, status = "waiting_manual_verification", options = {}) {
   const maintenance = reason === "maintenance_or_consumable";
+  const urgent = reason === "urgent_safety";
   return {
-    defectType: maintenance ? "běžná údržba / provozní materiál" : "neurčitá závada",
+    defectType: options.defectType || (urgent ? "bezpečnostní problém" : maintenance ? "běžná údržba / provozní materiál" : "neurčitá závada"),
     probablePart: "",
     probablePartBase: "",
     probablePartSide: "unknown",
@@ -184,28 +191,154 @@ function skipPartMatch(reason, message, status = "waiting_manual_verification") 
     aiPartCandidate: false,
     aiSkipReason: reason,
     aiPilotStatus: reason,
+    category: options.category || (urgent ? "bezpečnostní problém" : maintenance ? "jasný servisní úkon" : "nejasná závada"),
+    serviceType: options.serviceType || (urgent ? "urgentní zásah" : maintenance ? "servisní údržba" : "diagnostika"),
+    priority: options.priority || (urgent ? "urgentní" : "běžné"),
+    backgroundAction: options.backgroundAction || (urgent ? "urgent_alert" : maintenance ? "parts_search" : "diagnostics"),
     verifiedPart: "",
     partOrderNumber: "",
     note: message
   };
 }
 
+function clearServiceMatch(description, config) {
+  return {
+    defectType: config.defectType || "servisní údržba",
+    probablePart: config.probablePart,
+    probablePartBase: config.probablePart,
+    probablePartSide: config.probablePartSide || "unknown",
+    probablePartSideLabel: partSideLabel(config.probablePartSide || "unknown"),
+    sideSource: config.sideSource || "",
+    confidence: config.confidence || "high",
+    partIdentificationStatus: config.needsPartSideClarification ? "probable_waiting_verification" : "probable_part",
+    needsPartSideClarification: config.needsPartSideClarification === true,
+    needsManualVerification: true,
+    aiPartCandidate: true,
+    aiSkipReason: "",
+    aiPilotStatus: config.needsPartSideClarification ? "manual_verification_required" : "ready_for_vin_verification",
+    category: "jasný servisní úkon",
+    serviceType: config.serviceType,
+    priority: config.priority || "běžné",
+    backgroundAction: "parts_search",
+    verifiedPart: "",
+    partOrderNumber: "",
+    note: config.note || "Díl musí být ověřený podle VIN a kompatibility. Nic se automaticky neobjedná."
+  };
+}
+
+function axleFromText(normalized) {
+  if (/\b(predni|přední|predek|předek)\b/.test(normalized)) return "přední";
+  if (/\b(zadni|zadní|zadek)\b/.test(normalized)) return "zadní";
+  return "";
+}
+
 export function identifyProbablePartFromDescription(description) {
   const text = cleanString(description);
   const normalized = normalizeText(text);
 
-  if (/\b(servis|udrzba|kontrola|olej|oleje|kapalina|kapaliny|filtr|filtry|zarovka|zarovky|sterac|sterace|steracu|stirac|stirace|stiracu|pneumatika|pneumatiky|guma|gumy|provozni material|adblue)\b/.test(normalized)) {
+  if (/\b(nebrzdi|nebrzdí|spatne brzdi|špatně brzdí|mekky pedal|měkký pedál|kouri se|kouří se|kour z auta|kouř z auta|unika palivo|uniká palivo|tece palivo|teče palivo|tece benzin|teče benzin|tece nafta|teče nafta|nejde rizeni|nejde řízení|praskla pneumatika|prasklá pneumatika|cervena kontrolka|červená kontrolka)\b/.test(normalized)) {
     return skipPartMatch(
-      "maintenance_or_consumable",
-      "AI Boost nespustil hledání, protože jde o běžnou údržbu nebo provozní materiál.",
-      "not_applicable"
+      "urgent_safety",
+      "Urgentní bezpečnostní problém. Nepokračovat v jízdě, dokud Patrik nepotvrdí další postup.",
+      "not_applicable",
+      {
+        category: "bezpečnostní problém",
+        serviceType: "urgentní zásah",
+        priority: "urgentní",
+        backgroundAction: "urgent_alert"
+      }
     );
   }
 
-  if (/\b(neco|něco|piska|píská|vibruje|divne|divně|nejde nastartovat|nestartuje|sviti kontrolka|svítí kontrolka|kontrolka|brzdi divne|brzdí divně|podvozek)\b/.test(normalized)) {
+  if (/\b(olej|oleje|vymena oleje|výměna oleje|motorovy olej|motorový olej)\b/.test(normalized)) {
+    return clearServiceMatch(text, {
+      defectType: "servisní údržba",
+      serviceType: "výměna oleje",
+      probablePart: "motorový olej podle specifikace + olejový filtr",
+      note: "Hledat motorový olej podle specifikace, olejový filtr a vypouštěcí šroub nebo těsnění jen pokud je pro dané auto potřeba."
+    });
+  }
+
+  if (/\b(sterac|sterace|steracu|stirac|stirace|stiracu|stěrač|stěrače|stěračů)\b/.test(normalized)) {
+    return clearServiceMatch(text, {
+      defectType: "servisní údržba",
+      serviceType: "výměna stěračů",
+      probablePart: "přední stěrače",
+      note: "Hledat přední stěrače a zadní stěrač jen pokud dané auto zadní stěrač má."
+    });
+  }
+
+  if (/\b(brzdove desticky|brzdové destičky|desticky|destičky)\b/.test(normalized)) {
+    const axle = axleFromText(normalized);
+    return clearServiceMatch(text, {
+      defectType: "brzdy",
+      serviceType: "výměna brzdových destiček",
+      probablePart: axle ? `${axle} brzdové destičky` : "brzdové destičky",
+      needsPartSideClarification: !axle,
+      note: axle
+        ? "Ověřit kompatibilní brzdové destičky podle VIN a nápravy."
+        : "Potřeba upřesnit přední / zadní nápravu. Pokud lze napovědět z historie auta, označit jen jako návrh, ne jistotu."
+    });
+  }
+
+  if (/\b(brzdove kotouce|brzdové kotouče|kotouc|kotouč|kotouce|kotouče)\b/.test(normalized)) {
+    const axle = axleFromText(normalized);
+    return clearServiceMatch(text, {
+      defectType: "brzdy",
+      serviceType: "výměna brzdových kotoučů",
+      probablePart: axle ? `${axle} brzdové kotouče` : "brzdové kotouče",
+      needsPartSideClarification: !axle,
+      note: axle
+        ? "Ověřit kompatibilní brzdové kotouče podle VIN a nápravy."
+        : "Potřeba upřesnit přední / zadní nápravu. Bez nápravy neposílat jako jistý díl."
+    });
+  }
+
+  if (/\b(zarovka|zarovky|žárovka|žárovky)\b/.test(normalized)) {
+    return clearServiceMatch(text, {
+      defectType: "servisní údržba",
+      serviceType: "výměna žárovky",
+      probablePart: "žárovka",
+      confidence: "medium",
+      note: "Ověřit přesný typ žárovky podle VIN, světla a pozice."
+    });
+  }
+
+  if (/\b(baterie|akumulator|akumulátor)\b/.test(normalized)) {
+    return clearServiceMatch(text, {
+      defectType: "servisní údržba",
+      serviceType: "výměna baterie",
+      probablePart: "autobaterie",
+      confidence: "medium",
+      note: "Ověřit kapacitu, rozměr, polaritu a typ baterie podle VIN."
+    });
+  }
+
+  if (/\b(neco|něco|vrze|vrže|boucha|bouchá|klepe|piska|píská|vibruje|cuka|cuká|divne|divně|nejde nastartovat|nestartuje|spatne startuje|špatně startuje|sviti kontrolka|svítí kontrolka|kontrolka|tece kapalina|teče kapalina|smrdi spojka|smrdí spojka|brzdi divne|brzdí divně|podvozek)\b/.test(normalized)) {
     return skipPartMatch(
       "ambiguous_fault",
-      "AI Boost nespustil hledání, protože hlášení není jednoznačný požadavek na konkrétní díl."
+      "Nelze spolehlivě určit konkrétní díl bez kontroly auta. Čeká na servisní diagnostiku.",
+      "waiting_manual_verification",
+      {
+        category: "nejasná závada",
+        serviceType: "diagnostika",
+        priority: "běžné",
+        backgroundAction: "diagnostics"
+      }
+    );
+  }
+
+  if (/\b(servis|udrzba|údržba|kontrola|kapalina|kapaliny|filtr|filtry|pneumatika|pneumatiky|guma|gumy|provozni material|provozní materiál|adblue)\b/.test(normalized)) {
+    return skipPartMatch(
+      "maintenance_or_consumable",
+      "Jde o obecný servis nebo provozní materiál. Bez přesnějšího požadavku neposílat jako jistý díl.",
+      "not_applicable",
+      {
+        category: "jasný servisní úkon",
+        serviceType: "servisní údržba",
+        priority: "běžné",
+        backgroundAction: "diagnostics"
+      }
     );
   }
 
@@ -307,9 +440,13 @@ export function identifyProbablePartFromDescription(description) {
     aiPartCandidate: false,
     aiSkipReason: "ambiguous_fault",
     aiPilotStatus: "ambiguous_fault",
+    category: "nejasná závada",
+    serviceType: "diagnostika",
+    priority: "běžné",
+    backgroundAction: "diagnostics",
     verifiedPart: "",
     partOrderNumber: "",
-    note: "Díl zatím nebyl bezpečně rozpoznán. Čeká na ruční ověření."
+    note: "Díl zatím nebyl bezpečně rozpoznán. Čeká na servisní diagnostiku."
   };
 }
 
@@ -340,6 +477,7 @@ export function driverPartAiSkipReasonLabel(reason = "") {
   const normalized = cleanString(reason);
   if (normalized === "maintenance_or_consumable") return "běžná údržba / provozní materiál";
   if (normalized === "ambiguous_fault") return "neurčitá závada";
+  if (normalized === "urgent_safety") return "urgentní bezpečnostní problém";
   if (normalized === "out_of_pilot") return "mimo pilot";
   if (normalized === "missing_vin") return "chybí VIN";
   if (normalized === "vehicle_not_verified") return "vozidlo není bezpečně ověřené";
@@ -348,6 +486,14 @@ export function driverPartAiSkipReasonLabel(reason = "") {
 }
 
 export function driverPartRequestInitialStatus(partMatch) {
+  if (partMatch?.backgroundAction === "urgent_alert") {
+    return "ready_for_patrik";
+  }
+
+  if (partMatch?.backgroundAction === "diagnostics") {
+    return "waiting_diagnostics";
+  }
+
   if (!driverPartAiCandidateFromMatch(partMatch)) {
     return "new_report";
   }
@@ -362,14 +508,9 @@ export function driverPartRequestInitialStatus(partMatch) {
 export function driverPartRequestMissingQuestion(input = {}) {
   const description = cleanString(input.description || input.defectDescription || input.speechText);
   const licensePlate = normalizeLicensePlate(input.licensePlate || extractLicensePlate(description));
-  const partMatch = identifyProbablePartFromDescription(description);
 
   if (!licensePlate) {
     return "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
-  }
-
-  if (partMatch.needsPartSideClarification) {
-    return "Je poškozené levé, nebo pravé zrcátko?";
   }
 
   return "";

@@ -597,6 +597,49 @@ export function buildDriverPartOrderEmailPreview(env = {}, request, options = {}
   };
 }
 
+function renderDriverPartUrgentEmail({ request, ctaUrl }) {
+  const vin = cleanString(request.vin) || "není dostupné";
+  const note = cleanString(request.note) || "Bez doplňující poznámky.";
+
+  return `<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart odpady – urgentní servisní hlášení</title>
+</head>
+<body style="margin:0;padding:0;background:#f7f9f4;font-family:'Quicksand',Arial,Helvetica,sans-serif;color:#1f2921;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7f9f4;">
+    <tr>
+      <td align="center" style="padding:42px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:660px;background:#ffffff;border:1px solid #e1e6de;border-radius:16px;box-shadow:0 24px 64px rgba(31,41,33,0.14);overflow:hidden;">
+          <tr>
+            <td style="padding:40px 42px;">
+              <div style="display:inline-block;background:#c2410c;border-radius:14px;padding:12px 24px;color:#ffffff;font-size:28px;line-height:32px;font-weight:700;margin:0 0 34px 0;">URGENTNÍ</div>
+              <h1 style="margin:0 0 12px 0;font-size:34px;line-height:40px;font-weight:800;color:#1f2921;">Urgentní servisní hlášení</h1>
+              <p style="margin:0 0 26px 0;font-size:18px;line-height:28px;font-weight:600;color:#647064;">Patriku, řidič nahlásil bezpečnostní problém. Neposílám to do hledání dílů, čeká to na tvoje rozhodnutí.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;margin:0 0 24px 0;">
+                <tr><td style="padding:20px 22px;font-size:17px;line-height:25px;">
+                  <p style="margin:0 0 10px 0;"><strong>Řidič:</strong> ${htmlEscape(request.driverName || "neuvedeno")}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Auto:</strong> ${htmlEscape(request.vehicleName || request.licensePlate || "neuvedeno")}</p>
+                  <p style="margin:0 0 10px 0;"><strong>SPZ / VIN:</strong> ${htmlEscape(request.licensePlate || "neuvedeno")} / ${htmlEscape(vin)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Problém:</strong> ${htmlEscape(request.defectDescription || "neuvedeno")}</p>
+                  <p style="margin:0;"><strong>Poznámka:</strong> ${htmlEscape(note)}</p>
+                </td></tr>
+              </table>
+              <p style="margin:0 0 24px 0;font-size:16px;line-height:24px;font-weight:700;color:#9a3412;">Doporučení: nepokračovat v jízdě, dokud nepotvrdíš další postup.</p>
+              <a href="${htmlEscape(ctaUrl)}" style="display:block;text-align:center;background:#75bd25;border-radius:14px;padding:18px 24px;color:#ffffff;font-size:18px;line-height:24px;font-weight:800;text-decoration:none;">Otevřít detail hlášení</a>
+              <p style="margin:28px 0 0 0;font-size:13px;line-height:20px;color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export async function logNotification(env, entry) {
   const db = notificationDatabase(env);
   if (!db) {
@@ -995,6 +1038,28 @@ export async function sendDriverPartOrderNotification(env, request, options = {}
     moduleId: "driver-reports",
     relatedEntityType: "driver_part_request",
     messagePreview: `${cleanString(request.licensePlate)} – ${probablePart}`
+  });
+}
+
+export async function sendDriverPartUrgentNotification(env, request, options = {}) {
+  const recipientEmail = cleanString(options.recipientEmail || env.PARTS_PATRIK_EMAIL || env.PARTS_PATRICK_EMAIL || env.PATRICK_PARTS_EMAIL || env.PARTS_ORDER_EMAIL);
+  const recipientName = cleanString(options.recipientName || "Patrik Ištvánek");
+  const subject = `URGENTNÍ servisní hlášení: ${cleanString(request.licensePlate) || "SPZ"} – ${cleanString(request.defectDescription) || "bezpečnostní problém"}`;
+
+  return sendEmail(env, {
+    type: "driver_part_urgent_email",
+    to: recipientEmail,
+    subject,
+    html: renderDriverPartUrgentEmail({
+      request,
+      ctaUrl: driverPartRequestUrl(env, request.id)
+    }),
+    relatedEntityId: request.id,
+    recipientName,
+    fromName: "Smart odpady",
+    moduleId: "driver-reports",
+    relatedEntityType: "driver_part_request",
+    messagePreview: `${cleanString(request.licensePlate)} – urgentní servisní hlášení`
   });
 }
 

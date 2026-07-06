@@ -224,9 +224,10 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "create_driver_part_request",
-    description: "Zapíše potvrzené hlášení náhradního dílu přes KSO backend. Vyžaduje vehicleId z ověřeného seznamu, get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. VehicleId z get_driver_vehicle_picker_selection je KSO UI potvrzení vozidla. Bez potvrzení nic nezapíše ani neodešle.",
+    description: "Zapíše potvrzené servisní hlášení řidiče přes KSO backend. Hlášení se vytvoří hned; dohledání dílů, cen a případná zpráva Patrikovi běží až potom na pozadí. Vyžaduje vehicleId z ověřeného seznamu, get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. VehicleId z get_driver_vehicle_picker_selection je KSO UI potvrzení vozidla. Bez potvrzení nic nezapíše.",
     parameters: [
       { name: "defectDescription", type: "string", required: true },
+      { name: "driverNote", type: "string", required: false },
       { name: "licensePlate", type: "string", required: false },
       { name: "spzManual", type: "string", required: false },
       { name: "spzValidated", type: "boolean", required: false },
@@ -1329,6 +1330,7 @@ export function createElevenLabsClientTools({
     );
     const note = cleanString(parameters.note || parameters.absenceNote || parameters.absence_note || parameters.comment);
     const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
+    const driverNote = cleanString(parameters.driverNote || parameters.driver_note || parameters.note || parameters.comment);
     const text = spokenSummary || [
       `Zapiš ${absenceToolTypeLabel(type)}`,
       employeeName ? `pro ${employeeName}` : "",
@@ -1433,6 +1435,7 @@ export function createElevenLabsClientTools({
     let vehicleBrand = cleanString(parameters.vehicleBrand || parameters.brand);
     let vehicleSelectionSource = cleanString(parameters.vehicleSelectionSource || parameters.vehicle_selection_source);
     const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
+    const driverNote = cleanString(parameters.driverNote || parameters.driver_note || parameters.note || parameters.comment);
     const cachedSelection = resolveDriverVehiclePickerSelection(sessionKey);
     if (!vehicleId && cachedSelection?.vehicleId) {
       vehicleId = cachedSelection.vehicleId;
@@ -1464,6 +1467,7 @@ export function createElevenLabsClientTools({
       intent: "driver_part_request",
       parameters: {
         defectDescription,
+        driverNote,
         licensePlate,
         spzManual: licensePlate || "",
         spzValidated: Boolean(licensePlate),
@@ -1479,6 +1483,7 @@ export function createElevenLabsClientTools({
       context: {
         requestedIntent: "driver_part_request",
         defectDescription,
+        driverNote,
         licensePlate,
         spzManual: licensePlate || "",
         spzValidated: Boolean(licensePlate),
@@ -1558,13 +1563,14 @@ export function createElevenLabsClientTools({
       : null;
     const preparedParameters = preparedAction?.parameters || {};
     const confirmationMessage = [
-      "Šarlota chce vytvořit hlášení náhradního dílu a předat ho Patrikovi k ověření.",
+      "Šarlota chce vytvořit servisní hlášení řidiče.",
       preparedParameters.defectDescription ? `Závada: ${preparedParameters.defectDescription}` : (defectDescription ? `Závada: ${defectDescription}` : ""),
+      preparedParameters.driverNote ? `Poznámka: ${preparedParameters.driverNote}` : (driverNote ? `Poznámka: ${driverNote}` : ""),
       preparedParameters.vehicleId ? "Vozidlo: vybrané v aplikaci" : "",
       preparedParameters.licensePlate ? `SPZ: ${preparedParameters.licensePlate}` : "",
       preparedParameters.vehicleName ? `Vozidlo: ${preparedParameters.vehicleName}` : "",
       preparedParameters.vin ? `VIN: ${preparedParameters.vin}` : (vin ? `VIN: ${vin}` : ""),
-      "Bez potvrzení se nic neuloží ani neodešle."
+      "Dohledání dílů, cen a případná zpráva Patrikovi poběží až po uložení na pozadí."
     ].filter(Boolean).join("\n");
     const selectedByKsoPicker = cachedSelection?.vehicleId &&
       cleanString(preparedParameters.vehicleId || vehicleId) === cachedSelection.vehicleId &&
@@ -1574,7 +1580,7 @@ export function createElevenLabsClientTools({
       : await confirm({
         title: "Potvrdit hlášení řidiče",
         message: confirmationMessage,
-        confirmLabel: "Uložit a předat",
+        confirmLabel: "Uložit hlášení",
         cancelLabel: "Zrušit"
       });
 
