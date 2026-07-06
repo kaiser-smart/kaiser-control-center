@@ -277,7 +277,8 @@ Dodavatel
     const request = payload.GetPageParam || {};
     const rowsByEntity = {
       Company: [],
-      Directory: [{ Id: "D1", Name: "Adresář Alfa s.r.o.", ICO: "12345678" }],
+      Directory: [],
+      Contract: [{ Id: "K1", ContractNumber: "S001", Directory_FK_RecordId: "D1", Directory_FK_Caption: "Smluvní Alfa s.r.o." }],
       InvoiceIssued: [],
       Invoice: [{ Id: "I1", Number: "2601101477", Directory_FK_RecordId: "D1", DueDate: "2026-06-14", TotalAmount: "1210" }]
     };
@@ -300,12 +301,13 @@ Dodavatel
       VISTOS_API_PASSWORD: "secret"
     }, { pageSize: 5, maxPages: 1 });
     assert.equal(preview.apiStatus, "ready");
-    assert.equal(preview.diagnostics.companyEntity, "Directory");
+    assert.equal(preview.diagnostics.companyEntity, "Contract");
     assert.equal(preview.diagnostics.invoiceEntity, "Invoice");
-    assert.equal(preview.companies[0].companyName, "Adresář Alfa s.r.o.");
+    assert.equal(preview.companies[0].companyName, "Smluvní Alfa s.r.o.");
     assert.equal(preview.invoices[0].invoiceNumber, "2601101477");
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Company"));
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Directory"));
+    assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));
   } finally {
     globalThis.fetch = originalFetch;
   }

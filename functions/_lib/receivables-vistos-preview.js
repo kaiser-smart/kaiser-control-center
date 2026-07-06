@@ -26,6 +26,10 @@ const COMPANY_ATTEMPTS = [
   {
     entityName: "Directory",
     columns: ["Id", "Name"]
+  },
+  {
+    entityName: "Contract",
+    columns: ["Id", "ContractNumber", "Name", "Directory_FK", "DirectoryBranch_FK", "Sidlo_FK"]
   }
 ];
 
@@ -168,8 +172,8 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
 
 export function mapReceivablesVistosCompany(row = {}) {
   return {
-    vistoCompanyId: firstValue(row, ["Id", "CompanyId", "DirectoryId"]),
-    companyName: firstValue(row, ["Name", "Caption", "CompanyName", "ObchodniNazev"]),
+    vistoCompanyId: recordId(row, "Directory_FK") || recordId(row, "Sidlo_FK") || firstValue(row, ["Id", "CompanyId", "DirectoryId"]),
+    companyName: caption(row, "Directory_FK") || caption(row, "Sidlo_FK") || firstValue(row, ["Name", "Caption", "CompanyName", "ObchodniNazev"]),
     ico: compactDigits(firstValue(row, ["ICO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"])),
     dic: firstValue(row, ["DIC", "Dic", "VAT", "VatId"]),
     contactEmail: firstValue(row, ["Email", "E-mail", "ContactEmail", "InvoiceEmail"]),
@@ -230,6 +234,20 @@ function issueCounts(items, issueGetter) {
   return [...counts.entries()].map(([code, count]) => ({ code, count }));
 }
 
+function uniqueCompanies(companies) {
+  const seen = new Set();
+  const unique = [];
+  for (const company of companies) {
+    const key = company.vistoCompanyId || company.companyName.toLowerCase();
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(company);
+  }
+  return unique;
+}
+
 export async function createReceivablesVistosPreview(env, options = {}) {
   if (!isVistosExecuteConfigured(env)) {
     return {
@@ -273,7 +291,8 @@ export async function createReceivablesVistosPreview(env, options = {}) {
     })
   ]);
 
-  const companies = companyResult.page.rows.slice(0, RECEIVABLES_VISTOS_PREVIEW_LIMIT).map(mapReceivablesVistosCompany);
+  const companies = uniqueCompanies(companyResult.page.rows.map(mapReceivablesVistosCompany))
+    .slice(0, RECEIVABLES_VISTOS_PREVIEW_LIMIT);
   const invoices = invoiceResult.page.rows.slice(0, RECEIVABLES_VISTOS_INVOICE_PREVIEW_LIMIT).map(mapReceivablesVistosInvoice);
   const issues = [
     ...issueCounts(companies, companyIssues).map((issue) => ({ ...issue, scope: "companies" })),
