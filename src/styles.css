@@ -26411,6 +26411,19 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --sidebar-item-padding: 7px;
   --sidebar-item-gap: 12px;
   --sidebar-transition: 240ms ease;
+  --sidebar-link-color: var(--tracking-graphite);
+  --sidebar-link-hover-color: var(--brand-accent);
+  --sidebar-link-active-color: var(--brand-accent);
+  --sidebar-link-bg: color-mix(in srgb, var(--surface-inset) 48%, transparent);
+  --sidebar-link-hover-bg: color-mix(in srgb, var(--brand-accent) 7%, var(--surface-inset));
+  --sidebar-link-active-bg: color-mix(in srgb, var(--brand-accent) 11%, var(--surface-inset));
+  --sidebar-link-border: color-mix(in srgb, var(--border-soft) 72%, transparent);
+  --sidebar-link-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
+  --sidebar-link-active-border: var(--state-success-border);
+  --sidebar-tray-shadow: var(--shadow-inset-control);
+  --sidebar-tray-hover-shadow: var(--shadow-inset-control);
+  --sidebar-tray-active-shadow: var(--shadow-inset-control);
+  --sidebar-icon-holder-shadow: var(--shadow-control);
   --icon-sm: 21px;
   --icon-md: 28px;
   --icon-lg: 36px;
@@ -26520,6 +26533,15 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --state-neutral-text: var(--tracking-graphite);
   --tracking-accent-soft: var(--state-success-bg);
   --tracking-accent-border: var(--state-success-border);
+  --sidebar-link-color: var(--text-muted);
+  --sidebar-link-hover-color: var(--state-success-text);
+  --sidebar-link-active-color: var(--state-success-text);
+  --sidebar-link-bg: color-mix(in srgb, var(--surface-inset) 76%, rgba(177, 194, 207, 0.018));
+  --sidebar-link-hover-bg: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-inset));
+  --sidebar-link-active-bg: color-mix(in srgb, var(--brand-accent) 13%, var(--surface-inset));
+  --sidebar-link-border: color-mix(in srgb, var(--border-soft) 74%, transparent);
+  --sidebar-link-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
+  --sidebar-link-active-border: var(--state-success-border);
   --icon-green: #91d64c;
   --icon-teal: #7fb7bd;
   --icon-bluegrey: #a8bac7;
@@ -26668,8 +26690,11 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   grid-template-columns: var(--sidebar-icon-holder) minmax(0, 1fr);
   min-height: var(--sidebar-item-height);
   gap: var(--sidebar-item-gap);
-  border: 1px solid transparent;
+  border: 1px solid var(--sidebar-link-border);
+  background: var(--sidebar-link-bg);
   padding: var(--sidebar-item-padding);
+  color: var(--sidebar-link-color);
+  box-shadow: var(--sidebar-tray-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-sidebar__head,
@@ -26713,7 +26738,23 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   white-space: nowrap;
 }
 
-.tracking-page--soft-metal-preview .tracking-preview-nav-item:hover,
+.tracking-page--soft-metal-preview .tracking-preview-nav-item:hover {
+  border-color: var(--sidebar-link-hover-border);
+  background: var(--sidebar-link-hover-bg);
+  box-shadow: var(--sidebar-tray-hover-shadow);
+  color: var(--sidebar-link-hover-color);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-item:hover .tracking-preview-nav-item__icon {
+  --icon-color: var(--sidebar-link-hover-color);
+  --icon-border: color-mix(in srgb, var(--sidebar-link-hover-color) 28%, var(--border-soft));
+  --icon-filter: var(--icon-filter-brand);
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-item:hover .tracking-preview-nav-item__icon .theme-icon-img {
+  opacity: var(--icon-opacity-active);
+}
+
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand:hover,
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle:hover {
   border-color: color-mix(in srgb, var(--icon-bluegrey) 24%, var(--border-soft));
@@ -26723,10 +26764,10 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item--active,
 .tracking-page--soft-metal-preview .tracking-preview-nav-item[aria-current="page"] {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  box-shadow: var(--shadow-control-active);
-  color: var(--state-success-text);
+  border-color: var(--sidebar-link-active-border);
+  background: var(--sidebar-link-active-bg);
+  box-shadow: var(--sidebar-tray-active-shadow);
+  color: var(--sidebar-link-active-color);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-text,
@@ -26818,7 +26859,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   border: 1px solid var(--icon-border, var(--border-soft));
   background: var(--icon-bg, var(--surface-raised));
   color: var(--icon-color, var(--tracking-graphite));
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--sidebar-icon-holder-shadow, var(--shadow-control));
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-mark,
@@ -26852,9 +26893,11 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item--active .tracking-preview-nav-item__icon,
 .tracking-page--soft-metal-preview .tracking-preview-nav-item[aria-current="page"] .tracking-preview-nav-item__icon {
-  --icon-color: var(--brand-accent);
-  --icon-border: var(--state-success-border);
+  --icon-color: var(--sidebar-link-active-color);
+  --icon-border: var(--sidebar-link-active-border);
   --icon-filter: var(--icon-filter-brand);
+  color: var(--sidebar-link-active-color);
+  box-shadow: var(--sidebar-icon-holder-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item--active .tracking-preview-nav-item__icon .theme-icon-img,
@@ -27126,6 +27169,10 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-nav-item__label {
+  color: inherit;
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-role-chip {
@@ -27690,6 +27737,11 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-sidebar {
+    width: var(--sidebar-width-compact);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--expanded,
+  .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact {
     width: var(--sidebar-width-compact);
   }
 
