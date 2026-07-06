@@ -628,6 +628,132 @@ Dodavatel
 
 {
   const mock = mockVistosFetch({
+    __schema: {
+      DirectoryWithBranch: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Name", LocalizationString: "Název" },
+          { ColumnName: "Parent_FK", LocalizationString: "Rodič" },
+          { ColumnName: "RegNumber", LocalizationString: "IČO" },
+          { ColumnName: "VATNumber", LocalizationString: "DIČ" },
+          { ColumnName: "EmailInvoicing", LocalizationString: "Fakturační e-mail" },
+          { ColumnName: "InvoiceDueDays", LocalizationString: "Splatnost" }
+        ]
+      },
+      Directory: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Name", LocalizationString: "Název" },
+          { ColumnName: "EmailInvoicing", LocalizationString: "Fakturační e-mail" }
+        ]
+      },
+      Company: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Name", LocalizationString: "Název" },
+          { ColumnName: "RegNumber", LocalizationString: "IČO" }
+        ]
+      },
+      ContactList: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Name", LocalizationString: "Název" }
+        ]
+      },
+      ContactListRow: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Directory_FK", LocalizationString: "Firma" },
+          { ColumnName: "Email1", LocalizationString: "E-mail" }
+        ]
+      }
+    },
+    DbObject: [
+      { Id: "49", Name: "Directory", Caption: "Adresář" },
+      { Id: "121", Name: "ContactList", Caption: "Seznam kontaktů" },
+      { Id: "122", Name: "ContactListRow", Caption: "Řádek kontaktu" },
+      { Id: "301", Name: "DirectoryWithBranch", Caption: "Firmy a pobočky" },
+      { Id: "401", Name: "Company", Caption: "Seznam Adresářů" }
+    ],
+    DbColumn: [
+      { Id: "1", DbObject_FK: "301", ColumnName: "RegNumber", Caption: "IČO" },
+      { Id: "2", DbObject_FK: "301", ColumnName: "VATNumber", Caption: "DIČ" },
+      { Id: "3", DbObject_FK: "301", ColumnName: "EmailInvoicing", Caption: "Fakturační e-mail" },
+      { Id: "4", DbObject_FK: "301", ColumnName: "InvoiceDueDays", Caption: "Splatnost" },
+      { Id: "5", DbObject_FK: "122", ColumnName: "Directory_FK", Caption: "Firma" },
+      { Id: "6", DbObject_FK: "122", ColumnName: "Email1", Caption: "E-mail" }
+    ],
+    DirectoryWithBranch: [{
+      Id: "BR1",
+      Name: "Firma Alfa Brno",
+      Parent_FK_RecordId: "C123",
+      Parent_FK_Caption: "Firma Alfa s.r.o. - 12345678",
+      RegNumber: "12345678",
+      VATNumber: "CZ12345678",
+      EmailInvoicing: "fakturace@firma.cz",
+      InvoiceDueDays: "21"
+    }],
+    Company: [],
+    Directory: [],
+    Customer: [],
+    CustomerBranch: [],
+    CompanyBranch: [],
+    Partner: [],
+    AddressBook: [],
+    Contract: [{
+      Id: "K1",
+      ContractNumber: "S001",
+      Directory_FK_RecordId: "C123",
+      Directory_FK_Caption: "Firma Alfa s.r.o. - 12345678",
+      DirectoryBranch_FK_RecordId: "BR1",
+      DirectoryBranch_FK_Caption: "Firma Alfa Brno"
+    }],
+    InvoiceIssued: [{
+      Id: "I123",
+      InvoiceNumber: "2601101477",
+      BankReference2: "2601101477",
+      Customer_FK_RecordId: "C123",
+      Customer_FK_Caption: "Firma Alfa s.r.o.",
+      CustomerBranch_FK_RecordId: "BR1",
+      CustomerBranch_FK_Caption: "Firma Alfa Brno",
+      CustomerRegNumber: "12345678",
+      CustomerVatNumber: "CZ12345678",
+      IssuedDate: "2026-06-01",
+      DueDate: "2026-06-14",
+      PriceWithTax: "1210",
+      AmountPaid: "0",
+      RemainToPay: "1210"
+    }]
+  });
+  try {
+    const preview = await createReceivablesLedgerReadinessPreview({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "test-password"
+    }, { pageSize: 10, maxPages: 1, maxColumnsPerEntity: 20 });
+    assert.equal(preview.metadataResolver.enabled, true);
+    assert.equal(preview.metadataResolver.generatedCompanyAttempts >= 2, true);
+    assert.equal(preview.metadataResolver.entityName, "DirectoryWithBranch");
+    assert.equal(preview.metadataResolver.matchedCompanies >= 1, true);
+    assert.equal(preview.contactMetadata.contactListDbObjectId, "121");
+    assert.equal(preview.contactMetadata.contactListRowDbObjectId, "122");
+    assert.equal(preview.contactMetadata.canUseForCustomerCommunication, false);
+    assert.equal(preview.resolvedInvoices[0].confidence, "HIGH");
+    assert.equal(preview.writesD1, false);
+    assert.equal(preview.createsReceivableRecords, false);
+    assert.equal(preview.sendsCustomerCommunication, false);
+    assert.equal(preview.calculatesRealRating, false);
+    assert.equal(preview.importsKbPayments, false);
+    assert.ok(mock.calls.some((call) => call.methodName === "GetSchemaEntity"));
+    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "DbObject"));
+    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "DbColumn"));
+  } finally {
+    mock.restore();
+  }
+}
+
+{
+  const mock = mockVistosFetch({
     Contract: [{
       Id: "K1",
       ContractNumber: "S001",

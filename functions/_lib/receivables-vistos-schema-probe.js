@@ -509,52 +509,51 @@ function buildRecommendedNextStep(entitySummaries = [], dbObjectMatches = []) {
   };
 }
 
-export async function createReceivablesVistosSchemaProbe(env, options = {}) {
-  const normalizedOptions = previewOptions(options);
-  if (!isVistosExecuteConfigured(env)) {
-    return {
-      apiStatus: "not_configured",
-      message: VISTOS_NOT_CONFIGURED_MESSAGE,
-      readOnly: true,
-      writesD1: false,
-      createsReceivableRecords: false,
-      sendsCustomerCommunication: false,
-      startsAutomation: false,
-      calculatesRealRating: false,
-      importsKbPayments: false,
-      createsLegalPackages: false,
-      targetEntities: VISTOS_RECEIVABLES_SCHEMA_TARGET_ENTITIES,
-      schemaEntityAttempts: [],
-      dbObjectProbe: {
-        ok: false,
-        rowsLoaded: 0,
-        matchedObjects: [],
-        diagnostics: []
-      },
-      dbColumnProbe: {
-        columnsByEntity: []
-      },
-      entitySummaries: [],
-      summary: {
-        dbObjectsLoaded: 0,
-        matchedObjects: 0,
-        entitiesWithSchema: 0,
-        entitiesWithDbColumns: 0,
-        entitiesWithBillingEmailCandidate: 0,
-        entitiesWithPhoneCandidate: 0,
-        entitiesWithDueDaysCandidate: 0
-      },
-      readiness: {
-        metadataProbeUsable: false,
-        blockingReasons: ["VISTOS_NOT_CONFIGURED"],
-        recommendedNextStep: "Nastavit Vistos API secrets a znovu spustit read-only schema probe."
-      },
-      previewLimits: normalizedOptions,
-      loadedAt: new Date().toISOString()
-    };
-  }
+function notConfiguredSchemaProbe(normalizedOptions) {
+  return {
+    apiStatus: "not_configured",
+    message: VISTOS_NOT_CONFIGURED_MESSAGE,
+    readOnly: true,
+    writesD1: false,
+    createsReceivableRecords: false,
+    sendsCustomerCommunication: false,
+    startsAutomation: false,
+    calculatesRealRating: false,
+    importsKbPayments: false,
+    createsLegalPackages: false,
+    targetEntities: VISTOS_RECEIVABLES_SCHEMA_TARGET_ENTITIES,
+    schemaEntityAttempts: [],
+    dbObjectProbe: {
+      ok: false,
+      rowsLoaded: 0,
+      matchedObjects: [],
+      diagnostics: []
+    },
+    dbColumnProbe: {
+      columnsByEntity: []
+    },
+    entitySummaries: [],
+    summary: {
+      dbObjectsLoaded: 0,
+      matchedObjects: 0,
+      entitiesWithSchema: 0,
+      entitiesWithDbColumns: 0,
+      entitiesWithBillingEmailCandidate: 0,
+      entitiesWithPhoneCandidate: 0,
+      entitiesWithDueDaysCandidate: 0
+    },
+    readiness: {
+      metadataProbeUsable: false,
+      blockingReasons: ["VISTOS_NOT_CONFIGURED"],
+      recommendedNextStep: "Nastavit Vistos API secrets a znovu spustit read-only schema probe."
+    },
+    previewLimits: normalizedOptions,
+    loadedAt: new Date().toISOString()
+  };
+}
 
-  const session = await loginVistosExecute(env);
+export async function createReceivablesVistosSchemaProbeFromSession(env, session, options = {}) {
+  const normalizedOptions = previewOptions(options);
   const schemaEntityAttempts = [];
   for (const entityName of VISTOS_RECEIVABLES_SCHEMA_TARGET_ENTITIES) {
     schemaEntityAttempts.push(await probeSchemaEntity(env, session, entityName, normalizedOptions));
@@ -630,6 +629,16 @@ export async function createReceivablesVistosSchemaProbe(env, options = {}) {
     previewLimits: normalizedOptions,
     loadedAt: new Date().toISOString()
   };
+}
+
+export async function createReceivablesVistosSchemaProbe(env, options = {}) {
+  const normalizedOptions = previewOptions(options);
+  if (!isVistosExecuteConfigured(env)) {
+    return notConfiguredSchemaProbe(normalizedOptions);
+  }
+
+  const session = await loginVistosExecute(env);
+  return createReceivablesVistosSchemaProbeFromSession(env, session, normalizedOptions);
 }
 
 export function receivablesVistosSchemaProbeError(error) {

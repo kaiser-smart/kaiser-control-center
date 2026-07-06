@@ -23815,11 +23815,28 @@ function receivablesLedgerReadinessDiagnostics(preview) {
   const readiness = preview.ledgerReadiness || {};
   const diagnostics = preview.diagnostics || {};
   const enrichment = preview.companyEnrichment || {};
+  const metadataResolver = preview.metadataResolver || {};
+  const contactMetadata = preview.contactMetadata || {};
   const detailProbe = preview.companyDetailProbe || {};
   const enrichmentAttempts = diagnostics.companyEnrichmentAttempts || [];
+  const metadataAttempts = diagnostics.metadataCompanyAttempts || [];
   const detailAttempts = diagnostics.companyDetailAttempts || [];
   const enrichmentAttemptSummary = enrichmentAttempts
     .map((attempt) => `${attempt.entityName || "-"}:${attempt.ok ? `${attempt.returnedRows ?? 0}/${attempt.recordsTotal ?? 0}` : attempt.code || "chyba"}`)
+    .join(" | ");
+  const metadataAttemptSummary = metadataAttempts
+    .map((attempt) => `${attempt.entityName || "-"}:${attempt.ok ? `${attempt.returnedRows ?? 0}/${attempt.recordsTotal ?? 0}` : attempt.code || "chyba"}`)
+    .join(" | ");
+  const metadataCandidateSummary = (metadataResolver.candidateEntities || [])
+    .map((entity) => {
+      const useful = [
+        entity.ico?.length ? `IČO ${entity.ico.join("/")}` : "",
+        entity.dic?.length ? `DIČ ${entity.dic.join("/")}` : "",
+        entity.billingEmail?.length ? `fakturace ${entity.billingEmail.join("/")}` : "",
+        entity.standardDueDays?.length ? `splatnost ${entity.standardDueDays.join("/")}` : ""
+      ].filter(Boolean).join(", ");
+      return `${entity.entityName}: ${useful || "bez kandidátů"}`;
+    })
     .join(" | ");
   const detailAttemptSummary = detailAttempts
     .map((attempt) => {
@@ -23871,6 +23888,33 @@ function receivablesLedgerReadinessDiagnostics(preview) {
           <div><dt>Sloupce</dt><dd>${escapeHtml((diagnostics.companyEnrichmentColumns || []).join(", ") || "-")}</dd></div>
           <div><dt>Klíče ve vzorku</dt><dd>${escapeHtml((diagnostics.companyEnrichmentKeys || []).slice(0, 16).join(", ") || "-")}</dd></div>
           <div><dt>Zkoušené entity</dt><dd>${escapeHtml(enrichmentAttemptSummary || "-")}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Metadata-aware resolver</h3>
+        <dl class="receivables-diagnostics-list">
+          <div><dt>Schema probe</dt><dd>${metadataResolver.enabled ? "aktivní read-only" : "-"}</dd></div>
+          <div><dt>Metadata použitelná</dt><dd>${metadataResolver.metadataProbeUsable ? "ano" : "zatím ne"}</dd></div>
+          <div><dt>Schema entit OK</dt><dd>${escapeHtml(metadataResolver.schemaEntitiesOk ?? 0)}</dd></div>
+          <div><dt>DbObject načteno</dt><dd>${escapeHtml(metadataResolver.dbObjectsLoaded ?? 0)}</dd></div>
+          <div><dt>Generované pokusy</dt><dd>${escapeHtml(metadataResolver.generatedCompanyAttempts ?? 0)}</dd></div>
+          <div><dt>Entita</dt><dd>${escapeHtml(metadataResolver.entityName || "-")}</dd></div>
+          <div><dt>Sada</dt><dd>${escapeHtml(metadataResolver.attemptKey || "-")}</dd></div>
+          <div><dt>Načteno</dt><dd>${escapeHtml(metadataResolver.loadedRows ?? 0)} / ${escapeHtml(metadataResolver.totalRows ?? 0)}</dd></div>
+          <div><dt>Spárováno na vazbu</dt><dd>${escapeHtml(metadataResolver.matchedCompanies ?? 0)}</dd></div>
+          <div><dt>Kandidáti polí</dt><dd>${escapeHtml(metadataCandidateSummary || "-")}</dd></div>
+          <div><dt>Zkoušené metadata entity</dt><dd>${escapeHtml(metadataAttemptSummary || "-")}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Kontaktní metadata</h3>
+        <dl class="receivables-diagnostics-list">
+          <div><dt>ContactList DbObject</dt><dd>${escapeHtml(contactMetadata.contactListDbObjectId || "-")}</dd></div>
+          <div><dt>ContactListRow DbObject</dt><dd>${escapeHtml(contactMetadata.contactListRowDbObjectId || "-")}</dd></div>
+          <div><dt>E-mail kandidáti</dt><dd>${escapeHtml((contactMetadata.emailCandidates || []).join(", ") || "-")}</dd></div>
+          <div><dt>Vazba na firmu</dt><dd>${escapeHtml((contactMetadata.companyLinkCandidates || []).join(", ") || "-")}</dd></div>
+          <div><dt>Použít pro komunikaci</dt><dd>${contactMetadata.canUseForCustomerCommunication ? "ano" : "ne"}</dd></div>
+          <div><dt>Důvod</dt><dd>${escapeHtml(contactMetadata.reason || "-")}</dd></div>
         </dl>
       </section>
       <section>

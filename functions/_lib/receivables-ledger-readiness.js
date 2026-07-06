@@ -7,6 +7,7 @@ import {
   loginVistosExecute
 } from "./vistos-execute-client.js";
 import { mapReceivablesVistosInvoice } from "./receivables-vistos-preview.js";
+import { createReceivablesVistosSchemaProbeFromSession } from "./receivables-vistos-schema-probe.js";
 
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 const DEFAULT_PAGE_SIZE = 250;
@@ -282,6 +283,78 @@ const RECEIVABLES_INVOICE_ATTEMPTS = [
   { key: "kaiser_invoice_columns", entityName: "IssuedInvoice", columns: INVOICE_COLUMNS }
 ];
 
+const METADATA_COMPANY_ENTITY_ATTEMPTS = [
+  {
+    key: "metadata_directory_with_branch",
+    entityName: "DirectoryWithBranch",
+    columns: [
+      "Id",
+      "Name",
+      "Caption",
+      "Parent_FK",
+      "RegNumber",
+      "VATNumber",
+      "EmailInvoicing",
+      "InvoiceEmail",
+      "BillingEmail",
+      "Email",
+      "Phone",
+      "PhoneNumber",
+      "Mobile",
+      "InvoiceDueDays",
+      "StandardDueDays",
+      "Status_FK"
+    ]
+  },
+  {
+    key: "metadata_directory",
+    entityName: "Directory",
+    columns: [
+      "Id",
+      "Name",
+      "Caption",
+      "Parent_FK",
+      "RegNumber",
+      "VATNumber",
+      "ICO",
+      "DIC",
+      "EmailInvoicing",
+      "InvoiceEmail",
+      "BillingEmail",
+      "Email",
+      "Phone",
+      "PhoneNumber",
+      "Mobile",
+      "InvoiceDueDays",
+      "StandardDueDays",
+      "Status_FK"
+    ]
+  },
+  {
+    key: "metadata_company",
+    entityName: "Company",
+    columns: [
+      "Id",
+      "Name",
+      "Caption",
+      "RegNumber",
+      "VATNumber",
+      "ICO",
+      "DIC",
+      "EmailInvoicing",
+      "InvoiceEmail",
+      "BillingEmail",
+      "Email",
+      "Phone",
+      "PhoneNumber",
+      "Mobile",
+      "InvoiceDueDays",
+      "StandardDueDays",
+      "Status_FK"
+    ]
+  }
+];
+
 export const RECEIVABLES_LEDGER_FLAGS = {
   MISSING_COMPANY_ENTITY: "MISSING_COMPANY_ENTITY",
   MISSING_CUSTOMER_FK: "MISSING_CUSTOMER_FK",
@@ -382,6 +455,194 @@ function hasAnyValue(row, keys) {
 
 function sampleKeys(rows) {
   return [...new Set(rows.flatMap((row) => Object.keys(row || {})))].slice(0, 80);
+}
+
+function uniqueValues(values = []) {
+  const seen = new Set();
+  const result = [];
+  for (const value of values) {
+    const cleaned = clean(value);
+    const key = cleaned.toLowerCase();
+    if (!cleaned || seen.has(key)) continue;
+    seen.add(key);
+    result.push(cleaned);
+  }
+  return result;
+}
+
+function schemaSummaryForEntity(schemaProbe, entityName) {
+  return (schemaProbe?.entitySummaries || []).find((item) => item.entityName === entityName) || null;
+}
+
+function schemaCandidateColumns(summary) {
+  const candidates = summary?.candidates || {};
+  return uniqueValues([
+    ...(candidates.stableId || []),
+    ...(candidates.companyName || []),
+    ...(candidates.branchName || []),
+    ...(candidates.parent || []),
+    ...(candidates.ico || []),
+    ...(candidates.dic || []),
+    ...(candidates.billingEmail || []),
+    ...(candidates.email || []),
+    ...(candidates.phone || []),
+    ...(candidates.standardDueDays || [])
+  ]);
+}
+
+function knownSchemaFieldNames(summary) {
+  return new Set((summary?.fields || [])
+    .map((field) => clean(field?.name || field?.caption))
+    .filter(Boolean)
+    .map((field) => field.toLowerCase()));
+}
+
+function metadataAttemptColumns(summary, fallbackColumns = []) {
+  if (!summary?.schemaOk && !summary?.dbColumnOk) return [];
+  const knownNames = knownSchemaFieldNames(summary);
+  const candidateColumns = schemaCandidateColumns(summary);
+  const knownFallbackColumns = fallbackColumns.filter((column) => {
+    if (!knownNames.size) return false;
+    return knownNames.has(clean(column).toLowerCase());
+  });
+  const metadataColumns = uniqueValues([
+    ...candidateColumns,
+    ...knownFallbackColumns
+  ]);
+  if (!metadataColumns.length) return [];
+  return uniqueValues([
+    ...metadataColumns,
+    "Id",
+    "Name",
+    "Caption"
+  ]).slice(0, 36);
+}
+
+function buildMetadataCompanyAttempts(schemaProbe) {
+  if (schemaProbe?.apiStatus !== "ready") return [];
+  return METADATA_COMPANY_ENTITY_ATTEMPTS
+    .map((attempt) => {
+      const summary = schemaSummaryForEntity(schemaProbe, attempt.entityName);
+      const columns = metadataAttemptColumns(summary, attempt.columns);
+      if (!columns.length) return null;
+      return {
+        key: attempt.key,
+        entityName: attempt.entityName,
+        columns
+      };
+    })
+    .filter(Boolean);
+}
+
+function emptyWorkingResult() {
+  return {
+    key: "",
+    entityName: "",
+    columns: [],
+    page: { rows: [], total: 0, filtered: 0, capped: false },
+    diagnostics: []
+  };
+}
+
+function metadataProbeFailure(error) {
+  return {
+    apiStatus: "waiting",
+    message: "Vistos metadata probe se nepodařilo načíst v rámci ledger preview. Ledger preview pokračuje jen se statickými read-only pokusy.",
+    error: clean(error?.message).slice(0, 240) || "Neznámá chyba metadata probe.",
+    readOnly: true,
+    writesD1: false,
+    createsReceivableRecords: false,
+    sendsCustomerCommunication: false,
+    startsAutomation: false,
+    calculatesRealRating: false,
+    importsKbPayments: false,
+    createsLegalPackages: false,
+    entitySummaries: [],
+    summary: {},
+    readiness: {
+      metadataProbeUsable: false,
+      blockingReasons: ["METADATA_PROBE_FAILED"],
+      recommendedNextStep: "Nejdřív ověřit schema/metadata probe samostatně, potom znovu spustit ledger preview."
+    }
+  };
+}
+
+async function loadLedgerMetadataProbe(env, session, options = {}) {
+  try {
+    return await createReceivablesVistosSchemaProbeFromSession(env, session, {
+      pageSize: Math.min(Number(options.metadataPageSize) || 200, 500),
+      maxPages: 1,
+      maxColumnsPerEntity: Math.min(Number(options.maxColumnsPerEntity) || 120, 180)
+    });
+  } catch (error) {
+    return metadataProbeFailure(error);
+  }
+}
+
+function metadataEntityCandidateSummary(schemaProbe, entityName) {
+  const summary = schemaSummaryForEntity(schemaProbe, entityName);
+  const candidates = summary?.candidates || {};
+  return {
+    entityName,
+    schemaOk: Boolean(summary?.schemaOk),
+    dbColumnOk: Boolean(summary?.dbColumnOk),
+    dbObjectId: summary?.dbObjectId || "",
+    ico: candidates.ico || [],
+    dic: candidates.dic || [],
+    billingEmail: candidates.billingEmail || [],
+    email: candidates.email || [],
+    phone: candidates.phone || [],
+    standardDueDays: candidates.standardDueDays || [],
+    parent: candidates.parent || [],
+    blocking: summary?.blocking || []
+  };
+}
+
+function buildMetadataResolverSummary(schemaProbe, metadataAttempts, metadataResult, metadataEnrichment) {
+  return {
+    enabled: schemaProbe?.apiStatus === "ready",
+    metadataProbeUsable: Boolean(schemaProbe?.readiness?.metadataProbeUsable),
+    schemaEntitiesOk: schemaProbe?.summary?.entitiesWithSchema || 0,
+    dbObjectsLoaded: schemaProbe?.summary?.dbObjectsLoaded || 0,
+    matchedDbObjects: schemaProbe?.summary?.matchedObjects || 0,
+    generatedCompanyAttempts: metadataAttempts.length,
+    entityName: metadataResult?.entityName || "",
+    attemptKey: metadataResult?.key || "",
+    loadedRows: metadataResult?.page?.rows?.length || 0,
+    totalRows: metadataResult?.page?.total || metadataResult?.page?.rows?.length || 0,
+    capped: Boolean(metadataResult?.page?.capped),
+    matchedCompanies: metadataEnrichment?.matchedCompanies || 0,
+    candidateEntities: ["DirectoryWithBranch", "Directory", "Company"].map((entityName) => (
+      metadataEntityCandidateSummary(schemaProbe, entityName)
+    )),
+    blockingReasons: schemaProbe?.readiness?.blockingReasons || [],
+    recommendedNextStep: schemaProbe?.readiness?.recommendedNextStep || ""
+  };
+}
+
+function dbObjectMatch(schemaProbe, entityName) {
+  return (schemaProbe?.dbObjectProbe?.matchedObjects || []).find((item) => item.entityName === entityName) || null;
+}
+
+function buildContactMetadataSummary(schemaProbe) {
+  const contactList = schemaSummaryForEntity(schemaProbe, "ContactList");
+  const contactListRow = schemaSummaryForEntity(schemaProbe, "ContactListRow");
+  const contact = schemaSummaryForEntity(schemaProbe, "Contact");
+  const contactListObject = dbObjectMatch(schemaProbe, "ContactList");
+  const contactListRowObject = dbObjectMatch(schemaProbe, "ContactListRow");
+  const rowCandidates = contactListRow?.candidates || {};
+  return {
+    enabled: schemaProbe?.apiStatus === "ready",
+    contactSchemaOk: Boolean(contact?.schemaOk),
+    contactListSchemaOk: Boolean(contactList?.schemaOk),
+    contactListRowSchemaOk: Boolean(contactListRow?.schemaOk),
+    contactListDbObjectId: contactListObject?.dbObjectId || contactList?.dbObjectId || "",
+    contactListRowDbObjectId: contactListRowObject?.dbObjectId || contactListRow?.dbObjectId || "",
+    emailCandidates: rowCandidates.email || [],
+    companyLinkCandidates: rowCandidates.parent || [],
+    canUseForCustomerCommunication: false,
+    reason: "Pouze metadata. Není potvrzená ostrá vazba kontakt → zákazník/pobočka ani souhlas pro zákaznickou komunikaci."
+  };
 }
 
 function addFlag(flags, code) {
@@ -1042,37 +1303,65 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
         successfulRows: 0,
         usefulRows: 0
       },
+      metadataResolver: {
+        enabled: false,
+        metadataProbeUsable: false,
+        generatedCompanyAttempts: 0,
+        loadedRows: 0,
+        matchedCompanies: 0,
+        blockingReasons: ["VISTOS_NOT_CONFIGURED"]
+      },
+      contactMetadata: {
+        enabled: false,
+        canUseForCustomerCommunication: false,
+        reason: "Vistos API není nakonfigurováno."
+      },
       diagnostics: { configured: false, companyAttempts: [], invoiceAttempts: [] }
     };
   }
 
   const session = await loginVistosExecute(env);
+  const metadataProbePromise = loadLedgerMetadataProbe(env, session, options);
   const [companyResult, invoiceResult] = await Promise.all([
     loadFirstWorkingEntity(env, session, RECEIVABLES_COMPANY_ATTEMPTS, options),
     loadFirstWorkingEntity(env, session, RECEIVABLES_INVOICE_ATTEMPTS, options)
   ]);
+  const schemaProbe = await metadataProbePromise;
+  const metadataCompanyAttempts = buildMetadataCompanyAttempts(schemaProbe);
   const enrichmentResult = await loadFirstWorkingEntity(
     env,
     session,
     RECEIVABLES_COMPANY_ENRICHMENT_ATTEMPTS,
     options
   );
+  const metadataResult = metadataCompanyAttempts.length
+    ? await loadFirstWorkingEntity(env, session, metadataCompanyAttempts, options)
+    : emptyWorkingResult();
   const baseCompanies = companyResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, companyResult.entityName));
   const invoices = invoiceResult.page.rows.map(mapReceivablesVistosInvoice);
   const enrichmentCompanies = enrichmentResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, enrichmentResult.entityName));
+  const metadataCompanies = metadataResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, metadataResult.entityName));
   const pageEnrichment = mergeCompanyEnrichment(baseCompanies, enrichmentCompanies);
+  const metadataEnrichment = mergeCompanyEnrichment(pageEnrichment.companies, metadataCompanies);
   const detailProbe = await loadCompanyDetailProbe(
     env,
     session,
-    collectCompanyDetailIdentifiers(pageEnrichment.companies, invoices, options),
+    collectCompanyDetailIdentifiers(metadataEnrichment.companies, invoices, options),
     options
   );
-  const detailEnrichment = mergeCompanyEnrichment(pageEnrichment.companies, detailProbe.companies);
+  const detailEnrichment = mergeCompanyEnrichment(metadataEnrichment.companies, detailProbe.companies);
   const companies = detailEnrichment.companies;
   const companyIndexes = buildCompanyIndexes(companies);
   const resolvedInvoices = invoices.map((invoice) => resolveInvoiceCustomer(invoice, companies, companyIndexes));
   const companiesWithInvoiceCounts = annotateCompaniesWithInvoiceCounts(companies, resolvedInvoices);
   const ledgerReadiness = buildLedgerReadiness({ companies: companiesWithInvoiceCounts, invoices, resolvedInvoices, companyResult, invoiceResult });
+  const metadataResolver = buildMetadataResolverSummary(
+    schemaProbe,
+    metadataCompanyAttempts,
+    metadataResult,
+    metadataEnrichment
+  );
+  const contactMetadata = buildContactMetadataSummary(schemaProbe);
 
   return {
     apiStatus: "ready",
@@ -1100,11 +1389,15 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       capped: Boolean(enrichmentResult.page.capped),
       matchedCompanies: countBy(companies, (company) => Boolean(company.enrichmentMatched)),
       pageMatchedCompanies: pageEnrichment.matchedCompanies,
+      metadataMatchedCompanies: metadataEnrichment.matchedCompanies,
+      metadataLoadedRows: metadataCompanies.length,
       detailMatchedCompanies: detailEnrichment.matchedCompanies,
       companiesWithDicAfterEnrichment: countBy(companiesWithInvoiceCounts, (company) => Boolean(company.dic)),
       companiesWithBillingEmailAfterEnrichment: countBy(companiesWithInvoiceCounts, (company) => Boolean(company.billingEmail || company.email)),
       companiesWithStandardDueDaysAfterEnrichment: countBy(companiesWithInvoiceCounts, (company) => company.standardDueDays !== null && company.standardDueDays !== undefined)
     },
+    metadataResolver,
+    contactMetadata,
     companyDetailProbe: {
       enabled: true,
       sampledIdentifiers: detailProbe.sampledIdentifiers,
@@ -1127,6 +1420,15 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       companyEnrichmentColumns: enrichmentResult.columns,
       companyEnrichmentKeys: sampleKeys(enrichmentResult.page.rows),
       companyEnrichmentAttempts: enrichmentResult.diagnostics,
+      metadataSchemaStatus: schemaProbe.apiStatus,
+      metadataSchemaEntitiesOk: schemaProbe.summary?.entitiesWithSchema || 0,
+      metadataCompanyEntity: metadataResult.entityName,
+      metadataCompanyAttemptKey: metadataResult.key,
+      metadataCompanyColumns: metadataResult.columns,
+      metadataCompanyKeys: sampleKeys(metadataResult.page.rows),
+      metadataCompanyAttempts: metadataResult.diagnostics,
+      metadataCompanyGeneratedAttempts: metadataCompanyAttempts,
+      metadataBlockingReasons: schemaProbe.readiness?.blockingReasons || [],
       companyDetailIdentifiers: detailProbe.sampledIdentifiers,
       companyDetailBestEntity: detailProbe.bestEntity,
       companyDetailBestAttemptKey: detailProbe.bestAttemptKey,

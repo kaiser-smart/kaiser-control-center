@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.385"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.386"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: metadata-aware Vistos resolver",
+    text: "Firmy → Ledger read-only preview teď používá potvrzená Vistos metadata k bezpečným čtecím pokusům nad DirectoryWithBranch, Directory a Company. UI zobrazuje i kontaktní metadata ContactList/ContactListRow, ale bez povolení zákaznické komunikace, bez D1 zápisu, ratingu, KB plateb a automatizace."
+  },
   {
     title: "Pohledávky: Vistos schema/metadata probe",
     text: "Importní stránka Pohledávek má nový read-only probe pro GetSchemaEntity, DbObject a DbColumn u DirectoryWithBranch, Directory, ContactList a navazujících entit. Slouží jen k ověření metadat firem a kontaktů; bez D1 zápisu, ratingu, KB plateb a komunikace zákazníkům."
