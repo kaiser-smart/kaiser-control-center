@@ -25249,8 +25249,15 @@ body:has(.tracking-page--soft-metal-preview) {
   --border-soft: rgba(78, 92, 100, 0.24);
   --border-highlight: rgba(255, 255, 255, 0.76);
   --highlight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  --shadow-raised: 9px 11px 26px rgba(78, 92, 100, 0.17), -7px -7px 20px rgba(255, 255, 255, 0.8);
-  --shadow-raised-hover: 10px 12px 28px rgba(78, 92, 100, 0.2), -7px -7px 20px rgba(255, 255, 255, 0.84);
+  --shadow-panel: 8px 10px 24px rgba(78, 92, 100, 0.14), -7px -7px 18px rgba(255, 255, 255, 0.78);
+  --shadow-card: 5px 7px 16px rgba(78, 92, 100, 0.095), -4px -4px 12px rgba(255, 255, 255, 0.68);
+  --shadow-control: 0 1px 2px rgba(78, 92, 100, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.64);
+  --shadow-control-hover: 0 2px 6px rgba(78, 92, 100, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --shadow-control-active: inset 3px 3px 7px rgba(78, 92, 100, 0.11), inset -3px -3px 7px rgba(255, 255, 255, 0.58);
+  --shadow-inset-control: inset 4px 4px 10px rgba(78, 92, 100, 0.12), inset -4px -4px 10px rgba(255, 255, 255, 0.62);
+  --focus-ring: color-mix(in srgb, var(--brand-accent) 32%, var(--border-soft));
+  --shadow-raised: var(--shadow-panel);
+  --shadow-raised-hover: var(--shadow-card);
   --shadow-inset: inset 6px 6px 14px rgba(78, 92, 100, 0.17), inset -6px -6px 14px rgba(255, 255, 255, 0.72);
   --tracking-metal-bg: var(--metal-gradient);
   --tracking-metal-inset-bg: var(--metal-gradient-inset);
@@ -25366,7 +25373,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-radius: var(--radius-md);
   background: var(--brand-accent);
   color: #ffffff;
-  box-shadow: 0 7px 16px rgba(38, 48, 43, 0.12);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .secondary-link,
@@ -25393,21 +25400,21 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview :is(.secondary-link, .back-button, .tracking-tab, .tracking-demo-filter, .tracking-source-mode):hover {
   border-color: color-mix(in srgb, var(--brand-accent) 24%, var(--border-soft));
   background: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-raised));
-  box-shadow: var(--shadow-raised);
+  box-shadow: var(--shadow-control-hover);
   color: var(--text-main);
 }
 
 .tracking-page--soft-metal-preview :is(.primary-action, .primary-link):hover,
 .tracking-page--soft-metal-preview :is(.primary-action, .primary-link):focus-visible {
-  background: var(--brand-accent);
+  background: color-mix(in srgb, var(--brand-accent) 88%, var(--text-main));
   color: #ffffff;
-  box-shadow: 0 9px 18px rgba(38, 48, 43, 0.14);
+  box-shadow: var(--shadow-control-hover);
   transform: none;
 }
 
 .tracking-page--soft-metal-preview :is(a, button, input, select, textarea):focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--brand-accent) 34%, transparent);
-  outline-offset: 3px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .tracking-page--soft-metal-preview .tracking-tabs,
@@ -25430,7 +25437,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-color: var(--tracking-accent-border);
   background: var(--state-success-bg);
   color: var(--state-success-text);
-  box-shadow: var(--shadow-inset);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-layout {
@@ -25475,7 +25482,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-color: var(--tracking-accent-border);
   background: var(--state-success-bg);
   color: var(--state-success-text);
-  box-shadow: var(--shadow-inset);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--passive {
@@ -25666,17 +25673,17 @@ body:has(.tracking-page--soft-metal-preview) {
   min-width: 94px;
   height: 72px;
   min-height: 72px;
-  filter: drop-shadow(0 13px 18px rgba(38, 48, 43, 0.18));
+  filter: drop-shadow(0 8px 12px rgba(38, 48, 43, 0.12));
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-marker--selected,
 .tracking-page--soft-metal-preview .tracking-demo-marker--selected:hover {
   transform: translate(-50%, -50%);
-  filter: drop-shadow(0 15px 20px rgba(38, 48, 43, 0.22));
+  filter: drop-shadow(0 9px 14px rgba(38, 48, 43, 0.14));
 }
 
 .tracking-page--soft-metal-preview .tracking-google-marker--selected {
-  filter: drop-shadow(0 15px 20px rgba(38, 48, 43, 0.22));
+  filter: drop-shadow(0 9px 14px rgba(38, 48, 43, 0.14));
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker {
@@ -25691,7 +25698,7 @@ body:has(.tracking-page--soft-metal-preview) {
   height: 62px;
   border-width: 2px;
   background: var(--tracking-control-bg);
-  box-shadow: var(--shadow-raised), var(--highlight-edge);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
@@ -25702,7 +25709,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-map-vehicle-label {
   border-color: var(--border-highlight);
   background: color-mix(in srgb, var(--surface-raised) 78%, transparent);
-  box-shadow: 0 7px 13px rgba(90, 104, 112, 0.14);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker--moving,
@@ -25745,7 +25752,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-color: currentColor;
   outline: 2px solid currentColor;
   outline-offset: 3px;
-  box-shadow: var(--shadow-raised);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-list,
@@ -25792,7 +25799,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-wim-google-pin--selected {
   border-color: var(--tracking-accent-border);
   background: color-mix(in srgb, var(--brand-accent) 10%, var(--surface-raised));
-  box-shadow: var(--shadow-inset);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card--alert,
@@ -25867,7 +25874,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-soft));
   color: var(--text-main);
-  box-shadow: var(--shadow-inset);
+  box-shadow: var(--shadow-inset-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-list-table,
@@ -25889,12 +25896,12 @@ body:has(.tracking-page--soft-metal-preview) {
 }
 
 .tracking-page--soft-metal-preview .tracking-tcars-map-overlay {
-  box-shadow: 0 12px 24px rgba(38, 48, 43, 0.12);
+  box-shadow: var(--shadow-card);
 }
 
 .tracking-page--soft-metal-preview .tracking-tcars-google-marker,
 .tracking-page--soft-metal-preview .tracking-wim-google-marker {
-  filter: drop-shadow(0 12px 17px rgba(38, 48, 43, 0.18));
+  filter: drop-shadow(0 8px 12px rgba(38, 48, 43, 0.12));
 }
 
 .tracking-page--soft-metal-preview .tracking-tcars-google-marker--selected {
@@ -25910,7 +25917,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-wim-map-point {
   border-radius: var(--radius-md);
   background: var(--tracking-control-bg);
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-tcars-google-pin {
@@ -26035,7 +26042,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-color: var(--state-neutral-border);
   background: color-mix(in srgb, var(--tracking-graphite) 7%, var(--surface-inset));
   color: var(--text-muted);
-  box-shadow: var(--tracking-inset-shadow);
+  box-shadow: none;
   cursor: not-allowed;
   opacity: 0.76;
 }
@@ -26424,9 +26431,9 @@ body:has(.tracking-page--soft-metal-preview) {
   --tracking-card-bg: var(--metal-gradient-soft);
   --tracking-control-bg: var(--metal-gradient-control);
   --tracking-inset-bg: var(--metal-gradient-inset);
-  --tracking-soft-shadow: 10px 12px 27px rgba(78, 92, 100, 0.155), -7px -7px 20px rgba(255, 255, 255, 0.78);
-  --tracking-soft-shadow-sm: 6px 8px 17px rgba(78, 92, 100, 0.13), -5px -5px 13px rgba(255, 255, 255, 0.72);
-  --tracking-inset-shadow: inset 6px 6px 14px rgba(78, 92, 100, 0.17), inset -6px -6px 14px rgba(255, 255, 255, 0.72);
+  --tracking-soft-shadow: var(--shadow-panel);
+  --tracking-soft-shadow-sm: var(--shadow-card);
+  --tracking-inset-shadow: var(--shadow-inset);
   --tracking-control-height: 46px;
   --tracking-hero-icon-holder: 176px;
   --tracking-hero-icon-size: 108px;
@@ -26474,7 +26481,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-radius: var(--radius-xl);
   background: var(--tracking-panel-bg);
   padding: var(--sidebar-padding);
-  box-shadow: 9px 11px 25px rgba(78, 92, 100, 0.145), -7px -7px 20px rgba(255, 255, 255, 0.76), var(--highlight-edge);
+  box-shadow: var(--shadow-panel), var(--highlight-edge);
   transition:
     width var(--sidebar-transition),
     box-shadow 180ms ease,
@@ -26530,7 +26537,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid var(--border-soft);
   background: var(--tracking-control-bg);
   cursor: pointer;
-  box-shadow: var(--tracking-soft-shadow-sm);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__nav {
@@ -26592,14 +26599,14 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle:hover {
   border-color: color-mix(in srgb, var(--icon-bluegrey) 24%, var(--border-soft));
   background: var(--tracking-control-bg);
-  box-shadow: var(--tracking-soft-shadow-sm);
+  box-shadow: var(--shadow-control-hover);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item--active,
 .tracking-page--soft-metal-preview .tracking-preview-nav-item[aria-current="page"] {
   border-color: var(--state-success-border);
   background: var(--state-success-bg);
-  box-shadow: var(--tracking-inset-shadow);
+  box-shadow: var(--shadow-control-active);
   color: var(--state-success-text);
 }
 
@@ -26692,7 +26699,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid var(--icon-border, var(--border-soft));
   background: var(--icon-bg, var(--surface-raised));
   color: var(--icon-color, var(--tracking-graphite));
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-mark,
@@ -26746,7 +26753,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-preview-metric__icon {
   border-color: color-mix(in srgb, var(--icon-color, var(--tracking-graphite)) 24%, var(--border-soft));
   background: var(--tracking-control-bg);
-  box-shadow: 7px 9px 18px rgba(78, 92, 100, 0.12), -5px -5px 14px rgba(255, 255, 255, 0.72), var(--highlight-edge);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric--active .tracking-preview-metric__icon {
@@ -26786,7 +26793,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   background: var(--tracking-card-bg);
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-card), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric {
@@ -26801,7 +26808,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-preview-metric--active {
   border-color: var(--state-success-border);
   background: var(--state-success-bg);
-  box-shadow: var(--tracking-inset-shadow);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric__copy {
@@ -26892,14 +26899,14 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .kaiser-logo {
   background: var(--brand-accent);
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .topbar .back-button {
   min-height: 42px;
   margin-left: auto;
   background: var(--tracking-control-bg);
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .module-detail {
@@ -26940,7 +26947,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-radius: var(--radius-xl);
   background: var(--tracking-control-bg);
   color: var(--icon-teal);
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-card), var(--highlight-edge);
   cursor: default;
   pointer-events: none;
 }
@@ -26989,7 +26996,7 @@ body:has(.tracking-page--soft-metal-preview) {
   gap: var(--space-md);
   padding: var(--space-lg);
   background: var(--tracking-card-bg);
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode__copy {
@@ -27007,7 +27014,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-color: var(--state-success-border);
   background: var(--state-success-bg);
   color: var(--state-success-text);
-  box-shadow: var(--tracking-inset-shadow);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--passive {
@@ -27021,7 +27028,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-radius: var(--radius-md);
   background: var(--brand-accent);
   color: #ffffff;
-  box-shadow: var(--tracking-soft-shadow-sm);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .secondary-link,
@@ -27030,12 +27037,12 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-demo-filter {
   min-height: var(--tracking-control-height);
   background: var(--tracking-control-bg);
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview :is(.secondary-link, .back-button, .tracking-tab, .tracking-demo-filter):hover {
   background: var(--metal-gradient-soft);
-  box-shadow: 9px 11px 22px rgba(90, 104, 112, 0.15), -5px -5px 14px rgba(255, 255, 255, 0.76), var(--highlight-edge);
+  box-shadow: var(--shadow-control-hover);
 }
 
 .tracking-page--soft-metal-preview .tracking-tab--active,
@@ -27043,7 +27050,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-color: var(--state-success-border);
   background: var(--state-success-bg);
   color: var(--state-success-text);
-  box-shadow: var(--tracking-inset-shadow);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-tabs,
@@ -27055,7 +27062,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-radius: var(--radius-lg);
   background: var(--tracking-inset-bg);
   padding: 7px;
-  box-shadow: var(--tracking-inset-shadow);
+  box-shadow: var(--shadow-inset-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-badge,
@@ -27148,7 +27155,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   background: var(--tracking-card-bg);
-  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  box-shadow: var(--shadow-card), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card {
@@ -27192,13 +27199,13 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card--selected {
   border-color: var(--state-success-border);
   background: var(--state-success-bg);
-  box-shadow: var(--tracking-inset-shadow);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card--alert {
   border-color: var(--state-danger-border);
   background: color-mix(in srgb, var(--tracking-danger) 11%, var(--surface-raised));
-  box-shadow: var(--tracking-inset-shadow);
+  box-shadow: var(--shadow-control-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-image--card {
@@ -27262,7 +27269,7 @@ body:has(.tracking-page--soft-metal-preview) {
   width: 68px;
   height: 68px;
   background: var(--tracking-control-bg);
-  box-shadow: var(--tracking-soft-shadow-sm);
+  box-shadow: var(--shadow-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker__image {
@@ -27272,6 +27279,16 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview :is(.primary-action, .primary-link, .secondary-link, .back-button, .tracking-tab, .tracking-demo-filter, .tracking-source-mode, .tracking-demo-vehicle-card, .tracking-tcars-location-card, .tracking-wim-site-card):hover {
   transform: none;
+}
+
+.tracking-page--soft-metal-preview :is(.tracking-source-mode, .tracking-demo-vehicle-card, .tracking-tcars-location-card, .tracking-wim-site-card):hover {
+  border-color: color-mix(in srgb, var(--brand-accent) 22%, var(--border-soft));
+  box-shadow: var(--shadow-control-hover);
+}
+
+.tracking-page--soft-metal-preview :is(.primary-action, .primary-link, .secondary-link, .back-button, .tracking-tab, .tracking-demo-filter, .tracking-source-mode, .tracking-demo-vehicle-card, .tracking-tcars-location-card, .tracking-wim-site-card):active {
+  box-shadow: var(--shadow-control-active);
+  transform: translateY(1px);
 }
 
 @media (max-width: 1220px) {
@@ -27373,6 +27390,7 @@ body:has(.tracking-page--soft-metal-preview) {
     min-height: 0;
     padding: 7px;
     border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-card), var(--highlight-edge);
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--expanded,
