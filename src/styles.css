@@ -27820,6 +27820,11 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   gap: clamp(var(--space-lg), 2vw, 30px);
 }
 
+.tracking-page--soft-metal-preview .tracking-demo-list-section {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
 .tracking-page--soft-metal-preview .tracking-section {
   gap: var(--space-lg);
   padding: clamp(var(--space-xl), 2vw, 32px);
