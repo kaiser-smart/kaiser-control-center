@@ -10844,14 +10844,25 @@ function vehicleTrackingDemoFilters() {
   `;
 }
 
-function vehicleTrackingDemoVehicleImage(vehicle, className = "") {
-  if (!vehicle.imageSrc) {
+function vehicleTrackingDemoVehicleImage(vehicle, className = "", options = {}) {
+  const useMarkerIcon = Boolean(options.markerIcon);
+  const imageSrc = useMarkerIcon ? vehicleTrackingMarkerImageSrc(vehicle) : vehicle.imageSrc;
+  if (!imageSrc) {
     return "";
   }
+  const figureClass = [
+    "tracking-demo-vehicle-image",
+    className,
+    useMarkerIcon ? "tracking-demo-vehicle-image--marker-icon" : ""
+  ].filter(Boolean).join(" ");
+  const imageClass = useMarkerIcon ? "tracking-demo-vehicle-image__marker-icon" : "";
+  const alt = useMarkerIcon
+    ? `${vehicle.internalNumber} ikona vozidla`
+    : (vehicle.imageAlt || `${vehicle.internalNumber} demo vozidlo`);
 
   return `
-    <figure class="tracking-demo-vehicle-image ${escapeHtml(className)}">
-      <img src="${escapeHtml(vehicle.imageSrc)}" alt="${escapeHtml(vehicle.imageAlt || `${vehicle.internalNumber} demo vozidlo`)}" loading="lazy" decoding="async">
+    <figure class="${escapeHtml(figureClass)}">
+      <img class="${escapeHtml(imageClass)}" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async">
     </figure>
   `;
 }
@@ -10872,7 +10883,7 @@ function vehicleTrackingDemoVehicleCard(vehicle, selectedVehicle, elapsedMs) {
           </span>
         </div>
       </div>
-      ${vehicleTrackingDemoVehicleImage(vehicle, "tracking-demo-vehicle-image--card")}
+      ${vehicleTrackingDemoVehicleImage(vehicle, "tracking-demo-vehicle-image--card", { markerIcon: true })}
       <div class="tracking-demo-vehicle-status">
         <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}" data-tracking-demo-status="${escapeHtml(vehicle.id)}">${escapeHtml(summary.statusLabel)}</span>
         <span data-tracking-demo-speed="${escapeHtml(vehicle.id)}">${escapeHtml(`${summary.speedNow} km/h`)}</span>
