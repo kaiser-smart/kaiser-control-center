@@ -12877,8 +12877,8 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
         ${previewHeroMap}
       </section>
 
-      ${vehicleTrackingSourceModePanel()}
       ${isSoftMetalPreview ? vehicleTrackingPreviewDashboardMetrics(visibleVehicles) : ""}
+      ${vehicleTrackingSourceModePanel()}
       ${trackingModeNotice}
       ${vehicleTrackingTabs(view, sourceMode)}
       <div class="tracking-layout tracking-demo-layout">
