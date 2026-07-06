@@ -26411,18 +26411,40 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --sidebar-item-padding: 7px;
   --sidebar-item-gap: 12px;
   --sidebar-transition: 240ms ease;
-  --sidebar-link-color: var(--tracking-graphite);
-  --sidebar-link-hover-color: var(--brand-accent);
-  --sidebar-link-active-color: var(--brand-accent);
-  --sidebar-link-bg: color-mix(in srgb, var(--surface-inset) 48%, transparent);
-  --sidebar-link-hover-bg: color-mix(in srgb, var(--brand-accent) 7%, var(--surface-inset));
-  --sidebar-link-active-bg: color-mix(in srgb, var(--brand-accent) 11%, var(--surface-inset));
-  --sidebar-link-border: color-mix(in srgb, var(--border-soft) 72%, transparent);
-  --sidebar-link-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
-  --sidebar-link-active-border: var(--state-success-border);
-  --sidebar-tray-shadow: var(--shadow-inset-control);
-  --sidebar-tray-hover-shadow: var(--shadow-inset-control);
-  --sidebar-tray-active-shadow: var(--shadow-inset-control);
+  --sidebar-button-padding: 0 14px;
+  --sidebar-button-gap: 10px;
+  --sidebar-nav-icon-size: 24px;
+  --sidebar-nav-icon-column: 28px;
+  --sidebar-button-bg: var(--tracking-control-bg);
+  --sidebar-button-border: color-mix(in srgb, var(--border-soft) 76%, transparent);
+  --sidebar-button-color: var(--tracking-graphite);
+  --sidebar-button-icon-color: var(--icon-bluegrey);
+  --sidebar-button-icon-filter: var(--icon-filter-bluegrey);
+  --sidebar-button-hover-bg: color-mix(in srgb, var(--brand-accent) 7%, var(--surface-control));
+  --sidebar-button-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
+  --sidebar-button-hover-color: var(--brand-accent);
+  --sidebar-button-hover-icon-color: var(--brand-accent);
+  --sidebar-button-hover-icon-filter: var(--icon-filter-brand);
+  --sidebar-button-active-bg: var(--state-success-bg);
+  --sidebar-button-active-border: var(--state-success-border);
+  --sidebar-button-active-color: var(--text-main);
+  --sidebar-button-active-icon-color: var(--brand-accent);
+  --sidebar-button-active-icon-filter: var(--icon-filter-brand);
+  --sidebar-button-shadow: var(--shadow-control);
+  --sidebar-button-hover-shadow: var(--shadow-inset-control);
+  --sidebar-button-active-shadow: var(--shadow-control-active);
+  --sidebar-link-color: var(--sidebar-button-color);
+  --sidebar-link-hover-color: var(--sidebar-button-hover-color);
+  --sidebar-link-active-color: var(--sidebar-button-active-color);
+  --sidebar-link-bg: var(--sidebar-button-bg);
+  --sidebar-link-hover-bg: var(--sidebar-button-hover-bg);
+  --sidebar-link-active-bg: var(--sidebar-button-active-bg);
+  --sidebar-link-border: var(--sidebar-button-border);
+  --sidebar-link-hover-border: var(--sidebar-button-hover-border);
+  --sidebar-link-active-border: var(--sidebar-button-active-border);
+  --sidebar-tray-shadow: var(--sidebar-button-shadow);
+  --sidebar-tray-hover-shadow: var(--sidebar-button-hover-shadow);
+  --sidebar-tray-active-shadow: var(--sidebar-button-active-shadow);
   --sidebar-icon-holder-shadow: var(--shadow-control);
   --icon-sm: 21px;
   --icon-md: 28px;
@@ -26533,15 +26555,33 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --state-neutral-text: var(--tracking-graphite);
   --tracking-accent-soft: var(--state-success-bg);
   --tracking-accent-border: var(--state-success-border);
-  --sidebar-link-color: var(--text-muted);
-  --sidebar-link-hover-color: var(--state-success-text);
-  --sidebar-link-active-color: var(--state-success-text);
-  --sidebar-link-bg: color-mix(in srgb, var(--surface-inset) 76%, rgba(177, 194, 207, 0.018));
-  --sidebar-link-hover-bg: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-inset));
-  --sidebar-link-active-bg: color-mix(in srgb, var(--brand-accent) 13%, var(--surface-inset));
-  --sidebar-link-border: color-mix(in srgb, var(--border-soft) 74%, transparent);
-  --sidebar-link-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
-  --sidebar-link-active-border: var(--state-success-border);
+  --sidebar-button-bg: color-mix(in srgb, var(--surface-control) 82%, var(--surface-inset));
+  --sidebar-button-border: color-mix(in srgb, var(--border-soft) 74%, transparent);
+  --sidebar-button-color: var(--text-muted);
+  --sidebar-button-icon-color: var(--icon-bluegrey);
+  --sidebar-button-icon-filter: var(--icon-filter-bluegrey);
+  --sidebar-button-hover-bg: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-inset));
+  --sidebar-button-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
+  --sidebar-button-hover-color: var(--state-success-text);
+  --sidebar-button-hover-icon-color: var(--state-success-text);
+  --sidebar-button-hover-icon-filter: var(--icon-filter-brand);
+  --sidebar-button-active-bg: var(--state-success-bg);
+  --sidebar-button-active-border: var(--state-success-border);
+  --sidebar-button-active-color: var(--text-main);
+  --sidebar-button-active-icon-color: var(--state-success-text);
+  --sidebar-button-active-icon-filter: var(--icon-filter-brand);
+  --sidebar-button-shadow: var(--shadow-control);
+  --sidebar-button-hover-shadow: var(--shadow-inset-control);
+  --sidebar-button-active-shadow: var(--shadow-control-active);
+  --sidebar-link-color: var(--sidebar-button-color);
+  --sidebar-link-hover-color: var(--sidebar-button-hover-color);
+  --sidebar-link-active-color: var(--sidebar-button-active-color);
+  --sidebar-link-bg: var(--sidebar-button-bg);
+  --sidebar-link-hover-bg: var(--sidebar-button-hover-bg);
+  --sidebar-link-active-bg: var(--sidebar-button-active-bg);
+  --sidebar-link-border: var(--sidebar-button-border);
+  --sidebar-link-hover-border: var(--sidebar-button-hover-border);
+  --sidebar-link-active-border: var(--sidebar-button-active-border);
   --icon-green: #91d64c;
   --icon-teal: #7fb7bd;
   --icon-bluegrey: #a8bac7;
@@ -26687,12 +26727,12 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item {
-  grid-template-columns: var(--sidebar-icon-holder) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-nav-icon-column) minmax(0, 1fr);
   min-height: var(--sidebar-item-height);
-  gap: var(--sidebar-item-gap);
+  gap: var(--sidebar-button-gap);
   border: 1px solid var(--sidebar-link-border);
   background: var(--sidebar-link-bg);
-  padding: var(--sidebar-item-padding);
+  padding: var(--sidebar-button-padding);
   color: var(--sidebar-link-color);
   box-shadow: var(--sidebar-tray-shadow);
 }
@@ -26746,9 +26786,9 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item:hover .tracking-preview-nav-item__icon {
-  --icon-color: var(--sidebar-link-hover-color);
-  --icon-border: color-mix(in srgb, var(--sidebar-link-hover-color) 28%, var(--border-soft));
-  --icon-filter: var(--icon-filter-brand);
+  --icon-color: var(--sidebar-button-hover-icon-color);
+  --icon-filter: var(--sidebar-button-hover-icon-filter);
+  color: var(--sidebar-button-hover-icon-color);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item:hover .tracking-preview-nav-item__icon .theme-icon-img {
@@ -26865,9 +26905,9 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-mark,
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle,
 .tracking-page--soft-metal-preview .tracking-preview-nav-item:not(.tracking-preview-nav-item--active):not([aria-current="page"]) .tracking-preview-nav-item__icon {
-  --icon-color: var(--icon-bluegrey);
+  --icon-color: var(--sidebar-button-icon-color);
   --icon-border: color-mix(in srgb, var(--icon-bluegrey) 18%, var(--border-soft));
-  --icon-filter: var(--icon-filter-bluegrey);
+  --icon-filter: var(--sidebar-button-icon-filter);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-mark {
@@ -26883,6 +26923,15 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   border-radius: var(--radius-md);
 }
 
+.tracking-page--soft-metal-preview .tracking-preview-nav-item__icon {
+  width: var(--sidebar-nav-icon-column);
+  height: var(--sidebar-nav-icon-column);
+  border: 0;
+  background: transparent;
+  color: var(--sidebar-button-icon-color);
+  box-shadow: none;
+}
+
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__brand-mark .theme-icon-img,
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__toggle .theme-icon-img,
 .tracking-page--soft-metal-preview .tracking-preview-nav-item__icon .theme-icon-img {
@@ -26891,13 +26940,18 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   opacity: var(--icon-opacity-muted);
 }
 
+.tracking-page--soft-metal-preview .tracking-preview-nav-item__icon .theme-icon-img {
+  width: var(--sidebar-nav-icon-size);
+  height: var(--sidebar-nav-icon-size);
+  transform: scale(0.92);
+}
+
 .tracking-page--soft-metal-preview .tracking-preview-nav-item--active .tracking-preview-nav-item__icon,
 .tracking-page--soft-metal-preview .tracking-preview-nav-item[aria-current="page"] .tracking-preview-nav-item__icon {
-  --icon-color: var(--sidebar-link-active-color);
-  --icon-border: var(--sidebar-link-active-border);
-  --icon-filter: var(--icon-filter-brand);
-  color: var(--sidebar-link-active-color);
-  box-shadow: var(--sidebar-icon-holder-shadow);
+  --icon-color: var(--sidebar-button-active-icon-color);
+  --icon-filter: var(--sidebar-button-active-icon-filter);
+  color: var(--sidebar-button-active-icon-color);
+  box-shadow: none;
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-item--active .tracking-preview-nav-item__icon .theme-icon-img,
@@ -27073,24 +27127,17 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-logo {
-  display: inline-flex;
+  display: block;
   width: 92px;
-  height: 58px;
+  height: auto;
   flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--brand-accent) 40%, var(--border-soft));
-  border-radius: 10px;
-  background: var(--brand-accent);
-  box-shadow: var(--shadow-control);
+  line-height: 0;
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-logo img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  height: auto;
 }
 
 .tracking-page--soft-metal-preview .tracking-home-link,
@@ -27874,8 +27921,8 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   }
 
   .tracking-page--soft-metal-preview .tracking-preview-nav-item__icon {
-    width: 44px;
-    height: 44px;
+    width: var(--sidebar-nav-icon-column);
+    height: var(--sidebar-nav-icon-column);
   }
 
   .tracking-page--soft-metal-preview .tracking-demo-vehicle-list {
@@ -27928,7 +27975,6 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
   .tracking-page--soft-metal-preview .tracking-utility-logo {
     width: 82px;
-    height: 52px;
   }
 
   .tracking-page--soft-metal-preview .tracking-home-link,
