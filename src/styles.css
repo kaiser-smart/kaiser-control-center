@@ -27246,9 +27246,11 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
-  width: 36px;
-  height: 36px;
-  opacity: var(--icon-opacity-default);
+  width: 35px;
+  height: 35px;
+  filter: none;
+  opacity: 1;
+  transform: none;
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-logo {
@@ -28175,17 +28177,17 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   .tracking-page--soft-metal-preview .tracking-home-link,
   .tracking-page--soft-metal-preview .tracking-utility-logout,
   .tracking-page--soft-metal-preview .tracking-utility-icon-button {
-    min-height: 32px;
+    min-height: 35px;
   }
 
   .tracking-page--soft-metal-preview .tracking-utility-icon-button {
-    width: 32px;
-    height: 32px;
+    width: 35px;
+    height: 35px;
   }
 
   .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
-    width: 32px;
-    height: 32px;
+    width: 35px;
+    height: 35px;
   }
 
   .tracking-page--soft-metal-preview .tracking-home-link,
