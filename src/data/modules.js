@@ -144,6 +144,18 @@ export const modules = [
     order: 9
   },
   {
+    id: "receivables",
+    title: "Pohledávky",
+    description: "Pohledávkový kompas AI pro read-only diagnostiku Vistos faktur, firem a budoucí rating platební morálky.",
+    route: "/pohledavky",
+    dashboardRoute: "/pohledavky/dashboard",
+    icon: CostsIcon,
+    status: "read-only pilot",
+    active: true,
+    disabled: false,
+    order: 9.3
+  },
+  {
     id: "reports",
     title: "Reporty",
     description: "Provozní reporty, exporty, přehledy a vyhodnocení.",

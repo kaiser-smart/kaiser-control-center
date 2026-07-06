@@ -11,6 +11,7 @@ export const PERMISSION_MODULES = [
   "sampling-routes",
   "vistos",
   "costs",
+  "receivables",
   "reports",
   "users",
   "settings",
@@ -62,6 +63,8 @@ const MODULE_ALIASES = {
   "trasy-vzorku": "sampling-routes",
   zakaznici: "vistos",
   naklady: "costs",
+  pohledavky: "receivables",
+  receivables: "receivables",
   reporty: "reports",
   uzivatele: "users",
   nastaveni: "settings",
@@ -82,6 +85,7 @@ export const ROLE_PERMISSIONS = {
     ...actions("vehicle-tracking", ["view", "export"]),
     ...actions("vistos", ["view", "edit", "export"]),
     ...actions("costs", ["view", "edit", "export"]),
+    ...actions("receivables", ["view", "export", "manage"]),
     ...actions("reports", ["view", "export"]),
     ...actions("users", ["view", "edit"]),
     ...actions("settings", ["view"]),
@@ -96,6 +100,7 @@ export const ROLE_PERMISSIONS = {
     ...actions("service-maintenance", ["view", "create", "edit", "manage"]),
     ...actions("tyres", ["view", "edit", "export"]),
     ...actions("costs", ["view", "export"]),
+    ...actions("receivables", ["view"]),
     ...actions("reports", ["view", "export"]),
     ...actions("absence", ["view", "create", "approve"]),
     ...actions("feedback", ["view", "create"])
@@ -108,6 +113,7 @@ export const ROLE_PERMISSIONS = {
     ...actions("collection-routes", ["view", "edit", "manage"]),
     ...actions("sampling-routes", ["view", "edit", "manage"]),
     ...actions("costs", ["view"]),
+    ...actions("receivables", ["view"]),
     ...actions("reports", ["view"]),
     ...actions("absence", ["view", "create", "approve"]),
     ...actions("feedback", ["view", "create"])
@@ -131,6 +137,7 @@ export const ROLE_PERMISSIONS = {
     ...actions("sampling-routes", ["view"]),
     ...actions("vistos", ["view"]),
     ...actions("costs", ["view"]),
+    ...actions("receivables", ["view"]),
     ...actions("reports", ["view"]),
     ...actions("absence", ["view"])
   ]

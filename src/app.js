@@ -225,8 +225,9 @@ const SARLOTA_VOICE_WRITE_TEST_ENDPOINT = "/api/ai/elevenlabs/sarlota-voice-writ
 const FEEDBACK_ROUTE = "/pripominky";
 const FLEET_ROUTE = "/vozovy-park";
 const RECEIVABLES_ROUTE = "/pohledavky";
+const RECEIVABLES_ALIAS_ROUTE = "/receivables";
 const RECEIVABLES_MODULE_KEY = "receivables";
-const RECEIVABLES_PHASE_NOTICE = "Pilot Pohledávek je pouze UI/read-only návrh. Neposílá e-maily, SMS, WhatsApp, nespouští Šarlotu, neběží cron a neukládá ostrá data.";
+const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI je v read-only Vistos diagnostice. Nic neposílá, nespouští Šarlotu, nemá cron a bez další fáze neukládá faktury ani platby do D1.";
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
@@ -866,6 +867,14 @@ const driverReportsState = {
     loading: false
   },
   plateValidationRequestId: 0
+};
+
+const receivablesState = {
+  loading: false,
+  preview: null,
+  discovery: null,
+  message: "",
+  error: ""
 };
 
 let absenceState = loadAbsenceState();
@@ -22539,6 +22548,336 @@ async function copyDriverReportMobileLink(link) {
   render();
 }
 
+function formatReceivablesMoney(value, currency = "CZK") {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount) || amount === 0) {
+    return "0 Kč";
+  }
+
+  return new Intl.NumberFormat("cs-CZ", {
+    style: "currency",
+    currency: currency || "CZK",
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
+function receivablesEntityStatusLabel(status) {
+  const labels = {
+    usable_candidate: "použitelné pro rating",
+    rows_without_rating_fields: "má řádky, chybí pole",
+    empty: "dostupné, bez řádků",
+    blocked_or_missing: "blokováno / neexistuje",
+    readable_with_rows: "čitelné, vrací data",
+    readable_empty: "čitelné, bez dat"
+  };
+  return labels[status] || status || "-";
+}
+
+function receivablesSummaryCard(label, value, hint = "") {
+  return `
+    <article>
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      ${hint ? `<small>${escapeHtml(hint)}</small>` : ""}
+    </article>
+  `;
+}
+
+function receivablesVistosSummary(preview, discovery) {
+  const previewSummary = preview?.summary || {};
+  const discoverySummary = discovery?.summary || {};
+  return `
+    <div class="collection-routes-stats receivables-stats" aria-label="Souhrn Vistos diagnostiky">
+      ${receivablesSummaryCard("Firmy v náhledu", previewSummary.companiesPreviewRows || 0, preview?.diagnostics?.companyEntity || "-")}
+      ${receivablesSummaryCard("Faktury v náhledu", previewSummary.invoicesPreviewRows || 0, preview?.diagnostics?.invoiceEntity || "-")}
+      ${receivablesSummaryCard("Invoice kandidáti", discoverySummary.candidateCount || 0, `${discoverySummary.readableEntityCount || 0} čitelných`)}
+      ${receivablesSummaryCard("Použitelné entity", discoverySummary.usableEntityCount || 0, discovery?.bestEntity?.entityName || "zatím nic")}
+      ${receivablesSummaryCard("Kontrolní Vistos entity", discoverySummary.workingControlCount || 0, "Vehicle / Contract")}
+    </div>
+  `;
+}
+
+function receivablesControlCards(discovery) {
+  const controls = discovery?.controls || [];
+  if (!controls.length) {
+    return `<p class="collection-routes-empty">Kontrolní čtení Vehicle / Contract zatím nebylo spuštěné.</p>`;
+  }
+
+  return `
+    <div class="collection-routes-detail-grid">
+      ${controls.map((control) => `
+        <article>
+          <span>${escapeHtml(control.entityName)}</span>
+          <strong>${escapeHtml(receivablesEntityStatusLabel(control.status))}</strong>
+          <p>${escapeHtml(control.purpose || "")}</p>
+          <small>${escapeHtml(`${control.returnedRows || 0} řádků v náhledu / total ${control.recordsTotal || 0}`)}</small>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function receivablesCandidateRows(discovery) {
+  const candidates = discovery?.candidates || [];
+  if (!candidates.length) {
+    return `<p class="collection-routes-empty">Invoice discovery zatím nebylo spuštěné.</p>`;
+  }
+
+  return `
+    <div class="collection-routes-preview-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Entita</th>
+            <th>Stav</th>
+            <th>Řádků</th>
+            <th>Total</th>
+            <th>Sloupce</th>
+            <th>Klíče ve vzorku</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${candidates.map((candidate) => `
+            <tr>
+              <td data-label="Entita"><strong>${escapeHtml(candidate.entityName)}</strong></td>
+              <td data-label="Stav">${escapeHtml(receivablesEntityStatusLabel(candidate.status))}</td>
+              <td data-label="Řádků">${escapeHtml(candidate.returnedRows || 0)}</td>
+              <td data-label="Total">${escapeHtml(candidate.recordsTotal || 0)}</td>
+              <td data-label="Sloupce">${escapeHtml(candidate.bestColumnSet || "-")}</td>
+              <td data-label="Klíče">${escapeHtml((candidate.sampleKeys || []).slice(0, 10).join(", ") || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesCompaniesTable(preview) {
+  const companies = preview?.companies || [];
+  if (!companies.length) {
+    return `<p class="collection-routes-empty">Seznam firem z Vistosu zatím není načtený.</p>`;
+  }
+
+  return `
+    <div class="collection-routes-preview-table">
+      <table>
+        <thead>
+          <tr><th>Vistos ID</th><th>Firma</th><th>IČO</th><th>DIČ</th><th>E-mail</th><th>Telefon</th></tr>
+        </thead>
+        <tbody>
+          ${companies.slice(0, 30).map((company) => `
+            <tr>
+              <td data-label="Vistos ID">${escapeHtml(company.vistoCompanyId || "-")}</td>
+              <td data-label="Firma"><strong>${escapeHtml(company.companyName || "-")}</strong></td>
+              <td data-label="IČO">${escapeHtml(company.ico || "-")}</td>
+              <td data-label="DIČ">${escapeHtml(company.dic || "-")}</td>
+              <td data-label="E-mail">${escapeHtml(company.contactEmail || "-")}</td>
+              <td data-label="Telefon">${escapeHtml(company.contactPhone || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesInvoicesTable(preview, discovery) {
+  const invoices = (discovery?.invoices || []).length ? discovery.invoices : preview?.invoices || [];
+  if (!invoices.length) {
+    return `<p class="collection-routes-empty">Vydané faktury zatím nejsou dostupné přes zkoušené Vistos entity.</p>`;
+  }
+
+  return `
+    <div class="collection-routes-preview-table">
+      <table>
+        <thead>
+          <tr><th>Faktura</th><th>VS</th><th>Zákazník</th><th>Vystavení</th><th>Splatnost</th><th>Částka</th><th>Zbývá</th><th>Stav</th></tr>
+        </thead>
+        <tbody>
+          ${invoices.slice(0, 40).map((invoice) => `
+            <tr>
+              <td data-label="Faktura"><strong>${escapeHtml(invoice.invoiceNumber || invoice.vistoInvoiceId || "-")}</strong></td>
+              <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
+              <td data-label="Zákazník">${escapeHtml(invoice.customerName || invoice.customerId || "-")}</td>
+              <td data-label="Vystavení">${escapeHtml(invoice.issueDate || "-")}</td>
+              <td data-label="Splatnost">${escapeHtml(invoice.dueDate || "-")}</td>
+              <td data-label="Částka">${escapeHtml(formatReceivablesMoney(invoice.totalAmount, invoice.currency))}</td>
+              <td data-label="Zbývá">${escapeHtml(formatReceivablesMoney(invoice.openAmount, invoice.currency))}</td>
+              <td data-label="Stav">${escapeHtml(invoice.status || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesDiagnosticsDetails(preview, discovery) {
+  const previewDiagnostics = preview?.diagnostics || {};
+  const sourceParity = discovery?.sourceParity || previewDiagnostics;
+  const invoiceAttempts = previewDiagnostics.invoiceAttempts || [];
+
+  return `
+    <div class="collection-routes-decision-panel">
+      <div class="collection-routes-decision-panel__head">
+        <span>Zdroj a bezpečnost</span>
+        <strong>${escapeHtml(discovery?.apiStatus || preview?.apiStatus || "čeká")}</strong>
+      </div>
+      <div class="collection-routes-decision-grid">
+        <div class="collection-routes-decision-item collection-routes-decision-item--ok">
+          <span>Vistos klient</span>
+          <strong>${escapeHtml(sourceParity?.executeClient || "functions/_lib/vistos-execute-client.js")}</strong>
+          <small>${escapeHtml((sourceParity?.executeMethods || ["LoginParam", "GetPageParam"]).join(" / "))}</small>
+        </div>
+        <div class="collection-routes-decision-item collection-routes-decision-item--quiet">
+          <span>Zápis do D1</span>
+          <strong>NE</strong>
+          <small>read-only diagnostika bez importu</small>
+        </div>
+        <div class="collection-routes-decision-item collection-routes-decision-item--quiet">
+          <span>Komunikace zákazníkům</span>
+          <strong>NE</strong>
+          <small>žádný e-mail, SMS, WhatsApp ani Šarlota</small>
+        </div>
+      </div>
+      ${invoiceAttempts.length ? `
+        <details class="collection-routes-diagnostics">
+          <summary>Rychlé pokusy Company / InvoiceIssued</summary>
+          <pre>${escapeHtml(JSON.stringify(invoiceAttempts, null, 2))}</pre>
+        </details>
+      ` : ""}
+    </div>
+  `;
+}
+
+function receivablesPage(moduleItem, user, isDashboard = false) {
+  const preview = receivablesState.preview;
+  const discovery = receivablesState.discovery;
+  const title = isDashboard ? "Pohledávkový kompas AI dashboard" : "Pohledávkový kompas AI";
+  const message = receivablesState.message || discovery?.message || preview?.message || "";
+
+  return `
+    <main class="app-shell module-page module-theme-scope collection-routes-page receivables-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+
+      <section class="module-detail collection-routes-hero" aria-labelledby="receivables-title">
+        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        <div class="module-detail__body">
+          <div class="module-detail__eyebrow">Smart odpady / Pohledávky</div>
+          <h1 id="receivables-title">${escapeHtml(title)}</h1>
+          <p>Read-only ověření Vistos firem a vydaných faktur před ratingem. Cílem je zjistit správnou fakturační entitu a dostupná pole.</p>
+          <div class="module-detail__status">
+            <span>Stav</span>
+            <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="collection-routes-phase-note">
+        <strong>Bezpečný režim:</strong> ${escapeHtml(RECEIVABLES_PHASE_NOTICE)}
+      </section>
+
+      <section class="collection-routes-panel" aria-labelledby="receivables-vistos-title">
+        <div class="collection-routes-panel__head">
+          <div>
+            <h2 id="receivables-vistos-title">Vistos diagnostika fakturačních entit</h2>
+            <p>Ověří stejné Vistos Execute API jako Vozový park a Trasy svozu, načte seznam firem a projde kandidátní entity vydaných faktur.</p>
+          </div>
+          <form class="collection-routes-import-form" data-receivables-vistos-diagnostics-form>
+            <button class="primary-action" type="submit" ${receivablesState.loading ? "disabled" : ""}>
+              ${receivablesState.loading ? "Ověřuji Vistos..." : "Ověřit fakturační entity"}
+            </button>
+          </form>
+        </div>
+        ${receivablesState.error ? `<p class="module-feedback__error">${escapeHtml(receivablesState.error)}</p>` : ""}
+        ${message ? `<p class="module-feedback__notice">${escapeHtml(message)}</p>` : ""}
+        ${receivablesVistosSummary(preview, discovery)}
+        ${receivablesDiagnosticsDetails(preview, discovery)}
+      </section>
+
+      <section class="collection-routes-panel">
+        <div class="collection-routes-panel__head">
+          <div>
+            <h2>Kontrola napojení Vistos API</h2>
+            <p>Pokud tady Vehicle nebo Contract vrací data a faktury ne, je problém v názvu/oprávnění invoice entity, ne v samotném API.</p>
+          </div>
+        </div>
+        ${receivablesControlCards(discovery)}
+      </section>
+
+      <section class="collection-routes-panel">
+        <div class="collection-routes-panel__head">
+          <div>
+            <h2>Kandidátní entity vydaných faktur</h2>
+            <p>Potřebná pole pro další fázi: číslo faktury, VS, firma, splatnost, částka a stav úhrady.</p>
+          </div>
+        </div>
+        ${receivablesCandidateRows(discovery)}
+      </section>
+
+      <section class="collection-routes-panel">
+        <div class="collection-routes-panel__head">
+          <div>
+            <h2>Seznam firem z Vistosu</h2>
+            <p>Fallback umí použít Contract a zákazníka z Directory_FK, stejně jako už fungující Vistos data pro provozní moduly.</p>
+          </div>
+        </div>
+        ${receivablesCompaniesTable(preview)}
+      </section>
+
+      <section class="collection-routes-panel">
+        <div class="collection-routes-panel__head">
+          <div>
+            <h2>Vzorek faktur</h2>
+            <p>Vzorek se zobrazí až ve chvíli, kdy Vistos vrátí čitelnou fakturační entitu s řádky.</p>
+          </div>
+        </div>
+        ${receivablesInvoicesTable(preview, discovery)}
+      </section>
+
+      ${moduleFeedbackBoxFor(moduleItem, user)}
+    </main>
+  `;
+}
+
+async function loadReceivablesVistosDiagnostics() {
+  if (receivablesState.loading) {
+    return;
+  }
+
+  receivablesState.loading = true;
+  receivablesState.error = "";
+  receivablesState.message = "";
+  render();
+
+  try {
+    const [previewResult, discoveryResult] = await Promise.all([
+      apiJson("/api/receivables/vistos-preview", {
+        method: "POST",
+        body: JSON.stringify({ source: "receivables-vistos-preview" })
+      }),
+      apiJson("/api/receivables/vistos-invoice-discovery", {
+        method: "POST",
+        body: JSON.stringify({ source: "receivables-vistos-invoice-discovery" })
+      })
+    ]);
+    receivablesState.preview = previewResult.preview || null;
+    receivablesState.discovery = discoveryResult.discovery || null;
+    receivablesState.message = receivablesState.discovery?.message || receivablesState.preview?.message || "Vistos diagnostika dokončena.";
+  } catch (error) {
+    receivablesState.error = error.payload?.error || error.message || "Vistos diagnostika se nepodařila.";
+    receivablesState.message = "";
+  } finally {
+    receivablesState.loading = false;
+    render();
+  }
+}
+
 function modulePage(moduleItem, user, isDashboard = false) {
   if (moduleItem.id === "absence") {
     return absenceModulePage(moduleItem, user, isDashboard);
@@ -22558,6 +22897,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
 
   if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
     return collectionRoutesModulePage(moduleItem, user, isDashboard);
+  }
+
+  if (moduleItem.id === RECEIVABLES_MODULE_KEY) {
+    return receivablesPage(moduleItem, user, isDashboard);
   }
 
   if (moduleItem.id === DATA_BOX_MODULE_KEY) {
@@ -26456,6 +26799,7 @@ function shouldAutoShowAssistantPromo() {
   return AI_ASSISTANT_PROMO_AUTOSHOW_ENABLED &&
     !path.startsWith(FLEET_ROUTE) &&
     !isCollectionRoutesPath(path) &&
+    !path.startsWith(RECEIVABLES_ROUTE) &&
     !path.startsWith(ABSENCE_ROUTE);
 }
 
@@ -28533,6 +28877,11 @@ function renderAuthenticatedApp(user) {
   if (path === "/") {
     app.innerHTML = homePage(user);
     document.title = APP_NAME;
+    return;
+  }
+
+  if (path === RECEIVABLES_ALIAS_ROUTE) {
+    navigateToUrl(routeHref(RECEIVABLES_ROUTE));
     return;
   }
 
@@ -31227,6 +31576,13 @@ document.addEventListener("submit", async (event) => {
   if (collectionRoutesManualImportForm) {
     event.preventDefault();
     await submitCollectionRoutesManualImportPreview(collectionRoutesManualImportForm);
+    return;
+  }
+
+  const receivablesVistosDiagnosticsForm = event.target.closest("[data-receivables-vistos-diagnostics-form]");
+  if (receivablesVistosDiagnosticsForm) {
+    event.preventDefault();
+    await loadReceivablesVistosDiagnostics();
     return;
   }
 
