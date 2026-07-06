@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.364"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.365"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: úplnější e-mail Patrikovi",
+    text: "Zpráva Patrikovi nově výslovně uvádí typ požadavku, servisní typ, stav hlášení, prioritu a poznámku řidiče. Odkazy v notifikaci se navíc znovu filtrují podle stejné kompatibilitní logiky jako cenový průzkum."
+  },
   {
     title: "Hlášení řidičů: VIN metadata pro cenový průzkum",
     text: "Mercedes/Daimler ověření nově čte podle VIN také model, rok a motorizaci, pokud je oficiální provider vrátí. Cenový průzkum tyto údaje předává dál a nic si nedomýšlí, když provider metadata nedodá."

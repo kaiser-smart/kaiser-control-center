@@ -1137,11 +1137,12 @@ function driverPartTestEnv(db, offers) {
   assert.match(skippedEmail.errorMessage, /chybí 3 cenové nabídky s odkazy/);
 
   const emailReady = notificationInternals.driverPartOrderEmailReadiness({
+    probablePart: "přední sklo",
     priceBoostResultJson: JSON.stringify({
       offers: [
         { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
-        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
       ]
     })
   });
@@ -1159,12 +1160,17 @@ function driverPartTestEnv(db, offers) {
     licensePlate: "2BB 8251",
     vin: "WDD2573211A123456",
     defectDescription: "prasklé přední sklo",
+    note: "Poznámka řidiče: Rána od kamínku na dálnici.",
+    category: "jasný servisní úkon",
+    serviceType: "výměna čelního skla",
+    priority: "běžné",
+    statusLabel: "Připraveno pro Patrika",
     probablePart: "přední sklo",
     priceBoostResultJson: JSON.stringify({
       offers: [
         { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
-        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
       ]
     })
   });
@@ -1183,13 +1189,18 @@ function driverPartTestEnv(db, offers) {
       licensePlate: "2BB 8251",
       vin: "WDD2573211A123456",
       defectDescription: "prasklé přední sklo",
+      note: "Poznámka řidiče: Rána od kamínku na dálnici.",
+      category: "jasný servisní úkon",
+      serviceType: "výměna čelního skla",
+      priority: "běžné",
+      statusLabel: "Připraveno pro Patrika",
       probablePart: "přední sklo",
       partVerificationStatus: "probable_part",
       priceBoostResultJson: JSON.stringify({
         offers: [
           { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-          { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
-          { title: "Sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
         ]
       })
     },
@@ -1200,6 +1211,10 @@ function driverPartTestEnv(db, offers) {
   assert.match(emailHtml, /https:\/\/example\.test\/a/);
   assert.match(emailHtml, /https:\/\/example\.test\/b/);
   assert.match(emailHtml, /https:\/\/example\.test\/c/);
+  assert.match(emailHtml, /Typ požadavku:<\/strong> jasný servisní úkon/);
+  assert.match(emailHtml, /Servisní typ:<\/strong> výměna čelního skla/);
+  assert.match(emailHtml, /Poznámka řidiče:<\/strong> Poznámka řidiče: Rána od kamínku na dálnici\./);
+  assert.match(emailHtml, /Stav hlášení:<\/strong> Připraveno pro Patrika/);
   assert.equal(emailHtml.includes("probable_part"), false);
   assert.ok(emailHtml.indexOf("3 nejlevnější nabídky") < emailHtml.indexOf("Řidič:"));
 
@@ -1230,12 +1245,17 @@ function driverPartTestEnv(db, offers) {
       licensePlate: "2BB 8251",
       vin: "WDD2573211A123456",
       defectDescription: "prasklé přední sklo",
+      note: "Poznámka řidiče: Rána od kamínku na dálnici.",
+      category: "jasný servisní úkon",
+      serviceType: "výměna čelního skla",
+      priority: "běžné",
+      statusLabel: "Připraveno pro Patrika",
       probablePart: "přední sklo",
       priceBoostResultJson: JSON.stringify({
         offers: [
           { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-          { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
-          { title: "Sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" },
+          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" }
         ]
       })
     }, {
@@ -1253,6 +1273,8 @@ function driverPartTestEnv(db, offers) {
     assert.match(sentHtml, /https:\/\/example\.test\/a/);
     assert.match(sentHtml, /https:\/\/example\.test\/b/);
     assert.match(sentHtml, /https:\/\/example\.test\/c/);
+    assert.match(sentHtml, /Typ požadavku:<\/strong> jasný servisní úkon/);
+    assert.match(sentHtml, /Stav hlášení:<\/strong> Připraveno pro Patrika/);
     assert.doesNotMatch(sentHtml, /probable_part|waiting_verified_part/);
   } finally {
     globalThis.fetch = originalFetch;

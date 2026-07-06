@@ -1,6 +1,7 @@
 import { normalizeIdentifier } from "./auth.js";
 import { markAbsenceReminderSent } from "./absence-requests-store.js";
 import { markMedicalExamReminderSent } from "./medical-exams-store.js";
+import { selectDriverPartOffers } from "./driver-part-price-search.js";
 
 const NOTIFICATION_DB_BINDING = "SMART_ODPADY_DB";
 const DETAILED_NOTIFICATION_COLUMNS = [
@@ -80,7 +81,7 @@ function parseDriverPartOffers(value) {
 }
 
 function driverPartOrderEmailOffers(request = {}) {
-  return parseDriverPartOffers(request.priceBoostResultJson)
+  return selectDriverPartOffers(parseDriverPartOffers(request.priceBoostResultJson), request, { allowUsed: false })
     .filter((offer) => offer.url && (offer.title || offer.seller))
     .slice(0, 3);
 }
@@ -480,6 +481,11 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
   const side = cleanString(request.probablePartSideLabel) || cleanString(request.probablePartSide) || "neznámá strana";
   const probablePart = cleanString(request.partName || request.verifiedPart || request.probablePart) || "čeká na identifikaci";
   const oePartNumber = cleanString(request.oePartNumber || request.partOrderNumber) || "čeká na ověření";
+  const requestType = cleanString(request.category || request.requestCategory || request.defectCategory) || "neuvedeno";
+  const serviceType = cleanString(request.serviceType || request.defectType) || "neuvedeno";
+  const statusLabel = cleanString(request.statusLabel || request.status) || "neuvedeno";
+  const priority = cleanString(request.priority) || "běžné";
+  const driverNote = cleanString(request.driverNote || request.driver_note || request.note) || "bez poznámky";
   const providerMessage = cleanString(request.partsProviderMessage)
     || "Pilotní návrh AI Boost. Nic nebylo objednáno. Prosím ručně ověřit OE číslo a dostupnost před nákupem.";
   const offers = driverPartOrderEmailOffers(request);
@@ -529,6 +535,9 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
                   <p style="margin:0 0 10px 0;"><strong>Vozidlo:</strong> ${htmlEscape(request.vehicleName || request.licensePlate || "neuvedeno")}</p>
                   <p style="margin:0 0 10px 0;"><strong>SPZ / VIN:</strong> ${htmlEscape(request.licensePlate || "neuvedeno")} / ${htmlEscape(vin)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Závada:</strong> ${htmlEscape(request.defectDescription || "neuvedeno")}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Typ požadavku:</strong> ${htmlEscape(requestType)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Servisní typ:</strong> ${htmlEscape(serviceType)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Stav:</strong> ${htmlEscape(statusLabel)}</p>
                   <p style="margin:0;"><strong>Navržený díl:</strong> ${htmlEscape(probablePart)}${oePartNumber !== "čeká na ověření" ? `, OE ${htmlEscape(oePartNumber)}` : ""}</p>
                 </td></tr>
               </table>
@@ -541,6 +550,9 @@ function renderDriverPartOrderEmail({ request, ctaUrl, patrikUrl }) {
                   <p style="margin:0 0 10px 0;"><strong>SPZ:</strong> ${htmlEscape(request.licensePlate)}</p>
                   <p style="margin:0 0 10px 0;"><strong>VIN:</strong> ${htmlEscape(vin)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Závada:</strong> ${htmlEscape(request.defectDescription)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Poznámka řidiče:</strong> ${htmlEscape(driverNote)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Vyhodnocení:</strong> ${htmlEscape(requestType)} / ${htmlEscape(serviceType)} / ${htmlEscape(priority)}</p>
+                  <p style="margin:0 0 10px 0;"><strong>Stav hlášení:</strong> ${htmlEscape(statusLabel)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Fotka poškození:</strong> ${htmlEscape(damagePhoto)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Pravděpodobný díl:</strong> ${htmlEscape(probablePart)}</p>
                   <p style="margin:0 0 10px 0;"><strong>Strana dílu:</strong> ${htmlEscape(side)}</p>
