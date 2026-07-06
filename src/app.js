@@ -1389,10 +1389,9 @@ function vehicleTrackingPreviewUtilityBar(user) {
         </a>
       </div>
       <div class="tracking-utility-bar__tools">
-        ${vehicleTrackingPreviewUtilityShortcuts()}
         ${vehicleTrackingPreviewThemeSwitcher()}
-        <span class="tracking-preview-user-chip">${escapeHtml(previewName)}</span>
         <span class="tracking-preview-role-chip">${escapeHtml(roleText)}</span>
+        ${vehicleTrackingPreviewUtilityShortcuts()}
         <button class="tracking-utility-logout" type="button" data-logout>Odhlásit</button>
       </div>
     </nav>

@@ -27234,12 +27234,25 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  order: 4;
+}
+
+.tracking-page--soft-metal-preview .tracking-theme-switcher {
+  order: 1;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-role-chip {
+  order: 2;
+}
+
+.tracking-page--soft-metal-preview .tracking-utility-logout {
+  order: 3;
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-icon-button {
   display: inline-flex;
-  width: 36px;
-  height: 36px;
+  width: 33px;
+  height: 33px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -27248,14 +27261,23 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   background: transparent;
   color: var(--text-muted);
   box-shadow: none;
+  cursor: pointer;
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
-  width: 35px;
-  height: 35px;
+  width: 33px;
+  height: 33px;
   filter: none;
   opacity: 1;
   transform: none;
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease;
+}
+
+.tracking-page--soft-metal-preview .tracking-utility-icon-button:hover .theme-icon-img {
+  filter: grayscale(1) saturate(0.22) brightness(0.76);
+  opacity: var(--icon-opacity-default);
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-logo {
@@ -28188,17 +28210,17 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   .tracking-page--soft-metal-preview .tracking-home-link,
   .tracking-page--soft-metal-preview .tracking-utility-logout,
   .tracking-page--soft-metal-preview .tracking-utility-icon-button {
-    min-height: 35px;
+    min-height: 33px;
   }
 
   .tracking-page--soft-metal-preview .tracking-utility-icon-button {
-    width: 35px;
-    height: 35px;
+    width: 33px;
+    height: 33px;
   }
 
   .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
-    width: 35px;
-    height: 35px;
+    width: 33px;
+    height: 33px;
   }
 
   .tracking-page--soft-metal-preview .tracking-home-link,
