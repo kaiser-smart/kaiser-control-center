@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.380"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.381"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: detail firem podle Vistos ID",
+    text: "Read-only ledger readiness nově bere Customer_FK a CustomerBranch_FK ze smluv a faktur a zkouší k nim Vistos GetByIdParam. UI ukazuje Detail firem podle Vistos ID včetně nejlepší entity, vrácených detailů a použitelných polí. Bez D1 zápisu, ratingu, KB plateb a komunikace zákazníkům."
+  },
   {
     title: "Pohledávky: viditelné Vistos enrichment pokusy",
     text: "Panel Obohacení firem nově ukazuje i všechny zkoušené Vistos entity a počet vrácených řádků. Je tak jasné, jestli API skutečně našlo zdroj pro DIČ, fakturační e-mail a splatnost, nebo jestli zůstává datová blokace."

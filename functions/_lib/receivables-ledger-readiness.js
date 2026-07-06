@@ -2,6 +2,7 @@ import {
   VistosExecuteError,
   cleanVistosValue,
   getAllVistosPages,
+  getVistosById,
   isVistosExecuteConfigured,
   loginVistosExecute
 } from "./vistos-execute-client.js";
@@ -12,6 +13,8 @@ const DEFAULT_PAGE_SIZE = 250;
 const DEFAULT_MAX_PAGES = 1;
 const MAX_PAGE_SIZE = 1000;
 const MAX_PAGES = 5;
+const DEFAULT_DETAIL_ID_LIMIT = 4;
+const MAX_DETAIL_ID_LIMIT = 12;
 
 const DIRECTORY_WITH_BRANCH_CORE_COLUMNS = [
   "Id",
@@ -168,6 +171,78 @@ const RECEIVABLES_COMPANY_ENRICHMENT_ATTEMPTS = [
     key: "address_book_enrichment",
     entityName: "AddressBook",
     columns: ["Id", "Name", "RegNumber", "VATNumber", "Email", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays"]
+  }
+];
+
+const DIRECTORY_DETAIL_COLUMNS = [
+  "Id",
+  "Name",
+  "Caption",
+  "FirstName",
+  "LastName",
+  "MiddleName",
+  "RegNumber",
+  "VATNumber",
+  "ICO",
+  "DIC",
+  "Email",
+  "Email1",
+  "EmailInvoicing",
+  "InvoiceEmail",
+  "BillingEmail",
+  "Phone",
+  "PhoneNumber",
+  "Mobile",
+  "Parent_FK",
+  "MasterParent_FK",
+  "MainProjection_FK",
+  "IsCompany",
+  "InvoiceDueDays",
+  "StandardDueDays",
+  "BillingAddressStreet",
+  "BillingAddressCity",
+  "BillingAddressPostalCode",
+  "Street",
+  "City",
+  "Zip",
+  "Status_FK"
+];
+
+const RECEIVABLES_COMPANY_DETAIL_ATTEMPTS = [
+  {
+    key: "directory_with_branch_detail_czech",
+    entityName: "DirectoryWithBranch",
+    columns: [...new Set([...DIRECTORY_WITH_BRANCH_CZECH_COLUMNS, ...DIRECTORY_WITH_BRANCH_CORE_COLUMNS, "EmailInvoicing"])]
+  },
+  {
+    key: "directory_with_branch_detail_extended",
+    entityName: "DirectoryWithBranch",
+    columns: [...new Set([...DIRECTORY_WITH_BRANCH_EXTENDED_COLUMNS, ...DIRECTORY_WITH_BRANCH_CZECH_COLUMNS, "EmailInvoicing"])]
+  },
+  {
+    key: "directory_detail",
+    entityName: "Directory",
+    columns: DIRECTORY_DETAIL_COLUMNS
+  },
+  {
+    key: "customer_detail",
+    entityName: "Customer",
+    columns: ["Id", "Name", "Caption", "RegNumber", "VATNumber", "ICO", "DIC", "Email", "Email1", "EmailInvoicing", "InvoiceEmail", "BillingEmail", "Phone", "PhoneNumber", "InvoiceDueDays", "StandardDueDays", "Status_FK"]
+  },
+  {
+    key: "customer_branch_detail",
+    entityName: "CustomerBranch",
+    columns: ["Id", "Name", "Caption", "Parent_FK", "RegNumber", "VATNumber", "ICO", "DIC", "Email", "Email1", "EmailInvoicing", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays", "StandardDueDays", "Status_FK"]
+  },
+  {
+    key: "company_detail",
+    entityName: "Company",
+    columns: ["Id", "Name", "Caption", "RegNumber", "VATNumber", "ICO", "DIC", "Email", "Email1", "EmailInvoicing", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays", "StandardDueDays", "Status_FK"]
+  },
+  {
+    key: "address_book_detail",
+    entityName: "AddressBook",
+    columns: ["Id", "Name", "Caption", "RegNumber", "VATNumber", "ICO", "DIC", "Email", "Email1", "EmailInvoicing", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays", "StandardDueDays", "Status_FK"]
   }
 ];
 
@@ -364,6 +439,147 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
   };
 }
 
+function companyHasUsefulMasterData(company = {}) {
+  return Boolean(
+    company.ico ||
+    company.dic ||
+    company.billingEmail ||
+    company.email ||
+    company.standardDueDays !== null && company.standardDueDays !== undefined
+  );
+}
+
+function addDetailIdentifier(items, seen, id, source) {
+  const value = clean(id);
+  if (!value || seen.has(value)) return;
+  seen.add(value);
+  items.push({ id: value, source });
+}
+
+function collectCompanyDetailIdentifiers(baseCompanies = [], invoices = [], options = {}) {
+  const limit = Math.max(1, Math.min(Number(options.maxDetailIds) || DEFAULT_DETAIL_ID_LIMIT, MAX_DETAIL_ID_LIMIT));
+  const identifiers = [];
+  const seen = new Set();
+  const companySample = baseCompanies.slice(0, Math.max(limit * 3, 12));
+  const invoiceSample = invoices.slice(0, Math.max(limit * 3, 12));
+
+  for (const company of companySample) {
+    addDetailIdentifier(identifiers, seen, company.vistoBranchId, "company_visto_branch_id");
+    addDetailIdentifier(identifiers, seen, company.vistoCompanyId, "company_visto_company_id");
+    addDetailIdentifier(identifiers, seen, recordId(company.raw || {}, "DirectoryBranch_FK"), "contract_directory_branch_fk");
+    addDetailIdentifier(identifiers, seen, recordId(company.raw || {}, "Directory_FK"), "contract_directory_fk");
+    addDetailIdentifier(identifiers, seen, recordId(company.raw || {}, "Sidlo_FK"), "contract_sidlo_fk");
+    if (identifiers.length >= limit) break;
+  }
+
+  for (const invoice of invoiceSample) {
+    if (identifiers.length >= limit) break;
+    addDetailIdentifier(identifiers, seen, invoice.customerBranchId, "invoice_customer_branch_id");
+    addDetailIdentifier(identifiers, seen, invoice.customerCompanyId, "invoice_customer_company_id");
+    addDetailIdentifier(identifiers, seen, invoice.customerId, "invoice_customer_id");
+    addDetailIdentifier(identifiers, seen, recordId(invoice.raw || {}, "CustomerBranch_FK"), "invoice_customer_branch_fk");
+    addDetailIdentifier(identifiers, seen, recordId(invoice.raw || {}, "Customer_FK"), "invoice_customer_fk");
+  }
+
+  return identifiers.slice(0, limit);
+}
+
+async function loadCompanyDetailProbe(env, session, identifiers = [], options = {}) {
+  const sampledIdentifiers = identifiers.slice(0, Math.max(1, Math.min(Number(options.maxDetailIds) || DEFAULT_DETAIL_ID_LIMIT, MAX_DETAIL_ID_LIMIT)));
+  const diagnostics = [];
+  const companies = [];
+  const rawRows = [];
+
+  if (!sampledIdentifiers.length) {
+    return {
+      enabled: true,
+      sampledIdentifiers: [],
+      companies,
+      rawRows,
+      diagnostics,
+      bestEntity: "",
+      successfulRows: 0,
+      usefulRows: 0
+    };
+  }
+
+  for (const attempt of RECEIVABLES_COMPANY_DETAIL_ATTEMPTS) {
+    let returnedRows = 0;
+    let usefulRows = 0;
+    const matchedIds = [];
+    const errorCounts = new Map();
+
+    for (const identifier of sampledIdentifiers) {
+      try {
+        const detail = await getVistosById(env, session, attempt.entityName, identifier.id, attempt.columns);
+        const row = detail.row && typeof detail.row === "object" && !Array.isArray(detail.row)
+          ? detail.row
+          : {};
+        const keys = Object.keys(row);
+        if (!keys.length) {
+          continue;
+        }
+
+        const rowWithId = {
+          ...row,
+          Id: firstValue(row, ["Id", "Systémové ID"]) || identifier.id
+        };
+        const company = mapReceivablesLedgerCompany(rowWithId, attempt.entityName);
+        returnedRows += 1;
+        rawRows.push(rowWithId);
+        matchedIds.push({
+          id: identifier.id,
+          source: identifier.source,
+          keyCount: keys.length,
+          hasUsefulMasterData: companyHasUsefulMasterData(company)
+        });
+
+        if (companyHasUsefulMasterData(company)) {
+          usefulRows += 1;
+        }
+
+        companies.push({
+          ...company,
+          detailProbeAttemptKey: attempt.key,
+          detailProbeSourceId: identifier.id,
+          detailProbeSource: identifier.source
+        });
+      } catch (error) {
+        const code = clean(error?.code) || "detail_probe_failed";
+        errorCounts.set(code, (errorCounts.get(code) || 0) + 1);
+      }
+    }
+
+    diagnostics.push({
+      key: attempt.key,
+      entityName: attempt.entityName,
+      columns: attempt.columns,
+      attemptedIds: sampledIdentifiers.length,
+      returnedRows,
+      usefulRows,
+      ok: returnedRows > 0 || errorCounts.size === 0,
+      matchedIds: matchedIds.slice(0, 8),
+      errors: [...errorCounts.entries()].map(([code, count]) => ({ code, count }))
+    });
+  }
+
+  const best = diagnostics
+    .slice()
+    .sort((left, right) => (right.usefulRows - left.usefulRows) || (right.returnedRows - left.returnedRows))[0] || null;
+
+  return {
+    enabled: true,
+    sampledIdentifiers,
+    companies,
+    rawRows,
+    diagnostics,
+    bestEntity: best?.usefulRows || best?.returnedRows ? best.entityName : "",
+    bestAttemptKey: best?.usefulRows || best?.returnedRows ? best.key : "",
+    successfulRows: diagnostics.reduce((sum, item) => sum + item.returnedRows, 0),
+    usefulRows: diagnostics.reduce((sum, item) => sum + item.usefulRows, 0)
+  };
+}
+
 export function mapReceivablesLedgerCompany(row = {}, entityName = "DirectoryWithBranch") {
   const isContract = entityName === "Contract";
   const contractCompanyId = recordId(row, "Directory_FK") || recordId(row, "Sidlo_FK");
@@ -387,12 +603,13 @@ export function mapReceivablesLedgerCompany(row = {}, entityName = "DirectoryWit
   const billingEmail = firstValue(row, [
     "BillingEmail",
     "InvoiceEmail",
+    "EmailInvoicing",
     "FakturacniEmail",
     "Fakturacni_e_mail",
     "Fakturační e-mail",
     "E-mail fakturace"
   ]);
-  const email = firstValue(row, ["Email", "E-mail", "ContactEmail"]);
+  const email = firstValue(row, ["Email", "Email1", "E-mail", "ContactEmail"]);
   const standardDueDays = numberOrNull(firstValue(row, ["InvoiceDueDays", "Splatnost", "DueDays", "StandardDueDays"]));
   const billingAddress = [
     firstValue(row, ["BillingAddressStreet", "Street", "Ulice"]),
@@ -411,7 +628,7 @@ export function mapReceivablesLedgerCompany(row = {}, entityName = "DirectoryWit
     dic,
     billingEmail,
     email,
-    phone: firstValue(row, ["Phone", "Telefon", "Mobile"]),
+    phone: firstValue(row, ["Phone", "PhoneNumber", "Telefon", "Mobile"]),
     standardDueDays,
     billingAddress,
     deliveryAddress: billingAddress,
@@ -486,7 +703,7 @@ function mergeCompanyEnrichment(baseCompanies = [], enrichmentCompanies = []) {
     if (!enrichment) {
       return {
         ...company,
-        enrichmentMatched: false
+        enrichmentMatched: Boolean(company.enrichmentMatched)
       };
     }
 
@@ -779,6 +996,12 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
         matchedCompanies: 0,
         loadedRows: 0
       },
+      companyDetailProbe: {
+        enabled: false,
+        sampledIdentifiers: [],
+        successfulRows: 0,
+        usefulRows: 0
+      },
       diagnostics: { configured: false, companyAttempts: [], invoiceAttempts: [] }
     };
   }
@@ -795,10 +1018,17 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
     options
   );
   const baseCompanies = companyResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, companyResult.entityName));
-  const enrichmentCompanies = enrichmentResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, enrichmentResult.entityName));
-  const enrichment = mergeCompanyEnrichment(baseCompanies, enrichmentCompanies);
-  const companies = enrichment.companies;
   const invoices = invoiceResult.page.rows.map(mapReceivablesVistosInvoice);
+  const enrichmentCompanies = enrichmentResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, enrichmentResult.entityName));
+  const pageEnrichment = mergeCompanyEnrichment(baseCompanies, enrichmentCompanies);
+  const detailProbe = await loadCompanyDetailProbe(
+    env,
+    session,
+    collectCompanyDetailIdentifiers(pageEnrichment.companies, invoices, options),
+    options
+  );
+  const detailEnrichment = mergeCompanyEnrichment(pageEnrichment.companies, detailProbe.companies);
+  const companies = detailEnrichment.companies;
   const companyIndexes = buildCompanyIndexes(companies);
   const resolvedInvoices = invoices.map((invoice) => resolveInvoiceCustomer(invoice, companies, companyIndexes));
   const ledgerReadiness = buildLedgerReadiness({ companies, invoices, resolvedInvoices, companyResult, invoiceResult });
@@ -827,10 +1057,22 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       loadedRows: enrichmentCompanies.length,
       totalRows: enrichmentResult.page.total || enrichmentCompanies.length,
       capped: Boolean(enrichmentResult.page.capped),
-      matchedCompanies: enrichment.matchedCompanies,
+      matchedCompanies: countBy(companies, (company) => Boolean(company.enrichmentMatched)),
+      pageMatchedCompanies: pageEnrichment.matchedCompanies,
+      detailMatchedCompanies: detailEnrichment.matchedCompanies,
       companiesWithDicAfterEnrichment: countBy(companies, (company) => Boolean(company.dic)),
       companiesWithBillingEmailAfterEnrichment: countBy(companies, (company) => Boolean(company.billingEmail || company.email)),
       companiesWithStandardDueDaysAfterEnrichment: countBy(companies, (company) => company.standardDueDays !== null && company.standardDueDays !== undefined)
+    },
+    companyDetailProbe: {
+      enabled: true,
+      sampledIdentifiers: detailProbe.sampledIdentifiers,
+      bestEntity: detailProbe.bestEntity,
+      bestAttemptKey: detailProbe.bestAttemptKey,
+      successfulRows: detailProbe.successfulRows,
+      usefulRows: detailProbe.usefulRows,
+      loadedRows: detailProbe.companies.length,
+      matchedCompanies: detailEnrichment.matchedCompanies
     },
     diagnostics: {
       configured: true,
@@ -844,6 +1086,11 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       companyEnrichmentColumns: enrichmentResult.columns,
       companyEnrichmentKeys: sampleKeys(enrichmentResult.page.rows),
       companyEnrichmentAttempts: enrichmentResult.diagnostics,
+      companyDetailIdentifiers: detailProbe.sampledIdentifiers,
+      companyDetailBestEntity: detailProbe.bestEntity,
+      companyDetailBestAttemptKey: detailProbe.bestAttemptKey,
+      companyDetailKeys: sampleKeys(detailProbe.rawRows),
+      companyDetailAttempts: detailProbe.diagnostics,
       invoiceEntity: invoiceResult.entityName,
       invoiceAttemptKey: invoiceResult.key,
       invoiceColumns: invoiceResult.columns,

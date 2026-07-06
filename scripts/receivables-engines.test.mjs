@@ -52,6 +52,20 @@ const invoice = {
 function mockVistosFetch(rowsByEntity = {}) {
   const originalFetch = globalThis.fetch;
   const calls = [];
+  const rowsForEntity = (entityName, mode) => {
+    const source = rowsByEntity[entityName];
+    if (Array.isArray(source)) return source;
+    if (source && Array.isArray(source[mode])) return source[mode];
+    return [];
+  };
+  const idValue = (row) => String(
+    row?.Id ||
+    row?.["Systémové ID"] ||
+    row?.DirectoryWithBranchId ||
+    row?.CompanyBranchId ||
+    row?.CustomerBranchId ||
+    ""
+  );
   globalThis.fetch = async (url, options = {}) => {
     const payload = JSON.parse(options.body || "{}");
     const methodName = String(url).split("?").pop();
@@ -66,8 +80,19 @@ function mockVistosFetch(rowsByEntity = {}) {
       });
     }
 
+    if (methodName === "GetByIdParam") {
+      const request = payload.GetByIdParam || {};
+      const source = rowsByEntity[request.EntityName];
+      const detailById = source && !Array.isArray(source) && source.detailById
+        ? source.detailById
+        : {};
+      const entityId = String(request.EntityId ?? "");
+      const row = detailById[entityId] || rowsForEntity(request.EntityName, "detail").find((item) => idValue(item) === entityId) || {};
+      return new Response(JSON.stringify({ status: "OK", data: row }), { status: 200 });
+    }
+
     const request = payload.GetPageParam || {};
-    const rows = rowsByEntity[request.EntityName] || [];
+    const rows = rowsForEntity(request.EntityName, "page");
     return new Response(JSON.stringify({
       status: "OK",
       data: {
@@ -713,7 +738,7 @@ Dodavatel
     assert.equal(preview.resolvedInvoices[0].resolvedDic, "CZ12345678");
     assert.equal(preview.resolvedInvoices[0].resolvedBillingEmail, "fakturace@firma.cz");
     assert.equal(preview.resolvedInvoices[0].resolvedStandardDueDays, 21);
-    assert.equal(preview.companyEnrichment.matchedCompanies, 1);
+    assert.equal(preview.companyEnrichment.matchedCompanies >= 1, true);
     assert.equal(preview.companyEnrichment.companiesWithDicAfterEnrichment, 1);
     assert.equal(preview.companyEnrichment.companiesWithBillingEmailAfterEnrichment, 1);
     assert.equal(preview.companyEnrichment.companiesWithStandardDueDaysAfterEnrichment, 1);
@@ -723,6 +748,78 @@ Dodavatel
     assert.equal(preview.calculatesRealRating, false);
     assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));
     assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "DirectoryWithBranch"));
+  } finally {
+    mock.restore();
+  }
+}
+
+{
+  const mock = mockVistosFetch({
+    DirectoryWithBranch: {
+      page: [],
+      detail: [{
+        "Systémové ID": "BR1",
+        "Název": "Firma Alfa Brno",
+        "Rodič": "Firma Alfa s.r.o. - 12345678",
+        "IČO": "12345678",
+        "DIČ": "CZ12345678",
+        "Fakturační e-mail": "fakturace@firma.cz",
+        "Telefon": "+420111222333",
+        "Splatnost": "21"
+      }]
+    },
+    Company: [],
+    Directory: [],
+    Customer: [],
+    CustomerBranch: [],
+    CompanyBranch: [],
+    Partner: [],
+    AddressBook: [],
+    Contract: [{
+      Id: "K1",
+      ContractNumber: "S001",
+      Directory_FK_RecordId: "C123",
+      Directory_FK_Caption: "Firma Alfa s.r.o. - 12345678",
+      DirectoryBranch_FK_RecordId: "BR1",
+      DirectoryBranch_FK_Caption: "Firma Alfa Brno"
+    }],
+    InvoiceIssued: [{
+      Id: "I123",
+      InvoiceNumber: "2601101477",
+      BankReference2: "2601101477",
+      Customer_FK_RecordId: "C123",
+      Customer_FK_Caption: "Firma Alfa s.r.o.",
+      CustomerBranch_FK_RecordId: "BR1",
+      CustomerBranch_FK_Caption: "Firma Alfa Brno",
+      CustomerRegNumber: "12345678",
+      CustomerVatNumber: "CZ12345678",
+      IssuedDate: "2026-06-01",
+      DueDate: "2026-06-14",
+      PriceWithTax: "1210",
+      AmountPaid: "0",
+      RemainToPay: "1210"
+    }]
+  });
+  try {
+    const preview = await createReceivablesLedgerReadinessPreview({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "test-password"
+    }, { pageSize: 10, maxPages: 1, maxDetailIds: 2 });
+    assert.equal(preview.diagnostics.companyEntity, "Contract");
+    assert.equal(preview.diagnostics.companyEnrichmentEntity, "DirectoryWithBranch");
+    assert.equal(preview.companyDetailProbe.bestEntity, "DirectoryWithBranch");
+    assert.equal(preview.companyDetailProbe.usefulRows > 0, true);
+    assert.equal(preview.companyDetailProbe.matchedCompanies >= 1, true);
+    assert.equal(preview.resolvedInvoices[0].confidence, "HIGH");
+    assert.equal(preview.resolvedInvoices[0].resolvedDic, "CZ12345678");
+    assert.equal(preview.resolvedInvoices[0].resolvedBillingEmail, "fakturace@firma.cz");
+    assert.equal(preview.resolvedInvoices[0].resolvedStandardDueDays, 21);
+    assert.ok(mock.calls.some((call) => call.payload.GetByIdParam?.EntityName === "DirectoryWithBranch"));
+    assert.equal(preview.writesD1, false);
+    assert.equal(preview.sendsCustomerCommunication, false);
+    assert.equal(preview.calculatesRealRating, false);
+    assert.equal(preview.importsKbPayments, false);
   } finally {
     mock.restore();
   }

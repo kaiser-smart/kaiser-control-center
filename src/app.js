@@ -23313,10 +23313,23 @@ function receivablesLedgerReadinessDiagnostics(preview) {
   const readiness = preview.ledgerReadiness || {};
   const diagnostics = preview.diagnostics || {};
   const enrichment = preview.companyEnrichment || {};
+  const detailProbe = preview.companyDetailProbe || {};
   const enrichmentAttempts = diagnostics.companyEnrichmentAttempts || [];
+  const detailAttempts = diagnostics.companyDetailAttempts || [];
   const enrichmentAttemptSummary = enrichmentAttempts
     .map((attempt) => `${attempt.entityName || "-"}:${attempt.ok ? `${attempt.returnedRows ?? 0}/${attempt.recordsTotal ?? 0}` : attempt.code || "chyba"}`)
     .join(" | ");
+  const detailAttemptSummary = detailAttempts
+    .map((attempt) => {
+      const errors = Array.isArray(attempt.errors) && attempt.errors.length
+        ? `, chyby ${attempt.errors.map((error) => `${error.code}:${error.count}`).join("/")}`
+        : "";
+      return `${attempt.entityName || "-"}:${attempt.returnedRows ?? 0}/${attempt.usefulRows ?? 0}${errors}`;
+    })
+    .join(" | ");
+  const detailIdentifiers = Array.isArray(detailProbe.sampledIdentifiers)
+    ? detailProbe.sampledIdentifiers.map((item) => `${item.id} (${item.source})`).join(", ")
+    : "";
   const blocking = readiness.blockingReasons || [];
   const flags = readiness.topDataQualityFlags || [];
   const confidence = readiness.confidenceCounts || {};
@@ -23356,6 +23369,20 @@ function receivablesLedgerReadinessDiagnostics(preview) {
           <div><dt>Sloupce</dt><dd>${escapeHtml((diagnostics.companyEnrichmentColumns || []).join(", ") || "-")}</dd></div>
           <div><dt>Klíče ve vzorku</dt><dd>${escapeHtml((diagnostics.companyEnrichmentKeys || []).slice(0, 16).join(", ") || "-")}</dd></div>
           <div><dt>Zkoušené entity</dt><dd>${escapeHtml(enrichmentAttemptSummary || "-")}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Detail firem podle Vistos ID</h3>
+        <dl class="receivables-diagnostics-list">
+          <div><dt>Režim</dt><dd>${detailProbe.enabled ? "GetByIdParam read-only" : "-"}</dd></div>
+          <div><dt>Nejlepší entita</dt><dd>${escapeHtml(detailProbe.bestEntity || "-")}</dd></div>
+          <div><dt>Nejlepší sada</dt><dd>${escapeHtml(detailProbe.bestAttemptKey || "-")}</dd></div>
+          <div><dt>Vzorkovaná ID</dt><dd>${escapeHtml(detailIdentifiers || "-")}</dd></div>
+          <div><dt>Vrácené detaily</dt><dd>${escapeHtml(detailProbe.successfulRows ?? 0)}</dd></div>
+          <div><dt>Užitečné detaily</dt><dd>${escapeHtml(detailProbe.usefulRows ?? 0)}</dd></div>
+          <div><dt>Spárováno na vazbu</dt><dd>${escapeHtml(detailProbe.matchedCompanies ?? 0)}</dd></div>
+          <div><dt>Klíče v detailu</dt><dd>${escapeHtml((diagnostics.companyDetailKeys || []).slice(0, 18).join(", ") || "-")}</dd></div>
+          <div><dt>Detail pokusy</dt><dd>${escapeHtml(detailAttemptSummary || "-")}</dd></div>
         </dl>
       </section>
       <section>
