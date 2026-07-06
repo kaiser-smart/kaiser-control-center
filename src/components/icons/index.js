@@ -11,4 +11,5 @@ export { ServiceMaintenanceIcon } from "./ServiceMaintenanceIcon.js";
 export { SettingsIcon } from "./SettingsIcon.js";
 export { TyresIcon } from "./TyresIcon.js";
 export { UsersRolesIcon } from "./UsersRolesIcon.js";
+export { VehicleTrackingIcon } from "./VehicleTrackingIcon.js";
 export { VistosIcon } from "./VistosIcon.js";

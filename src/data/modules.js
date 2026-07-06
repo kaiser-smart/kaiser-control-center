@@ -11,6 +11,7 @@ import {
   SettingsIcon,
   TyresIcon,
   UsersRolesIcon,
+  VehicleTrackingIcon,
   VistosIcon
 } from "../components/icons/index.js";
 
@@ -43,7 +44,7 @@ export const modules = [
     title: "Sledování vozidel",
     description: "Online poloha vozidel, historie jízd, trasy, zastávky a provozní stav v terénu.",
     route: "/sledovani-vozidel",
-    icon: FleetIcon,
+    icon: VehicleTrackingIcon,
     status: "ROZPRACOVÁN",
     active: true,
     disabled: false,
