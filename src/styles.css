@@ -26489,12 +26489,12 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --sidebar-group-space: 14px;
   --sidebar-compact-gap: 3px;
   --sidebar-compact-padding: 7px;
-  --sidebar-compact-nav-icon-size: 24px;
+  --sidebar-compact-nav-icon-size: 30px;
   --sidebar-compact-nav-icon-column: 30px;
   --sidebar-transition: 240ms ease;
   --sidebar-button-padding: 0 10px;
   --sidebar-button-gap: 10px;
-  --sidebar-nav-icon-size: 22px;
+  --sidebar-nav-icon-size: 28px;
   --sidebar-nav-icon-column: 28px;
   --sidebar-button-bg: color-mix(in srgb, var(--surface-control) 34%, transparent);
   --sidebar-button-border: color-mix(in srgb, var(--border-soft) 44%, transparent);
