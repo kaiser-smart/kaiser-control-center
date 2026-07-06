@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Trasy svozu: denní trasa jako návrh",
+    text: "Hlavní filtr Svozových tras má read-only dispečerský panel Denní trasa – návrh. Ukazuje, co je v aktuálním filtru připravené ze 13 Excelů, Vistos mapování a pilotního řidičského auditu, ale nevytváří ostrý denní běh, GPS, T-Cars, SMS/e-maily ani automatizace."
+  },
+  {
     title: "Šarlota: žádné falešné potvrzení hlášení",
     text: "Hlasová Šarlota má nově přísnější pravidlo: nesmí říct, že vytvořila servisní hlášení, pokud backendový tool nevrátí skutečné číslo hlášení. Bez reportId musí jasně říct, že zápis v aplikaci zatím nevidí."
   },
