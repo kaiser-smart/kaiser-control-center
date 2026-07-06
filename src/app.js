@@ -10125,30 +10125,38 @@ function vehicleTrackingPreviewSidebar(activeView = "map", sourceMode = vehicleT
     ];
 
   return `
-    <aside class="tracking-preview-sidebar sidebar--expanded" aria-label="Navigace modulu Sledování vozidel" data-tracking-preview-sidebar>
-      <input class="tracking-preview-sidebar__state sr-only" type="checkbox" id="tracking-preview-sidebar-state" checked data-tracking-preview-sidebar-state>
-      <div class="tracking-preview-sidebar__head tracking-preview-sidebar__head--controls-only">
-        <label class="tracking-preview-sidebar__toggle icon-tone-graphite" for="tracking-preview-sidebar-state" title="Přepnout menu">
-          ${themePreviewIcon("menu")}
-          <span class="tracking-preview-sidebar__toggle-label">Menu</span>
-        </label>
-      </div>
-      <nav class="tracking-preview-sidebar__nav" aria-label="Sekce modulu">
-        ${items.map((item) => `
-          <a class="tracking-preview-nav-item ${item.id === activeView ? "tracking-preview-nav-item--active" : ""}" href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}" ${item.id === activeView ? 'aria-current="page"' : ""}>
-            <span class="tracking-preview-nav-item__icon icon-tone-${escapeHtml(item.tone)}">${themePreviewIcon(item.icon)}</span>
-            <span class="tracking-preview-nav-item__label">${escapeHtml(item.label)}</span>
-          </a>
-        `).join("")}
-      </nav>
-      <section class="tracking-preview-sidebar-news" aria-label="Novinky v aplikaci" title="Nový modul k vyzkoušení">
-        <span class="tracking-preview-sidebar-news__icon icon-tone-green" aria-hidden="true">${themePreviewIcon("app")}</span>
-        <span class="tracking-preview-sidebar-news__copy">
-          <strong>Nový modul k vyzkoušení</strong>
-          <span>Sledování vozidel je připravené pro interní připomínky.</span>
-        </span>
+    <div class="tracking-preview-sidebar-stack">
+      <aside class="tracking-preview-sidebar sidebar--expanded" aria-label="Navigace modulu Sledování vozidel" data-tracking-preview-sidebar>
+        <input class="tracking-preview-sidebar__state sr-only" type="checkbox" id="tracking-preview-sidebar-state" checked data-tracking-preview-sidebar-state>
+        <div class="tracking-preview-sidebar__head tracking-preview-sidebar__head--controls-only">
+          <label class="tracking-preview-sidebar__toggle icon-tone-graphite" for="tracking-preview-sidebar-state" title="Přepnout menu">
+            ${themePreviewIcon("menu")}
+            <span class="tracking-preview-sidebar__toggle-label">Menu</span>
+          </label>
+        </div>
+        <nav class="tracking-preview-sidebar__nav" aria-label="Sekce modulu">
+          ${items.map((item) => `
+            <a class="tracking-preview-nav-item ${item.id === activeView ? "tracking-preview-nav-item--active" : ""}" href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}" ${item.id === activeView ? 'aria-current="page"' : ""}>
+              <span class="tracking-preview-nav-item__icon icon-tone-${escapeHtml(item.tone)}">${themePreviewIcon(item.icon)}</span>
+              <span class="tracking-preview-nav-item__label">${escapeHtml(item.label)}</span>
+            </a>
+          `).join("")}
+        </nav>
+      </aside>
+      <section class="tracking-preview-news-panel" aria-labelledby="tracking-preview-news-title">
+        <h2 id="tracking-preview-news-title">Novinky</h2>
+        <article class="tracking-preview-news-item">
+          <time datetime="2026-06-22">22.6.2026</time>
+          <h3>Nový modul k vyzkoušení!</h3>
+          <p>Sledování vozidel je připravené pro interní připomínky a kontrolu nového soft-metal směru.</p>
+        </article>
+        <article class="tracking-preview-news-item">
+          <time datetime="2026-06-22">22.6.2026</time>
+          <h3>Aktualizovaný design preview</h3>
+          <p>Sidebar, karty a stavové prvky jsou sjednocené pro další společné hodnocení s kolegy.</p>
+        </article>
       </section>
-    </aside>
+    </div>
   `;
 }
 
