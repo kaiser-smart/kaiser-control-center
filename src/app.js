@@ -10141,6 +10141,13 @@ function vehicleTrackingPreviewSidebar(activeView = "map", sourceMode = vehicleT
           </a>
         `).join("")}
       </nav>
+      <section class="tracking-preview-sidebar-news" aria-label="Novinky v aplikaci" title="Nový modul k vyzkoušení">
+        <span class="tracking-preview-sidebar-news__icon icon-tone-green" aria-hidden="true">${themePreviewIcon("app")}</span>
+        <span class="tracking-preview-sidebar-news__copy">
+          <strong>Nový modul k vyzkoušení</strong>
+          <span>Sledování vozidel je připravené pro interní připomínky.</span>
+        </span>
+      </section>
     </aside>
   `;
 }
