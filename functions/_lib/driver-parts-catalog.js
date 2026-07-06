@@ -194,7 +194,7 @@ export function identifyProbablePartFromDescription(description) {
   const text = cleanString(description);
   const normalized = normalizeText(text);
 
-  if (/\b(servis|udrzba|kontrola|olej|oleje|kapalina|kapaliny|filtr|filtry|zarovka|zarovky|sterac|sterace|stirac|stirace|pneumatika|pneumatiky|guma|gumy|provozni material|adblue)\b/.test(normalized)) {
+  if (/\b(servis|udrzba|kontrola|olej|oleje|kapalina|kapaliny|filtr|filtry|zarovka|zarovky|sterac|sterace|steracu|stirac|stirace|stiracu|pneumatika|pneumatiky|guma|gumy|provozni material|adblue)\b/.test(normalized)) {
     return skipPartMatch(
       "maintenance_or_consumable",
       "AI Boost nespustil hledání, protože jde o běžnou údržbu nebo provozní materiál.",
@@ -348,8 +348,8 @@ export function driverPartAiSkipReasonLabel(reason = "") {
 }
 
 export function driverPartRequestInitialStatus(partMatch) {
-  if (!partMatch?.probablePart) {
-    return "waiting_part_identification";
+  if (!driverPartAiCandidateFromMatch(partMatch)) {
+    return "new_report";
   }
 
   if (partMatch.needsPartSideClarification) {

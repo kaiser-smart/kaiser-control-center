@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import {
   driverPartAiCandidateFromMatch,
+  driverPartRequestInitialStatus,
   identifyProbablePartFromDescription
 } from "../functions/_lib/driver-parts-catalog.js";
 import {
@@ -389,6 +390,14 @@ function driverPartTestEnv(db, offers) {
   const match = identifyProbablePartFromDescription("Výměna oleje");
   assert.equal(driverPartAiCandidateFromMatch(match), false);
   assert.equal(match.aiSkipReason, "maintenance_or_consumable");
+}
+
+{
+  const match = identifyProbablePartFromDescription("výměna stěračů");
+  assert.equal(driverPartAiCandidateFromMatch(match), false);
+  assert.equal(match.aiSkipReason, "maintenance_or_consumable");
+  assert.equal(match.aiPilotStatus, "maintenance_or_consumable");
+  assert.equal(driverPartRequestInitialStatus(match), "new_report");
 }
 
 {

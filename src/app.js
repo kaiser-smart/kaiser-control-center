@@ -20638,6 +20638,23 @@ function driverReportStatusLabel(status) {
   return DRIVER_REPORT_STATUS_LABELS[status] || status || "Neznámý stav";
 }
 
+function driverReportDisplayStatus(item = {}) {
+  const status = String(item.status || "").trim();
+  if (item.partAiSkipReason && ["new_report", "waiting_part_identification"].includes(status)) {
+    return item.partAiSkipReason;
+  }
+  return status;
+}
+
+function driverReportDisplayStatusLabel(item = {}) {
+  const status = driverReportDisplayStatus(item);
+  if (item.partAiSkipReason && status === item.partAiSkipReason) {
+    if (status === "maintenance_or_consumable") return "Neřešit AI pilotem";
+    return driverReportVinPilotLabel(status);
+  }
+  return driverReportStatusLabel(status);
+}
+
 function driverReportBadgeLabel(status) {
   return DRIVER_REPORT_BADGE_LABELS[status] || "ND";
 }
@@ -20649,6 +20666,14 @@ function driverReportStatusTone(status) {
   if (["ordered"].includes(status)) return "ordered";
   if (["handed_to_ordering", "part_identified"].includes(status)) return "progress";
   return "waiting";
+}
+
+function driverReportDisplayStatusTone(item = {}) {
+  const status = driverReportDisplayStatus(item);
+  if (item.partAiSkipReason && status === item.partAiSkipReason) {
+    return driverReportVinPilotTone(status);
+  }
+  return driverReportStatusTone(status);
 }
 
 function driverReportSideLabel(side) {
@@ -21463,7 +21488,7 @@ function driverReportTableEmpty(message) {
 function driverReportQueueRows(items) {
   return items.map((item) => `
     <tr class="${driverReportsState.selected?.id === item.id ? "driver-report-table-row--active" : ""}" data-driver-report-select="${escapeHtml(item.id)}" tabindex="0">
-      <td data-label="Stav"><span class="driver-report-status driver-report-status--${escapeHtml(driverReportStatusTone(item.status))}">${escapeHtml(driverReportStatusLabel(item.status))}</span></td>
+      <td data-label="Stav"><span class="driver-report-status driver-report-status--${escapeHtml(driverReportDisplayStatusTone(item))}">${escapeHtml(driverReportDisplayStatusLabel(item))}</span></td>
       <td data-label="Datum">${escapeHtml(formatDateTime(item.reportedAt))}</td>
       <td data-label="SPZ"><strong>${escapeHtml(item.licensePlate || "neuvedeno")}</strong></td>
       <td data-label="Vozidlo">${escapeHtml(driverReportShortText(driverReportVehicleLabel(item), 34))}</td>
