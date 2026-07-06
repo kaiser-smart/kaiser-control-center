@@ -10658,13 +10658,23 @@ function vehicleTrackingDemoScenarioPanel(elapsedMs = vehicleTrackingDemoCurrent
 
 function vehicleTrackingDemoAlertOverlay(elapsedMs = vehicleTrackingDemoCurrentElapsed()) {
   const active = vehicleTrackingDemoIsAlertActive(elapsedMs);
+  const alertMeta = DEMO_VEHICLE_TRACKING_ALERT.detail
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const alertMetaMarkup = alertMeta.length
+    ? alertMeta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+    : `<span>${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.detail)}</span>`;
 
   return `
     <div class="tracking-demo-alert ${active ? "tracking-demo-alert--active" : ""}" data-tracking-demo-alert aria-live="polite">
       <div class="tracking-demo-alert__symbol" aria-hidden="true">!</div>
-      <div>
-        <strong>${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.title)}: ${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.text)}</strong>
-        <span>${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.detail)}</span>
+      <div class="tracking-demo-alert__body">
+        <span class="tracking-demo-alert__label">${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.title)}</span>
+        <strong class="tracking-demo-alert__title">${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.text)}</strong>
+        <div class="tracking-demo-alert__meta">
+          ${alertMetaMarkup}
+        </div>
       </div>
       <div class="tracking-demo-alert__actions">
         <button class="secondary-link secondary-link--danger" type="button" data-tracking-demo-control="focus-alert">Zobrazit vozidlo</button>
