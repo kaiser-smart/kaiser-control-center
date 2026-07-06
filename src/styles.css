@@ -25305,11 +25305,11 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --state-success-bg: color-mix(in srgb, var(--brand-accent) 13%, transparent);
   --state-success-border: color-mix(in srgb, var(--brand-accent) 38%, var(--border-soft));
   --state-success-text: var(--text-main);
-  --active-pill-bg: var(--state-success-bg);
+  --active-pill-bg: #d0e3c1;
   --active-pill-border: color-mix(in srgb, var(--brand-accent) 52%, var(--border-soft));
   --active-pill-text: var(--text-main);
   --active-pill-dot: var(--brand-accent);
-  --active-pill-hover-bg: color-mix(in srgb, var(--brand-accent) 16%, transparent);
+  --active-pill-hover-bg: #d0e3c1;
   --active-pill-shadow: none;
   --state-warning-bg: color-mix(in srgb, var(--tracking-warning) 12%, transparent);
   --state-warning-border: color-mix(in srgb, var(--tracking-warning) 34%, var(--border-soft));
