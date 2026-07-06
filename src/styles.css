@@ -263,7 +263,7 @@ a {
   width: min(1180px, calc(100% - 40px));
   min-height: 100vh;
   margin: 0 auto;
-  padding: 42px 0 56px;
+  padding: 15px 0 55px;
 }
 
 .user-bar {
