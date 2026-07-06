@@ -330,6 +330,77 @@ GPS:
 - Pokud GPS chybi, dat zaznam do fronty `K doplneni polohy`.
 - Body bez potvrzene polohy se nesmi vydavat za GPS pravdu.
 
+## DirectoryWithBranch - firma nebo pobocka
+
+Stav overeni 2026-07-06:
+
+- Vistos UI `#/DirectoryWithBranch` je dostupne jako `Seznam firem a pobockek`.
+- Stranka se v UI zobrazuje jako `Firma nebo pobocka`.
+- V gridu jsou videt realne firmy/pobocky.
+- Prime API volani `DbColumn` z prohlizecoveho sandboxu nebylo mozne spustit,
+  protoze sandbox nepovolil `fetch` ani `XMLHttpRequest`.
+- Nize uvedena pole jsou potvrzena z technickych `name` atributu filtru Vistos UI,
+  ne jako finalni `DbColumn` dump.
+
+Overena vazba ze smluv:
+
+| Vyznam | API pole | Doporucene pouziti |
+| --- | --- | --- |
+| Firma nebo pobocka na smlouve | `Contract.DirectoryBranch_FK` | pobocka / misto zakaznika |
+| ID firmy nebo pobocky | `Contract.DirectoryBranch_FK_RecordId` | vazba na `DirectoryWithBranch` |
+| Popisek firmy nebo pobocky | `Contract.DirectoryBranch_FK_Caption` / hodnota FK | nazev do UI |
+
+Pole viditelna ve filtru `DirectoryWithBranch` UI:
+
+- `DirectoryWithBranch.Name`
+- `DirectoryWithBranch.c_ShortName`
+- `DirectoryWithBranch.Parent_FK`
+- `DirectoryWithBranch.Parent_FK_Caption`
+- `DirectoryWithBranch.RegNumber`
+- `DirectoryWithBranch.VATNumber`
+- `DirectoryWithBranch.ICP_10znaku_`
+- `DirectoryWithBranch.Internicislo`
+- `DirectoryWithBranch.BillingAddressStreet`
+- `DirectoryWithBranch.BillingAddressCity`
+- `DirectoryWithBranch.BillingAddressPostalCode`
+- `DirectoryWithBranch.Type_FK_Item`
+- `DirectoryWithBranch.Prioritafirmy_FK_Item`
+- `DirectoryWithBranch.CelniciDruhDopravy_FK_Item`
+- `DirectoryWithBranch.Urokzprodleni`
+- `DirectoryWithBranch.InvoiceDueDays`
+- `DirectoryWithBranch.InvoiceDueDays_Caption`
+- `DirectoryWithBranch.CreatedBy_FK_Item`
+- `DirectoryWithBranch.ModifiedBy_FK_Item`
+- `DirectoryWithBranch.Created_OperatorFrom_Value`
+- `DirectoryWithBranch.Created_OperatorTo_Value`
+- `DirectoryWithBranch.Modified_OperatorFrom_Value`
+- `DirectoryWithBranch.Modified_OperatorTo_Value`
+
+Doporucene mapovani pro budoucni moduly:
+
+- `company_branch_vistos_id` <- `DirectoryWithBranch.Id` nebo FK `_RecordId`
+- `company_branch_name` <- `DirectoryWithBranch.Name`
+- `company_branch_short_name` <- `DirectoryWithBranch.c_ShortName`
+- `company_branch_parent_id` <- `DirectoryWithBranch.Parent_FK_RecordId`
+- `company_branch_parent_name` <- `DirectoryWithBranch.Parent_FK_Caption`
+- `company_branch_reg_number` <- `DirectoryWithBranch.RegNumber`
+- `company_branch_vat_number` <- `DirectoryWithBranch.VATNumber`
+- `company_branch_internal_number` <- `DirectoryWithBranch.Internicislo`
+- `billing_street` <- `DirectoryWithBranch.BillingAddressStreet`
+- `billing_city` <- `DirectoryWithBranch.BillingAddressCity`
+- `billing_postal_code` <- `DirectoryWithBranch.BillingAddressPostalCode`
+- `invoice_due_days` <- `DirectoryWithBranch.InvoiceDueDays`
+
+Dulezite:
+
+- Pro Trasy svozu zustava primarni svozove misto `Contract.Nakladkovaadresa_FK`.
+- `DirectoryWithBranch` je vhodny zdroj pro firmu/pobocku, fakturacni adresu,
+  ICO/DIC a zakaznickou strukturu, ne automaticky pro GPS bod svozu.
+- Pred ostrym API syncem je nutne doplnit server-side `DbObject`/`DbColumn`
+  discovery nebo potvrzeni od Eurosoftworks.
+- Zadny modul si nema vytvaret duplicitni master databazi firem bez schvaleneho
+  zdroje pravdy a vazeb na Vistos ID.
+
 ## ContractRow - polozky smlouvy
 
 | Vyznam | API pole | Stav |
