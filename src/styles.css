@@ -25280,9 +25280,9 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --metal-gradient-soft: linear-gradient(145deg, #f4f6f6 0%, #e8edef 52%, #dde4e7 100%);
   --metal-gradient-inset: linear-gradient(145deg, #ccd5da 0%, #e8ecee 100%);
   --metal-gradient-control: linear-gradient(145deg, #f1f3f4 0%, #e2e8ea 54%, #d8e0e3 100%);
-  --text-main: #1f2921;
+  --text-main: #1b2329;
   --text-hero-title: var(--text-main);
-  --text-muted: #58666b;
+  --text-muted: color-mix(in srgb, var(--text-main) 68%, transparent);
   --border-soft: rgba(78, 92, 100, 0.24);
   --border-highlight: rgba(255, 255, 255, 0.76);
   --highlight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -25301,10 +25301,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --tracking-warning: #c98121;
   --tracking-danger: #c9583a;
   --tracking-bluegrey: #637c8a;
-  --tracking-graphite: #4b5550;
+  --tracking-graphite: color-mix(in srgb, var(--text-main) 82%, transparent);
   --state-success-bg: color-mix(in srgb, var(--brand-accent) 13%, transparent);
   --state-success-border: color-mix(in srgb, var(--brand-accent) 38%, var(--border-soft));
-  --state-success-text: var(--brand-accent);
+  --state-success-text: var(--text-main);
   --active-pill-bg: var(--state-success-bg);
   --active-pill-border: color-mix(in srgb, var(--brand-accent) 52%, var(--border-soft));
   --active-pill-text: var(--text-main);
@@ -25313,16 +25313,16 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --active-pill-shadow: none;
   --state-warning-bg: color-mix(in srgb, var(--tracking-warning) 12%, transparent);
   --state-warning-border: color-mix(in srgb, var(--tracking-warning) 34%, var(--border-soft));
-  --state-warning-text: color-mix(in srgb, var(--tracking-warning) 74%, var(--text-main));
+  --state-warning-text: var(--text-main);
   --state-danger-bg: color-mix(in srgb, var(--tracking-danger) 11%, transparent);
   --state-danger-border: color-mix(in srgb, var(--tracking-danger) 34%, var(--border-soft));
-  --state-danger-text: color-mix(in srgb, var(--tracking-danger) 76%, var(--text-main));
+  --state-danger-text: var(--text-main);
   --state-info-bg: color-mix(in srgb, var(--tracking-bluegrey) 12%, transparent);
   --state-info-border: color-mix(in srgb, var(--tracking-bluegrey) 32%, var(--border-soft));
-  --state-info-text: color-mix(in srgb, var(--tracking-bluegrey) 78%, var(--text-main));
+  --state-info-text: var(--text-main);
   --state-neutral-bg: color-mix(in srgb, var(--tracking-graphite) 8%, transparent);
   --state-neutral-border: color-mix(in srgb, var(--tracking-graphite) 22%, var(--border-soft));
-  --state-neutral-text: var(--tracking-graphite);
+  --state-neutral-text: var(--text-muted);
   --tracking-accent-soft: var(--state-success-bg);
   --tracking-accent-border: var(--state-success-border);
   width: min(1360px, calc(100% - 28px));
@@ -25378,7 +25378,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
 
 .tracking-page--soft-metal-preview .module-detail__eyebrow,
 .tracking-page--soft-metal-preview .tracking-source-mode span {
-  color: var(--brand-accent);
+  color: var(--text-muted);
 }
 
 .tracking-page--soft-metal-preview .module-detail h1 {
@@ -26482,12 +26482,12 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --sidebar-nav-icon-column: 40px;
   --sidebar-button-bg: var(--tracking-control-bg);
   --sidebar-button-border: color-mix(in srgb, var(--border-soft) 76%, transparent);
-  --sidebar-button-color: var(--tracking-graphite);
+  --sidebar-button-color: var(--text-muted);
   --sidebar-button-icon-color: var(--icon-bluegrey);
   --sidebar-button-icon-filter: var(--icon-filter-bluegrey);
   --sidebar-button-hover-bg: color-mix(in srgb, var(--brand-accent) 7%, var(--surface-control));
   --sidebar-button-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
-  --sidebar-button-hover-color: var(--brand-accent);
+  --sidebar-button-hover-color: var(--text-main);
   --sidebar-button-hover-icon-color: var(--brand-accent);
   --sidebar-button-hover-icon-filter: var(--icon-filter-brand);
   --sidebar-button-active-bg: var(--state-success-bg);
@@ -26590,8 +26590,8 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --metal-gradient-inset: linear-gradient(145deg, #070c12 0%, #0b121a 46%, #121b25 100%);
   --metal-gradient-control: linear-gradient(145deg, #1a2634 0%, var(--surface-control) 48%, #101821 100%);
   --text-main: #edf3f6;
-  --text-hero-title: #fbfdff;
-  --text-muted: #b5c1ca;
+  --text-hero-title: var(--text-main);
+  --text-muted: color-mix(in srgb, var(--text-main) 72%, transparent);
   --border-soft: rgba(177, 194, 207, 0.16);
   --border-highlight: rgba(255, 255, 255, 0.085);
   --highlight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.085);
@@ -26610,10 +26610,10 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --tracking-warning: #d7a34d;
   --tracking-danger: #df7868;
   --tracking-bluegrey: #96aab8;
-  --tracking-graphite: #c3cfda;
+  --tracking-graphite: color-mix(in srgb, var(--text-main) 82%, transparent);
   --state-success-bg: color-mix(in srgb, var(--brand-accent) 14%, rgba(14, 21, 30, 0.94));
   --state-success-border: color-mix(in srgb, var(--brand-accent) 36%, rgba(177, 194, 207, 0.15));
-  --state-success-text: var(--brand-accent);
+  --state-success-text: var(--text-main);
   --active-pill-bg: color-mix(in srgb, var(--brand-accent) 16%, rgba(14, 21, 30, 0.94));
   --active-pill-border: color-mix(in srgb, var(--brand-accent) 44%, var(--border-soft));
   --active-pill-text: var(--text-main);
@@ -26622,16 +26622,16 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --active-pill-shadow: none;
   --state-warning-bg: color-mix(in srgb, var(--tracking-warning) 15%, rgba(14, 21, 30, 0.94));
   --state-warning-border: color-mix(in srgb, var(--tracking-warning) 34%, rgba(177, 194, 207, 0.15));
-  --state-warning-text: #edc779;
+  --state-warning-text: var(--text-main);
   --state-danger-bg: color-mix(in srgb, var(--tracking-danger) 14%, rgba(14, 21, 30, 0.94));
   --state-danger-border: color-mix(in srgb, var(--tracking-danger) 34%, rgba(177, 194, 207, 0.15));
-  --state-danger-text: #f09b8d;
+  --state-danger-text: var(--text-main);
   --state-info-bg: color-mix(in srgb, var(--tracking-bluegrey) 15%, rgba(14, 21, 30, 0.94));
   --state-info-border: color-mix(in srgb, var(--tracking-bluegrey) 30%, rgba(177, 194, 207, 0.15));
-  --state-info-text: #b8cad7;
+  --state-info-text: var(--text-main);
   --state-neutral-bg: color-mix(in srgb, var(--tracking-graphite) 9%, rgba(14, 21, 30, 0.94));
   --state-neutral-border: color-mix(in srgb, var(--tracking-graphite) 21%, rgba(177, 194, 207, 0.15));
-  --state-neutral-text: var(--tracking-graphite);
+  --state-neutral-text: var(--text-muted);
   --tracking-accent-soft: var(--state-success-bg);
   --tracking-accent-border: var(--state-success-border);
   --sidebar-button-bg: color-mix(in srgb, var(--surface-control) 82%, var(--surface-inset));
@@ -26641,13 +26641,13 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --sidebar-button-icon-filter: var(--icon-filter-bluegrey);
   --sidebar-button-hover-bg: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-inset));
   --sidebar-button-hover-border: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
-  --sidebar-button-hover-color: var(--state-success-text);
-  --sidebar-button-hover-icon-color: var(--state-success-text);
+  --sidebar-button-hover-color: var(--text-main);
+  --sidebar-button-hover-icon-color: var(--brand-accent);
   --sidebar-button-hover-icon-filter: var(--icon-filter-brand);
   --sidebar-button-active-bg: var(--state-success-bg);
   --sidebar-button-active-border: var(--state-success-border);
   --sidebar-button-active-color: var(--text-main);
-  --sidebar-button-active-icon-color: var(--state-success-text);
+  --sidebar-button-active-icon-color: var(--brand-accent);
   --sidebar-button-active-icon-filter: var(--icon-filter-brand);
   --sidebar-button-shadow: var(--shadow-control);
   --sidebar-button-hover-shadow: var(--shadow-inset-control);
@@ -27420,7 +27420,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-theme-switcher--dark .tracking-theme-switcher__thumb {
-  color: var(--state-success-text);
+  color: var(--brand-accent);
   transform: translateX(38px);
 }
 
@@ -27451,7 +27451,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
 .tracking-page--soft-metal-preview .tracking-theme-switcher--light .tracking-theme-switcher__icon--sun,
 .tracking-page--soft-metal-preview .tracking-theme-switcher--dark .tracking-theme-switcher__icon--moon {
-  color: var(--state-success-text);
+  color: var(--brand-accent);
   opacity: 0.86;
 }
 
