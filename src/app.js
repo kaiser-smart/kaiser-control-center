@@ -5025,6 +5025,84 @@ function absenceSubmitLabel(type) {
   return "Odeslat žádost";
 }
 
+function canUseAbsenceOutOfOfficePilot(user) {
+  return ["admin", "management"].includes(normalizeRole(user?.role));
+}
+
+function absenceEmployeeByFormValue(form, user) {
+  const employees = absenceSelectableEmployees(user);
+  const employeeId = form?.elements?.employeeId?.value || employeeIdForUser(user);
+  return employees.find((employee) => employee.id === employeeId) ||
+    employees.find((employee) => employee.id === employeeIdForUser(user)) ||
+    null;
+}
+
+function absenceOutOfOfficeSubstituteLabel(form, user) {
+  const substituteId = form?.elements?.substituteUserId?.value || "";
+  const substitute = absenceSelectableEmployees(user).find((employee) => employee.id === substituteId);
+
+  if (!substitute) {
+    return "Zastupuje: bude doplněno";
+  }
+
+  return `Zastupuje: ${substitute.name}${substitute.email ? ` (${substitute.email})` : ""}`;
+}
+
+function absenceOutOfOfficeText({ employee, dateTo, substituteLine }) {
+  const safeDateTo = dateTo ? formatAbsenceDate(dateTo) : "dne návratu";
+  const employeeName = employee?.name || currentUser()?.name || "Jméno a příjmení";
+
+  return [
+    "Dobrý den,",
+    "děkuji za Vaši zprávu.",
+    "",
+    `Do ${safeDateTo} jsem mimo kancelář a k e-mailu se dostanu jen omezeně. Po návratu se Vám ozvu, jakmile to bude možné.`,
+    "",
+    "Kdyby šlo o něco urgentního, prosím obraťte se na mé kolegy:",
+    substituteLine || "Zastupuje: bude doplněno",
+    "Dispečink zakázek: dispecer@kaiserservis.cz",
+    "",
+    "Děkuji a přeji hezký den.",
+    employeeName
+  ].join("\n");
+}
+
+function absenceOutOfOfficePanel(user, selectedEmployee) {
+  if (!canUseAbsenceOutOfOfficePilot(user)) {
+    return "";
+  }
+
+  const today = toIsoDate(new Date());
+  const text = absenceOutOfOfficeText({
+    employee: selectedEmployee,
+    dateTo: today,
+    substituteLine: "Zastupuje: bude doplněno"
+  });
+
+  return `
+    <section class="absence-out-office" data-absence-out-office>
+      <label class="absence-checkbox absence-out-office__toggle">
+        <input name="outOfOfficeEnabled" type="checkbox" data-absence-out-office-toggle />
+        <span>Nastavit e-mailové upozornění „Jsem mimo kancelář“</span>
+      </label>
+      <div class="absence-out-office__preview" data-absence-out-office-preview hidden>
+        <div class="absence-out-office__head">
+          <div>
+            <strong>Text pro Forpsi</strong>
+            <small>AI Boost připraví text podle dovolené. Nic se samo nenastaví.</small>
+          </div>
+          <a class="secondary-link" href="https://webmail.forpsi.com/smart/#postmaster/mailboxes" target="_blank" rel="noopener noreferrer">
+            Otevřít Forpsi
+          </a>
+        </div>
+        <textarea rows="11" readonly data-absence-out-office-text>${escapeHtml(text)}</textarea>
+        <button class="secondary-link" type="button" data-absence-out-office-copy>Kopírovat text</button>
+        <small class="absence-out-office__status" data-absence-out-office-copy-status></small>
+      </div>
+    </section>
+  `;
+}
+
 function sarlotaAbsenceVoiceButton(label = "Hlasem přes Šarlotu") {
   return `
     <button class="sarlota-absence-voice-button" type="button" data-absence-sarlota-voice>
@@ -6302,6 +6380,7 @@ function absenceNewRequest(user) {
       value: employee.id,
       label: employee.name
     }));
+  const selectedEmployee = employees.find((employee) => employee.id === currentEmployeeId) || null;
   const canChooseEmployee = canSubmitAbsenceForOthers(user);
   const employeeLoadingNotice = canChooseEmployee && employeeCardState.employeesLoading
     ? '<p class="absence-form__hint">Načítám úplný seznam zaměstnanců…</p>'
@@ -6328,7 +6407,7 @@ function absenceNewRequest(user) {
         ${canChooseEmployee ? `
           <label>
             <span>Zaměstnanec</span>
-            <select name="employeeId">
+            <select name="employeeId" data-absence-out-office-source>
               ${optionList(employeeOptions, currentEmployeeId, "Vyberte zaměstnance")}
             </select>
           </label>
@@ -6367,10 +6446,11 @@ function absenceNewRequest(user) {
         </label>
         <label>
           <span>Zástup</span>
-          <select name="substituteUserId">
+          <select name="substituteUserId" data-absence-out-office-source>
             ${optionList(substituteOptions, "", "Bez zástupu")}
           </select>
         </label>
+        ${absenceOutOfOfficePanel(user, selectedEmployee)}
         <label>
           <span>Příloha</span>
           <input name="attachment" type="file" multiple />
@@ -32125,6 +32205,33 @@ function applyAbsenceFilters(form) {
   render();
 }
 
+function updateAbsenceOutOfOfficePreview(form) {
+  const panel = form.querySelector("[data-absence-out-office]");
+  if (!panel) {
+    return;
+  }
+
+  const user = currentUser();
+  const isVacation = absenceTypeLabel(form.elements.type.value) === "Dovolená";
+  const enabled = Boolean(form.elements.outOfOfficeEnabled?.checked);
+  const preview = panel.querySelector("[data-absence-out-office-preview]");
+  const textField = panel.querySelector("[data-absence-out-office-text]");
+
+  panel.hidden = !canUseAbsenceOutOfOfficePilot(user) || !isVacation;
+
+  if (preview) {
+    preview.hidden = panel.hidden || !enabled;
+  }
+
+  if (textField) {
+    textField.value = absenceOutOfOfficeText({
+      employee: absenceEmployeeByFormValue(form, user),
+      dateTo: form.elements.dateTo?.value || form.elements.dateFrom?.value || "",
+      substituteLine: absenceOutOfOfficeSubstituteLabel(form, user)
+    });
+  }
+}
+
 function updateAbsenceFormPreview(form) {
   const type = form.elements.type.value;
   const isDoctor = absenceTypeLabel(type) === "Lékař";
@@ -32168,6 +32275,32 @@ function updateAbsenceFormPreview(form) {
 
   if (submitButton) {
     submitButton.textContent = absenceSubmitLabel(type);
+  }
+
+  updateAbsenceOutOfOfficePreview(form);
+}
+
+async function copyAbsenceOutOfOfficeText(button) {
+  const form = button.closest("[data-absence-request-form]");
+  const text = form?.querySelector("[data-absence-out-office-text]")?.value || "";
+  const status = form?.querySelector("[data-absence-out-office-copy-status]");
+
+  if (!text.trim()) {
+    if (status) {
+      status.textContent = "Text není připravený.";
+    }
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    if (status) {
+      status.textContent = "Zkopírováno. Ve Forpsi vložte ručně.";
+    }
+  } catch {
+    if (status) {
+      status.textContent = "Kopírování selhalo. Označte text ručně.";
+    }
   }
 }
 
@@ -33944,7 +34077,7 @@ document.addEventListener("change", async (event) => {
     return;
   }
 
-  const absenceFormField = event.target.closest("[data-absence-type], [data-absence-date]");
+  const absenceFormField = event.target.closest("[data-absence-type], [data-absence-date], [data-absence-out-office-source], [data-absence-out-office-toggle]");
   if (absenceFormField) {
     const form = absenceFormField.closest("[data-absence-request-form]");
     if (form) {
@@ -34815,6 +34948,12 @@ document.addEventListener("click", async (event) => {
   if (collectionRoutesSourceDriverToggleList) {
     playCollectionRoutesDriverSound("tap");
     toggleCollectionRoutesSourceDriverList();
+    return;
+  }
+
+  const absenceOutOfficeCopy = event.target.closest("[data-absence-out-office-copy]");
+  if (absenceOutOfficeCopy) {
+    await copyAbsenceOutOfOfficeText(absenceOutOfficeCopy);
     return;
   }
 
