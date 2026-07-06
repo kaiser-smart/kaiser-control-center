@@ -23,12 +23,13 @@ function moduleRulesError(error) {
 }
 
 function moduleRulesReadOnlyPilotResponse(route) {
-  if (route.moduleKey !== "collection-routes") {
+  if (!["collection-routes", "receivables"].includes(route.moduleKey)) {
     return null;
   }
 
+  const moduleName = route.moduleKey === "receivables" ? "Pohledávky" : "Trasy svozu";
   return json({
-    error: "Trasy svozu jsou ve Fázi 1A pouze read-only pilot. Pravidla ani automatizace se teď nesmí aktivovat.",
+    error: `${moduleName} jsou v bezpečném dry-run režimu. Pravidla ani automatizace se teď nesmí aktivovat.`,
     apiStatus: "ready"
   }, 403);
 }
