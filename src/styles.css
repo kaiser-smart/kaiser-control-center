@@ -26795,6 +26795,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   display: flex;
   width: 100%;
   min-height: 0;
+  max-height: calc(100vh - 32px);
   height: fit-content;
   flex-direction: column;
   gap: var(--space-md);
@@ -26861,7 +26862,12 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar__nav {
   display: grid;
+  min-height: 0;
+  overflow-y: auto;
   gap: var(--space-sm);
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--border-soft) 76%, transparent) transparent;
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-news-panel {

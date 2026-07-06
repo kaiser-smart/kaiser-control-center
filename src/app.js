@@ -1745,6 +1745,24 @@ function themePreviewIcon(name) {
     topMail: "top-mail.svg",
     topLogin: "top-login.svg",
     topPhone: "top-phone.svg",
+    quickEntry: "016.svg",
+    collectionRoutes: "003.svg",
+    driverReports: "014.svg",
+    fleet: "006.svg",
+    vehicleTracking: "018.svg",
+    maintenance: "013.svg",
+    tires: "017.svg",
+    customers: "011.svg",
+    sampleRoutes: "012.svg",
+    dataBox: "002.svg",
+    absence: "008.svg",
+    reports: "015.svg",
+    feedback: "004.svg",
+    costs: "005.svg",
+    receivables: "010.svg",
+    usersRoles: "019.svg",
+    settings: "020.svg",
+    systemCheck: "009.svg",
     actionDone: "013.svg",
     actionWarning: "014.svg",
     actionIcons: "015.svg"
@@ -10107,22 +10125,28 @@ function vehicleTrackingPreviewSourceIcon(modeId = "") {
   return { icon: "truck", tone: "green" };
 }
 
-function vehicleTrackingPreviewSidebar(activeView = "map", sourceMode = vehicleTrackingActiveSourceMode()) {
-  const items = sourceMode === "tcars"
-    ? [
-      { id: "tcars-status", label: "T-Cars stav", href: "#tracking-tcars-status", icon: "route", tone: "teal" },
-      { id: "wim-sites", label: "WIM váhy", href: "#tracking-wim-sites", icon: "marker", tone: "amber" },
-      { id: "tcars-pairing", label: "Párování", href: "#tracking-tcars-pairing", icon: "truck", tone: "bluegrey" },
-      { id: "rules", label: "Pravidla", href: "#tracking-rules", icon: "check", tone: "green" },
-      { id: "api", label: "API", href: "#tracking-api", icon: "service", tone: "graphite" }
-    ]
-    : [
-      { id: "map", label: "Mapa", href: "#tracking-map", icon: "marker", tone: "teal" },
-      { id: "list", label: "Vozidla", href: "#tracking-list", icon: "truck", tone: "bluegrey" },
-      { id: "detail", label: "Detail", href: "#tracking-detail", icon: "container", tone: "green" },
-      { id: "api", label: "API", href: "#tracking-api", icon: "service", tone: "graphite" },
-      { id: "rules", label: "Pravidla", href: "#tracking-rules", icon: "check", tone: "amber" }
-    ];
+function vehicleTrackingPreviewSidebar() {
+  const items = [
+    { id: "dashboard", label: "Dashboard", href: "#tracking-preview-dashboard", icon: "dashboard", tone: "bluegrey" },
+    { id: "quick-entry", label: "Rychlé zadání", href: "#tracking-preview-quick-entry", icon: "quickEntry", tone: "green" },
+    { id: "collection-routes", label: "Trasy svozu", href: "#tracking-preview-collection-routes", icon: "collectionRoutes", tone: "teal" },
+    { id: "driver-reports", label: "Hlášení řidičů", href: "#tracking-preview-driver-reports", icon: "driverReports", tone: "amber" },
+    { id: "fleet", label: "Vozový park", href: "#tracking-preview-fleet", icon: "fleet", tone: "bluegrey" },
+    { id: "vehicle-tracking", label: "Sledování vozidel", href: "#tracking-map", icon: "vehicleTracking", tone: "green", active: true },
+    { id: "maintenance", label: "Servis a údržba", href: "#tracking-preview-maintenance", icon: "maintenance", tone: "graphite" },
+    { id: "tires", label: "Pneumatiky", href: "#tracking-preview-tires", icon: "tires", tone: "bluegrey" },
+    { id: "customers", label: "Zákazníci", href: "#tracking-preview-customers", icon: "customers", tone: "teal" },
+    { id: "sample-routes", label: "Trasy vzorků", href: "#tracking-preview-sample-routes", icon: "sampleRoutes", tone: "teal" },
+    { id: "data-box", label: "Datová schránka", href: "#tracking-preview-data-box", icon: "dataBox", tone: "bluegrey" },
+    { id: "absence", label: "Dovolená / Nemoc", href: "#tracking-preview-absence", icon: "absence", tone: "amber" },
+    { id: "reports", label: "Reporty", href: "#tracking-preview-reports", icon: "reports", tone: "graphite" },
+    { id: "feedback", label: "Připomínky", href: "#tracking-preview-feedback", icon: "feedback", tone: "amber" },
+    { id: "costs", label: "Náklady", href: "#tracking-preview-costs", icon: "costs", tone: "graphite" },
+    { id: "receivables", label: "Pohledávky", href: "#tracking-preview-receivables", icon: "receivables", tone: "bluegrey" },
+    { id: "users-roles", label: "Uživatelé a role", href: "#tracking-preview-users-roles", icon: "usersRoles", tone: "bluegrey" },
+    { id: "settings", label: "Nastavení", href: "#tracking-preview-settings", icon: "settings", tone: "graphite" },
+    { id: "system-check", label: "Kontrola systému", href: "#tracking-preview-system-check", icon: "systemCheck", tone: "green" }
+  ];
 
   return `
     <div class="tracking-preview-sidebar-stack">
@@ -10136,7 +10160,7 @@ function vehicleTrackingPreviewSidebar(activeView = "map", sourceMode = vehicleT
         </div>
         <nav class="tracking-preview-sidebar__nav" aria-label="Sekce modulu">
           ${items.map((item) => `
-            <a class="tracking-preview-nav-item ${item.id === activeView ? "tracking-preview-nav-item--active" : ""}" href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}" ${item.id === activeView ? 'aria-current="page"' : ""}>
+            <a class="tracking-preview-nav-item ${item.active ? "tracking-preview-nav-item--active" : ""}" href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}" ${item.active ? 'aria-current="page"' : ""}>
               <span class="tracking-preview-nav-item__icon icon-tone-${escapeHtml(item.tone)}">${themePreviewIcon(item.icon)}</span>
               <span class="tracking-preview-nav-item__label">${escapeHtml(item.label)}</span>
             </a>
