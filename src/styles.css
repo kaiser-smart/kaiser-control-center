@@ -18577,6 +18577,60 @@ body:has(.data-box-page) {
   grid-column: span 2;
 }
 
+.absence-out-office {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.absence-out-office[hidden],
+.absence-out-office__preview[hidden] {
+  display: none;
+}
+
+.absence-out-office__toggle {
+  margin: 0;
+}
+
+.absence-out-office__preview {
+  display: grid;
+  gap: 10px;
+}
+
+.absence-out-office__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.absence-out-office__head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.absence-out-office__head strong {
+  color: var(--ink);
+  font-size: 0.98rem;
+}
+
+.absence-out-office__head small,
+.absence-out-office__status {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.absence-out-office textarea {
+  min-height: 260px;
+  white-space: pre-wrap;
+}
+
 .absence-doctor-time-fields {
   display: grid;
   grid-column: 1 / -1;
@@ -19364,10 +19418,16 @@ body:has(.absence-page--employee-card) {
 .absence-page .absence-checkbox,
 .absence-page .absence-form__summary,
 .absence-page .absence-module-note,
+.absence-page .absence-out-office,
 .absence-page .absence-filters {
   border-color: var(--color-border);
   border-radius: var(--radius-button);
   background: var(--color-surface);
+}
+
+.absence-page .absence-out-office textarea {
+  border-radius: var(--radius-button);
+  background: var(--color-card);
 }
 
 .absence-page .absence-filter-button {
