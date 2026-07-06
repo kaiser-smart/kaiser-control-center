@@ -10867,20 +10867,13 @@ function vehicleTrackingDemoVehicleCard(vehicle, selectedVehicle, elapsedMs) {
             <span>${escapeHtml(vehicle.licensePlate)}</span>
           </span>
         </div>
-        <span class="tracking-demo-data-badge">Demo data</span>
       </div>
       ${vehicleTrackingDemoVehicleImage(vehicle, "tracking-demo-vehicle-image--card")}
-      <div class="tracking-demo-vehicle-meta">
-        <span>${escapeHtml(vehicle.driver)}</span>
-        <span>${escapeHtml(vehicle.type)}</span>
-      </div>
       <div class="tracking-demo-vehicle-status">
         <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}" data-tracking-demo-status="${escapeHtml(vehicle.id)}">${escapeHtml(summary.statusLabel)}</span>
         <span data-tracking-demo-speed="${escapeHtml(vehicle.id)}">${escapeHtml(`${summary.speedNow} km/h`)}</span>
-        <span data-tracking-demo-updated="${escapeHtml(vehicle.id)}">${escapeHtml(vehicle.lastUpdate)}</span>
         <span data-tracking-demo-deviation="${escapeHtml(vehicle.id)}">${escapeHtml(summary.isOffRoute ? `Odchylka ${summary.deviationText}` : "Odchylka 0 m")}</span>
       </div>
-      <button class="secondary-link" type="button" data-tracking-demo-select="${escapeHtml(vehicle.id)}">Detail</button>
     </article>
   `;
 }
@@ -10893,7 +10886,7 @@ function vehicleTrackingListSection(visibleVehicles, selectedVehicle) {
       ${vehicleTrackingSectionHeader(
         "tracking-list-title",
         "Sledování vozidel",
-        "Boční panel ukazuje pouze demo data a stav aktuální 50s smyčky."
+        "Demo data a stav aktuální smyčky."
       )}
       ${vehicleTrackingDemoFilters()}
       <div class="tracking-demo-vehicle-list" aria-label="Seznam demo vozidel">
