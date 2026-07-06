@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.379"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.380"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: viditelné Vistos enrichment pokusy",
+    text: "Panel Obohacení firem nově ukazuje i všechny zkoušené Vistos entity a počet vrácených řádků. Je tak jasné, jestli API skutečně našlo zdroj pro DIČ, fakturační e-mail a splatnost, nebo jestli zůstává datová blokace."
+  },
   {
     title: "Pohledávky: širší hledání Vistos entity firem",
     text: "Read-only enrichment po Contract vazbě už nezkouší jen DirectoryWithBranch, ale také Customer, CustomerBranch, Company, Directory, Partner a AddressBook. Cílem je najít živou Vistos projekci s DIČ, fakturačním e-mailem a splatností bez ostrého zápisu."

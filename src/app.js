@@ -23313,6 +23313,10 @@ function receivablesLedgerReadinessDiagnostics(preview) {
   const readiness = preview.ledgerReadiness || {};
   const diagnostics = preview.diagnostics || {};
   const enrichment = preview.companyEnrichment || {};
+  const enrichmentAttempts = diagnostics.companyEnrichmentAttempts || [];
+  const enrichmentAttemptSummary = enrichmentAttempts
+    .map((attempt) => `${attempt.entityName || "-"}:${attempt.ok ? `${attempt.returnedRows ?? 0}/${attempt.recordsTotal ?? 0}` : attempt.code || "chyba"}`)
+    .join(" | ");
   const blocking = readiness.blockingReasons || [];
   const flags = readiness.topDataQualityFlags || [];
   const confidence = readiness.confidenceCounts || {};
@@ -23351,6 +23355,7 @@ function receivablesLedgerReadinessDiagnostics(preview) {
           <div><dt>Splatnost po obohacení</dt><dd>${escapeHtml(enrichment.companiesWithStandardDueDaysAfterEnrichment ?? 0)}</dd></div>
           <div><dt>Sloupce</dt><dd>${escapeHtml((diagnostics.companyEnrichmentColumns || []).join(", ") || "-")}</dd></div>
           <div><dt>Klíče ve vzorku</dt><dd>${escapeHtml((diagnostics.companyEnrichmentKeys || []).slice(0, 16).join(", ") || "-")}</dd></div>
+          <div><dt>Zkoušené entity</dt><dd>${escapeHtml(enrichmentAttemptSummary || "-")}</dd></div>
         </dl>
       </section>
       <section>
