@@ -8,6 +8,7 @@ import {
 } from "../functions/_lib/driver-parts-catalog.js";
 import {
   handoffDriverPartRequest,
+  processDriverPartRequestAfterVoiceCreate,
   verifyMercedesDriverPartRequest,
   __test as driverPartRequestInternals
 } from "../functions/_lib/driver-part-requests-store.js";
@@ -199,7 +200,10 @@ function createDriverPartTestDb(initialRows = []) {
           });
           return { success: true };
         }
-        if (compactSql.includes("update driver_part_requests set status = ?")) {
+        if (
+          compactSql.includes("update driver_part_requests set status = ?") &&
+          compactSql.includes("assigned_to_name")
+        ) {
           const [
             status,
             assignedToName,
@@ -219,6 +223,24 @@ function createDriverPartTestDb(initialRows = []) {
             handed_off_to_patrik_at: handedOffToPatrikAt || "",
             patrik_email_status: patrikEmailStatus || "",
             patrik_email_error: patrikEmailError || "",
+            updated_by_user_id: updatedByUserId || "",
+            updated_at: updatedAt
+          });
+          return { success: true };
+        }
+        if (
+          compactSql.includes("update driver_part_requests set status = ?") &&
+          compactSql.includes("updated_by_user_id")
+        ) {
+          const [
+            status,
+            updatedByUserId,
+            updatedAt,
+            id
+          ] = this.params;
+          const row = state.requests.get(id);
+          Object.assign(row, {
+            status,
             updated_by_user_id: updatedByUserId || "",
             updated_at: updatedAt
           });
@@ -1258,6 +1280,92 @@ function driverPartTestEnv(db, offers) {
   assert.equal(row.parts_provider_status, "not_configured");
   assert.equal(row.price_boost_status, "not_requested");
   assert.equal(missingProviderDb.state.events.some((event) => event.action === "handoff_to_ordering"), false);
+}
+
+{
+  const backgroundMissingVinDb = createDriverPartTestDb([driverPartRequestRow({
+    id: "driver-part-background-missing-vin",
+    vin: "",
+    status: "part_identified"
+  })]);
+  let externalCalled = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    externalCalled = true;
+    throw new Error("Bez VIN se nesmí volat externí provider.");
+  };
+  let processed = null;
+  try {
+    processed = await processDriverPartRequestAfterVoiceCreate(
+      driverPartTestEnv(backgroundMissingVinDb, []),
+      adminUser,
+      "driver-part-background-missing-vin"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const row = backgroundMissingVinDb.state.requests.get("driver-part-background-missing-vin");
+  assert.equal(processed.status, "waiting_vehicle_vin");
+  assert.equal(row.status, "waiting_vehicle_vin");
+  assert.equal(externalCalled, false);
+  assert.equal(backgroundMissingVinDb.state.events.some((event) => event.action === "background_parts_started"), true);
+  assert.equal(backgroundMissingVinDb.state.events.some((event) => event.action === "background_blocked"), true);
+  assert.equal(backgroundMissingVinDb.state.events.some((event) => /VIN/.test(event.note)), true);
+}
+
+{
+  const backgroundTwoOfferDb = createDriverPartTestDb([driverPartRequestRow({
+    id: "driver-part-background-two-offers"
+  })]);
+  let sendGridCalled = false;
+  let mercedesCalled = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("mercedes.example.test")) {
+      mercedesCalled = true;
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            verified: true,
+            parts: [{
+              partNumber: "A 257 670 00 01",
+              name: "Přední sklo Mercedes CLS"
+            }]
+          });
+        }
+      };
+    }
+    sendGridCalled = true;
+    throw new Error("SendGrid nemá být volaný bez 3 odkazů.");
+  };
+  let processed = null;
+  try {
+    processed = await processDriverPartRequestAfterVoiceCreate(
+      driverPartTestEnv(backgroundTwoOfferDb, [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+        { title: "Přední sklo čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
+      ]),
+      adminUser,
+      "driver-part-background-two-offers"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const row = backgroundTwoOfferDb.state.requests.get("driver-part-background-two-offers");
+  assert.equal(processed.status, "waiting_decision");
+  assert.equal(row.status, "waiting_decision");
+  assert.equal(mercedesCalled, true);
+  assert.equal(sendGridCalled, false);
+  assert.equal(row.oe_part_number, "A 257 670 00 01");
+  assert.equal(row.price_boost_status, "partial_results");
+  assert.equal(JSON.parse(row.price_boost_result_json).offers.length, 2);
+  assert.equal(backgroundTwoOfferDb.state.events.some((event) => event.action === "background_parts_started"), true);
+  assert.equal(backgroundTwoOfferDb.state.events.some((event) => event.action === "background_prices_started"), true);
+  assert.equal(backgroundTwoOfferDb.state.events.some((event) => event.action === "background_blocked"), true);
 }
 
 {

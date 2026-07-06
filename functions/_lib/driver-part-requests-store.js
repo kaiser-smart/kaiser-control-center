@@ -40,6 +40,7 @@ import { hasPermission, isFullAccessRole, normalizeRole } from "../../src/permis
 const DB_BINDING = "SMART_ODPADY_DB";
 const STATUSES = new Set([
   "new_report",
+  "waiting_vehicle_vin",
   "waiting_diagnostics",
   "searching_parts",
   "searching_prices",
@@ -59,6 +60,7 @@ const NOTIFICATION_DONE_STATUSES = new Set(["sent"]);
 
 export const DRIVER_PART_REQUEST_STATUS_LABELS = {
   new_report: "Nové hlášení",
+  waiting_vehicle_vin: "Čeká na doplnění auta/VIN",
   waiting_diagnostics: "Čeká na diagnostiku",
   searching_parts: "Vyhledávám díly",
   searching_prices: "Vyhledávám ceny",
@@ -1629,6 +1631,69 @@ async function saveDriverPartPriceBoostResult(db, user, item, result) {
   return after;
 }
 
+function driverPartBackgroundBlockedStatus(code = "") {
+  const normalized = cleanString(code);
+  if ([
+    "driver_part_vehicle_required",
+    "driver_part_vehicle_not_verified",
+    "driver_part_vin_required"
+  ].includes(normalized)) {
+    return "waiting_vehicle_vin";
+  }
+  if ([
+    "driver_part_verified_part_required",
+    "driver_part_price_verified_part_required"
+  ].includes(normalized)) {
+    return "waiting_part_identification";
+  }
+  if (normalized === "driver_part_patrik_email_missing") {
+    return "ready_for_patrik";
+  }
+  return "waiting_decision";
+}
+
+async function saveDriverPartBackgroundStatus(db, user, item = {}, status, note, action = "background_status") {
+  const nextStatus = STATUSES.has(status) ? status : "waiting_decision";
+  if (!item?.id || item.status === nextStatus) {
+    return item;
+  }
+
+  const now = new Date().toISOString();
+  const after = {
+    ...item,
+    status: nextStatus,
+    updatedAt: now
+  };
+
+  await db.batch([
+    db
+      .prepare(`
+        UPDATE driver_part_requests
+        SET
+          status = ?,
+          updated_by_user_id = ?,
+          updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(
+        nextStatus,
+        nullableString(user?.id),
+        now,
+        item.id
+      ),
+    eventStatement(db, {
+      requestId: item.id,
+      action,
+      user,
+      before: item,
+      after,
+      note
+    })
+  ]);
+
+  return after;
+}
+
 export async function runDriverPartPriceBoost(env, user, id, options = {}) {
   if (!canManageDriverPartRequests(user)) {
     throw new DriverPartRequestsStoreError("Nemáte oprávnění spustit cenový průzkum.", 403, "driver_part_price_boost_forbidden");
@@ -1722,7 +1787,7 @@ export async function sendDriverPartUrgentAlert(env, user, id) {
 }
 
 export async function processDriverPartRequestAfterVoiceCreate(env, user, id, options = {}) {
-  const item = await getDriverPartRequest(env, user, id);
+  const { db, item } = await requestForUser(env, id, user);
 
   if (item.priority === "urgentní" || item.backgroundAction === "urgent_alert") {
     return sendDriverPartUrgentAlert(env, user, item.id);
@@ -1732,14 +1797,42 @@ export async function processDriverPartRequestAfterVoiceCreate(env, user, id, op
     return item;
   }
 
-  return handoffDriverPartRequest(env, user, item.id, {
-    allowCreatorHandoff: true,
-    allowProbablePartHandoff: true,
-    runPriceBoost: true,
-    requireVinPartVerification: true,
-    requirePriceOffersForHandoff: true,
-    ...options
-  });
+  await saveDriverPartBackgroundStatus(
+    db,
+    user,
+    item,
+    "searching_parts",
+    "Hlášení bylo vytvořeno. Pozadí začalo ověřovat vozidlo, VIN a díl.",
+    "background_parts_started"
+  );
+
+  try {
+    return await handoffDriverPartRequest(env, user, item.id, {
+      allowCreatorHandoff: true,
+      allowProbablePartHandoff: true,
+      runPriceBoost: true,
+      trackBackgroundStatus: true,
+      requireVinPartVerification: true,
+      requirePriceOffersForHandoff: true,
+      ...options
+    });
+  } catch (error) {
+    if (!(error instanceof DriverPartRequestsStoreError)) {
+      throw error;
+    }
+
+    const { db: latestDb, item: latestItem } = await requestForUser(env, item.id, user);
+    const status = driverPartBackgroundBlockedStatus(error.code);
+    await saveDriverPartBackgroundStatus(
+      latestDb,
+      user,
+      latestItem,
+      status,
+      `Pozadí se zastavilo: ${error.message}`,
+      "background_blocked"
+    );
+    return getDriverPartRequest(env, user, item.id);
+  }
 }
 
 export async function handoffDriverPartRequest(env, user, id, options = {}) {
@@ -1785,6 +1878,20 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
       )
     );
   if (shouldRunPriceBoost || (options.runPriceBoost === true && (itemForHandoff.priceBoostStatus !== "candidates_found" || missingRequiredPriceOffers))) {
+    if (options.trackBackgroundStatus === true) {
+      try {
+        itemForHandoff = await saveDriverPartBackgroundStatus(
+          db,
+          user,
+          itemForHandoff,
+          "searching_prices",
+          "Pozadí začalo hledat ceny a 3 použitelné odkazy.",
+          "background_prices_started"
+        );
+      } catch (error) {
+        throw dbError(error);
+      }
+    }
     const priceResult = await runDriverPartPriceSearch(env, itemForHandoff, {
       allowProbablePartSeed: options.allowProbablePartHandoff === true
     });

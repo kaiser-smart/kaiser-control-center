@@ -377,6 +377,7 @@ const NOTIFICATION_TYPE_OPTIONS = Object.entries(NOTIFICATION_TYPE_LABELS)
 const DRIVER_REPORT_ROUTE = "/hlaseni-ridicu";
 const DRIVER_REPORT_STATUS_LABELS = {
   new_report: "Nové hlášení",
+  waiting_vehicle_vin: "Čeká na doplnění auta/VIN",
   waiting_diagnostics: "Čeká na diagnostiku",
   searching_parts: "Vyhledávám díly",
   searching_prices: "Vyhledávám ceny",
@@ -394,6 +395,7 @@ const DRIVER_REPORT_STATUS_LABELS = {
 };
 const DRIVER_REPORT_BADGE_LABELS = {
   new_report: "ND",
+  waiting_vehicle_vin: "Čeká na VIN",
   waiting_diagnostics: "Diagnostika",
   searching_parts: "Díly",
   searching_prices: "Ceny",
@@ -21285,6 +21287,7 @@ function driverReportNextStep(item) {
   if (item.status === "completed") return "Hotovo";
   if (item.status === "canceled") return "Zrušeno";
   if (item.backgroundAction === "urgent_alert" || item.priority === "urgentní") return "Urgentně Patrik";
+  if (item.status === "waiting_vehicle_vin") return "Doplnit auto/VIN";
   if (item.status === "waiting_diagnostics") return "Servisní diagnostika";
   if (item.status === "searching_parts") return "Vyhledat díly";
   if (item.status === "searching_prices") return "Vyhledat ceny";

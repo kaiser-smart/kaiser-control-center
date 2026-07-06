@@ -1155,6 +1155,7 @@ function addMockNotificationLog(input) {
 
 const MOCK_DRIVER_PART_STATUS_LABELS = {
   new_report: "Nové hlášení",
+  waiting_vehicle_vin: "Čeká na doplnění auta/VIN",
   waiting_diagnostics: "Čeká na diagnostiku",
   searching_parts: "Vyhledávám díly",
   searching_prices: "Vyhledávám ceny",
