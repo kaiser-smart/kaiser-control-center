@@ -3064,14 +3064,49 @@ h1 {
   background: rgba(138, 154, 145, 0.12);
 }
 
+.collection-routes-location-review {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(72, 92, 84, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.collection-routes-location-review__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.collection-routes-location-review__head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.collection-routes-location-review__head span {
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-routes-location-review__cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
 @media (max-width: 980px) {
-  .collection-routes-map-readiness__cards {
+  .collection-routes-map-readiness__cards,
+  .collection-routes-location-review__cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 560px) {
-  .collection-routes-map-readiness__cards {
+  .collection-routes-map-readiness__cards,
+  .collection-routes-location-review__cards {
     grid-template-columns: 1fr;
   }
 }
