@@ -111,6 +111,18 @@ function compactDigits(value) {
   return clean(value).replace(/\D/g, "");
 }
 
+function splitCompanyNameAndIco(value) {
+  const text = clean(value);
+  const match = text.match(/^(.*?)\s+-\s+(\d{8})$/);
+  if (!match) {
+    return { companyName: text, ico: "" };
+  }
+  return {
+    companyName: clean(match[1]) || text,
+    ico: match[2]
+  };
+}
+
 function sampleKeys(rows) {
   return [...new Set(rows.flatMap((row) => Object.keys(row || {})))].slice(0, 80);
 }
@@ -171,10 +183,12 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
 }
 
 export function mapReceivablesVistosCompany(row = {}) {
+  const rawCompanyName = caption(row, "Directory_FK") || caption(row, "Sidlo_FK") || firstValue(row, ["Name", "Caption", "CompanyName", "ObchodniNazev"]);
+  const parsedCompany = splitCompanyNameAndIco(rawCompanyName);
   return {
     vistoCompanyId: recordId(row, "Directory_FK") || recordId(row, "Sidlo_FK") || firstValue(row, ["Id", "CompanyId", "DirectoryId"]),
-    companyName: caption(row, "Directory_FK") || caption(row, "Sidlo_FK") || firstValue(row, ["Name", "Caption", "CompanyName", "ObchodniNazev"]),
-    ico: compactDigits(firstValue(row, ["ICO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"])),
+    companyName: parsedCompany.companyName,
+    ico: compactDigits(firstValue(row, ["ICO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"])) || parsedCompany.ico,
     dic: firstValue(row, ["DIC", "Dic", "VAT", "VatId"]),
     contactEmail: firstValue(row, ["Email", "E-mail", "ContactEmail", "InvoiceEmail"]),
     contactPhone: firstValue(row, ["Phone", "Telefon", "Mobile", "ContactPhone"]),

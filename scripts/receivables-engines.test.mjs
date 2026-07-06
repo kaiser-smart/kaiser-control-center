@@ -238,6 +238,16 @@ Dodavatel
 }
 
 {
+  const companyFromContract = mapReceivablesVistosCompany({
+    Directory_FK_RecordId: "D1",
+    Directory_FK_Caption: "Smluvní Alfa s.r.o. - 12345678"
+  });
+  assert.equal(companyFromContract.vistoCompanyId, "D1");
+  assert.equal(companyFromContract.companyName, "Smluvní Alfa s.r.o.");
+  assert.equal(companyFromContract.ico, "12345678");
+}
+
+{
   const invoiceFromVistos = mapReceivablesVistosInvoice({
     Id: "I123",
     Number: "2601101477",
@@ -278,7 +288,7 @@ Dodavatel
     const rowsByEntity = {
       Company: [],
       Directory: [],
-      Contract: [{ Id: "K1", ContractNumber: "S001", Directory_FK_RecordId: "D1", Directory_FK_Caption: "Smluvní Alfa s.r.o." }],
+      Contract: [{ Id: "K1", ContractNumber: "S001", Directory_FK_RecordId: "D1", Directory_FK_Caption: "Smluvní Alfa s.r.o. - 12345678" }],
       InvoiceIssued: [],
       Invoice: [{ Id: "I1", Number: "2601101477", Directory_FK_RecordId: "D1", DueDate: "2026-06-14", TotalAmount: "1210" }]
     };
@@ -304,6 +314,7 @@ Dodavatel
     assert.equal(preview.diagnostics.companyEntity, "Contract");
     assert.equal(preview.diagnostics.invoiceEntity, "Invoice");
     assert.equal(preview.companies[0].companyName, "Smluvní Alfa s.r.o.");
+    assert.equal(preview.companies[0].ico, "12345678");
     assert.equal(preview.invoices[0].invoiceNumber, "2601101477");
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Company"));
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Directory"));
