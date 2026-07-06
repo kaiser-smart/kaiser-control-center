@@ -868,6 +868,10 @@ const receivablesState = {
   vistosPreviewLoading: false,
   vistosPreviewError: "",
   vistosPreviewMessage: "",
+  ledgerReadiness: null,
+  ledgerReadinessLoading: false,
+  ledgerReadinessError: "",
+  ledgerReadinessMessage: "",
   dryRunLoading: false,
   dryRunResult: null,
   dryRunError: ""
@@ -23266,11 +23270,252 @@ function receivablesVistosPreviewPanel() {
   `;
 }
 
+function receivablesLedgerPercent(value) {
+  const number = Number(value || 0);
+  return `${number.toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} %`;
+}
+
+function receivablesLedgerReadinessSummary(preview) {
+  const readiness = preview?.ledgerReadiness || {};
+  const counts = readiness.counts || {};
+  const rates = readiness.rates || {};
+  const cards = [
+    ["Ledger import", readiness.ledgerImportReady ? "připravený" : "jen preview"],
+    ["Firmy načtené", counts.companiesLoaded || 0],
+    ["Firmy s IČO", counts.companiesWithIco || 0],
+    ["Firmy s DIČ", counts.companiesWithDic || 0],
+    ["Fakturační e-mail", counts.companiesWithBillingEmail || 0],
+    ["Splatnost u firem", counts.companiesWithStandardDueDays || 0],
+    ["Faktury načtené", counts.invoicesLoaded || 0],
+    ["Faktury s Customer_FK", counts.invoicesWithCustomerFk || 0],
+    ["Faktury s Branch_FK", counts.invoicesWithCustomerBranchFk || 0],
+    ["Faktury se splatností", `${counts.invoicesWithDueDate || 0} / ${receivablesLedgerPercent(rates.invoiceDueDateRate)}`],
+    ["Faktury s VS", `${counts.invoicesWithVariableSymbol || 0} / ${receivablesLedgerPercent(rates.invoiceVariableSymbolRate)}`],
+    ["Vazba HIGH/MEDIUM", `${counts.invoicesLinkedHigh || 0} / ${counts.invoicesLinkedMedium || 0}`]
+  ];
+
+  return `
+    <div class="receivables-import-summary" aria-label="Ledger readiness souhrn">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function receivablesLedgerReadinessDiagnostics(preview) {
+  if (!preview) {
+    return `<p class="receivables-empty">Ledger readiness zatím není načtený.</p>`;
+  }
+  const readiness = preview.ledgerReadiness || {};
+  const diagnostics = preview.diagnostics || {};
+  const blocking = readiness.blockingReasons || [];
+  const flags = readiness.topDataQualityFlags || [];
+  const confidence = readiness.confidenceCounts || {};
+  const blockingRows = blocking.map((reason) => `
+    <tr>
+      <td data-label="Blocking reason">${escapeHtml(reason)}</td>
+    </tr>
+  `).join("");
+  const flagRows = flags.map((flag) => `
+    <tr>
+      <td data-label="Flag">${escapeHtml(flag.code)}</td>
+      <td data-label="Počet">${escapeHtml(flag.count)}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="receivables-import-diagnostics">
+      <section>
+        <h3>Stav napojení Firem</h3>
+        <dl class="receivables-diagnostics-list">
+          <div><dt>Entita</dt><dd>${escapeHtml(diagnostics.companyEntity || "-")}</dd></div>
+          <div><dt>Sada</dt><dd>${escapeHtml(diagnostics.companyAttemptKey || "-")}</dd></div>
+          <div><dt>Sloupce</dt><dd>${escapeHtml((diagnostics.companyColumns || []).join(", ") || "-")}</dd></div>
+          <div><dt>Klíče ve vzorku</dt><dd>${escapeHtml((diagnostics.companyKeys || []).slice(0, 16).join(", ") || "-")}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Stav vazby Faktury → Firma</h3>
+        <dl class="receivables-diagnostics-list">
+          <div><dt>Entita faktur</dt><dd>${escapeHtml(diagnostics.invoiceEntity || "-")}</dd></div>
+          <div><dt>HIGH</dt><dd>${escapeHtml(confidence.HIGH || 0)}</dd></div>
+          <div><dt>MEDIUM</dt><dd>${escapeHtml(confidence.MEDIUM || 0)}</dd></div>
+          <div><dt>LOW</dt><dd>${escapeHtml(confidence.LOW || 0)}</dd></div>
+          <div><dt>NONE</dt><dd>${escapeHtml(confidence.NONE || 0)}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Chybové flagy</h3>
+        ${flagRows ? `
+          <div class="receivables-table-wrap">
+            <table class="receivables-table receivables-table--compact">
+              <thead><tr><th>Flag</th><th>Počet</th></tr></thead>
+              <tbody>${flagRows}</tbody>
+            </table>
+          </div>
+        ` : `<p class="receivables-empty">Ve vzorku nejsou data quality flagy.</p>`}
+      </section>
+      <section>
+        <h3>Doporučený další krok</h3>
+        <p>${escapeHtml(readiness.recommendedNextStep || "-")}</p>
+        ${blockingRows ? `
+          <div class="receivables-table-wrap">
+            <table class="receivables-table receivables-table--compact">
+              <thead><tr><th>Blocking reason</th></tr></thead>
+              <tbody>${blockingRows}</tbody>
+            </table>
+          </div>
+        ` : `<p class="receivables-empty">Žádný blokující důvod ve vzorku.</p>`}
+      </section>
+    </div>
+  `;
+}
+
+function receivablesLedgerProblemInvoicesTable(preview) {
+  const invoices = preview?.problematicInvoices || [];
+  if (!invoices.length) {
+    return `<p class="receivables-empty">Žádné problémové faktury v načteném vzorku.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead>
+          <tr>
+            <th>Faktura</th>
+            <th>Customer_FK</th>
+            <th>CustomerBranch_FK</th>
+            <th>Název zákazníka</th>
+            <th>IČO</th>
+            <th>Vystavení</th>
+            <th>Splatnost</th>
+            <th>VS</th>
+            <th>Částka</th>
+            <th>Zbývá</th>
+            <th>Confidence</th>
+            <th>Flagy</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${invoices.slice(0, 80).map((item) => {
+            const invoice = item.invoice || {};
+            return `
+              <tr>
+                <td data-label="Faktura">${escapeHtml(item.invoiceNumber || invoice.invoiceNumber || item.invoiceId || "-")}</td>
+                <td data-label="Customer_FK">${escapeHtml(item.customerFk || "-")}</td>
+                <td data-label="CustomerBranch_FK">${escapeHtml(item.customerBranchFk || "-")}</td>
+                <td data-label="Název zákazníka">${escapeHtml(item.resolvedCustomerName || invoice.customerName || "-")}</td>
+                <td data-label="IČO">${escapeHtml(item.resolvedIco || invoice.ico || "-")}</td>
+                <td data-label="Vystavení">${escapeHtml(invoice.issueDate || "-")}</td>
+                <td data-label="Splatnost">${escapeHtml(invoice.dueDate || "-")}</td>
+                <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
+                <td data-label="Částka">${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
+                <td data-label="Zbývá">${escapeHtml(formatReceivableMoney(invoice.openAmount))}</td>
+                <td data-label="Confidence">${receivablesPill(item.confidence || "NONE", item.confidence === "HIGH" ? "ready" : item.confidence === "MEDIUM" ? "warning" : "danger")}</td>
+                <td data-label="Flagy">${escapeHtml((item.flags || []).join(", ") || "-")}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesLedgerProblemCompaniesTable(preview) {
+  const companies = preview?.problematicCompanies || [];
+  if (!companies.length) {
+    return `<p class="receivables-empty">Žádné problémové firmy v načteném vzorku.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead><tr><th>Firma</th><th>Vistos ID</th><th>Pobočka</th><th>IČO</th><th>DIČ</th><th>E-mail</th><th>Splatnost</th><th>Flagy</th></tr></thead>
+        <tbody>
+          ${companies.slice(0, 80).map((company) => `
+            <tr>
+              <td data-label="Firma">${escapeHtml(company.companyName || "-")}</td>
+              <td data-label="Vistos ID">${escapeHtml(company.vistoCompanyId || "-")}</td>
+              <td data-label="Pobočka">${escapeHtml(company.branchName || "-")}</td>
+              <td data-label="IČO">${escapeHtml(company.ico || "-")}</td>
+              <td data-label="DIČ">${escapeHtml(company.dic || "-")}</td>
+              <td data-label="E-mail">${escapeHtml(company.billingEmail || company.email || "-")}</td>
+              <td data-label="Splatnost">${escapeHtml(company.standardDueDays ?? "-")}</td>
+              <td data-label="Flagy">${escapeHtml((company.flags || []).join(", ") || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesLedgerReadinessPanel() {
+  const preview = receivablesState.ledgerReadiness;
+  const readiness = preview?.ledgerReadiness || {};
+  const safetyRows = preview ? [
+    ["readOnly", preview.readOnly],
+    ["writesD1", preview.writesD1],
+    ["createsReceivableRecords", preview.createsReceivableRecords],
+    ["sendsCustomerCommunication", preview.sendsCustomerCommunication],
+    ["calculatesRealRating", preview.calculatesRealRating],
+    ["importsKbPayments", preview.importsKbPayments]
+  ] : [];
+
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-ledger-readiness-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Vistos → Ledger připravenost</p>
+          <h2 id="receivables-ledger-readiness-title">Firmy → Ledger read-only sync</h2>
+          <p>Ověřuje propojení firem, poboček a vydaných faktur. Rating, KB platby, komunikace a ostrý ledger zůstávají vypnuté.</p>
+        </div>
+        ${receivablesPill(readiness.ledgerImportReady ? "ready" : "preview only", readiness.ledgerImportReady ? "ready" : "warning")}
+      </div>
+      <form class="receivables-import-form receivables-import-form--inline" data-receivables-ledger-readiness-form>
+        <button class="primary-button" type="submit" ${receivablesState.ledgerReadinessLoading ? "disabled" : ""}>
+          ${receivablesState.ledgerReadinessLoading ? "Kontroluju připravenost..." : "Zkontrolovat ledger připravenost"}
+        </button>
+      </form>
+      ${receivablesState.ledgerReadinessMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.ledgerReadinessMessage)}</p>` : ""}
+      ${receivablesState.ledgerReadinessError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.ledgerReadinessError)}</p>` : ""}
+      ${receivablesLedgerReadinessSummary(preview)}
+      ${receivablesLedgerReadinessDiagnostics(preview)}
+      ${safetyRows.length ? `
+        <div class="receivables-import-diagnostics">
+          <section>
+            <h3>Bezpečnostní pojistky</h3>
+            <dl class="receivables-diagnostics-list">
+              ${safetyRows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join("")}
+            </dl>
+          </section>
+        </div>
+      ` : ""}
+      <div class="receivables-import-diagnostics">
+        <section>
+          <h3>Náhled problémových faktur</h3>
+          ${receivablesLedgerProblemInvoicesTable(preview)}
+        </section>
+        <section>
+          <h3>Náhled problémových firem</h3>
+          ${receivablesLedgerProblemCompaniesTable(preview)}
+        </section>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesImportSection() {
   const invoiceDisabled = receivablesState.importSaving === "invoices" ? "disabled" : "";
   const bankDisabled = receivablesState.importSaving === "bank" ? "disabled" : "";
   return `
     ${receivablesVistosPreviewPanel()}
+    ${receivablesLedgerReadinessPanel()}
     <section class="receivables-panel" aria-labelledby="receivables-import-title">
       <div class="receivables-panel__head">
         <div>
@@ -24554,6 +24799,29 @@ async function submitReceivablesVistosPreview() {
     receivablesState.vistosPreviewMessage = "";
   } finally {
     receivablesState.vistosPreviewLoading = false;
+    render();
+  }
+}
+
+async function submitReceivablesLedgerReadiness() {
+  if (receivablesState.ledgerReadinessLoading) {
+    return;
+  }
+
+  receivablesState.ledgerReadinessLoading = true;
+  receivablesState.ledgerReadinessError = "";
+  receivablesState.ledgerReadinessMessage = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/receivables/vistos/ledger-readiness");
+    receivablesState.ledgerReadiness = result.preview || null;
+    receivablesState.ledgerReadinessMessage = result.preview?.message || "Ledger readiness preview načtené.";
+  } catch (error) {
+    receivablesState.ledgerReadinessError = error.payload?.error || error.message || "Ledger readiness preview se nepodařilo načíst.";
+    receivablesState.ledgerReadinessMessage = "";
+  } finally {
+    receivablesState.ledgerReadinessLoading = false;
     render();
   }
 }
@@ -29840,6 +30108,10 @@ async function logout() {
   receivablesState.vistosPreviewLoading = false;
   receivablesState.vistosPreviewError = "";
   receivablesState.vistosPreviewMessage = "";
+  receivablesState.ledgerReadiness = null;
+  receivablesState.ledgerReadinessLoading = false;
+  receivablesState.ledgerReadinessError = "";
+  receivablesState.ledgerReadinessMessage = "";
   receivablesState.dryRunLoading = false;
   receivablesState.dryRunResult = null;
   receivablesState.dryRunError = "";
@@ -32637,6 +32909,13 @@ document.addEventListener("submit", async (event) => {
   if (receivablesVistosPreviewForm) {
     event.preventDefault();
     await submitReceivablesVistosPreview();
+    return;
+  }
+
+  const receivablesLedgerReadinessForm = event.target.closest("[data-receivables-ledger-readiness-form]");
+  if (receivablesLedgerReadinessForm) {
+    event.preventDefault();
+    await submitReceivablesLedgerReadiness();
     return;
   }
 

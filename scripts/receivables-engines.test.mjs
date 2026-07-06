@@ -16,6 +16,15 @@ import {
   mapReceivablesVistosCompany,
   mapReceivablesVistosInvoice
 } from "../functions/_lib/receivables-vistos-preview.js";
+import {
+  createReceivablesLedgerReadinessPreview,
+  mapReceivablesLedgerCompany,
+  resolveInvoiceCustomer
+} from "../functions/_lib/receivables-ledger-readiness.js";
+import { onRequestGet as getReceivablesCompaniesPreview } from "../functions/api/receivables/vistos/companies-preview.js";
+import { onRequestGet as getReceivablesCustomerInvoicePreview } from "../functions/api/receivables/vistos/customer-invoice-preview.js";
+import { onRequestGet as getReceivablesInvoicesPreview } from "../functions/api/receivables/vistos/invoices-preview.js";
+import { onRequestGet as getReceivablesLedgerReadiness } from "../functions/api/receivables/vistos/ledger-readiness.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import {
   calculateInvoicePaymentState,
@@ -39,6 +48,43 @@ const invoice = {
   openAmount: 1210,
   status: "unpaid"
 };
+
+function mockVistosFetch(rowsByEntity = {}) {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = JSON.parse(options.body || "{}");
+    const methodName = String(url).split("?").pop();
+    calls.push({ methodName, payload });
+
+    if (methodName === "LoginParam") {
+      return new Response(JSON.stringify({ status: "OK" }), {
+        status: 200,
+        headers: {
+          "set-cookie": "VistosAccessToken=test-access; VistosRefreshToken=test-refresh"
+        }
+      });
+    }
+
+    const request = payload.GetPageParam || {};
+    const rows = rowsByEntity[request.EntityName] || [];
+    return new Response(JSON.stringify({
+      status: "OK",
+      data: {
+        data: rows.slice(Number(request.Start) || 0, (Number(request.Start) || 0) + (Number(request.Length) || rows.length)),
+        recordsTotal: rows.length,
+        recordsFiltered: rows.length
+      }
+    }), { status: 200 });
+  };
+
+  return {
+    calls,
+    restore() {
+      globalThis.fetch = originalFetch;
+    }
+  };
+}
 
 assert.equal(receivableToleranceAmount(1000), 1);
 assert.equal(receivableToleranceAmount(250000), 250);
@@ -371,6 +417,181 @@ Dodavatel
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));
   } finally {
     globalThis.fetch = originalFetch;
+  }
+}
+
+{
+  const unauthEndpoints = [
+    [getReceivablesCompaniesPreview, "/api/receivables/vistos/companies-preview"],
+    [getReceivablesInvoicesPreview, "/api/receivables/vistos/invoices-preview"],
+    [getReceivablesCustomerInvoicePreview, "/api/receivables/vistos/customer-invoice-preview"],
+    [getReceivablesLedgerReadiness, "/api/receivables/vistos/ledger-readiness"]
+  ];
+  for (const [handler, path] of unauthEndpoints) {
+    const response = await handler({
+      request: new Request(`https://example.test${path}`),
+      env: {}
+    });
+    assert.equal(response.status, 401, `${path} must require login`);
+  }
+}
+
+{
+  const company = mapReceivablesLedgerCompany({
+    Id: "C123",
+    Name: "Firma Alfa s.r.o.",
+    RegNumber: "12345678",
+    VATNumber: "CZ12345678",
+    BillingEmail: "fakturace@firma.cz",
+    InvoiceDueDays: "14"
+  });
+  const invoiceFromVistos = mapReceivablesVistosInvoice({
+    Id: "I123",
+    InvoiceNumber: "2601101477",
+    BankReference2: "2601101477",
+    Customer_FK_RecordId: "C123",
+    Customer_FK_Caption: "Firma Alfa s.r.o.",
+    CustomerRegNumber: "12345678",
+    CustomerVatNumber: "CZ12345678",
+    IssuedDate: "2026-06-01",
+    DueDate: "2026-06-14",
+    PriceWithTax: "1210",
+    AmountPaid: "0",
+    RemainToPay: "1210"
+  });
+  const resolved = resolveInvoiceCustomer(invoiceFromVistos, [company]);
+  assert.equal(resolved.confidence, "HIGH");
+  assert.equal(resolved.resolvedCompanyId, "C123");
+  assert.equal(resolved.resolvedIco, "12345678");
+}
+
+{
+  const invoiceWithoutCustomer = mapReceivablesVistosInvoice({
+    Id: "I124",
+    InvoiceNumber: "2601101478",
+    BankReference2: "2601101478",
+    DueDate: "2026-06-14",
+    PriceWithTax: "1210",
+    AmountPaid: "0",
+    RemainToPay: "1210"
+  });
+  const resolved = resolveInvoiceCustomer(invoiceWithoutCustomer, []);
+  assert.equal(resolved.flags.includes("MISSING_CUSTOMER_FK"), true);
+}
+
+{
+  const company = mapReceivablesLedgerCompany({ Id: "C123", Name: "Firma Alfa s.r.o.", RegNumber: "12345678" });
+  const invoiceWithoutDueDate = mapReceivablesVistosInvoice({
+    Id: "I125",
+    InvoiceNumber: "2601101479",
+    BankReference2: "2601101479",
+    Customer_FK_RecordId: "C123",
+    PriceWithTax: "1210",
+    AmountPaid: "0",
+    RemainToPay: "1210"
+  });
+  const resolved = resolveInvoiceCustomer(invoiceWithoutDueDate, [company]);
+  assert.equal(resolved.flags.includes("MISSING_DUE_DATE"), true);
+}
+
+{
+  const companyWithoutIco = mapReceivablesLedgerCompany({
+    Id: "C124",
+    Name: "Bez ICO s.r.o.",
+    VATNumber: "CZ11111111",
+    BillingEmail: "fakturace@bezico.cz",
+    InvoiceDueDays: "14"
+  });
+  assert.equal(companyWithoutIco.flags.includes("MISSING_ICO"), true);
+}
+
+{
+  const companies = [
+    mapReceivablesLedgerCompany({ Id: "C201", Name: "Duplicitní firma s.r.o.", RegNumber: "11111111" }),
+    mapReceivablesLedgerCompany({ Id: "C202", Name: "Duplicitní firma s.r.o.", RegNumber: "22222222" })
+  ];
+  const invoiceWithNameOnly = mapReceivablesVistosInvoice({
+    Id: "I126",
+    InvoiceNumber: "2601101480",
+    BankReference2: "2601101480",
+    "Firma nebo pobočka": "Duplicitní firma s.r.o.",
+    DueDate: "2026-06-14",
+    PriceWithTax: "1210",
+    AmountPaid: "0",
+    RemainToPay: "1210"
+  });
+  const resolved = resolveInvoiceCustomer(invoiceWithNameOnly, companies);
+  assert.equal(resolved.flags.includes("MULTIPLE_CUSTOMER_CANDIDATES"), true);
+  assert.equal(resolved.confidence, "LOW");
+}
+
+{
+  const mock = mockVistosFetch({
+    DirectoryWithBranch: [{
+      Id: "C123",
+      Name: "Firma Alfa s.r.o.",
+      RegNumber: "12345678",
+      VATNumber: "CZ12345678",
+      BillingEmail: "fakturace@firma.cz",
+      InvoiceDueDays: "14"
+    }],
+    InvoiceIssued: [{
+      Id: "I123",
+      InvoiceNumber: "2601101477",
+      BankReference2: "2601101477",
+      Customer_FK_RecordId: "C123",
+      Customer_FK_Caption: "Firma Alfa s.r.o.",
+      CustomerRegNumber: "12345678",
+      CustomerVatNumber: "CZ12345678",
+      IssuedDate: "2026-06-01",
+      DueDate: "2026-06-14",
+      PriceWithTax: "1210",
+      AmountPaid: "0",
+      RemainToPay: "1210"
+    }]
+  });
+  try {
+    const preview = await createReceivablesLedgerReadinessPreview({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "test-password"
+    }, { pageSize: 10, maxPages: 1 });
+    assert.equal(preview.ledgerReadiness.ledgerImportReady, true);
+    assert.equal(preview.sendsCustomerCommunication, false);
+    assert.equal(preview.calculatesRealRating, false);
+    assert.equal(preview.importsKbPayments, false);
+    assert.equal(preview.createsReceivableRecords, false);
+    assert.equal(preview.writesD1, false);
+    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "DirectoryWithBranch"));
+    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "InvoiceIssued"));
+  } finally {
+    mock.restore();
+  }
+}
+
+{
+  const mock = mockVistosFetch({
+    DirectoryWithBranch: [{ Id: "C999", Name: "Neúplná firma" }],
+    InvoiceIssued: [{
+      Id: "I999",
+      InvoiceNumber: "2601101499",
+      Customer_FK_RecordId: "MISSING",
+      PriceWithTax: "",
+      AmountPaid: "",
+      RemainToPay: ""
+    }]
+  });
+  try {
+    const preview = await createReceivablesLedgerReadinessPreview({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "test-password"
+    }, { pageSize: 10, maxPages: 1 });
+    assert.equal(preview.ledgerReadiness.ledgerImportReady, false);
+    assert.equal(preview.ledgerReadiness.blockingReasons.includes("INVOICE_DUE_DATE_RATE_UNDER_90"), true);
+    assert.equal(preview.ledgerReadiness.blockingReasons.includes("INVOICE_AMOUNT_RATE_UNDER_95"), true);
+  } finally {
+    mock.restore();
   }
 }
 
