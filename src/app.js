@@ -253,6 +253,9 @@ const FLEET_TAB_WAITING_MESSAGES = {
 };
 const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
 const VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE = `${VEHICLE_TRACKING_BASE_ROUTE}/soft-metal-preview`;
+const VEHICLE_TRACKING_PREVIEW_THEME_STORAGE_KEY = "smart_odpady_vehicle_tracking_preview_theme";
+const VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT = "light";
+const VEHICLE_TRACKING_PREVIEW_THEMES = new Set(["light", "dark"]);
 const VEHICLE_TRACKING_PUBLIC_PREVIEW_USER = {
   id: "vehicle-tracking-soft-metal-preview",
   name: "Veřejný design náhled",
@@ -1238,6 +1241,9 @@ const vehicleTrackingLiveState = {
   googleBoundsKey: "",
   googleFocusedLocationId: ""
 };
+const vehicleTrackingPreviewThemeState = {
+  mode: readVehicleTrackingPreviewTheme()
+};
 
 let vehicleTrackingAudioContext = null;
 
@@ -1288,6 +1294,93 @@ function normalizePath(pathname) {
 
 function isVehicleTrackingSoftMetalPreviewPath(pathname = window.location.pathname) {
   return normalizePath(pathname) === VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE;
+}
+
+function normalizeVehicleTrackingPreviewTheme(value) {
+  return VEHICLE_TRACKING_PREVIEW_THEMES.has(value) ? value : VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT;
+}
+
+function readVehicleTrackingPreviewTheme() {
+  try {
+    return normalizeVehicleTrackingPreviewTheme(window.localStorage?.getItem(VEHICLE_TRACKING_PREVIEW_THEME_STORAGE_KEY));
+  } catch {
+    return VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT;
+  }
+}
+
+function writeVehicleTrackingPreviewTheme(mode) {
+  try {
+    window.localStorage?.setItem(VEHICLE_TRACKING_PREVIEW_THEME_STORAGE_KEY, mode);
+  } catch {
+    // Browser storage is optional for the public preview.
+  }
+}
+
+function vehicleTrackingPreviewThemeMode() {
+  vehicleTrackingPreviewThemeState.mode = normalizeVehicleTrackingPreviewTheme(vehicleTrackingPreviewThemeState.mode);
+  return vehicleTrackingPreviewThemeState.mode;
+}
+
+function vehicleTrackingPreviewThemeIcon(mode) {
+  if (mode === "dark") {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M20.1 14.2A7.8 7.8 0 0 1 9.8 3.9a8.4 8.4 0 1 0 10.3 10.3Z"></path>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="4"></circle>
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+    </svg>
+  `;
+}
+
+function vehicleTrackingPreviewThemeSwitcher() {
+  const currentTheme = vehicleTrackingPreviewThemeMode();
+  const modes = [
+    { id: "light", label: "Den", ariaLabel: "Denni motiv" },
+    { id: "dark", label: "Noc", ariaLabel: "Nocni motiv" }
+  ];
+
+  return `
+    <div class="tracking-theme-switcher" role="group" aria-label="Prepinac motivu">
+      ${modes.map((mode) => `
+        <button class="tracking-theme-switcher__button" type="button" data-tracking-preview-theme="${mode.id}" aria-label="${mode.ariaLabel}" aria-pressed="${mode.id === currentTheme ? "true" : "false"}">
+          <span class="tracking-theme-switcher__icon" aria-hidden="true">${vehicleTrackingPreviewThemeIcon(mode.id)}</span>
+          <span class="tracking-theme-switcher__label">${escapeHtml(mode.label)}</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function applyVehicleTrackingPreviewTheme(mode = vehicleTrackingPreviewThemeMode()) {
+  const nextTheme = normalizeVehicleTrackingPreviewTheme(mode);
+  vehicleTrackingPreviewThemeState.mode = nextTheme;
+  document.body?.setAttribute("data-theme", nextTheme);
+  document.querySelectorAll("[data-tracking-preview-theme]").forEach((button) => {
+    const active = button.dataset.trackingPreviewTheme === nextTheme;
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function setVehicleTrackingPreviewTheme(mode) {
+  const nextTheme = normalizeVehicleTrackingPreviewTheme(mode);
+  vehicleTrackingPreviewThemeState.mode = nextTheme;
+  writeVehicleTrackingPreviewTheme(nextTheme);
+  applyVehicleTrackingPreviewTheme(nextTheme);
+}
+
+function syncVehicleTrackingPreviewThemeRoot(isPreview = isVehicleTrackingSoftMetalPreviewPath()) {
+  if (isPreview) {
+    applyVehicleTrackingPreviewTheme();
+    return;
+  }
+
+  document.body?.removeAttribute("data-theme");
 }
 
 function isCollectionRoutesPath(pathname = window.location.pathname) {
@@ -12578,6 +12671,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   }
   const isSoftMetalPreview = context.designPreview === "soft-metal";
   const pageClass = `app-shell module-page module-theme-scope tracking-page${isSoftMetalPreview ? " tracking-page--soft-metal-preview" : ""}`;
+  const themeStyleAttribute = isSoftMetalPreview ? "" : moduleThemeStyleAttribute();
   const previewShellStart = isSoftMetalPreview
     ? `<div class="tracking-preview-shell">${vehicleTrackingPreviewSidebar(view, sourceMode)}<div class="tracking-preview-content">`
     : "";
@@ -12591,14 +12685,17 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   const compareAction = isSoftMetalPreview
     ? `<a class="secondary-link tracking-preview-compare" href="${routeHref(VEHICLE_TRACKING_BASE_ROUTE)}" data-link>Původní zobrazení</a>`
     : "";
+  const topbarActions = isSoftMetalPreview
+    ? `<div class="tracking-topbar-actions">${vehicleTrackingPreviewThemeSwitcher()}<a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a></div>`
+    : `<a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>`;
 
   return `
-    <main class="${pageClass}" ${moduleThemeStyleAttribute()}>
+    <main class="${pageClass}" ${themeStyleAttribute}>
       ${userBar(user)}
       ${previewShellStart}
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
-        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+        ${topbarActions}
       </nav>
 
       <section class="module-detail tracking-hero" aria-labelledby="module-title">
@@ -26368,6 +26465,7 @@ function renderPublicVehicleTrackingPreview() {
     designPreview: "soft-metal",
     publicPreview: true
   });
+  applyVehicleTrackingPreviewTheme();
   document.title = `Veřejný soft-metal náhled sledování vozidel | ${APP_NAME}`;
 }
 
@@ -26607,7 +26705,11 @@ function render() {
     const publicSoftMetalPreview = isVehicleTrackingSoftMetalPreviewPath();
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
+    syncVehicleTrackingPreviewThemeRoot(publicSoftMetalPreview);
     renderApp();
+    if (publicSoftMetalPreview) {
+      applyVehicleTrackingPreviewTheme();
+    }
     if (!publicSoftMetalPreview) {
       app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
       app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
@@ -29652,6 +29754,13 @@ document.addEventListener("click", async (event) => {
       });
     }
 
+    return;
+  }
+
+  const trackingPreviewTheme = event.target.closest("[data-tracking-preview-theme]");
+  if (trackingPreviewTheme) {
+    event.preventDefault();
+    setVehicleTrackingPreviewTheme(trackingPreviewTheme.dataset.trackingPreviewTheme || VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT);
     return;
   }
 

@@ -25230,9 +25230,16 @@ body:has(.tracking-page--soft-metal-preview) {
     linear-gradient(145deg, #dfe5e8 0%, #edf0f2 43%, #d2d9dd 100%);
 }
 
+body[data-theme="dark"]:has(.tracking-page--soft-metal-preview) {
+  background:
+    linear-gradient(145deg, #070b12 0%, #101823 48%, #05080d 100%);
+}
+
+body[data-theme="light"] .tracking-page--soft-metal-preview,
 .tracking-page--soft-metal-preview {
   --brand-primary: #75bd25;
   --brand-accent: #75bd25;
+  --control-on-brand: #ffffff;
   --bg-app: #dfe5e8;
   --bg-app-deep: #d2d9dd;
   --surface: #edf0f1;
@@ -25372,7 +25379,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid color-mix(in srgb, var(--brand-accent) 64%, transparent);
   border-radius: var(--radius-md);
   background: var(--brand-accent);
-  color: #ffffff;
+  color: var(--control-on-brand);
   box-shadow: var(--shadow-control);
 }
 
@@ -25407,7 +25414,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview :is(.primary-action, .primary-link):hover,
 .tracking-page--soft-metal-preview :is(.primary-action, .primary-link):focus-visible {
   background: color-mix(in srgb, var(--brand-accent) 88%, var(--text-main));
-  color: #ffffff;
+  color: var(--control-on-brand);
   box-shadow: var(--shadow-control-hover);
   transform: none;
 }
@@ -25595,8 +25602,8 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(90deg, rgba(76, 86, 80, 0.08) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(76, 86, 80, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tracking-map-grid-line-x) 1px, transparent 1px),
+    linear-gradient(180deg, var(--tracking-map-grid-line-y) 1px, transparent 1px),
     var(--metal-gradient-inset);
   background-size: 56px 56px, 56px 56px, auto;
   box-shadow: var(--shadow-inset);
@@ -25604,11 +25611,11 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .tracking-demo-map--google,
 .tracking-page--soft-metal-preview .tracking-tcars-map--google {
-  background: #e8ece9;
+  background: var(--tracking-google-map-bg);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-road {
-  background: rgba(76, 86, 80, 0.18);
+  background: var(--tracking-road-bg);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-route-segment {
@@ -25663,7 +25670,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-demo-alert__symbol,
 .tracking-page--soft-metal-preview .tracking-vehicle-marker__alert {
   background: var(--tracking-danger);
-  color: #ffffff;
+  color: var(--control-on-brand);
   box-shadow: none;
 }
 
@@ -25673,17 +25680,17 @@ body:has(.tracking-page--soft-metal-preview) {
   min-width: 94px;
   height: 72px;
   min-height: 72px;
-  filter: drop-shadow(0 8px 12px rgba(38, 48, 43, 0.12));
+  filter: var(--tracking-marker-filter);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-marker--selected,
 .tracking-page--soft-metal-preview .tracking-demo-marker--selected:hover {
   transform: translate(-50%, -50%);
-  filter: drop-shadow(0 9px 14px rgba(38, 48, 43, 0.14));
+  filter: var(--tracking-marker-selected-filter);
 }
 
 .tracking-page--soft-metal-preview .tracking-google-marker--selected {
-  filter: drop-shadow(0 9px 14px rgba(38, 48, 43, 0.14));
+  filter: var(--tracking-marker-selected-filter);
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker {
@@ -25808,7 +25815,7 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-wim-state--error {
   border-color: color-mix(in srgb, var(--tracking-danger) 38%, var(--border-soft));
   background: color-mix(in srgb, var(--tracking-danger) 10%, var(--surface-raised));
-  color: color-mix(in srgb, var(--tracking-danger) 76%, #1f2921);
+  color: color-mix(in srgb, var(--tracking-danger) 76%, var(--text-main));
   box-shadow: none;
 }
 
@@ -25901,7 +25908,7 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .tracking-tcars-google-marker,
 .tracking-page--soft-metal-preview .tracking-wim-google-marker {
-  filter: drop-shadow(0 8px 12px rgba(38, 48, 43, 0.12));
+  filter: var(--tracking-marker-filter);
 }
 
 .tracking-page--soft-metal-preview .tracking-tcars-google-marker--selected {
@@ -25955,7 +25962,7 @@ body:has(.tracking-page--soft-metal-preview) {
   height: 40px;
   border-radius: var(--radius-sm);
   background: var(--tracking-warning);
-  color: #ffffff;
+  color: var(--control-on-brand);
   font-size: 0;
 }
 
@@ -25964,7 +25971,7 @@ body:has(.tracking-page--soft-metal-preview) {
   display: block;
   width: 19px;
   height: 14px;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--control-on-brand);
   border-top-width: 4px;
   border-radius: 4px;
   content: "";
@@ -26389,6 +26396,7 @@ body:has(.tracking-page--soft-metal-preview) {
 }
 
 /* Branch-only refinement: bring the real tracking module closer to the approved soft-metal preview. */
+body[data-theme="light"] .tracking-page--soft-metal-preview,
 .tracking-page--soft-metal-preview {
   --sidebar-width-compact: 90px;
   --sidebar-width-expanded: 244px;
@@ -26431,6 +26439,19 @@ body:has(.tracking-page--soft-metal-preview) {
   --tracking-card-bg: var(--metal-gradient-soft);
   --tracking-control-bg: var(--metal-gradient-control);
   --tracking-inset-bg: var(--metal-gradient-inset);
+  --tracking-shell-edge: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  --tracking-map-diagonal: rgba(78, 92, 100, 0.075);
+  --tracking-map-diagonal-soft: rgba(78, 92, 100, 0.065);
+  --tracking-map-grid-x: rgba(78, 92, 100, 0.04);
+  --tracking-map-grid-y: rgba(78, 92, 100, 0.035);
+  --tracking-map-inset-shadow: inset 4px 4px 11px rgba(78, 92, 100, 0.09), inset -4px -4px 11px rgba(255, 255, 255, 0.5);
+  --tracking-map-decor-opacity: 0.48;
+  --tracking-map-grid-line-x: rgba(76, 86, 80, 0.08);
+  --tracking-map-grid-line-y: rgba(76, 86, 80, 0.07);
+  --tracking-google-map-bg: #e8ece9;
+  --tracking-road-bg: rgba(76, 86, 80, 0.18);
+  --tracking-marker-filter: drop-shadow(0 8px 12px rgba(38, 48, 43, 0.12));
+  --tracking-marker-selected-filter: drop-shadow(0 9px 14px rgba(38, 48, 43, 0.14));
   --tracking-soft-shadow: var(--shadow-panel);
   --tracking-soft-shadow-sm: var(--shadow-card);
   --tracking-inset-shadow: var(--shadow-inset);
@@ -26438,6 +26459,99 @@ body:has(.tracking-page--soft-metal-preview) {
   --tracking-hero-icon-holder: 176px;
   --tracking-hero-icon-size: 108px;
   width: min(1500px, calc(100% - 28px));
+}
+
+body[data-theme="dark"] .tracking-page--soft-metal-preview {
+  color-scheme: dark;
+  --brand-primary: #75bd25;
+  --brand-accent: #75bd25;
+  --control-on-brand: #ffffff;
+  --bg-app: #070b12;
+  --bg-app-deep: #05080d;
+  --surface: #111923;
+  --surface-soft: #162130;
+  --surface-raised: #1a2533;
+  --surface-inset: #0b1119;
+  --surface-sunken: #070b12;
+  --metal-gradient: linear-gradient(145deg, #1a2533 0%, #111923 52%, #090e15 100%);
+  --metal-gradient-soft: linear-gradient(145deg, #1d2938 0%, #141e2b 56%, #0b1119 100%);
+  --metal-gradient-inset: linear-gradient(145deg, #080c12 0%, #121c28 100%);
+  --metal-gradient-control: linear-gradient(145deg, #1b2635 0%, #131d29 56%, #0c121a 100%);
+  --text-main: #edf4f7;
+  --text-muted: #aebbc6;
+  --border-soft: rgba(177, 196, 214, 0.22);
+  --border-highlight: rgba(226, 238, 248, 0.16);
+  --highlight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --shadow-panel: 10px 12px 26px rgba(0, 0, 0, 0.36), -6px -6px 16px rgba(129, 151, 171, 0.055);
+  --shadow-card: 6px 8px 18px rgba(0, 0, 0, 0.28), -4px -4px 12px rgba(132, 153, 174, 0.045);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --shadow-control-hover: 0 2px 6px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.11);
+  --shadow-control-active: inset 3px 3px 7px rgba(0, 0, 0, 0.32), inset -3px -3px 7px rgba(255, 255, 255, 0.055);
+  --shadow-inset-control: inset 4px 4px 10px rgba(0, 0, 0, 0.32), inset -4px -4px 10px rgba(255, 255, 255, 0.055);
+  --focus-ring: color-mix(in srgb, var(--brand-accent) 38%, rgba(237, 244, 247, 0.2));
+  --shadow-raised: var(--shadow-panel);
+  --shadow-raised-hover: var(--shadow-card);
+  --shadow-inset: inset 6px 6px 14px rgba(0, 0, 0, 0.36), inset -6px -6px 14px rgba(255, 255, 255, 0.055);
+  --tracking-metal-bg: var(--metal-gradient);
+  --tracking-metal-inset-bg: var(--metal-gradient-inset);
+  --tracking-warning: #d7a34d;
+  --tracking-danger: #df7868;
+  --tracking-bluegrey: #8fa7b7;
+  --tracking-graphite: #c3cfda;
+  --state-success-bg: color-mix(in srgb, var(--brand-accent) 16%, rgba(14, 21, 30, 0.92));
+  --state-success-border: color-mix(in srgb, var(--brand-accent) 42%, rgba(177, 196, 214, 0.16));
+  --state-success-text: #a4ee5c;
+  --state-warning-bg: color-mix(in srgb, var(--tracking-warning) 16%, rgba(14, 21, 30, 0.92));
+  --state-warning-border: color-mix(in srgb, var(--tracking-warning) 38%, rgba(177, 196, 214, 0.16));
+  --state-warning-text: #edc779;
+  --state-danger-bg: color-mix(in srgb, var(--tracking-danger) 15%, rgba(14, 21, 30, 0.92));
+  --state-danger-border: color-mix(in srgb, var(--tracking-danger) 38%, rgba(177, 196, 214, 0.16));
+  --state-danger-text: #f09b8d;
+  --state-info-bg: color-mix(in srgb, var(--tracking-bluegrey) 16%, rgba(14, 21, 30, 0.92));
+  --state-info-border: color-mix(in srgb, var(--tracking-bluegrey) 34%, rgba(177, 196, 214, 0.16));
+  --state-info-text: #b8cad7;
+  --state-neutral-bg: color-mix(in srgb, var(--tracking-graphite) 10%, rgba(14, 21, 30, 0.92));
+  --state-neutral-border: color-mix(in srgb, var(--tracking-graphite) 24%, rgba(177, 196, 214, 0.16));
+  --state-neutral-text: var(--tracking-graphite);
+  --tracking-accent-soft: var(--state-success-bg);
+  --tracking-accent-border: var(--state-success-border);
+  --icon-green: #9ae348;
+  --icon-teal: #7fb7bd;
+  --icon-bluegrey: #a8bac7;
+  --icon-amber: #e1b45f;
+  --icon-red: #e48678;
+  --icon-graphite: #c3cfda;
+  --icon-opacity-muted: 0.64;
+  --icon-opacity-default: 0.82;
+  --icon-opacity-active: 0.96;
+  --icon-filter-green: invert(83%) sepia(48%) saturate(742%) hue-rotate(35deg) brightness(98%) contrast(91%);
+  --icon-filter-teal: invert(72%) sepia(16%) saturate(588%) hue-rotate(136deg) brightness(89%) contrast(89%);
+  --icon-filter-bluegrey: invert(75%) sepia(12%) saturate(424%) hue-rotate(161deg) brightness(92%) contrast(86%);
+  --icon-filter-amber: invert(78%) sepia(33%) saturate(683%) hue-rotate(355deg) brightness(95%) contrast(88%);
+  --icon-filter-red: invert(67%) sepia(34%) saturate(631%) hue-rotate(319deg) brightness(94%) contrast(91%);
+  --icon-filter-graphite: invert(88%) sepia(9%) saturate(382%) hue-rotate(168deg) brightness(89%) contrast(88%);
+  --icon-filter-brand: invert(83%) sepia(48%) saturate(742%) hue-rotate(35deg) brightness(98%) contrast(91%);
+  --tracking-shell-bg: linear-gradient(145deg, rgba(20, 30, 43, 0.74) 0%, rgba(5, 9, 14, 0.64) 100%);
+  --tracking-panel-bg: var(--metal-gradient);
+  --tracking-card-bg: var(--metal-gradient-soft);
+  --tracking-control-bg: var(--metal-gradient-control);
+  --tracking-inset-bg: var(--metal-gradient-inset);
+  --tracking-shell-edge: inset 0 1px 0 rgba(255, 255, 255, 0.085);
+  --tracking-map-diagonal: rgba(126, 151, 170, 0.14);
+  --tracking-map-diagonal-soft: rgba(126, 151, 170, 0.11);
+  --tracking-map-grid-x: rgba(126, 151, 170, 0.07);
+  --tracking-map-grid-y: rgba(126, 151, 170, 0.06);
+  --tracking-map-inset-shadow: inset 4px 4px 11px rgba(0, 0, 0, 0.3), inset -4px -4px 11px rgba(255, 255, 255, 0.04);
+  --tracking-map-decor-opacity: 0.56;
+  --tracking-map-grid-line-x: rgba(126, 151, 170, 0.14);
+  --tracking-map-grid-line-y: rgba(126, 151, 170, 0.12);
+  --tracking-google-map-bg: #101823;
+  --tracking-road-bg: rgba(126, 151, 170, 0.22);
+  --tracking-marker-filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.26));
+  --tracking-marker-selected-filter: drop-shadow(0 9px 14px rgba(0, 0, 0, 0.32));
+  --tracking-soft-shadow: var(--shadow-panel);
+  --tracking-soft-shadow-sm: var(--shadow-card);
+  --tracking-inset-shadow: var(--shadow-inset);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-shell {
@@ -26465,7 +26579,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-radius: var(--radius-xl);
   background: var(--tracking-shell-bg);
   padding: clamp(8px, 1vw, var(--space-md));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  box-shadow: var(--tracking-shell-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar {
@@ -26909,6 +27023,86 @@ body:has(.tracking-page--soft-metal-preview) {
   box-shadow: var(--shadow-control);
 }
 
+.tracking-page--soft-metal-preview .tracking-topbar-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+.tracking-page--soft-metal-preview .topbar .tracking-topbar-actions .back-button {
+  margin-left: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-theme-switcher {
+  display: inline-grid;
+  min-height: 42px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 86%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--tracking-inset-bg);
+  padding: 4px;
+  box-shadow: var(--shadow-inset-control);
+}
+
+.tracking-page--soft-metal-preview .tracking-theme-switcher__button {
+  display: inline-flex;
+  min-width: 74px;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-md) - 4px);
+  background: transparent;
+  color: var(--tracking-graphite);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 850;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
+}
+
+.tracking-page--soft-metal-preview .tracking-theme-switcher__button:hover {
+  border-color: color-mix(in srgb, var(--brand-accent) 22%, var(--border-soft));
+  background: color-mix(in srgb, var(--brand-accent) 7%, var(--surface-raised));
+  color: var(--text-main);
+}
+
+.tracking-page--soft-metal-preview .tracking-theme-switcher__button[aria-pressed="true"] {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+  box-shadow: var(--shadow-control-active);
+}
+
+.tracking-page--soft-metal-preview .tracking-theme-switcher__button:active {
+  box-shadow: var(--shadow-control-active);
+}
+
+.tracking-page--soft-metal-preview .tracking-theme-switcher__icon,
+.tracking-page--soft-metal-preview .tracking-theme-switcher__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tracking-page--soft-metal-preview .tracking-theme-switcher__icon svg {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .tracking-page--soft-metal-preview .module-detail {
   position: relative;
   grid-template-columns: var(--tracking-hero-icon-holder) minmax(0, 760px);
@@ -26924,13 +27118,13 @@ body:has(.tracking-page--soft-metal-preview) {
   border: 1px solid color-mix(in srgb, var(--border-soft) 38%, transparent);
   border-radius: var(--radius-xl);
   background:
-    linear-gradient(135deg, transparent 0 38%, rgba(78, 92, 100, 0.075) 38% 40%, transparent 40% 100%),
-    linear-gradient(42deg, transparent 0 56%, rgba(78, 92, 100, 0.065) 56% 58%, transparent 58% 100%),
-    repeating-linear-gradient(90deg, rgba(78, 92, 100, 0.04) 0 1px, transparent 1px 34px),
-    repeating-linear-gradient(0deg, rgba(78, 92, 100, 0.035) 0 1px, transparent 1px 34px);
-  box-shadow: inset 4px 4px 11px rgba(78, 92, 100, 0.09), inset -4px -4px 11px rgba(255, 255, 255, 0.5);
+    linear-gradient(135deg, transparent 0 38%, var(--tracking-map-diagonal) 38% 40%, transparent 40% 100%),
+    linear-gradient(42deg, transparent 0 56%, var(--tracking-map-diagonal-soft) 56% 58%, transparent 58% 100%),
+    repeating-linear-gradient(90deg, var(--tracking-map-grid-x) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(0deg, var(--tracking-map-grid-y) 0 1px, transparent 1px 34px);
+  box-shadow: var(--tracking-map-inset-shadow);
   content: "";
-  opacity: 0.48;
+  opacity: var(--tracking-map-decor-opacity);
   pointer-events: none;
 }
 
@@ -27027,7 +27221,7 @@ body:has(.tracking-page--soft-metal-preview) {
   border-color: color-mix(in srgb, var(--brand-accent) 64%, transparent);
   border-radius: var(--radius-md);
   background: var(--brand-accent);
-  color: #ffffff;
+  color: var(--control-on-brand);
   box-shadow: var(--shadow-control);
 }
 
@@ -27235,8 +27429,8 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-image--detail {
   border-radius: var(--radius-xl);
   background:
-    linear-gradient(90deg, rgba(76, 86, 80, 0.08) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(76, 86, 80, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tracking-map-grid-line-x) 1px, transparent 1px),
+    linear-gradient(180deg, var(--tracking-map-grid-line-y) 1px, transparent 1px),
     var(--tracking-inset-bg);
   box-shadow: var(--tracking-inset-shadow);
 }
@@ -27365,6 +27559,16 @@ body:has(.tracking-page--soft-metal-preview) {
     padding-bottom: 94px;
   }
 
+  .tracking-page--soft-metal-preview .topbar,
+  .tracking-page--soft-metal-preview .tracking-topbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-topbar-actions {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
   .tracking-page--soft-metal-preview .tracking-preview-shell,
   .tracking-page--soft-metal-preview .tracking-preview-content,
   .tracking-page--soft-metal-preview .tracking-preview-metrics,
@@ -27463,6 +27667,20 @@ body:has(.tracking-page--soft-metal-preview) {
 }
 
 @media (max-width: 430px) {
+  .tracking-page--soft-metal-preview .tracking-topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-theme-switcher {
+    flex: 1 1 auto;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-theme-switcher__button {
+    min-width: 0;
+    padding: 0 8px;
+  }
+
   .tracking-page--soft-metal-preview .tracking-preview-metric {
     grid-template-columns: var(--icon-holder-md) minmax(0, 1fr);
     min-height: 96px;
