@@ -496,6 +496,55 @@ Dodavatel
 }
 
 {
+  const mock = mockVistosFetch({
+    Contract: [{
+      Id: "K1",
+      ContractNumber: "S001",
+      Directory_FK_RecordId: "C123",
+      Directory_FK_Caption: "Firma Alfa s.r.o. - 12345678"
+    }],
+    InvoiceIssued: {
+      page: [{
+        Id: "I123",
+        InvoiceNumber: "2601101477",
+        BankReference2: "2601101477",
+        Customer_FK_RecordId: "C123",
+        Customer_FK_Caption: "Firma Alfa s.r.o.",
+        DueDate: "2026-06-14",
+        PriceWithTax: "1210"
+      }],
+      detail: [{
+        Id: "I123",
+        InvoiceNumber: "2601101477",
+        AmountPaid: "210",
+        RemainToPay: "1000",
+        PaymentStatus_FK_Caption: "Částečně uhrazeno",
+        PrintUrl: "https://example.test/print/I123"
+      }]
+    }
+  });
+  try {
+    const preview = await createReceivablesVistosPreview({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "test-password"
+    }, { pageSize: 10, maxPages: 1, maxDetailIds: 1 });
+    assert.equal(preview.apiStatus, "ready");
+    assert.equal(preview.diagnostics.invoiceDetailProbe.returnedRows, 1);
+    assert.equal(preview.invoices[0].paidAmount, 210);
+    assert.equal(preview.invoices[0].remainingAmount, 1000);
+    assert.equal(preview.invoices[0].paymentStatus, "Částečně uhrazeno");
+    assert.equal(preview.invoices[0].printUrl, "https://example.test/print/I123");
+    assert.ok(mock.calls.some((call) => call.payload.GetByIdParam?.EntityName === "InvoiceIssued"));
+    assert.equal(preview.writesD1, false);
+    assert.equal(preview.sendsEmailOrSms, false);
+    assert.equal(preview.startsAutomation, false);
+  } finally {
+    mock.restore();
+  }
+}
+
+{
   const company = mapReceivablesLedgerCompany({
     Id: "C123",
     Name: "Firma Alfa s.r.o.",

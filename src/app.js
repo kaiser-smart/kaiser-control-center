@@ -23118,6 +23118,7 @@ function receivablesVistosPreviewDiagnostics(preview) {
   if (!preview) return "";
   const diagnostics = preview.diagnostics || {};
   const issues = preview.issues || [];
+  const invoiceDetailProbe = diagnostics.invoiceDetailProbe || {};
   const attempts = [
     ...(diagnostics.companyAttempts || []).map((attempt) => ({ ...attempt, scope: "Firmy" })),
     ...(diagnostics.invoiceAttempts || []).map((attempt) => ({ ...attempt, scope: "Faktury" }))
@@ -23150,6 +23151,11 @@ function receivablesVistosPreviewDiagnostics(preview) {
           <div><dt>Faktury entita</dt><dd>${escapeHtml(diagnostics.invoiceEntity || "-")}</dd></div>
           <div><dt>Klíče firem</dt><dd>${escapeHtml((diagnostics.companyKeys || []).slice(0, 12).join(", ") || "-")}</dd></div>
           <div><dt>Klíče faktur</dt><dd>${escapeHtml((diagnostics.invoiceKeys || []).slice(0, 12).join(", ") || "-")}</dd></div>
+          <div><dt>Detail faktury</dt><dd>${invoiceDetailProbe.enabled ? "GetByIdParam read-only" : "-"}</dd></div>
+          <div><dt>Detail ID faktur</dt><dd>${escapeHtml((invoiceDetailProbe.attemptedIds || []).join(", ") || "-")}</dd></div>
+          <div><dt>Detail vráceno</dt><dd>${escapeHtml(invoiceDetailProbe.returnedRows ?? "-")} / užitečné ${escapeHtml(invoiceDetailProbe.usefulRows ?? "-")}</dd></div>
+          <div><dt>Klíče detailu faktury</dt><dd>${escapeHtml((invoiceDetailProbe.keys || []).slice(0, 16).join(", ") || "-")}</dd></div>
+          <div><dt>Chyby detailu faktury</dt><dd>${escapeHtml(Array.isArray(invoiceDetailProbe.errors) && invoiceDetailProbe.errors.length ? invoiceDetailProbe.errors.map((error) => `${error.code}:${error.count}`).join(", ") : "-")}</dd></div>
         </dl>
       </section>
       <section>

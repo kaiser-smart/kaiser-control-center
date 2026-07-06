@@ -2,6 +2,7 @@ import {
   VistosExecuteError,
   cleanVistosValue,
   getAllVistosPages,
+  getVistosById,
   isVistosExecuteConfigured,
   loginVistosExecute
 } from "./vistos-execute-client.js";
@@ -9,6 +10,8 @@ import {
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 const RECEIVABLES_VISTOS_PREVIEW_LIMIT = 80;
 const RECEIVABLES_VISTOS_INVOICE_PREVIEW_LIMIT = 120;
+const DEFAULT_DETAIL_ID_LIMIT = 4;
+const MAX_DETAIL_ID_LIMIT = 12;
 
 const KAISER_INVOICE_COLUMNS = [
   "Id",
@@ -231,6 +234,62 @@ function booleanValue(value) {
 
 function sampleKeys(rows) {
   return [...new Set(rows.flatMap((row) => Object.keys(row || {})))].slice(0, 80);
+}
+
+function collectInvoiceDetailIdentifiers(rows = [], options = {}) {
+  const limit = Math.max(1, Math.min(Number(options.maxDetailIds) || DEFAULT_DETAIL_ID_LIMIT, MAX_DETAIL_ID_LIMIT));
+  return rows
+    .map((row) => firstValue(row, ["Id", "InvoiceId"]))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+async function loadInvoiceDetailProbe(env, session, entityName, columns, rows = [], options = {}) {
+  const identifiers = collectInvoiceDetailIdentifiers(rows, options);
+  const diagnostics = {
+    enabled: true,
+    entityName,
+    attemptedIds: identifiers,
+    returnedRows: 0,
+    usefulRows: 0,
+    keys: [],
+    errors: []
+  };
+  const detailsById = new Map();
+  const keySet = new Set();
+  const errors = new Map();
+
+  for (const id of identifiers) {
+    try {
+      const detail = await getVistosById(env, session, entityName, id, columns);
+      const row = detail.row && typeof detail.row === "object" && !Array.isArray(detail.row)
+        ? detail.row
+        : {};
+      const keys = Object.keys(row);
+      if (!keys.length) continue;
+      const rowWithId = {
+        ...row,
+        Id: firstValue(row, ["Id"]) || id
+      };
+      detailsById.set(String(id), rowWithId);
+      diagnostics.returnedRows += 1;
+      diagnostics.usefulRows += invoiceIssues(mapReceivablesVistosInvoice(rowWithId)).length < 3 ? 1 : 0;
+      for (const key of Object.keys(rowWithId)) {
+        keySet.add(key);
+      }
+    } catch (error) {
+      const code = clean(error?.code) || "invoice_detail_probe_failed";
+      errors.set(code, (errors.get(code) || 0) + 1);
+    }
+  }
+
+  diagnostics.keys = [...keySet].slice(0, 80);
+  diagnostics.errors = [...errors.entries()].map(([code, count]) => ({ code, count }));
+
+  return {
+    ...diagnostics,
+    detailsById
+  };
 }
 
 async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
@@ -470,7 +529,23 @@ export async function createReceivablesVistosPreview(env, options = {}) {
 
   const companies = uniqueCompanies(companyResult.page.rows.map(mapReceivablesVistosCompany))
     .slice(0, RECEIVABLES_VISTOS_PREVIEW_LIMIT);
-  const invoices = invoiceResult.page.rows.slice(0, RECEIVABLES_VISTOS_INVOICE_PREVIEW_LIMIT).map(mapReceivablesVistosInvoice);
+  const invoiceDetailProbe = await loadInvoiceDetailProbe(
+    env,
+    session,
+    invoiceResult.entityName,
+    [...new Set([...invoiceResult.columns, ...KAISER_INVOICE_COLUMNS])],
+    invoiceResult.page.rows,
+    options
+  );
+  const invoices = invoiceResult.page.rows
+    .slice(0, RECEIVABLES_VISTOS_INVOICE_PREVIEW_LIMIT)
+    .map((row) => {
+      const id = firstValue(row, ["Id", "InvoiceId"]);
+      return mapReceivablesVistosInvoice({
+        ...row,
+        ...(invoiceDetailProbe.detailsById.get(String(id)) || {})
+      });
+    });
   const issues = [
     ...issueCounts(companies, companyIssues).map((issue) => ({ ...issue, scope: "companies" })),
     ...issueCounts(invoices, invoiceIssues).map((issue) => ({ ...issue, scope: "invoices" }))
@@ -508,6 +583,15 @@ export async function createReceivablesVistosPreview(env, options = {}) {
       invoiceEntity: invoiceResult.entityName,
       invoiceColumns: invoiceResult.columns,
       invoiceKeys: sampleKeys(invoiceResult.page.rows),
+      invoiceDetailProbe: {
+        enabled: true,
+        entityName: invoiceDetailProbe.entityName,
+        attemptedIds: invoiceDetailProbe.attemptedIds,
+        returnedRows: invoiceDetailProbe.returnedRows,
+        usefulRows: invoiceDetailProbe.usefulRows,
+        keys: invoiceDetailProbe.keys,
+        errors: invoiceDetailProbe.errors
+      },
       invoiceAttempts: invoiceResult.diagnostics
     },
     loadedAt: new Date().toISOString()

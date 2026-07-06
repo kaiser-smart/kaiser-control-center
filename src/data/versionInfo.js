@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.382"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.383"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: detail vydané faktury z Vistosu",
+    text: "Read-only Vistos preview nově diagnosticky zkouší GetByIdParam i pro InvoiceIssued a zobrazuje ID faktur, vrácené detaily, použitelné klíče a případné chyby. Detail může doplnit uhrazeno, zbývá, payment status nebo print/PDF odkaz bez jakéhokoliv zápisu."
+  },
   {
     title: "Pohledávky: širší Vistos preview polí",
     text: "Read-only preview faktur a firem teď mapuje checklistová pole včetně Customer_FK, CustomerBranch_FK, DUZP, uhrazeno, zbývá, payment status, PDF/print odkazu, telefonu, splatnosti a počtu faktur u firmy. Pořád bez ostrého importu, ratingu, KB plateb a komunikace."
