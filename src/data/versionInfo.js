@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.355"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.356"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: širší pracovní detail",
+    text: "Detail hlášení je širší pracovní panel s rychlým přehledem, dvousloupcovým rozložením informací, akcí a historie. Nemění backend, AI Boost, e-maily ani objednávání dílů."
+  },
   {
     title: "Pohledávkový kompas AI: dry-run základ",
     text: "Modul Pohledávky má D1 schéma, chráněné API, payment matching, rating platební morálky, KB text parser, AI Booster dry-run, settings a detail zákazníka. Ostré odesílání, cron, Vistos sync, KB API a insolvenční live kontrola zůstávají vypnuté."

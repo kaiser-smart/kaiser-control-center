@@ -21953,6 +21953,28 @@ function driverReportDrawerSection(title, body, className = "") {
   `;
 }
 
+function driverReportWorkStripItem(label, value, tone = "") {
+  return `
+    <div class="driver-report-work-strip__item ${tone ? `driver-report-work-strip__item--${escapeHtml(tone)}` : ""}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "neuvedeno")}</strong>
+    </div>
+  `;
+}
+
+function driverReportWorkStrip(item) {
+  return `
+    <div class="driver-report-work-strip" aria-label="Rychlý přehled hlášení">
+      ${driverReportWorkStripItem("Stav", driverReportDisplayStatusLabel(item), driverReportDisplayStatusTone(item))}
+      ${driverReportWorkStripItem("Další krok", driverReportNextStep(item))}
+      ${driverReportWorkStripItem("SPZ", item.licensePlate)}
+      ${driverReportWorkStripItem("Vozidlo", driverReportVehicleLabel(item))}
+      ${driverReportWorkStripItem("Řidič", item.driverName)}
+      ${driverReportIsPartRelated(item) ? driverReportWorkStripItem("Díl", driverReportPartName(item)) : ""}
+    </div>
+  `;
+}
+
 function driverReportMercedesCompactActions(item) {
   if (item.vehicleBrand !== "mercedes") {
     return "";
@@ -21997,49 +22019,59 @@ function driverReportDetail(item) {
     return "";
   }
 
+  const title = driverReportShortText(item.defectDescription || item.probablePart || item.defectType, 76);
+
   return `
     <aside class="driver-report-drawer" aria-labelledby="driver-report-detail-title">
       <div class="driver-report-drawer__head">
         <div>
           <span class="driver-report-eyebrow">${escapeHtml(item.reportId)}</span>
-          <h2 id="driver-report-detail-title">${escapeHtml(item.licensePlate || "Bez SPZ")} · ${escapeHtml(driverReportShortText(item.probablePart || item.defectType, 42))}</h2>
+          <h2 id="driver-report-detail-title">${escapeHtml(item.licensePlate || "Bez SPZ")} · ${escapeHtml(title)}</h2>
+          <p>${escapeHtml(driverReportVehicleLabel(item))} · ${escapeHtml(formatDateTime(item.reportedAt))}</p>
         </div>
         <button class="driver-report-drawer__close" type="button" data-driver-report-close-detail aria-label="Zavřít detail">×</button>
       </div>
 
       <div class="driver-report-drawer__body">
-        ${driverReportDrawerSection("Základní informace", `
-          <div class="driver-report-detail-grid">
-            ${driverReportField("Datum", formatDateTime(item.reportedAt))}
-            ${driverReportField("Stav", driverReportStatusLabel(item.status))}
-            ${driverReportField("Řidič", item.driverName)}
-            ${driverReportField("Telefon", item.driverPhone)}
-            ${driverReportField("SPZ", item.licensePlate)}
-            ${driverReportField("Vozidlo", driverReportVehicleLabel(item))}
-            ${driverReportField("VIN", item.vin || "není dostupné")}
-            ${driverReportField("Značka", item.vehicleBrandLabel)}
-            ${driverReportField("Fotka / podklad", driverReportPhotoStatusLabel(item.damagePhotoStatus))}
+        ${driverReportWorkStrip(item)}
+        <div class="driver-report-detail-layout">
+          <div class="driver-report-detail-main">
+            ${driverReportDrawerSection("Základní informace", `
+              <div class="driver-report-detail-grid">
+                ${driverReportField("Datum", formatDateTime(item.reportedAt))}
+                ${driverReportField("Stav", driverReportDisplayStatusLabel(item))}
+                ${driverReportField("Řidič", item.driverName)}
+                ${driverReportField("Telefon", item.driverPhone)}
+                ${driverReportField("SPZ", item.licensePlate)}
+                ${driverReportField("Vozidlo", driverReportVehicleLabel(item))}
+                ${driverReportField("VIN", item.vin || "není dostupné")}
+                ${driverReportField("Značka", item.vehicleBrandLabel)}
+                ${driverReportField("Fotka / podklad", driverReportPhotoStatusLabel(item.damagePhotoStatus))}
+              </div>
+            `)}
+
+            ${driverReportDrawerSection("Text hlášení", `
+              <p class="driver-report-description">${escapeHtml(item.defectDescription || "Bez popisu")}</p>
+              ${item.note ? `<p class="driver-report-note">${escapeHtml(item.note)}</p>` : ""}
+            `, "driver-report-drawer-section--description")}
+
+            ${driverReportPartDetail(item)}
           </div>
-        `)}
 
-        ${driverReportDrawerSection("Text hlášení", `
-          <p class="driver-report-description">${escapeHtml(item.defectDescription || "Bez popisu")}</p>
-          ${item.note ? `<p class="driver-report-note">${escapeHtml(item.note)}</p>` : ""}
-        `)}
+          <div class="driver-report-detail-side">
+            ${driverReportDrawerSection("Notifikace a akce", `
+              <div class="driver-report-notifications" aria-label="Stavy notifikací">
+                ${driverReportNotificationPill("E-mail Patrikovi", item.patrikEmailStatus, item.patrikEmailError)}
+                ${driverReportNotificationPill("SMS řidiči", item.driverSmsStatus, item.driverSmsError)}
+              </div>
+              <p class="driver-report-note">Fáze 2 posílá jen e-mail Patrikovi s pilotním CC Radimovi. SMS Kamilovi se v tomto kroku neposílá.</p>
+              ${driverReportActionButtons(item)}
+              ${driverReportServiceForm(item)}
+            `, "driver-report-drawer-section--actions")}
 
-        ${driverReportPartDetail(item)}
-
-        ${driverReportDrawerSection("Notifikace a akce", `
-          <div class="driver-report-notifications" aria-label="Stavy notifikací">
-            ${driverReportNotificationPill("E-mail Patrikovi", item.patrikEmailStatus, item.patrikEmailError)}
-            ${driverReportNotificationPill("SMS řidiči", item.driverSmsStatus, item.driverSmsError)}
+            ${driverReportDrawerSection("Historie", driverReportHistory(item.events), "driver-report-drawer-section--history")}
           </div>
-          <p class="driver-report-note">Fáze 2 posílá jen e-mail Patrikovi s pilotním CC Radimovi. SMS Kamilovi se v tomto kroku neposílá.</p>
-          ${driverReportActionButtons(item)}
-          ${driverReportServiceForm(item)}
-        `)}
-
-        ${driverReportDrawerSection("Historie", driverReportHistory(item.events), "driver-report-drawer-section--history")}
+        </div>
       </div>
     </aside>
   `;
