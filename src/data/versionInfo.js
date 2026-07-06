@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.354"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.355"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávkový kompas AI: dry-run základ",
+    text: "Modul Pohledávky má D1 schéma, chráněné API, payment matching, rating platební morálky, KB text parser, AI Booster dry-run, settings a detail zákazníka. Ostré odesílání, cron, Vistos sync, KB API a insolvenční live kontrola zůstávají vypnuté."
+  },
   {
     title: "Trasy svozu: jemné zvuky řidičského tabletu",
     text: "Řidičský tablet má session přepínač Zvuky zap/vyp a krátké Web Audio tóny pro klik, HOTOVO, Problém a blokovaný klik. HOTOVO má potvrzení a krátký zámek proti vícenásobnému posunu; stále jde jen o UI/read-only pilot bez ostrých akcí."

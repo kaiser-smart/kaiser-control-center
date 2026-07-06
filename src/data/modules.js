@@ -144,6 +144,18 @@ export const modules = [
     order: 9
   },
   {
+    id: "receivables",
+    title: "Pohledávky",
+    description: "Pohledávkový kompas AI pro dry-run správu otevřených faktur, platební morálky a bezpečných doporučení.",
+    route: "/pohledavky",
+    dashboardRoute: "/pohledavky/dashboard",
+    icon: CostsIcon,
+    status: "dry-run",
+    active: true,
+    disabled: false,
+    order: 9.3
+  },
+  {
     id: "reports",
     title: "Reporty",
     description: "Provozní reporty, exporty, přehledy a vyhodnocení.",

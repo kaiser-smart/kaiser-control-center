@@ -225,8 +225,15 @@ const SARLOTA_VOICE_WRITE_TEST_ENDPOINT = "/api/ai/elevenlabs/sarlota-voice-writ
 const FEEDBACK_ROUTE = "/pripominky";
 const FLEET_ROUTE = "/vozovy-park";
 const RECEIVABLES_ROUTE = "/pohledavky";
+const RECEIVABLES_ALIAS_ROUTE = "/receivables";
 const RECEIVABLES_MODULE_KEY = "receivables";
-const RECEIVABLES_PHASE_NOTICE = "Pilot Pohledávek je pouze UI/read-only návrh. Neposílá e-maily, SMS, WhatsApp, nespouští Šarlotu, neběží cron a neukládá ostrá data.";
+const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI běží ve Fázi 1B jako dry-run. Nic neposílá, nespouští Šarlotu, nemá cron a ostré integrace čekají na samostatné potvrzení.";
+const RECEIVABLES_TABS = [
+  { id: "dashboard", label: "Dashboard", route: RECEIVABLES_ROUTE },
+  { id: "customers", label: "Zákazníci", route: `${RECEIVABLES_ROUTE}#receivables-customers` },
+  { id: "dry-run", label: "Dry-run", route: `${RECEIVABLES_ROUTE}#receivables-dry-run` },
+  { id: "settings", label: "Nastavení", route: `${RECEIVABLES_ROUTE}/settings` }
+];
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
@@ -813,6 +820,29 @@ const notificationCenterState = {
   error: "",
   apiStatus: "waiting",
   selectedId: ""
+};
+
+const receivablesState = {
+  dashboard: null,
+  dashboardLoaded: false,
+  dashboardLoading: false,
+  dashboardError: "",
+  apiStatus: "waiting",
+  customers: [],
+  selectedCustomerId: "",
+  customerDetail: null,
+  customerLoading: false,
+  customerError: "",
+  selectedCaseId: "",
+  caseDetail: null,
+  caseLoading: false,
+  caseError: "",
+  settings: null,
+  settingsLoading: false,
+  settingsError: "",
+  dryRunLoading: false,
+  dryRunResult: null,
+  dryRunError: ""
 };
 
 const driverReportsState = {
@@ -22526,6 +22556,450 @@ async function copyDriverReportMobileLink(link) {
   render();
 }
 
+function receivablesModuleItem() {
+  return orderedModules.find((item) => item.id === RECEIVABLES_MODULE_KEY) || {
+    id: RECEIVABLES_MODULE_KEY,
+    title: "Pohledávky",
+    description: "Pohledávkový kompas AI",
+    route: RECEIVABLES_ROUTE,
+    dashboardRoute: `${RECEIVABLES_ROUTE}/dashboard`,
+    icon: CostsIcon,
+    status: "dry-run"
+  };
+}
+
+function routeReceivablesContext(pathname = window.location.pathname) {
+  const path = normalizePath(pathname);
+  const startsWithReceivablesAlias = path === RECEIVABLES_ALIAS_ROUTE || path.startsWith(`${RECEIVABLES_ALIAS_ROUTE}/`);
+  const startsWithReceivablesRoute = path === RECEIVABLES_ROUTE || path.startsWith(`${RECEIVABLES_ROUTE}/`);
+  const prefix = startsWithReceivablesAlias
+    ? RECEIVABLES_ALIAS_ROUTE
+    : startsWithReceivablesRoute
+      ? RECEIVABLES_ROUTE
+      : "";
+
+  if (!prefix) {
+    return null;
+  }
+
+  const rest = path.slice(prefix.length) || "";
+  if (!rest || rest === "/" || rest === "/dashboard") {
+    return { view: "dashboard", path };
+  }
+  if (rest === "/settings") {
+    return { view: "settings", path };
+  }
+  if (rest.startsWith("/customers/")) {
+    return { view: "customer", customerId: decodeURIComponent(rest.replace(/^\/customers\//, "")), path };
+  }
+  if (rest.startsWith("/cases/")) {
+    return { view: "case", caseId: decodeURIComponent(rest.replace(/^\/cases\//, "")), path };
+  }
+  return { view: "dashboard", path };
+}
+
+function formatReceivableMoney(value, currency = "Kč") {
+  const number = Number(value);
+  const safe = Number.isFinite(number) ? number : 0;
+  return `${safe.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} ${currency}`;
+}
+
+function receivablesStatusTone(status) {
+  const key = String(status || "").toLowerCase();
+  if (["stop", "insolvency_hold", "legal_handoff", "requires_human"].includes(key)) return "danger";
+  if (["dry_run", "needs_review", "partially_paid"].includes(key)) return "warning";
+  if (["paid", "ready", "autonomous"].includes(key)) return "ready";
+  return "waiting";
+}
+
+function receivablesPill(label, tone = "waiting") {
+  return `<span class="receivables-pill receivables-pill--${escapeHtml(tone)}">${escapeHtml(label || "neuvedeno")}</span>`;
+}
+
+function receivablesRatingPill(rating) {
+  const value = String(rating || "-").toUpperCase();
+  const tone = value === "INSOLVENCE" ? "danger" : ["D", "E"].includes(value) ? "warning" : "ready";
+  return receivablesPill(value, tone);
+}
+
+function receivablesDashboardKpis() {
+  const kpis = receivablesState.dashboard?.kpis || {};
+  const cards = [
+    ["Celkem po splatnosti", formatReceivableMoney(kpis.totalOverdue)],
+    ["1-15 dní", formatReceivableMoney(kpis.overdue1To15)],
+    ["16-30 dní", formatReceivableMoney(kpis.overdue16To30)],
+    ["31-45 dní", formatReceivableMoney(kpis.overdue31To45)],
+    ["46-60 dní", formatReceivableMoney(kpis.overdue46To60)],
+    ["Po 60 dnech", formatReceivableMoney(kpis.overdueOver60)],
+    ["Přislíbené úhrady", kpis.promisedPayments || 0],
+    ["Dnes ke kontrole", kpis.todayReview || 0],
+    ["Insolvenční nálezy", kpis.insolvencyFindings || 0],
+    ["Predikce 7 dní", formatReceivableMoney(kpis.predicted7d)],
+    ["Predikce 14 dní", formatReceivableMoney(kpis.predicted14d)],
+    ["Predikce 30 dní", formatReceivableMoney(kpis.predicted30d)],
+    ["Automatický režim", kpis.automaticCustomers || 0],
+    ["Stop režim", kpis.stoppedCustomers || 0]
+  ];
+
+  return `
+    <div class="receivables-kpi-grid">
+      ${cards.map(([label, value]) => `
+        <article class="receivables-kpi">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function receivablesSourceStatus() {
+  const sourceStatus = receivablesState.dashboard?.sourceStatus || {};
+  const items = [
+    ["Vistos InvoiceIssued / Company", sourceStatus.vistos || "adapter_skeleton"],
+    ["KB platby", sourceStatus.bank || "pdf_text_preview"],
+    ["Insolvenční kontrola", sourceStatus.insolvency || "not_configured"],
+    ["Outbound kanály", sourceStatus.outbound || "disabled"]
+  ];
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-source-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Datové zdroje</p>
+          <h2 id="receivables-source-title">Stav napojení</h2>
+        </div>
+        ${receivablesPill(receivablesState.apiStatus || "waiting", receivablesState.apiStatus === "ready" ? "ready" : "warning")}
+      </div>
+      <div class="receivables-source-grid">
+        ${items.map(([label, status]) => `
+          <article>
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(status)}</strong>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function receivablesCustomersTable() {
+  const customers = receivablesState.dashboard?.customers || receivablesState.customers || [];
+  if (receivablesState.dashboardLoading && !customers.length) {
+    return `<p class="receivables-empty">Načítám pohledávky...</p>`;
+  }
+  if (!customers.length) {
+    return `<p class="receivables-empty">Zatím nejsou v D1 žádní zákazníci s otevřeným balíčkem. Import faktur je připravený až pro další potvrzenou fázi.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table">
+        <thead>
+          <tr>
+            <th>Zákazník</th>
+            <th>IČO</th>
+            <th>Rating</th>
+            <th>Skóre</th>
+            <th>Otevřeno</th>
+            <th>Faktur</th>
+            <th>Nejstarší splatnost</th>
+            <th>Max dnů</th>
+            <th>Další akce</th>
+            <th>Stav</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${customers.map((customer) => {
+            const pack = customer.package || {};
+            const rating = customer.rating || {};
+            const decision = customer.nextDecision || {};
+            return `
+              <tr>
+                <td data-label="Zákazník">
+                  <a href="${routeHref(`${RECEIVABLES_ROUTE}/customers/${encodeURIComponent(customer.id)}`)}" data-link>${escapeHtml(customer.companyName || customer.id)}</a>
+                </td>
+                <td data-label="IČO">${escapeHtml(customer.ico || "-")}</td>
+                <td data-label="Rating">${receivablesRatingPill(rating.rating || "-")}</td>
+                <td data-label="Skóre">${escapeHtml(rating.paymentMoralityScore ?? "-")}</td>
+                <td data-label="Otevřeno">${escapeHtml(formatReceivableMoney(pack.totalOpenAmount))}</td>
+                <td data-label="Faktur">${escapeHtml(pack.invoiceCount || 0)}</td>
+                <td data-label="Nejstarší splatnost">${escapeHtml(pack.oldestDueDate || "-")}</td>
+                <td data-label="Max dnů">${escapeHtml(pack.maxDaysOverdue || 0)}</td>
+                <td data-label="Další akce">${escapeHtml(decision.action || pack.nextActionAt || "-")}</td>
+                <td data-label="Stav">${receivablesPill(pack.status || customer.automationStatus || "dry_run", receivablesStatusTone(pack.status || customer.automationStatus))}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesDashboardSection() {
+  return `
+    <section class="receivables-panel" id="receivables-dashboard" aria-labelledby="receivables-dashboard-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Manažerský dashboard</p>
+          <h2 id="receivables-dashboard-title">Přehled pohledávek</h2>
+          <p>Částky se načtou z D1 po migraci a importu. Do té doby panel ukazuje stav dry-run infrastruktury.</p>
+        </div>
+        <button class="secondary-link" type="button" data-receivables-reload ${receivablesState.dashboardLoading ? "disabled" : ""}>Obnovit</button>
+      </div>
+      ${receivablesState.dashboardError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.dashboardError)}</p>` : ""}
+      ${receivablesDashboardKpis()}
+    </section>
+    ${receivablesSourceStatus()}
+    <section class="receivables-panel" id="receivables-customers" aria-labelledby="receivables-customers-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Balíčky podle zákazníka</p>
+          <h2 id="receivables-customers-title">Zákazníci</h2>
+        </div>
+        ${receivablesPill("1 balíček / zákazník", "ready")}
+      </div>
+      ${receivablesCustomersTable()}
+    </section>
+    <section class="receivables-panel" id="receivables-dry-run" aria-labelledby="receivables-dry-run-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">AI Booster</p>
+          <h2 id="receivables-dry-run-title">Dry-run rozhodnutí</h2>
+          <p>AI Booster ve Fázi 1B pouze navrhuje akci. Nic neposílá a nic nespouští automaticky.</p>
+        </div>
+        ${receivablesPill("outbound vypnutý", "warning")}
+      </div>
+      <div class="receivables-guardrails">
+        <span>Po-Pá</span>
+        <span>09:00-15:30</span>
+        <span>stop po 16:00</span>
+        <span>žádné hrozby</span>
+        <span>bez zakázaných slov</span>
+        <span>D+60 interní předání</span>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesCustomerDetailSection() {
+  const detail = receivablesState.customerDetail;
+  if (receivablesState.customerLoading) {
+    return `<section class="receivables-panel"><p class="receivables-empty">Načítám detail zákazníka...</p></section>`;
+  }
+  if (receivablesState.customerError) {
+    return `<section class="receivables-panel"><p class="module-feedback__error">${escapeHtml(receivablesState.customerError)}</p></section>`;
+  }
+  if (!detail?.customer) {
+    return `<section class="receivables-panel"><p class="receivables-empty">Detail zákazníka zatím není načtený.</p></section>`;
+  }
+
+  const customer = detail.customer;
+  const rating = detail.ratings?.[0] || {};
+  const pack = detail.package || {};
+  const timeline = [
+    ...(detail.decisions || []).map((item) => ({ when: item.createdAt, type: "AI", channel: item.channel, content: item.reason, result: item.action })),
+    ...(detail.communicationEvents || []).map((item) => ({ when: item.createdAt, type: "Komunikace", channel: item.channel, content: item.subject || item.templateKey, result: item.status })),
+    ...(detail.inboxMessages || []).map((item) => ({ when: item.receivedAt, type: "Inbox", channel: "email", content: item.subject, result: item.classification })),
+    ...(detail.promises || []).map((item) => ({ when: item.createdAt, type: "Slib úhrady", channel: "customer", content: item.detectedText || item.promisedDate, result: item.status }))
+  ].sort((a, b) => String(b.when || "").localeCompare(String(a.when || ""))).slice(0, 30);
+
+  return `
+    <section class="receivables-panel receivables-detail" aria-labelledby="receivables-detail-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Detail zákazníka</p>
+          <h2 id="receivables-detail-title">${escapeHtml(customer.companyName)}</h2>
+          <p>IČO ${escapeHtml(customer.ico || "-")} · ${escapeHtml(customer.preferredContactPerson || "kontakt neurčen")}</p>
+        </div>
+        <a class="secondary-link" href="${routeHref(RECEIVABLES_ROUTE)}" data-link>Zpět na přehled</a>
+      </div>
+      <div class="receivables-detail-grid">
+        <article><span>Rating</span><strong>${receivablesRatingPill(rating.rating || "-")}</strong></article>
+        <article><span>Skóre</span><strong>${escapeHtml(rating.paymentMoralityScore ?? "-")}</strong></article>
+        <article><span>Otevřeno</span><strong>${escapeHtml(formatReceivableMoney(pack.totalOpenAmount))}</strong></article>
+        <article><span>Max dnů po splatnosti</span><strong>${escapeHtml(pack.maxDaysOverdue || 0)}</strong></article>
+      </div>
+    </section>
+    <section class="receivables-panel" aria-labelledby="receivables-invoices-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Balíček</p>
+          <h2 id="receivables-invoices-title">Otevřené faktury</h2>
+        </div>
+      </div>
+      <div class="receivables-table-wrap">
+        <table class="receivables-table">
+          <thead><tr><th>Faktura</th><th>VS</th><th>Splatnost</th><th>Celkem</th><th>Uhrazeno</th><th>Zbývá</th><th>Stav</th></tr></thead>
+          <tbody>
+            ${(detail.invoices || []).map((invoice) => `
+              <tr>
+                <td>${escapeHtml(invoice.invoiceNumber)}</td>
+                <td>${escapeHtml(invoice.variableSymbol || "-")}</td>
+                <td>${escapeHtml(invoice.dueDate || "-")}</td>
+                <td>${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
+                <td>${escapeHtml(formatReceivableMoney(invoice.paidAmount))}</td>
+                <td>${escapeHtml(formatReceivableMoney(invoice.openAmount))}</td>
+                <td>${receivablesPill(invoice.status, receivablesStatusTone(invoice.status))}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="7">Zatím nejsou uložené žádné faktury.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="receivables-panel" aria-labelledby="receivables-timeline-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Timeline</p>
+          <h2 id="receivables-timeline-title">Komunikace, inbox, AI a sliby</h2>
+        </div>
+      </div>
+      <div class="receivables-timeline">
+        ${timeline.map((item) => `
+          <article>
+            <time>${escapeHtml(formatDateTime(item.when))}</time>
+            <strong>${escapeHtml(item.type)} · ${escapeHtml(item.channel || "-")}</strong>
+            <p>${escapeHtml(item.content || "-")}</p>
+            <span>${escapeHtml(item.result || "-")}</span>
+          </article>
+        `).join("") || `<p class="receivables-empty">Timeline je zatím prázdná.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function receivablesSettingsSection() {
+  const settings = receivablesState.settings?.settings || receivablesState.dashboard?.settings || {};
+  if (receivablesState.settingsLoading) {
+    return `<section class="receivables-panel"><p class="receivables-empty">Načítám nastavení...</p></section>`;
+  }
+  const workingHours = settings.working_hours || {};
+  const sender = settings.sender || {};
+  const limits = settings.communication_limits || {};
+  const bannedWords = settings.banned_words || [];
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-settings-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Nastavení modulu</p>
+          <h2 id="receivables-settings-title">Dry-run konfigurace</h2>
+          <p>Nastavení se teď jen čte z D1/defaultů. Úpravy budou až v další potvrzené fázi.</p>
+        </div>
+        <a class="secondary-link" href="${routeHref(RECEIVABLES_ROUTE)}" data-link>Zpět na dashboard</a>
+      </div>
+      ${receivablesState.settingsError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.settingsError)}</p>` : ""}
+      <div class="receivables-settings-grid">
+        <article>
+          <span>Pracovní doba</span>
+          <strong>${escapeHtml(workingHours.sendFrom || "09:00")} - ${escapeHtml(workingHours.sendTo || "15:30")}</strong>
+          <p>Tvrdý stop: ${escapeHtml(workingHours.hardStop || "16:00")} · ${escapeHtml(workingHours.timezone || "Europe/Prague")}</p>
+        </article>
+        <article>
+          <span>Odesílatel</span>
+          <strong>${escapeHtml(sender.email || "fakturace@kaiserservis.cz")}</strong>
+          <p>${escapeHtml(sender.name || "Kaiser servis - fakturace")}</p>
+        </article>
+        <article>
+          <span>Limity</span>
+          <strong>E-mail ${escapeHtml(limits.emailDays || 1)} den</strong>
+          <p>SMS ${escapeHtml(limits.smsDays || 7)} dní · WhatsApp ${escapeHtml(limits.whatsappDays || 7)} dní · hlas ${escapeHtml(limits.voiceDays || 14)} dní</p>
+        </article>
+        <article>
+          <span>Režim</span>
+          <strong>Dry-run</strong>
+          <p>Ostré odesílání, cron a autonomie jsou vypnuté.</p>
+        </article>
+      </div>
+      <div class="receivables-banned-words">
+        ${bannedWords.map((word) => `<span>${escapeHtml(word)}</span>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function receivablesCaseSection() {
+  if (receivablesState.caseLoading) {
+    return `<section class="receivables-panel"><p class="receivables-empty">Načítám právní podklady...</p></section>`;
+  }
+  if (receivablesState.caseError) {
+    return `<section class="receivables-panel"><p class="module-feedback__error">${escapeHtml(receivablesState.caseError)}</p></section>`;
+  }
+  const caseFile = receivablesState.caseDetail?.caseFile;
+  if (!caseFile) {
+    return `<section class="receivables-panel"><p class="receivables-empty">Případ zatím není načtený.</p></section>`;
+  }
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-case-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Právní podklady</p>
+          <h2 id="receivables-case-title">${escapeHtml(caseFile.id)}</h2>
+          <p>Fáze 1B připravuje jen interní case file. ZIP/PDF export je další fáze.</p>
+        </div>
+        ${receivablesPill(caseFile.status, receivablesStatusTone(caseFile.status))}
+      </div>
+      <div class="receivables-detail-grid">
+        <article><span>Celkem otevřeno</span><strong>${escapeHtml(formatReceivableMoney(caseFile.totalOpenAmount))}</strong></article>
+        <article><span>Nejstarší splatnost</span><strong>${escapeHtml(caseFile.oldestDueDate || "-")}</strong></article>
+        <article><span>Důvod</span><strong>${escapeHtml(caseFile.triggerReason || "-")}</strong></article>
+        <article><span>Vytvořeno</span><strong>${escapeHtml(formatDateTime(caseFile.createdAt))}</strong></article>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesPage(moduleItem, user, isDashboard = false, context = { view: "dashboard" }) {
+  const view = context.view || "dashboard";
+  const content = view === "customer"
+    ? receivablesCustomerDetailSection()
+    : view === "settings"
+      ? receivablesSettingsSection()
+      : view === "case"
+        ? receivablesCaseSection()
+        : receivablesDashboardSection();
+
+  return `
+    <main class="app-shell module-page module-theme-scope receivables-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+
+      <section class="module-detail receivables-hero" aria-labelledby="receivables-title">
+        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        <div class="module-detail__body">
+          <div class="module-detail__eyebrow">SMART ODPADY / FINANCE</div>
+          <h1 id="receivables-title">Pohledávkový kompas AI</h1>
+          <p>Dry-run modul pro balíčky otevřených faktur, párování plateb, rating platební morálky a bezpečná AI doporučení.</p>
+          <div class="module-detail__status">
+            <span>Stav</span>
+            <strong>Fáze 1B · dry-run</strong>
+          </div>
+        </div>
+      </section>
+
+      <div class="receivables-warning" role="status">
+        <strong>${RECEIVABLES_PHASE_NOTICE}</strong>
+        <span>Zdroj pravdy bude D1 + backend API. Frontend neposílá zákaznické zprávy a neobsahuje žádné API klíče.</span>
+      </div>
+
+      <nav class="receivables-tabs" aria-label="Sekce Pohledávkového kompasu AI">
+        ${RECEIVABLES_TABS.map((tab) => `
+          <a class="${view === tab.id || (view === "dashboard" && tab.id === "dashboard") ? "is-active" : ""}" href="${routeHref(tab.route)}" data-link>${escapeHtml(tab.label)}</a>
+        `).join("")}
+      </nav>
+
+      ${content}
+      ${moduleFeedbackBoxFor(moduleItem, user, {
+        moduleId: RECEIVABLES_MODULE_KEY,
+        moduleName: "Pohledávky",
+        placeholder: "Např. doplnit Vistos pole, KB párování, Markétin e-mail nebo hranici významné pohledávky..."
+      })}
+    </main>
+  `;
+}
+
 function modulePage(moduleItem, user, isDashboard = false) {
   if (moduleItem.id === "absence") {
     return absenceModulePage(moduleItem, user, isDashboard);
@@ -22545,6 +23019,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
 
   if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
     return collectionRoutesModulePage(moduleItem, user, isDashboard);
+  }
+
+  if (moduleItem.id === RECEIVABLES_MODULE_KEY) {
+    return receivablesPage(moduleItem, user, isDashboard, { view: isDashboard ? "dashboard" : "dashboard" });
   }
 
   if (moduleItem.id === DATA_BOX_MODULE_KEY) {
@@ -23376,6 +23854,111 @@ async function apiJson(path, options = {}) {
   }
 
   return payload;
+}
+
+async function loadReceivablesDashboard(options = {}) {
+  if (receivablesState.dashboardLoading) {
+    return;
+  }
+
+  receivablesState.dashboardLoading = true;
+  receivablesState.dashboardError = "";
+  try {
+    const result = await apiJson("/api/receivables/dashboard?limit=100");
+    receivablesState.dashboard = result;
+    receivablesState.customers = Array.isArray(result.customers) ? result.customers : [];
+    receivablesState.apiStatus = result.apiStatus || "ready";
+    receivablesState.dashboardLoaded = true;
+  } catch (error) {
+    receivablesState.dashboardError = error.payload?.error || error.message || "Pohledávky se teď nepodařilo načíst.";
+    receivablesState.apiStatus = error.payload?.apiStatus || "waiting";
+  } finally {
+    receivablesState.dashboardLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
+async function loadReceivablesCustomerDetail(customerId, options = {}) {
+  const id = String(customerId || "").trim();
+  if (!id || (receivablesState.customerLoading && receivablesState.selectedCustomerId === id)) {
+    return;
+  }
+
+  receivablesState.selectedCustomerId = id;
+  receivablesState.customerLoading = true;
+  receivablesState.customerError = "";
+  try {
+    receivablesState.customerDetail = await apiJson(`/api/receivables/customers/${encodeURIComponent(id)}`);
+  } catch (error) {
+    receivablesState.customerError = error.payload?.error || error.message || "Detail zákazníka se teď nepodařilo načíst.";
+  } finally {
+    receivablesState.customerLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
+async function loadReceivablesCase(caseId, options = {}) {
+  const id = String(caseId || "").trim();
+  if (!id || (receivablesState.caseLoading && receivablesState.selectedCaseId === id)) {
+    return;
+  }
+
+  receivablesState.selectedCaseId = id;
+  receivablesState.caseLoading = true;
+  receivablesState.caseError = "";
+  try {
+    receivablesState.caseDetail = await apiJson(`/api/receivables/cases/${encodeURIComponent(id)}`);
+  } catch (error) {
+    receivablesState.caseError = error.payload?.error || error.message || "Právní podklady se teď nepodařilo načíst.";
+  } finally {
+    receivablesState.caseLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
+async function loadReceivablesSettings(options = {}) {
+  if (receivablesState.settingsLoading) {
+    return;
+  }
+
+  receivablesState.settingsLoading = true;
+  receivablesState.settingsError = "";
+  try {
+    receivablesState.settings = await apiJson("/api/receivables/settings");
+  } catch (error) {
+    receivablesState.settingsError = error.payload?.error || error.message || "Nastavení Pohledávek se teď nepodařilo načíst.";
+  } finally {
+    receivablesState.settingsLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
+function ensureReceivablesData(context = { view: "dashboard" }) {
+  if (!receivablesState.dashboardLoaded && !receivablesState.dashboardLoading) {
+    void loadReceivablesDashboard();
+  }
+
+  if (context.view === "customer" && context.customerId && receivablesState.selectedCustomerId !== context.customerId) {
+    receivablesState.customerDetail = null;
+    void loadReceivablesCustomerDetail(context.customerId);
+  }
+
+  if (context.view === "case" && context.caseId && receivablesState.selectedCaseId !== context.caseId) {
+    receivablesState.caseDetail = null;
+    void loadReceivablesCase(context.caseId);
+  }
+
+  if (context.view === "settings" && !receivablesState.settings && !receivablesState.settingsLoading) {
+    void loadReceivablesSettings();
+  }
 }
 
 function collectionRoutesSourceRoutesApiUrl() {
@@ -28453,6 +29036,26 @@ async function logout() {
   resetModuleRulesState();
   resetSystemCheckState();
   resetDataBoxState();
+  receivablesState.dashboard = null;
+  receivablesState.dashboardLoaded = false;
+  receivablesState.dashboardLoading = false;
+  receivablesState.dashboardError = "";
+  receivablesState.apiStatus = "waiting";
+  receivablesState.customers = [];
+  receivablesState.selectedCustomerId = "";
+  receivablesState.customerDetail = null;
+  receivablesState.customerLoading = false;
+  receivablesState.customerError = "";
+  receivablesState.selectedCaseId = "";
+  receivablesState.caseDetail = null;
+  receivablesState.caseLoading = false;
+  receivablesState.caseError = "";
+  receivablesState.settings = null;
+  receivablesState.settingsLoading = false;
+  receivablesState.settingsError = "";
+  receivablesState.dryRunLoading = false;
+  receivablesState.dryRunResult = null;
+  receivablesState.dryRunError = "";
   resetVehicleTrackingLiveState();
   navigateToUrl(routeHref("/"));
 }
@@ -28614,6 +29217,21 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
+  const receivablesContext = routeReceivablesContext(path);
+  if (receivablesContext) {
+    if (!canViewModule(user, RECEIVABLES_MODULE_KEY)) {
+      app.innerHTML = forbiddenPage(user);
+      document.title = `Bez oprávnění | ${APP_NAME}`;
+      return;
+    }
+
+    const moduleItem = receivablesModuleItem();
+    app.innerHTML = receivablesPage(moduleItem, user, receivablesContext.view === "dashboard", receivablesContext);
+    document.title = `Pohledávkový kompas AI | ${APP_NAME}`;
+    ensureReceivablesData(receivablesContext);
+    return;
+  }
+
   if (userPrimaryRoutes.has(path)) {
     const moduleItem = userPrimaryRoutes.get(path);
     app.innerHTML = modulePage(moduleItem, user);
@@ -28647,6 +29265,9 @@ function renderAuthenticatedApp(user) {
     if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
       void loadCollectionRoutesPilot();
     }
+    if (moduleItem.id === RECEIVABLES_MODULE_KEY) {
+      ensureReceivablesData({ view: "dashboard" });
+    }
     if (moduleItem.id === "system-check") {
       ensureSystemCheckData();
     }
@@ -28670,6 +29291,9 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
       void loadCollectionRoutesPilot();
+    }
+    if (moduleItem.id === RECEIVABLES_MODULE_KEY) {
+      ensureReceivablesData({ view: "dashboard" });
     }
     return;
   }
@@ -31699,6 +32323,14 @@ document.addEventListener("click", async (event) => {
   if (systemCheckRefresh) {
     event.preventDefault();
     await loadSystemCheckStatus({ force: true });
+    return;
+  }
+
+  const receivablesReload = event.target.closest("[data-receivables-reload]");
+  if (receivablesReload) {
+    event.preventDefault();
+    receivablesState.dashboardLoaded = false;
+    await loadReceivablesDashboard({ renderAfter: true });
     return;
   }
 
