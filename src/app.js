@@ -1340,20 +1340,31 @@ function vehicleTrackingPreviewThemeIcon(mode) {
 
 function vehicleTrackingPreviewThemeSwitcher() {
   const currentTheme = vehicleTrackingPreviewThemeMode();
-  const modes = [
-    { id: "light", label: "Den", ariaLabel: "Denni motiv" },
-    { id: "dark", label: "Noc", ariaLabel: "Nocni motiv" }
-  ];
+  const isDark = currentTheme === "dark";
+  const nextTheme = isDark ? "light" : "dark";
+  const label = isDark ? "Noc" : "Den";
+  const nextLabel = isDark ? "denní" : "noční";
 
   return `
-    <div class="tracking-theme-switcher" role="group" aria-label="Prepinac motivu">
-      ${modes.map((mode) => `
-        <button class="tracking-theme-switcher__button" type="button" data-tracking-preview-theme="${mode.id}" aria-label="${mode.ariaLabel}" aria-pressed="${mode.id === currentTheme ? "true" : "false"}">
-          <span class="tracking-theme-switcher__icon" aria-hidden="true">${vehicleTrackingPreviewThemeIcon(mode.id)}</span>
-          <span class="tracking-theme-switcher__label">${escapeHtml(mode.label)}</span>
-        </button>
-      `).join("")}
-    </div>
+    <button
+      class="tracking-theme-switcher tracking-theme-switcher--${escapeHtml(currentTheme)}"
+      type="button"
+      role="switch"
+      aria-checked="${isDark ? "true" : "false"}"
+      aria-label="Přepnout na ${escapeHtml(nextLabel)} motiv"
+      data-theme-state="${escapeHtml(currentTheme)}"
+      data-tracking-preview-theme="${escapeHtml(nextTheme)}"
+      data-tracking-preview-theme-toggle
+    >
+      <span class="tracking-theme-switcher__track" aria-hidden="true">
+        <span class="tracking-theme-switcher__icon tracking-theme-switcher__icon--sun">${vehicleTrackingPreviewThemeIcon("light")}</span>
+        <span class="tracking-theme-switcher__icon tracking-theme-switcher__icon--moon">${vehicleTrackingPreviewThemeIcon("dark")}</span>
+        <span class="tracking-theme-switcher__thumb">
+          <span class="tracking-theme-switcher__thumb-icon">${vehicleTrackingPreviewThemeIcon(currentTheme)}</span>
+        </span>
+      </span>
+      <span class="tracking-theme-switcher__label">${escapeHtml(label)}</span>
+    </button>
   `;
 }
 
@@ -1392,6 +1403,25 @@ function applyVehicleTrackingPreviewTheme(mode = vehicleTrackingPreviewThemeMode
   vehicleTrackingPreviewThemeState.mode = nextTheme;
   document.body?.setAttribute("data-theme", nextTheme);
   document.querySelectorAll("[data-tracking-preview-theme]").forEach((button) => {
+    if (button.hasAttribute("data-tracking-preview-theme-toggle")) {
+      const isDark = nextTheme === "dark";
+      button.dataset.trackingPreviewTheme = isDark ? "light" : "dark";
+      button.dataset.themeState = nextTheme;
+      button.classList.toggle("tracking-theme-switcher--dark", isDark);
+      button.classList.toggle("tracking-theme-switcher--light", !isDark);
+      button.setAttribute("aria-checked", isDark ? "true" : "false");
+      button.setAttribute("aria-label", `Přepnout na ${isDark ? "denní" : "noční"} motiv`);
+      const label = button.querySelector(".tracking-theme-switcher__label");
+      if (label) {
+        label.textContent = isDark ? "Noc" : "Den";
+      }
+      const thumbIcon = button.querySelector(".tracking-theme-switcher__thumb-icon");
+      if (thumbIcon) {
+        thumbIcon.innerHTML = vehicleTrackingPreviewThemeIcon(nextTheme);
+      }
+      return;
+    }
+
     const active = button.dataset.trackingPreviewTheme === nextTheme;
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -12725,10 +12755,11 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   const isSoftMetalPreview = context.designPreview === "soft-metal";
   const pageClass = `app-shell module-page module-theme-scope tracking-page${isSoftMetalPreview ? " tracking-page--soft-metal-preview" : ""}`;
   const themeStyleAttribute = isSoftMetalPreview ? "" : moduleThemeStyleAttribute();
+  const previewHeader = isSoftMetalPreview ? vehicleTrackingPreviewUtilityBar(user) : "";
   const previewShellStart = isSoftMetalPreview
-    ? `<div class="tracking-preview-shell">${vehicleTrackingPreviewSidebar(view, sourceMode)}<div class="tracking-preview-content">`
+    ? `<div class="tracking-preview-frame">${previewHeader}<div class="tracking-preview-shell">${vehicleTrackingPreviewSidebar(view, sourceMode)}<div class="tracking-preview-content">`
     : "";
-  const previewShellEnd = isSoftMetalPreview ? "</div></div>" : "";
+  const previewShellEnd = isSoftMetalPreview ? "</div></div></div>" : "";
   const trackingModeNotice = sourceMode === "demo"
     ? (isSoftMetalPreview ? vehicleTrackingPreviewOperationalStrip(visibleVehicles) : vehicleTrackingDemoBanner())
     : "";
@@ -12744,9 +12775,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   const demoMapSection = !isSoftMetalPreview && sourceMode === "demo"
     ? vehicleTrackingMapSection(visibleVehicles, selectedVehicle)
     : "";
-  const topbar = isSoftMetalPreview
-    ? vehicleTrackingPreviewUtilityBar(user)
-    : `
+  const topbar = isSoftMetalPreview ? "" : `
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
         <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
