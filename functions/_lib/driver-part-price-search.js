@@ -190,6 +190,11 @@ export function isDriverPartPriceSearchConfigured(env = {}) {
   return Boolean(config.endpoint || config.mockJson || config.openAiApiKey);
 }
 
+export function isDriverPartOfficialPriceSearchConfigured(env = {}) {
+  const config = providerConfig(env);
+  return Boolean(config.endpoint || config.mockJson);
+}
+
 function canUseProbablePartPriceSeed(request = {}, options = {}) {
   return options.allowProbablePartSeed === true && Boolean(cleanString(request.probablePart || request.partAiDetectedName));
 }
@@ -488,6 +493,20 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
   }
 
   const config = providerConfig(env);
+  if (options.requireOfficialProvider === true && !config.endpoint && !config.mockJson) {
+    const message = "Finální cenový průzkum čeká na oficiální price provider. OpenAI web-search je jen read-only náhled a nesmí sám dodat Patrikovy 3 odkazy.";
+    return {
+      ok: false,
+      status: "official_provider_not_configured",
+      checkedAt: now,
+      query,
+      provider: config.openAiApiKey ? "openai_web_search" : "",
+      offers: [],
+      message,
+      resultJson: safeJson({ ok: false, reason: "official_provider_not_configured", provider: config.openAiApiKey ? "openai_web_search" : "", query, offers: [] })
+    };
+  }
+
   if (!config.endpoint && !config.mockJson && !config.openAiApiKey) {
     const message = "AI Boost web-search není nastavený. Chybí OPENAI_API_KEY nebo PARTS_PRICE_SEARCH_ENDPOINT.";
     return {
@@ -573,6 +592,7 @@ export const __test = {
   driverPartPriceSearchQuery,
   providerConfig,
   extractOpenAiOutputText,
+  isDriverPartOfficialPriceSearchConfigured,
   vehicleFitmentFromRequest,
   normalizeDriverPartOffer,
   hasStrongCompatibilityEvidence,

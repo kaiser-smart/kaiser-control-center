@@ -1767,7 +1767,8 @@ async function runMockDriverPartPriceBoost(user, id) {
   }
 
   const result = await runDriverPartPriceSearch(process.env, current, {
-    allowProbablePartSeed: false
+    allowProbablePartSeed: false,
+    requireOfficialProvider: true
   });
   return updateMockDriverRequest(id, (item) => ({
     ...item,

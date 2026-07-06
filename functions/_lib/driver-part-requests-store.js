@@ -27,6 +27,7 @@ import {
 } from "./partslink24-search-store.js";
 import {
   isDriverPartPriceSearchConfigured,
+  isDriverPartOfficialPriceSearchConfigured,
   runDriverPartPriceSearch,
   selectDriverPartOffers
 } from "./driver-part-price-search.js";
@@ -1269,7 +1270,15 @@ function driverPartRequestPriceOffers(item = {}) {
     .slice(0, 3);
 }
 
+function driverPartRequestPriceOffersProvider(item = {}) {
+  const parsed = parseJson(item.priceBoostResultJson, {});
+  return cleanString(parsed?.provider);
+}
+
 function driverPartRequestHasRequiredPriceOffers(item = {}, requiredCount = 3) {
+  if (driverPartRequestPriceOffersProvider(item) === "openai_web_search") {
+    return false;
+  }
   return driverPartRequestPriceOffers(item).length >= requiredCount;
 }
 
@@ -1315,6 +1324,14 @@ function driverPartRequestPatrikPriceHandoffEligibility(item = {}, options = {})
       allowed: true,
       code: "",
       message: ""
+    };
+  }
+
+  if (driverPartRequestPriceOffersProvider(item) === "openai_web_search") {
+    return {
+      allowed: false,
+      code: "driver_part_official_price_provider_required",
+      message: "Finální 3 odkazy čekají na oficiální price provider. OpenAI web-search je jen read-only náhled."
     };
   }
 
@@ -1475,6 +1492,7 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
   });
   const priceOffers = driverPartRequestPriceOffers(item);
   const priceSearchConfigured = isDriverPartPriceSearchConfigured(env);
+  const officialPriceSearchConfigured = isDriverPartOfficialPriceSearchConfigured(env);
   const patrik = await partsRecipient(env);
   const recipientConfigured = Boolean(cleanString(patrik.email));
   const ccConfigured = Boolean(pilotCcEmail(env));
@@ -1489,6 +1507,12 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
       "AI Boost web-search není nastavený. Chybí OPENAI_API_KEY nebo PARTS_PRICE_SEARCH_ENDPOINT."
     ));
   }
+  if (baseEligibility.allowed && priceSearchConfigured && !officialPriceSearchConfigured && !priceEligibility.allowed) {
+    blockers.push(readinessBlocker(
+      "driver_part_official_price_provider_required",
+      "Finální 3 odkazy čekají na oficiální price provider. OpenAI web-search je jen read-only náhled."
+    ));
+  }
   if (baseEligibility.allowed && !priceEligibility.allowed) {
     blockers.push(readinessBlocker(priceEligibility.code, priceEligibility.message));
   }
@@ -1501,7 +1525,7 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
 
   const canRunPriceBoost = canManageDriverPartRequests(user)
     && baseEligibility.allowed
-    && priceSearchConfigured
+    && officialPriceSearchConfigured
     && !driverPartRequestHasRequiredPriceOffers(item, 3);
   const canSendEmail = canManageDriverPartRequests(user)
     && baseEligibility.allowed
@@ -1521,6 +1545,7 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
     canRunPriceBoost,
     canSendEmail,
     priceSearchConfigured,
+    officialPriceSearchConfigured,
     recipientConfigured,
     ccConfigured,
     vehicleVerified: item.licensePlateVerified === true && item.manualVehicleReview !== true,
@@ -1702,7 +1727,8 @@ export async function runDriverPartPriceBoost(env, user, id, options = {}) {
 
   const { db, item } = await requestForUser(env, id, user);
   const result = await runDriverPartPriceSearch(env, item, {
-    allowProbablePartSeed: options.allowProbablePartSeed === true
+    allowProbablePartSeed: options.allowProbablePartSeed === true,
+    requireOfficialProvider: true
   });
 
   try {
@@ -1894,7 +1920,8 @@ export async function handoffDriverPartRequest(env, user, id, options = {}) {
       }
     }
     const priceResult = await runDriverPartPriceSearch(env, itemForHandoff, {
-      allowProbablePartSeed: options.allowProbablePartHandoff === true
+      allowProbablePartSeed: options.allowProbablePartHandoff === true,
+      requireOfficialProvider: true
     });
     try {
       itemForEmail = await saveDriverPartPriceBoostResult(db, user, itemForHandoff, priceResult);
@@ -2442,6 +2469,7 @@ export const __test = {
   driverPartRequestPriceSearchPreviewForItem,
   driverPartRequestSourceHasManualVehicleReview,
   driverPartRequestPriceOffers,
+  driverPartRequestPriceOffersProvider,
   pilotCcStatus,
   driverPartVehicleDisplayName,
   driverPartVehicleNameLooksLikePlate,

@@ -923,6 +923,22 @@ function driverPartTestEnv(db, offers) {
   assert.equal(result.provider, "openai_web_search");
   assert.equal(result.offers.length, 3);
   assert.deepEqual(result.offers.map((offer) => offer.seller), ["AI Dodavatel A", "AI Dodavatel B", "AI Dodavatel C"]);
+
+  let officialFetchCalled = false;
+  const officialRequired = await runDriverPartPriceSearch({
+    OPENAI_API_KEY: "test-openai-key",
+    PARTS_PRICE_SEARCH_OPENAI_MODEL: "gpt-test"
+  }, item, {
+    requireOfficialProvider: true,
+    fetchImpl: async () => {
+      officialFetchCalled = true;
+      throw new Error("OpenAI se nesmí volat pro finální Patrikovy odkazy bez oficiálního provideru.");
+    }
+  });
+  assert.equal(officialRequired.status, "official_provider_not_configured");
+  assert.equal(officialRequired.ok, false);
+  assert.deepEqual(officialRequired.offers, []);
+  assert.equal(officialFetchCalled, false);
 }
 
 {
@@ -983,6 +999,25 @@ function driverPartTestEnv(db, offers) {
   const vinPilotEmailReady = driverPartRequestInternals.driverPartVinPilotState(itemWithOffers, { allowed: true });
   assert.equal(vinPilotEmailReady.status, "email_ready");
 
+  const itemWithOpenAiOffers = {
+    ...itemWithOffers,
+    priceBoostResultJson: JSON.stringify({
+      provider: "openai_web_search",
+      offers: [
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "AI Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo A 257 670 00 01 Mercedes CLS", seller: "AI Dodavatel B", url: "https://example.test/b" },
+        { title: "Sklo A 257 670 00 01 Mercedes CLS", seller: "AI Dodavatel C", url: "https://example.test/c" }
+      ]
+    })
+  };
+  const priceEligibilityWithOpenAiOffers = driverPartRequestInternals.driverPartRequestPatrikPriceHandoffEligibility(itemWithOpenAiOffers, {
+    requirePriceOffersForHandoff: true
+  });
+  assert.equal(driverPartRequestInternals.driverPartRequestPriceOffersProvider(itemWithOpenAiOffers), "openai_web_search");
+  assert.equal(priceEligibilityWithOpenAiOffers.allowed, false);
+  assert.equal(priceEligibilityWithOpenAiOffers.code, "driver_part_official_price_provider_required");
+  assert.equal(driverPartRequestInternals.driverPartRequestHasRequiredPriceOffers(itemWithOpenAiOffers), false);
+
   const itemWithUnprovenOffers = {
     ...itemWithOffers,
     priceBoostResultJson: JSON.stringify({
@@ -1010,10 +1045,13 @@ function driverPartTestEnv(db, offers) {
     vin: "WDD2573211A123456"
   }, { allowProbablePartHandoff: true });
   assert.equal(readinessWithTwoOffers.canSendEmail, false);
-  assert.equal(readinessWithTwoOffers.canRunPriceBoost, true);
-  assert.equal(readinessWithTwoOffers.status, "price_search_ready");
+  assert.equal(readinessWithTwoOffers.canRunPriceBoost, false);
+  assert.equal(readinessWithTwoOffers.status, "waiting");
+  assert.equal(readinessWithTwoOffers.priceSearchConfigured, true);
+  assert.equal(readinessWithTwoOffers.officialPriceSearchConfigured, false);
   assert.equal(readinessWithTwoOffers.priceOfferCount, 2);
   assert.equal(readinessWithTwoOffers.missingPriceOfferCount, 1);
+  assert.equal(readinessWithTwoOffers.blockers.some((blocker) => blocker.code === "driver_part_official_price_provider_required"), true);
   assert.equal(readinessWithTwoOffers.blockers.some((blocker) => blocker.code === "driver_part_price_offers_required"), true);
 
   const readinessWithThreeOffers = await driverPartRequestInternals.driverPartRequestHandoffReadinessForItem({
