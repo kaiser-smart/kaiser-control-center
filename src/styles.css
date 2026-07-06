@@ -26895,8 +26895,8 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
 .tracking-page--soft-metal-preview .tracking-preview-nav-group__label {
   display: block;
-  padding: 0 10px 1px calc(10px + var(--sidebar-nav-icon-column) + var(--sidebar-button-gap));
-  color: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  padding: 0 10px 1px 10px;
+  color: var(--text-main);
   font-size: 0.64rem;
   font-weight: 900;
   letter-spacing: 0.08em;
