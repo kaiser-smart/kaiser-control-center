@@ -26936,18 +26936,21 @@ body:has(.tracking-page--soft-metal-preview) {
 .tracking-page--soft-metal-preview .module-detail__icon {
   width: var(--tracking-hero-icon-holder);
   height: var(--tracking-hero-icon-holder);
+  border-color: color-mix(in srgb, var(--icon-teal) 26%, var(--border-soft));
   border-radius: var(--radius-xl);
-  background: var(--tracking-inset-bg);
-  color: var(--icon-graphite);
-  box-shadow: var(--tracking-inset-shadow);
+  background: var(--tracking-control-bg);
+  color: var(--icon-teal);
+  box-shadow: var(--tracking-soft-shadow-sm), var(--highlight-edge);
+  cursor: default;
+  pointer-events: none;
 }
 
 .tracking-page--soft-metal-preview .module-detail__icon svg,
 .tracking-page--soft-metal-preview .module-detail__icon img {
   width: var(--tracking-hero-icon-size);
   height: var(--tracking-hero-icon-size);
-  opacity: var(--icon-opacity-active);
-  filter: var(--icon-filter-graphite) saturate(0.78) brightness(0.96) contrast(0.94);
+  opacity: var(--icon-opacity-default);
+  filter: var(--icon-filter-teal) saturate(0.78) brightness(0.96) contrast(0.94);
   stroke-width: var(--icon-stroke);
   stroke-linecap: round;
   stroke-linejoin: round;
