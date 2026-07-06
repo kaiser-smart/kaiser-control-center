@@ -1742,6 +1742,8 @@ function themePreviewIcon(name) {
     check: "019.svg",
     plus: "002.svg",
     menu: "021.svg",
+    sidebarExpand: "sidebar-expand.svg",
+    sidebarCollapse: "sidebar-collapse.svg",
     topMail: "top-mail.svg",
     topLogin: "top-login.svg",
     topPhone: "top-phone.svg",
@@ -10158,7 +10160,8 @@ function vehicleTrackingPreviewSidebar() {
         <input class="tracking-preview-sidebar__state sr-only" type="checkbox" id="tracking-preview-sidebar-state" checked data-tracking-preview-sidebar-state>
         <div class="tracking-preview-sidebar__head tracking-preview-sidebar__head--controls-only">
           <label class="tracking-preview-sidebar__toggle icon-tone-graphite" for="tracking-preview-sidebar-state" title="Přepnout menu">
-            ${themePreviewIcon("menu")}
+            <span class="tracking-preview-sidebar__toggle-icon tracking-preview-sidebar__toggle-icon--collapse">${themePreviewIcon("sidebarCollapse")}</span>
+            <span class="tracking-preview-sidebar__toggle-icon tracking-preview-sidebar__toggle-icon--expand">${themePreviewIcon("sidebarExpand")}</span>
             <span class="tracking-preview-sidebar__toggle-label">Menu</span>
           </label>
         </div>
