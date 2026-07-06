@@ -9,6 +9,7 @@ import {
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 const RECEIVABLES_VISTOS_PREVIEW_LIMIT = 80;
 const RECEIVABLES_VISTOS_INVOICE_PREVIEW_LIMIT = 120;
+const RECEIVABLES_INVOICE_DISCOVERY_PREVIEW_LIMIT = 80;
 
 const COMPANY_ATTEMPTS = [
   {
@@ -64,6 +65,88 @@ const INVOICE_ATTEMPTS = [
   {
     entityName: "InvoiceIssued",
     columns: ["Id", "Number"]
+  }
+];
+
+const INVOICE_DISCOVERY_ENTITY_NAMES = [
+  "InvoiceIssued",
+  "Invoice",
+  "IssuedInvoice",
+  "IssuedInvoices",
+  "InvoiceOut",
+  "OutgoingInvoice",
+  "SalesInvoice",
+  "TaxDocumentIssued",
+  "IssuedTaxDocument",
+  "TaxDocument",
+  "AccountingDocument",
+  "AccountDocument",
+  "DocumentIssued",
+  "Document",
+  "Receivable",
+  "ReceivableInvoice"
+];
+
+const INVOICE_DISCOVERY_COLUMN_SETS = [
+  {
+    key: "id_only",
+    columns: ["Id"]
+  },
+  {
+    key: "number_basic",
+    columns: ["Id", "Number"]
+  },
+  {
+    key: "invoice_number_basic",
+    columns: ["Id", "InvoiceNumber"]
+  },
+  {
+    key: "issued_invoice_standard",
+    columns: [
+      "Id",
+      "Number",
+      "InvoiceNumber",
+      "VariableSymbol",
+      "Directory_FK",
+      "Company_FK",
+      "IssueDate",
+      "InvoiceDate",
+      "DueDate",
+      "TotalAmount",
+      "PaidAmount",
+      "OpenAmount",
+      "Currency_FK",
+      "Status_FK"
+    ]
+  },
+  {
+    key: "date_amount_variants",
+    columns: [
+      "Id",
+      "Number",
+      "VariableSymbol",
+      "Directory_FK",
+      "DateIssue",
+      "DateAccounting",
+      "MaturityDate",
+      "AmountTotal",
+      "AmountPaid",
+      "AmountOpen"
+    ]
+  },
+  {
+    key: "document_variants",
+    columns: [
+      "Id",
+      "DocumentNumber",
+      "VariableSymbol",
+      "Directory_FK",
+      "CreatedDate",
+      "DueDate",
+      "PriceTotal",
+      "RemainingAmount",
+      "Currency_FK"
+    ]
   }
 ];
 
@@ -125,6 +208,20 @@ function splitCompanyNameAndIco(value) {
 
 function sampleKeys(rows) {
   return [...new Set(rows.flatMap((row) => Object.keys(row || {})))].slice(0, 80);
+}
+
+function invoiceMappingScore(invoices) {
+  let score = 0;
+  for (const invoice of invoices) {
+    if (invoice.vistoInvoiceId) score += 1;
+    if (invoice.invoiceNumber) score += 2;
+    if (invoice.variableSymbol) score += 1;
+    if (invoice.customerId || invoice.customerName) score += 2;
+    if (invoice.dueDate) score += 2;
+    if (invoice.totalAmount) score += 2;
+    if (invoice.openAmount || invoice.paidAmount) score += 1;
+  }
+  return score;
 }
 
 async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
@@ -262,6 +359,104 @@ function uniqueCompanies(companies) {
   return unique;
 }
 
+async function discoverInvoiceEntity(env, session, entityName, options = {}) {
+  const attempts = [];
+  let best = {
+    columnSet: "",
+    columns: [],
+    page: { rows: [], total: 0, filtered: 0, capped: false },
+    invoices: [],
+    mappingScore: -1
+  };
+
+  for (const columnSet of INVOICE_DISCOVERY_COLUMN_SETS) {
+    try {
+      const page = await getAllVistosPages(env, session, entityName, columnSet.columns, null, {
+        pageSize: Math.min(Number(options.pageSize) || 25, 100),
+        maxPages: 1
+      });
+      const invoices = page.rows
+        .slice(0, RECEIVABLES_INVOICE_DISCOVERY_PREVIEW_LIMIT)
+        .map(mapReceivablesVistosInvoice);
+      const mappingScore = invoiceMappingScore(invoices);
+      attempts.push({
+        columnSet: columnSet.key,
+        columns: columnSet.columns,
+        ok: true,
+        returnedRows: page.rows.length,
+        recordsTotal: page.total || 0,
+        recordsFiltered: page.filtered || 0,
+        mappingScore,
+        sampleKeys: sampleKeys(page.rows).slice(0, 20)
+      });
+
+      if (page.rows.length > 0 && mappingScore > best.mappingScore) {
+        best = {
+          columnSet: columnSet.key,
+          columns: columnSet.columns,
+          page,
+          invoices,
+          mappingScore
+        };
+      }
+
+      if (columnSet.key === "id_only" && !page.rows.length) {
+        break;
+      }
+    } catch (error) {
+      attempts.push({
+        columnSet: columnSet.key,
+        columns: columnSet.columns,
+        ok: false,
+        code: clean(error?.code),
+        message: clean(error?.message).slice(0, 180)
+      });
+
+      if (columnSet.key === "id_only") {
+        break;
+      }
+    }
+  }
+
+  const hasRows = best.page.rows.length > 0;
+  const usableForRating = best.invoices.some((invoice) =>
+    (invoice.customerId || invoice.customerName) &&
+    invoice.dueDate &&
+    invoice.totalAmount
+  );
+  const accessible = attempts.some((attempt) => attempt.ok);
+
+  return {
+    entityName,
+    status: hasRows ? (usableForRating ? "usable_candidate" : "rows_without_rating_fields") : accessible ? "empty" : "blocked_or_missing",
+    accessible,
+    hasRows,
+    usableForRating,
+    recordsTotal: best.page.total || best.page.rows.length || 0,
+    returnedRows: best.page.rows.length,
+    bestColumnSet: best.columnSet,
+    bestColumns: best.columns,
+    mappingScore: Math.max(0, best.mappingScore),
+    sampleKeys: sampleKeys(best.page.rows),
+    invoices: best.invoices,
+    attempts
+  };
+}
+
+async function runLimited(items, limit, worker) {
+  const results = [];
+  let index = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (index < items.length) {
+      const currentIndex = index;
+      index += 1;
+      results[currentIndex] = await worker(items[currentIndex], currentIndex);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export async function createReceivablesVistosPreview(env, options = {}) {
   if (!isVistosExecuteConfigured(env)) {
     return {
@@ -371,5 +566,93 @@ export function receivablesVistosPreviewError(error) {
       detail: detail || "Neznámá chyba backendu.",
       apiStatus: "waiting"
     }
+  };
+}
+
+export async function createReceivablesVistosInvoiceDiscovery(env, options = {}) {
+  if (!isVistosExecuteConfigured(env)) {
+    return {
+      apiStatus: "not_configured",
+      message: VISTOS_NOT_CONFIGURED_MESSAGE,
+      readOnly: true,
+      writesD1: false,
+      createsReceivableRecords: false,
+      sendsEmailOrSms: false,
+      startsAutomation: false,
+      summary: {
+        candidateCount: INVOICE_DISCOVERY_ENTITY_NAMES.length,
+        readableEntityCount: 0,
+        entitiesWithRows: 0,
+        usableEntityCount: 0,
+        previewInvoiceRows: 0
+      },
+      bestEntity: null,
+      candidates: [],
+      invoices: []
+    };
+  }
+
+  const session = await loginVistosExecute(env);
+  const candidates = await runLimited(
+    INVOICE_DISCOVERY_ENTITY_NAMES,
+    4,
+    (entityName) => discoverInvoiceEntity(env, session, entityName, options)
+  );
+  const withRows = candidates.filter((candidate) => candidate.hasRows);
+  const usable = candidates.filter((candidate) => candidate.usableForRating);
+  const bestEntity = [...candidates].sort((a, b) => {
+    if (Number(b.usableForRating) !== Number(a.usableForRating)) {
+      return Number(b.usableForRating) - Number(a.usableForRating);
+    }
+    if (b.mappingScore !== a.mappingScore) {
+      return b.mappingScore - a.mappingScore;
+    }
+    return b.recordsTotal - a.recordsTotal;
+  })[0] || null;
+  const invoices = (bestEntity?.invoices || []).slice(0, RECEIVABLES_INVOICE_DISCOVERY_PREVIEW_LIMIT);
+
+  return {
+    apiStatus: usable.length ? "ready" : withRows.length ? "needs_mapping" : "empty",
+    message: usable.length
+      ? `Vistos invoice discovery našlo použitelnou kandidátní entitu ${usable[0].entityName}.`
+      : withRows.length
+        ? "Vistos invoice discovery našlo entity s řádky, ale bez dostatečných polí pro rating."
+        : "Vistos invoice discovery nenašlo dostupnou entitu vydaných faktur.",
+    readOnly: true,
+    writesD1: false,
+    createsReceivableRecords: false,
+    sendsEmailOrSms: false,
+    startsAutomation: false,
+    summary: {
+      candidateCount: candidates.length,
+      readableEntityCount: candidates.filter((candidate) => candidate.accessible).length,
+      entitiesWithRows: withRows.length,
+      usableEntityCount: usable.length,
+      previewInvoiceRows: invoices.length
+    },
+    bestEntity: bestEntity ? {
+      entityName: bestEntity.entityName,
+      status: bestEntity.status,
+      recordsTotal: bestEntity.recordsTotal,
+      returnedRows: bestEntity.returnedRows,
+      bestColumnSet: bestEntity.bestColumnSet,
+      mappingScore: bestEntity.mappingScore,
+      sampleKeys: bestEntity.sampleKeys
+    } : null,
+    candidates: candidates.map((candidate) => ({
+      entityName: candidate.entityName,
+      status: candidate.status,
+      accessible: candidate.accessible,
+      hasRows: candidate.hasRows,
+      usableForRating: candidate.usableForRating,
+      recordsTotal: candidate.recordsTotal,
+      returnedRows: candidate.returnedRows,
+      bestColumnSet: candidate.bestColumnSet,
+      mappingScore: candidate.mappingScore,
+      sampleKeys: candidate.sampleKeys,
+      attempts: candidate.attempts
+    })),
+    invoices,
+    loadedAt: new Date().toISOString()
   };
 }

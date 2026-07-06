@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.360"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.361"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: invoice discovery",
+    text: "Pohledávkový kompas má samostatné read-only ověření kandidátních Vistos entit pro vydané faktury. Ukáže čitelné entity, počty řádků, nejlepší mapování a zda jsou data použitelná pro rating, bez zápisu do D1 a bez odesílání."
+  },
   {
     title: "Pohledávky: IČO ze smluvního názvu",
     text: "Read-only Vistos preview umí u firem ze smluvního fallbacku oddělit IČO z popisku ve tvaru Firma - 12345678, takže seznam zákazníků je použitelnější pro další analýzu před ratingem."

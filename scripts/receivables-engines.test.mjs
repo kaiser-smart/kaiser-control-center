@@ -12,6 +12,7 @@ import {
   normalizeInvoicePreviewRow
 } from "../functions/_lib/receivables-import-preview.js";
 import {
+  createReceivablesVistosInvoiceDiscovery,
   createReceivablesVistosPreview,
   mapReceivablesVistosCompany,
   mapReceivablesVistosInvoice
@@ -319,6 +320,60 @@ Dodavatel
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Company"));
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Directory"));
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+{
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = JSON.parse(options.body || "{}");
+    const methodName = String(url).split("?").pop();
+
+    if (methodName === "LoginParam") {
+      return new Response(JSON.stringify({ status: "OK" }), {
+        status: 200,
+        headers: {
+          "set-cookie": "VistosAccessToken=test-access; VistosRefreshToken=test-refresh"
+        }
+      });
+    }
+
+    const request = payload.GetPageParam || {};
+    const rowsByEntity = {
+      IssuedInvoice: [{
+        Id: "I900",
+        Number: "2601101477",
+        VariableSymbol: "2601101477",
+        Directory_FK_RecordId: "D1",
+        Directory_FK_Caption: "Smluvní Alfa s.r.o.",
+        DueDate: "2026-06-14",
+        TotalAmount: "1210"
+      }]
+    };
+    const rows = rowsByEntity[request.EntityName] || [];
+
+    return new Response(JSON.stringify({
+      status: "OK",
+      data: {
+        data: rows,
+        recordsTotal: rows.length,
+        recordsFiltered: rows.length
+      }
+    }), { status: 200 });
+  };
+
+  try {
+    const discovery = await createReceivablesVistosInvoiceDiscovery({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "secret"
+    }, { pageSize: 5 });
+    assert.equal(discovery.apiStatus, "ready");
+    assert.equal(discovery.bestEntity.entityName, "IssuedInvoice");
+    assert.equal(discovery.summary.usableEntityCount >= 1, true);
+    assert.equal(discovery.invoices[0].invoiceNumber, "2601101477");
   } finally {
     globalThis.fetch = originalFetch;
   }

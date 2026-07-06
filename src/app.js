@@ -851,6 +851,10 @@ const receivablesState = {
   vistosPreviewLoading: false,
   vistosPreviewError: "",
   vistosPreviewMessage: "",
+  vistosInvoiceDiscovery: null,
+  vistosInvoiceDiscoveryLoading: false,
+  vistosInvoiceDiscoveryError: "",
+  vistosInvoiceDiscoveryMessage: "",
   dryRunLoading: false,
   dryRunResult: null,
   dryRunError: ""
@@ -23069,11 +23073,101 @@ function receivablesVistosPreviewPanel() {
   `;
 }
 
+function receivablesVistosInvoiceDiscoverySummary(discovery) {
+  const summary = discovery?.summary || {};
+  const best = discovery?.bestEntity || {};
+  const cards = [
+    ["Kandidátů", summary.candidateCount || 0],
+    ["Čitelné entity", summary.readableEntityCount || 0],
+    ["Entity s řádky", summary.entitiesWithRows || 0],
+    ["Použitelné pro rating", summary.usableEntityCount || 0],
+    ["Preview faktur", summary.previewInvoiceRows || 0],
+    ["Nejlepší entita", best.entityName || "-"],
+    ["Stav nejlepší entity", best.status || "-"],
+    ["Řádků nejlepší entity", best.recordsTotal || 0]
+  ];
+
+  return `
+    <div class="receivables-import-summary" aria-label="Souhrn Vistos invoice discovery">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function receivablesVistosInvoiceDiscoveryCandidates(discovery) {
+  const candidates = discovery?.candidates || [];
+  if (!candidates.length) {
+    return `<p class="receivables-empty">Discovery fakturačních entit zatím neproběhlo.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead><tr><th>Entita</th><th>Stav</th><th>Čitelná</th><th>Řádků</th><th>Celkem</th><th>Sloupce</th><th>Skóre</th><th>Klíče</th></tr></thead>
+        <tbody>
+          ${candidates.map((candidate) => `
+            <tr>
+              <td data-label="Entita">${escapeHtml(candidate.entityName || "-")}</td>
+              <td data-label="Stav">${escapeHtml(candidate.status || "-")}</td>
+              <td data-label="Čitelná">${escapeHtml(candidate.accessible ? "ANO" : "NE")}</td>
+              <td data-label="Řádků">${escapeHtml(candidate.returnedRows || 0)}</td>
+              <td data-label="Celkem">${escapeHtml(candidate.recordsTotal || 0)}</td>
+              <td data-label="Sloupce">${escapeHtml(candidate.bestColumnSet || "-")}</td>
+              <td data-label="Skóre">${escapeHtml(candidate.mappingScore || 0)}</td>
+              <td data-label="Klíče">${escapeHtml((candidate.sampleKeys || []).slice(0, 8).join(", ") || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesVistosInvoiceDiscoveryPanel() {
+  const discovery = receivablesState.vistosInvoiceDiscovery;
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-vistos-invoice-discovery-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Vistos invoice discovery</p>
+          <h2 id="receivables-vistos-invoice-discovery-title">Read-only ověření fakturačních entit</h2>
+          <p>Discovery zkouší kandidátní entity vydaných faktur přes Vistos Execute API. Nic neukládá, neposílá a nemění oprávnění.</p>
+        </div>
+        ${receivablesPill("read-only", "ready")}
+      </div>
+      <form class="receivables-import-form receivables-import-form--inline" data-receivables-vistos-invoice-discovery-form>
+        <button class="primary-button" type="submit" ${receivablesState.vistosInvoiceDiscoveryLoading ? "disabled" : ""}>
+          ${receivablesState.vistosInvoiceDiscoveryLoading ? "Ověřuji fakturační entity..." : "Ověřit fakturační entity"}
+        </button>
+      </form>
+      ${receivablesState.vistosInvoiceDiscoveryMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.vistosInvoiceDiscoveryMessage)}</p>` : ""}
+      ${receivablesState.vistosInvoiceDiscoveryError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.vistosInvoiceDiscoveryError)}</p>` : ""}
+      ${receivablesVistosInvoiceDiscoverySummary(discovery)}
+      <div class="receivables-import-diagnostics">
+        <section>
+          <h3>Kandidátní entity</h3>
+          ${receivablesVistosInvoiceDiscoveryCandidates(discovery)}
+        </section>
+        <section>
+          <h3>Mapované faktury z nejlepší entity</h3>
+          ${receivablesVistosInvoicesTable({ invoices: discovery?.invoices || [] })}
+        </section>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesImportSection() {
   const invoiceDisabled = receivablesState.importSaving === "invoices" ? "disabled" : "";
   const bankDisabled = receivablesState.importSaving === "bank" ? "disabled" : "";
   return `
     ${receivablesVistosPreviewPanel()}
+    ${receivablesVistosInvoiceDiscoveryPanel()}
     <section class="receivables-panel" aria-labelledby="receivables-import-title">
       <div class="receivables-panel__head">
         <div>
@@ -24357,6 +24451,32 @@ async function submitReceivablesVistosPreview() {
     receivablesState.vistosPreviewMessage = "";
   } finally {
     receivablesState.vistosPreviewLoading = false;
+    render();
+  }
+}
+
+async function submitReceivablesVistosInvoiceDiscovery() {
+  if (receivablesState.vistosInvoiceDiscoveryLoading) {
+    return;
+  }
+
+  receivablesState.vistosInvoiceDiscoveryLoading = true;
+  receivablesState.vistosInvoiceDiscoveryError = "";
+  receivablesState.vistosInvoiceDiscoveryMessage = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/receivables/vistos-invoice-discovery", {
+      method: "POST",
+      body: JSON.stringify({ source: "receivables-vistos-invoice-discovery" })
+    });
+    receivablesState.vistosInvoiceDiscovery = result.discovery || null;
+    receivablesState.vistosInvoiceDiscoveryMessage = result.discovery?.message || "Fakturační discovery načtené.";
+  } catch (error) {
+    receivablesState.vistosInvoiceDiscoveryError = error.payload?.error || error.message || "Fakturační discovery se nepodařilo načíst.";
+    receivablesState.vistosInvoiceDiscoveryMessage = "";
+  } finally {
+    receivablesState.vistosInvoiceDiscoveryLoading = false;
     render();
   }
 }
@@ -29487,6 +29607,10 @@ async function logout() {
   receivablesState.vistosPreviewLoading = false;
   receivablesState.vistosPreviewError = "";
   receivablesState.vistosPreviewMessage = "";
+  receivablesState.vistosInvoiceDiscovery = null;
+  receivablesState.vistosInvoiceDiscoveryLoading = false;
+  receivablesState.vistosInvoiceDiscoveryError = "";
+  receivablesState.vistosInvoiceDiscoveryMessage = "";
   receivablesState.dryRunLoading = false;
   receivablesState.dryRunResult = null;
   receivablesState.dryRunError = "";
@@ -32284,6 +32408,13 @@ document.addEventListener("submit", async (event) => {
   if (receivablesVistosPreviewForm) {
     event.preventDefault();
     await submitReceivablesVistosPreview();
+    return;
+  }
+
+  const receivablesVistosInvoiceDiscoveryForm = event.target.closest("[data-receivables-vistos-invoice-discovery-form]");
+  if (receivablesVistosInvoiceDiscoveryForm) {
+    event.preventDefault();
+    await submitReceivablesVistosInvoiceDiscovery();
     return;
   }
 
