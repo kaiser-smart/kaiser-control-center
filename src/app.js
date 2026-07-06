@@ -454,7 +454,8 @@ const DRIVER_REPORT_PRICE_BOOST_LABELS = {
   candidates_found: "Kandidáti k ověření",
   partial_results: "Neúplný průzkum",
   no_results: "Bez ověřených nabídek",
-  provider_not_configured: "AI Boost není nastaven",
+  provider_not_configured: "Web-search není nastaven",
+  official_provider_not_configured: "Čeká na oficiální price provider",
   failed: "Chyba průzkumu",
   skipped: "Neprovádí se"
 };
@@ -20735,7 +20736,7 @@ function driverReportVinPilotTone(status) {
   if (["email_sent", "handed_to_patrik", "completed", "part_arrived"].includes(normalized)) return "done";
   if (["ready_for_vin_verification", "email_ready", "waiting_verified_oe"].includes(normalized)) return "ready";
   if (normalized === "waiting_price_links") return "pending";
-  if (["provider_not_configured", "waiting_vin", "manual_verification_required", "ambiguous_fault", "maintenance_or_consumable", "out_of_pilot"].includes(normalized)) return "waiting";
+  if (["provider_not_configured", "official_provider_not_configured", "waiting_vin", "manual_verification_required", "ambiguous_fault", "maintenance_or_consumable", "out_of_pilot"].includes(normalized)) return "waiting";
   if (["canceled"].includes(normalized)) return "cancel";
   return "progress";
 }
@@ -20970,21 +20971,40 @@ function driverReportPriceOffers(item) {
     .slice(0, 3);
 }
 
+function driverReportPriceOffersProvider(item) {
+  if (!item.priceBoostResultJson) return "";
+  try {
+    const parsed = JSON.parse(item.priceBoostResultJson);
+    return String(parsed?.provider || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function driverReportHasOpenAiPricePreview(item) {
+  return driverReportPriceOffersProvider(item) === "openai_web_search";
+}
+
 function driverReportHasRequiredPriceOffers(item, requiredCount = 3) {
+  if (driverReportHasOpenAiPricePreview(item)) return false;
   return driverReportPriceOffers(item).length >= requiredCount;
 }
 
 function driverReportInternetOffers(item) {
   const offers = driverReportPriceOffers(item);
+  const isOpenAiPreview = driverReportHasOpenAiPricePreview(item);
 
   if (!offers.length) {
-    const text = item.priceBoostStatus === "provider_not_configured"
-      ? "AI Boost web-search zatím není nastavený. Bez klíče nebo provideru se web neprohledá."
-      : "AI Boost zatím cenový průzkum nespustil nebo nenašel bezpečně relevantní nabídky. Nic nebylo objednáno.";
+    const text = item.priceBoostStatus === "official_provider_not_configured"
+      ? "Finální 3 odkazy čekají na oficiální price provider. OpenAI web-search je jen read-only náhled."
+      : item.priceBoostStatus === "provider_not_configured"
+        ? "Web-search zatím není nastavený. Bez klíče nebo provideru se web neprohledá."
+        : "AI Boost zatím cenový průzkum nespustil nebo nenašel bezpečně relevantní nabídky. Nic nebylo objednáno.";
     return `<p class="driver-report-note">${escapeHtml(text)}</p>`;
   }
 
   return `
+    ${isOpenAiPreview ? `<p class="driver-report-note">OpenAI web-search je jen read-only náhled. Tyto odkazy se nepočítají jako finální 3 odkazy pro Patrika bez oficiálního price provideru.</p>` : ""}
     <ol class="driver-report-offers">
       ${offers.slice(0, 3).map((offer) => `
         <li>
@@ -21156,7 +21176,7 @@ function driverReportPartslink24Section(item) {
         ${driverReportVinPilotStep(
           "4. Cenový průzkum",
           driverReportHasRequiredPriceOffers(item) ? "email_ready" : "waiting_price_links",
-          item.priceBoostNote || "AI Boost prohledá web přes serverový web-search a uloží max. 3 nabídky k ručnímu ověření. Nic neobjednává.",
+          item.priceBoostNote || "Read-only OpenAI náhled může prohledat web, ale finální 3 odkazy pro Patrika smí uložit až oficiální price provider. Nic se neobjednává.",
           [
             driverReportField("Stav", driverReportPriceBoostLabel(item.priceBoostStatus)),
             driverReportField("Poslední hledání", item.priceBoostCheckedAt ? formatDateTime(item.priceBoostCheckedAt) : "")
@@ -21488,6 +21508,8 @@ function driverReportPatrikHandoffBlockReason(item) {
   if (item.licensePlateVerified !== true || item.manualVehicleReview === true) return "Předání čeká na ruční ověření vozidla proti Vozovému parku.";
   if (!item.vin) return "Předání čeká na VIN.";
   if (!driverReportHasVerifiedPartForPatrikHandoff(item)) return "Předání čeká na ověřený díl/OE podle VIN. Pravděpodobný díl nestačí pro e-mail Patrikovi.";
+  if (driverReportHasOpenAiPricePreview(item)) return "Finální 3 odkazy čekají na oficiální price provider. OpenAI web-search je jen read-only náhled.";
+  if (item.priceBoostStatus === "official_provider_not_configured") return "Finální 3 odkazy čekají na oficiální price provider.";
   if (!driverReportHasRequiredPriceOffers(item)) return "Předání čeká na 3 cenové nabídky s odkazy.";
   return "";
 }

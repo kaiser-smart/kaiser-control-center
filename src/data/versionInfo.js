@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.367"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.368"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: OpenAI náhled není finální handoff",
+    text: "UI i lokální preview nově jasně oddělují read-only OpenAI web-search od finálních odkazů pro Patrika. Předání zůstane blokované, dokud nejsou 3 kompatibilní odkazy z oficiálního price provideru."
+  },
   {
     title: "Hlášení řidičů: finální odkazy jen z oficiálního provideru",
     text: "Perzistentní cenový průzkum a background handoff už nepoužijí samotný OpenAI web-search jako zdroj finálních 3 odkazů pro Patrika. OpenAI zůstává jen read-only náhled; finální odkazy čekají na oficiální price provider."

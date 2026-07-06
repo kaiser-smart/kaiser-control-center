@@ -1666,6 +1666,9 @@ function updateMockDriverRequest(id, updater) {
 function mockDriverPriceOffers(item = {}) {
   try {
     const parsed = JSON.parse(mockDriverClean(item.priceBoostResultJson) || "{}");
+    if (mockDriverClean(parsed?.provider) === "openai_web_search") {
+      return [];
+    }
     const offers = Array.isArray(parsed?.offers)
       ? parsed.offers
       : Array.isArray(parsed?.candidates) ? parsed.candidates : [];
@@ -1674,6 +1677,15 @@ function mockDriverPriceOffers(item = {}) {
       .slice(0, 3);
   } catch {
     return [];
+  }
+}
+
+function mockDriverPriceOffersProvider(item = {}) {
+  try {
+    const parsed = JSON.parse(mockDriverClean(item.priceBoostResultJson) || "{}");
+    return mockDriverClean(parsed?.provider);
+  } catch {
+    return "";
   }
 }
 
@@ -1713,7 +1725,10 @@ async function handoffMockDriverPartRequest(user, id) {
     current = await runMockDriverPartPriceBoost(user, id);
   }
   if (mockDriverPriceOffers(current).length < 3) {
-    const error = new Error("AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. E-mail Patrikovi neposílám bez odkazů.");
+    const message = mockDriverPriceOffersProvider(current) === "openai_web_search"
+      ? "Finální 3 odkazy čekají na oficiální price provider. OpenAI web-search je jen read-only náhled."
+      : "AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. E-mail Patrikovi neposílám bez odkazů.";
+    const error = new Error(message);
     error.status = 400;
     throw error;
   }

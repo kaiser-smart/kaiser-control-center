@@ -387,6 +387,9 @@ function driverPartTestEnv(db, offers) {
     appSource,
     /result\.request\?\.status === "handed_to_ordering" && result\.request\?\.patrikEmailStatus === "sent"/
   );
+  assert.match(appSource, /OpenAI web-search je jen read-only náhled/);
+  assert.match(appSource, /oficiální price provider/);
+  assert.match(appSource, /official_provider_not_configured/);
 }
 
 {
