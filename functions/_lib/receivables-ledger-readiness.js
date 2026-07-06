@@ -138,6 +138,36 @@ const RECEIVABLES_COMPANY_ENRICHMENT_ATTEMPTS = [
     key: "directory_with_branch_core_enrichment",
     entityName: "DirectoryWithBranch",
     columns: DIRECTORY_WITH_BRANCH_CORE_COLUMNS
+  },
+  {
+    key: "customer_enrichment",
+    entityName: "Customer",
+    columns: ["Id", "Name", "RegNumber", "VATNumber", "Email", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays", "Status_FK"]
+  },
+  {
+    key: "customer_branch_enrichment",
+    entityName: "CustomerBranch",
+    columns: ["Id", "Name", "Parent_FK", "RegNumber", "VATNumber", "Email", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays", "Status_FK"]
+  },
+  {
+    key: "company_enrichment",
+    entityName: "Company",
+    columns: ["Id", "Name", "Caption", "ICO", "DIC", "RegNumber", "VATNumber", "Email", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays"]
+  },
+  {
+    key: "directory_enrichment",
+    entityName: "Directory",
+    columns: ["Id", "Name", "Caption", "ICO", "DIC", "RegNumber", "VATNumber", "Email", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays"]
+  },
+  {
+    key: "partner_enrichment",
+    entityName: "Partner",
+    columns: ["Id", "Name", "RegNumber", "VATNumber", "Email", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays"]
+  },
+  {
+    key: "address_book_enrichment",
+    entityName: "AddressBook",
+    columns: ["Id", "Name", "RegNumber", "VATNumber", "Email", "InvoiceEmail", "BillingEmail", "Phone", "InvoiceDueDays"]
   }
 ];
 

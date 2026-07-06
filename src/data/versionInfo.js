@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.378"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.379"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: širší hledání Vistos entity firem",
+    text: "Read-only enrichment po Contract vazbě už nezkouší jen DirectoryWithBranch, ale také Customer, CustomerBranch, Company, Directory, Partner a AddressBook. Cílem je najít živou Vistos projekci s DIČ, fakturačním e-mailem a splatností bez ostrého zápisu."
+  },
   {
     title: "Pohledávky: obohacení firem z DirectoryWithBranch",
     text: "Read-only ledger readiness používá Contract jako stabilní vazbu faktura-firma a druhým bezpečným čtením z DirectoryWithBranch se pokouší doplnit DIČ, fakturační e-mail a splatnost. Výsledek je vidět v panelu Obohacení firem a pořád nic nezapisuje do ostrého ledgeru."
