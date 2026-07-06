@@ -258,6 +258,48 @@ Dodavatel
 }
 
 {
+  const kaiserInvoiceFromVistos = mapReceivablesVistosInvoice({
+    Id: "D2601",
+    InvoiceNumber: "2601101477",
+    BankReference2: "2601101477",
+    BankReference1: "0308",
+    BankReference3: "987",
+    CustomerBranch_FK_RecordId: "BR1",
+    CustomerBranch_FK_Caption: "Firma Alfa Brno",
+    Customer_FK_RecordId: "C123",
+    Customer_FK_Caption: "Firma Alfa s.r.o.",
+    CustomerRegNumber: "12345678",
+    CustomerVatNumber: "CZ12345678",
+    IssuedDate: "2026-06-01",
+    DueDate: "2026-06-14",
+    PriceWithoutTax: "1 000,00",
+    PriceWithTax: "1 210,00",
+    AmountPaid: "210,00",
+    RemainToPay: "1 000,00",
+    Status_FK_Caption: "Vystaveno",
+    IsPaid: false
+  });
+  assert.equal(kaiserInvoiceFromVistos.vistoInvoiceId, "D2601");
+  assert.equal(kaiserInvoiceFromVistos.invoiceNumber, "2601101477");
+  assert.equal(kaiserInvoiceFromVistos.variableSymbol, "2601101477");
+  assert.equal(kaiserInvoiceFromVistos.constantSymbol, "0308");
+  assert.equal(kaiserInvoiceFromVistos.specificSymbol, "987");
+  assert.equal(kaiserInvoiceFromVistos.customerId, "BR1");
+  assert.equal(kaiserInvoiceFromVistos.customerName, "Firma Alfa Brno");
+  assert.equal(kaiserInvoiceFromVistos.customerCompanyId, "C123");
+  assert.equal(kaiserInvoiceFromVistos.ico, "12345678");
+  assert.equal(kaiserInvoiceFromVistos.dic, "CZ12345678");
+  assert.equal(kaiserInvoiceFromVistos.issueDate, "2026-06-01");
+  assert.equal(kaiserInvoiceFromVistos.priceWithoutTax, 1000);
+  assert.equal(kaiserInvoiceFromVistos.priceWithTax, 1210);
+  assert.equal(kaiserInvoiceFromVistos.totalAmount, 1210);
+  assert.equal(kaiserInvoiceFromVistos.paidAmount, 210);
+  assert.equal(kaiserInvoiceFromVistos.openAmount, 1000);
+  assert.equal(kaiserInvoiceFromVistos.status, "Vystaveno");
+  assert.equal(kaiserInvoiceFromVistos.isPaid, false);
+}
+
+{
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, options = {}) => {
@@ -280,6 +322,20 @@ Dodavatel
       Directory: [],
       Contract: [{ Id: "K1", ContractNumber: "S001", Directory_FK_RecordId: "D1", Directory_FK_Caption: "Smluvní Alfa s.r.o." }],
       InvoiceIssued: [],
+      Document: [{
+        Id: "D1",
+        InvoiceNumber: "2601101477",
+        BankReference2: "2601101477",
+        CustomerBranch_FK_RecordId: "D1",
+        CustomerBranch_FK_Caption: "Smluvní Alfa s.r.o.",
+        CustomerRegNumber: "12345678",
+        IssuedDate: "2026-06-01",
+        DueDate: "2026-06-14",
+        PriceWithTax: "1210",
+        AmountPaid: "0",
+        RemainToPay: "1210",
+        IsPaid: false
+      }],
       Invoice: [{ Id: "I1", Number: "2601101477", Directory_FK_RecordId: "D1", DueDate: "2026-06-14", TotalAmount: "1210" }]
     };
     const rows = rowsByEntity[request.EntityName] || [];
@@ -298,13 +354,18 @@ Dodavatel
     const preview = await createReceivablesVistosPreview({
       VISTOS_API_BASE_URL: "https://vistos.example",
       VISTOS_API_USERNAME: "readonly",
-      VISTOS_API_PASSWORD: "secret"
+      VISTOS_API_PASSWORD: "test-password"
     }, { pageSize: 5, maxPages: 1 });
     assert.equal(preview.apiStatus, "ready");
     assert.equal(preview.diagnostics.companyEntity, "Contract");
-    assert.equal(preview.diagnostics.invoiceEntity, "Invoice");
+    assert.equal(preview.diagnostics.invoiceEntity, "Document");
     assert.equal(preview.companies[0].companyName, "Smluvní Alfa s.r.o.");
     assert.equal(preview.invoices[0].invoiceNumber, "2601101477");
+    assert.equal(preview.invoices[0].variableSymbol, "2601101477");
+    assert.equal(preview.invoices[0].ico, "12345678");
+    assert.equal(preview.invoices[0].totalAmount, 1210);
+    assert.equal(preview.invoices[0].openAmount, 1210);
+    assert.equal(preview.diagnostics.invoiceAttempts.find((attempt) => attempt.entityName === "Document")?.key, "kaiser_invoice_columns");
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Company"));
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Directory"));
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));

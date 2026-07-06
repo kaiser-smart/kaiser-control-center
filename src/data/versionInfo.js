@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.370"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.371"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: přesné Vistos sloupce faktur",
+    text: "Read-only Vistos preview nově zkouší Kaiser invoice sloupcovou sadu s poli InvoiceNumber, BankReference1-3, CustomerBranch_FK, Customer_FK, CustomerRegNumber, CustomerVatNumber, IssuedDate, DueDate, PriceWithoutTax, PriceWithTax, AmountPaid, RemainToPay, Status_FK a IsPaid. Stále bez D1 zápisu a bez komunikace zákazníkům."
+  },
   {
     title: "Trasy svozu: denní trasa jako návrh",
     text: "Hlavní filtr Svozových tras má read-only dispečerský panel Denní trasa – návrh. Ukazuje, co je v aktuálním filtru připravené ze 13 Excelů, Vistos mapování a pilotního řidičského auditu, ale nevytváří ostrý denní běh, GPS, T-Cars, SMS/e-maily ani automatizace."

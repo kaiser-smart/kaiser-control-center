@@ -10,6 +10,26 @@ const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 const RECEIVABLES_VISTOS_PREVIEW_LIMIT = 80;
 const RECEIVABLES_VISTOS_INVOICE_PREVIEW_LIMIT = 120;
 
+const KAISER_INVOICE_COLUMNS = [
+  "Id",
+  "InvoiceNumber",
+  "BankReference2",
+  "BankReference1",
+  "BankReference3",
+  "CustomerBranch_FK",
+  "Customer_FK",
+  "CustomerRegNumber",
+  "CustomerVatNumber",
+  "IssuedDate",
+  "DueDate",
+  "PriceWithoutTax",
+  "PriceWithTax",
+  "AmountPaid",
+  "RemainToPay",
+  "Status_FK",
+  "IsPaid"
+];
+
 const COMPANY_ATTEMPTS = [
   {
     entityName: "Company",
@@ -35,6 +55,27 @@ const COMPANY_ATTEMPTS = [
 
 const INVOICE_ATTEMPTS = [
   {
+    key: "kaiser_invoice_columns",
+    entityName: "InvoiceIssued",
+    columns: KAISER_INVOICE_COLUMNS
+  },
+  {
+    key: "kaiser_invoice_columns",
+    entityName: "Document",
+    columns: KAISER_INVOICE_COLUMNS
+  },
+  {
+    key: "kaiser_invoice_columns",
+    entityName: "Invoice",
+    columns: KAISER_INVOICE_COLUMNS
+  },
+  {
+    key: "kaiser_invoice_columns",
+    entityName: "IssuedInvoice",
+    columns: KAISER_INVOICE_COLUMNS
+  },
+  {
+    key: "legacy_invoice_issued_standard",
     entityName: "InvoiceIssued",
     columns: [
       "Id",
@@ -54,14 +95,17 @@ const INVOICE_ATTEMPTS = [
     ]
   },
   {
+    key: "legacy_invoice_issued_basic",
     entityName: "InvoiceIssued",
     columns: ["Id", "Number", "VariableSymbol", "Directory_FK", "IssueDate", "DueDate", "TotalAmount"]
   },
   {
+    key: "legacy_invoice_basic",
     entityName: "Invoice",
     columns: ["Id", "Number", "VariableSymbol", "Directory_FK", "IssueDate", "DueDate", "TotalAmount"]
   },
   {
+    key: "legacy_invoice_issued_id_number",
     entityName: "InvoiceIssued",
     columns: ["Id", "Number"]
   }
@@ -111,6 +155,17 @@ function compactDigits(value) {
   return clean(value).replace(/\D/g, "");
 }
 
+function booleanValue(value) {
+  const normalized = clean(value).toLowerCase();
+  if (["true", "1", "ano", "yes", "paid", "uhrazeno"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "ne", "no", "unpaid", "neuhrazeno"].includes(normalized)) {
+    return false;
+  }
+  return null;
+}
+
 function sampleKeys(rows) {
   return [...new Set(rows.flatMap((row) => Object.keys(row || {})))].slice(0, 80);
 }
@@ -130,6 +185,7 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
         maxPages: Math.min(Number(options.maxPages) || 2, 5)
       });
       diagnostics.push({
+        key: clean(attempt.key),
         entityName,
         columns,
         ok: true,
@@ -146,6 +202,7 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
       }
     } catch (error) {
       diagnostics.push({
+        key: clean(attempt.key),
         entityName,
         columns,
         ok: false,
@@ -186,22 +243,39 @@ export function mapReceivablesVistosCompany(row = {}) {
 }
 
 export function mapReceivablesVistosInvoice(row = {}) {
-  const customerId = recordId(row, "Directory_FK") || recordId(row, "Company_FK");
-  const customerName = caption(row, "Directory_FK") || caption(row, "Company_FK");
+  const customerBranchId = recordId(row, "CustomerBranch_FK");
+  const customerCompanyId = recordId(row, "Customer_FK");
+  const customerId = customerBranchId || customerCompanyId || recordId(row, "Directory_FK") || recordId(row, "Company_FK");
+  const customerBranchName = caption(row, "CustomerBranch_FK");
+  const customerCompanyName = caption(row, "Customer_FK");
+  const customerName = customerBranchName || customerCompanyName || caption(row, "Directory_FK") || caption(row, "Company_FK");
   const invoiceNumber = firstValue(row, ["InvoiceNumber", "Number", "DocumentNumber", "Cislo"]);
+  const priceWithTax = numberValue(firstValue(row, ["PriceWithTax", "TotalAmount", "TotalPrice", "AmountTotal", "PriceTotal"]));
+  const priceWithoutTax = numberValue(firstValue(row, ["PriceWithoutTax", "AmountWithoutTax"]));
   return {
     vistoInvoiceId: firstValue(row, ["Id", "InvoiceId"]),
     invoiceNumber,
-    variableSymbol: compactDigits(firstValue(row, ["VariableSymbol", "VS", "VarSymbol"])) || compactDigits(invoiceNumber),
+    variableSymbol: compactDigits(firstValue(row, ["BankReference2", "VariableSymbol", "VS", "VarSymbol"])) || compactDigits(invoiceNumber),
+    constantSymbol: compactDigits(firstValue(row, ["BankReference1", "ConstantSymbol", "KS"])),
+    specificSymbol: compactDigits(firstValue(row, ["BankReference3", "SpecificSymbol", "SS"])),
     customerId,
     customerName,
-    issueDate: firstValue(row, ["IssueDate", "InvoiceDate", "DateIssue", "CreatedDate"]),
+    customerBranchId,
+    customerBranchName,
+    customerCompanyId,
+    customerCompanyName,
+    ico: compactDigits(firstValue(row, ["CustomerRegNumber", "ICO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"])),
+    dic: firstValue(row, ["CustomerVatNumber", "DIC", "Dic", "VAT", "VatId"]),
+    issueDate: firstValue(row, ["IssuedDate", "IssueDate", "InvoiceDate", "DateIssue", "CreatedDate"]),
     dueDate: firstValue(row, ["DueDate", "MaturityDate", "DatumSplatnosti"]),
-    totalAmount: numberValue(firstValue(row, ["TotalAmount", "TotalPrice", "AmountTotal", "PriceTotal"])),
+    priceWithoutTax,
+    priceWithTax,
+    totalAmount: priceWithTax,
     paidAmount: numberValue(firstValue(row, ["PaidAmount", "AmountPaid"])),
-    openAmount: numberValue(firstValue(row, ["OpenAmount", "RemainingAmount", "AmountOpen"])),
+    openAmount: numberValue(firstValue(row, ["RemainToPay", "OpenAmount", "RemainingAmount", "AmountOpen"])),
     currency: caption(row, "Currency_FK") || firstValue(row, ["Currency", "CurrencyCode"]) || "CZK",
     status: caption(row, "Status_FK") || firstValue(row, ["Status", "InvoiceStatus"]),
+    isPaid: booleanValue(firstValue(row, ["IsPaid"])),
     raw: row
   };
 }
