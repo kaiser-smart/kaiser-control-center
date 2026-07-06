@@ -26473,10 +26473,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-hero {
 /* Branch-only refinement: bring the real tracking module closer to the approved soft-metal preview. */
 body[data-theme="light"] .tracking-page--soft-metal-preview,
 .tracking-page--soft-metal-preview {
-  --sidebar-width-compact: 90px;
+  --sidebar-width-compact: 70px;
   --sidebar-width-expanded: 244px;
   --sidebar-item-height: 48px;
-  --sidebar-compact-item-height: 38px;
+  --sidebar-compact-item-height: 46px;
   --sidebar-item-radius: var(--radius-sm);
   --sidebar-icon-size: 28px;
   --sidebar-icon-holder: 48px;
@@ -27000,7 +27000,7 @@ body:not([data-theme="dark"]) .tracking-page--soft-metal-preview .tracking-previ
   min-height: var(--sidebar-compact-item-height);
   aspect-ratio: 1;
   place-items: center;
-  padding: 10px;
+  padding: 8px;
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-sidebar__toggle {
