@@ -1389,6 +1389,7 @@ function vehicleTrackingPreviewUtilityBar(user) {
         </a>
       </div>
       <div class="tracking-utility-bar__tools">
+        ${vehicleTrackingPreviewUtilityShortcuts()}
         ${vehicleTrackingPreviewThemeSwitcher()}
         <span class="tracking-preview-user-chip">${escapeHtml(previewName)}</span>
         <span class="tracking-preview-role-chip">${escapeHtml(roleText)}</span>
@@ -1742,6 +1743,9 @@ function themePreviewIcon(name) {
     check: "009.svg",
     plus: "016.svg",
     menu: "021.svg",
+    topMail: "top-mail.svg",
+    topLogin: "top-login.svg",
+    topPhone: "top-phone.svg",
     actionDone: "013.svg",
     actionWarning: "014.svg",
     actionIcons: "015.svg"
@@ -1752,6 +1756,24 @@ function themePreviewIcon(name) {
 
 function themePreviewIconFile(file) {
   return `<img class="theme-icon-img" src="/design-icons/${file}" alt="" aria-hidden="true" loading="lazy">`;
+}
+
+function vehicleTrackingPreviewUtilityShortcuts() {
+  const shortcuts = [
+    { icon: "topMail", label: "Pošta" },
+    { icon: "topLogin", label: "Přihlášení" },
+    { icon: "topPhone", label: "Telefon" }
+  ];
+
+  return `
+    <div class="tracking-utility-shortcuts" aria-label="Rychlé systémové zkratky">
+      ${shortcuts.map((item) => `
+        <span class="tracking-utility-icon-button icon-tone-graphite" role="img" aria-label="${escapeHtml(item.label)}" title="${escapeHtml(item.label)}">
+          ${themePreviewIcon(item.icon)}
+        </span>
+      `).join("")}
+    </div>
+  `;
 }
 
 function themeSystemPreviewPage() {
