@@ -25305,6 +25305,12 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --state-success-bg: color-mix(in srgb, var(--brand-accent) 13%, transparent);
   --state-success-border: color-mix(in srgb, var(--brand-accent) 38%, var(--border-soft));
   --state-success-text: var(--brand-accent);
+  --active-pill-bg: var(--state-success-bg);
+  --active-pill-border: color-mix(in srgb, var(--brand-accent) 52%, var(--border-soft));
+  --active-pill-text: var(--text-main);
+  --active-pill-dot: var(--brand-accent);
+  --active-pill-hover-bg: color-mix(in srgb, var(--brand-accent) 16%, transparent);
+  --active-pill-shadow: none;
   --state-warning-bg: color-mix(in srgb, var(--tracking-warning) 12%, transparent);
   --state-warning-border: color-mix(in srgb, var(--tracking-warning) 34%, var(--border-soft));
   --state-warning-text: color-mix(in srgb, var(--tracking-warning) 74%, var(--text-main));
@@ -25472,10 +25478,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
 
 .tracking-page--soft-metal-preview .tracking-tab--active,
 .tracking-page--soft-metal-preview .tracking-demo-filter--active {
-  border-color: var(--tracking-accent-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  box-shadow: var(--shadow-control-active);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  color: var(--active-pill-text);
+  box-shadow: var(--active-pill-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-layout {
@@ -25517,10 +25523,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--active {
-  border-color: var(--tracking-accent-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  box-shadow: var(--shadow-control-active);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  color: var(--active-pill-text);
+  box-shadow: var(--active-pill-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--passive {
@@ -25565,9 +25571,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
 }
 
 .tracking-page--soft-metal-preview .tracking-status--moving {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
+  --status-dot-color: var(--active-pill-dot);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  color: var(--active-pill-text);
 }
 
 .tracking-page--soft-metal-preview .tracking-status--stopped {
@@ -25599,9 +25606,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-live-strip__states .tracking-status--moving {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
+  --status-dot-color: var(--active-pill-dot);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  color: var(--active-pill-text);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-live-strip__states .tracking-status--stopped {
@@ -26604,6 +26612,12 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --state-success-bg: color-mix(in srgb, var(--brand-accent) 14%, rgba(14, 21, 30, 0.94));
   --state-success-border: color-mix(in srgb, var(--brand-accent) 36%, rgba(177, 194, 207, 0.15));
   --state-success-text: var(--brand-accent);
+  --active-pill-bg: color-mix(in srgb, var(--brand-accent) 16%, rgba(14, 21, 30, 0.94));
+  --active-pill-border: color-mix(in srgb, var(--brand-accent) 44%, var(--border-soft));
+  --active-pill-text: var(--text-main);
+  --active-pill-dot: var(--brand-accent);
+  --active-pill-hover-bg: color-mix(in srgb, var(--brand-accent) 20%, rgba(14, 21, 30, 0.94));
+  --active-pill-shadow: none;
   --state-warning-bg: color-mix(in srgb, var(--tracking-warning) 15%, rgba(14, 21, 30, 0.94));
   --state-warning-border: color-mix(in srgb, var(--tracking-warning) 34%, rgba(177, 194, 207, 0.15));
   --state-warning-text: #edc779;
@@ -27314,9 +27328,9 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-role-chip {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  color: var(--active-pill-text);
   font-size: 0.7rem;
   letter-spacing: 0.03em;
 }
@@ -27593,10 +27607,10 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--active {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  box-shadow: var(--shadow-control-active);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  color: var(--active-pill-text);
+  box-shadow: var(--active-pill-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-source-mode--passive {
@@ -27617,9 +27631,10 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 .tracking-page--soft-metal-preview .back-button,
 .tracking-page--soft-metal-preview .tracking-tab,
 .tracking-page--soft-metal-preview .tracking-demo-filter {
-  min-height: var(--tracking-control-height);
+  min-height: 38px;
+  padding: 0 13px;
   background: var(--tracking-control-bg);
-  box-shadow: var(--shadow-control);
+  box-shadow: none;
 }
 
 .tracking-page--soft-metal-preview :is(.secondary-link, .back-button, .tracking-tab, .tracking-demo-filter):hover {
@@ -27627,12 +27642,21 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   box-shadow: var(--shadow-control-hover);
 }
 
+.tracking-page--soft-metal-preview :is(.tracking-tab, .tracking-demo-filter):hover,
+.tracking-page--soft-metal-preview :is(.tracking-tab--active, .tracking-demo-filter--active):hover,
+.tracking-page--soft-metal-preview :is(.tracking-tab, .tracking-demo-filter):focus-visible {
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-hover-bg);
+  box-shadow: none;
+  color: var(--active-pill-text);
+}
+
 .tracking-page--soft-metal-preview .tracking-tab--active,
 .tracking-page--soft-metal-preview .tracking-demo-filter--active {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  box-shadow: var(--shadow-control-active);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  color: var(--active-pill-text);
+  box-shadow: var(--active-pill-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-tabs,
@@ -27670,7 +27694,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   height: 9px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: currentColor;
+  background: var(--status-dot-color, currentColor);
   content: "";
 }
 
@@ -27682,9 +27706,10 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-status--moving {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
+  --status-dot-color: var(--active-pill-dot);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  color: var(--active-pill-text);
 }
 
 .tracking-page--soft-metal-preview .tracking-status--stopped {
@@ -27870,7 +27895,18 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
 .tracking-page--soft-metal-preview :is(.primary-action, .primary-link, .secondary-link, .back-button, .tracking-tab, .tracking-demo-filter, .tracking-source-mode, .tracking-demo-vehicle-card, .tracking-tcars-location-card, .tracking-wim-site-card):active {
   box-shadow: var(--shadow-control-active);
-  transform: translateY(1px);
+  transform: none;
+}
+
+.tracking-page--soft-metal-preview :is(.tracking-tab, .tracking-demo-filter):active,
+.tracking-page--soft-metal-preview :is(.tracking-tab--active, .tracking-demo-filter--active):active,
+.tracking-page--soft-metal-preview .tracking-source-mode--active:hover,
+.tracking-page--soft-metal-preview .tracking-source-mode--active:active {
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  box-shadow: var(--active-pill-shadow);
+  color: var(--active-pill-text);
+  transform: none;
 }
 
 @media (max-width: 1220px) {
