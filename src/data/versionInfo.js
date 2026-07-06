@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.360"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.361"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: řidičské akce přes backend",
+    text: "Řidičský tablet umí ukládat HOTOVO, Problém, Musím vysypat a Přestávka jako auditované D1 eventy přes backend API. HOTOVO je idempotentní pro jednu zastávku, takže vícenásobný klik neposune trasu o více stanovišť. Nevznikají ostré trasy, SMS/e-maily, T-Cars ani automatizace."
+  },
   {
     title: "Hlášení řidičů: rychlý hlasový zápis",
     text: "Šarlota po potvrzení hned vytvoří servisní hlášení a nečeká na díly, ceny ani e-mail. Jasné úkony, nejasné závady a urgentní problémy se rozdělují do samostatných stavů; urgentní hlášení jde Patrikovi přes backendové pozadí."

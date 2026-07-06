@@ -1041,6 +1041,9 @@ const collectionRoutesPilotState = {
   sourceDriverRouteDone: false,
   sourceDriverDoneConfirmOpen: false,
   sourceDriverDonePending: false,
+  sourceDriverRun: null,
+  sourceDriverRunKey: "",
+  sourceDriverEventPending: "",
   sourceDriverSoundsEnabled: true,
   sourceRouteView: "print",
   selectedSiteId: "",
@@ -15893,7 +15896,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
         <div class="collection-routes-driver-mode__problem-grid" aria-label="Rychlé hlášení problému">
           <div>
             <strong>Co se stalo?</strong>
-            <span>Vyber problém. Nic se zatím neodesílá bez potvrzeného backendu.</span>
+            <span>Vyber problém. Uloží se jen řidičský audit v D1; bez SMS, e-mailu, T-Cars a automatizace.</span>
           </div>
           <div>
             ${["Nádoba není venku", "Přeplněno", "Překážka", "Špatná adresa", "Nelze obsloužit", "Nahlásit dispečinku", "Vyfotit", "Jiné"].map((label) => collectionRoutesSourceDriverReadonlyButton(label, `problem:${label}`, "problem-soft")).join("")}
@@ -16256,7 +16259,7 @@ function collectionRoutesSourceRouteViewSwitch(rows = collectionRoutesSourceDisp
   const selectedView = collectionRoutesSourceRouteView();
   const options = [
     ["print", "Přehled k tisku", "Tabulka zastávek pro kontrolu a tisk"],
-    ["driver", "Řidičský tablet", "Kabinový read-only režim pro řidiče"],
+    ["driver", "Řidičský tablet", "Kabinový režim pro řidiče"],
     ["map", "Mapa / GPS", "Připravenost trasy bez navigace"]
   ];
   return `
@@ -24468,6 +24471,29 @@ function collectionRoutesSourceRoutesApiUrl() {
   return `/api/collection-routes/svozove-trasy/routes?${params.toString()}`;
 }
 
+function collectionRoutesSourceDriverRunKeyFromState() {
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  return [
+    collectionRoutesPilotState.sourceSelectedBatchId || "",
+    filters.day || "all",
+    filters.week || "all",
+    filters.vehicle || "all",
+    collectionRoutesSourceWasteApiValue(filters.waste || "all"),
+    filters.mappingStatus || "all"
+  ].join("|");
+}
+
+function resetCollectionRoutesSourceDriverRunIfChanged() {
+  const nextRunKey = collectionRoutesSourceDriverRunKeyFromState();
+  if (collectionRoutesPilotState.sourceDriverRunKey && collectionRoutesPilotState.sourceDriverRunKey !== nextRunKey) {
+    collectionRoutesPilotState.sourceDriverRun = null;
+    collectionRoutesPilotState.sourceDriverRunKey = "";
+    collectionRoutesPilotState.sourceDriverEventPending = "";
+    collectionRoutesPilotState.sourceDriverDoneConfirmOpen = false;
+    collectionRoutesPilotState.sourceDriverDonePending = false;
+  }
+}
+
 function collectionRoutesApplySourceRoutesPayload(payload = {}) {
   collectionRoutesPilotState.sourceFiles = Array.isArray(payload.files) ? payload.files : [];
   collectionRoutesPilotState.sourceRows = Array.isArray(payload.rows) ? payload.rows : [];
@@ -24477,6 +24503,7 @@ function collectionRoutesApplySourceRoutesPayload(payload = {}) {
   } else if (!collectionRoutesPilotState.sourceSelectedBatchId && collectionRoutesPilotState.sourceBatches[0]?.id) {
     collectionRoutesPilotState.sourceSelectedBatchId = collectionRoutesPilotState.sourceBatches[0].id;
   }
+  resetCollectionRoutesSourceDriverRunIfChanged();
 }
 
 async function loadCollectionRoutesSourceRoutes(options = {}) {
@@ -25142,6 +25169,86 @@ function focusCollectionRoutesSourceDriverMode() {
   }, 0);
 }
 
+function collectionRoutesSourceDriverCurrentRoutePayload() {
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  return {
+    sourceBatchId: collectionRoutesPilotState.sourceSelectedBatchId || "",
+    filters: {
+      day: filters.day || "all",
+      week: filters.week || "all",
+      vehicle: filters.vehicle || "all",
+      waste: collectionRoutesSourceWasteApiValue(filters.waste || "all"),
+      mappingStatus: filters.mappingStatus || "all"
+    }
+  };
+}
+
+function collectionRoutesSourceDriverClientEventId(action, sourceRowId) {
+  const randomPart = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `driver-tablet:${action}:${sourceRowId}:${randomPart}`;
+}
+
+async function ensureCollectionRoutesSourceDriverRun() {
+  const routePayload = collectionRoutesSourceDriverCurrentRoutePayload();
+  if (!routePayload.sourceBatchId) {
+    throw new Error("Nejdřív vyber uložený import 13 Excelů.");
+  }
+  const runKey = collectionRoutesSourceDriverRunKeyFromState();
+  if (collectionRoutesPilotState.sourceDriverRun?.id && collectionRoutesPilotState.sourceDriverRunKey === runKey) {
+    return collectionRoutesPilotState.sourceDriverRun;
+  }
+  const result = await apiJson("/api/collection-routes/driver-runs", {
+    method: "POST",
+    body: JSON.stringify(routePayload)
+  });
+  collectionRoutesPilotState.sourceDriverRun = result.run || null;
+  collectionRoutesPilotState.sourceDriverRunKey = runKey;
+  if (!collectionRoutesPilotState.sourceDriverRun?.id) {
+    throw new Error("Řidičskou trasu se nepodařilo připravit.");
+  }
+  return collectionRoutesPilotState.sourceDriverRun;
+}
+
+async function recordCollectionRoutesSourceDriverEvent(action, { reason = "", note = "" } = {}) {
+  const rows = collectionRoutesSourceDisplayRows();
+  const selectedIndex = collectionRoutesSourceDriverSelectedIndex(rows);
+  const row = rows[selectedIndex] || null;
+  const sourceRowId = row?.id || "";
+  if (!sourceRowId) {
+    throw new Error("Aktuální stanoviště nemá zdrojové ID z 13 Excelů.");
+  }
+
+  const run = await ensureCollectionRoutesSourceDriverRun();
+  const result = await apiJson(
+    `/api/collection-routes/driver-runs/${encodeURIComponent(run.id)}/stops/${encodeURIComponent(sourceRowId)}/events`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        action,
+        reason,
+        note,
+        clientEventId: collectionRoutesSourceDriverClientEventId(action, sourceRowId),
+        payload: {
+          routeOrder: row.routeOrder || selectedIndex + 1,
+          sourceFile: row.sourceFile || "",
+          sourceSheet: row.sourceSheet || "",
+          sourceRowNumber: row.sourceRowNumber || 0,
+          dayCode: row.dayCode || "",
+          weekMode: row.weekMode || "",
+          vehicleCode: row.vehicleCode || "",
+          wasteType: row.wasteType || "",
+          customerName: row.customerName || "",
+          addressText: row.addressText || ""
+        }
+      })
+    }
+  );
+  collectionRoutesPilotState.sourceDriverRun = result.run || collectionRoutesPilotState.sourceDriverRun;
+  return result;
+}
+
 function setCollectionRoutesSourceRouteView(view) {
   const nextView = ["driver", "map"].includes(view) ? view : "print";
   collectionRoutesPilotState.sourceRouteView = nextView;
@@ -25220,7 +25327,7 @@ function skipCollectionRoutesSourceDriverStop() {
 }
 
 function openCollectionRoutesSourceDriverDoneConfirm() {
-  if (collectionRoutesPilotState.sourceDriverDonePending) {
+  if (collectionRoutesPilotState.sourceDriverDonePending || collectionRoutesPilotState.sourceDriverEventPending) {
     playCollectionRoutesDriverSound("error");
     collectionRoutesPilotState.sourceImportError = "Počkej, předchozí potvrzení se ještě zpracovává.";
     collectionRoutesPilotState.sourceImportMessage = "";
@@ -25255,7 +25362,7 @@ function cancelCollectionRoutesSourceDriverDoneConfirm() {
   focusCollectionRoutesSourceDriverMode();
 }
 
-function confirmCollectionRoutesSourceDriverDone() {
+async function confirmCollectionRoutesSourceDriverDone() {
   if (!collectionRoutesPilotState.sourceDriverDoneConfirmOpen) {
     playCollectionRoutesDriverSound("error");
     collectionRoutesPilotState.sourceImportError = "Nejdřív otevři potvrzení přes HOTOVO.";
@@ -25264,7 +25371,7 @@ function confirmCollectionRoutesSourceDriverDone() {
     focusCollectionRoutesSourceDriverMode();
     return;
   }
-  if (collectionRoutesPilotState.sourceDriverDonePending) {
+  if (collectionRoutesPilotState.sourceDriverDonePending || collectionRoutesPilotState.sourceDriverEventPending) {
     playCollectionRoutesDriverSound("error");
     collectionRoutesPilotState.sourceImportError = "";
     collectionRoutesPilotState.sourceImportMessage = "Ukládám, další kliky jsou dočasně zamčené.";
@@ -25274,15 +25381,27 @@ function confirmCollectionRoutesSourceDriverDone() {
   }
   playCollectionRoutesDriverSound("success");
   collectionRoutesPilotState.sourceDriverDonePending = true;
+  collectionRoutesPilotState.sourceDriverEventPending = "done";
   collectionRoutesPilotState.sourceImportError = "";
   collectionRoutesPilotState.sourceImportMessage = "Ukládám...";
   render();
   focusCollectionRoutesSourceDriverMode();
-  setTimeout(() => {
+
+  try {
+    await recordCollectionRoutesSourceDriverEvent("done");
     collectionRoutesPilotState.sourceDriverDonePending = false;
+    collectionRoutesPilotState.sourceDriverEventPending = "";
     collectionRoutesPilotState.sourceDriverDoneConfirmOpen = false;
     completeCollectionRoutesSourceDriverStop();
-  }, 950);
+  } catch (error) {
+    playCollectionRoutesDriverSound("error");
+    collectionRoutesPilotState.sourceDriverDonePending = false;
+    collectionRoutesPilotState.sourceDriverEventPending = "";
+    collectionRoutesPilotState.sourceImportError = error.payload?.error || error.message || "HOTOVO se nepodařilo uložit.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+    render();
+    focusCollectionRoutesSourceDriverMode();
+  }
 }
 
 function selectCollectionRoutesSourceDriverStop(rowKey) {
@@ -25300,18 +25419,26 @@ function toggleCollectionRoutesSourceDriverList() {
   focusCollectionRoutesSourceDriverMode();
 }
 
-function handleCollectionRoutesSourceDriverReadonlyAction(action) {
+async function handleCollectionRoutesSourceDriverReadonlyAction(action) {
   const normalized = String(action || "").split(":")[0];
   if (normalized === "done") {
     openCollectionRoutesSourceDriverDoneConfirm();
     return;
   }
   if (normalized === "done-confirm") {
-    confirmCollectionRoutesSourceDriverDone();
+    await confirmCollectionRoutesSourceDriverDone();
     return;
   }
   if (normalized === "done-cancel") {
     cancelCollectionRoutesSourceDriverDoneConfirm();
+    return;
+  }
+  if (collectionRoutesPilotState.sourceDriverEventPending || collectionRoutesPilotState.sourceDriverDonePending) {
+    playCollectionRoutesDriverSound("error");
+    collectionRoutesPilotState.sourceImportError = "";
+    collectionRoutesPilotState.sourceImportMessage = "Počkej, předchozí akce se ještě ukládá.";
+    render();
+    focusCollectionRoutesSourceDriverMode();
     return;
   }
   playCollectionRoutesDriverSound(collectionRoutesSourceDriverReadonlySoundType(action));
@@ -25323,6 +25450,36 @@ function handleCollectionRoutesSourceDriverReadonlyAction(action) {
   if (normalized === "problem-close") {
     collectionRoutesPilotState.sourceDriverProblemPanelOpen = false;
   }
+  if (["dump", "break"].includes(normalized) || String(action || "").startsWith("problem:")) {
+    const reason = String(action || "").startsWith("problem:") ? String(action || "").slice("problem:".length) : "";
+    collectionRoutesPilotState.sourceDriverEventPending = normalized;
+    collectionRoutesPilotState.sourceImportError = "";
+    collectionRoutesPilotState.sourceImportMessage = "Ukládám řidičskou akci...";
+    render();
+    focusCollectionRoutesSourceDriverMode();
+    try {
+      await recordCollectionRoutesSourceDriverEvent(normalized, { reason });
+      collectionRoutesPilotState.sourceDriverEventPending = "";
+      collectionRoutesPilotState.sourceDriverProblemPanelOpen = normalized === "problem" ? false : collectionRoutesPilotState.sourceDriverProblemPanelOpen;
+      collectionRoutesPilotState.sourceImportError = "";
+      collectionRoutesPilotState.sourceImportMessage = {
+        dump: "Musím vysypat uloženo do řidičského auditu.",
+        break: "Přestávka uložena do řidičského auditu.",
+        problem: reason ? `Problém uložen: ${reason}.` : "Problém uložen."
+      }[normalized] || "Řidičská akce uložena.";
+      render();
+      focusCollectionRoutesSourceDriverMode();
+      return;
+    } catch (error) {
+      playCollectionRoutesDriverSound("error");
+      collectionRoutesPilotState.sourceDriverEventPending = "";
+      collectionRoutesPilotState.sourceImportError = error.payload?.error || error.message || "Řidičskou akci se nepodařilo uložit.";
+      collectionRoutesPilotState.sourceImportMessage = "";
+      render();
+      focusCollectionRoutesSourceDriverMode();
+      return;
+    }
+  }
   const messages = {
     navigate: "Navigace na další stanoviště bude zapnutá v další fázi.",
     problem: "Vyber, co se stalo.",
@@ -25330,6 +25487,8 @@ function handleCollectionRoutesSourceDriverReadonlyAction(action) {
     map: "Mapa bude zapnutá v další fázi.",
     list: "",
     report: "Hlášení otevři přes volbu Problém.",
+    dump: "Musím vysypat se ukládá jen do řidičského auditu. Nic se neodesílá mimo Smart.",
+    break: "Přestávka se ukládá jen do řidičského auditu. Nic se neodesílá mimo Smart.",
     dispatch: "Hlášení dispečinku bude zapnuté v další fázi.",
     sarlota: "Šarlota bude zapnutá v další fázi."
   };
@@ -33585,7 +33744,7 @@ document.addEventListener("click", async (event) => {
 
   const collectionRoutesDriverReadonlyAction = event.target.closest("[data-collection-routes-driver-readonly-action]");
   if (collectionRoutesDriverReadonlyAction) {
-    handleCollectionRoutesSourceDriverReadonlyAction(collectionRoutesDriverReadonlyAction.dataset.collectionRoutesDriverReadonlyAction || "");
+    await handleCollectionRoutesSourceDriverReadonlyAction(collectionRoutesDriverReadonlyAction.dataset.collectionRoutesDriverReadonlyAction || "");
     return;
   }
 
