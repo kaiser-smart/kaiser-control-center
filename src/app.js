@@ -15501,23 +15501,23 @@ function collectionRoutesSourceDriverSoundToggleHtml() {
 function collectionRoutesSourceDriverTonePlan(type) {
   if (type === "success") {
     return [
-      { frequency: 540, start: 0, duration: 0.065, gain: 0.032, wave: "sine" },
-      { frequency: 760, start: 0.07, duration: 0.095, gain: 0.038, wave: "sine" }
+      { frequency: 560, start: 0, duration: 0.085, gain: 0.105, wave: "sine" },
+      { frequency: 820, start: 0.075, duration: 0.135, gain: 0.13, wave: "sine" }
     ];
   }
   if (type === "warning") {
     return [
-      { frequency: 270, start: 0, duration: 0.11, gain: 0.032, wave: "triangle" },
-      { frequency: 210, start: 0.08, duration: 0.08, gain: 0.022, wave: "triangle" }
+      { frequency: 310, start: 0, duration: 0.14, gain: 0.1, wave: "triangle" },
+      { frequency: 220, start: 0.09, duration: 0.12, gain: 0.082, wave: "triangle" }
     ];
   }
   if (type === "error") {
     return [
-      { frequency: 155, start: 0, duration: 0.07, gain: 0.028, wave: "square" }
+      { frequency: 180, start: 0, duration: 0.095, gain: 0.09, wave: "square" }
     ];
   }
   return [
-    { frequency: 640, start: 0, duration: 0.055, gain: 0.026, wave: "sine" }
+    { frequency: 690, start: 0, duration: 0.08, gain: 0.08, wave: "triangle" }
   ];
 }
 

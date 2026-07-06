@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.354"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.355"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: hlasitější zvuky tabletu",
+    text: "Zvuky tlačítek v řidičském tabletu jsou výraznější pro kabinu nákladního auta. Zůstávají krátké, generované přes Web Audio API, vypínatelné v session a bez ostrých akcí."
+  },
   {
     title: "Trasy svozu: jemné zvuky řidičského tabletu",
     text: "Řidičský tablet má session přepínač Zvuky zap/vyp a krátké Web Audio tóny pro klik, HOTOVO, Problém a blokovaný klik. HOTOVO má potvrzení a krátký zámek proti vícenásobnému posunu; stále jde jen o UI/read-only pilot bez ostrých akcí."
