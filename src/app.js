@@ -22918,11 +22918,25 @@ function receivablesVistosPreviewDiagnostics(preview) {
   if (!preview) return "";
   const diagnostics = preview.diagnostics || {};
   const issues = preview.issues || [];
+  const attempts = [
+    ...(diagnostics.companyAttempts || []).map((attempt) => ({ ...attempt, scope: "Firmy" })),
+    ...(diagnostics.invoiceAttempts || []).map((attempt) => ({ ...attempt, scope: "Faktury" }))
+  ];
   const issueRows = issues.map((issue) => `
     <tr>
       <td data-label="Oblast">${escapeHtml(issue.scope || "-")}</td>
       <td data-label="Kód">${escapeHtml(issue.code)}</td>
       <td data-label="Počet">${escapeHtml(issue.count)}</td>
+    </tr>
+  `).join("");
+  const attemptRows = attempts.map((attempt) => `
+    <tr>
+      <td data-label="Oblast">${escapeHtml(attempt.scope)}</td>
+      <td data-label="Entita">${escapeHtml(attempt.entityName || "-")}</td>
+      <td data-label="Výsledek">${escapeHtml(attempt.ok ? "OK" : "chyba")}</td>
+      <td data-label="Řádků">${escapeHtml(attempt.returnedRows ?? "-")}</td>
+      <td data-label="Celkem">${escapeHtml(attempt.recordsTotal ?? "-")}</td>
+      <td data-label="Detail">${escapeHtml(attempt.message || attempt.code || "-")}</td>
     </tr>
   `).join("");
 
@@ -22936,6 +22950,17 @@ function receivablesVistosPreviewDiagnostics(preview) {
           <div><dt>Klíče firem</dt><dd>${escapeHtml((diagnostics.companyKeys || []).slice(0, 12).join(", ") || "-")}</dd></div>
           <div><dt>Klíče faktur</dt><dd>${escapeHtml((diagnostics.invoiceKeys || []).slice(0, 12).join(", ") || "-")}</dd></div>
         </dl>
+      </section>
+      <section>
+        <h3>Pokusy o čtení z Vistosu</h3>
+        ${attemptRows ? `
+          <div class="receivables-table-wrap">
+            <table class="receivables-table receivables-table--compact">
+              <thead><tr><th>Oblast</th><th>Entita</th><th>Výsledek</th><th>Řádků</th><th>Celkem</th><th>Detail</th></tr></thead>
+              <tbody>${attemptRows}</tbody>
+            </table>
+          </div>
+        ` : `<p class="receivables-empty">Pokusy se zobrazí po spuštění Vistos preview.</p>`}
       </section>
       <section>
         <h3>Datové mezery pro rating</h3>

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.357"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.358"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: Vistos preview fallback",
+    text: "Read-only preview Pohledávek teď při prázdné entitě pokračuje na další Vistos kandidáty a v UI ukazuje všechny pokusy o čtení firem a vydaných faktur. Data se stále neukládají do ostrého ledgeru a nic se neposílá."
+  },
   {
     title: "Pohledávkový kompas AI: Vistos firmy a faktury",
     text: "Fáze 1D přidává read-only preview Vistos Company / InvoiceIssued pro budoucí rating platební morálky. Náhled jen ověřuje firmy, faktury, splatnosti a dostupná pole; nic neukládá do ostrých tabulek, neposílá zprávy a nespouští automatizaci."

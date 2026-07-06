@@ -113,6 +113,7 @@ function sampleKeys(rows) {
 
 async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
   const diagnostics = [];
+  let firstEmptyResult = null;
 
   for (const attempt of attempts) {
     const entityName = clean(options.entityName) || attempt.entityName;
@@ -133,7 +134,12 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
         recordsFiltered: page.filtered || 0,
         capped: Boolean(page.capped)
       });
-      return { entityName, columns, page, diagnostics };
+      if (page.rows.length > 0) {
+        return { entityName, columns, page, diagnostics };
+      }
+      if (!firstEmptyResult) {
+        firstEmptyResult = { entityName, columns, page };
+      }
     } catch (error) {
       diagnostics.push({
         entityName,
@@ -143,6 +149,13 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
         message: clean(error?.message).slice(0, 180)
       });
     }
+  }
+
+  if (firstEmptyResult) {
+    return {
+      ...firstEmptyResult,
+      diagnostics
+    };
   }
 
   return {
