@@ -26428,6 +26428,8 @@ body:has(.tracking-page--soft-metal-preview) {
   --tracking-soft-shadow-sm: 6px 8px 17px rgba(78, 92, 100, 0.13), -5px -5px 13px rgba(255, 255, 255, 0.72);
   --tracking-inset-shadow: inset 6px 6px 14px rgba(78, 92, 100, 0.17), inset -6px -6px 14px rgba(255, 255, 255, 0.72);
   --tracking-control-height: 46px;
+  --tracking-hero-icon-holder: 176px;
+  --tracking-hero-icon-size: 108px;
   width: min(1500px, calc(100% - 28px));
 }
 
@@ -26902,6 +26904,7 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .module-detail {
   position: relative;
+  grid-template-columns: var(--tracking-hero-icon-holder) minmax(0, 760px);
   overflow: hidden;
   gap: var(--space-xl);
   padding: clamp(22px, 2.1vw, 30px);
@@ -26931,8 +26934,8 @@ body:has(.tracking-page--soft-metal-preview) {
 }
 
 .tracking-page--soft-metal-preview .module-detail__icon {
-  width: 88px;
-  height: 88px;
+  width: var(--tracking-hero-icon-holder);
+  height: var(--tracking-hero-icon-holder);
   border-radius: var(--radius-xl);
   background: var(--tracking-inset-bg);
   color: var(--icon-graphite);
@@ -26941,8 +26944,8 @@ body:has(.tracking-page--soft-metal-preview) {
 
 .tracking-page--soft-metal-preview .module-detail__icon svg,
 .tracking-page--soft-metal-preview .module-detail__icon img {
-  width: var(--icon-xl);
-  height: var(--icon-xl);
+  width: var(--tracking-hero-icon-size);
+  height: var(--tracking-hero-icon-size);
   opacity: var(--icon-opacity-active);
   filter: var(--icon-filter-graphite) saturate(0.78) brightness(0.96) contrast(0.94);
   stroke-width: var(--icon-stroke);
@@ -27422,14 +27425,14 @@ body:has(.tracking-page--soft-metal-preview) {
   }
 
   .tracking-page--soft-metal-preview .module-detail__icon {
-    width: var(--icon-holder-lg);
-    height: var(--icon-holder-lg);
+    width: 132px;
+    height: 132px;
   }
 
   .tracking-page--soft-metal-preview .module-detail__icon svg,
   .tracking-page--soft-metal-preview .module-detail__icon img {
-    width: var(--icon-lg);
-    height: var(--icon-lg);
+    width: 72px;
+    height: 72px;
   }
 
   .tracking-page--soft-metal-preview .tracking-demo-vehicle-card__head,
