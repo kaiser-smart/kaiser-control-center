@@ -123,6 +123,24 @@ const RECEIVABLES_COMPANY_ATTEMPTS = [
   }
 ];
 
+const RECEIVABLES_COMPANY_ENRICHMENT_ATTEMPTS = [
+  {
+    key: "directory_with_branch_czech_enrichment",
+    entityName: "DirectoryWithBranch",
+    columns: DIRECTORY_WITH_BRANCH_CZECH_COLUMNS
+  },
+  {
+    key: "directory_with_branch_extended_enrichment",
+    entityName: "DirectoryWithBranch",
+    columns: DIRECTORY_WITH_BRANCH_EXTENDED_COLUMNS
+  },
+  {
+    key: "directory_with_branch_core_enrichment",
+    entityName: "DirectoryWithBranch",
+    columns: DIRECTORY_WITH_BRANCH_CORE_COLUMNS
+  }
+];
+
 const INVOICE_COLUMNS = [
   "Id",
   "InvoiceNumber",
@@ -258,6 +276,18 @@ function addFlag(flags, code) {
   }
 }
 
+function companyDataQualityFlags(company = {}) {
+  const flags = [];
+  if (!company.vistoBranchId) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_COMPANY_ENTITY);
+  if (!company.ico) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_ICO);
+  if (!company.dic) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_DIC);
+  if (!company.billingEmail && !company.email) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_BILLING_EMAIL);
+  if (company.standardDueDays === null || company.standardDueDays === undefined) {
+    addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_STANDARD_DUE_DAYS);
+  }
+  return flags;
+}
+
 async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
   const diagnostics = [];
   let firstEmptyResult = null;
@@ -339,15 +369,7 @@ export function mapReceivablesLedgerCompany(row = {}, entityName = "DirectoryWit
     firstValue(row, ["BillingAddressCity", "City", "Město", "Mesto"]),
     firstValue(row, ["BillingAddressPostalCode", "Zip", "PSČ", "PSC"])
   ].filter(Boolean).join(", ");
-  const flags = [];
-
-  if (!branchId) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_COMPANY_ENTITY);
-  if (!ico) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_ICO);
-  if (!dic) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_DIC);
-  if (!billingEmail && !email) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_BILLING_EMAIL);
-  if (standardDueDays === null) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_STANDARD_DUE_DAYS);
-
-  return {
+  const company = {
     entityName,
     vistoCompanyId: parentId || branchId,
     vistoBranchId: branchId,
@@ -365,8 +387,13 @@ export function mapReceivablesLedgerCompany(row = {}, entityName = "DirectoryWit
     deliveryAddress: billingAddress,
     activeStatus: caption(row, "Status_FK") || firstValue(row, ["Status", "Stav"]),
     isBranch: Boolean(parentId && parentId !== branchId),
-    flags,
+    flags: [],
     raw: row
+  };
+
+  return {
+    ...company,
+    flags: companyDataQualityFlags(company)
   };
 }
 
@@ -393,6 +420,76 @@ function buildCompanyIndexes(companies = []) {
   }
 
   return { byCompanyId, byBranchId, byName, byIco };
+}
+
+function firstIndexMatch(map, key) {
+  if (!key) return null;
+  const value = map.get(key);
+  return Array.isArray(value) ? value[0] || null : value || null;
+}
+
+function mergeCompanyValue(primary, enrichment, keys) {
+  for (const key of keys) {
+    if (primary[key] !== null && primary[key] !== undefined && primary[key] !== "") {
+      return primary[key];
+    }
+  }
+  for (const key of keys) {
+    if (enrichment?.[key] !== null && enrichment?.[key] !== undefined && enrichment?.[key] !== "") {
+      return enrichment[key];
+    }
+  }
+  return primary[keys[0]];
+}
+
+function mergeCompanyEnrichment(baseCompanies = [], enrichmentCompanies = []) {
+  const enrichmentIndexes = buildCompanyIndexes(enrichmentCompanies);
+  let matchedCompanies = 0;
+
+  const companies = baseCompanies.map((company) => {
+    const nameKey = normalizeKey(company.companyName || company.branchName || company.parentCompanyName);
+    const enrichment = firstIndexMatch(enrichmentIndexes.byBranchId, company.vistoBranchId)
+      || firstIndexMatch(enrichmentIndexes.byCompanyId, company.vistoCompanyId)
+      || firstIndexMatch(enrichmentIndexes.byIco, company.ico)
+      || firstIndexMatch(enrichmentIndexes.byName, nameKey);
+
+    if (!enrichment) {
+      return {
+        ...company,
+        enrichmentMatched: false
+      };
+    }
+
+    matchedCompanies += 1;
+    const merged = {
+      ...company,
+      companyName: mergeCompanyValue(company, enrichment, ["companyName"]),
+      branchName: mergeCompanyValue(company, enrichment, ["branchName"]),
+      parentCompanyName: mergeCompanyValue(company, enrichment, ["parentCompanyName"]),
+      ico: mergeCompanyValue(company, enrichment, ["ico"]),
+      dic: mergeCompanyValue(company, enrichment, ["dic"]),
+      billingEmail: mergeCompanyValue(company, enrichment, ["billingEmail"]),
+      email: mergeCompanyValue(company, enrichment, ["email"]),
+      phone: mergeCompanyValue(company, enrichment, ["phone"]),
+      standardDueDays: mergeCompanyValue(company, enrichment, ["standardDueDays"]),
+      billingAddress: mergeCompanyValue(company, enrichment, ["billingAddress"]),
+      deliveryAddress: mergeCompanyValue(company, enrichment, ["deliveryAddress"]),
+      activeStatus: mergeCompanyValue(company, enrichment, ["activeStatus"]),
+      enrichmentMatched: true,
+      enrichmentEntityName: enrichment.entityName,
+      enrichmentBranchId: enrichment.vistoBranchId,
+      enrichmentCompanyId: enrichment.vistoCompanyId
+    };
+    return {
+      ...merged,
+      flags: companyDataQualityFlags(merged)
+    };
+  });
+
+  return {
+    companies,
+    matchedCompanies
+  };
 }
 
 function scoreNameMatch(invoiceName, company) {
@@ -647,6 +744,11 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
         blockingReasons: ["VISTOS_NOT_CONFIGURED"],
         recommendedNextStep: "Nastavit Vistos API secrets a znovu spustit read-only preview."
       },
+      companyEnrichment: {
+        enabled: false,
+        matchedCompanies: 0,
+        loadedRows: 0
+      },
       diagnostics: { configured: false, companyAttempts: [], invoiceAttempts: [] }
     };
   }
@@ -656,7 +758,16 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
     loadFirstWorkingEntity(env, session, RECEIVABLES_COMPANY_ATTEMPTS, options),
     loadFirstWorkingEntity(env, session, RECEIVABLES_INVOICE_ATTEMPTS, options)
   ]);
-  const companies = companyResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, companyResult.entityName));
+  const enrichmentResult = await loadFirstWorkingEntity(
+    env,
+    session,
+    RECEIVABLES_COMPANY_ENRICHMENT_ATTEMPTS,
+    options
+  );
+  const baseCompanies = companyResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, companyResult.entityName));
+  const enrichmentCompanies = enrichmentResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, enrichmentResult.entityName));
+  const enrichment = mergeCompanyEnrichment(baseCompanies, enrichmentCompanies);
+  const companies = enrichment.companies;
   const invoices = invoiceResult.page.rows.map(mapReceivablesVistosInvoice);
   const companyIndexes = buildCompanyIndexes(companies);
   const resolvedInvoices = invoices.map((invoice) => resolveInvoiceCustomer(invoice, companies, companyIndexes));
@@ -679,6 +790,18 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
     problematicInvoices: resolvedInvoices.filter((item) => item.flags.length || item.confidence !== "HIGH").slice(0, 120),
     proposedLedgerRows: proposedLedgerRows(resolvedInvoices),
     ledgerReadiness,
+    companyEnrichment: {
+      enabled: true,
+      entityName: enrichmentResult.entityName,
+      attemptKey: enrichmentResult.key,
+      loadedRows: enrichmentCompanies.length,
+      totalRows: enrichmentResult.page.total || enrichmentCompanies.length,
+      capped: Boolean(enrichmentResult.page.capped),
+      matchedCompanies: enrichment.matchedCompanies,
+      companiesWithDicAfterEnrichment: countBy(companies, (company) => Boolean(company.dic)),
+      companiesWithBillingEmailAfterEnrichment: countBy(companies, (company) => Boolean(company.billingEmail || company.email)),
+      companiesWithStandardDueDaysAfterEnrichment: countBy(companies, (company) => company.standardDueDays !== null && company.standardDueDays !== undefined)
+    },
     diagnostics: {
       configured: true,
       companyEntity: companyResult.entityName,
@@ -686,6 +809,11 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       companyColumns: companyResult.columns,
       companyKeys: sampleKeys(companyResult.page.rows),
       companyAttempts: companyResult.diagnostics,
+      companyEnrichmentEntity: enrichmentResult.entityName,
+      companyEnrichmentAttemptKey: enrichmentResult.key,
+      companyEnrichmentColumns: enrichmentResult.columns,
+      companyEnrichmentKeys: sampleKeys(enrichmentResult.page.rows),
+      companyEnrichmentAttempts: enrichmentResult.diagnostics,
       invoiceEntity: invoiceResult.entityName,
       invoiceAttemptKey: invoiceResult.key,
       invoiceColumns: invoiceResult.columns,

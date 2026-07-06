@@ -23312,6 +23312,7 @@ function receivablesLedgerReadinessDiagnostics(preview) {
   }
   const readiness = preview.ledgerReadiness || {};
   const diagnostics = preview.diagnostics || {};
+  const enrichment = preview.companyEnrichment || {};
   const blocking = readiness.blockingReasons || [];
   const flags = readiness.topDataQualityFlags || [];
   const confidence = readiness.confidenceCounts || {};
@@ -23332,10 +23333,24 @@ function receivablesLedgerReadinessDiagnostics(preview) {
       <section>
         <h3>Stav napojení Firem</h3>
         <dl class="receivables-diagnostics-list">
-          <div><dt>Entita</dt><dd>${escapeHtml(diagnostics.companyEntity || "-")}</dd></div>
-          <div><dt>Sada</dt><dd>${escapeHtml(diagnostics.companyAttemptKey || "-")}</dd></div>
-          <div><dt>Sloupce</dt><dd>${escapeHtml((diagnostics.companyColumns || []).join(", ") || "-")}</dd></div>
-          <div><dt>Klíče ve vzorku</dt><dd>${escapeHtml((diagnostics.companyKeys || []).slice(0, 16).join(", ") || "-")}</dd></div>
+          <div><dt>Vazební entita</dt><dd>${escapeHtml(diagnostics.companyEntity || "-")}</dd></div>
+          <div><dt>Vazební sada</dt><dd>${escapeHtml(diagnostics.companyAttemptKey || "-")}</dd></div>
+          <div><dt>Vazební sloupce</dt><dd>${escapeHtml((diagnostics.companyColumns || []).join(", ") || "-")}</dd></div>
+          <div><dt>Vazební klíče</dt><dd>${escapeHtml((diagnostics.companyKeys || []).slice(0, 16).join(", ") || "-")}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Obohacení firem</h3>
+        <dl class="receivables-diagnostics-list">
+          <div><dt>Entita</dt><dd>${escapeHtml(diagnostics.companyEnrichmentEntity || "-")}</dd></div>
+          <div><dt>Sada</dt><dd>${escapeHtml(diagnostics.companyEnrichmentAttemptKey || "-")}</dd></div>
+          <div><dt>Načteno</dt><dd>${escapeHtml(enrichment.loadedRows ?? 0)} / ${escapeHtml(enrichment.totalRows ?? 0)}</dd></div>
+          <div><dt>Spárováno na vazbu</dt><dd>${escapeHtml(enrichment.matchedCompanies ?? 0)}</dd></div>
+          <div><dt>DIČ po obohacení</dt><dd>${escapeHtml(enrichment.companiesWithDicAfterEnrichment ?? 0)}</dd></div>
+          <div><dt>E-mail po obohacení</dt><dd>${escapeHtml(enrichment.companiesWithBillingEmailAfterEnrichment ?? 0)}</dd></div>
+          <div><dt>Splatnost po obohacení</dt><dd>${escapeHtml(enrichment.companiesWithStandardDueDaysAfterEnrichment ?? 0)}</dd></div>
+          <div><dt>Sloupce</dt><dd>${escapeHtml((diagnostics.companyEnrichmentColumns || []).join(", ") || "-")}</dd></div>
+          <div><dt>Klíče ve vzorku</dt><dd>${escapeHtml((diagnostics.companyEnrichmentKeys || []).slice(0, 16).join(", ") || "-")}</dd></div>
         </dl>
       </section>
       <section>

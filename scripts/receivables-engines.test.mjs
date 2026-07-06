@@ -656,7 +656,15 @@ Dodavatel
 
 {
   const mock = mockVistosFetch({
-    DirectoryWithBranch: [],
+    DirectoryWithBranch: [{
+      "Systémové ID": "BR1",
+      "Název": "Firma Alfa Brno",
+      "Rodič": "Firma Alfa s.r.o. - 12345678",
+      "IČO": "12345678",
+      "DIČ": "CZ12345678",
+      "Fakturační e-mail": "fakturace@firma.cz",
+      "Splatnost": "21"
+    }],
     Company: [],
     Directory: [],
     Customer: [],
@@ -697,14 +705,24 @@ Dodavatel
     }, { pageSize: 10, maxPages: 1 });
     assert.equal(preview.diagnostics.companyEntity, "Contract");
     assert.equal(preview.diagnostics.companyAttemptKey, "contract_customer_fallback");
+    assert.equal(preview.diagnostics.companyEnrichmentEntity, "DirectoryWithBranch");
+    assert.equal(preview.diagnostics.companyEnrichmentAttemptKey, "directory_with_branch_czech_enrichment");
     assert.equal(preview.companies[0].vistoCompanyId, "C123");
     assert.equal(preview.companies[0].vistoBranchId, "BR1");
     assert.equal(preview.resolvedInvoices[0].confidence, "HIGH");
+    assert.equal(preview.resolvedInvoices[0].resolvedDic, "CZ12345678");
+    assert.equal(preview.resolvedInvoices[0].resolvedBillingEmail, "fakturace@firma.cz");
+    assert.equal(preview.resolvedInvoices[0].resolvedStandardDueDays, 21);
+    assert.equal(preview.companyEnrichment.matchedCompanies, 1);
+    assert.equal(preview.companyEnrichment.companiesWithDicAfterEnrichment, 1);
+    assert.equal(preview.companyEnrichment.companiesWithBillingEmailAfterEnrichment, 1);
+    assert.equal(preview.companyEnrichment.companiesWithStandardDueDaysAfterEnrichment, 1);
     assert.equal(preview.ledgerReadiness.confidenceCounts.HIGH, 1);
     assert.equal(preview.writesD1, false);
     assert.equal(preview.sendsCustomerCommunication, false);
     assert.equal(preview.calculatesRealRating, false);
     assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));
+    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "DirectoryWithBranch"));
   } finally {
     mock.restore();
   }

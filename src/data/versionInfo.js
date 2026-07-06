@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.377"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.378"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: obohacení firem z DirectoryWithBranch",
+    text: "Read-only ledger readiness používá Contract jako stabilní vazbu faktura-firma a druhým bezpečným čtením z DirectoryWithBranch se pokouší doplnit DIČ, fakturační e-mail a splatnost. Výsledek je vidět v panelu Obohacení firem a pořád nic nezapisuje do ostrého ledgeru."
+  },
   {
     title: "Pohledávky: rychlejší Vistos readiness preview",
     text: "Firmy → Ledger read-only preview nově používá sdílený index firem a bezpečný výchozí vzorek, aby se přihlášená kontrola vešla do Cloudflare Pages limitu. Stále nejde o ostrý import do D1, rating reálných firem, KB platby ani zákaznickou komunikaci."
