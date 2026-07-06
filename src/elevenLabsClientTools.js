@@ -224,7 +224,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "create_driver_part_request",
-    description: "Zapíše servisní hlášení řidiče přes KSO backend. Hlášení se vytvoří hned po jedné otázce na poznámku; dohledání dílů, cen a případná zpráva Patrikovi běží až potom na pozadí. Vyžaduje vehicleId z ověřeného seznamu, get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. Po vyřízení poznámky volej s confirmed true, confirmationSource voice-intake, driverNoteStatus provided/declined a driverNoteQuestionAsked true.",
+    description: "Zapíše servisní hlášení řidiče přes KSO backend. Hlášení se vytvoří hned po jedné otázce na poznámku; dohledání dílů, cen a případná zpráva Patrikovi běží až potom na pozadí. Vyžaduje vehicleId z ověřeného seznamu, get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. Po vyřízení poznámky volej s confirmed true, confirmationSource voice-intake, driverNoteStatus provided/declined a driverNoteQuestionAsked true. Za vytvořené hlášení považuj jen výsledek s ok true a neprázdným driverPartRequest.reportId; jinak nikdy neříkej, že hlášení vzniklo.",
     parameters: [
       { name: "defectDescription", type: "string", required: true },
       { name: "driverNote", type: "string", required: false },

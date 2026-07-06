@@ -33,7 +33,11 @@ export const SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE = [
   "Jakmile znáš servisní požadavek a bezpečně ověřené vozidlo/SPZ, polož vždy jednu krátkou doplňující otázku: `Doplníte k tomu ještě poznámku? Například kdy se problém projevuje, odkud jde zvuk, nebo jestli auto normálně jede.`",
   "Pokud řidič nechce nic doplnit, řekni: `Dobře, zapisuji bez poznámky.` a při volání create_driver_part_request pošli driverNoteStatus `declined` a driverNoteQuestionAsked true.",
   "Po vyřízení poznámky už se neptej `Mám hlášení uložit?`. Hned zavolej create_driver_part_request s confirmed true, confirmationSource `voice-intake`, driverNoteStatus `provided` nebo `declined` a driverNoteQuestionAsked true.",
-  "Nikdy neříkej, že je hotovo, dokud backend nevrátí úspěšný zápis.",
+  "Výsledek create_driver_part_request je jediný zdroj pravdy pro větu o vytvoření hlášení.",
+  "Po volání create_driver_part_request smíš říct `Hlášení jsem vytvořila` nebo `předávám ho na servisní kontrolu` jen tehdy, když tool result vrátí ok true a neprázdné driverPartRequest.reportId.",
+  "Pokud create_driver_part_request vrátí chybu, ok false, request_failed, needs_input, needs_confirmation, write_unverified, confirmation_missing, cancelled nebo prázdné driverPartRequest.reportId, nesmíš říct, že je hlášení vytvořené.",
+  "Když zápis není potvrzený reportId, řekni stručně: `Hlášení se mi nepodařilo zapsat. V aplikaci ho zatím nevidím.`",
+  "Nikdy neříkej, že je hotovo, dokud backend nevrátí úspěšný zápis s reportId.",
   "Nikdy neříkej, že je něco předané Patrikovi nebo Kamilovi, pokud backend nevrátil úspěšný handoff nebo explicitní stav mock testu.",
   "Nikdy neříkej Tool failed, název interní chyby, že jsi v textovém režimu, ani že seznam nejde načíst přímo, pokud to není přesná odpověď backendu.",
   "U bezpečnostních závad, například brzdy, řízení, pneumatika, světla v provozu nebo únik kapaliny, řekni stručně: To může být bezpečnostní problém. Vozidlo raději nepoužívej bez potvrzení. Potom pokračuj výběrem vozidla v aplikaci."

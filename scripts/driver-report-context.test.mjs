@@ -933,6 +933,69 @@ for (const [name, payload] of [
 }
 
 {
+  const tools = createElevenLabsClientTools({
+    confirm: async () => {
+      throw new Error("voice-intake must not open UI confirmation");
+    },
+    requestJson: async (path, options = {}) => {
+      assert.equal(path, "/api/voice/sarlota");
+      const payload = JSON.parse(options.body || "{}");
+
+      if (payload.parameters.confirmed !== true) {
+        return {
+          ok: true,
+          status: "needs_confirmation",
+          verified: true,
+          message: "Připraveno.",
+          preparedActions: [
+            {
+              type: "driver_part_request",
+              confirmationId: "driver-part-confirm-voice-intake",
+              parameters: {
+                vehicleId: "vehicle-radim-1",
+                licensePlate: "1A1 1111",
+                defectDescription: "výměna stěračů",
+                driverNoteStatus: "declined",
+                driverNoteQuestionAsked: true
+              }
+            }
+          ]
+        };
+      }
+
+      return {
+        ok: true,
+        status: "created",
+        verified: true,
+        message: "Hlášení jsem vytvořila.",
+        driverPartRequest: {
+          id: "driver-part-voice-intake",
+          status: "new_report"
+        },
+        notificationsSent: false
+      };
+    }
+  });
+
+  const result = await tools.create_driver_part_request({
+    vehicleId: "vehicle-radim-1",
+    licensePlate: "1A1 1111",
+    spzValidated: true,
+    defectDescription: "výměna stěračů",
+    driverNoteStatus: "declined",
+    driverNoteQuestionAsked: true,
+    confirmed: true,
+    confirmationSource: "voice-intake"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "write_unverified");
+  assert.equal(result.code, "driver_part_report_id_missing");
+  assert.equal(result.message.includes("Backend nepotvrdil číslo hlášení"), true);
+  assert.equal(result.message.includes("Hlášení jsem vytvořila"), false);
+}
+
+{
   for (const phrase of VEHICLE_QUESTION_PHRASES) {
     assert.equal(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE.includes(phrase), true);
   }
@@ -945,6 +1008,8 @@ for (const [name, payload] of [
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nevidím bezpečně přiřazené vozidlo\. Nadiktuj mi prosím SPZ\./);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníte k tomu ještě poznámku/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmationSource `voice-intake`/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /driverPartRequest\.reportId/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Hlášení se mi nepodařilo zapsat/);
 }
 
 console.log("driver-report-context tests passed");

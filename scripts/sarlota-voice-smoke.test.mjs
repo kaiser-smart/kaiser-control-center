@@ -102,6 +102,11 @@ function assertNoSecret(value = "") {
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníte k tomu ještě poznámku/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmationSource `voice-intake`/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Po vyřízení poznámky už se neptej `Mám hlášení uložit\?`/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /driverPartRequest\.reportId/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Hlášení se mi nepodařilo zapsat/);
+  const createReportTool = ELEVENLABS_CLIENT_TOOL_SCHEMAS.find((tool) => tool.name === "create_driver_part_request");
+  assert.match(createReportTool?.description || "", /Za vytvořené hlášení považuj jen výsledek s ok true/);
+  assert.match(createReportTool?.description || "", /driverPartRequest\.reportId/);
 }
 
 {
