@@ -26567,9 +26567,9 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --tracking-control-height: 46px;
   --tracking-hero-icon-holder: 176px;
   --tracking-hero-icon-size: 108px;
-  --tracking-hero-decor-icon-size: clamp(86px, 6.4vw, 112px);
-  --tracking-hero-decor-icon-opacity: 0.38;
-  --tracking-hero-decor-icon-filter: var(--icon-filter-teal) saturate(0.46) brightness(1.03) contrast(0.82);
+  --tracking-hero-decor-icon-size: clamp(108px, 8vw, 140px);
+  --tracking-hero-decor-icon-opacity: 0.78;
+  --tracking-hero-decor-icon-filter: var(--icon-filter-green);
   --tracking-header-bg: var(--tracking-card-bg);
   --tracking-header-shadow: var(--shadow-card), var(--highlight-edge);
   width: min(1500px, calc(100% - 28px));
@@ -26704,8 +26704,8 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --tracking-soft-shadow: var(--shadow-panel);
   --tracking-soft-shadow-sm: var(--shadow-card);
   --tracking-inset-shadow: var(--shadow-inset);
-  --tracking-hero-decor-icon-opacity: 0.36;
-  --tracking-hero-decor-icon-filter: var(--icon-filter-teal) saturate(0.34) brightness(1.04) contrast(0.78);
+  --tracking-hero-decor-icon-opacity: 0.78;
+  --tracking-hero-decor-icon-filter: var(--icon-filter-green);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-frame {
@@ -27620,7 +27620,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   border: 0;
   background: transparent;
   box-shadow: none;
-  color: var(--icon-teal);
+  color: var(--icon-green);
   cursor: default;
   opacity: var(--tracking-hero-decor-icon-opacity);
   pointer-events: none;
