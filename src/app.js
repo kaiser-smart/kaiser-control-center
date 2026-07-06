@@ -1744,6 +1744,7 @@ function themePreviewIcon(name) {
     menu: "021.svg",
     sidebarExpand: "sidebar-expand.svg",
     sidebarCollapse: "sidebar-collapse.svg",
+    vehicleTrackingPreview: "vehicle-tracking.svg",
     topMail: "top-mail.svg",
     topLogin: "top-login.svg",
     topPhone: "top-phone.svg",
@@ -1751,7 +1752,7 @@ function themePreviewIcon(name) {
     collectionRoutes: "003.svg",
     driverReports: "004.svg",
     fleet: "005.svg",
-    vehicleTracking: "018.svg",
+    vehicleTracking: "vehicle-tracking.svg",
     maintenance: "007.svg",
     tires: "008.svg",
     customers: "016.svg",
@@ -10171,7 +10172,7 @@ function vehicleTrackingPreviewSidebar() {
               <span class="tracking-preview-nav-group__label">${escapeHtml(group.label)}</span>
               ${group.items.map((item) => `
                 <a class="tracking-preview-nav-item ${item.active ? "tracking-preview-nav-item--active" : ""}" href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}" ${item.active ? 'aria-current="page"' : ""}>
-                  <span class="tracking-preview-nav-item__icon icon-tone-${escapeHtml(item.tone)}">${themePreviewIcon(item.icon)}</span>
+                  <span class="tracking-preview-nav-item__icon tracking-preview-nav-item__icon--${escapeHtml(item.id)} icon-tone-${escapeHtml(item.tone)}">${themePreviewIcon(item.icon)}</span>
                   <span class="tracking-preview-nav-item__label">${escapeHtml(item.label)}</span>
                 </a>
               `).join("")}
@@ -12863,7 +12864,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
       <section class="module-detail tracking-hero" aria-labelledby="module-title">
         ${isSoftMetalPreview ? "" : `<div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>`}
         <div class="module-detail__body">
-          ${isSoftMetalPreview ? `<div class="tracking-hero-decor-icon" aria-hidden="true">${renderModuleIcon(moduleItem)}</div>` : ""}
+          ${isSoftMetalPreview ? `<div class="tracking-hero-decor-icon" aria-hidden="true">${themePreviewIcon("vehicleTrackingPreview")}</div>` : ""}
           <div class="module-detail__eyebrow">SMART ODPADY / SLEDOVÁNÍ VOZIDEL</div>
           <h1 id="module-title">Sledování vozidel</h1>
           <p>Dispečerský přehled polohy vozidel, tras a odchylek. Veřejný náhled používá bezpečnou ukázkovou datovou sadu bez reálných GPS dat.</p>

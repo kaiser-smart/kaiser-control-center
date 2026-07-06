@@ -27228,6 +27228,10 @@ body:not([data-theme="dark"]) .tracking-page--soft-metal-preview .tracking-previ
   transform: scale(0.92);
 }
 
+.tracking-page--soft-metal-preview .tracking-preview-nav-item__icon--vehicle-tracking .theme-icon-img {
+  transform: scale(0.78);
+}
+
 .tracking-page--soft-metal-preview .tracking-preview-sidebar:has(.tracking-preview-sidebar__state:not(:checked)) .tracking-preview-nav-item__icon .theme-icon-img,
 .tracking-page--soft-metal-preview .tracking-preview-sidebar.sidebar--compact .tracking-preview-nav-item__icon .theme-icon-img {
   display: block;
