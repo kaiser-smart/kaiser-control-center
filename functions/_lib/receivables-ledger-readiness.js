@@ -258,12 +258,21 @@ const INVOICE_COLUMNS = [
   "CustomerVatNumber",
   "IssuedDate",
   "DueDate",
+  "TaxableSupplyDate",
+  "DateOfTaxableSupply",
   "PriceWithoutTax",
   "PriceWithTax",
   "AmountPaid",
   "RemainToPay",
+  "Currency_FK",
   "Status_FK",
-  "IsPaid"
+  "PaymentStatus_FK",
+  "IsPaid",
+  "PdfUrl",
+  "PrintUrl",
+  "AttachmentUrl",
+  "Created",
+  "Modified"
 ];
 
 const RECEIVABLES_INVOICE_ATTEMPTS = [
@@ -633,8 +642,11 @@ export function mapReceivablesLedgerCompany(row = {}, entityName = "DirectoryWit
     billingAddress,
     deliveryAddress: billingAddress,
     activeStatus: caption(row, "Status_FK") || firstValue(row, ["Status", "Stav"]),
+    createdAtVistos: firstValue(row, ["Created", "CreatedAt", "CreatedDate", "Vytvořeno"]),
+    updatedAtVistos: firstValue(row, ["Modified", "UpdatedAt", "ModifiedDate", "Změněno"]),
     isBranch: Boolean(parentId && parentId !== branchId),
     flags: [],
+    rawPayload: row,
     raw: row
   };
 
@@ -722,6 +734,8 @@ function mergeCompanyEnrichment(baseCompanies = [], enrichmentCompanies = []) {
       billingAddress: mergeCompanyValue(company, enrichment, ["billingAddress"]),
       deliveryAddress: mergeCompanyValue(company, enrichment, ["deliveryAddress"]),
       activeStatus: mergeCompanyValue(company, enrichment, ["activeStatus"]),
+      createdAtVistos: mergeCompanyValue(company, enrichment, ["createdAtVistos"]),
+      updatedAtVistos: mergeCompanyValue(company, enrichment, ["updatedAtVistos"]),
       enrichmentMatched: true,
       enrichmentEntityName: enrichment.entityName,
       enrichmentBranchId: enrichment.vistoBranchId,
@@ -958,7 +972,11 @@ function proposedLedgerRows(resolvedInvoices = []) {
       paid_amount: item.invoice.paidAmount,
       open_amount: item.invoice.openAmount,
       currency: item.invoice.currency,
-      status: item.invoice.status
+      status: item.invoice.status,
+      payment_status: item.invoice.paymentStatus,
+      pdf_url: item.invoice.pdfUrl,
+      print_url: item.invoice.printUrl,
+      attachment_url: item.invoice.attachmentUrl
     });
   }
 
@@ -967,6 +985,28 @@ function proposedLedgerRows(resolvedInvoices = []) {
     receivableCustomers: [...customerRowsById.values()].slice(0, 30),
     receivableInvoices: invoiceRows.slice(0, 50)
   };
+}
+
+function annotateCompaniesWithInvoiceCounts(companies = [], resolvedInvoices = []) {
+  const countsByCompany = new Map();
+  const countsByBranch = new Map();
+
+  for (const item of resolvedInvoices) {
+    const companyId = clean(item.resolvedCompanyId);
+    const branchId = clean(item.resolvedBranchId);
+    if (companyId) countsByCompany.set(companyId, (countsByCompany.get(companyId) || 0) + 1);
+    if (branchId) countsByBranch.set(branchId, (countsByBranch.get(branchId) || 0) + 1);
+  }
+
+  return companies.map((company) => {
+    const invoiceCount = (company.vistoBranchId && countsByBranch.get(company.vistoBranchId))
+      || (company.vistoCompanyId && countsByCompany.get(company.vistoCompanyId))
+      || 0;
+    return {
+      ...company,
+      invoiceCount
+    };
+  });
 }
 
 export async function createReceivablesLedgerReadinessPreview(env, options = {}) {
@@ -1031,7 +1071,8 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
   const companies = detailEnrichment.companies;
   const companyIndexes = buildCompanyIndexes(companies);
   const resolvedInvoices = invoices.map((invoice) => resolveInvoiceCustomer(invoice, companies, companyIndexes));
-  const ledgerReadiness = buildLedgerReadiness({ companies, invoices, resolvedInvoices, companyResult, invoiceResult });
+  const companiesWithInvoiceCounts = annotateCompaniesWithInvoiceCounts(companies, resolvedInvoices);
+  const ledgerReadiness = buildLedgerReadiness({ companies: companiesWithInvoiceCounts, invoices, resolvedInvoices, companyResult, invoiceResult });
 
   return {
     apiStatus: "ready",
@@ -1043,10 +1084,10 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
     startsAutomation: false,
     calculatesRealRating: false,
     importsKbPayments: false,
-    companies,
+    companies: companiesWithInvoiceCounts,
     invoices,
     resolvedInvoices,
-    problematicCompanies: companies.filter((company) => company.flags.length).slice(0, 80),
+    problematicCompanies: companiesWithInvoiceCounts.filter((company) => company.flags.length).slice(0, 80),
     problematicInvoices: resolvedInvoices.filter((item) => item.flags.length || item.confidence !== "HIGH").slice(0, 120),
     proposedLedgerRows: proposedLedgerRows(resolvedInvoices),
     ledgerReadiness,
@@ -1060,9 +1101,9 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       matchedCompanies: countBy(companies, (company) => Boolean(company.enrichmentMatched)),
       pageMatchedCompanies: pageEnrichment.matchedCompanies,
       detailMatchedCompanies: detailEnrichment.matchedCompanies,
-      companiesWithDicAfterEnrichment: countBy(companies, (company) => Boolean(company.dic)),
-      companiesWithBillingEmailAfterEnrichment: countBy(companies, (company) => Boolean(company.billingEmail || company.email)),
-      companiesWithStandardDueDaysAfterEnrichment: countBy(companies, (company) => company.standardDueDays !== null && company.standardDueDays !== undefined)
+      companiesWithDicAfterEnrichment: countBy(companiesWithInvoiceCounts, (company) => Boolean(company.dic)),
+      companiesWithBillingEmailAfterEnrichment: countBy(companiesWithInvoiceCounts, (company) => Boolean(company.billingEmail || company.email)),
+      companiesWithStandardDueDaysAfterEnrichment: countBy(companiesWithInvoiceCounts, (company) => company.standardDueDays !== null && company.standardDueDays !== undefined)
     },
     companyDetailProbe: {
       enabled: true,

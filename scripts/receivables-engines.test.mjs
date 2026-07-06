@@ -300,12 +300,19 @@ Dodavatel
     Name: "Firma Alfa s.r.o.",
     ICO: "12345678",
     DIC: "CZ12345678",
-    Email: "fakturace@firma.cz"
+    EmailInvoicing: "fakturace@firma.cz",
+    PhoneNumber: "+420111222333",
+    InvoiceDueDays: "14",
+    Status_FK_Caption: "Aktivní"
   });
   assert.equal(company.vistoCompanyId, "C123");
+  assert.equal(company.vistoBranchId, "C123");
   assert.equal(company.companyName, "Firma Alfa s.r.o.");
   assert.equal(company.ico, "12345678");
   assert.equal(company.contactEmail, "fakturace@firma.cz");
+  assert.equal(company.phone, "+420111222333");
+  assert.equal(company.standardDueDays, 14);
+  assert.equal(company.activeStatus, "Aktivní");
 }
 
 {
@@ -355,12 +362,19 @@ Dodavatel
     CustomerVatNumber: "CZ12345678",
     IssuedDate: "2026-06-01",
     DueDate: "2026-06-14",
+    TaxableSupplyDate: "2026-05-31",
     PriceWithoutTax: "1 000,00",
     PriceWithTax: "1 210,00",
     AmountPaid: "210,00",
     RemainToPay: "1 000,00",
     Status_FK_Caption: "Vystaveno",
-    IsPaid: false
+    PaymentStatus_FK_Caption: "Částečně uhrazeno",
+    IsPaid: false,
+    PdfUrl: "https://example.test/faktura.pdf",
+    PrintUrl: "https://example.test/print",
+    AttachmentUrl: "https://example.test/attachment",
+    Created: "2026-06-01T10:00:00+02:00",
+    Modified: "2026-06-02T10:00:00+02:00"
   });
   assert.equal(kaiserInvoiceFromVistos.vistoInvoiceId, "D2601");
   assert.equal(kaiserInvoiceFromVistos.invoiceNumber, "2601101477");
@@ -368,18 +382,28 @@ Dodavatel
   assert.equal(kaiserInvoiceFromVistos.constantSymbol, "0308");
   assert.equal(kaiserInvoiceFromVistos.specificSymbol, "987");
   assert.equal(kaiserInvoiceFromVistos.customerId, "BR1");
+  assert.equal(kaiserInvoiceFromVistos.customerFk, "C123");
+  assert.equal(kaiserInvoiceFromVistos.customerBranchFk, "BR1");
   assert.equal(kaiserInvoiceFromVistos.customerName, "Firma Alfa Brno");
   assert.equal(kaiserInvoiceFromVistos.customerCompanyId, "C123");
   assert.equal(kaiserInvoiceFromVistos.ico, "12345678");
   assert.equal(kaiserInvoiceFromVistos.dic, "CZ12345678");
   assert.equal(kaiserInvoiceFromVistos.issueDate, "2026-06-01");
+  assert.equal(kaiserInvoiceFromVistos.taxableSupplyDate, "2026-05-31");
   assert.equal(kaiserInvoiceFromVistos.priceWithoutTax, 1000);
   assert.equal(kaiserInvoiceFromVistos.priceWithTax, 1210);
   assert.equal(kaiserInvoiceFromVistos.totalAmount, 1210);
   assert.equal(kaiserInvoiceFromVistos.paidAmount, 210);
   assert.equal(kaiserInvoiceFromVistos.openAmount, 1000);
+  assert.equal(kaiserInvoiceFromVistos.remainingAmount, 1000);
   assert.equal(kaiserInvoiceFromVistos.status, "Vystaveno");
+  assert.equal(kaiserInvoiceFromVistos.paymentStatus, "Částečně uhrazeno");
   assert.equal(kaiserInvoiceFromVistos.isPaid, false);
+  assert.equal(kaiserInvoiceFromVistos.pdfUrl, "https://example.test/faktura.pdf");
+  assert.equal(kaiserInvoiceFromVistos.printUrl, "https://example.test/print");
+  assert.equal(kaiserInvoiceFromVistos.attachmentUrl, "https://example.test/attachment");
+  assert.equal(kaiserInvoiceFromVistos.createdAtVistos, "2026-06-01T10:00:00+02:00");
+  assert.equal(kaiserInvoiceFromVistos.updatedAtVistos, "2026-06-02T10:00:00+02:00");
 }
 
 {
@@ -734,6 +758,7 @@ Dodavatel
     assert.equal(preview.diagnostics.companyEnrichmentAttemptKey, "directory_with_branch_czech_enrichment");
     assert.equal(preview.companies[0].vistoCompanyId, "C123");
     assert.equal(preview.companies[0].vistoBranchId, "BR1");
+    assert.equal(preview.companies[0].invoiceCount, 1);
     assert.equal(preview.resolvedInvoices[0].confidence, "HIGH");
     assert.equal(preview.resolvedInvoices[0].resolvedDic, "CZ12345678");
     assert.equal(preview.resolvedInvoices[0].resolvedBillingEmail, "fakturace@firma.cz");
@@ -811,6 +836,7 @@ Dodavatel
     assert.equal(preview.companyDetailProbe.bestEntity, "DirectoryWithBranch");
     assert.equal(preview.companyDetailProbe.usefulRows > 0, true);
     assert.equal(preview.companyDetailProbe.matchedCompanies >= 1, true);
+    assert.equal(preview.companies[0].invoiceCount, 1);
     assert.equal(preview.resolvedInvoices[0].confidence, "HIGH");
     assert.equal(preview.resolvedInvoices[0].resolvedDic, "CZ12345678");
     assert.equal(preview.resolvedInvoices[0].resolvedBillingEmail, "fakturace@firma.cz");

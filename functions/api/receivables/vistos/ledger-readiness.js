@@ -8,7 +8,8 @@ function previewOptions(request) {
   const url = new URL(request.url);
   return {
     pageSize: url.searchParams.get("pageSize"),
-    maxPages: url.searchParams.get("maxPages")
+    maxPages: url.searchParams.get("maxPages"),
+    maxDetailIds: url.searchParams.get("maxDetailIds")
   };
 }
 

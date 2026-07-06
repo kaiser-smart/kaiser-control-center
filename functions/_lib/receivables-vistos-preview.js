@@ -22,12 +22,21 @@ const KAISER_INVOICE_COLUMNS = [
   "CustomerVatNumber",
   "IssuedDate",
   "DueDate",
+  "TaxableSupplyDate",
+  "DateOfTaxableSupply",
   "PriceWithoutTax",
   "PriceWithTax",
   "AmountPaid",
   "RemainToPay",
+  "Currency_FK",
   "Status_FK",
-  "IsPaid"
+  "PaymentStatus_FK",
+  "IsPaid",
+  "PdfUrl",
+  "PrintUrl",
+  "AttachmentUrl",
+  "Created",
+  "Modified"
 ];
 
 const DIRECTORY_WITH_BRANCH_CZECH_COLUMNS = [
@@ -38,10 +47,14 @@ const DIRECTORY_WITH_BRANCH_CZECH_COLUMNS = [
   "DIČ",
   "Fakturační e-mail",
   "E-mail",
+  "Telefon",
   "Splatnost",
   "Město",
   "PSČ",
-  "Ulice"
+  "Ulice",
+  "Stav",
+  "Vytvořeno",
+  "Změněno"
 ];
 
 const COMPANY_ATTEMPTS = [
@@ -55,15 +68,15 @@ const COMPANY_ATTEMPTS = [
   },
   {
     entityName: "DirectoryWithBranch",
-    columns: ["Id", "Name", "c_ShortName", "Parent_FK", "RegNumber", "VATNumber", "InvoiceDueDays", "Email", "InvoiceEmail", "BillingEmail"]
+    columns: ["Id", "Name", "c_ShortName", "Parent_FK", "RegNumber", "VATNumber", "InvoiceDueDays", "Email", "Email1", "EmailInvoicing", "InvoiceEmail", "BillingEmail", "Phone", "PhoneNumber", "Mobile", "Status_FK", "Created", "Modified"]
   },
   {
     entityName: "Company",
-    columns: ["Id", "Name", "Caption", "ICO", "DIC", "Email", "Phone", "Mobile", "Street", "City", "Zip"]
+    columns: ["Id", "Name", "Caption", "ICO", "DIC", "RegNumber", "VATNumber", "Email", "Email1", "EmailInvoicing", "InvoiceEmail", "BillingEmail", "Phone", "PhoneNumber", "Mobile", "Street", "City", "Zip", "InvoiceDueDays", "Status_FK", "Created", "Modified"]
   },
   {
     entityName: "Directory",
-    columns: ["Id", "Name", "Caption", "ICO", "DIC", "Email", "Phone", "Mobile", "Street", "City", "Zip"]
+    columns: ["Id", "Name", "Caption", "ICO", "DIC", "RegNumber", "VATNumber", "Email", "Email1", "EmailInvoicing", "InvoiceEmail", "BillingEmail", "Phone", "PhoneNumber", "Mobile", "Street", "City", "Zip", "InvoiceDueDays", "Status_FK", "Created", "Modified"]
   },
   {
     entityName: "Company",
@@ -109,11 +122,19 @@ const INVOICE_ATTEMPTS = [
       "IssueDate",
       "InvoiceDate",
       "DueDate",
+      "TaxableSupplyDate",
+      "DateOfTaxableSupply",
       "TotalAmount",
       "PaidAmount",
       "OpenAmount",
       "Currency_FK",
-      "Status_FK"
+      "Status_FK",
+      "PaymentStatus_FK",
+      "PdfUrl",
+      "PrintUrl",
+      "AttachmentUrl",
+      "Created",
+      "Modified"
     ]
   },
   {
@@ -275,19 +296,40 @@ export function mapReceivablesVistosCompany(row = {}) {
     || firstValue(row, ["Rodič"])
     || firstValue(row, ["Name", "Název", "Caption", "CompanyName", "ObchodniNazev"]);
   const rawBranchName = caption(row, "DirectoryBranch_FK") || firstValue(row, ["Name", "Název", "Caption"]);
+  const companyId = recordId(row, "Directory_FK") || recordId(row, "Sidlo_FK") || recordId(row, "Parent_FK") || firstValue(row, ["Id", "Systémové ID", "CompanyId", "DirectoryId"]);
+  const branchId = recordId(row, "DirectoryBranch_FK") || firstValue(row, ["Id", "Systémové ID", "CompanyBranchId", "CustomerBranchId"]);
+  const billingEmail = firstValue(row, ["BillingEmail", "InvoiceEmail", "EmailInvoicing", "Fakturační e-mail", "E-mail fakturace"]);
+  const email = firstValue(row, ["Email", "Email1", "E-mail", "ContactEmail"]);
+  const phone = firstValue(row, ["Phone", "PhoneNumber", "Telefon", "Mobile", "ContactPhone"]);
+  const billingAddress = [
+    firstValue(row, ["BillingAddressStreet", "Street", "Ulice"]),
+    firstValue(row, ["BillingAddressCity", "City", "Město", "Mesto"]),
+    firstValue(row, ["BillingAddressPostalCode", "Zip", "PSČ", "PSC"])
+  ].filter(Boolean).join(", ");
   return {
-    vistoCompanyId: recordId(row, "Directory_FK") || recordId(row, "Sidlo_FK") || firstValue(row, ["Id", "Systémové ID", "CompanyId", "DirectoryId"]),
+    vistoCompanyId: companyId,
+    vistoBranchId: branchId,
     companyName: displayName(rawCompanyName),
     branchName: displayName(rawBranchName),
     ico: compactDigits(firstValue(row, ["RegNumber", "ICO", "IČO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"]))
       || registrationFromCaption(rawCompanyName)
       || registrationFromCaption(rawBranchName),
     dic: firstValue(row, ["VATNumber", "DIC", "DIČ", "Dic", "VAT", "VatId"]),
-    contactEmail: firstValue(row, ["BillingEmail", "InvoiceEmail", "Fakturační e-mail", "Email", "E-mail", "ContactEmail"]),
-    contactPhone: firstValue(row, ["Phone", "Telefon", "Mobile", "ContactPhone"]),
+    billingEmail,
+    email,
+    phone,
+    standardDueDays: numberValue(firstValue(row, ["InvoiceDueDays", "Splatnost", "DueDays", "StandardDueDays"]), null),
+    billingAddress,
+    deliveryAddress: billingAddress,
+    activeStatus: caption(row, "Status_FK") || firstValue(row, ["Status", "Stav"]),
+    createdAtVistos: firstValue(row, ["Created", "CreatedAt", "CreatedDate", "Vytvořeno"]),
+    updatedAtVistos: firstValue(row, ["Modified", "UpdatedAt", "ModifiedDate", "Změněno"]),
+    contactEmail: billingEmail || email,
+    contactPhone: phone,
     city: firstValue(row, ["BillingAddressCity", "City", "Město", "Mesto"]),
     street: firstValue(row, ["BillingAddressStreet", "Street", "Ulice"]),
     zip: firstValue(row, ["BillingAddressPostalCode", "Zip", "PSČ", "PSC"]),
+    rawPayload: row,
     raw: row
   };
 }
@@ -309,6 +351,8 @@ export function mapReceivablesVistosInvoice(row = {}) {
     constantSymbol: compactDigits(firstValue(row, ["BankReference1", "ConstantSymbol", "KS"])),
     specificSymbol: compactDigits(firstValue(row, ["BankReference3", "SpecificSymbol", "SS"])),
     customerId,
+    customerFk: customerCompanyId,
+    customerBranchFk: customerBranchId,
     customerName,
     customerBranchId,
     customerBranchName,
@@ -318,14 +362,23 @@ export function mapReceivablesVistosInvoice(row = {}) {
     dic: firstValue(row, ["CustomerVatNumber", "DIČ zákazníka", "DIC", "DIČ", "Dic", "VAT", "VatId"]),
     issueDate: firstValue(row, ["IssuedDate", "IssueDate", "InvoiceDate", "DateIssue", "CreatedDate", "Datum vystavení"]),
     dueDate: firstValue(row, ["DueDate", "MaturityDate", "DatumSplatnosti", "Datum splatnosti"]),
+    taxableSupplyDate: firstValue(row, ["TaxableSupplyDate", "DateOfTaxableSupply", "VatDate", "DUZP", "Datum zdanitelného plnění"]),
     priceWithoutTax,
     priceWithTax,
     totalAmount: priceWithTax,
     paidAmount: numberValue(firstValue(row, ["PaidAmount", "AmountPaid", "Uhrazeno", "Uhrazeno (1)"])),
     openAmount: numberValue(firstValue(row, ["RemainToPay", "OpenAmount", "RemainingAmount", "AmountOpen", "Zbývá uhradit"])),
+    remainingAmount: numberValue(firstValue(row, ["RemainToPay", "OpenAmount", "RemainingAmount", "AmountOpen", "Zbývá uhradit"])),
     currency: caption(row, "Currency_FK") || firstValue(row, ["Currency", "CurrencyCode", "Měna"]) || "CZK",
     status: caption(row, "Status_FK") || firstValue(row, ["Status", "InvoiceStatus", "Stav"]),
+    paymentStatus: caption(row, "PaymentStatus_FK") || firstValue(row, ["PaymentStatus", "PaymentState", "Stav úhrady"]) || (booleanValue(firstValue(row, ["IsPaid", "Uhrazeno"])) === true ? "paid" : ""),
     isPaid: booleanValue(firstValue(row, ["IsPaid", "Uhrazeno"])),
+    pdfUrl: firstValue(row, ["PdfUrl", "InvoicePdfUrl", "PDF", "PDFUrl"]),
+    printUrl: firstValue(row, ["PrintUrl", "PrintUri", "TiskUrl"]),
+    attachmentUrl: firstValue(row, ["AttachmentUrl", "Attachment", "FileUrl"]),
+    createdAtVistos: firstValue(row, ["Created", "CreatedAt", "CreatedDate", "Vytvořeno"]),
+    updatedAtVistos: firstValue(row, ["Modified", "UpdatedAt", "ModifiedDate", "Změněno"]),
+    rawPayload: row,
     raw: row
   };
 }

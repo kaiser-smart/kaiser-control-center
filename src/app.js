@@ -23187,17 +23187,20 @@ function receivablesVistosCompaniesTable(preview) {
   return `
     <div class="receivables-table-wrap">
       <table class="receivables-table">
-        <thead><tr><th>Vistos ID</th><th>Firma</th><th>IČO</th><th>DIČ</th><th>E-mail</th><th>Telefon</th><th>Město</th></tr></thead>
+        <thead><tr><th>Vistos ID</th><th>Pobočka ID</th><th>Firma</th><th>Pobočka</th><th>IČO</th><th>DIČ</th><th>Fakturační e-mail</th><th>Telefon</th><th>Splatnost</th><th>Stav</th></tr></thead>
         <tbody>
           ${companies.slice(0, 30).map((company) => `
             <tr>
               <td data-label="Vistos ID">${escapeHtml(company.vistoCompanyId || "-")}</td>
+              <td data-label="Pobočka ID">${escapeHtml(company.vistoBranchId || "-")}</td>
               <td data-label="Firma">${escapeHtml(company.companyName || "-")}</td>
+              <td data-label="Pobočka">${escapeHtml(company.branchName || "-")}</td>
               <td data-label="IČO">${escapeHtml(company.ico || "-")}</td>
               <td data-label="DIČ">${escapeHtml(company.dic || "-")}</td>
-              <td data-label="E-mail">${escapeHtml(company.contactEmail || "-")}</td>
-              <td data-label="Telefon">${escapeHtml(company.contactPhone || "-")}</td>
-              <td data-label="Město">${escapeHtml(company.city || "-")}</td>
+              <td data-label="Fakturační e-mail">${escapeHtml(company.billingEmail || company.contactEmail || company.email || "-")}</td>
+              <td data-label="Telefon">${escapeHtml(company.phone || company.contactPhone || "-")}</td>
+              <td data-label="Splatnost">${escapeHtml(company.standardDueDays ?? "-")}</td>
+              <td data-label="Stav">${escapeHtml(company.activeStatus || "-")}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -23215,18 +23218,21 @@ function receivablesVistosInvoicesTable(preview) {
   return `
     <div class="receivables-table-wrap">
       <table class="receivables-table">
-        <thead><tr><th>Faktura</th><th>VS</th><th>Zákazník</th><th>Vystavení</th><th>Splatnost</th><th>Částka</th><th>Zbývá</th><th>Stav</th></tr></thead>
+        <thead><tr><th>Faktura</th><th>VS</th><th>Zákazník</th><th>Customer_FK</th><th>CustomerBranch_FK</th><th>Vystavení</th><th>Splatnost</th><th>Částka</th><th>Uhrazeno</th><th>Zbývá</th><th>Stav</th></tr></thead>
         <tbody>
           ${invoices.slice(0, 40).map((invoice) => `
             <tr>
               <td data-label="Faktura">${escapeHtml(invoice.invoiceNumber || invoice.vistoInvoiceId || "-")}</td>
               <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
               <td data-label="Zákazník">${escapeHtml(invoice.customerName || invoice.customerId || "-")}</td>
+              <td data-label="Customer_FK">${escapeHtml(invoice.customerFk || invoice.customerCompanyId || "-")}</td>
+              <td data-label="CustomerBranch_FK">${escapeHtml(invoice.customerBranchFk || invoice.customerBranchId || "-")}</td>
               <td data-label="Vystavení">${escapeHtml(invoice.issueDate || "-")}</td>
               <td data-label="Splatnost">${escapeHtml(invoice.dueDate || "-")}</td>
               <td data-label="Částka">${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
+              <td data-label="Uhrazeno">${escapeHtml(formatReceivableMoney(invoice.paidAmount))}</td>
               <td data-label="Zbývá">${escapeHtml(formatReceivableMoney(invoice.openAmount))}</td>
-              <td data-label="Stav">${escapeHtml(invoice.status || "-")}</td>
+              <td data-label="Stav">${escapeHtml(invoice.paymentStatus || invoice.status || "-")}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -23482,7 +23488,7 @@ function receivablesLedgerProblemCompaniesTable(preview) {
   return `
     <div class="receivables-table-wrap">
       <table class="receivables-table receivables-table--compact">
-        <thead><tr><th>Firma</th><th>Vistos ID</th><th>Pobočka</th><th>IČO</th><th>DIČ</th><th>E-mail</th><th>Splatnost</th><th>Flagy</th></tr></thead>
+        <thead><tr><th>Firma</th><th>Vistos ID</th><th>Pobočka</th><th>IČO</th><th>DIČ</th><th>E-mail</th><th>Telefon</th><th>Splatnost</th><th>Počet faktur</th><th>Flagy</th></tr></thead>
         <tbody>
           ${companies.slice(0, 80).map((company) => `
             <tr>
@@ -23492,7 +23498,9 @@ function receivablesLedgerProblemCompaniesTable(preview) {
               <td data-label="IČO">${escapeHtml(company.ico || "-")}</td>
               <td data-label="DIČ">${escapeHtml(company.dic || "-")}</td>
               <td data-label="E-mail">${escapeHtml(company.billingEmail || company.email || "-")}</td>
+              <td data-label="Telefon">${escapeHtml(company.phone || "-")}</td>
               <td data-label="Splatnost">${escapeHtml(company.standardDueDays ?? "-")}</td>
+              <td data-label="Počet faktur">${escapeHtml(company.invoiceCount ?? 0)}</td>
               <td data-label="Flagy">${escapeHtml((company.flags || []).join(", ") || "-")}</td>
             </tr>
           `).join("")}
