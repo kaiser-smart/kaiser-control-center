@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.373"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.374"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: Smart skládač ideálního pořadí",
+    text: "Hlavní filtr Svozových tras má read-only panel Ideální pořadí – návrh. Smart skládá návrh jen z aktuálního filtru 13 Excelů; Google/Waze je zde popsaný pouze jako budoucí navigace na další stanoviště. Nevzniká ostrá optimalizace, GPS zápis, T-Cars, SMS/e-mail ani automatizace."
+  },
   {
     title: "Trasy svozu: fronta ručního potvrzení polohy",
     text: "Záložka Mapa / GPS má read-only frontu stanovišť k ručnímu ověření polohy podle aktuálního filtru. Nic negeokóduje, nezapisuje GPS, nespouští T-Cars, navigaci, SMS/e-maily ani automatizace."

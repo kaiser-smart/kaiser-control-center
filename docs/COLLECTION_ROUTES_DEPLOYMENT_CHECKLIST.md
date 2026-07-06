@@ -67,7 +67,8 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 ## Denni trasy
 
 - NEZACATO - zadne denni behy tras.
-- NEZACATO - zadne optimalizovane poradi zastavek.
+- ROZPRACOVANO - Svozove trasy maji read-only navrh idealniho poradi nad aktualnim filtrem; Smart sklada navrh, Google/Waze zustava jen budouci navigace na dalsi stanoviste.
+- NEZACATO - zadne ostre optimalizovane poradi zastavek.
 
 ## Ridicsky tablet
 
