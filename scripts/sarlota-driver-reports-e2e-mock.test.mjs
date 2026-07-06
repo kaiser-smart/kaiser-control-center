@@ -433,19 +433,40 @@ async function testVoiceCreateConfirmationGuards() {
   const env = envFor({ vehicles: [vehicle()] });
 
   const prepared = await prepareVoiceCreate(env);
-  assert.equal(prepared.status, "needs_confirmation");
-  assert.equal(prepared.notificationsSent, false);
-  assert.match(prepared.reply, /Potvrď|uložit|předat/);
-  assert.equal(prepared.preparedActions.length, 1);
+  assert.equal(prepared.status, "needs_input");
+  assert.match(prepared.reply, /Doplníte k tomu ještě poznámku/);
 
-  const action = prepared.preparedActions[0];
+  const questionOnly = await prepareVoiceCreate(env, {
+    parameters: {
+      driverNoteQuestionAsked: true
+    }
+  });
+  assert.equal(questionOnly.status, "needs_input");
+  assert.match(questionOnly.reply, /Doplníte k tomu ještě poznámku/);
+
+  const afterNote = await prepareVoiceCreate(env, {
+    parameters: {
+      driverNoteStatus: "declined",
+      driverNoteQuestionAsked: true
+    }
+  });
+  assert.equal(afterNote.status, "needs_confirmation");
+  assert.equal(afterNote.notificationsSent, false);
+  assert.match(afterNote.reply, /Potvrď|uložit|předat/);
+  assert.equal(afterNote.preparedActions.length, 1);
+
+  const action = afterNote.preparedActions[0];
   assert.equal(action.requiresConfirmation, true);
-  assert.deepEqual(action.confirmationSourceRequired, ["kso-ui"]);
+  assert.deepEqual(action.confirmationSourceRequired, ["kso-ui", "voice-intake"]);
+  assert.equal(action.parameters.driverNoteStatus, "declined");
+  assert.equal(action.parameters.driverNoteQuestionAsked, true);
   assert.match(action.confirmationId, /^driver-part-confirm-/);
 
   const forged = await prepareVoiceCreate(env, {
     parameters: {
-      confirmed: true
+      confirmed: true,
+      driverNoteStatus: "declined",
+      driverNoteQuestionAsked: true
     }
   });
   assert.equal(forged.status, "needs_confirmation");
@@ -465,6 +486,21 @@ async function testVoiceCreateConfirmationGuards() {
   assert.equal(voiceExplicit.driverPartRequest, null);
   assert.equal(voiceExplicit.notificationsSent, false);
   assert.equal(voiceExplicit.reply, "Potvrď to prosím v aplikaci.");
+
+  const voiceIntake = await prepareVoiceCreate(env, {
+    parameters: {
+      ...action.parameters,
+      confirmed: true,
+      confirmationSource: "voice-intake",
+      confirmationId: action.confirmationId
+    }
+  });
+  assert.equal(voiceIntake.status, "created_mock");
+  assert.equal(voiceIntake.notificationsSent, false);
+  assert.equal(voiceIntake.driverPartRequest.status, "mock_created");
+  assert.match(voiceIntake.reply, /Mock hotovo/);
+  assert.equal(voiceIntake.reply.includes("předala Patrikovi"), false);
+  assert.equal(voiceIntake.reply.includes("předala Kamilovi"), false);
 
   const confirmed = await prepareVoiceCreate(env, {
     parameters: {
@@ -541,7 +577,9 @@ async function testVoiceCreateFromPickerVehicleId() {
     text: "Chci nahlásit prasklé přední sklo.",
     parameters: {
       defectDescription: "prasklé přední sklo",
-      vehicleId: "vehicle-2"
+      vehicleId: "vehicle-2",
+      driverNoteStatus: "declined",
+      driverNoteQuestionAsked: true
     },
     context: {
       requestedIntent: "driver_part_request"
@@ -563,6 +601,8 @@ async function testVoiceCreateFromPickerVehicleId() {
     parameters: {
       defectDescription: "prasklé přední sklo",
       vehicleId: "vehicle-2",
+      driverNoteStatus: "declined",
+      driverNoteQuestionAsked: true,
       confirmed: true,
       confirmationSource: "kso-ui",
       confirmationId: action.confirmationId

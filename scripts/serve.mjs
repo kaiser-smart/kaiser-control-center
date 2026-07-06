@@ -3308,6 +3308,36 @@ async function handleApi(request, response) {
     }
 
     const resolvedVehicle = plateValidation.vehicle || assignedVehicle;
+    const driverNote = parameters.driverNote || parameters.driver_note || parameters.note || "";
+    const driverNoteStatus = mockDriverClean(parameters.driverNoteStatus || parameters.driver_note_status || parameters.noteStatus || parameters.note_status)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/-/g, "_");
+    const driverNoteQuestionAsked = mockDriverTruthyFlag(
+      parameters.driverNoteQuestionAsked ||
+      parameters.driver_note_question_asked ||
+      parameters.noteQuestionAsked ||
+      parameters.note_question_asked
+    );
+    const driverNoteHandled = Boolean(mockDriverClean(driverNote)) ||
+      ["provided", "declined", "none", "no_note", "bez_poznamky", "empty", "skipped"].includes(driverNoteStatus);
+    if (!driverNoteHandled) {
+      const reply = "Doplníte k tomu ještě poznámku? Například kdy se problém projevuje, odkud jde zvuk, nebo jestli auto normálně jede. Pokud nic doplnit nechceš, řekni: bez poznámky.";
+      sendJson(response, 200, {
+        ok: false,
+        status: "needs_input",
+        code: "driver_part_driver_note_required",
+        intent: "driver_part_request",
+        reply,
+        text: reply,
+        verified: true,
+        preparedActions: [],
+        notificationsSent: false,
+        apiStatus: "ready"
+      });
+      return true;
+    }
     const confirmed = parameters.confirmed === true || parameters.writeConfirmed === true;
     const partMatch = identifyProbablePartFromDescription(defectDescription);
     if (!confirmed) {
@@ -3327,7 +3357,9 @@ async function handleApi(request, response) {
             notificationsSent: false,
             parameters: {
               defectDescription,
-              driverNote: parameters.driverNote || parameters.driver_note || parameters.note || "",
+              driverNote,
+              driverNoteStatus,
+              driverNoteQuestionAsked,
               licensePlate,
               vehicleId: resolvedVehicle?.id || "",
               vehicleName: resolvedVehicle?.internalNumber || resolvedVehicle?.model || "",
@@ -3346,7 +3378,9 @@ async function handleApi(request, response) {
       let item = await createMockDriverPartRequest(user, {
         ...parameters,
         defectDescription,
-        driverNote: parameters.driverNote || parameters.driver_note || parameters.note || "",
+        driverNote,
+        driverNoteStatus,
+        driverNoteQuestionAsked,
         licensePlate,
         vehicleId: parameters.vehicleId || resolvedVehicle?.id,
         vehicleName: parameters.vehicleName || resolvedVehicle?.internalNumber || resolvedVehicle?.model,

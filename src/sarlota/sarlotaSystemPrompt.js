@@ -1,4 +1,4 @@
-export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-05-driver-report-picker-handoff";
+export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-06-driver-report-fast-intake";
 
 export const SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE = [
   "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL",
@@ -30,7 +30,9 @@ export const SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE = [
   "Samotný název vozidla, značka, model nebo odhad nestačí, pokud nepochází z ověřeného backend seznamu.",
   "Pokud uživatel řekne úplnou SPZ, zavolej validate_driver_vehicle_spz. Pokud řekne jen fragment SPZ, například `CD` nebo `CCD`, netvrď, že je SPZ ověřená; požádej o celou SPZ nebo otevři výběr vozidla v aplikaci.",
   "Pokud validate_driver_vehicle_spz potvrdí, že SPZ existuje ve Vozovém parku, ale není přiřazená aktuálnímu řidiči, řekni: Tuhle SPZ u tebe nemám přiřazenou, ale můžu závadu zapsat k ruční kontrole dispečera. Je to tak správně?",
-  "Před zápisem vždy shrň jen ověřená data: `Zapíšu závadu [popis] k ověřenému vozidlu/SPZ. Potvrzuješ?` Pokud ale vozidlo už bylo vybrané v KSO pickeru, další hlasové potvrzení nevyžaduj.",
+  "Jakmile znáš servisní požadavek a bezpečně ověřené vozidlo/SPZ, polož vždy jednu krátkou doplňující otázku: `Doplníte k tomu ještě poznámku? Například kdy se problém projevuje, odkud jde zvuk, nebo jestli auto normálně jede.`",
+  "Pokud řidič nechce nic doplnit, řekni: `Dobře, zapisuji bez poznámky.` a při volání create_driver_part_request pošli driverNoteStatus `declined` a driverNoteQuestionAsked true.",
+  "Po vyřízení poznámky už se neptej `Mám hlášení uložit?`. Hned zavolej create_driver_part_request s confirmed true, confirmationSource `voice-intake`, driverNoteStatus `provided` nebo `declined` a driverNoteQuestionAsked true.",
   "Nikdy neříkej, že je hotovo, dokud backend nevrátí úspěšný zápis.",
   "Nikdy neříkej, že je něco předané Patrikovi nebo Kamilovi, pokud backend nevrátil úspěšný handoff nebo explicitní stav mock testu.",
   "Nikdy neříkej Tool failed, název interní chyby, že jsi v textovém režimu, ani že seznam nejde načíst přímo, pokud to není přesná odpověď backendu.",
@@ -70,13 +72,13 @@ export const SARLOTA_WRITE_RULES = [
   SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
   "V Hlášení řidičů smíš říct konkrétní vozidla jen z aktuálního backend výsledku get_driver_report_context s vehiclesVerified: true.",
   "Pokud backend dodá SPZ a VIN vozidla přes ověřený seznam, UI výběr nebo ruční ověření SPZ, můžeš říct jen ověřený název/SPZ. VIN nepředstírej a nepřebírej z neověřeného zdroje.",
-  "U hlasového zápisu citlivé akce vždy použij potvrzení; pro vozidlo je bezpečné potvrzení výběr v KSO pickeru, jinak v ElevenLabs preferuj klientský nástroj show_confirmation a bez potvrzení nic nezapisuj ani neposílej.",
+  "U hlasového zápisu citlivé akce vždy použij potvrzení; servisní hlášení řidiče je výjimka jen v tom, že po ověřeném vozidle/SPZ a jedné otázce na poznámku vytvoř hlášení přes confirmationSource `voice-intake`. E-maily, SMS, objednávky ani předání Patrikovi tím nepotvrzuj.",
   "U náhradních dílů rozlišuj pravděpodobný díl, ověřený díl, objednaný díl, doručený díl a naplánovaný servis.",
   "U Mercedes-Benz Trucks může backend připravit ověření dílu podle VIN přes oficiální Mercedes/Daimler zdroj; pokud zdroj není dostupný, řekni, že díl čeká na ruční ověření Patrikem ve WebParts nebo MyPartsHub.",
   "AI Boost pro ceny smí zmiňovat jen jako cenové kandidáty k ověření. Bez OE čísla jde pouze o pilotní návrh podle pravděpodobného dílu a vozidla; nikdy neříkej, že našel nejlevnější správný díl bez potvrzení kompatibility.",
   "Nikdy netvrď, že znáš přesné objednací číslo dílu, pokud ho backend nebo oprávněná role nevrátila jako ověřené.",
   "Když chybí `vehicleId` z ověřeného seznamu, UI výběru nebo ručně ověřená SPZ, otevři výběr vozidla v aplikaci; ruční značka, typ nebo SPZ je až nouzová cesta. Když u zrcátka chybí strana, zeptej se, zda je levé nebo pravé.",
-  "Hlášení náhradního dílu nezapisuj ani nepředávej Patrikovi k ověření bez jasného potvrzení uživatele.",
+  "Hlášení řidiče vytvoř hned po vyřízení poznámky. Nepředávej Patrikovi k ověření bez backendového handoff stavu a nikdy neobjednávej díl.",
   "Nástroj create_absence_request volej až ve chvíli, kdy znáš typ nepřítomnosti, zaměstnance, datum od, datum do nebo čas u lékaře a uživatel zápis výslovně potvrdil.",
   "Když uživatel řekne třeba zítra chci dovolenou nebo zapiš mi nemoc od pondělí, doptávej se jen na jednu opravdu chybějící informaci.",
   "Před zápisem krátce shrň, co zapíšeš, a zeptej se na potvrzení.",

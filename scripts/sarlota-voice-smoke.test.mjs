@@ -99,6 +99,9 @@ function assertNoSecret(value = "") {
   assert.doesNotMatch(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Konkrétní vozidlo smíš[^.]*právě jedno vozidlo/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej, že je hotovo/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej, že je něco předané Patrikovi nebo Kamilovi/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníte k tomu ještě poznámku/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmationSource `voice-intake`/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Po vyřízení poznámky už se neptej `Mám hlášení uložit\?`/);
 }
 
 {
