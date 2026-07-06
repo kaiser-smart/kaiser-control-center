@@ -1357,6 +1357,36 @@ function vehicleTrackingPreviewThemeSwitcher() {
   `;
 }
 
+function vehicleTrackingPreviewUtilityBar(user) {
+  const previewName = user?.name || "Veřejný design náhled";
+  const roleText = roleLabel(user?.role || "readonly").toUpperCase();
+
+  return `
+    <nav class="tracking-utility-bar" aria-label="Systémová lišta náhledu">
+      <div class="tracking-utility-bar__brand">
+        <a class="tracking-utility-logo" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">
+          <img src="/kaiser_logo.png" alt="" loading="eager" decoding="async">
+        </a>
+        <a class="tracking-home-link" href="${routeHref("/")}" data-link>
+          <span class="tracking-home-link__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M19 12H5"></path>
+              <path d="m12 5-7 7 7 7"></path>
+            </svg>
+          </span>
+          <span>Zpět na HP</span>
+        </a>
+      </div>
+      <div class="tracking-utility-bar__tools">
+        ${vehicleTrackingPreviewThemeSwitcher()}
+        <span class="tracking-preview-user-chip">${escapeHtml(previewName)}</span>
+        <span class="tracking-preview-role-chip">${escapeHtml(roleText)}</span>
+        <button class="tracking-utility-logout" type="button" data-logout>Odhlásit</button>
+      </div>
+    </nav>
+  `;
+}
+
 function applyVehicleTrackingPreviewTheme(mode = vehicleTrackingPreviewThemeMode()) {
   const nextTheme = normalizeVehicleTrackingPreviewTheme(mode);
   vehicleTrackingPreviewThemeState.mode = nextTheme;
@@ -10640,20 +10670,7 @@ function vehicleTrackingMapSection(visibleVehicles, selectedVehicle) {
       ${vehicleTrackingDemoControls()}
       ${vehicleTrackingDemoScenarioPanel(elapsedMs)}
       ${hasGoogleMapsKey ? "" : vehicleTrackingDemoMapNotice()}
-      <div class="tracking-map-shell tracking-demo-map ${hasGoogleMapsKey ? "tracking-demo-map--google" : "tracking-demo-map--fallback"}" data-tracking-demo-map aria-label="Demo mapový pohled sledování vozidel">
-        ${hasGoogleMapsKey
-          ? `<div class="tracking-google-map" data-tracking-google-map aria-label="Google mapa demo sledování vozidel"></div>`
-          : `
-            <div class="tracking-demo-road tracking-demo-road--one" aria-hidden="true"></div>
-            <div class="tracking-demo-road tracking-demo-road--two" aria-hidden="true"></div>
-            <div class="tracking-demo-road tracking-demo-road--three" aria-hidden="true"></div>
-            ${visibleVehicles.map((vehicle) => vehicleTrackingDemoRouteSegments(vehicle, elapsedMs, "planned")).join("")}
-            ${visibleVehicles.map((vehicle) => vehicleTrackingDemoRouteSegments(vehicle, elapsedMs, "actual")).join("")}
-            ${vehicleTrackingDemoPlaceLabels()}
-            ${visibleVehicles.map((vehicle) => vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs)).join("")}
-          `}
-        ${vehicleTrackingDemoAlertOverlay(elapsedMs)}
-      </div>
+      ${vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, { elapsedMs, hasGoogleMapsKey })}
       <div class="tracking-status-legend" aria-label="Stavy demo vozidel">
         ${DEMO_VEHICLE_TRACKING_STATUS_FILTERS.filter((filter) => filter.value !== "all").map((filter) => `
           <span class="tracking-status tracking-status--${escapeHtml(vehicleTrackingDemoStatusTone(filter.value))}">
@@ -10662,6 +10679,42 @@ function vehicleTrackingMapSection(visibleVehicles, selectedVehicle) {
         `).join("")}
       </div>
     </section>
+  `;
+}
+
+function vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, options = {}) {
+  const elapsedMs = options.elapsedMs ?? vehicleTrackingDemoCurrentElapsed();
+  const hasGoogleMapsKey = options.hasGoogleMapsKey ?? Boolean(vehicleTrackingDemoGoogleMapsKey());
+  const mapClasses = [
+    "tracking-map-shell",
+    "tracking-demo-map",
+    hasGoogleMapsKey ? "tracking-demo-map--google" : "tracking-demo-map--fallback",
+    options.variant ? `tracking-demo-map--${options.variant}` : ""
+  ].filter(Boolean).join(" ");
+
+  return `
+    <div class="${mapClasses}" data-tracking-demo-map aria-label="Demo mapový pohled sledování vozidel">
+      ${hasGoogleMapsKey
+        ? `<div class="tracking-google-map" data-tracking-google-map aria-label="Google mapa demo sledování vozidel"></div>`
+        : `
+          <div class="tracking-demo-road tracking-demo-road--one" aria-hidden="true"></div>
+          <div class="tracking-demo-road tracking-demo-road--two" aria-hidden="true"></div>
+          <div class="tracking-demo-road tracking-demo-road--three" aria-hidden="true"></div>
+          ${visibleVehicles.map((vehicle) => vehicleTrackingDemoRouteSegments(vehicle, elapsedMs, "planned")).join("")}
+          ${visibleVehicles.map((vehicle) => vehicleTrackingDemoRouteSegments(vehicle, elapsedMs, "actual")).join("")}
+          ${vehicleTrackingDemoPlaceLabels()}
+          ${visibleVehicles.map((vehicle) => vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs)).join("")}
+        `}
+      ${vehicleTrackingDemoAlertOverlay(elapsedMs)}
+    </div>
+  `;
+}
+
+function vehicleTrackingPreviewHeroMap(visibleVehicles, selectedVehicle) {
+  return `
+    <div class="tracking-hero-map" id="tracking-map" aria-label="Náhled demo mapy vozidel">
+      ${vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, { variant: "hero" })}
+    </div>
   `;
 }
 
@@ -12685,18 +12738,26 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   const compareAction = isSoftMetalPreview
     ? `<a class="secondary-link tracking-preview-compare" href="${routeHref(VEHICLE_TRACKING_BASE_ROUTE)}" data-link>Původní zobrazení</a>`
     : "";
-  const topbarActions = isSoftMetalPreview
-    ? `<div class="tracking-topbar-actions">${vehicleTrackingPreviewThemeSwitcher()}<a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a></div>`
-    : `<a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>`;
+  const previewHeroMap = isSoftMetalPreview && sourceMode === "demo"
+    ? vehicleTrackingPreviewHeroMap(visibleVehicles, selectedVehicle)
+    : "";
+  const demoMapSection = !isSoftMetalPreview && sourceMode === "demo"
+    ? vehicleTrackingMapSection(visibleVehicles, selectedVehicle)
+    : "";
+  const topbar = isSoftMetalPreview
+    ? vehicleTrackingPreviewUtilityBar(user)
+    : `
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+    `;
 
   return `
     <main class="${pageClass}" ${themeStyleAttribute}>
-      ${userBar(user)}
+      ${isSoftMetalPreview ? "" : userBar(user)}
       ${previewShellStart}
-      <nav class="topbar" aria-label="Navigace">
-        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
-        ${topbarActions}
-      </nav>
+      ${topbar}
 
       <section class="module-detail tracking-hero" aria-labelledby="module-title">
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
@@ -12714,6 +12775,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
           </div>
           ${compareAction ? `<div class="tracking-preview-actions">${compareAction}</div>` : ""}
         </div>
+        ${previewHeroMap}
       </section>
 
       ${vehicleTrackingSourceModePanel()}
@@ -12722,7 +12784,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
       ${vehicleTrackingTabs(view, sourceMode)}
       <div class="tracking-layout tracking-demo-layout">
         ${sourceMode === "demo" ? `
-          ${vehicleTrackingMapSection(visibleVehicles, selectedVehicle)}
+          ${demoMapSection}
           ${vehicleTrackingListSection(visibleVehicles, selectedVehicle)}
           ${vehicleTrackingDetailSection(selectedVehicle)}
         ` : `
