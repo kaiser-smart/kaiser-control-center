@@ -25366,6 +25366,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   padding: var(--space-xl);
 }
 
+body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-hero {
+  background: #f5f6f7;
+}
+
 .tracking-page--soft-metal-preview .module-detail__icon {
   width: 68px;
   height: 68px;
