@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.371"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.372"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Sjednocení produkce: Šarlota a Vistos faktury",
+    text: "Produkční build sjednocuje opravy Šarloty pro hlasová hlášení řidičů, opravený kontrolní voice zápis a read-only mapování Vistos faktur z vedlejší větve. Bez DB migrací, secrets, SMS/e-mailů a bez objednávek dílů."
+  },
   {
     title: "Pohledávky: přesné Vistos sloupce faktur",
     text: "Read-only Vistos preview nově zkouší Kaiser invoice sloupcovou sadu s poli InvoiceNumber, BankReference1-3, CustomerBranch_FK, Customer_FK, CustomerRegNumber, CustomerVatNumber, IssuedDate, DueDate, PriceWithoutTax, PriceWithTax, AmountPaid, RemainToPay, Status_FK a IsPaid. Stále bez D1 zápisu a bez komunikace zákazníkům."
