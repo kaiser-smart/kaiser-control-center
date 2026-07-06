@@ -15437,6 +15437,194 @@ function collectionRoutesSourceDailyRouteDraftPanel(rows = collectionRoutesSourc
   `;
 }
 
+function collectionRoutesSourceOptimizationDistanceKm(left, right) {
+  if (!left || !right) {
+    return 0;
+  }
+  const toRadians = (value) => (Number(value || 0) * Math.PI) / 180;
+  const radiusKm = 6371;
+  const dLat = toRadians(right.latitude - left.latitude);
+  const dLon = toRadians(right.longitude - left.longitude);
+  const lat1 = toRadians(left.latitude);
+  const lat2 = toRadians(right.latitude);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return radiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function collectionRoutesSourceOptimizationPathKm(items = []) {
+  return items.reduce((total, item, index) => {
+    if (!index) {
+      return total;
+    }
+    return total + collectionRoutesSourceOptimizationDistanceKm(items[index - 1]?.coordinates, item?.coordinates);
+  }, 0);
+}
+
+function collectionRoutesSourceOptimizationItems(rows = []) {
+  const items = rows.map((row, index) => ({
+    row,
+    sourceIndex: index,
+    sourceOrder: Number(row?.routeOrder || 0) || index + 1,
+    coordinates: collectionRoutesSourceCoordinates(row)
+  })).sort((left, right) => left.sourceOrder - right.sourceOrder || left.sourceIndex - right.sourceIndex);
+  const gpsItems = items.filter((item) => item.coordinates);
+  const waitingItems = items.filter((item) => !item.coordinates);
+
+  if (gpsItems.length < 3) {
+    return {
+      items: items.map((item, index) => ({
+        ...item,
+        optimizedOrder: index + 1,
+        method: item.coordinates ? "GPS připravena" : "čeká na GPS",
+        reason: gpsItems.length ? "Pro bezpečný návrh pořadí jsou potřeba alespoň 3 GPS body." : "Nejdřív potvrdit polohy stanovišť.",
+        moved: false
+      })),
+      gpsCount: gpsItems.length,
+      waitingCount: waitingItems.length,
+      movedCount: 0,
+      sourceDistanceKm: 0,
+      optimizedDistanceKm: 0,
+      status: "čeká na GPS"
+    };
+  }
+
+  const sourceGpsItems = [...gpsItems].sort((left, right) => left.sourceOrder - right.sourceOrder || left.sourceIndex - right.sourceIndex);
+  const remaining = sourceGpsItems.slice(1);
+  const optimizedGpsItems = [sourceGpsItems[0]];
+  while (remaining.length) {
+    const current = optimizedGpsItems[optimizedGpsItems.length - 1];
+    remaining.sort((left, right) => {
+      const distanceDiff = collectionRoutesSourceOptimizationDistanceKm(current.coordinates, left.coordinates) -
+        collectionRoutesSourceOptimizationDistanceKm(current.coordinates, right.coordinates);
+      return distanceDiff || left.sourceOrder - right.sourceOrder || left.sourceIndex - right.sourceIndex;
+    });
+    optimizedGpsItems.push(remaining.shift());
+  }
+
+  const optimizedItems = [
+    ...optimizedGpsItems.map((item) => ({
+      ...item,
+      method: "GPS návrh",
+      reason: "Lokální nearest-neighbor návrh nad potvrzenými GPS body. Není to Google/Waze ani ostrá trasa."
+    })),
+    ...waitingItems.map((item) => ({
+      ...item,
+      method: "čeká na GPS",
+      reason: "Bez potvrzené polohy se stanoviště do ideálního pořadí nesmí hádat."
+    }))
+  ].map((item, index) => ({
+    ...item,
+    optimizedOrder: index + 1,
+    moved: item.sourceOrder !== index + 1
+  }));
+
+  return {
+    items: optimizedItems,
+    gpsCount: gpsItems.length,
+    waitingCount: waitingItems.length,
+    movedCount: optimizedItems.filter((item) => item.moved && item.coordinates).length,
+    sourceDistanceKm: collectionRoutesSourceOptimizationPathKm(sourceGpsItems),
+    optimizedDistanceKm: collectionRoutesSourceOptimizationPathKm(optimizedGpsItems),
+    status: waitingItems.length ? "část čeká na GPS" : "read-only návrh"
+  };
+}
+
+function collectionRoutesSourceIdealRouteDraftPanel(rows = collectionRoutesSourceDisplayRows()) {
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const hasDay = Boolean(filters.day && filters.day !== "all");
+  const hasWeek = Boolean(filters.week && filters.week !== "all");
+  const hasVehicle = Boolean(filters.vehicle && filters.vehicle !== "all");
+  const isSpecificRoute = rows.length > 0 && hasDay && hasWeek && hasVehicle;
+  const draft = collectionRoutesSourceOptimizationItems(rows);
+  const cappedRows = draft.items.slice(0, 80);
+  const savedKm = draft.sourceDistanceKm && draft.optimizedDistanceKm
+    ? Math.max(0, draft.sourceDistanceKm - draft.optimizedDistanceKm)
+    : 0;
+  const statusTone = !rows.length ? "danger" : draft.gpsCount >= 3 && isSpecificRoute ? "ok" : "warning";
+  const statusLabel = !rows.length
+    ? "bez zastávek"
+    : !isSpecificRoute
+      ? "doplň den/týden/auto"
+      : draft.status;
+  const note = !rows.length
+    ? "Aktuální filtr nemá žádné zastávky."
+    : !isSpecificRoute
+      ? "Pro praktický návrh ideální trasy vyber konkrétní den, týden a auto. Smart nebude skládat trasu ze všech aut najednou."
+      : draft.gpsCount < 3
+        ? "Nejdřív potvrď GPS polohy stanovišť. Bez nich by šlo jen hádat podle textu adresy."
+        : "Smart skládá read-only návrh pořadí nad aktuálním filtrem. Google/Waze zůstává jen budoucí navigace na konkrétní další stanoviště.";
+  const extraNotice = draft.items.length > cappedRows.length
+    ? `<p class="module-feedback__notice">Zobrazeno prvních ${escapeHtml(cappedRows.length)} řádků návrhu. Souhrn počítá celý aktuální filtr.</p>`
+    : "";
+
+  return `
+    <section class="collection-routes-ideal-draft" aria-label="Ideální pořadí trasy návrh">
+      <div class="collection-routes-daily-draft__head">
+        <div>
+          <p class="module-feedback__eyebrow">AI návrh · read-only</p>
+          <h3>Ideální pořadí – návrh</h3>
+          <span>Smart skládá trasu. Google/Waze bude jen navigace na další stanoviště.</span>
+        </div>
+        <span class="collection-routes-daily-draft__status collection-routes-daily-draft__status--${escapeHtml(statusTone)}">
+          ${escapeHtml(statusLabel)}
+        </span>
+      </div>
+      <p class="collection-routes-daily-draft__note">${escapeHtml(note)}</p>
+      <div class="collection-routes-daily-draft__grid">
+        <article>
+          <span>Zastávky</span>
+          <strong>${collectionRoutesMetricValue(rows.length)}</strong>
+          <small>aktuální filtr</small>
+        </article>
+        <article>
+          <span>GPS body</span>
+          <strong>${collectionRoutesMetricValue(draft.gpsCount)}</strong>
+          <small>použitelné pro skládání</small>
+        </article>
+        <article>
+          <span>Čeká na polohu</span>
+          <strong>${collectionRoutesMetricValue(draft.waitingCount)}</strong>
+          <small>nezařazovat naslepo</small>
+        </article>
+        <article>
+          <span>Změny pořadí</span>
+          <strong>${collectionRoutesMetricValue(draft.movedCount)}</strong>
+          <small>jen read-only návrh</small>
+        </article>
+        <article>
+          <span>Odhad úspory</span>
+          <strong>${savedKm ? `${collectionRoutesMetricValue(savedKm.toFixed(1))} km` : "-"}</strong>
+          <small>jen GPS úsek návrhu</small>
+        </article>
+        <article>
+          <span>Ostrá trasa</span>
+          <strong>NE</strong>
+          <small>bez schválení dispečera</small>
+        </article>
+      </div>
+      <div class="collection-routes-daily-draft__flow" aria-label="Tok skládání trasy">
+        <span><strong>1</strong> 13 Excelů určují rozsah</span>
+        <span><strong>2</strong> Smart skládá návrh pořadí</span>
+        <span><strong>3</strong> Dispečer schvaluje</span>
+        <span><strong>4</strong> Waze/Google naviguje bod po bodu</span>
+      </div>
+      ${collectionRoutesPreviewTable(`Návrh pořadí: ${collectionRoutesSourceRouteTitle()}`, [
+        { label: "Návrh", value: (item) => item.optimizedOrder },
+        { label: "Excel", value: (item) => item.sourceOrder },
+        { label: "Zákazník", value: (item) => item.row?.customerName || "-" },
+        { label: "Adresa", value: (item) => item.row?.addressText || item.row?.vistosAddressText || "-" },
+        { label: "Podklad", value: (item) => item.method },
+        { label: "Proč", value: (item) => item.reason },
+        { label: "GPS", value: (item) => item.coordinates ? collectionRoutesSourceCoordinateLabel(item.row) : "chybí" },
+        { label: "Zdroj", value: (item) => collectionRoutesSourceSourceLabel(item.row) },
+        { label: "Ostrá navigace", value: () => "NE" }
+      ], cappedRows, "V aktuálním filtru nejsou zastávky pro návrh ideálního pořadí.")}
+      ${extraNotice}
+    </section>
+  `;
+}
+
 function collectionRoutesSourceVistosMatchStatus() {
   const summary = collectionRoutesPilotState.sourceVistosMatchSummary;
   if (!summary && !collectionRoutesPilotState.sourceVistosMatchMessage && !collectionRoutesPilotState.sourceVistosMatchError) {
@@ -16510,6 +16698,7 @@ function collectionRoutesSourceRoutesSection() {
       ${collectionRoutesSourceSmartFilterPanel()}
       ${collectionRoutesSourceRouteSummaryCards(rows)}
       ${collectionRoutesSourceDailyRouteDraftPanel(rows)}
+      ${collectionRoutesSourceIdealRouteDraftPanel(rows)}
       ${collectionRoutesSourceRouteViewSwitch(rows)}
       ${routeView === "driver"
         ? collectionRoutesSourceDriverModePanel(rows)
