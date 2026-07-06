@@ -15465,6 +15465,8 @@ const COLLECTION_ROUTES_DRIVER_ACTION_ICONS = {
   blocked: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="11"/><path d="M8.5 23.5l15-15"/></svg>`,
   dispatch: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h20v13H12l-6 5V8z"/><path d="M11 13h10"/><path d="M11 17h7"/></svg>`,
   camera: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h6l2-3h6l2 3h6v14H5V11z"/><circle cx="16" cy="18" r="5"/></svg>`,
+  dump: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11h14l-1 15H10L9 11z"/><path d="M12 11V8h8v3"/><path d="M7 11h18"/><path d="M13 17h6"/><path d="M16 15v8"/><path d="M13 20l3 3 3-3"/></svg>`,
+  break: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9h12v8a6 6 0 0 1-6 6 6 6 0 0 1-6-6V9z"/><path d="M21 11h2a3 3 0 0 1 0 6h-2"/><path d="M8 26h15"/></svg>`,
   more: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="16" r="1.5"/><circle cx="16" cy="16" r="1.5"/><circle cx="23" cy="16" r="1.5"/></svg>`,
   close: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l14 14"/><path d="M23 9L9 23"/></svg>`
 };
@@ -15592,6 +15594,12 @@ function collectionRoutesSourceDriverActionIconKey(label, action, tone) {
   }
   if (action === "navigate" || tone === "navigate") {
     return "navigate";
+  }
+  if (action === "dump" || tone === "dump") {
+    return "dump";
+  }
+  if (action === "break" || tone === "break") {
+    return "break";
   }
   const normalizedLabel = String(label || "").toLowerCase();
   if (normalizedLabel.includes("nádoba není")) {
@@ -15784,6 +15792,11 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
             ${collectionRoutesSourceDriverReadonlyButton("Navigovat na další stanoviště", "navigate", "navigate")}
             ${collectionRoutesSourceDriverReadonlyButton(isProblemPanelOpen ? "Problém otevřen" : "Problém", "problem", "problem")}
             ${collectionRoutesSourceDriverReadonlyButton("Šarlota", "sarlota", "sarlota")}
+          </div>
+
+          <div class="collection-routes-driver-mode__bottom-bar" aria-label="Provozní akce řidiče">
+            ${collectionRoutesSourceDriverReadonlyButton("Musím vysypat", "dump", "dump")}
+            ${collectionRoutesSourceDriverReadonlyButton("Přestávka", "break", "break")}
           </div>
 
           <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
@@ -24256,6 +24269,8 @@ function handleCollectionRoutesSourceDriverReadonlyAction(action) {
     map: "Mapa bude zapnutá v další fázi.",
     list: "",
     report: "Hlášení otevři přes volbu Problém.",
+    dump: "Musím vysypat je zatím jen read-only stav v řidičském tabletu. Nic se neodesílá.",
+    break: "Přestávka je zatím jen read-only stav v řidičském tabletu. Nic se neodesílá.",
     dispatch: "Hlášení dispečinku bude zapnuté v další fázi.",
     sarlota: "Šarlota bude zapnutá v další fázi."
   };
