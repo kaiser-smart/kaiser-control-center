@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.375"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.376"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -22,7 +22,7 @@ export const versionInfo = {
 export const versionNews = [
   {
     title: "Pohledávky: lepší mapování firem z Vistosu",
-    text: "Read-only Vistos preview pro Pohledávky nově zkouší české sloupce DirectoryWithBranch a jako bezpečný fallback používá Contract vazby Directory_FK / DirectoryBranch_FK. Resolver umí vytáhnout IČO z captionu typu Firma - IČO a propojit fakturu přes Customer_FK / CustomerBranch_FK bez ostrého zápisu do ledgeru."
+    text: "Read-only Vistos preview pro Pohledávky používá jako první rychlou cestu Contract vazby Directory_FK / DirectoryBranch_FK a následně diagnosticky zkouší české sloupce DirectoryWithBranch. Resolver umí vytáhnout IČO z captionu typu Firma - IČO a propojit fakturu přes Customer_FK / CustomerBranch_FK bez ostrého zápisu do ledgeru."
   },
   {
     title: "Produkce: stabilní načtení stylů",

@@ -424,8 +424,6 @@ Dodavatel
     assert.equal(preview.invoices[0].totalAmount, 1210);
     assert.equal(preview.invoices[0].openAmount, 1210);
     assert.equal(preview.diagnostics.invoiceAttempts.find((attempt) => attempt.entityName === "Document")?.key, "kaiser_invoice_columns");
-    assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Company"));
-    assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Directory"));
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));
   } finally {
     globalThis.fetch = originalFetch;

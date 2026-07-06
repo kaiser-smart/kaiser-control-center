@@ -46,6 +46,10 @@ const DIRECTORY_WITH_BRANCH_CZECH_COLUMNS = [
 
 const COMPANY_ATTEMPTS = [
   {
+    entityName: "Contract",
+    columns: ["Id", "ContractNumber", "Name", "Directory_FK", "DirectoryBranch_FK", "Sidlo_FK"]
+  },
+  {
     entityName: "DirectoryWithBranch",
     columns: DIRECTORY_WITH_BRANCH_CZECH_COLUMNS
   },
@@ -68,10 +72,6 @@ const COMPANY_ATTEMPTS = [
   {
     entityName: "Directory",
     columns: ["Id", "Name"]
-  },
-  {
-    entityName: "Contract",
-    columns: ["Id", "ContractNumber", "Name", "Directory_FK", "DirectoryBranch_FK", "Sidlo_FK"]
   }
 ];
 

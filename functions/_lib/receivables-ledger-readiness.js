@@ -65,6 +65,11 @@ const CONTRACT_CUSTOMER_COLUMNS = [
 
 const RECEIVABLES_COMPANY_ATTEMPTS = [
   {
+    key: "contract_customer_fallback",
+    entityName: "Contract",
+    columns: CONTRACT_CUSTOMER_COLUMNS
+  },
+  {
     key: "directory_with_branch_czech_export",
     entityName: "DirectoryWithBranch",
     columns: DIRECTORY_WITH_BRANCH_CZECH_COLUMNS
@@ -113,11 +118,6 @@ const RECEIVABLES_COMPANY_ATTEMPTS = [
     key: "address_book_probe",
     entityName: "AddressBook",
     columns: ["Id", "Name", "RegNumber", "VATNumber", "Email"]
-  },
-  {
-    key: "contract_customer_fallback",
-    entityName: "Contract",
-    columns: CONTRACT_CUSTOMER_COLUMNS
   }
 ];
 
