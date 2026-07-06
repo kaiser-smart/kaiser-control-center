@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.384"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.385"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: Vistos schema/metadata probe",
+    text: "Importní stránka Pohledávek má nový read-only probe pro GetSchemaEntity, DbObject a DbColumn u DirectoryWithBranch, Directory, ContactList a navazujících entit. Slouží jen k ověření metadat firem a kontaktů; bez D1 zápisu, ratingu, KB plateb a komunikace zákazníkům."
+  },
   {
     title: "Trasy svozu: Smart skládač ideálního pořadí",
     text: "Hlavní filtr Svozových tras má read-only panel Ideální pořadí – návrh. Smart skládá návrh jen z aktuálního filtru 13 Excelů; Google/Waze je zde popsaný pouze jako budoucí navigace na další stanoviště. Nevzniká ostrá optimalizace, GPS zápis, T-Cars, SMS/e-mail ani automatizace."

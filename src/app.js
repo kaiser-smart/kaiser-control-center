@@ -868,6 +868,10 @@ const receivablesState = {
   vistosPreviewLoading: false,
   vistosPreviewError: "",
   vistosPreviewMessage: "",
+  schemaProbe: null,
+  schemaProbeLoading: false,
+  schemaProbeError: "",
+  schemaProbeMessage: "",
   ledgerReadiness: null,
   ledgerReadinessLoading: false,
   ledgerReadinessError: "",
@@ -23574,6 +23578,200 @@ function receivablesVistosPreviewPanel() {
   `;
 }
 
+function receivablesSchemaCandidateText(candidates = {}, key) {
+  const values = Array.isArray(candidates[key]) ? candidates[key] : [];
+  return values.length ? values.slice(0, 5).join(", ") : "-";
+}
+
+function receivablesVistosSchemaProbeSummary(preview) {
+  const summary = preview?.summary || {};
+  const readiness = preview?.readiness || {};
+  const cards = [
+    ["Cílů", (preview?.targetEntities || []).length],
+    ["GetSchemaEntity OK", summary.entitiesWithSchema || 0],
+    ["DbObject nalezeno", summary.matchedObjects || 0],
+    ["DbColumn OK", summary.entitiesWithDbColumns || 0],
+    ["Kandidát IČO", summary.entitiesWithIcoCandidate || 0],
+    ["Kandidát DIČ", summary.entitiesWithDicCandidate || 0],
+    ["Fakturační e-mail", summary.entitiesWithBillingEmailCandidate || 0],
+    ["Splatnost", summary.entitiesWithDueDaysCandidate || 0]
+  ];
+
+  if (!preview) {
+    return `<p class="receivables-empty">Schema/metadata probe zatím není spuštěný.</p>`;
+  }
+
+  return `
+    <div class="receivables-import-summary" aria-label="Vistos schema probe souhrn">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+    <div class="receivables-import-diagnostics">
+      <section>
+        <h3>Doporučený další krok</h3>
+        <p>${escapeHtml(readiness.recommendedNextStep || "-")}</p>
+        ${(readiness.blockingReasons || []).length ? `
+          <div class="receivables-table-wrap">
+            <table class="receivables-table receivables-table--compact">
+              <thead><tr><th>Blocking reason</th></tr></thead>
+              <tbody>
+                ${(readiness.blockingReasons || []).map((reason) => `
+                  <tr><td data-label="Blocking reason">${escapeHtml(reason)}</td></tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        ` : `<p class="receivables-empty">Metadata probe nemá blokující důvod ve vzorku.</p>`}
+      </section>
+    </div>
+  `;
+}
+
+function receivablesVistosSchemaProbeDiagnostics(preview) {
+  if (!preview) {
+    return "";
+  }
+
+  const schemaRows = (preview.schemaEntityAttempts || []).map((attempt) => `
+    <tr>
+      <td data-label="Entita">${escapeHtml(attempt.entityName || "-")}</td>
+      <td data-label="Výsledek">${receivablesPill(attempt.ok ? "OK" : (attempt.code || "chyba"), attempt.ok ? "ready" : "danger")}</td>
+      <td data-label="Read">${escapeHtml(attempt.readAllowed === null || attempt.readAllowed === undefined ? "-" : String(attempt.readAllowed))}</td>
+      <td data-label="Sloupců">${escapeHtml(attempt.columnCount || 0)}</td>
+      <td data-label="Detail">${escapeHtml(attempt.ok ? (attempt.entityListTitle || "-") : (attempt.message || "-"))}</td>
+    </tr>
+  `).join("");
+  const objectRows = (preview.dbObjectProbe?.matchedObjects || []).map((object) => `
+    <tr>
+      <td data-label="Entita">${escapeHtml(object.entityName || "-")}</td>
+      <td data-label="DbObject">${escapeHtml(object.found ? "nalezeno" : "nenalezeno")}</td>
+      <td data-label="ID">${escapeHtml(object.dbObjectId || "-")}</td>
+      <td data-label="Název">${escapeHtml(object.name || "-")}</td>
+      <td data-label="Caption">${escapeHtml(object.caption || "-")}</td>
+    </tr>
+  `).join("");
+  const summaryRows = (preview.entitySummaries || []).map((item) => `
+    <tr>
+      <td data-label="Entita">${escapeHtml(item.entityName || "-")}</td>
+      <td data-label="Schema">${receivablesPill(item.schemaOk ? "OK" : "chyba", item.schemaOk ? "ready" : "danger")}</td>
+      <td data-label="DbObject ID">${escapeHtml(item.dbObjectId || "-")}</td>
+      <td data-label="DbColumn">${escapeHtml(item.dbColumnCount || 0)}</td>
+      <td data-label="IČO">${escapeHtml(receivablesSchemaCandidateText(item.candidates, "ico"))}</td>
+      <td data-label="DIČ">${escapeHtml(receivablesSchemaCandidateText(item.candidates, "dic"))}</td>
+      <td data-label="E-mail">${escapeHtml(receivablesSchemaCandidateText(item.candidates, "billingEmail"))}</td>
+      <td data-label="Splatnost">${escapeHtml(receivablesSchemaCandidateText(item.candidates, "standardDueDays"))}</td>
+      <td data-label="Blokace">${escapeHtml((item.blocking || []).join(", ") || "-")}</td>
+    </tr>
+  `).join("");
+  const dbColumnRows = (preview.dbColumnProbe?.columnsByEntity || []).map((item) => {
+    const fields = (item.columns || []).map((column) => column.name || column.caption).filter(Boolean).slice(0, 12).join(", ");
+    const diagnostics = (item.diagnostics || []).map((diagnostic) => `${diagnostic.key}:${diagnostic.ok ? "OK" : diagnostic.code || "chyba"}`).join(" | ");
+    return `
+      <tr>
+        <td data-label="Entita">${escapeHtml(item.entityName || "-")}</td>
+        <td data-label="DbObject ID">${escapeHtml(item.dbObjectId || "-")}</td>
+        <td data-label="Výsledek">${receivablesPill(item.ok ? "OK" : (item.reason || "chyba"), item.ok ? "ready" : item.skipped ? "warning" : "danger")}</td>
+        <td data-label="Filtr">${escapeHtml(item.filterField || "-")}</td>
+        <td data-label="Řádků">${escapeHtml(item.returnedRows || 0)}</td>
+        <td data-label="Pole">${escapeHtml(fields || "-")}</td>
+        <td data-label="Pokusy">${escapeHtml(diagnostics || "-")}</td>
+      </tr>
+    `;
+  }).join("");
+  const safetyRows = [
+    ["readOnly", preview.readOnly],
+    ["writesD1", preview.writesD1],
+    ["createsReceivableRecords", preview.createsReceivableRecords],
+    ["sendsCustomerCommunication", preview.sendsCustomerCommunication],
+    ["startsAutomation", preview.startsAutomation],
+    ["calculatesRealRating", preview.calculatesRealRating],
+    ["importsKbPayments", preview.importsKbPayments],
+    ["createsLegalPackages", preview.createsLegalPackages]
+  ];
+
+  return `
+    <div class="receivables-import-diagnostics">
+      <section>
+        <h3>GetSchemaEntity</h3>
+        <div class="receivables-table-wrap">
+          <table class="receivables-table receivables-table--compact">
+            <thead><tr><th>Entita</th><th>Výsledek</th><th>Read</th><th>Sloupců</th><th>Detail</th></tr></thead>
+            <tbody>${schemaRows}</tbody>
+          </table>
+        </div>
+      </section>
+      <section>
+        <h3>DbObject</h3>
+        <dl class="receivables-diagnostics-list">
+          <div><dt>Načteno</dt><dd>${escapeHtml(preview.dbObjectProbe?.rowsLoaded || 0)} / ${escapeHtml(preview.dbObjectProbe?.totalRows || 0)}</dd></div>
+          <div><dt>Sada</dt><dd>${escapeHtml(preview.dbObjectProbe?.key || "-")}</dd></div>
+          <div><dt>Capped</dt><dd>${escapeHtml(String(Boolean(preview.dbObjectProbe?.capped)))}</dd></div>
+        </dl>
+        <div class="receivables-table-wrap">
+          <table class="receivables-table receivables-table--compact">
+            <thead><tr><th>Entita</th><th>DbObject</th><th>ID</th><th>Název</th><th>Caption</th></tr></thead>
+            <tbody>${objectRows}</tbody>
+          </table>
+        </div>
+      </section>
+      <section>
+        <h3>DbColumn</h3>
+        <div class="receivables-table-wrap">
+          <table class="receivables-table receivables-table--compact">
+            <thead><tr><th>Entita</th><th>DbObject ID</th><th>Výsledek</th><th>Filtr</th><th>Řádků</th><th>Pole</th><th>Pokusy</th></tr></thead>
+            <tbody>${dbColumnRows}</tbody>
+          </table>
+        </div>
+      </section>
+      <section>
+        <h3>Kandidátní pole pro firmy</h3>
+        <div class="receivables-table-wrap">
+          <table class="receivables-table receivables-table--compact">
+            <thead><tr><th>Entita</th><th>Schema</th><th>DbObject ID</th><th>DbColumn</th><th>IČO</th><th>DIČ</th><th>E-mail</th><th>Splatnost</th><th>Blokace</th></tr></thead>
+            <tbody>${summaryRows}</tbody>
+          </table>
+        </div>
+      </section>
+      <section>
+        <h3>Bezpečnostní pojistky</h3>
+        <dl class="receivables-diagnostics-list">
+          ${safetyRows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join("")}
+        </dl>
+      </section>
+    </div>
+  `;
+}
+
+function receivablesVistosSchemaProbePanel() {
+  const preview = receivablesState.schemaProbe;
+  const readiness = preview?.readiness || {};
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-schema-probe-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Vistos metadata</p>
+          <h2 id="receivables-schema-probe-title">Schema/metadata probe firem</h2>
+          <p>Read-only ověření DbObject, DbColumn a GetSchemaEntity pro DirectoryWithBranch, Directory, ContactList a navazující entity.</p>
+        </div>
+        ${receivablesPill(readiness.metadataProbeUsable ? "metadata OK" : "read-only probe", readiness.metadataProbeUsable ? "ready" : "warning")}
+      </div>
+      <form class="receivables-import-form receivables-import-form--inline" data-receivables-schema-probe-form>
+        <button class="primary-button" type="submit" ${receivablesState.schemaProbeLoading ? "disabled" : ""}>
+          ${receivablesState.schemaProbeLoading ? "Kontroluju metadata..." : "Zkontrolovat Vistos metadata"}
+        </button>
+      </form>
+      ${receivablesState.schemaProbeMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.schemaProbeMessage)}</p>` : ""}
+      ${receivablesState.schemaProbeError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.schemaProbeError)}</p>` : ""}
+      ${receivablesVistosSchemaProbeSummary(preview)}
+      ${receivablesVistosSchemaProbeDiagnostics(preview)}
+    </section>
+  `;
+}
+
 function receivablesLedgerPercent(value) {
   const number = Number(value || 0);
   return `${number.toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} %`;
@@ -23868,6 +24066,7 @@ function receivablesImportSection() {
   const bankDisabled = receivablesState.importSaving === "bank" ? "disabled" : "";
   return `
     ${receivablesVistosPreviewPanel()}
+    ${receivablesVistosSchemaProbePanel()}
     ${receivablesLedgerReadinessPanel()}
     <section class="receivables-panel" aria-labelledby="receivables-import-title">
       <div class="receivables-panel__head">
@@ -25152,6 +25351,29 @@ async function submitReceivablesVistosPreview() {
     receivablesState.vistosPreviewMessage = "";
   } finally {
     receivablesState.vistosPreviewLoading = false;
+    render();
+  }
+}
+
+async function submitReceivablesSchemaProbe() {
+  if (receivablesState.schemaProbeLoading) {
+    return;
+  }
+
+  receivablesState.schemaProbeLoading = true;
+  receivablesState.schemaProbeError = "";
+  receivablesState.schemaProbeMessage = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/receivables/vistos/schema-probe");
+    receivablesState.schemaProbe = result.preview || null;
+    receivablesState.schemaProbeMessage = result.preview?.message || "Vistos schema/metadata probe načtený.";
+  } catch (error) {
+    receivablesState.schemaProbeError = error.payload?.error || error.message || "Vistos schema/metadata probe se nepodařilo načíst.";
+    receivablesState.schemaProbeMessage = "";
+  } finally {
+    receivablesState.schemaProbeLoading = false;
     render();
   }
 }
@@ -30461,6 +30683,10 @@ async function logout() {
   receivablesState.vistosPreviewLoading = false;
   receivablesState.vistosPreviewError = "";
   receivablesState.vistosPreviewMessage = "";
+  receivablesState.schemaProbe = null;
+  receivablesState.schemaProbeLoading = false;
+  receivablesState.schemaProbeError = "";
+  receivablesState.schemaProbeMessage = "";
   receivablesState.ledgerReadiness = null;
   receivablesState.ledgerReadinessLoading = false;
   receivablesState.ledgerReadinessError = "";
@@ -33262,6 +33488,13 @@ document.addEventListener("submit", async (event) => {
   if (receivablesVistosPreviewForm) {
     event.preventDefault();
     await submitReceivablesVistosPreview();
+    return;
+  }
+
+  const receivablesSchemaProbeForm = event.target.closest("[data-receivables-schema-probe-form]");
+  if (receivablesSchemaProbeForm) {
+    event.preventDefault();
+    await submitReceivablesSchemaProbe();
     return;
   }
 

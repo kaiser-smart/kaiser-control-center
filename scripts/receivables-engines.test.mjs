@@ -21,10 +21,12 @@ import {
   mapReceivablesLedgerCompany,
   resolveInvoiceCustomer
 } from "../functions/_lib/receivables-ledger-readiness.js";
+import { createReceivablesVistosSchemaProbe } from "../functions/_lib/receivables-vistos-schema-probe.js";
 import { onRequestGet as getReceivablesCompaniesPreview } from "../functions/api/receivables/vistos/companies-preview.js";
 import { onRequestGet as getReceivablesCustomerInvoicePreview } from "../functions/api/receivables/vistos/customer-invoice-preview.js";
 import { onRequestGet as getReceivablesInvoicesPreview } from "../functions/api/receivables/vistos/invoices-preview.js";
 import { onRequestGet as getReceivablesLedgerReadiness } from "../functions/api/receivables/vistos/ledger-readiness.js";
+import { onRequestGet as getReceivablesSchemaProbe } from "../functions/api/receivables/vistos/schema-probe.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import {
   calculateInvoicePaymentState,
@@ -58,6 +60,27 @@ function mockVistosFetch(rowsByEntity = {}) {
     if (source && Array.isArray(source[mode])) return source[mode];
     return [];
   };
+  const schemaForEntity = (entityName) => {
+    const source = rowsByEntity.__schema;
+    if (!source) return {};
+    if (Array.isArray(source)) {
+      return source.find((item) => item?.EntityName === entityName || item?.entityName === entityName) || {};
+    }
+    return source[entityName] || {};
+  };
+  const applyFilter = (rows, filter = {}) => {
+    if (!filter || !Object.keys(filter).length) return rows;
+    return rows.filter((row) => Object.entries(filter).every(([key, value]) => {
+      const expected = String(value ?? "");
+      const candidates = [
+        row?.[key],
+        row?.[`${key}_RecordId`],
+        row?.[`${key}_Id`],
+        row?.[`${key}Id`]
+      ].map((item) => String(item ?? ""));
+      return candidates.includes(expected);
+    }));
+  };
   const idValue = (row) => String(
     row?.Id ||
     row?.["Systémové ID"] ||
@@ -80,6 +103,26 @@ function mockVistosFetch(rowsByEntity = {}) {
       });
     }
 
+    if (methodName === "GetSchemaEntity") {
+      const request = payload.GetSchemaEntity || {};
+      const entityName = String(request.EntityName || "");
+      const schema = schemaForEntity(entityName);
+      const columns = Array.isArray(schema.Columns)
+        ? schema.Columns
+        : Array.isArray(schema.columns)
+          ? schema.columns
+          : rowsForEntity(entityName, "schemaColumns").map((item) => ({ ColumnName: item }));
+      return new Response(JSON.stringify({
+        status: "OK",
+        data: {
+          EntityName: entityName,
+          EntityListTitle: schema.EntityListTitle || `${entityName} - List`,
+          AccessRight: schema.AccessRight || { Read: true, Create: false, Edit: false },
+          Columns: columns
+        }
+      }), { status: 200 });
+    }
+
     if (methodName === "GetByIdParam") {
       const request = payload.GetByIdParam || {};
       const source = rowsByEntity[request.EntityName];
@@ -92,7 +135,7 @@ function mockVistosFetch(rowsByEntity = {}) {
     }
 
     const request = payload.GetPageParam || {};
-    const rows = rowsForEntity(request.EntityName, "page");
+    const rows = applyFilter(rowsForEntity(request.EntityName, "page"), request.Filter);
     return new Response(JSON.stringify({
       status: "OK",
       data: {
@@ -484,7 +527,8 @@ Dodavatel
     [getReceivablesCompaniesPreview, "/api/receivables/vistos/companies-preview"],
     [getReceivablesInvoicesPreview, "/api/receivables/vistos/invoices-preview"],
     [getReceivablesCustomerInvoicePreview, "/api/receivables/vistos/customer-invoice-preview"],
-    [getReceivablesLedgerReadiness, "/api/receivables/vistos/ledger-readiness"]
+    [getReceivablesLedgerReadiness, "/api/receivables/vistos/ledger-readiness"],
+    [getReceivablesSchemaProbe, "/api/receivables/vistos/schema-probe"]
   ];
   for (const [handler, path] of unauthEndpoints) {
     const response = await handler({
@@ -492,6 +536,93 @@ Dodavatel
       env: {}
     });
     assert.equal(response.status, 401, `${path} must require login`);
+  }
+}
+
+{
+  const mock = mockVistosFetch({
+    __schema: {
+      DirectoryWithBranch: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Name", LocalizationString: "Název" },
+          { ColumnName: "RegNumber", LocalizationString: "IČO" },
+          { ColumnName: "VATNumber", LocalizationString: "DIČ" },
+          { ColumnName: "EmailInvoicing", LocalizationString: "Fakturační e-mail" },
+          { ColumnName: "InvoiceDueDays", LocalizationString: "Splatnost" }
+        ]
+      },
+      Directory: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Name", LocalizationString: "Název" },
+          { ColumnName: "EmailInvoicing", LocalizationString: "Fakturační e-mail" },
+          { ColumnName: "PhoneNumber", LocalizationString: "Telefon" },
+          { ColumnName: "Parent_FK", LocalizationString: "Rodič" }
+        ]
+      },
+      ContactList: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Name", LocalizationString: "Název" },
+          { ColumnName: "SenderEmail", LocalizationString: "Odesílatel" }
+        ]
+      },
+      ContactListRow: {
+        Columns: [
+          { ColumnName: "Id", LocalizationString: "ID" },
+          { ColumnName: "Directory_FK", LocalizationString: "Firma" },
+          { ColumnName: "Email1", LocalizationString: "E-mail" },
+          { ColumnName: "SendMailEnabled", LocalizationString: "Povolit e-mail" }
+        ]
+      }
+    },
+    DbObject: [
+      { Id: "49", Name: "Directory", Caption: "Adresář" },
+      { Id: "201", Name: "ContactList", Caption: "Seznam kontaktů" },
+      { Id: "202", Name: "ContactListRow", Caption: "Řádek kontaktu" },
+      { Id: "301", Name: "DirectoryWithBranch", Caption: "Firmy a pobočky" }
+    ],
+    DbColumn: [
+      { Id: "1", DbObject_FK: "301", ColumnName: "RegNumber", Caption: "IČO" },
+      { Id: "2", DbObject_FK: "301", ColumnName: "VATNumber", Caption: "DIČ" },
+      { Id: "3", DbObject_FK: "301", ColumnName: "EmailInvoicing", Caption: "Fakturační e-mail" },
+      { Id: "4", DbObject_FK: "301", ColumnName: "InvoiceDueDays", Caption: "Splatnost" },
+      { Id: "5", DbObject_FK: "49", ColumnName: "EmailInvoicing", Caption: "Fakturační e-mail" },
+      { Id: "6", DbObject_FK: "49", ColumnName: "PhoneNumber", Caption: "Telefon" },
+      { Id: "7", DbObject_FK: "201", ColumnName: "SenderEmail", Caption: "Odesílatel" },
+      { Id: "8", DbObject_FK: "202", ColumnName: "Directory_FK", Caption: "Firma" },
+      { Id: "9", DbObject_FK: "202", ColumnName: "Email1", Caption: "E-mail" }
+    ]
+  });
+  try {
+    const preview = await createReceivablesVistosSchemaProbe({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "test-password"
+    }, { pageSize: 20, maxPages: 1, maxColumnsPerEntity: 20 });
+    assert.equal(preview.apiStatus, "ready");
+    assert.equal(preview.readOnly, true);
+    assert.equal(preview.writesD1, false);
+    assert.equal(preview.createsReceivableRecords, false);
+    assert.equal(preview.sendsCustomerCommunication, false);
+    assert.equal(preview.startsAutomation, false);
+    assert.equal(preview.calculatesRealRating, false);
+    assert.equal(preview.importsKbPayments, false);
+    assert.equal(preview.createsLegalPackages, false);
+    assert.ok(preview.schemaEntityAttempts.some((item) => item.entityName === "DirectoryWithBranch" && item.ok));
+    assert.equal(preview.dbObjectProbe.matchedObjects.find((item) => item.entityName === "ContactListRow")?.found, true);
+    const directoryWithBranch = preview.entitySummaries.find((item) => item.entityName === "DirectoryWithBranch");
+    assert.equal(directoryWithBranch.candidates.ico.includes("RegNumber"), true);
+    assert.equal(directoryWithBranch.candidates.dic.includes("VATNumber"), true);
+    assert.equal(directoryWithBranch.candidates.billingEmail.includes("EmailInvoicing"), true);
+    assert.equal(directoryWithBranch.candidates.standardDueDays.includes("InvoiceDueDays"), true);
+    assert.equal(preview.summary.entitiesWithBillingEmailCandidate > 0, true);
+    assert.ok(mock.calls.some((call) => call.methodName === "GetSchemaEntity"));
+    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "DbObject"));
+    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "DbColumn"));
+  } finally {
+    mock.restore();
   }
 }
 

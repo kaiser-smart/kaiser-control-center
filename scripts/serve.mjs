@@ -3222,6 +3222,142 @@ function mockReceivablesLedgerReadinessPreview() {
   };
 }
 
+function mockReceivablesVistosSchemaProbePreview() {
+  const targetEntities = [
+    "DirectoryWithBranch",
+    "Directory",
+    "ContactList",
+    "ContactListRow",
+    "Contact",
+    "Customer",
+    "CustomerBranch",
+    "Company",
+    "CompanyBranch",
+    "Partner",
+    "AddressBook"
+  ];
+  const entitySummaries = targetEntities.map((entityName) => {
+    const baseFields = [
+      { name: "Id", caption: "ID" },
+      { name: "Name", caption: "Název" }
+    ];
+    const companyFields = [
+      { name: "RegNumber", caption: "IČO" },
+      { name: "VATNumber", caption: "DIČ" },
+      { name: "EmailInvoicing", caption: "Fakturační e-mail" },
+      { name: "PhoneNumber", caption: "Telefon" },
+      { name: "InvoiceDueDays", caption: "Splatnost" }
+    ];
+    const contactFields = [
+      { name: "Directory_FK", caption: "Firma" },
+      { name: "Email1", caption: "E-mail" },
+      { name: "SendMailEnabled", caption: "Povolit e-mail" }
+    ];
+    const fields = entityName.includes("Contact") ? [...baseFields, ...contactFields] : [...baseFields, ...companyFields];
+    return {
+      entityName,
+      schemaOk: true,
+      dbColumnOk: !["Contact"].includes(entityName),
+      dbObjectId: entityName === "Directory" ? "49" : entityName === "ContactList" ? "201" : entityName === "ContactListRow" ? "202" : "",
+      readAllowed: !["ContactList", "ContactListRow"].includes(entityName),
+      schemaColumnCount: fields.length,
+      dbColumnCount: fields.length,
+      mergedColumnCount: fields.length,
+      fields,
+      candidates: {
+        stableId: ["Id"],
+        companyName: ["Name"],
+        branchName: entityName === "DirectoryWithBranch" ? ["Name"] : [],
+        ico: fields.some((field) => field.name === "RegNumber") ? ["RegNumber"] : [],
+        dic: fields.some((field) => field.name === "VATNumber") ? ["VATNumber"] : [],
+        billingEmail: fields.some((field) => field.name === "EmailInvoicing") ? ["EmailInvoicing"] : [],
+        email: fields.some((field) => field.name === "Email1") ? ["Email1"] : [],
+        phone: fields.some((field) => field.name === "PhoneNumber") ? ["PhoneNumber"] : [],
+        standardDueDays: fields.some((field) => field.name === "InvoiceDueDays") ? ["InvoiceDueDays"] : [],
+        parent: entityName === "ContactListRow" ? ["Directory_FK"] : []
+      },
+      blocking: entityName === "Contact" ? ["DB_OBJECT_NOT_FOUND"] : []
+    };
+  });
+
+  return {
+    apiStatus: "ready",
+    message: "Lokální read-only mock: Vistos schema/metadata probe. Nic se neukládá, neposílá ani nepočítá jako ostrý rating.",
+    readOnly: true,
+    writesD1: false,
+    createsReceivableRecords: false,
+    sendsCustomerCommunication: false,
+    startsAutomation: false,
+    calculatesRealRating: false,
+    importsKbPayments: false,
+    createsLegalPackages: false,
+    targetEntities,
+    schemaEntityAttempts: entitySummaries.map((item) => ({
+      entityName: item.entityName,
+      method: "GetSchemaEntity",
+      ok: true,
+      readAllowed: item.readAllowed,
+      columnCount: item.schemaColumnCount,
+      entityListTitle: `${item.entityName} - List`,
+      columns: item.fields
+    })),
+    dbObjectProbe: {
+      ok: true,
+      key: "local_mock",
+      rowsLoaded: 4,
+      totalRows: 4,
+      capped: false,
+      matchedObjects: targetEntities.map((entityName) => ({
+        entityName,
+        found: entityName !== "Contact",
+        dbObjectId: entityName === "Directory" ? "49" : entityName === "ContactList" ? "201" : entityName === "ContactListRow" ? "202" : "",
+        name: entityName,
+        caption: entityName
+      })),
+      diagnostics: [{ key: "local_mock", ok: true, rows: 4, total: 4, capped: false }]
+    },
+    dbColumnProbe: {
+      columnsByEntity: entitySummaries.map((item) => ({
+        entityName: item.entityName,
+        dbObjectId: item.dbObjectId,
+        ok: item.dbColumnOk,
+        skipped: !item.dbObjectId,
+        reason: item.dbColumnOk ? "" : "DB_OBJECT_NOT_FOUND",
+        key: "local_mock",
+        filterField: "DbObject_FK",
+        returnedRows: item.dbColumnCount,
+        totalRows: item.dbColumnCount,
+        capped: false,
+        columns: item.fields,
+        diagnostics: [{ key: "local_mock", ok: item.dbColumnOk }]
+      }))
+    },
+    entitySummaries,
+    summary: {
+      dbObjectsLoaded: 4,
+      matchedObjects: 10,
+      entitiesWithSchema: targetEntities.length,
+      entitiesWithDbColumns: 10,
+      entitiesWithBillingEmailCandidate: 7,
+      entitiesWithPhoneCandidate: 7,
+      entitiesWithDueDaysCandidate: 7,
+      entitiesWithIcoCandidate: 7,
+      entitiesWithDicCandidate: 7
+    },
+    readiness: {
+      metadataProbeUsable: true,
+      blockingReasons: [],
+      recommendedNextStep: "Lokální mock prošel. Pro produkční závěr spusť přihlášený read-only schema probe proti živému Vistos API."
+    },
+    previewLimits: {
+      pageSize: 500,
+      maxPages: 2,
+      maxColumnsPerEntity: 80
+    },
+    loadedAt: new Date().toISOString()
+  };
+}
+
 async function handleApi(request, response) {
   const url = new URL(request.url || "/", "http://localhost");
 
@@ -3327,6 +3463,10 @@ async function handleApi(request, response) {
     }
 
     const preview = mockReceivablesLedgerReadinessPreview();
+    if (url.pathname === "/api/receivables/vistos/schema-probe") {
+      sendJson(response, 200, { preview: mockReceivablesVistosSchemaProbePreview(), apiStatus: "ready" });
+      return true;
+    }
     if (url.pathname === "/api/receivables/vistos/companies-preview") {
       sendJson(response, 200, {
         apiStatus: "ready",
