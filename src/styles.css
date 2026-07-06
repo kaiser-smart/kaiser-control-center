@@ -25281,7 +25281,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --metal-gradient-inset: linear-gradient(145deg, #ccd5da 0%, #e8ecee 100%);
   --metal-gradient-control: linear-gradient(145deg, #f1f3f4 0%, #e2e8ea 54%, #d8e0e3 100%);
   --text-main: #1b2329;
-  --text-hero-title: var(--text-main);
+  --text-hero-title: var(--brand-accent);
   --text-muted: color-mix(in srgb, var(--text-main) 68%, transparent);
   --border-soft: rgba(78, 92, 100, 0.24);
   --border-highlight: rgba(255, 255, 255, 0.76);
@@ -26605,7 +26605,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --metal-gradient-inset: linear-gradient(145deg, #070c12 0%, #0b121a 46%, #121b25 100%);
   --metal-gradient-control: linear-gradient(145deg, #1a2634 0%, var(--surface-control) 48%, #101821 100%);
   --text-main: #edf3f6;
-  --text-hero-title: var(--text-main);
+  --text-hero-title: var(--brand-accent);
   --text-muted: color-mix(in srgb, var(--text-main) 72%, transparent);
   --border-soft: rgba(177, 194, 207, 0.16);
   --border-highlight: rgba(255, 255, 255, 0.085);
