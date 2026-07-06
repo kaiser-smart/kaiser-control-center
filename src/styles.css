@@ -27065,7 +27065,10 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-live-strip__icon .theme-icon-img {
-  transform: translate(1px, 1px) scale(var(--icon-scale));
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  object-position: center;
+  transform: scale(var(--icon-scale));
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metrics {
@@ -27136,6 +27139,12 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 .tracking-page--soft-metal-preview .tracking-preview-live-strip span {
   display: block;
   min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-preview-live-strip .tracking-preview-live-strip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-live-strip strong {
