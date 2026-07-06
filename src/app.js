@@ -1741,7 +1741,6 @@ function themePreviewIcon(name) {
     app: "005.svg",
     check: "009.svg",
     plus: "016.svg",
-    home: "020.svg",
     menu: "021.svg",
     actionDone: "013.svg",
     actionWarning: "014.svg",
@@ -10107,11 +10106,7 @@ function vehicleTrackingPreviewSidebar(activeView = "map", sourceMode = vehicleT
   return `
     <aside class="tracking-preview-sidebar sidebar--expanded" aria-label="Navigace modulu Sledování vozidel" data-tracking-preview-sidebar>
       <input class="tracking-preview-sidebar__state sr-only" type="checkbox" id="tracking-preview-sidebar-state" checked data-tracking-preview-sidebar-state>
-      <div class="tracking-preview-sidebar__head">
-        <a class="tracking-preview-sidebar__brand" href="${routeHref("/")}" data-link aria-label="Smart odpady">
-          <span class="tracking-preview-sidebar__brand-mark icon-tone-green">${themePreviewIcon("home")}</span>
-          <span class="tracking-preview-sidebar__brand-text">Smart</span>
-        </a>
+      <div class="tracking-preview-sidebar__head tracking-preview-sidebar__head--controls-only">
         <label class="tracking-preview-sidebar__toggle icon-tone-graphite" for="tracking-preview-sidebar-state" title="Přepnout menu">
           ${themePreviewIcon("menu")}
           <span class="tracking-preview-sidebar__toggle-label">Menu</span>
