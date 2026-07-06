@@ -27465,17 +27465,18 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
   width: 33px;
   height: 33px;
-  filter: none;
-  opacity: 1;
+  filter: grayscale(1) saturate(0.22) brightness(0.76);
+  opacity: var(--icon-opacity-default);
   transform: none;
   transition:
     filter 180ms ease,
     opacity 180ms ease;
 }
 
-.tracking-page--soft-metal-preview .tracking-utility-icon-button:hover .theme-icon-img {
-  filter: grayscale(1) saturate(0.22) brightness(0.76);
-  opacity: var(--icon-opacity-default);
+.tracking-page--soft-metal-preview .tracking-utility-icon-button:hover .theme-icon-img,
+.tracking-page--soft-metal-preview .tracking-utility-icon-button:focus-visible .theme-icon-img {
+  filter: none;
+  opacity: 1;
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-logo {
