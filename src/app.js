@@ -23128,6 +23128,7 @@ function receivablesVistosPreviewDiagnostics(preview) {
   const attemptRows = attempts.map((attempt) => `
     <tr>
       <td data-label="Oblast">${escapeHtml(attempt.scope)}</td>
+      <td data-label="Sada">${escapeHtml(attempt.key || "-")}</td>
       <td data-label="Entita">${escapeHtml(attempt.entityName || "-")}</td>
       <td data-label="Výsledek">${escapeHtml(attempt.ok ? "OK" : "chyba")}</td>
       <td data-label="Řádků">${escapeHtml(attempt.returnedRows ?? "-")}</td>
@@ -23152,7 +23153,7 @@ function receivablesVistosPreviewDiagnostics(preview) {
         ${attemptRows ? `
           <div class="receivables-table-wrap">
             <table class="receivables-table receivables-table--compact">
-              <thead><tr><th>Oblast</th><th>Entita</th><th>Výsledek</th><th>Řádků</th><th>Celkem</th><th>Detail</th></tr></thead>
+              <thead><tr><th>Oblast</th><th>Sada</th><th>Entita</th><th>Výsledek</th><th>Řádků</th><th>Celkem</th><th>Detail</th></tr></thead>
               <tbody>${attemptRows}</tbody>
             </table>
           </div>
