@@ -10871,20 +10871,26 @@ function vehicleTrackingDemoVehicleCard(vehicle, selectedVehicle, elapsedMs) {
 
   return `
     <article class="tracking-demo-vehicle-card ${summary.isOffRoute ? "tracking-demo-vehicle-card--alert" : ""} ${isSelected ? "tracking-demo-vehicle-card--selected" : ""}" data-tracking-demo-card="${escapeHtml(vehicle.id)}">
-      <div class="tracking-demo-vehicle-card__head">
-        <div class="tracking-demo-vehicle-card__title">
-          <span class="tracking-demo-vehicle-card__icon icon-tone-${escapeHtml(iconTone)}">${themePreviewIcon("truck")}</span>
-          <span>
-            <strong>${escapeHtml(vehicle.internalNumber)}</strong>
-            <span>${escapeHtml(vehicle.licensePlate)}</span>
-          </span>
+      <div class="tracking-demo-vehicle-card__layout">
+        <div class="tracking-demo-vehicle-card__info">
+          <div class="tracking-demo-vehicle-card__head">
+            <div class="tracking-demo-vehicle-card__title">
+              <span class="tracking-demo-vehicle-card__icon icon-tone-${escapeHtml(iconTone)}">${themePreviewIcon("truck")}</span>
+              <span>
+                <strong>${escapeHtml(vehicle.internalNumber)}</strong>
+                <span>${escapeHtml(vehicle.licensePlate)}</span>
+              </span>
+            </div>
+          </div>
+          <div class="tracking-demo-vehicle-status">
+            <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}" data-tracking-demo-status="${escapeHtml(vehicle.id)}">${escapeHtml(summary.statusLabel)}</span>
+            <span data-tracking-demo-speed="${escapeHtml(vehicle.id)}">${escapeHtml(`${summary.speedNow} km/h`)}</span>
+            <span data-tracking-demo-deviation="${escapeHtml(vehicle.id)}">${escapeHtml(summary.isOffRoute ? `Odchylka ${summary.deviationText}` : "Odchylka 0 m")}</span>
+          </div>
         </div>
-      </div>
-      ${vehicleTrackingDemoVehicleImage(vehicle, "tracking-demo-vehicle-image--card", { markerIcon: true })}
-      <div class="tracking-demo-vehicle-status">
-        <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}" data-tracking-demo-status="${escapeHtml(vehicle.id)}">${escapeHtml(summary.statusLabel)}</span>
-        <span data-tracking-demo-speed="${escapeHtml(vehicle.id)}">${escapeHtml(`${summary.speedNow} km/h`)}</span>
-        <span data-tracking-demo-deviation="${escapeHtml(vehicle.id)}">${escapeHtml(summary.isOffRoute ? `Odchylka ${summary.deviationText}` : "Odchylka 0 m")}</span>
+        <div class="tracking-demo-vehicle-card__visual">
+          ${vehicleTrackingDemoVehicleImage(vehicle, "tracking-demo-vehicle-image--card", { markerIcon: true })}
+        </div>
       </div>
     </article>
   `;

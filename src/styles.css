@@ -28038,6 +28038,26 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   padding: 14px;
 }
 
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__layout {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.42fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__info {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 10px;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-vehicle-card__visual {
+  display: grid;
+  min-width: 0;
+}
+
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card__head {
   display: flex;
   align-items: center;
@@ -28084,34 +28104,36 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-image--card {
-  height: 104px;
+  width: 100%;
+  height: 100%;
+  min-height: 128px;
   padding: 8px;
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-image--card.tracking-demo-vehicle-image--marker-icon {
-  padding: 12px;
+  padding: 14px;
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-image__marker-icon {
   width: auto;
-  max-width: 88%;
+  max-width: 94%;
   height: auto;
-  max-height: 88%;
+  max-height: 94%;
   object-fit: contain;
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-status {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.85fr) minmax(0, 1.15fr);
-  gap: 5px;
+  grid-template-columns: 1fr;
+  gap: 6px;
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-status .tracking-status {
   width: 100%;
   min-height: 26px;
   justify-content: center;
-  padding: 5px 6px;
-  font-size: 0.64rem;
+  padding: 5px 8px;
+  font-size: 0.68rem;
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-status > span:not(.tracking-status) {
@@ -28119,9 +28141,9 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   border: 1px solid var(--state-neutral-border);
   border-radius: 999px;
   background: var(--state-neutral-bg);
-  padding: 5px 6px;
+  padding: 5px 8px;
   color: var(--state-neutral-text);
-  font-size: 0.64rem;
+  font-size: 0.68rem;
   font-weight: 850;
   text-align: center;
   white-space: nowrap;
