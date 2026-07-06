@@ -27054,9 +27054,9 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
 .tracking-page--soft-metal-preview .tracking-preview-metric--active .tracking-preview-metric__icon {
   --icon-color: var(--brand-accent);
-  --icon-border: var(--state-success-border);
+  --icon-border: var(--active-pill-border);
   --icon-filter: var(--icon-filter-brand);
-  border-color: var(--state-success-border);
+  border-color: var(--active-pill-border);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric--active .tracking-preview-metric__icon .theme-icon-img {
@@ -27111,9 +27111,9 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric--active {
-  border-color: var(--state-success-border);
+  border-color: var(--active-pill-border);
   background: var(--active-pill-bg);
-  box-shadow: var(--shadow-control-active);
+  box-shadow: var(--active-pill-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric__copy {
@@ -27153,6 +27153,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-live-strip {
   border-color: var(--active-pill-border);
   background: var(--active-pill-bg);
+  box-shadow: var(--active-pill-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-live-strip strong,
@@ -27863,9 +27864,9 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card--selected {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  box-shadow: var(--shadow-control-active);
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
+  box-shadow: var(--active-pill-shadow);
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-vehicle-card--alert {
