@@ -35,7 +35,40 @@ const DIRECTORY_WITH_BRANCH_EXTENDED_COLUMNS = [
   "Mobile"
 ];
 
+const DIRECTORY_WITH_BRANCH_CZECH_COLUMNS = [
+  "Systémové ID",
+  "Název",
+  "Rodič",
+  "IČO",
+  "DIČ",
+  "Fakturační e-mail",
+  "E-mail",
+  "Splatnost",
+  "Město",
+  "PSČ",
+  "Ulice",
+  "Stav",
+  "Typ",
+  "Zákazník",
+  "Dodavatel"
+];
+
+const CONTRACT_CUSTOMER_COLUMNS = [
+  "Id",
+  "ContractNumber",
+  "Name",
+  "Directory_FK",
+  "DirectoryBranch_FK",
+  "Sidlo_FK",
+  "Status_FK"
+];
+
 const RECEIVABLES_COMPANY_ATTEMPTS = [
+  {
+    key: "directory_with_branch_czech_export",
+    entityName: "DirectoryWithBranch",
+    columns: DIRECTORY_WITH_BRANCH_CZECH_COLUMNS
+  },
   {
     key: "directory_with_branch_extended",
     entityName: "DirectoryWithBranch",
@@ -80,6 +113,11 @@ const RECEIVABLES_COMPANY_ATTEMPTS = [
     key: "address_book_probe",
     entityName: "AddressBook",
     columns: ["Id", "Name", "RegNumber", "VATNumber", "Email"]
+  },
+  {
+    key: "contract_customer_fallback",
+    entityName: "Contract",
+    columns: CONTRACT_CUSTOMER_COLUMNS
   }
 ];
 
@@ -167,6 +205,26 @@ function compactDigits(value) {
   return clean(value).replace(/\D/g, "");
 }
 
+function splitTrailingRegistration(value) {
+  const text = clean(value);
+  const match = /^(.*?)(?:\s+-\s+)(\d{8})$/.exec(text);
+  if (!match) {
+    return { name: text, regNumber: "" };
+  }
+  return {
+    name: clean(match[1]),
+    regNumber: match[2]
+  };
+}
+
+function displayName(value) {
+  return splitTrailingRegistration(value).name || clean(value);
+}
+
+function registrationFromCaption(value) {
+  return splitTrailingRegistration(value).regNumber;
+}
+
 function normalizeKey(value) {
   return clean(value)
     .normalize("NFD")
@@ -245,11 +303,24 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
 }
 
 export function mapReceivablesLedgerCompany(row = {}, entityName = "DirectoryWithBranch") {
-  const branchId = firstValue(row, ["Id", "Systémové ID", "DirectoryWithBranchId", "CompanyBranchId", "CustomerBranchId"]);
-  const parentId = recordId(row, "Parent_FK");
-  const branchName = firstValue(row, ["Name", "Název", "Caption", "CompanyName", "CustomerName"]);
-  const parentName = caption(row, "Parent_FK") || firstValue(row, ["Rodič"]);
-  const ico = compactDigits(firstValue(row, ["RegNumber", "IČO", "ICO", "Ico", "IC", "Ic", "CustomerRegNumber"]));
+  const isContract = entityName === "Contract";
+  const contractCompanyId = recordId(row, "Directory_FK") || recordId(row, "Sidlo_FK");
+  const contractBranchId = recordId(row, "DirectoryBranch_FK") || contractCompanyId || firstValue(row, ["Id"]);
+  const rawBranchName = isContract
+    ? caption(row, "DirectoryBranch_FK") || caption(row, "Directory_FK") || caption(row, "Sidlo_FK") || firstValue(row, ["Name", "Název", "Caption"])
+    : firstValue(row, ["Name", "Název", "Caption", "CompanyName", "CustomerName"]);
+  const rawParentName = isContract
+    ? caption(row, "Directory_FK") || caption(row, "Sidlo_FK")
+    : caption(row, "Parent_FK") || firstValue(row, ["Rodič"]);
+  const branchId = isContract
+    ? contractBranchId
+    : firstValue(row, ["Id", "Systémové ID", "DirectoryWithBranchId", "CompanyBranchId", "CustomerBranchId"]);
+  const parentId = isContract ? contractCompanyId : recordId(row, "Parent_FK");
+  const branchName = displayName(rawBranchName);
+  const parentName = displayName(rawParentName);
+  const ico = compactDigits(firstValue(row, ["RegNumber", "IČO", "ICO", "Ico", "IC", "Ic", "CustomerRegNumber"]))
+    || registrationFromCaption(rawBranchName)
+    || registrationFromCaption(rawParentName);
   const dic = firstValue(row, ["VATNumber", "DIČ", "DIC", "Dic", "CustomerVatNumber", "VAT", "VatId"]);
   const billingEmail = firstValue(row, [
     "BillingEmail",
@@ -291,7 +362,7 @@ export function mapReceivablesLedgerCompany(row = {}, entityName = "DirectoryWit
     billingAddress,
     deliveryAddress: billingAddress,
     activeStatus: caption(row, "Status_FK") || firstValue(row, ["Status", "Stav"]),
-    isBranch: Boolean(parentId),
+    isBranch: Boolean(parentId && parentId !== branchId),
     flags,
     raw: row
   };

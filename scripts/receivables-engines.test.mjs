@@ -284,6 +284,18 @@ Dodavatel
 }
 
 {
+  const companyFromCzechDirectory = mapReceivablesVistosCompany({
+    "Systémové ID": "117412",
+    "Rodič": "PSMaS Group s.r.o. - 23685123",
+    "Fakturační e-mail": "fakturace@psmas.cz"
+  });
+  assert.equal(companyFromCzechDirectory.vistoCompanyId, "117412");
+  assert.equal(companyFromCzechDirectory.companyName, "PSMaS Group s.r.o.");
+  assert.equal(companyFromCzechDirectory.ico, "23685123");
+  assert.equal(companyFromCzechDirectory.contactEmail, "fakturace@psmas.cz");
+}
+
+{
   const invoiceFromVistos = mapReceivablesVistosInvoice({
     Id: "I123",
     Number: "2601101477",
@@ -466,6 +478,55 @@ Dodavatel
 }
 
 {
+  const czechCompany = mapReceivablesLedgerCompany({
+    "Systémové ID": "117412",
+    "Rodič": "PSMaS Group s.r.o. - 23685123",
+    "Fakturační e-mail": "fakturace@psmas.cz",
+    "Splatnost": "14",
+    "Město": "Brno",
+    "PSČ": "60200",
+    "Ulice": "Testovací 1"
+  }, "DirectoryWithBranch");
+  assert.equal(czechCompany.vistoCompanyId, "117412");
+  assert.equal(czechCompany.vistoBranchId, "117412");
+  assert.equal(czechCompany.companyName, "PSMaS Group s.r.o.");
+  assert.equal(czechCompany.ico, "23685123");
+  assert.equal(czechCompany.billingEmail, "fakturace@psmas.cz");
+  assert.equal(czechCompany.standardDueDays, 14);
+}
+
+{
+  const contractCompany = mapReceivablesLedgerCompany({
+    Id: "K1",
+    ContractNumber: "S001",
+    Directory_FK_RecordId: "C123",
+    Directory_FK_Caption: "Firma Alfa s.r.o. - 12345678",
+    DirectoryBranch_FK_RecordId: "BR1",
+    DirectoryBranch_FK_Caption: "Firma Alfa Brno"
+  }, "Contract");
+  const invoiceFromVistos = mapReceivablesVistosInvoice({
+    Id: "I127",
+    InvoiceNumber: "2601101481",
+    BankReference2: "2601101481",
+    Customer_FK_RecordId: "C123",
+    CustomerBranch_FK_RecordId: "BR1",
+    CustomerRegNumber: "12345678",
+    DueDate: "2026-06-14",
+    PriceWithTax: "1210",
+    AmountPaid: "0",
+    RemainToPay: "1210"
+  });
+  const resolved = resolveInvoiceCustomer(invoiceFromVistos, [contractCompany]);
+  assert.equal(contractCompany.vistoCompanyId, "C123");
+  assert.equal(contractCompany.vistoBranchId, "BR1");
+  assert.equal(contractCompany.ico, "12345678");
+  assert.equal(resolved.confidence, "HIGH");
+  assert.equal(resolved.matchedBy, "branch_fk");
+  assert.equal(resolved.resolvedCompanyId, "C123");
+  assert.equal(resolved.resolvedBranchId, "BR1");
+}
+
+{
   const invoiceWithoutCustomer = mapReceivablesVistosInvoice({
     Id: "I124",
     InvoiceNumber: "2601101478",
@@ -590,6 +651,62 @@ Dodavatel
     assert.equal(preview.ledgerReadiness.ledgerImportReady, false);
     assert.equal(preview.ledgerReadiness.blockingReasons.includes("INVOICE_DUE_DATE_RATE_UNDER_90"), true);
     assert.equal(preview.ledgerReadiness.blockingReasons.includes("INVOICE_AMOUNT_RATE_UNDER_95"), true);
+  } finally {
+    mock.restore();
+  }
+}
+
+{
+  const mock = mockVistosFetch({
+    DirectoryWithBranch: [],
+    Company: [],
+    Directory: [],
+    Customer: [],
+    CustomerBranch: [],
+    CompanyBranch: [],
+    Partner: [],
+    AddressBook: [],
+    Contract: [{
+      Id: "K1",
+      ContractNumber: "S001",
+      Directory_FK_RecordId: "C123",
+      Directory_FK_Caption: "Firma Alfa s.r.o. - 12345678",
+      DirectoryBranch_FK_RecordId: "BR1",
+      DirectoryBranch_FK_Caption: "Firma Alfa Brno"
+    }],
+    InvoiceIssued: [{
+      Id: "I123",
+      InvoiceNumber: "2601101477",
+      BankReference2: "2601101477",
+      Customer_FK_RecordId: "C123",
+      Customer_FK_Caption: "Firma Alfa s.r.o.",
+      CustomerBranch_FK_RecordId: "BR1",
+      CustomerBranch_FK_Caption: "Firma Alfa Brno",
+      CustomerRegNumber: "12345678",
+      CustomerVatNumber: "CZ12345678",
+      IssuedDate: "2026-06-01",
+      DueDate: "2026-06-14",
+      PriceWithTax: "1210",
+      AmountPaid: "0",
+      RemainToPay: "1210"
+    }]
+  });
+  try {
+    const preview = await createReceivablesLedgerReadinessPreview({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "test-password"
+    }, { pageSize: 10, maxPages: 1 });
+    assert.equal(preview.diagnostics.companyEntity, "Contract");
+    assert.equal(preview.diagnostics.companyAttemptKey, "contract_customer_fallback");
+    assert.equal(preview.companies[0].vistoCompanyId, "C123");
+    assert.equal(preview.companies[0].vistoBranchId, "BR1");
+    assert.equal(preview.resolvedInvoices[0].confidence, "HIGH");
+    assert.equal(preview.ledgerReadiness.confidenceCounts.HIGH, 1);
+    assert.equal(preview.writesD1, false);
+    assert.equal(preview.sendsCustomerCommunication, false);
+    assert.equal(preview.calculatesRealRating, false);
+    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));
   } finally {
     mock.restore();
   }

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.374"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.375"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: lepší mapování firem z Vistosu",
+    text: "Read-only Vistos preview pro Pohledávky nově zkouší české sloupce DirectoryWithBranch a jako bezpečný fallback používá Contract vazby Directory_FK / DirectoryBranch_FK. Resolver umí vytáhnout IČO z captionu typu Firma - IČO a propojit fakturu přes Customer_FK / CustomerBranch_FK bez ostrého zápisu do ledgeru."
+  },
   {
     title: "Produkce: stabilní načtení stylů",
     text: "Build vkládá hlavní styly přímo do HTML, aby Cloudflare Pages alias nemohl po nasazení spadnout na chybějícím /src/styles.css. Nemění se backend, auth, DB, secrets ani žádné zákaznické odesílání."

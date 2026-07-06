@@ -30,7 +30,29 @@ const KAISER_INVOICE_COLUMNS = [
   "IsPaid"
 ];
 
+const DIRECTORY_WITH_BRANCH_CZECH_COLUMNS = [
+  "Systémové ID",
+  "Název",
+  "Rodič",
+  "IČO",
+  "DIČ",
+  "Fakturační e-mail",
+  "E-mail",
+  "Splatnost",
+  "Město",
+  "PSČ",
+  "Ulice"
+];
+
 const COMPANY_ATTEMPTS = [
+  {
+    entityName: "DirectoryWithBranch",
+    columns: DIRECTORY_WITH_BRANCH_CZECH_COLUMNS
+  },
+  {
+    entityName: "DirectoryWithBranch",
+    columns: ["Id", "Name", "c_ShortName", "Parent_FK", "RegNumber", "VATNumber", "InvoiceDueDays", "Email", "InvoiceEmail", "BillingEmail"]
+  },
   {
     entityName: "Company",
     columns: ["Id", "Name", "Caption", "ICO", "DIC", "Email", "Phone", "Mobile", "Street", "City", "Zip"]
@@ -155,6 +177,26 @@ function compactDigits(value) {
   return clean(value).replace(/\D/g, "");
 }
 
+function splitTrailingRegistration(value) {
+  const text = clean(value);
+  const match = /^(.*?)(?:\s+-\s+)(\d{8})$/.exec(text);
+  if (!match) {
+    return { name: text, regNumber: "" };
+  }
+  return {
+    name: clean(match[1]),
+    regNumber: match[2]
+  };
+}
+
+function displayName(value) {
+  return splitTrailingRegistration(value).name || clean(value);
+}
+
+function registrationFromCaption(value) {
+  return splitTrailingRegistration(value).regNumber;
+}
+
 function booleanValue(value) {
   const normalized = clean(value).toLowerCase();
   if (["true", "1", "ano", "yes", "paid", "uhrazeno"].includes(normalized)) {
@@ -228,10 +270,18 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
 }
 
 export function mapReceivablesVistosCompany(row = {}) {
+  const rawCompanyName = caption(row, "Directory_FK")
+    || caption(row, "Sidlo_FK")
+    || firstValue(row, ["Rodič"])
+    || firstValue(row, ["Name", "Název", "Caption", "CompanyName", "ObchodniNazev"]);
+  const rawBranchName = caption(row, "DirectoryBranch_FK") || firstValue(row, ["Name", "Název", "Caption"]);
   return {
     vistoCompanyId: recordId(row, "Directory_FK") || recordId(row, "Sidlo_FK") || firstValue(row, ["Id", "Systémové ID", "CompanyId", "DirectoryId"]),
-    companyName: caption(row, "Directory_FK") || caption(row, "Sidlo_FK") || firstValue(row, ["Name", "Název", "Caption", "CompanyName", "ObchodniNazev"]),
-    ico: compactDigits(firstValue(row, ["RegNumber", "ICO", "IČO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"])),
+    companyName: displayName(rawCompanyName),
+    branchName: displayName(rawBranchName),
+    ico: compactDigits(firstValue(row, ["RegNumber", "ICO", "IČO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"]))
+      || registrationFromCaption(rawCompanyName)
+      || registrationFromCaption(rawBranchName),
     dic: firstValue(row, ["VATNumber", "DIC", "DIČ", "Dic", "VAT", "VatId"]),
     contactEmail: firstValue(row, ["BillingEmail", "InvoiceEmail", "Fakturační e-mail", "Email", "E-mail", "ContactEmail"]),
     contactPhone: firstValue(row, ["Phone", "Telefon", "Mobile", "ContactPhone"]),
