@@ -26742,7 +26742,8 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   top: 16px;
   display: flex;
   width: var(--sidebar-width-expanded);
-  min-height: calc(100vh - 108px);
+  min-height: 0;
+  height: fit-content;
   flex-direction: column;
   gap: var(--space-md);
   overflow: hidden;
