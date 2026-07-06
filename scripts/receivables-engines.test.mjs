@@ -11,6 +11,10 @@ import {
   buildInvoiceImportPreview,
   normalizeInvoicePreviewRow
 } from "../functions/_lib/receivables-import-preview.js";
+import {
+  mapReceivablesVistosCompany,
+  mapReceivablesVistosInvoice
+} from "../functions/_lib/receivables-vistos-preview.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import {
   calculateInvoicePaymentState,
@@ -216,6 +220,40 @@ Dodavatel
   const ignored = bankTransactionToPreviewRow(parsed.transactions[1], 1);
   assert.equal(ready.previewStatus, "ready");
   assert.equal(ignored.previewStatus, "ignored");
+}
+
+{
+  const company = mapReceivablesVistosCompany({
+    Id: "C123",
+    Name: "Firma Alfa s.r.o.",
+    ICO: "12345678",
+    DIC: "CZ12345678",
+    Email: "fakturace@firma.cz"
+  });
+  assert.equal(company.vistoCompanyId, "C123");
+  assert.equal(company.companyName, "Firma Alfa s.r.o.");
+  assert.equal(company.ico, "12345678");
+  assert.equal(company.contactEmail, "fakturace@firma.cz");
+}
+
+{
+  const invoiceFromVistos = mapReceivablesVistosInvoice({
+    Id: "I123",
+    Number: "2601101477",
+    Directory_FK_RecordId: "C123",
+    Directory_FK_Caption: "Firma Alfa s.r.o.",
+    IssueDate: "2026-06-01",
+    DueDate: "2026-06-14",
+    TotalAmount: "1 210,00",
+    OpenAmount: "210,00",
+    Currency_FK_Caption: "CZK"
+  });
+  assert.equal(invoiceFromVistos.vistoInvoiceId, "I123");
+  assert.equal(invoiceFromVistos.variableSymbol, "2601101477");
+  assert.equal(invoiceFromVistos.customerId, "C123");
+  assert.equal(invoiceFromVistos.customerName, "Firma Alfa s.r.o.");
+  assert.equal(invoiceFromVistos.totalAmount, 1210);
+  assert.equal(invoiceFromVistos.openAmount, 210);
 }
 
 console.log("receivables engine tests passed");

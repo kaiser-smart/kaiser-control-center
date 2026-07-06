@@ -227,7 +227,7 @@ const FLEET_ROUTE = "/vozovy-park";
 const RECEIVABLES_ROUTE = "/pohledavky";
 const RECEIVABLES_ALIAS_ROUTE = "/receivables";
 const RECEIVABLES_MODULE_KEY = "receivables";
-const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI běží ve Fázi 1C jako dry-run se staging importem. Nic neposílá, nespouští Šarlotu, nemá cron a preview import se ukládá odděleně od ostrých faktur a plateb.";
+const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI běží ve Fázi 1D jako dry-run se staging importem a read-only Vistos preview. Nic neposílá, nespouští Šarlotu, nemá cron a bez potvrzení neukládá Vistos data do ostrých tabulek.";
 const RECEIVABLES_TABS = [
   { id: "dashboard", label: "Dashboard", route: RECEIVABLES_ROUTE },
   { id: "customers", label: "Zákazníci", route: `${RECEIVABLES_ROUTE}#receivables-customers` },
@@ -847,6 +847,10 @@ const receivablesState = {
   importSaving: "",
   importError: "",
   importResult: null,
+  vistosPreview: null,
+  vistosPreviewLoading: false,
+  vistosPreviewError: "",
+  vistosPreviewMessage: "",
   dryRunLoading: false,
   dryRunResult: null,
   dryRunError: ""
@@ -22723,7 +22727,7 @@ function receivablesCustomersTable() {
     return `<p class="receivables-empty">Načítám pohledávky...</p>`;
   }
   if (!customers.length) {
-    return `<p class="receivables-empty">Zatím nejsou v ostrém ledgeru žádní zákazníci s otevřeným balíčkem. Fáze 1C ukládá jen import preview do staging tabulek.</p>`;
+    return `<p class="receivables-empty">Zatím nejsou v ostrém ledgeru žádní zákazníci s otevřeným balíčkem. Aktuální fáze ukazuje read-only Vistos preview a případné staging importy mimo ostrý ledger.</p>`;
   }
 
   return `
@@ -22885,14 +22889,170 @@ function receivablesImportBatchesTable() {
   `;
 }
 
+function receivablesVistosPreviewSummary(preview) {
+  const summary = preview?.summary || {};
+  const cards = [
+    ["Vistos konfigurace", preview?.apiStatus === "ready" ? "Cloud API aktivní" : preview?.apiStatus === "not_configured" ? "Čeká na secrets" : "Čeká na data"],
+    ["Firmy celkem", summary.companiesTotal || 0],
+    ["Firmy v náhledu", summary.companiesPreviewRows || 0],
+    ["Faktury celkem", summary.invoicesTotal || 0],
+    ["Faktury v náhledu", summary.invoicesPreviewRows || 0],
+    ["Faktury se splatností", summary.invoicesWithDueDate || 0],
+    ["Faktury s firmou", summary.invoicesWithCustomerReference || 0],
+    ["Faktury s částkou", summary.invoicesWithAmount || 0]
+  ];
+
+  return `
+    <div class="receivables-import-summary" aria-label="Souhrn Vistos preview">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function receivablesVistosPreviewDiagnostics(preview) {
+  if (!preview) return "";
+  const diagnostics = preview.diagnostics || {};
+  const issues = preview.issues || [];
+  const issueRows = issues.map((issue) => `
+    <tr>
+      <td data-label="Oblast">${escapeHtml(issue.scope || "-")}</td>
+      <td data-label="Kód">${escapeHtml(issue.code)}</td>
+      <td data-label="Počet">${escapeHtml(issue.count)}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="receivables-import-diagnostics">
+      <section>
+        <h3>Diagnostika Vistos entit</h3>
+        <dl class="receivables-diagnostics-list">
+          <div><dt>Firmy entita</dt><dd>${escapeHtml(diagnostics.companyEntity || "-")}</dd></div>
+          <div><dt>Faktury entita</dt><dd>${escapeHtml(diagnostics.invoiceEntity || "-")}</dd></div>
+          <div><dt>Klíče firem</dt><dd>${escapeHtml((diagnostics.companyKeys || []).slice(0, 12).join(", ") || "-")}</dd></div>
+          <div><dt>Klíče faktur</dt><dd>${escapeHtml((diagnostics.invoiceKeys || []).slice(0, 12).join(", ") || "-")}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Datové mezery pro rating</h3>
+        ${issueRows ? `
+          <div class="receivables-table-wrap">
+            <table class="receivables-table receivables-table--compact">
+              <thead><tr><th>Oblast</th><th>Kód</th><th>Počet</th></tr></thead>
+              <tbody>${issueRows}</tbody>
+            </table>
+          </div>
+        ` : `<p class="receivables-empty">Náhled nehlásí datové mezery ve vzorku.</p>`}
+      </section>
+    </div>
+  `;
+}
+
+function receivablesVistosCompaniesTable(preview) {
+  const companies = preview?.companies || [];
+  if (!companies.length) {
+    return `<p class="receivables-empty">Vistos firmy zatím nejsou načtené.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table">
+        <thead><tr><th>Vistos ID</th><th>Firma</th><th>IČO</th><th>DIČ</th><th>E-mail</th><th>Telefon</th><th>Město</th></tr></thead>
+        <tbody>
+          ${companies.slice(0, 30).map((company) => `
+            <tr>
+              <td data-label="Vistos ID">${escapeHtml(company.vistoCompanyId || "-")}</td>
+              <td data-label="Firma">${escapeHtml(company.companyName || "-")}</td>
+              <td data-label="IČO">${escapeHtml(company.ico || "-")}</td>
+              <td data-label="DIČ">${escapeHtml(company.dic || "-")}</td>
+              <td data-label="E-mail">${escapeHtml(company.contactEmail || "-")}</td>
+              <td data-label="Telefon">${escapeHtml(company.contactPhone || "-")}</td>
+              <td data-label="Město">${escapeHtml(company.city || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesVistosInvoicesTable(preview) {
+  const invoices = preview?.invoices || [];
+  if (!invoices.length) {
+    return `<p class="receivables-empty">Vistos faktury zatím nejsou načtené.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table">
+        <thead><tr><th>Faktura</th><th>VS</th><th>Zákazník</th><th>Vystavení</th><th>Splatnost</th><th>Částka</th><th>Zbývá</th><th>Stav</th></tr></thead>
+        <tbody>
+          ${invoices.slice(0, 40).map((invoice) => `
+            <tr>
+              <td data-label="Faktura">${escapeHtml(invoice.invoiceNumber || invoice.vistoInvoiceId || "-")}</td>
+              <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
+              <td data-label="Zákazník">${escapeHtml(invoice.customerName || invoice.customerId || "-")}</td>
+              <td data-label="Vystavení">${escapeHtml(invoice.issueDate || "-")}</td>
+              <td data-label="Splatnost">${escapeHtml(invoice.dueDate || "-")}</td>
+              <td data-label="Částka">${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
+              <td data-label="Zbývá">${escapeHtml(formatReceivableMoney(invoice.openAmount))}</td>
+              <td data-label="Stav">${escapeHtml(invoice.status || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesVistosPreviewPanel() {
+  const preview = receivablesState.vistosPreview;
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-vistos-preview-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Vistos Company / InvoiceIssued</p>
+          <h2 id="receivables-vistos-preview-title">Read-only preview firem a faktur</h2>
+          <p>Tento krok jen ověřuje zdrojová pole pro pozdější rating. Nic neukládá do D1 a nic neposílá zákazníkům.</p>
+        </div>
+        ${receivablesPill("read-only", "ready")}
+      </div>
+      <form class="receivables-import-form receivables-import-form--inline" data-receivables-vistos-preview-form>
+        <button class="primary-button" type="submit" ${receivablesState.vistosPreviewLoading ? "disabled" : ""}>
+          ${receivablesState.vistosPreviewLoading ? "Načítám Vistos preview..." : "Načíst firmy a faktury z Vistosu"}
+        </button>
+      </form>
+      ${receivablesState.vistosPreviewMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.vistosPreviewMessage)}</p>` : ""}
+      ${receivablesState.vistosPreviewError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.vistosPreviewError)}</p>` : ""}
+      ${receivablesVistosPreviewSummary(preview)}
+      ${receivablesVistosPreviewDiagnostics(preview)}
+      <div class="receivables-import-diagnostics">
+        <section>
+          <h3>Firmy z Vistosu</h3>
+          ${receivablesVistosCompaniesTable(preview)}
+        </section>
+        <section>
+          <h3>Vydané faktury z Vistosu</h3>
+          ${receivablesVistosInvoicesTable(preview)}
+        </section>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesImportSection() {
   const invoiceDisabled = receivablesState.importSaving === "invoices" ? "disabled" : "";
   const bankDisabled = receivablesState.importSaving === "bank" ? "disabled" : "";
   return `
+    ${receivablesVistosPreviewPanel()}
     <section class="receivables-panel" aria-labelledby="receivables-import-title">
       <div class="receivables-panel__head">
         <div>
-          <p class="module-feedback__eyebrow">Fáze 1C</p>
+          <p class="module-feedback__eyebrow">Staging import</p>
           <h2 id="receivables-import-title">Bezpečný import preview</h2>
           <p>Import se ukládá jen do staging tabulek. Ostré faktury, platby, komunikace a autonomie zůstávají vypnuté.</p>
         </div>
@@ -23084,7 +23244,7 @@ function receivablesCaseSection() {
         <div>
           <p class="module-feedback__eyebrow">Právní podklady</p>
           <h2 id="receivables-case-title">${escapeHtml(caseFile.id)}</h2>
-          <p>Fáze 1C připravuje jen interní case file. ZIP/PDF export je další fáze.</p>
+          <p>Aktuální fáze připravuje jen interní case file. ZIP/PDF export je další fáze.</p>
         </div>
         ${receivablesPill(caseFile.status, receivablesStatusTone(caseFile.status))}
       </div>
@@ -23126,7 +23286,7 @@ function receivablesPage(moduleItem, user, isDashboard = false, context = { view
           <p>Dry-run modul pro balíčky otevřených faktur, párování plateb, rating platební morálky a bezpečná AI doporučení.</p>
           <div class="module-detail__status">
             <span>Stav</span>
-            <strong>Fáze 1C · dry-run + staging import</strong>
+            <strong>Fáze 1D · dry-run + Vistos preview</strong>
           </div>
         </div>
       </section>
@@ -24146,6 +24306,32 @@ async function submitReceivablesImportPreview(form) {
     receivablesState.importError = error.payload?.error || error.message || "Import preview se nepodařilo uložit.";
   } finally {
     receivablesState.importSaving = "";
+    render();
+  }
+}
+
+async function submitReceivablesVistosPreview() {
+  if (receivablesState.vistosPreviewLoading) {
+    return;
+  }
+
+  receivablesState.vistosPreviewLoading = true;
+  receivablesState.vistosPreviewError = "";
+  receivablesState.vistosPreviewMessage = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/receivables/vistos-preview", {
+      method: "POST",
+      body: JSON.stringify({ source: "receivables-vistos-preview" })
+    });
+    receivablesState.vistosPreview = result.preview || null;
+    receivablesState.vistosPreviewMessage = result.preview?.message || "Vistos preview načtené.";
+  } catch (error) {
+    receivablesState.vistosPreviewError = error.payload?.error || error.message || "Vistos preview se nepodařilo načíst.";
+    receivablesState.vistosPreviewMessage = "";
+  } finally {
+    receivablesState.vistosPreviewLoading = false;
     render();
   }
 }
@@ -29272,6 +29458,10 @@ async function logout() {
   receivablesState.importSaving = "";
   receivablesState.importError = "";
   receivablesState.importResult = null;
+  receivablesState.vistosPreview = null;
+  receivablesState.vistosPreviewLoading = false;
+  receivablesState.vistosPreviewError = "";
+  receivablesState.vistosPreviewMessage = "";
   receivablesState.dryRunLoading = false;
   receivablesState.dryRunResult = null;
   receivablesState.dryRunError = "";
@@ -32062,6 +32252,13 @@ document.addEventListener("submit", async (event) => {
   if (receivablesImportForm) {
     event.preventDefault();
     await submitReceivablesImportPreview(receivablesImportForm);
+    return;
+  }
+
+  const receivablesVistosPreviewForm = event.target.closest("[data-receivables-vistos-preview-form]");
+  if (receivablesVistosPreviewForm) {
+    event.preventDefault();
+    await submitReceivablesVistosPreview();
     return;
   }
 

@@ -137,7 +137,7 @@ function emptyDashboard(apiStatus = "waiting", message = "D1 databáze pro Pohle
     dryRunDecisions: [],
     settings: defaultReceivablesSettings(),
     sourceStatus: {
-      vistos: "not_configured",
+      vistos: "read_only_preview",
       bank: "pdf_text_preview_to_d1",
       insolvency: "not_configured",
       outbound: "disabled"

@@ -27622,6 +27622,11 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   background: #f8fafc;
 }
 
+.receivables-import-form--inline {
+  display: inline-grid;
+  margin-bottom: 12px;
+}
+
 .receivables-import-form label {
   display: block;
   margin-bottom: 6px;
@@ -27652,6 +27657,45 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.84rem;
   line-height: 1.45;
+}
+
+.receivables-import-diagnostics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.receivables-import-diagnostics h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.receivables-diagnostics-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.receivables-diagnostics-list div {
+  display: grid;
+  grid-template-columns: minmax(120px, 32%) 1fr;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--receivables-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.receivables-diagnostics-list dt {
+  color: var(--receivables-muted);
+  font-weight: 800;
+}
+
+.receivables-diagnostics-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .receivables-table-wrap {
@@ -27690,6 +27734,10 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 
 .receivables-table--import {
   min-width: 820px;
+}
+
+.receivables-table--compact {
+  min-width: 520px;
 }
 
 .receivables-pill {
@@ -27774,6 +27822,14 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   }
 
   .receivables-import-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .receivables-import-diagnostics {
+    grid-template-columns: 1fr;
+  }
+
+  .receivables-diagnostics-list div {
     grid-template-columns: 1fr;
   }
 
