@@ -46,6 +46,16 @@ function safeJson(value) {
   }
 }
 
+function parseJsonValue(value, fallback = {}) {
+  if (!value) return fallback;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
 function truncate(value, max = 180) {
   const text = cleanString(value);
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -58,6 +68,28 @@ function parseNumber(value) {
     .replace(",", ".");
   const match = text.match(/\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : 0;
+}
+
+function vehicleFitmentFromRequest(request = {}) {
+  const lookup = parseJsonValue(request.partLookupResultJson, {});
+  const details = lookup?.vehicleDetails || lookup?.vehicle?.vehicleDetails || lookup?.vehicle || {};
+  const brand = cleanString(details.brand || request.vehicleBrandLabel || request.vehicleBrand);
+  const model = cleanString(details.model || details.modelName);
+  const modelYear = cleanString(details.modelYear || details.year || details.productionYear);
+  const engine = cleanString(details.engine || details.engineName || details.motorization || details.motorisation);
+  const body = cleanString(details.body || details.bodyType || details.variant);
+  const fuel = cleanString(details.fuel || details.fuelType);
+  const label = cleanString(details.label || [brand, model, modelYear, engine].filter(Boolean).join(" "));
+
+  return {
+    brand,
+    model,
+    modelYear,
+    engine,
+    body,
+    fuel,
+    label
+  };
 }
 
 function providerConfig(env = {}) {
@@ -140,9 +172,11 @@ export function driverPartHasVerifiedPriceSeed(request = {}) {
 }
 
 export function driverPartPriceSearchQuery(request = {}) {
+  const fitment = vehicleFitmentFromRequest(request);
   return [
     request.oePartNumber || request.partOrderNumber,
     request.partName || request.verifiedPart || request.probablePart,
+    fitment.label,
     request.vehicleName,
     request.vehicleBrandLabel || request.vehicleBrand
   ].map(cleanString).filter(Boolean).join(" ");
@@ -255,6 +289,7 @@ function parseJsonObjectFromText(text) {
 
 async function fetchProviderOffers(config, request, query, signal, fetchImpl = fetch) {
   const headers = { "Content-Type": "application/json" };
+  const vehicleFitment = vehicleFitmentFromRequest(request);
   if (config.apiKey) {
     headers.Authorization = `Bearer ${config.apiKey}`;
   }
@@ -268,6 +303,7 @@ async function fetchProviderOffers(config, request, query, signal, fetchImpl = f
       partName: cleanString(request.partName || request.verifiedPart || request.probablePart),
       requireOeNumber: Boolean(cleanString(request.oePartNumber || request.partOrderNumber)),
       vehicleName: cleanString(request.vehicleName),
+      vehicleFitment,
       country: "CZ",
       maxResults: 10,
       allowUsed: config.allowUsed
@@ -291,6 +327,7 @@ async function fetchProviderOffers(config, request, query, signal, fetchImpl = f
 }
 
 async function fetchOpenAiWebSearchOffers(config, request, query, signal, fetchImpl = fetch) {
+  const vehicleFitment = vehicleFitmentFromRequest(request);
   const response = await fetchImpl("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -316,6 +353,8 @@ async function fetchOpenAiWebSearchOffers(config, request, query, signal, fetchI
         `OE cislo: ${cleanString(request.oePartNumber || request.partOrderNumber) || "neuvedeno"}`,
         `Dil: ${cleanString(request.partName || request.verifiedPart || request.probablePart) || "neuvedeno"}`,
         `Vozidlo: ${cleanString(request.vehicleName) || "neuvedeno"}`,
+        `VIN metadata: ${vehicleFitment.label || "neuvedeno"}`,
+        `Rok/model/motorizace: ${[vehicleFitment.modelYear, vehicleFitment.model, vehicleFitment.engine].filter(Boolean).join(" ") || "neuvedeno"}`,
         cleanString(request.oePartNumber || request.partOrderNumber)
           ? "Kazda vracena nabidka musi na strance, v nazvu, URL nebo snippet/note explicitne obsahovat toto OE cislo. Bez OE cisla ji vynech."
           : "Pokud chybi OE cislo, vrat jen nabidky s jasnou shodou nazvu dilu a uved v note proc je kandidat relevantni.",
@@ -452,8 +491,10 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
 
 export const __test = {
   driverPartHasVerifiedPriceSeed,
+  driverPartPriceSearchQuery,
   providerConfig,
   extractOpenAiOutputText,
+  vehicleFitmentFromRequest,
   normalizeDriverPartOffer,
   parseJsonObjectFromText,
   parseNumber,

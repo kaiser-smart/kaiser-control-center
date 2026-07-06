@@ -19,7 +19,8 @@ import {
 import { partslink24EligibilityForVehicle } from "../functions/_lib/partslink24-search-store.js";
 import {
   driverPartPriceSearchEligibility,
-  runDriverPartPriceSearch
+  runDriverPartPriceSearch,
+  __test as driverPartPriceSearchInternals
 } from "../functions/_lib/driver-part-price-search.js";
 
 const adminUser = {
@@ -834,6 +835,58 @@ function driverPartTestEnv(db, offers) {
     vin: "WDD2573211A123456",
     probablePart: "výfuk / díl výfuku",
     oePartNumber: "A 257 490 12 00",
+    partName: "tlumič výfuku",
+    partLookupResultJson: JSON.stringify({
+      vehicleDetails: {
+        brand: "Mercedes-Benz",
+        model: "CLS 400 d 4MATIC",
+        modelYear: "2021",
+        engine: "OM656 2.9 diesel",
+        body: "C257"
+      }
+    })
+  };
+  let providerPayload = null;
+  const result = await runDriverPartPriceSearch({
+    PARTS_PRICE_SEARCH_ENDPOINT: "https://prices.example.test/search",
+    PARTS_PRICE_SEARCH_API_KEY: "test-price-key"
+  }, item, {
+    fetchImpl: async (url, options) => {
+      providerPayload = { url, body: JSON.parse(options.body), headers: options.headers };
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            offers: [
+              { title: "Tlumič výfuku A 257 490 12 00", price: "3 800 Kč", seller: "Dodavatel A", url: "https://example.test/a" },
+              { title: "Tlumič výfuku A 257 490 12 00", price: "4 100 Kč", seller: "Dodavatel B", url: "https://example.test/b" },
+              { title: "Tlumič výfuku A 257 490 12 00", price: "4 900 Kč", seller: "Dodavatel C", url: "https://example.test/c" }
+            ]
+          });
+        }
+      };
+    }
+  });
+  assert.equal(result.status, "candidates_found");
+  assert.match(driverPartPriceSearchInternals.driverPartPriceSearchQuery(item), /CLS 400 d 4MATIC/);
+  assert.equal(providerPayload.url, "https://prices.example.test/search");
+  assert.equal(providerPayload.body.vehicleFitment.model, "CLS 400 d 4MATIC");
+  assert.equal(providerPayload.body.vehicleFitment.modelYear, "2021");
+  assert.equal(providerPayload.body.vehicleFitment.engine, "OM656 2.9 diesel");
+  assert.equal(providerPayload.body.requireOeNumber, true);
+  assert.match(providerPayload.headers.Authorization, /^Bearer /);
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
+    probablePart: "výfuk / díl výfuku",
+    oePartNumber: "A 257 490 12 00",
     partName: "tlumič výfuku"
   };
   let requestSnapshot = null;
@@ -1230,14 +1283,26 @@ function driverPartTestEnv(db, offers) {
   const verifyDb = createDriverPartTestDb([driverPartRequestRow({
     id: "driver-part-request-mercedes-verify"
   })]);
-  let mercedesRequest = null;
+  const mercedesRequests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
-    mercedesRequest = { url, options, body: JSON.parse(options.body) };
+    const body = JSON.parse(options.body);
+    mercedesRequests.push({ url, options, body });
     return {
       ok: true,
       status: 200,
       async text() {
+        if (String(url).includes("/vehicles/by-vin")) {
+          return JSON.stringify({
+            vehicle: {
+              brand: "Mercedes-Benz",
+              model: "CLS 400 d 4MATIC",
+              modelYear: "2021",
+              engine: "OM656 2.9 diesel",
+              bodyType: "C257"
+            }
+          });
+        }
         return JSON.stringify({
           verified: true,
           parts: [{
@@ -1260,15 +1325,23 @@ function driverPartTestEnv(db, offers) {
   }
 
   const row = verifyDb.state.requests.get("driver-part-request-mercedes-verify");
-  assert.equal(mercedesRequest.url, "https://mercedes.example.test/parts/search-by-vin");
-  assert.equal(mercedesRequest.body.vin, "WDD2573211A123456");
-  assert.match(mercedesRequest.body.query, /přední sklo/);
+  const vehicleRequest = mercedesRequests.find((request) => String(request.url).includes("/vehicles/by-vin"));
+  const partsRequest = mercedesRequests.find((request) => String(request.url).includes("/parts/search-by-vin"));
+  assert.equal(vehicleRequest.url, "https://mercedes.example.test/vehicles/by-vin");
+  assert.equal(vehicleRequest.body.vin, "WDD2573211A123456");
+  assert.equal(partsRequest.url, "https://mercedes.example.test/parts/search-by-vin");
+  assert.equal(partsRequest.body.vin, "WDD2573211A123456");
+  assert.match(partsRequest.body.query, /přední sklo/);
   assert.equal(row.oe_part_number, "A 257 670 00 01");
   assert.equal(row.part_name, "Přední sklo Mercedes CLS");
   assert.equal(row.part_verification_status, "verified_daimler");
   assert.equal(row.part_verification_source, "daimler");
   assert.equal(row.parts_provider_status, "verified");
   assert.equal(row.price_boost_status, "waiting_verified_part");
+  const lookupResult = JSON.parse(row.part_lookup_result_json);
+  assert.equal(lookupResult.vehicleDetails.model, "CLS 400 d 4MATIC");
+  assert.equal(lookupResult.vehicleDetails.modelYear, "2021");
+  assert.equal(lookupResult.vehicleDetails.engine, "OM656 2.9 diesel");
   assert.equal(verified.oePartNumber, "A 257 670 00 01");
   assert.equal(verified.partName, "Přední sklo Mercedes CLS");
   assert.equal(verifyDb.state.events.some((event) => event.action === "verify_mercedes_part"), true);

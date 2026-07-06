@@ -26,6 +26,49 @@ function safeJson(value) {
   }
 }
 
+function parseJsonValue(value, fallback = {}) {
+  if (!value) return fallback;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeVehicleDetails(data = {}) {
+  const vehicle = Array.isArray(data?.vehicles)
+    ? data.vehicles[0]
+    : data?.vehicle || data?.result || data;
+  const model = cleanString(vehicle?.model || vehicle?.modelName || vehicle?.series || vehicle?.type);
+  const modelYear = cleanString(vehicle?.modelYear || vehicle?.year || vehicle?.productionYear || vehicle?.registrationYear);
+  const engine = cleanString(vehicle?.engine || vehicle?.engineName || vehicle?.motorization || vehicle?.motorisation);
+  const body = cleanString(vehicle?.body || vehicle?.bodyType || vehicle?.variant);
+  const fuel = cleanString(vehicle?.fuel || vehicle?.fuelType);
+  const brand = cleanString(vehicle?.brand || vehicle?.make || "Mercedes-Benz");
+
+  return {
+    brand,
+    model,
+    modelYear,
+    engine,
+    body,
+    fuel,
+    label: [brand, model, modelYear, engine].filter(Boolean).join(" ")
+  };
+}
+
+function mergeProviderResultJson(partResult = {}, vehicleResult = null, vehicleDetails = {}) {
+  const partPayload = parseJsonValue(partResult.resultJson, {});
+  const vehiclePayload = parseJsonValue(vehicleResult?.resultJson, {});
+  return safeJson({
+    vehicleDetails,
+    vehicleProviderStatus: cleanString(vehicleResult?.status),
+    vehicle: vehiclePayload,
+    part: partPayload
+  });
+}
+
 async function fetchAccessToken(config) {
   if (!config.authUrl || !config.clientId || !config.clientSecret) {
     return "";
@@ -224,9 +267,21 @@ export async function verifyMercedesPartForRequest(env, request) {
   }
 
   try {
+    let vehicleResult = null;
+    try {
+      vehicleResult = await provider.getVehicleByVin(vin);
+    } catch (error) {
+      vehicleResult = {
+        status: "error",
+        resultJson: safeJson({ error: cleanString(error?.message) })
+      };
+    }
+    const vehicleDetails = normalizeVehicleDetails(parseJsonValue(vehicleResult?.resultJson, {}));
     const result = await provider.searchPartsByVinAndCategory(vin, query, request.defectType);
     return {
       ...result,
+      resultJson: mergeProviderResultJson(result, vehicleResult, vehicleDetails),
+      vehicleDetails,
       partVerificationSource: result.partVerificationStatus === "verified_daimler" ? "daimler" : "manual",
       partsProviderId: "mercedes_webparts",
       mercedesManualPortalUrl: config.manualPortalUrl,
