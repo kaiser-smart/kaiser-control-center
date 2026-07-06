@@ -8,8 +8,10 @@ import {
 import { mapReceivablesVistosInvoice } from "./receivables-vistos-preview.js";
 
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
-const DEFAULT_PAGE_SIZE = 1000;
-const DEFAULT_MAX_PAGES = 5;
+const DEFAULT_PAGE_SIZE = 250;
+const DEFAULT_MAX_PAGES = 1;
+const MAX_PAGE_SIZE = 1000;
+const MAX_PAGES = 5;
 
 const DIRECTORY_WITH_BRANCH_CORE_COLUMNS = [
   "Id",
@@ -265,8 +267,8 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
     const columns = attempt.columns;
     try {
       const page = await getAllVistosPages(env, session, entityName, columns, null, {
-        pageSize: Math.min(Number(options.pageSize) || DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE),
-        maxPages: Math.min(Number(options.maxPages) || DEFAULT_MAX_PAGES, 20)
+        pageSize: Math.min(Number(options.pageSize) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
+        maxPages: Math.min(Number(options.maxPages) || DEFAULT_MAX_PAGES, MAX_PAGES)
       });
       diagnostics.push({
         key: attempt.key,
@@ -411,8 +413,8 @@ function customerCandidatesByName(invoice, indexes) {
     .slice(0, 5);
 }
 
-export function resolveInvoiceCustomer(invoice = {}, companies = []) {
-  const indexes = buildCompanyIndexes(companies);
+export function resolveInvoiceCustomer(invoice = {}, companies = [], prebuiltIndexes = null) {
+  const indexes = prebuiltIndexes || buildCompanyIndexes(companies);
   const flags = [];
   const warnings = [];
   const raw = invoice.raw || {};
@@ -656,7 +658,8 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
   ]);
   const companies = companyResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, companyResult.entityName));
   const invoices = invoiceResult.page.rows.map(mapReceivablesVistosInvoice);
-  const resolvedInvoices = invoices.map((invoice) => resolveInvoiceCustomer(invoice, companies));
+  const companyIndexes = buildCompanyIndexes(companies);
+  const resolvedInvoices = invoices.map((invoice) => resolveInvoiceCustomer(invoice, companies, companyIndexes));
   const ledgerReadiness = buildLedgerReadiness({ companies, invoices, resolvedInvoices, companyResult, invoiceResult });
 
   return {
@@ -688,6 +691,12 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       invoiceColumns: invoiceResult.columns,
       invoiceKeys: sampleKeys(invoiceResult.page.rows),
       invoiceAttempts: invoiceResult.diagnostics
+    },
+    previewLimits: {
+      defaultPageSize: DEFAULT_PAGE_SIZE,
+      defaultMaxPages: DEFAULT_MAX_PAGES,
+      maxPageSize: MAX_PAGE_SIZE,
+      maxPages: MAX_PAGES
     },
     loadedAt: new Date().toISOString()
   };
