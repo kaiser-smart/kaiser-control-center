@@ -27107,7 +27107,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 
 .tracking-page--soft-metal-preview .tracking-preview-metric--active {
   border-color: var(--state-success-border);
-  background: var(--state-success-bg);
+  background: var(--active-pill-bg);
   box-shadow: var(--shadow-control-active);
 }
 
@@ -27143,6 +27143,11 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   align-items: center;
   gap: var(--space-md);
   padding: var(--space-lg);
+}
+
+body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-live-strip {
+  border-color: var(--active-pill-border);
+  background: var(--active-pill-bg);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-live-strip strong,
