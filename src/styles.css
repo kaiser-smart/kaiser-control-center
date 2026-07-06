@@ -27562,7 +27562,8 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 .receivables-kpi-grid,
 .receivables-source-grid,
 .receivables-detail-grid,
-.receivables-settings-grid {
+.receivables-settings-grid,
+.receivables-import-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
@@ -27571,7 +27572,8 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 .receivables-kpi,
 .receivables-source-grid article,
 .receivables-detail-grid article,
-.receivables-settings-grid article {
+.receivables-settings-grid article,
+.receivables-import-summary article {
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--receivables-border);
@@ -27582,7 +27584,8 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 .receivables-kpi span,
 .receivables-source-grid span,
 .receivables-detail-grid span,
-.receivables-settings-grid span {
+.receivables-settings-grid span,
+.receivables-import-summary span {
   display: block;
   color: var(--receivables-muted);
   font-size: 0.84rem;
@@ -27591,11 +27594,64 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 .receivables-kpi strong,
 .receivables-source-grid strong,
 .receivables-detail-grid strong,
-.receivables-settings-grid strong {
+.receivables-settings-grid strong,
+.receivables-import-summary strong {
   display: block;
   margin-top: 4px;
   color: #111827;
   font-size: 1.1rem;
+}
+
+.receivables-panel--compact {
+  padding: 14px;
+}
+
+.receivables-import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.receivables-import-form {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--receivables-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.receivables-import-form label {
+  display: block;
+  margin-bottom: 6px;
+  color: #334155;
+  font-weight: 800;
+}
+
+.receivables-import-form input,
+.receivables-import-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--receivables-border);
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+}
+
+.receivables-import-form input {
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.receivables-import-form textarea {
+  resize: vertical;
+  min-height: 210px;
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 .receivables-table-wrap {
@@ -27630,6 +27686,10 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   color: #0f766e;
   font-weight: 800;
   text-decoration: none;
+}
+
+.receivables-table--import {
+  min-width: 820px;
 }
 
 .receivables-pill {
@@ -27711,6 +27771,10 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 @media (max-width: 760px) {
   .receivables-panel__head {
     flex-direction: column;
+  }
+
+  .receivables-import-grid {
+    grid-template-columns: 1fr;
   }
 
   .receivables-table {

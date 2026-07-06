@@ -6,6 +6,11 @@ import {
   isReceivablesWorkingDay,
   nextReceivablesWorkingSendAt
 } from "../functions/_lib/receivables-ai-decision-engine.js";
+import {
+  bankTransactionToPreviewRow,
+  buildInvoiceImportPreview,
+  normalizeInvoicePreviewRow
+} from "../functions/_lib/receivables-import-preview.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import {
   calculateInvoicePaymentState,
@@ -173,6 +178,44 @@ Dodavatel
   assert.equal(parsed.incomingPaymentCount, 1);
   assert.equal(parsed.incomingPayments[0].variableSymbol, "2601101477");
   assert.equal(parsed.incomingPayments[0].amountIn, 1210);
+}
+
+{
+  const row = normalizeInvoicePreviewRow({
+    "Číslo faktury": "2601101477",
+    "VS": "2601101477",
+    "Firma": "Firma Alfa s.r.o.",
+    "IČO": "12345678",
+    "Splatnost": "01.06.2026",
+    "Celkem": "1 210,00 Kč"
+  });
+  assert.equal(row.previewStatus, "ready");
+  assert.equal(row.normalized.dueDate, "2026-06-01");
+  assert.equal(row.normalized.totalAmount, 1210);
+}
+
+{
+  const preview = buildInvoiceImportPreview({
+    text: `invoice_number;company_name;due_date;total_amount
+2601101477;Firma Alfa s.r.o.;2026-06-01;1210
+;Bez čísla s.r.o.;2026-06-02;500`
+  });
+  assert.equal(preview.summary.rowCount, 2);
+  assert.equal(preview.summary.acceptedCount, 1);
+  assert.equal(preview.summary.reviewCount, 1);
+}
+
+{
+  const parsed = parseKbBankStatementText(`
+01.06.2026 Příchozí úhrada 2601101477 1 210,00
+Firma Alfa s.r.o.
+02.06.2026 Odchozí úhrada 555 300,00
+Dodavatel
+  `);
+  const ready = bankTransactionToPreviewRow(parsed.transactions[0], 0);
+  const ignored = bankTransactionToPreviewRow(parsed.transactions[1], 1);
+  assert.equal(ready.previewStatus, "ready");
+  assert.equal(ignored.previewStatus, "ignored");
 }
 
 console.log("receivables engine tests passed");

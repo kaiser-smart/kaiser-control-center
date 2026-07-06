@@ -1,4 +1,5 @@
 import { decideReceivablesNextAction } from "./receivables-ai-decision-engine.js";
+import { buildBankImportPreview, buildInvoiceImportPreview } from "./receivables-import-preview.js";
 import { parseKbBankStatementText } from "./receivables-kb-bank-parser.js";
 import { calculateCustomerPaymentRating } from "./receivables-rating-engine.js";
 import { calculateInvoicePaymentState, matchReceivablePayments } from "./receivables-payment-matching.js";
@@ -91,6 +92,13 @@ function storeError(error) {
   }
 
   const message = cleanString(error?.message);
+  if (/no such table: receivable_import_/i.test(message)) {
+    return new ReceivablesStoreError(
+      "Tabulky import preview nejsou v D1 připravené. Spusťte migraci 0028_create_receivable_import_preview.sql.",
+      503,
+      "receivables_import_preview_migration_missing"
+    );
+  }
   if (/no such table|no such column/i.test(message)) {
     return new ReceivablesStoreError(
       "Tabulky Pohledávek nejsou v D1 připravené. Spusťte migraci 0027_create_receivables_core.sql.",
@@ -130,7 +138,7 @@ function emptyDashboard(apiStatus = "waiting", message = "D1 databáze pro Pohle
     settings: defaultReceivablesSettings(),
     sourceStatus: {
       vistos: "not_configured",
-      bank: "pdf_text_preview",
+      bank: "pdf_text_preview_to_d1",
       insolvency: "not_configured",
       outbound: "disabled"
     }
@@ -295,6 +303,41 @@ function rowToPaymentTransaction(row = {}) {
     counterpartyName: cleanString(row.counterparty_name),
     counterpartyAccount: cleanString(row.counterparty_account),
     message: cleanString(row.message),
+    rawPayload: parseJson(row.raw_payload, {}),
+    createdAt: cleanString(row.created_at)
+  };
+}
+
+function rowToImportBatch(row = {}) {
+  return {
+    id: cleanString(row.id),
+    source: cleanString(row.source),
+    importKind: cleanString(row.import_kind),
+    status: cleanString(row.status || "preview"),
+    filename: cleanString(row.filename),
+    rowCount: numberValue(row.row_count),
+    acceptedCount: numberValue(row.accepted_count),
+    reviewCount: numberValue(row.review_count),
+    ignoredCount: numberValue(row.ignored_count),
+    createdByUserId: cleanString(row.created_by_user_id),
+    createdAt: cleanString(row.created_at),
+    updatedAt: cleanString(row.updated_at),
+    parserSummary: parseJson(row.parser_summary_json, {}),
+    rawPayload: parseJson(row.raw_payload, {})
+  };
+}
+
+function rowToImportRow(row = {}) {
+  return {
+    id: cleanString(row.id),
+    batchId: cleanString(row.batch_id),
+    rowNumber: numberValue(row.row_number),
+    entityKind: cleanString(row.entity_kind),
+    previewStatus: cleanString(row.preview_status),
+    confidence: numberValue(row.confidence),
+    issueCode: cleanString(row.issue_code),
+    issueMessage: cleanString(row.issue_message),
+    normalized: parseJson(row.normalized_json, {}),
     rawPayload: parseJson(row.raw_payload, {}),
     createdAt: cleanString(row.created_at)
   };
@@ -670,15 +713,182 @@ export async function getReceivableCase(env, caseId) {
   }
 }
 
-export async function previewReceivablesBankTextImport(env, payload = {}) {
+async function createReceivableImportPreviewBatch(env, preview, payload = {}, user = null) {
+  const db = database(env, true);
+  const batchId = randomId("receivable-import-batch");
+  const summary = preview.summary || {};
+  const createdByUserId = cleanString(user?.id);
+  const rows = Array.isArray(preview.rows) ? preview.rows : [];
+  await db.batch([
+    db.prepare(`
+        INSERT INTO receivable_import_batches (
+          id, source, import_kind, status, filename, row_count, accepted_count,
+          review_count, ignored_count, created_by_user_id, parser_summary_json, raw_payload
+        )
+        VALUES (?, ?, ?, 'preview', ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        batchId,
+        preview.source,
+        preview.importKind,
+        preview.filename || "",
+        numberValue(summary.rowCount),
+        numberValue(summary.acceptedCount),
+        numberValue(summary.reviewCount),
+        numberValue(summary.ignoredCount),
+        createdByUserId || null,
+        safeJson(summary),
+        safeJson({
+          source: payload.source || "",
+          filename: payload.filename || "",
+          inputType: preview.inputType || "",
+          persist: true
+        })
+      )
+  ]);
+
+  const rowStatements = rows.map((row) => db.prepare(`
+    INSERT INTO receivable_import_rows (
+      id, batch_id, row_number, entity_kind, preview_status, confidence,
+      issue_code, issue_message, normalized_json, raw_payload
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    randomId("receivable-import-row"),
+    batchId,
+    numberValue(row.rowNumber),
+    cleanString(row.entityKind),
+    cleanString(row.previewStatus || "ready"),
+    numberValue(row.confidence),
+    cleanString(row.issueCode) || null,
+    cleanString(row.issueMessage) || null,
+    safeJson(row.normalized),
+    safeJson(row.raw)
+  ));
+
+  for (let index = 0; index < rowStatements.length; index += 100) {
+    await db.batch(rowStatements.slice(index, index + 100));
+  }
+
+  await db.batch([db.prepare(`
+    INSERT INTO receivable_audit_log (
+      id, entity_type, entity_id, action, actor_user_id, reason, after_json
+    )
+    VALUES (?, 'receivable_import_batch', ?, 'preview_import_created', ?, ?, ?)
+  `).bind(
+    randomId("receivable-audit"),
+    batchId,
+    createdByUserId || null,
+    `Preview import ${preview.importKind}`,
+    safeJson(summary)
+  )]);
+  return getReceivableImportBatch(env, batchId);
+}
+
+export async function listReceivableImportBatches(env, options = {}) {
+  const db = database(env);
+  if (!db) {
+    return { batches: [], total: 0, apiStatus: "waiting" };
+  }
+
+  try {
+    const limit = Math.max(1, Math.min(Number(options.limit) || 20, 100));
+    const result = await db.prepare(`
+      SELECT *
+      FROM receivable_import_batches
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).bind(limit).all();
+    const batches = (result.results || []).map(rowToImportBatch);
+    return { batches, total: batches.length, apiStatus: "ready" };
+  } catch (error) {
+    throw storeError(error);
+  }
+}
+
+export async function getReceivableImportBatch(env, batchId) {
+  const db = database(env);
+  if (!db) {
+    return { batch: null, rows: [], apiStatus: "waiting" };
+  }
+
+  try {
+    const id = cleanString(batchId);
+    const batch = await db.prepare("SELECT * FROM receivable_import_batches WHERE id = ? LIMIT 1").bind(id).first();
+    if (!batch) {
+      throw new ReceivablesStoreError("Import preview batch nebyl nalezen.", 404, "receivables_import_batch_not_found");
+    }
+    const rows = await db.prepare(`
+      SELECT *
+      FROM receivable_import_rows
+      WHERE batch_id = ?
+      ORDER BY row_number ASC
+      LIMIT 5000
+    `).bind(id).all();
+    return {
+      batch: rowToImportBatch(batch),
+      rows: (rows.results || []).map(rowToImportRow),
+      apiStatus: "ready"
+    };
+  } catch (error) {
+    throw storeError(error);
+  }
+}
+
+export async function previewReceivablesInvoiceImport(env, payload = {}, user = null) {
+  const preview = buildInvoiceImportPreview(payload);
+  if (payload.persist === false || payload.dryRun === true) {
+    return {
+      ...preview,
+      persisted: false,
+      apiStatus: database(env) ? "ready" : "waiting",
+      message: "Preview faktur proběhl bez zápisu do D1."
+    };
+  }
+
+  try {
+    const saved = await createReceivableImportPreviewBatch(env, preview, payload, user);
+    return {
+      ...preview,
+      batch: saved.batch,
+      rows: saved.rows,
+      persisted: true,
+      apiStatus: "ready",
+      message: "Preview faktur je uložený ve staging tabulkách. Ostré faktury zůstaly beze změny."
+    };
+  } catch (error) {
+    throw storeError(error);
+  }
+}
+
+export async function previewReceivablesBankTextImport(env, payload = {}, user = null) {
   const parsed = parseKbBankStatementText(payload.text || "", {
     source: payload.source || "kb_pdf_text",
     filename: payload.filename || ""
   });
+  const preview = buildBankImportPreview(parsed, payload);
+
+  if (payload.persist === true) {
+    try {
+      const saved = await createReceivableImportPreviewBatch(env, preview, payload, user);
+      return {
+        ...parsed,
+        preview: { ...preview, rows: saved.rows },
+        batch: saved.batch,
+        persisted: true,
+        matching: { matches: [], reviewQueue: [], threshold: 0.85 },
+        apiStatus: "ready",
+        message: "Preview KB plateb je uložený ve staging tabulkách. Ostré platby zůstaly beze změny."
+      };
+    } catch (error) {
+      throw storeError(error);
+    }
+  }
+
   const db = database(env);
   if (!db) {
     return {
       ...parsed,
+      preview,
       matching: { matches: [], reviewQueue: [], threshold: 0.85 },
       apiStatus: "waiting",
       message: "Parser proběhl bez D1. Párování proti fakturám čeká na migraci a data."
@@ -701,9 +911,10 @@ export async function previewReceivablesBankTextImport(env, payload = {}) {
     }));
     return {
       ...parsed,
+      preview,
       matching: matchReceivablePayments(invoices, payments, customers),
       apiStatus: "ready",
-      message: "Parser a dry-run párování proběhly. Nic se neuložilo."
+      message: "Parser a dry-run párování proběhly bez zápisu. Pro D1 staging použijte persist=true."
     };
   } catch (error) {
     throw storeError(error);

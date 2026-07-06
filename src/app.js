@@ -227,10 +227,11 @@ const FLEET_ROUTE = "/vozovy-park";
 const RECEIVABLES_ROUTE = "/pohledavky";
 const RECEIVABLES_ALIAS_ROUTE = "/receivables";
 const RECEIVABLES_MODULE_KEY = "receivables";
-const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI běží ve Fázi 1B jako dry-run. Nic neposílá, nespouští Šarlotu, nemá cron a ostré integrace čekají na samostatné potvrzení.";
+const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI běží ve Fázi 1C jako dry-run se staging importem. Nic neposílá, nespouští Šarlotu, nemá cron a preview import se ukládá odděleně od ostrých faktur a plateb.";
 const RECEIVABLES_TABS = [
   { id: "dashboard", label: "Dashboard", route: RECEIVABLES_ROUTE },
   { id: "customers", label: "Zákazníci", route: `${RECEIVABLES_ROUTE}#receivables-customers` },
+  { id: "import", label: "Import preview", route: `${RECEIVABLES_ROUTE}/import` },
   { id: "dry-run", label: "Dry-run", route: `${RECEIVABLES_ROUTE}#receivables-dry-run` },
   { id: "settings", label: "Nastavení", route: `${RECEIVABLES_ROUTE}/settings` }
 ];
@@ -840,6 +841,12 @@ const receivablesState = {
   settings: null,
   settingsLoading: false,
   settingsError: "",
+  importBatches: [],
+  importLoaded: false,
+  importLoading: false,
+  importSaving: "",
+  importError: "",
+  importResult: null,
   dryRunLoading: false,
   dryRunResult: null,
   dryRunError: ""
@@ -22611,6 +22618,9 @@ function routeReceivablesContext(pathname = window.location.pathname) {
   if (!rest || rest === "/" || rest === "/dashboard") {
     return { view: "dashboard", path };
   }
+  if (rest === "/import") {
+    return { view: "import", path };
+  }
   if (rest === "/settings") {
     return { view: "settings", path };
   }
@@ -22682,7 +22692,7 @@ function receivablesSourceStatus() {
   const sourceStatus = receivablesState.dashboard?.sourceStatus || {};
   const items = [
     ["Vistos InvoiceIssued / Company", sourceStatus.vistos || "adapter_skeleton"],
-    ["KB platby", sourceStatus.bank || "pdf_text_preview"],
+    ["KB platby", sourceStatus.bank || "pdf_text_preview_to_d1"],
     ["Insolvenční kontrola", sourceStatus.insolvency || "not_configured"],
     ["Outbound kanály", sourceStatus.outbound || "disabled"]
   ];
@@ -22713,7 +22723,7 @@ function receivablesCustomersTable() {
     return `<p class="receivables-empty">Načítám pohledávky...</p>`;
   }
   if (!customers.length) {
-    return `<p class="receivables-empty">Zatím nejsou v D1 žádní zákazníci s otevřeným balíčkem. Import faktur je připravený až pro další potvrzenou fázi.</p>`;
+    return `<p class="receivables-empty">Zatím nejsou v ostrém ledgeru žádní zákazníci s otevřeným balíčkem. Fáze 1C ukládá jen import preview do staging tabulek.</p>`;
   }
 
   return `
@@ -22791,7 +22801,7 @@ function receivablesDashboardSection() {
         <div>
           <p class="module-feedback__eyebrow">AI Booster</p>
           <h2 id="receivables-dry-run-title">Dry-run rozhodnutí</h2>
-          <p>AI Booster ve Fázi 1B pouze navrhuje akci. Nic neposílá a nic nespouští automaticky.</p>
+          <p>AI Booster ve Fázi 1C pouze navrhuje akci. Nic neposílá a nic nespouští automaticky.</p>
         </div>
         ${receivablesPill("outbound vypnutý", "warning")}
       </div>
@@ -22803,6 +22813,121 @@ function receivablesDashboardSection() {
         <span>bez zakázaných slov</span>
         <span>D+60 interní předání</span>
       </div>
+    </section>
+  `;
+}
+
+function receivablesImportResultPanel() {
+  const result = receivablesState.importResult;
+  if (!result) return "";
+  const batch = result.batch || {};
+  const summary = batch.id ? batch : (result.summary || result.preview?.summary || {});
+  const label = batch.importKind === "bank_transactions" ? "KB platby" : "Faktury";
+  return `
+    <section class="receivables-panel receivables-panel--compact" aria-labelledby="receivables-import-result-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Poslední import preview</p>
+          <h2 id="receivables-import-result-title">${escapeHtml(label)}</h2>
+          <p>${escapeHtml(result.message || "Preview je připravené.")}</p>
+        </div>
+        ${receivablesPill(result.persisted ? "uloženo v D1 staging" : "bez zápisu", result.persisted ? "ready" : "warning")}
+      </div>
+      <div class="receivables-import-summary">
+        <article><span>Řádků</span><strong>${escapeHtml(summary.rowCount || result.transactionCount || 0)}</strong></article>
+        <article><span>Ready</span><strong>${escapeHtml(summary.acceptedCount || 0)}</strong></article>
+        <article><span>Kontrola</span><strong>${escapeHtml(summary.reviewCount || 0)}</strong></article>
+        <article><span>Ignorováno</span><strong>${escapeHtml(summary.ignoredCount || 0)}</strong></article>
+      </div>
+    </section>
+  `;
+}
+
+function receivablesImportBatchesTable() {
+  if (receivablesState.importLoading && !receivablesState.importBatches.length) {
+    return `<p class="receivables-empty">Načítám import preview...</p>`;
+  }
+  const batches = receivablesState.importBatches || [];
+  if (!batches.length) {
+    return `<p class="receivables-empty">Zatím není uložený žádný import preview batch.</p>`;
+  }
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--import">
+        <thead>
+          <tr>
+            <th>Čas</th>
+            <th>Typ</th>
+            <th>Soubor</th>
+            <th>Řádků</th>
+            <th>Ready</th>
+            <th>Kontrola</th>
+            <th>Ignorováno</th>
+            <th>Stav</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${batches.map((batch) => `
+            <tr>
+              <td data-label="Čas">${escapeHtml(formatDateTime(batch.createdAt))}</td>
+              <td data-label="Typ">${escapeHtml(batch.importKind || "-")}</td>
+              <td data-label="Soubor">${escapeHtml(batch.filename || "-")}</td>
+              <td data-label="Řádků">${escapeHtml(batch.rowCount || 0)}</td>
+              <td data-label="Ready">${escapeHtml(batch.acceptedCount || 0)}</td>
+              <td data-label="Kontrola">${escapeHtml(batch.reviewCount || 0)}</td>
+              <td data-label="Ignorováno">${escapeHtml(batch.ignoredCount || 0)}</td>
+              <td data-label="Stav">${receivablesPill(batch.status || "preview", "ready")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesImportSection() {
+  const invoiceDisabled = receivablesState.importSaving === "invoices" ? "disabled" : "";
+  const bankDisabled = receivablesState.importSaving === "bank" ? "disabled" : "";
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-import-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Fáze 1C</p>
+          <h2 id="receivables-import-title">Bezpečný import preview</h2>
+          <p>Import se ukládá jen do staging tabulek. Ostré faktury, platby, komunikace a autonomie zůstávají vypnuté.</p>
+        </div>
+        ${receivablesPill("staging only", "warning")}
+      </div>
+      ${receivablesState.importError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.importError)}</p>` : ""}
+      <div class="receivables-import-grid">
+        <form class="receivables-import-form" data-receivables-import-form="invoices">
+          <div>
+            <label for="receivables-invoice-import-filename">Faktury / Vistos preview</label>
+            <input id="receivables-invoice-import-filename" name="filename" placeholder="vistos-invoices.json / invoices.csv" ${invoiceDisabled} />
+          </div>
+          <textarea name="text" rows="10" required ${invoiceDisabled} placeholder='[{"invoice_number":"2601101477","variable_symbol":"2601101477","company_name":"Firma Alfa s.r.o.","ico":"12345678","due_date":"2026-06-01","total_amount":1210,"open_amount":1210}]'></textarea>
+          <button class="primary-button" type="submit" ${invoiceDisabled}>Uložit preview faktur</button>
+        </form>
+        <form class="receivables-import-form" data-receivables-import-form="bank">
+          <div>
+            <label for="receivables-bank-import-filename">KB platby / PDF text preview</label>
+            <input id="receivables-bank-import-filename" name="filename" placeholder="KB_2026-06.txt" ${bankDisabled} />
+          </div>
+          <textarea name="text" rows="10" required ${bankDisabled} placeholder="01.06.2026 Příchozí úhrada 2601101477 1 210,00&#10;Firma Alfa s.r.o.&#10;Protiúčet 123456789/0100&#10;KS 0308"></textarea>
+          <button class="primary-button" type="submit" ${bankDisabled}>Uložit preview KB plateb</button>
+        </form>
+      </div>
+    </section>
+    ${receivablesImportResultPanel()}
+    <section class="receivables-panel" aria-labelledby="receivables-import-batches-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">D1 staging</p>
+          <h2 id="receivables-import-batches-title">Poslední import preview batche</h2>
+        </div>
+        <button class="secondary-link" type="button" data-receivables-import-reload ${receivablesState.importLoading ? "disabled" : ""}>Obnovit</button>
+      </div>
+      ${receivablesImportBatchesTable()}
     </section>
   `;
 }
@@ -22959,7 +23084,7 @@ function receivablesCaseSection() {
         <div>
           <p class="module-feedback__eyebrow">Právní podklady</p>
           <h2 id="receivables-case-title">${escapeHtml(caseFile.id)}</h2>
-          <p>Fáze 1B připravuje jen interní case file. ZIP/PDF export je další fáze.</p>
+          <p>Fáze 1C připravuje jen interní case file. ZIP/PDF export je další fáze.</p>
         </div>
         ${receivablesPill(caseFile.status, receivablesStatusTone(caseFile.status))}
       </div>
@@ -22977,6 +23102,8 @@ function receivablesPage(moduleItem, user, isDashboard = false, context = { view
   const view = context.view || "dashboard";
   const content = view === "customer"
     ? receivablesCustomerDetailSection()
+    : view === "import"
+      ? receivablesImportSection()
     : view === "settings"
       ? receivablesSettingsSection()
       : view === "case"
@@ -22999,7 +23126,7 @@ function receivablesPage(moduleItem, user, isDashboard = false, context = { view
           <p>Dry-run modul pro balíčky otevřených faktur, párování plateb, rating platební morálky a bezpečná AI doporučení.</p>
           <div class="module-detail__status">
             <span>Stav</span>
-            <strong>Fáze 1B · dry-run</strong>
+            <strong>Fáze 1C · dry-run + staging import</strong>
           </div>
         </div>
       </section>
@@ -23966,6 +24093,63 @@ async function loadReceivablesSettings(options = {}) {
   }
 }
 
+async function loadReceivablesImportBatches(options = {}) {
+  if (receivablesState.importLoading) {
+    return;
+  }
+
+  receivablesState.importLoading = true;
+  receivablesState.importError = "";
+  try {
+    const result = await apiJson("/api/receivables/import-batches?limit=20");
+    receivablesState.importBatches = Array.isArray(result.batches) ? result.batches : [];
+    receivablesState.importLoaded = true;
+  } catch (error) {
+    receivablesState.importError = error.payload?.error || error.message || "Import preview se teď nepodařilo načíst.";
+  } finally {
+    receivablesState.importLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
+async function submitReceivablesImportPreview(form) {
+  const kind = form?.dataset?.receivablesImportForm === "bank" ? "bank" : "invoices";
+  if (receivablesState.importSaving) {
+    return;
+  }
+
+  const data = new FormData(form);
+  const text = String(data.get("text") || "").trim();
+  const filename = String(data.get("filename") || "").trim();
+  receivablesState.importSaving = kind;
+  receivablesState.importError = "";
+  receivablesState.importResult = null;
+  render();
+
+  try {
+    const endpoint = kind === "bank"
+      ? "/api/receivables/bank-import/preview"
+      : "/api/receivables/invoice-import/preview";
+    receivablesState.importResult = await apiJson(endpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        text,
+        filename,
+        source: kind === "bank" ? "kb_pdf_text_preview" : "vistos_invoice_preview",
+        persist: true
+      })
+    });
+    await loadReceivablesImportBatches({ renderAfter: false });
+  } catch (error) {
+    receivablesState.importError = error.payload?.error || error.message || "Import preview se nepodařilo uložit.";
+  } finally {
+    receivablesState.importSaving = "";
+    render();
+  }
+}
+
 function ensureReceivablesData(context = { view: "dashboard" }) {
   if (!receivablesState.dashboardLoaded && !receivablesState.dashboardLoading) {
     void loadReceivablesDashboard();
@@ -23983,6 +24167,10 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "settings" && !receivablesState.settings && !receivablesState.settingsLoading) {
     void loadReceivablesSettings();
+  }
+
+  if (context.view === "import" && !receivablesState.importLoaded && !receivablesState.importLoading) {
+    void loadReceivablesImportBatches();
   }
 }
 
@@ -29078,6 +29266,12 @@ async function logout() {
   receivablesState.settings = null;
   receivablesState.settingsLoading = false;
   receivablesState.settingsError = "";
+  receivablesState.importBatches = [];
+  receivablesState.importLoaded = false;
+  receivablesState.importLoading = false;
+  receivablesState.importSaving = "";
+  receivablesState.importError = "";
+  receivablesState.importResult = null;
   receivablesState.dryRunLoading = false;
   receivablesState.dryRunResult = null;
   receivablesState.dryRunError = "";
@@ -31864,6 +32058,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const receivablesImportForm = event.target.closest("[data-receivables-import-form]");
+  if (receivablesImportForm) {
+    event.preventDefault();
+    await submitReceivablesImportPreview(receivablesImportForm);
+    return;
+  }
+
   const driverReportForm = event.target.closest("[data-driver-report-form]");
   if (driverReportForm) {
     event.preventDefault();
@@ -32356,6 +32557,14 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     receivablesState.dashboardLoaded = false;
     await loadReceivablesDashboard({ renderAfter: true });
+    return;
+  }
+
+  const receivablesImportReload = event.target.closest("[data-receivables-import-reload]");
+  if (receivablesImportReload) {
+    event.preventDefault();
+    receivablesState.importLoaded = false;
+    await loadReceivablesImportBatches({ renderAfter: true });
     return;
   }
 

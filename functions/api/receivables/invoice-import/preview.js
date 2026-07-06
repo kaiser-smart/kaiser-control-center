@@ -1,5 +1,5 @@
 import { json, readJson, requireUserPermission } from "../../../_lib/auth.js";
-import { previewReceivablesBankTextImport } from "../../../_lib/receivables-store.js";
+import { previewReceivablesInvoiceImport } from "../../../_lib/receivables-store.js";
 import { receivablesErrorResponse } from "../_error.js";
 
 export async function onRequestPost({ request, env }) {
@@ -8,8 +8,8 @@ export async function onRequestPost({ request, env }) {
 
   try {
     const payload = await readJson(request);
-    return json(await previewReceivablesBankTextImport(env, payload, user));
+    return json(await previewReceivablesInvoiceImport(env, payload, user));
   } catch (error) {
-    return receivablesErrorResponse(error, "POST /api/receivables/bank-import/preview");
+    return receivablesErrorResponse(error, "POST /api/receivables/invoice-import/preview");
   }
 }

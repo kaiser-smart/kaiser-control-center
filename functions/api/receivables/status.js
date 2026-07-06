@@ -10,6 +10,6 @@ export async function onRequestGet({ request, env }) {
     mode: "dry_run",
     outboundEnabled: false,
     cloudRunnerEnabled: false,
-    message: "Pohledávkový kompas AI je ve Fázi 1B pouze dry-run. Nic neposílá a nespouští cron."
+    message: "Pohledávkový kompas AI je ve Fázi 1C pouze dry-run se staging importem. Nic neposílá a nespouští cron."
   });
 }
