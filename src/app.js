@@ -15235,6 +15235,101 @@ function collectionRoutesSourceRouteSummaryCards(rows = collectionRoutesSourceDi
   `;
 }
 
+function collectionRoutesSourceDailyRouteDraftPanel(rows = collectionRoutesSourceDisplayRows()) {
+  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const summary = collectionRoutesSourceRowsMetrics(rows);
+  const mappingCounts = summary.mappingCounts || {};
+  const mappedCount = mappingCounts["namapováno"] || 0;
+  const problemCount = Math.max(0, summary.rowCount - mappedCount);
+  const wasteBreakdown = collectionRoutesSourceCountBreakdown(
+    summary.wasteCounts || {},
+    ["SKO", "BIO", "PAPIR", "PLAST", "SKLO", "ostatní / neznámé", "ostatní", "-"],
+    collectionRoutesSourceWasteLabel
+  );
+  const selectedBatch = collectionRoutesSourceSelectedBatch();
+  const hasDay = Boolean(filters.day && filters.day !== "all");
+  const hasWeek = Boolean(filters.week && filters.week !== "all");
+  const hasVehicle = Boolean(filters.vehicle && filters.vehicle !== "all");
+  const hasRows = rows.length > 0;
+  const isSpecificRoute = hasRows && hasDay && hasWeek && hasVehicle;
+  const statusLabel = !hasRows
+    ? "bez zastávek"
+    : isSpecificRoute
+      ? "připraveno jako návrh"
+      : "doplň filtr";
+  const statusTone = isSpecificRoute ? "ok" : hasRows ? "warning" : "danger";
+  const missingFilters = [
+    hasDay ? "" : "den",
+    hasWeek ? "" : "týden",
+    hasVehicle ? "" : "auto"
+  ].filter(Boolean);
+  const routeLabel = [
+    collectionRoutesSourceDayLabel(filters.day || "all"),
+    collectionRoutesSourceWeekLabel(filters.week || "all"),
+    collectionRoutesSourceDriverVehicleRouteLabel(filters.vehicle || "all"),
+    collectionRoutesSourceWasteFilterLabel(filters.waste || "all")
+  ].filter(Boolean).join(" · ");
+  const note = !hasRows
+    ? "Aktuální filtr nemá žádné zastávky. Denní návrh se zatím nemá z čeho složit."
+    : missingFilters.length
+      ? `Pro ostrý denní běh by bylo potřeba ručně vybrat: ${missingFilters.join(", ")}.`
+      : "Aktuální filtr je použitelný jako read-only podklad denní trasy.";
+
+  return `
+    <section class="collection-routes-daily-draft" aria-label="Denní trasa návrh">
+      <div class="collection-routes-daily-draft__head">
+        <div>
+          <p class="module-feedback__eyebrow">Dispečerský náhled</p>
+          <h3>Denní trasa – návrh</h3>
+          <span>${escapeHtml(routeLabel)}</span>
+        </div>
+        <span class="collection-routes-daily-draft__status collection-routes-daily-draft__status--${escapeHtml(statusTone)}">
+          ${escapeHtml(statusLabel)}
+        </span>
+      </div>
+      <p class="collection-routes-daily-draft__note">${escapeHtml(note)}</p>
+      <div class="collection-routes-daily-draft__grid">
+        <article>
+          <span>Zastávky</span>
+          <strong>${collectionRoutesMetricValue(summary.rowCount)}</strong>
+          <small>z aktuálního filtru</small>
+        </article>
+        <article>
+          <span>Nádoby</span>
+          <strong>${collectionRoutesMetricValue(summary.containerCount)}</strong>
+          <small>součet v trase</small>
+        </article>
+        <article>
+          <span>Odpady</span>
+          <strong>${escapeHtml(wasteBreakdown)}</strong>
+          <small>bez doplnění mimo Excel</small>
+        </article>
+        <article>
+          <span>Kontrola</span>
+          <strong>${collectionRoutesMetricValue(mappedCount)} / ${collectionRoutesMetricValue(problemCount)}</strong>
+          <small>namapováno / k ověření</small>
+        </article>
+        <article>
+          <span>Import</span>
+          <strong>${escapeHtml(formatDateTime(selectedBatch?.createdAt) || "čeká")}</strong>
+          <small>${escapeHtml(collectionRoutesSourceBatchSourceLabel(selectedBatch))}</small>
+        </article>
+        <article>
+          <span>Ostrá trasa</span>
+          <strong>NE</strong>
+          <small>žádný denní běh nevzniká</small>
+        </article>
+      </div>
+      <div class="collection-routes-daily-draft__flow" aria-label="Stav procesu denní trasy">
+        <span><strong>Zdroj</strong> 13 Excelů</span>
+        <span><strong>Vistos</strong> read-only match</span>
+        <span><strong>Řidičský audit</strong> pilotní D1 eventy</span>
+        <span><strong>Další fáze</strong> schválení ostrého denního běhu</span>
+      </div>
+    </section>
+  `;
+}
+
 function collectionRoutesSourceVistosMatchStatus() {
   const summary = collectionRoutesPilotState.sourceVistosMatchSummary;
   if (!summary && !collectionRoutesPilotState.sourceVistosMatchMessage && !collectionRoutesPilotState.sourceVistosMatchError) {
@@ -15847,6 +15942,11 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
             ${collectionRoutesSourceDriverReadonlyButton("Šarlota", "sarlota", "sarlota")}
           </div>
 
+          <div class="collection-routes-driver-mode__bottom-bar" aria-label="Provozní akce řidiče">
+            ${collectionRoutesSourceDriverReadonlyButton("Musím vysypat", "dump", "dump")}
+            ${collectionRoutesSourceDriverReadonlyButton("Přestávka", "break", "break")}
+          </div>
+
           <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
             <span style="width: ${escapeHtml(progressPercent)}%"></span>
           </div>
@@ -16302,6 +16402,7 @@ function collectionRoutesSourceRoutesSection() {
       `}
       ${collectionRoutesSourceSmartFilterPanel()}
       ${collectionRoutesSourceRouteSummaryCards(rows)}
+      ${collectionRoutesSourceDailyRouteDraftPanel(rows)}
       ${collectionRoutesSourceRouteViewSwitch(rows)}
       ${routeView === "driver"
         ? collectionRoutesSourceDriverModePanel(rows)
