@@ -27200,9 +27200,9 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
 }
 
 body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-live-strip {
-  border-color: var(--active-pill-border);
-  background: var(--active-pill-bg);
-  box-shadow: var(--active-pill-shadow);
+  border-color: var(--border-soft);
+  background: var(--tracking-card-bg);
+  box-shadow: var(--shadow-card), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-live-strip strong,
