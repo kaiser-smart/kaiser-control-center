@@ -27708,6 +27708,7 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   width: 9px;
   height: 9px;
   flex: 0 0 auto;
+  margin-right: 5px;
   border-radius: 999px;
   background: var(--status-dot-color, currentColor);
   content: "";
