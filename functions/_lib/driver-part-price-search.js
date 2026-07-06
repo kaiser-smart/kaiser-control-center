@@ -166,7 +166,8 @@ export function normalizeDriverPartOffer(rawOffer = {}, request = {}, options = 
   const titleCompact = compactIdentifier([title, seller, note, url].join(" "));
   const oeMatch = oeCompact ? titleCompact.includes(oeCompact) : false;
   const wordMatches = partWords.filter((word) => haystack.includes(word)).length;
-  const relevant = Boolean(oeMatch || wordMatches >= Math.min(2, partWords.length || 2));
+  const nameMatch = wordMatches >= Math.min(2, partWords.length || 2);
+  const relevant = oeCompact ? oeMatch : nameMatch;
 
   return {
     title,
@@ -176,7 +177,16 @@ export function normalizeDriverPartOffer(rawOffer = {}, request = {}, options = 
     url,
     availability,
     note: truncate(note),
-    relevanceNote: oeMatch ? "Shoda podle OE čísla." : wordMatches ? "Shoda podle názvu dílu." : "",
+    relevanceNote: oeMatch
+      ? "Shoda podle ověřeného OE čísla."
+      : wordMatches
+        ? "Shoda podle názvu dílu bez ověřeného OE čísla."
+        : "",
+    compatibilityEvidence: oeMatch
+      ? "oe_number"
+      : nameMatch
+        ? "part_name_only"
+        : "",
     blockedAsUsed,
     relevant
   };
@@ -256,6 +266,7 @@ async function fetchProviderOffers(config, request, query, signal, fetchImpl = f
       query,
       oeNumber: cleanString(request.oePartNumber || request.partOrderNumber),
       partName: cleanString(request.partName || request.verifiedPart || request.probablePart),
+      requireOeNumber: Boolean(cleanString(request.oePartNumber || request.partOrderNumber)),
       vehicleName: cleanString(request.vehicleName),
       country: "CZ",
       maxResults: 10,
@@ -305,6 +316,9 @@ async function fetchOpenAiWebSearchOffers(config, request, query, signal, fetchI
         `OE cislo: ${cleanString(request.oePartNumber || request.partOrderNumber) || "neuvedeno"}`,
         `Dil: ${cleanString(request.partName || request.verifiedPart || request.probablePart) || "neuvedeno"}`,
         `Vozidlo: ${cleanString(request.vehicleName) || "neuvedeno"}`,
+        cleanString(request.oePartNumber || request.partOrderNumber)
+          ? "Kazda vracena nabidka musi na strance, v nazvu, URL nebo snippet/note explicitne obsahovat toto OE cislo. Bez OE cisla ji vynech."
+          : "Pokud chybi OE cislo, vrat jen nabidky s jasnou shodou nazvu dilu a uved v note proc je kandidat relevantni.",
         "Neposilam VIN ani SPZ. Neber bazar, pouzite dily, vrakoviste, marketplace ani podezrele vysledky.",
         "Vrat pouze validni JSON bez komentare ve tvaru:",
         "{\"offers\":[{\"title\":\"\",\"price\":\"\",\"seller\":\"\",\"url\":\"\",\"availability\":\"\",\"note\":\"\"}]}",

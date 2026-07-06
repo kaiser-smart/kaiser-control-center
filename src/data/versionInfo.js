@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.362"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.363"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlášení řidičů: přísnější odkazy na díly",
+    text: "Cenový průzkum u ověřeného OE čísla počítá pro Patrika jen nabídky, které stejné OE číslo explicitně obsahují. Levný obecný výsledek bez důkazu kompatibility se mezi 3 odkazy nezařadí."
+  },
   {
     title: "Hlášení řidičů: stav pozadí po hlasovém zápisu",
     text: "Pozadí po vytvoření hlášení zapisuje, jestli ověřuje díly, hledá ceny, čeká na auto/VIN nebo čeká na rozhodnutí. Když nejsou splněné podmínky pro tři použitelné odkazy, hlášení nezůstane jen v technickém logu."

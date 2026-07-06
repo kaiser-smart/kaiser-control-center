@@ -27,7 +27,8 @@ import {
 } from "./partslink24-search-store.js";
 import {
   isDriverPartPriceSearchConfigured,
-  runDriverPartPriceSearch
+  runDriverPartPriceSearch,
+  selectDriverPartOffers
 } from "./driver-part-price-search.js";
 import {
   buildDriverPartOrderEmailPreview,
@@ -1263,7 +1264,7 @@ function driverPartRequestPriceOffers(item = {}) {
     ? parsed.offers
     : Array.isArray(parsed?.candidates) ? parsed.candidates : [];
 
-  return offers
+  return selectDriverPartOffers(offers, item, { allowUsed: false })
     .filter((offer) => cleanString(offer?.url) && (cleanString(offer?.title) || cleanString(offer?.seller)))
     .slice(0, 3);
 }

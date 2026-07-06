@@ -758,6 +758,34 @@ function driverPartTestEnv(db, offers) {
     licensePlateVerified: true,
     manualVehicleReview: false,
     vin: "WDD2573211A123456",
+    probablePart: "přední sklo",
+    oePartNumber: "A 257 670 00 01",
+    partName: "přední sklo"
+  };
+  const result = await runDriverPartPriceSearch({
+    PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS levně bez OE", price: "7 500 Kč", seller: "Dodavatel X", url: "https://example.test/x" },
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", price: "12 900 Kč", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo A 257 670 00 01 Mercedes CLS", price: "13 500 Kč", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Sklo pro jiný model A 257 670 99 99", price: "8 100 Kč", seller: "Dodavatel Y", url: "https://example.test/y" }
+      ]
+    })
+  }, item);
+  assert.equal(result.status, "partial_results");
+  assert.equal(result.offers.length, 2);
+  assert.deepEqual(result.offers.map((offer) => offer.seller), ["Dodavatel A", "Dodavatel B"]);
+  assert.equal(result.offers.some((offer) => offer.seller === "Dodavatel X"), false);
+  assert.equal(result.offers.every((offer) => offer.compatibilityEvidence === "oe_number"), true);
+}
+
+{
+  const item = {
+    licensePlate: "2BB 8251",
+    vehicleName: "Mercedes CLS",
+    licensePlateVerified: true,
+    manualVehicleReview: false,
+    vin: "WDD2573211A123456",
     probablePart: "výfuk / díl výfuku",
     oePartNumber: "A 257 490 12 00",
     partName: "tlumič výfuku"
@@ -869,8 +897,8 @@ function driverPartTestEnv(db, offers) {
     priceBoostStatus: "partial_results",
     priceBoostResultJson: JSON.stringify({
       offers: [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" }
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" }
       ]
     })
   };
@@ -887,9 +915,9 @@ function driverPartTestEnv(db, offers) {
     priceBoostStatus: "candidates_found",
     priceBoostResultJson: JSON.stringify({
       offers: [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
-        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Čelní sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
       ]
     })
   };
@@ -901,6 +929,23 @@ function driverPartTestEnv(db, offers) {
   assert.equal(driverPartRequestInternals.driverPartRequestPriceOffers(itemWithOffers).length, 3);
   const vinPilotEmailReady = driverPartRequestInternals.driverPartVinPilotState(itemWithOffers, { allowed: true });
   assert.equal(vinPilotEmailReady.status, "email_ready");
+
+  const itemWithUnprovenOffers = {
+    ...itemWithOffers,
+    priceBoostResultJson: JSON.stringify({
+      offers: [
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+      ]
+    })
+  };
+  const priceEligibilityWithUnprovenOffers = driverPartRequestInternals.driverPartRequestPatrikPriceHandoffEligibility(itemWithUnprovenOffers, {
+    requirePriceOffersForHandoff: true
+  });
+  assert.equal(priceEligibilityWithUnprovenOffers.allowed, false);
+  assert.equal(driverPartRequestInternals.driverPartRequestHasRequiredPriceOffers(itemWithUnprovenOffers), false);
+  assert.equal(driverPartRequestInternals.driverPartRequestPriceOffers(itemWithUnprovenOffers).length, 0);
 
   const readinessWithTwoOffers = await driverPartRequestInternals.driverPartRequestHandoffReadinessForItem({
     OPENAI_API_KEY: "test-openai-key",
@@ -948,8 +993,8 @@ function driverPartTestEnv(db, offers) {
     priceBoostResultJson: JSON.stringify({
       offers: [
         { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
-        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
       ]
     })
   }, { allowProbablePartHandoff: true });
@@ -973,8 +1018,8 @@ function driverPartTestEnv(db, offers) {
     priceBoostResultJson: JSON.stringify({
       offers: [
         { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", url: "https://example.test/a" },
-        { title: "Čelní sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
-        { title: "Sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel B", url: "https://example.test/b" },
+        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", url: "https://example.test/c" }
       ]
     })
   }, { allowProbablePartHandoff: true, requireVinPartVerification: true });
@@ -1345,8 +1390,8 @@ function driverPartTestEnv(db, offers) {
   try {
     processed = await processDriverPartRequestAfterVoiceCreate(
       driverPartTestEnv(backgroundTwoOfferDb, [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-        { title: "Přední sklo čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
       ]),
       adminUser,
       "driver-part-background-two-offers"
@@ -1399,8 +1444,8 @@ function driverPartTestEnv(db, offers) {
     await assert.rejects(
       () => handoffDriverPartRequest(
         driverPartTestEnv(twoOfferDb, [
-          { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-          { title: "Přední sklo čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
+          { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+          { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
         ]),
         adminUser,
         "driver-part-request-two-offers",
@@ -1473,10 +1518,10 @@ function driverPartTestEnv(db, offers) {
   try {
     handedOff = await handoffDriverPartRequest(
       driverPartTestEnv(threeOfferDb, [
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" },
-        { title: "Přední sklo Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
-        { title: "Použité přední sklo Mercedes CLS bazar", seller: "Bazoš", price: "3 000 Kč", url: "https://bazos.test/a" },
-        { title: "Přední sklo čelní sklo Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel C", price: "12 200 Kč", url: "https://example.test/c" },
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel A", price: "10 900 Kč", url: "https://example.test/a" },
+        { title: "Použité přední sklo A 257 670 00 01 Mercedes CLS bazar", seller: "Bazoš", price: "3 000 Kč", url: "https://bazos.test/a" },
+        { title: "Přední sklo A 257 670 00 01 Mercedes CLS", seller: "Dodavatel B", price: "11 500 Kč", url: "https://example.test/b" }
       ]),
       adminUser,
       "driver-part-request-three-offers",
