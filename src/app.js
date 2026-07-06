@@ -10147,28 +10147,7 @@ function vehicleTrackingPreviewSidebar() {
       label: "Správa",
       items: [
         { id: "maintenance", label: "Servis a údržba", href: "#tracking-preview-maintenance", icon: "maintenance", tone: "graphite" },
-        { id: "tires", label: "Pneumatiky", href: "#tracking-preview-tires", icon: "tires", tone: "bluegrey" },
-        { id: "customers", label: "Zákazníci", href: "#tracking-preview-customers", icon: "customers", tone: "teal" },
-        { id: "sample-routes", label: "Trasy vzorků", href: "#tracking-preview-sample-routes", icon: "sampleRoutes", tone: "teal" },
-        { id: "data-box", label: "Datová schránka", href: "#tracking-preview-data-box", icon: "dataBox", tone: "bluegrey" },
-        { id: "absence", label: "Dovolená / Nemoc", href: "#tracking-preview-absence", icon: "absence", tone: "amber" },
-        { id: "reports", label: "Reporty", href: "#tracking-preview-reports", icon: "reports", tone: "graphite" },
-        { id: "feedback", label: "Připomínky", href: "#tracking-preview-feedback", icon: "feedback", tone: "amber" }
-      ]
-    },
-    {
-      label: "Finance",
-      items: [
-        { id: "costs", label: "Náklady", href: "#tracking-preview-costs", icon: "costs", tone: "graphite" },
-        { id: "receivables", label: "Pohledávky", href: "#tracking-preview-receivables", icon: "receivables", tone: "bluegrey" }
-      ]
-    },
-    {
-      label: "Systém",
-      items: [
-        { id: "users-roles", label: "Uživatelé a role", href: "#tracking-preview-users-roles", icon: "usersRoles", tone: "bluegrey" },
-        { id: "settings", label: "Nastavení", href: "#tracking-preview-settings", icon: "settings", tone: "graphite" },
-        { id: "system-check", label: "Kontrola systému", href: "#tracking-preview-system-check", icon: "systemCheck", tone: "green" }
+        { id: "settings", label: "Nastavení", href: "#tracking-preview-settings", icon: "settings", tone: "graphite" }
       ]
     }
   ];
