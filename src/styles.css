@@ -7937,7 +7937,7 @@ body:has(.driver-tablet-preview-page--dark) {
   display: grid;
   min-height: 0;
   gap: var(--driver-preview-gap);
-  grid-template-rows: minmax(122px, 1.16fr) minmax(0, 0.84fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
   overflow: hidden;
 }
 
@@ -7950,7 +7950,7 @@ body:has(.driver-tablet-preview-page--dark) {
 
 .driver-tablet-preview-progress {
   gap: clamp(2px, 0.28vw, 4px);
-  grid-template-rows: auto minmax(clamp(58px, 5.15vw, 68px), 1fr) minmax(clamp(19px, 1.7vw, 24px), auto);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   align-content: center;
   padding: clamp(4px, 0.38vw, 5px);
 }
@@ -7970,7 +7970,7 @@ body:has(.driver-tablet-preview-page--dark) {
   grid-template-columns: minmax(0, 1fr) clamp(64px, 5.55vw, 75px);
   align-items: center;
   align-self: stretch;
-  min-height: clamp(58px, 5.15vw, 68px);
+  min-height: 0;
   padding: 0 clamp(1px, 0.16vw, 3px);
 }
 
