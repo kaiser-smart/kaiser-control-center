@@ -7151,6 +7151,13 @@ body:has(.driver-tablet-preview-page--dark) {
   overflow: hidden;
   border-radius: clamp(18px, 2.1vw, 46px);
   background: #000000;
+  font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.driver-tablet-preview-screen *,
+.driver-tablet-preview-screen *::before,
+.driver-tablet-preview-screen *::after {
+  font-family: inherit;
 }
 
 .driver-tablet-preview-screen .driver-tablet-preview-mode {
