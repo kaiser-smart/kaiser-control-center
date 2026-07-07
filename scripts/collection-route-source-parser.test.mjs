@@ -271,7 +271,7 @@ function derive(originalText) {
       Contract_FK_RecordId: "7337",
       Product_FK_RecordId: "product-sko",
       PickupAddressRuian_Caption: "Company",
-      PickupAddressRuian_MainProjection: "Brno, Komárov, U vlečky 726/5c, PSČ 61700",
+      PickupAddressRuian_FK_MainProjection: "Brno, Komárov, U vlečky 726/5c, PSČ 61700",
       Stanoviste: "U Vlečky 726/5c, 617 00 Brno - Komárov",
       StartDate: "2026-07-01"
     }],

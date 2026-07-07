@@ -1526,10 +1526,15 @@ function readVistosColumnValue(row, columnName) {
   }
   return firstNonEmpty(
     row[columnName],
+    row[`${columnName}_FK`],
     row[`${columnName}_Caption`],
+    row[`${columnName}_FK_Caption`],
     row[`${columnName}_MainProjection`],
+    row[`${columnName}_FK_MainProjection`],
     row[`${columnName}_Value`],
-    row[`${columnName}_RecordId`]
+    row[`${columnName}_FK_Value`],
+    row[`${columnName}_RecordId`],
+    row[`${columnName}_FK_RecordId`]
   );
 }
 
@@ -1539,10 +1544,15 @@ function readVistosColumnDisplayValue(row, columnName) {
   }
   return firstNonEmpty(
     row[`${columnName}_Caption`],
+    row[`${columnName}_FK_Caption`],
     row[`${columnName}_MainProjection`],
+    row[`${columnName}_FK_MainProjection`],
     row[`${columnName}_Value`],
+    row[`${columnName}_FK_Value`],
     row[columnName],
-    row[`${columnName}_RecordId`]
+    row[`${columnName}_FK`],
+    row[`${columnName}_RecordId`],
+    row[`${columnName}_FK_RecordId`]
   );
 }
 
@@ -1578,10 +1588,15 @@ function vistosAddressPlaceColumnValues(row, columnName) {
   }
   return [
     [row[`${columnName}_MainProjection`], `${columnName}_MainProjection`],
+    [row[`${columnName}_FK_MainProjection`], `${columnName}_FK_MainProjection`],
     [row[`${columnName}_Value`], `${columnName}_Value`],
+    [row[`${columnName}_FK_Value`], `${columnName}_FK_Value`],
     [row[columnName], columnName],
+    [row[`${columnName}_FK`], `${columnName}_FK`],
     [row[`${columnName}_Caption`], `${columnName}_Caption`],
-    [row[`${columnName}_RecordId`], `${columnName}_RecordId`]
+    [row[`${columnName}_FK_Caption`], `${columnName}_FK_Caption`],
+    [row[`${columnName}_RecordId`], `${columnName}_RecordId`],
+    [row[`${columnName}_FK_RecordId`], `${columnName}_FK_RecordId`]
   ]
     .map(([value, sourceColumn]) => ({
       sourceColumn,
