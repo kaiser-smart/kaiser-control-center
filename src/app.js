@@ -16570,14 +16570,16 @@ function collectionRoutesDriverTabletPreviewRows(options = {}) {
 
 function collectionRoutesDriverTabletPreviewAction(label, action, tone = "default") {
   const iconHtml = collectionRoutesSourceDriverActionIconHtml(label, action, tone);
+  const previewBadge = ["navigate", "sarlota"].includes(action) ? "neostre" : "preview";
   return `
     <button
       class="collection-routes-driver-action collection-routes-driver-action--${escapeHtml(tone)} driver-tablet-preview-action"
       type="button"
       data-driver-tablet-preview-action="${escapeHtml(action)}"
+      data-driver-tablet-preview-badge="${escapeHtml(previewBadge)}"
       aria-disabled="true"
-      aria-label="${escapeHtml(`${label} - design preview bez zapisu`)}"
-      title="Design preview - akce neni napojena na zapis"
+      aria-label="${escapeHtml(`${label} - design preview bez ostrych akci`)}"
+      title="Design preview - bez ostrych akci"
     >
       ${iconHtml}
       <span class="collection-routes-driver-action__label">${escapeHtml(label)}</span>
@@ -16602,10 +16604,6 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
     collectionRoutesSourceDriverContainerLabel(selectedRow)
   ].filter((value) => value && value !== "-").join(" | ") : "-";
   const currentTaskLabel = currentServiceLabel && currentServiceLabel !== "-" ? currentServiceLabel : "Proved svoz podle trasy";
-  const hasLoadedRows = !options.publicPreview && collectionRoutesVistosRouteDisplayRows().length > 0;
-  const sourceLabel = hasLoadedRows
-    ? "Read-only data z aktualniho filtru Vistos Svoz Kaiser"
-    : "Ukazkova data pro design preview";
 
   if (!selectedRow) {
     return `
@@ -16624,45 +16622,46 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
   }
 
   return `
-    <section class="driver-tablet-preview-frame" aria-label="Preview ridicskeho tabletu">
-      <div class="driver-tablet-preview-frame__label">
-        <span>Samostatna designova varianta</span>
-        <strong>${escapeHtml(sourceLabel)}</strong>
-      </div>
-      <div class="collection-routes-driver-mode driver-tablet-preview-mode" id="collection-routes-driver-tablet-preview">
+    <section class="driver-tablet-preview-device" aria-label="Preview ridicskeho tabletu">
+      <div class="driver-tablet-preview-screen">
+        <div class="collection-routes-driver-mode driver-tablet-preview-mode" id="collection-routes-driver-tablet-preview">
         <div class="collection-routes-driver-mode__topbar" aria-label="Stav ridicskeho preview">
           <div class="collection-routes-driver-mode__identity">
-            <span>Ridicsky tablet</span>
-            <strong>Design preview trasy</strong>
-            <small>Vistos Svoz Kaiser · akce nejsou napojene na zapis</small>
+            <span>Jsi na trase</span>
+            <strong>Ridicsky tablet</strong>
+            <small>Preview nic neuklada ani neposila</small>
           </div>
-          <div class="collection-routes-driver-mode__signals" aria-label="Cas a zvuky">
-            <span>Zvuky zap</span>
+          <div class="collection-routes-driver-mode__signals" aria-label="Rezim a cas">
+            <span>Kabina</span>
             <span>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</span>
           </div>
         </div>
 
         <div class="collection-routes-driver-mode__pilot-state" role="status">
-          DESIGN PREVIEW - tato obrazovka neuklada HOTOVO, problemy, navigaci ani komunikaci se Sarlotou.
+          Design preview - bez ostrych akci.
         </div>
 
         <div class="collection-routes-driver-mode__dashboard">
           <div class="collection-routes-driver-mode__main">
-            <section class="collection-routes-driver-mode__active" aria-label="Dalsi zastavka">
+            <section class="collection-routes-driver-mode__active" aria-label="Aktualni zastavka">
+              <div class="driver-tablet-preview-section-title">
+                <span>Aktualni zastavka</span>
+                <strong>Obsluz stanoviste</strong>
+              </div>
               <div class="collection-routes-driver-mode__route-pulse" aria-label="Postup trasy">
                 <strong>1 / ${escapeHtml(rows.length)}</strong>
-                <span>${escapeHtml(Math.max(0, rows.length - 1))} dalsich · ${escapeHtml(routeEtaText)}</span>
+                <span>Zbyva ${escapeHtml(Math.max(0, rows.length - 1))} | ${escapeHtml(routeEtaText)}</span>
               </div>
               <div class="collection-routes-driver-mode__hero-grid">
                 <div class="collection-routes-driver-mode__stop">
                   <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || 1)}</span>
                   <div>
-                    <span class="collection-routes-driver-mode__kicker">Dalsi stanoviste</span>
+                    <span class="collection-routes-driver-mode__kicker">Ted jsi tady</span>
                     <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
                     <p>${escapeHtml(selectedRow.addressText || "-")}</p>
-                    <span class="collection-routes-driver-mode__task-label">Ukol</span>
+                    <span class="collection-routes-driver-mode__task-label">Dalsi krok</span>
                     <strong>${escapeHtml(currentTaskLabel)}</strong>
-                    <small>Design preview: tlacitka zatim pouze ukazuji budouci ergonomii.</small>
+                    <small>Po obsluze stiskni HOTOVO.</small>
                   </div>
                 </div>
               </div>
@@ -16672,19 +16671,31 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
               </div>
             </section>
 
-            <div class="collection-routes-driver-mode__primary-actions" aria-label="Hlavni akce ridice - preview">
-              ${collectionRoutesDriverTabletPreviewAction("HOTOVO", "done", "done")}
-            </div>
+            <section class="driver-tablet-preview-main-step" aria-label="Hlavni krok ridice - preview">
+              <div class="driver-tablet-preview-section-title">
+                <span>Hlavni krok</span>
+                <strong>Potvrd zastavku</strong>
+              </div>
+              <div class="collection-routes-driver-mode__primary-actions">
+                ${collectionRoutesDriverTabletPreviewAction("HOTOVO", "done", "done")}
+              </div>
+            </section>
 
-            <div class="collection-routes-driver-mode__support-actions" aria-label="Vedlejsi akce ridice - preview">
-              ${collectionRoutesDriverTabletPreviewAction("Navigovat na dalsi stanoviste", "navigate", "navigate")}
-              ${collectionRoutesDriverTabletPreviewAction("Problem", "problem", "problem")}
-              ${collectionRoutesDriverTabletPreviewAction("Sarlota", "sarlota", "sarlota")}
-            </div>
+            <section class="driver-tablet-preview-support-step" aria-label="Vedlejsi akce ridice - preview">
+              <div class="driver-tablet-preview-section-title">
+                <span>Vedlejsi akce</span>
+                <strong>Jen kdyz potrebujes</strong>
+              </div>
+              <div class="collection-routes-driver-mode__support-actions">
+                ${collectionRoutesDriverTabletPreviewAction("Navigace", "navigate", "navigate")}
+                ${collectionRoutesDriverTabletPreviewAction("Problem", "problem", "problem")}
+                ${collectionRoutesDriverTabletPreviewAction("Sarlota", "sarlota", "sarlota")}
+              </div>
+            </section>
 
             <div class="collection-routes-driver-mode__bottom-bar" aria-label="Provozni akce ridice - preview">
-              ${collectionRoutesDriverTabletPreviewAction("Musim vysypat", "dump", "dump")}
-              ${collectionRoutesDriverTabletPreviewAction("Prestavka", "break", "break")}
+              ${collectionRoutesDriverTabletPreviewAction("Vysypat", "dump", "dump")}
+              ${collectionRoutesDriverTabletPreviewAction("Pauza", "break", "break")}
             </div>
 
             <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
@@ -16692,10 +16703,10 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
             </div>
           </div>
 
-          <aside class="collection-routes-driver-mode__queue" aria-label="Prubeh a zastavky v trase">
-            <div class="collection-routes-driver-progress-card" aria-label="Prubeh trasy">
-              <span>Prubeh trasy</span>
-              <strong>Hotovo ${escapeHtml(progressPercent)} %</strong>
+          <aside class="collection-routes-driver-mode__queue" aria-label="Stav trasy a dalsi zastavky">
+            <div class="collection-routes-driver-progress-card" aria-label="Stav trasy">
+              <span>Stav trasy</span>
+              <strong>${escapeHtml(progressPercent)} % hotovo</strong>
               <small>${escapeHtml(collectionRoutesMetricValue(completedCount))} z ${escapeHtml(collectionRoutesMetricValue(rows.length))} stanovist</small>
               <div class="collection-routes-driver-progress-card__bar" aria-hidden="true">
                 <span style="width: ${escapeHtml(progressPercent)}%"></span>
@@ -16707,7 +16718,7 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
               </dl>
             </div>
             <div class="collection-routes-driver-mode__list-head">
-              <strong>Dalsi zastavky (${escapeHtml(collectionRoutesMetricValue(visibleRows.length))})</strong>
+              <strong>Dalsi v trase (${escapeHtml(collectionRoutesMetricValue(visibleRows.length))})</strong>
               <span class="driver-tablet-preview-pill">Preview</span>
             </div>
             <div class="collection-routes-driver-mode__list">
@@ -16726,6 +16737,7 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
               `).join("")}
             </div>
           </aside>
+        </div>
         </div>
       </div>
     </section>
@@ -19022,10 +19034,6 @@ function collectionRoutesDriverTabletPreviewPage(user, options = {}) {
   return `
     <main class="app-shell module-page module-theme-scope collection-routes-page driver-tablet-preview-page driver-tablet-preview-page--${escapeHtml(previewTheme)}" data-driver-tablet-preview-theme="${escapeHtml(previewTheme)}" ${moduleThemeStyleAttribute()}>
       <header class="driver-tablet-preview-simple-header" aria-label="Ridicsky tablet preview">
-        <div class="driver-tablet-preview-simple-header__title">
-          <strong>Ridicsky tablet</strong>
-          <span>Neumorphic preview</span>
-        </div>
         <button
           class="driver-tablet-preview-theme-switcher driver-tablet-preview-theme-switcher--${escapeHtml(previewTheme)}"
           type="button"

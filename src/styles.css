@@ -7060,6 +7060,459 @@ body:has(.driver-tablet-preview-page--dark) {
   }
 }
 
+/* Tablet mockup preview: only the device screen plus the day/night switch. */
+body:has(.driver-tablet-preview-page),
+body:has(.driver-tablet-preview-page--light),
+body:has(.driver-tablet-preview-page--dark) {
+  overflow: hidden;
+  background: #444444;
+}
+
+.driver-tablet-preview-page {
+  display: grid;
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 16px;
+  place-items: center;
+  overflow: hidden;
+  background: #444444;
+}
+
+.driver-tablet-preview-simple-header {
+  position: fixed;
+  z-index: 5;
+  top: calc(18px + env(safe-area-inset-top));
+  right: calc(18px + env(safe-area-inset-right));
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.driver-tablet-preview-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  padding: 0;
+  place-items: center;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #444444;
+  box-shadow: none;
+}
+
+.driver-tablet-preview-device {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(960px, 112vw, 2200px);
+  max-width: none;
+  aspect-ratio: 3863 / 2868;
+  transform: translate(-50%, -50%);
+  background: url("/tablet.png") center / contain no-repeat;
+}
+
+.driver-tablet-preview-screen {
+  position: absolute;
+  top: 29.67%;
+  left: 30.18%;
+  display: grid;
+  width: 39.55%;
+  height: 40.7%;
+  overflow: hidden;
+  border-radius: clamp(18px, 2.1vw, 46px);
+  background: #000000;
+}
+
+.driver-tablet-preview-screen .driver-tablet-preview-mode {
+  height: 100%;
+  min-height: 0;
+  gap: clamp(6px, 0.72vw, 10px);
+  padding: clamp(8px, 0.9vw, 15px);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: var(--tracking-shell-bg);
+  box-shadow: none;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__topbar {
+  min-height: 0;
+  padding: clamp(7px, 0.75vw, 11px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-radius: clamp(10px, 1vw, var(--radius-md));
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__identity {
+  gap: 2px;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__identity strong {
+  font-size: clamp(1rem, 1.45vw, 1.45rem);
+  line-height: 1.04;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__identity span,
+.driver-tablet-preview-page .collection-routes-driver-mode__identity small,
+.driver-tablet-preview-page .collection-routes-driver-mode__signals span {
+  font-size: clamp(0.62rem, 0.72vw, 0.78rem);
+  line-height: 1.1;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__signals {
+  gap: 5px;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__signals span:first-child {
+  display: none;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__signals span {
+  min-height: 26px;
+  padding: 6px 8px;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__pilot-state {
+  display: none;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__dashboard {
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.44fr);
+  gap: clamp(7px, 0.8vw, 11px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__main,
+.driver-tablet-preview-page .collection-routes-driver-mode__queue {
+  gap: clamp(6px, 0.72vw, 10px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__main {
+  height: 100%;
+  grid-template-rows: clamp(112px, 11.7vw, 130px) auto auto auto;
+}
+
+.driver-tablet-preview-section-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.driver-tablet-preview-section-title span {
+  color: var(--brand-accent);
+  font-size: clamp(0.58rem, 0.64vw, 0.72rem);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.driver-tablet-preview-section-title strong {
+  color: var(--text-muted-strong);
+  font-size: clamp(0.68rem, 0.78vw, 0.88rem);
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__active,
+.driver-tablet-preview-main-step,
+.driver-tablet-preview-support-step,
+.driver-tablet-preview-page .collection-routes-driver-mode__queue {
+  padding: clamp(7px, 0.8vw, 11px);
+  border: 1px solid var(--border-soft);
+  border-radius: clamp(11px, 1vw, var(--radius-md));
+  background: var(--tracking-panel-bg);
+  box-shadow: var(--shadow-card), var(--highlight-edge);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__active {
+  gap: clamp(5px, 0.68vw, 9px);
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__route-pulse {
+  padding: 6px 8px;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__route-pulse strong,
+.driver-tablet-preview-page .collection-routes-driver-mode__route-pulse span {
+  font-size: clamp(0.64rem, 0.75vw, 0.82rem);
+  line-height: 1;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__stop {
+  min-height: 0;
+  gap: clamp(8px, 0.9vw, 12px);
+  padding: clamp(9px, 1vw, 14px);
+  border-radius: clamp(11px, 1vw, var(--radius-md));
+  overflow: hidden;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__order {
+  min-width: clamp(46px, 5vw, 68px);
+  min-height: clamp(46px, 5vw, 68px);
+  border-radius: clamp(10px, 0.9vw, var(--radius-md));
+  font-size: clamp(1.22rem, 2.1vw, 2rem);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__stop h4 {
+  font-size: clamp(1.28rem, 2.18vw, 2.28rem);
+  line-height: 1.02;
+  -webkit-line-clamp: 1;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__stop p {
+  margin-top: 5px;
+  font-size: clamp(0.84rem, 1.18vw, 1.12rem);
+  line-height: 1.12;
+  -webkit-line-clamp: 1;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__task-label {
+  margin: 7px 0 4px;
+  font-size: clamp(0.58rem, 0.66vw, 0.72rem);
+  line-height: 1;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__stop strong {
+  padding: 6px 9px;
+  border-radius: clamp(8px, 0.8vw, var(--radius-sm));
+  font-size: clamp(0.78rem, 1vw, 1rem);
+  line-height: 1.08;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__stop small {
+  margin-top: 6px;
+  font-size: clamp(0.62rem, 0.72vw, 0.78rem);
+  line-height: 1.12;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__facts {
+  display: none;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__facts article {
+  min-height: 42px;
+  padding: 7px 8px;
+  border-radius: clamp(9px, 0.9vw, var(--radius-sm));
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__facts span,
+.driver-tablet-preview-page .collection-routes-driver-progress-card span,
+.driver-tablet-preview-page .collection-routes-driver-progress-card dt {
+  font-size: clamp(0.55rem, 0.62vw, 0.68rem);
+  line-height: 1;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__facts strong,
+.driver-tablet-preview-page .collection-routes-driver-progress-card dd {
+  font-size: clamp(0.68rem, 0.8vw, 0.9rem);
+  line-height: 1.08;
+}
+
+.driver-tablet-preview-main-step,
+.driver-tablet-preview-support-step {
+  display: grid;
+  gap: clamp(6px, 0.72vw, 9px);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__primary-actions .collection-routes-driver-action {
+  min-height: clamp(70px, 6.4vw, 84px);
+  border-width: 2px;
+  font-size: clamp(1.42rem, 2.45vw, 2.42rem);
+  letter-spacing: 0;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__support-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(6px, 0.72vw, 9px);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__support-actions .collection-routes-driver-action,
+.driver-tablet-preview-page .collection-routes-driver-mode__bottom-bar .collection-routes-driver-action {
+  height: clamp(42px, 4.1vw, 54px);
+  min-height: 0;
+  padding: 6px 8px;
+  gap: 6px;
+  font-size: clamp(0.68rem, 0.9vw, 0.96rem);
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__support-actions .collection-routes-driver-action__label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: clamp(0.62rem, 0.74vw, 0.82rem);
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__support-actions .collection-routes-driver-action__icon {
+  width: clamp(28px, 2.75vw, 36px);
+  height: clamp(28px, 2.75vw, 36px);
+  flex: 0 0 auto;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-action__icon {
+  width: clamp(28px, 3.15vw, 42px);
+  height: clamp(28px, 3.15vw, 42px);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-action__icon svg {
+  width: clamp(17px, 1.85vw, 25px);
+  height: clamp(17px, 1.85vw, 25px);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-action--done .collection-routes-driver-action__icon {
+  width: clamp(40px, 4.4vw, 58px);
+  height: clamp(40px, 4.4vw, 58px);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-action--done .collection-routes-driver-action__icon svg {
+  width: clamp(25px, 2.8vw, 36px);
+  height: clamp(25px, 2.8vw, 36px);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__bottom-bar {
+  display: none;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__progress {
+  height: 8px;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-progress-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-progress-card strong {
+  font-size: clamp(1.05rem, 1.42vw, 1.42rem);
+  line-height: 1.05;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-progress-card small,
+.driver-tablet-preview-page .collection-routes-driver-progress-card em {
+  font-size: clamp(0.58rem, 0.68vw, 0.74rem);
+  line-height: 1.12;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-progress-card dl {
+  gap: 5px;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-progress-card dl div {
+  padding: 7px;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__list-head strong {
+  font-size: clamp(0.7rem, 0.82vw, 0.9rem);
+  line-height: 1.05;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-mode__list {
+  grid-template-columns: 1fr;
+  gap: 6px;
+  max-height: none;
+  min-height: 0;
+  overflow: hidden;
+  padding-right: 0;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-stop {
+  min-height: clamp(42px, 4.9vw, 58px);
+  padding: 7px;
+  border-radius: clamp(9px, 0.9vw, var(--radius-sm));
+}
+
+.driver-tablet-preview-page .collection-routes-driver-stop__order {
+  min-width: 28px;
+  min-height: 28px;
+  font-size: clamp(0.68rem, 0.82vw, 0.9rem);
+}
+
+.driver-tablet-preview-page .collection-routes-driver-stop strong {
+  font-size: clamp(0.66rem, 0.78vw, 0.86rem);
+  line-height: 1.08;
+}
+
+.driver-tablet-preview-page .collection-routes-driver-stop small {
+  font-size: clamp(0.56rem, 0.66vw, 0.72rem);
+  line-height: 1.08;
+}
+
+.driver-tablet-preview-action::after {
+  content: attr(data-driver-tablet-preview-badge);
+  top: 5px;
+  right: 6px;
+  min-height: 18px;
+  padding: 3px 6px;
+  font-size: clamp(0.48rem, 0.55vw, 0.6rem);
+  opacity: 0.78;
+}
+
+.driver-tablet-preview-theme-switcher {
+  min-height: 42px;
+  padding: 4px 6px 4px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(18, 22, 24, 0.52);
+  color: #f5f7f7;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 920px) {
+  .driver-tablet-preview-page {
+    width: 100%;
+    padding: 0;
+    padding-bottom: 0;
+  }
+
+  .driver-tablet-preview-device {
+    width: clamp(900px, 168vw, 1280px);
+  }
+
+  .driver-tablet-preview-simple-header {
+    top: calc(10px + env(safe-area-inset-top));
+    right: calc(10px + env(safe-area-inset-right));
+  }
+
+  .driver-tablet-preview-page .collection-routes-driver-mode__queue {
+    display: none;
+  }
+
+  .driver-tablet-preview-page .collection-routes-driver-mode__dashboard,
+  .driver-tablet-preview-page .collection-routes-driver-mode__support-actions,
+  .driver-tablet-preview-page .collection-routes-driver-mode__bottom-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .driver-tablet-preview-page .collection-routes-driver-mode__bottom-bar {
+    display: none;
+  }
+}
+
 .collection-routes-panel--driver-print .collection-routes-preview-table {
   border-radius: 8px;
 }
