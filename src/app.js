@@ -873,6 +873,10 @@ const receivablesState = {
   invoiceSnapshotMessage: "",
   invoiceSnapshotAdvanceRuns: 0,
   invoiceSnapshotAdvanceTimer: 0,
+  ledgerMapping: null,
+  ledgerMappingLoaded: false,
+  ledgerMappingLoading: false,
+  ledgerMappingError: "",
   vistosPreview: null,
   vistosPreviewLoading: false,
   vistosPreviewError: "",
@@ -23337,6 +23341,150 @@ function receivablesInvoiceSnapshotPanel() {
   `;
 }
 
+function receivablesLedgerMappingSummary(mapping) {
+  const summary = mapping?.summary || {};
+  const cards = [
+    ["Faktur ve snapshotu", summary.invoiceCount || 0],
+    ["Kandidátů zákazníků", summary.customerCandidateCount || 0],
+    ["Ready kandidátů", summary.readyCandidateCount || 0],
+    ["Ke kontrole", summary.reviewCandidateCount || 0],
+    ["Otevřené faktury", summary.openInvoiceCount || 0],
+    ["Po splatnosti", summary.overdueInvoiceCount || 0],
+    ["Neurčené faktury", summary.unresolvedInvoiceCount || 0],
+    ["Otevřeno celkem", formatReceivableMoney(summary.totalOpenAmount)]
+  ];
+
+  return `
+    <div class="receivables-import-summary" aria-label="Souhrn ledger mapping preview">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function receivablesLedgerMappingIssues(mapping) {
+  const issueCounts = mapping?.summary?.issueCounts || [];
+  if (!issueCounts.length) {
+    return `<p class="receivables-empty">Ledger mapping nehlásí datové mezery.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead><tr><th>Datová kontrola</th><th>Počet faktur</th></tr></thead>
+        <tbody>
+          ${issueCounts.slice(0, 12).map((issue) => `
+            <tr>
+              <td data-label="Datová kontrola">${escapeHtml(issue.code || "-")}</td>
+              <td data-label="Počet faktur">${escapeHtml(issue.count || 0)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesLedgerMappingTable(mapping) {
+  const candidates = mapping?.candidates || [];
+  if (receivablesState.ledgerMappingLoading && !candidates.length) {
+    return `<p class="receivables-empty">Načítám read-only ledger mapping...</p>`;
+  }
+  if (!candidates.length) {
+    return `<p class="receivables-empty">Ledger mapping zatím nemá kandidáty.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead>
+          <tr>
+            <th>Zákazník</th>
+            <th>Klíč</th>
+            <th>Faktur</th>
+            <th>Otevřeno</th>
+            <th>Po splatnosti</th>
+            <th>Max dnů</th>
+            <th>Nejstarší splatnost</th>
+            <th>Kontrola</th>
+            <th>Návrh</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${candidates.map((candidate) => `
+            <tr>
+              <td data-label="Zákazník">
+                <strong>${escapeHtml(candidate.customerName || "-")}</strong>
+                <small>${escapeHtml(candidate.ico ? `IČO ${candidate.ico}` : candidate.dic || "")}</small>
+              </td>
+              <td data-label="Klíč">${escapeHtml(candidate.customerKeyType || "-")}: ${escapeHtml(candidate.customerKeyValue || "-")}</td>
+              <td data-label="Faktur">${escapeHtml(candidate.invoiceCount || 0)}</td>
+              <td data-label="Otevřeno">${escapeHtml(formatReceivableMoney(candidate.openAmount))}</td>
+              <td data-label="Po splatnosti">${escapeHtml(candidate.overdueInvoiceCount || 0)}</td>
+              <td data-label="Max dnů">${escapeHtml(candidate.maxDaysOverdue || 0)}</td>
+              <td data-label="Nejstarší splatnost">${escapeHtml(candidate.oldestDueDate || "-")}</td>
+              <td data-label="Kontrola">${receivablesPill(candidate.mappingStatus || "-", candidate.mappingStatus === "ready" ? "ready" : "warning")}</td>
+              <td data-label="Návrh">${escapeHtml(candidate.recommendedAction || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesLedgerMappingPanel() {
+  const mapping = receivablesState.ledgerMapping?.mapping || null;
+  const summary = mapping?.summary || {};
+  const snapshot = receivablesState.ledgerMapping?.snapshot || null;
+  const safetyRows = [
+    ["Zdroj", "poslední Vistos snapshot"],
+    ["D1 zápis", "ne"],
+    ["Ostrý ledger", "vypnuto"],
+    ["Komunikace", "vypnuto"],
+    ["Autonomie", "vypnuto"]
+  ];
+
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-ledger-mapping-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Ledger mapping</p>
+          <h2 id="receivables-ledger-mapping-title">Read-only kandidáti do ledgeru</h2>
+          <p>Automatický náhled seskupuje faktury podle zákaznického klíče a počítá otevřené zůstatky. Zůstává bez ostrého zápisu a bez komunikace zákazníkům.</p>
+        </div>
+        ${receivablesPill(receivablesState.ledgerMappingLoading ? "načítám" : "read-only", "ready")}
+      </div>
+      ${receivablesState.ledgerMappingError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.ledgerMappingError)}</p>` : ""}
+      ${mapping ? receivablesLedgerMappingSummary(mapping) : `<p class="receivables-empty">Ledger mapping se načte automaticky po snapshotu.</p>`}
+      <div class="receivables-import-diagnostics">
+        <section>
+          <h3>Bezpečnostní pojistky</h3>
+          <dl class="receivables-diagnostics-list">
+            ${safetyRows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+            <div><dt>Snapshot</dt><dd>${escapeHtml(snapshot?.rowCount ? `${snapshot.rowCount} řádků` : "čeká")}</dd></div>
+          </dl>
+        </section>
+        <section>
+          <h3>Kontrolní fronta</h3>
+          ${receivablesLedgerMappingIssues(mapping)}
+        </section>
+      </div>
+      <div class="receivables-import-diagnostics">
+        <section>
+          <h3>Top kandidáti podle otevřené částky</h3>
+          <p class="receivables-empty">Zobrazeno ${escapeHtml(mapping?.pagination?.returned || 0)} z ${escapeHtml(mapping?.pagination?.totalCandidates || summary.customerCandidateCount || 0)} kandidátů.</p>
+          ${receivablesLedgerMappingTable(mapping)}
+        </section>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesVistosPreviewSummary(preview) {
   const summary = preview?.summary || {};
   const cards = [
@@ -23521,6 +23669,7 @@ function receivablesVistosPreviewPanel() {
 function receivablesImportSection() {
   return `
     ${receivablesInvoiceSnapshotPanel()}
+    ${receivablesLedgerMappingPanel()}
   `;
 }
 
@@ -24768,6 +24917,10 @@ async function loadReceivablesInvoiceSnapshot(options = {}) {
     receivablesState.invoiceSnapshotPagination = result.pagination || null;
     receivablesState.invoiceSnapshotLoaded = true;
     receivablesState.invoiceSnapshotMessage = result.snapshot?.summary?.recommendedNextStep || "";
+    const summary = receivablesState.invoiceSnapshot?.summary || {};
+    if (!summary.capped && !receivablesState.ledgerMappingLoading) {
+      void loadReceivablesLedgerMapping();
+    }
   } catch (error) {
     receivablesState.invoiceSnapshotError = error.payload?.error || error.message || "Snapshot Vistos faktur se teď nepodařilo načíst.";
     receivablesState.invoiceSnapshotLoaded = true;
@@ -24777,6 +24930,28 @@ async function loadReceivablesInvoiceSnapshot(options = {}) {
       render();
     }
     scheduleReceivablesInvoiceSnapshotAdvance();
+  }
+}
+
+async function loadReceivablesLedgerMapping(options = {}) {
+  if (receivablesState.ledgerMappingLoading) {
+    return;
+  }
+
+  receivablesState.ledgerMappingLoading = true;
+  receivablesState.ledgerMappingError = "";
+  try {
+    const result = await apiJson("/api/receivables/vistos/ledger-mapping?limit=80");
+    receivablesState.ledgerMapping = result || null;
+    receivablesState.ledgerMappingLoaded = true;
+  } catch (error) {
+    receivablesState.ledgerMappingError = error.payload?.error || error.message || "Ledger mapping preview se teď nepodařilo načíst.";
+    receivablesState.ledgerMappingLoaded = true;
+  } finally {
+    receivablesState.ledgerMappingLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
   }
 }
 
@@ -24863,6 +25038,16 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "import" && !receivablesState.invoiceSnapshotLoaded && !receivablesState.invoiceSnapshotLoading) {
     void loadReceivablesInvoiceSnapshot();
+  }
+
+  if (
+    context.view === "import"
+    && receivablesState.invoiceSnapshotLoaded
+    && !receivablesInvoiceSnapshotShouldAdvance()
+    && !receivablesState.ledgerMappingLoaded
+    && !receivablesState.ledgerMappingLoading
+  ) {
+    void loadReceivablesLedgerMapping();
   }
 }
 

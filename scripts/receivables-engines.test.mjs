@@ -16,6 +16,7 @@ import {
   mapReceivablesVistosCompany,
   mapReceivablesVistosInvoice
 } from "../functions/_lib/receivables-vistos-preview.js";
+import { buildReceivablesVistosLedgerMapping } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import {
   calculateInvoicePaymentState,
@@ -73,6 +74,62 @@ assert.equal(receivableToleranceAmount(250000), 250);
   ]);
   assert.equal(state.status, "overpaid");
   assert.equal(state.openAmount, 0);
+}
+
+{
+  const mapping = buildReceivablesVistosLedgerMapping([
+    {
+      previewStatus: "ready",
+      invoice: {
+        invoiceNumber: "2601101477",
+        variableSymbol: "2601101477",
+        customerBranchId: "BR-1",
+        customerName: "Firma Alfa s.r.o.",
+        ico: "12345678",
+        issueDate: "2026-06-01",
+        dueDate: "2026-06-14",
+        totalAmount: 1210,
+        paidAmount: 0,
+        openAmount: 1210
+      }
+    },
+    {
+      previewStatus: "review",
+      issueCode: "missing_due_date",
+      invoice: {
+        invoiceNumber: "2601101478",
+        customerBranchId: "BR-1",
+        customerName: "Firma Alfa s.r.o.",
+        totalAmount: 500,
+        paidAmount: 0,
+        openAmount: 500
+      }
+    },
+    {
+      previewStatus: "ready",
+      invoice: {
+        invoiceNumber: "2601101479",
+        customerCompanyId: "C-2",
+        customerName: "Beta a.s.",
+        dueDate: "2026-07-01",
+        totalAmount: 200,
+        paidAmount: 200,
+        openAmount: 0,
+        isPaid: true
+      }
+    }
+  ], { today: "2026-07-07" });
+  assert.equal(mapping.readOnly, true);
+  assert.equal(mapping.writesLedger, false);
+  assert.equal(mapping.mapping.summary.invoiceCount, 3);
+  assert.equal(mapping.mapping.summary.customerCandidateCount, 2);
+  assert.equal(mapping.mapping.summary.totalOpenAmount, 1710);
+  assert.equal(mapping.mapping.summary.reviewInvoiceCount, 1);
+  assert.equal(mapping.mapping.candidates[0].customerName, "Firma Alfa s.r.o.");
+  assert.equal(mapping.mapping.candidates[0].invoiceCount, 2);
+  assert.equal(mapping.mapping.candidates[0].openAmount, 1710);
+  assert.equal(mapping.mapping.candidates[0].mappingStatus, "needs_invoice_review");
+  assert.equal(mapping.mapping.candidates[0].maxDaysOverdue, 23);
 }
 
 {

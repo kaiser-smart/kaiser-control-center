@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.429"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.430"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: read-only ledger mapping",
+    text: "Import Pohledávek nad plným Vistos snapshotem automaticky seskupuje faktury podle zákaznického klíče, počítá otevřené zůstatky a ukazuje kandidáty do ledgeru bez ostrého zápisu a bez komunikace zákazníkům."
+  },
   {
     title: "Pohledávky: dávkový snapshot faktur",
     text: "Vistos faktury se v importu Pohledávek načítají automaticky po bezpečných read-only dávkách do stagingu, bez ledger zápisu, komunikace a automatizace."

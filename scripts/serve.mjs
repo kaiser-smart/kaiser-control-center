@@ -80,6 +80,8 @@ import {
   normalizeRole,
   roleLabel
 } from "../src/permissions.js";
+import { buildReceivablesVistosLedgerMapping } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
+import { receivablesVistosInvoiceLookbackWindow } from "../functions/_lib/receivables-vistos-preview.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -3384,6 +3386,27 @@ function mockReceivablesVistosInvoiceSnapshot() {
   };
 }
 
+function mockReceivablesVistosLedgerMapping() {
+  const snapshot = mockReceivablesVistosInvoiceSnapshot();
+  const rows = snapshot.rows.map((row) => ({
+    invoice: row.invoice,
+    previewStatus: row.previewStatus,
+    issueCode: row.issueCode,
+    issueMessage: row.issueMessage
+  }));
+  return {
+    ...buildReceivablesVistosLedgerMapping(rows, { limit: 80, today: "2026-07-07" }),
+    snapshot: {
+      batchId: snapshot.snapshot.batch.id,
+      status: snapshot.snapshot.batch.status,
+      rowCount: snapshot.snapshot.batch.rowCount,
+      createdAt: snapshot.snapshot.batch.createdAt,
+      updatedAt: snapshot.snapshot.batch.updatedAt
+    },
+    mode: "local_mock"
+  };
+}
+
 function mockReceivablesVistosSchemaProbePreview() {
   const targetEntities = [
     "DirectoryWithBranch",
@@ -3627,6 +3650,10 @@ async function handleApi(request, response) {
     const preview = mockReceivablesLedgerReadinessPreview();
     if (url.pathname === "/api/receivables/vistos/invoice-snapshot") {
       sendJson(response, 200, { ...mockReceivablesVistosInvoiceSnapshot(), mode: "local_mock" });
+      return true;
+    }
+    if (url.pathname === "/api/receivables/vistos/ledger-mapping") {
+      sendJson(response, 200, mockReceivablesVistosLedgerMapping());
       return true;
     }
     if (url.pathname === "/api/receivables/vistos/schema-probe") {
