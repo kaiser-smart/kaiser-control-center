@@ -7988,6 +7988,7 @@ body:has(.driver-tablet-preview-page--dark) {
   box-shadow: var(--driver-preview-control-shadow);
   isolation: isolate;
   overflow: hidden;
+  transform: translateY(clamp(-29px, -2.3vw, -20px));
 }
 
 .driver-tablet-preview-progress__copy {
