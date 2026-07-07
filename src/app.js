@@ -1216,7 +1216,8 @@ const vehicleTrackingDemoState = {
   googleMapsPromise: null,
   googleMapNode: null,
   googleMap: null,
-  googleOverlays: null
+  googleOverlays: null,
+  mapExpanded: false
 };
 const vehicleTrackingLiveState = {
   sourceMode: "tcars",
@@ -10806,12 +10807,34 @@ function vehicleTrackingDemoMapNotice() {
   `;
 }
 
+function vehicleTrackingMapExpandControl() {
+  const expanded = Boolean(vehicleTrackingDemoState.mapExpanded);
+
+  return `
+    <button
+      class="tracking-map-expand-control"
+      type="button"
+      data-tracking-demo-control="toggle-map-width"
+      aria-pressed="${expanded ? "true" : "false"}"
+      aria-label="${expanded ? "Zmenšit demo mapu" : "Zvětšit demo mapu na celou šířku sloupce"}"
+      title="${expanded ? "Zmenšit mapu" : "Zvětšit mapu"}"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        ${expanded
+          ? `<path d="M9 4v5H4"/><path d="M15 4v5h5"/><path d="M9 20v-5H4"/><path d="M15 20v-5h5"/><path d="M4 9l5-5"/><path d="M20 9l-5-5"/><path d="M4 15l5 5"/><path d="M20 15l-5 5"/>`
+          : `<path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/><path d="M9 4 4 9"/><path d="m15 4 5 5"/><path d="m9 20-5-5"/><path d="m15 20 5-5"/>`}
+      </svg>
+    </button>
+  `;
+}
+
 function vehicleTrackingMapSection(visibleVehicles, selectedVehicle) {
   const elapsedMs = vehicleTrackingDemoCurrentElapsed();
   const hasGoogleMapsKey = Boolean(vehicleTrackingDemoGoogleMapsKey());
+  const expanded = Boolean(vehicleTrackingDemoState.mapExpanded);
 
   return `
-    <section class="tracking-section tracking-section--map tracking-demo-map-section" id="tracking-map" aria-labelledby="tracking-map-title">
+    <section class="tracking-section tracking-section--map tracking-demo-map-section ${expanded ? "tracking-demo-map-section--expanded" : ""}" id="tracking-map" aria-labelledby="tracking-map-title">
       ${vehicleTrackingSectionHeader(
         "tracking-map-title",
         hasGoogleMapsKey ? "Google mapa vozidel" : "Demo mapa vozidel",
@@ -10823,7 +10846,7 @@ function vehicleTrackingMapSection(visibleVehicles, selectedVehicle) {
       ${vehicleTrackingDemoControls()}
       ${vehicleTrackingDemoScenarioPanel(elapsedMs)}
       ${hasGoogleMapsKey ? "" : vehicleTrackingDemoMapNotice()}
-      ${vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, { elapsedMs, hasGoogleMapsKey })}
+      ${vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, { elapsedMs, hasGoogleMapsKey, showExpandControl: true })}
       <div class="tracking-status-legend" aria-label="Stavy demo vozidel">
         ${DEMO_VEHICLE_TRACKING_STATUS_FILTERS.filter((filter) => filter.value !== "all").map((filter) => `
           <span class="tracking-status tracking-status--${escapeHtml(vehicleTrackingDemoStatusTone(filter.value))}">
@@ -10859,6 +10882,7 @@ function vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, options 
           ${visibleVehicles.map((vehicle) => vehicleTrackingDemoMarker(vehicle, selectedVehicle, elapsedMs)).join("")}
         `}
       ${vehicleTrackingDemoAlertOverlay(elapsedMs)}
+      ${options.showExpandControl ? vehicleTrackingMapExpandControl() : ""}
     </div>
   `;
 }
@@ -12125,6 +12149,12 @@ function handleVehicleTrackingDemoControl(action) {
 
   if (action === "mute") {
     vehicleTrackingDemoState.mutedForLoop = true;
+    return;
+  }
+
+  if (action === "toggle-map-width") {
+    vehicleTrackingDemoState.mapExpanded = !vehicleTrackingDemoState.mapExpanded;
+    render();
     return;
   }
 

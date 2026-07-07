@@ -4107,6 +4107,18 @@ h1 {
   grid-column: auto;
 }
 
+.tracking-demo-layout .tracking-demo-map-section--expanded {
+  grid-column: 1 / -1;
+}
+
+.tracking-demo-layout .tracking-demo-map-section--expanded ~ .tracking-demo-list-section {
+  grid-column: 1 / -1;
+}
+
+.tracking-demo-layout .tracking-demo-map-section--expanded ~ .tracking-demo-list-section .tracking-demo-vehicle-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .tracking-demo-detail-section,
 .tracking-demo-api-section {
   grid-column: 1 / -1;
@@ -4123,8 +4135,56 @@ h1 {
   background-size: auto, auto, 54px 54px, 54px 54px, auto;
 }
 
+.tracking-demo-map-section--expanded .tracking-demo-map {
+  min-height: 540px;
+}
+
 .tracking-demo-map--google {
   background: #edf4e8;
+}
+
+.tracking-map-expand-control {
+  position: absolute;
+  z-index: 18;
+  bottom: 14px;
+  left: 14px;
+  display: inline-flex;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--kaiser-green) 34%, #c8d4c3);
+  border-radius: 999px;
+  background: rgba(251, 253, 249, 0.94);
+  color: var(--kaiser-green-dark);
+  box-shadow: 0 10px 24px rgba(35, 40, 33, 0.16);
+  cursor: pointer;
+}
+
+.tracking-map-expand-control svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tracking-map-expand-control:hover,
+.tracking-map-expand-control:focus-visible,
+.tracking-map-expand-control[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--kaiser-green) 48%, #c8d4c3);
+  background: #f5faef;
+  color: var(--kaiser-green-dark);
+}
+
+.tracking-map-expand-control:focus-visible {
+  outline: 3px solid rgba(117, 189, 37, 0.18);
+  outline-offset: 2px;
 }
 
 .tracking-google-map {
@@ -16100,6 +16160,18 @@ body:has(.data-box-page) {
     min-height: 360px;
   }
 
+  .tracking-demo-map-section--expanded .tracking-demo-map {
+    min-height: 360px;
+  }
+
+  .tracking-demo-layout .tracking-demo-map-section--expanded ~ .tracking-demo-list-section .tracking-demo-vehicle-list {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-map-expand-control {
+    display: none;
+  }
+
   .tracking-tcars-map {
     min-height: 360px;
   }
@@ -25795,7 +25867,9 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-hero {
 
 .tracking-page--soft-metal-preview .tracking-map-vehicle-label {
   border-color: var(--border-highlight);
-  background: color-mix(in srgb, var(--surface-raised) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  color: var(--text-main);
+  font-weight: 900;
   box-shadow: var(--shadow-control);
 }
 
@@ -26110,8 +26184,9 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-hero {
 .tracking-page--soft-metal-preview .tracking-wim-map__label,
 .tracking-page--soft-metal-preview .tracking-demo-place {
   border-color: var(--border-soft);
-  background: color-mix(in srgb, var(--surface-raised) 78%, transparent);
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  color: var(--text-main);
+  font-weight: 850;
 }
 
 .tracking-page--soft-metal-preview .tracking-wim-map-legend span {
@@ -27112,7 +27187,7 @@ body:not([data-theme="dark"]) .tracking-page--soft-metal-preview .tracking-previ
   overflow: hidden;
   color: currentColor;
   font-size: 0.84rem;
-  font-weight: 800;
+  font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -27277,6 +27352,8 @@ body:not([data-theme="dark"]) .tracking-page--soft-metal-preview .tracking-previ
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-metric__icon {
+  --icon-color: var(--sidebar-button-icon-color);
+  --icon-filter: var(--sidebar-button-icon-filter);
   border-color: color-mix(in srgb, var(--icon-color, var(--tracking-graphite)) 24%, var(--border-soft));
   background: var(--tracking-control-bg);
   box-shadow: var(--shadow-control);
@@ -27501,7 +27578,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--sidebar-button-icon-color);
   box-shadow: none;
   cursor: pointer;
 }
@@ -27509,7 +27586,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
   width: 33px;
   height: 33px;
-  filter: grayscale(1) saturate(0.22) brightness(0.76);
+  filter: var(--sidebar-button-icon-filter);
   opacity: var(--icon-opacity-default);
   transform: none;
   transition:
@@ -27519,8 +27596,8 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 
 .tracking-page--soft-metal-preview .tracking-utility-icon-button:hover .theme-icon-img,
 .tracking-page--soft-metal-preview .tracking-utility-icon-button:focus-visible .theme-icon-img {
-  filter: none;
-  opacity: 1;
+  filter: var(--sidebar-button-hover-icon-filter);
+  opacity: var(--icon-opacity-active);
 }
 
 .tracking-page--soft-metal-preview .tracking-utility-logo {
