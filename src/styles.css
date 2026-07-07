@@ -6466,6 +6466,7 @@ body:has(.driver-tablet-preview-page--dark) {
   --chip-text: var(--text-muted-strong);
   --driver-metal-sheen: radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.82), transparent 34%);
   --driver-card-overlay: linear-gradient(145deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.02) 48%);
+  --driver-preview-control-shadow: 2px 3px 8px rgba(77, 91, 100, 0.09), -2px -2px 7px rgba(255, 255, 255, 0.7);
   --driver-green: #69bf21;
   --driver-green-deep: #2f7b16;
   --driver-green-glow: rgba(105, 191, 33, 0.24);
@@ -6523,6 +6524,7 @@ body:has(.driver-tablet-preview-page--dark) {
   --chip-text: color-mix(in srgb, var(--text-main) 88%, transparent);
   --driver-metal-sheen: radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.14), transparent 35%);
   --driver-card-overlay: linear-gradient(145deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.006) 50%);
+  --driver-preview-control-shadow: 3px 5px 11px rgba(0, 0, 0, 0.24), -2px -2px 7px rgba(255, 255, 255, 0.024);
   --driver-green: #6fc51f;
   --driver-green-deep: #205e12;
   --driver-green-glow: rgba(111, 197, 31, 0.34);
@@ -6557,7 +6559,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border-radius: var(--radius-lg);
   background: var(--tracking-metal-bg);
   color: var(--text-main);
-  box-shadow: var(--shadow-card), var(--highlight-edge);
+  box-shadow: var(--shadow-card);
 }
 
 .driver-tablet-preview-simple-header {
@@ -6569,7 +6571,7 @@ body:has(.driver-tablet-preview-page--dark) {
   min-height: 62px;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-panel), var(--highlight-edge);
+  box-shadow: var(--shadow-panel);
 }
 
 .driver-tablet-preview-simple-header__title {
@@ -6648,7 +6650,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border-radius: 999px;
   background: var(--tracking-control-bg);
   color: var(--text-main);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
   transition:
     transform 190ms ease,
     border-color 180ms ease,
@@ -6726,7 +6728,7 @@ body:has(.driver-tablet-preview-page--dark) {
   padding: var(--space-md);
   border-radius: var(--radius-xl);
   background: var(--tracking-panel-bg);
-  box-shadow: var(--shadow-panel), var(--highlight-edge);
+  box-shadow: var(--shadow-panel);
 }
 
 .driver-tablet-preview-frame__label {
@@ -6896,7 +6898,7 @@ body:has(.driver-tablet-preview-page--dark) {
   min-height: 76px;
   border-radius: var(--radius-lg);
   background: var(--tracking-control-bg);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
   transition:
     border-color 180ms ease,
     background-color 180ms ease,
@@ -6919,7 +6921,7 @@ body:has(.driver-tablet-preview-page--dark) {
   height: var(--icon-holder-md);
   border: 1px solid var(--border-soft);
   background: var(--tracking-control-bg);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
 }
 
 .driver-tablet-preview-page .collection-routes-driver-action__icon svg {
@@ -6933,7 +6935,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border-color: color-mix(in srgb, var(--brand-accent) 64%, transparent);
   background: var(--brand-accent);
   color: var(--control-on-brand);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
 }
 
 .driver-tablet-preview-page .collection-routes-driver-action--done .collection-routes-driver-action__icon {
@@ -6941,7 +6943,7 @@ body:has(.driver-tablet-preview-page--dark) {
   height: var(--icon-holder-lg);
   color: var(--control-on-brand);
   background: color-mix(in srgb, var(--brand-accent) 78%, #ffffff 10%);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
 }
 
 .driver-tablet-preview-page .collection-routes-driver-action--done .collection-routes-driver-action__icon svg {
@@ -7264,7 +7266,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border: 1px solid var(--border-soft);
   border-radius: clamp(11px, 1vw, var(--radius-md));
   background: var(--tracking-panel-bg);
-  box-shadow: var(--shadow-card), var(--highlight-edge);
+  box-shadow: var(--shadow-card);
 }
 
 .driver-tablet-preview-page .collection-routes-driver-mode__active {
@@ -7589,7 +7591,7 @@ body:has(.driver-tablet-preview-page--dark) {
   background:
     var(--driver-card-overlay),
     var(--tracking-panel-bg);
-  box-shadow: var(--shadow-card), var(--highlight-edge);
+  box-shadow: var(--shadow-card);
 }
 
 .driver-tablet-preview-cockpit {
@@ -7619,7 +7621,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border-radius: clamp(9px, 0.92vw, 14px);
   background: color-mix(in srgb, var(--brand-accent) 12%, var(--surface-raised));
   color: var(--brand-accent);
-  box-shadow: var(--driver-etched-shadow), var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
 }
 
 .driver-tablet-preview-brand__icon {
@@ -7717,7 +7719,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border: 1px solid var(--border-soft);
   border-radius: clamp(9px, 0.92vw, 13px);
   background: var(--tracking-control-bg);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
 }
 
 .driver-tablet-preview-cockpit__chips .driver-tablet-preview-inline-icon {
@@ -7890,7 +7892,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border: 1px solid var(--border-soft);
   border-radius: var(--driver-preview-card-radius);
   background: var(--tracking-control-bg);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
 }
 
 .driver-tablet-preview-info-row article strong {
@@ -7958,7 +7960,7 @@ body:has(.driver-tablet-preview-page--dark) {
   background:
     radial-gradient(circle at center, var(--surface-raised) 0 55%, transparent 56%),
     conic-gradient(var(--brand-accent) calc(var(--driver-progress) * 1%), color-mix(in srgb, var(--text-main) 12%, transparent) 0);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
 }
 
 .driver-tablet-preview-progress-ring strong,
@@ -7996,7 +7998,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border: 1px solid var(--border-soft);
   border-radius: clamp(8px, 0.8vw, 12px);
   background: var(--tracking-control-bg);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
 }
 
 .driver-tablet-preview-progress__facts .driver-tablet-preview-inline-icon {
@@ -8037,7 +8039,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border: 1px solid var(--border-soft);
   border-radius: clamp(9px, 0.92vw, 13px);
   background: var(--tracking-control-bg);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--driver-preview-control-shadow);
   color: var(--text-muted-strong);
   font: inherit;
   font-size: clamp(0.5rem, 0.58vw, 0.68rem);
