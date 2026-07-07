@@ -1155,7 +1155,7 @@ async function getAllVistosPages(env, session, entityName, columns, filter = nul
 function mergeVistosDetailRow(baseRow = {}, detailRow = {}) {
   const merged = { ...baseRow };
   for (const [key, value] of Object.entries(detailRow || {})) {
-    if (cleanString(value)) {
+    if (cleanString(value) && !cleanString(merged[key])) {
       merged[key] = value;
     }
   }
