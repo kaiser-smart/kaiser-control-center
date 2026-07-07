@@ -16742,18 +16742,19 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
                     </span>
                   </div>
                   <div class="driver-tablet-preview-progress__hero">
-                    <div class="driver-tablet-preview-progress-ring" style="--driver-progress: ${escapeHtml(progressPercent)}">
-                      <strong>${escapeHtml(progressPercent)}%</strong>
-                    </div>
-                    <div>
+                    <div class="driver-tablet-preview-progress__copy">
                       <strong>${escapeHtml(collectionRoutesMetricValue(completedCount))} z ${escapeHtml(totalStopsLabel)}</strong>
+                      <small>zastávek</small>
                       <span>Dokončeno</span>
+                    </div>
+                    <div class="driver-tablet-preview-progress-ring" style="--driver-progress: ${escapeHtml(progressPercent)}" aria-label="${escapeHtml(`${progressPercent} procent hotovo`)}">
+                      <strong>${escapeHtml(progressPercent)} %</strong>
                     </div>
                   </div>
                   <div class="driver-tablet-preview-progress__facts">
-                    <span>${collectionRoutesDriverTabletPreviewIcon("flag")}<small>Celkem zastávek</small><strong>${escapeHtml(totalStopsLabel)}</strong></span>
-                    <span>${collectionRoutesDriverTabletPreviewIcon("pin")}<small>Zbývá zastávek</small><strong>${escapeHtml(remainingStopsLabel)}</strong></span>
-                    <span>${collectionRoutesDriverTabletPreviewIcon("trash")}<small>Nádob celkem</small><strong>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</strong></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("flag")}<strong>${escapeHtml(totalStopsLabel)}</strong><small>Celkem</small></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("pin")}<strong>${escapeHtml(remainingStopsLabel)}</strong><small>Zbývá</small></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("trash")}<strong>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</strong><small>Nádob</small></span>
                   </div>
                 </section>
 
