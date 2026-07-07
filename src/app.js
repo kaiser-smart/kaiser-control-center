@@ -237,6 +237,7 @@ const RECEIVABLES_TABS = [
 ];
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ROUTE = `${COLLECTION_ROUTES_ROUTE}/tablet-preview`;
+const DRIVER_TABLET_PREVIEW_THEME_STORAGE_KEY = "smartOdpadyDriverTabletPreviewTheme";
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Read-only přehled tras svozu.";
 const COLLECTION_ROUTES_TABS = [
@@ -1091,6 +1092,9 @@ const collectionRoutesPilotState = {
   message: "",
   error: ""
 };
+const driverTabletPreviewState = {
+  theme: loadDriverTabletPreviewTheme()
+};
 let collectionRoutesSitesAutoRefreshTimer = null;
 let collectionRoutesSitesCountdownTimer = null;
 const dataBoxState = {
@@ -1425,6 +1429,49 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function normalizeDriverTabletPreviewTheme(value) {
+  return value === "light" ? "light" : "dark";
+}
+
+function loadDriverTabletPreviewTheme() {
+  try {
+    return normalizeDriverTabletPreviewTheme(window.localStorage?.getItem(DRIVER_TABLET_PREVIEW_THEME_STORAGE_KEY));
+  } catch {
+    return "dark";
+  }
+}
+
+function saveDriverTabletPreviewTheme(theme) {
+  try {
+    window.localStorage?.setItem(DRIVER_TABLET_PREVIEW_THEME_STORAGE_KEY, normalizeDriverTabletPreviewTheme(theme));
+  } catch {
+    // Local preview only; ignore blocked storage.
+  }
+}
+
+function setDriverTabletPreviewTheme(theme) {
+  driverTabletPreviewState.theme = normalizeDriverTabletPreviewTheme(theme);
+  saveDriverTabletPreviewTheme(driverTabletPreviewState.theme);
+  render();
+}
+
+function driverTabletPreviewThemeIcon(mode) {
+  if (mode === "dark") {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M20.1 14.2A7.8 7.8 0 0 1 9.8 3.9a8.4 8.4 0 1 0 10.3 10.3Z"></path>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="4"></circle>
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+    </svg>
+  `;
 }
 
 function activeThemeSettings() {
@@ -18960,48 +19007,35 @@ function collectionRoutesActiveSection(user) {
 function collectionRoutesDriverTabletPreviewPage(user) {
   ensureCollectionRoutesSitesReadOnlyData(user);
   const rows = collectionRoutesDriverTabletPreviewRows();
-  const hasApiRows = collectionRoutesVistosRouteDisplayRows().length > 0;
-  const sourceStateLabel = collectionRoutesPilotState.kommunalPairingLoading || collectionRoutesPilotState.loading
-    ? "Nacitam read-only trasu"
-    : hasApiRows
-      ? "Read-only Vistos data"
-      : "Bez dat - ukazkovy stav";
-  const loadedAt = collectionRoutesPilotState.kommunalPairingLoadedAt
-    ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt)
-    : "";
+  const previewTheme = normalizeDriverTabletPreviewTheme(driverTabletPreviewState.theme);
+  const nextTheme = previewTheme === "dark" ? "light" : "dark";
+  const nextThemeLabel = previewTheme === "dark" ? "denni" : "nocni";
 
   return `
-    <main class="app-shell module-page module-theme-scope collection-routes-page driver-tablet-preview-page" ${moduleThemeStyleAttribute()}>
-      ${userBar(user)}
-      <nav class="topbar" aria-label="Navigace">
-        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpet na ${APP_NAME}">kaiser.</a>
-        <a class="back-button" href="${routeHref(COLLECTION_ROUTES_ROUTE)}" data-link>Zpet na Trasy svozu</a>
-      </nav>
-
-      <section class="module-detail driver-tablet-preview-hero" aria-labelledby="driver-tablet-preview-title">
-        <div class="module-detail__body">
-          <div class="module-detail__eyebrow">SMART ODPADY / DESIGN PREVIEW</div>
-          <h1 id="driver-tablet-preview-title">Ridicsky tablet - nova varianta</h1>
-          <p>Samostatna preview URL pro upravy vzhledu. Puvodni tablet na /trasy-svozu zustava beze zmeny.</p>
-          <div class="module-detail__status">
-            <span>Stav</span>
-            <strong>${escapeHtml(sourceStateLabel)}</strong>
-          </div>
+    <main class="app-shell module-page module-theme-scope collection-routes-page driver-tablet-preview-page driver-tablet-preview-page--${escapeHtml(previewTheme)}" data-driver-tablet-preview-theme="${escapeHtml(previewTheme)}" ${moduleThemeStyleAttribute()}>
+      <header class="driver-tablet-preview-simple-header" aria-label="Ridicsky tablet preview">
+        <div class="driver-tablet-preview-simple-header__title">
+          <strong>Ridicsky tablet</strong>
+          <span>Neumorphic preview</span>
         </div>
-        <div class="driver-tablet-preview-hero__actions">
-          <a class="secondary-link" href="${routeHref(COLLECTION_ROUTES_ROUTE)}" data-link>Porovnat s puvodnim modulem</a>
-          <span class="employee-card-status employee-card-status--waiting">Bez zapisu do API</span>
-        </div>
-      </section>
-
-      <div class="driver-tablet-preview-notice" role="status">
-        <strong>Design preview</strong>
-        <span>Tato stranka nesmi ukladat HOTOVO, problemy, prestavky, navigaci, SMS, e-mail ani Sarlotu. Slouzi jen pro navrh noveho vzhledu ridicskeho tabletu.</span>
-      </div>
-
-      ${loadedAt ? `<p class="module-feedback__notice">Zdroj read-only dat: ${escapeHtml(loadedAt)} · ${escapeHtml(collectionRoutesPilotState.kommunalPairingSource || "Vistos Svoz Kaiser")}</p>` : ""}
-      ${!hasApiRows && collectionRoutesPilotState.kommunalPairingError ? `<p class="module-feedback__notice">Online read-only data se ted nenacetla; preview proto pouziva bezpecny ukazkovy stav.</p>` : ""}
-      ${collectionRoutesPilotState.loading || collectionRoutesPilotState.kommunalPairingLoading ? `<p class="module-feedback__notice">Nacitam online data; do te doby je zobrazena bezpecna ukazka preview.</p>` : ""}
+        <button
+          class="driver-tablet-preview-theme-switcher driver-tablet-preview-theme-switcher--${escapeHtml(previewTheme)}"
+          type="button"
+          role="switch"
+          aria-checked="${previewTheme === "dark" ? "true" : "false"}"
+          aria-label="Prepnout na ${escapeHtml(nextThemeLabel)} motiv"
+          data-driver-tablet-preview-theme-toggle="${escapeHtml(nextTheme)}"
+        >
+          <span class="driver-tablet-preview-theme-switcher__track" aria-hidden="true">
+            <span class="driver-tablet-preview-theme-switcher__icon driver-tablet-preview-theme-switcher__icon--sun">${driverTabletPreviewThemeIcon("light")}</span>
+            <span class="driver-tablet-preview-theme-switcher__icon driver-tablet-preview-theme-switcher__icon--moon">${driverTabletPreviewThemeIcon("dark")}</span>
+            <span class="driver-tablet-preview-theme-switcher__thumb">
+              <span class="driver-tablet-preview-theme-switcher__thumb-icon">${driverTabletPreviewThemeIcon(previewTheme)}</span>
+            </span>
+          </span>
+          <span class="driver-tablet-preview-theme-switcher__label">${previewTheme === "dark" ? "Noc" : "Den"}</span>
+        </button>
+      </header>
 
       <div class="driver-tablet-preview-stage">
         ${collectionRoutesDriverTabletPreviewPanel(rows)}
@@ -36324,6 +36358,13 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const driverTabletPreviewTheme = event.target.closest("[data-driver-tablet-preview-theme-toggle]");
+  if (driverTabletPreviewTheme) {
+    event.preventDefault();
+    setDriverTabletPreviewTheme(driverTabletPreviewTheme.dataset.driverTabletPreviewThemeToggle || "dark");
+    return;
+  }
+
   const trackingSourceMode = event.target.closest("[data-tracking-source-mode]");
   if (trackingSourceMode) {
     event.preventDefault();
@@ -36986,6 +37027,12 @@ document.addEventListener("click", async (event) => {
     }
     render();
     focusCollectionRoutesSourceDriverMode();
+    return;
+  }
+
+  const driverTabletPreviewAction = event.target.closest("[data-driver-tablet-preview-action]");
+  if (driverTabletPreviewAction) {
+    event.preventDefault();
     return;
   }
 
