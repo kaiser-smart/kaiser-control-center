@@ -27552,7 +27552,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview .tracking-utility-shortcuts {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   order: 4;
 }
 
