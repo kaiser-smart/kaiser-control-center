@@ -28585,7 +28585,16 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 
 .tracking-page--soft-metal-preview .tracking-field-chips {
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-integration-grid {
+  align-items: start;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-integration-grid article {
+  align-self: start;
+  padding: 12px;
 }
 
 .tracking-page--soft-metal-preview .tracking-field-chips span,
