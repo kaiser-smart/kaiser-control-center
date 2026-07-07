@@ -18648,13 +18648,17 @@ function dataBoxPlusActionHelpText(label = "") {
   return "Akce je v pilotu jen připravená k potvrzení. Nic se neodešle, nesmaže ani neuloží bez jasného schválení.";
 }
 
+let dataBoxPlusHelpId = 0;
+
 function dataBoxPlusHelp(label, text) {
   const helpText = String(text || "").trim();
   if (!helpText) return "";
+  dataBoxPlusHelpId += 1;
+  const helpId = `ds-plus-help-${dataBoxPlusHelpId}`;
   return `
     <span class="ds-plus-help">
-      <button class="ds-plus-help__button" type="button" aria-label="${escapeHtml(`Nápověda: ${label}`)}" title="${escapeHtml(helpText)}">?</button>
-      <span class="ds-plus-help__bubble" role="tooltip">${escapeHtml(helpText)}</span>
+      <button class="ds-plus-help__button" type="button" aria-label="${escapeHtml(`Nápověda: ${label}`)}" aria-describedby="${escapeHtml(helpId)}" title="${escapeHtml(helpText)}">?</button>
+      <span class="ds-plus-help__bubble" id="${escapeHtml(helpId)}" role="tooltip">${escapeHtml(helpText)}</span>
     </span>
   `;
 }
