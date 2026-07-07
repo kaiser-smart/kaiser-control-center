@@ -19598,14 +19598,14 @@ function dataBoxHumanRulesPanel() {
       <div class="data-box-ai-boost-section__head">
         <div>
           <h3 id="data-box-human-rules-title">Moje pravidla</h3>
-          <span>Jen lidské věty, bez JSONu.</span>
+          <span>Jednoduché věty pro opakované situace.</span>
         </div>
       </div>
       <div class="data-box-ai-boost-rule-list">
         ${rules.length ? rules.map(dataBoxAiBoostRulePreviewMarkup).join("") : `
           <div class="data-box-ai-boost-empty">
-            <strong>Zatím tu není žádné pravidlo.</strong>
-            <span>Pravidlo vytvoř z konkrétní zprávy nebo návrhu AI.</span>
+            <strong>Zatím tu není žádné uložené doporučení.</strong>
+            <span>Vytvoř ho až z konkrétní zprávy, kde dává opakování smysl.</span>
           </div>
         `}
       </div>
@@ -20969,7 +20969,7 @@ function dataBoxAiBoostSafetyChoiceLabel(value = "suggestion") {
 function dataBoxAiBoostRuleSentence(rule = {}) {
   const text = String(rule.textContains || "").trim() || "...";
   const action = dataBoxAiBoostActionChoiceLabel(rule.actionType || "archive");
-  return `Když zpráva obsahuje „${text}“, AI Boost navrhne „${action}“. Zpráva zůstane uložená u nás a nic se neodešle.`;
+  return `Zprávy s textem „${text}“ obvykle patří k akci „${action}“. Bez potvrzení se nic neodešle ani nesmaže.`;
 }
 
 function dataBoxAiBoostStarterRules() {
