@@ -1597,8 +1597,40 @@ function homeDataBoxMetricCount() {
   return 20;
 }
 
+function collectionRoutesSvozKaiserWatchdogSummary() {
+  return collectionRoutesPilotState.svozKaiserWatchdog?.summary || {};
+}
+
+function collectionRoutesSvozKaiserWatchdogSourceRule() {
+  return String(collectionRoutesSvozKaiserWatchdogSummary().sourceRule || "").trim();
+}
+
+function collectionRoutesSvozKaiserFieldConfirmed() {
+  const summary = collectionRoutesSvozKaiserWatchdogSummary();
+  if (summary.svozKaiserFieldConfirmed === true || summary.svozKaiserFilterConfirmed === true || summary.svozKaiserFiltered === true) {
+    return true;
+  }
+  if (summary.svozKaiserFieldConfirmed === false || summary.svozKaiserFilterConfirmed === false) {
+    return false;
+  }
+
+  const sourceRule = collectionRoutesSvozKaiserWatchdogSourceRule().toLocaleLowerCase("cs");
+  if (!sourceRule) {
+    return false;
+  }
+  if (sourceRule.includes("po potvrzení") || sourceRule.includes("po potvrzeni") || sourceRule.includes("bude tvrdý filtr") || sourceRule.includes("bude tvrdy filtr")) {
+    return false;
+  }
+
+  return sourceRule.includes("svoz kaiser ano") && sourceRule.includes("tvrdý filtr");
+}
+
+function collectionRoutesSvozKaiserWatchdogRawIssueCount() {
+  return Number(collectionRoutesSvozKaiserWatchdogSummary().errorCount || 0) || 0;
+}
+
 function collectionRoutesSvozKaiserWatchdogErrorCount() {
-  return Number(collectionRoutesPilotState.svozKaiserWatchdog?.summary?.errorCount || 0) || 0;
+  return collectionRoutesSvozKaiserFieldConfirmed() ? collectionRoutesSvozKaiserWatchdogRawIssueCount() : 0;
 }
 
 function homeStatusMetrics(modulesForUser, verifiedCount) {
@@ -1621,6 +1653,9 @@ function homeModuleMeta(moduleItem) {
     }
     if (collectionRoutesPilotState.svozKaiserWatchdogLoading) {
       return `<span class="module-card__meta module-card__meta--waiting">Kontroluji Vistos...</span>`;
+    }
+    if (collectionRoutesPilotState.svozKaiserWatchdogLoaded && !collectionRoutesSvozKaiserFieldConfirmed()) {
+      return `<span class="module-card__meta module-card__meta--waiting">Svoz Kaiser filtr čeká</span>`;
     }
     if (collectionRoutesPilotState.svozKaiserWatchdogLoaded && !collectionRoutesPilotState.svozKaiserWatchdogError) {
       return `<span class="module-card__meta module-card__meta--ok">Vistos kontrola OK</span>`;
@@ -13277,6 +13312,9 @@ function collectionRoutesWatchdogTextKey(...values) {
 }
 
 function collectionRoutesWatchdogAlertForSite(site = {}) {
+  if (!collectionRoutesSvozKaiserFieldConfirmed()) {
+    return null;
+  }
   const alerts = collectionRoutesWatchdogSiteAlerts();
   if (!alerts.length) {
     return null;
@@ -13306,18 +13344,31 @@ function collectionRoutesWatchdogAlertForSite(site = {}) {
 function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
   const watchdog = collectionRoutesPilotState.svozKaiserWatchdog;
   const summary = watchdog?.summary || {};
+  const filterConfirmed = collectionRoutesSvozKaiserFieldConfirmed();
+  const rawIssueCount = collectionRoutesSvozKaiserWatchdogRawIssueCount();
   const errorCount = collectionRoutesSvozKaiserWatchdogErrorCount();
   const siteErrorCount = Number(summary.siteErrorCount || 0) || 0;
   const issueSummary = Array.isArray(watchdog?.issueSummary) ? watchdog.issueSummary.slice(0, compact ? 3 : 6) : [];
-  const siteAlerts = collectionRoutesWatchdogSiteAlerts().slice(0, compact ? 3 : 8);
-  const tone = errorCount > 0 ? "danger" : collectionRoutesPilotState.svozKaiserWatchdogLoading ? "waiting" : "ok";
+  const siteAlerts = filterConfirmed ? collectionRoutesWatchdogSiteAlerts().slice(0, compact ? 3 : 8) : [];
+  const tone = errorCount > 0
+    ? "danger"
+    : collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.svozKaiserWatchdogError || (watchdog && !filterConfirmed)
+      ? "waiting"
+      : "ok";
   const headline = errorCount > 0
     ? `Hlídač našel ${errorCount} chyb na ${siteErrorCount} stanovištích.`
     : collectionRoutesPilotState.svozKaiserWatchdogLoading
       ? "Kontroluji Vistos Svoz Kaiser data..."
       : collectionRoutesPilotState.svozKaiserWatchdogError
         ? "Hlídač Vistos teď neběží."
-        : "Hlídač Vistos Svoz Kaiser je bez blokujících chyb.";
+        : watchdog && !filterConfirmed
+          ? "Čekám na potvrzení pole Svoz Kaiser ANO ve Vistos API."
+          : "Hlídač Vistos Svoz Kaiser je bez blokujících chyb.";
+  const badgeLabel = errorCount > 0 ? (errorCount > 99 ? "99+" : String(errorCount)) : !filterConfirmed && watchdog ? "filtr" : "0";
+  const filterNotice = watchdog && !filterConfirmed
+    ? `Aktuální čísla jsou jen diagnostika širších aktivních Komunál dat: ${rawIssueCount} upozornění na ${siteErrorCount} stanovištích. Nejde o potvrzené chyby Svoz Kaiser tras.`
+    : "";
+  const sourceRule = collectionRoutesSvozKaiserWatchdogSourceRule();
 
   return `
     <div class="collection-routes-watchdog collection-routes-watchdog--${escapeHtml(tone)} ${compact ? "collection-routes-watchdog--compact" : ""}" role="status" aria-label="Hlídač Vistos Svoz Kaiser">
@@ -13326,12 +13377,14 @@ function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
           <span>Hlídač Vistos Svoz Kaiser</span>
           <strong>${escapeHtml(headline)}</strong>
         </div>
-        <span class="collection-routes-watchdog__badge">${escapeHtml(errorCount > 99 ? "99+" : errorCount)}</span>
+        <span class="collection-routes-watchdog__badge">${escapeHtml(badgeLabel)}</span>
       </div>
       ${collectionRoutesPilotState.svozKaiserWatchdogError ? `<p>${escapeHtml(collectionRoutesPilotState.svozKaiserWatchdogError)}</p>` : ""}
-      ${summary.message && !collectionRoutesPilotState.svozKaiserWatchdogError ? `<p>${escapeHtml(summary.message)}</p>` : ""}
+      ${filterNotice ? `<p>${escapeHtml(filterNotice)}</p>` : ""}
+      ${sourceRule ? `<p>${escapeHtml(sourceRule)}</p>` : ""}
+      ${summary.message && !collectionRoutesPilotState.svozKaiserWatchdogError && !filterNotice ? `<p>${escapeHtml(summary.message)}</p>` : ""}
       ${issueSummary.length ? `
-        <div class="collection-routes-watchdog__chips" aria-label="Typy chyb">
+        <div class="collection-routes-watchdog__chips" aria-label="${escapeHtml(filterConfirmed ? "Typy chyb" : "Diagnostická upozornění")}">
           ${issueSummary.map((item) => `
             <span>${escapeHtml(item.label || item.issueType)} · ${escapeHtml(item.count || 0)}</span>
           `).join("")}
@@ -17335,50 +17388,258 @@ function collectionRoutesImportSection(user) {
   `;
 }
 
-function collectionRoutesSiteCards() {
-  const sites = collectionRoutesPilotState.sites;
-  if (!sites.length) {
+function collectionRoutesAddTextValue(target, value) {
+  const text = String(value ?? "").trim();
+  if (text && text !== "-") {
+    target.add(text);
+  }
+}
+
+function collectionRoutesTextList(values, fallback = "-", limit = 3) {
+  const list = Array.from(values || [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (!list.length) {
+    return fallback;
+  }
+  const shown = list.slice(0, limit).join(", ");
+  return list.length > limit ? `${shown} +${list.length - limit}` : shown;
+}
+
+function collectionRoutesIssueLabelsFromValue(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((issue) => {
+      if (typeof issue === "string") {
+        return issue;
+      }
+      return issue?.label || issue?.message || issue?.issueType || "";
+    })
+    .map((text) => String(text || "").trim())
+    .filter(Boolean);
+}
+
+function collectionRoutesVistosSiteRows() {
+  const rows = collectionRoutesPilotState.kommunalPairingRows;
+  const sitesByKey = new Map();
+
+  rows.forEach((sourceRow, index) => {
+    const summary = collectionRoutesImportRowSummary(sourceRow);
+    const key = collectionRoutesWatchdogTextKey(
+      summary.siteKey || sourceRow.siteKey,
+      summary.sourceSiteId || sourceRow.sourceSiteId,
+      summary.customerName,
+      summary.siteName,
+      summary.addressRaw
+    ) || `vistos-site-${index}`;
+    const existing = sitesByKey.get(key) || {
+      order: sitesByKey.size + 1,
+      customerName: summary.customerName || "-",
+      siteName: summary.siteName || summary.addressRaw || "-",
+      addressRaw: summary.addressRaw || "-",
+      locationQuality: summary.locationQuality || "neověřeno",
+      contracts: new Set(),
+      wastes: new Set(),
+      containers: new Set(),
+      frequencies: new Set(),
+      products: new Set(),
+      issueLabels: new Set(),
+      itemCount: 0,
+      containerCount: 0,
+      issueCount: 0
+    };
+
+    if (summary.customerName && existing.customerName === "-") {
+      existing.customerName = summary.customerName;
+    }
+    if (summary.siteName && existing.siteName === "-") {
+      existing.siteName = summary.siteName;
+    }
+    if (summary.addressRaw && existing.addressRaw === "-") {
+      existing.addressRaw = summary.addressRaw;
+    }
+    if (summary.locationQuality && existing.locationQuality === "neověřeno") {
+      existing.locationQuality = summary.locationQuality;
+    }
+
+    collectionRoutesAddTextValue(existing.contracts, summary.contractNumber || summary.sourceContractId || sourceRow.sourceContractId);
+    collectionRoutesAddTextValue(existing.wastes, summary.wasteType || summary.wasteCode);
+    collectionRoutesAddTextValue(existing.frequencies, summary.frequency);
+    collectionRoutesAddTextValue(existing.products, summary.productName || summary.rowName);
+
+    const containerCount = collectionRoutesMetricValue(summary.containerCount, 0);
+    const normalizedContainerCount = containerCount > 0 ? containerCount : summary.containerVolume ? 1 : 0;
+    if (summary.containerVolume) {
+      const containerText = `${normalizedContainerCount || 1}× ${summary.containerVolume} l${summary.containerType ? ` ${summary.containerType}` : ""}`;
+      collectionRoutesAddTextValue(existing.containers, containerText);
+    } else {
+      collectionRoutesAddTextValue(existing.containers, summary.containerType);
+    }
+
+    const issueLabels = collectionRoutesIssueLabelsFromValue(summary.issues || sourceRow.issues);
+    issueLabels.forEach((label) => collectionRoutesAddTextValue(existing.issueLabels, label));
+    const issueCount = collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, issueLabels.length);
+    if (issueCount > 0 && !issueLabels.length) {
+      collectionRoutesAddTextValue(existing.issueLabels, `${issueCount} upozornění`);
+    }
+
+    existing.itemCount += 1;
+    existing.containerCount += normalizedContainerCount;
+    existing.issueCount += Math.max(0, issueCount);
+    sitesByKey.set(key, existing);
+  });
+
+  return Array.from(sitesByKey.values()).sort((left, right) => (
+    String(left.customerName || "").localeCompare(String(right.customerName || ""), "cs") ||
+    String(left.siteName || "").localeCompare(String(right.siteName || ""), "cs") ||
+    left.order - right.order
+  ));
+}
+
+function collectionRoutesVistosSitesStats(siteRows = collectionRoutesVistosSiteRows()) {
+  const sourceRows = collectionRoutesPilotState.kommunalPairingRows;
+  const contracts = new Set();
+  let containerCount = 0;
+  sourceRows.forEach((sourceRow) => {
+    const summary = collectionRoutesImportRowSummary(sourceRow);
+    collectionRoutesAddTextValue(contracts, summary.contractNumber || summary.sourceContractId || sourceRow.sourceContractId);
+    const count = collectionRoutesMetricValue(summary.containerCount, 0);
+    containerCount += count > 0 ? count : summary.containerVolume ? 1 : 0;
+  });
+  return {
+    siteCount: siteRows.length,
+    contractCount: contracts.size,
+    itemCount: sourceRows.length,
+    containerCount
+  };
+}
+
+function collectionRoutesVistosSiteStatus(site) {
+  if (!collectionRoutesSvozKaiserFieldConfirmed()) {
+    return { label: "Čeká na Svoz Kaiser", tone: "waiting" };
+  }
+  if (site.issueCount > 0) {
+    return { label: "Zkontrolovat", tone: "warning" };
+  }
+  return { label: "OK", tone: "ok" };
+}
+
+function collectionRoutesVistosSitesTable() {
+  const siteRows = collectionRoutesVistosSiteRows();
+  if (collectionRoutesPilotState.kommunalPairingLoading && !siteRows.length) {
     return collectionRoutesEmptyState(
-      "Čeká na Vistos data.",
-      "V pilotu nejsou vložená žádná vymyšlená provozní data zákazníků. Stanoviště se zobrazí až po schváleném import preview z reálného zdroje."
+      "Načítám Vistos stanoviště.",
+      "Beru read-only export z Vistos Komunál preview. Nic nezapisuji a nevytvářím ostré trasy."
+    );
+  }
+  if (!siteRows.length) {
+    return collectionRoutesEmptyState(
+      "Zatím nejsou načtená Vistos stanoviště.",
+      "Klikni na Načíst Vistos stanoviště. Použije se jen read-only API export bez zápisu do Vistosu a bez ostrých tras."
     );
   }
 
   return `
-    <div class="collection-routes-list collection-routes-list--sites">
-      ${sites.map((site) => {
-        const alert = collectionRoutesWatchdogAlertForSite(site);
-        return `
-          <article class="collection-routes-list-item ${alert ? "collection-routes-list-item--watchdog-danger" : ""}">
-            <div>
-              <strong>${escapeHtml(site.siteName || site.customerName || "Stanoviště")}</strong>
-              <span>${escapeHtml(site.addressText || "Adresa čeká na Vistos")} · ${escapeHtml(site.locationQuality || "missing")}</span>
-            </div>
-            <p>${escapeHtml(site.customerName || "Zákazník bude načtený z Vistos.")}</p>
-            ${alert ? `
-              <span class="collection-routes-site-alert" aria-label="${escapeHtml(`Stanoviště má ${alert.issueCount || 1} chyb`)}">
-                ${escapeHtml(alert.issueCount || 1)} chyb · ${escapeHtml((alert.issues || [])[0]?.label || "zkontrolovat Vistos")}
-              </span>
-            ` : ""}
-            <button class="secondary-link" type="button" data-collection-site-select="${escapeHtml(site.id)}">Detail stanoviště</button>
-          </article>
-        `;
-      }).join("")}
+    <div class="collection-routes-sites-table collection-routes-preview-table" role="region" aria-label="Řádkový seznam stanovišť z Vistosu">
+      <table>
+        <thead>
+          <tr>
+            <th>Stav</th>
+            <th>Zákazník</th>
+            <th>Stanoviště / adresa</th>
+            <th>Odpad</th>
+            <th>Nádoba</th>
+            <th>Interval</th>
+            <th>Smlouva</th>
+            <th>Kontrola</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${siteRows.map((site) => {
+            const status = collectionRoutesVistosSiteStatus(site);
+            return `
+              <tr>
+                <td data-label="Stav">
+                  <span class="collection-routes-site-status collection-routes-site-status--${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>
+                </td>
+                <td data-label="Zákazník">${escapeHtml(site.customerName || "-")}</td>
+                <td data-label="Stanoviště / adresa">
+                  <strong>${escapeHtml(site.siteName || "-")}</strong>
+                  <span>${escapeHtml(site.addressRaw || "-")} · ${escapeHtml(site.locationQuality || "neověřeno")}</span>
+                </td>
+                <td data-label="Odpad">${escapeHtml(collectionRoutesTextList(site.wastes, "neurčeno", 4))}</td>
+                <td data-label="Nádoba">${escapeHtml(collectionRoutesTextList(site.containers, "neurčeno", 3))}</td>
+                <td data-label="Interval">${escapeHtml(collectionRoutesTextList(site.frequencies, "neurčeno", 3))}</td>
+                <td data-label="Smlouva">${escapeHtml(collectionRoutesTextList(site.contracts, "-", 2))}</td>
+                <td data-label="Kontrola">
+                  ${escapeHtml(collectionRoutesTextList(site.issueLabels, collectionRoutesSvozKaiserFieldConfirmed() ? "bez blokace" : "diagnostika čeká na filtr", 2))}
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
-function collectionRoutesSitesSection() {
+function ensureCollectionRoutesSitesReadOnlyData(user = currentUser()) {
+  if (
+    user &&
+    collectionRoutesCanViewPilot(user) &&
+    !collectionRoutesPilotState.svozKaiserWatchdogLoading &&
+    !collectionRoutesPilotState.svozKaiserWatchdogLoaded
+  ) {
+    void Promise.resolve().then(() => loadCollectionRoutesSvozKaiserWatchdog());
+  }
+  if (
+    collectionRoutesCanRunImportPreview(user) &&
+    !collectionRoutesPilotState.kommunalPairingRows.length &&
+    !collectionRoutesPilotState.kommunalPairingLoading &&
+    !collectionRoutesPilotState.kommunalPairingError
+  ) {
+    void Promise.resolve().then(() => loadCollectionRoutesKommunalPairingRows());
+  }
+}
+
+function collectionRoutesSitesSection(user) {
+  ensureCollectionRoutesSitesReadOnlyData(user);
+  const siteRows = collectionRoutesVistosSiteRows();
+  const stats = collectionRoutesVistosSitesStats(siteRows);
+  const filterConfirmed = collectionRoutesSvozKaiserFieldConfirmed();
+  const loadedAt = collectionRoutesPilotState.kommunalPairingLoadedAt ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt) : "";
   return `
     <section class="collection-routes-panel" id="collection-routes-sites" aria-labelledby="collection-routes-sites-title">
       <div class="collection-routes-panel__head">
         <div>
           <p class="module-feedback__eyebrow">Stanoviště</p>
-          <h2 id="collection-routes-sites-title">Seznam stanovišť</h2>
-          <p>1 položka = 1 svozové místo / stanoviště, ne zákazník a ne nádoba.</p>
+          <h2 id="collection-routes-sites-title">Stanoviště z Vistosu</h2>
+          <p>Řádkový read-only seznam z Vistos Komunál dat. Zdroj pro tuto záložku je Vistos API.</p>
         </div>
+        <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
       </div>
-      ${collectionRoutesSiteCards()}
+      <div class="collection-routes-preview-block__actions">
+        <button class="secondary-link" type="button" data-collection-routes-refresh-vistos-sites ${collectionRoutesPilotState.kommunalPairingLoading || collectionRoutesPilotState.svozKaiserWatchdogLoading ? "disabled" : ""}>
+          ${collectionRoutesPilotState.kommunalPairingLoading ? "Načítám Vistos stanoviště..." : "Načíst Vistos stanoviště"}
+        </button>
+      </div>
+      <div class="collection-routes-stats collection-routes-sites-summary">
+        <article><span>Zdroj</span><strong>Vistos API</strong></article>
+        <article><span>Stanoviště</span><strong>${escapeHtml(stats.siteCount)}</strong></article>
+        <article><span>Položky</span><strong>${escapeHtml(stats.itemCount)}</strong></article>
+        <article><span>Smlouvy</span><strong>${escapeHtml(stats.contractCount)}</strong></article>
+        <article><span>Nádoby</span><strong>${escapeHtml(stats.containerCount)}</strong></article>
+        <article class="collection-routes-stats__item--warning"><span>Svoz Kaiser ANO</span><strong>${escapeHtml(filterConfirmed ? "ověřeno" : "čeká")}</strong></article>
+      </div>
+      <div class="collection-routes-phase-note collection-routes-phase-note--warning">
+        <strong>${escapeHtml(filterConfirmed ? "Seznam je filtrovaný podle potvrzeného Svoz Kaiser pravidla." : "Pozor: zatím není potvrzené API pole Svoz Kaiser ANO.")}</strong>
+        <span>${escapeHtml(filterConfirmed ? "Červené stavy se vztahují jen ke skutečnému Svoz Kaiser rozsahu." : "Proto se zatím nezobrazuje červený alarm. Vidíš širší read-only Komunál náhled z Vistosu, ne ostrý seznam Svoz Kaiser stanovišť.")}</span>
+      </div>
+      ${loadedAt ? `<p class="module-feedback__notice">Načteno: ${escapeHtml(loadedAt)} · zdroj: ${escapeHtml(collectionRoutesPilotState.kommunalPairingSource || "vistos-komunal-preview-export")}</p>` : ""}
+      ${collectionRoutesPilotState.kommunalPairingError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.kommunalPairingError)}</p>` : ""}
+      ${collectionRoutesVistosSitesTable()}
     </section>
   `;
 }
@@ -17542,7 +17803,7 @@ function collectionRoutesActiveSection(user) {
     return collectionRoutesSourceRoutesSection(user);
   }
   if (activeTab === "sites") {
-    return `${collectionRoutesSitesSection()}${collectionRoutesPilotState.selectedSiteId ? collectionRoutesSiteDetailSection() : ""}`;
+    return `${collectionRoutesSitesSection(user)}${collectionRoutesPilotState.selectedSiteId ? collectionRoutesSiteDetailSection() : ""}`;
   }
   if (activeTab === "rules") {
     return collectionRoutesRulesSection(user);
@@ -34673,6 +34934,17 @@ document.addEventListener("click", async (event) => {
   if (collectionRoutesTab) {
     event.preventDefault();
     setCollectionRoutesActiveTab(collectionRoutesTab.dataset.collectionRoutesTab || "svozove-trasy");
+    return;
+  }
+
+  const collectionRoutesRefreshVistosSites = event.target.closest("[data-collection-routes-refresh-vistos-sites]");
+  if (collectionRoutesRefreshVistosSites) {
+    event.preventDefault();
+    await Promise.all([
+      loadCollectionRoutesSvozKaiserWatchdog({ force: true, renderAfter: false }),
+      loadCollectionRoutesKommunalPairingRows({ force: true, renderAfter: false })
+    ]);
+    render();
     return;
   }
 

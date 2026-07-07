@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.392"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.393"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -21,8 +21,12 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Trasy svozu: Stanoviště jako Vistos řádkový seznam",
+    text: "Záložka Stanoviště je nově čistý read-only řádkový seznam z Vistos Komunál dat. Širší diagnostika se už nezobrazuje jako červená chyba Svoz Kaiser tras, dokud není potvrzené konkrétní API pole Svoz Kaiser ANO. Nevznikají ostré trasy, zápisy do Vistosu, SMS/e-maily ani automatizace."
+  },
+  {
     title: "Trasy svozu: hlídač Vistos Svoz Kaiser dat",
-    text: "HP karta Trasy svozu nově ukazuje červené pulzující kolečko s počtem blokujících chyb z read-only Vistos kontroly. V modulu je panel hlídače a problémová stanoviště se červeně zvýrazní. Kontrola nic nezapisuje do Vistosu, nevytváří ostré trasy, SMS/e-maily ani automatizace."
+    text: "HP karta Trasy svozu umí ukázat červené pulzující kolečko s počtem blokujících chyb z read-only Vistos kontroly až nad potvrzeným Svoz Kaiser rozsahem. Kontrola nic nezapisuje do Vistosu, nevytváří ostré trasy, SMS/e-maily ani automatizace."
   },
   {
     title: "Trasy svozu: oprava zdrojového auta z Excelů",

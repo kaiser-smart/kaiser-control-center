@@ -2162,6 +2162,11 @@ h1 {
   color: var(--ink);
 }
 
+.collection-routes-phase-note--warning {
+  border-color: rgba(181, 118, 21, 0.28);
+  background: #fff8e8;
+}
+
 .collection-routes-source-switch {
   display: flex;
   flex-wrap: wrap;
@@ -2574,6 +2579,12 @@ h1 {
   text-transform: none;
 }
 
+.collection-routes-watchdog--waiting .collection-routes-watchdog__chips span {
+  border-color: rgba(181, 118, 21, 0.22);
+  background: rgba(255, 255, 255, 0.78);
+  color: #946200;
+}
+
 .collection-routes-watchdog__sites {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2588,6 +2599,11 @@ h1 {
   border: 1px solid rgba(190, 24, 24, 0.18);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.78);
+}
+
+.collection-routes-watchdog--waiting .collection-routes-watchdog__sites article {
+  border-color: rgba(181, 118, 21, 0.22);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .collection-routes-watchdog__sites strong,
@@ -2631,6 +2647,62 @@ h1 {
   font-weight: 900;
   line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+.collection-routes-sites-summary {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.collection-routes-sites-table table {
+  min-width: 1120px;
+}
+
+.collection-routes-sites-table td {
+  line-height: 1.35;
+}
+
+.collection-routes-sites-table td strong,
+.collection-routes-sites-table td span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.collection-routes-sites-table td strong {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.collection-routes-site-status {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1.15;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.collection-routes-site-status--ok {
+  border: 1px solid rgba(38, 139, 68, 0.22);
+  background: #edf8e7;
+  color: #176a32;
+}
+
+.collection-routes-site-status--warning {
+  border: 1px solid rgba(181, 118, 21, 0.28);
+  background: #fff8e8;
+  color: #946200;
+}
+
+.collection-routes-site-status--waiting {
+  border: 1px solid rgba(66, 80, 74, 0.16);
+  background: #f6f8f2;
+  color: var(--muted);
 }
 
 @keyframes collection-routes-site-danger-pulse {
@@ -17957,6 +18029,24 @@ body:has(.data-box-page) {
 
   .collection-routes-preview-table td {
     border-bottom: 1px solid rgba(66, 80, 74, 0.06);
+  }
+
+  .collection-routes-sites-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-sites-table table {
+    min-width: 0;
+  }
+
+  .collection-routes-sites-table td::before {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.7rem;
+    font-weight: 900;
+    text-transform: uppercase;
   }
 
   .fleet-tabs {
