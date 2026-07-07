@@ -1070,6 +1070,55 @@ Dodavatel
 }
 
 {
+  const invoices = Array.from({ length: 12 }, (_, index) => {
+    const number = `2601202${String(index).padStart(3, "0")}`;
+    return {
+      Id: `IF${index + 1}`,
+      InvoiceNumber: number,
+      BankReference2: number,
+      Customer_FK_RecordId: "C123",
+      Customer_FK_Caption: "Firma Alfa s.r.o.",
+      CustomerRegNumber: "12345678",
+      CustomerVatNumber: "CZ12345678",
+      IssuedDate: "2026-06-01",
+      DueDate: "2026-06-14",
+      PriceWithTax: "1210",
+      AmountPaid: "0",
+      RemainToPay: "1210"
+    };
+  });
+  const mock = mockVistosFetch({
+    DirectoryWithBranch: [{
+      Id: "C123",
+      Name: "Firma Alfa s.r.o.",
+      RegNumber: "12345678",
+      VATNumber: "CZ12345678",
+      BillingEmail: "fakturace@firma.cz",
+      InvoiceDueDays: "14"
+    }],
+    InvoiceIssued: invoices
+  });
+  try {
+    const preview = await createReceivablesLedgerReadinessPreview({
+      VISTOS_API_BASE_URL: "https://vistos.example",
+      VISTOS_API_USERNAME: "readonly",
+      VISTOS_API_PASSWORD: "test-password"
+    }, { runMode: "full_dry_run", pageSize: 5, maxPages: 2 });
+    assert.equal(preview.ledgerReadiness.counts.invoicesLoaded, 10);
+    assert.equal(preview.ledgerReadiness.counts.invoicesTotal, 12);
+    assert.equal(preview.ledgerReadiness.counts.invoicesCapped, true);
+    assert.equal(
+      preview.ledgerReadiness.blockingReasons.includes("FULL_DRY_RUN_CAPPED_NEEDS_BATCHED_LEDGER_EXPORT"),
+      true
+    );
+    assert.equal(preview.ledgerReadiness.blockingReasons.includes("PREVIEW_SAMPLE_CAPPED_NEEDS_FULL_DRY_RUN"), false);
+    assert.ok(preview.ledgerReadiness.recommendedNextStep.includes("dávkový read-only export/job"));
+  } finally {
+    mock.restore();
+  }
+}
+
+{
   const mock = mockVistosFetch({
     DirectoryWithBranch: [{ Id: "C999", Name: "Neúplná firma" }],
     InvoiceIssued: [{

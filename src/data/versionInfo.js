@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.389"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.390"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: přesnější verdict full dry-runu",
+    text: "Vistos → Ledger připravenost nově rozlišuje, jestli je oříznutá rychlá kontrola, nebo už úplný dry-run. Pokud full dry-run pořád narazí na limit, dashboard doporučí dávkový read-only export/job nebo užší období, ne opakování stejného kroku."
+  },
   {
     title: "Pohledávky: úplný Vistos dry-run",
     text: "Vistos → Ledger připravenost nově rozlišuje rychlou kontrolu 250 řádků a úplný dry-run s větším stránkováním za 24 měsíců. Výsledek zůstává read-only, bez ostrého ledgeru, ratingu, KB plateb a zákaznické komunikace."

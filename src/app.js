@@ -23905,12 +23905,19 @@ function receivablesLedgerReadinessBrief(preview) {
   const noneConfidence = Number(confidence.NONE || 0);
   const highConfidence = Number(confidence.HIGH || 0);
   const hasCappedSample = blockingReasons.includes("PREVIEW_SAMPLE_CAPPED_NEEDS_FULL_DRY_RUN");
+  const hasCappedFullDryRun = blockingReasons.includes("FULL_DRY_RUN_CAPPED_NEEDS_BATCHED_LEDGER_EXPORT");
   const blockerItems = [];
 
   if (hasCappedSample) {
     blockerItems.push({
       title: "Vzorek je pořád jen preview",
       text: "Než vznikne ledger import, je potřeba úplný dry-run bez zápisu do ostrých tabulek."
+    });
+  }
+  if (hasCappedFullDryRun) {
+    blockerItems.push({
+      title: "Úplný dry-run narazil na limit",
+      text: "Načtený vzorek nestačí na kompletní závěr; další krok je dávkový read-only export/job nebo užší období."
     });
   }
   if (noneConfidence || customerNotFound || branchNotFound) {

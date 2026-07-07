@@ -23,6 +23,8 @@ const DEFAULT_DETAIL_ID_LIMIT = 4;
 const MAX_DETAIL_ID_LIMIT = 12;
 const LEDGER_READINESS_RUN_MODE_QUICK = "quick";
 const LEDGER_READINESS_RUN_MODE_FULL = "full_dry_run";
+const LEDGER_BLOCKING_REASON_QUICK_SAMPLE_CAPPED = "PREVIEW_SAMPLE_CAPPED_NEEDS_FULL_DRY_RUN";
+const LEDGER_BLOCKING_REASON_FULL_SAMPLE_CAPPED = "FULL_DRY_RUN_CAPPED_NEEDS_BATCHED_LEDGER_EXPORT";
 
 const DIRECTORY_WITH_BRANCH_CORE_COLUMNS = [
   "Id",
@@ -1172,7 +1174,7 @@ function percentage(numerator, denominator) {
   return denominator > 0 ? Math.round((numerator / denominator) * 1000) / 10 : 0;
 }
 
-function buildLedgerReadiness({ companies, invoices, resolvedInvoices, companyResult, invoiceResult }) {
+function buildLedgerReadiness({ companies, invoices, resolvedInvoices, companyResult, invoiceResult, runMode = LEDGER_READINESS_RUN_MODE_QUICK }) {
   const companyCount = companies.length;
   const invoiceCount = invoices.length;
   const reliableInvoices = countBy(resolvedInvoices, (item) => ["HIGH", "MEDIUM"].includes(item.confidence));
@@ -1191,7 +1193,11 @@ function buildLedgerReadiness({ companies, invoices, resolvedInvoices, companyRe
 
   if (!companyCount) blockingReasons.push("NO_COMPANIES_LOADED");
   if (!invoiceCount) blockingReasons.push("NO_INVOICES_LOADED");
-  if (companyResult.page.capped || invoiceResult.page.capped) blockingReasons.push("PREVIEW_SAMPLE_CAPPED_NEEDS_FULL_DRY_RUN");
+  if (companyResult.page.capped || invoiceResult.page.capped) {
+    blockingReasons.push(runMode === LEDGER_READINESS_RUN_MODE_FULL
+      ? LEDGER_BLOCKING_REASON_FULL_SAMPLE_CAPPED
+      : LEDGER_BLOCKING_REASON_QUICK_SAMPLE_CAPPED);
+  }
   if (percentage(withCustomerFkOrReliable, invoiceCount) < 95) blockingReasons.push("INVOICE_CUSTOMER_LINK_RATE_UNDER_95");
   if (percentage(withDueDate, invoiceCount) < 90) blockingReasons.push("INVOICE_DUE_DATE_RATE_UNDER_90");
   if (percentage(withAmount, invoiceCount) < 95) blockingReasons.push("INVOICE_AMOUNT_RATE_UNDER_95");
@@ -1203,7 +1209,9 @@ function buildLedgerReadiness({ companies, invoices, resolvedInvoices, companyRe
     ledgerImportReady: blockingReasons.length === 0,
     blockingReasons,
     recommendedNextStep: blockingReasons.length
-      ? "Nejdřív vyřešit blokující datové mezery a spustit úplný dry-run bez zápisu do ostrého ledgeru."
+      ? runMode === LEDGER_READINESS_RUN_MODE_FULL
+        ? "Full dry-run je pořád jen oříznutý vzorek; další krok je dávkový read-only export/job nebo užší období, pořád bez ostrého ledgeru."
+        : "Nejdřív vyřešit blokující datové mezery a spustit úplný dry-run bez zápisu do ostrého ledgeru."
       : "Připravit samostatně potvrzený ostrý import do receivable_customers a receivable_invoices.",
     counts: {
       companiesLoaded: companyCount,
@@ -1415,7 +1423,14 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
   const companyIndexes = buildCompanyIndexes(companies);
   const resolvedInvoices = invoices.map((invoice) => resolveInvoiceCustomer(invoice, companies, companyIndexes));
   const companiesWithInvoiceCounts = annotateCompaniesWithInvoiceCounts(companies, resolvedInvoices);
-  const ledgerReadiness = buildLedgerReadiness({ companies: companiesWithInvoiceCounts, invoices, resolvedInvoices, companyResult, invoiceResult });
+  const ledgerReadiness = buildLedgerReadiness({
+    companies: companiesWithInvoiceCounts,
+    invoices,
+    resolvedInvoices,
+    companyResult,
+    invoiceResult,
+    runMode: normalizedOptions.runMode
+  });
   const metadataResolver = buildMetadataResolverSummary(
     schemaProbe,
     metadataCompanyAttempts,
