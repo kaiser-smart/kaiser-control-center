@@ -28180,6 +28180,168 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   box-shadow: none;
 }
 
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-panel {
+  --rules-panel-bg: var(--tracking-panel-bg);
+  --rules-surface-bg: var(--tracking-card-bg);
+  --rules-control-bg: var(--tracking-control-bg);
+  --rules-inset-bg: var(--tracking-inset-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xl);
+  background: var(--rules-panel-bg);
+  color: var(--text-main);
+  box-shadow: var(--tracking-soft-shadow), var(--highlight-edge);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .absence-panel__head h2,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-grid strong,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-empty strong,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail h3,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail-grid strong,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table td strong,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-endpoints code {
+  color: var(--text-main);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .absence-panel__head p,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-toolbar span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-grid span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-empty,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-empty small,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail p,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail-grid span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-json-grid pre,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-audit li span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-audit li small,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-runs li span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-runs li small,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table td,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table td small,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-search-count,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-readonly {
+  color: var(--text-muted);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-toolbar,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-grid article,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-empty,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail {
+  border: 1px solid var(--border-soft);
+  background: var(--rules-surface-bg);
+  box-shadow: var(--shadow-card), var(--highlight-edge);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-toolbar {
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-grid article,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-empty,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail {
+  border-radius: var(--radius-md);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-toolbar input,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-toolbar select {
+  border-color: var(--border-soft);
+  background: var(--rules-inset-bg);
+  color: var(--text-main);
+  box-shadow: var(--shadow-inset-control);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-toolbar input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.72;
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--rules-inset-bg);
+  box-shadow: var(--shadow-inset-control);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table th,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table td {
+  border-bottom-color: color-mix(in srgb, var(--border-soft) 74%, transparent);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table th {
+  background: color-mix(in srgb, var(--surface-inset) 70%, var(--surface-raised));
+  color: var(--text-muted);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table tbody tr {
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail-grid article,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-json-grid pre,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-audit li,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-runs li,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-endpoints code {
+  border-color: var(--border-soft);
+  background: color-mix(in srgb, var(--surface-raised) 84%, var(--surface-soft));
+  box-shadow: var(--shadow-control), var(--highlight-edge);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-chip {
+  border-color: var(--state-warning-border);
+  background: var(--state-warning-bg);
+  color: var(--state-warning-text);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-chip--active {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-chip--inactive {
+  border-color: var(--state-neutral-border);
+  background: var(--state-neutral-bg);
+  color: var(--state-neutral-text);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-chip--error {
+  border-color: var(--state-danger-border);
+  background: var(--state-danger-bg);
+  color: var(--state-danger-text);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .employee-card-status {
+  border: 1px solid var(--state-neutral-border);
+  background: var(--state-neutral-bg);
+  color: var(--state-neutral-text);
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .employee-card-status--ready {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .employee-card-status--waiting {
+  border-color: var(--state-warning-border);
+  background: var(--state-warning-bg);
+  color: var(--state-warning-text);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .employee-card-status--blocked,
+.tracking-page--soft-metal-preview #tracking-rules .module-feedback__error {
+  border-color: var(--state-danger-border);
+  background: var(--state-danger-bg);
+  color: var(--state-danger-text);
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-feedback__notice {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+}
+
 .tracking-page--soft-metal-preview .tracking-vehicle-marker {
   width: 106px;
   min-width: 106px;
