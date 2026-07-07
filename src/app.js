@@ -1774,7 +1774,7 @@ function themePreviewIcon(name) {
   return themePreviewIconFile(icons[name] || icons.marker);
 }
 
-const DESIGN_ICON_ASSET_VERSION = "0.1.323";
+const DESIGN_ICON_ASSET_VERSION = "0.1.324";
 
 function themePreviewIconFile(file) {
   return `<img class="theme-icon-img" src="/design-icons/${file}?v=${DESIGN_ICON_ASSET_VERSION}" alt="" aria-hidden="true" loading="lazy">`;
@@ -10894,7 +10894,7 @@ function vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, options 
 function vehicleTrackingPreviewHeroMap(visibleVehicles, selectedVehicle) {
   return `
     <div class="tracking-hero-map" id="tracking-map" aria-label="Náhled demo mapy vozidel">
-      ${vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, { variant: "hero" })}
+      ${vehicleTrackingDemoMapCanvas(visibleVehicles, selectedVehicle, { variant: "hero", showExpandControl: true })}
     </div>
   `;
 }
@@ -12978,6 +12978,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   const previewHeroMap = isSoftMetalPreview && sourceMode === "demo"
     ? vehicleTrackingPreviewHeroMap(visibleVehicles, selectedVehicle)
     : "";
+  const heroMapExpanded = Boolean(isSoftMetalPreview && sourceMode === "demo" && vehicleTrackingDemoState.mapExpanded);
   const demoMapSection = !isSoftMetalPreview && sourceMode === "demo"
     ? vehicleTrackingMapSection(visibleVehicles, selectedVehicle)
     : "";
@@ -12994,7 +12995,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
       ${previewShellStart}
       ${topbar}
 
-      <section class="module-detail tracking-hero" aria-labelledby="module-title">
+      <section class="module-detail tracking-hero ${heroMapExpanded ? "tracking-hero--map-expanded" : ""}" aria-labelledby="module-title">
         ${isSoftMetalPreview ? "" : `<div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>`}
         <div class="module-detail__body">
           ${isSoftMetalPreview ? `<div class="tracking-hero-decor-icon" aria-hidden="true">${themePreviewIcon("vehicleTrackingPreview")}</div>` : ""}

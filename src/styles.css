@@ -27941,6 +27941,101 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   box-shadow: none;
 }
 
+.tracking-page--soft-metal-preview .tracking-map-expand-control {
+  bottom: 12px;
+  left: 12px;
+  display: inline-flex;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border-color: color-mix(in srgb, var(--brand-accent) 30%, var(--border-soft));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 84%, var(--surface-soft));
+  color: var(--icon-green);
+  box-shadow: var(--shadow-control), var(--highlight-edge);
+}
+
+.tracking-page--soft-metal-preview .tracking-map-expand-control svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.9;
+}
+
+.tracking-page--soft-metal-preview .tracking-map-expand-control:hover,
+.tracking-page--soft-metal-preview .tracking-map-expand-control:focus-visible,
+.tracking-page--soft-metal-preview .tracking-map-expand-control[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--brand-accent) 48%, var(--border-soft));
+  background: color-mix(in srgb, var(--brand-accent) 11%, var(--surface-raised));
+  color: var(--brand-accent);
+  box-shadow: var(--shadow-control-hover), var(--highlight-edge);
+}
+
+.tracking-page--soft-metal-preview .tracking-map-expand-control:active {
+  box-shadow: var(--shadow-control-active);
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-sm) var(--space-lg);
+  align-self: stretch;
+  padding-right: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-hero-decor-icon {
+  display: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__eyebrow,
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded h1,
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body > p {
+  grid-column: 1;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body > p {
+  max-width: 740px;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__status {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-actions,
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-preview-actions {
+  grid-column: 2;
+  justify-content: flex-end;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-hero-map {
+  grid-column: 1 / -1;
+  min-height: clamp(380px, 42vw, 620px);
+}
+
+@media (max-width: 760px) {
+  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__status,
+  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-actions,
+  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-preview-actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: flex-start;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-hero-map {
+    min-height: 340px;
+  }
+}
+
 .tracking-page--soft-metal-preview .tracking-demo-map--hero .tracking-demo-place {
   opacity: 0.68;
 }
