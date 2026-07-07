@@ -1,0 +1,15 @@
+name = "kaiser-collection-routes-watchdog-runner"
+main = "workers/collection-routes-watchdog-runner.js"
+compatibility_date = "2026-07-07"
+workers_dev = false
+
+[vars]
+COLLECTION_ROUTES_WATCHDOG_TARGET_URL = "https://kaiser-control-center.pages.dev/api/collection-routes/vistos/svoz-kaiser-watchdog/run"
+COLLECTION_ROUTES_WATCHDOG_TIME_ZONE = "Europe/Prague"
+COLLECTION_ROUTES_WATCHDOG_ACTIVE_START = "04:30"
+COLLECTION_ROUTES_WATCHDOG_ACTIVE_END = "16:00"
+COLLECTION_ROUTES_WATCHDOG_ACTIVE_INTERVAL_MINUTES = "15"
+COLLECTION_ROUTES_WATCHDOG_OFF_HOURS_INTERVAL_MINUTES = "120"
+
+[triggers]
+crons = ["*/15 * * * *"]

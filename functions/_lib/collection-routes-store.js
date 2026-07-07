@@ -47,6 +47,9 @@ const VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_TYPES = new Set([
   "expired-contract-row-end-date",
   "invalid-contract-row-date-range"
 ]);
+const VISTOS_SVOZ_KAISER_WATCHDOG_SOURCE_MODE = "vistos-svoz-kaiser-watchdog";
+const VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_ROWS_LIMIT = 200;
+const VISTOS_SVOZ_KAISER_WATCHDOG_SITE_ALERTS_LIMIT = 100;
 const VISTOS_CONTRACT_COLUMNS = [
   "Id",
   "ContractNumber",
@@ -2852,6 +2855,193 @@ function buildVistosSvozKaiserWatchdog(preview, apiStatus = "ready") {
   };
 }
 
+function collectionRoutesWatchdogBatchStatus(watchdog = {}) {
+  const summary = watchdog.summary || {};
+  if (watchdog.apiStatus && watchdog.apiStatus !== "ready") {
+    return "waiting";
+  }
+  if (!summary.svozKaiserFieldConfirmed && !summary.svozKaiserFilterConfirmed && !summary.svozKaiserFiltered) {
+    return "waiting";
+  }
+  return Number(summary.errorCount || 0) > 0 ? "warning" : "ready";
+}
+
+function collectionRoutesWatchdogSnapshotPayload(watchdog = {}) {
+  return {
+    ...watchdog,
+    issueRows: Array.isArray(watchdog.issueRows)
+      ? watchdog.issueRows.slice(0, VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_ROWS_LIMIT)
+      : [],
+    siteAlerts: Array.isArray(watchdog.siteAlerts)
+      ? watchdog.siteAlerts.slice(0, VISTOS_SVOZ_KAISER_WATCHDOG_SITE_ALERTS_LIMIT)
+      : []
+  };
+}
+
+function collectionRoutesWatchdogSnapshotFromBatch(batch) {
+  if (!batch) {
+    return null;
+  }
+  const watchdog = batch.metadata?.watchdog || null;
+  if (!watchdog) {
+    return null;
+  }
+
+  return {
+    ...watchdog,
+    snapshot: {
+      id: batch.id,
+      sourceMode: batch.sourceMode,
+      status: batch.status,
+      apiStatus: batch.apiStatus,
+      createdAt: batch.createdAt,
+      finishedAt: batch.finishedAt,
+      triggeredBy: cleanString(batch.metadata?.triggeredBy),
+      runner: cleanString(batch.metadata?.runner),
+      scheduleMode: cleanString(batch.metadata?.scheduleMode),
+      cron: cleanString(batch.metadata?.cron)
+    }
+  };
+}
+
+export async function persistCollectionRoutesSvozKaiserWatchdogSnapshot(env, watchdog = {}, {
+  createdByUserId = "",
+  triggeredBy = "manual",
+  runner = "",
+  scheduledAt = "",
+  cron = "",
+  scheduleMode = "",
+  message = ""
+} = {}) {
+  const db = collectionRoutesDatabase(env, true);
+  const createdAt = cleanString(watchdog.generatedAt) || nowIso();
+  const finishedAt = nowIso();
+  const batchId = randomId("collection-watchdog-batch");
+  const summary = watchdog.summary || {};
+  const status = collectionRoutesWatchdogBatchStatus(watchdog);
+  const metadataJson = {
+    phase: VISTOS_KOMUNAL_PHASE,
+    mode: "vistos-svoz-kaiser-watchdog-snapshot",
+    source: "vistos",
+    sourceMode: VISTOS_SVOZ_KAISER_WATCHDOG_SOURCE_MODE,
+    triggeredBy,
+    runner,
+    scheduledAt,
+    cron,
+    scheduleMode,
+    createsOperationalRoutes: false,
+    sendsEmailOrSms: false,
+    startsRouteAutomation: false,
+    writesToVistos: false,
+    watchdog: collectionRoutesWatchdogSnapshotPayload(watchdog)
+  };
+
+  await db
+    .prepare(`
+      INSERT INTO collection_import_batches (
+        id,
+        source,
+        source_mode,
+        status,
+        api_status,
+        message,
+        row_count,
+        issue_count,
+        created_by_user_id,
+        created_at,
+        finished_at,
+        metadata_json
+      )
+      VALUES (?, 'vistos', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      batchId,
+      VISTOS_SVOZ_KAISER_WATCHDOG_SOURCE_MODE,
+      status,
+      cleanString(watchdog.apiStatus || "waiting"),
+      cleanString(message || summary.message || "Read-only snapshot hlídače Vistos Svoz Kaiser."),
+      Number(summary.checkedRows || 0) || 0,
+      Number(summary.errorCount || 0) || 0,
+      cleanString(createdByUserId || triggeredBy),
+      createdAt,
+      finishedAt,
+      jsonString(metadataJson)
+    )
+    .run();
+
+  return {
+    id: batchId,
+    sourceMode: VISTOS_SVOZ_KAISER_WATCHDOG_SOURCE_MODE,
+    status,
+    apiStatus: cleanString(watchdog.apiStatus || "waiting"),
+    createdAt,
+    finishedAt,
+    triggeredBy,
+    runner,
+    scheduleMode,
+    cron
+  };
+}
+
+async function finalizeCollectionRoutesSvozKaiserWatchdog(env, watchdog, options = {}) {
+  if (!options.persist) {
+    return watchdog;
+  }
+
+  try {
+    const snapshot = await persistCollectionRoutesSvozKaiserWatchdogSnapshot(env, watchdog, {
+      createdByUserId: cleanString(options.user?.id || options.createdByUserId),
+      triggeredBy: cleanString(options.triggeredBy || "manual"),
+      runner: cleanString(options.runner),
+      scheduledAt: cleanString(options.scheduledAt),
+      cron: cleanString(options.cron),
+      scheduleMode: cleanString(options.scheduleMode),
+      message: cleanString(options.message)
+    });
+    return { ...watchdog, snapshot };
+  } catch (error) {
+    if (options.throwOnPersistError) {
+      throw error;
+    }
+    console.error("collection_routes.svoz_kaiser_watchdog_snapshot_failed", { message: error.message });
+    return {
+      ...watchdog,
+      snapshot: {
+        status: "failed",
+        error: "Snapshot hlídače se nepodařilo uložit do D1."
+      }
+    };
+  }
+}
+
+export async function getLatestCollectionRoutesSvozKaiserWatchdogSnapshot(env) {
+  const db = collectionRoutesDatabase(env, true);
+  try {
+    const row = await db
+      .prepare(`
+        SELECT *
+        FROM collection_import_batches
+        WHERE source_mode = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+      `)
+      .bind(VISTOS_SVOZ_KAISER_WATCHDOG_SOURCE_MODE)
+      .first();
+
+    if (!row) {
+      return null;
+    }
+
+    const batch = rowToBatch(row);
+    return {
+      batch,
+      watchdog: collectionRoutesWatchdogSnapshotFromBatch(batch)
+    };
+  } catch (error) {
+    throw collectionRoutesDbError(error);
+  }
+}
+
 function mappedManualRow(rawRow, rowNumber) {
   const customerName = readMappedField(rawRow, "customerName");
   const addressRaw = readMappedField(rawRow, "addressRaw");
@@ -3770,13 +3960,13 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
   });
 }
 
-export async function createCollectionRoutesVistosSvozKaiserWatchdog(env) {
+export async function createCollectionRoutesVistosSvozKaiserWatchdog(env, options = {}) {
   let loaded;
   try {
     loaded = await loadVistosKommunalPreviewData(env);
   } catch (error) {
     if (error instanceof CollectionRoutesStoreError && error.code?.startsWith("vistos_api")) {
-      return {
+      return finalizeCollectionRoutesSvozKaiserWatchdog(env, {
         apiStatus: error.code === "vistos_api_not_configured" ? "not_configured" : "waiting",
         mode: "vistos-svoz-kaiser-watchdog",
         source: "vistos",
@@ -3797,13 +3987,13 @@ export async function createCollectionRoutesVistosSvozKaiserWatchdog(env) {
         issueSummary: [],
         issueRows: [],
         siteAlerts: []
-      };
+      }, options);
     }
     throw error;
   }
 
   if (!loaded.configured) {
-    return {
+    return finalizeCollectionRoutesSvozKaiserWatchdog(env, {
       apiStatus: loaded.apiStatus,
       mode: "vistos-svoz-kaiser-watchdog",
       source: "vistos",
@@ -3824,10 +4014,14 @@ export async function createCollectionRoutesVistosSvozKaiserWatchdog(env) {
       issueSummary: [],
       issueRows: [],
       siteAlerts: []
-    };
+    }, options);
   }
 
-  return buildVistosSvozKaiserWatchdog(loaded.preview, loaded.apiStatus || "ready");
+  return finalizeCollectionRoutesSvozKaiserWatchdog(
+    env,
+    buildVistosSvozKaiserWatchdog(loaded.preview, loaded.apiStatus || "ready"),
+    options
+  );
 }
 
 export async function createCollectionRoutesVistosKommunalPreviewExport(env, {

@@ -1,7 +1,8 @@
 import { json, requireUserPermission } from "../../../_lib/auth.js";
 import {
   CollectionRoutesStoreError,
-  createCollectionRoutesVistosSvozKaiserWatchdog
+  createCollectionRoutesVistosSvozKaiserWatchdog,
+  getLatestCollectionRoutesSvozKaiserWatchdogSnapshot
 } from "../../../_lib/collection-routes-store.js";
 
 function watchdogError(error) {
@@ -17,14 +18,40 @@ function watchdogError(error) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const { response } = await requireUserPermission(env, request, "collection-routes", "view");
+  const { user, response } = await requireUserPermission(env, request, "collection-routes", "view");
   if (response) {
     return response;
   }
 
   try {
-    const watchdog = await createCollectionRoutesVistosSvozKaiserWatchdog(env);
-    return json({ watchdog, apiStatus: watchdog.apiStatus || "ready" });
+    const url = new URL(request.url);
+    const mode = String(url.searchParams.get("mode") || "latest").trim().toLowerCase();
+    const live = mode === "live" || url.searchParams.get("live") === "1";
+
+    if (!live) {
+      const snapshot = await getLatestCollectionRoutesSvozKaiserWatchdogSnapshot(env);
+      return json({
+        watchdog: snapshot?.watchdog || null,
+        snapshot: snapshot?.batch || null,
+        latest: Boolean(snapshot?.watchdog),
+        apiStatus: snapshot?.watchdog?.apiStatus || snapshot?.batch?.apiStatus || "waiting"
+      });
+    }
+
+    const watchdog = await createCollectionRoutesVistosSvozKaiserWatchdog(env, {
+      persist: true,
+      user,
+      triggeredBy: "ui-open",
+      runner: "collection-routes-sites-open",
+      scheduleMode: "on-open",
+      message: "Živý read-only snapshot hlídače po otevření Stanovišť."
+    });
+    return json({
+      watchdog,
+      snapshot: watchdog.snapshot || null,
+      latest: false,
+      apiStatus: watchdog.apiStatus || "ready"
+    });
   } catch (error) {
     return watchdogError(error);
   }

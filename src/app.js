@@ -1017,6 +1017,8 @@ const collectionRoutesPilotState = {
   svozKaiserWatchdogLoaded: false,
   svozKaiserWatchdogLoading: false,
   svozKaiserWatchdogError: "",
+  svozKaiserWatchdogLiveAttempted: false,
+  svozKaiserWatchdogLiveLoadedAt: "",
   kommunalPairingRows: [],
   kommunalExpandedContractKeys: [],
   kommunalPairingLoading: false,
@@ -13414,6 +13416,21 @@ function collectionRoutesWatchdogAlertForSite(site = {}) {
   }) || null;
 }
 
+function collectionRoutesSvozKaiserWatchdogRunLine(watchdog) {
+  if (!watchdog) {
+    return "";
+  }
+  const snapshot = watchdog.snapshot || {};
+  const generatedAt = snapshot.createdAt || watchdog.generatedAt || "";
+  const source = snapshot.scheduleMode === "on-open"
+    ? "živé volání při otevření"
+    : snapshot.id
+      ? "poslední cloud snapshot"
+      : "živý výpočet";
+  const generatedText = generatedAt ? formatDateTime(generatedAt) : "";
+  return generatedText ? `${source} · ${generatedText}` : source;
+}
+
 function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
   const watchdog = collectionRoutesPilotState.svozKaiserWatchdog;
   const summary = watchdog?.summary || {};
@@ -13442,6 +13459,7 @@ function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
     ? `Aktuální čísla jsou jen diagnostika širších aktivních Komunál dat: ${rawIssueCount} upozornění na ${siteErrorCount} stanovištích. Nejde o potvrzené chyby Svoz Kaiser tras.`
     : "";
   const sourceRule = collectionRoutesSvozKaiserWatchdogSourceRule();
+  const runLine = collectionRoutesSvozKaiserWatchdogRunLine(watchdog);
 
   return `
     <div class="collection-routes-watchdog collection-routes-watchdog--${escapeHtml(tone)} ${compact ? "collection-routes-watchdog--compact" : ""}" role="status" aria-label="Hlídač Vistos Svoz Kaiser">
@@ -13454,6 +13472,7 @@ function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
       </div>
       ${collectionRoutesPilotState.svozKaiserWatchdogError ? `<p>${escapeHtml(collectionRoutesPilotState.svozKaiserWatchdogError)}</p>` : ""}
       ${filterNotice ? `<p>${escapeHtml(filterNotice)}</p>` : ""}
+      ${runLine ? `<p>${escapeHtml(runLine)}</p>` : ""}
       ${sourceRule ? `<p>${escapeHtml(sourceRule)}</p>` : ""}
       ${summary.message && !collectionRoutesPilotState.svozKaiserWatchdogError && !filterNotice ? `<p>${escapeHtml(summary.message)}</p>` : ""}
       ${issueSummary.length ? `
@@ -17763,9 +17782,10 @@ function ensureCollectionRoutesSitesReadOnlyData(user = currentUser()) {
     user &&
     collectionRoutesCanViewPilot(user) &&
     !collectionRoutesPilotState.svozKaiserWatchdogLoading &&
-    !collectionRoutesPilotState.svozKaiserWatchdogLoaded
+    !collectionRoutesPilotState.svozKaiserWatchdogLiveAttempted
   ) {
-    void Promise.resolve().then(() => loadCollectionRoutesSvozKaiserWatchdog());
+    collectionRoutesPilotState.svozKaiserWatchdogLiveAttempted = true;
+    void Promise.resolve().then(() => loadCollectionRoutesSvozKaiserWatchdog({ force: true, live: true }));
   }
   if (
     collectionRoutesCanRunImportPreview(user) &&
@@ -26316,12 +26336,18 @@ async function loadCollectionRoutesSvozKaiserWatchdog(options = {}) {
   collectionRoutesPilotState.svozKaiserWatchdogError = "";
 
   try {
-    const result = await apiJson("/api/collection-routes/vistos/svoz-kaiser-watchdog");
+    const mode = options.live === true ? "live" : "latest";
+    const result = await apiJson(`/api/collection-routes/vistos/svoz-kaiser-watchdog?mode=${encodeURIComponent(mode)}`);
     collectionRoutesPilotState.svozKaiserWatchdog = result.watchdog || null;
     collectionRoutesPilotState.svozKaiserWatchdogLoaded = true;
+    if (options.live === true) {
+      collectionRoutesPilotState.svozKaiserWatchdogLiveLoadedAt = new Date().toISOString();
+    }
   } catch (error) {
-    collectionRoutesPilotState.svozKaiserWatchdog = null;
-    collectionRoutesPilotState.svozKaiserWatchdogLoaded = false;
+    if (options.live !== true) {
+      collectionRoutesPilotState.svozKaiserWatchdog = null;
+      collectionRoutesPilotState.svozKaiserWatchdogLoaded = false;
+    }
     collectionRoutesPilotState.svozKaiserWatchdogError =
       error.payload?.error || error.message || "Hlídač Vistos Svoz Kaiser se teď nepodařilo spustit.";
   } finally {
