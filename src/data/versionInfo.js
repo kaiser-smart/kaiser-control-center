@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.428"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.429"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: dávkový snapshot faktur",
+    text: "Vistos faktury se v importu Pohledávek načítají automaticky po bezpečných read-only dávkách do stagingu, bez ledger zápisu, komunikace a automatizace."
+  },
   {
     title: "Trasy svozu: API refresh Stanovišť",
     text: "Odpočet ve Stanovištích teď jasně ukazuje další read-only API kontrolu a umožňuje ručně spustit volání API hned."

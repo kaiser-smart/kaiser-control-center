@@ -871,6 +871,8 @@ const receivablesState = {
   invoiceSnapshotLoading: false,
   invoiceSnapshotError: "",
   invoiceSnapshotMessage: "",
+  invoiceSnapshotAdvanceRuns: 0,
+  invoiceSnapshotAdvanceTimer: 0,
   vistosPreview: null,
   vistosPreviewLoading: false,
   vistosPreviewError: "",
@@ -24908,6 +24910,12 @@ function receivablesInvoiceSnapshotPanel() {
   const summary = snapshot?.summary || {};
   const pagination = receivablesState.invoiceSnapshotPagination || {};
   const totalRows = pagination.totalRows || summary.loadedRows || 0;
+  const loadedRows = Number(summary.loadedRows || 0);
+  const expectedRows = Number(summary.totalRows || totalRows || 0);
+  const stillAdvancing = Boolean(summary.capped && expectedRows > 0 && loadedRows < expectedRows);
+  const statusLabel = receivablesState.invoiceSnapshotLoading
+    ? "načítám"
+    : stillAdvancing ? "dávkově načítám" : summary.capped ? "snapshot capped" : "read-only";
   const safetyRows = [
     ["Vistos API", "read-only"],
     ["D1 zápis", "jen snapshot/staging"],
@@ -24924,9 +24932,9 @@ function receivablesInvoiceSnapshotPanel() {
         <div>
           <p class="module-feedback__eyebrow">Vistos faktury</p>
           <h2 id="receivables-invoice-snapshot-title">Automatický read-only snapshot za 24 měsíců</h2>
-          <p>Import záložka načítá poslední uložený snapshot automaticky. Pokud chybí, založí první staging snapshot bez zápisu do ledgeru.</p>
+          <p>Import záložka načítá snapshot automaticky po dávkách. Data zůstávají ve stagingu a bez zápisu do ledgeru.</p>
         </div>
-        ${receivablesPill(receivablesState.invoiceSnapshotLoading ? "načítám" : summary.capped ? "snapshot capped" : "read-only", summary.capped ? "warning" : "ready")}
+        ${receivablesPill(statusLabel, stillAdvancing || summary.capped ? "warning" : "ready")}
       </div>
       ${receivablesState.invoiceSnapshotError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.invoiceSnapshotError)}</p>` : ""}
       ${receivablesState.invoiceSnapshotMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.invoiceSnapshotMessage)}</p>` : ""}
@@ -27005,11 +27013,47 @@ async function loadReceivablesImportBatches(options = {}) {
   }
 }
 
+function receivablesInvoiceSnapshotShouldAdvance() {
+  const summary = receivablesState.invoiceSnapshot?.summary || {};
+  const loadedRows = Number(summary.loadedRows || 0);
+  const totalRows = Number(summary.totalRows || 0);
+  return Boolean(summary.capped && totalRows > 0 && loadedRows < totalRows);
+}
+
+function scheduleReceivablesInvoiceSnapshotAdvance() {
+  if (receivablesState.invoiceSnapshotError) {
+    return;
+  }
+  if (!receivablesInvoiceSnapshotShouldAdvance()) {
+    receivablesState.invoiceSnapshotAdvanceRuns = 0;
+    return;
+  }
+  if (!location.pathname.includes("/pohledavky/import") && !location.pathname.includes("/receivables/import")) {
+    return;
+  }
+  if (receivablesState.invoiceSnapshotLoading || receivablesState.invoiceSnapshotAdvanceTimer) {
+    return;
+  }
+  if (receivablesState.invoiceSnapshotAdvanceRuns >= 60) {
+    receivablesState.invoiceSnapshotMessage = "Dávkový snapshot je pozastavený po 60 dávkách. Obnov stránku pro pokračování.";
+    return;
+  }
+
+  receivablesState.invoiceSnapshotAdvanceTimer = window.setTimeout(() => {
+    receivablesState.invoiceSnapshotAdvanceTimer = 0;
+    receivablesState.invoiceSnapshotAdvanceRuns += 1;
+    void loadReceivablesInvoiceSnapshot({ advance: true });
+  }, 1200);
+}
+
 async function loadReceivablesInvoiceSnapshot(options = {}) {
   if (receivablesState.invoiceSnapshotLoading) {
     return;
   }
 
+  if (options.advance !== true) {
+    receivablesState.invoiceSnapshotAdvanceRuns = 0;
+  }
   receivablesState.invoiceSnapshotLoading = true;
   receivablesState.invoiceSnapshotError = "";
   receivablesState.invoiceSnapshotMessage = "";
@@ -27018,8 +27062,12 @@ async function loadReceivablesInvoiceSnapshot(options = {}) {
     params.set("page", String(options.page || receivablesState.invoiceSnapshotPagination?.page || 1));
     params.set("pageSize", String(options.pageSize || receivablesState.invoiceSnapshotPagination?.pageSize || 100));
     params.set("invoiceLookbackMonths", "24");
+    params.set("vistosPageSize", "1000");
+    params.set("pagesPerRun", "1");
     if (options.live === true) {
       params.set("mode", "live");
+    } else if (options.advance === true) {
+      params.set("mode", "advance");
     }
     const result = await apiJson(`/api/receivables/vistos/invoice-snapshot?${params.toString()}`);
     receivablesState.invoiceSnapshot = result.snapshot || null;
@@ -27035,6 +27083,7 @@ async function loadReceivablesInvoiceSnapshot(options = {}) {
     if (options.renderAfter !== false) {
       render();
     }
+    scheduleReceivablesInvoiceSnapshotAdvance();
   }
 }
 

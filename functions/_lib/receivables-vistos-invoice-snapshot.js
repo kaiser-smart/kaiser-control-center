@@ -2,6 +2,7 @@ import {
   VistosExecuteError,
   cleanVistosValue,
   getAllVistosPages,
+  getVistosPage,
   isVistosExecuteConfigured,
   loginVistosExecute
 } from "./vistos-execute-client.js";
@@ -17,6 +18,9 @@ const DEFAULT_PAGE_SIZE = 1000;
 const DEFAULT_MAX_PAGES = 5;
 const MAX_MAX_PAGES = 24;
 const DEFAULT_LOOKBACK_MONTHS = 24;
+const DEFAULT_ADVANCE_PAGE_SIZE = 1000;
+const DEFAULT_ADVANCE_PAGES_PER_RUN = 1;
+const MAX_ADVANCE_PAGES_PER_RUN = 3;
 
 const INVOICE_COLUMNS = [
   "Id",
@@ -160,6 +164,18 @@ function countIssues(rows = []) {
     .sort((left, right) => right.count - left.count || left.code.localeCompare(right.code));
 }
 
+function mergeIssueCounts(left = [], right = []) {
+  const counts = new Map();
+  for (const item of [...left, ...right]) {
+    const code = clean(item?.code);
+    if (!code) continue;
+    counts.set(code, (counts.get(code) || 0) + numberValue(item?.count));
+  }
+  return [...counts.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+}
+
 async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
   const diagnostics = [];
   const invoiceLookback = receivablesVistosInvoiceLookbackWindow({
@@ -211,6 +227,62 @@ async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
     invoiceLookback,
     pageSize,
     maxPages
+  };
+}
+
+async function loadInvoicePage(env, session, options = {}) {
+  const invoiceLookback = receivablesVistosInvoiceLookbackWindow({
+    months: options.invoiceLookbackMonths || DEFAULT_LOOKBACK_MONTHS,
+    now: options.now
+  });
+  const filter = options.filter && typeof options.filter === "object" ? options.filter : invoiceLookback.filter;
+  const pageSize = boundedInteger(options.vistosPageSize ?? options.pageSize, DEFAULT_ADVANCE_PAGE_SIZE, DEFAULT_PAGE_SIZE);
+  const start = Math.max(0, Math.floor(Number(options.start) || 0));
+  const diagnostics = [];
+
+  for (const attempt of INVOICE_ATTEMPTS) {
+    const entityName = clean(options.entityName) || attempt.entityName;
+    const columns = Array.isArray(options.columns) && options.columns.length ? options.columns : attempt.columns;
+    try {
+      const page = await getVistosPage(env, session, entityName, columns, filter, start, pageSize);
+      diagnostics.push({
+        key: attempt.key,
+        entityName,
+        columns,
+        ok: true,
+        returnedRows: page.rows.length,
+        recordsTotal: page.total || 0,
+        recordsFiltered: page.filtered || 0,
+        start,
+        pageSize,
+        filter
+      });
+      if (page.rows.length > 0 || clean(options.entityName)) {
+        return { entityName, columns, page, diagnostics, invoiceLookback, filter, pageSize, start };
+      }
+    } catch (error) {
+      diagnostics.push({
+        key: attempt.key,
+        entityName,
+        ok: false,
+        code: clean(error?.code),
+        message: clean(error?.message).slice(0, 180),
+        start,
+        pageSize,
+        filter
+      });
+    }
+  }
+
+  return {
+    entityName: clean(options.entityName),
+    columns: Array.isArray(options.columns) ? options.columns : [],
+    page: { rows: [], total: 0, filtered: 0 },
+    diagnostics,
+    invoiceLookback,
+    filter,
+    pageSize,
+    start
   };
 }
 
@@ -268,6 +340,16 @@ function snapshotSummaryFromBatch(batch = {}, rowCount = 0) {
   };
 }
 
+async function latestSnapshotBatch(db) {
+  return db.prepare(`
+    SELECT *
+    FROM receivable_import_batches
+    WHERE source = ? AND import_kind = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first();
+}
+
 export async function getLatestReceivablesVistosInvoiceSnapshot(env, options = {}) {
   const db = database(env);
   if (!db) {
@@ -279,13 +361,7 @@ export async function getLatestReceivablesVistosInvoiceSnapshot(env, options = {
   const offset = (page - 1) * pageSize;
 
   try {
-    const batchRow = await db.prepare(`
-      SELECT *
-      FROM receivable_import_batches
-      WHERE source = ? AND import_kind = ?
-      ORDER BY created_at DESC
-      LIMIT 1
-    `).bind(SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first();
+    const batchRow = await latestSnapshotBatch(db);
 
     if (!batchRow) {
       return { snapshot: null, rows: [], pagination: { page, pageSize, totalRows: 0 }, apiStatus: "empty" };
@@ -334,7 +410,8 @@ export async function createReceivablesVistosInvoiceSnapshot(env, options = {}) 
     const session = await loginVistosExecute(env);
     const invoiceResult = await loadFirstWorkingInvoiceEntity(env, session, {
       ...options,
-      entityName: env?.VISTOS_RECEIVABLES_INVOICE_ENTITY
+      entityName: env?.VISTOS_RECEIVABLES_INVOICE_ENTITY,
+      pageSize: options.vistosPageSize ?? options.loadPageSize ?? options.pageSize
     });
     const normalizedRows = invoiceResult.page.rows.map((raw, index) => {
       const invoice = mapReceivablesVistosInvoice(raw);
@@ -446,6 +523,217 @@ export async function createReceivablesVistosInvoiceSnapshot(env, options = {}) 
       page: options.page,
       pageSize: options.pageSize
     });
+  } catch (error) {
+    throw snapshotError(error);
+  }
+}
+
+export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {}) {
+  const db = database(env, true);
+  if (!isVistosExecuteConfigured(env)) {
+    return {
+      snapshot: null,
+      rows: [],
+      pagination: { page: 1, pageSize: 100, totalRows: 0 },
+      apiStatus: "not_configured",
+      message: "Vistos API není nakonfigurováno.",
+      readOnly: true
+    };
+  }
+
+  try {
+    const batchRow = await latestSnapshotBatch(db);
+    if (!batchRow) {
+      return createReceivablesVistosInvoiceSnapshot(env, {
+        ...options,
+        triggeredBy: clean(options.triggeredBy) || "ui-auto-batch-first-open"
+      });
+    }
+
+    const batch = rowToBatch(batchRow);
+    const summary = snapshotSummaryFromBatch(batch, batch.rowCount);
+    const currentRowCount = await db.prepare("SELECT COUNT(*) AS count FROM receivable_import_rows WHERE batch_id = ?")
+      .bind(batch.id)
+      .first();
+    const loadedBefore = numberValue(currentRowCount?.count, summary.loadedRows || batch.rowCount);
+    const knownTotal = numberValue(summary.totalRows);
+
+    if (knownTotal > 0 && loadedBefore >= knownTotal) {
+      await db.prepare(`
+        UPDATE receivable_import_batches
+        SET status = 'snapshot', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(batch.id).run();
+      return getLatestReceivablesVistosInvoiceSnapshot(env, options);
+    }
+
+    const session = await loginVistosExecute(env);
+    const pagesPerRun = boundedInteger(options.pagesPerRun, DEFAULT_ADVANCE_PAGES_PER_RUN, MAX_ADVANCE_PAGES_PER_RUN);
+    const pageSize = boundedInteger(options.vistosPageSize, DEFAULT_ADVANCE_PAGE_SIZE, DEFAULT_PAGE_SIZE);
+    const baseColumns = Array.isArray(summary.invoiceColumns) && summary.invoiceColumns.length ? summary.invoiceColumns : INVOICE_COLUMNS;
+    const baseEntity = clean(summary.invoiceEntity) || clean(batch.rawPayload?.invoiceEntity) || clean(env?.VISTOS_RECEIVABLES_INVOICE_ENTITY);
+    const baseLookback = summary.invoiceLookback || batch.rawPayload?.invoiceLookback || receivablesVistosInvoiceLookbackWindow({
+      months: options.invoiceLookbackMonths || DEFAULT_LOOKBACK_MONTHS,
+      now: options.now
+    });
+    const filter = baseLookback.filter || receivablesVistosInvoiceLookbackWindow({
+      months: options.invoiceLookbackMonths || DEFAULT_LOOKBACK_MONTHS,
+      now: options.now
+    }).filter;
+
+    let loadedRows = loadedBefore;
+    let totalRows = knownTotal;
+    let acceptedCount = numberValue(summary.acceptedCount);
+    let reviewCount = numberValue(summary.reviewCount);
+    let ignoredCount = numberValue(summary.ignoredCount);
+    let issueCounts = Array.isArray(summary.issueCounts) ? summary.issueCounts : [];
+    let latestEntity = baseEntity;
+    let latestColumns = baseColumns;
+    const diagnostics = [];
+    let lastPageRows = 0;
+
+    for (let pageIndex = 0; pageIndex < pagesPerRun; pageIndex += 1) {
+      const pageResult = await loadInvoicePage(env, session, {
+        entityName: latestEntity,
+        columns: latestColumns,
+        filter,
+        start: loadedRows,
+        vistosPageSize: pageSize,
+        invoiceLookbackMonths: options.invoiceLookbackMonths
+      });
+      latestEntity = pageResult.entityName || latestEntity;
+      latestColumns = pageResult.columns?.length ? pageResult.columns : latestColumns;
+      diagnostics.push(...pageResult.diagnostics);
+      const rows = pageResult.page.rows || [];
+      lastPageRows = rows.length;
+      totalRows = pageResult.page.filtered || pageResult.page.total || totalRows || loadedRows + rows.length;
+
+      if (!rows.length) {
+        break;
+      }
+
+      const normalizedRows = rows.map((raw, index) => {
+        const invoice = mapReceivablesVistosInvoice(raw);
+        const issues = invoiceIssues(invoice);
+        return {
+          rowNumber: loadedRows + index + 1,
+          invoice,
+          raw,
+          issues,
+          previewStatus: issues.length ? "review" : "ready"
+        };
+      });
+      const newIssueCounts = countIssues(normalizedRows);
+      issueCounts = mergeIssueCounts(issueCounts, newIssueCounts);
+      acceptedCount += normalizedRows.filter((row) => row.previewStatus === "ready").length;
+      reviewCount += normalizedRows.filter((row) => row.previewStatus === "review").length;
+
+      const rowStatements = normalizedRows.map((row) => db.prepare(`
+        INSERT OR REPLACE INTO receivable_import_rows (
+          id, batch_id, row_number, entity_kind, preview_status, confidence,
+          issue_code, issue_message, normalized_json, raw_payload
+        )
+        VALUES (?, ?, ?, 'vistos_invoice', ?, ?, ?, ?, ?, ?)
+      `).bind(
+        randomId("receivable-vistos-invoice-row"),
+        batch.id,
+        row.rowNumber,
+        row.previewStatus,
+        row.issues.length ? 0.55 : 0.95,
+        row.issues[0] || null,
+        row.issues.join(", ") || null,
+        safeJson(row.invoice),
+        safeJson(row.raw)
+      ));
+
+      for (let index = 0; index < rowStatements.length; index += 100) {
+        await db.batch(rowStatements.slice(index, index + 100));
+      }
+      loadedRows += normalizedRows.length;
+
+      if ((totalRows > 0 && loadedRows >= totalRows) || rows.length < pageSize) {
+        break;
+      }
+    }
+
+    const capped = Boolean(totalRows && loadedRows < totalRows);
+    const status = capped ? "snapshot_running" : "snapshot";
+    const updatedSummary = {
+      ...summary,
+      mode: "vistos-invoice-snapshot",
+      source: SNAPSHOT_SOURCE,
+      sourceMode: "read_only_vistos_execute",
+      invoiceEntity: latestEntity,
+      invoiceColumns: latestColumns,
+      invoiceLookback: baseLookback,
+      loadedRows,
+      totalRows,
+      acceptedCount,
+      reviewCount,
+      ignoredCount,
+      issueCounts,
+      capped,
+      pageSize,
+      maxPages: numberValue(summary.maxPages),
+      lastBatchRows: loadedRows - loadedBefore,
+      lastBatchStartedAt: loadedBefore,
+      lastBatchFinishedAt: loadedRows,
+      readOnly: true,
+      writesD1: true,
+      writesLedger: false,
+      createsReceivableRecords: false,
+      sendsCustomerCommunication: false,
+      startsAutomation: false,
+      calculatesRealRating: false,
+      importsKbPayments: false,
+      recommendedNextStep: capped
+        ? `Dávkový read-only snapshot pokračuje automaticky: načteno ${loadedRows} / ${totalRows}.`
+        : "Dávkový read-only snapshot faktur za 24 měsíců doběhl do staging vrstvy. Další krok je ledger mapping bez komunikace zákazníkům."
+    };
+    const updatedRawPayload = {
+      ...(batch.rawPayload || {}),
+      trigger: clean(options.triggeredBy) || "ui-auto-batch-advance",
+      source: SNAPSHOT_SOURCE,
+      importKind: SNAPSHOT_IMPORT_KIND,
+      invoiceEntity: latestEntity,
+      totalRows,
+      capped,
+      invoiceLookback: baseLookback,
+      diagnostics: [
+        ...((batch.rawPayload?.diagnostics || []).slice?.(-10) || []),
+        ...diagnostics
+      ].slice(-20),
+      lastPageRows,
+      readOnly: true,
+      writesLedger: false,
+      createsReceivableRecords: false,
+      sendsCustomerCommunication: false,
+      startsAutomation: false
+    };
+
+    await db.prepare(`
+      UPDATE receivable_import_batches
+      SET status = ?,
+          row_count = ?,
+          accepted_count = ?,
+          review_count = ?,
+          ignored_count = ?,
+          parser_summary_json = ?,
+          raw_payload = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      status,
+      loadedRows,
+      acceptedCount,
+      reviewCount,
+      ignoredCount,
+      safeJson(updatedSummary),
+      safeJson(updatedRawPayload),
+      batch.id
+    ).run();
+
+    return getLatestReceivablesVistosInvoiceSnapshot(env, options);
   } catch (error) {
     throw snapshotError(error);
   }
