@@ -17872,7 +17872,6 @@ function collectionRoutesSitesSection(user) {
         <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(isLoadingVistosSites ? "Načítám Vistos" : filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
       </div>
       ${loadingNotice ? `<p class="module-feedback__notice">${escapeHtml(loadingNotice)}</p>` : ""}
-      ${collectionRoutesSvozKaiserWatchdogPanel()}
       <div class="collection-routes-stats collection-routes-sites-summary">
         <article><span>Zdroj</span><strong>Vistos API</strong></article>
         <article><span>Stanoviště</span><strong>${escapeHtml(stats.siteCount)}</strong></article>
