@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.410"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.411"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: oprava objemu nádoby",
+    text: "Vistos Svoz Kaiser parser už nebere interval 1x30 jako 30l nádobu. U názvu typu 240 ltr SKO 1 x 30 ANO použije objem 240 l a interval ponechá jako frekvenci."
+  },
   {
     title: "Manuály modulů",
     text: "Do příručky projektu přibylo pravidlo, že hlavní moduly mají mít praktický uživatelský manuál v aplikaci i jako PDF. První pilotní manuál je vložený do modulu Hlášení řidičů."

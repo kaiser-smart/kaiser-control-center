@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collection-route-optimization-preview.js";
+import { __inferVistosContainerForTest } from "../functions/_lib/collection-routes-store.js";
 import {
   __buildCollectionRouteSourceRowsForTest,
   __buildCollectionRouteRepairWorkbookForTest,
@@ -70,6 +71,26 @@ function derive(originalText) {
   ]);
   assert.equal(container.containerVolume, 1100);
   assert.equal(container.containerCount, 2);
+}
+
+{
+  const container = __inferVistosContainerForTest({
+    Name: "SKO - 240 ltr SKO 1 x 30 ANO",
+    Quantity: "1"
+  });
+  assert.equal(container.volume, 240);
+  assert.equal(container.nameVolume, 240);
+  assert.equal(container.volumeSource, "name");
+  assert.equal(container.volumeMismatch, false);
+}
+
+{
+  const container = __inferVistosContainerForTest({
+    Name: "SKO 1 x 30 ANO",
+    Quantity: "1"
+  });
+  assert.equal(container.known, false);
+  assert.equal(container.volume, 0);
 }
 
 {

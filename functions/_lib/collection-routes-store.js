@@ -1873,11 +1873,14 @@ function normalizeContainerVolume(value) {
       known: Number.isFinite(volume) && ALLOWED_CONTAINER_VOLUMES.has(volume)
     };
   }
-  const countedVolume = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const countedVolumeMatch = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const countedVolume = countedVolumeMatch && (Number(countedVolumeMatch[1]) !== 30 || countedVolumeMatch[2])
+    ? countedVolumeMatch
+    : null;
   const prefixedVolume = raw.match(new RegExp(`\\b(?:P|POP|POPEL|KONT|KONTEJNER)\\.?\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
-  const preferredVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const preferredVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)\\b`, "i"));
   const directVolume = raw.match(new RegExp(`^\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*$`));
-  const match = countedVolume || prefixedVolume || preferredVolume || directVolume;
+  const match = prefixedVolume || preferredVolume || countedVolume || directVolume;
   const volume = match ? Number(match[1] || match[0]) : 0;
   return {
     volume,
@@ -1896,11 +1899,14 @@ function normalizeExplicitContainerVolumeText(value) {
     };
   }
 
-  const countedVolume = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const countedVolumeMatch = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const countedVolume = countedVolumeMatch && (Number(countedVolumeMatch[1]) !== 30 || countedVolumeMatch[2])
+    ? countedVolumeMatch
+    : null;
   const prefixedVolume = raw.match(new RegExp(`\\b(?:P|POP|POPEL|KONT|KONTEJNER)\\.?\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
   const unitVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)\\b`, "i"));
   const contextualVolume = raw.match(new RegExp(`\\b(?:NADOB(?:A|Y|U|OU|E)?|POPELNIC(?:E|I|A|OU)?|KONTEJNER|KONT|KAPACIT(?:A|OU|Y)?|VELIKOST(?:I)?|OBJEM(?:EM)?|VYKLOP(?:U)?)\\D{0,40}(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
-  const match = countedVolume || prefixedVolume || unitVolume || contextualVolume;
+  const match = prefixedVolume || unitVolume || contextualVolume || countedVolume;
   const volume = match ? Number(match[1] || match[0]) : 0;
   return {
     volume,
@@ -2586,6 +2592,10 @@ function inferVistosContainer(contractRow, product) {
     volumeNameText: cleanString(nameVolume.text),
     volumeMismatch: hasMismatch
   };
+}
+
+export function __inferVistosContainerForTest(contractRow = {}, product = null) {
+  return inferVistosContainer(contractRow, product);
 }
 
 function vistosSiteKey(contract) {
