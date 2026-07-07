@@ -2645,6 +2645,10 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.collection-routes-stats--vistos-route {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .collection-routes-stats--route article {
   min-height: 82px;
   border-color: rgba(66, 80, 74, 0.1);
