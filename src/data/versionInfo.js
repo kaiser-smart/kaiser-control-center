@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.432"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.433"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: aktuální HTML pro import route",
+    text: "Build nově generuje i přímou route /pohledavky/import, aby produkce na této adrese vždy načítala aktuální app.js a ne starý statický HTML soubor."
+  },
   {
     title: "Pohledávky: užší Vistos metadata zákazníků",
     text: "Read-only obohacení zákazníků v ledger mappingu používá užší potvrzenou sadu Vistos polí, aby lookup zákazníků nebyl blokovaný neověřenými sloupci. Bez ledger zápisu, komunikace a cronu."

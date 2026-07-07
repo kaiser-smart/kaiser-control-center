@@ -66,6 +66,7 @@ const routes = new Set([
   "/dovolena-nemoc/pravidla-automatizace",
   "/dovolena-nemoc/nastaveni",
   "/pohledavky/settings",
+  "/pohledavky/import",
   "/receivables",
   "/receivables/settings",
   "/design/neumorphic",
