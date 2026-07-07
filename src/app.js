@@ -16336,6 +16336,7 @@ const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS = {
   bin: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h14l-1 13H10L9 12z"/><path d="M11 12l2-5h6l2 5"/><path d="M13 17h6"/></svg>`,
   note: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6h18v20H7z"/><path d="M11 12h10"/><path d="M11 17h10"/><path d="M11 22h6"/></svg>`,
   headset: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17a9 9 0 0 1 18 0"/><path d="M7 17v5a3 3 0 0 0 3 3h2v-9H9a2 2 0 0 0-2 2z"/><path d="M25 17v5a3 3 0 0 1-3 3h-2v-9h3a2 2 0 0 1 2 2z"/><path d="M20 25c0 2-1.4 3-4 3h-2"/></svg>`,
+  break: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8v16"/><path d="M22 8v16"/><path d="M7 6h18"/><path d="M7 26h18"/></svg>`,
   cloud: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 23h13a5 5 0 0 0 0-10 8 8 0 0 0-15.4 2.2A4 4 0 0 0 11 23z"/><path d="M16 18v7"/><path d="M12 21l4 4 4-4"/></svg>`
 };
 
@@ -16599,10 +16600,16 @@ function collectionRoutesDriverTabletPreviewRows(options = {}) {
 }
 
 function collectionRoutesDriverTabletPreviewAction(label, action, tone = "default") {
-  const iconHtml = action === "sarlota"
+  const previewIconByAction = {
+    sarlota: "headset",
+    dump: "trash",
+    break: "break"
+  };
+  const previewIconName = previewIconByAction[action];
+  const iconHtml = previewIconName
     ? `
-      <span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--headset" aria-hidden="true">
-        ${COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS.headset}
+      <span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--${escapeHtml(previewIconName)}" aria-hidden="true">
+        ${COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS[previewIconName]}
       </span>
     `
     : collectionRoutesSourceDriverActionIconHtml(label, action, tone);
@@ -16637,7 +16644,6 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
   const currentStopOrder = selectedRow?.routeOrder || selectedIndex + 1;
   const totalStopsLabel = collectionRoutesMetricValue(rows.length);
   const remainingStopsLabel = collectionRoutesMetricValue(Math.max(0, rows.length - completedCount));
-  const noteText = selectedRow?.note || "Az bude hotovo, stiskni HOTOVO.";
 
   if (!selectedRow) {
     return `
@@ -16721,9 +16727,8 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
                     <span>${collectionRoutesDriverTabletPreviewIcon("bin")}<em>Nádoba</em></span>
                     <strong>${escapeHtml(collectionRoutesSourceDriverContainerLabel(selectedRow))}</strong>
                   </article>
-                  <article>
-                    <span>${collectionRoutesDriverTabletPreviewIcon("note")}<em>Poznámka</em></span>
-                    <strong>${escapeHtml(noteText)}</strong>
+                  <article class="driver-tablet-preview-stop-cta">
+                    ${collectionRoutesDriverTabletPreviewAction("HOTOVO A DALŠÍ ZASTÁVKA", "done", "done")}
                   </article>
                 </div>
               </section>
@@ -16776,15 +16781,21 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
               </aside>
             </div>
 
-            <div class="driver-tablet-preview-primary-action" aria-label="Hlavni akce ridice">
-              ${collectionRoutesDriverTabletPreviewAction("HOTOVO A DALŠÍ ZASTÁVKA", "done", "done")}
-            </div>
-
-            <div class="driver-tablet-preview-support-actions" aria-label="Vedlejsi akce ridice">
-              ${collectionRoutesDriverTabletPreviewAction("Navigovat", "navigate", "navigate")}
-              ${collectionRoutesDriverTabletPreviewAction("Nahlásit problém", "problem", "problem")}
-              ${collectionRoutesDriverTabletPreviewAction("Pomoc / Šarlota", "sarlota", "sarlota")}
-            </div>
+            <section class="driver-tablet-preview-tools" aria-label="Rychle nastroje ridice">
+              <div class="driver-tablet-preview-section-title">
+                <span class="driver-tablet-preview-section-label">
+                  ${collectionRoutesDriverTabletPreviewIcon("route")}
+                  <em>Rychlé nástroje</em>
+                </span>
+              </div>
+              <div class="driver-tablet-preview-support-actions" aria-label="Preview nastroje ridice">
+                ${collectionRoutesDriverTabletPreviewAction("Navigovat", "navigate", "navigate")}
+                ${collectionRoutesDriverTabletPreviewAction("Nahlásit problém", "problem", "problem")}
+                ${collectionRoutesDriverTabletPreviewAction("Pomoc / Šarlota", "sarlota", "sarlota")}
+                ${collectionRoutesDriverTabletPreviewAction("Musím vysypat", "dump", "dump")}
+                ${collectionRoutesDriverTabletPreviewAction("Přestávka", "break", "break")}
+              </div>
+            </section>
 
             <footer class="driver-tablet-preview-footer" aria-label="Stav preview">
               ${collectionRoutesDriverTabletPreviewIcon("cloud")}
