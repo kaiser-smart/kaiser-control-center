@@ -1774,7 +1774,7 @@ function themePreviewIcon(name) {
   return themePreviewIconFile(icons[name] || icons.marker);
 }
 
-const DESIGN_ICON_ASSET_VERSION = "0.1.326";
+const DESIGN_ICON_ASSET_VERSION = "0.1.327";
 
 function themePreviewIconFile(file) {
   return `<img class="theme-icon-img" src="/design-icons/${file}?v=${DESIGN_ICON_ASSET_VERSION}" alt="" aria-hidden="true" loading="lazy">`;
@@ -12972,13 +12972,15 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   const fleetAction = isSoftMetalPreview
     ? `<a class="primary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Otevřít Vozový park</a>`
     : vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE);
+  const heroMapExpanded = Boolean(isSoftMetalPreview && sourceMode === "demo" && vehicleTrackingDemoState.mapExpanded);
   const compareAction = isSoftMetalPreview
     ? `<a class="secondary-link tracking-preview-compare" href="${routeHref(VEHICLE_TRACKING_BASE_ROUTE)}" data-link>Původní zobrazení</a>`
     : "";
+  const inlineCompareAction = heroMapExpanded ? compareAction : "";
+  const stackedCompareAction = heroMapExpanded ? "" : compareAction;
   const previewHeroMap = isSoftMetalPreview && sourceMode === "demo"
     ? vehicleTrackingPreviewHeroMap(visibleVehicles, selectedVehicle)
     : "";
-  const heroMapExpanded = Boolean(isSoftMetalPreview && sourceMode === "demo" && vehicleTrackingDemoState.mapExpanded);
   const demoMapSection = !isSoftMetalPreview && sourceMode === "demo"
     ? vehicleTrackingMapSection(visibleVehicles, selectedVehicle)
     : "";
@@ -13009,8 +13011,9 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
           <div class="module-actions">
             ${fleetAction}
             ${vehicleTrackingAction("Správa GPS napojení")}
+            ${inlineCompareAction}
           </div>
-          ${compareAction ? `<div class="tracking-preview-actions">${compareAction}</div>` : ""}
+          ${stackedCompareAction ? `<div class="tracking-preview-actions">${stackedCompareAction}</div>` : ""}
         </div>
         ${previewHeroMap}
       </section>
