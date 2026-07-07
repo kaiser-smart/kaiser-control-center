@@ -598,7 +598,7 @@ const WASTE_TYPE_MAP = new Map([
   ["150106", { wasteType: "SMESNE OBALY", wasteCode: "150106" }]
 ]);
 
-const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "5x7", "1x14", "1x30"]);
+const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "4x7", "5x7", "1x14", "1x30"]);
 const ALLOWED_CONTAINER_VOLUMES = new Set([30, 60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500, 5000]);
 const ALLOWED_CONTAINER_VOLUME_PATTERN = "30|60|80|120|240|360|660|770|1100|1500|2500|5000";
 const VISTOS_ROUTE_WASTE_CODES = new Set(["150101", "150102", "150106", "200102", "200108", "200139", "200201", "200301"]);
@@ -1877,6 +1877,9 @@ function normalizeFrequencyAlias(value) {
   if (/3KRATTYDNE|3XTYD|3TYDNE/.test(compact)) {
     return "3x7";
   }
+  if (/4KRATTYDNE|4XTYD|4TYDNE/.test(compact)) {
+    return "4x7";
+  }
   if (/5KRATTYDNE|5XTYD|5TYDNE/.test(compact)) {
     return "5x7";
   }
@@ -2231,6 +2234,89 @@ function pickupDayEntriesFromValues(values = []) {
   };
 }
 
+function pickupDayLabelFromCode(code = "") {
+  return VISTOS_PICKUP_WEEKDAYS.find((day) => day.code === code)?.label || cleanString(code);
+}
+
+function pickupDayEntryDisplayValue(entry = {}) {
+  const day = pickupDayLabelFromCode(entry.day);
+  if (!day) {
+    return "";
+  }
+  const suffix = entry.inferred ? " (dopočteno)" : "";
+  if (entry.parity === "odd") {
+    return `${day} lichá${suffix}`;
+  }
+  if (entry.parity === "even") {
+    return `${day} sudá${suffix}`;
+  }
+  if (entry.parity === "both") {
+    return `${day} každý týden${suffix}`;
+  }
+  return `${day}${suffix}`;
+}
+
+function pickupParityOpposite(parity = "") {
+  if (parity === "odd") {
+    return "even";
+  }
+  if (parity === "even") {
+    return "odd";
+  }
+  return "";
+}
+
+function completePickupDayEntriesForFrequency(frequency = "", entries = []) {
+  const expected = expectedPickupCountsForFrequency(frequency);
+  const completed = entries.map((entry) => ({ ...entry, inferred: false }));
+
+  if (
+    expected.mode === "weekly" &&
+    expected.perWeek === 1 &&
+    completed.length === 1 &&
+    ["odd", "even"].includes(completed[0].parity)
+  ) {
+    const oppositeParity = pickupParityOpposite(completed[0].parity);
+    completed.push({
+      ...completed[0],
+      parity: oppositeParity,
+      inferred: true,
+      source: `${completed[0].source || pickupDayEntryDisplayValue(completed[0])} · dopočteno z intervalu 1x7`
+    });
+  }
+
+  return completed;
+}
+
+function pickupDayParitySet(entries = [], parity = "") {
+  const set = new Set();
+  entries.forEach((entry) => {
+    if (entry.parity === parity || entry.parity === "both") {
+      set.add(entry.day);
+    }
+  });
+  return set;
+}
+
+function samePickupDaySet(left, right) {
+  if (left.size !== right.size) {
+    return false;
+  }
+  return Array.from(left).every((item) => right.has(item));
+}
+
+function pickupDayScheduleFromValues({ frequency, values } = {}) {
+  const parsed = pickupDayEntriesFromValues(values);
+  const entries = completePickupDayEntriesForFrequency(frequency, parsed.entries);
+  return {
+    ...parsed,
+    sourceEntries: parsed.entries,
+    entries,
+    inferredEntries: entries.filter((entry) => entry.inferred),
+    displayText: entries.map(pickupDayEntryDisplayValue).filter(Boolean).join(", ")
+  };
+}
+
 function pickupDayDisplayValue(item = {}) {
   return firstNonEmpty(
     resolveVistosCollectionDayLabel(item.value),
@@ -2280,10 +2366,10 @@ function expectedPickupCountsForFrequency(frequency = "") {
   };
 }
 
-function pickupDayConsistencyIssues({ frequency, values, fieldConfirmed }) {
+function pickupDayConsistencyIssues({ frequency, values, fieldConfirmed, schedule = null }) {
   const issues = [];
   const expected = expectedPickupCountsForFrequency(frequency);
-  const { entries, duplicateCount, unknownTexts } = pickupDayEntriesFromValues(values);
+  const { entries, duplicateCount, unknownTexts } = schedule || pickupDayScheduleFromValues({ frequency, values });
 
   if (!fieldConfirmed) {
     issues.push({
@@ -2339,6 +2425,16 @@ function pickupDayConsistencyIssues({ frequency, values, fieldConfirmed }) {
         severity: "warning",
         message: `Interval ${frequency || "-"} neodpovídá rozložení svozových dnů: sudý ${effectiveEven}, lichý ${effectiveOdd}, očekáváno ${expected.expectedEven}/${expected.expectedOdd}.`
       });
+    } else {
+      const evenDays = pickupDayParitySet(entries, "even");
+      const oddDays = pickupDayParitySet(entries, "odd");
+      if (evenDays.size && oddDays.size && !samePickupDaySet(evenDays, oddDays)) {
+        issues.push({
+          type: "pickup-days-even-odd-mismatch",
+          severity: "warning",
+          message: `Interval ${frequency || "-"} má mít stejnou sadu svozových dnů v sudém i lichém týdnu.`
+        });
+      }
     }
     if (unknownParityCount > 0) {
       issues.push({
@@ -2673,6 +2769,14 @@ export function __pickupDayEntriesFromValuesForTest(values = []) {
   return pickupDayEntriesFromValues(values);
 }
 
+export function __pickupDayScheduleFromValuesForTest(input = {}) {
+  return pickupDayScheduleFromValues(input);
+}
+
+export function __pickupDayConsistencyIssuesForTest(input = {}) {
+  return pickupDayConsistencyIssues(input);
+}
+
 export function __pickupDayDisplayValueForTest(item = {}) {
   return pickupDayDisplayValue(item);
 }
@@ -2892,6 +2996,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const pickupToValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupTo");
       const pickupFrom = firstNonEmpty(...pickupFromValues.map((item) => item.value), contractRow?.StartDate);
       const pickupTo = firstNonEmpty(...pickupToValues.map((item) => item.value), contractRow?.EndDate);
+      const pickupDaySchedule = !isOutsideCollectionRoute && routeFrequency.frequency
+        ? pickupDayScheduleFromValues({ frequency: routeFrequency.frequency, values: pickupDayValues })
+        : null;
 
       if (normalizeLookupKey(rowAddressPlaceRaw) !== normalizeLookupKey(addressPlaceRaw)) {
         issues.push(...addressPlaceQualityIssues({
@@ -2904,7 +3011,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         issues.push(...pickupDayConsistencyIssues({
           frequency: routeFrequency.frequency,
           values: pickupDayValues,
-          fieldConfirmed: Boolean(consistencyFields?.fields?.pickupDays?.confirmed)
+          fieldConfirmed: Boolean(consistencyFields?.fields?.pickupDays?.confirmed),
+          schedule: pickupDaySchedule
         }));
       }
 
@@ -2923,7 +3031,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         validTo: isoDateValue(contract?.EndDate),
         pickupFrom: isoDateValue(pickupFrom),
         pickupTo: isoDateValue(pickupTo),
-        pickupDaysText: pickupDayValues.map(pickupDayDisplayValue).map(cleanString).filter(Boolean).join(", "),
+        pickupDaysText: pickupDaySchedule?.displayText || pickupDayValues.map(pickupDayDisplayValue).map(cleanString).filter(Boolean).join(", "),
+        pickupDaysInferred: Boolean(pickupDaySchedule?.inferredEntries?.length),
         customerName,
         branchName,
         addressRaw,

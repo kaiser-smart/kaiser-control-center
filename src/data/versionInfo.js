@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.415"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.416"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: chytré doplnění dne svozu",
+    text: "U Vistos Svoz Kaiser tras Smart bezpečně dopočítá chybějící druhou paritu u intervalu 1x7, například pondělí sudá doplní na pondělí lichá, a měsíční 1x30 bere jako jeden měsíční svozový den. U 2x7 a vyšších intervalů zůstává chybějící den jako chyba ke kontrole."
+  },
   {
     title: "Trasy svozu: oprava Adresního místa a akcí trasy",
     text: "Adresní místo se už nikdy nedoplňuje ze Stanoviště ani ze zákaznického captionu; pokud ve Vistosu chybí, zůstane jako chyba k opravě. Hlavní záložka Svozové trasy má zpět Řidičský tablet, tisk pro řidiče, detailní PDF a offline balíček nad aktuálním Vistos filtrem."

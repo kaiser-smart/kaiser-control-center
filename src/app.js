@@ -17754,6 +17754,39 @@ function collectionRoutesVistosPickupDaysDisplay(...values) {
   return labels.join(", ");
 }
 
+const COLLECTION_ROUTES_VISTOS_PICKUP_DAY_CODE_LABELS = {
+  PO: "pondělí",
+  "ÚT": "úterý",
+  ST: "středa",
+  "ČT": "čtvrtek",
+  "PÁ": "pátek",
+  SO: "sobota",
+  NE: "neděle"
+};
+
+function collectionRoutesVistosSmartPickupDaysDisplay(frequency, ...values) {
+  const text = collectionRoutesVistosPickupDaysDisplay(...values) || values.map((value) => String(value || "").trim()).filter(Boolean).join(" ");
+  const normalizedFrequency = String(frequency || "").trim().toLocaleLowerCase("cs");
+  if (normalizedFrequency !== "1x7" || !text) {
+    return text;
+  }
+
+  const dayCodes = collectionRoutesVistosPickupDayCodesFromText(text);
+  const weekModes = collectionRoutesVistosWeekModesFromText(text)
+    .filter((mode) => mode === "sudý týden" || mode === "lichý týden");
+  if (dayCodes.length !== 1 || weekModes.length !== 1) {
+    return text;
+  }
+
+  const dayLabel = COLLECTION_ROUTES_VISTOS_PICKUP_DAY_CODE_LABELS[dayCodes[0]] || dayCodes[0];
+  const inferredParity = weekModes[0] === "sudý týden" ? "lichá" : "sudá";
+  const inferredText = `${dayLabel} ${inferredParity}`;
+  if (normalizeAccessSearchText(text).includes(normalizeAccessSearchText(inferredText))) {
+    return text;
+  }
+  return `${text}, ${inferredText} (dopočteno)`;
+}
+
 function collectionRoutesVistosContainerEvidenceLabel(item = {}) {
   const fieldVolume = collectionRoutesMetricValue(item.containerFieldVolume, 0);
   const nameVolume = collectionRoutesMetricValue(item.containerNameVolume, 0);
@@ -17835,6 +17868,7 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     containerNameVolume: summary.containerNameVolume ?? sourceRow.containerNameVolume,
     containerVolumeSource: summary.containerVolumeSource || sourceRow.containerVolumeSource || ""
   };
+  const interval = summary.frequency || sourceRow.frequency || "neurčeno";
   return {
     order: index + 1,
     contractKey: collectionRoutesContractKey(sourceRow, summary, `contract-row-${index}`),
@@ -17849,8 +17883,9 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     waste: [summary.wasteType, summary.wasteCode].filter(Boolean).join(" / ") || "neurčeno",
     container,
     containerEvidenceLabel: collectionRoutesVistosContainerEvidenceLabel(containerEvidence),
-    interval: summary.frequency || "neurčeno",
-    pickupDays: collectionRoutesVistosPickupDaysDisplay(
+    interval,
+    pickupDays: collectionRoutesVistosSmartPickupDaysDisplay(
+      interval,
       summary.pickupDaysText,
       summary.pickupDays,
       sourceRow.pickupDaysText,
@@ -18061,6 +18096,7 @@ function collectionRoutesVistosRouteRows() {
   return collectionRoutesVistosSourceRows().map((sourceRow, index) => {
     const summary = collectionRoutesImportRowSummary(sourceRow);
     const issues = collectionRoutesIssuesFromValue(summary.issues || sourceRow.issues);
+    const frequency = summary.frequency || sourceRow.frequency || "";
     const pickupDaysRawText = [
       summary.pickupDaysText,
       summary.pickupDays,
@@ -18069,7 +18105,8 @@ function collectionRoutesVistosRouteRows() {
       summary.collectionDay,
       sourceRow.collectionDay
     ].filter(Boolean).join(" ");
-    const pickupDaysText = collectionRoutesVistosPickupDaysDisplay(
+    const pickupDaysText = collectionRoutesVistosSmartPickupDaysDisplay(
+      frequency,
       summary.pickupDaysText,
       summary.pickupDays,
       sourceRow.pickupDaysText,
@@ -18101,7 +18138,7 @@ function collectionRoutesVistosRouteRows() {
       containerNameVolume: summary.containerNameVolume ?? sourceRow.containerNameVolume ?? 0,
       containerVolumeSource: summary.containerVolumeSource || sourceRow.containerVolumeSource || "",
       containerVolumeMismatch: Boolean(summary.containerVolumeMismatch || sourceRow.containerVolumeMismatch),
-      frequency: summary.frequency || sourceRow.frequency || "",
+      frequency,
       note: summary.note || sourceRow.note || "",
       pickupDaysText: pickupDaysText || "neurčeno",
       pickupDayCodes,

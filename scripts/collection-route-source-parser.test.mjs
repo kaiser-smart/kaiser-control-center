@@ -4,8 +4,10 @@ import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collec
 import {
   __addressPlaceQualityIssuesForTest,
   __inferVistosContainerForTest,
+  __pickupDayConsistencyIssuesForTest,
   __pickupDayDisplayValueForTest,
   __pickupDayEntriesFromValuesForTest,
+  __pickupDayScheduleFromValuesForTest,
   __preferredVistosAddressPlaceValueForTest
 } from "../functions/_lib/collection-routes-store.js";
 import {
@@ -113,6 +115,69 @@ function derive(originalText) {
   assert.equal(__pickupDayDisplayValueForTest({ value: "18330" }), "pondělí lichá");
   assert.equal(__pickupDayDisplayValueForTest({ value: "18337" }), "pondělí sudá");
   assert.equal(__pickupDayDisplayValueForTest({ value: "18330,18337" }), "pondělí lichá, pondělí sudá");
+}
+
+{
+  const values = [{
+    value: "18337",
+    rawValue: "18337",
+    caption: "Svozový den",
+    columnName: "CollectionDay_FK"
+  }];
+  const schedule = __pickupDayScheduleFromValuesForTest({ frequency: "1x7", values });
+  const issues = __pickupDayConsistencyIssuesForTest({ frequency: "1x7", values, fieldConfirmed: true, schedule });
+  assert.equal(schedule.displayText, "pondělí sudá, pondělí lichá (dopočteno)");
+  assert.equal(schedule.inferredEntries.length, 1);
+  assert.equal(issues.length, 0);
+}
+
+{
+  const values = [{
+    value: "18339",
+    rawValue: "18339",
+    caption: "Svozový den",
+    columnName: "CollectionDay_FK"
+  }];
+  const schedule = __pickupDayScheduleFromValuesForTest({ frequency: "1x30", values });
+  const issues = __pickupDayConsistencyIssuesForTest({ frequency: "1x30", values, fieldConfirmed: true, schedule });
+  assert.equal(schedule.displayText, "středa sudá");
+  assert.equal(schedule.inferredEntries.length, 0);
+  assert.equal(issues.length, 0);
+}
+
+{
+  const values = [{
+    value: "18337",
+    rawValue: "18337",
+    caption: "Svozový den",
+    columnName: "CollectionDay_FK"
+  }];
+  const schedule = __pickupDayScheduleFromValuesForTest({ frequency: "2x7", values });
+  const issues = __pickupDayConsistencyIssuesForTest({ frequency: "2x7", values, fieldConfirmed: true, schedule });
+  assert.equal(schedule.displayText, "pondělí sudá");
+  assert.equal(schedule.inferredEntries.length, 0);
+  assert.equal(issues.some((issue) => issue.type === "pickup-days-even-odd-mismatch"), true);
+}
+
+{
+  const values = [
+    {
+      value: "18337",
+      rawValue: "18337",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    },
+    {
+      value: "18331",
+      rawValue: "18331",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    }
+  ];
+  const schedule = __pickupDayScheduleFromValuesForTest({ frequency: "1x7", values });
+  const issues = __pickupDayConsistencyIssuesForTest({ frequency: "1x7", values, fieldConfirmed: true, schedule });
+  assert.equal(schedule.displayText, "pondělí sudá, úterý lichá");
+  assert.equal(issues.some((issue) => issue.type === "pickup-days-even-odd-mismatch"), true);
 }
 
 {
