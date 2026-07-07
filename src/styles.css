@@ -28040,6 +28040,68 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   margin-bottom: 12px;
 }
 
+.receivables-readiness-brief {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--receivables-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.receivables-readiness-brief__verdict,
+.receivables-readiness-brief__next {
+  min-width: 0;
+}
+
+.receivables-readiness-brief h3 {
+  margin: 0 0 6px;
+  color: #111827;
+  font-size: 1rem;
+}
+
+.receivables-readiness-brief p {
+  margin: 0;
+  color: var(--receivables-muted);
+  line-height: 1.5;
+}
+
+.receivables-readiness-brief__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.receivables-readiness-brief ol {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.receivables-readiness-brief li {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border-left: 3px solid #86efac;
+  background: #fff;
+}
+
+.receivables-readiness-brief li strong {
+  color: #111827;
+  font-size: 0.92rem;
+}
+
+.receivables-readiness-brief li span {
+  color: var(--receivables-muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
 .receivables-import-form label {
   display: block;
   margin-bottom: 6px;
@@ -28234,7 +28296,8 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
     flex-direction: column;
   }
 
-  .receivables-import-grid {
+  .receivables-import-grid,
+  .receivables-readiness-brief {
     grid-template-columns: 1fr;
   }
 

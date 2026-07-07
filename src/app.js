@@ -23861,6 +23861,120 @@ function receivablesLedgerPercent(value) {
   return `${number.toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} %`;
 }
 
+function receivablesLedgerFlagCount(flags, code) {
+  const match = (flags || []).find((flag) => flag.code === code);
+  return Number(match?.count || 0);
+}
+
+function receivablesLedgerReadinessBrief(preview) {
+  if (!preview) {
+    return `
+      <section class="receivables-readiness-brief" aria-label="Rychlý verdikt ledger připravenosti">
+        <div class="receivables-readiness-brief__verdict">
+          <p class="module-feedback__eyebrow">Rychlý verdikt</p>
+          <h3>Čeká na kontrolu Vistos dat</h3>
+          <p>Nejdřív spusťte read-only kontrolu. Bez ní systém nepočítá rating, nezapisuje ledger a nic neposílá zákazníkům.</p>
+          <div class="receivables-readiness-brief__chips">
+            ${receivablesPill("read-only", "ready")}
+            ${receivablesPill("bez komunikace", "warning")}
+          </div>
+        </div>
+        <div class="receivables-readiness-brief__next">
+          <h3>Co teď řešit</h3>
+          <ol>
+            <li><strong>Spustit kontrolu</strong><span>Načte firmy a faktury jen jako preview.</span></li>
+            <li><strong>Vyhodnotit blokace</strong><span>Rating přijde až po čistých vazbách firma → faktura.</span></li>
+          </ol>
+        </div>
+      </section>
+    `;
+  }
+
+  const readiness = preview.ledgerReadiness || {};
+  const counts = readiness.counts || {};
+  const confidence = readiness.confidenceCounts || {};
+  const flags = readiness.topDataQualityFlags || [];
+  const blockingReasons = readiness.blockingReasons || [];
+  const missingDic = receivablesLedgerFlagCount(flags, "MISSING_DIC");
+  const missingBillingEmail = receivablesLedgerFlagCount(flags, "MISSING_BILLING_EMAIL");
+  const missingDueDays = receivablesLedgerFlagCount(flags, "MISSING_STANDARD_DUE_DAYS");
+  const missingRemainingAmount = receivablesLedgerFlagCount(flags, "MISSING_REMAINING_AMOUNT");
+  const customerNotFound = receivablesLedgerFlagCount(flags, "CUSTOMER_NOT_FOUND");
+  const branchNotFound = receivablesLedgerFlagCount(flags, "BRANCH_NOT_FOUND");
+  const noneConfidence = Number(confidence.NONE || 0);
+  const highConfidence = Number(confidence.HIGH || 0);
+  const hasCappedSample = blockingReasons.includes("PREVIEW_SAMPLE_CAPPED_NEEDS_FULL_DRY_RUN");
+  const blockerItems = [];
+
+  if (hasCappedSample) {
+    blockerItems.push({
+      title: "Vzorek je pořád jen preview",
+      text: "Než vznikne ledger import, je potřeba úplný dry-run bez zápisu do ostrých tabulek."
+    });
+  }
+  if (noneConfidence || customerNotFound || branchNotFound) {
+    blockerItems.push({
+      title: "Část faktur nemá jistou firmu",
+      text: `${noneConfidence || customerNotFound} faktur je bez spolehlivé vazby; CUSTOMER_NOT_FOUND ${customerNotFound}, BRANCH_NOT_FOUND ${branchNotFound}.`
+    });
+  }
+  if (missingDic || missingBillingEmail || missingDueDays) {
+    blockerItems.push({
+      title: "Firemní master data nejsou čistá",
+      text: `Chybí DIČ ${missingDic}, fakturační e-mail ${missingBillingEmail}, splatnost ${missingDueDays}.`
+    });
+  }
+  if (missingRemainingAmount) {
+    blockerItems.push({
+      title: "Zůstatek faktur není spolehlivý",
+      text: `${missingRemainingAmount} faktur nemá v preview jistou zbývající částku.`
+    });
+  }
+  if (!blockerItems.length) {
+    blockerItems.push({
+      title: "Data vypadají použitelně pro další suchý běh",
+      text: "Další krok má pořád zůstat dry-run, bez ratingu a bez zákaznické komunikace."
+    });
+  }
+
+  const verdictTitle = readiness.ledgerImportReady
+    ? "Připravené jen na další dry-run"
+    : "Zatím nepouštět rating ani ostrý import";
+  const verdictText = readiness.ledgerImportReady
+    ? "Základní prahy jsou splněné, ale další krok má zůstat kontrolovaný a bez komunikace."
+    : "Vistos vazby už dávají směr, ale kvalita firemních polí a část vazeb faktur ještě blokuje spolehlivý ledger.";
+  const statusTone = readiness.ledgerImportReady ? "ready" : "warning";
+  const recommendation = readiness.recommendedNextStep || "Nejdřív vyčistit blokující data a spustit úplný dry-run.";
+
+  return `
+    <section class="receivables-readiness-brief" aria-label="Rychlý verdikt ledger připravenosti">
+      <div class="receivables-readiness-brief__verdict">
+        <p class="module-feedback__eyebrow">Rychlý verdikt</p>
+        <h3>${escapeHtml(verdictTitle)}</h3>
+        <p>${escapeHtml(verdictText)}</p>
+        <div class="receivables-readiness-brief__chips">
+          ${receivablesPill(readiness.ledgerImportReady ? "prahy splněné" : "jen preview", statusTone)}
+          ${receivablesPill(`${counts.invoicesLoaded || 0} faktur`, "ready")}
+          ${receivablesPill(`${highConfidence} HIGH`, "ready")}
+          ${receivablesPill(`${noneConfidence} NONE`, noneConfidence ? "danger" : "ready")}
+        </div>
+      </div>
+      <div class="receivables-readiness-brief__next">
+        <h3>Co teď řešit</h3>
+        <ol>
+          ${blockerItems.slice(0, 4).map((item) => `
+            <li>
+              <strong>${escapeHtml(item.title)}</strong>
+              <span>${escapeHtml(item.text)}</span>
+            </li>
+          `).join("")}
+        </ol>
+        <p>${escapeHtml(recommendation)}</p>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesLedgerReadinessSummary(preview) {
   const readiness = preview?.ledgerReadiness || {};
   const counts = readiness.counts || {};
@@ -24167,6 +24281,7 @@ function receivablesLedgerReadinessPanel() {
       </form>
       ${receivablesState.ledgerReadinessMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.ledgerReadinessMessage)}</p>` : ""}
       ${receivablesState.ledgerReadinessError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.ledgerReadinessError)}</p>` : ""}
+      ${receivablesLedgerReadinessBrief(preview)}
       ${receivablesLedgerReadinessSummary(preview)}
       ${receivablesLedgerReadinessDiagnostics(preview)}
       ${safetyRows.length ? `

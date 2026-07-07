@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.387"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.388"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: rychlý verdikt Vistos readiness",
+    text: "Importní stránka Pohledávek má nad technickou diagnostikou krátký manažerský verdikt: zda zůstat jen v preview, co blokuje rating/import a co řešit jako první. Nemění API, D1, rating, KB platby ani zákaznickou komunikaci."
+  },
   {
     title: "Pohledávky: Vistos faktury za 24 měsíců",
     text: "Read-only preview faktur z Vistosu nově načítá výchozí okno posledních 24 měsíců přes filtr IssuedDate od daného data. Filtr je viditelný v importním UI a nemění ostrý ledger, rating, KB platby ani zákaznickou komunikaci."
