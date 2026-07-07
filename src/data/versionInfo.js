@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.436"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.437"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: Customer_FK schema probe",
+    text: "Import Pohledávek nově automaticky zobrazuje read-only schema probe pro fakturační vazbu Customer_FK z InvoiceIssued a sjednocuje fakturové tabulky do jednoho bloku po 10 řádcích."
+  },
   {
     title: "Pohledávky: přesnější zákaznický lookup",
     text: "Ledger mapping nově při read-only obohacení zákazníka zkouší nejdřív Customer_FK a IČO/RegNumber a teprve potom pobočkový CustomerBranch_FK, aby metadata zákazníka nebyla hledaná jen přes ID pobočky."

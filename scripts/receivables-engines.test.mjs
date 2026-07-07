@@ -18,6 +18,7 @@ import {
 } from "../functions/_lib/receivables-vistos-preview.js";
 import {
   buildReceivablesVistosLedgerMapping,
+  customerLinkProbeAttemptsForCandidate,
   customerLookupAttemptsForCandidate
 } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
@@ -94,6 +95,26 @@ assert.equal(receivableToleranceAmount(250000), 250);
   ]);
   assert.equal(attempts.some((attempt) => attempt.key === "directory_with_branch_by_reg_number"), true);
   assert.equal(attempts.some((attempt) => attempt.key === "customer_branch_by_branch_fk"), true);
+}
+
+{
+  const schemaByEntity = new Map([
+    ["DirectoryWithBranch", ["Id", "Parent_FK", "RegNumber"]],
+    ["CustomerBranch", ["Id", "Customer_FK"]],
+    ["Directory", ["Id", "RegNumber"]],
+    ["Customer", ["Id"]],
+    ["Company", ["Id"]]
+  ]);
+  const attempts = customerLinkProbeAttemptsForCandidate({
+    customerKeyType: "CustomerBranch_FK",
+    customerKeyValue: "BR-1",
+    customerBranchId: "BR-1",
+    customerCompanyId: "C-123",
+    ico: "12345678"
+  }, schemaByEntity);
+  assert.equal(attempts.some((attempt) => attempt.key === "customer_branch_customer_fk" && !attempt.skipped), true);
+  assert.equal(attempts.some((attempt) => attempt.key === "directory_with_branch_parent_fk" && !attempt.skipped), true);
+  assert.equal(attempts.some((attempt) => attempt.key === "directory_with_branch_customer_fk" && attempt.skipped), true);
 }
 
 {

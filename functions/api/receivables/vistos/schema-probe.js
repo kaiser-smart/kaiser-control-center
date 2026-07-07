@@ -4,15 +4,15 @@ import {
   ledgerMappingError
 } from "../../../_lib/receivables-vistos-ledger-mapping.js";
 
-function mappingOptions(request) {
+function probeOptions(request) {
   const url = new URL(request.url);
   return {
-    limit: url.searchParams.get("limit") || "80",
+    limit: url.searchParams.get("limit") || "25",
     today: url.searchParams.get("today") || "",
     enrichCustomers: url.searchParams.get("enrichCustomers") !== "0",
-    customerLimit: url.searchParams.get("customerLimit") || "25",
-    managerLimit: url.searchParams.get("managerLimit") || "25",
-    probeCustomerLink: url.searchParams.get("probeCustomerLink") !== "0",
+    customerLimit: url.searchParams.get("customerLimit") || "10",
+    managerLimit: url.searchParams.get("managerLimit") || "5",
+    probeCustomerLink: true,
     linkProbeLimit: url.searchParams.get("linkProbeLimit") || "5"
   };
 }
@@ -22,13 +22,20 @@ export async function onRequestGet({ request, env }) {
   if (response) return response;
 
   try {
-    const result = await getReceivablesVistosLedgerMapping(env, mappingOptions(request));
-    return json(result);
+    const result = await getReceivablesVistosLedgerMapping(env, probeOptions(request));
+    return json({
+      apiStatus: result.apiStatus,
+      readOnly: true,
+      writesD1: false,
+      writesLedger: false,
+      preview: result.mapping?.customerLinkProbe || null,
+      snapshot: result.snapshot || null
+    });
   } catch (error) {
     const normalized = ledgerMappingError(error);
     return json({
       error: normalized.message,
-      code: normalized.code || "receivables_vistos_ledger_mapping_failed",
+      code: normalized.code || "receivables_vistos_schema_probe_failed",
       apiStatus: normalized.status === 503 ? "waiting" : "error"
     }, normalized.status || 500);
   }
