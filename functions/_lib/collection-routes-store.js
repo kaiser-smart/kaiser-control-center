@@ -2790,6 +2790,14 @@ function addressPlaceQualityIssues({ addressPlaceRaw, addressRaw }) {
   return issues;
 }
 
+const VISTOS_ADDRESS_PLACE_QUALITY_ISSUE_TYPES = new Set([
+  "missing-address-place",
+  "incomplete-address-place",
+  "address-place-missing-number",
+  "address-place-suspicious-text",
+  "address-place-loading-address-mismatch"
+]);
+
 function productSearchText(contractRow, product) {
   return [
     product?.Kod_druhotnych_surovin,
@@ -3188,7 +3196,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
             (inferredContainer.fieldVolume && inferredContainer.nameVolume && inferredContainer.fieldVolume !== inferredContainer.nameVolume)
         }
         : inferredContainer;
-      const issues = [...baseIssues];
+      const issues = baseIssues.filter((issue) => !VISTOS_ADDRESS_PLACE_QUALITY_ISSUE_TYPES.has(issue.type));
 
       if (!isoDateValue(contractRow?.StartDate)) {
         issues.push({ type: "missing-contract-row-start-date", severity: "warning", message: "Položka smlouvy zatím nemá začátek platnosti z Vistosu." });
@@ -3255,13 +3263,11 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         ? pickupDayScheduleFromValues({ frequency: routeFrequency.frequency, values: pickupDayValues })
         : null;
 
-      if (normalizeLookupKey(rowAddressPlaceRaw) !== normalizeLookupKey(addressPlaceRaw)) {
-        issues.push(...addressPlaceQualityIssues({
-          addressPlaceRaw: rowAddressPlaceRaw,
-          addressRaw,
-          siteName
-        }));
-      }
+      issues.push(...addressPlaceQualityIssues({
+        addressPlaceRaw: rowAddressPlaceRaw,
+        addressRaw,
+        siteName
+      }));
       if (!isOutsideCollectionRoute && routeFrequency.frequency) {
         issues.push(...pickupDayConsistencyIssues({
           frequency: routeFrequency.frequency,

@@ -327,6 +327,7 @@ function derive(originalText) {
   assert.equal(row.addressCity, "Brno");
   assert.equal(row.addressPostalCode, "61700");
   assert.equal(row.stationName, "U Vlečky 726/5c, 617 00 Brno - Komárov");
+  assert.equal(row.issues.some((issue) => issue.type === "missing-address-place"), false);
 }
 
 {
