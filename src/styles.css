@@ -17962,6 +17962,154 @@ body:has(.data-box-page) {
     width: 100%;
     justify-content: center;
   }
+
+  .collection-routes-sites-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collection-routes-sites-table {
+    overflow: visible;
+    border: 0;
+  }
+
+  .collection-routes-sites-table table,
+  .collection-routes-sites-table thead,
+  .collection-routes-sites-table tbody,
+  .collection-routes-sites-table tr,
+  .collection-routes-sites-table th,
+  .collection-routes-sites-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .collection-routes-sites-table thead {
+    display: none;
+  }
+
+  .collection-routes-sites-table table {
+    min-width: 0;
+  }
+
+  .collection-routes-site-contract-row {
+    margin-bottom: 8px;
+    padding: 12px;
+    border: 1px solid rgba(66, 80, 74, 0.1);
+    border-radius: 12px;
+    background: #ffffff;
+  }
+
+  .collection-routes-site-contract-row td {
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(66, 80, 74, 0.07);
+  }
+
+  .collection-routes-site-contract-row td:last-child {
+    border-bottom: 0;
+  }
+
+  .collection-routes-site-contract-row td::before {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.7rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .collection-routes-site-contract-row--danger {
+    border-color: rgba(190, 24, 24, 0.28);
+    background: #fff7f7;
+    box-shadow: 0 0 0 0 rgba(190, 24, 24, 0.28);
+    animation: collection-routes-site-danger-pulse 1.55s ease-out infinite;
+  }
+
+  .collection-routes-site-contract-row--danger td {
+    border-top: 0;
+    border-bottom-color: rgba(190, 24, 24, 0.16);
+    background: transparent;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .collection-routes-site-contract-row--danger td:first-child,
+  .collection-routes-site-contract-row--danger td:last-child {
+    border-right: 0;
+    border-left: 0;
+  }
+
+  .collection-routes-site-detail-row {
+    margin: -2px 0 10px;
+    border: 1px solid rgba(66, 80, 74, 0.1);
+    border-radius: 12px;
+    background: #fbfdf8;
+  }
+
+  .collection-routes-site-detail-row td {
+    background: transparent;
+  }
+
+  .collection-routes-site-detail-cell {
+    padding: 8px;
+  }
+
+  .collection-routes-site-detail-cell::before {
+    display: none;
+  }
+
+  .collection-routes-site-detail-table {
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .collection-routes-site-detail-table table,
+  .collection-routes-site-detail-table thead,
+  .collection-routes-site-detail-table tbody,
+  .collection-routes-site-detail-table tr,
+  .collection-routes-site-detail-table th,
+  .collection-routes-site-detail-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .collection-routes-site-detail-table thead {
+    display: none;
+  }
+
+  .collection-routes-site-detail-table table {
+    min-width: 0;
+  }
+
+  .collection-routes-site-detail-table tr {
+    margin-bottom: 8px;
+    padding: 10px;
+    border: 1px solid rgba(66, 80, 74, 0.08);
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  .collection-routes-site-detail-table td {
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(66, 80, 74, 0.06);
+  }
+
+  .collection-routes-site-detail-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .collection-routes-site-detail-table td::before {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
 }
 
 @media (max-width: 720px) {
