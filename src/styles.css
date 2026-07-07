@@ -28922,6 +28922,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   display: grid;
   width: 64px;
   height: 64px;
+  margin: 0;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--chip-border);
