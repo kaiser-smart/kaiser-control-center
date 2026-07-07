@@ -12,6 +12,9 @@ const RECEIVABLES_VISTOS_PREVIEW_LIMIT = 80;
 const RECEIVABLES_VISTOS_INVOICE_PREVIEW_LIMIT = 120;
 const DEFAULT_DETAIL_ID_LIMIT = 4;
 const MAX_DETAIL_ID_LIMIT = 12;
+export const RECEIVABLES_VISTOS_INVOICE_LOOKBACK_MONTHS = 24;
+const RECEIVABLES_VISTOS_INVOICE_LOOKBACK_MAX_MONTHS = 120;
+const RECEIVABLES_VISTOS_INVOICE_DATE_FIELD = "IssuedDate";
 
 const KAISER_INVOICE_COLUMNS = [
   "Id",
@@ -236,6 +239,52 @@ function sampleKeys(rows) {
   return [...new Set(rows.flatMap((row) => Object.keys(row || {})))].slice(0, 80);
 }
 
+function positiveInteger(value, fallback, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return fallback;
+  return Math.max(1, Math.min(Math.floor(number), max));
+}
+
+function isoDate(date) {
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function subtractUtcMonths(date, months) {
+  const source = new Date(date);
+  const target = new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth() - months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(source.getUTCDate(), lastDay));
+  return target;
+}
+
+export function receivablesVistosInvoiceLookbackWindow(options = {}) {
+  const months = positiveInteger(
+    options.months ?? options.invoiceLookbackMonths,
+    RECEIVABLES_VISTOS_INVOICE_LOOKBACK_MONTHS,
+    RECEIVABLES_VISTOS_INVOICE_LOOKBACK_MAX_MONTHS
+  );
+  const now = options.now ? new Date(options.now) : new Date();
+  const safeNow = Number.isNaN(now.getTime()) ? new Date() : now;
+  const fromDate = isoDate(subtractUtcMonths(safeNow, months));
+  return {
+    enabled: true,
+    months,
+    dateField: RECEIVABLES_VISTOS_INVOICE_DATE_FIELD,
+    fromDate,
+    filter: {
+      [`${RECEIVABLES_VISTOS_INVOICE_DATE_FIELD}_From`]: fromDate
+    }
+  };
+}
+
+export function receivablesVistosInvoiceLookbackFilter(options = {}) {
+  return receivablesVistosInvoiceLookbackWindow(options).filter;
+}
+
 function collectInvoiceDetailIdentifiers(rows = [], options = {}) {
   const limit = Math.max(1, Math.min(Number(options.maxDetailIds) || DEFAULT_DETAIL_ID_LIMIT, MAX_DETAIL_ID_LIMIT));
   return rows
@@ -295,6 +344,7 @@ async function loadInvoiceDetailProbe(env, session, entityName, columns, rows = 
 async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
   const diagnostics = [];
   let firstEmptyResult = null;
+  const filter = options.filter && typeof options.filter === "object" ? options.filter : null;
 
   for (const attempt of attempts) {
     const entityName = clean(options.entityName) || attempt.entityName;
@@ -302,7 +352,7 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
       ? options.columns
       : attempt.columns;
     try {
-      const page = await getAllVistosPages(env, session, entityName, columns, null, {
+      const page = await getAllVistosPages(env, session, entityName, columns, filter, {
         pageSize: Math.min(Number(options.pageSize) || 500, 1000),
         maxPages: Math.min(Number(options.maxPages) || 2, 5)
       });
@@ -314,19 +364,21 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
         returnedRows: page.rows.length,
         recordsTotal: page.total || 0,
         recordsFiltered: page.filtered || 0,
-        capped: Boolean(page.capped)
+        capped: Boolean(page.capped),
+        filter
       });
       if (page.rows.length > 0) {
-        return { entityName, columns, page, diagnostics };
+        return { entityName, columns, filter, page, diagnostics };
       }
       if (!firstEmptyResult) {
-        firstEmptyResult = { entityName, columns, page };
+        firstEmptyResult = { entityName, columns, filter, page };
       }
     } catch (error) {
       diagnostics.push({
         key: clean(attempt.key),
         entityName,
         columns,
+        filter,
         ok: false,
         code: clean(error?.code),
         message: clean(error?.message).slice(0, 180)
@@ -344,6 +396,7 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
   return {
     entityName: "",
     columns: [],
+    filter,
     page: { rows: [], total: 0, filtered: 0, capped: false },
     diagnostics
   };
@@ -508,12 +561,17 @@ export async function createReceivablesVistosPreview(env, options = {}) {
       diagnostics: {
         configured: false,
         companyAttempts: [],
-        invoiceAttempts: []
+        invoiceAttempts: [],
+        invoiceLookback: receivablesVistosInvoiceLookbackWindow(options)
       }
     };
   }
 
   const session = await loginVistosExecute(env);
+  const invoiceLookback = receivablesVistosInvoiceLookbackWindow({
+    months: options.invoiceLookbackMonths ?? env?.VISTOS_RECEIVABLES_INVOICE_LOOKBACK_MONTHS,
+    now: options.now
+  });
   const [companyResult, invoiceResult] = await Promise.all([
     loadFirstWorkingEntity(env, session, COMPANY_ATTEMPTS, {
       entityName: env?.VISTOS_RECEIVABLES_COMPANY_ENTITY,
@@ -522,6 +580,7 @@ export async function createReceivablesVistosPreview(env, options = {}) {
     }),
     loadFirstWorkingEntity(env, session, INVOICE_ATTEMPTS, {
       entityName: env?.VISTOS_RECEIVABLES_INVOICE_ENTITY,
+      filter: invoiceLookback.filter,
       pageSize: options.pageSize,
       maxPages: options.maxPages
     })
@@ -582,6 +641,8 @@ export async function createReceivablesVistosPreview(env, options = {}) {
       companyAttempts: companyResult.diagnostics,
       invoiceEntity: invoiceResult.entityName,
       invoiceColumns: invoiceResult.columns,
+      invoiceFilter: invoiceResult.filter || invoiceLookback.filter,
+      invoiceLookback,
       invoiceKeys: sampleKeys(invoiceResult.page.rows),
       invoiceDetailProbe: {
         enabled: true,

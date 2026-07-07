@@ -9,7 +9,8 @@ function previewOptions(request) {
   return {
     pageSize: url.searchParams.get("pageSize"),
     maxPages: url.searchParams.get("maxPages"),
-    maxDetailIds: url.searchParams.get("maxDetailIds")
+    maxDetailIds: url.searchParams.get("maxDetailIds"),
+    invoiceLookbackMonths: url.searchParams.get("invoiceLookbackMonths")
   };
 }
 

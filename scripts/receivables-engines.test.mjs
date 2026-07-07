@@ -14,7 +14,8 @@ import {
 import {
   createReceivablesVistosPreview,
   mapReceivablesVistosCompany,
-  mapReceivablesVistosInvoice
+  mapReceivablesVistosInvoice,
+  receivablesVistosInvoiceLookbackWindow
 } from "../functions/_lib/receivables-vistos-preview.js";
 import {
   createReceivablesLedgerReadinessPreview,
@@ -72,6 +73,20 @@ function mockVistosFetch(rowsByEntity = {}) {
     if (!filter || !Object.keys(filter).length) return rows;
     return rows.filter((row) => Object.entries(filter).every(([key, value]) => {
       const expected = String(value ?? "");
+      if (key.endsWith("_From")) {
+        const baseKey = key.slice(0, -"_From".length);
+        const actual = String(row?.[baseKey] ?? "");
+        return actual && actual >= expected;
+      }
+      if (key.endsWith("_To")) {
+        const baseKey = key.slice(0, -"_To".length);
+        const actual = String(row?.[baseKey] ?? "");
+        return actual && actual < expected;
+      }
+      if (key.endsWith("_IsNull")) {
+        const baseKey = key.slice(0, -"_IsNull".length);
+        return Boolean(value) ? row?.[baseKey] === null || row?.[baseKey] === undefined || row?.[baseKey] === "" : Boolean(row?.[baseKey]);
+      }
       const candidates = [
         row?.[key],
         row?.[`${key}_RecordId`],
@@ -156,6 +171,14 @@ function mockVistosFetch(rowsByEntity = {}) {
 
 assert.equal(receivableToleranceAmount(1000), 1);
 assert.equal(receivableToleranceAmount(250000), 250);
+
+{
+  const window = receivablesVistosInvoiceLookbackWindow({ now: "2026-07-07T12:00:00Z" });
+  assert.equal(window.months, 24);
+  assert.equal(window.dateField, "IssuedDate");
+  assert.equal(window.fromDate, "2024-07-07");
+  assert.deepEqual(window.filter, { IssuedDate_From: "2024-07-07" });
+}
 
 {
   const result = matchReceivablePayments([invoice], [{
@@ -516,7 +539,14 @@ Dodavatel
     assert.equal(preview.invoices[0].totalAmount, 1210);
     assert.equal(preview.invoices[0].openAmount, 1210);
     assert.equal(preview.diagnostics.invoiceAttempts.find((attempt) => attempt.entityName === "Document")?.key, "kaiser_invoice_columns");
+    assert.equal(preview.diagnostics.invoiceLookback.months, 24);
+    assert.equal(preview.diagnostics.invoiceLookback.dateField, "IssuedDate");
+    assert.equal(Boolean(preview.diagnostics.invoiceLookback.fromDate), true);
     assert.ok(calls.some((call) => call.payload.GetPageParam?.EntityName === "Contract"));
+    assert.ok(calls.some((call) => (
+      call.payload.GetPageParam?.EntityName === "Document" &&
+      Boolean(call.payload.GetPageParam?.Filter?.IssuedDate_From)
+    )));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -767,6 +797,7 @@ Dodavatel
         BankReference2: "2601101477",
         Customer_FK_RecordId: "C123",
         Customer_FK_Caption: "Firma Alfa s.r.o.",
+        IssuedDate: "2026-06-01",
         DueDate: "2026-06-14",
         PriceWithTax: "1210"
       }],
@@ -976,8 +1007,13 @@ Dodavatel
     assert.equal(preview.importsKbPayments, false);
     assert.equal(preview.createsReceivableRecords, false);
     assert.equal(preview.writesD1, false);
+    assert.equal(preview.diagnostics.invoiceLookback.months, 24);
+    assert.equal(preview.diagnostics.invoiceLookback.dateField, "IssuedDate");
     assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "DirectoryWithBranch"));
-    assert.ok(mock.calls.some((call) => call.payload.GetPageParam?.EntityName === "InvoiceIssued"));
+    assert.ok(mock.calls.some((call) => (
+      call.payload.GetPageParam?.EntityName === "InvoiceIssued" &&
+      Boolean(call.payload.GetPageParam?.Filter?.IssuedDate_From)
+    )));
   } finally {
     mock.restore();
   }

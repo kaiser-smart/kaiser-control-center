@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.386"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.387"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: Vistos faktury za 24 měsíců",
+    text: "Read-only preview faktur z Vistosu nově načítá výchozí okno posledních 24 měsíců přes filtr IssuedDate od daného data. Filtr je viditelný v importním UI a nemění ostrý ledger, rating, KB platby ani zákaznickou komunikaci."
+  },
   {
     title: "Pohledávky: metadata-aware Vistos resolver",
     text: "Firmy → Ledger read-only preview teď používá potvrzená Vistos metadata k bezpečným čtecím pokusům nad DirectoryWithBranch, Directory a Company. UI zobrazuje i kontaktní metadata ContactList/ContactListRow, ale bez povolení zákaznické komunikace, bez D1 zápisu, ratingu, KB plateb a automatizace."

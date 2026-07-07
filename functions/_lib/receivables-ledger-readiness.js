@@ -6,7 +6,10 @@ import {
   isVistosExecuteConfigured,
   loginVistosExecute
 } from "./vistos-execute-client.js";
-import { mapReceivablesVistosInvoice } from "./receivables-vistos-preview.js";
+import {
+  mapReceivablesVistosInvoice,
+  receivablesVistosInvoiceLookbackWindow
+} from "./receivables-vistos-preview.js";
 import { createReceivablesVistosSchemaProbeFromSession } from "./receivables-vistos-schema-probe.js";
 
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
@@ -666,12 +669,13 @@ function companyDataQualityFlags(company = {}) {
 async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
   const diagnostics = [];
   let firstEmptyResult = null;
+  const filter = options.filter && typeof options.filter === "object" ? options.filter : null;
 
   for (const attempt of attempts) {
     const entityName = attempt.entityName;
     const columns = attempt.columns;
     try {
-      const page = await getAllVistosPages(env, session, entityName, columns, null, {
+      const page = await getAllVistosPages(env, session, entityName, columns, filter, {
         pageSize: Math.min(Number(options.pageSize) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
         maxPages: Math.min(Number(options.maxPages) || DEFAULT_MAX_PAGES, MAX_PAGES)
       });
@@ -683,19 +687,21 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
         returnedRows: page.rows.length,
         recordsTotal: page.total || 0,
         recordsFiltered: page.filtered || 0,
-        capped: Boolean(page.capped)
+        capped: Boolean(page.capped),
+        filter
       });
       if (page.rows.length > 0) {
-        return { key: attempt.key, entityName, columns, page, diagnostics };
+        return { key: attempt.key, entityName, columns, filter, page, diagnostics };
       }
       if (!firstEmptyResult) {
-        firstEmptyResult = { key: attempt.key, entityName, columns, page };
+        firstEmptyResult = { key: attempt.key, entityName, columns, filter, page };
       }
     } catch (error) {
       diagnostics.push({
         key: attempt.key,
         entityName,
         columns,
+        filter,
         ok: false,
         code: clean(error?.code),
         message: clean(error?.message).slice(0, 180)
@@ -704,7 +710,7 @@ async function loadFirstWorkingEntity(env, session, attempts, options = {}) {
   }
 
   return {
-    ...(firstEmptyResult || { key: "", entityName: "", columns: [], page: { rows: [], total: 0, filtered: 0, capped: false } }),
+    ...(firstEmptyResult || { key: "", entityName: "", columns: [], filter, page: { rows: [], total: 0, filtered: 0, capped: false } }),
     diagnostics
   };
 }
@@ -1316,15 +1322,27 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
         canUseForCustomerCommunication: false,
         reason: "Vistos API není nakonfigurováno."
       },
-      diagnostics: { configured: false, companyAttempts: [], invoiceAttempts: [] }
+      diagnostics: {
+        configured: false,
+        companyAttempts: [],
+        invoiceAttempts: [],
+        invoiceLookback: receivablesVistosInvoiceLookbackWindow(options)
+      }
     };
   }
 
   const session = await loginVistosExecute(env);
+  const invoiceLookback = receivablesVistosInvoiceLookbackWindow({
+    months: options.invoiceLookbackMonths ?? env?.VISTOS_RECEIVABLES_INVOICE_LOOKBACK_MONTHS,
+    now: options.now
+  });
   const metadataProbePromise = loadLedgerMetadataProbe(env, session, options);
   const [companyResult, invoiceResult] = await Promise.all([
     loadFirstWorkingEntity(env, session, RECEIVABLES_COMPANY_ATTEMPTS, options),
-    loadFirstWorkingEntity(env, session, RECEIVABLES_INVOICE_ATTEMPTS, options)
+    loadFirstWorkingEntity(env, session, RECEIVABLES_INVOICE_ATTEMPTS, {
+      ...options,
+      filter: invoiceLookback.filter
+    })
   ]);
   const schemaProbe = await metadataProbePromise;
   const metadataCompanyAttempts = buildMetadataCompanyAttempts(schemaProbe);
@@ -1437,6 +1455,8 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       invoiceEntity: invoiceResult.entityName,
       invoiceAttemptKey: invoiceResult.key,
       invoiceColumns: invoiceResult.columns,
+      invoiceFilter: invoiceResult.filter || invoiceLookback.filter,
+      invoiceLookback,
       invoiceKeys: sampleKeys(invoiceResult.page.rows),
       invoiceAttempts: invoiceResult.diagnostics
     },

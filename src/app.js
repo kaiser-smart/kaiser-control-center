@@ -23387,8 +23387,10 @@ function receivablesImportBatchesTable() {
 
 function receivablesVistosPreviewSummary(preview) {
   const summary = preview?.summary || {};
+  const invoiceLookback = preview?.diagnostics?.invoiceLookback || {};
   const cards = [
     ["Vistos konfigurace", preview?.apiStatus === "ready" ? "Cloud API aktivní" : preview?.apiStatus === "not_configured" ? "Čeká na secrets" : "Čeká na data"],
+    ["Období faktur", invoiceLookback.fromDate ? `${invoiceLookback.fromDate} → dnes` : "posledních 24 měsíců"],
     ["Firmy celkem", summary.companiesTotal || 0],
     ["Firmy v náhledu", summary.companiesPreviewRows || 0],
     ["Faktury celkem", summary.invoicesTotal || 0],
@@ -23415,6 +23417,7 @@ function receivablesVistosPreviewDiagnostics(preview) {
   const diagnostics = preview.diagnostics || {};
   const issues = preview.issues || [];
   const invoiceDetailProbe = diagnostics.invoiceDetailProbe || {};
+  const invoiceLookback = diagnostics.invoiceLookback || {};
   const attempts = [
     ...(diagnostics.companyAttempts || []).map((attempt) => ({ ...attempt, scope: "Firmy" })),
     ...(diagnostics.invoiceAttempts || []).map((attempt) => ({ ...attempt, scope: "Faktury" }))
@@ -23445,6 +23448,7 @@ function receivablesVistosPreviewDiagnostics(preview) {
         <dl class="receivables-diagnostics-list">
           <div><dt>Firmy entita</dt><dd>${escapeHtml(diagnostics.companyEntity || "-")}</dd></div>
           <div><dt>Faktury entita</dt><dd>${escapeHtml(diagnostics.invoiceEntity || "-")}</dd></div>
+          <div><dt>Filtr faktur</dt><dd>${escapeHtml(invoiceLookback.fromDate ? `${invoiceLookback.dateField || "IssuedDate"} od ${invoiceLookback.fromDate} (${invoiceLookback.months || 24} měsíců)` : "-")}</dd></div>
           <div><dt>Klíče firem</dt><dd>${escapeHtml((diagnostics.companyKeys || []).slice(0, 12).join(", ") || "-")}</dd></div>
           <div><dt>Klíče faktur</dt><dd>${escapeHtml((diagnostics.invoiceKeys || []).slice(0, 12).join(", ") || "-")}</dd></div>
           <div><dt>Detail faktury</dt><dd>${invoiceDetailProbe.enabled ? "GetByIdParam read-only" : "-"}</dd></div>
@@ -23781,8 +23785,10 @@ function receivablesLedgerReadinessSummary(preview) {
   const readiness = preview?.ledgerReadiness || {};
   const counts = readiness.counts || {};
   const rates = readiness.rates || {};
+  const invoiceLookback = preview?.diagnostics?.invoiceLookback || {};
   const cards = [
     ["Ledger import", readiness.ledgerImportReady ? "připravený" : "jen preview"],
+    ["Období faktur", invoiceLookback.fromDate ? `${invoiceLookback.fromDate} → dnes` : "posledních 24 měsíců"],
     ["Firmy načtené", counts.companiesLoaded || 0],
     ["Firmy s IČO", counts.companiesWithIco || 0],
     ["Firmy s DIČ", counts.companiesWithDic || 0],
@@ -23818,6 +23824,7 @@ function receivablesLedgerReadinessDiagnostics(preview) {
   const metadataResolver = preview.metadataResolver || {};
   const contactMetadata = preview.contactMetadata || {};
   const detailProbe = preview.companyDetailProbe || {};
+  const invoiceLookback = diagnostics.invoiceLookback || {};
   const enrichmentAttempts = diagnostics.companyEnrichmentAttempts || [];
   const metadataAttempts = diagnostics.metadataCompanyAttempts || [];
   const detailAttempts = diagnostics.companyDetailAttempts || [];
@@ -23935,6 +23942,7 @@ function receivablesLedgerReadinessDiagnostics(preview) {
         <h3>Stav vazby Faktury → Firma</h3>
         <dl class="receivables-diagnostics-list">
           <div><dt>Entita faktur</dt><dd>${escapeHtml(diagnostics.invoiceEntity || "-")}</dd></div>
+          <div><dt>Filtr faktur</dt><dd>${escapeHtml(invoiceLookback.fromDate ? `${invoiceLookback.dateField || "IssuedDate"} od ${invoiceLookback.fromDate} (${invoiceLookback.months || 24} měsíců)` : "-")}</dd></div>
           <div><dt>HIGH</dt><dd>${escapeHtml(confidence.HIGH || 0)}</dd></div>
           <div><dt>MEDIUM</dt><dd>${escapeHtml(confidence.MEDIUM || 0)}</dd></div>
           <div><dt>LOW</dt><dd>${escapeHtml(confidence.LOW || 0)}</dd></div>

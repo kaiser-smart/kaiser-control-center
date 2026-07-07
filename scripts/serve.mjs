@@ -26,6 +26,7 @@ import {
   FLEET_VISTOS_IMPORT_MAX_FILE_SIZE_BYTES,
   buildFleetVistosImportPreview
 } from "../functions/_lib/fleet-vistos-import-preview.js";
+import { receivablesVistosInvoiceLookbackWindow } from "../functions/_lib/receivables-vistos-preview.js";
 import {
   COLLECTION_ROUTES_MANUAL_IMPORT_MAX_FILE_SIZE_BYTES,
   buildCollectionRoutesManualImportPreview
@@ -3055,6 +3056,7 @@ function employeeWorkHistory(employeeId) {
 }
 
 function mockReceivablesLedgerReadinessPreview() {
+  const invoiceLookback = receivablesVistosInvoiceLookbackWindow();
   const company = {
     entityName: "DirectoryWithBranch",
     vistoCompanyId: "C123",
@@ -3305,8 +3307,10 @@ function mockReceivablesLedgerReadinessPreview() {
       companyDetailAttempts: [],
       invoiceEntity: "InvoiceIssued",
       invoiceAttemptKey: "local_mock",
-      invoiceColumns: ["Id", "InvoiceNumber", "BankReference2", "Customer_FK", "DueDate", "PriceWithTax", "AmountPaid", "RemainToPay"],
-      invoiceKeys: ["Id", "InvoiceNumber", "BankReference2", "Customer_FK", "DueDate", "PriceWithTax", "AmountPaid", "RemainToPay"],
+      invoiceColumns: ["Id", "InvoiceNumber", "BankReference2", "Customer_FK", "IssuedDate", "DueDate", "PriceWithTax", "AmountPaid", "RemainToPay"],
+      invoiceFilter: invoiceLookback.filter,
+      invoiceLookback,
+      invoiceKeys: ["Id", "InvoiceNumber", "BankReference2", "Customer_FK", "IssuedDate", "DueDate", "PriceWithTax", "AmountPaid", "RemainToPay"],
       invoiceAttempts: []
     },
     loadedAt: new Date().toISOString()
