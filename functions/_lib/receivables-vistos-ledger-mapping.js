@@ -26,14 +26,6 @@ const CUSTOMER_COLUMNS = [
   "Parent_FK"
 ];
 
-const CUSTOMER_ENTITY_ATTEMPTS = [
-  { key: "directory_with_branch_by_id", entityName: "DirectoryWithBranch", idFields: ["Id"] },
-  { key: "customer_branch_by_id", entityName: "CustomerBranch", idFields: ["Id"] },
-  { key: "directory_by_id", entityName: "Directory", idFields: ["Id"] },
-  { key: "customer_by_id", entityName: "Customer", idFields: ["Id"] },
-  { key: "company_by_id", entityName: "Company", idFields: ["Id"] }
-];
-
 const INVOICE_MANAGER_ATTEMPTS = [
   {
     key: "invoice_issued_customer_manager_by_id",
@@ -208,11 +200,41 @@ function invoiceIssueCodes(row = {}, invoice = {}) {
   return [...new Set(codes)];
 }
 
-function candidateLookupValue(candidate = {}) {
-  if (candidate.customerKeyType === "CustomerBranch_FK" && candidate.customerBranchId) return candidate.customerBranchId;
-  if (candidate.customerKeyType === "Customer_FK" && candidate.customerCompanyId) return candidate.customerCompanyId;
-  if (candidate.customerKeyValue && !["IČO", "Název", "nevyřešeno"].includes(candidate.customerKeyType)) return candidate.customerKeyValue;
-  return "";
+export function customerLookupAttemptsForCandidate(candidate = {}) {
+  const attempts = [];
+  const seen = new Set();
+  const addAttempt = (key, entityName, filter) => {
+    const normalizedFilter = Object.fromEntries(
+      Object.entries(filter || {})
+        .map(([filterKey, value]) => [filterKey, clean(value)])
+        .filter(([, value]) => value)
+    );
+    if (!Object.keys(normalizedFilter).length) return;
+    const dedupeKey = `${entityName}:${JSON.stringify(normalizedFilter)}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    attempts.push({ key, entityName, filter: normalizedFilter });
+  };
+
+  const companyId = clean(candidate.customerCompanyId)
+    || (candidate.customerKeyType === "Customer_FK" ? clean(candidate.customerKeyValue) : "");
+  const branchId = clean(candidate.customerBranchId)
+    || (candidate.customerKeyType === "CustomerBranch_FK" ? clean(candidate.customerKeyValue) : "");
+  const ico = compactDigits(candidate.ico)
+    || (candidate.customerKeyType === "IČO" ? compactDigits(candidate.customerKeyValue) : "");
+
+  addAttempt("directory_with_branch_by_customer_fk", "DirectoryWithBranch", { Id: companyId });
+  addAttempt("directory_by_customer_fk", "Directory", { Id: companyId });
+  addAttempt("company_by_customer_fk", "Company", { Id: companyId });
+  addAttempt("directory_with_branch_by_reg_number", "DirectoryWithBranch", { RegNumber: ico });
+  addAttempt("directory_by_reg_number", "Directory", { RegNumber: ico });
+  addAttempt("directory_with_branch_by_branch_fk", "DirectoryWithBranch", { Id: branchId });
+  addAttempt("customer_branch_by_branch_fk", "CustomerBranch", { Id: branchId });
+  addAttempt("directory_by_branch_fk", "Directory", { Id: branchId });
+  addAttempt("customer_by_branch_fk", "Customer", { Id: branchId });
+  addAttempt("company_by_branch_fk", "Company", { Id: branchId });
+
+  return attempts;
 }
 
 function customerMetadataStatus(candidate = {}, metadata = null) {
@@ -240,44 +262,41 @@ function customerMetadataIssues(candidate = {}, metadata = null) {
 }
 
 async function loadCustomerMetadataForCandidate(env, session, candidate = {}) {
-  const lookupValue = candidateLookupValue(candidate);
+  const customerAttempts = customerLookupAttemptsForCandidate(candidate);
   const attempts = [];
-  if (!lookupValue) {
+  if (!customerAttempts.length) {
     return { metadata: null, status: "missing_lookup_key", attempts };
   }
 
-  for (const attempt of CUSTOMER_ENTITY_ATTEMPTS) {
-    for (const idField of attempt.idFields) {
-      const filter = { [idField]: lookupValue };
-      try {
-        const page = await getVistosPage(env, session, attempt.entityName, CUSTOMER_COLUMNS, filter, 0, 2);
-        attempts.push({
-          key: attempt.key,
-          entityName: attempt.entityName,
-          filter,
-          ok: true,
-          returnedRows: page.rows.length,
-          recordsTotal: page.total || 0,
-          recordsFiltered: page.filtered || 0
-        });
-        if (page.rows.length > 0) {
-          const metadata = mapCustomerMetadata(page.rows[0], attempt);
-          return {
-            metadata,
-            status: customerMetadataStatus(candidate, metadata),
-            attempts
-          };
-        }
-      } catch (error) {
-        attempts.push({
-          key: attempt.key,
-          entityName: attempt.entityName,
-          filter,
-          ok: false,
-          code: clean(error?.code),
-          message: clean(error?.message).slice(0, 160)
-        });
+  for (const attempt of customerAttempts) {
+    try {
+      const page = await getVistosPage(env, session, attempt.entityName, CUSTOMER_COLUMNS, attempt.filter, 0, 2);
+      attempts.push({
+        key: attempt.key,
+        entityName: attempt.entityName,
+        filter: attempt.filter,
+        ok: true,
+        returnedRows: page.rows.length,
+        recordsTotal: page.total || 0,
+        recordsFiltered: page.filtered || 0
+      });
+      if (page.rows.length > 0) {
+        const metadata = mapCustomerMetadata(page.rows[0], attempt);
+        return {
+          metadata,
+          status: customerMetadataStatus(candidate, metadata),
+          attempts
+        };
       }
+    } catch (error) {
+      attempts.push({
+        key: attempt.key,
+        entityName: attempt.entityName,
+        filter: attempt.filter,
+        ok: false,
+        code: clean(error?.code),
+        message: clean(error?.message).slice(0, 160)
+      });
     }
   }
 
