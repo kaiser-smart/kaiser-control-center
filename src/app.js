@@ -17480,11 +17480,15 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     summary,
     dateRange: collectionRoutesVistosDateRangeLabel(summary.pickupFrom || sourceRow.pickupFrom, summary.pickupTo || sourceRow.pickupTo),
     addressPlace: summary.addressPlaceRaw || sourceRow.addressPlaceRaw || summary.addressRaw || summary.siteName || "neurčeno",
+    stationName: summary.stationName || sourceRow.stationName || "",
     waste: [summary.wasteType, summary.wasteCode].filter(Boolean).join(" / ") || "neurčeno",
     container,
     interval: summary.frequency || "neurčeno",
     pickupDays: summary.pickupDaysText || summary.pickupDays || sourceRow.pickupDaysText || sourceRow.pickupDays || "neurčeno",
     note: summary.note || sourceRow.note || "",
+    customerManagerMobile: summary.customerManagerMobile || sourceRow.customerManagerMobile || "",
+    customerManagerEmail: summary.customerManagerEmail || sourceRow.customerManagerEmail || "",
+    customerManagerContact: [summary.customerManagerMobile || sourceRow.customerManagerMobile, summary.customerManagerEmail || sourceRow.customerManagerEmail].filter(Boolean).join(" · "),
     issues,
     issueLabels: issues.map((issue) => issue.label).filter(Boolean),
     issueCount: collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, 0),
@@ -17692,6 +17696,7 @@ function collectionRoutesVistosRouteRows() {
       routeOrder: index + 1,
       customerName: summary.customerName || sourceRow.customerName || "-",
       addressText: summary.addressPlaceRaw || sourceRow.addressPlaceRaw || summary.addressRaw || sourceRow.addressRaw || summary.siteName || sourceRow.siteName || "-",
+      stationName: summary.stationName || sourceRow.stationName || "",
       wasteType,
       wasteCode: summary.wasteCode || sourceRow.wasteCode || "",
       containerVolume,
@@ -17711,6 +17716,8 @@ function collectionRoutesVistosRouteRows() {
       vistosContractNumber: summary.contractNumber || summary.sourceContractId || sourceRow.sourceContractId || "-",
       vistosCustomerName: summary.customerName || sourceRow.customerName || "-",
       vistosSiteName: summary.siteName || summary.addressPlaceRaw || sourceRow.addressPlaceRaw || summary.addressRaw || sourceRow.addressRaw || "-",
+      customerManagerMobile: summary.customerManagerMobile || sourceRow.customerManagerMobile || "",
+      customerManagerEmail: summary.customerManagerEmail || sourceRow.customerManagerEmail || "",
       issueCount,
       issues,
       rawSourceRow: sourceRow
@@ -17860,7 +17867,10 @@ function collectionRoutesVistosRouteTable(rows = collectionRoutesVistosRouteDisp
                 </td>
                 <td data-label="Pořadí">${escapeHtml(row.routeOrder)}</td>
                 <td data-label="Zákazník">${escapeHtml(row.customerName || "-")}</td>
-                <td data-label="Stanoviště">${escapeHtml(row.addressText || "-")}</td>
+                <td data-label="Stanoviště">
+                  <strong>${escapeHtml(row.stationName || row.addressText || "-")}</strong>
+                  ${row.stationName && row.addressText ? `<span>${escapeHtml(row.addressText)}</span>` : ""}
+                </td>
                 <td data-label="Odpad / nádoba">
                   <strong>${escapeHtml(collectionRoutesSourceDriverWasteLabel(row))}</strong>
                   <span>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</span>
@@ -17938,11 +17948,13 @@ function collectionRoutesVistosContractDetailTable(contractRow) {
           <tr>
             <th>Od-do</th>
             <th>Adresní místo</th>
+            <th>Stanoviště</th>
             <th>Odpad</th>
             <th>Nádoba</th>
             <th>Interval</th>
             <th>Den svozu</th>
             <th>Poznámka</th>
+            <th>Zákaznický manažer</th>
           </tr>
         </thead>
         <tbody>
@@ -17950,11 +17962,13 @@ function collectionRoutesVistosContractDetailTable(contractRow) {
             <tr class="${item.issueCount > 0 || item.issues.length ? "collection-routes-site-detail-item--danger" : ""}">
               <td class="${collectionRoutesDetailCellClass(item, "dateRange")}" data-label="Od-do">${escapeHtml(item.dateRange)}</td>
               <td class="${collectionRoutesDetailCellClass(item, "addressPlace")}" data-label="Adresní místo">${escapeHtml(item.addressPlace)}</td>
+              <td data-label="Stanoviště">${escapeHtml(item.stationName || "-")}</td>
               <td class="${collectionRoutesDetailCellClass(item, "waste")}" data-label="Odpad">${escapeHtml(item.waste)}</td>
               <td class="${collectionRoutesDetailCellClass(item, "container")}" data-label="Nádoba">${escapeHtml(item.container)}</td>
               <td class="${collectionRoutesDetailCellClass(item, "interval")}" data-label="Interval">${escapeHtml(item.interval)}</td>
               <td class="${collectionRoutesDetailCellClass(item, "pickupDays")}" data-label="Den svozu">${escapeHtml(item.pickupDays)}</td>
               <td data-label="Poznámka">${escapeHtml(item.note || "-")}</td>
+              <td data-label="Zákaznický manažer">${escapeHtml(item.customerManagerContact || "-")}</td>
             </tr>
           `).join("")}
         </tbody>

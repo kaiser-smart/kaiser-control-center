@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.406"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.407"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: doplnění Vistos kontaktů",
+    text: "Vistos Svoz Kaiser snapshot nově read-only načítá nepovinné Stanoviště a kontakt na zákaznického manažera: mobil a e-mail. Údaje se zobrazují v detailu položek smlouvy a jejich absence není blokující chyba."
+  },
   {
     title: "Trasy svozu: hlavní záložka Vistos-first",
     text: "Hlavní záložka Svozové trasy je uklizená od Excel-first pracovních panelů. Ukazuje čistý pracovní seznam z Vistos Svoz Kaiser snapshotu s filtrem den, týden, odpad a stav; historické Excel importy zůstávají jen v interní správě."

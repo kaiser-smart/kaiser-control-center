@@ -155,6 +155,85 @@ const VISTOS_CONSISTENCY_FIELD_SPECS = [
     ]
   },
   {
+    key: "siteOptional",
+    label: "Stanoviště",
+    targetEntities: ["ContractRow", "Contract"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "Stanoviste",
+      "NazevStanoviste",
+      "SvozoveStanoviste",
+      "SvozoveMisto",
+      "SiteName",
+      "CollectionSite"
+    ],
+    includeGroups: [
+      ["stanoviste"],
+      ["svozove", "stanoviste"],
+      ["nazev", "stanoviste"],
+      ["collection", "site"]
+    ]
+  },
+  {
+    key: "customerManagerMobile",
+    label: "Zákaznický manažer mobil",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 4,
+    minScore: 76,
+    candidates: [
+      "ZakaznickyManazerMobil",
+      "ZakaznickyManagerMobil",
+      "ZakaznickyManazerTelefon",
+      "ZakaznickyManagerTelefon",
+      "CustomerManagerMobile",
+      "CustomerManagerPhone",
+      "AccountManagerMobile",
+      "AccountManagerPhone",
+      "ObchodnikMobil",
+      "ObchodnikTelefon"
+    ],
+    includeGroups: [
+      ["zakaznicky", "manazer", "mobil"],
+      ["zakaznicky", "manazer", "telefon"],
+      ["customer", "manager", "mobile"],
+      ["customer", "manager", "phone"],
+      ["account", "manager", "mobile"],
+      ["account", "manager", "phone"],
+      ["obchodnik", "mobil"],
+      ["obchodnik", "telefon"]
+    ]
+  },
+  {
+    key: "customerManagerEmail",
+    label: "Zákaznický manažer e-mail",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 4,
+    minScore: 76,
+    candidates: [
+      "ZakaznickyManazerEmail",
+      "ZakaznickyManagerEmail",
+      "ZakaznickyManazerMail",
+      "ZakaznickyManagerMail",
+      "CustomerManagerEmail",
+      "CustomerManagerMail",
+      "AccountManagerEmail",
+      "AccountManagerMail",
+      "ObchodnikEmail",
+      "ObchodnikMail"
+    ],
+    includeGroups: [
+      ["zakaznicky", "manazer", "email"],
+      ["zakaznicky", "manazer", "mail"],
+      ["customer", "manager", "email"],
+      ["customer", "manager", "mail"],
+      ["account", "manager", "email"],
+      ["account", "manager", "mail"],
+      ["obchodnik", "email"],
+      ["obchodnik", "mail"]
+    ]
+  },
+  {
     key: "pickupFrom",
     label: "Svoz od",
     targetEntities: ["ContractRow", "Contract"],
@@ -1365,6 +1444,61 @@ function readVistosConsistencyFieldValues(contract, contractRow, consistencyFiel
   }).filter((item) => cleanString(item.value) || cleanString(item.rawValue));
 }
 
+function vistosConsistencyDisplayValues(values = []) {
+  return values
+    .map((item) => firstNonEmpty(item?.value, item?.rawValue))
+    .map(cleanString)
+    .filter(Boolean);
+}
+
+function vistosAddressPlaceCandidateScore(item = {}) {
+  const value = firstNonEmpty(item.value, item.rawValue);
+  const metadataKey = normalizeVistosMetadataKey([
+    item.columnName,
+    item.caption,
+    item.name,
+    item.label
+  ].filter(Boolean).join(" "));
+  let score = 0;
+
+  if (metadataKey.includes("adresnimisto") || metadataKey.includes("addressplace")) {
+    score += 120;
+  }
+  if ((metadataKey.includes("adresni") && metadataKey.includes("misto")) || (metadataKey.includes("address") && metadataKey.includes("place"))) {
+    score += 90;
+  }
+  if ((metadataKey.includes("svozova") && metadataKey.includes("adresa")) || (metadataKey.includes("nakladkova") && metadataKey.includes("adresa"))) {
+    score += 70;
+  }
+  if (metadataKey.includes("address") || metadataKey.includes("adresa")) {
+    score += 40;
+  }
+  if (metadataKey.includes("stanoviste") && !metadataKey.includes("adresa")) {
+    score -= 25;
+  }
+  if (/\d/.test(cleanString(value))) {
+    score += 20;
+  }
+  if (cleanString(value).length >= 12) {
+    score += 8;
+  }
+
+  return score;
+}
+
+function preferredVistosAddressPlaceValue(values = [], ...fallbacks) {
+  const candidates = values
+    .map((item) => ({
+      item,
+      value: firstNonEmpty(item?.value, item?.rawValue),
+      score: vistosAddressPlaceCandidateScore(item)
+    }))
+    .filter((candidate) => cleanString(candidate.value))
+    .sort((left, right) => right.score - left.score);
+
+  return firstNonEmpty(candidates[0]?.value, ...fallbacks);
+}
+
 function isVistosYesValue(value) {
   if (value === true || value === 1) {
     return true;
@@ -2289,7 +2423,13 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     const addressRaw = firstNonEmpty(fkCaption(contract, "Nakladkovaadresa_FK"), branchName);
     const siteName = firstNonEmpty(fkCaption(contract, "Nakladkovaadresa_FK"), branchName, customerName);
     const addressPlaceValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "addressPlace");
-    const addressPlaceRaw = firstNonEmpty(...addressPlaceValues.map((item) => item.value), addressRaw);
+    const addressPlaceRaw = preferredVistosAddressPlaceValue(addressPlaceValues, addressRaw);
+    const stationValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "siteOptional");
+    const stationName = firstNonEmpty(...vistosConsistencyDisplayValues(stationValues));
+    const customerManagerMobileValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerMobile");
+    const customerManagerEmailValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerEmail");
+    const customerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerMobileValues));
+    const customerManagerEmail = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerEmailValues));
     const sourceCustomerId = fkRecordId(contract, "Directory_FK");
     const sourceSiteId = firstNonEmpty(fkRecordId(contract, "Nakladkovaadresa_FK"), fkRecordId(contract, "DirectoryBranch_FK"));
     const contractActiveRange = dateInActiveRange(contract?.StartDate, contract?.EndDate, today);
@@ -2330,6 +2470,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         branchName,
         addressRaw,
         addressPlaceRaw,
+        stationName,
+        customerManagerMobile,
+        customerManagerEmail,
         siteName,
         wasteType: "",
         wasteCode: "",
@@ -2410,7 +2553,17 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const routeFrequency = isOutsideCollectionRoute ? { frequency: "" } : frequency;
       const routeContainer = isOutsideCollectionRoute ? { volume: 0, count: 0, type: "" } : container;
       const rowAddressPlaceValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace");
-      const rowAddressPlaceRaw = firstNonEmpty(...rowAddressPlaceValues.map((item) => item.value), addressPlaceRaw, addressRaw);
+      const rowAddressPlaceRaw = preferredVistosAddressPlaceValue(rowAddressPlaceValues, addressPlaceRaw, addressRaw);
+      const rowStationValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "siteOptional");
+      const rowStationName = firstNonEmpty(
+        ...vistosConsistencyDisplayValues(rowStationValues),
+        readVistosColumnDisplayValue(contractRow, "Stanoviste"),
+        stationName
+      );
+      const rowCustomerManagerMobileValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerMobile");
+      const rowCustomerManagerEmailValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerEmail");
+      const rowCustomerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerMobileValues), customerManagerMobile);
+      const rowCustomerManagerEmail = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerEmailValues), customerManagerEmail);
       const pickupDayValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupDays");
       const pickupFromValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupFrom");
       const pickupToValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupTo");
@@ -2452,6 +2605,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         branchName,
         addressRaw,
         addressPlaceRaw: rowAddressPlaceRaw,
+        stationName: rowStationName,
+        customerManagerMobile: rowCustomerManagerMobile,
+        customerManagerEmail: rowCustomerManagerEmail,
         siteName,
         wasteType: routeWaste.wasteType,
         wasteCode: routeWaste.wasteCode,
