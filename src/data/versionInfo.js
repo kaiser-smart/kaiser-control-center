@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.413"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.414"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -22,7 +22,7 @@ export const versionInfo = {
 export const versionNews = [
   {
     title: "Trasy svozu: čitelný svozový den a adresní místo",
-    text: "Vistos Svoz Kaiser parser převádí číselníkové ID svozového dne 18330-18343 na čitelné dny sudého/lichého týdne, zvládá i více dnů v jednom poli a zákaznický caption typu s.r.o. - IČO už nebere jako Adresní místo."
+    text: "Vistos Svoz Kaiser parser převádí číselníkové ID svozového dne 18330-18343 na čitelné dny sudého/lichého týdne, zvládá i více dnů v jednom poli a zákaznický caption typu s.r.o. - IČO už nebere jako Adresní místo ani jako srovnávací adresu."
   },
   {
     title: "Trasy svozu: oprava objemu nádoby",

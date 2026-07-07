@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collection-route-optimization-preview.js";
 import {
+  __addressPlaceQualityIssuesForTest,
   __inferVistosContainerForTest,
   __pickupDayDisplayValueForTest,
   __pickupDayEntriesFromValuesForTest,
@@ -139,6 +140,15 @@ function derive(originalText) {
     "U Vlečky 726/5c, 617 00 Brno - Komárov"
   );
   assert.equal(addressPlace, "U Vlečky 726/5c, 617 00 Brno - Komárov");
+}
+
+{
+  const issues = __addressPlaceQualityIssuesForTest({
+    addressPlaceRaw: "U Vlečky 726/5c, 617 00 Brno - Komárov",
+    addressRaw: "4 KLUCI OD KOL s.r.o. - 08576726",
+    siteName: "4 KLUCI OD KOL s.r.o. - 08576726"
+  });
+  assert.equal(issues.some((issue) => issue.type === "address-place-loading-address-mismatch"), false);
 }
 
 {

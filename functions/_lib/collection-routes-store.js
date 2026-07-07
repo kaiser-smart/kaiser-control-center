@@ -2401,6 +2401,7 @@ function addressPlaceQualityIssues({ addressPlaceRaw, addressRaw, siteName }) {
   const address = firstNonEmpty(addressPlaceRaw, addressRaw, siteName);
   const normalized = normalizeVistosWatchdogText(address);
   const loadingAddress = cleanString(addressRaw);
+  const comparableLoadingAddress = isGenericVistosAddressPlaceValue(loadingAddress) ? "" : loadingAddress;
 
   if (!address) {
     return issues;
@@ -2434,8 +2435,8 @@ function addressPlaceQualityIssues({ addressPlaceRaw, addressRaw, siteName }) {
     });
   }
 
-  if (addressPlaceRaw && loadingAddress && /\d/.test(addressPlaceRaw) && /\d/.test(loadingAddress)) {
-    const similarity = addressTokenSimilarity(addressPlaceRaw, loadingAddress);
+  if (addressPlaceRaw && comparableLoadingAddress && /\d/.test(addressPlaceRaw) && /\d/.test(comparableLoadingAddress)) {
+    const similarity = addressTokenSimilarity(addressPlaceRaw, comparableLoadingAddress);
     if (similarity < 0.35) {
       issues.push({
         type: "address-place-loading-address-mismatch",
@@ -2676,6 +2677,10 @@ export function __pickupDayDisplayValueForTest(item = {}) {
 
 export function __preferredVistosAddressPlaceValueForTest(values = [], ...fallbacks) {
   return preferredVistosAddressPlaceValue(values, ...fallbacks);
+}
+
+export function __addressPlaceQualityIssuesForTest(input = {}) {
+  return addressPlaceQualityIssues(input);
 }
 
 function vistosSiteKey(contract) {
