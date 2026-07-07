@@ -325,8 +325,6 @@ Dodavatel
     CustomerBranch_FK_Caption: "Firma Alfa Brno",
     Customer_FK_RecordId: "C123",
     Customer_FK_Caption: "Firma Alfa s.r.o.",
-    CustomerManager_FK_RecordId: "M001",
-    CustomerManager_FK_Caption: "Lucie Nováková",
     CustomerRegNumber: "12345678",
     CustomerVatNumber: "CZ12345678",
     IssuedDate: "2026-06-01",
@@ -346,8 +344,6 @@ Dodavatel
   assert.equal(kaiserInvoiceFromVistos.customerId, "BR1");
   assert.equal(kaiserInvoiceFromVistos.customerName, "Firma Alfa Brno");
   assert.equal(kaiserInvoiceFromVistos.customerCompanyId, "C123");
-  assert.equal(kaiserInvoiceFromVistos.customerManagerId, "M001");
-  assert.equal(kaiserInvoiceFromVistos.customerManagerName, "Lucie Nováková");
   assert.equal(kaiserInvoiceFromVistos.ico, "12345678");
   assert.equal(kaiserInvoiceFromVistos.dic, "CZ12345678");
   assert.equal(kaiserInvoiceFromVistos.issueDate, "2026-06-01");

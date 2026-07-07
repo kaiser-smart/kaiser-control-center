@@ -58,11 +58,6 @@ const COMPANY_ATTEMPTS = [
 
 const INVOICE_ATTEMPTS = [
   {
-    key: "kaiser_invoice_columns_customer_manager",
-    entityName: "InvoiceIssued",
-    columns: [...KAISER_INVOICE_COLUMNS, "CustomerManager_FK"]
-  },
-  {
     key: "kaiser_invoice_columns",
     entityName: "InvoiceIssued",
     columns: KAISER_INVOICE_COLUMNS
@@ -295,11 +290,9 @@ export function mapReceivablesVistosCompany(row = {}) {
 export function mapReceivablesVistosInvoice(row = {}) {
   const customerBranchId = recordId(row, "CustomerBranch_FK");
   const customerCompanyId = recordId(row, "Customer_FK");
-  const customerManagerId = recordId(row, "CustomerManager_FK") || recordId(row, "CustomerManager");
   const customerId = customerBranchId || customerCompanyId || recordId(row, "Directory_FK") || recordId(row, "Company_FK");
   const customerBranchName = caption(row, "CustomerBranch_FK");
   const customerCompanyName = caption(row, "Customer_FK");
-  const customerManagerName = caption(row, "CustomerManager_FK") || caption(row, "CustomerManager");
   const customerName = customerBranchName || customerCompanyName || caption(row, "Directory_FK") || caption(row, "Company_FK");
   const invoiceNumber = firstValue(row, ["InvoiceNumber", "Number", "DocumentNumber", "Cislo"]);
   const priceWithTax = numberValue(firstValue(row, ["PriceWithTax", "TotalAmount", "TotalPrice", "AmountTotal", "PriceTotal"]));
@@ -316,8 +309,6 @@ export function mapReceivablesVistosInvoice(row = {}) {
     customerBranchName,
     customerCompanyId,
     customerCompanyName,
-    customerManagerId,
-    customerManagerName,
     ico: compactDigits(firstValue(row, ["CustomerRegNumber", "ICO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"])),
     dic: firstValue(row, ["CustomerVatNumber", "DIC", "Dic", "VAT", "VatId"]),
     issueDate: firstValue(row, ["IssuedDate", "IssueDate", "InvoiceDate", "DateIssue", "CreatedDate"]),

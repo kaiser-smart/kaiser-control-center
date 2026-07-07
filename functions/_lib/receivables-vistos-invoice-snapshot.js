@@ -52,7 +52,6 @@ const INVOICE_COLUMNS = [
 ];
 
 const INVOICE_ATTEMPTS = [
-  { key: "kaiser_invoice_columns_customer_manager", entityName: "InvoiceIssued", columns: [...INVOICE_COLUMNS, "CustomerManager_FK"] },
   { key: "kaiser_invoice_columns", entityName: "InvoiceIssued", columns: INVOICE_COLUMNS },
   { key: "kaiser_invoice_columns", entityName: "Document", columns: INVOICE_COLUMNS },
   { key: "kaiser_invoice_columns", entityName: "Invoice", columns: INVOICE_COLUMNS },
