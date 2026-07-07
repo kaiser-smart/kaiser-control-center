@@ -2,10 +2,9 @@ export const DATA_BOX_MODULE_KEY = "data-box";
 export const DATA_BOX_ROUTE = "/datova-schranka";
 
 export const DATA_BOX_TABS = [
-  { id: "unresolved", label: "Nevyřízené", shortLabel: "Nevyř." },
-  { id: "received", label: "Přijaté zprávy", shortLabel: "Přijaté" },
-  { id: "sent", label: "Odeslané zprávy", shortLabel: "Odeslané" },
-  { id: "archive", label: "Archivace", shortLabel: "Archiv" },
-  { id: "ai-boost", label: "AI Boost", shortLabel: "AI Boost" },
-  { id: "rules", label: "Seznam pravidel a automatizace", shortLabel: "Pravidla" }
+  { id: "overview", label: "Přehled", shortLabel: "Přehled" },
+  { id: "messages", label: "Zprávy", shortLabel: "Zprávy" },
+  { id: "detail", label: "Detail zprávy", shortLabel: "Detail" },
+  { id: "confirmations", label: "Čeká na potvrzení", shortLabel: "Potvrdit" },
+  { id: "settings", label: "Nastavení / Diagnostika", shortLabel: "Nastavení" }
 ];
