@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.434"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.433"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,10 +20,6 @@ export const versionInfo = {
 };
 
 export const versionNews = [
-  {
-    title: "Pohledávky: manažer faktury a lookup diagnostika",
-    text: "Import Pohledávek ukazuje faktury v samostatném bloku po 10 řádcích, do normalizace přidává zákaznického manažera z faktury a v ledger mappingu zobrazuje read-only diagnostiku Vistos lookupů."
-  },
   {
     title: "Pohledávky: aktuální HTML pro import route",
     text: "Build nově generuje i přímou route /pohledavky/import, aby produkce na této adrese vždy načítala aktuální app.js a ne starý statický HTML soubor."

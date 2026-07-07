@@ -28038,33 +28038,6 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   font-size: 1rem;
 }
 
-.receivables-snapshot-invoices-block {
-  display: block;
-  min-width: 0;
-  margin-top: 14px;
-}
-
-.receivables-snapshot-invoices-block h3 {
-  margin: 0 0 10px;
-  font-size: 1rem;
-}
-
-.receivables-pagination {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-end;
-  margin: 0 0 10px;
-}
-
-.receivables-pagination span {
-  margin-right: auto;
-  color: var(--receivables-muted);
-  font-size: 0.86rem;
-  font-weight: 800;
-}
-
 .receivables-diagnostics-list {
   display: grid;
   gap: 8px;
