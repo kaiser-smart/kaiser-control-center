@@ -27977,13 +27977,11 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
+  gap: var(--space-sm);
 }
 
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-sm) var(--space-lg);
-  align-self: stretch;
+  display: contents;
   padding-right: 0;
 }
 
@@ -27993,44 +27991,51 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__eyebrow,
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded h1,
-.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body > p {
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body > p,
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__status,
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-actions,
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-preview-actions,
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-hero-map {
   grid-column: 1;
 }
 
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__eyebrow {
+  order: 1;
+  line-height: 1.05;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded h1 {
+  order: 2;
+  margin-top: 2px;
+  line-height: 0.96;
+}
+
+.tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-hero-map {
+  order: 3;
+  min-height: clamp(430px, 48vw, 660px);
+}
+
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body > p {
+  order: 4;
   max-width: 740px;
+  margin-top: var(--space-sm);
+  line-height: 1.34;
 }
 
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__status {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+  order: 5;
   align-self: start;
+  margin-top: 0;
 }
 
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-actions,
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-preview-actions {
-  grid-column: 2;
-  justify-content: flex-end;
-}
-
-.tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-hero-map {
-  grid-column: 1 / -1;
-  min-height: clamp(380px, 42vw, 620px);
+  order: 6;
+  margin-top: 0;
+  justify-content: flex-start;
 }
 
 @media (max-width: 760px) {
-  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__status,
-  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-actions,
-  .tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-preview-actions {
-    grid-column: 1;
-    grid-row: auto;
-    justify-content: flex-start;
-  }
-
   .tracking-page--soft-metal-preview .tracking-hero--map-expanded .tracking-hero-map {
     min-height: 340px;
   }
