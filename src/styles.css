@@ -28931,33 +28931,33 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   overflow: hidden;
   border: 1px solid var(--chip-border);
   border-radius: var(--radius-md);
-  background: var(--tracking-inset-bg);
-  box-shadow: var(--shadow-inset-control);
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-inset));
+  box-shadow: var(--shadow-control), var(--highlight-edge);
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-preview--card {
-  width: 92px;
-  height: 92px;
+  width: 110px;
+  height: 110px;
   border-radius: var(--radius-lg);
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-preview--gallery {
-  width: 58px;
-  height: 58px;
+  width: 70px;
+  height: 70px;
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-preview img {
   position: relative;
   z-index: 1;
   display: block;
-  width: 82%;
-  height: 82%;
+  width: 92%;
+  height: 92%;
   object-fit: contain;
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-preview--card img {
-  width: 86%;
-  height: 86%;
+  width: 94%;
+  height: 94%;
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-preview__fallback {
@@ -29042,7 +29042,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-gallery-tile {
   display: grid;
-  grid-template-rows: 58px minmax(32px, auto) 24px;
+  grid-template-rows: 70px minmax(32px, auto) 24px;
   align-items: center;
   justify-items: center;
   gap: 7px;
