@@ -75,6 +75,7 @@ const routes = new Set([
   "/receivables",
   "/receivables/settings",
   "/design/neumorphic",
+  "/trasy-svozu/tablet-preview",
   ...modules.map((moduleItem) => moduleItem.route),
   ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)
 ]);

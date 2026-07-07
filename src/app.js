@@ -236,6 +236,7 @@ const RECEIVABLES_TABS = [
   { id: "settings", label: "Nastavení", route: `${RECEIVABLES_ROUTE}/settings` }
 ];
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
+const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ROUTE = `${COLLECTION_ROUTES_ROUTE}/tablet-preview`;
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Read-only přehled tras svozu.";
 const COLLECTION_ROUTES_TABS = [
@@ -16471,6 +16472,214 @@ function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "defau
   `;
 }
 
+function collectionRoutesDriverTabletPreviewSampleRows() {
+  return [
+    {
+      routeOrder: 1,
+      customerName: "KOVO-KRCEK s.r.o. - 03651371",
+      addressText: "Tvarozna 437, PSC 66405",
+      wasteType: "PLAST",
+      wasteCode: "200139",
+      containerCount: 1,
+      containerVolume: 240,
+      estimatedServiceMinutes: 6,
+      sourceKind: "design-preview"
+    },
+    {
+      routeOrder: 2,
+      customerName: "PEPCO Czech Republic s.r.o.",
+      addressText: "Brno, Zabovresky, namesti Svornosti 2573/6",
+      wasteType: "SKO",
+      wasteCode: "200301",
+      containerCount: 2,
+      containerVolume: 240,
+      estimatedServiceMinutes: 8,
+      sourceKind: "design-preview"
+    },
+    {
+      routeOrder: 3,
+      customerName: "Ukazkove stanoviste pro ridice",
+      addressText: "Brno, testovaci trasa",
+      wasteType: "PAPIR",
+      wasteCode: "200101",
+      containerCount: 1,
+      containerVolume: 1100,
+      estimatedServiceMinutes: 9,
+      note: "Ukazkova poznamka pro design preview.",
+      sourceKind: "design-preview"
+    }
+  ];
+}
+
+function collectionRoutesDriverTabletPreviewRows() {
+  const rows = collectionRoutesVistosRouteDisplayRows();
+  return rows.length ? rows.slice(0, 14) : collectionRoutesDriverTabletPreviewSampleRows();
+}
+
+function collectionRoutesDriverTabletPreviewAction(label, action, tone = "default") {
+  const iconHtml = collectionRoutesSourceDriverActionIconHtml(label, action, tone);
+  return `
+    <button
+      class="collection-routes-driver-action collection-routes-driver-action--${escapeHtml(tone)} driver-tablet-preview-action"
+      type="button"
+      data-driver-tablet-preview-action="${escapeHtml(action)}"
+      aria-disabled="true"
+      aria-label="${escapeHtml(`${label} - design preview bez zapisu`)}"
+      title="Design preview - akce neni napojena na zapis"
+    >
+      ${iconHtml}
+      <span class="collection-routes-driver-action__label">${escapeHtml(label)}</span>
+    </button>
+  `;
+}
+
+function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverTabletPreviewRows()) {
+  const selectedIndex = 0;
+  const selectedRow = rows[selectedIndex] || null;
+  const visibleRows = collectionRoutesSourceDriverVisibleRows(rows, selectedIndex);
+  const completedCount = 0;
+  const remainingCount = rows.length;
+  const progressPercent = collectionRoutesSourceDriverProgressPercent(completedCount, rows.length);
+  const routeMetrics = collectionRoutesSourceRowsMetrics(rows);
+  const remainingMetrics = collectionRoutesSourceRowsMetrics(rows.slice(selectedIndex + 1));
+  const etaLabel = collectionRoutesSourceDriverEtaLabel(remainingMetrics.estimatedMinutes);
+  const routeEtaText = etaLabel === "neni dostupny" || etaLabel === "není dostupný" ? "odhad neni dostupny" : `konec ${etaLabel}`;
+  const estimateText = etaLabel === "neni dostupny" || etaLabel === "není dostupný" ? "neni dostupny" : etaLabel;
+  const currentServiceLabel = selectedRow ? [
+    collectionRoutesSourceDriverWasteLabel(selectedRow),
+    collectionRoutesSourceDriverContainerLabel(selectedRow)
+  ].filter((value) => value && value !== "-").join(" | ") : "-";
+  const currentTaskLabel = currentServiceLabel && currentServiceLabel !== "-" ? currentServiceLabel : "Proved svoz podle trasy";
+  const hasLoadedRows = collectionRoutesVistosRouteDisplayRows().length > 0;
+  const sourceLabel = hasLoadedRows
+    ? "Read-only data z aktualniho filtru Vistos Svoz Kaiser"
+    : "Ukazkova data pro design preview";
+
+  if (!selectedRow) {
+    return `
+      <section class="driver-tablet-preview-frame" aria-label="Preview ridicskeho tabletu">
+        <div class="collection-routes-driver-mode collection-routes-driver-mode--empty">
+          <div class="collection-routes-driver-mode__head">
+            <div>
+              <p class="module-feedback__eyebrow">Design preview</p>
+              <h3>Ceka na trasu</h3>
+              <span>Preview nema zadne provozni radky.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="driver-tablet-preview-frame" aria-label="Preview ridicskeho tabletu">
+      <div class="driver-tablet-preview-frame__label">
+        <span>Samostatna designova varianta</span>
+        <strong>${escapeHtml(sourceLabel)}</strong>
+      </div>
+      <div class="collection-routes-driver-mode driver-tablet-preview-mode" id="collection-routes-driver-tablet-preview">
+        <div class="collection-routes-driver-mode__topbar" aria-label="Stav ridicskeho preview">
+          <div class="collection-routes-driver-mode__identity">
+            <span>Ridicsky tablet</span>
+            <strong>Design preview trasy</strong>
+            <small>Vistos Svoz Kaiser · akce nejsou napojene na zapis</small>
+          </div>
+          <div class="collection-routes-driver-mode__signals" aria-label="Cas a zvuky">
+            <span>Zvuky zap</span>
+            <span>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</span>
+          </div>
+        </div>
+
+        <div class="collection-routes-driver-mode__pilot-state" role="status">
+          DESIGN PREVIEW - tato obrazovka neuklada HOTOVO, problemy, navigaci ani komunikaci se Sarlotou.
+        </div>
+
+        <div class="collection-routes-driver-mode__dashboard">
+          <div class="collection-routes-driver-mode__main">
+            <section class="collection-routes-driver-mode__active" aria-label="Dalsi zastavka">
+              <div class="collection-routes-driver-mode__route-pulse" aria-label="Postup trasy">
+                <strong>1 / ${escapeHtml(rows.length)}</strong>
+                <span>${escapeHtml(Math.max(0, rows.length - 1))} dalsich · ${escapeHtml(routeEtaText)}</span>
+              </div>
+              <div class="collection-routes-driver-mode__hero-grid">
+                <div class="collection-routes-driver-mode__stop">
+                  <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || 1)}</span>
+                  <div>
+                    <span class="collection-routes-driver-mode__kicker">Dalsi stanoviste</span>
+                    <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
+                    <p>${escapeHtml(selectedRow.addressText || "-")}</p>
+                    <span class="collection-routes-driver-mode__task-label">Ukol</span>
+                    <strong>${escapeHtml(currentTaskLabel)}</strong>
+                    <small>Design preview: tlacitka zatim pouze ukazuji budouci ergonomii.</small>
+                  </div>
+                </div>
+              </div>
+              <div class="collection-routes-driver-mode__facts collection-routes-driver-mode__facts--primary">
+                ${collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow))}
+                ${collectionRoutesSourceDriverModeMeta("Nadoba", collectionRoutesSourceDriverContainerLabel(selectedRow))}
+              </div>
+            </section>
+
+            <div class="collection-routes-driver-mode__primary-actions" aria-label="Hlavni akce ridice - preview">
+              ${collectionRoutesDriverTabletPreviewAction("HOTOVO", "done", "done")}
+            </div>
+
+            <div class="collection-routes-driver-mode__support-actions" aria-label="Vedlejsi akce ridice - preview">
+              ${collectionRoutesDriverTabletPreviewAction("Navigovat na dalsi stanoviste", "navigate", "navigate")}
+              ${collectionRoutesDriverTabletPreviewAction("Problem", "problem", "problem")}
+              ${collectionRoutesDriverTabletPreviewAction("Sarlota", "sarlota", "sarlota")}
+            </div>
+
+            <div class="collection-routes-driver-mode__bottom-bar" aria-label="Provozni akce ridice - preview">
+              ${collectionRoutesDriverTabletPreviewAction("Musim vysypat", "dump", "dump")}
+              ${collectionRoutesDriverTabletPreviewAction("Prestavka", "break", "break")}
+            </div>
+
+            <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
+              <span style="width: ${escapeHtml(progressPercent)}%"></span>
+            </div>
+          </div>
+
+          <aside class="collection-routes-driver-mode__queue" aria-label="Prubeh a zastavky v trase">
+            <div class="collection-routes-driver-progress-card" aria-label="Prubeh trasy">
+              <span>Prubeh trasy</span>
+              <strong>Hotovo ${escapeHtml(progressPercent)} %</strong>
+              <small>${escapeHtml(collectionRoutesMetricValue(completedCount))} z ${escapeHtml(collectionRoutesMetricValue(rows.length))} stanovist</small>
+              <div class="collection-routes-driver-progress-card__bar" aria-hidden="true">
+                <span style="width: ${escapeHtml(progressPercent)}%"></span>
+              </div>
+              <em>Zbyva ${escapeHtml(collectionRoutesMetricValue(remainingCount))}</em>
+              <dl>
+                <div><dt>Nadoby</dt><dd>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</dd></div>
+                <div><dt>Odhad</dt><dd>${escapeHtml(estimateText)}</dd></div>
+              </dl>
+            </div>
+            <div class="collection-routes-driver-mode__list-head">
+              <strong>Dalsi zastavky (${escapeHtml(collectionRoutesMetricValue(visibleRows.length))})</strong>
+              <span class="driver-tablet-preview-pill">Preview</span>
+            </div>
+            <div class="collection-routes-driver-mode__list">
+              ${visibleRows.map(({ row, index }) => `
+                <button
+                  class="collection-routes-driver-stop ${index === selectedIndex ? "collection-routes-driver-stop--active" : ""}"
+                  type="button"
+                  aria-disabled="true"
+                >
+                  <span class="collection-routes-driver-stop__order">${escapeHtml(row.routeOrder || index + 1)}</span>
+                  <span>
+                    <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</strong>
+                    <small>${escapeHtml(collectionRoutesSourceDriverStopSubtitle(row))}</small>
+                  </span>
+                </button>
+              `).join("")}
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisplayRows()) {
   if (!rows.length) {
     return `
@@ -18746,6 +18955,59 @@ function collectionRoutesActiveSection(user) {
     return collectionRoutesInternalSection(user);
   }
   return collectionRoutesSourceRoutesSection(user);
+}
+
+function collectionRoutesDriverTabletPreviewPage(user) {
+  ensureCollectionRoutesSitesReadOnlyData(user);
+  const rows = collectionRoutesDriverTabletPreviewRows();
+  const hasApiRows = collectionRoutesVistosRouteDisplayRows().length > 0;
+  const sourceStateLabel = collectionRoutesPilotState.kommunalPairingLoading || collectionRoutesPilotState.loading
+    ? "Nacitam read-only trasu"
+    : hasApiRows
+      ? "Read-only Vistos data"
+      : "Bez dat - ukazkovy stav";
+  const loadedAt = collectionRoutesPilotState.kommunalPairingLoadedAt
+    ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt)
+    : "";
+
+  return `
+    <main class="app-shell module-page module-theme-scope collection-routes-page driver-tablet-preview-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpet na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref(COLLECTION_ROUTES_ROUTE)}" data-link>Zpet na Trasy svozu</a>
+      </nav>
+
+      <section class="module-detail driver-tablet-preview-hero" aria-labelledby="driver-tablet-preview-title">
+        <div class="module-detail__body">
+          <div class="module-detail__eyebrow">SMART ODPADY / DESIGN PREVIEW</div>
+          <h1 id="driver-tablet-preview-title">Ridicsky tablet - nova varianta</h1>
+          <p>Samostatna preview URL pro upravy vzhledu. Puvodni tablet na /trasy-svozu zustava beze zmeny.</p>
+          <div class="module-detail__status">
+            <span>Stav</span>
+            <strong>${escapeHtml(sourceStateLabel)}</strong>
+          </div>
+        </div>
+        <div class="driver-tablet-preview-hero__actions">
+          <a class="secondary-link" href="${routeHref(COLLECTION_ROUTES_ROUTE)}" data-link>Porovnat s puvodnim modulem</a>
+          <span class="employee-card-status employee-card-status--waiting">Bez zapisu do API</span>
+        </div>
+      </section>
+
+      <div class="driver-tablet-preview-notice" role="status">
+        <strong>Design preview</strong>
+        <span>Tato stranka nesmi ukladat HOTOVO, problemy, prestavky, navigaci, SMS, e-mail ani Sarlotu. Slouzi jen pro navrh noveho vzhledu ridicskeho tabletu.</span>
+      </div>
+
+      ${loadedAt ? `<p class="module-feedback__notice">Zdroj read-only dat: ${escapeHtml(loadedAt)} · ${escapeHtml(collectionRoutesPilotState.kommunalPairingSource || "Vistos Svoz Kaiser")}</p>` : ""}
+      ${!hasApiRows && collectionRoutesPilotState.kommunalPairingError ? `<p class="module-feedback__notice">Online read-only data se ted nenacetla; preview proto pouziva bezpecny ukazkovy stav.</p>` : ""}
+      ${collectionRoutesPilotState.loading || collectionRoutesPilotState.kommunalPairingLoading ? `<p class="module-feedback__notice">Nacitam online data; do te doby je zobrazena bezpecna ukazka preview.</p>` : ""}
+
+      <div class="driver-tablet-preview-stage">
+        ${collectionRoutesDriverTabletPreviewPanel(rows)}
+      </div>
+    </main>
+  `;
 }
 
 function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
@@ -32610,6 +32872,20 @@ function renderAuthenticatedApp(user) {
   if (path === DESIGN_NEUMORPHIC_ROUTE) {
     app.innerHTML = neumorphicPreviewPage(user);
     document.title = `Neumorphic varianta | ${APP_NAME}`;
+    return;
+  }
+
+  if (path === COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ROUTE) {
+    if (!canViewModule(user, COLLECTION_ROUTES_MODULE_KEY)) {
+      app.innerHTML = forbiddenPage(user);
+      document.title = `Bez oprávnění | ${APP_NAME}`;
+      return;
+    }
+
+    ensureCollectionRoutesSvozKaiserWatchdog(user);
+    void loadCollectionRoutesPilot();
+    app.innerHTML = collectionRoutesDriverTabletPreviewPage(user);
+    document.title = `Řidičský tablet preview | ${APP_NAME}`;
     return;
   }
 
