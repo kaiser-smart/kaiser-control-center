@@ -17747,7 +17747,7 @@ function collectionRoutesVistosContractDetailTable(contractRow) {
         </thead>
         <tbody>
           ${contractRow.items.map((item) => `
-            <tr class="${item.issueCount > 0 ? "collection-routes-site-detail-item--danger" : ""}">
+            <tr class="${item.issueCount > 0 || item.issues.length ? "collection-routes-site-detail-item--danger" : ""}">
               <td class="${collectionRoutesDetailCellClass(item, "dateRange")}" data-label="Od-do">${escapeHtml(item.dateRange)}</td>
               <td class="${collectionRoutesDetailCellClass(item, "addressPlace")}" data-label="Adresní místo">${escapeHtml(item.addressPlace)}</td>
               <td class="${collectionRoutesDetailCellClass(item, "waste")}" data-label="Odpad">${escapeHtml(item.waste)}</td>
