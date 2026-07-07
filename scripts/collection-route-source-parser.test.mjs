@@ -111,6 +111,7 @@ function derive(originalText) {
   assert.equal(pickup.unknownTexts.length, 0);
   assert.equal(__pickupDayDisplayValueForTest({ value: "18330" }), "pondělí lichá");
   assert.equal(__pickupDayDisplayValueForTest({ value: "18337" }), "pondělí sudá");
+  assert.equal(__pickupDayDisplayValueForTest({ value: "18330,18337" }), "pondělí lichá, pondělí sudá");
 }
 
 {
@@ -123,6 +124,19 @@ function derive(originalText) {
     }],
     "U Vlečky 726/5c, 617 00 Brno - Komárov",
     "4 KLUCI OD KOL s.r.o. - 08576726"
+  );
+  assert.equal(addressPlace, "U Vlečky 726/5c, 617 00 Brno - Komárov");
+}
+
+{
+  const addressPlace = __preferredVistosAddressPlaceValueForTest(
+    [{
+      value: "4 KLUCI OD KOL s.r.o. - 08576726",
+      rawValue: "4 KLUCI OD KOL s.r.o. - 08576726",
+      caption: "Adresní místo",
+      columnName: "PickupAddressRuian"
+    }],
+    "U Vlečky 726/5c, 617 00 Brno - Komárov"
   );
   assert.equal(addressPlace, "U Vlečky 726/5c, 617 00 Brno - Komárov");
 }

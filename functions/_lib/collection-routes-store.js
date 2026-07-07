@@ -1577,6 +1577,15 @@ function vistosConsistencyDisplayValues(values = []) {
 
 function isGenericVistosAddressPlaceValue(value = "") {
   const key = normalizeVistosMetadataKey(value);
+  const text = cleanString(value);
+  const looksLikeCustomerCaption = /\s-\s*\d{6,12}$/.test(text) && (
+    /\b(?:s\.?\s*r\.?\s*o|a\.?\s*s|spol|druzstvo)\b/i.test(text) ||
+    text.toLocaleLowerCase("cs").includes("s.r.o") ||
+    text.toLocaleLowerCase("cs").includes("a.s")
+  );
+  if (looksLikeCustomerCaption) {
+    return true;
+  }
   return [
     "branch",
     "company",
@@ -2095,7 +2104,14 @@ const VISTOS_COLLECTION_DAY_ID_LABELS = {
 
 function resolveVistosCollectionDayLabel(value = "") {
   const key = cleanString(value);
-  return VISTOS_COLLECTION_DAY_ID_LABELS[key] || "";
+  if (VISTOS_COLLECTION_DAY_ID_LABELS[key]) {
+    return VISTOS_COLLECTION_DAY_ID_LABELS[key];
+  }
+  const parts = key.split(/[,\s;|]+/).map(cleanString).filter(Boolean);
+  if (parts.length > 1 && parts.every((part) => VISTOS_COLLECTION_DAY_ID_LABELS[part])) {
+    return parts.map((part) => VISTOS_COLLECTION_DAY_ID_LABELS[part]).join(", ");
+  }
+  return "";
 }
 
 function normalizeVistosWatchdogText(value = "") {
