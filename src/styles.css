@@ -27583,6 +27583,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   cursor: pointer;
 }
 
+.tracking-page--soft-metal-preview .tracking-utility-icon-button:has(.theme-icon-img[src*="top-login.svg"]) {
+  margin-left: 4px;
+}
+
 .tracking-page--soft-metal-preview .tracking-utility-icon-button .theme-icon-img {
   width: 33px;
   height: 33px;
