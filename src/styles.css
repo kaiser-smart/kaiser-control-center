@@ -27866,7 +27866,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   overflow: hidden;
   gap: var(--space-xl);
   align-items: stretch;
-  padding: clamp(22px, 2.1vw, 30px);
+  padding: clamp(22px, 2.1vw, 25px);
 }
 
 .tracking-page--soft-metal-preview .module-detail::after {
