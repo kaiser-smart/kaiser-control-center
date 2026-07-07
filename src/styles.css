@@ -25491,6 +25491,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-hero {
   font-weight: 750;
 }
 
+.tracking-page--soft-metal-preview .module-detail p {
+  margin: 10px 0px 15px 0px;
+}
+
 .tracking-page--soft-metal-preview .module-detail__status,
 .tracking-page--soft-metal-preview .tracking-preview-actions {
   margin-top: var(--space-sm);
@@ -28020,7 +28024,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview .tracking-hero--map-expanded .module-detail__body > p {
   order: 4;
   max-width: 740px;
-  margin-top: var(--space-sm);
+  margin: 10px 0px 15px 0px;
   line-height: 1.34;
 }
 
