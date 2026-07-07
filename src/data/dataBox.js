@@ -4,7 +4,6 @@ export const DATA_BOX_ROUTE = "/datova-schranka";
 export const DATA_BOX_TABS = [
   { id: "overview", label: "Přehled", shortLabel: "Přehled" },
   { id: "messages", label: "Zprávy", shortLabel: "Zprávy" },
-  { id: "detail", label: "Detail zprávy", shortLabel: "Detail" },
   { id: "confirmations", label: "Čeká na potvrzení", shortLabel: "Potvrdit" },
-  { id: "settings", label: "Nastavení / Diagnostika", shortLabel: "Nastavení" }
+  { id: "settings", label: "Nastavení", shortLabel: "Nastavení" }
 ];

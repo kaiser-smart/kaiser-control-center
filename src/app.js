@@ -19150,10 +19150,9 @@ function dataBoxCleanHeaderSummary() {
   const metrics = dataBoxReceivedWorkMetrics();
   return `
     <div class="data-box-clean-summary" aria-label="Souhrn datové schránky">
-      <span>Nové: <strong>${escapeHtml(String(metrics.newCount))}</strong></span>
-      <span>Nevyřízené: <strong>${escapeHtml(String(metrics.unresolved))}</strong></span>
+      <span>Nové zprávy: <strong>${escapeHtml(String(metrics.newCount))}</strong></span>
+      <span>K vyřízení: <strong>${escapeHtml(String(metrics.unresolved))}</strong></span>
       <span>Čeká na potvrzení: <strong>${escapeHtml(String(metrics.waiting))}</strong></span>
-      <span>Chyby: <strong>${escapeHtml(String(metrics.errors))}</strong></span>
     </div>
   `;
 }
@@ -19314,13 +19313,6 @@ function dataBoxActivePanel(user) {
     `;
   }
 
-  if (activeTab === "detail") {
-    return `
-      ${dataBoxDetailWorkspacePanel()}
-      ${dataBoxMessageDetailPanel()}
-    `;
-  }
-
   if (activeTab === "confirmations") {
     return `
       ${dataBoxConfirmationsPanel(user)}
@@ -19401,9 +19393,8 @@ function dataBoxOverviewSummary() {
   const metrics = dataBoxReceivedWorkMetrics();
   const cards = [
     ["Nové zprávy", metrics.newCount, "new"],
-    ["Nevyřízené", metrics.unresolved, "unresolved"],
-    ["Čeká na potvrzení", metrics.waiting, "ai_waiting"],
-    ["Chyby / rizika", metrics.errors, "errors"]
+    ["K vyřízení", metrics.unresolved, "unresolved"],
+    ["Čeká na potvrzení", metrics.waiting, "ai_waiting"]
   ];
 
   return `
@@ -19418,26 +19409,52 @@ function dataBoxOverviewSummary() {
   `;
 }
 
+function dataBoxHumanActionFromAction(action = {}) {
+  const actionType = String(action.result?.recommendedAction || action.actionType || "review").toLowerCase();
+  const recipient = String(action.recipient || action.result?.recipient || "").trim();
+  const reason = String(action.bodyPreview || action.result?.reason || action.result?.summary || "").trim();
+
+  if (reason && !dataBoxSearchText(reason).includes("kdyz zprava")) {
+    return reason;
+  }
+
+  if (actionType === "archive") {
+    return "Tuhle zprávu pravděpodobně stačí archivovat.";
+  }
+
+  if (actionType === "email") {
+    return recipient ? `Doporučuji poslat na ${recipient}.` : "Doporučuji předat e-mailem po kontrole.";
+  }
+
+  if (actionType === "reply") {
+    return "Doporučuji připravit odpověď.";
+  }
+
+  return "Tady je potřeba ruční kontrola.";
+}
+
 function dataBoxMessageWorkSentence(message) {
   const action = dataBoxPrimaryAiBoostAction(message);
   if (action) {
-    const recipient = action.recipient || action.result?.recipient || "";
-    const label = dataBoxAiBoostActionLabel(action).toLowerCase();
-    return recipient ? `${label}: ${recipient}` : label;
+    return dataBoxHumanActionFromAction(action);
   }
-  return dataBoxMessageNextStep(message);
+  return dataBoxMessageNextStep(message)
+    .replace(/^Návrh:\s*/i, "")
+    .replace("Zahodit / neřešit", "Pravděpodobně stačí archivovat")
+    .replace("upozornit Radima přes schválený backend kanál. E-mail se z frontendu neposílá.", "zkontrolovat a předat Radimovi.");
 }
 
 function dataBoxMessageWorkRow(message, options = {}) {
   const actor = dataBoxMessageActor(message) || "Neznámý odesílatel";
   const subject = String(message.subject || message.title || "").trim() || "Bez předmětu";
-  const status = dataBoxWorkflowStatus(message);
   const priority = dataBoxMessagePriority(message);
-  const type = dataBoxMessageType(message);
   const deadline = dataBoxDeadlineInfo(message);
   const date = formatDateTime(dataBoxMessageTimestamp(message)) || "bez data";
   const mailbox = dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel);
-  const compact = Boolean(options.compact);
+  const badges = [
+    priority.id !== "normal" ? dataBoxBadge(priority.label, priority.tone) : "",
+    deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : ""
+  ].filter(Boolean).slice(0, 2).join("");
 
   return `
     <article class="data-box-work-row data-box-work-row--${escapeHtml(priority.tone)}">
@@ -19449,15 +19466,11 @@ function dataBoxMessageWorkRow(message, options = {}) {
         <h3>${escapeHtml(subject)}</h3>
         <p>${escapeHtml(dataBoxMessageWorkSentence(message))}</p>
         <div class="data-box-work-row__tags">
-          ${dataBoxBadge(type.label, type.id)}
-          ${dataBoxBadge(status.label, status.tone)}
-          ${dataBoxBadge(priority.label, priority.tone)}
-          ${deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : ""}
-          ${dataBoxCompanyBadgeMarkup(message)}
+          ${badges}
         </div>
       </div>
       <div class="data-box-work-row__side">
-        ${compact ? "" : `<span>${escapeHtml(mailbox)}</span>`}
+        <span>${escapeHtml(mailbox)}</span>
         <button class="primary-action" type="button" data-data-box-message-detail="${escapeHtml(message.id || "")}">Otevřít</button>
       </div>
     </article>
@@ -19482,8 +19495,8 @@ function dataBoxWorkQueue(title, rows, emptyText, options = {}) {
 
 function dataBoxOverviewPanel(user) {
   const openRows = dataBoxOpenWorkMessages();
-  const attention = openRows.filter(dataBoxNeedsAttention);
-  const aiPrepared = openRows.filter(dataBoxMessageNeedsAiBoostConfirmation);
+  const todayRows = openRows.filter((message) => !dataBoxMessageNeedsAiBoostConfirmation(message) && !dataBoxIsInformationalMessage(message)).slice(0, 5);
+  const aiPrepared = openRows.filter(dataBoxMessageNeedsAiBoostConfirmation).slice(0, 3);
   const informational = openRows.filter(dataBoxIsInformationalMessage);
 
   return `
@@ -19491,35 +19504,39 @@ function dataBoxOverviewPanel(user) {
       <div class="data-box-overview__head">
         <div>
           <h2 id="data-box-overview-title">Přehled</h2>
-          <p>Co přišlo, co je důležité, co čeká na potvrzení a co může jít stranou.</p>
+          <p>Tady je pět věcí, které má smysl řešit jako první.</p>
         </div>
         ${dataBoxHeaderActions(user)}
       </div>
       ${dataBoxOverviewSummary()}
-      <div class="data-box-overview__grid">
-        ${dataBoxWorkQueue("Vyžaduje pozornost", attention, "Teď tu není žádná urgentní zpráva.", { id: "data-box-attention", limit: 6 })}
-        ${dataBoxWorkQueue("AI připravila návrh", aiPrepared, "AI návrhy čekající na potvrzení tu nejsou.", { id: "data-box-ai-prepared", limit: 6 })}
-        ${dataBoxWorkQueue("Jen informativní / k archivaci", informational, "Žádné čistě informativní zprávy k archivaci.", { id: "data-box-info-archive", limit: 6, compact: true })}
+      <div class="data-box-overview__simple">
+        ${dataBoxWorkQueue("Vyřídit dnes", todayRows, "Teď tu není nic urgentního k vyřízení.", { id: "data-box-attention", limit: 5 })}
+        ${dataBoxOverviewConfirmations(aiPrepared)}
+        <section class="data-box-safe-aside" aria-labelledby="data-box-safe-aside-title">
+          <div>
+            <h2 id="data-box-safe-aside-title">Bezpečně stranou</h2>
+            <p>${escapeHtml(informational.length ? `${informational.length} zpráv vypadá jako informativní.` : "Žádná zpráva teď nevypadá jako čistě informativní.")}</p>
+          </div>
+          <button class="secondary-action" type="button" data-data-box-overview-filter="all">Zkontrolovat</button>
+        </section>
       </div>
     </section>
   `;
 }
 
-function dataBoxDetailWorkspacePanel() {
-  const rows = dataBoxOpenWorkMessages();
-  const selected = dataBoxSelectedPreviewMessage(rows);
-  if (!selected) {
-    return dataBoxMessageInbox("Zprávy", "received");
-  }
+function dataBoxOverviewConfirmations(actionsMessages = []) {
   return `
-    <section class="data-box-detail-workspace" aria-labelledby="data-box-detail-workspace-title">
-      <div class="data-box-detail-workspace__head">
-        <div>
-          <h2 id="data-box-detail-workspace-title">Detail zprávy</h2>
-          <p>Rozhodnutí, přílohy a bezpečné akce jsou až tady.</p>
-        </div>
+    <section class="data-box-work-queue data-box-work-queue--confirmations" aria-labelledby="data-box-overview-confirm-title">
+      <div class="data-box-work-queue__head">
+        <h2 id="data-box-overview-confirm-title">Čeká na moje potvrzení</h2>
+        <span>${escapeHtml(String(actionsMessages.length))}</span>
       </div>
-      ${dataBoxReadingPane(selected, selected.direction)}
+      <div class="data-box-confirmation-list">
+        ${actionsMessages.length ? actionsMessages.map((message) => {
+          const action = dataBoxPrimaryAiBoostAction(message);
+          return dataBoxConfirmationCard(action, { compact: true });
+        }).join("") : `<p class="data-box-work-empty">Nic nečeká na potvrzení.</p>`}
+      </div>
     </section>
   `;
 }
@@ -19534,23 +19551,43 @@ function dataBoxConfirmationsPanel(user) {
       <div class="data-box-panel__head">
         <div>
           <h2 id="data-box-confirmations-title">Čeká na potvrzení</h2>
-          <p>${actions.length} návrhů. Bez člověka se nic neodešle, nesmaže ani neprovede.</p>
+          <p>${actions.length} návrhů čeká na lidské rozhodnutí.</p>
         </div>
       </div>
       ${dataBoxState.aiBoostError ? `<div class="data-box-action-feedback data-box-action-feedback--error" role="alert">${escapeHtml(dataBoxState.aiBoostError)}</div>` : ""}
       ${dataBoxState.aiBoostMessage ? `<div class="data-box-action-feedback data-box-action-feedback--success" role="status">${escapeHtml(dataBoxState.aiBoostMessage)}</div>` : ""}
-      <div class="data-box-ai-boost-list">
-        ${actions.length ? actions.map(dataBoxAiBoostCard).join("") : `
+      <div class="data-box-confirmation-list">
+        ${actions.length ? actions.map((action) => dataBoxConfirmationCard(action)).join("") : `
           <div class="data-box-ai-boost-empty">
             <strong>Žádný návrh nečeká na potvrzení.</strong>
-            <span>Jakmile AI připraví e-mail, archivaci nebo odpověď, objeví se tady.</span>
+            <span>Jakmile bude potřeba ruční rozhodnutí, objeví se tady.</span>
           </div>
         `}
       </div>
-      ${dataBoxCanManageRules(user) && actions.length ? `
-        <p class="data-box-ai-boost-pilot-note">Hromadné potvrzení není výchozí akce. Nejprve projdi konkrétní návrhy.</p>
-      ` : ""}
     </section>
+  `;
+}
+
+function dataBoxConfirmationCard(action = {}, options = {}) {
+  const message = dataBoxAiBoostMessage(action);
+  const title = message?.subject || action.subject || "Datová zpráva";
+  const sentence = dataBoxHumanActionFromAction(action);
+  const canConfirm = dataBoxAiBoostCanConfirm(action);
+
+  return `
+    <article class="data-box-confirmation-card">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <p>${escapeHtml(sentence)}</p>
+      </div>
+      <div class="data-box-confirmation-card__actions">
+        <button class="secondary-link" type="button" data-data-box-ai-open="${escapeHtml(action.messageId || "")}">Otevřít</button>
+        ${canConfirm ? `
+          <button class="primary-action" type="button" data-data-box-ai-confirm="${escapeHtml(action.id || "")}" ${dataBoxState.aiBoostLoading ? "disabled" : ""}>Potvrdit jako vyřešené</button>
+        ` : ""}
+        <button class="secondary-link" type="button" data-data-box-ai-reject="${escapeHtml(action.id || "")}" ${dataBoxState.aiBoostLoading ? "disabled" : ""}>Zamítnout</button>
+      </div>
+    </article>
   `;
 }
 
@@ -19970,7 +20007,7 @@ function dataBoxPriorityBadge(priority) {
   return `
     <span
       class="data-box-priority data-box-priority--${escapeHtml(priority.tone)}"
-      title="Návrh priority podle dostupných metadat, nejde o právní závěr."
+      title="Orientační priorita podle obsahu zprávy, nejde o právní závěr."
     >
       ${escapeHtml(priority.label)}
     </span>
@@ -20215,7 +20252,7 @@ function dataBoxOperationalKpis(direction = "received") {
   const active = dataBoxState.messageFilters.quick || "all";
   const cards = [
     { label: "Nepřečtené", value: metrics.newCount, note: "Nové obálky", filter: "new", tone: "info" },
-    { label: "Čeká na potvrzení", value: metrics.aiWaiting, note: "AI návrhy", filter: "ai_waiting", tone: metrics.aiWaiting ? "urgent" : "muted" },
+    { label: "Čeká na potvrzení", value: metrics.aiWaiting, note: "Návrhy k rozhodnutí", filter: "ai_waiting", tone: metrics.aiWaiting ? "urgent" : "muted" },
     { label: direction === "sent" ? "Odeslané" : "Zpracované", value: metrics.sentOrDone, note: direction === "sent" ? "V seznamu" : "Vyřízené", filter: direction === "sent" ? "all" : "done", tone: "done" }
   ];
 
@@ -20427,7 +20464,7 @@ function dataBoxMessageFlags(message, options = {}) {
   const isDone = action ? dataBoxAiBoostIsDone(action) : ["done", "rejected", "failed"].includes(String(message.aiStatus || "").toLowerCase());
 
   if (isWaiting) {
-    flags.push({ id: "ai-waiting", label: "Čeká na potvrzení", tone: "waiting-pulse", title: "AI Boost připravil návrh a čeká na ruční potvrzení." });
+    flags.push({ id: "ai-waiting", label: "Čeká na potvrzení", tone: "waiting-pulse", title: "Návrh čeká na ruční potvrzení." });
   }
   if (action && (isWaiting || detailed || (!isDone && statusFlag))) {
     flags.push(dataBoxAiBoostActionFlag(action));
@@ -20542,31 +20579,25 @@ function dataBoxInboxIsEmptyState(notice, allRows) {
 function dataBoxMessageCard(message, selected) {
   const status = dataBoxWorkflowStatus(message);
   const readState = dataBoxTechnicalReadState(message);
-  const attachmentCount = dataBoxAttachmentCount(message);
   const deliveredAt = formatDateTime(dataBoxMessageTimestamp(message));
   const actorValue = dataBoxMessageActor(message);
   const actor = actorValue && actorValue !== "-" ? actorValue : "Neznámý odesílatel";
   const subject = String(message.subject || message.title || "").trim() || "Bez předmětu";
-  const attachmentLabel = attachmentCount ? `Příloha${attachmentCount > 1 ? ` ${attachmentCount}` : ""}` : "";
   const unread = readState.id === "new";
-  const companyBadge = dataBoxCompanyBadgeMarkup(message);
-  const bulkSelected = dataBoxBulkSelectionSet().has(String(message.id || ""));
   const priority = dataBoxMessagePriority(message);
-  const type = dataBoxMessageType(message);
   const deadline = dataBoxDeadlineInfo(message);
   const recommendedAction = dataBoxMessageWorkSentence(message);
+  const mailbox = dataBoxCompanyBadge(message).label || dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel);
+  const rowBadges = [
+    unread ? dataBoxBadge("Nové", "info") : "",
+    priority.id !== "normal" ? dataBoxBadge(priority.label, priority.tone) : "",
+    deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : "",
+    status.id === "error" ? dataBoxBadge("Problém", "error") : ""
+  ].filter(Boolean).slice(0, 2).join("");
 
   return `
-    <article class="data-box-message-card ${selected ? "data-box-message-card--selected" : ""} ${bulkSelected ? "data-box-message-card--bulk-selected" : ""} ${unread ? "data-box-message-card--unread" : ""}">
-      <label class="data-box-message-card__bulk" title="Vybrat zprávu pro hromadnou akci" aria-label="Vybrat zprávu">
-        <input
-          type="checkbox"
-          data-data-box-bulk-message="${escapeHtml(message.id)}"
-          ${bulkSelected ? "checked" : ""}
-          aria-label="Vybrat zprávu ${escapeHtml(subject)}"
-        >
-        <span></span>
-      </label>
+    <article class="data-box-message-card ${selected ? "data-box-message-card--selected" : ""} ${unread ? "data-box-message-card--unread" : ""}">
+      <span class="data-box-message-card__priority data-box-message-card__priority--${escapeHtml(priority.tone)}" aria-hidden="true"></span>
       <button
         class="data-box-message-card__select"
         type="button"
@@ -20574,21 +20605,15 @@ function dataBoxMessageCard(message, selected) {
         aria-pressed="${selected ? "true" : "false"}"
       >
         <span class="data-box-message-card__top">
-          ${unread ? `<span class="data-box-message-card__unread-dot" title="Nepřečtená zpráva" aria-label="Nepřečtená zpráva"></span>` : ""}
           <span class="data-box-message-card__actor">${escapeHtml(actor)}</span>
-          <span class="data-box-message-card__mailbox">${companyBadge}</span>
           <span class="data-box-message-card__date">${escapeHtml(deliveredAt || "-")}</span>
         </span>
         <span class="data-box-message-card__bottom">
           <span class="data-box-message-card__subject">${escapeHtml(subject)}</span>
+          <span class="data-box-message-card__mailbox">${escapeHtml(mailbox)}</span>
           <span class="data-box-message-card__action">${escapeHtml(recommendedAction)}</span>
           <span class="data-box-message-card__extras" aria-label="Stav a doporučení zprávy">
-            ${dataBoxMessageFlagsMarkup(message, { limit: 3 })}
-            ${dataBoxBadge(type.label, type.id)}
-            ${dataBoxBadge(status.label, status.tone)}
-            ${dataBoxPriorityBadge(priority)}
-            ${deadline.date ? dataBoxBadge(deadline.label, deadline.tone) : ""}
-            ${attachmentCount ? `<span class="data-box-message-card__attachment" title="${escapeHtml(attachmentLabel)}" aria-label="${escapeHtml(attachmentLabel)}">Příloha</span>` : ""}
+            ${rowBadges}
           </span>
         </span>
       </button>
@@ -20620,10 +20645,25 @@ function dataBoxMessageContentPreview(message) {
   return text || "Náhled není dostupný.";
 }
 
+function dataBoxMessageAiSummary(message) {
+  const summary = String(message?.latestAiEvaluation?.summary || message?.summary || "").trim();
+  if (summary) {
+    return summary.split(/\n+/).slice(0, 2).join(" ");
+  }
+
+  const preview = dataBoxMessageContentPreview(message);
+  if (!preview || preview === "Náhled není dostupný.") {
+    return "K dispozici je jen základní obálka zprávy. Nejprve otevři přílohy a ověř obsah.";
+  }
+
+  const trimmed = preview.replace(/\s+/g, " ").trim();
+  return trimmed.length > 220 ? `${trimmed.slice(0, 217)}...` : trimmed;
+}
+
 function dataBoxReadingPane(message, direction) {
   if (!message) {
     return `
-      <aside class="data-box-reading-pane" aria-label="Detail zprávy">
+      <aside class="data-box-reading-pane" aria-label="Detail">
         <div class="data-box-reading-pane__empty">
           <strong>Vyber zprávu</strong>
           <span>${escapeHtml(direction === "sent" ? "Detail odeslané zprávy se zobrazí tady." : "Detail přijaté zprávy se zobrazí tady.")}</span>
@@ -20769,27 +20809,12 @@ function dataBoxAiBoostStatusLabel(action = {}) {
 
 function dataBoxAiBoostRecommendationSection(message) {
   const action = dataBoxPrimaryAiBoostAction(message);
-  if (!action) {
-    return "";
-  }
-
-  const reason = String(action.bodyPreview || action.result?.reason || action.result?.summary || "").trim();
-  const recipient = String(action.recipient || action.result?.recipient || "").trim();
-  const confidence = Number(action.result?.confidence || 0);
-  const confidenceText = confidence ? ` · jistota ${Math.round(confidence * 100)} %` : "";
+  const recommendation = action ? dataBoxHumanActionFromAction(action) : dataBoxMessageWorkSentence(message);
 
   return `
-    <section class="data-box-reading-section data-box-reading-section--ai-boost">
-      <h4>AI Boost doporučuje</h4>
-      <p>
-        <strong>${escapeHtml(dataBoxAiBoostActionLabel(action))}</strong>
-        ${recipient ? ` · ${escapeHtml(recipient)}` : ""}
-        ${escapeHtml(confidenceText)}
-      </p>
-      ${reason ? `<p>${escapeHtml(reason)}</p>` : ""}
-      <div class="data-box-reading-pane__badges">
-        ${dataBoxAiBoostWorkTags(action).map((tag) => dataBoxBadge(tag.label, tag.tone)).join("")}
-      </div>
+    <section class="data-box-reading-section data-box-reading-section--next-step">
+      <h4>Doporučený další krok</h4>
+      <p>${escapeHtml(recommendation)}</p>
     </section>
   `;
 }
@@ -21102,9 +21127,7 @@ function dataBoxAiBoostEditForm(action = {}) {
 }
 
 function dataBoxAiBoostActionSentence(action = {}) {
-  const message = dataBoxAiBoostMessage(action);
-  const condition = message?.subject || action.subject || dataBoxAiBoostRuleConditionLabel(action) || "této zprávě";
-  return `Když zpráva odpovídá „${condition}“, AI Boost navrhne „${dataBoxAiBoostActionLabel(action)}“. Nic se neodešle ani nesmaže bez potvrzení.`;
+  return dataBoxHumanActionFromAction(action);
 }
 
 function dataBoxAiBoostCard(action = {}) {
@@ -21374,7 +21397,6 @@ function dataBoxMessageInbox(title, direction, view = "") {
         </div>
         ${dataBoxInboxSearch()}
         ${dataBoxQuickFilters()}
-        ${dataBoxBulkArchiveToolbar(direction, view)}
         <div class="data-box-message-list" aria-label="${escapeHtml(sectionTitle)}">
           ${notice ? dataBoxInboxNoticeMarkup(notice) : visibleRows.map((message) => dataBoxMessageCard(message, String(message.id) === activeMessageId)).join("")}
         </div>
@@ -21479,37 +21501,38 @@ function dataBoxMessageSafeActions(message, options = {}) {
     return "";
   }
 
-  const includeDetail = Boolean(options.includeDetail);
   const id = escapeHtml(message.id || "");
   const loading = dataBoxState.actionLoading;
   const archived = dataBoxWorkflowStatus(message).id === "archived";
+  const action = dataBoxPrimaryAiBoostAction(message);
+  const waitingAction = action && dataBoxAiBoostIsWaiting(action);
+  const canConfirm = waitingAction && dataBoxAiBoostCanConfirm(action);
+  const priority = dataBoxMessagePriority(message);
+  const primaryLabel = canConfirm
+    ? "Potvrdit návrh"
+    : (priority.id === "urgent" || priority.id === "legal" ? "Předat" : "Vyřídit");
+  const primaryMarkup = canConfirm ? `
+    <button class="primary-action" type="button" data-data-box-ai-confirm="${escapeHtml(action.id || "")}" ${dataBoxState.aiBoostLoading ? "disabled" : ""}>
+      ${escapeHtml(primaryLabel)}
+    </button>
+  ` : `
+    <button class="primary-action" type="button" data-data-box-message-${priority.id === "urgent" || priority.id === "legal" ? "email" : "reply"}="${id}" ${loading === "email" || loading === "reply" ? "disabled" : ""}>
+      ${escapeHtml(primaryLabel)}
+    </button>
+  `;
 
   return `
     <div class="data-box-message-safe-actions" aria-label="Základní akce zprávy">
-      ${dataBoxMessageAiDecisionActions(message)}
-      ${includeDetail ? `
-        <button class="secondary-link" type="button" data-data-box-message-detail="${id}">
-          Otevřít detail
-        </button>
-      ` : ""}
-      <button class="secondary-link" type="button" data-data-box-message-reply="${id}">
-        Odpovědět
-      </button>
-      <button
-        class="secondary-link"
-        type="button"
-        data-data-box-message-email="${id}"
-        ${loading === "email" ? "disabled" : ""}
-        title="E-mail se odešle až po potvrzení uživatele."
-      >
-        ${loading === "email" ? "Odesílám..." : "Poslat e-mailem"}
-      </button>
+      ${primaryMarkup}
+      ${waitingAction ? `
+        <button class="secondary-link" type="button" data-data-box-ai-edit="${escapeHtml(action.id || "")}">Upravit</button>
+        <button class="secondary-link" type="button" data-data-box-ai-reject="${escapeHtml(action.id || "")}" ${dataBoxState.aiBoostLoading ? "disabled" : ""}>Zamítnout</button>
+      ` : `<button class="secondary-link" type="button" data-data-box-message-reply="${id}">Upravit</button>`}
       <button
         class="secondary-link"
         type="button"
         data-data-box-message-archive="${id}"
         ${loading === "archive" || archived ? "disabled" : ""}
-        title="Archivace se provede až po potvrzení uživatele."
       >
         ${archived ? "Archivováno" : loading === "archive" ? "Archivuji..." : "Archivovat"}
       </button>
@@ -21729,8 +21752,8 @@ function dataBoxAttachmentErrorMarkup(attachment) {
 
   return `
     <p class="data-box-attachment-error" role="alert">
-      <strong>Přílohu se nepodařilo otevřít.</strong>
-      <span>Zkontrolujte, zda byla příloha správně stažena z datové schránky.</span>
+      <strong>Přílohu se nepodařilo načíst.</strong>
+      <span>Zkontroluj, zda byla příloha správně stažena z datové schránky.</span>
     </p>
   `;
 }
@@ -21743,7 +21766,7 @@ function dataBoxAttachmentNoticeMarkup() {
     return `
       <p class="data-box-attachment-error" role="alert">
         <strong>${escapeHtml(error)}</strong>
-        <span>Zkontrolujte, zda byla příloha správně stažena z datové schránky.</span>
+        <span>Zkontroluj, zda byla příloha správně stažena z datové schránky.</span>
       </p>
     `;
   }
@@ -21759,6 +21782,7 @@ function dataBoxAttachmentActionMarkup(attachment) {
   const url = dataBoxAttachmentOpenUrl(attachment);
   const filename = attachment?.filename || "priloha";
   const contentType = attachment?.contentType || "";
+  const technicalReason = attachment?.error || attachment?.errorMessage || attachment?.status || "Chybí platný odkaz pro otevření přílohy.";
 
   if (url && !dataBoxAttachmentHasError(attachment)) {
     return `
@@ -21782,10 +21806,17 @@ function dataBoxAttachmentActionMarkup(attachment) {
   }
 
   return `
-    <button class="primary-action data-box-attachment-open" type="button" disabled>
-      Otevřít nyní
-    </button>
-    <small>Příloha nemá platný odkaz pro bezpečné otevření.</small>
+    <div class="data-box-attachment-problem" role="alert">
+      <strong>Přílohu se nepodařilo načíst.</strong>
+      <div class="data-box-attachment-problem__actions">
+        <button class="secondary-link" type="button" data-data-box-message-detail="${escapeHtml(dataBoxState.selectedMessageId || "")}">Zkusit znovu načíst přílohu</button>
+        <details>
+          <summary>Zobrazit technický důvod</summary>
+          <p>${escapeHtml(technicalReason)}</p>
+        </details>
+        <button class="secondary-link" type="button" data-data-box-attachment-problem>Označit jako problém</button>
+      </div>
+    </div>
   `;
 }
 
@@ -21824,8 +21855,17 @@ function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
             <em class="data-box-attachment-note">Přílohy zatím nejdou otevřít.</em>
           </div>
           <div class="data-box-attachment-actions">
-            <button class="primary-action data-box-attachment-open" type="button" disabled>Otevřít nyní</button>
-            <small>Platný odkaz pro otevření není k dispozici.</small>
+            <div class="data-box-attachment-problem" role="alert">
+              <strong>Přílohu se nepodařilo načíst.</strong>
+              <div class="data-box-attachment-problem__actions">
+                <button class="secondary-link" type="button" data-data-box-message-detail="${escapeHtml(dataBoxState.selectedMessageId || "")}">Zkusit znovu načíst přílohu</button>
+                <details>
+                  <summary>Zobrazit technický důvod</summary>
+                  <p>U zprávy vidíme jen počet příloh. Chybí platný odkaz i název souboru.</p>
+                </details>
+                <button class="secondary-link" type="button" data-data-box-attachment-problem>Označit jako problém</button>
+              </div>
+            </div>
           </div>
         </li>
       `;
@@ -22080,87 +22120,34 @@ function dataBoxMessageDetailOverlayMarkup() {
     const actorLabel = message.direction === "sent" ? "Příjemce" : "Odesílatel";
     const actorValue = dataBoxMessageActor(message);
     const deadline = dataBoxDeadlineInfo(message);
-    const workflow = dataBoxWorkflowStatus(message);
-    const readState = dataBoxTechnicalReadState(message);
-    const priority = dataBoxMessagePriority(message);
-    const messageType = dataBoxMessageType(message);
     const mailboxLabel = dataBoxDisplayName(message.dataBoxId, message.dataBoxLabel);
+    const deliveredAt = formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt);
 
     content = `
       <div class="data-box-detail-modal__body">
         <div class="data-box-detail-modal__main">
-        <section class="data-box-detail-summary">
-          <span>Shrnutí zprávy</span>
-          <strong>${escapeHtml(actorValue || "neuvedeno")}</strong>
-          <h3>${escapeHtml(message.subject || "(bez předmětu)")}</h3>
-          <p class="data-box-detail-summary__context">Schránka: <strong>${escapeHtml(mailboxLabel)}</strong></p>
-          <p>${escapeHtml(formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt) || "bez data")} · ${escapeHtml(workflow.label)} · ${escapeHtml(readState.label)}</p>
-          ${dataBoxMessageFlagsMarkup(message, { limit: 6, detailed: true })}
-        </section>
-        ${dataBoxMessageSafeActions(message)}
-        ${dataBoxActionFeedbackMarkup()}
-        ${dataBoxAiBoostRecommendationSection(message)}
-        ${dataBoxAttachmentsSection(message)}
-        <div class="data-box-detail-subject">
-          <span>Obsah zprávy</span>
-          <strong>${escapeHtml(dataBoxMessageContentPreview(message))}</strong>
-        </div>
-        <section class="data-box-reading-section data-box-reading-section--history">
-          <h4>Historie / stav</h4>
-          <div class="data-box-detail-grid">
-            ${dataBoxDetailField("Stav", workflow.label)}
-            ${dataBoxDetailField("Přečtení", readState.label)}
-            ${dataBoxDetailField("Lhůta", deadline.date ? deadline.label : "bez lhůty")}
-            ${dataBoxDetailField("Odpovědná osoba", dataBoxMessageAssigneeLabel(message))}
-          </div>
-        </section>
-        <details class="data-box-technical-details">
-          <summary>Diagnostika zprávy</summary>
-          <div class="data-box-detail-grid">
-            ${dataBoxDetailField("Směr", dataBoxDirectionLabel(message.direction))}
-            ${dataBoxDetailField("Schránka", mailboxLabel)}
-            ${dataBoxDetailField(actorLabel, actorValue)}
-            ${dataBoxDetailField("Stav", workflow.label)}
-            ${dataBoxDetailField("Přečtení", readState.label)}
-            ${dataBoxDetailField("Priorita", priority.label)}
-            ${dataBoxDetailField("Typ zprávy", messageType.label)}
-            ${dataBoxDetailField("Doručeno", formatDateTime(message.deliveredAt || message.acceptedAt || message.storedAt))}
-            ${dataBoxDetailField("Přečteno", formatDateTime(message.readAt))}
-            ${dataBoxDetailField("ID zprávy", message.id)}
-          </div>
-        </details>
-        <div class="data-box-detail-columns">
-          <section>
-            <h3>Doporučená akce AI</h3>
-            <p>${escapeHtml(dataBoxMessageNextStep(message))}</p>
-            ${dataBoxAiEvaluationDetail(message.latestAiEvaluation) ? `<p>${escapeHtml(dataBoxAiEvaluationDetail(message.latestAiEvaluation))}</p>` : ""}
-            ${message.latestAiEvaluation?.summary ? `<p>${escapeHtml(message.latestAiEvaluation.summary)}</p>` : ""}
-            ${message.latestAiEvaluation?.suggestedAction ? `<p>${escapeHtml(message.latestAiEvaluation.suggestedAction)}</p>` : ""}
+          <section class="data-box-detail-summary">
+            <span>${escapeHtml(mailboxLabel)}</span>
+            <h3>${escapeHtml(message.subject || "(bez předmětu)")}</h3>
+            <p class="data-box-detail-summary__context">
+              ${escapeHtml(actorLabel)}: <strong>${escapeHtml(actorValue || "neuvedeno")}</strong>
+              · ${escapeHtml(deliveredAt || "bez data")}
+              ${deadline.date ? ` · ${escapeHtml(deadline.label)}` : ""}
+            </p>
           </section>
-          <section>
-            <h3>Interní poznámky</h3>
-            <p>Bez interních poznámek v dostupných metadatech.</p>
+          <section class="data-box-reading-section data-box-reading-section--summary">
+            <h4>Shrnutí</h4>
+            <p>${escapeHtml(dataBoxMessageAiSummary(message))}</p>
           </section>
-          <section>
-            <h3>Typické úkony</h3>
-            <p>Zkontrolovat lhůtu, projít přílohy a ověřit odpovědnou osobu.</p>
+          ${dataBoxAiBoostRecommendationSection(message)}
+          ${dataBoxAttachmentsSection(message)}
+          <section class="data-box-reading-section data-box-reading-section--actions">
+            <h4>Akce</h4>
+            ${dataBoxMessageSafeActions(message)}
+            ${dataBoxActionFeedbackMarkup()}
           </section>
+          ${dataBoxReplyDraftPanel(message)}
         </div>
-        ${dataBoxReplyDraftPanel(message)}
-      </div>
-      </div>
-      <div class="data-box-detail-actions" aria-label="Akce detailu zprávy">
-        <div>
-          <strong>Akce jen po potvrzení</strong>
-          <p>E-mail, archivace i odpověď spouští server až po potvrzení uživatele.</p>
-        </div>
-        <button
-          class="secondary-link"
-          type="button"
-          data-data-box-message-reply="${escapeHtml(message.id)}"
-        >
-          Odpovědět
-        </button>
       </div>
     `;
   } else {
@@ -22190,7 +22177,7 @@ function dataBoxMessageDetailOverlayMarkup() {
         <div class="data-box-detail-modal__head">
           <div>
             <span>Datová zpráva</span>
-            <h2 id="data-box-message-detail-title">Detail zprávy</h2>
+            <h2 id="data-box-message-detail-title">Detail</h2>
           </div>
           <button class="secondary-link" type="button" data-data-box-message-detail-close>Zavřít</button>
         </div>
@@ -22282,14 +22269,6 @@ function dataBoxRulesAutomation(user) {
 
 function dataBoxPage(moduleItem, user) {
   ensureDataBoxData();
-  const hasMessages = dataBoxState.messages.length > 0;
-  const feedbackBox = hasMessages
-    ? moduleFeedbackBoxFor(moduleItem, user, {
-      moduleId: DATA_BOX_MODULE_KEY,
-      moduleName: "Datová schránka",
-      placeholder: "Např. chybí filtr podle odesílatele, priorita, vazba na zákazníka nebo typ návrhu vyřízení..."
-    })
-    : "";
 
   return `
     <main class="app-shell module-page module-theme-scope data-box-page" ${moduleThemeStyleAttribute()}>
@@ -22308,7 +22287,6 @@ function dataBoxPage(moduleItem, user) {
 
       ${dataBoxTabs(user)}
       ${dataBoxActivePanel(user)}
-      ${feedbackBox}
     </main>
   `;
 }
@@ -29316,7 +29294,7 @@ async function loadDataBoxMessageDetail(messageId, options = {}) {
   } catch (error) {
     if (dataBoxState.selectedMessageId === id) {
       dataBoxState.selectedMessage = null;
-      dataBoxState.detailError = error?.payload?.error || error?.message || "Detail zprávy se teď nepodařilo načíst.";
+      dataBoxState.detailError = error?.payload?.error || error?.message || "Zprávu se teď nepodařilo načíst.";
       dataBoxState.replyDraftError = openReply ? "Návrh odpovědi se nepodařilo připravit." : "";
     }
   } finally {
@@ -29858,7 +29836,7 @@ function openDataBoxAiBoostMessage(messageId) {
   if (message?.dataBoxId) {
     dataBoxState.selectedDataBoxId = message.dataBoxId;
   }
-  dataBoxState.activeTab = "detail";
+  dataBoxState.activeTab = "messages";
   void loadDataBoxMessageDetail(id);
 }
 
@@ -29886,7 +29864,7 @@ async function loadDataBoxMessageInlineDetail(messageId) {
   } catch (error) {
     if (dataBoxState.selectedMessageId === id) {
       dataBoxState.selectedMessage = null;
-      dataBoxState.detailError = error?.payload?.error || error?.message || "Detail zprávy se teď nepodařilo načíst.";
+      dataBoxState.detailError = error?.payload?.error || error?.message || "Zprávu se teď nepodařilo načíst.";
     }
   } finally {
     if (dataBoxState.selectedMessageId === id) {
@@ -36692,6 +36670,14 @@ document.addEventListener("click", async (event) => {
   if (dataBoxAttachmentOpen) {
     event.preventDefault();
     void openDataBoxAttachment(dataBoxAttachmentOpen);
+    return;
+  }
+
+  const dataBoxAttachmentProblem = event.target.closest("[data-data-box-attachment-problem]");
+  if (dataBoxAttachmentProblem) {
+    dataBoxState.attachmentNotice = "";
+    dataBoxState.attachmentError = "Příloha je označená jako problém k ruční kontrole.";
+    render();
     return;
   }
 
