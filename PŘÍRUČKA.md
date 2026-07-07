@@ -204,6 +204,53 @@ Pokud produkci ověřil, musí napsat:
 Pokud Codex/vývojář práci dokončí bez zveřejnění, musí se vždy zeptat:
 `Mohu zveřejnit?`
 
+### 7A. Tvrdá ochrana produkční verze a rozpracovaných modulů
+
+Před každým nasazením do produkce musí Codex/vývojář zastavit a ověřit:
+
+- aktuální lokální branch a commit
+- aktuální produkční `buildMeta` z produkční URL
+- jaký commit, branch a verzi se chystá nasadit
+- zda nasazení zachová všechny změny, které už v produkci jsou
+- zda nasazení nepřepíše práci z jiného modulu, jiné větve nebo jiného Codex běhu
+- zda je repo čisté, nebo přesně které soubory jsou změněné
+- zda ve stejný den nevznikly paralelní práce na jiných větvích
+
+Před každým produkčním deployem musí Codex/vývojář napsat přesný potvrzovací blok:
+
+```text
+Deployuji commit <commit> z branch <branch>.
+Aktuální produkce je <version> / <commit> / <branch>.
+Tento deploy zachová tyto již nasazené změny: <seznam>.
+Tento deploy přepíše tyto produkční změny: <seznam nebo NE>.
+Mohu nasadit?
+```
+
+Bez výslovného potvrzení Radima/Martina se produkční deploy nesmí spustit.
+
+Pokud je aktuální produkce na jiné větvi, novějším commitu nebo obsahuje změny mimo aktuální úkol, musí Codex/vývojář nasazení zastavit a nejdřív navrhnout bezpečný postup sloučení nebo samostatného publish plánu.
+
+Rollback není běžný deploy. Před rollbackem musí Codex/vývojář napsat:
+
+```text
+Rollback vrátí produkci z <aktuální verze/commit/branch> na <cílová verze/commit/branch>.
+Tím se dočasně ztratí tyto produkční změny: <seznam>.
+Důvod rollbacku: <důvod>.
+Mohu provést rollback?
+```
+
+Rollback bez výslovného potvrzení Radima/Martina je zakázaný.
+
+Pokud se ve stejný den pracuje na více modulech, musí každý deploy obsahovat kontrolu dopadu na ostatní moduly. Nestačí, že build prošel. Zdroj pravdy je produkční `buildMeta`, aktuální git historie a konkrétní ověření dotčeného UI/API.
+
+Pokud Codex/vývojář zjistí, že produkce byla přepsaná jinou větví nebo starším commitem, nesmí pokračovat v dalších úpravách. Musí nejdřív:
+
+- popsat přesný stav produkce
+- určit poslední bezpečný commit
+- určit, které změny by se obnovou ztratily
+- navrhnout bezpečnou obnovu bez hard resetu a bez force push
+- vyžádat potvrzení Radima/Martina
+
 ### 8. Pravdivost
 
 Codex/vývojář nesmí psát, že něco testoval, pokud to netestoval.
