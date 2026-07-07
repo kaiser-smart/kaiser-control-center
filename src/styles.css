@@ -25283,6 +25283,9 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --text-main: #1b2329;
   --text-hero-title: var(--brand-accent);
   --text-muted: color-mix(in srgb, var(--text-main) 68%, transparent);
+  --text-muted-strong: color-mix(in srgb, var(--text-main) 78%, transparent);
+  --panel-title: var(--text-main);
+  --panel-description: var(--text-muted-strong);
   --border-soft: rgba(78, 92, 100, 0.24);
   --border-highlight: rgba(255, 255, 255, 0.76);
   --highlight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -25323,6 +25326,19 @@ body[data-theme="light"] .tracking-page--soft-metal-preview,
   --state-neutral-bg: color-mix(in srgb, var(--tracking-graphite) 8%, transparent);
   --state-neutral-border: color-mix(in srgb, var(--tracking-graphite) 22%, var(--border-soft));
   --state-neutral-text: var(--text-muted);
+  --chip-height: 30px;
+  --chip-padding-x: 12px;
+  --chip-padding-y: 5px;
+  --chip-radius: 999px;
+  --chip-bg: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-soft));
+  --chip-border: color-mix(in srgb, var(--border-soft) 88%, transparent);
+  --chip-text: var(--text-muted-strong);
+  --schema-chip-bg: var(--chip-bg);
+  --schema-chip-border: var(--chip-border);
+  --schema-chip-text: var(--chip-text);
+  --endpoint-chip-bg: color-mix(in srgb, var(--brand-accent) 9%, var(--surface-raised));
+  --endpoint-chip-border: color-mix(in srgb, var(--brand-accent) 32%, var(--border-soft));
+  --endpoint-chip-text: var(--text-main);
   --tracking-accent-soft: var(--state-success-bg);
   --tracking-accent-border: var(--state-success-border);
   width: min(1360px, calc(100% - 28px));
@@ -26635,6 +26651,9 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --text-main: #edf3f6;
   --text-hero-title: var(--brand-accent);
   --text-muted: color-mix(in srgb, var(--text-main) 72%, transparent);
+  --text-muted-strong: color-mix(in srgb, var(--text-main) 84%, transparent);
+  --panel-title: color-mix(in srgb, var(--text-main) 96%, #ffffff);
+  --panel-description: var(--text-muted-strong);
   --border-soft: rgba(177, 194, 207, 0.16);
   --border-highlight: rgba(255, 255, 255, 0.085);
   --highlight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.085);
@@ -26675,6 +26694,15 @@ body[data-theme="dark"] .tracking-page--soft-metal-preview {
   --state-neutral-bg: color-mix(in srgb, var(--tracking-graphite) 9%, rgba(14, 21, 30, 0.94));
   --state-neutral-border: color-mix(in srgb, var(--tracking-graphite) 21%, rgba(177, 194, 207, 0.15));
   --state-neutral-text: var(--text-muted);
+  --chip-bg: color-mix(in srgb, var(--surface-inset) 72%, var(--surface-raised));
+  --chip-border: color-mix(in srgb, var(--tracking-bluegrey) 28%, var(--border-soft));
+  --chip-text: color-mix(in srgb, var(--text-main) 88%, transparent);
+  --schema-chip-bg: var(--chip-bg);
+  --schema-chip-border: var(--chip-border);
+  --schema-chip-text: var(--chip-text);
+  --endpoint-chip-bg: color-mix(in srgb, var(--brand-accent) 10%, var(--surface-inset));
+  --endpoint-chip-border: color-mix(in srgb, var(--brand-accent) 34%, var(--border-soft));
+  --endpoint-chip-text: color-mix(in srgb, var(--text-main) 94%, transparent);
   --tracking-accent-soft: var(--state-success-bg);
   --tracking-accent-border: var(--state-success-border);
   --sidebar-button-bg: color-mix(in srgb, var(--surface-control) 46%, transparent);
@@ -28505,6 +28533,115 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   border-color: var(--state-success-border);
   background: var(--state-success-bg);
   color: var(--state-success-text);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-section__head h2,
+.tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-integration-grid h3,
+.tracking-page--soft-metal-preview .tracking-icon-spec__head h3,
+.tracking-page--soft-metal-preview .tracking-icon-spec__grid h4,
+.tracking-page--soft-metal-preview #tracking-rules .absence-panel__head h2,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail h3,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-audit h4,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-runs h4,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-grid strong,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-empty strong,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail-grid strong,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table td strong {
+  color: var(--panel-title);
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-section__head p,
+.tracking-page--soft-metal-preview .tracking-demo-api-note span,
+.tracking-page--soft-metal-preview .tracking-icon-spec__head p,
+.tracking-page--soft-metal-preview .tracking-icon-spec__head span,
+.tracking-page--soft-metal-preview .tracking-icon-spec__files span,
+.tracking-page--soft-metal-preview #tracking-rules .absence-panel__head p,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail p,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-grid span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-empty,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-empty small,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail-grid span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-audit li span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-audit li small,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-runs li span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-runs li small,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table td,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-table td small,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-search-count {
+  color: var(--panel-description);
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-api-note strong,
+.tracking-page--soft-metal-preview .tracking-icon-spec__files strong,
+.tracking-page--soft-metal-preview .tracking-icon-spec code,
+.tracking-page--soft-metal-preview .tracking-icon-spec__mapping span {
+  color: var(--panel-title);
+}
+
+.tracking-page--soft-metal-preview .tracking-field-chips {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.tracking-page--soft-metal-preview .tracking-field-chips span,
+.tracking-page--soft-metal-preview .tracking-icon-spec__head > span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-chip,
+.tracking-page--soft-metal-preview #tracking-rules .employee-card-status,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-readonly {
+  display: inline-flex;
+  box-sizing: border-box;
+  min-height: var(--chip-height);
+  align-items: center;
+  justify-content: center;
+  padding: var(--chip-padding-y) var(--chip-padding-x);
+  border: 1px solid var(--schema-chip-border);
+  border-radius: var(--chip-radius);
+  background: var(--schema-chip-bg);
+  color: var(--schema-chip-text);
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.18;
+  text-align: center;
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-integration-grid article:first-child .tracking-field-chips span,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-endpoints code {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  min-height: var(--chip-height);
+  align-items: center;
+  justify-content: center;
+  padding: var(--chip-padding-y) var(--chip-padding-x);
+  border: 1px solid var(--endpoint-chip-border);
+  border-radius: var(--chip-radius);
+  background: var(--endpoint-chip-bg);
+  color: var(--endpoint-chip-text);
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.18;
+  text-align: left;
+  box-shadow: none;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec__files li,
+.tracking-page--soft-metal-preview .tracking-icon-spec__mapping,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-detail-grid article,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-json-grid pre,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-audit li,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-runs li {
+  border-color: var(--chip-border);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-inset));
+}
+
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-status-chip,
+.tracking-page--soft-metal-preview #tracking-rules .employee-card-status,
+.tracking-page--soft-metal-preview #tracking-rules .module-rules-readonly {
+  white-space: nowrap;
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker {
