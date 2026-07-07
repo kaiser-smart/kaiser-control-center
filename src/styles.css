@@ -27552,7 +27552,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview .tracking-utility-shortcuts {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 1px;
   order: 4;
 }
 
@@ -27601,7 +27601,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 
 .tracking-page--soft-metal-preview .tracking-utility-icon-button:hover .theme-icon-img,
 .tracking-page--soft-metal-preview .tracking-utility-icon-button:focus-visible .theme-icon-img {
-  filter: var(--sidebar-button-hover-icon-filter);
+  filter: var(--icon-filter-green);
   opacity: var(--icon-opacity-active);
 }
 
