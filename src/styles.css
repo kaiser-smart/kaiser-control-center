@@ -16888,6 +16888,122 @@ body:has(.data-box-page) {
   color: #991b1b;
 }
 
+.employee-card-accordion,
+.employee-card-inline-details {
+  min-width: 0;
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
+}
+
+.employee-card-accordion > summary,
+.employee-card-inline-details > summary {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  color: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+  list-style: none;
+}
+
+.employee-card-accordion > summary::-webkit-details-marker,
+.employee-card-inline-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.employee-card-accordion > summary::after,
+.employee-card-inline-details > summary::after {
+  flex: 0 0 auto;
+  color: var(--muted);
+  content: "+";
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.employee-card-accordion[open] > summary::after,
+.employee-card-inline-details[open] > summary::after {
+  content: "-";
+}
+
+.employee-card-accordion summary span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.employee-card-accordion summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-card-accordion summary small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.employee-card-accordion__body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.employee-card-accordion__body > .employee-card-section {
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.employee-card-inline-details {
+  grid-column: 1 / -1;
+  box-shadow: none;
+  background: #fbfdf9;
+}
+
+.employee-card-inline-details > summary {
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--kaiser-green-dark);
+  font-size: 0.9rem;
+}
+
+.employee-card-inline-details .employee-card-fields {
+  padding: 0 12px 12px;
+}
+
+.employee-card-operations {
+  display: grid;
+  gap: 10px;
+}
+
+.employee-card-operations__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px 0;
+}
+
+.employee-card-operations__head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.employee-card-operations__head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .employee-card-request-link {
   justify-self: end;
   min-height: 34px;
@@ -16955,59 +17071,104 @@ body:has(.data-box-page) {
 
 .employee-medical-exam-overview {
   display: grid;
-  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
   gap: 12px;
-  margin-bottom: 2px;
 }
 
-.employee-medical-exam-overview article {
+.employee-medical-exam-summary-card {
+  display: grid;
+  gap: 14px;
   min-width: 0;
+  padding: 16px;
   border: 1px solid #dfe8d8;
   border-radius: 8px;
   background: #ffffff;
 }
 
-.employee-medical-exam-overview__main,
-.employee-medical-exam-overview__rule,
-.employee-medical-exam-alert,
-.employee-medical-exam-automation {
-  padding: 14px;
-}
-
-.employee-medical-exam-overview__main {
+.employee-medical-exam-summary-card__head {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  background: #f7fbf3;
 }
 
-.employee-medical-exam-overview__main div,
-.employee-medical-exam-overview__rule,
-.employee-medical-exam-automation {
+.employee-medical-exam-summary-card__head div {
   display: grid;
-  gap: 6px;
+  min-width: 0;
+  gap: 4px;
 }
 
-.employee-medical-exam-overview__main span,
-.employee-medical-exam-overview__rule > span,
-.employee-medical-exam-automation > span {
+.employee-medical-exam-summary-card__head span,
+.employee-medical-exam-facts dt,
+.employee-card-technical-list span {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.employee-medical-exam-overview__main strong {
+.employee-medical-exam-summary-card__head strong {
   color: var(--ink);
-  font-size: 1.7rem;
-  line-height: 1.05;
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+  line-height: 1.1;
 }
 
-.employee-medical-exam-overview__rule strong {
+.employee-medical-exam-summary-card p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.employee-medical-exam-facts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.employee-medical-exam-facts div,
+.employee-card-technical-list div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #f8fbf4;
+}
+
+.employee-medical-exam-facts dd {
+  overflow: hidden;
+  margin: 0;
   color: var(--ink);
-  font-size: 1rem;
-  line-height: 1.2;
+  font-weight: 900;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+}
+
+.employee-medical-exam-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.employee-medical-exam-summary-actions .primary-action,
+.employee-medical-exam-summary-actions .secondary-link {
+  min-height: 42px;
+  text-decoration: none;
+}
+
+.employee-card-technical-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.employee-card-technical-list strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.3;
 }
 
 .employee-medical-exam-rule-row {
@@ -19519,13 +19680,17 @@ body:has(.absence-page--employee-card) {
 .absence-page .module-rules-endpoints code,
 .absence-page .employee-card-header,
 .absence-page .employee-card-section,
+.absence-page .employee-card-accordion,
+.absence-page .employee-card-inline-details,
 .absence-page .employee-card-kpi,
 .absence-page .absence-approval-card,
 .absence-page .absence-approval-card__details,
 .absence-page .employee-vacation-overview,
 .absence-page .employee-vacation-overview__stats span,
 .absence-page .employee-card-readonly,
-.absence-page .employee-medical-exam-overview article,
+.absence-page .employee-medical-exam-summary-card,
+.absence-page .employee-medical-exam-facts div,
+.absence-page .employee-card-technical-list div,
 .absence-page .employee-medical-exam-alert,
 .absence-page .employee-medical-exam-note,
 .absence-page .employee-medical-exam-pdf,
@@ -19547,6 +19712,9 @@ body:has(.absence-page--employee-card) {
 .absence-page .module-rules-endpoints code,
 .absence-page .employee-vacation-overview,
 .absence-page .employee-card-readonly,
+.absence-page .employee-card-inline-details,
+.absence-page .employee-medical-exam-facts div,
+.absence-page .employee-card-technical-list div,
 .absence-page .employee-medical-exam-note,
 .absence-page .employee-card-document-types span,
 .absence-page .employee-document-upload-form,
@@ -19568,9 +19736,10 @@ body:has(.absence-page--employee-card) {
 .absence-page .absence-approval-card,
 .absence-page .employee-card-header,
 .absence-page .employee-card-section,
+.absence-page .employee-card-accordion,
 .absence-page .employee-card-kpi,
 .absence-page .employee-vacation-overview__stats span,
-.absence-page .employee-medical-exam-overview article,
+.absence-page .employee-medical-exam-summary-card,
 .absence-page .employee-medical-exam-pdf {
   background: var(--color-card);
 }
@@ -21405,7 +21574,9 @@ body:has(.absence-page--employee-card) {
   }
 
   .employee-hr-profile-groups,
-  .employee-hr-profile-group .employee-card-fields {
+  .employee-hr-profile-group .employee-card-fields,
+  .employee-medical-exam-facts,
+  .employee-card-technical-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -21425,6 +21596,8 @@ body:has(.absence-page--employee-card) {
   .employee-hr-profile-groups,
   .employee-hr-profile-group .employee-card-fields,
   .employee-pinya-preview-summary,
+  .employee-medical-exam-facts,
+  .employee-card-technical-list,
   .employee-medical-exam-overview,
   .employee-work-history-form,
   .employee-medical-exam-form .employee-card-fields {
@@ -21433,6 +21606,21 @@ body:has(.absence-page--employee-card) {
 
   .employee-card-kpi {
     min-height: 92px;
+  }
+
+  .employee-card-accordion > summary,
+  .employee-card-inline-details > summary,
+  .employee-medical-exam-summary-card__head,
+  .employee-card-operations__head {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .employee-medical-exam-summary-actions,
+  .employee-medical-exam-summary-actions .primary-action,
+  .employee-medical-exam-summary-actions .secondary-link {
+    width: 100%;
+    justify-content: center;
   }
 
   .employee-card-switcher,
