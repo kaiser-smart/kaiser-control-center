@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.408"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.409"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: dvojí kontrola nádoby",
+    text: "Vistos Svoz Kaiser parser porovnává objem nádoby z Vistos pole s objemem vyčteným z názvu položky. Rozpor, například pole 30 l proti názvu 240 l, se označí jako chyba ke kontrole a v detailu se zobrazí oba zdroje."
+  },
   {
     title: "Trasy svozu: rozpad adresy a svozový den",
     text: "Vistos Svoz Kaiser snapshot nově čte rozpad svozové adresy na ulici, město, kraj/stát, zemi a PSČ. Filtr trasy rozpozná číselníkové hodnoty svozového dne typu MondayOdd/MondayEven a správně z nich určí den i sudý/lichý týden."

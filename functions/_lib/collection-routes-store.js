@@ -36,6 +36,7 @@ const VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_TYPES = new Set([
   "pickup-days-duplicate",
   "monthly-pickup-days-ambiguous",
   "missing-container-volume",
+  "container-volume-mismatch",
   "item-not-collection-mappable",
   "non-route-contract-row",
   "multiple-sites-contract",
@@ -1914,6 +1915,31 @@ function normalizeContainerCount(value) {
   return count || 1;
 }
 
+function inferExplicitContainerVolumeFromTexts(values = []) {
+  let fallbackText = "";
+  for (const value of values) {
+    const text = cleanString(value);
+    if (!text) {
+      continue;
+    }
+    if (!fallbackText) {
+      fallbackText = text;
+    }
+    const volume = normalizeExplicitContainerVolumeText(text);
+    if (volume.known) {
+      return {
+        ...volume,
+        text
+      };
+    }
+  }
+  return {
+    volume: 0,
+    known: false,
+    text: fallbackText
+  };
+}
+
 function firstNonEmpty(...values) {
   return values.map(cleanString).find(Boolean) || "";
 }
@@ -2536,24 +2562,29 @@ function inferVistosFrequency(contractRow, product) {
 
 function inferVistosContainer(contractRow, product) {
   const raw = firstNonEmpty(product?.Typnadoby, product?.Size);
-  const volume = normalizeContainerVolume(raw);
-  const textVolume = volume.known
-    ? volume
-    : normalizeExplicitContainerVolumeText([
-      product?.Typnadoby_Caption,
-      product?.Caption,
-      product?.Name,
-      contractRow?.Caption,
-      contractRow?.Name,
-      contractRow?.Description,
-      contractRow?.Product_FK_Caption
-    ].map(cleanString).filter(Boolean).join(" "));
+  const fieldVolume = normalizeContainerVolume(raw);
+  const nameVolume = inferExplicitContainerVolumeFromTexts([
+    contractRow?.Name,
+    contractRow?.Caption,
+    product?.Caption,
+    product?.Name,
+    contractRow?.Product_FK_Caption,
+    contractRow?.Description,
+    product?.Typnadoby_Caption
+  ]);
+  const textVolume = nameVolume.known ? nameVolume : fieldVolume;
   const quantitySource = firstNonEmpty(contractRow?.Quantity, product?.Quantity);
+  const hasMismatch = fieldVolume.known && nameVolume.known && fieldVolume.volume !== nameVolume.volume;
   return {
     volume: textVolume.volume,
     known: textVolume.known,
     count: normalizeContainerCount(quantitySource || raw),
-    type: cleanString(product?.Typnadoby || "container")
+    type: cleanString(product?.Typnadoby || "container"),
+    volumeSource: nameVolume.known ? "name" : fieldVolume.known ? "field" : "",
+    fieldVolume: fieldVolume.known ? fieldVolume.volume : 0,
+    nameVolume: nameVolume.known ? nameVolume.volume : 0,
+    volumeNameText: cleanString(nameVolume.text),
+    volumeMismatch: hasMismatch
   };
 }
 
@@ -2691,10 +2722,16 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         : inferVistosFrequency(contractRow, product);
       const container = textAlias
         ? {
-          volume: textAlias.containerVolume,
+          volume: inferredContainer.nameVolume || textAlias.containerVolume,
           known: true,
           count: inferredContainer.count,
-          type: textAlias.containerType || inferredContainer.type || "container"
+          type: textAlias.containerType || inferredContainer.type || "container",
+          volumeSource: inferredContainer.nameVolume ? "name" : "text_alias",
+          fieldVolume: inferredContainer.fieldVolume,
+          nameVolume: inferredContainer.nameVolume || textAlias.containerVolume,
+          volumeNameText: inferredContainer.volumeNameText,
+          volumeMismatch: inferredContainer.volumeMismatch ||
+            (inferredContainer.fieldVolume && inferredContainer.nameVolume && inferredContainer.fieldVolume !== inferredContainer.nameVolume)
         }
         : inferredContainer;
       const issues = [...baseIssues];
@@ -2718,6 +2755,13 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         }
         if (!container.known) {
           issues.push({ type: "missing-container-volume", severity: "warning", message: "Chybí nádoba/objem." });
+        }
+        if (container.volumeMismatch) {
+          issues.push({
+            type: "container-volume-mismatch",
+            severity: "error",
+            message: `Rozpor objemu nádoby: Vistos pole ${container.fieldVolume || "-"} l, Název ${container.nameVolume || "-"} l.`
+          });
         }
         if (!waste.known || !frequency.known || !container.known) {
           issues.push({ type: "item-not-collection-mappable", severity: "warning", message: "Svozová položka má obchodní text, který zatím nejde převést na trasu." });
@@ -2798,6 +2842,11 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         containerVolume: routeContainer.volume,
         containerCount: routeContainer.count,
         containerType: routeContainer.type,
+        containerVolumeSource: routeContainer.volumeSource || "",
+        containerFieldVolume: routeContainer.fieldVolume || 0,
+        containerNameVolume: routeContainer.nameVolume || 0,
+        containerVolumeNameText: routeContainer.volumeNameText || "",
+        containerVolumeMismatch: Boolean(routeContainer.volumeMismatch),
         productName: firstNonEmpty(product?.Caption, product?.Name, contractRow?.Name),
         rowName: cleanString(contractRow?.Name),
         note: cleanString(contractRow?.Description),
@@ -3014,6 +3063,7 @@ function watchdogIssueLabel(issueType = "") {
     "pickup-days-duplicate": "Duplicitní svozový den",
     "monthly-pickup-days-ambiguous": "Nejasný měsíční svoz",
     "missing-container-volume": "Chybí nádoba / objem",
+    "container-volume-mismatch": "Rozpor objemu nádoby",
     "item-not-collection-mappable": "Položka nejde převést na svoz",
     "non-route-contract-row": "Svoz Kaiser ANO je mimo pravidelnou trasu",
     "multiple-sites-contract": "Smlouva má více možných stanovišť",
@@ -3048,6 +3098,7 @@ function watchdogIssueAction(issueType = "") {
     "pickup-days-duplicate": "Odstranit duplicitně zadaný svozový den.",
     "monthly-pickup-days-ambiguous": "Ověřit měsíční režim a nenechat ho jako běžný týdenní svoz.",
     "missing-container-volume": "Doplnit nádobu, objem nebo počet.",
+    "container-volume-mismatch": "Srovnat objem nádoby ve Vistos poli a v názvu položky.",
     "item-not-collection-mappable": "Opravit text produktu tak, aby šel převést na svoz.",
     "non-route-contract-row": "Ověřit produkt/položku, nebo vypnout Svoz Kaiser ANO.",
     "multiple-sites-contract": "Ručně potvrdit správné stanoviště.",
@@ -3850,6 +3901,11 @@ function manualRowSummary(row) {
     containerVolume: row.containerVolume,
     containerCount: row.containerCount,
     containerType: row.containerType || "",
+    containerVolumeSource: row.containerVolumeSource || "",
+    containerFieldVolume: row.containerFieldVolume || 0,
+    containerNameVolume: row.containerNameVolume || 0,
+    containerVolumeNameText: row.containerVolumeNameText || "",
+    containerVolumeMismatch: Boolean(row.containerVolumeMismatch),
     unitPrice: row.unitPrice || 0,
     mappingStatus: row.mappingStatus || "",
     note: row.note,
@@ -3874,6 +3930,9 @@ function kommunalMappingGapReason(issueTypes) {
   if (issueTypes.has("missing-container-volume")) {
     reasons.push("chybí objem nádoby");
   }
+  if (issueTypes.has("container-volume-mismatch")) {
+    reasons.push("rozpor objemu nádoby");
+  }
   if (issueTypes.has("unknown-product")) {
     reasons.push("neznámý produkt");
   }
@@ -3892,6 +3951,9 @@ function kommunalMappingGapAction(issueTypes) {
   }
   if (issueTypes.has("missing-contract-items")) {
     return "Zkontrolovat, zda má smlouva ve Vistosu svozové položky.";
+  }
+  if (issueTypes.has("container-volume-mismatch")) {
+    return "Srovnat objem nádoby ve Vistos poli a v názvu položky.";
   }
   if (issueTypes.has("unknown-waste-type") || issueTypes.has("unknown-frequency") || issueTypes.has("missing-container-volume")) {
     return "Doplnit alias obchodního textu pro odpad, četnost nebo objem.";
@@ -3975,6 +4037,7 @@ function buildVistosKommunalRouteDraftRows(mappedRows) {
     "unknown-waste-type",
     "unknown-frequency",
     "missing-container-volume",
+    "container-volume-mismatch",
     "missing-address",
     "unclear-location"
   ]);

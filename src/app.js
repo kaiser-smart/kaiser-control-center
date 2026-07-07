@@ -13164,6 +13164,12 @@ const COLLECTION_ROUTES_KOMMUNAL_ISSUE_DEFINITIONS = {
     action: "Doplnit alias obchodního textu pro rozpoznání objemu nádoby.",
     group: "mapping"
   },
+  "container-volume-mismatch": {
+    label: "Rozpor objemu nádoby",
+    priority: "kontrola Vistos",
+    action: "Srovnat objem nádoby ve Vistos poli a v názvu položky.",
+    group: "check"
+  },
   "item-not-collection-mappable": {
     label: "Svozová položka má nejasný obchodní text",
     priority: "alias textu",
@@ -17440,6 +17446,27 @@ function collectionRoutesVistosAddressPartsLabel(parts = {}) {
   ].filter(Boolean).join(" · ");
 }
 
+function collectionRoutesVistosContainerEvidenceLabel(item = {}) {
+  const fieldVolume = collectionRoutesMetricValue(item.containerFieldVolume, 0);
+  const nameVolume = collectionRoutesMetricValue(item.containerNameVolume, 0);
+  const source = String(item.containerVolumeSource || "").trim();
+  const parts = [];
+  if (fieldVolume > 0) {
+    parts.push(`Vistos pole: ${fieldVolume} l`);
+  }
+  if (nameVolume > 0) {
+    parts.push(`Název: ${nameVolume} l`);
+  }
+  if (source === "name") {
+    parts.push("použito: Název");
+  } else if (source === "field") {
+    parts.push("použito: Vistos pole");
+  } else if (source === "text_alias") {
+    parts.push("použito: alias textu");
+  }
+  return parts.join(" · ");
+}
+
 function collectionRoutesIssueTypesForCell(item, cell) {
   const types = new Set((item.issues || []).map((issue) => String(issue.issueType || issue.label || "").toLowerCase()));
   const hasAny = (...needles) => Array.from(types).some((type) => needles.some((needle) => type.includes(needle)));
@@ -17494,6 +17521,11 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
   const container = summary.containerVolume
     ? `${normalizedContainerCount || 1}× ${summary.containerVolume} l${summary.containerType ? ` ${summary.containerType}` : ""}`
     : summary.containerType || "neurčeno";
+  const containerEvidence = {
+    containerFieldVolume: summary.containerFieldVolume ?? sourceRow.containerFieldVolume,
+    containerNameVolume: summary.containerNameVolume ?? sourceRow.containerNameVolume,
+    containerVolumeSource: summary.containerVolumeSource || sourceRow.containerVolumeSource || ""
+  };
   return {
     order: index + 1,
     contractKey: collectionRoutesContractKey(sourceRow, summary, `contract-row-${index}`),
@@ -17506,12 +17538,14 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     stationName: summary.stationName || sourceRow.stationName || "",
     waste: [summary.wasteType, summary.wasteCode].filter(Boolean).join(" / ") || "neurčeno",
     container,
+    containerEvidenceLabel: collectionRoutesVistosContainerEvidenceLabel(containerEvidence),
     interval: summary.frequency || "neurčeno",
     pickupDays: summary.pickupDaysText || summary.pickupDays || sourceRow.pickupDaysText || sourceRow.pickupDays || "neurčeno",
     note: summary.note || sourceRow.note || "",
     customerManagerMobile: summary.customerManagerMobile || sourceRow.customerManagerMobile || "",
     customerManagerEmail: summary.customerManagerEmail || sourceRow.customerManagerEmail || "",
     customerManagerContact: [summary.customerManagerMobile || sourceRow.customerManagerMobile, summary.customerManagerEmail || sourceRow.customerManagerEmail].filter(Boolean).join(" · "),
+    containerVolumeMismatch: Boolean(summary.containerVolumeMismatch || sourceRow.containerVolumeMismatch),
     issues,
     issueLabels: issues.map((issue) => issue.label).filter(Boolean),
     issueCount: collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, 0),
@@ -17737,6 +17771,10 @@ function collectionRoutesVistosRouteRows() {
       wasteCode: summary.wasteCode || sourceRow.wasteCode || "",
       containerVolume,
       containerCount: containerCount > 0 ? containerCount : containerVolume ? 1 : 0,
+      containerFieldVolume: summary.containerFieldVolume ?? sourceRow.containerFieldVolume ?? 0,
+      containerNameVolume: summary.containerNameVolume ?? sourceRow.containerNameVolume ?? 0,
+      containerVolumeSource: summary.containerVolumeSource || sourceRow.containerVolumeSource || "",
+      containerVolumeMismatch: Boolean(summary.containerVolumeMismatch || sourceRow.containerVolumeMismatch),
       frequency: summary.frequency || sourceRow.frequency || "",
       note: summary.note || sourceRow.note || "",
       pickupDaysText: pickupDaysText || "neurčeno",
@@ -18005,7 +18043,10 @@ function collectionRoutesVistosContractDetailTable(contractRow) {
               </td>
               <td data-label="Stanoviště">${escapeHtml(item.stationName || "-")}</td>
               <td class="${collectionRoutesDetailCellClass(item, "waste")}" data-label="Odpad">${escapeHtml(item.waste)}</td>
-              <td class="${collectionRoutesDetailCellClass(item, "container")}" data-label="Nádoba">${escapeHtml(item.container)}</td>
+              <td class="${collectionRoutesDetailCellClass(item, "container")}" data-label="Nádoba">
+                <strong>${escapeHtml(item.container)}</strong>
+                ${item.containerEvidenceLabel ? `<span class="collection-routes-site-detail-subline">${escapeHtml(item.containerEvidenceLabel)}</span>` : ""}
+              </td>
               <td class="${collectionRoutesDetailCellClass(item, "interval")}" data-label="Interval">${escapeHtml(item.interval)}</td>
               <td class="${collectionRoutesDetailCellClass(item, "pickupDays")}" data-label="Den svozu">${escapeHtml(item.pickupDays)}</td>
               <td data-label="Poznámka">${escapeHtml(item.note || "-")}</td>
