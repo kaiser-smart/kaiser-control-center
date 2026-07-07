@@ -40,6 +40,7 @@ export async function onRequestGet({ request, env }) {
 
     const watchdog = await createCollectionRoutesVistosSvozKaiserWatchdog(env, {
       persist: true,
+      persistSitesSnapshot: true,
       user,
       triggeredBy: "ui-open",
       runner: "collection-routes-sites-open",

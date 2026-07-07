@@ -61,6 +61,7 @@ export async function onRequestPost({ request, env }) {
   try {
     const watchdog = await createCollectionRoutesVistosSvozKaiserWatchdog(env, {
       persist: true,
+      persistSitesSnapshot: true,
       throwOnPersistError: true,
       createdByUserId: "cloudflare-cron",
       triggeredBy: cleanString(body.triggeredBy || "cloudflare-cron"),
@@ -74,6 +75,7 @@ export async function onRequestPost({ request, env }) {
       ok: true,
       watchdog,
       snapshot: watchdog.snapshot || null,
+      sitesSnapshot: watchdog.sitesSnapshot || null,
       apiStatus: watchdog.apiStatus || "ready"
     });
   } catch (error) {

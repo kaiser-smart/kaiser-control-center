@@ -48,8 +48,11 @@ const VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_TYPES = new Set([
   "invalid-contract-row-date-range"
 ]);
 const VISTOS_SVOZ_KAISER_WATCHDOG_SOURCE_MODE = "vistos-svoz-kaiser-watchdog";
+const VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_SOURCE_MODE = "vistos-svoz-kaiser-sites-snapshot";
 const VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_ROWS_LIMIT = 200;
 const VISTOS_SVOZ_KAISER_WATCHDOG_SITE_ALERTS_LIMIT = 100;
+const VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_DEFAULT_PAGE_SIZE = 100;
+const VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_MAX_PAGE_SIZE = 200;
 const VISTOS_CONTRACT_COLUMNS = [
   "Id",
   "ContractNumber",
@@ -2904,6 +2907,315 @@ function collectionRoutesWatchdogSnapshotFromBatch(batch) {
   };
 }
 
+function collectionRoutesSitesSnapshotPageValue(value) {
+  return Math.max(1, Math.floor(Number(value) || 1));
+}
+
+function collectionRoutesSitesSnapshotPageSizeValue(value) {
+  return Math.max(
+    1,
+    Math.min(
+      Math.floor(Number(value) || VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_DEFAULT_PAGE_SIZE),
+      VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_MAX_PAGE_SIZE
+    )
+  );
+}
+
+function collectionRoutesSitesSnapshotUsesSvozKaiserField(preview = {}) {
+  const field = preview?.metadata?.svozKaiserField || {};
+  return Boolean(field?.confirmed && field?.columnName);
+}
+
+function collectionRoutesSitesSnapshotRows(preview = {}) {
+  const rows = Array.isArray(preview?.rows) ? preview.rows : [];
+  return collectionRoutesSitesSnapshotUsesSvozKaiserField(preview)
+    ? rows.filter((row) => row?.svozKaiserIncluded === true)
+    : rows;
+}
+
+function collectionRoutesSitesSnapshotSummary(preview = {}, rows = []) {
+  const contracts = new Set();
+  const sites = new Set();
+  let containerCount = 0;
+  let issueCount = 0;
+
+  for (const row of rows) {
+    const contractKey = cleanString(row?.contractNumber || row?.sourceContractId || row?.contractId);
+    if (contractKey) {
+      contracts.add(contractKey);
+    }
+
+    const siteKey = cleanString(row?.siteKey || row?.sourceSiteId || row?.siteName || row?.addressRaw);
+    if (siteKey) {
+      sites.add(siteKey);
+    }
+
+    const count = numericValue(row?.containerCount, 0);
+    containerCount += count > 0 ? count : row?.containerVolume ? 1 : 0;
+    issueCount += Array.isArray(row?.issues) ? row.issues.length : 0;
+  }
+
+  return {
+    ...(preview.summary || {}),
+    status: "snapshot",
+    message: "Read-only D1 snapshot Stanovišť z Vistos Svoz Kaiser.",
+    rowCount: rows.length,
+    contractCount: contracts.size,
+    siteCount: sites.size,
+    itemCount: rows.length,
+    containerCount,
+    issueCount,
+    rawKomunalRows: Array.isArray(preview?.rows) ? preview.rows.length : 0,
+    totalPreviewRows: Number(preview?.totalPreviewRows || preview?.summary?.rowCount || rows.length) || rows.length,
+    svozKaiserFiltered: collectionRoutesSitesSnapshotUsesSvozKaiserField(preview),
+    createsOperationalRoutes: false,
+    sendsEmailOrSms: false,
+    startsAutomation: false
+  };
+}
+
+function collectionRoutesSitesSnapshotStatus(apiStatus, summary = {}) {
+  if (apiStatus && apiStatus !== "ready") {
+    return "waiting";
+  }
+  return Number(summary.issueCount || 0) > 0 ? "warning" : "ready";
+}
+
+function collectionRoutesSitesSnapshotRowSummary(row = {}) {
+  const { issues, ...summary } = row || {};
+  return {
+    ...summary,
+    issueCount: Array.isArray(issues) ? issues.length : Number(summary.issueCount || 0) || 0,
+    createsOperationalRoutes: false,
+    sendsEmailOrSms: false,
+    startsAutomation: false
+  };
+}
+
+function collectionRoutesSitesSnapshotRowFromImport(row) {
+  const importRow = rowToImportRow(row);
+  const summary = importRow.summary || {};
+  const issues = Array.isArray(importRow.issues) ? importRow.issues : [];
+  const fullSummary = {
+    ...summary,
+    issues,
+    issueCount: summary.issueCount ?? issues.length
+  };
+
+  return {
+    ...summary,
+    id: importRow.id,
+    batchId: importRow.batchId,
+    rowNumber: importRow.rowNumber || summary.rowNumber,
+    sourceEntity: importRow.sourceEntity || summary.sourceEntity,
+    sourceId: importRow.sourceId || summary.sourceId,
+    status: importRow.status,
+    issues,
+    summary: fullSummary,
+    createdAt: importRow.createdAt
+  };
+}
+
+export async function persistCollectionRoutesVistosSvozKaiserSitesSnapshot(env, preview = {}, {
+  createdByUserId = "",
+  triggeredBy = "manual",
+  runner = "",
+  scheduledAt = "",
+  cron = "",
+  scheduleMode = "",
+  message = ""
+} = {}) {
+  const db = collectionRoutesDatabase(env, true);
+  const createdAt = nowIso();
+  const finishedAt = createdAt;
+  const batchId = randomId("collection-sites-batch");
+  const rows = collectionRoutesSitesSnapshotRows(preview);
+  const summary = collectionRoutesSitesSnapshotSummary(preview, rows);
+  const apiStatus = cleanString(preview.apiStatus || "ready");
+  const status = collectionRoutesSitesSnapshotStatus(apiStatus, summary);
+  const metadataJson = {
+    phase: VISTOS_KOMUNAL_PHASE,
+    mode: "vistos-svoz-kaiser-sites-snapshot",
+    source: "vistos",
+    sourceMode: VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_SOURCE_MODE,
+    triggeredBy,
+    runner,
+    scheduledAt,
+    cron,
+    scheduleMode,
+    summary,
+    issueSummaryRows: preview.issueSummaryRows || [],
+    metadata: preview.metadata || {},
+    createsOperationalRoutes: false,
+    sendsEmailOrSms: false,
+    startsRouteAutomation: false,
+    writesToVistos: false
+  };
+
+  try {
+    await db
+      .prepare(`
+        INSERT INTO collection_import_batches (
+          id,
+          source,
+          source_mode,
+          status,
+          api_status,
+          message,
+          row_count,
+          issue_count,
+          created_by_user_id,
+          created_at,
+          finished_at,
+          metadata_json
+        )
+        VALUES (?, 'vistos', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        batchId,
+        VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_SOURCE_MODE,
+        status,
+        apiStatus,
+        cleanString(message || "Read-only D1 snapshot Stanovišť z Vistos Svoz Kaiser."),
+        rows.length,
+        Number(summary.issueCount || 0) || 0,
+        cleanString(createdByUserId || triggeredBy),
+        createdAt,
+        finishedAt,
+        jsonString(metadataJson)
+      )
+      .run();
+
+    const records = rows.map((row, index) => {
+      const issues = Array.isArray(row?.issues) ? row.issues : [];
+      return {
+        row,
+        issues,
+        rowNumber: Number(row?.rowNumber || index + 1) || index + 1,
+        sourceEntity: cleanString(row?.sourceEntity || "vistos-contract-row"),
+        sourceId: cleanString(row?.sourceId || row?.rowKey || row?.contractRowId || row?.contractId || `sites-row-${index + 1}`)
+      };
+    });
+
+    for (let index = 0; index < records.length; index += 100) {
+      const chunk = records.slice(index, index + 100);
+      await db.batch(chunk.map((record) => db.prepare(`
+        INSERT INTO collection_import_rows (
+          id,
+          batch_id,
+          row_number,
+          source_entity,
+          source_id,
+          status,
+          summary_json,
+          issues_json,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        randomId("collection-sites-row"),
+        batchId,
+        record.rowNumber,
+        record.sourceEntity,
+        record.sourceId,
+        record.issues.length ? "warning" : "ready",
+        jsonString(collectionRoutesSitesSnapshotRowSummary(record.row)),
+        jsonString(record.issues),
+        createdAt
+      )));
+    }
+
+    return {
+      id: batchId,
+      sourceMode: VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_SOURCE_MODE,
+      status,
+      apiStatus,
+      createdAt,
+      finishedAt,
+      rowCount: rows.length,
+      issueCount: Number(summary.issueCount || 0) || 0,
+      summary,
+      triggeredBy,
+      runner,
+      scheduleMode,
+      cron
+    };
+  } catch (error) {
+    throw collectionRoutesDbError(error);
+  }
+}
+
+export async function getLatestCollectionRoutesVistosSvozKaiserSitesSnapshot(env, {
+  page = 1,
+  pageSize = VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_DEFAULT_PAGE_SIZE
+} = {}) {
+  const db = collectionRoutesDatabase(env, true);
+  const safePageSize = collectionRoutesSitesSnapshotPageSizeValue(pageSize);
+  const requestedPage = collectionRoutesSitesSnapshotPageValue(page);
+
+  try {
+    const batchRow = await db
+      .prepare(`
+        SELECT *
+        FROM collection_import_batches
+        WHERE source_mode = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+      `)
+      .bind(VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_SOURCE_MODE)
+      .first();
+
+    if (!batchRow) {
+      return null;
+    }
+
+    const batch = rowToBatch(batchRow);
+    const totalRow = await db
+      .prepare("SELECT COUNT(*) AS total FROM collection_import_rows WHERE batch_id = ?")
+      .bind(batch.id)
+      .first();
+    const totalRows = numericValue(totalRow?.total, batch.rowCount || 0);
+    const totalPages = Math.max(1, Math.ceil(totalRows / safePageSize));
+    const safePage = Math.min(requestedPage, totalPages);
+    const offset = (safePage - 1) * safePageSize;
+    const rowsResult = await db
+      .prepare(`
+        SELECT *
+        FROM collection_import_rows
+        WHERE batch_id = ?
+        ORDER BY row_number ASC
+        LIMIT ?
+        OFFSET ?
+      `)
+      .bind(batch.id, safePageSize, offset)
+      .all();
+
+    return {
+      batch,
+      snapshot: batch,
+      sourceMode: VISTOS_SVOZ_KAISER_SITES_SNAPSHOT_SOURCE_MODE,
+      apiStatus: batch.apiStatus || "ready",
+      summary: batch.metadata?.summary || {},
+      metadata: batch.metadata?.metadata || {},
+      issueSummaryRows: batch.metadata?.issueSummaryRows || [],
+      rows: (rowsResult.results || []).map(collectionRoutesSitesSnapshotRowFromImport),
+      pagination: {
+        page: safePage,
+        pageSize: safePageSize,
+        totalRows,
+        totalPages,
+        hasPreviousPage: safePage > 1,
+        hasNextPage: safePage < totalPages
+      },
+      createsOperationalRoutes: false,
+      sendsEmailOrSms: false,
+      startsAutomation: false
+    };
+  } catch (error) {
+    throw collectionRoutesDbError(error);
+  }
+}
+
 export async function persistCollectionRoutesSvozKaiserWatchdogSnapshot(env, watchdog = {}, {
   createdByUserId = "",
   triggeredBy = "manual",
@@ -4017,11 +4329,52 @@ export async function createCollectionRoutesVistosSvozKaiserWatchdog(env, option
     }, options);
   }
 
-  return finalizeCollectionRoutesSvozKaiserWatchdog(
+  const watchdog = await finalizeCollectionRoutesSvozKaiserWatchdog(
     env,
     buildVistosSvozKaiserWatchdog(loaded.preview, loaded.apiStatus || "ready"),
     options
   );
+
+  if (!options.persistSitesSnapshot) {
+    return watchdog;
+  }
+
+  try {
+    const sitesSnapshot = await persistCollectionRoutesVistosSvozKaiserSitesSnapshot(env, {
+      status: "preview-export",
+      apiStatus: loaded.apiStatus || "ready",
+      phase: VISTOS_KOMUNAL_PHASE,
+      mode: "vistos-svoz-kaiser-sites-snapshot",
+      source: "vistos",
+      sourceMode: "vistos-komunal-preview",
+      rows: loaded.preview?.rows || [],
+      totalPreviewRows: loaded.preview?.summary?.rowCount || 0,
+      summary: loaded.preview?.summary || {},
+      issueSummaryRows: loaded.preview?.issueSummaryRows || [],
+      metadata: loaded.preview?.metadata || {}
+    }, {
+      createdByUserId: cleanString(options.user?.id || options.createdByUserId),
+      triggeredBy: cleanString(options.triggeredBy || "manual"),
+      runner: cleanString(options.runner),
+      scheduledAt: cleanString(options.scheduledAt),
+      cron: cleanString(options.cron),
+      scheduleMode: cleanString(options.scheduleMode),
+      message: "Read-only snapshot Stanovišť z Vistos Svoz Kaiser."
+    });
+    return { ...watchdog, sitesSnapshot };
+  } catch (error) {
+    if (options.throwOnPersistError) {
+      throw error;
+    }
+    console.error("collection_routes.svoz_kaiser_sites_snapshot_failed", { message: error.message });
+    return {
+      ...watchdog,
+      sitesSnapshot: {
+        status: "failed",
+        error: "Snapshot Stanovišť se nepodařilo uložit do D1."
+      }
+    };
+  }
 }
 
 export async function createCollectionRoutesVistosKommunalPreviewExport(env, {
@@ -4100,6 +4453,13 @@ export async function createCollectionRoutesVistosKommunalPreviewExport(env, {
     metadata: preview.metadata || {},
     rows
   };
+}
+
+export async function createCollectionRoutesVistosSvozKaiserSitesSnapshot(env, options = {}) {
+  const exportPayload = await createCollectionRoutesVistosKommunalPreviewExport(env, {
+    limit: options.limit || 10000
+  });
+  return persistCollectionRoutesVistosSvozKaiserSitesSnapshot(env, exportPayload, options);
 }
 
 export function collectionRoutesDbError(error) {

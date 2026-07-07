@@ -2657,6 +2657,33 @@ h1 {
   min-width: 860px;
 }
 
+.collection-routes-sites-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 10px;
+  background: #fbfdf8;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.collection-routes-sites-pagination > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.collection-routes-sites-pagination .secondary-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .collection-routes-sites-table td {
   line-height: 1.35;
 }
@@ -17965,6 +17992,20 @@ body:has(.data-box-page) {
 
   .collection-routes-sites-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collection-routes-sites-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .collection-routes-sites-pagination > div {
+    justify-content: stretch;
+  }
+
+  .collection-routes-sites-pagination .secondary-link {
+    flex: 1 1 0;
+    min-height: 42px;
   }
 
   .collection-routes-sites-table {

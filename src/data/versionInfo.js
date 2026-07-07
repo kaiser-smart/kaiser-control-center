@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.402"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.403"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: rychlé Stanoviště ze snapshotu",
+    text: "Záložka Stanoviště čte poslední read-only D1 snapshot Vistos Svoz Kaiser po stránkách. Živé Vistos volání běží na pozadí přes hlídač a ukládá nový snapshot, takže přepnutí okna znovu netahá celý export."
+  },
   {
     title: "Trasy svozu: tabletové Stanoviště bez scrollu",
     text: "Stanoviště se na tabletu na výšku přepnou z široké tabulky do kartového master/detail zobrazení. Master řádek, detail položek i červené chybové buňky zůstávají čitelné bez vodorovného scrollu stránky."
