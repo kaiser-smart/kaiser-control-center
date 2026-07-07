@@ -85,6 +85,27 @@ const VISTOS_CONTRACT_ROW_COLUMNS = [
   "ServiceList_FK"
 ];
 const VISTOS_SVOZ_KAISER_TARGET_ENTITIES = ["ContractRow", "Contract"];
+const VISTOS_CUSTOMER_MANAGER_CONTACT_COLUMNS = [
+  "Id",
+  "Name",
+  "Caption",
+  "FirstName",
+  "LastName",
+  "FullName",
+  "DisplayName",
+  "Email",
+  "Email1",
+  "Email2",
+  "Mail",
+  "Phone",
+  "Phone1",
+  "PhoneNumber",
+  "Mobile",
+  "Mobil",
+  "Telefon",
+  "CellPhone",
+  "GSM"
+];
 const VISTOS_SVOZ_KAISER_COLUMN_CANDIDATES = [
   "SvozKaiser",
   "SvozKaiserAno",
@@ -1718,6 +1739,18 @@ function readVistosColumnDisplayValue(row, columnName) {
   );
 }
 
+function readVistosColumnRecordId(row, columnName) {
+  if (!row || !columnName) {
+    return "";
+  }
+  return firstNonEmpty(
+    row[`${columnName}_RecordId`],
+    row[`${columnName}_FK_RecordId`],
+    row[columnName],
+    row[`${columnName}_FK`]
+  );
+}
+
 function readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, fieldKey) {
   const field = consistencyFields?.fields?.[fieldKey];
   if (!field?.confirmed) {
@@ -1800,6 +1833,121 @@ function vistosConsistencyDisplayValues(values = []) {
     .map((item) => firstNonEmpty(item?.value, item?.rawValue))
     .map(cleanString)
     .filter(Boolean);
+}
+
+function cleanVistosCustomerManagerName(value = "") {
+  const text = cleanString(value);
+  if (!text || /^\d+$/.test(text)) {
+    return "";
+  }
+  return text;
+}
+
+function vistosCustomerManagerContactValue(row = {}, fields = []) {
+  return firstNonEmpty(...fields.flatMap((field) => ([
+    row[field],
+    row[`${field}_Caption`],
+    row[`${field}_MainProjection`],
+    row[`${field}_Value`]
+  ])));
+}
+
+function vistosCustomerManagerContactName(row = {}) {
+  return cleanVistosCustomerManagerName(firstNonEmpty(
+    vistosCustomerManagerContactValue(row, ["FullName", "DisplayName", "Caption", "Name"]),
+    [row.FirstName, row.LastName].map(cleanString).filter(Boolean).join(" ")
+  ));
+}
+
+function vistosCustomerManagerContactMobile(row = {}) {
+  return cleanString(vistosCustomerManagerContactValue(row, [
+    "Mobile",
+    "Mobil",
+    "CellPhone",
+    "GSM",
+    "Phone",
+    "Phone1",
+    "PhoneNumber",
+    "Telefon"
+  ]));
+}
+
+function vistosCustomerManagerContactEmail(row = {}) {
+  return cleanString(vistosCustomerManagerContactValue(row, ["Email", "Email1", "Email2", "Mail"]));
+}
+
+function customerManagerReferenceEntityNames(column = {}) {
+  const inferred = cleanString(column.columnName).replace(/_FK$/i, "");
+  return Array.from(new Set([
+    cleanString(column.reference),
+    inferred,
+    "DirectoryManager",
+    "Employee",
+    "User",
+    "Person",
+    "Contact"
+  ].filter(Boolean)));
+}
+
+async function enrichVistosCustomerManagerContacts(env, session, rows = [], consistencyFields = null, { maxRows = 50 } = {}) {
+  const managerColumns = (consistencyFields?.fields?.customerManagerName?.columns || [])
+    .filter((column) => column?.columnName);
+  if (!managerColumns.length || !rows.length) {
+    return { rows, diagnostics: { requested: 0, succeeded: 0, failed: 0 } };
+  }
+
+  const detailsByKey = new Map();
+  const diagnostics = {
+    requested: 0,
+    succeeded: 0,
+    failed: 0
+  };
+
+  for (const row of rows.slice(0, Math.max(0, maxRows))) {
+    for (const column of managerColumns) {
+      const displayName = cleanVistosCustomerManagerName(readVistosColumnDisplayValue(row, column.columnName));
+      const managerId = cleanString(readVistosColumnRecordId(row, column.columnName));
+      if (displayName && !row.__customerManagerName) {
+        row.__customerManagerName = displayName;
+      }
+      if (!managerId || !/^\d+$/.test(managerId)) {
+        continue;
+      }
+
+      const entityNames = customerManagerReferenceEntityNames(column);
+      for (const entityName of entityNames) {
+        const key = `${entityName}:${managerId}`;
+        if (!detailsByKey.has(key)) {
+          diagnostics.requested += 1;
+          try {
+            const detail = await getVistosById(env, session, entityName, managerId, VISTOS_CUSTOMER_MANAGER_CONTACT_COLUMNS);
+            detailsByKey.set(key, detail.row || null);
+            if (detail.row && Object.keys(detail.row).length) {
+              diagnostics.succeeded += 1;
+            } else {
+              diagnostics.failed += 1;
+            }
+          } catch {
+            detailsByKey.set(key, null);
+            diagnostics.failed += 1;
+          }
+        }
+
+        const detailRow = detailsByKey.get(key);
+        if (!detailRow) {
+          continue;
+        }
+        row.__customerManagerName = firstNonEmpty(row.__customerManagerName, vistosCustomerManagerContactName(detailRow));
+        row.__customerManagerMobile = firstNonEmpty(row.__customerManagerMobile, vistosCustomerManagerContactMobile(detailRow));
+        row.__customerManagerEmail = firstNonEmpty(row.__customerManagerEmail, vistosCustomerManagerContactEmail(detailRow));
+        if (row.__customerManagerName || row.__customerManagerMobile || row.__customerManagerEmail) {
+          break;
+        }
+      }
+    }
+  }
+
+  return { rows, diagnostics };
 }
 
 function isGenericVistosAddressPlaceValue(value = "") {
@@ -3168,9 +3316,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     const customerManagerNameValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerName");
     const customerManagerMobileValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerMobile");
     const customerManagerEmailValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerEmail");
-    const customerManagerName = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerNameValues));
-    const customerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerMobileValues));
-    const customerManagerEmail = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerEmailValues));
+    const customerManagerName = firstNonEmpty(contract.__customerManagerName, ...vistosConsistencyDisplayValues(customerManagerNameValues));
+    const customerManagerMobile = firstNonEmpty(contract.__customerManagerMobile, ...vistosConsistencyDisplayValues(customerManagerMobileValues));
+    const customerManagerEmail = firstNonEmpty(contract.__customerManagerEmail, ...vistosConsistencyDisplayValues(customerManagerEmailValues));
     const sourceCustomerId = fkRecordId(contract, "Directory_FK");
     const sourceSiteId = firstNonEmpty(fkRecordId(contract, "Nakladkovaadresa_FK"), fkRecordId(contract, "DirectoryBranch_FK"));
     const contractActiveRange = dateInActiveRange(contract?.StartDate, contract?.EndDate, today);
@@ -3328,9 +3476,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const rowCustomerManagerNameValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerName");
       const rowCustomerManagerMobileValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerMobile");
       const rowCustomerManagerEmailValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerEmail");
-      const rowCustomerManagerName = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerNameValues), customerManagerName);
-      const rowCustomerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerMobileValues), customerManagerMobile);
-      const rowCustomerManagerEmail = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerEmailValues), customerManagerEmail);
+      const rowCustomerManagerName = firstNonEmpty(contractRow.__customerManagerName, ...vistosConsistencyDisplayValues(rowCustomerManagerNameValues), customerManagerName);
+      const rowCustomerManagerMobile = firstNonEmpty(contractRow.__customerManagerMobile, ...vistosConsistencyDisplayValues(rowCustomerManagerMobileValues), customerManagerMobile);
+      const rowCustomerManagerEmail = firstNonEmpty(contractRow.__customerManagerEmail, ...vistosConsistencyDisplayValues(rowCustomerManagerEmailValues), customerManagerEmail);
       const pickupDayValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupDays");
       const pickupFromValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupFrom");
       const pickupToValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupTo");
@@ -5061,15 +5209,30 @@ async function loadVistosKommunalPreviewData(env) {
     }
   }
   const today = new Date();
-  const kommunalContracts = contractsPage.rows;
+  let kommunalContracts = contractsPage.rows;
   const contractIds = new Set(kommunalContracts.map((contract) => cleanString(contract?.Id)).filter(Boolean));
   const rowContractId = (row) => cleanString(row?.Contract_FK_RecordId || row?.Contract_FK || row?.Contract_FK_Id || row?.ContractId);
-  const contractById = new Map(kommunalContracts.map((contract) => [cleanString(contract?.Id), contract]));
+  let contractById = new Map(kommunalContracts.map((contract) => [cleanString(contract?.Id), contract]));
   let contractRowsForKommunalContracts = contractRowsPage.rows.filter((row) => contractIds.has(rowContractId(row)));
   const svozKaiserRowsForDetail = contractRowsForKommunalContracts.filter((row) => {
     const contract = contractById.get(rowContractId(row));
     return isVistosYesValue(rowSvozKaiserValue(contract, row, svozKaiserField));
   });
+  const svozKaiserContractIds = new Set(svozKaiserRowsForDetail.map((row) => rowContractId(row)).filter(Boolean));
+  const svozKaiserContractsForDetail = kommunalContracts.filter((contract) => svozKaiserContractIds.has(cleanString(contract?.Id)));
+  const contractDetailEnrichment = await enrichVistosRowsById(
+    env,
+    session,
+    "Contract",
+    svozKaiserContractsForDetail,
+    contractColumns,
+    { maxRows: 50 }
+  );
+  if (contractDetailEnrichment.rows.length) {
+    const enrichedContractsById = new Map(contractDetailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
+    kommunalContracts = kommunalContracts.map((contract) => enrichedContractsById.get(cleanString(contract?.Id || contract?.RecordId)) || contract);
+    contractById = new Map(kommunalContracts.map((contract) => [cleanString(contract?.Id), contract]));
+  }
   const detailEnrichment = await enrichVistosRowsById(
     env,
     session,
@@ -5082,6 +5245,20 @@ async function loadVistosKommunalPreviewData(env) {
     const enrichedById = new Map(detailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
     contractRowsForKommunalContracts = contractRowsForKommunalContracts.map((row) => enrichedById.get(cleanString(row?.Id || row?.RecordId)) || row);
   }
+  const customerManagerContractEnrichment = await enrichVistosCustomerManagerContacts(
+    env,
+    session,
+    kommunalContracts,
+    consistencyFields,
+    { maxRows: 50 }
+  );
+  const customerManagerRowEnrichment = await enrichVistosCustomerManagerContacts(
+    env,
+    session,
+    contractRowsForKommunalContracts,
+    consistencyFields,
+    { maxRows: 50 }
+  );
   const matchedContractIds = new Set(contractRowsForKommunalContracts.map((row) => rowContractId(row)).filter(Boolean));
   const contractsInDateRange = kommunalContracts.filter((contract) => dateInActiveRange(contract?.StartDate, contract?.EndDate, today));
   const contractRowsWithActiveFlag = contractRowsForKommunalContracts.filter((row) => booleanValue(row?.IsActive, true));
@@ -5103,8 +5280,13 @@ async function loadVistosKommunalPreviewData(env) {
     contractRowsPassingDateRange: contractRowsInDateRange.length,
     contractRowsPassingStrictActiveDateRange: contractRowsInStrictActiveDateRange.length,
     contractRowsUsedForPreview: relevantContractRows.length,
+    contractsDetailEnriched: contractDetailEnrichment.diagnostics.succeeded,
+    contractsDetailEnrichmentFailed: contractDetailEnrichment.diagnostics.failed,
     contractRowsDetailEnriched: detailEnrichment.diagnostics.succeeded,
     contractRowsDetailEnrichmentFailed: detailEnrichment.diagnostics.failed,
+    customerManagerContactsRequested: customerManagerContractEnrichment.diagnostics.requested + customerManagerRowEnrichment.diagnostics.requested,
+    customerManagerContactsEnriched: customerManagerContractEnrichment.diagnostics.succeeded + customerManagerRowEnrichment.diagnostics.succeeded,
+    customerManagerContactsFailed: customerManagerContractEnrichment.diagnostics.failed + customerManagerRowEnrichment.diagnostics.failed,
     productsLoaded: productsPage.rows.length,
     productsMatchedToRows: relevantProducts.length,
     zeroResultReason: !kommunalContracts.length
