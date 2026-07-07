@@ -487,6 +487,26 @@ Nebo:
 Další krok je něco otestovat.
 ```
 
+### 12. Svozové trasy: zákaz odstraňování pracovních funkcí při úklidu dat
+
+Při úklidu dat, změně zdroje dat nebo přepnutí toku v modulu `Svozové trasy` se nesmí jako vedlejší efekt odstranit, schovat nebo rozpojit pracovní funkce trasy:
+- `Řidičský tablet`
+- `Tisk pro řidiče`
+- `Detailní PDF` / PDF trasy
+- `Offline balíček`
+- filtr dne, týdne, odpadu a stavu
+- rozklik detailu položek smlouvy
+
+Úklid dat znamená odstranit nebo přesunout matoucí datové bloky, ne odstranit uživatelské ovládání trasy.
+
+Pokud má být některá z těchto funkcí odstraněna nebo schována, musí to být výslovně pojmenováno v návrhu a potvrzeno Radimem/Martinem.
+
+Adresní a provozní pole se nesmí zaměňovat:
+- `Adresní místo` smí zobrazovat pouze skutečné pole Adresní místo z Vistosu.
+- `Stanoviště` smí být pouze ve vlastním sloupci Stanoviště.
+- `Svozová/nakládková adresa` je samostatný kontrolní údaj a nesmí se potichu vydávat za Adresní místo.
+- Pokud skutečné Adresní místo chybí, Smart musí ukázat chybu k opravě, ne doplnit náhradu z jiného pole.
+
 ## 2. Ukládání dat
 
 Aplikace běží a ukládá data pouze přes cloud / API.

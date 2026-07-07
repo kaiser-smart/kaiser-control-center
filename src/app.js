@@ -1028,6 +1028,9 @@ const collectionRoutesPilotState = {
   kommunalPairingError: "",
   kommunalPairingLoadedAt: "",
   kommunalPairingSource: "",
+  kommunalPairingAutoRefreshNextAt: "",
+  kommunalPairingAutoRefreshLastAt: "",
+  kommunalPairingAutoRefreshIntervalMs: 90 * 1000,
   vistosRouteFilters: {
     day: "all",
     week: "all",
@@ -1080,6 +1083,8 @@ const collectionRoutesPilotState = {
   message: "",
   error: ""
 };
+let collectionRoutesSitesAutoRefreshTimer = null;
+let collectionRoutesSitesCountdownTimer = null;
 const dataBoxState = {
   loaded: false,
   loading: false,
@@ -16480,8 +16485,9 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const visibleRows = collectionRoutesSourceDriverVisibleRows(rows, selectedIndex);
   const progressValue = Math.max(1, selectedIndex + 1);
   const note = selectedRow?.note || "";
-  const filters = collectionRoutesPilotState.sourceFilters || {};
-  const vehicle = filters.vehicle || selectedRow?.vehicleCode || "all";
+  const isVistosRoute = rows.some((row) => row.sourceKind === "vistos");
+  const filters = isVistosRoute ? (collectionRoutesPilotState.vistosRouteFilters || {}) : (collectionRoutesPilotState.sourceFilters || {});
+  const vehicle = isVistosRoute ? "vistos" : (filters.vehicle || selectedRow?.vehicleCode || "all");
   const dayLabel = collectionRoutesSourceDayLabel(filters.day || selectedRow?.dayCode || "all");
   const weekLabel = collectionRoutesSourceWeekLabel(filters.week || selectedRow?.weekMode || "all");
   const driverName = selectedRow?.driverName || selectedRow?.driver || "řidič nepřiřazen";
@@ -16508,7 +16514,7 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
   const hasMeaningfulNote = Boolean(String(note || "").trim());
   const routeDayLabel = dayLabel === "všechny dny" ? "Den není vybraný" : dayLabel;
   const routeWeekLabel = weekLabel === "všechny týdny" ? "Týden není vybraný" : weekLabel;
-  const routeVehicleLabel = collectionRoutesSourceDriverVehicleRouteLabel(vehicle);
+  const routeVehicleLabel = isVistosRoute ? "Vistos Svoz Kaiser" : collectionRoutesSourceDriverVehicleRouteLabel(vehicle);
   const routeDriverLabel = driverName && driverName !== "řidič nepřiřazen" ? driverName : "Řidič nepřiřazen";
   const driverFactsHtml = [
     collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow)),
@@ -17004,6 +17010,30 @@ function collectionRoutesSourceRouteTitle() {
   ].join(" / ");
 }
 
+function collectionRoutesVistosRouteTitle() {
+  const filters = collectionRoutesPilotState.vistosRouteFilters || {};
+  return [
+    filters.day && filters.day !== "all" ? filters.day : "všechny dny",
+    filters.week && filters.week !== "all" ? filters.week : "všechny týdny",
+    collectionRoutesSourceWasteFilterLabel(filters.waste || "all")
+  ].join(" / ");
+}
+
+function collectionRoutesCurrentRouteRows() {
+  const vistosRows = collectionRoutesVistosRouteDisplayRows();
+  return vistosRows.length ? vistosRows : collectionRoutesSourceDisplayRows();
+}
+
+function collectionRoutesCurrentRouteTitle() {
+  return collectionRoutesVistosSourceRows().length
+    ? `Vistos Svoz Kaiser ${collectionRoutesVistosRouteTitle()}`
+    : collectionRoutesSourceRouteTitle();
+}
+
+function collectionRoutesCurrentRouteSourceLabel(rows = collectionRoutesCurrentRouteRows()) {
+  return rows.some((row) => row.sourceKind === "vistos") ? "Vistos API" : "13 Excelů";
+}
+
 function collectionRoutesSourceRouteView() {
   return ["driver", "map"].includes(collectionRoutesPilotState.sourceRouteView)
     ? collectionRoutesPilotState.sourceRouteView
@@ -17034,9 +17064,109 @@ function collectionRoutesSourceRouteViewSwitch(rows = collectionRoutesSourceDisp
   `;
 }
 
+function collectionRoutesVistosRouteActions(rows = collectionRoutesVistosRouteDisplayRows()) {
+  return `
+    <div class="collection-routes-print-filter__actions collection-routes-route-actions" aria-label="Akce trasy">
+      <button class="primary-action" type="button" data-collection-routes-source-view="driver" ${rows.length ? "" : "disabled"}>
+        Řidičský tablet
+      </button>
+      <button class="secondary-link" type="button" data-collection-routes-source-print-driver ${rows.length ? "" : "disabled"}>
+        Tisk pro řidiče
+      </button>
+      <button class="secondary-link" type="button" data-collection-routes-source-print-pdf ${rows.length ? "" : "disabled"}>
+        Detailní PDF
+      </button>
+      <button class="secondary-link" type="button" data-collection-routes-source-offline-package ${rows.length ? "" : "disabled"}>
+        Offline balíček
+      </button>
+    </div>
+  `;
+}
+
+function collectionRoutesSitesRefreshSecondsRemaining() {
+  const nextAt = Date.parse(collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt || "");
+  if (!Number.isFinite(nextAt)) {
+    return collectionRoutesMetricValue(collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs, 90 * 1000) / 1000;
+  }
+  return Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+}
+
+function collectionRoutesSitesRefreshLabel() {
+  if (collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.kommunalPairingLoading) {
+    return "Refresh běží";
+  }
+  const seconds = collectionRoutesSitesRefreshSecondsRemaining();
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `Refresh za ${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+function collectionRoutesSitesRefreshStatusHtml() {
+  return `<span class="employee-card-status employee-card-status--waiting collection-routes-refresh-status">${escapeHtml(collectionRoutesSitesRefreshLabel())}</span>`;
+}
+
+function collectionRoutesScheduleCountdownRender() {
+  if (collectionRoutesSitesCountdownTimer || typeof window === "undefined") {
+    return;
+  }
+  collectionRoutesSitesCountdownTimer = window.setInterval(() => {
+    if (collectionRoutesPilotState.activeTab === "sites" || collectionRoutesPilotState.activeTab === "svozove-trasy") {
+      render();
+    }
+  }, 1000);
+}
+
+async function refreshCollectionRoutesSitesReadOnlySnapshot(options = {}) {
+  if (
+    !authState.user ||
+    collectionRoutesPilotState.svozKaiserWatchdogLoading ||
+    collectionRoutesPilotState.kommunalPairingLoading ||
+    !collectionRoutesCanViewPilot(currentUser())
+  ) {
+    return;
+  }
+  const currentPagination = collectionRoutesPilotState.kommunalPairingPagination || {};
+  collectionRoutesPilotState.kommunalPairingAutoRefreshLastAt = new Date().toISOString();
+  await loadCollectionRoutesSvozKaiserWatchdog({ force: true, live: true, renderAfter: false });
+  await loadCollectionRoutesKommunalPairingRows({
+    force: true,
+    preserveExpanded: true,
+    page: currentPagination.page || 1,
+    pageSize: currentPagination.pageSize || 100,
+    renderAfter: false
+  });
+  collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt =
+    new Date(Date.now() + collectionRoutesMetricValue(collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs, 90 * 1000)).toISOString();
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
+function scheduleCollectionRoutesSitesAutoRefresh(user = currentUser()) {
+  if (!user || !collectionRoutesCanViewPilot(user) || typeof window === "undefined") {
+    return;
+  }
+  collectionRoutesScheduleCountdownRender();
+  if (!collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt) {
+    collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt =
+      new Date(Date.now() + collectionRoutesMetricValue(collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs, 90 * 1000)).toISOString();
+  }
+  if (collectionRoutesSitesAutoRefreshTimer) {
+    return;
+  }
+  const delay = Math.max(1000, collectionRoutesSitesRefreshSecondsRemaining() * 1000);
+  collectionRoutesSitesAutoRefreshTimer = window.setTimeout(async () => {
+    collectionRoutesSitesAutoRefreshTimer = null;
+    await refreshCollectionRoutesSitesReadOnlySnapshot({ renderAfter: false });
+    scheduleCollectionRoutesSitesAutoRefresh(currentUser());
+    render();
+  }, delay);
+}
+
 function collectionRoutesSourceRoutesSection(user = currentUser()) {
   ensureCollectionRoutesSitesReadOnlyData(user);
   const rows = collectionRoutesVistosRouteDisplayRows();
+  const selectedView = collectionRoutesSourceRouteView();
   const filterConfirmed = collectionRoutesSvozKaiserFieldConfirmed();
   const loadedAt = collectionRoutesPilotState.kommunalPairingLoadedAt ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt) : "";
   const statusLabel = collectionRoutesPilotState.kommunalPairingLoading
@@ -17052,14 +17182,22 @@ function collectionRoutesSourceRoutesSection(user = currentUser()) {
           <h2 id="collection-routes-source-routes-title">Svozové trasy</h2>
           <p>Pracovní seznam tras z Vistos Svoz Kaiser dat.</p>
         </div>
-        <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(statusLabel)}</span>
+        <div class="collection-routes-panel__head-status">
+          <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(statusLabel)}</span>
+          ${collectionRoutesSitesRefreshStatusHtml()}
+        </div>
       </div>
 
       ${loadedAt ? `<p class="module-feedback__notice">Načteno: ${escapeHtml(loadedAt)} · zdroj: ${escapeHtml(collectionRoutesPilotState.kommunalPairingSource || "Vistos API")}</p>` : ""}
       ${collectionRoutesPilotState.kommunalPairingError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.kommunalPairingError)}</p>` : ""}
       ${collectionRoutesVistosRouteFilterPanel(rows)}
-      ${collectionRoutesVistosRouteSummaryCards(rows)}
-      ${collectionRoutesVistosRouteTable(rows)}
+      ${collectionRoutesVistosRouteActions(rows)}
+      ${collectionRoutesSourceRouteViewSwitch(rows)}
+      ${selectedView === "driver"
+        ? collectionRoutesSourceDriverModePanel(rows)
+        : selectedView === "map"
+          ? collectionRoutesSourceMapReadinessPanel(rows)
+          : `${collectionRoutesVistosRouteSummaryCards(rows)}${collectionRoutesVistosRouteTable(rows)}`}
     </section>
   `;
 }
@@ -17531,14 +17669,89 @@ function collectionRoutesVistosAddressPartsFromItem(item = {}) {
   };
 }
 
+function collectionRoutesVistosGenericAddressPlace(value = "") {
+  const text = String(value || "").trim();
+  const key = normalizeAccessSearchText(text).replace(/[^a-z0-9]+/g, "");
+  if (!text) {
+    return true;
+  }
+  if (["branch", "company", "customer", "directory", "directorybranch", "firma", "pobocka", "zakaznik"].includes(key)) {
+    return true;
+  }
+  return /\s-\s*\d{6,12}$/.test(text) && (
+    /\b(?:s\.?\s*r\.?\s*o|a\.?\s*s|spol|druzstvo)\b/i.test(text) ||
+    text.toLocaleLowerCase("cs").includes("s.r.o") ||
+    text.toLocaleLowerCase("cs").includes("a.s")
+  );
+}
+
+function collectionRoutesVistosStrictAddressPlace(...values) {
+  return values
+    .map((value) => String(value || "").trim())
+    .find((value) => value && !collectionRoutesVistosGenericAddressPlace(value)) || "";
+}
+
 function collectionRoutesVistosAddressPartsLabel(parts = {}) {
+  const region = /^\d+$/.test(String(parts.region || "").trim()) ? "" : parts.region;
+  const country = /^\d+$/.test(String(parts.country || "").trim()) ? "" : parts.country;
   return [
-    parts.street ? `ulice: ${parts.street}` : "",
+    parts.street ? `svozová ulice: ${parts.street}` : "",
     parts.city ? `město: ${parts.city}` : "",
-    parts.region ? `kraj/stát: ${parts.region}` : "",
-    parts.country ? `země: ${parts.country}` : "",
+    region ? `kraj/stát: ${region}` : "",
+    country ? `země: ${country}` : "",
     parts.postalCode ? `PSČ: ${parts.postalCode}` : ""
   ].filter(Boolean).join(" · ");
+}
+
+const COLLECTION_ROUTES_VISTOS_PICKUP_DAY_LABELS = {
+  18330: "pondělí lichá",
+  18331: "úterý lichá",
+  18332: "středa lichá",
+  18333: "čtvrtek lichá",
+  18334: "pátek lichá",
+  18335: "sobota lichá",
+  18336: "neděle lichá",
+  18337: "pondělí sudá",
+  18338: "úterý sudá",
+  18339: "středa sudá",
+  18340: "čtvrtek sudá",
+  18341: "pátek sudá",
+  18342: "sobota sudá",
+  18343: "neděle sudá"
+};
+
+function collectionRoutesVistosPickupDayDisplayValue(value = "") {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  const parts = text
+    .split(/[,;|]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length > 1) {
+    return parts.map(collectionRoutesVistosPickupDayDisplayValue).filter(Boolean).join(", ");
+  }
+  return COLLECTION_ROUTES_VISTOS_PICKUP_DAY_LABELS[text] || text;
+}
+
+function collectionRoutesVistosPickupDaysDisplay(...values) {
+  const seen = new Set();
+  const labels = [];
+  values.forEach((value) => {
+    collectionRoutesVistosPickupDayDisplayValue(value)
+      .split(/,\s*/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((label) => {
+        const key = label.toLocaleLowerCase("cs");
+        if (!seen.has(key)) {
+          seen.add(key);
+          labels.push(label);
+        }
+      });
+  });
+  return labels.join(", ");
 }
 
 function collectionRoutesVistosContainerEvidenceLabel(item = {}) {
@@ -17569,7 +17782,7 @@ function collectionRoutesIssueTypesForCell(item, cell) {
     return hasAny("date", "svoz od", "svoz do", "start", "end");
   }
   if (cell === "addressPlace") {
-    return hasAny("address", "adresa", "stanoviste", "stanoviště", "loading");
+    return hasAny("address", "adresa", "adresni", "adresní", "loading");
   }
   if (cell === "waste") {
     return hasAny("waste", "odpad", "product", "produkt", "mappable");
@@ -17611,6 +17824,7 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
   const summary = collectionRoutesImportRowSummary(sourceRow);
   const issues = collectionRoutesIssuesFromValue(summary.issues || sourceRow.issues);
   const addressParts = collectionRoutesVistosAddressPartsFromItem({ ...sourceRow, ...summary });
+  const addressPlace = collectionRoutesVistosStrictAddressPlace(summary.addressPlaceRaw, sourceRow.addressPlaceRaw);
   const containerCount = collectionRoutesMetricValue(summary.containerCount, 0);
   const normalizedContainerCount = containerCount > 0 ? containerCount : summary.containerVolume ? 1 : 0;
   const container = summary.containerVolume
@@ -17627,7 +17841,8 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     sourceRow,
     summary,
     dateRange: collectionRoutesVistosDateRangeLabel(summary.pickupFrom || sourceRow.pickupFrom, summary.pickupTo || sourceRow.pickupTo),
-    addressPlace: summary.addressPlaceRaw || sourceRow.addressPlaceRaw || summary.addressRaw || summary.siteName || "neurčeno",
+    addressPlace: addressPlace || "chybí Adresní místo",
+    addressPlaceMissing: !addressPlace,
     addressParts,
     addressPartsLabel: collectionRoutesVistosAddressPartsLabel(addressParts),
     stationName: summary.stationName || sourceRow.stationName || "",
@@ -17635,7 +17850,12 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     container,
     containerEvidenceLabel: collectionRoutesVistosContainerEvidenceLabel(containerEvidence),
     interval: summary.frequency || "neurčeno",
-    pickupDays: summary.pickupDaysText || summary.pickupDays || sourceRow.pickupDaysText || sourceRow.pickupDays || "neurčeno",
+    pickupDays: collectionRoutesVistosPickupDaysDisplay(
+      summary.pickupDaysText,
+      summary.pickupDays,
+      sourceRow.pickupDaysText,
+      sourceRow.pickupDays
+    ) || "neurčeno",
     note: summary.note || sourceRow.note || "",
     customerManagerMobile: summary.customerManagerMobile || sourceRow.customerManagerMobile || "",
     customerManagerEmail: summary.customerManagerEmail || sourceRow.customerManagerEmail || "",
@@ -17841,7 +18061,7 @@ function collectionRoutesVistosRouteRows() {
   return collectionRoutesVistosSourceRows().map((sourceRow, index) => {
     const summary = collectionRoutesImportRowSummary(sourceRow);
     const issues = collectionRoutesIssuesFromValue(summary.issues || sourceRow.issues);
-    const pickupDaysText = [
+    const pickupDaysRawText = [
       summary.pickupDaysText,
       summary.pickupDays,
       sourceRow.pickupDaysText,
@@ -17849,17 +18069,28 @@ function collectionRoutesVistosRouteRows() {
       summary.collectionDay,
       sourceRow.collectionDay
     ].filter(Boolean).join(" ");
+    const pickupDaysText = collectionRoutesVistosPickupDaysDisplay(
+      summary.pickupDaysText,
+      summary.pickupDays,
+      sourceRow.pickupDaysText,
+      sourceRow.pickupDays,
+      summary.collectionDay,
+      sourceRow.collectionDay
+    ) || pickupDaysRawText;
     const pickupDayCodes = collectionRoutesVistosPickupDayCodesFromText(pickupDaysText);
     const containerCount = collectionRoutesMetricValue(summary.containerCount ?? sourceRow.containerCount, 0);
     const containerVolume = summary.containerVolume ?? sourceRow.containerVolume ?? "";
     const issueCount = collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, issues.length);
     const wasteType = summary.wasteType || sourceRow.wasteType || "ostatní";
+    const strictAddressPlace = collectionRoutesVistosStrictAddressPlace(summary.addressPlaceRaw, sourceRow.addressPlaceRaw);
+    const routeAddressText = strictAddressPlace || summary.addressRaw || sourceRow.addressRaw || "-";
     const routeRow = {
       id: sourceRow.id || sourceRow.rowId || `vistos-route-${index + 1}`,
       sourceKind: "vistos",
       routeOrder: index + 1,
       customerName: summary.customerName || sourceRow.customerName || "-",
-      addressText: summary.addressPlaceRaw || sourceRow.addressPlaceRaw || summary.addressRaw || sourceRow.addressRaw || summary.siteName || sourceRow.siteName || "-",
+      addressText: routeAddressText,
+      addressPlaceText: strictAddressPlace,
       addressParts: collectionRoutesVistosAddressPartsFromItem({ ...sourceRow, ...summary }),
       stationName: summary.stationName || sourceRow.stationName || "",
       wasteType,
@@ -17874,8 +18105,8 @@ function collectionRoutesVistosRouteRows() {
       note: summary.note || sourceRow.note || "",
       pickupDaysText: pickupDaysText || "neurčeno",
       pickupDayCodes,
-      weekMode: collectionRoutesVistosWeekModeFromText(pickupDaysText || summary.frequency || sourceRow.frequency),
-      weekModes: collectionRoutesVistosWeekModesFromText(pickupDaysText || summary.frequency || sourceRow.frequency),
+      weekMode: collectionRoutesVistosWeekModeFromText(pickupDaysText || pickupDaysRawText || summary.frequency || sourceRow.frequency),
+      weekModes: collectionRoutesVistosWeekModesFromText(pickupDaysText || pickupDaysRawText || summary.frequency || sourceRow.frequency),
       vehicleCode: summary.vehicleCode || sourceRow.vehicleCode || "all",
       sourceFile: "Vistos API",
       sourceSheet: summary.contractNumber || summary.sourceContractId || sourceRow.sourceContractId || "-",
@@ -17884,7 +18115,7 @@ function collectionRoutesVistosRouteRows() {
       vistosIssue: issues.map((issue) => issue.label || issue.issueType || issue.type).filter(Boolean).join(", "),
       vistosContractNumber: summary.contractNumber || summary.sourceContractId || sourceRow.sourceContractId || "-",
       vistosCustomerName: summary.customerName || sourceRow.customerName || "-",
-      vistosSiteName: summary.siteName || summary.addressPlaceRaw || sourceRow.addressPlaceRaw || summary.addressRaw || sourceRow.addressRaw || "-",
+      vistosSiteName: summary.siteName || strictAddressPlace || summary.addressRaw || sourceRow.addressRaw || "-",
       customerManagerMobile: summary.customerManagerMobile || sourceRow.customerManagerMobile || "",
       customerManagerEmail: summary.customerManagerEmail || sourceRow.customerManagerEmail || "",
       issueCount,
@@ -18132,7 +18363,7 @@ function collectionRoutesVistosContractDetailTable(contractRow) {
           ${contractRow.items.map((item) => `
             <tr class="${item.issueCount > 0 || item.issues.length ? "collection-routes-site-detail-item--danger" : ""}">
               <td class="${collectionRoutesDetailCellClass(item, "dateRange")}" data-label="Od-do">${escapeHtml(item.dateRange)}</td>
-              <td class="${collectionRoutesDetailCellClass(item, "addressPlace")}" data-label="Adresní místo">
+              <td class="${collectionRoutesDetailCellClass(item, "addressPlace")} ${item.addressPlaceMissing ? "collection-routes-site-detail-cell--danger" : ""}" data-label="Adresní místo">
                 <strong>${escapeHtml(item.addressPlace)}</strong>
                 ${item.addressPartsLabel ? `<span class="collection-routes-site-detail-subline">${escapeHtml(item.addressPartsLabel)}</span>` : ""}
               </td>
@@ -18221,6 +18452,7 @@ function collectionRoutesVistosSitesTable() {
 }
 
 function ensureCollectionRoutesSitesReadOnlyData(user = currentUser()) {
+  scheduleCollectionRoutesSitesAutoRefresh(user);
   if (
     user &&
     collectionRoutesCanViewPilot(user) &&
@@ -18228,7 +18460,7 @@ function ensureCollectionRoutesSitesReadOnlyData(user = currentUser()) {
     !collectionRoutesPilotState.svozKaiserWatchdogLiveAttempted
   ) {
     collectionRoutesPilotState.svozKaiserWatchdogLiveAttempted = true;
-    void Promise.resolve().then(() => loadCollectionRoutesSvozKaiserWatchdog({ force: true, live: true }));
+    void Promise.resolve().then(() => refreshCollectionRoutesSitesReadOnlySnapshot());
   }
   if (
     collectionRoutesCanRunImportPreview(user) &&
@@ -18262,7 +18494,10 @@ function collectionRoutesSitesSection(user) {
           <h2 id="collection-routes-sites-title">Stanoviště z Vistosu</h2>
           <p>Řádkový read-only seznam z Vistos Komunál dat. Zdroj pro tuto záložku je Vistos API.</p>
         </div>
-        <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(isLoadingVistosSites ? "Načítám Vistos" : filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
+        <div class="collection-routes-panel__head-status">
+          <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(isLoadingVistosSites ? "Načítám Vistos" : filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
+          ${collectionRoutesSitesRefreshStatusHtml()}
+        </div>
       </div>
       ${loadingNotice ? `<p class="module-feedback__notice">${escapeHtml(loadingNotice)}</p>` : ""}
       <div class="collection-routes-stats collection-routes-sites-summary">
@@ -26940,7 +27175,7 @@ async function loadCollectionRoutesKommunalPairingRows(options = {}) {
     return;
   }
 
-  if (options.force) {
+  if (options.force && options.preserveExpanded !== true) {
     collectionRoutesPilotState.kommunalExpandedContractKeys = [];
   }
 
@@ -27563,6 +27798,9 @@ function collectionRoutesSourceDriverClientEventId(action, sourceRowId) {
 }
 
 async function ensureCollectionRoutesSourceDriverRun() {
+  if (collectionRoutesCurrentRouteRows().some((row) => row.sourceKind === "vistos")) {
+    throw new Error("HOTOVO pro Vistos-first trasy čeká na samostatný driver-run backend. Teď je řidičský tablet read-only.");
+  }
   const routePayload = collectionRoutesSourceDriverCurrentRoutePayload();
   if (!routePayload.sourceBatchId) {
     throw new Error("Nejdřív vyber uložený import 13 Excelů.");
@@ -27584,7 +27822,7 @@ async function ensureCollectionRoutesSourceDriverRun() {
 }
 
 async function recordCollectionRoutesSourceDriverEvent(action, { reason = "", note = "" } = {}) {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   const selectedIndex = collectionRoutesSourceDriverSelectedIndex(rows);
   const row = rows[selectedIndex] || null;
   const sourceRowId = row?.id || "";
@@ -27642,7 +27880,7 @@ function setCollectionRoutesSourceRouteView(view) {
 }
 
 function selectCollectionRoutesSourceDriverIndex(index, message = "") {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   if (!rows.length) {
     collectionRoutesPilotState.sourceDriverSelectedRowKey = "";
     collectionRoutesPilotState.sourceDriverRouteDone = false;
@@ -27664,7 +27902,7 @@ function selectCollectionRoutesSourceDriverIndex(index, message = "") {
 }
 
 function moveCollectionRoutesSourceDriverSelection(delta, message = "") {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   if (!rows.length) {
     return;
   }
@@ -27673,7 +27911,7 @@ function moveCollectionRoutesSourceDriverSelection(delta, message = "") {
 }
 
 function completeCollectionRoutesSourceDriverStop() {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   if (!rows.length) {
     return;
   }
@@ -27686,7 +27924,7 @@ function completeCollectionRoutesSourceDriverStop() {
 }
 
 function skipCollectionRoutesSourceDriverStop() {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   if (!rows.length) {
     return;
   }
@@ -27777,7 +28015,7 @@ async function confirmCollectionRoutesSourceDriverDone() {
 }
 
 function selectCollectionRoutesSourceDriverStop(rowKey) {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   const index = rows.findIndex((row, rowIndex) => collectionRoutesSourceDriverRowKey(row, rowIndex) === rowKey);
   if (index < 0) {
     return;
@@ -28151,20 +28389,22 @@ function collectionRoutesSourcePrintServiceLabel(row) {
 }
 
 function printCollectionRoutesSourcePdf() {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   if (!rows.length) {
-    collectionRoutesPilotState.sourceImportError = "Není co tisknout do PDF. Nahrajte 13 Excelů nebo upravte filtr.";
+    collectionRoutesPilotState.sourceImportError = "Není co tisknout do PDF. Uprav filtr trasy.";
     collectionRoutesPilotState.sourceImportMessage = "";
     render();
     return;
   }
 
   const summary = collectionRoutesSourceRowsMetrics(rows);
-  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const isVistosRoute = rows.some((row) => row.sourceKind === "vistos");
+  const filters = isVistosRoute ? (collectionRoutesPilotState.vistosRouteFilters || {}) : (collectionRoutesPilotState.sourceFilters || {});
   const selectedBatch = collectionRoutesSourceSelectedBatch();
+  const routeSourceLabel = collectionRoutesCurrentRouteSourceLabel(rows);
   const mappingCounts = summary.mappingCounts || {};
   const wasteCounts = summary.wasteCounts || {};
-  const title = `Svozová trasa ${collectionRoutesSourceRouteTitle()}`;
+  const title = `Svozová trasa ${collectionRoutesCurrentRouteTitle()}`;
   const generatedAt = formatDateTime(new Date().toISOString()) || new Date().toISOString();
   const batchLabel = formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "aktuální import";
   const batchId = selectedBatch?.id || collectionRoutesPilotState.sourceSelectedBatchId || "-";
@@ -28197,10 +28437,10 @@ function printCollectionRoutesSourcePdf() {
             <div>
               <p class="print-kicker">Svozové trasy · detailní PDF</p>
               <h1>${escapeHtml(title)}</h1>
-              <p class="print-subtitle">Read-only podklad z aktuálního filtru. Pořadí je podle zdrojového Excelu; nejde o AI optimalizaci ani ostrou trasu.</p>
+              <p class="print-subtitle">Read-only podklad z aktuálního filtru. Nejde o ostrou trasu ani zápis do Vistosu.</p>
             </div>
             <div class="print-route-state">
-              <span class="print-route-chip">Zdroj: 13 Excelů</span>
+              <span class="print-route-chip">Zdroj: ${escapeHtml(routeSourceLabel)}</span>
               <span class="print-route-chip">Vistos: read-only</span>
               <span class="print-route-chip">Ostrá trasa: NE</span>
             </div>
@@ -28209,7 +28449,7 @@ function printCollectionRoutesSourcePdf() {
             ${collectionRoutesSourcePrintSummaryCard("Datum generování", generatedAt)}
             ${collectionRoutesSourcePrintSummaryCard("Den", collectionRoutesSourceDayLabel(filters.day || "all"))}
             ${collectionRoutesSourcePrintSummaryCard("Týden", collectionRoutesSourceWeekLabel(filters.week || "all"))}
-            ${collectionRoutesSourcePrintSummaryCard("Auto", collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}
+            ${isVistosRoute ? "" : collectionRoutesSourcePrintSummaryCard("Auto", collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}
             ${collectionRoutesSourcePrintSummaryCard("Filtr odpadu", selectedWaste)}
             ${collectionRoutesSourcePrintSummaryCard("Zastávky", collectionRoutesMetricValue(summary.rowCount || rows.length))}
             ${collectionRoutesSourcePrintSummaryCard("Nádoby", collectionRoutesMetricValue(summary.containerCount || 0))}
@@ -28219,7 +28459,7 @@ function printCollectionRoutesSourcePdf() {
             ${collectionRoutesSourcePrintSummaryCard("Batch", batchId, { double: true })}
             ${collectionRoutesSourcePrintSummaryCard("Mapování", mappingBreakdown, { wide: true })}
             ${collectionRoutesSourcePrintSummaryCard("Odpady v trase", wasteBreakdown, { wide: true })}
-            ${collectionRoutesSourcePrintSummaryCard("Vistos", "read-only match bez rozšíření rozsahu mimo 13 Excelů", { wide: true })}
+            ${collectionRoutesSourcePrintSummaryCard("Vistos", "read-only bez zápisu do Vistosu", { wide: true })}
           </section>
           <p class="print-safety">Nevytváří ostré trasy, neposílá SMS/e-maily, nespouští automatizace a nepřepisuje původní dispečerské pořadí.</p>
           <table class="print-table print-table--detail">
@@ -28229,7 +28469,7 @@ function printCollectionRoutesSourcePdf() {
               <th class="col-stop">Zákazník / adresa</th>
               <th class="col-service">Odpad / nádoba / frekvence</th>
               <th class="col-note">Poznámka</th>
-              <th class="col-source">Zdroj Excel</th>
+              <th class="col-source">Zdroj</th>
               <th class="col-vistos">Vistos stav / detail</th>
               <th class="col-issue">Problém mapování</th>
             </tr>
@@ -28268,18 +28508,20 @@ function printCollectionRoutesSourcePdf() {
 }
 
 function printCollectionRoutesSourceDriverPreview() {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   if (!rows.length) {
-    collectionRoutesPilotState.sourceImportError = "Není co tisknout pro řidiče. Nahrajte 13 Excelů nebo upravte filtr.";
+    collectionRoutesPilotState.sourceImportError = "Není co tisknout pro řidiče. Uprav filtr trasy.";
     collectionRoutesPilotState.sourceImportMessage = "";
     render();
     return;
   }
 
   const summary = collectionRoutesSourceRowsMetrics(rows);
-  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const isVistosRoute = rows.some((row) => row.sourceKind === "vistos");
+  const filters = isVistosRoute ? (collectionRoutesPilotState.vistosRouteFilters || {}) : (collectionRoutesPilotState.sourceFilters || {});
   const selectedBatch = collectionRoutesSourceSelectedBatch();
-  const title = `Řidičský náhled ${collectionRoutesSourceRouteTitle()}`;
+  const routeSourceLabel = collectionRoutesCurrentRouteSourceLabel(rows);
+  const title = `Řidičský náhled ${collectionRoutesCurrentRouteTitle()}`;
   const generatedAt = formatDateTime(new Date().toISOString()) || new Date().toISOString();
   const batchLabel = formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "aktuální import";
   const selectedWaste = collectionRoutesSourceWasteFilterLabel(filters.waste || "all");
@@ -28301,10 +28543,10 @@ function printCollectionRoutesSourceDriverPreview() {
             <div>
               <p class="print-kicker">Svozové trasy · tisk pro řidiče</p>
               <h1>${escapeHtml(title)}</h1>
-              <p class="print-subtitle">Read-only tiskový podklad z aktuálního filtru. Pořadí je podle zdrojového Excelu; nejde o optimalizovanou ani ostrou trasu.</p>
+              <p class="print-subtitle">Read-only tiskový podklad z aktuálního filtru. Nejde o optimalizovanou ani ostrou trasu.</p>
             </div>
             <div class="print-route-state">
-              <span class="print-route-chip">Zdroj: 13 Excelů</span>
+              <span class="print-route-chip">Zdroj: ${escapeHtml(routeSourceLabel)}</span>
               <span class="print-route-chip">Ostrá trasa: NE</span>
               <span class="print-route-chip">Navigace/GPS: NE</span>
             </div>
@@ -28313,14 +28555,14 @@ function printCollectionRoutesSourceDriverPreview() {
             ${collectionRoutesSourcePrintSummaryCard("Datum", generatedAt)}
             ${collectionRoutesSourcePrintSummaryCard("Den", collectionRoutesSourceDayLabel(filters.day || "all"))}
             ${collectionRoutesSourcePrintSummaryCard("Týden", collectionRoutesSourceWeekLabel(filters.week || "all"))}
-            ${collectionRoutesSourcePrintSummaryCard("Auto", collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}
+            ${isVistosRoute ? "" : collectionRoutesSourcePrintSummaryCard("Auto", collectionRoutesSourceVehicleLabel(filters.vehicle || "all"))}
             ${collectionRoutesSourcePrintSummaryCard("Odpad", selectedWaste)}
             ${collectionRoutesSourcePrintSummaryCard("Zastávky", collectionRoutesMetricValue(summary.rowCount || rows.length))}
             ${collectionRoutesSourcePrintSummaryCard("Nádoby", collectionRoutesMetricValue(summary.containerCount || 0))}
             ${collectionRoutesSourcePrintSummaryCard("Čas", `${collectionRoutesMetricValue(summary.estimatedMinutes || 0)} min`)}
             ${collectionRoutesSourcePrintSummaryCard("Import", batchLabel)}
           </section>
-          <p class="print-safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů a automatizací. Vistos je jen read-only mapování řádků ze 13 Excelů.</p>
+          <p class="print-safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů, automatizací a zápisu do Vistosu.</p>
           <table class="print-table print-table--driver">
           <thead>
             <tr>
@@ -28652,13 +28894,17 @@ function collectionRoutesSourceOfflineStop(row, index) {
 
 function collectionRoutesSourceOfflinePackageHtml(rows = collectionRoutesSourceDisplayRows()) {
   const summary = collectionRoutesSourceRowsMetrics(rows);
-  const filters = collectionRoutesPilotState.sourceFilters || {};
+  const isVistosRoute = rows.some((row) => row.sourceKind === "vistos");
+  const filters = isVistosRoute ? (collectionRoutesPilotState.vistosRouteFilters || {}) : (collectionRoutesPilotState.sourceFilters || {});
   const selectedBatch = collectionRoutesSourceSelectedBatch();
-  const title = `Offline balíček ${collectionRoutesSourceRouteTitle()}`;
+  const routeSourceLabel = collectionRoutesCurrentRouteSourceLabel(rows);
+  const title = `Offline balíček ${collectionRoutesCurrentRouteTitle()}`;
   const generatedAt = formatDateTime(new Date().toISOString()) || new Date().toISOString();
   const selectedWaste = collectionRoutesSourceWasteFilterLabel(filters.waste || "all");
-  const batchLabel = formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "aktuální import";
-  const vehicle = collectionRoutesSourceVehicleLabel(filters.vehicle || "all");
+  const batchLabel = isVistosRoute
+    ? (collectionRoutesPilotState.kommunalPairingLoadedAt ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt) : "aktuální Vistos snapshot")
+    : (formatDateTime(selectedBatch?.createdAt) || selectedBatch?.id || "aktuální import");
+  const vehicle = isVistosRoute ? "Vistos filtr" : collectionRoutesSourceVehicleLabel(filters.vehicle || "all");
   const day = collectionRoutesSourceDayLabel(filters.day || "all");
   const week = collectionRoutesSourceWeekLabel(filters.week || "all");
 
@@ -28699,7 +28945,7 @@ function collectionRoutesSourceOfflinePackageHtml(rows = collectionRoutesSourceD
             ${collectionRoutesSourcePrintSummaryCard("T-Cars", "NE")}
           </section>
 
-          <p class="offline-safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů, automatizací a ostrých tras. Pořadí zastávek je podle aktuálního zdroje 13 Excelů / opravného sešitu.</p>
+          <p class="offline-safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů, automatizací a ostrých tras. Zdroj: ${escapeHtml(routeSourceLabel)}.</p>
 
           <section class="offline-list" aria-label="Zastávky offline trasy">
             ${rows.map((row, index) => collectionRoutesSourceOfflineStop(row, index)).join("")}
@@ -28744,9 +28990,9 @@ function collectionRoutesSourceOfflinePackageHtml(rows = collectionRoutesSourceD
 }
 
 function exportCollectionRoutesSourceOfflinePackage() {
-  const rows = collectionRoutesSourceDisplayRows();
+  const rows = collectionRoutesCurrentRouteRows();
   if (!rows.length) {
-    collectionRoutesPilotState.sourceImportError = "Není co uložit do offline balíčku. Nahrajte 13 Excelů nebo upravte filtr.";
+    collectionRoutesPilotState.sourceImportError = "Není co uložit do offline balíčku. Uprav filtr trasy.";
     collectionRoutesPilotState.sourceImportMessage = "";
     render();
     return;

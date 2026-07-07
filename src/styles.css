@@ -2553,6 +2553,19 @@ h1 {
   text-align: left;
 }
 
+.collection-routes-panel__head-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.collection-routes-refresh-status {
+  border-color: rgba(46, 116, 167, 0.18);
+  background: #eef8ff;
+  color: #24628f;
+}
+
 .collection-routes-panel h2 {
   margin: 0;
   color: var(--ink);
@@ -3269,6 +3282,10 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.collection-routes-route-actions {
+  justify-content: flex-start;
 }
 
 .collection-routes-view-switch {

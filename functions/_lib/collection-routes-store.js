@@ -138,21 +138,13 @@ const VISTOS_CONSISTENCY_FIELD_SPECS = [
     minScore: 76,
     candidates: [
       "AdresniMisto",
-      "SvozovaAdresa",
-      "SvozoveMisto",
-      "Stanoviste",
-      "Nakladkovaadresa_FK",
-      "LoadingAddress",
-      "PickupAddress",
+      "PickupAddressRuian",
       "AddressPlace"
     ],
     includeGroups: [
       ["adresni", "misto"],
-      ["svozova", "adresa"],
-      ["svozove", "misto"],
-      ["nakladkova", "adresa"],
-      ["pickup", "address"],
-      ["address", "place"]
+      ["address", "place"],
+      ["pickup", "address", "ruian"]
     ]
   },
   {
@@ -1614,20 +1606,25 @@ function vistosAddressPlaceCandidateScore(item = {}) {
   ].filter(Boolean).join(" "));
   let score = 0;
 
-  if (metadataKey.includes("adresnimisto") || metadataKey.includes("addressplace")) {
+  if (metadataKey.includes("adresnimisto") || metadataKey.includes("addressplace") || metadataKey.includes("pickupaddressruian")) {
     score += 120;
   }
   if ((metadataKey.includes("adresni") && metadataKey.includes("misto")) || (metadataKey.includes("address") && metadataKey.includes("place"))) {
     score += 90;
   }
-  if ((metadataKey.includes("svozova") && metadataKey.includes("adresa")) || (metadataKey.includes("nakladkova") && metadataKey.includes("adresa"))) {
-    score += 70;
+  if (metadataKey.includes("ruian")) {
+    score += 60;
   }
-  if (metadataKey.includes("address") || metadataKey.includes("adresa")) {
-    score += 40;
+  if (
+    (metadataKey.includes("svozova") && metadataKey.includes("adresa")) ||
+    (metadataKey.includes("nakladkova") && metadataKey.includes("adresa")) ||
+    metadataKey.includes("loadingaddress") ||
+    metadataKey === "pickupaddress"
+  ) {
+    score -= 160;
   }
-  if (metadataKey.includes("stanoviste") && !metadataKey.includes("adresa")) {
-    score -= 25;
+  if (metadataKey.includes("stanoviste")) {
+    score -= 180;
   }
   if (/\d/.test(cleanString(value))) {
     score += 20;
@@ -1649,7 +1646,7 @@ function preferredVistosAddressPlaceValue(values = [], ...fallbacks) {
     .filter((candidate) => cleanString(candidate.value))
     .sort((left, right) => right.score - left.score);
 
-  return firstNonGenericVistosAddressPlace(candidates[0]?.value, ...fallbacks);
+  return firstNonGenericVistosAddressPlace(candidates[0]?.value);
 }
 
 function firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, fieldKey, ...fallbacks) {
@@ -2396,14 +2393,19 @@ function addressTokenSimilarity(left = "", right = "") {
   return overlap / Math.min(leftTokens.size, rightTokens.size);
 }
 
-function addressPlaceQualityIssues({ addressPlaceRaw, addressRaw, siteName }) {
+function addressPlaceQualityIssues({ addressPlaceRaw, addressRaw }) {
   const issues = [];
-  const address = firstNonEmpty(addressPlaceRaw, addressRaw, siteName);
+  const address = cleanString(addressPlaceRaw);
   const normalized = normalizeVistosWatchdogText(address);
   const loadingAddress = cleanString(addressRaw);
   const comparableLoadingAddress = isGenericVistosAddressPlaceValue(loadingAddress) ? "" : loadingAddress;
 
   if (!address) {
+    issues.push({
+      type: "missing-address-place",
+      severity: "error",
+      message: "Chybí Adresní místo."
+    });
     return issues;
   }
 
@@ -2724,7 +2726,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     const stationValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "siteOptional");
     const stationName = firstNonEmpty(...vistosConsistencyDisplayValues(stationValues));
     const addressPlaceValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "addressPlace");
-    const addressPlaceRaw = preferredVistosAddressPlaceValue(addressPlaceValues, stationName, addressRaw, siteName);
+    const addressPlaceRaw = preferredVistosAddressPlaceValue(addressPlaceValues);
     const addressParts = compactVistosAddressParts(vistosAddressPartsFromFields(contract, null, consistencyFields));
     const customerManagerMobileValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerMobile");
     const customerManagerEmailValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerEmail");
@@ -2751,7 +2753,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     if (possibleSiteIds.size > 1 && !rowHasExplicitLoadingAddress(contract)) {
       baseIssues.push({ type: "multiple-sites-contract", severity: "info", message: "Smlouva má více možných adresních vazeb bez jasné nakládkové adresy." });
     }
-    baseIssues.push(...addressPlaceQualityIssues({ addressPlaceRaw, addressRaw, siteName }));
+    baseIssues.push(...addressPlaceQualityIssues({ addressPlaceRaw, addressRaw }));
 
     if (!contractRowsForContract.length) {
       const svozKaiserValue = rowSvozKaiserValue(contract, null, svozKaiserField);
@@ -2873,7 +2875,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         stationName
       );
       const rowAddressPlaceValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace");
-      const rowAddressPlaceRaw = preferredVistosAddressPlaceValue(rowAddressPlaceValues, rowStationName, addressPlaceRaw, addressRaw, siteName);
+      const rowAddressPlaceRaw = preferredVistosAddressPlaceValue(rowAddressPlaceValues) || addressPlaceRaw;
       const rowAddressParts = compactVistosAddressParts(vistosAddressPartsFromFields(contract, contractRow, consistencyFields, {
         street: addressParts.addressStreet,
         city: addressParts.addressCity,
@@ -3142,6 +3144,7 @@ function watchdogIssueLabel(issueType = "") {
   const labels = {
     "missing-customer": "Chybí zákazník",
     "missing-loading-address": "Chybí svozová/nakládková adresa",
+    "missing-address-place": "Chybí Adresní místo",
     "incomplete-address-place": "Neúplné adresní místo",
     "address-place-missing-number": "Adresní místo bez čísla",
     "address-place-possible-typo": "Možný překlep v adresním místě",
@@ -3177,6 +3180,7 @@ function watchdogIssueAction(issueType = "") {
   const actions = {
     "missing-customer": "Doplnit zákazníka / sídlo ve Vistosu.",
     "missing-loading-address": "Doplnit svozovou nebo nakládkovou adresu ve Vistosu.",
+    "missing-address-place": "Doplnit skutečné pole Adresní místo ve Vistosu; nepřebírat Stanoviště jako náhradu.",
     "incomplete-address-place": "Doplnit úplné Adresní místo ve Vistosu.",
     "address-place-missing-number": "Doplnit číslo popisné/orientační v Adresním místě.",
     "address-place-possible-typo": "Zkontrolovat překlep nebo poškozený zápis v Adresním místě.",

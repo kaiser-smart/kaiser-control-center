@@ -126,7 +126,7 @@ function derive(originalText) {
     "U Vlečky 726/5c, 617 00 Brno - Komárov",
     "4 KLUCI OD KOL s.r.o. - 08576726"
   );
-  assert.equal(addressPlace, "U Vlečky 726/5c, 617 00 Brno - Komárov");
+  assert.equal(addressPlace, "");
 }
 
 {
@@ -139,6 +139,19 @@ function derive(originalText) {
     }],
     "U Vlečky 726/5c, 617 00 Brno - Komárov"
   );
+  assert.equal(addressPlace, "");
+}
+
+{
+  const addressPlace = __preferredVistosAddressPlaceValueForTest(
+    [{
+      value: "U Vlečky 726/5c, 617 00 Brno - Komárov",
+      rawValue: "U Vlečky 726/5c, 617 00 Brno - Komárov",
+      caption: "Adresní místo",
+      columnName: "PickupAddressRuian"
+    }],
+    "Stanoviště nesmí být fallback"
+  );
   assert.equal(addressPlace, "U Vlečky 726/5c, 617 00 Brno - Komárov");
 }
 
@@ -149,6 +162,15 @@ function derive(originalText) {
     siteName: "4 KLUCI OD KOL s.r.o. - 08576726"
   });
   assert.equal(issues.some((issue) => issue.type === "address-place-loading-address-mismatch"), false);
+}
+
+{
+  const issues = __addressPlaceQualityIssuesForTest({
+    addressPlaceRaw: "",
+    addressRaw: "U Vlečky 726/5c, 617 00 Brno - Komárov",
+    siteName: "Stanoviště nesmí být Adresní místo"
+  });
+  assert.equal(issues.some((issue) => issue.type === "missing-address-place"), true);
 }
 
 {
