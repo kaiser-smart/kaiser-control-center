@@ -197,6 +197,15 @@ import {
   DATA_BOX_ROUTE,
   DATA_BOX_TABS
 } from "./data/dataBox.js";
+import {
+  DATA_BOX_PLUS_AUTOPILOT_DONE,
+  DATA_BOX_PLUS_ENTITY_MODEL,
+  DATA_BOX_PLUS_LEARNING_PLAN,
+  DATA_BOX_PLUS_MAILBOXES,
+  DATA_BOX_PLUS_MESSAGES,
+  DATA_BOX_PLUS_RECOMMENDATIONS,
+  DATA_BOX_PLUS_RULES
+} from "./data/dataBoxPlus.js";
 
 const app = document.querySelector("#app");
 const orderedModules = [...modules].sort((a, b) => a.order - b.order);
@@ -323,7 +332,7 @@ const HOME_MODULE_SECTIONS = [
     id: "documents-admin",
     title: "Dokumenty a administrativa",
     description: "Datové zprávy, reporty, připomínky a nepřítomnosti.",
-    moduleIds: ["data-box", "absence", "reports", "feedback"]
+    moduleIds: ["data-box-plus", "data-box", "absence", "reports", "feedback"]
   },
   {
     id: "finance-costs",
@@ -337,6 +346,16 @@ const HOME_MODULE_SECTIONS = [
     description: "Správa uživatelů, nastavení, integrace a kontrola systému.",
     moduleIds: ["users", "settings", "system-check"]
   }
+];
+const DATA_BOX_PLUS_MODULE_KEY = "data-box-plus";
+const DATA_BOX_PLUS_TABS = [
+  { id: "command", label: "Řídicí centrum" },
+  { id: "messages", label: "Zprávy" },
+  { id: "autopilot", label: "Autopilot" },
+  { id: "confirmations", label: "Čeká na potvrzení" },
+  { id: "rules", label: "Pravidla a učení" },
+  { id: "archive", label: "Archiv" },
+  { id: "settings", label: "Nastavení" }
 ];
 const NOTIFICATION_CHANNEL_LABELS = {
   email: "E-mail",
@@ -1121,6 +1140,18 @@ const dataBoxState = {
     dateTo: ""
   },
   error: ""
+};
+const dataBoxPlusState = {
+  activeTab: "command",
+  selectedMessageId: "",
+  filter: "all",
+  search: "",
+  rulesSearch: "",
+  rulesType: "all",
+  rulesStatus: "all",
+  confirmedRecommendationIds: [],
+  dismissedRecommendationIds: [],
+  notice: ""
 };
 let dataBoxSearchRenderTimer = null;
 const quickAbsenceState = {
@@ -17321,6 +17352,685 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
   `;
 }
 
+function dataBoxPlusSearchText(parts) {
+  return parts
+    .filter((part) => part !== null && part !== undefined)
+    .join(" ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function dataBoxPlusMailbox(messageOrMailboxId) {
+  const mailboxId = typeof messageOrMailboxId === "object"
+    ? messageOrMailboxId.mailboxId
+    : messageOrMailboxId;
+  return DATA_BOX_PLUS_MAILBOXES.find((mailbox) => mailbox.id === mailboxId) || null;
+}
+
+function dataBoxPlusMessageById(messageId) {
+  return DATA_BOX_PLUS_MESSAGES.find((message) => message.id === String(messageId || "")) || null;
+}
+
+function restoreDataBoxPlusInputFocus(selector, start, end) {
+  window.requestAnimationFrame(() => {
+    const input = document.querySelector(selector);
+    if (!input) {
+      return;
+    }
+    input.focus({ preventScroll: true });
+    if (typeof input.setSelectionRange === "function") {
+      input.setSelectionRange(Number.isFinite(start) ? start : input.value.length, Number.isFinite(end) ? end : input.value.length);
+    }
+  });
+}
+
+function dataBoxPlusSelectedMessage() {
+  return dataBoxPlusMessageById(dataBoxPlusState.selectedMessageId) || DATA_BOX_PLUS_MESSAGES[0] || null;
+}
+
+function dataBoxPlusTone(value) {
+  const normalized = dataBoxPlusSearchText([value]);
+  if (normalized.includes("vysoke") || normalized.includes("urgent") || normalized.includes("problem")) return "danger";
+  if (normalized.includes("pravni") || normalized.includes("exekuce") || normalized.includes("legal")) return "legal";
+  if (normalized.includes("stredni") || normalized.includes("ceka") || normalized.includes("uci")) return "warning";
+  if (normalized.includes("nizke") || normalized.includes("archiv") || normalized.includes("spolehlive")) return "quiet";
+  if (normalized.includes("aktivni") || normalized.includes("text nacteny")) return "success";
+  return "neutral";
+}
+
+function dataBoxPlusIsDueToday(message) {
+  return ["Dnes k vyřízení", "Čeká na potvrzení", "Problém"].includes(message.status);
+}
+
+function dataBoxPlusBadge(label, tone = "neutral") {
+  return `<span class="ds-plus-badge ds-plus-badge--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function dataBoxPlusMetricItems() {
+  const newMessages = DATA_BOX_PLUS_MESSAGES.filter((message) => ["Dnes k vyřízení", "Čeká na potvrzení", "Problém"].includes(message.status)).length;
+  const today = DATA_BOX_PLUS_MESSAGES.filter(dataBoxPlusIsDueToday).length;
+  const waiting = DATA_BOX_PLUS_RECOMMENDATIONS.filter((item) => !dataBoxPlusState.confirmedRecommendationIds.includes(item.id) && !dataBoxPlusState.dismissedRecommendationIds.includes(item.id)).length;
+  const risks = DATA_BOX_PLUS_MESSAGES.filter((message) => message.riskLevel === "Vysoké").length;
+  const attachmentProblems = DATA_BOX_PLUS_MESSAGES.filter((message) => ["Nepodařilo se stáhnout", "Nepodařilo se přečíst", "Čeká na zpracování"].includes(message.attachmentStatus)).length;
+  return [
+    ["Nové zprávy", newMessages, "neutral"],
+    ["Dnes k vyřízení", today, "warning"],
+    ["Čeká na moje potvrzení", waiting, "warning"],
+    ["Vyřešeno Autopilotem", DATA_BOX_PLUS_AUTOPILOT_DONE.length, "success"],
+    ["Rizika / lhůty", risks, "danger"],
+    ["Problém s přílohou", attachmentProblems, "danger"]
+  ];
+}
+
+function dataBoxPlusTabNav() {
+  return `
+    <nav class="ds-plus-tabs" aria-label="Sekce Datových schránek Plus">
+      ${DATA_BOX_PLUS_TABS.map((tab) => `
+        <button
+          class="ds-plus-tab ${dataBoxPlusState.activeTab === tab.id ? "ds-plus-tab--active" : ""}"
+          type="button"
+          data-ds-plus-tab="${escapeHtml(tab.id)}"
+          aria-pressed="${dataBoxPlusState.activeTab === tab.id ? "true" : "false"}"
+        >
+          ${escapeHtml(tab.label)}
+        </button>
+      `).join("")}
+    </nav>
+  `;
+}
+
+function dataBoxPlusStatusNotice() {
+  return `
+    <div class="ds-plus-status-note" role="status">
+      <strong>Fáze 1: bezpečný pilot</strong>
+      <span>První verze neodesílá zprávy, nemaže data a nepracuje s ostrými přístupy. Ostré napojení patří do další potvrzené fáze.</span>
+    </div>
+  `;
+}
+
+function dataBoxPlusMetrics() {
+  return `
+    <section class="ds-plus-metrics" aria-label="Klíčové metriky">
+      ${dataBoxPlusMetricItems().map(([label, value, tone]) => `
+        <article class="ds-plus-metric ds-plus-metric--${escapeHtml(tone)}">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </section>
+  `;
+}
+
+function dataBoxPlusPriorityCard(message) {
+  const mailbox = dataBoxPlusMailbox(message);
+  return `
+    <article class="ds-plus-priority ds-plus-priority--${escapeHtml(dataBoxPlusTone(message.priority))}">
+      <div>
+        <span class="ds-plus-priority__mailbox">${escapeHtml(mailbox?.name || "Schránka")}</span>
+        <h3>${escapeHtml(message.senderName)}</h3>
+        <p>${escapeHtml(message.subject)}</p>
+        <dl>
+          <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(message.deliveredAt))}</dd></div>
+          <div><dt>Důvod priority</dt><dd>${escapeHtml(message.priorityReason)}</dd></div>
+          <div><dt>Doporučení</dt><dd>${escapeHtml(message.recommendedAction)}</dd></div>
+        </dl>
+      </div>
+      <button class="primary-action" type="button" data-ds-plus-open="${escapeHtml(message.id)}">${escapeHtml(message.primaryAction || "Otevřít zprávu")}</button>
+    </article>
+  `;
+}
+
+function dataBoxPlusRecommendationCard(item) {
+  if (dataBoxPlusState.dismissedRecommendationIds.includes(item.id)) {
+    return "";
+  }
+  const confirmed = dataBoxPlusState.confirmedRecommendationIds.includes(item.id);
+  return `
+    <article class="ds-plus-recommendation ${confirmed ? "ds-plus-recommendation--done" : ""}">
+      <p>${escapeHtml(confirmed ? "Potvrzeno. Autopilot si uloží rozhodnutí pro další podobné zprávy." : item.text)}</p>
+      <dl>
+        <div><dt>Z čeho vychází</dt><dd>${escapeHtml(item.evidence)}</dd></div>
+        <div><dt>Proč čeká</dt><dd>${escapeHtml(item.risk)}</dd></div>
+      </dl>
+      <div class="ds-plus-recommendation__actions">
+        <button class="secondary-link" type="button" data-ds-plus-open="${escapeHtml(item.messageId)}">Otevřít zprávu</button>
+        <button class="primary-action" type="button" data-ds-plus-confirm="${escapeHtml(item.id)}">Potvrdit</button>
+        <button class="secondary-link" type="button" data-ds-plus-pilot-action="Upravit návrh">Upravit</button>
+        <button class="secondary-link" type="button" data-ds-plus-dismiss="${escapeHtml(item.id)}">Zamítnout</button>
+        <button class="secondary-link" type="button" data-ds-plus-pilot-action="Naučit Autopilot pro příště">Naučit Autopilot pro příště</button>
+      </div>
+    </article>
+  `;
+}
+
+function dataBoxPlusCommandCenter() {
+  const priorityMessages = DATA_BOX_PLUS_MESSAGES.filter(dataBoxPlusIsDueToday).slice(0, 5);
+  const openRecommendations = DATA_BOX_PLUS_RECOMMENDATIONS
+    .filter((item) => !dataBoxPlusState.confirmedRecommendationIds.includes(item.id) && !dataBoxPlusState.dismissedRecommendationIds.includes(item.id))
+    .slice(0, 3);
+  const risks = DATA_BOX_PLUS_MESSAGES
+    .filter((message) => message.riskLevel === "Vysoké" || message.attachmentStatus.includes("Nepodařilo"))
+    .slice(0, 4);
+  const safeAsideCount = DATA_BOX_PLUS_MESSAGES.filter((message) => message.riskLevel === "Nízké" && message.status !== "Archivované").length + 14;
+
+  return `
+    ${dataBoxPlusMetrics()}
+    <section class="ds-plus-command-grid" aria-label="Řídicí centrum">
+      <div class="ds-plus-command-main">
+        <section class="ds-plus-band" aria-labelledby="ds-plus-today-title">
+          <div class="ds-plus-section-head">
+            <div>
+              <span>Dnes</span>
+              <h2 id="ds-plus-today-title">Dnes vyřídit</h2>
+            </div>
+            <strong>max. 5</strong>
+          </div>
+          <div class="ds-plus-priority-list">
+            ${priorityMessages.map(dataBoxPlusPriorityCard).join("")}
+          </div>
+        </section>
+
+        <section class="ds-plus-band" aria-labelledby="ds-plus-prepared-title">
+          <div class="ds-plus-section-head">
+            <div>
+              <span>Čeká na rozhodnutí</span>
+              <h2 id="ds-plus-prepared-title">Autopilot připravil</h2>
+            </div>
+          </div>
+          <div class="ds-plus-recommendation-list">
+            ${openRecommendations.map(dataBoxPlusRecommendationCard).join("")}
+          </div>
+        </section>
+      </div>
+
+      <aside class="ds-plus-command-side" aria-label="Souhrn a rizika">
+        <section class="ds-plus-side-block ds-plus-side-block--done">
+          <h2>Autopilot vyřešil</h2>
+          <p>${escapeHtml(DATA_BOX_PLUS_AUTOPILOT_DONE[0])}</p>
+          <button class="secondary-link" type="button" data-ds-plus-tab="archive">Zobrazit historii</button>
+        </section>
+        <section class="ds-plus-side-block ds-plus-side-block--risk">
+          <h2>Rizika a lhůty</h2>
+          <ul>
+            ${risks.map((message) => `<li>${escapeHtml(message.subject)} - ${escapeHtml(message.priorityReason)}</li>`).join("")}
+          </ul>
+        </section>
+        <section class="ds-plus-side-block">
+          <h2>Bezpečně stranou</h2>
+          <p>${escapeHtml(`${safeAsideCount} zpráv vypadá jako informativních nebo vhodných k archivaci.`)}</p>
+          <button class="secondary-link" type="button" data-ds-plus-filter="safe">Zkontrolovat</button>
+        </section>
+      </aside>
+    </section>
+  `;
+}
+
+function dataBoxPlusFilterOptions() {
+  return [
+    ["all", "Vše"],
+    ["new", "Nové"],
+    ["today", "Dnes k vyřízení"],
+    ["confirmations", "Čeká na potvrzení"],
+    ["invoice", "Faktury"],
+    ["reminder", "Upomínky"],
+    ["office", "Úřady"],
+    ["fine", "Výzvy / pokuty"],
+    ["legal", "Exekuce / právní"],
+    ["contracts", "Registr smluv"],
+    ["vehicles", "Vozidla"],
+    ["technical", "Technická oznámení"],
+    ["safe", "Bezpečně stranou"],
+    ["archive", "Archivované"],
+    ["problem", "Problém"]
+  ];
+}
+
+function dataBoxPlusMessageMatchesFilter(message, filter) {
+  const normalized = dataBoxPlusSearchText([message.type, message.status, message.subject, message.senderName]);
+  if (filter === "all") return true;
+  if (filter === "new") return message.status !== "Archivované";
+  if (filter === "today") return dataBoxPlusIsDueToday(message);
+  if (filter === "confirmations") return message.status === "Čeká na potvrzení";
+  if (filter === "invoice") return normalized.includes("faktur");
+  if (filter === "reminder") return normalized.includes("upom");
+  if (filter === "office") return normalized.includes("urad");
+  if (filter === "fine") return normalized.includes("vyzvy") || normalized.includes("pokut");
+  if (filter === "legal") return normalized.includes("exekuce") || normalized.includes("pravni");
+  if (filter === "contracts") return normalized.includes("registr");
+  if (filter === "vehicles") return normalized.includes("vozid");
+  if (filter === "technical") return normalized.includes("technick");
+  if (filter === "archive") return message.status === "Archivované";
+  if (filter === "problem") return message.status === "Problém" || message.attachmentStatus.includes("Nepodařilo");
+  if (filter === "safe") return message.riskLevel === "Nízké";
+  return true;
+}
+
+function dataBoxPlusFilteredMessages() {
+  const query = dataBoxPlusSearchText([dataBoxPlusState.search]);
+  return DATA_BOX_PLUS_MESSAGES.filter((message) => {
+    const mailbox = dataBoxPlusMailbox(message);
+    const haystack = dataBoxPlusSearchText([
+      message.senderName,
+      message.subject,
+      message.id,
+      message.senderBoxId,
+      message.recipientBoxId,
+      mailbox?.name,
+      message.referenceNumber,
+      message.amount,
+      message.plateNumber,
+      message.attachments.map((attachment) => attachment.extractedText).join(" ")
+    ]);
+    return dataBoxPlusMessageMatchesFilter(message, dataBoxPlusState.filter) && (!query || haystack.includes(query));
+  });
+}
+
+function dataBoxPlusMessageRow(message) {
+  const mailbox = dataBoxPlusMailbox(message);
+  const badges = [
+    dataBoxPlusBadge(message.type, dataBoxPlusTone(message.type)),
+    dataBoxPlusBadge(message.attachmentStatus, dataBoxPlusTone(message.attachmentStatus))
+  ].slice(0, 2).join("");
+
+  return `
+    <article class="ds-plus-message-row ds-plus-message-row--${escapeHtml(dataBoxPlusTone(message.priority))}">
+      <div class="ds-plus-message-row__priority" aria-label="Priorita">${escapeHtml(message.priority === "legal" ? "P" : message.priority === "problem" ? "!" : message.priority === "urgent" ? "1" : message.priority === "high" ? "2" : "3")}</div>
+      <div class="ds-plus-message-row__body">
+        <div class="ds-plus-message-row__top">
+          <strong>${escapeHtml(message.senderName)}</strong>
+          <span>${escapeHtml(formatDateTime(message.deliveredAt))}</span>
+        </div>
+        <h3>${escapeHtml(message.subject)}</h3>
+        <div class="ds-plus-message-row__meta">
+          <span>${escapeHtml(mailbox?.name || "Schránka")}</span>
+          ${badges}
+        </div>
+      </div>
+      <div class="ds-plus-message-row__action">
+        <span>${escapeHtml(message.recommendedAction)}</span>
+        <button class="primary-action" type="button" data-ds-plus-open="${escapeHtml(message.id)}">Otevřít zprávu</button>
+      </div>
+    </article>
+  `;
+}
+
+function dataBoxPlusMessagesPanel() {
+  const rows = dataBoxPlusFilteredMessages();
+  return `
+    <section class="ds-plus-workspace" aria-labelledby="ds-plus-messages-title">
+      <div class="ds-plus-section-head ds-plus-section-head--stack">
+        <div>
+          <span>Pracovní inbox</span>
+          <h2 id="ds-plus-messages-title">Zprávy ze 7 schránek</h2>
+        </div>
+        <label class="ds-plus-search">
+          <span>Hledat</span>
+          <input
+            type="search"
+            value="${escapeHtml(dataBoxPlusState.search)}"
+            placeholder="Odesílatel, předmět, ID, značka, částka nebo text přílohy"
+            data-ds-plus-search
+          />
+        </label>
+      </div>
+      <div class="ds-plus-filter-row" aria-label="Filtry zpráv">
+        ${dataBoxPlusFilterOptions().map(([id, label]) => `
+          <button class="ds-plus-filter ${dataBoxPlusState.filter === id ? "ds-plus-filter--active" : ""}" type="button" data-ds-plus-filter="${escapeHtml(id)}">
+            ${escapeHtml(label)}
+          </button>
+        `).join("")}
+      </div>
+      <div class="ds-plus-message-list" aria-label="Seznam zpráv">
+        ${rows.length ? rows.map(dataBoxPlusMessageRow).join("") : `<p class="ds-plus-empty">V tomto filtru teď není žádná zpráva.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function dataBoxPlusConfirmationsPanel() {
+  const cards = DATA_BOX_PLUS_RECOMMENDATIONS.map(dataBoxPlusRecommendationCard).filter(Boolean).join("");
+  return `
+    <section class="ds-plus-workspace" aria-labelledby="ds-plus-confirm-title">
+      <div class="ds-plus-section-head">
+        <div>
+          <span>Lidské rozhodnutí</span>
+          <h2 id="ds-plus-confirm-title">Čeká na potvrzení</h2>
+        </div>
+      </div>
+      <div class="ds-plus-recommendation-list">
+        ${cards || `<p class="ds-plus-empty">Žádný návrh teď nečeká na potvrzení.</p>`}
+      </div>
+      ${dataBoxPlusState.notice ? `<p class="ds-plus-notice" role="status">${escapeHtml(dataBoxPlusState.notice)}</p>` : ""}
+    </section>
+  `;
+}
+
+function dataBoxPlusAutopilotPanel() {
+  const groups = [
+    ["Co už umí sám", [
+      "Archivovat informační zprávy z Registru smluv.",
+      "Rozpoznat faktury od známých dodavatelů.",
+      "Rozpoznat upomínky od Culligan.",
+      "Rozpoznat výzvy k zaplacení.",
+      "Předpřipravit e-mail pro faktury.",
+      "Označit technická oznámení jako nízkou prioritu."
+    ], "success"],
+    ["Co se učí", [
+      "Kam předávat výzvy z měst.",
+      "Jak zacházet s oznámeními k vozidlům.",
+      "Které zprávy řeší účetní.",
+      "Které zprávy patří právníkovi.",
+      "Které zprávy se bezpečně archivují."
+    ], "warning"],
+    ["Co nesmí bez potvrzení", [
+      "Poslat e-mail.",
+      "Poslat datovou zprávu.",
+      "Archivovat právně citlivou zprávu.",
+      "Označit výzvu jako vyřízenou.",
+      "Předat zprávu mimo firmu."
+    ], "danger"]
+  ];
+
+  return `
+    <section class="ds-plus-workspace" aria-labelledby="ds-plus-autopilot-title">
+      <div class="ds-plus-section-head">
+        <div>
+          <span>Autonomie pod kontrolou</span>
+          <h2 id="ds-plus-autopilot-title">Autopilot</h2>
+        </div>
+        <strong class="ds-plus-state-pill">Učí se</strong>
+      </div>
+      <div class="ds-plus-autopilot-grid">
+        ${groups.map(([title, items, tone]) => `
+          <section class="ds-plus-autopilot-block ds-plus-autopilot-block--${escapeHtml(tone)}">
+            <h3>${escapeHtml(title)}</h3>
+            <ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+          </section>
+        `).join("")}
+      </div>
+      <section class="ds-plus-band ds-plus-band--learning" aria-labelledby="ds-plus-learning-title">
+        <div class="ds-plus-section-head">
+          <div>
+            <span>Měsíční učení AI Boost</span>
+            <h2 id="ds-plus-learning-title">Plán převzetí rutiny</h2>
+          </div>
+        </div>
+        <div class="ds-plus-learning-timeline">
+          ${DATA_BOX_PLUS_LEARNING_PLAN.map(([period, title, text]) => `
+            <article>
+              <span>${escapeHtml(period)}</span>
+              <strong>${escapeHtml(title)}</strong>
+              <p>${escapeHtml(text)}</p>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function dataBoxPlusFilteredRules() {
+  const query = dataBoxPlusSearchText([dataBoxPlusState.rulesSearch]);
+  return DATA_BOX_PLUS_RULES.filter((rule) => {
+    const typeMatch = dataBoxPlusState.rulesType === "all" || dataBoxPlusSearchText([rule.type]) === dataBoxPlusSearchText([dataBoxPlusState.rulesType]);
+    const statusMatch = dataBoxPlusState.rulesStatus === "all" || dataBoxPlusSearchText([rule.status]) === dataBoxPlusSearchText([dataBoxPlusState.rulesStatus]);
+    const haystack = dataBoxPlusSearchText([rule.name, rule.description, rule.type, rule.status, rule.looksFor, rule.proposes, rule.trust]);
+    return typeMatch && statusMatch && (!query || haystack.includes(query));
+  });
+}
+
+function dataBoxPlusRulesPanel() {
+  const rules = dataBoxPlusFilteredRules();
+  return `
+    <section class="ds-plus-workspace" aria-labelledby="ds-plus-rules-title">
+      <div class="ds-plus-section-head ds-plus-section-head--stack">
+        <div>
+          <span>Seznam pravidel a automatizace</span>
+          <h2 id="ds-plus-rules-title">Pravidla a učení</h2>
+        </div>
+        <div class="ds-plus-rules-controls">
+          <label><span>Hledat</span><input type="search" value="${escapeHtml(dataBoxPlusState.rulesSearch)}" placeholder="Název, popis, dopad nebo autor" data-ds-plus-rules-search /></label>
+          <label><span>Typ</span><select data-ds-plus-rules-type>${["all", "Pravidlo", "Automatizace"].map((value) => `<option value="${escapeHtml(value)}" ${dataBoxPlusState.rulesType === value ? "selected" : ""}>${escapeHtml(value === "all" ? "Vše" : value)}</option>`).join("")}</select></label>
+          <label><span>Stav</span><select data-ds-plus-rules-status>${["all", "Nové pravidlo", "Učí se", "Spolehlivé", "Autonomní", "Pozastavené", "Rizikové"].map((value) => `<option value="${escapeHtml(value)}" ${dataBoxPlusState.rulesStatus === value ? "selected" : ""}>${escapeHtml(value === "all" ? "Vše" : value)}</option>`).join("")}</select></label>
+        </div>
+      </div>
+      <div class="ds-plus-rule-list">
+        ${rules.map((rule) => `
+          <article class="ds-plus-rule">
+            <div class="ds-plus-rule__head">
+              <div><span>${escapeHtml(rule.type)}</span><h3>${escapeHtml(rule.name)}</h3></div>
+              ${dataBoxPlusBadge(rule.trust, dataBoxPlusTone(rule.trust))}
+            </div>
+            <p>${escapeHtml(rule.description)}</p>
+            <dl>
+              <div><dt>Co hledá</dt><dd>${escapeHtml(rule.looksFor)}</dd></div>
+              <div><dt>Co navrhuje</dt><dd>${escapeHtml(rule.proposes)}</dd></div>
+              <div><dt>Co smí samo</dt><dd>${escapeHtml(rule.autonomous)}</dd></div>
+              <div><dt>Co vždy čeká</dt><dd>${escapeHtml(rule.confirmation)}</dd></div>
+            </dl>
+            <div class="ds-plus-rule__stats">
+              <span>Použito ${escapeHtml(rule.used)}</span>
+              <span>Potvrzeno ${escapeHtml(rule.confirmed)}</span>
+              <span>Upraveno ${escapeHtml(rule.edited)}</span>
+              <span>Naposledy ${escapeHtml(formatDateTime(rule.lastUsed))}</span>
+            </div>
+            <div class="ds-plus-rule__actions">
+              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Upravit pravidlo">Upravit</button>
+              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Pozastavit pravidlo">Pozastavit</button>
+              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Zobrazit audit pravidla">Audit</button>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function dataBoxPlusArchivePanel() {
+  const archived = DATA_BOX_PLUS_MESSAGES.filter((message) => message.status === "Archivované" || message.riskLevel === "Nízké");
+  return `
+    <section class="ds-plus-workspace" aria-labelledby="ds-plus-archive-title">
+      <div class="ds-plus-section-head">
+        <div><span>Bezpečný firemní archiv</span><h2 id="ds-plus-archive-title">Archiv</h2></div>
+      </div>
+      <div class="ds-plus-archive-summary">
+        ${DATA_BOX_PLUS_AUTOPILOT_DONE.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
+      </div>
+      <div class="ds-plus-message-list">
+        ${archived.map(dataBoxPlusMessageRow).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function dataBoxPlusSettingsPanel() {
+  return `
+    <section class="ds-plus-workspace" aria-labelledby="ds-plus-settings-title">
+      <div class="ds-plus-section-head">
+        <div><span>Bezpečnost, přístupy a autonomie</span><h2 id="ds-plus-settings-title">Nastavení</h2></div>
+      </div>
+      <div class="ds-plus-settings-grid">
+        <section class="ds-plus-settings-block">
+          <h3>Napojené schránky</h3>
+          <div class="ds-plus-mailbox-list">
+            ${DATA_BOX_PLUS_MAILBOXES.map((mailbox) => `<article><strong>${escapeHtml(mailbox.name)}</strong><span>${escapeHtml(mailbox.company)}</span>${dataBoxPlusBadge(mailbox.status, mailbox.status === "aktivní" ? "success" : "warning")}</article>`).join("")}
+          </div>
+        </section>
+        <section class="ds-plus-settings-block">
+          <h3>Bezpečnost AI</h3>
+          <ul>
+            <li>Autopilot nikdy nemaže datové zprávy.</li>
+            <li>Datovou zprávu ani e-mail neodešle bez schváleného scénáře.</li>
+            <li>Právní a finanční zprávy zůstávají pod lidskou kontrolou.</li>
+            <li>Když obsah přílohy není načtený, shrnutí nevznikne.</li>
+          </ul>
+        </section>
+        <section class="ds-plus-settings-block">
+          <h3>Kontakty pro předávání</h3>
+          <dl>
+            <div><dt>Faktury</dt><dd>faktury@kaiserservis.cz</dd></div>
+            <div><dt>Právní</dt><dd>GT Brno</dd></div>
+            <div><dt>Vozidla</dt><dd>Garážmistr</dd></div>
+            <div><dt>Provoz</dt><dd>Dispečink</dd></div>
+          </dl>
+        </section>
+        <section class="ds-plus-settings-block">
+          <h3>Úrovně autonomie</h3>
+          <div class="ds-plus-autonomy-list">
+            ${["Učí se", "Navrhuje", "Čeká na potvrzení", "Pracuje samostatně", "Pozastaveno", "Vyžaduje pozornost"].map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+          </div>
+        </section>
+        <section class="ds-plus-settings-block ds-plus-settings-block--wide">
+          <h3>Datové entity ostré fáze</h3>
+          <p>Ostré napojení má ukládat zprávy, přílohy, doporučení, učení, pravidla a audit jen přes backend.</p>
+          <div class="ds-plus-entity-list">${DATA_BOX_PLUS_ENTITY_MODEL.map((entity) => `<span>${escapeHtml(entity)}</span>`).join("")}</div>
+        </section>
+        <section class="ds-plus-settings-block ds-plus-settings-block--wide">
+          <h3>Credential vault / secrets provider</h3>
+          <p>Přístupy k datovým schránkám patří výhradně do bezpečného serverového úložiště. Frontend je nikdy neuvidí.</p>
+        </section>
+      </div>
+      <details class="ds-plus-diagnostics">
+        <summary>Zobrazit diagnostiku</summary>
+        <div>
+          <p>Diagnostika je připravená pro log posledního běhu, stav API, interní ID, stav příloh a chyby textové extrakce.</p>
+          <p>Cloudové spouštění po 30 minutách a ostré přístupy se dopojí až v samostatné schválené fázi.</p>
+        </div>
+      </details>
+    </section>
+  `;
+}
+
+function dataBoxPlusFacts(message) {
+  return `
+    <section class="ds-plus-detail-section">
+      <h3>Co z toho víme</h3>
+      <div class="ds-plus-facts">
+        ${message.facts.map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function dataBoxPlusSummary(message) {
+  if (!message.summaryLoaded) {
+    return `<section class="ds-plus-detail-section ds-plus-detail-section--warning"><h3>Shrnutí</h3><p>Přesný obsah zatím není načtený. Zpráva má dostupnou přílohu, kterou je potřeba otevřít.</p></section>`;
+  }
+  return `<section class="ds-plus-detail-section"><h3>Shrnutí</h3><p>${escapeHtml(message.summary)}</p><small>${escapeHtml(message.summarySource)}</small></section>`;
+}
+
+function dataBoxPlusAttachments(message) {
+  return `
+    <section class="ds-plus-detail-section">
+      <h3>Přílohy</h3>
+      <div class="ds-plus-attachments">
+        ${message.attachments.map((attachment) => `
+          <article class="ds-plus-attachment ds-plus-attachment--${escapeHtml(dataBoxPlusTone(attachment.storageStatus))}">
+            <div>
+              <strong>${escapeHtml(attachment.fileName)}</strong>
+              <span>${escapeHtml(attachment.mimeType)} · ${escapeHtml(attachment.size)}</span>
+              <small>${escapeHtml(attachment.storageStatus)} · ${escapeHtml(attachment.textExtractionStatus)}</small>
+            </div>
+            <div class="ds-plus-attachment__actions">
+              <button class="primary-action" type="button" data-ds-plus-pilot-action="Otevřít přílohu">Otevřít</button>
+              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Stáhnout přílohu">Stáhnout</button>
+              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Znovu načíst přílohu">Znovu načíst</button>
+            </div>
+            ${attachment.errorReason ? `<p class="ds-plus-attachment-error">Přílohu se nepodařilo načíst.</p><details><summary>Zobrazit technický důvod</summary><p>${escapeHtml(attachment.errorReason)}</p></details>` : ""}
+            ${attachment.extractedText ? `<details><summary>Zobrazit text</summary><p>${escapeHtml(attachment.extractedText)}</p></details>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function dataBoxPlusDetailOverlay() {
+  const message = dataBoxPlusSelectedMessage();
+  if (!message || !dataBoxPlusState.selectedMessageId) return "";
+  const mailbox = dataBoxPlusMailbox(message);
+  return `
+    <div class="ds-plus-detail-overlay" role="presentation">
+      <button class="ds-plus-detail-backdrop" type="button" data-ds-plus-close-detail aria-label="Zavřít zprávu"></button>
+      <section class="ds-plus-detail" role="dialog" aria-modal="true" aria-labelledby="ds-plus-detail-title">
+        <div class="ds-plus-detail__head">
+          <div><span>${escapeHtml(mailbox?.name || "Schránka")}</span><h2 id="ds-plus-detail-title">${escapeHtml(message.subject)}</h2></div>
+          <button class="secondary-link" type="button" data-ds-plus-close-detail>Zavřít</button>
+        </div>
+        <div class="ds-plus-detail__body">
+          <section class="ds-plus-detail-section ds-plus-detail-section--header">
+            <dl>
+              <div><dt>Odesílatel</dt><dd>${escapeHtml(message.senderName)}</dd></div>
+              <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(message.deliveredAt))}</dd></div>
+              <div><dt>ID datové zprávy</dt><dd>${escapeHtml(message.id)}</dd></div>
+              <div><dt>Stav</dt><dd>${escapeHtml(message.status)}</dd></div>
+              <div><dt>Typ zprávy</dt><dd>${escapeHtml(message.type)}</dd></div>
+              <div><dt>Rizikovost</dt><dd>${escapeHtml(message.riskLevel)}</dd></div>
+            </dl>
+          </section>
+          ${dataBoxPlusFacts(message)}
+          ${dataBoxPlusSummary(message)}
+          <section class="ds-plus-detail-section ds-plus-detail-section--action">
+            <h3>Doporučený další krok</h3>
+            <p>${escapeHtml(message.recommendedAction)}</p>
+            <div class="ds-plus-detail-actions">
+              <button class="primary-action" type="button" data-ds-plus-pilot-action="${escapeHtml(message.primaryAction)}">${escapeHtml(message.primaryAction)}</button>
+              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Upravit zprávu">Upravit</button>
+              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Přidat poznámku">Přidat poznámku</button>
+              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Přiřadit osobu">Přiřadit osobu</button>
+            </div>
+          </section>
+          ${dataBoxPlusAttachments(message)}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function dataBoxPlusActivePanel() {
+  if (dataBoxPlusState.activeTab === "messages") return dataBoxPlusMessagesPanel();
+  if (dataBoxPlusState.activeTab === "autopilot") return dataBoxPlusAutopilotPanel();
+  if (dataBoxPlusState.activeTab === "confirmations") return dataBoxPlusConfirmationsPanel();
+  if (dataBoxPlusState.activeTab === "rules") return dataBoxPlusRulesPanel();
+  if (dataBoxPlusState.activeTab === "archive") return dataBoxPlusArchivePanel();
+  if (dataBoxPlusState.activeTab === "settings") return dataBoxPlusSettingsPanel();
+  return dataBoxPlusCommandCenter();
+}
+
+function dataBoxPlusPage(moduleItem, user) {
+  return `
+    <main class="app-shell module-page module-theme-scope ds-plus-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+      <section class="ds-plus-header" aria-labelledby="ds-plus-title">
+        <div class="ds-plus-header__main">
+          <span class="ds-plus-eyebrow">Autopilot pro firemní datové schránky</span>
+          <h1 id="ds-plus-title">${escapeHtml(moduleItem.title)}</h1>
+          <p>Operační centrum pro příjem, pochopení, předání, archivaci a vyřízení datových zpráv napříč 7 firemními schránkami.</p>
+        </div>
+        <div class="ds-plus-header__state" aria-label="Stav autonomního pilotu">
+          <span>Stav Autopilota</span>
+          <strong>Učí se</strong>
+          <small>Rutinní akce čekají na potvrzení.</small>
+        </div>
+      </section>
+      ${dataBoxPlusStatusNotice()}
+      ${dataBoxPlusTabNav()}
+      ${dataBoxPlusActivePanel()}
+      ${dataBoxPlusDetailOverlay()}
+      ${moduleFeedbackBoxFor(moduleItem, user, {
+        moduleId: DATA_BOX_PLUS_MODULE_KEY,
+        moduleName: "Datové schránky Plus",
+        placeholder: "Např. doplnit routing, pravidlo Autopilota, stav přílohy nebo typ rizika..."
+      })}
+    </main>
+  `;
+}
+
 function dataBoxStatusLabel(value) {
   const labels = {
     inactive: "neaktivní",
@@ -24138,6 +24848,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
 
   if (moduleItem.id === DATA_BOX_MODULE_KEY) {
     return dataBoxPage(moduleItem, user);
+  }
+
+  if (moduleItem.id === DATA_BOX_PLUS_MODULE_KEY) {
+    return dataBoxPlusPage(moduleItem, user);
   }
 
   if (moduleItem.id === "system-check") {
@@ -33509,6 +34223,26 @@ document.addEventListener("input", (event) => {
     return;
   }
 
+  const dataBoxPlusSearch = event.target.closest("[data-ds-plus-search]");
+  if (dataBoxPlusSearch) {
+    const start = dataBoxPlusSearch.selectionStart;
+    const end = dataBoxPlusSearch.selectionEnd;
+    dataBoxPlusState.search = dataBoxPlusSearch.value || "";
+    render();
+    restoreDataBoxPlusInputFocus("[data-ds-plus-search]", start, end);
+    return;
+  }
+
+  const dataBoxPlusRulesSearch = event.target.closest("[data-ds-plus-rules-search]");
+  if (dataBoxPlusRulesSearch) {
+    const start = dataBoxPlusRulesSearch.selectionStart;
+    const end = dataBoxPlusRulesSearch.selectionEnd;
+    dataBoxPlusState.rulesSearch = dataBoxPlusRulesSearch.value || "";
+    render();
+    restoreDataBoxPlusInputFocus("[data-ds-plus-rules-search]", start, end);
+    return;
+  }
+
   const dataBoxAiRuleField = event.target.closest("[data-data-box-ai-rule-draft-form] input");
   if (dataBoxAiRuleField) {
     updateDataBoxAiBoostRulePreview(dataBoxAiRuleField.closest("[data-data-box-ai-rule-draft-form]"));
@@ -33644,6 +34378,20 @@ document.addEventListener("change", async (event) => {
   const moduleRulesFilter = event.target.closest("[data-module-rules-type-filter], [data-module-rules-status-filter]");
   if (moduleRulesFilter) {
     updateModuleRulesFilters(moduleRulesFilter);
+    return;
+  }
+
+  const dataBoxPlusRulesType = event.target.closest("[data-ds-plus-rules-type]");
+  if (dataBoxPlusRulesType) {
+    dataBoxPlusState.rulesType = dataBoxPlusRulesType.value || "all";
+    render();
+    return;
+  }
+
+  const dataBoxPlusRulesStatus = event.target.closest("[data-ds-plus-rules-status]");
+  if (dataBoxPlusRulesStatus) {
+    dataBoxPlusState.rulesStatus = dataBoxPlusRulesStatus.value || "all";
+    render();
     return;
   }
 
@@ -33804,6 +34552,78 @@ document.addEventListener("pointerup", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const dataBoxPlusTab = event.target.closest("[data-ds-plus-tab]");
+  if (dataBoxPlusTab) {
+    event.preventDefault();
+    dataBoxPlusState.activeTab = dataBoxPlusTab.dataset.dsPlusTab || "command";
+    dataBoxPlusState.notice = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusFilter = event.target.closest("[data-ds-plus-filter]");
+  if (dataBoxPlusFilter) {
+    event.preventDefault();
+    dataBoxPlusState.filter = dataBoxPlusFilter.dataset.dsPlusFilter || "all";
+    dataBoxPlusState.activeTab = "messages";
+    dataBoxPlusState.notice = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusOpen = event.target.closest("[data-ds-plus-open]");
+  if (dataBoxPlusOpen) {
+    event.preventDefault();
+    dataBoxPlusState.selectedMessageId = dataBoxPlusOpen.dataset.dsPlusOpen || "";
+    dataBoxPlusState.notice = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusCloseDetail = event.target.closest("[data-ds-plus-close-detail]");
+  if (dataBoxPlusCloseDetail) {
+    event.preventDefault();
+    dataBoxPlusState.selectedMessageId = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusConfirm = event.target.closest("[data-ds-plus-confirm]");
+  if (dataBoxPlusConfirm) {
+    event.preventDefault();
+    const id = dataBoxPlusConfirm.dataset.dsPlusConfirm || "";
+    dataBoxPlusState.confirmedRecommendationIds = Array.from(new Set([
+      ...dataBoxPlusState.confirmedRecommendationIds,
+      id
+    ])).filter(Boolean);
+    dataBoxPlusState.dismissedRecommendationIds = dataBoxPlusState.dismissedRecommendationIds.filter((item) => item !== id);
+    dataBoxPlusState.notice = "Potvrzení je připravené jako auditovatelná akce pro ostrou fázi. V pilotu se nic neodeslalo ani nezapsalo.";
+    render();
+    return;
+  }
+
+  const dataBoxPlusDismiss = event.target.closest("[data-ds-plus-dismiss]");
+  if (dataBoxPlusDismiss) {
+    event.preventDefault();
+    const id = dataBoxPlusDismiss.dataset.dsPlusDismiss || "";
+    dataBoxPlusState.dismissedRecommendationIds = Array.from(new Set([
+      ...dataBoxPlusState.dismissedRecommendationIds,
+      id
+    ])).filter(Boolean);
+    dataBoxPlusState.notice = "Návrh je zamítnutý jen v aktuálním pilotním zobrazení. Nic se nemaže.";
+    render();
+    return;
+  }
+
+  const dataBoxPlusPilotAction = event.target.closest("[data-ds-plus-pilot-action]");
+  if (dataBoxPlusPilotAction) {
+    event.preventDefault();
+    const action = dataBoxPlusPilotAction.dataset.dsPlusPilotAction || "Akce";
+    dataBoxPlusState.notice = `${action}: připraveno pro ostré backendové napojení. V této fázi se nic neodesílá ani neukládá.`;
+    render();
+    return;
+  }
+
   const driverReportPlateSuggestion = event.target.closest("[data-driver-report-plate-suggestion]");
   if (driverReportPlateSuggestion) {
     event.preventDefault();

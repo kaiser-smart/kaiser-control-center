@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.373"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.439"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: nový autonomní pilot",
+    text: "Přibyl samostatný modul /datove-schranky-plus jako bezpečný UI/read-only pilot operačního centra pro 7 firemních datových schránek, Autopilot, přílohy, pravidla, potvrzení a auditní hranice. Bez zásahu do původní Datové schránky, databáze, přístupových hesel nebo ostrého automatického běhu."
+  },
   {
     title: "Pohledávky: Firmy → Ledger read-only sync",
     text: "Modul Pohledávky má novou kontrolu Vistos → Ledger připravenost. Přihlášeně ověří entitu DirectoryWithBranch, vazbu InvoiceIssued.Customer_FK / CustomerBranch_FK, confidence HIGH/MEDIUM/LOW/NONE a data quality flagy. Výstup je pouze read-only preview bez ratingu reálných firem, KB plateb, zákaznické komunikace a ostrého zápisu do ledgeru."

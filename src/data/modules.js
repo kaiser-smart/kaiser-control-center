@@ -61,6 +61,17 @@ export const modules = [
     order: 2.7
   },
   {
+    id: "data-box-plus",
+    title: "Datové schránky Plus",
+    description: "Autonomní operační centrum pro příjem, třídění, předání, archivaci a vyřízení firemních datových zpráv.",
+    route: "/datove-schranky-plus",
+    icon: ReportsIcon,
+    status: "UI návrh",
+    active: true,
+    disabled: false,
+    order: 2.8
+  },
+  {
     id: "driver-reports",
     title: "Hlášení řidičů",
     description: "Servisní hlášení, údržba a požadavky k vozidlům.",
