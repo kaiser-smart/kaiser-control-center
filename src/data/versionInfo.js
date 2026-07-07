@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.437"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.439"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: návrat správné Vistos verze",
+    text: "Trasy svozu znovu používají Vistos Adresní místo jako Adresní místo ve Smartu, zobrazují čitelný Den svozu místo interních ID, doplňují zákaznického manažera včetně mobilu/e-mailu a mají funkční read-only refresh snapshotu bez ostrých tras, SMS/e-mailů a automatizací."
+  },
   {
     title: "Pohledávky: Customer_FK schema probe",
     text: "Import Pohledávek nově automaticky zobrazuje read-only schema probe pro fakturační vazbu Customer_FK z InvoiceIssued a sjednocuje fakturové tabulky do jednoho bloku po 10 řádcích."
