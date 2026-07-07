@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.417"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.418"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: Adresní místo z Vistosu",
+    text: "Stanoviště z Vistosu teď u Adresního místa čtou přímo skutečné Vistos pole, například Brno, Komárov, U vlečky 726/5c, PSČ 61700. Stanoviště ani technický rozpad svozové adresy ho nesmí nahradit."
+  },
   {
     title: "Trasy svozu: správné mapování svozové adresy",
     text: "Svozová adresa pro trasu se teď primárně skládá ze skutečného Vistos pole Adresní místo, například Brno, Komárov, U vlečky 726/5c, PSČ 61700. Technické části Svozová adresa - ulice/město/PSČ už nepřebíjí správné Adresní místo."

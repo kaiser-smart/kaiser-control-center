@@ -1560,6 +1560,46 @@ function readVistosConsistencyFieldValues(contract, contractRow, consistencyFiel
   }).filter((item) => cleanString(item.value) || cleanString(item.rawValue));
 }
 
+const VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS = [
+  "AdresniMisto",
+  "Adresni_misto",
+  "AdresniMisto_FK",
+  "AddressPlace",
+  "PickupAddressRuian"
+];
+
+function directVistosAddressPlaceValues(contract, contractRow) {
+  const values = [];
+  for (const [entityName, row] of [["Contract", contract], ["ContractRow", contractRow]]) {
+    if (!row) {
+      continue;
+    }
+    for (const columnName of VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS) {
+      const value = readVistosColumnDisplayValue(row, columnName);
+      const rawValue = readVistosColumnValue(row, columnName);
+      if (!cleanString(value) && !cleanString(rawValue)) {
+        continue;
+      }
+      values.push({
+        entityName,
+        columnName,
+        caption: "Adresní místo",
+        source: "direct",
+        value,
+        rawValue
+      });
+    }
+  }
+  return values;
+}
+
+function readVistosAddressPlaceRaw(contract, contractRow, consistencyFields, fallback = "") {
+  return preferredVistosAddressPlaceValue([
+    ...directVistosAddressPlaceValues(contract, contractRow),
+    ...readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace")
+  ]) || firstNonGenericVistosAddressPlace(fallback);
+}
+
 function vistosConsistencyDisplayValues(values = []) {
   return values
     .map((item) => firstNonEmpty(item?.value, item?.rawValue))
@@ -2850,6 +2890,10 @@ export function __vistosAddressPartsFromAddressPlaceForTest(value = "") {
   return compactVistosAddressParts(vistosAddressPartsFromAddressPlace(value));
 }
 
+export function __buildVistosKommunalPreviewForTest(input = {}) {
+  return buildVistosKommunalPreview(input);
+}
+
 function vistosSiteKey(contract) {
   const sourceSiteId = firstNonEmpty(fkRecordId(contract, "Nakladkovaadresa_FK"), fkRecordId(contract, "DirectoryBranch_FK"));
   if (sourceSiteId) {
@@ -2890,8 +2934,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     const siteName = firstNonEmpty(fkCaption(contract, "Nakladkovaadresa_FK"), branchName, customerName);
     const stationValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "siteOptional");
     const stationName = firstNonEmpty(...vistosConsistencyDisplayValues(stationValues));
-    const addressPlaceValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "addressPlace");
-    const addressPlaceRaw = preferredVistosAddressPlaceValue(addressPlaceValues);
+    const addressPlaceRaw = readVistosAddressPlaceRaw(contract, null, consistencyFields);
     const addressParts = preferVistosAddressPlaceParts(
       addressPlaceRaw,
       compactVistosAddressParts(vistosAddressPartsFromFields(contract, null, consistencyFields))
@@ -3042,8 +3085,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         readVistosColumnDisplayValue(contractRow, "Stanoviste"),
         stationName
       );
-      const rowAddressPlaceValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace");
-      const rowAddressPlaceRaw = preferredVistosAddressPlaceValue(rowAddressPlaceValues) || addressPlaceRaw;
+      const rowAddressPlaceRaw = readVistosAddressPlaceRaw(contract, contractRow, consistencyFields, addressPlaceRaw);
       const rowAddressParts = preferVistosAddressPlaceParts(
         rowAddressPlaceRaw,
         compactVistosAddressParts(vistosAddressPartsFromFields(contract, contractRow, consistencyFields, {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collection-route-optimization-preview.js";
 import {
   __addressPlaceQualityIssuesForTest,
+  __buildVistosKommunalPreviewForTest,
   __inferVistosContainerForTest,
   __pickupDayConsistencyIssuesForTest,
   __pickupDayDisplayValueForTest,
@@ -251,6 +252,57 @@ function derive(originalText) {
   assert.equal(parts.addressCity, "Brno");
   assert.equal(parts.addressStreet, "U Vlečky 726/5c");
   assert.equal(parts.addressPostalCode, "61700");
+}
+
+{
+  const preview = __buildVistosKommunalPreviewForTest({
+    today: new Date("2026-07-07T00:00:00.000Z"),
+    contracts: [{
+      Id: "7337",
+      ContractNumber: "2025-0265 SPIU",
+      Directory_FK_RecordId: "08576726",
+      Directory_FK_Caption: "4 KLUCI OD KOL s.r.o. - 08576726",
+      Nakladkovaadresa_FK_RecordId: "site-7337",
+      Nakladkovaadresa_FK_Caption: "U Vlečky 726/5c, 617 00 Brno - Komárov",
+      StartDate: "2026-07-01"
+    }],
+    contractRows: [{
+      Id: "row-7337",
+      Contract_FK_RecordId: "7337",
+      Product_FK_RecordId: "product-sko",
+      PickupAddressRuian: "Brno, Komárov, U vlečky 726/5c, PSČ 61700",
+      Stanoviste: "U Vlečky 726/5c, 617 00 Brno - Komárov",
+      StartDate: "2026-07-01"
+    }],
+    products: [{
+      Id: "product-sko",
+      Caption: "SKO / 200301 240 l 1x30",
+      Name: "SKO / 200301 240 l 1x30",
+      Quantity: "1"
+    }],
+    consistencyFields: {
+      fields: {
+        addressStreet: {
+          confirmed: true,
+          columns: [{ entityName: "ContractRow", columnName: "SvozovaAdresaUlice" }]
+        },
+        addressCity: {
+          confirmed: true,
+          columns: [{ entityName: "ContractRow", columnName: "SvozovaAdresaMesto" }]
+        },
+        addressPostalCode: {
+          confirmed: true,
+          columns: [{ entityName: "ContractRow", columnName: "SvozovaAdresaPsc" }]
+        }
+      }
+    }
+  });
+  const row = preview.rows[0];
+  assert.equal(row.addressPlaceRaw, "Brno, Komárov, U vlečky 726/5c, PSČ 61700");
+  assert.equal(row.addressStreet, "U vlečky 726/5c");
+  assert.equal(row.addressCity, "Brno");
+  assert.equal(row.addressPostalCode, "61700");
+  assert.equal(row.stationName, "U Vlečky 726/5c, 617 00 Brno - Komárov");
 }
 
 {
