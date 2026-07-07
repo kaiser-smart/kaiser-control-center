@@ -469,7 +469,7 @@ const DRIVER_REPORT_PART_SOURCE_LABELS = {
 const DRIVER_REPORT_PRICE_BOOST_LABELS = {
   not_requested: "Čeká na ověřené OE číslo",
   waiting_verified_part: "Připraveno po potvrzení kompatibility",
-  running: "AI Boost hledá nabídky",
+  running: "Autopilot hledá nabídky",
   candidates_found: "Kandidáti k ověření",
   partial_results: "Neúplný průzkum",
   no_results: "Bez ověřených nabídek",
@@ -5211,7 +5211,7 @@ function absenceOutOfOfficePanel(user, selectedEmployee) {
         <div class="absence-out-office__head">
           <div>
             <strong>Text pro Forpsi</strong>
-            <small>AI Boost připraví text podle dovolené. Nic se samo nenastaví.</small>
+            <small>Autopilot připraví text podle dovolené. Nic se samo nenastaví.</small>
           </div>
           <a class="secondary-link" href="https://webmail.forpsi.com/smart/#postmaster/mailboxes" target="_blank" rel="noopener noreferrer">
             Otevřít Forpsi
@@ -18598,6 +18598,91 @@ function dataBoxPlusBadge(label, tone = "neutral") {
   return `<span class="ds-plus-badge ds-plus-badge--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
 }
 
+function dataBoxPlusActionHelpText(label = "") {
+  const normalized = dataBoxPlusSearchText([label]);
+  if (normalized.includes("predat") || normalized.includes("priradit")) {
+    return "Zpráva se přiřadí vybrané osobě k vyřízení. Datová zpráva se nikam neodesílá. V ostré fázi se akce zapíše do historie a přiřazení půjde změnit.";
+  }
+  if (normalized.includes("archiv")) {
+    return "Zpráva se přesune do archivu jako vyřízená nebo informativní. Nic se nesmaže ani neodešle mimo systém. Akci lze dohledat v historii a zprávu vrátit do práce.";
+  }
+  if (normalized.includes("potvrdit")) {
+    return "Provede se akce připravená Autopilotem. Před provedením uvidíš přesně, co se stane. Nic se neodešle mimo systém bez schválení a krok bude dohledatelný.";
+  }
+  if (normalized.includes("zamit")) {
+    return "Návrh Autopilota se odmítne. Zpráva zůstane nevyřízená, nic se neodešle a odmítnutí bude dohledatelné. Nový návrh můžeš vytvořit znovu.";
+  }
+  if (normalized.includes("znovu nacist")) {
+    return "Systém se znovu pokusí stáhnout přílohu z datové schránky. Nic se neodešle mimo systém. Výsledek se zapíše do historie a pokus lze zopakovat.";
+  }
+  if (normalized.includes("pripravit e-mail")) {
+    return "Vznikne návrh e-mailu k ruční kontrole. E-mail se bez potvrzení neodešle mimo systém. Návrh bude dohledatelný a lze ho upravit nebo zahodit.";
+  }
+  if (normalized.includes("otevrit pdf") || normalized.includes("otevrit prilohu")) {
+    return "Otevře se dostupná příloha ke kontrole. Zpráva se tím nevyřídí, nic se neodešle, nic se nesmaže a krok lze bezpečně zopakovat.";
+  }
+  if (normalized.includes("stahnout")) {
+    return "Stáhne se kopie přílohy. Zpráva zůstane beze změny, nic se neodešle mimo systém a stažení bude v ostré fázi dohledatelné.";
+  }
+  if (normalized.includes("zadat lhutu")) {
+    return "Připraví se zápis termínu k potvrzení. Bez schválení se nic neuloží ani neodešle. Termín půjde upravit a krok bude dohledatelný.";
+  }
+  if (normalized.includes("naucit autopilot")) {
+    return "Autopilot si po schválení uloží, jak podobnou situaci příště navrhnout. Nic se neodešle mimo systém, změnu půjde upravit a citlivé zprávy dál čekají na člověka.";
+  }
+  if (normalized.includes("upravit")) {
+    return "Návrh můžeš změnit před potvrzením. Původní zpráva se nezmění, nic se neodešle a úprava bude v ostré fázi dohledatelná.";
+  }
+  if (normalized.includes("pozastavit")) {
+    return "Doporučení se dočasně vypne. Zprávy se nemažou, nic se neodešle a změnu lze vrátit.";
+  }
+  if (normalized.includes("audit") || normalized.includes("historii")) {
+    return "Zobrazí se historie rozhodnutí a provedených kroků. Nic se tím nemění ani neodesílá.";
+  }
+  if (normalized.includes("zkontrolovat") || normalized.includes("otevrit zpravu")) {
+    return "Otevře se pracovní kontrola zprávy. Stav zprávy se nezmění, nic se neodešle a kontrolu můžeš zavřít bez následku.";
+  }
+  if (normalized.includes("poznamku")) {
+    return "Připraví se interní poznámka ke zprávě. Datová zpráva se nikam neodesílá, poznámku půjde upravit a v ostré fázi bude dohledatelná.";
+  }
+  return "Akce je v pilotu jen připravená k potvrzení. Nic se neodešle, nesmaže ani neuloží bez jasného schválení.";
+}
+
+function dataBoxPlusHelp(label, text) {
+  const helpText = String(text || "").trim();
+  if (!helpText) return "";
+  return `
+    <span class="ds-plus-help">
+      <button class="ds-plus-help__button" type="button" aria-label="${escapeHtml(`Nápověda: ${label}`)}" title="${escapeHtml(helpText)}">?</button>
+      <span class="ds-plus-help__bubble" role="tooltip">${escapeHtml(helpText)}</span>
+    </span>
+  `;
+}
+
+function dataBoxPlusActionButton({ label, variant = "secondary-link", attrs = "", help = "" }) {
+  const safeLabel = String(label || "Akce");
+  return `
+    <span class="ds-plus-action-with-help">
+      <button class="${escapeHtml(variant)}" type="button" ${attrs}>${escapeHtml(safeLabel)}</button>
+      ${dataBoxPlusHelp(safeLabel, help || dataBoxPlusActionHelpText(safeLabel))}
+    </span>
+  `;
+}
+
+function dataBoxPlusAutopilotReason(item) {
+  return `
+    <details class="ds-plus-ai-reason">
+      <summary>Proč to Autopilot navrhuje?</summary>
+      <dl>
+        <div><dt>Z čeho vycházel</dt><dd>${escapeHtml(item.evidence)}</dd></div>
+        <div><dt>Podobné případy</dt><dd>${escapeHtml(item.similarCases || "Podobné potvrzené případy se zatím učí rozpoznávat.")}</dd></div>
+        <div><dt>Po potvrzení</dt><dd>${escapeHtml(item.afterConfirm || "Nejdřív uvidíš přesně připravený krok.")}</dd></div>
+        <div><dt>Proč čeká na člověka</dt><dd>${escapeHtml(item.humanReason || item.risk)}</dd></div>
+      </dl>
+    </details>
+  `;
+}
+
 function dataBoxPlusMetricItems() {
   const newMessages = DATA_BOX_PLUS_MESSAGES.filter((message) => ["Dnes k vyřízení", "Čeká na potvrzení", "Problém"].includes(message.status)).length;
   const today = DATA_BOX_PLUS_MESSAGES.filter(dataBoxPlusIsDueToday).length;
@@ -18667,7 +18752,11 @@ function dataBoxPlusPriorityCard(message) {
           <div><dt>Doporučení</dt><dd>${escapeHtml(message.recommendedAction)}</dd></div>
         </dl>
       </div>
-      <button class="primary-action" type="button" data-ds-plus-open="${escapeHtml(message.id)}">${escapeHtml(message.primaryAction || "Otevřít zprávu")}</button>
+      ${dataBoxPlusActionButton({
+        label: message.primaryAction || "Otevřít zprávu",
+        variant: "primary-action",
+        attrs: `data-ds-plus-open="${escapeHtml(message.id)}"`
+      })}
     </article>
   `;
 }
@@ -18684,12 +18773,13 @@ function dataBoxPlusRecommendationCard(item) {
         <div><dt>Z čeho vychází</dt><dd>${escapeHtml(item.evidence)}</dd></div>
         <div><dt>Proč čeká</dt><dd>${escapeHtml(item.risk)}</dd></div>
       </dl>
+      ${dataBoxPlusAutopilotReason(item)}
       <div class="ds-plus-recommendation__actions">
-        <button class="secondary-link" type="button" data-ds-plus-open="${escapeHtml(item.messageId)}">Otevřít zprávu</button>
-        <button class="primary-action" type="button" data-ds-plus-confirm="${escapeHtml(item.id)}">Potvrdit</button>
-        <button class="secondary-link" type="button" data-ds-plus-pilot-action="Upravit návrh">Upravit</button>
-        <button class="secondary-link" type="button" data-ds-plus-dismiss="${escapeHtml(item.id)}">Zamítnout</button>
-        <button class="secondary-link" type="button" data-ds-plus-pilot-action="Naučit Autopilot pro příště">Naučit Autopilot pro příště</button>
+        ${dataBoxPlusActionButton({ label: "Otevřít zprávu", attrs: `data-ds-plus-open="${escapeHtml(item.messageId)}"` })}
+        ${dataBoxPlusActionButton({ label: "Potvrdit návrh", variant: "primary-action", attrs: `data-ds-plus-confirm="${escapeHtml(item.id)}"` })}
+        ${dataBoxPlusActionButton({ label: "Upravit návrh", attrs: `data-ds-plus-pilot-action="Upravit návrh"` })}
+        ${dataBoxPlusActionButton({ label: "Zamítnout", attrs: `data-ds-plus-dismiss="${escapeHtml(item.id)}"` })}
+        ${dataBoxPlusActionButton({ label: "Naučit Autopilot", attrs: `data-ds-plus-pilot-action="Naučit Autopilot pro příště"` })}
       </div>
     </article>
   `;
@@ -18739,7 +18829,7 @@ function dataBoxPlusCommandCenter() {
         <section class="ds-plus-side-block ds-plus-side-block--done">
           <h2>Autopilot vyřešil</h2>
           <p>${escapeHtml(DATA_BOX_PLUS_AUTOPILOT_DONE[0])}</p>
-          <button class="secondary-link" type="button" data-ds-plus-tab="archive">Zobrazit historii</button>
+          ${dataBoxPlusActionButton({ label: "Zobrazit historii", attrs: `data-ds-plus-tab="archive"` })}
         </section>
         <section class="ds-plus-side-block ds-plus-side-block--risk">
           <h2>Rizika a lhůty</h2>
@@ -18750,7 +18840,7 @@ function dataBoxPlusCommandCenter() {
         <section class="ds-plus-side-block">
           <h2>Bezpečně stranou</h2>
           <p>${escapeHtml(`${safeAsideCount} zpráv vypadá jako informativních nebo vhodných k archivaci.`)}</p>
-          <button class="secondary-link" type="button" data-ds-plus-filter="safe">Zkontrolovat</button>
+          ${dataBoxPlusActionButton({ label: "Zkontrolovat", attrs: `data-ds-plus-filter="safe"` })}
         </section>
       </aside>
     </section>
@@ -18840,7 +18930,7 @@ function dataBoxPlusMessageRow(message) {
       </div>
       <div class="ds-plus-message-row__action">
         <span>${escapeHtml(message.recommendedAction)}</span>
-        <button class="primary-action" type="button" data-ds-plus-open="${escapeHtml(message.id)}">Otevřít zprávu</button>
+        ${dataBoxPlusActionButton({ label: "Otevřít zprávu", variant: "primary-action", attrs: `data-ds-plus-open="${escapeHtml(message.id)}"` })}
       </div>
     </article>
   `;
@@ -18943,7 +19033,7 @@ function dataBoxPlusAutopilotPanel() {
       <section class="ds-plus-band ds-plus-band--learning" aria-labelledby="ds-plus-learning-title">
         <div class="ds-plus-section-head">
           <div>
-            <span>Měsíční učení AI Boost</span>
+            <span>Měsíční učení Autopilota</span>
             <h2 id="ds-plus-learning-title">Plán převzetí rutiny</h2>
           </div>
         </div>
@@ -19007,9 +19097,9 @@ function dataBoxPlusRulesPanel() {
               <span>Naposledy ${escapeHtml(formatDateTime(rule.lastUsed))}</span>
             </div>
             <div class="ds-plus-rule__actions">
-              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Upravit pravidlo">Upravit</button>
-              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Pozastavit pravidlo">Pozastavit</button>
-              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Zobrazit audit pravidla">Audit</button>
+              ${dataBoxPlusActionButton({ label: "Upravit pravidlo", attrs: `data-ds-plus-pilot-action="Upravit pravidlo"` })}
+              ${dataBoxPlusActionButton({ label: "Pozastavit pravidlo", attrs: `data-ds-plus-pilot-action="Pozastavit pravidlo"` })}
+              ${dataBoxPlusActionButton({ label: "Zobrazit audit", attrs: `data-ds-plus-pilot-action="Zobrazit audit pravidla"` })}
             </div>
           </article>
         `).join("")}
@@ -19124,9 +19214,9 @@ function dataBoxPlusAttachments(message) {
               <small>${escapeHtml(attachment.storageStatus)} · ${escapeHtml(attachment.textExtractionStatus)}</small>
             </div>
             <div class="ds-plus-attachment__actions">
-              <button class="primary-action" type="button" data-ds-plus-pilot-action="Otevřít přílohu">Otevřít</button>
-              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Stáhnout přílohu">Stáhnout</button>
-              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Znovu načíst přílohu">Znovu načíst</button>
+              ${dataBoxPlusActionButton({ label: "Otevřít přílohu", variant: "primary-action", attrs: `data-ds-plus-pilot-action="Otevřít přílohu"` })}
+              ${dataBoxPlusActionButton({ label: "Stáhnout přílohu", attrs: `data-ds-plus-pilot-action="Stáhnout přílohu"` })}
+              ${dataBoxPlusActionButton({ label: "Znovu načíst přílohu", attrs: `data-ds-plus-pilot-action="Znovu načíst přílohu"` })}
             </div>
             ${attachment.errorReason ? `<p class="ds-plus-attachment-error">Přílohu se nepodařilo načíst.</p><details><summary>Zobrazit technický důvod</summary><p>${escapeHtml(attachment.errorReason)}</p></details>` : ""}
             ${attachment.extractedText ? `<details><summary>Zobrazit text</summary><p>${escapeHtml(attachment.extractedText)}</p></details>` : ""}
@@ -19166,10 +19256,10 @@ function dataBoxPlusDetailOverlay() {
             <h3>Doporučený další krok</h3>
             <p>${escapeHtml(message.recommendedAction)}</p>
             <div class="ds-plus-detail-actions">
-              <button class="primary-action" type="button" data-ds-plus-pilot-action="${escapeHtml(message.primaryAction)}">${escapeHtml(message.primaryAction)}</button>
-              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Upravit zprávu">Upravit</button>
-              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Přidat poznámku">Přidat poznámku</button>
-              <button class="secondary-link" type="button" data-ds-plus-pilot-action="Přiřadit osobu">Přiřadit osobu</button>
+              ${dataBoxPlusActionButton({ label: message.primaryAction, variant: "primary-action", attrs: `data-ds-plus-pilot-action="${escapeHtml(message.primaryAction)}"` })}
+              ${dataBoxPlusActionButton({ label: "Upravit zprávu", attrs: `data-ds-plus-pilot-action="Upravit zprávu"` })}
+              ${dataBoxPlusActionButton({ label: "Přidat poznámku", attrs: `data-ds-plus-pilot-action="Přidat poznámku"` })}
+              ${dataBoxPlusActionButton({ label: "Přiřadit osobu", attrs: `data-ds-plus-pilot-action="Přiřadit osobu"` })}
             </div>
           </section>
           ${dataBoxPlusAttachments(message)}
@@ -20903,7 +20993,7 @@ function dataBoxAiStatusLabel(value) {
   const labels = {
     not_evaluated: "Nevyhodnoceno",
     draft: "Návrh",
-    reviewed: "AI Boost",
+    reviewed: "Autopilot",
     requires_confirmation: "Čeká na potvrzení",
     done: "Hotovo",
     rejected: "Zamítnuto",
@@ -21123,7 +21213,7 @@ function dataBoxAiBoostActionFlag(action = {}) {
     ai_boost: "Ruční kontrola"
   };
   const label = labels[actionType] || "Ruční kontrola";
-  return { id: `action-${actionType}`, label, tone: actionType, title: "Doporučená akce AI Boostu" };
+  return { id: `action-${actionType}`, label, tone: actionType, title: "Doporučená akce Autopilotu" };
 }
 
 function dataBoxAiBoostStatusFlag(action = {}, message = null) {
@@ -21142,20 +21232,20 @@ function dataBoxAiBoostStatusFlag(action = {}, message = null) {
 
   if (labels[status]) {
     const [label, tone] = labels[status];
-    return { id: `status-${status}`, label, tone, title: "Stav AI Boost akce" };
+    return { id: `status-${status}`, label, tone, title: "Stav akce Autopilota" };
   }
 
   if (aiStatus === "requires_confirmation") {
-    return { id: "status-requires-confirmation", label: "K potvrzení", tone: "waiting", title: "Stav AI Boost akce" };
+    return { id: "status-requires-confirmation", label: "K potvrzení", tone: "waiting", title: "Stav akce Autopilota" };
   }
   if (aiStatus === "done") {
-    return { id: "status-done", label: "Hotovo", tone: "done", title: "Stav AI Boost akce" };
+    return { id: "status-done", label: "Hotovo", tone: "done", title: "Stav akce Autopilota" };
   }
   if (aiStatus === "rejected") {
-    return { id: "status-rejected", label: "Zamítnuto", tone: "rejected", title: "Stav AI Boost akce" };
+    return { id: "status-rejected", label: "Zamítnuto", tone: "rejected", title: "Stav akce Autopilota" };
   }
   if (aiStatus === "failed") {
-    return { id: "status-failed", label: "Chyba", tone: "error", title: "Stav AI Boost akce" };
+    return { id: "status-failed", label: "Chyba", tone: "error", title: "Stav akce Autopilota" };
   }
 
   return null;
@@ -21183,7 +21273,7 @@ function dataBoxMessageFlags(message, options = {}) {
     flags.push(statusFlag);
   }
   if (action && Number(action.result?.confidence || 0) && Number(action.result.confidence) < 0.7) {
-    flags.push({ id: "confidence-low", label: "Nejisté", tone: "warning", title: "AI Boost má nižší jistotu" });
+    flags.push({ id: "confidence-low", label: "Nejisté", tone: "warning", title: "Autopilot má nižší jistotu" });
   }
 
   const seen = new Set();
@@ -21641,7 +21731,7 @@ function dataBoxAiBoostSafetyLabel(action = {}) {
   if (type === "archive") {
     return "Vyžaduje potvrzení. Archivace není mazání.";
   }
-  return "Jen návrh. AI Boost nic sám neprovede.";
+  return "Jen návrh. Autopilot nic sám neprovede.";
 }
 
 function dataBoxAiBoostActionChoiceLabel(value = "archive") {
@@ -21898,7 +21988,7 @@ function dataBoxAiBoostNewActionForm() {
       <div class="data-box-ai-boost-wizard__head">
         <span>Vytvořit pravidlo</span>
         <h3 id="data-box-ai-create-title">Když zpráva obsahuje X → navrhni Y</h3>
-        <p>Stačí vyplnit, co má zpráva obsahovat a jaký návrh má AI Boost ukázat. Bez potvrzení se nic nemaže ani neposílá.</p>
+        <p>Stačí vyplnit, co má zpráva obsahovat a jaký návrh má Autopilot ukázat. Bez potvrzení se nic nemaže ani neposílá.</p>
       </div>
       <form data-data-box-ai-rule-draft-form data-editing-rule-id="${escapeHtml(editingRule?.id || "")}">
         <section class="data-box-ai-boost-step">
@@ -21932,11 +22022,11 @@ function dataBoxAiBoostNewActionForm() {
           <div class="data-box-ai-boost-step__title">
             <strong>2</strong>
             <div>
-              <h4>Co má AI Boost navrhnout?</h4>
+              <h4>Co má Autopilot navrhnout?</h4>
               <span>Vyber jednu jasnou akci.</span>
             </div>
           </div>
-          <div class="data-box-ai-boost-choice-grid" role="radiogroup" aria-label="Co má AI Boost navrhnout">
+          <div class="data-box-ai-boost-choice-grid" role="radiogroup" aria-label="Co má Autopilot navrhnout">
             ${[
               ["archive", "Archivovat / neřešit"],
               ["handoff", "Předat Radimovi"],
@@ -22031,7 +22121,7 @@ function dataBoxAiBoostPanel(user) {
 
   return `
     <section class="data-box-panel data-box-ai-boost-panel" aria-labelledby="data-box-ai-boost-title">
-      <p class="data-box-ai-boost-safe-line" id="data-box-ai-boost-title">Když zpráva obsahuje X → AI Boost navrhne Y → nic se nemaže ani neposílá bez potvrzení.</p>
+      <p class="data-box-ai-boost-safe-line" id="data-box-ai-boost-title">Když zpráva obsahuje X → Autopilot navrhne Y → nic se nemaže ani neposílá bez potvrzení.</p>
       ${dataBoxState.aiBoostError ? `<div class="data-box-action-feedback data-box-action-feedback--error" role="alert">${escapeHtml(dataBoxState.aiBoostError)}</div>` : ""}
       ${dataBoxState.aiBoostMessage ? `<div class="data-box-action-feedback data-box-action-feedback--success" role="status">${escapeHtml(dataBoxState.aiBoostMessage)}</div>` : ""}
       ${dataBoxAiBoostNewActionForm()}
@@ -23123,9 +23213,9 @@ function systemCheckAutomationItems(data) {
       detail: "DS akce se zapisují do data_box_actions a čtou přes /api/data-box/actions."
     },
     {
-      label: "E-maily/SMS z AI Boostu jsou evidované",
+      label: "E-maily/SMS z Autopilotu jsou evidované",
       status: "NEOVĚŘENO",
-      detail: "Bez ostrého odesílání a bez napojené historie AI Boost akcí."
+      detail: "Bez ostrého odesílání a bez napojené historie akcí Autopilota."
     },
     {
       label: "Idempotence brání duplicitám",
@@ -23464,7 +23554,7 @@ function driverReportMercedesPartSection(item) {
         ${driverReportField("Název dílu", item.partName || item.verifiedPart)}
         ${driverReportField("Zdroj ověření", driverReportPartSourceLabel(item.partVerificationSource))}
         ${driverReportField("Stav provideru", item.partsProviderStatus)}
-        ${driverReportField("AI Boost cena", driverReportPriceBoostLabel(item.priceBoostStatus))}
+        ${driverReportField("Ceny Autopilota", driverReportPriceBoostLabel(item.priceBoostStatus))}
         ${driverReportField("Dotaz pro katalog", item.partLookupQuery)}
       </div>
       ${item.partsProviderMessage ? `<p class="driver-report-note">${escapeHtml(item.partsProviderMessage)}</p>` : ""}
@@ -23557,7 +23647,7 @@ function driverReportInternetOffers(item) {
       ? "Finální 3 odkazy čekají na oficiální price provider. OpenAI web-search je jen read-only náhled."
       : item.priceBoostStatus === "provider_not_configured"
         ? "Web-search zatím není nastavený. Bez klíče nebo provideru se web neprohledá."
-        : "AI Boost zatím cenový průzkum nespustil nebo nenašel bezpečně relevantní nabídky. Nic nebylo objednáno.";
+        : "Autopilot zatím cenový průzkum nespustil nebo nenašel bezpečně relevantní nabídky. Nic nebylo objednáno.";
     return `<p class="driver-report-note">${escapeHtml(text)}</p>`;
   }
 
@@ -23675,7 +23765,7 @@ function driverReportPartslink24Section(item) {
   const priceActions = canRunPrice
     ? [
       `<button class="secondary-link" type="button" data-driver-report-price-preview data-request-id="${escapeHtml(item.id)}" ${previewLoading ? "disabled" : ""}>${previewLoading ? "Ověřuji..." : "Ověřit bez uložení"}</button>`,
-      `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${priceLoading ? "disabled" : ""}>${priceLoading ? "AI Boost hledá..." : "Spustit AI Boost"}</button>`
+      `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${priceLoading ? "disabled" : ""}>${priceLoading ? "Autopilot hledá..." : "Spustit Autopilot"}</button>`
     ].join("")
     : "";
   const ccStatus = pilot.pilotCcStatus || "not_sent";
@@ -23711,7 +23801,7 @@ function driverReportPartslink24Section(item) {
         ${driverReportVinPilotStep(
           "2. Detekce dílu",
           partStatus,
-          pilot.candidate === false ? message : "AI Boost našel kandidáta dílu. Výsledek je návrh, ne objednávka.",
+          pilot.candidate === false ? message : "Autopilot našel kandidáta dílu. Výsledek je návrh, ne objednávka.",
           [
             driverReportField("Pravděpodobný díl", item.partAiDetectedName || item.probablePart),
             driverReportField("Strana", driverReportSideLabel(item.partAiDetectedSide || item.probablePartSide)),
@@ -23745,7 +23835,7 @@ function driverReportPartslink24Section(item) {
           "5. Předání Patrikovi",
           handoffStatus,
           canPatrikHandoff
-            ? "Pilotní návrh AI Boost. Nic nebylo objednáno. Patrik musí vše ručně ověřit před nákupem."
+            ? "Pilotní návrh Autopilota. Nic nebylo objednáno. Patrik musí vše ručně ověřit před nákupem."
             : (handoffBlockReason || "Předání Patrikovi se zpřístupní až po bezpečném ověření vozidla, VIN a dílu."),
           [
             driverReportField("E-mail Patrikovi", driverReportNotificationLabel(item.patrikEmailStatus)),
@@ -24100,7 +24190,7 @@ function driverReportPartRowActions(item) {
       <button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Otevřít</button>
       ${canRunVin ? `<button class="text-action" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Ověřit podle VIN</button>` : ""}
       ${canRunVin ? `<a class="text-action" href="https://www.partslink24.com/partslink24/startup.do" target="_blank" rel="noopener noreferrer">Partslink24</a>` : ""}
-      ${canRunPrice ? `<button class="text-action" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>AI Boost ceny</button>` : ""}
+      ${canRunPrice ? `<button class="text-action" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Ceny Autopilota</button>` : ""}
       ${canHandoff ? `<button class="text-action" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Odeslat Patrikovi</button>` : ""}
       ${canManage && ["ordered", "handed_to_ordering"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Díl dorazil</button>` : ""}
       ${canManage && ["part_arrived", "service_scheduled"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Vyřízeno</button>` : ""}
@@ -24470,7 +24560,7 @@ function driverReportManualPartForm(item) {
   const vehicleReviewNote = item.licensePlateVerified !== true
     ? "SPZ není ověřená ve Vozovém parku. Nejdřív oprav SPZ nebo vozidlo."
     : item.manualVehicleReview === true
-      ? "Vozidlo vyžaduje ruční kontrolu. Po potvrzení vozidla a dílu se zpřístupní AI Boost ceny a e-mail Patrikovi."
+      ? "Vozidlo vyžaduje ruční kontrolu. Po potvrzení vozidla a dílu se zpřístupní ceny Autopilota a e-mail Patrikovi."
       : "";
 
   return `
@@ -24546,7 +24636,7 @@ function driverReportActionButtons(item) {
 
   return `
     <div class="driver-report-actions">
-      ${partWorkflow ? `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${canRunPrice && !loading ? "" : "disabled"}>Spustit AI Boost</button>` : ""}
+      ${partWorkflow ? `<button class="secondary-link" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${canRunPrice && !loading ? "" : "disabled"}>Spustit Autopilot</button>` : ""}
       ${partWorkflow ? `<button class="secondary-link" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${canHandoff && !loading ? "" : "disabled"}>Předat Patrikovi</button>` : ""}
       ${partWorkflow ? `<button class="secondary-link" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${canArrived && !loading ? "" : "disabled"}>Díl dorazil</button>` : ""}
       <button class="secondary-link" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${canComplete && !loading ? "" : "disabled"}>Vyřízeno</button>
@@ -25169,8 +25259,8 @@ async function runDriverReportPricePreview(requestId) {
     };
     const preview = result.preview || {};
     driverReportsState.message = preview.ok
-      ? "Kontrolní AI Boost našel 3 odkazy. Výsledek zatím není uložený a e-mail neodešel."
-      : preview.message || "Kontrolní AI Boost zatím nenašel 3 odkazy.";
+      ? "Kontrolní průzkum Autopilota našel 3 odkazy. Výsledek zatím není uložený a e-mail neodešel."
+      : preview.message || "Kontrolní průzkum Autopilota zatím nenašel 3 odkazy.";
   } catch (error) {
     driverReportsState.error = error.payload?.error || "Kontrolní cenový průzkum se nepodařilo spustit.";
   } finally {
@@ -25456,9 +25546,9 @@ function receivablesDashboardSection() {
     <section class="receivables-panel" id="receivables-dry-run" aria-labelledby="receivables-dry-run-title">
       <div class="receivables-panel__head">
         <div>
-          <p class="module-feedback__eyebrow">AI Booster</p>
+          <p class="module-feedback__eyebrow">Autopilot</p>
           <h2 id="receivables-dry-run-title">Dry-run rozhodnutí</h2>
-          <p>AI Booster ve Fázi 1C pouze navrhuje akci. Nic neposílá a nic nespouští automaticky.</p>
+          <p>Autopilot ve Fázi 1C pouze navrhuje akci. Nic neposílá a nic nespouští automaticky.</p>
         </div>
         ${receivablesPill("outbound vypnutý", "warning")}
       </div>
@@ -30259,7 +30349,7 @@ async function runDataBoxAiBoostAction() {
 
   dataBoxState.aiBoostLoading = true;
   dataBoxState.aiBoostError = "";
-  dataBoxState.aiBoostMessage = "AI Boost připravuje koncepty...";
+  dataBoxState.aiBoostMessage = "Autopilot připravuje koncepty...";
   render();
 
   try {
@@ -30267,12 +30357,12 @@ async function runDataBoxAiBoostAction() {
       method: "POST",
       body: JSON.stringify({ limit: 30 })
     });
-    dataBoxState.aiBoostMessage = result.message || `AI Boost připravil ${Number(result.created || 0)} konceptů.`;
+    dataBoxState.aiBoostMessage = result.message || `Autopilot připravil ${Number(result.created || 0)} konceptů.`;
     dataBoxState.aiBoostError = "";
     await loadDataBoxData({ force: true, renderAfter: false });
     dataBoxState.activeTab = "confirmations";
   } catch (error) {
-    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "AI Boost se nepodařilo spustit.";
+    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "Autopilot se nepodařilo spustit.";
     dataBoxState.aiBoostMessage = "";
   } finally {
     dataBoxState.aiBoostLoading = false;
@@ -30287,15 +30377,15 @@ async function confirmDataBoxAiBoostAction(actionId) {
   }
   const action = dataBoxState.aiBoostActions.find((item) => String(item.id || "") === id);
   const label = dataBoxAiBoostActionLabel(action);
-  const subject = action?.subject || "AI Boost koncept";
+  const subject = action?.subject || "Koncept Autopilota";
 
-  if (!window.confirm(`Potvrdit AI Boost koncept?\n\nAkce: ${label}\nZpráva: ${subject}\n\nBez potvrzení se nic neprovede.`)) {
+  if (!window.confirm(`Potvrdit koncept Autopilota?\n\nAkce: ${label}\nZpráva: ${subject}\n\nBez potvrzení se nic neprovede.`)) {
     return;
   }
 
   dataBoxState.aiBoostLoading = true;
   dataBoxState.aiBoostError = "";
-  dataBoxState.aiBoostMessage = "Potvrzuji AI Boost koncept...";
+  dataBoxState.aiBoostMessage = "Potvrzuji koncept Autopilota...";
   render();
 
   try {
@@ -30303,12 +30393,12 @@ async function confirmDataBoxAiBoostAction(actionId) {
       method: "POST",
       body: JSON.stringify({ confirmed: true })
     });
-    dataBoxState.aiBoostMessage = result.notice || "AI Boost koncept byl potvrzen.";
+    dataBoxState.aiBoostMessage = result.notice || "Koncept Autopilota byl potvrzen.";
     dataBoxState.aiBoostError = "";
     await loadDataBoxData({ force: true, renderAfter: false });
     dataBoxState.activeTab = "confirmations";
   } catch (error) {
-    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "AI Boost koncept se nepodařilo potvrdit.";
+    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "Koncept Autopilota se nepodařilo potvrdit.";
     dataBoxState.aiBoostMessage = "";
   } finally {
     dataBoxState.aiBoostLoading = false;
@@ -30394,7 +30484,7 @@ async function saveDataBoxAiBoostEditForm(form) {
   const formData = new FormData(form);
   dataBoxState.aiBoostLoading = true;
   dataBoxState.aiBoostError = "";
-  dataBoxState.aiBoostMessage = "Ukládám upravený AI Boost návrh...";
+  dataBoxState.aiBoostMessage = "Ukládám upravený návrh Autopilota...";
   render();
 
   try {
@@ -30409,12 +30499,12 @@ async function saveDataBoxAiBoostEditForm(form) {
       })
     });
     dataBoxState.aiBoostEditingId = "";
-    dataBoxState.aiBoostMessage = result.notice || "AI Boost návrh byl upraven.";
+    dataBoxState.aiBoostMessage = result.notice || "Návrh Autopilota byl upraven.";
     dataBoxState.aiBoostError = "";
     await loadDataBoxData({ force: true, renderAfter: false });
     dataBoxState.activeTab = "confirmations";
   } catch (error) {
-    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "AI Boost návrh se nepodařilo upravit.";
+    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "Návrh Autopilota se nepodařilo upravit.";
     dataBoxState.aiBoostMessage = "";
   } finally {
     dataBoxState.aiBoostLoading = false;
@@ -30435,7 +30525,7 @@ async function rejectDataBoxAiBoostAction(actionId) {
 
   dataBoxState.aiBoostLoading = true;
   dataBoxState.aiBoostError = "";
-  dataBoxState.aiBoostMessage = "Zamítám AI Boost návrh...";
+  dataBoxState.aiBoostMessage = "Zamítám návrh Autopilota...";
   render();
 
   try {
@@ -30444,12 +30534,12 @@ async function rejectDataBoxAiBoostAction(actionId) {
       body: JSON.stringify({ reason: String(reason || "").trim() || "Zamítnuto uživatelem." })
     });
     dataBoxState.aiBoostEditingId = "";
-    dataBoxState.aiBoostMessage = result.notice || "AI Boost návrh byl zamítnut.";
+    dataBoxState.aiBoostMessage = result.notice || "Návrh Autopilota byl zamítnut.";
     dataBoxState.aiBoostError = "";
     await loadDataBoxData({ force: true, renderAfter: false });
     dataBoxState.activeTab = "confirmations";
   } catch (error) {
-    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "AI Boost návrh se nepodařilo zamítnout.";
+    dataBoxState.aiBoostError = error?.payload?.error || error?.message || "Návrh Autopilota se nepodařilo zamítnout.";
     dataBoxState.aiBoostMessage = "";
   } finally {
     dataBoxState.aiBoostLoading = false;
@@ -30510,7 +30600,7 @@ function createDataBoxAiBoostRuleDraftFromAction(actionId) {
   const action = dataBoxState.aiBoostActions.find((item) => String(item.id || "") === String(actionId || ""));
   const message = dataBoxAiBoostMessage(action);
   if (!action?.id) {
-    dataBoxState.aiBoostError = "AI Boost návrh nebyl nalezen.";
+    dataBoxState.aiBoostError = "Návrh Autopilota nebyl nalezen.";
     dataBoxState.aiBoostMessage = "";
     render();
     return;

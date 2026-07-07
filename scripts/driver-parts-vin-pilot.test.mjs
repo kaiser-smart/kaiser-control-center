@@ -75,7 +75,7 @@ function driverPartRequestRow(overrides = {}) {
     part_verification_source: "",
     parts_provider_id: "partslink24",
     parts_provider_status: "waiting_vin_pilot",
-    parts_provider_message: "AI Boost rozpoznal konkrétní díl.",
+    parts_provider_message: "Autopilot rozpoznal konkrétní díl.",
     parts_provider_error: "",
     part_lookup_query: "přední sklo",
     part_lookup_result_json: "",
@@ -796,7 +796,7 @@ function driverPartTestEnv(db, offers) {
   };
   const result = await runDriverPartPriceSearch({}, item);
   assert.equal(result.status, "provider_not_configured");
-  assert.match(result.message, /AI Boost web-search není nastavený/);
+  assert.match(result.message, /vyhledávání Autopilota není nastavené/);
   assert.deepEqual(result.offers, []);
 }
 
@@ -947,7 +947,7 @@ function driverPartTestEnv(db, offers) {
 {
   const itemWithoutOffers = {
     priceBoostStatus: "failed",
-    priceBoostNote: "AI Boost cenový průzkum selhal: The operation was aborted. Pokračuj ručně.",
+    priceBoostNote: "Cenový průzkum Autopilota selhal: The operation was aborted. Pokračuj ručně.",
     priceBoostResultJson: JSON.stringify({
       ok: false,
       offers: []

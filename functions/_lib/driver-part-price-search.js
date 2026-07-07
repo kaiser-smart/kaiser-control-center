@@ -431,7 +431,7 @@ async function fetchOpenAiWebSearchOffers(config, request, query, signal, fetchI
       tool_choice: "required",
       input: [
         "Najdi nejlevnejsi relevantni dostupne nove nabidky nahradniho dilu v CR nebo EU.",
-        "Jde o pilot AI Boost pro servisni overeni. Nic neobjednavej.",
+        "Jde o pilot Autopilota pro servisni overeni. Nic neobjednavej.",
         `Dotaz: ${query}`,
         `OE cislo: ${cleanString(request.oePartNumber || request.partOrderNumber) || "neuvedeno"}`,
         `Dil: ${cleanString(request.partName || request.verifiedPart || request.probablePart) || "neuvedeno"}`,
@@ -508,7 +508,7 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
   }
 
   if (!config.endpoint && !config.mockJson && !config.openAiApiKey) {
-    const message = "AI Boost web-search není nastavený. Chybí OPENAI_API_KEY nebo PARTS_PRICE_SEARCH_ENDPOINT.";
+    const message = "vyhledávání Autopilota není nastavené. Chybí OPENAI_API_KEY nebo PARTS_PRICE_SEARCH_ENDPOINT.";
     return {
       ok: false,
       status: "provider_not_configured",
@@ -542,10 +542,10 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
     const hasRequiredOffers = offers.length >= MAX_OFFERS;
     const status = hasRequiredOffers ? "candidates_found" : offers.length ? "partial_results" : "no_results";
     const message = hasRequiredOffers
-      ? "AI Boost našel 3 prokazatelně kompatibilní nabídky k ručnímu ověření. Nic nebylo objednáno."
+      ? "Autopilot našel 3 prokazatelně kompatibilní nabídky k ručnímu ověření. Nic nebylo objednáno."
       : offers.length
-        ? `AI Boost našel jen ${offers.length} z 3 potřebných prokazatelně kompatibilních nabídek s odkazy. E-mail Patrikovi zatím neposílám.`
-        : "AI Boost nenašel 3 prokazatelně kompatibilní nabídky. Pokračuj ručně.";
+        ? `Autopilot našel jen ${offers.length} z 3 potřebných prokazatelně kompatibilních nabídek s odkazy. E-mail Patrikovi zatím neposílám.`
+        : "Autopilot nenašel 3 prokazatelně kompatibilní nabídky. Pokračuj ručně.";
     const provider = config.mockJson ? "mock" : config.endpoint ? config.provider : "openai_web_search";
 
     return {
@@ -562,11 +562,11 @@ export async function runDriverPartPriceSearch(env = {}, request = {}, options =
         query,
         offers,
         checkedAt: now,
-        note: "Pilotní AI Boost cenový průzkum. Nic nebylo objednáno."
+        note: "Pilotní cenový průzkum Autopilota. Nic nebylo objednáno."
       })
     };
   } catch (error) {
-    const message = `AI Boost cenový průzkum selhal: ${safeErrorDetail(error)}. Pokračuj ručně.`;
+    const message = `Cenový průzkum Autopilota selhal: ${safeErrorDetail(error)}. Pokračuj ručně.`;
     return {
       ok: false,
       status: "failed",

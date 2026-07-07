@@ -242,6 +242,9 @@ export const DATA_BOX_PLUS_RECOMMENDATIONS = [
     text: "Zpráva od Culligan vypadá jako upomínka. Doporučuji připravit e-mail na faktury@kaiserservis.cz.",
     action: "Připravit e-mail",
     evidence: "Odesílatel Culligan, slovo upomínka a variabilní symbol faktury.",
+    similarCases: "Poslední 4 podobné upomínky šly účetnímu oddělení.",
+    afterConfirm: "Po potvrzení vznikne návrh e-mailu pro faktury k ruční kontrole.",
+    humanReason: "Obsahuje finanční požadavek, proto se nic neodešle bez člověka.",
     risk: "Finanční požadavek čeká na člověka."
   },
   {
@@ -250,6 +253,9 @@ export const DATA_BOX_PLUS_RECOMMENDATIONS = [
     text: "Oznámení z Registru smluv vypadá jako informativní zpráva. Doporučuji archivovat.",
     action: "Archivovat",
     evidence: "Známý odesílatel a potvrzení o zveřejnění smlouvy.",
+    similarCases: "Posledních 12 podobných potvrzení bylo archivováno bez další akce.",
+    afterConfirm: "Po potvrzení se zpráva označí jako informativní a půjde do archivu.",
+    humanReason: "Nízké riziko může být časem autonomní, ale nový typ potvrzuje člověk.",
     risk: "Nízké riziko podle schváleného playbooku."
   },
   {
@@ -258,6 +264,9 @@ export const DATA_BOX_PLUS_RECOMMENDATIONS = [
     text: "Exekuční dokument vyžaduje právní kontrolu. Doporučuji předat právníkovi / GT Brno.",
     action: "Předat",
     evidence: "Odesílatel je soudní exekutor a příloha obsahuje spisovou značku.",
+    similarCases: "Podobné právní zprávy se vždy předávaly GT Brno nebo právníkovi.",
+    afterConfirm: "Po potvrzení se připraví předání odpovědné osobě.",
+    humanReason: "Právní dokument nesmí Autopilot uzavřít ani archivovat sám.",
     risk: "Právní dokument nelze uzavřít samostatně."
   }
 ];

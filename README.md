@@ -25,7 +25,7 @@ https://kaiser-smart.github.io/kaiser-pneu-evidence/
 
 ## Hlášení řidičů: partslink24 VIN pilot
 
-Vyhledání náhradních dílů podle VIN přes partslink24 je zatím pouze read-only / AI Boost pilot pro osobní vozidla. Nákladní vozidla jsou mimo tento pilot a potřebují samostatné ověřené řešení. partslink24 nemá v projektu dostupné API, proto se ověřuje server-side browser automation mimo produkční UI. Pilot nesmí objednávat díly, měnit data v partslink24 ani ukládat heslo/cookies do logu.
+Vyhledání náhradních dílů podle VIN přes partslink24 je zatím pouze read-only / pilot Autopilota pro osobní vozidla. Nákladní vozidla jsou mimo tento pilot a potřebují samostatné ověřené řešení. partslink24 nemá v projektu dostupné API, proto se ověřuje server-side browser automation mimo produkční UI. Pilot nesmí objednávat díly, měnit data v partslink24 ani ukládat heslo/cookies do logu.
 
 Dokumentace pilotu je v `docs/PARTSLINK24_VIN_PILOT.md`.
 

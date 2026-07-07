@@ -513,7 +513,7 @@ export async function confirmDataBoxAction(env, actionId, payload = {}, currentU
       message: await loadMessage(env, message.id),
       status: "archived",
       apiStatus: "ready",
-      notice: "AI Boost koncept byl potvrzen a zpráva byla archivována."
+      notice: "Koncept Autopilota byl potvrzen a zpráva byla archivována."
     };
   }
 
@@ -557,12 +557,12 @@ export async function confirmDataBoxAction(env, actionId, payload = {}, currentU
       message,
       status: "sent",
       apiStatus: "ready",
-      notice: "AI Boost koncept byl potvrzen a e-mail byl odeslán."
+      notice: "Koncept Autopilota byl potvrzen a e-mail byl odeslán."
     };
   }
 
   throw new DataBoxActionError(
-    "Tento typ AI Boost konceptu zatím nejde potvrdit přímo. Otevřete zprávu a dokončete akci v detailu.",
+    "Tento typ konceptu Autopilota zatím nejde potvrdit přímo. Otevřete zprávu a dokončete akci v detailu.",
     409,
     "data_box_action_confirm_unsupported"
   );
@@ -642,7 +642,7 @@ export async function updateDataBoxActionDraft(env, actionId, payload = {}, curr
     action: await getAction(db, action.id),
     status: "requires_confirmation",
     apiStatus: "ready",
-    notice: "AI Boost návrh byl upraven a čeká na potvrzení."
+    notice: "Návrh Autopilota byl upraven a čeká na potvrzení."
   };
 }
 
@@ -670,7 +670,7 @@ export async function rejectDataBoxActionDraft(env, actionId, payload = {}, curr
     action: updatedAction,
     status: "skipped",
     apiStatus: "ready",
-    notice: "AI Boost návrh byl zamítnut."
+    notice: "Návrh Autopilota byl zamítnut."
   };
 }
 

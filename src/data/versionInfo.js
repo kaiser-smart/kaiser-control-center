@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.441"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.442"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: nápověda akcí a Autopilot",
+    text: "Důležité akce v Datových schránkách Plus nově ukazují lidskou nápovědu pro hover, focus i tapnutí a návrhy mají vysvětlení, proč je Autopilot doporučuje. Starší označení asistenta je napříč KSO sjednocené na Autopilot."
+  },
   {
     title: "Datové schránky Plus: nový autonomní pilot",
     text: "Přibyl samostatný modul /datove-schranky-plus jako bezpečný UI/read-only pilot operačního centra pro 7 firemních datových schránek, Autopilot, přílohy, pravidla, potvrzení a auditní hranice. Bez zásahu do původní Datové schránky, databáze, přístupových hesel nebo ostrého automatického běhu."
@@ -98,7 +102,7 @@ export const versionNews = [
   },
   {
     title: "Hlášení řidičů: odkazy jen s důkazem kompatibility",
-    text: "AI Boost a e-mail Patrikovi nově počítají mezi 3 nabídky jen položky s OE shodou, VIN/provider fitmentem nebo oficiálním katalogovým důkazem. Pouhá shoda názvu dílu už nestačí."
+    text: "Autopilot a e-mail Patrikovi nově počítají mezi 3 nabídky jen položky s OE shodou, VIN/provider fitmentem nebo oficiálním katalogovým důkazem. Pouhá shoda názvu dílu už nestačí."
   },
   {
     title: "Hlášení řidičů: úplnější e-mail Patrikovi",
@@ -146,7 +150,7 @@ export const versionNews = [
   },
   {
     title: "Pohledávkový kompas AI: dry-run základ",
-    text: "Modul Pohledávky má D1 schéma, chráněné API, payment matching, rating platební morálky, KB text parser, AI Booster dry-run, settings a detail zákazníka. Ostré odesílání, cron, Vistos sync, KB API a insolvenční live kontrola zůstávají vypnuté."
+    text: "Modul Pohledávky má D1 schéma, chráněné API, payment matching, rating platební morálky, KB text parser, náhled Autopilota, settings a detail zákazníka. Ostré odesílání, cron, Vistos sync, KB API a insolvenční live kontrola zůstávají vypnuté."
   },
   {
     title: "Trasy svozu: jemné zvuky řidičského tabletu",
@@ -182,22 +186,22 @@ export const versionNews = [
   },
   {
     title: "Hlášení řidičů: náhled e-mailu bez odeslání",
-    text: "Kontrolní AI Boost cenový průzkum nově ukáže přesný náhled e-mailu Patrikovi včetně předmětu, adresátů a tří odkazů. Náhled nic neuloží a e-mail neodešle."
+    text: "Kontrolní cenový průzkum Autopilota nově ukáže přesný náhled e-mailu Patrikovi včetně předmětu, adresátů a tří odkazů. Náhled nic neuloží a e-mail neodešle."
   },
   {
     title: "Hlášení řidičů: e-mail Patrikovi má odkazy nahoře",
-    text: "Šablona e-mailu pro náhradní díl nově ukazuje souhrn závady a hned pod ním 3 nejlevnější nabídky s odkazy. Interní stav AI Boostu už není hlavní obsah zprávy."
+    text: "Šablona e-mailu pro náhradní díl nově ukazuje souhrn závady a hned pod ním 3 nejlevnější nabídky s odkazy. Interní stav Autopilotu už není hlavní obsah zprávy."
   },
   {
-    title: "Hlášení řidičů: AI Boost musí použít web-search",
-    text: "Cenový průzkum přes OpenAI Responses API nově vynucuje web-search tool. AI Boost tak nemá jen odpovídat z modelu, ale musí opravdu zkusit dohledat dostupné nabídky na internetu."
+    title: "Hlášení řidičů: Autopilot musí použít web-search",
+    text: "Cenový průzkum přes OpenAI Responses API nově vynucuje web-search tool. Autopilot tak nemá jen odpovídat z modelu, ale musí opravdu zkusit dohledat dostupné nabídky na internetu."
   },
   {
-    title: "Hlášení řidičů: kontrolní AI Boost bez e-mailu",
-    text: "Detail hlášení má read-only kontrolu cenového průzkumu. Spustí stejný AI Boost web-search, ukáže nalezené odkazy, ale nic neuloží do hlášení a neodešle e-mail Patrikovi."
+    title: "Hlášení řidičů: kontrolní Autopilot bez e-mailu",
+    text: "Detail hlášení má read-only kontrolu cenového průzkumu. Spustí stejné vyhledávání Autopilota, ukáže nalezené odkazy, ale nic neuloží do hlášení a neodešle e-mail Patrikovi."
   },
   {
-    title: "Hlášení řidičů: AI Boost retry podle rozpoznaného dílu",
+    title: "Hlášení řidičů: Autopilot retry podle rozpoznaného dílu",
     text: "Cenový průzkum lze znovu spustit i pro bezpečně ověřené vozidlo s VIN a jasným AI kandidátem dílu, bez ručního OE čísla. E-mail Patrikovi ale dál projde jen se třemi cenovými odkazy."
   },
   {
@@ -206,11 +210,11 @@ export const versionNews = [
   },
   {
     title: "Hlášení řidičů: kontrola před e-mailem",
-    text: "Backend má read-only kontrolu připravenosti předání Patrikovi. Bez zápisu a bez odeslání e-mailu ověří vozidlo, VIN, díl, konfiguraci AI Boostu, počet cenových odkazů a cílový e-mail."
+    text: "Backend má read-only kontrolu připravenosti předání Patrikovi. Bez zápisu a bez odeslání e-mailu ověří vozidlo, VIN, díl, konfiguraci Autopilotu, počet cenových odkazů a cílový e-mail."
   },
   {
     title: "Hlášení řidičů: e-mail až po 3 odkazech",
-    text: "Servisní fronta a detail hlášení už neukazují předání Patrikovi jako připravené, dokud AI Boost nedodá tři cenové nabídky s odkazy. Jedna nebo dvě nabídky se uloží jako neúplný průzkum a e-mail se dál blokuje."
+    text: "Servisní fronta a detail hlášení už neukazují předání Patrikovi jako připravené, dokud Autopilot nedodá tři cenové nabídky s odkazy. Jedna nebo dvě nabídky se uloží jako neúplný průzkum a e-mail se dál blokuje."
   },
   {
     title: "Náhradní díly: osobní Mercedes ve VIN pilotu",
@@ -218,7 +222,7 @@ export const versionNews = [
   },
   {
     title: "Hlášení řidičů: e-mail Patrikovi až s odkazy",
-    text: "AI Boost už nesmí označit náhradní díl jako předaný Patrikovi, pokud cenový průzkum nedodal tři bezpečné nabídky s odkazy. Hlasové hlášení se zapíše rychle a web-search běží serverově; e-mail odejde až s odkazy a nic se automaticky neobjednává."
+    text: "Autopilot už nesmí označit náhradní díl jako předaný Patrikovi, pokud cenový průzkum nedodal tři bezpečné nabídky s odkazy. Hlasové hlášení se zapíše rychle a web-search běží serverově; e-mail odejde až s odkazy a nic se automaticky neobjednává."
   },
   {
     title: "Trasy svozu: klidnější řidičský displej",
@@ -226,7 +230,7 @@ export const versionNews = [
   },
   {
     title: "Šarlota: KSO výběr vozidla odemyká předání",
-    text: "Hlasové hlášení s vozidlem vybraným v KSO popupu se už nevrací do ruční kontroly vozidla. KSO výběr se zapisuje jako aplikační potvrzení, takže jasný díl může pokračovat do AI Boost cen a e-mailu Patrikovi; nic se automaticky neobjednává."
+    text: "Hlasové hlášení s vozidlem vybraným v KSO popupu se už nevrací do ruční kontroly vozidla. KSO výběr se zapisuje jako aplikační potvrzení, takže jasný díl může pokračovat do Autopilot cen a e-mailu Patrikovi; nic se automaticky neobjednává."
   },
   {
     title: "Trasy svozu: návrh Fáze 2D",
@@ -238,7 +242,7 @@ export const versionNews = [
   },
   {
     title: "Šarlota: ostrý hlasový průchod Hlášení řidičů",
-    text: "Výběr vozidla v KSO popupu se bere jako aplikační potvrzení pro hlasové hlášení. Šarlota po ověřeném vozidle a konkrétním dílu může spustit AI Boost cenový průzkum a poslat pilotní e-mail Patrikovi s CC Radimovi; nic se automaticky neobjednává."
+    text: "Výběr vozidla v KSO popupu se bere jako aplikační potvrzení pro hlasové hlášení. Šarlota po ověřeném vozidle a konkrétním dílu může spustit cenový průzkum Autopilota a poslat pilotní e-mail Patrikovi s CC Radimovi; nic se automaticky neobjednává."
   },
   {
     title: "Trasy svozu: offline balíček pro řidiče",
@@ -545,8 +549,8 @@ export const versionNews = [
     text: "Modul Hlášení řidičů má backendový workflow pro náhradní díly: pravděpodobný díl, předání Patrikovi, SMS servisu, doručení dílu, plán servisu a hlasové potvrzení Šarlotou."
   },
   {
-    title: "Datová schránka: ukládání AI Boost konceptů",
-    text: "Cloud DB akce Datové schránky nově povolují i typy AI Boost a kontrolní návrh, aby se koncepty pro potvrzení ukládaly stejně jako archivace, e-mail a odpověď."
+    title: "Datová schránka: ukládání konceptů Autopilota",
+    text: "Cloud DB akce Datové schránky nově povolují i typy Autopilot a kontrolní návrh, aby se koncepty pro potvrzení ukládaly stejně jako archivace, e-mail a odpověď."
   },
   {
     title: "Vozový park: Vistos Vehicle preview",
@@ -565,8 +569,8 @@ export const versionNews = [
     text: "Hlasová Šarlota v modulu Dovolená / Nemoc a Rychlé zadání nově připraví dovolenou, nemoc, OČR, lékaře, náhradní volno, neplacené volno i jinou nepřítomnost a zapisuje až po potvrzení přes KSO backend."
   },
   {
-    title: "Datová schránka: jasné AI Boost příznaky",
-    text: "Zprávy vyhodnocené AI Boostem mají samostatný příznak AI Boost a oddělené příznaky pro doporučenou akci i stav potvrzení, aby se nemíchalo Hotovo, E-mail, Faktury a Archiv do jedné nesrozumitelné bubliny."
+    title: "Datová schránka: jasné Autopilot příznaky",
+    text: "Zprávy vyhodnocené Autopilotem mají samostatný příznak Autopilot a oddělené příznaky pro doporučenou akci i stav potvrzení, aby se nemíchalo Hotovo, E-mail, Faktury a Archiv do jedné nesrozumitelné bubliny."
   },
   {
     title: "Šarlota: počasí a svátky",

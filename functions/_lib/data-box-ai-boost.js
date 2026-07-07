@@ -85,7 +85,7 @@ function openAiConfig(env) {
 
   if (!apiKey) {
     throw new DataBoxAiBoostError(
-      "AI Boost není napojený: chybí server-side OpenAI API key.",
+      "Autopilot není napojený: chybí server-side OpenAI API key.",
       503,
       "data_box_ai_boost_missing_openai_key"
     );
@@ -105,7 +105,7 @@ function extractJsonObject(text) {
     if (start >= 0 && end > start) {
       return JSON.parse(raw.slice(start, end + 1));
     }
-    throw new DataBoxAiBoostError("AI Boost vrátil neplatný JSON.", 502, "data_box_ai_boost_invalid_json");
+    throw new DataBoxAiBoostError("Autopilot vrátil neplatný JSON.", 502, "data_box_ai_boost_invalid_json");
   }
 }
 
@@ -125,7 +125,7 @@ async function requestAiRecommendations(env, messages, rules) {
         {
           role: "system",
           content: [
-            "Jsi bezpečný AI Boost pro modul Datová schránka v Kaiser Smart.",
+            "Jsi bezpečný Autopilot pro modul Datová schránka v Kaiser Smart.",
             "Nevytváříš ostré akce. Jen doporučuješ koncepty čekající na potvrzení uživatele.",
             "Doporuč jen akce archive, email, reply nebo review.",
             "E-mail doporuč pouze tehdy, když příjemce jasně vyplývá z pravidel.",
@@ -136,7 +136,7 @@ async function requestAiRecommendations(env, messages, rules) {
         {
           role: "user",
           content: JSON.stringify({
-            task: "Vyber maximálně 12 bezpečných AI Boost konceptů pro zprávy.",
+            task: "Vyber maximálně 12 bezpečných konceptů Autopilota pro zprávy.",
             rules,
             messages,
             outputShape: {
@@ -227,7 +227,7 @@ export async function runDataBoxAiBoost(env, options = {}) {
       status: "skipped",
       created: 0,
       actions: [],
-      message: "AI Boost nemá žádné přijaté zprávy k vyhodnocení."
+      message: "Autopilot nemá žádné přijaté zprávy k vyhodnocení."
     };
   }
 
@@ -263,8 +263,8 @@ export async function runDataBoxAiBoost(env, options = {}) {
 
     const actionType = normalizeActionType(recommendation.actionType);
     const recipient = cleanString(recommendation.recipient);
-    const subject = truncate(recommendation.subject || message.subject || "AI Boost koncept", 180);
-    const reason = truncate(recommendation.reason || "AI Boost doporučuje ruční kontrolu.", 460);
+    const subject = truncate(recommendation.subject || message.subject || "Koncept Autopilota", 180);
+    const reason = truncate(recommendation.reason || "Autopilot doporučuje ruční kontrolu.", 460);
     const confidence = Number(recommendation.confidence || 0);
     const storedActionType = actionType === "review" ? "ai_boost" : actionType;
 
@@ -308,8 +308,8 @@ export async function runDataBoxAiBoost(env, options = {}) {
     created: createdActions.length,
     actions: createdActions,
     message: createdActions.length
-      ? `AI Boost připravil ${createdActions.length} konceptů k ručnímu potvrzení.`
-      : "AI Boost nenašel dostatečně jistý koncept k potvrzení."
+      ? `Autopilot připravil ${createdActions.length} konceptů k ručnímu potvrzení.`
+      : "Autopilot nenašel dostatečně jistý koncept k potvrzení."
   };
 }
 
@@ -323,7 +323,7 @@ export function dataBoxAiBoostErrorResponse(error) {
 
   return {
     payload: {
-      error: cleanString(error?.message) || "AI Boost se nepodařilo spustit.",
+      error: cleanString(error?.message) || "Autopilot se nepodařilo spustit.",
       code: cleanString(error?.code || "data_box_ai_boost_failed"),
       apiStatus: "ready"
     },

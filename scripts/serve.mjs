@@ -1583,7 +1583,7 @@ async function createMockDriverPartRequest(user, payload = {}) {
     partVerificationSource: mockDriverClean(payload.partVerificationSource),
     partsProviderId: partAiCandidate ? "partslink24" : "",
     partsProviderStatus: partAiCandidate ? "waiting_vin_pilot" : "not_applicable",
-    partsProviderMessage: partAiCandidate ? "AI Boost rozpoznal konkrétní díl. Ověření podle VIN je read-only pilot." : partMatch.note,
+    partsProviderMessage: partAiCandidate ? "Autopilot rozpoznal konkrétní díl. Ověření podle VIN je read-only pilot." : partMatch.note,
     partsProviderError: "",
     partLookupQuery: [probablePart, partMatch.defectType, defectDescription].filter(Boolean).join(" "),
     partLookupResultJson: "",
@@ -1729,7 +1729,7 @@ async function handoffMockDriverPartRequest(user, id) {
   if (mockDriverPriceOffers(current).length < 3) {
     const message = mockDriverPriceOffersProvider(current) === "openai_web_search"
       ? "Finální 3 odkazy čekají na oficiální price provider. OpenAI web-search je jen read-only náhled."
-      : "AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. E-mail Patrikovi neposílám bez odkazů.";
+      : "Autopilot zatím nedodal 3 bezpečně relevantní nabídky s odkazy. E-mail Patrikovi neposílám bez odkazů.";
     const error = new Error(message);
     error.status = 400;
     throw error;
@@ -1877,8 +1877,8 @@ async function verifyMockMercedesDriverPartRequest(user, id) {
     mercedesMyPartsHubUrl: mockDriverClean(result.mercedesMyPartsHubUrl || current.mercedesMyPartsHubUrl),
     priceBoostStatus: result.oePartNumber || result.partOrderNumber ? "waiting_verified_part" : "not_requested",
     priceBoostNote: result.oePartNumber || result.partOrderNumber
-      ? "AI Boost cenový průzkum smí běžet až po potvrzení kompatibility člověkem."
-      : "AI Boost cenový průzkum čeká na ověřené OE číslo.",
+      ? "Cenový průzkum Autopilota smí běžet až po potvrzení kompatibility člověkem."
+      : "Cenový průzkum Autopilota čeká na ověřené OE číslo.",
     updatedByUserId: user?.id || "",
     updatedAt: now,
     events: [mockDriverEvent(current.id, isMercedes ? "verify_mercedes_part" : "skip_mercedes_part_verification", user, result.partsProviderMessage || "Lokální preview: ověření dílu zapsáno."), ...(current.events || [])]
@@ -1910,7 +1910,7 @@ function updateMockDriverPartManualVerification(user, id, payload = {}) {
       note: mockDriverClean(payload.note || item.note),
       priceBoostStatus: hasManualData ? "waiting_verified_part" : item.priceBoostStatus,
       priceBoostNote: hasManualData
-        ? "AI Boost cenový průzkum smí běžet až po potvrzení kompatibility člověkem."
+        ? "Cenový průzkum Autopilota smí běžet až po potvrzení kompatibility člověkem."
         : item.priceBoostNote,
       updatedByUserId: user?.id || "",
       updatedAt: now,
@@ -5382,7 +5382,7 @@ async function handleApi(request, response) {
       return true;
     }
     if (!canManageMockDataBox(user)) {
-      sendJson(response, 403, { error: "Nemate opravneni spustit AI Boost Datove schranky." });
+      sendJson(response, 403, { error: "Nemate opravneni spustit Autopilot Datove schranky." });
       return true;
     }
 
@@ -5394,14 +5394,14 @@ async function handleApi(request, response) {
       actionType: "ai_boost",
       status: "requires_confirmation",
       recipient: "",
-      subject: "Lokální AI Boost koncept",
-      bodyPreview: "Lokální mock: AI Boost by připravil koncept k ruční kontrole. Bez OpenAI secretu nic neposílá.",
+      subject: "Lokální koncept Autopilota",
+      bodyPreview: "Lokální mock: Autopilot by připravil koncept k ruční kontrole. Bez OpenAI secretu nic neposílá.",
       dedupeKey: `data-box:ai-boost:mock:${now}`,
       result: {
         source: "ai_boost",
         provider: "local-mock",
         recommendedAction: "review",
-        reason: "Lokální mock pro ověření záložky AI Boost.",
+        reason: "Lokální mock pro ověření záložky Autopilot.",
         confidence: 0.7,
         requiresConfirmation: true
       },
@@ -5415,7 +5415,7 @@ async function handleApi(request, response) {
       provider: "local-mock",
       created: 1,
       actions: [action],
-      message: "Lokální mock připravil 1 AI Boost koncept. Nic se neodeslalo."
+      message: "Lokální mock připravil 1 koncept Autopilota. Nic se neodeslalo."
     });
     return true;
   }
@@ -5428,7 +5428,7 @@ async function handleApi(request, response) {
       return true;
     }
     if (!canManageMockDataBox(user)) {
-      sendJson(response, 403, { error: "Nemate opravneni potvrdit AI Boost koncept." });
+      sendJson(response, 403, { error: "Nemate opravneni potvrdit koncept Autopilota." });
       return true;
     }
 

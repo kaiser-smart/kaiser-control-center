@@ -385,7 +385,7 @@ function driverPartVinPilotState(item = {}, eligibility = null, latestSearch = n
       status: normalizePartAiStatus(item.partAiStatus || item.partAiSkipReason, "manual_verification_required"),
       candidate: false,
       skipReason: item.partAiSkipReason,
-      message: "AI Boost nespustil hledání, protože hlášení není jednoznačný požadavek na konkrétní díl."
+      message: "Autopilot nespustil hledání, protože hlášení není jednoznačný požadavek na konkrétní díl."
     };
   }
 
@@ -457,7 +457,7 @@ function driverPartVinPilotState(item = {}, eligibility = null, latestSearch = n
       status: "email_ready",
       candidate: true,
       skipReason: "",
-      message: "Díl má ověření a AI Boost dodal 3 cenové nabídky s odkazy. Nákup zůstává ruční pilot."
+      message: "Díl má ověření a Autopilot dodal 3 cenové nabídky s odkazy. Nákup zůstává ruční pilot."
     };
   }
 
@@ -729,7 +729,7 @@ function normalizeCreatePayload(payload, user, vehicle, driverContact = null) {
   ));
   const partsProviderMessage = cleanString(payload.partsProviderMessage || (
     partAiCandidate
-      ? "AI Boost rozpoznal konkrétní díl. Ověření podle VIN je read-only pilot a čeká na ruční spuštění."
+      ? "Autopilot rozpoznal konkrétní díl. Ověření podle VIN je read-only pilot a čeká na ruční spuštění."
       : partMatch.note
   ));
   const priceBoostStatus = cleanString(payload.priceBoostStatus || (
@@ -1346,7 +1346,7 @@ function driverPartRequestPatrikPriceHandoffEligibility(item = {}, options = {})
   return {
     allowed: false,
     code: "driver_part_price_offers_required",
-    message: "AI Boost zatím nedodal 3 bezpečně relevantní nabídky s odkazy. E-mail Patrikovi neposílám bez odkazů."
+    message: "Autopilot zatím nedodal 3 bezpečně relevantní nabídky s odkazy. E-mail Patrikovi neposílám bez odkazů."
   };
 }
 
@@ -1406,8 +1406,8 @@ function driverPartVerificationAfter(user, item = {}, providerResult = {}) {
       mercedesMyPartsHubUrl: providerResult.mercedesMyPartsHubUrl,
       priceBoostStatus: oePartNumber || partOrderNumber ? "waiting_verified_part" : "not_requested",
       priceBoostNote: oePartNumber || partOrderNumber
-        ? "AI Boost cenový průzkum smí běžet až po potvrzení kompatibility člověkem."
-        : "AI Boost cenový průzkum čeká na ověřené OE číslo.",
+        ? "Cenový průzkum Autopilota smí běžet až po potvrzení kompatibility člověkem."
+        : "Cenový průzkum Autopilota čeká na ověřené OE číslo.",
       updatedAt: now
     },
     now,
@@ -1504,7 +1504,7 @@ async function driverPartRequestHandoffReadinessForItem(env, user, item = {}, op
   if (baseEligibility.allowed && !priceSearchConfigured && !priceEligibility.allowed) {
     blockers.push(readinessBlocker(
       "driver_part_price_search_not_configured",
-      "AI Boost web-search není nastavený. Chybí OPENAI_API_KEY nebo PARTS_PRICE_SEARCH_ENDPOINT."
+      "vyhledávání Autopilota není nastavené. Chybí OPENAI_API_KEY nebo PARTS_PRICE_SEARCH_ENDPOINT."
     ));
   }
   if (baseEligibility.allowed && priceSearchConfigured && !officialPriceSearchConfigured && !priceEligibility.allowed) {
@@ -2170,7 +2170,7 @@ export async function updateDriverPartManualVerification(env, user, id, payload 
     note,
     priceBoostStatus: hasManualData ? "waiting_verified_part" : item.priceBoostStatus,
     priceBoostNote: hasManualData
-      ? "AI Boost cenový průzkum smí běžet až po potvrzení kompatibility člověkem."
+      ? "Cenový průzkum Autopilota smí běžet až po potvrzení kompatibility člověkem."
       : item.priceBoostNote,
     source,
     manualVehicleReview: driverPartRequestSourceHasManualVehicleReview(source),
