@@ -17100,16 +17100,22 @@ function collectionRoutesSitesRefreshSecondsRemaining() {
 
 function collectionRoutesSitesRefreshLabel() {
   if (collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.kommunalPairingLoading) {
-    return "Refresh běží";
+    return "Volám API...";
   }
   const seconds = collectionRoutesSitesRefreshSecondsRemaining();
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
-  return `Refresh za ${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+  return `API za ${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
 
 function collectionRoutesSitesRefreshStatusHtml() {
-  return `<span class="employee-card-status employee-card-status--waiting collection-routes-refresh-status">${escapeHtml(collectionRoutesSitesRefreshLabel())}</span>`;
+  const isLoading = collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.kommunalPairingLoading;
+  return `
+    <span class="employee-card-status employee-card-status--waiting collection-routes-refresh-status">${escapeHtml(collectionRoutesSitesRefreshLabel())}</span>
+    <button class="secondary-link" type="button" data-collection-routes-sites-refresh-now ${isLoading ? "disabled" : ""}>
+      ${isLoading ? "Volám API" : "Volat API teď"}
+    </button>
+  `;
 }
 
 function collectionRoutesScheduleCountdownRender() {
@@ -17147,6 +17153,13 @@ async function refreshCollectionRoutesSitesReadOnlySnapshot(options = {}) {
   if (options.renderAfter !== false) {
     render();
   }
+}
+
+function resetCollectionRoutesSitesAutoRefreshTimer() {
+  if (collectionRoutesSitesAutoRefreshTimer && typeof window !== "undefined") {
+    window.clearTimeout(collectionRoutesSitesAutoRefreshTimer);
+  }
+  collectionRoutesSitesAutoRefreshTimer = null;
 }
 
 function scheduleCollectionRoutesSitesAutoRefresh(user = currentUser()) {
@@ -36088,6 +36101,19 @@ document.addEventListener("click", async (event) => {
       page: Number(collectionRoutesSitesPage.dataset.collectionRoutesSitesPage || 1),
       force: true
     });
+    return;
+  }
+
+  const collectionRoutesSitesRefreshNow = event.target.closest("[data-collection-routes-sites-refresh-now]");
+  if (collectionRoutesSitesRefreshNow) {
+    event.preventDefault();
+    if (collectionRoutesSitesRefreshNow.disabled) {
+      return;
+    }
+    resetCollectionRoutesSitesAutoRefreshTimer();
+    await refreshCollectionRoutesSitesReadOnlySnapshot({ renderAfter: false });
+    scheduleCollectionRoutesSitesAutoRefresh(currentUser());
+    render();
     return;
   }
 
