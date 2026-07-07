@@ -1377,7 +1377,7 @@ function vehicleTrackingPreviewUtilityBar(user) {
     <nav class="tracking-utility-bar" aria-label="Systémová lišta náhledu">
       <div class="tracking-utility-bar__brand">
         <a class="tracking-utility-logo" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">
-          <img src="/kaiser_logo.png" alt="" loading="eager" decoding="async">
+          <img src="/kaiser_logo.png?v=${DESIGN_ICON_ASSET_VERSION}" alt="" loading="eager" decoding="async">
         </a>
         <a class="tracking-home-link" href="${routeHref("/")}" data-link>
           <span class="tracking-home-link__icon" aria-hidden="true">
@@ -1774,7 +1774,7 @@ function themePreviewIcon(name) {
   return themePreviewIconFile(icons[name] || icons.marker);
 }
 
-const DESIGN_ICON_ASSET_VERSION = "0.1.329";
+const DESIGN_ICON_ASSET_VERSION = "0.1.330";
 
 function themePreviewIconFile(file) {
   return `<img class="theme-icon-img" src="/design-icons/${file}?v=${DESIGN_ICON_ASSET_VERSION}" alt="" aria-hidden="true" loading="lazy">`;
