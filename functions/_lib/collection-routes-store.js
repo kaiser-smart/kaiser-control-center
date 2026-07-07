@@ -1514,7 +1514,10 @@ function withVistosConsistencyColumns(columns, consistencyFields, entityName) {
     .flatMap((field) => field.confirmed ? field.columns || [] : [])
     .filter((column) => column.entityName === entityName && column.columnName)
     .map((column) => column.columnName);
-  return Array.from(new Set([...columns, ...extra]));
+  const directAddressPlaceColumns = ["Contract", "ContractRow"].includes(entityName)
+    ? VISTOS_ADDRESS_PLACE_GETPAGE_COLUMNS
+    : [];
+  return Array.from(new Set([...columns, ...directAddressPlaceColumns, ...extra]));
 }
 
 function readVistosColumnValue(row, columnName) {
@@ -1567,6 +1570,7 @@ const VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS = [
   "AddressPlace",
   "PickupAddressRuian"
 ];
+const VISTOS_ADDRESS_PLACE_GETPAGE_COLUMNS = ["PickupAddressRuian"];
 
 function directVistosAddressPlaceValues(contract, contractRow) {
   const values = [];
