@@ -677,6 +677,35 @@ Automatizace nesmí být:
 
 Nejdřív vždy vytvořit společný komponent / pattern, společné API a pilotní modul. Neimplementovat záložku plošně do všech modulů bez schváleného pilotu.
 
+## Manuály modulů
+
+Každý hlavní modul aplikace musí obsahovat aktuální uživatelský manuál.
+
+Manuál musí být dostupný ve dvou formách:
+
+1. Náhled přímo v aplikaci
+   - uživatel si může manuál rychle zobrazit bez stahování,
+   - náhled musí být čitelný, jednoduchý a použitelný i pro běžného uživatele,
+   - náhled nesmí překážet hlavní práci v modulu.
+2. PDF ke stažení
+   - uživatel si může manuál stáhnout jako PDF,
+   - PDF musí odpovídat aktuální verzi modulu,
+   - zastaralé nebo neplatné manuály se nesmí zobrazovat jako aktuální.
+
+Manuál má být praktický, stručný a psaný lidsky. Nemá popisovat technické interní detaily, které běžný uživatel nepotřebuje.
+
+Manuál musí vysvětlit hlavně:
+- k čemu modul slouží,
+- kdo ho používá,
+- hlavní obrazovky a akce,
+- běžný pracovní postup,
+- nejčastější chyby nebo nejasnosti,
+- co dělat, když si uživatel není jistý.
+
+Pokud se modul výrazně změní, musí se aktualizovat i jeho manuál.
+
+Modul bez aktuálního manuálu se nepovažuje za dokončený.
+
 ## 3. Veřejná adresa aplikace
 
 Veřejná adresa aplikace je:

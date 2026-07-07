@@ -1978,6 +1978,101 @@ function moduleStatusIsComplete(moduleItem) {
   return moduleStatusLabel(moduleItem) === "Hotovo";
 }
 
+const MODULE_MANUALS = {
+  "driver-reports": {
+    title: "Hlášení řidičů",
+    eyebrow: "Uživatelský manuál",
+    version: "2026-07-07",
+    updatedAt: "7. 7. 2026",
+    pdfHref: "/manuals/hlaseni-ridicu-manual-v2026-07-07.pdf",
+    intro: "Krátký návod pro řidiče, dispečera a servis, jak zadat a zpracovat požadavek k vozidlu.",
+    sections: [
+      {
+        title: "K čemu modul slouží",
+        items: [
+          "Rychlé nahlášení závady, údržby, servisní potřeby nebo požadavku na náhradní díl.",
+          "Přehled fronty hlášení pro dispečera a servis.",
+          "Dohled nad stavem hlášení od zadání po vyřízení."
+        ]
+      },
+      {
+        title: "Kdo modul používá",
+        items: [
+          "Řidič zadává nové hlášení k vozidlu.",
+          "Dispečer kontroluje údaje, prioritu a návaznost na provoz.",
+          "Servis řeší díl, termín opravy a uzavření požadavku."
+        ]
+      },
+      {
+        title: "Běžný pracovní postup",
+        items: [
+          "Vyber nebo napiš vozidlo a SPZ.",
+          "Popiš problém lidsky a stručně. Stačí co se stalo, kde a jak moc to spěchá.",
+          "Přidej fotku nebo poznámku, pokud pomůže servisu.",
+          "Odešli hlášení a dál sleduj stav ve frontě.",
+          "Servis nebo dispečer doplní další krok a po vyřízení hlášení uzavře."
+        ]
+      },
+      {
+        title: "Nejčastější nejasnosti",
+        items: [
+          "Když si nejsi jistý SPZ, napiš typ, značku nebo interní název vozidla.",
+          "Urgentní bezpečnostní problém řeš nejdřív telefonicky s dispečerem.",
+          "Duplicitní hlášení neposílej. Doplň poznámku k existujícímu požadavku, pokud je už založený."
+        ]
+      },
+      {
+        title: "Když si nejsi jistý",
+        items: [
+          "Napiš do hlášení, co víš, a označ nejistotu v poznámce.",
+          "Pokud jde o provozní bezpečnost, zastav práci a volej dispečera.",
+          "Když systém neumožní odeslání, zkontroluj SPZ a povinný popis."
+        ]
+      }
+    ]
+  }
+};
+
+function moduleManualItems(items = []) {
+  return `
+    <ul class="module-manual__list">
+      ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function moduleManualPanel(moduleItem) {
+  const manual = MODULE_MANUALS[moduleItem?.id];
+  if (!manual) {
+    return "";
+  }
+
+  return `
+    <section class="module-manual" aria-labelledby="module-manual-title-${escapeHtml(moduleItem.id)}">
+      <div class="module-manual__top">
+        <div>
+          <p class="module-manual__eyebrow">${escapeHtml(manual.eyebrow)}</p>
+          <h2 id="module-manual-title-${escapeHtml(moduleItem.id)}">${escapeHtml(manual.title)}</h2>
+          <p>${escapeHtml(manual.intro)}</p>
+          <small>Verze manuálu ${escapeHtml(manual.version)} · aktualizováno ${escapeHtml(manual.updatedAt)}</small>
+        </div>
+        <a class="primary-link module-manual__download" href="${escapeHtml(manual.pdfHref)}" download>Stáhnout PDF</a>
+      </div>
+      <details class="module-manual__preview">
+        <summary>Náhled manuálu v aplikaci</summary>
+        <div class="module-manual__content">
+          ${manual.sections.map((section) => `
+            <section class="module-manual__section">
+              <h3>${escapeHtml(section.title)}</h3>
+              ${moduleManualItems(section.items)}
+            </section>
+          `).join("")}
+        </div>
+      </details>
+    </section>
+  `;
+}
+
 function moduleFeedbackBoxFor(moduleItem, user, options = {}) {
   if (!hasPermission(user, "feedback", "create")) {
     return "";
@@ -23816,6 +23911,8 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
       ${driverReportsSummaryCards(items)}
 
       ${driverReportMobileEntry(user)}
+
+      ${moduleManualPanel(moduleItem)}
 
       <section class="driver-report-desktop-workspace" aria-label="Pracovní fronta Hlášení řidičů">
         ${driverReportDesktopEntryCard()}
