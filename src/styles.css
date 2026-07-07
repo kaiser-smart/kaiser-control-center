@@ -6401,6 +6401,7 @@ body:has(.driver-tablet-preview-page--dark) {
   --driver-preview-gap: clamp(3px, 0.4vw, 5px);
   --driver-preview-panel-radius: clamp(13px, 1.18vw, 18px);
   --driver-preview-card-radius: clamp(11px, 1vw, 15px);
+  --driver-preview-control-radius: clamp(8px, 0.72vw, 11px);
   --driver-preview-header-height: clamp(54px, 4.85vw, 66px);
   --driver-preview-action-height: clamp(52px, 4.5vw, 62px);
   --driver-preview-support-height: clamp(51px, 4.75vw, 65px);
@@ -6467,7 +6468,7 @@ body:has(.driver-tablet-preview-page--dark) {
   --chip-text: var(--text-muted-strong);
   --driver-metal-sheen: radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.82), transparent 34%);
   --driver-card-overlay: linear-gradient(145deg, rgba(255, 255, 255, 0.64), rgba(255, 255, 255, 0.16) 48%, rgba(210, 225, 231, 0.1) 100%);
-  --driver-preview-control-shadow: 2px 3px 8px rgba(77, 91, 100, 0.09), -2px -2px 7px rgba(255, 255, 255, 0.7);
+  --driver-preview-control-shadow: 2px 3px 8px rgba(77, 91, 100, 0.09), -1px -1px 4px rgba(255, 255, 255, 0.52);
   --driver-green: #69bf21;
   --driver-green-deep: #2f7b16;
   --driver-green-glow: rgba(105, 191, 33, 0.24);
@@ -6998,6 +6999,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border: 1px solid var(--chip-border);
   border-radius: var(--chip-radius);
   background: var(--chip-bg);
+  background-clip: padding-box;
   color: var(--chip-text);
   font-size: 0.7rem;
   font-weight: 850;
@@ -7554,6 +7556,7 @@ body:has(.driver-tablet-preview-page--dark) {
   width: 37.25%;
   height: 37.55%;
   border-radius: 5px;
+  background-clip: padding-box;
 }
 
 .driver-tablet-preview-screen .driver-tablet-preview-mode {
@@ -7564,6 +7567,8 @@ body:has(.driver-tablet-preview-page--dark) {
     var(--driver-metal-sheen),
     radial-gradient(circle at 26% 0%, color-mix(in srgb, var(--brand-accent) 10%, transparent), transparent 34%),
     var(--tracking-metal-inset-bg);
+  background-clip: padding-box;
+  isolation: isolate;
 }
 
 .driver-tablet-preview-dashboard {
@@ -7592,7 +7597,10 @@ body:has(.driver-tablet-preview-page--dark) {
   background:
     var(--driver-card-overlay),
     var(--tracking-panel-bg);
+  background-clip: padding-box;
   box-shadow: var(--shadow-card);
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .driver-tablet-preview-cockpit {
@@ -7619,10 +7627,13 @@ body:has(.driver-tablet-preview-page--dark) {
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
-  border-radius: clamp(9px, 0.92vw, 14px);
+  border-radius: var(--driver-preview-control-radius);
   background: color-mix(in srgb, var(--brand-accent) 12%, var(--surface-raised));
+  background-clip: padding-box;
   color: var(--brand-accent);
   box-shadow: var(--driver-preview-control-shadow);
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .driver-tablet-preview-brand__icon {
@@ -7641,7 +7652,7 @@ body:has(.driver-tablet-preview-page--dark) {
   width: clamp(19px, 1.88vw, 25px);
   height: clamp(19px, 1.88vw, 25px);
   flex: 0 0 auto;
-  border-radius: clamp(7px, 0.72vw, 11px);
+  border-radius: clamp(7px, 0.62vw, 9px);
 }
 
 .driver-tablet-preview-section-label,
@@ -7718,9 +7729,11 @@ body:has(.driver-tablet-preview-page--dark) {
   overflow: hidden;
   padding: 4px 7px 4px 4px;
   border: 1px solid var(--border-soft);
-  border-radius: clamp(9px, 0.92vw, 13px);
+  border-radius: var(--driver-preview-control-radius);
   background: var(--tracking-control-bg);
+  background-clip: padding-box;
   box-shadow: var(--driver-preview-control-shadow);
+  isolation: isolate;
 }
 
 .driver-tablet-preview-cockpit__chips .driver-tablet-preview-inline-icon {
@@ -7819,14 +7832,16 @@ body:has(.driver-tablet-preview-page--dark) {
   min-height: clamp(86px, 8.05vw, 108px);
   padding: clamp(8px, 0.9vw, 12px);
   border: 1px solid color-mix(in srgb, #ffffff 28%, var(--brand-accent));
-  border-radius: clamp(13px, 1.25vw, 19px);
+  border-radius: var(--driver-preview-card-radius);
   background:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.2), transparent 36%),
     linear-gradient(145deg, color-mix(in srgb, var(--driver-green) 94%, #ffffff 8%), color-mix(in srgb, var(--driver-green-deep) 84%, #07120a 16%));
+  background-clip: padding-box;
   color: #ffffff;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.34),
-    inset -10px -12px 24px rgba(0, 0, 0, 0.16),
     0 8px 18px var(--driver-green-glow);
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .driver-tablet-preview-stop-number strong {
@@ -7891,9 +7906,12 @@ body:has(.driver-tablet-preview-page--dark) {
   min-width: 0;
   padding: clamp(7px, 0.68vw, 10px);
   border: 1px solid var(--border-soft);
-  border-radius: var(--driver-preview-card-radius);
+  border-radius: var(--driver-preview-control-radius);
   background: var(--tracking-control-bg);
+  background-clip: padding-box;
   box-shadow: var(--driver-preview-control-shadow);
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .driver-tablet-preview-info-row article strong {
@@ -7919,7 +7937,7 @@ body:has(.driver-tablet-preview-page--dark) {
   display: grid;
   min-height: 0;
   gap: var(--driver-preview-gap);
-  grid-template-rows: minmax(100px, 0.9fr) minmax(0, 1.1fr);
+  grid-template-rows: minmax(122px, 1.16fr) minmax(0, 0.84fr);
   overflow: hidden;
 }
 
@@ -7931,9 +7949,10 @@ body:has(.driver-tablet-preview-page--dark) {
 }
 
 .driver-tablet-preview-progress {
-  gap: clamp(3px, 0.34vw, 5px);
-  grid-template-rows: auto minmax(clamp(38px, 3.5vw, 46px), 1fr) auto;
-  padding: clamp(5px, 0.5vw, 7px);
+  gap: clamp(2px, 0.28vw, 4px);
+  grid-template-rows: auto minmax(clamp(58px, 5.15vw, 68px), 1fr) minmax(clamp(19px, 1.7vw, 24px), auto);
+  align-content: center;
+  padding: clamp(4px, 0.38vw, 5px);
 }
 
 .driver-tablet-preview-progress .driver-tablet-preview-section-label {
@@ -7947,24 +7966,28 @@ body:has(.driver-tablet-preview-page--dark) {
 
 .driver-tablet-preview-progress__hero {
   display: grid;
-  gap: clamp(5px, 0.5vw, 7px);
-  grid-template-columns: minmax(0, 1fr) clamp(39px, 3.55vw, 47px);
+  gap: clamp(5px, 0.52vw, 8px);
+  grid-template-columns: minmax(0, 1fr) clamp(64px, 5.55vw, 75px);
   align-items: center;
-  align-self: center;
-  min-height: clamp(38px, 3.5vw, 46px);
+  align-self: stretch;
+  min-height: clamp(58px, 5.15vw, 68px);
+  padding: 0 clamp(1px, 0.16vw, 3px);
 }
 
 .driver-tablet-preview-progress-ring {
   display: grid;
   place-items: center;
   justify-self: end;
-  width: clamp(39px, 3.55vw, 47px);
+  width: clamp(64px, 5.55vw, 75px);
   aspect-ratio: 1;
   border-radius: 999px;
   background:
-    radial-gradient(circle at center, var(--surface-raised) 0 55%, transparent 56%),
+    radial-gradient(circle at center, var(--surface-raised) 0 53%, transparent 54%),
     conic-gradient(var(--brand-accent) calc(var(--driver-progress) * 1%), color-mix(in srgb, var(--text-main) 12%, transparent) 0);
+  background-clip: padding-box;
   box-shadow: var(--driver-preview-control-shadow);
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .driver-tablet-preview-progress__copy {
@@ -7973,11 +7996,12 @@ body:has(.driver-tablet-preview-page--dark) {
   align-content: center;
   justify-items: start;
   min-width: 0;
+  padding-left: clamp(1px, 0.18vw, 3px);
 }
 
 .driver-tablet-preview-progress-ring strong {
   color: var(--text-main);
-  font-size: clamp(0.78rem, 0.9vw, 1.04rem);
+  font-size: clamp(0.68rem, 0.78vw, 0.9rem);
   font-weight: 950;
   line-height: 1;
 }
@@ -7986,12 +8010,12 @@ body:has(.driver-tablet-preview-page--dark) {
   color: var(--text-main);
   font-size: clamp(0.92rem, 1.08vw, 1.24rem);
   font-weight: 950;
-  line-height: 1;
+  line-height: 1.02;
 }
 
 .driver-tablet-preview-progress__copy small {
   color: var(--text-muted);
-  font-size: clamp(0.48rem, 0.56vw, 0.64rem);
+  font-size: clamp(0.5rem, 0.58vw, 0.66rem);
   font-weight: 850;
   line-height: 1;
 }
@@ -7999,7 +8023,7 @@ body:has(.driver-tablet-preview-page--dark) {
 .driver-tablet-preview-progress__copy span {
   display: block;
   color: var(--brand-accent);
-  font-size: clamp(0.55rem, 0.66vw, 0.76rem);
+  font-size: clamp(0.56rem, 0.66vw, 0.76rem);
   font-weight: 900;
   line-height: 1;
 }
@@ -8008,21 +8032,26 @@ body:has(.driver-tablet-preview-page--dark) {
   display: grid;
   gap: clamp(3px, 0.32vw, 5px);
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
   min-height: 0;
 }
 
 .driver-tablet-preview-progress__facts > span {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 1px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px clamp(3px, 0.32vw, 5px);
   align-items: center;
-  justify-items: center;
-  min-height: clamp(18px, 1.58vw, 22px);
-  padding: 2px 2px;
+  justify-items: stretch;
+  min-width: 0;
+  min-height: clamp(19px, 1.7vw, 24px);
+  padding: 2px clamp(4px, 0.38vw, 5px);
   border: 1px solid var(--border-soft);
-  border-radius: clamp(8px, 0.8vw, 12px);
+  border-radius: var(--driver-preview-control-radius);
   background: var(--tracking-control-bg);
+  background-clip: padding-box;
   box-shadow: var(--driver-preview-control-shadow);
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .driver-tablet-preview-progress__facts .driver-tablet-preview-inline-icon {
@@ -8031,14 +8060,24 @@ body:has(.driver-tablet-preview-page--dark) {
 
 .driver-tablet-preview-progress__facts small {
   display: block;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: clamp(0.38rem, 0.44vw, 0.5rem);
   font-weight: 850;
   line-height: 1;
-  text-align: center;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .driver-tablet-preview-progress__facts strong {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
   color: var(--text-main);
   font-size: clamp(0.55rem, 0.66vw, 0.78rem);
   font-weight: 950;
@@ -8066,8 +8105,9 @@ body:has(.driver-tablet-preview-page--dark) {
   padding: 0 clamp(18px, 1.86vw, 24px) 0 clamp(8px, 0.82vw, 11px);
   overflow: hidden;
   border: 1px solid var(--border-soft);
-  border-radius: clamp(9px, 0.92vw, 13px);
+  border-radius: var(--driver-preview-control-radius);
   background: var(--tracking-control-bg);
+  background-clip: padding-box;
   box-shadow: var(--driver-preview-control-shadow);
   color: var(--text-muted-strong);
   font: inherit;
@@ -8125,6 +8165,7 @@ body:has(.driver-tablet-preview-page--dark) {
   border: 1px solid color-mix(in srgb, var(--brand-accent) 42%, var(--border-soft));
   border-radius: 999px;
   background: color-mix(in srgb, var(--brand-accent) 82%, #ffffff 8%);
+  background-clip: padding-box;
   color: #ffffff;
   font-size: clamp(0.56rem, 0.64vw, 0.74rem);
   font-weight: 950;
@@ -8175,11 +8216,12 @@ body:has(.driver-tablet-preview-page--dark) {
   background:
     radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.24), transparent 34%),
     linear-gradient(145deg, color-mix(in srgb, var(--driver-green) 94%, #ffffff 7%), color-mix(in srgb, var(--driver-green-deep) 80%, #07120a 20%));
+  background-clip: padding-box;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.34),
-    inset -16px -18px 28px rgba(0, 0, 0, 0.15),
     0 12px 28px var(--driver-green-glow);
   color: #ffffff;
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .driver-tablet-preview-primary-action .collection-routes-driver-action__icon,
@@ -8188,8 +8230,11 @@ body:has(.driver-tablet-preview-page--dark) {
   height: clamp(42px, 4.02vw, 55px);
   flex: 0 0 auto;
   border-color: rgba(255, 255, 255, 0.46);
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.88);
+  background-clip: padding-box;
   color: var(--brand-accent);
+  overflow: hidden;
 }
 
 .driver-tablet-preview-primary-action .collection-routes-driver-action__icon svg,
@@ -8320,6 +8365,9 @@ body:has(.driver-tablet-preview-page--dark) {
   width: clamp(26px, 2.48vw, 34px);
   height: clamp(26px, 2.48vw, 34px);
   flex: 0 0 auto;
+  border-radius: 999px;
+  background-clip: padding-box;
+  overflow: hidden;
 }
 
 .driver-tablet-preview-support-actions .collection-routes-driver-action__icon svg {
@@ -8432,9 +8480,8 @@ body:has(.driver-tablet-preview-page--dark) {
     radial-gradient(circle at 24% 0%, color-mix(in srgb, var(--brand-accent) 10%, transparent), transparent 34%),
     radial-gradient(circle at 82% 92%, rgba(197, 214, 222, 0.2), transparent 32%),
     linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 246, 247, 0.96) 48%, rgba(226, 236, 240, 0.94) 100%);
-  box-shadow:
-    inset 7px 7px 16px rgba(110, 130, 142, 0.1),
-    inset -8px -8px 18px rgba(255, 255, 255, 0.72);
+  background-clip: padding-box;
+  box-shadow: none;
 }
 
 .driver-tablet-preview-page--dark .driver-tablet-preview-screen .driver-tablet-preview-mode {
@@ -8442,6 +8489,8 @@ body:has(.driver-tablet-preview-page--dark) {
     var(--driver-metal-sheen),
     radial-gradient(circle at 24% 0%, color-mix(in srgb, var(--brand-accent) 16%, transparent), transparent 34%),
     linear-gradient(145deg, rgba(18, 28, 39, 0.94), rgba(5, 10, 15, 0.94));
+  background-clip: padding-box;
+  box-shadow: none;
 }
 
 @media (max-width: 1080px) {

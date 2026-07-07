@@ -16752,9 +16752,9 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
                     </div>
                   </div>
                   <div class="driver-tablet-preview-progress__facts">
-                    <span>${collectionRoutesDriverTabletPreviewIcon("flag")}<strong>${escapeHtml(totalStopsLabel)}</strong><small>Celkem</small></span>
-                    <span>${collectionRoutesDriverTabletPreviewIcon("pin")}<strong>${escapeHtml(remainingStopsLabel)}</strong><small>Zbývá</small></span>
-                    <span>${collectionRoutesDriverTabletPreviewIcon("trash")}<strong>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</strong><small>Nádob</small></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("flag")}<small>Celkem</small><strong>${escapeHtml(totalStopsLabel)}</strong></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("pin")}<small>Zbývá</small><strong>${escapeHtml(remainingStopsLabel)}</strong></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("trash")}<small>Nádob</small><strong>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</strong></span>
                   </div>
                 </section>
 
