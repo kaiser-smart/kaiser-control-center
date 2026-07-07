@@ -1774,7 +1774,7 @@ function themePreviewIcon(name) {
   return themePreviewIconFile(icons[name] || icons.marker);
 }
 
-const DESIGN_ICON_ASSET_VERSION = "0.1.321";
+const DESIGN_ICON_ASSET_VERSION = "0.1.322";
 
 function themePreviewIconFile(file) {
   return `<img class="theme-icon-img" src="/design-icons/${file}?v=${DESIGN_ICON_ASSET_VERSION}" alt="" aria-hidden="true" loading="lazy">`;

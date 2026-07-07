@@ -26299,6 +26299,10 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-hero {
     grid-template-columns: 1fr;
   }
 
+  .tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-integration-grid {
+    columns: 1;
+  }
+
   .tracking-page--soft-metal-preview .tracking-source-mode {
     min-height: 0;
   }
@@ -28675,12 +28679,18 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-integration-grid {
-  align-items: start;
+  display: block;
+  columns: 2 340px;
+  column-gap: 8px;
 }
 
 .tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-integration-grid article {
   align-self: start;
-  padding: 12px;
+  display: grid;
+  width: 100%;
+  margin: 0 0 7px;
+  break-inside: avoid;
+  padding: 10px 12px;
 }
 
 .tracking-page--soft-metal-preview .tracking-field-chips span,
