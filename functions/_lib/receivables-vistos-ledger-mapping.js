@@ -1,6 +1,5 @@
 import {
   getVistosPage,
-  getVistosSchemaEntity,
   isVistosExecuteConfigured,
   loginVistosExecute
 } from "./vistos-execute-client.js";
@@ -12,8 +11,6 @@ const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 250;
 const DEFAULT_CUSTOMER_LIMIT = 25;
 const MAX_CUSTOMER_LIMIT = 80;
-const DEFAULT_LINK_PROBE_LIMIT = 5;
-const MAX_LINK_PROBE_LIMIT = 12;
 const ROW_PAGE_SIZE = 1000;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -36,30 +33,6 @@ const INVOICE_MANAGER_ATTEMPTS = [
     columns: ["Id", "InvoiceNumber", "CustomerManager_FK"],
     idFields: ["Id"]
   }
-];
-
-const CUSTOMER_LINK_SCHEMA_ENTITIES = [
-  "InvoiceIssued",
-  "DirectoryWithBranch",
-  "Directory",
-  "Company",
-  "Customer",
-  "CustomerBranch"
-];
-
-const CUSTOMER_LINK_PROBE_COLUMNS = [
-  "Id",
-  "Name",
-  "RegNumber",
-  "VATNumber",
-  "EmailInvoicing",
-  "Email",
-  "PhoneNumber",
-  "InvoiceDueDays",
-  "Parent_FK",
-  "Directory_FK",
-  "Customer_FK",
-  "CustomerBranch_FK"
 ];
 
 export class ReceivablesVistosLedgerMappingError extends Error {
@@ -262,203 +235,6 @@ export function customerLookupAttemptsForCandidate(candidate = {}) {
   addAttempt("company_by_branch_fk", "Company", { Id: branchId });
 
   return attempts;
-}
-
-function schemaColumnsFromPayload(payload) {
-  const columns = new Set();
-  const visit = (value) => {
-    if (!value || typeof value !== "object") return;
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    const name = clean(value.ColumnName || value.columnName || value.Name || value.name || value.FieldName || value.fieldName);
-    if (name) columns.add(name);
-    for (const key of ["Columns", "columns", "Fields", "fields", "Items", "items", "Data", "data"]) {
-      visit(value[key]);
-    }
-  };
-  visit(payload);
-  return [...columns].sort((left, right) => left.localeCompare(right));
-}
-
-async function loadCustomerLinkSchemas(env, session) {
-  const byEntity = new Map();
-  const diagnostics = [];
-  for (const entityName of CUSTOMER_LINK_SCHEMA_ENTITIES) {
-    try {
-      const payload = await getVistosSchemaEntity(env, session, entityName);
-      const columns = schemaColumnsFromPayload(payload);
-      byEntity.set(entityName, columns);
-      diagnostics.push({
-        entityName,
-        method: "GetSchemaEntity",
-        ok: true,
-        columnCount: columns.length,
-        relevantColumns: columns.filter((column) => /customer|directory|branch|regnumber|vat|email|invoice/i.test(column)).slice(0, 40)
-      });
-    } catch (error) {
-      byEntity.set(entityName, []);
-      diagnostics.push({
-        entityName,
-        method: "GetSchemaEntity",
-        ok: false,
-        code: clean(error?.code),
-        message: clean(error?.message).slice(0, 160)
-      });
-    }
-  }
-  return { byEntity, diagnostics };
-}
-
-function hasSchemaColumn(schemaByEntity, entityName, columnName) {
-  const columns = schemaByEntity.get(entityName) || [];
-  if (!columns.length) return true;
-  return columns.includes(columnName);
-}
-
-function customerLinkProbeColumns(schemaByEntity, entityName) {
-  const columns = schemaByEntity.get(entityName) || [];
-  if (!columns.length) return CUSTOMER_LINK_PROBE_COLUMNS;
-  const selected = CUSTOMER_LINK_PROBE_COLUMNS.filter((columnName) => columns.includes(columnName));
-  return selected.length ? selected : ["Id"];
-}
-
-function addCustomerLinkProbeAttempt(attempts, schemaByEntity, attempt) {
-  const filterEntries = Object.entries(attempt.filter || {})
-    .map(([key, value]) => [key, clean(value)])
-    .filter(([, value]) => value);
-  if (!filterEntries.length) return;
-  const filter = Object.fromEntries(filterEntries);
-  const missingFilterColumns = Object.keys(filter)
-    .filter((columnName) => !hasSchemaColumn(schemaByEntity, attempt.entityName, columnName));
-  attempts.push({
-    ...attempt,
-    filter,
-    skipped: Boolean(missingFilterColumns.length),
-    reason: missingFilterColumns.length ? `schema_missing_filter_column:${missingFilterColumns.join(",")}` : ""
-  });
-}
-
-export function customerLinkProbeAttemptsForCandidate(candidate = {}, schemaByEntity = new Map()) {
-  const attempts = [];
-  const companyId = clean(candidate.customerCompanyId)
-    || (candidate.customerKeyType === "Customer_FK" ? clean(candidate.customerKeyValue) : "");
-  const branchId = clean(candidate.customerBranchId)
-    || (candidate.customerKeyType === "CustomerBranch_FK" ? clean(candidate.customerKeyValue) : "");
-  const ico = compactDigits(candidate.ico)
-    || (candidate.customerKeyType === "IČO" ? compactDigits(candidate.customerKeyValue) : "");
-
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "directory_with_branch_customer_fk",
-    entityName: "DirectoryWithBranch",
-    filter: { Customer_FK: companyId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "directory_with_branch_directory_fk",
-    entityName: "DirectoryWithBranch",
-    filter: { Directory_FK: companyId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "directory_with_branch_parent_fk",
-    entityName: "DirectoryWithBranch",
-    filter: { Parent_FK: companyId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "directory_with_branch_id_by_customer_fk",
-    entityName: "DirectoryWithBranch",
-    filter: { Id: companyId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "directory_id_by_customer_fk",
-    entityName: "Directory",
-    filter: { Id: companyId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "directory_reg_number",
-    entityName: "Directory",
-    filter: { RegNumber: ico }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "directory_with_branch_reg_number",
-    entityName: "DirectoryWithBranch",
-    filter: { RegNumber: ico }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "customer_branch_customer_fk",
-    entityName: "CustomerBranch",
-    filter: { Customer_FK: companyId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "customer_branch_directory_fk",
-    entityName: "CustomerBranch",
-    filter: { Directory_FK: companyId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "customer_branch_id",
-    entityName: "CustomerBranch",
-    filter: { Id: branchId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "customer_id_by_customer_fk",
-    entityName: "Customer",
-    filter: { Id: companyId }
-  });
-  addCustomerLinkProbeAttempt(attempts, schemaByEntity, {
-    key: "company_id_by_customer_fk",
-    entityName: "Company",
-    filter: { Id: companyId }
-  });
-
-  const seen = new Set();
-  return attempts.filter((attempt) => {
-    const key = `${attempt.entityName}:${JSON.stringify(attempt.filter)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-async function probeCustomerLinkForCandidate(env, session, candidate, schemaByEntity) {
-  const attempts = customerLinkProbeAttemptsForCandidate(candidate, schemaByEntity);
-  const diagnostics = [];
-  for (const attempt of attempts) {
-    if (attempt.skipped) {
-      diagnostics.push({
-        ...attempt,
-        ok: false,
-        returnedRows: 0,
-        recordsTotal: 0,
-        recordsFiltered: 0
-      });
-      continue;
-    }
-    try {
-      const columns = customerLinkProbeColumns(schemaByEntity, attempt.entityName);
-      const page = await getVistosPage(env, session, attempt.entityName, columns, attempt.filter, 0, 2);
-      diagnostics.push({
-        ...attempt,
-        columns,
-        ok: true,
-        returnedRows: page.rows.length,
-        recordsTotal: page.total || 0,
-        recordsFiltered: page.filtered || 0,
-        rowKeys: Object.keys(page.rows[0] || {}).slice(0, 40)
-      });
-    } catch (error) {
-      diagnostics.push({
-        ...attempt,
-        columns: customerLinkProbeColumns(schemaByEntity, attempt.entityName),
-        ok: false,
-        code: clean(error?.code),
-        message: clean(error?.message).slice(0, 160),
-        returnedRows: 0,
-        recordsTotal: 0,
-        recordsFiltered: 0
-      });
-    }
-  }
-  return diagnostics;
 }
 
 function customerMetadataStatus(candidate = {}, metadata = null) {
@@ -754,130 +530,6 @@ async function enrichInvoiceManagers(env, candidates = [], options = {}) {
   };
 }
 
-async function probeCustomerInvoiceLink(env, candidates = [], options = {}) {
-  const limit = boundedInteger(options.linkProbeLimit, DEFAULT_LINK_PROBE_LIMIT, MAX_LINK_PROBE_LIMIT);
-  const targetCandidates = candidates
-    .filter((candidate) => clean(candidate.customerCompanyId || candidate.customerBranchId || candidate.ico))
-    .slice(0, limit);
-
-  if (!targetCandidates.length) {
-    return {
-      enabled: true,
-      apiStatus: "empty",
-      readOnly: true,
-      writesD1: false,
-      targetCandidates: 0,
-      processedCandidates: 0,
-      schemaDiagnostics: [],
-      diagnostics: [],
-      summary: {
-        matchingAttempts: 0,
-        successfulAttempts: 0,
-        skippedAttempts: 0,
-        bestAttemptKey: "",
-        bestEntity: "",
-        bestFilter: null
-      },
-      recommendedNextStep: "Nejdřív je potřeba ve snapshotu najít faktury s Customer_FK, CustomerBranch_FK nebo IČO."
-    };
-  }
-
-  if (!isVistosExecuteConfigured(env)) {
-    return {
-      enabled: true,
-      apiStatus: "not_configured",
-      readOnly: true,
-      writesD1: false,
-      targetCandidates: targetCandidates.length,
-      processedCandidates: 0,
-      schemaDiagnostics: [],
-      diagnostics: [],
-      summary: {
-        matchingAttempts: 0,
-        successfulAttempts: 0,
-        skippedAttempts: 0,
-        bestAttemptKey: "",
-        bestEntity: "",
-        bestFilter: null
-      },
-      message: "Vistos API není nakonfigurováno pro schema probe."
-    };
-  }
-
-  let session = null;
-  try {
-    session = await loginVistosExecute(env);
-  } catch (error) {
-    return {
-      enabled: true,
-      apiStatus: "error",
-      readOnly: true,
-      writesD1: false,
-      targetCandidates: targetCandidates.length,
-      processedCandidates: 0,
-      schemaDiagnostics: [{
-        ok: false,
-        stage: "login",
-        code: clean(error?.code),
-        message: clean(error?.message).slice(0, 160)
-      }],
-      diagnostics: [],
-      summary: {
-        matchingAttempts: 0,
-        successfulAttempts: 0,
-        skippedAttempts: 0,
-        bestAttemptKey: "",
-        bestEntity: "",
-        bestFilter: null
-      },
-      message: "Schema probe se nepodařilo přihlásit do Vistos API."
-    };
-  }
-
-  const schemas = await loadCustomerLinkSchemas(env, session);
-  const diagnostics = [];
-  for (const candidate of targetCandidates) {
-    const candidateDiagnostics = await probeCustomerLinkForCandidate(env, session, candidate, schemas.byEntity);
-    diagnostics.push(...candidateDiagnostics.map((attempt) => ({
-      ...attempt,
-      customerKey: candidate.customerKey,
-      customerName: candidate.customerName,
-      customerKeyType: candidate.customerKeyType,
-      customerKeyValue: candidate.customerKeyValue,
-      customerCompanyId: candidate.customerCompanyId,
-      customerBranchId: candidate.customerBranchId,
-      ico: candidate.ico
-    })));
-  }
-
-  const successful = diagnostics.filter((item) => item.ok && Number(item.returnedRows || 0) > 0);
-  const best = successful
-    .sort((left, right) => Number(right.returnedRows || 0) - Number(left.returnedRows || 0))[0] || null;
-
-  return {
-    enabled: true,
-    apiStatus: "ready",
-    readOnly: true,
-    writesD1: false,
-    source: "vistos_execute_customer_fk_schema_probe",
-    targetCandidates: targetCandidates.length,
-    processedCandidates: targetCandidates.length,
-    schemaDiagnostics: schemas.diagnostics,
-    diagnostics: diagnostics.slice(0, 200),
-    summary: {
-      matchingAttempts: diagnostics.length,
-      successfulAttempts: successful.length,
-      skippedAttempts: diagnostics.filter((item) => item.skipped).length,
-      bestAttemptKey: best?.key || "",
-      bestEntity: best?.entityName || "",
-      bestFilter: best?.filter || null
-    },
-    recommendedNextStep: best
-      ? "Použít nejlepší potvrzený filtr pro zákaznické obohacení a teprve potom spustit read-only rating preview."
-      : "Customer_FK z faktur se zatím nepodařilo propojit přes testované entity. Další bezpečný krok je doplnit probe přes DbObject/DbColumn pro přesný název cílové projekce."
-  };
-}
-
 export function buildReceivablesVistosLedgerMapping(rows = [], options = {}) {
   const today = isoDate(options.today || options.now) || new Date().toISOString().slice(0, 10);
   const groups = new Map();
@@ -1144,9 +796,6 @@ export async function getReceivablesVistosLedgerMapping(env, options = {}) {
           ? { ...candidate, customerManagers: liveManagers }
           : candidate;
       });
-    }
-    if (options.probeCustomerLink !== false && options.probeCustomerLink !== "0" && result.mapping?.candidates?.length) {
-      result.mapping.customerLinkProbe = await probeCustomerInvoiceLink(env, result.mapping.candidates, options);
     }
     return {
       ...result,

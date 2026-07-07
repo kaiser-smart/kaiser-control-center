@@ -23228,20 +23228,6 @@ function receivablesInvoiceSnapshotIssues(snapshot) {
   `;
 }
 
-function receivablesInvoiceBlock({ title, description = "", controls = "", content = "", visibleCount = 0, totalCount = 0 }) {
-  return `
-    <div class="receivables-snapshot-invoices-block">
-      <section>
-        <h3>${escapeHtml(title)}</h3>
-        ${description ? `<p class="receivables-empty">${escapeHtml(description)}</p>` : ""}
-        <p class="receivables-empty">Zobrazeno ${escapeHtml(visibleCount)} z ${escapeHtml(totalCount)} faktur · 10 řádků na blok.</p>
-        ${controls}
-        ${content}
-      </section>
-    </div>
-  `;
-}
-
 function receivablesInvoiceSnapshotRowsTable() {
   const rows = receivablesState.invoiceSnapshotRows || [];
   if (receivablesState.invoiceSnapshotLoading && !rows.length) {
@@ -23362,14 +23348,14 @@ function receivablesInvoiceSnapshotPanel() {
           ${receivablesInvoiceSnapshotIssues(snapshot)}
         </section>
       </div>
-      ${receivablesInvoiceBlock({
-        title: "Faktury v aktuálním snapshotu",
-        description: "Jeden pracovní blok faktur z aktuální stránky snapshotu.",
-        visibleCount: (receivablesState.invoiceSnapshotRows || []).length,
-        totalCount: totalRows,
-        controls: receivablesInvoiceSnapshotPaginationControls(pagination),
-        content: receivablesInvoiceSnapshotRowsTable()
-      })}
+      <div class="receivables-snapshot-invoices-block">
+        <section>
+          <h3>Faktury v aktuálním snapshotu</h3>
+          <p class="receivables-empty">Zobrazeno ${escapeHtml((receivablesState.invoiceSnapshotRows || []).length)} z ${escapeHtml(totalRows)} uložených řádků.</p>
+          ${receivablesInvoiceSnapshotPaginationControls(pagination)}
+          ${receivablesInvoiceSnapshotRowsTable()}
+        </section>
+      </div>
     </section>
   `;
 }
@@ -23540,120 +23526,6 @@ function receivablesInvoiceManagerLookupDiagnostics(invoiceManagerEnrichment = {
   `;
 }
 
-function receivablesCustomerLinkProbeSummary(probe = {}) {
-  const summary = probe.summary || {};
-  const cards = [
-    ["Stav", probe.apiStatus || "čeká"],
-    ["Kandidátů", probe.processedCandidates || 0],
-    ["Pokusů", summary.matchingAttempts || 0],
-    ["Nalezeno", summary.successfulAttempts || 0],
-    ["Přeskočeno schema", summary.skippedAttempts || 0],
-    ["Nejlepší entita", summary.bestEntity || "-"],
-    ["Nejlepší filtr", summary.bestFilter ? Object.entries(summary.bestFilter).map(([key, value]) => `${key}: ${value}`).join(", ") : "-"]
-  ];
-
-  return `
-    <div class="receivables-import-summary" aria-label="Souhrn Customer_FK schema probe">
-      ${cards.map(([label, value]) => `
-        <article>
-          <span>${escapeHtml(label)}</span>
-          <strong>${escapeHtml(value)}</strong>
-        </article>
-      `).join("")}
-    </div>
-  `;
-}
-
-function receivablesCustomerLinkSchemaDiagnostics(probe = {}) {
-  const rows = Array.isArray(probe.schemaDiagnostics) ? probe.schemaDiagnostics : [];
-  if (!rows.length) {
-    return `<p class="receivables-empty">Schema diagnostika zatím není dostupná.</p>`;
-  }
-
-  return `
-    <div class="receivables-table-wrap">
-      <table class="receivables-table receivables-table--compact">
-        <thead><tr><th>Entita</th><th>Metoda</th><th>Výsledek</th><th>Sloupce</th><th>Relevantní pole</th></tr></thead>
-        <tbody>
-          ${rows.map((item) => `
-            <tr>
-              <td data-label="Entita">${escapeHtml(item.entityName || "-")}</td>
-              <td data-label="Metoda">${escapeHtml(item.method || "-")}</td>
-              <td data-label="Výsledek">${item.ok ? receivablesPill("OK", "ready") : receivablesPill(item.code || "chyba", "warning")}</td>
-              <td data-label="Sloupce">${escapeHtml(item.columnCount ?? "-")}</td>
-              <td data-label="Relevantní pole">${escapeHtml((item.relevantColumns || []).slice(0, 12).join(", ") || item.message || "-")}</td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function receivablesCustomerLinkProbeDiagnostics(probe = {}) {
-  const rows = Array.isArray(probe.diagnostics) ? probe.diagnostics : [];
-  if (!rows.length) {
-    return `<p class="receivables-empty">Probe fakturační vazby zatím nemá řádky.</p>`;
-  }
-
-  return `
-    <div class="receivables-table-wrap">
-      <table class="receivables-table receivables-table--compact">
-        <thead>
-          <tr>
-            <th>Zákazník</th>
-            <th>Entita</th>
-            <th>Filtr</th>
-            <th>Výsledek</th>
-            <th>Detail</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.slice(0, 60).map((item) => {
-            const filterText = Object.entries(item.filter || {})
-              .map(([key, value]) => `${key}: ${value}`)
-              .join(", ");
-            const resultText = item.skipped
-              ? "přeskočeno"
-              : item.ok ? `${item.returnedRows || 0} řádků / ${item.recordsFiltered || item.recordsTotal || 0}` : item.code || "chyba";
-            const tone = item.skipped ? "waiting" : item.ok && item.returnedRows ? "ready" : item.ok ? "waiting" : "warning";
-            return `
-              <tr>
-                <td data-label="Zákazník">${escapeHtml(item.customerName || item.customerKey || "-")}</td>
-                <td data-label="Entita">${escapeHtml(item.entityName || "-")}</td>
-                <td data-label="Filtr">${escapeHtml(filterText || "-")}</td>
-                <td data-label="Výsledek">${receivablesPill(resultText, tone)}</td>
-                <td data-label="Detail">${escapeHtml(item.reason || item.message || item.key || "-")}</td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function receivablesCustomerLinkProbePanel(probe = {}) {
-  if (!probe?.enabled) {
-    return `<p class="receivables-empty">Customer_FK schema probe čeká na ledger mapping.</p>`;
-  }
-
-  return `
-    ${receivablesCustomerLinkProbeSummary(probe)}
-    <p class="receivables-empty">${escapeHtml(probe.recommendedNextStep || "Probe je pouze read-only diagnostika bez ledger zápisu.")}</p>
-    <div class="receivables-import-diagnostics">
-      <section>
-        <h3>Schema entit</h3>
-        ${receivablesCustomerLinkSchemaDiagnostics(probe)}
-      </section>
-      <section>
-        <h3>Filtry pro Customer_FK</h3>
-        ${receivablesCustomerLinkProbeDiagnostics(probe)}
-      </section>
-    </div>
-  `;
-}
-
 function receivablesLedgerMappingTable(mapping) {
   const candidates = mapping?.candidates || [];
   if (receivablesState.ledgerMappingLoading && !candidates.length) {
@@ -23715,7 +23587,6 @@ function receivablesLedgerMappingPanel() {
   const snapshot = receivablesState.ledgerMapping?.snapshot || null;
   const customerEnrichment = mapping?.customerEnrichment || {};
   const invoiceManagerEnrichment = mapping?.invoiceManagerEnrichment || {};
-  const customerLinkProbe = mapping?.customerLinkProbe || {};
   const safetyRows = [
     ["Zdroj", "poslední Vistos snapshot"],
     ["Zákazníci", customerEnrichment.enabled ? `${customerEnrichment.processedCandidates || 0} read-only lookupů` : "čeká"],
@@ -23762,13 +23633,6 @@ function receivablesLedgerMappingPanel() {
           <h3>Diagnostika Vistos lookupů zákazníka</h3>
           <p class="receivables-empty">Read-only kontrola přesných klíčů pro zákazníka/pobočku. Bez zápisu do ledgeru.</p>
           ${receivablesCustomerLookupDiagnostics(customerEnrichment)}
-        </section>
-      </div>
-      <div class="receivables-snapshot-invoices-block">
-        <section>
-          <h3>Fakturační vazba Customer_FK</h3>
-          <p class="receivables-empty">Read-only schema probe hledá, jaká entita a filtr odpovídá Customer_FK z InvoiceIssued. Bez zápisu do ledgeru.</p>
-          ${receivablesCustomerLinkProbePanel(customerLinkProbe)}
         </section>
       </div>
       <div class="receivables-snapshot-invoices-block">
@@ -23904,14 +23768,13 @@ function receivablesVistosInvoicesTable(preview) {
   if (!invoices.length) {
     return `<p class="receivables-empty">Vistos faktury zatím nejsou načtené.</p>`;
   }
-  const visibleInvoices = invoices.slice(0, 10);
 
   return `
     <div class="receivables-table-wrap">
       <table class="receivables-table">
         <thead><tr><th>Faktura</th><th>VS</th><th>Zákazník</th><th>Vystavení</th><th>Splatnost</th><th>Částka</th><th>Zbývá</th><th>Stav</th></tr></thead>
         <tbody>
-          ${visibleInvoices.map((invoice) => `
+          ${invoices.slice(0, 40).map((invoice) => `
             <tr>
               <td data-label="Faktura">${escapeHtml(invoice.invoiceNumber || invoice.vistoInvoiceId || "-")}</td>
               <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
@@ -23955,14 +23818,11 @@ function receivablesVistosPreviewPanel() {
           <h3>Firmy z Vistosu</h3>
           ${receivablesVistosCompaniesTable(preview)}
         </section>
+        <section>
+          <h3>Vydané faktury z Vistosu</h3>
+          ${receivablesVistosInvoicesTable(preview)}
+        </section>
       </div>
-      ${receivablesInvoiceBlock({
-        title: "Vydané faktury z Vistosu",
-        description: "Starší read-only preview faktur je sjednocené do stejného fakturového bloku.",
-        visibleCount: Math.min((preview?.invoices || []).length, 10),
-        totalCount: (preview?.invoices || []).length,
-        content: receivablesVistosInvoicesTable(preview)
-      })}
     </section>
   `;
 }
@@ -23989,8 +23849,6 @@ function receivablesCustomerDetailSection() {
   const customer = detail.customer;
   const rating = detail.ratings?.[0] || {};
   const pack = detail.package || {};
-  const detailInvoices = Array.isArray(detail.invoices) ? detail.invoices : [];
-  const visibleDetailInvoices = detailInvoices.slice(0, 10);
   const timeline = [
     ...(detail.decisions || []).map((item) => ({ when: item.createdAt, type: "AI", channel: item.channel, content: item.reason, result: item.action })),
     ...(detail.communicationEvents || []).map((item) => ({ when: item.createdAt, type: "Komunikace", channel: item.channel, content: item.subject || item.templateKey, result: item.status })),
@@ -24022,32 +23880,24 @@ function receivablesCustomerDetailSection() {
           <h2 id="receivables-invoices-title">Otevřené faktury</h2>
         </div>
       </div>
-      ${receivablesInvoiceBlock({
-        title: "Otevřené faktury zákazníka",
-        description: "Detail zákazníka ukazuje faktury ve stejném pracovním bloku.",
-        visibleCount: visibleDetailInvoices.length,
-        totalCount: detailInvoices.length,
-        content: `
-          <div class="receivables-table-wrap">
-            <table class="receivables-table">
-              <thead><tr><th>Faktura</th><th>VS</th><th>Splatnost</th><th>Celkem</th><th>Uhrazeno</th><th>Zbývá</th><th>Stav</th></tr></thead>
-              <tbody>
-                ${visibleDetailInvoices.map((invoice) => `
-                  <tr>
-                    <td>${escapeHtml(invoice.invoiceNumber)}</td>
-                    <td>${escapeHtml(invoice.variableSymbol || "-")}</td>
-                    <td>${escapeHtml(invoice.dueDate || "-")}</td>
-                    <td>${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
-                    <td>${escapeHtml(formatReceivableMoney(invoice.paidAmount))}</td>
-                    <td>${escapeHtml(formatReceivableMoney(invoice.openAmount))}</td>
-                    <td>${receivablesPill(invoice.status, receivablesStatusTone(invoice.status))}</td>
-                  </tr>
-                `).join("") || `<tr><td colspan="7">Zatím nejsou uložené žádné faktury.</td></tr>`}
-              </tbody>
-            </table>
-          </div>
-        `
-      })}
+      <div class="receivables-table-wrap">
+        <table class="receivables-table">
+          <thead><tr><th>Faktura</th><th>VS</th><th>Splatnost</th><th>Celkem</th><th>Uhrazeno</th><th>Zbývá</th><th>Stav</th></tr></thead>
+          <tbody>
+            ${(detail.invoices || []).map((invoice) => `
+              <tr>
+                <td>${escapeHtml(invoice.invoiceNumber)}</td>
+                <td>${escapeHtml(invoice.variableSymbol || "-")}</td>
+                <td>${escapeHtml(invoice.dueDate || "-")}</td>
+                <td>${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
+                <td>${escapeHtml(formatReceivableMoney(invoice.paidAmount))}</td>
+                <td>${escapeHtml(formatReceivableMoney(invoice.openAmount))}</td>
+                <td>${receivablesPill(invoice.status, receivablesStatusTone(invoice.status))}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="7">Zatím nejsou uložené žádné faktury.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
     </section>
     <section class="receivables-panel" aria-labelledby="receivables-timeline-title">
       <div class="receivables-panel__head">
@@ -25252,7 +25102,7 @@ async function loadReceivablesLedgerMapping(options = {}) {
   receivablesState.ledgerMappingLoading = true;
   receivablesState.ledgerMappingError = "";
   try {
-    const result = await apiJson("/api/receivables/vistos/ledger-mapping?limit=80&enrichCustomers=1&customerLimit=25&managerLimit=25&probeCustomerLink=1&linkProbeLimit=5");
+    const result = await apiJson("/api/receivables/vistos/ledger-mapping?limit=80&enrichCustomers=1&customerLimit=25");
     receivablesState.ledgerMapping = result || null;
     receivablesState.ledgerMappingLoaded = true;
   } catch (error) {

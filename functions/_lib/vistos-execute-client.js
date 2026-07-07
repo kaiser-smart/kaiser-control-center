@@ -234,13 +234,6 @@ export async function getVistosPage(env, session, entityName, columns, filter = 
   };
 }
 
-export async function getVistosSchemaEntity(env, session, entityName) {
-  const result = await fetchVistosExecute(env, "GetSchemaEntity", {
-    EntityName: cleanVistosValue(entityName)
-  }, session.cookieHeader);
-  return result.body;
-}
-
 export async function getAllVistosPages(env, session, entityName, columns, filter = null, options = {}) {
   const pageSize = Math.max(1, Math.min(Number(options.pageSize) || DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE));
   const maxPages = Math.max(1, Math.min(Number(options.maxPages) || DEFAULT_MAX_PAGES, 100));

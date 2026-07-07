@@ -10,10 +10,7 @@ function mappingOptions(request) {
     limit: url.searchParams.get("limit") || "80",
     today: url.searchParams.get("today") || "",
     enrichCustomers: url.searchParams.get("enrichCustomers") !== "0",
-    customerLimit: url.searchParams.get("customerLimit") || "25",
-    managerLimit: url.searchParams.get("managerLimit") || "25",
-    probeCustomerLink: url.searchParams.get("probeCustomerLink") !== "0",
-    linkProbeLimit: url.searchParams.get("linkProbeLimit") || "5"
+    customerLimit: url.searchParams.get("customerLimit") || "25"
   };
 }
 
