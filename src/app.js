@@ -1013,6 +1013,10 @@ const collectionRoutesPilotState = {
   issues: [],
   kommunalPreviewRows: [],
   kommunalPreviewIssues: [],
+  svozKaiserWatchdog: null,
+  svozKaiserWatchdogLoaded: false,
+  svozKaiserWatchdogLoading: false,
+  svozKaiserWatchdogError: "",
   kommunalPairingRows: [],
   kommunalPairingLoading: false,
   kommunalPairingError: "",
@@ -1593,6 +1597,10 @@ function homeDataBoxMetricCount() {
   return 20;
 }
 
+function collectionRoutesSvozKaiserWatchdogErrorCount() {
+  return Number(collectionRoutesPilotState.svozKaiserWatchdog?.summary?.errorCount || 0) || 0;
+}
+
 function homeStatusMetrics(modulesForUser, verifiedCount) {
   const unreadMessages = homeDataBoxMetricCount();
   const unverifiedCount = modulesForUser.filter((moduleItem) => moduleStatusLabel(moduleItem) === "Neověřeno").length;
@@ -1606,6 +1614,19 @@ function homeStatusMetrics(modulesForUser, verifiedCount) {
 }
 
 function homeModuleMeta(moduleItem) {
+  if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
+    const errorCount = collectionRoutesSvozKaiserWatchdogErrorCount();
+    if (errorCount > 0) {
+      return `<span class="module-card__meta module-card__meta--danger">${escapeHtml(errorCount > 99 ? "99+ chyb ve Vistosu" : `${errorCount} chyb ve Vistosu`)}</span>`;
+    }
+    if (collectionRoutesPilotState.svozKaiserWatchdogLoading) {
+      return `<span class="module-card__meta module-card__meta--waiting">Kontroluji Vistos...</span>`;
+    }
+    if (collectionRoutesPilotState.svozKaiserWatchdogLoaded && !collectionRoutesPilotState.svozKaiserWatchdogError) {
+      return `<span class="module-card__meta module-card__meta--ok">Vistos kontrola OK</span>`;
+    }
+  }
+
   if (moduleItem.id !== DATA_BOX_MODULE_KEY) {
     return "";
   }
@@ -1618,9 +1639,26 @@ function homeModuleMeta(moduleItem) {
   return `<span class="module-card__meta">${escapeHtml(unreadCount > 99 ? "99+ nových zpráv" : `${unreadCount} nových zpráv`)}</span>`;
 }
 
+function homeModuleCornerBadge(moduleItem) {
+  if (moduleItem.id !== COLLECTION_ROUTES_MODULE_KEY) {
+    return "";
+  }
+  const errorCount = collectionRoutesSvozKaiserWatchdogErrorCount();
+  if (errorCount <= 0) {
+    return "";
+  }
+  const value = errorCount > 99 ? "99+" : String(errorCount);
+  return `
+    <span class="collection-routes-home-alert-badge" title="${escapeHtml(`${value} chyb ve Vistos Svoz Kaiser datech`)}" aria-label="${escapeHtml(`Trasy svozu: ${value} chyb`)}">
+      ${escapeHtml(value)}
+    </span>
+  `;
+}
+
 function homeModuleCard(moduleItem, user, variant = "standard") {
   return `
     <a class="module-card module-card--${escapeHtml(variant)}" href="${routeHref(routeForModuleCard(moduleItem, user))}" data-link>
+      ${homeModuleCornerBadge(moduleItem)}
       <span class="module-card__top">
         <span class="module-icon" aria-hidden="true">${renderModuleIcon(moduleItem)}</span>
         ${statusBadge(moduleItem)}
@@ -13222,6 +13260,98 @@ function collectionRoutesTextKey(value = "") {
     .replace(/\s+/g, " ");
 }
 
+function collectionRoutesWatchdogSiteAlerts() {
+  const alerts = collectionRoutesPilotState.svozKaiserWatchdog?.siteAlerts;
+  return Array.isArray(alerts) ? alerts : [];
+}
+
+function collectionRoutesWatchdogTextKey(...values) {
+  return values
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join("|")
+    .toLocaleLowerCase("cs")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function collectionRoutesWatchdogAlertForSite(site = {}) {
+  const alerts = collectionRoutesWatchdogSiteAlerts();
+  if (!alerts.length) {
+    return null;
+  }
+  const siteKeys = new Set([
+    collectionRoutesWatchdogTextKey(site.id),
+    collectionRoutesWatchdogTextKey(site.siteName),
+    collectionRoutesWatchdogTextKey(site.addressText),
+    collectionRoutesWatchdogTextKey(site.customerName),
+    collectionRoutesWatchdogTextKey(site.siteName, site.addressText),
+    collectionRoutesWatchdogTextKey(site.customerName, site.siteName, site.addressText)
+  ].filter(Boolean));
+
+  return alerts.find((alert) => {
+    const alertKeys = [
+      collectionRoutesWatchdogTextKey(alert.siteKey),
+      collectionRoutesWatchdogTextKey(alert.siteName),
+      collectionRoutesWatchdogTextKey(alert.addressRaw),
+      collectionRoutesWatchdogTextKey(alert.customerName),
+      collectionRoutesWatchdogTextKey(alert.siteName, alert.addressRaw),
+      collectionRoutesWatchdogTextKey(alert.customerName, alert.siteName, alert.addressRaw)
+    ].filter(Boolean);
+    return alertKeys.some((key) => siteKeys.has(key));
+  }) || null;
+}
+
+function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
+  const watchdog = collectionRoutesPilotState.svozKaiserWatchdog;
+  const summary = watchdog?.summary || {};
+  const errorCount = collectionRoutesSvozKaiserWatchdogErrorCount();
+  const siteErrorCount = Number(summary.siteErrorCount || 0) || 0;
+  const issueSummary = Array.isArray(watchdog?.issueSummary) ? watchdog.issueSummary.slice(0, compact ? 3 : 6) : [];
+  const siteAlerts = collectionRoutesWatchdogSiteAlerts().slice(0, compact ? 3 : 8);
+  const tone = errorCount > 0 ? "danger" : collectionRoutesPilotState.svozKaiserWatchdogLoading ? "waiting" : "ok";
+  const headline = errorCount > 0
+    ? `Hlídač našel ${errorCount} chyb na ${siteErrorCount} stanovištích.`
+    : collectionRoutesPilotState.svozKaiserWatchdogLoading
+      ? "Kontroluji Vistos Svoz Kaiser data..."
+      : collectionRoutesPilotState.svozKaiserWatchdogError
+        ? "Hlídač Vistos teď neběží."
+        : "Hlídač Vistos Svoz Kaiser je bez blokujících chyb.";
+
+  return `
+    <div class="collection-routes-watchdog collection-routes-watchdog--${escapeHtml(tone)} ${compact ? "collection-routes-watchdog--compact" : ""}" role="status" aria-label="Hlídač Vistos Svoz Kaiser">
+      <div class="collection-routes-watchdog__head">
+        <div>
+          <span>Hlídač Vistos Svoz Kaiser</span>
+          <strong>${escapeHtml(headline)}</strong>
+        </div>
+        <span class="collection-routes-watchdog__badge">${escapeHtml(errorCount > 99 ? "99+" : errorCount)}</span>
+      </div>
+      ${collectionRoutesPilotState.svozKaiserWatchdogError ? `<p>${escapeHtml(collectionRoutesPilotState.svozKaiserWatchdogError)}</p>` : ""}
+      ${summary.message && !collectionRoutesPilotState.svozKaiserWatchdogError ? `<p>${escapeHtml(summary.message)}</p>` : ""}
+      ${issueSummary.length ? `
+        <div class="collection-routes-watchdog__chips" aria-label="Typy chyb">
+          ${issueSummary.map((item) => `
+            <span>${escapeHtml(item.label || item.issueType)} · ${escapeHtml(item.count || 0)}</span>
+          `).join("")}
+        </div>
+      ` : ""}
+      ${siteAlerts.length ? `
+        <div class="collection-routes-watchdog__sites" aria-label="Stanoviště s chybou">
+          ${siteAlerts.map((site) => `
+            <article>
+              <strong>${escapeHtml(site.siteName || site.addressRaw || "Stanoviště")}</strong>
+              <span>${escapeHtml(site.customerName || "-")} · ${escapeHtml(site.addressRaw || "-")}</span>
+              <small>${escapeHtml((site.issues || []).slice(0, 2).map((issue) => issue.label || issue.message).join(", ") || "Datová chyba")}</small>
+            </article>
+          `).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
 function collectionRoutesKommunalMappingReason(issueTypes = []) {
   const types = new Set(issueTypes);
   const reasons = [];
@@ -16780,6 +16910,7 @@ function collectionRoutesSourceRoutesSection() {
       ${collectionRoutesPilotState.sourceBatches.length ? "" : `
         <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Nejdřív je potřeba import v Interní správě.</p>
       `}
+      ${collectionRoutesSvozKaiserWatchdogPanel({ compact: true })}
       ${collectionRoutesSourceSmartFilterPanel()}
       ${collectionRoutesSourceRouteSummaryCards(rows)}
       ${collectionRoutesSourceDailyRouteDraftPanel(rows)}
@@ -16915,6 +17046,8 @@ function collectionRoutesVistosKommunalSection(user) {
         <strong>Tento náhled nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.</strong>
         <span>Filtr: Contract.Status_FK = 74, Contract.Typsmlouvy_FK = [14735]. Contract.StartDate/EndDate a ContractRow.IsActive/StartDate/EndDate se ve Fázi 1E vyhodnocují jako datové problémy, ne jako tvrdé vyřazení preview.</span>
       </div>
+
+      ${collectionRoutesSvozKaiserWatchdogPanel()}
 
       <div class="collection-routes-source-switch" aria-label="Oddělení zdrojových podkladů a návrhu AI">
         <button class="secondary-link collection-routes-source-switch__link" type="button" data-collection-routes-export-optimization>
@@ -17213,16 +17346,24 @@ function collectionRoutesSiteCards() {
 
   return `
     <div class="collection-routes-list collection-routes-list--sites">
-      ${sites.map((site) => `
-        <article class="collection-routes-list-item">
-          <div>
-            <strong>${escapeHtml(site.siteName || site.customerName || "Stanoviště")}</strong>
-            <span>${escapeHtml(site.addressText || "Adresa čeká na Vistos")} · ${escapeHtml(site.locationQuality || "missing")}</span>
-          </div>
-          <p>${escapeHtml(site.customerName || "Zákazník bude načtený z Vistos.")}</p>
-          <button class="secondary-link" type="button" data-collection-site-select="${escapeHtml(site.id)}">Detail stanoviště</button>
-        </article>
-      `).join("")}
+      ${sites.map((site) => {
+        const alert = collectionRoutesWatchdogAlertForSite(site);
+        return `
+          <article class="collection-routes-list-item ${alert ? "collection-routes-list-item--watchdog-danger" : ""}">
+            <div>
+              <strong>${escapeHtml(site.siteName || site.customerName || "Stanoviště")}</strong>
+              <span>${escapeHtml(site.addressText || "Adresa čeká na Vistos")} · ${escapeHtml(site.locationQuality || "missing")}</span>
+            </div>
+            <p>${escapeHtml(site.customerName || "Zákazník bude načtený z Vistos.")}</p>
+            ${alert ? `
+              <span class="collection-routes-site-alert" aria-label="${escapeHtml(`Stanoviště má ${alert.issueCount || 1} chyb`)}">
+                ${escapeHtml(alert.issueCount || 1)} chyb · ${escapeHtml((alert.issues || [])[0]?.label || "zkontrolovat Vistos")}
+              </span>
+            ` : ""}
+            <button class="secondary-link" type="button" data-collection-site-select="${escapeHtml(site.id)}">Detail stanoviště</button>
+          </article>
+        `;
+      }).join("")}
     </div>
   `;
 }
@@ -25728,6 +25869,44 @@ function collectionRoutesSourceDriverRunKeyFromState() {
   ].join("|");
 }
 
+async function loadCollectionRoutesSvozKaiserWatchdog(options = {}) {
+  if (!authState.user || collectionRoutesPilotState.svozKaiserWatchdogLoading || !collectionRoutesCanViewPilot(currentUser())) {
+    return;
+  }
+  if (collectionRoutesPilotState.svozKaiserWatchdogLoaded && options.force !== true) {
+    return;
+  }
+
+  collectionRoutesPilotState.svozKaiserWatchdogLoading = true;
+  collectionRoutesPilotState.svozKaiserWatchdogError = "";
+
+  try {
+    const result = await apiJson("/api/collection-routes/vistos/svoz-kaiser-watchdog");
+    collectionRoutesPilotState.svozKaiserWatchdog = result.watchdog || null;
+    collectionRoutesPilotState.svozKaiserWatchdogLoaded = true;
+  } catch (error) {
+    collectionRoutesPilotState.svozKaiserWatchdog = null;
+    collectionRoutesPilotState.svozKaiserWatchdogLoaded = false;
+    collectionRoutesPilotState.svozKaiserWatchdogError =
+      error.payload?.error || error.message || "Hlídač Vistos Svoz Kaiser se teď nepodařilo spustit.";
+  } finally {
+    collectionRoutesPilotState.svozKaiserWatchdogLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
+function ensureCollectionRoutesSvozKaiserWatchdog(user = currentUser()) {
+  if (!user || !collectionRoutesCanViewPilot(user)) {
+    return;
+  }
+  if (collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.svozKaiserWatchdogLoaded) {
+    return;
+  }
+  void loadCollectionRoutesSvozKaiserWatchdog();
+}
+
 function resetCollectionRoutesSourceDriverRunIfChanged() {
   const nextRunKey = collectionRoutesSourceDriverRunKeyFromState();
   if (collectionRoutesPilotState.sourceDriverRunKey && collectionRoutesPilotState.sourceDriverRunKey !== nextRunKey) {
@@ -31032,6 +31211,7 @@ function renderAuthenticatedApp(user) {
   }
 
   if (path === "/") {
+    ensureCollectionRoutesSvozKaiserWatchdog(user);
     app.innerHTML = homePage(user);
     document.title = APP_NAME;
     return;
@@ -31176,6 +31356,7 @@ function renderAuthenticatedApp(user) {
       ensureDriverReportsData();
     }
     if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
+      ensureCollectionRoutesSvozKaiserWatchdog(user);
       void loadCollectionRoutesPilot();
     }
     if (moduleItem.id === RECEIVABLES_MODULE_KEY) {
@@ -31203,6 +31384,7 @@ function renderAuthenticatedApp(user) {
       ensureDriverReportsData();
     }
     if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
+      ensureCollectionRoutesSvozKaiserWatchdog(user);
       void loadCollectionRoutesPilot();
     }
     if (moduleItem.id === RECEIVABLES_MODULE_KEY) {

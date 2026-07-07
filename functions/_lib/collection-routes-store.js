@@ -17,6 +17,18 @@ const VISTOS_KOMUNAL_CONTRACT_FILTER = {
   Status_FK: 74,
   Typsmlouvy_FK: [14735]
 };
+const VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_TYPES = new Set([
+  "missing-customer",
+  "missing-loading-address",
+  "missing-contract-items",
+  "unknown-product",
+  "unknown-waste-type",
+  "unknown-frequency",
+  "missing-container-volume",
+  "item-not-collection-mappable",
+  "multiple-sites-contract",
+  "possible-site-duplicate"
+]);
 const VISTOS_CONTRACT_COLUMNS = [
   "Id",
   "ContractNumber",
@@ -1545,6 +1557,143 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
   };
 }
 
+function watchdogIssueLabel(issueType = "") {
+  const labels = {
+    "missing-customer": "Chybí zákazník",
+    "missing-loading-address": "Chybí svozová/nakládková adresa",
+    "missing-contract-items": "Smlouva nemá svozové položky",
+    "unknown-product": "Neznámý produkt",
+    "unknown-waste-type": "Chybí nebo nejde určit druh odpadu",
+    "unknown-frequency": "Chybí nebo nejde určit interval odvozu",
+    "missing-container-volume": "Chybí nádoba / objem",
+    "item-not-collection-mappable": "Položka nejde převést na svoz",
+    "multiple-sites-contract": "Smlouva má více možných stanovišť",
+    "possible-site-duplicate": "Možná duplicita stanoviště"
+  };
+  return labels[issueType] || "Datová chyba svozu";
+}
+
+function watchdogIssueAction(issueType = "") {
+  const actions = {
+    "missing-customer": "Doplnit zákazníka / sídlo ve Vistosu.",
+    "missing-loading-address": "Doplnit svozovou nebo nakládkovou adresu ve Vistosu.",
+    "missing-contract-items": "Doplnit svozovou položku smlouvy.",
+    "unknown-product": "Zkontrolovat produkt a jeho vazbu na svoz.",
+    "unknown-waste-type": "Doplnit druh odpadu / katalogové zařazení.",
+    "unknown-frequency": "Doplnit interval odvozu nebo svozový den.",
+    "missing-container-volume": "Doplnit nádobu, objem nebo počet.",
+    "item-not-collection-mappable": "Opravit text produktu tak, aby šel převést na svoz.",
+    "multiple-sites-contract": "Ručně potvrdit správné stanoviště.",
+    "possible-site-duplicate": "Sloučit nebo rozlišit duplicitní stanoviště."
+  };
+  return actions[issueType] || "Zkontrolovat Vistos smlouvu a svozovou položku.";
+}
+
+function buildVistosSvozKaiserWatchdog(preview, apiStatus = "ready") {
+  const rows = Array.isArray(preview?.rows) ? preview.rows : [];
+  const issueRows = [];
+  const siteAlertsByKey = new Map();
+  const issueCounts = new Map();
+
+  for (const row of rows) {
+    const issues = Array.isArray(row?.issues) ? row.issues : [];
+    const blockingIssues = issues.filter((issue) => VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_TYPES.has(cleanString(issue?.type || issue?.issueType)));
+    if (!blockingIssues.length) {
+      continue;
+    }
+
+    const siteKey = cleanString(row?.siteKey || row?.sourceSiteId || row?.siteName || row?.addressRaw || row?.contractNumber || row?.rowKey) || `watchdog-site-${siteAlertsByKey.size + 1}`;
+    const existing = siteAlertsByKey.get(siteKey) || {
+      siteKey,
+      siteName: cleanString(row?.siteName || row?.addressRaw || "Stanoviště bez názvu"),
+      addressRaw: cleanString(row?.addressRaw),
+      customerName: cleanString(row?.customerName),
+      contractNumber: cleanString(row?.contractNumber),
+      issueCount: 0,
+      issues: []
+    };
+
+    for (const issue of blockingIssues) {
+      const issueType = cleanString(issue?.type || issue?.issueType || "data_issue");
+      const item = {
+        issueType,
+        severity: cleanString(issue?.severity || "warning"),
+        label: watchdogIssueLabel(issueType),
+        message: cleanString(issue?.message || watchdogIssueLabel(issueType)),
+        action: watchdogIssueAction(issueType),
+        siteKey,
+        siteName: existing.siteName,
+        addressRaw: existing.addressRaw,
+        customerName: existing.customerName,
+        contractNumber: existing.contractNumber
+      };
+      issueRows.push(item);
+      existing.issues.push(item);
+      existing.issueCount += 1;
+      issueCounts.set(issueType, (issueCounts.get(issueType) || 0) + 1);
+    }
+
+    siteAlertsByKey.set(siteKey, existing);
+  }
+
+  const issueSummary = Array.from(issueCounts.entries())
+    .map(([issueType, count]) => ({
+      issueType,
+      count,
+      label: watchdogIssueLabel(issueType),
+      action: watchdogIssueAction(issueType)
+    }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "cs"));
+
+  const siteAlerts = Array.from(siteAlertsByKey.values())
+    .sort((left, right) => right.issueCount - left.issueCount || left.siteName.localeCompare(right.siteName, "cs"));
+
+  return {
+    apiStatus,
+    mode: "vistos-svoz-kaiser-watchdog",
+    source: "vistos",
+    sourceMode: "vistos-komunal-read-only-watchdog",
+    generatedAt: nowIso(),
+    createsOperationalRoutes: false,
+    sendsEmailOrSms: false,
+    startsAutomation: false,
+    summary: {
+      status: apiStatus === "ready" ? "ready" : "waiting",
+      errorCount: issueRows.length,
+      siteErrorCount: siteAlerts.length,
+      checkedRows: rows.length,
+      contractCount: preview?.summary?.contractCount || preview?.metadata?.mappingStats?.contracts || 0,
+      itemCount: preview?.summary?.itemCount || preview?.metadata?.mappingStats?.mappedItems || 0,
+      sourceRule: "Vistos aktivní Komunál smlouvy; Svoz Kaiser ANO bude tvrdý filtr po potvrzení názvu pole z Vistos API.",
+      message: issueRows.length
+        ? `Hlídač našel ${issueRows.length} chyb ve Vistos svozových datech.`
+        : "Hlídač nenašel blokující chyby ve Vistos svozových datech."
+    },
+    requiredFields: [
+      "Číslo smlouvy",
+      "Sídlo",
+      "Nakládková adresa",
+      "Stav Aktivní",
+      "Typ Komunál",
+      "Kategorie odpadu",
+      "Interval odvozu",
+      "Svoz Kaiser ANO",
+      "Svoz Od",
+      "Svoz Do",
+      "Druh odpadu",
+      "Svozový den",
+      "Svozová adresa - ulice",
+      "Svozová adresa - město",
+      "Produkt",
+      "Název",
+      "Poznámky"
+    ],
+    issueSummary,
+    issueRows: issueRows.slice(0, 200),
+    siteAlerts: siteAlerts.slice(0, 100)
+  };
+}
+
 function mappedManualRow(rawRow, rowNumber) {
   const customerName = readMappedField(rawRow, "customerName");
   const addressRaw = readMappedField(rawRow, "addressRaw");
@@ -2396,6 +2545,66 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
     persistRowsLimit: VISTOS_KOMUNAL_PERSIST_ROWS_LIMIT,
     derivedRowsLimit: 250
   });
+}
+
+export async function createCollectionRoutesVistosSvozKaiserWatchdog(env) {
+  let loaded;
+  try {
+    loaded = await loadVistosKommunalPreviewData(env);
+  } catch (error) {
+    if (error instanceof CollectionRoutesStoreError && error.code?.startsWith("vistos_api")) {
+      return {
+        apiStatus: error.code === "vistos_api_not_configured" ? "not_configured" : "waiting",
+        mode: "vistos-svoz-kaiser-watchdog",
+        source: "vistos",
+        generatedAt: nowIso(),
+        createsOperationalRoutes: false,
+        sendsEmailOrSms: false,
+        startsAutomation: false,
+        summary: {
+          status: "waiting",
+          errorCount: 0,
+          siteErrorCount: 0,
+          checkedRows: 0,
+          contractCount: 0,
+          itemCount: 0,
+          message: error.message
+        },
+        requiredFields: [],
+        issueSummary: [],
+        issueRows: [],
+        siteAlerts: []
+      };
+    }
+    throw error;
+  }
+
+  if (!loaded.configured) {
+    return {
+      apiStatus: loaded.apiStatus,
+      mode: "vistos-svoz-kaiser-watchdog",
+      source: "vistos",
+      generatedAt: nowIso(),
+      createsOperationalRoutes: false,
+      sendsEmailOrSms: false,
+      startsAutomation: false,
+      summary: {
+        status: "waiting",
+        errorCount: 0,
+        siteErrorCount: 0,
+        checkedRows: 0,
+        contractCount: 0,
+        itemCount: 0,
+        message: loaded.message
+      },
+      requiredFields: [],
+      issueSummary: [],
+      issueRows: [],
+      siteAlerts: []
+    };
+  }
+
+  return buildVistosSvozKaiserWatchdog(loaded.preview, loaded.apiStatus || "ready");
 }
 
 export async function createCollectionRoutesVistosKommunalPreviewExport(env, {

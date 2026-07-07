@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.391"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.392"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: hlídač Vistos Svoz Kaiser dat",
+    text: "HP karta Trasy svozu nově ukazuje červené pulzující kolečko s počtem blokujících chyb z read-only Vistos kontroly. V modulu je panel hlídače a problémová stanoviště se červeně zvýrazní. Kontrola nic nezapisuje do Vistosu, nevytváří ostré trasy, SMS/e-maily ani automatizace."
+  },
   {
     title: "Trasy svozu: oprava zdrojového auta z Excelů",
     text: "Import zdrojových Svozových tras už nepřebírá pracovní AI odhad auta podle dne. Běžné denní a měsíční Excel soubory drží Auto A, TRASY POPELÁŘ - CECIL Auto B a TRASY M.FLORIÁN Auto C; stále jde jen o read-only preview bez ostrých tras."

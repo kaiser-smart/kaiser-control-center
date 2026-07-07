@@ -4685,6 +4685,64 @@ async function handleApi(request, response) {
     return true;
   }
 
+  if (url.pathname === "/api/collection-routes/vistos/svoz-kaiser-watchdog" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    sendJson(response, 200, {
+      watchdog: {
+        apiStatus: "ready",
+        mode: "vistos-svoz-kaiser-watchdog",
+        source: "vistos",
+        generatedAt: new Date().toISOString(),
+        createsOperationalRoutes: false,
+        sendsEmailOrSms: false,
+        startsAutomation: false,
+        summary: {
+          status: "ready",
+          errorCount: 2,
+          siteErrorCount: 1,
+          checkedRows: 12,
+          contractCount: 8,
+          itemCount: 12,
+          message: "Lokální mock: hlídač našel 2 chyby ve Vistos svozových datech."
+        },
+        requiredFields: ["Svoz Kaiser ANO", "Svozový den", "Svozová adresa", "Druh odpadu", "Produkt"],
+        issueSummary: [
+          { issueType: "missing-loading-address", count: 1, label: "Chybí svozová/nakládková adresa", action: "Doplnit adresu ve Vistosu." },
+          { issueType: "unknown-frequency", count: 1, label: "Chybí nebo nejde určit interval odvozu", action: "Doplnit interval ve Vistosu." }
+        ],
+        issueRows: [
+          { issueType: "missing-loading-address", label: "Chybí svozová/nakládková adresa", siteName: "Lokální test stanoviště", customerName: "Test zákazník", addressRaw: "Brno" },
+          { issueType: "unknown-frequency", label: "Chybí nebo nejde určit interval odvozu", siteName: "Lokální test stanoviště", customerName: "Test zákazník", addressRaw: "Brno" }
+        ],
+        siteAlerts: [
+          {
+            siteKey: "local-watchdog-site",
+            siteName: "Lokální test stanoviště",
+            addressRaw: "Brno",
+            customerName: "Test zákazník",
+            contractNumber: "LOCAL-001",
+            issueCount: 2,
+            issues: [
+              { issueType: "missing-loading-address", label: "Chybí svozová/nakládková adresa" },
+              { issueType: "unknown-frequency", label: "Chybí nebo nejde určit interval odvozu" }
+            ]
+          }
+        ]
+      },
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/collection-routes/import-batches" && request.method === "GET") {
     const user = currentDevUser(request);
     if (!user) {

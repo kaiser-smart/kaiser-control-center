@@ -15,6 +15,8 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 - ROZPRACOVANO - read-only API discovery existuje.
 - ROZPRACOVANO - Faze 1E nacita Komunal preview pres backend/secrets.
+- ROZPRACOVANO - Vistos Svoz Kaiser ma read-only hlidace dat pro HP badge a cervene zvyrazneni problemovych stanovist; bez zapisu, bez cronu a bez ostrych tras.
+- ROZPRACOVANO - Novy cil tras: Vistos API je zdroj svozovych radku, 13 Excelu zustava jen pomocne parovani vozidel A/B/C.
 - NEZACATO - ostry import do planovacich tabulek.
 - BLOKOVANO - kontaktni osoby a SMS pole 15/30/60 jeste nejsou potvrzene.
 
