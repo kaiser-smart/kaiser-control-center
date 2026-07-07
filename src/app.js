@@ -13056,6 +13056,30 @@ const COLLECTION_ROUTES_KOMMUNAL_ISSUE_DEFINITIONS = {
     action: "Doplnit adresu stanoviště ve Vistosu.",
     group: "source"
   },
+  "incomplete-address-place": {
+    label: "Neúplné adresní místo",
+    priority: "zdrojová data",
+    action: "Doplnit úplné Adresní místo ve Vistosu.",
+    group: "source"
+  },
+  "address-place-missing-number": {
+    label: "Adresní místo bez čísla",
+    priority: "zdrojová data",
+    action: "Doplnit číslo popisné/orientační v Adresním místě.",
+    group: "source"
+  },
+  "address-place-possible-typo": {
+    label: "Možný překlep v adresním místě",
+    priority: "kontrola",
+    action: "Zkontrolovat překlep nebo poškozený zápis v Adresním místě.",
+    group: "check"
+  },
+  "address-place-loading-address-mismatch": {
+    label: "Adresní místo nesedí s nakládkovou adresou",
+    priority: "kontrola",
+    action: "Sjednotit Adresní místo a svozovou/nakládkovou adresu.",
+    group: "check"
+  },
   "missing-contract-items": {
     label: "Smlouva nemá položky",
     priority: "zdrojová data",
@@ -13079,6 +13103,48 @@ const COLLECTION_ROUTES_KOMMUNAL_ISSUE_DEFINITIONS = {
     priority: "alias textu",
     action: "Doplnit alias obchodního textu četnosti na interval svozu.",
     group: "mapping"
+  },
+  "missing-pickup-days": {
+    label: "Chybí svozové dny",
+    priority: "zdrojová data",
+    action: "Doplnit svozové dny podle intervalu odvozu.",
+    group: "source"
+  },
+  "pickup-day-fields-not-readable": {
+    label: "Nelze ověřit svozové dny",
+    priority: "Vistos metadata",
+    action: "Ověřit technické pole svozových dnů ve Vistosu.",
+    group: "check"
+  },
+  "pickup-days-count-mismatch": {
+    label: "Interval nesedí na počet svozových dnů",
+    priority: "kontrola",
+    action: "Opravit počet svozových dnů podle intervalu.",
+    group: "check"
+  },
+  "pickup-days-even-odd-mismatch": {
+    label: "Sudé/liché svozové dny nesedí s intervalem",
+    priority: "kontrola",
+    action: "Srovnat sudé a liché svozové dny podle intervalu.",
+    group: "check"
+  },
+  "pickup-days-missing-week-parity": {
+    label: "Chybí sudý/lichý režim u svozového dne",
+    priority: "kontrola",
+    action: "Doplnit sudý/lichý/každý týden u svozového dne.",
+    group: "check"
+  },
+  "pickup-days-duplicate": {
+    label: "Duplicitní svozový den",
+    priority: "kontrola",
+    action: "Odstranit duplicitně zadaný svozový den.",
+    group: "check"
+  },
+  "monthly-pickup-days-ambiguous": {
+    label: "Nejasný měsíční svoz",
+    priority: "kontrola",
+    action: "Ověřit měsíční režim ve Vistosu.",
+    group: "check"
   },
   "missing-container-volume": {
     label: "Chybí objem nádoby",
@@ -13123,10 +13189,16 @@ const COLLECTION_ROUTES_KOMMUNAL_ISSUE_DEFINITIONS = {
     group: "diagnostic"
   },
   "missing-contract-row-start-date": {
-    label: "Chybí datum začátku položky",
-    priority: "diagnostika",
-    action: "Neřešit teď. Chybějící datum Fázi 1E neblokuje.",
+    label: "Chybí Svoz od",
+    priority: "zdrojová data",
+    action: "Doplnit Svoz od.",
     group: "diagnostic"
+  },
+  "invalid-contract-row-date-range": {
+    label: "Svoz od je po Svoz do",
+    priority: "zdrojová data",
+    action: "Opravit Svoz od / Svoz do.",
+    group: "source"
   },
   "multiple-sites-contract": {
     label: "Smlouva má více možných stanovišť",
@@ -17541,7 +17613,7 @@ function collectionRoutesVistosSitesTable() {
   if (!siteRows.length) {
     return collectionRoutesEmptyState(
       "Zatím nejsou načtená Vistos stanoviště.",
-      "Klikni na Načíst Vistos stanoviště. Použije se jen read-only API export bez zápisu do Vistosu a bez ostrých tras."
+      "Smart je načítá automaticky z read-only Vistos API exportu. Bez zápisu do Vistosu a bez ostrých tras."
     );
   }
 
@@ -17614,6 +17686,11 @@ function collectionRoutesSitesSection(user) {
   const stats = collectionRoutesVistosSitesStats(siteRows);
   const filterConfirmed = collectionRoutesSvozKaiserFieldConfirmed();
   const loadedAt = collectionRoutesPilotState.kommunalPairingLoadedAt ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt) : "";
+  const loadingNotice = collectionRoutesPilotState.kommunalPairingLoading || collectionRoutesPilotState.svozKaiserWatchdogLoading
+    ? "Načítám Vistos stanoviště automaticky..."
+    : !loadedAt && !collectionRoutesPilotState.kommunalPairingError
+      ? "Stanoviště se načtou automaticky po otevření záložky."
+      : "";
   return `
     <section class="collection-routes-panel" id="collection-routes-sites" aria-labelledby="collection-routes-sites-title">
       <div class="collection-routes-panel__head">
@@ -17624,11 +17701,7 @@ function collectionRoutesSitesSection(user) {
         </div>
         <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
       </div>
-      <div class="collection-routes-preview-block__actions">
-        <button class="secondary-link" type="button" data-collection-routes-refresh-vistos-sites ${collectionRoutesPilotState.kommunalPairingLoading || collectionRoutesPilotState.svozKaiserWatchdogLoading ? "disabled" : ""}>
-          ${collectionRoutesPilotState.kommunalPairingLoading ? "Načítám Vistos stanoviště..." : "Načíst Vistos stanoviště"}
-        </button>
-      </div>
+      ${loadingNotice ? `<p class="module-feedback__notice">${escapeHtml(loadingNotice)}</p>` : ""}
       <div class="collection-routes-stats collection-routes-sites-summary">
         <article><span>Zdroj</span><strong>Vistos API</strong></article>
         <article><span>Stanoviště</span><strong>${escapeHtml(stats.siteCount)}</strong></article>
@@ -34938,17 +35011,6 @@ document.addEventListener("click", async (event) => {
   if (collectionRoutesTab) {
     event.preventDefault();
     setCollectionRoutesActiveTab(collectionRoutesTab.dataset.collectionRoutesTab || "svozove-trasy");
-    return;
-  }
-
-  const collectionRoutesRefreshVistosSites = event.target.closest("[data-collection-routes-refresh-vistos-sites]");
-  if (collectionRoutesRefreshVistosSites) {
-    event.preventDefault();
-    await Promise.all([
-      loadCollectionRoutesSvozKaiserWatchdog({ force: true, renderAfter: false }),
-      loadCollectionRoutesKommunalPairingRows({ force: true, renderAfter: false })
-    ]);
-    render();
     return;
   }
 
