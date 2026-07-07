@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.437"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.439"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: nový autonomní pilot",
+    text: "Přibyl samostatný modul /datove-schranky-plus jako bezpečný UI/read-only pilot operačního centra pro 7 firemních datových schránek, Autopilot, přílohy, pravidla, potvrzení a auditní hranice. Bez zásahu do původní Datové schránky, databáze, přístupových hesel nebo ostrého automatického běhu."
+  },
   {
     title: "Pohledávky: Customer_FK schema probe",
     text: "Import Pohledávek nově automaticky zobrazuje read-only schema probe pro fakturační vazbu Customer_FK z InvoiceIssued a sjednocuje fakturové tabulky do jednoho bloku po 10 řádcích."
