@@ -32397,7 +32397,8 @@ function updateAbsenceFormPreview(form) {
 
 async function copyAbsenceOutOfOfficeText(button) {
   const form = button.closest("[data-absence-request-form]");
-  const text = form?.querySelector("[data-absence-out-office-text]")?.value || "";
+  const textField = form?.querySelector("[data-absence-out-office-text]");
+  const text = textField?.value || "";
   const status = form?.querySelector("[data-absence-out-office-copy-status]");
 
   if (!text.trim()) {
@@ -32413,9 +32414,28 @@ async function copyAbsenceOutOfOfficeText(button) {
       status.textContent = "Zkopírováno. Ve Forpsi vložte ručně.";
     }
   } catch {
+    const fallbackCopied = copyTextFromField(textField, text);
     if (status) {
-      status.textContent = "Kopírování selhalo. Označte text ručně.";
+      status.textContent = fallbackCopied
+        ? "Zkopírováno. Ve Forpsi vložte ručně."
+        : "Text je označený. Zkopírujte ho klávesami Cmd+C.";
     }
+  }
+}
+
+function copyTextFromField(field, text) {
+  if (!field || !text.trim()) {
+    return false;
+  }
+
+  field.focus();
+  field.select();
+  field.setSelectionRange(0, text.length);
+
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
   }
 }
 
