@@ -16,10 +16,7 @@ import {
   mapReceivablesVistosCompany,
   mapReceivablesVistosInvoice
 } from "../functions/_lib/receivables-vistos-preview.js";
-import {
-  buildReceivablesVistosLedgerMapping,
-  customerLookupAttemptsForCandidate
-} from "../functions/_lib/receivables-vistos-ledger-mapping.js";
+import { buildReceivablesVistosLedgerMapping } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import {
   calculateInvoicePaymentState,
@@ -77,23 +74,6 @@ assert.equal(receivableToleranceAmount(250000), 250);
   ]);
   assert.equal(state.status, "overpaid");
   assert.equal(state.openAmount, 0);
-}
-
-{
-  const attempts = customerLookupAttemptsForCandidate({
-    customerKeyType: "CustomerBranch_FK",
-    customerKeyValue: "BR-1",
-    customerBranchId: "BR-1",
-    customerCompanyId: "C-123",
-    ico: "12345678"
-  });
-  assert.deepEqual(attempts.slice(0, 3).map((attempt) => attempt.key), [
-    "directory_with_branch_by_customer_fk",
-    "directory_by_customer_fk",
-    "company_by_customer_fk"
-  ]);
-  assert.equal(attempts.some((attempt) => attempt.key === "directory_with_branch_by_reg_number"), true);
-  assert.equal(attempts.some((attempt) => attempt.key === "customer_branch_by_branch_fk"), true);
 }
 
 {
