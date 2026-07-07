@@ -28613,3 +28613,238 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
     font-weight: 800;
   }
 }
+
+/* Datova schranka: posledni vrstva svetleho inboxu. */
+body:has(.data-box-page),
+body:has(.data-box-page) .data-box-page {
+  background: #f5f7f3 !important;
+  color: #202821 !important;
+}
+
+body:has(.data-box-page) .data-box-page::before,
+body:has(.data-box-page) .data-box-page::after,
+body:has(.data-box-page) .data-box-message-list::before,
+body:has(.data-box-page) .data-box-message-list::after {
+  display: none !important;
+}
+
+body:has(.data-box-page) .data-box-inbox-header,
+body:has(.data-box-page) .data-box-tabs,
+body:has(.data-box-page) .data-box-panel,
+body:has(.data-box-page) .data-box-work-queue,
+body:has(.data-box-page) .data-box-safe-aside,
+body:has(.data-box-page) .data-box-message-card,
+body:has(.data-box-page) .data-box-detail-modal,
+body:has(.data-box-page) .data-box-reading-section,
+body:has(.data-box-page) .data-box-detail-summary,
+body:has(.data-box-page) .data-box-attachments-priority {
+  border: 1px solid #dfe5dc !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+body:has(.data-box-page) .data-box-inbox-header,
+body:has(.data-box-page) .data-box-tabs,
+body:has(.data-box-page) .data-box-overview,
+body:has(.data-box-page) .data-box-workbench,
+body:has(.data-box-page) .data-box-confirmations-panel,
+body:has(.data-box-page) .data-box-settings-panel {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
+body:has(.data-box-page) .data-box-overview__simple,
+body:has(.data-box-page) .data-box-confirmation-list {
+  display: grid;
+  gap: 12px;
+}
+
+body:has(.data-box-page) .data-box-work-queue,
+body:has(.data-box-page) .data-box-safe-aside,
+body:has(.data-box-page) .data-box-reading-section {
+  padding: 14px !important;
+}
+
+body:has(.data-box-page) .data-box-safe-aside,
+body:has(.data-box-page) .data-box-confirmation-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+body:has(.data-box-page) .data-box-confirmation-card {
+  padding: 12px;
+  border: 1px solid #dfe5dc;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+body:has(.data-box-page) .data-box-work-row {
+  border: 1px solid #dfe5dc !important;
+  border-left: 4px solid #cbd5c8 !important;
+  background: #ffffff !important;
+}
+
+body:has(.data-box-page) .data-box-work-row--urgent,
+body:has(.data-box-page) .data-box-work-row--error {
+  border-left-color: #b42318 !important;
+}
+
+body:has(.data-box-page) .data-box-work-row--legal {
+  border-left-color: #8a6d1d !important;
+}
+
+body:has(.data-box-page) .data-box-message-card {
+  display: grid !important;
+  grid-template-columns: 10px minmax(0, 1fr) auto !important;
+  gap: 12px !important;
+  align-items: center !important;
+  padding: 11px 12px !important;
+}
+
+body:has(.data-box-page) .data-box-message-card__priority {
+  width: 5px;
+  min-height: 46px;
+  border-radius: 999px;
+  background: #cbd5c8;
+}
+
+body:has(.data-box-page) .data-box-message-card__priority--urgent,
+body:has(.data-box-page) .data-box-message-card__priority--error {
+  background: #b42318;
+}
+
+body:has(.data-box-page) .data-box-message-card__priority--legal {
+  background: #8a6d1d;
+}
+
+body:has(.data-box-page) .data-box-message-card__select {
+  display: grid !important;
+  gap: 6px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  text-align: left !important;
+}
+
+body:has(.data-box-page) .data-box-message-card__top {
+  display: flex !important;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body:has(.data-box-page) .data-box-message-card__bottom {
+  display: grid !important;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(120px, 0.65fr) minmax(180px, 1fr) auto;
+  gap: 10px;
+}
+
+body:has(.data-box-page) .data-box-message-card__actor,
+body:has(.data-box-page) .data-box-message-card__subject,
+body:has(.data-box-page) .data-box-detail-summary h3 {
+  color: #202821 !important;
+  font-weight: 850 !important;
+}
+
+body:has(.data-box-page) .data-box-message-card__mailbox,
+body:has(.data-box-page) .data-box-message-card__date,
+body:has(.data-box-page) .data-box-message-card__action,
+body:has(.data-box-page) .data-box-safe-aside p,
+body:has(.data-box-page) .data-box-confirmation-card p,
+body:has(.data-box-page) .data-box-reading-section p {
+  color: #667166 !important;
+}
+
+body:has(.data-box-page) .data-box-message-card__extras,
+body:has(.data-box-page) .data-box-confirmation-card__actions,
+body:has(.data-box-page) .data-box-message-safe-actions,
+body:has(.data-box-page) .data-box-attachment-problem__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+body:has(.data-box-page) .data-box-badge,
+body:has(.data-box-page) .data-box-priority {
+  border-radius: 999px !important;
+  padding: 3px 8px !important;
+  font-size: 0.74rem !important;
+  letter-spacing: 0 !important;
+}
+
+body:has(.data-box-page) .primary-action {
+  background: #4d8f1f !important;
+  color: #ffffff !important;
+}
+
+body:has(.data-box-page) .secondary-link,
+body:has(.data-box-page) .secondary-action {
+  border: 1px solid #dfe5dc !important;
+  background: #ffffff !important;
+  color: #202821 !important;
+}
+
+body:has(.data-box-page) .data-box-detail-overlay {
+  background: rgba(32, 40, 33, 0.28) !important;
+}
+
+body:has(.data-box-page) .data-box-detail-modal {
+  max-width: 860px !important;
+}
+
+body:has(.data-box-page) .data-box-detail-modal__main {
+  display: grid;
+  gap: 12px;
+}
+
+body:has(.data-box-page) .data-box-attachment-problem {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #f1b8b1;
+  border-radius: 8px;
+  background: #fff7f6;
+}
+
+body:has(.data-box-page) .data-box-attachment-problem details {
+  color: #667166;
+}
+
+@media (max-width: 860px) {
+  body:has(.data-box-page) .data-box-clean-summary,
+  body:has(.data-box-page) .data-box-work-summary {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body:has(.data-box-page) .data-box-safe-aside,
+  body:has(.data-box-page) .data-box-confirmation-card,
+  body:has(.data-box-page) .data-box-message-card {
+    grid-template-columns: 1fr !important;
+  }
+
+  body:has(.data-box-page) .data-box-message-card__priority {
+    display: none;
+  }
+
+  body:has(.data-box-page) .data-box-message-card__bottom {
+    grid-template-columns: 1fr !important;
+  }
+
+  body:has(.data-box-page) .data-box-confirmation-card__actions,
+  body:has(.data-box-page) .data-box-message-safe-actions,
+  body:has(.data-box-page) .data-box-attachment-problem__actions {
+    justify-content: stretch;
+  }
+
+  body:has(.data-box-page) .data-box-confirmation-card__actions button,
+  body:has(.data-box-page) .data-box-message-safe-actions button,
+  body:has(.data-box-page) .data-box-message-card__open {
+    width: 100%;
+    justify-content: center;
+  }
+}
