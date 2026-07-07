@@ -10942,37 +10942,45 @@ function vehicleTrackingDetailSection(selectedVehicle) {
 
   return `
     <section class="tracking-section tracking-demo-detail-section" id="tracking-detail" aria-labelledby="tracking-detail-title">
-      ${vehicleTrackingSectionHeader(
-        "tracking-detail-title",
-        `Detail ${selectedVehicle.internalNumber}`,
-        "Detail je pouze demo ukázka pro budoucí napojení na cloud API."
-      )}
-      <div class="tracking-demo-detail-title">
-        <span class="tracking-demo-data-badge">Demo data</span>
-        <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}" data-tracking-demo-detail-status>${escapeHtml(summary.statusLabel)}</span>
-      </div>
-      ${summary.isOffRoute ? `
-        <div class="tracking-demo-detail-alert" data-tracking-demo-detail-alert>
-          Vozidlo je mimo plánovanou trasu.
+      <div class="tracking-demo-detail-shell">
+        <div class="tracking-demo-detail-hero">
+          <div class="tracking-demo-detail-copy">
+            ${vehicleTrackingSectionHeader(
+              "tracking-detail-title",
+              `Detail ${selectedVehicle.internalNumber}`,
+              "Detail je pouze demo ukázka pro budoucí napojení na cloud API."
+            )}
+            <div class="tracking-demo-detail-title">
+              <span class="tracking-demo-data-badge">Demo data</span>
+              <span class="tracking-status tracking-status--${escapeHtml(summary.tone)}" data-tracking-demo-detail-status>${escapeHtml(summary.statusLabel)}</span>
+            </div>
+          </div>
+          <div class="tracking-demo-detail-visual">
+            ${vehicleTrackingDemoVehicleImage(selectedVehicle, "tracking-demo-vehicle-image--detail", { markerIcon: true })}
+          </div>
         </div>
-      ` : `<div class="tracking-demo-detail-alert" data-tracking-demo-detail-alert hidden>Vozidlo je mimo plánovanou trasu.</div>`}
-      ${vehicleTrackingDemoVehicleImage(selectedVehicle, "tracking-demo-vehicle-image--detail")}
-      <div class="tracking-detail-grid">
-        ${vehicleTrackingDemoDetailField("Interní číslo", selectedVehicle.internalNumber)}
-        ${vehicleTrackingDemoDetailField("SPZ", selectedVehicle.licensePlate)}
-        ${vehicleTrackingDemoDetailField("Řidič", selectedVehicle.driver)}
-        ${vehicleTrackingDemoDetailField("Typ vozidla", selectedVehicle.type)}
-        ${vehicleTrackingDemoDetailField("Stav", `<span data-tracking-demo-detail-status-text>${escapeHtml(summary.statusLabel)}</span>`, { raw: true })}
-        ${vehicleTrackingDemoDetailField("Demo rychlost", `<span data-tracking-demo-detail-speed>${escapeHtml(`${summary.speedNow} km/h`)}</span>`, { raw: true })}
-        ${vehicleTrackingDemoDetailField("Poslední aktualizace", selectedVehicle.lastUpdate)}
-        ${vehicleTrackingDemoDetailField("Přesnost GPS", selectedVehicle.accuracy)}
-        ${vehicleTrackingDemoDetailField("Zdroj", selectedVehicle.source)}
-        ${vehicleTrackingDemoDetailField("Plánovaná trasa", selectedVehicle.routeName)}
-        ${vehicleTrackingDemoDetailField("Skutečná trasa", summary.isOffRoute ? "Komárov → odbočka mimo trasu" : selectedVehicle.routeName)}
-        ${vehicleTrackingDemoDetailField("Odchylka od trasy", `<span data-tracking-demo-detail-deviation>${escapeHtml(summary.deviationText)}</span>`, { raw: true })}
-      </div>
-      <div class="tracking-actions">
-        <button class="secondary-link tracking-disabled-action" type="button" disabled>Čeká na API pro detail vozidla.</button>
+        ${summary.isOffRoute ? `
+          <div class="tracking-demo-detail-alert" data-tracking-demo-detail-alert>
+            Vozidlo je mimo plánovanou trasu.
+          </div>
+        ` : `<div class="tracking-demo-detail-alert" data-tracking-demo-detail-alert hidden>Vozidlo je mimo plánovanou trasu.</div>`}
+        <div class="tracking-detail-grid tracking-detail-grid--demo">
+          ${vehicleTrackingDemoDetailField("Interní číslo", selectedVehicle.internalNumber)}
+          ${vehicleTrackingDemoDetailField("SPZ", selectedVehicle.licensePlate)}
+          ${vehicleTrackingDemoDetailField("Řidič", selectedVehicle.driver)}
+          ${vehicleTrackingDemoDetailField("Typ vozidla", selectedVehicle.type)}
+          ${vehicleTrackingDemoDetailField("Stav", `<span data-tracking-demo-detail-status-text>${escapeHtml(summary.statusLabel)}</span>`, { raw: true })}
+          ${vehicleTrackingDemoDetailField("Demo rychlost", `<span data-tracking-demo-detail-speed>${escapeHtml(`${summary.speedNow} km/h`)}</span>`, { raw: true })}
+          ${vehicleTrackingDemoDetailField("Poslední aktualizace", selectedVehicle.lastUpdate)}
+          ${vehicleTrackingDemoDetailField("Přesnost GPS", selectedVehicle.accuracy)}
+          ${vehicleTrackingDemoDetailField("Zdroj", selectedVehicle.source)}
+          ${vehicleTrackingDemoDetailField("Plánovaná trasa", selectedVehicle.routeName)}
+          ${vehicleTrackingDemoDetailField("Skutečná trasa", summary.isOffRoute ? "Komárov → odbočka mimo trasu" : selectedVehicle.routeName)}
+          ${vehicleTrackingDemoDetailField("Odchylka od trasy", `<span data-tracking-demo-detail-deviation>${escapeHtml(summary.deviationText)}</span>`, { raw: true })}
+        </div>
+        <div class="tracking-actions">
+          <button class="secondary-link tracking-disabled-action" type="button" disabled>Čeká na API pro detail vozidla.</button>
+        </div>
       </div>
     </section>
   `;
