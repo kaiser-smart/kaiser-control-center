@@ -27044,10 +27044,12 @@ body:not([data-theme="dark"]) .tracking-page--soft-metal-preview .tracking-previ
   gap: 2px;
   padding: 0 0 18px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 68%, transparent);
+  box-shadow: 0 1px 0 var(--border-highlight);
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-news-item:last-child {
   border-bottom: 0;
+  box-shadow: none;
 }
 
 .tracking-page--soft-metal-preview .tracking-preview-news-item time {
