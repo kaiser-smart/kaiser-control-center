@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 
 import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collection-route-optimization-preview.js";
 import {
+  __buildCollectionRouteSourceRowsForTest,
   __buildCollectionRouteRepairWorkbookForTest,
+  __collectionRouteSourceVehicleFromFilenameForTest,
   __deriveCollectionRouteSourceFieldsForTest
 } from "../functions/_lib/collection-route-sources-store.js";
 
@@ -68,6 +70,49 @@ function derive(originalText) {
   ]);
   assert.equal(container.containerVolume, 1100);
   assert.equal(container.containerCount, 2);
+}
+
+{
+  assert.equal(__collectionRouteSourceVehicleFromFilenameForTest("Středa SUDÁ AI.xls"), "A");
+  assert.equal(__collectionRouteSourceVehicleFromFilenameForTest("Měsíční 1x30 AI.xls"), "A");
+  assert.equal(__collectionRouteSourceVehicleFromFilenameForTest("TRASY POPELÁŘ - CECIL.xlsx"), "B");
+  assert.equal(__collectionRouteSourceVehicleFromFilenameForTest("TRASY M.FLORIÁN.XLSX"), "C");
+}
+
+{
+  const rows = __buildCollectionRouteSourceRowsForTest({
+    parsedFiles: [{ filename: "Středa SUDÁ AI.xls" }],
+    rows: [
+      {
+        sourceFile: "Středa SUDÁ AI.xls",
+        sheetName: "List1",
+        sourceRoute: "Středa SUDÁ AI",
+        sourceRowNumber: 11,
+        originalText: "8 | S.A.M.-metallizační společnost, s.r.o. | Brno, Hájecká 12 | Nýdrle 727 933 722 | sudá středa | 1x7 | 240 ltr | 3 | FKU",
+        originalDay: "ST",
+        originalWeek: "sudý týden",
+        suggestedDay: "ST",
+        vehicleCode: "C",
+        vehicleRegistration: "3BE 2831",
+        wasteType: "-",
+        wasteCode: "-",
+        frequency: "1x7",
+        containerVolume: 240,
+        containerCount: 3,
+        estimatedServiceMinutes: 9,
+        estimatedWeightTons: 0,
+        qualityIssues: []
+      }
+    ]
+  });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].dayCode, "ST");
+  assert.equal(rows[0].weekMode, "sudý týden");
+  assert.equal(rows[0].vehicleCode, "A");
+  assert.equal(rows[0].metadata.vehicleSource, "source-file");
+  assert.equal(rows[0].customerName, "S.A.M.-metallizační společnost, s.r.o.");
+  assert.equal(rows[0].addressText, "Brno, Hájecká 12");
 }
 
 {

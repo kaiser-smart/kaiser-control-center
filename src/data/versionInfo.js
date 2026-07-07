@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.390"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.391"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: oprava zdrojového auta z Excelů",
+    text: "Import zdrojových Svozových tras už nepřebírá pracovní AI odhad auta podle dne. Běžné denní a měsíční Excel soubory drží Auto A, TRASY POPELÁŘ - CECIL Auto B a TRASY M.FLORIÁN Auto C; stále jde jen o read-only preview bez ostrých tras."
+  },
   {
     title: "Pohledávky: přesnější verdict full dry-runu",
     text: "Vistos → Ledger připravenost nově rozlišuje, jestli je oříznutá rychlá kontrola, nebo už úplný dry-run. Pokud full dry-run pořád narazí na limit, dashboard doporučí dávkový read-only export/job nebo užší období, ne opakování stejného kroku."
