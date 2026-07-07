@@ -3091,6 +3091,8 @@ function mockReceivablesLedgerReadinessPreview() {
     customerBranchName: "",
     customerCompanyId: "C123",
     customerCompanyName: "Firma Alfa s.r.o.",
+    customerManagerId: "M001",
+    customerManagerName: "Lucie Nováková",
     ico: "12345678",
     dic: "CZ12345678",
     issueDate: "2026-06-01",
@@ -3709,7 +3711,19 @@ async function handleApi(request, response) {
 
     const preview = mockReceivablesLedgerReadinessPreview();
     if (url.pathname === "/api/receivables/vistos/invoice-snapshot") {
-      sendJson(response, 200, { ...mockReceivablesVistosInvoiceSnapshot(), mode: "local_mock" });
+      const snapshot = mockReceivablesVistosInvoiceSnapshot();
+      const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+      const pageSize = Math.max(1, Math.min(Number(url.searchParams.get("pageSize") || 10), 500));
+      sendJson(response, 200, {
+        ...snapshot,
+        rows: snapshot.rows.slice((page - 1) * pageSize, page * pageSize),
+        pagination: {
+          page,
+          pageSize,
+          totalRows: snapshot.rows.length
+        },
+        mode: "local_mock"
+      });
       return true;
     }
     if (url.pathname === "/api/receivables/vistos/ledger-mapping") {

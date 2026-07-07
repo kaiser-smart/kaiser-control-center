@@ -23246,6 +23246,7 @@ function receivablesInvoiceSnapshotRowsTable() {
             <th>Faktura</th>
             <th>VS</th>
             <th>Zákazník</th>
+            <th>Zákaznický manažer</th>
             <th>Customer_FK</th>
             <th>CustomerBranch_FK</th>
             <th>Vystavení</th>
@@ -23266,6 +23267,7 @@ function receivablesInvoiceSnapshotRowsTable() {
                 <td data-label="Faktura">${escapeHtml(invoice.invoiceNumber || invoice.vistoInvoiceId || "-")}</td>
                 <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
                 <td data-label="Zákazník">${escapeHtml(invoice.customerName || invoice.customerId || "-")}</td>
+                <td data-label="Zákaznický manažer">${escapeHtml(invoice.customerManagerName || invoice.customerManagerId || "-")}</td>
                 <td data-label="Customer_FK">${escapeHtml(invoice.customerFk || invoice.customerCompanyId || "-")}</td>
                 <td data-label="CustomerBranch_FK">${escapeHtml(invoice.customerBranchFk || invoice.customerBranchId || "-")}</td>
                 <td data-label="Vystavení">${escapeHtml(invoice.issueDate || "-")}</td>
@@ -23280,6 +23282,22 @@ function receivablesInvoiceSnapshotRowsTable() {
           }).join("")}
         </tbody>
       </table>
+    </div>
+  `;
+}
+
+function receivablesInvoiceSnapshotPaginationControls(pagination = {}) {
+  const page = Number(pagination.page || 1);
+  const pageSize = Number(pagination.pageSize || 10);
+  const totalRows = Number(pagination.totalRows || 0);
+  const totalPages = Math.max(1, Math.ceil(totalRows / Math.max(1, pageSize)));
+  const start = totalRows ? ((page - 1) * pageSize) + 1 : 0;
+  const end = Math.min(totalRows, page * pageSize);
+  return `
+    <div class="receivables-pagination" aria-label="Stránkování faktur ve snapshotu">
+      <span>${escapeHtml(start)}-${escapeHtml(end)} z ${escapeHtml(totalRows)} · 10 řádků na stránku</span>
+      <button class="secondary-link" type="button" data-receivables-invoice-page="${escapeHtml(page - 1)}" ${page <= 1 || receivablesState.invoiceSnapshotLoading ? "disabled" : ""}>Předchozí</button>
+      <button class="secondary-link" type="button" data-receivables-invoice-page="${escapeHtml(page + 1)}" ${page >= totalPages || receivablesState.invoiceSnapshotLoading ? "disabled" : ""}>Další</button>
     </div>
   `;
 }
@@ -23330,10 +23348,11 @@ function receivablesInvoiceSnapshotPanel() {
           ${receivablesInvoiceSnapshotIssues(snapshot)}
         </section>
       </div>
-      <div class="receivables-import-diagnostics">
+      <div class="receivables-snapshot-invoices-block">
         <section>
           <h3>Faktury v aktuálním snapshotu</h3>
           <p class="receivables-empty">Zobrazeno ${escapeHtml((receivablesState.invoiceSnapshotRows || []).length)} z ${escapeHtml(totalRows)} uložených řádků.</p>
+          ${receivablesInvoiceSnapshotPaginationControls(pagination)}
           ${receivablesInvoiceSnapshotRowsTable()}
         </section>
       </div>
@@ -23409,6 +23428,60 @@ function receivablesLedgerMappingIssues(mapping) {
   `;
 }
 
+function receivablesCustomerManagersLabel(managers = []) {
+  if (!Array.isArray(managers) || !managers.length) return "-";
+  return managers
+    .slice(0, 3)
+    .map((manager) => {
+      const name = manager.managerName || manager.managerId || "-";
+      const count = Number(manager.invoiceCount || 0);
+      return count > 1 ? `${name} (${count})` : name;
+    })
+    .join(", ");
+}
+
+function receivablesCustomerLookupDiagnostics(customerEnrichment = {}) {
+  const diagnostics = Array.isArray(customerEnrichment.diagnostics) ? customerEnrichment.diagnostics : [];
+  if (!diagnostics.length) {
+    return `<p class="receivables-empty">Diagnostika lookupů zatím není dostupná.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead>
+          <tr>
+            <th>Zákazník</th>
+            <th>Entita</th>
+            <th>Filtr</th>
+            <th>Výsledek</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${diagnostics.slice(0, 25).map((item) => {
+            const filterText = Object.entries(item.filter || {})
+              .map(([key, value]) => `${key}: ${value}`)
+              .join(", ");
+            const resultText = item.ok
+              ? `${item.returnedRows || 0} řádků / ${item.recordsFiltered || item.recordsTotal || 0}`
+              : item.code || "chyba";
+            return `
+              <tr>
+                <td data-label="Zákazník">${escapeHtml(item.customerName || item.customerKey || "-")}</td>
+                <td data-label="Entita">${escapeHtml(item.entityName || "-")}</td>
+                <td data-label="Filtr">${escapeHtml(filterText || "-")}</td>
+                <td data-label="Výsledek">${item.ok ? receivablesPill(resultText, item.returnedRows ? "ready" : "waiting") : receivablesPill(resultText, "warning")}</td>
+                <td data-label="Detail">${escapeHtml(item.message || item.key || "-")}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function receivablesLedgerMappingTable(mapping) {
   const candidates = mapping?.candidates || [];
   if (receivablesState.ledgerMappingLoading && !candidates.length) {
@@ -23430,6 +23503,7 @@ function receivablesLedgerMappingTable(mapping) {
             <th>Po splatnosti</th>
             <th>Max dnů</th>
             <th>Nejstarší splatnost</th>
+            <th>Zákaznický manažer</th>
             <th>Zákazník</th>
             <th>Kontrola</th>
             <th>Návrh</th>
@@ -23448,6 +23522,7 @@ function receivablesLedgerMappingTable(mapping) {
               <td data-label="Po splatnosti">${escapeHtml(candidate.overdueInvoiceCount || 0)}</td>
               <td data-label="Max dnů">${escapeHtml(candidate.maxDaysOverdue || 0)}</td>
               <td data-label="Nejstarší splatnost">${escapeHtml(candidate.oldestDueDate || "-")}</td>
+              <td data-label="Zákaznický manažer">${escapeHtml(receivablesCustomerManagersLabel(candidate.customerManagers))}</td>
               <td data-label="Zákazník">
                 ${receivablesPill(receivablesCustomerMetadataLabel(candidate.customerMetadataStatus), receivablesCustomerMetadataTone(candidate.customerMetadataStatus))}
                 <small>${escapeHtml((candidate.customerMetadataIssues || []).slice(0, 3).join(", ") || candidate.customerMetadata?.billingEmail || "")}</small>
@@ -23506,6 +23581,13 @@ function receivablesLedgerMappingPanel() {
           <h3>Top kandidáti podle otevřené částky</h3>
           <p class="receivables-empty">Zobrazeno ${escapeHtml(mapping?.pagination?.returned || 0)} z ${escapeHtml(mapping?.pagination?.totalCandidates || summary.customerCandidateCount || 0)} kandidátů.</p>
           ${receivablesLedgerMappingTable(mapping)}
+        </section>
+      </div>
+      <div class="receivables-snapshot-invoices-block">
+        <section>
+          <h3>Diagnostika Vistos lookupů zákazníka</h3>
+          <p class="receivables-empty">Read-only kontrola přesných klíčů pro zákazníka/pobočku. Bez zápisu do ledgeru.</p>
+          ${receivablesCustomerLookupDiagnostics(customerEnrichment)}
         </section>
       </div>
     </section>
@@ -24929,7 +25011,7 @@ async function loadReceivablesInvoiceSnapshot(options = {}) {
   try {
     const params = new URLSearchParams();
     params.set("page", String(options.page || receivablesState.invoiceSnapshotPagination?.page || 1));
-    params.set("pageSize", String(options.pageSize || receivablesState.invoiceSnapshotPagination?.pageSize || 100));
+    params.set("pageSize", String(options.pageSize || receivablesState.invoiceSnapshotPagination?.pageSize || 10));
     params.set("invoiceLookbackMonths", "24");
     params.set("vistosPageSize", "1000");
     params.set("pagesPerRun", "1");
@@ -33689,6 +33771,16 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     receivablesState.importLoaded = false;
     await loadReceivablesImportBatches({ renderAfter: true });
+    return;
+  }
+
+  const receivablesInvoicePage = event.target.closest("[data-receivables-invoice-page]");
+  if (receivablesInvoicePage) {
+    event.preventDefault();
+    const page = Number(receivablesInvoicePage.dataset.receivablesInvoicePage || 1);
+    if (Number.isFinite(page) && page > 0) {
+      await loadReceivablesInvoiceSnapshot({ page, pageSize: 10, renderAfter: true });
+    }
     return;
   }
 

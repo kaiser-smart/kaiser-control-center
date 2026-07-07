@@ -423,6 +423,7 @@ export function buildReceivablesVistosLedgerMapping(rows = [], options = {}) {
         maxDaysOverdue: 0,
         oldestDueDate: "",
         newestIssueDate: "",
+        customerManagers: new Map(),
         issueCodes: new Map(),
         sampleInvoices: []
       });
@@ -445,6 +446,16 @@ export function buildReceivablesVistosLedgerMapping(rows = [], options = {}) {
     group.maxDaysOverdue = Math.max(group.maxDaysOverdue, daysOverdue);
     group.oldestDueDate = dueDate && (!group.oldestDueDate || dueDate < group.oldestDueDate) ? dueDate : group.oldestDueDate;
     group.newestIssueDate = issueDate && (!group.newestIssueDate || issueDate > group.newestIssueDate) ? issueDate : group.newestIssueDate;
+    const managerKey = clean(invoice.customerManagerId || invoice.customerManagerName);
+    if (managerKey) {
+      const current = group.customerManagers.get(managerKey) || {
+        managerId: clean(invoice.customerManagerId),
+        managerName: clean(invoice.customerManagerName || invoice.customerManagerId),
+        invoiceCount: 0
+      };
+      current.invoiceCount += 1;
+      group.customerManagers.set(managerKey, current);
+    }
     if (amountOpen > 0) {
       openInvoiceCount += 1;
       totalOpenAmount += amountOpen;
@@ -464,6 +475,8 @@ export function buildReceivablesVistosLedgerMapping(rows = [], options = {}) {
         openAmount: amountOpen,
         daysOverdue,
         status: clean(invoice.status || invoice.paymentStatus),
+        customerManagerId: clean(invoice.customerManagerId),
+        customerManagerName: clean(invoice.customerManagerName),
         issueCodes: issues
       });
     }
@@ -478,6 +491,9 @@ export function buildReceivablesVistosLedgerMapping(rows = [], options = {}) {
       issueCodes: [...group.issueCodes.entries()]
         .map(([code, count]) => ({ code, count }))
         .sort((left, right) => right.count - left.count || left.code.localeCompare(right.code)),
+      customerManagers: [...group.customerManagers.values()]
+        .sort((left, right) => right.invoiceCount - left.invoiceCount || left.managerName.localeCompare(right.managerName, "cs"))
+        .slice(0, 5),
       mappingStatus: group.customerKey === "unresolved"
         ? "needs_customer_resolution"
         : group.reviewInvoiceCount > 0 ? "needs_invoice_review" : "ready",
