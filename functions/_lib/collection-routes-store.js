@@ -815,6 +815,31 @@ function extractVistosRows(payload) {
   return nested;
 }
 
+function extractVistosRecord(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {};
+  }
+
+  const nestedData = payload.data;
+  if (nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)) {
+    if (nestedData.data && typeof nestedData.data === "object" && !Array.isArray(nestedData.data)) {
+      return nestedData.data;
+    }
+    if (!Array.isArray(nestedData.data)) {
+      return nestedData;
+    }
+  }
+
+  for (const key of ["record", "item", "value", "result"]) {
+    const value = payload[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return {};
+}
+
 function vistosExecuteApiBase(env) {
   const rawBase = cleanString(env?.VISTOS_API_BASE_URL);
   if (!rawBase) {
@@ -996,6 +1021,21 @@ async function getVistosPage(env, session, entityName, columns, filter = null, s
   };
 }
 
+async function getVistosById(env, session, entityName, entityId, columns = []) {
+  const numericId = Number(entityId);
+  const request = {
+    EntityName: entityName,
+    EntityId: Number.isFinite(numericId) ? numericId : entityId,
+    MethodMode: "HeaderColumns",
+    ColNameToRead: columns
+  };
+  const result = await fetchVistosExecute(env, "GetByIdParam", request, session.cookieHeader);
+  return {
+    row: extractVistosRecord(result.body),
+    status: result.status
+  };
+}
+
 async function getAllVistosPages(env, session, entityName, columns, filter = null, {
   pageSize = VISTOS_EXECUTE_PAGE_SIZE,
   maxPages = VISTOS_EXECUTE_MAX_PAGES
@@ -1021,6 +1061,56 @@ async function getAllVistosPages(env, session, entityName, columns, filter = nul
     total,
     filtered,
     capped: Boolean(filtered && rows.length < filtered)
+  };
+}
+
+function mergeVistosDetailRow(baseRow = {}, detailRow = {}) {
+  const merged = { ...baseRow };
+  for (const [key, value] of Object.entries(detailRow || {})) {
+    if (cleanString(value)) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+async function enrichVistosRowsById(env, session, entityName, rows = [], columns = [], { maxRows = 25 } = {}) {
+  const limitedRows = rows.slice(0, Math.max(0, maxRows));
+  const detailColumns = Array.from(new Set(columns)).filter(Boolean);
+  const detailsById = new Map();
+  const diagnostics = {
+    entityName,
+    requested: limitedRows.length,
+    succeeded: 0,
+    failed: 0,
+    maxRows
+  };
+
+  for (const row of limitedRows) {
+    const id = cleanString(row?.Id || row?.RecordId);
+    if (!id || detailsById.has(id)) {
+      continue;
+    }
+
+    try {
+      const detail = await getVistosById(env, session, entityName, id, detailColumns);
+      if (detail.row && Object.keys(detail.row).length) {
+        detailsById.set(id, mergeVistosDetailRow(row, detail.row));
+        diagnostics.succeeded += 1;
+      } else {
+        diagnostics.failed += 1;
+      }
+    } catch {
+      diagnostics.failed += 1;
+    }
+  }
+
+  return {
+    rows: rows.map((row) => {
+      const id = cleanString(row?.Id || row?.RecordId);
+      return detailsById.get(id) || row;
+    }),
+    diagnostics
   };
 }
 
@@ -4866,7 +4956,24 @@ async function loadVistosKommunalPreviewData(env) {
   const kommunalContracts = contractsPage.rows;
   const contractIds = new Set(kommunalContracts.map((contract) => cleanString(contract?.Id)).filter(Boolean));
   const rowContractId = (row) => cleanString(row?.Contract_FK_RecordId || row?.Contract_FK || row?.Contract_FK_Id || row?.ContractId);
-  const contractRowsForKommunalContracts = contractRowsPage.rows.filter((row) => contractIds.has(rowContractId(row)));
+  const contractById = new Map(kommunalContracts.map((contract) => [cleanString(contract?.Id), contract]));
+  let contractRowsForKommunalContracts = contractRowsPage.rows.filter((row) => contractIds.has(rowContractId(row)));
+  const svozKaiserRowsForDetail = contractRowsForKommunalContracts.filter((row) => {
+    const contract = contractById.get(rowContractId(row));
+    return isVistosYesValue(rowSvozKaiserValue(contract, row, svozKaiserField));
+  });
+  const detailEnrichment = await enrichVistosRowsById(
+    env,
+    session,
+    "ContractRow",
+    svozKaiserRowsForDetail,
+    contractRowColumns,
+    { maxRows: 25 }
+  );
+  if (detailEnrichment.rows.length) {
+    const enrichedById = new Map(detailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
+    contractRowsForKommunalContracts = contractRowsForKommunalContracts.map((row) => enrichedById.get(cleanString(row?.Id || row?.RecordId)) || row);
+  }
   const matchedContractIds = new Set(contractRowsForKommunalContracts.map((row) => rowContractId(row)).filter(Boolean));
   const contractsInDateRange = kommunalContracts.filter((contract) => dateInActiveRange(contract?.StartDate, contract?.EndDate, today));
   const contractRowsWithActiveFlag = contractRowsForKommunalContracts.filter((row) => booleanValue(row?.IsActive, true));
@@ -4888,6 +4995,8 @@ async function loadVistosKommunalPreviewData(env) {
     contractRowsPassingDateRange: contractRowsInDateRange.length,
     contractRowsPassingStrictActiveDateRange: contractRowsInStrictActiveDateRange.length,
     contractRowsUsedForPreview: relevantContractRows.length,
+    contractRowsDetailEnriched: detailEnrichment.diagnostics.succeeded,
+    contractRowsDetailEnrichmentFailed: detailEnrichment.diagnostics.failed,
     productsLoaded: productsPage.rows.length,
     productsMatchedToRows: relevantProducts.length,
     zeroResultReason: !kommunalContracts.length
@@ -4906,6 +5015,7 @@ async function loadVistosKommunalPreviewData(env) {
       products: relevantProducts,
       today,
       filterDiagnostics,
+      detailEnrichment,
       svozKaiserField,
       consistencyFields,
       totals: {

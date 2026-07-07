@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.421"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.422"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: detail Adresního místa z Vistosu",
+    text: "Read-only snapshot Stanovišť si pro Svoz Kaiser řádky dočítá detail položky smlouvy z Vistosu, aby Smart zobrazil stejné Adresní místo jako formulář Vistos."
+  },
   {
     title: "Trasy svozu: Adresní místo z Vistosu",
     text: "Stanoviště z Vistosu teď u Adresního místa čtou přímo skutečné Vistos pole, například Brno, Komárov, U vlečky 726/5c, PSČ 61700. Stanoviště ani technický rozpad svozové adresy ho nesmí nahradit."
