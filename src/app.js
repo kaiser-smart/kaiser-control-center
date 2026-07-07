@@ -16590,7 +16590,10 @@ function collectionRoutesDriverTabletPreviewAction(label, action, tone = "defaul
 function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverTabletPreviewRows(), options = {}) {
   const selectedIndex = 0;
   const selectedRow = rows[selectedIndex] || null;
-  const visibleRows = collectionRoutesSourceDriverVisibleRows(rows, selectedIndex);
+  const nextRows = rows.slice(selectedIndex + 1, selectedIndex + 4).map((row, offset) => ({
+    row,
+    index: selectedIndex + offset + 1
+  }));
   const completedCount = 0;
   const remainingCount = rows.length;
   const progressPercent = collectionRoutesSourceDriverProgressPercent(completedCount, rows.length);
@@ -16604,6 +16607,11 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
     collectionRoutesSourceDriverContainerLabel(selectedRow)
   ].filter((value) => value && value !== "-").join(" | ") : "-";
   const currentTaskLabel = currentServiceLabel && currentServiceLabel !== "-" ? currentServiceLabel : "Proved svoz podle trasy";
+  const currentStopTitle = selectedRow ? collectionRoutesSourceDriverStopTitle(selectedRow).replace(/\s+-\s*\d{6,}$/, "") : "-";
+  const currentStopOrder = selectedRow?.routeOrder || selectedIndex + 1;
+  const totalStopsLabel = collectionRoutesMetricValue(rows.length);
+  const remainingStopsLabel = collectionRoutesMetricValue(Math.max(0, rows.length - completedCount));
+  const noteText = selectedRow?.note || "Az bude hotovo, stiskni HOTOVO.";
 
   if (!selectedRow) {
     return `
@@ -16625,119 +16633,114 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
     <section class="driver-tablet-preview-device" aria-label="Preview ridicskeho tabletu">
       <div class="driver-tablet-preview-screen">
         <div class="collection-routes-driver-mode driver-tablet-preview-mode" id="collection-routes-driver-tablet-preview">
-        <div class="collection-routes-driver-mode__topbar" aria-label="Stav ridicskeho preview">
-          <div class="collection-routes-driver-mode__identity">
-            <span>Jsi na trase</span>
-            <strong>Ridicsky tablet</strong>
-            <small>Preview nic neuklada ani neposila</small>
-          </div>
-          <div class="collection-routes-driver-mode__signals" aria-label="Rezim a cas">
-            <span>Kabina</span>
-            <span>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</span>
-          </div>
-        </div>
-
-        <div class="collection-routes-driver-mode__pilot-state" role="status">
-          Design preview - bez ostrych akci.
-        </div>
-
-        <div class="collection-routes-driver-mode__dashboard">
-          <div class="collection-routes-driver-mode__main">
-            <section class="collection-routes-driver-mode__active" aria-label="Aktualni zastavka">
-              <div class="driver-tablet-preview-section-title">
-                <span>Aktualni zastavka</span>
-                <strong>Obsluz stanoviste</strong>
-              </div>
-              <div class="collection-routes-driver-mode__route-pulse" aria-label="Postup trasy">
-                <strong>1 / ${escapeHtml(rows.length)}</strong>
-                <span>Zbyva ${escapeHtml(Math.max(0, rows.length - 1))} | ${escapeHtml(routeEtaText)}</span>
-              </div>
-              <div class="collection-routes-driver-mode__hero-grid">
-                <div class="collection-routes-driver-mode__stop">
-                  <span class="collection-routes-driver-mode__order">#${escapeHtml(selectedRow.routeOrder || 1)}</span>
-                  <div>
-                    <span class="collection-routes-driver-mode__kicker">Ted jsi tady</span>
-                    <h4>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h4>
-                    <p>${escapeHtml(selectedRow.addressText || "-")}</p>
-                    <span class="collection-routes-driver-mode__task-label">Dalsi krok</span>
-                    <strong>${escapeHtml(currentTaskLabel)}</strong>
-                    <small>Po obsluze stiskni HOTOVO.</small>
-                  </div>
+          <div class="driver-tablet-preview-dashboard" aria-label="Ridicsky tablet design preview">
+            <header class="driver-tablet-preview-cockpit" aria-label="Souhrn trasy">
+              <div class="driver-tablet-preview-brand">
+                <span class="driver-tablet-preview-brand__icon" aria-hidden="true">
+                  ${COLLECTION_ROUTES_DRIVER_ACTION_ICONS.navigate}
+                </span>
+                <div>
+                  <span>Ridicsky tablet</span>
+                  <strong>Dnesni trasa</strong>
+                  <small>Preview - bez ostrych akci</small>
                 </div>
               </div>
-              <div class="collection-routes-driver-mode__facts collection-routes-driver-mode__facts--primary">
-                ${collectionRoutesSourceDriverModeMeta("Odpad", collectionRoutesSourceDriverWasteLabel(selectedRow))}
-                ${collectionRoutesSourceDriverModeMeta("Nadoba", collectionRoutesSourceDriverContainerLabel(selectedRow))}
+              <div class="driver-tablet-preview-cockpit__chips" aria-label="Zakladni informace">
+                <span><small>Vozidlo</small><strong>KS 101</strong></span>
+                <span><small>Ridic</small><strong>Jan Novak</strong></span>
+                <span><small>Cas</small><strong>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</strong></span>
               </div>
-            </section>
+            </header>
 
-            <section class="driver-tablet-preview-main-step" aria-label="Hlavni krok ridice - preview">
-              <div class="driver-tablet-preview-section-title">
-                <span>Hlavni krok</span>
-                <strong>Potvrd zastavku</strong>
-              </div>
-              <div class="collection-routes-driver-mode__primary-actions">
-                ${collectionRoutesDriverTabletPreviewAction("HOTOVO", "done", "done")}
-              </div>
-            </section>
+            <div class="driver-tablet-preview-route-grid">
+              <section class="driver-tablet-preview-current-card" aria-label="Aktualni zastavka">
+                <div class="driver-tablet-preview-section-title">
+                  <span>Kam jedu ted</span>
+                  <strong>Aktualni zastavka</strong>
+                </div>
+                <div class="driver-tablet-preview-current-card__body">
+                  <div class="driver-tablet-preview-stop-number" aria-label="Zastavka ${escapeHtml(currentStopOrder)} z ${escapeHtml(totalStopsLabel)}">
+                    <strong>#${escapeHtml(currentStopOrder)}</strong>
+                    <span>z ${escapeHtml(totalStopsLabel)}</span>
+                  </div>
+                  <div class="driver-tablet-preview-stop-copy">
+                    <span>Dalsi zakaznik</span>
+                    <h4>${escapeHtml(currentStopTitle)}</h4>
+                    <p>${escapeHtml(selectedRow.addressText || "-")}</p>
+                  </div>
+                </div>
+                <div class="driver-tablet-preview-info-row" aria-label="Detail zastavky">
+                  <article>
+                    <span>Odpad</span>
+                    <strong>${escapeHtml(collectionRoutesSourceDriverWasteLabel(selectedRow))}</strong>
+                  </article>
+                  <article>
+                    <span>Nadoba</span>
+                    <strong>${escapeHtml(collectionRoutesSourceDriverContainerLabel(selectedRow))}</strong>
+                  </article>
+                  <article>
+                    <span>Pokyn</span>
+                    <strong>${escapeHtml(noteText)}</strong>
+                  </article>
+                </div>
+              </section>
 
-            <section class="driver-tablet-preview-support-step" aria-label="Vedlejsi akce ridice - preview">
-              <div class="driver-tablet-preview-section-title">
-                <span>Vedlejsi akce</span>
-                <strong>Jen kdyz potrebujes</strong>
-              </div>
-              <div class="collection-routes-driver-mode__support-actions">
-                ${collectionRoutesDriverTabletPreviewAction("Navigace", "navigate", "navigate")}
-                ${collectionRoutesDriverTabletPreviewAction("Problem", "problem", "problem")}
-                ${collectionRoutesDriverTabletPreviewAction("Sarlota", "sarlota", "sarlota")}
-              </div>
-            </section>
+              <aside class="driver-tablet-preview-side" aria-label="Stav trasy a dalsi zastavky">
+                <section class="driver-tablet-preview-progress" aria-label="Stav trasy">
+                  <div class="driver-tablet-preview-section-title">
+                    <span>Dnes na trase</span>
+                    <strong>Stav trasy</strong>
+                  </div>
+                  <div class="driver-tablet-preview-progress__hero">
+                    <div class="driver-tablet-preview-progress-ring" style="--driver-progress: ${escapeHtml(progressPercent)}">
+                      <strong>${escapeHtml(progressPercent)}%</strong>
+                    </div>
+                    <div>
+                      <strong>${escapeHtml(collectionRoutesMetricValue(completedCount))} z ${escapeHtml(totalStopsLabel)}</strong>
+                      <span>Hotovo</span>
+                    </div>
+                  </div>
+                  <div class="driver-tablet-preview-progress__facts">
+                    <span><small>Celkem</small><strong>${escapeHtml(totalStopsLabel)}</strong></span>
+                    <span><small>Zbyva</small><strong>${escapeHtml(remainingStopsLabel)}</strong></span>
+                    <span><small>Nadob</small><strong>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</strong></span>
+                  </div>
+                </section>
 
-            <div class="collection-routes-driver-mode__bottom-bar" aria-label="Provozni akce ridice - preview">
-              ${collectionRoutesDriverTabletPreviewAction("Vysypat", "dump", "dump")}
-              ${collectionRoutesDriverTabletPreviewAction("Pauza", "break", "break")}
+                <section class="driver-tablet-preview-next" aria-label="Dalsi zastavky">
+                  <div class="driver-tablet-preview-section-title">
+                    <span>Dalsi</span>
+                    <strong>V trase</strong>
+                  </div>
+                  <div class="driver-tablet-preview-next__list">
+                    ${nextRows.map(({ row, index }) => `
+                      <button class="driver-tablet-preview-next-stop" type="button" aria-disabled="true">
+                        <span>${escapeHtml(row.routeOrder || index + 1)}</span>
+                        <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row).replace(/\s+-\s*\d{6,}$/, ""))}</strong>
+                        <small>${escapeHtml(collectionRoutesSourceDriverStopSubtitle(row))}</small>
+                      </button>
+                    `).join("")}
+                  </div>
+                </section>
+              </aside>
             </div>
 
-            <div class="collection-routes-driver-mode__progress" aria-label="Pozice v trase">
-              <span style="width: ${escapeHtml(progressPercent)}%"></span>
+            <div class="driver-tablet-preview-primary-action" aria-label="Hlavni akce ridice">
+              ${collectionRoutesDriverTabletPreviewAction("HOTOVO A DALSI", "done", "done")}
             </div>
+
+            <div class="driver-tablet-preview-support-actions" aria-label="Vedlejsi akce ridice">
+              ${collectionRoutesDriverTabletPreviewAction("Navigovat", "navigate", "navigate")}
+              ${collectionRoutesDriverTabletPreviewAction("Problem", "problem", "problem")}
+              ${collectionRoutesDriverTabletPreviewAction("Sarlota", "sarlota", "sarlota")}
+            </div>
+
+            <footer class="driver-tablet-preview-footer" aria-label="Stav preview">
+              <span>Online</span>
+              <strong>Design preview - bez ostrych akci</strong>
+              <span>${escapeHtml(routeEtaText)}</span>
+            </footer>
           </div>
-
-          <aside class="collection-routes-driver-mode__queue" aria-label="Stav trasy a dalsi zastavky">
-            <div class="collection-routes-driver-progress-card" aria-label="Stav trasy">
-              <span>Stav trasy</span>
-              <strong>${escapeHtml(progressPercent)} % hotovo</strong>
-              <small>${escapeHtml(collectionRoutesMetricValue(completedCount))} z ${escapeHtml(collectionRoutesMetricValue(rows.length))} stanovist</small>
-              <div class="collection-routes-driver-progress-card__bar" aria-hidden="true">
-                <span style="width: ${escapeHtml(progressPercent)}%"></span>
-              </div>
-              <em>Zbyva ${escapeHtml(collectionRoutesMetricValue(remainingCount))}</em>
-              <dl>
-                <div><dt>Nadoby</dt><dd>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</dd></div>
-                <div><dt>Odhad</dt><dd>${escapeHtml(estimateText)}</dd></div>
-              </dl>
-            </div>
-            <div class="collection-routes-driver-mode__list-head">
-              <strong>Dalsi v trase (${escapeHtml(collectionRoutesMetricValue(visibleRows.length))})</strong>
-              <span class="driver-tablet-preview-pill">Preview</span>
-            </div>
-            <div class="collection-routes-driver-mode__list">
-              ${visibleRows.map(({ row, index }) => `
-                <button
-                  class="collection-routes-driver-stop ${index === selectedIndex ? "collection-routes-driver-stop--active" : ""}"
-                  type="button"
-                  aria-disabled="true"
-                >
-                  <span class="collection-routes-driver-stop__order">${escapeHtml(row.routeOrder || index + 1)}</span>
-                  <span>
-                    <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</strong>
-                    <small>${escapeHtml(collectionRoutesSourceDriverStopSubtitle(row))}</small>
-                  </span>
-                </button>
-              `).join("")}
-            </div>
-          </aside>
-        </div>
         </div>
       </div>
     </section>
