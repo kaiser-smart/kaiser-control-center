@@ -1,5 +1,6 @@
 import { json, requireUserPermission } from "../../../_lib/auth.js";
 import {
+  advanceReceivablesVistosInvoiceSnapshot,
   createReceivablesVistosInvoiceSnapshot,
   getLatestReceivablesVistosInvoiceSnapshot,
   snapshotError
@@ -10,10 +11,14 @@ function snapshotOptions(request, user) {
   return {
     page: url.searchParams.get("page"),
     pageSize: url.searchParams.get("pageSize"),
-    maxPages: url.searchParams.get("maxPages"),
+    maxPages: url.searchParams.get("maxPages") || "1",
+    pagesPerRun: url.searchParams.get("pagesPerRun") || "1",
+    vistosPageSize: url.searchParams.get("vistosPageSize") || "1000",
     invoiceLookbackMonths: url.searchParams.get("invoiceLookbackMonths"),
     createdByUserId: user?.id,
-    triggeredBy: url.searchParams.get("mode") === "live" || url.searchParams.get("live") === "1"
+    triggeredBy: url.searchParams.get("mode") === "advance"
+      ? "ui-auto-batch-advance"
+      : url.searchParams.get("mode") === "live" || url.searchParams.get("live") === "1"
       ? "ui-live-refresh"
       : "ui-first-open"
   };
@@ -31,8 +36,16 @@ export async function onRequestGet({ request, env }) {
 
   try {
     const url = new URL(request.url);
-    const mode = url.searchParams.get("mode") === "live" || url.searchParams.get("live") === "1" ? "live" : "latest";
+    const rawMode = url.searchParams.get("mode");
+    const mode = rawMode === "advance"
+      ? "advance"
+      : rawMode === "live" || url.searchParams.get("live") === "1" ? "live" : "latest";
     const options = snapshotOptions(request, user);
+
+    if (mode === "advance") {
+      const result = await advanceReceivablesVistosInvoiceSnapshot(env, options);
+      return json({ ...result, mode });
+    }
 
     if (mode === "live") {
       const result = await createReceivablesVistosInvoiceSnapshot(env, options);
