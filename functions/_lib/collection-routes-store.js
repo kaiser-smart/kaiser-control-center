@@ -292,6 +292,41 @@ const VISTOS_CONSISTENCY_FIELD_SPECS = [
     ]
   },
   {
+    key: "customerManagerName",
+    label: "Zákaznický manažer",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 4,
+    minScore: 76,
+    candidates: [
+      "ZakaznickyManazer",
+      "ZakaznickyManager",
+      "CustomerManager",
+      "AccountManager",
+      "AccountManager_FK",
+      "Obchodnik",
+      "ObchodniZastupce",
+      "SalesRepresentative",
+      "SalesRep",
+      "Salesman",
+      "Referent",
+      "ResponsiblePerson",
+      "ZodpovednaOsoba"
+    ],
+    includeGroups: [
+      ["zakaznicky", "manazer"],
+      ["customer", "manager"],
+      ["account", "manager"],
+      ["obchodnik"],
+      ["obchodni", "zastupce"],
+      ["sales", "representative"],
+      ["sales", "rep"],
+      ["referent"],
+      ["responsible", "person"],
+      ["zodpovedna", "osoba"]
+    ],
+    excludeKeys: ["mobil", "mobile", "phone", "telefon", "tel", "email", "mail"]
+  },
+  {
     key: "customerManagerMobile",
     label: "Zákaznický manažer mobil",
     targetEntities: ["Contract", "ContractRow"],
@@ -307,7 +342,15 @@ const VISTOS_CONSISTENCY_FIELD_SPECS = [
       "AccountManagerMobile",
       "AccountManagerPhone",
       "ObchodnikMobil",
-      "ObchodnikTelefon"
+      "ObchodnikTelefon",
+      "ObchodniZastupceMobil",
+      "ObchodniZastupceTelefon",
+      "SalesRepresentativeMobile",
+      "SalesRepresentativePhone",
+      "SalesRepMobile",
+      "SalesRepPhone",
+      "ReferentMobil",
+      "ReferentTelefon"
     ],
     includeGroups: [
       ["zakaznicky", "manazer", "mobil"],
@@ -317,7 +360,15 @@ const VISTOS_CONSISTENCY_FIELD_SPECS = [
       ["account", "manager", "mobile"],
       ["account", "manager", "phone"],
       ["obchodnik", "mobil"],
-      ["obchodnik", "telefon"]
+      ["obchodnik", "telefon"],
+      ["obchodni", "zastupce", "mobil"],
+      ["obchodni", "zastupce", "telefon"],
+      ["sales", "representative", "mobile"],
+      ["sales", "representative", "phone"],
+      ["sales", "rep", "mobile"],
+      ["sales", "rep", "phone"],
+      ["referent", "mobil"],
+      ["referent", "telefon"]
     ]
   },
   {
@@ -336,7 +387,15 @@ const VISTOS_CONSISTENCY_FIELD_SPECS = [
       "AccountManagerEmail",
       "AccountManagerMail",
       "ObchodnikEmail",
-      "ObchodnikMail"
+      "ObchodnikMail",
+      "ObchodniZastupceEmail",
+      "ObchodniZastupceMail",
+      "SalesRepresentativeEmail",
+      "SalesRepresentativeMail",
+      "SalesRepEmail",
+      "SalesRepMail",
+      "ReferentEmail",
+      "ReferentMail"
     ],
     includeGroups: [
       ["zakaznicky", "manazer", "email"],
@@ -346,7 +405,15 @@ const VISTOS_CONSISTENCY_FIELD_SPECS = [
       ["account", "manager", "email"],
       ["account", "manager", "mail"],
       ["obchodnik", "email"],
-      ["obchodnik", "mail"]
+      ["obchodnik", "mail"],
+      ["obchodni", "zastupce", "email"],
+      ["obchodni", "zastupce", "mail"],
+      ["sales", "representative", "email"],
+      ["sales", "representative", "mail"],
+      ["sales", "rep", "email"],
+      ["sales", "rep", "mail"],
+      ["referent", "email"],
+      ["referent", "mail"]
     ]
   },
   {
@@ -1187,9 +1254,13 @@ function vistosConsistencyColumnScore(column = {}, spec = {}) {
     return 100;
   }
 
+  const excludeKeys = (spec.excludeKeys || []).map(normalizeVistosMetadataKey).filter(Boolean);
   const includeGroups = Array.isArray(spec.includeGroups) ? spec.includeGroups : [];
   let best = 0;
   for (const value of values) {
+    if (excludeKeys.some((key) => value.includes(key))) {
+      continue;
+    }
     for (const group of includeGroups) {
       const keys = group.map(normalizeVistosMetadataKey).filter(Boolean);
       if (keys.length && keys.every((key) => value.includes(key))) {
@@ -1205,6 +1276,7 @@ function compactVistosConsistencyCandidate(candidate = {}) {
     entityName: cleanString(candidate.entityName),
     columnName: cleanString(candidate.columnName),
     caption: cleanString(candidate.compact?.caption || candidate.column?.Caption || candidate.column?.Name),
+    reference: cleanString(candidate.compact?.reference),
     score: numericValue(candidate.score, 0),
     source: cleanString(candidate.source || candidate.method)
   };
@@ -3093,8 +3165,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       addressPlaceRaw,
       compactVistosAddressParts(vistosAddressPartsFromFields(contract, null, consistencyFields))
     );
+    const customerManagerNameValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerName");
     const customerManagerMobileValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerMobile");
     const customerManagerEmailValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerEmail");
+    const customerManagerName = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerNameValues));
     const customerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerMobileValues));
     const customerManagerEmail = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerEmailValues));
     const sourceCustomerId = fkRecordId(contract, "Directory_FK");
@@ -3139,6 +3213,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         addressPlaceRaw,
         stationName,
         ...addressParts,
+        customerManagerName,
         customerManagerMobile,
         customerManagerEmail,
         siteName,
@@ -3250,8 +3325,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
           postalCode: addressParts.addressPostalCode
         }))
       );
+      const rowCustomerManagerNameValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerName");
       const rowCustomerManagerMobileValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerMobile");
       const rowCustomerManagerEmailValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerEmail");
+      const rowCustomerManagerName = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerNameValues), customerManagerName);
       const rowCustomerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerMobileValues), customerManagerMobile);
       const rowCustomerManagerEmail = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerEmailValues), customerManagerEmail);
       const pickupDayValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupDays");
@@ -3300,6 +3377,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         addressPlaceRaw: rowAddressPlaceRaw,
         stationName: rowStationName,
         ...rowAddressParts,
+        customerManagerName: rowCustomerManagerName,
         customerManagerMobile: rowCustomerManagerMobile,
         customerManagerEmail: rowCustomerManagerEmail,
         siteName,
@@ -3459,6 +3537,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       label: field.label,
       confirmed: Boolean(field.confirmed),
       columns: Array.isArray(field.columns) ? field.columns : [],
+      candidates: Array.isArray(field.candidates) ? field.candidates : [],
       message: field.message || ""
     }]))
   };

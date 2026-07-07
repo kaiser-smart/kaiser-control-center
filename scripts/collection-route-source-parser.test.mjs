@@ -296,6 +296,9 @@ function derive(originalText) {
       PickupAddressRuian_Caption: "Company",
       PickupAddressRuian_FK_MainProjection: "Brno, Komárov, U vlečky 726/5c, PSČ 61700",
       Stanoviste: "U Vlečky 726/5c, 617 00 Brno - Komárov",
+      CustomerManager_FK_Caption: "Jana Nováková",
+      CustomerManagerMobile: "+420 777 111 222",
+      CustomerManagerEmail: "jana.novakova@example.cz",
       StartDate: "2026-07-01"
     }],
     products: [{
@@ -306,6 +309,18 @@ function derive(originalText) {
     }],
     consistencyFields: {
       fields: {
+        customerManagerName: {
+          confirmed: true,
+          columns: [{ entityName: "ContractRow", columnName: "CustomerManager_FK" }]
+        },
+        customerManagerMobile: {
+          confirmed: true,
+          columns: [{ entityName: "ContractRow", columnName: "CustomerManagerMobile" }]
+        },
+        customerManagerEmail: {
+          confirmed: true,
+          columns: [{ entityName: "ContractRow", columnName: "CustomerManagerEmail" }]
+        },
         addressStreet: {
           confirmed: true,
           columns: [{ entityName: "ContractRow", columnName: "SvozovaAdresaUlice" }]
@@ -327,6 +342,9 @@ function derive(originalText) {
   assert.equal(row.addressCity, "Brno");
   assert.equal(row.addressPostalCode, "61700");
   assert.equal(row.stationName, "U Vlečky 726/5c, 617 00 Brno - Komárov");
+  assert.equal(row.customerManagerName, "Jana Nováková");
+  assert.equal(row.customerManagerMobile, "+420 777 111 222");
+  assert.equal(row.customerManagerEmail, "jana.novakova@example.cz");
   assert.equal(row.issues.some((issue) => issue.type === "missing-address-place"), false);
 }
 

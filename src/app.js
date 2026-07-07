@@ -17892,9 +17892,14 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
       sourceRow.pickupDays
     ) || "neurčeno",
     note: summary.note || sourceRow.note || "",
+    customerManagerName: summary.customerManagerName || sourceRow.customerManagerName || "",
     customerManagerMobile: summary.customerManagerMobile || sourceRow.customerManagerMobile || "",
     customerManagerEmail: summary.customerManagerEmail || sourceRow.customerManagerEmail || "",
-    customerManagerContact: [summary.customerManagerMobile || sourceRow.customerManagerMobile, summary.customerManagerEmail || sourceRow.customerManagerEmail].filter(Boolean).join(" · "),
+    customerManagerContact: [
+      summary.customerManagerName || sourceRow.customerManagerName,
+      summary.customerManagerMobile || sourceRow.customerManagerMobile,
+      summary.customerManagerEmail || sourceRow.customerManagerEmail
+    ].filter(Boolean).join(" · "),
     containerVolumeMismatch: Boolean(summary.containerVolumeMismatch || sourceRow.containerVolumeMismatch),
     issues,
     issueLabels: issues.map((issue) => issue.label).filter(Boolean),
@@ -18155,6 +18160,7 @@ function collectionRoutesVistosRouteRows() {
       vistosSiteName: summary.siteName || strictAddressPlace || summary.addressRaw || sourceRow.addressRaw || "-",
       customerManagerMobile: summary.customerManagerMobile || sourceRow.customerManagerMobile || "",
       customerManagerEmail: summary.customerManagerEmail || sourceRow.customerManagerEmail || "",
+      customerManagerName: summary.customerManagerName || sourceRow.customerManagerName || "",
       issueCount,
       issues,
       rawSourceRow: sourceRow
