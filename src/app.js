@@ -10057,6 +10057,44 @@ function vehicleTrackingMarkerImageSrc(vehicle = {}, options = {}) {
   return mappedImage || explicitImage;
 }
 
+function vehicleTrackingIconPreview(type, className = "") {
+  const fallbackText = (type.label || type.key || "V")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join("")
+    .toUpperCase() || "V";
+
+  return `
+    <figure class="tracking-icon-spec-preview ${escapeHtml(className)}" aria-label="${escapeHtml(`${type.label} náhled ikony`)}">
+      <span class="tracking-icon-spec-preview__fallback" aria-hidden="true">${escapeHtml(fallbackText)}</span>
+      <img src="${escapeHtml(type.primary)}" alt="${escapeHtml(`${type.label} ikona vozidla`)}" loading="lazy" decoding="async" onerror="this.hidden=true">
+    </figure>
+  `;
+}
+
+function vehicleTrackingIconSpecCard(type) {
+  return `
+    <article class="tracking-icon-spec-card tracking-icon-spec-card--${escapeHtml(type.slug)}">
+      ${vehicleTrackingIconPreview(type)}
+      <div class="tracking-icon-spec-card__body">
+        <strong>${escapeHtml(type.label)}</strong>
+        <dl>
+          <div>
+            <dt>PNG</dt>
+            <dd><code>${escapeHtml(type.primary.replace(VEHICLE_TRACKING_ICON_FOLDER, ""))}</code></dd>
+          </div>
+          <div>
+            <dt>WebP</dt>
+            <dd><code>${escapeHtml(type.webp.replace(VEHICLE_TRACKING_ICON_FOLDER, ""))}</code></dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+  `;
+}
+
 function vehicleTrackingMarkerContent(vehicle = {}, options = {}) {
   const statusKey = vehicleTrackingMarkerStatusKey(options.status || vehicle.status || vehicle.baseStatus);
   const tone = options.tone || vehicleTrackingMarkerTone(statusKey);
@@ -11926,35 +11964,62 @@ function vehicleTrackingIconSpecSection() {
         </div>
         <span>${escapeHtml(VEHICLE_TRACKING_ICON_WAITING)}</span>
       </div>
-      <div class="tracking-icon-spec__grid">
-        <article>
-          <h4>Formát</h4>
-          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_ICON_FORMATS)}
-        </article>
-        <article>
-          <h4>Vzhled</h4>
-          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_ICON_REQUIREMENTS)}
-        </article>
-        <article>
-          <h4>Složka</h4>
-          ${vehicleTrackingFieldChips([VEHICLE_TRACKING_ICON_FOLDER, "PNG primárně", "WebP volitelně"])}
-        </article>
-        <article>
-          <h4>Typy vozidel</h4>
-          <ul class="tracking-icon-spec__files">
-            ${VEHICLE_TRACKING_ICON_TYPES.map((type) => `
-              <li>
-                <strong>${escapeHtml(type.label)}</strong>
-                <code>${escapeHtml(type.primary.replace(VEHICLE_TRACKING_ICON_FOLDER, ""))}</code>
-                <span>${escapeHtml(type.webp.replace(VEHICLE_TRACKING_ICON_FOLDER, ""))}</span>
-              </li>
-            `).join("")}
-          </ul>
-        </article>
-      </div>
-      <div class="tracking-icon-spec__mapping">
-        <span>Mapování typů</span>
-        <code>${escapeHtml(JSON.stringify(VEHICLE_ICON_BY_TYPE))}</code>
+      <div class="tracking-icon-spec__layout">
+        <div class="tracking-icon-spec__info">
+          <article class="tracking-icon-spec-panel tracking-icon-spec-panel--format">
+            <h4>Formát</h4>
+            ${vehicleTrackingFieldChips(VEHICLE_TRACKING_ICON_FORMATS)}
+          </article>
+          <article class="tracking-icon-spec-panel tracking-icon-spec-panel--appearance">
+            <h4>Vzhled</h4>
+            ${vehicleTrackingFieldChips(VEHICLE_TRACKING_ICON_REQUIREMENTS)}
+          </article>
+          <article class="tracking-icon-spec-panel tracking-icon-spec-panel--folder">
+            <h4>Složka</h4>
+            <div class="tracking-icon-spec-path">
+              <code>${escapeHtml(VEHICLE_TRACKING_ICON_FOLDER)}</code>
+              ${vehicleTrackingFieldChips(["PNG primárně", "WebP volitelně"])}
+            </div>
+          </article>
+          <article class="tracking-icon-spec-panel tracking-icon-spec-panel--mapping">
+            <h4>Mapování typů</h4>
+            <div class="tracking-icon-spec__mapping">
+              <span>Read-only mapping</span>
+              <code>${escapeHtml(JSON.stringify(VEHICLE_ICON_BY_TYPE))}</code>
+            </div>
+          </article>
+        </div>
+        <div class="tracking-icon-spec__catalog">
+          <article class="tracking-icon-spec-panel tracking-icon-spec-panel--types">
+            <div class="tracking-icon-spec-panel__head">
+              <h4>Typy vozidel</h4>
+              <span>${escapeHtml(String(VEHICLE_TRACKING_ICON_TYPES.length))} typů</span>
+            </div>
+            <div class="tracking-icon-spec-card-grid">
+              ${VEHICLE_TRACKING_ICON_TYPES.map((type) => vehicleTrackingIconSpecCard(type)).join("")}
+            </div>
+          </article>
+          <article class="tracking-icon-spec-panel tracking-icon-spec-panel--gallery">
+            <div class="tracking-icon-spec-panel__head">
+              <h4>Náhled ikon</h4>
+              <span>PNG / WebP</span>
+            </div>
+            <div class="tracking-icon-spec-gallery">
+              <div class="tracking-icon-spec-gallery__row">
+                <span>PNG</span>
+                <div class="tracking-icon-spec-gallery__icons">
+                  ${VEHICLE_TRACKING_ICON_TYPES.map((type) => vehicleTrackingIconPreview(type, "tracking-icon-spec-preview--sm")).join("")}
+                </div>
+              </div>
+              <div class="tracking-icon-spec-gallery__row">
+                <span>WebP</span>
+                <div class="tracking-icon-spec-gallery__paths">
+                  ${VEHICLE_TRACKING_ICON_TYPES.map((type) => `<code>${escapeHtml(type.webp.replace(VEHICLE_TRACKING_ICON_FOLDER, ""))}</code>`).join("")}
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
       </div>
     </div>
   `;

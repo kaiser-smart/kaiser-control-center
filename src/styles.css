@@ -28539,6 +28539,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview .tracking-demo-api-section .tracking-integration-grid h3,
 .tracking-page--soft-metal-preview .tracking-icon-spec__head h3,
 .tracking-page--soft-metal-preview .tracking-icon-spec__grid h4,
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel h4,
 .tracking-page--soft-metal-preview #tracking-rules .absence-panel__head h2,
 .tracking-page--soft-metal-preview #tracking-rules .module-rules-detail h3,
 .tracking-page--soft-metal-preview #tracking-rules .module-rules-audit h4,
@@ -28557,6 +28558,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview .tracking-icon-spec__head p,
 .tracking-page--soft-metal-preview .tracking-icon-spec__head span,
 .tracking-page--soft-metal-preview .tracking-icon-spec__files span,
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel__head span,
 .tracking-page--soft-metal-preview #tracking-rules .absence-panel__head p,
 .tracking-page--soft-metal-preview #tracking-rules .module-rules-detail p,
 .tracking-page--soft-metal-preview #tracking-rules .module-rules-status-grid span,
@@ -28575,6 +28577,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 
 .tracking-page--soft-metal-preview .tracking-demo-api-note strong,
 .tracking-page--soft-metal-preview .tracking-icon-spec__files strong,
+.tracking-page--soft-metal-preview .tracking-icon-spec-card strong,
 .tracking-page--soft-metal-preview .tracking-icon-spec code,
 .tracking-page--soft-metal-preview .tracking-icon-spec__mapping span {
   color: var(--panel-title);
@@ -28642,6 +28645,311 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 .tracking-page--soft-metal-preview #tracking-rules .employee-card-status,
 .tracking-page--soft-metal-preview #tracking-rules .module-rules-readonly {
   white-space: nowrap;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec {
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: var(--tracking-panel-bg);
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec__layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.72fr) minmax(0, 1.28fr);
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec__info,
+.tracking-page--soft-metal-preview .tracking-icon-spec__catalog {
+  display: grid;
+  align-content: start;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel {
+  --icon-spec-panel-bg: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-inset));
+  --icon-spec-panel-border: var(--border-soft);
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--icon-spec-panel-border);
+  border-radius: var(--radius-lg);
+  background: var(--icon-spec-panel-bg);
+  box-shadow: var(--shadow-control), var(--highlight-edge);
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel--format {
+  --icon-spec-panel-bg: color-mix(in srgb, var(--tracking-graphite) 5%, var(--surface-raised));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel--appearance,
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel--types {
+  --icon-spec-panel-bg: color-mix(in srgb, var(--brand-accent) 7%, var(--surface-raised));
+  --icon-spec-panel-border: color-mix(in srgb, var(--brand-accent) 26%, var(--border-soft));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel--mapping {
+  --icon-spec-panel-bg: color-mix(in srgb, var(--tracking-bluegrey) 8%, var(--surface-raised));
+  --icon-spec-panel-border: color-mix(in srgb, var(--tracking-bluegrey) 24%, var(--border-soft));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel--gallery {
+  --icon-spec-panel-bg: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-inset));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel h4 {
+  margin: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-panel__head span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px;
+  border: 1px solid var(--schema-chip-border);
+  border-radius: var(--chip-radius);
+  background: var(--schema-chip-bg);
+  font-size: 0.68rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-path {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-path > code,
+.tracking-page--soft-metal-preview .tracking-icon-spec__mapping code {
+  display: block;
+  min-width: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--chip-border);
+  border-radius: var(--radius-md);
+  background: var(--tracking-inset-bg);
+  color: var(--panel-title);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.73rem;
+  font-weight: 750;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: var(--shadow-inset-control);
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  min-height: 148px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--chip-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-inset));
+  box-shadow: var(--shadow-control), var(--highlight-edge);
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card--svozove-vozidlo {
+  background: color-mix(in srgb, var(--brand-accent) 9%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--brand-accent) 28%, var(--border-soft));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card--kontejnerove-vozidlo,
+.tracking-page--soft-metal-preview .tracking-icon-spec-card--prives-naves {
+  background: color-mix(in srgb, var(--tracking-bluegrey) 9%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--tracking-bluegrey) 26%, var(--border-soft));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card--specialni-technika {
+  background: color-mix(in srgb, var(--tracking-graphite) 7%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--tracking-bluegrey) 22%, var(--border-soft));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card--dodavka,
+.tracking-page--soft-metal-preview .tracking-icon-spec-card--osobni-vozidlo {
+  background: color-mix(in srgb, var(--tracking-graphite) 6%, var(--surface-raised));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-preview {
+  position: relative;
+  display: grid;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--chip-border);
+  border-radius: var(--radius-md);
+  background: var(--tracking-inset-bg);
+  box-shadow: var(--shadow-inset-control);
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-preview--sm {
+  width: 46px;
+  height: 46px;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-preview img {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-preview__fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--schema-chip-text);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card__body {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card dl {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card dl > div {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card dt {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--schema-chip-border);
+  border-radius: var(--chip-radius);
+  background: var(--schema-chip-bg);
+  color: var(--schema-chip-text);
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-card dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-gallery {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-gallery__row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--chip-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-inset));
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-gallery__row > span {
+  color: var(--panel-title);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-gallery__icons,
+.tracking-page--soft-metal-preview .tracking-icon-spec-gallery__paths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-gallery__paths code {
+  display: inline-flex;
+  min-height: var(--chip-height);
+  align-items: center;
+  justify-content: center;
+  padding: var(--chip-padding-y) var(--chip-padding-x);
+  border: 1px solid var(--schema-chip-border);
+  border-radius: var(--chip-radius);
+  background: var(--schema-chip-bg);
+  color: var(--schema-chip-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  line-height: 1.18;
+}
+
+@media (max-width: 1120px) {
+  .tracking-page--soft-metal-preview .tracking-icon-spec__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-icon-spec-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .tracking-page--soft-metal-preview .tracking-icon-spec-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .tracking-page--soft-metal-preview .tracking-icon-spec {
+    padding: var(--space-md);
+  }
+
+  .tracking-page--soft-metal-preview .tracking-icon-spec-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-icon-spec-card {
+    min-height: 124px;
+  }
+
+  .tracking-page--soft-metal-preview .tracking-icon-spec-gallery__row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
 }
 
 .tracking-page--soft-metal-preview .tracking-vehicle-marker {
