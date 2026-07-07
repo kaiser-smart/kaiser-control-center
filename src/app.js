@@ -237,7 +237,7 @@ const RECEIVABLES_TABS = [
 ];
 const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
-const COLLECTION_ROUTES_PHASE_NOTICE = "Pilot Tras svozu nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.";
+const COLLECTION_ROUTES_PHASE_NOTICE = "Read-only přehled tras svozu.";
 const COLLECTION_ROUTES_TABS = [
   { id: "svozove-trasy", label: "Svozové trasy", targetId: "collection-routes-source-routes" },
   { id: "sites", label: "Stanoviště", targetId: "collection-routes-sites" },
@@ -17923,10 +17923,6 @@ function collectionRoutesSitesSection(user) {
         <article><span>Nádoby</span><strong>${escapeHtml(stats.containerCount)}</strong></article>
         <article class="collection-routes-stats__item--warning"><span>Svoz Kaiser ANO</span><strong>${escapeHtml(filterConfirmed ? "ověřeno" : "čeká")}</strong></article>
       </div>
-      <div class="collection-routes-phase-note collection-routes-phase-note--warning">
-        <strong>${escapeHtml(filterConfirmed ? "Seznam je filtrovaný podle potvrzeného Svoz Kaiser pravidla." : "Pozor: zatím není potvrzené API pole Svoz Kaiser ANO.")}</strong>
-        <span>${escapeHtml(filterConfirmed ? "Seznam se otevírá z posledního D1 snapshotu; živá Vistos kontrola běží na pozadí." : "Proto se zatím nezobrazuje červený alarm. Vidíš širší read-only Komunál náhled z Vistosu, ne ostrý seznam Svoz Kaiser stanovišť.")}</span>
-      </div>
       ${loadedAt ? `<p class="module-feedback__notice">Načteno: ${escapeHtml(loadedAt)} · zdroj: ${escapeHtml(collectionRoutesPilotState.kommunalPairingSource || "vistos-komunal-preview-export")}</p>` : ""}
       ${collectionRoutesPilotState.kommunalPairingError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.kommunalPairingError)}</p>` : ""}
       ${collectionRoutesVistosSitesTable()}
@@ -18138,13 +18134,6 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
           </div>
         </div>
       </section>
-      `}
-
-      ${isSourceRoutesTab ? "" : `
-        <div class="collection-routes-warning" role="status">
-          <strong>${COLLECTION_ROUTES_PHASE_NOTICE}</strong>
-          <span>Žádná provozní data nejsou uložená v prohlížeči a žádná vymyšlená data nejsou zobrazena jako realita.</span>
-        </div>
       `}
 
       <nav class="collection-routes-tabs" aria-label="Sekce Tras svozu" role="tablist">
