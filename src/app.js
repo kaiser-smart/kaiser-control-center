@@ -17422,7 +17422,9 @@ function collectionRoutesIssueLabelsFromValue(value) {
 }
 
 function collectionRoutesVistosSiteRows() {
-  const rows = collectionRoutesPilotState.kommunalPairingRows;
+  const rows = collectionRoutesSvozKaiserFieldConfirmed()
+    ? collectionRoutesPilotState.kommunalPairingRows.filter((row) => row?.svozKaiserIncluded === true)
+    : collectionRoutesPilotState.kommunalPairingRows;
   const sitesByKey = new Map();
 
   rows.forEach((sourceRow, index) => {
@@ -17499,7 +17501,9 @@ function collectionRoutesVistosSiteRows() {
 }
 
 function collectionRoutesVistosSitesStats(siteRows = collectionRoutesVistosSiteRows()) {
-  const sourceRows = collectionRoutesPilotState.kommunalPairingRows;
+  const sourceRows = collectionRoutesSvozKaiserFieldConfirmed()
+    ? collectionRoutesPilotState.kommunalPairingRows.filter((row) => row?.svozKaiserIncluded === true)
+    : collectionRoutesPilotState.kommunalPairingRows;
   const contracts = new Set();
   let containerCount = 0;
   sourceRows.forEach((sourceRow) => {

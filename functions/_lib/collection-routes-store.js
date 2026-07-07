@@ -59,6 +59,62 @@ const VISTOS_CONTRACT_ROW_COLUMNS = [
   "IsActive",
   "ServiceList_FK"
 ];
+const VISTOS_SVOZ_KAISER_TARGET_ENTITIES = ["ContractRow", "Contract"];
+const VISTOS_SVOZ_KAISER_COLUMN_CANDIDATES = [
+  "SvozKaiser",
+  "SvozKaiserAno",
+  "Svoz_Kaiser",
+  "Svoz_Kaiser_ANO",
+  "c_SvozKaiser",
+  "c_SvozKaiserAno",
+  "IsSvozKaiser",
+  "KaiserSvoz",
+  "KaiserSvozAno"
+];
+const VISTOS_METADATA_DB_OBJECT_COLUMNS = [
+  "Id",
+  "Name",
+  "Caption",
+  "EntityName",
+  "TableName",
+  "DbName",
+  "Description",
+  "Status_FK"
+];
+const VISTOS_METADATA_DB_COLUMN_ATTEMPTS = [
+  {
+    key: "db_column_extended_by_object_fk",
+    filterField: "DbObject_FK",
+    columns: [
+      "Id",
+      "Name",
+      "Caption",
+      "ColumnName",
+      "DbColumnName",
+      "DbObject_FK",
+      "Type_FK",
+      "DataType",
+      "Nullable",
+      "IsNullable",
+      "IsReadOnly",
+      "IsVisible",
+      "VisibleOnGrid",
+      "IsVisibleOnFilter",
+      "LocalizationString",
+      "ReferenceDbObject_FK"
+    ]
+  },
+  {
+    key: "db_column_core_by_object_fk",
+    filterField: "DbObject_FK",
+    columns: ["Id", "Name", "Caption", "ColumnName", "DbObject_FK", "Type_FK"]
+  },
+  {
+    key: "db_column_core_by_record_id",
+    filterField: "DbObject_FK_RecordId",
+    columns: ["Id", "Name", "Caption", "ColumnName", "DbObject_FK", "Type_FK"]
+  }
+];
 const VISTOS_PRODUCT_COLUMNS = [
   "Id",
   "Name",
@@ -661,6 +717,421 @@ async function getAllVistosPages(env, session, entityName, columns, filter = nul
   };
 }
 
+function columnsFromSchemaBody(body = {}) {
+  const data = body?.data && typeof body.data === "object" ? body.data : {};
+  if (Array.isArray(data.Columns)) {
+    return data.Columns.filter((item) => item && typeof item === "object");
+  }
+  if (Array.isArray(data.columns)) {
+    return data.columns.filter((item) => item && typeof item === "object");
+  }
+  return extractVistosRows(body);
+}
+
+function compactVistosColumn(column = {}) {
+  return {
+    id: firstNonEmpty(column.Id, column.id),
+    name: firstNonEmpty(column.ColumnName, column.DbColumnName, column.Name, column.name),
+    caption: firstNonEmpty(column.LocalizationString, column.Caption, column.Description, column.Name, column.ColumnName),
+    type: firstNonEmpty(column.Type_FK, column.DataType, column.Type, column.EnumType),
+    nullable: column.Nullable ?? column.IsNullable ?? null,
+    readOnly: column.IsReadOnly ?? null,
+    visible: column.VisibleOnGrid ?? column.IsVisible ?? column.IsVisibleOnFilter ?? null,
+    reference: firstNonEmpty(column.ReferenceDbObject_FK, column.ReferenceDbObject_FK_Caption),
+    rawKeys: Object.keys(column || {}).slice(0, 16)
+  };
+}
+
+function normalizeVistosMetadataKey(value = "") {
+  return cleanString(value)
+    .toLocaleLowerCase("cs")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function vistosSvozKaiserColumnScore(column = {}) {
+  const values = [
+    column.ColumnName,
+    column.DbColumnName,
+    column.Name,
+    column.Caption,
+    column.LocalizationString,
+    column.Description
+  ].map(normalizeVistosMetadataKey).filter(Boolean);
+  const candidateKeys = VISTOS_SVOZ_KAISER_COLUMN_CANDIDATES.map(normalizeVistosMetadataKey);
+
+  if (values.some((value) => candidateKeys.includes(value))) {
+    return 100;
+  }
+  if (values.some((value) => value.includes("svozkaiserano") || value.includes("kaisersvozano"))) {
+    return 95;
+  }
+  if (values.some((value) => value.includes("svozkaiser") || value.includes("kaisersvoz"))) {
+    return 90;
+  }
+  if (values.some((value) => value.includes("svoz") && value.includes("kaiser") && value.includes("ano"))) {
+    return 85;
+  }
+  if (values.some((value) => value.includes("svoz") && value.includes("kaiser"))) {
+    return 80;
+  }
+  return 0;
+}
+
+function vistosDbObjectId(row = {}) {
+  return firstNonEmpty(row.Id, row.DbObjectId, row.DbObject_FK_RecordId, row.RecordId);
+}
+
+function matchVistosDbObjects(rows = [], targetEntities = VISTOS_SVOZ_KAISER_TARGET_ENTITIES) {
+  return targetEntities.map((entityName) => {
+    const targetKey = normalizeVistosMetadataKey(entityName);
+    const row = rows.find((item) => {
+      const values = [
+        item.Name,
+        item.EntityName,
+        item.Caption,
+        item.TableName,
+        item.DbName
+      ].map(normalizeVistosMetadataKey).filter(Boolean);
+      return values.includes(targetKey) || values.some((value) => value.endsWith(targetKey));
+    });
+
+    return {
+      entityName,
+      found: Boolean(row),
+      dbObjectId: row ? vistosDbObjectId(row) : "",
+      name: firstNonEmpty(row?.Name, row?.EntityName),
+      caption: firstNonEmpty(row?.Caption, row?.Description),
+      tableName: firstNonEmpty(row?.TableName, row?.DbName)
+    };
+  });
+}
+
+async function loadVistosSvozKaiserSchemaEntity(env, session, entityName) {
+  try {
+    const result = await fetchVistosExecute(env, "GetSchemaEntity", {
+      EntityName: entityName,
+      Force: false
+    }, session.cookieHeader);
+    const columns = columnsFromSchemaBody(result.body);
+    return {
+      entityName,
+      method: "GetSchemaEntity",
+      ok: true,
+      status: result.status,
+      columnCount: columns.length,
+      columns,
+      candidates: columns
+        .map((column) => ({ column, score: vistosSvozKaiserColumnScore(column) }))
+        .filter((item) => item.score > 0)
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 8)
+    };
+  } catch (error) {
+    return {
+      entityName,
+      method: "GetSchemaEntity",
+      ok: false,
+      error: error?.message || "GetSchemaEntity se nepodařilo načíst.",
+      code: error?.code || "vistos_schema_entity_failed",
+      columnCount: 0,
+      columns: [],
+      candidates: []
+    };
+  }
+}
+
+async function loadVistosSvozKaiserDbColumns(env, session, dbObject) {
+  if (!dbObject?.found || !dbObject.dbObjectId) {
+    return {
+      entityName: dbObject?.entityName || "",
+      dbObjectId: dbObject?.dbObjectId || "",
+      ok: false,
+      reason: "DB_OBJECT_NOT_FOUND",
+      columnCount: 0,
+      columns: [],
+      candidates: [],
+      diagnostics: []
+    };
+  }
+
+  const diagnostics = [];
+  for (const attempt of VISTOS_METADATA_DB_COLUMN_ATTEMPTS) {
+    try {
+      const page = await getAllVistosPages(
+        env,
+        session,
+        "DbColumn",
+        attempt.columns,
+        { [attempt.filterField]: dbObject.dbObjectId },
+        { pageSize: 500, maxPages: 2 }
+      );
+      const candidates = page.rows
+        .map((column) => ({ column, score: vistosSvozKaiserColumnScore(column) }))
+        .filter((item) => item.score > 0)
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 8);
+
+      return {
+        entityName: dbObject.entityName,
+        dbObjectId: dbObject.dbObjectId,
+        method: "DbColumn",
+        ok: true,
+        key: attempt.key,
+        filterField: attempt.filterField,
+        returnedRows: page.rows.length,
+        totalRows: page.total || page.rows.length,
+        capped: Boolean(page.capped),
+        columnCount: page.rows.length,
+        columns: page.rows,
+        candidates,
+        diagnostics: [...diagnostics, {
+          key: attempt.key,
+          ok: true,
+          returnedRows: page.rows.length,
+          totalRows: page.total || page.rows.length,
+          capped: Boolean(page.capped)
+        }]
+      };
+    } catch (error) {
+      diagnostics.push({
+        key: attempt.key,
+        filterField: attempt.filterField,
+        ok: false,
+        error: error?.message || "DbColumn se nepodařilo načíst.",
+        code: error?.code || "vistos_db_column_failed"
+      });
+    }
+  }
+
+  return {
+    entityName: dbObject.entityName,
+    dbObjectId: dbObject.dbObjectId,
+    method: "DbColumn",
+    ok: false,
+    reason: "DB_COLUMN_READ_FAILED",
+    columnCount: 0,
+    columns: [],
+    candidates: [],
+    diagnostics
+  };
+}
+
+function bestVistosSvozKaiserCandidate(candidates = [], source = "") {
+  const sorted = candidates
+    .map((candidate) => ({
+      ...candidate,
+      columnName: firstNonEmpty(candidate.column?.ColumnName, candidate.column?.DbColumnName, candidate.column?.Name),
+      compact: compactVistosColumn(candidate.column),
+      source
+    }))
+    .filter((candidate) => candidate.score > 0 && candidate.columnName)
+    .sort((left, right) => right.score - left.score);
+  return sorted[0] || null;
+}
+
+async function resolveVistosSvozKaiserField(env, session) {
+  const schemaAttempts = [];
+  for (const entityName of VISTOS_SVOZ_KAISER_TARGET_ENTITIES) {
+    schemaAttempts.push(await loadVistosSvozKaiserSchemaEntity(env, session, entityName));
+  }
+
+  const schemaCandidates = schemaAttempts.flatMap((attempt) => (
+    attempt.candidates || []
+  ).map((candidate) => ({
+    ...candidate,
+    entityName: attempt.entityName,
+    method: attempt.method
+  })));
+  const schemaBest = bestVistosSvozKaiserCandidate(schemaCandidates, "GetSchemaEntity");
+  if (schemaBest) {
+    return {
+      confirmed: true,
+      entityName: schemaBest.entityName,
+      columnName: schemaBest.columnName,
+      caption: schemaBest.compact.caption,
+      score: schemaBest.score,
+      source: "GetSchemaEntity",
+      candidates: schemaCandidates.slice(0, 10).map((candidate) => ({
+        entityName: candidate.entityName,
+        score: candidate.score,
+        column: compactVistosColumn(candidate.column)
+      })),
+      diagnostics: {
+        schemaAttempts: schemaAttempts.map((attempt) => ({
+          entityName: attempt.entityName,
+          ok: attempt.ok,
+          method: attempt.method,
+          columnCount: attempt.columnCount,
+          candidateCount: attempt.candidates?.length || 0,
+          error: attempt.error || ""
+        })),
+        dbObjectAttempts: []
+      }
+    };
+  }
+
+  let dbObjectPage;
+  try {
+    dbObjectPage = await getAllVistosPages(
+      env,
+      session,
+      "DbObject",
+      VISTOS_METADATA_DB_OBJECT_COLUMNS,
+      null,
+      { pageSize: 500, maxPages: 4 }
+    );
+  } catch (error) {
+    return {
+      confirmed: false,
+      entityName: "",
+      columnName: "",
+      caption: "",
+      score: 0,
+      source: "",
+      candidates: [],
+      diagnostics: {
+        schemaAttempts: schemaAttempts.map((attempt) => ({
+          entityName: attempt.entityName,
+          ok: attempt.ok,
+          method: attempt.method,
+          columnCount: attempt.columnCount,
+          candidateCount: attempt.candidates?.length || 0,
+          error: attempt.error || ""
+        })),
+        dbObjectAttempts: [{
+          ok: false,
+          error: error?.message || "DbObject metadata se nepodařilo načíst.",
+          code: error?.code || "vistos_db_object_failed"
+        }],
+        dbColumnAttempts: []
+      },
+      message: "Pole Svoz Kaiser ANO se nepodařilo potvrdit přes GetSchemaEntity ani DbObject/DbColumn metadata."
+    };
+  }
+  const dbObjects = matchVistosDbObjects(dbObjectPage.rows);
+  const dbColumnAttempts = [];
+  for (const dbObject of dbObjects) {
+    dbColumnAttempts.push(await loadVistosSvozKaiserDbColumns(env, session, dbObject));
+  }
+  const dbColumnCandidates = dbColumnAttempts.flatMap((attempt) => (
+    attempt.candidates || []
+  ).map((candidate) => ({
+    ...candidate,
+    entityName: attempt.entityName,
+    method: attempt.method
+  })));
+  const dbColumnBest = bestVistosSvozKaiserCandidate(dbColumnCandidates, "DbColumn");
+  if (dbColumnBest) {
+    return {
+      confirmed: true,
+      entityName: dbColumnBest.entityName,
+      columnName: dbColumnBest.columnName,
+      caption: dbColumnBest.compact.caption,
+      score: dbColumnBest.score,
+      source: "DbColumn",
+      candidates: dbColumnCandidates.slice(0, 10).map((candidate) => ({
+        entityName: candidate.entityName,
+        score: candidate.score,
+        column: compactVistosColumn(candidate.column)
+      })),
+      diagnostics: {
+        schemaAttempts: schemaAttempts.map((attempt) => ({
+          entityName: attempt.entityName,
+          ok: attempt.ok,
+          method: attempt.method,
+          columnCount: attempt.columnCount,
+          candidateCount: attempt.candidates?.length || 0,
+          error: attempt.error || ""
+        })),
+        dbObjectAttempts: dbObjects,
+        dbColumnAttempts: dbColumnAttempts.map((attempt) => ({
+          entityName: attempt.entityName,
+          ok: attempt.ok,
+          method: attempt.method,
+          columnCount: attempt.columnCount,
+          candidateCount: attempt.candidates?.length || 0,
+          reason: attempt.reason || "",
+          diagnostics: attempt.diagnostics || []
+        }))
+      }
+    };
+  }
+
+  return {
+    confirmed: false,
+    entityName: "",
+    columnName: "",
+    caption: "",
+    score: 0,
+    source: "",
+    candidates: [],
+    diagnostics: {
+      schemaAttempts: schemaAttempts.map((attempt) => ({
+        entityName: attempt.entityName,
+        ok: attempt.ok,
+        method: attempt.method,
+        columnCount: attempt.columnCount,
+        candidateCount: attempt.candidates?.length || 0,
+        error: attempt.error || ""
+      })),
+      dbObjectAttempts: dbObjects,
+      dbColumnAttempts: dbColumnAttempts.map((attempt) => ({
+        entityName: attempt.entityName,
+        ok: attempt.ok,
+        method: attempt.method,
+        columnCount: attempt.columnCount,
+        candidateCount: attempt.candidates?.length || 0,
+        reason: attempt.reason || "",
+        diagnostics: attempt.diagnostics || []
+      }))
+    },
+    message: "Pole Svoz Kaiser ANO se nepodařilo potvrdit v ContractRow ani Contract metadatech."
+  };
+}
+
+function withVistosSvozKaiserColumn(columns, field, entityName) {
+  if (!field?.confirmed || field.entityName !== entityName || !field.columnName) {
+    return columns;
+  }
+  return Array.from(new Set([...columns, field.columnName]));
+}
+
+function readVistosColumnValue(row, columnName) {
+  if (!row || !columnName) {
+    return "";
+  }
+  return firstNonEmpty(
+    row[columnName],
+    row[`${columnName}_Caption`],
+    row[`${columnName}_MainProjection`],
+    row[`${columnName}_Value`],
+    row[`${columnName}_RecordId`]
+  );
+}
+
+function isVistosYesValue(value) {
+  if (value === true || value === 1) {
+    return true;
+  }
+  const key = normalizeVistosMetadataKey(value);
+  return ["1", "true", "ano", "yes", "y", "a", "checked", "zapnuto", "aktivni"].includes(key);
+}
+
+function rowSvozKaiserValue(contract, contractRow, field) {
+  if (!field?.confirmed || !field.columnName) {
+    return "";
+  }
+  if (field.entityName === "ContractRow") {
+    return readVistosColumnValue(contractRow, field.columnName);
+  }
+  if (field.entityName === "Contract") {
+    return readVistosColumnValue(contract, field.columnName);
+  }
+  return "";
+}
+
 function flattenVistosRow(row, path) {
   const flattened = {
     __vistosEndpoint: cleanString(path)
@@ -1219,7 +1690,7 @@ function vistosSiteKey(contract) {
   ].join("|"));
 }
 
-function buildVistosKommunalPreview({ contracts, contractRows, products, totals = {}, today = new Date(), filterDiagnostics = {} }) {
+function buildVistosKommunalPreview({ contracts, contractRows, products, totals = {}, today = new Date(), filterDiagnostics = {}, svozKaiserField = null }) {
   const productsById = new Map(products.map((product) => [cleanString(product?.Id), product]));
   const contractIds = new Set(contracts.map((contract) => cleanString(contract?.Id)).filter(Boolean));
   const rowsByContractId = new Map();
@@ -1268,6 +1739,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     }
 
     if (!contractRowsForContract.length) {
+      const svozKaiserValue = rowSvozKaiserValue(contract, null, svozKaiserField);
       mappedRows.push({
         rowNumber: mappedRows.length + 1,
         sourceEntity: "Contract",
@@ -1297,6 +1769,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         locationQuality: sourceSiteId ? "vistos_unverified" : "missing",
         latitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Lat),
         longitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Long),
+        svozKaiserValue,
+        svozKaiserIncluded: isVistosYesValue(svozKaiserValue),
         issues: [
           ...baseIssues,
           { type: "missing-contract-items", severity: "warning", message: "Chybí položky smlouvy." }
@@ -1306,6 +1780,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     }
 
     for (const contractRow of contractRowsForContract) {
+      const svozKaiserValue = rowSvozKaiserValue(contract, contractRow, svozKaiserField);
       const productId = cleanString(contractRow?.Product_FK_RecordId || contractRow?.Product_FK);
       const product = productsById.get(productId) || null;
       const searchText = productSearchText(contractRow, product);
@@ -1392,6 +1867,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         latitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Lat),
         longitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Long),
         unitPrice: numericValue(product?.ListPrice || product?.CostPrice || product?.WeightedCostPrice || product?.DiscountPrice, 0),
+        svozKaiserValue,
+        svozKaiserIncluded: isVistosYesValue(svozKaiserValue),
         issues
       });
     }
@@ -1511,6 +1988,12 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
   const mappingGapRows = buildVistosKommunalMappingGapRows(mappedRows);
   const routeDraftRows = buildVistosKommunalRouteDraftRows(mappedRows);
   const routeDraftContainerCount = routeDraftRows.reduce((sum, row) => sum + (row.containerCount || 0), 0);
+  const svozKaiserFieldSummary = {
+    ...(svozKaiserField || {}),
+    confirmed: Boolean(svozKaiserField?.confirmed && svozKaiserField?.columnName),
+    yesRowCount: mappedRows.filter((row) => row.svozKaiserIncluded === true).length,
+    checkedRowCount: mappedRows.length
+  };
 
   return {
     filename: "vistos-komunal-preview.json",
@@ -1543,6 +2026,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       filter: VISTOS_KOMUNAL_CONTRACT_FILTER,
       filterDiagnostics,
       vistosTotals: totals,
+      svozKaiserField: svozKaiserFieldSummary,
       mappingStats: {
         contracts: contracts.length,
         contractRows: contractRows.length,
@@ -1590,7 +2074,12 @@ function watchdogIssueAction(issueType = "") {
 }
 
 function buildVistosSvozKaiserWatchdog(preview, apiStatus = "ready") {
-  const rows = Array.isArray(preview?.rows) ? preview.rows : [];
+  const allRows = Array.isArray(preview?.rows) ? preview.rows : [];
+  const svozKaiserField = preview?.metadata?.svozKaiserField || {};
+  const svozKaiserFieldConfirmed = Boolean(svozKaiserField?.confirmed && svozKaiserField?.columnName);
+  const rows = svozKaiserFieldConfirmed
+    ? allRows.filter((row) => row?.svozKaiserIncluded === true)
+    : [];
   const issueRows = [];
   const siteAlertsByKey = new Map();
   const issueCounts = new Map();
@@ -1647,6 +2136,16 @@ function buildVistosSvozKaiserWatchdog(preview, apiStatus = "ready") {
 
   const siteAlerts = Array.from(siteAlertsByKey.values())
     .sort((left, right) => right.issueCount - left.issueCount || left.siteName.localeCompare(right.siteName, "cs"));
+  const sourceRule = svozKaiserFieldConfirmed
+    ? `Vistos ${svozKaiserField.entityName}.${svozKaiserField.columnName} = ANO`
+    : cleanString(svozKaiserField.message) || "Svoz Kaiser ANO zatím není potvrzené technické pole ve Vistos API; širší Komunál diagnostika se nepočítá jako chyba Svoz Kaiser.";
+  const message = !svozKaiserFieldConfirmed
+    ? "Hlídač čeká na potvrzené pole Svoz Kaiser ANO. Nehlásí chyby nad celým Komunálem."
+    : rows.length
+      ? issueRows.length
+        ? `Hlídač našel ${issueRows.length} chyb jen v řádcích Svoz Kaiser ANO.`
+        : "Hlídač nenašel blokující chyby v řádcích Svoz Kaiser ANO."
+      : "Pole Svoz Kaiser ANO je potvrzené, ale v aktivních Komunál datech zatím není žádný řádek zakliknutý ANO.";
 
   return {
     apiStatus,
@@ -1658,16 +2157,26 @@ function buildVistosSvozKaiserWatchdog(preview, apiStatus = "ready") {
     sendsEmailOrSms: false,
     startsAutomation: false,
     summary: {
-      status: apiStatus === "ready" ? "ready" : "waiting",
+      status: apiStatus === "ready" && svozKaiserFieldConfirmed ? "ready" : "waiting",
       errorCount: issueRows.length,
       siteErrorCount: siteAlerts.length,
       checkedRows: rows.length,
+      rawKomunalRows: allRows.length,
       contractCount: preview?.summary?.contractCount || preview?.metadata?.mappingStats?.contracts || 0,
       itemCount: preview?.summary?.itemCount || preview?.metadata?.mappingStats?.mappedItems || 0,
-      sourceRule: "Vistos aktivní Komunál smlouvy; Svoz Kaiser ANO bude tvrdý filtr po potvrzení názvu pole z Vistos API.",
-      message: issueRows.length
-        ? `Hlídač našel ${issueRows.length} chyb ve Vistos svozových datech.`
-        : "Hlídač nenašel blokující chyby ve Vistos svozových datech."
+      svozKaiserFieldConfirmed,
+      svozKaiserFilterConfirmed: svozKaiserFieldConfirmed,
+      svozKaiserFiltered: svozKaiserFieldConfirmed,
+      svozKaiserEntity: cleanString(svozKaiserField.entityName),
+      svozKaiserColumn: cleanString(svozKaiserField.columnName),
+      svozKaiserCaption: cleanString(svozKaiserField.caption),
+      svozKaiserMetadataSource: cleanString(svozKaiserField.source),
+      svozKaiserYesRows: rows.length,
+      sourceRule,
+      message
+    },
+    metadata: {
+      svozKaiserField
     },
     requiredFields: [
       "Číslo smlouvy",
@@ -2382,11 +2891,35 @@ async function loadVistosKommunalPreviewData(env) {
   }
 
   const session = await loginVistosExecute(env);
-  const [contractsPage, contractRowsPage, productsPage] = await Promise.all([
-    getAllVistosPages(env, session, "Contract", VISTOS_CONTRACT_COLUMNS, VISTOS_KOMUNAL_CONTRACT_FILTER),
-    getAllVistosPages(env, session, "ContractRow", VISTOS_CONTRACT_ROW_COLUMNS, null),
-    getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
-  ]);
+  let svozKaiserField = await resolveVistosSvozKaiserField(env, session);
+  const contractColumns = withVistosSvozKaiserColumn(VISTOS_CONTRACT_COLUMNS, svozKaiserField, "Contract");
+  const contractRowColumns = withVistosSvozKaiserColumn(VISTOS_CONTRACT_ROW_COLUMNS, svozKaiserField, "ContractRow");
+  let contractsPage;
+  let contractRowsPage;
+  let productsPage;
+
+  try {
+    [contractsPage, contractRowsPage, productsPage] = await Promise.all([
+      getAllVistosPages(env, session, "Contract", contractColumns, VISTOS_KOMUNAL_CONTRACT_FILTER),
+      getAllVistosPages(env, session, "ContractRow", contractRowColumns, null),
+      getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
+    ]);
+  } catch (error) {
+    if (!svozKaiserField?.confirmed) {
+      throw error;
+    }
+    svozKaiserField = {
+      ...svozKaiserField,
+      confirmed: false,
+      readFailed: true,
+      message: `Pole ${svozKaiserField.entityName}.${svozKaiserField.columnName} existuje v metadatech, ale GetPageParam ho teď nepřečetl: ${error?.message || "neznámá chyba"}.`
+    };
+    [contractsPage, contractRowsPage, productsPage] = await Promise.all([
+      getAllVistosPages(env, session, "Contract", VISTOS_CONTRACT_COLUMNS, VISTOS_KOMUNAL_CONTRACT_FILTER),
+      getAllVistosPages(env, session, "ContractRow", VISTOS_CONTRACT_ROW_COLUMNS, null),
+      getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
+    ]);
+  }
   const today = new Date();
   const kommunalContracts = contractsPage.rows;
   const contractIds = new Set(kommunalContracts.map((contract) => cleanString(contract?.Id)).filter(Boolean));
@@ -2431,6 +2964,7 @@ async function loadVistosKommunalPreviewData(env) {
       products: relevantProducts,
       today,
       filterDiagnostics,
+      svozKaiserField,
       totals: {
         contracts: {
           total: contractsPage.total,
