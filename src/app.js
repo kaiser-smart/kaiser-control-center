@@ -16342,6 +16342,30 @@ const COLLECTION_ROUTES_DRIVER_ACTION_ICONS = {
   close: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l14 14"/><path d="M23 9L9 23"/></svg>`
 };
 
+const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS = {
+  truck: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16v12H4z"/><path d="M20 14h4l4 4v3h-8z"/><path d="M8 25a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M24 25a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>`,
+  calendar: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8h18v18H7z"/><path d="M7 13h18"/><path d="M11 5v6"/><path d="M21 5v6"/></svg>`,
+  user: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16a5 5 0 1 0 0-10 5 5 0 0 0 0 10z"/><path d="M7 27c1.4-5.2 4.4-8 9-8s7.6 2.8 9 8"/></svg>`,
+  bell: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10 23h12"/><path d="M12 23V14a4 4 0 0 1 8 0v9"/><path d="M14 26a2.5 2.5 0 0 0 4 0"/><path d="M20 14c0-3-1.2-5-4-5s-4 2-4 5"/></svg>`,
+  pin: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 28s9-8.2 9-15A9 9 0 0 0 7 13c0 6.8 9 15 9 15z"/><circle cx="16" cy="13" r="3"/></svg>`,
+  route: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 24c5 0 4-16 9-16s4 16 9 16"/><circle cx="7" cy="24" r="2"/><circle cx="16" cy="8" r="2"/><circle cx="25" cy="24" r="2"/></svg>`,
+  flag: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8 27V6"/><path d="M8 7h15l-2 5 2 5H8"/></svg>`,
+  trash: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11h14l-1 15H10L9 11z"/><path d="M12 11V8h8v3"/><path d="M7 11h18"/></svg>`,
+  bin: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h14l-1 13H10L9 12z"/><path d="M11 12l2-5h6l2 5"/><path d="M13 17h6"/></svg>`,
+  note: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6h18v20H7z"/><path d="M11 12h10"/><path d="M11 17h10"/><path d="M11 22h6"/></svg>`,
+  headset: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17a9 9 0 0 1 18 0"/><path d="M7 17v5a3 3 0 0 0 3 3h2v-9H9a2 2 0 0 0-2 2z"/><path d="M25 17v5a3 3 0 0 1-3 3h-2v-9h3a2 2 0 0 1 2 2z"/><path d="M20 25c0 2-1.4 3-4 3h-2"/></svg>`,
+  cloud: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 23h13a5 5 0 0 0 0-10 8 8 0 0 0-15.4 2.2A4 4 0 0 0 11 23z"/><path d="M16 18v7"/><path d="M12 21l4 4 4-4"/></svg>`
+};
+
+function collectionRoutesDriverTabletPreviewIcon(name, extraClass = "") {
+  const iconName = String(name || "").trim();
+  return `
+    <span class="driver-tablet-preview-inline-icon driver-tablet-preview-inline-icon--${escapeHtml(iconName)} ${escapeHtml(extraClass)}" aria-hidden="true">
+      ${COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS[iconName] || COLLECTION_ROUTES_DRIVER_ACTION_ICONS.problem}
+    </span>
+  `;
+}
+
 let collectionRoutesDriverAudioContext = null;
 
 function collectionRoutesSourceDriverSoundsEnabled() {
@@ -16525,42 +16549,66 @@ function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "defau
 }
 
 function collectionRoutesDriverTabletPreviewSampleRows() {
-  return [
+  const previewRows = [
     {
       routeOrder: 1,
-      customerName: "KOVO-KRCEK s.r.o. - 03651371",
-      addressText: "Tvarozna 437, PSC 66405",
-      wasteType: "PLAST",
-      wasteCode: "200139",
+      customerName: "RC Autokosmetika s.r.o.",
+      addressText: "Brno, Strazni 5",
+      wasteType: "SKO",
+      wasteCode: "200301",
       containerCount: 1,
-      containerVolume: 240,
+      containerVolume: 30,
       estimatedServiceMinutes: 6,
       sourceKind: "design-preview"
     },
     {
       routeOrder: 2,
-      customerName: "PEPCO Czech Republic s.r.o.",
-      addressText: "Brno, Zabovresky, namesti Svornosti 2573/6",
+      customerName: "Vienna Point a.s.",
+      addressText: "Brno, Videnska 121",
       wasteType: "SKO",
       wasteCode: "200301",
-      containerCount: 2,
-      containerVolume: 240,
+      containerCount: 1,
+      containerVolume: 30,
       estimatedServiceMinutes: 8,
       sourceKind: "design-preview"
     },
     {
       routeOrder: 3,
-      customerName: "Ukazkove stanoviste pro ridice",
-      addressText: "Brno, testovaci trasa",
-      wasteType: "PAPIR",
-      wasteCode: "200101",
+      customerName: "ASV SERVISCAR s.r.o.",
+      addressText: "Brno, Sokolova 63a",
+      wasteType: "SKO",
+      wasteCode: "200301",
       containerCount: 1,
-      containerVolume: 1100,
+      containerVolume: 30,
       estimatedServiceMinutes: 9,
-      note: "Ukazkova poznamka pro design preview.",
+      sourceKind: "design-preview"
+    },
+    {
+      routeOrder: 4,
+      customerName: "VV SaZ s.r.o.",
+      addressText: "Brno, Hudcova 660/76d",
+      wasteType: "SKO",
+      wasteCode: "200301",
+      containerCount: 1,
+      containerVolume: 30,
+      estimatedServiceMinutes: 7,
       sourceKind: "design-preview"
     }
   ];
+  for (let order = 5; order <= 19; order += 1) {
+    previewRows.push({
+      routeOrder: order,
+      customerName: `Ukazkova zastavka ${order}`,
+      addressText: "Brno, design preview",
+      wasteType: order % 3 === 0 ? "PAPIR" : "SKO",
+      wasteCode: order % 3 === 0 ? "200101" : "200301",
+      containerCount: order <= 12 ? 2 : 1,
+      containerVolume: order % 3 === 0 ? 1100 : 30,
+      estimatedServiceMinutes: 7,
+      sourceKind: "design-preview"
+    });
+  }
+  return previewRows;
 }
 
 function collectionRoutesDriverTabletPreviewRows(options = {}) {
@@ -16569,7 +16617,13 @@ function collectionRoutesDriverTabletPreviewRows(options = {}) {
 }
 
 function collectionRoutesDriverTabletPreviewAction(label, action, tone = "default") {
-  const iconHtml = collectionRoutesSourceDriverActionIconHtml(label, action, tone);
+  const iconHtml = action === "sarlota"
+    ? `
+      <span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--headset" aria-hidden="true">
+        ${COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS.headset}
+      </span>
+    `
+    : collectionRoutesSourceDriverActionIconHtml(label, action, tone);
   const previewBadge = ["navigate", "sarlota"].includes(action) ? "neostre" : "preview";
   return `
     <button
@@ -16594,8 +16648,8 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
     row,
     index: selectedIndex + offset + 1
   }));
-  const completedCount = 0;
-  const remainingCount = rows.length;
+  const completedCount = Math.min(6, rows.length);
+  const remainingCount = Math.max(0, rows.length - completedCount);
   const progressPercent = collectionRoutesSourceDriverProgressPercent(completedCount, rows.length);
   const routeMetrics = collectionRoutesSourceRowsMetrics(rows);
   const remainingMetrics = collectionRoutesSourceRowsMetrics(rows.slice(selectedIndex + 1));
@@ -16637,7 +16691,7 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
             <header class="driver-tablet-preview-cockpit" aria-label="Souhrn trasy">
               <div class="driver-tablet-preview-brand">
                 <span class="driver-tablet-preview-brand__icon" aria-hidden="true">
-                  ${COLLECTION_ROUTES_DRIVER_ACTION_ICONS.navigate}
+                  ${COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS.truck}
                 </span>
                 <div>
                   <span>Ridicsky tablet</span>
@@ -16646,17 +16700,34 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
                 </div>
               </div>
               <div class="driver-tablet-preview-cockpit__chips" aria-label="Zakladni informace">
-                <span><small>Vozidlo</small><strong>KS 101</strong></span>
-                <span><small>Ridic</small><strong>Jan Novak</strong></span>
-                <span><small>Cas</small><strong>${escapeHtml(collectionRoutesSourceDriverTimeLabel())}</strong></span>
+                <span>
+                  ${collectionRoutesDriverTabletPreviewIcon("calendar")}
+                  <small>Den / tyden</small>
+                  <strong>St 22. 5. 2024</strong>
+                </span>
+                <span>
+                  ${collectionRoutesDriverTabletPreviewIcon("truck")}
+                  <small>Vozidlo</small>
+                  <strong>KS 101</strong>
+                </span>
+                <span>
+                  ${collectionRoutesDriverTabletPreviewIcon("user")}
+                  <small>Ridic</small>
+                  <strong>Jan Novak</strong>
+                </span>
+                <span class="driver-tablet-preview-cockpit__alert" aria-label="Upozorneni">
+                  ${collectionRoutesDriverTabletPreviewIcon("bell")}
+                </span>
               </div>
             </header>
 
             <div class="driver-tablet-preview-route-grid">
               <section class="driver-tablet-preview-current-card" aria-label="Aktualni zastavka">
                 <div class="driver-tablet-preview-section-title">
-                  <span>Kam jedu ted</span>
-                  <strong>Aktualni zastavka</strong>
+                  <span class="driver-tablet-preview-section-label">
+                    ${collectionRoutesDriverTabletPreviewIcon("pin")}
+                    <em>Kam jedu ted</em>
+                  </span>
                 </div>
                 <div class="driver-tablet-preview-current-card__body">
                   <div class="driver-tablet-preview-stop-number" aria-label="Zastavka ${escapeHtml(currentStopOrder)} z ${escapeHtml(totalStopsLabel)}">
@@ -16671,15 +16742,15 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
                 </div>
                 <div class="driver-tablet-preview-info-row" aria-label="Detail zastavky">
                   <article>
-                    <span>Odpad</span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("trash")}<em>Druh odpadu</em></span>
                     <strong>${escapeHtml(collectionRoutesSourceDriverWasteLabel(selectedRow))}</strong>
                   </article>
                   <article>
-                    <span>Nadoba</span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("bin")}<em>Nadoba</em></span>
                     <strong>${escapeHtml(collectionRoutesSourceDriverContainerLabel(selectedRow))}</strong>
                   </article>
                   <article>
-                    <span>Pokyn</span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("note")}<em>Poznamka</em></span>
                     <strong>${escapeHtml(noteText)}</strong>
                   </article>
                 </div>
@@ -16688,8 +16759,10 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
               <aside class="driver-tablet-preview-side" aria-label="Stav trasy a dalsi zastavky">
                 <section class="driver-tablet-preview-progress" aria-label="Stav trasy">
                   <div class="driver-tablet-preview-section-title">
-                    <span>Dnes na trase</span>
-                    <strong>Stav trasy</strong>
+                    <span class="driver-tablet-preview-section-label">
+                      ${collectionRoutesDriverTabletPreviewIcon("route")}
+                      <em>Dnes na trase</em>
+                    </span>
                   </div>
                   <div class="driver-tablet-preview-progress__hero">
                     <div class="driver-tablet-preview-progress-ring" style="--driver-progress: ${escapeHtml(progressPercent)}">
@@ -16701,23 +16774,26 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
                     </div>
                   </div>
                   <div class="driver-tablet-preview-progress__facts">
-                    <span><small>Celkem</small><strong>${escapeHtml(totalStopsLabel)}</strong></span>
-                    <span><small>Zbyva</small><strong>${escapeHtml(remainingStopsLabel)}</strong></span>
-                    <span><small>Nadob</small><strong>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</strong></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("flag")}<small>Celkem zastavek</small><strong>${escapeHtml(totalStopsLabel)}</strong></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("pin")}<small>Zbyva zastavek</small><strong>${escapeHtml(remainingStopsLabel)}</strong></span>
+                    <span>${collectionRoutesDriverTabletPreviewIcon("trash")}<small>Nadob celkem</small><strong>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</strong></span>
                   </div>
                 </section>
 
                 <section class="driver-tablet-preview-next" aria-label="Dalsi zastavky">
                   <div class="driver-tablet-preview-section-title">
-                    <span>Dalsi</span>
-                    <strong>V trase</strong>
+                    <span class="driver-tablet-preview-section-label">
+                      ${collectionRoutesDriverTabletPreviewIcon("pin")}
+                      <em>Dalsi zastavky</em>
+                    </span>
                   </div>
                   <div class="driver-tablet-preview-next__list">
                     ${nextRows.map(({ row, index }) => `
                       <button class="driver-tablet-preview-next-stop" type="button" aria-disabled="true">
                         <span>${escapeHtml(row.routeOrder || index + 1)}</span>
                         <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row).replace(/\s+-\s*\d{6,}$/, ""))}</strong>
-                        <small>${escapeHtml(collectionRoutesSourceDriverStopSubtitle(row))}</small>
+                        <small>${escapeHtml(row.addressText || "-")}</small>
+                        <em>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</em>
                       </button>
                     `).join("")}
                   </div>
@@ -16731,11 +16807,12 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
 
             <div class="driver-tablet-preview-support-actions" aria-label="Vedlejsi akce ridice">
               ${collectionRoutesDriverTabletPreviewAction("Navigovat", "navigate", "navigate")}
-              ${collectionRoutesDriverTabletPreviewAction("Problem", "problem", "problem")}
-              ${collectionRoutesDriverTabletPreviewAction("Sarlota", "sarlota", "sarlota")}
+              ${collectionRoutesDriverTabletPreviewAction("Nahlasit problem", "problem", "problem")}
+              ${collectionRoutesDriverTabletPreviewAction("Pomoc / Sarlota", "sarlota", "sarlota")}
             </div>
 
             <footer class="driver-tablet-preview-footer" aria-label="Stav preview">
+              ${collectionRoutesDriverTabletPreviewIcon("cloud")}
               <span>Online</span>
               <strong>Design preview - bez ostrych akci</strong>
               <span>${escapeHtml(routeEtaText)}</span>
