@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.398"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.399"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: uklizená Stanoviště",
+    text: "Záložka Stanoviště má přímo vložený panel hlídače, master řádky s chybou jemně pulzují, detailní chybné buňky jsou červené a zákazník je v hlavním řádku před smlouvou. Opakované živé načítání Vistos exportu je v aktuální stránce omezené."
+  },
   {
     title: "Trasy svozu: cloud hlídač Vistos Svoz Kaiser",
     text: "Hlídač Svoz Kaiser má chráněný cloud runner pro read-only snapshoty každých 15 minut v provozu a každé 2 hodiny mimo provoz. HP badge čte poslední uložený snapshot a otevření Stanovišť spustí navíc živé Vistos volání bez zápisu do Vistosu."

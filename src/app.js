@@ -1021,6 +1021,7 @@ const collectionRoutesPilotState = {
   svozKaiserWatchdogLiveLoadedAt: "",
   kommunalPairingRows: [],
   kommunalExpandedContractKeys: [],
+  kommunalPairingLoadAttempted: false,
   kommunalPairingLoading: false,
   kommunalPairingError: "",
   kommunalPairingLoadedAt: "",
@@ -13442,7 +13443,7 @@ function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
   const siteAlerts = filterConfirmed ? collectionRoutesWatchdogSiteAlerts().slice(0, compact ? 3 : 8) : [];
   const tone = errorCount > 0
     ? "danger"
-    : collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.svozKaiserWatchdogError || (watchdog && !filterConfirmed)
+    : collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.svozKaiserWatchdogError || !watchdog || (watchdog && !filterConfirmed)
       ? "waiting"
       : "ok";
   const headline = errorCount > 0
@@ -13451,6 +13452,8 @@ function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
       ? "Kontroluji Vistos Svoz Kaiser data..."
       : collectionRoutesPilotState.svozKaiserWatchdogError
         ? "Hlídač Vistos teď neběží."
+        : !watchdog
+          ? "Čekám na první cloud snapshot hlídače."
         : watchdog && !filterConfirmed
           ? "Čekám na potvrzení pole Svoz Kaiser ANO ve Vistos API."
           : "Hlídač Vistos Svoz Kaiser je bez blokujících chyb.";
@@ -14642,6 +14645,7 @@ function collectionRoutesNormalizeKommunalPreviewState() {
 
 function collectionRoutesResetKommunalPairingRows() {
   collectionRoutesPilotState.kommunalPairingRows = [];
+  collectionRoutesPilotState.kommunalPairingLoadAttempted = false;
   collectionRoutesPilotState.kommunalPairingError = "";
   collectionRoutesPilotState.kommunalPairingLoadedAt = "";
   collectionRoutesPilotState.kommunalPairingSource = "";
@@ -17513,6 +17517,50 @@ function collectionRoutesIssueLabelsFromValue(value) {
     .filter(Boolean);
 }
 
+function collectionRoutesIssuesFromValue(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((issue) => {
+      if (typeof issue === "string") {
+        return { issueType: issue, label: issue };
+      }
+      const issueType = String(issue?.type || issue?.issueType || "").trim();
+      const label = String(issue?.label || issue?.message || issueType || "").trim();
+      return { issueType, label };
+    })
+    .filter((issue) => issue.issueType || issue.label);
+}
+
+function collectionRoutesIssueTypesForCell(item, cell) {
+  const types = new Set((item.issues || []).map((issue) => String(issue.issueType || issue.label || "").toLowerCase()));
+  const hasAny = (...needles) => Array.from(types).some((type) => needles.some((needle) => type.includes(needle)));
+  if (cell === "dateRange") {
+    return hasAny("date", "svoz od", "svoz do", "start", "end");
+  }
+  if (cell === "addressPlace") {
+    return hasAny("address", "adresa", "stanoviste", "stanoviště", "loading");
+  }
+  if (cell === "waste") {
+    return hasAny("waste", "odpad", "product", "produkt", "mappable");
+  }
+  if (cell === "container") {
+    return hasAny("container", "nadob", "nádob", "volume");
+  }
+  if (cell === "interval") {
+    return hasAny("frequency", "interval", "cetnost", "četnost");
+  }
+  if (cell === "pickupDays") {
+    return hasAny("pickup-day", "pickup-days", "svozovy", "svozové", "collectionday", "parity", "sudy", "lichy");
+  }
+  return false;
+}
+
+function collectionRoutesDetailCellClass(item, cell) {
+  return collectionRoutesIssueTypesForCell(item, cell) ? "collection-routes-site-detail-cell--danger" : "";
+}
+
 function collectionRoutesVistosSourceRows() {
   return collectionRoutesSvozKaiserFieldConfirmed()
     ? collectionRoutesPilotState.kommunalPairingRows.filter((row) => row?.svozKaiserIncluded === true)
@@ -17532,6 +17580,7 @@ function collectionRoutesContractKey(sourceRow, summary, fallback = "") {
 
 function collectionRoutesVistosContractDetailItem(sourceRow, index) {
   const summary = collectionRoutesImportRowSummary(sourceRow);
+  const issues = collectionRoutesIssuesFromValue(summary.issues || sourceRow.issues);
   const containerCount = collectionRoutesMetricValue(summary.containerCount, 0);
   const normalizedContainerCount = containerCount > 0 ? containerCount : summary.containerVolume ? 1 : 0;
   const container = summary.containerVolume
@@ -17549,7 +17598,8 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     interval: summary.frequency || "neurčeno",
     pickupDays: summary.pickupDaysText || summary.pickupDays || sourceRow.pickupDaysText || sourceRow.pickupDays || "neurčeno",
     note: summary.note || sourceRow.note || "",
-    issueLabels: collectionRoutesIssueLabelsFromValue(summary.issues || sourceRow.issues),
+    issues,
+    issueLabels: issues.map((issue) => issue.label).filter(Boolean),
     issueCount: collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, 0),
     containerCount: normalizedContainerCount
   };
@@ -17697,13 +17747,13 @@ function collectionRoutesVistosContractDetailTable(contractRow) {
         </thead>
         <tbody>
           ${contractRow.items.map((item) => `
-            <tr>
-              <td data-label="Od-do">${escapeHtml(item.dateRange)}</td>
-              <td data-label="Adresní místo">${escapeHtml(item.addressPlace)}</td>
-              <td data-label="Odpad">${escapeHtml(item.waste)}</td>
-              <td data-label="Nádoba">${escapeHtml(item.container)}</td>
-              <td data-label="Interval">${escapeHtml(item.interval)}</td>
-              <td data-label="Den svozu">${escapeHtml(item.pickupDays)}</td>
+            <tr class="${item.issueCount > 0 ? "collection-routes-site-detail-item--danger" : ""}">
+              <td class="${collectionRoutesDetailCellClass(item, "dateRange")}" data-label="Od-do">${escapeHtml(item.dateRange)}</td>
+              <td class="${collectionRoutesDetailCellClass(item, "addressPlace")}" data-label="Adresní místo">${escapeHtml(item.addressPlace)}</td>
+              <td class="${collectionRoutesDetailCellClass(item, "waste")}" data-label="Odpad">${escapeHtml(item.waste)}</td>
+              <td class="${collectionRoutesDetailCellClass(item, "container")}" data-label="Nádoba">${escapeHtml(item.container)}</td>
+              <td class="${collectionRoutesDetailCellClass(item, "interval")}" data-label="Interval">${escapeHtml(item.interval)}</td>
+              <td class="${collectionRoutesDetailCellClass(item, "pickupDays")}" data-label="Den svozu">${escapeHtml(item.pickupDays)}</td>
               <td data-label="Poznámka">${escapeHtml(item.note || "-")}</td>
             </tr>
           `).join("")}
@@ -17734,8 +17784,8 @@ function collectionRoutesVistosSitesTable() {
         <thead>
           <tr>
             <th>Stav</th>
-            <th>Smlouva</th>
             <th>Zákazník</th>
+            <th>Smlouva</th>
             <th>Detail</th>
           </tr>
         </thead>
@@ -17744,15 +17794,15 @@ function collectionRoutesVistosSitesTable() {
             const status = collectionRoutesVistosSiteStatus(contractRow);
             const expanded = collectionRoutesVistosContractExpanded(contractRow.key);
             return `
-              <tr class="collection-routes-site-contract-row">
+              <tr class="collection-routes-site-contract-row ${contractRow.issueCount > 0 ? "collection-routes-site-contract-row--danger" : ""}">
                 <td data-label="Stav">
                   <span class="collection-routes-site-status collection-routes-site-status--${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>
                 </td>
+                <td data-label="Zákazník">${escapeHtml(contractRow.customerName || "-")}</td>
                 <td data-label="Smlouva">
                   <strong>${escapeHtml(contractRow.contractNumber || "-")}</strong>
                   <span>${escapeHtml(contractRow.itemCount)} položek · ${escapeHtml(contractRow.containerCount)} nádob</span>
                 </td>
-                <td data-label="Zákazník">${escapeHtml(contractRow.customerName || "-")}</td>
                 <td data-label="Detail">
                   <button class="secondary-link collection-routes-site-detail-toggle" type="button" data-collection-routes-site-contract-detail="${escapeHtml(contractRow.key)}" aria-expanded="${expanded ? "true" : "false"}">
                     ${expanded ? "Skrýt detail" : "Detail"}
@@ -17791,8 +17841,10 @@ function ensureCollectionRoutesSitesReadOnlyData(user = currentUser()) {
     collectionRoutesCanRunImportPreview(user) &&
     !collectionRoutesPilotState.kommunalPairingRows.length &&
     !collectionRoutesPilotState.kommunalPairingLoading &&
-    !collectionRoutesPilotState.kommunalPairingError
+    !collectionRoutesPilotState.kommunalPairingError &&
+    !collectionRoutesPilotState.kommunalPairingLoadAttempted
   ) {
+    collectionRoutesPilotState.kommunalPairingLoadAttempted = true;
     void Promise.resolve().then(() => loadCollectionRoutesKommunalPairingRows());
   }
 }
@@ -17803,6 +17855,7 @@ function collectionRoutesSitesSection(user) {
   const stats = collectionRoutesVistosSitesStats(contractRows);
   const filterConfirmed = collectionRoutesSvozKaiserFieldConfirmed();
   const loadedAt = collectionRoutesPilotState.kommunalPairingLoadedAt ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt) : "";
+  const isLoadingVistosSites = collectionRoutesPilotState.kommunalPairingLoading || collectionRoutesPilotState.svozKaiserWatchdogLoading;
   const loadingNotice = collectionRoutesPilotState.kommunalPairingLoading || collectionRoutesPilotState.svozKaiserWatchdogLoading
     ? "Načítám Vistos stanoviště automaticky..."
     : !loadedAt && !collectionRoutesPilotState.kommunalPairingError
@@ -17816,9 +17869,10 @@ function collectionRoutesSitesSection(user) {
           <h2 id="collection-routes-sites-title">Stanoviště z Vistosu</h2>
           <p>Řádkový read-only seznam z Vistos Komunál dat. Zdroj pro tuto záložku je Vistos API.</p>
         </div>
-        <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
+        <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(isLoadingVistosSites ? "Načítám Vistos" : filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
       </div>
       ${loadingNotice ? `<p class="module-feedback__notice">${escapeHtml(loadingNotice)}</p>` : ""}
+      ${collectionRoutesSvozKaiserWatchdogPanel()}
       <div class="collection-routes-stats collection-routes-sites-summary">
         <article><span>Zdroj</span><strong>Vistos API</strong></article>
         <article><span>Stanoviště</span><strong>${escapeHtml(stats.siteCount)}</strong></article>
@@ -26500,6 +26554,7 @@ async function loadCollectionRoutesKommunalPairingRows(options = {}) {
     collectionRoutesResetKommunalPairingRows();
   }
 
+  collectionRoutesPilotState.kommunalPairingLoadAttempted = true;
   collectionRoutesPilotState.kommunalPairingLoading = true;
   collectionRoutesPilotState.kommunalPairingError = "";
   if (options.renderAfter !== false) {
