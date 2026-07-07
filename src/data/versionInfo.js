@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.395"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.396"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: Stanoviště podle smluv",
+    text: "Záložka Stanoviště má hlavní řádek zjednodušený na stav, smlouvu, zákazníka a detail. Položky smlouvy se rozbalí pod řádkem s údaji od-do, adresní místo, odpad, nádoba, interval, den svozu a poznámka. Jde o read-only Vistos zobrazení bez zápisu do Vistosu."
+  },
   {
     title: "Trasy svozu: obecný hlídač konzistence Vistos Svoz Kaiser",
     text: "Read-only hlídač Svoz Kaiser nově křížově kontroluje Adresní místo, svozové dny, sudý/lichý režim, interval odvozu, Svoz od/do a platnost položek jen nad řádky Svoz Kaiser ANO. Záložka Stanoviště se načítá automaticky bez ručního refresh tlačítka. Nevznikají ostré trasy, zápisy do Vistosu, SMS/e-maily ani automatizace."

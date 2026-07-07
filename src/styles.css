@@ -2654,7 +2654,7 @@ h1 {
 }
 
 .collection-routes-sites-table table {
-  min-width: 1120px;
+  min-width: 860px;
 }
 
 .collection-routes-sites-table td {
@@ -2670,6 +2670,58 @@ h1 {
 .collection-routes-sites-table td strong {
   color: var(--ink);
   font-weight: 900;
+}
+
+.collection-routes-site-contract-row td {
+  vertical-align: middle;
+}
+
+.collection-routes-site-detail-toggle {
+  min-height: 38px;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
+.collection-routes-site-detail-row td {
+  background: #fbfdf8;
+}
+
+.collection-routes-site-detail-cell {
+  padding: 0;
+}
+
+.collection-routes-site-detail-table {
+  margin: 10px;
+  overflow: auto;
+  border: 1px solid rgba(66, 80, 74, 0.1);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.collection-routes-site-detail-table table {
+  min-width: 1040px;
+}
+
+.collection-routes-site-detail-table th {
+  background: #f5f9f0;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.collection-routes-site-detail-table td {
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+
+.collection-routes-site-detail-warning {
+  margin: 0 10px 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(181, 118, 21, 0.22);
+  border-radius: 8px;
+  background: #fff8e8;
+  color: #7c5200;
+  font-size: 0.84rem;
+  font-weight: 800;
 }
 
 .collection-routes-site-status {
@@ -18045,6 +18097,47 @@ body:has(.data-box-page) {
     color: var(--muted);
     content: attr(data-label);
     font-size: 0.7rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .collection-routes-site-detail-cell::before {
+    display: none;
+  }
+
+  .collection-routes-site-detail-table {
+    margin: 8px;
+    overflow: visible;
+  }
+
+  .collection-routes-site-detail-table table,
+  .collection-routes-site-detail-table thead,
+  .collection-routes-site-detail-table tbody,
+  .collection-routes-site-detail-table tr,
+  .collection-routes-site-detail-table th,
+  .collection-routes-site-detail-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .collection-routes-site-detail-table thead {
+    display: none;
+  }
+
+  .collection-routes-site-detail-table tr {
+    margin: 0;
+    border: 0;
+    border-bottom: 1px solid rgba(66, 80, 74, 0.08);
+    border-radius: 0;
+  }
+
+  .collection-routes-site-detail-table td::before {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.68rem;
     font-weight: 900;
     text-transform: uppercase;
   }

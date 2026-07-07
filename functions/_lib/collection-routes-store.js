@@ -2441,6 +2441,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         validTo: isoDateValue(contract?.EndDate),
         pickupFrom: isoDateValue(pickupFrom),
         pickupTo: isoDateValue(pickupTo),
+        pickupDaysText: pickupDayValues.map((item) => cleanString(item.value)).filter(Boolean).join(", "),
         customerName,
         branchName,
         addressRaw,
