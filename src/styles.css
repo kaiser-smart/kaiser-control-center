@@ -29029,7 +29029,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-gallery__tiles {
   display: grid;
-  grid-template-columns: repeat(3, minmax(102px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
   justify-items: stretch;
@@ -29052,13 +29052,19 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-gallery-tile strong {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
   max-width: 100%;
   color: var(--panel-title);
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 900;
   line-height: 1.2;
   text-align: center;
-  overflow-wrap: anywhere;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-gallery__formats {
