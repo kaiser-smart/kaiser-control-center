@@ -1,10 +1,49 @@
+import {
+  getVistosPage,
+  isVistosExecuteConfigured,
+  loginVistosExecute
+} from "./vistos-execute-client.js";
+
 const DB_BINDING = "SMART_ODPADY_DB";
 const SNAPSHOT_IMPORT_KIND = "vistos_invoice_snapshot";
 const SNAPSHOT_SOURCE = "vistos";
 const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 250;
+const DEFAULT_CUSTOMER_LIMIT = 25;
+const MAX_CUSTOMER_LIMIT = 80;
 const ROW_PAGE_SIZE = 1000;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const CUSTOMER_COLUMNS = [
+  "Id",
+  "Name",
+  "Caption",
+  "RegNumber",
+  "VATNumber",
+  "ICO",
+  "DIC",
+  "EmailInvoicing",
+  "BillingEmail",
+  "Email",
+  "PhoneNumber",
+  "Phone",
+  "Mobile",
+  "InvoiceDueDays",
+  "Parent_FK",
+  "Directory_FK",
+  "DirectoryBranch_FK",
+  "Street",
+  "City",
+  "Zip"
+];
+
+const CUSTOMER_ENTITY_ATTEMPTS = [
+  { key: "directory_with_branch_by_id", entityName: "DirectoryWithBranch", idFields: ["Id"] },
+  { key: "customer_branch_by_id", entityName: "CustomerBranch", idFields: ["Id"] },
+  { key: "directory_by_id", entityName: "Directory", idFields: ["Id"] },
+  { key: "customer_by_id", entityName: "Customer", idFields: ["Id"] },
+  { key: "company_by_id", entityName: "Company", idFields: ["Id"] }
+];
 
 export class ReceivablesVistosLedgerMappingError extends Error {
   constructor(message, status = 400, code = "receivables_vistos_ledger_mapping_error") {
@@ -68,6 +107,57 @@ function compactDigits(value) {
   return clean(value).replace(/\D/g, "");
 }
 
+function firstValue(row, keys) {
+  for (const key of keys) {
+    const value = clean(row?.[key]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function recordId(row, baseKey) {
+  return firstValue(row, [
+    `${baseKey}_RecordId`,
+    `${baseKey}.RecordId`,
+    `${baseKey}_Id`,
+    `${baseKey}.Id`,
+    baseKey
+  ]);
+}
+
+function caption(row, baseKey) {
+  return firstValue(row, [
+    `${baseKey}_Caption`,
+    `${baseKey}.Caption`,
+    `${baseKey}_Name`,
+    `${baseKey}.Name`,
+    baseKey
+  ]);
+}
+
+function mapCustomerMetadata(row = {}, attempt = {}) {
+  const parentCompanyId = recordId(row, "Parent_FK") || recordId(row, "Directory_FK");
+  const parentCompanyName = caption(row, "Parent_FK") || caption(row, "Directory_FK");
+  return {
+    sourceEntity: clean(attempt.entityName),
+    sourceAttemptKey: clean(attempt.key),
+    vistoCustomerId: firstValue(row, ["Id", "CompanyId", "DirectoryId", "CustomerId"]),
+    companyName: firstValue(row, ["Name", "Caption", "CompanyName", "ObchodniNazev"]),
+    ico: compactDigits(firstValue(row, ["RegNumber", "ICO", "Ico", "IC", "Ic", "CompanyIdentificationNumber"])),
+    dic: firstValue(row, ["VATNumber", "DIC", "Dic", "VAT", "VatId"]),
+    billingEmail: firstValue(row, ["EmailInvoicing", "BillingEmail", "InvoiceEmail", "Email"]),
+    email: firstValue(row, ["Email", "Email1", "ContactEmail"]),
+    phone: firstValue(row, ["PhoneNumber", "Phone", "Telefon", "Mobile"]),
+    standardDueDays: numberValue(firstValue(row, ["InvoiceDueDays", "DueDays", "StandardDueDays"]), 0),
+    parentCompanyId,
+    parentCompanyName,
+    street: firstValue(row, ["Street", "Ulice"]),
+    city: firstValue(row, ["City", "Mesto"]),
+    zip: firstValue(row, ["Zip", "PSC"]),
+    rawKeys: Object.keys(row || {}).slice(0, 60)
+  };
+}
+
 function customerKey(invoice = {}) {
   const branch = clean(invoice.customerBranchId || invoice.customerBranchFk);
   if (branch) return { key: `branch:${branch}`, type: "CustomerBranch_FK", value: branch };
@@ -106,6 +196,194 @@ function invoiceIssueCodes(row = {}, invoice = {}) {
   if (!isoDate(invoice.dueDate)) codes.push("missing_due_date");
   if (!numberValue(invoice.totalAmount ?? invoice.priceWithTax)) codes.push("missing_total_amount");
   return [...new Set(codes)];
+}
+
+function candidateLookupValue(candidate = {}) {
+  if (candidate.customerKeyType === "CustomerBranch_FK" && candidate.customerBranchId) return candidate.customerBranchId;
+  if (candidate.customerKeyType === "Customer_FK" && candidate.customerCompanyId) return candidate.customerCompanyId;
+  if (candidate.customerKeyValue && !["IČO", "Název", "nevyřešeno"].includes(candidate.customerKeyType)) return candidate.customerKeyValue;
+  return "";
+}
+
+function customerMetadataStatus(candidate = {}, metadata = null) {
+  if (!metadata) return "missing_metadata";
+  const issues = customerMetadataIssues(candidate, metadata);
+  if (issues.some((issue) => issue.endsWith("_conflict"))) return "metadata_conflict";
+  if (issues.length) return "partial_metadata";
+  return "enriched";
+}
+
+function customerMetadataIssues(candidate = {}, metadata = null) {
+  if (!metadata) return ["missing_metadata"];
+  const conflicts = [];
+  const candidateIco = compactDigits(candidate.ico);
+  if (candidateIco && metadata.ico && candidateIco !== metadata.ico) conflicts.push("ico_conflict");
+  if (candidate.dic && metadata.dic && clean(candidate.dic).toLowerCase() !== clean(metadata.dic).toLowerCase()) {
+    conflicts.push("dic_conflict");
+  }
+  const missing = [];
+  if (!metadata.ico) missing.push("missing_ico");
+  if (!metadata.dic) missing.push("missing_dic");
+  if (!metadata.billingEmail) missing.push("missing_billing_email");
+  if (!metadata.standardDueDays) missing.push("missing_standard_due_days");
+  return [...conflicts, ...missing];
+}
+
+async function loadCustomerMetadataForCandidate(env, session, candidate = {}) {
+  const lookupValue = candidateLookupValue(candidate);
+  const attempts = [];
+  if (!lookupValue) {
+    return { metadata: null, status: "missing_lookup_key", attempts };
+  }
+
+  for (const attempt of CUSTOMER_ENTITY_ATTEMPTS) {
+    for (const idField of attempt.idFields) {
+      const filter = { [idField]: lookupValue };
+      try {
+        const page = await getVistosPage(env, session, attempt.entityName, CUSTOMER_COLUMNS, filter, 0, 2);
+        attempts.push({
+          key: attempt.key,
+          entityName: attempt.entityName,
+          filter,
+          ok: true,
+          returnedRows: page.rows.length,
+          recordsTotal: page.total || 0,
+          recordsFiltered: page.filtered || 0
+        });
+        if (page.rows.length > 0) {
+          const metadata = mapCustomerMetadata(page.rows[0], attempt);
+          return {
+            metadata,
+            status: customerMetadataStatus(candidate, metadata),
+            attempts
+          };
+        }
+      } catch (error) {
+        attempts.push({
+          key: attempt.key,
+          entityName: attempt.entityName,
+          filter,
+          ok: false,
+          code: clean(error?.code),
+          message: clean(error?.message).slice(0, 160)
+        });
+      }
+    }
+  }
+
+  return { metadata: null, status: "missing_metadata", attempts };
+}
+
+async function enrichCustomerMetadata(env, candidates = [], options = {}) {
+  const limit = boundedInteger(options.customerLimit, DEFAULT_CUSTOMER_LIMIT, MAX_CUSTOMER_LIMIT);
+  const targetCandidates = candidates
+    .filter((candidate) => candidate.customerKey !== "unresolved")
+    .slice(0, limit);
+
+  if (!targetCandidates.length) {
+    return {
+      enabled: true,
+      apiStatus: "empty",
+      readOnly: true,
+      writesD1: false,
+      processedCandidates: 0,
+      results: [],
+      summary: {
+        enriched: 0,
+        partialMetadata: 0,
+        missingMetadata: 0,
+        metadataConflict: 0
+      },
+      diagnostics: []
+    };
+  }
+
+  if (!isVistosExecuteConfigured(env)) {
+    return {
+      enabled: true,
+      apiStatus: "not_configured",
+      readOnly: true,
+      writesD1: false,
+      processedCandidates: 0,
+      targetCandidates: targetCandidates.length,
+      results: [],
+      summary: {
+        enriched: 0,
+        partialMetadata: 0,
+        missingMetadata: targetCandidates.length,
+        metadataConflict: 0
+      },
+      diagnostics: [],
+      message: "Vistos API není nakonfigurováno pro zákaznické metadata."
+    };
+  }
+
+  let session = null;
+  try {
+    session = await loginVistosExecute(env);
+  } catch (error) {
+    return {
+      enabled: true,
+      apiStatus: "error",
+      readOnly: true,
+      writesD1: false,
+      processedCandidates: 0,
+      targetCandidates: targetCandidates.length,
+      results: [],
+      summary: {
+        enriched: 0,
+        partialMetadata: 0,
+        missingMetadata: targetCandidates.length,
+        metadataConflict: 0
+      },
+      diagnostics: [{
+        ok: false,
+        stage: "login",
+        code: clean(error?.code),
+        message: clean(error?.message).slice(0, 160)
+      }],
+      message: "Zákaznická metadata se nepodařilo read-only načíst z Vistosu."
+    };
+  }
+  const results = [];
+  const diagnostics = [];
+
+  for (const candidate of targetCandidates) {
+    const enrichment = await loadCustomerMetadataForCandidate(env, session, candidate);
+    diagnostics.push(...enrichment.attempts.map((attempt) => ({
+      ...attempt,
+      customerKey: candidate.customerKey,
+      customerName: candidate.customerName
+    })));
+    results.push({
+      customerKey: candidate.customerKey,
+      customerName: candidate.customerName,
+      customerKeyType: candidate.customerKeyType,
+      customerKeyValue: candidate.customerKeyValue,
+      status: enrichment.status,
+      metadata: enrichment.metadata,
+      issues: customerMetadataIssues(candidate, enrichment.metadata)
+    });
+  }
+
+  const countStatus = (status) => results.filter((item) => item.status === status).length;
+  return {
+    enabled: true,
+    apiStatus: "ready",
+    readOnly: true,
+    writesD1: false,
+    processedCandidates: results.length,
+    targetCandidates: targetCandidates.length,
+    source: "vistos_execute_targeted_customer_lookup",
+    results,
+    summary: {
+      enriched: countStatus("enriched"),
+      partialMetadata: countStatus("partial_metadata"),
+      missingMetadata: countStatus("missing_metadata") + countStatus("missing_lookup_key"),
+      metadataConflict: countStatus("metadata_conflict")
+    },
+    diagnostics: diagnostics.slice(-200)
+  };
 }
 
 export function buildReceivablesVistosLedgerMapping(rows = [], options = {}) {
@@ -318,6 +596,21 @@ export async function getReceivablesVistosLedgerMapping(env, options = {}) {
     }
     const rows = await loadSnapshotRows(db, batch.id);
     const result = buildReceivablesVistosLedgerMapping(rows, options);
+    const shouldEnrichCustomers = options.enrichCustomers !== false && options.enrichCustomers !== "0";
+    if (shouldEnrichCustomers && result.mapping?.candidates?.length) {
+      const enrichment = await enrichCustomerMetadata(env, result.mapping.candidates, options);
+      const enrichmentByKey = new Map((enrichment.results || []).map((item) => [item.customerKey, item]));
+      result.mapping.customerEnrichment = enrichment;
+      result.mapping.candidates = result.mapping.candidates.map((candidate) => {
+        const customer = enrichmentByKey.get(candidate.customerKey) || null;
+        return {
+          ...candidate,
+          customerMetadataStatus: customer?.status || "not_checked",
+          customerMetadata: customer?.metadata || null,
+          customerMetadataIssues: customer?.issues || []
+        };
+      });
+    }
     return {
       ...result,
       snapshot: {

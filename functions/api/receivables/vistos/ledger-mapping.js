@@ -8,7 +8,9 @@ function mappingOptions(request) {
   const url = new URL(request.url);
   return {
     limit: url.searchParams.get("limit") || "80",
-    today: url.searchParams.get("today") || ""
+    today: url.searchParams.get("today") || "",
+    enrichCustomers: url.searchParams.get("enrichCustomers") !== "0",
+    customerLimit: url.searchParams.get("customerLimit") || "25"
   };
 }
 

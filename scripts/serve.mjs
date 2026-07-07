@@ -3394,8 +3394,68 @@ function mockReceivablesVistosLedgerMapping() {
     issueCode: row.issueCode,
     issueMessage: row.issueMessage
   }));
+  const result = buildReceivablesVistosLedgerMapping(rows, { limit: 80, today: "2026-07-07" });
+  const firstCandidate = result.mapping?.candidates?.[0] || null;
+  const customerMetadata = {
+    sourceEntity: "DirectoryWithBranch",
+    sourceAttemptKey: "local_mock",
+    vistoCustomerId: firstCandidate?.customerCompanyId || firstCandidate?.customerKeyValue || "C123",
+    companyName: firstCandidate?.customerName || "Firma Alfa s.r.o.",
+    ico: firstCandidate?.ico || "12345678",
+    dic: firstCandidate?.dic || "CZ12345678",
+    billingEmail: "fakturace@example.test",
+    email: "info@example.test",
+    phone: "",
+    standardDueDays: 14,
+    parentCompanyId: "",
+    parentCompanyName: "",
+    street: "",
+    city: "",
+    zip: "",
+    rawKeys: ["Id", "Name", "RegNumber", "VATNumber", "EmailInvoicing", "InvoiceDueDays"]
+  };
+  result.mapping.customerEnrichment = {
+    enabled: true,
+    apiStatus: "ready",
+    readOnly: true,
+    writesD1: false,
+    processedCandidates: firstCandidate ? 1 : 0,
+    targetCandidates: firstCandidate ? 1 : 0,
+    source: "local_mock_targeted_customer_lookup",
+    summary: {
+      enriched: firstCandidate ? 1 : 0,
+      partialMetadata: 0,
+      missingMetadata: 0,
+      metadataConflict: 0
+    },
+    results: firstCandidate
+      ? [{
+        customerKey: firstCandidate.customerKey,
+        customerName: firstCandidate.customerName,
+        customerKeyType: firstCandidate.customerKeyType,
+        customerKeyValue: firstCandidate.customerKeyValue,
+        status: "enriched",
+        metadata: customerMetadata,
+        issues: []
+      }]
+      : [],
+    diagnostics: []
+  };
+  result.mapping.candidates = (result.mapping.candidates || []).map((candidate, index) => (index === 0
+    ? {
+      ...candidate,
+      customerMetadataStatus: "enriched",
+      customerMetadata,
+      customerMetadataIssues: []
+    }
+    : {
+      ...candidate,
+      customerMetadataStatus: "not_checked",
+      customerMetadata: null,
+      customerMetadataIssues: []
+    }));
   return {
-    ...buildReceivablesVistosLedgerMapping(rows, { limit: 80, today: "2026-07-07" }),
+    ...result,
     snapshot: {
       batchId: snapshot.snapshot.batch.id,
       status: snapshot.snapshot.batch.status,

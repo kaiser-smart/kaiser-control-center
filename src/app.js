@@ -23343,6 +23343,7 @@ function receivablesInvoiceSnapshotPanel() {
 
 function receivablesLedgerMappingSummary(mapping) {
   const summary = mapping?.summary || {};
+  const customerSummary = mapping?.customerEnrichment?.summary || {};
   const cards = [
     ["Faktur ve snapshotu", summary.invoiceCount || 0],
     ["Kandidátů zákazníků", summary.customerCandidateCount || 0],
@@ -23350,7 +23351,9 @@ function receivablesLedgerMappingSummary(mapping) {
     ["Ke kontrole", summary.reviewCandidateCount || 0],
     ["Otevřené faktury", summary.openInvoiceCount || 0],
     ["Po splatnosti", summary.overdueInvoiceCount || 0],
-    ["Neurčené faktury", summary.unresolvedInvoiceCount || 0],
+    ["Zákazník obohacen", customerSummary.enriched || 0],
+    ["Chybí metadata", customerSummary.missingMetadata || 0],
+    ["Konflikt", customerSummary.metadataConflict || 0],
     ["Otevřeno celkem", formatReceivableMoney(summary.totalOpenAmount)]
   ];
 
@@ -23364,6 +23367,23 @@ function receivablesLedgerMappingSummary(mapping) {
       `).join("")}
     </div>
   `;
+}
+
+function receivablesCustomerMetadataTone(status) {
+  if (status === "enriched") return "ready";
+  if (status === "metadata_conflict") return "danger";
+  if (status === "partial_metadata") return "warning";
+  return "waiting";
+}
+
+function receivablesCustomerMetadataLabel(status) {
+  if (status === "enriched") return "zákazník obohacen";
+  if (status === "partial_metadata") return "část metadat chybí";
+  if (status === "metadata_conflict") return "konflikt";
+  if (status === "missing_metadata") return "chybí metadata";
+  if (status === "missing_lookup_key") return "chybí klíč";
+  if (status === "not_checked") return "neověřeno";
+  return status || "neověřeno";
 }
 
 function receivablesLedgerMappingIssues(mapping) {
@@ -23410,6 +23430,7 @@ function receivablesLedgerMappingTable(mapping) {
             <th>Po splatnosti</th>
             <th>Max dnů</th>
             <th>Nejstarší splatnost</th>
+            <th>Zákazník</th>
             <th>Kontrola</th>
             <th>Návrh</th>
           </tr>
@@ -23427,6 +23448,10 @@ function receivablesLedgerMappingTable(mapping) {
               <td data-label="Po splatnosti">${escapeHtml(candidate.overdueInvoiceCount || 0)}</td>
               <td data-label="Max dnů">${escapeHtml(candidate.maxDaysOverdue || 0)}</td>
               <td data-label="Nejstarší splatnost">${escapeHtml(candidate.oldestDueDate || "-")}</td>
+              <td data-label="Zákazník">
+                ${receivablesPill(receivablesCustomerMetadataLabel(candidate.customerMetadataStatus), receivablesCustomerMetadataTone(candidate.customerMetadataStatus))}
+                <small>${escapeHtml((candidate.customerMetadataIssues || []).slice(0, 3).join(", ") || candidate.customerMetadata?.billingEmail || "")}</small>
+              </td>
               <td data-label="Kontrola">${receivablesPill(candidate.mappingStatus || "-", candidate.mappingStatus === "ready" ? "ready" : "warning")}</td>
               <td data-label="Návrh">${escapeHtml(candidate.recommendedAction || "-")}</td>
             </tr>
@@ -23441,8 +23466,10 @@ function receivablesLedgerMappingPanel() {
   const mapping = receivablesState.ledgerMapping?.mapping || null;
   const summary = mapping?.summary || {};
   const snapshot = receivablesState.ledgerMapping?.snapshot || null;
+  const customerEnrichment = mapping?.customerEnrichment || {};
   const safetyRows = [
     ["Zdroj", "poslední Vistos snapshot"],
+    ["Zákazníci", customerEnrichment.enabled ? `${customerEnrichment.processedCandidates || 0} read-only lookupů` : "čeká"],
     ["D1 zápis", "ne"],
     ["Ostrý ledger", "vypnuto"],
     ["Komunikace", "vypnuto"],
@@ -24941,7 +24968,7 @@ async function loadReceivablesLedgerMapping(options = {}) {
   receivablesState.ledgerMappingLoading = true;
   receivablesState.ledgerMappingError = "";
   try {
-    const result = await apiJson("/api/receivables/vistos/ledger-mapping?limit=80");
+    const result = await apiJson("/api/receivables/vistos/ledger-mapping?limit=80&enrichCustomers=1&customerLimit=25");
     receivablesState.ledgerMapping = result || null;
     receivablesState.ledgerMappingLoaded = true;
   } catch (error) {
