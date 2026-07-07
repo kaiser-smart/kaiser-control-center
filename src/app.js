@@ -17501,14 +17501,14 @@ function collectionRoutesVistosSourceRows() {
 }
 
 function collectionRoutesContractKey(sourceRow, summary, fallback = "") {
-  return collectionRoutesWatchdogTextKey(
+  const key = collectionRoutesWatchdogTextKey(
     summary.contractNumber,
     summary.sourceContractId,
     summary.contractId,
     sourceRow.sourceContractId,
-    sourceRow.contractId,
-    fallback
+    sourceRow.contractId
   );
+  return key || fallback;
 }
 
 function collectionRoutesVistosContractDetailItem(sourceRow, index) {

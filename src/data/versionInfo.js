@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.396"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.397"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: sloučení položek jedné smlouvy",
+    text: "Stanoviště z Vistosu nyní slučují položky stejné smlouvy do jednoho hlavního řádku. Detail smlouvy ukáže více položek pod sebou, místo aby stejná smlouva vznikla vícekrát v hlavním seznamu."
+  },
   {
     title: "Trasy svozu: Stanoviště podle smluv",
     text: "Záložka Stanoviště má hlavní řádek zjednodušený na stav, smlouvu, zákazníka a detail. Položky smlouvy se rozbalí pod řádkem s údaji od-do, adresní místo, odpad, nádoba, interval, den svozu a poznámka. Jde o read-only Vistos zobrazení bez zápisu do Vistosu."
