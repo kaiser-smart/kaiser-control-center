@@ -1741,6 +1741,7 @@ function themePreviewIcon(name) {
     service: "007.svg",
     app: "020.svg",
     check: "019.svg",
+    speed: "001.svg",
     plus: "002.svg",
     menu: "021.svg",
     vehicleTrackingPreview: "vehicle-tracking.svg",
@@ -10188,6 +10189,7 @@ function vehicleTrackingPreviewSidebar() {
         { id: "collection-routes", label: "Trasy svozu", href: "#tracking-preview-collection-routes", icon: "collectionRoutes", tone: "teal" },
         { id: "driver-reports", label: "Hlášení řidičů", href: "#tracking-preview-driver-reports", icon: "driverReports", tone: "amber" },
         { id: "fleet", label: "Vozový park", href: "#tracking-preview-fleet", icon: "fleet", tone: "bluegrey" },
+        { id: "tires", label: "Pneumatiky", href: "#tracking-preview-tires", icon: "tires", tone: "bluegrey" },
         { id: "vehicle-tracking", label: "Sledování vozidel", href: "#tracking-map", icon: "vehicleTracking", tone: "green", active: true }
       ]
     },
@@ -10269,14 +10271,14 @@ function vehicleTrackingPreviewDashboardMetrics(visibleVehicles = []) {
       label: "Upozornění",
       value: String(alertCount),
       note: alertCount ? "vyžaduje kontrolu" : "bez kritické události",
-      icon: alertCount ? "warning" : "check",
+      icon: "warning",
       tone: alertCount ? "amber" : "green"
     },
     {
       label: selectedVehicle ? selectedVehicle.internalNumber : "Vybrané vozidlo",
       value: selectedSummary ? `${selectedSummary.speedNow} km/h` : "—",
       note: selectedSummary ? selectedSummary.statusLabel : "není vybráno",
-      icon: "marker",
+      icon: "speed",
       tone: selectedTone
     }
   ];
