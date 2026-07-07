@@ -3317,6 +3317,74 @@ function mockReceivablesLedgerReadinessPreview() {
   };
 }
 
+function mockReceivablesVistosInvoiceSnapshot() {
+  const preview = mockReceivablesLedgerReadinessPreview();
+  const invoiceLookback = receivablesVistosInvoiceLookbackWindow();
+  const rows = preview.invoices.map((invoice, index) => ({
+    id: `mock-vistos-invoice-row-${index + 1}`,
+    batchId: "mock-vistos-invoice-snapshot",
+    rowNumber: index + 1,
+    entityKind: "vistos_invoice",
+    previewStatus: "ready",
+    confidence: 0.95,
+    issueCode: "",
+    issueMessage: "",
+    invoice,
+    rawPayload: invoice.raw || {},
+    createdAt: new Date().toISOString()
+  }));
+  return {
+    snapshot: {
+      batch: {
+        id: "mock-vistos-invoice-snapshot",
+        source: "vistos",
+        importKind: "vistos_invoice_snapshot",
+        status: "snapshot",
+        filename: "vistos-invoices-24m",
+        rowCount: rows.length,
+        acceptedCount: rows.length,
+        reviewCount: 0,
+        ignoredCount: 0,
+        createdByUserId: "dev-user",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        parserSummary: {},
+        rawPayload: {}
+      },
+      summary: {
+        mode: "vistos-invoice-snapshot",
+        source: "vistos",
+        sourceMode: "local_mock",
+        invoiceEntity: "InvoiceIssued",
+        invoiceLookback,
+        loadedRows: rows.length,
+        totalRows: rows.length,
+        acceptedCount: rows.length,
+        reviewCount: 0,
+        ignoredCount: 0,
+        issueCounts: [],
+        capped: false,
+        readOnly: true,
+        writesD1: true,
+        writesLedger: false,
+        createsReceivableRecords: false,
+        sendsCustomerCommunication: false,
+        startsAutomation: false,
+        calculatesRealRating: false,
+        importsKbPayments: false,
+        recommendedNextStep: "Lokální mock snapshotu je načtený. Produkce použije živý Vistos read-only endpoint."
+      }
+    },
+    rows,
+    pagination: {
+      page: 1,
+      pageSize: 100,
+      totalRows: rows.length
+    },
+    apiStatus: "ready"
+  };
+}
+
 function mockReceivablesVistosSchemaProbePreview() {
   const targetEntities = [
     "DirectoryWithBranch",
@@ -3558,6 +3626,10 @@ async function handleApi(request, response) {
     }
 
     const preview = mockReceivablesLedgerReadinessPreview();
+    if (url.pathname === "/api/receivables/vistos/invoice-snapshot") {
+      sendJson(response, 200, { ...mockReceivablesVistosInvoiceSnapshot(), mode: "local_mock" });
+      return true;
+    }
     if (url.pathname === "/api/receivables/vistos/schema-probe") {
       sendJson(response, 200, { preview: mockReceivablesVistosSchemaProbePreview(), apiStatus: "ready" });
       return true;

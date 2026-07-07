@@ -864,6 +864,13 @@ const receivablesState = {
   importSaving: "",
   importError: "",
   importResult: null,
+  invoiceSnapshot: null,
+  invoiceSnapshotRows: [],
+  invoiceSnapshotPagination: null,
+  invoiceSnapshotLoaded: false,
+  invoiceSnapshotLoading: false,
+  invoiceSnapshotError: "",
+  invoiceSnapshotMessage: "",
   vistosPreview: null,
   vistosPreviewLoading: false,
   vistosPreviewError: "",
@@ -24777,6 +24784,163 @@ function receivablesImportBatchesTable() {
   `;
 }
 
+function receivablesInvoiceSnapshotSummary(snapshot) {
+  const summary = snapshot?.summary || {};
+  const batch = snapshot?.batch || {};
+  const lookback = summary.invoiceLookback || {};
+  const cards = [
+    ["Období", lookback.fromDate ? `${lookback.fromDate} → dnes` : "posledních 24 měsíců"],
+    ["Načteno", `${summary.loadedRows || 0} / ${summary.totalRows || 0}`],
+    ["Stav", batch.status || "čeká"],
+    ["Entita", summary.invoiceEntity || "-"],
+    ["Ready", summary.acceptedCount || 0],
+    ["Kontrola", summary.reviewCount || 0],
+    ["Uloženo", batch.createdAt ? formatDateTime(batch.createdAt) : "-"],
+    ["Ořezáno", summary.capped ? "ano" : "ne"]
+  ];
+
+  return `
+    <div class="receivables-import-summary" aria-label="Souhrn snapshotu faktur">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function receivablesInvoiceSnapshotIssues(snapshot) {
+  const issueCounts = snapshot?.summary?.issueCounts || [];
+  if (!issueCounts.length) {
+    return `<p class="receivables-empty">Snapshot zatím nehlásí základní datové mezery ve fakturách.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead><tr><th>Datová mezera</th><th>Počet</th></tr></thead>
+        <tbody>
+          ${issueCounts.slice(0, 20).map((issue) => `
+            <tr>
+              <td data-label="Datová mezera">${escapeHtml(issue.code || "-")}</td>
+              <td data-label="Počet">${escapeHtml(issue.count || 0)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesInvoiceSnapshotRowsTable() {
+  const rows = receivablesState.invoiceSnapshotRows || [];
+  if (receivablesState.invoiceSnapshotLoading && !rows.length) {
+    return `<p class="receivables-empty">Načítám Vistos faktury...</p>`;
+  }
+  if (!rows.length) {
+    return `<p class="receivables-empty">Snapshot faktur zatím neobsahuje řádky.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Faktura</th>
+            <th>VS</th>
+            <th>Zákazník</th>
+            <th>Customer_FK</th>
+            <th>CustomerBranch_FK</th>
+            <th>Vystavení</th>
+            <th>Splatnost</th>
+            <th>Částka</th>
+            <th>Uhrazeno</th>
+            <th>Zbývá</th>
+            <th>Stav</th>
+            <th>Kontrola</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => {
+            const invoice = row.invoice || {};
+            return `
+              <tr>
+                <td data-label="#">${escapeHtml(row.rowNumber || "-")}</td>
+                <td data-label="Faktura">${escapeHtml(invoice.invoiceNumber || invoice.vistoInvoiceId || "-")}</td>
+                <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
+                <td data-label="Zákazník">${escapeHtml(invoice.customerName || invoice.customerId || "-")}</td>
+                <td data-label="Customer_FK">${escapeHtml(invoice.customerFk || invoice.customerCompanyId || "-")}</td>
+                <td data-label="CustomerBranch_FK">${escapeHtml(invoice.customerBranchFk || invoice.customerBranchId || "-")}</td>
+                <td data-label="Vystavení">${escapeHtml(invoice.issueDate || "-")}</td>
+                <td data-label="Splatnost">${escapeHtml(invoice.dueDate || "-")}</td>
+                <td data-label="Částka">${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
+                <td data-label="Uhrazeno">${escapeHtml(formatReceivableMoney(invoice.paidAmount))}</td>
+                <td data-label="Zbývá">${escapeHtml(formatReceivableMoney(invoice.remainingAmount ?? invoice.openAmount))}</td>
+                <td data-label="Stav">${escapeHtml(invoice.paymentStatus || invoice.status || "-")}</td>
+                <td data-label="Kontrola">${row.issueCode ? receivablesPill(row.issueCode, "warning") : receivablesPill("ready", "ready")}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function receivablesInvoiceSnapshotPanel() {
+  const snapshot = receivablesState.invoiceSnapshot;
+  const summary = snapshot?.summary || {};
+  const pagination = receivablesState.invoiceSnapshotPagination || {};
+  const totalRows = pagination.totalRows || summary.loadedRows || 0;
+  const safetyRows = [
+    ["Vistos API", "read-only"],
+    ["D1 zápis", "jen snapshot/staging"],
+    ["Ostrý ledger", summary.writesLedger ? "zapnuto" : "vypnuto"],
+    ["Pohledávky", summary.createsReceivableRecords ? "vytváří" : "nevytváří"],
+    ["Komunikace", summary.sendsCustomerCommunication ? "zapnuto" : "vypnuto"],
+    ["Autonomie", summary.startsAutomation ? "zapnuto" : "vypnuto"],
+    ["KB platby", summary.importsKbPayments ? "importuje" : "neimportuje"]
+  ];
+
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-invoice-snapshot-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Vistos faktury</p>
+          <h2 id="receivables-invoice-snapshot-title">Automatický read-only snapshot za 24 měsíců</h2>
+          <p>Import záložka načítá poslední uložený snapshot automaticky. Pokud chybí, založí první staging snapshot bez zápisu do ledgeru.</p>
+        </div>
+        ${receivablesPill(receivablesState.invoiceSnapshotLoading ? "načítám" : summary.capped ? "snapshot capped" : "read-only", summary.capped ? "warning" : "ready")}
+      </div>
+      ${receivablesState.invoiceSnapshotError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.invoiceSnapshotError)}</p>` : ""}
+      ${receivablesState.invoiceSnapshotMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.invoiceSnapshotMessage)}</p>` : ""}
+      ${receivablesInvoiceSnapshotSummary(snapshot)}
+      <div class="receivables-import-diagnostics">
+        <section>
+          <h3>Bezpečnostní pojistky</h3>
+          <dl class="receivables-diagnostics-list">
+            ${safetyRows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+          </dl>
+        </section>
+        <section>
+          <h3>Datové mezery faktur</h3>
+          ${receivablesInvoiceSnapshotIssues(snapshot)}
+        </section>
+      </div>
+      <div class="receivables-import-diagnostics">
+        <section>
+          <h3>Faktury v aktuálním snapshotu</h3>
+          <p class="receivables-empty">Zobrazeno ${escapeHtml((receivablesState.invoiceSnapshotRows || []).length)} z ${escapeHtml(totalRows)} uložených řádků.</p>
+          ${receivablesInvoiceSnapshotRowsTable()}
+        </section>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesVistosPreviewSummary(preview) {
   const summary = preview?.summary || {};
   const invoiceLookback = preview?.diagnostics?.invoiceLookback || {};
@@ -25641,52 +25805,8 @@ function receivablesLedgerReadinessPanel() {
 }
 
 function receivablesImportSection() {
-  const invoiceDisabled = receivablesState.importSaving === "invoices" ? "disabled" : "";
-  const bankDisabled = receivablesState.importSaving === "bank" ? "disabled" : "";
   return `
-    ${receivablesVistosPreviewPanel()}
-    ${receivablesVistosSchemaProbePanel()}
-    ${receivablesLedgerReadinessPanel()}
-    <section class="receivables-panel" aria-labelledby="receivables-import-title">
-      <div class="receivables-panel__head">
-        <div>
-          <p class="module-feedback__eyebrow">Staging import</p>
-          <h2 id="receivables-import-title">Bezpečný import preview</h2>
-          <p>Import se ukládá jen do staging tabulek. Ostré faktury, platby, komunikace a autonomie zůstávají vypnuté.</p>
-        </div>
-        ${receivablesPill("staging only", "warning")}
-      </div>
-      ${receivablesState.importError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.importError)}</p>` : ""}
-      <div class="receivables-import-grid">
-        <form class="receivables-import-form" data-receivables-import-form="invoices">
-          <div>
-            <label for="receivables-invoice-import-filename">Faktury / Vistos preview</label>
-            <input id="receivables-invoice-import-filename" name="filename" placeholder="vistos-invoices.json / invoices.csv" ${invoiceDisabled} />
-          </div>
-          <textarea name="text" rows="10" required ${invoiceDisabled} placeholder='[{"invoice_number":"2601101477","variable_symbol":"2601101477","company_name":"Firma Alfa s.r.o.","ico":"12345678","due_date":"2026-06-01","total_amount":1210,"open_amount":1210}]'></textarea>
-          <button class="primary-button" type="submit" ${invoiceDisabled}>Uložit preview faktur</button>
-        </form>
-        <form class="receivables-import-form" data-receivables-import-form="bank">
-          <div>
-            <label for="receivables-bank-import-filename">KB platby / PDF text preview</label>
-            <input id="receivables-bank-import-filename" name="filename" placeholder="KB_2026-06.txt" ${bankDisabled} />
-          </div>
-          <textarea name="text" rows="10" required ${bankDisabled} placeholder="01.06.2026 Příchozí úhrada 2601101477 1 210,00&#10;Firma Alfa s.r.o.&#10;Protiúčet 123456789/0100&#10;KS 0308"></textarea>
-          <button class="primary-button" type="submit" ${bankDisabled}>Uložit preview KB plateb</button>
-        </form>
-      </div>
-    </section>
-    ${receivablesImportResultPanel()}
-    <section class="receivables-panel" aria-labelledby="receivables-import-batches-title">
-      <div class="receivables-panel__head">
-        <div>
-          <p class="module-feedback__eyebrow">D1 staging</p>
-          <h2 id="receivables-import-batches-title">Poslední import preview batche</h2>
-        </div>
-        <button class="secondary-link" type="button" data-receivables-import-reload ${receivablesState.importLoading ? "disabled" : ""}>Obnovit</button>
-      </div>
-      ${receivablesImportBatchesTable()}
-    </section>
+    ${receivablesInvoiceSnapshotPanel()}
   `;
 }
 
@@ -26872,6 +26992,39 @@ async function loadReceivablesImportBatches(options = {}) {
   }
 }
 
+async function loadReceivablesInvoiceSnapshot(options = {}) {
+  if (receivablesState.invoiceSnapshotLoading) {
+    return;
+  }
+
+  receivablesState.invoiceSnapshotLoading = true;
+  receivablesState.invoiceSnapshotError = "";
+  receivablesState.invoiceSnapshotMessage = "";
+  try {
+    const params = new URLSearchParams();
+    params.set("page", String(options.page || receivablesState.invoiceSnapshotPagination?.page || 1));
+    params.set("pageSize", String(options.pageSize || receivablesState.invoiceSnapshotPagination?.pageSize || 100));
+    params.set("invoiceLookbackMonths", "24");
+    if (options.live === true) {
+      params.set("mode", "live");
+    }
+    const result = await apiJson(`/api/receivables/vistos/invoice-snapshot?${params.toString()}`);
+    receivablesState.invoiceSnapshot = result.snapshot || null;
+    receivablesState.invoiceSnapshotRows = Array.isArray(result.rows) ? result.rows : [];
+    receivablesState.invoiceSnapshotPagination = result.pagination || null;
+    receivablesState.invoiceSnapshotLoaded = true;
+    receivablesState.invoiceSnapshotMessage = result.snapshot?.summary?.recommendedNextStep || "";
+  } catch (error) {
+    receivablesState.invoiceSnapshotError = error.payload?.error || error.message || "Snapshot Vistos faktur se teď nepodařilo načíst.";
+    receivablesState.invoiceSnapshotLoaded = true;
+  } finally {
+    receivablesState.invoiceSnapshotLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
 async function submitReceivablesImportPreview(form) {
   const kind = form?.dataset?.receivablesImportForm === "bank" ? "bank" : "invoices";
   if (receivablesState.importSaving) {
@@ -27006,8 +27159,8 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
     void loadReceivablesSettings();
   }
 
-  if (context.view === "import" && !receivablesState.importLoaded && !receivablesState.importLoading) {
-    void loadReceivablesImportBatches();
+  if (context.view === "import" && !receivablesState.invoiceSnapshotLoaded && !receivablesState.invoiceSnapshotLoading) {
+    void loadReceivablesInvoiceSnapshot();
   }
 }
 
