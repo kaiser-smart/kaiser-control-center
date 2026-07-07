@@ -1512,6 +1512,11 @@ function isCollectionRoutesPath(pathname = window.location.pathname) {
   return normalizePath(pathname).startsWith(COLLECTION_ROUTES_ROUTE);
 }
 
+function isPublicDriverTabletPreviewUrl() {
+  return normalizePath(window.location.pathname) === COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ROUTE &&
+    new URLSearchParams(window.location.search).get("simple") === "1";
+}
+
 function routeHref(route) {
   if (route === "/") {
     return `${basePath || ""}/`;
@@ -16558,8 +16563,8 @@ function collectionRoutesDriverTabletPreviewSampleRows() {
   ];
 }
 
-function collectionRoutesDriverTabletPreviewRows() {
-  const rows = collectionRoutesVistosRouteDisplayRows();
+function collectionRoutesDriverTabletPreviewRows(options = {}) {
+  const rows = options.publicPreview ? [] : collectionRoutesVistosRouteDisplayRows();
   return rows.length ? rows.slice(0, 14) : collectionRoutesDriverTabletPreviewSampleRows();
 }
 
@@ -16580,7 +16585,7 @@ function collectionRoutesDriverTabletPreviewAction(label, action, tone = "defaul
   `;
 }
 
-function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverTabletPreviewRows()) {
+function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverTabletPreviewRows(), options = {}) {
   const selectedIndex = 0;
   const selectedRow = rows[selectedIndex] || null;
   const visibleRows = collectionRoutesSourceDriverVisibleRows(rows, selectedIndex);
@@ -16597,7 +16602,7 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
     collectionRoutesSourceDriverContainerLabel(selectedRow)
   ].filter((value) => value && value !== "-").join(" | ") : "-";
   const currentTaskLabel = currentServiceLabel && currentServiceLabel !== "-" ? currentServiceLabel : "Proved svoz podle trasy";
-  const hasLoadedRows = collectionRoutesVistosRouteDisplayRows().length > 0;
+  const hasLoadedRows = !options.publicPreview && collectionRoutesVistosRouteDisplayRows().length > 0;
   const sourceLabel = hasLoadedRows
     ? "Read-only data z aktualniho filtru Vistos Svoz Kaiser"
     : "Ukazkova data pro design preview";
@@ -19004,9 +19009,12 @@ function collectionRoutesActiveSection(user) {
   return collectionRoutesSourceRoutesSection(user);
 }
 
-function collectionRoutesDriverTabletPreviewPage(user) {
-  ensureCollectionRoutesSitesReadOnlyData(user);
-  const rows = collectionRoutesDriverTabletPreviewRows();
+function collectionRoutesDriverTabletPreviewPage(user, options = {}) {
+  const publicPreview = Boolean(options.publicPreview);
+  if (!publicPreview) {
+    ensureCollectionRoutesSitesReadOnlyData(user);
+  }
+  const rows = collectionRoutesDriverTabletPreviewRows({ publicPreview });
   const previewTheme = normalizeDriverTabletPreviewTheme(driverTabletPreviewState.theme);
   const nextTheme = previewTheme === "dark" ? "light" : "dark";
   const nextThemeLabel = previewTheme === "dark" ? "denni" : "nocni";
@@ -19038,7 +19046,7 @@ function collectionRoutesDriverTabletPreviewPage(user) {
       </header>
 
       <div class="driver-tablet-preview-stage">
-        ${collectionRoutesDriverTabletPreviewPanel(rows)}
+        ${collectionRoutesDriverTabletPreviewPanel(rows, { publicPreview })}
       </div>
     </main>
   `;
@@ -33117,6 +33125,12 @@ function renderAuthenticatedApp(user) {
 }
 
 function renderApp() {
+  if (isPublicDriverTabletPreviewUrl()) {
+    app.innerHTML = collectionRoutesDriverTabletPreviewPage(null, { publicPreview: true });
+    document.title = `Ridicsky tablet preview | ${APP_NAME}`;
+    return;
+  }
+
   if (authState.status === "loading") {
     app.innerHTML = loadingPage();
     document.title = `Přihlášení | ${APP_NAME}`;
@@ -37537,4 +37551,6 @@ window.addEventListener("popstate", handlePopStateNavigation);
 window.addEventListener("hashchange", handleHashChangeNavigation);
 render();
 probeAiAssistantAvatarAssets();
-bootstrapAuth();
+if (!isPublicDriverTabletPreviewUrl()) {
+  bootstrapAuth();
+}
