@@ -28931,8 +28931,8 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   overflow: hidden;
   border: 1px solid var(--chip-border);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-inset));
-  box-shadow: var(--shadow-control), var(--highlight-edge);
+  background: var(--tracking-inset-bg);
+  box-shadow: var(--shadow-inset-control);
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-preview--card {
@@ -28953,6 +28953,11 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   width: 92%;
   height: 92%;
   object-fit: contain;
+}
+
+.tracking-page--soft-metal-preview .tracking-icon-spec-preview--gallery img {
+  width: 84%;
+  height: 84%;
 }
 
 .tracking-page--soft-metal-preview .tracking-icon-spec-preview--card img {
