@@ -1575,6 +1575,26 @@ function vistosConsistencyDisplayValues(values = []) {
     .filter(Boolean);
 }
 
+function isGenericVistosAddressPlaceValue(value = "") {
+  const key = normalizeVistosMetadataKey(value);
+  return [
+    "branch",
+    "company",
+    "customer",
+    "directory",
+    "directorybranch",
+    "firma",
+    "pobocka",
+    "zakaznik"
+  ].includes(key);
+}
+
+function firstNonGenericVistosAddressPlace(...values) {
+  return values
+    .map(cleanString)
+    .find((value) => value && !isGenericVistosAddressPlaceValue(value)) || "";
+}
+
 function vistosAddressPlaceCandidateScore(item = {}) {
   const value = firstNonEmpty(item.value, item.rawValue);
   const metadataKey = normalizeVistosMetadataKey([
@@ -1614,13 +1634,13 @@ function preferredVistosAddressPlaceValue(values = [], ...fallbacks) {
   const candidates = values
     .map((item) => ({
       item,
-      value: firstNonEmpty(item?.value, item?.rawValue),
+      value: firstNonGenericVistosAddressPlace(item?.value, item?.rawValue),
       score: vistosAddressPlaceCandidateScore(item)
     }))
     .filter((candidate) => cleanString(candidate.value))
     .sort((left, right) => right.score - left.score);
 
-  return firstNonEmpty(candidates[0]?.value, ...fallbacks);
+  return firstNonGenericVistosAddressPlace(candidates[0]?.value, ...fallbacks);
 }
 
 function firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, fieldKey, ...fallbacks) {
@@ -2056,6 +2076,27 @@ const VISTOS_PICKUP_WEEKDAYS = [
   { code: "SO", label: "sobota", patterns: [/\bSO\b/, /\bSOBOTA\b/, /\bSATURDAY\b/, /\bSAMSTAG\b/] },
   { code: "NE", label: "neděle", patterns: [/\bNE\b/, /\bNEDELE\b/, /\bNEDELA\b/, /\bSUNDAY\b/, /\bSONNTAG\b/] }
 ];
+const VISTOS_COLLECTION_DAY_ID_LABELS = {
+  18330: "pondělí lichá",
+  18331: "úterý lichá",
+  18332: "středa lichá",
+  18333: "čtvrtek lichá",
+  18334: "pátek lichá",
+  18335: "sobota lichá",
+  18336: "neděle lichá",
+  18337: "pondělí sudá",
+  18338: "úterý sudá",
+  18339: "středa sudá",
+  18340: "čtvrtek sudá",
+  18341: "pátek sudá",
+  18342: "sobota sudá",
+  18343: "neděle sudá"
+};
+
+function resolveVistosCollectionDayLabel(value = "") {
+  const key = cleanString(value);
+  return VISTOS_COLLECTION_DAY_ID_LABELS[key] || "";
+}
 
 function normalizeVistosWatchdogText(value = "") {
   return cleanString(value)
@@ -2126,10 +2167,12 @@ function pickupDayEntriesFromValues(values = []) {
   const unknownTexts = [];
 
   for (const item of values) {
-    const value = cleanString(item.value);
+    const originalValue = cleanString(item.value);
     const rawValue = cleanString(item.rawValue);
+    const resolvedValue = resolveVistosCollectionDayLabel(originalValue) || resolveVistosCollectionDayLabel(rawValue);
+    const value = resolvedValue || originalValue;
     const labelText = [item.caption, item.columnName].map(cleanString).filter(Boolean).join(" ");
-    const normalizedValue = normalizeVistosMetadataKey(value || rawValue);
+    const normalizedValue = normalizeVistosMetadataKey(originalValue || rawValue);
     const booleanLikeValue = ["1", "true", "ano", "yes", "checked", "zapnuto", "aktivni"].includes(normalizedValue);
     const falseLikeValue = ["0", "false", "ne", "no", "unchecked", "vypnuto", "neaktivni"].includes(normalizedValue);
 
@@ -2173,6 +2216,15 @@ function pickupDayEntriesFromValues(values = []) {
     duplicateCount: Math.max(0, entries.length - unique.length),
     unknownTexts
   };
+}
+
+function pickupDayDisplayValue(item = {}) {
+  return firstNonEmpty(
+    resolveVistosCollectionDayLabel(item.value),
+    resolveVistosCollectionDayLabel(item.rawValue),
+    item.value,
+    item.rawValue
+  );
 }
 
 function expectedPickupCountsForFrequency(frequency = "") {
@@ -2598,6 +2650,18 @@ export function __inferVistosContainerForTest(contractRow = {}, product = null) 
   return inferVistosContainer(contractRow, product);
 }
 
+export function __pickupDayEntriesFromValuesForTest(values = []) {
+  return pickupDayEntriesFromValues(values);
+}
+
+export function __pickupDayDisplayValueForTest(item = {}) {
+  return pickupDayDisplayValue(item);
+}
+
+export function __preferredVistosAddressPlaceValueForTest(values = [], ...fallbacks) {
+  return preferredVistosAddressPlaceValue(values, ...fallbacks);
+}
+
 function vistosSiteKey(contract) {
   const sourceSiteId = firstNonEmpty(fkRecordId(contract, "Nakladkovaadresa_FK"), fkRecordId(contract, "DirectoryBranch_FK"));
   if (sourceSiteId) {
@@ -2636,10 +2700,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     const branchName = fkCaption(contract, "DirectoryBranch_FK");
     const addressRaw = firstNonEmpty(fkCaption(contract, "Nakladkovaadresa_FK"), branchName);
     const siteName = firstNonEmpty(fkCaption(contract, "Nakladkovaadresa_FK"), branchName, customerName);
-    const addressPlaceValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "addressPlace");
-    const addressPlaceRaw = preferredVistosAddressPlaceValue(addressPlaceValues, addressRaw);
     const stationValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "siteOptional");
     const stationName = firstNonEmpty(...vistosConsistencyDisplayValues(stationValues));
+    const addressPlaceValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "addressPlace");
+    const addressPlaceRaw = preferredVistosAddressPlaceValue(addressPlaceValues, stationName, addressRaw, siteName);
     const addressParts = compactVistosAddressParts(vistosAddressPartsFromFields(contract, null, consistencyFields));
     const customerManagerMobileValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerMobile");
     const customerManagerEmailValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerEmail");
@@ -2781,14 +2845,14 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const routeWaste = isOutsideCollectionRoute ? { wasteType: "", wasteCode: "" } : waste;
       const routeFrequency = isOutsideCollectionRoute ? { frequency: "" } : frequency;
       const routeContainer = isOutsideCollectionRoute ? { volume: 0, count: 0, type: "" } : container;
-      const rowAddressPlaceValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace");
-      const rowAddressPlaceRaw = preferredVistosAddressPlaceValue(rowAddressPlaceValues, addressPlaceRaw, addressRaw);
       const rowStationValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "siteOptional");
       const rowStationName = firstNonEmpty(
         ...vistosConsistencyDisplayValues(rowStationValues),
         readVistosColumnDisplayValue(contractRow, "Stanoviste"),
         stationName
       );
+      const rowAddressPlaceValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace");
+      const rowAddressPlaceRaw = preferredVistosAddressPlaceValue(rowAddressPlaceValues, rowStationName, addressPlaceRaw, addressRaw, siteName);
       const rowAddressParts = compactVistosAddressParts(vistosAddressPartsFromFields(contract, contractRow, consistencyFields, {
         street: addressParts.addressStreet,
         city: addressParts.addressCity,
@@ -2836,7 +2900,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         validTo: isoDateValue(contract?.EndDate),
         pickupFrom: isoDateValue(pickupFrom),
         pickupTo: isoDateValue(pickupTo),
-        pickupDaysText: pickupDayValues.map((item) => cleanString(item.value)).filter(Boolean).join(", "),
+        pickupDaysText: pickupDayValues.map(pickupDayDisplayValue).map(cleanString).filter(Boolean).join(", "),
         customerName,
         branchName,
         addressRaw,

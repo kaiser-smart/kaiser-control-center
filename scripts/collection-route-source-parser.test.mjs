@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 
 import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collection-route-optimization-preview.js";
-import { __inferVistosContainerForTest } from "../functions/_lib/collection-routes-store.js";
+import {
+  __inferVistosContainerForTest,
+  __pickupDayDisplayValueForTest,
+  __pickupDayEntriesFromValuesForTest,
+  __preferredVistosAddressPlaceValueForTest
+} from "../functions/_lib/collection-routes-store.js";
 import {
   __buildCollectionRouteSourceRowsForTest,
   __buildCollectionRouteRepairWorkbookForTest,
@@ -91,6 +96,35 @@ function derive(originalText) {
   });
   assert.equal(container.known, false);
   assert.equal(container.volume, 0);
+}
+
+{
+  const pickup = __pickupDayEntriesFromValuesForTest([{
+    value: "18333",
+    rawValue: "18333",
+    caption: "Svozový den",
+    columnName: "CollectionDay_FK"
+  }]);
+  assert.equal(pickup.entries.length, 1);
+  assert.equal(pickup.entries[0].day, "CT");
+  assert.equal(pickup.entries[0].parity, "odd");
+  assert.equal(pickup.unknownTexts.length, 0);
+  assert.equal(__pickupDayDisplayValueForTest({ value: "18330" }), "pondělí lichá");
+  assert.equal(__pickupDayDisplayValueForTest({ value: "18337" }), "pondělí sudá");
+}
+
+{
+  const addressPlace = __preferredVistosAddressPlaceValueForTest(
+    [{
+      value: "Company",
+      rawValue: "Company",
+      caption: "Adresní místo",
+      columnName: "PickupAddressRuian"
+    }],
+    "U Vlečky 726/5c, 617 00 Brno - Komárov",
+    "4 KLUCI OD KOL s.r.o. - 08576726"
+  );
+  assert.equal(addressPlace, "U Vlečky 726/5c, 617 00 Brno - Komárov");
 }
 
 {
