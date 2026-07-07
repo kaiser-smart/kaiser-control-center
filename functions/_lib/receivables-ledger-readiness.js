@@ -15,10 +15,14 @@ import { createReceivablesVistosSchemaProbeFromSession } from "./receivables-vis
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 const DEFAULT_PAGE_SIZE = 250;
 const DEFAULT_MAX_PAGES = 1;
+const FULL_DRY_RUN_PAGE_SIZE = 1000;
+const FULL_DRY_RUN_MAX_PAGES = 5;
 const MAX_PAGE_SIZE = 1000;
 const MAX_PAGES = 5;
 const DEFAULT_DETAIL_ID_LIMIT = 4;
 const MAX_DETAIL_ID_LIMIT = 12;
+const LEDGER_READINESS_RUN_MODE_QUICK = "quick";
+const LEDGER_READINESS_RUN_MODE_FULL = "full_dry_run";
 
 const DIRECTORY_WITH_BRANCH_CORE_COLUMNS = [
   "Id",
@@ -654,6 +658,31 @@ function addFlag(flags, code) {
   }
 }
 
+function boundedPositiveInteger(value, fallback, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return fallback;
+  return Math.max(1, Math.min(Math.floor(number), max));
+}
+
+function normalizeLedgerReadinessOptions(options = {}) {
+  const runMode = String(options.runMode || "").trim() === LEDGER_READINESS_RUN_MODE_FULL
+    ? LEDGER_READINESS_RUN_MODE_FULL
+    : LEDGER_READINESS_RUN_MODE_QUICK;
+  const fallbackPageSize = runMode === LEDGER_READINESS_RUN_MODE_FULL
+    ? FULL_DRY_RUN_PAGE_SIZE
+    : DEFAULT_PAGE_SIZE;
+  const fallbackMaxPages = runMode === LEDGER_READINESS_RUN_MODE_FULL
+    ? FULL_DRY_RUN_MAX_PAGES
+    : DEFAULT_MAX_PAGES;
+
+  return {
+    ...options,
+    runMode,
+    pageSize: boundedPositiveInteger(options.pageSize, fallbackPageSize, MAX_PAGE_SIZE),
+    maxPages: boundedPositiveInteger(options.maxPages, fallbackMaxPages, MAX_PAGES)
+  };
+}
+
 function companyDataQualityFlags(company = {}) {
   const flags = [];
   if (!company.vistoBranchId) addFlag(flags, RECEIVABLES_LEDGER_FLAGS.MISSING_COMPANY_ENTITY);
@@ -1277,6 +1306,8 @@ function annotateCompaniesWithInvoiceCounts(companies = [], resolvedInvoices = [
 }
 
 export async function createReceivablesLedgerReadinessPreview(env, options = {}) {
+  const normalizedOptions = normalizeLedgerReadinessOptions(options);
+
   if (!isVistosExecuteConfigured(env)) {
     return {
       apiStatus: "not_configured",
@@ -1324,23 +1355,35 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       },
       diagnostics: {
         configured: false,
+        runMode: normalizedOptions.runMode,
         companyAttempts: [],
         invoiceAttempts: [],
-        invoiceLookback: receivablesVistosInvoiceLookbackWindow(options)
+        invoiceLookback: receivablesVistosInvoiceLookbackWindow(normalizedOptions)
+      },
+      previewLimits: {
+        runMode: normalizedOptions.runMode,
+        effectivePageSize: normalizedOptions.pageSize,
+        effectiveMaxPages: normalizedOptions.maxPages,
+        defaultPageSize: DEFAULT_PAGE_SIZE,
+        defaultMaxPages: DEFAULT_MAX_PAGES,
+        fullDryRunPageSize: FULL_DRY_RUN_PAGE_SIZE,
+        fullDryRunMaxPages: FULL_DRY_RUN_MAX_PAGES,
+        maxPageSize: MAX_PAGE_SIZE,
+        maxPages: MAX_PAGES
       }
     };
   }
 
   const session = await loginVistosExecute(env);
   const invoiceLookback = receivablesVistosInvoiceLookbackWindow({
-    months: options.invoiceLookbackMonths ?? env?.VISTOS_RECEIVABLES_INVOICE_LOOKBACK_MONTHS,
-    now: options.now
+    months: normalizedOptions.invoiceLookbackMonths ?? env?.VISTOS_RECEIVABLES_INVOICE_LOOKBACK_MONTHS,
+    now: normalizedOptions.now
   });
-  const metadataProbePromise = loadLedgerMetadataProbe(env, session, options);
+  const metadataProbePromise = loadLedgerMetadataProbe(env, session, normalizedOptions);
   const [companyResult, invoiceResult] = await Promise.all([
-    loadFirstWorkingEntity(env, session, RECEIVABLES_COMPANY_ATTEMPTS, options),
+    loadFirstWorkingEntity(env, session, RECEIVABLES_COMPANY_ATTEMPTS, normalizedOptions),
     loadFirstWorkingEntity(env, session, RECEIVABLES_INVOICE_ATTEMPTS, {
-      ...options,
+      ...normalizedOptions,
       filter: invoiceLookback.filter
     })
   ]);
@@ -1350,10 +1393,10 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
     env,
     session,
     RECEIVABLES_COMPANY_ENRICHMENT_ATTEMPTS,
-    options
+    normalizedOptions
   );
   const metadataResult = metadataCompanyAttempts.length
-    ? await loadFirstWorkingEntity(env, session, metadataCompanyAttempts, options)
+    ? await loadFirstWorkingEntity(env, session, metadataCompanyAttempts, normalizedOptions)
     : emptyWorkingResult();
   const baseCompanies = companyResult.page.rows.map((row) => mapReceivablesLedgerCompany(row, companyResult.entityName));
   const invoices = invoiceResult.page.rows.map(mapReceivablesVistosInvoice);
@@ -1364,8 +1407,8 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
   const detailProbe = await loadCompanyDetailProbe(
     env,
     session,
-    collectCompanyDetailIdentifiers(metadataEnrichment.companies, invoices, options),
-    options
+    collectCompanyDetailIdentifiers(metadataEnrichment.companies, invoices, normalizedOptions),
+    normalizedOptions
   );
   const detailEnrichment = mergeCompanyEnrichment(metadataEnrichment.companies, detailProbe.companies);
   const companies = detailEnrichment.companies;
@@ -1428,6 +1471,7 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
     },
     diagnostics: {
       configured: true,
+      runMode: normalizedOptions.runMode,
       companyEntity: companyResult.entityName,
       companyAttemptKey: companyResult.key,
       companyColumns: companyResult.columns,
@@ -1461,8 +1505,13 @@ export async function createReceivablesLedgerReadinessPreview(env, options = {})
       invoiceAttempts: invoiceResult.diagnostics
     },
     previewLimits: {
+      runMode: normalizedOptions.runMode,
+      effectivePageSize: normalizedOptions.pageSize,
+      effectiveMaxPages: normalizedOptions.maxPages,
       defaultPageSize: DEFAULT_PAGE_SIZE,
       defaultMaxPages: DEFAULT_MAX_PAGES,
+      fullDryRunPageSize: FULL_DRY_RUN_PAGE_SIZE,
+      fullDryRunMaxPages: FULL_DRY_RUN_MAX_PAGES,
       maxPageSize: MAX_PAGE_SIZE,
       maxPages: MAX_PAGES
     },

@@ -28040,6 +28040,27 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   margin-bottom: 12px;
 }
 
+.receivables-readiness-form {
+  margin-bottom: 12px;
+}
+
+.receivables-readiness-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.receivables-readiness-actions .secondary-link {
+  justify-content: center;
+}
+
+.receivables-readiness-form__hint {
+  margin: 0;
+  color: var(--receivables-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 .receivables-readiness-brief {
   display: grid;
   grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);

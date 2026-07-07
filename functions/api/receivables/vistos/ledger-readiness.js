@@ -10,7 +10,8 @@ function previewOptions(request) {
     pageSize: url.searchParams.get("pageSize"),
     maxPages: url.searchParams.get("maxPages"),
     maxDetailIds: url.searchParams.get("maxDetailIds"),
-    invoiceLookbackMonths: url.searchParams.get("invoiceLookbackMonths")
+    invoiceLookbackMonths: url.searchParams.get("invoiceLookbackMonths"),
+    runMode: url.searchParams.get("runMode")
   };
 }
 

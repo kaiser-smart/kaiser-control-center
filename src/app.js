@@ -874,6 +874,7 @@ const receivablesState = {
   schemaProbeMessage: "",
   ledgerReadiness: null,
   ledgerReadinessLoading: false,
+  ledgerReadinessMode: "quick",
   ledgerReadinessError: "",
   ledgerReadinessMessage: "",
   dryRunLoading: false,
@@ -23975,12 +23976,18 @@ function receivablesLedgerReadinessBrief(preview) {
   `;
 }
 
+function receivablesLedgerRunModeLabel(runMode) {
+  return runMode === "full_dry_run" ? "úplný dry-run" : "rychlá kontrola";
+}
+
 function receivablesLedgerReadinessSummary(preview) {
   const readiness = preview?.ledgerReadiness || {};
   const counts = readiness.counts || {};
   const rates = readiness.rates || {};
   const invoiceLookback = preview?.diagnostics?.invoiceLookback || {};
+  const runMode = preview?.previewLimits?.runMode || preview?.diagnostics?.runMode || receivablesState.ledgerReadinessMode;
   const cards = [
+    ["Režim", receivablesLedgerRunModeLabel(runMode)],
     ["Ledger import", readiness.ledgerImportReady ? "připravený" : "jen preview"],
     ["Období faktur", invoiceLookback.fromDate ? `${invoiceLookback.fromDate} → dnes` : "posledních 24 měsíců"],
     ["Firmy načtené", counts.companiesLoaded || 0],
@@ -23988,7 +23995,7 @@ function receivablesLedgerReadinessSummary(preview) {
     ["Firmy s DIČ", counts.companiesWithDic || 0],
     ["Fakturační e-mail", counts.companiesWithBillingEmail || 0],
     ["Splatnost u firem", counts.companiesWithStandardDueDays || 0],
-    ["Faktury načtené", counts.invoicesLoaded || 0],
+    ["Faktury načtené", counts.invoicesTotal ? `${counts.invoicesLoaded || 0} / ${counts.invoicesTotal}` : counts.invoicesLoaded || 0],
     ["Faktury s Customer_FK", counts.invoicesWithCustomerFk || 0],
     ["Faktury s Branch_FK", counts.invoicesWithCustomerBranchFk || 0],
     ["Faktury se splatností", `${counts.invoicesWithDueDate || 0} / ${receivablesLedgerPercent(rates.invoiceDueDateRate)}`],
@@ -24255,6 +24262,7 @@ function receivablesLedgerProblemCompaniesTable(preview) {
 function receivablesLedgerReadinessPanel() {
   const preview = receivablesState.ledgerReadiness;
   const readiness = preview?.ledgerReadiness || {};
+  const activeRunMode = receivablesState.ledgerReadinessMode || "quick";
   const safetyRows = preview ? [
     ["readOnly", preview.readOnly],
     ["writesD1", preview.writesD1],
@@ -24274,10 +24282,16 @@ function receivablesLedgerReadinessPanel() {
         </div>
         ${receivablesPill(readiness.ledgerImportReady ? "ready" : "preview only", readiness.ledgerImportReady ? "ready" : "warning")}
       </div>
-      <form class="receivables-import-form receivables-import-form--inline" data-receivables-ledger-readiness-form>
-        <button class="primary-button" type="submit" ${receivablesState.ledgerReadinessLoading ? "disabled" : ""}>
-          ${receivablesState.ledgerReadinessLoading ? "Kontroluju připravenost..." : "Zkontrolovat ledger připravenost"}
-        </button>
+      <form class="receivables-import-form receivables-readiness-form" data-receivables-ledger-readiness-form>
+        <div class="receivables-readiness-actions">
+          <button class="secondary-link" type="submit" data-receivables-ledger-mode="quick" ${receivablesState.ledgerReadinessLoading ? "disabled" : ""}>
+            ${receivablesState.ledgerReadinessLoading && activeRunMode === "quick" ? "Kontroluju rychle..." : "Rychlá kontrola"}
+          </button>
+          <button class="primary-button" type="submit" data-receivables-ledger-mode="full_dry_run" ${receivablesState.ledgerReadinessLoading ? "disabled" : ""}>
+            ${receivablesState.ledgerReadinessLoading && activeRunMode === "full_dry_run" ? "Načítám úplný dry-run..." : "Úplný dry-run"}
+          </button>
+        </div>
+        <p class="receivables-readiness-form__hint">Rychlá kontrola bere 250 řádků. Úplný dry-run načte až 5 × 1000 řádků za 24 měsíců a ukáže načteno/celkem, pořád bez zápisu, ratingu, KB plateb a komunikace.</p>
       </form>
       ${receivablesState.ledgerReadinessMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.ledgerReadinessMessage)}</p>` : ""}
       ${receivablesState.ledgerReadinessError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.ledgerReadinessError)}</p>` : ""}
@@ -25625,18 +25639,25 @@ async function submitReceivablesSchemaProbe() {
   }
 }
 
-async function submitReceivablesLedgerReadiness() {
+async function submitReceivablesLedgerReadiness(runMode = "quick") {
   if (receivablesState.ledgerReadinessLoading) {
     return;
   }
 
+  const safeRunMode = runMode === "full_dry_run" ? "full_dry_run" : "quick";
   receivablesState.ledgerReadinessLoading = true;
+  receivablesState.ledgerReadinessMode = safeRunMode;
   receivablesState.ledgerReadinessError = "";
   receivablesState.ledgerReadinessMessage = "";
   render();
 
   try {
-    const result = await apiJson("/api/receivables/vistos/ledger-readiness");
+    const params = new URLSearchParams();
+    if (safeRunMode === "full_dry_run") {
+      params.set("runMode", "full_dry_run");
+    }
+    const query = params.toString();
+    const result = await apiJson(`/api/receivables/vistos/ledger-readiness${query ? `?${query}` : ""}`);
     receivablesState.ledgerReadiness = result.preview || null;
     receivablesState.ledgerReadinessMessage = result.preview?.message || "Ledger readiness preview načtené.";
   } catch (error) {
@@ -33821,7 +33842,8 @@ document.addEventListener("submit", async (event) => {
   const receivablesLedgerReadinessForm = event.target.closest("[data-receivables-ledger-readiness-form]");
   if (receivablesLedgerReadinessForm) {
     event.preventDefault();
-    await submitReceivablesLedgerReadiness();
+    const mode = event.submitter?.dataset?.receivablesLedgerMode || "quick";
+    await submitReceivablesLedgerReadiness(mode);
     return;
   }
 
