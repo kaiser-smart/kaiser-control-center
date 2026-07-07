@@ -1572,6 +1572,24 @@ const VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS = [
 ];
 const VISTOS_ADDRESS_PLACE_GETPAGE_COLUMNS = ["PickupAddressRuian"];
 
+function vistosAddressPlaceColumnValues(row, columnName) {
+  if (!row || !columnName) {
+    return [];
+  }
+  return [
+    [row[`${columnName}_MainProjection`], `${columnName}_MainProjection`],
+    [row[`${columnName}_Value`], `${columnName}_Value`],
+    [row[columnName], columnName],
+    [row[`${columnName}_Caption`], `${columnName}_Caption`],
+    [row[`${columnName}_RecordId`], `${columnName}_RecordId`]
+  ]
+    .map(([value, sourceColumn]) => ({
+      sourceColumn,
+      value: cleanString(value)
+    }))
+    .filter((item) => item.value);
+}
+
 function directVistosAddressPlaceValues(contract, contractRow) {
   const values = [];
   for (const [entityName, row] of [["Contract", contract], ["ContractRow", contractRow]]) {
@@ -1579,19 +1597,15 @@ function directVistosAddressPlaceValues(contract, contractRow) {
       continue;
     }
     for (const columnName of VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS) {
-      const value = readVistosColumnDisplayValue(row, columnName);
-      const rawValue = readVistosColumnValue(row, columnName);
-      if (!cleanString(value) && !cleanString(rawValue)) {
-        continue;
-      }
-      values.push({
+      values.push(...vistosAddressPlaceColumnValues(row, columnName).map((item) => ({
         entityName,
         columnName,
+        sourceColumn: item.sourceColumn,
         caption: "Adresní místo",
         source: "direct",
-        value,
-        rawValue
-      });
+        value: item.value,
+        rawValue: item.value
+      })));
     }
   }
   return values;
