@@ -248,6 +248,29 @@ function derive(originalText) {
 }
 
 {
+  const rawAddressPlace = JSON.stringify({
+    CityName: "Brno",
+    CityPartName: "Komárov",
+    StreetName: "U vlečky",
+    HouseNumber: "726",
+    OrientationNumber: "5c",
+    PostalCode: "61700",
+    Caption1: "Brno, Komárov, U vlečky 726/5c, PSČ 61700"
+  });
+  const addressPlace = __preferredVistosAddressPlaceValueForTest([{
+    value: rawAddressPlace,
+    rawValue: rawAddressPlace,
+    caption: "Adresní místo",
+    columnName: "PickupAddressRuian"
+  }]);
+  const parts = __vistosAddressPartsFromAddressPlaceForTest(rawAddressPlace);
+  assert.equal(addressPlace, "Brno, Komárov, U vlečky 726/5c, PSČ 61700");
+  assert.equal(parts.addressCity, "Brno");
+  assert.equal(parts.addressStreet, "U vlečky 726/5c");
+  assert.equal(parts.addressPostalCode, "61700");
+}
+
+{
   const parts = __vistosAddressPartsFromAddressPlaceForTest("U Vlečky 726/5c, 617 00 Brno - Komárov");
   assert.equal(parts.addressCity, "Brno");
   assert.equal(parts.addressStreet, "U Vlečky 726/5c");

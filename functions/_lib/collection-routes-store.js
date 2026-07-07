@@ -1753,9 +1753,32 @@ function isGenericVistosAddressPlaceValue(value = "") {
   ].includes(key);
 }
 
+function vistosAddressPlaceText(value = "") {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return firstNonEmpty(
+      value.Caption1,
+      value.Caption,
+      value.caption,
+      value.DisplayName,
+      value.Name,
+      value.Value
+    );
+  }
+
+  const text = cleanString(value);
+  if (text.startsWith("{") && text.endsWith("}")) {
+    try {
+      return vistosAddressPlaceText(JSON.parse(text));
+    } catch {
+      return text;
+    }
+  }
+  return text;
+}
+
 function firstNonGenericVistosAddressPlace(...values) {
   return values
-    .map(cleanString)
+    .map(vistosAddressPlaceText)
     .find((value) => value && !isGenericVistosAddressPlaceValue(value)) || "";
 }
 
