@@ -1666,6 +1666,52 @@ function vistosAddressPartsFromFields(contract, contractRow, consistencyFields, 
   };
 }
 
+function vistosAddressPartsFromAddressPlace(value = "") {
+  const address = firstNonGenericVistosAddressPlace(value);
+  if (!address) {
+    return {};
+  }
+
+  const postalMatch = address.match(/(?:PSČ|PSC)?\s*(\d{3})\s*(\d{2})\b/i);
+  const postalCode = postalMatch ? `${postalMatch[1]}${postalMatch[2]}` : "";
+  const withoutPostalCode = address
+    .replace(/(?:PSČ|PSC)?\s*\d{3}\s*\d{2}\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const parts = withoutPostalCode
+    .split(",")
+    .map((part) => cleanString(part))
+    .filter(Boolean);
+
+  let city = "";
+  let street = "";
+
+  if (parts.length >= 3) {
+    city = parts[0];
+    street = parts.slice(2).join(", ");
+  } else if (parts.length === 2) {
+    const [first, second] = parts;
+    if (/\d/.test(first) && !/\d/.test(second)) {
+      street = first;
+      city = second;
+    } else if (!/\d/.test(first) && /\d/.test(second)) {
+      city = first;
+      street = second;
+    } else {
+      city = first;
+      street = second;
+    }
+  }
+
+  city = city.replace(/\s+-\s+.+$/, "").trim();
+
+  return {
+    street,
+    city,
+    postalCode
+  };
+}
+
 function compactVistosAddressParts(parts = {}) {
   return {
     addressStreet: cleanString(parts.street),
@@ -1673,6 +1719,17 @@ function compactVistosAddressParts(parts = {}) {
     addressRegion: cleanString(parts.region),
     addressCountry: cleanString(parts.country),
     addressPostalCode: cleanString(parts.postalCode)
+  };
+}
+
+function preferVistosAddressPlaceParts(addressPlaceRaw, fieldParts = {}) {
+  const parsed = compactVistosAddressParts(vistosAddressPartsFromAddressPlace(addressPlaceRaw));
+  return {
+    addressStreet: parsed.addressStreet || fieldParts.addressStreet || "",
+    addressCity: parsed.addressCity || fieldParts.addressCity || "",
+    addressRegion: fieldParts.addressRegion || "",
+    addressCountry: fieldParts.addressCountry || "",
+    addressPostalCode: parsed.addressPostalCode || fieldParts.addressPostalCode || ""
   };
 }
 
@@ -2789,6 +2846,10 @@ export function __addressPlaceQualityIssuesForTest(input = {}) {
   return addressPlaceQualityIssues(input);
 }
 
+export function __vistosAddressPartsFromAddressPlaceForTest(value = "") {
+  return compactVistosAddressParts(vistosAddressPartsFromAddressPlace(value));
+}
+
 function vistosSiteKey(contract) {
   const sourceSiteId = firstNonEmpty(fkRecordId(contract, "Nakladkovaadresa_FK"), fkRecordId(contract, "DirectoryBranch_FK"));
   if (sourceSiteId) {
@@ -2831,7 +2892,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     const stationName = firstNonEmpty(...vistosConsistencyDisplayValues(stationValues));
     const addressPlaceValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "addressPlace");
     const addressPlaceRaw = preferredVistosAddressPlaceValue(addressPlaceValues);
-    const addressParts = compactVistosAddressParts(vistosAddressPartsFromFields(contract, null, consistencyFields));
+    const addressParts = preferVistosAddressPlaceParts(
+      addressPlaceRaw,
+      compactVistosAddressParts(vistosAddressPartsFromFields(contract, null, consistencyFields))
+    );
     const customerManagerMobileValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerMobile");
     const customerManagerEmailValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerEmail");
     const customerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerMobileValues));
@@ -2980,13 +3044,16 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       );
       const rowAddressPlaceValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace");
       const rowAddressPlaceRaw = preferredVistosAddressPlaceValue(rowAddressPlaceValues) || addressPlaceRaw;
-      const rowAddressParts = compactVistosAddressParts(vistosAddressPartsFromFields(contract, contractRow, consistencyFields, {
-        street: addressParts.addressStreet,
-        city: addressParts.addressCity,
-        region: addressParts.addressRegion,
-        country: addressParts.addressCountry,
-        postalCode: addressParts.addressPostalCode
-      }));
+      const rowAddressParts = preferVistosAddressPlaceParts(
+        rowAddressPlaceRaw,
+        compactVistosAddressParts(vistosAddressPartsFromFields(contract, contractRow, consistencyFields, {
+          street: addressParts.addressStreet,
+          city: addressParts.addressCity,
+          region: addressParts.addressRegion,
+          country: addressParts.addressCountry,
+          postalCode: addressParts.addressPostalCode
+        }))
+      );
       const rowCustomerManagerMobileValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerMobile");
       const rowCustomerManagerEmailValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerEmail");
       const rowCustomerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerMobileValues), customerManagerMobile);

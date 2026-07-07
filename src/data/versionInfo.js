@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.416"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.417"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: správné mapování svozové adresy",
+    text: "Svozová adresa pro trasu se teď primárně skládá ze skutečného Vistos pole Adresní místo, například Brno, Komárov, U vlečky 726/5c, PSČ 61700. Technické části Svozová adresa - ulice/město/PSČ už nepřebíjí správné Adresní místo."
+  },
   {
     title: "Trasy svozu: chytré doplnění dne svozu",
     text: "U Vistos Svoz Kaiser tras Smart bezpečně dopočítá chybějící druhou paritu u intervalu 1x7, například pondělí sudá doplní na pondělí lichá, a měsíční 1x30 bere jako jeden měsíční svozový den. U 2x7 a vyšších intervalů zůstává chybějící den jako chyba ke kontrole."

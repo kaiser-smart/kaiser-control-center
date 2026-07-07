@@ -8,7 +8,8 @@ import {
   __pickupDayDisplayValueForTest,
   __pickupDayEntriesFromValuesForTest,
   __pickupDayScheduleFromValuesForTest,
-  __preferredVistosAddressPlaceValueForTest
+  __preferredVistosAddressPlaceValueForTest,
+  __vistosAddressPartsFromAddressPlaceForTest
 } from "../functions/_lib/collection-routes-store.js";
 import {
   __buildCollectionRouteSourceRowsForTest,
@@ -236,6 +237,20 @@ function derive(originalText) {
     siteName: "Stanoviště nesmí být Adresní místo"
   });
   assert.equal(issues.some((issue) => issue.type === "missing-address-place"), true);
+}
+
+{
+  const parts = __vistosAddressPartsFromAddressPlaceForTest("Brno, Komárov, U vlečky 726/5c, PSČ 61700");
+  assert.equal(parts.addressCity, "Brno");
+  assert.equal(parts.addressStreet, "U vlečky 726/5c");
+  assert.equal(parts.addressPostalCode, "61700");
+}
+
+{
+  const parts = __vistosAddressPartsFromAddressPlaceForTest("U Vlečky 726/5c, 617 00 Brno - Komárov");
+  assert.equal(parts.addressCity, "Brno");
+  assert.equal(parts.addressStreet, "U Vlečky 726/5c");
+  assert.equal(parts.addressPostalCode, "61700");
 }
 
 {

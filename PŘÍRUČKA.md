@@ -505,6 +505,7 @@ Adresní a provozní pole se nesmí zaměňovat:
 - `Adresní místo` smí zobrazovat pouze skutečné pole Adresní místo z Vistosu.
 - `Stanoviště` smí být pouze ve vlastním sloupci Stanoviště.
 - `Svozová/nakládková adresa` je samostatný kontrolní údaj a nesmí se potichu vydávat za Adresní místo.
+- Provozní svozová adresa pro trasu se primárně skládá ze skutečného `Adresní místo`; technické části `Svozová adresa - ulice/město/PSČ` jsou jen pomocný rozpad a nesmí přebít správné Adresní místo.
 - Pokud skutečné Adresní místo chybí, Smart musí ukázat chybu k opravě, ne doplnit náhradu z jiného pole.
 
 ## 2. Ukládání dat
