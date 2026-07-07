@@ -7652,27 +7652,57 @@ function employeeHrProfileField(profile, field, disabled, readonly = false) {
   }));
 }
 
+function employeeCardAccordion(title, meta, body, options = {}) {
+  const status = options.status
+    ? `<span class="employee-card-status ${escapeHtml(options.statusClass || "employee-card-status--waiting")}">${escapeHtml(options.status)}</span>`
+    : "";
+  const open = options.open ? "open" : "";
+  const className = options.className ? ` ${options.className}` : "";
+
+  return `
+    <details class="employee-card-accordion${className}" ${open}>
+      <summary>
+        <span>
+          <strong>${escapeHtml(title)}</strong>
+          ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+        </span>
+        ${status}
+      </summary>
+      <div class="employee-card-accordion__body">
+        ${body}
+      </div>
+    </details>
+  `;
+}
+
 function employeeHrProfileSection(employee, canEdit) {
   if (!canEdit) {
     return "";
   }
 
   if (employee.hrProfileApiStatus !== "ready") {
-    return `
+    const body = `
       <section class="employee-card-section employee-card-section--wide">
         <div class="employee-card-section__head">
           <div>
-            <h2>HR položky z Excelu</h2>
-            <p>Citlivá HR data čekají na DB migraci employee_hr_profiles.</p>
+            <h2>HR údaje</h2>
+            <p>Citlivá HR data čekají na připravené úložiště.</p>
           </div>
-          <span class="employee-card-status employee-card-status--waiting">Čeká na API</span>
         </div>
       </section>
     `;
+
+    return employeeCardAccordion("HR údaje", "Čeká na načtení HR profilu", body, {
+      status: "Čeká na data",
+      statusClass: "employee-card-status--waiting",
+      className: "employee-card-accordion--hr"
+    });
   }
 
   const profile = employee.hrProfile || {};
-  const groups = EMPLOYEE_HR_PROFILE_FIELD_GROUPS.map((group) => `
+  const visibleGroups = EMPLOYEE_HR_PROFILE_FIELD_GROUPS.filter((group) => group.title !== "Zdroj Excelu");
+  const technicalGroups = EMPLOYEE_HR_PROFILE_FIELD_GROUPS.filter((group) => group.title === "Zdroj Excelu");
+  const groups = visibleGroups.map((group) => `
     <section class="employee-hr-profile-group">
       <h3>${escapeHtml(group.title)}</h3>
       <div class="employee-card-fields" data-employee-hr-profile-fields>
@@ -7680,24 +7710,42 @@ function employeeHrProfileSection(employee, canEdit) {
       </div>
     </section>
   `).join("");
+  const technicalBody = technicalGroups.map((group) => `
+    <section class="employee-hr-profile-group employee-hr-profile-group--technical">
+      <h3>${escapeHtml(group.title)}</h3>
+      <div class="employee-card-fields" data-employee-hr-profile-fields>
+        ${group.fields.map((field) => employeeHrProfileField(profile, field, true, true)).join("")}
+      </div>
+    </section>
+  `).join("");
 
-  return `
+  const body = `
     <section class="employee-card-section employee-card-section--wide employee-hr-profile-section">
       <div class="employee-card-section__head">
         <div>
-          <h2>HR položky z Excelu</h2>
-          <p>Oddělený personální profil. Nezakládá login a neposílá žádné notifikace.</p>
+          <h2>HR údaje</h2>
+          <p>Personální údaje dostupné jen oprávněným rolím.</p>
         </div>
-        <span class="employee-card-status employee-card-status--ready">API aktivní</span>
       </div>
       <p class="employee-card-api-note">
-        Obsahuje citlivé údaje z HR exportu. Zobrazují se jen rolím, které mohou kartu upravovat.
+        Citlivé osobní údaje. Používejte jen pro HR kontrolu a úpravu karty.
       </p>
       <div class="employee-hr-profile-groups">
         ${groups}
       </div>
+      ${technicalBody ? employeeCardAccordion("Nastavení / Technické údaje", "Zdroj Excelu, import a auditní údaje", technicalBody, {
+        status: "Technické",
+        statusClass: "employee-card-status--waiting",
+        className: "employee-card-accordion--technical"
+      }) : ""}
     </section>
   `;
+
+  return employeeCardAccordion("HR údaje", "Osobní údaje, smlouva, kontakty a finance", body, {
+    status: "Jen HR",
+    statusClass: "employee-card-status--ready",
+    className: "employee-card-accordion--hr"
+  });
 }
 
 function employeeImportIssueLabel(issue) {
@@ -7783,16 +7831,13 @@ function employeeExcelImportSection(canEdit) {
   }
 
   const preview = employeeCardState.importPreview;
-  return `
+  const body = `
     <section class="employee-card-section employee-card-section--wide employee-import-section">
       <div class="employee-card-section__head">
         <div>
           <h2>Import zaměstnanců z Excelu</h2>
-          <p>Preview nejdřív porovná Excel proti kartám. Import nezakládá přístupové účty.</p>
+          <p>Otevřete jen při kontrole nebo aktualizaci zaměstnanců.</p>
         </div>
-        <span class="employee-card-status ${preview ? "employee-card-status--ready" : "employee-card-status--waiting"}">
-          ${preview ? "Preview připraveno" : "Čeká na Excel"}
-        </span>
       </div>
       ${employeeCardState.importMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.importMessage)}</p>` : ""}
       ${employeeCardState.importError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.importError)}</p>` : ""}
@@ -7815,6 +7860,12 @@ function employeeExcelImportSection(canEdit) {
       `}
     </section>
   `;
+
+  return employeeCardAccordion("Import zaměstnanců", preview ? "Preview je připravené" : "Stav: čeká na Excel", body, {
+    status: preview ? "Připraveno" : "Čeká na Excel",
+    statusClass: preview ? "employee-card-status--ready" : "employee-card-status--waiting",
+    className: "employee-card-accordion--operations"
+  });
 }
 
 function employeeDocumentImportStatus(row) {
@@ -7907,16 +7958,13 @@ function employeeDocumentImportSection(canEdit) {
   const preview = employeeCardState.documentImportPreview;
   const readyCount = preview?.summary?.readyCount || 0;
 
-  return `
+  const body = `
     <section class="employee-card-section employee-card-section--wide employee-document-import-section">
       <div class="employee-card-section__head">
         <div>
           <h2>Hromadný import dokumentů z Pinya</h2>
-          <p>Vyberte soubory stažené nebo exportované z Pinya. Aplikace je podle názvu spáruje se zaměstnanci.</p>
+          <p>Párování souborů stažených z Pinya se zaměstnanci.</p>
         </div>
-        <span class="employee-card-status ${preview ? "employee-card-status--ready" : "employee-card-status--waiting"}">
-          ${preview ? "Preview připraveno" : "Čeká na soubory"}
-        </span>
       </div>
       ${employeeCardState.documentImportMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.documentImportMessage)}</p>` : ""}
       ${employeeCardState.documentImportError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.documentImportError)}</p>` : ""}
@@ -7939,6 +7987,12 @@ function employeeDocumentImportSection(canEdit) {
       `}
     </section>
   `;
+
+  return employeeCardAccordion("Hromadný import dokumentů", preview ? `${readyCount} připravených dokumentů` : "Stav: čeká na soubory", body, {
+    status: preview ? "Připraveno" : "Čeká na soubory",
+    statusClass: preview ? "employee-card-status--ready" : "employee-card-status--waiting",
+    className: "employee-card-accordion--operations"
+  });
 }
 
 function employeePinyaDocumentsPreviewSummary(summary = {}) {
@@ -7979,14 +8033,13 @@ function employeePinyaDocumentsPreviewSection(canEdit) {
       ? "Blokováno"
       : "Nenačteno";
 
-  return `
+  const body = `
     <section class="employee-card-section employee-card-section--wide employee-pinya-preview-section">
       <div class="employee-card-section__head">
         <div>
           <h2>Dokumenty z Pinya</h2>
-          <p>Read-only preview stavu napojení. Bez stažení souborů a bez zápisu do úložiště.</p>
+          <p>Stav napojení a párování dokumentů bez zápisu do úložiště.</p>
         </div>
-        <span class="employee-card-status ${statusClass}">${statusLabel}</span>
       </div>
       ${employeeCardState.pinyaDocumentsPreviewMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.pinyaDocumentsPreviewMessage)}</p>` : ""}
       ${employeeCardState.pinyaDocumentsPreviewError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.pinyaDocumentsPreviewError)}</p>` : ""}
@@ -8005,6 +8058,12 @@ function employeePinyaDocumentsPreviewSection(canEdit) {
       ` : ""}
     </section>
   `;
+
+  return employeeCardAccordion("Dokumenty z Pinya", preview ? "Stav napojení načtený" : "Stav: čeká na ověření", body, {
+    status: statusLabel,
+    statusClass,
+    className: "employee-card-accordion--operations"
+  });
 }
 
 function employeeMedicalExamStatusBadge(state) {
@@ -8012,6 +8071,34 @@ function employeeMedicalExamStatusBadge(state) {
   const label = state?.statusLabel || "Chybí údaje";
 
   return `<span class="employee-medical-exam-status employee-medical-exam-status--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function employeeMedicalExamHumanState(exam, nextExamLabel) {
+  const notTracked = exam.status === "not_tracked" || (exam.intervalMonths === null && exam.intervalLabel === "nechodí se");
+
+  if (notTracked) {
+    return {
+      statusLabel: "Termín není potřeba hlídat",
+      statusTone: "muted",
+      reason: exam.category === "administration_i"
+        ? "Administrativa / kategorie I. - pravidelná prohlídka není povinná"
+        : (exam.ruleNote || "Pravidelná prohlídka není povinná"),
+      nextExamLabel: "Není vyžadována",
+      intervalLabel: "Pravidelná prohlídka není povinná"
+    };
+  }
+
+  return {
+    statusLabel: exam.statusLabel || "Chybí údaje",
+    statusTone: exam.statusTone || "waiting",
+    reason: exam.missingReason || exam.ruleNote || "Termín se řídí vybranou kategorií práce.",
+    nextExamLabel,
+    intervalLabel: exam.intervalLabel || "neuvedeno"
+  };
+}
+
+function employeeMedicalExamHumanStatusBadge(humanState) {
+  return `<span class="employee-medical-exam-status employee-medical-exam-status--${escapeHtml(humanState.statusTone || "waiting")}">${escapeHtml(humanState.statusLabel)}</span>`;
 }
 
 function employeeMedicalExamDateLabel(value, fallback = "neuvedeno") {
@@ -8034,47 +8121,61 @@ function employeeMedicalExamRuleBadge(exam) {
   return '<span class="employee-medical-exam-rule-badge employee-medical-exam-rule-badge--optional">Nepovinná</span>';
 }
 
-function employeeMedicalExamOverview(exam, nextExamLabel) {
-  const notificationClass = exam.notificationEnabled
-    ? "employee-medical-exam-alert--enabled"
-    : "employee-medical-exam-alert--disabled";
-  const notificationLabel = exam.notificationEnabled ? "Hlídání termínu prohlídky" : "Hlídání termínu vypnuto";
-  const notificationText = exam.notificationEnabled
-    ? "Kontroluje příští prohlídku a stav termínu."
-    : "Karta se z kontroly termínů vynechá.";
-  const ruleNote = exam.ruleNote
-    ? `<p class="employee-medical-exam-overview__note">${escapeHtml(exam.ruleNote)}</p>`
-    : "";
+function employeeMedicalExamOptionLabel(options, value, fallback = "neuvedeno") {
+  return options.find((option) => option.value === value)?.label || fallback;
+}
+
+function employeeMedicalExamOverview(exam, nextExamLabel, canEdit, requestUrl) {
+  const humanState = employeeMedicalExamHumanState(exam, nextExamLabel);
+  const categoryLabel = exam.categoryLabel || "neuvedeno";
+  const requestTypeLabel = employeeMedicalExamOptionLabel(
+    MEDICAL_EXAM_REQUEST_TYPE_OPTIONS,
+    exam.requestExamType || "entry",
+    "Vstupní prohlídka"
+  );
 
   return `
     <div class="employee-medical-exam-overview" aria-label="Přehled lékařské prohlídky">
-      <article class="employee-medical-exam-overview__main">
-        <div>
-          <span>Příští prohlídka</span>
-          <strong>${escapeHtml(nextExamLabel)}</strong>
+      <article class="employee-medical-exam-summary-card">
+        <div class="employee-medical-exam-summary-card__head">
+          <div>
+            <span>Stav</span>
+            <strong>${escapeHtml(humanState.statusLabel)}</strong>
+          </div>
+          ${employeeMedicalExamHumanStatusBadge(humanState)}
         </div>
-        ${employeeMedicalExamStatusBadge(exam)}
-      </article>
-      <article class="employee-medical-exam-overview__rule">
-        <span>Pravidlo</span>
-        <strong>${escapeHtml(exam.fullCategoryLabel || exam.categoryLabel || "Vyberte kategorii")}</strong>
-        <div class="employee-medical-exam-rule-row">
-          ${employeeMedicalExamRuleBadge(exam)}
-          <small>${escapeHtml(exam.intervalLabel || "perioda neuvedena")}</small>
+        <p>${escapeHtml(humanState.reason)}</p>
+        <dl class="employee-medical-exam-facts">
+          <div>
+            <dt>Poslední prohlídka</dt>
+            <dd>${escapeHtml(employeeMedicalExamDateLabel(exam.lastExamDate, "neuvedeno"))}</dd>
+          </div>
+          <div>
+            <dt>Příští prohlídka</dt>
+            <dd>${escapeHtml(humanState.nextExamLabel)}</dd>
+          </div>
+          <div>
+            <dt>Typ prohlídky</dt>
+            <dd>${escapeHtml(requestTypeLabel)}</dd>
+          </div>
+          <div>
+            <dt>Kategorie práce</dt>
+            <dd>${escapeHtml(categoryLabel)}</dd>
+          </div>
+          <div>
+            <dt>Zdravotnické zařízení</dt>
+            <dd>${escapeHtml(exam.medicalFacilityName || "neuvedeno")}</dd>
+          </div>
+        </dl>
+        <div class="employee-medical-exam-summary-actions">
+          ${canEdit ? `<button class="secondary-link" type="button" data-employee-medical-exam-open-detail>Upravit</button>` : ""}
+          <a class="primary-action" href="${escapeHtml(`${requestUrl}?mode=download`)}" target="_blank" rel="noopener noreferrer">
+            Vygenerovat žádost PDF
+          </a>
+          <a class="secondary-link" href="${escapeHtml(`${requestUrl}?mode=print`)}" target="_blank" rel="noopener noreferrer">
+            Tisk PDF
+          </a>
         </div>
-        ${ruleNote}
-      </article>
-      <article class="employee-medical-exam-alert ${notificationClass}">
-        <span class="employee-medical-exam-alert__icon" aria-hidden="true"></span>
-        <div>
-          <strong>${escapeHtml(notificationLabel)}</strong>
-          <span>${escapeHtml(notificationText)}</span>
-        </div>
-      </article>
-      <article class="employee-medical-exam-automation">
-        <span>Odesílání</span>
-        <strong>Dry-run</strong>
-        <small>Pravidla se vyhodnocují bez ostrého odeslání e-mailu/SMS.</small>
       </article>
     </div>
   `;
@@ -8098,19 +8199,17 @@ function employeeMedicalExamSection(employee, canEdit) {
     ...MEDICAL_EXAM_CATEGORY_OPTIONS
   ];
   const requestUrl = apiHref(`/api/employees/${encodeURIComponent(employee.id)}/medical-exam-request`);
+  const humanState = employeeMedicalExamHumanState(exam, nextExamLabel);
 
   return `
     <section class="employee-card-section employee-card-section--wide employee-medical-exam-section" aria-labelledby="employee-medical-exam-title">
       <div class="employee-card-section__head">
         <div>
-          <h2 id="employee-medical-exam-title">Lékařské prohlídky</h2>
-          <p>Chráněná evidence pracovnělékařských prohlídek a hlídání dalších termínů.</p>
+          <h2 id="employee-medical-exam-title">Lékařská prohlídka</h2>
+          <p>Stručný stav zdravotní způsobilosti a nejbližší termín.</p>
         </div>
         <div class="employee-medical-exam-status-group">
-          ${employeeMedicalExamStatusBadge(exam)}
-          <span class="employee-card-status ${employeeCardState.medicalExamApiStatus === "ready" ? "employee-card-status--ready" : "employee-card-status--waiting"}">
-            ${employeeCardState.medicalExamApiStatus === "ready" ? "API aktivní" : "Čeká na API"}
-          </span>
+          ${employeeMedicalExamHumanStatusBadge(humanState)}
         </div>
       </div>
 
@@ -8118,48 +8217,54 @@ function employeeMedicalExamSection(employee, canEdit) {
       ${employeeCardState.medicalExamError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.medicalExamError)}</p>` : ""}
 
       <form class="employee-medical-exam-form" data-employee-medical-exam-form data-employee-id="${escapeHtml(employee.id)}">
-        ${employeeMedicalExamOverview(exam, nextExamLabel)}
-        <div class="employee-card-fields">
-          ${employeeCardField("Kategorie prohlídky", employeeCardSelect("category", categoryOptions, exam.category, disabled))}
-          ${employeeCardField("Datum narození pro výpočet věku", employeeCardInput("dateOfBirth", exam.dateOfBirth, { type: "date", disabled }))}
-          ${employeeCardField("Datum poslední prohlídky", employeeCardInput("lastExamDate", exam.lastExamDate, { type: "date", disabled }))}
-          ${employeeCardField("Typ prohlídky do PDF", employeeCardSelect("requestExamType", MEDICAL_EXAM_REQUEST_TYPE_OPTIONS, exam.requestExamType || "entry", disabled))}
-          ${employeeCardField("Zařazení do PDF", employeeCardSelect("requestCategory", MEDICAL_EXAM_REQUEST_CATEGORY_OPTIONS, exam.requestCategory || exam.category || "", disabled))}
-          ${employeeCardField("Hlídání termínu", employeeCardSelect("notificationEnabled", [
-            { value: "true", label: "Zapnuto" },
-            { value: "false", label: "Vypnuto" }
-          ], exam.notificationEnabled ? "true" : "false", disabled))}
-          ${employeeCardReadonlyValue("Rozhodný věk", employeeMedicalExamAgeLabel(exam))}
-          ${employeeCardReadonlyValue("Perioda", exam.intervalLabel || "neuvedeno")}
-          ${employeeCardReadonlyValue("Příští prohlídka", nextExamLabel)}
-          <div class="employee-card-readonly">
-            <span>Stav termínu</span>
-            ${employeeMedicalExamStatusBadge(exam)}
-          </div>
-          ${employeeCardField("Jméno zařízení", employeeCardInput("medicalFacilityName", exam.medicalFacilityName || "", { disabled }))}
-          ${employeeCardField("Posuzující lékař", employeeCardInput("medicalDoctorName", exam.medicalDoctorName || "", { disabled }))}
-          ${employeeCardField("Sídlo zařízení", employeeCardInput("medicalFacilityAddress", exam.medicalFacilityAddress || "", { disabled }))}
-          ${employeeCardField("IČ zařízení", employeeCardInput("medicalFacilityCompanyId", exam.medicalFacilityCompanyId || "", { disabled }))}
-        </div>
+        ${employeeMedicalExamOverview(exam, nextExamLabel, canEdit, requestUrl)}
 
-        <p class="employee-medical-exam-note">
-          Citlivé údaje jsou dostupné jen oprávněným rolím. Tato karta sama nespouští ostré e-mailové ani SMS odesílání.
-        </p>
+        <details class="employee-card-accordion employee-card-accordion--medical-detail" data-employee-medical-exam-detail>
+          <summary>
+            <span>
+              <strong>Detail lékařské prohlídky</strong>
+              <small>Úprava údajů pro výpočet, PDF a zdravotnické zařízení</small>
+            </span>
+          </summary>
+          <div class="employee-card-accordion__body">
+            <div class="employee-card-fields">
+              ${employeeCardField("Kategorie prohlídky", employeeCardSelect("category", categoryOptions, exam.category, disabled))}
+              ${employeeCardField("Datum narození pro výpočet věku", employeeCardInput("dateOfBirth", exam.dateOfBirth, { type: "date", disabled }))}
+              ${employeeCardField("Datum poslední prohlídky", employeeCardInput("lastExamDate", exam.lastExamDate, { type: "date", disabled }))}
+              ${employeeCardField("Typ prohlídky do PDF", employeeCardSelect("requestExamType", MEDICAL_EXAM_REQUEST_TYPE_OPTIONS, exam.requestExamType || "entry", disabled))}
+              ${employeeCardField("Zařazení do PDF", employeeCardSelect("requestCategory", MEDICAL_EXAM_REQUEST_CATEGORY_OPTIONS, exam.requestCategory || exam.category || "", disabled))}
+              ${humanState.statusLabel === "Termín není potřeba hlídat"
+                ? `${employeeCardReadonlyValue("Hlídání termínu", "Nevyžaduje se")}<input name="notificationEnabled" type="hidden" value="${exam.notificationEnabled ? "true" : "false"}" />`
+                : employeeCardField("Hlídání termínu", employeeCardSelect("notificationEnabled", [
+                  { value: "true", label: "Zapnuto" },
+                  { value: "false", label: "Vypnuto" }
+                ], exam.notificationEnabled ? "true" : "false", disabled))}
+              ${employeeCardReadonlyValue("Rozhodný věk", employeeMedicalExamAgeLabel(exam))}
+              ${employeeCardReadonlyValue("Perioda", humanState.intervalLabel)}
+              ${employeeCardReadonlyValue("Příští prohlídka", humanState.nextExamLabel)}
+              <div class="employee-card-readonly">
+                <span>Stav termínu</span>
+                ${employeeMedicalExamHumanStatusBadge(humanState)}
+              </div>
+              ${employeeCardField("Jméno zařízení", employeeCardInput("medicalFacilityName", exam.medicalFacilityName || "", { disabled }))}
+              ${employeeCardField("Posuzující lékař", employeeCardInput("medicalDoctorName", exam.medicalDoctorName || "", { disabled }))}
+              ${employeeCardField("Sídlo zařízení", employeeCardInput("medicalFacilityAddress", exam.medicalFacilityAddress || "", { disabled }))}
+              ${employeeCardField("IČ zařízení", employeeCardInput("medicalFacilityCompanyId", exam.medicalFacilityCompanyId || "", { disabled }))}
+            </div>
+          </div>
+        </details>
 
-        <div class="employee-medical-exam-pdf">
-          <div>
-            <strong>Žádost o posouzení zdravotní způsobilosti k práci</strong>
-            <span>Nejdřív uložte změny. Export i tisk se generují přes chráněné backend API a zapíšou audit.</span>
+        ${employeeCardAccordion("Nastavení / Technické údaje", "API, testovací režim, audit exportu", `
+          <div class="employee-card-technical-list">
+            <div><span>Backend evidence</span><strong>${employeeCardState.medicalExamApiStatus === "ready" ? "Připraveno" : "Čeká na data"}</strong></div>
+            <div><span>Testovací režim</span><strong>Pravidla neodesílají e-mail/SMS</strong></div>
+            <div><span>PDF export</span><strong>Generuje se přes chráněné backend API a zapisuje audit</strong></div>
           </div>
-          <div class="employee-medical-exam-pdf__actions">
-            <a class="primary-action" href="${escapeHtml(`${requestUrl}?mode=download`)}" target="_blank" rel="noopener noreferrer">
-              Export vyplněného PDF
-            </a>
-            <a class="secondary-link" href="${escapeHtml(`${requestUrl}?mode=print`)}" target="_blank" rel="noopener noreferrer">
-              Tisk vyplněného PDF
-            </a>
-          </div>
-        </div>
+        `, {
+          status: "Technické",
+          statusClass: "employee-card-status--waiting",
+          className: "employee-card-accordion--technical"
+        })}
 
         ${canEdit ? `
           <div class="employee-card-form-actions">
@@ -8247,17 +8352,12 @@ function employeeDocumentsSection(employee, canEdit) {
       </tr>
     `;
 
-  return `
+  const body = `
     <section class="employee-card-section">
       <div class="employee-card-section__head">
         <div>
           <h2>Dokumenty</h2>
           <p>Pracovní smlouvy, dodatky, školení, lékařské prohlídky a ostatní dokumenty.</p>
-        </div>
-        <div class="employee-card-actions">
-          <span class="employee-card-status ${uploadReady ? "employee-card-status--ready" : "employee-card-status--waiting"}">
-            ${uploadReady ? "Cloud upload" : "Čeká na API"}
-          </span>
         </div>
       </div>
       <div class="employee-card-document-types">
@@ -8284,6 +8384,12 @@ function employeeDocumentsSection(employee, canEdit) {
       ` : ""}
     </section>
   `;
+
+  return employeeCardAccordion("Dokumenty", `${documents.length} uložených dokumentů`, body, {
+    status: uploadReady ? "Nahrávání připraveno" : "Čeká na data",
+    statusClass: uploadReady ? "employee-card-status--ready" : "employee-card-status--waiting",
+    className: "employee-card-accordion--documents"
+  });
 }
 
 function employeeWorkHistorySection(employee, canEdit) {
@@ -8302,7 +8408,7 @@ function employeeWorkHistorySection(employee, canEdit) {
       </tr>
     `;
 
-  return `
+  const body = `
     <section class="employee-card-section">
       <div class="employee-card-section__head">
         <div>
@@ -8336,6 +8442,12 @@ function employeeWorkHistorySection(employee, canEdit) {
       ` : ""}
     </section>
   `;
+
+  return employeeCardAccordion("Historie", `${employeeCardState.workHistory.length} pracovních záznamů`, body, {
+    status: employeeCardState.workHistory.length ? "Evidováno" : "Bez historie",
+    statusClass: employeeCardState.workHistory.length ? "employee-card-status--ready" : "employee-card-status--waiting",
+    className: "employee-card-accordion--history"
+  });
 }
 
 function employeeAbsenceWorkflowSection(employee) {
@@ -8371,12 +8483,13 @@ function employeeAbsenceWorkflowSection(employee) {
       `).join("")
     : '<li><span>Historie zatím není k dispozici.</span></li>';
 
-  return `
+  const pendingCount = items.filter((item) => item.status === "pending_approval" || item.status === "pending").length;
+  const body = `
     <section class="employee-card-section employee-card-section--wide">
       <div class="employee-card-section__head">
         <div>
           <h2>Schvalování absencí</h2>
-          <p>Stavy žádostí, schvalovatelé, připomínky a historie z cloud API.</p>
+          <p>Žádosti, schvalovatelé a historie změn.</p>
         </div>
         <button class="text-action employee-card-request-link" type="button" data-employee-open-requests="${escapeHtml(employee?.id || "")}">
           Zobrazit žádosti
@@ -8402,6 +8515,12 @@ function employeeAbsenceWorkflowSection(employee) {
       </ul>
     </section>
   `;
+
+  return employeeCardAccordion("Žádosti a schvalování", `${items.length} žádostí, ${pendingCount} čeká`, body, {
+    status: pendingCount ? "Čeká" : "Bez čekajících",
+    statusClass: pendingCount ? "employee-card-status--waiting" : "employee-card-status--ready",
+    className: "employee-card-accordion--absence"
+  });
 }
 
 function employeeCardContent(employeeId, user) {
@@ -8465,13 +8584,18 @@ function employeeCardContent(employeeId, user) {
               ${employeeCardField("Role", employeeCardSelect("role", ROLE_DEFINITIONS.map((role) => ({ value: role.id, label: role.label })), normalizeRole(formEmployee.role), disabled))}
               ${employeeCardField("Oddělení", employeeCardInput("department", formEmployee.department, { disabled }))}
               ${employeeCardField("Pracovní pozice", employeeCardInput("position", formEmployee.position, { disabled }))}
-              ${employeeCardField("Bydliště", employeeCardInput("address", employeeResidenceAddress(formEmployee), { disabled }))}
-              ${employeeCardField("Místo výkonu práce", employeeCardInput("workplace", formEmployee.workplace || "", { disabled }))}
               ${employeeCardField("Stav zaměstnance", employeeCardSelect("employmentStatus", EMPLOYMENT_STATUS_OPTIONS, formEmployee.employmentStatus || "active", disabled))}
-              ${employeeCardField("Datum nástupu", employeeCardInput("startDate", formEmployee.startDate, { type: "date", disabled }))}
-              ${employeeCardField("Pracovní úvazek", employeeCardInput("workload", formEmployee.workload, { type: "number", step: "0.1", min: "0", disabled }))}
-              ${employeeCardField("Týdenní hodiny", employeeCardInput("weeklyHours", formEmployee.weeklyHours || (Number(formEmployee.workload || 0) * 40), { type: "number", step: "0.5", min: "0", disabled }))}
-              ${employeeCardField("Typ pracovního vztahu", employeeCardSelect("employmentType", EMPLOYMENT_TYPE_SELECT_OPTIONS, formEmployee.employmentType, disabled))}
+              <details class="employee-card-inline-details employee-card-field--wide">
+                <summary>Další pracovní údaje</summary>
+                <div class="employee-card-fields">
+                  ${employeeCardField("Bydliště", employeeCardInput("address", employeeResidenceAddress(formEmployee), { disabled }))}
+                  ${employeeCardField("Místo výkonu práce", employeeCardInput("workplace", formEmployee.workplace || "", { disabled }))}
+                  ${employeeCardField("Datum nástupu", employeeCardInput("startDate", formEmployee.startDate, { type: "date", disabled }))}
+                  ${employeeCardField("Pracovní úvazek", employeeCardInput("workload", formEmployee.workload, { type: "number", step: "0.1", min: "0", disabled }))}
+                  ${employeeCardField("Týdenní hodiny", employeeCardInput("weeklyHours", formEmployee.weeklyHours || (Number(formEmployee.workload || 0) * 40), { type: "number", step: "0.5", min: "0", disabled }))}
+                  ${employeeCardField("Typ pracovního vztahu", employeeCardSelect("employmentType", EMPLOYMENT_TYPE_SELECT_OPTIONS, formEmployee.employmentType, disabled))}
+                </div>
+              </details>
             </div>
           </section>
 
@@ -8542,15 +8666,22 @@ function employeeCardContent(employeeId, user) {
       </form>
 
       ${employeeMedicalExamSection(employee, canEditMedicalExam)}
-      ${employeeExcelImportSection(canEdit)}
-      ${employeePinyaDocumentsPreviewSection(canEdit)}
-      ${employeeDocumentImportSection(canEdit)}
 
       <div class="employee-card-grid employee-card-grid--bottom">
         ${employeeAbsenceWorkflowSection(employee)}
         ${employeeWorkHistorySection(employee, canEdit)}
         ${employeeDocumentsSection(employee, canEdit)}
       </div>
+
+      <section class="employee-card-operations" aria-label="Nastavení a technické údaje karty zaměstnance">
+        <div class="employee-card-operations__head">
+          <h2>Nastavení / Technické údaje</h2>
+          <p>Importy, Pinya a technické nástroje jsou sbalené mimo hlavní kartu.</p>
+        </div>
+        ${employeeExcelImportSection(canEdit)}
+        ${employeePinyaDocumentsPreviewSection(canEdit)}
+        ${employeeDocumentImportSection(canEdit)}
+      </section>
     </section>
   `;
 }
@@ -34985,6 +35116,17 @@ document.addEventListener("click", async (event) => {
   const employeeMedicalExamDiscard = event.target.closest("[data-employee-medical-exam-discard]");
   if (employeeMedicalExamDiscard) {
     discardEmployeeMedicalExamDirtyChanges();
+    return;
+  }
+
+  const employeeMedicalExamOpenDetail = event.target.closest("[data-employee-medical-exam-open-detail]");
+  if (employeeMedicalExamOpenDetail) {
+    event.preventDefault();
+    const details = document.querySelector("[data-employee-medical-exam-detail]");
+    if (details) {
+      details.open = true;
+      details.querySelector("input:not([disabled]), select:not([disabled]), textarea:not([disabled])")?.focus();
+    }
     return;
   }
 
