@@ -3054,6 +3054,472 @@ function employeeWorkHistory(employeeId) {
   return mockEmployeeWorkHistory.get(employeeId) || [];
 }
 
+function mockReceivablesLedgerReadinessPreview() {
+  const invoiceLookback = receivablesVistosInvoiceLookbackWindow();
+  const company = {
+    entityName: "DirectoryWithBranch",
+    vistoCompanyId: "C123",
+    vistoBranchId: "C123",
+    companyName: "Firma Alfa s.r.o.",
+    branchName: "Firma Alfa s.r.o.",
+    parentCompanyId: "",
+    parentCompanyName: "",
+    ico: "12345678",
+    dic: "CZ12345678",
+    billingEmail: "fakturace@firma.cz",
+    email: "info@firma.cz",
+    phone: "",
+    standardDueDays: 14,
+    billingAddress: "Ulice 1, Praha, 11000",
+    deliveryAddress: "Ulice 1, Praha, 11000",
+    activeStatus: "Aktivní",
+    isBranch: false,
+    flags: [],
+    raw: {}
+  };
+  const invoice = {
+    vistoInvoiceId: "I123",
+    invoiceNumber: "2601101477",
+    variableSymbol: "2601101477",
+    constantSymbol: "0308",
+    specificSymbol: "",
+    customerId: "C123",
+    customerName: "Firma Alfa s.r.o.",
+    customerBranchId: "",
+    customerBranchName: "",
+    customerCompanyId: "C123",
+    customerCompanyName: "Firma Alfa s.r.o.",
+    ico: "12345678",
+    dic: "CZ12345678",
+    issueDate: "2026-06-01",
+    dueDate: "2026-06-14",
+    priceWithoutTax: 1000,
+    priceWithTax: 1210,
+    totalAmount: 1210,
+    paidAmount: 0,
+    openAmount: 1210,
+    currency: "CZK",
+    status: "Vystaveno",
+    isPaid: false,
+    raw: {}
+  };
+  const resolvedInvoice = {
+    invoiceId: invoice.vistoInvoiceId,
+    invoiceNumber: invoice.invoiceNumber,
+    customerFk: "C123",
+    customerBranchFk: "",
+    resolvedCompanyId: "C123",
+    resolvedBranchId: "C123",
+    resolvedCustomerName: "Firma Alfa s.r.o.",
+    resolvedIco: "12345678",
+    resolvedDic: "CZ12345678",
+    resolvedBillingEmail: "fakturace@firma.cz",
+    resolvedStandardDueDays: 14,
+    confidence: "HIGH",
+    matchedBy: "customer_fk",
+    warnings: [],
+    flags: ["MISSING_BRANCH_FK"],
+    invoice,
+    company
+  };
+  return {
+    apiStatus: "ready",
+    message: "Lokální read-only mock: Firmy → Ledger preview. Ostrý ledger, rating, KB platby a komunikace zůstaly vypnuté.",
+    readOnly: true,
+    writesD1: false,
+    createsReceivableRecords: false,
+    sendsCustomerCommunication: false,
+    startsAutomation: false,
+    calculatesRealRating: false,
+    importsKbPayments: false,
+    companies: [company],
+    invoices: [invoice],
+    resolvedInvoices: [resolvedInvoice],
+    problematicCompanies: [],
+    problematicInvoices: [resolvedInvoice],
+    proposedLedgerRows: {
+      writesD1: false,
+      receivableCustomers: [{
+        visto_company_id: "C123",
+        company_name: "Firma Alfa s.r.o.",
+        ico: "12345678",
+        dic: "CZ12345678",
+        contact_email: "fakturace@firma.cz",
+        preferred_channel: "email",
+        automation_status: "dry_run"
+      }],
+      receivableInvoices: [{
+        visto_invoice_id: "I123",
+        invoice_number: "2601101477",
+        variable_symbol: "2601101477",
+        customer_external_id: "C123",
+        issue_date: "2026-06-01",
+        due_date: "2026-06-14",
+        total_amount: 1210,
+        paid_amount: 0,
+        open_amount: 1210,
+        currency: "CZK",
+        status: "Vystaveno"
+      }]
+    },
+    ledgerReadiness: {
+      scope: "local_read_only_mock",
+      ledgerImportReady: true,
+      blockingReasons: [],
+      recommendedNextStep: "Lokální mock prošel. Pro produkční závěr spusť přihlášené read-only preview proti živému Vistos API.",
+      counts: {
+        companiesLoaded: 1,
+        companiesTotal: 1,
+        companiesCapped: false,
+        companiesWithIco: 1,
+        companiesWithDic: 1,
+        companiesWithBillingEmail: 1,
+        companiesWithStandardDueDays: 1,
+        companiesWithStableId: 1,
+        invoicesLoaded: 1,
+        invoicesTotal: 1,
+        invoicesCapped: false,
+        invoicesWithCustomerFk: 1,
+        invoicesWithCustomerBranchFk: 0,
+        invoicesWithDueDate: 1,
+        invoicesWithVariableSymbol: 1,
+        invoicesWithAmount: 1,
+        invoicesWithPaidAmount: 1,
+        invoicesWithRemainingAmount: 1,
+        invoicesLinkedHigh: 1,
+        invoicesLinkedMedium: 0,
+        invoicesLinkedLow: 0,
+        invoicesWithoutReliableCompany: 0
+      },
+      rates: {
+        invoiceCustomerLinkRate: 100,
+        invoiceDueDateRate: 100,
+        invoiceAmountRate: 100,
+        invoiceVariableSymbolRate: 100,
+        customerStableIdRate: 100
+      },
+      confidenceCounts: {
+        HIGH: 1,
+        MEDIUM: 0,
+        LOW: 0,
+        NONE: 0
+      },
+      topDataQualityFlags: [{ code: "MISSING_BRANCH_FK", count: 1 }]
+    },
+    companyEnrichment: {
+      enabled: true,
+      entityName: "DirectoryWithBranch",
+      attemptKey: "local_mock_enrichment",
+      loadedRows: 1,
+      totalRows: 1,
+      capped: false,
+      matchedCompanies: 1,
+      pageMatchedCompanies: 1,
+      metadataMatchedCompanies: 1,
+      metadataLoadedRows: 1,
+      detailMatchedCompanies: 0,
+      companiesWithDicAfterEnrichment: 1,
+      companiesWithBillingEmailAfterEnrichment: 1,
+      companiesWithStandardDueDaysAfterEnrichment: 1
+    },
+    metadataResolver: {
+      enabled: true,
+      metadataProbeUsable: true,
+      schemaEntitiesOk: 11,
+      dbObjectsLoaded: 186,
+      matchedDbObjects: 3,
+      generatedCompanyAttempts: 3,
+      entityName: "DirectoryWithBranch",
+      attemptKey: "metadata_directory_with_branch",
+      loadedRows: 1,
+      totalRows: 1,
+      capped: false,
+      matchedCompanies: 1,
+      candidateEntities: [{
+        entityName: "DirectoryWithBranch",
+        schemaOk: true,
+        dbColumnOk: true,
+        dbObjectId: "301",
+        ico: ["RegNumber"],
+        dic: ["VATNumber"],
+        billingEmail: ["EmailInvoicing"],
+        email: ["Email"],
+        phone: ["PhoneNumber"],
+        standardDueDays: ["InvoiceDueDays"],
+        parent: ["Parent_FK"],
+        blocking: []
+      }],
+      blockingReasons: [],
+      recommendedNextStep: "Použít potvrzená metadata jen pro read-only resolver; ostrý import řešit až samostatně."
+    },
+    contactMetadata: {
+      enabled: true,
+      contactSchemaOk: true,
+      contactListSchemaOk: true,
+      contactListRowSchemaOk: true,
+      contactListDbObjectId: "121",
+      contactListRowDbObjectId: "122",
+      emailCandidates: ["Email1"],
+      companyLinkCandidates: ["Directory_FK"],
+      canUseForCustomerCommunication: false,
+      reason: "Pouze metadata. Není potvrzená ostrá vazba kontakt → zákazník/pobočka ani souhlas pro zákaznickou komunikaci."
+    },
+    companyDetailProbe: {
+      enabled: true,
+      sampledIdentifiers: [{ id: "C123", source: "company_visto_company_id" }],
+      bestEntity: "DirectoryWithBranch",
+      bestAttemptKey: "local_mock_detail",
+      successfulRows: 1,
+      usefulRows: 1,
+      loadedRows: 1,
+      matchedCompanies: 1
+    },
+    diagnostics: {
+      configured: true,
+      companyEntity: "DirectoryWithBranch",
+      companyAttemptKey: "local_mock",
+      companyColumns: ["Id", "Name", "RegNumber", "VATNumber", "BillingEmail", "InvoiceDueDays"],
+      companyKeys: ["Id", "Name", "RegNumber", "VATNumber", "BillingEmail", "InvoiceDueDays"],
+      companyAttempts: [],
+      companyEnrichmentEntity: "DirectoryWithBranch",
+      companyEnrichmentAttemptKey: "local_mock_enrichment",
+      companyEnrichmentColumns: ["Id", "Name", "RegNumber", "VATNumber", "BillingEmail", "InvoiceDueDays"],
+      companyEnrichmentKeys: ["Id", "Name", "RegNumber", "VATNumber", "BillingEmail", "InvoiceDueDays"],
+      companyEnrichmentAttempts: [],
+      metadataSchemaStatus: "ready",
+      metadataSchemaEntitiesOk: 11,
+      metadataCompanyEntity: "DirectoryWithBranch",
+      metadataCompanyAttemptKey: "metadata_directory_with_branch",
+      metadataCompanyColumns: ["Id", "Name", "RegNumber", "VATNumber", "EmailInvoicing", "InvoiceDueDays"],
+      metadataCompanyKeys: ["Id", "Name", "RegNumber", "VATNumber", "EmailInvoicing", "InvoiceDueDays"],
+      metadataCompanyAttempts: [],
+      metadataCompanyGeneratedAttempts: [{
+        key: "metadata_directory_with_branch",
+        entityName: "DirectoryWithBranch",
+        columns: ["Id", "Name", "RegNumber", "VATNumber", "EmailInvoicing", "InvoiceDueDays"]
+      }],
+      metadataBlockingReasons: [],
+      companyDetailIdentifiers: [{ id: "C123", source: "company_visto_company_id" }],
+      companyDetailBestEntity: "DirectoryWithBranch",
+      companyDetailBestAttemptKey: "local_mock_detail",
+      companyDetailKeys: ["Id", "Name", "RegNumber", "VATNumber", "EmailInvoicing", "InvoiceDueDays"],
+      companyDetailAttempts: [],
+      invoiceEntity: "InvoiceIssued",
+      invoiceAttemptKey: "local_mock",
+      invoiceColumns: ["Id", "InvoiceNumber", "BankReference2", "Customer_FK", "IssuedDate", "DueDate", "PriceWithTax", "AmountPaid", "RemainToPay"],
+      invoiceFilter: invoiceLookback.filter,
+      invoiceLookback,
+      invoiceKeys: ["Id", "InvoiceNumber", "BankReference2", "Customer_FK", "IssuedDate", "DueDate", "PriceWithTax", "AmountPaid", "RemainToPay"],
+      invoiceAttempts: []
+    },
+    loadedAt: new Date().toISOString()
+  };
+}
+
+function mockReceivablesVistosInvoiceSnapshot() {
+  const preview = mockReceivablesLedgerReadinessPreview();
+  const invoiceLookback = receivablesVistosInvoiceLookbackWindow();
+  const rows = preview.invoices.map((invoice, index) => ({
+    id: `mock-vistos-invoice-row-${index + 1}`,
+    batchId: "mock-vistos-invoice-snapshot",
+    rowNumber: index + 1,
+    entityKind: "vistos_invoice",
+    previewStatus: "ready",
+    confidence: 0.95,
+    issueCode: "",
+    issueMessage: "",
+    invoice,
+    rawPayload: invoice.raw || {},
+    createdAt: new Date().toISOString()
+  }));
+  return {
+    snapshot: {
+      batch: {
+        id: "mock-vistos-invoice-snapshot",
+        source: "vistos",
+        importKind: "vistos_invoice_snapshot",
+        status: "snapshot",
+        filename: "vistos-invoices-24m",
+        rowCount: rows.length,
+        acceptedCount: rows.length,
+        reviewCount: 0,
+        ignoredCount: 0,
+        createdByUserId: "dev-user",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        parserSummary: {},
+        rawPayload: {}
+      },
+      summary: {
+        mode: "vistos-invoice-snapshot",
+        source: "vistos",
+        sourceMode: "local_mock",
+        invoiceEntity: "InvoiceIssued",
+        invoiceLookback,
+        loadedRows: rows.length,
+        totalRows: rows.length,
+        acceptedCount: rows.length,
+        reviewCount: 0,
+        ignoredCount: 0,
+        issueCounts: [],
+        capped: false,
+        readOnly: true,
+        writesD1: true,
+        writesLedger: false,
+        createsReceivableRecords: false,
+        sendsCustomerCommunication: false,
+        startsAutomation: false,
+        calculatesRealRating: false,
+        importsKbPayments: false,
+        recommendedNextStep: "Lokální mock snapshotu je načtený. Produkce použije živý Vistos read-only endpoint."
+      }
+    },
+    rows,
+    pagination: {
+      page: 1,
+      pageSize: 100,
+      totalRows: rows.length
+    },
+    apiStatus: "ready"
+  };
+}
+
+function mockReceivablesVistosSchemaProbePreview() {
+  const targetEntities = [
+    "DirectoryWithBranch",
+    "Directory",
+    "ContactList",
+    "ContactListRow",
+    "Contact",
+    "Customer",
+    "CustomerBranch",
+    "Company",
+    "CompanyBranch",
+    "Partner",
+    "AddressBook"
+  ];
+  const entitySummaries = targetEntities.map((entityName) => {
+    const baseFields = [
+      { name: "Id", caption: "ID" },
+      { name: "Name", caption: "Název" }
+    ];
+    const companyFields = [
+      { name: "RegNumber", caption: "IČO" },
+      { name: "VATNumber", caption: "DIČ" },
+      { name: "EmailInvoicing", caption: "Fakturační e-mail" },
+      { name: "PhoneNumber", caption: "Telefon" },
+      { name: "InvoiceDueDays", caption: "Splatnost" }
+    ];
+    const contactFields = [
+      { name: "Directory_FK", caption: "Firma" },
+      { name: "Email1", caption: "E-mail" },
+      { name: "SendMailEnabled", caption: "Povolit e-mail" }
+    ];
+    const fields = entityName.includes("Contact") ? [...baseFields, ...contactFields] : [...baseFields, ...companyFields];
+    return {
+      entityName,
+      schemaOk: true,
+      dbColumnOk: !["Contact"].includes(entityName),
+      dbObjectId: entityName === "Directory" ? "49" : entityName === "ContactList" ? "201" : entityName === "ContactListRow" ? "202" : "",
+      readAllowed: !["ContactList", "ContactListRow"].includes(entityName),
+      schemaColumnCount: fields.length,
+      dbColumnCount: fields.length,
+      mergedColumnCount: fields.length,
+      fields,
+      candidates: {
+        stableId: ["Id"],
+        companyName: ["Name"],
+        branchName: entityName === "DirectoryWithBranch" ? ["Name"] : [],
+        ico: fields.some((field) => field.name === "RegNumber") ? ["RegNumber"] : [],
+        dic: fields.some((field) => field.name === "VATNumber") ? ["VATNumber"] : [],
+        billingEmail: fields.some((field) => field.name === "EmailInvoicing") ? ["EmailInvoicing"] : [],
+        email: fields.some((field) => field.name === "Email1") ? ["Email1"] : [],
+        phone: fields.some((field) => field.name === "PhoneNumber") ? ["PhoneNumber"] : [],
+        standardDueDays: fields.some((field) => field.name === "InvoiceDueDays") ? ["InvoiceDueDays"] : [],
+        parent: entityName === "ContactListRow" ? ["Directory_FK"] : []
+      },
+      blocking: entityName === "Contact" ? ["DB_OBJECT_NOT_FOUND"] : []
+    };
+  });
+
+  return {
+    apiStatus: "ready",
+    message: "Lokální read-only mock: Vistos schema/metadata probe. Nic se neukládá, neposílá ani nepočítá jako ostrý rating.",
+    readOnly: true,
+    writesD1: false,
+    createsReceivableRecords: false,
+    sendsCustomerCommunication: false,
+    startsAutomation: false,
+    calculatesRealRating: false,
+    importsKbPayments: false,
+    createsLegalPackages: false,
+    targetEntities,
+    schemaEntityAttempts: entitySummaries.map((item) => ({
+      entityName: item.entityName,
+      method: "GetSchemaEntity",
+      ok: true,
+      readAllowed: item.readAllowed,
+      columnCount: item.schemaColumnCount,
+      entityListTitle: `${item.entityName} - List`,
+      columns: item.fields
+    })),
+    dbObjectProbe: {
+      ok: true,
+      key: "local_mock",
+      rowsLoaded: 4,
+      totalRows: 4,
+      capped: false,
+      matchedObjects: targetEntities.map((entityName) => ({
+        entityName,
+        found: entityName !== "Contact",
+        dbObjectId: entityName === "Directory" ? "49" : entityName === "ContactList" ? "201" : entityName === "ContactListRow" ? "202" : "",
+        name: entityName,
+        caption: entityName
+      })),
+      diagnostics: [{ key: "local_mock", ok: true, rows: 4, total: 4, capped: false }]
+    },
+    dbColumnProbe: {
+      columnsByEntity: entitySummaries.map((item) => ({
+        entityName: item.entityName,
+        dbObjectId: item.dbObjectId,
+        ok: item.dbColumnOk,
+        skipped: !item.dbObjectId,
+        reason: item.dbColumnOk ? "" : "DB_OBJECT_NOT_FOUND",
+        key: "local_mock",
+        filterField: "DbObject_FK",
+        returnedRows: item.dbColumnCount,
+        totalRows: item.dbColumnCount,
+        capped: false,
+        columns: item.fields,
+        diagnostics: [{ key: "local_mock", ok: item.dbColumnOk }]
+      }))
+    },
+    entitySummaries,
+    summary: {
+      dbObjectsLoaded: 4,
+      matchedObjects: 10,
+      entitiesWithSchema: targetEntities.length,
+      entitiesWithDbColumns: 10,
+      entitiesWithBillingEmailCandidate: 7,
+      entitiesWithPhoneCandidate: 7,
+      entitiesWithDueDaysCandidate: 7,
+      entitiesWithIcoCandidate: 7,
+      entitiesWithDicCandidate: 7
+    },
+    readiness: {
+      metadataProbeUsable: true,
+      blockingReasons: [],
+      recommendedNextStep: "Lokální mock prošel. Pro produkční závěr spusť přihlášený read-only schema probe proti živému Vistos API."
+    },
+    previewLimits: {
+      pageSize: 500,
+      maxPages: 2,
+      maxColumnsPerEntity: 80
+    },
+    loadedAt: new Date().toISOString()
+  };
+}
+
 async function handleApi(request, response) {
   const url = new URL(request.url || "/", "http://localhost");
 
@@ -3145,6 +3611,81 @@ async function handleApi(request, response) {
       apiStatus: "ready"
     });
     return true;
+  }
+
+  if (url.pathname.startsWith("/api/receivables/vistos/") && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "receivables", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const preview = mockReceivablesLedgerReadinessPreview();
+    if (url.pathname === "/api/receivables/vistos/invoice-snapshot") {
+      sendJson(response, 200, { ...mockReceivablesVistosInvoiceSnapshot(), mode: "local_mock" });
+      return true;
+    }
+    if (url.pathname === "/api/receivables/vistos/schema-probe") {
+      sendJson(response, 200, { preview: mockReceivablesVistosSchemaProbePreview(), apiStatus: "ready" });
+      return true;
+    }
+    if (url.pathname === "/api/receivables/vistos/companies-preview") {
+      sendJson(response, 200, {
+        apiStatus: "ready",
+        preview: {
+          apiStatus: "ready",
+          message: preview.message,
+          readOnly: true,
+          writesD1: false,
+          companies: preview.companies,
+          problematicCompanies: preview.problematicCompanies,
+          ledgerReadiness: preview.ledgerReadiness,
+          diagnostics: preview.diagnostics
+        }
+      });
+      return true;
+    }
+    if (url.pathname === "/api/receivables/vistos/invoices-preview") {
+      sendJson(response, 200, {
+        apiStatus: "ready",
+        preview: {
+          apiStatus: "ready",
+          message: preview.message,
+          readOnly: true,
+          writesD1: false,
+          invoices: preview.invoices,
+          problematicInvoices: preview.problematicInvoices,
+          ledgerReadiness: preview.ledgerReadiness,
+          diagnostics: preview.diagnostics
+        }
+      });
+      return true;
+    }
+    if (url.pathname === "/api/receivables/vistos/customer-invoice-preview") {
+      sendJson(response, 200, {
+        apiStatus: "ready",
+        preview: {
+          apiStatus: "ready",
+          message: preview.message,
+          readOnly: true,
+          writesD1: false,
+          resolvedInvoices: preview.resolvedInvoices,
+          problematicInvoices: preview.problematicInvoices,
+          proposedLedgerRows: preview.proposedLedgerRows,
+          ledgerReadiness: preview.ledgerReadiness,
+          diagnostics: preview.diagnostics
+        }
+      });
+      return true;
+    }
+    if (url.pathname === "/api/receivables/vistos/ledger-readiness") {
+      sendJson(response, 200, { preview, apiStatus: "ready" });
+      return true;
+    }
   }
 
   if (url.pathname === "/api/ai/driver-reports/context" && request.method === "GET") {
