@@ -15,6 +15,10 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 - ROZPRACOVANO - read-only API discovery existuje.
 - ROZPRACOVANO - Faze 1E nacita Komunal preview pres backend/secrets.
+- ROZPRACOVANO - Vistos Svoz Kaiser ma read-only metadata overeni pole `Svoz Kaiser ANO` pres `GetSchemaEntity` a `DbColumn`; cerveny HP badge a cervene stanoviste se zapnou jen nad potvrzenym Svoz Kaiser rozsahem.
+- HOTOVO - Hlidac uz nepocita chyby nad celym aktivnim Komunalem, pokud pole `Svoz Kaiser ANO` neni potvrzene nebo nema zadne radky ANO.
+- ROZPRACOVANO - Hlidac Svoz Kaiser kontroluje konzistenci Adresniho mista, intervalu odvozu, svozovych dnu, sudeho/licheho rezimu a platnosti Svoz od/do jen read-only nad radky `Svoz Kaiser ANO`.
+- ROZPRACOVANO - Novy cil tras: Vistos API je zdroj svozovych radku, 13 Excelu zustava jen pomocne parovani vozidel A/B/C.
 - NEZACATO - ostry import do planovacich tabulek.
 - BLOKOVANO - kontaktni osoby a SMS pole 15/30/60 jeste nejsou potvrzene.
 
@@ -27,6 +31,8 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 ## Stanoviste
 
 - ROZPRACOVANO - preview uklada stanoviste do pilotnich tabulek.
+- ROZPRACOVANO - zalozka Stanoviste ukazuje radkovy read-only seznam z Vistos Komunal exportu; bez Excel pracovnich textu, bez zapisu do Vistosu a bez ostrych tras.
+- ROZPRACOVANO - zalozka Stanoviste nacita Vistos read-only data automaticky bez rucniho refresh workflow pro bezne uzivatele.
 - ROZPRACOVANO - chybejici poloha jde do datovych problemu.
 - ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici adresy ve zdrojovych 13 Excelech.
 - NEZACATO - rucni potvrzeni GPS polohy.

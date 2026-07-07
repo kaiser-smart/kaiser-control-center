@@ -17,6 +17,37 @@ const VISTOS_KOMUNAL_CONTRACT_FILTER = {
   Status_FK: 74,
   Typsmlouvy_FK: [14735]
 };
+const VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_TYPES = new Set([
+  "missing-customer",
+  "missing-loading-address",
+  "incomplete-address-place",
+  "address-place-missing-number",
+  "address-place-possible-typo",
+  "address-place-loading-address-mismatch",
+  "missing-contract-items",
+  "unknown-product",
+  "unknown-waste-type",
+  "unknown-frequency",
+  "missing-pickup-days",
+  "pickup-day-fields-not-readable",
+  "pickup-days-count-mismatch",
+  "pickup-days-even-odd-mismatch",
+  "pickup-days-missing-week-parity",
+  "pickup-days-duplicate",
+  "monthly-pickup-days-ambiguous",
+  "missing-container-volume",
+  "container-volume-mismatch",
+  "item-not-collection-mappable",
+  "non-route-contract-row",
+  "multiple-sites-contract",
+  "possible-site-duplicate",
+  "inactive-contract-range",
+  "missing-contract-row-start-date",
+  "inactive-contract-row-flag",
+  "future-contract-row-start-date",
+  "expired-contract-row-end-date",
+  "invalid-contract-row-date-range"
+]);
 const VISTOS_CONTRACT_COLUMNS = [
   "Id",
   "ContractNumber",
@@ -46,6 +77,432 @@ const VISTOS_CONTRACT_ROW_COLUMNS = [
   "StartDate",
   "IsActive",
   "ServiceList_FK"
+];
+const VISTOS_SVOZ_KAISER_TARGET_ENTITIES = ["ContractRow", "Contract"];
+const VISTOS_CUSTOMER_MANAGER_CONTACT_COLUMNS = [
+  "Id",
+  "Name",
+  "Caption",
+  "FirstName",
+  "LastName",
+  "FullName",
+  "DisplayName",
+  "Email",
+  "Email1",
+  "Email2",
+  "Mail",
+  "Phone",
+  "Phone1",
+  "PhoneNumber",
+  "Mobile",
+  "Mobil",
+  "Telefon",
+  "CellPhone",
+  "GSM"
+];
+const VISTOS_SVOZ_KAISER_COLUMN_CANDIDATES = [
+  "SvozKaiser",
+  "SvozKaiserAno",
+  "Svoz_Kaiser",
+  "Svoz_Kaiser_ANO",
+  "c_SvozKaiser",
+  "c_SvozKaiserAno",
+  "IsSvozKaiser",
+  "KaiserSvoz",
+  "KaiserSvozAno"
+];
+const VISTOS_CONSISTENCY_FIELD_SPECS = [
+  {
+    key: "pickupDays",
+    label: "Svozové dny",
+    targetEntities: ["ContractRow", "Contract"],
+    maxColumns: 12,
+    minScore: 72,
+    candidates: [
+      "SvozovyDen",
+      "SvozoveDny",
+      "SvozovyDenSudy",
+      "SvozovyDenLichy",
+      "SvozovyDenSudyTyden",
+      "SvozovyDenLichyTyden",
+      "DenSvozu",
+      "DnySvozu",
+      "SvozDen",
+      "SvozDny",
+      "PickupDay",
+      "PickupDays",
+      "CollectionDay",
+      "CollectionDays"
+    ],
+    includeGroups: [
+      ["svoz", "den"],
+      ["svoz", "dny"],
+      ["den", "svozu"],
+      ["dny", "svozu"],
+      ["pickup", "day"],
+      ["collection", "day"],
+      ["sudy", "svoz"],
+      ["lichy", "svoz"]
+    ]
+  },
+  {
+    key: "addressPlace",
+    label: "Adresní místo",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 4,
+    minScore: 76,
+    candidates: [
+      "AdresniMisto",
+      "PickupAddressRuian",
+      "AddressPlace"
+    ],
+    includeGroups: [
+      ["adresni", "misto"],
+      ["address", "place"],
+      ["pickup", "address", "ruian"]
+    ]
+  },
+  {
+    key: "siteOptional",
+    label: "Stanoviště",
+    targetEntities: ["ContractRow", "Contract"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "Stanoviste",
+      "NazevStanoviste",
+      "SvozoveStanoviste",
+      "SvozoveMisto",
+      "SiteName",
+      "CollectionSite"
+    ],
+    includeGroups: [
+      ["stanoviste"],
+      ["svozove", "stanoviste"],
+      ["nazev", "stanoviste"],
+      ["collection", "site"]
+    ]
+  },
+  {
+    key: "addressStreet",
+    label: "Svozová adresa - ulice",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaUlice",
+      "SvozovaUlice",
+      "PickupStreet",
+      "CollectionStreet",
+      "AddressStreet",
+      "Street"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "ulice"],
+      ["svozova", "ulice"],
+      ["adresa", "ulice"],
+      ["pickup", "street"],
+      ["collection", "street"],
+      ["address", "street"]
+    ]
+  },
+  {
+    key: "addressCity",
+    label: "Svozová adresa - město",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaMesto",
+      "SvozoveMesto",
+      "PickupCity",
+      "CollectionCity",
+      "AddressCity",
+      "City"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "mesto"],
+      ["svozove", "mesto"],
+      ["adresa", "mesto"],
+      ["pickup", "city"],
+      ["collection", "city"],
+      ["address", "city"]
+    ]
+  },
+  {
+    key: "addressRegion",
+    label: "Svozová adresa - kraj/stát",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaKrajStat",
+      "SvozovaAdresaKraj",
+      "SvozovyKraj",
+      "PickupRegion",
+      "PickupState",
+      "AddressRegion",
+      "AddressState",
+      "Region",
+      "State"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "kraj"],
+      ["svozova", "adresa", "stat"],
+      ["adresa", "kraj"],
+      ["adresa", "stat"],
+      ["pickup", "region"],
+      ["pickup", "state"],
+      ["address", "region"],
+      ["address", "state"]
+    ]
+  },
+  {
+    key: "addressCountry",
+    label: "Svozová adresa - země",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaZeme",
+      "SvozovaZeme",
+      "PickupCountry",
+      "CollectionCountry",
+      "AddressCountry",
+      "Country"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "zeme"],
+      ["svozova", "zeme"],
+      ["adresa", "zeme"],
+      ["pickup", "country"],
+      ["collection", "country"],
+      ["address", "country"]
+    ]
+  },
+  {
+    key: "addressPostalCode",
+    label: "Svozová adresa - PSČ",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaPSC",
+      "SvozovePSC",
+      "PickupPostalCode",
+      "PickupZip",
+      "AddressPostalCode",
+      "PostalCode",
+      "ZipCode",
+      "PSC"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "psc"],
+      ["svozove", "psc"],
+      ["adresa", "psc"],
+      ["postal", "code"],
+      ["zip", "code"],
+      ["address", "postal"],
+      ["pickup", "postal"]
+    ]
+  },
+  {
+    key: "customerManagerName",
+    label: "Zákaznický manažer",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 4,
+    minScore: 76,
+    candidates: [
+      "ZakaznickyManazer",
+      "ZakaznickyManager",
+      "CustomerManager",
+      "AccountManager",
+      "AccountManager_FK",
+      "Obchodnik",
+      "ObchodniZastupce",
+      "SalesRepresentative",
+      "SalesRep",
+      "Salesman",
+      "Referent",
+      "ResponsiblePerson",
+      "ZodpovednaOsoba"
+    ],
+    includeGroups: [
+      ["zakaznicky", "manazer"],
+      ["customer", "manager"],
+      ["account", "manager"],
+      ["obchodnik"],
+      ["obchodni", "zastupce"],
+      ["sales", "representative"],
+      ["sales", "rep"],
+      ["referent"],
+      ["responsible", "person"],
+      ["zodpovedna", "osoba"]
+    ],
+    excludeKeys: ["mobil", "mobile", "phone", "telefon", "tel", "email", "mail"]
+  },
+  {
+    key: "customerManagerMobile",
+    label: "Zákaznický manažer mobil",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 4,
+    minScore: 76,
+    candidates: [
+      "ZakaznickyManazerMobil",
+      "ZakaznickyManagerMobil",
+      "ZakaznickyManazerTelefon",
+      "ZakaznickyManagerTelefon",
+      "CustomerManagerMobile",
+      "CustomerManagerPhone",
+      "AccountManagerMobile",
+      "AccountManagerPhone",
+      "ObchodnikMobil",
+      "ObchodnikTelefon",
+      "ObchodniZastupceMobil",
+      "ObchodniZastupceTelefon",
+      "SalesRepresentativeMobile",
+      "SalesRepresentativePhone",
+      "SalesRepMobile",
+      "SalesRepPhone",
+      "ReferentMobil",
+      "ReferentTelefon"
+    ],
+    includeGroups: [
+      ["zakaznicky", "manazer", "mobil"],
+      ["zakaznicky", "manazer", "telefon"],
+      ["customer", "manager", "mobile"],
+      ["customer", "manager", "phone"],
+      ["account", "manager", "mobile"],
+      ["account", "manager", "phone"],
+      ["obchodnik", "mobil"],
+      ["obchodnik", "telefon"],
+      ["obchodni", "zastupce", "mobil"],
+      ["obchodni", "zastupce", "telefon"],
+      ["sales", "representative", "mobile"],
+      ["sales", "representative", "phone"],
+      ["sales", "rep", "mobile"],
+      ["sales", "rep", "phone"],
+      ["referent", "mobil"],
+      ["referent", "telefon"]
+    ]
+  },
+  {
+    key: "customerManagerEmail",
+    label: "Zákaznický manažer e-mail",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 4,
+    minScore: 76,
+    candidates: [
+      "ZakaznickyManazerEmail",
+      "ZakaznickyManagerEmail",
+      "ZakaznickyManazerMail",
+      "ZakaznickyManagerMail",
+      "CustomerManagerEmail",
+      "CustomerManagerMail",
+      "AccountManagerEmail",
+      "AccountManagerMail",
+      "ObchodnikEmail",
+      "ObchodnikMail",
+      "ObchodniZastupceEmail",
+      "ObchodniZastupceMail",
+      "SalesRepresentativeEmail",
+      "SalesRepresentativeMail",
+      "SalesRepEmail",
+      "SalesRepMail",
+      "ReferentEmail",
+      "ReferentMail"
+    ],
+    includeGroups: [
+      ["zakaznicky", "manazer", "email"],
+      ["zakaznicky", "manazer", "mail"],
+      ["customer", "manager", "email"],
+      ["customer", "manager", "mail"],
+      ["account", "manager", "email"],
+      ["account", "manager", "mail"],
+      ["obchodnik", "email"],
+      ["obchodnik", "mail"],
+      ["obchodni", "zastupce", "email"],
+      ["obchodni", "zastupce", "mail"],
+      ["sales", "representative", "email"],
+      ["sales", "representative", "mail"],
+      ["sales", "rep", "email"],
+      ["sales", "rep", "mail"],
+      ["referent", "email"],
+      ["referent", "mail"]
+    ]
+  },
+  {
+    key: "pickupFrom",
+    label: "Svoz od",
+    targetEntities: ["ContractRow", "Contract"],
+    maxColumns: 3,
+    minScore: 75,
+    candidates: ["SvozOd", "PickupFrom", "CollectionFrom", "ServiceFrom"],
+    includeGroups: [
+      ["svoz", "od"],
+      ["pickup", "from"],
+      ["collection", "from"],
+      ["service", "from"]
+    ]
+  },
+  {
+    key: "pickupTo",
+    label: "Svoz do",
+    targetEntities: ["ContractRow", "Contract"],
+    maxColumns: 3,
+    minScore: 75,
+    candidates: ["SvozDo", "PickupTo", "CollectionTo", "ServiceTo"],
+    includeGroups: [
+      ["svoz", "do"],
+      ["pickup", "to"],
+      ["collection", "to"],
+      ["service", "to"]
+    ]
+  }
+];
+const VISTOS_METADATA_DB_OBJECT_COLUMNS = [
+  "Id",
+  "Name",
+  "Caption",
+  "EntityName",
+  "TableName",
+  "DbName",
+  "Description",
+  "Status_FK"
+];
+const VISTOS_METADATA_DB_COLUMN_ATTEMPTS = [
+  {
+    key: "db_column_extended_by_object_fk",
+    filterField: "DbObject_FK",
+    columns: [
+      "Id",
+      "Name",
+      "Caption",
+      "ColumnName",
+      "DbColumnName",
+      "DbObject_FK",
+      "Type_FK",
+      "DataType",
+      "Nullable",
+      "IsNullable",
+      "IsReadOnly",
+      "IsVisible",
+      "VisibleOnGrid",
+      "IsVisibleOnFilter",
+      "LocalizationString",
+      "ReferenceDbObject_FK"
+    ]
+  },
+  {
+    key: "db_column_core_by_object_fk",
+    filterField: "DbObject_FK",
+    columns: ["Id", "Name", "Caption", "ColumnName", "DbObject_FK", "Type_FK"]
+  },
+  {
+    key: "db_column_core_by_record_id",
+    filterField: "DbObject_FK_RecordId",
+    columns: ["Id", "Name", "Caption", "ColumnName", "DbObject_FK", "Type_FK"]
+  }
 ];
 const VISTOS_PRODUCT_COLUMNS = [
   "Id",
@@ -223,7 +680,7 @@ const WASTE_TYPE_MAP = new Map([
   ["150106", { wasteType: "SMESNE OBALY", wasteCode: "150106" }]
 ]);
 
-const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "5x7", "1x14", "1x30"]);
+const ALLOWED_FREQUENCIES = new Set(["1x7", "2x7", "3x7", "4x7", "5x7", "1x14", "1x30"]);
 const ALLOWED_CONTAINER_VOLUMES = new Set([30, 60, 80, 120, 240, 360, 660, 770, 1100, 1500, 2500, 5000]);
 const ALLOWED_CONTAINER_VOLUME_PATTERN = "30|60|80|120|240|360|660|770|1100|1500|2500|5000";
 const VISTOS_ROUTE_WASTE_CODES = new Set(["150101", "150102", "150106", "200102", "200108", "200139", "200201", "200301"]);
@@ -440,6 +897,31 @@ function extractVistosRows(payload) {
   return nested;
 }
 
+function extractVistosRecord(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {};
+  }
+
+  const nestedData = payload.data;
+  if (nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)) {
+    if (nestedData.data && typeof nestedData.data === "object" && !Array.isArray(nestedData.data)) {
+      return nestedData.data;
+    }
+    if (!Array.isArray(nestedData.data)) {
+      return nestedData;
+    }
+  }
+
+  for (const key of ["record", "item", "value", "result"]) {
+    const value = payload[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return {};
+}
+
 function vistosExecuteApiBase(env) {
   const rawBase = cleanString(env?.VISTOS_API_BASE_URL);
   if (!rawBase) {
@@ -621,6 +1103,21 @@ async function getVistosPage(env, session, entityName, columns, filter = null, s
   };
 }
 
+async function getVistosById(env, session, entityName, entityId, columns = []) {
+  const numericId = Number(entityId);
+  const request = {
+    EntityName: entityName,
+    EntityId: Number.isFinite(numericId) ? numericId : entityId,
+    MethodMode: "HeaderColumns",
+    ColNameToRead: columns
+  };
+  const result = await fetchVistosExecute(env, "GetByIdParam", request, session.cookieHeader);
+  return {
+    row: extractVistosRecord(result.body),
+    status: result.status
+  };
+}
+
 async function getAllVistosPages(env, session, entityName, columns, filter = null, {
   pageSize = VISTOS_EXECUTE_PAGE_SIZE,
   maxPages = VISTOS_EXECUTE_MAX_PAGES
@@ -647,6 +1144,1014 @@ async function getAllVistosPages(env, session, entityName, columns, filter = nul
     filtered,
     capped: Boolean(filtered && rows.length < filtered)
   };
+}
+
+function mergeVistosDetailRow(baseRow = {}, detailRow = {}) {
+  const merged = { ...baseRow };
+  for (const [key, value] of Object.entries(detailRow || {})) {
+    if (cleanString(value) && !cleanString(merged[key])) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+async function enrichVistosRowsById(env, session, entityName, rows = [], columns = [], { maxRows = 25 } = {}) {
+  const limitedRows = rows.slice(0, Math.max(0, maxRows));
+  const detailColumns = Array.from(new Set(columns)).filter(Boolean);
+  const detailsById = new Map();
+  const diagnostics = {
+    entityName,
+    requested: limitedRows.length,
+    succeeded: 0,
+    failed: 0,
+    maxRows
+  };
+
+  for (const row of limitedRows) {
+    const id = cleanString(row?.Id || row?.RecordId);
+    if (!id || detailsById.has(id)) {
+      continue;
+    }
+
+    try {
+      const detail = await getVistosById(env, session, entityName, id, detailColumns);
+      if (detail.row && Object.keys(detail.row).length) {
+        detailsById.set(id, mergeVistosDetailRow(row, detail.row));
+        diagnostics.succeeded += 1;
+      } else {
+        diagnostics.failed += 1;
+      }
+    } catch {
+      diagnostics.failed += 1;
+    }
+  }
+
+  return {
+    rows: rows.map((row) => {
+      const id = cleanString(row?.Id || row?.RecordId);
+      return detailsById.get(id) || row;
+    }),
+    diagnostics
+  };
+}
+
+function columnsFromSchemaBody(body = {}) {
+  const data = body?.data && typeof body.data === "object" ? body.data : {};
+  if (Array.isArray(data.Columns)) {
+    return data.Columns.filter((item) => item && typeof item === "object");
+  }
+  if (Array.isArray(data.columns)) {
+    return data.columns.filter((item) => item && typeof item === "object");
+  }
+  return extractVistosRows(body);
+}
+
+function compactVistosColumn(column = {}) {
+  return {
+    id: firstNonEmpty(column.Id, column.id),
+    name: firstNonEmpty(column.ColumnName, column.DbColumnName, column.Name, column.name),
+    caption: firstNonEmpty(column.LocalizationString, column.Caption, column.Description, column.Name, column.ColumnName),
+    type: firstNonEmpty(column.Type_FK, column.DataType, column.Type, column.EnumType),
+    nullable: column.Nullable ?? column.IsNullable ?? null,
+    readOnly: column.IsReadOnly ?? null,
+    visible: column.VisibleOnGrid ?? column.IsVisible ?? column.IsVisibleOnFilter ?? null,
+    reference: firstNonEmpty(column.ReferenceDbObject_FK, column.ReferenceDbObject_FK_Caption),
+    rawKeys: Object.keys(column || {}).slice(0, 16)
+  };
+}
+
+function normalizeVistosMetadataKey(value = "") {
+  return cleanString(value)
+    .toLocaleLowerCase("cs")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function vistosMetadataValues(column = {}) {
+  return [
+    column.ColumnName,
+    column.DbColumnName,
+    column.Name,
+    column.Caption,
+    column.LocalizationString,
+    column.Description
+  ].map(normalizeVistosMetadataKey).filter(Boolean);
+}
+
+function vistosSvozKaiserColumnScore(column = {}) {
+  const values = vistosMetadataValues(column);
+  const candidateKeys = VISTOS_SVOZ_KAISER_COLUMN_CANDIDATES.map(normalizeVistosMetadataKey);
+
+  if (values.some((value) => candidateKeys.includes(value))) {
+    return 100;
+  }
+  if (values.some((value) => value.includes("svozkaiserano") || value.includes("kaisersvozano"))) {
+    return 95;
+  }
+  if (values.some((value) => value.includes("svozkaiser") || value.includes("kaisersvoz"))) {
+    return 90;
+  }
+  if (values.some((value) => value.includes("svoz") && value.includes("kaiser") && value.includes("ano"))) {
+    return 85;
+  }
+  if (values.some((value) => value.includes("svoz") && value.includes("kaiser"))) {
+    return 80;
+  }
+  return 0;
+}
+
+function vistosConsistencyColumnScore(column = {}, spec = {}) {
+  const values = vistosMetadataValues(column);
+  const candidateKeys = (spec.candidates || []).map(normalizeVistosMetadataKey).filter(Boolean);
+  if (values.some((value) => candidateKeys.includes(value))) {
+    return 100;
+  }
+
+  const excludeKeys = (spec.excludeKeys || []).map(normalizeVistosMetadataKey).filter(Boolean);
+  const includeGroups = Array.isArray(spec.includeGroups) ? spec.includeGroups : [];
+  let best = 0;
+  for (const value of values) {
+    if (excludeKeys.some((key) => value.includes(key))) {
+      continue;
+    }
+    for (const group of includeGroups) {
+      const keys = group.map(normalizeVistosMetadataKey).filter(Boolean);
+      if (keys.length && keys.every((key) => value.includes(key))) {
+        best = Math.max(best, 82 + Math.min(keys.length * 4, 12));
+      }
+    }
+  }
+  return best;
+}
+
+function compactVistosConsistencyCandidate(candidate = {}) {
+  return {
+    entityName: cleanString(candidate.entityName),
+    columnName: cleanString(candidate.columnName),
+    caption: cleanString(candidate.compact?.caption || candidate.column?.Caption || candidate.column?.Name),
+    reference: cleanString(candidate.compact?.reference),
+    score: numericValue(candidate.score, 0),
+    source: cleanString(candidate.source || candidate.method)
+  };
+}
+
+function vistosDbObjectId(row = {}) {
+  return firstNonEmpty(row.Id, row.DbObjectId, row.DbObject_FK_RecordId, row.RecordId);
+}
+
+function matchVistosDbObjects(rows = [], targetEntities = VISTOS_SVOZ_KAISER_TARGET_ENTITIES) {
+  return targetEntities.map((entityName) => {
+    const targetKey = normalizeVistosMetadataKey(entityName);
+    const row = rows.find((item) => {
+      const values = [
+        item.Name,
+        item.EntityName,
+        item.Caption,
+        item.TableName,
+        item.DbName
+      ].map(normalizeVistosMetadataKey).filter(Boolean);
+      return values.includes(targetKey) || values.some((value) => value.endsWith(targetKey));
+    });
+
+    return {
+      entityName,
+      found: Boolean(row),
+      dbObjectId: row ? vistosDbObjectId(row) : "",
+      name: firstNonEmpty(row?.Name, row?.EntityName),
+      caption: firstNonEmpty(row?.Caption, row?.Description),
+      tableName: firstNonEmpty(row?.TableName, row?.DbName)
+    };
+  });
+}
+
+async function loadVistosSvozKaiserSchemaEntity(env, session, entityName) {
+  try {
+    const result = await fetchVistosExecute(env, "GetSchemaEntity", {
+      EntityName: entityName,
+      Force: false
+    }, session.cookieHeader);
+    const columns = columnsFromSchemaBody(result.body);
+    return {
+      entityName,
+      method: "GetSchemaEntity",
+      ok: true,
+      status: result.status,
+      columnCount: columns.length,
+      columns,
+      candidates: columns
+        .map((column) => ({ column, score: vistosSvozKaiserColumnScore(column) }))
+        .filter((item) => item.score > 0)
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 8)
+    };
+  } catch (error) {
+    return {
+      entityName,
+      method: "GetSchemaEntity",
+      ok: false,
+      error: error?.message || "GetSchemaEntity se nepodařilo načíst.",
+      code: error?.code || "vistos_schema_entity_failed",
+      columnCount: 0,
+      columns: [],
+      candidates: []
+    };
+  }
+}
+
+async function loadVistosSvozKaiserDbColumns(env, session, dbObject) {
+  if (!dbObject?.found || !dbObject.dbObjectId) {
+    return {
+      entityName: dbObject?.entityName || "",
+      dbObjectId: dbObject?.dbObjectId || "",
+      ok: false,
+      reason: "DB_OBJECT_NOT_FOUND",
+      columnCount: 0,
+      columns: [],
+      candidates: [],
+      diagnostics: []
+    };
+  }
+
+  const diagnostics = [];
+  for (const attempt of VISTOS_METADATA_DB_COLUMN_ATTEMPTS) {
+    try {
+      const page = await getAllVistosPages(
+        env,
+        session,
+        "DbColumn",
+        attempt.columns,
+        { [attempt.filterField]: dbObject.dbObjectId },
+        { pageSize: 500, maxPages: 2 }
+      );
+      const candidates = page.rows
+        .map((column) => ({ column, score: vistosSvozKaiserColumnScore(column) }))
+        .filter((item) => item.score > 0)
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 8);
+
+      return {
+        entityName: dbObject.entityName,
+        dbObjectId: dbObject.dbObjectId,
+        method: "DbColumn",
+        ok: true,
+        key: attempt.key,
+        filterField: attempt.filterField,
+        returnedRows: page.rows.length,
+        totalRows: page.total || page.rows.length,
+        capped: Boolean(page.capped),
+        columnCount: page.rows.length,
+        columns: page.rows,
+        candidates,
+        diagnostics: [...diagnostics, {
+          key: attempt.key,
+          ok: true,
+          returnedRows: page.rows.length,
+          totalRows: page.total || page.rows.length,
+          capped: Boolean(page.capped)
+        }]
+      };
+    } catch (error) {
+      diagnostics.push({
+        key: attempt.key,
+        filterField: attempt.filterField,
+        ok: false,
+        error: error?.message || "DbColumn se nepodařilo načíst.",
+        code: error?.code || "vistos_db_column_failed"
+      });
+    }
+  }
+
+  return {
+    entityName: dbObject.entityName,
+    dbObjectId: dbObject.dbObjectId,
+    method: "DbColumn",
+    ok: false,
+    reason: "DB_COLUMN_READ_FAILED",
+    columnCount: 0,
+    columns: [],
+    candidates: [],
+    diagnostics
+  };
+}
+
+function bestVistosSvozKaiserCandidate(candidates = [], source = "") {
+  const sorted = candidates
+    .map((candidate) => ({
+      ...candidate,
+      columnName: firstNonEmpty(candidate.column?.ColumnName, candidate.column?.DbColumnName, candidate.column?.Name),
+      compact: compactVistosColumn(candidate.column),
+      source
+    }))
+    .filter((candidate) => candidate.score > 0 && candidate.columnName)
+    .sort((left, right) => right.score - left.score);
+  return sorted[0] || null;
+}
+
+async function resolveVistosSvozKaiserField(env, session) {
+  const schemaAttempts = [];
+  for (const entityName of VISTOS_SVOZ_KAISER_TARGET_ENTITIES) {
+    schemaAttempts.push(await loadVistosSvozKaiserSchemaEntity(env, session, entityName));
+  }
+
+  const schemaCandidates = schemaAttempts.flatMap((attempt) => (
+    attempt.candidates || []
+  ).map((candidate) => ({
+    ...candidate,
+    entityName: attempt.entityName,
+    method: attempt.method
+  })));
+  const schemaBest = bestVistosSvozKaiserCandidate(schemaCandidates, "GetSchemaEntity");
+  if (schemaBest) {
+    return {
+      confirmed: true,
+      entityName: schemaBest.entityName,
+      columnName: schemaBest.columnName,
+      caption: schemaBest.compact.caption,
+      score: schemaBest.score,
+      source: "GetSchemaEntity",
+      candidates: schemaCandidates.slice(0, 10).map((candidate) => ({
+        entityName: candidate.entityName,
+        score: candidate.score,
+        column: compactVistosColumn(candidate.column)
+      })),
+      diagnostics: {
+        schemaAttempts: schemaAttempts.map((attempt) => ({
+          entityName: attempt.entityName,
+          ok: attempt.ok,
+          method: attempt.method,
+          columnCount: attempt.columnCount,
+          candidateCount: attempt.candidates?.length || 0,
+          error: attempt.error || ""
+        })),
+        dbObjectAttempts: []
+      }
+    };
+  }
+
+  let dbObjectPage;
+  try {
+    dbObjectPage = await getAllVistosPages(
+      env,
+      session,
+      "DbObject",
+      VISTOS_METADATA_DB_OBJECT_COLUMNS,
+      null,
+      { pageSize: 500, maxPages: 4 }
+    );
+  } catch (error) {
+    return {
+      confirmed: false,
+      entityName: "",
+      columnName: "",
+      caption: "",
+      score: 0,
+      source: "",
+      candidates: [],
+      diagnostics: {
+        schemaAttempts: schemaAttempts.map((attempt) => ({
+          entityName: attempt.entityName,
+          ok: attempt.ok,
+          method: attempt.method,
+          columnCount: attempt.columnCount,
+          candidateCount: attempt.candidates?.length || 0,
+          error: attempt.error || ""
+        })),
+        dbObjectAttempts: [{
+          ok: false,
+          error: error?.message || "DbObject metadata se nepodařilo načíst.",
+          code: error?.code || "vistos_db_object_failed"
+        }],
+        dbColumnAttempts: []
+      },
+      message: "Pole Svoz Kaiser ANO se nepodařilo potvrdit přes GetSchemaEntity ani DbObject/DbColumn metadata."
+    };
+  }
+  const dbObjects = matchVistosDbObjects(dbObjectPage.rows);
+  const dbColumnAttempts = [];
+  for (const dbObject of dbObjects) {
+    dbColumnAttempts.push(await loadVistosSvozKaiserDbColumns(env, session, dbObject));
+  }
+  const dbColumnCandidates = dbColumnAttempts.flatMap((attempt) => (
+    attempt.candidates || []
+  ).map((candidate) => ({
+    ...candidate,
+    entityName: attempt.entityName,
+    method: attempt.method
+  })));
+  const dbColumnBest = bestVistosSvozKaiserCandidate(dbColumnCandidates, "DbColumn");
+  if (dbColumnBest) {
+    return {
+      confirmed: true,
+      entityName: dbColumnBest.entityName,
+      columnName: dbColumnBest.columnName,
+      caption: dbColumnBest.compact.caption,
+      score: dbColumnBest.score,
+      source: "DbColumn",
+      candidates: dbColumnCandidates.slice(0, 10).map((candidate) => ({
+        entityName: candidate.entityName,
+        score: candidate.score,
+        column: compactVistosColumn(candidate.column)
+      })),
+      diagnostics: {
+        schemaAttempts: schemaAttempts.map((attempt) => ({
+          entityName: attempt.entityName,
+          ok: attempt.ok,
+          method: attempt.method,
+          columnCount: attempt.columnCount,
+          candidateCount: attempt.candidates?.length || 0,
+          error: attempt.error || ""
+        })),
+        dbObjectAttempts: dbObjects,
+        dbColumnAttempts: dbColumnAttempts.map((attempt) => ({
+          entityName: attempt.entityName,
+          ok: attempt.ok,
+          method: attempt.method,
+          columnCount: attempt.columnCount,
+          candidateCount: attempt.candidates?.length || 0,
+          reason: attempt.reason || "",
+          diagnostics: attempt.diagnostics || []
+        }))
+      }
+    };
+  }
+
+  return {
+    confirmed: false,
+    entityName: "",
+    columnName: "",
+    caption: "",
+    score: 0,
+    source: "",
+    candidates: [],
+    diagnostics: {
+      schemaAttempts: schemaAttempts.map((attempt) => ({
+        entityName: attempt.entityName,
+        ok: attempt.ok,
+        method: attempt.method,
+        columnCount: attempt.columnCount,
+        candidateCount: attempt.candidates?.length || 0,
+        error: attempt.error || ""
+      })),
+      dbObjectAttempts: dbObjects,
+      dbColumnAttempts: dbColumnAttempts.map((attempt) => ({
+        entityName: attempt.entityName,
+        ok: attempt.ok,
+        method: attempt.method,
+        columnCount: attempt.columnCount,
+        candidateCount: attempt.candidates?.length || 0,
+        reason: attempt.reason || "",
+        diagnostics: attempt.diagnostics || []
+      }))
+    },
+    message: "Pole Svoz Kaiser ANO se nepodařilo potvrdit v ContractRow ani Contract metadatech."
+  };
+}
+
+async function resolveVistosSvozKaiserConsistencyFields(env, session) {
+  const targetEntities = Array.from(new Set(VISTOS_CONSISTENCY_FIELD_SPECS
+    .flatMap((spec) => spec.targetEntities || [])
+    .filter(Boolean)));
+  const schemaAttempts = [];
+  for (const entityName of targetEntities) {
+    schemaAttempts.push(await loadVistosSvozKaiserSchemaEntity(env, session, entityName));
+  }
+
+  const fields = {};
+  for (const spec of VISTOS_CONSISTENCY_FIELD_SPECS) {
+    const candidates = schemaAttempts
+      .filter((attempt) => (spec.targetEntities || []).includes(attempt.entityName))
+      .flatMap((attempt) => (attempt.columns || []).map((column) => {
+        const compact = compactVistosColumn(column);
+        return {
+          entityName: attempt.entityName,
+          method: attempt.method,
+          source: "GetSchemaEntity",
+          column,
+          compact,
+          columnName: firstNonEmpty(column.ColumnName, column.DbColumnName, column.Name),
+          score: vistosConsistencyColumnScore(column, spec)
+        };
+      }))
+      .filter((candidate) => candidate.columnName && candidate.score >= (spec.minScore || 75))
+      .sort((left, right) => right.score - left.score || left.columnName.localeCompare(right.columnName, "cs"));
+
+    const unique = [];
+    const seen = new Set();
+    for (const candidate of candidates) {
+      const key = `${candidate.entityName}:${candidate.columnName}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      unique.push(candidate);
+      if (unique.length >= (spec.maxColumns || 1)) {
+        break;
+      }
+    }
+
+    fields[spec.key] = {
+      key: spec.key,
+      label: spec.label,
+      confirmed: unique.length > 0,
+      columns: unique.map(compactVistosConsistencyCandidate),
+      candidates: candidates.slice(0, 12).map(compactVistosConsistencyCandidate),
+      message: unique.length
+        ? `${spec.label} potvrzeno přes Vistos metadata.`
+        : `${spec.label} se v metadatech Contract/ContractRow nepodařilo jednoznačně najít.`
+    };
+  }
+
+  return {
+    confirmed: Object.values(fields).some((field) => field.confirmed),
+    source: "GetSchemaEntity",
+    fields,
+    diagnostics: {
+      schemaAttempts: schemaAttempts.map((attempt) => ({
+        entityName: attempt.entityName,
+        ok: attempt.ok,
+        method: attempt.method,
+        columnCount: attempt.columnCount,
+        error: attempt.error || ""
+      }))
+    }
+  };
+}
+
+function withVistosSvozKaiserColumn(columns, field, entityName) {
+  if (!field?.confirmed || field.entityName !== entityName || !field.columnName) {
+    return columns;
+  }
+  return Array.from(new Set([...columns, field.columnName]));
+}
+
+function withVistosConsistencyColumns(columns, consistencyFields, entityName) {
+  const extra = Object.values(consistencyFields?.fields || {})
+    .flatMap((field) => field.confirmed ? field.columns || [] : [])
+    .filter((column) => column.entityName === entityName && column.columnName)
+    .map((column) => column.columnName);
+  const directAddressPlaceColumns = ["Contract", "ContractRow"].includes(entityName)
+    ? VISTOS_ADDRESS_PLACE_GETPAGE_COLUMNS
+    : [];
+  return Array.from(new Set([...columns, ...directAddressPlaceColumns, ...extra]));
+}
+
+function readVistosColumnValue(row, columnName) {
+  if (!row || !columnName) {
+    return "";
+  }
+  return firstNonEmpty(
+    row[columnName],
+    row[`${columnName}_FK`],
+    row[`${columnName}_Caption`],
+    row[`${columnName}_FK_Caption`],
+    row[`${columnName}_MainProjection`],
+    row[`${columnName}_FK_MainProjection`],
+    row[`${columnName}_Value`],
+    row[`${columnName}_FK_Value`],
+    row[`${columnName}_RecordId`],
+    row[`${columnName}_FK_RecordId`]
+  );
+}
+
+function readVistosColumnDisplayValue(row, columnName) {
+  if (!row || !columnName) {
+    return "";
+  }
+  return firstNonEmpty(
+    row[`${columnName}_Caption`],
+    row[`${columnName}_FK_Caption`],
+    row[`${columnName}_MainProjection`],
+    row[`${columnName}_FK_MainProjection`],
+    row[`${columnName}_Value`],
+    row[`${columnName}_FK_Value`],
+    row[columnName],
+    row[`${columnName}_FK`],
+    row[`${columnName}_RecordId`],
+    row[`${columnName}_FK_RecordId`]
+  );
+}
+
+function readVistosColumnRecordId(row, columnName) {
+  if (!row || !columnName) {
+    return "";
+  }
+  return firstNonEmpty(
+    row[`${columnName}_RecordId`],
+    row[`${columnName}_FK_RecordId`],
+    row[columnName],
+    row[`${columnName}_FK`]
+  );
+}
+
+function readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, fieldKey) {
+  const field = consistencyFields?.fields?.[fieldKey];
+  if (!field?.confirmed) {
+    return [];
+  }
+  return (field.columns || []).map((column) => {
+    const row = column.entityName === "ContractRow" ? contractRow : contract;
+    const value = readVistosColumnDisplayValue(row, column.columnName);
+    const rawValue = readVistosColumnValue(row, column.columnName);
+    return {
+      ...column,
+      value,
+      rawValue
+    };
+  }).filter((item) => cleanString(item.value) || cleanString(item.rawValue));
+}
+
+const VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS = [
+  "AdresniMisto",
+  "Adresni_misto",
+  "AdresniMisto_FK",
+  "AddressPlace",
+  "PickupAddressRuian"
+];
+const VISTOS_ADDRESS_PLACE_GETPAGE_COLUMNS = ["PickupAddressRuian"];
+
+function vistosAddressPlaceColumnValues(row, columnName) {
+  if (!row || !columnName) {
+    return [];
+  }
+  return [
+    [row[`${columnName}_MainProjection`], `${columnName}_MainProjection`],
+    [row[`${columnName}_FK_MainProjection`], `${columnName}_FK_MainProjection`],
+    [row[`${columnName}_Value`], `${columnName}_Value`],
+    [row[`${columnName}_FK_Value`], `${columnName}_FK_Value`],
+    [row[columnName], columnName],
+    [row[`${columnName}_FK`], `${columnName}_FK`],
+    [row[`${columnName}_Caption`], `${columnName}_Caption`],
+    [row[`${columnName}_FK_Caption`], `${columnName}_FK_Caption`],
+    [row[`${columnName}_RecordId`], `${columnName}_RecordId`],
+    [row[`${columnName}_FK_RecordId`], `${columnName}_FK_RecordId`]
+  ]
+    .map(([value, sourceColumn]) => ({
+      sourceColumn,
+      value: cleanString(value)
+    }))
+    .filter((item) => item.value);
+}
+
+function directVistosAddressPlaceValues(contract, contractRow) {
+  const values = [];
+  for (const [entityName, row] of [["Contract", contract], ["ContractRow", contractRow]]) {
+    if (!row) {
+      continue;
+    }
+    for (const columnName of VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS) {
+      values.push(...vistosAddressPlaceColumnValues(row, columnName).map((item) => ({
+        entityName,
+        columnName,
+        sourceColumn: item.sourceColumn,
+        caption: "Adresní místo",
+        source: "direct",
+        value: item.value,
+        rawValue: item.value
+      })));
+    }
+  }
+  return values;
+}
+
+function readVistosAddressPlaceRaw(contract, contractRow, consistencyFields, fallback = "") {
+  return preferredVistosAddressPlaceValue([
+    ...directVistosAddressPlaceValues(contract, contractRow),
+    ...readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace")
+  ]) || firstNonGenericVistosAddressPlace(fallback);
+}
+
+function vistosConsistencyDisplayValues(values = []) {
+  return values
+    .map((item) => firstNonEmpty(item?.value, item?.rawValue))
+    .map(cleanString)
+    .filter(Boolean);
+}
+
+function cleanVistosCustomerManagerName(value = "") {
+  const text = cleanString(value);
+  if (!text || /^\d+$/.test(text)) {
+    return "";
+  }
+  return text;
+}
+
+function vistosCustomerManagerContactValue(row = {}, fields = []) {
+  return firstNonEmpty(...fields.flatMap((field) => ([
+    row[field],
+    row[`${field}_Caption`],
+    row[`${field}_MainProjection`],
+    row[`${field}_Value`]
+  ])));
+}
+
+function vistosCustomerManagerContactName(row = {}) {
+  return cleanVistosCustomerManagerName(firstNonEmpty(
+    vistosCustomerManagerContactValue(row, ["FullName", "DisplayName", "Caption", "Name"]),
+    [row.FirstName, row.LastName].map(cleanString).filter(Boolean).join(" ")
+  ));
+}
+
+function vistosCustomerManagerContactMobile(row = {}) {
+  return cleanString(vistosCustomerManagerContactValue(row, [
+    "Mobile",
+    "Mobil",
+    "CellPhone",
+    "GSM",
+    "Phone",
+    "Phone1",
+    "PhoneNumber",
+    "Telefon"
+  ]));
+}
+
+function vistosCustomerManagerContactEmail(row = {}) {
+  return cleanString(vistosCustomerManagerContactValue(row, ["Email", "Email1", "Email2", "Mail"]));
+}
+
+function customerManagerReferenceEntityNames(column = {}) {
+  const inferred = cleanString(column.columnName).replace(/_FK$/i, "");
+  return Array.from(new Set([
+    cleanString(column.reference),
+    inferred,
+    "DirectoryManager",
+    "Employee",
+    "User",
+    "Person",
+    "Contact"
+  ].filter(Boolean)));
+}
+
+async function enrichVistosCustomerManagerContacts(env, session, rows = [], consistencyFields = null, { maxRows = 50 } = {}) {
+  const managerColumns = (consistencyFields?.fields?.customerManagerName?.columns || [])
+    .filter((column) => column?.columnName);
+  if (!managerColumns.length || !rows.length) {
+    return { rows, diagnostics: { requested: 0, succeeded: 0, failed: 0 } };
+  }
+
+  const detailsByKey = new Map();
+  const diagnostics = {
+    requested: 0,
+    succeeded: 0,
+    failed: 0
+  };
+
+  for (const row of rows.slice(0, Math.max(0, maxRows))) {
+    for (const column of managerColumns) {
+      const displayName = cleanVistosCustomerManagerName(readVistosColumnDisplayValue(row, column.columnName));
+      const managerId = cleanString(readVistosColumnRecordId(row, column.columnName));
+      if (displayName && !row.__customerManagerName) {
+        row.__customerManagerName = displayName;
+      }
+      if (!managerId || !/^\d+$/.test(managerId)) {
+        continue;
+      }
+
+      const entityNames = customerManagerReferenceEntityNames(column);
+      for (const entityName of entityNames) {
+        const key = `${entityName}:${managerId}`;
+        if (!detailsByKey.has(key)) {
+          diagnostics.requested += 1;
+          try {
+            const detail = await getVistosById(env, session, entityName, managerId, VISTOS_CUSTOMER_MANAGER_CONTACT_COLUMNS);
+            detailsByKey.set(key, detail.row || null);
+            if (detail.row && Object.keys(detail.row).length) {
+              diagnostics.succeeded += 1;
+            } else {
+              diagnostics.failed += 1;
+            }
+          } catch {
+            detailsByKey.set(key, null);
+            diagnostics.failed += 1;
+          }
+        }
+
+        const detailRow = detailsByKey.get(key);
+        if (!detailRow) {
+          continue;
+        }
+        row.__customerManagerName = firstNonEmpty(row.__customerManagerName, vistosCustomerManagerContactName(detailRow));
+        row.__customerManagerMobile = firstNonEmpty(row.__customerManagerMobile, vistosCustomerManagerContactMobile(detailRow));
+        row.__customerManagerEmail = firstNonEmpty(row.__customerManagerEmail, vistosCustomerManagerContactEmail(detailRow));
+        if (row.__customerManagerName || row.__customerManagerMobile || row.__customerManagerEmail) {
+          break;
+        }
+      }
+    }
+  }
+
+  return { rows, diagnostics };
+}
+
+function isGenericVistosAddressPlaceValue(value = "") {
+  const key = normalizeVistosMetadataKey(value);
+  const text = cleanString(value);
+  const looksLikeCustomerCaption = /\s-\s*\d{6,12}$/.test(text) && (
+    /\b(?:s\.?\s*r\.?\s*o|a\.?\s*s|spol|druzstvo)\b/i.test(text) ||
+    text.toLocaleLowerCase("cs").includes("s.r.o") ||
+    text.toLocaleLowerCase("cs").includes("a.s")
+  );
+  if (looksLikeCustomerCaption) {
+    return true;
+  }
+  return [
+    "branch",
+    "company",
+    "customer",
+    "directory",
+    "directorybranch",
+    "firma",
+    "pobocka",
+    "zakaznik"
+  ].includes(key);
+}
+
+function vistosAddressPlaceText(value = "") {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return firstNonEmpty(
+      value.Caption1,
+      value.Caption,
+      value.caption,
+      value.DisplayName,
+      value.Name,
+      value.Value
+    );
+  }
+
+  const text = cleanString(value);
+  if (text.startsWith("{") && text.endsWith("}")) {
+    try {
+      return vistosAddressPlaceText(JSON.parse(text));
+    } catch {
+      return text;
+    }
+  }
+  return text;
+}
+
+function firstNonGenericVistosAddressPlace(...values) {
+  return values
+    .map(vistosAddressPlaceText)
+    .find((value) => value && !isGenericVistosAddressPlaceValue(value)) || "";
+}
+
+function vistosAddressPlaceCandidateScore(item = {}) {
+  const value = firstNonEmpty(item.value, item.rawValue);
+  const metadataKey = normalizeVistosMetadataKey([
+    item.columnName,
+    item.caption,
+    item.name,
+    item.label
+  ].filter(Boolean).join(" "));
+  let score = 0;
+
+  if (metadataKey.includes("adresnimisto") || metadataKey.includes("addressplace") || metadataKey.includes("pickupaddressruian")) {
+    score += 120;
+  }
+  if ((metadataKey.includes("adresni") && metadataKey.includes("misto")) || (metadataKey.includes("address") && metadataKey.includes("place"))) {
+    score += 90;
+  }
+  if (metadataKey.includes("ruian")) {
+    score += 60;
+  }
+  if (
+    (metadataKey.includes("svozova") && metadataKey.includes("adresa")) ||
+    (metadataKey.includes("nakladkova") && metadataKey.includes("adresa")) ||
+    metadataKey.includes("loadingaddress") ||
+    metadataKey === "pickupaddress"
+  ) {
+    score -= 160;
+  }
+  if (metadataKey.includes("stanoviste")) {
+    score -= 180;
+  }
+  if (/\d/.test(cleanString(value))) {
+    score += 20;
+  }
+  if (cleanString(value).length >= 12) {
+    score += 8;
+  }
+
+  return score;
+}
+
+function preferredVistosAddressPlaceValue(values = [], ...fallbacks) {
+  const candidates = values
+    .map((item) => ({
+      item,
+      value: firstNonGenericVistosAddressPlace(item?.value, item?.rawValue),
+      score: vistosAddressPlaceCandidateScore(item)
+    }))
+    .filter((candidate) => cleanString(candidate.value))
+    .sort((left, right) => right.score - left.score);
+
+  return firstNonGenericVistosAddressPlace(candidates[0]?.value);
+}
+
+function firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, fieldKey, ...fallbacks) {
+  return firstNonEmpty(
+    ...vistosConsistencyDisplayValues(readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, fieldKey)),
+    ...fallbacks
+  );
+}
+
+function vistosAddressPartsFromFields(contract, contractRow, consistencyFields, fallback = {}) {
+  return {
+    street: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressStreet", fallback.street),
+    city: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressCity", fallback.city),
+    region: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressRegion", fallback.region),
+    country: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressCountry", fallback.country),
+    postalCode: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressPostalCode", fallback.postalCode)
+  };
+}
+
+function vistosAddressPartsFromAddressPlace(value = "") {
+  const address = firstNonGenericVistosAddressPlace(value);
+  if (!address) {
+    return {};
+  }
+
+  const postalMatch = address.match(/(?:PSČ|PSC)?\s*(\d{3})\s*(\d{2})\b/i);
+  const postalCode = postalMatch ? `${postalMatch[1]}${postalMatch[2]}` : "";
+  const withoutPostalCode = address
+    .replace(/(?:PSČ|PSC)?\s*\d{3}\s*\d{2}\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const parts = withoutPostalCode
+    .split(",")
+    .map((part) => cleanString(part))
+    .filter(Boolean);
+
+  let city = "";
+  let street = "";
+
+  if (parts.length >= 3) {
+    city = parts[0];
+    street = parts.slice(2).join(", ");
+  } else if (parts.length === 2) {
+    const [first, second] = parts;
+    if (/\d/.test(first) && !/\d/.test(second)) {
+      street = first;
+      city = second;
+    } else if (!/\d/.test(first) && /\d/.test(second)) {
+      city = first;
+      street = second;
+    } else {
+      city = first;
+      street = second;
+    }
+  }
+
+  city = city.replace(/\s+-\s+.+$/, "").trim();
+
+  return {
+    street,
+    city,
+    postalCode
+  };
+}
+
+function compactVistosAddressParts(parts = {}) {
+  return {
+    addressStreet: cleanString(parts.street),
+    addressCity: cleanString(parts.city),
+    addressRegion: cleanString(parts.region),
+    addressCountry: cleanString(parts.country),
+    addressPostalCode: cleanString(parts.postalCode)
+  };
+}
+
+function preferVistosAddressPlaceParts(addressPlaceRaw, fieldParts = {}) {
+  const parsed = compactVistosAddressParts(vistosAddressPartsFromAddressPlace(addressPlaceRaw));
+  return {
+    addressStreet: parsed.addressStreet || fieldParts.addressStreet || "",
+    addressCity: parsed.addressCity || fieldParts.addressCity || "",
+    addressRegion: fieldParts.addressRegion || "",
+    addressCountry: fieldParts.addressCountry || "",
+    addressPostalCode: parsed.addressPostalCode || fieldParts.addressPostalCode || ""
+  };
+}
+
+function isVistosYesValue(value) {
+  if (value === true || value === 1) {
+    return true;
+  }
+  const key = normalizeVistosMetadataKey(value);
+  return ["1", "true", "ano", "yes", "y", "a", "checked", "zapnuto", "aktivni"].includes(key);
+}
+
+function rowSvozKaiserValue(contract, contractRow, field) {
+  if (!field?.confirmed || !field.columnName) {
+    return "";
+  }
+  if (field.entityName === "ContractRow") {
+    return readVistosColumnValue(contractRow, field.columnName);
+  }
+  if (field.entityName === "Contract") {
+    return readVistosColumnValue(contract, field.columnName);
+  }
+  return "";
 }
 
 function flattenVistosRow(row, path) {
@@ -829,6 +2334,9 @@ function normalizeFrequencyAlias(value) {
   if (/3KRATTYDNE|3XTYD|3TYDNE/.test(compact)) {
     return "3x7";
   }
+  if (/4KRATTYDNE|4XTYD|4TYDNE/.test(compact)) {
+    return "4x7";
+  }
   if (/5KRATTYDNE|5XTYD|5TYDNE/.test(compact)) {
     return "5x7";
   }
@@ -851,11 +2359,14 @@ function normalizeContainerVolume(value) {
       known: Number.isFinite(volume) && ALLOWED_CONTAINER_VOLUMES.has(volume)
     };
   }
-  const countedVolume = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const countedVolumeMatch = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const countedVolume = countedVolumeMatch && (Number(countedVolumeMatch[1]) !== 30 || countedVolumeMatch[2])
+    ? countedVolumeMatch
+    : null;
   const prefixedVolume = raw.match(new RegExp(`\\b(?:P|POP|POPEL|KONT|KONTEJNER)\\.?\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
-  const preferredVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const preferredVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)\\b`, "i"));
   const directVolume = raw.match(new RegExp(`^\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*$`));
-  const match = countedVolume || prefixedVolume || preferredVolume || directVolume;
+  const match = prefixedVolume || preferredVolume || countedVolume || directVolume;
   const volume = match ? Number(match[1] || match[0]) : 0;
   return {
     volume,
@@ -874,11 +2385,14 @@ function normalizeExplicitContainerVolumeText(value) {
     };
   }
 
-  const countedVolume = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const countedVolumeMatch = raw.match(new RegExp(`\\b\\d+\\s*[x×]\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(l|lt|ltr|litru|litr|litry)?\\b`, "i"));
+  const countedVolume = countedVolumeMatch && (Number(countedVolumeMatch[1]) !== 30 || countedVolumeMatch[2])
+    ? countedVolumeMatch
+    : null;
   const prefixedVolume = raw.match(new RegExp(`\\b(?:P|POP|POPEL|KONT|KONTEJNER)\\.?\\s*(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
   const unitVolume = raw.match(new RegExp(`\\b(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)\\b`, "i"));
   const contextualVolume = raw.match(new RegExp(`\\b(?:NADOB(?:A|Y|U|OU|E)?|POPELNIC(?:E|I|A|OU)?|KONTEJNER|KONT|KAPACIT(?:A|OU|Y)?|VELIKOST(?:I)?|OBJEM(?:EM)?|VYKLOP(?:U)?)\\D{0,40}(${ALLOWED_CONTAINER_VOLUME_PATTERN})\\b`, "i"));
-  const match = countedVolume || prefixedVolume || unitVolume || contextualVolume;
+  const match = prefixedVolume || unitVolume || contextualVolume || countedVolume;
   const volume = match ? Number(match[1] || match[0]) : 0;
   return {
     volume,
@@ -891,6 +2405,31 @@ function normalizeContainerCount(value) {
   const countedVolume = raw.match(new RegExp(`^\\s*(\\d+)\\s*[x×]\\s*(?:${ALLOWED_CONTAINER_VOLUME_PATTERN})\\s*(?:l|lt|ltr|litru|litr|litry)?\\b`, "i"));
   const count = Math.max(0, Math.round(countedVolume ? Number(countedVolume[1]) : numericValue(raw, 0)));
   return count || 1;
+}
+
+function inferExplicitContainerVolumeFromTexts(values = []) {
+  let fallbackText = "";
+  for (const value of values) {
+    const text = cleanString(value);
+    if (!text) {
+      continue;
+    }
+    if (!fallbackText) {
+      fallbackText = text;
+    }
+    const volume = normalizeExplicitContainerVolumeText(text);
+    if (volume.known) {
+      return {
+        ...volume,
+        text
+      };
+    }
+  }
+  return {
+    volume: 0,
+    known: false,
+    text: fallbackText
+  };
 }
 
 function firstNonEmpty(...values) {
@@ -983,8 +2522,495 @@ function contractRowValidityIssues(row, today = new Date()) {
     });
   }
 
+  if (start && end && start > end) {
+    issues.push({
+      type: "invalid-contract-row-date-range",
+      severity: "error",
+      message: "Položka smlouvy má začátek svozu po konci svozu."
+    });
+  }
+
   return issues;
 }
+
+const VISTOS_PICKUP_WEEKDAYS = [
+  { code: "PO", label: "pondělí", patterns: [/\bPO\b/, /\bPOND(?:ELI)?\b/, /\bMONDAY\b/, /\bPONDELOK\b/, /\bMONTAG\b/] },
+  { code: "UT", label: "úterý", patterns: [/\bUT\b/, /\bUTERY\b/, /\bTUESDAY\b/, /\bUTOROK\b/, /\bDIENSTAG\b/] },
+  { code: "ST", label: "středa", patterns: [/\bST\b/, /\bSTREDA\b/, /\bWEDNESDAY\b/, /\bMITTWOCH\b/] },
+  { code: "CT", label: "čtvrtek", patterns: [/\bCT\b/, /\bCTVRTEK\b/, /\bTHURSDAY\b/, /\bSTVRTOK\b/, /\bDONNERSTAG\b/] },
+  { code: "PA", label: "pátek", patterns: [/\bPA\b/, /\bPATEK\b/, /\bFRIDAY\b/, /\bPIATOK\b/, /\bFREITAG\b/] },
+  { code: "SO", label: "sobota", patterns: [/\bSO\b/, /\bSOBOTA\b/, /\bSATURDAY\b/, /\bSAMSTAG\b/] },
+  { code: "NE", label: "neděle", patterns: [/\bNE\b/, /\bNEDELE\b/, /\bNEDELA\b/, /\bSUNDAY\b/, /\bSONNTAG\b/] }
+];
+const VISTOS_COLLECTION_DAY_ID_LABELS = {
+  18330: "pondělí lichá",
+  18331: "úterý lichá",
+  18332: "středa lichá",
+  18333: "čtvrtek lichá",
+  18334: "pátek lichá",
+  18335: "sobota lichá",
+  18336: "neděle lichá",
+  18337: "pondělí sudá",
+  18338: "úterý sudá",
+  18339: "středa sudá",
+  18340: "čtvrtek sudá",
+  18341: "pátek sudá",
+  18342: "sobota sudá",
+  18343: "neděle sudá"
+};
+
+function resolveVistosCollectionDayLabel(value = "") {
+  const key = cleanString(value);
+  if (VISTOS_COLLECTION_DAY_ID_LABELS[key]) {
+    return VISTOS_COLLECTION_DAY_ID_LABELS[key];
+  }
+  const parts = key.split(/[,\s;|]+/).map(cleanString).filter(Boolean);
+  if (parts.length > 1 && parts.every((part) => VISTOS_COLLECTION_DAY_ID_LABELS[part])) {
+    return parts.map((part) => VISTOS_COLLECTION_DAY_ID_LABELS[part]).join(", ");
+  }
+  return "";
+}
+
+function normalizeVistosWatchdogText(value = "") {
+  return cleanString(value)
+    .toLocaleUpperCase("cs")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function pickupParityFromText(text = "") {
+  const normalized = normalizeVistosWatchdogText(text);
+  const compact = normalized.replace(/\s+/g, "");
+  const compactWithoutOdd = compact
+    .replaceAll("NEPARNY", "")
+    .replaceAll("NEPARNA", "")
+    .replaceAll("NEPARN", "")
+    .replaceAll("UNGERADE", "");
+  if (
+    /\bLICH(?:Y|A|E|EM|YCH)?\b/.test(normalized) ||
+    compact.includes("LICHY") ||
+    compact.includes("LICHE") ||
+    compact.includes("ODD") ||
+    compact.includes("NEPARN") ||
+    compact.includes("UNGERADE")
+  ) {
+    return "odd";
+  }
+  if (
+    /\bSUD(?:Y|A|E|EM|YCH)?\b/.test(normalized) ||
+    compact.includes("SUDY") ||
+    compact.includes("SUDE") ||
+    compact.includes("EVEN") ||
+    compactWithoutOdd.includes("PARN") ||
+    compactWithoutOdd.includes("GERADE")
+  ) {
+    return "even";
+  }
+  if (/\b(KAZDY|KAZDE|KAZD|TYDNE|TYDENNE|OBA|OBOU)\b/.test(normalized)) {
+    return "both";
+  }
+  return "";
+}
+
+function pickupWeekdaysFromText(text = "") {
+  const normalized = normalizeVistosWatchdogText(text);
+  const compact = normalized.replace(/\s+/g, "");
+  if (!normalized) {
+    return [];
+  }
+  return VISTOS_PICKUP_WEEKDAYS
+    .filter((day) => (
+      day.patterns.some((pattern) => pattern.test(normalized)) ||
+      (day.code === "PO" && compact.includes("PONDELI")) ||
+      (day.code === "UT" && compact.includes("UTERY")) ||
+      (day.code === "ST" && compact.includes("STREDA")) ||
+      (day.code === "CT" && compact.includes("CTVRTEK")) ||
+      (day.code === "PA" && compact.includes("PATEK")) ||
+      (day.code === "SO" && compact.includes("SOBOTA")) ||
+      (day.code === "NE" && (compact.includes("NEDELE") || compact.includes("NEDELA")))
+    ))
+    .map((day) => day.code);
+}
+
+function pickupDayEntriesFromValues(values = []) {
+  const entries = [];
+  const unknownTexts = [];
+
+  for (const item of values) {
+    const originalValue = cleanString(item.value);
+    const rawValue = cleanString(item.rawValue);
+    const resolvedValue = resolveVistosCollectionDayLabel(originalValue) || resolveVistosCollectionDayLabel(rawValue);
+    const value = resolvedValue || originalValue;
+    const labelText = [item.caption, item.columnName].map(cleanString).filter(Boolean).join(" ");
+    const normalizedValue = normalizeVistosMetadataKey(originalValue || rawValue);
+    const booleanLikeValue = ["1", "true", "ano", "yes", "checked", "zapnuto", "aktivni"].includes(normalizedValue);
+    const falseLikeValue = ["0", "false", "ne", "no", "unchecked", "vypnuto", "neaktivni"].includes(normalizedValue);
+
+    if (falseLikeValue) {
+      continue;
+    }
+
+    const text = booleanLikeValue
+      ? labelText
+      : [value, labelText].filter(Boolean).join(" ");
+    const days = pickupWeekdaysFromText(text);
+    const parity = pickupParityFromText(text) || "unknown";
+
+    if (!days.length) {
+      if (value || rawValue) {
+        unknownTexts.push(text);
+      }
+      continue;
+    }
+
+    days.forEach((day) => entries.push({
+      day,
+      parity,
+      source: text
+    }));
+  }
+
+  const unique = [];
+  const seen = new Set();
+  for (const entry of entries) {
+    const key = `${entry.day}:${entry.parity}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(entry);
+  }
+
+  return {
+    entries: unique,
+    duplicateCount: Math.max(0, entries.length - unique.length),
+    unknownTexts
+  };
+}
+
+function pickupDayLabelFromCode(code = "") {
+  return VISTOS_PICKUP_WEEKDAYS.find((day) => day.code === code)?.label || cleanString(code);
+}
+
+function pickupDayEntryDisplayValue(entry = {}) {
+  const day = pickupDayLabelFromCode(entry.day);
+  if (!day) {
+    return "";
+  }
+  const suffix = entry.inferred ? " (dopočteno)" : "";
+  if (entry.parity === "odd") {
+    return `${day} lichá${suffix}`;
+  }
+  if (entry.parity === "even") {
+    return `${day} sudá${suffix}`;
+  }
+  if (entry.parity === "both") {
+    return `${day} každý týden${suffix}`;
+  }
+  return `${day}${suffix}`;
+}
+
+function pickupParityOpposite(parity = "") {
+  if (parity === "odd") {
+    return "even";
+  }
+  if (parity === "even") {
+    return "odd";
+  }
+  return "";
+}
+
+function completePickupDayEntriesForFrequency(frequency = "", entries = []) {
+  const expected = expectedPickupCountsForFrequency(frequency);
+  const completed = entries.map((entry) => ({ ...entry, inferred: false }));
+
+  if (
+    expected.mode === "weekly" &&
+    expected.perWeek === 1 &&
+    completed.length === 1 &&
+    ["odd", "even"].includes(completed[0].parity)
+  ) {
+    const oppositeParity = pickupParityOpposite(completed[0].parity);
+    completed.push({
+      ...completed[0],
+      parity: oppositeParity,
+      inferred: true,
+      source: `${completed[0].source || pickupDayEntryDisplayValue(completed[0])} · dopočteno z intervalu 1x7`
+    });
+  }
+
+  return completed;
+}
+
+function pickupDayParitySet(entries = [], parity = "") {
+  const set = new Set();
+  entries.forEach((entry) => {
+    if (entry.parity === parity || entry.parity === "both") {
+      set.add(entry.day);
+    }
+  });
+  return set;
+}
+
+function samePickupDaySet(left, right) {
+  if (left.size !== right.size) {
+    return false;
+  }
+  return Array.from(left).every((item) => right.has(item));
+}
+
+function pickupDayScheduleFromValues({ frequency, values } = {}) {
+  const parsed = pickupDayEntriesFromValues(values);
+  const entries = completePickupDayEntriesForFrequency(frequency, parsed.entries);
+  return {
+    ...parsed,
+    sourceEntries: parsed.entries,
+    entries,
+    inferredEntries: entries.filter((entry) => entry.inferred),
+    displayText: entries.map(pickupDayEntryDisplayValue).filter(Boolean).join(", ")
+  };
+}
+
+function pickupDayDisplayValue(item = {}) {
+  return firstNonEmpty(
+    resolveVistosCollectionDayLabel(item.value),
+    resolveVistosCollectionDayLabel(item.rawValue),
+    item.value,
+    item.rawValue
+  );
+}
+
+function expectedPickupCountsForFrequency(frequency = "") {
+  const normalized = normalizeFrequencyAlias(frequency) || normalizeFrequency(frequency).frequency;
+  const weekly = cleanString(normalized).match(/^([1-5])x7$/);
+  if (weekly) {
+    const perWeek = Number(weekly[1]);
+    return {
+      mode: "weekly",
+      perWeek,
+      expectedEven: perWeek,
+      expectedOdd: perWeek,
+      expectedTotal: perWeek * 2
+    };
+  }
+  if (normalized === "1x14") {
+    return {
+      mode: "biweekly",
+      perWeek: 0,
+      expectedEven: null,
+      expectedOdd: null,
+      expectedTotal: 1
+    };
+  }
+  if (normalized === "1x30") {
+    return {
+      mode: "monthly",
+      perWeek: 0,
+      expectedEven: null,
+      expectedOdd: null,
+      expectedTotal: 1
+    };
+  }
+  return {
+    mode: "unknown",
+    perWeek: 0,
+    expectedEven: null,
+    expectedOdd: null,
+    expectedTotal: 0
+  };
+}
+
+function pickupDayConsistencyIssues({ frequency, values, fieldConfirmed, schedule = null }) {
+  const issues = [];
+  const expected = expectedPickupCountsForFrequency(frequency);
+  const { entries, duplicateCount, unknownTexts } = schedule || pickupDayScheduleFromValues({ frequency, values });
+
+  if (!fieldConfirmed) {
+    issues.push({
+      type: "pickup-day-fields-not-readable",
+      severity: "warning",
+      message: "Hlídač nenašel čitelné pole svozových dnů ve Vistos API; interval nejde křížově ověřit."
+    });
+    return issues;
+  }
+
+  if (duplicateCount > 0) {
+    issues.push({
+      type: "pickup-days-duplicate",
+      severity: "warning",
+      message: "Svozové dny obsahují duplicitu stejného dne/režimu."
+    });
+  }
+
+  if (unknownTexts.length && !entries.length) {
+    issues.push({
+      type: "missing-pickup-days",
+      severity: "warning",
+      message: "Svozové dny jsou vyplněné nečitelně; hlídač z nich neumí určit pracovní den."
+    });
+    return issues;
+  }
+
+  if (expected.mode === "unknown") {
+    return issues;
+  }
+
+  if (!entries.length) {
+    issues.push({
+      type: "missing-pickup-days",
+      severity: "warning",
+      message: "Chybí svozový den pro zadaný interval odvozu."
+    });
+    return issues;
+  }
+
+  const evenCount = entries.filter((entry) => entry.parity === "even").length;
+  const oddCount = entries.filter((entry) => entry.parity === "odd").length;
+  const bothCount = entries.filter((entry) => entry.parity === "both").length;
+  const unknownParityCount = entries.filter((entry) => entry.parity === "unknown").length;
+  const effectiveEven = evenCount + bothCount;
+  const effectiveOdd = oddCount + bothCount;
+  const total = entries.length;
+
+  if (expected.mode === "weekly") {
+    if (effectiveEven !== expected.expectedEven || effectiveOdd !== expected.expectedOdd) {
+      issues.push({
+        type: "pickup-days-even-odd-mismatch",
+        severity: "warning",
+        message: `Interval ${frequency || "-"} neodpovídá rozložení svozových dnů: sudý ${effectiveEven}, lichý ${effectiveOdd}, očekáváno ${expected.expectedEven}/${expected.expectedOdd}.`
+      });
+    } else {
+      const evenDays = pickupDayParitySet(entries, "even");
+      const oddDays = pickupDayParitySet(entries, "odd");
+      if (evenDays.size && oddDays.size && !samePickupDaySet(evenDays, oddDays)) {
+        issues.push({
+          type: "pickup-days-even-odd-mismatch",
+          severity: "warning",
+          message: `Interval ${frequency || "-"} má mít stejnou sadu svozových dnů v sudém i lichém týdnu.`
+        });
+      }
+    }
+    if (unknownParityCount > 0) {
+      issues.push({
+        type: "pickup-days-missing-week-parity",
+        severity: "warning",
+        message: "U některých svozových dnů chybí jasné rozlišení sudý/lichý/každý týden."
+      });
+    }
+    return issues;
+  }
+
+  if (expected.mode === "biweekly") {
+    if (total !== 1 || bothCount > 0 || unknownParityCount > 0) {
+      issues.push({
+        type: "pickup-days-count-mismatch",
+        severity: "warning",
+        message: "Interval 1x14 má mít jeden svozový den s jasným sudým nebo lichým týdnem."
+      });
+    }
+    return issues;
+  }
+
+  if (expected.mode === "monthly" && total > 1) {
+    issues.push({
+      type: "monthly-pickup-days-ambiguous",
+      severity: "warning",
+      message: "Měsíční interval má více týdenních svozových dnů; ověřte měsíční režim ve Vistosu."
+    });
+  }
+
+  return issues;
+}
+
+function addressTokenSet(value = "") {
+  return new Set(normalizeVistosWatchdogText(value)
+    .split(" ")
+    .filter((token) => token.length >= 3 && !/^\d+$/.test(token)));
+}
+
+function addressTokenSimilarity(left = "", right = "") {
+  const leftTokens = addressTokenSet(left);
+  const rightTokens = addressTokenSet(right);
+  if (!leftTokens.size || !rightTokens.size) {
+    return 1;
+  }
+  let overlap = 0;
+  leftTokens.forEach((token) => {
+    if (rightTokens.has(token)) {
+      overlap += 1;
+    }
+  });
+  return overlap / Math.min(leftTokens.size, rightTokens.size);
+}
+
+function addressPlaceQualityIssues({ addressPlaceRaw, addressRaw }) {
+  const issues = [];
+  const address = cleanString(addressPlaceRaw);
+  const normalized = normalizeVistosWatchdogText(address);
+  const loadingAddress = cleanString(addressRaw);
+  const comparableLoadingAddress = isGenericVistosAddressPlaceValue(loadingAddress) ? "" : loadingAddress;
+
+  if (!address) {
+    issues.push({
+      type: "missing-address-place",
+      severity: "error",
+      message: "Chybí Adresní místo."
+    });
+    return issues;
+  }
+
+  if (
+    normalized.length < 8 ||
+    /^(BRNO|PRAHA|BLANSKO|VYSKOV|MESTO|OBEC|ADRESA|STANOVISTE)$/.test(normalized) ||
+    /\b(BEZ ADRESY|NEZNAMA|NEZNAMY|DOPLNIT|XXX|TEST)\b/.test(normalized)
+  ) {
+    issues.push({
+      type: "incomplete-address-place",
+      severity: "warning",
+      message: "Adresní místo je neúplné nebo vypadá jako zástupný text."
+    });
+  }
+
+  if (!/\d/.test(normalized)) {
+    issues.push({
+      type: "address-place-missing-number",
+      severity: "warning",
+      message: "Adresní místo neobsahuje číslo popisné/orientační."
+    });
+  }
+
+  if (/[,;:/\\-]{2,}/.test(address) || /\?{2,}/.test(address) || /([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ])\1\1/i.test(address)) {
+    issues.push({
+      type: "address-place-possible-typo",
+      severity: "warning",
+      message: "Adresní místo obsahuje podezřelý překlep nebo poškozený zápis."
+    });
+  }
+
+  if (addressPlaceRaw && comparableLoadingAddress && /\d/.test(addressPlaceRaw) && /\d/.test(comparableLoadingAddress)) {
+    const similarity = addressTokenSimilarity(addressPlaceRaw, comparableLoadingAddress);
+    if (similarity < 0.35) {
+      issues.push({
+        type: "address-place-loading-address-mismatch",
+        severity: "warning",
+        message: "Adresní místo se výrazně liší od nakládkové/svozové adresy."
+      });
+    }
+  }
+
+  return issues;
+}
+
+const VISTOS_ADDRESS_PLACE_QUALITY_ISSUE_TYPES = new Set([
+  "missing-address-place",
+  "incomplete-address-place",
+  "address-place-missing-number",
+  "address-place-suspicious-text",
+  "address-place-loading-address-mismatch"
+]);
 
 function productSearchText(contractRow, product) {
   return [
@@ -1174,25 +3200,66 @@ function inferVistosFrequency(contractRow, product) {
 
 function inferVistosContainer(contractRow, product) {
   const raw = firstNonEmpty(product?.Typnadoby, product?.Size);
-  const volume = normalizeContainerVolume(raw);
-  const textVolume = volume.known
-    ? volume
-    : normalizeExplicitContainerVolumeText([
-      product?.Typnadoby_Caption,
-      product?.Caption,
-      product?.Name,
-      contractRow?.Caption,
-      contractRow?.Name,
-      contractRow?.Description,
-      contractRow?.Product_FK_Caption
-    ].map(cleanString).filter(Boolean).join(" "));
+  const fieldVolume = normalizeContainerVolume(raw);
+  const nameVolume = inferExplicitContainerVolumeFromTexts([
+    contractRow?.Name,
+    contractRow?.Caption,
+    product?.Caption,
+    product?.Name,
+    contractRow?.Product_FK_Caption,
+    contractRow?.Description,
+    product?.Typnadoby_Caption
+  ]);
+  const textVolume = nameVolume.known ? nameVolume : fieldVolume;
   const quantitySource = firstNonEmpty(contractRow?.Quantity, product?.Quantity);
+  const hasMismatch = fieldVolume.known && nameVolume.known && fieldVolume.volume !== nameVolume.volume;
   return {
     volume: textVolume.volume,
     known: textVolume.known,
     count: normalizeContainerCount(quantitySource || raw),
-    type: cleanString(product?.Typnadoby || "container")
+    type: cleanString(product?.Typnadoby || "container"),
+    volumeSource: nameVolume.known ? "name" : fieldVolume.known ? "field" : "",
+    fieldVolume: fieldVolume.known ? fieldVolume.volume : 0,
+    nameVolume: nameVolume.known ? nameVolume.volume : 0,
+    volumeNameText: cleanString(nameVolume.text),
+    volumeMismatch: hasMismatch
   };
+}
+
+export function __inferVistosContainerForTest(contractRow = {}, product = null) {
+  return inferVistosContainer(contractRow, product);
+}
+
+export function __pickupDayEntriesFromValuesForTest(values = []) {
+  return pickupDayEntriesFromValues(values);
+}
+
+export function __pickupDayScheduleFromValuesForTest(input = {}) {
+  return pickupDayScheduleFromValues(input);
+}
+
+export function __pickupDayConsistencyIssuesForTest(input = {}) {
+  return pickupDayConsistencyIssues(input);
+}
+
+export function __pickupDayDisplayValueForTest(item = {}) {
+  return pickupDayDisplayValue(item);
+}
+
+export function __preferredVistosAddressPlaceValueForTest(values = [], ...fallbacks) {
+  return preferredVistosAddressPlaceValue(values, ...fallbacks);
+}
+
+export function __addressPlaceQualityIssuesForTest(input = {}) {
+  return addressPlaceQualityIssues(input);
+}
+
+export function __vistosAddressPartsFromAddressPlaceForTest(value = "") {
+  return compactVistosAddressParts(vistosAddressPartsFromAddressPlace(value));
+}
+
+export function __buildVistosKommunalPreviewForTest(input = {}) {
+  return buildVistosKommunalPreview(input);
 }
 
 function vistosSiteKey(contract) {
@@ -1207,7 +3274,7 @@ function vistosSiteKey(contract) {
   ].join("|"));
 }
 
-function buildVistosKommunalPreview({ contracts, contractRows, products, totals = {}, today = new Date(), filterDiagnostics = {} }) {
+function buildVistosKommunalPreview({ contracts, contractRows, products, totals = {}, today = new Date(), filterDiagnostics = {}, svozKaiserField = null, consistencyFields = null }) {
   const productsById = new Map(products.map((product) => [cleanString(product?.Id), product]));
   const contractIds = new Set(contracts.map((contract) => cleanString(contract?.Id)).filter(Boolean));
   const rowsByContractId = new Map();
@@ -1233,6 +3300,19 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     const branchName = fkCaption(contract, "DirectoryBranch_FK");
     const addressRaw = firstNonEmpty(fkCaption(contract, "Nakladkovaadresa_FK"), branchName);
     const siteName = firstNonEmpty(fkCaption(contract, "Nakladkovaadresa_FK"), branchName, customerName);
+    const stationValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "siteOptional");
+    const stationName = firstNonEmpty(...vistosConsistencyDisplayValues(stationValues));
+    const addressPlaceRaw = readVistosAddressPlaceRaw(contract, null, consistencyFields);
+    const addressParts = preferVistosAddressPlaceParts(
+      addressPlaceRaw,
+      compactVistosAddressParts(vistosAddressPartsFromFields(contract, null, consistencyFields))
+    );
+    const customerManagerNameValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerName");
+    const customerManagerMobileValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerMobile");
+    const customerManagerEmailValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerEmail");
+    const customerManagerName = firstNonEmpty(contract.__customerManagerName, ...vistosConsistencyDisplayValues(customerManagerNameValues));
+    const customerManagerMobile = firstNonEmpty(contract.__customerManagerMobile, ...vistosConsistencyDisplayValues(customerManagerMobileValues));
+    const customerManagerEmail = firstNonEmpty(contract.__customerManagerEmail, ...vistosConsistencyDisplayValues(customerManagerEmailValues));
     const sourceCustomerId = fkRecordId(contract, "Directory_FK");
     const sourceSiteId = firstNonEmpty(fkRecordId(contract, "Nakladkovaadresa_FK"), fkRecordId(contract, "DirectoryBranch_FK"));
     const contractActiveRange = dateInActiveRange(contract?.StartDate, contract?.EndDate, today);
@@ -1254,8 +3334,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     if (possibleSiteIds.size > 1 && !rowHasExplicitLoadingAddress(contract)) {
       baseIssues.push({ type: "multiple-sites-contract", severity: "info", message: "Smlouva má více možných adresních vazeb bez jasné nakládkové adresy." });
     }
+    baseIssues.push(...addressPlaceQualityIssues({ addressPlaceRaw, addressRaw }));
 
     if (!contractRowsForContract.length) {
+      const svozKaiserValue = rowSvozKaiserValue(contract, null, svozKaiserField);
       mappedRows.push({
         rowNumber: mappedRows.length + 1,
         sourceEntity: "Contract",
@@ -1270,6 +3352,12 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         customerName,
         branchName,
         addressRaw,
+        addressPlaceRaw,
+        stationName,
+        ...addressParts,
+        customerManagerName,
+        customerManagerMobile,
+        customerManagerEmail,
         siteName,
         wasteType: "",
         wasteCode: "",
@@ -1285,6 +3373,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         locationQuality: sourceSiteId ? "vistos_unverified" : "missing",
         latitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Lat),
         longitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Long),
+        svozKaiserValue,
+        svozKaiserIncluded: isVistosYesValue(svozKaiserValue),
         issues: [
           ...baseIssues,
           { type: "missing-contract-items", severity: "warning", message: "Chybí položky smlouvy." }
@@ -1294,6 +3384,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     }
 
     for (const contractRow of contractRowsForContract) {
+      const svozKaiserValue = rowSvozKaiserValue(contract, contractRow, svozKaiserField);
       const productId = cleanString(contractRow?.Product_FK_RecordId || contractRow?.Product_FK);
       const product = productsById.get(productId) || null;
       const searchText = productSearchText(contractRow, product);
@@ -1310,13 +3401,19 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         : inferVistosFrequency(contractRow, product);
       const container = textAlias
         ? {
-          volume: textAlias.containerVolume,
+          volume: inferredContainer.nameVolume || textAlias.containerVolume,
           known: true,
           count: inferredContainer.count,
-          type: textAlias.containerType || inferredContainer.type || "container"
+          type: textAlias.containerType || inferredContainer.type || "container",
+          volumeSource: inferredContainer.nameVolume ? "name" : "text_alias",
+          fieldVolume: inferredContainer.fieldVolume,
+          nameVolume: inferredContainer.nameVolume || textAlias.containerVolume,
+          volumeNameText: inferredContainer.volumeNameText,
+          volumeMismatch: inferredContainer.volumeMismatch ||
+            (inferredContainer.fieldVolume && inferredContainer.nameVolume && inferredContainer.fieldVolume !== inferredContainer.nameVolume)
         }
         : inferredContainer;
-      const issues = [...baseIssues];
+      const issues = baseIssues.filter((issue) => !VISTOS_ADDRESS_PLACE_QUALITY_ISSUE_TYPES.has(issue.type));
 
       if (!isoDateValue(contractRow?.StartDate)) {
         issues.push({ type: "missing-contract-row-start-date", severity: "warning", message: "Položka smlouvy zatím nemá začátek platnosti z Vistosu." });
@@ -1338,6 +3435,13 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         if (!container.known) {
           issues.push({ type: "missing-container-volume", severity: "warning", message: "Chybí nádoba/objem." });
         }
+        if (container.volumeMismatch) {
+          issues.push({
+            type: "container-volume-mismatch",
+            severity: "error",
+            message: `Rozpor objemu nádoby: Vistos pole ${container.fieldVolume || "-"} l, Název ${container.nameVolume || "-"} l.`
+          });
+        }
         if (!waste.known || !frequency.known || !container.known) {
           issues.push({ type: "item-not-collection-mappable", severity: "warning", message: "Svozová položka má obchodní text, který zatím nejde převést na trasu." });
         }
@@ -1346,6 +3450,51 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const routeWaste = isOutsideCollectionRoute ? { wasteType: "", wasteCode: "" } : waste;
       const routeFrequency = isOutsideCollectionRoute ? { frequency: "" } : frequency;
       const routeContainer = isOutsideCollectionRoute ? { volume: 0, count: 0, type: "" } : container;
+      const rowStationValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "siteOptional");
+      const rowStationName = firstNonEmpty(
+        ...vistosConsistencyDisplayValues(rowStationValues),
+        readVistosColumnDisplayValue(contractRow, "Stanoviste"),
+        stationName
+      );
+      const rowAddressPlaceRaw = readVistosAddressPlaceRaw(contract, contractRow, consistencyFields, addressPlaceRaw);
+      const rowAddressParts = preferVistosAddressPlaceParts(
+        rowAddressPlaceRaw,
+        compactVistosAddressParts(vistosAddressPartsFromFields(contract, contractRow, consistencyFields, {
+          street: addressParts.addressStreet,
+          city: addressParts.addressCity,
+          region: addressParts.addressRegion,
+          country: addressParts.addressCountry,
+          postalCode: addressParts.addressPostalCode
+        }))
+      );
+      const rowCustomerManagerNameValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerName");
+      const rowCustomerManagerMobileValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerMobile");
+      const rowCustomerManagerEmailValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerEmail");
+      const rowCustomerManagerName = firstNonEmpty(contractRow.__customerManagerName, ...vistosConsistencyDisplayValues(rowCustomerManagerNameValues), customerManagerName);
+      const rowCustomerManagerMobile = firstNonEmpty(contractRow.__customerManagerMobile, ...vistosConsistencyDisplayValues(rowCustomerManagerMobileValues), customerManagerMobile);
+      const rowCustomerManagerEmail = firstNonEmpty(contractRow.__customerManagerEmail, ...vistosConsistencyDisplayValues(rowCustomerManagerEmailValues), customerManagerEmail);
+      const pickupDayValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupDays");
+      const pickupFromValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupFrom");
+      const pickupToValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupTo");
+      const pickupFrom = firstNonEmpty(...pickupFromValues.map((item) => item.value), contractRow?.StartDate);
+      const pickupTo = firstNonEmpty(...pickupToValues.map((item) => item.value), contractRow?.EndDate);
+      const pickupDaySchedule = !isOutsideCollectionRoute && routeFrequency.frequency
+        ? pickupDayScheduleFromValues({ frequency: routeFrequency.frequency, values: pickupDayValues })
+        : null;
+
+      issues.push(...addressPlaceQualityIssues({
+        addressPlaceRaw: rowAddressPlaceRaw,
+        addressRaw,
+        siteName
+      }));
+      if (!isOutsideCollectionRoute && routeFrequency.frequency) {
+        issues.push(...pickupDayConsistencyIssues({
+          frequency: routeFrequency.frequency,
+          values: pickupDayValues,
+          fieldConfirmed: Boolean(consistencyFields?.fields?.pickupDays?.confirmed),
+          schedule: pickupDaySchedule
+        }));
+      }
 
       mappedRows.push({
         rowNumber: mappedRows.length + 1,
@@ -1360,9 +3509,19 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         contractNumber: cleanString(contract?.ContractNumber),
         validFrom: isoDateValue(contract?.StartDate),
         validTo: isoDateValue(contract?.EndDate),
+        pickupFrom: isoDateValue(pickupFrom),
+        pickupTo: isoDateValue(pickupTo),
+        pickupDaysText: pickupDaySchedule?.displayText || pickupDayValues.map(pickupDayDisplayValue).map(cleanString).filter(Boolean).join(", "),
+        pickupDaysInferred: Boolean(pickupDaySchedule?.inferredEntries?.length),
         customerName,
         branchName,
         addressRaw,
+        addressPlaceRaw: rowAddressPlaceRaw,
+        stationName: rowStationName,
+        ...rowAddressParts,
+        customerManagerName: rowCustomerManagerName,
+        customerManagerMobile: rowCustomerManagerMobile,
+        customerManagerEmail: rowCustomerManagerEmail,
         siteName,
         wasteType: routeWaste.wasteType,
         wasteCode: routeWaste.wasteCode,
@@ -1370,6 +3529,11 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         containerVolume: routeContainer.volume,
         containerCount: routeContainer.count,
         containerType: routeContainer.type,
+        containerVolumeSource: routeContainer.volumeSource || "",
+        containerFieldVolume: routeContainer.fieldVolume || 0,
+        containerNameVolume: routeContainer.nameVolume || 0,
+        containerVolumeNameText: routeContainer.volumeNameText || "",
+        containerVolumeMismatch: Boolean(routeContainer.volumeMismatch),
         productName: firstNonEmpty(product?.Caption, product?.Name, contractRow?.Name),
         rowName: cleanString(contractRow?.Name),
         note: cleanString(contractRow?.Description),
@@ -1380,6 +3544,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         latitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Lat),
         longitude: nullableNumericValue(contract?.Nakladkovaadresa_FK_Long),
         unitPrice: numericValue(product?.ListPrice || product?.CostPrice || product?.WeightedCostPrice || product?.DiscountPrice, 0),
+        svozKaiserValue,
+        svozKaiserIncluded: isVistosYesValue(svozKaiserValue),
         issues
       });
     }
@@ -1499,6 +3665,24 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
   const mappingGapRows = buildVistosKommunalMappingGapRows(mappedRows);
   const routeDraftRows = buildVistosKommunalRouteDraftRows(mappedRows);
   const routeDraftContainerCount = routeDraftRows.reduce((sum, row) => sum + (row.containerCount || 0), 0);
+  const svozKaiserFieldSummary = {
+    ...(svozKaiserField || {}),
+    confirmed: Boolean(svozKaiserField?.confirmed && svozKaiserField?.columnName),
+    yesRowCount: mappedRows.filter((row) => row.svozKaiserIncluded === true).length,
+    checkedRowCount: mappedRows.length
+  };
+  const consistencyFieldSummary = {
+    source: cleanString(consistencyFields?.source),
+    readFailed: Boolean(consistencyFields?.readFailed),
+    message: cleanString(consistencyFields?.message),
+    fields: Object.fromEntries(Object.entries(consistencyFields?.fields || {}).map(([key, field]) => [key, {
+      label: field.label,
+      confirmed: Boolean(field.confirmed),
+      columns: Array.isArray(field.columns) ? field.columns : [],
+      candidates: Array.isArray(field.candidates) ? field.candidates : [],
+      message: field.message || ""
+    }]))
+  };
 
   return {
     filename: "vistos-komunal-preview.json",
@@ -1531,6 +3715,8 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       filter: VISTOS_KOMUNAL_CONTRACT_FILTER,
       filterDiagnostics,
       vistosTotals: totals,
+      svozKaiserField: svozKaiserFieldSummary,
+      consistencyFields: consistencyFieldSummary,
       mappingStats: {
         contracts: contracts.length,
         contractRows: contractRows.length,
@@ -1542,6 +3728,213 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         issues: issueCount
       }
     }
+  };
+}
+
+function watchdogIssueLabel(issueType = "") {
+  const labels = {
+    "missing-customer": "Chybí zákazník",
+    "missing-loading-address": "Chybí svozová/nakládková adresa",
+    "missing-address-place": "Chybí Adresní místo",
+    "incomplete-address-place": "Neúplné adresní místo",
+    "address-place-missing-number": "Adresní místo bez čísla",
+    "address-place-possible-typo": "Možný překlep v adresním místě",
+    "address-place-loading-address-mismatch": "Adresní místo nesedí s nakládkovou adresou",
+    "missing-contract-items": "Smlouva nemá svozové položky",
+    "unknown-product": "Neznámý produkt",
+    "unknown-waste-type": "Chybí nebo nejde určit druh odpadu",
+    "unknown-frequency": "Chybí nebo nejde určit interval odvozu",
+    "missing-pickup-days": "Chybí svozové dny",
+    "pickup-day-fields-not-readable": "Nelze ověřit svozové dny",
+    "pickup-days-count-mismatch": "Interval nesedí na počet svozových dnů",
+    "pickup-days-even-odd-mismatch": "Sudé/liché svozové dny nesedí s intervalem",
+    "pickup-days-missing-week-parity": "Chybí sudý/lichý režim u svozového dne",
+    "pickup-days-duplicate": "Duplicitní svozový den",
+    "monthly-pickup-days-ambiguous": "Nejasný měsíční svoz",
+    "missing-container-volume": "Chybí nádoba / objem",
+    "container-volume-mismatch": "Rozpor objemu nádoby",
+    "item-not-collection-mappable": "Položka nejde převést na svoz",
+    "non-route-contract-row": "Svoz Kaiser ANO je mimo pravidelnou trasu",
+    "multiple-sites-contract": "Smlouva má více možných stanovišť",
+    "possible-site-duplicate": "Možná duplicita stanoviště",
+    "inactive-contract-range": "Smlouva není v platném období",
+    "missing-contract-row-start-date": "Chybí Svoz od",
+    "inactive-contract-row-flag": "Svozová položka je neaktivní",
+    "future-contract-row-start-date": "Svoz začíná v budoucnu",
+    "expired-contract-row-end-date": "Svoz už skončil",
+    "invalid-contract-row-date-range": "Svoz od je po Svoz do"
+  };
+  return labels[issueType] || "Datová chyba svozu";
+}
+
+function watchdogIssueAction(issueType = "") {
+  const actions = {
+    "missing-customer": "Doplnit zákazníka / sídlo ve Vistosu.",
+    "missing-loading-address": "Doplnit svozovou nebo nakládkovou adresu ve Vistosu.",
+    "missing-address-place": "Doplnit skutečné pole Adresní místo ve Vistosu; nepřebírat Stanoviště jako náhradu.",
+    "incomplete-address-place": "Doplnit úplné Adresní místo ve Vistosu.",
+    "address-place-missing-number": "Doplnit číslo popisné/orientační v Adresním místě.",
+    "address-place-possible-typo": "Zkontrolovat překlep nebo poškozený zápis v Adresním místě.",
+    "address-place-loading-address-mismatch": "Sjednotit Adresní místo a svozovou/nakládkovou adresu.",
+    "missing-contract-items": "Doplnit svozovou položku smlouvy.",
+    "unknown-product": "Zkontrolovat produkt a jeho vazbu na svoz.",
+    "unknown-waste-type": "Doplnit druh odpadu / katalogové zařazení.",
+    "unknown-frequency": "Doplnit interval odvozu nebo svozový den.",
+    "missing-pickup-days": "Doplnit svozové dny podle intervalu odvozu.",
+    "pickup-day-fields-not-readable": "Ověřit technické pole svozových dnů ve Vistosu nebo doplnit čitelné pole.",
+    "pickup-days-count-mismatch": "Opravit počet svozových dnů podle zadaného intervalu.",
+    "pickup-days-even-odd-mismatch": "Srovnat sudé a liché svozové dny podle intervalu.",
+    "pickup-days-missing-week-parity": "Doplnit sudý/lichý/každý týden u svozového dne.",
+    "pickup-days-duplicate": "Odstranit duplicitně zadaný svozový den.",
+    "monthly-pickup-days-ambiguous": "Ověřit měsíční režim a nenechat ho jako běžný týdenní svoz.",
+    "missing-container-volume": "Doplnit nádobu, objem nebo počet.",
+    "container-volume-mismatch": "Srovnat objem nádoby ve Vistos poli a v názvu položky.",
+    "item-not-collection-mappable": "Opravit text produktu tak, aby šel převést na svoz.",
+    "non-route-contract-row": "Ověřit produkt/položku, nebo vypnout Svoz Kaiser ANO.",
+    "multiple-sites-contract": "Ručně potvrdit správné stanoviště.",
+    "possible-site-duplicate": "Sloučit nebo rozlišit duplicitní stanoviště.",
+    "inactive-contract-range": "Ověřit platnost smlouvy pro svoz.",
+    "missing-contract-row-start-date": "Doplnit Svoz od.",
+    "inactive-contract-row-flag": "Aktivovat položku, nebo vypnout Svoz Kaiser ANO.",
+    "future-contract-row-start-date": "Ověřit, jestli má položka už patřit do aktuálních tras.",
+    "expired-contract-row-end-date": "Prodloužit Svoz do, nebo vypnout Svoz Kaiser ANO.",
+    "invalid-contract-row-date-range": "Opravit Svoz od / Svoz do."
+  };
+  return actions[issueType] || "Zkontrolovat Vistos smlouvu a svozovou položku.";
+}
+
+function buildVistosSvozKaiserWatchdog(preview, apiStatus = "ready") {
+  const allRows = Array.isArray(preview?.rows) ? preview.rows : [];
+  const svozKaiserField = preview?.metadata?.svozKaiserField || {};
+  const consistencyFields = preview?.metadata?.consistencyFields || {};
+  const svozKaiserFieldConfirmed = Boolean(svozKaiserField?.confirmed && svozKaiserField?.columnName);
+  const rows = svozKaiserFieldConfirmed
+    ? allRows.filter((row) => row?.svozKaiserIncluded === true)
+    : [];
+  const issueRows = [];
+  const siteAlertsByKey = new Map();
+  const issueCounts = new Map();
+
+  for (const row of rows) {
+    const issues = Array.isArray(row?.issues) ? row.issues : [];
+    const blockingIssues = issues.filter((issue) => VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_TYPES.has(cleanString(issue?.type || issue?.issueType)));
+    if (!blockingIssues.length) {
+      continue;
+    }
+
+    const siteKey = cleanString(row?.siteKey || row?.sourceSiteId || row?.siteName || row?.addressRaw || row?.contractNumber || row?.rowKey) || `watchdog-site-${siteAlertsByKey.size + 1}`;
+    const existing = siteAlertsByKey.get(siteKey) || {
+      siteKey,
+      siteName: cleanString(row?.siteName || row?.addressRaw || "Stanoviště bez názvu"),
+      addressRaw: cleanString(row?.addressRaw),
+      customerName: cleanString(row?.customerName),
+      contractNumber: cleanString(row?.contractNumber),
+      issueCount: 0,
+      issues: []
+    };
+
+    for (const issue of blockingIssues) {
+      const issueType = cleanString(issue?.type || issue?.issueType || "data_issue");
+      const item = {
+        issueType,
+        severity: cleanString(issue?.severity || "warning"),
+        label: watchdogIssueLabel(issueType),
+        message: cleanString(issue?.message || watchdogIssueLabel(issueType)),
+        action: watchdogIssueAction(issueType),
+        siteKey,
+        siteName: existing.siteName,
+        addressRaw: existing.addressRaw,
+        customerName: existing.customerName,
+        contractNumber: existing.contractNumber
+      };
+      issueRows.push(item);
+      existing.issues.push(item);
+      existing.issueCount += 1;
+      issueCounts.set(issueType, (issueCounts.get(issueType) || 0) + 1);
+    }
+
+    siteAlertsByKey.set(siteKey, existing);
+  }
+
+  const issueSummary = Array.from(issueCounts.entries())
+    .map(([issueType, count]) => ({
+      issueType,
+      count,
+      label: watchdogIssueLabel(issueType),
+      action: watchdogIssueAction(issueType)
+    }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "cs"));
+
+  const siteAlerts = Array.from(siteAlertsByKey.values())
+    .sort((left, right) => right.issueCount - left.issueCount || left.siteName.localeCompare(right.siteName, "cs"));
+  const sourceRule = svozKaiserFieldConfirmed
+    ? `Vistos ${svozKaiserField.entityName}.${svozKaiserField.columnName} = ANO`
+    : cleanString(svozKaiserField.message) || "Svoz Kaiser ANO zatím není potvrzené technické pole ve Vistos API; širší Komunál diagnostika se nepočítá jako chyba Svoz Kaiser.";
+  const message = !svozKaiserFieldConfirmed
+    ? "Hlídač čeká na potvrzené pole Svoz Kaiser ANO. Nehlásí chyby nad celým Komunálem."
+    : rows.length
+      ? issueRows.length
+        ? `Hlídač našel ${issueRows.length} chyb jen v řádcích Svoz Kaiser ANO.`
+        : "Hlídač nenašel blokující chyby v řádcích Svoz Kaiser ANO."
+      : "Pole Svoz Kaiser ANO je potvrzené, ale v aktivních Komunál datech zatím není žádný řádek zakliknutý ANO.";
+
+  return {
+    apiStatus,
+    mode: "vistos-svoz-kaiser-watchdog",
+    source: "vistos",
+    sourceMode: "vistos-komunal-read-only-watchdog",
+    generatedAt: nowIso(),
+    createsOperationalRoutes: false,
+    sendsEmailOrSms: false,
+    startsAutomation: false,
+    summary: {
+      status: apiStatus === "ready" && svozKaiserFieldConfirmed ? "ready" : "waiting",
+      errorCount: issueRows.length,
+      siteErrorCount: siteAlerts.length,
+      checkedRows: rows.length,
+      rawKomunalRows: allRows.length,
+      contractCount: preview?.summary?.contractCount || preview?.metadata?.mappingStats?.contracts || 0,
+      itemCount: preview?.summary?.itemCount || preview?.metadata?.mappingStats?.mappedItems || 0,
+      svozKaiserFieldConfirmed,
+      svozKaiserFilterConfirmed: svozKaiserFieldConfirmed,
+      svozKaiserFiltered: svozKaiserFieldConfirmed,
+      svozKaiserEntity: cleanString(svozKaiserField.entityName),
+      svozKaiserColumn: cleanString(svozKaiserField.columnName),
+      svozKaiserCaption: cleanString(svozKaiserField.caption),
+      svozKaiserMetadataSource: cleanString(svozKaiserField.source),
+      consistencyFieldsReadFailed: Boolean(consistencyFields?.readFailed),
+      consistencyFields,
+      svozKaiserYesRows: rows.length,
+      sourceRule,
+      message
+    },
+    metadata: {
+      svozKaiserField,
+      consistencyFields
+    },
+    requiredFields: [
+      "Číslo smlouvy",
+      "Sídlo",
+      "Nakládková adresa",
+      "Stav Aktivní",
+      "Typ Komunál",
+      "Kategorie odpadu",
+      "Interval odvozu",
+      "Svoz Kaiser ANO",
+      "Adresní místo",
+      "Svoz Od",
+      "Svoz Do",
+      "Druh odpadu",
+      "Svozový den",
+      "Svozová adresa - ulice",
+      "Svozová adresa - město",
+      "Produkt",
+      "Název",
+      "Poznámky"
+    ],
+    issueSummary,
+    issueRows: issueRows.slice(0, 200),
+    siteAlerts: siteAlerts.slice(0, 100)
   };
 }
 
@@ -1702,6 +4095,11 @@ function manualRowSummary(row) {
     containerVolume: row.containerVolume,
     containerCount: row.containerCount,
     containerType: row.containerType || "",
+    containerVolumeSource: row.containerVolumeSource || "",
+    containerFieldVolume: row.containerFieldVolume || 0,
+    containerNameVolume: row.containerNameVolume || 0,
+    containerVolumeNameText: row.containerVolumeNameText || "",
+    containerVolumeMismatch: Boolean(row.containerVolumeMismatch),
     unitPrice: row.unitPrice || 0,
     mappingStatus: row.mappingStatus || "",
     note: row.note,
@@ -1726,6 +4124,9 @@ function kommunalMappingGapReason(issueTypes) {
   if (issueTypes.has("missing-container-volume")) {
     reasons.push("chybí objem nádoby");
   }
+  if (issueTypes.has("container-volume-mismatch")) {
+    reasons.push("rozpor objemu nádoby");
+  }
   if (issueTypes.has("unknown-product")) {
     reasons.push("neznámý produkt");
   }
@@ -1744,6 +4145,9 @@ function kommunalMappingGapAction(issueTypes) {
   }
   if (issueTypes.has("missing-contract-items")) {
     return "Zkontrolovat, zda má smlouva ve Vistosu svozové položky.";
+  }
+  if (issueTypes.has("container-volume-mismatch")) {
+    return "Srovnat objem nádoby ve Vistos poli a v názvu položky.";
   }
   if (issueTypes.has("unknown-waste-type") || issueTypes.has("unknown-frequency") || issueTypes.has("missing-container-volume")) {
     return "Doplnit alias obchodního textu pro odpad, četnost nebo objem.";
@@ -1827,6 +4231,7 @@ function buildVistosKommunalRouteDraftRows(mappedRows) {
     "unknown-waste-type",
     "unknown-frequency",
     "missing-container-volume",
+    "container-volume-mismatch",
     "missing-address",
     "unclear-location"
   ]);
@@ -2233,16 +4638,125 @@ async function loadVistosKommunalPreviewData(env) {
   }
 
   const session = await loginVistosExecute(env);
-  const [contractsPage, contractRowsPage, productsPage] = await Promise.all([
-    getAllVistosPages(env, session, "Contract", VISTOS_CONTRACT_COLUMNS, VISTOS_KOMUNAL_CONTRACT_FILTER),
-    getAllVistosPages(env, session, "ContractRow", VISTOS_CONTRACT_ROW_COLUMNS, null),
-    getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
-  ]);
+  let svozKaiserField = await resolveVistosSvozKaiserField(env, session);
+  let consistencyFields = await resolveVistosSvozKaiserConsistencyFields(env, session);
+  const baseContractColumns = withVistosSvozKaiserColumn(VISTOS_CONTRACT_COLUMNS, svozKaiserField, "Contract");
+  const baseContractRowColumns = withVistosSvozKaiserColumn(VISTOS_CONTRACT_ROW_COLUMNS, svozKaiserField, "ContractRow");
+  const contractColumns = withVistosConsistencyColumns(baseContractColumns, consistencyFields, "Contract");
+  const contractRowColumns = withVistosConsistencyColumns(baseContractRowColumns, consistencyFields, "ContractRow");
+  let contractsPage;
+  let contractRowsPage;
+  let productsPage;
+
+  try {
+    [contractsPage, contractRowsPage, productsPage] = await Promise.all([
+      getAllVistosPages(env, session, "Contract", contractColumns, VISTOS_KOMUNAL_CONTRACT_FILTER),
+      getAllVistosPages(env, session, "ContractRow", contractRowColumns, null),
+      getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
+    ]);
+  } catch (error) {
+    const hasConsistencyColumns = contractColumns.length !== baseContractColumns.length || contractRowColumns.length !== baseContractRowColumns.length;
+    if (hasConsistencyColumns && svozKaiserField?.confirmed) {
+      try {
+        [contractsPage, contractRowsPage, productsPage] = await Promise.all([
+          getAllVistosPages(env, session, "Contract", baseContractColumns, VISTOS_KOMUNAL_CONTRACT_FILTER),
+          getAllVistosPages(env, session, "ContractRow", baseContractRowColumns, null),
+          getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
+        ]);
+        consistencyFields = {
+          ...consistencyFields,
+          readFailed: true,
+          message: `Konzistenční pole existují v metadatech, ale GetPageParam je teď nepřečetl: ${error?.message || "neznámá chyba"}.`
+        };
+      } catch (fallbackError) {
+        if (!svozKaiserField?.confirmed) {
+          throw fallbackError;
+        }
+        svozKaiserField = {
+          ...svozKaiserField,
+          confirmed: false,
+          readFailed: true,
+          message: `Pole ${svozKaiserField.entityName}.${svozKaiserField.columnName} existuje v metadatech, ale GetPageParam ho teď nepřečetl: ${fallbackError?.message || "neznámá chyba"}.`
+        };
+        consistencyFields = {
+          ...consistencyFields,
+          readFailed: true,
+          message: `Konzistenční pole nebyla čitelná při fallbacku: ${fallbackError?.message || "neznámá chyba"}.`
+        };
+        [contractsPage, contractRowsPage, productsPage] = await Promise.all([
+          getAllVistosPages(env, session, "Contract", VISTOS_CONTRACT_COLUMNS, VISTOS_KOMUNAL_CONTRACT_FILTER),
+          getAllVistosPages(env, session, "ContractRow", VISTOS_CONTRACT_ROW_COLUMNS, null),
+          getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
+        ]);
+      }
+    } else {
+      if (!svozKaiserField?.confirmed) {
+        throw error;
+      }
+      svozKaiserField = {
+        ...svozKaiserField,
+        confirmed: false,
+        readFailed: true,
+        message: `Pole ${svozKaiserField.entityName}.${svozKaiserField.columnName} existuje v metadatech, ale GetPageParam ho teď nepřečetl: ${error?.message || "neznámá chyba"}.`
+      };
+      [contractsPage, contractRowsPage, productsPage] = await Promise.all([
+        getAllVistosPages(env, session, "Contract", VISTOS_CONTRACT_COLUMNS, VISTOS_KOMUNAL_CONTRACT_FILTER),
+        getAllVistosPages(env, session, "ContractRow", VISTOS_CONTRACT_ROW_COLUMNS, null),
+        getAllVistosPages(env, session, "Product", VISTOS_PRODUCT_COLUMNS, null, { maxPages: 10 })
+      ]);
+    }
+  }
   const today = new Date();
-  const kommunalContracts = contractsPage.rows;
+  let kommunalContracts = contractsPage.rows;
   const contractIds = new Set(kommunalContracts.map((contract) => cleanString(contract?.Id)).filter(Boolean));
   const rowContractId = (row) => cleanString(row?.Contract_FK_RecordId || row?.Contract_FK || row?.Contract_FK_Id || row?.ContractId);
-  const contractRowsForKommunalContracts = contractRowsPage.rows.filter((row) => contractIds.has(rowContractId(row)));
+  let contractById = new Map(kommunalContracts.map((contract) => [cleanString(contract?.Id), contract]));
+  let contractRowsForKommunalContracts = contractRowsPage.rows.filter((row) => contractIds.has(rowContractId(row)));
+  const svozKaiserRowsForDetail = contractRowsForKommunalContracts.filter((row) => {
+    const contract = contractById.get(rowContractId(row));
+    return isVistosYesValue(rowSvozKaiserValue(contract, row, svozKaiserField));
+  });
+  const svozKaiserContractIds = new Set(svozKaiserRowsForDetail.map((row) => rowContractId(row)).filter(Boolean));
+  const svozKaiserContractsForDetail = kommunalContracts.filter((contract) => svozKaiserContractIds.has(cleanString(contract?.Id)));
+  const contractDetailEnrichment = await enrichVistosRowsById(
+    env,
+    session,
+    "Contract",
+    svozKaiserContractsForDetail,
+    contractColumns,
+    { maxRows: 50 }
+  );
+  if (contractDetailEnrichment.rows.length) {
+    const enrichedContractsById = new Map(contractDetailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
+    kommunalContracts = kommunalContracts.map((contract) => enrichedContractsById.get(cleanString(contract?.Id || contract?.RecordId)) || contract);
+    contractById = new Map(kommunalContracts.map((contract) => [cleanString(contract?.Id), contract]));
+  }
+  const detailEnrichment = await enrichVistosRowsById(
+    env,
+    session,
+    "ContractRow",
+    svozKaiserRowsForDetail,
+    contractRowColumns,
+    { maxRows: 25 }
+  );
+  if (detailEnrichment.rows.length) {
+    const enrichedById = new Map(detailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
+    contractRowsForKommunalContracts = contractRowsForKommunalContracts.map((row) => enrichedById.get(cleanString(row?.Id || row?.RecordId)) || row);
+  }
+  const customerManagerContractEnrichment = await enrichVistosCustomerManagerContacts(
+    env,
+    session,
+    kommunalContracts,
+    consistencyFields,
+    { maxRows: 50 }
+  );
+  const customerManagerRowEnrichment = await enrichVistosCustomerManagerContacts(
+    env,
+    session,
+    contractRowsForKommunalContracts,
+    consistencyFields,
+    { maxRows: 50 }
+  );
   const matchedContractIds = new Set(contractRowsForKommunalContracts.map((row) => rowContractId(row)).filter(Boolean));
   const contractsInDateRange = kommunalContracts.filter((contract) => dateInActiveRange(contract?.StartDate, contract?.EndDate, today));
   const contractRowsWithActiveFlag = contractRowsForKommunalContracts.filter((row) => booleanValue(row?.IsActive, true));
@@ -2264,6 +4778,13 @@ async function loadVistosKommunalPreviewData(env) {
     contractRowsPassingDateRange: contractRowsInDateRange.length,
     contractRowsPassingStrictActiveDateRange: contractRowsInStrictActiveDateRange.length,
     contractRowsUsedForPreview: relevantContractRows.length,
+    contractsDetailEnriched: contractDetailEnrichment.diagnostics.succeeded,
+    contractsDetailEnrichmentFailed: contractDetailEnrichment.diagnostics.failed,
+    contractRowsDetailEnriched: detailEnrichment.diagnostics.succeeded,
+    contractRowsDetailEnrichmentFailed: detailEnrichment.diagnostics.failed,
+    customerManagerContactsRequested: customerManagerContractEnrichment.diagnostics.requested + customerManagerRowEnrichment.diagnostics.requested,
+    customerManagerContactsEnriched: customerManagerContractEnrichment.diagnostics.succeeded + customerManagerRowEnrichment.diagnostics.succeeded,
+    customerManagerContactsFailed: customerManagerContractEnrichment.diagnostics.failed + customerManagerRowEnrichment.diagnostics.failed,
     productsLoaded: productsPage.rows.length,
     productsMatchedToRows: relevantProducts.length,
     zeroResultReason: !kommunalContracts.length
@@ -2282,6 +4803,9 @@ async function loadVistosKommunalPreviewData(env) {
       products: relevantProducts,
       today,
       filterDiagnostics,
+      detailEnrichment,
+      svozKaiserField,
+      consistencyFields,
       totals: {
         contracts: {
           total: contractsPage.total,
@@ -2396,6 +4920,66 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
     persistRowsLimit: VISTOS_KOMUNAL_PERSIST_ROWS_LIMIT,
     derivedRowsLimit: 250
   });
+}
+
+export async function createCollectionRoutesVistosSvozKaiserWatchdog(env) {
+  let loaded;
+  try {
+    loaded = await loadVistosKommunalPreviewData(env);
+  } catch (error) {
+    if (error instanceof CollectionRoutesStoreError && error.code?.startsWith("vistos_api")) {
+      return {
+        apiStatus: error.code === "vistos_api_not_configured" ? "not_configured" : "waiting",
+        mode: "vistos-svoz-kaiser-watchdog",
+        source: "vistos",
+        generatedAt: nowIso(),
+        createsOperationalRoutes: false,
+        sendsEmailOrSms: false,
+        startsAutomation: false,
+        summary: {
+          status: "waiting",
+          errorCount: 0,
+          siteErrorCount: 0,
+          checkedRows: 0,
+          contractCount: 0,
+          itemCount: 0,
+          message: error.message
+        },
+        requiredFields: [],
+        issueSummary: [],
+        issueRows: [],
+        siteAlerts: []
+      };
+    }
+    throw error;
+  }
+
+  if (!loaded.configured) {
+    return {
+      apiStatus: loaded.apiStatus,
+      mode: "vistos-svoz-kaiser-watchdog",
+      source: "vistos",
+      generatedAt: nowIso(),
+      createsOperationalRoutes: false,
+      sendsEmailOrSms: false,
+      startsAutomation: false,
+      summary: {
+        status: "waiting",
+        errorCount: 0,
+        siteErrorCount: 0,
+        checkedRows: 0,
+        contractCount: 0,
+        itemCount: 0,
+        message: loaded.message
+      },
+      requiredFields: [],
+      issueSummary: [],
+      issueRows: [],
+      siteAlerts: []
+    };
+  }
+
+  return buildVistosSvozKaiserWatchdog(loaded.preview, loaded.apiStatus || "ready");
 }
 
 export async function createCollectionRoutesVistosKommunalPreviewExport(env, {

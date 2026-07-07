@@ -754,6 +754,29 @@ function vehicleFromText(value) {
   return "";
 }
 
+function sourceVehicleFromFilename(value) {
+  const explicitVehicle = vehicleFromText(value);
+  if (explicitVehicle) {
+    return explicitVehicle;
+  }
+  const text = normalizeText(value);
+  if (text.includes("POPELAR") || text.includes("CECIL")) {
+    return "B";
+  }
+  if (
+    text.includes("PONDELI") ||
+    text.includes("UTERY") ||
+    text.includes("STREDA") ||
+    text.includes("CTVRT") ||
+    text.includes("PATEK") ||
+    text.includes("MESIC") ||
+    text.includes("1X30")
+  ) {
+    return "A";
+  }
+  return "";
+}
+
 function routeModeFromWeek(weekMode) {
   if (weekMode === "sudý") return "sudý týden";
   if (weekMode === "lichý") return "lichý týden";
@@ -1010,7 +1033,7 @@ function buildRepairWorkbookImportPayloadFromParsed(parsed, {
         dayFromText(`${safeSourceFile} ${sourceSheet}`),
       weekMode: repairWeekMode(repairRowCell(row, repairSheet.headerMap, "Tyden")),
       vehicleCode: repairVehicleCode(repairRowCell(row, repairSheet.headerMap, "Auto")) ||
-        vehicleFromText(safeSourceFile),
+        sourceVehicleFromFilename(safeSourceFile),
       wasteType: waste.wasteType,
       wasteCode: waste.wasteCode,
       frequency,
@@ -1081,7 +1104,7 @@ function buildRepairWorkbookImportPayloadFromParsed(parsed, {
     filename: file.filename,
     dayCode: dayFromText(file.filename),
     weekMode: routeModeFromWeek(weekFromSourceContext(file.filename)),
-    vehicleCode: vehicleFromText(file.filename),
+    vehicleCode: sourceVehicleFromFilename(file.filename),
     sheetCount: file.sheets.size,
     sourceRowCount: file.sourceRowCount,
     routeRowCount: file.routeRowCount,
@@ -1485,6 +1508,10 @@ export function __deriveCollectionRouteSourceFieldsForTest(row = {}, context = {
   }, context);
 }
 
+export function __collectionRouteSourceVehicleFromFilenameForTest(value = "") {
+  return sourceVehicleFromFilename(value);
+}
+
 function rowToSourceBatch(row) {
   return {
     id: cleanString(row?.id),
@@ -1610,7 +1637,8 @@ function buildSourceRows(preview, batchId, fileIds) {
           : row.originalWeek && row.originalWeek !== "-"
             ? row.originalWeek
             : routeModeFromWeek(filenameWeek);
-    const sourceVehicle = vehicleFromText(sourceFile) || cleanString(row.vehicleCode || "");
+    const sourceVehicle = sourceVehicleFromFilename(sourceFile) || cleanString(row.vehicleCode || "");
+    const vehicleSource = sourceVehicleFromFilename(sourceFile) ? "source-file" : "working-draft";
     const salesCode = routeSourceSalesCode(row.originalText);
     const sourceSheet = cleanString(row.sheetName);
     const scopeKey = [sourceFile, sourceSheet].join("\u0001");
@@ -1664,7 +1692,7 @@ function buildSourceRows(preview, batchId, fileIds) {
           sourceRowNumber: inheritedStop.sourceRowNumber,
           routeOrder: inheritedStop.routeOrder
         } : null,
-        vehicleSource: vehicleFromText(sourceFile) ? "source-file" : "working-draft",
+        vehicleSource,
         createsOperationalRoutes: false,
         sendsEmailOrSms: false,
         startsAutomation: false
@@ -1684,6 +1712,15 @@ function buildSourceRows(preview, batchId, fileIds) {
   }
 
   return rows;
+}
+
+export function __buildCollectionRouteSourceRowsForTest(preview = {}) {
+  const filenames = new Set([
+    ...(preview.parsedFiles || []).map((file) => cleanString(file.filename)),
+    ...(preview.rows || []).map((row) => cleanString(row.sourceFile))
+  ].filter(Boolean));
+  const fileIds = new Map([...filenames].map((filename, index) => [filename, `test-file-${index + 1}`]));
+  return buildSourceRows(preview, "test-batch", fileIds);
 }
 
 function sourceSummary(files, rows) {
@@ -1751,7 +1788,7 @@ export async function createCollectionRouteSourceImport(env, user, { files = [] 
         filename: file.filename,
         dayCode: dayFromText(file.filename),
         weekMode: weekFromText(file.filename),
-        vehicleCode: vehicleFromText(file.filename),
+        vehicleCode: sourceVehicleFromFilename(file.filename),
         sheetCount: numericValue(file.sheetCount),
         sourceRowCount: numericValue(file.sourceRowCount),
         routeRowCount: numericValue(file.plannedRowCount),
