@@ -13373,11 +13373,6 @@ function collectionRoutesTextKey(value = "") {
     .replace(/\s+/g, " ");
 }
 
-function collectionRoutesWatchdogSiteAlerts() {
-  const alerts = collectionRoutesPilotState.svozKaiserWatchdog?.siteAlerts;
-  return Array.isArray(alerts) ? alerts : [];
-}
-
 function collectionRoutesWatchdogTextKey(...values) {
   return values
     .map((value) => String(value || "").trim())
@@ -13387,119 +13382,6 @@ function collectionRoutesWatchdogTextKey(...values) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "");
-}
-
-function collectionRoutesWatchdogAlertForSite(site = {}) {
-  if (!collectionRoutesSvozKaiserFieldConfirmed()) {
-    return null;
-  }
-  const alerts = collectionRoutesWatchdogSiteAlerts();
-  if (!alerts.length) {
-    return null;
-  }
-  const siteKeys = new Set([
-    collectionRoutesWatchdogTextKey(site.id),
-    collectionRoutesWatchdogTextKey(site.siteName),
-    collectionRoutesWatchdogTextKey(site.addressText),
-    collectionRoutesWatchdogTextKey(site.customerName),
-    collectionRoutesWatchdogTextKey(site.siteName, site.addressText),
-    collectionRoutesWatchdogTextKey(site.customerName, site.siteName, site.addressText)
-  ].filter(Boolean));
-
-  return alerts.find((alert) => {
-    const alertKeys = [
-      collectionRoutesWatchdogTextKey(alert.siteKey),
-      collectionRoutesWatchdogTextKey(alert.siteName),
-      collectionRoutesWatchdogTextKey(alert.addressRaw),
-      collectionRoutesWatchdogTextKey(alert.customerName),
-      collectionRoutesWatchdogTextKey(alert.siteName, alert.addressRaw),
-      collectionRoutesWatchdogTextKey(alert.customerName, alert.siteName, alert.addressRaw)
-    ].filter(Boolean);
-    return alertKeys.some((key) => siteKeys.has(key));
-  }) || null;
-}
-
-function collectionRoutesSvozKaiserWatchdogRunLine(watchdog) {
-  if (!watchdog) {
-    return "";
-  }
-  const snapshot = watchdog.snapshot || {};
-  const generatedAt = snapshot.createdAt || watchdog.generatedAt || "";
-  const source = snapshot.scheduleMode === "on-open"
-    ? "živé volání při otevření"
-    : snapshot.id
-      ? "poslední cloud snapshot"
-      : "živý výpočet";
-  const generatedText = generatedAt ? formatDateTime(generatedAt) : "";
-  return generatedText ? `${source} · ${generatedText}` : source;
-}
-
-function collectionRoutesSvozKaiserWatchdogPanel({ compact = false } = {}) {
-  const watchdog = collectionRoutesPilotState.svozKaiserWatchdog;
-  const summary = watchdog?.summary || {};
-  const filterConfirmed = collectionRoutesSvozKaiserFieldConfirmed();
-  const rawIssueCount = collectionRoutesSvozKaiserWatchdogRawIssueCount();
-  const errorCount = collectionRoutesSvozKaiserWatchdogErrorCount();
-  const siteErrorCount = Number(summary.siteErrorCount || 0) || 0;
-  const issueSummary = Array.isArray(watchdog?.issueSummary) ? watchdog.issueSummary.slice(0, compact ? 3 : 6) : [];
-  const siteAlerts = filterConfirmed ? collectionRoutesWatchdogSiteAlerts().slice(0, compact ? 3 : 8) : [];
-  const tone = errorCount > 0
-    ? "danger"
-    : collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.svozKaiserWatchdogError || !watchdog || (watchdog && !filterConfirmed)
-      ? "waiting"
-      : "ok";
-  const headline = errorCount > 0
-    ? `Hlídač našel ${errorCount} chyb na ${siteErrorCount} stanovištích.`
-    : collectionRoutesPilotState.svozKaiserWatchdogLoading
-      ? "Kontroluji Vistos Svoz Kaiser data..."
-      : collectionRoutesPilotState.svozKaiserWatchdogError
-        ? "Hlídač Vistos teď neběží."
-        : !watchdog
-          ? "Čekám na první cloud snapshot hlídače."
-        : watchdog && !filterConfirmed
-          ? "Čekám na potvrzení pole Svoz Kaiser ANO ve Vistos API."
-          : "Hlídač Vistos Svoz Kaiser je bez blokujících chyb.";
-  const badgeLabel = errorCount > 0 ? (errorCount > 99 ? "99+" : String(errorCount)) : !filterConfirmed && watchdog ? "filtr" : "0";
-  const filterNotice = watchdog && !filterConfirmed
-    ? `Aktuální čísla jsou jen diagnostika širších aktivních Komunál dat: ${rawIssueCount} upozornění na ${siteErrorCount} stanovištích. Nejde o potvrzené chyby Svoz Kaiser tras.`
-    : "";
-  const sourceRule = collectionRoutesSvozKaiserWatchdogSourceRule();
-  const runLine = collectionRoutesSvozKaiserWatchdogRunLine(watchdog);
-
-  return `
-    <div class="collection-routes-watchdog collection-routes-watchdog--${escapeHtml(tone)} ${compact ? "collection-routes-watchdog--compact" : ""}" role="status" aria-label="Hlídač Vistos Svoz Kaiser">
-      <div class="collection-routes-watchdog__head">
-        <div>
-          <span>Hlídač Vistos Svoz Kaiser</span>
-          <strong>${escapeHtml(headline)}</strong>
-        </div>
-        <span class="collection-routes-watchdog__badge">${escapeHtml(badgeLabel)}</span>
-      </div>
-      ${collectionRoutesPilotState.svozKaiserWatchdogError ? `<p>${escapeHtml(collectionRoutesPilotState.svozKaiserWatchdogError)}</p>` : ""}
-      ${filterNotice ? `<p>${escapeHtml(filterNotice)}</p>` : ""}
-      ${runLine ? `<p>${escapeHtml(runLine)}</p>` : ""}
-      ${sourceRule ? `<p>${escapeHtml(sourceRule)}</p>` : ""}
-      ${summary.message && !collectionRoutesPilotState.svozKaiserWatchdogError && !filterNotice ? `<p>${escapeHtml(summary.message)}</p>` : ""}
-      ${issueSummary.length ? `
-        <div class="collection-routes-watchdog__chips" aria-label="${escapeHtml(filterConfirmed ? "Typy chyb" : "Diagnostická upozornění")}">
-          ${issueSummary.map((item) => `
-            <span>${escapeHtml(item.label || item.issueType)} · ${escapeHtml(item.count || 0)}</span>
-          `).join("")}
-        </div>
-      ` : ""}
-      ${siteAlerts.length ? `
-        <div class="collection-routes-watchdog__sites" aria-label="Stanoviště s chybou">
-          ${siteAlerts.map((site) => `
-            <article>
-              <strong>${escapeHtml(site.siteName || site.addressRaw || "Stanoviště")}</strong>
-              <span>${escapeHtml(site.customerName || "-")} · ${escapeHtml(site.addressRaw || "-")}</span>
-              <small>${escapeHtml((site.issues || []).slice(0, 2).map((issue) => issue.label || issue.message).join(", ") || "Datová chyba")}</small>
-            </article>
-          `).join("")}
-        </div>
-      ` : ""}
-    </div>
-  `;
 }
 
 function collectionRoutesKommunalMappingReason(issueTypes = []) {
@@ -17054,7 +16936,7 @@ function collectionRoutesSourceRoutesSection() {
         <div>
           <p class="module-feedback__eyebrow">Svozové trasy</p>
           <h2 id="collection-routes-source-routes-title">Svozové trasy</h2>
-          <p>Pracovní filtr a tisk trasy pro aktuální import 13 Excelů.</p>
+          <p>Filtr, tisk a řidičský náhled trasy.</p>
         </div>
         <span class="employee-card-status employee-card-status--waiting">${collectionRoutesMetricValue(rows.length)} zastávek</span>
       </div>
@@ -17063,7 +16945,6 @@ function collectionRoutesSourceRoutesSection() {
       ${collectionRoutesPilotState.sourceBatches.length ? "" : `
         <p class="module-feedback__notice">Trasy zatím nemají načtený zdroj. Nejdřív je potřeba import v Interní správě.</p>
       `}
-      ${collectionRoutesSvozKaiserWatchdogPanel({ compact: true })}
       ${collectionRoutesSourceSmartFilterPanel()}
       ${collectionRoutesSourceRouteSummaryCards(rows)}
       ${collectionRoutesSourceDailyRouteDraftPanel(rows)}
@@ -17199,8 +17080,6 @@ function collectionRoutesVistosKommunalSection(user) {
         <strong>Tento náhled nevytváří ostré trasy, neposílá SMS/e-maily a nespouští automatizace.</strong>
         <span>Filtr: Contract.Status_FK = 74, Contract.Typsmlouvy_FK = [14735]. Contract.StartDate/EndDate a ContractRow.IsActive/StartDate/EndDate se ve Fázi 1E vyhodnocují jako datové problémy, ne jako tvrdé vyřazení preview.</span>
       </div>
-
-      ${collectionRoutesSvozKaiserWatchdogPanel()}
 
       <div class="collection-routes-source-switch" aria-label="Oddělení zdrojových podkladů a návrhu AI">
         <button class="secondary-link collection-routes-source-switch__link" type="button" data-collection-routes-export-optimization>
@@ -17895,9 +17774,6 @@ function collectionRoutesSitesSection(user) {
   const filterConfirmed = collectionRoutesSvozKaiserFieldConfirmed();
   const loadedAt = collectionRoutesPilotState.kommunalPairingLoadedAt ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt) : "";
   const isLoadingVistosSites = collectionRoutesPilotState.kommunalPairingLoading;
-  const backgroundWatchdogNotice = collectionRoutesPilotState.svozKaiserWatchdogLoading && loadedAt
-    ? "Hlídač Svoz Kaiser se kontroluje na pozadí. Seznam Stanovišť zůstává z posledního snapshotu."
-    : "";
   const loadingNotice = collectionRoutesPilotState.kommunalPairingLoading
     ? "Načítám Stanoviště z posledního D1 snapshotu..."
     : !loadedAt && !collectionRoutesPilotState.kommunalPairingError
@@ -17914,7 +17790,6 @@ function collectionRoutesSitesSection(user) {
         <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(isLoadingVistosSites ? "Načítám Vistos" : filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
       </div>
       ${loadingNotice ? `<p class="module-feedback__notice">${escapeHtml(loadingNotice)}</p>` : ""}
-      ${backgroundWatchdogNotice ? `<p class="module-feedback__notice">${escapeHtml(backgroundWatchdogNotice)}</p>` : ""}
       <div class="collection-routes-stats collection-routes-sites-summary">
         <article><span>Zdroj</span><strong>Vistos API</strong></article>
         <article><span>Stanoviště</span><strong>${escapeHtml(stats.siteCount)}</strong></article>
