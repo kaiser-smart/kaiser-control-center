@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.431"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.432"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: užší Vistos metadata zákazníků",
+    text: "Read-only obohacení zákazníků v ledger mappingu používá užší potvrzenou sadu Vistos polí, aby lookup zákazníků nebyl blokovaný neověřenými sloupci. Bez ledger zápisu, komunikace a cronu."
+  },
   {
     title: "Pohledávky: metadata zákazníků pro rating",
     text: "Ledger mapping v importu Pohledávek teď read-only dočítá zákazníky navázané na faktury v aktuálním snapshotu a ukazuje, zda je zákazník obohacený, má chybějící metadata nebo konflikt. Bez ledger zápisu, komunikace a cronu."

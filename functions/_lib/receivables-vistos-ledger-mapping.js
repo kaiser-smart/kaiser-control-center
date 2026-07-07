@@ -17,24 +17,13 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const CUSTOMER_COLUMNS = [
   "Id",
   "Name",
-  "Caption",
   "RegNumber",
   "VATNumber",
-  "ICO",
-  "DIC",
   "EmailInvoicing",
-  "BillingEmail",
   "Email",
   "PhoneNumber",
-  "Phone",
-  "Mobile",
   "InvoiceDueDays",
-  "Parent_FK",
-  "Directory_FK",
-  "DirectoryBranch_FK",
-  "Street",
-  "City",
-  "Zip"
+  "Parent_FK"
 ];
 
 const CUSTOMER_ENTITY_ATTEMPTS = [
