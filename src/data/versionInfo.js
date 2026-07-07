@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.434"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.435"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: live kontrola zákaznického manažera",
+    text: "Ledger mapping nově bez zápisu kontroluje CustomerManager_FK přímo na fakturách ve Vistosu a ukazuje samostatnou diagnostiku, aby bylo jasné, jestli lze pro kontakt použít zákaznického manažera faktury."
+  },
   {
     title: "Pohledávky: manažer faktury a lookup diagnostika",
     text: "Import Pohledávek ukazuje faktury v samostatném bloku po 10 řádcích, do normalizace přidává zákaznického manažera z faktury a v ledger mappingu zobrazuje read-only diagnostiku Vistos lookupů."

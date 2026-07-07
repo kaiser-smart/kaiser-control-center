@@ -23482,6 +23482,50 @@ function receivablesCustomerLookupDiagnostics(customerEnrichment = {}) {
   `;
 }
 
+function receivablesInvoiceManagerLookupDiagnostics(invoiceManagerEnrichment = {}) {
+  const diagnostics = Array.isArray(invoiceManagerEnrichment.diagnostics) ? invoiceManagerEnrichment.diagnostics : [];
+  if (!diagnostics.length) {
+    return `<p class="receivables-empty">Diagnostika manažera faktury zatím není dostupná.</p>`;
+  }
+
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead>
+          <tr>
+            <th>Faktura</th>
+            <th>Zákazník</th>
+            <th>Entita</th>
+            <th>Filtr</th>
+            <th>Výsledek</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${diagnostics.slice(0, 25).map((item) => {
+            const filterText = Object.entries(item.filter || {})
+              .map(([key, value]) => `${key}: ${value}`)
+              .join(", ");
+            const resultText = item.ok
+              ? `${item.returnedRows || 0} řádků / ${item.recordsFiltered || item.recordsTotal || 0}`
+              : item.code || "chyba";
+            return `
+              <tr>
+                <td data-label="Faktura">${escapeHtml(item.invoiceNumber || "-")}</td>
+                <td data-label="Zákazník">${escapeHtml(item.customerName || "-")}</td>
+                <td data-label="Entita">${escapeHtml(item.entityName || "-")}</td>
+                <td data-label="Filtr">${escapeHtml(filterText || "-")}</td>
+                <td data-label="Výsledek">${item.ok ? receivablesPill(resultText, item.returnedRows ? "ready" : "waiting") : receivablesPill(resultText, "warning")}</td>
+                <td data-label="Detail">${escapeHtml(item.message || item.key || "-")}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function receivablesLedgerMappingTable(mapping) {
   const candidates = mapping?.candidates || [];
   if (receivablesState.ledgerMappingLoading && !candidates.length) {
@@ -23542,6 +23586,7 @@ function receivablesLedgerMappingPanel() {
   const summary = mapping?.summary || {};
   const snapshot = receivablesState.ledgerMapping?.snapshot || null;
   const customerEnrichment = mapping?.customerEnrichment || {};
+  const invoiceManagerEnrichment = mapping?.invoiceManagerEnrichment || {};
   const safetyRows = [
     ["Zdroj", "poslední Vistos snapshot"],
     ["Zákazníci", customerEnrichment.enabled ? `${customerEnrichment.processedCandidates || 0} read-only lookupů` : "čeká"],
@@ -23588,6 +23633,13 @@ function receivablesLedgerMappingPanel() {
           <h3>Diagnostika Vistos lookupů zákazníka</h3>
           <p class="receivables-empty">Read-only kontrola přesných klíčů pro zákazníka/pobočku. Bez zápisu do ledgeru.</p>
           ${receivablesCustomerLookupDiagnostics(customerEnrichment)}
+        </section>
+      </div>
+      <div class="receivables-snapshot-invoices-block">
+        <section>
+          <h3>Diagnostika zákaznického manažera faktury</h3>
+          <p class="receivables-empty">Read-only kontrola pole CustomerManager_FK přímo na fakturách ve Vistosu. Bez zápisu do stagingu i ledgeru.</p>
+          ${receivablesInvoiceManagerLookupDiagnostics(invoiceManagerEnrichment)}
         </section>
       </div>
     </section>

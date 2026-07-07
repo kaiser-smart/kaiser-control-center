@@ -34,6 +34,15 @@ const CUSTOMER_ENTITY_ATTEMPTS = [
   { key: "company_by_id", entityName: "Company", idFields: ["Id"] }
 ];
 
+const INVOICE_MANAGER_ATTEMPTS = [
+  {
+    key: "invoice_issued_customer_manager_by_id",
+    entityName: "InvoiceIssued",
+    columns: ["Id", "InvoiceNumber", "CustomerManager_FK"],
+    idFields: ["Id"]
+  }
+];
+
 export class ReceivablesVistosLedgerMappingError extends Error {
   constructor(message, status = 400, code = "receivables_vistos_ledger_mapping_error") {
     super(message);
@@ -144,6 +153,18 @@ function mapCustomerMetadata(row = {}, attempt = {}) {
     city: firstValue(row, ["City", "Mesto"]),
     zip: firstValue(row, ["Zip", "PSC"]),
     rawKeys: Object.keys(row || {}).slice(0, 60)
+  };
+}
+
+function mapInvoiceManager(row = {}, attempt = {}) {
+  return {
+    sourceEntity: clean(attempt.entityName),
+    sourceAttemptKey: clean(attempt.key),
+    invoiceId: firstValue(row, ["Id", "InvoiceId"]),
+    invoiceNumber: firstValue(row, ["InvoiceNumber", "Number"]),
+    managerId: recordId(row, "CustomerManager_FK") || recordId(row, "CustomerManager"),
+    managerName: caption(row, "CustomerManager_FK") || caption(row, "CustomerManager"),
+    rawKeys: Object.keys(row || {}).slice(0, 40)
   };
 }
 
@@ -375,6 +396,121 @@ async function enrichCustomerMetadata(env, candidates = [], options = {}) {
   };
 }
 
+async function enrichInvoiceManagers(env, candidates = [], options = {}) {
+  const limit = boundedInteger(options.managerLimit, DEFAULT_CUSTOMER_LIMIT, MAX_CUSTOMER_LIMIT);
+  const invoiceTargets = [];
+  for (const candidate of candidates) {
+    for (const invoice of candidate.sampleInvoices || []) {
+      const invoiceId = clean(invoice.invoiceId);
+      if (invoiceId && invoiceTargets.length < limit) {
+        invoiceTargets.push({ candidate, invoice });
+      }
+    }
+    if (invoiceTargets.length >= limit) break;
+  }
+
+  if (!invoiceTargets.length || !isVistosExecuteConfigured(env)) {
+    return {
+      enabled: true,
+      apiStatus: invoiceTargets.length ? "not_configured" : "empty",
+      readOnly: true,
+      writesD1: false,
+      processedInvoices: 0,
+      targetInvoices: invoiceTargets.length,
+      results: [],
+      summary: { managerFound: 0, managerMissing: invoiceTargets.length },
+      diagnostics: []
+    };
+  }
+
+  let session = null;
+  try {
+    session = await loginVistosExecute(env);
+  } catch (error) {
+    return {
+      enabled: true,
+      apiStatus: "error",
+      readOnly: true,
+      writesD1: false,
+      processedInvoices: 0,
+      targetInvoices: invoiceTargets.length,
+      results: [],
+      summary: { managerFound: 0, managerMissing: invoiceTargets.length },
+      diagnostics: [{
+        ok: false,
+        stage: "login",
+        code: clean(error?.code),
+        message: clean(error?.message).slice(0, 160)
+      }]
+    };
+  }
+
+  const results = [];
+  const diagnostics = [];
+  for (const target of invoiceTargets) {
+    let manager = null;
+    for (const attempt of INVOICE_MANAGER_ATTEMPTS) {
+      for (const idField of attempt.idFields) {
+        const filter = { [idField]: target.invoice.invoiceId };
+        try {
+          const page = await getVistosPage(env, session, attempt.entityName, attempt.columns, filter, 0, 2);
+          diagnostics.push({
+            key: attempt.key,
+            entityName: attempt.entityName,
+            filter,
+            ok: true,
+            returnedRows: page.rows.length,
+            recordsTotal: page.total || 0,
+            recordsFiltered: page.filtered || 0,
+            invoiceNumber: target.invoice.invoiceNumber,
+            customerName: target.candidate.customerName
+          });
+          if (page.rows.length > 0) {
+            manager = mapInvoiceManager(page.rows[0], attempt);
+          }
+        } catch (error) {
+          diagnostics.push({
+            key: attempt.key,
+            entityName: attempt.entityName,
+            filter,
+            ok: false,
+            code: clean(error?.code),
+            message: clean(error?.message).slice(0, 160),
+            invoiceNumber: target.invoice.invoiceNumber,
+            customerName: target.candidate.customerName
+          });
+        }
+        if (manager) break;
+      }
+      if (manager) break;
+    }
+    results.push({
+      customerKey: target.candidate.customerKey,
+      customerName: target.candidate.customerName,
+      invoiceId: target.invoice.invoiceId,
+      invoiceNumber: target.invoice.invoiceNumber,
+      manager,
+      status: manager?.managerId || manager?.managerName ? "manager_found" : "manager_missing"
+    });
+  }
+
+  return {
+    enabled: true,
+    apiStatus: "ready",
+    readOnly: true,
+    writesD1: false,
+    processedInvoices: results.length,
+    targetInvoices: invoiceTargets.length,
+    source: "vistos_execute_invoice_customer_manager_lookup",
+    results,
+    summary: {
+      managerFound: results.filter((item) => item.status === "manager_found").length,
+      managerMissing: results.filter((item) => item.status !== "manager_found").length
+    },
+    diagnostics: diagnostics.slice(-200)
+  };
+}
+
 export function buildReceivablesVistosLedgerMapping(rows = [], options = {}) {
   const today = isoDate(options.today || options.now) || new Date().toISOString().slice(0, 10);
   const groups = new Map();
@@ -475,6 +611,7 @@ export function buildReceivablesVistosLedgerMapping(rows = [], options = {}) {
         openAmount: amountOpen,
         daysOverdue,
         status: clean(invoice.status || invoice.paymentStatus),
+        invoiceId: clean(invoice.vistoInvoiceId || invoice.invoiceId),
         customerManagerId: clean(invoice.customerManagerId),
         customerManagerName: clean(invoice.customerManagerName),
         issueCodes: issues
@@ -614,6 +751,31 @@ export async function getReceivablesVistosLedgerMapping(env, options = {}) {
           customerMetadata: customer?.metadata || null,
           customerMetadataIssues: customer?.issues || []
         };
+      });
+    }
+    if (shouldEnrichCustomers && result.mapping?.candidates?.length) {
+      const managerEnrichment = await enrichInvoiceManagers(env, result.mapping.candidates, options);
+      result.mapping.invoiceManagerEnrichment = managerEnrichment;
+      const managersByCustomer = new Map();
+      for (const item of managerEnrichment.results || []) {
+        const manager = item.manager || {};
+        const managerKey = clean(manager.managerId || manager.managerName);
+        if (!managerKey) continue;
+        const current = managersByCustomer.get(item.customerKey) || new Map();
+        const aggregate = current.get(managerKey) || {
+          managerId: clean(manager.managerId),
+          managerName: clean(manager.managerName || manager.managerId),
+          invoiceCount: 0
+        };
+        aggregate.invoiceCount += 1;
+        current.set(managerKey, aggregate);
+        managersByCustomer.set(item.customerKey, current);
+      }
+      result.mapping.candidates = result.mapping.candidates.map((candidate) => {
+        const liveManagers = [...(managersByCustomer.get(candidate.customerKey)?.values() || [])];
+        return liveManagers.length
+          ? { ...candidate, customerManagers: liveManagers }
+          : candidate;
       });
     }
     return {
