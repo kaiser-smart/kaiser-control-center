@@ -17420,6 +17420,26 @@ function collectionRoutesIssuesFromValue(value) {
     .filter((issue) => issue.issueType || issue.label);
 }
 
+function collectionRoutesVistosAddressPartsFromItem(item = {}) {
+  return {
+    street: String(item.addressStreet || "").trim(),
+    city: String(item.addressCity || "").trim(),
+    region: String(item.addressRegion || "").trim(),
+    country: String(item.addressCountry || "").trim(),
+    postalCode: String(item.addressPostalCode || "").trim()
+  };
+}
+
+function collectionRoutesVistosAddressPartsLabel(parts = {}) {
+  return [
+    parts.street ? `ulice: ${parts.street}` : "",
+    parts.city ? `město: ${parts.city}` : "",
+    parts.region ? `kraj/stát: ${parts.region}` : "",
+    parts.country ? `země: ${parts.country}` : "",
+    parts.postalCode ? `PSČ: ${parts.postalCode}` : ""
+  ].filter(Boolean).join(" · ");
+}
+
 function collectionRoutesIssueTypesForCell(item, cell) {
   const types = new Set((item.issues || []).map((issue) => String(issue.issueType || issue.label || "").toLowerCase()));
   const hasAny = (...needles) => Array.from(types).some((type) => needles.some((needle) => type.includes(needle)));
@@ -17468,6 +17488,7 @@ function collectionRoutesContractKey(sourceRow, summary, fallback = "") {
 function collectionRoutesVistosContractDetailItem(sourceRow, index) {
   const summary = collectionRoutesImportRowSummary(sourceRow);
   const issues = collectionRoutesIssuesFromValue(summary.issues || sourceRow.issues);
+  const addressParts = collectionRoutesVistosAddressPartsFromItem({ ...sourceRow, ...summary });
   const containerCount = collectionRoutesMetricValue(summary.containerCount, 0);
   const normalizedContainerCount = containerCount > 0 ? containerCount : summary.containerVolume ? 1 : 0;
   const container = summary.containerVolume
@@ -17480,6 +17501,8 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     summary,
     dateRange: collectionRoutesVistosDateRangeLabel(summary.pickupFrom || sourceRow.pickupFrom, summary.pickupTo || sourceRow.pickupTo),
     addressPlace: summary.addressPlaceRaw || sourceRow.addressPlaceRaw || summary.addressRaw || summary.siteName || "neurčeno",
+    addressParts,
+    addressPartsLabel: collectionRoutesVistosAddressPartsLabel(addressParts),
     stationName: summary.stationName || sourceRow.stationName || "",
     waste: [summary.wasteType, summary.wasteCode].filter(Boolean).join(" / ") || "neurčeno",
     container,
@@ -17618,20 +17641,26 @@ function collectionRoutesVistosPickupDayCodesFromText(value) {
       days.push(code);
     }
   };
-  if (/(^|[^a-z])po([^a-z]|$)|pondeli|pondel/.test(text)) {
+  if (/(^|[^a-z])po([^a-z]|$)|pondeli|pondel|monday|pondelok|montag/.test(text)) {
     addDay("PO");
   }
-  if (/(^|[^a-z])ut([^a-z]|$)|utery|uter/.test(text)) {
+  if (/(^|[^a-z])ut([^a-z]|$)|utery|uter|tuesday|utorok|dienstag/.test(text)) {
     addDay("ÚT");
   }
-  if (/(^|[^a-z])st([^a-z]|$)|streda|stre/.test(text)) {
+  if (/(^|[^a-z])st([^a-z]|$)|streda|stre|wednesday|mittwoch/.test(text)) {
     addDay("ST");
   }
-  if (/(^|[^a-z])ct([^a-z]|$)|ctvrtek|ctvrt/.test(text)) {
+  if (/(^|[^a-z])ct([^a-z]|$)|ctvrtek|ctvrt|thursday|stvrtok|donnerstag/.test(text)) {
     addDay("ČT");
   }
-  if (/(^|[^a-z])pa([^a-z]|$)|patek|pat/.test(text)) {
+  if (/(^|[^a-z])pa([^a-z]|$)|patek|pat|friday|piatok|freitag/.test(text)) {
     addDay("PÁ");
+  }
+  if (/(^|[^a-z])so([^a-z]|$)|sobota|saturday|samstag/.test(text)) {
+    addDay("SO");
+  }
+  if (/(^|[^a-z])ne([^a-z]|$)|nedele|nedela|sunday|sonntag/.test(text)) {
+    addDay("NE");
   }
   return days;
 }
@@ -17642,6 +17671,12 @@ function collectionRoutesVistosWeekModeFromText(value) {
 
 function collectionRoutesVistosWeekModesFromText(value) {
   const text = normalizeAccessSearchText(value);
+  const compact = text.replace(/\s+/g, "");
+  const compactWithoutOdd = compact
+    .replaceAll("neparny", "")
+    .replaceAll("neparna", "")
+    .replaceAll("neparn", "")
+    .replaceAll("ungerade", "");
   const modes = [];
   const addMode = (mode) => {
     if (mode && !modes.includes(mode)) {
@@ -17651,10 +17686,10 @@ function collectionRoutesVistosWeekModesFromText(value) {
   if (/mesic|1x30|30/.test(text)) {
     addMode("měsíční / 1x30");
   }
-  if (/lich/.test(text)) {
+  if (/lich|odd|nepar|ungerade/.test(text)) {
     addMode("lichý týden");
   }
-  if (/sud/.test(text)) {
+  if (/sud|even|parn|gerade/.test(compactWithoutOdd)) {
     addMode("sudý týden");
   }
   if (!modes.length) {
@@ -17696,6 +17731,7 @@ function collectionRoutesVistosRouteRows() {
       routeOrder: index + 1,
       customerName: summary.customerName || sourceRow.customerName || "-",
       addressText: summary.addressPlaceRaw || sourceRow.addressPlaceRaw || summary.addressRaw || sourceRow.addressRaw || summary.siteName || sourceRow.siteName || "-",
+      addressParts: collectionRoutesVistosAddressPartsFromItem({ ...sourceRow, ...summary }),
       stationName: summary.stationName || sourceRow.stationName || "",
       wasteType,
       wasteCode: summary.wasteCode || sourceRow.wasteCode || "",
@@ -17787,7 +17823,9 @@ function collectionRoutesVistosRouteFilterPanel(rows = collectionRoutesVistosRou
               ["ÚT", "úterý"],
               ["ST", "středa"],
               ["ČT", "čtvrtek"],
-              ["PÁ", "pátek"]
+              ["PÁ", "pátek"],
+              ["SO", "sobota"],
+              ["NE", "neděle"]
             ].map(([value, label]) => `<option value="${escapeHtml(value)}" ${collectionRoutesVistosRouteFilterValue("day") === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
           </select>
         </label>
@@ -17961,7 +17999,10 @@ function collectionRoutesVistosContractDetailTable(contractRow) {
           ${contractRow.items.map((item) => `
             <tr class="${item.issueCount > 0 || item.issues.length ? "collection-routes-site-detail-item--danger" : ""}">
               <td class="${collectionRoutesDetailCellClass(item, "dateRange")}" data-label="Od-do">${escapeHtml(item.dateRange)}</td>
-              <td class="${collectionRoutesDetailCellClass(item, "addressPlace")}" data-label="Adresní místo">${escapeHtml(item.addressPlace)}</td>
+              <td class="${collectionRoutesDetailCellClass(item, "addressPlace")}" data-label="Adresní místo">
+                <strong>${escapeHtml(item.addressPlace)}</strong>
+                ${item.addressPartsLabel ? `<span class="collection-routes-site-detail-subline">${escapeHtml(item.addressPartsLabel)}</span>` : ""}
+              </td>
               <td data-label="Stanoviště">${escapeHtml(item.stationName || "-")}</td>
               <td class="${collectionRoutesDetailCellClass(item, "waste")}" data-label="Odpad">${escapeHtml(item.waste)}</td>
               <td class="${collectionRoutesDetailCellClass(item, "container")}" data-label="Nádoba">${escapeHtml(item.container)}</td>

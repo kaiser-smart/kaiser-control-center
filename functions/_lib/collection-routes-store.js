@@ -176,6 +176,129 @@ const VISTOS_CONSISTENCY_FIELD_SPECS = [
     ]
   },
   {
+    key: "addressStreet",
+    label: "Svozová adresa - ulice",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaUlice",
+      "SvozovaUlice",
+      "PickupStreet",
+      "CollectionStreet",
+      "AddressStreet",
+      "Street"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "ulice"],
+      ["svozova", "ulice"],
+      ["adresa", "ulice"],
+      ["pickup", "street"],
+      ["collection", "street"],
+      ["address", "street"]
+    ]
+  },
+  {
+    key: "addressCity",
+    label: "Svozová adresa - město",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaMesto",
+      "SvozoveMesto",
+      "PickupCity",
+      "CollectionCity",
+      "AddressCity",
+      "City"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "mesto"],
+      ["svozove", "mesto"],
+      ["adresa", "mesto"],
+      ["pickup", "city"],
+      ["collection", "city"],
+      ["address", "city"]
+    ]
+  },
+  {
+    key: "addressRegion",
+    label: "Svozová adresa - kraj/stát",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaKrajStat",
+      "SvozovaAdresaKraj",
+      "SvozovyKraj",
+      "PickupRegion",
+      "PickupState",
+      "AddressRegion",
+      "AddressState",
+      "Region",
+      "State"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "kraj"],
+      ["svozova", "adresa", "stat"],
+      ["adresa", "kraj"],
+      ["adresa", "stat"],
+      ["pickup", "region"],
+      ["pickup", "state"],
+      ["address", "region"],
+      ["address", "state"]
+    ]
+  },
+  {
+    key: "addressCountry",
+    label: "Svozová adresa - země",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaZeme",
+      "SvozovaZeme",
+      "PickupCountry",
+      "CollectionCountry",
+      "AddressCountry",
+      "Country"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "zeme"],
+      ["svozova", "zeme"],
+      ["adresa", "zeme"],
+      ["pickup", "country"],
+      ["collection", "country"],
+      ["address", "country"]
+    ]
+  },
+  {
+    key: "addressPostalCode",
+    label: "Svozová adresa - PSČ",
+    targetEntities: ["Contract", "ContractRow"],
+    maxColumns: 3,
+    minScore: 76,
+    candidates: [
+      "SvozovaAdresaPSC",
+      "SvozovePSC",
+      "PickupPostalCode",
+      "PickupZip",
+      "AddressPostalCode",
+      "PostalCode",
+      "ZipCode",
+      "PSC"
+    ],
+    includeGroups: [
+      ["svozova", "adresa", "psc"],
+      ["svozove", "psc"],
+      ["adresa", "psc"],
+      ["postal", "code"],
+      ["zip", "code"],
+      ["address", "postal"],
+      ["pickup", "postal"]
+    ]
+  },
+  {
     key: "customerManagerMobile",
     label: "Zákaznický manažer mobil",
     targetEntities: ["Contract", "ContractRow"],
@@ -1499,6 +1622,33 @@ function preferredVistosAddressPlaceValue(values = [], ...fallbacks) {
   return firstNonEmpty(candidates[0]?.value, ...fallbacks);
 }
 
+function firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, fieldKey, ...fallbacks) {
+  return firstNonEmpty(
+    ...vistosConsistencyDisplayValues(readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, fieldKey)),
+    ...fallbacks
+  );
+}
+
+function vistosAddressPartsFromFields(contract, contractRow, consistencyFields, fallback = {}) {
+  return {
+    street: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressStreet", fallback.street),
+    city: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressCity", fallback.city),
+    region: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressRegion", fallback.region),
+    country: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressCountry", fallback.country),
+    postalCode: firstVistosConsistencyDisplayValue(contract, contractRow, consistencyFields, "addressPostalCode", fallback.postalCode)
+  };
+}
+
+function compactVistosAddressParts(parts = {}) {
+  return {
+    addressStreet: cleanString(parts.street),
+    addressCity: cleanString(parts.city),
+    addressRegion: cleanString(parts.region),
+    addressCountry: cleanString(parts.country),
+    addressPostalCode: cleanString(parts.postalCode)
+  };
+}
+
 function isVistosYesValue(value) {
   if (value === true || value === 1) {
     return true;
@@ -1866,11 +2016,13 @@ function contractRowValidityIssues(row, today = new Date()) {
 }
 
 const VISTOS_PICKUP_WEEKDAYS = [
-  { code: "PO", label: "pondělí", patterns: [/\bPO\b/, /\bPOND(?:ELI)?\b/] },
-  { code: "UT", label: "úterý", patterns: [/\bUT\b/, /\bUTERY\b/] },
-  { code: "ST", label: "středa", patterns: [/\bST\b/, /\bSTREDA\b/] },
-  { code: "CT", label: "čtvrtek", patterns: [/\bCT\b/, /\bCTVRTEK\b/] },
-  { code: "PA", label: "pátek", patterns: [/\bPA\b/, /\bPATEK\b/] }
+  { code: "PO", label: "pondělí", patterns: [/\bPO\b/, /\bPOND(?:ELI)?\b/, /\bMONDAY\b/, /\bPONDELOK\b/, /\bMONTAG\b/] },
+  { code: "UT", label: "úterý", patterns: [/\bUT\b/, /\bUTERY\b/, /\bTUESDAY\b/, /\bUTOROK\b/, /\bDIENSTAG\b/] },
+  { code: "ST", label: "středa", patterns: [/\bST\b/, /\bSTREDA\b/, /\bWEDNESDAY\b/, /\bMITTWOCH\b/] },
+  { code: "CT", label: "čtvrtek", patterns: [/\bCT\b/, /\bCTVRTEK\b/, /\bTHURSDAY\b/, /\bSTVRTOK\b/, /\bDONNERSTAG\b/] },
+  { code: "PA", label: "pátek", patterns: [/\bPA\b/, /\bPATEK\b/, /\bFRIDAY\b/, /\bPIATOK\b/, /\bFREITAG\b/] },
+  { code: "SO", label: "sobota", patterns: [/\bSO\b/, /\bSOBOTA\b/, /\bSATURDAY\b/, /\bSAMSTAG\b/] },
+  { code: "NE", label: "neděle", patterns: [/\bNE\b/, /\bNEDELE\b/, /\bNEDELA\b/, /\bSUNDAY\b/, /\bSONNTAG\b/] }
 ];
 
 function normalizeVistosWatchdogText(value = "") {
@@ -1886,11 +2038,30 @@ function normalizeVistosWatchdogText(value = "") {
 function pickupParityFromText(text = "") {
   const normalized = normalizeVistosWatchdogText(text);
   const compact = normalized.replace(/\s+/g, "");
-  if (/\bSUD(?:Y|A|E|EM|YCH)?\b/.test(normalized) || compact.includes("SUDY") || compact.includes("SUDE")) {
-    return "even";
-  }
-  if (/\bLICH(?:Y|A|E|EM|YCH)?\b/.test(normalized) || compact.includes("LICHY") || compact.includes("LICHE")) {
+  const compactWithoutOdd = compact
+    .replaceAll("NEPARNY", "")
+    .replaceAll("NEPARNA", "")
+    .replaceAll("NEPARN", "")
+    .replaceAll("UNGERADE", "");
+  if (
+    /\bLICH(?:Y|A|E|EM|YCH)?\b/.test(normalized) ||
+    compact.includes("LICHY") ||
+    compact.includes("LICHE") ||
+    compact.includes("ODD") ||
+    compact.includes("NEPARN") ||
+    compact.includes("UNGERADE")
+  ) {
     return "odd";
+  }
+  if (
+    /\bSUD(?:Y|A|E|EM|YCH)?\b/.test(normalized) ||
+    compact.includes("SUDY") ||
+    compact.includes("SUDE") ||
+    compact.includes("EVEN") ||
+    compactWithoutOdd.includes("PARN") ||
+    compactWithoutOdd.includes("GERADE")
+  ) {
+    return "even";
   }
   if (/\b(KAZDY|KAZDE|KAZD|TYDNE|TYDENNE|OBA|OBOU)\b/.test(normalized)) {
     return "both";
@@ -1911,7 +2082,9 @@ function pickupWeekdaysFromText(text = "") {
       (day.code === "UT" && compact.includes("UTERY")) ||
       (day.code === "ST" && compact.includes("STREDA")) ||
       (day.code === "CT" && compact.includes("CTVRTEK")) ||
-      (day.code === "PA" && compact.includes("PATEK"))
+      (day.code === "PA" && compact.includes("PATEK")) ||
+      (day.code === "SO" && compact.includes("SOBOTA")) ||
+      (day.code === "NE" && (compact.includes("NEDELE") || compact.includes("NEDELA")))
     ))
     .map((day) => day.code);
 }
@@ -2426,6 +2599,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     const addressPlaceRaw = preferredVistosAddressPlaceValue(addressPlaceValues, addressRaw);
     const stationValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "siteOptional");
     const stationName = firstNonEmpty(...vistosConsistencyDisplayValues(stationValues));
+    const addressParts = compactVistosAddressParts(vistosAddressPartsFromFields(contract, null, consistencyFields));
     const customerManagerMobileValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerMobile");
     const customerManagerEmailValues = readVistosConsistencyFieldValues(contract, null, consistencyFields, "customerManagerEmail");
     const customerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(customerManagerMobileValues));
@@ -2471,6 +2645,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         addressRaw,
         addressPlaceRaw,
         stationName,
+        ...addressParts,
         customerManagerMobile,
         customerManagerEmail,
         siteName,
@@ -2560,6 +2735,13 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         readVistosColumnDisplayValue(contractRow, "Stanoviste"),
         stationName
       );
+      const rowAddressParts = compactVistosAddressParts(vistosAddressPartsFromFields(contract, contractRow, consistencyFields, {
+        street: addressParts.addressStreet,
+        city: addressParts.addressCity,
+        region: addressParts.addressRegion,
+        country: addressParts.addressCountry,
+        postalCode: addressParts.addressPostalCode
+      }));
       const rowCustomerManagerMobileValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerMobile");
       const rowCustomerManagerEmailValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "customerManagerEmail");
       const rowCustomerManagerMobile = firstNonEmpty(...vistosConsistencyDisplayValues(rowCustomerManagerMobileValues), customerManagerMobile);
@@ -2606,6 +2788,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         addressRaw,
         addressPlaceRaw: rowAddressPlaceRaw,
         stationName: rowStationName,
+        ...rowAddressParts,
         customerManagerMobile: rowCustomerManagerMobile,
         customerManagerEmail: rowCustomerManagerEmail,
         siteName,

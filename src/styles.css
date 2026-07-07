@@ -2574,6 +2574,19 @@ h1 {
   font-size: 0.86rem;
 }
 
+.collection-routes-site-detail-table td strong {
+  display: block;
+}
+
+.collection-routes-site-detail-subline {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .collection-routes-site-detail-item--danger td {
   background: #fffafa;
 }
