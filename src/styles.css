@@ -27427,7 +27427,7 @@ body[data-theme="light"] .tracking-page--soft-metal-preview .tracking-preview-li
   border: 0;
   border-radius: 0;
   background: transparent;
-  padding: 0 2px 2px;
+  padding: 0 20px 0 10px;
   box-shadow: none;
 }
 
