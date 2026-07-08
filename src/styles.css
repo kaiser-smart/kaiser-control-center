@@ -30879,7 +30879,6 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-priority dl,
-.ds-plus-compact-workflow,
 .ds-plus-recommendation dl,
 .ds-plus-rule dl,
 .ds-plus-detail-section dl,
@@ -30890,7 +30889,6 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-priority dt,
-.ds-plus-compact-workflow dt,
 .ds-plus-recommendation dt,
 .ds-plus-rule dt,
 .ds-plus-settings-block dt {
@@ -30900,7 +30898,6 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-priority dd,
-.ds-plus-compact-workflow dd,
 .ds-plus-recommendation dd,
 .ds-plus-rule dd,
 .ds-plus-settings-block dd,
@@ -31071,8 +31068,10 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-message-row__action {
-  display: grid;
+  display: flex;
   gap: 6px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .ds-plus-message-row__buttons {
@@ -31081,16 +31080,18 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-compact-workflow {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
 }
 
-.ds-plus-compact-workflow dt {
-  font-size: 0.7rem;
-}
-
-.ds-plus-compact-workflow dd {
+.ds-plus-compact-workflow__next {
+  min-width: 0;
+  color: #4f5d50;
+  font-size: 0.88rem;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .ds-plus-workflow-summary {
@@ -32032,6 +32033,8 @@ body:has(.ds-plus-page) {
 
   .ds-plus-message-row {
     grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 9px 10px;
   }
 
   .ds-plus-message-row__priority {
@@ -32039,7 +32042,32 @@ body:has(.ds-plus-page) {
   }
 
   .ds-plus-message-row__top {
-    display: grid;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .ds-plus-message-row__id {
+    display: none;
+  }
+
+  .ds-plus-message-row__action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .ds-plus-message-row__action .ds-plus-action-with-help {
+    width: auto;
+  }
+
+  .ds-plus-message-row__action .primary-action,
+  .ds-plus-message-row__action .secondary-link {
+    width: auto;
+    min-height: 34px;
+    padding: 7px 12px;
   }
 
   .ds-plus-detail-overlay {
