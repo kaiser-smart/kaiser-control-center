@@ -19826,6 +19826,11 @@ function dataBoxPlusPreparedAction(item = {}) {
     message?.type,
     message?.subject
   ]);
+  const messageSignal = dataBoxPlusSearchText([
+    message?.senderName,
+    message?.subject,
+    message?.type
+  ]);
   const risk = message?.riskLevel || item.riskReason || item.risk || "Střední";
 
   if (normalized.includes("priloha neni nactena") || normalized.includes("znovu") || normalized.includes("rucni kontrol")) {
@@ -19843,7 +19848,10 @@ function dataBoxPlusPreparedAction(item = {}) {
       risk
     };
   }
-  if (normalized.includes("lhutu") || normalized.includes("lhuta") || normalized.includes("kalendar") || normalized.includes("technick") || normalized.includes("stk")) {
+  if (
+    (normalized.includes("lhutu") || normalized.includes("lhuta") || normalized.includes("kalendar") || normalized.includes("technick") || normalized.includes("stk")) &&
+    (messageSignal.includes("vozid") || messageSignal.includes("stk") || messageSignal.includes("registr vozidel") || messageSignal.includes("technick") || messageSignal.includes("prohlidk"))
+  ) {
     return {
       type: "deadline",
       prepared: "Zapsání lhůty a předání garážmistrovi.",
