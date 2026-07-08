@@ -1917,7 +1917,7 @@ function neumorphicPreviewPage(user) {
   const completedCount = modulesForUser.filter((moduleItem) => moduleItem.status === "HOTOVO").length;
   const pilotRows = [
     { label: "Sledování vozidel", value: "Mapa a alerty", tone: "active" },
-    { label: "Datová schránka", value: "Pilot ISDS", tone: "waiting" },
+    { label: "Datové schránky Plus", value: "DSP", tone: "active" },
     { label: "Šarlota", value: "Hlasový pilot", tone: "draft" }
   ];
   const rowMarkup = pilotRows
