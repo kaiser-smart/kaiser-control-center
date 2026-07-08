@@ -198,13 +198,8 @@ import {
   DATA_BOX_TABS
 } from "./data/dataBox.js";
 import {
-  DATA_BOX_PLUS_AUTOPILOT_DONE,
   DATA_BOX_PLUS_ENTITY_MODEL,
-  DATA_BOX_PLUS_LEARNING_PLAN,
-  DATA_BOX_PLUS_MAILBOXES,
-  DATA_BOX_PLUS_MESSAGES,
-  DATA_BOX_PLUS_RECOMMENDATIONS,
-  DATA_BOX_PLUS_RULES
+  DATA_BOX_PLUS_LEARNING_PLAN
 } from "./data/dataBoxPlus.js";
 
 const app = document.querySelector("#app");
@@ -1170,7 +1165,17 @@ const dataBoxPlusState = {
   rulesStatus: "all",
   confirmedRecommendationIds: [],
   dismissedRecommendationIds: [],
-  notice: ""
+  notice: "",
+  apiStatus: "waiting",
+  loaded: false,
+  loading: false,
+  error: "",
+  lastLoadedAt: 0,
+  mailboxes: [],
+  messages: [],
+  recommendations: [],
+  rules: [],
+  syncRuns: []
 };
 let dataBoxSearchRenderTimer = null;
 const quickAbsenceState = {
@@ -18552,15 +18557,58 @@ function dataBoxPlusSearchText(parts) {
     .toLowerCase();
 }
 
+function dataBoxPlusHumanError(message) {
+  const text = String(message || "").trim();
+  if (!text) return "";
+  const normalized = dataBoxPlusSearchText([text]);
+  if (normalized.includes("d1") || normalized.includes("tabulk") || normalized.includes("migraci")) {
+    return "Ostré úložiště Datových schránek Plus ještě není připravené. Po dokončení nasazení se zprávy začnou načítat samy.";
+  }
+  if (normalized.includes("opravnen") || normalized.includes("prihlas")) {
+    return "Pro načtení Datových schránek Plus je potřeba platné přihlášení a oprávnění k modulu.";
+  }
+  return text;
+}
+
+function dataBoxPlusMailboxes() {
+  return Array.isArray(dataBoxPlusState.mailboxes) ? dataBoxPlusState.mailboxes : [];
+}
+
+function dataBoxPlusMessages() {
+  return Array.isArray(dataBoxPlusState.messages) ? dataBoxPlusState.messages : [];
+}
+
+function dataBoxPlusRecommendations({ includeClosed = false } = {}) {
+  const recommendations = Array.isArray(dataBoxPlusState.recommendations) ? dataBoxPlusState.recommendations : [];
+  if (includeClosed) return recommendations;
+  return recommendations.filter((item) => item.status !== "confirmed" && item.status !== "rejected");
+}
+
+function dataBoxPlusRules() {
+  return Array.isArray(dataBoxPlusState.rules) ? dataBoxPlusState.rules : [];
+}
+
+function dataBoxPlusAutopilotDoneItems() {
+  const confirmedCount = dataBoxPlusRecommendations({ includeClosed: true }).filter((item) => item.status === "confirmed").length;
+  if (confirmedCount > 0) {
+    return [`Autopilot dnes provedl ${confirmedCount} potvrzených kroků a každý zapsal do historie.`];
+  }
+  const lastSync = dataBoxPlusState.syncRuns?.[0];
+  if (lastSync?.messagesDownloaded) {
+    return [`Autopilot načetl ${lastSync.messagesDownloaded} zpráv a připravil je k vyřízení.`];
+  }
+  return ["Autopilot čeká na první automatické načtení ostrých zpráv."];
+}
+
 function dataBoxPlusMailbox(messageOrMailboxId) {
   const mailboxId = typeof messageOrMailboxId === "object"
     ? messageOrMailboxId.mailboxId
     : messageOrMailboxId;
-  return DATA_BOX_PLUS_MAILBOXES.find((mailbox) => mailbox.id === mailboxId) || null;
+  return dataBoxPlusMailboxes().find((mailbox) => mailbox.id === mailboxId) || null;
 }
 
 function dataBoxPlusMessageById(messageId) {
-  return DATA_BOX_PLUS_MESSAGES.find((message) => message.id === String(messageId || "")) || null;
+  return dataBoxPlusMessages().find((message) => message.id === String(messageId || "")) || null;
 }
 
 function restoreDataBoxPlusInputFocus(selector, start, end) {
@@ -18577,7 +18625,7 @@ function restoreDataBoxPlusInputFocus(selector, start, end) {
 }
 
 function dataBoxPlusSelectedMessage() {
-  return dataBoxPlusMessageById(dataBoxPlusState.selectedMessageId) || DATA_BOX_PLUS_MESSAGES[0] || null;
+  return dataBoxPlusMessageById(dataBoxPlusState.selectedMessageId) || null;
 }
 
 function dataBoxPlusTone(value) {
@@ -18645,7 +18693,7 @@ function dataBoxPlusActionHelpText(label = "") {
   if (normalized.includes("poznamku")) {
     return "Připraví se interní poznámka ke zprávě. Datová zpráva se nikam neodesílá, poznámku půjde upravit a v ostré fázi bude dohledatelná.";
   }
-  return "Akce je v pilotu jen připravená k potvrzení. Nic se neodešle, nesmaže ani neuloží bez jasného schválení.";
+  return "Akce čeká na jasné potvrzení. Nic se neodešle mimo systém, nic se nesmaže a krok bude dohledatelný.";
 }
 
 function dataBoxPlusHelp(label, text) {
@@ -18683,16 +18731,18 @@ function dataBoxPlusAutopilotReason(item) {
 }
 
 function dataBoxPlusMetricItems() {
-  const newMessages = DATA_BOX_PLUS_MESSAGES.filter((message) => ["Dnes k vyřízení", "Čeká na potvrzení", "Problém"].includes(message.status)).length;
-  const today = DATA_BOX_PLUS_MESSAGES.filter(dataBoxPlusIsDueToday).length;
-  const waiting = DATA_BOX_PLUS_RECOMMENDATIONS.filter((item) => !dataBoxPlusState.confirmedRecommendationIds.includes(item.id) && !dataBoxPlusState.dismissedRecommendationIds.includes(item.id)).length;
-  const risks = DATA_BOX_PLUS_MESSAGES.filter((message) => message.riskLevel === "Vysoké").length;
-  const attachmentProblems = DATA_BOX_PLUS_MESSAGES.filter((message) => ["Nepodařilo se stáhnout", "Nepodařilo se přečíst", "Čeká na zpracování"].includes(message.attachmentStatus)).length;
+  const messages = dataBoxPlusMessages();
+  const recommendations = dataBoxPlusRecommendations();
+  const newMessages = messages.filter((message) => ["Dnes k vyřízení", "Čeká na potvrzení", "Problém", "Nové"].includes(message.status)).length;
+  const today = messages.filter(dataBoxPlusIsDueToday).length;
+  const waiting = recommendations.filter((item) => !dataBoxPlusState.confirmedRecommendationIds.includes(item.id) && !dataBoxPlusState.dismissedRecommendationIds.includes(item.id)).length;
+  const risks = messages.filter((message) => message.riskLevel === "Vysoké").length;
+  const attachmentProblems = messages.filter((message) => ["Nepodařilo se stáhnout", "Nepodařilo se přečíst", "Čeká na zpracování"].includes(message.attachmentStatus)).length;
   return [
     ["Nové zprávy", newMessages, "neutral"],
     ["Dnes k vyřízení", today, "warning"],
     ["Čeká na moje potvrzení", waiting, "warning"],
-    ["Vyřešeno Autopilotem", DATA_BOX_PLUS_AUTOPILOT_DONE.length, "success"],
+    ["Vyřešeno Autopilotem", dataBoxPlusRecommendations({ includeClosed: true }).filter((item) => item.status === "confirmed").length, "success"],
     ["Rizika / lhůty", risks, "danger"],
     ["Problém s přílohou", attachmentProblems, "danger"]
   ];
@@ -18716,10 +18766,26 @@ function dataBoxPlusTabNav() {
 }
 
 function dataBoxPlusStatusNotice() {
+  if (dataBoxPlusState.loading && !dataBoxPlusState.loaded) {
+    return `
+      <div class="ds-plus-status-note" role="status">
+        <strong>Načítám ostrý provoz</strong>
+        <span>Datové schránky Plus si samy tahají stav z backendu. Ruční načtení není součást běžné práce.</span>
+      </div>
+    `;
+  }
+  if (dataBoxPlusState.error) {
+    return `
+      <div class="ds-plus-status-note ds-plus-status-note--warning" role="status">
+        <strong>Ostré napojení čeká na dokončení</strong>
+        <span>${escapeHtml(dataBoxPlusHumanError(dataBoxPlusState.error))}</span>
+      </div>
+    `;
+  }
   return `
     <div class="ds-plus-status-note" role="status">
-      <strong>Fáze 1: bezpečný pilot</strong>
-      <span>První verze neodesílá zprávy, nemaže data a nepracuje s ostrými přístupy. Ostré napojení patří do další potvrzené fáze.</span>
+      <strong>Ostrá verze</strong>
+      <span>Zprávy se načítají na pozadí. Autopilot nesmaže datovou zprávu a rizikové kroky čekají na potvrzení Radima nebo Martina.</span>
     </div>
   `;
 }
@@ -18761,10 +18827,10 @@ function dataBoxPlusPriorityCard(message) {
 }
 
 function dataBoxPlusRecommendationCard(item) {
-  if (dataBoxPlusState.dismissedRecommendationIds.includes(item.id)) {
+  if (item.status === "rejected" || dataBoxPlusState.dismissedRecommendationIds.includes(item.id)) {
     return "";
   }
-  const confirmed = dataBoxPlusState.confirmedRecommendationIds.includes(item.id);
+  const confirmed = item.status === "confirmed" || dataBoxPlusState.confirmedRecommendationIds.includes(item.id);
   return `
     <article class="ds-plus-recommendation ${confirmed ? "ds-plus-recommendation--done" : ""}">
       <p>${escapeHtml(confirmed ? "Potvrzeno. Autopilot si uloží rozhodnutí pro další podobné zprávy." : item.text)}</p>
@@ -18785,14 +18851,16 @@ function dataBoxPlusRecommendationCard(item) {
 }
 
 function dataBoxPlusCommandCenter() {
-  const priorityMessages = DATA_BOX_PLUS_MESSAGES.filter(dataBoxPlusIsDueToday).slice(0, 5);
-  const openRecommendations = DATA_BOX_PLUS_RECOMMENDATIONS
+  const messages = dataBoxPlusMessages();
+  const priorityMessages = messages.filter(dataBoxPlusIsDueToday).slice(0, 5);
+  const openRecommendations = dataBoxPlusRecommendations()
     .filter((item) => !dataBoxPlusState.confirmedRecommendationIds.includes(item.id) && !dataBoxPlusState.dismissedRecommendationIds.includes(item.id))
     .slice(0, 3);
-  const risks = DATA_BOX_PLUS_MESSAGES
+  const risks = messages
     .filter((message) => message.riskLevel === "Vysoké" || message.attachmentStatus.includes("Nepodařilo"))
     .slice(0, 4);
-  const safeAsideCount = DATA_BOX_PLUS_MESSAGES.filter((message) => message.riskLevel === "Nízké" && message.status !== "Archivované").length + 14;
+  const safeAsideCount = messages.filter((message) => message.riskLevel === "Nízké" && message.status !== "Archivované").length;
+  const autopilotDone = dataBoxPlusAutopilotDoneItems();
 
   return `
     ${dataBoxPlusMetrics()}
@@ -18807,7 +18875,7 @@ function dataBoxPlusCommandCenter() {
             <strong>max. 5</strong>
           </div>
           <div class="ds-plus-priority-list">
-            ${priorityMessages.map(dataBoxPlusPriorityCard).join("")}
+            ${priorityMessages.length ? priorityMessages.map(dataBoxPlusPriorityCard).join("") : `<p class="ds-plus-empty">Teď tu není žádná ostrá zpráva k dnešnímu vyřízení.</p>`}
           </div>
         </section>
 
@@ -18819,7 +18887,7 @@ function dataBoxPlusCommandCenter() {
             </div>
           </div>
           <div class="ds-plus-recommendation-list">
-            ${openRecommendations.map(dataBoxPlusRecommendationCard).join("")}
+            ${openRecommendations.length ? openRecommendations.map(dataBoxPlusRecommendationCard).join("") : `<p class="ds-plus-empty">Autopilot teď nemá žádný návrh k potvrzení.</p>`}
           </div>
         </section>
       </div>
@@ -18827,13 +18895,13 @@ function dataBoxPlusCommandCenter() {
       <aside class="ds-plus-command-side" aria-label="Souhrn a rizika">
         <section class="ds-plus-side-block ds-plus-side-block--done">
           <h2>Autopilot vyřešil</h2>
-          <p>${escapeHtml(DATA_BOX_PLUS_AUTOPILOT_DONE[0])}</p>
+          <p>${escapeHtml(autopilotDone[0])}</p>
           ${dataBoxPlusActionButton({ label: "Zobrazit historii", attrs: `data-ds-plus-tab="archive"` })}
         </section>
         <section class="ds-plus-side-block ds-plus-side-block--risk">
           <h2>Rizika a lhůty</h2>
           <ul>
-            ${risks.map((message) => `<li>${escapeHtml(message.subject)} - ${escapeHtml(message.priorityReason)}</li>`).join("")}
+            ${risks.length ? risks.map((message) => `<li>${escapeHtml(message.subject)} - ${escapeHtml(message.priorityReason)}</li>`).join("") : `<li>Žádné riziko z ostrých dat teď nečeká.</li>`}
           </ul>
         </section>
         <section class="ds-plus-side-block">
@@ -18888,7 +18956,7 @@ function dataBoxPlusMessageMatchesFilter(message, filter) {
 
 function dataBoxPlusFilteredMessages() {
   const query = dataBoxPlusSearchText([dataBoxPlusState.search]);
-  return DATA_BOX_PLUS_MESSAGES.filter((message) => {
+  return dataBoxPlusMessages().filter((message) => {
     const mailbox = dataBoxPlusMailbox(message);
     const haystack = dataBoxPlusSearchText([
       message.senderName,
@@ -18969,7 +19037,7 @@ function dataBoxPlusMessagesPanel() {
 }
 
 function dataBoxPlusConfirmationsPanel() {
-  const cards = DATA_BOX_PLUS_RECOMMENDATIONS.map(dataBoxPlusRecommendationCard).filter(Boolean).join("");
+  const cards = dataBoxPlusRecommendations().map(dataBoxPlusRecommendationCard).filter(Boolean).join("");
   return `
     <section class="ds-plus-workspace" aria-labelledby="ds-plus-confirm-title">
       <div class="ds-plus-section-head">
@@ -19052,7 +19120,7 @@ function dataBoxPlusAutopilotPanel() {
 
 function dataBoxPlusFilteredRules() {
   const query = dataBoxPlusSearchText([dataBoxPlusState.rulesSearch]);
-  return DATA_BOX_PLUS_RULES.filter((rule) => {
+  return dataBoxPlusRules().filter((rule) => {
     const typeMatch = dataBoxPlusState.rulesType === "all" || dataBoxPlusSearchText([rule.type]) === dataBoxPlusSearchText([dataBoxPlusState.rulesType]);
     const statusMatch = dataBoxPlusState.rulesStatus === "all" || dataBoxPlusSearchText([rule.status]) === dataBoxPlusSearchText([dataBoxPlusState.rulesStatus]);
     const haystack = dataBoxPlusSearchText([rule.name, rule.description, rule.type, rule.status, rule.looksFor, rule.proposes, rule.trust]);
@@ -19076,7 +19144,7 @@ function dataBoxPlusRulesPanel() {
         </div>
       </div>
       <div class="ds-plus-rule-list">
-        ${rules.map((rule) => `
+        ${rules.length ? rules.map((rule) => `
           <article class="ds-plus-rule">
             <div class="ds-plus-rule__head">
               <div><span>${escapeHtml(rule.type)}</span><h3>${escapeHtml(rule.name)}</h3></div>
@@ -19101,30 +19169,32 @@ function dataBoxPlusRulesPanel() {
               ${dataBoxPlusActionButton({ label: "Zobrazit audit", attrs: `data-ds-plus-pilot-action="Zobrazit audit pravidla"` })}
             </div>
           </article>
-        `).join("")}
+        `).join("") : `<p class="ds-plus-empty">Pravidla Autopilota se načtou z ostrého backendu po dokončení prvního spuštění.</p>`}
       </div>
     </section>
   `;
 }
 
 function dataBoxPlusArchivePanel() {
-  const archived = DATA_BOX_PLUS_MESSAGES.filter((message) => message.status === "Archivované" || message.riskLevel === "Nízké");
+  const archived = dataBoxPlusMessages().filter((message) => message.status === "Archivované" || message.riskLevel === "Nízké");
+  const autopilotDone = dataBoxPlusAutopilotDoneItems();
   return `
     <section class="ds-plus-workspace" aria-labelledby="ds-plus-archive-title">
       <div class="ds-plus-section-head">
         <div><span>Bezpečný firemní archiv</span><h2 id="ds-plus-archive-title">Archiv</h2></div>
       </div>
       <div class="ds-plus-archive-summary">
-        ${DATA_BOX_PLUS_AUTOPILOT_DONE.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
+        ${autopilotDone.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
       </div>
       <div class="ds-plus-message-list">
-        ${archived.map(dataBoxPlusMessageRow).join("")}
+        ${archived.length ? archived.map(dataBoxPlusMessageRow).join("") : `<p class="ds-plus-empty">Archiv se začne plnit po potvrzených nebo autonomních nízkorizikových krocích.</p>`}
       </div>
     </section>
   `;
 }
 
 function dataBoxPlusSettingsPanel() {
+  const mailboxes = dataBoxPlusMailboxes();
   return `
     <section class="ds-plus-workspace" aria-labelledby="ds-plus-settings-title">
       <div class="ds-plus-section-head">
@@ -19134,7 +19204,7 @@ function dataBoxPlusSettingsPanel() {
         <section class="ds-plus-settings-block">
           <h3>Napojené schránky</h3>
           <div class="ds-plus-mailbox-list">
-            ${DATA_BOX_PLUS_MAILBOXES.map((mailbox) => `<article><strong>${escapeHtml(mailbox.name)}</strong><span>${escapeHtml(mailbox.company)}</span>${dataBoxPlusBadge(mailbox.status, mailbox.status === "aktivní" ? "success" : "warning")}</article>`).join("")}
+            ${mailboxes.length ? mailboxes.map((mailbox) => `<article><strong>${escapeHtml(mailbox.name)}</strong><span>${escapeHtml(mailbox.company)}</span>${dataBoxPlusBadge(mailbox.status, mailbox.status === "aktivní" ? "success" : "warning")}</article>`).join("") : `<p class="ds-plus-empty">Čekám na ostrý stav 7 napojených schránek.</p>`}
           </div>
         </section>
         <section class="ds-plus-settings-block">
@@ -19174,8 +19244,9 @@ function dataBoxPlusSettingsPanel() {
       <details class="ds-plus-diagnostics">
         <summary>Zobrazit diagnostiku</summary>
         <div>
-          <p>Diagnostika je připravená pro log posledního běhu, stav API, interní ID, stav příloh a chyby textové extrakce.</p>
-          <p>Cloudové spouštění po 30 minutách a ostré přístupy se dopojí až v samostatné schválené fázi.</p>
+          <p>Poslední načtení: ${escapeHtml(dataBoxPlusState.syncRuns?.[0]?.startedAt ? formatDateTime(dataBoxPlusState.syncRuns[0].startedAt) : "zatím neproběhlo")}.</p>
+          <p>Servisní ruční načtení je jen pro správce. Běžný uživatel má počítat s automatickým provozem.</p>
+          ${dataBoxPlusActionButton({ label: "Servisně načíst teď", attrs: `data-ds-plus-service-sync` })}
         </div>
       </details>
     </section>
@@ -19201,11 +19272,12 @@ function dataBoxPlusSummary(message) {
 }
 
 function dataBoxPlusAttachments(message) {
+  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
   return `
     <section class="ds-plus-detail-section">
       <h3>Přílohy</h3>
       <div class="ds-plus-attachments">
-        ${message.attachments.map((attachment) => `
+        ${attachments.length ? attachments.map((attachment) => `
           <article class="ds-plus-attachment ds-plus-attachment--${escapeHtml(dataBoxPlusTone(attachment.storageStatus))}">
             <div>
               <strong>${escapeHtml(attachment.fileName)}</strong>
@@ -19213,14 +19285,14 @@ function dataBoxPlusAttachments(message) {
               <small>${escapeHtml(attachment.storageStatus)} · ${escapeHtml(attachment.textExtractionStatus)}</small>
             </div>
             <div class="ds-plus-attachment__actions">
-              ${dataBoxPlusActionButton({ label: "Otevřít přílohu", variant: "primary-action", attrs: `data-ds-plus-pilot-action="Otevřít přílohu"` })}
-              ${dataBoxPlusActionButton({ label: "Stáhnout přílohu", attrs: `data-ds-plus-pilot-action="Stáhnout přílohu"` })}
+              ${dataBoxPlusActionButton({ label: "Otevřít přílohu", variant: "primary-action", attrs: attachment.openUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.openUrl)}"` : `data-ds-plus-pilot-action="Otevřít přílohu"` })}
+              ${dataBoxPlusActionButton({ label: "Stáhnout přílohu", attrs: attachment.downloadUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.downloadUrl)}"` : `data-ds-plus-pilot-action="Stáhnout přílohu"` })}
               ${dataBoxPlusActionButton({ label: "Znovu načíst přílohu", attrs: `data-ds-plus-pilot-action="Znovu načíst přílohu"` })}
             </div>
             ${attachment.errorReason ? `<p class="ds-plus-attachment-error">Přílohu se nepodařilo načíst.</p><details><summary>Zobrazit technický důvod</summary><p>${escapeHtml(attachment.errorReason)}</p></details>` : ""}
             ${attachment.extractedText ? `<details><summary>Zobrazit text</summary><p>${escapeHtml(attachment.extractedText)}</p></details>` : ""}
           </article>
-        `).join("")}
+        `).join("") : `<p class="ds-plus-empty">Přílohy zatím nejsou v ostrém detailu načtené.</p>`}
       </div>
     </section>
   `;
@@ -19292,10 +19364,10 @@ function dataBoxPlusPage(moduleItem, user) {
           <h1 id="ds-plus-title">${escapeHtml(moduleItem.title)}</h1>
           <p>Operační centrum pro příjem, pochopení, předání, archivaci a vyřízení datových zpráv napříč 7 firemními schránkami.</p>
         </div>
-        <div class="ds-plus-header__state" aria-label="Stav autonomního pilotu">
+        <div class="ds-plus-header__state" aria-label="Stav Autopilota">
           <span>Stav Autopilota</span>
-          <strong>Učí se</strong>
-          <small>Rutinní akce čekají na potvrzení.</small>
+          <strong>${escapeHtml(dataBoxPlusState.loading ? "Načítá" : "Učí se")}</strong>
+          <small>${escapeHtml(dataBoxPlusRecommendations().length ? "Některé akce čekají na potvrzení." : "Rutinní kroky běží podle schválených hranic.")}</small>
         </div>
       </section>
       ${dataBoxPlusStatusNotice()}
@@ -27517,6 +27589,118 @@ async function apiJson(path, options = {}) {
   return payload;
 }
 
+async function loadDataBoxPlusData(options = {}) {
+  const force = Boolean(options.force);
+  const now = Date.now();
+  if (dataBoxPlusState.loading) return;
+  if (!force && dataBoxPlusState.loaded && now - dataBoxPlusState.lastLoadedAt < 60000) return;
+
+  dataBoxPlusState.loading = true;
+  dataBoxPlusState.error = "";
+  try {
+    const [statusResult, messagesResult, recommendationsResult, rulesResult, syncRunsResult] = await Promise.all([
+      apiJson("/api/data-box-plus/status"),
+      apiJson("/api/data-box-plus/messages?limit=150"),
+      apiJson("/api/data-box-plus/recommendations?status=all&limit=150"),
+      apiJson("/api/data-box-plus/rules"),
+      apiJson("/api/data-box-plus/sync-runs?limit=20")
+    ]);
+    dataBoxPlusState.apiStatus = statusResult.apiStatus || "ready";
+    dataBoxPlusState.mailboxes = Array.isArray(statusResult.mailboxes) ? statusResult.mailboxes : [];
+    dataBoxPlusState.messages = Array.isArray(messagesResult.messages) ? messagesResult.messages : [];
+    dataBoxPlusState.recommendations = Array.isArray(recommendationsResult.recommendations) ? recommendationsResult.recommendations : [];
+    dataBoxPlusState.rules = Array.isArray(rulesResult.rules) ? rulesResult.rules : [];
+    dataBoxPlusState.syncRuns = Array.isArray(syncRunsResult.syncRuns) ? syncRunsResult.syncRuns : [];
+    dataBoxPlusState.loaded = true;
+    dataBoxPlusState.lastLoadedAt = now;
+  } catch (error) {
+    dataBoxPlusState.apiStatus = error.payload?.apiStatus || "waiting";
+    dataBoxPlusState.error = dataBoxPlusHumanError(error.payload?.error || error.message || "Datové schránky Plus se teď nepodařilo načíst.");
+  } finally {
+    dataBoxPlusState.loading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
+function ensureDataBoxPlusData() {
+  void loadDataBoxPlusData({ force: !dataBoxPlusState.loaded });
+}
+
+async function loadDataBoxPlusMessageDetail(messageId) {
+  const id = String(messageId || "");
+  if (!id) return;
+  try {
+    const result = await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(id)}`);
+    if (result.message?.id) {
+      const index = dataBoxPlusState.messages.findIndex((message) => message.id === result.message.id);
+      if (index >= 0) {
+        dataBoxPlusState.messages = [
+          ...dataBoxPlusState.messages.slice(0, index),
+          result.message,
+          ...dataBoxPlusState.messages.slice(index + 1)
+        ];
+      } else {
+        dataBoxPlusState.messages = [result.message, ...dataBoxPlusState.messages];
+      }
+    }
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Detail zprávy se teď nepodařilo načíst.");
+  }
+}
+
+async function confirmDataBoxPlusRecommendation(recommendationId) {
+  const id = String(recommendationId || "");
+  if (!id) return;
+  try {
+    await apiJson(`/api/data-box-plus/recommendations/${encodeURIComponent(id)}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ requireRadimMartin: true })
+    });
+    dataBoxPlusState.confirmedRecommendationIds = Array.from(new Set([
+      ...dataBoxPlusState.confirmedRecommendationIds,
+      id
+    ]));
+    dataBoxPlusState.dismissedRecommendationIds = dataBoxPlusState.dismissedRecommendationIds.filter((item) => item !== id);
+    dataBoxPlusState.notice = "Návrh je potvrzený a zapsaný do historie. Nic se neodeslalo mimo systém.";
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Potvrzení návrhu se nepodařilo uložit.");
+  }
+}
+
+async function rejectDataBoxPlusRecommendation(recommendationId) {
+  const id = String(recommendationId || "");
+  if (!id) return;
+  try {
+    await apiJson(`/api/data-box-plus/recommendations/${encodeURIComponent(id)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason: "Odmítnuto z UI Datové schránky Plus." })
+    });
+    dataBoxPlusState.dismissedRecommendationIds = Array.from(new Set([
+      ...dataBoxPlusState.dismissedRecommendationIds,
+      id
+    ]));
+    dataBoxPlusState.notice = "Návrh je zamítnutý a Autopilot se z opravy poučí. Zpráva zůstává k vyřízení.";
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Zamítnutí návrhu se nepodařilo uložit.");
+  }
+}
+
+async function runDataBoxPlusServiceSync() {
+  try {
+    dataBoxPlusState.notice = "Servisní načtení běží na pozadí.";
+    render();
+    await apiJson("/api/data-box-plus/sync", { method: "POST", body: JSON.stringify({}) });
+    dataBoxPlusState.notice = "Servisní načtení doběhlo. Běžný provoz dál počítá s automatickým načítáním.";
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Servisní načtení se nepodařilo spustit.");
+  }
+}
+
 async function loadReceivablesDashboard(options = {}) {
   if (receivablesState.dashboardLoading) {
     return;
@@ -33305,6 +33489,9 @@ function renderAuthenticatedApp(user) {
     if (moduleItem.id === RECEIVABLES_MODULE_KEY) {
       ensureReceivablesData({ view: "dashboard" });
     }
+    if (moduleItem.id === DATA_BOX_PLUS_MODULE_KEY) {
+      ensureDataBoxPlusData();
+    }
     if (moduleItem.id === "system-check") {
       ensureSystemCheckData();
     }
@@ -36469,6 +36656,7 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     dataBoxPlusState.selectedMessageId = dataBoxPlusOpen.dataset.dsPlusOpen || "";
     dataBoxPlusState.notice = "";
+    await loadDataBoxPlusMessageDetail(dataBoxPlusState.selectedMessageId);
     render();
     return;
   }
@@ -36485,12 +36673,7 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusConfirm) {
     event.preventDefault();
     const id = dataBoxPlusConfirm.dataset.dsPlusConfirm || "";
-    dataBoxPlusState.confirmedRecommendationIds = Array.from(new Set([
-      ...dataBoxPlusState.confirmedRecommendationIds,
-      id
-    ])).filter(Boolean);
-    dataBoxPlusState.dismissedRecommendationIds = dataBoxPlusState.dismissedRecommendationIds.filter((item) => item !== id);
-    dataBoxPlusState.notice = "Potvrzení je připravené jako auditovatelná akce pro ostrou fázi. V pilotu se nic neodeslalo ani nezapsalo.";
+    await confirmDataBoxPlusRecommendation(id);
     render();
     return;
   }
@@ -36499,12 +36682,24 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusDismiss) {
     event.preventDefault();
     const id = dataBoxPlusDismiss.dataset.dsPlusDismiss || "";
-    dataBoxPlusState.dismissedRecommendationIds = Array.from(new Set([
-      ...dataBoxPlusState.dismissedRecommendationIds,
-      id
-    ])).filter(Boolean);
-    dataBoxPlusState.notice = "Návrh je zamítnutý jen v aktuálním pilotním zobrazení. Nic se nemaže.";
+    await rejectDataBoxPlusRecommendation(id);
     render();
+    return;
+  }
+
+  const dataBoxPlusServiceSync = event.target.closest("[data-ds-plus-service-sync]");
+  if (dataBoxPlusServiceSync) {
+    event.preventDefault();
+    await runDataBoxPlusServiceSync();
+    render();
+    return;
+  }
+
+  const dataBoxPlusOpenUrl = event.target.closest("[data-ds-plus-open-url]");
+  if (dataBoxPlusOpenUrl) {
+    event.preventDefault();
+    const url = dataBoxPlusOpenUrl.dataset.dsPlusOpenUrl || "";
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
     return;
   }
 
@@ -36512,7 +36707,7 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusPilotAction) {
     event.preventDefault();
     const action = dataBoxPlusPilotAction.dataset.dsPlusPilotAction || "Akce";
-    dataBoxPlusState.notice = `${action}: připraveno pro ostré backendové napojení. V této fázi se nic neodesílá ani neukládá.`;
+    dataBoxPlusState.notice = `${action}: akce je připravená k bezpečnému dopracování. Nic se neodešle mimo systém bez potvrzení.`;
     render();
     return;
   }

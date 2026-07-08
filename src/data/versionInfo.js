@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.446"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.447"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: ostrý oddělený backend",
+    text: "Datové schránky Plus mají vlastní tabulky, API, audit, pravidla, přílohy a plánované načítání na pozadí. Modul čte přístupy z bezpečných serverových secrets, ale data a akce drží odděleně od původní Datové schránky."
+  },
   {
     title: "Datové schránky Plus: nápověda akcí a Autopilot",
     text: "Důležité akce v Datových schránkách Plus nově ukazují lidskou nápovědu pro hover, focus i tapnutí a návrhy mají vysvětlení, proč je Autopilot doporučuje. Starší označení asistenta je napříč KSO sjednocené na Autopilot."

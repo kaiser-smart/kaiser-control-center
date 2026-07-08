@@ -6,7 +6,7 @@ const ISDS_NAMESPACE = "http://isds.czechpoint.cz/v20";
 const ISDS_TIMEOUT_MS = 25000;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_LOOKBACK_DAYS = 30;
-const MAX_ISDS_ACCOUNTS = 6;
+const MAX_ISDS_ACCOUNTS = 7;
 const PRIMARY_DATA_BOX_ID = "kaiser-primary";
 
 export class DataBoxIsdsError extends Error {
@@ -199,7 +199,7 @@ function isdsConfig(env = {}) {
 function ensureIsdsConfig(config) {
   if (!config.configured) {
     throw new DataBoxIsdsError(
-      "ISDS read-only synchronizace ceka na Cloudflare secrets DATA_BOX_ISDS_ENABLED a alespon jednu dvojici DATA_BOX_ISDS_USERNAME/PASSWORD nebo DATA_BOX_ISDS_USERNAME_1..6/PASSWORD_1..6.",
+      "ISDS read-only synchronizace ceka na Cloudflare secrets DATA_BOX_ISDS_ENABLED a alespon jednu dvojici DATA_BOX_ISDS_USERNAME/PASSWORD nebo DATA_BOX_ISDS_USERNAME_1..7/PASSWORD_1..7.",
       409,
       "data_box_isds_not_configured"
     );
