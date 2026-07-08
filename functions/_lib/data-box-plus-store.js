@@ -191,6 +191,30 @@ function plusMailboxName(account = {}) {
   return cleanString(account.label) || MAILBOX_NAMES[slot - 1] || `Datova schranka ${slot}`;
 }
 
+function sourceDataBoxIdForSlot(slot) {
+  const normalizedSlot = numberValue(slot);
+  if (normalizedSlot === 1) return "kaiser-primary";
+  if (normalizedSlot > 1 && normalizedSlot <= 6) return `kaiser-data-box-${normalizedSlot}`;
+  return "";
+}
+
+function isGenericMailboxLabel(value, slot) {
+  const label = cleanString(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const normalizedSlot = numberValue(slot);
+  return !label
+    || label === `datova schranka ${normalizedSlot}`
+    || label === "kaiser smart datova schranka";
+}
+
+function sourceLabelForRow(row, fallback = "", slot = 0) {
+  const sourceLabel = cleanString(row?.source_data_box_label);
+  if (sourceLabel && !isGenericMailboxLabel(sourceLabel, slot)) return sourceLabel;
+  return cleanString(fallback);
+}
+
 function messageRecordId(mailboxId, direction, isdsMessageId) {
   const safeDirection = cleanString(direction || "received").toLowerCase() === "sent" ? "sent" : "received";
   return `${cleanString(mailboxId)}-${safeDirection}-${cleanString(isdsMessageId)}`;
@@ -369,6 +393,14 @@ function classifyMessage(message = {}, attachmentState = {}) {
 function rowToMailbox(row, fallbackAccount = null) {
   if (!row) return null;
   const credentialId = cleanString(row.credential_id);
+  const slot = numberValue(row.slot);
+  const sourceLabel = sourceLabelForRow(row, MAILBOX_NAMES[slot - 1], slot);
+  const name = isGenericMailboxLabel(row.name, slot)
+    ? (sourceLabel || MAILBOX_NAMES[slot - 1] || cleanString(row.name))
+    : cleanString(row.name);
+  const company = isGenericMailboxLabel(row.company, slot)
+    ? (sourceLabel || name)
+    : cleanString(row.company || name);
   const credentialActive = row.credential_active === undefined || row.credential_active === null
     ? null
     : numberValue(row.credential_active) === 1;
@@ -380,10 +412,10 @@ function rowToMailbox(row, fallbackAccount = null) {
     : fallbackConfigured ? "Původní serverové secrets" : "";
   return {
     id: cleanString(row.id),
-    name: cleanString(row.name),
-    company: cleanString(row.company || row.name),
-    isdsId: cleanString(row.isds_id || fallbackAccount?.isdsId),
-    slot: numberValue(row.slot),
+    name,
+    company,
+    isdsId: cleanString(row.isds_id || row.source_data_box_isds_id || fallbackAccount?.isdsId),
+    slot,
     status: cleanString(row.connection_status || "waiting") === "ready" ? "aktivní" : "čeká na přístup",
     connectionStatus: cleanString(row.connection_status),
     lastSync: cleanString(row.last_sync_at),
@@ -418,6 +450,8 @@ async function mailboxRowsWithCredentials(db) {
       .prepare(`
         SELECT
           m.*,
+          source_box.label AS source_data_box_label,
+          source_box.isds_id AS source_data_box_isds_id,
           c.id AS credential_id,
           c.username_ciphertext,
           c.username_hint,
@@ -428,6 +462,11 @@ async function mailboxRowsWithCredentials(db) {
           c.source AS credential_source
         FROM data_box_plus_mailboxes m
         LEFT JOIN data_box_plus_credentials c ON c.mailbox_id = m.id
+        LEFT JOIN data_boxes source_box ON source_box.id = CASE
+          WHEN m.slot = 1 THEN 'kaiser-primary'
+          WHEN m.slot BETWEEN 2 AND 6 THEN 'kaiser-data-box-' || m.slot
+          ELSE ''
+        END
         ORDER BY m.slot ASC, m.name ASC
       `)
       .all();
@@ -463,6 +502,53 @@ async function credentialRows(db) {
     if (credentialTableMissing(error)) return [];
     throw error;
   }
+}
+
+async function sourceDataBoxRows(db) {
+  try {
+    const result = await db
+      .prepare(`
+        SELECT
+          box.id,
+          box.label,
+          COALESCE(
+            NULLIF(box.isds_id, ''),
+            (
+              SELECT CASE
+                WHEN message.direction = 'sent' THEN message.sender_box_id
+                ELSE message.recipient_box_id
+              END
+              FROM data_box_messages message
+              WHERE message.data_box_id = box.id
+                AND CASE
+                  WHEN message.direction = 'sent' THEN message.sender_box_id
+                  ELSE message.recipient_box_id
+                END <> ''
+              ORDER BY COALESCE(message.delivered_at, message.accepted_at, message.stored_at) DESC
+              LIMIT 1
+            ),
+            ''
+          ) AS isds_id,
+          box.last_sync_at,
+          box.last_sync_status,
+          box.last_sync_message
+        FROM data_boxes box
+      `)
+      .all();
+    return result.results || [];
+  } catch (error) {
+    const message = cleanString(error?.message).toLowerCase();
+    if (message.includes("data_boxes") && message.includes("no such table")) return [];
+    throw error;
+  }
+}
+
+async function sourceDataBoxMap(db) {
+  const map = new Map();
+  for (const row of await sourceDataBoxRows(db)) {
+    map.set(cleanString(row.id), row);
+  }
+  return map;
 }
 
 async function dataBoxPlusAccountConfigs(env) {
@@ -1069,6 +1155,7 @@ export async function ensureDataBoxPlusMailboxes(env) {
   const isds = dataBoxIsdsStatus(env);
   const configuredAccounts = dataBoxIsdsAccountConfigs(env);
   const fallbackMap = fallbackAccountMap(env);
+  const sourceBoxes = await sourceDataBoxMap(db);
   const visibleAccounts = isds.accounts?.length ? isds.accounts : [];
   const accounts = visibleAccounts.length
     ? visibleAccounts.map((account) => ({
@@ -1078,13 +1165,20 @@ export async function ensureDataBoxPlusMailboxes(env) {
     : [];
 
   for (let slot = 1; slot <= EXPECTED_MAILBOX_COUNT; slot += 1) {
+    const sourceBox = sourceBoxes.get(sourceDataBoxIdForSlot(slot));
     const account = accounts.find((item) => item.slot === slot) || {
       slot,
       label: MAILBOX_NAMES[slot - 1],
       isdsId: "",
       configured: false
     };
-    await ensureMailbox(db, account);
+    await ensureMailbox(db, {
+      ...account,
+      label: sourceLabelForRow({
+        source_data_box_label: sourceBox?.label
+      }, MAILBOX_NAMES[slot - 1] || account.label, slot),
+      isdsId: cleanString(sourceBox?.isds_id || account.isdsId)
+    });
   }
 
   const rows = await mailboxRowsWithCredentials(db);
