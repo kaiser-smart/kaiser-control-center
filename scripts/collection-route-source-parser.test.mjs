@@ -199,6 +199,19 @@ function derive(originalText) {
 {
   const addressPlace = __preferredVistosAddressPlaceValueForTest(
     [{
+      value: "17",
+      rawValue: "17",
+      caption: "Adresní místo",
+      columnName: "PickupAddressRuian_FK_RecordId"
+    }],
+    "U Vlečky 726/5c, 617 00 Brno - Komárov"
+  );
+  assert.equal(addressPlace, "");
+}
+
+{
+  const addressPlace = __preferredVistosAddressPlaceValueForTest(
+    [{
       value: "4 KLUCI OD KOL s.r.o. - 08576726",
       rawValue: "4 KLUCI OD KOL s.r.o. - 08576726",
       caption: "Adresní místo",
@@ -271,6 +284,29 @@ function derive(originalText) {
 }
 
 {
+  const rawAddressPlace = JSON.stringify({
+    Caption: "Company",
+    CityName: "Brno",
+    CityPartName: "Komárov",
+    StreetName: "U vlečky",
+    HouseNumber: "726",
+    OrientationNumber: "5c",
+    PostalCode: "61700"
+  });
+  const addressPlace = __preferredVistosAddressPlaceValueForTest([{
+    value: rawAddressPlace,
+    rawValue: rawAddressPlace,
+    caption: "Adresní místo",
+    columnName: "PickupAddressRuian"
+  }]);
+  const parts = __vistosAddressPartsFromAddressPlaceForTest(rawAddressPlace);
+  assert.equal(addressPlace, "Brno, Komárov, U vlečky 726/5c, PSČ 61700");
+  assert.equal(parts.addressCity, "Brno");
+  assert.equal(parts.addressStreet, "U vlečky 726/5c");
+  assert.equal(parts.addressPostalCode, "61700");
+}
+
+{
   const parts = __vistosAddressPartsFromAddressPlaceForTest("U Vlečky 726/5c, 617 00 Brno - Komárov");
   assert.equal(parts.addressCity, "Brno");
   assert.equal(parts.addressStreet, "U Vlečky 726/5c");
@@ -294,7 +330,8 @@ function derive(originalText) {
       Contract_FK_RecordId: "7337",
       Product_FK_RecordId: "product-sko",
       PickupAddressRuian_Caption: "Company",
-      PickupAddressRuian_FK_MainProjection: "Brno, Komárov, U vlečky 726/5c, PSČ 61700",
+      PickupAddressRuian_FK_RecordId: "17",
+      __vistosAddressPlaceRaw: "Brno, Komárov, U vlečky 726/5c, PSČ 61700",
       Stanoviste: "U Vlečky 726/5c, 617 00 Brno - Komárov",
       CustomerManager_FK_Caption: "Jana Nováková",
       CustomerManagerMobile: "+420 777 111 222",

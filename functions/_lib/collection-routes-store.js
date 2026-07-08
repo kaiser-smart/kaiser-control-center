@@ -100,6 +100,29 @@ const VISTOS_CUSTOMER_MANAGER_CONTACT_COLUMNS = [
   "CellPhone",
   "GSM"
 ];
+const VISTOS_ADDRESS_PLACE_DETAIL_COLUMNS = [
+  "Id",
+  "Name",
+  "Caption",
+  "Caption1",
+  "DisplayName",
+  "Value",
+  "MainProjection",
+  "CityName",
+  "CityPartName",
+  "StreetName",
+  "HouseNumber",
+  "OrientationNumber",
+  "PostalCode",
+  "ZipCode",
+  "PSC",
+  "Psc",
+  "Obec",
+  "CastObce",
+  "Ulice",
+  "CisloPopisne",
+  "CisloOrientacni"
+];
 const VISTOS_SVOZ_KAISER_COLUMN_CANDIDATES = [
   "SvozKaiser",
   "SvozKaiserAno",
@@ -1800,6 +1823,18 @@ function directVistosAddressPlaceValues(contract, contractRow) {
     if (!row) {
       continue;
     }
+    const enrichedAddressPlace = firstNonGenericVistosAddressPlace(row.__vistosAddressPlaceRaw);
+    if (enrichedAddressPlace) {
+      values.push({
+        entityName,
+        columnName: "__vistosAddressPlaceRaw",
+        sourceColumn: "__vistosAddressPlaceRaw",
+        caption: "Adresní místo",
+        source: "enriched",
+        value: enrichedAddressPlace,
+        rawValue: enrichedAddressPlace
+      });
+    }
     for (const columnName of VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS) {
       values.push(...vistosAddressPlaceColumnValues(row, columnName).map((item) => ({
         entityName,
@@ -1820,6 +1855,125 @@ function readVistosAddressPlaceRaw(contract, contractRow, consistencyFields, fal
     ...directVistosAddressPlaceValues(contract, contractRow),
     ...readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "addressPlace")
   ]) || firstNonGenericVistosAddressPlace(fallback);
+}
+
+function addressPlaceReferenceEntityNames(column = {}) {
+  const inferredFromColumn = cleanString(column.columnName).replace(/_FK$/i, "");
+  return Array.from(new Set([
+    column.reference,
+    inferredFromColumn,
+    "PickupAddressRuian",
+    "AddressPlace",
+    "AddressPlaceRuian",
+    "AddressRuian",
+    "RuianAddress",
+    "RuianAddressPlace",
+    "AdresniMisto",
+    "PickupAddress",
+    "Address"
+  ].map(cleanString).filter((value) => value && !/^\d+$/.test(value))));
+}
+
+function addressPlaceReferenceColumns(consistencyFields, entityName) {
+  const consistencyColumns = (consistencyFields?.fields?.addressPlace?.columns || [])
+    .filter((column) => column.entityName === entityName && column.columnName);
+  const directColumns = VISTOS_ADDRESS_PLACE_DIRECT_COLUMNS.map((columnName) => ({
+    entityName,
+    columnName,
+    caption: "Adresní místo",
+    source: "direct"
+  }));
+  const columnsByName = new Map();
+  for (const column of [...consistencyColumns, ...directColumns]) {
+    const key = `${column.entityName}:${column.columnName}`;
+    if (!columnsByName.has(key)) {
+      columnsByName.set(key, column);
+    }
+  }
+  return Array.from(columnsByName.values());
+}
+
+function addressPlaceReferenceId(row, columnName) {
+  const id = cleanString(readVistosColumnRecordId(row, columnName));
+  return /^\d+$/.test(id) ? id : "";
+}
+
+async function enrichVistosAddressPlaceReferences(env, session, rows = [], consistencyFields, entityName, { maxRows = 100 } = {}) {
+  const limitedRows = rows.slice(0, Math.max(0, maxRows));
+  const columns = addressPlaceReferenceColumns(consistencyFields, entityName);
+  const detailByReference = new Map();
+  const diagnostics = {
+    entityName,
+    requested: 0,
+    succeeded: 0,
+    failed: 0,
+    maxRows
+  };
+
+  for (const row of limitedRows) {
+    if (preferredVistosAddressPlaceValue(directVistosAddressPlaceValues(
+      entityName === "Contract" ? row : null,
+      entityName === "ContractRow" ? row : null
+    ))) {
+      continue;
+    }
+
+    let enriched = "";
+    let sourceColumn = "";
+    for (const column of columns) {
+      const recordId = addressPlaceReferenceId(row, column.columnName);
+      if (!recordId) {
+        continue;
+      }
+
+      for (const referenceEntityName of addressPlaceReferenceEntityNames(column)) {
+        const cacheKey = `${referenceEntityName}:${recordId}`;
+        let cached = detailByReference.get(cacheKey);
+        if (!cached) {
+          diagnostics.requested += 1;
+          try {
+            const detail = await getVistosById(env, session, referenceEntityName, recordId, VISTOS_ADDRESS_PLACE_DETAIL_COLUMNS);
+            const addressPlace = firstNonGenericVistosAddressPlace(detail.row);
+            cached = {
+              ok: Boolean(addressPlace),
+              addressPlace
+            };
+            diagnostics[cached.ok ? "succeeded" : "failed"] += 1;
+          } catch {
+            cached = {
+              ok: false,
+              addressPlace: ""
+            };
+            diagnostics.failed += 1;
+          }
+          detailByReference.set(cacheKey, cached);
+        }
+
+        if (cached.ok) {
+          enriched = cached.addressPlace;
+          sourceColumn = column.columnName;
+          break;
+        }
+      }
+
+      if (enriched) {
+        break;
+      }
+    }
+
+    if (enriched) {
+      row.__vistosAddressPlaceRaw = enriched;
+      if (sourceColumn) {
+        row[`${sourceColumn}_MainProjection`] = firstNonEmpty(row[`${sourceColumn}_MainProjection`], enriched);
+        row[`${sourceColumn}_FK_MainProjection`] = firstNonEmpty(row[`${sourceColumn}_FK_MainProjection`], enriched);
+      }
+    }
+  }
+
+  return {
+    rows,
+    diagnostics
+  };
 }
 
 function vistosConsistencyDisplayValues(values = []) {
@@ -1967,16 +2121,35 @@ function isGenericVistosAddressPlaceValue(value = "") {
   ].includes(key);
 }
 
+function composeVistosAddressPlaceText(value = {}) {
+  const city = firstNonEmpty(value.CityName, value.Obec, value.City, value.City_FK_Caption);
+  const cityPart = firstNonEmpty(value.CityPartName, value.CastObce, value.CityPart, value.CityPart_FK_Caption, value.District);
+  const streetName = firstNonEmpty(value.StreetName, value.Ulice, value.Street, value.Street_FK_Caption);
+  const houseNumber = firstNonEmpty(value.HouseNumber, value.CisloPopisne, value.HouseNo);
+  const orientationNumber = firstNonEmpty(value.OrientationNumber, value.CisloOrientacni, value.OrientationNo);
+  const postalCode = cleanString(firstNonEmpty(value.PostalCode, value.ZipCode, value.PSC, value.Psc)).replace(/\s+/g, "");
+  const streetNumber = [houseNumber, orientationNumber].map(cleanString).filter(Boolean).join("/");
+  const street = [streetName, streetNumber].map(cleanString).filter(Boolean).join(" ");
+
+  return [city, cityPart, street, postalCode ? `PSČ ${postalCode}` : ""]
+    .map(cleanString)
+    .filter(Boolean)
+    .join(", ");
+}
+
 function vistosAddressPlaceText(value = "") {
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    return firstNonEmpty(
+    const candidates = [
       value.Caption1,
       value.Caption,
       value.caption,
       value.DisplayName,
       value.Name,
-      value.Value
-    );
+      value.Value,
+      value.MainProjection,
+      composeVistosAddressPlaceText(value)
+    ].map(cleanString).filter(Boolean);
+    return candidates.find((candidate) => !/^\d+$/.test(candidate) && !isGenericVistosAddressPlaceValue(candidate)) || candidates[0] || "";
   }
 
   const text = cleanString(value);
@@ -1993,7 +2166,7 @@ function vistosAddressPlaceText(value = "") {
 function firstNonGenericVistosAddressPlace(...values) {
   return values
     .map(vistosAddressPlaceText)
-    .find((value) => value && !isGenericVistosAddressPlaceValue(value)) || "";
+    .find((value) => value && !/^\d+$/.test(value) && !isGenericVistosAddressPlaceValue(value)) || "";
 }
 
 function vistosAddressPlaceCandidateScore(item = {}) {
@@ -4743,6 +4916,31 @@ async function loadVistosKommunalPreviewData(env) {
     const enrichedById = new Map(detailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
     contractRowsForKommunalContracts = contractRowsForKommunalContracts.map((row) => enrichedById.get(cleanString(row?.Id || row?.RecordId)) || row);
   }
+  const addressPlaceContractEnrichment = await enrichVistosAddressPlaceReferences(
+    env,
+    session,
+    kommunalContracts,
+    consistencyFields,
+    "Contract",
+    { maxRows: 100 }
+  );
+  if (addressPlaceContractEnrichment.rows.length) {
+    const enrichedAddressContractsById = new Map(addressPlaceContractEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
+    kommunalContracts = kommunalContracts.map((contract) => enrichedAddressContractsById.get(cleanString(contract?.Id || contract?.RecordId)) || contract);
+    contractById = new Map(kommunalContracts.map((contract) => [cleanString(contract?.Id), contract]));
+  }
+  const addressPlaceRowEnrichment = await enrichVistosAddressPlaceReferences(
+    env,
+    session,
+    contractRowsForKommunalContracts,
+    consistencyFields,
+    "ContractRow",
+    { maxRows: 150 }
+  );
+  if (addressPlaceRowEnrichment.rows.length) {
+    const enrichedAddressRowsById = new Map(addressPlaceRowEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
+    contractRowsForKommunalContracts = contractRowsForKommunalContracts.map((row) => enrichedAddressRowsById.get(cleanString(row?.Id || row?.RecordId)) || row);
+  }
   const customerManagerContractEnrichment = await enrichVistosCustomerManagerContacts(
     env,
     session,
@@ -4782,6 +4980,9 @@ async function loadVistosKommunalPreviewData(env) {
     contractsDetailEnrichmentFailed: contractDetailEnrichment.diagnostics.failed,
     contractRowsDetailEnriched: detailEnrichment.diagnostics.succeeded,
     contractRowsDetailEnrichmentFailed: detailEnrichment.diagnostics.failed,
+    addressPlacesRequested: addressPlaceContractEnrichment.diagnostics.requested + addressPlaceRowEnrichment.diagnostics.requested,
+    addressPlacesEnriched: addressPlaceContractEnrichment.diagnostics.succeeded + addressPlaceRowEnrichment.diagnostics.succeeded,
+    addressPlacesFailed: addressPlaceContractEnrichment.diagnostics.failed + addressPlaceRowEnrichment.diagnostics.failed,
     customerManagerContactsRequested: customerManagerContractEnrichment.diagnostics.requested + customerManagerRowEnrichment.diagnostics.requested,
     customerManagerContactsEnriched: customerManagerContractEnrichment.diagnostics.succeeded + customerManagerRowEnrichment.diagnostics.succeeded,
     customerManagerContactsFailed: customerManagerContractEnrichment.diagnostics.failed + customerManagerRowEnrichment.diagnostics.failed,

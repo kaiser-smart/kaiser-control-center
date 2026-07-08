@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Trasy svozu: skutečné Adresní místo z Vistosu",
+    text: "Stanoviště ve svozových trasách při read-only refreshi dočítají detail Vistos Adresního místa podle reference a nepoužívají technická ID ani Stanoviště jako náhradu za Adresní místo."
+  },
+  {
     title: "Vozový park: pracovní centrum vozidel",
     text: "Stávající modul Vozový park má nový přehled, evidenci vozidel, detail vozidla, termíny, servis, náklady a dokumenty. Související Hlášení řidičů jen zobrazuje a proklikává, bez duplikace jejich workflow."
   },
