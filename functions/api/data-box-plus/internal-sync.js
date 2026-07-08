@@ -33,7 +33,7 @@ export async function onRequestPost({ request, env }) {
       id: "cloudflare-scheduler",
       name: "Autopilot"
     }, {
-      triggerType: "background"
+      triggerType: "cloud-scheduler"
     }));
   } catch (error) {
     const result = dataBoxPlusStoreErrorResponse(error);

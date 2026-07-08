@@ -21685,13 +21685,36 @@ function dataBoxPlusMailboxCreateForm(mailboxes = []) {
   `;
 }
 
+function dataBoxPlusCloudSyncInfo(syncRuns = []) {
+  const runs = Array.isArray(syncRuns) ? syncRuns : [];
+  const cloudRuns = runs.filter((run) => {
+    const trigger = String(run?.triggerType || "").toLowerCase();
+    return ["cloud-scheduler", "cloudflare-scheduled", "scheduled", "background"].includes(trigger);
+  });
+  const latestCloud = cloudRuns[0] || null;
+  const finishedAt = latestCloud?.finishedAt || latestCloud?.startedAt || "";
+  const ageMs = finishedAt ? Date.now() - Date.parse(finishedAt) : Number.POSITIVE_INFINITY;
+  const isFresh = Number.isFinite(ageMs) && ageMs <= 65 * 60 * 1000;
+  const status = String(latestCloud?.status || "").toLowerCase();
+  const isOk = ["success", "partial"].includes(status);
+  return {
+    latestCloud,
+    isFresh,
+    isOk,
+    isRunning: Boolean(latestCloud && isFresh && isOk),
+    lastLabel: finishedAt ? formatDateTime(finishedAt) : "zatím neproběhlo"
+  };
+}
+
 function dataBoxPlusEventLogBlock() {
   const mailboxes = dataBoxPlusMailboxes();
   const latestSync = Array.isArray(dataBoxPlusState.syncRuns) ? dataBoxPlusState.syncRuns[0] : null;
+  const cloudSync = dataBoxPlusCloudSyncInfo(dataBoxPlusState.syncRuns);
   const activeMailboxes = mailboxes.filter((mailbox) => mailbox.credentialActive !== false && mailbox.status !== "čeká na přístup").length;
   const mailboxProblems = mailboxes.reduce((sum, mailbox) => sum + (Number(mailbox.problemCount || 0) || 0), 0);
   const messages = dataBoxPlusMessages();
   const messageProblems = messages.filter((message) => dataBoxPlusSearchText([message.status, message.attachmentStatus, message.riskLevel]).includes("problem")).length;
+  const allCoreChecksOk = cloudSync.isRunning && activeMailboxes === 7 && !mailboxProblems && !messageProblems;
   const historyEvents = messages
     .flatMap((message) => (Array.isArray(message.history) ? message.history : []).map((event) => ({
       createdAt: event.createdAt || message.updatedAt || message.receivedAt || message.deliveredAt,
@@ -21720,19 +21743,23 @@ function dataBoxPlusEventLogBlock() {
   const statuses = [
     {
       label: "Automatizace v cloudu",
-      value: latestSync ? "částečně ověřit" : "neověřeno",
-      tone: "warning",
-      text: latestSync
-        ? "Existuje poslední běh načítání, ale tento blok neprokazuje zapnutý cloud scheduler."
-        : "Není doložený žádný běh, který by prokazoval pravidelné cloud načítání."
+      value: cloudSync.isRunning ? "běží" : (cloudSync.latestCloud ? "čeká na další běh" : "neověřeno"),
+      tone: cloudSync.isRunning ? "success" : "warning",
+      text: cloudSync.isRunning
+        ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Další běh je po 30 minutách.`
+        : (cloudSync.latestCloud
+          ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Čekám na čerstvý úspěšný běh.`
+          : "Zatím není doložený cloudový běh načítání.")
     },
     {
       label: "Vše běží?",
-      value: mailboxProblems || messageProblems ? "ne, jsou problémy" : "částečně",
-      tone: mailboxProblems || messageProblems ? "danger" : "warning",
-      text: mailboxProblems || messageProblems
-        ? "Některé schránky nebo zprávy mají problém. Odesílání mimo systém je stále vypnuté."
-        : "Načítání má stav k ověření. Ostré odesílání datovek, e-mailů a SMS není zapnuté."
+      value: allCoreChecksOk ? "ano" : (mailboxProblems || messageProblems ? "ne, jsou problémy" : "částečně"),
+      tone: allCoreChecksOk ? "success" : (mailboxProblems || messageProblems ? "danger" : "warning"),
+      text: allCoreChecksOk
+        ? "Načítání běží, všech 7 schránek je aktivních a nejsou hlášené problémy. Odesílání mimo systém zůstává vypnuté."
+        : (mailboxProblems || messageProblems
+          ? "Některé schránky nebo zprávy mají problém. Odesílání mimo systém je stále vypnuté."
+          : "Načítání je zapnuté, ale ještě není splněná kompletní ostrá kontrola 7/7 schránek.")
     },
     {
       label: "Odesílání datových zpráv",
@@ -21768,7 +21795,7 @@ function dataBoxPlusEventLogBlock() {
           <h3>Log událostí</h3>
           <p>Pravdivý provozní stav DSP. Pokud něco není ověřené, není to označené jako běžící.</p>
         </div>
-        ${dataBoxPlusBadge(latestSync ? "poslední stav" : "čeká na běh", latestSync ? "warning" : "neutral")}
+        ${dataBoxPlusBadge(cloudSync.isRunning ? "cloud běží" : (latestSync ? "poslední stav" : "čeká na běh"), cloudSync.isRunning ? "success" : (latestSync ? "warning" : "neutral"))}
       </div>
       <div class="ds-plus-event-status-grid">
         ${statuses.map((item) => `

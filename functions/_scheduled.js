@@ -10,7 +10,7 @@ export async function onScheduled(event, env, ctx) {
   }
 
   ctx.waitUntil(runDataBoxPlusSync(env, { id: "cloudflare-scheduled", name: "Autopilot" }, {
-    triggerType: "background"
+    triggerType: "cloud-scheduler"
   }).catch((error) => {
     console.error("data_box_plus.scheduled_failed", {
       message: error?.message,
