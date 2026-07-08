@@ -16757,7 +16757,7 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
                   <div class="driver-tablet-preview-brand__headline">
                     <strong>Dnešní trasa</strong>
                   </div>
-                  <small>Design preview - bez ostrých akcí</small>
+                  <small>Preview bez ostrých akcí</small>
                 </div>
               </div>
               <div class="driver-tablet-preview-cockpit__chips" aria-label="Zakladni informace">
@@ -16811,7 +16811,7 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
                     <strong>${escapeHtml(collectionRoutesSourceDriverContainerLabel(selectedRow))}</strong>
                   </article>
                   <article class="driver-tablet-preview-stop-cta">
-                    ${collectionRoutesDriverTabletPreviewAction("HOTOVO A DALŠÍ ZASTÁVKA", "done", "done")}
+                    ${collectionRoutesDriverTabletPreviewAction("HOTOVO A DALŠÍ", "done", "done")}
                   </article>
                 </div>
               </section>
@@ -16883,10 +16883,10 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
 
             <footer class="driver-tablet-preview-footer" aria-label="Stav preview">
               ${collectionRoutesDriverTabletPreviewIcon("cloud")}
-              <span>Poslední synchronizace: dnes 08:42</span>
+              <span>Sync dnes 08:42</span>
               <i aria-hidden="true"></i>
               <strong>Online</strong>
-              <span>Design preview - bez ostrých akcí</span>
+              <span>Preview bez ostrých akcí</span>
             </footer>
           </div>
         </div>
