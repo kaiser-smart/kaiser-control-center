@@ -5,6 +5,7 @@ import {
   fetchDataBoxMessageAttachments,
   fetchDataBoxMessageMetadata
 } from "./data-box-isds-client.js";
+import { sendDataBoxForwardNotification } from "./notification-service.js";
 
 const EXPECTED_MAILBOX_COUNT = 7;
 const DEFAULT_LIMIT = 100;
@@ -88,6 +89,49 @@ function maskSecret(value) {
 
 function actorName(currentUser) {
   return cleanString(currentUser?.name || currentUser?.email || currentUser?.id || "system");
+}
+
+function normalizeEmail(value) {
+  const email = cleanString(value).toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+}
+
+function sendReadiness(env = {}) {
+  const emailProvider = cleanString(env.EMAIL_PROVIDER || (env.SENDGRID_API_KEY ? "sendgrid" : "")).toLowerCase();
+  const emailReady = emailProvider === "sendgrid" && Boolean(cleanString(env.EMAIL_FROM) && cleanString(env.SENDGRID_API_KEY || env.EMAIL_API_KEY));
+  const dataBoxReady = Boolean(
+    cleanString(env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT)
+    && cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY)
+  );
+  const smsReady = Boolean(
+    cleanString(env.TWILIO_ACCOUNT_SID)
+    && cleanString(env.TWILIO_AUTH_TOKEN)
+    && cleanString(env.TWILIO_MESSAGING_SERVICE_SID)
+  );
+
+  return {
+    dataBox: {
+      enabled: dataBoxReady,
+      label: dataBoxReady ? "zapnuto" : "čeká na DS bránu",
+      text: dataBoxReady
+        ? "Nová zpráva a odpověď se odešlou ze serveru až po finálním potvrzení člověka."
+        : "Chybí DATA_BOX_REPLY_ENDPOINT a DATA_BOX_REPLY_API_KEY. Bez nich DSP datovou zprávu neodešle."
+    },
+    email: {
+      enabled: emailReady,
+      label: emailReady ? "zapnuto" : "čeká na mail provider",
+      text: emailReady
+        ? "E-mailové předání je napojené na serverový SendGrid a odešle se až po potvrzení."
+        : "Chybí produkční SendGrid nastavení. E-mail se bez něj neodešle."
+    },
+    sms: {
+      enabled: smsReady,
+      label: smsReady ? "zapnuto" : "čeká na SMS provider",
+      text: smsReady
+        ? "SMS odesílání má serverový Twilio Messaging Service."
+        : "Chybí TWILIO_MESSAGING_SERVICE_SID. Verify služba nestačí pro běžné ostré SMS odesílání."
+    }
+  };
 }
 
 function userId(currentUser) {
@@ -1323,6 +1367,7 @@ export async function getDataBoxPlusStatus(env) {
         pendingPatterns: numberValue(pendingPatternsRow?.count),
         strongAreas: ["Faktury", "Registr smluv", "ČSSZ"]
       },
+      sendReadiness: sendReadiness(env),
       background: {
         intervalMinutes: 30,
         enabled: cleanString(env.DATA_BOX_PLUS_BACKGROUND_ENABLED || "true") !== "false",
@@ -1791,6 +1836,119 @@ export async function getDataBoxPlusAttachmentFile(env, messageId, attachmentId)
       "Cache-Control": "no-store"
     }
   };
+}
+
+export async function sendDataBoxPlusMessageEmail(env, messageId, payload = {}, currentUser = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const id = cleanString(messageId);
+  const recipientEmail = normalizeEmail(payload.recipientEmail || payload.recipient || payload.to);
+  const confirmed = payload.confirmed === true;
+
+  if (!confirmed) {
+    throw new DataBoxPlusStoreError("Odeslání e-mailu vyžaduje finální potvrzení.", 409, "data_box_plus_email_confirmation_required");
+  }
+  if (!recipientEmail) {
+    throw new DataBoxPlusStoreError("Chybí platný e-mail příjemce.", 400, "data_box_plus_email_recipient_missing");
+  }
+
+  const message = await getDataBoxPlusMessage(env, id);
+  const mailbox = await db
+    .prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1")
+    .bind(cleanString(message.mailboxId))
+    .first();
+  const actor = actorName(currentUser);
+  const subject = cleanString(payload.subject || message.subject || "Datová zpráva");
+  const body = cleanString(payload.body || payload.note || `Předávám datovou zprávu: ${subject}`);
+  const actionId = idValue("dbp-action");
+
+  await db
+    .prepare(`
+      INSERT INTO data_box_plus_action_log (
+        id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+      )
+      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      actionId,
+      id,
+      actor,
+      "Odeslání e-mailu",
+      JSON.stringify({ recipientEmail, subject, bodyPreview: body.slice(0, 500), confirmed: true }),
+      new Date().toISOString(),
+      "sending",
+      `${actor} potvrdil e-mailové předání na ${recipientEmail}.`
+    )
+    .run();
+
+  const result = await sendDataBoxForwardNotification(env, {
+    ...message,
+    dataBoxLabel: cleanString(mailbox?.name || mailbox?.company || message.mailboxId),
+    attachments: Array.isArray(message.attachments) ? message.attachments.map((attachment) => ({
+      filename: attachment.fileName,
+      mimeType: attachment.mimeType
+    })) : []
+  }, {
+    recipientEmail,
+    subject,
+    body,
+    fromName: "Datové schránky Plus"
+  });
+
+  const sent = result.status === "sent";
+  await db
+    .prepare(`
+      UPDATE data_box_plus_action_log
+      SET result = ?,
+          audit_note = ?
+      WHERE id = ?
+    `)
+    .bind(
+      sent ? "sent" : cleanString(result.status || "failed"),
+      sent
+        ? `E-mailové předání na ${recipientEmail} bylo odeslané přes serverový SendGrid.`
+        : `E-mailové předání na ${recipientEmail} se nepodařilo odeslat: ${cleanString(result.errorMessage || "bez detailu")}.`,
+      actionId
+    )
+    .run();
+
+  if (!sent) {
+    throw new DataBoxPlusStoreError(
+      cleanString(result.errorMessage || "E-mail se nepodařilo odeslat."),
+      result.status === "skipped" ? 503 : 502,
+      "data_box_plus_email_send_failed"
+    );
+  }
+
+  await db
+    .prepare(`
+      UPDATE data_box_plus_messages
+      SET status = 'Předáno',
+          assigned_to = ?,
+          suggested_action = ?,
+          primary_action = 'Detail předání',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    .bind(recipientEmail, `E-mailově předáno na ${recipientEmail}.`, id)
+    .run();
+  await updateMailboxCounters(db, cleanString(message.mailboxId));
+
+  return {
+    apiStatus: "ready",
+    status: "sent",
+    actionLogId: actionId,
+    result,
+    message: await getDataBoxPlusMessage(env, id),
+    notice: `E-mail byl odeslán na ${recipientEmail}.`
+  };
+}
+
+export async function sendDataBoxPlusReply(env) {
+  const readiness = sendReadiness(env);
+  if (!readiness.dataBox.enabled) {
+    throw new DataBoxPlusStoreError(readiness.dataBox.text, 503, "data_box_plus_ds_sender_missing");
+  }
+  throw new DataBoxPlusStoreError("DS odesílací brána je dostupná, ale DSP nemá dokončenou mapu payloadu pro ostré odeslání datové zprávy.", 501, "data_box_plus_ds_sender_not_implemented");
 }
 
 export async function listDataBoxPlusRecommendations(env, filters = {}) {

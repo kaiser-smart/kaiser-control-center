@@ -1182,6 +1182,7 @@ const dataBoxPlusState = {
   recommendations: [],
   rules: [],
   syncRuns: [],
+  sendReadiness: null,
   learning: null,
   instructionDrafts: {},
   instructionLoadingId: "",
@@ -21710,6 +21711,7 @@ function dataBoxPlusEventLogBlock() {
   const mailboxes = dataBoxPlusMailboxes();
   const latestSync = Array.isArray(dataBoxPlusState.syncRuns) ? dataBoxPlusState.syncRuns[0] : null;
   const cloudSync = dataBoxPlusCloudSyncInfo(dataBoxPlusState.syncRuns);
+  const readiness = dataBoxPlusState.sendReadiness || {};
   const activeMailboxes = mailboxes.filter((mailbox) => mailbox.credentialActive !== false && mailbox.status !== "čeká na přístup").length;
   const mailboxProblems = mailboxes.reduce((sum, mailbox) => sum + (Number(mailbox.problemCount || 0) || 0), 0);
   const messages = dataBoxPlusMessages();
@@ -21752,32 +21754,32 @@ function dataBoxPlusEventLogBlock() {
           : "Zatím není doložený cloudový běh načítání.")
     },
     {
-      label: "Vše běží?",
-      value: allCoreChecksOk ? "ano" : (mailboxProblems || messageProblems ? "ne, jsou problémy" : "částečně"),
+      label: "Celkový ostrý stav",
+      value: allCoreChecksOk ? "plný provoz" : (mailboxProblems || messageProblems ? "provoz s chybami" : "částečný provoz"),
       tone: allCoreChecksOk ? "success" : (mailboxProblems || messageProblems ? "danger" : "warning"),
       text: allCoreChecksOk
-        ? "Načítání běží, všech 7 schránek je aktivních a nejsou hlášené problémy. Odesílání mimo systém zůstává vypnuté."
+        ? "Načítání běží, všech 7 schránek je aktivních a nejsou hlášené problémy."
         : (mailboxProblems || messageProblems
-          ? "Některé schránky nebo zprávy mají problém. Odesílání mimo systém je stále vypnuté."
+          ? "Některé schránky nebo zprávy mají problém. Nejde o kompletně zelený ostrý stav."
           : "Načítání je zapnuté, ale ještě není splněná kompletní ostrá kontrola 7/7 schránek.")
     },
     {
       label: "Odesílání datových zpráv",
-      value: "vypnuto",
-      tone: "blocked",
-      text: "Nová zpráva a odpověď jsou zatím pracovní návrh. Bez další schválené fáze se datová zpráva neodešle."
+      value: readiness.dataBox?.label || "čeká na DS bránu",
+      tone: readiness.dataBox?.enabled ? "success" : "blocked",
+      text: readiness.dataBox?.text || "Chybí serverová DS odesílací brána. Bez ní DSP datovou zprávu neodešle."
     },
     {
       label: "E-mail",
-      value: "jen návrh",
-      tone: "warning",
-      text: "DSP může připravit interní návrh e-mailu. E-mail se neodešle mimo systém."
+      value: readiness.email?.label || "čeká na mail provider",
+      tone: readiness.email?.enabled ? "success" : "warning",
+      text: readiness.email?.text || "Chybí serverový mail provider."
     },
     {
       label: "SMS",
-      value: "nezapojeno",
-      tone: "blocked",
-      text: "DSP nemá zapnuté ostré SMS odesílání."
+      value: readiness.sms?.label || "čeká na SMS provider",
+      tone: readiness.sms?.enabled ? "success" : "blocked",
+      text: readiness.sms?.text || "Chybí serverový SMS provider."
     },
     {
       label: "Napojené schránky",
@@ -22134,6 +22136,7 @@ function dataBoxPlusDetailOverlay() {
           <div><span>${escapeHtml(mailbox?.name || "Schránka")}</span><h2 id="ds-plus-detail-title">${escapeHtml(message.subject)}</h2></div>
           <div class="ds-plus-detail__head-actions">
             <button class="primary-action" type="button" data-ds-plus-reply="${escapeHtml(message.id)}">Odpovědět</button>
+            <button class="secondary-link" type="button" data-ds-plus-email="${escapeHtml(message.id)}">Odeslat e-mail</button>
             <button class="secondary-link" type="button" data-ds-plus-close-detail>Zavřít</button>
           </div>
         </div>
@@ -30453,6 +30456,7 @@ async function loadDataBoxPlusData(options = {}) {
     ]);
     dataBoxPlusState.apiStatus = statusResult.apiStatus || "ready";
     dataBoxPlusState.mailboxes = Array.isArray(statusResult.mailboxes) ? statusResult.mailboxes : [];
+    dataBoxPlusState.sendReadiness = statusResult.sendReadiness || null;
     dataBoxPlusState.learning = statusResult.learning || null;
     dataBoxPlusState.messages = Array.isArray(messagesResult.messages) ? messagesResult.messages : [];
     dataBoxPlusState.recommendations = Array.isArray(recommendationsResult.recommendations) ? recommendationsResult.recommendations : [];
@@ -30595,6 +30599,51 @@ async function runDataBoxPlusServiceSync() {
     await loadDataBoxPlusData({ force: true, renderAfter: false });
   } catch (error) {
     dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Servisní načtení se nepodařilo spustit.");
+  }
+}
+
+async function sendDataBoxPlusEmail(messageId) {
+  const id = String(messageId || "").trim();
+  const message = dataBoxPlusMessageById(id);
+  if (!id || !message) return;
+  const readiness = dataBoxPlusState.sendReadiness || {};
+  if (!readiness.email?.enabled) {
+    dataBoxPlusState.notice = readiness.email?.text || "E-mailový provider není připravený.";
+    render();
+    return;
+  }
+  const recipientEmail = window.prompt("Kam e-mail odeslat?", message.assignedTo?.includes("@") ? message.assignedTo : "faktury@kaiserservis.cz");
+  const cleanRecipient = String(recipientEmail || "").trim();
+  if (!cleanRecipient) return;
+  const subject = window.prompt("Předmět e-mailu", message.subject || "Datová zpráva");
+  const cleanSubject = String(subject || "").trim() || message.subject || "Datová zpráva";
+  const body = window.prompt("Krátká zpráva do e-mailu", `Předávám datovou zprávu: ${message.subject || ""}`);
+  const cleanBody = String(body || "").trim();
+  if (!window.confirm(`Opravdu odeslat e-mail na ${cleanRecipient}? Akce se zapíše do historie DSP.`)) {
+    return;
+  }
+  dataBoxPlusState.notice = "Odesílám e-mail přes serverový provider.";
+  render();
+  try {
+    const result = await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(id)}/email`, {
+      method: "POST",
+      body: JSON.stringify({
+        confirmed: true,
+        recipientEmail: cleanRecipient,
+        subject: cleanSubject,
+        body: cleanBody
+      })
+    });
+    dataBoxPlusState.notice = result.notice || `E-mail byl odeslán na ${cleanRecipient}.`;
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+    if (result.message?.id) {
+      const index = dataBoxPlusState.messages.findIndex((item) => item.id === result.message.id);
+      if (index >= 0) dataBoxPlusState.messages[index] = result.message;
+    }
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "E-mail se nepodařilo odeslat.");
+  } finally {
+    render();
   }
 }
 
@@ -39765,6 +39814,13 @@ document.addEventListener("click", async (event) => {
     dataBoxPlusState.replyDraftMessageId = dataBoxPlusReply.dataset.dsPlusReply || "";
     dataBoxPlusState.notice = "Odpověď je otevřená jako návrh. Bez potvrzení se nic neodešle.";
     render();
+    return;
+  }
+
+  const dataBoxPlusEmail = event.target.closest("[data-ds-plus-email]");
+  if (dataBoxPlusEmail) {
+    event.preventDefault();
+    await sendDataBoxPlusEmail(dataBoxPlusEmail.dataset.dsPlusEmail || "");
     return;
   }
 

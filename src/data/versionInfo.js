@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.473"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.474"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: ostrý e-mail",
+    text: "DSP má serverové e-mailové předání zprávy přes SendGrid po finálním potvrzení uživatele. Provozní stav nově odděluje cloud načítání, e-mail, DS odesílací bránu, SMS provider a celkový ostrý stav."
+  },
   {
     title: "Datové schránky Plus: cloud načítání",
     text: "DSP má ostrý cloud runner pro načítání každých 30 minut. Log událostí rozlišuje čerstvý cloudový běh, stav 7 schránek a ponechává odesílání datovek, e-mailů a SMS vypnuté."
