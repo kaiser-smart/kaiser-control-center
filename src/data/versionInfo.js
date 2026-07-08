@@ -26,7 +26,7 @@ export const versionNews = [
   },
   {
     title: "Trasy svozu: rychlé Stanoviště ze snapshotu",
-    text: "Stanoviště a Svozové trasy při běžném otevření čtou krátký Svoz Kaiser výřez z uloženého D1 snapshotu místo pomalého live Vistos exportu. Ruční refresh z Vistosu zůstává oddělený, neblokuje ho nezávislý hlídač a přibyl filtr Jen s chybou."
+    text: "Stanoviště a Svozové trasy při běžném otevření čtou krátký Svoz Kaiser výřez z uloženého D1 snapshotu místo pomalého live Vistos exportu. Snapshot řádky mají kompatibilní Svoz Kaiser příznak, HTML se revaliduje a přibyl filtr Jen s chybou."
   },
   {
     title: "Trasy svozu: skutečné Adresní místo z Vistosu",

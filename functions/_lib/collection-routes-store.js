@@ -5323,6 +5323,7 @@ function rowToBatch(row) {
 }
 
 function rowToImportRow(row) {
+  const summary = parseJson(row?.summary_json, {});
   return {
     id: cleanString(row?.id),
     batchId: cleanString(row?.batch_id),
@@ -5330,7 +5331,8 @@ function rowToImportRow(row) {
     sourceEntity: cleanString(row?.source_entity),
     sourceId: cleanString(row?.source_id),
     status: cleanString(row?.status),
-    summary: parseJson(row?.summary_json, {}),
+    svozKaiserIncluded: summary.svozKaiserIncluded === true,
+    summary,
     issues: parseJson(row?.issues_json, []),
     createdAt: cleanString(row?.created_at)
   };

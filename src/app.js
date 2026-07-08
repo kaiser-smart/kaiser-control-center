@@ -19155,7 +19155,7 @@ function collectionRoutesDetailCellClass(item, cell) {
 
 function collectionRoutesVistosSourceRows() {
   return collectionRoutesSvozKaiserFieldConfirmed()
-    ? collectionRoutesPilotState.kommunalPairingRows.filter((row) => row?.svozKaiserIncluded === true)
+    ? collectionRoutesPilotState.kommunalPairingRows.filter((row) => collectionRoutesImportRowSummary(row).svozKaiserIncluded === true)
     : collectionRoutesPilotState.kommunalPairingRows;
 }
 

@@ -102,6 +102,10 @@ await writeFile(path.join(dist, "_redirects"), [
   "/receivables/* /pohledavky/index.html 200",
   "/design/neumorphic* /index.html 200"
 ].join("\n") + "\n");
+await writeFile(path.join(dist, "_headers"), [
+  "/*",
+  "  Cache-Control: no-cache"
+].join("\n") + "\n");
 
 for (const route of routes) {
   if (route === "/") {
