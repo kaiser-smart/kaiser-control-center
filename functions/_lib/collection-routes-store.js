@@ -4910,7 +4910,7 @@ async function loadVistosKommunalPreviewData(env) {
     "ContractRow",
     svozKaiserRowsForDetail,
     contractRowColumns,
-    { maxRows: 25 }
+    { maxRows: 150 }
   );
   if (detailEnrichment.rows.length) {
     const enrichedById = new Map(detailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
