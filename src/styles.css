@@ -8180,7 +8180,7 @@ body:has(.driver-tablet-preview-page--dark) {
   justify-self: center;
   width: clamp(20px, 1.72vw, 23px);
   aspect-ratio: 1;
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 42%, var(--border-soft));
   border-radius: 999px;
   background:
     radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.32), transparent 34%),
