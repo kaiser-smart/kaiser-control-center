@@ -32043,6 +32043,10 @@ body:has(.ds-plus-page) {
   padding: 22px;
 }
 
+.ds-plus-reply-overlay {
+  z-index: 90;
+}
+
 .ds-plus-detail-backdrop {
   position: absolute;
   inset: 0;
@@ -32124,6 +32128,68 @@ body:has(.ds-plus-page) {
   gap: 10px;
 }
 
+.ds-plus-reply-modal {
+  width: min(920px, 100%);
+}
+
+.ds-plus-reply-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ds-plus-reply-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid #e2e8df;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.ds-plus-reply-step--active {
+  border-color: #2f7d46;
+  background: #f6fbf5;
+}
+
+.ds-plus-reply-step > span {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e7f4e4;
+  color: #245d36;
+  font-weight: 850;
+}
+
+.ds-plus-reply-step h3,
+.ds-plus-reply-step p,
+.ds-plus-reply-step small,
+.ds-plus-reply-attachments h3,
+.ds-plus-reply-attachments p,
+.ds-plus-reply-check h3 {
+  margin: 0;
+}
+
+.ds-plus-reply-step h3 {
+  color: #1f2a22;
+  font-size: 0.96rem;
+}
+
+.ds-plus-reply-step p {
+  color: #344035;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.ds-plus-reply-step small,
+.ds-plus-reply-attachments p {
+  color: #526052;
+  line-height: 1.35;
+}
+
 .ds-plus-reply-draft {
   display: grid;
   gap: 12px;
@@ -32162,6 +32228,37 @@ body:has(.ds-plus-page) {
   color: #202821;
   font: inherit;
   font-weight: 600;
+}
+
+.ds-plus-reply-attachments {
+  display: grid;
+  gap: 10px;
+}
+
+.ds-plus-reply-check {
+  display: grid;
+  gap: 12px;
+  border-color: #c7dfc3;
+  background: #f8fcf7;
+}
+
+.ds-plus-reply-check dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.ds-plus-reply-check dt {
+  color: #657164;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.ds-plus-reply-check dd {
+  margin: 2px 0 0;
+  color: #1f2a22;
+  font-weight: 800;
 }
 
 .ds-plus-facts article {
@@ -32263,6 +32360,8 @@ body:has(.ds-plus-page) {
   .ds-plus-instruction-plan,
   .ds-plus-learning-status__metrics,
   .ds-plus-technical-info dl,
+  .ds-plus-reply-flow,
+  .ds-plus-reply-check dl,
   .ds-plus-detail-section--header dl,
   .ds-plus-facts {
     grid-template-columns: 1fr;

@@ -21938,35 +21938,98 @@ function dataBoxPlusAttachments(message) {
   `;
 }
 
-function dataBoxPlusReplyDraft(message) {
-  if (dataBoxPlusState.replyDraftMessageId !== message.id) return "";
+function dataBoxPlusReplyOverlay() {
+  const message = dataBoxPlusMessageById(dataBoxPlusState.replyDraftMessageId);
+  if (!message) return "";
+  const mailbox = dataBoxPlusMailbox(message);
+  const recipientName = message.senderName || "Odesílatel původní zprávy";
+  const recipientBoxId = message.senderBoxId || "ID schránky zatím není načtené";
+  const senderName = mailbox?.name || mailbox?.company || "Vybraná firemní schránka";
+  const senderBoxId = mailbox?.isdsId || message.recipientBoxId || "ID schránky zatím není načtené";
   return `
-    <section class="ds-plus-detail-section ds-plus-reply-draft" aria-label="Odpověď na datovou zprávu">
-      <div class="ds-plus-reply-draft__head">
-        <div>
-          <h3>Odpověď</h3>
-          <p>Připraví se návrh odpovědi na tuto zprávu. Bez potvrzení se nic neodešle.</p>
+    <div class="ds-plus-detail-overlay ds-plus-reply-overlay" role="presentation">
+      <button class="ds-plus-detail-backdrop" type="button" data-ds-plus-reply-close aria-label="Zavřít odpověď"></button>
+      <section class="ds-plus-detail ds-plus-reply-modal" role="dialog" aria-modal="true" aria-labelledby="ds-plus-reply-title">
+        <div class="ds-plus-detail__head">
+          <div>
+            <span>Odpověď na datovou zprávu</span>
+            <h2 id="ds-plus-reply-title">${escapeHtml(message.subject || "Odpověď")}</h2>
+          </div>
+          <button class="secondary-link" type="button" data-ds-plus-reply-close>Zavřít</button>
         </div>
-        <button class="secondary-link" type="button" data-ds-plus-reply-close>Zavřít</button>
-      </div>
-      <label>
-        <span>Text odpovědi</span>
-        <textarea rows="5" placeholder="Napiš odpověď..."></textarea>
-      </label>
-      <div class="ds-plus-detail-actions">
-        ${dataBoxPlusActionButton({
-          label: "Připravit odpověď",
-          variant: "primary-action",
-          attrs: `data-ds-plus-pilot-action="Připravit odpověď"`,
-          help: "Vznikne pouze návrh odpovědi k ruční kontrole. Datová zpráva se bez výslovného potvrzení neodešle."
-        })}
-        ${dataBoxPlusActionButton({
-          label: "Přidat přílohu",
-          attrs: `data-ds-plus-pilot-action="Přidat přílohu k odpovědi"`,
-          help: "Příloha se zatím jen připraví do návrhu. Nic se neodešle mimo systém bez závěrečné kontroly."
-        })}
-      </div>
-    </section>
+        <div class="ds-plus-detail__body">
+          <section class="ds-plus-reply-flow" aria-label="Postup odpovědi">
+            <article class="ds-plus-reply-step ds-plus-reply-step--active">
+              <span>1</span>
+              <div>
+                <h3>Komu odpovídáš</h3>
+                <p>${escapeHtml(recipientName)}</p>
+                <small>ID DS: ${escapeHtml(recipientBoxId)}</small>
+              </div>
+            </article>
+            <article class="ds-plus-reply-step">
+              <span>2</span>
+              <div>
+                <h3>Z jaké schránky</h3>
+                <p>${escapeHtml(senderName)}</p>
+                <small>ID DS: ${escapeHtml(senderBoxId)}</small>
+              </div>
+            </article>
+            <article class="ds-plus-reply-step">
+              <span>3</span>
+              <div>
+                <h3>Kontrola</h3>
+                <p>Nic se zatím neodesílá.</p>
+                <small>Odeslání bude až po samostatném potvrzení.</small>
+              </div>
+            </article>
+          </section>
+          <section class="ds-plus-detail-section ds-plus-reply-draft" aria-label="Text odpovědi">
+            <div class="ds-plus-reply-draft__head">
+              <div>
+                <h3>Text odpovědi</h3>
+                <p>Napiš návrh odpovědi. Před odesláním uvidíš kontrolu.</p>
+              </div>
+            </div>
+            <label>
+              <span>Návrh odpovědi</span>
+              <textarea rows="7" placeholder="Napiš odpověď..."></textarea>
+            </label>
+          </section>
+          <section class="ds-plus-detail-section ds-plus-reply-attachments">
+            <h3>Přílohy</h3>
+            <p>Zatím nejsou přidané žádné přílohy.</p>
+            ${dataBoxPlusActionButton({
+              label: "Přidat přílohu",
+              attrs: `data-ds-plus-pilot-action="Přidat přílohu k odpovědi"`,
+              help: "Příloha se zatím jen připraví do návrhu. Nic se neodešle mimo systém bez závěrečné kontroly."
+            })}
+          </section>
+          <section class="ds-plus-detail-section ds-plus-reply-check">
+            <h3>Kontrola před odesláním</h3>
+            <dl>
+              <div><dt>Odesílatel</dt><dd>${escapeHtml(senderName)}</dd></div>
+              <div><dt>Příjemce</dt><dd>${escapeHtml(recipientName)}</dd></div>
+              <div><dt>Stav</dt><dd>Návrh odpovědi</dd></div>
+              <div><dt>Odeslání mimo systém</dt><dd>Ne, čeká na potvrzení</dd></div>
+            </dl>
+            <div class="ds-plus-detail-actions">
+              ${dataBoxPlusActionButton({
+                label: "Pokračovat ke kontrole",
+                variant: "primary-action",
+                attrs: `data-ds-plus-pilot-action="Pokračovat ke kontrole odpovědi"`,
+                help: "Připraví se kontrola odpovědi. Datová zpráva se v tomto kroku ještě neodešle."
+              })}
+              ${dataBoxPlusActionButton({
+                label: "Uložit rozepsané",
+                attrs: `data-ds-plus-pilot-action="Uložit rozepsanou odpověď"`,
+                help: "Návrh odpovědi se připraví k pozdějšímu dopracování. Nic se neodešle mimo systém."
+              })}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -22001,7 +22064,6 @@ function dataBoxPlusDetailOverlay() {
           </section>
           ${dataBoxPlusSummary(message)}
           ${dataBoxPlusAttachments(message)}
-          ${dataBoxPlusReplyDraft(message)}
           ${dataBoxPlusStatusHistory(message, workflow)}
           ${dataBoxPlusTechnicalInfo(message)}
         </div>
@@ -22046,6 +22108,7 @@ function dataBoxPlusPage(moduleItem, user) {
       ${dataBoxPlusTabNav()}
       ${dataBoxPlusActivePanel()}
       ${dataBoxPlusDetailOverlay()}
+      ${dataBoxPlusReplyOverlay()}
       ${dataBoxPlusComposeOverlay()}
     </main>
   `;
