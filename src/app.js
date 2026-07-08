@@ -3302,10 +3302,15 @@ function formatDateTime(value) {
     return "neuvedeno";
   }
 
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "neuvedeno";
+  }
+
   return new Intl.DateTimeFormat("cs-CZ", {
     dateStyle: "medium",
     timeStyle: "short"
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function formatFileSize(value) {
@@ -24901,7 +24906,9 @@ function ensureDriverReportsData(options = {}) {
 }
 
 function driverReportsApplyListPayload(result) {
-  driverReportsState.items = Array.isArray(result.requests) ? result.requests : [];
+  driverReportsState.items = Array.isArray(result.requests)
+    ? result.requests.filter((item) => item && typeof item === "object")
+    : [];
   driverReportsState.permissions = result.permissions || driverReportsState.permissions;
   driverReportsState.apiStatus = result.apiStatus || "ready";
   driverReportsState.loaded = true;
@@ -32529,8 +32536,12 @@ async function loadFleetVehicles(options = {}) {
 
   try {
     const result = await apiJson("/api/vehicles");
-    fleetVehiclesState.vehicles = Array.isArray(result.vehicles) ? result.vehicles : [];
-    fleetVehiclesState.driverCandidates = Array.isArray(result.driverCandidates) ? result.driverCandidates : [];
+    fleetVehiclesState.vehicles = Array.isArray(result.vehicles)
+      ? result.vehicles.filter((item) => item && typeof item === "object")
+      : [];
+    fleetVehiclesState.driverCandidates = Array.isArray(result.driverCandidates)
+      ? result.driverCandidates.filter((item) => item && typeof item === "object")
+      : [];
     fleetVehiclesState.summary = result.summary || null;
     fleetVehiclesState.apiStatus = result.apiStatus || "waiting";
     fleetVehiclesState.provider = result.provider || "";
