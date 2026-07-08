@@ -253,6 +253,7 @@ const FLEET_TAB_WAITING_MESSAGES = {
 };
 const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
 const VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE = `${VEHICLE_TRACKING_BASE_ROUTE}/soft-metal-preview`;
+const DRIVER_TABLET_SOFT_METAL_PREVIEW_ROUTE = "/ridicsky-tablet/soft-metal-preview";
 const VEHICLE_TRACKING_PREVIEW_THEME_STORAGE_KEY = "smart_odpady_vehicle_tracking_preview_theme";
 const VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT = "light";
 const VEHICLE_TRACKING_PREVIEW_THEMES = new Set(["light", "dark"]);
@@ -1297,6 +1298,14 @@ function isVehicleTrackingSoftMetalPreviewPath(pathname = window.location.pathna
   return normalizePath(pathname) === VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE;
 }
 
+function isDriverTabletSoftMetalPreviewPath(pathname = window.location.pathname) {
+  return normalizePath(pathname) === DRIVER_TABLET_SOFT_METAL_PREVIEW_ROUTE;
+}
+
+function isPublicDesignPreviewPath(pathname = window.location.pathname) {
+  return isVehicleTrackingSoftMetalPreviewPath(pathname) || isDriverTabletSoftMetalPreviewPath(pathname);
+}
+
 function normalizeVehicleTrackingPreviewTheme(value) {
   return VEHICLE_TRACKING_PREVIEW_THEMES.has(value) ? value : VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT;
 }
@@ -1778,6 +1787,185 @@ const DESIGN_ICON_ASSET_VERSION = "0.1.330";
 
 function themePreviewIconFile(file) {
   return `<img class="theme-icon-img" src="/design-icons/${file}?v=${DESIGN_ICON_ASSET_VERSION}" alt="" aria-hidden="true" loading="lazy">`;
+}
+
+function driverTabletSoftMetalIcon(name, tone = "green", className = "") {
+  const classes = ["driver-tablet-icon", `icon-tone-${tone}`, className].filter(Boolean).join(" ");
+  return `<span class="${escapeHtml(classes)}">${themePreviewIcon(name)}</span>`;
+}
+
+function driverTabletRouteStops() {
+  const stops = [
+    { number: "2", name: "Vienna Point a.s.", address: "Brno, V\u00eddensk\u00e1 121", amount: "1x 30 l" },
+    { number: "3", name: "ASV SERVISCAR s.r.o.", address: "Brno, Sokolova 63a", amount: "1x 30 l" },
+    { number: "4", name: "VV SaZ s.r.o.", address: "Brno, Hudcova 660/76d", amount: "1x 30 l" }
+  ];
+
+  return stops.map((stop) => `
+    <article class="driver-tablet-stop-card">
+      <span class="driver-tablet-stop-card__index">${escapeHtml(stop.number)}</span>
+      <span class="driver-tablet-stop-card__copy">
+        <strong>${escapeHtml(stop.name)}</strong>
+        <small>${escapeHtml(stop.address)}</small>
+      </span>
+      <span class="driver-tablet-stop-card__amount">${escapeHtml(stop.amount)}</span>
+    </article>
+  `).join("");
+}
+
+function driverTabletQuickTools() {
+  const tools = [
+    { icon: "route", label: "Navigovat" },
+    { icon: "warning", label: "Nahl\u00e1sit probl\u00e9m" },
+    { icon: "costs", label: "Pomoc / \u0160arlota" },
+    { icon: "usersRoles", label: "Mus\u00edm vysypat" },
+    { icon: "absence", label: "P\u0159est\u00e1vka" }
+  ];
+
+  return tools.map((tool) => `
+    <button class="driver-tablet-tool" type="button">
+      ${driverTabletSoftMetalIcon(tool.icon, "green")}
+      <span>${escapeHtml(tool.label)}</span>
+    </button>
+  `).join("");
+}
+
+function driverTabletInfoChip(icon, label, value, tone = "graphite") {
+  return `
+    <article class="driver-tablet-info-chip">
+      ${driverTabletSoftMetalIcon(icon, tone)}
+      <span>
+        <small>${label}</small>
+        <strong>${value}</strong>
+      </span>
+    </article>
+  `;
+}
+
+function driverTabletSoftMetalPreviewPage() {
+  return `
+    <main class="driver-tablet-page driver-tablet-page--soft-metal-preview" aria-labelledby="driver-tablet-preview-title">
+      <section class="driver-tablet-canvas" aria-label="N&aacute;hled aplikace pro &rcaron;idi&ccaron;sk&yacute; tablet">
+        <div class="driver-tablet-app">
+          <header class="driver-tablet-topbar">
+            <a class="driver-tablet-logo" href="/" aria-label="Zp&ecaron;t na Smart odpady">
+              <img src="/logo-kaiser.svg" alt="kaiser." loading="eager">
+            </a>
+            <div class="driver-tablet-title">
+              <span>&Rcaron;IDI&Ccaron;SK&Yacute; TABLET</span>
+              <h1 id="driver-tablet-preview-title">Dne&scaron;n&iacute; trasa</h1>
+            </div>
+            <div class="driver-tablet-topbar__meta" aria-label="Stav sm&ecaron;ny">
+              ${driverTabletInfoChip("absence", "DEN / T&Yacute;DEN", "St 22. 5. 2024", "graphite")}
+              ${driverTabletInfoChip("truck", "VOZIDLO", "KS 101", "green")}
+              ${driverTabletInfoChip("usersRoles", "&Rcaron;IDI&Ccaron;", "Jan Nov&aacute;k", "graphite")}
+              <button class="driver-tablet-bell" type="button" aria-label="Upozorn&ecaron;n&iacute;">
+                ${driverTabletSoftMetalIcon("feedback", "green")}
+                <span class="driver-tablet-bell__dot" aria-hidden="true"></span>
+              </button>
+            </div>
+          </header>
+
+          <div class="driver-tablet-main-grid">
+            <section class="driver-tablet-panel driver-tablet-current-stop" aria-labelledby="driver-current-stop-title">
+              <div class="driver-tablet-panel-title">
+                ${driverTabletSoftMetalIcon("marker", "green")}
+                <h2 id="driver-current-stop-title">Kam jedu te&dcaron;</h2>
+              </div>
+              <div class="driver-tablet-current-stop__body">
+                <div class="driver-tablet-stop-counter" aria-label="Prvn&iacute; z devaten&aacute;cti zast&aacute;vek">
+                  <span>#1</span>
+                  <strong>z 19</strong>
+                </div>
+                <div class="driver-tablet-customer">
+                  <span>Dal&scaron;&iacute; z&aacute;kazn&iacute;k</span>
+                  <h3>RC Autokosmetika s.r.o.</h3>
+                  <p>Brno, Str&aacute;&zcaron;n&iacute; 5</p>
+                  <div class="driver-tablet-detail-cards">
+                    <article>
+                      ${driverTabletSoftMetalIcon("dataBox", "graphite")}
+                      <span>
+                        <small>Druh odpadu</small>
+                        <strong>SKO (200301)</strong>
+                      </span>
+                    </article>
+                    <article>
+                      ${driverTabletSoftMetalIcon("container", "graphite")}
+                      <span>
+                        <small>N&aacute;doba</small>
+                        <strong>1x 30 l</strong>
+                      </span>
+                    </article>
+                  </div>
+                </div>
+              </div>
+              <button class="driver-tablet-primary-action" type="button">
+                <span aria-hidden="true">✓</span>
+                Hotovo a dal&scaron;&iacute;
+                <span aria-hidden="true">›</span>
+              </button>
+            </section>
+
+            <aside class="driver-tablet-side-stack">
+              <section class="driver-tablet-panel driver-tablet-progress-panel" aria-labelledby="driver-progress-title">
+                <div class="driver-tablet-panel-title">
+                  ${driverTabletSoftMetalIcon("route", "green")}
+                  <h2 id="driver-progress-title">Dnes na trase</h2>
+                </div>
+                <div class="driver-tablet-progress-panel__body">
+                  <div class="driver-tablet-progress-copy">
+                    <strong>6 z 19</strong>
+                    <span>zast&aacute;vek</span>
+                  </div>
+                  <div class="driver-tablet-progress-ring" aria-label="32 procent hotovo">
+                    <svg viewBox="0 0 120 120" role="img" aria-hidden="true">
+                      <circle class="driver-tablet-progress-ring__track" cx="60" cy="60" r="48"></circle>
+                      <circle class="driver-tablet-progress-ring__value" cx="60" cy="60" r="48"></circle>
+                    </svg>
+                    <span>32&nbsp;%</span>
+                  </div>
+                </div>
+                <div class="driver-tablet-progress-stats" aria-label="Souhrn trasy">
+                  <span>Celkem <strong>19</strong></span>
+                  <span>Zb&yacute;v&aacute; <strong>13</strong></span>
+                  <span>N&aacute;dob <strong>27</strong></span>
+                </div>
+              </section>
+
+              <section class="driver-tablet-panel driver-tablet-next-stops" aria-labelledby="driver-next-stops-title">
+                <div class="driver-tablet-list-head">
+                  <div class="driver-tablet-panel-title">
+                    ${driverTabletSoftMetalIcon("marker", "green")}
+                    <h2 id="driver-next-stops-title">Dal&scaron;&iacute; zast&aacute;vky</h2>
+                  </div>
+                  <button class="driver-tablet-secondary-action" type="button">Otev&rcaron;&iacute;t cel&yacute; seznam</button>
+                </div>
+                <div class="driver-tablet-stop-list">
+                  ${driverTabletRouteStops()}
+                </div>
+              </section>
+            </aside>
+          </div>
+
+          <section class="driver-tablet-panel driver-tablet-tools" aria-labelledby="driver-tools-title">
+            <div class="driver-tablet-panel-title">
+              ${driverTabletSoftMetalIcon("service", "graphite")}
+              <h2 id="driver-tools-title">Rychl&eacute; n&aacute;stroje</h2>
+            </div>
+            <div class="driver-tablet-tool-grid">
+              ${driverTabletQuickTools()}
+            </div>
+          </section>
+
+          <footer class="driver-tablet-statusbar" aria-label="Stav aplikace">
+            <span>${driverTabletSoftMetalIcon("settings", "graphite")} Sync dnes 08:42</span>
+            <span class="driver-tablet-statusbar__online">Online</span>
+            <span>Preview bez ostr&yacute;ch akc&iacute;</span>
+          </footer>
+        </div>
+      </section>
+    </main>
+  `;
 }
 
 function vehicleTrackingPreviewUtilityShortcuts() {
@@ -26771,6 +26959,12 @@ function renderPublicVehicleTrackingPreview() {
   document.title = `Veřejný soft-metal náhled sledování vozidel | ${APP_NAME}`;
 }
 
+function renderPublicDriverTabletPreview() {
+  clearVehicleTrackingTcarsGoogleMap();
+  app.innerHTML = driverTabletSoftMetalPreviewPage();
+  document.title = `Řidičský tablet - soft-metal náhled | ${APP_NAME}`;
+}
+
 function renderAuthenticatedApp(user) {
   const path = normalizePath(window.location.pathname);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
@@ -26884,6 +27078,11 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
+  if (path === DRIVER_TABLET_SOFT_METAL_PREVIEW_ROUTE) {
+    renderPublicDriverTabletPreview();
+    return;
+  }
+
   const trackingContext = routeVehicleTrackingContext(path);
   if (trackingContext) {
     if (!canViewModule(user, "vehicle-tracking")) {
@@ -26979,6 +27178,11 @@ function renderApp() {
     return;
   }
 
+  if (isDriverTabletSoftMetalPreviewPath()) {
+    renderPublicDriverTabletPreview();
+    return;
+  }
+
   if (authState.status === "loading") {
     app.innerHTML = loadingPage();
     document.title = `Přihlášení | ${APP_NAME}`;
@@ -27004,15 +27208,16 @@ function renderApp() {
 
 function render() {
   try {
-    const publicSoftMetalPreview = isVehicleTrackingSoftMetalPreviewPath();
+    const publicVehicleTrackingSoftMetalPreview = isVehicleTrackingSoftMetalPreviewPath();
+    const publicDesignPreview = isPublicDesignPreviewPath();
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
-    syncVehicleTrackingPreviewThemeRoot(publicSoftMetalPreview);
+    syncVehicleTrackingPreviewThemeRoot(publicVehicleTrackingSoftMetalPreview);
     renderApp();
-    if (publicSoftMetalPreview) {
+    if (publicVehicleTrackingSoftMetalPreview) {
       applyVehicleTrackingPreviewTheme();
     }
-    if (!publicSoftMetalPreview) {
+    if (!publicDesignPreview) {
       app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
       app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
       syncAssistantPromoVideo();
