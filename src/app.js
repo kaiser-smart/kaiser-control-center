@@ -7,7 +7,6 @@ import { AiWelcomeModal } from "./components/AiWelcomeModal.js";
 import { ElevenLabsAssistantProvider } from "./ElevenLabsAssistantProvider.js";
 import { VersionBackupInfo } from "./components/VersionBackupInfo.js";
 import { VersionNewsInfo } from "./components/VersionNewsInfo.js";
-import { ModuleFeedbackBox } from "./components/ModuleFeedbackBox.js";
 import { AppearanceSettingsBox } from "./components/AppearanceSettingsBox.js";
 import { SarlotaStatusPanel } from "./components/SarlotaStatusPanel.js";
 import { QuickAbsenceIcon, ReportsIcon } from "./components/icons/index.js";
@@ -790,7 +789,6 @@ const sarlotaPanelStatusState = {
   error: ""
 };
 
-const feedbackFormState = {};
 const feedbackFilters = {
   moduleId: "",
   status: "",
@@ -1982,11 +1980,6 @@ function visibleDashboardRoutes(user) {
   return filterModulesByUser(user, moduleDashboards);
 }
 
-function moduleFeedbackItems(moduleId, user) {
-  const items = feedbackState.items.filter((item) => item.moduleId === moduleId);
-  return visibleFeedbackForUser(items, user);
-}
-
 function moduleStatusLabel(moduleItem) {
   return {
     HOTOVO: "Hotovo",
@@ -2017,26 +2010,6 @@ function moduleStatusTone(moduleItem) {
 
 function moduleStatusIsComplete(moduleItem) {
   return moduleStatusLabel(moduleItem) === "Hotovo";
-}
-
-function moduleFeedbackBoxFor(moduleItem, user, options = {}) {
-  if (!hasPermission(user, "feedback", "create")) {
-    return "";
-  }
-
-  const moduleId = options.moduleId || moduleItem.id;
-  const moduleName = options.moduleName || moduleItem.title;
-  const feedbackState = feedbackFormState[moduleId] || {};
-
-  return ModuleFeedbackBox({
-    moduleId,
-    moduleName,
-    currentUser: user,
-    feedbackItems: moduleFeedbackItems(moduleId, user),
-    notice: feedbackState.message || "",
-    error: feedbackState.error || "",
-    placeholder: options.placeholder
-  });
 }
 
 function createAiAssistantMessage(sender, text, actions = [], assistantName = "") {
@@ -8700,7 +8673,6 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
           ? "quick"
           : absenceUiState.tab;
   const activeTab = resolveAbsenceTab(user, requestedTab);
-  const feedbackBox = "";
   const tabs = absenceTabsForUser(user);
   const isQuickTab = activeTab === "quick";
   const heroDataStatus = isQuickTab ? null : absenceDataStatus();
@@ -8749,7 +8721,6 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
       ${absenceUiState.message ? `<p class="module-feedback__notice">${escapeHtml(absenceUiState.message)}</p>` : ""}
       ${absenceUiState.error ? `<p class="module-feedback__error">${escapeHtml(absenceUiState.error)}</p>` : ""}
       ${absenceActiveContent(activeTab, user, context)}
-      ${feedbackBox}
     </main>
   `;
 }
@@ -9969,11 +9940,6 @@ function fleetModulePage(moduleItem, user, options = {}) {
         ${fleetDocumentsSection(activeTab)}
         ${fleetSettingsSection(user, activeTab)}
       </div>
-      ${moduleFeedbackBoxFor(moduleItem, user, {
-        moduleId: "vozovy-park",
-        moduleName: "Vozový park",
-        placeholder: "Např. chybí pole ve vozidle, filtr, typ dokladu nebo servisní údaj…"
-      })}
     </main>
   `;
 }
@@ -12929,11 +12895,6 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
           ${vehicleTrackingRulesAutomation(user)}
         </div>
       </div>
-      ${moduleFeedbackBoxFor(moduleItem, user, {
-        moduleId: "sledovani-vozidel",
-        moduleName: "Sledování vozidel",
-        placeholder: "Např. chybí GPS provider, filtr, stav vozidla nebo typ historie jízd…"
-      })}
     </main>
   `;
 }
@@ -18539,11 +18500,6 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
 
       ${collectionRoutesPilotState.loading ? `<p class="module-feedback__notice">Načítám pilotní data z API...</p>` : ""}
       ${collectionRoutesActiveSection(user)}
-      ${moduleFeedbackBoxFor(moduleItem, user, {
-        moduleId: "trasy-svozu",
-        moduleName: "Trasy svozu",
-        placeholder: "Např. chybí mapování Vistos polí, filtr stanovišť nebo pravidlo četnosti…"
-      })}
     </main>
   `;
 }
@@ -19374,11 +19330,6 @@ function dataBoxPlusPage(moduleItem, user) {
       ${dataBoxPlusTabNav()}
       ${dataBoxPlusActivePanel()}
       ${dataBoxPlusDetailOverlay()}
-      ${moduleFeedbackBoxFor(moduleItem, user, {
-        moduleId: DATA_BOX_PLUS_MODULE_KEY,
-        moduleName: "Datové schránky Plus",
-        placeholder: "Např. doplnit routing, pravidlo Autopilota, stav přílohy nebo typ rizika..."
-      })}
     </main>
   `;
 }
@@ -25081,7 +25032,6 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
   }
   const items = driverReportsState.items;
   const selected = driverReportsState.selected;
-  const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
   const activeItems = driverReportVisibleItems(items);
 
   return `
@@ -25136,7 +25086,6 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
         ${driverReportDetail(selected)}
       </section>
 
-      ${feedbackBox}
     </main>
   `;
 }
@@ -26720,11 +26669,6 @@ function receivablesPage(moduleItem, user, isDashboard = false, context = { view
       </nav>
 
       ${content}
-      ${moduleFeedbackBoxFor(moduleItem, user, {
-        moduleId: RECEIVABLES_MODULE_KEY,
-        moduleName: "Pohledávky",
-        placeholder: "Např. doplnit Vistos pole, KB párování, Markétin e-mail nebo hranici významné pohledávky..."
-      })}
     </main>
   `;
 }
@@ -26784,7 +26728,6 @@ function modulePage(moduleItem, user, isDashboard = false) {
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
   const reportsPanel = moduleItem.id === "reports" && !isDashboard ? notificationCenterSection(user) : "";
-  const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
 
   return `
     <main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>
@@ -26813,7 +26756,6 @@ function modulePage(moduleItem, user, isDashboard = false) {
       ${usersPanel}
       ${settingsPanel}
       ${reportsPanel}
-      ${feedbackBox}
     </main>
   `;
 }
@@ -33661,57 +33603,6 @@ function handleHashChangeNavigation() {
   render();
 }
 
-async function submitModuleFeedback(form) {
-  const user = currentUser();
-  if (!hasPermission(user, "feedback", "create")) {
-    feedbackFormState[form.dataset.moduleId || ""] = {
-      message: "",
-      error: "Nemáte oprávnění odeslat připomínku."
-    };
-    render();
-    return;
-  }
-
-  const moduleId = form.dataset.moduleId || "";
-  const moduleName = form.dataset.moduleName || "";
-  const message = form.elements.message.value;
-  const priority = form.elements.priority.value;
-
-  try {
-    const result = await apiJson("/api/module-feedback", {
-      method: "POST",
-      body: JSON.stringify({
-        moduleId,
-        moduleName,
-        message,
-        priority
-      })
-    });
-
-    if (result.feedback) {
-      replaceFeedbackItem(result.feedback);
-    }
-
-    form.reset();
-    feedbackState.apiStatus = result.apiStatus || "ready";
-    feedbackState.loaded = true;
-    feedbackFormState[moduleId] = {
-      message: "Děkujeme, připomínka byla uložena.",
-      error: ""
-    };
-  } catch (error) {
-    const missing = error.payload?.missingEndpoint;
-    feedbackFormState[moduleId] = {
-      message: "",
-      error: missing
-        ? `Čeká na API: ${missing}`
-        : "Připomínku se nepodařilo uložit. Zkuste to prosím znovu."
-    };
-  }
-
-  render();
-}
-
 async function submitCentralModuleFeedback(form) {
   const user = currentUser();
   if (!canCreateCentralFeedback(user)) {
@@ -36218,13 +36109,6 @@ document.addEventListener("submit", async (event) => {
   if (absenceFilterForm) {
     event.preventDefault();
     applyAbsenceFilters(absenceFilterForm);
-    return;
-  }
-
-  const feedbackForm = event.target.closest("[data-feedback-form]");
-  if (feedbackForm) {
-    event.preventDefault();
-    submitModuleFeedback(feedbackForm);
     return;
   }
 
