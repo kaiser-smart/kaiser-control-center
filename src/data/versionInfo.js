@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Trasy svozu: rychlé Stanoviště ze snapshotu",
+    text: "Stanoviště a Svozové trasy při běžném otevření čtou uložený D1 snapshot místo pomalého live Vistos exportu. Ruční refresh z Vistosu zůstává oddělený a přibyl filtr Jen s chybou."
+  },
+  {
     title: "Trasy svozu: skutečné Adresní místo z Vistosu",
     text: "Stanoviště ve svozových trasách při read-only refreshi dočítají detail Vistos Adresního místa podle reference a nepoužívají technická ID ani Stanoviště jako náhradu za Adresní místo."
   },

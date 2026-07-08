@@ -1035,9 +1035,12 @@ const collectionRoutesPilotState = {
   svozKaiserWatchdogLoading: false,
   svozKaiserWatchdogError: "",
   kommunalPairingRows: [],
+  kommunalPairingSummary: null,
+  kommunalPairingPagination: null,
   kommunalExpandedContractKeys: [],
   kommunalPairingLoadAttempted: false,
   kommunalPairingLoading: false,
+  kommunalPairingRefreshMode: "",
   kommunalPairingError: "",
   kommunalPairingLoadedAt: "",
   kommunalPairingSource: "",
@@ -1048,6 +1051,9 @@ const collectionRoutesPilotState = {
     day: "all",
     week: "all",
     waste: "all",
+    status: "all"
+  },
+  vistosSitesFilter: {
     status: "all"
   },
   kommunalPreviewDetailError: "",
@@ -16210,7 +16216,10 @@ function collectionRoutesNormalizeKommunalPreviewState() {
 
 function collectionRoutesResetKommunalPairingRows() {
   collectionRoutesPilotState.kommunalPairingRows = [];
+  collectionRoutesPilotState.kommunalPairingSummary = null;
+  collectionRoutesPilotState.kommunalPairingPagination = null;
   collectionRoutesPilotState.kommunalPairingLoadAttempted = false;
+  collectionRoutesPilotState.kommunalPairingRefreshMode = "";
   collectionRoutesPilotState.kommunalPairingError = "";
   collectionRoutesPilotState.kommunalPairingLoadedAt = "";
   collectionRoutesPilotState.kommunalPairingSource = "";
@@ -18369,12 +18378,12 @@ function collectionRoutesSitesRefreshSecondsRemaining() {
 
 function collectionRoutesSitesRefreshLabel() {
   if (collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.kommunalPairingLoading) {
-    return "Volám API...";
+    return collectionRoutesPilotState.kommunalPairingRefreshMode === "live" ? "Volám Vistos..." : "Načítám snapshot...";
   }
-  const seconds = collectionRoutesSitesRefreshSecondsRemaining();
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return `API za ${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+  if (collectionRoutesPilotState.kommunalPairingLoadedAt) {
+    return "Snapshot načten";
+  }
+  return "Čeká na snapshot";
 }
 
 function collectionRoutesSitesRefreshStatusHtml() {
@@ -18382,43 +18391,53 @@ function collectionRoutesSitesRefreshStatusHtml() {
   return `
     <span class="employee-card-status employee-card-status--waiting collection-routes-refresh-status">${escapeHtml(collectionRoutesSitesRefreshLabel())}</span>
     <button class="secondary-link" type="button" data-collection-routes-sites-refresh-now ${isLoading ? "disabled" : ""}>
-      ${isLoading ? "Volám API" : "Volat API teď"}
+      ${isLoading ? escapeHtml(collectionRoutesSitesRefreshLabel()) : "Aktualizovat z Vistosu"}
     </button>
   `;
 }
 
 function collectionRoutesScheduleCountdownRender() {
-  if (collectionRoutesSitesCountdownTimer || typeof window === "undefined") {
-    return;
-  }
-  collectionRoutesSitesCountdownTimer = window.setInterval(() => {
-    if (collectionRoutesPilotState.activeTab === "sites" || collectionRoutesPilotState.activeTab === "svozove-trasy") {
-      render();
-    }
-  }, 1000);
+  return;
 }
 
 async function refreshCollectionRoutesSitesReadOnlySnapshot(options = {}) {
   if (
     !authState.user ||
-    collectionRoutesPilotState.svozKaiserWatchdogLoading ||
     collectionRoutesPilotState.kommunalPairingLoading ||
     !collectionRoutesCanViewPilot(currentUser())
   ) {
     return;
   }
-  const currentPagination = collectionRoutesPilotState.kommunalPairingPagination || {};
   collectionRoutesPilotState.kommunalPairingAutoRefreshLastAt = new Date().toISOString();
-  await loadCollectionRoutesSvozKaiserWatchdog({ force: true, live: true, renderAfter: false });
+  collectionRoutesPilotState.kommunalPairingLoading = true;
+  collectionRoutesPilotState.kommunalPairingRefreshMode = "live";
+  collectionRoutesPilotState.kommunalPairingError = "";
+  if (options.renderAfter !== false) {
+    render();
+  }
+  try {
+    await apiJson("/api/collection-routes/vistos/kommunal-preview", {
+      method: "POST",
+      body: JSON.stringify({ source: "vistos-komunal-preview" })
+    });
+  } catch (error) {
+    collectionRoutesPilotState.kommunalPairingError =
+      error.payload?.error || error.message || "Ruční Vistos refresh se nepodařilo dokončit.";
+    collectionRoutesPilotState.kommunalPairingLoading = false;
+    collectionRoutesPilotState.kommunalPairingRefreshMode = "";
+    if (options.renderAfter !== false) {
+      render();
+    }
+    return;
+  }
+  collectionRoutesPilotState.kommunalPairingLoading = false;
+  collectionRoutesPilotState.kommunalPairingRefreshMode = "";
+  await loadCollectionRoutesPilot({ force: true, renderAfter: false });
   await loadCollectionRoutesKommunalPairingRows({
     force: true,
     preserveExpanded: true,
-    page: currentPagination.page || 1,
-    pageSize: currentPagination.pageSize || 100,
     renderAfter: false
   });
-  collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt =
-    new Date(Date.now() + collectionRoutesMetricValue(collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs, 90 * 1000)).toISOString();
   if (options.renderAfter !== false) {
     render();
   }
@@ -18435,21 +18454,6 @@ function scheduleCollectionRoutesSitesAutoRefresh(user = currentUser()) {
   if (!user || !collectionRoutesCanViewPilot(user) || typeof window === "undefined") {
     return;
   }
-  collectionRoutesScheduleCountdownRender();
-  if (!collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt) {
-    collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt =
-      new Date(Date.now() + collectionRoutesMetricValue(collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs, 90 * 1000)).toISOString();
-  }
-  if (collectionRoutesSitesAutoRefreshTimer) {
-    return;
-  }
-  const delay = Math.max(1000, collectionRoutesSitesRefreshSecondsRemaining() * 1000);
-  collectionRoutesSitesAutoRefreshTimer = window.setTimeout(async () => {
-    collectionRoutesSitesAutoRefreshTimer = null;
-    await refreshCollectionRoutesSitesReadOnlySnapshot({ renderAfter: false });
-    scheduleCollectionRoutesSitesAutoRefresh(currentUser());
-    render();
-  }, delay);
 }
 
 function collectionRoutesSourceRoutesSection(user = currentUser()) {
@@ -19306,6 +19310,47 @@ function collectionRoutesVistosSitesSummaryStats(contractRows = collectionRoutes
   };
 }
 
+function collectionRoutesVistosSitesFilterValue(name) {
+  const filters = collectionRoutesPilotState.vistosSitesFilter || {};
+  return filters[name] || "all";
+}
+
+function collectionRoutesVistosFilteredContractRows(contractRows = collectionRoutesVistosContractRows()) {
+  const status = collectionRoutesVistosSitesFilterValue("status");
+  if (status === "errors") {
+    return contractRows.filter((row) => collectionRoutesMetricValue(row.issueCount, 0) > 0);
+  }
+  if (status === "ok") {
+    return contractRows.filter((row) => collectionRoutesMetricValue(row.issueCount, 0) === 0);
+  }
+  return contractRows;
+}
+
+function collectionRoutesVistosSitesFilterPanel(contractRows = collectionRoutesVistosContractRows()) {
+  const selected = collectionRoutesVistosSitesFilterValue("status");
+  const errorCount = contractRows.filter((row) => collectionRoutesMetricValue(row.issueCount, 0) > 0).length;
+  const okCount = Math.max(0, contractRows.length - errorCount);
+  return `
+    <div class="collection-routes-sites-filter" role="group" aria-label="Filtr stanovišť">
+      ${[
+        ["all", "Všechna", contractRows.length],
+        ["errors", "Jen s chybou", errorCount],
+        ["ok", "OK", okCount]
+      ].map(([value, label, count]) => `
+        <button
+          class="collection-routes-sites-filter__button ${selected === value ? "collection-routes-sites-filter__button--active" : ""}"
+          type="button"
+          data-collection-routes-sites-filter="${escapeHtml(value)}"
+          aria-pressed="${selected === value ? "true" : "false"}"
+        >
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(count)}</strong>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
 function collectionRoutesVistosRouteFilterValue(name) {
   const filters = collectionRoutesPilotState.vistosRouteFilters || {};
   return filters[name] || "all";
@@ -19717,18 +19762,19 @@ function collectionRoutesVistosContractDetailTable(contractRow) {
   `;
 }
 
-function collectionRoutesVistosSitesTable() {
-  const contractRows = collectionRoutesVistosContractRows();
+function collectionRoutesVistosSitesTable(contractRows = collectionRoutesVistosFilteredContractRows()) {
   if (collectionRoutesPilotState.kommunalPairingLoading && !contractRows.length) {
     return collectionRoutesEmptyState(
-      "Načítám Vistos stanoviště.",
-      "Beru read-only export z Vistos Komunál preview. Nic nezapisuji a nevytvářím ostré trasy."
+      "Načítám uložený snapshot stanovišť.",
+      "Běžné otevření čte D1 snapshot. Live Vistos se volá jen ručně."
     );
   }
   if (!contractRows.length) {
     return collectionRoutesEmptyState(
-      "Zatím nejsou načtená Vistos stanoviště.",
-      "Smart je načítá automaticky z read-only Vistos API exportu. Bez zápisu do Vistosu a bez ostrých tras."
+      collectionRoutesVistosSitesFilterValue("status") === "errors" ? "Žádné stanoviště s chybou." : "Zatím nejsou načtená Vistos stanoviště.",
+      collectionRoutesVistosSitesFilterValue("status") === "errors"
+        ? "V aktuálním snapshotu filtr nenašel chybová stanoviště."
+        : "Použij ruční refresh z Vistosu, pokud ještě neexistuje uložený snapshot."
     );
   }
 
@@ -19784,15 +19830,6 @@ function collectionRoutesVistosSitesTable() {
 function ensureCollectionRoutesSitesReadOnlyData(user = currentUser()) {
   scheduleCollectionRoutesSitesAutoRefresh(user);
   if (
-    user &&
-    collectionRoutesCanViewPilot(user) &&
-    !collectionRoutesPilotState.svozKaiserWatchdogLoading &&
-    !collectionRoutesPilotState.svozKaiserWatchdogLoaded
-  ) {
-    collectionRoutesPilotState.svozKaiserWatchdogLiveAttempted = true;
-    void Promise.resolve().then(() => refreshCollectionRoutesSitesReadOnlySnapshot());
-  }
-  if (
     collectionRoutesCanRunImportPreview(user) &&
     !collectionRoutesPilotState.kommunalPairingRows.length &&
     !collectionRoutesPilotState.kommunalPairingLoading &&
@@ -19807,14 +19844,15 @@ function ensureCollectionRoutesSitesReadOnlyData(user = currentUser()) {
 function collectionRoutesSitesSection(user) {
   ensureCollectionRoutesSitesReadOnlyData(user);
   const contractRows = collectionRoutesVistosContractRows();
+  const filteredContractRows = collectionRoutesVistosFilteredContractRows(contractRows);
   const stats = collectionRoutesVistosSitesStats(contractRows);
   const filterConfirmed = collectionRoutesSvozKaiserFieldConfirmed();
   const loadedAt = collectionRoutesPilotState.kommunalPairingLoadedAt ? formatDateTime(collectionRoutesPilotState.kommunalPairingLoadedAt) : "";
   const isLoadingVistosSites = collectionRoutesPilotState.kommunalPairingLoading;
   const loadingNotice = collectionRoutesPilotState.kommunalPairingLoading
-    ? "Načítám Stanoviště z posledního D1 snapshotu..."
+    ? "Načítám uložený D1 snapshot. Live Vistos běží jen po ručním refreshi."
     : !loadedAt && !collectionRoutesPilotState.kommunalPairingError
-      ? "Stanoviště se načtou automaticky po otevření záložky."
+      ? "Stanoviště se načtou z posledního uloženého snapshotu."
       : "";
   return `
     <section class="collection-routes-panel" id="collection-routes-sites" aria-labelledby="collection-routes-sites-title">
@@ -19822,29 +19860,30 @@ function collectionRoutesSitesSection(user) {
         <div>
           <p class="module-feedback__eyebrow">Stanoviště</p>
           <h2 id="collection-routes-sites-title">Stanoviště z Vistosu</h2>
-          <p>Řádkový read-only seznam z Vistos Komunál dat. Zdroj pro tuto záložku je Vistos API.</p>
+          <p>Rychlý pracovní přehled z posledního D1 snapshotu. Live Vistos API se spouští jen ručně.</p>
         </div>
         <div class="collection-routes-panel__head-status">
-          <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(isLoadingVistosSites ? "Načítám Vistos" : filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
+          <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(isLoadingVistosSites ? collectionRoutesSitesRefreshLabel() : filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
           ${collectionRoutesSitesRefreshStatusHtml()}
         </div>
       </div>
       ${loadingNotice ? `<p class="module-feedback__notice">${escapeHtml(loadingNotice)}</p>` : ""}
       <div class="collection-routes-stats collection-routes-sites-summary">
-        <article><span>Zdroj</span><strong>Vistos API</strong></article>
+        <article><span>Zdroj</span><strong>D1 snapshot</strong></article>
         <article><span>Stanoviště</span><strong>${escapeHtml(stats.siteCount)}</strong></article>
         <article><span>Položky</span><strong>${escapeHtml(stats.itemCount)}</strong></article>
         <article><span>Smlouvy</span><strong>${escapeHtml(stats.contractCount)}</strong></article>
         <article><span>Nádoby</span><strong>${escapeHtml(stats.containerCount)}</strong></article>
         <article class="collection-routes-stats__item--warning"><span>Svoz Kaiser ANO</span><strong>${escapeHtml(filterConfirmed ? "ověřeno" : "čeká")}</strong></article>
       </div>
+      ${collectionRoutesVistosSitesFilterPanel(contractRows)}
       <div class="collection-routes-phase-note collection-routes-phase-note--warning">
-        <strong>${escapeHtml(filterConfirmed ? "Seznam je filtrovaný podle potvrzeného Svoz Kaiser pravidla." : "Pozor: zatím není potvrzené API pole Svoz Kaiser ANO.")}</strong>
-        <span>${escapeHtml(filterConfirmed ? "Červené stavy se vztahují jen ke skutečnému Svoz Kaiser rozsahu." : "Proto se zatím nezobrazuje červený alarm. Vidíš širší read-only Komunál náhled z Vistosu, ne ostrý seznam Svoz Kaiser stanovišť.")}</span>
+        <strong>${escapeHtml(filterConfirmed ? "Seznam je filtrovaný podle potvrzeného Svoz Kaiser pravidla." : "Čeká se na potvrzení pole Svoz Kaiser ANO ve snapshotu.")}</strong>
+        <span>${escapeHtml(filterConfirmed ? "Těžké Vistos načtení nespouštím při otevření stránky. Ruční refresh vytvoří nový snapshot." : "Pokud snapshot ještě nemá potvrzený filtr, spusť ruční refresh z Vistosu.")}</span>
       </div>
-      ${loadedAt ? `<p class="module-feedback__notice">Načteno: ${escapeHtml(loadedAt)} · zdroj: ${escapeHtml(collectionRoutesPilotState.kommunalPairingSource || "vistos-komunal-preview-export")}</p>` : ""}
+      ${loadedAt ? `<p class="module-feedback__notice">Snapshot: ${escapeHtml(loadedAt)} · zdroj: ${escapeHtml(collectionRoutesPilotState.kommunalPairingSource || "d1-vistos-komunal-preview")} · zobrazeno ${escapeHtml(filteredContractRows.length)} / ${escapeHtml(contractRows.length)}</p>` : ""}
       ${collectionRoutesPilotState.kommunalPairingError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.kommunalPairingError)}</p>` : ""}
-      ${collectionRoutesVistosSitesTable()}
+      ${collectionRoutesVistosSitesTable(filteredContractRows)}
     </section>
   `;
 }
@@ -30714,6 +30753,50 @@ function ensureCollectionRoutesSvozKaiserWatchdog(user = currentUser()) {
   void loadCollectionRoutesSvozKaiserWatchdog();
 }
 
+function collectionRoutesApplyKommunalSnapshot(payload = {}, sourceLabel = "d1-vistos-komunal-preview") {
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const summary = payload.summary || {};
+  const metadata = payload.metadata || payload.batch?.metadata || {};
+  const batch = payload.batch || {};
+  const field = metadata.svozKaiserField || {};
+  const filterConfirmed = field.confirmed === true || rows.some((row) => collectionRoutesImportRowSummary(row).svozKaiserIncluded === true);
+
+  collectionRoutesPilotState.kommunalPairingRows = rows;
+  collectionRoutesPilotState.kommunalPairingSummary = summary;
+  collectionRoutesPilotState.kommunalPairingPagination = {
+    page: 1,
+    pageSize: rows.length || collectionRoutesMetricValue(summary.rowCount, 0) || 100,
+    totalRows: collectionRoutesMetricValue(payload.totalRows || summary.rowCount || batch.rowCount, rows.length),
+    totalPages: 1
+  };
+  collectionRoutesPilotState.kommunalPairingLoadedAt = batch.createdAt || new Date().toISOString();
+  collectionRoutesPilotState.kommunalPairingSource = sourceLabel;
+  collectionRoutesPilotState.apiStatus = payload.apiStatus || "ready";
+
+  if (filterConfirmed) {
+    const fieldLabel = [field.entityName, field.columnName].filter(Boolean).join(".");
+    collectionRoutesPilotState.svozKaiserWatchdog = {
+      summary: {
+        status: "snapshot",
+        errorCount: 0,
+        siteErrorCount: 0,
+        checkedRows: rows.length,
+        svozKaiserFieldConfirmed: true,
+        svozKaiserFilterConfirmed: true,
+        svozKaiserFiltered: true,
+        sourceRule: fieldLabel
+          ? `Svoz Kaiser ANO potvrzeno ze snapshotu přes ${fieldLabel}.`
+          : "Svoz Kaiser ANO potvrzeno z uloženého snapshotu.",
+        message: "Běžné otevření používá uložený D1 snapshot. Live Vistos se volá jen ručně."
+      },
+      issueSummary: [],
+      siteAlerts: []
+    };
+    collectionRoutesPilotState.svozKaiserWatchdogLoaded = true;
+    collectionRoutesPilotState.svozKaiserWatchdogError = "";
+  }
+}
+
 function resetCollectionRoutesSourceDriverRunIfChanged() {
   const nextRunKey = collectionRoutesSourceDriverRunKeyFromState();
   if (collectionRoutesPilotState.sourceDriverRunKey && collectionRoutesPilotState.sourceDriverRunKey !== nextRunKey) {
@@ -30849,28 +30932,35 @@ async function loadCollectionRoutesKommunalPairingRows(options = {}) {
 
   collectionRoutesPilotState.kommunalPairingLoadAttempted = true;
   collectionRoutesPilotState.kommunalPairingLoading = true;
+  collectionRoutesPilotState.kommunalPairingRefreshMode = options.live === true ? "live" : "snapshot";
   collectionRoutesPilotState.kommunalPairingError = "";
   if (options.renderAfter !== false) {
     render();
   }
 
   try {
-    const result = await apiJson("/api/collection-routes/vistos/kommunal-preview-export?limit=10000");
-    const exportPayload = result.export || {};
-    collectionRoutesPilotState.kommunalPairingRows = Array.isArray(exportPayload.rows) ? exportPayload.rows : [];
-    collectionRoutesPilotState.kommunalPairingLoadedAt = new Date().toISOString();
-    collectionRoutesPilotState.kommunalPairingSource = "vistos-komunal-preview-export";
+    const result = options.live === true
+      ? await apiJson("/api/collection-routes/vistos/kommunal-preview-export?limit=10000")
+      : await apiJson("/api/collection-routes/vistos/kommunal-snapshot?limit=10000");
+    const payload = options.live === true ? result.export || {} : result.snapshot || {};
+    collectionRoutesApplyKommunalSnapshot(payload, options.live === true ? "vistos-komunal-preview-export" : "d1-vistos-komunal-preview");
     if (!collectionRoutesPilotState.kommunalPairingRows.length) {
-      collectionRoutesPilotState.kommunalPairingError = "Vistos párovací export nevrátil žádné řádky.";
+      collectionRoutesPilotState.kommunalPairingError = options.live === true
+        ? "Vistos párovací export nevrátil žádné řádky."
+        : "Uložený D1 snapshot zatím neobsahuje žádné řádky. Spusť ruční refresh z Vistosu.";
     }
   } catch (error) {
     collectionRoutesPilotState.kommunalPairingRows = [];
+    collectionRoutesPilotState.kommunalPairingSummary = null;
+    collectionRoutesPilotState.kommunalPairingPagination = null;
+    collectionRoutesPilotState.kommunalPairingRefreshMode = "";
     collectionRoutesPilotState.kommunalPairingLoadedAt = "";
     collectionRoutesPilotState.kommunalPairingSource = "";
     collectionRoutesPilotState.kommunalPairingError =
-      error.payload?.error || error.message || "Vistos párovací export se nepodařilo načíst.";
+      error.payload?.error || error.message || "Vistos snapshot se nepodařilo načíst.";
   } finally {
     collectionRoutesPilotState.kommunalPairingLoading = false;
+    collectionRoutesPilotState.kommunalPairingRefreshMode = "";
     if (options.renderAfter !== false) {
       render();
     }
@@ -39593,6 +39683,14 @@ document.addEventListener("click", async (event) => {
       page: Number(collectionRoutesSitesPage.dataset.collectionRoutesSitesPage || 1),
       force: true
     });
+    return;
+  }
+
+  const collectionRoutesSitesFilter = event.target.closest("[data-collection-routes-sites-filter]");
+  if (collectionRoutesSitesFilter) {
+    event.preventDefault();
+    collectionRoutesPilotState.vistosSitesFilter.status = collectionRoutesSitesFilter.dataset.collectionRoutesSitesFilter || "all";
+    render();
     return;
   }
 

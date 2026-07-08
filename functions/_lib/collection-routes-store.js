@@ -4250,14 +4250,29 @@ function manualRowSummary(row) {
   return {
     sourceEntity: row.sourceEntity || "",
     sourceId: row.sourceId || "",
+    sourceContractId: row.sourceContractId || "",
+    sourceCustomerId: row.sourceCustomerId || "",
+    sourceSiteId: row.sourceSiteId || "",
     contractId: row.contractId || "",
     contractRowId: row.contractRowId || "",
     contractNumber: row.contractNumber || "",
     validFrom: row.validFrom || "",
     validTo: row.validTo || "",
+    pickupFrom: row.pickupFrom || "",
+    pickupTo: row.pickupTo || "",
+    pickupDaysText: row.pickupDaysText || "",
+    pickupDays: row.pickupDays || "",
+    pickupDaysInferred: Boolean(row.pickupDaysInferred),
     customerName: row.customerName,
     branchName: row.branchName || "",
     addressRaw: row.addressRaw,
+    addressPlaceRaw: row.addressPlaceRaw || "",
+    addressStreet: row.addressStreet || "",
+    addressCity: row.addressCity || "",
+    addressRegion: row.addressRegion || "",
+    addressCountry: row.addressCountry || "",
+    addressPostalCode: row.addressPostalCode || "",
+    stationName: row.stationName || "",
     siteName: row.siteName,
     productId: row.productId || "",
     productName: row.productName || "",
@@ -4279,6 +4294,17 @@ function manualRowSummary(row) {
     contact: row.contact,
     phone: row.phone,
     email: row.email,
+    customerManagerName: row.customerManagerName || "",
+    customerManagerMobile: row.customerManagerMobile || "",
+    customerManagerEmail: row.customerManagerEmail || "",
+    rowKey: row.rowKey || "",
+    siteKey: row.siteKey || "",
+    locationQuality: row.locationQuality || "",
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    svozKaiserValue: row.svozKaiserValue || "",
+    svozKaiserIncluded: Boolean(row.svozKaiserIncluded),
+    issueCount: Array.isArray(row.issues) ? row.issues.length : numericValue(row.issueCount, 0),
     createsOperationalRoutes: false
   };
 }
@@ -5451,6 +5477,79 @@ export async function listCollectionImportRows(env, batchId, limit = 500) {
       .bind(id, Math.max(1, Math.min(Number(limit) || 500, 1000)))
       .all();
     return (result.results || []).map(rowToImportRow);
+  } catch (error) {
+    throw collectionRoutesDbError(error);
+  }
+}
+
+export async function getLatestCollectionRoutesVistosSnapshot(env, { limit = 10000 } = {}) {
+  const db = collectionRoutesDatabase(env, true);
+  const maxRows = Math.max(1, Math.min(Number(limit) || 10000, 10000));
+
+  try {
+    const batchRow = await db
+      .prepare(`
+        SELECT *
+        FROM collection_import_batches
+        WHERE source_mode = 'vistos-komunal-preview'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `)
+      .first();
+
+    if (!batchRow) {
+      return {
+        status: "empty",
+        apiStatus: "waiting",
+        sourceMode: "vistos-komunal-preview",
+        rowCount: 0,
+        totalRows: 0,
+        batch: null,
+        summary: {},
+        metadata: {},
+        rows: []
+      };
+    }
+
+    const batch = rowToBatch(batchRow);
+    const rowsResult = await db
+      .prepare(`
+        SELECT *
+        FROM collection_import_rows
+        WHERE batch_id = ?
+        ORDER BY row_number ASC
+        LIMIT ?
+      `)
+      .bind(batch.id, maxRows)
+      .all();
+    const rows = (rowsResult.results || []).map(rowToImportRow);
+    const metadata = batch.metadata || {};
+    const mappingStats = metadata.mappingStats || {};
+    const summary = {
+      rowCount: batch.rowCount || rows.length,
+      contractCount: metadata.contractCount || mappingStats.contracts || 0,
+      customerCount: metadata.customerCount || 0,
+      siteCount: metadata.siteCount || 0,
+      itemCount: mappingStats.mappedItems || batch.rowCount || rows.length,
+      containerCount: metadata.containerCount || 0,
+      issueCount: batch.issueCount || mappingStats.issues || 0,
+      createsOperationalRoutes: false,
+      sendsEmailOrSms: false,
+      startsAutomation: false
+    };
+
+    return {
+      status: "snapshot",
+      apiStatus: batch.apiStatus || "ready",
+      source: "d1-vistos-komunal-preview",
+      sourceMode: "vistos-komunal-preview",
+      rowCount: rows.length,
+      totalRows: batch.rowCount || rows.length,
+      batch,
+      summary,
+      metadata,
+      rows
+    };
   } catch (error) {
     throw collectionRoutesDbError(error);
   }
