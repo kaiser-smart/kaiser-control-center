@@ -19828,8 +19828,7 @@ function dataBoxPlusPreparedAction(item = {}) {
   ]);
   const messageSignal = dataBoxPlusSearchText([
     message?.senderName,
-    message?.subject,
-    message?.type
+    message?.subject
   ]);
   const risk = message?.riskLevel || item.riskReason || item.risk || "Střední";
 
