@@ -1185,7 +1185,10 @@ const dataBoxPlusState = {
   learning: null,
   instructionDrafts: {},
   instructionLoadingId: "",
-  instructionRemember: {}
+  instructionRemember: {},
+  composeOpen: false,
+  composeMailboxId: "",
+  replyDraftMessageId: ""
 };
 const dataBoxPlusHomeState = {
   loaded: false,
@@ -20693,6 +20696,70 @@ function dataBoxPlusMiniInstructionForm(message) {
   `;
 }
 
+function dataBoxPlusComposeLauncher() {
+  return `
+    <section class="ds-plus-send-strip" aria-label="Odesílání datových zpráv">
+      <div>
+        <h2>Odesílání</h2>
+        <p>Nová zpráva a odpověď se vždy nejdřív připraví. Bez potvrzení se nic neodešle.</p>
+      </div>
+      <button class="primary-action" type="button" data-ds-plus-compose-open>Nová zpráva</button>
+    </section>
+  `;
+}
+
+function dataBoxPlusComposeOverlay() {
+  if (!dataBoxPlusState.composeOpen) return "";
+  const mailboxes = dataBoxPlusMailboxes();
+  const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === dataBoxPlusState.composeMailboxId) || null;
+  return `
+    <div class="ds-plus-detail-overlay" role="presentation">
+      <button class="ds-plus-detail-backdrop" type="button" data-ds-plus-compose-close aria-label="Zavřít novou zprávu"></button>
+      <section class="ds-plus-detail ds-plus-compose" role="dialog" aria-modal="true" aria-labelledby="ds-plus-compose-title">
+        <div class="ds-plus-detail__head">
+          <div>
+            <span>Nová datová zpráva</span>
+            <h2 id="ds-plus-compose-title">1. Vyber schránku</h2>
+          </div>
+          <button class="secondary-link" type="button" data-ds-plus-compose-close>Zavřít</button>
+        </div>
+        <div class="ds-plus-detail__body">
+          <section class="ds-plus-detail-section ds-plus-detail-section--workflow">
+            <h3>Odkud chceš odeslat?</h3>
+            <p>Vyber firemní datovou schránku. Další kroky budou příjemce, text, přílohy a kontrola před odesláním.</p>
+          </section>
+          <section class="ds-plus-compose-mailboxes" aria-label="Výběr schránky pro odeslání">
+            ${mailboxes.length ? mailboxes.map((mailbox) => {
+              const selected = mailbox.id === dataBoxPlusState.composeMailboxId;
+              const status = mailbox.connectionStatus || mailbox.status || "";
+              return `
+                <article class="ds-plus-compose-mailbox ${selected ? "ds-plus-compose-mailbox--selected" : ""}">
+                  <div>
+                    <strong>${escapeHtml(mailbox.name || mailbox.company || "Datová schránka")}</strong>
+                    <span>${escapeHtml(mailbox.company || mailbox.name || "Firma")}</span>
+                    <small>ID: ${escapeHtml(dataBoxPlusMailboxValue(mailbox.isdsId))}</small>
+                  </div>
+                  <button class="${selected ? "primary-action" : "secondary-link"}" type="button" data-ds-plus-compose-mailbox="${escapeHtml(mailbox.id)}">
+                    ${escapeHtml(selected ? "Vybráno" : "Vybrat")}
+                  </button>
+                  ${status ? `<em>${escapeHtml(status)}</em>` : ""}
+                </article>
+              `;
+            }).join("") : `<p class="ds-plus-empty">Nejdřív připoj datovou schránku v Nastavení DSP.</p>`}
+          </section>
+          <section class="ds-plus-detail-section ds-plus-compose-next">
+            <h3>Další krok</h3>
+            <p>${selectedMailbox
+              ? `Vybraná schránka: ${escapeHtml(selectedMailbox.name || selectedMailbox.company || "Datová schránka")}. Další krok bude výběr příjemce.`
+              : "Vyber schránku, ze které se má zpráva připravit."}</p>
+            <small>Odeslání nebude možné bez závěrečné kontroly a výslovného potvrzení.</small>
+          </section>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
 function dataBoxPlusShortAssistantText(recommendation = {}, plan = {}) {
   const text = String(recommendation.text || plan.assistantText || "").trim();
   const normalized = dataBoxPlusSearchText([text, plan.recommendedAction, plan.actionType, plan.confirmLabel]);
@@ -21251,6 +21318,7 @@ function dataBoxPlusCommandCenter() {
     ${dataBoxPlusMetrics()}
     <section class="ds-plus-command-grid" aria-label="Řídicí centrum">
       <div class="ds-plus-command-main">
+        ${dataBoxPlusComposeLauncher()}
         <section class="ds-plus-band" aria-labelledby="ds-plus-today-title">
           <div class="ds-plus-section-head">
             <div>
@@ -21870,6 +21938,38 @@ function dataBoxPlusAttachments(message) {
   `;
 }
 
+function dataBoxPlusReplyDraft(message) {
+  if (dataBoxPlusState.replyDraftMessageId !== message.id) return "";
+  return `
+    <section class="ds-plus-detail-section ds-plus-reply-draft" aria-label="Odpověď na datovou zprávu">
+      <div class="ds-plus-reply-draft__head">
+        <div>
+          <h3>Odpověď</h3>
+          <p>Připraví se návrh odpovědi na tuto zprávu. Bez potvrzení se nic neodešle.</p>
+        </div>
+        <button class="secondary-link" type="button" data-ds-plus-reply-close>Zavřít</button>
+      </div>
+      <label>
+        <span>Text odpovědi</span>
+        <textarea rows="5" placeholder="Napiš odpověď..."></textarea>
+      </label>
+      <div class="ds-plus-detail-actions">
+        ${dataBoxPlusActionButton({
+          label: "Připravit odpověď",
+          variant: "primary-action",
+          attrs: `data-ds-plus-pilot-action="Připravit odpověď"`,
+          help: "Vznikne pouze návrh odpovědi k ruční kontrole. Datová zpráva se bez výslovného potvrzení neodešle."
+        })}
+        ${dataBoxPlusActionButton({
+          label: "Přidat přílohu",
+          attrs: `data-ds-plus-pilot-action="Přidat přílohu k odpovědi"`,
+          help: "Příloha se zatím jen připraví do návrhu. Nic se neodešle mimo systém bez závěrečné kontroly."
+        })}
+      </div>
+    </section>
+  `;
+}
+
 function dataBoxPlusDetailOverlay() {
   const message = dataBoxPlusSelectedMessage();
   if (!message || !dataBoxPlusState.selectedMessageId) return "";
@@ -21881,7 +21981,10 @@ function dataBoxPlusDetailOverlay() {
       <section class="ds-plus-detail" role="dialog" aria-modal="true" aria-labelledby="ds-plus-detail-title">
         <div class="ds-plus-detail__head">
           <div><span>${escapeHtml(mailbox?.name || "Schránka")}</span><h2 id="ds-plus-detail-title">${escapeHtml(message.subject)}</h2></div>
-          <button class="secondary-link" type="button" data-ds-plus-close-detail>Zavřít</button>
+          <div class="ds-plus-detail__head-actions">
+            <button class="primary-action" type="button" data-ds-plus-reply="${escapeHtml(message.id)}">Odpovědět</button>
+            <button class="secondary-link" type="button" data-ds-plus-close-detail>Zavřít</button>
+          </div>
         </div>
         <div class="ds-plus-detail__body">
           <section class="ds-plus-detail-section ds-plus-detail-section--workflow">
@@ -21898,6 +22001,7 @@ function dataBoxPlusDetailOverlay() {
           </section>
           ${dataBoxPlusSummary(message)}
           ${dataBoxPlusAttachments(message)}
+          ${dataBoxPlusReplyDraft(message)}
           ${dataBoxPlusStatusHistory(message, workflow)}
           ${dataBoxPlusTechnicalInfo(message)}
         </div>
@@ -21942,6 +22046,7 @@ function dataBoxPlusPage(moduleItem, user) {
       ${dataBoxPlusTabNav()}
       ${dataBoxPlusActivePanel()}
       ${dataBoxPlusDetailOverlay()}
+      ${dataBoxPlusComposeOverlay()}
     </main>
   `;
 }
@@ -39454,6 +39559,36 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const dataBoxPlusComposeOpen = event.target.closest("[data-ds-plus-compose-open]");
+  if (dataBoxPlusComposeOpen) {
+    event.preventDefault();
+    dataBoxPlusState.composeOpen = true;
+    dataBoxPlusState.notice = "";
+    if (!dataBoxPlusState.composeMailboxId) {
+      const firstReadyMailbox = dataBoxPlusMailboxes().find((mailbox) => dataBoxPlusSearchText([mailbox.connectionStatus, mailbox.status]).includes("aktivni"));
+      dataBoxPlusState.composeMailboxId = firstReadyMailbox?.id || dataBoxPlusMailboxes()[0]?.id || "";
+    }
+    render();
+    return;
+  }
+
+  const dataBoxPlusComposeClose = event.target.closest("[data-ds-plus-compose-close]");
+  if (dataBoxPlusComposeClose) {
+    event.preventDefault();
+    dataBoxPlusState.composeOpen = false;
+    render();
+    return;
+  }
+
+  const dataBoxPlusComposeMailbox = event.target.closest("[data-ds-plus-compose-mailbox]");
+  if (dataBoxPlusComposeMailbox) {
+    event.preventDefault();
+    dataBoxPlusState.composeMailboxId = dataBoxPlusComposeMailbox.dataset.dsPlusComposeMailbox || "";
+    dataBoxPlusState.notice = "Schránka pro novou zprávu je vybraná. Nic se zatím neodesílá.";
+    render();
+    return;
+  }
+
   const dataBoxPlusOpen = event.target.closest("[data-ds-plus-open]");
   if (dataBoxPlusOpen) {
     event.preventDefault();
@@ -39468,6 +39603,24 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusCloseDetail) {
     event.preventDefault();
     dataBoxPlusState.selectedMessageId = "";
+    dataBoxPlusState.replyDraftMessageId = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusReply = event.target.closest("[data-ds-plus-reply]");
+  if (dataBoxPlusReply) {
+    event.preventDefault();
+    dataBoxPlusState.replyDraftMessageId = dataBoxPlusReply.dataset.dsPlusReply || "";
+    dataBoxPlusState.notice = "Odpověď je otevřená jako návrh. Bez potvrzení se nic neodešle.";
+    render();
+    return;
+  }
+
+  const dataBoxPlusReplyClose = event.target.closest("[data-ds-plus-reply-close]");
+  if (dataBoxPlusReplyClose) {
+    event.preventDefault();
+    dataBoxPlusState.replyDraftMessageId = "";
     render();
     return;
   }

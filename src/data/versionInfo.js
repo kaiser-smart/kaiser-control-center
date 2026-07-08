@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.469"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.470"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: nová zpráva a odpověď",
+    text: "DSP má širší mini-pokyn na kartě, první krok průvodce Nová zpráva pro výběr odesílací schránky a v detailu bezpečný návrh Odpovědět. Nic se neodešle bez závěrečné kontroly a potvrzení."
+  },
   {
     title: "Trasy svozu: interní runner přes Pages",
     text: "Cloud runner pro Trasy svozu umí spouštět read-only Vistos snapshot přes interní Pages endpoint chráněný tokenem. Vistos přístupy zůstávají v Pages secrets; worker nedostává Vistos heslo a nevytváří ostré trasy."
