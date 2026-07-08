@@ -731,7 +731,22 @@ function rowToAttachment(row) {
   };
 }
 
-function rowToMessage(row, attachments = []) {
+function rowToActionLog(row) {
+  if (!row) return null;
+  return {
+    id: cleanString(row.id),
+    messageId: cleanString(row.message_id),
+    recommendationId: cleanString(row.recommendation_id),
+    actor: cleanString(row.actor),
+    actionType: cleanString(row.action_type),
+    payload: safeJsonParse(row.action_payload, {}),
+    createdAt: cleanString(row.created_at),
+    result: cleanString(row.result),
+    auditNote: cleanString(row.audit_note)
+  };
+}
+
+function rowToMessage(row, attachments = [], actionLogs = []) {
   if (!row) return null;
   const facts = safeJsonParse(row.facts_json, []);
   return {
@@ -761,18 +776,25 @@ function rowToMessage(row, attachments = []) {
     summary: cleanString(row.summary),
     summarySource: cleanString(row.summary_source),
     facts,
-    attachments
+    attachments,
+    history: Array.isArray(actionLogs) ? actionLogs.filter(Boolean) : []
   };
 }
 
 function rowToRecommendation(row) {
   if (!row) return null;
+  const extractedData = safeJsonParse(row.extracted_facts, []);
+  const instructionPlan = Array.isArray(extractedData)
+    ? null
+    : extractedData?.instructionPlan || null;
   return {
     id: cleanString(row.id),
     messageId: cleanString(row.message_id),
     text: cleanString(row.text),
     summary: cleanString(row.summary),
-    extractedFacts: safeJsonParse(row.extracted_facts, []),
+    extractedFacts: Array.isArray(extractedData) ? extractedData : Array.isArray(extractedData?.facts) ? extractedData.facts : [],
+    instructionPlan,
+    userInstruction: cleanString(instructionPlan?.userInstruction),
     recommendedAction: cleanString(row.recommended_action),
     risk: cleanString(row.risk_reason),
     riskReason: cleanString(row.risk_reason),
@@ -1258,6 +1280,15 @@ export async function getDataBoxPlusStatus(env) {
     const waitingRow = await db
       .prepare("SELECT COUNT(*) AS count FROM data_box_plus_recommendations WHERE status = 'waiting'")
       .first();
+    const confirmedRow = await db
+      .prepare("SELECT COUNT(*) AS count FROM data_box_plus_recommendations WHERE status = 'confirmed'")
+      .first();
+    const learnedPatternsRow = await db
+      .prepare("SELECT COUNT(*) AS count FROM data_box_plus_rules WHERE type = 'Učící vzor'")
+      .first();
+    const pendingPatternsRow = await db
+      .prepare("SELECT COUNT(*) AS count FROM data_box_plus_rules WHERE type = 'Učící vzor' AND status IN ('Nové pravidlo', 'Učí se')")
+      .first();
     const newRow = await db
       .prepare(`
         SELECT COUNT(*) AS count
@@ -1285,6 +1316,12 @@ export async function getDataBoxPlusStatus(env) {
         newCount: numberValue(newRow?.count),
         unresolvedCount: numberValue(unresolvedRow?.count),
         waitingRecommendations: numberValue(waitingRow?.count)
+      },
+      learning: {
+        confirmedDecisions: numberValue(confirmedRow?.count),
+        learnedPatterns: numberValue(learnedPatternsRow?.count),
+        pendingPatterns: numberValue(pendingPatternsRow?.count),
+        strongAreas: ["Faktury", "Registr smluv", "ČSSZ"]
       },
       background: {
         intervalMinutes: 30,
@@ -1712,7 +1749,11 @@ export async function getDataBoxPlusMessage(env, id) {
       .prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name")
       .bind(messageId)
       .all();
-    return rowToMessage(row, (attachments.results || []).map(rowToAttachment));
+    const actionLogs = await db
+      .prepare("SELECT * FROM data_box_plus_action_log WHERE message_id = ? ORDER BY created_at DESC LIMIT 30")
+      .bind(messageId)
+      .all();
+    return rowToMessage(row, (attachments.results || []).map(rowToAttachment), (actionLogs.results || []).map(rowToActionLog));
   } catch (error) {
     if (error instanceof DataBoxPlusStoreError) throw error;
     throw dbError(error);
@@ -1811,7 +1852,210 @@ async function recommendationById(db, id) {
   return recommendation;
 }
 
+function instructionPlanFromText(instruction, message = {}, attachments = []) {
+  const userInstruction = cleanString(instruction);
+  if (!userInstruction) {
+    throw new DataBoxPlusStoreError("Napiš pokyn pro Autopilota.", 400, "data_box_plus_instruction_missing");
+  }
+  const attachmentText = attachments.map((attachment) => cleanString(attachment.extracted_text)).join(" ");
+  const normalized = searchText([userInstruction, message.subject, message.sender_name, attachmentText]);
+  const base = {
+    userInstruction,
+    sendsOutsideSystem: false,
+    deletesMessage: false,
+    writesHistory: true,
+    createsLearningPattern: true,
+    risk: cleanString(message.risk_level || "Běžné"),
+    evidence: `Pokyn uživatele: ${userInstruction}`
+  };
+  const plan = (overrides) => ({ ...base, ...overrides });
+
+  if (normalized.includes("nechat") && (normalized.includes("nevyrizene") || normalized.includes("otevrene"))) {
+    return plan({
+      actionType: "leave_open",
+      confirmLabel: "Nechat nevyřízené",
+      recommendedAction: "Nechat zprávu nevyřízenou.",
+      assistantText: "Rozumím. Nechám zprávu nevyřízenou pro pozdější rozhodnutí. Nic se neodešle mimo systém.",
+      afterConfirm: "Zpráva zůstane otevřená. Akce se zapíše do historie a Autopilot si zapamatuje, že u podobných zpráv nemá spěchat.",
+      messageStatus: "Čeká na pokyn",
+      archiveStatus: "active",
+      assignedTo: "",
+      resultLabel: "Zpráva zůstává nevyřízená.",
+      nextStep: "Vrátit se ke zprávě později.",
+      performedAction: "Ponechání zprávy nevyřízené",
+      auditNote: "Zpráva byla ponechána nevyřízená. Nic se neodeslalo mimo systém.",
+      learningPattern: "U podobných zpráv nabídnout ponechání k pozdějšímu rozhodnutí."
+    });
+  }
+
+  if (normalized.includes("archiv") || normalized.includes("registr smluv")) {
+    return plan({
+      actionType: "archive",
+      confirmLabel: "Potvrdit archivaci",
+      recommendedAction: "Archivovat zprávu jako vyřízenou nebo informativní.",
+      assistantText: "Rozumím. Připravím archivaci. Nic se nesmaže a datová zpráva se nikam neodešle.",
+      afterConfirm: "Zpráva se označí jako archivovaná. Nic se nesmaže. Akce se zapíše do historie a postup se uloží jako vzor.",
+      messageStatus: "Archivováno",
+      archiveStatus: "archived",
+      assignedTo: "",
+      resultLabel: normalized.includes("registr smluv") ? "Informační zpráva z Registru smluv byla uložena do archivu." : "Zpráva byla uložena do archivu.",
+      nextStep: "Bez další akce.",
+      performedAction: "Archivace zprávy",
+      auditNote: "Zpráva byla interně archivována. Nic se nesmazalo ani neodeslalo mimo systém.",
+      learningPattern: "U podobných informativních zpráv nabídnout archivaci."
+    });
+  }
+
+  if (normalized.includes("cssz") || normalized.includes("mzd") || normalized.includes("podani prijato") || normalized.includes("evidenc")) {
+    const resolveOnly = normalized.includes("vyres") || normalized.includes("evidenc") || normalized.includes("podani prijato") || normalized.includes("potvrzeni");
+    return plan({
+      actionType: resolveOnly ? "payroll_record" : "payroll_handoff",
+      confirmLabel: resolveOnly ? "Potvrdit označení jako vyřešené" : "Potvrdit předání",
+      recommendedAction: resolveOnly ? "Označit jako vyřešené a uložit k evidenci." : "Předat mzdové účetní.",
+      assistantText: resolveOnly
+        ? "Rozumím. Označím zprávu jako vyřešenou s výsledkem: Podání přijato ČSSZ. Nic se neodešle mimo systém."
+        : "Rozumím. Připravím předání mzdové účetní. Datová zpráva se nikam neodešle.",
+      afterConfirm: resolveOnly
+        ? "Zpráva bude označená jako vyřešená. Akce se zapíše do historie a Autopilot si vzor uloží pro příště."
+        : "Zpráva se interně předá mzdové účetní. Nic se neodešle mimo systém a akce bude dohledatelná.",
+      messageStatus: resolveOnly ? "Vyřešeno" : "Předáno",
+      archiveStatus: "active",
+      assignedTo: resolveOnly ? "" : "Mzdová účetní",
+      resultLabel: resolveOnly ? "Podání přijato ČSSZ." : "Předáno mzdové účetní.",
+      nextStep: resolveOnly ? "Bez další akce." : "Čeká na zpracování mzdové účetní.",
+      performedAction: resolveOnly ? "Uložení potvrzení ČSSZ k evidenci" : "Předání mzdové účetní",
+      auditNote: resolveOnly
+        ? "Zpráva byla označena jako vyřešená a uložená k evidenci. Nic se neodeslalo mimo systém."
+        : "Zpráva byla interně předána mzdové účetní. Nic se neodeslalo mimo systém.",
+      learningPattern: resolveOnly
+        ? "U podobných potvrzení ČSSZ nabídnout označení jako vyřešené."
+        : "U podobných mzdových zpráv nabídnout předání mzdové účetní."
+    });
+  }
+
+  if (normalized.includes("faktur") || normalized.includes("ucetn") || normalized.includes("účetn")) {
+    return plan({
+      actionType: "handoff",
+      confirmLabel: "Potvrdit předání",
+      recommendedAction: "Předat na faktury@kaiserservis.cz.",
+      assistantText: "Rozumím. Připravím předání na faktury@kaiserservis.cz. Zpráva se nesmaže a datová zpráva se nikam neodešle.",
+      afterConfirm: "Zpráva se označí jako předaná účetnímu oddělení. Nic se neodešle mimo systém a akce se zapíše do historie.",
+      messageStatus: "Předáno",
+      archiveStatus: "active",
+      assignedTo: "faktury@kaiserservis.cz",
+      resultLabel: "Předáno účetnímu oddělení.",
+      nextStep: "Čeká na zpracování účetní.",
+      performedAction: "Předání účetnímu oddělení",
+      auditNote: "Zpráva byla interně předána účetnímu oddělení. Nic se neodeslalo mimo systém.",
+      learningPattern: "U podobných faktur a upomínek nabídnout předání účetnímu oddělení."
+    });
+  }
+
+  if (normalized.includes("stk") || normalized.includes("termin") || normalized.includes("termín") || normalized.includes("lhut") || normalized.includes("kalendar")) {
+    const plateMatch = cleanString(userInstruction).match(/\b\d[A-Z0-9]{2}\s?\d{4}\b/i);
+    return plan({
+      actionType: "deadline",
+      confirmLabel: "Potvrdit zapsání lhůty",
+      recommendedAction: plateMatch ? `Zapsat termín k vozidlu ${plateMatch[0].toUpperCase()}.` : "Zapsat termín k ručnímu doplnění.",
+      assistantText: "Rozumím. Připravím zapsání termínu. Nic se bez potvrzení neuloží mimo historii zprávy.",
+      afterConfirm: "Zpráva se označí pro zadání lhůty. Nic se neodešle mimo systém a krok bude dohledatelný.",
+      messageStatus: "Rozpracováno",
+      archiveStatus: "active",
+      assignedTo: "Garážmistr",
+      resultLabel: plateMatch ? `Připraven termín k vozidlu ${plateMatch[0].toUpperCase()}.` : "Připraveno zapsání termínu.",
+      nextStep: "Doplnit konkrétní termín a zodpovědnou osobu.",
+      performedAction: "Zapsání lhůty k ručnímu doplnění",
+      auditNote: "Zpráva byla označena pro zadání lhůty. Nic se neodeslalo mimo systém.",
+      learningPattern: "U podobných provozních termínů nabídnout přípravu lhůty k potvrzení."
+    });
+  }
+
+  if (normalized.includes("gt brno") || normalized.includes("pravnik") || normalized.includes("právn") || normalized.includes("exekuc") || normalized.includes("soud")) {
+    return plan({
+      actionType: "legal_handoff",
+      confirmLabel: "Potvrdit předání",
+      recommendedAction: "Předat GT Brno.",
+      assistantText: "Rozumím. Připravím interní předání GT Brno. Nic se neodešle mimo systém.",
+      afterConfirm: "Zpráva se označí jako předaná GT Brno. Právní nebo finanční dopad zůstává pod kontrolou člověka.",
+      messageStatus: "Předáno",
+      archiveStatus: "active",
+      assignedTo: "GT Brno",
+      resultLabel: "Předáno GT Brno.",
+      nextStep: "Čeká na ruční zpracování GT Brno.",
+      performedAction: "Předání GT Brno",
+      auditNote: "Zpráva byla interně předána GT Brno. Nic se neodeslalo mimo systém.",
+      learningPattern: "U podobných právních zpráv nabídnout předání GT Brno."
+    });
+  }
+
+  if (normalized.includes("ukol") || normalized.includes("úkol") || normalized.includes("radim")) {
+    return plan({
+      actionType: "task",
+      confirmLabel: "Potvrdit přiřazení",
+      recommendedAction: "Vytvořit interní úkol pro Radima.",
+      assistantText: "Rozumím. Připravím interní úkol pro Radima. Datová zpráva se nikam neodešle.",
+      afterConfirm: "Zpráva se přiřadí Radimovi jako interní úkol. Akce se zapíše do historie.",
+      messageStatus: "Rozpracováno",
+      archiveStatus: "active",
+      assignedTo: "Radim",
+      resultLabel: "Vytvořen interní úkol pro Radima.",
+      nextStep: "Čeká na zpracování Radima.",
+      performedAction: "Vytvoření interního úkolu",
+      auditNote: "Ke zprávě byl připraven interní úkol. Nic se neodeslalo mimo systém.",
+      learningPattern: "U podobných zpráv nabídnout vytvoření interního úkolu."
+    });
+  }
+
+  if (normalized.includes("vyres") || normalized.includes("vyřeš") || normalized.includes("zpracovan")) {
+    return plan({
+      actionType: "resolve",
+      confirmLabel: "Potvrdit označení jako vyřešené",
+      recommendedAction: "Označit zprávu jako vyřešenou.",
+      assistantText: "Rozumím. Označím zprávu jako vyřešenou. Nic se neodešle mimo systém.",
+      afterConfirm: "Zpráva bude označená jako vyřešená, akce se zapíše do historie a vzor se uloží pro příště.",
+      messageStatus: "Vyřešeno",
+      archiveStatus: "active",
+      assignedTo: "",
+      resultLabel: "Zpráva byla označena jako vyřešená.",
+      nextStep: "Bez další akce.",
+      performedAction: "Označení jako vyřešené",
+      auditNote: "Zpráva byla označena jako vyřešená. Nic se neodeslalo mimo systém.",
+      learningPattern: "U podobných zpráv nabídnout označení jako vyřešené."
+    });
+  }
+
+  return plan({
+    actionType: "assignment",
+    confirmLabel: "Potvrdit přiřazení",
+    recommendedAction: "Přiřadit zprávu odpovědné osobě.",
+    assistantText: "Rozumím. Připravím interní přiřazení odpovědné osobě. Nic se neodešle mimo systém.",
+    afterConfirm: "Zpráva se interně přiřadí k vyřízení a akce se zapíše do historie.",
+    messageStatus: "Rozpracováno",
+    archiveStatus: "active",
+    assignedTo: "Odpovědná osoba",
+    resultLabel: "Přiřazeno odpovědné osobě.",
+    nextStep: "Čeká na ruční zpracování.",
+    performedAction: "Přiřazení odpovědné osobě",
+    auditNote: "Zpráva byla interně přiřazena k vyřízení. Nic se neodeslalo mimo systém.",
+    learningPattern: "U podobných zpráv nabídnout přiřazení odpovědné osobě."
+  });
+}
+
 function recommendationConfirmAction(recommendation = {}, body = {}) {
+  const instructionPlan = recommendation.instructionPlan || null;
+  if (instructionPlan?.actionType) {
+    return {
+      actionType: cleanString(instructionPlan.confirmLabel || "Potvrdit provedení"),
+      performedAction: cleanString(instructionPlan.performedAction || instructionPlan.recommendedAction),
+      messageStatus: cleanString(instructionPlan.messageStatus),
+      archiveStatus: cleanString(instructionPlan.archiveStatus || "active"),
+      assignedTo: cleanString(instructionPlan.assignedTo),
+      suggestedAction: cleanString(instructionPlan.resultLabel || instructionPlan.recommendedAction),
+      primaryAction: cleanString(instructionPlan.nextStep === "Bez další akce." ? "Detail historie" : "Otevřít zprávu"),
+      auditNote: cleanString(instructionPlan.auditNote || "Pokyn Autopilota byl potvrzen. Nic se neodeslalo mimo systém."),
+      instructionPlan
+    };
+  }
   const requestedAction = searchText([body.actionType]);
   const normalized = searchText([
     body.actionType,
@@ -1931,6 +2175,7 @@ async function applyRecommendationActionToMessage(db, recommendation, actionInfo
           archive_status = ?,
           assigned_to = CASE WHEN ? <> '' THEN ? ELSE assigned_to END,
           suggested_action = CASE WHEN ? <> '' THEN ? ELSE suggested_action END,
+          primary_action = CASE WHEN ? <> '' THEN ? ELSE primary_action END,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `)
@@ -1941,11 +2186,178 @@ async function applyRecommendationActionToMessage(db, recommendation, actionInfo
       cleanString(actionInfo.assignedTo),
       cleanString(actionInfo.suggestedAction),
       cleanString(actionInfo.suggestedAction),
+      cleanString(actionInfo.primaryAction),
+      cleanString(actionInfo.primaryAction),
       message.id
     )
     .run();
   await updateMailboxCounters(db, cleanString(message.mailbox_id));
   return true;
+}
+
+async function rememberDataBoxPlusLearningPattern(db, recommendation, actionInfo, currentUser = null) {
+  const plan = actionInfo.instructionPlan || recommendation.instructionPlan || null;
+  if (!plan?.learningPattern) return null;
+  const message = await db
+    .prepare(`
+      SELECT m.*, b.name AS mailbox_name
+      FROM data_box_plus_messages m
+      LEFT JOIN data_box_plus_mailboxes b ON b.id = m.mailbox_id
+      WHERE m.id = ?
+      LIMIT 1
+    `)
+    .bind(cleanString(recommendation.messageId))
+    .first();
+  const ruleId = `dbp-learn-${cleanString(recommendation.id)}`.slice(0, 180);
+  const mailboxName = cleanString(message?.mailbox_name || message?.mailbox_id || "schránka");
+  const actor = actorName(currentUser);
+  await db
+    .prepare(`
+      INSERT INTO data_box_plus_rules (
+        id, name, human_description, conditions_text, proposed_action, autonomy_level,
+        confirmation_required, success_count, confirmed_count, edit_count, reject_count,
+        last_used_at, status, type, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET
+        human_description = excluded.human_description,
+        conditions_text = excluded.conditions_text,
+        proposed_action = excluded.proposed_action,
+        success_count = data_box_plus_rules.success_count + 1,
+        confirmed_count = data_box_plus_rules.confirmed_count + 1,
+        last_used_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    `)
+    .bind(
+      ruleId,
+      `Vzor z pokynu: ${cleanString(message?.sender_name || "odesílatel")}`.slice(0, 120),
+      `${plan.learningPattern} Vzor vznikl z potvrzeného pokynu uživatele ${actor}.`,
+      `Odesílatel: ${cleanString(message?.sender_name)}. Předmět: ${cleanString(message?.subject)}. Schránka: ${mailboxName}.`,
+      cleanString(plan.recommendedAction || actionInfo.performedAction),
+      "Jen navrhovat",
+      "Bez dalšího schválení z toho nevznikne automatické pravidlo.",
+      1,
+      1,
+      0,
+      0,
+      "Nové pravidlo",
+      "Učící vzor"
+    )
+    .run();
+  return ruleId;
+}
+
+export async function prepareDataBoxPlusMessageInstruction(env, messageId, currentUser = null, body = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const id = cleanString(messageId);
+  const instruction = cleanString(body.instruction);
+  try {
+    const message = await db.prepare("SELECT * FROM data_box_plus_messages WHERE id = ? LIMIT 1").bind(id).first();
+    if (!message?.id) throw new DataBoxPlusStoreError("Zpráva nebyla nalezena.", 404, "data_box_plus_message_not_found");
+    const attachments = await db
+      .prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name")
+      .bind(id)
+      .all();
+    const plan = instructionPlanFromText(instruction, message, attachments.results || []);
+    const recommendationId = idValue("dbp-instruction");
+    const actor = actorName(currentUser);
+    const actionId = idValue("dbp-action");
+    const extractedFacts = {
+      instructionPlan: {
+        ...plan,
+        messageId: id,
+        mailboxId: cleanString(message.mailbox_id),
+        senderName: cleanString(message.sender_name),
+        subject: cleanString(message.subject),
+        confirmedBy: "",
+        createdBy: actor,
+        createdAt: new Date().toISOString()
+      },
+      facts: safeJsonParse(message.facts_json, [])
+    };
+    await db
+      .prepare(`
+        INSERT INTO data_box_plus_recommendations (
+          id, message_id, text, summary, extracted_facts, recommended_action, risk_reason,
+          confidence, evidence, similar_cases, after_confirm, human_reason, requires_confirmation,
+          status, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'waiting', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `)
+      .bind(
+        recommendationId,
+        id,
+        plan.assistantText,
+        `Chystám se provést: ${plan.recommendedAction}`,
+        JSON.stringify(extractedFacts),
+        plan.recommendedAction,
+        plan.risk,
+        0.86,
+        plan.evidence,
+        "Autopilot se učí z potvrzených pokynů u konkrétních zpráv.",
+        plan.afterConfirm,
+        "Akce čeká na potvrzení člověka. Nic se neodešle mimo systém.",
+      )
+      .run();
+    await db
+      .prepare(`
+        INSERT INTO data_box_plus_action_log (
+          id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        actionId,
+        id,
+        recommendationId,
+        actor,
+        "Pokyn Autopilotu",
+        JSON.stringify({ instruction, plan }),
+        new Date().toISOString(),
+        "prepared",
+        `${actor} zadal pokyn: ${instruction}`
+      )
+      .run();
+    await db
+      .prepare(`
+        UPDATE data_box_plus_messages
+        SET status = 'Připraveno k potvrzení',
+            archive_status = 'active',
+            suggested_action = ?,
+            primary_action = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      .bind(plan.nextStep, plan.confirmLabel, id)
+      .run();
+    const updatedMessage = await getDataBoxPlusMessage(env, id);
+    return {
+      apiStatus: "ready",
+      recommendation: {
+        id: recommendationId,
+        messageId: id,
+        text: plan.assistantText,
+        summary: `Chystám se provést: ${plan.recommendedAction}`,
+        instructionPlan: extractedFacts.instructionPlan,
+        userInstruction: instruction,
+        recommendedAction: plan.recommendedAction,
+        risk: plan.risk,
+        riskReason: plan.risk,
+        confidence: 0.86,
+        evidence: plan.evidence,
+        similarCases: "Autopilot se učí z potvrzených pokynů u konkrétních zpráv.",
+        afterConfirm: plan.afterConfirm,
+        humanReason: "Akce čeká na potvrzení člověka. Nic se neodešle mimo systém.",
+        requiresConfirmation: true,
+        status: "waiting"
+      },
+      message: updatedMessage,
+      auditId: actionId
+    };
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
 }
 
 export async function confirmDataBoxPlusRecommendation(env, recommendationId, currentUser = null, body = {}) {
@@ -1956,12 +2368,19 @@ export async function confirmDataBoxPlusRecommendation(env, recommendationId, cu
     const actionId = idValue("dbp-action");
     const actionInfo = recommendationConfirmAction(recommendation, body);
     const messageUpdated = await applyRecommendationActionToMessage(db, recommendation, actionInfo);
+    const rememberPattern = body.rememberPattern !== false;
+    const learnedRuleId = rememberPattern
+      ? await rememberDataBoxPlusLearningPattern(db, recommendation, actionInfo, currentUser)
+      : null;
     const payload = {
       confirmedBy: actor,
       requireRadimMartin: body.requireRadimMartin !== false,
       note: cleanString(body.note),
       performedAction: actionInfo.performedAction,
-      messageUpdated
+      messageUpdated,
+      userInstruction: cleanString(recommendation.userInstruction || actionInfo.instructionPlan?.userInstruction),
+      rememberPattern,
+      learnedRuleId
     };
     await db
       .prepare("UPDATE data_box_plus_recommendations SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
@@ -2015,11 +2434,11 @@ export async function rejectDataBoxPlusRecommendation(env, recommendationId, cur
         recommendation.messageId,
         recommendation.id,
         actor,
-        "Nepoužít návrh",
+        "Zrušit akci",
         JSON.stringify({ decidedBy: actor, reason: cleanString(body.reason), note: cleanString(body.note) }),
         new Date().toISOString(),
         "rejected",
-        "Autopilotův návrh se nepoužil. Zpráva zůstává k ručnímu vyřízení."
+        "Připravená akce se zrušila. Zpráva zůstává k ručnímu vyřízení."
       )
       .run();
     return { apiStatus: "ready", recommendation: { ...recommendation, status: "rejected" }, auditId: actionId };

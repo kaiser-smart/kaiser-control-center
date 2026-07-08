@@ -30286,6 +30286,95 @@ body:has(.ds-plus-page) {
   line-height: 1.05;
 }
 
+.ds-plus-learning-status {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  border-top: 1px solid #dfe8dc;
+  padding-top: 12px;
+}
+
+.ds-plus-learning-status__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ds-plus-learning-status__head strong {
+  color: #1f2a22;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.ds-plus-learning-status__head span,
+.ds-plus-learning-status__head small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #eef6ec;
+  color: #245d36;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.ds-plus-learning-status__bar {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: #e4eadf;
+}
+
+.ds-plus-learning-status__bar span,
+.ds-plus-learning-status__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #efc983 0%, #2f7d46 100%);
+}
+
+.ds-plus-learning-status__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.ds-plus-learning-status__metrics div {
+  min-width: 0;
+  border: 1px solid #e4eae1;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+}
+
+.ds-plus-learning-status__metrics dt {
+  color: #647060;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ds-plus-learning-status__metrics dd {
+  margin: 3px 0 0;
+  color: #1f2a22;
+  font-weight: 850;
+}
+
+.ds-plus-learning-status p {
+  margin: 0;
+  color: #526052;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.ds-plus-learning-status small {
+  color: #647060;
+  line-height: 1.4;
+}
+
 .ds-plus-header__state strong {
   color: #2f7d46;
   font-size: 1.5rem;
@@ -30453,6 +30542,10 @@ body:has(.ds-plus-page) {
   gap: 16px;
   align-items: center;
   padding: 16px;
+}
+
+.ds-plus-priority__instruction {
+  grid-column: 1 / -1;
 }
 
 .ds-plus-priority h3,
@@ -30877,6 +30970,187 @@ body:has(.ds-plus-page) {
 .ds-plus-recommendation--done {
   border-color: #c7dfc3;
   background: #f8fcf7;
+}
+
+.ds-plus-instruction-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce6d8;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfdf9;
+}
+
+.ds-plus-instruction-card--compact {
+  padding: 12px;
+  background: #f8fbf6;
+}
+
+.ds-plus-instruction-card form {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ds-plus-instruction-card__head {
+  display: grid;
+  gap: 5px;
+}
+
+.ds-plus-instruction-card__head h3,
+.ds-plus-instruction-card__head p,
+.ds-plus-instruction-bubble p,
+.ds-plus-instruction-preview > strong {
+  margin: 0;
+}
+
+.ds-plus-instruction-card__head h3 {
+  color: #1f2a22;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.ds-plus-instruction-card__head p {
+  color: #526052;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.ds-plus-instruction-card textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 74px;
+  border: 1px solid #d5dfd1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+  color: #202821;
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.ds-plus-instruction-card--compact textarea {
+  min-height: 58px;
+}
+
+.ds-plus-instruction-card textarea:focus {
+  outline: 2px solid #2f7d46;
+  outline-offset: 2px;
+}
+
+.ds-plus-instruction-examples,
+.ds-plus-instruction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ds-plus-instruction-examples button {
+  min-height: 32px;
+  border: 1px solid #d8e0d5;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #ffffff;
+  color: #344035;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ds-plus-instruction-examples button:hover,
+.ds-plus-instruction-examples button:focus-visible {
+  border-color: #bfd7bd;
+  background: #edf6ec;
+}
+
+.ds-plus-instruction-preview {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #dce6d8;
+  padding-top: 12px;
+}
+
+.ds-plus-instruction-bubble {
+  display: grid;
+  gap: 4px;
+  max-width: 860px;
+  border: 1px solid #e1e8de;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.ds-plus-instruction-bubble--user {
+  border-color: #d6e1d2;
+  background: #f3f8f0;
+}
+
+.ds-plus-instruction-bubble--assistant {
+  border-color: #cfe0cc;
+  background: #ffffff;
+}
+
+.ds-plus-instruction-bubble span {
+  color: #647060;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.ds-plus-instruction-bubble p {
+  color: #223025;
+  line-height: 1.45;
+}
+
+.ds-plus-instruction-plan {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.ds-plus-instruction-plan div {
+  min-width: 0;
+  border: 1px solid #e5ebe2;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+}
+
+.ds-plus-instruction-plan dt {
+  color: #647060;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.ds-plus-instruction-plan dd {
+  margin: 3px 0 0;
+  color: #223025;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.ds-plus-instruction-remember {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-self: start;
+  min-width: 0;
+  color: #223025;
+  font-weight: 780;
+}
+
+.ds-plus-instruction-remember input {
+  width: 17px;
+  height: 17px;
+  accent-color: #2f7d46;
+}
+
+.ds-plus-detail-section--chat {
+  border-color: #cfe0cc;
+  background: #f8fbf6;
 }
 
 .ds-plus-notice,
@@ -31351,6 +31625,8 @@ body:has(.ds-plus-page) {
   .ds-plus-rule dl,
   .ds-plus-rules-controls,
   .ds-plus-workflow-summary,
+  .ds-plus-instruction-plan,
+  .ds-plus-learning-status__metrics,
   .ds-plus-detail-section--header dl,
   .ds-plus-facts {
     grid-template-columns: 1fr;
@@ -31412,6 +31688,8 @@ body:has(.ds-plus-page) {
   .ds-plus-priority .primary-action,
   .ds-plus-message-row__action .primary-action,
   .ds-plus-recommendation__actions button,
+  .ds-plus-instruction-card > form > .primary-action,
+  .ds-plus-instruction-actions button,
   .ds-plus-rule__actions button,
   .ds-plus-detail-actions button,
   .ds-plus-attachment__actions button {
