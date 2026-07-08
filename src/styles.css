@@ -29953,6 +29953,10 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
   font-size: clamp(0.7rem, 0.82vw, 0.86rem);
 }
 
+.driver-tablet-theme--light .driver-tablet-title > span {
+  color: #1b2329;
+}
+
 .driver-tablet-title h1 {
   margin: 0;
   color: var(--driver-text);
