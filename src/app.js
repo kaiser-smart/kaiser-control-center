@@ -257,6 +257,8 @@ const DRIVER_TABLET_SOFT_METAL_PREVIEW_ROUTE = "/ridicsky-tablet/soft-metal-prev
 const VEHICLE_TRACKING_PREVIEW_THEME_STORAGE_KEY = "smart_odpady_vehicle_tracking_preview_theme";
 const VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT = "light";
 const VEHICLE_TRACKING_PREVIEW_THEMES = new Set(["light", "dark"]);
+const DRIVER_TABLET_PREVIEW_THEME_STORAGE_KEY = "smart_odpady_driver_tablet_preview_theme";
+const DRIVER_TABLET_PREVIEW_THEME_DEFAULT = "dark";
 const VEHICLE_TRACKING_PUBLIC_PREVIEW_USER = {
   id: "vehicle-tracking-soft-metal-preview",
   name: "Veřejný design náhled",
@@ -1246,6 +1248,9 @@ const vehicleTrackingLiveState = {
 const vehicleTrackingPreviewThemeState = {
   mode: readVehicleTrackingPreviewTheme()
 };
+const driverTabletPreviewThemeState = {
+  mode: readDriverTabletPreviewTheme()
+};
 
 let vehicleTrackingAudioContext = null;
 
@@ -1442,6 +1447,65 @@ function setVehicleTrackingPreviewTheme(mode) {
   vehicleTrackingPreviewThemeState.mode = nextTheme;
   writeVehicleTrackingPreviewTheme(nextTheme);
   applyVehicleTrackingPreviewTheme(nextTheme);
+}
+
+function normalizeDriverTabletPreviewTheme(value) {
+  return VEHICLE_TRACKING_PREVIEW_THEMES.has(value) ? value : DRIVER_TABLET_PREVIEW_THEME_DEFAULT;
+}
+
+function readDriverTabletPreviewTheme() {
+  try {
+    return normalizeDriverTabletPreviewTheme(window.localStorage?.getItem(DRIVER_TABLET_PREVIEW_THEME_STORAGE_KEY));
+  } catch {
+    return DRIVER_TABLET_PREVIEW_THEME_DEFAULT;
+  }
+}
+
+function writeDriverTabletPreviewTheme(mode) {
+  try {
+    window.localStorage?.setItem(DRIVER_TABLET_PREVIEW_THEME_STORAGE_KEY, mode);
+  } catch {
+    // Browser storage is optional for the public preview.
+  }
+}
+
+function driverTabletPreviewThemeMode() {
+  driverTabletPreviewThemeState.mode = normalizeDriverTabletPreviewTheme(driverTabletPreviewThemeState.mode);
+  return driverTabletPreviewThemeState.mode;
+}
+
+function driverTabletPreviewThemeSwitcher() {
+  const currentTheme = driverTabletPreviewThemeMode();
+  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+  const isDark = currentTheme === "dark";
+  const label = isDark ? "Noc" : "Den";
+
+  return `
+    <button
+      class="driver-tablet-theme-switcher driver-tablet-theme-switcher--${escapeHtml(currentTheme)}"
+      type="button"
+      role="switch"
+      aria-checked="${isDark ? "true" : "false"}"
+      aria-label="Prepnout na ${isDark ? "denni" : "nocni"} motiv"
+      data-driver-tablet-theme="${escapeHtml(nextTheme)}"
+    >
+      <span class="driver-tablet-theme-switcher__track" aria-hidden="true">
+        <span class="driver-tablet-theme-switcher__icon driver-tablet-theme-switcher__icon--sun">${vehicleTrackingPreviewThemeIcon("light")}</span>
+        <span class="driver-tablet-theme-switcher__icon driver-tablet-theme-switcher__icon--moon">${vehicleTrackingPreviewThemeIcon("dark")}</span>
+        <span class="driver-tablet-theme-switcher__thumb">
+          <span class="driver-tablet-theme-switcher__thumb-icon">${vehicleTrackingPreviewThemeIcon(currentTheme)}</span>
+        </span>
+      </span>
+      <span class="driver-tablet-theme-switcher__label">${escapeHtml(label)}</span>
+    </button>
+  `;
+}
+
+function setDriverTabletPreviewTheme(mode) {
+  const nextTheme = normalizeDriverTabletPreviewTheme(mode);
+  driverTabletPreviewThemeState.mode = nextTheme;
+  writeDriverTabletPreviewTheme(nextTheme);
+  render();
 }
 
 function syncVehicleTrackingPreviewThemeRoot(isPreview = isVehicleTrackingSoftMetalPreviewPath()) {
@@ -1843,13 +1907,19 @@ function driverTabletInfoChip(icon, label, value, tone = "graphite") {
 }
 
 function driverTabletSoftMetalPreviewPage() {
+  const themeMode = driverTabletPreviewThemeMode();
+
   return `
-    <main class="driver-tablet-page driver-tablet-page--soft-metal-preview" aria-labelledby="driver-tablet-preview-title">
-      <section class="driver-tablet-canvas" aria-label="N&aacute;hled aplikace pro &rcaron;idi&ccaron;sk&yacute; tablet">
+    <main class="driver-tablet-page driver-tablet-page--soft-metal-preview driver-tablet-theme--${escapeHtml(themeMode)}" aria-labelledby="driver-tablet-preview-title" data-driver-tablet-theme-state="${escapeHtml(themeMode)}">
+      <div class="driver-tablet-preview-frame">
+        <div class="driver-tablet-preview-toolbar" aria-label="Nastaven&iacute; n&aacute;hledu">
+          ${driverTabletPreviewThemeSwitcher()}
+        </div>
+        <section class="driver-tablet-canvas" aria-label="N&aacute;hled aplikace pro &rcaron;idi&ccaron;sk&yacute; tablet">
         <div class="driver-tablet-app">
           <header class="driver-tablet-topbar">
             <a class="driver-tablet-logo" href="/" aria-label="Zp&ecaron;t na Smart odpady">
-              <img src="/logo-kaiser.svg" alt="kaiser." loading="eager">
+              <img src="/kaiser_logo.png?v=${DESIGN_ICON_ASSET_VERSION}" alt="kaiser." loading="eager" decoding="async">
             </a>
             <div class="driver-tablet-title">
               <span>&Rcaron;IDI&Ccaron;SK&Yacute; TABLET</span>
@@ -1963,7 +2033,8 @@ function driverTabletSoftMetalPreviewPage() {
             <span>Preview bez ostr&yacute;ch akc&iacute;</span>
           </footer>
         </div>
-      </section>
+        </section>
+      </div>
     </main>
   `;
 }
@@ -30268,6 +30339,13 @@ document.addEventListener("click", async (event) => {
   if (trackingPreviewTheme) {
     event.preventDefault();
     setVehicleTrackingPreviewTheme(trackingPreviewTheme.dataset.trackingPreviewTheme || VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT);
+    return;
+  }
+
+  const driverTabletTheme = event.target.closest("[data-driver-tablet-theme]");
+  if (driverTabletTheme) {
+    event.preventDefault();
+    setDriverTabletPreviewTheme(driverTabletTheme.dataset.driverTabletTheme || DRIVER_TABLET_PREVIEW_THEME_DEFAULT);
     return;
   }
 
