@@ -808,6 +808,22 @@ export async function getDataBoxPlusStatus(env) {
     const waitingRow = await db
       .prepare("SELECT COUNT(*) AS count FROM data_box_plus_recommendations WHERE status = 'waiting'")
       .first();
+    const newRow = await db
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM data_box_plus_messages
+        WHERE archive_status <> 'archived'
+          AND status IN ('Nové', 'Dnes k vyřízení', 'Čeká na potvrzení', 'Problém')
+      `)
+      .first();
+    const unresolvedRow = await db
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM data_box_plus_messages
+        WHERE archive_status <> 'archived'
+          AND status NOT IN ('Bezpečně stranou', 'Archivované')
+      `)
+      .first();
     return {
       apiStatus: "ready",
       expectedMailboxes: EXPECTED_MAILBOX_COUNT,
@@ -815,10 +831,15 @@ export async function getDataBoxPlusStatus(env) {
       isds: dataBoxIsdsStatus(env),
       latestSyncRun: rowToSyncRun(syncRow),
       waitingRecommendations: numberValue(waitingRow?.count),
+      summary: {
+        newCount: numberValue(newRow?.count),
+        unresolvedCount: numberValue(unresolvedRow?.count),
+        waitingRecommendations: numberValue(waitingRow?.count)
+      },
       background: {
         intervalMinutes: 30,
         enabled: cleanString(env.DATA_BOX_PLUS_BACKGROUND_ENABLED || "true") !== "false",
-        note: "Automatické načítání běží serverově, pokud je na Pages projektu zapnutý plánovaný trigger."
+        note: "Automatické načítání běží serverově každých 30 minut."
       }
     };
   } catch (error) {

@@ -1425,6 +1425,27 @@ h1 {
   line-height: 1;
 }
 
+.data-box-plus-home-badge {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  min-width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #d7262f;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(215, 38, 47, 0.24);
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
 .collection-routes-home-alert-badge {
   position: absolute;
   z-index: 4;

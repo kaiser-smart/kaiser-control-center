@@ -1175,6 +1175,14 @@ const dataBoxPlusState = {
   rules: [],
   syncRuns: []
 };
+const dataBoxPlusHomeState = {
+  loaded: false,
+  loading: false,
+  error: "",
+  lastLoadedAt: 0,
+  newCount: 0,
+  unresolvedCount: 0
+};
 let dataBoxSearchRenderTimer = null;
 const quickAbsenceState = {
   step: "type",
@@ -1726,19 +1734,33 @@ function homeModuleMeta(moduleItem) {
 }
 
 function homeModuleCornerBadge(moduleItem) {
-  if (moduleItem.id !== COLLECTION_ROUTES_MODULE_KEY) {
-    return "";
+  if (moduleItem.id === DATA_BOX_PLUS_MODULE_KEY) {
+    const unresolvedCount = dataBoxPlusHomeUnresolvedCount();
+    if (!dataBoxPlusHomeState.loaded) {
+      return "";
+    }
+    const value = unresolvedCount > 99 ? "99+" : String(unresolvedCount);
+    return `
+    <span class="data-box-plus-home-badge" title="${escapeHtml(`${value} nevyřízených zpráv v Datových schránkách Plus`)}" aria-label="${escapeHtml(`Datové schránky Plus: ${value} nevyřízených zpráv`)}">
+      ${escapeHtml(value)}
+    </span>
+  `;
   }
-  const errorCount = collectionRoutesSvozKaiserWatchdogErrorCount();
-  if (errorCount <= 0) {
-    return "";
-  }
-  const value = errorCount > 99 ? "99+" : String(errorCount);
-  return `
+
+  if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
+    const errorCount = collectionRoutesSvozKaiserWatchdogErrorCount();
+    if (errorCount <= 0) {
+      return "";
+    }
+    const value = errorCount > 99 ? "99+" : String(errorCount);
+    return `
     <span class="collection-routes-home-alert-badge" title="${escapeHtml(`${value} chyb ve Vistos Svoz Kaiser datech`)}" aria-label="${escapeHtml(`Trasy svozu: ${value} chyb`)}">
       ${escapeHtml(value)}
     </span>
   `;
+  }
+
+  return "";
 }
 
 function homeModuleCard(moduleItem, user, variant = "standard") {
@@ -27531,6 +27553,40 @@ async function apiJson(path, options = {}) {
   return payload;
 }
 
+function dataBoxPlusHomeUnresolvedCount() {
+  return Number(dataBoxPlusHomeState.unresolvedCount || 0) || 0;
+}
+
+async function loadDataBoxPlusHomeStatus(options = {}) {
+  const force = Boolean(options.force);
+  const now = Date.now();
+  if (dataBoxPlusHomeState.loading) return;
+  if (!force && dataBoxPlusHomeState.loaded && now - dataBoxPlusHomeState.lastLoadedAt < 60000) return;
+
+  dataBoxPlusHomeState.loading = true;
+  dataBoxPlusHomeState.error = "";
+  try {
+    const statusResult = await apiJson("/api/data-box-plus/status");
+    const summary = statusResult.summary || {};
+    dataBoxPlusHomeState.newCount = Number(summary.newCount || 0) || 0;
+    dataBoxPlusHomeState.unresolvedCount = Number(summary.unresolvedCount || 0) || 0;
+    dataBoxPlusHomeState.loaded = true;
+    dataBoxPlusHomeState.lastLoadedAt = now;
+  } catch (error) {
+    dataBoxPlusHomeState.error = dataBoxPlusHumanError(error.payload?.error || error.message || "Počet zpráv DSP se teď nepodařilo načíst.");
+  } finally {
+    dataBoxPlusHomeState.loading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
+function ensureDataBoxPlusHomeStatus(user) {
+  if (!canViewModule(user, DATA_BOX_PLUS_MODULE_KEY)) return;
+  void loadDataBoxPlusHomeStatus({ force: !dataBoxPlusHomeState.loaded });
+}
+
 async function loadDataBoxPlusData(options = {}) {
   const force = Boolean(options.force);
   const now = Date.now();
@@ -33269,6 +33325,7 @@ function renderAuthenticatedApp(user) {
 
   if (sarlotaDeepLink) {
     app.innerHTML = homePage(user);
+    ensureDataBoxPlusHomeStatus(user);
     document.title = `Šarlota | ${APP_NAME}`;
     return;
   }
@@ -33282,6 +33339,7 @@ function renderAuthenticatedApp(user) {
   if (path === "/") {
     ensureCollectionRoutesSvozKaiserWatchdog(user);
     app.innerHTML = homePage(user);
+    ensureDataBoxPlusHomeStatus(user);
     document.title = APP_NAME;
     return;
   }
