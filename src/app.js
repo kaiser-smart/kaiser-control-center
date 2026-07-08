@@ -18657,7 +18657,7 @@ function dataBoxPlusHelp(label, text) {
   const helpId = `ds-plus-help-${dataBoxPlusHelpId}`;
   return `
     <span class="ds-plus-help">
-      <button class="ds-plus-help__button" type="button" aria-label="${escapeHtml(`Nápověda: ${label}`)}" aria-describedby="${escapeHtml(helpId)}" title="${escapeHtml(helpText)}">?</button>
+      <button class="ds-plus-help__button" type="button" aria-label="${escapeHtml(`Informace: ${label}`)}" aria-describedby="${escapeHtml(helpId)}">i</button>
       <span class="ds-plus-help__bubble" id="${escapeHtml(helpId)}" role="tooltip">${escapeHtml(helpText)}</span>
     </span>
   `;
