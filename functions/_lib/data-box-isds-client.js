@@ -141,6 +141,41 @@ function accountConfig(env = {}, slot) {
   };
 }
 
+export function dataBoxIsdsAccountFromCredentials(env = {}, details = {}) {
+  const slot = numberValue(details.slot, 1);
+  const baseUrl = baseUrlFromEnv(env);
+  const username = cleanString(details.username);
+  const password = cleanString(details.password);
+  const enabled = details.enabled === undefined ? true : Boolean(details.enabled);
+  const configured = enabled && Boolean(username && password);
+  const missing = [];
+
+  if (!enabled) missing.push(`DATA_BOX_PLUS_MAILBOX_${slot}_DISABLED`);
+  if (!username) missing.push(`DATA_BOX_PLUS_MAILBOX_${slot}_USERNAME`);
+  if (!password) missing.push(`DATA_BOX_PLUS_MAILBOX_${slot}_PASSWORD`);
+
+  return {
+    slot,
+    id: cleanString(details.id) || dataBoxAccountId(slot),
+    label: cleanString(details.label) || accountLabel(env, slot),
+    isdsId: cleanString(details.isdsId),
+    enabled,
+    configured,
+    mode: modeFromEnv(env),
+    baseUrl,
+    infoEndpointUrl: `${baseUrl}${ISDS_INFO_PATH}`,
+    messageEndpointUrl: `${baseUrl}${ISDS_MESSAGE_PATH}`,
+    hasUsername: Boolean(username),
+    hasPassword: Boolean(password),
+    missing,
+    username,
+    password,
+    limit: positiveInteger(env.DATA_BOX_ISDS_MESSAGE_LIMIT, DEFAULT_LIMIT, 100),
+    lookbackDays: positiveInteger(env.DATA_BOX_ISDS_LOOKBACK_DAYS, DEFAULT_LOOKBACK_DAYS, 365),
+    documentationStatus: "official-isds-wsdl-3.11-2026-06-26"
+  };
+}
+
 function publicAccountStatus(config) {
   const {
     username,

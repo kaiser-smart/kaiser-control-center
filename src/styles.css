@@ -30189,18 +30189,139 @@ body:has(.ds-plus-page) {
   gap: 8px;
 }
 
-.ds-plus-mailbox-list article {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 10px;
-  align-items: center;
-  border-bottom: 1px solid #eef1eb;
-  padding: 8px 0;
+.ds-plus-mailbox-list {
+  gap: 12px;
 }
 
+.ds-plus-mailbox-create {
+  margin: 0 0 14px;
+  border: 1px solid #dfe7db;
+  border-radius: 8px;
+  background: #f9fbf8;
+  padding: 10px 12px;
+}
+
+.ds-plus-mailbox-create summary,
+.ds-plus-mailbox-actions summary {
+  cursor: pointer;
+  color: #223028;
+  font-weight: 800;
+}
+
+.ds-plus-mailbox-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #e2e8df;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.ds-plus-mailbox-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ds-plus-mailbox-card__head span,
 .ds-plus-mailbox-list article > span {
   color: #667166;
   font-size: 0.88rem;
+}
+
+.ds-plus-mailbox-card__head strong {
+  display: block;
+  margin-top: 2px;
+  color: #1f2a22;
+  font-size: 1.05rem;
+}
+
+.ds-plus-mailbox-card__head p,
+.ds-plus-mailbox-warning {
+  margin: 3px 0 0;
+  color: #5f6b60;
+}
+
+.ds-plus-mailbox-warning {
+  border-left: 3px solid #d64a3a;
+  padding: 8px 10px;
+  background: #fff7f5;
+  color: #7d2f27;
+}
+
+.ds-plus-mailbox-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.ds-plus-mailbox-meta div {
+  min-width: 0;
+}
+
+.ds-plus-mailbox-meta dt {
+  color: #667166;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.ds-plus-mailbox-meta dd {
+  margin: 2px 0 0;
+  color: #233029;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ds-plus-mailbox-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.ds-plus-mailbox-actions details {
+  border-top: 1px solid #eef1eb;
+  padding-top: 8px;
+}
+
+.ds-plus-mailbox-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  align-items: end;
+  margin-top: 10px;
+}
+
+.ds-plus-mailbox-form label {
+  display: grid;
+  gap: 4px;
+  color: #667166;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.ds-plus-mailbox-form input,
+.ds-plus-mailbox-form select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #d8e0d5;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2a22;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.ds-plus-checkbox {
+  display: flex !important;
+  align-items: center;
+  gap: 8px !important;
+  min-height: 42px;
+}
+
+.ds-plus-checkbox input {
+  width: 18px;
+  min-height: 18px;
 }
 
 .ds-plus-autonomy-list,

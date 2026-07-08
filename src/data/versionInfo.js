@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.450"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.451"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: správa přístupů",
+    text: "Nastavení DSP nově ukazuje konkrétní seznam 7 schránek včetně ID, stavu přístupů a posledního načtení. Přibyla editace schránky, změna hesla a přidání schránky přes vlastní šifrovaný DSP vault oddělený od původní Datové schránky."
+  },
   {
     title: "Datové schránky Plus: oprava příjmu, odpočet a manuál",
     text: "DSP ukládá nejdřív obálku zprávy a potom přílohy, takže automatické načítání může zapisovat nalezené zprávy. V hlavičce přibyl odpočet do dalšího načtení a samostatná záložka Manuál včetně stavu Nová zpráva / Odpovědět."

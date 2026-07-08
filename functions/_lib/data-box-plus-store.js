@@ -1,4 +1,5 @@
 import {
+  dataBoxIsdsAccountFromCredentials,
   dataBoxIsdsAccountConfigs,
   dataBoxIsdsStatus,
   fetchDataBoxMessageAttachments,
@@ -58,6 +59,79 @@ function idValue(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function activeFlag(value, fallback = true) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  return ["1", "true", "yes", "on", "active", "enabled", "aktivni", "aktivní"].includes(cleanString(value).toLowerCase());
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  const binary = atob(cleanString(value));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function maskSecret(value) {
+  const text = cleanString(value);
+  if (!text) return "";
+  if (text.length <= 4) return `${text[0] || ""}•••`;
+  return `${text.slice(0, 2)}••••${text.slice(-2)}`;
+}
+
+function actorName(currentUser) {
+  return cleanString(currentUser?.name || currentUser?.email || currentUser?.id || "system");
+}
+
+function userId(currentUser) {
+  return cleanString(currentUser?.id || currentUser?.email || currentUser?.name || "");
+}
+
+async function credentialCryptoKey(env) {
+  const secret = cleanString(env.DATA_BOX_PLUS_CREDENTIALS_KEY);
+  if (!secret) {
+    throw new DataBoxPlusStoreError(
+      "Chybí bezpečný klíč pro ukládání přístupů Datových schránek Plus.",
+      503,
+      "data_box_plus_credentials_key_missing"
+    );
+  }
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+async function encryptCredential(env, value) {
+  const text = cleanString(value);
+  if (!text) return "";
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await credentialCryptoKey(env);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(text));
+  return `v1:${bytesToBase64(iv)}:${bytesToBase64(new Uint8Array(ciphertext))}`;
+}
+
+async function decryptCredential(env, value) {
+  const encrypted = cleanString(value);
+  if (!encrypted) return "";
+  const [version, ivValue, ciphertextValue] = encrypted.split(":");
+  if (version !== "v1" || !ivValue || !ciphertextValue) {
+    throw new DataBoxPlusStoreError("Přístup k datové schránce má neplatný bezpečnostní formát.", 500, "data_box_plus_credentials_invalid");
+  }
+  const key = await credentialCryptoKey(env);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: base64ToBytes(ivValue) },
+    key,
+    base64ToBytes(ciphertextValue)
+  );
+  return new TextDecoder().decode(plaintext);
+}
+
 function safeJsonParse(value, fallback) {
   try {
     return JSON.parse(cleanString(value));
@@ -80,6 +154,11 @@ function dataBoxPlusDatabase(env = {}, required = true) {
 
 function dataBoxPlusDocumentsBucket(env = {}) {
   return env.SMART_ODPADY_DOCUMENTS || null;
+}
+
+function credentialTableMissing(error) {
+  const message = cleanString(error?.message).toLowerCase();
+  return message.includes("data_box_plus_credentials") && message.includes("no such table");
 }
 
 export function dataBoxPlusApiStatus(env = {}) {
@@ -287,13 +366,23 @@ function classifyMessage(message = {}, attachmentState = {}) {
   };
 }
 
-function rowToMailbox(row) {
+function rowToMailbox(row, fallbackAccount = null) {
   if (!row) return null;
+  const credentialId = cleanString(row.credential_id);
+  const credentialActive = row.credential_active === undefined || row.credential_active === null
+    ? null
+    : numberValue(row.credential_active) === 1;
+  const fallbackConfigured = Boolean(fallbackAccount?.configured);
+  const hasLogin = Boolean(row.username_ciphertext || fallbackAccount?.hasUsername || fallbackAccount?.username);
+  const hasPassword = Boolean(row.password_ciphertext || fallbackAccount?.hasPassword || fallbackAccount?.password);
+  const credentialSource = credentialId
+    ? "DSP vault"
+    : fallbackConfigured ? "Původní serverové secrets" : "";
   return {
     id: cleanString(row.id),
     name: cleanString(row.name),
     company: cleanString(row.company || row.name),
-    isdsId: cleanString(row.isds_id),
+    isdsId: cleanString(row.isds_id || fallbackAccount?.isdsId),
     slot: numberValue(row.slot),
     status: cleanString(row.connection_status || "waiting") === "ready" ? "aktivní" : "čeká na přístup",
     connectionStatus: cleanString(row.connection_status),
@@ -302,8 +391,193 @@ function rowToMailbox(row) {
     lastSyncMessage: cleanString(row.last_sync_message),
     newCount: numberValue(row.new_count),
     dueCount: numberValue(row.due_count),
-    problemCount: numberValue(row.problem_count)
+    problemCount: numberValue(row.problem_count),
+    hasCredentials: credentialId ? Boolean(credentialActive && hasLogin && hasPassword) : fallbackConfigured,
+    hasLogin,
+    hasPassword,
+    usernameMasked: cleanString(row.username_hint) || maskSecret(fallbackAccount?.username),
+    passwordStatus: hasPassword ? "nastaveno" : "chybí",
+    credentialSource,
+    credentialUpdatedAt: cleanString(row.credential_updated_at),
+    credentialRotatedAt: cleanString(row.last_rotated_at),
+    credentialActive: credentialId ? credentialActive : fallbackConfigured
   };
+}
+
+function fallbackAccountMap(env) {
+  const map = new Map();
+  for (const account of dataBoxIsdsAccountConfigs(env)) {
+    map.set(numberValue(account.slot), account);
+  }
+  return map;
+}
+
+async function mailboxRowsWithCredentials(db) {
+  try {
+    const result = await db
+      .prepare(`
+        SELECT
+          m.*,
+          c.id AS credential_id,
+          c.username_ciphertext,
+          c.username_hint,
+          c.password_ciphertext,
+          c.active AS credential_active,
+          c.updated_at AS credential_updated_at,
+          c.last_rotated_at,
+          c.source AS credential_source
+        FROM data_box_plus_mailboxes m
+        LEFT JOIN data_box_plus_credentials c ON c.mailbox_id = m.id
+        ORDER BY m.slot ASC, m.name ASC
+      `)
+      .all();
+    return result.results || [];
+  } catch (error) {
+    if (!credentialTableMissing(error)) throw error;
+    const result = await db
+      .prepare("SELECT * FROM data_box_plus_mailboxes ORDER BY slot ASC, name ASC")
+      .all();
+    return result.results || [];
+  }
+}
+
+async function credentialRows(db) {
+  try {
+    const result = await db
+      .prepare(`
+        SELECT
+          c.*,
+          m.id AS mailbox_id,
+          m.name,
+          m.company,
+          m.isds_id,
+          m.slot AS mailbox_slot
+        FROM data_box_plus_credentials c
+        JOIN data_box_plus_mailboxes m ON m.id = c.mailbox_id
+        WHERE c.active = 1
+        ORDER BY c.slot ASC
+      `)
+      .all();
+    return result.results || [];
+  } catch (error) {
+    if (credentialTableMissing(error)) return [];
+    throw error;
+  }
+}
+
+async function dataBoxPlusAccountConfigs(env) {
+  const db = dataBoxPlusDatabase(env, true);
+  const fallbackAccounts = dataBoxIsdsAccountConfigs(env).slice(0, EXPECTED_MAILBOX_COUNT);
+  const rows = await credentialRows(db);
+  const accounts = [];
+  const usedSlots = new Set();
+
+  for (const row of rows) {
+    const slot = numberValue(row.slot || row.mailbox_slot);
+    if (!slot || slot > EXPECTED_MAILBOX_COUNT) continue;
+    const username = await decryptCredential(env, row.username_ciphertext);
+    const password = await decryptCredential(env, row.password_ciphertext);
+    const account = dataBoxIsdsAccountFromCredentials(env, {
+      slot,
+      id: cleanString(row.mailbox_id),
+      label: cleanString(row.name),
+      isdsId: cleanString(row.isds_id),
+      enabled: numberValue(row.active) === 1,
+      username,
+      password
+    });
+    if (account.configured) {
+      accounts.push(account);
+      usedSlots.add(slot);
+    }
+  }
+
+  for (const account of fallbackAccounts) {
+    const slot = numberValue(account.slot);
+    if (!usedSlots.has(slot)) {
+      accounts.push(account);
+    }
+  }
+
+  return accounts
+    .filter((account) => numberValue(account.slot) >= 1 && numberValue(account.slot) <= EXPECTED_MAILBOX_COUNT)
+    .sort((a, b) => numberValue(a.slot) - numberValue(b.slot));
+}
+
+function mailboxPayload(body = {}, fallback = {}) {
+  const slot = numberValue(body.slot ?? fallback.slot);
+  if (!slot || slot < 1 || slot > EXPECTED_MAILBOX_COUNT) {
+    throw new DataBoxPlusStoreError("Vyber slot schránky 1 až 7.", 400, "data_box_plus_mailbox_slot_invalid");
+  }
+
+  const name = cleanString(body.name ?? fallback.name);
+  const company = cleanString(body.company ?? fallback.company ?? name);
+  if (!name) {
+    throw new DataBoxPlusStoreError("Doplň název schránky.", 400, "data_box_plus_mailbox_name_missing");
+  }
+
+  return {
+    id: cleanString(body.id || fallback.id || MAILBOX_IDS[slot - 1] || `dbp-mailbox-${slot}`),
+    slot,
+    name,
+    company: company || name,
+    isdsId: cleanString(body.isdsId ?? body.isds_id ?? fallback.isds_id ?? fallback.isdsId),
+    active: activeFlag(body.active, activeFlag(fallback.active, true))
+  };
+}
+
+async function mailboxRowByIdOrSlot(db, id, slot = 0) {
+  const mailboxId = cleanString(id);
+  if (mailboxId) {
+    const row = await db.prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(mailboxId).first();
+    if (row) return row;
+  }
+  const slotNumber = numberValue(slot);
+  if (slotNumber) {
+    const row = await db.prepare("SELECT * FROM data_box_plus_mailboxes WHERE slot = ? LIMIT 1").bind(slotNumber).first();
+    if (row) return row;
+  }
+  return null;
+}
+
+async function credentialRowByMailbox(db, mailboxId) {
+  try {
+    return await db
+      .prepare("SELECT * FROM data_box_plus_credentials WHERE mailbox_id = ? LIMIT 1")
+      .bind(cleanString(mailboxId))
+      .first();
+  } catch (error) {
+    if (credentialTableMissing(error)) {
+      throw new DataBoxPlusStoreError(
+        "Chybí tabulka pro přístupy Datových schránek Plus. Spusť migraci 0030.",
+        503,
+        "data_box_plus_credentials_migration_missing"
+      );
+    }
+    throw error;
+  }
+}
+
+async function writeMailboxAudit(db, currentUser, actionType, payload = {}) {
+  await db
+    .prepare(`
+      INSERT INTO data_box_plus_action_log (
+        id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      idValue("dbp-action"),
+      null,
+      null,
+      actorName(currentUser),
+      actionType,
+      JSON.stringify(payload),
+      new Date().toISOString(),
+      "saved",
+      "Změna přístupů DSP byla zapsaná do historie. Heslo se do historie neukládá."
+    )
+    .run();
 }
 
 function rowToAttachment(row) {
@@ -794,6 +1068,7 @@ export async function ensureDataBoxPlusMailboxes(env) {
   const db = dataBoxPlusDatabase(env, true);
   const isds = dataBoxIsdsStatus(env);
   const configuredAccounts = dataBoxIsdsAccountConfigs(env);
+  const fallbackMap = fallbackAccountMap(env);
   const visibleAccounts = isds.accounts?.length ? isds.accounts : [];
   const accounts = visibleAccounts.length
     ? visibleAccounts.map((account) => ({
@@ -811,15 +1086,31 @@ export async function ensureDataBoxPlusMailboxes(env) {
     };
     await ensureMailbox(db, account);
   }
+
+  const rows = await mailboxRowsWithCredentials(db);
+  for (const row of rows) {
+    const fallback = fallbackMap.get(numberValue(row.slot));
+    const hasVault = Boolean(row.credential_id);
+    const ready = hasVault
+      ? numberValue(row.credential_active) === 1 && Boolean(row.username_ciphertext && row.password_ciphertext)
+      : Boolean(fallback?.configured);
+    await db
+      .prepare(`
+        UPDATE data_box_plus_mailboxes
+        SET connection_status = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND connection_status IN ('waiting', 'configuration_missing')
+      `)
+      .bind(ready ? "ready" : "waiting", cleanString(row.id))
+      .run();
+  }
 }
 
 export async function getDataBoxPlusStatus(env) {
   const db = dataBoxPlusDatabase(env, true);
   try {
     await ensureDataBoxPlusMailboxes(env);
-    const mailboxesResult = await db
-      .prepare("SELECT * FROM data_box_plus_mailboxes ORDER BY slot ASC, name ASC")
-      .all();
+    const fallbackMap = fallbackAccountMap(env);
+    const mailboxRows = await mailboxRowsWithCredentials(db);
     const syncRow = await db
       .prepare("SELECT * FROM data_box_plus_sync_runs ORDER BY started_at DESC LIMIT 1")
       .first();
@@ -845,7 +1136,7 @@ export async function getDataBoxPlusStatus(env) {
     return {
       apiStatus: "ready",
       expectedMailboxes: EXPECTED_MAILBOX_COUNT,
-      mailboxes: (mailboxesResult.results || []).map(rowToMailbox),
+      mailboxes: mailboxRows.map((row) => rowToMailbox(row, fallbackMap.get(numberValue(row.slot)))),
       isds: dataBoxIsdsStatus(env),
       latestSyncRun: rowToSyncRun(syncRow),
       waitingRecommendations: numberValue(waitingRow?.count),
@@ -878,7 +1169,7 @@ export async function runDataBoxPlusSync(env, currentUser = null, options = {}) 
   let attachmentsDownloaded = 0;
 
   try {
-    const accounts = dataBoxIsdsAccountConfigs(env).slice(0, EXPECTED_MAILBOX_COUNT);
+    const accounts = await dataBoxPlusAccountConfigs(env);
     if (!accounts.length) {
       errors.push({ message: "Chybí přístup k datovým schránkám.", code: "data_box_plus_isds_missing" });
     }
@@ -971,8 +1262,202 @@ export async function listDataBoxPlusMailboxes(env) {
   const db = dataBoxPlusDatabase(env, true);
   try {
     await ensureDataBoxPlusMailboxes(env);
-    const result = await db.prepare("SELECT * FROM data_box_plus_mailboxes ORDER BY slot ASC, name ASC").all();
-    return (result.results || []).map(rowToMailbox);
+    const fallbackMap = fallbackAccountMap(env);
+    const rows = await mailboxRowsWithCredentials(db);
+    return rows.map((row) => rowToMailbox(row, fallbackMap.get(numberValue(row.slot))));
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
+export async function saveDataBoxPlusMailbox(env, currentUser = null, body = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  try {
+    await ensureDataBoxPlusMailboxes(env);
+    const existing = await mailboxRowByIdOrSlot(db, body.id, body.slot);
+    const payload = mailboxPayload(body, existing || {});
+    const providedUsername = cleanString(body.username);
+    const providedPassword = cleanString(body.password);
+    const existingCredential = existing?.id ? await credentialRowByMailbox(db, existing.id) : null;
+
+    if (!existingCredential && (!providedUsername || !providedPassword)) {
+      throw new DataBoxPlusStoreError("Pro novou schránku doplň login i heslo.", 400, "data_box_plus_mailbox_credentials_missing");
+    }
+
+    await db
+      .prepare(`
+        INSERT INTO data_box_plus_mailboxes (
+          id, name, company, isds_id, slot, connection_status, last_sync_status, last_sync_message
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          company = excluded.company,
+          isds_id = excluded.isds_id,
+          slot = excluded.slot,
+          connection_status = excluded.connection_status,
+          updated_at = CURRENT_TIMESTAMP
+      `)
+      .bind(
+        payload.id,
+        payload.name,
+        payload.company,
+        payload.isdsId,
+        payload.slot,
+        payload.active ? "ready" : "waiting",
+        payload.active ? "waiting" : "configuration_missing",
+        payload.active ? "Přístup je uložený v DSP vaultu." : "Schránka je vypnutá."
+      )
+      .run();
+
+    const targetMailbox = await mailboxRowByIdOrSlot(db, payload.id, payload.slot);
+    if (!targetMailbox?.id) {
+      throw new DataBoxPlusStoreError("Schránku se nepodařilo uložit.", 500, "data_box_plus_mailbox_save_failed");
+    }
+
+    const credential = await credentialRowByMailbox(db, targetMailbox.id);
+    const usernameCiphertext = providedUsername
+      ? await encryptCredential(env, providedUsername)
+      : cleanString(credential?.username_ciphertext);
+    const passwordCiphertext = providedPassword
+      ? await encryptCredential(env, providedPassword)
+      : cleanString(credential?.password_ciphertext);
+
+    await db
+      .prepare(`
+        INSERT INTO data_box_plus_credentials (
+          id, mailbox_id, slot, username_ciphertext, username_hint, password_ciphertext,
+          active, source, created_by_user_id, updated_by_user_id, last_rotated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(mailbox_id) DO UPDATE SET
+          slot = excluded.slot,
+          username_ciphertext = excluded.username_ciphertext,
+          username_hint = excluded.username_hint,
+          password_ciphertext = excluded.password_ciphertext,
+          active = excluded.active,
+          source = excluded.source,
+          updated_at = CURRENT_TIMESTAMP,
+          updated_by_user_id = excluded.updated_by_user_id,
+          last_rotated_at = CASE
+            WHEN excluded.last_rotated_at <> '' THEN excluded.last_rotated_at
+            ELSE data_box_plus_credentials.last_rotated_at
+          END
+      `)
+      .bind(
+        credential?.id || idValue("dbp-cred"),
+        targetMailbox.id,
+        payload.slot,
+        usernameCiphertext,
+        providedUsername ? maskSecret(providedUsername) : cleanString(credential?.username_hint),
+        passwordCiphertext,
+        payload.active ? 1 : 0,
+        "vault",
+        userId(currentUser),
+        userId(currentUser),
+        providedPassword ? new Date().toISOString() : cleanString(credential?.last_rotated_at)
+      )
+      .run();
+
+    await writeMailboxAudit(db, currentUser, credential ? "Upravit schránku DSP" : "Přidat schránku DSP", {
+      mailboxId: targetMailbox.id,
+      slot: payload.slot,
+      name: payload.name,
+      company: payload.company,
+      isdsId: payload.isdsId,
+      active: payload.active,
+      usernameChanged: Boolean(providedUsername),
+      passwordChanged: Boolean(providedPassword)
+    });
+
+    const fallbackMap = fallbackAccountMap(env);
+    const rows = await mailboxRowsWithCredentials(db);
+    const row = rows.find((item) => cleanString(item.id) === targetMailbox.id);
+    return { apiStatus: "ready", mailbox: rowToMailbox(row, fallbackMap.get(numberValue(row?.slot))) };
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
+export async function updateDataBoxPlusMailboxPassword(env, mailboxId, currentUser = null, body = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  try {
+    await ensureDataBoxPlusMailboxes(env);
+    const mailbox = await mailboxRowByIdOrSlot(db, mailboxId, body.slot);
+    if (!mailbox?.id) {
+      throw new DataBoxPlusStoreError("Schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
+    }
+    const password = cleanString(body.password);
+    if (!password) {
+      throw new DataBoxPlusStoreError("Doplň nové heslo.", 400, "data_box_plus_mailbox_password_missing");
+    }
+    const credential = await credentialRowByMailbox(db, mailbox.id);
+    const providedUsername = cleanString(body.username);
+    const usernameCiphertext = providedUsername
+      ? await encryptCredential(env, providedUsername)
+      : cleanString(credential?.username_ciphertext);
+    const usernameHint = providedUsername ? maskSecret(providedUsername) : cleanString(credential?.username_hint);
+    if (!usernameCiphertext) {
+      throw new DataBoxPlusStoreError("Pro první uložení hesla doplň i login.", 400, "data_box_plus_mailbox_username_missing");
+    }
+
+    await db
+      .prepare(`
+        INSERT INTO data_box_plus_credentials (
+          id, mailbox_id, slot, username_ciphertext, username_hint, password_ciphertext,
+          active, source, created_by_user_id, updated_by_user_id, last_rotated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(mailbox_id) DO UPDATE SET
+          username_ciphertext = excluded.username_ciphertext,
+          username_hint = excluded.username_hint,
+          password_ciphertext = excluded.password_ciphertext,
+          active = excluded.active,
+          source = excluded.source,
+          updated_at = CURRENT_TIMESTAMP,
+          updated_by_user_id = excluded.updated_by_user_id,
+          last_rotated_at = excluded.last_rotated_at
+      `)
+      .bind(
+        credential?.id || idValue("dbp-cred"),
+        mailbox.id,
+        numberValue(mailbox.slot),
+        usernameCiphertext,
+        usernameHint,
+        await encryptCredential(env, password),
+        1,
+        "vault",
+        userId(currentUser),
+        userId(currentUser),
+        new Date().toISOString()
+      )
+      .run();
+
+    await db
+      .prepare(`
+        UPDATE data_box_plus_mailboxes
+        SET connection_status = 'ready',
+            last_sync_status = 'waiting',
+            last_sync_message = 'Heslo bylo změněné v DSP vaultu.',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      .bind(mailbox.id)
+      .run();
+
+    await writeMailboxAudit(db, currentUser, "Změnit heslo DSP", {
+      mailboxId: mailbox.id,
+      slot: numberValue(mailbox.slot),
+      usernameChanged: Boolean(providedUsername),
+      passwordChanged: true
+    });
+
+    const fallbackMap = fallbackAccountMap(env);
+    const rows = await mailboxRowsWithCredentials(db);
+    const row = rows.find((item) => cleanString(item.id) === mailbox.id);
+    return { apiStatus: "ready", mailbox: rowToMailbox(row, fallbackMap.get(numberValue(row?.slot))) };
   } catch (error) {
     if (error instanceof DataBoxPlusStoreError) throw error;
     throw dbError(error);

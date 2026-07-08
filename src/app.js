@@ -1171,6 +1171,7 @@ const dataBoxPlusState = {
   loading: false,
   error: "",
   lastLoadedAt: 0,
+  mailboxSaving: false,
   mailboxes: [],
   messages: [],
   recommendations: [],
@@ -19232,6 +19233,103 @@ function dataBoxPlusArchivePanel() {
   `;
 }
 
+function dataBoxPlusMailboxValue(value, fallback = "nedoplněno") {
+  const text = String(value || "").trim();
+  return text || fallback;
+}
+
+function dataBoxPlusMailboxSlotOptions(selectedSlot = 1) {
+  return Array.from({ length: 7 }, (_, index) => {
+    const slot = index + 1;
+    return `<option value="${slot}" ${Number(selectedSlot) === slot ? "selected" : ""}>Slot ${slot}</option>`;
+  }).join("");
+}
+
+function dataBoxPlusMailboxEditForm(mailbox) {
+  return `
+    <form class="ds-plus-mailbox-form" data-ds-plus-mailbox-form data-mailbox-id="${escapeHtml(mailbox.id)}">
+      <input type="hidden" name="id" value="${escapeHtml(mailbox.id)}" />
+      <label><span>Slot</span><select name="slot">${dataBoxPlusMailboxSlotOptions(mailbox.slot)}</select></label>
+      <label><span>Název</span><input name="name" value="${escapeHtml(mailbox.name)}" autocomplete="off" required /></label>
+      <label><span>Firma</span><input name="company" value="${escapeHtml(mailbox.company)}" autocomplete="off" required /></label>
+      <label><span>ID datové schránky</span><input name="isdsId" value="${escapeHtml(mailbox.isdsId)}" autocomplete="off" placeholder="např. abc123" /></label>
+      <label><span>Login</span><input name="username" autocomplete="username" placeholder="${escapeHtml(mailbox.usernameMasked || "ponechat beze změny")}" /></label>
+      <label class="ds-plus-checkbox"><input type="checkbox" name="active" ${mailbox.credentialActive === false ? "" : "checked"} /> <span>Aktivní pro automatické načítání</span></label>
+      <button class="secondary-action" type="submit">Uložit schránku</button>
+    </form>
+  `;
+}
+
+function dataBoxPlusMailboxPasswordForm(mailbox) {
+  return `
+    <form class="ds-plus-mailbox-form ds-plus-mailbox-form--password" data-ds-plus-mailbox-password-form data-mailbox-id="${escapeHtml(mailbox.id)}">
+      <label><span>Login</span><input name="username" autocomplete="username" placeholder="${escapeHtml(mailbox.usernameMasked || "doplnit při prvním uložení")}" /></label>
+      <label><span>Nové heslo</span><input name="password" type="password" autocomplete="new-password" required /></label>
+      <button class="secondary-action" type="submit">Změnit heslo</button>
+      ${dataBoxPlusHelp("Změnit heslo", "Nové heslo se uloží šifrovaně do DSP vaultu. Heslo se nezobrazí v prohlížeči ani v historii. Změna se zapíše do auditu.")}
+    </form>
+  `;
+}
+
+function dataBoxPlusMailboxCard(mailbox) {
+  const syncText = mailbox.lastSync ? formatDateTime(mailbox.lastSync) : "zatím neproběhlo";
+  const lastProblem = mailbox.lastSyncStatus === "failed" && mailbox.lastSyncMessage
+    ? `<p class="ds-plus-mailbox-warning">${escapeHtml(mailbox.lastSyncMessage)}</p>`
+    : "";
+  return `
+    <article class="ds-plus-mailbox-card">
+      <div class="ds-plus-mailbox-card__head">
+        <div>
+          <span>Slot ${escapeHtml(mailbox.slot)}</span>
+          <strong>${escapeHtml(mailbox.name)}</strong>
+          <p>${escapeHtml(mailbox.company)}</p>
+        </div>
+        ${dataBoxPlusBadge(mailbox.status, mailbox.status === "aktivní" ? "success" : "warning")}
+      </div>
+      <dl class="ds-plus-mailbox-meta">
+        <div><dt>ID schránky</dt><dd>${escapeHtml(dataBoxPlusMailboxValue(mailbox.isdsId))}</dd></div>
+        <div><dt>Login</dt><dd>${escapeHtml(dataBoxPlusMailboxValue(mailbox.usernameMasked))}</dd></div>
+        <div><dt>Heslo</dt><dd>${escapeHtml(mailbox.passwordStatus || "chybí")}</dd></div>
+        <div><dt>Zdroj přístupu</dt><dd>${escapeHtml(dataBoxPlusMailboxValue(mailbox.credentialSource, "zatím není uložený"))}</dd></div>
+        <div><dt>Poslední načtení</dt><dd>${escapeHtml(syncText)}</dd></div>
+        <div><dt>Zprávy</dt><dd>${escapeHtml(`${mailbox.newCount || 0} nových / ${mailbox.dueCount || 0} k vyřízení / ${mailbox.problemCount || 0} problém`)}</dd></div>
+      </dl>
+      ${lastProblem}
+      <div class="ds-plus-mailbox-actions">
+        <details>
+          <summary>Upravit schránku</summary>
+          ${dataBoxPlusMailboxEditForm(mailbox)}
+        </details>
+        <details>
+          <summary>Změnit heslo</summary>
+          ${dataBoxPlusMailboxPasswordForm(mailbox)}
+        </details>
+      </div>
+    </article>
+  `;
+}
+
+function dataBoxPlusMailboxCreateForm(mailboxes = []) {
+  const usedSlots = new Set(mailboxes.map((mailbox) => Number(mailbox.slot)));
+  const nextSlot = Array.from({ length: 7 }, (_, index) => index + 1).find((slot) => !usedSlots.has(slot)) || 7;
+  return `
+    <details class="ds-plus-mailbox-create">
+      <summary>Přidat schránku</summary>
+      <form class="ds-plus-mailbox-form" data-ds-plus-mailbox-form>
+        <label><span>Slot</span><select name="slot">${dataBoxPlusMailboxSlotOptions(nextSlot)}</select></label>
+        <label><span>Název</span><input name="name" autocomplete="off" required /></label>
+        <label><span>Firma</span><input name="company" autocomplete="off" required /></label>
+        <label><span>ID datové schránky</span><input name="isdsId" autocomplete="off" required /></label>
+        <label><span>Login</span><input name="username" autocomplete="username" required /></label>
+        <label><span>Heslo</span><input name="password" type="password" autocomplete="new-password" required /></label>
+        <label class="ds-plus-checkbox"><input type="checkbox" name="active" checked /> <span>Aktivní pro automatické načítání</span></label>
+        <button class="primary-action" type="submit">Přidat schránku</button>
+        ${dataBoxPlusHelp("Přidat schránku", "Schránka se uloží do DSP. Login a heslo se uloží jen na serveru, šifrovaně. Nic se neodešle mimo systém a změna se zapíše do historie.")}
+      </form>
+    </details>
+  `;
+}
+
 function dataBoxPlusSettingsPanel() {
   const mailboxes = dataBoxPlusMailboxes();
   return `
@@ -19242,8 +19340,9 @@ function dataBoxPlusSettingsPanel() {
       <div class="ds-plus-settings-grid">
         <section class="ds-plus-settings-block">
           <h3>Napojené schránky</h3>
+          ${dataBoxPlusMailboxCreateForm(mailboxes)}
           <div class="ds-plus-mailbox-list">
-            ${mailboxes.length ? mailboxes.map((mailbox) => `<article><strong>${escapeHtml(mailbox.name)}</strong><span>${escapeHtml(mailbox.company)}</span>${dataBoxPlusBadge(mailbox.status, mailbox.status === "aktivní" ? "success" : "warning")}</article>`).join("") : `<p class="ds-plus-empty">Čekám na ostrý stav 7 napojených schránek.</p>`}
+            ${mailboxes.length ? mailboxes.map(dataBoxPlusMailboxCard).join("") : `<p class="ds-plus-empty">Čekám na ostrý stav 7 napojených schránek.</p>`}
           </div>
         </section>
         <section class="ds-plus-settings-block">
@@ -27837,6 +27936,67 @@ async function runDataBoxPlusServiceSync() {
   }
 }
 
+function dataBoxPlusMailboxPayload(form) {
+  const fields = form?.elements || {};
+  return {
+    id: String(fields.id?.value || form?.dataset?.mailboxId || "").trim(),
+    slot: Number(fields.slot?.value || 0),
+    name: String(fields.name?.value || "").trim(),
+    company: String(fields.company?.value || "").trim(),
+    isdsId: String(fields.isdsId?.value || "").trim(),
+    username: String(fields.username?.value || "").trim(),
+    password: String(fields.password?.value || "").trim(),
+    active: Boolean(fields.active?.checked)
+  };
+}
+
+async function saveDataBoxPlusMailboxForm(form) {
+  if (dataBoxPlusState.mailboxSaving) return;
+  dataBoxPlusState.mailboxSaving = true;
+  dataBoxPlusState.notice = "Ukládám schránku do DSP. Heslo se v prohlížeči nebude zobrazovat.";
+  render();
+  try {
+    const payload = dataBoxPlusMailboxPayload(form);
+    const mailboxId = String(form?.dataset?.mailboxId || payload.id || "").trim();
+    await apiJson(mailboxId ? `/api/data-box-plus/mailboxes/${encodeURIComponent(mailboxId)}` : "/api/data-box-plus/mailboxes", {
+      method: mailboxId ? "PATCH" : "POST",
+      body: JSON.stringify(payload)
+    });
+    dataBoxPlusState.notice = "Schránka je uložená. Přístupy jsou uložené jen serverově a změna je v historii.";
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Schránku se nepodařilo uložit.");
+  } finally {
+    dataBoxPlusState.mailboxSaving = false;
+    render();
+  }
+}
+
+async function saveDataBoxPlusMailboxPasswordForm(form) {
+  if (dataBoxPlusState.mailboxSaving) return;
+  const mailboxId = String(form?.dataset?.mailboxId || "").trim();
+  if (!mailboxId) return;
+  dataBoxPlusState.mailboxSaving = true;
+  dataBoxPlusState.notice = "Ukládám nové heslo do DSP vaultu.";
+  render();
+  try {
+    await apiJson(`/api/data-box-plus/mailboxes/${encodeURIComponent(mailboxId)}/password`, {
+      method: "POST",
+      body: JSON.stringify({
+        username: String(form.elements.username?.value || "").trim(),
+        password: String(form.elements.password?.value || "").trim()
+      })
+    });
+    dataBoxPlusState.notice = "Heslo je změněné a zapsané do historie. V prohlížeči se nezobrazuje.";
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Heslo se nepodařilo změnit.");
+  } finally {
+    dataBoxPlusState.mailboxSaving = false;
+    render();
+  }
+}
+
 async function loadReceivablesDashboard(options = {}) {
   if (receivablesState.dashboardLoading) {
     return;
@@ -36097,6 +36257,20 @@ document.addEventListener("submit", async (event) => {
   if (accessRoleForm) {
     event.preventDefault();
     saveAccessRoleForm(accessRoleForm);
+    return;
+  }
+
+  const dataBoxPlusMailboxForm = event.target.closest("[data-ds-plus-mailbox-form]");
+  if (dataBoxPlusMailboxForm) {
+    event.preventDefault();
+    await saveDataBoxPlusMailboxForm(dataBoxPlusMailboxForm);
+    return;
+  }
+
+  const dataBoxPlusMailboxPasswordForm = event.target.closest("[data-ds-plus-mailbox-password-form]");
+  if (dataBoxPlusMailboxPasswordForm) {
+    event.preventDefault();
+    await saveDataBoxPlusMailboxPasswordForm(dataBoxPlusMailboxPasswordForm);
     return;
   }
 
