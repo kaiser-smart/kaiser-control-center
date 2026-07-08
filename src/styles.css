@@ -12891,7 +12891,7 @@ body:has(.driver-tablet-preview-page--dark) {
 
 .driver-tablet-v2-stop-copy h2 {
   max-width: 100%;
-  font-size: clamp(2rem, 2.05vw, 3rem);
+  font-size: clamp(1.74rem, 1.86vw, 2.76rem);
   line-height: 1.05;
   overflow-wrap: normal;
 }
@@ -12937,7 +12937,17 @@ body:has(.driver-tablet-preview-page--dark) {
 .driver-tablet-v2-done__icon {
   width: var(--driver-icon-size-lg);
   height: var(--driver-icon-size-lg);
+  border-color: rgba(255, 255, 255, 0.52);
   border-radius: var(--driver-icon-radius);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 8px 18px rgba(40, 80, 20, 0.16);
+}
+
+.driver-tablet-v2-done__icon .theme-icon-img {
+  width: 66%;
+  height: 66%;
+  filter: brightness(0) saturate(100%) invert(45%) sepia(75%) saturate(696%) hue-rotate(49deg) brightness(91%) contrast(85%);
+  opacity: 1;
 }
 
 .driver-tablet-v2-done__copy {
@@ -12988,20 +12998,35 @@ body:has(.driver-tablet-preview-page--dark) {
 }
 
 .driver-tablet-v2-progress-ring {
+  position: relative;
   width: clamp(66px, 5.4vw, 90px);
-  background:
-    radial-gradient(circle at center, var(--driver-card-strong) 0 54%, transparent 55%),
-    conic-gradient(var(--driver-accent) calc(var(--driver-progress) * 1%), color-mix(in srgb, var(--driver-text) 9%, transparent) 0);
-  box-shadow: var(--driver-shadow-control), inset 0 1px 0 var(--driver-highlight);
+  overflow: hidden;
+  border-radius: 999px;
+  background: conic-gradient(from -90deg, var(--driver-accent) 0 calc(var(--driver-progress) * 1%), rgba(86, 106, 116, 0.2) 0 100%);
+  box-shadow: var(--driver-shadow-control), inset 0 1px 0 var(--driver-highlight), 0 0 0 1px rgba(117, 189, 37, 0.14);
+}
+
+.driver-tablet-v2-progress-ring::before {
+  content: "";
+  position: absolute;
+  inset: clamp(9px, 0.74vw, 13px);
+  border-radius: inherit;
+  background: var(--driver-card-strong);
+  box-shadow: inset 3px 3px 9px rgba(83, 98, 108, 0.12), inset -3px -3px 9px rgba(255, 255, 255, 0.78);
 }
 
 .driver-tablet-preview-page--dark .driver-tablet-v2-progress-ring {
-  background:
-    radial-gradient(circle at center, #192633 0 54%, transparent 55%),
-    conic-gradient(var(--driver-accent) calc(var(--driver-progress) * 1%), rgba(238, 244, 246, 0.12) 0);
+  background: conic-gradient(from -90deg, var(--driver-accent) 0 calc(var(--driver-progress) * 1%), rgba(238, 244, 246, 0.16) 0 100%);
+}
+
+.driver-tablet-preview-page--dark .driver-tablet-v2-progress-ring::before {
+  background: #192633;
+  box-shadow: inset 3px 3px 9px rgba(0, 0, 0, 0.34), inset -3px -3px 9px rgba(255, 255, 255, 0.035);
 }
 
 .driver-tablet-v2-progress-ring strong {
+  position: relative;
+  z-index: 1;
   font-size: clamp(0.96rem, 0.82vw, 1.22rem);
 }
 
@@ -13137,64 +13162,41 @@ body:has(.driver-tablet-preview-page--dark) {
   }
 }
 
-/* Driver tablet v2 final frame: CSS front-facing tablet, matching the provided reference image. */
+/* Driver tablet v2 final frame: real tablet mockup with the approved cockpit layout inside. */
 .driver-tablet-v2-device {
-  width: min(96vw, 1420px, calc(96vh * 1.4));
-  aspect-ratio: 1456 / 1040;
+  width: clamp(1680px, 322vh, 4300px);
+  aspect-ratio: 3863 / 2868;
   transform: translate(-50%, -50%);
-  border: clamp(2px, 0.2vw, 4px) solid rgba(232, 236, 238, 0.92);
-  border-radius: clamp(34px, 3.4vw, 58px);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.2), transparent 16%),
-    linear-gradient(145deg, #111314 0%, #050607 54%, #0c0e0f 100%);
-  box-shadow:
-    0 32px 72px rgba(0, 0, 0, 0.42),
-    inset 0 0 0 clamp(24px, 2.6vw, 44px) #050607,
-    inset 0 0 0 clamp(26px, 2.78vw, 47px) rgba(255, 255, 255, 0.08);
+  border: 0;
+  border-radius: 0;
+  background: url("/tablet.png") center / contain no-repeat;
+  box-shadow: none;
 }
 
-.driver-tablet-v2-device::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: clamp(10px, 0.9vw, 16px);
-  width: clamp(4px, 0.36vw, 6px);
-  aspect-ratio: 1;
-  border-radius: 999px;
-  background: #19283c;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 0 4px rgba(96, 150, 255, 0.35);
-  transform: translateY(-50%);
-}
-
+.driver-tablet-v2-device::before,
 .driver-tablet-v2-device::after {
-  content: "";
-  position: absolute;
-  top: clamp(10px, 0.88vw, 15px);
-  left: 50%;
-  width: clamp(72px, 6vw, 94px);
-  height: clamp(3px, 0.32vw, 5px);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-  transform: translateX(-50%);
+  content: none;
 }
 
 .driver-tablet-v2-screen {
-  inset: clamp(44px, 4.1vw, 64px) clamp(50px, 4.5vw, 70px);
-  width: auto;
-  height: auto;
-  border-radius: clamp(20px, 1.7vw, 30px);
+  inset: auto;
+  top: 29.18%;
+  left: 30.02%;
+  width: 39.95%;
+  height: 41.38%;
+  border-radius: clamp(18px, 1.62vw, 32px);
 }
 
 .driver-tablet-v2 {
-  --driver-header-height: clamp(70px, 5vw, 88px);
-  --driver-tools-height: clamp(86px, 6.5vw, 112px);
-  --driver-footer-height: clamp(24px, 2vw, 34px);
-  padding: clamp(14px, 1.2vw, 24px);
-  gap: clamp(10px, 0.86vw, 16px);
+  --driver-header-height: clamp(86px, 6.35vw, 112px);
+  --driver-tools-height: clamp(108px, 8.35vw, 144px);
+  --driver-footer-height: clamp(28px, 2.45vw, 40px);
+  padding: clamp(16px, 1.38vw, 28px);
+  gap: clamp(12px, 1.02vw, 18px);
 }
 
 .driver-tablet-v2-header {
-  grid-template-columns: minmax(280px, 1.05fr) minmax(0, 1.62fr);
+  grid-template-columns: minmax(340px, 1.02fr) minmax(0, 1.72fr);
 }
 
 .driver-tablet-v2-meta-card {
@@ -13202,7 +13204,7 @@ body:has(.driver-tablet-preview-page--dark) {
 }
 
 .driver-tablet-v2-main {
-  grid-template-columns: minmax(0, 1.92fr) minmax(290px, 0.92fr);
+  grid-template-columns: minmax(0, 1.78fr) minmax(320px, 1fr);
 }
 
 .collection-routes-panel--driver-print .collection-routes-preview-table {

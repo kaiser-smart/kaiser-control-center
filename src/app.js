@@ -1132,7 +1132,7 @@ const collectionRoutesPilotState = {
   error: ""
 };
 const driverTabletPreviewState = {
-  theme: "light"
+  theme: "dark"
 };
 let collectionRoutesSitesAutoRefreshTimer = null;
 let collectionRoutesSitesCountdownTimer = null;
@@ -16947,9 +16947,7 @@ function collectionRoutesDriverTabletPreviewV2Panel(rows = collectionRoutesDrive
   const remainingStopsLabel = collectionRoutesMetricValue(Math.max(0, rows.length - completedCount));
   const currentStopOrder = selectedRow?.routeOrder || selectedIndex + 1;
   const currentStopTitle = selectedRow ? collectionRoutesSourceDriverStopTitle(selectedRow).replace(/\s+-\s*\d{6,}$/, "") : "-";
-  const currentStopDisplayTitle = currentStopTitle
-    .replace(/\s+s\.?r\.?o\.?$/i, "")
-    .replace(/\s+a\.?s\.?$/i, "");
+  const currentStopDisplayTitle = currentStopTitle;
   const nextRows = rows.slice(selectedIndex + 1, selectedIndex + 4).map((row, offset) => ({
     row,
     index: selectedIndex + offset + 1
@@ -17084,7 +17082,7 @@ function collectionRoutesDriverTabletPreviewV2Panel(rows = collectionRoutesDrive
                     <button class="driver-tablet-v2-next-stop" type="button" aria-disabled="true">
                       <span class="driver-tablet-v2-next-stop__number">${escapeHtml(row.routeOrder || index + 1)}</span>
                       <span class="driver-tablet-v2-next-stop__copy">
-                        <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row).replace(/\s+-\s*\d{6,}$/, "").replace(/\s+s\.?r\.?o\.?$/i, "").replace(/\s+a\.?s\.?$/i, ""))}</strong>
+                        <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row).replace(/\s+-\s*\d{6,}$/, ""))}</strong>
                         <small>${escapeHtml(row.addressText || "-")}</small>
                       </span>
                       <em>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</em>
