@@ -20028,6 +20028,23 @@ body:has(.data-box-page) {
   color: #a22d2d;
 }
 
+.notification-status--delivered {
+  background: #e7f8f0;
+  color: #0f766e;
+}
+
+.notification-status--fallback,
+.notification-status--accepted {
+  background: #e9f1ff;
+  color: #285a9d;
+}
+
+.notification-status--opted_out,
+.notification-status--blocked {
+  background: #f2eeee;
+  color: #6f3d3d;
+}
+
 .notification-error-summary {
   display: inline-flex;
   max-width: 240px;
@@ -20114,6 +20131,91 @@ body:has(.data-box-page) {
   margin: 0;
   overflow-wrap: anywhere;
   color: #1f2921;
+  font-weight: 800;
+}
+
+.customer-messaging {
+  border-color: #cfe3ef;
+}
+
+.customer-message-success {
+  margin: 0;
+  padding: 12px 14px;
+  background: #edf9e6;
+  border: 1px solid #cdeac0;
+  border-radius: 12px;
+  color: #35770d;
+  font-weight: 900;
+}
+
+.customer-optout-panel {
+  display: grid;
+  gap: 14px;
+  padding-top: 8px;
+  border-top: 1px solid #edf2ea;
+}
+
+.customer-optout-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 2fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.customer-optout-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.customer-optout-form span {
+  color: var(--steel);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.customer-optout-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid #d7e1d2;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1f2921;
+  font: inherit;
+  font-weight: 800;
+}
+
+.customer-optout-list {
+  display: grid;
+  gap: 10px;
+}
+
+.customer-optout-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  background: #f8fbf4;
+  border: 1px solid #dfe8d9;
+  border-radius: 12px;
+}
+
+.customer-optout-list article > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.customer-optout-list strong {
+  color: #1f2921;
+  font-weight: 900;
+}
+
+.customer-optout-list span,
+.customer-optout-list small {
+  color: var(--steel);
   font-weight: 800;
 }
 
@@ -22555,6 +22657,7 @@ body:has(.absence-page--employee-card) {
 
   .notification-summary-grid,
   .notification-filters,
+  .customer-optout-form,
   .notification-detail dl {
     grid-template-columns: 1fr;
   }

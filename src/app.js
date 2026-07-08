@@ -358,13 +358,22 @@ const DATA_BOX_PLUS_TABS = [
 ];
 const NOTIFICATION_CHANNEL_LABELS = {
   email: "E-mail",
-  sms: "SMS"
+  sms: "SMS",
+  rcs: "RCS",
+  rcs_sms_auto_fallback: "RCS/SMS fallback",
+  unknown: "Neurčeno",
+  blocked: "Blokováno"
 };
 const NOTIFICATION_STATUS_LABELS = {
   sent: "Odešlo",
   not_sent: "Neodešlo",
   pending: "Čeká",
-  failed: "Selhalo"
+  failed: "Selhalo",
+  delivered: "Doručeno",
+  fallback: "Fallback",
+  opted_out: "Opt-out",
+  blocked: "Blokováno",
+  accepted: "Přijato"
 };
 const NOTIFICATION_TYPE_LABELS = {
   absence_approval_request: "Nová žádost ke schválení",
@@ -396,6 +405,22 @@ const NOTIFICATION_STATUS_OPTIONS = [
 ];
 const NOTIFICATION_TYPE_OPTIONS = Object.entries(NOTIFICATION_TYPE_LABELS)
   .map(([value, label]) => ({ value, label }));
+const CUSTOMER_MESSAGE_STATUS_OPTIONS = [
+  { value: "pending", label: "Čeká" },
+  { value: "sent", label: "Odesláno" },
+  { value: "delivered", label: "Doručeno" },
+  { value: "failed", label: "Selhalo" },
+  { value: "fallback", label: "Fallback" },
+  { value: "opted_out", label: "Opt-out" },
+  { value: "blocked", label: "Blokováno" }
+];
+const CUSTOMER_MESSAGE_TEMPLATE_LABELS = {
+  request_received: "Přijetí požadavku",
+  appointment_confirmed: "Potvrzení termínu",
+  appointment_changed: "Změna termínu",
+  dispatch_message: "Dispečink",
+  missing_information: "Doplnění údajů"
+};
 const DRIVER_REPORT_ROUTE = "/hlaseni-ridicu";
 const DRIVER_REPORT_STATUS_LABELS = {
   new_report: "Nové hlášení",
@@ -868,6 +893,37 @@ const communicationInfrastructureState = {
   loading: false,
   error: "",
   message: ""
+};
+
+const customerMessagingState = {
+  items: [],
+  optOuts: [],
+  templates: Object.entries(CUSTOMER_MESSAGE_TEMPLATE_LABELS).map(([key, label]) => ({ key, label })),
+  status: {},
+  filters: {
+    dateFrom: notificationDefaultDateFrom(),
+    dateTo: notificationDefaultDateTo(),
+    phone: "",
+    status: "",
+    templateKey: "",
+    search: ""
+  },
+  optOutDraft: {
+    phone: "",
+    reason: ""
+  },
+  total: 0,
+  optOutTotal: 0,
+  page: 1,
+  pageSize: 50,
+  loaded: false,
+  loading: false,
+  optOutLoading: false,
+  savingOptOut: false,
+  error: "",
+  optOutError: "",
+  message: "",
+  selectedId: ""
 };
 
 const receivablesState = {
@@ -26469,7 +26525,9 @@ function modulePage(moduleItem, user, isDashboard = false) {
     : "";
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
-  const reportsPanel = moduleItem.id === "reports" && !isDashboard ? notificationCenterSection(user) : "";
+  const reportsPanel = moduleItem.id === "reports" && !isDashboard
+    ? `${notificationCenterSection(user)}${customerMessagingSection(user)}`
+    : "";
   const feedbackBox = moduleFeedbackBoxFor(moduleItem, user);
 
   return `
@@ -26793,6 +26851,270 @@ function notificationCenterSection(user) {
         Zobrazeno ${escapeHtml(notificationCenterState.items.length)} z ${escapeHtml(notificationCenterState.total)} záznamů.
       </p>
       ${notificationDetailPanel()}
+    </section>
+  `;
+}
+
+function customerMessageTemplateLabel(key) {
+  const fromState = customerMessagingState.templates.find((template) => template.key === key);
+  return fromState?.label || CUSTOMER_MESSAGE_TEMPLATE_LABELS[key] || key || "neuvedeno";
+}
+
+function customerMessagingStatusText() {
+  const status = customerMessagingState.status || {};
+  if (!status.twilioConfigured) {
+    return "Twilio není kompletně nastavené přes ENV.";
+  }
+  if (status.mode === "live") {
+    return "Twilio live režim podle serverových secrets.";
+  }
+  if (status.mode === "test") {
+    return "Test režim: záměr se zaloguje, ostrá zpráva se neodešle.";
+  }
+  return "Odesílání je vypnuté.";
+}
+
+function customerMessagingFiltersForm() {
+  const filters = customerMessagingState.filters;
+  const templateOptions = customerMessagingState.templates.map((template) => ({
+    value: template.key,
+    label: template.label
+  }));
+
+  return `
+    <form class="notification-filters customer-message-filters" data-customer-message-filters>
+      <label>
+        <span>Období od</span>
+        <input name="dateFrom" type="date" value="${escapeHtml(filters.dateFrom)}" data-customer-message-filter />
+      </label>
+      <label>
+        <span>Období do</span>
+        <input name="dateTo" type="date" value="${escapeHtml(filters.dateTo)}" data-customer-message-filter />
+      </label>
+      <label>
+        <span>Telefon</span>
+        <input name="phone" value="${escapeHtml(filters.phone)}" placeholder="+420..." data-customer-message-filter />
+      </label>
+      <label>
+        <span>Stav</span>
+        <select name="status" data-customer-message-filter>
+          ${optionList(CUSTOMER_MESSAGE_STATUS_OPTIONS, filters.status)}
+        </select>
+      </label>
+      <label>
+        <span>Šablona</span>
+        <select name="templateKey" data-customer-message-filter>
+          ${optionList(templateOptions, filters.templateKey)}
+        </select>
+      </label>
+      <label>
+        <span>Vyhledávání</span>
+        <input name="search" value="${escapeHtml(filters.search)}" placeholder="Telefon, text nebo chyba" data-customer-message-filter />
+      </label>
+      <div class="notification-filter-actions">
+        <button class="primary-action" type="submit">Filtrovat</button>
+        <button class="secondary-link" type="button" data-customer-message-reset>Reset</button>
+      </div>
+    </form>
+  `;
+}
+
+function customerMessageRow(item) {
+  return `
+    <tr>
+      <td data-label="Datum / čas">${escapeHtml(formatDateTime(item.createdAt))}</td>
+      <td data-label="Telefon">${escapeHtml(item.phone || "neuvedeno")}</td>
+      <td data-label="Kanál">${escapeHtml(notificationChannelLabel(item.usedChannel || item.requestedChannel))}</td>
+      <td data-label="Šablona">${escapeHtml(customerMessageTemplateLabel(item.templateKey))}</td>
+      <td data-label="Stav">${notificationStatusBadge(item.status)}</td>
+      <td data-label="Twilio SID">${escapeHtml(item.twilioMessageSid || "neuvedeno")}</td>
+      <td data-label="Vazba">${escapeHtml([item.relatedEntityType, item.relatedEntityId].filter(Boolean).join(" / ") || "bez vazby")}</td>
+      <td data-label="Akce">
+        <button class="text-action" type="button" data-customer-message-detail="${escapeHtml(item.id)}">Detail</button>
+      </td>
+    </tr>
+  `;
+}
+
+function customerMessagesTable() {
+  if (customerMessagingState.loading && !customerMessagingState.loaded) {
+    return '<p class="notification-empty">Načítám zákaznické zprávy...</p>';
+  }
+
+  if (customerMessagingState.error) {
+    return `
+      <div class="notification-error">
+        <p>${escapeHtml(customerMessagingState.error)}</p>
+        <button class="secondary-link" type="button" data-customer-message-reload>Zkusit znovu</button>
+      </div>
+    `;
+  }
+
+  if (!customerMessagingState.items.length) {
+    return '<p class="notification-empty">Zatím nejsou žádné zákaznické RCS/SMS zprávy.</p>';
+  }
+
+  return `
+    <div class="notification-table-wrap">
+      <table class="notification-table">
+        <thead>
+          <tr>
+            <th>Datum / čas</th>
+            <th>Telefon</th>
+            <th>Kanál</th>
+            <th>Šablona</th>
+            <th>Stav</th>
+            <th>Twilio SID</th>
+            <th>Vazba</th>
+            <th>Akce</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${customerMessagingState.items.map(customerMessageRow).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function selectedCustomerMessage() {
+  return customerMessagingState.items.find((item) => item.id === customerMessagingState.selectedId) || null;
+}
+
+function customerMessageDetailPanel() {
+  const item = selectedCustomerMessage();
+  if (!item) return "";
+
+  return `
+    <section class="notification-detail" aria-label="Detail zákaznické zprávy">
+      <div class="notification-detail__header">
+        <div>
+          <span>Detail zákaznické zprávy</span>
+          <h3>${escapeHtml(customerMessageTemplateLabel(item.templateKey))}</h3>
+        </div>
+        <button class="text-action" type="button" data-customer-message-detail-close>Zavřít</button>
+      </div>
+      <dl>
+        <div><dt>ID</dt><dd>${escapeHtml(item.id)}</dd></div>
+        <div><dt>Telefon</dt><dd>${escapeHtml(item.phone || "neuvedeno")}</dd></div>
+        <div><dt>Požadovaný kanál</dt><dd>${escapeHtml(notificationChannelLabel(item.requestedChannel))}</dd></div>
+        <div><dt>Použitý kanál</dt><dd>${escapeHtml(notificationChannelLabel(item.usedChannel))}</dd></div>
+        <div><dt>Stav</dt><dd>${notificationStatusBadge(item.status)}</dd></div>
+        <div><dt>Šablona</dt><dd>${escapeHtml(customerMessageTemplateLabel(item.templateKey))}</dd></div>
+        <div><dt>Zpráva</dt><dd>${escapeHtml(item.messageBody || "neuvedeno")}</dd></div>
+        <div><dt>Twilio SID</dt><dd>${escapeHtml(item.twilioMessageSid || "neuvedeno")}</dd></div>
+        <div><dt>Chyba</dt><dd>${escapeHtml(item.errorMessage || "bez chyby")}</dd></div>
+        <div><dt>Důvod</dt><dd>${escapeHtml(item.reason || "neuvedeno")}</dd></div>
+        <div><dt>Zákazník</dt><dd>${escapeHtml(item.customerId || "neuvedeno")}</dd></div>
+        <div><dt>Vazba</dt><dd>${escapeHtml([item.relatedEntityType, item.relatedEntityId].filter(Boolean).join(" / ") || "bez vazby")}</dd></div>
+        <div><dt>Vytvořeno</dt><dd>${escapeHtml(formatDateTime(item.createdAt))}</dd></div>
+        <div><dt>Aktualizováno</dt><dd>${escapeHtml(formatDateTime(item.updatedAt))}</dd></div>
+      </dl>
+    </section>
+  `;
+}
+
+function customerOptOutForm(canManage) {
+  if (!canManage) {
+    return "";
+  }
+
+  return `
+    <form class="customer-optout-form" data-customer-optout-form>
+      <label>
+        <span>Telefon</span>
+        <input name="phone" value="${escapeHtml(customerMessagingState.optOutDraft.phone)}" placeholder="+420..." required />
+      </label>
+      <label>
+        <span>Důvod</span>
+        <input name="reason" value="${escapeHtml(customerMessagingState.optOutDraft.reason)}" placeholder="Ruční opt-out" />
+      </label>
+      <button class="primary-action" type="submit" ${customerMessagingState.savingOptOut ? "disabled" : ""}>Přidat opt-out</button>
+    </form>
+  `;
+}
+
+function customerOptOutList(canManage) {
+  if (customerMessagingState.optOutLoading) {
+    return '<p class="notification-empty">Načítám opt-out čísla...</p>';
+  }
+
+  if (customerMessagingState.optOutError) {
+    return `<p class="notification-error">${escapeHtml(customerMessagingState.optOutError)}</p>`;
+  }
+
+  if (!customerMessagingState.optOuts.length) {
+    return '<p class="notification-empty">Opt-out seznam je prázdný.</p>';
+  }
+
+  return `
+    <div class="customer-optout-list">
+      ${customerMessagingState.optOuts.map((item) => `
+        <article>
+          <div>
+            <strong>${escapeHtml(item.phone)}</strong>
+            <span>${escapeHtml(item.reason || item.source || "opt-out")}</span>
+            <small>${escapeHtml(formatDateTime(item.createdAt))}</small>
+          </div>
+          ${canManage ? `<button class="text-action" type="button" data-customer-optout-remove="${escapeHtml(item.phone)}">Odebrat</button>` : ""}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function customerMessagingSection(user) {
+  if (!canViewNotificationCenter(user)) {
+    return "";
+  }
+
+  const canManage = hasPermission(user, "reports", "manage");
+  const status = customerMessagingState.status || {};
+  const statusCards = [
+    ["Režim", status.mode || "neznámý"],
+    ["Twilio ENV", status.twilioConfigured ? "nastavené" : "chybí"],
+    ["RCS sender", status.rcsSenderIdConfigured ? "nastavený" : "chybí"],
+    ["Webhook secret", status.inboundWebhookSecretConfigured ? "nastavený" : "chybí"]
+  ];
+
+  return `
+    <section class="notification-center customer-messaging" aria-labelledby="customer-messaging-title">
+      <div class="notification-center__header">
+        <div>
+          <span>Zákaznické RCS/SMS</span>
+          <h2 id="customer-messaging-title">Provozní zprávy zákazníkům</h2>
+          <p>${escapeHtml(customerMessagingStatusText())}</p>
+        </div>
+        <button class="secondary-link" type="button" data-customer-message-reload>
+          Obnovit
+        </button>
+      </div>
+      <div class="notification-summary-grid">
+        ${statusCards.map(([label, value]) => `
+          <article>
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(value)}</strong>
+          </article>
+        `).join("")}
+      </div>
+      ${customerMessagingState.message ? `<p class="customer-message-success">${escapeHtml(customerMessagingState.message)}</p>` : ""}
+      ${customerMessagingFiltersForm()}
+      ${customerMessagesTable()}
+      <p class="notification-meta">
+        Zobrazeno ${escapeHtml(customerMessagingState.items.length)} z ${escapeHtml(customerMessagingState.total)} záznamů.
+      </p>
+      ${customerMessageDetailPanel()}
+      <section class="customer-optout-panel" aria-label="Opt-out čísla">
+        <div class="notification-center__header">
+          <div>
+            <span>STOP / NEPOSÍLAT</span>
+            <h3>Opt-out seznam</h3>
+            <p>Čísla v seznamu jsou blokovaná pro RCS i SMS.</p>
+          </div>
+        </div>
+        ${customerOptOutForm(canManage)}
+        ${customerOptOutList(canManage)}
+      </section>
     </section>
   `;
 }
@@ -30971,6 +31293,37 @@ function normalizeNotificationLog(item) {
   };
 }
 
+function normalizeCustomerMessage(item) {
+  return {
+    id: String(item?.id || ""),
+    customerId: String(item?.customerId || ""),
+    phone: String(item?.phone || ""),
+    requestedChannel: String(item?.requestedChannel || ""),
+    usedChannel: String(item?.usedChannel || ""),
+    templateKey: String(item?.templateKey || ""),
+    messageBody: String(item?.messageBody || ""),
+    twilioMessageSid: String(item?.twilioMessageSid || ""),
+    status: String(item?.status || "pending"),
+    errorMessage: String(item?.errorMessage || ""),
+    relatedEntityType: String(item?.relatedEntityType || ""),
+    relatedEntityId: String(item?.relatedEntityId || ""),
+    reason: String(item?.reason || ""),
+    metadata: item?.metadata || {},
+    createdAt: String(item?.createdAt || ""),
+    updatedAt: String(item?.updatedAt || "")
+  };
+}
+
+function normalizeCustomerOptOut(item) {
+  return {
+    id: String(item?.id || ""),
+    phone: String(item?.phone || ""),
+    source: String(item?.source || ""),
+    reason: String(item?.reason || ""),
+    createdAt: String(item?.createdAt || "")
+  };
+}
+
 function notificationQueryString() {
   const params = new URLSearchParams();
   const filters = notificationCenterState.filters;
@@ -30984,6 +31337,22 @@ function notificationQueryString() {
 
   params.set("page", String(notificationCenterState.page));
   params.set("pageSize", String(notificationCenterState.pageSize));
+  return params.toString();
+}
+
+function customerMessageQueryString() {
+  const params = new URLSearchParams();
+  const filters = customerMessagingState.filters;
+
+  for (const key of ["dateFrom", "dateTo", "phone", "status", "templateKey", "search"]) {
+    const value = String(filters[key] || "").trim();
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  params.set("page", String(customerMessagingState.page));
+  params.set("pageSize", String(customerMessagingState.pageSize));
   return params.toString();
 }
 
@@ -31040,6 +31409,56 @@ async function loadNotificationCenter(options = {}) {
   }
 }
 
+async function loadCustomerMessaging(options = {}) {
+  const user = currentUser();
+  if (!canViewNotificationCenter(user)) {
+    return;
+  }
+
+  if (customerMessagingState.loading) {
+    return;
+  }
+
+  customerMessagingState.loading = true;
+  customerMessagingState.optOutLoading = true;
+  customerMessagingState.error = "";
+  customerMessagingState.optOutError = "";
+
+  try {
+    const query = customerMessageQueryString();
+    const [messageResult, optOutResult] = await Promise.all([
+      apiJson(`/api/customer-messages?${query}`),
+      apiJson("/api/customer-messages/opt-outs?pageSize=100")
+    ]);
+
+    customerMessagingState.items = (messageResult.items || []).map(normalizeCustomerMessage);
+    customerMessagingState.optOuts = (optOutResult.items || []).map(normalizeCustomerOptOut);
+    customerMessagingState.templates = (messageResult.templates || customerMessagingState.templates)
+      .map((template) => ({
+        key: String(template.key || ""),
+        label: String(template.label || template.key || "")
+      }))
+      .filter((template) => template.key);
+    customerMessagingState.status = messageResult.status || {};
+    customerMessagingState.total = Number(messageResult.total || 0);
+    customerMessagingState.optOutTotal = Number(optOutResult.total || 0);
+    customerMessagingState.page = Number(messageResult.page || customerMessagingState.page);
+  } catch (error) {
+    const missing = error.payload?.missingEndpoint;
+    customerMessagingState.error = missing
+      ? `Čeká na API: ${missing}`
+      : error.payload?.error || "Zákaznické zprávy se nepodařilo načíst.";
+    customerMessagingState.optOutError = customerMessagingState.error;
+  } finally {
+    customerMessagingState.loaded = true;
+    customerMessagingState.loading = false;
+    customerMessagingState.optOutLoading = false;
+    if (options.render !== false) {
+      render();
+    }
+  }
+}
+
 function selectedNotification() {
   return notificationCenterState.items.find((item) => item.id === notificationCenterState.selectedId) || null;
 }
@@ -31078,6 +31497,91 @@ function resetNotificationFilters() {
   notificationCenterState.selectedId = "";
   render();
   loadNotificationCenter();
+}
+
+function applyCustomerMessageFilters(form) {
+  customerMessagingState.filters = {
+    dateFrom: form.elements.dateFrom?.value || notificationDefaultDateFrom(),
+    dateTo: form.elements.dateTo?.value || notificationDefaultDateTo(),
+    phone: form.elements.phone?.value.trim() || "",
+    status: form.elements.status?.value || "",
+    templateKey: form.elements.templateKey?.value || "",
+    search: form.elements.search?.value.trim() || ""
+  };
+  customerMessagingState.page = 1;
+  customerMessagingState.loaded = false;
+  customerMessagingState.selectedId = "";
+  render();
+  loadCustomerMessaging();
+}
+
+function resetCustomerMessageFilters() {
+  customerMessagingState.filters = {
+    dateFrom: notificationDefaultDateFrom(),
+    dateTo: notificationDefaultDateTo(),
+    phone: "",
+    status: "",
+    templateKey: "",
+    search: ""
+  };
+  customerMessagingState.page = 1;
+  customerMessagingState.loaded = false;
+  customerMessagingState.selectedId = "";
+  render();
+  loadCustomerMessaging();
+}
+
+async function submitCustomerOptOut(form) {
+  if (customerMessagingState.savingOptOut) {
+    return;
+  }
+
+  customerMessagingState.savingOptOut = true;
+  customerMessagingState.optOutError = "";
+  customerMessagingState.message = "";
+  customerMessagingState.optOutDraft = {
+    phone: form.elements.phone?.value.trim() || "",
+    reason: form.elements.reason?.value.trim() || ""
+  };
+  render();
+
+  try {
+    await apiJson("/api/customer-messages/opt-outs", {
+      method: "POST",
+      body: JSON.stringify(customerMessagingState.optOutDraft)
+    });
+    customerMessagingState.message = "Opt-out číslo bylo přidané.";
+    customerMessagingState.optOutDraft = { phone: "", reason: "" };
+    await loadCustomerMessaging({ render: false });
+  } catch (error) {
+    customerMessagingState.optOutError = error.payload?.error || "Opt-out číslo se nepodařilo přidat.";
+  } finally {
+    customerMessagingState.savingOptOut = false;
+    render();
+  }
+}
+
+async function removeCustomerOptOut(phone) {
+  const confirmed = window.confirm(`Opravdu odebrat opt-out pro ${phone}? Po odebrání bude možné na číslo znovu posílat provozní RCS/SMS.`);
+  if (!confirmed) {
+    return;
+  }
+
+  customerMessagingState.optOutError = "";
+  customerMessagingState.message = "";
+  render();
+
+  try {
+    await apiJson(`/api/customer-messages/opt-outs/${encodeURIComponent(phone)}?confirm=remove-opt-out`, {
+      method: "DELETE"
+    });
+    customerMessagingState.message = "Opt-out číslo bylo odebrané.";
+    await loadCustomerMessaging({ render: false });
+  } catch (error) {
+    customerMessagingState.optOutError = error.payload?.error || "Opt-out číslo se nepodařilo odebrat.";
+  } finally {
+    render();
+  }
 }
 
 function notificationCsvValue(value) {
@@ -33037,6 +33541,7 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === "reports") {
       loadNotificationCenter();
+      loadCustomerMessaging();
     }
     if (moduleItem.id === "absence") {
       loadEmployeeList();
@@ -35844,6 +36349,20 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const customerMessageFilters = event.target.closest("[data-customer-message-filters]");
+  if (customerMessageFilters) {
+    event.preventDefault();
+    applyCustomerMessageFilters(customerMessageFilters);
+    return;
+  }
+
+  const customerOptOutForm = event.target.closest("[data-customer-optout-form]");
+  if (customerOptOutForm) {
+    event.preventDefault();
+    await submitCustomerOptOut(customerOptOutForm);
+    return;
+  }
+
   const sarlotaVoiceWriteForm = event.target.closest("[data-sarlota-voice-write-form]");
   if (sarlotaVoiceWriteForm) {
     event.preventDefault();
@@ -36177,6 +36696,15 @@ document.addEventListener("change", async (event) => {
     const form = notificationFilter.closest("[data-notification-filters]");
     if (form) {
       applyNotificationFilters(form);
+    }
+    return;
+  }
+
+  const customerMessageFilter = event.target.closest("[data-customer-message-filter]");
+  if (customerMessageFilter) {
+    const form = customerMessageFilter.closest("[data-customer-message-filters]");
+    if (form) {
+      applyCustomerMessageFilters(form);
     }
     return;
   }
@@ -37255,6 +37783,19 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const customerMessageReload = event.target.closest("[data-customer-message-reload]");
+  if (customerMessageReload) {
+    customerMessagingState.loaded = false;
+    loadCustomerMessaging();
+    return;
+  }
+
+  const customerMessageReset = event.target.closest("[data-customer-message-reset]");
+  if (customerMessageReset) {
+    resetCustomerMessageFilters();
+    return;
+  }
+
   const notificationDetail = event.target.closest("[data-notification-detail]");
   if (notificationDetail) {
     notificationCenterState.selectedId = notificationDetail.dataset.notificationDetail || "";
@@ -37266,6 +37807,26 @@ document.addEventListener("click", async (event) => {
   if (notificationDetailClose) {
     notificationCenterState.selectedId = "";
     render();
+    return;
+  }
+
+  const customerMessageDetail = event.target.closest("[data-customer-message-detail]");
+  if (customerMessageDetail) {
+    customerMessagingState.selectedId = customerMessageDetail.dataset.customerMessageDetail || "";
+    render();
+    return;
+  }
+
+  const customerMessageDetailClose = event.target.closest("[data-customer-message-detail-close]");
+  if (customerMessageDetailClose) {
+    customerMessagingState.selectedId = "";
+    render();
+    return;
+  }
+
+  const customerOptOutRemove = event.target.closest("[data-customer-optout-remove]");
+  if (customerOptOutRemove) {
+    removeCustomerOptOut(customerOptOutRemove.dataset.customerOptoutRemove || "");
     return;
   }
 
