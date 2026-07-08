@@ -7,6 +7,7 @@ workers_dev = false
 MODULE_AUTOMATION_MODULE_KEY = "absence"
 MODULE_AUTOMATION_TIME_ZONE = "Europe/Prague"
 MODULE_AUTOMATION_MODE = "dry-run"
+APP_BASE_URL = "https://kaiser-control-center.pages.dev"
 
 [[d1_databases]]
 binding = "SMART_ODPADY_DB"

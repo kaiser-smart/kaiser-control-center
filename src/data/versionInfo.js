@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.468"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.469"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: interní runner přes Pages",
+    text: "Cloud runner pro Trasy svozu umí spouštět read-only Vistos snapshot přes interní Pages endpoint chráněný tokenem. Vistos přístupy zůstávají v Pages secrets; worker nedostává Vistos heslo a nevytváří ostré trasy."
+  },
   {
     title: "Trasy svozu: ochrana posledního platného snapshotu",
     text: "Stanoviště z Vistosu teď ignorují neúspěšné diagnostické batche a berou poslední platný ready snapshot. Cloud runner při chybějící Vistos konfiguraci zapíše jen audit běhu, aby nevznikl prázdný aktuální snapshot."
