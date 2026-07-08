@@ -11694,6 +11694,13 @@ body:has(.driver-tablet-preview-page--dark) {
   font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.driver-tablet-preview-page .driver-tablet-v2,
+.driver-tablet-preview-page .driver-tablet-v2 *,
+.driver-tablet-preview-page .driver-tablet-v2 *::before,
+.driver-tablet-preview-page .driver-tablet-v2 *::after {
+  font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
 .driver-tablet-v2,
 .driver-tablet-v2 *,
 .driver-tablet-v2 *::before,
@@ -13164,9 +13171,9 @@ body:has(.driver-tablet-preview-page--dark) {
 
 /* Driver tablet v2 final frame: real tablet mockup with the approved cockpit layout inside. */
 .driver-tablet-v2-device {
-  width: clamp(1680px, 322vh, 4300px);
+  width: clamp(1680px, 318vh, 4300px);
   aspect-ratio: 3863 / 2868;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -49.55%);
   border: 0;
   border-radius: 0;
   background: url("/tablet.png") center / contain no-repeat;
@@ -13205,6 +13212,19 @@ body:has(.driver-tablet-preview-page--dark) {
 
 .driver-tablet-v2-main {
   grid-template-columns: minmax(0, 1.78fr) minmax(320px, 1fr);
+}
+
+.driver-tablet-v2 .driver-tablet-v2-done__icon {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.driver-tablet-v2 .driver-tablet-v2-done__icon .theme-icon-img {
+  width: 72%;
+  height: 72%;
+  opacity: 1;
+  filter: brightness(0) invert(1);
 }
 
 .collection-routes-panel--driver-print .collection-routes-preview-table {
