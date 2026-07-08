@@ -3,7 +3,6 @@ export const PERMISSION_MODULES = [
   "dashboard",
   "fleet",
   "vehicle-tracking",
-  "data-box",
   "data-box-plus",
   "driver-reports",
   "service-maintenance",
@@ -56,7 +55,7 @@ const ROLE_ALIASES = {
 const MODULE_ALIASES = {
   "vozovy-park": "fleet",
   "sledovani-vozidel": "vehicle-tracking",
-  "datova-schranka": "data-box",
+  "datova-schranka": "data-box-plus",
   "datove-schranky-plus": "data-box-plus",
   "hlaseni-ridicu": "driver-reports",
   "servis-udrzba": "service-maintenance",

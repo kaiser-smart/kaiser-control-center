@@ -91,56 +91,31 @@ async function countRows(db, sql, ...bindings) {
   return Number(row?.count || 0);
 }
 
-async function dataBoxAccountRows(db) {
-  const result = await db.prepare(`
-    SELECT id, label, isds_id, status, last_sync_at, last_sync_status, last_sync_message
-    FROM data_boxes
-    ORDER BY label ASC
-  `).all();
-
-  return (result.results || []).map((row) => ({
-    id: cleanString(row.id),
-    label: cleanString(row.label),
-    isdsIdConfigured: Boolean(cleanString(row.isds_id)),
-    status: cleanString(row.status || "unknown"),
-    lastSyncAt: cleanString(row.last_sync_at),
-    lastSyncStatus: cleanString(row.last_sync_status),
-    lastSyncMessage: cleanString(row.last_sync_message),
-    passwordStatus: "NEOVĚŘENO",
-    loginStatus: cleanString(row.last_sync_status).toLowerCase() === "success" ? "Přihlášení OK" : "Neověřeno"
-  }));
-}
-
 export async function getSystemCheckStatus(env) {
   const db = monitorDb(env, true);
 
   try {
     const [
       latestMonitor,
-      dataBoxRules,
-      dataBoxActiveRules,
-      dataBoxAutomations,
-      dataBoxActiveAutomations,
-      dataBoxMessages,
-      dataBoxAttachments,
-      dataBoxAccounts,
-      latestDataBoxRunner
+      dataBoxPlusRules,
+      dataBoxPlusActiveRules,
+      dataBoxPlusMessages,
+      dataBoxPlusAttachments,
+      dataBoxPlusAccounts,
+      latestDataBoxPlusSync
     ] = await Promise.all([
       runProductionMonitor(env, { source: "read-only-status" }).catch(() => null),
-      countRows(db, "SELECT COUNT(*) AS count FROM module_rules WHERE module_key = ?", "data-box"),
-      countRows(db, "SELECT COUNT(*) AS count FROM module_rules WHERE module_key = ? AND status = ?", "data-box", "active"),
-      countRows(db, "SELECT COUNT(*) AS count FROM module_rules WHERE module_key = ? AND is_automation = 1", "data-box"),
-      countRows(db, "SELECT COUNT(*) AS count FROM module_rules WHERE module_key = ? AND is_automation = 1 AND status = ?", "data-box", "active"),
-      countRows(db, "SELECT COUNT(*) AS count FROM data_box_messages"),
-      countRows(db, "SELECT COUNT(*) AS count FROM data_box_attachments"),
-      dataBoxAccountRows(db),
+      countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_rules"),
+      countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_rules WHERE status IN (?, ?, ?)", "Učí se", "Spolehlivé", "Autonomní"),
+      countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_messages"),
+      countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_attachments"),
+      countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_mailboxes"),
       db.prepare(`
         SELECT *
-        FROM module_automation_runner_runs
-        WHERE module_key = ?
+        FROM data_box_plus_sync_runs
         ORDER BY started_at DESC
         LIMIT 1
-      `).bind("data-box").first()
+      `).first()
     ]);
 
     return {
@@ -162,34 +137,34 @@ export async function getSystemCheckStatus(env) {
         note: "GitHub Actions kontrola není v této bezpečné fázi přidaná ani napojená."
       },
       dataBox: {
-        expectedDefaultMailboxId: "kaiser-primary",
-        messages: dataBoxMessages,
-        attachments: dataBoxAttachments,
-        accounts: dataBoxAccounts,
-        accountCount: dataBoxAccounts.length
+        expectedDefaultMailboxId: "data-box-plus",
+        messages: dataBoxPlusMessages,
+        attachments: dataBoxPlusAttachments,
+        accounts: [],
+        accountCount: dataBoxPlusAccounts
       },
       automation: {
-        rulesTotal: dataBoxRules,
-        activeRules: dataBoxActiveRules,
-        automationsTotal: dataBoxAutomations,
-        activeAutomations: dataBoxActiveAutomations,
-        latestRunnerRun: latestDataBoxRunner ? {
-          id: cleanString(latestDataBoxRunner.id),
-          runnerName: cleanString(latestDataBoxRunner.runner_name),
-          startedAt: cleanString(latestDataBoxRunner.started_at),
-          finishedAt: cleanString(latestDataBoxRunner.finished_at),
-          status: cleanString(latestDataBoxRunner.status),
-          rulesTotal: Number(latestDataBoxRunner.rules_total || 0),
-          dryRunCount: Number(latestDataBoxRunner.dry_run_count || 0),
-          skippedCount: Number(latestDataBoxRunner.skipped_count || 0),
-          failedCount: Number(latestDataBoxRunner.failed_count || 0),
-          message: cleanString(latestDataBoxRunner.message),
-          cron: cleanString(latestDataBoxRunner.cron)
+        rulesTotal: dataBoxPlusRules,
+        activeRules: dataBoxPlusActiveRules,
+        automationsTotal: 0,
+        activeAutomations: 0,
+        latestRunnerRun: latestDataBoxPlusSync ? {
+          id: cleanString(latestDataBoxPlusSync.id),
+          runnerName: "data-box-plus-sync",
+          startedAt: cleanString(latestDataBoxPlusSync.started_at),
+          finishedAt: cleanString(latestDataBoxPlusSync.finished_at),
+          status: cleanString(latestDataBoxPlusSync.status),
+          rulesTotal: dataBoxPlusRules,
+          dryRunCount: 0,
+          skippedCount: 0,
+          failedCount: Number(latestDataBoxPlusSync.errors ? 1 : 0),
+          message: cleanString(latestDataBoxPlusSync.errors || latestDataBoxPlusSync.status),
+          cron: "30 minut"
         } : null,
-        runnerStatus: latestDataBoxRunner ? cleanString(latestDataBoxRunner.status) : "NEOVĚŘENO",
+        runnerStatus: latestDataBoxPlusSync ? cleanString(latestDataBoxPlusSync.status) : "NEOVĚŘENO",
         actionHistory: {
-          status: "NEOVĚŘENO",
-          note: "Samostatná historie akcí DS automatizací není v databázi napojená."
+          status: "OK",
+          note: "DSP akce se zapisují do data_box_plus_action_log."
         }
       }
     };
@@ -292,32 +267,31 @@ async function monitorDatabaseItems(env) {
   }
 
   try {
-    const rulesTotal = await countRows(db, "SELECT COUNT(*) AS count FROM module_rules WHERE module_key = ?", "data-box");
-    const activeRules = await countRows(db, "SELECT COUNT(*) AS count FROM module_rules WHERE module_key = ? AND status = ?", "data-box", "active");
+    const messagesTotal = await countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_messages");
+    const mailboxesTotal = await countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_mailboxes");
     const runnerRun = await db.prepare(`
       SELECT status, started_at
-      FROM module_automation_runner_runs
-      WHERE module_key = ?
+      FROM data_box_plus_sync_runs
       ORDER BY started_at DESC
       LIMIT 1
-    `).bind("data-box").first();
+    `).first();
 
     return [
       {
-        key: "data-box-rules",
-        label: "DS pravidla v cloud DB",
-        status: rulesTotal > 0 ? "OK" : "WARNING",
-        message: rulesTotal > 0
-          ? `${rulesTotal} pravidel, ${activeRules} aktivních.`
-          : "V cloud DB nejsou žádná pravidla pro Datovou schránku."
+        key: "data-box-plus-messages",
+        label: "DSP zprávy v cloud DB",
+        status: messagesTotal > 0 ? "OK" : "WARNING",
+        message: messagesTotal > 0
+          ? `${messagesTotal} zpráv napříč ${mailboxesTotal} schránkami.`
+          : "DSP zatím nemá uložené žádné zprávy."
       },
       {
-        key: "data-box-runner",
-        label: "DS runner automatizací",
+        key: "data-box-plus-sync",
+        label: "DSP cloud načítání",
         status: runnerRun ? (cleanString(runnerRun.status).toLowerCase() === "completed" ? "OK" : "WARNING") : "WARNING",
         message: runnerRun
           ? `Poslední běh: ${cleanString(runnerRun.status)} ${cleanString(runnerRun.started_at)}.`
-          : "Runner Datové schránky zatím nemá zapsaný běh."
+          : "DSP zatím nemá zapsaný běh načítání."
       }
     ];
   } catch (error) {
@@ -335,22 +309,18 @@ export async function runProductionMonitor(env, options = {}) {
   const targetUrl = cleanString(options.targetUrl || env?.PRODUCTION_MONITOR_TARGET_URL) || DEFAULT_TARGET_URL;
   const source = cleanString(options.source) || "read-only-status";
   const startedAt = Date.now();
-  const [home, dataBox, dataBoxStatus, moduleRules, moduleRuns, buildMeta, dbItems] = await Promise.all([
+  const [home, dataBoxPlus, dataBoxPlusStatus, buildMeta, dbItems] = await Promise.all([
     monitorHttpItem(targetUrl, "/", "Produkční web", [200]),
-    monitorHttpItem(targetUrl, "/datova-schranka", "DS modul", [200]),
-    monitorHttpItem(targetUrl, "/api/data-box/status", "DS status endpoint", [200, 401, 403]),
-    monitorHttpItem(targetUrl, "/api/modules/data-box/rules", "Cloud API pravidel", [200, 401, 403]),
-    monitorHttpItem(targetUrl, "/api/modules/data-box/automation-runs", "Cloud API běhů automatizací", [200, 401, 403]),
+    monitorHttpItem(targetUrl, "/datove-schranky-plus", "DSP modul", [200]),
+    monitorHttpItem(targetUrl, "/api/data-box-plus/status", "DSP status endpoint", [200, 401, 403]),
     monitorBuildMeta(targetUrl),
     monitorDatabaseItems(env)
   ]);
 
   const checkedItems = [
     home,
-    dataBox,
-    dataBoxStatus,
-    moduleRules,
-    moduleRuns,
+    dataBoxPlus,
+    dataBoxPlusStatus,
     buildMeta.item,
     ...dbItems
   ];

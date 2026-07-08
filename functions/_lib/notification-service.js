@@ -987,7 +987,7 @@ export async function sendVersionNewsNotification(env, news, options = {}) {
 export async function sendDataBoxForwardNotification(env, message, options = {}) {
   const title = cleanString(options.subject || message?.subject || "Datová zpráva");
   const recipientEmail = cleanString(options.recipientEmail);
-  const ctaUrl = `${appBaseUrl(env).replace(/\/+$/, "")}/datova-schranka?message=${encodeURIComponent(cleanString(message?.id))}`;
+  const ctaUrl = `${appBaseUrl(env).replace(/\/+$/, "")}/datove-schranky-plus?message=${encodeURIComponent(cleanString(message?.id))}`;
 
   return sendEmail(env, {
     type: "data_box_forward_email",
@@ -1001,7 +1001,7 @@ export async function sendDataBoxForwardNotification(env, message, options = {})
     relatedEntityId: cleanString(message?.id),
     recipientName: cleanString(options.recipientName || recipientEmail),
     fromName: cleanString(options.fromName || "Kaiser Smart"),
-    moduleId: "data-box",
+    moduleId: "data-box-plus",
     relatedEntityType: "data_box_message",
     messagePreview: title
   });

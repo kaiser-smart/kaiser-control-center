@@ -325,7 +325,7 @@ const HOME_MODULE_SECTIONS = [
     id: "documents-admin",
     title: "Dokumenty a administrativa",
     description: "Datové zprávy, reporty, připomínky a nepřítomnosti.",
-    moduleIds: ["data-box-plus", "data-box", "absence", "reports", "feedback"]
+    moduleIds: ["data-box-plus", "absence", "reports", "feedback"]
   },
   {
     id: "finance-costs",
@@ -341,6 +341,7 @@ const HOME_MODULE_SECTIONS = [
   }
 ];
 const DATA_BOX_PLUS_MODULE_KEY = "data-box-plus";
+const DATA_BOX_PLUS_ROUTE = "/datove-schranky-plus";
 const DATA_BOX_PLUS_TABS = [
   { id: "command", label: "Řídicí centrum" },
   { id: "messages", label: "Zprávy" },
@@ -36427,6 +36428,13 @@ function renderAuthenticatedApp(user) {
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   const userDashboardRoutes = new Map(visibleDashboardRoutes(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   const sarlotaDeepLink = prepareSarlotaDeepLinkPanel();
+
+  if (path === DATA_BOX_ROUTE) {
+    window.history.replaceState({}, "", routeHref(DATA_BOX_PLUS_ROUTE));
+    lastRenderedUrl = window.location.href;
+    render();
+    return;
+  }
 
   if (hasPermission(user, "feedback", "view")) {
     loadModuleFeedback({ render: true });

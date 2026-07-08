@@ -50,17 +50,6 @@ export const modules = [
     order: 2.5
   },
   {
-    id: "data-box",
-    title: "Datová schránka",
-    description: "Přijaté a odeslané datové zprávy, lhůty, přílohy a stav vyřízení.",
-    route: "/datova-schranka",
-    icon: ReportsIcon,
-    status: "ROZPRACOVÁN",
-    active: true,
-    disabled: false,
-    order: 2.7
-  },
-  {
     id: "data-box-plus",
     title: "Datové schránky Plus",
     description: "Autonomní operační centrum pro příjem, třídění, předání, archivaci a vyřízení firemních datových zpráv.",
