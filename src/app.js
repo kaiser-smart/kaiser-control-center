@@ -372,10 +372,14 @@ const NOTIFICATION_TYPE_LABELS = {
   module_feedback_resolved_email: "Připomínka vyřešena",
   version_news_email: "Co je nového",
   employee_medical_exam_reminder: "Lékařská prohlídka",
+  data_box_forward_email: "DS předání e-mailem",
   driver_part_order_email: "ND ověření e-mail",
   driver_part_urgent_email: "Urgentní servisní e-mail",
   driver_part_service_tech_sms: "ND SMS servis",
-  driver_part_ready_driver_sms: "ND SMS řidiči"
+  driver_part_ready_driver_sms: "ND SMS řidiči",
+  communication_inbound_reply: "Příchozí odpověď",
+  twilio_delivery_status: "Twilio delivery status",
+  sms_inbound_reply: "Příchozí SMS odpověď"
 };
 const NOTIFICATION_CHANNEL_OPTIONS = [
   { value: "email", label: "E-mail" },
@@ -852,6 +856,14 @@ const notificationCenterState = {
   error: "",
   apiStatus: "waiting",
   selectedId: ""
+};
+
+const communicationInfrastructureState = {
+  data: null,
+  loaded: false,
+  loading: false,
+  error: "",
+  message: ""
 };
 
 const receivablesState = {
@@ -4997,8 +5009,10 @@ function settingsManagementSection(user) {
   }
 
   ensureSarlotaStatusData();
+  ensureCommunicationInfrastructureData();
 
   return `
+    ${communicationInfrastructureSection(user)}
     ${SarlotaStatusPanel({
       status: sarlotaStatusState.data,
       loading: sarlotaStatusState.loading,
@@ -5019,6 +5033,140 @@ function settingsManagementSection(user) {
       message: themeState.message,
       error: themeState.error
     })}
+  `;
+}
+
+function communicationInfrastructureStatusClass(status = "") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("ostré") || normalized.includes("běží")) return "OK";
+  if (normalized.includes("vypnuto") || normalized.includes("chybí") || normalized.includes("selhalo")) return "ERROR";
+  if (normalized.includes("připraveno") || normalized.includes("čeká") || normalized.includes("test")) return "WARNING";
+  return "NEOVĚŘENO";
+}
+
+function communicationInfrastructureStatusItem(item = {}) {
+  return `
+    <li class="communication-status-item">
+      ${systemCheckBadge(communicationInfrastructureStatusClass(item.status))}
+      <div>
+        <strong>${escapeHtml(item.label || "Stav")}</strong>
+        <span>${escapeHtml(item.status || "NEOVĚŘENO")}</span>
+        ${item.detail ? `<small>${escapeHtml(item.detail)}</small>` : ""}
+      </div>
+    </li>
+  `;
+}
+
+function communicationInfrastructureFact(label, value) {
+  return `
+    <div>
+      <dt>${escapeHtml(label)}</dt>
+      <dd>${escapeHtml(value || "neuvedeno")}</dd>
+    </div>
+  `;
+}
+
+function communicationInfrastructureCounts(data = {}) {
+  const counts = data.counts || {};
+  const items = [
+    ["E-mail odchozí", counts.outboundEmail || 0],
+    ["E-mail odpovědi", counts.inboundEmail || 0],
+    ["Nespárované", counts.unmatchedReplies || 0],
+    ["SMS odchozí", counts.outboundSms || 0],
+    ["SMS odpovědi", counts.inboundSms || 0],
+    ["Chyby", counts.failed || 0]
+  ];
+
+  return `
+    <div class="communication-count-grid">
+      ${items.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function communicationInfrastructureEvents(data = {}) {
+  const events = Array.isArray(data.latestEvents) ? data.latestEvents : [];
+
+  if (!events.length) {
+    return '<p class="communication-empty">Zatím není uložená žádná komunikační událost.</p>';
+  }
+
+  return `
+    <div class="communication-event-list">
+      ${events.slice(0, 8).map((event) => `
+        <article>
+          <div>
+            <strong>${escapeHtml(event.eventType || "událost")}</strong>
+            <span>${escapeHtml([event.channel, event.moduleKey, event.status].filter(Boolean).join(" · ") || "bez metadat")}</span>
+          </div>
+          <p>${escapeHtml(event.detail || "bez detailu")}</p>
+          <time>${escapeHtml(formatDateTime(event.createdAt))}</time>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function communicationInfrastructureSection(user) {
+  if (!hasPermission(user, "settings", "view")) {
+    return "";
+  }
+
+  const data = communicationInfrastructureState.data || {};
+  const sender = data.sender || {};
+  const statusItems = [
+    data.email,
+    data.inboundEmail,
+    data.twilio,
+    data.sms,
+    data.deliveryWebhook
+  ].filter(Boolean);
+  const visibleStatusItems = statusItems.length
+    ? statusItems
+    : [{
+      label: "Stav komunikace",
+      status: communicationInfrastructureState.loading ? "načítám" : "čeká na načtení",
+      detail: "Data se načtou ze serverového API bez přístupu k secretům."
+    }];
+
+  return `
+    <section class="communication-infrastructure" aria-labelledby="communication-infrastructure-title">
+      <div class="communication-infrastructure__header">
+        <div>
+          <span>Komunikační infrastruktura KSO</span>
+          <h2 id="communication-infrastructure-title">Šarlota, e-maily, SMS a odpovědi</h2>
+          <p>Pravdivý provozní stav. Autopilot odpovědi pouze zařazuje a bez potvrzení nic sám neodesílá.</p>
+        </div>
+        <button class="secondary-link" type="button" data-communication-refresh ${communicationInfrastructureState.loading ? "disabled" : ""}>
+          ${communicationInfrastructureState.loading ? "Načítám..." : "Obnovit"}
+        </button>
+      </div>
+
+      ${communicationInfrastructureState.error ? `<p class="module-feedback__error">${escapeHtml(communicationInfrastructureState.error)}</p>` : ""}
+      ${communicationInfrastructureState.message ? `<p class="module-feedback__notice">${escapeHtml(communicationInfrastructureState.message)}</p>` : ""}
+
+      <dl class="communication-sender-strip">
+        ${communicationInfrastructureFact("From", `${sender.fromName || "Šarlota Kaiser"} <${sender.fromEmail || "sarlota@kaiserservis.cz"}>`)}
+        ${communicationInfrastructureFact("Reply-To", sender.replyTo || "sarlota@kaiserservis.cz")}
+        ${communicationInfrastructureFact("Původní sender", sender.replacedFrom ? `${sender.replacedFrom} nahrazeno` : "bez náhrady")}
+      </dl>
+
+      <ul class="communication-status-list">
+        ${visibleStatusItems.map(communicationInfrastructureStatusItem).join("")}
+      </ul>
+
+      ${communicationInfrastructureCounts(data)}
+
+      <section class="communication-event-log" aria-label="Log událostí komunikace">
+        <h3>Log událostí</h3>
+        ${communicationInfrastructureEvents(data)}
+      </section>
+    </section>
   `;
 }
 
@@ -29873,8 +30021,15 @@ function notificationDetailPanel() {
         <div><dt>Nadřízený</dt><dd>${escapeHtml(item.managerName || item.recipientName || "neuvedeno")}</dd></div>
         <div><dt>Předmět</dt><dd>${escapeHtml(item.subject || "neuvedeno")}</dd></div>
         <div><dt>Náhled zprávy</dt><dd>${escapeHtml(item.messagePreview || "neuvedeno")}</dd></div>
+        <div><dt>From</dt><dd>${escapeHtml([item.fromName, item.fromAddress ? `<${item.fromAddress}>` : ""].filter(Boolean).join(" ") || "neuvedeno")}</dd></div>
+        <div><dt>Reply-To</dt><dd>${escapeHtml(item.replyTo || "neuvedeno")}</dd></div>
         <div><dt>Provider</dt><dd>${escapeHtml(item.provider || "neuvedeno")}</dd></div>
         <div><dt>Provider Message ID</dt><dd>${escapeHtml(item.providerMessageId || "neuvedeno")}</dd></div>
+        <div><dt>Provider status</dt><dd>${escapeHtml(item.providerStatus || "neuvedeno")}</dd></div>
+        <div><dt>Message ID</dt><dd>${escapeHtml(item.messageId || "neuvedeno")}</dd></div>
+        <div><dt>Thread ID</dt><dd>${escapeHtml(item.threadId || "neuvedeno")}</dd></div>
+        <div><dt>Audit ID</dt><dd>${escapeHtml(item.auditId || "neuvedeno")}</dd></div>
+        <div><dt>Subject token</dt><dd>${escapeHtml(item.subjectToken || "neuvedeno")}</dd></div>
         <div><dt>Počet pokusů</dt><dd>${escapeHtml(item.attempts || 1)}</dd></div>
         <div><dt>Poslední chyba</dt><dd>${escapeHtml(item.lastError || "bez chyby")}</dd></div>
         <div><dt>Vytvořeno</dt><dd>${escapeHtml(formatDateTime(item.createdAt))}</dd></div>
@@ -34545,6 +34700,14 @@ function normalizeNotificationLog(item) {
     messagePreview: String(item?.messagePreview || ""),
     provider: String(item?.provider || ""),
     providerMessageId: String(item?.providerMessageId || ""),
+    providerStatus: String(item?.providerStatus || ""),
+    messageId: String(item?.messageId || ""),
+    threadId: String(item?.threadId || ""),
+    auditId: String(item?.auditId || ""),
+    fromName: String(item?.fromName || ""),
+    fromAddress: String(item?.fromAddress || ""),
+    replyTo: String(item?.replyTo || ""),
+    subjectToken: String(item?.subjectToken || ""),
     attempts: Number(item?.attempts || 1),
     lastError: String(item?.lastError || ""),
     sentAt: String(item?.sentAt || ""),
@@ -35924,6 +36087,52 @@ function resetSystemCheckState() {
   systemCheckState.message = "";
 }
 
+function resetCommunicationInfrastructureState() {
+  communicationInfrastructureState.loaded = false;
+  communicationInfrastructureState.loading = false;
+  communicationInfrastructureState.data = null;
+  communicationInfrastructureState.error = "";
+  communicationInfrastructureState.message = "";
+}
+
+function ensureCommunicationInfrastructureData(options = {}) {
+  if (!authState.user || communicationInfrastructureState.loading || !hasPermission(authState.user, "settings", "view")) {
+    return;
+  }
+
+  if (!communicationInfrastructureState.loaded || options.force) {
+    void loadCommunicationInfrastructureStatus(options);
+  }
+}
+
+async function loadCommunicationInfrastructureStatus(options = {}) {
+  if (!authState.user || communicationInfrastructureState.loading || !hasPermission(authState.user, "settings", "view")) {
+    return;
+  }
+
+  communicationInfrastructureState.loading = true;
+  communicationInfrastructureState.error = "";
+
+  try {
+    const result = await apiJson("/api/communication/status");
+    communicationInfrastructureState.data = result;
+    communicationInfrastructureState.loaded = true;
+    if (options.force) {
+      communicationInfrastructureState.message = "Stav komunikační infrastruktury byl obnoven.";
+    }
+  } catch (error) {
+    communicationInfrastructureState.data = null;
+    communicationInfrastructureState.loaded = true;
+    communicationInfrastructureState.error = error.payload?.error || "Komunikační infrastrukturu se teď nepodařilo načíst.";
+  } finally {
+    communicationInfrastructureState.loading = false;
+  }
+
+  if (options.renderAfter !== false) {
+    render();
+  }
+}
+
 function ensureSystemCheckData(options = {}) {
   if (!authState.user || systemCheckState.loading || !hasPermission(authState.user, "system-check", "view")) {
     return;
@@ -36352,6 +36561,7 @@ async function logout() {
   absenceSettingsState.missingEndpoint = "PATCH /api/absence-settings";
   resetModuleRulesState();
   resetSystemCheckState();
+  resetCommunicationInfrastructureState();
   resetDataBoxState();
   receivablesState.dashboard = null;
   receivablesState.dashboardLoaded = false;
@@ -39940,6 +40150,13 @@ document.addEventListener("click", async (event) => {
   if (systemCheckRefresh) {
     event.preventDefault();
     await loadSystemCheckStatus({ force: true });
+    return;
+  }
+
+  const communicationRefresh = event.target.closest("[data-communication-refresh]");
+  if (communicationRefresh) {
+    event.preventDefault();
+    await loadCommunicationInfrastructureStatus({ force: true });
     return;
   }
 

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.475"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.476"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "KSO komunikace: Šarlota jako jednotný odesílatel",
+    text: "Komunikační infrastruktura KSO připravuje jednotný From Šarlota Kaiser <sarlota@kaiserservis.cz>, audit před odesláním, interní thread metadata, příjem odpovědí do ruční fronty a oddělenou Twilio Kaiser konfiguraci."
+  },
   {
     title: "Datové schránky Plus: odstranění staré Datové schránky",
     text: "Starý modul /datova-schranka byl odstraněný z hlavní stránky a oprávnění. Původní URL bezpečně přesměruje do Datových schránek Plus a provozní odkazy už míří na DSP."
