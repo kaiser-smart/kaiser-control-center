@@ -20716,6 +20716,32 @@ function dataBoxPlusInstructionExamples(message = {}) {
   return examples;
 }
 
+function dataBoxPlusMiniInstructionForm(message) {
+  const recommendation = dataBoxPlusOpenRecommendationForMessage(message);
+  const draft = Object.prototype.hasOwnProperty.call(dataBoxPlusState.instructionDrafts, message.id)
+    ? dataBoxPlusState.instructionDrafts[message.id]
+    : "";
+  const loading = dataBoxPlusState.instructionLoadingId === message.id;
+  const pending = recommendation
+    ? `<span class="ds-plus-mini-instruction__pending">Krok připravený k potvrzení.</span>`
+    : "";
+
+  return `
+    <form class="ds-plus-mini-instruction" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
+      <label for="ds-plus-mini-instruction-${escapeHtml(message.id)}">Co s tím?</label>
+      <input
+        id="ds-plus-mini-instruction-${escapeHtml(message.id)}"
+        name="instruction"
+        value="${escapeHtml(draft)}"
+        placeholder="Napiš pokyn…"
+        ${loading ? "disabled" : ""}
+      />
+      <button type="submit" ${loading ? "disabled" : ""}>${escapeHtml(loading ? "..." : "Odeslat")}</button>
+      ${pending}
+    </form>
+  `;
+}
+
 function dataBoxPlusShortAssistantText(recommendation = {}, plan = {}) {
   const text = String(recommendation.text || plan.assistantText || "").trim();
   const normalized = dataBoxPlusSearchText([text, plan.recommendedAction, plan.actionType, plan.confirmLabel]);
@@ -21228,23 +21254,18 @@ function dataBoxPlusMetrics() {
 function dataBoxPlusPriorityCard(message) {
   const mailbox = dataBoxPlusMailbox(message);
   const workflow = dataBoxPlusMessageWorkflow(message);
-  const nextStep = dataBoxPlusOverviewNextStep(message, workflow);
-  const action = dataBoxPlusOverviewAction(message, workflow);
   return `
     <article class="ds-plus-priority ds-plus-priority--${escapeHtml(workflow.tone)}">
       <div class="ds-plus-priority__body">
-        <div class="ds-plus-priority__top">
+        <div class="ds-plus-priority__summary">
           <span class="ds-plus-priority__mailbox">${escapeHtml(mailbox?.name || "Schránka")}</span>
+          <strong>${escapeHtml(message.senderName)}</strong>
+          <span>${escapeHtml(message.subject)}</span>
           <span>${escapeHtml(formatDateTime(message.deliveredAt))}</span>
-        </div>
-        <h3>${escapeHtml(message.senderName)}</h3>
-        <p>${escapeHtml(message.subject)}</p>
-        <div class="ds-plus-priority__state">
           <span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(workflow.tone)}">${escapeHtml(workflow.stateLabel || workflow.state)}</span>
-          <span>${escapeHtml(nextStep)}</span>
         </div>
+        ${dataBoxPlusMiniInstructionForm(message)}
       </div>
-      ${dataBoxPlusRenderWorkflowAction(action)}
     </article>
   `;
 }
@@ -39099,7 +39120,7 @@ document.addEventListener("input", (event) => {
     return;
   }
 
-  const dataBoxPlusInstructionInput = event.target.closest("[data-ds-plus-instruction-form] textarea");
+  const dataBoxPlusInstructionInput = event.target.closest("[data-ds-plus-instruction-form] textarea, [data-ds-plus-instruction-form] input[name='instruction']");
   if (dataBoxPlusInstructionInput) {
     const form = dataBoxPlusInstructionInput.closest("[data-ds-plus-instruction-form]");
     const messageId = form?.dataset?.messageId || "";
