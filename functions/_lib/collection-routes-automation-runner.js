@@ -1,4 +1,7 @@
-import { createCollectionRoutesVistosKommunalPreview } from "./collection-routes-store.js";
+import {
+  createCollectionRoutesVistosKommunalPreview,
+  isVistosExecuteConfigured
+} from "./collection-routes-store.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const DATABASE_NAME = "smart-odpady";
@@ -219,6 +222,41 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
       moduleKey: MODULE_KEY,
       status: "skipped",
       message: `Běh přeskočen: snapshot pro slot ${slotIso(now)} už existuje.`,
+      dryRunCount: 0,
+      skippedCount: 1,
+      errorCount: 0,
+      cron,
+      dedupeKey: key
+    };
+  }
+
+  if (!isVistosExecuteConfigured(env)) {
+    const finishedAt = new Date().toISOString();
+    const message = "Read-only Vistos snapshot přeskočen: worker nemá nastavené VISTOS_API_BASE_URL, VISTOS_API_USERNAME a VISTOS_API_PASSWORD.";
+    await updateAutomationRun(db, {
+      id: automationRunId,
+      finishedAt,
+      status: "skipped",
+      message,
+      errorCode: "vistos_api_not_configured"
+    });
+    await updateRunnerRun(db, {
+      id: runnerRunId,
+      finishedAt,
+      status: "skipped",
+      dryRunCount: 0,
+      skippedCount: 1,
+      failedCount: 0,
+      message,
+      errorCode: "vistos_api_not_configured"
+    });
+    return {
+      mode: "read-only-snapshot",
+      runner: RUNNER_NAME,
+      runnerRunId,
+      moduleKey: MODULE_KEY,
+      status: "skipped",
+      message,
       dryRunCount: 0,
       skippedCount: 1,
       errorCount: 0,

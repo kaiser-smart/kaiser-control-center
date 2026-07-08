@@ -969,7 +969,7 @@ function vistosExecuteApiBase(env) {
   }
 }
 
-function isVistosExecuteConfigured(env) {
+export function isVistosExecuteConfigured(env) {
   return Boolean(
     vistosExecuteApiBase(env) &&
     cleanString(env?.VISTOS_API_USERNAME) &&
@@ -5494,6 +5494,7 @@ export async function getLatestCollectionRoutesVistosSnapshot(env, { limit = 100
         SELECT *
         FROM collection_import_batches
         WHERE source_mode = 'vistos-komunal-preview'
+          AND api_status = 'ready'
         ORDER BY created_at DESC
         LIMIT 1
       `)
