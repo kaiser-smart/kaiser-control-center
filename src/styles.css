@@ -30777,9 +30777,9 @@ body:has(.ds-plus-page) {
 .ds-plus-priority {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
-  padding: 16px;
+  padding: 12px 14px;
 }
 
 .ds-plus-priority__instruction {
@@ -30797,8 +30797,9 @@ body:has(.ds-plus-page) {
 
 .ds-plus-priority h3,
 .ds-plus-message-row h3 {
-  margin: 2px 0 4px;
+  margin: 1px 0 2px;
   font-size: 1rem;
+  line-height: 1.25;
 }
 
 .ds-plus-priority p,
@@ -30809,7 +30810,7 @@ body:has(.ds-plus-page) {
 .ds-plus-rule p {
   margin: 0;
   color: #4f5d50;
-  line-height: 1.5;
+  line-height: 1.35;
 }
 
 .ds-plus-recommendation__head {
@@ -30841,8 +30842,8 @@ body:has(.ds-plus-page) {
 .ds-plus-detail-section dl,
 .ds-plus-settings-block dl {
   display: grid;
-  gap: 8px;
-  margin: 12px 0 0;
+  gap: 6px;
+  margin: 8px 0 0;
 }
 
 .ds-plus-priority dt,
@@ -30953,17 +30954,17 @@ body:has(.ds-plus-page) {
 
 .ds-plus-message-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) minmax(240px, 0.7fr);
-  gap: 14px;
-  padding: 14px;
-  align-items: start;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(220px, 0.62fr);
+  gap: 10px;
+  padding: 10px 12px;
+  align-items: center;
 }
 
 .ds-plus-message-row__priority {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: #f2f5ef;
   color: #2f7d46;
@@ -31028,7 +31029,7 @@ body:has(.ds-plus-page) {
 
 .ds-plus-message-row__action {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .ds-plus-message-row__buttons {
@@ -31039,6 +31040,14 @@ body:has(.ds-plus-page) {
 .ds-plus-compact-workflow {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
+}
+
+.ds-plus-compact-workflow dt {
+  font-size: 0.7rem;
+}
+
+.ds-plus-compact-workflow dd {
+  line-height: 1.25;
 }
 
 .ds-plus-workflow-summary {
@@ -31221,10 +31230,10 @@ body:has(.ds-plus-page) {
 
 .ds-plus-instruction-card {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid #dce6d8;
   border-radius: 8px;
-  padding: 14px;
+  padding: 12px;
   background: #fbfdf9;
 }
 
@@ -31235,7 +31244,7 @@ body:has(.ds-plus-page) {
 
 .ds-plus-instruction-card form {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -31266,7 +31275,7 @@ body:has(.ds-plus-page) {
 .ds-plus-instruction-card textarea {
   width: 100%;
   min-width: 0;
-  min-height: 74px;
+  min-height: 68px;
   border: 1px solid #d5dfd1;
   border-radius: 8px;
   padding: 10px 12px;
@@ -31315,9 +31324,9 @@ body:has(.ds-plus-page) {
 
 .ds-plus-instruction-preview {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   border-top: 1px solid #dce6d8;
-  padding-top: 12px;
+  padding-top: 10px;
 }
 
 .ds-plus-instruction-bubble {
@@ -31353,8 +31362,8 @@ body:has(.ds-plus-page) {
 
 .ds-plus-instruction-plan {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
   margin: 0;
 }
 
@@ -31362,7 +31371,7 @@ body:has(.ds-plus-page) {
   min-width: 0;
   border: 1px solid #e5ebe2;
   border-radius: 8px;
-  padding: 8px;
+  padding: 7px 8px;
   background: #ffffff;
 }
 
@@ -31380,18 +31389,37 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-instruction-remember {
-  display: inline-flex;
-  gap: 8px;
+  display: flex;
+  gap: 8px 10px;
   align-items: center;
-  justify-self: start;
+  flex-wrap: wrap;
+  justify-self: stretch;
   min-width: 0;
   color: #223025;
   font-weight: 780;
 }
 
+.ds-plus-instruction-remember > span {
+  color: #526052;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.ds-plus-instruction-remember label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  border: 1px solid #d8e0d5;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #ffffff;
+  font-size: 0.84rem;
+}
+
 .ds-plus-instruction-remember input {
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
   accent-color: #2f7d46;
 }
 
