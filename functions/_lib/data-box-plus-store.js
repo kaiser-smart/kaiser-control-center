@@ -1475,6 +1475,83 @@ export async function saveDataBoxPlusMailbox(env, currentUser = null, body = {})
   }
 }
 
+export async function importDataBoxPlusCredentialsFromDataBox(env, currentUser = null) {
+  const db = dataBoxPlusDatabase(env, true);
+  try {
+    await ensureDataBoxPlusMailboxes(env);
+    const sourceBoxes = await sourceDataBoxMap(db);
+    const accounts = dataBoxIsdsAccountConfigs(env).slice(0, EXPECTED_MAILBOX_COUNT);
+    const imported = [];
+    const skipped = [];
+
+    for (let slot = 1; slot <= EXPECTED_MAILBOX_COUNT; slot += 1) {
+      const sourceBox = sourceBoxes.get(sourceDataBoxIdForSlot(slot));
+      const account = accounts.find((item) => numberValue(item.slot) === slot);
+      if (!account?.configured || !cleanString(account.username) || !cleanString(account.password)) {
+        skipped.push({
+          slot,
+          mailboxId: MAILBOX_IDS[slot - 1] || `dbp-mailbox-${slot}`,
+          reason: "Původní DS nemá pro tenhle slot kompletní serverový přístup."
+        });
+        continue;
+      }
+
+      const name = sourceLabelForRow(
+        { source_data_box_label: sourceBox?.label },
+        MAILBOX_NAMES[slot - 1] || account.label,
+        slot
+      );
+      const mailboxId = plusMailboxId({ slot });
+      const isdsId = cleanString(sourceBox?.isds_id || account.isdsId);
+      await saveDataBoxPlusMailbox(env, currentUser, {
+        id: mailboxId,
+        slot,
+        name,
+        company: name,
+        isdsId,
+        username: account.username,
+        password: account.password,
+        active: true
+      });
+      imported.push({
+        slot,
+        mailboxId,
+        name,
+        isdsId,
+        usernameMasked: maskSecret(account.username)
+      });
+    }
+
+    await writeMailboxAudit(db, currentUser, "Převzít přístupy z DS", {
+      importedCount: imported.length,
+      skippedCount: skipped.length,
+      imported: imported.map((item) => ({
+        slot: item.slot,
+        mailboxId: item.mailboxId,
+        name: item.name,
+        isdsId: item.isdsId,
+        usernameMasked: item.usernameMasked
+      })),
+      skipped
+    });
+
+    return {
+      apiStatus: "ready",
+      importedCount: imported.length,
+      skippedCount: skipped.length,
+      imported,
+      skipped,
+      mailboxes: await listDataBoxPlusMailboxes(env),
+      message: imported.length
+        ? `Do DSP vaultu je převzato ${imported.length} přístupů z původních DS. Hesla se nezobrazila.`
+        : "Původní DS nemá žádný kompletní serverový přístup k převzetí."
+    };
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
 export async function updateDataBoxPlusMailboxPassword(env, mailboxId, currentUser = null, body = {}) {
   const db = dataBoxPlusDatabase(env, true);
   try {

@@ -20364,6 +20364,7 @@ function dataBoxPlusSettingsPanel() {
       <div class="ds-plus-section-head">
         <div><span>Bezpečnost, přístupy a autonomie</span><h2 id="ds-plus-settings-title">Nastavení</h2></div>
       </div>
+      ${dataBoxPlusState.notice ? `<p class="ds-plus-notice" role="status">${escapeHtml(dataBoxPlusState.notice)}</p>` : ""}
       <div class="ds-plus-settings-grid">
         <section class="ds-plus-settings-block">
           <h3>Napojené schránky</h3>
@@ -20404,6 +20405,14 @@ function dataBoxPlusSettingsPanel() {
         <section class="ds-plus-settings-block ds-plus-settings-block--wide">
           <h3>Credential vault / secrets provider</h3>
           <p>Přístupy k datovým schránkám patří výhradně do bezpečného serverového úložiště. Frontend je nikdy neuvidí.</p>
+          <div class="ds-plus-settings-actions">
+            ${dataBoxPlusActionButton({
+              label: dataBoxPlusState.mailboxSaving ? "Přebírám přístupy..." : "Převzít přístupy z DS",
+              variant: "primary-action",
+              attrs: `data-ds-plus-import-credentials ${dataBoxPlusState.mailboxSaving ? "disabled" : ""}`,
+              help: "Server převezme login a heslo z původních DS secrets do šifrovaného DSP vaultu. Hesla se nezobrazí, nic se nikam neodešle a akce se zapíše do historie."
+            })}
+          </div>
         </section>
       </div>
       <details class="ds-plus-diagnostics">
@@ -29018,6 +29027,26 @@ async function saveDataBoxPlusMailboxPasswordForm(form) {
     await loadDataBoxPlusData({ force: true, renderAfter: false });
   } catch (error) {
     dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Heslo se nepodařilo změnit.");
+  } finally {
+    dataBoxPlusState.mailboxSaving = false;
+    render();
+  }
+}
+
+async function importDataBoxPlusCredentialsFromDataBox() {
+  if (dataBoxPlusState.mailboxSaving) return;
+  dataBoxPlusState.mailboxSaving = true;
+  dataBoxPlusState.notice = "Přebírám přístupy z původních DS do DSP vaultu. Hesla se nezobrazí.";
+  render();
+  try {
+    const result = await apiJson("/api/data-box-plus/mailboxes/import-from-ds", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    dataBoxPlusState.notice = result.message || "Přístupy z DS jsou uložené v DSP vaultu. Hesla se nezobrazila.";
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Přístupy z DS se nepodařilo převzít.");
   } finally {
     dataBoxPlusState.mailboxSaving = false;
     render();
@@ -37992,6 +38021,14 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusServiceSync) {
     event.preventDefault();
     await runDataBoxPlusServiceSync();
+    render();
+    return;
+  }
+
+  const dataBoxPlusImportCredentials = event.target.closest("[data-ds-plus-import-credentials]");
+  if (dataBoxPlusImportCredentials) {
+    event.preventDefault();
+    await importDataBoxPlusCredentialsFromDataBox();
     render();
     return;
   }
