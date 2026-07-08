@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.464"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.465"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: oprava načítání Vistos stanovišť",
+    text: "Stanoviště z Vistosu nově načítají Svoz Kaiser výřez ze snapshotu robustně podle uložených dat řádku a hlavní obrazovka ukáže přesný stav, když snapshot existuje, ale filtr nevrací žádné řádky."
+  },
   {
     title: "Trasy svozu: rychlé Stanoviště ze snapshotu",
     text: "Stanoviště a Svozové trasy při běžném otevření čtou krátký Svoz Kaiser výřez z uloženého D1 snapshotu místo pomalého live Vistos exportu. Ruční refresh z Vistosu zůstává oddělený, neblokuje ho nezávislý hlídač a přibyl filtr Jen s chybou."

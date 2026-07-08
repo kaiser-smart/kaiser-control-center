@@ -5512,23 +5512,28 @@ export async function getLatestCollectionRoutesVistosSnapshot(env, { limit = 100
     }
 
     const batch = rowToBatch(batchRow);
+    const fetchLimit = svozKaiserOnly ? 10000 : maxRows;
     const rowsSql = `
         SELECT *
         FROM collection_import_rows
         WHERE batch_id = ?
-        ${svozKaiserOnly ? "AND json_extract(summary_json, '$.svozKaiserIncluded') = 1" : ""}
         ORDER BY row_number ASC
         LIMIT ?
       `;
     const rowsResult = await db
       .prepare(rowsSql)
-      .bind(batch.id, maxRows)
+      .bind(batch.id, fetchLimit)
       .all();
-    const rows = (rowsResult.results || []).map(rowToImportRow);
+    const allRows = (rowsResult.results || []).map(rowToImportRow);
+    const rows = svozKaiserOnly
+      ? allRows.filter((row) => row?.summary?.svozKaiserIncluded === true).slice(0, maxRows)
+      : allRows;
     const metadata = batch.metadata || {};
     const mappingStats = metadata.mappingStats || {};
     const summary = {
       rowCount: batch.rowCount || rows.length,
+      filteredRowCount: rows.length,
+      loadedRowCount: allRows.length,
       contractCount: metadata.contractCount || mappingStats.contracts || 0,
       customerCount: metadata.customerCount || 0,
       siteCount: metadata.siteCount || 0,
@@ -5546,6 +5551,7 @@ export async function getLatestCollectionRoutesVistosSnapshot(env, { limit = 100
       source: "d1-vistos-komunal-preview",
       sourceMode: "vistos-komunal-preview",
       rowCount: rows.length,
+      loadedRowCount: allRows.length,
       totalRows: batch.rowCount || rows.length,
       batch,
       summary,
