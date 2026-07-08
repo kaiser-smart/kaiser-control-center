@@ -20287,7 +20287,7 @@ function dataBoxPlusLearningBlock() {
         <div><dt>Rozhodnutí</dt><dd>${escapeHtml(Number(learning.confirmedDecisions || 0))}</dd></div>
         <div><dt>Vzory</dt><dd>${escapeHtml(Number(learning.learnedPatterns || 0))}</dd></div>
       </dl>
-      <p>Autopilot se učí z potvrzených pokynů.</p>
+      <p>Učí se z pokynů.</p>
     </div>
   `;
 }
@@ -20718,12 +20718,28 @@ function dataBoxPlusInstructionExamples(message = {}) {
 
 function dataBoxPlusMiniInstructionForm(message) {
   const recommendation = dataBoxPlusOpenRecommendationForMessage(message);
+  const plan = dataBoxPlusInstructionPlan(recommendation || {});
   const draft = Object.prototype.hasOwnProperty.call(dataBoxPlusState.instructionDrafts, message.id)
     ? dataBoxPlusState.instructionDrafts[message.id]
     : "";
   const loading = dataBoxPlusState.instructionLoadingId === message.id;
-  const pending = recommendation
-    ? `<span class="ds-plus-mini-instruction__pending">Krok připravený k potvrzení.</span>`
+  const pending = recommendation && plan
+    ? `
+      <div class="ds-plus-mini-confirm">
+        <span>${escapeHtml(dataBoxPlusShortAssistantText(recommendation, plan))}</span>
+        <button
+          type="button"
+          data-ds-plus-confirm="${escapeHtml(recommendation.id)}"
+          data-ds-plus-confirm-type="${escapeHtml(plan.actionType || "")}"
+          aria-label="${escapeHtml(plan.confirmLabel || "Potvrdit připravený krok")}"
+        >${escapeHtml(plan.confirmLabel || "Potvrdit")}</button>
+        <button
+          type="button"
+          data-ds-plus-edit-instruction="${escapeHtml(message.id)}"
+          data-recommendation-id="${escapeHtml(recommendation.id)}"
+        >Upravit</button>
+      </div>
+    `
     : "";
 
   return `
@@ -20733,12 +20749,12 @@ function dataBoxPlusMiniInstructionForm(message) {
         id="ds-plus-mini-instruction-${escapeHtml(message.id)}"
         name="instruction"
         value="${escapeHtml(draft)}"
-        placeholder="Napiš pokyn…"
+        placeholder="např. faktury"
         ${loading ? "disabled" : ""}
       />
       <button type="submit" ${loading ? "disabled" : ""}>${escapeHtml(loading ? "..." : "Odeslat")}</button>
-      ${pending}
     </form>
+    ${pending}
   `;
 }
 
@@ -21256,14 +21272,17 @@ function dataBoxPlusPriorityCard(message) {
   const workflow = dataBoxPlusMessageWorkflow(message);
   return `
     <article class="ds-plus-priority ds-plus-priority--${escapeHtml(workflow.tone)}">
-      <div class="ds-plus-priority__body">
-        <div class="ds-plus-priority__summary">
-          <span class="ds-plus-priority__mailbox">${escapeHtml(mailbox?.name || "Schránka")}</span>
-          <strong>${escapeHtml(message.senderName)}</strong>
-          <span>${escapeHtml(message.subject)}</span>
-          <span>${escapeHtml(formatDateTime(message.deliveredAt))}</span>
-          <span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(workflow.tone)}">${escapeHtml(workflow.stateLabel || workflow.state)}</span>
-        </div>
+      <div class="ds-plus-priority__topline">
+        <span class="ds-plus-priority__mailbox">${escapeHtml(mailbox?.name || "Schránka")}</span>
+        <span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(workflow.tone)}">${escapeHtml(workflow.stateLabel || workflow.state)}</span>
+      </div>
+      <div class="ds-plus-priority__content">
+        <h3>${escapeHtml(message.senderName)}</h3>
+        <p>${escapeHtml(message.subject)}</p>
+        <span>Doručeno: ${escapeHtml(formatDateTime(message.deliveredAt))}</span>
+      </div>
+      <div class="ds-plus-priority__actions">
+        <button class="secondary-link ds-plus-priority__open" type="button" data-ds-plus-open="${escapeHtml(message.id)}">Otevřít</button>
         ${dataBoxPlusMiniInstructionForm(message)}
       </div>
     </article>
@@ -21875,6 +21894,20 @@ function dataBoxPlusSummary(message) {
   return `<section class="ds-plus-detail-section"><h3>Shrnutí</h3><p>${escapeHtml(message.summary)}</p><small>${escapeHtml(message.summarySource)}</small></section>`;
 }
 
+function dataBoxPlusTechnicalInfo(message) {
+  return `
+    <details class="ds-plus-technical-info">
+      <summary>Technické informace</summary>
+      <dl>
+        <div><dt>ID datové zprávy</dt><dd>${escapeHtml(message.id)}</dd></div>
+        <div><dt>Stav v systému</dt><dd>${escapeHtml(message.status)}</dd></div>
+        <div><dt>Typ zprávy</dt><dd>${escapeHtml(message.type)}</dd></div>
+        <div><dt>Rizikovost</dt><dd>${escapeHtml(message.riskLevel)}</dd></div>
+      </dl>
+    </details>
+  `;
+}
+
 function dataBoxPlusAttachments(message) {
   const attachments = Array.isArray(message.attachments) ? message.attachments : [];
   return `
@@ -21886,7 +21919,6 @@ function dataBoxPlusAttachments(message) {
             <div>
               <strong>${escapeHtml(attachment.fileName)}</strong>
               <span>${escapeHtml(attachment.mimeType)} · ${escapeHtml(attachment.size)}</span>
-              <small>${escapeHtml(attachment.storageStatus)} · ${escapeHtml(attachment.textExtractionStatus)}</small>
             </div>
             <div class="ds-plus-attachment__actions">
               ${dataBoxPlusActionButton({ label: "Otevřít přílohu", variant: "primary-action", attrs: attachment.openUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.openUrl)}"` : `data-ds-plus-pilot-action="Otevřít přílohu"` })}
@@ -21894,6 +21926,7 @@ function dataBoxPlusAttachments(message) {
               ${dataBoxPlusActionButton({ label: "Znovu načíst přílohu", attrs: `data-ds-plus-pilot-action="Znovu načíst přílohu"` })}
             </div>
             ${attachment.errorReason ? `<p class="ds-plus-attachment-error">Přílohu se nepodařilo načíst.</p><details><summary>Zobrazit technický důvod</summary><p>${escapeHtml(attachment.errorReason)}</p></details>` : ""}
+            <details><summary>Stav zpracování</summary><p>${escapeHtml(attachment.storageStatus)} · ${escapeHtml(attachment.textExtractionStatus)}</p></details>
             ${attachment.extractedText ? `<details><summary>Zobrazit text</summary><p>${escapeHtml(attachment.extractedText)}</p></details>` : ""}
           </article>
         `).join("") : `<p class="ds-plus-empty">Přílohy zatím nejsou v ostrém detailu načtené.</p>`}
@@ -21923,20 +21956,15 @@ function dataBoxPlusDetailOverlay() {
           <section class="ds-plus-detail-section ds-plus-detail-section--header">
             <dl>
               <div><dt>Odesílatel</dt><dd>${escapeHtml(message.senderName)}</dd></div>
+              <div><dt>Předmět</dt><dd>${escapeHtml(message.subject)}</dd></div>
               <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(message.deliveredAt))}</dd></div>
-              <div><dt>ID datové zprávy</dt><dd>${escapeHtml(message.id)}</dd></div>
-              <div><dt>Stav v systému</dt><dd>${escapeHtml(message.status)}</dd></div>
-              <div><dt>Typ zprávy</dt><dd>${escapeHtml(message.type)}</dd></div>
-              <div><dt>Rizikovost</dt><dd>${escapeHtml(message.riskLevel)}</dd></div>
+              <div><dt>Schránka</dt><dd>${escapeHtml(mailbox?.name || "Schránka")}</dd></div>
             </dl>
           </section>
-          ${dataBoxPlusFacts(message)}
           ${dataBoxPlusSummary(message)}
           ${dataBoxPlusAttachments(message)}
-          <section class="ds-plus-detail-section ds-plus-detail-section--chat">
-            ${dataBoxPlusInstructionCard(message)}
-          </section>
           ${dataBoxPlusStatusHistory(message, workflow)}
+          ${dataBoxPlusTechnicalInfo(message)}
         </div>
       </section>
     </div>
@@ -21966,7 +21994,7 @@ function dataBoxPlusPage(moduleItem, user) {
         <div class="ds-plus-header__main">
           <span class="ds-plus-eyebrow">Autopilot pro firemní datové schránky</span>
           <h1 id="ds-plus-title">${escapeHtml(moduleItem.title)}</h1>
-          <p>Operační centrum pro příjem, pochopení, předání, archivaci a vyřízení datových zpráv napříč 7 firemními schránkami.</p>
+          <p>Datové zprávy napříč 7 schránkami.</p>
         </div>
         <div class="ds-plus-header__state" aria-label="Stav Autopilota">
           <span>Stav Autopilota</span>
@@ -39533,7 +39561,7 @@ document.addEventListener("click", async (event) => {
     dataBoxPlusState.instructionDrafts[messageId] = instruction;
     dataBoxPlusState.notice = "Pokyn je připravený k úpravě. Samotná zpráva se tím nezměnila.";
     render();
-    restoreDataBoxPlusInputFocus(`[data-ds-plus-instruction-form][data-message-id="${CSS.escape(messageId)}"] textarea`, instruction.length, instruction.length);
+    restoreDataBoxPlusInputFocus(`[data-ds-plus-instruction-form][data-message-id="${CSS.escape(messageId)}"] textarea, [data-ds-plus-instruction-form][data-message-id="${CSS.escape(messageId)}"] input[name="instruction"]`, instruction.length, instruction.length);
     return;
   }
 

@@ -30820,63 +30820,81 @@ body:has(.ds-plus-page) {
 .ds-plus-priority {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  align-items: center;
-  padding: 8px 10px;
+  gap: 9px;
+  align-items: start;
+  padding: 12px 14px;
 }
 
-.ds-plus-priority__body {
+.ds-plus-priority__topline,
+.ds-plus-priority__content,
+.ds-plus-priority__actions {
   min-width: 0;
 }
 
-.ds-plus-priority__summary,
-.ds-plus-priority__state {
+.ds-plus-priority__topline {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.ds-plus-priority__summary {
-  flex-wrap: nowrap;
+.ds-plus-priority__mailbox,
+.ds-plus-priority__content > span {
+  color: #657164;
+  font-size: 0.84rem;
+  font-weight: 750;
 }
 
-.ds-plus-priority__summary strong,
-.ds-plus-priority__summary span {
+.ds-plus-priority__mailbox {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ds-plus-priority__summary strong {
-  flex: 0 1 190px;
+.ds-plus-priority__content {
+  display: grid;
+  gap: 3px;
+}
+
+.ds-plus-priority__content h3,
+.ds-plus-priority__content p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-plus-priority__content h3 {
+  margin: 0;
   color: #1f2a22;
+  font-size: 1rem;
+  line-height: 1.25;
 }
 
-.ds-plus-priority__summary span {
-  color: #657164;
-  font-size: 0.84rem;
-  font-weight: 700;
-}
-
-.ds-plus-priority__summary span:nth-child(3) {
-  flex: 1 1 auto;
+.ds-plus-priority__content p {
+  margin: 0;
   color: #344035;
-  font-size: 0.92rem;
-  font-weight: 650;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
-.ds-plus-priority__summary span:nth-child(4) {
-  flex: 0 0 auto;
+.ds-plus-priority__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.ds-plus-priority__instruction {
-  grid-column: 1 / -1;
+.ds-plus-priority__open {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-color: #bfd7bd;
+  background: #ffffff;
+  font-weight: 800;
 }
 
-.ds-plus-priority h3,
-.ds-plus-priority p,
 .ds-plus-message-row h3,
 .ds-plus-recommendation p,
 .ds-plus-rule p,
@@ -30884,24 +30902,14 @@ body:has(.ds-plus-page) {
   overflow-wrap: anywhere;
 }
 
-.ds-plus-priority h3,
 .ds-plus-message-row h3 {
   margin: 1px 0 2px;
   font-size: 1rem;
   line-height: 1.25;
 }
 
-.ds-plus-priority h3,
-.ds-plus-priority p {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ds-plus-priority p,
 .ds-plus-message-row__action span,
 .ds-plus-compact-workflow dd,
-.ds-plus-priority__state span:last-child,
 .ds-plus-side-block p,
 .ds-plus-recommendation p,
 .ds-plus-rule p {
@@ -30910,20 +30918,18 @@ body:has(.ds-plus-page) {
   line-height: 1.35;
 }
 
-.ds-plus-priority__state {
-  margin-top: 7px;
-}
-
 .ds-plus-mini-instruction {
   display: grid;
-  grid-template-columns: auto minmax(140px, 1fr) auto auto;
-  gap: 7px;
+  grid-template-columns: auto minmax(86px, 150px) auto auto;
+  gap: 6px;
   align-items: center;
-  margin-top: 7px;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
 }
 
 .ds-plus-mini-instruction label,
-.ds-plus-mini-instruction__pending {
+.ds-plus-mini-confirm span {
   color: #526052;
   font-size: 0.82rem;
   font-weight: 800;
@@ -30932,6 +30938,8 @@ body:has(.ds-plus-page) {
 
 .ds-plus-mini-instruction input {
   min-width: 0;
+  width: 150px;
+  max-width: 100%;
   height: 34px;
   border: 1px solid #d5dfd1;
   border-radius: 8px;
@@ -30947,7 +30955,8 @@ body:has(.ds-plus-page) {
   outline-offset: 1px;
 }
 
-.ds-plus-mini-instruction button {
+.ds-plus-mini-instruction button,
+.ds-plus-mini-confirm button {
   min-height: 34px;
   border: 1px solid #2f7d46;
   border-radius: 8px;
@@ -30960,13 +30969,51 @@ body:has(.ds-plus-page) {
   cursor: pointer;
 }
 
-.ds-plus-mini-instruction button:disabled {
+.ds-plus-mini-confirm button:nth-child(3) {
+  border-color: #d8e0d5;
+  background: #ffffff;
+  color: #344035;
+}
+
+.ds-plus-mini-instruction button:disabled,
+.ds-plus-mini-confirm button:disabled {
   opacity: 0.65;
   cursor: wait;
 }
 
-.ds-plus-mini-instruction__pending {
+.ds-plus-mini-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.ds-plus-mini-confirm span {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #8d520f;
+  white-space: nowrap;
+}
+
+.ds-plus-technical-info {
+  border: 1px solid #e2e8df;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #ffffff;
+}
+
+.ds-plus-technical-info summary {
+  cursor: pointer;
+  color: #344035;
+  font-weight: 800;
+}
+
+.ds-plus-technical-info dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 0;
 }
 
 .ds-plus-recommendation__head {
@@ -31580,11 +31627,6 @@ body:has(.ds-plus-page) {
   accent-color: #2f7d46;
 }
 
-.ds-plus-detail-section--chat {
-  border-color: #cfe0cc;
-  background: #f8fbf6;
-}
-
 .ds-plus-notice,
 .ds-plus-empty,
 .ds-plus-attachment-error {
@@ -32059,6 +32101,7 @@ body:has(.ds-plus-page) {
   .ds-plus-workflow-summary,
   .ds-plus-instruction-plan,
   .ds-plus-learning-status__metrics,
+  .ds-plus-technical-info dl,
   .ds-plus-detail-section--header dl,
   .ds-plus-facts {
     grid-template-columns: 1fr;
@@ -32117,16 +32160,8 @@ body:has(.ds-plus-page) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ds-plus-priority__summary {
-    gap: 6px;
-  }
-
-  .ds-plus-priority__summary strong {
-    flex-basis: 120px;
-  }
-
-  .ds-plus-priority__summary span:nth-child(4) {
-    display: none;
+  .ds-plus-priority__actions {
+    align-items: stretch;
   }
 
   .ds-plus-message-row__action .primary-action,
@@ -32160,10 +32195,21 @@ body:has(.ds-plus-page) {
 
   .ds-plus-mini-instruction {
     grid-template-columns: auto minmax(0, 1fr) auto;
+    width: 100%;
   }
 
-  .ds-plus-mini-instruction__pending {
-    grid-column: 2 / -1;
+  .ds-plus-mini-instruction input {
+    width: 100%;
+  }
+
+  .ds-plus-mini-confirm {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  .ds-plus-mini-confirm span {
+    flex: 1 1 100%;
+    max-width: 100%;
     white-space: normal;
   }
 
