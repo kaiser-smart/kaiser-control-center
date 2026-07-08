@@ -13320,6 +13320,50 @@ body:has(.driver-tablet-preview-page--dark) {
   align-content: start;
 }
 
+.driver-tablet-v2-brand__copy strong {
+  font-size: clamp(2.2rem, 2.28vw, 2.9rem);
+}
+
+.driver-tablet-v2-brand__copy small {
+  font-size: clamp(0.86rem, 0.72vw, 1rem);
+}
+
+.driver-tablet-v2-meta-card small {
+  font-size: clamp(0.74rem, 0.62vw, 0.9rem);
+}
+
+.driver-tablet-v2-meta-card strong {
+  font-size: clamp(0.96rem, 0.82vw, 1.16rem);
+}
+
+.driver-tablet-v2-stop-chip strong {
+  font-size: clamp(5rem, 6.18vw, 7rem);
+}
+
+.driver-tablet-v2-stop-copy small {
+  font-size: clamp(0.86rem, 0.74vw, 1rem);
+}
+
+.driver-tablet-v2-stop-copy h2 {
+  font-size: clamp(2.2rem, 2.66vw, 3.2rem);
+}
+
+.driver-tablet-v2-stop-copy p {
+  font-size: clamp(1.16rem, 1.08vw, 1.44rem);
+}
+
+.driver-tablet-v2-done__copy strong {
+  font-size: clamp(1.68rem, 1.55vw, 2.08rem);
+}
+
+.driver-tablet-v2-progress__copy strong {
+  font-size: clamp(2rem, 2.18vw, 2.55rem);
+}
+
+.driver-tablet-v2-progress__copy small {
+  font-size: clamp(1rem, 0.9vw, 1.22rem);
+}
+
 .collection-routes-panel--driver-print .collection-routes-preview-table {
   border-radius: 8px;
 }
