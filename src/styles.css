@@ -7648,6 +7648,20 @@ body:has(.driver-tablet-preview-page--dark) {
   stroke-width: 2.55;
 }
 
+.driver-tablet-preview-brand__icon .module-icon__svg,
+.driver-tablet-preview-inline-icon .module-icon__svg {
+  width: 68%;
+  height: 68%;
+}
+
+body:has(.driver-tablet-preview-page--dark) .driver-tablet-preview-page .module-icon__svg :is(path, circle, rect)[stroke="#3F4A45"] {
+  stroke: color-mix(in srgb, #e8f0ee 84%, var(--brand-accent) 16%);
+}
+
+body:has(.driver-tablet-preview-page--dark) .driver-tablet-preview-page .module-icon__svg :is(path, circle, rect)[fill="#3F4A45"] {
+  fill: color-mix(in srgb, #e8f0ee 84%, var(--brand-accent) 16%);
+}
+
 .driver-tablet-preview-inline-icon {
   width: clamp(19px, 1.88vw, 25px);
   height: clamp(19px, 1.88vw, 25px);
@@ -8320,6 +8334,11 @@ body:has(.driver-tablet-preview-page--dark) {
   height: clamp(19px, 1.86vw, 25px);
 }
 
+.driver-tablet-preview-stop-cta .collection-routes-driver-action__icon .module-icon__svg {
+  width: 66%;
+  height: 66%;
+}
+
 .driver-tablet-preview-stop-cta .collection-routes-driver-action__label {
   min-width: 0;
   overflow: hidden;
@@ -8403,6 +8422,11 @@ body:has(.driver-tablet-preview-page--dark) {
 .driver-tablet-preview-support-actions .collection-routes-driver-action__icon svg {
   width: clamp(16px, 1.52vw, 21px);
   height: clamp(16px, 1.52vw, 21px);
+}
+
+.driver-tablet-preview-support-actions .collection-routes-driver-action__icon .module-icon__svg {
+  width: 68%;
+  height: 68%;
 }
 
 .driver-tablet-preview-support-actions .collection-routes-driver-action--navigate .collection-routes-driver-action__icon {
