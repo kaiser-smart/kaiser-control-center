@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.466"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.467"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: automatický Vistos snapshot",
+    text: "Existující cloud runner nově každých 15 minut vytváří read-only Vistos snapshot pro Trasy svozu a zapisuje audit běhu do D1. UI už nepočítá s ručním klikáním jako běžným provozem; ostré trasy, SMS/e-maily a zápisy do Vistosu zůstávají vypnuté."
+  },
   {
     title: "Trasy svozu: oprava načítání Vistos stanovišť",
     text: "Stanoviště z Vistosu nově načítají Svoz Kaiser výřez ze snapshotu robustně podle uložených dat řádku. Pokud rychlý výřez vrátí prázdno, UI použije read-only fallback z uloženého batch detailu bez live Vistos volání."

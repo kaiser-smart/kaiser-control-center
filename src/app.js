@@ -19790,7 +19790,7 @@ function collectionRoutesVistosSitesTable(contractRows = collectionRoutesVistosF
   if (collectionRoutesPilotState.kommunalPairingLoading && !contractRows.length) {
     return collectionRoutesEmptyState(
       "Načítám uložený snapshot stanovišť.",
-      "Běžné otevření čte D1 snapshot. Live Vistos se volá jen ručně."
+      "Běžné otevření čte D1 snapshot. Nový snapshot průběžně připravuje cloud runner."
     );
   }
   if (!contractRows.length) {
@@ -19798,7 +19798,7 @@ function collectionRoutesVistosSitesTable(contractRows = collectionRoutesVistosF
       collectionRoutesVistosSitesFilterValue("status") === "errors" ? "Žádné stanoviště s chybou." : "Zatím nejsou načtená Vistos stanoviště.",
       collectionRoutesVistosSitesFilterValue("status") === "errors"
         ? "V aktuálním snapshotu filtr nenašel chybová stanoviště."
-        : "Použij ruční refresh z Vistosu, pokud ještě neexistuje uložený snapshot."
+        : "Počkej na nejbližší běh cloud runneru, který připravuje nový read-only snapshot."
     );
   }
 
@@ -19887,7 +19887,7 @@ function collectionRoutesSitesSection(user) {
         <div>
           <p class="module-feedback__eyebrow">Stanoviště</p>
           <h2 id="collection-routes-sites-title">Stanoviště z Vistosu</h2>
-          <p>Rychlý pracovní přehled z posledního D1 snapshotu. Live Vistos API se spouští jen ručně.</p>
+          <p>Rychlý pracovní přehled z posledního D1 snapshotu. Cloud runner připravuje nový read-only Vistos snapshot každých 15 minut.</p>
         </div>
         <div class="collection-routes-panel__head-status">
           <span class="employee-card-status employee-card-status--${filterConfirmed ? "ready" : "waiting"}">${escapeHtml(isLoadingVistosSites ? collectionRoutesSitesRefreshLabel() : filterConfirmed ? "Svoz Kaiser filtr aktivní" : "čeká na Svoz Kaiser pole")}</span>
@@ -19906,7 +19906,7 @@ function collectionRoutesSitesSection(user) {
       ${collectionRoutesVistosSitesFilterPanel(contractRows)}
       <div class="collection-routes-phase-note collection-routes-phase-note--warning">
         <strong>${escapeHtml(filterConfirmed ? "Seznam je filtrovaný podle potvrzeného Svoz Kaiser pravidla." : "Čeká se na potvrzení pole Svoz Kaiser ANO ve snapshotu.")}</strong>
-        <span>${escapeHtml(filterConfirmed ? "Těžké Vistos načtení nespouštím při otevření stránky. Ruční refresh vytvoří nový snapshot." : "Pokud snapshot ještě nemá potvrzený filtr, spusť ruční refresh z Vistosu.")}</span>
+        <span>${escapeHtml(filterConfirmed ? "Těžké Vistos načtení nespouštím při otevření stránky. Nový snapshot vytváří cloud runner bez ručního klikání." : "Pokud snapshot ještě nemá potvrzený filtr, počkej na nejbližší běh cloud runneru.")}</span>
       </div>
       ${loadedAt ? `<p class="module-feedback__notice">Načteno: ${escapeHtml(loadedAt)} · zdroj: ${escapeHtml(sourceLabel)} · zobrazeno ${escapeHtml(filteredContractRows.length)} / ${escapeHtml(contractRows.length)}</p>` : ""}
       ${collectionRoutesPilotState.kommunalPairingError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.kommunalPairingError)}</p>` : ""}

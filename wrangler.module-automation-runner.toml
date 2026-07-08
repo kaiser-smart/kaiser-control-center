@@ -14,4 +14,4 @@ database_name = "smart-odpady"
 database_id = "6d9ab099-fa10-4245-b06b-e146b63450a9"
 
 [triggers]
-crons = ["15 3 * * *"]
+crons = ["*/15 * * * *", "15 3 * * *"]

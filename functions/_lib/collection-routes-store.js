@@ -5068,7 +5068,7 @@ async function loadVistosKommunalPreviewData(env) {
   };
 }
 
-export async function createCollectionRoutesVistosKommunalPreview(env, user) {
+export async function createCollectionRoutesVistosKommunalPreview(env, user, options = {}) {
   let loaded;
   try {
     loaded = await loadVistosKommunalPreviewData(env);
@@ -5145,7 +5145,7 @@ export async function createCollectionRoutesVistosKommunalPreview(env, user) {
       filter: VISTOS_KOMUNAL_CONTRACT_FILTER
     },
     persistRowsLimit: VISTOS_KOMUNAL_PERSIST_ROWS_LIMIT,
-    derivedRowsLimit: 250
+    derivedRowsLimit: Number.isFinite(Number(options.derivedRowsLimit)) ? Number(options.derivedRowsLimit) : 250
   });
 }
 
