@@ -30679,7 +30679,7 @@ body:has(.ds-plus-page) {
 
 .ds-plus-metrics {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -30803,6 +30803,7 @@ body:has(.ds-plus-page) {
 
 .ds-plus-priority p,
 .ds-plus-message-row__action span,
+.ds-plus-compact-workflow dd,
 .ds-plus-side-block p,
 .ds-plus-recommendation p,
 .ds-plus-rule p {
@@ -30834,6 +30835,7 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-priority dl,
+.ds-plus-compact-workflow,
 .ds-plus-recommendation dl,
 .ds-plus-rule dl,
 .ds-plus-detail-section dl,
@@ -30844,6 +30846,7 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-priority dt,
+.ds-plus-compact-workflow dt,
 .ds-plus-recommendation dt,
 .ds-plus-rule dt,
 .ds-plus-settings-block dt {
@@ -30853,6 +30856,7 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-priority dd,
+.ds-plus-compact-workflow dd,
 .ds-plus-recommendation dd,
 .ds-plus-rule dd,
 .ds-plus-settings-block dd,
@@ -30949,7 +30953,7 @@ body:has(.ds-plus-page) {
 
 .ds-plus-message-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 0.9fr) minmax(360px, 1.2fr);
+  grid-template-columns: 44px minmax(0, 1fr) minmax(240px, 0.7fr);
   gap: 14px;
   padding: 14px;
   align-items: start;
@@ -31030,6 +31034,11 @@ body:has(.ds-plus-page) {
 .ds-plus-message-row__buttons {
   display: flex;
   justify-content: flex-start;
+}
+
+.ds-plus-compact-workflow {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
 }
 
 .ds-plus-workflow-summary {
