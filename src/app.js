@@ -16895,6 +16895,230 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
   `;
 }
 
+function collectionRoutesDriverTabletPreviewV2Action(label, action, iconName, tone = "default") {
+  const iconTone = collectionRoutesDriverTabletPreviewIconTone(iconName);
+  const previewBadge = ["navigate", "sarlota"].includes(action) ? "neostré" : "preview";
+  return `
+    <button
+      class="driver-tablet-v2-action driver-tablet-v2-action--${escapeHtml(tone)}"
+      type="button"
+      data-driver-tablet-preview-action="${escapeHtml(action)}"
+      data-driver-tablet-preview-badge="${escapeHtml(previewBadge)}"
+      aria-disabled="true"
+      aria-label="${escapeHtml(`${label} - design preview bez ostrých akcí`)}"
+      title="Design preview - bez ostrých akcí"
+    >
+      <span class="driver-tablet-v2-action__icon icon-tone-${escapeHtml(iconTone)}" aria-hidden="true">
+        ${collectionRoutesDriverTabletPreviewIconMarkup(iconName)}
+      </span>
+      <span class="driver-tablet-v2-action__label">${escapeHtml(label)}</span>
+      <span class="driver-tablet-v2-action__badge">${escapeHtml(previewBadge)}</span>
+    </button>
+  `;
+}
+
+function collectionRoutesDriverTabletPreviewV2DoneAction() {
+  return `
+    <button
+      class="driver-tablet-v2-done"
+      type="button"
+      data-driver-tablet-preview-action="done"
+      aria-disabled="true"
+      aria-label="Hotovo, další zastávka - design preview bez ostrých akcí"
+      title="Design preview - bez ostrých akcí"
+    >
+      <span class="driver-tablet-v2-done__icon icon-tone-green" aria-hidden="true">
+        ${collectionRoutesDriverTabletPreviewIconMarkup("done")}
+      </span>
+      <span class="driver-tablet-v2-done__copy">
+        <strong>HOTOVO</strong>
+        <small>DALŠÍ ZASTÁVKA</small>
+      </span>
+      <span class="driver-tablet-v2-done__arrow" aria-hidden="true">›</span>
+    </button>
+  `;
+}
+
+function collectionRoutesDriverTabletPreviewV2Panel(rows = collectionRoutesDriverTabletPreviewRows(), options = {}) {
+  const selectedIndex = 0;
+  const selectedRow = rows[selectedIndex] || null;
+  const completedCount = Math.min(6, rows.length);
+  const progressPercent = collectionRoutesSourceDriverProgressPercent(completedCount, rows.length);
+  const routeMetrics = collectionRoutesSourceRowsMetrics(rows);
+  const totalStopsLabel = collectionRoutesMetricValue(rows.length);
+  const remainingStopsLabel = collectionRoutesMetricValue(Math.max(0, rows.length - completedCount));
+  const currentStopOrder = selectedRow?.routeOrder || selectedIndex + 1;
+  const currentStopTitle = selectedRow ? collectionRoutesSourceDriverStopTitle(selectedRow).replace(/\s+-\s*\d{6,}$/, "") : "-";
+  const currentStopDisplayTitle = currentStopTitle
+    .replace(/\s+s\.?r\.?o\.?$/i, "")
+    .replace(/\s+a\.?s\.?$/i, "");
+  const nextRows = rows.slice(selectedIndex + 1, selectedIndex + 4).map((row, offset) => ({
+    row,
+    index: selectedIndex + offset + 1
+  }));
+
+  if (!selectedRow) {
+    return `
+      <section class="driver-tablet-v2-device" aria-label="Preview řidičského tabletu">
+        <div class="driver-tablet-v2-screen">
+          <div class="driver-tablet-v2 driver-tablet-v2--empty">
+            <article class="driver-tablet-v2-panel">
+              <strong>Čeká na trasu</strong>
+              <span>Preview nemá žádné provozní řádky.</span>
+            </article>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  const detailItems = [
+    { icon: "trash", label: "Druh odpadu", value: collectionRoutesSourceDriverWasteLabel(selectedRow) },
+    { icon: "bin", label: "Nádoba", value: collectionRoutesSourceDriverContainerLabel(selectedRow) }
+  ];
+
+  const toolItems = [
+    { label: "Navigovat", action: "navigate", icon: "navigate", tone: "navigate" },
+    { label: "Problém", action: "problem", icon: "problem", tone: "problem" },
+    { label: "Šarlota", action: "sarlota", icon: "sarlota", tone: "sarlota" },
+    { label: "Vysypat", action: "dump", icon: "dump", tone: "dump" },
+    { label: "Přestávka", action: "break", icon: "break", tone: "break" }
+  ];
+
+  return `
+    <section class="driver-tablet-v2-device" aria-label="Preview řidičského tabletu">
+      <div class="driver-tablet-v2-screen">
+        <div class="driver-tablet-v2" id="collection-routes-driver-tablet-preview">
+          <header class="driver-tablet-v2-header" aria-label="Souhrn trasy">
+            <div class="driver-tablet-v2-brand">
+              <span class="driver-tablet-v2-brand__mark" aria-hidden="true">
+                <img class="driver-tablet-v2-logo" src="/kaiser_logo.png?v=0.1.330" alt="" loading="lazy">
+              </span>
+              <span class="driver-tablet-v2-brand__copy">
+                <small>ŘIDIČSKÝ TABLET</small>
+                <strong>Dnešní trasa</strong>
+              </span>
+            </div>
+            <div class="driver-tablet-v2-meta" aria-label="Základní informace">
+              <span class="driver-tablet-v2-meta-card">
+                ${collectionRoutesDriverTabletPreviewIcon("calendar")}
+                <span><small>Den / týden</small><strong>St 22. 5.</strong></span>
+              </span>
+              <span class="driver-tablet-v2-meta-card">
+                ${collectionRoutesDriverTabletPreviewIcon("truck")}
+                <span><small>Vozidlo</small><strong>KS 101</strong></span>
+              </span>
+              <span class="driver-tablet-v2-meta-card">
+                ${collectionRoutesDriverTabletPreviewIcon("user")}
+                <span><small>Řidič</small><strong>J. Novák</strong></span>
+              </span>
+              <span class="driver-tablet-v2-meta-card driver-tablet-v2-meta-card--icon" aria-label="Upozornění">
+                ${collectionRoutesDriverTabletPreviewIcon("bell")}
+              </span>
+            </div>
+          </header>
+
+          <main class="driver-tablet-v2-main" aria-label="Aktuální trasa">
+            <section class="driver-tablet-v2-current driver-tablet-v2-panel" aria-label="Aktuální zastávka">
+              <div class="driver-tablet-v2-section-title">
+                ${collectionRoutesDriverTabletPreviewIcon("pin")}
+                <strong>Kam jedu teď</strong>
+              </div>
+              <div class="driver-tablet-v2-current__body">
+                <div class="driver-tablet-v2-stop-chip" aria-label="${escapeHtml(`Zastávka ${currentStopOrder} z ${totalStopsLabel}`)}">
+                  <strong>#${escapeHtml(currentStopOrder)}</strong>
+                  <span>z ${escapeHtml(totalStopsLabel)}</span>
+                </div>
+                <div class="driver-tablet-v2-stop-copy">
+                  <small>Další zákazník</small>
+                  <h2>${escapeHtml(currentStopDisplayTitle)}</h2>
+                  <p>${escapeHtml(selectedRow.addressText || "-")}</p>
+                </div>
+              </div>
+              <div class="driver-tablet-v2-current__bottom">
+                ${detailItems.map((item) => `
+                  <article class="driver-tablet-v2-info">
+                    ${collectionRoutesDriverTabletPreviewIcon(item.icon)}
+                    <span>
+                      <small>${escapeHtml(item.label)}</small>
+                      <strong>${escapeHtml(item.value)}</strong>
+                    </span>
+                  </article>
+                `).join("")}
+                ${collectionRoutesDriverTabletPreviewV2DoneAction()}
+              </div>
+            </section>
+
+            <aside class="driver-tablet-v2-rail" aria-label="Stav trasy a další zastávky">
+              <section class="driver-tablet-v2-progress driver-tablet-v2-panel" aria-label="Dnes na trase">
+                <div class="driver-tablet-v2-section-title">
+                  ${collectionRoutesDriverTabletPreviewIcon("route")}
+                  <strong>Dnes na trase</strong>
+                </div>
+                <div class="driver-tablet-v2-progress__body">
+                  <div class="driver-tablet-v2-progress__copy">
+                    <strong>${escapeHtml(collectionRoutesMetricValue(completedCount))} z ${escapeHtml(totalStopsLabel)}</strong>
+                    <small>zastávek</small>
+                    <span>Dokončeno</span>
+                  </div>
+                  <div class="driver-tablet-v2-progress-ring" style="--driver-progress: ${escapeHtml(progressPercent)}" aria-label="${escapeHtml(`${progressPercent} procent hotovo`)}">
+                    <strong>${escapeHtml(progressPercent)} %</strong>
+                  </div>
+                </div>
+                <div class="driver-tablet-v2-progress__facts">
+                  <span><small>Celkem</small><strong>${escapeHtml(totalStopsLabel)}</strong></span>
+                  <span><small>Zbývá</small><strong>${escapeHtml(remainingStopsLabel)}</strong></span>
+                  <span><small>Nádob</small><strong>${escapeHtml(collectionRoutesMetricValue(routeMetrics.containerCount || 0))}</strong></span>
+                </div>
+              </section>
+
+              <section class="driver-tablet-v2-next driver-tablet-v2-panel" aria-label="Další zastávky">
+                <div class="driver-tablet-v2-section-title driver-tablet-v2-section-title--split">
+                  <span>
+                    ${collectionRoutesDriverTabletPreviewIcon("pin")}
+                    <strong>Další zastávky</strong>
+                  </span>
+                  <button class="driver-tablet-v2-list-button" type="button" aria-disabled="true">Otevřít seznam</button>
+                </div>
+                <div class="driver-tablet-v2-next__list">
+                  ${nextRows.map(({ row, index }) => `
+                    <button class="driver-tablet-v2-next-stop" type="button" aria-disabled="true">
+                      <span class="driver-tablet-v2-next-stop__number">${escapeHtml(row.routeOrder || index + 1)}</span>
+                      <span class="driver-tablet-v2-next-stop__copy">
+                        <strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row).replace(/\s+-\s*\d{6,}$/, "").replace(/\s+s\.?r\.?o\.?$/i, "").replace(/\s+a\.?s\.?$/i, ""))}</strong>
+                        <small>${escapeHtml(row.addressText || "-")}</small>
+                      </span>
+                      <em>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</em>
+                    </button>
+                  `).join("")}
+                </div>
+              </section>
+            </aside>
+          </main>
+
+          <section class="driver-tablet-v2-tools driver-tablet-v2-panel" aria-label="Rychlé nástroje řidiče">
+            <div class="driver-tablet-v2-section-title">
+              ${collectionRoutesDriverTabletPreviewIcon("route")}
+              <strong>Rychlé nástroje</strong>
+            </div>
+            <div class="driver-tablet-v2-tools__grid">
+              ${toolItems.map((item) => collectionRoutesDriverTabletPreviewV2Action(item.label, item.action, item.icon, item.tone)).join("")}
+            </div>
+          </section>
+
+          <footer class="driver-tablet-v2-footer" aria-label="Stav preview">
+            ${collectionRoutesDriverTabletPreviewIcon("cloud")}
+            <span>Sync dnes 08:42</span>
+            <i aria-hidden="true"></i>
+            <strong>Online</strong>
+            <span>Preview bez ostrých akcí</span>
+          </footer>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisplayRows()) {
   if (!rows.length) {
     return `
@@ -19205,7 +19429,7 @@ function collectionRoutesDriverTabletPreviewPage(user, options = {}) {
       </header>
 
       <div class="driver-tablet-preview-stage">
-        ${collectionRoutesDriverTabletPreviewPanel(rows, { publicPreview })}
+        ${collectionRoutesDriverTabletPreviewV2Panel(rows, { publicPreview })}
       </div>
     </main>
   `;
