@@ -29768,7 +29768,7 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(3, 8, 12, 0.2) 0%, rgba(3, 8, 12, 0.08) 42%, rgba(3, 8, 12, 0.22) 100%),
-    url("/driver-tablet-mockup.png") center center / cover no-repeat,
+    url("/driver-tablet-mockup.png") center center / 112% auto no-repeat,
     #05090d;
   padding: 0;
   color: var(--driver-text);
