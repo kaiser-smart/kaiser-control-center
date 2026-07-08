@@ -181,7 +181,7 @@ Ta přidává interní vazby `message_id`, `thread_id`, `module_key`, `entity_ty
 Inbound odpovědi a Twilio callbacky:
 
 ```text
-GET  /api/communication/status
+GET  /api/communication/status/
 POST /api/communication/inbound-email
 POST /api/communication/twilio/status-callback
 POST /api/communication/twilio/inbound

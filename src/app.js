@@ -36114,7 +36114,7 @@ async function loadCommunicationInfrastructureStatus(options = {}) {
   communicationInfrastructureState.error = "";
 
   try {
-    const result = await apiJson("/api/communication/status");
+    const result = await apiJson("/api/communication/status/");
     communicationInfrastructureState.data = result;
     communicationInfrastructureState.loaded = true;
     if (options.force) {
