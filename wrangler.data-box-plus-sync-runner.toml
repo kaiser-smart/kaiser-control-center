@@ -1,0 +1,19 @@
+name = "kaiser-data-box-plus-sync-runner"
+main = "workers/data-box-plus-sync-runner.js"
+compatibility_date = "2026-07-08"
+workers_dev = false
+
+[vars]
+DATA_BOX_PLUS_BACKGROUND_ENABLED = "true"
+
+[[d1_databases]]
+binding = "SMART_ODPADY_DB"
+database_name = "smart-odpady"
+database_id = "6d9ab099-fa10-4245-b06b-e146b63450a9"
+
+[[r2_buckets]]
+binding = "SMART_ODPADY_DOCUMENTS"
+bucket_name = "smart-odpady-documents"
+
+[triggers]
+crons = ["*/30 * * * *"]
