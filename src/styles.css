@@ -2212,10 +2212,39 @@ h1 {
   grid-column: span 2;
 }
 
+.fleet-vehicle-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fleet-vehicle-summary-grid article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(35, 40, 33, 0.08);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.fleet-vehicle-summary-grid span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.fleet-vehicle-summary-grid strong {
+  color: var(--ink);
+  font-size: 1.32rem;
+  line-height: 1;
+}
+
 .fleet-table {
   display: grid;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
@@ -2223,48 +2252,161 @@ h1 {
 
 .fleet-table__header {
   display: grid;
-  grid-template-columns: 0.8fr 0.75fr 1.05fr 0.9fr 1fr 0.9fr 0.8fr 0.8fr 0.85fr 0.85fr 0.75fr 1.35fr 0.75fr;
-  min-width: 0;
-  background: #f5f8f1;
+  grid-template-columns: 94px 96px minmax(170px, 1.25fr) minmax(150px, 1fr) 104px 92px minmax(132px, 0.9fr) minmax(130px, 0.95fr) minmax(160px, 1fr) minmax(190px, 1.25fr) 112px;
+  min-width: 1380px;
+  background: #f6f8f4;
 }
 
 .fleet-table__row {
   display: grid;
-  grid-template-columns: 0.8fr 0.75fr 1.05fr 0.9fr 1fr 0.9fr 0.8fr 0.8fr 0.85fr 0.85fr 0.75fr 1.35fr 0.75fr;
-  min-width: 0;
+  grid-template-columns: 94px 96px minmax(170px, 1.25fr) minmax(150px, 1fr) 104px 92px minmax(132px, 0.9fr) minmax(130px, 0.95fr) minmax(160px, 1fr) minmax(190px, 1.25fr) 112px;
+  min-width: 1380px;
+  align-items: stretch;
   border-top: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.fleet-table__row--attention,
+.fleet-table__row--warning,
+.fleet-table__row--service {
+  background: #fffdf8;
+  box-shadow: inset 3px 0 0 #e3a347;
+}
+
+.fleet-table__row--risk,
+.fleet-table__row--out-of-order {
+  background: #fffafa;
+  box-shadow: inset 3px 0 0 #cf4c3e;
 }
 
 .fleet-table__header span {
   min-width: 0;
-  padding: 10px 8px;
+  padding: 9px 10px;
   color: var(--steel);
   font-size: 0.68rem;
   font-weight: 900;
   line-height: 1.25;
-  overflow-wrap: anywhere;
   text-transform: uppercase;
 }
 
-.fleet-table__row span {
+.fleet-table__row [role="cell"] {
+  display: flex;
   min-width: 0;
-  padding: 10px 8px;
+  min-height: 58px;
+  align-items: center;
+  padding: 8px 10px;
   color: var(--ink);
   font-size: 0.78rem;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.28;
   overflow-wrap: anywhere;
 }
 
-.fleet-table__row [data-label="Akce"] {
+.fleet-table__row [role="cell"] + [role="cell"] {
+  border-left: 1px solid rgba(102, 124, 105, 0.08);
+}
+
+.fleet-row-status,
+.fleet-row-chip {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.fleet-row-status--active,
+.fleet-row-chip--quiet {
+  background: #eef4ea;
+  color: #53634d;
+}
+
+.fleet-row-status--attention,
+.fleet-row-status--warning,
+.fleet-row-status--service,
+.fleet-row-chip--warning,
+.fleet-row-chip--service {
+  background: #fff2da;
+  color: #8a5b0e;
+}
+
+.fleet-row-status--risk,
+.fleet-row-status--out-of-order,
+.fleet-row-chip--risk {
+  background: #ffe7e3;
+  color: #9c3228;
+}
+
+.fleet-row-status--waiting,
+.fleet-row-status--retired,
+.fleet-row-chip--muted {
+  background: #eef1ec;
+  color: #596356;
+}
+
+.fleet-row-main,
+.fleet-row-stack,
+.fleet-tracking-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fleet-row-main strong,
+.fleet-row-plate,
+.fleet-tracking-cell strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 950;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.fleet-row-main small,
+.fleet-tracking-cell small,
+.fleet-muted-empty {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.fleet-tracking-cell .fleet-action-with-help {
+  margin-top: 2px;
+}
+
+.fleet-tracking-cell .secondary-link {
+  min-height: 28px;
+  justify-self: start;
+  padding: 0 8px;
+  font-size: 0.68rem;
+}
+
+.fleet-table__row [data-label="Akce"],
+.fleet-table__actions {
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .fleet-table__row .secondary-link {
-  min-height: 34px;
-  padding: 0 10px;
+  min-height: 32px;
+  padding: 0 11px;
   font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.fleet-table__actions .fleet-action-with-help {
+  flex-wrap: nowrap;
+  justify-content: center;
 }
 
 .fleet-table__empty {
@@ -2887,6 +3029,22 @@ h1 {
   min-width: min(100%, 320px);
   color: var(--ink);
   overflow-wrap: anywhere;
+}
+
+.fleet-tracking-detail {
+  border-color: #d8e3d2;
+  background: #fbfcfa;
+}
+
+.fleet-tracking-detail__list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fleet-tracking-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  min-width: 0;
 }
 
 .fleet-term-list,
@@ -19284,6 +19442,7 @@ body:has(.data-box-page) {
   .fleet-driver-form,
   .fleet-vehicle-facts,
   .fleet-settings-grid,
+  .fleet-tracking-detail__list,
   .fleet-filters {
     grid-template-columns: 1fr;
   }
@@ -19297,7 +19456,8 @@ body:has(.data-box-page) {
   }
 
   .fleet-kpi-grid,
-  .fleet-term-grid {
+  .fleet-term-grid,
+  .fleet-vehicle-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
@@ -19328,20 +19488,26 @@ body:has(.data-box-page) {
   .fleet-table__row {
     display: grid;
     grid-template-columns: 1fr;
+    min-width: 0;
     gap: 0;
     padding: 10px 12px;
   }
 
-  .fleet-table__row span {
+  .fleet-table__row [role="cell"] {
     display: grid;
     grid-template-columns: minmax(90px, 0.44fr) minmax(0, 1fr);
     gap: 10px;
+    min-height: 0;
     padding: 7px 0;
     border-bottom: 1px solid rgba(102, 124, 105, 0.14);
     font-size: 0.8rem;
   }
 
-  .fleet-table__row span::before {
+  .fleet-table__row [role="cell"] + [role="cell"] {
+    border-left: 0;
+  }
+
+  .fleet-table__row [role="cell"]::before {
     content: attr(data-label);
     color: var(--steel);
     font-size: 0.68rem;
@@ -19349,7 +19515,7 @@ body:has(.data-box-page) {
     text-transform: uppercase;
   }
 
-  .fleet-table__row span:last-child {
+  .fleet-table__row [role="cell"]:last-child {
     border-bottom: 0;
   }
 
@@ -19359,7 +19525,8 @@ body:has(.data-box-page) {
 
   .fleet-table__row .secondary-link {
     justify-content: center;
-    width: 100%;
+    width: auto;
+    min-width: 86px;
   }
 
   .fleet-actions-preview .secondary-link,

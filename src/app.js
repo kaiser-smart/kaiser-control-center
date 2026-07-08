@@ -9230,11 +9230,10 @@ const FLEET_QUICK_FILTERS = [
   { id: "attention", label: "K řešení" },
   { id: "open_report", label: "Otevřené hlášení" },
   { id: "waiting_part", label: "Čeká na díl" },
-  { id: "stk_due", label: "STK končí" },
-  { id: "insurance_due", label: "Pojištění končí" },
-  { id: "service", label: "V servisu" },
-  { id: "out_of_order", label: "Neprovozní" },
-  { id: "high_costs", label: "Vysoké náklady" },
+  { id: "gps_active", label: "GPS aktivní" },
+  { id: "gps_unpaired", label: "GPS nespárováno" },
+  { id: "no_tracking", label: "Bez sledování" },
+  { id: "risk", label: "Riziko" },
   { id: "personal", label: "Osobní" },
   { id: "truck", label: "Nákladní" },
   { id: "tech", label: "Technika" },
@@ -9598,6 +9597,7 @@ function fleetPriorityVehicles(limit = 5) {
 function fleetSummaryMetrics() {
   const vehicles = fleetVehiclesState.vehicles;
   const statuses = vehicles.map((vehicle) => fleetVehicleOperationalStatus(vehicle));
+  const trackingStates = vehicles.map((vehicle) => fleetVehicleTrackingState(vehicle));
   return {
     total: vehicles.length,
     active: statuses.filter((status) => !["retired", "out_of_order"].includes(status)).length,
@@ -9606,7 +9606,10 @@ function fleetSummaryMetrics() {
     insuranceDue: vehicles.filter(fleetVehicleHasInsuranceDue).length,
     inService: statuses.filter((status) => status === "service").length,
     waitingPart: statuses.filter((status) => status === "waiting_part").length,
-    risks: statuses.filter((status) => status === "risk" || status === "out_of_order").length
+    risks: statuses.filter((status) => status === "risk" || status === "out_of_order").length,
+    gpsActive: trackingStates.filter((state) => state.status === "active").length,
+    gpsUnpaired: trackingStates.filter((state) => state.status === "unpaired" || state.status === "verify").length,
+    noTracking: trackingStates.filter((state) => state.status === "no_unit").length
   };
 }
 
@@ -9896,6 +9899,53 @@ function fleetTimelineDetail(vehicle = {}) {
           <span>Časová osa se naplní změnami stavu, termíny, servisy, dokumenty a hlášeními.</span>
         </div>
       `}
+    </article>
+  `;
+}
+
+function fleetTrackingDetail(vehicle = {}) {
+  const tracking = fleetVehicleTrackingState(vehicle);
+  const speed = Number(tracking.speed);
+  const speedText = Number.isFinite(speed) ? `${speed} km/h` : "Zatím nejsou dostupná data.";
+  const lastGpsText = tracking.lastGpsAt
+    ? (formatDateTime(tracking.lastGpsAt) || fleetFormatDate(tracking.lastGpsAt) || tracking.lastGpsAt)
+    : "Zatím nejsou dostupná data.";
+  const unitText = tracking.unit || "Zatím nejsou dostupná data.";
+  const locationText = tracking.address || "Zatím nejsou dostupná data.";
+  const action = tracking.canOpen
+    ? fleetActionLink(
+      "Otevřít ve Sledování aut",
+      fleetVehicleTrackingRoute(vehicle, tracking),
+      "Otevře polohu a historii pohybu vozidla v modulu Sledování aut. Ve Vozovém parku se nic nezmění.",
+      { primary: true }
+    )
+    : fleetActionLink(
+      "Spárovat vozidlo",
+      fleetVehicleTrackingPairingRoute(),
+      "Propojí vozidlo z evidence s GPS záznamem ve Sledování aut. Master data vozidla zůstanou ve Vistos Vehicle.",
+      { primary: true }
+    );
+
+  return `
+    <article class="fleet-detail-card fleet-tracking-detail" id="fleet-tracking">
+      <div class="fleet-card-head">
+        <div>
+          <h3>Sledování auta</h3>
+          <p>${escapeHtml(tracking.status === "unpaired" ? "Vozidlo zatím není spárované se Sledováním aut." : `${tracking.label} · ${tracking.detail}`)}</p>
+        </div>
+        <span>${escapeHtml(tracking.label)}</span>
+      </div>
+      <dl class="fleet-human-list fleet-tracking-detail__list">
+        <div><dt>Stav GPS / sledování</dt><dd>${escapeHtml(tracking.label)}</dd></div>
+        <div><dt>Zdroj dat</dt><dd>${escapeHtml(tracking.source || "Sledování aut")}</dd></div>
+        <div><dt>Poslední známá poloha</dt><dd>${escapeHtml(locationText)}</dd></div>
+        <div><dt>Čas posledního záznamu</dt><dd>${escapeHtml(lastGpsText)}</dd></div>
+        <div><dt>Poslední rychlost</dt><dd>${escapeHtml(speedText)}</dd></div>
+        <div><dt>Stav jednotky</dt><dd>${escapeHtml(unitText)}</dd></div>
+      </dl>
+      <div class="fleet-tracking-detail__actions">
+        ${action}
+      </div>
     </article>
   `;
 }
@@ -10220,6 +10270,7 @@ function fleetVehicleDriverOptions() {
 
 function fleetVehicleSearchText(vehicle = {}) {
   const reports = fleetDriverReportSummary(vehicle).reports;
+  const tracking = fleetVehicleTrackingState(vehicle);
   return normalizeAccessSearchText([
     vehicle.id,
     vehicle.vehicleId,
@@ -10244,6 +10295,13 @@ function fleetVehicleSearchText(vehicle = {}) {
     vehicle.nextServiceDate,
     vehicle.source,
     vehicle.telemetrySource,
+    vehicle.tcarsVehicleId,
+    vehicle.tcarsUnitId,
+    vehicle.gpsUnitId,
+    tracking.label,
+    tracking.detail,
+    tracking.source,
+    tracking.address,
     ...reports.flatMap((report) => [
       report.reportId,
       report.driverName,
@@ -10299,16 +10357,16 @@ function fleetVehicleMatchesFilters(vehicle = {}) {
   const query = normalizeAccessSearchText(filters.search || "");
   const operationalStatus = fleetVehicleOperationalStatus(vehicle);
   const reportSummary = fleetDriverReportSummary(vehicle);
+  const trackingState = fleetVehicleTrackingState(vehicle);
   const typeText = normalizeAccessSearchText(vehicle.vehicleType || vehicle.bodyType || vehicle.vistosVehicleCategory || vehicle.model || "");
 
   if (quick === "attention" && !["attention", "waiting_part", "service", "waiting_approval", "risk", "out_of_order"].includes(operationalStatus)) return false;
   if (quick === "open_report" && !reportSummary.openReports.length) return false;
   if (quick === "waiting_part" && !reportSummary.waitingPartReports.length) return false;
-  if (quick === "stk_due" && !fleetVehicleHasStkDue(vehicle)) return false;
-  if (quick === "insurance_due" && !fleetVehicleHasInsuranceDue(vehicle)) return false;
-  if (quick === "service" && operationalStatus !== "service") return false;
-  if (quick === "out_of_order" && operationalStatus !== "out_of_order") return false;
-  if (quick === "high_costs") return false;
+  if (quick === "gps_active" && trackingState.status !== "active") return false;
+  if (quick === "gps_unpaired" && !["unpaired", "verify"].includes(trackingState.status)) return false;
+  if (quick === "no_tracking" && trackingState.status !== "no_unit") return false;
+  if (quick === "risk" && !["risk", "out_of_order"].includes(operationalStatus)) return false;
   if (quick === "personal" && !/(osob|passenger|car)/.test(typeText)) return false;
   if (quick === "truck" && !/(naklad|náklad|svoz|kontejner|hak|hák|naves|návěs|truck|lkw)/.test(typeText)) return false;
   if (quick === "tech" && !/(technik|stroj|manipul|jerab|jeřab|special)/.test(typeText)) return false;
@@ -10386,6 +10444,299 @@ function fleetVehicleKey(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
+}
+
+function fleetFormatTime(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("cs-CZ", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function fleetEmptyText(label = "neuvedeno") {
+  return `<em class="fleet-muted-empty">${escapeHtml(label)}</em>`;
+}
+
+function fleetCellText(value, fallback = "neuvedeno") {
+  const text = String(value ?? "").trim();
+  return text ? escapeHtml(text) : fleetEmptyText(fallback);
+}
+
+function fleetShortVin(value) {
+  const vin = String(value || "").trim();
+  if (!vin) return "";
+  if (vin.length <= 10) return vin;
+  return `${vin.slice(0, 4)}…${vin.slice(-5)}`;
+}
+
+function fleetTrackingEntryValues(entry = {}, fields = []) {
+  const vehicle = entry.vehicle || {};
+  const fleetVehicle = entry.fleetVehicle || entry.pairedVehicle || {};
+  return fields
+    .flatMap((field) => [entry[field], vehicle[field], fleetVehicle[field]])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+function fleetTrackingEntryKeys(entry = {}) {
+  return {
+    ids: fleetTrackingEntryValues(entry, [
+      "id",
+      "vehicleId",
+      "vehicle_id",
+      "externalVehicleId",
+      "tcarsVehicleId",
+      "internalNumber",
+      "gpsUnitId",
+      "externalUnitId",
+      "tcarsUnitId"
+    ]).map(fleetVehicleKey).filter(Boolean),
+    plates: fleetTrackingEntryValues(entry, ["licensePlate", "tcarsLicensePlate", "spz"])
+      .map(fleetVehicleKey)
+      .filter(Boolean),
+    vins: fleetTrackingEntryValues(entry, ["vin", "vehicleVin"])
+      .map(fleetVehicleKey)
+      .filter(Boolean)
+  };
+}
+
+function fleetTrackingVehicleKeys(vehicle = {}) {
+  return {
+    ids: [
+      vehicle.tcarsVehicleId,
+      vehicle.gpsUnitId,
+      vehicle.tcarsUnitId,
+      vehicle.externalVehicleId,
+      vehicle.vehicleId,
+      vehicle.id,
+      vehicle.vistosVehicleId,
+      vehicle.internalNumber
+    ].map(fleetVehicleKey).filter(Boolean),
+    plates: [
+      vehicle.licensePlate,
+      vehicle.tcarsLicensePlate
+    ].map(fleetVehicleKey).filter(Boolean),
+    vins: [vehicle.vin].map(fleetVehicleKey).filter(Boolean)
+  };
+}
+
+function fleetKeysIntersect(left = [], right = []) {
+  return left.some((value) => right.includes(value));
+}
+
+function fleetTrackingEntries() {
+  const status = vehicleTrackingLiveState.status || {};
+  const groups = vehicleTrackingTcarsLocationGroups(status);
+  const entries = [
+    ...groups.validLocations.map((entry) => ({ ...entry, _fleetTrackingKind: "valid" })),
+    ...groups.invalidVehicles.map((entry) => ({ ...entry, _fleetTrackingKind: "invalid" })),
+    ...vehicleTrackingTcarsVehicleList(status).map((entry) => ({ ...entry, _fleetTrackingKind: "vehicle" }))
+  ];
+  const byKey = new Map();
+
+  for (const entry of entries) {
+    const keys = fleetTrackingEntryKeys(entry);
+    const key = [
+      entry._locationId,
+      ...keys.ids,
+      ...keys.plates,
+      ...keys.vins
+    ].find(Boolean);
+    if (key && !byKey.has(key)) {
+      byKey.set(key, entry);
+    }
+  }
+
+  return [...byKey.values()];
+}
+
+function fleetVehicleHasTrackingLink(vehicle = {}) {
+  const provider = normalizeAccessSearchText(vehicle.gpsProvider || vehicle.telemetrySource || vehicle.source || "");
+  return Boolean(
+    vehicle.tcarsVehicleId ||
+    vehicle.tcarsUnitId ||
+    vehicle.gpsUnitId ||
+    provider.includes("tcars") ||
+    provider.includes("t cars") ||
+    provider.includes("t-cars")
+  );
+}
+
+function fleetVehicleExplicitlyWithoutTracking(vehicle = {}) {
+  const provider = normalizeAccessSearchText(vehicle.gpsProvider || vehicle.telemetrySource || "");
+  return /bezgps|nogps|none|bezsledovani|bezjednotky/.test(provider);
+}
+
+function fleetVehicleTrackingMatch(vehicle = {}) {
+  const vehicleKeys = fleetTrackingVehicleKeys(vehicle);
+  const entries = fleetTrackingEntries()
+    .map((entry) => ({ entry, keys: fleetTrackingEntryKeys(entry) }));
+  const byId = entries.filter((item) => fleetKeysIntersect(vehicleKeys.ids, item.keys.ids));
+  const byPlate = entries.filter((item) => fleetKeysIntersect(vehicleKeys.plates, item.keys.plates));
+  const byVin = entries.filter((item) => fleetKeysIntersect(vehicleKeys.vins, item.keys.vins));
+  const candidates = byId.length ? byId : byPlate.length ? byPlate : byVin;
+
+  if (!candidates.length) {
+    return { entry: null, confidence: "none" };
+  }
+
+  const unique = new Map(candidates.map((item) => [
+    item.entry._locationId || item.keys.ids[0] || item.keys.plates[0] || item.keys.vins[0],
+    item.entry
+  ]));
+
+  if (unique.size > 1) {
+    return { entry: candidates[0].entry, confidence: "verify" };
+  }
+
+  return { entry: candidates[0].entry, confidence: byId.length ? "id" : byPlate.length ? "spz" : "vin" };
+}
+
+function fleetTrackingLabelForStatus(status) {
+  if (status === "active") return "Aktivní";
+  if (status === "inactive") return "Neaktivní";
+  if (status === "no_unit") return "Bez jednotky";
+  if (status === "unpaired") return "Není spárováno";
+  if (status === "data_error") return "Chyba dat";
+  if (status === "verify") return "Nutné ověřit";
+  return "Neznámé";
+}
+
+function fleetVehicleTrackingState(vehicle = {}) {
+  const hasFleetLink = fleetVehicleHasTrackingLink(vehicle);
+  const match = fleetVehicleTrackingMatch(vehicle);
+  const entry = match.entry;
+  const source = entry?.source || vehicle.telemetrySource || (hasFleetLink ? "T-Cars" : "Sledování aut");
+  const lastGpsAt = entry ? vehicleTrackingTcarsGpsDateValue(entry) : (vehicle.updatedAt || "");
+  const speed = entry?.speedKmh;
+  const unit = entry?.gpsUnitId || entry?.externalUnitId || entry?.tcarsUnitId || vehicle.gpsUnitId || vehicle.tcarsUnitId || "";
+  const address = entry?.address || entry?.locationLabel || "";
+
+  if (vehicleTrackingLiveState.error) {
+    return {
+      status: "data_error",
+      label: fleetTrackingLabelForStatus("data_error"),
+      detail: "Sledování aut teď nevrací čitelná data.",
+      source,
+      entry,
+      lastGpsAt,
+      speed,
+      unit,
+      address,
+      canOpen: false
+    };
+  }
+
+  if (match.confidence === "verify") {
+    return {
+      status: "verify",
+      label: fleetTrackingLabelForStatus("verify"),
+      detail: "Shoda podle SPZ/VIN není jednoznačná.",
+      source,
+      entry,
+      lastGpsAt,
+      speed,
+      unit,
+      address,
+      canOpen: true
+    };
+  }
+
+  if (entry) {
+    const invalidReason = entry._fleetTrackingKind === "vehicle"
+      ? VEHICLE_TRACKING_NO_SIGNAL
+      : entry._invalidReason || "";
+    if (!invalidReason) {
+      return {
+        status: "active",
+        label: fleetTrackingLabelForStatus("active"),
+        detail: fleetFormatTime(lastGpsAt) ? `poslední poloha ${fleetFormatTime(lastGpsAt)}` : "aktuální poloha dostupná",
+        source,
+        entry,
+        lastGpsAt,
+        speed,
+        unit,
+        address,
+        canOpen: true
+      };
+    }
+
+    return {
+      status: invalidReason === VEHICLE_TRACKING_STALE_POSITION_WARNING ? "inactive" : "data_error",
+      label: invalidReason === VEHICLE_TRACKING_STALE_POSITION_WARNING ? fleetTrackingLabelForStatus("inactive") : fleetTrackingLabelForStatus("data_error"),
+      detail: fleetFormatTime(lastGpsAt) ? `poslední záznam ${fleetFormatTime(lastGpsAt)}` : invalidReason,
+      source,
+      entry,
+      lastGpsAt,
+      speed,
+      unit,
+      address,
+      canOpen: true
+    };
+  }
+
+  if (hasFleetLink) {
+    return {
+      status: vehicleTrackingLiveState.loading && !vehicleTrackingLiveState.loaded ? "unknown" : "inactive",
+      label: fleetTrackingLabelForStatus(vehicleTrackingLiveState.loading && !vehicleTrackingLiveState.loaded ? "unknown" : "inactive"),
+      detail: vehicleTrackingLiveState.loading && !vehicleTrackingLiveState.loaded ? "načítám GPS stav" : "napojení evidováno, bez aktuální polohy",
+      source,
+      entry: null,
+      lastGpsAt,
+      speed,
+      unit,
+      address,
+      canOpen: true
+    };
+  }
+
+  if (fleetVehicleExplicitlyWithoutTracking(vehicle)) {
+    return {
+      status: "no_unit",
+      label: fleetTrackingLabelForStatus("no_unit"),
+      detail: "GPS jednotka není evidovaná.",
+      source,
+      entry: null,
+      lastGpsAt: "",
+      speed: "",
+      unit: "",
+      address: "",
+      canOpen: false
+    };
+  }
+
+  return {
+    status: "unpaired",
+    label: fleetTrackingLabelForStatus("unpaired"),
+    detail: "není propojeno se Sledováním aut",
+    source,
+    entry: null,
+    lastGpsAt: "",
+    speed: "",
+    unit: "",
+    address: "",
+    canOpen: false
+  };
+}
+
+function fleetVehicleTrackingRoute(vehicle = {}, tracking = fleetVehicleTrackingState(vehicle)) {
+  const entry = tracking.entry || {};
+  const id = entry._locationId ||
+    entry.externalVehicleId ||
+    entry.tcarsVehicleId ||
+    entry.vehicleId ||
+    vehicle.tcarsVehicleId ||
+    vehicle.vehicleId ||
+    vehicle.licensePlate ||
+    "";
+  return id
+    ? `${VEHICLE_TRACKING_ROUTE}/${encodeURIComponent(id)}`
+    : `${VEHICLE_TRACKING_ROUTE}#tracking-tcars-status`;
+}
+
+function fleetVehicleTrackingPairingRoute() {
+  return `${VEHICLE_TRACKING_ROUTE}#tracking-tcars-pairing`;
 }
 
 function fleetVehicleMatchesId(vehicle, vehicleId) {
@@ -10565,32 +10916,160 @@ function fleetVehiclesStatusText() {
   return fleetVehiclesState.message || "Seznam se načte z chráněného cloud API.";
 }
 
-function fleetVehicleRow(vehicle) {
+function fleetTableCell(label, html, className = "") {
+  return `
+    <span role="cell" data-label="${escapeHtml(label)}" class="${escapeHtml(className)}">
+      ${html}
+    </span>
+  `;
+}
+
+function fleetRowStatusHtml(vehicle = {}) {
+  const status = fleetVehicleOperationalStatus(vehicle);
+  const tone = fleetVehicleStatusTone(vehicle);
+  return `<b class="fleet-row-status fleet-row-status--${escapeHtml(tone)}">${escapeHtml(fleetStatusLabel(status))}</b>`;
+}
+
+function fleetVehicleNameHtml(vehicle = {}) {
+  const model = fleetVehicleModel(vehicle) || vehicle.vistosVehicleName || vehicle.internalNumber || "Vozidlo";
+  const type = vehicle.vehicleType || vehicle.vistosVehicleCategory || "";
+  return `
+    <div class="fleet-row-main">
+      <strong>${escapeHtml(model)}</strong>
+      ${type ? `<small>${escapeHtml(type)}</small>` : ""}
+    </div>
+  `;
+}
+
+function fleetDriverHtml(vehicle = {}) {
+  const driver = vehicle.assignedDriverName || vehicle.driverAssignmentUpdatedByName || "";
+  const meta = vehicle.assignedDriverPhone || vehicle.assignedDriverEmail || "";
+  if (!driver) return fleetEmptyText("bez řidiče");
+  return `
+    <div class="fleet-row-main">
+      <strong>${escapeHtml(driver)}</strong>
+      ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+    </div>
+  `;
+}
+
+function fleetMileageHtml(vehicle = {}) {
+  const mileage = Number(vehicle.mileageKm);
+  return Number.isFinite(mileage)
+    ? escapeHtml(`${mileage.toLocaleString("cs-CZ")} km`)
+    : fleetEmptyText("není uveden");
+}
+
+function fleetRowChip(label, tone = "muted") {
+  return `<b class="fleet-row-chip fleet-row-chip--${escapeHtml(tone)}">${escapeHtml(label)}</b>`;
+}
+
+function fleetTermsSummaryHtml(vehicle = {}) {
+  const important = fleetImportantTerms(vehicle)
+    .filter((term) => Number.isFinite(term.days) && term.days <= 30)
+    .slice(0, 2);
+  if (important.length) {
+    return `
+      <div class="fleet-row-stack">
+        ${important.map((term) => fleetRowChip(`${term.label} ${fleetDaysText(term.days)}`, term.days < 0 ? "risk" : "warning")).join("")}
+      </div>
+    `;
+  }
+
+  const visibleTerms = [
+    vehicle.stkValidTo ? `STK ${fleetFormatDate(vehicle.stkValidTo)}` : "",
+    vehicle.insuranceValidTo ? `Poj. ${fleetFormatDate(vehicle.insuranceValidTo)}` : ""
+  ].filter(Boolean);
+
+  return visibleTerms.length
+    ? `<div class="fleet-row-stack">${visibleTerms.slice(0, 2).map((term) => fleetRowChip(term, "quiet")).join("")}</div>`
+    : fleetEmptyText("termíny neuvedené");
+}
+
+function fleetReportsServiceHtml(vehicle = {}) {
   const reportSummary = fleetDriverReportSummary(vehicle);
-  const lastService = vehicle.lastServiceDate || vehicle.nextServiceDate || "";
-  const cells = [
-    ["Stav", fleetVehicleStatusLabel(vehicle)],
-    ["SPZ", vehicle.licensePlate],
-    ["Značka/model", fleetVehicleModel(vehicle)],
-    ["Typ", vehicle.vehicleType || vehicle.source || fleetVehiclesSourceLabel()],
-    ["Řidič / odpovědná osoba", vehicle.assignedDriverName || vehicle.driverAssignmentUpdatedByName],
-    ["VIN", vehicle.vin],
-    ["Nájezd", Number.isFinite(Number(vehicle.mileageKm)) ? `${Number(vehicle.mileageKm).toLocaleString("cs-CZ")} km` : ""],
-    ["STK", vehicle.stkValidTo],
-    ["Pojištění", vehicle.insuranceValidTo],
-    ["Poslední servis", lastService],
-    ["Otevřená hlášení", reportSummary.openReports.length ? String(reportSummary.openReports.length) : "0"],
-    ["Doporučená akce", fleetVehicleRecommendation(vehicle)]
+  const chips = [];
+  if (reportSummary.openReports.length) {
+    chips.push(fleetRowChip(`${reportSummary.openReports.length} otevř.`, reportSummary.safetyReports.length ? "risk" : "warning"));
+  }
+  if (reportSummary.waitingPartReports.length) {
+    chips.push(fleetRowChip("čeká na díl", "warning"));
+  }
+  if (fleetVehicleOperationalStatus(vehicle) === "service") {
+    chips.push(fleetRowChip("v servisu", "service"));
+  }
+  if (reportSummary.lastReport && !reportSummary.openReports.length) {
+    chips.push(fleetRowChip("poslední hlášení", "quiet"));
+  }
+
+  return chips.length
+    ? `<div class="fleet-row-stack">${chips.slice(0, 2).join("")}</div>`
+    : fleetEmptyText("bez otevřených hlášení");
+}
+
+function fleetTrackingCellHtml(vehicle = {}) {
+  const tracking = fleetVehicleTrackingState(vehicle);
+  const href = tracking.canOpen ? fleetVehicleTrackingRoute(vehicle, tracking) : fleetVehicleTrackingPairingRoute();
+  const action = tracking.canOpen ? "Otevřít sledování" : "Spárovat";
+  const help = tracking.canOpen
+    ? "Otevře polohu a historii pohybu vozidla v modulu Sledování aut. Ve Vozovém parku se nic nezmění."
+    : "Propojí vozidlo z evidence s GPS záznamem ve Sledování aut. Master data vozidla zůstanou ve Vistos Vehicle.";
+
+  return `
+    <div class="fleet-tracking-cell fleet-tracking-cell--${escapeHtml(tracking.status)}">
+      <strong>${escapeHtml(tracking.label)}</strong>
+      <small>${escapeHtml(tracking.detail)}</small>
+      ${fleetActionLink(action, href, help)}
+    </div>
+  `;
+}
+
+function fleetVehicleSummaryCards() {
+  const summary = fleetSummaryMetrics();
+  const cards = [
+    ["Vozidla celkem", summary.total],
+    ["K řešení", summary.attention],
+    ["Čeká na díl", summary.waitingPart],
+    ["GPS aktivní", summary.gpsActive],
+    ["GPS nespárováno", summary.gpsUnpaired],
+    ["Rizika", summary.risks]
   ];
 
   return `
-    <div class="fleet-table__row fleet-table__row--${escapeHtml(fleetVehicleStatusTone(vehicle))}" role="row">
-      ${cells.map(([label, value]) => `
-        <span role="cell" data-label="${escapeHtml(label)}">${escapeHtml(fleetVehicleDisplayValue(value))}</span>
+    <div class="fleet-vehicle-summary-grid" aria-label="Rychlý souhrn vozidel">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(fleetVehiclesState.loading ? "…" : String(value))}</strong>
+        </article>
       `).join("")}
-      <span role="cell" data-label="Akce">
-        ${fleetActionLink("Otevřít", fleetVehicleRoute(vehicle), "Otevře kartu vozidla ve Vozovém parku. Samotným otevřením se nic nezmění.")}
-      </span>
+    </div>
+  `;
+}
+
+function fleetVehicleRow(vehicle) {
+  const tone = fleetVehicleStatusTone(vehicle);
+  const cells = [
+    fleetTableCell("Stav", fleetRowStatusHtml(vehicle), "fleet-table__status"),
+    fleetTableCell("SPZ", `<strong class="fleet-row-plate">${fleetCellText(vehicle.licensePlate || vehicle.tcarsLicensePlate, "bez SPZ")}</strong>`, "fleet-table__plate"),
+    fleetTableCell("Vozidlo", fleetVehicleNameHtml(vehicle), "fleet-table__vehicle"),
+    fleetTableCell("Řidič / odpovědná osoba", fleetDriverHtml(vehicle), "fleet-table__driver"),
+    fleetTableCell("VIN zkráceně", fleetCellText(fleetShortVin(vehicle.vin), "VIN neuveden"), "fleet-table__vin"),
+    fleetTableCell("Nájezd", fleetMileageHtml(vehicle), "fleet-table__mileage"),
+    fleetTableCell("Termíny", fleetTermsSummaryHtml(vehicle), "fleet-table__terms"),
+    fleetTableCell("Hlášení / servis", fleetReportsServiceHtml(vehicle), "fleet-table__reports"),
+    fleetTableCell("GPS / sledování", fleetTrackingCellHtml(vehicle), "fleet-table__tracking"),
+    fleetTableCell("Doporučená akce", fleetCellText(fleetVehicleRecommendation(vehicle), "bez otevřeného problému"), "fleet-table__recommendation"),
+    fleetTableCell(
+      "Akce",
+      fleetActionLink("Otevřít", fleetVehicleRoute(vehicle), "Otevře detail vozidla, hlášení, termíny, dokumenty a související servisní informace."),
+      "fleet-table__actions"
+    )
+  ];
+
+  return `
+    <div class="fleet-table__row fleet-table__row--${escapeHtml(tone)}" role="row">
+      ${cells.join("")}
     </div>
   `;
 }
@@ -10651,6 +11130,7 @@ function fleetVehiclesSection(activeId) {
         "Hlavní evidence vozidel s termíny, otevřenými hlášeními a nejbližší doporučenou akcí.",
         { badge: false }
       )}
+      ${fleetVehicleSummaryCards()}
       ${fleetFiltersSection()}
       <p class="fleet-operational-note">
         ${escapeHtml(fleetVehiclesStatusText())}
@@ -10719,6 +11199,7 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
 
           ${fleetDriverAssignmentSection(vehicle)}
           ${fleetDriverReportsDetail(vehicle)}
+          ${fleetTrackingDetail(vehicle)}
           ${fleetTermsDetail(vehicle)}
           ${fleetServiceDetail(vehicle)}
           ${fleetDocumentsDetail(vehicle)}
@@ -10955,6 +11436,9 @@ function fleetRulesAutomationSection(user, activeId) {
 function fleetModulePage(moduleItem, user, options = {}) {
   if (hasPermission(user, "driver-reports", "view")) {
     ensureDriverReportsData({ renderAfter: false });
+  }
+  if (hasPermission(user, "vehicle-tracking", "view")) {
+    void loadVehicleTrackingStatus({ renderAfter: true });
   }
   const isDashboard = Boolean(options.isDashboard);
   const vehicleId = options.vehicleId || "";
