@@ -56,15 +56,13 @@ export const FLEET_VEHICLE_TYPES = [
 export const FLEET_LIST_COLUMNS = [
   "Stav",
   "SPZ",
-  "Značka / model",
-  "Typ",
+  "Vozidlo",
   "Řidič / odpovědná osoba",
-  "VIN",
+  "VIN zkráceně",
   "Nájezd",
-  "STK",
-  "Pojištění",
-  "Poslední servis",
-  "Otevřená hlášení",
+  "Termíny",
+  "Hlášení / servis",
+  "GPS / sledování",
   "Doporučená akce",
   "Akce"
 ];
