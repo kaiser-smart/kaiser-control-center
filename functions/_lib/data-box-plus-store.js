@@ -279,6 +279,53 @@ function classifyMessage(message = {}, attachmentState = {}) {
   if (caseMatch) addFact("Číslo jednací / spis", caseMatch[0]);
   addFact("Odesílatel", message.senderName);
 
+  const isCsszPayrollMessage =
+    haystack.includes("jmhz") ||
+    haystack.includes("jednotne mesicni hlaseni zamestnavatele") ||
+    haystack.includes("cssz") ||
+    haystack.includes("ceska sprava socialniho zabezpeceni") ||
+    haystack.includes("e-podani") ||
+    haystack.includes("podani bylo prijato") ||
+    haystack.includes("odpoved na e-podani");
+  if (isCsszPayrollMessage) {
+    const hasHighRiskSignal =
+      haystack.includes("sankc") ||
+      haystack.includes("pokut") ||
+      haystack.includes("lhut") ||
+      haystack.includes("pravni") ||
+      haystack.includes("financni narok");
+    const hasMediumRiskSignal =
+      hasHighRiskSignal ||
+      haystack.includes("vyzv") ||
+      haystack.includes("chyb") ||
+      haystack.includes("odmit") ||
+      haystack.includes("oprav") ||
+      haystack.includes("povinnost") ||
+      haystack.includes("doplnit");
+    const riskLevel = hasHighRiskSignal ? "Vysoké" : hasMediumRiskSignal ? "Střední" : "Nízké";
+    return {
+      messageType: "Potvrzení o přijetí podání / mzdová agenda / ČSSZ",
+      status: hasMediumRiskSignal ? "Dnes k vyřízení" : "Čeká na potvrzení",
+      riskLevel,
+      priority: hasHighRiskSignal ? "urgent" : hasMediumRiskSignal ? "high" : "low",
+      priorityReason: hasMediumRiskSignal
+        ? "Mzdová agenda ČSSZ obsahuje signál, který má ověřit člověk."
+        : "Potvrzení o přijetí podání ČSSZ je běžná evidenční zpráva.",
+      suggestedAction: hasMediumRiskSignal
+        ? "Otevřít zprávu a předat mzdové účetní k ověření."
+        : "Uložit k evidenci a případně předat mzdové účetní.",
+      primaryAction: hasMediumRiskSignal ? "Předat mzdové účetní" : "Označit jako zpracované",
+      facts,
+      recommendationText: hasMediumRiskSignal
+        ? "Zpráva se týká mzdové agendy ČSSZ a obsahuje signál k ověření. Doporučuji předat ji mzdové účetní."
+        : "Zpráva potvrzuje přijetí podání ČSSZ. Doporučuji uložit ji k evidenci a případně předat mzdové účetní.",
+      riskReason: hasMediumRiskSignal
+        ? "Riziko je vyšší jen kvůli výzvě, chybě, odmítnutí, opravě, lhůtě, sankci nebo povinnosti něco doplnit."
+        : "Nízké riziko: jde o potvrzení přijetí podání, ne o vozidlo ani lhůtu.",
+      requiresConfirmation: true
+    };
+  }
+
   if (haystack.includes("exekutor") || haystack.includes("exekuc") || haystack.includes("soud") || haystack.includes("usneseni")) {
     return {
       messageType: "Exekuce / právní",
@@ -381,10 +428,10 @@ function classifyMessage(message = {}, attachmentState = {}) {
     riskLevel: "Střední",
     priority: "normal",
     priorityReason: "Nová datová zpráva čeká na první rozhodnutí.",
-    suggestedAction: "Oznámení ISDS. Ruční kontrola.",
-    primaryAction: "Předat",
+    suggestedAction: "Otevřít zprávu a ručně určit, zda jde o potvrzení, účetní/mzdovou agendu, nebo zprávu k archivaci.",
+    primaryAction: "Otevřít zprávu",
     facts,
-    recommendationText: "Nová zpráva čeká na ruční kontrolu, protože Autopilot pro ni zatím nemá ověřený vzor.",
+    recommendationText: "Autopilot zatím neví, jak tuto zprávu zařadit. Otevři ji a rozhodni ručně.",
     riskReason: "Nový typ zprávy se teprve učí.",
     requiresConfirmation: true
   };
@@ -1034,9 +1081,9 @@ async function upsertMessage(db, env, account, mailbox, message) {
         "Nové",
         "Střední",
         "normal",
-        "Oznámení ISDS. Ruční kontrola.",
+        "Otevřít zprávu a ručně určit, zda jde o potvrzení, účetní/mzdovou agendu, nebo zprávu k archivaci.",
         "Nová datová zpráva čeká na první rozhodnutí.",
-        "Předat",
+        "Otevřít zprávu",
         message?.hasAttachments ? "Čeká na zpracování" : "Dostupná"
       )
       .run();
@@ -1765,12 +1812,35 @@ async function recommendationById(db, id) {
 }
 
 function recommendationConfirmAction(recommendation = {}, body = {}) {
+  const requestedAction = searchText([body.actionType]);
   const normalized = searchText([
     body.actionType,
     recommendation.recommendedAction,
     recommendation.text,
     recommendation.summary
   ]);
+  if (requestedAction.includes("payroll_record")) {
+    return {
+      actionType: "Označit jako zpracované",
+      performedAction: "Uložení k evidenci",
+      messageStatus: "Archivované",
+      archiveStatus: "archived",
+      assignedTo: "",
+      suggestedAction: "Uloženo k evidenci jako zpracované potvrzení.",
+      auditNote: "Zpráva byla označena jako zpracovaná a uložená k evidenci. Nic se nesmazalo ani neodeslalo mimo systém."
+    };
+  }
+  if (requestedAction.includes("payroll_handoff")) {
+    return {
+      actionType: "Předat mzdové účetní",
+      performedAction: "Předání mzdové účetní",
+      messageStatus: "Čeká na potvrzení",
+      archiveStatus: "active",
+      assignedTo: "Mzdová účetní",
+      suggestedAction: "Předáno mzdové účetní k evidenci nebo ověření.",
+      auditNote: "Zpráva byla interně označena jako předaná mzdové účetní. Nic se neodeslalo mimo systém."
+    };
+  }
   if (normalized.includes("archiv")) {
     return {
       actionType: "Potvrdit archivaci",
@@ -1945,11 +2015,11 @@ export async function rejectDataBoxPlusRecommendation(env, recommendationId, cur
         recommendation.messageId,
         recommendation.id,
         actor,
-        "Zamítnout návrh",
-        JSON.stringify({ rejectedBy: actor, reason: cleanString(body.reason), note: cleanString(body.note) }),
+        "Nepoužít návrh",
+        JSON.stringify({ decidedBy: actor, reason: cleanString(body.reason), note: cleanString(body.note) }),
         new Date().toISOString(),
         "rejected",
-        "Návrh Autopilota byl odmítnut. Zpráva zůstává k ručnímu vyřízení."
+        "Autopilotův návrh se nepoužil. Zpráva zůstává k ručnímu vyřízení."
       )
       .run();
     return { apiStatus: "ready", recommendation: { ...recommendation, status: "rejected" }, auditId: actionId };

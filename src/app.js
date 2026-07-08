@@ -19720,6 +19720,21 @@ function dataBoxPlusBadge(label, tone = "neutral") {
 
 function dataBoxPlusActionHelpText(label = "") {
   const normalized = dataBoxPlusSearchText([label]);
+  if (normalized.includes("predat mzdove ucetni")) {
+    return "Zpráva se interně označí pro mzdovou účetní. Datová zpráva se nikam neodesílá a akce se zapíše do historie.";
+  }
+  if (normalized.includes("oznacit jako zpracovane")) {
+    return "Zpráva se uloží k evidenci jako zpracovaná. Nic se nesmaže, nic se neodešle mimo systém a krok bude dohledatelný.";
+  }
+  if (normalized.includes("nepouzit navrh")) {
+    return "Připravená akce se nepoužije. Zpráva zůstane k vyřízení, nic se neodešle a rozhodnutí bude dohledatelné.";
+  }
+  if (normalized.includes("zaradit rucne")) {
+    return "Otevře se detail zprávy, kde ji můžeš ručně zařadit nebo předat. Nic se tím samo neodešle ani neuzavře.";
+  }
+  if (normalized.includes("nechat nevyrizene")) {
+    return "Autopilotův nejistý návrh se schová a zpráva zůstane nevyřízená pro pozdější rozhodnutí. Nic se neodešle mimo systém.";
+  }
   if (normalized.includes("potvrdit predani")) {
     return "Zpráva se označí jako předaná odpovědné osobě nebo týmu. Nic se neodešle mimo systém a akce se zapíše do historie.";
   }
@@ -19821,6 +19836,44 @@ function dataBoxPlusRecommendationMessage(item = {}) {
   return dataBoxPlusMessageById(item.messageId) || null;
 }
 
+function dataBoxPlusIsCsszPayrollMessage(item = {}, message = null) {
+  const normalized = dataBoxPlusSearchText([
+    item.recommendedAction,
+    item.text,
+    item.summary,
+    item.evidence,
+    message?.senderName,
+    message?.subject,
+    message?.recommendedAction,
+    message?.type
+  ]);
+  return (
+    normalized.includes("jmhz") ||
+    normalized.includes("jednotne mesicni hlaseni zamestnavatele") ||
+    normalized.includes("cssz") ||
+    normalized.includes("ceska sprava socialniho zabezpeceni") ||
+    normalized.includes("e-podani") ||
+    normalized.includes("podani bylo prijato") ||
+    normalized.includes("odpoved na e-podani")
+  );
+}
+
+function dataBoxPlusCsszPayrollRisk(item = {}, message = null) {
+  const normalized = dataBoxPlusSearchText([
+    item.recommendedAction,
+    item.text,
+    item.summary,
+    item.evidence,
+    message?.subject,
+    message?.recommendedAction
+  ]);
+  const highRisk = normalized.includes("sankc") || normalized.includes("pokut") || normalized.includes("lhut") || normalized.includes("pravni") || normalized.includes("financni narok");
+  const mediumRisk = highRisk || normalized.includes("vyzv") || normalized.includes("chyb") || normalized.includes("odmit") || normalized.includes("oprav") || normalized.includes("povinnost") || normalized.includes("doplnit");
+  if (highRisk) return "Vysoké";
+  if (mediumRisk) return "Střední";
+  return "Nízké";
+}
+
 function dataBoxPlusPreparedAction(item = {}) {
   const message = dataBoxPlusRecommendationMessage(item);
   const normalized = dataBoxPlusSearchText([
@@ -19837,6 +19890,34 @@ function dataBoxPlusPreparedAction(item = {}) {
   ]);
   const risk = message?.riskLevel || item.riskReason || item.risk || "Střední";
 
+  if (dataBoxPlusIsCsszPayrollMessage(item, message)) {
+    const payrollRisk = dataBoxPlusCsszPayrollRisk(item, message);
+    const needsPayrollReview = payrollRisk !== "Nízké";
+    return {
+      type: needsPayrollReview ? "payroll_handoff" : "payroll_record",
+      prepared: needsPayrollReview
+        ? "Předání mzdové účetní k ověření."
+        : "Uložení potvrzení ČSSZ k evidenci.",
+      confirmLabel: needsPayrollReview ? "Předat mzdové účetní" : "Označit jako zpracované",
+      afterConfirm: needsPayrollReview
+        ? "Zpráva se interně označí pro mzdovou účetní. Nic se nesmaže a datová zpráva se nikam neodesílá."
+        : "Zpráva se uloží k evidenci jako zpracovaná. Nic se nesmaže a datová zpráva se nikam neodesílá.",
+      risk: payrollRisk,
+      messageType: "Potvrzení o přijetí podání / mzdová agenda / ČSSZ",
+      recipient: needsPayrollReview ? "Mzdová účetní" : "Nikomu. Zpráva zůstane uložená k evidenci.",
+      reason: needsPayrollReview
+        ? "Zpráva obsahuje signál k ověření, ale nejde o vozidlovou lhůtu ani předání garážmistrovi."
+        : "Zpráva pouze potvrzuje přijetí podání ČSSZ, proto má běžné nebo nízké riziko.",
+      secondaryConfirmActions: needsPayrollReview
+        ? []
+        : [{
+            type: "payroll_handoff",
+            label: "Předat mzdové účetní",
+            help: "Zpráva se interně označí pro mzdovou účetní. Datová zpráva se nikam neodesílá a akce se zapíše do historie."
+          }]
+    };
+  }
+
   if (normalized.includes("priloha neni nactena") || normalized.includes("znovu") || normalized.includes("rucni kontrol")) {
     return null;
   }
@@ -19849,7 +19930,10 @@ function dataBoxPlusPreparedAction(item = {}) {
       prepared: "Archivaci zprávy jako vyřízené nebo informativní.",
       confirmLabel: "Potvrdit archivaci",
       afterConfirm: "Zpráva se přesune do archivu jako vyřízená. Nic se nesmaže a akci lze dohledat v historii.",
-      risk
+      risk,
+      messageType: message?.type || "Archivace",
+      recipient: "Nikomu. Zpráva se jen interně přesune do archivu.",
+      reason: "Jde o známý informační typ, u kterého archivace nic nemaže ani neodesílá."
     };
   }
   if (
@@ -19861,7 +19945,10 @@ function dataBoxPlusPreparedAction(item = {}) {
       prepared: "Zapsání lhůty a předání garážmistrovi.",
       confirmLabel: "Potvrdit zapsání lhůty",
       afterConfirm: "Zpráva se označí pro zadání lhůty a předání garážmistrovi. Nic se neodešle mimo systém a akce se zapíše do historie.",
-      risk
+      risk,
+      messageType: message?.type || "Vozidla",
+      recipient: "Garážmistr",
+      reason: "Návrh se zobrazí jen u zpráv se signálem vozidla, technické kontroly nebo konkrétní provozní lhůty."
     };
   }
   if (normalized.includes("faktury") || normalized.includes("faktura") || normalized.includes("upom")) {
@@ -19870,7 +19957,10 @@ function dataBoxPlusPreparedAction(item = {}) {
       prepared: "Předání na faktury@kaiserservis.cz.",
       confirmLabel: "Potvrdit předání",
       afterConfirm: "Zpráva se označí jako předaná účetnímu oddělení. Nic se nesmaže a datová zpráva se nikam neodesílá.",
-      risk
+      risk,
+      messageType: message?.type || "Faktury / upomínky",
+      recipient: "faktury@kaiserservis.cz",
+      reason: "Zpráva vypadá jako faktura nebo upomínka, proto se pouze interně označí pro účetní oddělení."
     };
   }
   if (normalized.includes("pravnik") || normalized.includes("gt brno") || normalized.includes("exekuc") || normalized.includes("soud")) {
@@ -19879,7 +19969,10 @@ function dataBoxPlusPreparedAction(item = {}) {
       prepared: "Předání právníkovi nebo GT Brno.",
       confirmLabel: "Potvrdit předání",
       afterConfirm: "Zpráva se označí jako předaná právníkovi nebo GT Brno. Nic se neodešle mimo systém a akce se zapíše do historie.",
-      risk
+      risk,
+      messageType: message?.type || "Exekuce / právní",
+      recipient: "Právník / GT Brno",
+      reason: "Právní zprávy se neuzavírají automaticky a zůstávají pod lidskou kontrolou."
     };
   }
   if (normalized.includes("predat") || normalized.includes("priradit")) {
@@ -19888,7 +19981,10 @@ function dataBoxPlusPreparedAction(item = {}) {
       prepared: "Přiřazení odpovědné osobě.",
       confirmLabel: "Potvrdit přiřazení",
       afterConfirm: "Zpráva se přiřadí odpovědné osobě k vyřízení. Datová zpráva se nikam neodesílá a akce se zapíše do historie.",
-      risk
+      risk,
+      messageType: message?.type || "Přiřazení",
+      recipient: "Odpovědná osoba",
+      reason: "Přiřazení mění jen interní odpovědnost za vyřízení zprávy."
     };
   }
   if (normalized.includes("e-mail") || normalized.includes("email")) {
@@ -19897,7 +19993,10 @@ function dataBoxPlusPreparedAction(item = {}) {
       prepared: "Vytvoření návrhu e-mailu k ruční kontrole.",
       confirmLabel: "Potvrdit vytvoření e-mailu",
       afterConfirm: "V systému se potvrdí připravený návrh e-mailu. E-mail se bez dalšího výslovného schválení neodešle mimo systém.",
-      risk
+      risk,
+      messageType: message?.type || "Návrh e-mailu",
+      recipient: "Nikomu bez dalšího schválení.",
+      reason: "Vznikne jen interní návrh e-mailu. Odeslání mimo systém vyžaduje samostatné potvrzení."
     };
   }
   return null;
@@ -19912,7 +20011,7 @@ function dataBoxPlusManualReviewReason(item = {}) {
   if (normalized.includes("otevrit pdf") || normalized.includes("overit castku") || normalized.includes("vyzva")) {
     return "Zpráva může obsahovat finanční požadavek nebo lhůtu, proto čeká na ruční kontrolu.";
   }
-  return "Autopilot pro tuhle zprávu zatím nemá ověřený vzor.";
+  return "Autopilot zatím neví, jak tuto zprávu zařadit.";
 }
 
 function dataBoxPlusMetricItems() {
@@ -20020,6 +20119,7 @@ function dataBoxPlusRecommendationCard(item) {
   const mailbox = message ? dataBoxPlusMailbox(message) : null;
   const action = dataBoxPlusPreparedAction(item);
   if (!message || !action) return "";
+  const secondaryConfirmActions = Array.isArray(action.secondaryConfirmActions) ? action.secondaryConfirmActions : [];
   return `
     <article class="ds-plus-recommendation ${confirmed ? "ds-plus-recommendation--done" : ""}">
       <div class="ds-plus-recommendation__head">
@@ -20028,15 +20128,23 @@ function dataBoxPlusRecommendationCard(item) {
         <p>${escapeHtml(message.subject || "Bez předmětu")}</p>
       </div>
       <dl>
+        <div><dt>Typ zprávy</dt><dd>${escapeHtml(action.messageType || message.type || "Datová zpráva")}</dd></div>
         <div><dt>Co Autopilot připravil</dt><dd>${escapeHtml(action.prepared)}</dd></div>
         <div><dt>Po potvrzení</dt><dd>${escapeHtml(action.afterConfirm)}</dd></div>
+        <div><dt>Komu se předá</dt><dd>${escapeHtml(action.recipient || "Nikomu bez dalšího schválení.")}</dd></div>
+        <div><dt>Proč je návrh bezpečný nebo rizikový</dt><dd>${escapeHtml(action.reason || "Akce je interní, dohledatelná a nic se neodešle mimo systém bez dalšího schválení.")}</dd></div>
         <div><dt>Riziko</dt><dd>${escapeHtml(action.risk)}</dd></div>
       </dl>
       ${dataBoxPlusAutopilotReason(item)}
       <div class="ds-plus-recommendation__actions">
         ${dataBoxPlusActionButton({ label: action.confirmLabel, variant: "primary-action", attrs: `data-ds-plus-confirm="${escapeHtml(item.id)}" data-ds-plus-confirm-type="${escapeHtml(action.type)}"`, help: dataBoxPlusActionHelpText(action.confirmLabel) })}
-        ${dataBoxPlusActionButton({ label: "Zkontrolovat", attrs: `data-ds-plus-open="${escapeHtml(item.messageId)}"` })}
-        ${dataBoxPlusActionButton({ label: "Zamítnout", attrs: `data-ds-plus-dismiss="${escapeHtml(item.id)}"` })}
+        ${secondaryConfirmActions.map((secondaryAction) => dataBoxPlusActionButton({
+          label: secondaryAction.label,
+          attrs: `data-ds-plus-confirm="${escapeHtml(item.id)}" data-ds-plus-confirm-type="${escapeHtml(secondaryAction.type)}"`,
+          help: secondaryAction.help || dataBoxPlusActionHelpText(secondaryAction.label)
+        })).join("")}
+        ${dataBoxPlusActionButton({ label: "Otevřít zprávu", attrs: `data-ds-plus-open="${escapeHtml(item.messageId)}"` })}
+        ${dataBoxPlusActionButton({ label: "Nepoužít návrh", attrs: `data-ds-plus-dismiss="${escapeHtml(item.id)}"` })}
       </div>
     </article>
   `;
@@ -20057,14 +20165,15 @@ function dataBoxPlusManualReviewCard(item) {
         <p>${escapeHtml(message.subject || "Bez předmětu")}</p>
       </div>
       <dl>
-        <div><dt>Proč čeká na člověka</dt><dd>${escapeHtml(dataBoxPlusManualReviewReason(item))}</dd></div>
-        <div><dt>Doporučený další krok</dt><dd>${escapeHtml(message.recommendedAction || item.recommendedAction || "Zkontrolovat zprávu a rozhodnout konkrétní krok.")}</dd></div>
+        <div><dt>Stav</dt><dd>Čeká na ruční kontrolu</dd></div>
+        <div><dt>Proč</dt><dd>${escapeHtml(dataBoxPlusManualReviewReason(item))}</dd></div>
+        <div><dt>Doporučený další krok</dt><dd>${escapeHtml(message.recommendedAction || item.recommendedAction || "Otevřít zprávu a ručně určit, zda jde o potvrzení, účetní/mzdovou agendu, nebo zprávu k archivaci.")}</dd></div>
         <div><dt>Riziko</dt><dd>${escapeHtml(message.riskLevel || item.risk || "Střední")}</dd></div>
       </dl>
-      ${dataBoxPlusAutopilotReason(item)}
       <div class="ds-plus-recommendation__actions">
-        ${dataBoxPlusActionButton({ label: "Zkontrolovat", variant: "primary-action", attrs: `data-ds-plus-open="${escapeHtml(item.messageId)}"` })}
-        ${dataBoxPlusActionButton({ label: "Zamítnout", attrs: `data-ds-plus-dismiss="${escapeHtml(item.id)}"` })}
+        ${dataBoxPlusActionButton({ label: "Otevřít zprávu", variant: "primary-action", attrs: `data-ds-plus-open="${escapeHtml(item.messageId)}"` })}
+        ${dataBoxPlusActionButton({ label: "Zařadit ručně", attrs: `data-ds-plus-open="${escapeHtml(item.messageId)}"` })}
+        ${dataBoxPlusActionButton({ label: "Nechat nevyřízené", attrs: `data-ds-plus-dismiss="${escapeHtml(item.id)}"` })}
       </div>
     </article>
   `;
@@ -20144,7 +20253,7 @@ function dataBoxPlusCommandCenter() {
         <section class="ds-plus-side-block">
           <h2>Bezpečně stranou</h2>
           <p>${escapeHtml(`${safeAsideCount} zpráv vypadá jako informativních nebo vhodných k archivaci.`)}</p>
-          ${dataBoxPlusActionButton({ label: "Zkontrolovat", attrs: `data-ds-plus-filter="safe"` })}
+          ${dataBoxPlusActionButton({ label: "Otevřít přehled", attrs: `data-ds-plus-filter="safe"` })}
         </section>
       </aside>
     </section>
@@ -29093,15 +29202,20 @@ async function loadDataBoxPlusMessageDetail(messageId) {
   }
 }
 
-async function confirmDataBoxPlusRecommendation(recommendationId) {
+async function confirmDataBoxPlusRecommendation(recommendationId, actionTypeOverride = "") {
   const id = String(recommendationId || "");
   if (!id) return;
   const item = dataBoxPlusRecommendations({ includeClosed: true }).find((recommendation) => recommendation.id === id);
   const action = item ? dataBoxPlusPreparedAction(item) : null;
+  const selectedActionType = String(actionTypeOverride || action?.type || "");
+  const secondaryAction = Array.isArray(action?.secondaryConfirmActions)
+    ? action.secondaryConfirmActions.find((candidate) => candidate.type === selectedActionType)
+    : null;
+  const actionLabel = secondaryAction?.label || action?.confirmLabel || "Potvrzení akce";
   try {
     await apiJson(`/api/data-box-plus/recommendations/${encodeURIComponent(id)}/confirm`, {
       method: "POST",
-      body: JSON.stringify({ requireRadimMartin: true, actionType: action?.type || "" })
+      body: JSON.stringify({ requireRadimMartin: true, actionType: selectedActionType })
     });
     dataBoxPlusState.confirmedRecommendationIds = Array.from(new Set([
       ...dataBoxPlusState.confirmedRecommendationIds,
@@ -29109,7 +29223,7 @@ async function confirmDataBoxPlusRecommendation(recommendationId) {
     ]));
     dataBoxPlusState.dismissedRecommendationIds = dataBoxPlusState.dismissedRecommendationIds.filter((item) => item !== id);
     dataBoxPlusState.notice = action
-      ? `${action.confirmLabel}: hotovo a zapsáno do historie. Nic se neodeslalo mimo systém.`
+      ? `${actionLabel}: zapsáno do historie. Nic se neodeslalo mimo systém.`
       : "Doporučení je potvrzené a zapsané do historie. Nic se neodeslalo mimo systém.";
     await loadDataBoxPlusData({ force: true, renderAfter: false });
   } catch (error) {
@@ -29123,16 +29237,16 @@ async function rejectDataBoxPlusRecommendation(recommendationId) {
   try {
     await apiJson(`/api/data-box-plus/recommendations/${encodeURIComponent(id)}/reject`, {
       method: "POST",
-      body: JSON.stringify({ reason: "Odmítnuto z UI Datové schránky Plus." })
+      body: JSON.stringify({ reason: "Nepoužito z UI Datové schránky Plus." })
     });
     dataBoxPlusState.dismissedRecommendationIds = Array.from(new Set([
       ...dataBoxPlusState.dismissedRecommendationIds,
       id
     ]));
-    dataBoxPlusState.notice = "Návrh je zamítnutý a Autopilot se z opravy poučí. Zpráva zůstává k vyřízení.";
+    dataBoxPlusState.notice = "Autopilotův návrh se nepoužije. Zpráva zůstává k vyřízení a nic se neodeslalo mimo systém.";
     await loadDataBoxPlusData({ force: true, renderAfter: false });
   } catch (error) {
-    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Zamítnutí návrhu se nepodařilo uložit.");
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Rozhodnutí nepoužít návrh se nepodařilo uložit.");
   }
 }
 
@@ -38183,7 +38297,8 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusConfirm) {
     event.preventDefault();
     const id = dataBoxPlusConfirm.dataset.dsPlusConfirm || "";
-    await confirmDataBoxPlusRecommendation(id);
+    const actionType = dataBoxPlusConfirm.dataset.dsPlusConfirmType || "";
+    await confirmDataBoxPlusRecommendation(id, actionType);
     render();
     return;
   }
