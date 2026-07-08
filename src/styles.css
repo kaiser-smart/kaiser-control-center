@@ -13169,29 +13169,92 @@ body:has(.driver-tablet-preview-page--dark) {
   }
 }
 
-/* Driver tablet v2 final frame: real tablet mockup with the approved cockpit layout inside. */
-.driver-tablet-v2-device {
-  width: clamp(1680px, 318vh, 4300px);
-  aspect-ratio: 3863 / 2868;
-  transform: translate(-50%, -49.55%);
+/* Driver tablet v2 final frame: front-facing dark tablet mockup matching the approved reference. */
+body:has(.driver-tablet-preview-page--dark) {
+  background:
+    radial-gradient(circle at 50% 54%, rgba(82, 88, 86, 0.28), transparent 36%),
+    linear-gradient(145deg, #070808 0%, #020303 100%);
+}
+
+.driver-tablet-preview-page {
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+.driver-tablet-preview-stage {
+  min-height: 100vh;
+  margin: 0;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
-  background: url("/tablet.png") center / contain no-repeat;
+  background:
+    radial-gradient(circle at 50% 54%, rgba(88, 95, 92, 0.36), transparent 38%),
+    linear-gradient(145deg, #0a0b0b 0%, #020303 100%);
   box-shadow: none;
 }
 
-.driver-tablet-v2-device::before,
+.driver-tablet-preview-simple-header {
+  display: none;
+}
+
+.driver-tablet-v2-device {
+  width: min(98vw, calc((100vh - 12px) * 1.4415));
+  aspect-ratio: 1600 / 1110;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(204, 210, 214, 0.72);
+  border-radius: clamp(34px, 4.4vw, 68px);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.16), transparent 8% 92%, rgba(255, 255, 255, 0.18)),
+    #020303;
+  box-shadow:
+    0 24px 54px rgba(0, 0, 0, 0.72),
+    inset 0 0 0 7px rgba(255, 255, 255, 0.05),
+    inset 0 0 0 18px #050606,
+    inset 0 0 38px rgba(255, 255, 255, 0.1);
+}
+
+.driver-tablet-v2-device::before {
+  content: "";
+  position: absolute;
+  inset: clamp(15px, 1.8vw, 30px);
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: clamp(26px, 3.5vw, 54px);
+  background: #020303;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    inset 0 0 28px rgba(255, 255, 255, 0.08);
+}
+
 .driver-tablet-v2-device::after {
-  content: none;
+  content: "";
+  position: absolute;
+  top: 51.2%;
+  left: 1.25%;
+  z-index: 2;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #1f8bff;
+  box-shadow:
+    0 0 0 2px rgba(31, 139, 255, 0.12),
+    0 0 9px rgba(31, 139, 255, 0.82);
 }
 
 .driver-tablet-v2-screen {
   inset: auto;
-  top: 29.18%;
-  left: 30.02%;
-  width: 39.95%;
-  height: 41.38%;
-  border-radius: clamp(18px, 1.62vw, 32px);
+  top: 5.25%;
+  left: 4.15%;
+  z-index: 1;
+  width: 91.7%;
+  height: 89.55%;
+  border-radius: clamp(22px, 2.45vw, 40px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 0 30px rgba(255, 255, 255, 0.04);
 }
 
 .driver-tablet-v2 {

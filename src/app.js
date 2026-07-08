@@ -17006,7 +17006,7 @@ function collectionRoutesDriverTabletPreviewV2Panel(rows = collectionRoutesDrive
               </span>
               <span class="driver-tablet-v2-meta-card">
                 ${collectionRoutesDriverTabletPreviewIcon("user")}
-                <span><small>Řidič</small><strong>Jan Novak</strong></span>
+                <span><small>Řidič</small><strong>Jan Novák</strong></span>
               </span>
               <span class="driver-tablet-v2-meta-card driver-tablet-v2-meta-card--icon" aria-label="Upozornění">
                 ${collectionRoutesDriverTabletPreviewIcon("bell")}
