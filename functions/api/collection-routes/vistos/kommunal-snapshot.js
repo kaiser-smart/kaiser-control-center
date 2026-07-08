@@ -23,7 +23,8 @@ export async function onRequestGet({ request, env }) {
   try {
     const url = new URL(request.url);
     const snapshot = await getLatestCollectionRoutesVistosSnapshot(env, {
-      limit: url.searchParams.get("limit") || 10000
+      limit: url.searchParams.get("limit") || 10000,
+      svozKaiserOnly: url.searchParams.get("svozKaiserOnly") === "1"
     });
     return json({ snapshot, apiStatus: snapshot.apiStatus || "ready" });
   } catch (error) {

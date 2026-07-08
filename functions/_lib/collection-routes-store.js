@@ -5482,7 +5482,7 @@ export async function listCollectionImportRows(env, batchId, limit = 500) {
   }
 }
 
-export async function getLatestCollectionRoutesVistosSnapshot(env, { limit = 10000 } = {}) {
+export async function getLatestCollectionRoutesVistosSnapshot(env, { limit = 10000, svozKaiserOnly = false } = {}) {
   const db = collectionRoutesDatabase(env, true);
   const maxRows = Math.max(1, Math.min(Number(limit) || 10000, 10000));
 
@@ -5512,14 +5512,16 @@ export async function getLatestCollectionRoutesVistosSnapshot(env, { limit = 100
     }
 
     const batch = rowToBatch(batchRow);
-    const rowsResult = await db
-      .prepare(`
+    const rowsSql = `
         SELECT *
         FROM collection_import_rows
         WHERE batch_id = ?
+        ${svozKaiserOnly ? "AND json_extract(summary_json, '$.svozKaiserIncluded') = 1" : ""}
         ORDER BY row_number ASC
         LIMIT ?
-      `)
+      `;
+    const rowsResult = await db
+      .prepare(rowsSql)
       .bind(batch.id, maxRows)
       .all();
     const rows = (rowsResult.results || []).map(rowToImportRow);

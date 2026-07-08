@@ -30966,7 +30966,7 @@ async function loadCollectionRoutesKommunalPairingRows(options = {}) {
   try {
     const result = options.live === true
       ? await apiJson("/api/collection-routes/vistos/kommunal-preview-export?limit=10000")
-      : await apiJson("/api/collection-routes/vistos/kommunal-snapshot?limit=10000");
+      : await apiJson("/api/collection-routes/vistos/kommunal-snapshot?limit=1000&svozKaiserOnly=1");
     const payload = options.live === true ? result.export || {} : result.snapshot || {};
     collectionRoutesApplyKommunalSnapshot(payload, options.live === true ? "vistos-komunal-preview-export" : "d1-vistos-komunal-preview");
     if (!collectionRoutesPilotState.kommunalPairingRows.length) {
