@@ -109,7 +109,6 @@ import {
   FLEET_API_MISSING_MESSAGE,
   FLEET_API_WAITING_LABEL,
   FLEET_DASHBOARD_METRICS,
-  FLEET_DEFECT_FIELDS,
   FLEET_DOCUMENT_FIELDS,
   FLEET_LIST_COLUMNS,
   FLEET_REQUIRED_SECTIONS,
@@ -1367,6 +1366,7 @@ const fleetUiState = {
   error: "",
   savingAssignmentVehicleId: "",
   vehicleFilters: {
+    quick: "all",
     status: "all",
     type: "all",
     driver: "all",
@@ -7108,7 +7108,31 @@ function moduleRulesAutomationRow(item, canManage) {
   `;
 }
 
-function moduleRuleDetail() {
+function moduleRuleHumanText(value, fallback = "Zatím není dostupný lidský popis.") {
+  if (!value) return fallback;
+  if (typeof value === "string") {
+    const cleaned = value.trim();
+    if (!cleaned) return fallback;
+    try {
+      const parsed = JSON.parse(cleaned);
+      return moduleRuleHumanText(parsed, fallback);
+    } catch {
+      return cleaned;
+    }
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => moduleRuleHumanText(item, "")).filter(Boolean).join(", ") || fallback;
+  }
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, item]) => `${key}: ${Array.isArray(item) ? item.join(", ") : typeof item === "object" ? moduleRuleHumanText(item, "") : String(item ?? "")}`)
+      .filter((text) => text.trim() && !text.endsWith(": "))
+      .join("; ") || fallback;
+  }
+  return String(value || "").trim() || fallback;
+}
+
+function moduleRuleDetail(humanDetail = false) {
   const selected = moduleRulesState.rules.find((item) => item.id === moduleRulesState.selectedId) || moduleRulesState.rules[0];
   if (!selected) {
     return `
@@ -7163,10 +7187,31 @@ function moduleRuleDetail() {
           <strong>${escapeHtml(selected.cloudRunner || "Fáze 2")}</strong>
         </article>
       </div>
-      <div class="module-rules-json-grid">
-        <pre>${escapeHtml(moduleRuleJsonPreview(selected.conditionsJson || selected.conditions))}</pre>
-        <pre>${escapeHtml(moduleRuleJsonPreview(selected.actionsJson || selected.actions))}</pre>
-      </div>
+      ${humanDetail ? `
+        <div class="module-rules-human-grid">
+          <article>
+            <span>Co sleduje</span>
+            <strong>${escapeHtml(moduleRuleHumanText(selected.conditions || selected.conditionsJson))}</strong>
+          </article>
+          <article>
+            <span>Co doporučí</span>
+            <strong>${escapeHtml(moduleRuleHumanText(selected.actions || selected.actionsJson))}</strong>
+          </article>
+          <article>
+            <span>Odpovědnost</span>
+            <strong>${escapeHtml(moduleRuleUserLabel(selected.updatedByUserId || selected.createdByUserId))}</strong>
+          </article>
+          <article>
+            <span>Bezpečnostní dopad</span>
+            <strong>Pravidlo pouze upozorňuje nebo doporučuje. Kritická změna vyžaduje člověka.</strong>
+          </article>
+        </div>
+      ` : `
+        <div class="module-rules-json-grid">
+          <pre>${escapeHtml(moduleRuleJsonPreview(selected.conditionsJson || selected.conditions))}</pre>
+          <pre>${escapeHtml(moduleRuleJsonPreview(selected.actionsJson || selected.actions))}</pre>
+        </div>
+      `}
       <div class="module-rules-audit">
         <h4>Audit změn</h4>
         <ul>${auditRows}</ul>
@@ -7185,7 +7230,8 @@ function moduleRulesAutomationPanel({
   user,
   description = "",
   cloudNote = "",
-  readOnly = false
+  readOnly = false,
+  humanDetail = false
 }) {
   const canManage = !readOnly && (hasPermission(user, moduleKey, "manage") || isFullAccessRole(user));
   const statusLabel = moduleRulesState.loading
@@ -7302,28 +7348,30 @@ function moduleRulesAutomationPanel({
           <span>Stav runneru</span>
           <strong>${escapeHtml(runnerSummary.latestStatus ? runnerStatusLabel : "čeká")}</strong>
         </article>
-        <article>
-          <span>rules_total</span>
-          <strong>${runnerSummary.rulesTotal}</strong>
-        </article>
-        <article>
-          <span>dry_run_count</span>
-          <strong>${runnerSummary.dryRunCount}</strong>
-        </article>
-        <article>
-          <span>skipped_count</span>
-          <strong>${runnerSummary.skippedCount}</strong>
-        </article>
-        <article>
-          <span>failed_count</span>
-          <strong>${runnerSummary.failedCount}</strong>
-        </article>
+        ${humanDetail ? "" : `
+          <article>
+            <span>rules_total</span>
+            <strong>${runnerSummary.rulesTotal}</strong>
+          </article>
+          <article>
+            <span>dry_run_count</span>
+            <strong>${runnerSummary.dryRunCount}</strong>
+          </article>
+          <article>
+            <span>skipped_count</span>
+            <strong>${runnerSummary.skippedCount}</strong>
+          </article>
+          <article>
+            <span>failed_count</span>
+            <strong>${runnerSummary.failedCount}</strong>
+          </article>
+        `}
       </div>
 
       <div class="module-rules-empty module-rules-empty--cloud" role="status">
         <strong>${moduleRulesState.apiStatus === "ready" ? readyRulesText : "Cloud API pro pravidla není dostupné."}</strong>
         <span>${escapeHtml(cloudNote || "Cloudový runner spouští automatizace pouze v bezpečném režimu podle nastavení modulu. Ostré akce musí být výslovně povolené další fází.")}</span>
-        ${latestRunnerRun ? `
+        ${latestRunnerRun && !humanDetail ? `
           <small>
             Poslední audit runneru: ${escapeHtml(runnerStatusLabel)}
             · ${escapeHtml(latestRunnerRun.triggeredBy || "-")}
@@ -7362,7 +7410,7 @@ function moduleRulesAutomationPanel({
         </table>
       </div>
 
-      ${moduleRuleDetail()}
+      ${moduleRuleDetail(humanDetail)}
     </section>
   `;
 }
@@ -9135,12 +9183,13 @@ function fleetActionNotice() {
 }
 
 function isFleetTabId(tabId) {
-  return FLEET_REQUIRED_SECTIONS.some((section) => section.id === tabId);
+  const normalized = fleetTabId(tabId);
+  return normalized === "detail" || FLEET_REQUIRED_SECTIONS.some((section) => section.id === normalized);
 }
 
 function fleetTabFromHash(hash = window.location.hash) {
   const match = String(hash || "").match(/^#fleet-([a-z-]+)$/);
-  const tabId = match ? match[1] : "";
+  const tabId = fleetTabId(match ? match[1] : "");
   return isFleetTabId(tabId) ? tabId : "";
 }
 
@@ -9150,7 +9199,7 @@ function fleetActiveTab(vehicleId = "") {
     return "detail";
   }
 
-  return hashTab || (vehicleId ? "detail" : "dashboard");
+  return hashTab || (vehicleId ? "detail" : "overview");
 }
 
 function fleetTabHref(tabId) {
@@ -9195,7 +9244,9 @@ function fleetActionButton(label, action, options = {}) {
     options.target ? `data-fleet-target="${escapeHtml(options.target)}"` : ""
   ].filter(Boolean).join(" ");
 
-  return `<button class="secondary-link fleet-action-button" type="button" ${dataset}>${escapeHtml(label)}</button>`;
+  const className = options.primary ? "primary-action" : "secondary-link";
+  const button = `<button class="${className} fleet-action-button" type="button" ${dataset}>${escapeHtml(label)}</button>`;
+  return options.help ? fleetActionWithHelp(button, options.help) : button;
 }
 
 function fleetFieldChips(fields) {
@@ -9206,51 +9257,883 @@ function fleetFieldChips(fields) {
   `;
 }
 
+const FLEET_QUICK_FILTERS = [
+  { id: "all", label: "Vše" },
+  { id: "attention", label: "K řešení" },
+  { id: "open_report", label: "Otevřené hlášení" },
+  { id: "waiting_part", label: "Čeká na díl" },
+  { id: "stk_due", label: "STK končí" },
+  { id: "insurance_due", label: "Pojištění končí" },
+  { id: "service", label: "V servisu" },
+  { id: "out_of_order", label: "Neprovozní" },
+  { id: "high_costs", label: "Vysoké náklady" },
+  { id: "personal", label: "Osobní" },
+  { id: "truck", label: "Nákladní" },
+  { id: "tech", label: "Technika" },
+  { id: "trailers", label: "Přívěsy" }
+];
+
+const FLEET_OPEN_REPORT_STATUSES = new Set([
+  "new_report",
+  "waiting_vehicle_vin",
+  "waiting_diagnostics",
+  "searching_parts",
+  "searching_prices",
+  "ready_for_patrik",
+  "sent_to_patrik",
+  "waiting_decision",
+  "waiting_part_identification",
+  "part_identified",
+  "handed_to_ordering",
+  "ordered",
+  "part_arrived",
+  "service_scheduled"
+]);
+
+const FLEET_WAITING_PART_STATUSES = new Set([
+  "waiting_part_identification",
+  "part_identified",
+  "handed_to_ordering",
+  "ordered"
+]);
+
+const FLEET_WAITING_APPROVAL_STATUSES = new Set([
+  "waiting_decision",
+  "ready_for_patrik",
+  "sent_to_patrik"
+]);
+
+const FLEET_HANDOFF_PATRIK_STATUSES = new Set([
+  "ready_for_patrik",
+  "sent_to_patrik",
+  "handed_to_ordering"
+]);
+
+const FLEET_RISK_WORDS = [
+  "brzd",
+  "řízení",
+  "rizeni",
+  "pneumat",
+  "olej",
+  "světl",
+  "svetl",
+  "motor",
+  "bezpečnost",
+  "bezpecnost",
+  "únik",
+  "unik"
+];
+
+function fleetTabId(tabId = "") {
+  const normalized = String(tabId || "").trim();
+  if (normalized === "dashboard") return "overview";
+  if (normalized === "defects") return "service";
+  return normalized;
+}
+
+function fleetSafeDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const date = new Date(raw.length <= 10 ? `${raw}T00:00:00` : raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function fleetToday() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function fleetDaysUntil(value) {
+  const date = fleetSafeDate(value);
+  if (!date) return null;
+  date.setHours(0, 0, 0, 0);
+  return Math.ceil((date.getTime() - fleetToday().getTime()) / 86400000);
+}
+
+function fleetDaysText(days) {
+  if (!Number.isFinite(days)) return "termín není dostupný";
+  if (days < 0) return `po termínu ${Math.abs(days)} dní`;
+  if (days === 0) return "dnes";
+  if (days === 1) return "zítra";
+  return `za ${days} dní`;
+}
+
+function fleetFormatDate(value) {
+  const date = fleetSafeDate(value);
+  if (!date) return "";
+  return new Intl.DateTimeFormat("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+}
+
+function fleetTermStatus(days) {
+  if (!Number.isFinite(days)) return "missing";
+  if (days < 0) return "overdue";
+  if (days <= 7) return "due7";
+  if (days <= 30) return "due30";
+  if (days <= 60) return "due60";
+  return "ok";
+}
+
+function fleetTermStatusLabel(days) {
+  const status = fleetTermStatus(days);
+  if (status === "missing") return "není dostupné";
+  if (status === "overdue") return "prošlé";
+  if (status === "due7") return "do 7 dnů";
+  if (status === "due30") return "do 30 dnů";
+  if (status === "due60") return "do 60 dnů";
+  return "v pořádku";
+}
+
+function fleetTermRecommendation(label, days) {
+  if (!Number.isFinite(days)) return "Doplnit datum platnosti.";
+  if (days < 0) return `${label} je prošlá. Vozidlo označit jako rizikové.`;
+  if (days === 0) return `${label} končí dnes. Domluvit okamžitou kontrolu.`;
+  if (days <= 30) {
+    if (label === "Pojištění") return `Pojištění končí za ${days} dní. Připravit obnovu.`;
+    if (label === "Dálniční známka") return "Dálniční známka končí tento měsíc. Ověřit obnovu.";
+    return `${label} končí za ${days} dní. Naplánovat kontrolu.`;
+  }
+  if (days <= 60) return `${label} končí za ${days} dní. Připravit termín.`;
+  return `${label} je v pořádku.`;
+}
+
+function fleetReportLink(item = {}) {
+  const id = item.id || item.reportId;
+  return id ? `${DRIVER_REPORT_ROUTE}?request=${encodeURIComponent(id)}` : DRIVER_REPORT_ROUTE;
+}
+
+function fleetVehicleRoute(vehicle = {}) {
+  const id = vehicle?.id || vehicle?.vehicleId || vehicle?.licensePlate || "";
+  return `${FLEET_ROUTE}/${encodeURIComponent(id)}`;
+}
+
+function fleetReportMatchesVehicle(report = {}, vehicle = {}) {
+  const reportIds = [
+    report.vehicleId,
+    report.vehicle_id
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  const vehicleIds = [
+    vehicle.id,
+    vehicle.vehicleId,
+    vehicle.tcarsVehicleId,
+    vehicle.externalVehicleId,
+    vehicle.vistosVehicleId,
+    vehicle.tcarsVehicleId ? `tcars-${vehicle.tcarsVehicleId}` : "",
+    vehicle.vistosVehicleId ? `vistos-${vehicle.vistosVehicleId}` : ""
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  if (reportIds.some((id) => vehicleIds.includes(id))) return true;
+
+  const reportPlate = fleetVehicleKey(report.licensePlate || report.spz);
+  const vehiclePlate = fleetVehicleKey(vehicle.licensePlate || vehicle.tcarsLicensePlate);
+  if (reportPlate && vehiclePlate && reportPlate === vehiclePlate) return true;
+
+  const reportVin = fleetVehicleKey(report.vin);
+  const vehicleVin = fleetVehicleKey(vehicle.vin);
+  return Boolean(reportVin && vehicleVin && reportVin === vehicleVin);
+}
+
+function fleetRelatedDriverReports(vehicle = {}) {
+  const items = Array.isArray(driverReportsState.items) ? driverReportsState.items : [];
+  return items
+    .filter((item) => fleetReportMatchesVehicle(item, vehicle))
+    .sort((left, right) => String(right.reportedAt || right.createdAt || "").localeCompare(String(left.reportedAt || left.createdAt || "")));
+}
+
+function fleetReportIsOpen(report = {}) {
+  return FLEET_OPEN_REPORT_STATUSES.has(String(report.status || "").trim());
+}
+
+function fleetReportWaitsForPart(report = {}) {
+  return FLEET_WAITING_PART_STATUSES.has(String(report.status || "").trim()) ||
+    String(report.partVinPilot?.status || report.partsProviderStatus || "").includes("waiting");
+}
+
+function fleetReportWaitsForVin(report = {}) {
+  return String(report.status || "").trim() === "waiting_vehicle_vin" || !String(report.vin || "").trim();
+}
+
+function fleetReportIsHandedToPatrik(report = {}) {
+  return FLEET_HANDOFF_PATRIK_STATUSES.has(String(report.status || "").trim()) || Boolean(report.handedOffToPatrikAt);
+}
+
+function fleetReportIsSafetyRisk(report = {}) {
+  const text = normalizeAccessSearchText([
+    report.defectType,
+    report.defectDescription,
+    report.category,
+    report.serviceType,
+    report.priority
+  ].join(" "));
+  return FLEET_RISK_WORDS.some((word) => text.includes(normalizeAccessSearchText(word)));
+}
+
+function fleetDriverReportSummary(vehicle = {}) {
+  const reports = fleetRelatedDriverReports(vehicle);
+  const openReports = reports.filter(fleetReportIsOpen);
+  const waitingPartReports = openReports.filter(fleetReportWaitsForPart);
+  const waitingVinReports = openReports.filter(fleetReportWaitsForVin);
+  const handedToPatrikReports = openReports.filter(fleetReportIsHandedToPatrik);
+  const safetyReports = openReports.filter(fleetReportIsSafetyRisk);
+  const lastReport = reports[0] || null;
+  return {
+    reports,
+    openReports,
+    waitingPartReports,
+    waitingVinReports,
+    handedToPatrikReports,
+    safetyReports,
+    lastReport
+  };
+}
+
+function fleetVehicleTerms(vehicle = {}) {
+  return [
+    ...FLEET_TERM_DEFINITIONS,
+    { id: "highwayVignetteValidTo", label: "Dálniční známka", endpoint: "GET /api/vehicles/:id" },
+    { id: "lastServiceDate", label: "Poslední servis", endpoint: "GET /api/vehicles/:id" },
+    { id: "nextServiceDate", label: "Příští servis", endpoint: "GET /api/vehicles/:id" }
+  ].map((term) => {
+    const date = vehicle[term.id];
+    const days = fleetDaysUntil(date);
+    return {
+      ...term,
+      date,
+      days,
+      status: fleetTermStatus(days),
+      statusLabel: fleetTermStatusLabel(days),
+      recommendation: fleetTermRecommendation(term.label, days)
+    };
+  });
+}
+
+function fleetImportantTerms(vehicle = {}) {
+  return fleetVehicleTerms(vehicle)
+    .filter((term) => Number.isFinite(term.days) && term.days <= 60)
+    .sort((left, right) => left.days - right.days);
+}
+
+function fleetNearestTerm(vehicle = {}) {
+  return fleetImportantTerms(vehicle)[0] || null;
+}
+
+function fleetVehicleHasInsuranceDue(vehicle = {}) {
+  const days = fleetDaysUntil(vehicle.insuranceValidTo);
+  return Number.isFinite(days) && days <= 30;
+}
+
+function fleetVehicleHasStkDue(vehicle = {}) {
+  const days = fleetDaysUntil(vehicle.stkValidTo);
+  return Number.isFinite(days) && days <= 30;
+}
+
+function fleetVehicleHasRevisionDue(vehicle = {}) {
+  return FLEET_TERM_DEFINITIONS
+    .filter((term) => !["stkValidTo", "insuranceValidTo"].includes(term.id))
+    .some((term) => {
+      const days = fleetDaysUntil(vehicle[term.id]);
+      return Number.isFinite(days) && days <= 30;
+    });
+}
+
+function fleetVehicleOperationalStatus(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle);
+  const rawStatus = String(vehicle.status || "").trim();
+  const nearestTerm = fleetNearestTerm(vehicle);
+  if (rawStatus === "retired") return "retired";
+  if (rawStatus === "out_of_order") return "out_of_order";
+  if (reports.safetyReports.length || (nearestTerm && nearestTerm.days < 0)) return "risk";
+  if (reports.waitingPartReports.length) return "waiting_part";
+  if (rawStatus === "service" || reports.openReports.some((report) => String(report.status || "") === "service_scheduled")) return "service";
+  if (reports.openReports.some((report) => FLEET_WAITING_APPROVAL_STATUSES.has(String(report.status || "")))) return "waiting_approval";
+  if (reports.openReports.length || (nearestTerm && nearestTerm.days <= 30)) return "attention";
+  return "ok";
+}
+
+function fleetVehicleStatusLabel(vehicle = {}) {
+  return fleetStatusLabel(fleetVehicleOperationalStatus(vehicle));
+}
+
+function fleetVehicleStatusTone(vehicle = {}) {
+  return fleetStatusTone(fleetVehicleOperationalStatus(vehicle));
+}
+
+function fleetVehicleProblem(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle);
+  const last = reports.lastReport;
+  if (reports.waitingPartReports[0]) return reports.waitingPartReports[0].defectDescription || reports.waitingPartReports[0].probablePart || "Hlášení čeká na díl.";
+  if (reports.safetyReports[0]) return reports.safetyReports[0].defectDescription || "Bezpečnostní závada vyžaduje ruční kontrolu.";
+  if (reports.openReports[0]) return reports.openReports[0].defectDescription || reports.openReports[0].defectType || "Otevřené hlášení.";
+  const term = fleetNearestTerm(vehicle);
+  if (term && term.days <= 30) return `${term.label} ${fleetDaysText(term.days)}.`;
+  if (String(vehicle.status || "") === "out_of_order") return "Vozidlo je neprovozní.";
+  if (String(vehicle.status || "") === "service") return "Vozidlo je v servisu.";
+  return last ? last.defectDescription || last.defectType || "Poslední hlášení je uzavřené." : "Bez otevřeného problému.";
+}
+
+function fleetVehicleRecommendation(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle);
+  const waitingPart = reports.waitingPartReports[0];
+  if (waitingPart) {
+    return `Otevřené hlášení: ${driverReportShortText(waitingPart.defectDescription || waitingPart.probablePart || "čeká na díl", 54)}. Ověřit stav dílu.`;
+  }
+  const safety = reports.safetyReports[0];
+  if (safety) {
+    return `Bezpečnostní závada: ${driverReportShortText(safety.defectDescription || safety.defectType, 54)}. Vyžaduje ruční kontrolu.`;
+  }
+  const open = reports.openReports[0];
+  if (open) {
+    return `Otevřené hlášení: ${driverReportShortText(open.defectDescription || open.defectType, 54)}. Ověřit další krok.`;
+  }
+  const stkDays = fleetDaysUntil(vehicle.stkValidTo);
+  if (Number.isFinite(stkDays) && stkDays <= 30) {
+    return stkDays < 0 ? "STK je po termínu. Vozidlo označit jako rizikové." : `STK končí za ${stkDays} dní. Naplánovat kontrolu.`;
+  }
+  const insuranceDays = fleetDaysUntil(vehicle.insuranceValidTo);
+  if (Number.isFinite(insuranceDays) && insuranceDays <= 30) {
+    return insuranceDays < 0 ? "Pojištění je po termínu. Ověřit provozní riziko." : `Pojištění končí za ${insuranceDays} dní. Připravit obnovu.`;
+  }
+  const revision = fleetImportantTerms(vehicle).find((term) => !["stkValidTo", "insuranceValidTo"].includes(term.id) && term.days <= 30);
+  if (revision) {
+    return fleetTermRecommendation(revision.label, revision.days);
+  }
+  if (String(vehicle.status || "") === "service") return "Vozidlo je v servisu. Ověřit datum dokončení.";
+  if (String(vehicle.status || "") === "out_of_order") return "Vozidlo je neprovozní. Potvrdit ruční kontrolu.";
+  return "Bez otevřeného problému.";
+}
+
+function fleetVehiclePriorityScore(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle);
+  let score = 0;
+  if (fleetVehicleOperationalStatus(vehicle) === "risk") score += 100;
+  if (String(vehicle.status || "") === "out_of_order") score += 80;
+  score += reports.safetyReports.length * 40;
+  score += reports.waitingPartReports.length * 30;
+  score += reports.openReports.length * 18;
+  const nearest = fleetNearestTerm(vehicle);
+  if (nearest) {
+    if (nearest.days < 0) score += 50;
+    else if (nearest.days <= 7) score += 35;
+    else if (nearest.days <= 30) score += 20;
+    else if (nearest.days <= 60) score += 8;
+  }
+  return score;
+}
+
+function fleetPriorityVehicles(limit = 5) {
+  return fleetVehiclesState.vehicles
+    .map((vehicle) => ({ vehicle, score: fleetVehiclePriorityScore(vehicle) }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit);
+}
+
+function fleetSummaryMetrics() {
+  const vehicles = fleetVehiclesState.vehicles;
+  const statuses = vehicles.map((vehicle) => fleetVehicleOperationalStatus(vehicle));
+  return {
+    total: vehicles.length,
+    active: statuses.filter((status) => !["retired", "out_of_order"].includes(status)).length,
+    attention: statuses.filter((status) => ["attention", "waiting_part", "service", "waiting_approval", "risk", "out_of_order"].includes(status)).length,
+    termsDue: vehicles.filter((vehicle) => fleetVehicleHasStkDue(vehicle) || fleetVehicleHasRevisionDue(vehicle)).length,
+    insuranceDue: vehicles.filter(fleetVehicleHasInsuranceDue).length,
+    inService: statuses.filter((status) => status === "service").length,
+    waitingPart: statuses.filter((status) => status === "waiting_part").length,
+    risks: statuses.filter((status) => status === "risk" || status === "out_of_order").length
+  };
+}
+
+function fleetVehiclesWithoutProblemCount() {
+  return fleetVehiclesState.vehicles.filter((vehicle) => fleetVehicleOperationalStatus(vehicle) === "ok").length;
+}
+
+function fleetHelpButton(text) {
+  const help = String(text || "").trim();
+  if (!help) return "";
+  return `
+    <button class="fleet-help" type="button" aria-label="Nápověda" data-fleet-help>
+      <span aria-hidden="true">?</span>
+      <span class="fleet-help__bubble" role="tooltip">${escapeHtml(help)}</span>
+    </button>
+  `;
+}
+
+function fleetActionWithHelp(actionHtml, helpText = "") {
+  return `
+    <span class="fleet-action-with-help">
+      ${actionHtml}
+      ${fleetHelpButton(helpText)}
+    </span>
+  `;
+}
+
+function fleetActionLink(label, href, helpText = "", options = {}) {
+  const className = options.primary ? "primary-link" : "secondary-link";
+  const link = `<a class="${className}" href="${escapeHtml(routeHref(href))}" data-link>${escapeHtml(label)}</a>`;
+  return helpText ? fleetActionWithHelp(link, helpText) : link;
+}
+
+function fleetExplanationButton(label, text) {
+  return `
+    <button class="secondary-link fleet-explain-button" type="button" data-fleet-help>
+      ${escapeHtml(label)}
+      <span class="fleet-help__bubble fleet-help__bubble--wide" role="tooltip">${escapeHtml(text)}</span>
+    </button>
+  `;
+}
+
+function fleetVehicleImportantSummary(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle);
+  const waitingPart = reports.waitingPartReports[0];
+  const open = reports.openReports[0];
+  const stkDays = fleetDaysUntil(vehicle.stkValidTo);
+  const insuranceDays = fleetDaysUntil(vehicle.insuranceValidTo);
+  const termsKnown = Number.isFinite(stkDays) || Number.isFinite(insuranceDays);
+
+  if (waitingPart) {
+    const termText = termsKnown
+      ? ` STK ${Number.isFinite(stkDays) && stkDays <= 30 ? fleetDaysText(stkDays) : "je zatím bez blízkého termínu"} a pojištění ${Number.isFinite(insuranceDays) && insuranceDays <= 30 ? fleetDaysText(insuranceDays) : "je zatím bez blízkého termínu"}.`
+      : "";
+    return `Vozidlo má otevřené hlášení ${driverReportShortText(waitingPart.defectDescription || waitingPart.probablePart || "čekající na díl", 90)} a čeká se na ověření dílu.${termText}`;
+  }
+  if (open) {
+    return `Vozidlo má otevřené hlášení ${driverReportShortText(open.defectDescription || open.defectType, 90)}. Nejbližší krok: ${fleetVehicleRecommendation(vehicle)}`;
+  }
+  const nearest = fleetNearestTerm(vehicle);
+  if (nearest && nearest.days <= 30) {
+    return `${nearest.label} ${fleetDaysText(nearest.days)}. Nejbližší krok: ${fleetTermRecommendation(nearest.label, nearest.days)}`;
+  }
+  if (termsKnown) {
+    return "Vozidlo nemá otevřené související hlášení a načtené termíny neukazují akutní problém.";
+  }
+  return "Pro toto vozidlo zatím nejsou dostupná kompletní data.";
+}
+
+function fleetRecommendationReason(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle);
+  const term = fleetNearestTerm(vehicle);
+  const facts = [
+    reports.openReports.length ? `${reports.openReports.length} otevřených hlášení` : "",
+    reports.waitingPartReports.length ? `${reports.waitingPartReports.length} hlášení čeká na díl` : "",
+    reports.handedToPatrikReports.length ? "něco je předáno Patrikovi" : "",
+    term ? `${term.label} ${fleetDaysText(term.days)}` : "",
+    vehicle.status ? `stav vozidla: ${fleetStatusLabel(vehicle.status)}` : ""
+  ].filter(Boolean).join(", ");
+  return `Systém vychází z načtených údajů vozidla, termínů a souvisejících hlášení řidičů. Použitá data: ${facts || "zatím nejsou dostupná kompletní data"}. Po potvrzení akce se otevře příslušný detail nebo návrh úkolu; díl, servis ani e-mail se automaticky neobjedná a neodešle.`;
+}
+
+function fleetDriverReportsDetail(vehicle = {}) {
+  const summary = fleetDriverReportSummary(vehicle);
+  const last = summary.lastReport;
+  const primary = summary.waitingPartReports[0] || summary.handedToPatrikReports[0] || summary.openReports[0] || last;
+  const hasDriverReportsAccess = hasPermission(currentUser(), "driver-reports", "view");
+  return `
+    <article class="fleet-detail-card fleet-driver-reports-link">
+      <div class="fleet-card-head">
+        <div>
+          <h3>Hlášení řidičů</h3>
+          <p>Pouze související data z existujícího modulu, bez formuláře a bez QR workflow.</p>
+        </div>
+        <span>${escapeHtml(summary.openReports.length ? `${summary.openReports.length} otevřená` : "bez otevřeného hlášení")}</span>
+      </div>
+      <div class="fleet-driver-report-stats">
+        <div><span>Otevřená hlášení</span><strong>${escapeHtml(String(summary.openReports.length))}</strong></div>
+        <div><span>Čeká na díl</span><strong>${escapeHtml(String(summary.waitingPartReports.length))}</strong></div>
+        <div><span>Čeká na VIN</span><strong>${escapeHtml(String(summary.waitingVinReports.length))}</strong></div>
+        <div><span>Předáno Patrikovi</span><strong>${escapeHtml(summary.handedToPatrikReports.length ? "ano" : "ne")}</strong></div>
+      </div>
+      ${last ? `
+        <dl class="fleet-human-list">
+          <div><dt>Poslední hlášení</dt><dd>${escapeHtml(driverReportShortText(last.defectDescription || last.probablePart || last.defectType, 120))}</dd></div>
+          <div><dt>Stav</dt><dd>${escapeHtml(driverReportStatusLabel(last.status))}</dd></div>
+          <div><dt>Další krok</dt><dd>${escapeHtml(driverReportNextStep(last))}</dd></div>
+        </dl>
+      ` : `
+        <div class="fleet-empty-state fleet-empty-state--calm">
+          <strong>Zatím nejsou dostupná data.</strong>
+          <span>Jakmile bude k vozidlu přiřazené hlášení, ukáže se tady počet, poslední stav a proklik.</span>
+        </div>
+      `}
+      ${hasDriverReportsAccess && primary
+        ? fleetActionLink("Otevřít v Hlášení řidičů", fleetReportLink(primary), "Otevře se detail hlášení v modulu Hlášení řidičů. Ve Vozovém parku se nic nezmění.", { primary: true })
+        : ""}
+    </article>
+  `;
+}
+
+function fleetTermsDetail(vehicle = {}) {
+  const terms = fleetVehicleTerms(vehicle);
+  return `
+    <article class="fleet-detail-card">
+      <div class="fleet-card-head">
+        <div>
+          <h3>Termíny</h3>
+          <p>STK, emise, revize, pojištění, dálniční známka a servisní intervaly.</p>
+        </div>
+      </div>
+      <div class="fleet-term-list">
+        ${terms.map((term) => `
+          <div class="fleet-term-row fleet-term-row--${escapeHtml(term.status)}">
+            <span>${escapeHtml(term.label)}</span>
+            <strong>${escapeHtml(term.date ? fleetFormatDate(term.date) : "Zatím nejsou dostupná data.")}</strong>
+            <small>${escapeHtml(Number.isFinite(term.days) ? fleetDaysText(term.days) : "bez data")} · ${escapeHtml(term.statusLabel)}</small>
+            <em>${escapeHtml(term.recommendation)}</em>
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function fleetServiceDetail(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle);
+  const serviceReports = reports.openReports.filter((report) => ["service_scheduled", "part_arrived", "waiting_diagnostics", "new_report", "ordered"].includes(report.status));
+  return `
+    <article class="fleet-detail-card">
+      <div class="fleet-card-head">
+        <div>
+          <h3>Servisní stav</h3>
+          <p>Servisní případy, čekající díly a doporučení bez duplikace workflow Hlášení řidičů.</p>
+        </div>
+      </div>
+      <dl class="fleet-human-list">
+        <div><dt>Poslední servis</dt><dd>${escapeHtml(fleetVehicleDisplayValue(vehicle.lastServiceDate, "Zatím nejsou dostupná data."))}</dd></div>
+        <div><dt>Příští plánovaný servis</dt><dd>${escapeHtml(fleetVehicleDisplayValue(vehicle.nextServiceDate, "Zatím nejsou dostupná data."))}</dd></div>
+        <div><dt>Otevřené servisní případy</dt><dd>${escapeHtml(String(serviceReports.length))}</dd></div>
+        <div><dt>Čekající díly</dt><dd>${escapeHtml(String(reports.waitingPartReports.length))}</dd></div>
+        <div><dt>Servisní doporučení</dt><dd>${escapeHtml(fleetVehicleRecommendation(vehicle))}</dd></div>
+      </dl>
+      ${serviceReports.length ? `
+        <div class="fleet-linked-list">
+          ${serviceReports.slice(0, 4).map((report) => `
+            <article>
+              <strong>${escapeHtml(driverReportShortText(report.defectDescription || report.defectType, 84))}</strong>
+              <span>${escapeHtml(driverReportStatusLabel(report.status))}</span>
+              ${fleetActionLink("Otevřít v Hlášení řidičů", fleetReportLink(report), "Otevře se související hlášení nebo servisní případ. Servis se nic neodešle bez potvrzení člověka.")}
+            </article>
+          `).join("")}
+        </div>
+      ` : ""}
+    </article>
+  `;
+}
+
+function fleetDocumentsDetail() {
+  const documentTypes = [
+    "Technický průkaz",
+    "Pojistná smlouva",
+    "Zelená karta",
+    "Protokol STK",
+    "Revizní zpráva",
+    "Servisní faktura",
+    "Fotografie"
+  ];
+  return `
+    <article class="fleet-detail-card">
+      <div class="fleet-card-head">
+        <div>
+          <h3>Dokumenty</h3>
+          <p>Rychlý přístup k dokladům vozidla, jakmile budou dostupné přes cloud API/R2.</p>
+        </div>
+      </div>
+      <div class="fleet-document-type-grid">
+        ${documentTypes.map((type) => `
+          <article>
+            <strong>${escapeHtml(type)}</strong>
+            <span>Zatím nejsou dostupná data.</span>
+            <div>
+              <button class="secondary-link" type="button" disabled>Otevřít</button>
+              <button class="secondary-link" type="button" disabled>Stáhnout</button>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function fleetCostsDetail(vehicle = {}) {
+  const rows = [
+    ["Náklady tento měsíc", vehicle.costsThisMonth],
+    ["Náklady za 12 měsíců", vehicle.costsLast12Months],
+    ["Servis", vehicle.serviceCosts],
+    ["Pneumatiky", vehicle.tyreCosts],
+    ["Pojištění", vehicle.insuranceCosts],
+    ["Palivo", vehicle.fuelCosts],
+    ["Mytí", vehicle.washCosts],
+    ["Opravy", vehicle.repairCosts],
+    ["Mimořádné náklady", vehicle.extraCosts]
+  ];
+  const hasCosts = rows.some(([, value]) => value !== undefined && value !== null && value !== "");
+  return `
+    <article class="fleet-detail-card">
+      <div class="fleet-card-head">
+        <div>
+          <h3>Náklady</h3>
+          <p>Ekonomika vozidla, cena na měsíc a anomálie nákladů.</p>
+        </div>
+      </div>
+      ${hasCosts ? `
+        <div class="fleet-cost-grid">
+          ${rows.map(([label, value]) => `
+            <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(fleetVehicleDisplayValue(value))}</strong></div>
+          `).join("")}
+        </div>
+      ` : `
+        <div class="fleet-empty-state fleet-empty-state--calm">
+          <strong>Zatím nejsou dostupná data.</strong>
+          <span>Nákladové anomálie se tady ukážou po napojení faktur, servisu, paliva nebo dalších nákladových zdrojů.</span>
+        </div>
+      `}
+    </article>
+  `;
+}
+
+function fleetTimelineDetail(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle).reports.slice(0, 6).map((report) => ({
+    date: report.reportedAt || report.createdAt,
+    title: "Hlášení řidičů",
+    text: driverReportShortText(report.defectDescription || report.defectType, 100),
+    href: fleetReportLink(report)
+  }));
+  const events = [
+    vehicle.updatedAt ? { date: vehicle.updatedAt, title: "Aktualizace vozidla", text: fleetVehicleDisplayValue(vehicle.vistosVehicleName || vehicle.internalNumber) } : null,
+    vehicle.driverAssignmentUpdatedAt ? { date: vehicle.driverAssignmentUpdatedAt, title: "Změna řidiče", text: fleetVehicleDisplayValue(vehicle.assignedDriverName) } : null,
+    vehicle.stkValidTo ? { date: vehicle.stkValidTo, title: "STK", text: fleetTermRecommendation("STK", fleetDaysUntil(vehicle.stkValidTo)) } : null,
+    vehicle.insuranceValidTo ? { date: vehicle.insuranceValidTo, title: "Pojištění", text: fleetTermRecommendation("Pojištění", fleetDaysUntil(vehicle.insuranceValidTo)) } : null,
+    ...reports
+  ].filter(Boolean).sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")));
+
+  return `
+    <article class="fleet-detail-card fleet-detail-card--wide" id="fleet-timeline">
+      <div class="fleet-card-head">
+        <div>
+          <h3>Časová osa</h3>
+          <p>Chronologie stavů, termínů, hlášení, dokumentů a změn řidiče.</p>
+        </div>
+      </div>
+      ${events.length ? `
+        <ol class="fleet-timeline">
+          ${events.map((event) => `
+            <li>
+              <time>${escapeHtml(formatDateTime(event.date) || fleetFormatDate(event.date) || "-")}</time>
+              <strong>${escapeHtml(event.title)}</strong>
+              <span>${escapeHtml(event.text || "Záznam bez poznámky")}</span>
+              ${event.href ? fleetActionLink("Otevřít v Hlášení řidičů", event.href, "Otevře se související hlášení v samostatném modulu. Ve Vozovém parku se nic nezmění.") : ""}
+            </li>
+          `).join("")}
+        </ol>
+      ` : `
+        <div class="fleet-empty-state fleet-empty-state--calm">
+          <strong>Zatím nejsou dostupná data.</strong>
+          <span>Časová osa se naplní změnami stavu, termíny, servisy, dokumenty a hlášeními.</span>
+        </div>
+      `}
+    </article>
+  `;
+}
+
+function fleetPrimaryAction(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle);
+  const primaryReport = reports.waitingPartReports[0] || reports.openReports[0] || null;
+  if (primaryReport) {
+    const waitsForPart = fleetReportWaitsForPart(primaryReport);
+    return waitsForPart
+      ? fleetActionLink("Ověřit díl", fleetReportLink(primaryReport), "Otevře se související hlášení nebo servisní případ, kde lze ověřit stav dílu. Díl se neobjedná automaticky.", { primary: true })
+      : fleetActionLink("Otevřít související hlášení", fleetReportLink(primaryReport), "Otevře se detail hlášení v modulu Hlášení řidičů. Ve Vozovém parku se nic nezmění.", { primary: true });
+  }
+  const insuranceDays = fleetDaysUntil(vehicle.insuranceValidTo);
+  if (Number.isFinite(insuranceDays) && insuranceDays <= 30) {
+    return fleetActionButton("Obnovit pojištění", "documents", {
+      vehicleId: vehicle.id,
+      target: "fleet-documents",
+      primary: true,
+      help: "Otevře dokumenty vozidla pro přípravu obnovy pojištění. Nic se neodešle mimo systém bez potvrzení člověka."
+    });
+  }
+  const term = fleetNearestTerm(vehicle);
+  if (term && term.days <= 30) {
+    return fleetActionButton("Naplánovat servis", "service", {
+      vehicleId: vehicle.id,
+      primary: true,
+      help: "Vytvoří se pouze návrh servisního úkolu v pracovním pohledu. Servisu se nic neodešle bez potvrzení člověka."
+    });
+  }
+  return fleetActionButton("Upravit vozidlo", "settings", {
+    vehicleId: vehicle.id,
+    primary: true,
+    help: "Otevře nastavení a evidenční údaje vozidla. Důležité změny musí projít přes backend a audit."
+  });
+}
+
+function fleetDetailActions(vehicle = {}) {
+  return `
+    <section class="fleet-detail-card fleet-detail-card--actions" aria-labelledby="fleet-detail-actions-title">
+      <div>
+        <h3 id="fleet-detail-actions-title">Akce</h3>
+        <p>Zobrazuje se jedna primární akce podle aktuálního stavu vozidla.</p>
+      </div>
+      <div class="fleet-detail-primary-action">
+        ${fleetPrimaryAction(vehicle)}
+      </div>
+      <div class="fleet-detail-secondary-actions">
+        ${fleetActionButton("Přidat poznámku", "settings", { vehicleId: vehicle.id, help: "Otevře nastavení pro poznámku. Poznámka se neuloží bez potvrzení přes backend." })}
+        ${fleetActionButton("Změnit řidiče", "settings", { vehicleId: vehicle.id, help: "Přejde na přiřazení řidiče. Změna se uloží pouze přes cloud API a zapíše k vozidlu." })}
+        ${fleetActionButton("Přidat fakturu", "costs", { vehicleId: vehicle.id, help: "Přejde do nákladů. Faktura se nevytvoří ani neodešle bez potvrzení člověka." })}
+        ${fleetActionButton("Zobrazit historii", "timeline", { vehicleId: vehicle.id, help: "Zobrazí časovou osu událostí vozidla. Nic se tím nemění." })}
+        ${fleetActionLink("Přejít do Hlášení řidičů", DRIVER_REPORT_ROUTE, "Otevře samostatný modul Hlášení řidičů. Vozový park nepřebírá jeho workflow.")}
+      </div>
+    </section>
+  `;
+}
+
 function fleetDashboardSection(activeId) {
-  const summary = fleetVehiclesState.summary || {};
+  const summary = fleetSummaryMetrics();
   const isReady = fleetVehiclesState.apiStatus === "ready";
   const valueFor = (metricId) => {
     if (fleetVehiclesState.loading) {
       return "…";
     }
-    if (isReady && Number.isFinite(Number(summary[metricId]))) {
+    if (Number.isFinite(Number(summary[metricId]))) {
       return String(summary[metricId]);
     }
     return "—";
   };
-  const statusFor = () => {
-    if (fleetVehiclesState.error) {
-      return "Chyba načtení";
-    }
-    if (isReady) {
-      return fleetVehiclesSourceLabel();
-    }
-    if (fleetVehiclesState.loading) {
-      return "Načítám";
-    }
-    return FLEET_API_WAITING_LABEL;
-  };
+  const priorityItems = fleetPriorityVehicles(5);
+  const riskItems = fleetVehiclesState.vehicles
+    .flatMap((vehicle) => {
+      const reports = fleetDriverReportSummary(vehicle);
+      const terms = fleetImportantTerms(vehicle).filter((term) => term.days <= 30);
+      return [
+        ...terms.map((term) => ({
+          tone: term.days < 0 ? "risk" : "warning",
+          title: `${term.label} ${fleetDaysText(term.days)}`,
+          text: `${fleetVehicleDisplayValue(vehicle.licensePlate || vehicle.tcarsLicensePlate)} · ${fleetTermRecommendation(term.label, term.days)}`,
+          vehicle
+        })),
+        ...reports.waitingPartReports.slice(0, 1).map((report) => ({
+          tone: "warning",
+          title: "Vozidlo čeká na díl",
+          text: `${fleetVehicleDisplayValue(vehicle.licensePlate || vehicle.tcarsLicensePlate)} · ${driverReportShortText(report.defectDescription || report.probablePart || "otevřené hlášení", 84)}`,
+          vehicle,
+          report
+        })),
+        ...reports.safetyReports.slice(0, 1).map((report) => ({
+          tone: "risk",
+          title: "Bezpečnostní riziko",
+          text: `${fleetVehicleDisplayValue(vehicle.licensePlate || vehicle.tcarsLicensePlate)} · ${driverReportShortText(report.defectDescription || report.defectType, 84)}`,
+          vehicle,
+          report
+        }))
+      ];
+    })
+    .slice(0, 8);
+  const serviceSummary = [
+    { label: "Čeká na servis", value: fleetVehiclesState.vehicles.filter((vehicle) => fleetDriverReportSummary(vehicle).openReports.some((report) => ["new_report", "waiting_diagnostics"].includes(report.status))).length },
+    { label: "V servisu", value: summary.inService },
+    { label: "Čeká na díl", value: summary.waitingPart },
+    { label: "Díl dorazil", value: fleetVehiclesState.vehicles.filter((vehicle) => fleetDriverReportSummary(vehicle).openReports.some((report) => report.status === "part_arrived")).length },
+    { label: "Čeká na schválení", value: fleetVehiclesState.vehicles.filter((vehicle) => fleetVehicleOperationalStatus(vehicle) === "waiting_approval").length },
+    { label: "Vyřešeno", value: (Array.isArray(driverReportsState.items) ? driverReportsState.items : []).filter((report) => report.status === "completed").length }
+  ];
 
   return `
-    <section class="fleet-section" id="fleet-dashboard" aria-labelledby="fleet-dashboard-title" ${fleetPanelAttributes("dashboard", activeId)}>
+    <section class="fleet-section fleet-overview" id="fleet-overview" aria-labelledby="fleet-overview-title" ${fleetPanelAttributes("overview", activeId)}>
       ${fleetSectionHeader(
-        "fleet-dashboard-title",
-        "Dashboard",
-        "Centrální přehled provozního stavu vozidel a blížících se termínů.",
-        { badgeText: isReady ? fleetVehiclesSourceLabel() : FLEET_API_WAITING_LABEL }
+        "fleet-overview-title",
+        "Přehled",
+        "Co je dnes potřeba řešit u firemních vozidel.",
+        { badge: false }
       )}
       <div class="fleet-kpi-grid" aria-label="Přehled vozového parku">
         ${FLEET_DASHBOARD_METRICS.map((metric) => `
           <article class="fleet-kpi">
             <span>${escapeHtml(metric.label)}</span>
             <strong>${escapeHtml(valueFor(metric.id))}</strong>
-            <small>${escapeHtml(statusFor())}</small>
+            <small>${escapeHtml(isReady ? "aktuální přehled" : fleetVehiclesState.loading ? "načítám" : "čeká na data")}</small>
           </article>
         `).join("")}
       </div>
-      ${isReady
-        ? `<p class="fleet-api-note">Dashboard používá stejný read-only zdroj jako seznam vozidel.<span>${escapeHtml(fleetVehiclesSourceDescription())}</span></p>`
-        : fleetApiNotice("GET /api/vehicles/summary")}
+
+      <section class="fleet-work-block" aria-labelledby="fleet-today-title">
+        <div class="fleet-work-block__head">
+          <h3 id="fleet-today-title">Dnes řešit</h3>
+          <span>max. 5 položek</span>
+        </div>
+        <div class="fleet-priority-grid">
+          ${priorityItems.length ? priorityItems.map(({ vehicle }) => {
+            const reports = fleetDriverReportSummary(vehicle);
+            const primaryReport = reports.waitingPartReports[0] || reports.safetyReports[0] || reports.openReports[0] || null;
+            const responsible = vehicle.assignedDriverName || vehicle.driverAssignmentUpdatedByName || "odpovědná osoba zatím není uvedená";
+            return `
+              <article class="fleet-priority-card fleet-priority-card--${escapeHtml(fleetVehicleStatusTone(vehicle))}">
+                <div class="fleet-priority-card__top">
+                  <span>${escapeHtml(fleetVehicleStatusLabel(vehicle))}</span>
+                  <strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.licensePlate || vehicle.tcarsLicensePlate))}</strong>
+                </div>
+                <h4>${escapeHtml(fleetVehicleDisplayValue(fleetVehicleModel(vehicle) || vehicle.internalNumber || vehicle.vistosVehicleName, "Vozidlo"))}</h4>
+                <dl>
+                  <div><dt>Řidič / odpovědný</dt><dd>${escapeHtml(responsible)}</dd></div>
+                  <div><dt>Problém</dt><dd>${escapeHtml(fleetVehicleProblem(vehicle))}</dd></div>
+                  <div><dt>Důvod priority</dt><dd>${escapeHtml(primaryReport ? "Vozidlo má otevřené související hlášení." : "Blíží se provozní nebo právní termín.")}</dd></div>
+                  <div><dt>Doporučený krok</dt><dd>${escapeHtml(fleetVehicleRecommendation(vehicle))}</dd></div>
+                </dl>
+                ${fleetActionLink("Otevřít vozidlo", fleetVehicleRoute(vehicle), "Otevře se karta vozidla ve Vozovém parku. Samotným otevřením se nic nezmění.", { primary: true })}
+              </article>
+            `;
+          }).join("") : `
+            <div class="fleet-empty-state fleet-empty-state--calm">
+              <strong>Žádné vozidlo teď nevyžaduje okamžitý zásah.</strong>
+              <span>${fleetVehiclesState.loading ? "Načítám vozidla." : "Po načtení dat se tady ukážou jen věci, které mají provozní, právní nebo finanční dopad."}</span>
+            </div>
+          `}
+        </div>
+      </section>
+
+      <div class="fleet-overview-grid">
+        <section class="fleet-work-block" aria-labelledby="fleet-risks-title">
+          <div class="fleet-work-block__head">
+            <h3 id="fleet-risks-title">Termíny a rizika</h3>
+            <span>${escapeHtml(String(riskItems.length))}</span>
+          </div>
+          <div class="fleet-risk-list">
+            ${riskItems.length ? riskItems.map((item) => `
+              <article class="fleet-risk-item fleet-risk-item--${escapeHtml(item.tone)}">
+                <strong>${escapeHtml(item.title)}</strong>
+                <span>${escapeHtml(item.text)}</span>
+                ${item.report ? fleetActionLink("Otevřít v Hlášení řidičů", fleetReportLink(item.report), "Otevře se detail hlášení v modulu Hlášení řidičů. Ve Vozovém parku se nic nezmění.") : fleetActionLink("Otevřít vozidlo", fleetVehicleRoute(item.vehicle), "Otevře se karta vozidla ve Vozovém parku.")}
+              </article>
+            `).join("") : `
+              <div class="fleet-empty-state fleet-empty-state--calm">
+                <strong>Bez provozních rizik v načtených datech.</strong>
+                <span>Končící STK, revize, pojištění, čekající díly a bezpečnostní závady se ukážou tady.</span>
+              </div>
+            `}
+          </div>
+        </section>
+
+        <section class="fleet-work-block" aria-labelledby="fleet-service-parts-title">
+          <div class="fleet-work-block__head">
+            <h3 id="fleet-service-parts-title">Servis a díly</h3>
+            <span>stav práce</span>
+          </div>
+          <div class="fleet-service-summary">
+            ${serviceSummary.map((item) => `
+              <article>
+                <span>${escapeHtml(item.label)}</span>
+                <strong>${escapeHtml(String(item.value))}</strong>
+              </article>
+            `).join("")}
+          </div>
+        </section>
+      </div>
+
+      <section class="fleet-work-block fleet-work-block--compact" aria-labelledby="fleet-ok-title">
+        <div>
+          <h3 id="fleet-ok-title">Vozidla bez problému</h3>
+          <p>${escapeHtml(`${fleetVehiclesWithoutProblemCount()} vozidel je bez otevřeného problému.`)}</p>
+        </div>
+        ${fleetActionLink("Zobrazit vozidla", `${FLEET_ROUTE}#fleet-vehicles`, "Přejde na evidenci vozidel. Filtry a data se tím nemění.")}
+      </section>
     </section>
   `;
 }
@@ -9262,6 +10145,18 @@ function fleetFiltersSection() {
 
   return `
     <form class="fleet-filters" aria-label="Filtry vozidel" data-fleet-filters>
+      <div class="fleet-quick-filters" role="group" aria-label="Rychlé filtry vozidel">
+        ${FLEET_QUICK_FILTERS.map((filter) => `
+          <button
+            class="fleet-filter-chip ${filters.quick === filter.id ? "fleet-filter-chip--active" : ""}"
+            type="button"
+            data-fleet-quick-filter="${escapeHtml(filter.id)}"
+            aria-pressed="${filters.quick === filter.id ? "true" : "false"}"
+          >
+            ${escapeHtml(filter.label)}
+          </button>
+        `).join("")}
+      </div>
       <label>
         <span>Stav</span>
         <select name="status" data-fleet-filter>
@@ -9305,7 +10200,7 @@ function fleetFiltersSection() {
       </label>
       <label class="fleet-filter-search">
         <span>Hledat</span>
-        <input name="search" type="search" value="${escapeHtml(filters.search)}" placeholder="Název, SPZ, VIN, řidič" data-fleet-filter>
+        <input name="search" type="search" value="${escapeHtml(filters.search)}" placeholder="SPZ, VIN, řidič, značka, model, závada, hlášení, servis, pojistka, faktura, díl" data-fleet-filter>
       </label>
       <button class="secondary-link" type="button" data-fleet-reset-filters>Reset</button>
     </form>
@@ -9356,6 +10251,7 @@ function fleetVehicleDriverOptions() {
 }
 
 function fleetVehicleSearchText(vehicle = {}) {
+  const reports = fleetDriverReportSummary(vehicle).reports;
   return normalizeAccessSearchText([
     vehicle.id,
     vehicle.vehicleId,
@@ -9370,10 +10266,29 @@ function fleetVehicleSearchText(vehicle = {}) {
     vehicle.brand,
     vehicle.model,
     vehicle.assignedDriverName,
+    vehicle.assignedDriverEmail,
+    vehicle.assignedDriverPhone,
     vehicle.vistosVehicleCategory,
     vehicle.vistosVehicleStatus,
+    vehicle.insuranceCompany,
+    vehicle.insurancePolicyNumber,
+    vehicle.lastServiceDate,
+    vehicle.nextServiceDate,
     vehicle.source,
-    vehicle.telemetrySource
+    vehicle.telemetrySource,
+    ...reports.flatMap((report) => [
+      report.reportId,
+      report.driverName,
+      report.defectType,
+      report.defectDescription,
+      report.probablePart,
+      report.verifiedPart,
+      report.partName,
+      report.partOrderNumber,
+      report.serviceTechnician,
+      report.serviceNote,
+      report.note
+    ])
   ].join(" "));
 }
 
@@ -9407,14 +10322,31 @@ function fleetVehicleHasOpenDefect(vehicle = {}) {
 
 function fleetVehicleMatchesFilters(vehicle = {}) {
   const filters = fleetUiState.vehicleFilters;
+  const quick = String(filters.quick || "all");
   const status = String(filters.status || "all");
   const type = String(filters.type || "all");
   const driver = String(filters.driver || "all");
   const terms = String(filters.terms || "all");
   const defects = String(filters.defects || "all");
   const query = normalizeAccessSearchText(filters.search || "");
+  const operationalStatus = fleetVehicleOperationalStatus(vehicle);
+  const reportSummary = fleetDriverReportSummary(vehicle);
+  const typeText = normalizeAccessSearchText(vehicle.vehicleType || vehicle.bodyType || vehicle.vistosVehicleCategory || vehicle.model || "");
 
-  if (status !== "all" && vehicle.status !== status) {
+  if (quick === "attention" && !["attention", "waiting_part", "service", "waiting_approval", "risk", "out_of_order"].includes(operationalStatus)) return false;
+  if (quick === "open_report" && !reportSummary.openReports.length) return false;
+  if (quick === "waiting_part" && !reportSummary.waitingPartReports.length) return false;
+  if (quick === "stk_due" && !fleetVehicleHasStkDue(vehicle)) return false;
+  if (quick === "insurance_due" && !fleetVehicleHasInsuranceDue(vehicle)) return false;
+  if (quick === "service" && operationalStatus !== "service") return false;
+  if (quick === "out_of_order" && operationalStatus !== "out_of_order") return false;
+  if (quick === "high_costs") return false;
+  if (quick === "personal" && !/(osob|passenger|car)/.test(typeText)) return false;
+  if (quick === "truck" && !/(naklad|náklad|svoz|kontejner|hak|hák|naves|návěs|truck|lkw)/.test(typeText)) return false;
+  if (quick === "tech" && !/(technik|stroj|manipul|jerab|jeřab|special)/.test(typeText)) return false;
+  if (quick === "trailers" && !/(prives|přívěs|naves|návěs|trailer)/.test(typeText)) return false;
+
+  if (status !== "all" && operationalStatus !== status) {
     return false;
   }
 
@@ -9430,7 +10362,7 @@ function fleetVehicleMatchesFilters(vehicle = {}) {
     return false;
   }
 
-  if (defects === "open" && !fleetVehicleHasOpenDefect(vehicle)) {
+  if (defects === "open" && !fleetVehicleHasOpenDefect(vehicle) && !reportSummary.openReports.length) {
     return false;
   }
 
@@ -9441,6 +10373,7 @@ function fleetVehicleFiltersActive() {
   const filters = fleetUiState.vehicleFilters;
   return Boolean(
     normalizeAccessSearchText(filters.search || "") ||
+    filters.quick !== "all" ||
     filters.status !== "all" ||
     filters.type !== "all" ||
     filters.driver !== "all" ||
@@ -9665,26 +10598,30 @@ function fleetVehiclesStatusText() {
 }
 
 function fleetVehicleRow(vehicle) {
+  const reportSummary = fleetDriverReportSummary(vehicle);
+  const lastService = vehicle.lastServiceDate || vehicle.nextServiceDate || "";
   const cells = [
-    ["Název", vehicle.internalNumber || vehicle.vistosVehicleName],
+    ["Stav", fleetVehicleStatusLabel(vehicle)],
     ["SPZ", vehicle.licensePlate],
-    ["Typ", vehicle.vehicleType || vehicle.source || fleetVehiclesSourceLabel()],
     ["Značka/model", fleetVehicleModel(vehicle)],
-    ["Řidič", vehicle.assignedDriverName],
-    ["Stav", fleetStatusLabel(vehicle.status)],
-    ["STK do", vehicle.stkValidTo],
-    ["Revize do", vehicle.tachographValidTo || vehicle.craneRevisionValidTo || vehicle.liftRevisionValidTo || vehicle.pressureEquipmentRevisionValidTo],
-    ["Pojištění do", vehicle.insuranceValidTo],
-    ["Otevřené závady", fleetVehicleCountValue(vehicle.openDefects)]
+    ["Typ", vehicle.vehicleType || vehicle.source || fleetVehiclesSourceLabel()],
+    ["Řidič / odpovědná osoba", vehicle.assignedDriverName || vehicle.driverAssignmentUpdatedByName],
+    ["VIN", vehicle.vin],
+    ["Nájezd", Number.isFinite(Number(vehicle.mileageKm)) ? `${Number(vehicle.mileageKm).toLocaleString("cs-CZ")} km` : ""],
+    ["STK", vehicle.stkValidTo],
+    ["Pojištění", vehicle.insuranceValidTo],
+    ["Poslední servis", lastService],
+    ["Otevřená hlášení", reportSummary.openReports.length ? String(reportSummary.openReports.length) : "0"],
+    ["Doporučená akce", fleetVehicleRecommendation(vehicle)]
   ];
 
   return `
-    <div class="fleet-table__row" role="row">
+    <div class="fleet-table__row fleet-table__row--${escapeHtml(fleetVehicleStatusTone(vehicle))}" role="row">
       ${cells.map(([label, value]) => `
         <span role="cell" data-label="${escapeHtml(label)}">${escapeHtml(fleetVehicleDisplayValue(value))}</span>
       `).join("")}
       <span role="cell" data-label="Akce">
-        ${fleetActionButton("Detail", "detail", { vehicleId: vehicle.id })}
+        ${fleetActionLink("Otevřít", fleetVehicleRoute(vehicle), "Otevře kartu vozidla ve Vozovém parku. Samotným otevřením se nic nezmění.")}
       </span>
     </div>
   `;
@@ -9724,10 +10661,10 @@ function fleetVehiclesTableBody() {
   }
 
   return `
-    <div class="fleet-table__empty" role="row">
-      <strong>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Bez vozidel" : FLEET_API_WAITING_LABEL)}</strong>
-      <span>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Vistos Vehicle nevrátil žádná vozidla." : fleetVehiclesState.message || "Seznam se načte z cloud API. Produkční vozidla nejsou ve frontendu napevno.")}</span>
-    </div>
+      <div class="fleet-table__empty" role="row">
+        <strong>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Bez vozidel" : FLEET_API_WAITING_LABEL)}</strong>
+        <span>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Zatím nejsou dostupná data." : fleetVehiclesState.message || "Seznam se načte z cloud API. Produkční vozidla nejsou ve frontendu napevno.")}</span>
+      </div>
   `;
 }
 
@@ -9742,14 +10679,13 @@ function fleetVehiclesSection(activeId) {
     <section class="fleet-section" id="fleet-vehicles" aria-labelledby="fleet-vehicles-title" ${fleetPanelAttributes("vehicles", activeId)}>
       ${fleetSectionHeader(
         "fleet-vehicles-title",
-        "Seznam vozidel",
-        "Vozidla, STK, revize, závady a servisní historie na jednom místě.",
-        { badgeText: fleetVehiclesState.apiStatus === "ready" ? fleetVehiclesSourceLabel() : FLEET_API_WAITING_LABEL }
+        "Vozidla",
+        "Hlavní evidence vozidel s termíny, otevřenými hlášeními a nejbližší doporučenou akcí.",
+        { badge: false }
       )}
       ${fleetFiltersSection()}
-      <p class="fleet-api-note">
+      <p class="fleet-operational-note">
         ${escapeHtml(fleetVehiclesStatusText())}
-        <span>${escapeHtml(fleetVehiclesSourceDescription())} Přiřazení řidiče ukládá KSO do D1.</span>
         ${filterCountText ? `<span>${escapeHtml(filterCountText)}</span>` : ""}
       </p>
       <div class="fleet-table" role="table" aria-label="Seznam vozidel">
@@ -9757,12 +10693,6 @@ function fleetVehiclesSection(activeId) {
           ${FLEET_LIST_COLUMNS.map((column) => `<span role="columnheader">${escapeHtml(column)}</span>`).join("")}
         </div>
         ${fleetVehiclesTableBody()}
-      </div>
-      <div class="fleet-actions-preview" aria-label="Akce vozidla">
-        ${fleetActionButton("Detail", "detail")}
-        ${fleetActionButton("Přidat závadu", "defect")}
-        ${fleetActionButton("Přidat servis", "service")}
-        ${fleetActionButton("Dokumenty", "documents", { target: "fleet-documents" })}
       </div>
     </section>
   `;
@@ -9776,10 +10706,10 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
     : safeVehicleId;
   const detailTitle = vehicleLabel ? `Detail vozidla ${vehicleLabel}` : "Detail vozidla";
   const detailDescription = vehicle
-    ? "Master údaje vozidla jsou read-only z Vistos Vehicle. T-Cars zůstává doplňkový/GPS zdroj a přiřazení řidiče ukládá KSO do D1."
+    ? "Rozhodovací karta vozidla: stav, termíny, související hlášení, servis, dokumenty, náklady a historie."
     : safeVehicleId
-      ? "Vozidlo zatím není v načteném seznamu. Zkuste obnovit seznam vozidel nebo zkontrolovat Vistos Vehicle preview."
-      : "Karta vozidla se otevře po výběru konkrétního záznamu z API.";
+      ? "Vozidlo zatím není v načteném seznamu. Zkuste obnovit seznam vozidel."
+      : "Karta vozidla se otevře po výběru konkrétního záznamu.";
 
   return `
     <section class="fleet-section fleet-section--wide" id="fleet-detail" aria-labelledby="fleet-detail-title" ${fleetPanelAttributes("detail", activeId)}>
@@ -9787,116 +10717,159 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
         "fleet-detail-title",
         detailTitle,
         detailDescription,
-        { badge: true }
+        { badge: false }
       )}
-      <div class="fleet-detail-shell">
-        <header class="fleet-detail-header">
-          <div>
-            <span>SPZ / interní číslo</span>
-            <strong>${escapeHtml(fleetVehicleDisplayValue(vehicle ? (vehicle.licensePlate || vehicle.tcarsLicensePlate || vehicle.internalNumber) : ""))}</strong>
-          </div>
-          <div>
-            <span>Značka / model</span>
-            <strong>${escapeHtml(fleetVehicleDisplayValue(vehicle ? fleetVehicleModel(vehicle) : ""))}</strong>
-          </div>
-          <div>
-            <span>Stav</span>
-            <strong>${escapeHtml(fleetStatusLabel(vehicle?.status))}</strong>
-          </div>
-          <div>
-            <span>Řidič</span>
-            <strong>${escapeHtml(fleetVehicleDisplayValue(vehicle?.assignedDriverName, "Doplnit řidiče"))}</strong>
-          </div>
-        </header>
-        <div class="fleet-detail-actions">
-          ${safeVehicleId ? `<a class="secondary-link" href="${routeHref(`${FLEET_ROUTE}#fleet-vehicles`)}" data-link>Zpět na seznam</a>` : ""}
-          ${fleetActionButton("Přidat závadu", "defect", { vehicleId: safeVehicleId })}
-          ${fleetActionButton("Přidat servis", "service", { vehicleId: safeVehicleId })}
-          ${fleetActionButton("Dokumenty", "documents", { vehicleId: safeVehicleId, target: "fleet-documents" })}
+      ${vehicle ? `
+        <div class="fleet-detail-shell">
+          <header class="fleet-detail-header fleet-detail-header--work">
+            <div><span>SPZ</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.licensePlate || vehicle.tcarsLicensePlate))}</strong></div>
+            <div><span>VIN</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.vin))}</strong></div>
+            <div><span>Značka</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.brand || vehicle.vistosVehicleName || vehicle.internalNumber))}</strong></div>
+            <div><span>Model</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.model || vehicle.internalNumber))}</strong></div>
+            <div><span>Rok</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.year))}</strong></div>
+            <div><span>Typ</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.vehicleType || vehicle.vistosVehicleCategory))}</strong></div>
+            <div><span>Aktuální stav</span><strong class="fleet-status-text fleet-status-text--${escapeHtml(fleetVehicleStatusTone(vehicle))}">${escapeHtml(fleetVehicleStatusLabel(vehicle))}</strong></div>
+            <div><span>Řidič / odpovědný</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.assignedDriverName, "Zatím není uvedeno"))}</strong></div>
+            <div><span>Provozuschopnost</span><strong>${escapeHtml(["out_of_order", "risk"].includes(fleetVehicleOperationalStatus(vehicle)) ? "vyžaduje ruční kontrolu" : "provozuschopné podle načtených dat")}</strong></div>
+            <div><span>Nájezd</span><strong>${escapeHtml(Number.isFinite(Number(vehicle.mileageKm)) ? `${Number(vehicle.mileageKm).toLocaleString("cs-CZ")} km` : "Zatím nejsou dostupná data.")}</strong></div>
+            <div><span>Poslední aktualizace</span><strong>${escapeHtml(formatDateTime(vehicle.updatedAt) || fleetFormatDate(vehicle.updatedAt) || "Zatím nejsou dostupná data.")}</strong></div>
+          </header>
+
+          <section class="fleet-detail-card fleet-detail-card--important" aria-labelledby="fleet-important-title">
+            <div class="fleet-card-head">
+              <div>
+                <h3 id="fleet-important-title">Co je důležité</h3>
+                <p>${escapeHtml(fleetVehicleImportantSummary(vehicle))}</p>
+              </div>
+              <span>Doporučení systému</span>
+            </div>
+            <div class="fleet-system-recommendation">
+              <strong>${escapeHtml(fleetVehicleRecommendation(vehicle))}</strong>
+              ${fleetExplanationButton("Proč to systém doporučuje?", fleetRecommendationReason(vehicle))}
+            </div>
+          </section>
+
+          ${fleetDriverAssignmentSection(vehicle)}
+          ${fleetDriverReportsDetail(vehicle)}
+          ${fleetTermsDetail(vehicle)}
+          ${fleetServiceDetail(vehicle)}
+          ${fleetDocumentsDetail(vehicle)}
+          ${fleetCostsDetail(vehicle)}
+          ${fleetTimelineDetail(vehicle)}
+          ${fleetDetailActions(vehicle)}
         </div>
-        ${vehicle ? fleetDriverAssignmentSection(vehicle) : ""}
-        ${vehicle ? fleetVehicleFacts(vehicle) : ""}
-        <div class="fleet-detail-grid">
-          <article>
-            <h3>Základní údaje</h3>
-            ${vehicle
-              ? fleetFieldChips(["id", "internalNumber", "licensePlate", "vin", "brand", "model", "assignedDriverId", "assignedDriverName"])
-              : fleetFieldChips(FLEET_VEHICLE_FIELDS.slice(0, 14))}
-          </article>
-          <article>
-            <h3>Technický stav</h3>
-            ${fleetFieldChips(FLEET_VEHICLE_FIELDS.slice(14, 24))}
-          </article>
-          <article>
-            <h3>Pojištění a provoz</h3>
-            ${fleetFieldChips(FLEET_VEHICLE_FIELDS.slice(24))}
-          </article>
+      ` : `
+        <div class="fleet-empty-state fleet-empty-state--calm">
+          <strong>${escapeHtml(safeVehicleId ? "Vozidlo nebylo v načtených datech nalezené." : "Vyberte vozidlo ze seznamu.")}</strong>
+          <span>Zatím nejsou dostupná data.</span>
+          ${fleetActionLink("Zpět na vozidla", `${FLEET_ROUTE}#fleet-vehicles`, "Vrátí vás na evidenci vozidel.")}
         </div>
-      </div>
-      ${vehicle
-        ? `<p class="fleet-api-note">Vistos Vehicle zůstává read-only master zdroj. T-Cars se používá jen jako doplněk pro GPS/telemetrii. Pole řidič je KSO vrstva pro přiřazení řidiče, Šarlotu a servisní párování.<span>GET/PATCH /api/vehicles/:id</span></p>`
-        : fleetApiNotice(safeVehicleId ? "GET/PATCH /api/vehicles/:id" : "GET /api/vehicles", FLEET_TAB_WAITING_MESSAGES.detail)}
+      `}
     </section>
   `;
 }
 
 function fleetTermsSection(activeId) {
+  const termRows = fleetVehiclesState.vehicles
+    .flatMap((vehicle) => fleetVehicleTerms(vehicle)
+      .filter((term) => Number.isFinite(term.days))
+      .map((term) => ({ vehicle, term })))
+    .sort((left, right) => left.term.days - right.term.days);
+  const priorityRows = termRows.filter(({ term }) => term.days <= 60);
+  const rows = priorityRows.length ? priorityRows : termRows.slice(0, 20);
   return `
     <section class="fleet-section" id="fleet-terms" aria-labelledby="fleet-terms-title" ${fleetPanelAttributes("terms", activeId)}>
       ${fleetSectionHeader(
         "fleet-terms-title",
         "Termíny",
-        "STK, emise, revize, tachograf, hasicí přístroje a pojištění.",
-        { badge: true }
+        "Provozní a právní platnosti podle priority.",
+        { badge: false }
       )}
-      <div class="fleet-term-grid">
-        ${FLEET_TERM_DEFINITIONS.map((term) => `
-          <article class="fleet-term fleet-term--waiting">
-            <span>${escapeHtml(term.label)}</span>
-            <strong>—</strong>
-            <small>${escapeHtml(FLEET_API_WAITING_LABEL)}</small>
+      <div class="fleet-priority-bands" aria-label="Priorita termínů">
+        ${[
+          ["Prošlé", rows.filter(({ term }) => term.days < 0).length, "risk"],
+          ["Do 7 dnů", rows.filter(({ term }) => term.days >= 0 && term.days <= 7).length, "risk"],
+          ["Do 30 dnů", rows.filter(({ term }) => term.days > 7 && term.days <= 30).length, "warning"],
+          ["Do 60 dnů", rows.filter(({ term }) => term.days > 30 && term.days <= 60).length, "warning"],
+          ["V pořádku", termRows.filter(({ term }) => term.days > 60).length, "ok"]
+        ].map(([label, value, tone]) => `
+          <article class="fleet-priority-band fleet-priority-band--${escapeHtml(tone)}">
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(String(value))}</strong>
           </article>
         `).join("")}
       </div>
-      ${fleetApiNotice("GET /api/vehicles", FLEET_TAB_WAITING_MESSAGES.terms)}
-    </section>
-  `;
-}
-
-function fleetDefectsSection(activeId) {
-  return `
-    <section class="fleet-section" id="fleet-defects" aria-labelledby="fleet-defects-title" ${fleetPanelAttributes("defects", activeId)}>
-      ${fleetSectionHeader(
-        "fleet-defects-title",
-        "Závady",
-        "Evidence otevřených a uzavřených závad podle vozidla, závažnosti a řešení.",
-        { badge: true }
-      )}
-      ${fleetFieldChips(FLEET_DEFECT_FIELDS)}
-      <div class="fleet-empty-state">
-        <strong>${escapeHtml(FLEET_API_WAITING_LABEL)}</strong>
-        <span>Závady se budou zapisovat pouze přes chráněné cloud API.</span>
-      </div>
-      ${fleetApiNotice("GET /api/vehicles/:id/defects", FLEET_TAB_WAITING_MESSAGES.defects)}
+      ${rows.length ? `
+        <div class="fleet-work-table" role="table" aria-label="Termíny vozidel">
+          <div class="fleet-work-table__header" role="row">
+            ${["Vozidlo", "SPZ", "Typ termínu", "Datum konce", "Do konce", "Odpovědný", "Doporučený krok"].map((column) => `<span role="columnheader">${escapeHtml(column)}</span>`).join("")}
+          </div>
+          ${rows.map(({ vehicle, term }) => `
+            <div class="fleet-work-table__row fleet-work-table__row--${escapeHtml(term.status)}" role="row">
+              <span role="cell" data-label="Vozidlo">${escapeHtml(fleetVehicleDisplayValue(fleetVehicleModel(vehicle) || vehicle.internalNumber || vehicle.vistosVehicleName))}</span>
+              <span role="cell" data-label="SPZ">${escapeHtml(fleetVehicleDisplayValue(vehicle.licensePlate || vehicle.tcarsLicensePlate))}</span>
+              <span role="cell" data-label="Typ termínu">${escapeHtml(term.label)}</span>
+              <span role="cell" data-label="Datum konce">${escapeHtml(fleetFormatDate(term.date))}</span>
+              <span role="cell" data-label="Do konce">${escapeHtml(fleetDaysText(term.days))}</span>
+              <span role="cell" data-label="Odpovědný">${escapeHtml(fleetVehicleDisplayValue(vehicle.assignedDriverName, "Zatím není uvedeno"))}</span>
+              <span role="cell" data-label="Doporučený krok">${escapeHtml(term.recommendation)}</span>
+            </div>
+          `).join("")}
+        </div>
+      ` : `
+        <div class="fleet-empty-state fleet-empty-state--calm">
+          <strong>Zatím nejsou dostupná data.</strong>
+          <span>Termíny se zobrazí po načtení STK, emisí, revizí, pojištění a servisních intervalů.</span>
+        </div>
+      `}
     </section>
   `;
 }
 
 function fleetServiceSection(activeId) {
+  const serviceCases = fleetVehiclesState.vehicles
+    .flatMap((vehicle) => fleetDriverReportSummary(vehicle).openReports
+      .filter((report) => ["new_report", "waiting_diagnostics", "waiting_part_identification", "part_identified", "ordered", "part_arrived", "service_scheduled"].includes(report.status))
+      .map((report) => ({ vehicle, report })));
   return `
     <section class="fleet-section" id="fleet-service" aria-labelledby="fleet-service-title" ${fleetPanelAttributes("service", activeId)}>
       ${fleetSectionHeader(
         "fleet-service-title",
-        "Servisní historie",
-        "Servisy, opravy, dodavatelé, náklady, stav kilometrů a další plánovaný servis.",
-        { badge: true }
+        "Servis",
+        "Plánované servisy, otevřené opravy, čekající díly a servisní historie.",
+        { badge: false }
       )}
-      ${fleetFieldChips(FLEET_SERVICE_FIELDS)}
-      <div class="fleet-empty-state">
-        <strong>${escapeHtml(FLEET_API_WAITING_LABEL)}</strong>
-        <span>Servisní záznamy se neukládají do prohlížeče ani do mock databáze.</span>
-      </div>
-      ${fleetApiNotice("GET /api/vehicles/:id/service-records", FLEET_TAB_WAITING_MESSAGES.service)}
+      ${serviceCases.length ? `
+        <div class="fleet-service-case-grid">
+          ${serviceCases.map(({ vehicle, report }) => `
+            <article class="fleet-service-case">
+              <div class="fleet-card-head">
+                <div>
+                  <h3>${escapeHtml(fleetVehicleDisplayValue(vehicle.licensePlate || vehicle.tcarsLicensePlate))}</h3>
+                  <p>${escapeHtml(fleetVehicleDisplayValue(fleetVehicleModel(vehicle) || vehicle.internalNumber || vehicle.vistosVehicleName))}</p>
+                </div>
+                <span>${escapeHtml(driverReportStatusLabel(report.status))}</span>
+              </div>
+              <dl class="fleet-human-list">
+                <div><dt>Důvod servisu</dt><dd>${escapeHtml(driverReportShortText(report.defectDescription || report.defectType, 120))}</dd></div>
+                <div><dt>Vazba na hlášení</dt><dd>${escapeHtml(report.reportId || report.id)}</dd></div>
+                <div><dt>Doporučený servisní úkon</dt><dd>${escapeHtml(driverReportNextStep(report))}</dd></div>
+                <div><dt>Priorita</dt><dd>${escapeHtml(report.priority || (fleetReportIsSafetyRisk(report) ? "ruční kontrola" : "běžná"))}</dd></div>
+                <div><dt>Servis / dodavatel</dt><dd>${escapeHtml(fleetVehicleDisplayValue(report.serviceTechnician, "Zatím nejsou dostupná data."))}</dd></div>
+                <div><dt>Odhad / skutečná cena</dt><dd>Zatím nejsou dostupná data.</dd></div>
+                <div><dt>Faktura / přílohy</dt><dd>Zatím nejsou dostupná data.</dd></div>
+                <div><dt>Odpovědný</dt><dd>${escapeHtml(fleetVehicleDisplayValue(report.assignedToName || vehicle.assignedDriverName, "Zatím není uvedeno"))}</dd></div>
+              </dl>
+              ${fleetActionLink("Otevřít v Hlášení řidičů", fleetReportLink(report), "Otevře se související hlášení. Vozový park nepřebírá servisní workflow.", { primary: true })}
+            </article>
+          `).join("")}
+        </div>
+      ` : `
+        <div class="fleet-empty-state fleet-empty-state--calm">
+          <strong>Zatím nejsou dostupná data.</strong>
+          <span>Servisní případy se zobrazí ze souvisejících hlášení a budoucích servisních záznamů. Nevzniká duplicitní fronta Hlášení řidičů.</span>
+        </div>
+      `}
     </section>
   `;
 }
@@ -9907,18 +10880,41 @@ function fleetDocumentsSection(activeId) {
       ${fleetSectionHeader(
         "fleet-documents-title",
         "Dokumenty",
-        "Technické průkazy, pojistky, servisní doklady, revizní protokoly a fotodokumentace.",
-        { badge: true }
+        "Rychlý přístup k dokladům vozidel.",
+        { badge: false }
       )}
-      ${fleetFieldChips(FLEET_DOCUMENT_FIELDS)}
-      <div class="fleet-empty-state">
-        <strong>${escapeHtml(FLEET_API_WAITING_LABEL)}</strong>
-        <span>Soubory musí jít přes cloud API a R2, ne přes lokální úložiště prohlížeče.</span>
+      <div class="fleet-document-filters" aria-label="Filtry dokumentů">
+        ${["Vozidlo", "Typ dokumentu", "Platnost", "Chybí dokument", "Končí platnost", "Nahráno nedávno"].map((label) => `<span>${escapeHtml(label)}</span>`).join("")}
       </div>
-      <div class="fleet-actions-preview">
-        ${fleetActionButton("Dokumenty", "documents")}
+      <div class="fleet-empty-state fleet-empty-state--calm">
+        <strong>Zatím nejsou dostupná data.</strong>
+        <span>Technické průkazy, pojistné smlouvy, zelené karty, STK protokoly, revizní zprávy, servisní faktury a fotografie se zobrazí po napojení dokumentového API.</span>
       </div>
-      ${fleetApiNotice("GET /api/vehicles/:id/documents", FLEET_TAB_WAITING_MESSAGES.documents)}
+    </section>
+  `;
+}
+
+function fleetCostsSection(activeId) {
+  return `
+    <section class="fleet-section" id="fleet-costs" aria-labelledby="fleet-costs-title" ${fleetPanelAttributes("costs", activeId)}>
+      ${fleetSectionHeader(
+        "fleet-costs-title",
+        "Náklady",
+        "Ekonomika vozidel, dodavatelé, servis, pojištění, palivo a anomálie.",
+        { badge: false }
+      )}
+      <div class="fleet-cost-overview">
+        ${["Podle vozidla", "Podle typu", "Podle dodavatele", "Servis", "Pojištění", "Pneumatiky", "Palivo", "Mimořádné opravy", "Cena na km", "Cena na měsíc"].map((label) => `
+          <article>
+            <span>${escapeHtml(label)}</span>
+            <strong>Zatím nejsou dostupná data.</strong>
+          </article>
+        `).join("")}
+      </div>
+      <div class="fleet-empty-state fleet-empty-state--calm">
+        <strong>Zatím nejsou dostupná data.</strong>
+        <span>Nákladové anomálie se zobrazí po napojení faktur, servisních nákladů, pojištění, paliva nebo dalších nákladových zdrojů.</span>
+      </div>
     </section>
   `;
 }
@@ -9928,9 +10924,9 @@ function fleetSettingsSection(user, activeId) {
     <section class="fleet-section fleet-section--wide" id="fleet-settings" aria-labelledby="fleet-settings-title" ${fleetPanelAttributes("settings", activeId)}>
       ${fleetSectionHeader(
         "fleet-settings-title",
-        "Nastavení / číselníky",
-        "Typy vozidel, interní stavy, termíny a budoucí napojení na cloud API.",
-        { badge: true }
+        "Nastavení",
+        "Číselníky, stavy, zdroje dat a bezpečné hranice Vozového parku.",
+        { badge: false }
       )}
       <div class="fleet-settings-grid">
         <article>
@@ -9948,24 +10944,56 @@ function fleetSettingsSection(user, activeId) {
           ${fleetFieldChips(FLEET_VEHICLE_TYPES)}
         </article>
         <article>
-          <h3>API endpointy</h3>
-          ${fleetFieldChips(FLEET_API_ENDPOINTS)}
+          <h3>Bezpečnostní hranice</h3>
+          <ul class="fleet-safety-list">
+            <li>Systém neobjedná díl bez potvrzení člověka.</li>
+            <li>Systém neobjedná servis bez potvrzení člověka.</li>
+            <li>Bezpečnostní závada se neuzavře automaticky.</li>
+            <li>Vyřazení vozidla vyžaduje ruční kontrolu.</li>
+          </ul>
         </article>
       </div>
-      ${fleetApiNotice("GET /api/vehicles/settings", FLEET_TAB_WAITING_MESSAGES.settings)}
-      ${fleetVistosVehiclePreviewSection(user)}
-      ${fleetVistosImportSection(user)}
+      <details class="fleet-diagnostics">
+        <summary>
+          <span>Diagnostika a import preview</span>
+          <small>Technické náhledy pro správce</small>
+        </summary>
+        <div class="fleet-diagnostics__body">
+          ${fleetFieldChips(FLEET_API_ENDPOINTS)}
+          ${fleetVistosVehiclePreviewSection(user)}
+          ${fleetVistosImportSection(user)}
+        </div>
+      </details>
+    </section>
+  `;
+}
+
+function fleetRulesAutomationSection(user, activeId) {
+  ensureModuleRulesData("fleet");
+  return `
+    <section class="fleet-section fleet-section--wide" id="fleet-rules-automation" aria-labelledby="fleet-rules-automation-title" ${fleetPanelAttributes("rules-automation", activeId)}>
+      ${moduleRulesAutomationPanel({
+        moduleKey: "fleet",
+        moduleName: "Vozový park",
+        user,
+        description: "Pravidla a doporučení Vozového parku slouží k upozornění, prioritě a auditu. Neprovádí autonomní objednávky, uzavírání závad ani vyřazení vozidla.",
+        cloudNote: "Pravidla v této fázi pouze evidují nebo doporučují další krok. Kritické akce vyžadují ruční potvrzení člověka.",
+        humanDetail: true
+      })}
     </section>
   `;
 }
 
 function fleetModulePage(moduleItem, user, options = {}) {
+  if (hasPermission(user, "driver-reports", "view")) {
+    ensureDriverReportsData({ renderAfter: false });
+  }
   const isDashboard = Boolean(options.isDashboard);
   const vehicleId = options.vehicleId || "";
   const activeTab = fleetActiveTab(vehicleId);
-  const title = vehicleId ? "Detail vozidla" : isDashboard ? "Vozový park dashboard" : "Vozový park";
+  const title = vehicleId ? "Detail vozidla" : "Vozový park";
   const description = vehicleId
-    ? "Detailová karta používá read-only vozidlo z T-Cars a KSO přiřazení řidiče pro Šarlotu a servisní párování."
+    ? "Detailová karta vozidla s termíny, hlášeními, servisem, dokumenty, náklady a historií."
     : "Evidence vozidel, technického stavu, STK, revizí, pojištění, závad a servisní historie.";
 
   return `
@@ -9987,10 +11015,8 @@ function fleetModulePage(moduleItem, user, options = {}) {
             <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
           </div>
           <div class="module-actions">
-            ${isDashboard ? `<a class="primary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Otevřít modul</a>` : ""}
+            ${isDashboard ? `<a class="primary-link" href="${routeHref(FLEET_ROUTE)}" data-link>Otevřít Vozový park</a>` : ""}
             ${vehicleId ? `<a class="secondary-link" href="${routeHref(`${FLEET_ROUTE}#fleet-vehicles`)}" data-link>Seznam vozidel</a>` : ""}
-            ${!isDashboard ? `<a class="secondary-link" href="${routeHref(`${FLEET_ROUTE}/dashboard`)}" data-link>Dashboard modulu</a>` : ""}
-            ${fleetActionButton("Přidat vozidlo", "addVehicle")}
           </div>
         </div>
       </section>
@@ -10002,10 +11028,11 @@ function fleetModulePage(moduleItem, user, options = {}) {
         ${fleetVehiclesSection(activeTab)}
         ${fleetDetailSection(vehicleId, activeTab)}
         ${fleetTermsSection(activeTab)}
-        ${fleetDefectsSection(activeTab)}
         ${fleetServiceSection(activeTab)}
+        ${fleetCostsSection(activeTab)}
         ${fleetDocumentsSection(activeTab)}
         ${fleetSettingsSection(user, activeTab)}
+        ${fleetRulesAutomationSection(user, activeTab)}
       </div>
       ${moduleFeedbackBoxFor(moduleItem, user, {
         moduleId: "vozovy-park",
@@ -28982,6 +30009,7 @@ function updateFleetVehicleFilter(field) {
 
 function resetFleetVehicleFilters() {
   fleetUiState.vehicleFilters = {
+    quick: "all",
     status: "all",
     type: "all",
     driver: "all",
@@ -32426,21 +33454,39 @@ function handleFleetAction(button) {
   }
 
   if (action === "defect") {
-    activateFleetTab("defects");
-    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.defect);
+    activateFleetTab("service");
+    setFleetActionMessage("Závady se ve Vozovém parku zobrazují jen jako vazby na existující hlášení a servisní případy.");
     return;
   }
 
   if (action === "service") {
     activateFleetTab("service");
-    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.service);
+    setFleetActionMessage("Servisní pohled je otevřený. Nic se neodesílá mimo systém bez potvrzení člověka.");
     return;
   }
 
   if (action === "documents") {
     activateFleetTab("documents");
-    setFleetActionMessage(FLEET_ACTION_WAITING_MESSAGES.documents);
+    setFleetActionMessage("Dokumenty jsou otevřené. Soubor se nenahraje ani neodešle bez potvrzení člověka.");
     scrollToFleetTarget(target);
+    return;
+  }
+
+  if (action === "costs") {
+    activateFleetTab("costs");
+    setFleetActionMessage("Náklady jsou otevřené. Faktura se nepřidá bez potvrzení člověka.");
+    return;
+  }
+
+  if (action === "settings") {
+    activateFleetTab("settings");
+    setFleetActionMessage("Nastavení je otevřené. Důležité změny musí projít přes backend a audit.");
+    return;
+  }
+
+  if (action === "timeline") {
+    scrollToFleetTarget("fleet-timeline");
+    setFleetActionMessage("Historie vozidla je zobrazená v časové ose. Nic se tím nemění.");
     return;
   }
 
@@ -34874,10 +35920,31 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const fleetHelp = event.target.closest("[data-fleet-help]");
+  if (fleetHelp) {
+    event.preventDefault();
+    document.querySelectorAll("[data-fleet-help].fleet-help--open").forEach((node) => {
+      if (node !== fleetHelp) node.classList.remove("fleet-help--open");
+    });
+    fleetHelp.classList.toggle("fleet-help--open");
+    return;
+  }
+
   const fleetAction = event.target.closest("[data-fleet-action]");
   if (fleetAction) {
     event.preventDefault();
     handleFleetAction(fleetAction);
+    return;
+  }
+
+  const fleetQuickFilter = event.target.closest("[data-fleet-quick-filter]");
+  if (fleetQuickFilter) {
+    event.preventDefault();
+    fleetUiState.vehicleFilters = {
+      ...fleetUiState.vehicleFilters,
+      quick: fleetQuickFilter.dataset.fleetQuickFilter || "all"
+    };
+    render();
     return;
   }
 

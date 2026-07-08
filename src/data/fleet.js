@@ -21,20 +21,24 @@ export const FLEET_API_ENDPOINTS = [
 ];
 
 export const FLEET_DASHBOARD_METRICS = [
-  { id: "total", label: "Celkem" },
-  { id: "active", label: "Provozuschopná" },
-  { id: "outOfOrder", label: "Mimo provoz" },
+  { id: "total", label: "Vozidla celkem" },
+  { id: "active", label: "Aktivní vozidla" },
+  { id: "attention", label: "K řešení" },
+  { id: "termsDue", label: "STK / revize končí" },
+  { id: "insuranceDue", label: "Pojištění končí" },
   { id: "inService", label: "V servisu" },
-  { id: "stkDue", label: "STK do 30 dnů" },
-  { id: "revisionDue", label: "Revize do 30 dnů" },
-  { id: "insuranceDue", label: "Pojištění do 30 dnů" },
-  { id: "openDefects", label: "Otevřené závady" }
+  { id: "waitingPart", label: "Čeká na díl" },
+  { id: "risks", label: "Rizika" }
 ];
 
 export const FLEET_STATUS_OPTIONS = [
-  { value: "active", label: "Provozuschopné", tone: "active" },
+  { value: "ok", label: "V pořádku", tone: "active" },
+  { value: "attention", label: "K řešení", tone: "attention" },
+  { value: "waiting_part", label: "Čeká na díl", tone: "warning" },
   { value: "service", label: "V servisu", tone: "service" },
-  { value: "out_of_order", label: "Mimo provoz", tone: "out-of-order" },
+  { value: "out_of_order", label: "Neprovozní", tone: "out-of-order" },
+  { value: "waiting_approval", label: "Čeká na schválení", tone: "warning" },
+  { value: "risk", label: "Riziko", tone: "risk" },
   { value: "retired", label: "Vyřazené", tone: "retired" }
 ];
 
@@ -50,16 +54,18 @@ export const FLEET_VEHICLE_TYPES = [
 ];
 
 export const FLEET_LIST_COLUMNS = [
-  "Název",
-  "SPZ",
-  "Typ",
-  "Značka/model",
-  "Řidič",
   "Stav",
-  "STK do",
-  "Revize do",
-  "Pojištění do",
-  "Otevřené závady",
+  "SPZ",
+  "Značka / model",
+  "Typ",
+  "Řidič / odpovědná osoba",
+  "VIN",
+  "Nájezd",
+  "STK",
+  "Pojištění",
+  "Poslední servis",
+  "Otevřená hlášení",
+  "Doporučená akce",
   "Akce"
 ];
 
@@ -75,14 +81,14 @@ export const FLEET_TERM_DEFINITIONS = [
 ];
 
 export const FLEET_REQUIRED_SECTIONS = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "vehicles", label: "Seznam vozidel" },
-  { id: "detail", label: "Detail vozidla" },
+  { id: "overview", label: "Přehled" },
+  { id: "vehicles", label: "Vozidla" },
   { id: "terms", label: "Termíny" },
-  { id: "defects", label: "Závady" },
-  { id: "service", label: "Servisní historie" },
+  { id: "service", label: "Servis" },
+  { id: "costs", label: "Náklady" },
   { id: "documents", label: "Dokumenty" },
-  { id: "settings", label: "Nastavení / číselníky" }
+  { id: "settings", label: "Nastavení" },
+  { id: "rules-automation", label: "Seznam pravidel a automatizace" }
 ];
 
 export const FLEET_VEHICLE_FIELDS = [
@@ -176,9 +182,13 @@ export const FLEET_DOCUMENT_FIELDS = [
 ];
 
 export function fleetStatusLabel(status) {
-  return FLEET_STATUS_OPTIONS.find((option) => option.value === status)?.label || "Čeká na API";
+  if (status === "active") return "V pořádku";
+  if (status === "out_of_order") return "Neprovozní";
+  return FLEET_STATUS_OPTIONS.find((option) => option.value === status)?.label || "Zatím není dostupný stav";
 }
 
 export function fleetStatusTone(status) {
+  if (status === "active") return "active";
+  if (status === "out_of_order") return "out-of-order";
   return FLEET_STATUS_OPTIONS.find((option) => option.value === status)?.tone || "waiting";
 }
