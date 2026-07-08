@@ -642,6 +642,46 @@ async function upsertMessage(db, env, account, mailbox, message) {
   if (!isdsMessageId) return { state: "skipped", attachmentsDownloaded: 0 };
 
   const messageId = messageRecordId(mailboxId, direction, isdsMessageId);
+  const existing = await db
+    .prepare("SELECT id FROM data_box_plus_messages WHERE mailbox_id = ? AND isds_message_id = ? AND direction = ? LIMIT 1")
+    .bind(mailboxId, isdsMessageId, direction)
+    .first();
+  const targetMessageId = existing?.id || messageId;
+
+  if (!existing?.id) {
+    await db
+      .prepare(`
+        INSERT OR IGNORE INTO data_box_plus_messages (
+          id, mailbox_id, isds_message_id, direction, sender_name, sender_box_id, recipient_name,
+          recipient_box_id, subject, delivered_at, received_at, message_type, status, risk_level,
+          priority, suggested_action, priority_reason, primary_action, attachment_status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        messageId,
+        mailboxId,
+        isdsMessageId,
+        direction,
+        cleanString(message.senderName),
+        cleanString(message.senderBoxId),
+        cleanString(message.recipientName),
+        cleanString(message.recipientBoxId),
+        cleanString(message.subject),
+        cleanString(message.deliveredAt),
+        cleanString(message.acceptedAt || message.deliveredAt),
+        "Oznámení ISDS",
+        "Nové",
+        "Střední",
+        "normal",
+        "Oznámení ISDS. Ruční kontrola.",
+        "Nová datová zpráva čeká na první rozhodnutí.",
+        "Předat",
+        message?.hasAttachments ? "Čeká na zpracování" : "Dostupná"
+      )
+      .run();
+  }
+
   const attachmentState = await syncAttachments(db, env, account, mailboxId, message, messageId);
   const classification = classifyMessage(message, attachmentState);
   const facts = classification.facts || [];
@@ -650,11 +690,6 @@ async function upsertMessage(db, env, account, mailbox, message) {
     ? `${classification.suggestedAction} Shrnutí vychází z textově čitelné přílohy.`
     : "";
   const summarySource = summaryLoaded ? "Shrnutí vychází z textu přílohy uložené v Datových schránkách Plus." : "";
-
-  const existing = await db
-    .prepare("SELECT id FROM data_box_plus_messages WHERE mailbox_id = ? AND isds_message_id = ? AND direction = ? LIMIT 1")
-    .bind(mailboxId, isdsMessageId, direction)
-    .first();
 
   const values = [
     mailboxId,
@@ -684,59 +719,42 @@ async function upsertMessage(db, env, account, mailbox, message) {
     summaryLoaded ? 1 : 0
   ];
 
-  if (existing?.id) {
-    await db
-      .prepare(`
-        UPDATE data_box_plus_messages
-        SET
-          mailbox_id = ?,
-          isds_message_id = ?,
-          direction = ?,
-          sender_name = ?,
-          sender_box_id = ?,
-          recipient_name = ?,
-          recipient_box_id = ?,
-          subject = ?,
-          delivered_at = ?,
-          received_at = ?,
-          message_type = ?,
-          status = CASE WHEN archive_status = 'archived' THEN status ELSE ? END,
-          risk_level = ?,
-          priority = ?,
-          due_date = ?,
-          suggested_action = ?,
-          priority_reason = ?,
-          primary_action = ?,
-          assigned_to = CASE WHEN assigned_to <> '' THEN assigned_to ELSE ? END,
-          archive_status = CASE WHEN archive_status = 'archived' THEN archive_status ELSE ? END,
-          attachment_status = ?,
-          facts_json = ?,
-          summary = ?,
-          summary_source = ?,
-          summary_loaded = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `)
-      .bind(...values, existing.id)
-      .run();
-    await upsertRecommendation(db, existing.id, classification, facts);
-    return { state: "updated", attachmentsDownloaded: attachmentState.downloaded };
-  }
-
   await db
     .prepare(`
-      INSERT INTO data_box_plus_messages (
-        id, mailbox_id, isds_message_id, direction, sender_name, sender_box_id, recipient_name,
-        recipient_box_id, subject, delivered_at, received_at, message_type, status, risk_level,
-        priority, due_date, suggested_action, priority_reason, primary_action, assigned_to,
-        archive_status, attachment_status, facts_json, summary, summary_source, summary_loaded
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      UPDATE data_box_plus_messages
+      SET
+        mailbox_id = ?,
+        isds_message_id = ?,
+        direction = ?,
+        sender_name = ?,
+        sender_box_id = ?,
+        recipient_name = ?,
+        recipient_box_id = ?,
+        subject = ?,
+        delivered_at = ?,
+        received_at = ?,
+        message_type = ?,
+        status = CASE WHEN archive_status = 'archived' THEN status ELSE ? END,
+        risk_level = ?,
+        priority = ?,
+        due_date = ?,
+        suggested_action = ?,
+        priority_reason = ?,
+        primary_action = ?,
+        assigned_to = CASE WHEN assigned_to <> '' THEN assigned_to ELSE ? END,
+        archive_status = CASE WHEN archive_status = 'archived' THEN archive_status ELSE ? END,
+        attachment_status = ?,
+        facts_json = ?,
+        summary = ?,
+        summary_source = ?,
+        summary_loaded = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
     `)
-    .bind(messageId, ...values)
+    .bind(...values, targetMessageId)
     .run();
-  await upsertRecommendation(db, messageId, classification, facts);
-  return { state: "created", attachmentsDownloaded: attachmentState.downloaded };
+  await upsertRecommendation(db, targetMessageId, classification, facts);
+  return { state: existing?.id ? "updated" : "created", attachmentsDownloaded: attachmentState.downloaded };
 }
 
 async function createSyncRun(db, startedAt, triggerType, currentUser) {

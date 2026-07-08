@@ -29608,9 +29608,29 @@ body:has(.ds-plus-page) {
   background: #f8fbf6;
 }
 
+.ds-plus-sync-countdown {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  border-top: 1px solid #dfe8dc;
+  padding-top: 10px;
+}
+
+.ds-plus-sync-countdown strong {
+  color: #1f2a22;
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
 .ds-plus-header__state strong {
   color: #2f7d46;
   font-size: 1.5rem;
+}
+
+.ds-plus-header__state .ds-plus-sync-countdown strong {
+  color: #1f2a22;
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
 }
 
 .ds-plus-header__state small,
@@ -29714,7 +29734,8 @@ body:has(.ds-plus-page) {
 .ds-plus-message-list,
 .ds-plus-rule-list,
 .ds-plus-attachments,
-.ds-plus-settings-grid {
+.ds-plus-settings-grid,
+.ds-plus-manual-grid {
   display: grid;
   gap: 12px;
 }
@@ -29753,6 +29774,7 @@ body:has(.ds-plus-page) {
 .ds-plus-recommendation,
 .ds-plus-rule,
 .ds-plus-settings-block,
+.ds-plus-manual-block,
 .ds-plus-attachment,
 .ds-plus-archive-summary p,
 .ds-plus-autopilot-block,
@@ -30115,12 +30137,49 @@ body:has(.ds-plus-page) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.ds-plus-manual-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .ds-plus-settings-block {
   padding: 16px;
 }
 
+.ds-plus-manual-block {
+  padding: 16px;
+}
+
+.ds-plus-manual-block--warning {
+  border-color: #efc983;
+  background: #fffaf2;
+}
+
 .ds-plus-settings-block--wide {
   grid-column: 1 / -1;
+}
+
+.ds-plus-manual-block h3 {
+  margin: 0 0 8px;
+  color: #1f2a22;
+}
+
+.ds-plus-manual-block p,
+.ds-plus-manual-block li {
+  color: #4f5d50;
+  line-height: 1.55;
+}
+
+.ds-plus-manual-block p {
+  margin: 0 0 8px;
+}
+
+.ds-plus-manual-block p:last-child {
+  margin-bottom: 0;
+}
+
+.ds-plus-manual-block ul {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .ds-plus-mailbox-list,
@@ -30315,6 +30374,7 @@ body:has(.ds-plus-page) {
 @media (max-width: 900px) {
   .ds-plus-autopilot-grid,
   .ds-plus-settings-grid,
+  .ds-plus-manual-grid,
   .ds-plus-rule dl,
   .ds-plus-rules-controls,
   .ds-plus-detail-section--header dl,

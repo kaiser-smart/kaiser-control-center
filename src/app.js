@@ -349,8 +349,10 @@ const DATA_BOX_PLUS_TABS = [
   { id: "confirmations", label: "Čeká na potvrzení" },
   { id: "rules", label: "Pravidla a učení" },
   { id: "archive", label: "Archiv" },
-  { id: "settings", label: "Nastavení" }
+  { id: "settings", label: "Nastavení" },
+  { id: "manual", label: "Manuál" }
 ];
+const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const NOTIFICATION_CHANNEL_LABELS = {
   email: "E-mail",
   sms: "SMS"
@@ -1184,6 +1186,7 @@ const dataBoxPlusHomeState = {
   unresolvedCount: 0
 };
 let dataBoxSearchRenderTimer = null;
+let dataBoxPlusCountdownTimer = null;
 const quickAbsenceState = {
   step: "type",
   type: "",
@@ -18578,6 +18581,64 @@ function dataBoxPlusAutopilotDoneItems() {
   return ["Autopilot čeká na první automatické načtení ostrých zpráv."];
 }
 
+function dataBoxPlusLastSyncTimeMs() {
+  const lastSync = dataBoxPlusState.syncRuns?.[0];
+  const value = lastSync?.finishedAt || lastSync?.startedAt || "";
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function dataBoxPlusNextSyncInfo(now = Date.now()) {
+  const lastSyncTime = dataBoxPlusLastSyncTimeMs();
+  if (!lastSyncTime) {
+    return {
+      label: "Čekám na první načtení",
+      note: "Jakmile proběhne první automatické načtení, uvidíš přesný odpočet.",
+      nextAt: 0
+    };
+  }
+
+  let nextAt = lastSyncTime + DATA_BOX_PLUS_SYNC_INTERVAL_MS;
+  while (nextAt <= now) {
+    nextAt += DATA_BOX_PLUS_SYNC_INTERVAL_MS;
+  }
+  const remainingMs = Math.max(0, nextAt - now);
+  const minutes = String(Math.floor(remainingMs / 60000)).padStart(2, "0");
+  const seconds = String(Math.floor((remainingMs % 60000) / 1000)).padStart(2, "0");
+  return {
+    label: `${minutes}:${seconds}`,
+    note: `Poslední načtení: ${formatDateTime(lastSyncTime)}.`,
+    nextAt
+  };
+}
+
+function dataBoxPlusCountdownBlock() {
+  const info = dataBoxPlusNextSyncInfo();
+  return `
+    <div class="ds-plus-sync-countdown" data-ds-plus-countdown data-next-sync-at="${escapeHtml(info.nextAt || "")}">
+      <span>Další načtení</span>
+      <strong data-ds-plus-countdown-value>${escapeHtml(info.label)}</strong>
+      <small data-ds-plus-countdown-note>${escapeHtml(info.note)}</small>
+    </div>
+  `;
+}
+
+function updateDataBoxPlusCountdownNodes() {
+  document.querySelectorAll("[data-ds-plus-countdown]").forEach((node) => {
+    const valueNode = node.querySelector("[data-ds-plus-countdown-value]");
+    const noteNode = node.querySelector("[data-ds-plus-countdown-note]");
+    const info = dataBoxPlusNextSyncInfo();
+    node.dataset.nextSyncAt = info.nextAt ? String(info.nextAt) : "";
+    if (valueNode) valueNode.textContent = info.label;
+    if (noteNode) noteNode.textContent = info.note;
+  });
+}
+
+function ensureDataBoxPlusCountdownTimer() {
+  if (dataBoxPlusCountdownTimer) return;
+  dataBoxPlusCountdownTimer = window.setInterval(updateDataBoxPlusCountdownNodes, 1000);
+}
+
 function dataBoxPlusMailbox(messageOrMailboxId) {
   const mailboxId = typeof messageOrMailboxId === "object"
     ? messageOrMailboxId.mailboxId
@@ -19231,6 +19292,80 @@ function dataBoxPlusSettingsPanel() {
   `;
 }
 
+function dataBoxPlusManualPanel() {
+  return `
+    <section class="ds-plus-workspace" aria-labelledby="ds-plus-manual-title">
+      <div class="ds-plus-section-head">
+        <div>
+          <span>Provozní manuál</span>
+          <h2 id="ds-plus-manual-title">Jak Datové schránky Plus používat</h2>
+        </div>
+      </div>
+      <div class="ds-plus-manual-grid">
+        <section class="ds-plus-manual-block">
+          <h3>Co modul dělá sám</h3>
+          <ul>
+            <li>Pravidelně prochází napojené firemní datové schránky.</li>
+            <li>Ukládá obálky zpráv, stav doručení a historii načtení.</li>
+            <li>Stahuje dostupné přílohy a u čitelných souborů připravuje text.</li>
+            <li>Třídí zprávy podle rizika, typu a doporučeného dalšího kroku.</li>
+          </ul>
+        </section>
+        <section class="ds-plus-manual-block">
+          <h3>Co musí potvrdit člověk</h3>
+          <ul>
+            <li>Právní dokumenty, výzvy, pokuty, lhůty a finanční požadavky.</li>
+            <li>Předání zprávy mimo běžný schválený postup.</li>
+            <li>Archivaci zpráv, u kterých si Autopilot není jistý.</li>
+            <li>Jakýkoliv krok, který by měl mít právní nebo finanční dopad.</li>
+          </ul>
+        </section>
+        <section class="ds-plus-manual-block">
+          <h3>Automatické načítání</h3>
+          <p>Zprávy se načítají každých 30 minut. Odpočítávač v horní části ukazuje, kdy přijde další pokus o načtení.</p>
+          <p>Když aplikaci nikdo neotevře, serverové načítání běží dál. Běžný uživatel nemá ručně klikat na načtení.</p>
+        </section>
+        <section class="ds-plus-manual-block">
+          <h3>Práce se zprávou</h3>
+          <ul>
+            <li>Řídicí centrum ukazuje jen věci, které mají mít dnes pozornost.</li>
+            <li>Detail zprávy rozlišuje obálku zprávy a obsah příloh.</li>
+            <li>Když příloha není přečtená, Autopilot nevytvoří falešné shrnutí.</li>
+            <li>Každé doporučení má vysvětlení, proč ho Autopilot navrhuje.</li>
+          </ul>
+        </section>
+        <section class="ds-plus-manual-block ds-plus-manual-block--warning">
+          <h3>Nová zpráva a Odpovědět</h3>
+          <p>Ostré odesílání datových zpráv zatím není hotový proces v DSP.</p>
+          <p>Bez další schválené fáze modul datovou zprávu neodešle. Bezpečný další krok je nejdřív vytvořit koncepty, potvrzovací obrazovku, audit a teprve potom napojit skutečné odeslání.</p>
+        </section>
+        <section class="ds-plus-manual-block">
+          <h3>Co Autopilot nikdy neudělá sám</h3>
+          <ul>
+            <li>Nesmaže datovou zprávu.</li>
+            <li>Nepošle datovou zprávu bez výslovného povolení.</li>
+            <li>Nepošle e-mail mimo schválený scénář.</li>
+            <li>Neoznačí právně citlivou zprávu jako vyřízenou bez dohledatelné historie.</li>
+          </ul>
+        </section>
+        <section class="ds-plus-manual-block">
+          <h3>Archiv a audit</h3>
+          <p>Archiv slouží jako bezpečné firemní místo pro vyřízené a informativní zprávy. Nic se nemaže.</p>
+          <p>Autonomní akce, potvrzení a zamítnutí musí být dohledatelné v historii.</p>
+        </section>
+        <section class="ds-plus-manual-block">
+          <h3>Když něco nesedí</h3>
+          <ul>
+            <li>Když je počet zpráv nulový, zkontroluj stav posledního načtení v diagnostice.</li>
+            <li>Když chybí příloha, použij „Znovu načíst přílohu“.</li>
+            <li>Když Autopilot navrhuje špatný krok, návrh zamítni a nauč ho správný postup.</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+  `;
+}
+
 function dataBoxPlusFacts(message) {
   return `
     <section class="ds-plus-detail-section">
@@ -19325,6 +19460,7 @@ function dataBoxPlusActivePanel() {
   if (dataBoxPlusState.activeTab === "rules") return dataBoxPlusRulesPanel();
   if (dataBoxPlusState.activeTab === "archive") return dataBoxPlusArchivePanel();
   if (dataBoxPlusState.activeTab === "settings") return dataBoxPlusSettingsPanel();
+  if (dataBoxPlusState.activeTab === "manual") return dataBoxPlusManualPanel();
   return dataBoxPlusCommandCenter();
 }
 
@@ -19346,6 +19482,7 @@ function dataBoxPlusPage(moduleItem, user) {
           <span>Stav Autopilota</span>
           <strong>${escapeHtml(dataBoxPlusState.loading ? "Načítá" : "Učí se")}</strong>
           <small>${escapeHtml(dataBoxPlusRecommendations().length ? "Některé akce čekají na potvrzení." : "Rutinní kroky běží podle schválených hranic.")}</small>
+          ${dataBoxPlusCountdownBlock()}
         </div>
       </section>
       ${dataBoxPlusStatusNotice()}
@@ -27619,6 +27756,7 @@ async function loadDataBoxPlusData(options = {}) {
     if (options.renderAfter !== false) {
       render();
     }
+    updateDataBoxPlusCountdownNodes();
   }
 }
 
@@ -33490,6 +33628,7 @@ function renderAuthenticatedApp(user) {
       ensureReceivablesData({ view: "dashboard" });
     }
     if (moduleItem.id === DATA_BOX_PLUS_MODULE_KEY) {
+      ensureDataBoxPlusCountdownTimer();
       ensureDataBoxPlusData();
     }
     if (moduleItem.id === "system-check") {
