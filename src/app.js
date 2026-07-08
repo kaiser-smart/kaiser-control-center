@@ -9370,6 +9370,39 @@ function fleetTermRecommendation(label, days) {
   return `${label} je v pořádku.`;
 }
 
+function fleetTermStatusForDefinition(term, days) {
+  if (term?.isDeadline === false) {
+    return Number.isFinite(days) ? "info" : "missing";
+  }
+  return fleetTermStatus(days);
+}
+
+function fleetTermStatusLabelForDefinition(term, days) {
+  if (term?.isDeadline === false) {
+    return Number.isFinite(days) ? "zaznamenáno" : "není dostupné";
+  }
+  return fleetTermStatusLabel(days);
+}
+
+function fleetTermRecommendationForDefinition(term, days) {
+  if (term?.isDeadline === false) {
+    return Number.isFinite(days)
+      ? `${term.label} je historický záznam. Neoznačuje riziko vozidla.`
+      : `Doplnit datum: ${term.label.toLowerCase()}.`;
+  }
+  return fleetTermRecommendation(term.label, days);
+}
+
+function fleetTermMetaText(term = {}) {
+  if (term.isDeadline === false) {
+    if (!Number.isFinite(term.days)) return "bez data · není dostupné";
+    if (term.days < 0) return `před ${Math.abs(term.days)} dny · zaznamenáno`;
+    if (term.days === 0) return "dnes · zaznamenáno";
+    return `${fleetDaysText(term.days)} · plánovaný záznam`;
+  }
+  return `${fleetDaysText(term.days)} · ${term.statusLabel}`;
+}
+
 function fleetReportLink(item = {}) {
   const id = item.id || item.reportId;
   return id ? `${DRIVER_REPORT_ROUTE}?request=${encodeURIComponent(id)}` : DRIVER_REPORT_ROUTE;
@@ -9463,25 +9496,26 @@ function fleetVehicleTerms(vehicle = {}) {
   return [
     ...FLEET_TERM_DEFINITIONS,
     { id: "highwayVignetteValidTo", label: "Dálniční známka", endpoint: "GET /api/vehicles/:id" },
-    { id: "lastServiceDate", label: "Poslední servis", endpoint: "GET /api/vehicles/:id" },
+    { id: "lastServiceDate", label: "Poslední servis", endpoint: "GET /api/vehicles/:id", isDeadline: false },
     { id: "nextServiceDate", label: "Příští servis", endpoint: "GET /api/vehicles/:id" }
   ].map((term) => {
     const date = vehicle[term.id];
     const days = fleetDaysUntil(date);
     return {
       ...term,
+      isDeadline: term.isDeadline !== false,
       date,
       days,
-      status: fleetTermStatus(days),
-      statusLabel: fleetTermStatusLabel(days),
-      recommendation: fleetTermRecommendation(term.label, days)
+      status: fleetTermStatusForDefinition(term, days),
+      statusLabel: fleetTermStatusLabelForDefinition(term, days),
+      recommendation: fleetTermRecommendationForDefinition(term, days)
     };
   });
 }
 
 function fleetImportantTerms(vehicle = {}) {
   return fleetVehicleTerms(vehicle)
-    .filter((term) => Number.isFinite(term.days) && term.days <= 60)
+    .filter((term) => term.isDeadline !== false && Number.isFinite(term.days) && term.days <= 60)
     .sort((left, right) => left.days - right.days);
 }
 
@@ -9726,7 +9760,7 @@ function fleetDriverReportsDetail(vehicle = {}) {
         </dl>
       ` : `
         <div class="fleet-empty-state fleet-empty-state--calm">
-          <strong>Zatím nejsou dostupná data.</strong>
+          <strong>Bez souvisejících hlášení</strong>
           <span>Jakmile bude k vozidlu přiřazené hlášení, ukáže se tady počet, poslední stav a proklik.</span>
         </div>
       `}
@@ -9737,26 +9771,58 @@ function fleetDriverReportsDetail(vehicle = {}) {
   `;
 }
 
+function fleetReadableVehicleTerms(vehicle = {}) {
+  return fleetVehicleTerms(vehicle)
+    .filter((term) => term.date && Number.isFinite(term.days))
+    .sort((left, right) => left.days - right.days);
+}
+
+function fleetMissingVehicleTerms(vehicle = {}) {
+  return fleetVehicleTerms(vehicle)
+    .filter((term) => !term.date || !Number.isFinite(term.days));
+}
+
 function fleetTermsDetail(vehicle = {}) {
-  const terms = fleetVehicleTerms(vehicle);
+  const readableTerms = fleetReadableVehicleTerms(vehicle);
+  const missingTerms = fleetMissingVehicleTerms(vehicle);
+  const missingLabel = missingTerms.length
+    ? missingTerms.map((term) => term.label).join(", ")
+    : "";
   return `
     <article class="fleet-detail-card">
       <div class="fleet-card-head">
         <div>
           <h3>Termíny</h3>
-          <p>STK, emise, revize, pojištění, dálniční známka a servisní intervaly.</p>
+          <p>Platnosti a servisní termíny načtené z Vistos Vehicle.</p>
         </div>
+        <span>${escapeHtml(readableTerms.length ? `${readableTerms.length} načteno` : "bez termínů")}</span>
       </div>
-      <div class="fleet-term-list">
-        ${terms.map((term) => `
+      ${readableTerms.length ? `
+        <div class="fleet-term-list fleet-term-list--available">
+          ${readableTerms.map((term) => `
           <div class="fleet-term-row fleet-term-row--${escapeHtml(term.status)}">
             <span>${escapeHtml(term.label)}</span>
-            <strong>${escapeHtml(term.date ? fleetFormatDate(term.date) : "Zatím nejsou dostupná data.")}</strong>
-            <small>${escapeHtml(Number.isFinite(term.days) ? fleetDaysText(term.days) : "bez data")} · ${escapeHtml(term.statusLabel)}</small>
+            <strong>${escapeHtml(fleetFormatDate(term.date) || term.date)}</strong>
+            <small>${escapeHtml(fleetTermMetaText(term))}</small>
             <em>${escapeHtml(term.recommendation)}</em>
           </div>
-        `).join("")}
-      </div>
+          `).join("")}
+        </div>
+      ` : `
+        <div class="fleet-empty-state fleet-empty-state--calm">
+          <strong>Termíny nejsou v datech vozidla</strong>
+          <span>Vozidlo je načtené z Vistos Vehicle, ale STK, revize, pojištění nebo servisní termíny zatím nejsou v dostupných polích.</span>
+        </div>
+      `}
+      ${missingTerms.length ? `
+        <div class="fleet-term-missing" aria-label="Chybějící termíny">
+          <strong>Chybí ve Vistos datech</strong>
+          <div class="fleet-missing-term-chips">
+            ${missingTerms.map((term) => `<span>${escapeHtml(term.label)}</span>`).join("")}
+          </div>
+          <small>${escapeHtml(missingLabel ? `Bez čitelného data: ${missingLabel}.` : "")}</small>
+        </div>
+      ` : ""}
     </article>
   `;
 }
@@ -9764,6 +9830,10 @@ function fleetTermsDetail(vehicle = {}) {
 function fleetServiceDetail(vehicle = {}) {
   const reports = fleetDriverReportSummary(vehicle);
   const serviceReports = reports.openReports.filter((report) => ["service_scheduled", "part_arrived", "waiting_diagnostics", "new_report", "ordered"].includes(report.status));
+  const serviceDates = [
+    vehicle.lastServiceDate ? ["Poslední servis", fleetFormatDate(vehicle.lastServiceDate) || vehicle.lastServiceDate] : null,
+    vehicle.nextServiceDate ? ["Příští plánovaný servis", fleetFormatDate(vehicle.nextServiceDate) || vehicle.nextServiceDate] : null
+  ].filter(Boolean);
   return `
     <article class="fleet-detail-card">
       <div class="fleet-card-head">
@@ -9773,8 +9843,9 @@ function fleetServiceDetail(vehicle = {}) {
         </div>
       </div>
       <dl class="fleet-human-list">
-        <div><dt>Poslední servis</dt><dd>${escapeHtml(fleetVehicleDisplayValue(vehicle.lastServiceDate, "Zatím nejsou dostupná data."))}</dd></div>
-        <div><dt>Příští plánovaný servis</dt><dd>${escapeHtml(fleetVehicleDisplayValue(vehicle.nextServiceDate, "Zatím nejsou dostupná data."))}</dd></div>
+        ${serviceDates.length
+          ? serviceDates.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")
+          : `<div><dt>Servisní intervaly</dt><dd>Nejsou v datech vozidla.</dd></div>`}
         <div><dt>Otevřené servisní případy</dt><dd>${escapeHtml(String(serviceReports.length))}</dd></div>
         <div><dt>Čekající díly</dt><dd>${escapeHtml(String(reports.waitingPartReports.length))}</dd></div>
         <div><dt>Servisní doporučení</dt><dd>${escapeHtml(fleetVehicleRecommendation(vehicle))}</dd></div>
@@ -9812,17 +9883,9 @@ function fleetDocumentsDetail() {
           <p>Rychlý přístup k dokladům vozidla, jakmile budou dostupné přes cloud API/R2.</p>
         </div>
       </div>
-      <div class="fleet-document-type-grid">
-        ${documentTypes.map((type) => `
-          <article>
-            <strong>${escapeHtml(type)}</strong>
-            <span>Zatím nejsou dostupná data.</span>
-            <div>
-              <button class="secondary-link" type="button" disabled>Otevřít</button>
-              <button class="secondary-link" type="button" disabled>Stáhnout</button>
-            </div>
-          </article>
-        `).join("")}
+      <div class="fleet-empty-state fleet-empty-state--calm">
+        <strong>Dokumenty zatím nejsou napojené</strong>
+        <span>Po napojení dokumentového API se zde zobrazí: ${escapeHtml(documentTypes.join(", "))}.</span>
       </div>
     </article>
   `;
@@ -9857,7 +9920,7 @@ function fleetCostsDetail(vehicle = {}) {
         </div>
       ` : `
         <div class="fleet-empty-state fleet-empty-state--calm">
-          <strong>Zatím nejsou dostupná data.</strong>
+          <strong>Náklady zatím nejsou napojené</strong>
           <span>Nákladové anomálie se tady ukážou po napojení faktur, servisu, paliva nebo dalších nákladových zdrojů.</span>
         </div>
       `}
@@ -9901,7 +9964,7 @@ function fleetTimelineDetail(vehicle = {}) {
         </ol>
       ` : `
         <div class="fleet-empty-state fleet-empty-state--calm">
-          <strong>Zatím nejsou dostupná data.</strong>
+          <strong>Bez historie vozidla</strong>
           <span>Časová osa se naplní změnami stavu, termíny, servisy, dokumenty a hlášeními.</span>
         </div>
       `}
@@ -9912,12 +9975,12 @@ function fleetTimelineDetail(vehicle = {}) {
 function fleetTrackingDetail(vehicle = {}) {
   const tracking = fleetVehicleTrackingState(vehicle);
   const speed = Number(tracking.speed);
-  const speedText = Number.isFinite(speed) ? `${speed} km/h` : "Zatím nejsou dostupná data.";
+  const speedText = Number.isFinite(speed) ? `${speed} km/h` : "bez rychlosti";
   const lastGpsText = tracking.lastGpsAt
     ? (formatDateTime(tracking.lastGpsAt) || fleetFormatDate(tracking.lastGpsAt) || tracking.lastGpsAt)
-    : "Zatím nejsou dostupná data.";
-  const unitText = tracking.unit || "Zatím nejsou dostupná data.";
-  const locationText = tracking.address || "Zatím nejsou dostupná data.";
+    : "bez záznamu";
+  const unitText = tracking.unit || "bez jednotky";
+  const locationText = tracking.address || "bez polohy";
   const action = tracking.canOpen
     ? fleetActionLink(
       "Otevřít ve Sledování aut",
@@ -10768,118 +10831,6 @@ function fleetVehicleById(vehicleId) {
   return fleetVehiclesState.vehicles.find((vehicle) => fleetVehicleMatchesId(vehicle, vehicleId)) || null;
 }
 
-function fleetDriverUsers() {
-  const candidates = Array.isArray(fleetVehiclesState.driverCandidates) ? fleetVehiclesState.driverCandidates : [];
-
-  if (candidates.length) {
-    return candidates
-      .filter((employee) => employee?.id)
-      .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "cs"));
-  }
-
-  return employeeCardState.employees
-    .filter((employee) => employee?.id)
-    .filter((employee) => employee.employmentStatus !== "inactive")
-    .map((employee) => ({
-      id: employee.id,
-      userId: employee.userId || employee.id,
-      name: employeeFullName(employee),
-      phone: employee.phone || "",
-      email: employee.email || "",
-      role: employee.role || "",
-      position: employee.position || "",
-      department: employee.department || "",
-      source: "employees"
-    }))
-    .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "cs"));
-}
-
-function fleetDriverOptionLabel(driver) {
-  const meta = [driver.position, driver.department].map((value) => String(value || "").trim()).filter(Boolean).join(" · ");
-  return meta ? `${driver.name || driver.id} (${meta})` : (driver.name || driver.id || "Zaměstnanec");
-}
-
-function fleetDriverOptions(selectedDriverId = "") {
-  const selected = String(selectedDriverId || "").trim();
-  const drivers = fleetDriverUsers();
-
-  if (!drivers.length) {
-    return `<option value="">Nejdřív doplňte zaměstnance</option>`;
-  }
-
-  return [
-    `<option value="" ${!selected ? "selected" : ""}>Bez přiřazeného řidiče</option>`,
-    ...drivers.map((driver) => `
-      <option value="${escapeHtml(driver.id)}" ${String(driver.id || "") === selected || String(driver.userId || "") === selected ? "selected" : ""}>
-        ${escapeHtml(fleetDriverOptionLabel(driver))}
-      </option>
-    `)
-  ].join("");
-}
-
-function fleetDriverSelectedInfo(vehicle) {
-  const driverId = String(vehicle?.assignedDriverId || "").trim();
-  const selected = driverId
-    ? fleetDriverUsers().find((driver) => String(driver.id || "") === driverId || String(driver.userId || "") === driverId)
-    : null;
-  const name = selected?.name || vehicle?.assignedDriverName || "";
-
-  if (!name) {
-    return `<p class="fleet-assignment-readonly">Řidič zatím není přiřazený. Vyberte ho pouze ze seznamu zaměstnanců.</p>`;
-  }
-
-  return `
-    <p class="fleet-assignment-readonly">
-      Vybraný zaměstnanec: <strong>${escapeHtml(name)}</strong>
-      ${selected?.phone ? ` · ${escapeHtml(selected.phone)}` : ""}
-      ${selected?.email ? ` · ${escapeHtml(selected.email)}` : ""}
-    </p>
-  `;
-}
-
-function fleetDriverAssignmentSection(vehicle) {
-  const userCanEdit = hasPermission(currentUser(), "fleet", "edit");
-  const vehicleId = String(vehicle?.id || "").trim();
-  const saving = fleetUiState.savingAssignmentVehicleId === vehicleId;
-  const message = fleetUiState.message ? `<p class="fleet-assignment-message" role="status">${escapeHtml(fleetUiState.message)}</p>` : "";
-  const error = fleetUiState.error ? `<p class="fleet-assignment-error" role="alert">${escapeHtml(fleetUiState.error)}</p>` : "";
-
-  return `
-    <article class="fleet-driver-assignment">
-      <div class="fleet-driver-assignment__head">
-        <div>
-          <h3>Řidič</h3>
-          <p>Vazba pro vozový park a hlasovou Šarlotu v Hlášení řidičů.</p>
-        </div>
-        <span>${escapeHtml(vehicle?.assignedDriverName ? "Přiřazeno" : "Čeká na doplnění")}</span>
-      </div>
-      <form class="fleet-driver-form" data-fleet-driver-assignment-form data-vehicle-id="${escapeHtml(vehicleId)}">
-        <label>
-          <span>Řidič ze zaměstnanců</span>
-          <select name="assignedDriverId" ${userCanEdit ? "" : "disabled"}>
-            ${fleetDriverOptions(vehicle?.assignedDriverId)}
-          </select>
-        </label>
-        <label class="fleet-driver-form__wide">
-          <span>Poznámka</span>
-          <input name="note" value="${escapeHtml(vehicle?.driverAssignmentNote || "")}" placeholder="Např. střídá vozidlo v týdnu" ${userCanEdit ? "" : "disabled"}>
-        </label>
-        <div class="fleet-driver-form__wide">
-          ${fleetDriverSelectedInfo(vehicle)}
-        </div>
-        ${userCanEdit ? `
-          <button class="primary-action fleet-driver-form__submit" type="submit" ${saving ? "disabled" : ""}>
-            ${saving ? "Ukládám…" : "Uložit řidiče"}
-          </button>
-        ` : `<p class="fleet-assignment-readonly">Řidiče může upravit garáž, kancelář nebo admin.</p>`}
-      </form>
-      ${message}
-      ${error}
-      ${vehicle?.driverAssignmentUpdatedAt ? `<p class="fleet-assignment-meta">Naposledy upraveno: ${escapeHtml(formatDateTime(vehicle.driverAssignmentUpdatedAt))}${vehicle.driverAssignmentUpdatedByName ? ` · ${escapeHtml(vehicle.driverAssignmentUpdatedByName)}` : ""}</p>` : ""}
-    </article>
-  `;
-}
-
 function fleetVehicleFacts(vehicle) {
   const facts = [
     ["ID", vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId],
@@ -11209,26 +11160,10 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
             <div><span>Typ</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.vehicleType || vehicle.vistosVehicleCategory))}</strong></div>
             <div><span>Aktuální stav</span><strong class="fleet-status-text fleet-status-text--${escapeHtml(fleetVehicleStatusTone(vehicle))}">${escapeHtml(fleetVehicleStatusLabel(vehicle))}</strong></div>
             <div><span>Řidič / odpovědný</span><strong>${escapeHtml(fleetVehicleDisplayValue(vehicle.assignedDriverName, "Zatím není uvedeno"))}</strong></div>
-            <div><span>Provozuschopnost</span><strong>${escapeHtml(["out_of_order", "risk"].includes(fleetVehicleOperationalStatus(vehicle)) ? "vyžaduje ruční kontrolu" : "provozuschopné podle načtených dat")}</strong></div>
-            <div><span>Nájezd</span><strong>${escapeHtml(Number.isFinite(Number(vehicle.mileageKm)) ? `${Number(vehicle.mileageKm).toLocaleString("cs-CZ")} km` : "Zatím nejsou dostupná data.")}</strong></div>
-            <div><span>Poslední aktualizace</span><strong>${escapeHtml(formatDateTime(vehicle.updatedAt) || fleetFormatDate(vehicle.updatedAt) || "Zatím nejsou dostupná data.")}</strong></div>
+            <div><span>Nájezd</span><strong>${escapeHtml(Number.isFinite(Number(vehicle.mileageKm)) ? `${Number(vehicle.mileageKm).toLocaleString("cs-CZ")} km` : "není uveden")}</strong></div>
+            <div><span>Poslední aktualizace</span><strong>${escapeHtml(formatDateTime(vehicle.updatedAt) || fleetFormatDate(vehicle.updatedAt) || "bez záznamu")}</strong></div>
           </header>
 
-          <section class="fleet-detail-card fleet-detail-card--important" aria-labelledby="fleet-important-title">
-            <div class="fleet-card-head">
-              <div>
-                <h3 id="fleet-important-title">Co je důležité</h3>
-                <p>${escapeHtml(fleetVehicleImportantSummary(vehicle))}</p>
-              </div>
-              <span>Doporučení systému</span>
-            </div>
-            <div class="fleet-system-recommendation">
-              <strong>${escapeHtml(fleetVehicleRecommendation(vehicle))}</strong>
-              ${fleetExplanationButton("Proč to systém doporučuje?", fleetRecommendationReason(vehicle))}
-            </div>
-          </section>
-
-          ${fleetDriverAssignmentSection(vehicle)}
           ${fleetDriverReportsDetail(vehicle)}
           ${fleetTrackingDetail(vehicle)}
           ${fleetTermsDetail(vehicle)}
@@ -11241,7 +11176,7 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
       ` : `
         <div class="fleet-empty-state fleet-empty-state--calm">
           <strong>${escapeHtml(safeVehicleId ? "Vozidlo nebylo v načtených datech nalezené." : "Vyberte vozidlo ze seznamu.")}</strong>
-          <span>Zatím nejsou dostupná data.</span>
+          <span>Detail se zobrazí po načtení vozidla z evidence.</span>
           ${fleetActionLink("Zpět na vozidla", `${FLEET_ROUTE}#fleet-vehicles`, "Vrátí vás na evidenci vozidel.")}
         </div>
       `}
@@ -11252,7 +11187,7 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
 function fleetTermsSection(activeId) {
   const termRows = fleetVehiclesState.vehicles
     .flatMap((vehicle) => fleetVehicleTerms(vehicle)
-      .filter((term) => Number.isFinite(term.days))
+      .filter((term) => term.isDeadline !== false && Number.isFinite(term.days))
       .map((term) => ({ vehicle, term })))
     .sort((left, right) => left.term.days - right.term.days);
   const priorityRows = termRows.filter(({ term }) => term.days <= 60);

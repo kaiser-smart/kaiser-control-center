@@ -2,6 +2,7 @@ import {
   VistosExecuteError,
   cleanVistosValue,
   getAllVistosPages,
+  getVistosSchemaEntity,
   isVistosExecuteConfigured,
   loginVistosExecute
 } from "./vistos-execute-client.js";
@@ -31,9 +32,85 @@ const FLEET_VISTOS_VEHICLE_COLUMNS = [
 const FLEET_VISTOS_VEHICLE_ACTIVE_FILTER = {
   Stavvozidla_FK: [16541]
 };
+const FLEET_VISTOS_VEHICLE_TERM_SPECS = [
+  {
+    field: "stkValidTo",
+    label: "STK",
+    aliases: ["STK", "Stk", "STKValidTo", "StkValidTo", "STKPlatnostDo", "TechnickaKontrolaDo", "c_STK", "c_STKDo", "c_STKPlatnostDo", "c_TechnickaKontrolaDo"],
+    tokens: [["stk"], ["valid", "platnost", "do", "date", "datum", "kontrola"]]
+  },
+  {
+    field: "emissionsValidTo",
+    label: "Emise",
+    aliases: ["Emise", "EmiseDo", "EmissionsValidTo", "EmissionValidTo", "c_Emise", "c_EmiseDo", "c_EmisePlatnostDo"],
+    tokens: [["emise", "emission"], ["valid", "platnost", "do", "date", "datum"]]
+  },
+  {
+    field: "tachographValidTo",
+    label: "Tachograf",
+    aliases: ["Tachograf", "TachografDo", "TachographValidTo", "c_Tachograf", "c_TachografDo", "c_TachografPlatnostDo"],
+    tokens: [["tachograf", "tachograph"], ["valid", "platnost", "do", "date", "datum"]]
+  },
+  {
+    field: "craneRevisionValidTo",
+    label: "Revize jeřábu",
+    aliases: ["RevizeJerabu", "RevizeJerabuDo", "CraneRevisionValidTo", "c_RevizeJerabu", "c_RevizeJerabuDo", "c_JerabRevizeDo"],
+    tokens: [["jerab", "crane"], ["revize", "revision", "valid", "platnost", "do", "date", "datum"]]
+  },
+  {
+    field: "liftRevisionValidTo",
+    label: "Revize čela",
+    aliases: ["RevizeCela", "RevizeCelaDo", "TailLiftRevisionValidTo", "LiftRevisionValidTo", "c_RevizeCela", "c_RevizeCelaDo", "c_CeloRevizeDo"],
+    tokens: [["celo", "cela", "lift", "taillift"], ["revize", "revision", "valid", "platnost", "do", "date", "datum"]]
+  },
+  {
+    field: "pressureEquipmentRevisionValidTo",
+    label: "Tlakové zařízení",
+    aliases: ["TlakoveZarizeni", "TlakoveZarizeniDo", "PressureEquipmentRevisionValidTo", "c_TlakoveZarizeni", "c_TlakoveZarizeniDo"],
+    tokens: [["tlakove", "tlak", "pressure"], ["zarizeni", "equipment", "revize", "revision", "valid", "platnost", "do", "date", "datum"]]
+  },
+  {
+    field: "fireExtinguisherValidTo",
+    label: "Hasicí přístroj",
+    aliases: ["HasiciPristroj", "HasiciPristrojDo", "FireExtinguisherValidTo", "c_HasiciPristroj", "c_HasiciPristrojDo"],
+    tokens: [["hasici", "hasic", "fireextinguisher"], ["valid", "platnost", "do", "date", "datum", "revize"]]
+  },
+  {
+    field: "insuranceValidTo",
+    label: "Pojištění",
+    aliases: ["Pojisteni", "PojisteniDo", "InsuranceValidTo", "c_Pojisteni", "c_PojisteniDo", "c_PojisteniPlatnostDo"],
+    tokens: [["pojisteni", "insurance"], ["valid", "platnost", "do", "date", "datum"]]
+  },
+  {
+    field: "highwayVignetteValidTo",
+    label: "Dálniční známka",
+    aliases: ["DalnicniZnamka", "DalnicniZnamkaDo", "HighwayVignetteValidTo", "VignetteValidTo", "c_DalnicniZnamka", "c_DalnicniZnamkaDo"],
+    tokens: [["dalnicni", "vignette"], ["znamka", "valid", "platnost", "do", "date", "datum"]]
+  },
+  {
+    field: "lastServiceDate",
+    label: "Poslední servis",
+    aliases: ["LastServiceDate", "PosledniServis", "PosledniServisDatum", "c_PosledniServis", "c_PosledniServisDatum"],
+    tokens: [["servis", "service"], ["last", "posledni", "datum", "date"]]
+  },
+  {
+    field: "nextServiceDate",
+    label: "Příští servis",
+    aliases: ["NextServiceDate", "PristiServis", "PristiServisDatum", "c_PristiServis", "c_PristiServisDatum"],
+    tokens: [["servis", "service"], ["next", "pristi", "datum", "date"]]
+  }
+];
 
 function clean(value) {
   return cleanVistosValue(value);
+}
+
+function normalizeMetadataKey(value) {
+  return clean(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 function firstValue(row, keys) {
@@ -44,6 +121,169 @@ function firstValue(row, keys) {
     }
   }
   return "";
+}
+
+function schemaColumnName(column = {}) {
+  return firstValue(column, ["ColumnName", "columnName", "DbColumnName", "Name", "name", "FieldName", "fieldName"]);
+}
+
+function schemaColumnCaption(column = {}) {
+  return firstValue(column, ["Caption", "caption", "Title", "title", "Label", "label", "Description", "description"]);
+}
+
+function schemaColumnsFromPayload(payload) {
+  const columns = new Map();
+  const visit = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+
+    const columnName = schemaColumnName(value);
+    if (columnName && !columns.has(columnName)) {
+      columns.set(columnName, {
+        columnName,
+        caption: schemaColumnCaption(value),
+        type: firstValue(value, ["DataType", "dataType", "Type", "type"])
+      });
+    }
+
+    for (const key of ["Columns", "columns", "Fields", "fields", "Items", "items", "Data", "data", "Result", "result"]) {
+      visit(value[key]);
+    }
+  };
+
+  visit(payload);
+  return [...columns.values()].sort((left, right) => left.columnName.localeCompare(right.columnName, "cs"));
+}
+
+function termColumnScore(column = {}, spec = {}) {
+  const columnName = clean(column.columnName);
+  if (!columnName) return 0;
+
+  const columnKey = normalizeMetadataKey(columnName);
+  const captionKey = normalizeMetadataKey(column.caption);
+  const combinedKey = `${columnKey}${captionKey}`;
+  const aliasKeys = (spec.aliases || []).map(normalizeMetadataKey).filter(Boolean);
+
+  if (aliasKeys.includes(columnKey)) return 120;
+  if (captionKey && aliasKeys.includes(captionKey)) return 105;
+  if (aliasKeys.some((alias) => alias && (columnKey.includes(alias) || captionKey.includes(alias)))) return 88;
+
+  const tokenGroups = spec.tokens || [];
+  if (tokenGroups.length && tokenGroups.every((group) => group.some((token) => combinedKey.includes(normalizeMetadataKey(token))))) {
+    return 72;
+  }
+
+  return 0;
+}
+
+async function resolveVehicleTermFields(env, session) {
+  try {
+    const payload = await getVistosSchemaEntity(env, session, "Vehicle");
+    const schemaColumns = schemaColumnsFromPayload(payload);
+    const fields = {};
+
+    for (const spec of FLEET_VISTOS_VEHICLE_TERM_SPECS) {
+      const candidates = schemaColumns
+        .map((column) => ({
+          ...column,
+          score: termColumnScore(column, spec)
+        }))
+        .filter((column) => column.score > 0)
+        .sort((left, right) => right.score - left.score || left.columnName.localeCompare(right.columnName, "cs"));
+      const best = candidates[0] || null;
+      fields[spec.field] = {
+        field: spec.field,
+        label: spec.label,
+        confirmed: Boolean(best),
+        columnName: best?.columnName || "",
+        caption: best?.caption || "",
+        score: best?.score || 0,
+        candidates: candidates.slice(0, 5).map((column) => ({
+          columnName: column.columnName,
+          caption: column.caption,
+          score: column.score
+        }))
+      };
+    }
+
+    return {
+      ok: true,
+      source: "GetSchemaEntity",
+      columns: schemaColumns,
+      fields
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      source: "GetSchemaEntity",
+      columns: [],
+      fields: {},
+      error: clean(error?.message).slice(0, 160),
+      code: clean(error?.code)
+    };
+  }
+}
+
+function withVehicleTermColumns(columns, termFields) {
+  const extra = Object.values(termFields?.fields || {})
+    .filter((field) => field.confirmed && field.columnName)
+    .map((field) => field.columnName);
+  return Array.from(new Set([...columns, ...extra]));
+}
+
+function readVistosDisplayValue(row, columnName) {
+  if (!row || !columnName) return "";
+  return firstValue(row, [
+    `${columnName}_Caption`,
+    `${columnName}_FK_Caption`,
+    `${columnName}_MainProjection`,
+    `${columnName}_FK_MainProjection`,
+    `${columnName}_Value`,
+    `${columnName}_FK_Value`,
+    columnName,
+    `${columnName}_FK`,
+    `${columnName}_RecordId`,
+    `${columnName}_FK_RecordId`
+  ]);
+}
+
+function normalizeVistosDate(value) {
+  const raw = clean(value);
+  if (!raw) return "";
+
+  const msMatch = raw.match(/\/Date\((\d+)(?:[+-]\d+)?\)\//);
+  if (msMatch) {
+    const date = new Date(Number(msMatch[1]));
+    return Number.isNaN(date.getTime()) ? raw : date.toISOString().slice(0, 10);
+  }
+
+  const czechMatch = raw.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
+  if (czechMatch) {
+    const [, day, month, year] = czechMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? raw : date.toISOString().slice(0, 10);
+}
+
+function termValueFromRow(row, termFields, field) {
+  const source = termFields?.fields?.[field];
+  const raw = readVistosDisplayValue(row, source?.columnName);
+  return {
+    value: normalizeVistosDate(raw),
+    sourceColumn: raw && source?.columnName ? source.columnName : "",
+    sourceCaption: raw && source?.caption ? source.caption : ""
+  };
 }
 
 function recordId(row, baseKey) {
@@ -100,8 +340,11 @@ function vehicleIssueCodes(vehicle) {
   return issues;
 }
 
-function mapVehicle(row) {
+function mapVehicle(row, termFields = null) {
   const vin = firstValue(row, ["VIN", "Vin"]);
+  const termValues = Object.fromEntries(
+    FLEET_VISTOS_VEHICLE_TERM_SPECS.map((spec) => [spec.field, termValueFromRow(row, termFields, spec.field)])
+  );
   const vehicle = {
     vistosVehicleId: firstValue(row, ["Id", "VehicleId"]),
     name: firstValue(row, ["Name", "Caption"]),
@@ -125,6 +368,25 @@ function mapVehicle(row) {
     lastPositionSyncDate: firstValue(row, ["LastPositionSyncDate"]),
     gpsUpdatedAt: firstValue(row, ["c_DateUpdateGPS"]),
     gps: gpsFromRow(row),
+    stkValidTo: termValues.stkValidTo?.value || "",
+    emissionsValidTo: termValues.emissionsValidTo?.value || "",
+    tachographValidTo: termValues.tachographValidTo?.value || "",
+    craneRevisionValidTo: termValues.craneRevisionValidTo?.value || "",
+    liftRevisionValidTo: termValues.liftRevisionValidTo?.value || "",
+    pressureEquipmentRevisionValidTo: termValues.pressureEquipmentRevisionValidTo?.value || "",
+    fireExtinguisherValidTo: termValues.fireExtinguisherValidTo?.value || "",
+    insuranceValidTo: termValues.insuranceValidTo?.value || "",
+    highwayVignetteValidTo: termValues.highwayVignetteValidTo?.value || "",
+    lastServiceDate: termValues.lastServiceDate?.value || "",
+    nextServiceDate: termValues.nextServiceDate?.value || "",
+    termSources: Object.fromEntries(
+      Object.entries(termValues)
+        .filter(([, item]) => item?.sourceColumn)
+        .map(([field, item]) => [field, {
+          columnName: item.sourceColumn,
+          caption: item.sourceCaption
+        }])
+    ),
     sourceEntity: "Vehicle",
     mappingTarget: "fleet",
     readOnly: true
@@ -205,15 +467,16 @@ export async function createFleetVistosVehiclePreview(env) {
   }
 
   const session = await loginVistosExecute(env);
+  const termFields = await resolveVehicleTermFields(env, session);
   const page = await getAllVistosPages(
     env,
     session,
     "Vehicle",
-    FLEET_VISTOS_VEHICLE_COLUMNS,
+    withVehicleTermColumns(FLEET_VISTOS_VEHICLE_COLUMNS, termFields),
     FLEET_VISTOS_VEHICLE_ACTIVE_FILTER,
     { maxPages: 20 }
   );
-  const vehicles = page.rows.slice(0, FLEET_VISTOS_VEHICLE_PREVIEW_LIMIT).map(mapVehicle);
+  const vehicles = page.rows.slice(0, FLEET_VISTOS_VEHICLE_PREVIEW_LIMIT).map((row) => mapVehicle(row, termFields));
   const diagnostics = diagnosticsFromPage(page);
 
   return {
@@ -229,7 +492,27 @@ export async function createFleetVistosVehiclePreview(env) {
     summary: summaryFromVehicles(vehicles, page),
     vehicles,
     issues: issueSummary(vehicles),
-    diagnostics,
+    diagnostics: {
+      ...diagnostics,
+      columns: withVehicleTermColumns(FLEET_VISTOS_VEHICLE_COLUMNS, termFields),
+      vehicleTermFields: {
+        ok: termFields.ok,
+        source: termFields.source,
+        matched: Object.values(termFields.fields || {})
+          .filter((field) => field.confirmed)
+          .map((field) => ({
+            field: field.field,
+            label: field.label,
+            columnName: field.columnName,
+            caption: field.caption,
+            score: field.score
+          })),
+        missing: Object.values(termFields.fields || {})
+          .filter((field) => !field.confirmed)
+          .map((field) => field.label),
+        error: termFields.error || ""
+      }
+    },
     loadedAt: new Date().toISOString()
   };
 }
