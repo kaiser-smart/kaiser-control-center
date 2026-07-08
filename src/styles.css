@@ -30820,9 +30820,40 @@ body:has(.ds-plus-page) {
 .ds-plus-priority {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 12px 14px;
+  padding: 10px 12px;
+}
+
+.ds-plus-priority__body {
+  min-width: 0;
+}
+
+.ds-plus-priority__top,
+.ds-plus-priority__state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ds-plus-priority__top {
+  justify-content: space-between;
+}
+
+.ds-plus-priority__top span {
+  color: #657164;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.ds-plus-priority__top span:last-child,
+.ds-plus-priority__state span:last-child {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ds-plus-priority__instruction {
@@ -30845,15 +30876,27 @@ body:has(.ds-plus-page) {
   line-height: 1.25;
 }
 
+.ds-plus-priority h3,
+.ds-plus-priority p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ds-plus-priority p,
 .ds-plus-message-row__action span,
 .ds-plus-compact-workflow dd,
+.ds-plus-priority__state span:last-child,
 .ds-plus-side-block p,
 .ds-plus-recommendation p,
 .ds-plus-rule p {
   margin: 0;
   color: #4f5d50;
   line-height: 1.35;
+}
+
+.ds-plus-priority__state {
+  margin-top: 7px;
 }
 
 .ds-plus-recommendation__head {
@@ -32001,10 +32044,9 @@ body:has(.ds-plus-page) {
   }
 
   .ds-plus-priority {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .ds-plus-priority .primary-action,
   .ds-plus-message-row__action .primary-action,
   .ds-plus-recommendation__actions button,
   .ds-plus-instruction-card > form > .primary-action,
@@ -32022,6 +32064,16 @@ body:has(.ds-plus-page) {
 
   .ds-plus-action-with-help > button:not(.ds-plus-help__button) {
     flex: 1 1 auto;
+  }
+
+  .ds-plus-priority .ds-plus-action-with-help {
+    width: auto;
+  }
+
+  .ds-plus-priority .primary-action {
+    width: auto;
+    min-height: 36px;
+    padding: 7px 12px;
   }
 
   .ds-plus-page .ds-plus-help__button {

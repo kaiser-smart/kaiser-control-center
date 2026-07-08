@@ -21232,15 +21232,17 @@ function dataBoxPlusPriorityCard(message) {
   const action = dataBoxPlusOverviewAction(message, workflow);
   return `
     <article class="ds-plus-priority ds-plus-priority--${escapeHtml(workflow.tone)}">
-      <div>
-        <span class="ds-plus-priority__mailbox">${escapeHtml(mailbox?.name || "Schránka")}</span>
+      <div class="ds-plus-priority__body">
+        <div class="ds-plus-priority__top">
+          <span class="ds-plus-priority__mailbox">${escapeHtml(mailbox?.name || "Schránka")}</span>
+          <span>${escapeHtml(formatDateTime(message.deliveredAt))}</span>
+        </div>
         <h3>${escapeHtml(message.senderName)}</h3>
         <p>${escapeHtml(message.subject)}</p>
-        <dl class="ds-plus-priority__context">
-          <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(message.deliveredAt))}</dd></div>
-          <div><dt>Stav</dt><dd><span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(workflow.tone)}">${escapeHtml(workflow.stateLabel || workflow.state)}</span></dd></div>
-          <div><dt>Další krok</dt><dd>${escapeHtml(nextStep)}</dd></div>
-        </dl>
+        <div class="ds-plus-priority__state">
+          <span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(workflow.tone)}">${escapeHtml(workflow.stateLabel || workflow.state)}</span>
+          <span>${escapeHtml(nextStep)}</span>
+        </div>
       </div>
       ${dataBoxPlusRenderWorkflowAction(action)}
     </article>
