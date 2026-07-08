@@ -16749,14 +16749,13 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
           <div class="driver-tablet-preview-dashboard" aria-label="Ridicsky tablet design preview">
             <header class="driver-tablet-preview-cockpit" aria-label="Souhrn trasy">
               <div class="driver-tablet-preview-brand">
-                <span class="driver-tablet-preview-brand__icon icon-tone-green" aria-hidden="true">
-                  ${collectionRoutesDriverTabletPreviewIconMarkup("truck")}
+                <span class="driver-tablet-preview-brand__logo" aria-hidden="true">
+                  <img class="driver-tablet-preview-kaiser-logo" src="/kaiser_logo.png?v=0.1.330" alt="" loading="lazy">
                 </span>
                 <div class="driver-tablet-preview-brand__copy">
                   <span>Řidičský tablet</span>
                   <div class="driver-tablet-preview-brand__headline">
                     <strong>Dnešní trasa</strong>
-                    <img class="driver-tablet-preview-kaiser-logo" src="/kaiser_logo.png?v=0.1.330" alt="Kaiser" loading="lazy">
                   </div>
                   <small>Design preview - bez ostrých akcí</small>
                 </div>
