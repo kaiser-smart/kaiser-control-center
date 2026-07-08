@@ -9,6 +9,9 @@ import {
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 const RECEIVABLES_VISTOS_PREVIEW_LIMIT = 80;
 const RECEIVABLES_VISTOS_INVOICE_PREVIEW_LIMIT = 120;
+export const RECEIVABLES_VISTOS_INVOICE_LOOKBACK_MONTHS = 24;
+const RECEIVABLES_VISTOS_INVOICE_LOOKBACK_MAX_MONTHS = 120;
+const RECEIVABLES_VISTOS_INVOICE_DATE_FIELD = "IssuedDate";
 
 const KAISER_INVOICE_COLUMNS = [
   "Id",
@@ -113,6 +116,48 @@ const INVOICE_ATTEMPTS = [
 
 function clean(value) {
   return cleanVistosValue(value);
+}
+
+function positiveInteger(value, fallback, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return fallback;
+  return Math.max(1, Math.min(Math.floor(number), max));
+}
+
+function isoDate(date) {
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function subtractUtcMonths(date, months) {
+  const source = new Date(date);
+  const target = new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth() - months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(source.getUTCDate(), lastDay));
+  return target;
+}
+
+export function receivablesVistosInvoiceLookbackWindow(options = {}) {
+  const months = positiveInteger(
+    options.months ?? options.invoiceLookbackMonths,
+    RECEIVABLES_VISTOS_INVOICE_LOOKBACK_MONTHS,
+    RECEIVABLES_VISTOS_INVOICE_LOOKBACK_MAX_MONTHS
+  );
+  const now = options.now ? new Date(options.now) : new Date();
+  const safeNow = Number.isNaN(now.getTime()) ? new Date() : now;
+  const fromDate = isoDate(subtractUtcMonths(safeNow, months));
+  return {
+    enabled: true,
+    months,
+    dateField: RECEIVABLES_VISTOS_INVOICE_DATE_FIELD,
+    fromDate,
+    filter: {
+      [`${RECEIVABLES_VISTOS_INVOICE_DATE_FIELD}_From`]: fromDate
+    }
+  };
 }
 
 function firstValue(row, keys) {
