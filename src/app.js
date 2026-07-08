@@ -218,6 +218,46 @@ const TYRES_MODULE_URL = "https://kaiser-smart.github.io/kaiser-pneu-evidence/";
 const APP_NAME = "Smart odpady";
 const HOME_SUBTITLE = "Provozní systém pro odpady, vozidla a trasy";
 const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
+const DESIGN_ICON_ASSET_VERSION = "0.1.330";
+const THEME_PREVIEW_ICON_FILES = {
+  dashboard: "001.svg",
+  truck: "005.svg",
+  route: "003.svg",
+  warning: "014.svg",
+  marker: "006.svg",
+  container: "005.svg",
+  service: "007.svg",
+  app: "020.svg",
+  check: "019.svg",
+  speed: "001.svg",
+  plus: "002.svg",
+  menu: "021.svg",
+  vehicleTrackingPreview: "vehicle-tracking.svg",
+  topMail: "top-mail.svg",
+  topLogin: "top-login.svg",
+  topPhone: "top-phone.svg",
+  quickEntry: "002.svg",
+  collectionRoutes: "003.svg",
+  driverReports: "004.svg",
+  fleet: "005.svg",
+  vehicleTracking: "vehicle-tracking.svg",
+  maintenance: "007.svg",
+  tires: "008.svg",
+  customers: "016.svg",
+  sampleRoutes: "010.svg",
+  dataBox: "011.svg",
+  absence: "012.svg",
+  reports: "013.svg",
+  feedback: "014.svg",
+  costs: "015.svg",
+  receivables: "022.svg",
+  usersRoles: "009.svg",
+  settings: "017.svg",
+  systemCheck: "020.svg",
+  actionDone: "019.svg",
+  actionWarning: "014.svg",
+  actionIcons: "015.svg"
+};
 const SARLOTA_ROUTE = "/sarlota";
 const SARLOTA_OPEN_QUERY_VALUE = "sarlota";
 const SARLOTA_PANEL_STATUS_ENDPOINT = "/api/ai/elevenlabs/sarlota-panel-status";
@@ -1430,6 +1470,14 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function themePreviewIcon(name) {
+  return themePreviewIconFile(THEME_PREVIEW_ICON_FILES[name] || THEME_PREVIEW_ICON_FILES.marker);
+}
+
+function themePreviewIconFile(file) {
+  return `<img class="theme-icon-img" src="/design-icons/${escapeHtml(file)}?v=${DESIGN_ICON_ASSET_VERSION}" alt="" aria-hidden="true" loading="lazy">`;
+}
+
 function normalizeDriverTabletPreviewTheme(value) {
   return value === "light" ? "light" : "dark";
 }
@@ -1440,20 +1488,7 @@ function setDriverTabletPreviewTheme(theme) {
 }
 
 function driverTabletPreviewThemeIcon(mode) {
-  if (mode === "dark") {
-    return `
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M20.1 14.2A7.8 7.8 0 0 1 9.8 3.9a8.4 8.4 0 1 0 10.3 10.3Z"></path>
-      </svg>
-    `;
-  }
-
-  return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="12" cy="12" r="4"></circle>
-      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
-    </svg>
-  `;
+  return themePreviewIcon(mode === "dark" ? "systemCheck" : "dashboard");
 }
 
 function activeThemeSettings() {
@@ -16324,37 +16359,47 @@ const COLLECTION_ROUTES_DRIVER_ACTION_ICONS = {
   close: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l14 14"/><path d="M23 9L9 23"/></svg>`
 };
 
-const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICON_MODULES = {
-  truck: "fleet",
-  calendar: "absence",
-  user: "users",
-  bell: "reports",
-  pin: "collection-routes",
-  route: "collection-routes",
-  flag: "collection-routes",
-  trash: "driver-reports",
-  bin: "driver-reports",
+const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICON_NAMES = {
+  truck: "truck",
+  calendar: "app",
+  user: "usersRoles",
+  bell: "warning",
+  pin: "marker",
+  route: "route",
+  flag: "route",
+  trash: "driverReports",
+  bin: "container",
   note: "reports",
-  headset: "driver-reports",
+  headset: "actionIcons",
   break: "absence",
-  cloud: "dashboard",
-  done: "absence",
-  navigate: "collection-routes",
-  problem: "service-maintenance",
-  dump: "driver-reports",
-  sarlota: "driver-reports"
+  cloud: "systemCheck",
+  done: "actionDone",
+  navigate: "route",
+  problem: "actionWarning",
+  dump: "driverReports",
+  sarlota: "actionIcons"
 };
 
-function collectionRoutesDriverTabletPreviewApprovedIcon(moduleId) {
-  const moduleItem = orderedModules.find((item) => item.id === moduleId)
-    || orderedModules.find((item) => item.id === "reports");
-  return typeof moduleItem?.icon === "function" ? moduleItem.icon() : ReportsIcon();
-}
-
-const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS = Object.fromEntries(
-  Object.entries(COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICON_MODULES)
-    .map(([iconName, moduleId]) => [iconName, collectionRoutesDriverTabletPreviewApprovedIcon(moduleId)])
-);
+const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICON_TONES = {
+  truck: "green",
+  calendar: "bluegrey",
+  user: "bluegrey",
+  bell: "graphite",
+  pin: "green",
+  route: "green",
+  flag: "bluegrey",
+  trash: "graphite",
+  bin: "graphite",
+  note: "graphite",
+  headset: "bluegrey",
+  break: "graphite",
+  cloud: "bluegrey",
+  done: "green",
+  navigate: "green",
+  problem: "amber",
+  dump: "green",
+  sarlota: "bluegrey"
+};
 
 const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ACTION_ICONS = {
   done: "done",
@@ -16366,11 +16411,27 @@ const COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ACTION_ICONS = {
   break: "break"
 };
 
-function collectionRoutesDriverTabletPreviewIcon(name, extraClass = "") {
+function collectionRoutesDriverTabletPreviewIconName(name) {
   const iconName = String(name || "").trim();
+  return COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICON_NAMES[iconName] ? iconName : "problem";
+}
+
+function collectionRoutesDriverTabletPreviewIconMarkup(name) {
+  const iconName = collectionRoutesDriverTabletPreviewIconName(name);
+  return themePreviewIcon(COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICON_NAMES[iconName]);
+}
+
+function collectionRoutesDriverTabletPreviewIconTone(name) {
+  const iconName = collectionRoutesDriverTabletPreviewIconName(name);
+  return COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICON_TONES[iconName] || "graphite";
+}
+
+function collectionRoutesDriverTabletPreviewIcon(name, extraClass = "") {
+  const iconName = collectionRoutesDriverTabletPreviewIconName(name);
+  const tone = collectionRoutesDriverTabletPreviewIconTone(iconName);
   return `
-    <span class="driver-tablet-preview-inline-icon driver-tablet-preview-inline-icon--${escapeHtml(iconName)} ${escapeHtml(extraClass)}" aria-hidden="true">
-      ${COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS[iconName] || COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS.problem}
+    <span class="driver-tablet-preview-inline-icon driver-tablet-preview-inline-icon--${escapeHtml(iconName)} icon-tone-${escapeHtml(tone)} ${escapeHtml(extraClass)}" aria-hidden="true">
+      ${collectionRoutesDriverTabletPreviewIconMarkup(iconName)}
     </span>
   `;
 }
@@ -16627,9 +16688,10 @@ function collectionRoutesDriverTabletPreviewRows(options = {}) {
 
 function collectionRoutesDriverTabletPreviewAction(label, action, tone = "default") {
   const previewIconName = COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ACTION_ICONS[action] || "problem";
+  const iconTone = collectionRoutesDriverTabletPreviewIconTone(previewIconName);
   const iconHtml = `
-    <span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--${escapeHtml(previewIconName)}" aria-hidden="true">
-      ${COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS[previewIconName] || COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS.problem}
+    <span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--${escapeHtml(previewIconName)} icon-tone-${escapeHtml(iconTone)}" aria-hidden="true">
+      ${collectionRoutesDriverTabletPreviewIconMarkup(previewIconName)}
     </span>
   `;
   const previewBadge = ["navigate", "sarlota"].includes(action) ? "neostré" : "preview";
@@ -16687,12 +16749,15 @@ function collectionRoutesDriverTabletPreviewPanel(rows = collectionRoutesDriverT
           <div class="driver-tablet-preview-dashboard" aria-label="Ridicsky tablet design preview">
             <header class="driver-tablet-preview-cockpit" aria-label="Souhrn trasy">
               <div class="driver-tablet-preview-brand">
-                <span class="driver-tablet-preview-brand__icon" aria-hidden="true">
-                  ${COLLECTION_ROUTES_DRIVER_TABLET_PREVIEW_ICONS.truck}
+                <span class="driver-tablet-preview-brand__icon icon-tone-green" aria-hidden="true">
+                  ${collectionRoutesDriverTabletPreviewIconMarkup("truck")}
                 </span>
-                <div>
+                <div class="driver-tablet-preview-brand__copy">
                   <span>Řidičský tablet</span>
-                  <strong>Dnešní trasa</strong>
+                  <div class="driver-tablet-preview-brand__headline">
+                    <strong>Dnešní trasa</strong>
+                    <img class="driver-tablet-preview-kaiser-logo" src="/kaiser_logo.png?v=0.1.330" alt="Kaiser" loading="lazy">
+                  </div>
                   <small>Design preview - bez ostrých akcí</small>
                 </div>
               </div>

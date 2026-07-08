@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Vrstva_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 100 100" color="#000000" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" data-line-weight="soft-metal-140">
+  <path d="M18.5,8.5h43.2l16.8,16.8v52.2c0,3.9-3.1,7-7,7h-53c-3.9,0-7-3.1-7-7v-62c0-3.9,3.1-7,7-7Z"/>
+  <path d="M61.7,8.5v12.7c0,2.3,1.8,4.1,4.1,4.1h12.7"/>
+  <path d="M24.8,33.2h30.4"/>
+  <path d="M24.8,45.4h38.6"/>
+  <path d="M24.8,57.6h24.6"/>
+  <path d="M24.8,69.8h18.4"/>
+  <circle cx="68.7" cy="68.5" r="17.1"/>
+  <path d="M60.9,69.3l5.6,5.6l11.1-12.4"/>
+</svg>
