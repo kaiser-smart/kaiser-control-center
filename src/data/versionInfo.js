@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.452"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.453"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozový park: pracovní centrum vozidel",
+    text: "Stávající modul Vozový park má nový přehled, evidenci vozidel, detail vozidla, termíny, servis, náklady a dokumenty. Související Hlášení řidičů jen zobrazuje a proklikává, bez duplikace jejich workflow."
+  },
   {
     title: "Datové schránky Plus: údaje převzaté z DS",
     text: "DSP při zobrazení schránek přebírá názvy a ověřené ID z původní Datové schránky a z jejích metadat zpráv. Login a heslo zůstávají serverově v secrets nebo DSP vaultu, bez ručního přepisování v UI."
