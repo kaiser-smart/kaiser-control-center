@@ -11,6 +11,10 @@ const RULE_ID = "collection-routes-vistos-snapshot-15m";
 const TIME_ZONE = "Europe/Prague";
 const SLOT_MS = 15 * 60 * 1000;
 
+function appBaseUrl(env) {
+  return cleanString(env?.APP_BASE_URL || "https://kaiser-control-center.pages.dev").replace(/\/+$/, "");
+}
+
 function cleanString(value) {
   return String(value ?? "").trim();
 }
@@ -172,6 +176,45 @@ async function updateAutomationRun(db, run) {
     .run();
 }
 
+async function runPagesSnapshot(env, scheduledAt) {
+  const token = cleanString(env?.COLLECTION_ROUTES_RUNNER_TOKEN);
+  if (!token) {
+    return {
+      ok: false,
+      reason: "missing_token",
+      errorCode: "collection_routes_runner_token_missing",
+      message: "Read-only Vistos snapshot přeskočen: worker nemá nastavený COLLECTION_ROUTES_RUNNER_TOKEN."
+    };
+  }
+
+  const response = await fetch(`${appBaseUrl(env)}/api/collection-routes/vistos/kommunal-preview-internal`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      scheduledAt,
+      runner: RUNNER_NAME
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      reason: "pages_snapshot_failed",
+      errorCode: payload.code || "collection_routes_pages_snapshot_failed",
+      message: payload.error || "Interní Pages snapshot Tras svozu selhal."
+    };
+  }
+
+  return {
+    ok: true,
+    preview: payload.preview || payload
+  };
+}
+
 export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
   const db = database(env);
   const now = new Date(Number(options.scheduledTime || Date.now()));
@@ -230,47 +273,52 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
     };
   }
 
-  if (!isVistosExecuteConfigured(env)) {
-    const finishedAt = new Date().toISOString();
-    const message = "Read-only Vistos snapshot přeskočen: worker nemá nastavené VISTOS_API_BASE_URL, VISTOS_API_USERNAME a VISTOS_API_PASSWORD.";
-    await updateAutomationRun(db, {
-      id: automationRunId,
-      finishedAt,
-      status: "skipped",
-      message,
-      errorCode: "vistos_api_not_configured"
-    });
-    await updateRunnerRun(db, {
-      id: runnerRunId,
-      finishedAt,
-      status: "skipped",
-      dryRunCount: 0,
-      skippedCount: 1,
-      failedCount: 0,
-      message,
-      errorCode: "vistos_api_not_configured"
-    });
-    return {
-      mode: "read-only-snapshot",
-      runner: RUNNER_NAME,
-      runnerRunId,
-      moduleKey: MODULE_KEY,
-      status: "skipped",
-      message,
-      dryRunCount: 0,
-      skippedCount: 1,
-      errorCount: 0,
-      cron,
-      dedupeKey: key
-    };
-  }
-
   try {
-    const result = await createCollectionRoutesVistosKommunalPreview(env, {
-      id: `cloud-runner:${RUNNER_NAME}`
-    }, {
-      derivedRowsLimit: 0
-    });
+    let result;
+    if (isVistosExecuteConfigured(env)) {
+      result = await createCollectionRoutesVistosKommunalPreview(env, {
+        id: `cloud-runner:${RUNNER_NAME}`
+      }, {
+        derivedRowsLimit: 0
+      });
+    } else {
+      const pagesResult = await runPagesSnapshot(env, now.toISOString());
+      if (!pagesResult.ok) {
+        const finishedAt = new Date().toISOString();
+        await updateAutomationRun(db, {
+          id: automationRunId,
+          finishedAt,
+          status: "skipped",
+          message: pagesResult.message,
+          errorCode: pagesResult.errorCode
+        });
+        await updateRunnerRun(db, {
+          id: runnerRunId,
+          finishedAt,
+          status: "skipped",
+          dryRunCount: 0,
+          skippedCount: 1,
+          failedCount: 0,
+          message: pagesResult.message,
+          errorCode: pagesResult.errorCode
+        });
+        return {
+          mode: "read-only-snapshot",
+          runner: RUNNER_NAME,
+          runnerRunId,
+          moduleKey: MODULE_KEY,
+          status: "skipped",
+          message: pagesResult.message,
+          dryRunCount: 0,
+          skippedCount: 1,
+          errorCount: 0,
+          cron,
+          dedupeKey: key
+        };
+      }
+      result = pagesResult.preview;
+    }
+
     const finishedAt = new Date().toISOString();
     const summary = result.summary || {};
     const batch = result.batch || {};
