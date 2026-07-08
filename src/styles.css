@@ -30409,14 +30409,19 @@ body:has(.ds-plus-page) {
   }
 
   .ds-plus-help__bubble {
-    right: auto;
-    left: 50%;
-    transform: translate(-50%, -4px);
+    position: fixed;
+    top: auto;
+    right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    left: 12px;
+    z-index: 120;
+    width: auto;
+    transform: translateY(6px);
   }
 
   .ds-plus-help:hover .ds-plus-help__bubble,
   .ds-plus-help:focus-within .ds-plus-help__bubble {
-    transform: translate(-50%, 0);
+    transform: translateY(0);
   }
 
   .ds-plus-message-row {
