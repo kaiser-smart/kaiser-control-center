@@ -32021,6 +32021,117 @@ body:has(.ds-plus-page) {
   font-weight: 600;
 }
 
+.ds-plus-event-log {
+  display: grid;
+  gap: 14px;
+}
+
+.ds-plus-event-log__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ds-plus-event-log__head h3,
+.ds-plus-event-log__head p,
+.ds-plus-event-feed h4 {
+  margin: 0;
+}
+
+.ds-plus-event-log__head p {
+  margin-top: 4px;
+  color: #5b675c;
+  line-height: 1.45;
+}
+
+.ds-plus-event-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.ds-plus-event-status {
+  border: 1px solid #e0e6dd;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.ds-plus-event-status span {
+  display: block;
+  color: #657164;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.ds-plus-event-status strong {
+  display: block;
+  margin-top: 3px;
+  color: #1f2a22;
+  font-size: 1.05rem;
+}
+
+.ds-plus-event-status p {
+  margin: 6px 0 0;
+  color: #536054;
+  line-height: 1.42;
+}
+
+.ds-plus-event-status--success {
+  border-color: #c9e4c2;
+  background: #f6fbf4;
+}
+
+.ds-plus-event-status--warning {
+  border-color: #efd59b;
+  background: #fffaf0;
+}
+
+.ds-plus-event-status--danger,
+.ds-plus-event-status--blocked {
+  border-color: #efc0b9;
+  background: #fff7f5;
+}
+
+.ds-plus-event-feed {
+  border-top: 1px solid #e8eee5;
+  padding-top: 12px;
+}
+
+.ds-plus-event-feed ol {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-plus-event-feed li {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #e4eae1;
+  border-radius: 8px;
+  background: #fbfdf9;
+  padding: 10px 12px;
+}
+
+.ds-plus-event-feed span {
+  color: #657164;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.ds-plus-event-feed strong {
+  color: #223028;
+}
+
+.ds-plus-event-feed p {
+  margin: 0;
+  color: #536054;
+  line-height: 1.4;
+}
+
 .ds-plus-diagnostics {
   margin-top: 14px;
   border: 1px solid #dfe5dc;

@@ -21685,6 +21685,116 @@ function dataBoxPlusMailboxCreateForm(mailboxes = []) {
   `;
 }
 
+function dataBoxPlusEventLogBlock() {
+  const mailboxes = dataBoxPlusMailboxes();
+  const latestSync = Array.isArray(dataBoxPlusState.syncRuns) ? dataBoxPlusState.syncRuns[0] : null;
+  const activeMailboxes = mailboxes.filter((mailbox) => mailbox.credentialActive !== false && mailbox.status !== "čeká na přístup").length;
+  const mailboxProblems = mailboxes.reduce((sum, mailbox) => sum + (Number(mailbox.problemCount || 0) || 0), 0);
+  const messages = dataBoxPlusMessages();
+  const messageProblems = messages.filter((message) => dataBoxPlusSearchText([message.status, message.attachmentStatus, message.riskLevel]).includes("problem")).length;
+  const historyEvents = messages
+    .flatMap((message) => (Array.isArray(message.history) ? message.history : []).map((event) => ({
+      createdAt: event.createdAt || message.updatedAt || message.receivedAt || message.deliveredAt,
+      title: message.subject || "Datová zpráva",
+      note: event.auditNote || event.result || event.actionType || "Událost byla zapsaná do historie."
+    })))
+    .sort((a, b) => Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""))
+    .slice(0, 4);
+  const fallbackEvents = [
+    latestSync ? {
+      createdAt: latestSync.finishedAt || latestSync.startedAt,
+      title: "Načtení schránek",
+      note: `Poslední běh: ${latestSync.status || "stav není uvedený"}. Staženo ${latestSync.messagesDownloaded || 0} zpráv.`
+    } : {
+      createdAt: "",
+      title: "Načtení schránek",
+      note: "Čeká se na první doložený běh načítání."
+    },
+    {
+      createdAt: "",
+      title: "Odesílání mimo systém",
+      note: "Datové zprávy, e-maily ani SMS se z DSP v této fázi neodesílají automaticky."
+    }
+  ];
+  const events = historyEvents.length ? historyEvents : fallbackEvents;
+  const statuses = [
+    {
+      label: "Automatizace v cloudu",
+      value: latestSync ? "částečně ověřit" : "neověřeno",
+      tone: "warning",
+      text: latestSync
+        ? "Existuje poslední běh načítání, ale tento blok neprokazuje zapnutý cloud scheduler."
+        : "Není doložený žádný běh, který by prokazoval pravidelné cloud načítání."
+    },
+    {
+      label: "Vše běží?",
+      value: mailboxProblems || messageProblems ? "ne, jsou problémy" : "částečně",
+      tone: mailboxProblems || messageProblems ? "danger" : "warning",
+      text: mailboxProblems || messageProblems
+        ? "Některé schránky nebo zprávy mají problém. Odesílání mimo systém je stále vypnuté."
+        : "Načítání má stav k ověření. Ostré odesílání datovek, e-mailů a SMS není zapnuté."
+    },
+    {
+      label: "Odesílání datových zpráv",
+      value: "vypnuto",
+      tone: "blocked",
+      text: "Nová zpráva a odpověď jsou zatím pracovní návrh. Bez další schválené fáze se datová zpráva neodešle."
+    },
+    {
+      label: "E-mail",
+      value: "jen návrh",
+      tone: "warning",
+      text: "DSP může připravit interní návrh e-mailu. E-mail se neodešle mimo systém."
+    },
+    {
+      label: "SMS",
+      value: "nezapojeno",
+      tone: "blocked",
+      text: "DSP nemá zapnuté ostré SMS odesílání."
+    },
+    {
+      label: "Napojené schránky",
+      value: `${activeMailboxes}/7`,
+      tone: activeMailboxes === 7 ? "success" : "warning",
+      text: activeMailboxes === 7
+        ? "Všech 7 schránek je v DSP vedených jako aktivní."
+        : "Některá schránka čeká na přístup nebo ověření."
+    }
+  ];
+  return `
+    <section class="ds-plus-settings-block ds-plus-settings-block--wide ds-plus-event-log">
+      <div class="ds-plus-event-log__head">
+        <div>
+          <h3>Log událostí</h3>
+          <p>Pravdivý provozní stav DSP. Pokud něco není ověřené, není to označené jako běžící.</p>
+        </div>
+        ${dataBoxPlusBadge(latestSync ? "poslední stav" : "čeká na běh", latestSync ? "warning" : "neutral")}
+      </div>
+      <div class="ds-plus-event-status-grid">
+        ${statuses.map((item) => `
+          <article class="ds-plus-event-status ds-plus-event-status--${escapeHtml(item.tone)}">
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(item.value)}</strong>
+            <p>${escapeHtml(item.text)}</p>
+          </article>
+        `).join("")}
+      </div>
+      <div class="ds-plus-event-feed">
+        <h4>Poslední události</h4>
+        <ol>
+          ${events.map((event) => `
+            <li>
+              <span>${escapeHtml(event.createdAt ? formatDateTime(event.createdAt) : "bez času")}</span>
+              <strong>${escapeHtml(event.title)}</strong>
+              <p>${escapeHtml(event.note)}</p>
+            </li>
+          `).join("")}
+        </ol>
+      </div>
+    </section>
+  `;
+}
+
 function dataBoxPlusSettingsPanel() {
   const mailboxes = dataBoxPlusMailboxes();
   return `
@@ -21725,6 +21835,7 @@ function dataBoxPlusSettingsPanel() {
             ${["Učí se", "Navrhuje", "Čeká na potvrzení", "Pracuje samostatně", "Pozastaveno", "Vyžaduje pozornost"].map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
           </div>
         </section>
+        ${dataBoxPlusEventLogBlock()}
         <section class="ds-plus-settings-block ds-plus-settings-block--wide">
           <h3>Datové entity ostré fáze</h3>
           <p>Ostré napojení má ukládat zprávy, přílohy, doporučení, učení, pravidla a audit jen přes backend.</p>

@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Datové schránky Plus: Log událostí",
+    text: "V Nastavení DSP je nový provozní blok Log událostí. Ukazuje pravdivý stav načítání, cloud automatizace, datových zpráv, e-mailů a SMS; neoznačuje jako běžící nic, co není ověřené nebo zapnuté."
+  },
+  {
     title: "Datové schránky Plus: odpověď v samostatném okně",
     text: "Odpověď na datovou zprávu se nově otevírá jako samostatný pracovní modal s kroky příjemce, odesílací schránka, text, přílohy a kontrola. Detail zprávy už se po kliknutí na Odpovědět neroztahuje matoucím formulářem."
   },
