@@ -30480,6 +30480,28 @@ body:has(.ds-plus-page) {
   line-height: 1.5;
 }
 
+.ds-plus-recommendation__head {
+  display: grid;
+  gap: 4px;
+}
+
+.ds-plus-recommendation__head span {
+  color: #657164;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.ds-plus-recommendation__head h3 {
+  margin: 0;
+  color: #1f2a22;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.ds-plus-recommendation__head p {
+  margin: 0;
+}
+
 .ds-plus-priority dl,
 .ds-plus-recommendation dl,
 .ds-plus-rule dl,

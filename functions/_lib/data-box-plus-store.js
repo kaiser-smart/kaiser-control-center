@@ -1764,17 +1764,134 @@ async function recommendationById(db, id) {
   return recommendation;
 }
 
+function recommendationConfirmAction(recommendation = {}, body = {}) {
+  const normalized = searchText([
+    body.actionType,
+    recommendation.recommendedAction,
+    recommendation.text,
+    recommendation.summary
+  ]);
+  if (normalized.includes("archiv")) {
+    return {
+      actionType: "Potvrdit archivaci",
+      performedAction: "Archivace zprávy",
+      messageStatus: "Archivované",
+      archiveStatus: "archived",
+      assignedTo: "",
+      suggestedAction: "Archivováno jako vyřízená nebo informativní zpráva.",
+      auditNote: "Zpráva byla interně přesunuta do archivu. Nic se nesmazalo ani neodeslalo mimo systém."
+    };
+  }
+  if (normalized.includes("lhuta") || normalized.includes("lhutu") || normalized.includes("kalendar") || normalized.includes("deadline")) {
+    return {
+      actionType: "Potvrdit zapsání lhůty",
+      performedAction: "Zapsání lhůty k ručnímu doplnění",
+      messageStatus: "Čeká na potvrzení",
+      archiveStatus: "active",
+      assignedTo: "Garážmistr",
+      suggestedAction: "Lhůta připravena k zapsání a předána garážmistrovi.",
+      auditNote: "Zpráva byla interně označena pro zadání lhůty. Nic se neodeslalo mimo systém."
+    };
+  }
+  if (normalized.includes("faktury") || normalized.includes("faktura") || normalized.includes("upom")) {
+    return {
+      actionType: "Potvrdit předání",
+      performedAction: "Předání účetnímu oddělení",
+      messageStatus: "Čeká na potvrzení",
+      archiveStatus: "active",
+      assignedTo: "faktury@kaiserservis.cz",
+      suggestedAction: "Předáno účetnímu oddělení k vyřízení.",
+      auditNote: "Zpráva byla interně označena jako předaná účetnímu oddělení. Nic se neodeslalo mimo systém."
+    };
+  }
+  if (normalized.includes("email") || normalized.includes("e-mail")) {
+    return {
+      actionType: "Potvrdit vytvoření e-mailu",
+      performedAction: "Návrh e-mailu k ruční kontrole",
+      messageStatus: "Čeká na potvrzení",
+      archiveStatus: "active",
+      assignedTo: "faktury@kaiserservis.cz",
+      suggestedAction: "Návrh e-mailu připraven k ručnímu schválení.",
+      auditNote: "Návrh e-mailu byl potvrzen jako interně připravený. E-mail se neodeslal mimo systém."
+    };
+  }
+  if (normalized.includes("pravnik") || normalized.includes("gt brno") || normalized.includes("exekuc") || normalized.includes("soud")) {
+    return {
+      actionType: "Potvrdit předání",
+      performedAction: "Předání právníkovi / GT Brno",
+      messageStatus: "Dnes k vyřízení",
+      archiveStatus: "active",
+      assignedTo: "GT Brno",
+      suggestedAction: "Předáno právníkovi / GT Brno k ruční kontrole.",
+      auditNote: "Zpráva byla interně označena jako předaná právníkovi nebo GT Brno. Nic se neodeslalo mimo systém."
+    };
+  }
+  if (normalized.includes("predat") || normalized.includes("priradit") || normalized.includes("assignment") || normalized.includes("handoff")) {
+    return {
+      actionType: normalized.includes("priradit") || normalized.includes("assignment") ? "Potvrdit přiřazení" : "Potvrdit předání",
+      performedAction: "Přiřazení odpovědné osobě",
+      messageStatus: "Čeká na potvrzení",
+      archiveStatus: "active",
+      assignedTo: "Odpovědná osoba",
+      suggestedAction: "Přiřazeno odpovědné osobě k vyřízení.",
+      auditNote: "Zpráva byla interně přiřazena k vyřízení. Nic se neodeslalo mimo systém."
+    };
+  }
+  return {
+    actionType: "Potvrdit doporučení",
+    performedAction: cleanString(recommendation.recommendedAction || "Potvrzení doporučení"),
+    messageStatus: "",
+    archiveStatus: "",
+    assignedTo: "",
+    suggestedAction: cleanString(recommendation.recommendedAction),
+    auditNote: "Doporučení Autopilota bylo potvrzeno. Nic se neodeslalo mimo systém."
+  };
+}
+
+async function applyRecommendationActionToMessage(db, recommendation, actionInfo) {
+  const message = await db
+    .prepare("SELECT id, mailbox_id FROM data_box_plus_messages WHERE id = ? LIMIT 1")
+    .bind(cleanString(recommendation.messageId))
+    .first();
+  if (!message?.id || !cleanString(actionInfo.messageStatus)) return false;
+  await db
+    .prepare(`
+      UPDATE data_box_plus_messages
+      SET status = ?,
+          archive_status = ?,
+          assigned_to = CASE WHEN ? <> '' THEN ? ELSE assigned_to END,
+          suggested_action = CASE WHEN ? <> '' THEN ? ELSE suggested_action END,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    .bind(
+      actionInfo.messageStatus,
+      cleanString(actionInfo.archiveStatus || "active"),
+      cleanString(actionInfo.assignedTo),
+      cleanString(actionInfo.assignedTo),
+      cleanString(actionInfo.suggestedAction),
+      cleanString(actionInfo.suggestedAction),
+      message.id
+    )
+    .run();
+  await updateMailboxCounters(db, cleanString(message.mailbox_id));
+  return true;
+}
+
 export async function confirmDataBoxPlusRecommendation(env, recommendationId, currentUser = null, body = {}) {
   const db = dataBoxPlusDatabase(env, true);
   try {
     const recommendation = await recommendationById(db, recommendationId);
     const actor = cleanString(currentUser?.name || currentUser?.email || currentUser?.id || "system");
     const actionId = idValue("dbp-action");
+    const actionInfo = recommendationConfirmAction(recommendation, body);
+    const messageUpdated = await applyRecommendationActionToMessage(db, recommendation, actionInfo);
     const payload = {
       confirmedBy: actor,
       requireRadimMartin: body.requireRadimMartin !== false,
       note: cleanString(body.note),
-      performedAction: recommendation.recommendedAction
+      performedAction: actionInfo.performedAction,
+      messageUpdated
     };
     await db
       .prepare("UPDATE data_box_plus_recommendations SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
@@ -1792,14 +1909,14 @@ export async function confirmDataBoxPlusRecommendation(env, recommendationId, cu
         recommendation.messageId,
         recommendation.id,
         actor,
-        "Potvrdit návrh",
+        actionInfo.actionType,
         JSON.stringify(payload),
         new Date().toISOString(),
         "confirmed",
-        "Návrh Autopilota byl potvrzen. Nic se neodeslalo mimo systém bez samostatného schválení."
+        actionInfo.auditNote
       )
       .run();
-    return { apiStatus: "ready", recommendation: { ...recommendation, status: "confirmed" }, auditId: actionId };
+    return { apiStatus: "ready", recommendation: { ...recommendation, status: "confirmed" }, action: actionInfo, auditId: actionId };
   } catch (error) {
     if (error instanceof DataBoxPlusStoreError) throw error;
     throw dbError(error);
