@@ -5476,7 +5476,7 @@ export async function listCollectionImportRows(env, batchId, limit = 500) {
         ORDER BY row_number ASC
         LIMIT ?
       `)
-      .bind(id, Math.max(1, Math.min(Number(limit) || 500, 1000)))
+      .bind(id, Math.max(1, Math.min(Number(limit) || 500, 5000)))
       .all();
     return (result.results || []).map(rowToImportRow);
   } catch (error) {

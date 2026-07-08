@@ -30872,6 +30872,29 @@ function collectionRoutesApplyKommunalSnapshot(payload = {}, sourceLabel = "d1-v
   }
 }
 
+async function collectionRoutesLoadKommunalPairingFallbackPayload() {
+  const batch = collectionRoutesLatestBatchByMode("vistos-komunal-preview");
+  if (!batch?.id) {
+    return null;
+  }
+  const result = await apiJson(`/api/collection-routes/import-batches/${encodeURIComponent(batch.id)}/rows?limit=5000`);
+  const allRows = Array.isArray(result.rows) ? result.rows : [];
+  const rows = allRows.filter((row) => collectionRoutesImportRowSummary(row).svozKaiserIncluded === true);
+  return {
+    batch,
+    rows,
+    totalRows: batch.rowCount || allRows.length,
+    loadedRowCount: allRows.length,
+    summary: {
+      rowCount: batch.rowCount || allRows.length,
+      filteredRowCount: rows.length,
+      loadedRowCount: allRows.length
+    },
+    metadata: batch.metadata || {},
+    apiStatus: result.apiStatus || "ready"
+  };
+}
+
 function resetCollectionRoutesSourceDriverRunIfChanged() {
   const nextRunKey = collectionRoutesSourceDriverRunKeyFromState();
   if (collectionRoutesPilotState.sourceDriverRunKey && collectionRoutesPilotState.sourceDriverRunKey !== nextRunKey) {
@@ -31017,7 +31040,10 @@ async function loadCollectionRoutesKommunalPairingRows(options = {}) {
     const result = options.live === true
       ? await apiJson("/api/collection-routes/vistos/kommunal-preview-export?limit=10000")
       : await apiJson("/api/collection-routes/vistos/kommunal-snapshot?limit=1000&svozKaiserOnly=1");
-    const payload = options.live === true ? result.export || {} : result.snapshot || {};
+    let payload = options.live === true ? result.export || {} : result.snapshot || {};
+    if (options.live !== true && !(Array.isArray(payload.rows) && payload.rows.length)) {
+      payload = await collectionRoutesLoadKommunalPairingFallbackPayload() || payload;
+    }
     collectionRoutesApplyKommunalSnapshot(payload, options.live === true ? "vistos-komunal-preview-export" : "d1-vistos-komunal-preview");
     if (!collectionRoutesPilotState.kommunalPairingRows.length) {
       collectionRoutesPilotState.kommunalPairingError = collectionRoutesSitesZeroRowsMessage(payload, options.live === true);

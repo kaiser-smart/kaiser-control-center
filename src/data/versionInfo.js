@@ -22,7 +22,7 @@ export const versionInfo = {
 export const versionNews = [
   {
     title: "Trasy svozu: oprava načítání Vistos stanovišť",
-    text: "Stanoviště z Vistosu nově načítají Svoz Kaiser výřez ze snapshotu robustně podle uložených dat řádku a hlavní obrazovka ukáže přesný stav, když snapshot existuje, ale filtr nevrací žádné řádky."
+    text: "Stanoviště z Vistosu nově načítají Svoz Kaiser výřez ze snapshotu robustně podle uložených dat řádku. Pokud rychlý výřez vrátí prázdno, UI použije read-only fallback z uloženého batch detailu bez live Vistos volání."
   },
   {
     title: "Trasy svozu: rychlé Stanoviště ze snapshotu",
