@@ -18377,7 +18377,7 @@ function collectionRoutesSitesRefreshSecondsRemaining() {
 }
 
 function collectionRoutesSitesRefreshLabel() {
-  if (collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.kommunalPairingLoading) {
+  if (collectionRoutesPilotState.kommunalPairingLoading) {
     return collectionRoutesPilotState.kommunalPairingRefreshMode === "live" ? "Volám Vistos..." : "Načítám snapshot...";
   }
   if (collectionRoutesPilotState.kommunalPairingLoadedAt) {
@@ -18387,7 +18387,7 @@ function collectionRoutesSitesRefreshLabel() {
 }
 
 function collectionRoutesSitesRefreshStatusHtml() {
-  const isLoading = collectionRoutesPilotState.svozKaiserWatchdogLoading || collectionRoutesPilotState.kommunalPairingLoading;
+  const isLoading = collectionRoutesPilotState.kommunalPairingLoading;
   return `
     <span class="employee-card-status employee-card-status--waiting collection-routes-refresh-status">${escapeHtml(collectionRoutesSitesRefreshLabel())}</span>
     <button class="secondary-link" type="button" data-collection-routes-sites-refresh-now ${isLoading ? "disabled" : ""}>
