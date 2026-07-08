@@ -57,12 +57,10 @@ export const FLEET_LIST_COLUMNS = [
   "Stav",
   "SPZ",
   "Vozidlo",
-  "Řidič / odpovědná osoba",
-  "VIN zkráceně",
-  "Nájezd",
-  "Termíny",
-  "Hlášení / servis",
+  "Řidič / odpovědný",
   "GPS / sledování",
+  "Hlášení / servis",
+  "Termíny",
   "Doporučená akce",
   "Akce"
 ];

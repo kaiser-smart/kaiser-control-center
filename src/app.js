@@ -10929,10 +10929,17 @@ function fleetRowStatusHtml(vehicle = {}) {
 function fleetVehicleNameHtml(vehicle = {}) {
   const model = fleetVehicleModel(vehicle) || vehicle.vistosVehicleName || vehicle.internalNumber || "Vozidlo";
   const type = vehicle.vehicleType || vehicle.vistosVehicleCategory || "";
+  const vin = fleetShortVin(vehicle.vin);
+  const mileage = Number(vehicle.mileageKm);
+  const facts = [
+    type,
+    vin ? `VIN ${vin}` : "",
+    Number.isFinite(mileage) ? `${mileage.toLocaleString("cs-CZ")} km` : ""
+  ].filter(Boolean);
   return `
     <div class="fleet-row-main">
       <strong>${escapeHtml(model)}</strong>
-      ${type ? `<small>${escapeHtml(type)}</small>` : ""}
+      ${facts.length ? `<small>${escapeHtml(facts.join(" · "))}</small>` : ""}
     </div>
   `;
 }
@@ -11006,7 +11013,7 @@ function fleetReportsServiceHtml(vehicle = {}) {
 function fleetTrackingCellHtml(vehicle = {}) {
   const tracking = fleetVehicleTrackingState(vehicle);
   const href = tracking.canOpen ? fleetVehicleTrackingRoute(vehicle, tracking) : fleetVehicleTrackingPairingRoute();
-  const action = tracking.canOpen ? "Otevřít sledování" : "Spárovat";
+  const action = tracking.canOpen ? "Otevřít GPS" : "Spárovat";
   const help = tracking.canOpen
     ? "Otevře polohu a historii pohybu vozidla v modulu Sledování aut. Ve Vozovém parku se nic nezmění."
     : "Propojí vozidlo z evidence s GPS záznamem ve Sledování aut. Master data vozidla zůstanou ve Vistos Vehicle.";
@@ -11017,6 +11024,25 @@ function fleetTrackingCellHtml(vehicle = {}) {
       <small>${escapeHtml(tracking.detail)}</small>
       ${fleetActionLink(action, href, help)}
     </div>
+  `;
+}
+
+function fleetTrackingBridge() {
+  const summary = fleetSummaryMetrics();
+  const canOpenTracking = hasPermission(currentUser(), "vehicle-tracking", "view");
+  return `
+    <aside class="fleet-tracking-bridge" aria-label="Napojení na Sledování aut">
+      <div>
+        <span>Sledování aut / T-Cars</span>
+        <strong>GPS je doplňkový zdroj, Vistos Vehicle zůstává master evidence.</strong>
+        <small>${escapeHtml(`${summary.gpsActive} aktivní · ${summary.gpsUnpaired} nespárováno · ${summary.noTracking} bez jednotky`)}</small>
+      </div>
+      ${canOpenTracking ? fleetActionLink(
+        "Otevřít Sledování aut",
+        VEHICLE_TRACKING_ROUTE,
+        "Otevře modul Sledování aut. Ve Vozovém parku se tím nic nezmění."
+      ) : ""}
+    </aside>
   `;
 }
 
@@ -11049,12 +11075,10 @@ function fleetVehicleRow(vehicle) {
     fleetTableCell("Stav", fleetRowStatusHtml(vehicle), "fleet-table__status"),
     fleetTableCell("SPZ", `<strong class="fleet-row-plate">${fleetCellText(vehicle.licensePlate || vehicle.tcarsLicensePlate, "bez SPZ")}</strong>`, "fleet-table__plate"),
     fleetTableCell("Vozidlo", fleetVehicleNameHtml(vehicle), "fleet-table__vehicle"),
-    fleetTableCell("Řidič / odpovědná osoba", fleetDriverHtml(vehicle), "fleet-table__driver"),
-    fleetTableCell("VIN zkráceně", fleetCellText(fleetShortVin(vehicle.vin), "VIN neuveden"), "fleet-table__vin"),
-    fleetTableCell("Nájezd", fleetMileageHtml(vehicle), "fleet-table__mileage"),
-    fleetTableCell("Termíny", fleetTermsSummaryHtml(vehicle), "fleet-table__terms"),
-    fleetTableCell("Hlášení / servis", fleetReportsServiceHtml(vehicle), "fleet-table__reports"),
+    fleetTableCell("Řidič / odpovědný", fleetDriverHtml(vehicle), "fleet-table__driver"),
     fleetTableCell("GPS / sledování", fleetTrackingCellHtml(vehicle), "fleet-table__tracking"),
+    fleetTableCell("Hlášení / servis", fleetReportsServiceHtml(vehicle), "fleet-table__reports"),
+    fleetTableCell("Termíny", fleetTermsSummaryHtml(vehicle), "fleet-table__terms"),
     fleetTableCell("Doporučená akce", fleetCellText(fleetVehicleRecommendation(vehicle), "bez otevřeného problému"), "fleet-table__recommendation"),
     fleetTableCell(
       "Akce",
@@ -11123,10 +11147,11 @@ function fleetVehiclesSection(activeId) {
       ${fleetSectionHeader(
         "fleet-vehicles-title",
         "Vozidla",
-        "Hlavní evidence vozidel s termíny, otevřenými hlášeními a nejbližší doporučenou akcí.",
+        "Hlavní evidence vozidel s termíny, hlášeními, GPS napojením a nejbližší doporučenou akcí.",
         { badge: false }
       )}
       ${fleetVehicleSummaryCards()}
+      ${fleetTrackingBridge()}
       ${fleetFiltersSection()}
       <p class="fleet-operational-note">
         ${escapeHtml(fleetVehiclesStatusText())}
