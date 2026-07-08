@@ -13290,6 +13290,36 @@ body:has(.driver-tablet-preview-page--dark) {
   filter: brightness(0) invert(1);
 }
 
+.driver-tablet-v2 {
+  --driver-tools-height: clamp(132px, 9.28vw, 150px);
+}
+
+.driver-tablet-v2-stop-chip {
+  align-self: center;
+  height: clamp(292px, 21.5vw, 344px);
+}
+
+.driver-tablet-v2-stop-copy {
+  transform: translateY(clamp(-30px, -1.9vw, -22px));
+}
+
+.driver-tablet-v2-rail {
+  grid-template-rows: clamp(236px, 16.9vw, 270px) minmax(0, 1fr);
+}
+
+.driver-tablet-v2-progress__body {
+  grid-template-columns: minmax(0, 1fr) clamp(100px, 7.5vw, 120px);
+}
+
+.driver-tablet-v2-progress-ring {
+  width: clamp(100px, 7.5vw, 120px);
+}
+
+.driver-tablet-v2-next__list {
+  grid-template-rows: repeat(3, clamp(64px, 4.65vw, 74px));
+  align-content: start;
+}
+
 .collection-routes-panel--driver-print .collection-routes-preview-table {
   border-radius: 8px;
 }
