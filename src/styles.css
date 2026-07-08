@@ -30538,6 +30538,35 @@ body:has(.ds-plus-page) {
   border-color: #edb4ad;
 }
 
+.ds-plus-priority--problem,
+.ds-plus-message-row--problem {
+  border-color: #edb4ad;
+  background: #fffafa;
+}
+
+.ds-plus-priority--waiting,
+.ds-plus-message-row--waiting {
+  border-color: #efc983;
+}
+
+.ds-plus-priority--prepared,
+.ds-plus-message-row--prepared {
+  border-color: #b8d7ee;
+}
+
+.ds-plus-priority--handoff,
+.ds-plus-message-row--handoff,
+.ds-plus-priority--resolved,
+.ds-plus-message-row--resolved {
+  border-color: #c7dfc3;
+}
+
+.ds-plus-priority--archive,
+.ds-plus-message-row--archive {
+  border-color: #d7ddd4;
+  background: #fafbf9;
+}
+
 .ds-plus-priority--legal,
 .ds-plus-message-row--legal {
   border-color: #c6b7dd;
@@ -30589,10 +30618,10 @@ body:has(.ds-plus-page) {
 
 .ds-plus-message-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) minmax(260px, 360px);
+  grid-template-columns: 44px minmax(0, 0.9fr) minmax(360px, 1.2fr);
   gap: 14px;
   padding: 14px;
-  align-items: center;
+  align-items: start;
 }
 
 .ds-plus-message-row__priority {
@@ -30604,6 +30633,37 @@ body:has(.ds-plus-page) {
   background: #f2f5ef;
   color: #2f7d46;
   font-weight: 700;
+}
+
+.ds-plus-message-row__priority--new {
+  background: #eef4fb;
+  color: #34648d;
+}
+
+.ds-plus-message-row__priority--waiting {
+  background: #fff2d9;
+  color: #8d520f;
+}
+
+.ds-plus-message-row__priority--prepared {
+  background: #eaf5ee;
+  color: #245d36;
+}
+
+.ds-plus-message-row__priority--handoff,
+.ds-plus-message-row__priority--resolved {
+  background: #e7f4e4;
+  color: #245d36;
+}
+
+.ds-plus-message-row__priority--archive {
+  background: #eef1ec;
+  color: #586257;
+}
+
+.ds-plus-message-row__priority--problem {
+  background: #fff0ef;
+  color: #9f2d23;
 }
 
 .ds-plus-message-row__top,
@@ -30633,7 +30693,83 @@ body:has(.ds-plus-page) {
 
 .ds-plus-message-row__action {
   display: grid;
+  gap: 10px;
+}
+
+.ds-plus-message-row__buttons {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.ds-plus-workflow-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  margin: 10px 0 0;
+}
+
+.ds-plus-workflow-summary div {
+  min-width: 0;
+  border: 1px solid #e6ece3;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fbfdf9;
+}
+
+.ds-plus-workflow-summary dt {
+  color: #657164;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.ds-plus-workflow-summary dd {
+  margin: 3px 0 0;
+  color: #223025;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.ds-plus-work-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: #eef2eb;
+  color: #344035;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.ds-plus-work-state--new {
+  background: #eef4fb;
+  color: #34648d;
+}
+
+.ds-plus-work-state--waiting {
+  background: #fff2d9;
+  color: #8d520f;
+}
+
+.ds-plus-work-state--prepared {
+  background: #eaf5ee;
+  color: #245d36;
+}
+
+.ds-plus-work-state--handoff,
+.ds-plus-work-state--resolved {
+  background: #e7f4e4;
+  color: #245d36;
+}
+
+.ds-plus-work-state--archive {
+  background: #f0f2ee;
+  color: #586257;
+}
+
+.ds-plus-work-state--problem {
+  background: #fff0ef;
+  color: #9f2d23;
 }
 
 .ds-plus-action-with-help {
@@ -31107,6 +31243,11 @@ body:has(.ds-plus-page) {
   background: #f8fcf7;
 }
 
+.ds-plus-detail-section--workflow {
+  border-color: #b8d7ee;
+  background: #fbfdff;
+}
+
 .ds-plus-detail-section--header dl,
 .ds-plus-facts {
   display: grid;
@@ -31162,6 +31303,32 @@ body:has(.ds-plus-page) {
   font-weight: 700;
 }
 
+.ds-plus-status-history {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-plus-status-history li {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid #c7dfc3;
+  padding-left: 10px;
+}
+
+.ds-plus-status-history span {
+  color: #657164;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.ds-plus-status-history p {
+  margin: 0;
+  color: #223025;
+}
+
 @media (max-width: 1180px) {
   .ds-plus-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -31183,6 +31350,7 @@ body:has(.ds-plus-page) {
   .ds-plus-manual-grid,
   .ds-plus-rule dl,
   .ds-plus-rules-controls,
+  .ds-plus-workflow-summary,
   .ds-plus-detail-section--header dl,
   .ds-plus-facts {
     grid-template-columns: 1fr;
