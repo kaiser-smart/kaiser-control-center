@@ -128,14 +128,23 @@ TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 TWILIO_VERIFY_SERVICE_SID=...
 TWILIO_MESSAGING_SERVICE_SID=...
+TWILIO_KAISER_ACCOUNT_SID=...
+TWILIO_KAISER_AUTH_TOKEN=...
+TWILIO_KAISER_MESSAGING_SERVICE_SID=...
+TWILIO_KAISER_STATUS_CALLBACK_URL=...
+TWILIO_KAISER_STATUS_WEBHOOK_TOKEN=...
+TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN=...
+KSO_SMS_MODE=off
 SENDGRID_API_KEY=...
 EMAIL_PROVIDER=sendgrid
-EMAIL_FROM=...
-EMAIL_REPLY_TO=...
+KSO_EMAIL_FROM=sarlota@kaiserservis.cz
+KSO_EMAIL_FROM_NAME=Šarlota Kaiser
+KSO_EMAIL_REPLY_TO=sarlota@kaiserservis.cz
+KSO_INBOUND_EMAIL_WEBHOOK_TOKEN=...
 ABSENCE_APPROVAL_REMINDER_HOURS=24
 ```
 
-`EMAIL_PROVIDER=sendgrid` je doporučené nastavení. Pokud není vyplněné, backend použije SendGrid automaticky, jakmile existuje `SENDGRID_API_KEY`. `EMAIL_FROM` může být vyplněné samostatně; pokud chybí, použije se `ABSENCE_REPORT_EMAIL`.
+`EMAIL_PROVIDER=sendgrid` je doporučené nastavení. Pokud není vyplněné, backend použije SendGrid automaticky, jakmile existuje `SENDGRID_API_KEY`. Uživatelský odesílatel KSO je pevně `Šarlota Kaiser <sarlota@kaiserservis.cz>`; starší `EMAIL_FROM` se bere jen jako legacy konfigurační hodnota a v odchozích KSO e-mailech se nepoužije jako viditelný From.
 
 V produkci se mock OTP nepovolí na větvi `main`; testovací kód `123456` je pouze pro lokální vývoj nebo neprodukční prostředí s `AUTH_MODE=mock`.
 
@@ -149,6 +158,50 @@ GET /api/notifications/summary
 ```
 
 Zdroj pravdy je D1 tabulka `notification_logs`. Frontend žádné e-maily ani SMS neposílá a neobsahuje žádné Twilio, SendGrid ani SMTP tokeny.
+
+## Komunikační infrastruktura KSO / Šarlota
+
+Odchozí e-maily generované KSO se uživatelsky sjednocují na:
+
+```text
+Šarlota Kaiser <sarlota@kaiserservis.cz>
+Reply-To: sarlota@kaiserservis.cz
+```
+
+Technický provider zůstává serverový. `SENDGRID_API_KEY`, Twilio tokeny, inbound webhook tokeny a callback tokeny patří pouze do Cloudflare Variables / Secrets. Frontend je nesmí obsahovat.
+
+Komunikační audit používá D1 migraci:
+
+```text
+migrations/0031_create_communication_infrastructure.sql
+```
+
+Ta přidává interní vazby `message_id`, `thread_id`, `module_key`, `entity_type`, `entity_id`, `subject_token` a `audit_id`, aby šla odpověď na e-mail od Šarloty bezpečně zařadit zpět do původní entity. Předmět se kvůli tomu nezaplňuje technickým ID; primárně se používají interní hlavičky a backend mapping.
+
+Inbound odpovědi a Twilio callbacky:
+
+```text
+GET  /api/communication/status
+POST /api/communication/inbound-email
+POST /api/communication/twilio/status-callback
+POST /api/communication/twilio/inbound
+```
+
+Autopilot u příchozích odpovědí odpověď pouze zařadí, uloží do historie, navrhne další krok a případně vytvoří ruční frontu `Nespárovaná odpověď`. Bez potvrzení člověka nesmí sám odeslat další e-mail, uzavřít právní/finanční/servisní případ ani smazat odpověď.
+
+Twilio pro Kaiser má oddělené serverové proměnné:
+
+```text
+TWILIO_KAISER_ACCOUNT_SID=...
+TWILIO_KAISER_AUTH_TOKEN=...
+TWILIO_KAISER_MESSAGING_SERVICE_SID=...
+TWILIO_KAISER_STATUS_CALLBACK_URL=...
+TWILIO_KAISER_STATUS_WEBHOOK_TOKEN=...
+TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN=...
+KSO_SMS_MODE=off|test|live
+```
+
+Pokud existují pouze starší `TWILIO_*` proměnné, stavový panel to ukáže jako legacy konfiguraci čekající na oddělení do Kaiser projektu.
 
 ## Cloudflare D1 pro uživatele
 

@@ -26533,6 +26533,195 @@ body:has(.data-box-page) .data-box-side-status__ai small {
   overflow-wrap: anywhere;
 }
 
+.communication-infrastructure {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 16px;
+  border: 1px solid var(--theme-border, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 90%, var(--theme-bg-surface, #f6faf4));
+  box-shadow: var(--theme-shadow-card, 0 10px 26px rgba(20, 30, 24, 0.06));
+}
+
+.communication-infrastructure__header {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.communication-infrastructure__header span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.communication-infrastructure__header h2 {
+  margin: 2px 0 3px;
+  font-size: 1.18rem;
+}
+
+.communication-infrastructure__header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.communication-sender-strip,
+.communication-status-list,
+.communication-count-grid,
+.communication-event-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.communication-sender-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.communication-sender-strip div,
+.communication-count-grid article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-border, var(--line)) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 78%, transparent);
+}
+
+.communication-sender-strip dt,
+.communication-count-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.communication-sender-strip dd,
+.communication-count-grid strong {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--text);
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.communication-status-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0;
+  list-style: none;
+}
+
+.communication-status-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-border, var(--line)) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 78%, transparent);
+}
+
+.communication-status-item strong,
+.communication-status-item span,
+.communication-status-item small {
+  display: block;
+}
+
+.communication-status-item strong {
+  font-size: 0.93rem;
+}
+
+.communication-status-item span {
+  margin-top: 2px;
+  color: var(--text);
+  font-weight: 850;
+}
+
+.communication-status-item small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.communication-count-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.communication-event-log {
+  display: grid;
+  gap: 10px;
+}
+
+.communication-event-log h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.communication-event-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-border, var(--line)) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-card, #ffffff) 78%, transparent);
+}
+
+.communication-event-list strong,
+.communication-event-list span,
+.communication-event-list time {
+  display: block;
+}
+
+.communication-event-list span,
+.communication-event-list p,
+.communication-event-list time,
+.communication-empty {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.communication-event-list p {
+  margin: 0;
+}
+
+.communication-event-list time {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .communication-sender-strip,
+  .communication-status-list,
+  .communication-count-grid,
+  .communication-event-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .communication-infrastructure__header {
+    display: grid;
+  }
+
+  .communication-infrastructure__header .secondary-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .communication-event-list time {
+    white-space: normal;
+  }
+}
+
 @media (max-width: 720px) {
   body:has(.data-box-page) {
     background: var(--theme-bg, var(--page));

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.453"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.476"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "KSO komunikace: Šarlota jako jednotný odesílatel",
+    text: "Komunikační infrastruktura KSO připravuje jednotný From Šarlota Kaiser <sarlota@kaiserservis.cz>, audit před odesláním, interní thread metadata, příjem odpovědí do ruční fronty a oddělenou Twilio Kaiser konfiguraci."
+  },
   {
     title: "Vozový park: pracovní centrum vozidel",
     text: "Stávající modul Vozový park má nový přehled, evidenci vozidel, detail vozidla, termíny, servis, náklady a dokumenty. Související Hlášení řidičů jen zobrazuje a proklikává, bez duplikace jejich workflow."

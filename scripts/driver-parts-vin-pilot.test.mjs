@@ -29,6 +29,61 @@ const adminUser = {
   role: "admin"
 };
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const notificationLogColumns = [
+  "id",
+  "module_id",
+  "type",
+  "channel",
+  "recipient",
+  "related_entity_type",
+  "related_entity_id",
+  "status",
+  "error_message",
+  "subject",
+  "message_preview",
+  "provider",
+  "provider_message_id",
+  "provider_status",
+  "attempts",
+  "message_id",
+  "thread_id",
+  "audit_id",
+  "from_name",
+  "from_address",
+  "reply_to",
+  "subject_token",
+  "sent_at",
+  "created_at",
+  "updated_at"
+];
+
+function fakeCommunicationDb() {
+  return {
+    statements: [],
+    prepare(sql) {
+      const record = { sql, bindings: [] };
+      this.statements.push(record);
+      return {
+        bind(...bindings) {
+          record.bindings = bindings;
+          return this;
+        },
+        async all() {
+          if (/PRAGMA table_info\(notification_logs\)/i.test(sql)) {
+            return { results: notificationLogColumns.map((name) => ({ name })) };
+          }
+          return { results: [] };
+        },
+        async first() {
+          return null;
+        },
+        async run() {
+          return { success: true };
+        }
+      };
+    }
+  };
+}
 
 function passengerVehicle(overrides = {}) {
   return {
@@ -1274,7 +1329,9 @@ function driverPartTestEnv(db, offers) {
     };
   };
   try {
+    const db = fakeCommunicationDb();
     const sentEmail = await sendDriverPartOrderNotification({
+      SMART_ODPADY_DB: db,
       EMAIL_PROVIDER: "sendgrid",
       SENDGRID_API_KEY: "test-sendgrid-key",
       EMAIL_FROM: "robot@example.test"
@@ -1308,6 +1365,12 @@ function driverPartTestEnv(db, offers) {
     assert.equal(sendGridRequest.url, "https://api.sendgrid.com/v3/mail/send");
     assert.equal(sendGridRequest.body.personalizations[0].to[0].email, "patrik@example.test");
     assert.equal(sendGridRequest.body.personalizations[0].cc[0].email, "oplustil@kaiserservis.cz");
+    assert.deepEqual(sendGridRequest.body.from, { email: "sarlota@kaiserservis.cz", name: "Šarlota Kaiser" });
+    assert.deepEqual(sendGridRequest.body.reply_to, { email: "sarlota@kaiserservis.cz", name: "Šarlota Kaiser" });
+    assert.equal(sendGridRequest.body.headers["X-KSO-Module-Key"], "driver-reports");
+    assert.equal(sendGridRequest.body.headers["X-KSO-Entity-Type"], "driver_part_request");
+    assert.equal(sendGridRequest.body.headers["X-KSO-Entity-Id"], "driver-report-email-send");
+    assert.ok(db.statements.some((statement) => /INSERT INTO communication_messages/i.test(statement.sql)));
     assert.match(sendGridRequest.body.subject, /Náhradní díl k ověření: 2BB 8251/);
     const sentHtml = sendGridRequest.body.content[0].value;
     assert.match(sentHtml, /3 nejlevnější nabídky/);
