@@ -254,7 +254,7 @@ const THEME_PREVIEW_ICON_FILES = {
   usersRoles: "009.svg",
   settings: "017.svg",
   systemCheck: "020.svg",
-  actionDone: "019.svg",
+  actionDone: "fajfka.svg",
   actionWarning: "014.svg",
   actionIcons: "015.svg"
 };
