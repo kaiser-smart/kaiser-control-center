@@ -1396,9 +1396,176 @@ Při každé změně Šarloty ověřit:
 - Synchronizace ElevenLabs client tools smí proběhnout jen přes chráněný backendový postup: nejdřív read-only návrh, potom explicitní `apply: true`, kontrola správného agenta Šarloty a ověření, že se nemění system prompt, first message ani model.
 - Synchronizace doplňkového prompt bloku smí proběhnout jen přes chráněný backendový postup: nejdřív read-only návrh, potom explicitní `apply: true`, kontrola správného agenta Šarloty a append pouze schváleného bloku bez změny first message, modelu a tools.
 
-## 18. Datová schránka a UI pravidla
+## 18. Obecná pravidla UI/UX všech modulů
 
-### 18.1 Bezpečné předávání hesel / Cloudflare secrets
+### 18.1 Vzhled modulů
+
+- Při vývoji každého modulu respektovat barevné schéma v Nastavení.
+- Nehardcodovat dominantní modulové barvy mimo existující theme proměnné, pokud to není výslovně potvrzené.
+- Výchozí font UI je Quicksand.
+- Nadpisy mohou být výraznější, ale běžný obsah a tabulkové řádky nemají být zbytečně tučné.
+- Před dokončením vizuální změny ověřit desktop, notebook, tablet a mobil.
+
+### 18.2 Precizní UI/UX
+
+Každý modul musí mít precizní UI/UX.
+Precizní znamená, že uživatel okamžitě chápe, co vidí, co je důležité a co má udělat.
+
+Precizní UI/UX není jen hezký vzhled. Je to kombinace přehlednosti, jednoduchosti, správné pracovní logiky, čitelnosti a jasných akcí.
+
+#### 18.2.1 Základní pravidlo
+
+Uživatel se nesmí v modulu ztratit.
+
+Každá obrazovka musí během několika sekund odpovědět na otázky:
+
+- Co je tady nejdůležitější?
+- Co je v pořádku?
+- Co je problém?
+- Co čeká na mě?
+- Co už je vyřešené?
+- Jaký je další krok?
+
+#### 18.2.2 Co znamená „precizní“
+
+Precizní znamená:
+
+- žádná důležitá informace není schovaná mimo obraz,
+- žádný řádek, karta ani tlačítko není useknuté,
+- žádné tlačítko se neláme do svislého textu,
+- uživatel vždy vidí hlavní stav položky,
+- uživatel vždy vidí jasnou akci,
+- texty jsou krátké a lidské,
+- tabulky nejsou přeplácané,
+- dlouhé údaje nerozbíjejí layout,
+- technické informace nejsou v hlavním pohledu,
+- hlavní přehled není návod ani dokumentace,
+- detail slouží k rozhodnutí,
+- akce odpovídají aktuálnímu stavu položky.
+
+#### 18.2.3 Zakázané chování UI
+
+V produkčním UI nesmí být:
+
+- useknutá pravá část obrazovky,
+- horizontálně rozbitá tabulka,
+- akce mimo viditelnou část obrazovky,
+- svisle zalomené tlačítko typu „O t e v ř í t“,
+- dlouhé technické texty v hlavním pohledu,
+- obecná tlačítka bez významu,
+- opakované vysvětlující bloky pod každou položkou,
+- příliš mnoho štítků vedle sebe,
+- debug informace v běžném pracovním toku,
+- nejasné stavy typu „Zkontrolovat“ bez vysvětlení, co přesně se má kontrolovat.
+
+#### 18.2.4 Pravidla pro přehled
+
+Přehled má být krátký a pracovní.
+
+Na přehledu zobrazit pouze:
+
+- stav,
+- název / subjekt,
+- nejdůležitější informaci,
+- další krok,
+- jednu hlavní akci.
+
+Na přehledu nezobrazovat všechno.
+Detailní informace patří do detailu nebo rozbalené karty.
+
+#### 18.2.5 Pravidla pro tabulky
+
+Tabulka smí být použita jen tehdy, pokud zůstane čitelná.
+
+Pokud má tabulka moc sloupců:
+
+- zmenšit počet sloupců,
+- přesunout detail do rozbalené karty,
+- zkrátit dlouhé texty,
+- použít dvouřádkové buňky,
+- ponechat akce vždy viditelné.
+
+Nikdy nesmí nastat stav, že část řádku není vidět.
+
+#### 18.2.6 Pravidla pro tlačítka
+
+Každé tlačítko musí být konkrétní.
+
+Špatně:
+
+- Zkontrolovat
+- Zamítnout
+- Potvrdit návrh
+- Zobrazit
+- Provést
+
+Správně:
+
+- Otevřít zprávu
+- Potvrdit předání
+- Detail archivace
+- Ověřit přílohu
+- Označit jako vyřešené
+- Předat fakturám
+- Opravit den svozu
+
+Tlačítko musí říkat, co se stane po kliknutí.
+
+#### 18.2.7 Nápověda u akcí
+
+U nejasných nebo rizikových akcí musí být krátká lidská nápověda.
+
+Nápověda má říct:
+
+- co se stane,
+- co se nestane,
+- zda se něco odešle,
+- zda se něco smaže,
+- zda se akce zapíše do historie.
+
+Příklad:
+
+Tlačítko:
+`Potvrdit předání`
+
+Nápověda:
+`Zpráva se označí jako předaná účetnímu oddělení. Nic se neodešle mimo systém a akce se zapíše do historie.`
+
+#### 18.2.8 Pravidlo pro technické informace
+
+Technické informace nepatří do hlavního UI.
+
+Do hlavního UI nepatří:
+
+- JSON,
+- cron,
+- runner,
+- raw metadata,
+- interní ID,
+- debug log,
+- technické chyby bez lidského vysvětlení.
+
+Technické informace smí být pouze v:
+
+- Diagnostice,
+- rozbalené servisní sekci,
+- detailu pro administrátora.
+
+#### 18.2.9 Akceptační pravidlo
+
+UI je hotové až ve chvíli, kdy běžný uživatel bez vysvětlení pochopí:
+
+- co je stav,
+- co je problém,
+- co je hotové,
+- co má udělat,
+- kde má kliknout.
+
+Pokud uživatel musí přemýšlet, co tlačítko znamená, nebo nevidí celou informaci, UI není precizní.
+
+## 19. Datová schránka a UI pravidla
+
+### 19.1 Bezpečné předávání hesel / Cloudflare secrets
 
 - Hesla, tokeny a secrets se nikdy nevypisují do chatu, shellu, logu ani screenshotu.
 - U Datové schránky je bezpečný postup zadávání Cloudflare secrets po jednom:
@@ -1412,15 +1579,7 @@ Při každé změně Šarloty ověřit:
 - Hromadný `.env` import nepoužívat, pokud Radim výslovně nepotvrdí konkrétní bezpečný postup.
 - Po změně Cloudflare secrets je nutný nový deployment, jinak se změny nemusí projevit v produkci.
 
-### 18.2 Vzhled modulů
-
-- Při vývoji každého modulu respektovat barevné schéma v Nastavení.
-- Nehardcodovat dominantní modulové barvy mimo existující theme proměnné, pokud to není výslovně potvrzené.
-- Výchozí font UI je Quicksand.
-- Nadpisy mohou být výraznější, ale běžný obsah a tabulkové řádky nemají být zbytečně tučné.
-- Před dokončením vizuální změny ověřit desktop, notebook, tablet a mobil.
-
-### 18.3 Datová schránka jako pracovní inbox
+### 19.2 Datová schránka jako pracovní inbox
 
 - Datová schránka není obyčejná tabulka.
 - Firemní datové schránky mají být klikací boxy vedle sebe:

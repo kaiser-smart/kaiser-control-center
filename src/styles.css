@@ -2658,6 +2658,45 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.fleet-term-missing {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e7e1d2;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.fleet-term-missing strong {
+  color: #76500e;
+  font-size: 0.86rem;
+}
+
+.fleet-term-missing small {
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.fleet-missing-term-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.fleet-missing-term-chips span {
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #ead8b7;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #76500e;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
 .fleet-work-table {
   display: grid;
   min-width: 0;
