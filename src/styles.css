@@ -29949,35 +29949,6 @@ body:has(.ds-plus-page) {
   outline-offset: 2px;
 }
 
-.ds-plus-help__bubble {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 30;
-  width: min(300px, calc(100vw - 34px));
-  border: 1px solid #d9e3d5;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: #ffffff;
-  box-shadow: 0 16px 38px rgba(35, 45, 38, 0.18);
-  color: #263228;
-  font-size: 0.86rem;
-  font-weight: 600;
-  line-height: 1.45;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-4px);
-  visibility: hidden;
-  white-space: normal;
-}
-
-.ds-plus-help:hover .ds-plus-help__bubble,
-.ds-plus-help:focus-within .ds-plus-help__bubble {
-  opacity: 1;
-  transform: translateY(0);
-  visibility: visible;
-}
-
 .ds-plus-ai-reason {
   margin: 12px 0 0;
   border: 1px solid #dfe8dc;
@@ -30406,22 +30377,6 @@ body:has(.ds-plus-page) {
     min-width: 22px;
     height: 22px;
     padding: 0;
-  }
-
-  .ds-plus-help__bubble {
-    position: fixed;
-    top: auto;
-    right: 12px;
-    bottom: calc(14px + env(safe-area-inset-bottom));
-    left: 12px;
-    z-index: 120;
-    width: auto;
-    transform: translateY(6px);
-  }
-
-  .ds-plus-help:hover .ds-plus-help__bubble,
-  .ds-plus-help:focus-within .ds-plus-help__bubble {
-    transform: translateY(0);
   }
 
   .ds-plus-message-row {
