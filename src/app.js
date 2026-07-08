@@ -20422,10 +20422,10 @@ function dataBoxPlusOverviewAction(message, workflow) {
 
 function dataBoxPlusCompactWorkflow(workflow, nextStep) {
   return `
-    <dl class="ds-plus-compact-workflow">
-      <div><dt>Stav</dt><dd><span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(workflow.tone)}">${escapeHtml(workflow.stateLabel || workflow.state)}</span></dd></div>
-      <div><dt>Další krok</dt><dd>${escapeHtml(nextStep)}</dd></div>
-    </dl>
+    <div class="ds-plus-compact-workflow" aria-label="Stav a další krok">
+      <span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(workflow.tone)}">${escapeHtml(workflow.stateLabel || workflow.state)}</span>
+      <span class="ds-plus-compact-workflow__next">${escapeHtml(nextStep)}</span>
+    </div>
   `;
 }
 
@@ -21362,7 +21362,7 @@ function dataBoxPlusMessageRow(message) {
         <h3>${escapeHtml(message.subject)}</h3>
         <div class="ds-plus-message-row__meta">
           <span>${escapeHtml(mailbox?.name || "Schránka")}</span>
-          <span>${escapeHtml(message.id)}</span>
+          <span class="ds-plus-message-row__id">${escapeHtml(message.id)}</span>
         </div>
       </div>
       <div class="ds-plus-message-row__action">
