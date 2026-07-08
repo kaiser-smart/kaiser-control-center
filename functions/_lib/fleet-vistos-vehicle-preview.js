@@ -36,68 +36,87 @@ const FLEET_VISTOS_VEHICLE_TERM_SPECS = [
   {
     field: "stkValidTo",
     label: "STK",
-    aliases: ["STK", "Stk", "STKValidTo", "StkValidTo", "STKPlatnostDo", "TechnickaKontrolaDo", "c_STK", "c_STKDo", "c_STKPlatnostDo", "c_TechnickaKontrolaDo"],
-    tokens: [["stk"], ["valid", "platnost", "do", "date", "datum", "kontrola"]]
+    aliases: [
+      "STK",
+      "Stk",
+      "KonecSTK",
+      "KonecStk",
+      "Konec STK",
+      "STKValidTo",
+      "StkValidTo",
+      "STKPlatnostDo",
+      "TechnickaKontrolaDo",
+      "TechnickaProhlidkaDo",
+      "TechnicalInspectionValidTo",
+      "c_STK",
+      "c_STKDo",
+      "c_KonecSTK",
+      "c_KonecStk",
+      "c_STKPlatnostDo",
+      "c_TechnickaKontrolaDo",
+      "c_TechnickaProhlidkaDo"
+    ],
+    tokens: [["stk"], ["konec", "valid", "platnost", "do", "date", "datum", "kontrola", "prohlidka"]]
   },
   {
     field: "emissionsValidTo",
     label: "Emise",
-    aliases: ["Emise", "EmiseDo", "EmissionsValidTo", "EmissionValidTo", "c_Emise", "c_EmiseDo", "c_EmisePlatnostDo"],
-    tokens: [["emise", "emission"], ["valid", "platnost", "do", "date", "datum"]]
+    aliases: ["Emise", "EmiseDo", "KonecEmisi", "KonecEmise", "Konec emisí", "EmissionsValidTo", "EmissionValidTo", "c_Emise", "c_EmiseDo", "c_KonecEmisi", "c_KonecEmise", "c_EmisePlatnostDo"],
+    tokens: [["emise", "emisi", "emission"], ["konec", "valid", "platnost", "do", "date", "datum"]]
   },
   {
     field: "tachographValidTo",
     label: "Tachograf",
-    aliases: ["Tachograf", "TachografDo", "TachographValidTo", "c_Tachograf", "c_TachografDo", "c_TachografPlatnostDo"],
-    tokens: [["tachograf", "tachograph"], ["valid", "platnost", "do", "date", "datum"]]
+    aliases: ["Tachograf", "TachografDo", "KonecTachografu", "Konec tachografu", "TachographValidTo", "c_Tachograf", "c_TachografDo", "c_KonecTachografu", "c_TachografPlatnostDo"],
+    tokens: [["tachograf", "tachograph"], ["konec", "valid", "platnost", "do", "date", "datum"]]
   },
   {
     field: "craneRevisionValidTo",
     label: "Revize jeřábu",
-    aliases: ["RevizeJerabu", "RevizeJerabuDo", "CraneRevisionValidTo", "c_RevizeJerabu", "c_RevizeJerabuDo", "c_JerabRevizeDo"],
-    tokens: [["jerab", "crane"], ["revize", "revision", "valid", "platnost", "do", "date", "datum"]]
+    aliases: ["RevizeJerabu", "RevizeJerabuDo", "KonecRevizeJerabu", "Konec revize jeřábu", "CraneRevisionValidTo", "c_RevizeJerabu", "c_RevizeJerabuDo", "c_KonecRevizeJerabu", "c_JerabRevizeDo"],
+    tokens: [["jerab", "crane"], ["konec", "revize", "revision", "valid", "platnost", "do", "date", "datum"]]
   },
   {
     field: "liftRevisionValidTo",
     label: "Revize čela",
-    aliases: ["RevizeCela", "RevizeCelaDo", "TailLiftRevisionValidTo", "LiftRevisionValidTo", "c_RevizeCela", "c_RevizeCelaDo", "c_CeloRevizeDo"],
-    tokens: [["celo", "cela", "lift", "taillift"], ["revize", "revision", "valid", "platnost", "do", "date", "datum"]]
+    aliases: ["RevizeCela", "RevizeCelaDo", "KonecRevizeCela", "Konec revize čela", "TailLiftRevisionValidTo", "LiftRevisionValidTo", "c_RevizeCela", "c_RevizeCelaDo", "c_KonecRevizeCela", "c_CeloRevizeDo"],
+    tokens: [["celo", "cela", "lift", "taillift"], ["konec", "revize", "revision", "valid", "platnost", "do", "date", "datum"]]
   },
   {
     field: "pressureEquipmentRevisionValidTo",
     label: "Tlakové zařízení",
-    aliases: ["TlakoveZarizeni", "TlakoveZarizeniDo", "PressureEquipmentRevisionValidTo", "c_TlakoveZarizeni", "c_TlakoveZarizeniDo"],
-    tokens: [["tlakove", "tlak", "pressure"], ["zarizeni", "equipment", "revize", "revision", "valid", "platnost", "do", "date", "datum"]]
+    aliases: ["TlakoveZarizeni", "TlakoveZarizeniDo", "KonecTlakoveZkousky", "DatumTlakoveZkousky", "Datum tlakové zkoušky", "PressureEquipmentRevisionValidTo", "PressureTestDate", "c_TlakoveZarizeni", "c_TlakoveZarizeniDo", "c_KonecTlakoveZkousky", "c_DatumTlakoveZkousky"],
+    tokens: [["tlakove", "tlak", "pressure"], ["zarizeni", "equipment", "zkouska", "revize", "revision", "valid", "platnost", "do", "date", "datum", "konec"]]
   },
   {
     field: "fireExtinguisherValidTo",
     label: "Hasicí přístroj",
-    aliases: ["HasiciPristroj", "HasiciPristrojDo", "FireExtinguisherValidTo", "c_HasiciPristroj", "c_HasiciPristrojDo"],
-    tokens: [["hasici", "hasic", "fireextinguisher"], ["valid", "platnost", "do", "date", "datum", "revize"]]
+    aliases: ["HasiciPristroj", "HasiciPristrojDo", "KonecRevizeHasicihoPristroje", "Konec revize hasicího přístroje", "FireExtinguisherValidTo", "c_HasiciPristroj", "c_HasiciPristrojDo", "c_KonecRevizeHasicihoPristroje"],
+    tokens: [["hasici", "hasic", "fireextinguisher"], ["konec", "valid", "platnost", "do", "date", "datum", "revize"]]
   },
   {
     field: "insuranceValidTo",
     label: "Pojištění",
-    aliases: ["Pojisteni", "PojisteniDo", "InsuranceValidTo", "c_Pojisteni", "c_PojisteniDo", "c_PojisteniPlatnostDo"],
-    tokens: [["pojisteni", "insurance"], ["valid", "platnost", "do", "date", "datum"]]
+    aliases: ["Pojisteni", "PojisteniDo", "KonecPojisteni", "Konec pojištění", "PojistkaDo", "InsuranceValidTo", "InsuranceEndDate", "c_Pojisteni", "c_PojisteniDo", "c_KonecPojisteni", "c_PojistkaDo", "c_PojisteniPlatnostDo"],
+    tokens: [["pojisteni", "pojistka", "insurance"], ["konec", "valid", "platnost", "do", "date", "datum"]]
   },
   {
     field: "highwayVignetteValidTo",
     label: "Dálniční známka",
-    aliases: ["DalnicniZnamka", "DalnicniZnamkaDo", "HighwayVignetteValidTo", "VignetteValidTo", "c_DalnicniZnamka", "c_DalnicniZnamkaDo"],
-    tokens: [["dalnicni", "vignette"], ["znamka", "valid", "platnost", "do", "date", "datum"]]
+    aliases: ["DalnicniZnamka", "DalnicniZnamkaDo", "KonecDalnicniZnamky", "Konec dálniční známky", "HighwayVignetteValidTo", "VignetteValidTo", "c_DalnicniZnamka", "c_DalnicniZnamkaDo", "c_KonecDalnicniZnamky"],
+    tokens: [["dalnicni", "vignette"], ["znamka", "konec", "valid", "platnost", "do", "date", "datum"]]
   },
   {
     field: "lastServiceDate",
     label: "Poslední servis",
-    aliases: ["LastServiceDate", "PosledniServis", "PosledniServisDatum", "c_PosledniServis", "c_PosledniServisDatum"],
+    aliases: ["LastServiceDate", "PosledniServis", "PosledniServisDatum", "DatumPoslednihoServisu", "c_PosledniServis", "c_PosledniServisDatum", "c_DatumPoslednihoServisu"],
     tokens: [["servis", "service"], ["last", "posledni", "datum", "date"]]
   },
   {
     field: "nextServiceDate",
     label: "Příští servis",
-    aliases: ["NextServiceDate", "PristiServis", "PristiServisDatum", "c_PristiServis", "c_PristiServisDatum"],
-    tokens: [["servis", "service"], ["next", "pristi", "datum", "date"]]
+    aliases: ["NextServiceDate", "PristiServis", "PristiServisDatum", "DalsiServis", "KonecServisnihoIntervalu", "c_PristiServis", "c_PristiServisDatum", "c_DalsiServis", "c_KonecServisnihoIntervalu"],
+    tokens: [["servis", "service"], ["next", "pristi", "dalsi", "datum", "date", "konec", "interval"]]
   }
 ];
 
@@ -277,13 +296,31 @@ function normalizeVistosDate(value) {
 }
 
 function termValueFromRow(row, termFields, field) {
+  const spec = FLEET_VISTOS_VEHICLE_TERM_SPECS.find((item) => item.field === field) || {};
   const source = termFields?.fields?.[field];
-  const raw = readVistosDisplayValue(row, source?.columnName);
+  const explicitRaw = readVistosDisplayValue(row, source?.columnName);
+  const fallback = explicitRaw ? null : termValueFallbackFromRow(row, spec);
+  const raw = explicitRaw || fallback?.raw || "";
   return {
     value: normalizeVistosDate(raw),
-    sourceColumn: raw && source?.columnName ? source.columnName : "",
-    sourceCaption: raw && source?.caption ? source.caption : ""
+    sourceColumn: raw && source?.columnName ? source.columnName : fallback?.columnName || "",
+    sourceCaption: raw && source?.caption ? source.caption : fallback?.caption || ""
   };
+}
+
+function termValueFallbackFromRow(row, spec = {}) {
+  if (!row || typeof row !== "object") return null;
+  const candidates = Object.keys(row)
+    .map((columnName) => ({
+      columnName,
+      caption: "",
+      raw: readVistosDisplayValue(row, columnName),
+      score: termColumnScore({ columnName, caption: "" }, spec)
+    }))
+    .filter((item) => item.raw && item.score > 0)
+    .sort((left, right) => right.score - left.score || left.columnName.localeCompare(right.columnName, "cs"));
+
+  return candidates[0] || null;
 }
 
 function recordId(row, baseKey) {

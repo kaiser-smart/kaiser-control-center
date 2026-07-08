@@ -9361,7 +9361,7 @@ function fleetTermStatusLabel(days) {
 }
 
 function fleetTermRecommendation(label, days) {
-  if (!Number.isFinite(days)) return "Doplnit datum platnosti.";
+  if (!Number.isFinite(days)) return "Datum není ve Vistosu načtené.";
   if (days < 0) return `${label} je prošlá. Vozidlo označit jako rizikové.`;
   if (days === 0) return `${label} končí dnes. Domluvit okamžitou kontrolu.`;
   if (days <= 30) {
@@ -9391,14 +9391,14 @@ function fleetTermRecommendationForDefinition(term, days) {
   if (term?.isDeadline === false) {
     return Number.isFinite(days)
       ? `${term.label} je historický záznam. Neoznačuje riziko vozidla.`
-      : `Doplnit datum: ${term.label.toLowerCase()}.`;
+      : `${term.label} není ve Vistosu načtený.`;
   }
   return fleetTermRecommendation(term.label, days);
 }
 
 function fleetTermMetaText(term = {}) {
   if (term.isDeadline === false) {
-    if (!Number.isFinite(term.days)) return "bez data · není dostupné";
+    if (!Number.isFinite(term.days)) return "není načteno z Vistosu";
     if (term.days < 0) return `před ${Math.abs(term.days)} dny · zaznamenáno`;
     if (term.days === 0) return "dnes · zaznamenáno";
     return `${fleetDaysText(term.days)} · plánovaný záznam`;
@@ -9686,55 +9686,6 @@ function fleetActionLink(label, href, helpText = "", options = {}) {
   return helpText ? fleetActionWithHelp(link, helpText) : link;
 }
 
-function fleetExplanationButton(label, text) {
-  return `
-    <button class="secondary-link fleet-explain-button" type="button" data-fleet-help>
-      ${escapeHtml(label)}
-      <span class="fleet-help__bubble fleet-help__bubble--wide" role="tooltip">${escapeHtml(text)}</span>
-    </button>
-  `;
-}
-
-function fleetVehicleImportantSummary(vehicle = {}) {
-  const reports = fleetDriverReportSummary(vehicle);
-  const waitingPart = reports.waitingPartReports[0];
-  const open = reports.openReports[0];
-  const stkDays = fleetDaysUntil(vehicle.stkValidTo);
-  const insuranceDays = fleetDaysUntil(vehicle.insuranceValidTo);
-  const termsKnown = Number.isFinite(stkDays) || Number.isFinite(insuranceDays);
-
-  if (waitingPart) {
-    const termText = termsKnown
-      ? ` STK ${Number.isFinite(stkDays) && stkDays <= 30 ? fleetDaysText(stkDays) : "je zatím bez blízkého termínu"} a pojištění ${Number.isFinite(insuranceDays) && insuranceDays <= 30 ? fleetDaysText(insuranceDays) : "je zatím bez blízkého termínu"}.`
-      : "";
-    return `Vozidlo má otevřené hlášení ${driverReportShortText(waitingPart.defectDescription || waitingPart.probablePart || "čekající na díl", 90)} a čeká se na ověření dílu.${termText}`;
-  }
-  if (open) {
-    return `Vozidlo má otevřené hlášení ${driverReportShortText(open.defectDescription || open.defectType, 90)}. Nejbližší krok: ${fleetVehicleRecommendation(vehicle)}`;
-  }
-  const nearest = fleetNearestTerm(vehicle);
-  if (nearest && nearest.days <= 30) {
-    return `${nearest.label} ${fleetDaysText(nearest.days)}. Nejbližší krok: ${fleetTermRecommendation(nearest.label, nearest.days)}`;
-  }
-  if (termsKnown) {
-    return "Vozidlo nemá otevřené související hlášení a načtené termíny neukazují akutní problém.";
-  }
-  return "Pro toto vozidlo zatím nejsou dostupná kompletní data.";
-}
-
-function fleetRecommendationReason(vehicle = {}) {
-  const reports = fleetDriverReportSummary(vehicle);
-  const term = fleetNearestTerm(vehicle);
-  const facts = [
-    reports.openReports.length ? `${reports.openReports.length} otevřených hlášení` : "",
-    reports.waitingPartReports.length ? `${reports.waitingPartReports.length} hlášení čeká na díl` : "",
-    reports.handedToPatrikReports.length ? "něco je předáno Patrikovi" : "",
-    term ? `${term.label} ${fleetDaysText(term.days)}` : "",
-    vehicle.status ? `stav vozidla: ${fleetStatusLabel(vehicle.status)}` : ""
-  ].filter(Boolean).join(", ");
-  return `Systém vychází z načtených údajů vozidla, termínů a souvisejících hlášení řidičů. Použitá data: ${facts || "zatím nejsou dostupná kompletní data"}. Po potvrzení akce se otevře příslušný detail nebo návrh úkolu; díl, servis ani e-mail se automaticky neobjedná a neodešle.`;
-}
-
 function fleetDriverReportsDetail(vehicle = {}) {
   const summary = fleetDriverReportSummary(vehicle);
   const last = summary.lastReport;
@@ -9788,9 +9739,8 @@ function fleetMissingVehicleTerms(vehicle = {}) {
 function fleetTermsDetail(vehicle = {}) {
   const readableTerms = fleetReadableVehicleTerms(vehicle);
   const missingTerms = fleetMissingVehicleTerms(vehicle);
-  const missingLabel = missingTerms.length
-    ? missingTerms.map((term) => term.label).join(", ")
-    : "";
+  const missingLabel = missingTerms.slice(0, 6).map((term) => term.label).join(", ");
+  const missingMore = Math.max(0, missingTerms.length - 6);
   return `
     <article class="fleet-detail-card">
       <div class="fleet-card-head">
@@ -9813,17 +9763,17 @@ function fleetTermsDetail(vehicle = {}) {
         </div>
       ` : `
         <div class="fleet-empty-state fleet-empty-state--calm">
-          <strong>Termíny nejsou v datech vozidla</strong>
-          <span>Vozidlo je načtené z Vistos Vehicle, ale STK, revize, pojištění nebo servisní termíny zatím nejsou v dostupných polích.</span>
+          <strong>Bez načtených termínů z Vistosu</strong>
+          <span>U vozidla teď nezobrazuji prázdné položky. Jakmile Vistos vrátí STK, revizi, pojištění nebo servisní datum, ukáže se tady konkrétní termín a další krok.</span>
         </div>
       `}
-      ${missingTerms.length ? `
+      ${missingTerms.length && readableTerms.length ? `
         <div class="fleet-term-missing" aria-label="Chybějící termíny">
-          <strong>Chybí ve Vistos datech</strong>
+          <strong>Bez data ve Vistosu</strong>
           <div class="fleet-missing-term-chips">
-            ${missingTerms.map((term) => `<span>${escapeHtml(term.label)}</span>`).join("")}
+            ${missingTerms.slice(0, 6).map((term) => `<span>${escapeHtml(term.label)}</span>`).join("")}
           </div>
-          <small>${escapeHtml(missingLabel ? `Bez čitelného data: ${missingLabel}.` : "")}</small>
+          <small>${escapeHtml(missingLabel ? `Nezobrazuji prázdné řádky: ${missingLabel}${missingMore ? ` a další ${missingMore}` : ""}.` : "")}</small>
         </div>
       ` : ""}
     </article>
@@ -9848,7 +9798,7 @@ function fleetServiceDetail(vehicle = {}) {
       <dl class="fleet-human-list">
         ${serviceDates.length
           ? serviceDates.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")
-          : `<div><dt>Servisní intervaly</dt><dd>Nejsou v datech vozidla.</dd></div>`}
+          : `<div><dt>Servisní intervaly</dt><dd>Bez načteného servisního termínu z Vistosu.</dd></div>`}
         <div><dt>Otevřené servisní případy</dt><dd>${escapeHtml(String(serviceReports.length))}</dd></div>
         <div><dt>Čekající díly</dt><dd>${escapeHtml(String(reports.waitingPartReports.length))}</dd></div>
         <div><dt>Servisní doporučení</dt><dd>${escapeHtml(fleetVehicleRecommendation(vehicle))}</dd></div>
@@ -11094,7 +11044,7 @@ function fleetVehiclesTableBody() {
   return `
       <div class="fleet-table__empty" role="row">
         <strong>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Bez vozidel" : FLEET_API_WAITING_LABEL)}</strong>
-        <span>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Zatím nejsou dostupná data." : fleetVehiclesState.message || "Seznam se načte z cloud API. Produkční vozidla nejsou ve frontendu napevno.")}</span>
+        <span>${escapeHtml(fleetVehiclesState.apiStatus === "ready" ? "Evidence neobsahuje vozidla pro aktuální filtr." : fleetVehiclesState.message || "Seznam se načte z cloud API. Produkční vozidla nejsou ve frontendu napevno.")}</span>
       </div>
   `;
 }
@@ -11236,8 +11186,8 @@ function fleetTermsSection(activeId) {
         </div>
       ` : `
         <div class="fleet-empty-state fleet-empty-state--calm">
-          <strong>Zatím nejsou dostupná data.</strong>
-          <span>Termíny se zobrazí po načtení STK, emisí, revizí, pojištění a servisních intervalů.</span>
+          <strong>Bez načtených termínů</strong>
+          <span>Jakmile Vistos vrátí STK, emise, revize, pojištění nebo servisní interval, zobrazí se tady jen konkrétní datum a další krok.</span>
         </div>
       `}
     </section>
@@ -11273,9 +11223,9 @@ function fleetServiceSection(activeId) {
                 <div><dt>Vazba na hlášení</dt><dd>${escapeHtml(report.reportId || report.id)}</dd></div>
                 <div><dt>Doporučený servisní úkon</dt><dd>${escapeHtml(driverReportNextStep(report))}</dd></div>
                 <div><dt>Priorita</dt><dd>${escapeHtml(report.priority || (fleetReportIsSafetyRisk(report) ? "ruční kontrola" : "běžná"))}</dd></div>
-                <div><dt>Servis / dodavatel</dt><dd>${escapeHtml(fleetVehicleDisplayValue(report.serviceTechnician, "Zatím nejsou dostupná data."))}</dd></div>
-                <div><dt>Odhad / skutečná cena</dt><dd>Zatím nejsou dostupná data.</dd></div>
-                <div><dt>Faktura / přílohy</dt><dd>Zatím nejsou dostupná data.</dd></div>
+                <div><dt>Servis / dodavatel</dt><dd>${escapeHtml(fleetVehicleDisplayValue(report.serviceTechnician, "Bez dodavatele"))}</dd></div>
+                <div><dt>Odhad / skutečná cena</dt><dd>Bez napojené ceny</dd></div>
+                <div><dt>Faktura / přílohy</dt><dd>Bez napojené přílohy</dd></div>
                 <div><dt>Odpovědný</dt><dd>${escapeHtml(fleetVehicleDisplayValue(report.assignedToName || vehicle.assignedDriverName, "Zatím není uvedeno"))}</dd></div>
               </dl>
               ${fleetActionLink("Otevřít v Hlášení řidičů", fleetReportLink(report), "Otevře se související hlášení. Vozový park nepřebírá servisní workflow.", { primary: true })}
@@ -11284,7 +11234,7 @@ function fleetServiceSection(activeId) {
         </div>
       ` : `
         <div class="fleet-empty-state fleet-empty-state--calm">
-          <strong>Zatím nejsou dostupná data.</strong>
+          <strong>Bez otevřených servisních případů</strong>
           <span>Servisní případy se zobrazí ze souvisejících hlášení a budoucích servisních záznamů. Nevzniká duplicitní fronta Hlášení řidičů.</span>
         </div>
       `}
@@ -11305,7 +11255,7 @@ function fleetDocumentsSection(activeId) {
         ${["Vozidlo", "Typ dokumentu", "Platnost", "Chybí dokument", "Končí platnost", "Nahráno nedávno"].map((label) => `<span>${escapeHtml(label)}</span>`).join("")}
       </div>
       <div class="fleet-empty-state fleet-empty-state--calm">
-        <strong>Zatím nejsou dostupná data.</strong>
+        <strong>Dokumenty zatím nejsou napojené</strong>
         <span>Technické průkazy, pojistné smlouvy, zelené karty, STK protokoly, revizní zprávy, servisní faktury a fotografie se zobrazí po napojení dokumentového API.</span>
       </div>
     </section>
@@ -11325,12 +11275,12 @@ function fleetCostsSection(activeId) {
         ${["Podle vozidla", "Podle typu", "Podle dodavatele", "Servis", "Pojištění", "Pneumatiky", "Palivo", "Mimořádné opravy", "Cena na km", "Cena na měsíc"].map((label) => `
           <article>
             <span>${escapeHtml(label)}</span>
-            <strong>Zatím nejsou dostupná data.</strong>
+            <strong>Bez napojených nákladů</strong>
           </article>
         `).join("")}
       </div>
       <div class="fleet-empty-state fleet-empty-state--calm">
-        <strong>Zatím nejsou dostupná data.</strong>
+        <strong>Bez nákladových záznamů</strong>
         <span>Nákladové anomálie se zobrazí po napojení faktur, servisních nákladů, pojištění, paliva nebo dalších nákladových zdrojů.</span>
       </div>
     </section>
