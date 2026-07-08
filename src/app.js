@@ -20511,7 +20511,7 @@ function dataBoxPlusMessageWorkflow(message, options = {}) {
       secondaryActions: [
         dataBoxPlusWorkflowAction({ label: "Detail", messageId, help: "Otevře se detail zprávy a podklady pro rozhodnutí. Nic se tím neodešle." }),
         dataBoxPlusWorkflowAction({
-          label: "Zrušit akci",
+          label: "Zrušit",
           attrs: `data-ds-plus-dismiss="${escapeHtml(recommendation.id)}"`,
           help: "Připravená akce se zruší. Zpráva zůstane otevřená a nic se neodešle mimo systém."
         })
@@ -20613,7 +20613,7 @@ function dataBoxPlusMessageWorkflow(message, options = {}) {
       secondaryActions: [
         dataBoxPlusWorkflowAction({ label: "Otevřít zprávu", messageId, help: dataBoxPlusActionHelpText("Otevřít zprávu") }),
         dataBoxPlusWorkflowAction({
-          label: "Zrušit akci",
+          label: "Zrušit",
           attrs: `data-ds-plus-dismiss="${escapeHtml(recommendation.id)}"`,
           help: "Připravená akce se zruší. Zpráva zůstane otevřená a nic se neodešle mimo systém."
         })
@@ -20666,12 +20666,10 @@ function dataBoxPlusWorkflowSummary(workflow) {
 
 function dataBoxPlusInstructionPlanSummary(plan = {}) {
   const rows = [
-    ["Změna stavu", plan.messageStatus || "Připraví se po potvrzení"],
-    ["Komu se předá", plan.assignedTo || "Nikomu"],
-    ["Odešle se mimo systém", plan.sendsOutsideSystem ? "Ano" : "Ne"],
-    ["Archivace", plan.archiveStatus === "archived" ? "Ano, bez mazání" : "Ne"],
-    ["Historie", plan.writesHistory ? "Akce se zapíše" : "Bez zápisu"],
-    ["Učící vzor", plan.createsLearningPattern ? "Uložit jako návrh vzoru" : "Neukládat"]
+    ["Stav", plan.messageStatus || "Připraví se"],
+    ["Předání", plan.assignedTo || "Nikomu"],
+    ["Mimo systém", plan.sendsOutsideSystem ? "Ano" : "Ne"],
+    ["Historie", plan.writesHistory ? "Ano" : "Ne"]
   ];
   return `
     <dl class="ds-plus-instruction-plan">
@@ -20685,9 +20683,31 @@ function dataBoxPlusInstructionExamples(message = {}) {
     "Předat na faktury",
     "Archivovat",
     "Předat mzdové účetní",
+    "Označit jako vyřešené",
     "Nechat nevyřízené"
   ];
   return examples;
+}
+
+function dataBoxPlusShortAssistantText(recommendation = {}, plan = {}) {
+  const text = String(recommendation.text || plan.assistantText || "").trim();
+  const normalized = dataBoxPlusSearchText([text, plan.recommendedAction, plan.actionType, plan.confirmLabel]);
+  if (normalized.includes("faktur") || normalized.includes("predan")) {
+    return "Připravím předání. Nic se neodešle mimo systém.";
+  }
+  if (normalized.includes("archiv")) {
+    return "Připravím archivaci. Nic se nesmaže.";
+  }
+  if (normalized.includes("vyresen") || normalized.includes("zpracovan") || normalized.includes("cssz")) {
+    return "Připravím označení jako vyřešené. Nic se neodešle mimo systém.";
+  }
+  if (normalized.includes("nechat nevyrizene")) {
+    return "Zpráva zůstane nevyřízená. Nic se neodešle mimo systém.";
+  }
+  if (text) {
+    return text.length > 120 ? `${text.slice(0, 117).trim()}...` : text;
+  }
+  return "Připravím krok k potvrzení. Nic se zatím neprovede.";
 }
 
 function dataBoxPlusInstructionCard(message, options = {}) {
@@ -20707,15 +20727,32 @@ function dataBoxPlusInstructionCard(message, options = {}) {
       </div>
       <div class="ds-plus-instruction-bubble ds-plus-instruction-bubble--assistant">
         <span>Návrh</span>
-        <p>${escapeHtml(recommendation.text || plan.assistantText || "Rozumím. Připravil jsem akci k potvrzení.")}</p>
+        <p>${escapeHtml(dataBoxPlusShortAssistantText(recommendation, plan))}</p>
       </div>
-      <strong>Před potvrzením:</strong>
       ${dataBoxPlusInstructionPlanSummary(plan)}
-      <label class="ds-plus-instruction-remember">
-        <input type="checkbox" data-ds-plus-remember-pattern="${escapeHtml(recommendation.id)}" ${dataBoxPlusState.instructionRemember[recommendation.id] === false ? "" : "checked"} />
-        <span>Zapamatovat pro příště</span>
-        ${dataBoxPlusHelp("Zapamatovat pro příště", "Autopilot si uloží tento postup jako vzor. Bez dalšího schválení z něj nevznikne automatické pravidlo.")}
-      </label>
+      <div class="ds-plus-instruction-remember" role="group" aria-label="Podobné zprávy příště nabídnout stejně?">
+        <span>Podobné zprávy příště nabídnout stejně?</span>
+        <label>
+          <input
+            type="radio"
+            name="remember-${escapeHtml(recommendation.id)}"
+            value="yes"
+            data-ds-plus-remember-pattern="${escapeHtml(recommendation.id)}"
+            ${dataBoxPlusState.instructionRemember[recommendation.id] === false ? "" : "checked"}
+          />
+          <span>Ano, jen navrhnout</span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="remember-${escapeHtml(recommendation.id)}"
+            value="no"
+            data-ds-plus-remember-pattern="${escapeHtml(recommendation.id)}"
+            ${dataBoxPlusState.instructionRemember[recommendation.id] === false ? "checked" : ""}
+          />
+          <span>Ne</span>
+        </label>
+      </div>
       <div class="ds-plus-instruction-actions">
         ${dataBoxPlusActionButton({
           label: plan.confirmLabel || "Potvrdit provedení",
@@ -20724,12 +20761,12 @@ function dataBoxPlusInstructionCard(message, options = {}) {
           help: "Provede se připravená interní akce. Nic se neodešle mimo systém a krok se zapíše do historie."
         })}
         ${dataBoxPlusActionButton({
-          label: "Upravit pokyn",
+          label: "Upravit",
           attrs: `data-ds-plus-edit-instruction="${escapeHtml(message.id)}" data-recommendation-id="${escapeHtml(recommendation.id)}"`,
           help: "Vrátí pokyn do pole k úpravě. Samotná zpráva se tím nezmění."
         })}
         ${dataBoxPlusActionButton({
-          label: "Zrušit akci",
+          label: "Zrušit",
           attrs: `data-ds-plus-dismiss="${escapeHtml(recommendation.id)}"`,
           help: "Připravená akce se zruší. Zpráva zůstane otevřená a nic se neodešle mimo systém."
         })}
@@ -20753,7 +20790,7 @@ function dataBoxPlusInstructionCard(message, options = {}) {
         <div class="ds-plus-instruction-examples" aria-label="Příklady pokynů">
           ${examples.map((example) => `<button type="button" data-ds-plus-instruction-example="${escapeHtml(example)}">${escapeHtml(example)}</button>`).join("")}
         </div>
-        <button class="primary-action" type="submit" ${loading ? "disabled" : ""}>${escapeHtml(loading ? "Připravuji..." : "Odeslat pokyn")}</button>
+        <button class="primary-action" type="submit" ${loading ? "disabled" : ""}>${escapeHtml(loading ? "Připravuji..." : "Připravit krok")}</button>
       </form>
       ${pendingMarkup}
     </section>
@@ -20816,7 +20853,7 @@ function dataBoxPlusActionHelpText(label = "") {
   if (normalized.includes("oznacit jako zpracovane")) {
     return "Zpráva se uloží k evidenci jako zpracovaná. Nic se nesmaže, nic se neodešle mimo systém a krok bude dohledatelný.";
   }
-  if (normalized.includes("zrusit akci")) {
+  if (normalized.includes("zrusit")) {
     return "Připravená akce se zruší. Zpráva zůstane k vyřízení, nic se neodešle a rozhodnutí bude dohledatelné.";
   }
   if (normalized.includes("zaradit rucne")) {
@@ -21832,10 +21869,6 @@ function dataBoxPlusDetailOverlay() {
           <section class="ds-plus-detail-section ds-plus-detail-section--workflow">
             <h3>Pracovní stav</h3>
             ${dataBoxPlusWorkflowSummary(workflow)}
-            <div class="ds-plus-detail-actions">
-              ${dataBoxPlusRenderWorkflowAction(workflow.primaryAction)}
-              ${workflow.secondaryActions.map(dataBoxPlusRenderWorkflowAction).join("")}
-            </div>
           </section>
           <section class="ds-plus-detail-section ds-plus-detail-section--header">
             <dl>
@@ -21849,14 +21882,6 @@ function dataBoxPlusDetailOverlay() {
           </section>
           ${dataBoxPlusFacts(message)}
           ${dataBoxPlusSummary(message)}
-          ${workflow.closed ? "" : `<section class="ds-plus-detail-section ds-plus-detail-section--action">
-            <h3>Doporučený další krok</h3>
-            <p>${escapeHtml(workflow.nextStep)}</p>
-            <div class="ds-plus-detail-actions">
-              ${dataBoxPlusActionButton({ label: "Přidat poznámku", attrs: `data-ds-plus-pilot-action="Přidat poznámku"` })}
-              ${dataBoxPlusActionButton({ label: "Přiřadit osobu", attrs: `data-ds-plus-pilot-action="Přiřadit osobu"` })}
-            </div>
-          </section>`}
           ${dataBoxPlusAttachments(message)}
           <section class="ds-plus-detail-section ds-plus-detail-section--chat">
             ${dataBoxPlusInstructionCard(message)}
@@ -39209,7 +39234,10 @@ document.addEventListener("change", async (event) => {
 
   const dataBoxPlusRememberPattern = event.target.closest("[data-ds-plus-remember-pattern]");
   if (dataBoxPlusRememberPattern) {
-    dataBoxPlusState.instructionRemember[dataBoxPlusRememberPattern.dataset.dsPlusRememberPattern || ""] = dataBoxPlusRememberPattern.checked;
+    const value = String(dataBoxPlusRememberPattern.value || "yes");
+    dataBoxPlusState.instructionRemember[dataBoxPlusRememberPattern.dataset.dsPlusRememberPattern || ""] = value === "no"
+      ? false
+      : dataBoxPlusRememberPattern.checked;
     return;
   }
 
