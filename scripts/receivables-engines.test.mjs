@@ -21,6 +21,7 @@ import {
   customerLinkProbeAttemptsForCandidate,
   customerLookupAttemptsForCandidate
 } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
+import { receivablesKbApiOnboardingStatus } from "../functions/_lib/receivables-kb-api-onboarding.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import {
   calculateInvoicePaymentState,
@@ -47,6 +48,21 @@ const invoice = {
 
 assert.equal(receivableToleranceAmount(1000), 1);
 assert.equal(receivableToleranceAmount(250000), 250);
+
+{
+  const status = receivablesKbApiOnboardingStatus({
+    KB_ADAA_ENVIRONMENT: "sandbox",
+    KB_ADAA_CLIENT_REGISTRATION_API_KEY: "secret-client-registration",
+    KB_ADAA_OAUTH_API_KEY: "secret-oauth",
+    KB_ADAA_ACCOUNT_API_KEY: "secret-account"
+  });
+  assert.equal(status.apiStatus, "partial");
+  assert.equal(status.readyForSandboxProbe, true);
+  assert.equal(status.readyForProductionRead, false);
+  assert.equal(JSON.stringify(status).includes("secret-client-registration"), false);
+  assert.equal(status.items.some((entry) => entry.id === "software_statement" && !entry.configured), true);
+  assert.equal(status.safety.callsKbApi, false);
+}
 
 {
   const result = matchReceivablePayments([invoice], [{

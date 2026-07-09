@@ -5,6 +5,7 @@ import {
   fetchDataBoxMessageAttachments,
   fetchDataBoxMessageMetadata
 } from "./data-box-isds-client.js";
+import { communicationEmailIdentity, communicationSmsConfig } from "./communication-store.js";
 import { sendDataBoxForwardNotification } from "./notification-service.js";
 
 const EXPECTED_MAILBOX_COUNT = 7;
@@ -98,16 +99,14 @@ function normalizeEmail(value) {
 
 function sendReadiness(env = {}) {
   const emailProvider = cleanString(env.EMAIL_PROVIDER || (env.SENDGRID_API_KEY ? "sendgrid" : "")).toLowerCase();
-  const emailReady = emailProvider === "sendgrid" && Boolean(cleanString(env.EMAIL_FROM) && cleanString(env.SENDGRID_API_KEY || env.EMAIL_API_KEY));
+  const emailIdentity = communicationEmailIdentity(env);
+  const smsConfig = communicationSmsConfig(env);
+  const emailReady = emailProvider === "sendgrid" && Boolean(emailIdentity.fromEmail && cleanString(env.SENDGRID_API_KEY || env.EMAIL_API_KEY));
   const dataBoxReady = Boolean(
     cleanString(env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT)
     && cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY)
   );
-  const smsReady = Boolean(
-    cleanString(env.TWILIO_ACCOUNT_SID)
-    && cleanString(env.TWILIO_AUTH_TOKEN)
-    && cleanString(env.TWILIO_MESSAGING_SERVICE_SID)
-  );
+  const smsReady = Boolean(smsConfig.accountSid && smsConfig.authToken && smsConfig.messagingServiceSid);
 
   return {
     dataBox: {
@@ -128,8 +127,8 @@ function sendReadiness(env = {}) {
       enabled: smsReady,
       label: smsReady ? "zapnuto" : "čeká na SMS provider",
       text: smsReady
-        ? "SMS odesílání má serverový Twilio Messaging Service."
-        : "Chybí TWILIO_MESSAGING_SERVICE_SID. Verify služba nestačí pro běžné ostré SMS odesílání."
+        ? "SMS odesílání má serverovou Kaiser Twilio Messaging Service."
+        : "Chybí TWILIO_KAISER_MESSAGING_SERVICE_SID. Verify služba nestačí pro běžné ostré SMS odesílání."
     }
   };
 }

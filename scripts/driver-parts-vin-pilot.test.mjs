@@ -124,7 +124,10 @@ function createDriverPartTestDb(initialRows = []) {
   const state = {
     requests: new Map(initialRows.map((row) => [row.id, { ...row }])),
     events: [],
-    notificationLogs: []
+    notificationLogs: [],
+    communicationThreads: new Map(),
+    communicationMessages: new Map(),
+    communicationEvents: []
   };
 
   function normalizedSql(sql) {
@@ -164,7 +167,15 @@ function createDriverPartTestDb(initialRows = []) {
               "provider",
               "provider_message_id",
               "attempts",
-              "updated_at"
+              "updated_at",
+              "message_id",
+              "thread_id",
+              "audit_id",
+              "from_name",
+              "from_address",
+              "reply_to",
+              "subject_token",
+              "provider_status"
             ].map((name) => ({ name }))
           };
         }
@@ -336,7 +347,162 @@ function createDriverPartTestDb(initialRows = []) {
             status: this.params[7],
             subject: this.params[9],
             provider: this.params[11],
-            providerMessageId: this.params[12]
+            providerMessageId: this.params[12],
+            messageId: this.params[17],
+            threadId: this.params[18],
+            auditId: this.params[19],
+            fromName: this.params[20],
+            fromAddress: this.params[21],
+            replyTo: this.params[22],
+            subjectToken: this.params[23],
+            providerStatus: this.params[24]
+          });
+          return { success: true };
+        }
+        if (compactSql.includes("insert into communication_threads")) {
+          const [
+            id,
+            threadId,
+            moduleKey,
+            entityType,
+            entityId,
+            auditId,
+            subjectToken,
+            subject,
+            status,
+            lastOutboundAt,
+            lastEventAt,
+            metadataJson,
+            createdAt,
+            updatedAt
+          ] = this.params;
+          state.communicationThreads.set(threadId, {
+            id,
+            thread_id: threadId,
+            module_key: moduleKey,
+            entity_type: entityType,
+            entity_id: entityId || "",
+            audit_id: auditId,
+            subject_token: subjectToken,
+            subject: subject || "",
+            status,
+            last_outbound_at: lastOutboundAt,
+            last_event_at: lastEventAt,
+            metadata_json: metadataJson || "{}",
+            created_at: createdAt,
+            updated_at: updatedAt
+          });
+          return { success: true };
+        }
+        if (compactSql.includes("insert into communication_messages")) {
+          const [
+            id,
+            threadId,
+            auditId,
+            channel,
+            direction,
+            moduleKey,
+            entityType,
+            entityId,
+            messageId,
+            provider,
+            fromName,
+            fromAddress,
+            replyTo,
+            toAddress,
+            ccAddress,
+            subject,
+            bodyPreview,
+            status,
+            rawPayload,
+            createdAt,
+            updatedAt
+          ] = this.params;
+          state.communicationMessages.set(id, {
+            id,
+            thread_id: threadId,
+            audit_id: auditId,
+            channel,
+            direction,
+            module_key: moduleKey,
+            entity_type: entityType,
+            entity_id: entityId || "",
+            message_id: messageId,
+            provider,
+            from_name: fromName || "",
+            from_address: fromAddress || "",
+            reply_to: replyTo || "",
+            to_address: toAddress || "",
+            cc_address: ccAddress || "",
+            subject: subject || "",
+            body_preview: bodyPreview || "",
+            status,
+            raw_payload: rawPayload || "{}",
+            created_at: createdAt,
+            updated_at: updatedAt
+          });
+          return { success: true };
+        }
+        if (compactSql.includes("update communication_messages")) {
+          const [
+            status,
+            provider,
+            providerMessageId,
+            providerStatus,
+            errorMessage,
+            sentStatus,
+            sentAt,
+            updatedAt,
+            id
+          ] = this.params;
+          const row = state.communicationMessages.get(id);
+          if (row) {
+            Object.assign(row, {
+              status,
+              provider: provider || row.provider,
+              provider_message_id: providerMessageId || row.provider_message_id || "",
+              provider_status: providerStatus,
+              error_message: errorMessage || "",
+              sent_at: sentStatus === "sent" ? (row.sent_at || sentAt) : row.sent_at,
+              updated_at: updatedAt
+            });
+          }
+          return { success: true };
+        }
+        if (compactSql.includes("update communication_threads")) {
+          const [
+            status,
+            sentStatus,
+            lastOutboundAt,
+            lastEventAt,
+            updatedAt,
+            threadId
+          ] = this.params;
+          const row = state.communicationThreads.get(threadId);
+          if (row) {
+            Object.assign(row, {
+              status,
+              last_outbound_at: sentStatus === "sent" ? (row.last_outbound_at || lastOutboundAt) : row.last_outbound_at,
+              last_event_at: lastEventAt,
+              updated_at: updatedAt
+            });
+          }
+          return { success: true };
+        }
+        if (compactSql.includes("insert into communication_events")) {
+          state.communicationEvents.push({
+            id: this.params[0],
+            event_type: this.params[1],
+            channel: this.params[2],
+            module_key: this.params[3],
+            entity_type: this.params[4],
+            entity_id: this.params[5],
+            thread_id: this.params[6],
+            communication_message_id: this.params[7],
+            status: this.params[8],
+            detail: this.params[9],
+            raw_payload: this.params[10],
+            created_at: this.params[11]
           });
           return { success: true };
         }
@@ -1274,7 +1440,9 @@ function driverPartTestEnv(db, offers) {
     };
   };
   try {
+    const db = createDriverPartTestDb();
     const sentEmail = await sendDriverPartOrderNotification({
+      SMART_ODPADY_DB: db,
       EMAIL_PROVIDER: "sendgrid",
       SENDGRID_API_KEY: "test-sendgrid-key",
       EMAIL_FROM: "robot@example.test"
@@ -1308,6 +1476,11 @@ function driverPartTestEnv(db, offers) {
     assert.equal(sendGridRequest.url, "https://api.sendgrid.com/v3/mail/send");
     assert.equal(sendGridRequest.body.personalizations[0].to[0].email, "patrik@example.test");
     assert.equal(sendGridRequest.body.personalizations[0].cc[0].email, "oplustil@kaiserservis.cz");
+    assert.deepEqual(sendGridRequest.body.from, { email: "sarlota@kaiserservis.cz", name: "Šarlota Kaiser" });
+    assert.deepEqual(sendGridRequest.body.reply_to, { email: "sarlota@kaiserservis.cz", name: "Šarlota Kaiser" });
+    assert.equal(sendGridRequest.body.headers["X-KSO-Module-Key"], "driver-reports");
+    assert.equal(db.state.communicationMessages.size, 1);
+    assert.equal(db.state.communicationEvents.some((entry) => entry.event_type === "email_outbound_sent"), true);
     assert.match(sendGridRequest.body.subject, /Náhradní díl k ověření: 2BB 8251/);
     const sentHtml = sendGridRequest.body.content[0].value;
     assert.match(sentHtml, /3 nejlevnější nabídky/);
@@ -1689,6 +1862,9 @@ function driverPartTestEnv(db, offers) {
   assert.equal(sendGridRequest.url, "https://api.sendgrid.com/v3/mail/send");
   assert.equal(sendGridRequest.body.personalizations[0].to[0].email, "patrik@example.test");
   assert.equal(sendGridRequest.body.personalizations[0].cc[0].email, "oplustil@kaiserservis.cz");
+  assert.deepEqual(sendGridRequest.body.from, { email: "sarlota@kaiserservis.cz", name: "Šarlota Kaiser" });
+  assert.deepEqual(sendGridRequest.body.reply_to, { email: "sarlota@kaiserservis.cz", name: "Šarlota Kaiser" });
+  assert.equal(sendGridRequest.body.headers["X-KSO-Module-Key"], "driver-reports");
   const sentHtml = sendGridRequest.body.content[0].value;
   assert.match(sentHtml, /3 nejlevnější nabídky/);
   assert.match(sentHtml, /https:\/\/example\.test\/a/);
@@ -1697,6 +1873,8 @@ function driverPartTestEnv(db, offers) {
   assert.doesNotMatch(sentHtml, /bazos|probable_part|waiting_verified_part/i);
   assert.equal(threeOfferDb.state.events.some((event) => event.action === "handoff_to_ordering"), true);
   assert.equal(threeOfferDb.state.notificationLogs.some((entry) => entry.status === "sent"), true);
+  assert.equal(threeOfferDb.state.communicationMessages.size, 1);
+  assert.equal(threeOfferDb.state.communicationEvents.some((entry) => entry.event_type === "email_outbound_sent"), true);
 }
 
 console.log("driver parts VIN pilot tests passed");

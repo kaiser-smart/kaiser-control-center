@@ -2,6 +2,14 @@ import { normalizeIdentifier } from "./auth.js";
 import { markAbsenceReminderSent } from "./absence-requests-store.js";
 import { markMedicalExamReminderSent } from "./medical-exams-store.js";
 import { selectDriverPartOffers } from "./driver-part-price-search.js";
+import {
+  CommunicationStoreError,
+  communicationEmailIdentity,
+  communicationHeaders,
+  communicationSmsConfig,
+  createOutgoingCommunicationAudit,
+  updateOutgoingCommunicationAudit
+} from "./communication-store.js";
 
 const NOTIFICATION_DB_BINDING = "SMART_ODPADY_DB";
 const DETAILED_NOTIFICATION_COLUMNS = [
@@ -12,6 +20,16 @@ const DETAILED_NOTIFICATION_COLUMNS = [
   "provider_message_id",
   "attempts",
   "updated_at"
+];
+const EXTENDED_NOTIFICATION_COLUMNS = [
+  ["message_id", (entry) => entry.messageId],
+  ["thread_id", (entry) => entry.threadId],
+  ["audit_id", (entry) => entry.auditId],
+  ["from_name", (entry) => entry.fromName],
+  ["from_address", (entry) => entry.fromAddress],
+  ["reply_to", (entry) => entry.replyTo],
+  ["subject_token", (entry) => entry.subjectToken],
+  ["provider_status", (entry) => entry.providerStatus]
 ];
 
 const TYPE_LABELS = {
@@ -40,6 +58,12 @@ async function notificationLogColumns(db) {
 
 function canWriteDetailedNotification(columns) {
   return DETAILED_NOTIFICATION_COLUMNS.every((columnName) => columns.has(columnName));
+}
+
+function notificationExtendedColumns(columns, entry) {
+  return EXTENDED_NOTIFICATION_COLUMNS
+    .filter(([columnName]) => columns.has(columnName))
+    .map(([columnName, valueForEntry]) => [columnName, nullableString(valueForEntry(entry))]);
 }
 
 function cleanString(value) {
@@ -251,15 +275,15 @@ function missingSmsSettingsMessage({ accountSid, authToken, messagingServiceSid,
   const missing = [];
 
   if (!accountSid) {
-    missing.push("TWILIO_ACCOUNT_SID");
+    missing.push("TWILIO_KAISER_ACCOUNT_SID");
   }
 
   if (!authToken) {
-    missing.push("TWILIO_AUTH_TOKEN");
+    missing.push("TWILIO_KAISER_AUTH_TOKEN");
   }
 
   if (!messagingServiceSid) {
-    missing.push("TWILIO_MESSAGING_SERVICE_SID");
+    missing.push("TWILIO_KAISER_MESSAGING_SERVICE_SID");
   }
 
   return `Telefon pro ${recipientLabel(recipientName)} je vyplněný, ale chybí produkční nastavení SMS: ${missing.join(", ")}.`;
@@ -670,6 +694,14 @@ export async function logNotification(env, entry) {
     const columns = await notificationLogColumns(db);
 
     if (canWriteDetailedNotification(columns)) {
+      const extraColumns = notificationExtendedColumns(columns, entry);
+      const extraColumnSql = extraColumns.length
+        ? `,\n            ${extraColumns.map(([columnName]) => columnName).join(",\n            ")}`
+        : "";
+      const extraPlaceholderSql = extraColumns.length
+        ? `, ${extraColumns.map(() => "?").join(", ")}`
+        : "";
+
       await db
         .prepare(`
           INSERT INTO notification_logs (
@@ -689,8 +721,8 @@ export async function logNotification(env, entry) {
             attempts,
             sent_at,
             created_at,
-            updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            updated_at${extraColumnSql}
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${extraPlaceholderSql})
         `)
         .bind(
           randomId("notification-log"),
@@ -709,7 +741,8 @@ export async function logNotification(env, entry) {
           Number(entry.attempts || 1),
           entry.status === "sent" ? now : null,
           now,
-          now
+          now,
+          ...extraColumns.map(([, value]) => value)
         )
         .run();
       return null;
@@ -763,20 +796,40 @@ async function sendEmail(env, {
   relatedEntityType = "absence_request",
   messagePreview = ""
 }) {
-  const replyTo = cleanString(env.EMAIL_REPLY_TO);
   const apiKey = cleanString(env.SENDGRID_API_KEY || env.EMAIL_API_KEY);
   const provider = cleanString(env.EMAIL_PROVIDER || (apiKey ? "sendgrid" : "")).toLowerCase();
-  const from = cleanString(env.EMAIL_FROM || env.ABSENCE_REPORT_EMAIL);
+  const identity = communicationEmailIdentity(env, { fromName });
   const cleanRecipientName = cleanString(recipientName);
   const ccRecipients = emailRecipients(cc).filter((email) => email.toLowerCase() !== cleanString(to).toLowerCase());
   const recipientForLog = [to, ccRecipients.length ? `cc: ${ccRecipients.join(", ")}` : ""].filter(Boolean).join(" | ");
+  let audit = null;
 
-  if (!to || provider !== "sendgrid" || !from || !apiKey) {
-    const missing = !to
-      ? cleanRecipientName
-        ? `Chybí e-mail příjemce: ${cleanRecipientName}.`
-        : "Chybí příjemce e-mailu."
-      : missingEmailSettingsMessage({ provider, from, apiKey, recipientName: cleanRecipientName });
+  try {
+    audit = await createOutgoingCommunicationAudit(env, {
+      channel: "email",
+      type,
+      provider: "SendGrid",
+      toAddress: to,
+      ccAddress: ccRecipients.join(", "),
+      subject,
+      messagePreview,
+      moduleKey: moduleId,
+      entityType: relatedEntityType,
+      entityId: relatedEntityId,
+      fromName: identity.fromName,
+      fromAddress: identity.fromEmail,
+      replyTo: identity.replyTo,
+      rawPayload: {
+        recipientName: cleanRecipientName,
+        requestedFromName: identity.requestedFromName,
+        replacedFrom: identity.replacedFrom,
+        replacedReplyTo: identity.replacedReplyTo
+      }
+    });
+  } catch (error) {
+    const message = error instanceof CommunicationStoreError
+      ? error.message
+      : "Audit odchozího e-mailu se nepodařilo založit.";
     await logNotification(env, {
       moduleId,
       type,
@@ -787,6 +840,44 @@ async function sendEmail(env, {
       status: "skipped",
       subject,
       provider: "SendGrid",
+      messagePreview,
+      errorMessage: message,
+      fromName: identity.fromName,
+      fromAddress: identity.fromEmail,
+      replyTo: identity.replyTo
+    });
+    return { status: "skipped", errorMessage: message, recipientName: cleanRecipientName, cc: ccRecipients };
+  }
+
+  if (!to || provider !== "sendgrid" || !identity.fromEmail || !apiKey) {
+    const missing = !to
+      ? cleanRecipientName
+        ? `Chybí e-mail příjemce: ${cleanRecipientName}.`
+        : "Chybí příjemce e-mailu."
+      : missingEmailSettingsMessage({ provider, from: identity.fromEmail, apiKey, recipientName: cleanRecipientName });
+    await updateOutgoingCommunicationAudit(env, audit, {
+      status: "skipped",
+      provider: "SendGrid",
+      errorMessage: missing
+    });
+    await logNotification(env, {
+      moduleId,
+      type,
+      channel: "email",
+      recipient: recipientForLog || to,
+      relatedEntityType,
+      relatedEntityId,
+      status: "skipped",
+      subject,
+      provider: "SendGrid",
+      messageId: audit.messageId,
+      threadId: audit.threadId,
+      auditId: audit.auditId,
+      fromName: identity.fromName,
+      fromAddress: identity.fromEmail,
+      replyTo: identity.replyTo,
+      subjectToken: audit.subjectToken,
+      providerStatus: "skipped",
       messagePreview,
       errorMessage: missing
     });
@@ -807,9 +898,17 @@ async function sendEmail(env, {
       },
       body: JSON.stringify({
         personalizations: [personalization],
-        from: { email: from, name: cleanString(fromName) || "Smart odpady" },
-        reply_to: replyTo ? { email: replyTo } : undefined,
+        from: { email: identity.fromEmail, name: identity.fromName },
+        reply_to: { email: identity.replyTo, name: identity.fromName },
         subject,
+        headers: communicationHeaders(audit),
+        custom_args: {
+          kso_audit_id: audit.auditId,
+          kso_thread_id: audit.threadId,
+          kso_module_key: audit.moduleKey,
+          kso_entity_type: audit.entityType,
+          kso_entity_id: audit.entityId || ""
+        },
         content: [{ type: "text/html", value: html }]
       })
     });
@@ -818,6 +917,13 @@ async function sendEmail(env, {
       throw new Error(`SendGrid ${response.status}`);
     }
 
+    const providerMessageId = response.headers.get("x-message-id") || "";
+    await updateOutgoingCommunicationAudit(env, audit, {
+      status: "sent",
+      provider: "SendGrid",
+      providerMessageId,
+      providerStatus: "sent"
+    });
     await logNotification(env, {
       moduleId,
       type,
@@ -828,11 +934,24 @@ async function sendEmail(env, {
       status: "sent",
       subject,
       provider: "SendGrid",
-      providerMessageId: response.headers.get("x-message-id") || "",
+      providerMessageId,
+      messageId: audit.messageId,
+      threadId: audit.threadId,
+      auditId: audit.auditId,
+      fromName: identity.fromName,
+      fromAddress: identity.fromEmail,
+      replyTo: identity.replyTo,
+      subjectToken: audit.subjectToken,
+      providerStatus: "sent",
       messagePreview
     });
     return { status: "sent", recipientName: cleanRecipientName, cc: ccRecipients };
   } catch (error) {
+    await updateOutgoingCommunicationAudit(env, audit, {
+      status: "failed",
+      provider: "SendGrid",
+      errorMessage: error.message
+    });
     await logNotification(env, {
       moduleId,
       type,
@@ -843,6 +962,14 @@ async function sendEmail(env, {
       status: "failed",
       subject,
       provider: "SendGrid",
+      messageId: audit.messageId,
+      threadId: audit.threadId,
+      auditId: audit.auditId,
+      fromName: identity.fromName,
+      fromAddress: identity.fromEmail,
+      replyTo: identity.replyTo,
+      subjectToken: audit.subjectToken,
+      providerStatus: "failed",
       messagePreview,
       errorMessage: error.message
     });
@@ -859,18 +986,33 @@ async function sendSms(env, {
   moduleId = "dovolena-nemoc",
   relatedEntityType = "absence_request"
 }) {
-  const accountSid = cleanString(env.TWILIO_ACCOUNT_SID);
-  const authToken = cleanString(env.TWILIO_AUTH_TOKEN);
-  const messagingServiceSid = cleanString(env.TWILIO_MESSAGING_SERVICE_SID);
+  const smsConfig = communicationSmsConfig(env);
+  const { accountSid, authToken, messagingServiceSid } = smsConfig;
   const normalizedTo = normalizeIdentifier(to);
   const cleanRecipientName = cleanString(recipientName);
+  let audit = null;
 
-  if (!normalizedTo || !accountSid || !authToken || !messagingServiceSid) {
-    const missing = !normalizedTo
-      ? cleanRecipientName
-        ? `Chybí telefon příjemce: ${cleanRecipientName}.`
-        : "Chybí telefon příjemce."
-      : missingSmsSettingsMessage({ accountSid, authToken, messagingServiceSid, recipientName: cleanRecipientName });
+  try {
+    audit = await createOutgoingCommunicationAudit(env, {
+      channel: "sms",
+      type,
+      provider: "Twilio",
+      toAddress: normalizedTo || to,
+      messagePreview: body,
+      moduleKey: moduleId,
+      entityType: relatedEntityType,
+      entityId: relatedEntityId,
+      rawPayload: {
+        recipientName: cleanRecipientName,
+        twilioProject: smsConfig.projectName,
+        configSource: smsConfig.configSource,
+        mode: smsConfig.mode
+      }
+    });
+  } catch (error) {
+    const message = error instanceof CommunicationStoreError
+      ? error.message
+      : "Audit odchozí SMS se nepodařilo založit.";
     await logNotification(env, {
       moduleId,
       type,
@@ -880,6 +1022,42 @@ async function sendSms(env, {
       relatedEntityId,
       status: "skipped",
       provider: "Twilio",
+      messagePreview: body,
+      errorMessage: message
+    });
+    return { status: "skipped", errorMessage: message, recipientName: cleanRecipientName };
+  }
+
+  if (!normalizedTo || !accountSid || !authToken || !messagingServiceSid || smsConfig.mode === "off" || smsConfig.mode === "test") {
+    const missing = smsConfig.mode === "off"
+      ? "SMS odesílání je vypnuté přes KSO_SMS_MODE=off."
+      : smsConfig.mode === "test"
+        ? "SMS je v test režimu. Záměr je auditovaný, ostrá SMS nebyla odeslána."
+        : !normalizedTo
+      ? cleanRecipientName
+        ? `Chybí telefon příjemce: ${cleanRecipientName}.`
+        : "Chybí telefon příjemce."
+      : missingSmsSettingsMessage({ accountSid, authToken, messagingServiceSid, recipientName: cleanRecipientName });
+    await updateOutgoingCommunicationAudit(env, audit, {
+      status: "skipped",
+      provider: "Twilio",
+      providerStatus: smsConfig.mode,
+      errorMessage: missing
+    });
+    await logNotification(env, {
+      moduleId,
+      type,
+      channel: "sms",
+      recipient: normalizedTo || to,
+      relatedEntityType,
+      relatedEntityId,
+      status: "skipped",
+      provider: "Twilio",
+      providerStatus: smsConfig.mode,
+      messageId: audit.messageId,
+      threadId: audit.threadId,
+      auditId: audit.auditId,
+      subjectToken: audit.subjectToken,
       messagePreview: body,
       errorMessage: missing
     });
@@ -896,7 +1074,8 @@ async function sendSms(env, {
       body: new URLSearchParams({
         To: normalizedTo,
         MessagingServiceSid: messagingServiceSid,
-        Body: body
+        Body: body,
+        ...(smsConfig.statusCallbackUrl ? { StatusCallback: smsConfig.statusCallbackUrl } : {})
       })
     });
 
@@ -906,6 +1085,13 @@ async function sendSms(env, {
       throw new Error(`Twilio ${response.status}`);
     }
 
+    const providerMessageId = cleanString(responsePayload.sid);
+    await updateOutgoingCommunicationAudit(env, audit, {
+      status: "sent",
+      provider: "Twilio",
+      providerMessageId,
+      providerStatus: cleanString(responsePayload.status || "sent")
+    });
     await logNotification(env, {
       moduleId,
       type,
@@ -915,11 +1101,22 @@ async function sendSms(env, {
       relatedEntityId,
       status: "sent",
       provider: "Twilio",
-      providerMessageId: cleanString(responsePayload.sid),
+      providerMessageId,
+      providerStatus: cleanString(responsePayload.status || "sent"),
+      messageId: audit.messageId,
+      threadId: audit.threadId,
+      auditId: audit.auditId,
+      subjectToken: audit.subjectToken,
       messagePreview: body
     });
     return { status: "sent", recipientName: cleanRecipientName };
   } catch (error) {
+    await updateOutgoingCommunicationAudit(env, audit, {
+      status: "failed",
+      provider: "Twilio",
+      providerStatus: "failed",
+      errorMessage: error.message
+    });
     await logNotification(env, {
       moduleId,
       type,
@@ -929,6 +1126,11 @@ async function sendSms(env, {
       relatedEntityId,
       status: "failed",
       provider: "Twilio",
+      providerStatus: "failed",
+      messageId: audit.messageId,
+      threadId: audit.threadId,
+      auditId: audit.auditId,
+      subjectToken: audit.subjectToken,
       messagePreview: body,
       errorMessage: error.message
     });

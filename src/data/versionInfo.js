@@ -21,6 +21,14 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "KSO komunikace: Šarlota jako jednotný odesílatel",
+    text: "Odchozí e-maily KSO se auditují přes backend a uživatelsky používají Šarlota Kaiser <sarlota@kaiserservis.cz> s Reply-To sarlota@kaiserservis.cz. Stavový panel v Nastavení ukazuje e-maily, příchozí odpovědi, Twilio, SMS a webhooky pravdivě jako běží, čeká, test nebo vypnuto."
+  },
+  {
+    title: "Pohledávky: KB ADAA onboarding",
+    text: "Import Pohledávek znovu ukazuje read-only stav přípravy KB Account Direct Access API. Panel kontroluje jen přítomnost serverových konfiguračních položek, nezobrazuje secrets, nevolá banku, neukládá transakce a neposílá platby."
+  },
+  {
     title: "Datové schránky Plus: odstranění staré Datové schránky",
     text: "Starý modul /datova-schranka byl odstraněný z hlavní stránky a oprávnění. Původní URL bezpečně přesměruje do Datových schránek Plus a provozní odkazy už míří na DSP."
   },
