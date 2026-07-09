@@ -30662,7 +30662,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
   const reportsPanel = moduleItem.id === "reports" && !isDashboard
     ? `${notificationCenterSection(user)}${customerMessagingSection(user)}`
     : "";
-  const genericSettingsPanel = !isDashboard ? genericModuleSettingsSection(moduleItem) : "";
+  const genericSettingsPanel = !isDashboard && moduleItem.id !== "dashboard" ? genericModuleSettingsSection(moduleItem) : "";
 
   return `
     <main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>

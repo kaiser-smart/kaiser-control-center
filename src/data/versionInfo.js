@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.482"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.483"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Dashboard: Log událostí jen v Nastavení",
+    text: "Provozní Log událostí pro Dashboard zůstává v Nastavení a nezobrazuje se v hlavním pracovním přehledu. Přehled tak neplete pracovní obsah se servisním stavem."
+  },
   {
     title: "Datové schránky Plus: responzivita a příznak modelu",
     text: "DSP má v hlavičce a nastavení viditelný příznak ostrého odděleného modelu. Responzivní rozvržení zpevňuje řádky zpráv, akce, schránkové karty a detail tak, aby se na mobilu nesvíraly vedle sebe."
