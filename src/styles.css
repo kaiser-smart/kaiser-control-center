@@ -875,14 +875,13 @@ h1 {
   gap: 7px 18px;
   align-items: center;
   overflow: hidden;
-  margin: 18px 0 0;
-  padding: 10px 14px 10px 16px;
-  border: 1px solid rgba(36, 45, 34, 0.08);
+  margin: 12px 0 0;
+  padding: 8px 12px 8px 14px;
+  border: 1px solid rgba(36, 45, 34, 0.06);
   border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(251, 252, 248, 0.98) 100%),
-    var(--card);
-  box-shadow: var(--shadow-card);
+  background: rgba(255, 255, 255, 0.56);
+  box-shadow: none;
+  opacity: 0.78;
 }
 
 .version-backup-info::before {
@@ -992,12 +991,12 @@ h1 {
 .version-news-info {
   position: relative;
   overflow: hidden;
-  margin-top: 28px;
-  padding: 16px 18px;
+  margin-top: 22px;
+  padding: 13px 15px;
   border: 1px solid rgba(36, 45, 34, 0.08);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 10px 24px rgba(36, 45, 34, 0.06);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: none;
 }
 
 .version-news-info::before {
@@ -1048,8 +1047,8 @@ h1 {
 .version-news-info__list {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px 16px;
-  margin: 14px 0 0;
+  gap: 7px 16px;
+  margin: 10px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -1080,8 +1079,8 @@ h1 {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 16px;
-  padding-top: 14px;
+  margin-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid rgba(66, 80, 74, 0.1);
 }
 
@@ -1230,7 +1229,7 @@ h1 {
   --accent-soft: var(--section-accent-soft);
 }
 
-.module-section--quick-operations {
+.module-section--today-tasks {
   --accent: #75bd25;
   --section-accent: #75bd25;
   --section-accent-soft: #edf8e7;
@@ -1241,22 +1240,22 @@ h1 {
     linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(247, 252, 243, 0.98) 100%);
 }
 
-.module-section--quick-operations .module-section__grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.module-section--today-tasks .module-section__grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
 }
 
-.module-section--quick-operations .module-card {
+.module-section--today-tasks .module-card {
   min-height: 248px;
   padding: 22px;
   border-color: rgba(117, 189, 37, 0.16);
 }
 
-.module-section--quick-operations .module-card::before {
+.module-section--today-tasks .module-card::before {
   height: 5px;
 }
 
-.module-section--quick-operations .module-card__title {
+.module-section--today-tasks .module-card__title {
   font-size: 1.22rem;
 }
 
@@ -1270,17 +1269,17 @@ h1 {
   --section-accent-soft: #e8f0f8;
 }
 
-.module-section--documents-admin {
+.module-section--administration {
   --section-accent: #6f6b9f;
   --section-accent-soft: #efeff8;
 }
 
-.module-section--finance-costs {
+.module-section--finance {
   --section-accent: #8c764f;
   --section-accent-soft: #f3efe6;
 }
 
-.module-section--system {
+.module-section--system-settings {
   --section-accent: #63706a;
   --section-accent-soft: #edf0ee;
   margin-top: 8px;
@@ -1288,21 +1287,21 @@ h1 {
   background: rgba(247, 249, 246, 0.82);
 }
 
-.module-section--system .module-section__header h2 {
+.module-section--system-settings .module-section__header h2 {
   color: #5d6762;
   font-size: 1.05rem;
 }
 
-.module-section--system .module-section__header p:not(.module-section__eyebrow) {
+.module-section--system-settings .module-section__header p:not(.module-section__eyebrow) {
   font-size: 0.86rem;
 }
 
-.module-section--system .module-section__grid {
+.module-section--system-settings .module-section__grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 240px));
   gap: 12px;
 }
 
-.module-section--system .module-card {
+.module-section--system-settings .module-card {
   min-height: 172px;
   padding: 16px;
   border-color: rgba(36, 45, 34, 0.06);
@@ -1310,11 +1309,11 @@ h1 {
   box-shadow: 0 10px 22px rgba(36, 45, 34, 0.06);
 }
 
-.module-section--system .module-card::before {
+.module-section--system-settings .module-card::before {
   height: 2px;
 }
 
-.module-section--system .module-icon {
+.module-section--system-settings .module-icon {
   opacity: 0.84;
 }
 
@@ -22493,7 +22492,7 @@ body:has(.absence-page--employee-card) {
 }
 
 @media (max-width: 1120px) {
-  .module-section--quick-operations .module-section__grid {
+  .module-section--today-tasks .module-section__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -22521,7 +22520,7 @@ body:has(.absence-page--employee-card) {
     padding-bottom: 0;
   }
 
-  .module-section--quick-operations .module-section__grid {
+  .module-section--today-tasks .module-section__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -23256,16 +23255,16 @@ body:has(.absence-page--employee-card) {
     font-size: 0.86rem;
   }
 
-  .module-section--quick-operations {
+  .module-section--today-tasks {
     gap: 15px;
   }
 
-  .module-section--quick-operations .module-card {
+  .module-section--today-tasks .module-card {
     min-height: 190px;
     padding: 16px;
   }
 
-  .module-section--quick-operations .module-section__grid,
+  .module-section--today-tasks .module-section__grid,
   .module-section__grid,
   .module-grid {
     grid-template-columns: 1fr;

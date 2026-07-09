@@ -1,6 +1,6 @@
 import { versionInfo, versionNews } from "../data/versionInfo.js";
 
-const VERSION_NEWS_PAGE_SIZE = 5;
+const VERSION_NEWS_PAGE_SIZE = 3;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -93,6 +93,66 @@ function VersionNewsPagination({ currentPage, pageCount }) {
   `;
 }
 
+function operationalNewsTitle(item) {
+  const text = `${item?.title ?? ""} ${item?.text ?? ""}`.toLowerCase();
+
+  if (text.includes("datov")) {
+    return "Datové zprávy";
+  }
+
+  if (text.includes("voz") || text.includes("fleet") || text.includes("servis") || text.includes("pneu")) {
+    return "Vozidla a servis";
+  }
+
+  if (text.includes("trasy") || text.includes("svoz") || text.includes("vzork")) {
+    return "Trasy a svozy";
+  }
+
+  if (text.includes("faktur") || text.includes("pohled") || text.includes("náklad")) {
+    return "Finance";
+  }
+
+  if (text.includes("dovol") || text.includes("nemoc") || text.includes("nepřítom")) {
+    return "Nepřítomnosti";
+  }
+
+  if (text.includes("uživatel") || text.includes("role") || text.includes("nastaven") || text.includes("kontrol")) {
+    return "Správa aplikace";
+  }
+
+  return "Provozní úpravy";
+}
+
+function operationalNewsText(item) {
+  const text = `${item?.title ?? ""} ${item?.text ?? ""}`.toLowerCase();
+
+  if (text.includes("datov")) {
+    return "Přehled zpráv je přístupnější pro rychlé denní zpracování.";
+  }
+
+  if (text.includes("voz") || text.includes("fleet") || text.includes("servis") || text.includes("pneu")) {
+    return "Přehled vozidel, polohy a servisních úkonů je jednodušší pro běžnou kontrolu.";
+  }
+
+  if (text.includes("trasy") || text.includes("svoz") || text.includes("vzork")) {
+    return "Trasy a související hlášení jsou lépe připravené pro denní plánování.";
+  }
+
+  if (text.includes("faktur") || text.includes("pohled") || text.includes("náklad")) {
+    return "Finanční přehledy se lépe používají pro kontrolu faktur a nákladů.";
+  }
+
+  if (text.includes("dovol") || text.includes("nemoc") || text.includes("nepřítom")) {
+    return "Evidence nepřítomností je přehlednější pro provozní plánování lidí.";
+  }
+
+  if (text.includes("uživatel") || text.includes("role") || text.includes("nastaven") || text.includes("kontrol")) {
+    return "Správa aplikace a stav systému jsou přehlednější pro administrátory.";
+  }
+
+  return "Drobné úpravy zpřehledňují každodenní práci v aplikaci.";
+}
+
 export function VersionNewsInfo() {
   const totalItems = versionNews.length;
   const pageCount = Math.max(1, Math.ceil(totalItems / VERSION_NEWS_PAGE_SIZE));
@@ -105,8 +165,8 @@ export function VersionNewsInfo() {
     .map(
       (item) => `
         <li class="version-news-info__item">
-          <strong>${escapeHtml(item.title)}</strong>
-          <span>${escapeHtml(item.text)}</span>
+          <strong>${escapeHtml(operationalNewsTitle(item))}</strong>
+          <span>${escapeHtml(operationalNewsText(item))}</span>
         </li>
       `
     )
@@ -115,7 +175,7 @@ export function VersionNewsInfo() {
   return `
     <section class="version-news-info" aria-labelledby="version-news-title" id="version-news">
       <div class="version-news-info__header">
-        <h2 id="version-news-title">Co je nov&eacute;ho</h2>
+        <h2 id="version-news-title">Novinky ve verzi</h2>
         <div class="version-news-info__summary">
           <p class="version-news-info__eyebrow">${escapeHtml(versionInfo.version)}</p>
           <p class="version-news-info__range">${rangeStart}-${rangeEnd} z ${totalItems}</p>

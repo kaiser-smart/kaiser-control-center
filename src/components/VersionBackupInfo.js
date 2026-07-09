@@ -26,15 +26,15 @@ export function VersionBackupInfo() {
       <div class="version-backup-info__header">
         <div>
           <p class="version-backup-info__eyebrow">${escapeHtml(versionInfo.appName)}</p>
-          <h2 id="version-backup-title">Verze a záloha</h2>
+          <h2 id="version-backup-title">Servisní informace</h2>
         </div>
         <span class="version-backup-info__badge version-backup-info__badge--${statusClass}">
           ${escapeHtml(versionStatusBadge(versionInfo.status))}
         </span>
       </div>
       <dl class="version-backup-info__grid">
-        ${infoItem("Aktuální verze", versionInfo.version)}
-        ${infoItem("Datum zálohy", versionInfo.backupDate)}
+        ${infoItem("Verze", versionInfo.version)}
+        ${infoItem("Záloha", versionInfo.backupDate)}
         ${infoItem("Commit", versionInfo.commit)}
       </dl>
     </section>

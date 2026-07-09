@@ -204,11 +204,12 @@ const app = document.querySelector("#app");
 const orderedModules = [...modules].sort((a, b) => a.order - b.order);
 const feedbackMenuItem = {
   id: "feedback",
-  title: "Připomínky",
-  description: "Přehled připomínek k modulům, stavů, priorit a interních poznámek.",
+  title: "Úkoly a připomínky",
+  description: "Věci k dořešení, nápady z provozu a jejich stav.",
   route: "/pripominky",
   icon: ReportsIcon,
   status: "správa",
+  ctaLabel: "Zobrazit úkoly",
   active: true,
   disabled: false,
   order: 15
@@ -293,50 +294,51 @@ const ABSENCE_TAB_ROUTES = {
 const quickAbsenceMenuItem = {
   id: "quick-absence",
   title: "Rychlé zadání",
-  description: "Nepřítomnost na pár kliknutí nebo hlasem přímo z mobilu.",
+  description: "Rychle zapsat událost, požadavek nebo nepřítomnost.",
   route: QUICK_ABSENCE_ENTRY_ROUTE,
   icon: QuickAbsenceIcon,
   status: "Rozpracováno",
+  ctaLabel: "Zadat událost",
   active: true,
   disabled: false,
   order: 0
 };
 const HOME_MODULE_SECTIONS = [
   {
-    id: "quick-operations",
-    eyebrow: "Dnes / Rychlý provoz",
-    title: "Dnes v provozu",
-    description: "Nejdůležitější vstupy pro dnešní práci, svoz, rychlé zadání a hlášení řidičů.",
-    moduleIds: ["dashboard", "quick-absence", "collection-routes", "driver-reports"]
+    id: "today-tasks",
+    eyebrow: "Denní práce",
+    title: "Dnes k řešení",
+    description: "Nejdřív trasy, hlášení, zprávy a lidé mimo práci.",
+    moduleIds: ["collection-routes", "driver-reports", "data-box-plus", "quick-absence", "absence", "dashboard"]
   },
   {
     id: "vehicles-service",
     title: "Vozidla a servis",
-    description: "Evidence techniky, provozní stav, údržba a servisní připravenost.",
+    description: "Technika, poloha, servis a věci, které drží provoz v pohybu.",
     moduleIds: ["fleet", "vehicle-tracking", "service-maintenance", "tyres"]
   },
   {
     id: "customers-routes",
-    title: "Zákazníci a trasy",
-    description: "Zákaznická data, Vistos a plánování speciálních tras.",
+    title: "Zákazníci a svozy",
+    description: "Zákaznické podklady, Vistos a odběrové trasy.",
     moduleIds: ["vistos", "sampling-routes"]
   },
   {
-    id: "documents-admin",
-    title: "Dokumenty a administrativa",
-    description: "Datové zprávy, reporty, připomínky a nepřítomnosti.",
-    moduleIds: ["data-box-plus", "absence", "reports", "feedback"]
+    id: "administration",
+    title: "Administrativa",
+    description: "Reporty, připomínky a podpůrné administrativní přehledy.",
+    moduleIds: ["reports", "feedback"]
   },
   {
-    id: "finance-costs",
-    title: "Finance a náklady",
-    description: "Přehled nákladů, otevřených faktur a bezpečných finančních pilotů.",
-    moduleIds: ["costs", "receivables"]
+    id: "finance",
+    title: "Finance",
+    description: "Nezaplacené faktury a náklady podle provozu.",
+    moduleIds: ["receivables", "costs"]
   },
   {
-    id: "system",
-    title: "Systém",
-    description: "Správa uživatelů, nastavení, integrace a kontrola systému.",
+    id: "system-settings",
+    title: "Systém a nastavení",
+    description: "Správa přístupů, nastavení a kontrola stavu aplikace.",
     moduleIds: ["users", "settings", "system-check"]
   }
 ];
@@ -1737,14 +1739,56 @@ function homeStatusMetric(value, label, tone = "neutral") {
   `;
 }
 
-function homeDataBoxMetricCount() {
+function homeDataBoxMetricValue() {
   const unreadMessages = dataBoxTotalUnreadCount();
+  const unresolvedPlusMessages = dataBoxPlusHomeUnresolvedCount();
+  const total = unreadMessages + unresolvedPlusMessages;
 
-  if (dataBoxState.messages.length > 0) {
-    return unreadMessages;
+  if (dataBoxState.loaded || dataBoxPlusHomeState.loaded || total > 0) {
+    return String(total);
   }
 
-  return 20;
+  return "čeká";
+}
+
+function homeCollectionRoutesMetricValue() {
+  const rowCount = Array.isArray(collectionRoutesPilotState.sourceRows)
+    ? collectionRoutesSourceDisplayRows().length
+    : 0;
+
+  if (rowCount > 0) {
+    return String(rowCount);
+  }
+
+  if (collectionRoutesPilotState.sourceBatches.length || collectionRoutesPilotState.svozKaiserWatchdogLoaded) {
+    return "0";
+  }
+
+  return "čeká";
+}
+
+function homeDriverReportsMetricValue() {
+  if (!driverReportsState.loaded) {
+    return "čeká";
+  }
+
+  const openCount = driverReportsState.items.filter((report) => {
+    const status = String(report.status || "").toLowerCase();
+    return !["completed", "cancelled", "canceled", "closed"].includes(status);
+  }).length;
+
+  return String(openCount);
+}
+
+function homeIssuesMetricValue() {
+  const collectionRouteErrors = collectionRoutesSvozKaiserWatchdogErrorCount();
+  const hasLoadedIssueSource = collectionRoutesPilotState.svozKaiserWatchdogLoaded || collectionRoutesPilotState.svozKaiserWatchdogError;
+
+  if (hasLoadedIssueSource) {
+    return String(collectionRouteErrors);
+  }
+
+  return "čeká";
 }
 
 function collectionRoutesSvozKaiserWatchdogSummary() {
@@ -1783,15 +1827,12 @@ function collectionRoutesSvozKaiserWatchdogErrorCount() {
   return collectionRoutesSvozKaiserFieldConfirmed() ? collectionRoutesSvozKaiserWatchdogRawIssueCount() : 0;
 }
 
-function homeStatusMetrics(modulesForUser, verifiedCount) {
-  const unreadMessages = homeDataBoxMetricCount();
-  const unverifiedCount = modulesForUser.filter((moduleItem) => moduleStatusLabel(moduleItem) === "Neověřeno").length;
-
+function homeStatusMetrics() {
   return [
-    homeStatusMetric(String(modulesForUser.length), "modulů", "green"),
-    homeStatusMetric(String(verifiedCount), verifiedCount === 1 ? "ověřený modul" : "ověřené moduly", "green"),
-    homeStatusMetric(String(unreadMessages), "datových zpráv", "blue"),
-    homeStatusMetric(String(unverifiedCount), unverifiedCount === 1 ? "neověřená kontrola" : "neověřené kontroly", "muted")
+    homeStatusMetric(homeCollectionRoutesMetricValue(), "trasy dnes", "green"),
+    homeStatusMetric(homeDriverReportsMetricValue(), "hlášení z vozidel", "blue"),
+    homeStatusMetric(homeDataBoxMetricValue(), "datové zprávy", "blue"),
+    homeStatusMetric(homeIssuesMetricValue(), "chyby k řešení", "muted")
   ].join("");
 }
 
@@ -1832,7 +1873,7 @@ function homeModuleCornerBadge(moduleItem) {
     }
     const value = unresolvedCount > 99 ? "99+" : String(unresolvedCount);
     return `
-    <span class="data-box-plus-home-badge" title="${escapeHtml(`${value} nevyřízených zpráv v Datových schránkách Plus`)}" aria-label="${escapeHtml(`Datové schránky Plus: ${value} nevyřízených zpráv`)}">
+    <span class="data-box-plus-home-badge" title="${escapeHtml(`${value} nevyřízených zpráv v Datových schránkách`)}" aria-label="${escapeHtml(`Datové schránky: ${value} nevyřízených zpráv`)}">
       ${escapeHtml(value)}
     </span>
   `;
@@ -1845,13 +1886,17 @@ function homeModuleCornerBadge(moduleItem) {
     }
     const value = errorCount > 99 ? "99+" : String(errorCount);
     return `
-    <span class="collection-routes-home-alert-badge" title="${escapeHtml(`${value} chyb ve Vistos Svoz Kaiser datech`)}" aria-label="${escapeHtml(`Trasy svozu: ${value} chyb`)}">
+    <span class="collection-routes-home-alert-badge" title="${escapeHtml(`${value} chyb v datech svozu`)}" aria-label="${escapeHtml(`Svozové trasy: ${value} chyb`)}">
       ${escapeHtml(value)}
     </span>
   `;
   }
 
   return "";
+}
+
+function homeModuleCtaLabel(moduleItem) {
+  return moduleItem.ctaLabel || "Otevřít";
 }
 
 function homeModuleCard(moduleItem, user, variant = "standard") {
@@ -1869,7 +1914,7 @@ function homeModuleCard(moduleItem, user, variant = "standard") {
         <span class="module-card__description">${escapeHtml(moduleItem.description)}</span>
         ${homeModuleMeta(moduleItem)}
       </span>
-      <span class="module-card__cta" aria-hidden="true">Otevřít</span>
+      <span class="module-card__cta" aria-hidden="true">${escapeHtml(homeModuleCtaLabel(moduleItem))}</span>
     </a>
   `;
 }
@@ -1890,7 +1935,7 @@ function homeModuleSections(modulesForUser, user) {
         })
         .filter(Boolean);
 
-      if (section.id === "system") {
+      if (section.id === "system-settings") {
         for (const moduleItem of modulesForUser) {
           if (!usedIds.has(moduleItem.id)) {
             items.push(moduleItem);
@@ -1903,9 +1948,9 @@ function homeModuleSections(modulesForUser, user) {
         return "";
       }
 
-      const variant = section.id === "quick-operations"
+      const variant = section.id === "today-tasks"
         ? "primary"
-        : section.id === "system"
+        : section.id === "system-settings"
           ? "system"
           : "standard";
 
@@ -1933,20 +1978,20 @@ function visibleDashboardRoutes(user) {
 
 function moduleStatusLabel(moduleItem) {
   return {
-    HOTOVO: "Hotovo",
-    Testování: "Testování",
-    Pilot: "Pilot",
-    "připraveno": "Rozpracováno",
-    skeleton: "Rozpracováno",
-    "mock data": "Rozpracováno",
-    ROZPRACOVÁN: "Rozpracováno",
-    Rozpracováno: "Rozpracováno",
-    "V přípravě": "V přípravě",
-    "Bezpečný režim": "Bezpečný režim",
-    "Čeká na ověření": "Čeká na ověření",
-    "Read-only pilot": "Read-only",
-    NEOVĚŘENO: "Neověřeno",
-    správa: "Správa"
+    HOTOVO: "Funkční",
+    Testování: "Čeká na kontrolu",
+    Pilot: "Pilotní provoz",
+    "připraveno": "Funkční",
+    skeleton: "Připravuje se",
+    "mock data": "Připravuje se",
+    ROZPRACOVÁN: "Ve vývoji",
+    Rozpracováno: "Ve vývoji",
+    "V přípravě": "Připravuje se",
+    "Bezpečný režim": "Bez ostrých akcí",
+    "Čeká na ověření": "Čeká na kontrolu",
+    "Read-only pilot": "Jen náhled",
+    NEOVĚŘENO: "Čeká na kontrolu",
+    správa: "Admin"
   }[moduleItem?.status] || moduleItem?.status || "";
 }
 
@@ -1962,7 +2007,7 @@ function moduleStatusTone(moduleItem) {
     skeleton: "progress",
     "V přípravě": "progress",
     "připraveno": "progress",
-    "Bezpečný režim": "dry-run",
+    "Bezpečný režim": "readonly",
     "mock data": "progress",
     ROZPRACOVÁN: "progress",
     Rozpracováno: "progress"
@@ -1970,7 +2015,7 @@ function moduleStatusTone(moduleItem) {
 }
 
 function moduleStatusIsComplete(moduleItem) {
-  return moduleStatusLabel(moduleItem) === "Hotovo";
+  return moduleItem?.status === "HOTOVO" || moduleStatusLabel(moduleItem) === "Funkční";
 }
 
 function createAiAssistantMessage(sender, text, actions = [], assistantName = "") {
@@ -5446,16 +5491,16 @@ function loginPage() {
   `;
 }
 
-function homeOperationsPanel(user, modulesForUser, verifiedCount) {
+function homeOperationsPanel(user) {
   return `
     <section class="home-ops-panel" aria-labelledby="home-ops-title">
       <div class="home-ops-panel__copy">
-        <p class="home-ops-panel__eyebrow">Operační centrum</p>
-        <h2 id="home-ops-title">Dobrý den, ${escapeHtml(homeGreetingName(user))}</h2>
-        <p>Tady je dnešní přehled provozu Smart odpady.</p>
+        <p class="home-ops-panel__eyebrow">Dnešní provoz</p>
+        <h2 id="home-ops-title">Co dnes hoří?</h2>
+        <p>${escapeHtml(homeGreetingName(user))}, tady jsou trasy, hlášení, zprávy a chyby, které stojí za pozornost.</p>
       </div>
-      <div class="home-ops-panel__metrics" aria-label="Rychlý stav systému">
-        ${homeStatusMetrics(modulesForUser, verifiedCount)}
+      <div class="home-ops-panel__metrics" aria-label="Rychlý provozní stav">
+        ${homeStatusMetrics()}
       </div>
     </section>
   `;
@@ -5463,10 +5508,12 @@ function homeOperationsPanel(user, modulesForUser, verifiedCount) {
 
 function homePage(user) {
   ensureDataBoxData();
+  if (canViewModule(user, "driver-reports")) {
+    ensureDriverReportsData();
+  }
   const modulesForUser = hasPermission(user, "absence", "create")
     ? [quickAbsenceMenuItem, ...menuModules(user)]
     : menuModules(user);
-  const verifiedCount = modulesForUser.filter(moduleStatusIsComplete).length;
   const moduleSections = homeModuleSections(modulesForUser, user);
 
   return `
@@ -5483,7 +5530,7 @@ function homePage(user) {
         </div>
         ${userBar(user)}
       </section>
-      ${homeOperationsPanel(user, modulesForUser, verifiedCount)}
+      ${homeOperationsPanel(user)}
       <div class="home-module-sections" aria-label="Hlavní moduly">
         ${moduleSections}
       </div>
