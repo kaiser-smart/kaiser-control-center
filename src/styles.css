@@ -30350,7 +30350,7 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
 .driver-tablet-side-stack {
   display: grid;
   height: 100%;
-  grid-template-rows: minmax(170px, 0.84fr) minmax(0, 1.16fr);
+  grid-template-rows: minmax(190px, 0.94fr) minmax(0, 1.06fr);
   gap: clamp(8px, 0.85vw, 13px);
   align-self: stretch;
   min-height: 0;
