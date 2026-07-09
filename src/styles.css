@@ -30474,14 +30474,14 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
 
 .driver-tablet-progress-stats span {
   display: inline-flex;
-  min-height: 22px;
+  min-height: 33px;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: 1px solid var(--driver-border);
   border-radius: var(--driver-radius-sm);
   background: var(--driver-control-bg);
-  font-size: 0.66rem;
+  font-size: 0.83rem;
   font-weight: 780;
   box-shadow: var(--driver-shadow-control), var(--driver-highlight);
 }
