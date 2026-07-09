@@ -244,6 +244,7 @@ const COLLECTION_ROUTES_TABS = [
   { id: "svozove-trasy", label: "Svozové trasy", targetId: "collection-routes-source-routes" },
   { id: "sites", label: "Stanoviště", targetId: "collection-routes-sites" },
   { id: "rules", label: "Pravidla", targetId: "module-rules-title" },
+  { id: "settings", label: "Nastavení", targetId: "collection-routes-settings" },
   { id: "internal", label: "Interní správa", targetId: "collection-routes-internal", adminOnly: true }
 ];
 const COLLECTION_ROUTES_LEGACY_TAB_TARGETS = {
@@ -3400,6 +3401,703 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+const MODULE_EVENT_LOG_TRUTH_TEXT = "Tento blok ukazuje skutečný stav modulu. Pokud něco není ověřené, není to označené jako běžící.";
+const MODULE_EVENT_LOG_STATE_TONES = {
+  "běží": "success",
+  "ověřeno": "success",
+  "částečně ověřeno": "warning",
+  "čeká na ověření": "waiting",
+  "vypnuto": "muted",
+  "jen návrh": "proposal",
+  "dry-run": "dry-run",
+  "nezapojeno": "muted",
+  "chyba": "danger",
+  "vyžaduje pozornost": "danger"
+};
+
+function moduleEventLogSafeKey(value = "module") {
+  return String(value || "module").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "module";
+}
+
+function moduleEventLogTone(state = "") {
+  return MODULE_EVENT_LOG_STATE_TONES[String(state || "").trim().toLowerCase()] || "waiting";
+}
+
+function moduleEventLogStatus(label, state, text, options = {}) {
+  return {
+    label,
+    state,
+    text,
+    tone: options.tone || moduleEventLogTone(state)
+  };
+}
+
+function moduleEventLogEvent(time, title, result, text) {
+  return {
+    time,
+    title,
+    result,
+    text
+  };
+}
+
+function moduleEventLogDiagnostic(label, value) {
+  return { label, value };
+}
+
+function moduleEventLogApiState(apiStatus = "", loaded = false, error = "") {
+  if (error) return "chyba";
+  if (apiStatus === "ready" && loaded) return "částečně ověřeno";
+  if (apiStatus === "ready") return "čeká na ověření";
+  return "čeká na ověření";
+}
+
+function moduleEventLogBlock(config = {}) {
+  const safeKey = moduleEventLogSafeKey(config.moduleKey);
+  const moduleName = config.moduleName || "Modul";
+  const statuses = Array.isArray(config.statuses) && config.statuses.length
+    ? config.statuses
+    : [moduleEventLogStatus("Provozní stav", "čeká na ověření", "Pro tento modul zatím není doložený provozní log.")];
+  const events = Array.isArray(config.events) && config.events.length
+    ? config.events
+    : [moduleEventLogEvent("", "Log událostí", "čeká na ověření", "Zatím není uložená žádná provozní událost.")];
+  const inactiveItems = Array.isArray(config.inactiveItems) && config.inactiveItems.length
+    ? config.inactiveItems
+    : ["Ostré odesílání mimo systém není v tomto bloku označené jako zapnuté."];
+  const pilotItems = Array.isArray(config.pilotItems) && config.pilotItems.length
+    ? config.pilotItems
+    : ["Bez doloženého backendu nebo cloud runneru je stav označený jako čeká na ověření."];
+  const diagnostics = Array.isArray(config.diagnostics) && config.diagnostics.length
+    ? config.diagnostics
+    : [moduleEventLogDiagnostic("Diagnostika", "Bez technických detailů v UI.")];
+  const badgeState = config.badgeState || statuses[0]?.state || "čeká na ověření";
+
+  return `
+    <section class="module-event-log ${config.className || ""}" aria-labelledby="module-event-log-${escapeHtml(safeKey)}">
+      <div class="module-event-log__head">
+        <div>
+          <p class="module-feedback__eyebrow">Nastavení → Log událostí</p>
+          <h3 id="module-event-log-${escapeHtml(safeKey)}">Log událostí</h3>
+          <p><strong>Pravdivý provozní stav:</strong> ${escapeHtml(config.truthText || MODULE_EVENT_LOG_TRUTH_TEXT)}</p>
+        </div>
+        <span class="module-event-log__badge module-event-log__badge--${escapeHtml(moduleEventLogTone(badgeState))}">${escapeHtml(badgeState)}</span>
+      </div>
+
+      <div class="module-event-log__status-grid" aria-label="${escapeHtml(`Stav klíčových funkcí modulu ${moduleName}`)}">
+        ${statuses.map((item) => `
+          <article class="module-event-log__status module-event-log__status--${escapeHtml(item.tone || moduleEventLogTone(item.state))}">
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(item.state)}</strong>
+            <p>${escapeHtml(item.text)}</p>
+          </article>
+        `).join("")}
+      </div>
+
+      <div class="module-event-log__lists">
+        <section>
+          <h4>Co je vypnuté</h4>
+          <ul>${inactiveItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </section>
+        <section>
+          <h4>Co je jen návrh / pilot / dry-run</h4>
+          <ul>${pilotItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </section>
+      </div>
+
+      <div class="module-event-log__feed">
+        <h4>Poslední události</h4>
+        <ol>
+          ${events.map((event) => `
+            <li>
+              <span>${escapeHtml(event.time ? formatDateTime(event.time) : "bez času")}</span>
+              <strong>${escapeHtml(event.title || "Událost")}</strong>
+              <em>${escapeHtml(event.result || "čeká na ověření")}</em>
+              <p>${escapeHtml(event.text || "Bez lidského vysvětlení.")}</p>
+            </li>
+          `).join("")}
+        </ol>
+      </div>
+
+      <details class="module-event-log__diagnostics">
+        <summary>Zobrazit diagnostiku</summary>
+        <dl>
+          ${diagnostics.map((item) => `
+            <div>
+              <dt>${escapeHtml(item.label)}</dt>
+              <dd>${escapeHtml(item.value ?? "neuvedeno")}</dd>
+            </div>
+          `).join("")}
+        </dl>
+      </details>
+    </section>
+  `;
+}
+
+function genericModuleEventLogConfig(moduleItem = {}) {
+  const moduleName = moduleItem.title || "Modul";
+  const statusLabel = moduleStatusLabel(moduleItem) || "Rozpracováno";
+  const isExternalTyres = moduleItem.id === "tyres";
+  const isSkeleton = ["skeleton", "připraveno", "mock data", "ROZPRACOVÁN"].includes(moduleItem.status);
+  return {
+    moduleKey: moduleItem.id || "module",
+    moduleName,
+    badgeState: isExternalTyres ? "čeká na ověření" : (isSkeleton ? "čeká na ověření" : "částečně ověřeno"),
+    statuses: [
+      moduleEventLogStatus("Automatizace", "čeká na ověření", "V tomto UI není doložený pravidelný cloud runner, cron ani queue. Modul proto není označený jako běžící."),
+      moduleEventLogStatus("API / import / synchronizace", isExternalTyres ? "čeká na ověření" : "nezapojeno", isExternalTyres ? "Modul Pneumatiky se otevírá jako externí aplikace. Tento shell její backend neověřuje." : "Pro tento modul není v aplikaci doložené ostré napojení API/import/sync."),
+      moduleEventLogStatus("Odesílání mimo systém", "vypnuto", "Z tohoto modulu se v této obrazovce neposílá e-mail, SMS ani jiná zpráva mimo systém."),
+      moduleEventLogStatus("Napojené účty / zdroje dat", isExternalTyres ? "čeká na ověření" : "nezapojeno", isExternalTyres ? "Externí zdroj není z tohoto nastavení ověřený." : "Není uvedený žádný ověřený externí účet ani zdroj dat."),
+      moduleEventLogStatus("AI doporučení a autonomní akce", "jen návrh", "Bez doloženého backendu a oprávnění nesmí modul provést autonomní akci.")
+    ],
+    inactiveItems: [
+      "Ostré e-maily, SMS a notifikace mimo systém.",
+      "Autonomní akce bez ručního potvrzení.",
+      "Pravidelná cloud automatizace bez doloženého runneru."
+    ],
+    pilotItems: [
+      `${moduleName}: aktuální stav v menu je ${statusLabel}.`,
+      "Nedoložené backendové části jsou v Logu vedené jako čeká na ověření nebo nezapojeno."
+    ],
+    events: [
+      moduleEventLogEvent("", "Zobrazení modulu", "čeká na ověření", `Modul je dostupný v aplikaci se stavem ${statusLabel}, ale Log neověřuje žádný ostrý provoz mimo tento UI stav.`),
+      moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Bez samostatně ověřeného backendového procesu se nic neposílá.")
+    ],
+    diagnostics: [
+      moduleEventLogDiagnostic("moduleId", moduleItem.id || "neuvedeno"),
+      moduleEventLogDiagnostic("route", moduleItem.route || "neuvedeno"),
+      moduleEventLogDiagnostic("dashboardRoute", moduleItem.dashboardRoute || "neuvedeno"),
+      moduleEventLogDiagnostic("raw status", moduleItem.status || "neuvedeno")
+    ]
+  };
+}
+
+function moduleEventLogConfig(moduleItem = {}) {
+  const moduleId = moduleItem.id || "";
+
+  if (moduleId === "dashboard") {
+    return {
+      moduleKey: "dashboard",
+      moduleName: "Dashboard",
+      badgeState: "čeká na ověření",
+      statuses: [
+        moduleEventLogStatus("Hlavní přehled", "částečně ověřeno", "Dashboard skládá dostupné moduly podle oprávnění uživatele. Neprokazuje tím ale běžící backend automatizaci."),
+        moduleEventLogStatus("Automatizace", "čeká na ověření", "Dashboard sám nespouští pravidelný cloud runner ani cron."),
+        moduleEventLogStatus("API / synchronizace", "čeká na ověření", "Souhrn stavů vychází z dat načtených jednotlivými moduly; Dashboard nemá vlastní ověřený sync."),
+        moduleEventLogStatus("Odesílání mimo systém", "vypnuto", "Dashboard neposílá e-maily, SMS ani jiné zprávy mimo systém."),
+        moduleEventLogStatus("AI doporučení a autonomní akce", "nezapojeno", "Dashboard neprovádí autonomní akce.")
+      ],
+      inactiveItems: [
+        "Odesílání e-mailů a SMS z Dashboardu.",
+        "Autonomní změny v modulech bez otevření konkrétního modulu.",
+        "Pravidelný scheduler řízený Dashboardem."
+      ],
+      pilotItems: [
+        "Dashboard je hlavní pracovní přehled. Jeho Log událostí je proto umístěný v modulu Nastavení, ne v hlavním přehledu.",
+        "Souhrnné stavy modulů nejsou důkaz běžící automatizace."
+      ],
+      events: [
+        moduleEventLogEvent("", "Zobrazení hlavního přehledu", "čeká na ověření", "UI přehled je dostupný, ale bez samostatného provozního logu backend běhů."),
+        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Dashboard nic neposílá mimo systém."),
+        moduleEventLogEvent("", "Automatizace Dashboardu", "nezapojeno", "Není zapojený vlastní runner Dashboardu.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("moduleId", "dashboard"),
+        moduleEventLogDiagnostic("route", moduleItem.route || "/dashboard"),
+        moduleEventLogDiagnostic("raw status", moduleItem.status || "neuvedeno"),
+        moduleEventLogDiagnostic("visible modules source", "src/data/modules.js"),
+        moduleEventLogDiagnostic("orderedModules", orderedModules.length)
+      ]
+    };
+  }
+
+  if (moduleId === "fleet") {
+    const apiState = moduleEventLogApiState(fleetVehiclesState.apiStatus, fleetVehiclesState.loaded, fleetVehiclesState.error);
+    return {
+      moduleKey: "fleet",
+      moduleName: "Vozový park",
+      badgeState: fleetVehiclesState.error ? "vyžaduje pozornost" : apiState,
+      statuses: [
+        moduleEventLogStatus("Automatizace", "čeká na ověření", "Není doložený pravidelný cloud runner pro Vozový park. Termíny a importy se proto neoznačují jako běžící automatizace."),
+        moduleEventLogStatus("API vozidel", apiState, fleetVehiclesState.error ? "Načtení vozidel hlásí chybu a vyžaduje ruční kontrolu." : "Stav vychází jen z načtení existujícího API v UI, ne z pravidelného cloud běhu."),
+        moduleEventLogStatus("Vistos import / preview", "dry-run", "Vistos části v Nastavení jsou náhledy a import preview. Bez potvrzení nevytváří ostré změny."),
+        moduleEventLogStatus("Odesílání e-mailů a SMS", "vypnuto", "Vozový park sám neposílá e-mail ani SMS mimo systém."),
+        moduleEventLogStatus("Objednávky servisu / dílů", "jen návrh", "Systém neobjedná díl ani servis bez potvrzení člověka.")
+      ],
+      inactiveItems: [
+        "Automatické objednání servisu nebo dílu.",
+        "E-mail/SMS z Vozového parku mimo systém.",
+        "Automatické uzavření bezpečnostní závady."
+      ],
+      pilotItems: [
+        "Vistos Vehicle preview je náhled bez ostrého zápisu.",
+        "Import preview je kontrola dat před potvrzenou další fází."
+      ],
+      events: [
+        fleetVehiclesState.error
+          ? moduleEventLogEvent("", "Načtení vozidel", "chyba", fleetVehiclesState.error)
+          : moduleEventLogEvent(fleetVehiclesState.lastFetchedAt, "Načtení vozidel", apiState, fleetVehiclesState.loaded ? `Načteno ${fleetVehiclesState.vehicles.length} vozidel.` : "Čeká se na doložené načtení vozidel."),
+        fleetVistosVehiclePreviewState.error
+          ? moduleEventLogEvent("", "Vistos Vehicle preview", "chyba", fleetVistosVehiclePreviewState.error)
+          : moduleEventLogEvent("", "Vistos Vehicle preview", "dry-run", fleetVistosVehiclePreviewState.message || "Preview je připravené jen jako servisní náhled."),
+        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Modul neodesílá e-maily ani SMS z Nastavení.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("apiStatus", fleetVehiclesState.apiStatus),
+        moduleEventLogDiagnostic("loaded", fleetVehiclesState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("vehicles", fleetVehiclesState.vehicles.length),
+        moduleEventLogDiagnostic("provider", fleetVehiclesState.provider || "neuvedeno"),
+        moduleEventLogDiagnostic("source", fleetVehiclesState.source || "neuvedeno"),
+        moduleEventLogDiagnostic("lastFetchedAt", fleetVehiclesState.lastFetchedAt || "neuvedeno"),
+        moduleEventLogDiagnostic("lastError", fleetVehiclesState.error || fleetVistosVehiclePreviewState.error || fleetImportPreviewState.error || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === "absence") {
+    const settingsState = moduleEventLogApiState(absenceSettingsState.apiStatus, absenceSettingsState.loaded, absenceSettingsState.error);
+    const requestsState = moduleEventLogApiState(absenceApiState.apiStatus, absenceApiState.loaded, absenceApiState.error);
+    return {
+      moduleKey: "absence",
+      moduleName: "Dovolená / Nemoc",
+      badgeState: absenceSettingsState.error || absenceApiState.error ? "vyžaduje pozornost" : settingsState,
+      statuses: [
+        moduleEventLogStatus("Nastavení reportu", settingsState, "Ukládání nastavení jde přes cloud API, ale pravidelné odeslání reportu není z tohoto bloku označené jako běžící."),
+        moduleEventLogStatus("Žádosti přes API", requestsState, absenceApiState.error ? "Načtení žádostí hlásí chybu." : "Stav vychází z načtení žádostí v UI."),
+        moduleEventLogStatus("Automatizace měsíčního reportu", "čeká na ověření", "Plán je v nastavení, ale není doložené, že scheduler běží pravidelně v cloudu."),
+        moduleEventLogStatus("E-mail / SMS mimo systém", "vypnuto", "Bez ověřeného scheduleru a potvrzené produkční konfigurace není odesílání označené jako zapnuté."),
+        moduleEventLogStatus("Lékařské prohlídky", "částečně ověřeno", "Pravidla jsou viditelná v UI, odesílání připomínek není v tomto Logu označené jako běžící.")
+      ],
+      inactiveItems: [
+        "Ostré automatické odesílání měsíčního reportu bez ověřeného scheduleru.",
+        "SMS mimo systém z Nastavení Dovolená / Nemoc.",
+        "Autonomní schválení nebo zamítnutí žádosti."
+      ],
+      pilotItems: [
+        "Plán měsíčního reportu je nastavení, ne důkaz běžící automatizace.",
+        "Lékařské prohlídky mají UI pravidla; připomínky vyžadují samostatné ověření backend běhu."
+      ],
+      events: [
+        absenceSettingsState.error
+          ? moduleEventLogEvent("", "Nastavení reportu", "chyba", absenceSettingsState.error)
+          : moduleEventLogEvent("", "Nastavení reportu", settingsState, "Nastavení je dostupné v UI; pravidelný běh není ověřený."),
+        absenceApiState.error
+          ? moduleEventLogEvent(absenceApiState.loadedAt, "Načtení žádostí", "chyba", absenceApiState.error)
+          : moduleEventLogEvent(absenceApiState.loadedAt, "Načtení žádostí", requestsState, absenceApiState.loaded ? `Načteno ${absenceApiState.requests.length} žádostí.` : "Čeká se na načtení žádostí."),
+        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Bez ověřené automatizace se report ani SMS neoznačují jako zapnuté.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("absenceSettings.apiStatus", absenceSettingsState.apiStatus),
+        moduleEventLogDiagnostic("absenceSettings.loaded", absenceSettingsState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("absenceApi.apiStatus", absenceApiState.apiStatus),
+        moduleEventLogDiagnostic("absenceApi.loadedAt", absenceApiState.loadedAt || "neuvedeno"),
+        moduleEventLogDiagnostic("missingEndpoint", absenceSettingsState.missingEndpoint),
+        moduleEventLogDiagnostic("lastError", absenceSettingsState.error || absenceApiState.error || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === DATA_BOX_MODULE_KEY) {
+    const latestSync = Array.isArray(dataBoxState.syncRuns) ? dataBoxState.syncRuns[0] : null;
+    const syncState = dataBoxState.error || dataBoxState.syncError ? "chyba" : latestSync ? "částečně ověřeno" : "čeká na ověření";
+    return {
+      moduleKey: DATA_BOX_MODULE_KEY,
+      moduleName: "Datová schránka",
+      badgeState: dataBoxState.error || dataBoxState.syncError ? "vyžaduje pozornost" : syncState,
+      statuses: [
+        moduleEventLogStatus("Synchronizace zpráv", syncState, latestSync ? "Existuje poslední běh synchronizace, ale pravidelnost scheduleru tím není potvrzená." : "Čeká se na doložený běh synchronizace."),
+        moduleEventLogStatus("API / úložiště", moduleEventLogApiState(dataBoxState.apiStatus, dataBoxState.loaded, dataBoxState.error), "Stav vychází z API načtení v UI."),
+        moduleEventLogStatus("Práce s přílohami", dataBoxState.attachmentError ? "chyba" : "čeká na ověření", dataBoxState.attachmentError || "Přílohy se neoznačují jako plně ověřené bez aktuálního detailu zprávy."),
+        moduleEventLogStatus("AI doporučení", "jen návrh", "AI návrhy čekají na lidské potvrzení a samy nic neodesílají."),
+        moduleEventLogStatus("Odesílání datovek/e-mailů/SMS", "vypnuto", "Automatické odesílání mimo systém není zapnuté. Případné kroky musí projít potvrzeným backend scénářem.")
+      ],
+      inactiveItems: [
+        "Automatické odesílání datových zpráv.",
+        "Automatické odesílání e-mailů a SMS.",
+        "Mazání datových zpráv bez člověka."
+      ],
+      pilotItems: [
+        "AI Boost je návrhový režim čekající na potvrzení.",
+        "Ruční a servisní synchronizace nejsou důkaz pravidelné cloud automatizace."
+      ],
+      events: [
+        dataBoxState.error || dataBoxState.syncError
+          ? moduleEventLogEvent("", "Načtení Datové schránky", "chyba", dataBoxState.error || dataBoxState.syncError)
+          : moduleEventLogEvent(latestSync?.finishedAt || latestSync?.startedAt, "Synchronizace zpráv", syncState, latestSync ? `Poslední běh: ${latestSync.status || "stav neuveden"}.` : "Čeká se na první doložený běh."),
+        moduleEventLogEvent("", "AI návrhy", "jen návrh", `${dataBoxState.aiBoostActions.length} návrhů v UI; nic se neodesílá bez potvrzení.`),
+        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Automatické datovky, e-maily a SMS jsou vypnuté.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("apiStatus", dataBoxState.apiStatus),
+        moduleEventLogDiagnostic("storageStatus", dataBoxState.storageStatus),
+        moduleEventLogDiagnostic("integrationStatus", dataBoxState.integrationStatus),
+        moduleEventLogDiagnostic("syncRuns", dataBoxState.syncRuns.length),
+        moduleEventLogDiagnostic("messages", dataBoxState.messages.length),
+        moduleEventLogDiagnostic("aiBoostActions", dataBoxState.aiBoostActions.length),
+        moduleEventLogDiagnostic("lastError", dataBoxState.error || dataBoxState.syncError || dataBoxState.attachmentError || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === "vehicle-tracking") {
+    const summary = vehicleTrackingTcarsStatusSummary(vehicleTrackingLiveState.status || {}, vehicleTrackingLiveState.error);
+    const gpsState = vehicleTrackingLiveState.error
+      ? "chyba"
+      : summary.apiStatus === "ready" && summary.isLive && summary.liveVerified
+        ? "částečně ověřeno"
+        : "čeká na ověření";
+    const wimState = vehicleTrackingLiveState.wimError ? "chyba" : vehicleTrackingLiveState.wimLoaded ? "částečně ověřeno" : "čeká na ověření";
+    return {
+      moduleKey: "vehicle-tracking",
+      moduleName: "Sledování vozidel",
+      badgeState: vehicleTrackingLiveState.error || vehicleTrackingLiveState.wimError ? "vyžaduje pozornost" : gpsState,
+      statuses: [
+        moduleEventLogStatus("T-Cars API / GPS", gpsState, vehicleTrackingLiveState.error || "GPS data se neoznačují jako běžící, dokud není doložený čerstvý live stav."),
+        moduleEventLogStatus("WIM váhy", wimState, vehicleTrackingLiveState.wimError || "WIM vrstva je read-only stav z API a není to odesílací automatizace."),
+        moduleEventLogStatus("Geofencing 15 km", "jen návrh", "Geofencing alerty jsou návrh bez ostrého cloud runneru."),
+        moduleEventLogStatus("SMS / app alert", "vypnuto", "Bez cloud runneru, deduplikace a audit logu se neodesílá SMS ani app upozornění."),
+        moduleEventLogStatus("Demo mapa", "dry-run", "Demo režim ukazuje ukázková data a není důkaz reálného sledování vozidel.")
+      ],
+      inactiveItems: [
+        "SMS a app alerty 15 km před WIM vahou.",
+        "Autonomní geofencing runner.",
+        "Přepnutí demo dat na ostrý provoz bez ověření."
+      ],
+      pilotItems: [
+        "Demo mapa je dry-run ukázka.",
+        "Geofencing panel je návrh budoucí automatizace."
+      ],
+      events: [
+        vehicleTrackingLiveState.error
+          ? moduleEventLogEvent("", "T-Cars stav", "chyba", vehicleTrackingLiveState.error)
+          : moduleEventLogEvent("", "T-Cars stav", gpsState, summary.message || "Čeká se na ověřený live stav GPS."),
+        vehicleTrackingLiveState.wimError
+          ? moduleEventLogEvent("", "WIM váhy", "chyba", vehicleTrackingLiveState.wimError)
+          : moduleEventLogEvent("", "WIM váhy", wimState, vehicleTrackingLiveState.wimLoaded ? `Načteno ${vehicleTrackingLiveState.wimSites.length} WIM míst.` : "Čeká se na načtení WIM míst."),
+        moduleEventLogEvent("", "Geofencing alert", "jen návrh", "Alerty jsou návrh bez ostrého odesílání.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("sourceMode", vehicleTrackingLiveState.sourceMode),
+        moduleEventLogDiagnostic("tcars.loaded", vehicleTrackingLiveState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("tcars.apiStatus", summary.apiStatus || "neuvedeno"),
+        moduleEventLogDiagnostic("tcars.dataMode", summary.dataMode || "neuvedeno"),
+        moduleEventLogDiagnostic("wim.loaded", vehicleTrackingLiveState.wimLoaded ? "true" : "false"),
+        moduleEventLogDiagnostic("wimApiStatus", vehicleTrackingLiveState.wimApiStatus),
+        moduleEventLogDiagnostic("lastError", vehicleTrackingLiveState.error || vehicleTrackingLiveState.wimError || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === COLLECTION_ROUTES_MODULE_KEY) {
+    const importState = collectionRoutesPilotState.error ? "chyba" : collectionRoutesPilotState.sourceBatches.length || collectionRoutesPilotState.batches.length ? "částečně ověřeno" : "čeká na ověření";
+    const vistosState = collectionRoutesPilotState.kommunalPairingError || collectionRoutesPilotState.sourceVistosMatchError
+      ? "chyba"
+      : collectionRoutesPilotState.kommunalPairingLoadedAt || collectionRoutesPilotState.sourceVistosMatchSummary
+        ? "částečně ověřeno"
+        : "čeká na ověření";
+    return {
+      moduleKey: COLLECTION_ROUTES_MODULE_KEY,
+      moduleName: "Trasy svozu",
+      badgeState: collectionRoutesPilotState.error ? "vyžaduje pozornost" : "dry-run",
+      statuses: [
+        moduleEventLogStatus("Svozové trasy", "dry-run", "Modul je read-only pilot. Nevytváří ostré trasy bez další potvrzené fáze."),
+        moduleEventLogStatus("Import 13 Excelů", importState, collectionRoutesPilotState.error || "Import slouží jako read-only zdroj a kontrola dat."),
+        moduleEventLogStatus("Vistos match / preview", vistosState, collectionRoutesPilotState.kommunalPairingError || collectionRoutesPilotState.sourceVistosMatchError || "Vistos části jsou náhled nebo párování, ne ostrý svozový runner."),
+        moduleEventLogStatus("Automatizace svozu", "čeká na ověření", "Není doložený cloud runner, cron ani queue pro ostré svozové trasy."),
+        moduleEventLogStatus("SMS / e-mail řidičům", "vypnuto", "Modul z tohoto nastavení nic neposílá řidičům mimo systém.")
+      ],
+      inactiveItems: [
+        "Ostré vytvoření tras bez ručního potvrzení.",
+        "SMS/e-mail řidičům.",
+        "Cloud runner pro pravidelné generování svozů."
+      ],
+      pilotItems: [
+        "Svozové trasy jsou read-only pilot.",
+        "Vistos-only a import preview jsou náhledy bez ostrého dopadu.",
+        "Řidičský tablet je pracovní náhled, ne samostatná cloud automatizace."
+      ],
+      events: [
+        collectionRoutesPilotState.error
+          ? moduleEventLogEvent("", "Načtení Tras svozu", "chyba", collectionRoutesPilotState.error)
+          : moduleEventLogEvent("", "Načtení Tras svozu", importState, collectionRoutesPilotState.message || `Zdrojové dávky: ${collectionRoutesPilotState.sourceBatches.length || collectionRoutesPilotState.batches.length}.`),
+        collectionRoutesPilotState.kommunalPairingError || collectionRoutesPilotState.sourceVistosMatchError
+          ? moduleEventLogEvent("", "Vistos párování", "chyba", collectionRoutesPilotState.kommunalPairingError || collectionRoutesPilotState.sourceVistosMatchError)
+          : moduleEventLogEvent(collectionRoutesPilotState.kommunalPairingLoadedAt, "Vistos párování", vistosState, collectionRoutesPilotState.sourceVistosMatchMessage || "Čeká na doložené párování nebo používá read-only preview."),
+        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Bez další fáze se nic neposílá řidičům mimo systém.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("apiStatus", collectionRoutesPilotState.apiStatus),
+        moduleEventLogDiagnostic("sourceBatches", collectionRoutesPilotState.sourceBatches.length),
+        moduleEventLogDiagnostic("sourceRows", collectionRoutesPilotState.sourceRows.length),
+        moduleEventLogDiagnostic("sites", collectionRoutesPilotState.sites.length),
+        moduleEventLogDiagnostic("issues", collectionRoutesPilotState.issues.length),
+        moduleEventLogDiagnostic("kommunalPairingLoadedAt", collectionRoutesPilotState.kommunalPairingLoadedAt || "neuvedeno"),
+        moduleEventLogDiagnostic("lastError", collectionRoutesPilotState.error || collectionRoutesPilotState.kommunalPairingError || collectionRoutesPilotState.sourceVistosMatchError || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === "driver-reports") {
+    const apiState = moduleEventLogApiState(driverReportsState.apiStatus, driverReportsState.loaded, driverReportsState.error);
+    return {
+      moduleKey: "driver-reports",
+      moduleName: "Hlášení řidičů",
+      badgeState: driverReportsState.error ? "vyžaduje pozornost" : apiState,
+      statuses: [
+        moduleEventLogStatus("Hlášení přes API", apiState, driverReportsState.error || "Stav vychází z načtení pracovní fronty v UI."),
+        moduleEventLogStatus("SPZ / vozidlo", driverReportsState.plateValidation.exact ? "ověřeno" : "čeká na ověření", driverReportsState.plateValidation.message || "Ověření SPZ probíhá jen pro konkrétní zadání."),
+        moduleEventLogStatus("PartsLink24 / VIN pilot", "dry-run", "Vyhledávání dílů a cen je pilotní kontrola. Nic se neobjedná samo."),
+        moduleEventLogStatus("E-mail / SMS servis", "vypnuto", "Automatické odesílání mimo systém není zapnuté. Každý externí dopad musí projít potvrzenou backend akcí."),
+        moduleEventLogStatus("Autonomní akce", "jen návrh", "Modul může připravit další krok, ale neprovede objednávku ani servis bez člověka.")
+      ],
+      inactiveItems: [
+        "Automatické objednání dílu.",
+        "Automatické odeslání e-mailu/SMS bez potvrzené backend akce.",
+        "Autonomní uzavření hlášení s provozním dopadem."
+      ],
+      pilotItems: [
+        "PartsLink24 / VIN kontrola je pilot.",
+        "Cenový průzkum je náhled a neobjednává díly."
+      ],
+      events: [
+        driverReportsState.error
+          ? moduleEventLogEvent("", "Načtení hlášení", "chyba", driverReportsState.error)
+          : moduleEventLogEvent("", "Načtení hlášení", apiState, driverReportsState.loaded ? `V UI je ${driverReportsState.items.length} hlášení.` : "Čeká se na načtení hlášení."),
+        moduleEventLogEvent("", "SPZ ověření", driverReportsState.plateValidation.exact ? "ověřeno" : "čeká na ověření", driverReportsState.plateValidation.message || "Bez konkrétního zadání není SPZ ověřená."),
+        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Modul nic neodesílá automaticky.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("apiStatus", driverReportsState.apiStatus),
+        moduleEventLogDiagnostic("loaded", driverReportsState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("items", driverReportsState.items.length),
+        moduleEventLogDiagnostic("activeTab", driverReportsState.activeTab),
+        moduleEventLogDiagnostic("plateValidation.status", driverReportsState.plateValidation.status),
+        moduleEventLogDiagnostic("lastError", driverReportsState.error || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === RECEIVABLES_MODULE_KEY) {
+    const apiState = moduleEventLogApiState(receivablesState.apiStatus, receivablesState.dashboardLoaded, receivablesState.dashboardError);
+    const importState = receivablesState.importError ? "chyba" : receivablesState.importLoaded ? "dry-run" : "čeká na ověření";
+    return {
+      moduleKey: RECEIVABLES_MODULE_KEY,
+      moduleName: "Pohledávky",
+      badgeState: receivablesState.dashboardError || receivablesState.importError ? "vyžaduje pozornost" : "dry-run",
+      statuses: [
+        moduleEventLogStatus("Dry-run kompas", "dry-run", "Modul připravuje interní doporučení a balíčky. Nic sám neposílá zákazníkům."),
+        moduleEventLogStatus("API / dashboard", apiState, receivablesState.dashboardError || "Stav vychází z read-only načtení dashboardu."),
+        moduleEventLogStatus("Import / Vistos preview", importState, receivablesState.importError || "Import a Vistos části jsou staging nebo read-only preview."),
+        moduleEventLogStatus("E-mail / SMS / WhatsApp / hlas", "vypnuto", "Ostré outbound kanály jsou v tomto modulu vypnuté."),
+        moduleEventLogStatus("AI doporučení", "jen návrh", "AI doporučení neprovádí autonomní vymáhací akci.")
+      ],
+      inactiveItems: [
+        "Ostré upomínky zákazníkům.",
+        "SMS, WhatsApp a hlasové akce z Pohledávek.",
+        "Autonomní právní nebo finanční krok."
+      ],
+      pilotItems: [
+        "Celý modul je Fáze 1D dry-run.",
+        "Vistos preview a import jsou read-only/staging podle aktuálního pohledu."
+      ],
+      events: [
+        receivablesState.dashboardError
+          ? moduleEventLogEvent("", "Načtení dashboardu", "chyba", receivablesState.dashboardError)
+          : moduleEventLogEvent("", "Načtení dashboardu", apiState, receivablesState.dashboardLoaded ? "Dashboard byl načten přes API." : "Dashboard zatím není načtený."),
+        receivablesState.importError
+          ? moduleEventLogEvent("", "Import preview", "chyba", receivablesState.importError)
+          : moduleEventLogEvent("", "Import preview", importState, receivablesState.importResult ? "Poslední import proběhl v režimu preview/staging." : "Čeká na import preview."),
+        moduleEventLogEvent("", "Odesílání zákazníkům", "vypnuto", "Modul nic neposílá mimo systém.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("apiStatus", receivablesState.apiStatus),
+        moduleEventLogDiagnostic("dashboardLoaded", receivablesState.dashboardLoaded ? "true" : "false"),
+        moduleEventLogDiagnostic("customers", receivablesState.customers.length),
+        moduleEventLogDiagnostic("importBatches", receivablesState.importBatches.length),
+        moduleEventLogDiagnostic("invoiceSnapshotLoaded", receivablesState.invoiceSnapshotLoaded ? "true" : "false"),
+        moduleEventLogDiagnostic("lastError", receivablesState.dashboardError || receivablesState.importError || receivablesState.settingsError || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === "reports") {
+    const failed = Number(notificationCenterState.summary.failed || 0);
+    const sent = Number(notificationCenterState.summary.emailSent || 0) + Number(notificationCenterState.summary.smsSent || 0);
+    const notificationState = notificationCenterState.error ? "chyba" : failed ? "vyžaduje pozornost" : moduleEventLogApiState(notificationCenterState.apiStatus, notificationCenterState.loaded, notificationCenterState.error);
+    return {
+      moduleKey: "reports",
+      moduleName: "Reporty",
+      badgeState: notificationCenterState.error || customerMessagingState.error ? "vyžaduje pozornost" : notificationState,
+      statuses: [
+        moduleEventLogStatus("Notifikační log", notificationState, notificationCenterState.error || "Stav vychází z backendového logu notifikací v modulu Reporty."),
+        moduleEventLogStatus("Customer messaging", customerMessagingState.error ? "chyba" : customerMessagingState.loaded ? "částečně ověřeno" : "čeká na ověření", customerMessagingState.error || "Zobrazuje se jen stav uložených zpráv a opt-outů."),
+        moduleEventLogStatus("E-mail / SMS mimo systém", sent ? "částečně ověřeno" : "čeká na ověření", sent ? `V logu existuje ${sent} odeslaných záznamů. Pravidelný provoz tím není označený jako běžící.` : "Nejsou doložené odeslané záznamy v aktuálním filtru."),
+        moduleEventLogStatus("Automatizace", "čeká na ověření", "Log ukazuje události, ale neprokazuje pravidelný scheduler."),
+        moduleEventLogStatus("Export", notificationCenterState.items.length ? "částečně ověřeno" : "čeká na ověření", "Export pracuje nad aktuálně načtenými záznamy; nejde o automatizaci.")
+      ],
+      inactiveItems: [
+        "Skryté odesílání bez záznamu v notifikačním logu.",
+        "Automatické reporty bez doloženého scheduleru."
+      ],
+      pilotItems: [
+        "Customer messaging se v UI zobrazuje jako provozní evidence a vyžaduje samostatné ověření odesílání.",
+        "Filtry a export jsou pracovní nástroje, ne cloud automatizace."
+      ],
+      events: [
+        notificationCenterState.error
+          ? moduleEventLogEvent("", "Notifikační log", "chyba", notificationCenterState.error)
+          : moduleEventLogEvent("", "Notifikační log", notificationState, `Zobrazeno ${notificationCenterState.items.length} záznamů z ${notificationCenterState.total}.`),
+        customerMessagingState.error
+          ? moduleEventLogEvent("", "Customer messaging", "chyba", customerMessagingState.error)
+          : moduleEventLogEvent("", "Customer messaging", customerMessagingState.loaded ? "částečně ověřeno" : "čeká na ověření", `Zobrazeno ${customerMessagingState.items.length} zpráv a ${customerMessagingState.optOuts.length} opt-outů.`),
+        moduleEventLogEvent("", "Selhané notifikace", failed ? "vyžaduje pozornost" : "ověřeno", failed ? `${failed} záznamů hlásí selhání.` : "V aktuálním souhrnu není selhaná notifikace.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("notification.apiStatus", notificationCenterState.apiStatus),
+        moduleEventLogDiagnostic("notification.loaded", notificationCenterState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("notification.total", notificationCenterState.total),
+        moduleEventLogDiagnostic("notification.failed", failed),
+        moduleEventLogDiagnostic("customerMessaging.loaded", customerMessagingState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("lastError", notificationCenterState.error || customerMessagingState.error || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === "settings") {
+    const communicationState = communicationInfrastructureState.error ? "chyba" : communicationInfrastructureState.loaded ? "částečně ověřeno" : "čeká na ověření";
+    return {
+      moduleKey: "settings",
+      moduleName: "Nastavení",
+      badgeState: communicationInfrastructureState.error || sarlotaStatusState.error ? "vyžaduje pozornost" : communicationState,
+      statuses: [
+        moduleEventLogStatus("Komunikační infrastruktura", communicationState, communicationInfrastructureState.error || "Stav se čte ze serveru bez zobrazení secretů."),
+        moduleEventLogStatus("Šarlota / ElevenLabs status", sarlotaStatusState.error ? "chyba" : sarlotaStatusState.loaded ? "částečně ověřeno" : "čeká na ověření", sarlotaStatusState.error || "Panel je read-only kontrola konfigurace, ne důkaz hlasového runtime."),
+        moduleEventLogStatus("Vzhled aplikace", themeState.error ? "chyba" : themeState.settings ? "částečně ověřeno" : "čeká na ověření", themeState.error || "Nastavení vzhledu se ukládá přes cloud API."),
+        moduleEventLogStatus("Odesílání mimo systém", "čeká na ověření", "Nastavení ukazuje stav providerů. Nic se neoznačuje jako běžící bez konkrétního logu odeslání."),
+        moduleEventLogStatus("Secrets", "nezapojeno", "Secrets se v UI nezobrazují a nesmí být součástí Logu událostí.")
+      ],
+      inactiveItems: [
+        "Zobrazení nebo výpis secretů.",
+        "Odesílání testovacích e-mailů/SMS bez potvrzeného backend kroku.",
+        "Automatické změny externích integrací bez potvrzení."
+      ],
+      pilotItems: [
+        "Diagnostika Šarloty je read-only kontrola.",
+        "Synchronizace tools/promptů vyžaduje samostatné potvrzení."
+      ],
+      events: [
+        communicationInfrastructureState.error
+          ? moduleEventLogEvent("", "Komunikační infrastruktura", "chyba", communicationInfrastructureState.error)
+          : moduleEventLogEvent("", "Komunikační infrastruktura", communicationState, communicationInfrastructureState.loaded ? "Stav komunikace byl načten ze serveru." : "Čeká se na načtení stavu komunikace."),
+        sarlotaStatusState.error
+          ? moduleEventLogEvent("", "Šarlota status", "chyba", sarlotaStatusState.error)
+          : moduleEventLogEvent("", "Šarlota status", sarlotaStatusState.loaded ? "částečně ověřeno" : "čeká na ověření", "Panel neprokazuje ostrý hlasový hovor."),
+        moduleEventLogEvent("", "Secrets", "nezapojeno", "Secrets se nesmí vypisovat v UI ani diagnostice.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("communication.loaded", communicationInfrastructureState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("communication.apiStatus", communicationInfrastructureState.data?.apiStatus || "neuvedeno"),
+        moduleEventLogDiagnostic("sarlota.loaded", sarlotaStatusState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("theme.loading", themeState.loading ? "true" : "false"),
+        moduleEventLogDiagnostic("lastError", communicationInfrastructureState.error || sarlotaStatusState.error || themeState.error || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === "users") {
+    return {
+      moduleKey: "users",
+      moduleName: "Uživatelé a role",
+      badgeState: adminUsersState.error ? "vyžaduje pozornost" : adminUsersState.loaded ? "částečně ověřeno" : "čeká na ověření",
+      statuses: [
+        moduleEventLogStatus("Správa uživatelů", adminUsersState.error ? "chyba" : adminUsersState.loaded ? "částečně ověřeno" : "čeká na ověření", adminUsersState.error || "Stav vychází z načtení uživatelů v UI."),
+        moduleEventLogStatus("Role a oprávnění", "částečně ověřeno", "Oprávnění se zobrazují přes existující model, změny musí projít backendem."),
+        moduleEventLogStatus("Automatizace", "nezapojeno", "Modul nespouští pravidelný runner."),
+        moduleEventLogStatus("Odesílání mimo systém", "vypnuto", "Správa uživatelů sama neposílá e-mail ani SMS z tohoto nastavení."),
+        moduleEventLogStatus("Audit změn", "čeká na ověření", "Bez aktuálního backend audit logu není audit označený jako ověřený.")
+      ],
+      inactiveItems: [
+        "Automatické změny rolí bez admin potvrzení.",
+        "Odesílání e-mailů/SMS ze správy uživatelů.",
+        "Rozhodování oprávnění jen ve frontendu."
+      ],
+      pilotItems: [
+        "Audit změn je v tomto Logu čeká na ověření, dokud není zobrazený backend záznam."
+      ],
+      events: [
+        adminUsersState.error
+          ? moduleEventLogEvent("", "Načtení uživatelů", "chyba", adminUsersState.error)
+          : moduleEventLogEvent("", "Načtení uživatelů", adminUsersState.loaded ? "částečně ověřeno" : "čeká na ověření", adminUsersState.loaded ? `Načteno ${adminUsersState.users.length} uživatelů.` : "Čeká se na načtení uživatelů."),
+        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Modul neposílá zprávy mimo systém.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("loaded", adminUsersState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("loading", adminUsersState.loading ? "true" : "false"),
+        moduleEventLogDiagnostic("users", adminUsersState.users.length),
+        moduleEventLogDiagnostic("lastError", adminUsersState.error || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === "system-check") {
+    return {
+      moduleKey: "system-check",
+      moduleName: "Kontrola systému",
+      badgeState: systemCheckState.error ? "vyžaduje pozornost" : systemCheckState.loaded ? "částečně ověřeno" : "čeká na ověření",
+      statuses: [
+        moduleEventLogStatus("Produkční monitoring", systemCheckState.error ? "chyba" : systemCheckState.loaded ? "částečně ověřeno" : "čeká na ověření", systemCheckState.error || "Kontrola systému čte stav, ale sama nespouští produkční opravy."),
+        moduleEventLogStatus("Automatizace", "čeká na ověření", "Stav automatizací se musí brát z konkrétních backend logů, ne z názvu modulu."),
+        moduleEventLogStatus("Odesílání mimo systém", "vypnuto", "Kontrola systému sama neposílá SMS/e-mail mimo systém."),
+        moduleEventLogStatus("Externí integrace", "čeká na ověření", "Externí integrace jsou jen zobrazené, dokud nejsou ověřené posledním stavem."),
+        moduleEventLogStatus("Diagnostika", "částečně ověřeno", "Technické detaily jsou v servisních blocích, ne v hlavním přehledu.")
+      ],
+      inactiveItems: [
+        "Automatické opravy produkce.",
+        "Odesílání e-mailů/SMS z kontroly systému.",
+        "Změny Cloudflare, D1, R2 nebo secrets."
+      ],
+      pilotItems: [
+        "Kontrolní panely jsou read-only stav, ne důkaz běžící automatizace."
+      ],
+      events: [
+        systemCheckState.error
+          ? moduleEventLogEvent("", "Kontrola systému", "chyba", systemCheckState.error)
+          : moduleEventLogEvent("", "Kontrola systému", systemCheckState.loaded ? "částečně ověřeno" : "čeká na ověření", systemCheckState.loaded ? "Stav systému byl načten." : "Čeká se na načtení stavu systému."),
+        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Kontrolní modul nic neposílá.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("apiStatus", systemCheckState.apiStatus),
+        moduleEventLogDiagnostic("loaded", systemCheckState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("message", systemCheckState.message || "neuvedeno"),
+        moduleEventLogDiagnostic("lastError", systemCheckState.error || "bez chyby")
+      ]
+    };
+  }
+
+  return genericModuleEventLogConfig(moduleItem);
+}
+
+function moduleEventLogForModule(moduleItem, options = {}) {
+  return moduleEventLogBlock({
+    ...moduleEventLogConfig(moduleItem),
+    ...options
+  });
+}
+
+function genericModuleSettingsSection(moduleItem) {
+  return `
+    <section class="module-settings-panel" aria-labelledby="module-settings-${escapeHtml(moduleEventLogSafeKey(moduleItem?.id))}">
+      <div class="module-settings-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">${escapeHtml(moduleItem?.title || "Modul")}</p>
+          <h2 id="module-settings-${escapeHtml(moduleEventLogSafeKey(moduleItem?.id))}">Nastavení</h2>
+          <p>Provozní stav modulu bez technických detailů v hlavním přehledu.</p>
+        </div>
+      </div>
+      ${moduleEventLogForModule(moduleItem)}
+    </section>
+  `;
+}
+
 function formatFileSize(value) {
   const bytes = Number(value || 0);
 
@@ -5070,8 +5768,10 @@ function settingsManagementSection(user) {
 
   ensureSarlotaStatusData();
   ensureCommunicationInfrastructureData();
+  const dashboardModule = orderedModules.find((moduleItem) => moduleItem.id === "dashboard");
 
   return `
+    ${dashboardModule ? genericModuleSettingsSection(dashboardModule) : ""}
     ${communicationInfrastructureSection(user)}
     ${SarlotaStatusPanel({
       status: sarlotaStatusState.data,
@@ -7791,6 +8491,7 @@ function absenceSettings(user) {
         </button>
       </form>
     </section>
+    ${moduleEventLogForModule(absenceModuleItem())}
     ${medicalExamRulesOverviewPanel()}
   `;
 }
@@ -11531,6 +12232,7 @@ function fleetSettingsSection(user, activeId) {
           </ul>
         </article>
       </div>
+      ${moduleEventLogForModule({ id: "fleet", title: "Vozový park", route: FLEET_ROUTE, status: "ROZPRACOVÁN" }, { className: "module-event-log--fleet" })}
       <details class="fleet-diagnostics">
         <summary>
           <span>Diagnostika a import preview</span>
@@ -11802,13 +12504,15 @@ function vehicleTrackingTabs(activeView = "map", sourceMode = vehicleTrackingAct
       { id: "wim-sites", label: "WIM váhy", href: "#tracking-wim-sites" },
       { id: "tcars-pairing", label: "Párování", href: "#tracking-tcars-pairing" },
       { id: "rules", label: "Pravidla", href: "#tracking-rules" },
-      { id: "api", label: "API", href: "#tracking-api" }
+      { id: "api", label: "API", href: "#tracking-api" },
+      { id: "settings", label: "Nastavení", href: "#tracking-settings" }
     ]
     : [
       { id: "map", label: "Demo mapa", href: "#tracking-map" },
       { id: "list", label: "Vozidla", href: "#tracking-list" },
       { id: "detail", label: "Detail", href: "#tracking-detail" },
-      { id: "api", label: "Budoucí API", href: "#tracking-api" }
+      { id: "api", label: "Budoucí API", href: "#tracking-api" },
+      { id: "settings", label: "Nastavení", href: "#tracking-settings" }
     ];
 
   return `
@@ -14517,6 +15221,20 @@ function vehicleTrackingRulesAutomation(user) {
   });
 }
 
+function vehicleTrackingSettingsSection() {
+  return `
+    <section class="tracking-section tracking-settings-section" id="tracking-settings" aria-labelledby="tracking-settings-title">
+      ${vehicleTrackingSectionHeader(
+        "tracking-settings-title",
+        "Nastavení",
+        "Pravdivý provozní stav GPS, WIM vrstvy, návrhů a odesílání mimo systém.",
+        { badgeText: "Log událostí", badgeTone: "waiting" }
+      )}
+      ${moduleEventLogForModule({ id: "vehicle-tracking", title: "Sledování vozidel", route: VEHICLE_TRACKING_ROUTE, status: "ROZPRACOVÁN" })}
+    </section>
+  `;
+}
+
 function vehicleTrackingPage(moduleItem, user, context = {}) {
   const vehicleId = context.vehicleId || "";
   const view = context.view || "map";
@@ -14566,6 +15284,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
         `}
         ${vehicleTrackingGeofencingDraftPanel()}
         ${vehicleTrackingApiSection()}
+        ${vehicleTrackingSettingsSection()}
         <div id="tracking-rules">
           ${vehicleTrackingRulesAutomation(user)}
         </div>
@@ -20107,6 +20826,22 @@ function collectionRoutesRulesSection(user) {
   });
 }
 
+function collectionRoutesSettingsSection() {
+  return `
+    <section class="collection-routes-internal" id="collection-routes-settings" aria-labelledby="collection-routes-settings-title">
+      <div class="collection-routes-internal__head">
+        <div>
+          <p class="module-feedback__eyebrow">Nastavení modulu</p>
+          <h2 id="collection-routes-settings-title">Nastavení</h2>
+          <p>Provozní stav Tras svozu bez technických detailů v hlavním pracovním pohledu.</p>
+        </div>
+        <span class="employee-card-status employee-card-status--waiting">Log událostí</span>
+      </div>
+      ${moduleEventLogForModule({ id: COLLECTION_ROUTES_MODULE_KEY, title: "Trasy svozu", route: COLLECTION_ROUTES_ROUTE, status: "Read-only pilot" })}
+    </section>
+  `;
+}
+
 function collectionRoutesInternalSection(user) {
   return `
     <section class="collection-routes-internal" id="collection-routes-internal" aria-labelledby="collection-routes-internal-title">
@@ -20176,6 +20911,9 @@ function collectionRoutesActiveSection(user) {
   }
   if (activeTab === "rules") {
     return collectionRoutesRulesSection(user);
+  }
+  if (activeTab === "settings") {
+    return collectionRoutesSettingsSection();
   }
   if (activeTab === "internal") {
     return collectionRoutesInternalSection(user);
@@ -21952,85 +22690,77 @@ function dataBoxPlusEventLogBlock() {
   ];
   const events = historyEvents.length ? historyEvents : fallbackEvents;
   const statuses = [
-    {
-      label: "Automatizace v cloudu",
-      value: cloudSync.isRunning ? "běží" : (cloudSync.latestCloud ? "čeká na další běh" : "neověřeno"),
-      tone: cloudSync.isRunning ? "success" : "warning",
-      text: cloudSync.isRunning
+    moduleEventLogStatus(
+      "Automatizace v cloudu",
+      cloudSync.isRunning ? "běží" : (cloudSync.latestCloud ? "částečně ověřeno" : "čeká na ověření"),
+      cloudSync.isRunning
         ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Další běh je po 30 minutách.`
         : (cloudSync.latestCloud
           ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Čekám na čerstvý úspěšný běh.`
           : "Zatím není doložený cloudový běh načítání.")
-    },
-    {
-      label: "Celkový ostrý stav",
-      value: allCoreChecksOk ? "plný provoz" : (mailboxProblems || messageProblems ? "provoz s chybami" : "částečný provoz"),
-      tone: allCoreChecksOk ? "success" : (mailboxProblems || messageProblems ? "danger" : "warning"),
-      text: allCoreChecksOk
+    ),
+    moduleEventLogStatus(
+      "Celkový ostrý stav",
+      allCoreChecksOk ? "ověřeno" : (mailboxProblems || messageProblems ? "vyžaduje pozornost" : "částečně ověřeno"),
+      allCoreChecksOk
         ? "Načítání běží, všech 7 schránek je aktivních a nejsou hlášené problémy."
         : (mailboxProblems || messageProblems
           ? "Některé schránky nebo zprávy mají problém. Nejde o kompletně zelený ostrý stav."
           : "Načítání je zapnuté, ale ještě není splněná kompletní ostrá kontrola 7/7 schránek.")
-    },
-    {
-      label: "Odesílání datových zpráv",
-      value: readiness.dataBox?.label || "čeká na DS bránu",
-      tone: readiness.dataBox?.enabled ? "success" : "blocked",
-      text: readiness.dataBox?.text || "Chybí serverová DS odesílací brána. Bez ní DSP datovou zprávu neodešle."
-    },
-    {
-      label: "E-mail",
-      value: readiness.email?.label || "čeká na mail provider",
-      tone: readiness.email?.enabled ? "success" : "warning",
-      text: readiness.email?.text || "Chybí serverový mail provider."
-    },
-    {
-      label: "SMS",
-      value: readiness.sms?.label || "čeká na SMS provider",
-      tone: readiness.sms?.enabled ? "success" : "blocked",
-      text: readiness.sms?.text || "Chybí serverový SMS provider."
-    },
-    {
-      label: "Napojené schránky",
-      value: `${activeMailboxes}/7`,
-      tone: activeMailboxes === 7 ? "success" : "warning",
-      text: activeMailboxes === 7
+    ),
+    moduleEventLogStatus(
+      "Odesílání datových zpráv",
+      readiness.dataBox?.enabled ? "ověřeno" : "vypnuto",
+      readiness.dataBox?.text || "Chybí serverová DS odesílací brána. Bez ní DSP datovou zprávu neodešle."
+    ),
+    moduleEventLogStatus(
+      "E-mail",
+      readiness.email?.enabled ? "ověřeno" : "vypnuto",
+      readiness.email?.text || "Chybí serverový mail provider. E-mail se z DSP neodesílá."
+    ),
+    moduleEventLogStatus(
+      "SMS",
+      readiness.sms?.enabled ? "ověřeno" : "vypnuto",
+      readiness.sms?.text || "Chybí serverový SMS provider. SMS se z DSP neodesílá."
+    ),
+    moduleEventLogStatus(
+      "Napojené schránky",
+      activeMailboxes === 7 ? "ověřeno" : "částečně ověřeno",
+      activeMailboxes === 7
         ? "Všech 7 schránek je v DSP vedených jako aktivní."
         : "Některá schránka čeká na přístup nebo ověření."
-    }
+    )
   ];
-  return `
-    <section class="ds-plus-settings-block ds-plus-settings-block--wide ds-plus-event-log">
-      <div class="ds-plus-event-log__head">
-        <div>
-          <h3>Log událostí</h3>
-          <p>Pravdivý provozní stav DSP. Pokud něco není ověřené, není to označené jako běžící.</p>
-        </div>
-        ${dataBoxPlusBadge(cloudSync.isRunning ? "cloud běží" : (latestSync ? "poslední stav" : "čeká na běh"), cloudSync.isRunning ? "success" : (latestSync ? "warning" : "neutral"))}
-      </div>
-      <div class="ds-plus-event-status-grid">
-        ${statuses.map((item) => `
-          <article class="ds-plus-event-status ds-plus-event-status--${escapeHtml(item.tone)}">
-            <span>${escapeHtml(item.label)}</span>
-            <strong>${escapeHtml(item.value)}</strong>
-            <p>${escapeHtml(item.text)}</p>
-          </article>
-        `).join("")}
-      </div>
-      <div class="ds-plus-event-feed">
-        <h4>Poslední události</h4>
-        <ol>
-          ${events.map((event) => `
-            <li>
-              <span>${escapeHtml(event.createdAt ? formatDateTime(event.createdAt) : "bez času")}</span>
-              <strong>${escapeHtml(event.title)}</strong>
-              <p>${escapeHtml(event.note)}</p>
-            </li>
-          `).join("")}
-        </ol>
-      </div>
-    </section>
-  `;
+  return moduleEventLogBlock({
+    moduleKey: DATA_BOX_PLUS_MODULE_KEY,
+    moduleName: "Datové schránky Plus",
+    className: "ds-plus-settings-block--wide ds-plus-event-log",
+    badgeState: cloudSync.isRunning ? "běží" : (latestSync ? "částečně ověřeno" : "čeká na ověření"),
+    statuses,
+    inactiveItems: [
+      readiness.dataBox?.enabled ? "Automatické odeslání datové zprávy bez potvrzení člověka." : "Odesílání datových zpráv z DSP.",
+      readiness.email?.enabled ? "Automatické odeslání e-mailu bez schváleného scénáře." : "E-mail z DSP.",
+      readiness.sms?.enabled ? "Automatické odeslání SMS bez schváleného scénáře." : "SMS z DSP."
+    ],
+    pilotItems: [
+      "AI doporučení a učení Autopilota jsou návrhový režim a rizikové kroky čekají na člověka.",
+      "Pokud cloudový běh není čerstvý, automatizace není označená jako běžící."
+    ],
+    events: events.map((event) => moduleEventLogEvent(event.createdAt, event.title, event.title === "Odesílání mimo systém" ? "vypnuto" : "částečně ověřeno", event.note)),
+    diagnostics: [
+      moduleEventLogDiagnostic("syncRuns", dataBoxPlusState.syncRuns.length),
+      moduleEventLogDiagnostic("latestSync.status", latestSync?.status || "neuvedeno"),
+      moduleEventLogDiagnostic("latestCloud.startedAt", cloudSync.latestCloud?.startedAt || "neuvedeno"),
+      moduleEventLogDiagnostic("latestCloud.finishedAt", cloudSync.latestCloud?.finishedAt || "neuvedeno"),
+      moduleEventLogDiagnostic("activeMailboxes", `${activeMailboxes}/7`),
+      moduleEventLogDiagnostic("mailboxProblems", mailboxProblems),
+      moduleEventLogDiagnostic("messageProblems", messageProblems),
+      moduleEventLogDiagnostic("sendReadiness.dataBox", readiness.dataBox?.label || "neuvedeno"),
+      moduleEventLogDiagnostic("sendReadiness.email", readiness.email?.label || "neuvedeno"),
+      moduleEventLogDiagnostic("sendReadiness.sms", readiness.sms?.label || "neuvedeno"),
+      moduleEventLogDiagnostic("lastError", dataBoxPlusState.error || "bez chyby")
+    ]
+  });
 }
 
 function dataBoxPlusSettingsPanel() {
@@ -23568,6 +24298,7 @@ function dataBoxSettingsPanel(user) {
       ${dataBoxHumanRulesPanel()}
       ${dataBoxMailboxesSettingsPanel()}
       ${dataBoxSafetySettingsPanel()}
+      ${moduleEventLogForModule({ id: DATA_BOX_MODULE_KEY, title: "Datová schránka", route: DATA_BOX_ROUTE, status: "ROZPRACOVÁN" }, { className: "module-event-log--data-box" })}
       <details class="data-box-diagnostics-panel">
         <summary>Diagnostika</summary>
         <div class="data-box-diagnostics-panel__body">
@@ -26407,6 +27138,7 @@ function systemCheckPage(moduleItem, user) {
         ${systemCheckSection("DS účty", systemCheckAccountsItems(data))}
         ${systemCheckExternalCard(data)}
       </section>
+      ${genericModuleSettingsSection(moduleItem)}
     </main>
   `;
 }
@@ -27136,6 +27868,9 @@ function driverReportMatchesCurrentFilters(item, options = {}) {
 }
 
 function driverReportVisibleItems(items, tab = driverReportsState.activeTab) {
+  if (tab === "settings") {
+    return [];
+  }
   if (tab === "parts") {
     return items.filter((item) => driverReportMatchesCurrentFilters(item, { partsOnly: true, archive: false }));
   }
@@ -27164,7 +27899,23 @@ function driverReportTabs(items) {
       ${driverReportTabButton("reports", "Hlášení", reports)}
       ${driverReportTabButton("parts", "Náhradní díly", parts)}
       ${driverReportTabButton("archive", "Archiv", archive)}
+      ${driverReportTabButton("settings", "Nastavení", "Log")}
     </div>
+  `;
+}
+
+function driverReportsSettingsSection() {
+  return `
+    <section class="driver-report-settings" aria-labelledby="driver-report-settings-title">
+      <div class="driver-report-panel__head">
+        <div>
+          <h2 id="driver-report-settings-title">Nastavení</h2>
+          <p>Pravdivý provozní stav modulu, pilotních částí a odesílání mimo systém.</p>
+        </div>
+        <span>Log událostí</span>
+      </div>
+      ${moduleEventLogForModule({ id: "driver-reports", title: "Hlášení řidičů", route: DRIVER_REPORT_ROUTE, status: "Testování" })}
+    </section>
   `;
 }
 
@@ -28146,26 +28897,28 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
       ${driverReportsState.message ? `<p class="module-feedback__notice" role="status">${escapeHtml(driverReportsState.message)}</p>` : ""}
       ${driverReportsState.permissions?.limitation ? `<p class="driver-report-limitation">${escapeHtml(driverReportsState.permissions.limitation)}</p>` : ""}
 
-      ${driverReportsSummaryCards(items)}
+      ${driverReportsState.activeTab === "settings" ? "" : driverReportsSummaryCards(items)}
 
-      ${driverReportMobileEntry(user)}
+      ${driverReportsState.activeTab === "settings" ? "" : driverReportMobileEntry(user)}
 
       <section class="driver-report-desktop-workspace" aria-label="Pracovní fronta Hlášení řidičů">
-        ${driverReportDesktopEntryCard()}
         ${driverReportTabs(items)}
-        ${driverReportFilters(items)}
-        <section class="driver-report-queue-panel" aria-labelledby="driver-report-queue-title">
-          <div class="driver-report-queue-head">
-            <div>
-              <h2 id="driver-report-queue-title">${driverReportsState.activeTab === "parts" ? "Náhradní díly" : driverReportsState.activeTab === "archive" ? "Archiv" : "Hlášení"}</h2>
-              <p>${driverReportsState.activeTab === "parts" ? "Servisní fronta Patrika: VIN, díl, OE, cenový průzkum a další krok." : "Pracovní fronta dispečera a servisu v kompaktních řádcích."}</p>
+        ${driverReportsState.activeTab === "settings" ? driverReportsSettingsSection() : `
+          ${driverReportDesktopEntryCard()}
+          ${driverReportFilters(items)}
+          <section class="driver-report-queue-panel" aria-labelledby="driver-report-queue-title">
+            <div class="driver-report-queue-head">
+              <div>
+                <h2 id="driver-report-queue-title">${driverReportsState.activeTab === "parts" ? "Náhradní díly" : driverReportsState.activeTab === "archive" ? "Archiv" : "Hlášení"}</h2>
+                <p>${driverReportsState.activeTab === "parts" ? "Servisní fronta Patrika: VIN, díl, OE, cenový průzkum a další krok." : "Pracovní fronta dispečera a servisu v kompaktních řádcích."}</p>
+              </div>
+              <span>${escapeHtml(String(activeItems.length))} řádků</span>
             </div>
-            <span>${escapeHtml(String(activeItems.length))} řádků</span>
-          </div>
-          ${driverReportsState.loading && !items.length ? `<p class="driver-report-empty driver-report-empty--table">Načítám hlášení...</p>` : ""}
-          ${!driverReportsState.loading ? driverReportActiveQueue(items) : ""}
-        </section>
-        ${driverReportDetail(selected)}
+            ${driverReportsState.loading && !items.length ? `<p class="driver-report-empty driver-report-empty--table">Načítám hlášení...</p>` : ""}
+            ${!driverReportsState.loading ? driverReportActiveQueue(items) : ""}
+          </section>
+          ${driverReportDetail(selected)}
+        `}
       </section>
 
     </main>
@@ -28416,7 +29169,7 @@ async function submitDriverReportSearch(form) {
 }
 
 function setDriverReportTab(tab) {
-  driverReportsState.activeTab = ["reports", "parts", "archive"].includes(tab) ? tab : "reports";
+  driverReportsState.activeTab = ["reports", "parts", "archive", "settings"].includes(tab) ? tab : "reports";
   driverReportsState.selected = null;
   render();
 }
@@ -29765,6 +30518,7 @@ function receivablesSettingsSection() {
           <p>Ostré odesílání, cron a autonomie jsou vypnuté.</p>
         </article>
       </div>
+      ${moduleEventLogForModule({ id: RECEIVABLES_MODULE_KEY, title: "Pohledávky", route: RECEIVABLES_ROUTE, status: "dry-run" }, { className: "module-event-log--receivables" })}
       <div class="receivables-banned-words">
         ${bannedWords.map((word) => `<span>${escapeHtml(word)}</span>`).join("")}
       </div>
@@ -29909,6 +30663,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
   const reportsPanel = moduleItem.id === "reports" && !isDashboard
     ? `${notificationCenterSection(user)}${customerMessagingSection(user)}`
     : "";
+  const genericSettingsPanel = !isDashboard ? genericModuleSettingsSection(moduleItem) : "";
 
   return `
     <main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>
@@ -29937,6 +30692,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
       ${usersPanel}
       ${settingsPanel}
       ${reportsPanel}
+      ${genericSettingsPanel}
     </main>
   `;
 }

@@ -556,6 +556,45 @@ Zakázané:
 
 Provozní data musí jít přes API / backend / cloud databázi.
 
+## Log událostí
+
+Každý nový modul musí mít v Nastavení povinný blok „Log událostí“.
+
+Log událostí ukazuje pravdivý provozní stav modulu:
+- co skutečně běží,
+- co je ověřené,
+- co je vypnuté,
+- co je jen návrh,
+- co je dry-run,
+- co selhalo,
+- co čeká na ověření.
+
+Log událostí nesmí být marketingový popis. Musí být pravdivý provozní stav.
+
+Pokud funkce není ověřená, nesmí být označená jako běžící.
+Pokud funkce nic neposílá mimo systém, musí to být jasně napsané.
+Pokud je funkce jen návrh, musí být označená jako „jen návrh“.
+Pokud je modul v pilotu, musí být označený jako pilot / dry-run.
+
+Log událostí patří do:
+Nastavení → Log událostí
+
+Technické podrobnosti patří pouze do rozbalené části:
+Zobrazit diagnostiku
+
+Každý Log událostí musí minimálně obsahovat:
+- pravdivý provozní stav,
+- stav hlavních funkcí,
+- stav napojení,
+- stav automatizace,
+- stav odesílání mimo systém,
+- poslední události,
+- případné chyby,
+- rozbalenou diagnostiku.
+
+Cíl:
+Uživatel musí vždy vědět, co modul opravdu dělá a co se pouze tváří jako připravené.
+
 ## Povinná záložka v každém modulu: Seznam pravidel a automatizace
 
 Každý modul v Kaiser Smart / Smart odpady musí mít samostatnou záložku:

@@ -1835,6 +1835,257 @@ h1 {
   margin-top: 22px;
 }
 
+.module-settings-panel,
+.driver-report-settings {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.module-settings-panel__head,
+.driver-report-settings .driver-report-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.module-settings-panel__head h2,
+.driver-report-settings h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.35rem;
+  letter-spacing: 0;
+}
+
+.module-settings-panel__head p,
+.driver-report-settings p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.module-event-log {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dfe8d8;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.module-event-log__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.module-event-log__head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.16rem;
+  letter-spacing: 0;
+}
+
+.module-event-log__head p {
+  max-width: 760px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.module-event-log__badge {
+  flex: 0 0 auto;
+  max-width: 190px;
+  padding: 6px 9px;
+  border: 1px solid #d4decf;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475448;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.module-event-log__status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.module-event-log__status {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #dfe8d8;
+  border-left: 4px solid #9aa79a;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.module-event-log__status span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.module-event-log__status strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.module-event-log__status p,
+.module-event-log__feed p,
+.module-event-log__lists li {
+  margin: 0;
+  color: #4f5b50;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.module-event-log__status--success,
+.module-event-log__badge--success {
+  border-color: #b9dbb3;
+  border-left-color: #2f7d46;
+}
+
+.module-event-log__status--warning,
+.module-event-log__badge--warning,
+.module-event-log__status--waiting,
+.module-event-log__badge--waiting,
+.module-event-log__status--proposal,
+.module-event-log__badge--proposal,
+.module-event-log__status--dry-run,
+.module-event-log__badge--dry-run {
+  border-color: #ead9a5;
+  border-left-color: #b88716;
+}
+
+.module-event-log__status--danger,
+.module-event-log__badge--danger {
+  border-color: #efc1bb;
+  border-left-color: #b42318;
+}
+
+.module-event-log__status--muted,
+.module-event-log__badge--muted {
+  border-color: #dce3d8;
+  border-left-color: #849082;
+}
+
+.module-event-log__lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.module-event-log__lists section,
+.module-event-log__feed,
+.module-event-log__diagnostics {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e4eadf;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.module-event-log__lists h4,
+.module-event-log__feed h4 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 0.94rem;
+}
+
+.module-event-log__lists ul,
+.module-event-log__feed ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.module-event-log__feed li {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.module-event-log__feed span,
+.module-event-log__feed em {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.module-event-log__feed strong {
+  color: var(--ink);
+}
+
+.module-event-log__diagnostics summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.module-event-log__diagnostics dl {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.module-event-log__diagnostics div {
+  display: grid;
+  grid-template-columns: minmax(150px, 240px) minmax(0, 1fr);
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #edf1ea;
+}
+
+.module-event-log__diagnostics dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.module-event-log__diagnostics dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .module-settings-panel,
+  .driver-report-settings,
+  .module-event-log {
+    padding: 14px;
+  }
+
+  .module-settings-panel__head,
+  .driver-report-settings .driver-report-panel__head,
+  .module-event-log__head,
+  .module-event-log__lists,
+  .module-event-log__diagnostics div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .module-event-log__badge {
+    justify-self: start;
+    max-width: 100%;
+  }
+}
+
 .fleet-import-panel {
   display: grid;
   gap: 18px;
