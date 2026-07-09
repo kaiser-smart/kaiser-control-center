@@ -4336,7 +4336,7 @@ async function handleApi(request, response) {
       return true;
     }
 
-    if (normalizeRole(user.role) !== "admin") {
+    if (!isFullAccessRole(user)) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
@@ -4426,7 +4426,7 @@ async function handleApi(request, response) {
       return true;
     }
 
-    if (normalizeRole(user.role) !== "admin") {
+    if (!isFullAccessRole(user)) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
@@ -4471,7 +4471,7 @@ async function handleApi(request, response) {
       return true;
     }
 
-    if (normalizeRole(user.role) !== "admin") {
+    if (!isFullAccessRole(user)) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
@@ -4663,7 +4663,7 @@ async function handleApi(request, response) {
       return true;
     }
 
-    if (normalizeRole(user.role) !== "admin") {
+    if (!isFullAccessRole(user)) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
@@ -4789,7 +4789,7 @@ async function handleApi(request, response) {
       return true;
     }
 
-    if (normalizeRole(user.role) !== "admin") {
+    if (!isFullAccessRole(user)) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }

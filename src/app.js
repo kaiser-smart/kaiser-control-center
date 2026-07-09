@@ -14581,7 +14581,7 @@ function collectionRoutesCanViewPilot(user) {
 }
 
 function collectionRoutesCanRunImportPreview(user) {
-  return normalizeRole(user?.role) === "admin";
+  return isFullAccessRole(user);
 }
 
 function collectionRoutesCanLoadVistosSnapshot(user) {
@@ -14589,8 +14589,7 @@ function collectionRoutesCanLoadVistosSnapshot(user) {
 }
 
 function collectionRoutesCanRefreshVistosSnapshot(user) {
-  return ["admin", "management"].includes(normalizeRole(user?.role)) &&
-    collectionRoutesCanViewPilot(user);
+  return isFullAccessRole(user) && collectionRoutesCanViewPilot(user);
 }
 
 function collectionRoutesCanViewInternalTab(user) {

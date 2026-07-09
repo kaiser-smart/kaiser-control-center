@@ -1,5 +1,5 @@
 import { json, requireUserPermission } from "../../../_lib/auth.js";
-import { normalizeRole } from "../../../../src/permissions.js";
+import { isFullAccessRole } from "../../../../src/permissions.js";
 import {
   CollectionRoutesStoreError,
   createCollectionRoutesVistosKommunalPreviewExport
@@ -20,7 +20,7 @@ function collectionRoutesError(error) {
 }
 
 function canRunCollectionRoutesVistosRefresh(user) {
-  return ["admin", "management"].includes(normalizeRole(user?.role));
+  return isFullAccessRole(user);
 }
 
 async function requireCollectionRoutesVistosRefresh(env, request) {

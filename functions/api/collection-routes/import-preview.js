@@ -1,5 +1,5 @@
 import { currentUser, json } from "../../_lib/auth.js";
-import { normalizeRole } from "../../../src/permissions.js";
+import { isFullAccessRole } from "../../../src/permissions.js";
 import {
   COLLECTION_ROUTES_MANUAL_IMPORT_MAX_FILE_SIZE_BYTES,
   CollectionRoutesStoreError,
@@ -23,7 +23,7 @@ async function requireCollectionRoutesAdmin(env, request) {
     return { user: null, response: json({ error: "Nepřihlášeno." }, 401) };
   }
 
-  if (normalizeRole(user.role) !== "admin") {
+  if (!isFullAccessRole(user)) {
     return { user, response: json({ error: "Nemáte oprávnění." }, 403) };
   }
 
