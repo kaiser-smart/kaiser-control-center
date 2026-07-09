@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.479"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.480"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: Management vidí Vistos snapshot",
+    text: "Role Management může načíst Stanoviště a Svozové trasy z read-only Vistos snapshotu. Admin interní importy zůstávají oddělené."
+  },
   {
     title: "Trasy svozu: automatický refresh Stanovišť",
     text: "Stanoviště z Vistosu mají funkční odpočet 15:00 do dalšího načtení. Po doběhu se načte aktuální read-only snapshot a stránka se sama obnoví bez ručního klikání."

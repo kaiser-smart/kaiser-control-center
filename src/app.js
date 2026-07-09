@@ -14584,6 +14584,15 @@ function collectionRoutesCanRunImportPreview(user) {
   return normalizeRole(user?.role) === "admin";
 }
 
+function collectionRoutesCanLoadVistosSnapshot(user) {
+  return collectionRoutesCanViewPilot(user);
+}
+
+function collectionRoutesCanRefreshVistosSnapshot(user) {
+  return ["admin", "management"].includes(normalizeRole(user?.role)) &&
+    collectionRoutesCanViewPilot(user);
+}
+
 function collectionRoutesCanViewInternalTab(user) {
   return collectionRoutesCanRunImportPreview(user);
 }
@@ -18494,15 +18503,16 @@ function collectionRoutesSitesRefreshLabel() {
 function collectionRoutesSitesRefreshStatusHtml() {
   const isLoading = collectionRoutesPilotState.kommunalPairingLoading;
   const countdown = collectionRoutesSitesRefreshCountdownLabel();
+  const canRefresh = collectionRoutesCanRefreshVistosSnapshot(currentUser());
   return `
     <span class="employee-card-status employee-card-status--waiting collection-routes-refresh-status">${escapeHtml(collectionRoutesSitesRefreshLabel())}</span>
     <span class="collection-routes-refresh-countdown" data-collection-routes-sites-countdown>
       <span>Další automatické načtení</span>
       <strong data-collection-routes-sites-countdown-value>${escapeHtml(countdown)}</strong>
     </span>
-    <button class="secondary-link" type="button" data-collection-routes-sites-refresh-now ${isLoading ? "disabled" : ""}>
+    ${canRefresh ? `<button class="secondary-link" type="button" data-collection-routes-sites-refresh-now ${isLoading ? "disabled" : ""}>
       ${isLoading ? escapeHtml(collectionRoutesSitesRefreshLabel()) : "Servisní refresh z Vistosu"}
-    </button>
+    </button>` : ""}
   `;
 }
 
@@ -18553,7 +18563,7 @@ async function refreshCollectionRoutesSitesReadOnlySnapshot(options = {}) {
   if (
     !authState.user ||
     collectionRoutesPilotState.kommunalPairingLoading ||
-    !collectionRoutesCanViewPilot(currentUser())
+    !collectionRoutesCanRefreshVistosSnapshot(currentUser())
   ) {
     return;
   }
@@ -20033,7 +20043,7 @@ function collectionRoutesVistosSitesTable(contractRows = collectionRoutesVistosF
 function ensureCollectionRoutesSitesReadOnlyData(user = currentUser()) {
   scheduleCollectionRoutesSitesAutoRefresh(user);
   if (
-    collectionRoutesCanRunImportPreview(user) &&
+    collectionRoutesCanLoadVistosSnapshot(user) &&
     !collectionRoutesPilotState.kommunalPairingRows.length &&
     !collectionRoutesPilotState.kommunalPairingLoading &&
     !collectionRoutesPilotState.kommunalPairingError &&
@@ -31969,7 +31979,11 @@ async function loadCollectionRoutesPilot(options = {}) {
 }
 
 async function loadCollectionRoutesKommunalPairingRows(options = {}) {
-  if (!collectionRoutesCanRunImportPreview(currentUser()) || collectionRoutesPilotState.kommunalPairingLoading) {
+  const user = currentUser();
+  const canLoad = options.live === true
+    ? collectionRoutesCanRefreshVistosSnapshot(user)
+    : collectionRoutesCanLoadVistosSnapshot(user);
+  if (!canLoad || collectionRoutesPilotState.kommunalPairingLoading) {
     return;
   }
   if (!options.force && collectionRoutesPilotState.kommunalPairingRows.length) {
