@@ -29870,8 +29870,8 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
   position: absolute;
   top: 53%;
   left: 50%;
-  width: clamp(860px, 72vw, 1100px);
-  height: clamp(600px, 52vw, 760px);
+  width: clamp(720px, 56vw, 950px);
+  height: clamp(500px, 38.2vw, 636px);
   overflow: hidden;
   border: 0;
   border-radius: clamp(16px, 1.35vw, 26px);
