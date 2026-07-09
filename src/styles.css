@@ -30350,7 +30350,7 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
 .driver-tablet-side-stack {
   display: grid;
   height: 100%;
-  grid-template-rows: minmax(145px, 0.72fr) minmax(0, 1.28fr);
+  grid-template-rows: minmax(170px, 0.84fr) minmax(0, 1.16fr);
   gap: clamp(8px, 0.85vw, 13px);
   align-self: stretch;
   min-height: 0;
@@ -30381,9 +30381,9 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
 
 .driver-tablet-progress-panel__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 78px;
+  grid-template-columns: minmax(0, 1fr) 106px;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .driver-tablet-progress-panel .driver-tablet-panel-title .driver-tablet-icon {
@@ -30421,8 +30421,8 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
 .driver-tablet-progress-ring {
   position: relative;
   display: grid;
-  width: 76px;
-  height: 76px;
+  width: 104px;
+  height: 104px;
   place-items: center;
 }
 
@@ -30456,7 +30456,7 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
 
 .driver-tablet-progress-ring span {
   color: var(--driver-text);
-  font-size: 0.96rem;
+  font-size: 1.14rem;
   font-weight: 950;
 }
 
