@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.479"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.482"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -23,6 +23,18 @@ export const versionNews = [
   {
     title: "KSO úklid: produkčnější UI",
     text: "Z hlavní aplikace zmizel oddělený designový experiment, stará DSP demo data a technické statusy modulů. Servisní akce Šarloty jsou přesunuté do rozbalovací servisní části a DSP texty pravdivě rozlišují návrh, ověření a potvrzení člověkem."
+  },
+  {
+    title: "Vývoj: Management na úrovni Admin",
+    text: "Během vývoje se role Management řídí stejným full-access oprávněním jako Admin. Ruční admin-only kontroly v Trasách svozu a dev API byly sjednocené přes centrální oprávnění."
+  },
+  {
+    title: "Trasy svozu: Management vidí Vistos snapshot",
+    text: "Role Management může načíst Stanoviště a Svozové trasy z read-only Vistos snapshotu. Admin interní importy zůstávají oddělené."
+  },
+  {
+    title: "Trasy svozu: automatický refresh Stanovišť",
+    text: "Stanoviště z Vistosu mají funkční odpočet 15:00 do dalšího načtení. Po doběhu se načte aktuální read-only snapshot a stránka se sama obnoví bez ručního klikání."
   },
   {
     title: "Produkce: tvrdá ochrana deploye",

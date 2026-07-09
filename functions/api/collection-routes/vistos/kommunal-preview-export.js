@@ -1,5 +1,5 @@
-import { currentUser, json } from "../../../_lib/auth.js";
-import { normalizeRole } from "../../../../src/permissions.js";
+import { json, requireUserPermission } from "../../../_lib/auth.js";
+import { isFullAccessRole } from "../../../../src/permissions.js";
 import {
   CollectionRoutesStoreError,
   createCollectionRoutesVistosKommunalPreviewExport
@@ -19,14 +19,17 @@ function collectionRoutesError(error) {
   }, 500);
 }
 
-async function requireCollectionRoutesAdmin(env, request) {
-  const user = await currentUser(env, request);
+function canRunCollectionRoutesVistosRefresh(user) {
+  return isFullAccessRole(user);
+}
 
-  if (!user) {
-    return { user: null, response: json({ error: "Nepřihlášeno." }, 401) };
+async function requireCollectionRoutesVistosRefresh(env, request) {
+  const { user, response } = await requireUserPermission(env, request, "collection-routes", "view");
+  if (response) {
+    return { user, response };
   }
 
-  if (normalizeRole(user.role) !== "admin") {
+  if (!canRunCollectionRoutesVistosRefresh(user)) {
     return { user, response: json({ error: "Nemáte oprávnění." }, 403) };
   }
 
@@ -34,7 +37,7 @@ async function requireCollectionRoutesAdmin(env, request) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const { response } = await requireCollectionRoutesAdmin(env, request);
+  const { response } = await requireCollectionRoutesVistosRefresh(env, request);
 
   if (response) {
     return response;
