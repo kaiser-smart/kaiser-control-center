@@ -355,6 +355,10 @@ const DATA_BOX_PLUS_TABS = [
   { id: "manual", label: "Manuál" }
 ];
 const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const DATA_BOX_PLUS_MODEL_FLAG = {
+  label: "Model: ostrý DSP",
+  detail: "Oddělený backend, bezpečné potvrzování a audit bez zásahu do původní Datové schránky."
+};
 const NOTIFICATION_CHANNEL_LABELS = {
   email: "E-mail",
   sms: "SMS",
@@ -21112,6 +21116,14 @@ function dataBoxPlusLearningBlock() {
   `;
 }
 
+function dataBoxPlusModelFlag() {
+  return `
+    <span class="ds-plus-model-flag" title="${escapeHtml(DATA_BOX_PLUS_MODEL_FLAG.detail)}">
+      ${escapeHtml(DATA_BOX_PLUS_MODEL_FLAG.label)}
+    </span>
+  `;
+}
+
 function updateDataBoxPlusCountdownNodes() {
   document.querySelectorAll("[data-ds-plus-countdown]").forEach((node) => {
     const valueNode = node.querySelector("[data-ds-plus-countdown-value]");
@@ -22790,6 +22802,7 @@ function dataBoxPlusSettingsPanel() {
         <section class="ds-plus-settings-block ds-plus-settings-block--wide">
           <h3>Datové entity ostré fáze</h3>
           <p>Ostré napojení má ukládat zprávy, přílohy, doporučení, učení, pravidla a audit jen přes backend.</p>
+          <p class="ds-plus-model-note">${dataBoxPlusModelFlag()} ${escapeHtml(DATA_BOX_PLUS_MODEL_FLAG.detail)}</p>
           <div class="ds-plus-entity-list">${DATA_BOX_PLUS_ENTITY_MODEL.map((entity) => `<span>${escapeHtml(entity)}</span>`).join("")}</div>
         </section>
         <section class="ds-plus-settings-block ds-plus-settings-block--wide">
@@ -23106,7 +23119,10 @@ function dataBoxPlusPage(moduleItem, user) {
       </nav>
       <section class="ds-plus-header" aria-labelledby="ds-plus-title">
         <div class="ds-plus-header__main">
-          <span class="ds-plus-eyebrow">Autopilot pro firemní datové schránky</span>
+          <div class="ds-plus-header__flags">
+            <span class="ds-plus-eyebrow">Autopilot pro firemní datové schránky</span>
+            ${dataBoxPlusModelFlag()}
+          </div>
           <h1 id="ds-plus-title">${escapeHtml(moduleItem.title)}</h1>
           <p>Datové zprávy napříč 7 schránkami.</p>
         </div>

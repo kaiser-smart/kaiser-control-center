@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Datové schránky Plus: responzivita a příznak modelu",
+    text: "DSP má v hlavičce a nastavení viditelný příznak ostrého odděleného modelu. Responzivní rozvržení zpevňuje řádky zpráv, akce, schránkové karty a detail tak, aby se na mobilu nesvíraly vedle sebe."
+  },
+  {
     title: "Trasy svozu: dopočet 2x7 sudý/lichý",
     text: "Když Vistos u intervalu 2x7 vrátí dva různé svozové dny jen v jedné paritě, Smart bezpečně dopočítá stejné dny i pro druhý týden a nehlásí zbytečnou chybu."
   },

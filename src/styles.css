@@ -31173,6 +31173,13 @@ body:has(.ds-plus-page) {
   min-width: 0;
 }
 
+.ds-plus-header__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .ds-plus-eyebrow,
 .ds-plus-section-head span,
 .ds-plus-priority__mailbox,
@@ -31188,6 +31195,21 @@ body:has(.ds-plus-page) {
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0;
+}
+
+.ds-plus-model-flag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  max-width: 100%;
+  border: 1px solid #d7bf85;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #fff7e8;
+  color: #7c4a0b;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.15;
 }
 
 .ds-plus-header h1 {
@@ -31968,17 +31990,20 @@ body:has(.ds-plus-page) {
   gap: 6px;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .ds-plus-message-row__buttons {
   display: flex;
   justify-content: flex-start;
+  flex: 0 0 auto;
 }
 
 .ds-plus-compact-workflow {
   display: flex;
   align-items: center;
   gap: 7px;
+  flex: 1 1 220px;
   min-width: 0;
 }
 
@@ -32461,6 +32486,20 @@ body:has(.ds-plus-page) {
 
 .ds-plus-settings-block--wide {
   grid-column: 1 / -1;
+}
+
+.ds-plus-model-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 12px;
+  border: 1px solid #ead7a8;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffaf0;
+  color: #4f3b1d;
+  font-weight: 750;
 }
 
 .ds-plus-manual-block h3 {
@@ -33108,11 +33147,16 @@ body:has(.ds-plus-page) {
   .ds-plus-message-row__action {
     grid-column: 1 / -1;
   }
+
+  .ds-plus-header {
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 640px) {
   .ds-plus-page {
     gap: 12px;
+    width: min(100%, 1480px);
   }
 
   .ds-plus-header,
@@ -33120,6 +33164,33 @@ body:has(.ds-plus-page) {
   .ds-plus-band,
   .ds-plus-side-block {
     padding: 14px;
+  }
+
+  .ds-plus-header h1 {
+    font-size: clamp(1.55rem, 9vw, 2rem);
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+  }
+
+  .ds-plus-header p,
+  .ds-plus-sync-countdown small,
+  .ds-plus-learning-status p,
+  .ds-plus-learning-status small {
+    overflow-wrap: anywhere;
+  }
+
+  .ds-plus-header__state {
+    padding: 12px;
+  }
+
+  .ds-plus-header__state .ds-plus-sync-countdown strong {
+    font-size: clamp(1.25rem, 8vw, 1.6rem);
+    overflow-wrap: anywhere;
+  }
+
+  .ds-plus-learning-status__head {
+    display: grid;
+    justify-items: start;
   }
 
   .ds-plus-metrics,
@@ -33254,21 +33325,46 @@ body:has(.ds-plus-page) {
   }
 
   .ds-plus-message-row__action {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
     gap: 8px;
   }
 
+  .ds-plus-compact-workflow {
+    flex-wrap: wrap;
+  }
+
+  .ds-plus-message-row__buttons {
+    width: 100%;
+  }
+
   .ds-plus-message-row__action .ds-plus-action-with-help {
-    width: auto;
+    width: 100%;
   }
 
   .ds-plus-message-row__action .primary-action,
   .ds-plus-message-row__action .secondary-link {
-    width: auto;
+    width: 100%;
     min-height: 34px;
     padding: 7px 12px;
+    justify-content: center;
+  }
+
+  .ds-plus-mailbox-card__head {
+    display: grid;
+  }
+
+  .ds-plus-mailbox-card__head .ds-plus-badge {
+    justify-self: start;
+  }
+
+  .ds-plus-mailbox-form {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-plus-model-note {
+    display: grid;
   }
 
   .ds-plus-detail-overlay {
