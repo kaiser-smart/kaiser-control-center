@@ -29768,7 +29768,7 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(3, 8, 12, 0.2) 0%, rgba(3, 8, 12, 0.08) 42%, rgba(3, 8, 12, 0.22) 100%),
-    url("/driver-tablet-mockup.png") center center / 112% auto no-repeat,
+    url("/driver-tablet-mockup.png") center center / clamp(2850px, 222vw, 4300px) auto no-repeat,
     #05090d;
   padding: 0;
   color: var(--driver-text);
@@ -29864,10 +29864,10 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
 
 .driver-tablet-canvas {
   position: absolute;
-  top: 52.2%;
-  left: 50%;
-  width: clamp(720px, 47vw, 940px);
-  height: clamp(500px, 31.8vw, 636px);
+  top: 44.3%;
+  left: 48.2%;
+  width: clamp(720px, 56vw, 950px);
+  height: clamp(500px, 38.2vw, 636px);
   overflow: hidden;
   border: 0;
   border-radius: clamp(16px, 1.35vw, 26px);
