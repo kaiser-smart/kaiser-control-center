@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Trasy svozu: dopočet 2x7 sudý/lichý",
+    text: "Když Vistos u intervalu 2x7 vrátí dva různé svozové dny jen v jedné paritě, Smart bezpečně dopočítá stejné dny i pro druhý týden a nehlásí zbytečnou chybu."
+  },
+  {
     title: "KSO úklid: produkčnější UI",
     text: "Z hlavní aplikace zmizel oddělený designový experiment, stará DSP demo data a technické statusy modulů. Servisní akce Šarloty jsou přesunuté do rozbalovací servisní části a DSP texty pravdivě rozlišují návrh, ověření a potvrzení člověkem."
   },

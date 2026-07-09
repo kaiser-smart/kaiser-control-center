@@ -164,6 +164,28 @@ function derive(originalText) {
 {
   const values = [
     {
+      value: "18331",
+      rawValue: "18331",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    },
+    {
+      value: "18334",
+      rawValue: "18334",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    }
+  ];
+  const schedule = __pickupDayScheduleFromValuesForTest({ frequency: "2x7", values });
+  const issues = __pickupDayConsistencyIssuesForTest({ frequency: "2x7", values, fieldConfirmed: true, schedule });
+  assert.equal(schedule.displayText, "úterý lichá, pátek lichá, úterý sudá (dopočteno), pátek sudá (dopočteno)");
+  assert.equal(schedule.inferredEntries.length, 2);
+  assert.equal(issues.length, 0);
+}
+
+{
+  const values = [
+    {
       value: "18337",
       rawValue: "18337",
       caption: "Svozový den",

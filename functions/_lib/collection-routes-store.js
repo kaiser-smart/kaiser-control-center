@@ -2915,6 +2915,23 @@ function completePickupDayEntriesForFrequency(frequency = "", entries = []) {
     });
   }
 
+  if (
+    expected.mode === "weekly" &&
+    expected.perWeek === 2 &&
+    completed.length === 2 &&
+    completed.every((entry) => ["odd", "even"].includes(entry.parity)) &&
+    completed.every((entry) => entry.parity === completed[0].parity) &&
+    new Set(completed.map((entry) => entry.day)).size === 2
+  ) {
+    const oppositeParity = pickupParityOpposite(completed[0].parity);
+    completed.push(...completed.map((entry) => ({
+      ...entry,
+      parity: oppositeParity,
+      inferred: true,
+      source: `${entry.source || pickupDayEntryDisplayValue(entry)} · dopočteno z intervalu 2x7`
+    })));
+  }
+
   return completed;
 }
 
