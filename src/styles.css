@@ -29871,7 +29871,7 @@ body:has(.driver-tablet-page--soft-metal-preview.driver-tablet-theme--light) {
   top: 53%;
   left: 50%;
   width: clamp(860px, 72vw, 1100px);
-  height: clamp(560px, 48vw, 720px);
+  height: clamp(600px, 52vw, 760px);
   overflow: hidden;
   border: 0;
   border-radius: clamp(16px, 1.35vw, 26px);
