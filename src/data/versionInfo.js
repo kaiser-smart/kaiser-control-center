@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.477"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.478"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Produkce: tvrdá ochrana deploye",
+    text: "Produkční Pages deploy má nový guard. Nasazení se zastaví, pokud neběží z aktuálního origin/main, pokud chybí chráněné commity Tras svozu, pokud je repo před buildem špinavé nebo pokud buildMeta a asset verze nesedí."
+  },
   {
     title: "KSO komunikace: Šarlota jako jednotný odesílatel",
     text: "Odchozí e-maily KSO se auditují přes backend a uživatelsky používají Šarlota Kaiser <sarlota@kaiserservis.cz> s Reply-To sarlota@kaiserservis.cz. Stavový panel v Nastavení ukazuje e-maily, příchozí odpovědi, Twilio, SMS a webhooky pravdivě jako běží, čeká, test nebo vypnuto."

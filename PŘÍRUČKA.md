@@ -204,6 +204,38 @@ Pokud produkci ověřil, musí napsat:
 Pokud Codex/vývojář práci dokončí bez zveřejnění, musí se vždy zeptat:
 `Mohu zveřejnit?`
 
+#### 7.1 Tvrdá ochrana produkčního Pages deploye
+
+Produkční Cloudflare Pages deploy pro Kaiser Control Center se nesmí spouštět přímým příkazem:
+
+```bash
+wrangler pages deploy dist --project-name kaiser-control-center-legacy
+```
+
+Produkční deploy se smí spustit pouze přes projektový guard:
+
+```bash
+npm run deploy:pages:production
+```
+
+Guard musí povinně zastavit nasazení, pokud:
+- aktuální větev není `main`,
+- `HEAD` přesně neodpovídá `origin/main`,
+- pracovní strom není před buildem čistý,
+- nasazovaný commit neobsahuje chráněné commity modulu `Svozové trasy`,
+- neprojde syntax check,
+- neprojde test Tras svozu,
+- neprojde build,
+- `buildMeta` nemá správnou verzi, branch a commit,
+- HTML pro `/trasy-svozu` nemá aktuální asset cache-buster.
+
+Chráněné commity modulu `Svozové trasy`, které nesmí z produkce zmizet:
+- `16074246` - automatický read-only Vistos snapshot,
+- `322469e3` - ochrana posledního platného snapshotu,
+- `1c309113` - internal Pages runner přes token.
+
+Pokud je potřeba nasadit hotfix z jiné větve, musí se nejdřív převést do `main` tak, aby `origin/main` obsahoval i chráněné commity Tras svozu. Obcházet guard přímým deployem je zakázané.
+
 ### 8. Pravdivost
 
 Codex/vývojář nesmí psát, že něco testoval, pokud to netestoval.

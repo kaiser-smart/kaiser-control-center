@@ -1,12 +1,14 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.477",
+  "version": "0.1.478",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "build:sites": "node scripts/build.mjs && node scripts/build-sites.mjs",
+    "deploy:pages:production": "node scripts/deploy-pages-production.mjs",
+    "deploy:pages:production:check": "node scripts/deploy-pages-production.mjs --check-only",
     "lint": "node scripts/check-syntax.mjs",
     "test:elevenlabs": "node scripts/elevenlabs-signed-url-options.test.mjs",
     "test:elevenlabs-assistants": "node scripts/elevenlabs-assistant-config.test.mjs",
