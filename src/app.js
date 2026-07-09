@@ -1119,7 +1119,7 @@ const collectionRoutesPilotState = {
   kommunalPairingSource: "",
   kommunalPairingAutoRefreshNextAt: "",
   kommunalPairingAutoRefreshLastAt: "",
-  kommunalPairingAutoRefreshIntervalMs: 90 * 1000,
+  kommunalPairingAutoRefreshIntervalMs: 15 * 60 * 1000,
   vistosRouteFilters: {
     day: "all",
     week: "all",
@@ -18469,9 +18469,16 @@ function collectionRoutesVistosRouteActions(rows = collectionRoutesVistosRouteDi
 function collectionRoutesSitesRefreshSecondsRemaining() {
   const nextAt = Date.parse(collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt || "");
   if (!Number.isFinite(nextAt)) {
-    return collectionRoutesMetricValue(collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs, 90 * 1000) / 1000;
+    return collectionRoutesMetricValue(collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs, 15 * 60 * 1000) / 1000;
   }
   return Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+}
+
+function collectionRoutesSitesRefreshCountdownLabel(seconds = collectionRoutesSitesRefreshSecondsRemaining()) {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, "0");
+  const remainder = String(safeSeconds % 60).padStart(2, "0");
+  return `${minutes}:${remainder}`;
 }
 
 function collectionRoutesSitesRefreshLabel() {
@@ -18486,10 +18493,15 @@ function collectionRoutesSitesRefreshLabel() {
 
 function collectionRoutesSitesRefreshStatusHtml() {
   const isLoading = collectionRoutesPilotState.kommunalPairingLoading;
+  const countdown = collectionRoutesSitesRefreshCountdownLabel();
   return `
     <span class="employee-card-status employee-card-status--waiting collection-routes-refresh-status">${escapeHtml(collectionRoutesSitesRefreshLabel())}</span>
+    <span class="collection-routes-refresh-countdown" data-collection-routes-sites-countdown>
+      <span>Další automatické načtení</span>
+      <strong data-collection-routes-sites-countdown-value>${escapeHtml(countdown)}</strong>
+    </span>
     <button class="secondary-link" type="button" data-collection-routes-sites-refresh-now ${isLoading ? "disabled" : ""}>
-      ${isLoading ? escapeHtml(collectionRoutesSitesRefreshLabel()) : "Aktualizovat z Vistosu"}
+      ${isLoading ? escapeHtml(collectionRoutesSitesRefreshLabel()) : "Servisní refresh z Vistosu"}
     </button>
   `;
 }
@@ -18519,7 +18531,22 @@ function collectionRoutesSitesZeroRowsMessage(payload = {}, live = false) {
 }
 
 function collectionRoutesScheduleCountdownRender() {
-  return;
+  if (typeof window === "undefined") {
+    return;
+  }
+  document.querySelectorAll("[data-collection-routes-sites-countdown]").forEach((node) => {
+    const valueNode = node.querySelector("[data-collection-routes-sites-countdown-value]");
+    if (valueNode) {
+      valueNode.textContent = collectionRoutesSitesRefreshCountdownLabel();
+    }
+  });
+}
+
+function ensureCollectionRoutesSitesCountdownTimer() {
+  if (typeof window === "undefined" || collectionRoutesSitesCountdownTimer) {
+    return;
+  }
+  collectionRoutesSitesCountdownTimer = window.setInterval(collectionRoutesScheduleCountdownRender, 1000);
 }
 
 async function refreshCollectionRoutesSitesReadOnlySnapshot(options = {}) {
@@ -18572,10 +18599,64 @@ function resetCollectionRoutesSitesAutoRefreshTimer() {
   collectionRoutesSitesAutoRefreshTimer = null;
 }
 
+async function runCollectionRoutesSitesAutoRefresh() {
+  resetCollectionRoutesSitesAutoRefreshTimer();
+  const user = currentUser();
+  if (!user || !collectionRoutesCanViewPilot(user) || typeof window === "undefined") {
+    return;
+  }
+
+  const intervalMs = collectionRoutesMetricValue(
+    collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs,
+    15 * 60 * 1000
+  );
+  if (collectionRoutesPilotState.kommunalPairingLoading) {
+    collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt = new Date(Date.now() + 30 * 1000).toISOString();
+    scheduleCollectionRoutesSitesAutoRefresh(user);
+    return;
+  }
+
+  collectionRoutesPilotState.kommunalPairingAutoRefreshLastAt = new Date().toISOString();
+  collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt = new Date(Date.now() + intervalMs).toISOString();
+  collectionRoutesPilotState.kommunalPairingRefreshMode = "snapshot";
+  collectionRoutesPilotState.kommunalPairingError = "";
+  try {
+    await loadCollectionRoutesPilot({ force: true, renderAfter: false });
+    await loadCollectionRoutesKommunalPairingRows({
+      force: true,
+      preserveExpanded: true,
+      renderAfter: false
+    });
+  } finally {
+    collectionRoutesPilotState.kommunalPairingRefreshMode = "";
+    render();
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 250);
+  }
+}
+
 function scheduleCollectionRoutesSitesAutoRefresh(user = currentUser()) {
   if (!user || !collectionRoutesCanViewPilot(user) || typeof window === "undefined") {
     return;
   }
+  const intervalMs = collectionRoutesMetricValue(
+    collectionRoutesPilotState.kommunalPairingAutoRefreshIntervalMs,
+    15 * 60 * 1000
+  );
+  const now = Date.now();
+  let nextAt = Date.parse(collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt || "");
+  if (!Number.isFinite(nextAt) || nextAt <= now) {
+    nextAt = now + intervalMs;
+    collectionRoutesPilotState.kommunalPairingAutoRefreshNextAt = new Date(nextAt).toISOString();
+  }
+  resetCollectionRoutesSitesAutoRefreshTimer();
+  collectionRoutesSitesAutoRefreshTimer = window.setTimeout(
+    runCollectionRoutesSitesAutoRefresh,
+    Math.max(1000, nextAt - now)
+  );
+  ensureCollectionRoutesSitesCountdownTimer();
+  window.setTimeout(collectionRoutesScheduleCountdownRender, 0);
 }
 
 function collectionRoutesSourceRoutesSection(user = currentUser()) {
@@ -19974,7 +20055,7 @@ function collectionRoutesSitesSection(user) {
   const loadingNotice = collectionRoutesPilotState.kommunalPairingLoading
     ? collectionRoutesPilotState.kommunalPairingRefreshMode === "live"
       ? "Načítám data z Vistosu a připravuji nový pracovní snapshot."
-      : "Načítám uložený D1 snapshot. Live Vistos běží jen po ručním refreshi."
+      : "Načítám uložený D1 snapshot. Nový read-only Vistos snapshot připravuje cloud runner každých 15 minut."
     : !loadedAt && !collectionRoutesPilotState.kommunalPairingError
       ? "Stanoviště se načtou z posledního uloženého snapshotu."
       : "";

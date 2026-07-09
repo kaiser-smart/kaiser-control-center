@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.478"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.479"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Trasy svozu: automatický refresh Stanovišť",
+    text: "Stanoviště z Vistosu mají funkční odpočet 15:00 do dalšího načtení. Po doběhu se načte aktuální read-only snapshot a stránka se sama obnoví bez ručního klikání."
+  },
   {
     title: "Produkce: tvrdá ochrana deploye",
     text: "Produkční Pages deploy má nový guard. Nasazení se zastaví, pokud neběží z aktuálního origin/main, pokud chybí chráněné commity Tras svozu, pokud je repo před buildem špinavé nebo pokud buildMeta a asset verze nesedí."
