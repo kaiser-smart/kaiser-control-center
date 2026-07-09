@@ -255,7 +255,6 @@ const COLLECTION_ROUTES_LEGACY_TAB_TARGETS = {
   "collection-routes-location-issues": "internal",
   "collection-routes-site-detail": "sites"
 };
-const DESIGN_NEUMORPHIC_ROUTE = "/design/neumorphic";
 const FLEET_ACTION_WAITING_MESSAGES = {
   addVehicle: "Čeká na API pro přidání vozidla.",
   detail: "Čeká na API pro detail vozidla.",
@@ -296,7 +295,7 @@ const quickAbsenceMenuItem = {
   description: "Nepřítomnost na pár kliknutí nebo hlasem přímo z mobilu.",
   route: QUICK_ABSENCE_ENTRY_ROUTE,
   icon: QuickAbsenceIcon,
-  status: "ROZPRACOVÁN",
+  status: "Rozpracováno",
   active: true,
   disabled: false,
   order: 0
@@ -1927,168 +1926,6 @@ function homeModuleSections(modulesForUser, user) {
     .join("");
 }
 
-const NEUMORPHIC_ACCENTS = [
-  { id: "kaiser", label: "Kaiser", value: "#75bd25", contrast: "#ffffff" },
-  { id: "blue", label: "Modrá", value: "#2f80ed", contrast: "#ffffff" },
-  { id: "teal", label: "Tyrkys", value: "#10a9a2", contrast: "#ffffff" },
-  { id: "berry", label: "Malina", value: "#c63c7a", contrast: "#ffffff" },
-  { id: "graphite", label: "Grafit", value: "#5b667a", contrast: "#ffffff" }
-];
-
-function neumorphicVisibleModules(user) {
-  const items = visibleModules(user);
-  return items.length ? items.slice(0, 6) : orderedModules.slice(0, 6);
-}
-
-function neumorphicAccentPicker() {
-  return NEUMORPHIC_ACCENTS
-    .map((accent, index) => `
-      <button
-        class="neo-accent-button ${index === 0 ? "neo-accent-button--active" : ""}"
-        type="button"
-        style="--neo-swatch: ${accent.value}"
-        data-neumorphic-accent="${accent.value}"
-        data-neumorphic-accent-contrast="${accent.contrast}"
-        aria-pressed="${index === 0 ? "true" : "false"}"
-      >
-        <span class="neo-accent-button__swatch" aria-hidden="true"></span>
-        <span>${escapeHtml(accent.label)}</span>
-      </button>
-    `)
-    .join("");
-}
-
-function neumorphicModuleCards(user) {
-  return neumorphicVisibleModules(user)
-    .map((moduleItem) => `
-      <a class="neo-module" href="${routeHref(routeForModuleCard(moduleItem, user))}" data-link>
-        <span class="neo-module__icon">${renderModuleIcon(moduleItem)}</span>
-        <span class="neo-module__text">
-          <span>${escapeHtml(moduleItem.title)}</span>
-          <small>${escapeHtml(moduleStatusLabel(moduleItem) || "Modul")}</small>
-        </span>
-      </a>
-    `)
-    .join("");
-}
-
-function neumorphicClassicModuleCards(user) {
-  return neumorphicVisibleModules(user)
-    .slice(0, 4)
-    .map((moduleItem) => `
-      <span class="neo-classic-module">
-        <span class="neo-classic-module__icon">${renderModuleIcon(moduleItem)}</span>
-        <span>${escapeHtml(moduleItem.title)}</span>
-      </span>
-    `)
-    .join("");
-}
-
-function neumorphicPreviewPage(user) {
-  const modulesForUser = visibleModules(user);
-  const completedCount = modulesForUser.filter((moduleItem) => moduleItem.status === "HOTOVO").length;
-  const pilotRows = [
-    { label: "Sledování vozidel", value: "Mapa a alerty", tone: "active" },
-    { label: "Datové schránky Plus", value: "DSP", tone: "active" },
-    { label: "Šarlota", value: "Hlasový pilot", tone: "draft" }
-  ];
-  const rowMarkup = pilotRows
-    .map((row) => `
-      <div class="neo-soft-row">
-        <span>
-          <strong>${escapeHtml(row.label)}</strong>
-          <small>${escapeHtml(row.value)}</small>
-        </span>
-        <span class="neo-soft-status neo-soft-status--${escapeHtml(row.tone)}"></span>
-      </div>
-    `)
-    .join("");
-
-  return `
-    <main
-      class="neumorphic-preview-page"
-      data-neumorphic-preview
-      style="--neo-accent: ${NEUMORPHIC_ACCENTS[0].value}; --neo-accent-contrast: ${NEUMORPHIC_ACCENTS[0].contrast};"
-    >
-      <header class="neo-topbar" aria-labelledby="neo-preview-title">
-        <div>
-          <a class="neo-logo" href="${routeHref("/")}" data-link aria-label="${APP_NAME}">kaiser.</a>
-          <p class="neo-eyebrow">Design lab</p>
-          <h1 id="neo-preview-title">Neumorphic varianta</h1>
-        </div>
-        <a class="neo-home-link" href="${routeHref("/")}" data-link>Stávající dashboard</a>
-      </header>
-
-      <section class="neo-hero" aria-label="Nastaveni akcentu">
-        <div class="neo-hero__copy">
-          <p class="neo-section-kicker">Ruční akcent</p>
-          <h2>Kaiser zelená jako hlavní barva, zbytek palety se skládá automaticky.</h2>
-        </div>
-        <div class="neo-accent-picker" aria-label="Výběr hlavní barvy">
-          ${neumorphicAccentPicker()}
-        </div>
-      </section>
-
-      <section class="neo-comparison" aria-label="Porovnání vzhledu">
-        <article class="neo-compare-card neo-compare-card--classic">
-          <div class="neo-card-heading">
-            <p class="neo-section-kicker">Současný styl</p>
-            <h2>Aktuální aplikace</h2>
-          </div>
-          <div class="neo-classic-dashboard">
-            <div class="neo-classic-hero">
-              <span>Smart odpady</span>
-              <strong>${modulesForUser.length || orderedModules.length}</strong>
-              <small>modulu v menu</small>
-            </div>
-            <div class="neo-classic-stats">
-              <span><strong>${completedCount}</strong><small>hotovo</small></span>
-              <span><strong>API</strong><small>zdroj dat</small></span>
-              <span><strong>Cloud</strong><small>provoz</small></span>
-            </div>
-            <div class="neo-classic-modules">
-              ${neumorphicClassicModuleCards(user)}
-            </div>
-          </div>
-        </article>
-
-        <article class="neo-compare-card neo-compare-card--soft">
-          <div class="neo-card-heading">
-            <p class="neo-section-kicker">Návrh stylu</p>
-            <h2>Neumorphic dashboard</h2>
-          </div>
-          <div class="neo-soft-dashboard">
-            <div class="neo-soft-status-card">
-              <span class="neo-soft-ring" aria-hidden="true"><span>${Math.max(completedCount, 1)}</span></span>
-              <div>
-                <strong>Provozní přehled</strong>
-                <small>Měkké panely, výrazný akcent, klidné pozadí.</small>
-              </div>
-            </div>
-
-            <div class="neo-soft-modules">
-              ${neumorphicModuleCards(user)}
-            </div>
-
-            <div class="neo-soft-control-row">
-              <button class="neo-pill-button neo-pill-button--active" type="button">Online</button>
-              <button class="neo-icon-button" type="button" aria-label="Upozornění">!</button>
-              <div class="neo-soft-toggle" aria-label="Aktivní stav"><span></span></div>
-            </div>
-
-            <div class="neo-soft-panel">
-              <div class="neo-soft-progress">
-                <span style="--neo-progress: 72%"></span>
-              </div>
-              ${rowMarkup}
-            </div>
-          </div>
-        </article>
-      </section>
-    </main>
-  `;
-}
-
 function visibleDashboardRoutes(user) {
   return filterModulesByUser(user, moduleDashboards);
 }
@@ -2097,10 +1934,15 @@ function moduleStatusLabel(moduleItem) {
   return {
     HOTOVO: "Hotovo",
     Testování: "Testování",
+    Pilot: "Pilot",
     "připraveno": "Rozpracováno",
     skeleton: "Rozpracováno",
     "mock data": "Rozpracováno",
     ROZPRACOVÁN: "Rozpracováno",
+    Rozpracováno: "Rozpracováno",
+    "V přípravě": "V přípravě",
+    "Bezpečný režim": "Bezpečný režim",
+    "Čeká na ověření": "Čeká na ověření",
     "Read-only pilot": "Read-only",
     NEOVĚŘENO: "Neověřeno",
     správa: "Správa"
@@ -2111,13 +1953,18 @@ function moduleStatusTone(moduleItem) {
   return {
     HOTOVO: "done",
     Testování: "testing",
+    Pilot: "testing",
     "Read-only pilot": "readonly",
     NEOVĚŘENO: "unverified",
+    "Čeká na ověření": "unverified",
     správa: "admin",
     skeleton: "progress",
+    "V přípravě": "progress",
     "připraveno": "progress",
+    "Bezpečný režim": "dry-run",
     "mock data": "progress",
-    ROZPRACOVÁN: "progress"
+    ROZPRACOVÁN: "progress",
+    Rozpracováno: "progress"
   }[moduleItem?.status] || "progress";
 }
 
@@ -21661,12 +21508,11 @@ function dataBoxPlusConfirmationsPanel() {
 
 function dataBoxPlusAutopilotPanel() {
   const groups = [
-    ["Co už umí sám", [
-      "Archivovat informační zprávy z Registru smluv.",
-      "Rozpoznat faktury od známých dodavatelů.",
-      "Rozpoznat upomínky od Culligan.",
-      "Rozpoznat výzvy k zaplacení.",
-      "Předpřipravit e-mail pro faktury.",
+    ["Co umí připravit", [
+      "Zařadit informační zprávy k ručnímu potvrzení.",
+      "Rozpoznat známé faktury a upomínky.",
+      "Rozpoznat výzvy k zaplacení a termíny.",
+      "Připravit předání účetnímu oddělení.",
       "Označit technická oznámení jako nízkou prioritu."
     ], "success"],
     ["Co se učí", [
@@ -21676,7 +21522,7 @@ function dataBoxPlusAutopilotPanel() {
       "Které zprávy patří právníkovi.",
       "Které zprávy se bezpečně archivují."
     ], "warning"],
-    ["Co nesmí bez potvrzení", [
+    ["Co vždy čeká na člověka", [
       "Poslat e-mail.",
       "Poslat datovou zprávu.",
       "Archivovat právně citlivou zprávu.",
@@ -21689,7 +21535,7 @@ function dataBoxPlusAutopilotPanel() {
     <section class="ds-plus-workspace" aria-labelledby="ds-plus-autopilot-title">
       <div class="ds-plus-section-head">
         <div>
-          <span>Autonomie pod kontrolou</span>
+          <span>Návrhy pod kontrolou</span>
           <h2 id="ds-plus-autopilot-title">Autopilot</h2>
         </div>
         <strong class="ds-plus-state-pill">Učí se</strong>
@@ -22115,12 +21961,12 @@ function dataBoxPlusManualPanel() {
       </div>
       <div class="ds-plus-manual-grid">
         <section class="ds-plus-manual-block">
-          <h3>Co modul dělá sám</h3>
+          <h3>Co modul dělá po ověřeném napojení</h3>
           <ul>
-            <li>Pravidelně prochází napojené firemní datové schránky.</li>
+            <li>Načítá napojené firemní datové schránky podle serverového runneru.</li>
             <li>Ukládá obálky zpráv, stav doručení a historii načtení.</li>
-            <li>Stahuje dostupné přílohy a u čitelných souborů připravuje text.</li>
-            <li>Třídí zprávy podle rizika, typu a doporučeného dalšího kroku.</li>
+            <li>Připravuje dostupné přílohy a u čitelných souborů text pro kontrolu.</li>
+            <li>Navrhuje třídění podle rizika, typu a dalšího kroku.</li>
           </ul>
         </section>
         <section class="ds-plus-manual-block">
@@ -22133,9 +21979,9 @@ function dataBoxPlusManualPanel() {
           </ul>
         </section>
         <section class="ds-plus-manual-block">
-          <h3>Automatické načítání</h3>
-          <p>Zprávy se načítají každých 30 minut. Odpočítávač v horní části ukazuje, kdy přijde další pokus o načtení.</p>
-          <p>Když aplikaci nikdo neotevře, serverové načítání běží dál. Běžný uživatel nemá ručně klikat na načtení.</p>
+          <h3>Automatické načítání po ověření</h3>
+          <p>Po ověřené konfiguraci běží serverové načítání podle cloudového runneru. Horní stav ukazuje poslední ověřený běh a další očekávaný pokus.</p>
+          <p>Když běh není doložený, Log událostí ukazuje stav čeká na ověření místo dojmu ostrého provozu.</p>
         </section>
         <section class="ds-plus-manual-block">
           <h3>Práce se zprávou</h3>
@@ -28540,10 +28386,10 @@ function receivablesDashboardKpis() {
 function receivablesSourceStatus() {
   const sourceStatus = receivablesState.dashboard?.sourceStatus || {};
   const items = [
-    ["Vistos InvoiceIssued / Company", sourceStatus.vistos || "adapter_skeleton"],
-    ["KB platby", sourceStatus.bank || "pdf_text_preview_to_d1"],
-    ["Insolvenční kontrola", sourceStatus.insolvency || "not_configured"],
-    ["Outbound kanály", sourceStatus.outbound || "disabled"]
+    ["Vistos InvoiceIssued / Company", sourceStatus.vistos || "čeká na ověření"],
+    ["KB platby", sourceStatus.bank || "PDF preview"],
+    ["Insolvenční kontrola", sourceStatus.insolvency || "nenastaveno"],
+    ["Outbound kanály", sourceStatus.outbound || "vypnuto"]
   ];
   return `
     <section class="receivables-panel" aria-labelledby="receivables-source-title">
@@ -37291,12 +37137,6 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
-  if (path === DESIGN_NEUMORPHIC_ROUTE) {
-    app.innerHTML = neumorphicPreviewPage(user);
-    document.title = `Neumorphic varianta | ${APP_NAME}`;
-    return;
-  }
-
   if (path === "/") {
     ensureCollectionRoutesSvozKaiserWatchdog(user);
     app.innerHTML = homePage(user);
@@ -40911,23 +40751,6 @@ document.addEventListener("click", async (event) => {
   if (sarlotaTestCall) {
     event.preventDefault();
     startSarlotaAssistantTestCall();
-    return;
-  }
-
-  const neumorphicAccent = event.target.closest("[data-neumorphic-accent]");
-  if (neumorphicAccent) {
-    event.preventDefault();
-    const preview = neumorphicAccent.closest("[data-neumorphic-preview]");
-
-    if (preview) {
-      preview.style.setProperty("--neo-accent", neumorphicAccent.dataset.neumorphicAccent || "#75bd25");
-      preview.style.setProperty("--neo-accent-contrast", neumorphicAccent.dataset.neumorphicAccentContrast || "#ffffff");
-      preview.querySelectorAll("[data-neumorphic-accent]").forEach((button) => {
-        button.classList.toggle("neo-accent-button--active", button === neumorphicAccent);
-        button.setAttribute("aria-pressed", button === neumorphicAccent ? "true" : "false");
-      });
-    }
-
     return;
   }
 

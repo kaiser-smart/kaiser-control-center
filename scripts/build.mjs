@@ -21,7 +21,6 @@ function runtimeConfigModuleSource(env = process.env) {
 function versionedTemplate() {
   return template
     .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
-    .replace('href="src/neumorphic-preview.css"', `href="src/neumorphic-preview.css?v=${assetVersion}"`)
     .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
 }
 
@@ -69,7 +68,6 @@ const routes = new Set([
   "/pohledavky/import",
   "/receivables",
   "/receivables/settings",
-  "/design/neumorphic",
   ...modules.map((moduleItem) => moduleItem.route),
   ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)
 ]);
@@ -99,8 +97,7 @@ await writeFile(path.join(dist, "_redirects"), [
   "/datova-schranka/* /datova-schranka/index.html 200",
   "/pohledavky/* /pohledavky/index.html 200",
   "/receivables /pohledavky/index.html 200",
-  "/receivables/* /pohledavky/index.html 200",
-  "/design/neumorphic* /index.html 200"
+  "/receivables/* /pohledavky/index.html 200"
 ].join("\n") + "\n");
 await writeFile(path.join(dist, "_headers"), [
   "/*",

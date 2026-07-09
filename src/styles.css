@@ -9923,6 +9923,31 @@ h1 {
   justify-content: flex-end;
 }
 
+.sarlota-status__service-actions {
+  padding: 10px 12px;
+  border: 1px solid rgba(35, 40, 33, 0.1);
+  border-radius: 8px;
+  background: rgba(248, 250, 246, 0.78);
+}
+
+.sarlota-status__service-actions summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.sarlota-status__actions--service {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.sarlota-status__service-actions p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .sarlota-status__assistant-select {
   display: inline-flex;
   min-height: 44px;

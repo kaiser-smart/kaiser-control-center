@@ -489,6 +489,11 @@ export function SarlotaStatusPanel({
           <button class="secondary-link" type="button" data-sarlota-status-refresh ${loading || syncing ? "disabled" : ""}>
             ${loading ? "Načítám..." : "Obnovit"}
           </button>
+        </div>
+      </div>
+      <details class="sarlota-status__service-actions">
+        <summary>Servisní akce Šarloty</summary>
+        <div class="sarlota-status__actions sarlota-status__actions--service">
           <button class="primary-action sarlota-status__sync" type="button" data-sarlota-tools-sync ${loading || syncing ? "disabled" : ""}>
             ${syncing ? "Synchronizuji..." : "Synchronizovat tools"}
           </button>
@@ -496,10 +501,10 @@ export function SarlotaStatusPanel({
             Opravit Smart 2 základ
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-delete ${smart2DeleteDisabled ? "disabled" : ""}>
-            Smazat Smart 2
+            Smazat test Smart 2
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-diagnostic ${diagnosticSyncDisabled ? "disabled" : ""}>
-            Diagnostika: odpojit tools
+            Servis: odpojit tools
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-vehicle-context-diagnostic ${loading || syncing ? "disabled" : ""}>
             ${omitDriverReportVehicleContext ? "Vypnout test bez vozidel" : "Test: bez vozidel v hlasu"}
@@ -508,13 +513,14 @@ export function SarlotaStatusPanel({
             Doplnit prompt
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-voice-write-test ${voiceWriteTestDisabled ? "disabled" : ""}>
-            Kontrolní voice zápis
+            Test voice zápisu
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-test-call ${loading || syncing ? "disabled" : ""}>
             Testovací hovor
           </button>
         </div>
-      </div>
+        <p>Servisní akce mění nebo testují napojení. Rizikové kroky mají vlastní potvrzení.</p>
+      </details>
       ${error ? `<p class="module-feedback__error" role="alert">${escapeHtml(error)}</p>` : ""}
       ${syncError ? `<p class="module-feedback__error" role="alert">${escapeHtml(syncError)}</p>` : ""}
       ${syncMessage ? `<p class="module-feedback__success" role="status">${escapeHtml(syncMessage)}</p>` : ""}

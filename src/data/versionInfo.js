@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.478"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.479"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "KSO úklid: produkčnější UI",
+    text: "Z hlavní aplikace zmizel oddělený designový experiment, stará DSP demo data a technické statusy modulů. Servisní akce Šarloty jsou přesunuté do rozbalovací servisní části a DSP texty pravdivě rozlišují návrh, ověření a potvrzení člověkem."
+  },
   {
     title: "Produkce: tvrdá ochrana deploye",
     text: "Produkční Pages deploy má nový guard. Nasazení se zastaví, pokud neběží z aktuálního origin/main, pokud chybí chráněné commity Tras svozu, pokud je repo před buildem špinavé nebo pokud buildMeta a asset verze nesedí."
@@ -1151,18 +1155,6 @@ export const versionNews = [
   {
     title: "Trasy svozu: Fáze 1A read-only pilot",
     text: "Modul Trasy svozu má bezpečný read-only pilot s Vistos discovery/import preview stavem, pilotními D1 tabulkami, chráněným API a jasným označením bez ostrých tras, SMS/e-mailů a automatizací."
-  },
-  {
-    title: "Design: čitelnější neumorphic preview",
-    text: "Oddělený neumorphic návrh má kovově šedé plochy, jemný obrys panelů a výraznější ikony; firemní barva zůstává hlavně jako akční akcent."
-  },
-  {
-    title: "Design: přímý neumorphic odkaz",
-    text: "Produkce má Pages fallback pro /design/neumorphic, aby samostatná URL otevírala přímo oddělený designový náhled."
-  },
-  {
-    title: "Design: neumorphic preview",
-    text: "Samostatná URL /design/neumorphic ukazuje oddělený neumorphic návrh dashboardu s ručně volenou hlavní barvou a automaticky doladěnými odstíny."
   },
   {
     title: "Sledovani vozidel: WIM vahy v mape",

@@ -33,7 +33,7 @@ export const modules = [
     route: "/vozovy-park",
     dashboardRoute: "/vozovy-park/dashboard",
     icon: FleetIcon,
-    status: "ROZPRACOVÁN",
+    status: "Rozpracováno",
     active: true,
     disabled: false,
     order: 2
@@ -44,7 +44,7 @@ export const modules = [
     description: "Online poloha vozidel, historie jízd, trasy, zastávky a provozní stav v terénu.",
     route: "/sledovani-vozidel",
     icon: FleetIcon,
-    status: "ROZPRACOVÁN",
+    status: "Rozpracováno",
     active: true,
     disabled: false,
     order: 2.5
@@ -55,7 +55,7 @@ export const modules = [
     description: "Autonomní operační centrum pro příjem, třídění, předání, archivaci a vyřízení firemních datových zpráv.",
     route: "/datove-schranky-plus",
     icon: ReportsIcon,
-    status: "UI návrh",
+    status: "Čeká na ověření",
     active: true,
     disabled: false,
     order: 2.8
@@ -67,7 +67,7 @@ export const modules = [
     route: "/hlaseni-ridicu",
     dashboardRoute: "/hlaseni-ridicu/dashboard",
     icon: DriverReportsIcon,
-    status: "Testování",
+    status: "Pilot",
     active: true,
     disabled: false,
     order: 3
@@ -79,7 +79,7 @@ export const modules = [
     route: "/servis-udrzba",
     dashboardRoute: "/servis-udrzba/dashboard",
     icon: ServiceMaintenanceIcon,
-    status: "skeleton",
+    status: "V přípravě",
     active: true,
     disabled: false,
     order: 4
@@ -114,7 +114,7 @@ export const modules = [
     route: "/trasy-vzorku",
     dashboardRoute: "/trasy-vzorku/dashboard",
     icon: SamplingRoutesIcon,
-    status: "skeleton",
+    status: "V přípravě",
     active: true,
     disabled: false,
     order: 7
@@ -126,7 +126,7 @@ export const modules = [
     route: "/vistos",
     dashboardRoute: "/vistos/dashboard",
     icon: VistosIcon,
-    status: "skeleton",
+    status: "V přípravě",
     active: true,
     disabled: false,
     order: 8
@@ -138,7 +138,7 @@ export const modules = [
     route: "/naklady",
     dashboardRoute: "/naklady/dashboard",
     icon: CostsIcon,
-    status: "skeleton",
+    status: "V přípravě",
     active: true,
     disabled: false,
     order: 9
@@ -146,11 +146,11 @@ export const modules = [
   {
     id: "receivables",
     title: "Pohledávky",
-    description: "Pohledávkový kompas AI pro dry-run správu otevřených faktur, platební morálky a bezpečných doporučení.",
+    description: "Pohledávkový kompas AI pro bezpečnou správu otevřených faktur, platební morálky a doporučení ke kontrole.",
     route: "/pohledavky",
     dashboardRoute: "/pohledavky/dashboard",
     icon: CostsIcon,
-    status: "dry-run",
+    status: "Bezpečný režim",
     active: true,
     disabled: false,
     order: 9.3
@@ -162,7 +162,7 @@ export const modules = [
     route: "/reporty",
     dashboardRoute: "/reporty/dashboard",
     icon: ReportsIcon,
-    status: "skeleton",
+    status: "V přípravě",
     active: true,
     disabled: false,
     order: 10
@@ -174,7 +174,7 @@ export const modules = [
     route: "/dovolena-nemoc",
     dashboardRoute: "/dovolena-nemoc/dashboard",
     icon: AbsenceIcon,
-    status: "mock data",
+    status: "Pilot",
     active: true,
     disabled: false,
     order: 14
@@ -186,7 +186,7 @@ export const modules = [
     route: "/uzivatele",
     dashboardRoute: "/uzivatele/dashboard",
     icon: UsersRolesIcon,
-    status: "skeleton",
+    status: "V přípravě",
     active: true,
     disabled: false,
     order: 12
@@ -198,7 +198,7 @@ export const modules = [
     route: "/nastaveni",
     dashboardRoute: "/nastaveni/dashboard",
     icon: SettingsIcon,
-    status: "skeleton",
+    status: "V přípravě",
     active: true,
     disabled: false,
     order: 13
@@ -209,7 +209,7 @@ export const modules = [
     description: "Produkční monitoring, DS checklist, stav automatizací a ověřenost běhů.",
     route: "/kontrola-systemu",
     icon: SettingsIcon,
-    status: "NEOVĚŘENO",
+    status: "Čeká na ověření",
     active: true,
     disabled: false,
     order: 13.5
