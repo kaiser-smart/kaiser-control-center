@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.488"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.489"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: pre-rating bez nulových zůstatků",
+    text: "Pre-rating A0/B0/C0/N používá v přehledu skutečný otevřený balíček faktur a nezobrazuje falešné nulové metriky zpoždění."
+  },
   {
     title: "Pohledávky: dávkový přepočet ratingů",
     text: "Admin může potvrzeným jednorázovým během přepočítat rating payment-rating-v1 pro celý ledger po malých dávkách. Běh neodesílá komunikaci a nespouští automatizaci."
