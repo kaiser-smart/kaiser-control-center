@@ -956,6 +956,10 @@ const receivablesState = {
   kbOnboardingLoaded: false,
   kbOnboardingLoading: false,
   kbOnboardingError: "",
+  kbSandboxProbe: null,
+  kbSandboxProbeLoaded: false,
+  kbSandboxProbeLoading: false,
+  kbSandboxProbeError: "",
   invoiceSnapshot: null,
   invoiceSnapshotRows: [],
   invoiceSnapshotPagination: null,
@@ -29730,8 +29734,71 @@ function receivablesKbOnboardingChecklist(status = {}) {
   `;
 }
 
+function receivablesKbSandboxProbeTone(entry = {}) {
+  if (entry.ok) return "ready";
+  if (entry.configured) return "warning";
+  return "waiting";
+}
+
+function receivablesKbSandboxProbeLabel(value) {
+  if (value === "ready_to_call") return "připraveno k API fázi";
+  if (value === "blocked_oauth_onboarding") return "blokuje OAuth onboarding";
+  if (value === "review") return "ke kontrole";
+  if (value === "waiting") return "čeká";
+  return value || "neověřeno";
+}
+
+function receivablesKbSandboxProbePanel(probe = {}) {
+  const keyChecks = Array.isArray(probe.keyChecks) ? probe.keyChecks : [];
+  const missingOauth = Array.isArray(probe.missingOauthOnboarding) ? probe.missingOauthOnboarding : [];
+  const cards = [
+    ["Stav probe", receivablesKbSandboxProbeLabel(probe.status)],
+    ["Ověřené klíče", `${probe.validKeyCount || 0} / ${probe.expectedKeyCount || keyChecks.length || 0}`],
+    ["Volání KB API", probe.callsKbApi ? "provedeno" : "nevoláno"],
+    ["Zápis transakcí", probe.persistsBankTransactions ? "zapnuto" : "vypnuto"]
+  ];
+
+  if (!probe.status && receivablesState.kbSandboxProbeLoading) {
+    return `<p class="receivables-empty">Sandbox probe se načítá.</p>`;
+  }
+
+  if (!probe.status) {
+    return `<p class="receivables-empty">Sandbox probe zatím není dostupná.</p>`;
+  }
+
+  return `
+    <div class="receivables-import-summary" aria-label="Souhrn KB sandbox probe">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+    <div class="receivables-kb-checklist">
+      ${keyChecks.map((entry) => `
+        <article>
+          <div>
+            <strong>${escapeHtml(entry.label || "-")}</strong>
+            <p>${escapeHtml(entry.message || "")}</p>
+            <small>${escapeHtml([
+              `keytype: ${entry.keytype || "nezjištěno"}`,
+              entry.subscribedApis?.length ? `API: ${entry.subscribedApis.join(", ")}` : "",
+              entry.contexts?.length ? `context: ${entry.contexts.join(", ")}` : ""
+            ].filter(Boolean).join(" · "))}</small>
+          </div>
+          ${receivablesPill(entry.ok ? "sandbox ok" : entry.configured ? "kontrola" : "chybí", receivablesKbSandboxProbeTone(entry))}
+        </article>
+      `).join("")}
+    </div>
+    ${missingOauth.length ? `<p class="receivables-empty receivables-kb-note">Blokace API volání: ${escapeHtml(missingOauth.join(", "))}</p>` : ""}
+    <p class="receivables-empty receivables-kb-note">${escapeHtml(probe.recommendedNextStep || "")}</p>
+  `;
+}
+
 function receivablesKbApiOnboardingPanel() {
   const status = receivablesState.kbOnboarding || {};
+  const probe = receivablesState.kbSandboxProbe || {};
   const safetyRows = [
     ["Volání KB API", status.safety?.callsKbApi ? "zapnuto" : "vypnuto"],
     ["Hodnoty secretů v UI", status.safety?.exposesSecretValues ? "zobrazuje" : "nezobrazuje"],
@@ -29772,6 +29839,13 @@ function receivablesKbApiOnboardingPanel() {
         <section>
           <h3>Checklist napojení</h3>
           ${receivablesKbOnboardingChecklist(status)}
+        </section>
+      </div>
+      <div class="receivables-snapshot-invoices-block">
+        <section>
+          <h3>Sandbox probe</h3>
+          ${receivablesState.kbSandboxProbeError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.kbSandboxProbeError)}</p>` : ""}
+          ${receivablesKbSandboxProbePanel(probe)}
         </section>
       </div>
     </section>
@@ -32289,6 +32363,27 @@ async function loadReceivablesKbOnboarding(options = {}) {
   }
 }
 
+async function loadReceivablesKbSandboxProbe(options = {}) {
+  if (receivablesState.kbSandboxProbeLoading) {
+    return;
+  }
+
+  receivablesState.kbSandboxProbeLoading = true;
+  receivablesState.kbSandboxProbeError = "";
+  try {
+    receivablesState.kbSandboxProbe = await apiJson("/api/receivables/kb/sandbox-probe");
+    receivablesState.kbSandboxProbeLoaded = true;
+  } catch (error) {
+    receivablesState.kbSandboxProbeError = error.payload?.error || error.message || "KB sandbox probe se teď nepodařilo načíst.";
+    receivablesState.kbSandboxProbeLoaded = true;
+  } finally {
+    receivablesState.kbSandboxProbeLoading = false;
+    if (options.renderAfter !== false) {
+      render();
+    }
+  }
+}
+
 async function submitReceivablesImportPreview(form) {
   const kind = form?.dataset?.receivablesImportForm === "bank" ? "bank" : "invoices";
   if (receivablesState.importSaving) {
@@ -32376,6 +32471,10 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "import" && !receivablesState.kbOnboardingLoaded && !receivablesState.kbOnboardingLoading) {
     void loadReceivablesKbOnboarding();
+  }
+
+  if (context.view === "import" && !receivablesState.kbSandboxProbeLoaded && !receivablesState.kbSandboxProbeLoading) {
+    void loadReceivablesKbSandboxProbe();
   }
 
   if (
@@ -37979,6 +38078,10 @@ async function logout() {
   receivablesState.kbOnboardingLoaded = false;
   receivablesState.kbOnboardingLoading = false;
   receivablesState.kbOnboardingError = "";
+  receivablesState.kbSandboxProbe = null;
+  receivablesState.kbSandboxProbeLoaded = false;
+  receivablesState.kbSandboxProbeLoading = false;
+  receivablesState.kbSandboxProbeError = "";
   receivablesState.vistosPreview = null;
   receivablesState.vistosPreviewLoading = false;
   receivablesState.vistosPreviewError = "";

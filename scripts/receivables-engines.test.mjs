@@ -21,7 +21,10 @@ import {
   customerLinkProbeAttemptsForCandidate,
   customerLookupAttemptsForCandidate
 } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
-import { receivablesKbApiOnboardingStatus } from "../functions/_lib/receivables-kb-api-onboarding.js";
+import {
+  receivablesKbApiOnboardingStatus,
+  receivablesKbApiSandboxProbe
+} from "../functions/_lib/receivables-kb-api-onboarding.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import {
   calculateInvoicePaymentState,
@@ -46,6 +49,23 @@ const invoice = {
   status: "unpaid"
 };
 
+function testKbJwt(serviceName, context = "/sandbox/test") {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return [
+    encode({ alg: "RS256", typ: "JWT" }),
+    encode({
+      sub: "test-subject",
+      application: { uuid: "test-application" },
+      iss: "https://apim.example.test/oauth2/token",
+      keytype: "SANDBOX",
+      subscribedAPIs: [{ name: serviceName, context, version: "v1", subscriptionTier: "Copper" }],
+      token_type: "apiKey",
+      iat: 1783645707
+    }),
+    "signature"
+  ].join(".");
+}
+
 assert.equal(receivableToleranceAmount(1000), 1);
 assert.equal(receivableToleranceAmount(250000), 250);
 
@@ -62,6 +82,23 @@ assert.equal(receivableToleranceAmount(250000), 250);
   assert.equal(JSON.stringify(status).includes("secret-client-registration"), false);
   assert.equal(status.items.some((entry) => entry.id === "software_statement" && !entry.configured), true);
   assert.equal(status.safety.callsKbApi, false);
+}
+
+{
+  const probe = receivablesKbApiSandboxProbe({
+    KB_ADAA_ENVIRONMENT: "sandbox",
+    KB_ADAA_CLIENT_REGISTRATION_API_KEY: testKbJwt("ClientRegistrationSandbox", "/sandbox/client-registration/v3"),
+    KB_ADAA_OAUTH_API_KEY: testKbJwt("OAuth2", "/sandbox/oauth2/v3"),
+    KB_ADAA_ACCOUNT_API_KEY: testKbJwt("AccountDirectAccessAPI", "/sandbox/account-direct-access/v2")
+  });
+  assert.equal(probe.status, "blocked_oauth_onboarding");
+  assert.equal(probe.validKeyCount, 3);
+  assert.equal(probe.callsKbApi, false);
+  assert.equal(probe.apiCallAttempted, false);
+  assert.equal(probe.persistsBankTransactions, false);
+  assert.equal(probe.missingOauthOnboarding.includes("KB_ADAA_REFRESH_TOKEN"), true);
+  assert.equal(JSON.stringify(probe).includes("test-subject"), false);
+  assert.equal(probe.keyChecks.every((entry) => entry.keytype === "SANDBOX"), true);
 }
 
 {
