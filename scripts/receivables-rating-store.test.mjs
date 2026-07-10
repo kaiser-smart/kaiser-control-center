@@ -6,7 +6,11 @@ import {
   previewReceivablePaymentRating,
   recomputeReceivablePaymentRating
 } from "../functions/_lib/receivables-rating-store.js";
-import { getReceivableCustomerDetail } from "../functions/_lib/receivables-store.js";
+import {
+  getReceivableCustomerDetail,
+  getReceivablesDashboard,
+  listReceivableCustomers
+} from "../functions/_lib/receivables-store.js";
 import { decodeReceivableCustomerId } from "../functions/api/receivables/customers/[customerId].js";
 import {
   syncReceivablesBankLedger,
@@ -208,6 +212,11 @@ sqlite.prepare(`
   assert.equal(storedInvoice.open_amount, 1210);
   assert.equal(storedInvoice.status, "unpaid");
   assert.deepEqual(JSON.parse(storedInvoice.data_quality_flags_json), ["INVOICE_AMOUNT_MISMATCH", "MISSING_REMAINING_AMOUNT"]);
+  const customerList = await listReceivableCustomers(env);
+  assert.equal(customerList.customers[0].package.totalOpenAmount, 1210);
+  assert.equal(customerList.customers[0].package.totalOverdueAmount, 1210);
+  const dashboard = await getReceivablesDashboard(env, { today: "2026-07-10" });
+  assert.equal(dashboard.kpis.automaticCustomers, 0);
 }
 
 sqlite.prepare(`

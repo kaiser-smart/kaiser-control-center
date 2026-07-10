@@ -480,7 +480,7 @@ export async function getReceivablesDashboard(env, options = {}) {
       WHERE dry_run = 1 AND (requires_human_approval = 1 OR marketa_alert = 1)
     `);
     const insolvencyFindings = await countScalar(db, "SELECT COUNT(*) AS count FROM receivable_insolvency_checks WHERE found = 1");
-    const automaticCustomers = await countScalar(db, "SELECT COUNT(*) AS count FROM receivable_customers WHERE automation_status IN ('dry_run', 'autonomous')");
+    const automaticCustomers = await countScalar(db, "SELECT COUNT(*) AS count FROM receivable_customers WHERE automation_status IN ('autonomous', 'READY_FOR_AUTOMATION', 'ready_for_automation')");
     const stoppedCustomers = await countScalar(db, "SELECT COUNT(*) AS count FROM receivable_customers WHERE automation_status IN ('STOP', 'stop', 'insolvency_hold')");
     const settingsResult = await getReceivablesSettings(env);
     const customers = await listReceivableCustomers(env, { limit: options.limit || 100 });
@@ -521,11 +521,11 @@ export async function listReceivableCustomers(env, options = {}) {
       SELECT
         c.*,
         p.id AS package_id,
-        p.total_open_amount,
-        p.total_overdue_amount,
-        p.invoice_count,
-        p.oldest_due_date,
-        p.max_days_overdue,
+        COALESCE(p.total_open_amount, invoice_aggregate.total_open_amount, 0) AS total_open_amount,
+        COALESCE(p.total_overdue_amount, invoice_aggregate.total_overdue_amount, 0) AS total_overdue_amount,
+        COALESCE(p.invoice_count, invoice_aggregate.invoice_count, 0) AS invoice_count,
+        COALESCE(p.oldest_due_date, invoice_aggregate.oldest_due_date) AS oldest_due_date,
+        COALESCE(p.max_days_overdue, invoice_aggregate.max_days_overdue, 0) AS max_days_overdue,
         p.days_to_legal_handoff,
         p.status AS package_status,
         p.next_action_at,
@@ -582,6 +582,22 @@ export async function listReceivableCustomers(env, options = {}) {
         d.created_at AS decision_created_at
       FROM receivable_customers c
       LEFT JOIN receivable_packages p ON p.customer_id = c.id
+      LEFT JOIN (
+        SELECT
+          customer_id,
+          ROUND(SUM(open_amount), 2) AS total_open_amount,
+          ROUND(SUM(CASE WHEN due_date < date('now') THEN open_amount ELSE 0 END), 2) AS total_overdue_amount,
+          COUNT(*) AS invoice_count,
+          MIN(CASE WHEN due_date < date('now') THEN due_date END) AS oldest_due_date,
+          MAX(CASE
+            WHEN due_date < date('now') THEN CAST(julianday(date('now')) - julianday(due_date) AS INTEGER)
+            ELSE 0
+          END) AS max_days_overdue
+        FROM receivable_invoices
+        WHERE open_amount > 0
+          AND status NOT IN ('paid', 'overpaid', 'legal_handoff', 'insolvency_hold')
+        GROUP BY customer_id
+      ) invoice_aggregate ON invoice_aggregate.customer_id = c.id
       LEFT JOIN receivable_customer_payment_ratings r ON r.id = (
         SELECT id FROM receivable_customer_payment_ratings
         WHERE customer_id = c.id
@@ -594,7 +610,9 @@ export async function listReceivableCustomers(env, options = {}) {
         ORDER BY created_at DESC
         LIMIT 1
       )
-      ORDER BY COALESCE(p.max_days_overdue, 0) DESC, COALESCE(p.total_open_amount, 0) DESC, c.company_name ASC
+      ORDER BY COALESCE(p.max_days_overdue, invoice_aggregate.max_days_overdue, 0) DESC,
+        COALESCE(p.total_open_amount, invoice_aggregate.total_open_amount, 0) DESC,
+        c.company_name ASC
       LIMIT ?
     `).bind(limit).all();
 
