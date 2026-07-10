@@ -37,4 +37,21 @@ assert.equal(directEmail.messageStatus, "Odesláno e-mailem");
 assert.equal(directEmail.recipientEmail, "radim@example.cz");
 assert.equal(directEmail.emailSent, true);
 
+const unclearVehicleMessage = plan("???", {
+  subject: "Informace o konci platnosti technické prohlídky u vozidla 3BE2831"
+});
+assert.equal(unclearVehicleMessage.messageStatus, "Potřebuje upřesnit");
+assert.equal(unclearVehicleMessage.assistantText, "Nevím přesně, co mám udělat. Upřesni pokyn.");
+
+const archiveVehicleMessage = plan("archivuj", {
+  subject: "Informace o konci platnosti technické prohlídky u vozidla 3BE2831"
+});
+assert.equal(archiveVehicleMessage.messageStatus, "Archivováno");
+
+const vehicleRecordFromMessage = plan("zapiš do vozidel", {
+  subject: "Informace o konci platnosti technické prohlídky u vozidla 3BE2831"
+});
+assert.equal(vehicleRecordFromMessage.messageStatus, "Předáno garážmistrovi");
+assert.match(vehicleRecordFromMessage.resultLabel, /3BE2831/);
+
 console.log("data-box-plus instruction flow ok");

@@ -2234,8 +2234,7 @@ function directInstructionPlanFromText(instruction, message = {}, attachments = 
   if (!userInstruction) {
     throw new DataBoxPlusStoreError("Napiš pokyn pro Autopilota.", 400, "data_box_plus_instruction_missing");
   }
-  const attachmentText = attachments.map((attachment) => cleanString(attachment.extracted_text)).join(" ");
-  const normalized = searchText([userInstruction, message.subject, message.sender_name, attachmentText]);
+  const normalized = searchText([userInstruction]);
   const sourceMessage = {
     messageId: cleanString(message.id),
     mailboxId: cleanString(message.mailbox_id),
@@ -2396,7 +2395,9 @@ function directInstructionPlanFromText(instruction, message = {}, attachments = 
   }
 
   if (normalized.includes("vozid") || normalized.includes("stk") || normalized.includes("technick") || normalized.includes("lhut") || normalized.includes("kalendar")) {
-    const plateMatch = userInstruction.match(/\b\d[A-Z0-9]{2}\s?\d{4}\b/i);
+    const attachmentText = attachments.map((attachment) => cleanString(attachment.extracted_text || attachment.extractedText)).join(" ");
+    const vehicleContext = [userInstruction, cleanString(message.subject), attachmentText].join(" ");
+    const plateMatch = vehicleContext.match(/\b\d[A-Z0-9]{2}\s?\d{4}\b/i);
     if (!plateMatch) {
       return plan({
         actionType: "missing_vehicle",
@@ -2481,7 +2482,8 @@ async function logDataBoxPlusInstruction(db, id, actor, instruction, plan, resul
         recipient: plan.recipientEmail || plan.recipientLabel || plan.assignedTo || "",
         emailSent: plan.emailSent,
         sourceMessage: plan.sourceMessage,
-        recipientOptions: plan.recipientOptions
+        recipientOptions: plan.recipientOptions,
+        assistantText: plan.assistantText
       }),
       new Date().toISOString(),
       result,

@@ -16,6 +16,11 @@ import { AI_ASSISTANTS, DEFAULT_AI_ASSISTANT_ID, assistantById } from "./data/ai
 import { ELEVENLABS_ASSISTANT_CONFIGS, isValidElevenLabsAssistantKey } from "./elevenLabsAssistants.js";
 import { normalizeAiRoute } from "./elevenLabsClientTools.js";
 import {
+  dataBoxPlusConversationEntries,
+  dataBoxPlusPendingChatEntries,
+  dataBoxPlusResolvePendingChatEntries
+} from "./data/dataBoxPlusChat.js";
+import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
   ABSENCE_REPORT_TIME,
@@ -21732,39 +21737,24 @@ function dataBoxPlusInstructionCard(message, options = {}) {
     ? dataBoxPlusState.instructionDrafts[message.id]
     : "";
   const loading = dataBoxPlusState.instructionLoadingId === message.id;
-  const localChat = dataBoxPlusState.instructionChats[message.id] || null;
+  const localChat = dataBoxPlusState.instructionChats[message.id] || [];
   const history = Array.isArray(message.history) ? message.history : [];
-  const lastInstructionEvent = history.find((event) => String(event.originalInstruction || event.userInstruction || event.auditNote || "").trim());
-  const lastInstruction = lastInstructionEvent
-    ? String(lastInstructionEvent.originalInstruction || lastInstructionEvent.userInstruction || "").trim()
-    : "";
-  const lastAssistantText = lastInstructionEvent
-    ? String(lastInstructionEvent.assistantText || lastInstructionEvent.result || lastInstructionEvent.auditNote || "").trim()
-    : "";
-  const visibleUserText = localChat?.userText || lastInstruction;
-  const assistantIntro = loading
-    ? localChat?.assistantText || "Pracuju na tom."
-    : localChat?.assistantText || lastAssistantText || "Napiš mi, co mám se zprávou udělat. Jakmile zprávu pošleš, rovnou to provedu.";
+  const conversation = dataBoxPlusConversationEntries(history, localChat);
 
   return `
     <section class="ds-plus-instruction-card ds-plus-chat-window ${compact ? "ds-plus-instruction-card--compact" : ""}" aria-label="Chat s Autopilotem">
-      <div class="ds-plus-chat-window__messages" aria-live="polite">
-        <div class="ds-plus-chat-message ds-plus-chat-message--assistant">
-          <span>Autopilot</span>
-          <p>${escapeHtml(assistantIntro)}</p>
-        </div>
-        ${visibleUserText ? `
-          <div class="ds-plus-chat-message ds-plus-chat-message--user">
-            <span>Radim</span>
-            <p>${escapeHtml(visibleUserText)}</p>
+      <div class="ds-plus-chat-window__messages" data-ds-plus-chat-messages aria-live="polite" aria-busy="${loading ? "true" : "false"}">
+        ${conversation.length ? conversation.map((entry) => `
+          <div class="ds-plus-chat-message ds-plus-chat-message--${entry.role === "user" ? "user" : "assistant"} ${entry.pending ? "ds-plus-chat-message--pending" : ""} ${entry.error ? "ds-plus-chat-message--error" : ""}">
+            <span>${entry.role === "user" ? "Radim" : "Autopilot"}</span>
+            <p>${escapeHtml(entry.text)}</p>
           </div>
-        ` : ""}
-        ${draft ? `
-          <div class="ds-plus-chat-message ds-plus-chat-message--user ds-plus-chat-message--draft">
-            <span>Radim píše</span>
-            <p>${escapeHtml(draft)}</p>
+        `).join("") : `
+          <div class="ds-plus-chat-message ds-plus-chat-message--assistant">
+            <span>Autopilot</span>
+            <p>Napiš mi, co mám se zprávou udělat.</p>
           </div>
-        ` : ""}
+        `}
       </div>
       <form class="ds-plus-chat-composer" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
         <textarea
@@ -21775,10 +21765,9 @@ function dataBoxPlusInstructionCard(message, options = {}) {
           ${loading ? "disabled" : ""}
         >${escapeHtml(draft)}</textarea>
         <button class="primary-action" type="submit" aria-label="Odeslat zprávu Autopilotovi" title="Odeslat" ${loading ? "disabled" : ""}>
-          ${loading ? `<span>...</span>` : `<span aria-hidden="true">→</span>`}
+          ${loading ? `<span class="ds-plus-chat-composer__loading" aria-hidden="true"></span>` : `<span aria-hidden="true">→</span>`}
         </button>
       </form>
-      <p class="ds-plus-chat-window__hint">Autopilot po odeslání zprávy rovnou změní stav a zapíše historii.</p>
     </section>
   `;
 }
@@ -21788,7 +21777,7 @@ function dataBoxPlusChatPanel(message) {
     <section class="ds-plus-chat-panel" aria-label="Radim vs Autopilot">
       <div class="ds-plus-chat-panel__head">
         <div>
-          <span>Řešení datové zprávy</span>
+          <span class="ds-plus-chat-panel__status">Autopilot je online</span>
           <h3>${escapeHtml(message.subject || "Zpráva")}</h3>
         </div>
       </div>
@@ -32060,26 +32049,29 @@ async function submitDataBoxPlusInstruction(form) {
     render();
     return;
   }
-  dataBoxPlusState.instructionChats[messageId] = {
-    userText: instruction,
-    assistantText: "Pracuju na tom.",
-    pending: true
-  };
+  const requestId = `ds-plus-chat-${messageId}-${Date.now()}`;
+  dataBoxPlusState.instructionChats[messageId] = dataBoxPlusPendingChatEntries(
+    dataBoxPlusState.instructionChats[messageId],
+    instruction,
+    requestId
+  );
+  delete dataBoxPlusState.instructionDrafts[messageId];
   dataBoxPlusState.instructionLoadingId = messageId;
   dataBoxPlusState.notice = "Autopilot pracuje.";
   render();
+  scrollDataBoxPlusChatToLatest();
   try {
     const result = await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(messageId)}/instruction`, {
       method: "POST",
       body: JSON.stringify({ instruction })
     });
-    delete dataBoxPlusState.instructionDrafts[messageId];
     const assistantText = result.notice || result.action?.assistantText || "Hotovo. Provedeno.";
-    dataBoxPlusState.instructionChats[messageId] = {
-      userText: instruction,
+    dataBoxPlusState.instructionChats[messageId] = dataBoxPlusResolvePendingChatEntries(
+      dataBoxPlusState.instructionChats[messageId],
+      requestId,
       assistantText,
-      pending: false
-    };
+      result.auditId
+    );
     dataBoxPlusState.notice = assistantText;
     await loadDataBoxPlusData({ force: true, renderAfter: false });
     if (result.message?.id) {
@@ -32088,16 +32080,26 @@ async function submitDataBoxPlusInstruction(form) {
     }
   } catch (error) {
     const assistantText = dataBoxPlusHumanError(error.payload?.error || error.message || "Zprávu se nepodařilo zpracovat.");
-    dataBoxPlusState.instructionChats[messageId] = {
-      userText: instruction,
+    dataBoxPlusState.instructionChats[messageId] = dataBoxPlusResolvePendingChatEntries(
+      dataBoxPlusState.instructionChats[messageId],
+      requestId,
       assistantText,
-      pending: false
-    };
+      "",
+      true
+    );
     dataBoxPlusState.notice = assistantText;
   } finally {
     dataBoxPlusState.instructionLoadingId = "";
     render();
+    scrollDataBoxPlusChatToLatest();
   }
+}
+
+function scrollDataBoxPlusChatToLatest() {
+  requestAnimationFrame(() => {
+    const messages = document.querySelector("[data-ds-plus-chat-messages]");
+    if (messages) messages.scrollTop = messages.scrollHeight;
+  });
 }
 
 async function confirmDataBoxPlusRecommendation(recommendationId, actionTypeOverride = "") {
@@ -41685,6 +41687,7 @@ document.addEventListener("click", async (event) => {
     await loadDataBoxPlusMessageDetail(dataBoxPlusState.chatMessageId);
     render();
     restoreDataBoxPlusInputFocus(`[data-ds-plus-instruction-form][data-message-id="${CSS.escape(dataBoxPlusState.chatMessageId)}"] textarea, [data-ds-plus-instruction-form][data-message-id="${CSS.escape(dataBoxPlusState.chatMessageId)}"] input[name="instruction"]`);
+    scrollDataBoxPlusChatToLatest();
     return;
   }
 
@@ -43178,6 +43181,17 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  const dataBoxPlusInstructionInput = event.target.closest?.("[data-ds-plus-instruction-form] textarea");
+  if (dataBoxPlusInstructionInput && event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+    event.preventDefault();
+    dataBoxPlusInstructionInput.closest("form")?.requestSubmit();
+    return;
+  }
+  if (event.key === "Escape" && dataBoxPlusState.chatMessageId) {
+    dataBoxPlusState.chatMessageId = "";
+    render();
+    return;
+  }
   if (event.key !== "Escape" || !dataBoxState.selectedMessageId) {
     return;
   }
