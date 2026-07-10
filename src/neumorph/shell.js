@@ -1,4 +1,4 @@
-import { NEUMORPH_NAV_GROUPS } from "./navigation.js";
+import { buildNeumorphNavigation } from "./navigation.js";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -15,6 +15,22 @@ function icon(name) {
     components: '<path d="M4 8h16"></path><path d="M4 16h16"></path><path d="M8 4v16"></path><path d="M16 4v16"></path>',
     route: '<path d="M6 18c4-6 8 6 12 0"></path><path d="M7 6a3 3 0 0 0-3 3c0 2.5 3 5 3 5s3-2.5 3-5a3 3 0 0 0-3-3Z"></path><path d="M17 4a3 3 0 0 0-3 3c0 2.5 3 5 3 5s3-2.5 3-5a3 3 0 0 0-3-3Z"></path>',
     chart: '<path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 15v-4"></path><path d="M12 15V8"></path><path d="M16 15v-6"></path>',
+    module: '<path d="M5 7h14"></path><path d="M5 12h14"></path><path d="M5 17h14"></path>',
+    fleet: '<path d="M4 16V8a2 2 0 0 1 2-2h9l4 4v6"></path><path d="M7 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path><path d="M17 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path><path d="M15 6v4h4"></path>',
+    tracking: '<path d="M12 3v4"></path><path d="M7 8a7 7 0 0 0 10 0"></path><path d="M5 11a10 10 0 0 0 14 0"></path><path d="M4 20h16"></path><path d="M8 20l1-6h6l1 6"></path>',
+    mail: '<path d="M4 6h16v12H4z"></path><path d="m4 7 8 6 8-6"></path>',
+    driver: '<path d="M8 9a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z"></path><path d="M4 21a8 8 0 0 1 16 0"></path>',
+    service: '<path d="m14.7 6.3 3 3"></path><path d="M3 21l6.8-6.8"></path><path d="M14 7a4 4 0 0 0-5.6 5.6L3 18v3h3l5.4-5.4A4 4 0 0 0 14 7Z"></path>',
+    tyre: '<circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 4v3M12 17v3M4 12h3M17 12h3"></path>',
+    sampling: '<path d="M10 2v6l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17l-5-9V2"></path><path d="M8 2h8"></path><path d="M7 15h10"></path>',
+    customers: '<path d="M4 20V8l8-4 8 4v12"></path><path d="M9 20v-6h6v6"></path><path d="M8 10h.01M16 10h.01"></path>',
+    costs: '<path d="M12 3v18"></path><path d="M17 7.5c0-1.7-2.1-3-5-3s-5 1.3-5 3 2.1 3 5 3 5 1.3 5 3-2.1 3-5 3-5-1.3-5-3"></path>',
+    reports: '<path d="M6 3h9l3 3v15H6z"></path><path d="M15 3v4h4"></path><path d="M9 13h6M9 17h5"></path>',
+    absence: '<path d="M7 3v4M17 3v4"></path><path d="M4 8h16v12H4z"></path><path d="M8 13h3M13 13h3M8 17h3"></path>',
+    users: '<path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path><path d="M2 21a7 7 0 0 1 14 0"></path><path d="M17 11a3 3 0 1 0 0-6"></path><path d="M18 14a6 6 0 0 1 4 6"></path>',
+    settings: '<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.5-.2-.1a1.7 1.7 0 0 0-2 .4l-.1.1H11l-.1-.1a1.7 1.7 0 0 0-2-.4l-.2.1-2-3.5.1-.1A1.7 1.7 0 0 0 7 15l-.1-.2-2.9-1.7V9l2.9-1.7L7 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-3.5.2.1a1.7 1.7 0 0 0 2-.4l.1-.2h4.2l.1.2a1.7 1.7 0 0 0 2 .4l.2-.1 2 3.5-.1.1A1.7 1.7 0 0 0 19 7l.1.2L22 9v4.1l-2.9 1.7Z"></path>',
+    "system-check": '<path d="M20 7 9 18l-5-5"></path><path d="M4 4h16v16H4z"></path>',
+    feedback: '<path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h6"></path>',
     menu: '<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>',
     sun: '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>',
     moon: '<path d="M20.1 14.2A7.8 7.8 0 0 1 9.8 3.9a8.4 8.4 0 1 0 10.3 10.3Z"></path>'
@@ -70,7 +86,7 @@ function renderNavItem(item, routeHref) {
   `;
 }
 
-function renderSidebar(routeHref) {
+function renderSidebar(routeHref, navigationGroups) {
   return `
     <aside class="nm-sidebar" aria-label="Navigace neumorph migrace">
       <div class="nm-sidebar__top">
@@ -85,7 +101,7 @@ function renderSidebar(routeHref) {
         </button>
       </div>
       <nav class="nm-sidebar__nav">
-        ${NEUMORPH_NAV_GROUPS.map((group) => `
+        ${navigationGroups.map((group) => `
           <section class="nm-sidebar__group" aria-label="${escapeHtml(group.label)}">
             <span class="nm-sidebar__group-label">${escapeHtml(group.label)}</span>
             ${group.items.map((item) => renderNavItem(item, routeHref)).join("")}
@@ -96,8 +112,11 @@ function renderSidebar(routeHref) {
   `;
 }
 
-function renderMobileNav(routeHref) {
-  const items = NEUMORPH_NAV_GROUPS.flatMap((group) => group.items).slice(0, 4);
+function renderMobileNav(routeHref, navigationGroups) {
+  const items = navigationGroups
+    .flatMap((group) => group.items)
+    .filter((item) => !item.planned)
+    .slice(0, 4);
 
   return `
     <nav class="nm-mobile-nav" aria-label="Mobilni navigace neumorph migrace">
@@ -142,18 +161,20 @@ function renderHeader({ routeHref, theme, user }) {
   `;
 }
 
-export function renderNeumorphShell({ routeHref, theme, user, content }) {
+export function renderNeumorphShell({ routeHref, theme, user, content, currentPath }) {
+  const navigationGroups = buildNeumorphNavigation({ user, currentPath });
+
   return `
     <div class="nm-app" data-theme="${escapeHtml(theme)}">
       <div class="nm-shell" data-nm-shell>
         ${renderHeader({ routeHref, theme, user })}
         <div class="nm-shell__body">
-          ${renderSidebar(routeHref)}
+          ${renderSidebar(routeHref, navigationGroups)}
           <main class="nm-shell__content" id="nm-main" tabindex="-1">
             ${content}
           </main>
         </div>
-        ${renderMobileNav(routeHref)}
+        ${renderMobileNav(routeHref, navigationGroups)}
       </div>
     </div>
   `;

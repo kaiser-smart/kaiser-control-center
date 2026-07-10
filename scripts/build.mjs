@@ -2,7 +2,7 @@ import { access, mkdir, readdir, rm, stat, copyFile, readFile, writeFile } from 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
-import { modules } from "../src/data/modules.js";
+import { moduleDashboards, modules } from "../src/data/modules.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(root, "dist");
@@ -69,6 +69,9 @@ const routes = new Set([
   "/design/neumorphic",
   "/design/theme-system",
   "/neumorph",
+  ...modules.map((moduleItem) => `/neumorph${moduleItem.route}`),
+  ...moduleDashboards.map((moduleItem) => `/neumorph${moduleItem.route}`),
+  "/neumorph/pripominky",
   "/sledovani-vozidel/soft-metal-preview",
   ...modules.map((moduleItem) => moduleItem.route),
   ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)

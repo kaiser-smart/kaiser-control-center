@@ -4,9 +4,18 @@ import {
   toggleNeumorphTheme
 } from "./theme.js";
 import { renderNeumorphShell } from "./shell.js";
+import {
+  renderNeumorphAccessState,
+  renderNeumorphModuleCatalog,
+  renderNeumorphModulePage
+} from "./modulePages.js";
+import {
+  NEUMORPH_BASE_ROUTE,
+  resolveNeumorphRoute
+} from "./moduleRegistry.js";
 import { renderNeumorphSystemPreview } from "./systemPreview.js";
 
-export const NEUMORPH_ROUTE = "/neumorph";
+export const NEUMORPH_ROUTE = NEUMORPH_BASE_ROUTE;
 
 export function isNeumorphRoute(path = "") {
   const normalizedPath = String(path || "/").replace(/\/+$/, "") || "/";
@@ -80,13 +89,35 @@ export function handleNeumorphAction(actionElement) {
   return false;
 }
 
-export function renderNeumorphRoute({ routeHref = (route) => route, user = null } = {}) {
+function renderNeumorphContent({ resolvedRoute, routeHref, user }) {
+  if (resolvedRoute.view === "home") {
+    return `
+      <div class="nm-stack">
+        ${renderNeumorphSystemPreview()}
+        ${renderNeumorphModuleCatalog({ user, routeHref })}
+      </div>
+    `;
+  }
+
+  if (resolvedRoute.view === "module") {
+    return renderNeumorphModulePage({ resolvedRoute, user, routeHref });
+  }
+
+  return renderNeumorphAccessState({
+    type: resolvedRoute.view,
+    routeHref
+  });
+}
+
+export function renderNeumorphRoute({ routeHref = (route) => route, user = null, path = NEUMORPH_ROUTE } = {}) {
   const theme = readStoredNeumorphTheme();
+  const resolvedRoute = resolveNeumorphRoute({ path, user });
 
   return renderNeumorphShell({
     routeHref,
+    currentPath: path,
     theme,
     user,
-    content: renderNeumorphSystemPreview()
+    content: renderNeumorphContent({ resolvedRoute, routeHref, user })
   });
 }

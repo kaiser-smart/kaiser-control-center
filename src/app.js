@@ -26783,9 +26783,11 @@ function renderPublicVehicleTrackingPreview() {
 
 function renderNeumorphMigrationPreview() {
   const user = authState.user ? currentUser() : null;
+  const path = normalizePath(window.location.pathname);
   app.innerHTML = renderNeumorphRoute({
     routeHref,
-    user
+    user,
+    path
   });
   syncNeumorphRouteTheme(app.querySelector(".nm-app"));
   document.title = `Neumorph migrace | ${APP_NAME}`;
