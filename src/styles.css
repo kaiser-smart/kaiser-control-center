@@ -31619,20 +31619,6 @@ body:has(.ds-plus-page) {
   line-height: 1.35;
 }
 
-.ds-plus-chat-launcher {
-  min-height: 34px;
-  justify-self: start;
-  border-color: #bfd7bd;
-  background: #ffffff;
-  color: #245d36;
-  font-weight: 800;
-}
-
-.ds-plus-chat-launcher:disabled {
-  opacity: 0.65;
-  cursor: wait;
-}
-
 .ds-plus-mini-confirm span {
   color: #526052;
   font-size: 0.82rem;
@@ -32259,6 +32245,18 @@ body:has(.ds-plus-page) {
   color: #245d36;
   font-size: 0.78rem;
   white-space: nowrap;
+}
+
+.ds-plus-chat-dialog {
+  width: min(720px, 100%);
+}
+
+.ds-plus-chat-dialog .ds-plus-detail__body {
+  min-height: min(560px, calc(100vh - 180px));
+}
+
+.ds-plus-chat-dialog .ds-plus-chat-panel {
+  min-height: 100%;
 }
 
 .ds-plus-chat-window__messages {
