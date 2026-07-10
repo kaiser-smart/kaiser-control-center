@@ -115,8 +115,11 @@ assert.equal(unclearVehicleMessage.messageStatus, "Nová");
 const storeSource = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
 const executeSource = storeSource.match(/export async function executeDataBoxPlusMessageInstruction[\s\S]+?\n}\nfunction recommendationConfirmAction/)?.[0] || "";
 assert.ok(executeSource, "execution source must be present");
-assert.doesNotMatch(executeSource, /sendDataBoxPlusMessageEmail/);
-assert.doesNotMatch(executeSource, /dataBoxPlusChatDecision|waiting_confirmation/);
-assert.match(executeSource, /plan\.outcome === "done"/);
+assert.match(executeSource, /interpretDataBoxPlusChat/);
+assert.match(executeSource, /waiting_confirmation/);
+assert.match(storeSource, /sendDataBoxPlusMessageEmail/);
+assert.match(storeSource, /sendCustomerMessage/);
+assert.match(storeSource, /rememberConfirmedDataBoxPlusChatPattern/);
+assert.match(storeSource, /DATA_BOX_PLUS_CONFIRMATION_TTL_MS/);
 
 console.log("data-box-plus instruction flow ok");

@@ -884,13 +884,14 @@ async function sendEmail(env, {
     return { status: "skipped", errorMessage: missing, recipientName: cleanRecipientName, cc: ccRecipients };
   }
 
-  try {
-    const personalization = { to: [{ email: to }] };
-    if (ccRecipients.length) {
-      personalization.cc = ccRecipients.map((email) => ({ email }));
-    }
+  const personalization = { to: [{ email: to }] };
+  if (ccRecipients.length) {
+    personalization.cc = ccRecipients.map((email) => ({ email }));
+  }
 
-    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+  let response;
+  try {
+    response = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -916,42 +917,17 @@ async function sendEmail(env, {
     if (!response.ok) {
       throw new Error(`SendGrid ${response.status}`);
     }
-
-    const providerMessageId = response.headers.get("x-message-id") || "";
-    await updateOutgoingCommunicationAudit(env, audit, {
-      status: "sent",
-      provider: "SendGrid",
-      providerMessageId,
-      providerStatus: "sent"
-    });
-    await logNotification(env, {
-      moduleId,
-      type,
-      channel: "email",
-      recipient: recipientForLog || to,
-      relatedEntityType,
-      relatedEntityId,
-      status: "sent",
-      subject,
-      provider: "SendGrid",
-      providerMessageId,
-      messageId: audit.messageId,
-      threadId: audit.threadId,
-      auditId: audit.auditId,
-      fromName: identity.fromName,
-      fromAddress: identity.fromEmail,
-      replyTo: identity.replyTo,
-      subjectToken: audit.subjectToken,
-      providerStatus: "sent",
-      messagePreview
-    });
-    return { status: "sent", recipientName: cleanRecipientName, cc: ccRecipients };
   } catch (error) {
-    await updateOutgoingCommunicationAudit(env, audit, {
-      status: "failed",
-      provider: "SendGrid",
-      errorMessage: error.message
-    });
+    const errorMessage = cleanString(error?.message) || "SendGrid odeslání selhalo.";
+    try {
+      await updateOutgoingCommunicationAudit(env, audit, {
+        status: "failed",
+        provider: "SendGrid",
+        errorMessage
+      });
+    } catch (auditError) {
+      console.error("notification.email_failure_audit_failed", { message: auditError.message, type });
+    }
     await logNotification(env, {
       moduleId,
       type,
@@ -971,10 +947,52 @@ async function sendEmail(env, {
       subjectToken: audit.subjectToken,
       providerStatus: "failed",
       messagePreview,
-      errorMessage: error.message
+      errorMessage
     });
-    return { status: "failed", errorMessage: error.message, recipientName: cleanRecipientName, cc: ccRecipients };
+    return { status: "failed", errorMessage, recipientName: cleanRecipientName, cc: ccRecipients };
   }
+
+  const providerMessageId = response.headers?.get?.("x-message-id") || "";
+  let auditWarning = "";
+  try {
+    await updateOutgoingCommunicationAudit(env, audit, {
+      status: "sent",
+      provider: "SendGrid",
+      providerMessageId,
+      providerStatus: "sent"
+    });
+  } catch (error) {
+    auditWarning = "E-mail byl přijatý poskytovatelem, ale nepodařilo se aktualizovat jeho auditní záznam.";
+    console.error("notification.email_success_audit_failed", { message: error.message, type });
+  }
+  await logNotification(env, {
+    moduleId,
+    type,
+    channel: "email",
+    recipient: recipientForLog || to,
+    relatedEntityType,
+    relatedEntityId,
+    status: "sent",
+    subject,
+    provider: "SendGrid",
+    providerMessageId,
+    messageId: audit.messageId,
+    threadId: audit.threadId,
+    auditId: audit.auditId,
+    fromName: identity.fromName,
+    fromAddress: identity.fromEmail,
+    replyTo: identity.replyTo,
+    subjectToken: audit.subjectToken,
+    providerStatus: "sent",
+    messagePreview
+  });
+  return {
+    status: "sent",
+    recipientName: cleanRecipientName,
+    cc: ccRecipients,
+    providerMessageId,
+    auditWarning
+  };
 }
 
 async function sendSms(env, {

@@ -33781,6 +33781,106 @@ body:has(.ds-plus-page) {
   background: #fff4f2;
 }
 
+.ds-plus-chat-message:has(.ds-plus-chat-confirmation) {
+  width: min(100%, 520px);
+  max-width: 100%;
+}
+
+.ds-plus-chat-confirmation {
+  display: grid;
+  gap: 9px;
+  margin-top: 7px;
+  border: 1px solid #cbdac7;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f7fbf4;
+}
+
+.ds-plus-chat-confirmation__eyebrow {
+  color: #4f7657;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ds-plus-chat-confirmation h4,
+.ds-plus-chat-confirmation p {
+  margin: 0;
+}
+
+.ds-plus-chat-confirmation h4 {
+  color: #1f2a22;
+  font-size: 0.98rem;
+}
+
+.ds-plus-chat-confirmation dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.ds-plus-chat-confirmation dl div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 8px;
+  border-top: 1px solid #dce7d8;
+  padding-top: 6px;
+}
+
+.ds-plus-chat-confirmation dt {
+  color: #637064;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ds-plus-chat-confirmation dd {
+  margin: 0;
+  color: #273229;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.ds-plus-chat-confirmation .ds-plus-chat-confirmation__help {
+  color: #58655a;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.ds-plus-chat-confirmation__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ds-plus-chat-confirmation__actions button {
+  min-height: 38px;
+}
+
+.ds-plus-detail-section--chat {
+  overflow: hidden;
+  padding: 0;
+}
+
+.ds-plus-detail-section--chat > .ds-plus-detail-section__head {
+  padding: 16px 18px 12px;
+}
+
+.ds-plus-detail-section--chat > .ds-plus-detail-section__head h3,
+.ds-plus-detail-section--chat > .ds-plus-detail-section__head p {
+  margin: 0;
+}
+
+.ds-plus-detail-section--chat > .ds-plus-detail-section__head p {
+  margin-top: 4px;
+  color: #5e6b60;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .ds-plus-chat-window__footer {
   position: relative;
   z-index: 1;
@@ -33915,6 +34015,20 @@ body:has(.ds-plus-page) {
 
   .ds-plus-chat-message {
     max-width: 88%;
+  }
+
+  .ds-plus-chat-message:has(.ds-plus-chat-confirmation) {
+    max-width: 100%;
+  }
+
+  .ds-plus-chat-confirmation dl div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .ds-plus-chat-confirmation__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .ds-plus-chat-window__footer {

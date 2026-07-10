@@ -28,8 +28,12 @@ function isUnclearChatInstruction(value) {
 }
 
 function humanAssistantText(event, payload, instruction) {
-  if (isUnclearChatInstruction(instruction)) return SIMPLE_CHAT_HELP;
   const outcome = cleanText(payload.outcome || event?.result).toLowerCase();
+  const explicitAssistantText = cleanText(payload.assistantText);
+  if (isUnclearChatInstruction(instruction)
+    && (!explicitAssistantText || !["done", "cancelled", "expired", "failed", "waiting_confirmation"].includes(outcome))) {
+    return SIMPLE_CHAT_HELP;
+  }
   if (outcome === "draft_ready") {
     return "Připravím návrh odpovědi. Odeslání musí potvrdit člověk.";
   }
@@ -63,6 +67,12 @@ export function dataBoxPlusHistoryChatEntries(history = []) {
       const assistantText = humanAssistantText(event, payload, instruction);
       const auditId = cleanText(event.id);
       const createdAt = cleanText(event.createdAt);
+      const eventResult = cleanText(event.result);
+      const payloadOutcome = cleanText(payload.outcome);
+      const activeConfirmation = eventResult === "waiting_confirmation";
+      const outcome = payloadOutcome === "waiting_confirmation" && eventResult && !activeConfirmation
+        ? eventResult
+        : payloadOutcome || eventResult;
       return [
         {
           id: `${auditId || createdAt}-user`,
@@ -77,9 +87,13 @@ export function dataBoxPlusHistoryChatEntries(history = []) {
           role: "assistant",
           text: assistantText,
           createdAt,
-          outcome: cleanText(payload.outcome || event.result),
+          outcome,
           intent: cleanText(payload.intent),
-          statusLabel: cleanText(payload.statusLabel)
+          statusLabel: cleanText(payload.statusLabel),
+          confirmationId: activeConfirmation ? cleanText(payload.proposedAction?.confirmationId || payload.confirmationId) : "",
+          proposedAction: activeConfirmation && payload.proposedAction && typeof payload.proposedAction === "object"
+            ? payload.proposedAction
+            : undefined
         }] : [])
       ];
     });

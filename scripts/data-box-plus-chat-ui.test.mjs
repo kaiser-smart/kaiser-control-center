@@ -26,6 +26,44 @@ assert.deepEqual(
   ]
 );
 
+const waitingConfirmation = dataBoxPlusHistoryChatEntries([{
+  id: "audit-confirm",
+  actionType: "Chatový pokyn",
+  result: "waiting_confirmation",
+  createdAt: "2026-07-10T05:00:30.000Z",
+  payload: {
+    originalInstruction: "pošli e-mail Radimovi",
+    outcome: "waiting_confirmation",
+    assistantText: "E-mail je připravený. Mám provést?",
+    proposedAction: {
+      confirmationId: "audit-confirm",
+      type: "send_email",
+      summary: "Odeslat e-mail Radimovi",
+      recipientEmail: "radim@example.cz",
+      subject: "Kontrola zprávy",
+      body: "Prosím o kontrolu."
+    }
+  }
+}]);
+assert.equal(waitingConfirmation[1].outcome, "waiting_confirmation");
+assert.equal(waitingConfirmation[1].confirmationId, "audit-confirm");
+assert.equal(waitingConfirmation[1].proposedAction.type, "send_email");
+
+const usedConfirmation = dataBoxPlusHistoryChatEntries([{
+  id: "audit-used",
+  actionType: "Chatový pokyn",
+  result: "confirmed",
+  createdAt: "2026-07-10T05:00:40.000Z",
+  payload: {
+    originalInstruction: "pošli e-mail Radimovi",
+    outcome: "waiting_confirmation",
+    assistantText: "E-mail je připravený. Mám provést?",
+    proposedAction: { confirmationId: "audit-used", type: "send_email" }
+  }
+}]);
+assert.equal(usedConfirmation[1].outcome, "confirmed");
+assert.equal(usedConfirmation[1].proposedAction, undefined);
+
 const legacySmalltalk = dataBoxPlusHistoryChatEntries([{
   id: "legacy-smalltalk",
   actionType: "Chatový pokyn",
@@ -103,6 +141,25 @@ assert.equal(resolved[1].text, "Hotovo. Zpráva byla předána Jarce.");
 assert.equal(resolved[1].pending, false);
 assert.equal(resolved[1].auditId, "audit-2");
 
+const resolvedConfirmation = dataBoxPlusResolvePendingChatEntries(
+  dataBoxPlusPendingChatEntries([], "pošli SMS", "request-confirm"),
+  "request-confirm",
+  "SMS je připravená. Mám provést?",
+  "audit-confirm-local",
+  false,
+  {
+    outcome: "waiting_confirmation",
+    proposedAction: {
+      confirmationId: "audit-confirm-local",
+      type: "send_sms",
+      recipientPhone: "+420777000111",
+      body: "Prosím o kontrolu zprávy."
+    }
+  }
+);
+assert.equal(resolvedConfirmation[1].proposedAction.type, "send_sms");
+assert.equal(resolvedConfirmation[1].outcome, "waiting_confirmation");
+
 const merged = dataBoxPlusConversationEntries([
   ...history,
   {
@@ -129,12 +186,26 @@ assert.equal(failed[0].text, "nejasný pokyn");
 assert.equal(failed[1].error, true);
 
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const composeOverlaySource = appSource.slice(
+  appSource.indexOf("function dataBoxPlusComposeOverlay()"),
+  appSource.indexOf("function dataBoxPlusChatSuggestions")
+);
+const detailOverlaySource = appSource.slice(
+  appSource.indexOf("function dataBoxPlusDetailOverlay()"),
+  appSource.indexOf("function dataBoxPlusChatOverlay()")
+);
+assert.doesNotMatch(composeOverlaySource, /dataBoxPlusChatPanel\(message\)/);
+assert.match(detailOverlaySource, /ds-plus-detail-section--chat[\s\S]*dataBoxPlusChatPanel\(message\)/);
+assert.match(appSource, /E-mail nebo SMS odešle jen po potvrzení/);
 const compactChatStyles = styles.slice(styles.lastIndexOf("/* Datove schranky Plus: simple message chat. */"));
 assert.match(compactChatStyles, /width:\s*min\(600px, calc\(100vw - 48px\)\)/);
 assert.match(compactChatStyles, /max-height:\s*min\(680px, calc\(100dvh - 48px\)\)/);
 assert.match(compactChatStyles, /grid-template-rows:\s*auto minmax\(0, auto\)/);
 assert.match(compactChatStyles, /max-height:\s*min\(360px, calc\(100dvh - 250px\)\)/);
 assert.match(compactChatStyles, /overflow-y:\s*auto/);
+assert.match(compactChatStyles, /\.ds-plus-chat-confirmation/);
+assert.match(compactChatStyles, /\.ds-plus-detail-section--chat/);
 assert.match(compactChatStyles, /@media \(max-width: 720px\)[\s\S]*height:\s*100dvh/);
 assert.doesNotMatch(compactChatStyles.split("@media (max-width: 720px)")[0], /height:\s*100dvh/);
 

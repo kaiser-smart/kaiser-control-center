@@ -21104,14 +21104,14 @@ function dataBoxPlusLearningStage() {
     return {
       label: "Vysoký",
       percent: 74,
-      text: "Autopilot má ověřené vzory pro běžné zprávy a po pokynu rovnou zapisuje výsledek."
+      text: "Autopilot má ověřené vzory pro běžné zprávy a výsledek zapíše až po potvrzení člověka."
     };
   }
   if (confirmed >= 20) {
     return {
       label: "Střední",
       percent: 48,
-      text: "Autopilot rozpoznává opakované vzory a provádí konkrétní pokyny z chatu."
+      text: "Autopilot rozpoznává opakované vzory a potvrzené pokyny z chatu provádí přes backend."
     };
   }
   return {
@@ -21661,7 +21661,7 @@ function dataBoxPlusComposeLauncher() {
     <section class="ds-plus-send-strip" aria-label="Odesílání datových zpráv">
       <div>
         <h2>Odesílání</h2>
-        <p>Nová datová zpráva je samostatný proces. V chatu se provádějí jen bezpečné interní kroky; odeslání ven zůstává vždy návrhem.</p>
+        <p>Nová datová zpráva je samostatný proces. Chat každou akci nejdřív připraví a odeslání e-mailu nebo SMS vždy vyžaduje potvrzení.</p>
       </div>
       <button class="primary-action" type="button" data-ds-plus-compose-open>Nová zpráva</button>
     </section>
@@ -21759,6 +21759,60 @@ function dataBoxPlusChatSuggestions(message) {
   `;
 }
 
+function dataBoxPlusChatActionLabel(type) {
+  return ({
+    archive_info: "Archivovat zprávu",
+    mark_done: "Označit jako vyřízenou",
+    need_more_info: "Označit k doplnění",
+    mark_cannot_execute: "Označit jako neproveditelné",
+    internal_note: "Přidat interní poznámku",
+    create_task: "Vytvořit interní úkol",
+    prepare_reply: "Připravit návrh odpovědi",
+    send_email: "Odeslat e-mail",
+    send_sms: "Odeslat SMS",
+    set_reminder: "Uložit termín připomínky",
+    assign_to_user: "Předat kolegovi"
+  })[String(type || "")] || "Provést připravenou akci";
+}
+
+function dataBoxPlusChatConfirmationCard(entry, message, loading) {
+  const action = entry?.proposedAction && typeof entry.proposedAction === "object" ? entry.proposedAction : null;
+  const confirmationId = String(action?.confirmationId || entry?.confirmationId || "").trim();
+  if (!action || !confirmationId || entry?.outcome !== "waiting_confirmation") return "";
+  const recipient = action.recipientName || action.recipientEmail || action.recipientPhone || action.assignedTo || "";
+  return `
+    <section class="ds-plus-chat-confirmation" aria-label="Akce čeká na potvrzení">
+      <span class="ds-plus-chat-confirmation__eyebrow">Před provedením zkontrolujte</span>
+      <h4>${escapeHtml(dataBoxPlusChatActionLabel(action.type))}</h4>
+      <p>${escapeHtml(action.summary || "Připravená akce")}</p>
+      <dl>
+        ${recipient ? `<div><dt>Pro koho</dt><dd>${escapeHtml(recipient)}</dd></div>` : ""}
+        ${action.subject ? `<div><dt>Předmět</dt><dd>${escapeHtml(action.subject)}</dd></div>` : ""}
+        ${action.body ? `<div><dt>Text</dt><dd>${escapeHtml(action.body)}</dd></div>` : ""}
+        ${action.noteText ? `<div><dt>Poznámka</dt><dd>${escapeHtml(action.noteText)}</dd></div>` : ""}
+        ${action.dueDate ? `<div><dt>Termín</dt><dd>${escapeHtml(action.dueDate)}</dd></div>` : ""}
+      </dl>
+      <p class="ds-plus-chat-confirmation__help">Akce se provede jednou a zapíše se do historie. Bez potvrzení se nic nezmění ani neodešle.</p>
+      <div class="ds-plus-chat-confirmation__actions">
+        <button
+          class="primary-action"
+          type="button"
+          data-ds-plus-chat-confirm="${escapeHtml(message.id)}"
+          data-confirmation-id="${escapeHtml(confirmationId)}"
+          ${loading ? "disabled" : ""}
+        >Provést</button>
+        <button
+          class="secondary-link"
+          type="button"
+          data-ds-plus-chat-cancel="${escapeHtml(message.id)}"
+          data-confirmation-id="${escapeHtml(confirmationId)}"
+          ${loading ? "disabled" : ""}
+        >Zrušit</button>
+      </div>
+    </section>
+  `;
+}
+
 function dataBoxPlusInstructionCard(message) {
   const draft = Object.prototype.hasOwnProperty.call(dataBoxPlusState.instructionDrafts, message.id)
     ? dataBoxPlusState.instructionDrafts[message.id]
@@ -21775,6 +21829,7 @@ function dataBoxPlusInstructionCard(message) {
           <div class="ds-plus-chat-message ds-plus-chat-message--${entry.role === "user" ? "user" : "assistant"} ${entry.pending ? "ds-plus-chat-message--pending" : ""} ${entry.error ? "ds-plus-chat-message--error" : ""}">
             <span>${entry.role === "user" ? "Radim" : "Autopilot"}</span>
             <p>${escapeHtml(entry.text)}</p>
+            ${entry.role === "assistant" ? dataBoxPlusChatConfirmationCard(entry, message, loading) : ""}
           </div>
         `).join("") : `
           <div class="ds-plus-chat-message ds-plus-chat-message--assistant">
@@ -22192,7 +22247,7 @@ function dataBoxPlusStatusNotice() {
   return `
     <div class="ds-plus-status-note" role="status">
       <strong>Ostrá verze</strong>
-      <span>Zprávy se načítají na pozadí. Autopilot provede bezpečný interní pokyn, nebo se krátce doptá na chybějící údaj.</span>
+      <span>Zprávy se načítají na pozadí. Autopilot připraví přesnou akci, doptá se na chybějící údaj a provede ji až po potvrzení.</span>
     </div>
   `;
 }
@@ -22727,7 +22782,7 @@ function dataBoxPlusEventLogBlock() {
     {
       createdAt: "",
       title: "Odesílání mimo systém",
-      note: "E-mail se z DSP odešle jen po jasném chatovém pokynu a známém adresátovi."
+      note: "E-mail nebo SMS se z DSP odešle jen po přesném návrhu a jednorázovém potvrzení člověka."
     }
   ];
   const events = historyEvents.length ? historyEvents : fallbackEvents;
@@ -22749,6 +22804,11 @@ function dataBoxPlusEventLogBlock() {
         : (mailboxProblems || messageProblems
           ? "Některé schránky nebo zprávy mají problém. Nejde o kompletně zelený ostrý stav."
           : "Načítání je zapnuté, ale ještě není splněná kompletní ostrá kontrola 7/7 schránek.")
+    ),
+    moduleEventLogStatus(
+      "GPT chat",
+      readiness.gpt?.enabled ? "ověřeno" : "vypnuto",
+      readiness.gpt?.text || "Chybí serverové připojení OpenAI. GPT chat nic neprovede."
     ),
     moduleEventLogStatus(
       "Odesílání datových zpráv",
@@ -22785,7 +22845,8 @@ function dataBoxPlusEventLogBlock() {
       readiness.sms?.enabled ? "Automatické odeslání SMS bez schváleného scénáře." : "SMS z DSP."
     ],
     pilotItems: [
-      "Chatový pokyn je příkaz k provedení a každý výsledek se zapisuje do historie.",
+      "Chatový pokyn nejdřív vytvoří návrh. Akce se provede až po jednorázovém potvrzení a výsledek se zapíše do historie.",
+      "Autopilot se učí pouze z potvrzených akcí, které skutečně úspěšně proběhly.",
       "Pokud cloudový běh není čerstvý, automatizace není označená jako běžící."
     ],
     events: events.map((event) => moduleEventLogEvent(event.createdAt, event.title, event.title === "Odesílání mimo systém" ? "vypnuto" : "částečně ověřeno", event.note)),
@@ -22797,6 +22858,7 @@ function dataBoxPlusEventLogBlock() {
       moduleEventLogDiagnostic("activeMailboxes", `${activeMailboxes}/7`),
       moduleEventLogDiagnostic("mailboxProblems", mailboxProblems),
       moduleEventLogDiagnostic("messageProblems", messageProblems),
+      moduleEventLogDiagnostic("sendReadiness.gpt", readiness.gpt?.label || "neuvedeno"),
       moduleEventLogDiagnostic("sendReadiness.dataBox", readiness.dataBox?.label || "neuvedeno"),
       moduleEventLogDiagnostic("sendReadiness.email", readiness.email?.label || "neuvedeno"),
       moduleEventLogDiagnostic("sendReadiness.sms", readiness.sms?.label || "neuvedeno"),
@@ -22825,8 +22887,8 @@ function dataBoxPlusSettingsPanel() {
           <h3>Bezpečnost AI</h3>
           <ul>
             <li>Autopilot nikdy nemaže datové zprávy.</li>
-            <li>Autopilot provede pouze jasný bezpečný interní pokyn.</li>
-            <li>E-mail, datovou zprávu ani odpověď úřadu chat nikdy neodešle.</li>
+            <li>Autopilot provede pouze jasný pokyn, který člověk předem potvrdil.</li>
+            <li>E-mail nebo SMS odešle jen po potvrzení. Novou datovou zprávu ani odpověď úřadu přes ISDS zatím neodešle.</li>
             <li>Když obsah přílohy není načtený nebo chybí vazba, nastaví konkrétní stav.</li>
           </ul>
         </section>
@@ -22914,8 +22976,8 @@ function dataBoxPlusManualPanel() {
           <h3>Práce se zprávou</h3>
           <ul>
             <li>Řídicí centrum ukazuje jen věci, které mají mít dnes pozornost.</li>
-            <li>Tlačítko Chat s Autopilotem otevře kompaktní panel ke konkrétní zprávě.</li>
-            <li>Bezpečný interní pokyn Autopilot provede rovnou a zapíše do historie.</li>
+            <li>Chat s Autopilotem je nahoře v detailu každé zprávy a má vlastní historii.</li>
+            <li>Autopilot každý pokyn nejdřív shrne, zeptá se „Mám provést?“ a teprve po potvrzení ho zapíše jako provedený.</li>
             <li>Detail zprávy rozlišuje obálku zprávy a obsah příloh.</li>
             <li>Když příloha není přečtená, Autopilot nevytvoří falešné shrnutí.</li>
           </ul>
@@ -23124,6 +23186,15 @@ function dataBoxPlusDetailOverlay() {
           </div>
         </div>
         <div class="ds-plus-detail__body">
+          <section class="ds-plus-detail-section ds-plus-detail-section--chat">
+            <div class="ds-plus-detail-section__head">
+              <div>
+                <h3>Chat s Autopilotem</h3>
+                <p>Tento chat a jeho historie patří jen k této datové zprávě. Každá akce čeká na potvrzení.</p>
+              </div>
+            </div>
+            ${dataBoxPlusChatPanel(message)}
+          </section>
           <section class="ds-plus-detail-section ds-plus-detail-section--workflow">
             <h3>Pracovní stav</h3>
             ${dataBoxPlusWorkflowSummary(workflow)}
@@ -32170,7 +32241,7 @@ async function loadDataBoxPlusMessageDetail(messageId) {
   }
 }
 
-async function runDataBoxPlusInstruction(messageIdValue, instructionValue) {
+async function runDataBoxPlusInstruction(messageIdValue, instructionValue, options = {}) {
   const messageId = String(messageIdValue || "").trim();
   const instruction = String(instructionValue || "").trim();
   if (!messageId) return;
@@ -32193,7 +32264,10 @@ async function runDataBoxPlusInstruction(messageIdValue, instructionValue) {
   try {
     const result = await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(messageId)}/instruction`, {
       method: "POST",
-      body: JSON.stringify({ instruction })
+      body: JSON.stringify({
+        instruction,
+        ...(options.confirmationId ? { confirmationId: options.confirmationId } : {})
+      })
     });
     const assistantText = result.notice || result.action?.assistantText || "Hotovo. Provedeno.";
     dataBoxPlusState.instructionChats[messageId] = dataBoxPlusResolvePendingChatEntries(
@@ -32210,7 +32284,8 @@ async function runDataBoxPlusInstruction(messageIdValue, instructionValue) {
         understoodAs: result.action?.understoodAs,
         performedAction: result.action?.outcome === "done" || result.action?.outcome === "draft_ready"
           ? result.action?.performedAction
-          : "Nebylo provedeno nic"
+          : "Nebylo provedeno nic",
+        proposedAction: result.action?.proposedAction
       }
     );
     dataBoxPlusState.notice = assistantText;
@@ -41882,6 +41957,28 @@ document.addEventListener("click", async (event) => {
     dataBoxPlusState.composeMailboxId = dataBoxPlusComposeMailbox.dataset.dsPlusComposeMailbox || "";
     dataBoxPlusState.notice = "Schránka pro novou zprávu je vybraná. Nic se zatím neodesílá.";
     render();
+    return;
+  }
+
+  const dataBoxPlusChatConfirm = event.target.closest("[data-ds-plus-chat-confirm]");
+  if (dataBoxPlusChatConfirm) {
+    event.preventDefault();
+    await runDataBoxPlusInstruction(
+      dataBoxPlusChatConfirm.dataset.dsPlusChatConfirm || "",
+      "ano",
+      { confirmationId: dataBoxPlusChatConfirm.dataset.confirmationId || "" }
+    );
+    return;
+  }
+
+  const dataBoxPlusChatCancel = event.target.closest("[data-ds-plus-chat-cancel]");
+  if (dataBoxPlusChatCancel) {
+    event.preventDefault();
+    await runDataBoxPlusInstruction(
+      dataBoxPlusChatCancel.dataset.dsPlusChatCancel || "",
+      "zrušit",
+      { confirmationId: dataBoxPlusChatCancel.dataset.confirmationId || "" }
+    );
     return;
   }
 

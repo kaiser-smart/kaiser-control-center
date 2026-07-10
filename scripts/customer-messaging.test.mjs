@@ -7,6 +7,7 @@ import {
 } from "../functions/_lib/customer-messaging-service.js";
 import {
   CUSTOMER_MESSAGE_TEMPLATES,
+  customerTemplateOptions,
   renderCustomerMessageTemplate,
   templateAlwaysIncludesStop
 } from "../functions/_lib/customer-message-templates.js";
@@ -203,6 +204,11 @@ function validInput(overrides = {}) {
 assert.equal(messagingTest.normalizeCustomerPhone("777 123 456"), "+420777123456");
 assert.equal(messagingTest.normalizeCustomerPhone("+420777123456"), "+420777123456");
 assert.equal(messagingTest.normalizeCustomerPhone("abc"), "");
+assert.equal(customerTemplateOptions().some((template) => template.key === "data_box_forward"), false);
+assert.match(
+  renderCustomerMessageTemplate("data_box_forward", { message: "Prosím o kontrolu datové zprávy." }).body,
+  /Prosím o kontrolu datové zprávy\./
+);
 
 for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
   const rendered = renderCustomerMessageTemplate(key, {
@@ -266,6 +272,29 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     assert.equal(testEnv.SMART_ODPADY_DB.logs[0].status, "delivered");
   } finally {
     globalThis.fetch = originalFetch;
+  }
+}
+
+{
+  const testEnv = env({ KSO_CUSTOMER_MESSAGING_MODE: "live" });
+  const originalFetch = globalThis.fetch;
+  const originalConsoleError = console.error;
+  const database = testEnv.SMART_ODPADY_DB;
+  const originalRun = database.run.bind(database);
+  database.run = (sql, bindings) => {
+    if (sql.includes("UPDATE customer_message_log")) throw new Error("audit unavailable");
+    return originalRun(sql, bindings);
+  };
+  globalThis.fetch = async () => new Response(JSON.stringify({ sid: "SM-AUDIT-WARNING", status: "accepted" }), { status: 201 });
+  console.error = () => {};
+  try {
+    const result = await sendCustomerMessage(testEnv, validInput());
+    assert.equal(result.sent, true);
+    assert.equal(result.twilioMessageSid, "SM-AUDIT-WARNING");
+    assert.match(result.auditWarning, /přijatá poskytovatelem/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.error = originalConsoleError;
   }
 }
 

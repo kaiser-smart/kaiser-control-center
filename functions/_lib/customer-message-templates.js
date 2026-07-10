@@ -21,6 +21,12 @@ export const CUSTOMER_MESSAGE_TEMPLATES = {
     category: "transactional",
     body: "Kaiser servis: Zpráva od dispečinku k vaší službě: {message}."
   },
+  data_box_forward: {
+    label: "Předání datové zprávy",
+    category: "transactional",
+    internalOnly: true,
+    body: "Kaiser servis: {message}"
+  },
   missing_information: {
     label: "Doplnění údajů",
     category: "transactional",
@@ -40,11 +46,13 @@ function normalizeTemplateKey(value) {
 }
 
 export function customerTemplateOptions() {
-  return Object.entries(CUSTOMER_MESSAGE_TEMPLATES).map(([key, template]) => ({
-    key,
-    label: template.label,
-    category: template.category
-  }));
+  return Object.entries(CUSTOMER_MESSAGE_TEMPLATES)
+    .filter(([, template]) => template.internalOnly !== true)
+    .map(([key, template]) => ({
+      key,
+      label: template.label,
+      category: template.category
+    }));
 }
 
 export function templateAlwaysIncludesStop(body) {

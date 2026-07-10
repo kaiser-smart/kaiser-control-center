@@ -204,25 +204,45 @@ export async function sendCustomerMessage(env, input = {}) {
     return { id: log.id, status: "pending", sent: false, testMode: true, messageBody };
   }
 
+  let payload;
   try {
-    const payload = await twilioPostMessage(config, { to: phone, body: messageBody, channel });
-    const sid = cleanString(payload.sid);
-    const providerStatus = cleanString(payload.status || "accepted");
+    payload = await twilioPostMessage(config, { to: phone, body: messageBody, channel });
+  } catch (error) {
+    const errorMessage = cleanString(error.message) || "Twilio odeslání selhalo.";
+    try {
+      await updateCustomerMessageLog(env, log.id, {
+        status: "failed",
+        errorMessage,
+        metadata: { ...baseLog.metadata, twilioError: error.payload || { message: errorMessage } }
+      });
+    } catch (auditError) {
+      console.error("customer_message.failure_audit_failed", { message: auditError.message });
+    }
+    return { id: log.id, status: "failed", sent: false, errorMessage, messageBody };
+  }
+
+  const sid = cleanString(payload.sid);
+  const providerStatus = cleanString(payload.status || "accepted");
+  let auditWarning = "";
+  try {
     await updateCustomerMessageLog(env, log.id, {
       status: ["sent", "delivered"].includes(providerStatus) ? providerStatus : "pending",
       twilioMessageSid: sid,
       usedChannel: usedChannelForRequest(channel),
       metadata: { ...baseLog.metadata, twilioResponse: { sid, status: providerStatus } }
     });
-    return { id: log.id, status: providerStatus || "pending", sent: true, twilioMessageSid: sid, messageBody };
   } catch (error) {
-    await updateCustomerMessageLog(env, log.id, {
-      status: "failed",
-      errorMessage: cleanString(error.message) || "Twilio odeslání selhalo.",
-      metadata: { ...baseLog.metadata, twilioError: error.payload || { message: error.message } }
-    });
-    return { id: log.id, status: "failed", sent: false, errorMessage: error.message, messageBody };
+    auditWarning = "SMS byla přijatá poskytovatelem, ale nepodařilo se aktualizovat její auditní záznam.";
+    console.error("customer_message.success_audit_failed", { message: error.message });
   }
+  return {
+    id: log.id,
+    status: providerStatus || "pending",
+    sent: true,
+    twilioMessageSid: sid,
+    messageBody,
+    auditWarning
+  };
 }
 
 export function isStopMessage(body) {

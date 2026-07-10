@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.489"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.490"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: GPT chat s potvrzením",
+    text: "Každá datová zpráva má vlastní GPT chat s cloudovou historií. Autopilot připraví přesnou akci, vyžádá jednorázové potvrzení a teprve potom může změnit stav, odeslat potvrzený e-mail nebo provozní SMS. Učí se jen z úspěšně potvrzených výsledků."
+  },
   {
     title: "Pohledávky: pre-rating bez nulových zůstatků",
     text: "Pre-rating A0/B0/C0/N používá v přehledu skutečný otevřený balíček faktur a nezobrazuje falešné nulové metriky zpoždění."
