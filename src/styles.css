@@ -31619,17 +31619,20 @@ body:has(.ds-plus-page) {
   line-height: 1.35;
 }
 
-.ds-plus-mini-instruction {
-  display: grid;
-  grid-template-columns: auto minmax(280px, 520px) auto;
-  gap: 6px;
-  align-items: center;
-  width: auto;
-  max-width: 100%;
-  margin: 0;
+.ds-plus-chat-launcher {
+  min-height: 34px;
+  justify-self: start;
+  border-color: #bfd7bd;
+  background: #ffffff;
+  color: #245d36;
+  font-weight: 800;
 }
 
-.ds-plus-mini-instruction label,
+.ds-plus-chat-launcher:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .ds-plus-mini-confirm span {
   color: #526052;
   font-size: 0.82rem;
@@ -31637,26 +31640,6 @@ body:has(.ds-plus-page) {
   white-space: nowrap;
 }
 
-.ds-plus-mini-instruction input {
-  min-width: 0;
-  width: 520px;
-  max-width: 100%;
-  height: 34px;
-  border: 1px solid #d5dfd1;
-  border-radius: 8px;
-  padding: 6px 10px;
-  background: #ffffff;
-  color: #202821;
-  font: inherit;
-  font-size: 0.9rem;
-}
-
-.ds-plus-mini-instruction input:focus {
-  outline: 2px solid #2f7d46;
-  outline-offset: 1px;
-}
-
-.ds-plus-mini-instruction button,
 .ds-plus-mini-confirm button {
   min-height: 34px;
   border: 1px solid #2f7d46;
@@ -31676,7 +31659,6 @@ body:has(.ds-plus-page) {
   color: #344035;
 }
 
-.ds-plus-mini-instruction button:disabled,
 .ds-plus-mini-confirm button:disabled {
   opacity: 0.65;
   cursor: wait;
@@ -32212,11 +32194,11 @@ body:has(.ds-plus-page) {
 
 .ds-plus-instruction-card {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   border: 1px solid #dce6d8;
   border-radius: 8px;
-  padding: 12px;
-  background: #fbfdf9;
+  padding: 14px;
+  background: #f8fbf6;
 }
 
 .ds-plus-instruction-card--compact {
@@ -32224,43 +32206,115 @@ body:has(.ds-plus-page) {
   background: #f8fbf6;
 }
 
-.ds-plus-instruction-card form {
+.ds-plus-chat-composer {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
   gap: 8px;
+  align-items: end;
   min-width: 0;
 }
 
-.ds-plus-instruction-card__head {
+.ds-plus-chat-panel {
   display: grid;
-  gap: 5px;
+  gap: 12px;
+  border: 1px solid #d7e3d3;
+  border-radius: 8px;
+  padding: 14px;
+  background: linear-gradient(180deg, #f8fbf6 0%, #ffffff 100%);
 }
 
-.ds-plus-instruction-card__head h3,
-.ds-plus-instruction-card__head p,
-.ds-plus-instruction-bubble p,
+.ds-plus-chat-panel__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.ds-plus-chat-panel__head h3,
+.ds-plus-chat-panel__head p,
+.ds-plus-chat-message p,
 .ds-plus-instruction-preview > strong {
   margin: 0;
 }
 
-.ds-plus-instruction-card__head h3 {
+.ds-plus-chat-panel__head h3 {
   color: #1f2a22;
-  font-size: 1rem;
+  font-size: 1.08rem;
   line-height: 1.2;
 }
 
-.ds-plus-instruction-card__head p {
+.ds-plus-chat-panel__head span {
   color: #526052;
-  font-size: 0.9rem;
-  line-height: 1.45;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
-.ds-plus-instruction-card textarea {
-  width: 100%;
-  min-width: 0;
-  min-height: 68px;
-  border: 1px solid #d5dfd1;
+.ds-plus-chat-panel__head strong {
+  border: 1px solid #cfe0cc;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #ffffff;
+  color: #245d36;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.ds-plus-chat-window__messages {
+  display: grid;
+  gap: 10px;
+  max-height: min(42vh, 360px);
+  overflow: auto;
+  padding: 2px;
+}
+
+.ds-plus-chat-message {
+  display: grid;
+  gap: 5px;
+  max-width: min(78%, 680px);
+  border: 1px solid #dfe8dc;
   border-radius: 8px;
   padding: 10px 12px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(37, 54, 38, 0.06);
+}
+
+.ds-plus-chat-message--assistant {
+  justify-self: start;
+  border-color: #cfe0cc;
+}
+
+.ds-plus-chat-message--user {
+  justify-self: end;
+  border-color: #bcd4bd;
+  background: #eef7ec;
+}
+
+.ds-plus-chat-message--draft {
+  opacity: 0.78;
+}
+
+.ds-plus-chat-message span {
+  color: #647060;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.ds-plus-chat-message p {
+  color: #223025;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ds-plus-chat-composer textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 160px;
+  border: 1px solid #d5dfd1;
+  border-radius: 8px;
+  padding: 11px 12px;
   background: #ffffff;
   color: #202821;
   font: inherit;
@@ -32268,16 +32322,23 @@ body:has(.ds-plus-page) {
   resize: vertical;
 }
 
-.ds-plus-instruction-card--compact textarea {
-  min-height: 58px;
+.ds-plus-chat-composer button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
-.ds-plus-instruction-card textarea:focus {
+.ds-plus-chat-composer textarea:focus {
   outline: 2px solid #2f7d46;
   outline-offset: 2px;
 }
 
-.ds-plus-instruction-examples,
+.ds-plus-chat-suggestions,
 .ds-plus-instruction-actions {
   display: flex;
   flex-wrap: wrap;
@@ -32285,7 +32346,7 @@ body:has(.ds-plus-page) {
   align-items: center;
 }
 
-.ds-plus-instruction-examples button {
+.ds-plus-chat-suggestions button {
   min-height: 32px;
   border: 1px solid #d8e0d5;
   border-radius: 999px;
@@ -32298,10 +32359,17 @@ body:has(.ds-plus-page) {
   cursor: pointer;
 }
 
-.ds-plus-instruction-examples button:hover,
-.ds-plus-instruction-examples button:focus-visible {
+.ds-plus-chat-suggestions button:hover,
+.ds-plus-chat-suggestions button:focus-visible {
   border-color: #bfd7bd;
   background: #edf6ec;
+}
+
+.ds-plus-chat-window__hint {
+  margin: 0;
+  color: #5c6a5c;
+  font-size: 0.86rem;
+  line-height: 1.35;
 }
 
 .ds-plus-instruction-preview {
@@ -33285,7 +33353,7 @@ body:has(.ds-plus-page) {
 
   .ds-plus-message-row__action .primary-action,
   .ds-plus-recommendation__actions button,
-  .ds-plus-instruction-card > form > .primary-action,
+  .ds-plus-chat-composer,
   .ds-plus-instruction-actions button,
   .ds-plus-rule__actions button,
   .ds-plus-detail-actions button,
@@ -33312,13 +33380,32 @@ body:has(.ds-plus-page) {
     padding: 7px 12px;
   }
 
-  .ds-plus-mini-instruction {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    width: 100%;
+  .ds-plus-chat-panel,
+  .ds-plus-instruction-card {
+    padding: 12px;
   }
 
-  .ds-plus-mini-instruction input {
-    width: 100%;
+  .ds-plus-chat-panel__head {
+    display: grid;
+  }
+
+  .ds-plus-chat-panel__head strong {
+    justify-self: start;
+    white-space: normal;
+  }
+
+  .ds-plus-chat-message {
+    max-width: 100%;
+  }
+
+  .ds-plus-chat-suggestions {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .ds-plus-chat-suggestions button {
+    flex: 0 0 auto;
   }
 
   .ds-plus-mini-confirm {

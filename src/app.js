@@ -1268,6 +1268,7 @@ const dataBoxPlusState = {
   sendReadiness: null,
   learning: null,
   instructionDrafts: {},
+  instructionChats: {},
   instructionLoadingId: "",
   instructionRemember: {},
   composeOpen: false,
@@ -21399,12 +21400,12 @@ function dataBoxPlusMessageWorkflow(message, options = {}) {
       state: "Potřebuje pokyn",
       stateLabel: "Potřebuje pokyn",
       result: "Autopilot čeká na jasný chatový pokyn.",
-      nextStep: "Odeslat pokyn",
+      nextStep: "Chat s Autopilotem",
       primaryAction: dataBoxPlusWorkflowAction({
-        label: "Odeslat pokyn",
+        label: "Chat s Autopilotem",
         variant: "primary-action",
-        attrs: `data-ds-plus-open="${escapeHtml(messageId)}"`,
-        help: "Otevře se chat. Napsaný pokyn Autopilot rovnou provede."
+        attrs: `data-ds-plus-chat="${escapeHtml(messageId)}"`,
+        help: "Otevře se chat. Napsaná zpráva Autopilotovi se rovnou provede."
       }),
       secondaryActions: [
         dataBoxPlusWorkflowAction({ label: "Detail historie", messageId, help: "Otevře se detail zprávy a historie." })
@@ -21574,7 +21575,7 @@ function dataBoxPlusMessageWorkflow(message, options = {}) {
       state: "Potřebuje pokyn",
       stateLabel: "Potřebuje pokyn",
       result: "Nezpracováno.",
-      nextStep: "Odeslat pokyn",
+      nextStep: "Chat s Autopilotem",
       primaryAction: openAction,
       secondaryActions: [
         dataBoxPlusWorkflowAction({ label: "Detail historie", messageId, help: dataBoxPlusActionHelpText("Historie") })
@@ -21590,7 +21591,7 @@ function dataBoxPlusMessageWorkflow(message, options = {}) {
       state: "Potřebuje pokyn",
       stateLabel: "Potřebuje pokyn",
       result: "Zpráva čeká na chatový pokyn.",
-      nextStep: "Odeslat pokyn",
+      nextStep: "Chat s Autopilotem",
       primaryAction: openAction,
       secondaryActions: [],
       tone: dataBoxPlusWorkflowTone("Potřebuje pokyn"),
@@ -21651,23 +21652,12 @@ function dataBoxPlusInstructionExamples(message = {}) {
 }
 
 function dataBoxPlusMiniInstructionForm(message) {
-  const draft = Object.prototype.hasOwnProperty.call(dataBoxPlusState.instructionDrafts, message.id)
-    ? dataBoxPlusState.instructionDrafts[message.id]
-    : "";
   const loading = dataBoxPlusState.instructionLoadingId === message.id;
 
   return `
-    <form class="ds-plus-mini-instruction" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
-      <label for="ds-plus-mini-instruction-${escapeHtml(message.id)}">Co s tím?</label>
-      <input
-        id="ds-plus-mini-instruction-${escapeHtml(message.id)}"
-        name="instruction"
-        value="${escapeHtml(draft)}"
-        placeholder="např. faktury"
-        ${loading ? "disabled" : ""}
-      />
-      <button type="submit" ${loading ? "disabled" : ""}>${escapeHtml(loading ? "..." : "Odeslat pokyn")}</button>
-    </form>
+    <button class="secondary-link ds-plus-chat-launcher" type="button" data-ds-plus-chat="${escapeHtml(message.id)}" ${loading ? "disabled" : ""}>
+      ${escapeHtml(loading ? "Autopilot pracuje..." : "Chat s Autopilotem")}
+    </button>
   `;
 }
 
@@ -21762,26 +21752,72 @@ function dataBoxPlusInstructionCard(message, options = {}) {
     ? dataBoxPlusState.instructionDrafts[message.id]
     : "";
   const loading = dataBoxPlusState.instructionLoadingId === message.id;
+  const localChat = dataBoxPlusState.instructionChats[message.id] || null;
   const examples = dataBoxPlusInstructionExamples(message);
+  const history = Array.isArray(message.history) ? message.history : [];
+  const lastInstructionEvent = history.find((event) => String(event.originalInstruction || event.userInstruction || event.auditNote || "").trim());
+  const lastInstruction = lastInstructionEvent
+    ? String(lastInstructionEvent.originalInstruction || lastInstructionEvent.userInstruction || "").trim()
+    : "";
+  const lastAssistantText = lastInstructionEvent
+    ? String(lastInstructionEvent.assistantText || lastInstructionEvent.result || lastInstructionEvent.auditNote || "").trim()
+    : "";
+  const visibleUserText = localChat?.userText || lastInstruction;
+  const assistantIntro = loading
+    ? localChat?.assistantText || "Pracuju na tom."
+    : localChat?.assistantText || lastAssistantText || "Napiš mi, co mám se zprávou udělat. Jakmile zprávu pošleš, rovnou to provedu.";
 
   return `
-    <section class="ds-plus-instruction-card ${compact ? "ds-plus-instruction-card--compact" : ""}" aria-label="Pokyn Autopilotovi">
-      <form data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
-        <div class="ds-plus-instruction-card__head">
-          <h3>Co s touto zprávou?</h3>
-          <p>Napiš pokyn. Autopilot ho rovnou provede.</p>
+    <section class="ds-plus-instruction-card ds-plus-chat-window ${compact ? "ds-plus-instruction-card--compact" : ""}" aria-label="Chat s Autopilotem">
+      <div class="ds-plus-chat-window__messages" aria-live="polite">
+        <div class="ds-plus-chat-message ds-plus-chat-message--assistant">
+          <span>Autopilot</span>
+          <p>${escapeHtml(assistantIntro)}</p>
         </div>
+        ${visibleUserText ? `
+          <div class="ds-plus-chat-message ds-plus-chat-message--user">
+            <span>Radim</span>
+            <p>${escapeHtml(visibleUserText)}</p>
+          </div>
+        ` : ""}
+        ${draft ? `
+          <div class="ds-plus-chat-message ds-plus-chat-message--user ds-plus-chat-message--draft">
+            <span>Radim píše</span>
+            <p>${escapeHtml(draft)}</p>
+          </div>
+        ` : ""}
+      </div>
+      <div class="ds-plus-chat-suggestions" aria-label="Rychlé zprávy">
+        ${examples.map((example) => `<button type="button" data-ds-plus-instruction-example="${escapeHtml(example)}">${escapeHtml(example)}</button>`).join("")}
+      </div>
+      <form class="ds-plus-chat-composer" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
         <textarea
           name="instruction"
-          rows="${compact ? "2" : "3"}"
-          placeholder="Např. předat na faktury, archivovat, označit jako vyřešené…"
+          rows="${compact ? "1" : "2"}"
+          aria-label="Zpráva pro Autopilota"
+          placeholder="Napiš zprávu Autopilotovi..."
           ${loading ? "disabled" : ""}
         >${escapeHtml(draft)}</textarea>
-        <div class="ds-plus-instruction-examples" aria-label="Příklady pokynů">
-          ${examples.map((example) => `<button type="button" data-ds-plus-instruction-example="${escapeHtml(example)}">${escapeHtml(example)}</button>`).join("")}
-        </div>
-        <button class="primary-action" type="submit" ${loading ? "disabled" : ""}>${escapeHtml(loading ? "Provádím..." : "Odeslat pokyn")}</button>
+        <button class="primary-action" type="submit" aria-label="Odeslat zprávu Autopilotovi" title="Odeslat" ${loading ? "disabled" : ""}>
+          ${loading ? `<span>...</span>` : `<span aria-hidden="true">→</span>`}
+        </button>
       </form>
+      <p class="ds-plus-chat-window__hint">Autopilot po odeslání zprávy rovnou změní stav a zapíše historii.</p>
+    </section>
+  `;
+}
+
+function dataBoxPlusChatPanel(message) {
+  return `
+    <section class="ds-plus-chat-panel" aria-label="Radim vs Autopilot">
+      <div class="ds-plus-chat-panel__head">
+        <div>
+          <span>Radim vs Autopilot</span>
+          <h3>Chat s Autopilotem</h3>
+        </div>
+        <strong>Provádí zprávy hned</strong>
+      </div>
+      ${dataBoxPlusInstructionCard(message)}
     </section>
   `;
 }
@@ -23106,16 +23142,7 @@ function dataBoxPlusDetailOverlay() {
             <h3>Pracovní stav</h3>
             ${dataBoxPlusWorkflowSummary(workflow)}
           </section>
-          <section class="ds-plus-detail-section ds-plus-detail-section--chat" aria-label="Chat s Autopilotem">
-            <div class="ds-plus-chat-title">
-              <div>
-                <span>Radim</span>
-                <h3>Chat s Autopilotem</h3>
-              </div>
-              <strong>Autopilot provede pokyn hned</strong>
-            </div>
-            ${dataBoxPlusInstructionCard(message)}
-          </section>
+          ${dataBoxPlusChatPanel(message)}
           <section class="ds-plus-detail-section ds-plus-detail-section--header">
             <dl>
               <div><dt>Odesílatel</dt><dd>${escapeHtml(message.senderName)}</dd></div>
@@ -32032,12 +32059,17 @@ async function submitDataBoxPlusInstruction(form) {
   const instruction = String(form?.elements?.instruction?.value || "").trim();
   if (!messageId) return;
   if (!instruction) {
-    dataBoxPlusState.notice = "Napiš pokyn pro Autopilota.";
+    dataBoxPlusState.notice = "Napiš zprávu Autopilotovi.";
     render();
     return;
   }
+  dataBoxPlusState.instructionChats[messageId] = {
+    userText: instruction,
+    assistantText: "Pracuju na tom.",
+    pending: true
+  };
   dataBoxPlusState.instructionLoadingId = messageId;
-  dataBoxPlusState.notice = "Autopilot provádí pokyn.";
+  dataBoxPlusState.notice = "Autopilot pracuje.";
   render();
   try {
     const result = await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(messageId)}/instruction`, {
@@ -32045,14 +32077,26 @@ async function submitDataBoxPlusInstruction(form) {
       body: JSON.stringify({ instruction })
     });
     delete dataBoxPlusState.instructionDrafts[messageId];
-    dataBoxPlusState.notice = result.notice || result.action?.assistantText || "Hotovo. Pokyn byl proveden.";
+    const assistantText = result.notice || result.action?.assistantText || "Hotovo. Provedeno.";
+    dataBoxPlusState.instructionChats[messageId] = {
+      userText: instruction,
+      assistantText,
+      pending: false
+    };
+    dataBoxPlusState.notice = assistantText;
     await loadDataBoxPlusData({ force: true, renderAfter: false });
     if (result.message?.id) {
       const index = dataBoxPlusState.messages.findIndex((message) => message.id === result.message.id);
       if (index >= 0) dataBoxPlusState.messages[index] = result.message;
     }
   } catch (error) {
-    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Pokyn se nepodařilo zpracovat.");
+    const assistantText = dataBoxPlusHumanError(error.payload?.error || error.message || "Zprávu se nepodařilo zpracovat.");
+    dataBoxPlusState.instructionChats[messageId] = {
+      userText: instruction,
+      assistantText,
+      pending: false
+    };
+    dataBoxPlusState.notice = assistantText;
   } finally {
     dataBoxPlusState.instructionLoadingId = "";
     render();
