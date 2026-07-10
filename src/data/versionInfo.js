@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.484"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.485"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: kontrola otevřeného zůstatku",
+    text: "Import respektuje výslovný stav neuhrazené faktury z Vistosu. Rozporný nulový zůstatek bezpečně dopočítá z částky a úhrad a označí fakturu k ruční kontrole."
+  },
   {
     title: "Pohledávky: ověřitelný rating platební morálky",
     text: "Rating rozlišuje bankovní pre-rating a finální výpočet z faktur, splatností a skutečných úhrad. Zobrazuje skóre, confidence, metriky, penalizace a kvalitu dat; celý modul zůstává read-only/dry-run bez komunikace zákazníkům a bez volání bankovního API."

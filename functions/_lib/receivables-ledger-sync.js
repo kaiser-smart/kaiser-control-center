@@ -25,6 +25,11 @@ function booleanValue(value) {
   return value === true || value === 1 || cleanString(value).toLowerCase() === "true";
 }
 
+function optionalBoolean(value) {
+  if (value === undefined || value === null || cleanString(value) === "") return null;
+  return booleanValue(value);
+}
+
 function parseJson(value, fallback) {
   if (value && typeof value === "object") return value;
   try {
@@ -94,12 +99,30 @@ async function runStatements(db, statements) {
 function invoiceStatus(invoice, paidAmount, openAmount) {
   const sourceStatus = cleanString(invoice.status).toLowerCase();
   if (sourceStatus.includes("spor") || sourceStatus === "disputed") return "disputed";
-  if (booleanValue(invoice.isPaid) || openAmount <= 0) return "paid";
+  const sourcePaid = optionalBoolean(invoice.isPaid);
+  if (sourcePaid === true) return "paid";
+  if (sourcePaid === false) return paidAmount > 0 && openAmount > 0 ? "partially_paid" : "unpaid";
+  if (openAmount <= 0) return "paid";
   if (paidAmount > 0) return "partially_paid";
   return "unpaid";
 }
 
-function invoiceFlags(row, invoice) {
+function invoiceAmounts(invoice) {
+  const totalAmount = numberValue(invoice.totalAmount ?? invoice.priceWithTax);
+  const paidAmount = Math.max(0, numberValue(invoice.paidAmount));
+  const computedOpenAmount = Math.max(0, totalAmount - paidAmount);
+  const sourceOpenValue = invoice.openAmount ?? invoice.remainingAmount;
+  const sourceOpenAmount = sourceOpenValue === undefined || sourceOpenValue === null || cleanString(sourceOpenValue) === ""
+    ? null
+    : Math.max(0, numberValue(sourceOpenValue));
+  const sourcePaid = optionalBoolean(invoice.isPaid);
+  let openAmount = sourceOpenAmount ?? computedOpenAmount;
+  if (sourcePaid === true) openAmount = 0;
+  if (sourcePaid === false) openAmount = Math.max(sourceOpenAmount ?? 0, computedOpenAmount);
+  return { totalAmount, paidAmount, openAmount, sourceOpenAmount, computedOpenAmount, sourcePaid };
+}
+
+function invoiceFlags(row, invoice, amounts) {
   const flags = [];
   if (cleanString(row.preview_status) === "review" || cleanString(row.preview_status) === "needs_review") {
     const issue = cleanString(row.issue_code).toUpperCase();
@@ -109,7 +132,18 @@ function invoiceFlags(row, invoice) {
   }
   if (!cleanString(invoice.dueDate)) flags.push("MISSING_DUE_DATE");
   if (!cleanString(invoice.variableSymbol)) flags.push("MISSING_VARIABLE_SYMBOL");
-  if (!numberValue(invoice.totalAmount ?? invoice.priceWithTax)) flags.push("MISSING_INVOICE_AMOUNT");
+  if (!amounts.totalAmount) flags.push("MISSING_INVOICE_AMOUNT");
+  const tolerance = Math.max(1, Math.abs(amounts.totalAmount) * 0.001);
+  if (
+    amounts.sourcePaid === false
+    && (amounts.sourceOpenAmount ?? 0) <= tolerance
+    && amounts.computedOpenAmount > tolerance
+  ) {
+    flags.push("MISSING_REMAINING_AMOUNT", "INVOICE_AMOUNT_MISMATCH");
+  }
+  if (amounts.sourcePaid === true && amounts.computedOpenAmount > tolerance) {
+    flags.push("INVOICE_AMOUNT_MISMATCH");
+  }
   return [...new Set(flags)].sort();
 }
 
@@ -135,7 +169,8 @@ export async function syncReceivablesVistosLedger(env, payload = {}, user = null
       const invoice = parseJson(row.normalized_json, {});
       const companyId = cleanString(invoice.customerCompanyId || invoice.customerFk);
       const invoiceId = cleanString(invoice.vistoInvoiceId || invoice.invoiceId);
-      const flags = invoiceFlags(row, invoice);
+      const amounts = invoiceAmounts(invoice);
+      const flags = invoiceFlags(row, invoice, amounts);
       if (!companyId || !invoiceId || flags.includes("MISSING_INVOICE_AMOUNT")) {
         summary.skipped += 1;
         summary.review += 1;
@@ -144,9 +179,7 @@ export async function syncReceivablesVistosLedger(env, payload = {}, user = null
       const customerId = stableId("receivable-customer", companyId);
       const ledgerInvoiceId = stableId("receivable-invoice", invoiceId);
       const customerName = cleanString(invoice.customerCompanyName || invoice.customerName || companyId);
-      const totalAmount = numberValue(invoice.totalAmount ?? invoice.priceWithTax);
-      const paidAmount = Math.max(0, numberValue(invoice.paidAmount));
-      const openAmount = Math.max(0, numberValue(invoice.openAmount ?? invoice.remainingAmount, totalAmount - paidAmount));
+      const { totalAmount, paidAmount, openAmount } = amounts;
       const status = invoiceStatus(invoice, paidAmount, openAmount);
       customerIds.add(customerId);
       summary.invoiceCount += 1;

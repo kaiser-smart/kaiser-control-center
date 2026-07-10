@@ -184,7 +184,8 @@ sqlite.prepare(`
   dueDate: "2026-06-15",
   totalAmount: 1210,
   paidAmount: 0,
-  openAmount: 1210,
+  openAmount: 0,
+  isPaid: false,
   currency: "CZK",
   customerManagerName: "Test Manager"
 }));
@@ -192,10 +193,16 @@ sqlite.prepare(`
 {
   const preview = await syncReceivablesVistosLedger(env, { batchId: "batch-vistos" }, user);
   assert.equal(preview.persisted, false);
+  assert.equal(preview.summary.ready, 0);
+  assert.equal(preview.summary.review, 1);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM receivable_customers WHERE company_name = 'Ledger Test s.r.o.'").get().count, 0);
   const persisted = await syncReceivablesVistosLedger(env, { batchId: "batch-vistos", persist: true }, user);
   assert.equal(persisted.persisted, true);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM receivable_invoices WHERE invoice_number = '2601000999'").get().count, 1);
+  const storedInvoice = sqlite.prepare("SELECT open_amount, status, data_quality_flags_json FROM receivable_invoices WHERE invoice_number = '2601000999'").get();
+  assert.equal(storedInvoice.open_amount, 1210);
+  assert.equal(storedInvoice.status, "unpaid");
+  assert.deepEqual(JSON.parse(storedInvoice.data_quality_flags_json), ["INVOICE_AMOUNT_MISMATCH", "MISSING_REMAINING_AMOUNT"]);
 }
 
 sqlite.prepare(`
