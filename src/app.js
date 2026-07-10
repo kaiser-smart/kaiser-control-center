@@ -26781,16 +26781,112 @@ function renderPublicVehicleTrackingPreview() {
   document.title = `Veřejný soft-metal náhled sledování vozidel | ${APP_NAME}`;
 }
 
+function neumorphCollectionRoutesRuntime(user) {
+  if (!user || !collectionRoutesCanViewPilot(user)) {
+    return {
+      loaded: false,
+      loading: false,
+      error: user ? "Aktualni role nema pristup k modulu Trasy svozu." : "",
+      apiStatus: "waiting",
+      canView: false,
+      canManage: false,
+      batches: [],
+      sites: [],
+      issues: [],
+      sourceBatches: [],
+      sourceRows: [],
+      sourceAllRows: [],
+      sourceSummary: null,
+      sourceImportError: "",
+      sourceImportMessage: "",
+      sourceVistosMatchMessage: "",
+      sourceVistosMatchError: "",
+      sourceVistosMatchLoading: false,
+      sourceFilters: { ...collectionRoutesPilotState.sourceFilters },
+      sourceSelectedBatchId: "",
+      sourceSmartDayKey: collectionRoutesPilotState.sourceSmartDayKey,
+      sourceSmartCustomDate: collectionRoutesPilotState.sourceSmartCustomDate,
+      sourceSmartStatus: collectionRoutesPilotState.sourceSmartStatus,
+      sourceRouteView: collectionRoutesPilotState.sourceRouteView,
+      sourceDriverSelectedRowKey: collectionRoutesPilotState.sourceDriverSelectedRowKey,
+      sourceDriverListExpanded: collectionRoutesPilotState.sourceDriverListExpanded
+    };
+  }
+
+  return {
+    loaded: collectionRoutesPilotState.loaded,
+    loading: collectionRoutesPilotState.loading,
+    error: collectionRoutesPilotState.error,
+    message: collectionRoutesPilotState.message,
+    apiStatus: collectionRoutesPilotState.apiStatus,
+    canView: true,
+    canManage: collectionRoutesCanRunImportPreview(user),
+    importLoading: collectionRoutesPilotState.importLoading,
+    manualImportLoading: collectionRoutesPilotState.manualImportLoading,
+    kommunalPreviewLoading: collectionRoutesPilotState.kommunalPreviewLoading,
+    routeOptimizationLoading: collectionRoutesPilotState.routeOptimizationLoading,
+    batches: collectionRoutesPilotState.batches,
+    sites: collectionRoutesPilotState.sites,
+    issues: collectionRoutesPilotState.issues,
+    sourceBatches: collectionRoutesPilotState.sourceBatches,
+    sourceFiles: collectionRoutesPilotState.sourceFiles,
+    sourceRows: collectionRoutesSourceDisplayRows(),
+    sourceAllRows: collectionRoutesPilotState.sourceRows,
+    sourceSummary: collectionRoutesPilotState.sourceSummary,
+    sourceSelectedBatchId: collectionRoutesPilotState.sourceSelectedBatchId,
+    sourceFilters: { ...collectionRoutesPilotState.sourceFilters },
+    sourceSmartDayKey: collectionRoutesPilotState.sourceSmartDayKey,
+    sourceSmartCustomDate: collectionRoutesPilotState.sourceSmartCustomDate,
+    sourceSmartStatus: collectionRoutesPilotState.sourceSmartStatus,
+    sourceRouteView: collectionRoutesPilotState.sourceRouteView,
+    sourceDriverSelectedRowKey: collectionRoutesPilotState.sourceDriverSelectedRowKey,
+    sourceDriverListExpanded: collectionRoutesPilotState.sourceDriverListExpanded,
+    sourceImportLoading: collectionRoutesPilotState.sourceImportLoading,
+    sourceImportMessage: collectionRoutesPilotState.sourceImportMessage,
+    sourceImportError: collectionRoutesPilotState.sourceImportError,
+    sourceVistosMatchLoading: collectionRoutesPilotState.sourceVistosMatchLoading,
+    sourceVistosMatchMessage: collectionRoutesPilotState.sourceVistosMatchMessage,
+    sourceVistosMatchError: collectionRoutesPilotState.sourceVistosMatchError,
+    sourceVistosMatchSummary: collectionRoutesPilotState.sourceVistosMatchSummary,
+    kommunalPreviewRows: collectionRoutesPilotState.kommunalPreviewRows,
+    kommunalPreviewIssues: collectionRoutesPilotState.kommunalPreviewIssues,
+    kommunalPairingRows: collectionRoutesPilotState.kommunalPairingRows,
+    routeOptimizationPreview: collectionRoutesPilotState.routeOptimizationPreview
+  };
+}
+
+function neumorphRuntimeContext(user) {
+  return {
+    collectionRoutes: neumorphCollectionRoutesRuntime(user)
+  };
+}
+
+function ensureNeumorphRuntimeData(path, user) {
+  if (!user || !canViewModule(user, COLLECTION_ROUTES_MODULE_KEY)) {
+    return;
+  }
+
+  if (
+    path === "/neumorph" ||
+    path === "/neumorph/system-preview" ||
+    path.startsWith("/neumorph/trasy-svozu")
+  ) {
+    void loadCollectionRoutesPilot();
+  }
+}
+
 function renderNeumorphMigrationPreview() {
   const user = authState.user ? currentUser() : null;
   const path = normalizePath(window.location.pathname);
   app.innerHTML = renderNeumorphRoute({
     routeHref,
     user,
-    path
+    path,
+    runtime: neumorphRuntimeContext(user)
   });
   syncNeumorphRouteTheme(app.querySelector(".nm-app"));
   document.title = `Neumorph migrace | ${APP_NAME}`;
+  ensureNeumorphRuntimeData(path, user);
 }
 
 function renderAuthenticatedApp(user) {

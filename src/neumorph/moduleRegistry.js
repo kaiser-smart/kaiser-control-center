@@ -3,6 +3,7 @@ import { modules, moduleDashboards } from "../data/modules.js";
 import { canViewModule, hasPermission } from "../permissions.js";
 
 export const NEUMORPH_BASE_ROUTE = "/neumorph";
+export const NEUMORPH_SYSTEM_PREVIEW_ROUTE = `${NEUMORPH_BASE_ROUTE}/system-preview`;
 
 const feedbackModule = {
   id: "feedback",
@@ -413,32 +414,32 @@ export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BA
       label: "Migrace",
       items: [
         {
-          id: "system-preview",
-          label: "System",
-          shortLabel: "System",
+          id: "home",
+          label: "Prehled",
+          shortLabel: "Prehled",
           href: NEUMORPH_BASE_ROUTE,
           route: NEUMORPH_BASE_ROUTE,
           group: "migration",
           order: 0,
           permission: "dashboard",
           icon: "dashboard",
-          mobilePriority: 5,
+          mobilePriority: 1,
           activeMatch: [NEUMORPH_BASE_ROUTE],
           active: normalizePath(currentPath) === NEUMORPH_BASE_ROUTE
         },
         {
-          id: "components",
-          label: "Komponenty",
-          shortLabel: "Komponenty",
-          href: `${NEUMORPH_BASE_ROUTE}#components`,
-          route: `${NEUMORPH_BASE_ROUTE}#components`,
+          id: "system-preview",
+          label: "System preview",
+          shortLabel: "System",
+          href: NEUMORPH_SYSTEM_PREVIEW_ROUTE,
+          route: NEUMORPH_SYSTEM_PREVIEW_ROUTE,
           group: "migration",
           order: 1,
           permission: "dashboard",
           icon: "components",
           mobilePriority: 20,
-          activeMatch: [`${NEUMORPH_BASE_ROUTE}#components`],
-          active: false
+          activeMatch: [NEUMORPH_SYSTEM_PREVIEW_ROUTE],
+          active: normalizePath(currentPath) === NEUMORPH_SYSTEM_PREVIEW_ROUTE
         }
       ]
     }
@@ -498,6 +499,14 @@ export function resolveNeumorphRoute({ path = NEUMORPH_BASE_ROUTE, user = null }
       view: "home",
       path: normalizedPath,
       originalPath: "/"
+    };
+  }
+
+  if (normalizedPath === NEUMORPH_SYSTEM_PREVIEW_ROUTE) {
+    return {
+      view: "system-preview",
+      path: normalizedPath,
+      originalPath: "/system-preview"
     };
   }
 

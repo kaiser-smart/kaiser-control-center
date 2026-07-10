@@ -15,6 +15,7 @@ import {
   moduleGroupLabel,
   resolveNeumorphRoute
 } from "./moduleRegistry.js";
+import { renderNeumorphDashboard } from "./modules/dashboard.js";
 import { renderNeumorphSystemPreview } from "./systemPreview.js";
 
 export const NEUMORPH_ROUTE = NEUMORPH_BASE_ROUTE;
@@ -127,6 +128,20 @@ export function handleNeumorphAction(actionElement) {
 }
 
 function shellContextForRoute(resolvedRoute) {
+  if (resolvedRoute.view === "home") {
+    return {
+      title: "Prehled systemu",
+      group: "Hlavni prace"
+    };
+  }
+
+  if (resolvedRoute.view === "system-preview") {
+    return {
+      title: "System preview",
+      group: "Migracni nahled"
+    };
+  }
+
   if (resolvedRoute.view === "module" && resolvedRoute.module) {
     return {
       title: moduleDisplayLabel(resolvedRoute.module),
@@ -147,11 +162,15 @@ function shellContextForRoute(resolvedRoute) {
   };
 }
 
-function renderNeumorphContent({ resolvedRoute, routeHref, user }) {
+function renderNeumorphContent({ resolvedRoute, routeHref, user, runtime }) {
   if (resolvedRoute.view === "home") {
+    return renderNeumorphDashboard({ user, routeHref, runtime });
+  }
+
+  if (resolvedRoute.view === "system-preview") {
     return `
       <div class="nm-stack">
-        ${renderNeumorphSystemPreview()}
+        ${renderNeumorphSystemPreview({ routeHref })}
         ${renderNeumorphModuleCatalog({ user, routeHref })}
       </div>
     `;
@@ -167,7 +186,7 @@ function renderNeumorphContent({ resolvedRoute, routeHref, user }) {
   });
 }
 
-export function renderNeumorphRoute({ routeHref = (route) => route, user = null, path = NEUMORPH_ROUTE } = {}) {
+export function renderNeumorphRoute({ routeHref = (route) => route, user = null, path = NEUMORPH_ROUTE, runtime = {} } = {}) {
   const theme = readStoredNeumorphTheme();
   const resolvedRoute = resolveNeumorphRoute({ path, user });
 
@@ -177,6 +196,6 @@ export function renderNeumorphRoute({ routeHref = (route) => route, user = null,
     theme,
     user,
     context: shellContextForRoute(resolvedRoute),
-    content: renderNeumorphContent({ resolvedRoute, routeHref, user })
+    content: renderNeumorphContent({ resolvedRoute, routeHref, user, runtime })
   });
 }

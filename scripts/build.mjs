@@ -69,6 +69,7 @@ const routes = new Set([
   "/design/neumorphic",
   "/design/theme-system",
   "/neumorph",
+  "/neumorph/system-preview",
   ...modules.map((moduleItem) => `/neumorph${moduleItem.route}`),
   ...moduleDashboards.map((moduleItem) => `/neumorph${moduleItem.route}`),
   "/neumorph/pripominky",
