@@ -82,6 +82,7 @@ import {
 } from "../src/permissions.js";
 import { buildReceivablesVistosLedgerMapping } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
 import { receivablesVistosInvoiceLookbackWindow } from "../functions/_lib/receivables-vistos-preview.js";
+import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-plus-store.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -116,6 +117,32 @@ let mockCollectionRouteSourceFiles = [];
 let mockCollectionRouteSourceRows = [];
 let mockDataBoxSyncRuns = [];
 let mockDataBoxActions = [];
+let mockDataBoxPlusMessage = {
+  id: "mock-data-box-plus-message",
+  mailboxId: "mock-data-box-plus-mailbox",
+  senderName: "Automat Registr vozidel (Ministerstvo dopravy)",
+  subject: "Informace o konci platnosti technické prohlídky u vozidla registrační značky 3BE2831",
+  deliveredAt: "2026-06-28T08:52:00.000Z",
+  receivedAt: "2026-06-28T08:52:00.000Z",
+  type: "Provozní",
+  messageType: "Provozní",
+  status: "Nová",
+  riskLevel: "Nízké",
+  priority: "Střední",
+  dueDate: "",
+  recommendedAction: "Vyřešit v chatu s Autopilotem.",
+  suggestedAction: "Vyřešit v chatu s Autopilotem.",
+  priorityReason: "Blíží se konec platnosti technické prohlídky.",
+  primaryAction: "Chat s Autopilotem",
+  assignedTo: "",
+  archiveStatus: "active",
+  attachmentStatus: "Bez přílohy",
+  summaryLoaded: true,
+  summary: "Upozornění na konec platnosti technické prohlídky.",
+  facts: [],
+  attachments: [],
+  history: []
+};
 
 const mockVehicleWimSites = [
   ["wim-d0-0781-modletice-jesenice", "D0", "km 78,1 / cca km 79", "mezi Modleticemi a Jesenici", "Cernosice", "vpravo + vlevo", "active", "v provozu", 49.9706, 14.5288, 2],
@@ -5342,6 +5369,168 @@ async function handleApi(request, response) {
     }
 
     sendJson(response, 200, mockDataBoxStatusPayload());
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box-plus/status" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      mailboxes: [{
+        id: "mock-data-box-plus-mailbox",
+        name: "Kaiser technology",
+        company: "Kaiser technology",
+        isdsId: "DEV123",
+        status: "Připojeno",
+        unreadCount: mockDataBoxPlusMessage.status === "Nová" ? 1 : 0,
+        totalCount: 1
+      }],
+      summary: {
+        newCount: mockDataBoxPlusMessage.status === "Nová" ? 1 : 0,
+        unresolvedCount: ["Archivováno", "Vyřešeno"].includes(mockDataBoxPlusMessage.status) ? 0 : 1
+      },
+      sendReadiness: { ready: false },
+      learning: { confirmedDecisions: mockDataBoxPlusMessage.history.length, learnedPatterns: 0 }
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box-plus/messages" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+    sendJson(response, 200, { apiStatus: "ready", messages: [mockDataBoxPlusMessage] });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box-plus/recommendations" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+    sendJson(response, 200, { apiStatus: "ready", recommendations: [] });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box-plus/rules" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+    sendJson(response, 200, { apiStatus: "ready", rules: [] });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box-plus/sync-runs" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+    sendJson(response, 200, { apiStatus: "ready", syncRuns: [] });
+    return true;
+  }
+
+  const dataBoxPlusMessageMatch = /^\/api\/data-box-plus\/messages\/([^/]+)$/.exec(url.pathname);
+  if (dataBoxPlusMessageMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canViewMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni." });
+      return true;
+    }
+    const messageId = decodeURIComponent(dataBoxPlusMessageMatch[1] || "");
+    if (messageId !== mockDataBoxPlusMessage.id) {
+      sendJson(response, 404, { error: "Zprava nebyla nalezena." });
+      return true;
+    }
+    sendJson(response, 200, { apiStatus: "ready", message: mockDataBoxPlusMessage });
+    return true;
+  }
+
+  const dataBoxPlusInstructionMatch = /^\/api\/data-box-plus\/messages\/([^/]+)\/instruction$/.exec(url.pathname);
+  if (dataBoxPlusInstructionMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canManageMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni provest pokyn Autopilota." });
+      return true;
+    }
+    const messageId = decodeURIComponent(dataBoxPlusInstructionMatch[1] || "");
+    if (messageId !== mockDataBoxPlusMessage.id) {
+      sendJson(response, 404, { error: "Zprava nebyla nalezena." });
+      return true;
+    }
+    const { instruction = "" } = await readJsonBody(request);
+    const action = dataBoxPlusInstructionPlanForTest(instruction, mockDataBoxPlusMessage, []);
+    const auditId = `mock-data-box-plus-audit-${randomUUID()}`;
+    const createdAt = new Date().toISOString();
+    mockDataBoxPlusMessage = {
+      ...mockDataBoxPlusMessage,
+      status: action.messageStatus,
+      archiveStatus: action.archiveStatus,
+      assignedTo: action.assignedTo,
+      suggestedAction: action.resultLabel,
+      primaryAction: action.primaryAction,
+      history: [{
+        id: auditId,
+        messageId,
+        actor: user.name || "Radim",
+        actionType: "Chatový pokyn",
+        payload: {
+          originalInstruction: instruction,
+          understoodAs: action.understoodAs,
+          performedAction: action.performedAction,
+          newStatus: action.messageStatus,
+          assistantText: action.assistantText
+        },
+        createdAt,
+        result: action.requiresInput ? "needs_input" : "done",
+        auditNote: `${user.name || "Radim"} zadal pokyn. ${action.assistantText}`
+      }, ...mockDataBoxPlusMessage.history]
+    };
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      status: action.requiresInput ? "needs_input" : "done",
+      action,
+      message: mockDataBoxPlusMessage,
+      auditId,
+      notice: action.assistantText
+    });
     return true;
   }
 
