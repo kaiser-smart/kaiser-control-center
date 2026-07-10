@@ -17,6 +17,7 @@ import {
 } from "./moduleRegistry.js";
 import { renderNeumorphCollectionRoutes } from "./modules/collectionRoutes.js";
 import { renderNeumorphDashboard } from "./modules/dashboard.js";
+import { renderNeumorphDriverReports } from "./modules/driverReports.js";
 import { renderNeumorphFleet } from "./modules/fleet.js";
 import { renderNeumorphVehicleTracking } from "./modules/vehicleTracking.js";
 import { renderNeumorphSystemPreview } from "./systemPreview.js";
@@ -182,6 +183,10 @@ function renderNeumorphContent({ resolvedRoute, routeHref, user, runtime }) {
   if (resolvedRoute.view === "module") {
     if (resolvedRoute.module?.id === "fleet") {
       return renderNeumorphFleet({ user, routeHref, runtime, resolvedRoute });
+    }
+
+    if (resolvedRoute.module?.id === "driver-reports") {
+      return renderNeumorphDriverReports({ user, routeHref, runtime, resolvedRoute });
     }
 
     if (resolvedRoute.module?.id === "collection-routes") {

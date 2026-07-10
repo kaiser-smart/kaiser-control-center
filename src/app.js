@@ -26993,8 +26993,97 @@ function neumorphFleetRuntime(user) {
   };
 }
 
+function driverReportNeumorphSelectedIdFromUrl() {
+  const requestId = driverReportSelectedIdFromUrl();
+  if (requestId) {
+    return requestId;
+  }
+
+  const path = normalizePath(window.location.pathname);
+  const prefix = "/neumorph/hlaseni-ridicu/";
+  if (!path.startsWith(prefix) || path === "/neumorph/hlaseni-ridicu/dashboard") {
+    return "";
+  }
+
+  return decodeURIComponent(path.slice(prefix.length).split("/")[0] || "").trim();
+}
+
+function neumorphDriverReportsRuntime(user) {
+  const base = {
+    canView: true,
+    canCreate: false,
+    canManage: false,
+    canSearchPartslink24: false,
+    authRequired: !user,
+    items: [],
+    selected: null,
+    selectedId: driverReportNeumorphSelectedIdFromUrl(),
+    permissions: {
+      canCreate: false,
+      canManage: false,
+      canSearchPartslink24: false,
+      limitation: ""
+    },
+    loaded: false,
+    loading: false,
+    saving: false,
+    actionLoading: "",
+    apiStatus: "waiting",
+    error: "",
+    message: user ? "" : "Verejne static-only preview neni prihlasene do chraneneho Smart odpady API.",
+    search: driverReportsState.search,
+    draft: { ...driverReportsState.draft },
+    plateValidation: { ...driverReportsState.plateValidation },
+    canSubmitCreate: false
+  };
+
+  if (!user) {
+    return base;
+  }
+
+  if (!canViewModule(user, "driver-reports")) {
+    return {
+      ...base,
+      canView: false,
+      authRequired: false,
+      error: "Aktualni role nema pristup k modulu Hlaseni ridicu."
+    };
+  }
+
+  const permissions = {
+    ...driverReportsState.permissions,
+    canCreate: driverReportsState.permissions?.canCreate || hasPermission(user, "driver-reports", "create"),
+    canManage: driverReportsState.permissions?.canManage || hasPermission(user, "driver-reports", "manage") || hasPermission(user, "driver-reports", "edit"),
+    canSearchPartslink24: driverReportsState.permissions?.canSearchPartslink24 || hasPermission(user, "driver-reports", "parts-search")
+  };
+
+  return {
+    ...base,
+    authRequired: false,
+    canCreate: permissions.canCreate,
+    canManage: permissions.canManage,
+    canSearchPartslink24: permissions.canSearchPartslink24,
+    items: driverReportsState.items,
+    selected: driverReportsState.selected,
+    selectedId: driverReportNeumorphSelectedIdFromUrl(),
+    permissions,
+    loaded: driverReportsState.loaded,
+    loading: driverReportsState.loading,
+    saving: driverReportsState.saving,
+    actionLoading: driverReportsState.actionLoading,
+    apiStatus: driverReportsState.apiStatus,
+    error: driverReportsState.error,
+    message: driverReportsState.message,
+    search: driverReportsState.search,
+    draft: { ...driverReportsState.draft },
+    plateValidation: { ...driverReportsState.plateValidation },
+    canSubmitCreate: driverReportCanSubmitCreateForm()
+  };
+}
+
 function neumorphRuntimeContext(user) {
   return {
+    driverReports: neumorphDriverReportsRuntime(user),
     fleet: neumorphFleetRuntime(user),
     collectionRoutes: neumorphCollectionRoutesRuntime(user),
     vehicleTracking: neumorphVehicleTrackingRuntime(user)
@@ -27018,6 +27107,13 @@ function ensureNeumorphRuntimeData(path, user) {
 
   if (path.startsWith("/neumorph/vozovy-park") && canViewModule(user, "fleet")) {
     void loadFleetVehicles();
+  }
+
+  if (path.startsWith("/neumorph/hlaseni-ridicu") && canViewModule(user, "driver-reports")) {
+    ensureDriverReportsData();
+    if (hasPermission(user, "fleet", "view")) {
+      void loadFleetVehicles({ renderAfter: false });
+    }
   }
 
   if (path.startsWith("/neumorph/sledovani-vozidel") && canViewModule(user, "vehicle-tracking")) {
