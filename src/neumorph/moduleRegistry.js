@@ -1,4 +1,4 @@
-import { ReportsIcon } from "../components/icons/index.js";
+import { QuickAbsenceIcon, ReportsIcon } from "../components/icons/index.js";
 import { modules, moduleDashboards } from "../data/modules.js";
 import { canViewModule, hasPermission } from "../permissions.js";
 
@@ -20,37 +20,56 @@ const orderedModules = [...modules, feedbackModule].sort((a, b) => a.order - b.o
 
 const moduleGroups = [
   {
-    id: "overview",
-    label: "Prehled",
-    moduleIds: ["dashboard"]
+    id: "main-work",
+    label: "Hlavni prace",
+    order: 1,
+    moduleIds: ["dashboard", "quick-entry", "collection-routes", "driver-reports", "vehicle-tracking"]
   },
   {
-    id: "operations",
-    label: "Provoz",
-    moduleIds: [
-      "collection-routes",
-      "vehicle-tracking",
-      "fleet",
-      "driver-reports",
-      "service-maintenance",
-      "tyres",
-      "sampling-routes"
-    ]
+    id: "fleet-ops",
+    label: "Vozidla a provoz",
+    order: 2,
+    moduleIds: ["fleet", "service-maintenance", "tyres", "costs"]
   },
   {
-    id: "office",
-    label: "Agenda",
-    moduleIds: ["data-box", "vistos", "absence", "costs", "reports"]
+    id: "customers-planning",
+    label: "Zakaznici a planovani",
+    order: 3,
+    moduleIds: ["vistos", "sampling-routes", "feedback"]
+  },
+  {
+    id: "administration",
+    label: "Administrativa",
+    order: 4,
+    moduleIds: ["data-box", "absence", "reports"]
   },
   {
     id: "system",
-    label: "Rizeni",
-    moduleIds: ["users", "settings", "system-check", "feedback"]
+    label: "Sprava systemu",
+    order: 5,
+    moduleIds: ["users", "system-check", "settings"]
   }
 ];
 
+const quickEntryModule = {
+  id: "quick-entry",
+  title: "Rychle zadani",
+  description: "Zkraceny vstup pro provozni zaznamy a zadosti.",
+  route: "/dovolena-nemoc/rychle-zadani",
+  icon: QuickAbsenceIcon,
+  status: "mock data",
+  active: true,
+  disabled: false,
+  order: 1.5,
+  permissionModuleId: "absence",
+  sourceModuleId: "absence"
+};
+
+const navigationModules = [...orderedModules, quickEntryModule].sort((a, b) => a.order - b.order);
+
 const moduleIconNames = {
   dashboard: "dashboard",
+  "quick-entry": "quick-entry",
   fleet: "fleet",
   "vehicle-tracking": "tracking",
   "data-box": "mail",
@@ -69,18 +88,155 @@ const moduleIconNames = {
   feedback: "feedback"
 };
 
+const moduleNavigationMeta = {
+  dashboard: {
+    label: "Prehled",
+    shortLabel: "Prehled",
+    group: "main-work",
+    order: 1,
+    mobilePriority: 1
+  },
+  "quick-entry": {
+    label: "Rychle zadani",
+    shortLabel: "Rychle",
+    group: "main-work",
+    order: 2,
+    mobilePriority: 2
+  },
+  "collection-routes": {
+    label: "Trasy svozu",
+    shortLabel: "Trasy",
+    group: "main-work",
+    order: 3,
+    mobilePriority: 3
+  },
+  "driver-reports": {
+    label: "Hlaseni ridicu",
+    shortLabel: "Hlaseni",
+    group: "main-work",
+    order: 4,
+    mobilePriority: 8
+  },
+  "vehicle-tracking": {
+    label: "Sledovani vozidel",
+    shortLabel: "Sledovani",
+    group: "main-work",
+    order: 5,
+    mobilePriority: 6
+  },
+  fleet: {
+    label: "Vozovy park",
+    shortLabel: "Vozidla",
+    group: "fleet-ops",
+    order: 1,
+    mobilePriority: 4
+  },
+  "service-maintenance": {
+    label: "Servis a udrzba",
+    shortLabel: "Servis",
+    group: "fleet-ops",
+    order: 2,
+    mobilePriority: 10
+  },
+  tyres: {
+    label: "Pneumatiky",
+    shortLabel: "Pneu",
+    group: "fleet-ops",
+    order: 3,
+    mobilePriority: 11
+  },
+  costs: {
+    label: "Naklady",
+    shortLabel: "Naklady",
+    group: "fleet-ops",
+    order: 4,
+    mobilePriority: 12
+  },
+  vistos: {
+    label: "Zakaznici",
+    shortLabel: "Zakaznici",
+    group: "customers-planning",
+    order: 1,
+    mobilePriority: 7
+  },
+  "sampling-routes": {
+    label: "Trasy vzorku",
+    shortLabel: "Vzorky",
+    group: "customers-planning",
+    order: 2,
+    mobilePriority: 13
+  },
+  feedback: {
+    label: "Pripominky",
+    shortLabel: "Pripominky",
+    group: "customers-planning",
+    order: 3,
+    mobilePriority: 14
+  },
+  "data-box": {
+    label: "Datova schranka",
+    shortLabel: "Schranka",
+    group: "administration",
+    order: 1,
+    mobilePriority: 15
+  },
+  absence: {
+    label: "Dovolena a nemoc",
+    shortLabel: "Absence",
+    group: "administration",
+    order: 2,
+    mobilePriority: 9
+  },
+  reports: {
+    label: "Reporty",
+    shortLabel: "Reporty",
+    group: "administration",
+    order: 3,
+    mobilePriority: 16
+  },
+  users: {
+    label: "Uzivatele a role",
+    shortLabel: "Uzivatele",
+    group: "system",
+    order: 1,
+    mobilePriority: 17
+  },
+  "system-check": {
+    label: "Kontrola systemu",
+    shortLabel: "Kontrola",
+    group: "system",
+    order: 2,
+    mobilePriority: 18
+  },
+  settings: {
+    label: "Nastaveni",
+    shortLabel: "Nastaveni",
+    group: "system",
+    order: 3,
+    mobilePriority: 19
+  }
+};
+
 function normalizePath(path = "/") {
   const [pathname] = String(path || "/").split(/[?#]/);
   const cleaned = pathname.replace(/\/+$/, "") || "/";
   return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
 }
 
-function canUseModule(user, moduleId) {
+function permissionModuleId(moduleItemOrId) {
+  if (typeof moduleItemOrId === "string") {
+    return moduleNavigationMeta[moduleItemOrId]?.permissionModuleId || moduleItemOrId;
+  }
+
+  return moduleItemOrId?.permissionModuleId || moduleItemOrId?.id || "";
+}
+
+function canUseModule(user, moduleItemOrId) {
   if (!user) {
     return true;
   }
 
-  return canViewModule(user, moduleId);
+  return canViewModule(user, permissionModuleId(moduleItemOrId));
 }
 
 export function neumorphPathForRoute(route = "/") {
@@ -106,6 +262,28 @@ export function moduleIconName(moduleId) {
   return moduleIconNames[moduleId] || "module";
 }
 
+export function moduleDisplayLabel(moduleItemOrId) {
+  const moduleId = typeof moduleItemOrId === "string" ? moduleItemOrId : moduleItemOrId?.id;
+  return moduleNavigationMeta[moduleId]?.label || moduleItemOrId?.title || moduleId || "";
+}
+
+export function moduleShortLabel(moduleItemOrId) {
+  const moduleId = typeof moduleItemOrId === "string" ? moduleItemOrId : moduleItemOrId?.id;
+  return moduleNavigationMeta[moduleId]?.shortLabel || moduleDisplayLabel(moduleItemOrId);
+}
+
+export function moduleGroupId(moduleItemOrId) {
+  const moduleId = typeof moduleItemOrId === "string" ? moduleItemOrId : moduleItemOrId?.id;
+  return moduleNavigationMeta[moduleId]?.group || "main-work";
+}
+
+export function moduleGroupLabel(moduleItemOrId) {
+  const groupId = typeof moduleItemOrId === "string" && moduleGroups.some((group) => group.id === moduleItemOrId)
+    ? moduleItemOrId
+    : moduleGroupId(moduleItemOrId);
+  return moduleGroups.find((group) => group.id === groupId)?.label || "Kaiser Smart";
+}
+
 export function moduleStatusLabel(moduleItem) {
   return {
     HOTOVO: "Hotovo",
@@ -118,6 +296,24 @@ export function moduleStatusLabel(moduleItem) {
     Testování: "Testovani",
     NEOVĚŘENO: "Neovereno"
   }[moduleItem?.status] || moduleItem?.status || "Rozpracovano";
+}
+
+export function moduleMigrationLabel(moduleItem) {
+  const status = String(moduleItem?.status || "").toLowerCase();
+
+  if (moduleItem?.disabled) {
+    return "Planovano";
+  }
+
+  if (status.includes("hotovo")) {
+    return "Dostupna funkcni neumorph varianta";
+  }
+
+  if (status.includes("pilot") || status.includes("test") || status.includes("rozprac")) {
+    return "Probiha migrace";
+  }
+
+  return "Pripraveno k migraci";
 }
 
 export function moduleStatusTone(moduleItem) {
@@ -162,9 +358,54 @@ export function visibleNeumorphModules(user) {
   return orderedModules.filter((moduleItem) => canUseModule(user, moduleItem.id));
 }
 
-export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BASE_ROUTE } = {}) {
+export function visibleNavigationModules(user) {
+  return navigationModules.filter((moduleItem) => canUseModule(user, moduleItem));
+}
+
+function navigationItemForModule(moduleItem, currentOriginalPath) {
+  const meta = moduleNavigationMeta[moduleItem.id] || {};
+  const originalRoute = normalizePath(moduleItem.route);
+  const active = currentOriginalPath === originalRoute ||
+    currentOriginalPath.startsWith(`${originalRoute}/`) ||
+    (moduleItem.sourceModuleId && currentOriginalPath.startsWith(`/${moduleItem.sourceModuleId}/`));
+
+  return {
+    id: moduleItem.id,
+    label: meta.label || moduleItem.title,
+    shortLabel: meta.shortLabel || meta.label || moduleItem.title,
+    href: neumorphPathForRoute(moduleItem.route),
+    route: moduleItem.route,
+    group: meta.group || moduleGroupId(moduleItem),
+    order: meta.order ?? moduleItem.order ?? 100,
+    permission: permissionModuleId(moduleItem),
+    icon: moduleIconName(moduleItem.id),
+    active,
+    disabled: moduleItem.disabled === true,
+    planned: moduleItem.disabled === true,
+    mobilePriority: meta.mobilePriority ?? 99,
+    activeMatch: [originalRoute],
+    module: moduleItem
+  };
+}
+
+export function buildNeumorphNavigationItems({ user = null, currentPath = NEUMORPH_BASE_ROUTE } = {}) {
   const currentOriginalPath = originalPathForNeumorphRoute(currentPath);
-  const visibleModules = visibleNeumorphModules(user);
+
+  return visibleNavigationModules(user)
+    .map((moduleItem) => navigationItemForModule(moduleItem, currentOriginalPath))
+    .sort((a, b) => {
+      if (a.group !== b.group) {
+        const groupA = moduleGroups.find((group) => group.id === a.group)?.order ?? 100;
+        const groupB = moduleGroups.find((group) => group.id === b.group)?.order ?? 100;
+        return groupA - groupB;
+      }
+
+      return a.order - b.order;
+    });
+}
+
+export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BASE_ROUTE } = {}) {
+  const navigationItems = buildNeumorphNavigationItems({ user, currentPath });
 
   const groups = [
     {
@@ -173,16 +414,30 @@ export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BA
       items: [
         {
           id: "system-preview",
-          label: "Systemovy nahled",
+          label: "System",
+          shortLabel: "System",
           href: NEUMORPH_BASE_ROUTE,
+          route: NEUMORPH_BASE_ROUTE,
+          group: "migration",
+          order: 0,
+          permission: "dashboard",
           icon: "dashboard",
+          mobilePriority: 5,
+          activeMatch: [NEUMORPH_BASE_ROUTE],
           active: normalizePath(currentPath) === NEUMORPH_BASE_ROUTE
         },
         {
           id: "components",
           label: "Komponenty",
+          shortLabel: "Komponenty",
           href: `${NEUMORPH_BASE_ROUTE}#components`,
+          route: `${NEUMORPH_BASE_ROUTE}#components`,
+          group: "migration",
+          order: 1,
+          permission: "dashboard",
           icon: "components",
+          mobilePriority: 20,
+          activeMatch: [`${NEUMORPH_BASE_ROUTE}#components`],
           active: false
         }
       ]
@@ -190,23 +445,7 @@ export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BA
   ];
 
   moduleGroups.forEach((group) => {
-    const items = group.moduleIds
-      .map((moduleId) => visibleModules.find((moduleItem) => moduleItem.id === moduleId))
-      .filter(Boolean)
-      .map((moduleItem) => {
-        const originalRoute = normalizePath(moduleItem.route);
-        const active = currentOriginalPath === originalRoute ||
-          currentOriginalPath.startsWith(`${originalRoute}/`);
-
-        return {
-          id: moduleItem.id,
-          label: moduleItem.title,
-          href: neumorphPathForRoute(moduleItem.route),
-          icon: moduleIconName(moduleItem.id),
-          active,
-          planned: moduleItem.disabled === true
-        };
-      });
+    const items = navigationItems.filter((item) => item.group === group.id);
 
     if (items.length) {
       groups.push({ ...group, items });
@@ -214,6 +453,28 @@ export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BA
   });
 
   return groups;
+}
+
+export function buildNeumorphMobileNavigation({ user = null, currentPath = NEUMORPH_BASE_ROUTE, maxItems = 4 } = {}) {
+  const groups = buildNeumorphNavigation({ user, currentPath });
+  const items = groups
+    .flatMap((group) => group.items.map((item) => ({ ...item, groupLabel: group.label })))
+    .filter((item) => !item.disabled && !item.planned)
+    .sort((a, b) => (a.mobilePriority ?? 99) - (b.mobilePriority ?? 99));
+
+  const primaryItems = items.slice(0, maxItems);
+  const primaryIds = new Set(primaryItems.map((item) => item.id));
+  const moreGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !primaryIds.has(item.id))
+    }))
+    .filter((group) => group.items.length);
+
+  return {
+    primaryItems,
+    moreGroups
+  };
 }
 
 function findExactRouteEntry(originalPath) {

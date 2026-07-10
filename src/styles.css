@@ -3,6 +3,11 @@
 @import url("./styles/neumorph/foundation.css");
 @import url("./styles/neumorph/components.css");
 @import url("./styles/neumorph/shell.css");
+@import url("./styles/neumorph/navigation.css");
+@import url("./styles/neumorph/module-layout.css");
+@import url("./styles/neumorph/forms.css");
+@import url("./styles/neumorph/tables.css");
+@import url("./styles/neumorph/states.css");
 @import url("./styles/neumorph/modules.css");
 @import url("./styles/neumorph/responsive.css");
 

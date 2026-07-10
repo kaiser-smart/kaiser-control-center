@@ -25,6 +25,10 @@ body[data-theme="light"] .nm-app {
   --nm-shadow-control-active: inset 3px 3px 7px rgba(78, 92, 100, 0.11), inset -3px -3px 7px rgba(255, 255, 255, 0.58);
   --nm-shadow-inset-control: inset 4px 4px 10px rgba(78, 92, 100, 0.12), inset -4px -4px 10px rgba(255, 255, 255, 0.62);
   --nm-focus-ring: color-mix(in srgb, var(--nm-brand-accent) 32%, var(--nm-border-soft));
+  --nm-active-tray-bg: #d0e3c1;
+  --nm-active-tray-border: color-mix(in srgb, var(--nm-brand-accent) 52%, var(--nm-border-soft));
+  --nm-active-tray-text: var(--nm-text-strong);
+  --nm-active-tray-shadow: inset 3px 3px 8px rgba(78, 92, 100, 0.12), inset -2px -2px 7px rgba(255, 255, 255, 0.46);
 }
 
 .nm-app[data-theme="dark"],
@@ -56,6 +60,10 @@ body[data-theme="dark"] .nm-app {
   --nm-shadow-control-active: inset 3px 3px 7px rgba(0, 0, 0, 0.34), inset -2px -2px 6px rgba(255, 255, 255, 0.028);
   --nm-shadow-inset-control: inset 5px 6px 13px rgba(0, 0, 0, 0.38), inset -4px -4px 10px rgba(255, 255, 255, 0.032);
   --nm-focus-ring: color-mix(in srgb, var(--nm-brand-accent) 34%, rgba(237, 244, 247, 0.2));
+  --nm-active-tray-bg: color-mix(in srgb, var(--nm-brand-accent) 16%, rgba(14, 21, 30, 0.94));
+  --nm-active-tray-border: color-mix(in srgb, var(--nm-brand-accent) 44%, rgba(177, 194, 207, 0.15));
+  --nm-active-tray-text: var(--nm-text-strong);
+  --nm-active-tray-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.36), inset -2px -2px 7px rgba(255, 255, 255, 0.03);
 
   --nm-state-success-bg: color-mix(in srgb, var(--nm-brand-accent) 14%, rgba(14, 21, 30, 0.94));
   --nm-state-success-border: color-mix(in srgb, var(--nm-brand-accent) 36%, rgba(177, 194, 207, 0.15));

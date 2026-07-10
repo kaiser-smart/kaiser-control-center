@@ -1,4 +1,10 @@
-import { buildNeumorphNavigation } from "./navigation.js";
+import { roleLabel } from "../permissions.js";
+import {
+  buildNeumorphMobileNavigation,
+  buildNeumorphNavigation
+} from "./navigation.js";
+
+const NEUMORPH_SIDEBAR_STORAGE_KEY = "smart_odpady_neumorph_sidebar";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -16,6 +22,7 @@ function icon(name) {
     route: '<path d="M6 18c4-6 8 6 12 0"></path><path d="M7 6a3 3 0 0 0-3 3c0 2.5 3 5 3 5s3-2.5 3-5a3 3 0 0 0-3-3Z"></path><path d="M17 4a3 3 0 0 0-3 3c0 2.5 3 5 3 5s3-2.5 3-5a3 3 0 0 0-3-3Z"></path>',
     chart: '<path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 15v-4"></path><path d="M12 15V8"></path><path d="M16 15v-6"></path>',
     module: '<path d="M5 7h14"></path><path d="M5 12h14"></path><path d="M5 17h14"></path>',
+    "quick-entry": '<path d="M5 13h6V5H5z"></path><path d="M13 19h6V5h-6z"></path><path d="M5 19h6v-4H5z"></path><path d="M8 8v2M16 8v2"></path>',
     fleet: '<path d="M4 16V8a2 2 0 0 1 2-2h9l4 4v6"></path><path d="M7 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path><path d="M17 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path><path d="M15 6v4h4"></path>',
     tracking: '<path d="M12 3v4"></path><path d="M7 8a7 7 0 0 0 10 0"></path><path d="M5 11a10 10 0 0 0 14 0"></path><path d="M4 20h16"></path><path d="M8 20l1-6h6l1 6"></path>',
     mail: '<path d="M4 6h16v12H4z"></path><path d="m4 7 8 6 8-6"></path>',
@@ -32,11 +39,21 @@ function icon(name) {
     "system-check": '<path d="M20 7 9 18l-5-5"></path><path d="M4 4h16v16H4z"></path>',
     feedback: '<path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h6"></path>',
     menu: '<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>',
+    more: '<circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle>',
+    close: '<path d="M6 6l12 12M18 6 6 18"></path>',
     sun: '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>',
     moon: '<path d="M20.1 14.2A7.8 7.8 0 0 1 9.8 3.9a8.4 8.4 0 1 0 10.3 10.3Z"></path>'
   };
 
   return `<svg viewBox="0 0 24 24" class="nm-icon" aria-hidden="true" focusable="false">${paths[name] || paths.dashboard}</svg>`;
+}
+
+function readSidebarCompact() {
+  try {
+    return globalThis.localStorage?.getItem(NEUMORPH_SIDEBAR_STORAGE_KEY) === "compact";
+  } catch {
+    return false;
+  }
 }
 
 function renderThemeToggle(theme) {
@@ -86,15 +103,15 @@ function renderNavItem(item, routeHref) {
   `;
 }
 
-function renderSidebar(routeHref, navigationGroups) {
+function renderSidebar(routeHref, navigationGroups, compact = false) {
   return `
     <aside class="nm-sidebar" aria-label="Navigace neumorph migrace">
       <div class="nm-sidebar__top">
         <button
           class="nm-sidebar__toggle"
           type="button"
-          aria-label="Sbalit navigaci"
-          aria-expanded="true"
+          aria-label="${compact ? "Rozbalit navigaci" : "Sbalit navigaci"}"
+          aria-expanded="${compact ? "false" : "true"}"
           data-nm-action="toggle-sidebar"
         >
           ${icon("menu")}
@@ -112,15 +129,13 @@ function renderSidebar(routeHref, navigationGroups) {
   `;
 }
 
-function renderMobileNav(routeHref, navigationGroups) {
-  const items = navigationGroups
-    .flatMap((group) => group.items)
-    .filter((item) => !item.planned)
-    .slice(0, 4);
+function renderMobileNav(routeHref, user, currentPath) {
+  const { primaryItems, moreGroups } = buildNeumorphMobileNavigation({ user, currentPath });
+  const hasMore = moreGroups.length > 0;
 
   return `
     <nav class="nm-mobile-nav" aria-label="Mobilni navigace neumorph migrace">
-      ${items.map((item) => {
+      ${primaryItems.map((item) => {
         const itemClass = [
           "nm-mobile-nav__item",
           item.active ? "nm-mobile-nav__item--active" : "",
@@ -134,12 +149,66 @@ function renderMobileNav(routeHref, navigationGroups) {
 
         return `<a class="${itemClass}" href="${routeHref(item.href)}" data-link ${item.active ? 'aria-current="page"' : ""}>${content}</a>`;
       }).join("")}
+      ${hasMore ? `
+        <button class="nm-mobile-nav__item nm-mobile-nav__item--more" type="button" aria-expanded="false" data-nm-action="toggle-mobile-more">
+          ${icon("more")}<span>Vice</span>
+        </button>
+      ` : ""}
     </nav>
   `;
 }
 
-function renderHeader({ routeHref, theme, user }) {
+function renderMobileMorePanel(routeHref, user, currentPath) {
+  const { moreGroups } = buildNeumorphMobileNavigation({ user, currentPath });
+
+  if (!moreGroups.length) {
+    return "";
+  }
+
+  return `
+    <div class="nm-mobile-more" data-nm-mobile-more hidden>
+      <div class="nm-mobile-more__scrim" data-nm-action="close-mobile-more" aria-hidden="true"></div>
+      <section class="nm-mobile-more__sheet" aria-label="Dalsi moduly">
+        <div class="nm-mobile-more__head">
+          <div>
+            <span>Dalsi moduly</span>
+            <strong>Kaiser Smart</strong>
+          </div>
+          <button class="nm-icon-button nm-mobile-more__close" type="button" aria-label="Zavrit dalsi moduly" data-nm-action="close-mobile-more">
+            ${icon("close")}
+          </button>
+        </div>
+        <div class="nm-mobile-more__groups">
+          ${moreGroups.map((group) => `
+            <section class="nm-mobile-more__group" aria-label="${escapeHtml(group.label)}">
+              <span class="nm-mobile-more__group-label">${escapeHtml(group.label)}</span>
+              ${group.items.map((item) => {
+                const itemClass = [
+                  "nm-mobile-more__item",
+                  item.active ? "nm-mobile-more__item--active" : "",
+                  item.planned ? "nm-mobile-more__item--planned" : ""
+                ].filter(Boolean).join(" ");
+                const content = `<span class="nm-mobile-more__icon" aria-hidden="true">${icon(item.icon)}</span><span>${escapeHtml(item.label)}</span>`;
+
+                if (item.planned || !item.href) {
+                  return `<span class="${itemClass}" aria-disabled="true">${content}</span>`;
+                }
+
+                return `<a class="${itemClass}" href="${routeHref(item.href)}" data-link ${item.active ? 'aria-current="page"' : ""}>${content}</a>`;
+              }).join("")}
+            </section>
+          `).join("")}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderHeader({ routeHref, theme, user, context }) {
   const userLabel = user?.name || "Interni nahled";
+  const resolvedRole = user?.role ? roleLabel(user.role) : "Preview";
+  const contextTitle = context?.title || "Neumorph system";
+  const contextGroup = context?.group || "Migracni nahled";
 
   return `
     <header class="nm-shell__header">
@@ -149,32 +218,39 @@ function renderHeader({ routeHref, theme, user }) {
         </a>
         <div class="nm-shell__title">
           <span>Kaiser Smart</span>
-          <strong>Neumorph migrace</strong>
+          <strong>${escapeHtml(contextTitle)}</strong>
+          <small>${escapeHtml(contextGroup)}</small>
         </div>
       </div>
       <div class="nm-shell__tools">
         <span class="nm-shell__status">Migracni nahled</span>
         ${renderThemeToggle(theme)}
-        <span class="nm-shell__user">${escapeHtml(userLabel)}</span>
+        <span class="nm-shell__user">
+          <strong>${escapeHtml(userLabel)}</strong>
+          <small>${escapeHtml(resolvedRole)}</small>
+        </span>
       </div>
     </header>
   `;
 }
 
-export function renderNeumorphShell({ routeHref, theme, user, content, currentPath }) {
+export function renderNeumorphShell({ routeHref, theme, user, content, currentPath, context }) {
   const navigationGroups = buildNeumorphNavigation({ user, currentPath });
+  const compact = readSidebarCompact();
+  const shellClass = ["nm-shell", compact ? "nm-shell--compact" : ""].filter(Boolean).join(" ");
 
   return `
     <div class="nm-app" data-theme="${escapeHtml(theme)}">
-      <div class="nm-shell" data-nm-shell>
-        ${renderHeader({ routeHref, theme, user })}
+      <div class="${shellClass}" data-nm-shell>
+        ${renderHeader({ routeHref, theme, user, context })}
         <div class="nm-shell__body">
-          ${renderSidebar(routeHref, navigationGroups)}
+          ${renderSidebar(routeHref, navigationGroups, compact)}
           <main class="nm-shell__content" id="nm-main" tabindex="-1">
             ${content}
           </main>
         </div>
-        ${renderMobileNav(routeHref, navigationGroups)}
+        ${renderMobileNav(routeHref, user, currentPath)}
+        ${renderMobileMorePanel(routeHref, user, currentPath)}
       </div>
     </div>
   `;

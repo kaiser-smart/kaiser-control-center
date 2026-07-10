@@ -11,6 +11,14 @@
   gap: var(--nm-space-4);
 }
 
+.nm-app .nm-module-section-head--raised {
+  align-items: center;
+}
+
+.nm-app .nm-module-section-head--raised p:not(.nm-system-eyebrow) {
+  margin-top: var(--nm-space-2);
+}
+
 .nm-app .nm-module-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
@@ -66,6 +74,13 @@
   font-size: 1.03rem;
   font-weight: 900;
   line-height: 1.15;
+}
+
+.nm-app .nm-module-card__eyebrow {
+  color: var(--nm-brand-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .nm-app .nm-module-card__text {
@@ -162,6 +177,10 @@
 .nm-app .nm-module-grid {
   --nm-grid-min: 320px;
   align-items: start;
+}
+
+.nm-app .nm-migration-plan {
+  --nm-grid-min: 220px;
 }
 
 .nm-app .nm-module-section {

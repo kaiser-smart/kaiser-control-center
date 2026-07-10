@@ -1,5 +1,8 @@
 import {
+  moduleDisplayLabel,
+  moduleGroupLabel,
   moduleIconName,
+  moduleMigrationLabel,
   modulePermissionSummary,
   moduleStatusLabel,
   moduleStatusTone,
@@ -7,23 +10,14 @@ import {
   neumorphRouteEntries,
   visibleNeumorphModules
 } from "./moduleRegistry.js";
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function renderModuleAsset(moduleItem) {
-  if (typeof moduleItem?.icon !== "function") {
-    return "";
-  }
-
-  return moduleItem.icon();
-}
+import {
+  escapeHtml,
+  renderModuleAsset,
+  renderNeumorphModuleHeader,
+  renderNeumorphState,
+  renderNeumorphStatusStrip,
+  renderNeumorphToolbar
+} from "./moduleLayout.js";
 
 function renderRoutePath(path) {
   return `<code>${escapeHtml(path)}</code>`;
@@ -42,10 +36,11 @@ function renderModuleCard(moduleItem, routeHref) {
         ${renderModuleAsset(moduleItem)}
       </span>
       <span class="nm-module-card__body">
-        <span class="nm-module-card__title">${escapeHtml(moduleItem.title)}</span>
+        <span class="nm-module-card__eyebrow">${escapeHtml(moduleGroupLabel(moduleItem))}</span>
+        <span class="nm-module-card__title">${escapeHtml(moduleDisplayLabel(moduleItem))}</span>
         <span class="nm-module-card__text">${escapeHtml(moduleItem.description)}</span>
       </span>
-      <span class="nm-chip nm-chip--${moduleStatusTone(moduleItem)}">${escapeHtml(moduleStatusLabel(moduleItem))}</span>
+      <span class="nm-chip nm-chip--${moduleStatusTone(moduleItem)}">${escapeHtml(moduleMigrationLabel(moduleItem))}</span>
     </a>
   `;
 }
@@ -54,11 +49,12 @@ export function renderNeumorphModuleCatalog({ user = null, routeHref = (route) =
   const moduleItems = visibleNeumorphModules(user);
 
   return `
-    <section class="nm-panel nm-module-catalog" aria-labelledby="nm-module-catalog-title">
-      <div class="nm-module-section-head">
+    <section class="nm-module-catalog" aria-labelledby="nm-module-catalog-title">
+      <div class="nm-panel nm-module-section-head nm-module-section-head--raised">
         <div>
-          <p class="nm-system-eyebrow">Migracni mapa</p>
-          <h2 id="nm-module-catalog-title">Paralelni neumorph moduly</h2>
+          <p class="nm-system-eyebrow">Modulova mapa</p>
+          <h2 id="nm-module-catalog-title">Paralelni neumorph prostredi</h2>
+          <p>Stejne moduly, permissions a route registry. Detailni obsah se bude migrovat po modulech.</p>
         </div>
         <span class="nm-chip nm-chip--info">${moduleItems.length} modulu</span>
       </div>
@@ -115,6 +111,25 @@ function renderModuleKpis(moduleItem, resolvedRoute, user) {
   `;
 }
 
+function renderMigrationPlan(moduleItem) {
+  return `
+    <div class="nm-grid nm-migration-plan">
+      <article class="nm-card nm-card--inset">
+        <h3>Stav migrace</h3>
+        <p>${escapeHtml(moduleMigrationLabel(moduleItem))}</p>
+      </article>
+      <article class="nm-card nm-card--inset">
+        <h3>Design system</h3>
+        <p>Shell, navigace, toolbar, panely, formulare a tabulkovy wrapper jsou pripraveny jako sdileny zaklad.</p>
+      </article>
+      <article class="nm-card nm-card--inset">
+        <h3>Data a API</h3>
+        <p>Bez zmen. Funkcni workflow zustava na puvodni route, dokud nebude modul migrovan samostatne.</p>
+      </article>
+    </div>
+  `;
+}
+
 export function renderNeumorphModulePage({
   resolvedRoute,
   user = null,
@@ -122,27 +137,61 @@ export function renderNeumorphModulePage({
 } = {}) {
   const moduleItem = resolvedRoute.module;
   const dashboardHref = moduleItem.dashboardRoute ? neumorphPathForRoute(moduleItem.dashboardRoute) : "";
+  const actions = [
+    {
+      label: "Otevrit puvodni modul",
+      href: routeHref(resolvedRoute.originalPath),
+      variant: "primary"
+    },
+    dashboardHref
+      ? {
+          label: "Neumorph dashboard",
+          href: routeHref(dashboardHref),
+          variant: "secondary"
+        }
+      : null,
+    {
+      label: "Mapa migrace",
+      href: routeHref("/neumorph"),
+      variant: "subtle"
+    }
+  ].filter(Boolean);
 
   return `
     <section class="nm-module-page" aria-labelledby="nm-module-title">
-      <div class="nm-panel nm-module-hero">
-        <div class="nm-module-hero__copy">
-          <p class="nm-system-eyebrow">Kaiser Smart / ${escapeHtml(moduleItem.title)}</p>
-          <h1 id="nm-module-title">${escapeHtml(moduleItem.title)}</h1>
-          <p>${escapeHtml(moduleItem.description)}</p>
-          <div class="nm-cluster">
-            <span class="nm-chip nm-chip--${moduleStatusTone(moduleItem)}">${escapeHtml(moduleStatusLabel(moduleItem))}</span>
-            <span class="nm-chip">${resolvedRoute.isDashboard ? "dashboard" : resolvedRoute.entryType}</span>
-          </div>
-        </div>
-        <div class="nm-module-hero__visual" aria-hidden="true">
-          <span class="nm-icon-holder nm-icon-holder--active nm-module-hero__icon">
-            ${renderModuleAsset(moduleItem)}
-          </span>
-        </div>
-      </div>
+      ${renderNeumorphModuleHeader({
+        moduleItem,
+        eyebrow: `Kaiser Smart / ${moduleGroupLabel(moduleItem)}`,
+        title: moduleDisplayLabel(moduleItem),
+        description: moduleItem.description,
+        status: moduleMigrationLabel(moduleItem),
+        statusTone: moduleStatusTone(moduleItem),
+        actions,
+        meta: [resolvedRoute.isDashboard ? "dashboard" : resolvedRoute.entryType, moduleStatusLabel(moduleItem)]
+      })}
 
       ${renderModuleKpis(moduleItem, resolvedRoute, user)}
+
+      ${renderNeumorphStatusStrip([
+        { label: "Route", value: resolvedRoute.path, detail: "paralelni neumorph cesta" },
+        { label: "Puvodni modul", value: resolvedRoute.originalPath, detail: "beze zmen business logiky" },
+        { label: "Stav", value: moduleMigrationLabel(moduleItem), detail: "bez falesnych produkcnich dat" }
+      ])}
+
+      ${renderNeumorphToolbar({
+        label: "Budouci toolbar modulu",
+        searchPlaceholder: `Hledat v ${moduleDisplayLabel(moduleItem)}`,
+        segments: ["Prehled", "Aktivni", "Archiv"],
+        filters: [
+          { label: "Stav", options: ["Vse", "Aktivni", "Ceka"] },
+          { label: "Obdobi", options: ["Dnes", "Tyden", "Mesic"] }
+        ],
+        actions: [
+          { label: "Export", icon: "download", variant: "secondary", disabled: true },
+          { label: "Nova akce", icon: "plus", variant: "primary", disabled: true }
+        ],
+        countLabel: "ukazka toolbaru"
+      })}
 
       <div class="nm-grid nm-module-grid">
         <section class="nm-panel nm-module-section" aria-labelledby="nm-module-actions-title">
@@ -153,14 +202,10 @@ export function renderNeumorphModulePage({
             </div>
           </div>
           <p>
-            Tato stranka je izolovany neumorph prototyp pro stejny modulovy vstup.
-            Data, API a realne akce zustavaji beze zmen na puvodnich routach.
+            Tento pohled ukazuje finalizovany sdileny shell a module layout.
+            Nejde jeste o detailni migraci realne funkcni obrazovky modulu.
           </p>
-          <div class="nm-cluster">
-            <a class="nm-button nm-button--primary" href="${routeHref(resolvedRoute.originalPath)}" data-link>Otevrit puvodni modul</a>
-            ${dashboardHref ? `<a class="nm-button nm-button--secondary" href="${routeHref(dashboardHref)}" data-link>Neumorph dashboard</a>` : ""}
-            <a class="nm-button nm-button--subtle" href="${routeHref("/neumorph")}" data-link>Zpet na mapu migrace</a>
-          </div>
+          ${renderMigrationPlan(moduleItem)}
         </section>
 
         <section class="nm-panel nm-module-section" aria-labelledby="nm-module-routes-title">
@@ -172,6 +217,19 @@ export function renderNeumorphModulePage({
           </div>
           ${renderSiblingRoutes(moduleItem, routeHref)}
         </section>
+      </div>
+
+      <div class="nm-grid nm-module-state-grid">
+        ${renderNeumorphState({
+          type: "empty",
+          title: "Obsah modulu zatim neni migrovan",
+          description: "Tento ramec je pripraveny pro dalsi fazi, ktera prevede konkretni tabulky, formulare a workflow."
+        })}
+        ${renderNeumorphState({
+          type: "warning",
+          title: "Realne akce zustavaji na puvodni route",
+          description: "Dokud modul neprojde samostatnou migraci, neumorph route nesimuluje produkcni workflow."
+        })}
       </div>
     </section>
   `;

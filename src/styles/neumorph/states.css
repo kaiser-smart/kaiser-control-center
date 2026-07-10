@@ -1,0 +1,96 @@
+.nm-app .nm-icon-button {
+  width: var(--nm-control-height-md);
+  min-width: var(--nm-control-height-md);
+  padding: 0;
+}
+
+.nm-app .nm-button__icon {
+  display: inline-flex;
+}
+
+.nm-app .nm-button__icon .nm-icon {
+  width: var(--nm-icon-sm);
+  height: var(--nm-icon-sm);
+}
+
+.nm-app .nm-icon-holder--info {
+  border-color: var(--nm-state-info-border);
+  background: var(--nm-state-info-bg);
+  color: var(--nm-state-info-text);
+}
+
+.nm-app .nm-icon-holder--warning {
+  border-color: var(--nm-state-warning-border);
+  background: var(--nm-state-warning-bg);
+  color: var(--nm-state-warning-text);
+}
+
+.nm-app .nm-icon-holder--danger {
+  border-color: var(--nm-state-danger-border);
+  background: var(--nm-state-danger-bg);
+  color: var(--nm-state-danger-text);
+}
+
+.nm-app .nm-state-card {
+  display: grid;
+  grid-template-columns: var(--nm-icon-holder-md) minmax(0, 1fr);
+  gap: var(--nm-space-4);
+  align-items: center;
+  padding: var(--nm-space-5);
+  border: 1px solid var(--nm-border-soft);
+  border-radius: var(--nm-radius-lg);
+  background: var(--nm-surface-raised);
+  box-shadow: var(--nm-shadow-card), var(--nm-highlight-edge);
+}
+
+.nm-app .nm-state-card h3 {
+  margin-bottom: var(--nm-space-1);
+}
+
+.nm-app .nm-state-card--info {
+  border-color: var(--nm-state-info-border);
+  background: var(--nm-state-info-bg);
+}
+
+.nm-app .nm-state-card--warning {
+  border-color: var(--nm-state-warning-border);
+  background: var(--nm-state-warning-bg);
+}
+
+.nm-app .nm-state-card--danger {
+  border-color: var(--nm-state-danger-border);
+  background: var(--nm-state-danger-bg);
+}
+
+.nm-app .nm-system-state-grid,
+.nm-app .nm-module-state-grid {
+  --nm-grid-min: 260px;
+}
+
+.nm-app .nm-progress {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid var(--nm-border-soft);
+  border-radius: var(--nm-radius-pill);
+  background: var(--nm-surface-inset);
+  box-shadow: var(--nm-shadow-inset-control);
+}
+
+.nm-app .nm-progress span {
+  display: block;
+  width: var(--nm-progress-value, 50%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--nm-brand-accent);
+}
+
+.nm-app .nm-state-card--info .nm-icon {
+  animation: nm-spin 1s linear infinite;
+}
+
+@keyframes nm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

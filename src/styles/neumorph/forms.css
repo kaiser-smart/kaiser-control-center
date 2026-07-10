@@ -1,0 +1,72 @@
+.nm-app .nm-field--compact {
+  min-width: 150px;
+}
+
+.nm-app .nm-field--wide {
+  grid-column: 1 / -1;
+}
+
+.nm-app .nm-form-grid {
+  --nm-grid-min: 210px;
+}
+
+.nm-app .nm-option-grid {
+  display: grid;
+  gap: var(--nm-space-2);
+}
+
+.nm-app .nm-check-option,
+.nm-app .nm-radio-option,
+.nm-app .nm-switch-option {
+  display: grid;
+  min-height: var(--nm-control-height-md);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nm-space-3);
+  align-items: center;
+  padding: var(--nm-space-2) var(--nm-space-3);
+  border: 1px solid var(--nm-border-soft);
+  border-radius: var(--nm-radius-md);
+  background: color-mix(in srgb, var(--nm-surface-raised) 78%, var(--nm-surface-control));
+  color: var(--nm-text-muted-strong);
+  font-weight: 850;
+  box-shadow: var(--nm-shadow-control), var(--nm-highlight-edge);
+}
+
+.nm-app .nm-check-option input,
+.nm-app .nm-radio-option input,
+.nm-app .nm-switch-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.nm-app .nm-switch-option input {
+  width: 38px;
+}
+
+.nm-app .nm-input:focus,
+.nm-app .nm-select:focus,
+.nm-app .nm-textarea:focus {
+  border-color: var(--nm-active-tray-border);
+  box-shadow: var(--nm-shadow-inset-control), 0 0 0 2px var(--nm-focus-ring);
+  outline: 0;
+}
+
+.nm-app .nm-field--error .nm-input,
+.nm-app .nm-field--error .nm-select,
+.nm-app .nm-field--error .nm-textarea {
+  border-color: var(--nm-state-danger-border);
+  background: var(--nm-state-danger-bg);
+}
+
+.nm-app .nm-field__help {
+  color: var(--nm-text-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.nm-app .nm-field__error {
+  color: var(--nm-state-danger-text);
+  font-size: 0.78rem;
+  font-weight: 850;
+}

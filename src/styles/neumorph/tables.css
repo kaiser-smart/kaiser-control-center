@@ -1,0 +1,58 @@
+.nm-app .nm-table-shell {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  gap: var(--nm-space-3);
+  padding: var(--nm-space-3);
+  border: 1px solid var(--nm-border-soft);
+  border-radius: var(--nm-radius-lg);
+  background: color-mix(in srgb, var(--nm-surface-inset) 58%, var(--nm-surface-raised));
+  box-shadow: var(--nm-shadow-inset-control);
+}
+
+.nm-app .nm-table-shell__head,
+.nm-app .nm-pagination-shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nm-space-3);
+}
+
+.nm-app .nm-table-shell__head strong {
+  color: var(--nm-text-strong);
+  font-size: 1rem;
+}
+
+.nm-app .nm-table-shell__head span,
+.nm-app .nm-pagination-shell span {
+  color: var(--nm-text-muted);
+  font-weight: 800;
+}
+
+.nm-app .nm-table-wrap {
+  contain: paint;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: var(--nm-radius-lg);
+}
+
+.nm-app .nm-table {
+  min-width: 680px;
+}
+
+.nm-app .nm-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--nm-brand-accent) 5%, transparent);
+}
+
+.nm-app .nm-button--sm {
+  min-height: var(--nm-control-height-sm);
+  padding-inline: var(--nm-space-3);
+  font-size: 0.82rem;
+}
+
+.nm-app .nm-pagination-shell {
+  justify-content: flex-end;
+}

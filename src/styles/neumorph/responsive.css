@@ -1,6 +1,6 @@
 @media (max-width: 1100px) {
   .nm-app .nm-shell__body {
-    grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-columns: var(--nm-sidebar-width-compact) minmax(0, 1fr);
   }
 
   .nm-app .nm-sidebar {
@@ -27,10 +27,16 @@
   }
 
   .nm-app .nm-sidebar__item {
-    width: var(--nm-icon-holder-lg);
+    width: 52px;
+    min-height: 52px;
     grid-template-columns: 1fr;
     justify-items: center;
-    padding: var(--nm-space-2);
+    padding: 0;
+  }
+
+  .nm-app .nm-sidebar__icon {
+    width: 30px;
+    height: 30px;
   }
 
   .nm-app .nm-system-hero,
@@ -55,6 +61,10 @@
     flex-wrap: wrap;
   }
 
+  .nm-app .nm-shell__title strong {
+    white-space: normal;
+  }
+
   .nm-app .nm-system-hero {
     padding: var(--nm-space-5);
   }
@@ -75,12 +85,12 @@
 
   .nm-app .nm-mobile-nav {
     position: fixed;
-    right: var(--nm-space-3);
-    bottom: var(--nm-space-3);
-    left: var(--nm-space-3);
+    right: max(var(--nm-space-3), env(safe-area-inset-right));
+    bottom: max(var(--nm-space-3), env(safe-area-inset-bottom));
+    left: max(var(--nm-space-3), env(safe-area-inset-left));
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: var(--nm-space-2);
     padding: var(--nm-space-2);
     border: 1px solid var(--nm-border-soft);
@@ -104,6 +114,10 @@
     text-decoration: none;
   }
 
+  .nm-app .nm-mobile-nav__item--more {
+    padding: 0;
+  }
+
   .nm-app .nm-mobile-nav__item .nm-icon {
     width: var(--nm-icon-sm);
     height: var(--nm-icon-sm);
@@ -123,7 +137,7 @@
 @media (max-width: 520px) {
   .nm-app .nm-shell {
     padding: var(--nm-space-3);
-    padding-bottom: calc(var(--nm-space-8) + var(--nm-space-6));
+    padding-bottom: calc(var(--nm-space-8) + var(--nm-space-7));
   }
 
   .nm-app .nm-shell__logo {
@@ -163,6 +177,27 @@
   }
 
   .nm-app .nm-table {
-    min-width: 560px;
+    min-width: 620px;
+  }
+}
+
+@media (max-width: 390px) {
+  .nm-app .nm-mobile-nav {
+    gap: 4px;
+    padding: 5px;
+  }
+
+  .nm-app .nm-mobile-nav__item {
+    min-height: 54px;
+    font-size: 0.66rem;
+  }
+
+  .nm-app .nm-shell__brand {
+    gap: var(--nm-space-3);
+  }
+
+  .nm-app .nm-shell__logo {
+    width: 70px;
+    height: 44px;
   }
 }

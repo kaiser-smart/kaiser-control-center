@@ -20,6 +20,7 @@
 .nm-app .nm-card,
 .nm-app .nm-empty-state,
 .nm-app .nm-alert {
+  min-width: 0;
   border: 1px solid var(--nm-border-soft);
   border-radius: var(--nm-radius-lg);
   background: var(--nm-surface-raised);

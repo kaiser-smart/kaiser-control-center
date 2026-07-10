@@ -52,6 +52,13 @@
   --nm-icon-holder-md: 52px;
   --nm-icon-holder-lg: 64px;
 
+  --nm-sidebar-width-expanded: 256px;
+  --nm-sidebar-width-compact: 74px;
+  --nm-sidebar-item-height: 48px;
+  --nm-sidebar-icon-size: 26px;
+  --nm-sidebar-gap: 7px;
+  --nm-sidebar-group-gap: 14px;
+
   --nm-control-height-sm: 34px;
   --nm-control-height-md: 42px;
   --nm-control-height-lg: 50px;
@@ -81,4 +88,9 @@
   --nm-state-neutral-bg: color-mix(in srgb, var(--nm-text-main) 8%, transparent);
   --nm-state-neutral-border: color-mix(in srgb, var(--nm-text-main) 22%, var(--nm-border-soft));
   --nm-state-neutral-text: var(--nm-text-muted);
+
+  --nm-active-tray-bg: color-mix(in srgb, var(--nm-brand-accent) 13%, var(--nm-surface-raised));
+  --nm-active-tray-border: color-mix(in srgb, var(--nm-brand-accent) 42%, var(--nm-border-soft));
+  --nm-active-tray-text: var(--nm-text-strong);
+  --nm-active-tray-shadow: var(--nm-shadow-control-active);
 }

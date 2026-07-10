@@ -1,3 +1,16 @@
+import { modules } from "../data/modules.js";
+import {
+  renderInlineIcon,
+  renderNeumorphModuleHeader,
+  renderNeumorphState,
+  renderNeumorphStatusStrip,
+  renderNeumorphToolbar
+} from "./moduleLayout.js";
+
+function statusChip(label, modifier = "neutral") {
+  return `<span class="nm-chip nm-chip--${modifier}">${label}</span>`;
+}
+
 function previewMetric(label, value, detail, tone = "neutral") {
   return `
     <article class="nm-card nm-preview-metric nm-preview-metric--${tone}">
@@ -8,171 +21,224 @@ function previewMetric(label, value, detail, tone = "neutral") {
   `;
 }
 
-function statusChip(label, modifier) {
-  return `<span class="nm-chip nm-chip--${modifier}">${label}</span>`;
-}
-
-export function renderNeumorphSystemPreview() {
+function renderComponentGallery() {
   return `
-    <section class="nm-system-preview" aria-labelledby="nm-system-title">
-      <div class="nm-panel nm-system-hero">
-        <div class="nm-system-hero__copy">
-          <span class="nm-system-eyebrow">Kaiser Smart / migrace UI</span>
-          <h1 id="nm-system-title">Neumorph system</h1>
-          <p>
-            Paralelni izolovany shell pro postupny prevod aplikace do soft-metal / neumorph 2.0 designu.
-            Zatim bez realnych modulu, API a produkcnich akci.
-          </p>
+    <section class="nm-panel nm-system-section" id="components">
+      <div class="nm-system-section__head">
+        <span class="nm-icon-holder nm-icon-holder--active" aria-hidden="true">${renderInlineIcon("check")}</span>
+        <div>
+          <p class="nm-system-eyebrow">Komponenty</p>
+          <h2>Spolecny soft-metal zaklad</h2>
+          <p>Viditelne ukazky pro budoucni moduly bez realnych provoznich dat.</p>
+        </div>
+      </div>
+
+      <div class="nm-grid nm-system-component-grid">
+        <article class="nm-card nm-system-card">
+          <h3>Tlacitka a akce</h3>
           <div class="nm-cluster">
-            ${statusChip("Izolovano pod .nm-app", "success")}
-            ${statusChip("Light / dark tokeny", "info")}
-            ${statusChip("Bez produkcnich dat", "warning")}
-          </div>
-        </div>
-        <div class="nm-card nm-system-hero__status" aria-label="Stav migrace">
-          <span class="nm-icon-holder nm-icon-holder--active" aria-hidden="true">
-            <svg viewBox="0 0 24 24" class="nm-icon">
-              <path d="M5 12.5 9 16l10-10"></path>
-            </svg>
-          </span>
-          <div>
-            <strong>Faze 2</strong>
-            <span>AppShell a responsivni kostra</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="nm-grid nm-preview-metrics" aria-label="Souhrn foundation">
-        ${previewMetric("Tokeny", "60+", "barvy, stiny, mezery, radiusy", "success")}
-        ${previewMetric("Motivy", "2", "jeden markup pro den i noc", "info")}
-        ${previewMetric("Route", "/neumorph", "paralelni migracni vstup", "neutral")}
-      </div>
-
-      <section class="nm-grid nm-system-layout">
-        <article class="nm-panel nm-system-section" id="components">
-          <div class="nm-system-section__head">
-            <span class="nm-icon-holder" aria-hidden="true">
-              <svg viewBox="0 0 24 24" class="nm-icon">
-                <path d="M4 8h16M4 16h16M8 4v16M16 4v16"></path>
-              </svg>
-            </span>
-            <div>
-              <h2>Komponenty</h2>
-              <p>Zakladni primitives z Faze 1 v jednom zivem katalogu.</p>
-            </div>
-          </div>
-
-          <div class="nm-stack">
-            <div class="nm-card">
-              <h3>Tlacitka</h3>
-              <div class="nm-cluster">
-                <button class="nm-button nm-button--primary" type="button">Primary</button>
-                <button class="nm-button nm-button--secondary" type="button">Secondary</button>
-                <button class="nm-button nm-button--subtle" type="button">Subtle</button>
-                <button class="nm-button nm-button--danger" type="button">Danger</button>
-                <button class="nm-button" type="button" disabled>Disabled</button>
-              </div>
-            </div>
-
-            <div class="nm-card">
-              <h3>Status chipy</h3>
-              <div class="nm-cluster">
-                ${statusChip("Aktivni", "success")}
-                ${statusChip("Ceka", "warning")}
-                ${statusChip("Chyba", "danger")}
-                ${statusChip("Info", "info")}
-                <span class="nm-chip">Neutral</span>
-              </div>
-            </div>
-
-            <div class="nm-card nm-form-preview">
-              <h3>Formulare</h3>
-              <div class="nm-grid">
-                <label class="nm-field">
-                  <span>Nazev pohledu</span>
-                  <input class="nm-input" type="text" value="Migracni shell">
-                </label>
-                <label class="nm-field">
-                  <span>Stav</span>
-                  <select class="nm-select">
-                    <option>Pripraveno pro pilot</option>
-                    <option>V navrhu</option>
-                  </select>
-                </label>
-              </div>
-            </div>
+            <button class="nm-button nm-button--primary" type="button">Primary</button>
+            <button class="nm-button nm-button--secondary" type="button">Secondary</button>
+            <button class="nm-button nm-button--subtle" type="button">Subtle</button>
+            <button class="nm-button nm-button--danger" type="button">Danger</button>
+            <button class="nm-button" type="button" disabled>Disabled</button>
+            <button class="nm-button nm-icon-button" type="button" aria-label="Vice moznosti">${renderInlineIcon("more")}</button>
           </div>
         </article>
 
-        <aside class="nm-stack nm-system-aside" aria-label="Doplnkove ukazky">
-          <div class="nm-alert">
-            <strong>Interni nahled.</strong>
-            <span>Slouzi jen pro kontrolu shellu, tokenu a komponent.</span>
+        <article class="nm-card nm-system-card">
+          <h3>Chipy a stavy</h3>
+          <div class="nm-cluster">
+            ${statusChip("Aktivni", "success")}
+            ${statusChip("Info", "info")}
+            ${statusChip("Ceka", "warning")}
+            ${statusChip("Chyba", "danger")}
+            ${statusChip("Neutral")}
           </div>
-          <div class="nm-alert nm-alert--success">
-            <strong>Bezpecne oddeleno.</strong>
-            <span>Puvodni routy se nemeni a bez .nm-app se styly neuplatni.</span>
-          </div>
-          <div class="nm-card nm-card--inset">
-            <h3>Inset panel</h3>
-            <p>Ukazka zapusteneho soft-metal povrchu pro budouci filtry nebo staticke souhrny.</p>
-          </div>
-        </aside>
-      </section>
+        </article>
 
-      <section class="nm-panel nm-system-section">
-        <div class="nm-system-section__head">
-          <span class="nm-icon-holder" aria-hidden="true">
-            <svg viewBox="0 0 24 24" class="nm-icon">
-              <path d="M4 6h16M4 12h16M4 18h10"></path>
-            </svg>
-          </span>
-          <div>
-            <h2>Tabulka a prazdny stav</h2>
-            <p>Neutralni staticka data pro kontrolu typografie a hran.</p>
+        <article class="nm-card nm-system-card">
+          <h3>Formulare</h3>
+          <div class="nm-grid nm-form-grid">
+            <label class="nm-field">
+              <span>Nazev pohledu</span>
+              <input class="nm-input" type="text" value="Migracni shell">
+            </label>
+            <label class="nm-field">
+              <span>Stav</span>
+              <select class="nm-select">
+                <option>Pripraveno k migraci</option>
+                <option>Probiha migrace</option>
+              </select>
+            </label>
+            <label class="nm-field nm-field--wide">
+              <span>Poznamka</span>
+              <textarea class="nm-textarea">Sdilene komponenty jsou izolovane pod .nm-app.</textarea>
+            </label>
           </div>
+          <div class="nm-option-grid">
+            <label class="nm-check-option">
+              <input type="checkbox" checked>
+              <span>Ukazat aktivni moduly</span>
+            </label>
+            <label class="nm-radio-option">
+              <input type="radio" name="nm-system-tone" checked>
+              <span>Soft-metal</span>
+            </label>
+            <label class="nm-switch-option">
+              <input type="checkbox" checked>
+              <span>Tokenovy motiv</span>
+            </label>
+          </div>
+        </article>
+
+        <article class="nm-card nm-system-card">
+          <h3>Progress a dostupnost</h3>
+          <div class="nm-progress" aria-label="Stav pripravy systemu">
+            <span style="--nm-progress-value: 72%"></span>
+          </div>
+          <p>Shell, navigace a komponenty jsou pripraveny pro navazujici detailni migraci.</p>
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+function renderTablePreview() {
+  return `
+    <section class="nm-panel nm-system-section">
+      <div class="nm-system-section__head">
+        <span class="nm-icon-holder" aria-hidden="true">${renderInlineIcon("filter")}</span>
+        <div>
+          <p class="nm-system-eyebrow">Data shell</p>
+          <h2>Tabulka, toolbar a stavy</h2>
+          <p>Staticky priklad wrapperu. Neobsahuje realna provozni data.</p>
         </div>
+      </div>
 
-        <div class="nm-system-table-wrap">
+      ${renderNeumorphToolbar({
+        label: "Ukazkovy toolbar",
+        searchPlaceholder: "Hledat modul nebo stav",
+        segments: ["Vse", "Aktivni", "Pripravene"],
+        filters: [
+          { label: "Skupina", options: ["Vse", "Provoz", "Administrativa"] },
+          { label: "Motiv", options: ["Light", "Dark"] }
+        ],
+        actions: [
+          { label: "Export", icon: "download", variant: "secondary", disabled: true },
+          { label: "Nova akce", icon: "plus", variant: "primary", disabled: true }
+        ],
+        countLabel: "staticka ukazka"
+      })}
+
+      <div class="nm-table-shell">
+        <div class="nm-table-shell__head">
+          <strong>Modulove oblasti</strong>
+          <span>3 radky</span>
+        </div>
+        <div class="nm-table-wrap">
           <table class="nm-table">
             <thead>
               <tr>
                 <th>Oblast</th>
                 <th>Stav</th>
                 <th>Poznamka</th>
+                <th>Akce</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>Foundation CSS</td>
-                <td>Hotovo</td>
-                <td>Tokeny a primitives pod .nm-app.</td>
-              </tr>
-              <tr>
                 <td>AppShell</td>
-                <td>Faze 2</td>
-                <td>Header, sidebar, content a mobilni nav.</td>
+                <td>${statusChip("Finalizovano", "success")}</td>
+                <td>Header, sidebar, compact rail a mobile nav.</td>
+                <td><button class="nm-button nm-button--subtle nm-button--sm" type="button">Detail</button></td>
               </tr>
               <tr>
-                <td>Pilotni modul</td>
-                <td>Priste</td>
-                <td>Bez migrace v tomto kroku.</td>
+                <td>Module layout</td>
+                <td>${statusChip("Pripraveno", "info")}</td>
+                <td>Header, toolbar, status strip a content shell.</td>
+                <td><button class="nm-button nm-button--subtle nm-button--sm" type="button">Detail</button></td>
+              </tr>
+              <tr>
+                <td>Realne workflow</td>
+                <td>${statusChip("Dalsi faze", "warning")}</td>
+                <td>Budou migrovana samostatne po modulech.</td>
+                <td><button class="nm-button nm-button--subtle nm-button--sm" type="button" disabled>Plan</button></td>
               </tr>
             </tbody>
           </table>
         </div>
-
-        <div class="nm-empty-state">
-          <span class="nm-icon-holder" aria-hidden="true">
-            <svg viewBox="0 0 24 24" class="nm-icon">
-              <path d="M5 7h14v10H5z"></path>
-              <path d="M8 10h8M8 14h5"></path>
-            </svg>
-          </span>
-          <h3>Zadne produkcni akce</h3>
-          <p>Tato route je pouze zivy katalog systemu. Nevola realna API a nepracuje s ostrymi daty.</p>
+        <div class="nm-pagination-shell" aria-label="Ukazkove strankovani">
+          <button class="nm-button nm-button--subtle nm-button--sm" type="button" disabled>Predchozi</button>
+          <span>1 / 1</span>
+          <button class="nm-button nm-button--subtle nm-button--sm" type="button" disabled>Dalsi</button>
         </div>
-      </section>
+      </div>
+    </section>
+  `;
+}
+
+function renderStatePreview() {
+  return `
+    <section class="nm-grid nm-system-state-grid" aria-label="Systemove stavy">
+      ${renderNeumorphState({
+        type: "loading",
+        title: "Nacitani",
+        description: "Jednoduchy loading stav pro budouci datove obrazovky."
+      })}
+      ${renderNeumorphState({
+        type: "empty",
+        title: "Prazdny stav",
+        description: "Bezpecny empty state bez falesnych provoznich dat."
+      })}
+      ${renderNeumorphState({
+        type: "error",
+        title: "Chybovy stav",
+        description: "Kontrastni, ale klidny error panel pro problemove akce."
+      })}
+      ${renderNeumorphState({
+        type: "offline",
+        title: "Nedostupne",
+        description: "Stav pro offline nebo docasne nedostupnou sluzbu."
+      })}
+    </section>
+  `;
+}
+
+export function renderNeumorphSystemPreview() {
+  const dashboardModule = modules.find((moduleItem) => moduleItem.id === "dashboard") || modules[0];
+
+  return `
+    <section class="nm-system-preview" aria-labelledby="nm-system-title">
+      ${renderNeumorphModuleHeader({
+        moduleItem: dashboardModule,
+        eyebrow: "Kaiser Smart / neumorph system",
+        title: "Neumorph zaklad aplikace",
+        description: "Finalizovany spolecny shell, navigace a komponenty pro navazujici prevod realnych modulu.",
+        status: "Faze 3B",
+        statusTone: "success",
+        actions: [
+          { label: "Projit moduly", href: "#nm-module-catalog-title", variant: "primary" },
+          { label: "Komponenty", href: "#components", variant: "secondary" }
+        ],
+        meta: ["bez produkcniho deploye", "izolovano pod .nm-app"]
+      })}
+
+      <div class="nm-grid nm-preview-metrics" aria-label="Souhrn systemu">
+        ${previewMetric("Shell", "1", "spolecny layout pro desktop, tablet a mobil", "success")}
+        ${previewMetric("Navigace", "5", "logicke skupiny z realnych modulu", "info")}
+        ${previewMetric("Motivy", "2", "jedna struktura, light/dark tokeny", "success")}
+      </div>
+
+      ${renderNeumorphStatusStrip([
+        { label: "CSS izolace", value: ".nm-app", detail: "bez globalniho dopadu" },
+        { label: "Route", value: "/neumorph", detail: "paralelni migracni prostor" },
+        { label: "Workflow", value: "beze zmen", detail: "API, data a permissions zustavaji puvodni" }
+      ])}
+
+      ${renderComponentGallery()}
+      ${renderTablePreview()}
+      ${renderStatePreview()}
     </section>
   `;
 }
