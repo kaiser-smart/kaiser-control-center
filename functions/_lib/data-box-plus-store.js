@@ -97,6 +97,22 @@ function normalizeEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
 }
 
+const DATA_BOX_PLUS_RECIPIENT_CHOICES = [
+  { id: "faktury", label: "faktury@kaiserservis.cz", email: "faktury@kaiserservis.cz" },
+  { id: "sarlota", label: "sarlota@kaiserservis.cz", email: "sarlota@kaiserservis.cz" },
+  { id: "mzdova-ucetni", label: "mzdová účetní", email: "" },
+  { id: "garazmistr", label: "garážmistr", email: "" },
+  { id: "custom", label: "zadat jiný e-mail", email: "" }
+];
+
+function quoteInstruction(value) {
+  return `„${cleanString(value)}“`;
+}
+
+function recipientChoicesPayload() {
+  return DATA_BOX_PLUS_RECIPIENT_CHOICES.map((choice) => ({ ...choice }));
+}
+
 function sendReadiness(env = {}) {
   const emailProvider = cleanString(env.EMAIL_PROVIDER || (env.SENDGRID_API_KEY ? "sendgrid" : "")).toLowerCase();
   const emailIdentity = communicationEmailIdentity(env);
@@ -113,14 +129,14 @@ function sendReadiness(env = {}) {
       enabled: dataBoxReady,
       label: dataBoxReady ? "zapnuto" : "čeká na DS bránu",
       text: dataBoxReady
-        ? "Nová zpráva a odpověď se odešlou ze serveru až po finálním potvrzení člověka."
+        ? "Serverová brána pro datové zprávy je dostupná. Chatové pokyny se vyhodnocují přes backend."
         : "Chybí DATA_BOX_REPLY_ENDPOINT a DATA_BOX_REPLY_API_KEY. Bez nich DSP datovou zprávu neodešle."
     },
     email: {
       enabled: emailReady,
       label: emailReady ? "zapnuto" : "čeká na mail provider",
       text: emailReady
-        ? "E-mailové předání je napojené na serverový SendGrid a odešle se až po potvrzení."
+        ? "E-mailové předání je napojené na serverový SendGrid a po jasném chatovém pokynu se odešle."
         : "Chybí produkční SendGrid nastavení. E-mail se bez něj neodešle."
     },
     sms: {
@@ -348,7 +364,7 @@ function classifyMessage(message = {}, attachmentState = {}) {
     const riskLevel = hasHighRiskSignal ? "Vysoké" : hasMediumRiskSignal ? "Střední" : "Nízké";
     return {
       messageType: "Potvrzení o přijetí podání / mzdová agenda / ČSSZ",
-      status: hasMediumRiskSignal ? "Dnes k vyřízení" : "Čeká na potvrzení",
+      status: "Potřebuje pokyn",
       riskLevel,
       priority: hasHighRiskSignal ? "urgent" : hasMediumRiskSignal ? "high" : "low",
       priorityReason: hasMediumRiskSignal
@@ -365,14 +381,14 @@ function classifyMessage(message = {}, attachmentState = {}) {
       riskReason: hasMediumRiskSignal
         ? "Riziko je vyšší jen kvůli výzvě, chybě, odmítnutí, opravě, lhůtě, sankci nebo povinnosti něco doplnit."
         : "Nízké riziko: jde o potvrzení přijetí podání, ne o vozidlo ani lhůtu.",
-      requiresConfirmation: true
+      requiresConfirmation: false
     };
   }
 
   if (haystack.includes("exekutor") || haystack.includes("exekuc") || haystack.includes("soud") || haystack.includes("usneseni")) {
     return {
       messageType: "Exekuce / právní",
-      status: "Dnes k vyřízení",
+      status: "Potřebuje pokyn",
       riskLevel: "Vysoké",
       priority: "legal",
       priorityReason: "Právní dokument vyžaduje auditní stopu předání.",
@@ -380,15 +396,15 @@ function classifyMessage(message = {}, attachmentState = {}) {
       primaryAction: "Předat",
       facts,
       recommendationText: "Zpráva vypadá jako právní dokument. Doporučuji předat ji právníkovi nebo GT Brno.",
-      riskReason: "Právní zprávu Autopilot nikdy neuzavírá bez člověka.",
-      requiresConfirmation: true
+      riskReason: "Právní zpráva potřebuje konkrétní pokyn.",
+      requiresConfirmation: false
     };
   }
 
   if (haystack.includes("vyzva") || haystack.includes("pokut") || haystack.includes("uhrad") || haystack.includes("urcene castky")) {
     return {
       messageType: "Výzvy / pokuty",
-      status: "Dnes k vyřízení",
+      status: "Potřebuje pokyn",
       riskLevel: "Vysoké",
       priority: "urgent",
       priorityReason: "Finanční požadavek nebo lhůta může mít dopad na firmu.",
@@ -396,31 +412,31 @@ function classifyMessage(message = {}, attachmentState = {}) {
       primaryAction: "Otevřít PDF",
       facts,
       recommendationText: "Zpráva obsahuje výzvu k úhradě. Doporučuji ověřit částku, lhůtu a důvod výzvy.",
-      riskReason: "Finanční požadavek čeká na potvrzení Radima nebo Martina.",
-      requiresConfirmation: true
+      riskReason: "Finanční požadavek potřebuje konkrétní pokyn.",
+      requiresConfirmation: false
     };
   }
 
   if (haystack.includes("upom") || haystack.includes("faktur") || haystack.includes("predzalob")) {
     return {
       messageType: haystack.includes("upom") ? "Upomínky" : "Faktury",
-      status: "Čeká na potvrzení",
+      status: "Potřebuje pokyn",
       riskLevel: "Střední",
       priority: "high",
       priorityReason: "Finanční požadavek čeká na předání účetnímu oddělení.",
       suggestedAction: "Zpráva vypadá jako faktura. Doporučuji předat na faktury.",
-      primaryAction: "Připravit e-mail",
+      primaryAction: "Odeslat pokyn",
       facts,
       recommendationText: "Zpráva vypadá jako faktura nebo upomínka. Doporučuji připravit e-mail na faktury.",
-      riskReason: "Obsahuje finanční požadavek, proto čeká na člověka.",
-      requiresConfirmation: true
+      riskReason: "Obsahuje finanční požadavek, proto potřebuje konkrétní pokyn.",
+      requiresConfirmation: false
     };
   }
 
   if (haystack.includes("registr smluv") || haystack.includes("zverejneni smlouvy")) {
     return {
       messageType: "Registr smluv",
-      status: "Bezpečně stranou",
+      status: "Potřebuje pokyn",
       riskLevel: "Nízké",
       priority: "low",
       priorityReason: "Známý informační typ podle schváleného playbooku.",
@@ -428,15 +444,15 @@ function classifyMessage(message = {}, attachmentState = {}) {
       primaryAction: "Archivovat",
       facts,
       recommendationText: "Oznámení z Registru smluv vypadá jako informativní zpráva. Doporučuji archivovat.",
-      riskReason: "Nízké riziko, ale nové pravidlo se první měsíc učí.",
-      requiresConfirmation: true
+      riskReason: "Známý typ, ale čeká na chatový pokyn.",
+      requiresConfirmation: false
     };
   }
 
   if (haystack.includes("vozid") || haystack.includes("technick") || haystack.includes("stk")) {
     return {
       messageType: "Vozidla",
-      status: "Dnes k vyřízení",
+      status: "Potřebuje pokyn",
       riskLevel: "Vysoké",
       priority: "high",
       priorityReason: "Provozní dopad na vozidlo nebo termín.",
@@ -444,15 +460,15 @@ function classifyMessage(message = {}, attachmentState = {}) {
       primaryAction: "Zadat lhůtu",
       facts,
       recommendationText: "Zpráva se týká vozidla nebo technické lhůty. Doporučuji předat garážmistrovi.",
-      riskReason: "Provozní lhůtu musí potvrdit člověk.",
-      requiresConfirmation: true
+      riskReason: "Provozní lhůta potřebuje konkrétní pokyn nebo vazbu.",
+      requiresConfirmation: false
     };
   }
 
   if (attachmentState.problem) {
     return {
       messageType: "Oznámení ISDS",
-      status: "Problém",
+      status: "Chybí příloha",
       riskLevel: "Vysoké",
       priority: "problem",
       priorityReason: "Přílohu se nepodařilo načíst.",
@@ -461,7 +477,7 @@ function classifyMessage(message = {}, attachmentState = {}) {
       facts,
       recommendationText: "Autopilot si není jistý, protože příloha zatím není přečtená. Doporučuji ruční kontrolu.",
       riskReason: "Bez přílohy nelze bezpečně rozhodnout.",
-      requiresConfirmation: true
+      requiresConfirmation: false
     };
   }
 
@@ -476,7 +492,7 @@ function classifyMessage(message = {}, attachmentState = {}) {
     facts,
     recommendationText: "Autopilot zatím neví, jak tuto zprávu zařadit. Otevři ji a rozhodni ručně.",
     riskReason: "Nový typ zprávy se teprve učí.",
-    requiresConfirmation: true
+    requiresConfirmation: false
   };
 }
 
@@ -766,7 +782,7 @@ function rowToAttachment(row) {
     mimeType: cleanString(row.mime_type || "application/octet-stream"),
     size: sizeBytes ? `${Math.round(sizeBytes / 1024)} kB` : "neznámá",
     storageStatus: cleanString(row.storage_status || "Dostupná"),
-    textExtractionStatus: cleanString(row.text_extraction_status || "Čeká na zpracování"),
+    textExtractionStatus: cleanString(row.text_extraction_status || "Text zatím nenačten"),
     extractedText: cleanString(row.extracted_text),
     errorReason: cleanString(row.error_reason),
     openUrl: `/api/data-box-plus/messages/${encodeURIComponent(cleanString(row.message_id))}/attachments/${encodeURIComponent(cleanString(row.id))}`,
@@ -934,9 +950,9 @@ async function updateMailboxCounters(db, mailboxId) {
   const row = await db
     .prepare(`
       SELECT
-        SUM(CASE WHEN status <> 'Archivované' THEN 1 ELSE 0 END) AS new_count,
-        SUM(CASE WHEN status IN ('Dnes k vyřízení', 'Čeká na potvrzení', 'Problém') THEN 1 ELSE 0 END) AS due_count,
-        SUM(CASE WHEN status = 'Problém' OR attachment_status LIKE 'Nepodařilo%' THEN 1 ELSE 0 END) AS problem_count
+        SUM(CASE WHEN status NOT IN ('Archivováno', 'Archivované', 'Vyřešeno', 'Odesláno e-mailem') THEN 1 ELSE 0 END) AS new_count,
+        SUM(CASE WHEN status IN ('Nové', 'Potřebuje pokyn', 'Potřebuje upřesnit', 'Potřebuje adresáta', 'Chybí vozidlo', 'Chybí příloha', 'Nelze provést') THEN 1 ELSE 0 END) AS due_count,
+        SUM(CASE WHEN status IN ('Chybí vozidlo', 'Chybí příloha', 'Nelze provést') OR attachment_status LIKE 'Nepodařilo%' THEN 1 ELSE 0 END) AS problem_count
       FROM data_box_plus_messages
       WHERE mailbox_id = ?
     `)
@@ -981,7 +997,7 @@ async function upsertAttachment(db, bucket, messageId, mailboxId, attachment, in
 
   const textExtractionStatus = extractedText
     ? "Text načtený"
-    : (contentType.includes("pdf") ? "Vyžaduje ruční otevření" : "Čeká na zpracování");
+    : (contentType.includes("pdf") ? "Vyžaduje ruční otevření" : "Text zatím nenačten");
 
   await db
     .prepare(`
@@ -1099,7 +1115,7 @@ async function upsertRecommendation(db, messageId, classification, facts) {
       classification.riskLevel === "Nízké"
         ? "Podobné informační zprávy se obvykle archivují po kontrole."
         : "Podobné rizikové zprávy zatím vždy čekají na člověka.",
-      "Před provedením uvidíš konkrétní krok. Nic se neodešle mimo systém bez potvrzení.",
+      "Chatový pokyn je příkaz k provedení. Když chybí údaj, systém řekne konkrétně který.",
       classification.riskReason,
       classification.requiresConfirmation ? 1 : 0,
       "waiting"
@@ -1149,7 +1165,7 @@ async function upsertMessage(db, env, account, mailbox, message) {
         "Otevřít zprávu a ručně určit, zda jde o potvrzení, účetní/mzdovou agendu, nebo zprávu k archivaci.",
         "Nová datová zpráva čeká na první rozhodnutí.",
         "Otevřít zprávu",
-        message?.hasAttachments ? "Čeká na zpracování" : "Dostupná"
+        message?.hasAttachments ? "Text zatím nenačten" : "Dostupná"
       )
       .run();
   }
@@ -1337,7 +1353,7 @@ export async function getDataBoxPlusStatus(env) {
         SELECT COUNT(*) AS count
         FROM data_box_plus_messages
         WHERE archive_status <> 'archived'
-          AND status IN ('Nové', 'Dnes k vyřízení', 'Čeká na potvrzení', 'Problém')
+          AND status IN ('Nové', 'Potřebuje pokyn', 'Potřebuje upřesnit', 'Potřebuje adresáta', 'Chybí vozidlo', 'Chybí příloha', 'Nelze provést')
       `)
       .first();
     const unresolvedRow = await db
@@ -1345,7 +1361,7 @@ export async function getDataBoxPlusStatus(env) {
         SELECT COUNT(*) AS count
         FROM data_box_plus_messages
         WHERE archive_status <> 'archived'
-          AND status NOT IN ('Bezpečně stranou', 'Archivované')
+          AND status NOT IN ('Archivováno', 'Archivované', 'Vyřešeno', 'Odesláno e-mailem')
       `)
       .first();
     return {
@@ -1890,7 +1906,7 @@ export async function sendDataBoxPlusMessageEmail(env, messageId, payload = {}, 
     recipientEmail,
     subject,
     body,
-    fromName: "Datové schránky Plus"
+    fromName: "Šarlota Kaiser"
   });
 
   const sent = result.status === "sent";
@@ -1921,14 +1937,14 @@ export async function sendDataBoxPlusMessageEmail(env, messageId, payload = {}, 
   await db
     .prepare(`
       UPDATE data_box_plus_messages
-      SET status = 'Předáno',
+      SET status = 'Odesláno e-mailem',
           assigned_to = ?,
           suggested_action = ?,
-          primary_action = 'Detail předání',
+          primary_action = 'Detail historie',
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `)
-    .bind(recipientEmail, `E-mailově předáno na ${recipientEmail}.`, id)
+    .bind(recipientEmail, `Odesláno na ${recipientEmail}.`, id)
     .run();
   await updateMailboxCounters(db, cleanString(message.mailboxId));
 
@@ -1938,7 +1954,7 @@ export async function sendDataBoxPlusMessageEmail(env, messageId, payload = {}, 
     actionLogId: actionId,
     result,
     message: await getDataBoxPlusMessage(env, id),
-    notice: `E-mail byl odeslán na ${recipientEmail}.`
+    notice: `Hotovo. Odesláno na ${recipientEmail}.`
   };
 }
 
@@ -2079,7 +2095,7 @@ function instructionPlanFromText(instruction, message = {}, attachments = []) {
       archiveStatus: "active",
       assignedTo: resolveOnly ? "" : "Mzdová účetní",
       resultLabel: resolveOnly ? "Podání přijato ČSSZ." : "Předáno mzdové účetní.",
-      nextStep: resolveOnly ? "Bez další akce." : "Čeká na zpracování mzdové účetní.",
+      nextStep: resolveOnly ? "Bez další akce." : "Čeká na mzdovou účetní.",
       performedAction: resolveOnly ? "Uložení potvrzení ČSSZ k evidenci" : "Předání mzdové účetní",
       auditNote: resolveOnly
         ? "Zpráva byla označena jako vyřešená a uložená k evidenci. Nic se neodeslalo mimo systém."
@@ -2101,7 +2117,7 @@ function instructionPlanFromText(instruction, message = {}, attachments = []) {
       archiveStatus: "active",
       assignedTo: "faktury@kaiserservis.cz",
       resultLabel: "Předáno účetnímu oddělení.",
-      nextStep: "Čeká na zpracování účetní.",
+      nextStep: "Čeká na účetní.",
       performedAction: "Předání účetnímu oddělení",
       auditNote: "Zpráva byla interně předána účetnímu oddělení. Nic se neodeslalo mimo systém.",
       learningPattern: "U podobných faktur a upomínek nabídnout předání účetnímu oddělení."
@@ -2114,7 +2130,7 @@ function instructionPlanFromText(instruction, message = {}, attachments = []) {
       actionType: "deadline",
       confirmLabel: "Potvrdit zapsání lhůty",
       recommendedAction: plateMatch ? `Zapsat termín k vozidlu ${plateMatch[0].toUpperCase()}.` : "Zapsat termín k ručnímu doplnění.",
-      assistantText: "Rozumím. Připravím zapsání termínu. Nic se bez potvrzení neuloží mimo historii zprávy.",
+      assistantText: "Chybí konkrétní termín nebo vozidlo. Doplň údaj pro zápis.",
       afterConfirm: "Zpráva se označí pro zadání lhůty. Nic se neodešle mimo systém a krok bude dohledatelný.",
       messageStatus: "Rozpracováno",
       archiveStatus: "active",
@@ -2156,7 +2172,7 @@ function instructionPlanFromText(instruction, message = {}, attachments = []) {
       archiveStatus: "active",
       assignedTo: "Radim",
       resultLabel: "Vytvořen interní úkol pro Radima.",
-      nextStep: "Čeká na zpracování Radima.",
+      nextStep: "Čeká na Radima.",
       performedAction: "Vytvoření interního úkolu",
       auditNote: "Ke zprávě byl připraven interní úkol. Nic se neodeslalo mimo systém.",
       learningPattern: "U podobných zpráv nabídnout vytvoření interního úkolu."
@@ -2198,6 +2214,355 @@ function instructionPlanFromText(instruction, message = {}, attachments = []) {
   });
 }
 
+function emailRecipientFromInstruction(userInstruction, normalized) {
+  const directEmail = normalizeEmail(cleanString(userInstruction).match(/[^\s<>"]+@[^\s<>"]+\.[^\s<>",.]+/i)?.[0]);
+  if (directEmail) return { email: directEmail, label: directEmail, ambiguous: false };
+  if (normalized.includes("faktur")) {
+    return { email: "faktury@kaiserservis.cz", label: "faktury@kaiserservis.cz", ambiguous: false };
+  }
+  if (normalized.includes("sarlot") || normalized.includes("sarlota")) {
+    return { email: "sarlota@kaiserservis.cz", label: "sarlota@kaiserservis.cz", ambiguous: false };
+  }
+  if (normalized.includes("vyz email") || normalized.includes("vyz e-mail") || normalized.includes("vyz")) {
+    return { email: "", label: "vyz email", ambiguous: true };
+  }
+  return { email: "", label: "", ambiguous: true };
+}
+
+function directInstructionPlanFromText(instruction, message = {}, attachments = []) {
+  const userInstruction = cleanString(instruction);
+  if (!userInstruction) {
+    throw new DataBoxPlusStoreError("Napiš pokyn pro Autopilota.", 400, "data_box_plus_instruction_missing");
+  }
+  const attachmentText = attachments.map((attachment) => cleanString(attachment.extracted_text)).join(" ");
+  const normalized = searchText([userInstruction, message.subject, message.sender_name, attachmentText]);
+  const sourceMessage = {
+    messageId: cleanString(message.id),
+    mailboxId: cleanString(message.mailbox_id),
+    senderName: cleanString(message.sender_name),
+    subject: cleanString(message.subject)
+  };
+  const plan = (overrides) => {
+    const messageStatus = cleanString(overrides.messageStatus || "Potřebuje upřesnit");
+    const performedAction = cleanString(overrides.performedAction || overrides.resultLabel || "Pokyn vyžaduje upřesnění");
+    const nextStep = cleanString(overrides.nextStep || "Upřesnit pokyn");
+    return {
+      userInstruction,
+      understoodAs: cleanString(overrides.understoodAs || performedAction),
+      actionType: cleanString(overrides.actionType || "needs_clarification"),
+      messageStatus,
+      archiveStatus: cleanString(overrides.archiveStatus || "active"),
+      assignedTo: cleanString(overrides.assignedTo),
+      resultLabel: cleanString(overrides.resultLabel || performedAction),
+      nextStep,
+      primaryAction: cleanString(overrides.primaryAction || (nextStep === "Bez další akce." ? "Detail historie" : nextStep)),
+      performedAction,
+      auditNote: cleanString(overrides.auditNote || `Systém provedl: ${performedAction}. Nový stav: ${messageStatus}.`),
+      assistantText: cleanString(overrides.assistantText || `Hotovo. ${performedAction}.`),
+      recipientEmail: normalizeEmail(overrides.recipientEmail),
+      recipientLabel: cleanString(overrides.recipientLabel || overrides.recipientEmail || overrides.assignedTo),
+      emailSent: Boolean(overrides.emailSent),
+      sendsEmail: Boolean(overrides.sendsEmail),
+      requiresInput: Boolean(overrides.requiresInput),
+      recipientOptions: Array.isArray(overrides.recipientOptions) ? overrides.recipientOptions : [],
+      sourceMessage
+    };
+  };
+
+  const emailIntent = normalized.includes("email") || normalized.includes("e-mail") || normalized.includes("posli") || normalized.includes("odesli");
+  if (emailIntent) {
+    const recipient = emailRecipientFromInstruction(userInstruction, normalized);
+    if (!recipient.email) {
+      const label = recipient.label || cleanString(userInstruction);
+      return plan({
+        actionType: "needs_recipient",
+        understoodAs: "odeslání e-mailu",
+        messageStatus: "Potřebuje adresáta",
+        resultLabel: "Adresát není jasný.",
+        nextStep: "Vybrat adresáta",
+        primaryAction: "Vybrat adresáta",
+        performedAction: "Adresát chybí",
+        auditNote: `Adresát pro pokyn ${quoteInstruction(userInstruction)} není jasný. E-mail nebyl odeslán.`,
+        assistantText: `Nevím, který e-mail je ${quoteInstruction(label)}. Vyber adresáta.`,
+        requiresInput: true,
+        recipientOptions: recipientChoicesPayload()
+      });
+    }
+    return plan({
+      actionType: "send_email",
+      understoodAs: "odeslání e-mailu",
+      messageStatus: "Odesláno e-mailem",
+      resultLabel: `Odesláno na ${recipient.email}.`,
+      nextStep: "Bez další akce.",
+      primaryAction: "Detail historie",
+      performedAction: `E-mail odeslán na ${recipient.email}`,
+      auditNote: `E-mail byl odeslán na ${recipient.email}.`,
+      assistantText: `Hotovo. Odesláno na ${recipient.email}.`,
+      assignedTo: recipient.email,
+      recipientEmail: recipient.email,
+      recipientLabel: recipient.label || recipient.email,
+      sendsEmail: true,
+      emailSent: true
+    });
+  }
+
+  if (normalized.includes("nechat") && (normalized.includes("nevyrizene") || normalized.includes("otevrene"))) {
+    return plan({
+      actionType: "leave_unresolved",
+      understoodAs: "ponechání nevyřízené",
+      messageStatus: "Nevyřízené",
+      resultLabel: "Zpráva zůstává nevyřízená.",
+      nextStep: "Bez další akce.",
+      primaryAction: "Detail historie",
+      performedAction: "Ponecháno nevyřízené",
+      auditNote: "Zpráva byla ponechána jako nevyřízená.",
+      assistantText: "Hotovo. Necháno nevyřízené."
+    });
+  }
+
+  if (normalized.includes("archiv") || normalized.includes("registr smluv")) {
+    return plan({
+      actionType: "archive",
+      understoodAs: "archivace zprávy",
+      messageStatus: "Archivováno",
+      archiveStatus: "archived",
+      resultLabel: "Archivováno.",
+      nextStep: "Bez další akce.",
+      primaryAction: "Detail historie",
+      performedAction: "Archivováno",
+      auditNote: "Zpráva byla archivována.",
+      assistantText: "Hotovo. Archivováno."
+    });
+  }
+
+  if (normalized.includes("uloz") || normalized.includes("ulož") || normalized.includes("evidenc") || normalized.includes("vyres") || normalized.includes("vyřeš") || normalized.includes("zpracovan")) {
+    const evidence = normalized.includes("evidenc") || normalized.includes("uloz") || normalized.includes("ulož");
+    return plan({
+      actionType: evidence ? "record_evidence" : "resolve",
+      understoodAs: evidence ? "uložení k evidenci" : "označení jako vyřešené",
+      messageStatus: "Vyřešeno",
+      resultLabel: evidence ? "Uloženo k evidenci." : "Označeno jako vyřešené.",
+      nextStep: "Bez další akce.",
+      primaryAction: "Detail historie",
+      performedAction: evidence ? "Uloženo k evidenci" : "Označeno jako vyřešené",
+      auditNote: evidence ? "Zpráva byla uložena k evidenci." : "Zpráva byla označena jako vyřešená.",
+      assistantText: evidence ? "Hotovo. Uloženo k evidenci." : "Hotovo. Označeno jako vyřešené."
+    });
+  }
+
+  if (normalized.includes("mzd")) {
+    return plan({
+      actionType: "handoff_payroll",
+      understoodAs: "předání mzdové účetní",
+      messageStatus: "Předáno mzdové účetní",
+      resultLabel: "Předáno mzdové účetní.",
+      nextStep: "Čeká na mzdovou účetní",
+      primaryAction: "Detail historie",
+      assignedTo: "Mzdová účetní",
+      performedAction: "Předáno mzdové účetní",
+      auditNote: "Zpráva byla předána mzdové účetní.",
+      assistantText: "Hotovo. Předáno mzdové účetní."
+    });
+  }
+
+  if (normalized.includes("faktur") || normalized.includes("ucetn") || normalized.includes("účetn")) {
+    return plan({
+      actionType: "handoff_invoices",
+      understoodAs: "předání fakturám",
+      messageStatus: "Předáno fakturám",
+      resultLabel: "Předáno fakturám.",
+      nextStep: "Čeká na účetní",
+      primaryAction: "Detail historie",
+      assignedTo: "faktury@kaiserservis.cz",
+      performedAction: "Předáno fakturám",
+      auditNote: "Zpráva byla předána fakturám.",
+      assistantText: "Hotovo. Předáno fakturám."
+    });
+  }
+
+  if (normalized.includes("garaz") || normalized.includes("garáž")) {
+    return plan({
+      actionType: "handoff_garage",
+      understoodAs: "předání garážmistrovi",
+      messageStatus: "Předáno garážmistrovi",
+      resultLabel: "Předáno garážmistrovi.",
+      nextStep: "Čeká na garážmistra",
+      primaryAction: "Detail historie",
+      assignedTo: "Garážmistr",
+      performedAction: "Předáno garážmistrovi",
+      auditNote: "Zpráva byla předána garážmistrovi.",
+      assistantText: "Hotovo. Předáno garážmistrovi."
+    });
+  }
+
+  if (normalized.includes("vozid") || normalized.includes("stk") || normalized.includes("technick") || normalized.includes("lhut") || normalized.includes("kalendar")) {
+    const plateMatch = userInstruction.match(/\b\d[A-Z0-9]{2}\s?\d{4}\b/i);
+    if (!plateMatch) {
+      return plan({
+        actionType: "missing_vehicle",
+        understoodAs: "zápis k vozidlu",
+        messageStatus: "Chybí vozidlo",
+        resultLabel: "Chybí vazba na vozidlo.",
+        nextStep: "Vybrat vozidlo",
+        primaryAction: "Vybrat vozidlo",
+        performedAction: "Chybí vozidlo",
+        auditNote: "Systém nemá jasnou vazbu na vozidlo. Zápis do vozidel nebyl proveden.",
+        assistantText: "Chybí vozidlo. Vyber vozidlo.",
+        requiresInput: true
+      });
+    }
+    return plan({
+      actionType: "vehicle_handoff",
+      understoodAs: "předání vozidlové agendy",
+      messageStatus: "Předáno garážmistrovi",
+      resultLabel: `Předáno garážmistrovi k vozidlu ${plateMatch[0].toUpperCase()}.`,
+      nextStep: "Čeká na garážmistra",
+      primaryAction: "Detail historie",
+      assignedTo: "Garážmistr",
+      performedAction: `Předáno garážmistrovi k vozidlu ${plateMatch[0].toUpperCase()}`,
+      auditNote: `Zpráva byla předána garážmistrovi k vozidlu ${plateMatch[0].toUpperCase()}.`,
+      assistantText: "Hotovo. Předáno garážmistrovi."
+    });
+  }
+
+  if (normalized.includes("predat") || normalized.includes("předej") || normalized.includes("prirad") || normalized.includes("přiřa")) {
+    return plan({
+      actionType: "needs_clarification",
+      understoodAs: "předání bez jasného adresáta",
+      messageStatus: "Potřebuje upřesnit",
+      resultLabel: "Není jasné, komu předat.",
+      nextStep: "Upřesnit pokyn",
+      primaryAction: "Upřesnit pokyn",
+      performedAction: "Potřebuje upřesnit",
+      auditNote: "Pokyn k předání nemá jasného adresáta. Akce nebyla provedena.",
+      assistantText: "Nevím, komu zprávu předat. Upřesni pokyn.",
+      requiresInput: true
+    });
+  }
+
+  return plan({
+    actionType: "needs_clarification",
+    understoodAs: "nejasný pokyn",
+    messageStatus: "Potřebuje upřesnit",
+    resultLabel: "Pokyn není jasný.",
+    nextStep: "Upřesnit pokyn",
+    primaryAction: "Upřesnit pokyn",
+    performedAction: "Potřebuje upřesnit",
+    auditNote: "Systém pokynu nerozuměl dostatečně přesně. Akce nebyla provedena.",
+    assistantText: "Nevím přesně, co mám udělat. Upřesni pokyn.",
+    requiresInput: true
+  });
+}
+
+export function dataBoxPlusInstructionPlanForTest(instruction, message = {}, attachments = []) {
+  return directInstructionPlanFromText(instruction, message, attachments);
+}
+
+async function logDataBoxPlusInstruction(db, id, actor, instruction, plan, result) {
+  const actionId = idValue("dbp-action");
+  await db
+    .prepare(`
+      INSERT INTO data_box_plus_action_log (
+        id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+      )
+      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      actionId,
+      id,
+      actor,
+      "Chatový pokyn",
+      JSON.stringify({
+        originalInstruction: instruction,
+        understoodAs: plan.understoodAs,
+        performedAction: plan.performedAction,
+        newStatus: plan.messageStatus,
+        nextStep: plan.nextStep,
+        recipient: plan.recipientEmail || plan.recipientLabel || plan.assignedTo || "",
+        emailSent: plan.emailSent,
+        sourceMessage: plan.sourceMessage,
+        recipientOptions: plan.recipientOptions
+      }),
+      new Date().toISOString(),
+      result,
+      `${actor} zadal: ${quoteInstruction(instruction)}. Systém provedl: ${plan.performedAction}. Nový stav: ${plan.messageStatus}.`
+    )
+    .run();
+  return actionId;
+}
+
+export async function executeDataBoxPlusMessageInstruction(env, messageId, currentUser = null, body = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const id = cleanString(messageId);
+  const instruction = cleanString(body.instruction);
+  try {
+    const message = await db.prepare("SELECT * FROM data_box_plus_messages WHERE id = ? LIMIT 1").bind(id).first();
+    if (!message?.id) throw new DataBoxPlusStoreError("Zpráva nebyla nalezena.", 404, "data_box_plus_message_not_found");
+    const attachments = await db
+      .prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name")
+      .bind(id)
+      .all();
+    const plan = directInstructionPlanFromText(instruction, message, attachments.results || []);
+    const actor = actorName(currentUser);
+
+    if (plan.sendsEmail && plan.recipientEmail) {
+      const auditId = await logDataBoxPlusInstruction(db, id, actor, instruction, plan, "action_started");
+      const emailResult = await sendDataBoxPlusMessageEmail(env, id, {
+        confirmed: true,
+        recipientEmail: plan.recipientEmail,
+        subject: cleanString(body.subject || message.subject || "Datová zpráva"),
+        body: cleanString(body.body || `Předávám datovou zprávu: ${cleanString(message.subject || "")}`)
+      }, currentUser);
+      await db
+        .prepare("UPDATE data_box_plus_action_log SET result = ?, audit_note = ? WHERE id = ?")
+        .bind("done", `${actor} zadal: ${quoteInstruction(instruction)}. Systém provedl: ${plan.performedAction}. Nový stav: Odesláno e-mailem.`, auditId)
+        .run();
+      return {
+        apiStatus: "ready",
+        status: "done",
+        action: plan,
+        message: emailResult.message,
+        auditId,
+        notice: plan.assistantText
+      };
+    }
+
+    await db
+      .prepare(`
+        UPDATE data_box_plus_messages
+        SET status = ?,
+            archive_status = ?,
+            assigned_to = ?,
+            suggested_action = ?,
+            primary_action = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      .bind(
+        plan.messageStatus,
+        plan.archiveStatus,
+        plan.assignedTo,
+        plan.resultLabel,
+        plan.primaryAction,
+        id
+      )
+      .run();
+    await updateMailboxCounters(db, cleanString(message.mailbox_id));
+    const auditId = await logDataBoxPlusInstruction(db, id, actor, instruction, plan, plan.requiresInput ? "needs_input" : "done");
+    return {
+      apiStatus: "ready",
+      status: plan.requiresInput ? "needs_input" : "done",
+      action: plan,
+      message: await getDataBoxPlusMessage(env, id),
+      auditId,
+      notice: plan.assistantText
+    };
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
 function recommendationConfirmAction(recommendation = {}, body = {}) {
   const instructionPlan = recommendation.instructionPlan || null;
   if (instructionPlan?.actionType) {
@@ -2235,7 +2600,7 @@ function recommendationConfirmAction(recommendation = {}, body = {}) {
     return {
       actionType: "Předat mzdové účetní",
       performedAction: "Předání mzdové účetní",
-      messageStatus: "Čeká na potvrzení",
+      messageStatus: "Předáno mzdové účetní",
       archiveStatus: "active",
       assignedTo: "Mzdová účetní",
       suggestedAction: "Předáno mzdové účetní k evidenci nebo ověření.",
@@ -2257,7 +2622,7 @@ function recommendationConfirmAction(recommendation = {}, body = {}) {
     return {
       actionType: "Potvrdit zapsání lhůty",
       performedAction: "Zapsání lhůty k ručnímu doplnění",
-      messageStatus: "Čeká na potvrzení",
+      messageStatus: "Předáno garážmistrovi",
       archiveStatus: "active",
       assignedTo: "Garážmistr",
       suggestedAction: "Lhůta připravena k zapsání a předána garážmistrovi.",
@@ -2268,7 +2633,7 @@ function recommendationConfirmAction(recommendation = {}, body = {}) {
     return {
       actionType: "Potvrdit předání",
       performedAction: "Předání účetnímu oddělení",
-      messageStatus: "Čeká na potvrzení",
+      messageStatus: "Předáno fakturám",
       archiveStatus: "active",
       assignedTo: "faktury@kaiserservis.cz",
       suggestedAction: "Předáno účetnímu oddělení k vyřízení.",
@@ -2278,12 +2643,12 @@ function recommendationConfirmAction(recommendation = {}, body = {}) {
   if (normalized.includes("email") || normalized.includes("e-mail")) {
     return {
       actionType: "Potvrdit vytvoření e-mailu",
-      performedAction: "Návrh e-mailu k ruční kontrole",
-      messageStatus: "Čeká na potvrzení",
+      performedAction: "Potřebuje adresáta",
+      messageStatus: "Potřebuje adresáta",
       archiveStatus: "active",
       assignedTo: "faktury@kaiserservis.cz",
-      suggestedAction: "Návrh e-mailu připraven k ručnímu schválení.",
-      auditNote: "Návrh e-mailu byl potvrzen jako interně připravený. E-mail se neodeslal mimo systém."
+      suggestedAction: "Vybrat adresáta pro e-mail.",
+      auditNote: "Adresát e-mailu není jasný. E-mail se neodeslal."
     };
   }
   if (normalized.includes("pravnik") || normalized.includes("gt brno") || normalized.includes("exekuc") || normalized.includes("soud")) {
@@ -2301,7 +2666,7 @@ function recommendationConfirmAction(recommendation = {}, body = {}) {
     return {
       actionType: normalized.includes("priradit") || normalized.includes("assignment") ? "Potvrdit přiřazení" : "Potvrdit předání",
       performedAction: "Přiřazení odpovědné osobě",
-      messageStatus: "Čeká na potvrzení",
+      messageStatus: "Potřebuje upřesnit",
       archiveStatus: "active",
       assignedTo: "Odpovědná osoba",
       suggestedAction: "Přiřazeno odpovědné osobě k vyřízení.",
@@ -2439,7 +2804,7 @@ export async function prepareDataBoxPlusMessageInstruction(env, messageId, curre
           confidence, evidence, similar_cases, after_confirm, human_reason, requires_confirmation,
           status, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'waiting', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'waiting', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `)
       .bind(
         recommendationId,
@@ -2453,7 +2818,7 @@ export async function prepareDataBoxPlusMessageInstruction(env, messageId, curre
         plan.evidence,
         "Autopilot se učí z potvrzených pokynů u konkrétních zpráv.",
         plan.afterConfirm,
-        "Akce čeká na potvrzení člověka. Nic se neodešle mimo systém.",
+        "Chatový pokyn byl přijat. Systém vrátí konkrétní provedení nebo konkrétní chybějící údaj.",
       )
       .run();
     await db
@@ -2478,7 +2843,7 @@ export async function prepareDataBoxPlusMessageInstruction(env, messageId, curre
     await db
       .prepare(`
         UPDATE data_box_plus_messages
-        SET status = 'Připraveno k potvrzení',
+        SET status = 'Potřebuje pokyn',
             archive_status = 'active',
             suggested_action = ?,
             primary_action = ?,
@@ -2504,8 +2869,8 @@ export async function prepareDataBoxPlusMessageInstruction(env, messageId, curre
         evidence: plan.evidence,
         similarCases: "Autopilot se učí z potvrzených pokynů u konkrétních zpráv.",
         afterConfirm: plan.afterConfirm,
-        humanReason: "Akce čeká na potvrzení člověka. Nic se neodešle mimo systém.",
-        requiresConfirmation: true,
+        humanReason: "Chatový pokyn se má provést přímo. Pokud chybí údaj, systém se zeptá konkrétně.",
+        requiresConfirmation: false,
         status: "waiting"
       },
       message: updatedMessage,
