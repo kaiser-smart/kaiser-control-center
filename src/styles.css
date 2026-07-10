@@ -33618,18 +33618,18 @@ body:has(.ds-plus-page) {
 
 /* Datove schranky Plus: simple message chat. */
 .ds-plus-chat-overlay {
-  place-items: stretch end;
-  padding: 0;
+  place-items: center end;
+  padding: 24px;
 }
 
 .ds-plus-chat-dialog {
-  width: min(700px, 100vw);
-  height: 100dvh;
-  max-height: 100dvh;
+  width: min(600px, calc(100vw - 48px));
+  height: auto;
+  max-height: min(680px, calc(100dvh - 48px));
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, auto);
   overflow: hidden;
-  border-radius: 8px 0 0 8px;
+  border-radius: 8px;
 }
 
 .ds-plus-chat-dialog .ds-plus-detail__head {
@@ -33682,29 +33682,37 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-chat-dialog .ds-plus-detail__body {
+  display: grid;
+  height: auto;
+  max-height: 100%;
   min-height: 0;
   padding: 0;
   overflow: hidden;
 }
 
 .ds-plus-chat-panel {
-  height: 100%;
+  height: auto;
+  max-height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
+  overflow: hidden;
 }
 
 .ds-plus-chat-window {
-  height: 100%;
+  height: auto;
+  max-height: 100%;
   min-height: 0;
 }
 
 .ds-plus-chat-window.ds-plus-instruction-card {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, auto) auto;
   gap: 0;
+  max-height: 100%;
   padding: 0;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: #ffffff;
@@ -33712,20 +33720,24 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-chat-window__messages {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+  min-height: 132px;
+  max-height: min(360px, calc(100dvh - 250px));
+  display: grid;
+  align-content: end;
   gap: 9px;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px 18px;
   background: #f6f8f5;
   scrollbar-gutter: stable;
+  scroll-behavior: smooth;
 }
 
 .ds-plus-chat-message {
   width: fit-content;
   max-width: 78%;
-  align-self: flex-start;
+  justify-self: start;
   display: grid;
   gap: 3px;
   border: 1px solid #dfe6dc;
@@ -33750,7 +33762,7 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-chat-message--user {
-  align-self: flex-end;
+  justify-self: end;
   border-color: #2f8447;
   background: #2f8447;
 }
@@ -33770,6 +33782,8 @@ body:has(.ds-plus-page) {
 }
 
 .ds-plus-chat-window__footer {
+  position: relative;
+  z-index: 1;
   border-top: 1px solid #e1e7df;
   padding: 9px 13px 13px;
   background: #ffffff;
@@ -33814,9 +33828,9 @@ body:has(.ds-plus-page) {
 
 .ds-plus-chat-composer textarea {
   width: 100%;
-  min-height: 50px;
-  max-height: 112px;
-  resize: vertical;
+  min-height: 48px;
+  max-height: 72px;
+  resize: none;
 }
 
 .ds-plus-chat-composer button {
@@ -33829,9 +33843,32 @@ body:has(.ds-plus-page) {
   place-items: center;
 }
 
+@media (min-width: 721px) and (max-width: 900px) {
+  .ds-plus-chat-overlay {
+    padding: 16px;
+  }
+
+  .ds-plus-chat-dialog {
+    width: min(640px, calc(100vw - 32px));
+    max-height: min(680px, calc(100dvh - 32px));
+  }
+
+  .ds-plus-chat-window__messages {
+    max-height: min(380px, calc(100dvh - 234px));
+  }
+}
+
 @media (max-width: 720px) {
+  .ds-plus-chat-overlay {
+    place-items: stretch;
+    padding: 0;
+  }
+
   .ds-plus-chat-dialog {
     width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
     border: 0;
     border-radius: 0;
   }
@@ -33859,7 +33896,20 @@ body:has(.ds-plus-page) {
     grid-template-columns: 1fr auto;
   }
 
+  .ds-plus-chat-dialog .ds-plus-detail__body,
+  .ds-plus-chat-panel,
+  .ds-plus-chat-window {
+    height: 100%;
+  }
+
+  .ds-plus-chat-window.ds-plus-instruction-card {
+    height: 100%;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
   .ds-plus-chat-window__messages {
+    min-height: 0;
+    max-height: none;
     padding: 12px 10px;
   }
 
@@ -33884,5 +33934,20 @@ body:has(.ds-plus-page) {
     padding: 5px 6px;
     font-size: 0.71rem;
     overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 360px) {
+  .ds-plus-chat-suggestions {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 3px;
+  }
+
+  .ds-plus-chat-suggestions button {
+    flex: 0 0 auto;
+    min-height: 32px;
   }
 }

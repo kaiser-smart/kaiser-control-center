@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   dataBoxPlusConversationEntries,
   dataBoxPlusHistoryChatEntries,
@@ -47,6 +48,17 @@ const legacyAction = dataBoxPlusHistoryChatEntries([{
   payload: { originalInstruction: "předej Jarce" }
 }]);
 assert.equal(legacyAction[1].text, "Hotovo. Interní předání osobě Jarce.");
+
+const legacyMissingRecipient = dataBoxPlusHistoryChatEntries([{
+  id: "legacy-missing-recipient",
+  actionType: "Chatový pokyn",
+  result: "done",
+  createdAt: "2026-07-10T05:02:30.000Z",
+  auditNote: "Radim zadal pokyn. Systém provedl: Adresát chybí. Nový stav: Potřebuje adresáta.",
+  payload: { originalInstruction: "předej kolegovi" }
+}]);
+assert.equal(legacyMissingRecipient[1].text, "Chybí adresát. Komu to mám předat nebo přeposlat?");
+assert.doesNotMatch(legacyMissingRecipient[1].text, /^Hotovo\./);
 
 const draftHistory = dataBoxPlusHistoryChatEntries([{
   id: "draft",
@@ -115,5 +127,15 @@ const failed = dataBoxPlusResolvePendingChatEntries(
 );
 assert.equal(failed[0].text, "nejasný pokyn");
 assert.equal(failed[1].error, true);
+
+const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const compactChatStyles = styles.slice(styles.lastIndexOf("/* Datove schranky Plus: simple message chat. */"));
+assert.match(compactChatStyles, /width:\s*min\(600px, calc\(100vw - 48px\)\)/);
+assert.match(compactChatStyles, /max-height:\s*min\(680px, calc\(100dvh - 48px\)\)/);
+assert.match(compactChatStyles, /grid-template-rows:\s*auto minmax\(0, auto\)/);
+assert.match(compactChatStyles, /max-height:\s*min\(360px, calc\(100dvh - 250px\)\)/);
+assert.match(compactChatStyles, /overflow-y:\s*auto/);
+assert.match(compactChatStyles, /@media \(max-width: 720px\)[\s\S]*height:\s*100dvh/);
+assert.doesNotMatch(compactChatStyles.split("@media (max-width: 720px)")[0], /height:\s*100dvh/);
 
 console.log("data-box-plus chat ui flow ok");
