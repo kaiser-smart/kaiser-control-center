@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.491",
+  "version": "0.1.492",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "test:elevenlabs": "node scripts/elevenlabs-signed-url-options.test.mjs",
     "test:elevenlabs-assistants": "node scripts/elevenlabs-assistant-config.test.mjs",
     "test:driver-reports": "node scripts/driver-report-context.test.mjs",
-    "test:receivables": "node scripts/receivables-engines.test.mjs && node scripts/receivables-rating-store.test.mjs",
+    "test:receivables": "node scripts/receivables-engines.test.mjs && node scripts/receivables-rating-store.test.mjs && node scripts/receivables-navigation.test.mjs",
     "test:data-box-plus": "node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs",
     "test:customer-messaging": "node scripts/customer-messaging.test.mjs",
     "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs",

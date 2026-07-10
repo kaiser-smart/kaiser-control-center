@@ -21,6 +21,10 @@ import {
   dataBoxPlusResolvePendingChatEntries
 } from "./data/dataBoxPlusChat.js";
 import {
+  receivablesActiveTab,
+  receivablesHashTargetId
+} from "./data/receivablesNavigation.js";
+import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
   ABSENCE_REPORT_TIME,
@@ -29384,6 +29388,19 @@ function routeReceivablesContext(pathname = window.location.pathname) {
   return { view: "dashboard", path };
 }
 
+function scrollToReceivablesHashTarget() {
+  if (!routeReceivablesContext()) return;
+  const targetId = receivablesHashTargetId(window.location.hash);
+  if (!targetId) return;
+
+  window.requestAnimationFrame(() => {
+    document.getElementById(targetId)?.scrollIntoView({
+      block: "start",
+      behavior: "smooth"
+    });
+  });
+}
+
 function formatReceivableMoney(value, currency = "Kč") {
   const number = Number(value);
   const safe = Number.isFinite(number) ? number : 0;
@@ -31073,6 +31090,7 @@ function receivablesCaseSection() {
 
 function receivablesPage(moduleItem, user, isDashboard = false, context = { view: "dashboard" }) {
   const view = context.view || "dashboard";
+  const activeTab = receivablesActiveTab(view, window.location.hash);
   const content = view === "customer"
     ? receivablesCustomerDetailSection()
     : view === "import"
@@ -31111,7 +31129,7 @@ function receivablesPage(moduleItem, user, isDashboard = false, context = { view
 
       <nav class="receivables-tabs" aria-label="Sekce Pohledávkového kompasu AI">
         ${RECEIVABLES_TABS.map((tab) => `
-          <a class="${view === tab.id || (view === "dashboard" && tab.id === "dashboard") ? "is-active" : ""}" href="${routeHref(tab.route)}" data-link>${escapeHtml(tab.label)}</a>
+          <a class="${activeTab === tab.id ? "is-active" : ""}" href="${routeHref(tab.route)}" data-link>${escapeHtml(tab.label)}</a>
         `).join("")}
       </nav>
 
@@ -39002,6 +39020,7 @@ async function bootstrapAuth() {
   }
 
   render();
+  scrollToReceivablesHashTarget();
 }
 
 function hasUnsavedChanges() {
@@ -39019,6 +39038,7 @@ function navigateToUrl(url) {
   window.history.pushState({}, "", url);
   lastRenderedUrl = window.location.href;
   render();
+  scrollToReceivablesHashTarget();
 }
 
 function guardedAccessAction(action) {
@@ -39034,12 +39054,14 @@ function handlePopStateNavigation() {
       window.history.pushState({}, "", targetUrl);
       lastRenderedUrl = window.location.href;
       render();
+      scrollToReceivablesHashTarget();
     });
     return;
   }
 
   lastRenderedUrl = targetUrl;
   render();
+  scrollToReceivablesHashTarget();
 }
 
 function handleHashChangeNavigation() {
@@ -39048,12 +39070,14 @@ function handleHashChangeNavigation() {
     accessUnsavedChangesGuard.confirm(() => {
       lastRenderedUrl = window.location.href;
       render();
+      scrollToReceivablesHashTarget();
     });
     return;
   }
 
   lastRenderedUrl = window.location.href;
   render();
+  scrollToReceivablesHashTarget();
 }
 
 async function submitCentralModuleFeedback(form) {
