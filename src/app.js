@@ -1262,6 +1262,7 @@ const dataBoxState = {
 };
 const dataBoxPlusState = {
   activeTab: "command",
+  commandCenterPage: 1,
   selectedMessageId: "",
   chatMessageId: "",
   filter: "all",
@@ -1291,6 +1292,10 @@ const dataBoxPlusState = {
   instructionRemember: {},
   composeOpen: false,
   composeMailboxId: "",
+  composeStep: "mailbox",
+  composeRecipient: "",
+  composeSubject: "",
+  composeBody: "",
   replyDraftMessageId: "",
   replyDraftTexts: {}
 };
@@ -21679,6 +21684,7 @@ function dataBoxPlusComposeOverlay() {
   if (!dataBoxPlusState.composeOpen) return "";
   const mailboxes = dataBoxPlusMailboxes();
   const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === dataBoxPlusState.composeMailboxId) || null;
+  const recipientStep = dataBoxPlusState.composeStep === "recipient" && selectedMailbox;
   return `
     <div class="ds-plus-detail-overlay" role="presentation">
       <button class="ds-plus-detail-backdrop" type="button" data-ds-plus-compose-close aria-label="Zavřít novou zprávu"></button>
@@ -21686,11 +21692,36 @@ function dataBoxPlusComposeOverlay() {
         <div class="ds-plus-detail__head">
           <div>
             <span>Nová datová zpráva</span>
-            <h2 id="ds-plus-compose-title">1. Vyber schránku</h2>
+            <h2 id="ds-plus-compose-title">${recipientStep ? "2. Připrav návrh" : "1. Vyber schránku"}</h2>
           </div>
           <button class="secondary-link" type="button" data-ds-plus-compose-close>Zavřít</button>
         </div>
         <div class="ds-plus-detail__body">
+          ${recipientStep ? `
+          <section class="ds-plus-detail-section ds-plus-detail-section--workflow">
+            <h3>Komu a co odeslat?</h3>
+            <p>Schránka ${escapeHtml(selectedMailbox.name || selectedMailbox.company || "Datová schránka")} je vybraná. Vyplň návrh zprávy; nic se neodešle bez dalšího napojení a potvrzení.</p>
+          </section>
+          <form class="ds-plus-compose-form" data-ds-plus-compose-form>
+            <label>
+              <span>Adresát datové schránky</span>
+              <input name="recipient" value="${escapeHtml(dataBoxPlusState.composeRecipient)}" placeholder="ID datové schránky nebo název" required />
+            </label>
+            <label>
+              <span>Předmět</span>
+              <input name="subject" value="${escapeHtml(dataBoxPlusState.composeSubject)}" placeholder="Předmět zprávy" required />
+            </label>
+            <label>
+              <span>Text zprávy</span>
+              <textarea name="body" rows="7" placeholder="Text nové datové zprávy" required>${escapeHtml(dataBoxPlusState.composeBody)}</textarea>
+            </label>
+            <div class="ds-plus-compose-footer">
+              <button class="secondary-link" type="button" data-ds-plus-compose-back>Zpět k výběru</button>
+              <button class="primary-action" type="submit">Připravit návrh</button>
+            </div>
+            <p class="ds-plus-compose-note" role="status">Návrh se pouze připraví v pracovním okně. Datová zpráva se neodešle.</p>
+          </form>
+          ` : `
           <section class="ds-plus-detail-section ds-plus-detail-section--workflow">
             <h3>Odkud chceš odeslat?</h3>
             <p>Vyber firemní datovou schránku. Další kroky budou příjemce, text, přílohy a kontrola před odesláním.</p>
@@ -21721,6 +21752,15 @@ function dataBoxPlusComposeOverlay() {
               : "Vyber schránku, ze které se má zpráva připravit."}</p>
             <small>Odeslání nebude možné bez závěrečné kontroly a výslovného potvrzení.</small>
           </section>
+          <div class="ds-plus-compose-footer">
+            <span role="status">${selectedMailbox
+              ? "Schránka je vybraná."
+              : "Nejdřív vyber schránku."}</span>
+            <button class="primary-action" type="button" data-ds-plus-compose-recipient ${selectedMailbox ? "" : "disabled"}>
+              Zadat příjemce
+            </button>
+          </div>
+          `}
         </div>
       </section>
     </div>
@@ -22297,10 +22337,23 @@ function dataBoxPlusPriorityCard(message) {
 function dataBoxPlusCommandCenter() {
   const messages = dataBoxPlusMessages();
   const withWorkflow = messages.map((message) => ({ message, workflow: dataBoxPlusMessageWorkflow(message) }));
-  const priorityMessages = withWorkflow
+  const priorityCandidates = withWorkflow
     .filter((item) => ["Nová", "Potřebuje pokyn", "Potřebuje upřesnit", "Potřebuje adresáta", "Chybí vozidlo", "Chybí příloha", "Nelze provést"].includes(item.workflow.state))
-    .slice(0, 5)
     .map((item) => item.message);
+  const pageSize = 5;
+  const totalPages = Math.max(1, Math.ceil(priorityCandidates.length / pageSize));
+  const currentPage = Math.min(
+    Math.max(1, Number(dataBoxPlusState.commandCenterPage) || 1),
+    totalPages
+  );
+  if (dataBoxPlusState.commandCenterPage !== currentPage) {
+    dataBoxPlusState.commandCenterPage = currentPage;
+  }
+  const startIndex = (currentPage - 1) * pageSize;
+  const visiblePriorityCandidates = priorityCandidates.slice(startIndex, startIndex + pageSize);
+  const visibleStart = priorityCandidates.length ? startIndex + 1 : 0;
+  const visibleEnd = Math.min(startIndex + pageSize, priorityCandidates.length);
+  const priorityMessages = visiblePriorityCandidates;
   const resolvedToday = withWorkflow
     .filter((item) => ["Vyřešeno", "Archivováno"].includes(item.workflow.state))
     .slice(0, 2)
@@ -22328,7 +22381,28 @@ function dataBoxPlusCommandCenter() {
               <span>Dnes</span>
               <h2 id="ds-plus-today-title">Dnes vyřídit</h2>
             </div>
-            <strong>max. 5</strong>
+            <strong>${priorityCandidates.length ? `${visibleStart}–${visibleEnd} z ${priorityCandidates.length}` : "0 zpráv"}</strong>
+          </div>
+          <div class="ds-plus-command-pagination" aria-label="Stránkování přijatých zpráv">
+            <span aria-live="polite">Stránka ${currentPage} z ${totalPages}</span>
+            <div class="ds-plus-command-pagination__controls">
+              <button
+                class="secondary-link"
+                type="button"
+                data-ds-plus-command-page="${currentPage - 1}"
+                aria-label="Předchozí stránka"
+                title="Předchozí stránka"
+                ${currentPage <= 1 ? "disabled" : ""}
+              >‹</button>
+              <button
+                class="secondary-link"
+                type="button"
+                data-ds-plus-command-page="${currentPage + 1}"
+                aria-label="Další stránka"
+                title="Další stránka"
+                ${currentPage >= totalPages ? "disabled" : ""}
+              >›</button>
+            </div>
           </div>
           <div class="ds-plus-priority-list">
             ${priorityMessages.length ? priorityMessages.map(dataBoxPlusPriorityCard).join("") : `<p class="ds-plus-empty">Teď tu není žádná ostrá zpráva k dnešnímu vyřízení.</p>`}
@@ -41419,6 +41493,21 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const dataBoxPlusComposeForm = event.target.closest("[data-ds-plus-compose-form]");
+  if (dataBoxPlusComposeForm) {
+    event.preventDefault();
+    dataBoxPlusState.composeRecipient = String(dataBoxPlusComposeForm.elements.recipient?.value || "").trim();
+    dataBoxPlusState.composeSubject = String(dataBoxPlusComposeForm.elements.subject?.value || "").trim();
+    dataBoxPlusState.composeBody = String(dataBoxPlusComposeForm.elements.body?.value || "").trim();
+    if (!dataBoxPlusState.composeRecipient || !dataBoxPlusState.composeSubject || !dataBoxPlusState.composeBody) {
+      dataBoxPlusState.notice = "Doplň adresáta, předmět a text zprávy. Nic se neodeslalo.";
+    } else {
+      dataBoxPlusState.notice = "Návrh nové datové zprávy je připravený v tomto okně. Nic se neodeslalo.";
+    }
+    render();
+    return;
+  }
+
   const employeeImportForm = event.target.closest("[data-employee-import-form]");
   if (employeeImportForm) {
     event.preventDefault();
@@ -42072,6 +42161,17 @@ document.addEventListener("pointerup", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const dataBoxPlusCommandPage = event.target.closest("[data-ds-plus-command-page]");
+  if (dataBoxPlusCommandPage) {
+    event.preventDefault();
+    const nextPage = Number(dataBoxPlusCommandPage.dataset.dsPlusCommandPage);
+    if (Number.isFinite(nextPage) && nextPage > 0) {
+      dataBoxPlusState.commandCenterPage = nextPage;
+      render();
+    }
+    return;
+  }
+
   const dataBoxPlusTab = event.target.closest("[data-ds-plus-tab]");
   if (dataBoxPlusTab) {
     event.preventDefault();
@@ -42095,6 +42195,10 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusComposeOpen) {
     event.preventDefault();
     dataBoxPlusState.composeOpen = true;
+    dataBoxPlusState.composeStep = "mailbox";
+    dataBoxPlusState.composeRecipient = "";
+    dataBoxPlusState.composeSubject = "";
+    dataBoxPlusState.composeBody = "";
     dataBoxPlusState.notice = "";
     if (!dataBoxPlusState.composeMailboxId) {
       const firstReadyMailbox = dataBoxPlusMailboxes().find((mailbox) => dataBoxPlusSearchText([mailbox.connectionStatus, mailbox.status]).includes("aktivni"));
@@ -42117,6 +42221,24 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     dataBoxPlusState.composeMailboxId = dataBoxPlusComposeMailbox.dataset.dsPlusComposeMailbox || "";
     dataBoxPlusState.notice = "Schránka pro novou zprávu je vybraná. Nic se zatím neodesílá.";
+    render();
+    return;
+  }
+
+  const dataBoxPlusComposeRecipient = event.target.closest("[data-ds-plus-compose-recipient]");
+  if (dataBoxPlusComposeRecipient) {
+    event.preventDefault();
+    if (!dataBoxPlusState.composeMailboxId) return;
+    dataBoxPlusState.composeStep = "recipient";
+    dataBoxPlusState.notice = "Zadej příjemce a připrav návrh zprávy. Nic se zatím neodesílá.";
+    render();
+    return;
+  }
+
+  const dataBoxPlusComposeBack = event.target.closest("[data-ds-plus-compose-back]");
+  if (dataBoxPlusComposeBack) {
+    event.preventDefault();
+    dataBoxPlusState.composeStep = "mailbox";
     render();
     return;
   }

@@ -14,7 +14,7 @@
     "test:elevenlabs-assistants": "node scripts/elevenlabs-assistant-config.test.mjs",
     "test:driver-reports": "node scripts/driver-report-context.test.mjs",
     "test:receivables": "node scripts/receivables-engines.test.mjs && node scripts/receivables-rating-store.test.mjs && node scripts/receivables-navigation.test.mjs",
-    "test:data-box-plus": "node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs",
+    "test:data-box-plus": "node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs && node scripts/data-box-plus-command-center.test.mjs",
     "test:customer-messaging": "node scripts/customer-messaging.test.mjs",
     "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs",
     "test:partslink24": "node scripts/partslink24_vin_pilot.test.mjs",
