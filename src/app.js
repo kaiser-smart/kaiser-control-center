@@ -1246,6 +1246,7 @@ const dataBoxState = {
 const dataBoxPlusState = {
   activeTab: "command",
   selectedMessageId: "",
+  chatMessageId: "",
   filter: "all",
   search: "",
   rulesSearch: "",
@@ -21640,27 +21641,6 @@ function dataBoxPlusInstructionPlanSummary(plan = {}) {
   `;
 }
 
-function dataBoxPlusInstructionExamples(message = {}) {
-  const examples = [
-    "Předat na faktury",
-    "Archivovat",
-    "Předat mzdové účetní",
-    "Označit jako vyřešené",
-    "Nechat nevyřízené"
-  ];
-  return examples;
-}
-
-function dataBoxPlusMiniInstructionForm(message) {
-  const loading = dataBoxPlusState.instructionLoadingId === message.id;
-
-  return `
-    <button class="secondary-link ds-plus-chat-launcher" type="button" data-ds-plus-chat="${escapeHtml(message.id)}" ${loading ? "disabled" : ""}>
-      ${escapeHtml(loading ? "Autopilot pracuje..." : "Chat s Autopilotem")}
-    </button>
-  `;
-}
-
 function dataBoxPlusComposeLauncher() {
   return `
     <section class="ds-plus-send-strip" aria-label="Odesílání datových zpráv">
@@ -21753,7 +21733,6 @@ function dataBoxPlusInstructionCard(message, options = {}) {
     : "";
   const loading = dataBoxPlusState.instructionLoadingId === message.id;
   const localChat = dataBoxPlusState.instructionChats[message.id] || null;
-  const examples = dataBoxPlusInstructionExamples(message);
   const history = Array.isArray(message.history) ? message.history : [];
   const lastInstructionEvent = history.find((event) => String(event.originalInstruction || event.userInstruction || event.auditNote || "").trim());
   const lastInstruction = lastInstructionEvent
@@ -21787,9 +21766,6 @@ function dataBoxPlusInstructionCard(message, options = {}) {
           </div>
         ` : ""}
       </div>
-      <div class="ds-plus-chat-suggestions" aria-label="Rychlé zprávy">
-        ${examples.map((example) => `<button type="button" data-ds-plus-instruction-example="${escapeHtml(example)}">${escapeHtml(example)}</button>`).join("")}
-      </div>
       <form class="ds-plus-chat-composer" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
         <textarea
           name="instruction"
@@ -21812,10 +21788,9 @@ function dataBoxPlusChatPanel(message) {
     <section class="ds-plus-chat-panel" aria-label="Radim vs Autopilot">
       <div class="ds-plus-chat-panel__head">
         <div>
-          <span>Radim vs Autopilot</span>
-          <h3>Chat s Autopilotem</h3>
+          <span>Řešení datové zprávy</span>
+          <h3>${escapeHtml(message.subject || "Zpráva")}</h3>
         </div>
-        <strong>Provádí zprávy hned</strong>
       </div>
       ${dataBoxPlusInstructionCard(message)}
     </section>
@@ -22240,7 +22215,6 @@ function dataBoxPlusPriorityCard(message) {
       <div class="ds-plus-priority__actions">
         <button class="primary-action ds-plus-priority__open" type="button" data-ds-plus-chat="${escapeHtml(message.id)}">Chat s Autopilotem</button>
         <button class="secondary-link" type="button" data-ds-plus-open="${escapeHtml(message.id)}">Otevřít zprávu</button>
-        ${dataBoxPlusMiniInstructionForm(message)}
       </div>
     </article>
   `;
@@ -23128,7 +23102,7 @@ function dataBoxPlusDetailOverlay() {
   return `
     <div class="ds-plus-detail-overlay" role="presentation">
       <button class="ds-plus-detail-backdrop" type="button" data-ds-plus-close-detail aria-label="Zavřít zprávu"></button>
-      <section class="ds-plus-detail ds-plus-chat-modal" role="dialog" aria-modal="true" aria-labelledby="ds-plus-detail-title">
+      <section class="ds-plus-detail" role="dialog" aria-modal="true" aria-labelledby="ds-plus-detail-title">
         <div class="ds-plus-detail__head">
           <div><span>${escapeHtml(mailbox?.name || "Schránka")} · Radim vs Autopilot</span><h2 id="ds-plus-detail-title">${escapeHtml(message.subject)}</h2></div>
           <div class="ds-plus-detail__head-actions">
@@ -23142,7 +23116,6 @@ function dataBoxPlusDetailOverlay() {
             <h3>Pracovní stav</h3>
             ${dataBoxPlusWorkflowSummary(workflow)}
           </section>
-          ${dataBoxPlusChatPanel(message)}
           <section class="ds-plus-detail-section ds-plus-detail-section--header">
             <dl>
               <div><dt>Odesílatel</dt><dd>${escapeHtml(message.senderName)}</dd></div>
@@ -23155,6 +23128,29 @@ function dataBoxPlusDetailOverlay() {
           ${dataBoxPlusAttachments(message)}
           ${dataBoxPlusStatusHistory(message, workflow)}
           ${dataBoxPlusTechnicalInfo(message)}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function dataBoxPlusChatOverlay() {
+  const message = dataBoxPlusMessageById(dataBoxPlusState.chatMessageId);
+  if (!message || !dataBoxPlusState.chatMessageId) return "";
+  const mailbox = dataBoxPlusMailbox(message);
+  return `
+    <div class="ds-plus-detail-overlay ds-plus-chat-overlay" role="presentation">
+      <button class="ds-plus-detail-backdrop" type="button" data-ds-plus-chat-close aria-label="Zavřít chat s Autopilotem"></button>
+      <section class="ds-plus-detail ds-plus-chat-dialog" role="dialog" aria-modal="true" aria-labelledby="ds-plus-chat-title">
+        <div class="ds-plus-detail__head">
+          <div>
+            <span>${escapeHtml(mailbox?.name || "Schránka")} · ${escapeHtml(message.senderName || "Datová zpráva")}</span>
+            <h2 id="ds-plus-chat-title">Radim vs Autopilot</h2>
+          </div>
+          <button class="secondary-link" type="button" data-ds-plus-chat-close>Zavřít</button>
+        </div>
+        <div class="ds-plus-detail__body">
+          ${dataBoxPlusChatPanel(message)}
         </div>
       </section>
     </div>
@@ -23200,6 +23196,7 @@ function dataBoxPlusPage(moduleItem, user) {
       ${dataBoxPlusTabNav()}
       ${dataBoxPlusActivePanel()}
       ${dataBoxPlusDetailOverlay()}
+      ${dataBoxPlusChatOverlay()}
       ${dataBoxPlusReplyOverlay()}
       ${dataBoxPlusComposeOverlay()}
     </main>
@@ -41682,11 +41679,12 @@ document.addEventListener("click", async (event) => {
   const dataBoxPlusChat = event.target.closest("[data-ds-plus-chat]");
   if (dataBoxPlusChat) {
     event.preventDefault();
-    dataBoxPlusState.selectedMessageId = dataBoxPlusChat.dataset.dsPlusChat || "";
+    dataBoxPlusState.chatMessageId = dataBoxPlusChat.dataset.dsPlusChat || "";
+    dataBoxPlusState.selectedMessageId = "";
     dataBoxPlusState.notice = "";
-    await loadDataBoxPlusMessageDetail(dataBoxPlusState.selectedMessageId);
+    await loadDataBoxPlusMessageDetail(dataBoxPlusState.chatMessageId);
     render();
-    restoreDataBoxPlusInputFocus(`[data-ds-plus-instruction-form][data-message-id="${CSS.escape(dataBoxPlusState.selectedMessageId)}"] textarea, [data-ds-plus-instruction-form][data-message-id="${CSS.escape(dataBoxPlusState.selectedMessageId)}"] input[name="instruction"]`);
+    restoreDataBoxPlusInputFocus(`[data-ds-plus-instruction-form][data-message-id="${CSS.escape(dataBoxPlusState.chatMessageId)}"] textarea, [data-ds-plus-instruction-form][data-message-id="${CSS.escape(dataBoxPlusState.chatMessageId)}"] input[name="instruction"]`);
     return;
   }
 
@@ -41694,8 +41692,17 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusOpen) {
     event.preventDefault();
     dataBoxPlusState.selectedMessageId = dataBoxPlusOpen.dataset.dsPlusOpen || "";
+    dataBoxPlusState.chatMessageId = "";
     dataBoxPlusState.notice = "";
     await loadDataBoxPlusMessageDetail(dataBoxPlusState.selectedMessageId);
+    render();
+    return;
+  }
+
+  const dataBoxPlusChatClose = event.target.closest("[data-ds-plus-chat-close]");
+  if (dataBoxPlusChatClose) {
+    event.preventDefault();
+    dataBoxPlusState.chatMessageId = "";
     render();
     return;
   }
@@ -41730,20 +41737,6 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     dataBoxPlusState.replyDraftMessageId = "";
     render();
-    return;
-  }
-
-  const dataBoxPlusExample = event.target.closest("[data-ds-plus-instruction-example]");
-  if (dataBoxPlusExample) {
-    event.preventDefault();
-    const form = dataBoxPlusExample.closest("[data-ds-plus-instruction-form]");
-    const messageId = form?.dataset?.messageId || "";
-    const value = dataBoxPlusExample.dataset.dsPlusInstructionExample || "";
-    if (form?.elements?.instruction) {
-      form.elements.instruction.value = value;
-      dataBoxPlusState.instructionDrafts[messageId] = value;
-      form.elements.instruction.focus();
-    }
     return;
   }
 
