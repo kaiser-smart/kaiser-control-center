@@ -83,7 +83,10 @@ import {
 import { buildReceivablesVistosLedgerMapping } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
 import { receivablesVistosInvoiceLookbackWindow } from "../functions/_lib/receivables-vistos-preview.js";
 import { calculateCustomerPaymentRating } from "../functions/_lib/receivables-rating-engine.js";
-import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-plus-store.js";
+import {
+  dataBoxPlusChatDecisionForTest,
+  dataBoxPlusInstructionPlanForTest
+} from "../functions/_lib/data-box-plus-store.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -118,6 +121,7 @@ let mockCollectionRouteSourceFiles = [];
 let mockCollectionRouteSourceRows = [];
 let mockDataBoxSyncRuns = [];
 let mockDataBoxActions = [];
+let mockDataBoxPlusPendingAction = null;
 let mockDataBoxPlusMessage = {
   id: "mock-data-box-plus-message",
   mailboxId: "mock-data-box-plus-mailbox",
@@ -5635,16 +5639,61 @@ async function handleApi(request, response) {
       return true;
     }
     const { instruction = "" } = await readJsonBody(request);
-    const action = dataBoxPlusInstructionPlanForTest(instruction, mockDataBoxPlusMessage, []);
+    const decision = dataBoxPlusChatDecisionForTest(instruction);
+    let action;
+    let result;
+    if (decision === "confirm" && mockDataBoxPlusPendingAction?.kind === "confirmation") {
+      action = {
+        ...mockDataBoxPlusPendingAction.action,
+        outcome: "done",
+        statusLabel: "Provedeno",
+        requiresConfirmation: false,
+        requiresInput: false,
+        assistantText: mockDataBoxPlusPendingAction.action.completionText
+      };
+      result = "done";
+    } else if (decision === "reject") {
+      action = {
+        ...dataBoxPlusInstructionPlanForTest("ahoj", mockDataBoxPlusMessage, []),
+        intent: "cancel",
+        assistantText: mockDataBoxPlusPendingAction
+          ? "Rozumím. Návrh byl zrušen a nic se neprovedlo."
+          : "Není tu žádný návrh ke zrušení."
+      };
+      result = "not_done";
+    } else {
+      const context = mockDataBoxPlusPendingAction?.kind === "input"
+        ? {
+            pendingIntent: mockDataBoxPlusPendingAction.action.pendingIntent,
+            missingField: mockDataBoxPlusPendingAction.action.missingField,
+            actor: user.name || "Radim"
+          }
+        : { actor: user.name || "Radim" };
+      action = dataBoxPlusInstructionPlanForTest(instruction, mockDataBoxPlusMessage, [], context);
+      result = action.outcome === "waiting_confirmation"
+        ? "waiting_confirmation"
+        : action.outcome === "needs_input"
+          ? "needs_input"
+          : action.outcome;
+    }
     const auditId = `mock-data-box-plus-audit-${randomUUID()}`;
     const createdAt = new Date().toISOString();
+    if (result === "done") {
+      mockDataBoxPlusMessage = {
+        ...mockDataBoxPlusMessage,
+        status: action.messageStatus || mockDataBoxPlusMessage.status,
+        archiveStatus: action.archiveStatus || mockDataBoxPlusMessage.archiveStatus,
+        assignedTo: action.assignedTo || mockDataBoxPlusMessage.assignedTo,
+        dueDate: action.dueDate || mockDataBoxPlusMessage.dueDate,
+        suggestedAction: action.resultLabel || mockDataBoxPlusMessage.suggestedAction,
+        primaryAction: action.primaryAction || mockDataBoxPlusMessage.primaryAction,
+        history: mockDataBoxPlusMessage.history.map((event) => (
+          event.id === mockDataBoxPlusPendingAction?.auditId ? { ...event, result: "confirmed" } : event
+        ))
+      };
+    }
     mockDataBoxPlusMessage = {
       ...mockDataBoxPlusMessage,
-      status: action.messageStatus,
-      archiveStatus: action.archiveStatus,
-      assignedTo: action.assignedTo,
-      suggestedAction: action.resultLabel,
-      primaryAction: action.primaryAction,
       history: [{
         id: auditId,
         messageId,
@@ -5652,19 +5701,34 @@ async function handleApi(request, response) {
         actionType: "Chatový pokyn",
         payload: {
           originalInstruction: instruction,
+          intent: action.intent,
           understoodAs: action.understoodAs,
-          performedAction: action.performedAction,
-          newStatus: action.messageStatus,
-          assistantText: action.assistantText
+          performedAction: result === "done" ? action.performedAction : "Nebylo provedeno nic",
+          proposedAction: result === "waiting_confirmation" ? action : undefined,
+          newStatus: result === "done" ? action.messageStatus : "",
+          outcome: result,
+          statusLabel: action.statusLabel,
+          assistantText: action.assistantText,
+          pendingIntent: action.pendingIntent,
+          missingField: action.missingField,
+          draftText: action.draftText,
+          dueDate: action.dueDate
         },
         createdAt,
-        result: action.requiresInput ? "needs_input" : "done",
-        auditNote: `${user.name || "Radim"} zadal pokyn. ${action.assistantText}`
+        result,
+        auditNote: result === "done"
+          ? `${user.name || "Radim"} potvrdil pokyn. Systém provedl: ${action.performedAction}.`
+          : action.auditNote
       }, ...mockDataBoxPlusMessage.history]
     };
+    mockDataBoxPlusPendingAction = result === "waiting_confirmation"
+      ? { kind: "confirmation", action, auditId }
+      : result === "needs_input"
+        ? { kind: "input", action, auditId }
+        : null;
     sendJson(response, 200, {
       apiStatus: "ready",
-      status: action.requiresInput ? "needs_input" : "done",
+      status: result,
       action,
       message: mockDataBoxPlusMessage,
       auditId,

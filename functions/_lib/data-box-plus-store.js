@@ -2229,268 +2229,510 @@ function emailRecipientFromInstruction(userInstruction, normalized) {
   return { email: "", label: "", ambiguous: true };
 }
 
-function directInstructionPlanFromText(instruction, message = {}, attachments = []) {
+const DATA_BOX_PLUS_CAPABILITY_REPLY = "Jsem Autopilot pro tuto datovou zprávu. Můžu ji archivovat, označit jako vyřízenou, připravit odpověď, předat kolegovi nebo nastavit připomínku. Co s ní chcete udělat?";
+
+function dataBoxPlusChatWords(value) {
+  return searchText([value]).replace(/[^a-z0-9@._-]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function dataBoxPlusChatDecision(value) {
+  const words = dataBoxPlusChatWords(value);
+  if (["ano", "souhlasim", "souhlas", "proved", "provedte", "potvrzuji"].includes(words)) return "confirm";
+  if (["ne", "nesouhlasim", "zrusit", "zrus", "storno"].includes(words)) return "reject";
+  return "";
+}
+
+function dataBoxPlusSmalltalk(value) {
+  const words = dataBoxPlusChatWords(value);
+  if (!words || ["co", "ahoj", "cau", "dobry den", "test", "zkouska"].includes(words)) return true;
+  return words.includes("tvoje poslani") || words.includes("co umis") || words.includes("kdo jsi");
+}
+
+function dataBoxPlusKnownAction(value) {
+  const normalized = searchText([value]);
+  return [
+    "archiv", "vyriz", "vyres", "doplnen", "kontrol", "poznamk", "ukol", "odpove",
+    "predat", "predej", "prirad", "pripomen", "email", "e-mail", "odesli", "posli",
+    "vozid", "stk", "smaz", "potrebuje pokyn", "nelze provest"
+  ].some((token) => normalized.includes(token));
+}
+
+function dataBoxPlusInternalRecipient(value) {
+  const match = cleanString(value).match(/(?:předej|predej|předat|predat|přiřaď|prirad)(?:\s+(?:to|zprávu|zpravu))?\s+(.+)$/i);
+  const recipient = cleanString(match?.[1]).replace(/^(?:kolegovi|kolegyni|kolegu)\s+/i, "");
+  return /^(?:|kolegovi|kolegyni|kolegu)$/i.test(recipient) ? "" : recipient.slice(0, 120);
+}
+
+function dataBoxPlusReminderDate(value, now = new Date()) {
+  const normalized = searchText([value]);
+  const days = Number(normalized.match(/za\s+(\d{1,3})\s+(?:den|dny|dni)/)?.[1] || 0);
+  if (days > 0) return new Date(now.getTime() + days * 86400000).toISOString().slice(0, 10);
+  const explicit = normalized.match(/\b(\d{1,2})\s*\.\s*(\d{1,2})\s*\.\s*(\d{4})\b/);
+  if (!explicit) return "";
+  const date = new Date(Date.UTC(Number(explicit[3]), Number(explicit[2]) - 1, Number(explicit[1])));
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function intelligentInstructionPlanFromText(instruction, message = {}, attachments = [], context = {}) {
   const userInstruction = cleanString(instruction);
   if (!userInstruction) {
-    throw new DataBoxPlusStoreError("Napiš pokyn pro Autopilota.", 400, "data_box_plus_instruction_missing");
+    throw new DataBoxPlusStoreError("Napište pokyn k této zprávě.", 400, "data_box_plus_instruction_missing");
   }
   const normalized = searchText([userInstruction]);
+  const currentStatus = cleanString(message.status || message.messageStatus || "Nová");
   const sourceMessage = {
     messageId: cleanString(message.id),
-    mailboxId: cleanString(message.mailbox_id),
-    senderName: cleanString(message.sender_name),
+    mailboxId: cleanString(message.mailbox_id || message.mailboxId),
+    senderName: cleanString(message.sender_name || message.senderName),
     subject: cleanString(message.subject)
   };
-  const plan = (overrides) => {
-    const messageStatus = cleanString(overrides.messageStatus || "Potřebuje upřesnit");
-    const performedAction = cleanString(overrides.performedAction || overrides.resultLabel || "Pokyn vyžaduje upřesnění");
-    const nextStep = cleanString(overrides.nextStep || "Upřesnit pokyn");
+  const make = (overrides = {}) => {
+    const outcome = cleanString(overrides.outcome || "waiting_confirmation");
+    const requiresConfirmation = outcome === "waiting_confirmation";
+    const actionSummary = cleanString(overrides.actionSummary || overrides.performedAction || "Nebylo provedeno nic");
+    const externalText = overrides.externalAction ? "Akce má dopad mimo systém." : "Nic se neodešle mimo systém.";
+    const confirmationPrompt = requiresConfirmation
+      ? `Rozumím tomu takto: ${actionSummary}. ${externalText} Souhlasíte, abych to provedl?`
+      : "";
     return {
       userInstruction,
-      understoodAs: cleanString(overrides.understoodAs || performedAction),
-      actionType: cleanString(overrides.actionType || "needs_clarification"),
-      messageStatus,
+      intent: cleanString(overrides.intent || "unknown"),
+      actionType: cleanString(overrides.intent || "unknown"),
+      understoodAs: cleanString(overrides.understoodAs || actionSummary),
+      outcome,
+      statusLabel: cleanString(overrides.statusLabel || (requiresConfirmation ? "Čeká na potvrzení" : "Informativní")),
+      messageStatus: cleanString(overrides.messageStatus || currentStatus),
       archiveStatus: cleanString(overrides.archiveStatus || "active"),
       assignedTo: cleanString(overrides.assignedTo),
-      resultLabel: cleanString(overrides.resultLabel || performedAction),
-      nextStep,
-      primaryAction: cleanString(overrides.primaryAction || (nextStep === "Bez další akce." ? "Detail historie" : nextStep)),
-      performedAction,
-      auditNote: cleanString(overrides.auditNote || `Systém provedl: ${performedAction}. Nový stav: ${messageStatus}.`),
-      assistantText: cleanString(overrides.assistantText || `Hotovo. ${performedAction}.`),
+      resultLabel: cleanString(overrides.resultLabel || actionSummary),
+      nextStep: cleanString(overrides.nextStep || (requiresConfirmation ? "Potvrdit nebo zrušit návrh" : "Napsat konkrétní pokyn")),
+      primaryAction: cleanString(overrides.primaryAction || "Detail historie"),
+      performedAction: cleanString(overrides.performedAction || actionSummary),
+      actionSummary,
+      auditNote: cleanString(overrides.auditNote || (requiresConfirmation
+        ? `Nebylo provedeno nic. Návrh čeká na potvrzení: ${actionSummary}.`
+        : "Nebylo provedeno nic.")),
+      assistantText: cleanString(overrides.assistantText || confirmationPrompt || DATA_BOX_PLUS_CAPABILITY_REPLY),
+      confirmationPrompt,
+      completionText: cleanString(overrides.completionText || `Hotovo. ${actionSummary}.`),
       recipientEmail: normalizeEmail(overrides.recipientEmail),
       recipientLabel: cleanString(overrides.recipientLabel || overrides.recipientEmail || overrides.assignedTo),
-      emailSent: Boolean(overrides.emailSent),
+      emailSent: false,
       sendsEmail: Boolean(overrides.sendsEmail),
-      requiresInput: Boolean(overrides.requiresInput),
+      externalAction: Boolean(overrides.externalAction),
+      supported: overrides.supported !== false,
+      changesMessage: Boolean(overrides.changesMessage),
+      writesHistory: true,
+      requiresConfirmation,
+      requiresInput: outcome === "needs_input",
+      pendingIntent: cleanString(overrides.pendingIntent),
+      missingField: cleanString(overrides.missingField),
       recipientOptions: Array.isArray(overrides.recipientOptions) ? overrides.recipientOptions : [],
+      dueDate: cleanString(overrides.dueDate),
+      noteText: cleanString(overrides.noteText),
+      draftText: cleanString(overrides.draftText),
       sourceMessage
     };
   };
+  const noAction = (overrides = {}) => make({
+    outcome: "not_done",
+    statusLabel: "Informativní",
+    performedAction: "Nebylo provedeno nic",
+    resultLabel: "Bez změny zprávy.",
+    assistantText: DATA_BOX_PLUS_CAPABILITY_REPLY,
+    auditNote: "Nebylo provedeno nic. Vstup neobsahoval jasný provozní pokyn.",
+    ...overrides
+  });
+  const needsInput = (pendingIntent, missingField, assistantText, understoodAs) => make({
+    intent: "need_more_info",
+    outcome: "needs_input",
+    statusLabel: "Potřebuji doplnit",
+    understoodAs,
+    performedAction: "Nebylo provedeno nic",
+    resultLabel: "Chybí údaj.",
+    nextStep: "Doplnit údaj",
+    primaryAction: "Doplnit údaj",
+    assistantText,
+    auditNote: `Nebylo provedeno nic. Chybí údaj: ${missingField}.`,
+    pendingIntent,
+    missingField
+  });
+
+  if (dataBoxPlusSmalltalk(userInstruction)) {
+    return noAction({ intent: dataBoxPlusChatWords(userInstruction) ? "smalltalk" : "unknown", understoodAs: "obecná nebo nejasná zpráva bez provozní akce" });
+  }
+
+  const pendingIntent = cleanString(context.pendingIntent);
+  if (pendingIntent && !dataBoxPlusKnownAction(userInstruction)) {
+    if (pendingIntent === "assign_to_user") {
+      return make({
+        intent: "assign_to_user",
+        actionSummary: `interně předat zprávu osobě ${userInstruction}`,
+        understoodAs: `interní předání osobě ${userInstruction}`,
+        messageStatus: "Předáno kolegovi",
+        assignedTo: userInstruction,
+        resultLabel: `Předáno osobě ${userInstruction}.`,
+        nextStep: `Čeká na ${userInstruction}`,
+        performedAction: `Interní předání osobě ${userInstruction}`,
+        completionText: `Hotovo. Zpráva byla interně předána osobě ${userInstruction}.`,
+        changesMessage: true
+      });
+    }
+    if (pendingIntent === "send_email") {
+      const recipient = emailRecipientFromInstruction(userInstruction, normalized);
+      if (recipient.email) return make({
+        intent: "send_email",
+        actionSummary: `odeslat e-mail na ${recipient.email}`,
+        understoodAs: "odeslání e-mailu",
+        messageStatus: "Odesláno e-mailem",
+        recipientEmail: recipient.email,
+        recipientLabel: recipient.label,
+        resultLabel: `Odesláno na ${recipient.email}.`,
+        performedAction: `E-mail odeslán na ${recipient.email}`,
+        completionText: `Hotovo. Odesláno na ${recipient.email}.`,
+        sendsEmail: true,
+        externalAction: true,
+        changesMessage: true
+      });
+    }
+    if (pendingIntent === "set_reminder") {
+      const dueDate = dataBoxPlusReminderDate(userInstruction);
+      if (dueDate) return make({
+        intent: "set_reminder",
+        actionSummary: `uložit termín připomínky ${dueDate}`,
+        understoodAs: "nastavení termínu připomínky",
+        dueDate,
+        resultLabel: `Termín připomínky ${dueDate} uložen.`,
+        performedAction: `Termín připomínky uložen na ${dueDate}`,
+        completionText: `Hotovo. Termín připomínky byl uložen na ${dueDate}. Automatické upozornění zatím neběží.`,
+        changesMessage: true
+      });
+    }
+    if (pendingIntent === "internal_note") return make({
+      intent: "internal_note",
+      actionSummary: `přidat interní poznámku: ${userInstruction}`,
+      understoodAs: "přidání interní poznámky",
+      noteText: userInstruction,
+      resultLabel: "Interní poznámka přidána.",
+      performedAction: "Interní poznámka přidána",
+      completionText: "Hotovo. Interní poznámka byla přidána k historii zprávy.",
+      changesMessage: true
+    });
+  }
+
+  if ((normalized.includes("datovou zpravu") || normalized.includes("uradu"))
+    && (normalized.includes("odesli") || normalized.includes("posli") || normalized.includes("odpovez"))) {
+    return noAction({
+      intent: "cannot_execute",
+      outcome: "cannot_execute",
+      statusLabel: "Nelze provést",
+      understoodAs: "odeslání datové nebo úřední odpovědi",
+      resultLabel: "Ostré odeslání datové zprávy není implementované.",
+      assistantText: "Tuto akci zatím systém neumí provést. Nebylo provedeno nic.",
+      auditNote: "Nebylo provedeno nic. DSP nemá implementované ostré odeslání datové nebo úřední odpovědi.",
+      supported: false
+    });
+  }
+  if (normalized.includes("smaz") || normalized.includes("odstran zpravu")) {
+    return noAction({
+      intent: "cannot_execute",
+      outcome: "cannot_execute",
+      statusLabel: "Nelze provést",
+      understoodAs: "smazání datové zprávy",
+      resultLabel: "Datovou zprávu nelze z chatu smazat.",
+      assistantText: "Datovou zprávu z chatu nesmažu. Nebylo provedeno nic.",
+      auditNote: "Nebylo provedeno nic. Požadavek na smazání byl odmítnut.",
+      supported: false
+    });
+  }
 
   const emailIntent = normalized.includes("email") || normalized.includes("e-mail") || normalized.includes("posli") || normalized.includes("odesli");
   if (emailIntent) {
     const recipient = emailRecipientFromInstruction(userInstruction, normalized);
-    if (!recipient.email) {
-      const label = recipient.label || cleanString(userInstruction);
-      return plan({
-        actionType: "needs_recipient",
-        understoodAs: "odeslání e-mailu",
-        messageStatus: "Potřebuje adresáta",
-        resultLabel: "Adresát není jasný.",
-        nextStep: "Vybrat adresáta",
-        primaryAction: "Vybrat adresáta",
-        performedAction: "Adresát chybí",
-        auditNote: `Adresát pro pokyn ${quoteInstruction(userInstruction)} není jasný. E-mail nebyl odeslán.`,
-        assistantText: `Nevím, který e-mail je ${quoteInstruction(label)}. Vyber adresáta.`,
-        requiresInput: true,
-        recipientOptions: recipientChoicesPayload()
-      });
-    }
-    return plan({
-      actionType: "send_email",
+    if (!recipient.email) return needsInput("send_email", "recipientEmail", "Na jaký e-mail mám zprávu odeslat?", "odeslání e-mailu");
+    return make({
+      intent: "send_email",
+      actionSummary: `odeslat e-mail na ${recipient.email}`,
       understoodAs: "odeslání e-mailu",
       messageStatus: "Odesláno e-mailem",
-      resultLabel: `Odesláno na ${recipient.email}.`,
-      nextStep: "Bez další akce.",
-      primaryAction: "Detail historie",
-      performedAction: `E-mail odeslán na ${recipient.email}`,
-      auditNote: `E-mail byl odeslán na ${recipient.email}.`,
-      assistantText: `Hotovo. Odesláno na ${recipient.email}.`,
-      assignedTo: recipient.email,
       recipientEmail: recipient.email,
-      recipientLabel: recipient.label || recipient.email,
+      recipientLabel: recipient.label,
+      resultLabel: `Odesláno na ${recipient.email}.`,
+      performedAction: `E-mail odeslán na ${recipient.email}`,
+      completionText: `Hotovo. Odesláno na ${recipient.email}.`,
       sendsEmail: true,
-      emailSent: true
+      externalAction: true,
+      changesMessage: true
+    });
+  }
+  if (normalized.includes("potrebuje pokyn") || (normalized.includes("nechat") && normalized.includes("nevyrizene"))) return make({
+    intent: "need_instruction",
+    actionSummary: "nastavit stav Potřebuje pokyn",
+    understoodAs: "ponechání zprávy k dalšímu rozhodnutí",
+    messageStatus: "Potřebuje pokyn",
+    resultLabel: "Zpráva potřebuje další pokyn.",
+    performedAction: "Stav nastaven na Potřebuje pokyn",
+    completionText: "Hotovo. Zpráva nyní potřebuje další pokyn.",
+    changesMessage: true
+  });
+  if (normalized.includes("archiv")) return make({
+    intent: "archive_info",
+    actionSummary: "archivovat zprávu jako informativní",
+    understoodAs: "archivace informativní zprávy",
+    messageStatus: "Archivováno",
+    archiveStatus: "archived",
+    resultLabel: "Archivováno jako informativní.",
+    nextStep: "Bez další akce.",
+    performedAction: "Archivováno jako informativní",
+    completionText: "Hotovo. Zpráva byla uložena do archivu jako informativní.",
+    changesMessage: true
+  });
+  if (normalized.includes("vyriz") || normalized.includes("vyres") || normalized.includes("zpracovan")) return make({
+    intent: "mark_done",
+    actionSummary: "označit zprávu jako vyřízenou",
+    understoodAs: "označení jako vyřízené",
+    messageStatus: "Vyřešeno",
+    resultLabel: "Označeno jako vyřízené.",
+    nextStep: "Bez další akce.",
+    performedAction: "Označeno jako vyřízené",
+    completionText: "Hotovo. Zpráva byla označena jako vyřízená.",
+    changesMessage: true
+  });
+  if (normalized.includes("k doplneni") || normalized.includes("potrebuje kontrolu") || normalized.includes("vyzaduje kontrolu")) return make({
+    intent: "need_more_info",
+    actionSummary: "přesunout zprávu do K doplnění",
+    understoodAs: "označení zprávy pro kontrolu",
+    messageStatus: "Potřebuje upřesnit",
+    resultLabel: "Zpráva vyžaduje kontrolu.",
+    nextStep: "Doplnit nebo zkontrolovat údaje",
+    primaryAction: "Otevřít zprávu",
+    performedAction: "Přesunuto do K doplnění",
+    completionText: "Hotovo. Zpráva byla přesunuta do K doplnění.",
+    changesMessage: true
+  });
+  if (normalized.includes("nelze provest")) return make({
+    intent: "mark_cannot_execute",
+    actionSummary: "označit zprávu jako Nelze provést",
+    understoodAs: "ruční označení neproveditelné akce",
+    messageStatus: "Nelze provést",
+    resultLabel: "Označeno jako Nelze provést.",
+    nextStep: "Otevřít zprávu",
+    primaryAction: "Otevřít zprávu",
+    performedAction: "Označeno jako Nelze provést",
+    completionText: "Hotovo. Zpráva byla označena jako Nelze provést.",
+    changesMessage: true
+  });
+  if (normalized.includes("poznamk")) {
+    const noteText = cleanString(userInstruction.replace(/^.*?pozn[aá]mk\w*\s*/i, ""));
+    if (!noteText || noteText === userInstruction) return needsInput("internal_note", "noteText", "Jakou interní poznámku mám ke zprávě přidat?", "přidání interní poznámky");
+    return make({
+      intent: "internal_note",
+      actionSummary: `přidat interní poznámku: ${noteText}`,
+      understoodAs: "přidání interní poznámky",
+      noteText,
+      resultLabel: "Interní poznámka přidána.",
+      performedAction: "Interní poznámka přidána",
+      completionText: "Hotovo. Interní poznámka byla přidána k historii zprávy.",
+      changesMessage: true
+    });
+  }
+  if (normalized.includes("ukol")) {
+    const assignee = cleanString(context.actor || "Odpovědná osoba");
+    return make({
+      intent: "create_task",
+      actionSummary: `vytvořit interní úkol u zprávy pro ${assignee}`,
+      understoodAs: "vytvoření interního úkolu u datové zprávy",
+      messageStatus: "Rozpracováno",
+      assignedTo: assignee,
+      resultLabel: `Interní úkol pro ${assignee}.`,
+      nextStep: `Čeká na ${assignee}`,
+      performedAction: `Interní úkol vytvořen pro ${assignee}`,
+      completionText: `Hotovo. U datové zprávy vznikl interní úkol pro ${assignee}.`,
+      changesMessage: true
+    });
+  }
+  if (normalized.includes("odpove") || normalized.includes("priprav odpoved")) {
+    const subject = cleanString(message.subject || "datové zprávě");
+    return make({
+      intent: "prepare_reply",
+      actionSummary: "připravit návrh odpovědi bez odeslání",
+      understoodAs: "příprava návrhu odpovědi",
+      resultLabel: "Návrh odpovědi připraven.",
+      nextStep: "Zkontrolovat návrh odpovědi",
+      primaryAction: "Otevřít návrh",
+      performedAction: "Návrh odpovědi připraven",
+      completionText: "Hotovo. Návrh odpovědi byl připraven. Nic nebylo odesláno.",
+      draftText: `Dobrý den,\n\nděkujeme za datovou zprávu „${subject}“. Návrh odpovědi před odesláním doplňte a zkontrolujte.\n\nS pozdravem`,
+      changesMessage: true
+    });
+  }
+  if (normalized.includes("pripomen")) {
+    const dueDate = dataBoxPlusReminderDate(userInstruction);
+    if (!dueDate) return needsInput("set_reminder", "dueDate", "Kdy mám připomínku nastavit?", "nastavení termínu připomínky");
+    return make({
+      intent: "set_reminder",
+      actionSummary: `uložit termín připomínky ${dueDate}`,
+      understoodAs: "nastavení termínu připomínky",
+      dueDate,
+      resultLabel: `Termín připomínky ${dueDate} uložen.`,
+      performedAction: `Termín připomínky uložen na ${dueDate}`,
+      completionText: `Hotovo. Termín připomínky byl uložen na ${dueDate}. Automatické upozornění zatím neběží.`,
+      changesMessage: true
     });
   }
 
-  if (normalized.includes("nechat") && (normalized.includes("nevyrizene") || normalized.includes("otevrene"))) {
-    return plan({
-      actionType: "leave_unresolved",
-      understoodAs: "ponechání nevyřízené",
-      messageStatus: "Nevyřízené",
-      resultLabel: "Zpráva zůstává nevyřízená.",
-      nextStep: "Bez další akce.",
-      primaryAction: "Detail historie",
-      performedAction: "Ponecháno nevyřízené",
-      auditNote: "Zpráva byla ponechána jako nevyřízená.",
-      assistantText: "Hotovo. Necháno nevyřízené."
-    });
-  }
-
-  if (normalized.includes("archiv") || normalized.includes("registr smluv")) {
-    return plan({
-      actionType: "archive",
-      understoodAs: "archivace zprávy",
-      messageStatus: "Archivováno",
-      archiveStatus: "archived",
-      resultLabel: "Archivováno.",
-      nextStep: "Bez další akce.",
-      primaryAction: "Detail historie",
-      performedAction: "Archivováno",
-      auditNote: "Zpráva byla archivována.",
-      assistantText: "Hotovo. Archivováno."
-    });
-  }
-
-  if (normalized.includes("uloz") || normalized.includes("ulož") || normalized.includes("evidenc") || normalized.includes("vyres") || normalized.includes("vyřeš") || normalized.includes("zpracovan")) {
-    const evidence = normalized.includes("evidenc") || normalized.includes("uloz") || normalized.includes("ulož");
-    return plan({
-      actionType: evidence ? "record_evidence" : "resolve",
-      understoodAs: evidence ? "uložení k evidenci" : "označení jako vyřešené",
-      messageStatus: "Vyřešeno",
-      resultLabel: evidence ? "Uloženo k evidenci." : "Označeno jako vyřešené.",
-      nextStep: "Bez další akce.",
-      primaryAction: "Detail historie",
-      performedAction: evidence ? "Uloženo k evidenci" : "Označeno jako vyřešené",
-      auditNote: evidence ? "Zpráva byla uložena k evidenci." : "Zpráva byla označena jako vyřešená.",
-      assistantText: evidence ? "Hotovo. Uloženo k evidenci." : "Hotovo. Označeno jako vyřešené."
-    });
-  }
-
-  if (normalized.includes("mzd")) {
-    return plan({
-      actionType: "handoff_payroll",
-      understoodAs: "předání mzdové účetní",
-      messageStatus: "Předáno mzdové účetní",
-      resultLabel: "Předáno mzdové účetní.",
-      nextStep: "Čeká na mzdovou účetní",
-      primaryAction: "Detail historie",
-      assignedTo: "Mzdová účetní",
-      performedAction: "Předáno mzdové účetní",
-      auditNote: "Zpráva byla předána mzdové účetní.",
-      assistantText: "Hotovo. Předáno mzdové účetní."
-    });
-  }
-
-  if (normalized.includes("faktur") || normalized.includes("ucetn") || normalized.includes("účetn")) {
-    return plan({
-      actionType: "handoff_invoices",
-      understoodAs: "předání fakturám",
-      messageStatus: "Předáno fakturám",
-      resultLabel: "Předáno fakturám.",
-      nextStep: "Čeká na účetní",
-      primaryAction: "Detail historie",
-      assignedTo: "faktury@kaiserservis.cz",
-      performedAction: "Předáno fakturám",
-      auditNote: "Zpráva byla předána fakturám.",
-      assistantText: "Hotovo. Předáno fakturám."
-    });
-  }
-
-  if (normalized.includes("garaz") || normalized.includes("garáž")) {
-    return plan({
-      actionType: "handoff_garage",
-      understoodAs: "předání garážmistrovi",
-      messageStatus: "Předáno garážmistrovi",
-      resultLabel: "Předáno garážmistrovi.",
-      nextStep: "Čeká na garážmistra",
-      primaryAction: "Detail historie",
-      assignedTo: "Garážmistr",
-      performedAction: "Předáno garážmistrovi",
-      auditNote: "Zpráva byla předána garážmistrovi.",
-      assistantText: "Hotovo. Předáno garážmistrovi."
-    });
-  }
-
-  if (normalized.includes("vozid") || normalized.includes("stk") || normalized.includes("technick") || normalized.includes("lhut") || normalized.includes("kalendar")) {
+  const specialRecipient = normalized.includes("mzd")
+    ? "Mzdová účetní"
+    : normalized.includes("faktur") || normalized.includes("ucetn")
+      ? "faktury@kaiserservis.cz"
+      : normalized.includes("garaz")
+        ? "Garážmistr"
+        : "";
+  if (specialRecipient) return make({
+    intent: "assign_to_user",
+    actionSummary: `interně předat zprávu osobě ${specialRecipient}`,
+    understoodAs: `interní předání osobě ${specialRecipient}`,
+    messageStatus: specialRecipient === "Mzdová účetní" ? "Předáno mzdové účetní" : specialRecipient === "Garážmistr" ? "Předáno garážmistrovi" : "Předáno fakturám",
+    assignedTo: specialRecipient,
+    resultLabel: `Předáno osobě ${specialRecipient}.`,
+    nextStep: `Čeká na ${specialRecipient}`,
+    performedAction: `Interní předání osobě ${specialRecipient}`,
+    completionText: `Hotovo. Zpráva byla interně předána osobě ${specialRecipient}.`,
+    changesMessage: true
+  });
+  if (normalized.includes("vozid") || normalized.includes("stk")) {
     const attachmentText = attachments.map((attachment) => cleanString(attachment.extracted_text || attachment.extractedText)).join(" ");
-    const vehicleContext = [userInstruction, cleanString(message.subject), attachmentText].join(" ");
-    const plateMatch = vehicleContext.match(/\b\d[A-Z0-9]{2}\s?\d{4}\b/i);
-    if (!plateMatch) {
-      return plan({
-        actionType: "missing_vehicle",
-        understoodAs: "zápis k vozidlu",
-        messageStatus: "Chybí vozidlo",
-        resultLabel: "Chybí vazba na vozidlo.",
-        nextStep: "Vybrat vozidlo",
-        primaryAction: "Vybrat vozidlo",
-        performedAction: "Chybí vozidlo",
-        auditNote: "Systém nemá jasnou vazbu na vozidlo. Zápis do vozidel nebyl proveden.",
-        assistantText: "Chybí vozidlo. Vyber vozidlo.",
-        requiresInput: true
-      });
-    }
-    return plan({
-      actionType: "vehicle_handoff",
+    const plate = [userInstruction, cleanString(message.subject), attachmentText].join(" ").match(/\b\d[A-Z0-9]{2}\s?\d{4}\b/i)?.[0];
+    if (!plate) return needsInput("assign_to_user", "vehicle", "Ke kterému vozidlu mám zprávu přiřadit?", "předání vozidlové agendy");
+    return make({
+      intent: "assign_to_user",
+      actionSummary: `interně předat vozidlovou agendu k vozidlu ${plate.toUpperCase()}`,
       understoodAs: "předání vozidlové agendy",
       messageStatus: "Předáno garážmistrovi",
-      resultLabel: `Předáno garážmistrovi k vozidlu ${plateMatch[0].toUpperCase()}.`,
-      nextStep: "Čeká na garážmistra",
-      primaryAction: "Detail historie",
       assignedTo: "Garážmistr",
-      performedAction: `Předáno garážmistrovi k vozidlu ${plateMatch[0].toUpperCase()}`,
-      auditNote: `Zpráva byla předána garážmistrovi k vozidlu ${plateMatch[0].toUpperCase()}.`,
-      assistantText: "Hotovo. Předáno garážmistrovi."
+      resultLabel: `Předáno garážmistrovi k vozidlu ${plate.toUpperCase()}.`,
+      performedAction: `Předáno garážmistrovi k vozidlu ${plate.toUpperCase()}`,
+      completionText: "Hotovo. Předáno garážmistrovi.",
+      changesMessage: true
     });
   }
-
-  if (normalized.includes("predat") || normalized.includes("předej") || normalized.includes("prirad") || normalized.includes("přiřa")) {
-    return plan({
-      actionType: "needs_clarification",
-      understoodAs: "předání bez jasného adresáta",
-      messageStatus: "Potřebuje upřesnit",
-      resultLabel: "Není jasné, komu předat.",
-      nextStep: "Upřesnit pokyn",
-      primaryAction: "Upřesnit pokyn",
-      performedAction: "Potřebuje upřesnit",
-      auditNote: "Pokyn k předání nemá jasného adresáta. Akce nebyla provedena.",
-      assistantText: "Nevím, komu zprávu předat. Upřesni pokyn.",
-      requiresInput: true
+  if (normalized.includes("predat") || normalized.includes("predej") || normalized.includes("prirad")) {
+    const recipient = dataBoxPlusInternalRecipient(userInstruction);
+    if (!recipient) return needsInput("assign_to_user", "assignedTo", "Komu mám zprávu předat?", "interní předání kolegovi");
+    return make({
+      intent: "assign_to_user",
+      actionSummary: `interně předat zprávu osobě ${recipient}`,
+      understoodAs: `interní předání osobě ${recipient}`,
+      messageStatus: "Předáno kolegovi",
+      assignedTo: recipient,
+      resultLabel: `Předáno osobě ${recipient}.`,
+      nextStep: `Čeká na ${recipient}`,
+      performedAction: `Interní předání osobě ${recipient}`,
+      completionText: `Hotovo. Zpráva byla interně předána osobě ${recipient}.`,
+      changesMessage: true
     });
   }
-
-  return plan({
-    actionType: "needs_clarification",
-    understoodAs: "nejasný pokyn",
-    messageStatus: "Potřebuje upřesnit",
-    resultLabel: "Pokyn není jasný.",
-    nextStep: "Upřesnit pokyn",
-    primaryAction: "Upřesnit pokyn",
-    performedAction: "Potřebuje upřesnit",
-    auditNote: "Systém pokynu nerozuměl dostatečně přesně. Akce nebyla provedena.",
-    assistantText: "Nevím přesně, co mám udělat. Upřesni pokyn.",
-    requiresInput: true
-  });
+  return noAction({ intent: "unknown", understoodAs: "nejasný pokyn" });
 }
 
-export function dataBoxPlusInstructionPlanForTest(instruction, message = {}, attachments = []) {
-  return directInstructionPlanFromText(instruction, message, attachments);
+export function dataBoxPlusInstructionPlanForTest(instruction, message = {}, attachments = [], context = {}) {
+  return intelligentInstructionPlanFromText(instruction, message, attachments, context);
 }
 
-async function logDataBoxPlusInstruction(db, id, actor, instruction, plan, result) {
+export function dataBoxPlusChatDecisionForTest(instruction) {
+  return dataBoxPlusChatDecision(instruction);
+}
+
+async function logIntelligentDataBoxPlusInstruction(db, id, actor, instruction, plan, result, options = {}) {
   const actionId = idValue("dbp-action");
-  await db
-    .prepare(`
-      INSERT INTO data_box_plus_action_log (
-        id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
-      )
-      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
-    `)
-    .bind(
-      actionId,
-      id,
-      actor,
-      "Chatový pokyn",
-      JSON.stringify({
-        originalInstruction: instruction,
-        understoodAs: plan.understoodAs,
-        performedAction: plan.performedAction,
-        newStatus: plan.messageStatus,
-        nextStep: plan.nextStep,
-        recipient: plan.recipientEmail || plan.recipientLabel || plan.assignedTo || "",
-        emailSent: plan.emailSent,
-        sourceMessage: plan.sourceMessage,
-        recipientOptions: plan.recipientOptions,
-        assistantText: plan.assistantText
-      }),
-      new Date().toISOString(),
-      result,
-      `${actor} zadal: ${quoteInstruction(instruction)}. Systém provedl: ${plan.performedAction}. Nový stav: ${plan.messageStatus}.`
+  const performed = ["done", "sent"].includes(result);
+  const payload = {
+    originalInstruction: instruction,
+    intent: plan.intent,
+    understoodAs: plan.understoodAs,
+    performedAction: performed ? plan.performedAction : "Nebylo provedeno nic",
+    proposedAction: result === "waiting_confirmation" ? plan : undefined,
+    previousStatus: cleanString(options.previousStatus),
+    newStatus: performed ? plan.messageStatus : "",
+    outcome: result,
+    statusLabel: plan.statusLabel,
+    nextStep: plan.nextStep,
+    recipient: plan.recipientEmail || plan.recipientLabel || plan.assignedTo || "",
+    emailSent: performed && Boolean(plan.emailSent),
+    sourceMessage: plan.sourceMessage,
+    recipientOptions: plan.recipientOptions,
+    assistantText: plan.assistantText,
+    pendingIntent: plan.pendingIntent,
+    missingField: plan.missingField,
+    confirmationOf: cleanString(options.confirmationOf),
+    draftText: plan.draftText,
+    noteText: plan.noteText,
+    dueDate: plan.dueDate
+  };
+  await db.prepare(`
+    INSERT INTO data_box_plus_action_log (
+      id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
     )
-    .run();
+    VALUES (?, ?, NULL, ?, 'Chatový pokyn', ?, ?, ?, ?)
+  `).bind(
+    actionId,
+    id,
+    actor,
+    JSON.stringify(payload),
+    new Date().toISOString(),
+    result,
+    performed
+      ? `${actor} potvrdil pokyn ${quoteInstruction(instruction)}. Systém provedl: ${plan.performedAction}. Nový stav: ${plan.messageStatus}.`
+      : cleanString(plan.auditNote || `Nebylo provedeno nic. Výsledek: ${result}.`)
+  ).run();
   return actionId;
+}
+
+async function latestPendingDataBoxPlusChatAction(db, id, actor) {
+  return db.prepare(`
+    SELECT *
+    FROM data_box_plus_action_log
+    WHERE message_id = ?
+      AND actor = ?
+      AND action_type = 'Chatový pokyn'
+      AND result IN ('waiting_confirmation', 'needs_input')
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(id, actor).first();
+}
+
+async function closePendingDataBoxPlusChatActions(db, id, actor, result, note) {
+  await db.prepare(`
+    UPDATE data_box_plus_action_log
+    SET result = ?, audit_note = ?
+    WHERE message_id = ?
+      AND actor = ?
+      AND action_type = 'Chatový pokyn'
+      AND result IN ('waiting_confirmation', 'needs_input')
+  `).bind(result, note, id, actor).run();
+}
+
+async function applyIntelligentDataBoxPlusInstruction(db, message, plan) {
+  await db.prepare(`
+    UPDATE data_box_plus_messages
+    SET status = CASE WHEN ? <> '' THEN ? ELSE status END,
+        archive_status = CASE WHEN ? <> '' THEN ? ELSE archive_status END,
+        assigned_to = CASE WHEN ? <> '' THEN ? ELSE assigned_to END,
+        due_date = CASE WHEN ? <> '' THEN ? ELSE due_date END,
+        suggested_action = CASE WHEN ? <> '' THEN ? ELSE suggested_action END,
+        primary_action = CASE WHEN ? <> '' THEN ? ELSE primary_action END,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(
+    cleanString(plan.messageStatus), cleanString(plan.messageStatus),
+    cleanString(plan.archiveStatus), cleanString(plan.archiveStatus),
+    cleanString(plan.assignedTo), cleanString(plan.assignedTo),
+    cleanString(plan.dueDate), cleanString(plan.dueDate),
+    cleanString(plan.resultLabel), cleanString(plan.resultLabel),
+    cleanString(plan.primaryAction), cleanString(plan.primaryAction),
+    cleanString(message.id)
+  ).run();
+  await updateMailboxCounters(db, cleanString(message.mailbox_id));
 }
 
 export async function executeDataBoxPlusMessageInstruction(env, messageId, currentUser = null, body = {}) {
@@ -2500,63 +2742,135 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
   try {
     const message = await db.prepare("SELECT * FROM data_box_plus_messages WHERE id = ? LIMIT 1").bind(id).first();
     if (!message?.id) throw new DataBoxPlusStoreError("Zpráva nebyla nalezena.", 404, "data_box_plus_message_not_found");
-    const attachments = await db
-      .prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name")
-      .bind(id)
-      .all();
-    const plan = directInstructionPlanFromText(instruction, message, attachments.results || []);
+    const attachments = await db.prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name").bind(id).all();
     const actor = actorName(currentUser);
+    const pendingRow = await latestPendingDataBoxPlusChatAction(db, id, actor);
+    const pendingPayload = safeJsonParse(pendingRow?.action_payload, {});
+    const decision = dataBoxPlusChatDecision(instruction);
 
-    if (plan.sendsEmail && plan.recipientEmail) {
-      const auditId = await logDataBoxPlusInstruction(db, id, actor, instruction, plan, "action_started");
-      const emailResult = await sendDataBoxPlusMessageEmail(env, id, {
-        confirmed: true,
-        recipientEmail: plan.recipientEmail,
-        subject: cleanString(body.subject || message.subject || "Datová zpráva"),
-        body: cleanString(body.body || `Předávám datovou zprávu: ${cleanString(message.subject || "")}`)
-      }, currentUser);
-      await db
-        .prepare("UPDATE data_box_plus_action_log SET result = ?, audit_note = ? WHERE id = ?")
-        .bind("done", `${actor} zadal: ${quoteInstruction(instruction)}. Systém provedl: ${plan.performedAction}. Nový stav: Odesláno e-mailem.`, auditId)
-        .run();
-      return {
-        apiStatus: "ready",
-        status: "done",
-        action: plan,
-        message: emailResult.message,
-        auditId,
-        notice: plan.assistantText
+    if (decision === "reject") {
+      if (pendingRow?.id) {
+        await closePendingDataBoxPlusChatActions(db, id, actor, "cancelled", `${actor} návrh zrušil. Nebylo provedeno nic.`);
+      }
+      const cancelledPlan = {
+        ...intelligentInstructionPlanFromText("ahoj", message, attachments.results || []),
+        intent: "cancel",
+        understoodAs: "zrušení připraveného návrhu",
+        assistantText: pendingRow?.id ? "Rozumím. Návrh byl zrušen a nic se neprovedlo." : "Není tu žádný návrh ke zrušení.",
+        auditNote: pendingRow?.id ? "Návrh byl zrušen. Nebylo provedeno nic." : "Nebylo provedeno nic. Nebyl nalezen návrh ke zrušení."
       };
+      const auditId = await logIntelligentDataBoxPlusInstruction(db, id, actor, instruction, cancelledPlan, "not_done", { previousStatus: message.status });
+      return { apiStatus: "ready", status: "not_done", action: cancelledPlan, message: await getDataBoxPlusMessage(env, id), auditId, notice: cancelledPlan.assistantText };
     }
 
-    await db
-      .prepare(`
-        UPDATE data_box_plus_messages
-        SET status = ?,
-            archive_status = ?,
-            assigned_to = ?,
-            suggested_action = ?,
-            primary_action = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `)
-      .bind(
-        plan.messageStatus,
-        plan.archiveStatus,
-        plan.assignedTo,
-        plan.resultLabel,
-        plan.primaryAction,
-        id
-      )
-      .run();
-    await updateMailboxCounters(db, cleanString(message.mailbox_id));
-    const auditId = await logDataBoxPlusInstruction(db, id, actor, instruction, plan, plan.requiresInput ? "needs_input" : "done");
+    if (decision === "confirm") {
+      const proposedAction = pendingRow?.result === "waiting_confirmation" ? pendingPayload.proposedAction : null;
+      if (!proposedAction?.intent) {
+        const noProposalPlan = {
+          ...intelligentInstructionPlanFromText("ahoj", message, attachments.results || []),
+          intent: "unknown",
+          assistantText: pendingRow?.result === "needs_input"
+            ? "Nejdřív potřebuji doplnit chybějící údaj."
+            : "Není tu žádný návrh k potvrzení. Napište nejdřív konkrétní pokyn.",
+          auditNote: "Nebylo provedeno nic. Nebyl nalezen jednorázový návrh k potvrzení."
+        };
+        const auditId = await logIntelligentDataBoxPlusInstruction(db, id, actor, instruction, noProposalPlan, "not_done", { previousStatus: message.status });
+        return { apiStatus: "ready", status: "not_done", action: noProposalPlan, message: await getDataBoxPlusMessage(env, id), auditId, notice: noProposalPlan.assistantText };
+      }
+
+      const claim = await db.prepare(`
+        UPDATE data_box_plus_action_log
+        SET result = 'executing', audit_note = ?
+        WHERE id = ? AND result = 'waiting_confirmation'
+      `).bind(`${actor} potvrdil návrh. Probíhá provedení jednorázové akce.`, pendingRow.id).run();
+      if (Number(claim?.meta?.changes || 0) !== 1) {
+        const alreadyHandledPlan = {
+          ...intelligentInstructionPlanFromText("ahoj", message, attachments.results || []),
+          intent: "unknown",
+          assistantText: "Tento návrh už byl zpracován. Nebylo provedeno nic dalšího.",
+          auditNote: "Nebylo provedeno nic. Jednorázový návrh už byl zpracován."
+        };
+        const auditId = await logIntelligentDataBoxPlusInstruction(db, id, actor, instruction, alreadyHandledPlan, "not_done", { previousStatus: message.status });
+        return { apiStatus: "ready", status: "not_done", action: alreadyHandledPlan, message: await getDataBoxPlusMessage(env, id), auditId, notice: alreadyHandledPlan.assistantText };
+      }
+
+      const completedPlan = {
+        ...proposedAction,
+        outcome: "done",
+        statusLabel: "Provedeno",
+        requiresConfirmation: false,
+        requiresInput: false,
+        assistantText: cleanString(proposedAction.completionText || `Hotovo. ${proposedAction.performedAction}.`),
+        auditNote: `Systém provedl: ${proposedAction.performedAction}. Nový stav: ${proposedAction.messageStatus}.`
+      };
+      try {
+        let updatedMessage;
+        if (completedPlan.sendsEmail && completedPlan.recipientEmail) {
+          const emailResult = await sendDataBoxPlusMessageEmail(env, id, {
+            confirmed: true,
+            recipientEmail: completedPlan.recipientEmail,
+            subject: cleanString(body.subject || message.subject || "Datová zpráva"),
+            body: cleanString(body.body || `Předávám datovou zprávu: ${cleanString(message.subject || "")}`)
+          }, currentUser);
+          completedPlan.emailSent = true;
+          updatedMessage = emailResult.message;
+        } else {
+          await applyIntelligentDataBoxPlusInstruction(db, message, completedPlan);
+          updatedMessage = await getDataBoxPlusMessage(env, id);
+        }
+        await db.prepare("UPDATE data_box_plus_action_log SET result = ?, audit_note = ? WHERE id = ?")
+          .bind("confirmed", `${actor} návrh potvrdil. Akce byla provedena.`, pendingRow.id)
+          .run();
+        const auditId = await logIntelligentDataBoxPlusInstruction(db, id, actor, instruction, completedPlan, "done", {
+          confirmationOf: pendingRow.id,
+          previousStatus: message.status
+        });
+        return { apiStatus: "ready", status: "done", action: completedPlan, message: updatedMessage, auditId, notice: completedPlan.assistantText };
+      } catch (error) {
+        await db.prepare("UPDATE data_box_plus_action_log SET result = ?, audit_note = ? WHERE id = ?")
+          .bind("failed", `Potvrzenou akci se nepodařilo provést: ${cleanString(error?.message || "bez detailu")}.`, pendingRow.id)
+          .run();
+        const failedPlan = {
+          ...completedPlan,
+          outcome: "failed",
+          statusLabel: "Nelze provést",
+          assistantText: `Akci se nepodařilo provést. ${cleanString(error?.message || "Zkuste to znovu.")}`,
+          auditNote: "Potvrzená akce se nepodařila. Stav zprávy nebyl označený jako úspěšně změněný."
+        };
+        await logIntelligentDataBoxPlusInstruction(db, id, actor, instruction, failedPlan, "failed", { confirmationOf: pendingRow.id, previousStatus: message.status });
+        throw error;
+      }
+    }
+
+    const context = pendingRow?.result === "needs_input"
+      ? { pendingIntent: pendingPayload.pendingIntent, missingField: pendingPayload.missingField, actor }
+      : { actor };
+    const plan = intelligentInstructionPlanFromText(instruction, message, attachments.results || [], context);
+    if (pendingRow?.id) {
+      const supplied = plan.outcome === "waiting_confirmation" && pendingRow.result === "needs_input";
+      await closePendingDataBoxPlusChatActions(
+        db,
+        id,
+        actor,
+        supplied ? "supplied" : "superseded",
+        supplied
+          ? `${actor} doplnil chybějící údaj. Původní otázka je vyřešená.`
+          : `${actor} zadal nový pokyn. Starší návrh byl nahrazen a nic z něj se neprovedlo.`
+      );
+    }
+    const result = plan.outcome === "waiting_confirmation"
+      ? "waiting_confirmation"
+      : plan.outcome === "needs_input"
+        ? "needs_input"
+        : plan.outcome;
+    const auditId = await logIntelligentDataBoxPlusInstruction(db, id, actor, instruction, plan, result, { previousStatus: message.status });
     return {
       apiStatus: "ready",
-      status: plan.requiresInput ? "needs_input" : "done",
+      status: result,
       action: plan,
       message: await getDataBoxPlusMessage(env, id),
       auditId,
+      pendingActionId: result === "waiting_confirmation" ? auditId : "",
       notice: plan.assistantText
     };
   } catch (error) {
