@@ -30815,6 +30815,44 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   overflow-wrap: anywhere;
 }
 
+.receivables-rating-explanation {
+  margin: 0 0 14px;
+  max-width: 92ch;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.receivables-rating-metrics {
+  margin-top: 12px;
+}
+
+.receivables-rating-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.receivables-rating-flags span,
+.receivables-rating-clear {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.receivables-rating-clear {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
 .receivables-timeline {
   display: grid;
   gap: 10px;
@@ -30891,6 +30929,16 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
     color: var(--receivables-muted);
     font-size: 0.78rem;
     font-weight: 800;
+  }
+
+  body:has(.receivables-page) .ai-assistant-layer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 14px 14px;
+  }
+
+  body:has(.receivables-page) .ai-assistant-launcher {
+    position: static;
   }
 }
 

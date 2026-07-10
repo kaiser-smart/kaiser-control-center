@@ -29291,9 +29291,9 @@ function formatReceivableMoney(value, currency = "Kč") {
 
 function receivablesStatusTone(status) {
   const key = String(status || "").toLowerCase();
-  if (["stop", "insolvency_hold", "legal_handoff", "requires_human"].includes(key)) return "danger";
-  if (["dry_run", "needs_review", "partially_paid"].includes(key)) return "warning";
-  if (["paid", "ready", "autonomous"].includes(key)) return "ready";
+  if (["stop", "insolvency_hold", "legal_handoff", "requires_human", "human_review"].includes(key)) return "danger";
+  if (["dry_run", "dry_run_only", "ready_after_review", "needs_review", "partially_paid"].includes(key)) return "warning";
+  if (["paid", "ready", "autonomous", "ready_for_automation"].includes(key)) return "ready";
   return "waiting";
 }
 
@@ -29303,8 +29303,49 @@ function receivablesPill(label, tone = "waiting") {
 
 function receivablesRatingPill(rating) {
   const value = String(rating || "-").toUpperCase();
-  const tone = value === "INSOLVENCE" ? "danger" : ["D", "E"].includes(value) ? "warning" : "ready";
+  const tone = ["INSOLVENCE", "D", "E"].includes(value)
+    ? "danger"
+    : ["C", "C0", "N", "Q"].includes(value) ? "warning" : value === "X" ? "waiting" : "ready";
   return receivablesPill(value, tone);
+}
+
+function receivablesRatingMetric(value, suffix = "") {
+  if (value === null || value === undefined || value === "") return "-";
+  const number = Number(value);
+  const formatted = Number.isFinite(number)
+    ? number.toLocaleString("cs-CZ", { maximumFractionDigits: 2 })
+    : String(value);
+  return `${formatted}${suffix}`;
+}
+
+function receivablesRatingFlags(flags = []) {
+  if (!Array.isArray(flags) || !flags.length) return `<span class="receivables-rating-clear">Bez kritických flagů</span>`;
+  return `<div class="receivables-rating-flags">${flags.map((flag) => `<span>${escapeHtml(flag)}</span>`).join("")}</div>`;
+}
+
+function receivablesRatingPenalties(rating = {}) {
+  const penalties = rating.penalties || {};
+  const rows = [
+    ["Vážené průměrné zpoždění", penalties.weightedAvgDelayPenalty],
+    ["P90 zpoždění", penalties.p90DelayPenalty],
+    ["Částka uhrazená včas", penalties.onTimeAmountPenalty],
+    ["Aktuální zůstatek po splatnosti", penalties.currentOverdueBalancePenalty],
+    ["Maximum dnů po splatnosti", penalties.currentMaxDaysOverduePenalty],
+    ["Nesplněné sliby", penalties.brokenPromisePenalty],
+    ["Částečné úhrady", penalties.partialPaymentPenalty],
+    ["Spory", penalties.disputePenalty],
+    ["Nespárované platby", penalties.unmatchedPaymentPenalty]
+  ];
+  return `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact">
+        <thead><tr><th>Zdroj penalizace</th><th>Body dolů</th></tr></thead>
+        <tbody>${rows.map(([label, value]) => `
+          <tr><td data-label="Zdroj penalizace">${escapeHtml(label)}</td><td data-label="Body dolů">${escapeHtml(receivablesRatingMetric(value, " b."))}</td></tr>
+        `).join("")}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 function receivablesDashboardKpis() {
@@ -29385,19 +29426,20 @@ function receivablesCustomersTable() {
             <th>IČO</th>
             <th>Rating</th>
             <th>Skóre</th>
-            <th>Otevřeno</th>
-            <th>Faktur</th>
-            <th>Nejstarší splatnost</th>
+            <th>Confidence</th>
+            <th>Otevřeno celkem</th>
+            <th>Po splatnosti</th>
             <th>Max dnů</th>
-            <th>Další akce</th>
-            <th>Stav</th>
+            <th>Průměrné zpoždění</th>
+            <th>P90</th>
+            <th>Automatizace</th>
+            <th>Data quality</th>
           </tr>
         </thead>
         <tbody>
           ${customers.map((customer) => {
             const pack = customer.package || {};
             const rating = customer.rating || {};
-            const decision = customer.nextDecision || {};
             return `
               <tr>
                 <td data-label="Zákazník">
@@ -29406,12 +29448,14 @@ function receivablesCustomersTable() {
                 <td data-label="IČO">${escapeHtml(customer.ico || "-")}</td>
                 <td data-label="Rating">${receivablesRatingPill(rating.rating || "-")}</td>
                 <td data-label="Skóre">${escapeHtml(rating.paymentMoralityScore ?? "-")}</td>
-                <td data-label="Otevřeno">${escapeHtml(formatReceivableMoney(pack.totalOpenAmount))}</td>
-                <td data-label="Faktur">${escapeHtml(pack.invoiceCount || 0)}</td>
-                <td data-label="Nejstarší splatnost">${escapeHtml(pack.oldestDueDate || "-")}</td>
-                <td data-label="Max dnů">${escapeHtml(pack.maxDaysOverdue || 0)}</td>
-                <td data-label="Další akce">${escapeHtml(decision.action || pack.nextActionAt || "-")}</td>
-                <td data-label="Stav">${receivablesPill(pack.status || customer.automationStatus || "dry_run", receivablesStatusTone(pack.status || customer.automationStatus))}</td>
+                <td data-label="Confidence">${receivablesPill(rating.confidence || "NONE", rating.confidence === "HIGH" ? "ready" : "warning")}</td>
+                <td data-label="Otevřeno celkem">${escapeHtml(formatReceivableMoney(rating.openAmountTotal ?? pack.totalOpenAmount))}</td>
+                <td data-label="Po splatnosti">${escapeHtml(formatReceivableMoney(rating.currentOverdueBalance ?? pack.totalOverdueAmount))}</td>
+                <td data-label="Max dnů">${escapeHtml(rating.currentMaxDaysOverdue ?? pack.maxDaysOverdue ?? 0)}</td>
+                <td data-label="Průměrné zpoždění">${escapeHtml(receivablesRatingMetric(rating.weightedAvgDelay, " d"))}</td>
+                <td data-label="P90">${escapeHtml(receivablesRatingMetric(rating.p90Delay, " d"))}</td>
+                <td data-label="Automatizace">${receivablesPill(rating.automationStatus || "DRY_RUN_ONLY", receivablesStatusTone(rating.automationStatus))}</td>
+                <td data-label="Data quality">${escapeHtml((rating.dataQualityFlags || []).length || 0)}</td>
               </tr>
             `;
           }).join("")}
@@ -30600,6 +30644,7 @@ function receivablesCustomerDetailSection() {
   const pack = detail.package || {};
   const detailInvoices = Array.isArray(detail.invoices) ? detail.invoices : [];
   const visibleDetailInvoices = detailInvoices.slice(0, 10);
+  const blockingReasons = Array.isArray(rating.blockingReasons) ? rating.blockingReasons : [];
   const timeline = [
     ...(detail.decisions || []).map((item) => ({ when: item.createdAt, type: "AI", channel: item.channel, content: item.reason, result: item.action })),
     ...(detail.communicationEvents || []).map((item) => ({ when: item.createdAt, type: "Komunikace", channel: item.channel, content: item.subject || item.templateKey, result: item.status })),
@@ -30620,9 +30665,54 @@ function receivablesCustomerDetailSection() {
       <div class="receivables-detail-grid">
         <article><span>Rating</span><strong>${receivablesRatingPill(rating.rating || "-")}</strong></article>
         <article><span>Skóre</span><strong>${escapeHtml(rating.paymentMoralityScore ?? "-")}</strong></article>
-        <article><span>Otevřeno</span><strong>${escapeHtml(formatReceivableMoney(pack.totalOpenAmount))}</strong></article>
-        <article><span>Max dnů po splatnosti</span><strong>${escapeHtml(pack.maxDaysOverdue || 0)}</strong></article>
+        <article><span>Confidence</span><strong>${escapeHtml(rating.confidence || "NONE")}</strong></article>
+        <article><span>Režim</span><strong>${escapeHtml(rating.ratingMode || "PRE_RATING")}</strong></article>
+        <article><span>Efektivní stav</span><strong>${escapeHtml(rating.automationStatus || "DRY_RUN_ONLY")}</strong></article>
+        <article><span>Doporučený stav</span><strong>${escapeHtml(rating.recommendedAutomationStatus || "DRY_RUN_ONLY")}</strong></article>
+        <article><span>Otevřeno</span><strong>${escapeHtml(formatReceivableMoney(rating.openAmountTotal ?? pack.totalOpenAmount))}</strong></article>
+        <article><span>Po splatnosti</span><strong>${escapeHtml(formatReceivableMoney(rating.currentOverdueBalance ?? pack.totalOverdueAmount))}</strong></article>
+        <article><span>Max dnů po splatnosti</span><strong>${escapeHtml(rating.currentMaxDaysOverdue ?? pack.maxDaysOverdue ?? 0)}</strong></article>
+        <article><span>Platnost dat</span><strong>${escapeHtml(rating.periodTo || "-")}</strong></article>
       </div>
+    </section>
+    <section class="receivables-panel" aria-labelledby="receivables-rating-explanation-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Výpočet platební morálky</p>
+          <h2 id="receivables-rating-explanation-title">Vysvětlení ratingu</h2>
+        </div>
+        ${receivablesPill(rating.calculationVersion || "bez výpočtu", rating.calculationVersion === "payment-rating-v1" ? "ready" : "warning")}
+      </div>
+      ${detail.ratingPreviewError ? `<p class="module-feedback__warning">Aktuální read-only přepočet není dostupný: ${escapeHtml(detail.ratingPreviewError)}</p>` : ""}
+      <p class="receivables-rating-explanation">${escapeHtml(rating.explanation || "Ostrý rating zatím nebyl bezpečně vypočítán.")}</p>
+      <div class="receivables-detail-grid receivables-rating-metrics">
+        <article><span>Faktur</span><strong>${escapeHtml(rating.invoiceCount ?? 0)}</strong></article>
+        <article><span>Uhrazených</span><strong>${escapeHtml(rating.paidInvoiceCount ?? 0)}</strong></article>
+        <article><span>Otevřených</span><strong>${escapeHtml(rating.openInvoiceCount ?? 0)}</strong></article>
+        <article><span>Průměrné zpoždění</span><strong>${escapeHtml(receivablesRatingMetric(rating.weightedAvgDelay, " dnů"))}</strong></article>
+        <article><span>P90 zpoždění</span><strong>${escapeHtml(receivablesRatingMetric(rating.p90Delay, " dnů"))}</strong></article>
+        <article><span>Včas uhrazeno</span><strong>${escapeHtml(rating.onTimeAmountRate === null || rating.onTimeAmountRate === undefined ? "-" : `${Math.round(rating.onTimeAmountRate * 100)} %`)}</strong></article>
+        <article><span>Průměrná měsíční fakturace</span><strong>${escapeHtml(formatReceivableMoney(rating.avgMonthlyBilling))}</strong></article>
+        <article><span>Částečné úhrady</span><strong>${escapeHtml(receivablesRatingMetric(rating.partialPaymentRisk, ""))}</strong></article>
+        <article><span>Nesplněné sliby</span><strong>${escapeHtml(receivablesRatingMetric(rating.brokenPromiseRate, ""))}</strong></article>
+        <article><span>Nespárované platby</span><strong>${escapeHtml(receivablesRatingMetric(rating.unmatchedPaymentRate, ""))}</strong></article>
+      </div>
+    </section>
+    <section class="receivables-panel" aria-labelledby="receivables-rating-penalties-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Audit výpočtu</p>
+          <h2 id="receivables-rating-penalties-title">Rozpad penalizací</h2>
+        </div>
+        <span>${escapeHtml(formatDateTime(rating.calculatedAt))}</span>
+      </div>
+      ${receivablesRatingPenalties(rating)}
+      <h3>Data quality</h3>
+      ${receivablesRatingFlags(rating.dataQualityFlags)}
+      <h3>Blocking reasons</h3>
+      <ul class="receivables-clean-list">
+        ${blockingReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("") || `<li>Bez blokujícího důvodu.</li>`}
+      </ul>
     </section>
     <section class="receivables-panel" aria-labelledby="receivables-invoices-title">
       <div class="receivables-panel__head">
@@ -30643,13 +30733,13 @@ function receivablesCustomerDetailSection() {
               <tbody>
                 ${visibleDetailInvoices.map((invoice) => `
                   <tr>
-                    <td>${escapeHtml(invoice.invoiceNumber)}</td>
-                    <td>${escapeHtml(invoice.variableSymbol || "-")}</td>
-                    <td>${escapeHtml(invoice.dueDate || "-")}</td>
-                    <td>${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
-                    <td>${escapeHtml(formatReceivableMoney(invoice.paidAmount))}</td>
-                    <td>${escapeHtml(formatReceivableMoney(invoice.openAmount))}</td>
-                    <td>${receivablesPill(invoice.status, receivablesStatusTone(invoice.status))}</td>
+                    <td data-label="Faktura">${escapeHtml(invoice.invoiceNumber)}</td>
+                    <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
+                    <td data-label="Splatnost">${escapeHtml(invoice.dueDate || "-")}</td>
+                    <td data-label="Celkem">${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
+                    <td data-label="Uhrazeno">${escapeHtml(formatReceivableMoney(invoice.paidAmount))}</td>
+                    <td data-label="Zbývá">${escapeHtml(formatReceivableMoney(invoice.openAmount))}</td>
+                    <td data-label="Stav">${receivablesPill(invoice.status, receivablesStatusTone(invoice.status))}</td>
                   </tr>
                 `).join("") || `<tr><td colspan="7">Zatím nejsou uložené žádné faktury.</td></tr>`}
               </tbody>
@@ -32327,7 +32417,18 @@ async function loadReceivablesCustomerDetail(customerId, options = {}) {
   receivablesState.customerLoading = true;
   receivablesState.customerError = "";
   try {
-    receivablesState.customerDetail = await apiJson(`/api/receivables/customers/${encodeURIComponent(id)}`);
+    const [detail, preview] = await Promise.all([
+      apiJson(`/api/receivables/customers/${encodeURIComponent(id)}`),
+      apiJson("/api/receivables/ratings/preview", {
+        method: "POST",
+        body: JSON.stringify({ customerId: id })
+      }).catch((error) => ({ ratingPreviewError: error.payload?.error || error.message }))
+    ]);
+    if (preview?.rating) {
+      detail.ratings = [preview.rating, ...(detail.ratings || [])];
+    }
+    if (preview?.ratingPreviewError) detail.ratingPreviewError = preview.ratingPreviewError;
+    receivablesState.customerDetail = detail;
   } catch (error) {
     receivablesState.customerError = error.payload?.error || error.message || "Detail zákazníka se teď nepodařilo načíst.";
   } finally {

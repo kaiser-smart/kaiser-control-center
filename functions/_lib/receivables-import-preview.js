@@ -229,11 +229,16 @@ export function buildInvoiceImportPreview(payload = {}) {
 }
 
 export function bankTransactionToPreviewRow(transaction = {}, index = 0) {
+  const dataQualityFlags = Array.isArray(transaction.dataQualityFlags) ? transaction.dataQualityFlags : [];
   let previewStatus = "ignored";
   let issueCode = "";
   let issueMessage = "";
   if (transaction.isReceivableCandidate) {
-    if (transaction.variableSymbol) {
+    if (dataQualityFlags.includes("DUPLICATE_PAYMENT_CANDIDATE")) {
+      previewStatus = "needs_review";
+      issueCode = "duplicate_payment_candidate";
+      issueMessage = "Transakce má duplicitní otisk a vyžaduje kontrolu bankovního ID.";
+    } else if (transaction.variableSymbol) {
       previewStatus = "ready";
     } else {
       previewStatus = "needs_review";
@@ -270,7 +275,8 @@ export function bankTransactionToPreviewRow(transaction = {}, index = 0) {
       currency: "CZK",
       message: transaction.message,
       isIncoming: transaction.isIncoming,
-      isReceivableCandidate: transaction.isReceivableCandidate
+      isReceivableCandidate: transaction.isReceivableCandidate,
+      dataQualityFlags
     },
     raw: transaction
   };
@@ -282,7 +288,7 @@ export function buildBankImportPreview(parsed, payload = {}) {
     source: cleanString(payload.source) || parsed.source || "kb_pdf_text",
     importKind: "bank_transactions",
     filename: cleanString(payload.filename || parsed.filename),
-    inputType: "kb_pdf_text",
+    inputType: parsed.parserMode === "kb_csv_v1" ? "kb_csv" : "kb_pdf_text",
     rows,
     summary: {
       ...summarizeImportPreviewRows(rows),
@@ -290,7 +296,13 @@ export function buildBankImportPreview(parsed, payload = {}) {
       incomingPaymentCount: parsed.incomingPaymentCount || 0,
       emptyVariableSymbolCount: parsed.emptyVariableSymbolCount || 0,
       parserMode: parsed.parserMode || "text_preview",
-      pdfBinarySupported: parsed.pdfBinarySupported === true
+      pdfBinarySupported: parsed.pdfBinarySupported === true,
+      dateFrom: parsed.dateFrom || "",
+      dateTo: parsed.dateTo || "",
+      uniqueTransactionIdCount: parsed.uniqueTransactionIdCount || 0,
+      duplicateTransactionIdCount: parsed.duplicateTransactionIdCount || 0,
+      dataQualitySummary: parsed.dataQualitySummary || [],
+      contentSha256: parsed.contentSha256 || ""
     }
   };
 }

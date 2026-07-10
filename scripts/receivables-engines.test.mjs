@@ -26,12 +26,18 @@ import {
   receivablesKbApiSandboxProbe
 } from "../functions/_lib/receivables-kb-api-onboarding.js";
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
+import { parseKbBankCsvText } from "../functions/_lib/receivables-kb-csv-parser.js";
 import {
   calculateInvoicePaymentState,
   matchReceivablePayments,
   receivableToleranceAmount
 } from "../functions/_lib/receivables-payment-matching.js";
-import { calculateCustomerPaymentRating } from "../functions/_lib/receivables-rating-engine.js";
+import {
+  calculateCustomerPaymentRating,
+  deriveInvoicePaidDate,
+  isFinalPaymentRating
+} from "../functions/_lib/receivables-rating-engine.js";
+import { previewReceivablePaymentRating } from "../functions/_lib/receivables-rating-store.js";
 
 const customer = {
   id: "customer-1",
@@ -258,13 +264,16 @@ assert.equal(receivableToleranceAmount(250000), 250);
 {
   const rating = calculateCustomerPaymentRating({
     today: "2026-07-05",
+    customerId: "customer-1",
+    customerLinkConfidence: "MEDIUM",
     invoices: [
       { totalAmount: 1000, paidAmount: 1000, openAmount: 0, dueDate: "2026-01-10", paidDate: "2026-01-10", issueDate: "2026-01-01", status: "paid" },
       { totalAmount: 2000, paidAmount: 1000, openAmount: 1000, dueDate: "2026-06-01", issueDate: "2026-05-20", status: "partially_paid" }
     ],
     promises: [{ status: "broken" }, { status: "resolved" }]
   });
-  assert.equal(["C", "D", "E"].includes(rating.rating), true);
+  assert.equal(rating.rating, "B");
+  assert.equal(rating.score, 76);
   assert.equal(rating.metrics.partialPaymentRisk > 0, true);
   assert.equal(rating.metrics.brokenPromiseRate, 0.5);
 }
@@ -532,6 +541,268 @@ Dodavatel
   } finally {
     globalThis.fetch = originalFetch;
   }
+}
+
+function ratingInvoiceFixture(index, delayDays = 0, overrides = {}) {
+  const due = new Date(Date.UTC(2026, 0, 10 + index));
+  const paid = new Date(due);
+  paid.setUTCDate(paid.getUTCDate() + delayDays);
+  return {
+    id: `rating-invoice-${index}`,
+    invoiceNumber: `R-${index}`,
+    variableSymbol: `9900${index}`,
+    customerId: "rating-customer",
+    issueDate: `2026-01-${String(index).padStart(2, "0")}`,
+    dueDate: due.toISOString().slice(0, 10),
+    totalAmount: 10000,
+    paidAmount: 10000,
+    openAmount: 0,
+    paidDate: paid.toISOString().slice(0, 10),
+    status: "paid",
+    ...overrides
+  };
+}
+
+function finalRatingInput(invoices, extra = {}) {
+  return {
+    today: "2026-07-10",
+    calculatedAt: "2026-07-10T08:00:00.000Z",
+    customerId: "rating-customer",
+    customerLinkConfidence: "MEDIUM",
+    invoices,
+    ...extra
+  };
+}
+
+{
+  const rating = calculateCustomerPaymentRating(finalRatingInput(
+    Array.from({ length: 6 }, (_, index) => ratingInvoiceFixture(index + 1, 0))
+  ));
+  assert.equal(rating.ratingMode, "FINAL_RATING");
+  assert.equal(rating.rating, "A");
+  assert.equal(rating.score, 100);
+  assert.equal(rating.confidence, "HIGH");
+  assert.equal(rating.automationStatus, "DRY_RUN_ONLY");
+  assert.equal(rating.recommendedAutomationStatus, "READY_FOR_AUTOMATION");
+  assert.equal(isFinalPaymentRating(rating), true);
+}
+
+{
+  const rating = calculateCustomerPaymentRating(finalRatingInput(
+    Array.from({ length: 6 }, (_, index) => ratingInvoiceFixture(index + 1, 5))
+  ));
+  assert.equal(rating.rating, "B");
+  assert.equal(rating.weightedAvgDelay, 5);
+}
+
+{
+  const delays = [15, 18, 20, 22, 25, 25];
+  const rating = calculateCustomerPaymentRating(finalRatingInput(
+    delays.map((delay, index) => ratingInvoiceFixture(index + 1, delay))
+  ));
+  assert.equal(rating.rating, "C");
+  assert.equal(rating.p90Delay, 25);
+}
+
+{
+  const open = Array.from({ length: 5 }, (_, index) => ratingInvoiceFixture(index + 1, index % 2 ? 45 : 30));
+  open.push(ratingInvoiceFixture(7, 0, {
+    issueDate: "2026-02-01",
+    dueDate: "2026-03-01",
+    paidDate: "",
+    paidAmount: 0,
+    openAmount: 100000,
+    status: "unpaid"
+  }));
+  const rating = calculateCustomerPaymentRating(finalRatingInput(open));
+  assert.equal(["D", "E"].includes(rating.rating), true);
+  assert.equal(rating.currentMaxDaysOverdue > 60, true);
+}
+
+{
+  const rating = calculateCustomerPaymentRating(finalRatingInput([ratingInvoiceFixture(1, 0)]));
+  assert.equal(rating.ratingMode, "PRE_RATING");
+  assert.equal(rating.rating, "N");
+  assert.equal(rating.score, null);
+}
+
+{
+  const invoices = [ratingInvoiceFixture(1, 0, { dueDate: "" }), ratingInvoiceFixture(2, 0, { dueDate: "" })];
+  const rating = calculateCustomerPaymentRating(finalRatingInput(invoices));
+  assert.equal(rating.rating, "N");
+  assert.equal(rating.dataQualityFlags.includes("MISSING_DUE_DATE"), true);
+  assert.equal(rating.blockingReasons.length > 0, true);
+}
+
+{
+  const state = calculateInvoicePaymentState(invoice, [{ amount: 500, bookingDate: "2026-06-03", status: "auto_matched" }]);
+  assert.equal(state.status, "partially_paid");
+  assert.equal(state.openAmount, 710);
+  assert.equal(state.paidDate, "");
+}
+
+{
+  const state = deriveInvoicePaidDate({
+    ...invoice,
+    totalAmount: 1000,
+    openAmount: 0,
+    matchedPayments: [
+      { id: "part-1", amount: 400, bookingDate: "2026-06-03", status: "auto_matched" },
+      { id: "part-2", amount: 600, bookingDate: "2026-06-05", status: "auto_matched" }
+    ]
+  });
+  assert.equal(state.status, "paid");
+  assert.equal(state.paidDate, "2026-06-05");
+}
+
+{
+  const state = deriveInvoicePaidDate({
+    ...invoice,
+    totalAmount: 1000,
+    paidAmount: 1000,
+    openAmount: 0,
+    status: "paid",
+    paidDate: "",
+    matchedPayments: [
+      { id: "partial-authoritative", amount: 400, bookingDate: "2026-06-03", status: "auto_matched" }
+    ]
+  });
+  assert.equal(state.status, "partially_paid");
+  assert.equal(state.openAmount, 600);
+  assert.equal(state.paidDate, "");
+}
+
+{
+  const payments = [{
+    id: "no-vs-but-matched",
+    bookingDate: "2026-01-10",
+    amount: 10000,
+    variableSymbol: "",
+    matchedInvoiceId: "rating-invoice-1",
+    matched: true,
+    status: "matched"
+  }];
+  const rating = calculateCustomerPaymentRating(finalRatingInput(
+    Array.from({ length: 6 }, (_, index) => ratingInvoiceFixture(index + 1, 0)),
+    { payments }
+  ));
+  assert.equal(rating.rating, "A");
+  assert.equal(rating.dataQualityFlags.includes("PAYMENT_WITHOUT_VS"), true);
+  assert.equal(rating.penalties.unmatchedPaymentPenalty, 0);
+}
+
+{
+  const rating = calculateCustomerPaymentRating(finalRatingInput(
+    Array.from({ length: 6 }, (_, index) => ratingInvoiceFixture(index + 1, 0, {
+      dataQualityFlags: index === 0 ? ["CREDIT_NOTE_PRESENT"] : []
+    }))
+  ));
+  assert.equal(rating.dataQualityFlags.includes("CREDIT_NOTE_PRESENT"), true);
+  assert.equal(rating.rating, "A");
+}
+
+{
+  const invoices = Array.from({ length: 6 }, (_, index) => ratingInvoiceFixture(index + 1, 0));
+  const clean = calculateCustomerPaymentRating(finalRatingInput(invoices));
+  const broken = calculateCustomerPaymentRating(finalRatingInput(invoices, {
+    promises: [{ status: "broken" }, { status: "resolved" }]
+  }));
+  assert.equal(broken.brokenPromiseRate, 0.5);
+  assert.equal(broken.score < clean.score, true);
+}
+
+{
+  const invoices = Array.from({ length: 6 }, (_, index) => ratingInvoiceFixture(index + 1, 0));
+  invoices[0] = { ...invoices[0], status: "disputed", disputeActive: true };
+  const rating = calculateCustomerPaymentRating(finalRatingInput(invoices));
+  assert.equal(rating.automationStatus, "HUMAN_REVIEW");
+  assert.equal(rating.dataQualityFlags.includes("DISPUTE_ACTIVE"), true);
+  assert.equal(["A", "B"].includes(rating.rating), true);
+}
+
+{
+  const rating = calculateCustomerPaymentRating(finalRatingInput([], { insolvency: true }));
+  assert.equal(rating.rating, "INSOLVENCE");
+  assert.equal(rating.score, 0);
+  assert.equal(rating.automationStatus, "STOP");
+  assert.equal(rating.confidence, "HIGH");
+}
+
+{
+  const payments = Array.from({ length: 10 }, (_, index) => ({
+    id: `match-quality-${index}`,
+    bookingDate: "2026-03-01",
+    amount: 1000,
+    variableSymbol: `7${index}`,
+    matchedInvoiceId: index < 4 ? `rating-invoice-${index + 1}` : "",
+    matched: index < 4,
+    status: index < 4 ? "matched" : "unmatched"
+  }));
+  const rating = calculateCustomerPaymentRating(finalRatingInput(
+    Array.from({ length: 6 }, (_, index) => ratingInvoiceFixture(index + 1, 0)),
+    { payments }
+  ));
+  assert.equal(rating.confidence, "LOW");
+  assert.equal(rating.unmatchedPaymentRate, 0.6);
+}
+
+{
+  const bankPayments = ["2026-01-05", "2026-02-05", "2026-03-05", "2026-04-05", "2026-05-05", "2026-06-05"]
+    .map((bookingDate, index) => ({ id: `bank-${index}`, bookingDate, amount: 1000 }));
+  const rating = calculateCustomerPaymentRating(finalRatingInput([], { bankPayments }));
+  assert.equal(rating.ratingMode, "PRE_RATING");
+  assert.equal(rating.rating, "A0");
+  assert.equal(rating.score, null);
+  assert.equal(isFinalPaymentRating(rating), false);
+}
+
+{
+  const preview = await previewReceivablePaymentRating({}, {
+    input: finalRatingInput(Array.from({ length: 6 }, (_, index) => ratingInvoiceFixture(index + 1, 0)))
+  });
+  assert.equal(preview.persisted, false);
+  assert.equal(preview.sendsCustomerCommunication, false);
+  assert.equal(preview.startsAutomation, false);
+  assert.equal("action" in preview.rating, false);
+  assert.equal("channel" in preview.rating, false);
+}
+
+{
+  const missingPaidDate = calculateCustomerPaymentRating(finalRatingInput([
+    ratingInvoiceFixture(1, 0, { paidDate: "" }),
+    ratingInvoiceFixture(2, 0, { paidDate: "" })
+  ]));
+  assert.equal(missingPaidDate.ratingMode, "PRE_RATING");
+  assert.equal(missingPaidDate.dataQualityFlags.includes("MISSING_PAID_DATE"), true);
+}
+
+{
+  const sameVsInvoices = [
+    { ...invoice, id: "ambiguous-1", variableSymbol: "12345" },
+    { ...invoice, id: "ambiguous-2", variableSymbol: "12345" }
+  ];
+  const matching = matchReceivablePayments(sameVsInvoices, [{
+    id: "ambiguous-payment",
+    amount: 1210,
+    variableSymbol: "12345",
+    bookingDate: "2026-06-03"
+  }], [customer], { ambiguousVariableSymbols: ["12345"] });
+  assert.equal(matching.matches.length, 0);
+  assert.equal(matching.reviewQueue.length, 2);
+}
+
+{
+  const csv = `Preambule;;;;
+Datum splatnosti;Datum zuctovani;Protiucet/Kod banky;Nazev protiuctu;Castka;VS;KS;SS;Identifikace transakce;Systemovy popis;Popis prikazce;Popis pro prijemce
+01.06.2026;02.06.2026;123/0100;Firma Alfa;1 210,00;2601101477;0308;;TX-UNIQUE-1;Prichozi uhrada;;Faktura
+03.06.2026;03.06.2026;456/0100;Dodavatel;-120,00;;;;TX-UNIQUE-2;Odchozi uhrada;;;`;
+  const parsed = parseKbBankCsvText(csv, { filename: "kb.csv" });
+  assert.equal(parsed.apiStatus, "ready");
+  assert.equal(parsed.transactionCount, 2);
+  assert.equal(parsed.incomingPaymentCount, 1);
+  assert.equal(parsed.outgoingPaymentCount, 1);
+  assert.equal(parsed.incomingPayments[0].bankTransactionId, "TX-UNIQUE-1");
+  assert.equal(parsed.incomingPayments[0].variableSymbol, "2601101477");
 }
 
 console.log("receivables engine tests passed");

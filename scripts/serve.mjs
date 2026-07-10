@@ -82,6 +82,7 @@ import {
 } from "../src/permissions.js";
 import { buildReceivablesVistosLedgerMapping } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
 import { receivablesVistosInvoiceLookbackWindow } from "../functions/_lib/receivables-vistos-preview.js";
+import { calculateCustomerPaymentRating } from "../functions/_lib/receivables-rating-engine.js";
 import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-plus-store.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -3632,6 +3633,70 @@ function mockReceivablesVistosSchemaProbePreview() {
   };
 }
 
+function mockReceivablesRatingFixture() {
+  const paidInvoices = [15, 18, 20, 22, 25, 25].map((delay, index) => {
+    const month = String(index + 1).padStart(2, "0");
+    const dueDay = 10;
+    const paidDate = new Date(Date.UTC(2026, index, dueDay + delay)).toISOString().slice(0, 10);
+    return {
+      id: `local-rating-invoice-${index + 1}`,
+      invoiceNumber: `26010${String(index + 1).padStart(4, "0")}`,
+      variableSymbol: `26010${String(index + 1).padStart(4, "0")}`,
+      customerId: "local-rating-customer",
+      issueDate: `2026-${month}-01`,
+      dueDate: `2026-${month}-10`,
+      totalAmount: 10000,
+      paidAmount: 10000,
+      openAmount: 0,
+      currency: "CZK",
+      status: "paid",
+      paidDate,
+      customerLinkConfidence: "HIGH"
+    };
+  });
+  const openInvoice = {
+    id: "local-rating-invoice-open",
+    invoiceNumber: "2601099999",
+    variableSymbol: "2601099999",
+    customerId: "local-rating-customer",
+    issueDate: "2026-04-20",
+    dueDate: "2026-05-10",
+    totalAmount: 30000,
+    paidAmount: 10000,
+    openAmount: 20000,
+    currency: "CZK",
+    status: "partially_paid",
+    paidDate: "",
+    customerLinkConfidence: "HIGH"
+  };
+  const invoices = [...paidInvoices, openInvoice];
+  const rating = calculateCustomerPaymentRating({
+    customerId: "local-rating-customer",
+    customerLinkConfidence: "HIGH",
+    customerLinkReliable: true,
+    periodTo: "2026-07-10",
+    calculatedAt: "2026-07-10T08:00:00.000Z",
+    invoices,
+    promises: [{ id: "local-promise-1", status: "broken", promisedDate: "2026-06-20" }]
+  });
+  const customer = {
+    id: "local-rating-customer",
+    companyName: "Lokální rating test s.r.o.",
+    ico: "12345678",
+    preferredContactPerson: "Zákaznický manažer"
+  };
+  const pack = {
+    id: "local-rating-package",
+    customerId: customer.id,
+    totalOpenAmount: rating.openAmountTotal,
+    totalOverdueAmount: rating.currentOverdueBalance,
+    invoiceCount: rating.invoiceCount,
+    maxDaysOverdue: rating.currentMaxDaysOverdue,
+    status: "dry_run"
+  };
+  return { customer, invoices, rating, package: pack };
+}
+
 async function handleApi(request, response) {
   const url = new URL(request.url || "/", "http://localhost");
 
@@ -3721,6 +3786,80 @@ async function handleApi(request, response) {
           .filter((action) => hasPermission(user, moduleItem.id, action))
       })),
       apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/receivables/dashboard" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const fixture = mockReceivablesRatingFixture();
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      kpis: {
+        totalOverdue: fixture.rating.currentOverdueBalance,
+        overdueOver60: fixture.rating.currentOverdueBalance,
+        todayReview: 1,
+        automaticCustomers: 0,
+        stoppedCustomers: 0
+      },
+      sourceStatus: {
+        vistos: "lokální fixture",
+        bank: "read-only CSV",
+        insolvency: "nenalezeno",
+        outbound: "vypnuto"
+      },
+      customers: [{ ...fixture.customer, package: fixture.package, rating: fixture.rating }]
+    });
+    return true;
+  }
+
+  const receivablesCustomerMatch = url.pathname.match(/^\/api\/receivables\/customers\/([^/]+)$/);
+  if (receivablesCustomerMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const fixture = mockReceivablesRatingFixture();
+    if (decodeURIComponent(receivablesCustomerMatch[1]) !== fixture.customer.id) {
+      sendJson(response, 404, { error: "Zákazník nebyl nalezen." });
+      return true;
+    }
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      customer: fixture.customer,
+      package: fixture.package,
+      invoices: fixture.invoices,
+      ratings: [fixture.rating],
+      decisions: [],
+      communicationEvents: [],
+      promises: [{ id: "local-promise-1", status: "broken", promisedDate: "2026-06-20" }],
+      inboxMessages: [],
+      insolvencyChecks: [],
+      legalPackages: [],
+      auditLog: [],
+      payments: []
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/receivables/ratings/preview" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const fixture = mockReceivablesRatingFixture();
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      rating: fixture.rating,
+      persisted: false,
+      sendsCustomerCommunication: false,
+      startsAutomation: false
     });
     return true;
   }

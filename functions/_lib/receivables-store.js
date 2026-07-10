@@ -1,6 +1,7 @@
 import { decideReceivablesNextAction } from "./receivables-ai-decision-engine.js";
 import { buildBankImportPreview, buildInvoiceImportPreview } from "./receivables-import-preview.js";
 import { parseKbBankStatementText } from "./receivables-kb-bank-parser.js";
+import { isKbBankCsvText, kbCsvContentSha256, parseKbBankCsvText } from "./receivables-kb-csv-parser.js";
 import { calculateCustomerPaymentRating } from "./receivables-rating-engine.js";
 import { calculateInvoicePaymentState, matchReceivablePayments } from "./receivables-payment-matching.js";
 
@@ -232,7 +233,7 @@ function rowToPackage(row = {}) {
     customerId: cleanString(row.customer_id),
     totalOpenAmount: numberValue(row.total_open_amount),
     totalOverdueAmount: numberValue(row.total_overdue_amount),
-    invoiceCount: numberValue(row.invoice_count),
+    invoiceCount: numberValue(row.rating_invoice_count ?? row.invoice_count),
     oldestDueDate: cleanString(row.oldest_due_date),
     maxDaysOverdue: numberValue(row.max_days_overdue),
     daysToLegalHandoff: numberValue(row.days_to_legal_handoff, DEFAULT_LEGAL_HANDOFF_DAYS),
@@ -244,23 +245,54 @@ function rowToPackage(row = {}) {
 }
 
 function rowToRating(row = {}) {
+  const calculationVersion = cleanString(row.calculation_version || "legacy");
+  const ratingMode = cleanString(row.rating_mode || "PRE_RATING");
+  const rawRating = cleanString(row.rating || "N").toUpperCase();
+  const legacyUnsafe = calculationVersion !== "payment-rating-v1"
+    || (ratingMode === "PRE_RATING" && ["A", "B", "C", "D", "E"].includes(rawRating));
+  const score = legacyUnsafe || row.payment_morality_score === null || row.payment_morality_score === undefined
+    ? null
+    : numberValue(row.payment_morality_score);
+  const blockingReasons = parseJson(row.blocking_reasons_json, []);
+  if (legacyUnsafe) blockingReasons.push("Starší výpočet není ověřený rating payment-rating-v1.");
   return {
     id: cleanString(row.rating_id || row.id),
     customerId: cleanString(row.customer_id),
-    paymentMoralityScore: row.payment_morality_score === null || row.payment_morality_score === undefined
-      ? null
-      : numberValue(row.payment_morality_score),
-    rating: cleanString(row.rating || "C"),
-    automationStatus: cleanString(row.rating_automation_status || row.automation_status || "dry_run"),
-    weightedAvgDelay: numberValue(row.weighted_avg_delay),
-    p90Delay: numberValue(row.p90_delay),
-    onTimeAmountRate: numberValue(row.on_time_amount_rate, 1),
+    score,
+    paymentMoralityScore: score,
+    ratingMode: legacyUnsafe ? "PRE_RATING" : ratingMode,
+    rating: legacyUnsafe ? "N" : rawRating,
+    confidence: legacyUnsafe ? "NONE" : cleanString(row.confidence || "NONE"),
+    automationStatus: legacyUnsafe ? "DRY_RUN_ONLY" : cleanString(row.rating_automation_status || row.automation_status || "DRY_RUN_ONLY"),
+    recommendedAutomationStatus: legacyUnsafe ? "DRY_RUN_ONLY" : cleanString(row.recommended_automation_status || "DRY_RUN_ONLY"),
+    periodFrom: cleanString(row.period_from),
+    periodTo: cleanString(row.period_to),
+    invoiceCount: numberValue(row.invoice_count),
+    paidInvoiceCount: numberValue(row.paid_invoice_count),
+    openInvoiceCount: numberValue(row.open_invoice_count),
+    invoiceAmountTotal: numberValue(row.invoice_amount_total),
+    paidAmountTotal: numberValue(row.paid_amount_total),
+    openAmountTotal: numberValue(row.open_amount_total),
+    overdueAmountTotal: numberValue(row.overdue_amount_total),
+    weightedAvgDelay: row.weighted_avg_delay === null ? null : numberValue(row.weighted_avg_delay),
+    p90Delay: row.p90_delay === null ? null : numberValue(row.p90_delay),
+    onTimeAmountRate: row.on_time_amount_rate === null ? null : numberValue(row.on_time_amount_rate),
     currentOverdueBalance: numberValue(row.current_overdue_balance),
     avgMonthlyBilling: numberValue(row.avg_monthly_billing),
+    currentMaxDaysOverdue: numberValue(row.current_max_days_overdue),
     brokenPromiseRate: numberValue(row.broken_promise_rate),
     partialPaymentRisk: numberValue(row.partial_payment_risk),
     disputeRate: numberValue(row.dispute_rate),
+    unmatchedPaymentRate: numberValue(row.unmatched_payment_rate),
     unmatchedPaymentPenalty: numberValue(row.unmatched_payment_penalty),
+    penalties: parseJson(row.penalties_json, {}),
+    dataQualityFlags: parseJson(row.data_quality_flags_json, []),
+    blockingReasons: [...new Set(blockingReasons)],
+    explanation: legacyUnsafe
+      ? "Starší výpočet se nezobrazuje jako ostrý rating. Je nutný nový ověřitelný přepočet."
+      : cleanString(row.explanation),
+    calculationVersion,
+    sourceFingerprint: cleanString(row.source_fingerprint),
     variables: parseJson(row.variables_json, {}),
     calculatedAt: cleanString(row.calculated_at)
   };
@@ -512,6 +544,26 @@ export async function listReceivableCustomers(env, options = {}) {
         r.partial_payment_risk,
         r.dispute_rate,
         r.unmatched_payment_penalty,
+        r.rating_mode,
+        r.confidence,
+        r.recommended_automation_status,
+        r.period_from,
+        r.period_to,
+        r.invoice_count AS rating_invoice_count,
+        r.paid_invoice_count,
+        r.open_invoice_count,
+        r.invoice_amount_total,
+        r.paid_amount_total,
+        r.open_amount_total,
+        r.overdue_amount_total,
+        r.current_max_days_overdue,
+        r.unmatched_payment_rate,
+        r.penalties_json,
+        r.data_quality_flags_json,
+        r.blocking_reasons_json,
+        r.explanation,
+        r.calculation_version,
+        r.source_fingerprint,
         r.variables_json,
         r.calculated_at,
         d.id AS decision_id,
@@ -723,9 +775,10 @@ async function createReceivableImportPreviewBatch(env, preview, payload = {}, us
     db.prepare(`
         INSERT INTO receivable_import_batches (
           id, source, import_kind, status, filename, row_count, accepted_count,
-          review_count, ignored_count, created_by_user_id, parser_summary_json, raw_payload
+          review_count, ignored_count, created_by_user_id, parser_summary_json, raw_payload,
+          content_sha256, period_from, period_to
         )
-        VALUES (?, ?, ?, 'preview', ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, 'preview', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         batchId,
         preview.source,
@@ -742,7 +795,10 @@ async function createReceivableImportPreviewBatch(env, preview, payload = {}, us
           filename: payload.filename || "",
           inputType: preview.inputType || "",
           persist: true
-        })
+        }),
+        cleanString(summary.contentSha256) || null,
+        cleanString(summary.dateFrom) || null,
+        cleanString(summary.dateTo) || null
       )
   ]);
 
@@ -861,10 +917,19 @@ export async function previewReceivablesInvoiceImport(env, payload = {}, user = 
 }
 
 export async function previewReceivablesBankTextImport(env, payload = {}, user = null) {
-  const parsed = parseKbBankStatementText(payload.text || "", {
-    source: payload.source || "kb_pdf_text",
-    filename: payload.filename || ""
-  });
+  const text = payload.text || "";
+  const csvInput = isKbBankCsvText(text) || cleanString(payload.filename).toLowerCase().endsWith(".csv");
+  const parsed = csvInput
+    ? parseKbBankCsvText(text, {
+      source: payload.source || "kb_csv",
+      filename: payload.filename || "",
+      internalAccounts: payload.internalAccounts || []
+    })
+    : parseKbBankStatementText(text, {
+      source: payload.source || "kb_pdf_text",
+      filename: payload.filename || ""
+    });
+  if (csvInput) parsed.contentSha256 = await kbCsvContentSha256(text);
   const preview = buildBankImportPreview(parsed, payload);
 
   if (payload.persist === true) {

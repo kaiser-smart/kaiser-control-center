@@ -207,7 +207,7 @@ export function calculateInvoicePaymentState(invoice, matches = [], options = {}
   const total = invoiceAmount(invoice);
   const tolerance = options.toleranceAmount ?? receivableToleranceAmount(total);
   const protectedStatus = cleanString(invoice?.status).toLowerCase();
-  if (["disputed", "legal_handoff", "insolvency_hold"].includes(protectedStatus)) {
+  if (["legal_handoff", "insolvency_hold"].includes(protectedStatus)) {
     return {
       status: protectedStatus,
       paidAmount: money(invoice?.paidAmount ?? invoice?.paid_amount),
@@ -253,8 +253,9 @@ export function calculateInvoicePaymentState(invoice, matches = [], options = {}
 
 export function matchReceivablePayments(invoices = [], payments = [], customers = [], options = {}) {
   const reviewThreshold = Number(options.reviewThreshold ?? PAYMENT_MATCH_REVIEW_THRESHOLD);
+  const includePaidInvoices = options.includePaidInvoices === true;
+  const ambiguousVariableSymbols = new Set((options.ambiguousVariableSymbols || []).map(normalizeDigits).filter(Boolean));
   const customersById = new Map(customers.map((customer) => [cleanString(customer.id), customer]));
-  const usedPaymentIds = new Set();
   const candidates = [];
 
   for (const payment of payments) {
@@ -264,7 +265,7 @@ export function matchReceivablePayments(invoices = [], payments = [], customers 
 
     for (const invoice of invoices) {
       const status = cleanString(invoice?.status).toLowerCase();
-      if (["paid", "overpaid", "legal_handoff", "insolvency_hold"].includes(status)) {
+      if (["legal_handoff", "insolvency_hold"].includes(status) || (!includePaidInvoices && ["paid", "overpaid"].includes(status))) {
         continue;
       }
 
@@ -274,38 +275,81 @@ export function matchReceivablePayments(invoices = [], payments = [], customers 
         continue;
       }
 
+      const invoiceVs = normalizeDigits(invoice?.variableSymbol || invoice?.variable_symbol);
+      const ambiguousVs = invoiceVs && ambiguousVariableSymbols.has(invoiceVs);
+      const confidence = ambiguousVs && score.matchMethod === "variable_symbol_exact" ? 0.7 : score.confidence;
       candidates.push({
         invoiceId: cleanString(invoice.id),
         paymentTransactionId: cleanString(payment.id),
+        bookingDate: dayKey(payment?.bookingDate || payment?.booking_date),
         customerId: cleanString(invoice?.customerId || invoice?.customer_id),
         matchedAmount: Math.min(paymentAmount(payment), Math.max(invoiceOpenAmount(invoice), 0) || paymentAmount(payment)),
         paymentAmount: paymentAmount(payment),
         openAmount: invoiceOpenAmount(invoice),
-        confidence: score.confidence,
+        confidence,
         matchMethod: score.matchMethod,
-        reason: score.reason,
-        status: score.confidence >= reviewThreshold ? "auto_matched" : "needs_review"
+        reason: ambiguousVs
+          ? "Variabilní symbol používá více faktur nebo zákazníků a vyžaduje ruční kontrolu."
+          : score.reason,
+        status: confidence >= reviewThreshold ? "auto_matched" : "needs_review"
       });
     }
   }
 
   const matches = [];
   const reviewQueue = [];
-  for (const candidate of candidates.sort(sortCandidates)) {
-    if (candidate.status === "auto_matched") {
-      if (usedPaymentIds.has(candidate.paymentTransactionId)) {
-        continue;
-      }
-      usedPaymentIds.add(candidate.paymentTransactionId);
-      matches.push(candidate);
+  const candidatesByPayment = new Map();
+  for (const candidate of candidates) {
+    const current = candidatesByPayment.get(candidate.paymentTransactionId) || [];
+    current.push(candidate);
+    candidatesByPayment.set(candidate.paymentTransactionId, current);
+  }
+  const allocatedByInvoice = new Map();
+  const orderedPayments = [...candidatesByPayment.entries()].sort((left, right) => {
+    const leftDate = cleanString(left[1][0]?.bookingDate);
+    const rightDate = cleanString(right[1][0]?.bookingDate);
+    return leftDate.localeCompare(rightDate) || left[0].localeCompare(right[0]);
+  });
+
+  for (const [, paymentCandidates] of orderedPayments) {
+    const ranked = paymentCandidates.sort(sortCandidates);
+    const top = ranked[0];
+    const second = ranked[1];
+    const ambiguousTop = Boolean(second && Math.abs(top.confidence - second.confidence) < 0.05);
+    if (top.status !== "auto_matched" || ambiguousTop) {
+      reviewQueue.push(...ranked.map((candidate) => ({
+        ...candidate,
+        status: "needs_review",
+        reason: ambiguousTop
+          ? "Platba má více srovnatelných kandidátů a vyžaduje ruční kontrolu."
+          : candidate.reason
+      })));
       continue;
     }
-    reviewQueue.push(candidate);
+
+    const alreadyAllocated = allocatedByInvoice.get(top.invoiceId) || 0;
+    const remainingOpen = Math.max(0, money(top.openAmount - alreadyAllocated));
+    if (remainingOpen <= 0) {
+      reviewQueue.push({
+        ...top,
+        status: "needs_review",
+        reason: "Faktura je již pokryta dříve přiřazenými platbami."
+      });
+      continue;
+    }
+    const matchedAmount = Math.min(top.paymentAmount, remainingOpen);
+    allocatedByInvoice.set(top.invoiceId, money(alreadyAllocated + matchedAmount));
+    matches.push({
+      ...top,
+      matchedAmount,
+      unallocatedAmount: Math.max(0, money(top.paymentAmount - matchedAmount)),
+      matchConfidence: top.confidence
+    });
   }
 
   return {
     matches,
-    reviewQueue: reviewQueue.filter((candidate) => !usedPaymentIds.has(candidate.paymentTransactionId)),
+    reviewQueue,
     threshold: reviewThreshold
   };
 }
