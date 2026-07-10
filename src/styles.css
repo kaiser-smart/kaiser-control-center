@@ -32911,6 +32911,41 @@ body:has(.ds-plus-page) {
   background: #fbfdff;
 }
 
+.ds-plus-detail-section--chat {
+  border-color: #c7dfc3;
+  background: #f8fcf7;
+}
+
+.ds-plus-chat-modal {
+  width: min(1040px, 100%);
+}
+
+.ds-plus-chat-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.ds-plus-chat-title span {
+  color: #526052;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.ds-plus-chat-title strong {
+  min-height: 28px;
+  border: 1px solid #c7dfc3;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #ffffff;
+  color: #245d36;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
 .ds-plus-detail-section--header dl,
 .ds-plus-facts {
   display: grid;
