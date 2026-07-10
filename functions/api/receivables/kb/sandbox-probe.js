@@ -1,8 +1,9 @@
-import { json } from "../../../_lib/http.js";
+import { json, requireUserPermission } from "../../../_lib/auth.js";
 import { receivablesKbApiSandboxProbe } from "../../../_lib/receivables-kb-api-onboarding.js";
-import { requireUserPermission } from "../../../_lib/session.js";
 
-export async function onRequestGet({ env, request }) {
-  await requireUserPermission(request, env, "receivables", "view");
+export async function onRequestGet({ request, env }) {
+  const { response } = await requireUserPermission(env, request, "receivables", "view");
+  if (response) return response;
+
   return json(receivablesKbApiSandboxProbe(env));
 }
