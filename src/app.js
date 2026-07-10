@@ -26855,23 +26855,87 @@ function neumorphCollectionRoutesRuntime(user) {
   };
 }
 
+function neumorphVehicleTrackingRuntime(user) {
+  if (!user || !canViewModule(user, "vehicle-tracking")) {
+    return {
+      loaded: false,
+      loading: false,
+      error: user ? "Aktualni role nema pristup k modulu Sledovani vozidel." : "",
+      canView: false,
+      status: null,
+      validLocations: [],
+      invalidVehicles: [],
+      vehicleCount: 0,
+      selectedLocationId: "",
+      wimLoaded: false,
+      wimLoading: false,
+      wimError: "",
+      wimApiStatus: "waiting",
+      wimSites: [],
+      wimSummary: null,
+      wimSource: null,
+      wimAlertEvents: [],
+      selectedWimSiteId: "",
+      hasGoogleMapsKey: false,
+      configItems: []
+    };
+  }
+
+  const status = vehicleTrackingLiveState.status || {};
+  const locationGroups = vehicleTrackingTcarsLocationGroups(status);
+
+  return {
+    loaded: vehicleTrackingLiveState.loaded,
+    loading: vehicleTrackingLiveState.loading,
+    error: vehicleTrackingLiveState.error,
+    canView: true,
+    canExport: hasPermission(user, "vehicle-tracking", "export"),
+    status,
+    validLocations: locationGroups.validLocations,
+    invalidLocations: locationGroups.invalidLocations,
+    invalidVehicles: locationGroups.invalidVehicles,
+    vehicleCount: locationGroups.vehicleCount,
+    selectedLocationId: vehicleTrackingTcarsSelectedLocation(locationGroups.validLocations)?._locationId || "",
+    wimLoaded: vehicleTrackingLiveState.wimLoaded,
+    wimLoading: vehicleTrackingLiveState.wimLoading,
+    wimError: vehicleTrackingLiveState.wimError,
+    wimApiStatus: vehicleTrackingLiveState.wimApiStatus,
+    wimSites: vehicleTrackingWimSitesForMap(),
+    wimSummary: vehicleTrackingLiveState.wimSummary,
+    wimSource: vehicleTrackingLiveState.wimSource,
+    wimAlertEvents: vehicleTrackingLiveState.wimAlertEvents,
+    selectedWimSiteId: vehicleTrackingSelectedWimSite(vehicleTrackingWimSitesForMap())?.id || "",
+    hasGoogleMapsKey: Boolean(vehicleTrackingDemoGoogleMapsKey()),
+    configItems: vehicleTrackingTcarsConfigItems(status)
+  };
+}
+
 function neumorphRuntimeContext(user) {
   return {
-    collectionRoutes: neumorphCollectionRoutesRuntime(user)
+    collectionRoutes: neumorphCollectionRoutesRuntime(user),
+    vehicleTracking: neumorphVehicleTrackingRuntime(user)
   };
 }
 
 function ensureNeumorphRuntimeData(path, user) {
-  if (!user || !canViewModule(user, COLLECTION_ROUTES_MODULE_KEY)) {
+  if (!user) {
     return;
   }
 
-  if (
+  const needsCollectionRoutes = canViewModule(user, COLLECTION_ROUTES_MODULE_KEY) && (
     path === "/neumorph" ||
     path === "/neumorph/system-preview" ||
     path.startsWith("/neumorph/trasy-svozu")
-  ) {
+  );
+
+  if (needsCollectionRoutes) {
     void loadCollectionRoutesPilot();
+  }
+
+  if (path.startsWith("/neumorph/sledovani-vozidel") && canViewModule(user, "vehicle-tracking")) {
+    void loadVehicleTrackingStatus();
+    void loadVehicleTrackingWimSites();
+    queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
   }
 }
 
