@@ -1,0 +1,84 @@
+.nm-app {
+  --nm-brand-primary: #75bd25;
+  --nm-brand-primary-dark: #3f7416;
+  --nm-brand-accent: #75bd25;
+
+  --nm-bg-app: #dfe5e8;
+  --nm-bg-app-deep: #d2d9dd;
+  --nm-surface: #edf0f1;
+  --nm-surface-soft: #f4f6f6;
+  --nm-surface-raised: #f2f4f5;
+  --nm-surface-inset: #d8e0e3;
+  --nm-surface-control: #e2e8ea;
+  --nm-surface-sunken: #cad3d8;
+
+  --nm-text-main: #1b2329;
+  --nm-text-strong: #11181d;
+  --nm-text-muted: color-mix(in srgb, var(--nm-text-main) 68%, transparent);
+  --nm-text-muted-strong: color-mix(in srgb, var(--nm-text-main) 78%, transparent);
+  --nm-text-inverse: #ffffff;
+
+  --nm-border-soft: rgba(78, 92, 100, 0.24);
+  --nm-border-strong: color-mix(in srgb, var(--nm-text-main) 28%, var(--nm-border-soft));
+  --nm-highlight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+  --nm-shadow-panel: 8px 10px 24px rgba(78, 92, 100, 0.14), -7px -7px 18px rgba(255, 255, 255, 0.78);
+  --nm-shadow-card: 5px 7px 16px rgba(78, 92, 100, 0.095), -4px -4px 12px rgba(255, 255, 255, 0.68);
+  --nm-shadow-control: 0 1px 2px rgba(78, 92, 100, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.64);
+  --nm-shadow-control-hover: 0 2px 6px rgba(78, 92, 100, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --nm-shadow-control-active: inset 3px 3px 7px rgba(78, 92, 100, 0.11), inset -3px -3px 7px rgba(255, 255, 255, 0.58);
+  --nm-shadow-inset-control: inset 4px 4px 10px rgba(78, 92, 100, 0.12), inset -4px -4px 10px rgba(255, 255, 255, 0.62);
+
+  --nm-radius-sm: 8px;
+  --nm-radius-md: 12px;
+  --nm-radius-lg: 16px;
+  --nm-radius-xl: 22px;
+  --nm-radius-pill: 999px;
+
+  --nm-space-1: 4px;
+  --nm-space-2: 6px;
+  --nm-space-3: 10px;
+  --nm-space-4: 14px;
+  --nm-space-5: 18px;
+  --nm-space-6: 24px;
+  --nm-space-7: 32px;
+  --nm-space-8: 42px;
+
+  --nm-icon-sm: 18px;
+  --nm-icon-md: 26px;
+  --nm-icon-lg: 38px;
+  --nm-icon-xl: 56px;
+  --nm-icon-holder-sm: 42px;
+  --nm-icon-holder-md: 52px;
+  --nm-icon-holder-lg: 64px;
+
+  --nm-control-height-sm: 34px;
+  --nm-control-height-md: 42px;
+  --nm-control-height-lg: 50px;
+  --nm-chip-height: 30px;
+  --nm-chip-padding-x: 12px;
+
+  --nm-focus-ring: color-mix(in srgb, var(--nm-brand-accent) 32%, var(--nm-border-soft));
+  --nm-transition-fast: 140ms ease;
+  --nm-transition-base: 180ms ease;
+
+  --nm-state-success-bg: color-mix(in srgb, var(--nm-brand-accent) 13%, transparent);
+  --nm-state-success-border: color-mix(in srgb, var(--nm-brand-accent) 38%, var(--nm-border-soft));
+  --nm-state-success-text: var(--nm-text-main);
+
+  --nm-state-warning-bg: color-mix(in srgb, #c98121 12%, transparent);
+  --nm-state-warning-border: color-mix(in srgb, #c98121 34%, var(--nm-border-soft));
+  --nm-state-warning-text: var(--nm-text-main);
+
+  --nm-state-danger-bg: color-mix(in srgb, #c9583a 11%, transparent);
+  --nm-state-danger-border: color-mix(in srgb, #c9583a 34%, var(--nm-border-soft));
+  --nm-state-danger-text: var(--nm-text-main);
+
+  --nm-state-info-bg: color-mix(in srgb, #637c8a 12%, transparent);
+  --nm-state-info-border: color-mix(in srgb, #637c8a 32%, var(--nm-border-soft));
+  --nm-state-info-text: var(--nm-text-main);
+
+  --nm-state-neutral-bg: color-mix(in srgb, var(--nm-text-main) 8%, transparent);
+  --nm-state-neutral-border: color-mix(in srgb, var(--nm-text-main) 22%, var(--nm-border-soft));
+  --nm-state-neutral-text: var(--nm-text-muted);
+}

@@ -1,3 +1,8 @@
+@import url("./styles/neumorph/tokens.css");
+@import url("./styles/neumorph/themes.css");
+@import url("./styles/neumorph/foundation.css");
+@import url("./styles/neumorph/components.css");
+
 :root {
   color-scheme: light;
   --kaiser-green: #75bd25;

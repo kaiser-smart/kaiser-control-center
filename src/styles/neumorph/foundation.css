@@ -1,0 +1,113 @@
+.nm-app,
+.nm-app *,
+.nm-app *::before,
+.nm-app *::after {
+  box-sizing: border-box;
+}
+
+.nm-app {
+  min-height: 100%;
+  margin: 0;
+  background: var(--nm-bg-app);
+  color: var(--nm-text-main);
+  accent-color: var(--nm-brand-accent);
+  font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+  text-rendering: optimizeLegibility;
+}
+
+.nm-app ::selection {
+  background: color-mix(in srgb, var(--nm-brand-accent) 28%, transparent);
+  color: var(--nm-text-strong);
+}
+
+.nm-app :where(h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd) {
+  margin: 0;
+}
+
+.nm-app :where(h1, h2, h3, h4, h5, h6) {
+  color: var(--nm-text-strong);
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.nm-app h1 {
+  font-size: clamp(2rem, 4vw, 3.6rem);
+}
+
+.nm-app h2 {
+  font-size: clamp(1.45rem, 2.4vw, 2.15rem);
+}
+
+.nm-app h3 {
+  font-size: clamp(1.12rem, 1.5vw, 1.35rem);
+}
+
+.nm-app :where(p, li, dd) {
+  color: var(--nm-text-muted);
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.nm-app :where(a) {
+  color: inherit;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.2em;
+}
+
+.nm-app :where(button, input, select, textarea) {
+  font: inherit;
+  letter-spacing: 0;
+}
+
+.nm-app :where(button) {
+  cursor: pointer;
+}
+
+.nm-app :where(button, input, select, textarea, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--nm-focus-ring);
+  outline-offset: 2px;
+}
+
+.nm-app :where(svg, img) {
+  display: block;
+  max-width: 100%;
+}
+
+.nm-app .nm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.nm-app .nm-icon {
+  display: inline-flex;
+  width: var(--nm-icon-md);
+  height: var(--nm-icon-md);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.nm-app .nm-icon svg,
+.nm-app .nm-icon img {
+  width: 100%;
+  height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nm-app *,
+  .nm-app *::before,
+  .nm-app *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
