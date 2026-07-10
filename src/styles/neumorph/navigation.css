@@ -152,6 +152,11 @@
   color: color-mix(in srgb, var(--nm-text-muted-strong) 80%, transparent);
 }
 
+.nm-app .nm-sidebar__icon .module-icon__svg {
+  width: 100%;
+  height: 100%;
+}
+
 .nm-app .nm-sidebar__item:hover .nm-sidebar__icon,
 .nm-app .nm-sidebar__item:focus-visible .nm-sidebar__icon,
 .nm-app .nm-sidebar__item--active .nm-sidebar__icon {
@@ -199,6 +204,11 @@
   border-color: var(--nm-active-tray-border);
   background: var(--nm-active-tray-bg);
   box-shadow: var(--nm-active-tray-shadow);
+}
+
+.nm-app .nm-mobile-nav__item .module-icon__svg {
+  width: var(--nm-icon-sm);
+  height: var(--nm-icon-sm);
 }
 
 .nm-app .nm-mobile-more[hidden] {
@@ -285,4 +295,9 @@
 .nm-app .nm-mobile-more__icon {
   display: inline-flex;
   color: var(--nm-brand-accent);
+}
+
+.nm-app .nm-mobile-more__icon .module-icon__svg {
+  width: 30px;
+  height: 30px;
 }

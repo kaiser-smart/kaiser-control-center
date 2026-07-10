@@ -3,6 +3,7 @@ import { createDriverReportsViewModel } from "../adapters/driverReportsAdapter.j
 import {
   escapeHtml,
   renderInlineIcon,
+  renderModuleAsset,
   renderNeumorphModuleHeader,
   renderNeumorphState,
   renderNeumorphStatusStrip
@@ -72,12 +73,8 @@ function renderToolbar(viewModel) {
   `;
 }
 
-function reportIcon(item) {
-  const text = item.licensePlate === "SPZ neuvedena"
-    ? item.reportId.slice(0, 2)
-    : item.licensePlate.replace(/\s+/g, "").slice(0, 2);
-
-  return `<span class="nm-driver-report-icon" aria-hidden="true">${escapeHtml(text || "ND")}</span>`;
+function reportIcon() {
+  return `<span class="nm-driver-report-icon" aria-hidden="true">${renderModuleAsset(driverReportsModule)}</span>`;
 }
 
 function renderListItem(item) {

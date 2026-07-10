@@ -4,7 +4,9 @@
 }
 
 .nm-app .nm-shell {
+  width: min(100%, 1780px);
   min-height: 100dvh;
+  margin: 0 auto;
   padding: var(--nm-space-5);
   color: var(--nm-text-main);
 }
@@ -270,7 +272,9 @@
 }
 
 .nm-app .nm-shell__content {
+  display: grid;
   min-width: 0;
+  gap: var(--nm-space-5);
 }
 
 .nm-app .nm-system-preview,

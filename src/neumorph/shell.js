@@ -48,6 +48,14 @@ function icon(name) {
   return `<svg viewBox="0 0 24 24" class="nm-icon" aria-hidden="true" focusable="false">${paths[name] || paths.dashboard}</svg>`;
 }
 
+function moduleIcon(item) {
+  if (typeof item?.module?.icon === "function") {
+    return item.module.icon();
+  }
+
+  return icon(item?.icon || "module");
+}
+
 function readSidebarCompact() {
   try {
     return globalThis.localStorage?.getItem(NEUMORPH_SIDEBAR_STORAGE_KEY) === "compact";
@@ -83,7 +91,7 @@ function renderNavItem(item, routeHref) {
     item.planned ? "nm-sidebar__item--planned" : ""
   ].filter(Boolean).join(" ");
   const content = `
-    <span class="nm-sidebar__icon" aria-hidden="true">${icon(item.icon)}</span>
+    <span class="nm-sidebar__icon" aria-hidden="true">${moduleIcon(item)}</span>
     <span class="nm-sidebar__text">${escapeHtml(item.label)}</span>
     ${item.planned ? '<span class="nm-sidebar__badge">plan</span>' : ""}
   `;
@@ -141,7 +149,7 @@ function renderMobileNav(routeHref, user, currentPath) {
           item.active ? "nm-mobile-nav__item--active" : "",
           item.planned ? "nm-mobile-nav__item--planned" : ""
         ].filter(Boolean).join(" ");
-        const content = `${icon(item.icon)}<span>${escapeHtml(item.label)}</span>`;
+        const content = `${moduleIcon(item)}<span>${escapeHtml(item.label)}</span>`;
 
         if (item.planned || !item.href) {
           return `<span class="${itemClass}" aria-disabled="true">${content}</span>`;
@@ -188,7 +196,7 @@ function renderMobileMorePanel(routeHref, user, currentPath) {
                   item.active ? "nm-mobile-more__item--active" : "",
                   item.planned ? "nm-mobile-more__item--planned" : ""
                 ].filter(Boolean).join(" ");
-                const content = `<span class="nm-mobile-more__icon" aria-hidden="true">${icon(item.icon)}</span><span>${escapeHtml(item.label)}</span>`;
+                const content = `<span class="nm-mobile-more__icon" aria-hidden="true">${moduleIcon(item)}</span><span>${escapeHtml(item.label)}</span>`;
 
                 if (item.planned || !item.href) {
                   return `<span class="${itemClass}" aria-disabled="true">${content}</span>`;

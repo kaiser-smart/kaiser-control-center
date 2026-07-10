@@ -98,7 +98,13 @@
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2;
+  stroke-width: 2.35;
+}
+
+.nm-app .module-icon__svg {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .nm-app .nm-icon svg,

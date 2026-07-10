@@ -4,6 +4,7 @@ import { createFleetViewModel } from "../adapters/fleetAdapter.js";
 import {
   escapeHtml,
   renderInlineIcon,
+  renderModuleAsset,
   renderNeumorphModuleHeader,
   renderNeumorphState,
   renderNeumorphStatusStrip
@@ -136,11 +137,8 @@ function renderToolbar(viewModel) {
   `;
 }
 
-function renderVehicleIcon(vehicle) {
-  const initials = vehicle.licensePlate === "SPZ neuvedena"
-    ? vehicle.name.slice(0, 2)
-    : vehicle.licensePlate.replace(/\s+/g, "").slice(0, 2);
-  return `<span class="nm-fleet-vehicle-icon" aria-hidden="true">${escapeHtml(initials || "VP")}</span>`;
+function renderVehicleIcon() {
+  return `<span class="nm-fleet-vehicle-icon" aria-hidden="true">${renderModuleAsset(fleetModule)}</span>`;
 }
 
 function renderVehicleCard(vehicle) {

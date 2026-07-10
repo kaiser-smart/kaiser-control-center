@@ -327,9 +327,11 @@
   background: var(--nm-surface-raised);
   color: var(--nm-brand-accent);
   box-shadow: var(--nm-shadow-control-active);
-  font-weight: 950;
-  letter-spacing: 0;
-  text-transform: uppercase;
+}
+
+.nm-app .nm-driver-report-icon .module-icon__svg {
+  width: calc(var(--nm-icon-holder-lg) * 0.78);
+  height: calc(var(--nm-icon-holder-lg) * 0.78);
 }
 
 .nm-app .nm-driver-report-item__part {
@@ -355,7 +357,11 @@
   width: var(--nm-icon-holder-xl);
   height: var(--nm-icon-holder-xl);
   border-radius: var(--nm-radius-xl);
-  font-size: 1.2rem;
+}
+
+.nm-app .nm-driver-report-detail__hero .nm-driver-report-icon .module-icon__svg {
+  width: calc(var(--nm-icon-holder-xl) * 0.78);
+  height: calc(var(--nm-icon-holder-xl) * 0.78);
 }
 
 .nm-app .nm-driver-report-detail__hero h2 {
