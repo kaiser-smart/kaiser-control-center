@@ -51,7 +51,8 @@ assert.match(plan("připomeň zítra").dueDate, /^\d{4}-\d{2}-\d{2}$/);
 const missingColleague = plan("předej kolegovi");
 assert.equal(missingColleague.outcome, "needs_input");
 assert.equal(missingColleague.pendingIntent, "assign_to_user");
-assert.equal(missingColleague.assistantText, "Komu mám zprávu předat?");
+assert.equal(missingColleague.assistantText, "Chybí adresát. Komu mám zprávu interně předat?");
+assert.doesNotMatch(missingColleague.assistantText, /^Hotovo\./);
 
 const suppliedColleague = plan("Jarce", {}, {
   pendingIntent: missingColleague.pendingIntent,
@@ -85,6 +86,8 @@ const missingEmail = plan("pošli email");
 assert.equal(missingEmail.outcome, "needs_input");
 assert.equal(missingEmail.pendingIntent, "send_email");
 assert.equal(missingEmail.changesMessage, false);
+assert.equal(missingEmail.assistantText, "Chybí adresát. Komu to mám předat nebo přeposlat?");
+assert.doesNotMatch(missingEmail.assistantText, /^Hotovo\./);
 
 const suppliedEmail = plan("radim@example.cz", {}, {
   pendingIntent: missingEmail.pendingIntent,

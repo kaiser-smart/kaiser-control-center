@@ -2442,7 +2442,7 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
   const emailIntent = normalized.includes("email") || normalized.includes("e-mail") || normalized.includes("posli") || normalized.includes("odesli");
   if (emailIntent) {
     const recipient = emailRecipientFromInstruction(userInstruction, normalized);
-    if (!recipient.email) return needsInput("send_email", "recipientEmail", "Na jaký e-mail mám zprávu odeslat?", "odeslání e-mailu");
+    if (!recipient.email) return needsInput("send_email", "recipientEmail", "Chybí adresát. Komu to mám předat nebo přeposlat?", "odeslání e-mailu");
     return replyDraft({ recipientEmail: recipient.email, recipientLabel: recipient.label });
   }
   if (normalized.includes("potrebuje pokyn") || (normalized.includes("nechat") && normalized.includes("nevyrizene"))) return make({
@@ -2586,7 +2586,7 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
   }
   if (normalized.includes("predat") || normalized.includes("predej") || normalized.includes("prirad")) {
     const recipient = dataBoxPlusInternalRecipient(userInstruction);
-    if (!recipient) return needsInput("assign_to_user", "assignedTo", "Komu mám zprávu předat?", "interní předání kolegovi");
+    if (!recipient) return needsInput("assign_to_user", "assignedTo", "Chybí adresát. Komu mám zprávu interně předat?", "interní předání kolegovi");
     return make({
       intent: "assign_to_user",
       actionSummary: `interně předat zprávu osobě ${recipient}`,

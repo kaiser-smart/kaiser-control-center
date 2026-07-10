@@ -35,6 +35,18 @@ function humanAssistantText(event, payload, instruction) {
   }
   const raw = cleanText(payload.assistantText || event?.assistantText || event?.auditNote || payload.performedAction);
   const performed = raw.match(/Systém provedl:\s*(.+?)(?:\.\s*Nový stav:|$)/i)?.[1];
+  const missingWords = simpleChatWords(performed || raw);
+  const missingRecipient = missingWords.includes("chybi adresat") || missingWords.includes("adresat chybi");
+  if (missingRecipient) {
+    return "Chybí adresát. Komu to mám předat nebo přeposlat?";
+  }
+  if (outcome === "needs_input") {
+    return raw.replace(/^Hotovo\.\s*/i, "") || "Potřebuji doplnit chybějící údaj.";
+  }
+  if (missingWords.includes("chybi")) {
+    const missingDetail = cleanText(performed || raw).replace(/[.\s]+$/, "");
+    return `${missingDetail}. Potřebuji doplnit chybějící údaj.`;
+  }
   if (performed) return `Hotovo. ${performed.replace(/[.\s]+$/, "")}.`;
   if (/^(intent|result|no_action|changedstate)\b/i.test(raw)) return SIMPLE_CHAT_HELP;
   return raw || SIMPLE_CHAT_HELP;
