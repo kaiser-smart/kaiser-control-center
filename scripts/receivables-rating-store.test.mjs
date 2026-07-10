@@ -7,10 +7,15 @@ import {
   recomputeReceivablePaymentRating
 } from "../functions/_lib/receivables-rating-store.js";
 import { getReceivableCustomerDetail } from "../functions/_lib/receivables-store.js";
+import { decodeReceivableCustomerId } from "../functions/api/receivables/customers/[customerId].js";
 import {
   syncReceivablesBankLedger,
   syncReceivablesVistosLedger
 } from "../functions/_lib/receivables-ledger-sync.js";
+
+assert.equal(decodeReceivableCustomerId("receivable-customer%3A80492"), "receivable-customer:80492");
+assert.equal(decodeReceivableCustomerId("receivable-customer:80492"), "receivable-customer:80492");
+assert.equal(decodeReceivableCustomerId("malformed%id"), "malformed%id");
 
 class D1Statement {
   constructor(database, sql, values = []) {
