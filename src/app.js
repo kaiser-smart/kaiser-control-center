@@ -11,6 +11,12 @@ import { ModuleFeedbackBox } from "./components/ModuleFeedbackBox.js";
 import { AppearanceSettingsBox } from "./components/AppearanceSettingsBox.js";
 import { SarlotaStatusPanel } from "./components/SarlotaStatusPanel.js";
 import { QuickAbsenceIcon, ReportsIcon } from "./components/icons/index.js";
+import {
+  handleNeumorphAction,
+  isNeumorphRoute,
+  renderNeumorphRoute,
+  syncNeumorphRouteTheme
+} from "./neumorph/routes.js";
 import { useSpeechRecognition } from "./useSpeechRecognition.js";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard.js";
 import { AI_ASSISTANTS, DEFAULT_AI_ASSISTANT_ID, assistantById } from "./data/aiAssistants.js";
@@ -1295,6 +1301,10 @@ function normalizePath(pathname) {
 
 function isVehicleTrackingSoftMetalPreviewPath(pathname = window.location.pathname) {
   return normalizePath(pathname) === VEHICLE_TRACKING_SOFT_METAL_PREVIEW_ROUTE;
+}
+
+function isNeumorphMigrationPath(pathname = window.location.pathname) {
+  return isNeumorphRoute(normalizePath(pathname));
 }
 
 function normalizeVehicleTrackingPreviewTheme(value) {
@@ -26771,6 +26781,16 @@ function renderPublicVehicleTrackingPreview() {
   document.title = `Veřejný soft-metal náhled sledování vozidel | ${APP_NAME}`;
 }
 
+function renderNeumorphMigrationPreview() {
+  const user = authState.user ? currentUser() : null;
+  app.innerHTML = renderNeumorphRoute({
+    routeHref,
+    user
+  });
+  syncNeumorphRouteTheme(app.querySelector(".nm-app"));
+  document.title = `Neumorph migrace | ${APP_NAME}`;
+}
+
 function renderAuthenticatedApp(user) {
   const path = normalizePath(window.location.pathname);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
@@ -26974,6 +26994,11 @@ function renderAuthenticatedApp(user) {
 }
 
 function renderApp() {
+  if (isNeumorphMigrationPath()) {
+    renderNeumorphMigrationPreview();
+    return;
+  }
+
   if (isVehicleTrackingSoftMetalPreviewPath()) {
     renderPublicVehicleTrackingPreview();
     return;
@@ -27005,6 +27030,7 @@ function renderApp() {
 function render() {
   try {
     const publicSoftMetalPreview = isVehicleTrackingSoftMetalPreviewPath();
+    const neumorphPreview = isNeumorphMigrationPath();
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
     syncVehicleTrackingPreviewThemeRoot(publicSoftMetalPreview);
@@ -27012,7 +27038,7 @@ function render() {
     if (publicSoftMetalPreview) {
       applyVehicleTrackingPreviewTheme();
     }
-    if (!publicSoftMetalPreview) {
+    if (!publicSoftMetalPreview && !neumorphPreview) {
       app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
       app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
       syncAssistantPromoVideo();
@@ -30064,6 +30090,14 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     setVehicleTrackingPreviewTheme(trackingPreviewTheme.dataset.trackingPreviewTheme || VEHICLE_TRACKING_PREVIEW_THEME_DEFAULT);
     return;
+  }
+
+  const neumorphAction = event.target.closest("[data-nm-action]");
+  if (neumorphAction && isNeumorphMigrationPath()) {
+    event.preventDefault();
+    if (handleNeumorphAction(neumorphAction)) {
+      return;
+    }
   }
 
   const trackingSourceMode = event.target.closest("[data-tracking-source-mode]");

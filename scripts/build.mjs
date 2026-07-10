@@ -68,6 +68,7 @@ const routes = new Set([
   "/dovolena-nemoc/nastaveni",
   "/design/neumorphic",
   "/design/theme-system",
+  "/neumorph",
   "/sledovani-vozidel/soft-metal-preview",
   ...modules.map((moduleItem) => moduleItem.route),
   ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)
@@ -96,6 +97,7 @@ await writeFile(path.join(dist, "_redirects"), [
   "/sledovani-vozidel/* /index.html 200",
   "/datova-schranka /datova-schranka/index.html 200",
   "/datova-schranka/* /datova-schranka/index.html 200",
+  "/neumorph* /index.html 200",
   "/design/neumorphic* /index.html 200",
   "/design/theme-system* /index.html 200"
 ].join("\n") + "\n");
