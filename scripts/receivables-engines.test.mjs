@@ -28,6 +28,12 @@ import {
 import { parseKbBankStatementText } from "../functions/_lib/receivables-kb-bank-parser.js";
 import { parseKbBankCsvText } from "../functions/_lib/receivables-kb-csv-parser.js";
 import {
+  buildIsirCuzkIcoRequest,
+  checkIsirCuzkByIco,
+  normalizeReceivableIco,
+  parseIsirCuzkResponse
+} from "../functions/_lib/receivables-insolvency-isir.js";
+import {
   calculateInvoicePaymentState,
   matchReceivablePayments,
   receivableToleranceAmount
@@ -74,6 +80,46 @@ function testKbJwt(serviceName, context = "/sandbox/test") {
 
 assert.equal(receivableToleranceAmount(1000), 1);
 assert.equal(receivableToleranceAmount(250000), 250);
+
+assert.equal(normalizeReceivableIco("26274906"), "26274906");
+assert.equal(normalizeReceivableIco("1234567"), "01234567");
+assert.equal(normalizeReceivableIco("bez ico"), "");
+assert.match(buildIsirCuzkIcoRequest("26274906"), /<ic>26274906<\/ic>/);
+assert.match(buildIsirCuzkIcoRequest("26274906"), /<filtrAktualniRizeni>T<\/filtrAktualniRizeni>/);
+assert.match(buildIsirCuzkIcoRequest("26274906"), /<maxRelevanceVysledku>2<\/maxRelevanceVysledku>/);
+
+{
+  const clear = parseIsirCuzkResponse(`
+    <soap:Envelope><soap:Body><getIsirWsCuzkDataResponse><stav>
+      <kodChyby>WS2</kodChyby><textChyby>Prazdny vysledek</textChyby>
+    </stav></getIsirWsCuzkDataResponse></soap:Body></soap:Envelope>
+  `, "26274906");
+  assert.equal(clear.status, "clear");
+  assert.equal(clear.found, false);
+}
+
+{
+  const found = parseIsirCuzkResponse(`
+    <soap:Envelope><soap:Body><ns2:getIsirWsCuzkDataResponse>
+      <data><ic>26274906</ic><cisloSenatu>40</cisloSenatu><druhVec>INS</druhVec><bcVec>123</bcVec><rocnik>2026</rocnik><druhStavKonkursu>UPADEK</druhStavKonkursu><urlDetailRizeni>https://isir.justice.cz/detail</urlDetailRizeni><dalsiDluznikVRizeni>F</dalsiDluznikVRizeni></data>
+      <data><ic>11111111</ic><cisloSenatu>40</cisloSenatu><druhVec>INS</druhVec><bcVec>124</bcVec><rocnik>2026</rocnik><dalsiDluznikVRizeni>T</dalsiDluznikVRizeni></data>
+      <stav><pocetVysledku>2</pocetVysledku><relevanceVysledku>2</relevanceVysledku><casSynchronizace>2026-07-10T08:00:00</casSynchronizace></stav>
+    </ns2:getIsirWsCuzkDataResponse></soap:Body></soap:Envelope>
+  `, "26274906");
+  assert.equal(found.status, "found");
+  assert.equal(found.found, true);
+  assert.equal(found.proceedings.length, 1);
+  assert.equal(found.proceedings[0].reference, "40 INS 123/2026");
+  assert.equal(found.sourceSynchronizedAt, "2026-07-10T08:00:00");
+}
+
+{
+  const unavailable = await checkIsirCuzkByIco("26274906", {
+    fetchImpl: async () => new Response("temporary failure", { status: 503 })
+  });
+  assert.equal(unavailable.status, "unavailable");
+  assert.equal(unavailable.found, null);
+}
 
 {
   const status = receivablesKbApiOnboardingStatus({

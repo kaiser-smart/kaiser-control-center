@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.490"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.491"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: ISIR preview a fronta plateb",
+    text: "Detail zákazníka automaticky provede read-only kontrolu probíhajícího insolvenčního řízení podle IČO přes veřejnou službu Ministerstva spravedlnosti. Dashboard zároveň ukazuje úplný rozpad nespárovaných plateb; nic se nezapisuje, rating se nemění a automatizace zůstává blokovaná."
+  },
   {
     title: "Datové schránky Plus: GPT chat s potvrzením",
     text: "Každá datová zpráva má vlastní GPT chat s cloudovou historií. Autopilot připraví přesnou akci, vyžádá jednorázové potvrzení a teprve potom může změnit stav, odeslat potvrzený e-mail nebo provozní SMS. Učí se jen z úspěšně potvrzených výsledků."
@@ -294,7 +298,7 @@ export const versionNews = [
   },
   {
     title: "Pohledávkový kompas AI: dry-run základ",
-    text: "Modul Pohledávky má D1 schéma, chráněné API, payment matching, rating platební morálky, KB text parser, náhled Autopilota, settings a detail zákazníka. Ostré odesílání, cron, Vistos sync, KB API a insolvenční live kontrola zůstávají vypnuté."
+    text: "Modul Pohledávky má D1 schéma, chráněné API, payment matching, rating platební morálky, KB text parser, náhled Autopilota, settings a detail zákazníka. Ostré odesílání, cron, KB API a dávkové ukládání insolvenčních výsledků zůstávají vypnuté."
   },
   {
     title: "Trasy svozu: jemné zvuky řidičského tabletu",

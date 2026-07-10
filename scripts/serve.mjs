@@ -3810,10 +3810,60 @@ async function handleApi(request, response) {
       sourceStatus: {
         vistos: "lokální fixture",
         bank: "read-only CSV",
-        insolvency: "nenalezeno",
+        insolvency: "ISIR read-only preview",
         outbound: "vypnuto"
       },
+      unmatchedPaymentReview: {
+        totalCount: 1249,
+        totalAmount: 131125802.41,
+        duplicateCandidateCount: 22,
+        duplicateCandidateAmount: 5161512.88,
+        safeAutoMatchCount: 0,
+        blocksAutomation: true,
+        buckets: [
+          { code: "missing_variable_symbol", paymentCount: 595, amountTotal: 88549055.15 },
+          { code: "variable_symbol_without_invoice", paymentCount: 342, amountTotal: 32699610.54 },
+          { code: "exact_variable_symbol_over_invoice_total", paymentCount: 302, amountTotal: 9814636.42 },
+          { code: "payment_before_invoice", paymentCount: 10, amountTotal: 62500.3 }
+        ]
+      },
       customers: [{ ...fixture.customer, package: fixture.package, rating: fixture.rating }]
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/receivables/insolvency/preview" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const fixture = mockReceivablesRatingFixture();
+    if (url.searchParams.get("customerId") !== fixture.customer.id) {
+      sendJson(response, 404, { error: "Zákazník nebyl nalezen." });
+      return true;
+    }
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      mode: "read_only_preview",
+      customer: fixture.customer,
+      result: {
+        status: "clear",
+        found: false,
+        sourceStatus: "ready",
+        reason: "Pro zadané IČO nebylo nalezeno probíhající insolvenční řízení.",
+        sourceSynchronizedAt: "2026-07-10T08:00:00.000Z",
+        proceedings: [],
+        checkedAt: new Date().toISOString()
+      },
+      source: { id: "ISIR_CUZK_WS2", name: "Ministerstvo spravedlnosti ČR" },
+      safety: {
+        readOnly: true,
+        writesD1: false,
+        changesRating: false,
+        startsAutomation: false,
+        sendsCustomerCommunication: false
+      }
     });
     return true;
   }

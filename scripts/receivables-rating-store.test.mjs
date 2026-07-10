@@ -267,5 +267,67 @@ sqlite.prepare(`
   assert.equal(sqlite.prepare("SELECT content_hash FROM receivable_payment_transactions").get().content_hash, "sha256-test");
 }
 
+sqlite.prepare(`
+  INSERT INTO receivable_invoices (
+    id, invoice_number, variable_symbol, customer_id, issue_date, due_date,
+    total_amount, paid_amount, open_amount, status, customer_link_confidence
+  ) VALUES (?, ?, ?, 'customer-rating', ?, ?, 100, 0, 100, 'unpaid', 'HIGH')
+`).run("invoice-review-over", "9910000001", "9910000001", "2026-06-01", "2026-06-15");
+sqlite.prepare(`
+  INSERT INTO receivable_invoices (
+    id, invoice_number, variable_symbol, customer_id, issue_date, due_date,
+    total_amount, paid_amount, open_amount, status, customer_link_confidence
+  ) VALUES (?, ?, ?, 'customer-rating', ?, ?, 100, 0, 100, 'unpaid', 'HIGH')
+`).run("invoice-review-before", "9910000002", "9910000002", "2026-06-01", "2026-06-15");
+
+const insertReviewPayment = sqlite.prepare(`
+  INSERT INTO receivable_payment_transactions (
+    id, source, booking_date, amount, variable_symbol, data_quality_flags_json
+  ) VALUES (?, 'kb_csv', ?, ?, ?, ?)
+`);
+insertReviewPayment.run(
+  "payment-review-no-vs",
+  "2026-06-20",
+  50,
+  "",
+  JSON.stringify(["PAYMENT_WITHOUT_VS", "UNMATCHED_PAYMENT", "DUPLICATE_PAYMENT_CANDIDATE"])
+);
+insertReviewPayment.run(
+  "payment-review-unknown-vs",
+  "2026-06-20",
+  60,
+  "9999999999",
+  JSON.stringify(["UNMATCHED_PAYMENT"])
+);
+insertReviewPayment.run(
+  "payment-review-over",
+  "2026-06-20",
+  150,
+  "9910000001",
+  JSON.stringify(["UNMATCHED_PAYMENT", "PAYMENT_MATCH_LOW_CONFIDENCE"])
+);
+insertReviewPayment.run(
+  "payment-review-before",
+  "2026-05-20",
+  100,
+  "9910000002",
+  JSON.stringify(["UNMATCHED_PAYMENT", "PAYMENT_MATCH_LOW_CONFIDENCE"])
+);
+
+{
+  const dashboard = await getReceivablesDashboard(env, { today: "2026-07-10" });
+  const buckets = new Map(dashboard.unmatchedPaymentReview.buckets.map((bucket) => [bucket.code, bucket]));
+  assert.equal(dashboard.sourceStatus.insolvency, "isir_read_only_preview");
+  assert.equal(dashboard.unmatchedPaymentReview.totalCount, 4);
+  assert.equal(dashboard.unmatchedPaymentReview.totalAmount, 360);
+  assert.equal(dashboard.unmatchedPaymentReview.duplicateCandidateCount, 1);
+  assert.equal(dashboard.unmatchedPaymentReview.safeAutoMatchCount, 0);
+  assert.equal(dashboard.unmatchedPaymentReview.blocksAutomation, true);
+  assert.equal(buckets.get("missing_variable_symbol").paymentCount, 1);
+  assert.equal(buckets.get("variable_symbol_without_invoice").paymentCount, 1);
+  assert.equal(buckets.get("exact_variable_symbol_over_invoice_total").paymentCount, 1);
+  assert.equal(buckets.get("payment_before_invoice").paymentCount, 1);
+}
+
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM receivable_communication_events").get().count, 0);
 console.log("receivables rating store tests passed");

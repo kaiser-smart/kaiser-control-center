@@ -944,6 +944,9 @@ const receivablesState = {
   customerDetail: null,
   customerLoading: false,
   customerError: "",
+  insolvencyPreview: null,
+  insolvencyPreviewLoading: false,
+  insolvencyPreviewError: "",
   selectedCaseId: "",
   caseDetail: null,
   caseLoading: false,
@@ -29416,6 +29419,17 @@ function receivablesRatingMetric(value, suffix = "") {
   return `${formatted}${suffix}`;
 }
 
+function receivablesSafeIsirUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "https:" && ["isir.justice.cz", "eisir.justice.cz"].includes(url.hostname)
+      ? url.href
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 function receivablesDisplayedRatingMetrics(rating = {}, pack = {}) {
   const finalRating = rating.ratingMode === "FINAL_RATING";
   return {
@@ -29517,6 +29531,52 @@ function receivablesSourceStatus() {
   `;
 }
 
+function receivablesUnmatchedPaymentReview() {
+  const review = receivablesState.dashboard?.unmatchedPaymentReview || {};
+  const labels = {
+    missing_variable_symbol: "Chybí variabilní symbol",
+    variable_symbol_without_invoice: "VS nemá fakturu v ledgeru",
+    multiple_invoice_candidates: "VS odpovídá více fakturám",
+    exact_variable_symbol_over_invoice_total: "Přesný VS, součet převyšuje fakturu",
+    exact_variable_symbol_requires_review: "Přesný VS vyžaduje další kontrolu",
+    payment_before_invoice: "Platba je před vystavením faktury"
+  };
+  const buckets = Array.isArray(review.buckets) ? review.buckets : [];
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-unmatched-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Kontrolní fronta</p>
+          <h2 id="receivables-unmatched-title">Nespárované bankovní platby</h2>
+          <p>Nejasné položky zůstávají bez spárování. Dokud fronta není vyřešená, ostrá zákaznická automatizace zůstává blokovaná.</p>
+        </div>
+        ${receivablesPill(`${review.totalCount || 0} ke kontrole`, review.totalCount ? "warning" : "ready")}
+      </div>
+      <div class="receivables-detail-grid">
+        <article><span>Počet</span><strong>${escapeHtml(review.totalCount || 0)}</strong></article>
+        <article><span>Částka</span><strong>${escapeHtml(formatReceivableMoney(review.totalAmount))}</strong></article>
+        <article><span>Kandidáti duplicity</span><strong>${escapeHtml(review.duplicateCandidateCount || 0)}</strong></article>
+        <article><span>Bezpečně k auto-matchi</span><strong>${escapeHtml(review.safeAutoMatchCount || 0)}</strong></article>
+      </div>
+      <div class="receivables-table-wrap">
+        <table class="receivables-table receivables-table--compact">
+          <thead><tr><th>Důvod</th><th>Počet</th><th>Částka</th><th>Rozhodnutí</th></tr></thead>
+          <tbody>
+            ${buckets.map((bucket) => `
+              <tr>
+                <td data-label="Důvod">${escapeHtml(labels[bucket.code] || bucket.code || "Neurčeno")}</td>
+                <td data-label="Počet">${escapeHtml(bucket.paymentCount || 0)}</td>
+                <td data-label="Částka">${escapeHtml(formatReceivableMoney(bucket.amountTotal))}</td>
+                <td data-label="Rozhodnutí">${receivablesPill("ruční kontrola", "warning")}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="4">Fronta je prázdná.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesCustomersTable() {
   const customers = receivablesState.dashboard?.customers || receivablesState.customers || [];
   if (receivablesState.dashboardLoading && !customers.length) {
@@ -29590,6 +29650,7 @@ function receivablesDashboardSection() {
       ${receivablesDashboardKpis()}
     </section>
     ${receivablesSourceStatus()}
+    ${receivablesUnmatchedPaymentReview()}
     <section class="receivables-panel" id="receivables-customers" aria-labelledby="receivables-customers-title">
       <div class="receivables-panel__head">
         <div>
@@ -30763,6 +30824,16 @@ function receivablesCustomerDetailSection() {
     ...(detail.promises || []).map((item) => ({ when: item.createdAt, type: "Slib úhrady", channel: "customer", content: item.detectedText || item.promisedDate, result: item.status }))
   ].sort((a, b) => String(b.when || "").localeCompare(String(a.when || ""))).slice(0, 30);
 
+  const insolvencyPreview = receivablesState.insolvencyPreview;
+  const insolvencyResult = insolvencyPreview?.result || {};
+  const insolvencyTone = insolvencyResult.status === "found"
+    ? "danger"
+    : insolvencyResult.status === "clear" ? "ready" : "warning";
+  const insolvencyLabel = insolvencyResult.status === "found"
+    ? "nalezeno probíhající řízení"
+    : insolvencyResult.status === "clear" ? "bez aktuálního nálezu" : "stav neověřen";
+  const insolvencyProceedings = Array.isArray(insolvencyResult.proceedings) ? insolvencyResult.proceedings : [];
+
   return `
     <section class="receivables-panel receivables-detail" aria-labelledby="receivables-detail-title">
       <div class="receivables-panel__head">
@@ -30785,6 +30856,45 @@ function receivablesCustomerDetailSection() {
         <article><span>Max dnů po splatnosti</span><strong>${escapeHtml(displayed.maxDaysOverdue ?? 0)}</strong></article>
         <article><span>Platnost dat</span><strong>${escapeHtml(rating.periodTo || "-")}</strong></article>
       </div>
+    </section>
+    <section class="receivables-panel" aria-labelledby="receivables-insolvency-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Read-only ISIR preview</p>
+          <h2 id="receivables-insolvency-title">Insolvenční kontrola</h2>
+          <p>Automatický dotaz podle IČO do veřejné služby Ministerstva spravedlnosti. Výsledek se v této fázi nezapisuje do D1 ani nemění rating.</p>
+        </div>
+        ${receivablesState.insolvencyPreviewLoading
+          ? receivablesPill("ověřuji", "warning")
+          : receivablesPill(insolvencyLabel, insolvencyTone)}
+      </div>
+      ${receivablesState.insolvencyPreviewError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.insolvencyPreviewError)}</p>` : ""}
+      ${!receivablesState.insolvencyPreviewLoading && insolvencyResult.reason ? `<p class="receivables-rating-explanation">${escapeHtml(insolvencyResult.reason)}</p>` : ""}
+      <div class="receivables-detail-grid">
+        <article><span>Kontrolované IČO</span><strong>${escapeHtml(insolvencyPreview?.customer?.ico || customer.ico || "-")}</strong></article>
+        <article><span>Výsledek</span><strong>${escapeHtml(insolvencyLabel)}</strong></article>
+        <article><span>Čas kontroly</span><strong>${escapeHtml(formatDateTime(insolvencyResult.checkedAt))}</strong></article>
+        <article><span>Zdroj synchronizován</span><strong>${escapeHtml(formatDateTime(insolvencyResult.sourceSynchronizedAt))}</strong></article>
+      </div>
+      ${insolvencyResult.status === "found" ? `<p class="module-feedback__error">Nález je zatím pouze preview. STOP režim a rating INSOLVENCE se bez samostatně potvrzeného zápisu nemění.</p>` : ""}
+      ${insolvencyProceedings.length ? `
+        <div class="receivables-table-wrap">
+          <table class="receivables-table receivables-table--compact">
+            <thead><tr><th>Řízení</th><th>Stav</th><th>Právní moc úpadku</th><th>Detail</th></tr></thead>
+            <tbody>${insolvencyProceedings.map((item) => {
+              const detailUrl = receivablesSafeIsirUrl(item.detailUrl);
+              return `
+                <tr>
+                  <td data-label="Řízení">${escapeHtml(item.reference || "-")}</td>
+                  <td data-label="Stav">${escapeHtml(item.proceedingStatus || "-")}</td>
+                  <td data-label="Právní moc úpadku">${escapeHtml(item.insolvencyStartedAt || "-")}</td>
+                  <td data-label="Detail">${detailUrl ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noreferrer">ISIR</a>` : "-"}</td>
+                </tr>
+              `;
+            }).join("")}</tbody>
+          </table>
+        </div>
+      ` : ""}
     </section>
     <section class="receivables-panel" aria-labelledby="receivables-rating-explanation-title">
       <div class="receivables-panel__head">
@@ -32580,6 +32690,31 @@ async function loadReceivablesCustomerDetail(customerId, options = {}) {
       render();
     }
   }
+  if (receivablesState.customerDetail?.customer?.id === id) {
+    void loadReceivablesCustomerInsolvency(id);
+  }
+}
+
+async function loadReceivablesCustomerInsolvency(customerId) {
+  const id = String(customerId || "").trim();
+  if (!id || receivablesState.insolvencyPreviewLoading || receivablesState.selectedCustomerId !== id) return;
+
+  receivablesState.insolvencyPreviewLoading = true;
+  receivablesState.insolvencyPreviewError = "";
+  render();
+  try {
+    const preview = await apiJson(`/api/receivables/insolvency/preview?customerId=${encodeURIComponent(id)}`);
+    if (receivablesState.selectedCustomerId === id) receivablesState.insolvencyPreview = preview;
+  } catch (error) {
+    if (receivablesState.selectedCustomerId === id) {
+      receivablesState.insolvencyPreviewError = error.payload?.error || error.message || "Insolvenční kontrola je dočasně nedostupná.";
+    }
+  } finally {
+    if (receivablesState.selectedCustomerId === id) {
+      receivablesState.insolvencyPreviewLoading = false;
+      render();
+    }
+  }
 }
 
 async function loadReceivablesCase(caseId, options = {}) {
@@ -32888,6 +33023,8 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "customer" && context.customerId && receivablesState.selectedCustomerId !== context.customerId) {
     receivablesState.customerDetail = null;
+    receivablesState.insolvencyPreview = null;
+    receivablesState.insolvencyPreviewError = "";
     void loadReceivablesCustomerDetail(context.customerId);
   }
 

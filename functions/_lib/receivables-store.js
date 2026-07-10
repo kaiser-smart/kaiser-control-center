@@ -140,8 +140,17 @@ function emptyDashboard(apiStatus = "waiting", message = "D1 databáze pro Pohle
     sourceStatus: {
       vistos: "read_only_preview",
       bank: "pdf_text_preview_to_d1",
-      insolvency: "not_configured",
+      insolvency: "isir_read_only_preview",
       outbound: "disabled"
+    },
+    unmatchedPaymentReview: {
+      totalCount: 0,
+      totalAmount: 0,
+      duplicateCandidateCount: 0,
+      duplicateCandidateAmount: 0,
+      safeAutoMatchCount: 0,
+      blocksAutomation: true,
+      buckets: []
     }
   };
 }
@@ -444,6 +453,75 @@ async function countScalar(db, sql, ...bindings) {
   return numberValue(row?.count);
 }
 
+async function unmatchedPaymentReviewSummary(db) {
+  const result = await db.prepare(`
+    WITH unmatched AS (
+      SELECT id, amount, booking_date, variable_symbol, data_quality_flags_json
+      FROM receivable_payment_transactions
+      WHERE amount > 0
+        AND data_quality_flags_json LIKE '%UNMATCHED_PAYMENT%'
+    ),
+    invoice_vs AS (
+      SELECT
+        variable_symbol,
+        COUNT(*) AS invoice_count,
+        SUM(total_amount) AS invoice_amount,
+        MIN(issue_date) AS first_issue_date
+      FROM receivable_invoices
+      WHERE total_amount > 0
+        AND COALESCE(variable_symbol, '') <> ''
+      GROUP BY variable_symbol
+    ),
+    payment_vs AS (
+      SELECT variable_symbol, SUM(amount) AS payment_amount, MIN(booking_date) AS first_booking_date
+      FROM unmatched
+      WHERE COALESCE(variable_symbol, '') <> ''
+      GROUP BY variable_symbol
+    ),
+    classified AS (
+      SELECT
+        u.amount,
+        u.data_quality_flags_json,
+        CASE
+          WHEN COALESCE(u.variable_symbol, '') = '' THEN 'missing_variable_symbol'
+          WHEN i.variable_symbol IS NULL THEN 'variable_symbol_without_invoice'
+          WHEN i.invoice_count > 1 THEN 'multiple_invoice_candidates'
+          WHEN p.first_booking_date < i.first_issue_date THEN 'payment_before_invoice'
+          WHEN p.payment_amount > i.invoice_amount + MAX(1, ABS(i.invoice_amount) * 0.001)
+            THEN 'exact_variable_symbol_over_invoice_total'
+          ELSE 'exact_variable_symbol_requires_review'
+        END AS bucket
+      FROM unmatched u
+      LEFT JOIN invoice_vs i ON i.variable_symbol = u.variable_symbol
+      LEFT JOIN payment_vs p ON p.variable_symbol = u.variable_symbol
+    )
+    SELECT
+      bucket,
+      COUNT(*) AS payment_count,
+      ROUND(SUM(amount), 2) AS amount_total,
+      SUM(CASE WHEN data_quality_flags_json LIKE '%DUPLICATE_PAYMENT_CANDIDATE%' THEN 1 ELSE 0 END) AS duplicate_count,
+      ROUND(SUM(CASE WHEN data_quality_flags_json LIKE '%DUPLICATE_PAYMENT_CANDIDATE%' THEN amount ELSE 0 END), 2) AS duplicate_amount
+    FROM classified
+    GROUP BY bucket
+    ORDER BY payment_count DESC
+  `).all();
+
+  const buckets = (result.results || []).map((row) => ({
+    code: cleanString(row.bucket),
+    paymentCount: numberValue(row.payment_count),
+    amountTotal: numberValue(row.amount_total)
+  }));
+  return {
+    totalCount: buckets.reduce((sum, bucket) => sum + bucket.paymentCount, 0),
+    totalAmount: Math.round(buckets.reduce((sum, bucket) => sum + bucket.amountTotal, 0) * 100) / 100,
+    duplicateCandidateCount: (result.results || []).reduce((sum, row) => sum + numberValue(row.duplicate_count), 0),
+    duplicateCandidateAmount: Math.round((result.results || []).reduce((sum, row) => sum + numberValue(row.duplicate_amount), 0) * 100) / 100,
+    safeAutoMatchCount: 0,
+    blocksAutomation: true,
+    buckets
+  };
+}
+
 export async function getReceivablesSettings(env) {
   const db = database(env);
   const defaults = defaultReceivablesSettings();
@@ -484,6 +562,7 @@ export async function getReceivablesDashboard(env, options = {}) {
     const stoppedCustomers = await countScalar(db, "SELECT COUNT(*) AS count FROM receivable_customers WHERE automation_status IN ('STOP', 'stop', 'insolvency_hold')");
     const settingsResult = await getReceivablesSettings(env);
     const customers = await listReceivableCustomers(env, { limit: options.limit || 100 });
+    const unmatchedPaymentReview = await unmatchedPaymentReviewSummary(db);
 
     return {
       ...emptyDashboard("ready", "Pohledávkový kompas AI běží v dry-run režimu."),
@@ -502,7 +581,8 @@ export async function getReceivablesDashboard(env, options = {}) {
         stoppedCustomers
       },
       customers: customers.customers,
-      settings: settingsResult.settings
+      settings: settingsResult.settings,
+      unmatchedPaymentReview
     };
   } catch (error) {
     throw storeError(error);
