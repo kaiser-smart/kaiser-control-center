@@ -17,7 +17,6 @@ import { ELEVENLABS_ASSISTANT_CONFIGS, isValidElevenLabsAssistantKey } from "./e
 import { normalizeAiRoute } from "./elevenLabsClientTools.js";
 import {
   dataBoxPlusConversationEntries,
-  dataBoxPlusLatestActionState,
   dataBoxPlusPendingChatEntries,
   dataBoxPlusResolvePendingChatEntries
 } from "./data/dataBoxPlusChat.js";
@@ -363,7 +362,7 @@ const DATA_BOX_PLUS_TABS = [
 const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const DATA_BOX_PLUS_MODEL_FLAG = {
   label: "Model: ostrý DSP",
-  detail: "Oddělený backend, dvoukrokové potvrzování chatových pokynů a audit bez zásahu do původní Datové schránky."
+  detail: "Oddělený backend, bezpečné interní pokyny a audit. Odeslání mimo systém zůstává pouze návrhem."
 };
 const NOTIFICATION_CHANNEL_LABELS = {
   email: "E-mail",
@@ -21657,7 +21656,7 @@ function dataBoxPlusComposeLauncher() {
     <section class="ds-plus-send-strip" aria-label="Odesílání datových zpráv">
       <div>
         <h2>Odesílání</h2>
-        <p>Nová datová zpráva je samostatný proces. Chatový pokyn Autopilot nejdřív shrne a provede ho až po vašem souhlasu.</p>
+        <p>Nová datová zpráva je samostatný proces. V chatu se provádějí jen bezpečné interní kroky; odeslání ven zůstává vždy návrhem.</p>
       </div>
       <button class="primary-action" type="button" data-ds-plus-compose-open>Nová zpráva</button>
     </section>
@@ -21737,95 +21736,21 @@ function dataBoxPlusShortAssistantText(recommendation = {}, plan = {}) {
   return "Připravím krok k potvrzení. Nic se zatím neprovede.";
 }
 
-function dataBoxPlusChatMessageType(message) {
-  const normalized = dataBoxPlusSearchText([
-    message.type,
-    message.subject,
-    message.summary,
-    message.recommendedAction,
-    message.priorityReason
-  ]);
-  if (!message.summaryLoaded || normalized.includes("nejasn") || normalized.includes("chybi")) return "Nejasné";
-  if (normalized.includes("rozhodnut") || normalized.includes("usnesen") || normalized.includes("vyzva")) return "Úřední rozhodnutí";
-  if (normalized.includes("termin") || normalized.includes("lhut") || normalized.includes("splatnost") || normalized.includes("platnosti")) return "Termín";
-  if (normalized.includes("reakc") || normalized.includes("odpoved") || normalized.includes("dopln")) return "Vyžaduje reakci";
-  return "Informativní";
-}
-
-function dataBoxPlusChatSummary(message) {
-  const workflow = dataBoxPlusMessageWorkflow(message);
-  const summary = message.summaryLoaded && message.summary
-    ? message.summary
-    : "Přesný obsah zatím není načtený. Před rozhodnutím otevřete zprávu nebo přílohu.";
-  const recommendedStep = message.recommendedAction || message.suggestedAction || workflow.nextStep || "Napsat konkrétní pokyn.";
+function dataBoxPlusChatSuggestions(message) {
+  const suggestions = [
+    "Archivuj jako informativní",
+    "Označ jako vyřízené",
+    "Připrav odpověď",
+    "Předej kolegovi"
+  ];
   return `
-    <section class="ds-plus-chat-summary" aria-label="Shrnutí zprávy Autopilotem">
-      <div class="ds-plus-chat-section-heading">
-        <div>
-          <span>Autopilot rozumí zprávě takto</span>
-          <h3>${escapeHtml(dataBoxPlusChatMessageType(message))}</h3>
-        </div>
-        <span class="ds-plus-chat-summary__type">${escapeHtml(message.type || "Datová zpráva")}</span>
-      </div>
-      <p>${escapeHtml(summary)}</p>
-      <dl>
-        <div><dt>Doporučený další krok</dt><dd>${escapeHtml(recommendedStep)}</dd></div>
-      </dl>
-    </section>
-  `;
-}
-
-function dataBoxPlusQuickActions(message) {
-  const informative = dataBoxPlusChatMessageType(message) === "Informativní";
-  const actions = informative
-    ? [
-        "Archivovat jako informativní",
-        "Označit jako vyřízené",
-        "Přidat interní poznámku",
-        "Přidat úkol",
-        "Předat kolegovi",
-        "Nastavit připomínku"
-      ]
-    : [
-        "Označit jako vyřízené",
-        "Připravit odpověď",
-        "Přidat úkol",
-        "Předat kolegovi",
-        "Nastavit připomínku",
-        "Potřebuje kontrolu",
-        "Nelze provést"
-      ];
-  return `
-    <section class="ds-plus-chat-quick" aria-label="Rychlé akce">
-      <div class="ds-plus-chat-section-heading">
-        <div><span>Rychlé akce</span><h3>Co má Autopilot připravit</h3></div>
-      </div>
-      <div class="ds-plus-chat-quick__buttons">
-        ${actions.map((instruction) => `
-          <button type="button" data-ds-plus-quick-instruction="${escapeHtml(instruction)}" data-message-id="${escapeHtml(message.id)}">
-            ${escapeHtml(instruction)}
-          </button>
-        `).join("")}
-      </div>
-      <small>Každá akce se nejdřív shrne v chatu a čeká na váš souhlas.</small>
-    </section>
-  `;
-}
-
-function dataBoxPlusLatestActionPanel(message) {
-  const action = dataBoxPlusLatestActionState(message.history, dataBoxPlusState.instructionChats[message.id]);
-  return `
-    <aside class="ds-plus-chat-action-state ds-plus-chat-action-state--${escapeHtml(action.tone)}" aria-label="Stav poslední akce">
-      <div class="ds-plus-chat-action-state__head">
-        <span>Poslední akce</span>
-        <strong>${escapeHtml(action.label)}</strong>
-      </div>
-      <dl>
-        <div><dt>Autopilot pochopil</dt><dd>${escapeHtml(action.understoodAs)}</dd></div>
-        <div><dt>Výsledek</dt><dd>${escapeHtml(action.actionText)}</dd></div>
-        <div><dt>Zápis do historie</dt><dd>${escapeHtml(action.createdAt ? formatDateTime(action.createdAt) : "Zatím bez zápisu")}</dd></div>
-      </dl>
-    </aside>
+    <div class="ds-plus-chat-suggestions" aria-label="Návrhy pokynů">
+      ${suggestions.map((instruction) => `
+        <button type="button" data-ds-plus-quick-instruction="${escapeHtml(instruction)}" data-message-id="${escapeHtml(message.id)}">
+          ${escapeHtml(instruction)}
+        </button>
+      `).join("")}
+    </div>
   `;
 }
 
@@ -21842,29 +21767,32 @@ function dataBoxPlusInstructionCard(message) {
     <section class="ds-plus-instruction-card ds-plus-chat-window" aria-label="Chat k datové zprávě">
       <div class="ds-plus-chat-window__messages" data-ds-plus-chat-messages aria-live="polite" aria-busy="${loading ? "true" : "false"}">
         ${conversation.length ? conversation.map((entry) => `
-          <div class="ds-plus-chat-message ds-plus-chat-message--${entry.role === "user" ? "user" : "assistant"} ${entry.pending ? "ds-plus-chat-message--pending" : ""} ${entry.error ? "ds-plus-chat-message--error" : ""} ${entry.outcome ? `ds-plus-chat-message--${escapeHtml(entry.outcome)}` : ""}">
+          <div class="ds-plus-chat-message ds-plus-chat-message--${entry.role === "user" ? "user" : "assistant"} ${entry.pending ? "ds-plus-chat-message--pending" : ""} ${entry.error ? "ds-plus-chat-message--error" : ""}">
             <span>${entry.role === "user" ? "Radim" : "Autopilot"}</span>
             <p>${escapeHtml(entry.text)}</p>
           </div>
         `).join("") : `
           <div class="ds-plus-chat-message ds-plus-chat-message--assistant">
             <span>Autopilot</span>
-            <p>Napište, co mám se zprávou udělat. Nejdřív pokyn shrnu a požádám o souhlas.</p>
+            <p>Tady můžete napsat pokyn k této datové zprávě.</p>
           </div>
         `}
       </div>
-      <form class="ds-plus-chat-composer" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
-        <textarea
-          name="instruction"
-          rows="2"
-          aria-label="Zpráva pro Autopilota"
-          placeholder="Napište pokyn k této zprávě..."
-          ${loading ? "disabled" : ""}
-        >${escapeHtml(draft)}</textarea>
-        <button class="primary-action" type="submit" aria-label="Odeslat zprávu Autopilotovi" title="Odeslat" ${loading ? "disabled" : ""}>
-          ${loading ? `<span class="ds-plus-chat-composer__loading" aria-hidden="true"></span>` : `<span aria-hidden="true">→</span>`}
-        </button>
-      </form>
+      <div class="ds-plus-chat-window__footer">
+        ${dataBoxPlusChatSuggestions(message)}
+        <form class="ds-plus-chat-composer" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
+          <textarea
+            name="instruction"
+            rows="2"
+            aria-label="Zpráva pro Autopilota"
+            placeholder="Napište, co mám se zprávou udělat…"
+            ${loading ? "disabled" : ""}
+          >${escapeHtml(draft)}</textarea>
+          <button class="primary-action" type="submit" aria-label="Odeslat zprávu Autopilotovi" title="Odeslat" ${loading ? "disabled" : ""}>
+            ${loading ? `<span class="ds-plus-chat-composer__loading" aria-hidden="true"></span>` : `<span aria-hidden="true">→</span>`}
+          </button>
+        </form>
+      </div>
     </section>
   `;
 }
@@ -21872,16 +21800,10 @@ function dataBoxPlusInstructionCard(message) {
 function dataBoxPlusChatPanel(message) {
   return `
     <section class="ds-plus-chat-panel" aria-label="Chat k datové zprávě">
-      ${dataBoxPlusChatSummary(message)}
-      ${dataBoxPlusQuickActions(message)}
-      <div class="ds-plus-chat-workspace">
-        ${dataBoxPlusInstructionCard(message)}
-        ${dataBoxPlusLatestActionPanel(message)}
-      </div>
+      ${dataBoxPlusInstructionCard(message)}
     </section>
   `;
 }
-
 function dataBoxPlusStatusHistory(message, workflow) {
   const history = Array.isArray(message.history) ? message.history : [];
   if (history.length) {
@@ -22265,7 +22187,7 @@ function dataBoxPlusStatusNotice() {
   return `
     <div class="ds-plus-status-note" role="status">
       <strong>Ostrá verze</strong>
-      <span>Zprávy se načítají na pozadí. Chatový pokyn Autopilot nejdřív shrne, a když něco chybí, zeptá se přesně na jeden údaj.</span>
+      <span>Zprávy se načítají na pozadí. Autopilot provede bezpečný interní pokyn, nebo se krátce doptá na chybějící údaj.</span>
     </div>
   `;
 }
@@ -22898,8 +22820,8 @@ function dataBoxPlusSettingsPanel() {
           <h3>Bezpečnost AI</h3>
           <ul>
             <li>Autopilot nikdy nemaže datové zprávy.</li>
-            <li>Jasný chatový pokyn shrne a provede až po souhlasu uživatele.</li>
-            <li>E-mail, datovou zprávu ani odpověď úřadu chat bez potvrzení neodešle.</li>
+            <li>Autopilot provede pouze jasný bezpečný interní pokyn.</li>
+            <li>E-mail, datovou zprávu ani odpověď úřadu chat nikdy neodešle.</li>
             <li>Když obsah přílohy není načtený nebo chybí vazba, nastaví konkrétní stav.</li>
           </ul>
         </section>
@@ -22988,7 +22910,7 @@ function dataBoxPlusManualPanel() {
           <ul>
             <li>Řídicí centrum ukazuje jen věci, které mají mít dnes pozornost.</li>
             <li>Tlačítko Chat s Autopilotem otevře kompaktní panel ke konkrétní zprávě.</li>
-            <li>Autopilot pokyn nejdřív shrne a provede ho až po souhlasu.</li>
+            <li>Bezpečný interní pokyn Autopilot provede rovnou a zapíše do historie.</li>
             <li>Detail zprávy rozlišuje obálku zprávy a obsah příloh.</li>
             <li>Když příloha není přečtená, Autopilot nevytvoří falešné shrnutí.</li>
           </ul>
@@ -23231,12 +23153,7 @@ function dataBoxPlusChatOverlay() {
           <div class="ds-plus-chat-context">
             <span>${escapeHtml(mailbox?.name || "Schránka")}</span>
             <h2 id="ds-plus-chat-title">Chat k datové zprávě</h2>
-            <dl>
-              <div><dt>Odesílatel</dt><dd>${escapeHtml(message.senderName || "Datová schránka")}</dd></div>
-              <div><dt>Předmět</dt><dd>${escapeHtml(message.subject || "Datová zpráva")}</dd></div>
-              <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(message.deliveredAt || message.receivedAt))}</dd></div>
-              <div><dt>Stav</dt><dd>${escapeHtml(message.status || "Nová")}</dd></div>
-            </dl>
+            <p>${escapeHtml(message.subject || "Datová zpráva")}</p>
           </div>
           <div class="ds-plus-chat-dialog__actions">
             <button class="primary-action" type="button" data-ds-plus-open="${escapeHtml(message.id)}">Otevřít zprávu</button>
@@ -32273,10 +32190,9 @@ async function runDataBoxPlusInstruction(messageIdValue, instructionValue) {
         intent: result.action?.intent,
         statusLabel: result.action?.statusLabel,
         understoodAs: result.action?.understoodAs,
-        performedAction: result.action?.outcome === "done" || result.action?.outcome === "sent"
+        performedAction: result.action?.outcome === "done" || result.action?.outcome === "draft_ready"
           ? result.action?.performedAction
-          : "Nebylo provedeno nic",
-        proposedAction: result.action?.outcome === "waiting_confirmation" ? result.action : undefined
+          : "Nebylo provedeno nic"
       }
     );
     dataBoxPlusState.notice = assistantText;
@@ -32285,9 +32201,8 @@ async function runDataBoxPlusInstruction(messageIdValue, instructionValue) {
       const index = dataBoxPlusState.messages.findIndex((message) => message.id === result.message.id);
       if (index >= 0) dataBoxPlusState.messages[index] = result.message;
     }
-    if (result.status === "done" && result.action?.intent === "prepare_reply" && result.action?.draftText) {
+    if (["done", "draft_ready"].includes(result.status) && result.action?.intent === "prepare_reply" && result.action?.draftText) {
       dataBoxPlusState.replyDraftTexts[messageId] = result.action.draftText;
-      dataBoxPlusState.replyDraftMessageId = messageId;
     }
   } catch (error) {
     const assistantText = dataBoxPlusHumanError(error.payload?.error || error.message || "Zprávu se nepodařilo zpracovat.");

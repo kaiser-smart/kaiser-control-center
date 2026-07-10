@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
-import {
-  dataBoxPlusChatDecisionForTest,
-  dataBoxPlusInstructionPlanForTest
-} from "../functions/_lib/data-box-plus-store.js";
+import { readFileSync } from "node:fs";
+import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-plus-store.js";
 
 const message = {
   id: "dbp-test-message",
@@ -16,36 +14,41 @@ function plan(instruction, overrides = {}, context = {}) {
   return dataBoxPlusInstructionPlanForTest(instruction, { ...message, ...overrides }, [], context);
 }
 
-for (const instruction of ["co?", "???", "ahoj", "test", "Jaké je tvoje poslání?"]) {
+const helpText = "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, připravit odpověď nebo předat kolegovi.";
+
+for (const instruction of ["co?", "???", "ahoj", "test", "Jaké je tvoje poslání?", "ano", "souhlasím", "proveď"]) {
   const result = plan(instruction);
   assert.equal(result.outcome, "not_done", instruction);
   assert.equal(result.changesMessage, false, instruction);
   assert.equal(result.messageStatus, "Nová", instruction);
-  assert.match(result.assistantText, /Jsem Autopilot pro tuto datovou zprávu/, instruction);
+  assert.equal(result.assistantText, helpText, instruction);
   assert.doesNotMatch(result.auditNote, /Systém provedl/, instruction);
 }
 
-const actionableCases = [
+const safeCases = [
   ["archivuj jako informativní", "archive_info", "Archivováno"],
   ["označ jako vyřízené", "mark_done", "Vyřešeno"],
   ["předej to Jarce", "assign_to_user", "Předáno kolegovi"],
-  ["odpověz jim", "prepare_reply", "Nová"],
-  ["připomeň za 7 dní", "set_reminder", "Nová"],
-  ["potřebuje kontrolu", "need_more_info", "Potřebuje upřesnit"],
-  ["nelze provést", "mark_cannot_execute", "Nelze provést"]
+  ["připomeň zítra", "set_reminder", "Nová"],
+  ["dej do k doplnění", "need_more_info", "Potřebuje upřesnit"],
+  ["přidej poznámku kontrola hotová", "internal_note", "Nová"],
+  ["přidej úkol", "create_task", "Rozpracováno"]
 ];
 
-for (const [instruction, intent, targetStatus] of actionableCases) {
+for (const [instruction, intent, targetStatus] of safeCases) {
   const result = plan(instruction, {}, { actor: "Radim" });
   assert.equal(result.intent, intent, instruction);
-  assert.equal(result.outcome, "waiting_confirmation", instruction);
-  assert.equal(result.requiresConfirmation, true, instruction);
+  assert.equal(result.outcome, "done", instruction);
+  assert.equal(result.requiresConfirmation, false, instruction);
+  assert.equal(result.changesMessage, true, instruction);
   assert.equal(result.messageStatus, targetStatus, instruction);
-  assert.match(result.assistantText, /Souhlasíte, abych to provedl\?/, instruction);
-  assert.doesNotMatch(result.auditNote, /Systém provedl/, instruction);
+  assert.match(result.assistantText, /^Hotovo\./, instruction);
 }
 
-const missingColleague = plan("předej to kolegovi");
+assert.equal(plan("archivuj jako informativní").assistantText, "Hotovo. Zpráva byla archivována jako informativní.");
+assert.match(plan("připomeň zítra").dueDate, /^\d{4}-\d{2}-\d{2}$/);
+
+const missingColleague = plan("předej kolegovi");
 assert.equal(missingColleague.outcome, "needs_input");
 assert.equal(missingColleague.pendingIntent, "assign_to_user");
 assert.equal(missingColleague.assistantText, "Komu mám zprávu předat?");
@@ -55,26 +58,50 @@ const suppliedColleague = plan("Jarce", {}, {
   missingField: missingColleague.missingField
 });
 assert.equal(suppliedColleague.intent, "assign_to_user");
-assert.equal(suppliedColleague.outcome, "waiting_confirmation");
+assert.equal(suppliedColleague.outcome, "done");
 assert.equal(suppliedColleague.assignedTo, "Jarce");
 
-const emailProposal = plan("pošli email na radim@example.cz");
-assert.equal(emailProposal.intent, "send_email");
-assert.equal(emailProposal.outcome, "waiting_confirmation");
-assert.equal(emailProposal.externalAction, true);
-assert.equal(emailProposal.emailSent, false);
-assert.match(emailProposal.assistantText, /dopad mimo systém/);
+const missingNote = plan("přidej poznámku");
+assert.equal(missingNote.outcome, "needs_input");
+assert.equal(missingNote.assistantText, "Jakou interní poznámku mám ke zprávě přidat?");
 
-const missingEmail = plan("pošli na vyz email");
+const replyDraft = plan("odpověz jim");
+assert.equal(replyDraft.intent, "prepare_reply");
+assert.equal(replyDraft.outcome, "draft_ready");
+assert.equal(replyDraft.changesMessage, false);
+assert.equal(replyDraft.sendsEmail, false);
+assert.equal(replyDraft.emailSent, false);
+assert.equal(replyDraft.assistantText, "Připravím návrh odpovědi. Odeslání musí potvrdit člověk.");
+assert.match(replyDraft.draftText, /Návrh odpovědi před odesláním/);
+
+const emailDraft = plan("pošli email na radim@example.cz");
+assert.equal(emailDraft.intent, "prepare_reply");
+assert.equal(emailDraft.outcome, "draft_ready");
+assert.equal(emailDraft.recipientEmail, "radim@example.cz");
+assert.equal(emailDraft.sendsEmail, false);
+assert.equal(emailDraft.emailSent, false);
+
+const missingEmail = plan("pošli email");
 assert.equal(missingEmail.outcome, "needs_input");
 assert.equal(missingEmail.pendingIntent, "send_email");
 assert.equal(missingEmail.changesMessage, false);
 
-const unsupportedDataBoxSend = plan("odešli datovou zprávu úřadu");
-assert.equal(unsupportedDataBoxSend.outcome, "cannot_execute");
-assert.equal(unsupportedDataBoxSend.supported, false);
-assert.equal(unsupportedDataBoxSend.changesMessage, false);
-assert.match(unsupportedDataBoxSend.assistantText, /systém neumí provést/);
+const suppliedEmail = plan("radim@example.cz", {}, {
+  pendingIntent: missingEmail.pendingIntent,
+  missingField: missingEmail.missingField
+});
+assert.equal(suppliedEmail.outcome, "draft_ready");
+assert.equal(suppliedEmail.recipientEmail, "radim@example.cz");
+assert.equal(suppliedEmail.sendsEmail, false);
+
+const dataBoxDraft = plan("odešli datovou zprávu úřadu");
+assert.equal(dataBoxDraft.outcome, "draft_ready");
+assert.equal(dataBoxDraft.intent, "prepare_reply");
+assert.equal(dataBoxDraft.changesMessage, false);
+
+const deleteAttempt = plan("smaž zprávu");
+assert.equal(deleteAttempt.outcome, "cannot_execute");
+assert.equal(deleteAttempt.changesMessage, false);
 
 const unclearVehicleMessage = plan("???", {
   subject: "Informace o konci platnosti technické prohlídky u vozidla 3BE2831"
@@ -82,10 +109,11 @@ const unclearVehicleMessage = plan("???", {
 assert.equal(unclearVehicleMessage.outcome, "not_done");
 assert.equal(unclearVehicleMessage.messageStatus, "Nová");
 
-assert.equal(dataBoxPlusChatDecisionForTest("ano"), "confirm");
-assert.equal(dataBoxPlusChatDecisionForTest("souhlasím"), "confirm");
-assert.equal(dataBoxPlusChatDecisionForTest("proveď"), "confirm");
-assert.equal(dataBoxPlusChatDecisionForTest("ne"), "reject");
-assert.equal(dataBoxPlusChatDecisionForTest("archivuj"), "");
+const storeSource = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
+const executeSource = storeSource.match(/export async function executeDataBoxPlusMessageInstruction[\s\S]+?\n}\nfunction recommendationConfirmAction/)?.[0] || "";
+assert.ok(executeSource, "execution source must be present");
+assert.doesNotMatch(executeSource, /sendDataBoxPlusMessageEmail/);
+assert.doesNotMatch(executeSource, /dataBoxPlusChatDecision|waiting_confirmation/);
+assert.match(executeSource, /plan\.outcome === "done"/);
 
 console.log("data-box-plus instruction flow ok");
