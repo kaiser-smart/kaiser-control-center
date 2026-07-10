@@ -4,7 +4,8 @@ import { DatabaseSync } from "node:sqlite";
 
 import {
   previewReceivablePaymentRating,
-  recomputeReceivablePaymentRating
+  recomputeReceivablePaymentRating,
+  recomputeReceivablePaymentRatingsBatch
 } from "../functions/_lib/receivables-rating-store.js";
 import {
   getReceivableCustomerDetail,
@@ -217,6 +218,19 @@ sqlite.prepare(`
   assert.equal(customerList.customers[0].package.totalOverdueAmount, 1210);
   const dashboard = await getReceivablesDashboard(env, { today: "2026-07-10" });
   assert.equal(dashboard.kpis.automaticCustomers, 0);
+}
+
+{
+  const batch = await recomputeReceivablePaymentRatingsBatch(env, {
+    offset: 0,
+    limit: 1,
+    persist: false,
+    today: "2026-07-10"
+  }, user);
+  assert.equal(batch.summary.processed, 1);
+  assert.equal(batch.summary.persisted, 0);
+  assert.equal(batch.sendsCustomerCommunication, false);
+  assert.equal(batch.startsAutomation, false);
 }
 
 sqlite.prepare(`

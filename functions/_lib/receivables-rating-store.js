@@ -208,7 +208,7 @@ async function loadCustomerRatingInput(db, customerId, options = {}) {
   ]);
   let payments = (paymentRows.results || []).map(paymentFromRow);
   const baseInvoices = (invoiceRows.results || []).map((row) => invoiceFromRow(row, []));
-  if (!payments.length && baseInvoices.length) {
+  if (!payments.length && baseInvoices.length && options.allowPreviewMatching !== false) {
     const [transactionRows, ambiguousRows] = await Promise.all([
       db.prepare(`
         SELECT * FROM receivable_payment_transactions
@@ -430,6 +430,59 @@ export async function recomputeReceivablePaymentRating(env, payload = {}, user =
       sourceFingerprint: fingerprint,
       persisted: true,
       apiStatus: "ready",
+      sendsCustomerCommunication: false,
+      startsAutomation: false
+    };
+  } catch (error) {
+    throw receivablesRatingStoreError(error);
+  }
+}
+
+export async function recomputeReceivablePaymentRatingsBatch(env, payload = {}, user = null) {
+  const db = database(env, true);
+  const offset = Math.max(0, Math.floor(numberValue(payload.offset)));
+  const limit = Math.max(1, Math.min(25, Math.floor(numberValue(payload.limit, 25))));
+  try {
+    const [customerRows, totalRow] = await Promise.all([
+      db.prepare(`
+        SELECT id FROM receivable_customers
+        ORDER BY id ASC
+        LIMIT ? OFFSET ?
+      `).bind(limit, offset).all(),
+      db.prepare("SELECT COUNT(*) AS count FROM receivable_customers").first()
+    ]);
+    const customers = customerRows.results || [];
+    const summary = {
+      processed: 0,
+      persisted: 0,
+      finalRatings: 0,
+      preRatings: 0,
+      ratings: {}
+    };
+    for (const customer of customers) {
+      const result = await recomputeReceivablePaymentRating(env, {
+        ...payload,
+        customerId: cleanString(customer.id),
+        allowPreviewMatching: false
+      }, user);
+      const rating = result.rating || {};
+      summary.processed += 1;
+      if (result.persisted) summary.persisted += 1;
+      if (rating.ratingMode === "FINAL_RATING") summary.finalRatings += 1;
+      else summary.preRatings += 1;
+      const code = cleanString(rating.rating || "N").toUpperCase();
+      summary.ratings[code] = (summary.ratings[code] || 0) + 1;
+    }
+    const total = numberValue(totalRow?.count);
+    const nextOffset = offset + customers.length;
+    return {
+      apiStatus: "ready",
+      offset,
+      nextOffset,
+      limit,
+      total,
+      done: customers.length < limit || nextOffset >= total,
+      summary,
       sendsCustomerCommunication: false,
       startsAutomation: false
     };

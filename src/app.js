@@ -984,7 +984,12 @@ const receivablesState = {
   vistosPreviewMessage: "",
   dryRunLoading: false,
   dryRunResult: null,
-  dryRunError: ""
+  dryRunError: "",
+  fullRatingJobRunning: false,
+  fullRatingJobCompleted: false,
+  fullRatingJobError: "",
+  fullRatingJobProcessed: 0,
+  fullRatingJobTotal: 0
 };
 
 const driverReportsState = {
@@ -32754,6 +32759,40 @@ async function submitReceivablesVistosPreview() {
   }
 }
 
+function receivablesFullRatingJobRequested() {
+  return new URLSearchParams(window.location.search).get("ratingJob") === "full-confirmed";
+}
+
+async function runReceivablesFullRatingJob() {
+  if (receivablesState.fullRatingJobRunning || receivablesState.fullRatingJobCompleted) return;
+  receivablesState.fullRatingJobRunning = true;
+  receivablesState.fullRatingJobError = "";
+  let offset = 0;
+  try {
+    while (true) {
+      const result = await apiJson("/api/receivables/ratings/recompute-all", {
+        method: "POST",
+        body: JSON.stringify({ offset, limit: 25, persist: true })
+      });
+      receivablesState.fullRatingJobProcessed += Number(result.summary?.processed || 0);
+      receivablesState.fullRatingJobTotal = Number(result.total || 0);
+      offset = Number(result.nextOffset || offset);
+      if (result.done) break;
+    }
+    receivablesState.fullRatingJobCompleted = true;
+    receivablesState.dashboardLoaded = false;
+    await loadReceivablesDashboard({ renderAfter: false });
+    const url = new URL(window.location.href);
+    url.searchParams.delete("ratingJob");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch (error) {
+    receivablesState.fullRatingJobError = error.payload?.error || error.message || "Dávkový přepočet ratingů se nepodařil.";
+  } finally {
+    receivablesState.fullRatingJobRunning = false;
+    render();
+  }
+}
+
 function ensureReceivablesData(context = { view: "dashboard" }) {
   if (!receivablesState.dashboardLoaded && !receivablesState.dashboardLoading) {
     void loadReceivablesDashboard();
@@ -32783,6 +32822,10 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "import" && !receivablesState.kbSandboxProbeLoaded && !receivablesState.kbSandboxProbeLoading) {
     void loadReceivablesKbSandboxProbe();
+  }
+
+  if (context.view === "import" && receivablesFullRatingJobRequested()) {
+    void runReceivablesFullRatingJob();
   }
 
   if (
