@@ -29796,9 +29796,88 @@ function receivablesKbSandboxProbePanel(probe = {}) {
   `;
 }
 
+function receivablesKbOnboardingPackagePanel(pkg = {}) {
+  const steps = Array.isArray(pkg.steps) ? pkg.steps : [];
+  const secretPlan = Array.isArray(pkg.secretPlan) ? pkg.secretPlan : [];
+  const portalLinks = Array.isArray(pkg.portalLinks) ? pkg.portalLinks : [];
+  const checklist = Array.isArray(pkg.handoffChecklist) ? pkg.handoffChecklist : [];
+
+  if (!steps.length && !secretPlan.length) {
+    return `<p class="receivables-empty">Onboarding balíček zatím není dostupný.</p>`;
+  }
+
+  return `
+    <div class="receivables-import-summary" aria-label="Souhrn KB onboarding balíčku">
+      <article>
+        <span>Další akce</span>
+        <strong>${escapeHtml(pkg.nextAction?.label || "neověřeno")}</strong>
+      </article>
+      <article>
+        <span>Callback URL</span>
+        <strong>${escapeHtml(pkg.callbackUrl || "-")}</strong>
+      </article>
+      <article>
+        <span>KB API volání</span>
+        <strong>${pkg.safety?.callsKbApi ? "zapnuto" : "vypnuto"}</strong>
+      </article>
+      <article>
+        <span>Secret hodnoty</span>
+        <strong>${pkg.safety?.exposesSecretValues ? "zobrazuje" : "nezobrazuje"}</strong>
+      </article>
+    </div>
+    <div class="receivables-import-diagnostics">
+      <section>
+        <h3>Postup</h3>
+        <div class="receivables-kb-checklist">
+          ${steps.map((step) => `
+            <article>
+              <div>
+                <strong>${escapeHtml(step.label || "-")}</strong>
+                <p>${escapeHtml(step.description || "")}</p>
+                ${step.missingEnv?.length ? `<small>Chybí: ${escapeHtml(step.missingEnv.join(", "))}</small>` : `<small>Krok je připravený nebo dokončený podle serverové konfigurace.</small>`}
+              </div>
+              ${receivablesPill(step.status === "done" ? "hotovo" : step.status === "ready" ? "připraveno" : step.status === "blocked" ? "blokováno" : "čeká", step.status === "done" || step.status === "ready" ? "ready" : "waiting")}
+            </article>
+          `).join("")}
+        </div>
+      </section>
+      <section>
+        <h3>Cloudflare secrets</h3>
+        <div class="receivables-kb-checklist">
+          ${secretPlan.map((secret) => `
+            <article>
+              <div>
+                <strong>${escapeHtml(secret.key || "-")}</strong>
+                <p>${escapeHtml(secret.label || "")}</p>
+                <small>${escapeHtml(secret.note || "Hodnota se v UI nezobrazuje.")}</small>
+              </div>
+              ${receivablesPill(secret.configured ? "nastaveno" : "chybí", secret.configured ? "ready" : "waiting")}
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    </div>
+    <div class="receivables-import-diagnostics">
+      <section>
+        <h3>KB odkazy</h3>
+        <div class="receivables-guardrails">
+          ${portalLinks.map((link) => `<a href="${escapeHtml(link.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(link.label || link.url || "-")}</a>`).join("")}
+        </div>
+      </section>
+      <section>
+        <h3>Pojistky</h3>
+        <ul class="receivables-clean-list">
+          ${checklist.map((entry) => `<li>${escapeHtml(entry)}</li>`).join("")}
+        </ul>
+      </section>
+    </div>
+  `;
+}
+
 function receivablesKbApiOnboardingPanel() {
   const status = receivablesState.kbOnboarding || {};
   const probe = receivablesState.kbSandboxProbe || {};
+  const onboardingPackage = status.onboardingPackage || {};
   const safetyRows = [
     ["Volání KB API", status.safety?.callsKbApi ? "zapnuto" : "vypnuto"],
     ["Hodnoty secretů v UI", status.safety?.exposesSecretValues ? "zobrazuje" : "nezobrazuje"],
@@ -29839,6 +29918,12 @@ function receivablesKbApiOnboardingPanel() {
         <section>
           <h3>Checklist napojení</h3>
           ${receivablesKbOnboardingChecklist(status)}
+        </section>
+      </div>
+      <div class="receivables-snapshot-invoices-block">
+        <section>
+          <h3>Onboarding balíček</h3>
+          ${receivablesKbOnboardingPackagePanel(onboardingPackage)}
         </section>
       </div>
       <div class="receivables-snapshot-invoices-block">

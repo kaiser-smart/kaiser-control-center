@@ -98,6 +98,159 @@ const KB_ADAA_SANDBOX_KEY_PROBES = [
   }
 ];
 
+const KB_ADAA_ONBOARDING_PORTAL_LINKS = [
+  {
+    label: "KB Developer Portal",
+    url: "https://developers.kb.cz/"
+  },
+  {
+    label: "Software Statement",
+    url: "https://developers.kb.cz/service/AccountDirectAccessAPI-v2/software-statements"
+  },
+  {
+    label: "OAuth registrace aplikace",
+    url: "https://developers.kb.cz/service/AccountDirectAccessAPI-v2/application-registration-oauth2"
+  },
+  {
+    label: "Tokeny",
+    url: "https://developers.kb.cz/service/AccountDirectAccessAPI-v2/tokens"
+  },
+  {
+    label: "Accounts",
+    url: "https://developers.kb.cz/service/AccountDirectAccessAPI-v2/accounts"
+  }
+];
+
+const KB_ADAA_ONBOARDING_SECRET_PLAN = [
+  {
+    key: "KB_ADAA_QUALIFIED_CERTIFICATE_READY",
+    label: "Kvalifikovaný certifikát připraven",
+    phase: "certifikat",
+    note: "Pouze příznak připravenosti; certifikát neukládat do repozitáře."
+  },
+  {
+    key: "KB_ADAA_SOFTWARE_STATEMENT",
+    label: "Software Statement",
+    phase: "software_statement",
+    note: "Token od KB uložit jen jako Cloudflare secret."
+  },
+  {
+    key: "KB_ADAA_SOFTWARE_STATEMENT_CONTACT_EMAIL",
+    label: "Kontakt pro obnovu Software Statementu",
+    phase: "software_statement",
+    note: "Doporučený sdílený provozní e-mail, ne osobní schránka jednoho člověka."
+  },
+  {
+    key: "KB_ADAA_CLIENT_ID",
+    label: "OAuth Client ID",
+    phase: "oauth",
+    note: "Vznikne po registraci aplikace v KB."
+  },
+  {
+    key: "KB_ADAA_CLIENT_SECRET",
+    label: "OAuth Client Secret",
+    phase: "oauth",
+    note: "Uložit jen jako Cloudflare secret."
+  },
+  {
+    key: "KB_ADAA_REFRESH_TOKEN",
+    label: "Refresh token po souhlasu uživatele",
+    phase: "souhlas",
+    note: "Až po přihlášení oprávněného uživatele KB a potvrzení přístupu."
+  },
+  {
+    key: "KB_ADAA_REDIRECT_URI",
+    label: "OAuth redirect URI",
+    phase: "oauth",
+    note: "Volitelné přepsání výchozí produkční callback URL."
+  }
+];
+
+function onboardingStep(id, label, description, requiredEnv, env) {
+  const missingEnv = requiredEnv.filter((key) => !hasEnvValue(env, key));
+  return {
+    id,
+    label,
+    description,
+    requiredEnv,
+    missingEnv,
+    status: missingEnv.length ? "waiting" : "done"
+  };
+}
+
+function buildReceivablesKbOnboardingPackage(env, onboarding) {
+  const callbackUrl = cleanString(env.KB_ADAA_REDIRECT_URI)
+    || "https://kaiser-control-center.pages.dev/api/receivables/kb/oauth/callback";
+  const steps = [
+    onboardingStep(
+      "qualified_certificate",
+      "Získat kvalifikovaný certifikát",
+      "Pořídit kvalifikovaný certifikát pro elektronický podpis nebo pečeť u akceptované certifikační autority.",
+      ["KB_ADAA_QUALIFIED_CERTIFICATE_READY"],
+      env
+    ),
+    onboardingStep(
+      "software_statement",
+      "Vyžádat Software Statement",
+      "V KB Developer Portálu použít Client Registration API key a certifikát; výsledek uložit jako secret.",
+      ["KB_ADAA_SOFTWARE_STATEMENT", "KB_ADAA_SOFTWARE_STATEMENT_CONTACT_EMAIL"],
+      env
+    ),
+    onboardingStep(
+      "oauth_registration",
+      "Registrovat OAuth aplikaci",
+      "Propojit aplikaci s klientem KB a získat Client ID a Client Secret.",
+      ["KB_ADAA_CLIENT_ID", "KB_ADAA_CLIENT_SECRET"],
+      env
+    ),
+    onboardingStep(
+      "user_consent",
+      "Potvrdit souhlas uživatele",
+      "Uživatel s dispozičním právem se přihlásí do KB a potvrdí přístup k účtům.",
+      ["KB_ADAA_REFRESH_TOKEN"],
+      env
+    ),
+    {
+      id: "read_only_api_probe",
+      label: "Povolit read-only API probe",
+      description: "Teprve po kompletním OAuth onboardingu volat sandbox Accounts, Balances a Transactions bez zápisu do ledgeru.",
+      requiredEnv: [],
+      missingEnv: [],
+      status: onboarding.readyForProductionRead ? "ready" : "blocked"
+    }
+  ];
+  const firstWaiting = steps.find((step) => step.status === "waiting" || step.status === "blocked");
+
+  return {
+    mode: "manual_onboarding_package",
+    callbackUrl,
+    redirectUriConfigured: hasEnvValue(env, "KB_ADAA_REDIRECT_URI"),
+    applicationName: cleanString(env.KB_ADAA_APPLICATION_NAME) || "Kaiser Control Center - Pohledávky",
+    nextAction: firstWaiting || steps[steps.length - 1],
+    steps,
+    secretPlan: KB_ADAA_ONBOARDING_SECRET_PLAN.map((secret) => ({
+      ...secret,
+      configured: hasEnvValue(env, secret.key),
+      valueVisible: false
+    })),
+    portalLinks: KB_ADAA_ONBOARDING_PORTAL_LINKS,
+    handoffChecklist: [
+      "Neposílat API klíče, certifikát, Software Statement ani tokeny do chatu.",
+      "Všechny hodnoty ukládat přes Cloudflare Dashboard nebo wrangler pages secret put.",
+      "Po doplnění secretů znovu ověřit panel KB ADAA v produkčním UI.",
+      "KB Accounts/Balances/Transactions volat až v samostatné read-only fázi."
+    ],
+    safety: {
+      callsKbApi: false,
+      writesLedger: false,
+      storesSecretsInRepository: false,
+      exposesSecretValues: false,
+      createsPayments: false,
+      startsAutomation: false
+    }
+  };
+}
+
 function decodeKbApiKeyMetadata(token) {
   const parts = cleanString(token).split(".");
   if (parts.length !== 3) {
@@ -205,7 +358,7 @@ export function receivablesKbApiOnboardingStatus(env = {}) {
     .every((id) => items.find((entry) => entry.id === id)?.configured);
   const readyForProductionRead = missingCount === 0;
 
-  return {
+  const status = {
     apiStatus: readyForProductionRead ? "ready" : configuredCount > 0 ? "partial" : "waiting",
     mode: "read_only_onboarding",
     provider: "Komerční banka",
@@ -236,6 +389,10 @@ export function receivablesKbApiOnboardingStatus(env = {}) {
       persistsBankTransactions: false,
       createsPayments: false
     }
+  };
+  return {
+    ...status,
+    onboardingPackage: buildReceivablesKbOnboardingPackage(env, status)
   };
 }
 

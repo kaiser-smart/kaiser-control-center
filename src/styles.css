@@ -30785,6 +30785,7 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
 }
 
 .receivables-guardrails span,
+.receivables-guardrails a,
 .receivables-banned-words span {
   display: inline-flex;
   align-items: center;
@@ -30796,6 +30797,22 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   color: #334155;
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.receivables-guardrails a {
+  text-decoration: none;
+}
+
+.receivables-clean-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+}
+
+.receivables-clean-list li {
+  overflow-wrap: anywhere;
 }
 
 .receivables-timeline {
