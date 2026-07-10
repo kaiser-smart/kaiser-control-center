@@ -7,6 +7,39 @@ function eventTime(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
+const SIMPLE_CHAT_HELP = "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, připravit odpověď nebo předat kolegovi.";
+
+function simpleChatWords(value) {
+  return cleanText(value)
+    .toLocaleLowerCase("cs-CZ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function isUnclearChatInstruction(value) {
+  const words = simpleChatWords(value);
+  return !words
+    || ["ahoj", "co", "test", "zkouska", "ano", "souhlasim", "souhlas", "proved", "potvrzuji"].includes(words)
+    || words.includes("tvoje poslani")
+    || words.includes("jake je tvoje poslani")
+    || words.includes("co umis");
+}
+
+function humanAssistantText(event, payload, instruction) {
+  if (isUnclearChatInstruction(instruction)) return SIMPLE_CHAT_HELP;
+  const outcome = cleanText(payload.outcome || event?.result).toLowerCase();
+  if (outcome === "draft_ready") {
+    return "Připravím návrh odpovědi. Odeslání musí potvrdit člověk.";
+  }
+  const raw = cleanText(payload.assistantText || event?.assistantText || event?.auditNote || payload.performedAction);
+  const performed = raw.match(/Systém provedl:\s*(.+?)(?:\.\s*Nový stav:|$)/i)?.[1];
+  if (performed) return `Hotovo. ${performed.replace(/[.\s]+$/, "")}.`;
+  if (/^(intent|result|no_action|changedstate)\b/i.test(raw)) return SIMPLE_CHAT_HELP;
+  return raw || SIMPLE_CHAT_HELP;
+}
+
 export function dataBoxPlusHistoryChatEntries(history = []) {
   return (Array.isArray(history) ? history : [])
     .filter((event) => cleanText(event?.actionType).toLocaleLowerCase("cs-CZ") === "chatový pokyn")
@@ -15,12 +48,7 @@ export function dataBoxPlusHistoryChatEntries(history = []) {
       const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
       const instruction = cleanText(payload.originalInstruction || payload.userInstruction);
       if (!instruction) return [];
-      const assistantText = cleanText(
-        payload.assistantText
-        || event.assistantText
-        || event.auditNote
-        || payload.performedAction
-      );
+      const assistantText = humanAssistantText(event, payload, instruction);
       const auditId = cleanText(event.id);
       const createdAt = cleanText(event.createdAt);
       return [
@@ -43,62 +71,6 @@ export function dataBoxPlusHistoryChatEntries(history = []) {
         }] : [])
       ];
     });
-}
-
-export function dataBoxPlusLatestActionState(history = [], localEntries = []) {
-  const persistedEvent = [...(Array.isArray(history) ? history : [])]
-    .filter((item) => cleanText(item?.actionType).toLocaleLowerCase("cs-CZ") === "chatový pokyn")
-    .sort((left, right) => eventTime(right?.createdAt) - eventTime(left?.createdAt))[0];
-  const localEvent = [...(Array.isArray(localEntries) ? localEntries : [])]
-    .filter((item) => item?.role === "assistant" && !item?.pending && cleanText(item?.outcome))
-    .sort((left, right) => eventTime(right?.createdAt) - eventTime(left?.createdAt))[0];
-  const event = localEvent && eventTime(localEvent.createdAt) >= eventTime(persistedEvent?.createdAt)
-    ? {
-        createdAt: localEvent.createdAt,
-        result: localEvent.outcome,
-        payload: {
-          outcome: localEvent.outcome,
-          intent: localEvent.intent,
-          statusLabel: localEvent.statusLabel,
-          understoodAs: localEvent.understoodAs,
-          performedAction: localEvent.performedAction,
-          proposedAction: localEvent.proposedAction
-        }
-      }
-    : persistedEvent;
-  if (!event) {
-    return {
-      tone: "info",
-      label: "Informativní",
-      understoodAs: "Zatím nebyl zadán žádný pokyn.",
-      actionText: "Nebylo provedeno nic.",
-      createdAt: ""
-    };
-  }
-  const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
-  const result = cleanText(payload.outcome || event.result).toLowerCase();
-  const state = result === "done" || result === "sent"
-    ? { tone: "done", label: "Provedeno" }
-    : result === "waiting_confirmation"
-      ? { tone: "confirmation", label: "Čeká na potvrzení" }
-      : result === "needs_input"
-        ? { tone: "input", label: "Potřebuji doplnit" }
-        : result === "failed" || result === "cannot_execute"
-          ? { tone: "error", label: "Nelze provést" }
-          : { tone: "info", label: "Informativní" };
-  const actionText = result === "waiting_confirmation"
-    ? cleanText(payload.proposedAction?.actionSummary || payload.understoodAs)
-    : cleanText(payload.performedAction) && payload.performedAction !== "Nebylo provedeno nic"
-      ? payload.performedAction
-      : "Nebylo provedeno nic.";
-  return {
-    ...state,
-    understoodAs: cleanText(payload.understoodAs || payload.intent || "Nejasný pokyn"),
-    actionText,
-    createdAt: cleanText(event.createdAt),
-    intent: cleanText(payload.intent),
-    result
-  };
 }
 
 export function dataBoxPlusConversationEntries(history = [], localEntries = []) {
