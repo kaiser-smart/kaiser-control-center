@@ -26920,8 +26920,82 @@ function neumorphVehicleTrackingRuntime(user) {
   };
 }
 
+function neumorphFleetRuntime(user) {
+  const base = {
+    canView: true,
+    canEdit: false,
+    canExport: false,
+    authRequired: !user,
+    loading: false,
+    loaded: false,
+    vehicles: [],
+    filteredVehicles: [],
+    driverCandidates: [],
+    summary: null,
+    apiStatus: "waiting",
+    provider: "",
+    source: "",
+    telemetrySource: "",
+    message: user ? "" : "Verejne static-only preview neni prihlasene do chraneneho Smart odpady API.",
+    error: "",
+    lastFetchedAt: "",
+    filters: { ...fleetUiState.vehicleFilters },
+    filtersActive: false,
+    typeOptions: [],
+    driverOptions: [],
+    sourceLabel: "Read-only API",
+    sourceDescription: "Seznam vozidel se nacita z chraneneho Smart odpady API.",
+    statusText: "",
+    activeTab: fleetTabFromHash(),
+    actionMessage: fleetUiState.message,
+    actionError: fleetUiState.error,
+    savingAssignmentVehicleId: fleetUiState.savingAssignmentVehicleId
+  };
+
+  if (!user) {
+    return base;
+  }
+
+  if (!canViewModule(user, "fleet")) {
+    return {
+      ...base,
+      canView: false,
+      authRequired: false,
+      error: "Aktualni role nema pristup k modulu Vozovy park."
+    };
+  }
+
+  return {
+    ...base,
+    canEdit: hasPermission(user, "fleet", "edit"),
+    canExport: hasPermission(user, "fleet", "export"),
+    authRequired: false,
+    loading: fleetVehiclesState.loading,
+    loaded: fleetVehiclesState.loaded,
+    vehicles: fleetVehiclesState.vehicles,
+    filteredVehicles: filteredFleetVehicles(),
+    driverCandidates: fleetVehiclesState.driverCandidates,
+    summary: fleetVehiclesState.summary,
+    apiStatus: fleetVehiclesState.apiStatus,
+    provider: fleetVehiclesState.provider,
+    source: fleetVehiclesState.source,
+    telemetrySource: fleetVehiclesState.telemetrySource,
+    message: fleetVehiclesState.message,
+    error: fleetVehiclesState.error,
+    lastFetchedAt: fleetVehiclesState.lastFetchedAt,
+    filters: { ...fleetUiState.vehicleFilters },
+    filtersActive: fleetVehicleFiltersActive(),
+    typeOptions: fleetVehicleTypeOptions(),
+    driverOptions: fleetVehicleDriverOptions(),
+    sourceLabel: fleetVehiclesSourceLabel(),
+    sourceDescription: fleetVehiclesSourceDescription(),
+    statusText: fleetVehiclesStatusText()
+  };
+}
+
 function neumorphRuntimeContext(user) {
   return {
+    fleet: neumorphFleetRuntime(user),
     collectionRoutes: neumorphCollectionRoutesRuntime(user),
     vehicleTracking: neumorphVehicleTrackingRuntime(user)
   };
@@ -26940,6 +27014,10 @@ function ensureNeumorphRuntimeData(path, user) {
 
   if (needsCollectionRoutes) {
     void loadCollectionRoutesPilot();
+  }
+
+  if (path.startsWith("/neumorph/vozovy-park") && canViewModule(user, "fleet")) {
+    void loadFleetVehicles();
   }
 
   if (path.startsWith("/neumorph/sledovani-vozidel") && canViewModule(user, "vehicle-tracking")) {
@@ -28140,9 +28218,15 @@ function handleFleetAction(button) {
   const action = button.dataset.fleetAction || "";
   const vehicleId = String(button.dataset.fleetVehicleId || "").trim();
   const target = String(button.dataset.fleetTarget || "").trim();
+  const routeBase = isNeumorphRoute(window.location.pathname) ? "/neumorph/vozovy-park" : FLEET_ROUTE;
 
   if (action === "openModule") {
-    guardedAccessAction(() => navigateToUrl(routeHref(FLEET_ROUTE)));
+    guardedAccessAction(() => navigateToUrl(routeHref(routeBase)));
+    return;
+  }
+
+  if (action === "refresh") {
+    void loadFleetVehicles({ force: true });
     return;
   }
 
@@ -28153,7 +28237,7 @@ function handleFleetAction(button) {
 
   if (action === "detail") {
     if (vehicleId) {
-      guardedAccessAction(() => navigateToUrl(routeHref(`${FLEET_ROUTE}/${encodeURIComponent(vehicleId)}`)));
+      guardedAccessAction(() => navigateToUrl(routeHref(`${routeBase}/${encodeURIComponent(vehicleId)}`)));
       return;
     }
 
