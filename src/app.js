@@ -24783,6 +24783,11 @@ function handleVehicleTrackingTcarsSelect(locationId, options = {}) {
   }
 
   vehicleTrackingLiveState.selectedLocationId = normalizedId;
+  if (isNeumorphMigrationPath()) {
+    render();
+    queueVehicleTrackingTcarsGoogleSync({ focusSelected: options.focusMap !== false });
+    return;
+  }
   syncVehicleTrackingTcarsSelectionDom(normalizedId);
   queueVehicleTrackingTcarsGoogleSync({ focusSelected: options.focusMap !== false });
 }
@@ -24805,6 +24810,11 @@ function handleVehicleTrackingWimSelect(siteId, options = {}) {
   }
 
   vehicleTrackingLiveState.selectedWimSiteId = normalizedId;
+  if (isNeumorphMigrationPath()) {
+    render();
+    queueVehicleTrackingTcarsGoogleSync({ focusWimSelected: options.focusMap !== false });
+    return;
+  }
   syncVehicleTrackingWimSelectionDom(normalizedId);
   queueVehicleTrackingTcarsGoogleSync({ focusWimSelected: options.focusMap !== false });
 }

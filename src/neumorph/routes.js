@@ -17,6 +17,7 @@ import {
 } from "./moduleRegistry.js";
 import { renderNeumorphCollectionRoutes } from "./modules/collectionRoutes.js";
 import { renderNeumorphDashboard } from "./modules/dashboard.js";
+import { renderNeumorphVehicleTracking } from "./modules/vehicleTracking.js";
 import { renderNeumorphSystemPreview } from "./systemPreview.js";
 
 export const NEUMORPH_ROUTE = NEUMORPH_BASE_ROUTE;
@@ -180,6 +181,10 @@ function renderNeumorphContent({ resolvedRoute, routeHref, user, runtime }) {
   if (resolvedRoute.view === "module") {
     if (resolvedRoute.module?.id === "collection-routes") {
       return renderNeumorphCollectionRoutes({ user, routeHref, runtime });
+    }
+
+    if (resolvedRoute.module?.id === "vehicle-tracking") {
+      return renderNeumorphVehicleTracking({ user, routeHref, runtime });
     }
 
     return renderNeumorphModulePage({ resolvedRoute, user, routeHref });
