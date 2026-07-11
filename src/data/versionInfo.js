@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.498"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.499"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Samoopravy: kontrola kanonických produkčních adres",
+    text: "Hodinový monitor ověřuje přímo kanonické adresy stránek s koncovým lomítkem. Legitimní přesměrování Cloudflare Pages už nevytváří falešné nálezy a kontrola zůstává v limitu 48 veřejných požadavků."
+  },
   {
     title: "Samoopravy: hodinový read-only cloud monitor",
     text: "Cloud Worker každou hodinu ověří nasazené stránky, zapíše a sloučí nálezy a připraví návrh promptu k ruční kontrole. Codex, změny repozitáře, pull request, nasazení a e-mail zůstávají vypnuté."

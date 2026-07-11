@@ -2558,7 +2558,7 @@ function createMockSelfRepairMonitorFinding() {
     actualBehavior: "Lokální test simuluje rozdílnou verzi assetu; do produkce se tento případ nezapisuje.",
     reproductionSteps: "Otevřít lokální /samoopravy a zkontrolovat detail případu.",
     sourceRoute: "/samoopravy",
-    buildVersion: "v0.1.498",
+    buildVersion: "v0.1.499",
     buildCommit: "local-mock",
     browserInfo: "",
     reporterUserId: "cloud:self-repair-monitor",

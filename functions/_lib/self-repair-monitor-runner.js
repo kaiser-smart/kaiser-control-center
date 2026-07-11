@@ -214,7 +214,8 @@ function safeRoutePath(value) {
   try {
     const parsed = new URL(cleaned, "https://smart-odpady.invalid");
     if (parsed.origin !== "https://smart-odpady.invalid") return "";
-    return parsed.pathname;
+    const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    return pathname === "/" ? "/" : `${pathname}/`;
   } catch {
     return "";
   }
