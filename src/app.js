@@ -1,4 +1,11 @@
 import { moduleDashboards, modules } from "./data/modules.js";
+import {
+  MAIN_DASHBOARD_ECONOMICS_METRICS,
+  MAIN_DASHBOARD_ECONOMICS_SOURCES,
+  MAIN_DASHBOARD_PERIODS,
+  mainDashboardPeriod,
+  mainDashboardVehicleSnapshot
+} from "./data/mainDashboard.js";
 import { AiAssistantChat } from "./components/AiAssistantChat.js";
 import { AiAssistantLauncher } from "./components/AiAssistantLauncher.js";
 import { AiAssistantPromoModal } from "./components/AiAssistantPromoModal.js";
@@ -1654,6 +1661,9 @@ const vehicleTrackingUiState = {
   routePanelOpen: false,
   routeRange: "24h"
 };
+const mainDashboardUiState = {
+  period: "30d"
+};
 
 let vehicleTrackingAudioContext = null;
 
@@ -2114,7 +2124,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
 ];
 
 const UI_SYSTEM_PILOT_NAV_LABELS = {
-  dashboard: "Přehled",
+  dashboard: "Dashboard",
   "quick-absence": "Rychlé zadání",
   "collection-routes": "Trasy svozu",
   "driver-reports": "Hlášení z vozidel",
@@ -5820,16 +5830,298 @@ function loginPage() {
   `;
 }
 
-function homeOperationsPanel(user) {
+function mainDashboardCanSeeEconomics(user) {
+  return isFullAccessRole(user)
+    || hasPermission(user, "costs", "view")
+    || hasPermission(user, "reports", "view");
+}
+
+function mainDashboardTrackingSnapshot() {
+  const groups = vehicleTrackingTcarsLocationGroups(vehicleTrackingLiveState.status || {});
+  return {
+    groups,
+    snapshot: mainDashboardVehicleSnapshot(groups.validLocations, groups.invalidVehicles),
+    summary: vehicleTrackingTcarsStatusSummary(vehicleTrackingLiveState.status || {}, vehicleTrackingLiveState.error)
+  };
+}
+
+function mainDashboardMetricCard(label, value, detail, tone = "neutral") {
   return `
-    <section class="home-ops-panel" aria-labelledby="home-ops-title">
-      <div class="home-ops-panel__copy">
-        <p class="home-ops-panel__eyebrow">Dnešní provoz</p>
-        <h2 id="home-ops-title">Co dnes vyžaduje pozornost?</h2>
-        <p>${escapeHtml(homeGreetingName(user))}, tady máš trasy, hlášení, zprávy a datové problémy v jednom klidném pracovním pohledu.</p>
+    <article class="main-dashboard-kpi main-dashboard-kpi--${escapeHtml(tone)}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(detail)}</small>
+    </article>
+  `;
+}
+
+function mainDashboardPeriodControl() {
+  const selected = mainDashboardPeriod(mainDashboardUiState.period);
+  return `
+    <div class="main-dashboard-period" role="group" aria-label="Období ekonomiky flotily">
+      ${MAIN_DASHBOARD_PERIODS.map((period) => `
+        <button
+          class="main-dashboard-period__button ${period.id === selected.id ? "main-dashboard-period__button--active" : ""}"
+          type="button"
+          data-main-dashboard-period="${escapeHtml(period.id)}"
+          aria-pressed="${period.id === selected.id ? "true" : "false"}"
+        >${escapeHtml(period.label)}</button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function mainDashboardEconomicsMetric(metric) {
+  return `
+    <article class="main-dashboard-economics-metric">
+      <div><span>${escapeHtml(metric.label)}</span><small>${escapeHtml(metric.source)}</small></div>
+      <strong>—</strong>
+      <span class="main-dashboard-state main-dashboard-state--waiting">Čeká na data</span>
+    </article>
+  `;
+}
+
+function mainDashboardDistanceChart(period, user) {
+  return `
+    <article class="main-dashboard-chart main-dashboard-chart--distance" data-main-dashboard-distance-chart>
+      <header class="main-dashboard-chart__header">
+        <div>
+          <span>Využití nákladních vozidel</span>
+          <h3>Produktivní vs. přejezdové km</h3>
+          <p>Podíl a skutečné kilometry za ${escapeHtml(period.context)}. Nezařazené km zůstanou samostatně, dokud je nepůjde bezpečně přiřadit.</p>
+        </div>
+        <span class="main-dashboard-state main-dashboard-state--proposal">UI návrh</span>
+      </header>
+      <div class="main-dashboard-chart__legend" aria-label="Budoucí kategorie kilometrů">
+        <span><i class="main-dashboard-chart__swatch main-dashboard-chart__swatch--productive"></i>Produktivní km</span>
+        <span><i class="main-dashboard-chart__swatch main-dashboard-chart__swatch--deadhead"></i>Přejezdové km</span>
+        <span><i class="main-dashboard-chart__swatch main-dashboard-chart__swatch--unknown"></i>Nezařazené km</span>
       </div>
-      <div class="home-ops-panel__metrics" aria-label="Rychlý provozní stav">
-        ${homeStatusMetrics()}
+      <div class="main-dashboard-chart__empty" role="status">
+        <div class="main-dashboard-chart__empty-bars" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <strong>Čeká na historii jízd a párování vozidla se zakázkou.</strong>
+        <p>Dashboard nezapočítává demo ani odhadované kilometry.</p>
+      </div>
+      <footer><span>Řazení po nasazení: nejvyšší podíl přejezdů první</span>${canViewModule(user, "vehicle-tracking") ? `<a href="${routeHref(VEHICLE_TRACKING_ROUTE)}" data-link>Otevřít Sledování vozidel</a>` : ""}</footer>
+    </article>
+  `;
+}
+
+function mainDashboardUnitEconomicsChart(period, user) {
+  return `
+    <article class="main-dashboard-chart main-dashboard-chart--unit" data-main-dashboard-unit-chart>
+      <header class="main-dashboard-chart__header">
+        <div>
+          <span>Jednotková ekonomika</span>
+          <h3>Výnos/km vs. náklad/km</h3>
+          <p>Porovnání za ${escapeHtml(period.context)} použije u obou hodnot stejný jmenovatel: všechny ujeté kilometry vozidla.</p>
+        </div>
+        <span class="main-dashboard-state main-dashboard-state--proposal">UI návrh</span>
+      </header>
+      <div class="main-dashboard-chart__legend" aria-label="Budoucí ekonomické hodnoty">
+        <span><i class="main-dashboard-chart__dot main-dashboard-chart__dot--revenue"></i>Výnos / km</span>
+        <span><i class="main-dashboard-chart__dot main-dashboard-chart__dot--cost"></i>Náklad / km</span>
+      </div>
+      <div class="main-dashboard-chart__empty main-dashboard-chart__empty--unit" role="status">
+        <div class="main-dashboard-chart__empty-lines" aria-hidden="true"><span></span><span></span><span></span></div>
+        <strong>Čeká na ověřené výnosy, náklady a celkové kilometry.</strong>
+        <p>Vozidlo bez úplného pokrytí se nebude řadit mezi nejlepší ani nejhorší.</p>
+      </div>
+      <footer><span>Budoucí řazení: nejnižší marže/km první</span>${canViewModule(user, "costs") ? `<a href="${routeHref("/naklady")}" data-link>Otevřít Náklady</a>` : ""}</footer>
+    </article>
+  `;
+}
+
+function mainDashboardEconomicsSection(user) {
+  if (!mainDashboardCanSeeEconomics(user)) {
+    return "";
+  }
+
+  const period = mainDashboardPeriod(mainDashboardUiState.period);
+  return `
+    <section class="main-dashboard-economics" data-main-dashboard-economics aria-labelledby="main-dashboard-economics-title">
+      <div class="main-dashboard-section-head">
+        <div>
+          <span class="main-dashboard-eyebrow">Nákladní vozidla · ekonomika</span>
+          <h2 id="main-dashboard-economics-title">Která vozidla vydělávají a která jen stojí peníze</h2>
+          <p>Dva hlavní pohledy pro management. Výpočty se aktivují až po nasazení ověřených zdrojů; do té doby zde nejsou žádné náhradní hodnoty.</p>
+        </div>
+        ${mainDashboardPeriodControl()}
+      </div>
+
+      <div class="main-dashboard-economics-metrics" aria-label="Budoucí ekonomické metriky">
+        ${MAIN_DASHBOARD_ECONOMICS_METRICS.map(mainDashboardEconomicsMetric).join("")}
+      </div>
+
+      <div class="main-dashboard-chart-grid">
+        ${mainDashboardDistanceChart(period, user)}
+        ${mainDashboardUnitEconomicsChart(period, user)}
+      </div>
+
+      <div class="main-dashboard-readiness" aria-label="Připravenost dat pro ekonomiku flotily">
+        <div>
+          <span class="main-dashboard-eyebrow">Datová připravenost</span>
+          <strong>Ekonomika zatím není funkční proces.</strong>
+          <small>Jde o UI návrh bez DB, nového API, automatizace a zápisu provozních dat.</small>
+        </div>
+        ${MAIN_DASHBOARD_ECONOMICS_SOURCES.map((source) => `
+          <article>
+            <div><strong>${escapeHtml(source.label)}</strong><small>${escapeHtml(source.detail)}</small></div>
+            <span class="main-dashboard-state main-dashboard-state--waiting">Čeká</span>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function mainDashboardAttentionTone(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric > 0 ? "attention" : "calm";
+  }
+  return "waiting";
+}
+
+function mainDashboardAttentionItem(item) {
+  return `
+    <a class="main-dashboard-attention main-dashboard-attention--${escapeHtml(mainDashboardAttentionTone(item.value))}" href="${routeHref(item.route)}" data-link>
+      <span class="main-dashboard-attention__value">${escapeHtml(item.value)}</span>
+      <span class="main-dashboard-attention__copy"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.detail)}</small></span>
+      <span class="main-dashboard-attention__action">${escapeHtml(item.action)}</span>
+    </a>
+  `;
+}
+
+function mainDashboardAttentionItems(user, snapshot) {
+  const items = [];
+  if (canViewModule(user, "vehicle-tracking")) {
+    items.push({
+      value: vehicleTrackingLiveState.error ? "—" : vehicleTrackingLiveState.loaded ? String(snapshot.noSignalCount) : "čeká",
+      label: "Vozidla bez signálu",
+      detail: "Aktuální read-only stav T-Cars.",
+      route: VEHICLE_TRACKING_ROUTE,
+      action: "Otevřít sledování"
+    });
+  }
+  if (canViewModule(user, "driver-reports")) {
+    items.push({
+      value: homeDriverReportsMetricValue(),
+      label: "Otevřená hlášení z vozidel",
+      detail: "Závady a požadavky, které nejsou uzavřené.",
+      route: DRIVER_REPORT_ROUTE,
+      action: "Otevřít hlášení"
+    });
+  }
+  if (canViewModule(user, COLLECTION_ROUTES_MODULE_KEY)) {
+    items.push({
+      value: homeCollectionRoutesMetricValue(),
+      label: "Trasy v provozním přehledu",
+      detail: "Read-only stav dostupných svozových podkladů.",
+      route: COLLECTION_ROUTES_ROUTE,
+      action: "Otevřít trasy"
+    });
+  }
+  if (canViewModule(user, DATA_BOX_PLUS_MODULE_KEY) || canViewModule(user, DATA_BOX_MODULE_KEY)) {
+    items.push({
+      value: homeDataBoxMetricValue(),
+      label: "Datové zprávy k pozornosti",
+      detail: "Nepřečtené nebo nevyřešené zprávy v dostupných schránkách.",
+      route: DATA_BOX_PLUS_ROUTE,
+      action: "Otevřít zprávy"
+    });
+  }
+  return items;
+}
+
+function mainDashboardFleetComposition(snapshot, hasData) {
+  const total = snapshot.movingCount + snapshot.standingCount + snapshot.unknownMotionCount + snapshot.noSignalCount;
+  if (!hasData || total <= 0) {
+    return `
+      <div class="main-dashboard-fleet-empty" role="status">
+        <strong>Čekám na první ověřený snímek flotily.</strong>
+        <span>Bez živých dat Dashboard nezobrazuje nulový provoz jako skutečnost.</span>
+      </div>
+    `;
+  }
+
+  const width = (value) => `${Math.max(0, (value / total) * 100).toFixed(2)}%`;
+  return `
+    <div class="main-dashboard-fleet-chart" aria-label="Složení aktuálního stavu flotily">
+      <div class="main-dashboard-fleet-chart__bar" aria-hidden="true">
+        <span class="main-dashboard-fleet-chart__moving" style="width:${width(snapshot.movingCount)}"></span>
+        <span class="main-dashboard-fleet-chart__standing" style="width:${width(snapshot.standingCount)}"></span>
+        <span class="main-dashboard-fleet-chart__unknown" style="width:${width(snapshot.unknownMotionCount)}"></span>
+        <span class="main-dashboard-fleet-chart__offline" style="width:${width(snapshot.noSignalCount)}"></span>
+      </div>
+      <div class="main-dashboard-fleet-chart__legend">
+        <span><i class="main-dashboard-fleet-chart__moving"></i>V pohybu <strong>${escapeHtml(snapshot.movingCount)}</strong></span>
+        <span><i class="main-dashboard-fleet-chart__standing"></i>Stojí <strong>${escapeHtml(snapshot.standingCount)}</strong></span>
+        <span><i class="main-dashboard-fleet-chart__unknown"></i>Bez rychlosti <strong>${escapeHtml(snapshot.unknownMotionCount)}</strong></span>
+        <span><i class="main-dashboard-fleet-chart__offline"></i>Bez signálu <strong>${escapeHtml(snapshot.noSignalCount)}</strong></span>
+      </div>
+    </div>
+  `;
+}
+
+function mainDashboardOperationsSection(user) {
+  const { snapshot, summary } = mainDashboardTrackingSnapshot();
+  const hasTrackingPermission = canViewModule(user, "vehicle-tracking");
+  const hasSnapshot = hasTrackingPermission
+    && !vehicleTrackingLiveState.error
+    && (summary.liveVerified || summary.isLive || snapshot.total > 0);
+  const valueOrWaiting = (value) => hasSnapshot ? String(value) : vehicleTrackingLiveState.error ? "—" : "čeká";
+  const fastestValue = hasSnapshot
+    ? snapshot.fastestSpeed === null ? "bez dat" : `${Math.round(snapshot.fastestSpeed)} km/h`
+    : vehicleTrackingLiveState.error ? "—" : "čeká";
+  const attentionItems = mainDashboardAttentionItems(user, snapshot);
+  const stateLabel = vehicleTrackingLiveState.loading
+    ? "Načítám T-Cars…"
+    : vehicleTrackingLiveState.error
+      ? "T-Cars data jsou nedostupná"
+      : summary.liveVerified
+        ? "Aktuální T-Cars snímek"
+        : vehicleTrackingLiveState.loaded
+          ? "Read-only stav čeká na ověření"
+          : "Čeká na načtení";
+  const lastUpdated = summary.lastUpdatedAt ? formatDateTime(summary.lastUpdatedAt) : "zatím bez hodnoty";
+
+  return `
+    <section class="main-dashboard-operations" aria-labelledby="main-dashboard-operations-title">
+      <div class="main-dashboard-section-head">
+        <div>
+          <span class="main-dashboard-eyebrow">Dnešní provoz</span>
+          <h2 id="main-dashboard-operations-title">Co se děje právě teď</h2>
+          <p>Živý provoz používá pouze existující read-only zdroje a respektuje oprávnění přihlášeného uživatele.</p>
+        </div>
+        <div class="main-dashboard-live-state">
+          <span aria-hidden="true"></span>
+          <div><strong>${escapeHtml(stateLabel)}</strong><small>Poslední hodnota ${escapeHtml(lastUpdated)}</small></div>
+          ${hasTrackingPermission ? `<button type="button" data-main-dashboard-refresh ${vehicleTrackingLiveState.loading ? "disabled" : ""}>Obnovit provoz</button>` : ""}
+        </div>
+      </div>
+
+      <div class="main-dashboard-kpis" aria-label="Aktuální stav flotily">
+        ${mainDashboardMetricCard("Vozidla celkem", valueOrWaiting(summary.vehiclesTotal || snapshot.total), "evidovaná ve zdroji T-Cars", "neutral")}
+        ${mainDashboardMetricCard("V pohybu", valueOrWaiting(snapshot.movingCount), "rychlost nad 2 km/h", "ready")}
+        ${mainDashboardMetricCard("Stojí", valueOrWaiting(snapshot.standingCount), "s dostupnou rychlostí", "standing")}
+        ${mainDashboardMetricCard("Bez signálu", valueOrWaiting(summary.withoutValidLocationCount || snapshot.noSignalCount), "vyžaduje kontrolu", snapshot.noSignalCount > 0 ? "warning" : "neutral")}
+        ${mainDashboardMetricCard("Nejvyšší rychlost nyní", fastestValue, "aktuální snímek, ne maximum za období", "accent")}
+      </div>
+
+      <div class="main-dashboard-operations-grid">
+        <article class="main-dashboard-fleet-panel">
+          <header><div><span>Flotila právě teď</span><h3>Pohyb, stání a dostupnost GPS</h3></div>${hasTrackingPermission ? `<a href="${routeHref(VEHICLE_TRACKING_ROUTE)}" data-link>Otevřít dispečink</a>` : ""}</header>
+          ${mainDashboardFleetComposition(snapshot, hasSnapshot)}
+        </article>
+        <aside class="main-dashboard-attention-list" aria-label="Co vyžaduje pozornost">
+          <header><span>Pracovní fronta</span><h3>Co vyžaduje pozornost</h3></header>
+          ${attentionItems.length
+            ? attentionItems.map(mainDashboardAttentionItem).join("")
+            : `<div class="main-dashboard-fleet-empty"><strong>Pro tvoje oprávnění tu není žádná pracovní fronta.</strong><span>Otevři dostupný modul z přehledu níže.</span></div>`}
+        </aside>
       </div>
     </section>
   `;
@@ -5839,6 +6131,9 @@ function homePage(user) {
   ensureDataBoxData();
   if (canViewModule(user, "driver-reports")) {
     ensureDriverReportsData();
+  }
+  if (canViewModule(user, "vehicle-tracking")) {
+    loadVehicleTrackingStatus();
   }
   const modulesForUser = hasPermission(user, "absence", "create")
     ? [quickAbsenceMenuItem, ...menuModules(user)]
@@ -5855,25 +6150,26 @@ function homePage(user) {
         </div>
         ${userBar(user)}
       </div>
-      <section class="home-hero ui-pilot-hero" aria-labelledby="home-title">
+      <section class="home-hero ui-pilot-hero main-dashboard-hero" aria-labelledby="home-title">
         <div class="home-hero__main">
-          <p class="ui-pilot-eyebrow">Kaiser Smart / hlavní práce</p>
-          <h1 id="home-title" class="home-brand-title">Přehled systému</h1>
-          <p class="home-subtitle">Příjemný provozní vstup do tras, hlášení, zpráv a úkolů. Zachovává reálná oprávnění i stávající API data.</p>
+          <p class="ui-pilot-eyebrow">Kaiser Smart / hlavní dashboard</p>
+          <h1 id="home-title" class="home-brand-title">Dashboard firmy</h1>
+          <p class="home-subtitle">Provoz, výjimky a budoucí ekonomika flotily v jednom rozhodovacím přehledu.</p>
           <div class="ui-pilot-chip-row" aria-label="Stav rozhraní">
-            <span class="ui-pilot-chip ui-pilot-chip--active">Nový vzhled</span>
+            <span class="ui-pilot-chip ui-pilot-chip--active">Read-only provoz</span>
+            <span class="ui-pilot-chip">Ekonomika čeká na data</span>
             <span class="ui-pilot-chip">Reálná oprávnění</span>
-            <span class="ui-pilot-chip">Stávající API</span>
           </div>
           <div class="ui-pilot-hero__actions">
-            <a class="primary-link" href="${routeHref(COLLECTION_ROUTES_ROUTE)}" data-link>Otevřít trasy svozu</a>
-            <a class="secondary-link" href="#module-section-today-tasks">Dnešní práce</a>
+            ${canViewModule(user, "vehicle-tracking") ? `<a class="primary-link" href="${routeHref(VEHICLE_TRACKING_ROUTE)}" data-link>Otevřít Sledování vozidel</a>` : ""}
+            <a class="secondary-link" href="#main-dashboard-modules">Otevřít moduly</a>
           </div>
         </div>
         <div class="ui-pilot-hero__icon" aria-hidden="true">${uiSystemPilotIcon("dashboard")}</div>
       </section>
-      ${homeOperationsPanel(user)}
-      <div class="home-module-sections" aria-label="Hlavní moduly">
+      ${mainDashboardEconomicsSection(user)}
+      ${mainDashboardOperationsSection(user)}
+      <div class="home-module-sections" id="main-dashboard-modules" aria-label="Hlavní moduly">
         ${moduleSections}
       </div>
       ${VersionNewsInfo()}
@@ -40753,11 +41049,11 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
-  if (path === "/") {
+  if (path === "/" || path === "/dashboard") {
     ensureCollectionRoutesSvozKaiserWatchdog(user);
     app.innerHTML = homePage(user);
     ensureDataBoxPlusHomeStatus(user);
-    document.title = APP_NAME;
+    document.title = `Dashboard firmy | ${APP_NAME}`;
     return;
   }
 
@@ -44227,6 +44523,21 @@ document.addEventListener("pointerup", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const mainDashboardPeriodButton = event.target.closest("[data-main-dashboard-period]");
+  if (mainDashboardPeriodButton) {
+    event.preventDefault();
+    mainDashboardUiState.period = mainDashboardPeriod(mainDashboardPeriodButton.dataset.mainDashboardPeriod).id;
+    render();
+    return;
+  }
+
+  const mainDashboardRefresh = event.target.closest("[data-main-dashboard-refresh]");
+  if (mainDashboardRefresh) {
+    event.preventDefault();
+    await loadVehicleTrackingStatus({ force: true });
+    return;
+  }
+
   const dataBoxPlusCommandPage = event.target.closest("[data-ds-plus-command-page]");
   if (dataBoxPlusCommandPage) {
     event.preventDefault();

@@ -17,12 +17,12 @@ import {
 export const modules = [
   {
     id: "dashboard",
-    title: "Dashboard",
-    description: "Rychlý přehled dnešního provozu, otevřených úkolů a důležitých stavů.",
+    title: "Dashboard firmy",
+    description: "Provoz, pracovní výjimky a budoucí ekonomika flotily v jednom rozhodovacím přehledu.",
     route: "/dashboard",
     icon: DashboardIcon,
-    status: "připraveno",
-    ctaLabel: "Zobrazit přehled",
+    status: "Read-only pilot",
+    ctaLabel: "Otevřít dashboard",
     active: true,
     disabled: false,
     order: 1
