@@ -2057,6 +2057,102 @@ function homeModuleSections(modulesForUser, user) {
     .join("");
 }
 
+const UI_SYSTEM_PILOT_NAV_GROUPS = [
+  {
+    label: "Přehled",
+    moduleIds: ["dashboard"]
+  },
+  {
+    label: "Hlavní práce",
+    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "data-box-plus"]
+  },
+  {
+    label: "Provoz a správa",
+    moduleIds: ["fleet", "absence", "receivables", "settings"]
+  }
+];
+
+const UI_SYSTEM_PILOT_NAV_LABELS = {
+  dashboard: "Přehled",
+  "quick-absence": "Rychlé zadání",
+  "collection-routes": "Trasy svozu",
+  "driver-reports": "Hlášení z vozidel",
+  "vehicle-tracking": "Poloha vozidel",
+  "data-box-plus": "Datové schránky",
+  fleet: "Vozidla",
+  absence: "Nepřítomnosti",
+  receivables: "Nezaplacené faktury",
+  settings: "Nastavení"
+};
+
+function uiSystemPilotModulesForUser(user) {
+  const items = hasPermission(user, "absence", "create")
+    ? [quickAbsenceMenuItem, ...menuModules(user)]
+    : menuModules(user);
+
+  return new Map(items.map((moduleItem) => [moduleItem.id, moduleItem]));
+}
+
+function uiSystemPilotModuleHref(moduleItem, user) {
+  return routeHref(moduleItem.id === "dashboard" ? "/" : routeForModuleCard(moduleItem, user));
+}
+
+function uiSystemPilotSidebar(user, activeModuleId = "dashboard") {
+  const modulesById = uiSystemPilotModulesForUser(user);
+  const groups = UI_SYSTEM_PILOT_NAV_GROUPS.map((group) => {
+    const items = group.moduleIds.map((moduleId) => modulesById.get(moduleId)).filter(Boolean);
+    if (!items.length) {
+      return "";
+    }
+
+    return `
+      <section class="ui-pilot-nav__group" aria-label="${escapeHtml(group.label)}">
+        <p>${escapeHtml(group.label)}</p>
+        <div class="ui-pilot-nav__items">
+          ${items.map((moduleItem) => {
+            const active = moduleItem.id === activeModuleId;
+            return `
+              <a
+                class="ui-pilot-nav__item ${active ? "ui-pilot-nav__item--active" : ""}"
+                href="${uiSystemPilotModuleHref(moduleItem, user)}"
+                data-link
+                ${active ? 'aria-current="page"' : ""}
+              >
+                <span class="ui-pilot-nav__icon" aria-hidden="true">${renderModuleIcon(moduleItem)}</span>
+                <span>${escapeHtml(UI_SYSTEM_PILOT_NAV_LABELS[moduleItem.id] || moduleItem.title)}</span>
+              </a>
+            `;
+          }).join("")}
+        </div>
+      </section>
+    `;
+  }).join("");
+
+  return `
+    <aside class="ui-pilot-sidebar" aria-label="Hlavní navigace UI pilotu">
+      <a class="ui-pilot-brand" href="${routeHref("/")}" data-link aria-label="${APP_NAME}">
+        <span class="kaiser-logo">kaiser.</span>
+        <span class="ui-pilot-brand__copy">
+          <strong>Smart odpady</strong>
+          <small>Provozní systém</small>
+        </span>
+      </a>
+      <nav class="ui-pilot-nav" aria-label="Moduly">
+        ${groups}
+      </nav>
+      <div class="ui-pilot-sidebar__footer">
+        <span>UI pilot</span>
+        <small>HP + Svozové trasy</small>
+      </div>
+    </aside>
+  `;
+}
+
+function uiSystemPilotIcon(moduleId) {
+  const moduleItem = orderedModules.find((item) => item.id === moduleId);
+  return moduleItem ? renderModuleIcon(moduleItem) : "";
+}
+
 function visibleDashboardRoutes(user) {
   return filterModulesByUser(user, moduleDashboards);
 }
@@ -5678,8 +5774,8 @@ function homeOperationsPanel(user) {
     <section class="home-ops-panel" aria-labelledby="home-ops-title">
       <div class="home-ops-panel__copy">
         <p class="home-ops-panel__eyebrow">Dnešní provoz</p>
-        <h2 id="home-ops-title">Co dnes hoří?</h2>
-        <p>${escapeHtml(homeGreetingName(user))}, tady jsou trasy, hlášení, zprávy a chyby, které stojí za pozornost.</p>
+        <h2 id="home-ops-title">Co dnes vyžaduje pozornost?</h2>
+        <p>${escapeHtml(homeGreetingName(user))}, tady máš trasy, hlášení, zprávy a datové problémy v jednom klidném pracovním pohledu.</p>
       </div>
       <div class="home-ops-panel__metrics" aria-label="Rychlý provozní stav">
         ${homeStatusMetrics()}
@@ -5699,18 +5795,31 @@ function homePage(user) {
   const moduleSections = homeModuleSections(modulesForUser, user);
 
   return `
-    <main class="app-shell module-theme-scope" ${moduleThemeStyleAttribute()}>
-      <section class="home-hero" aria-labelledby="home-title">
-        <div class="home-hero__main">
-          <h1 id="home-title" class="home-brand-title">
-            <a class="home-brand-logo" href="${routeHref("/")}" data-link aria-label="${APP_NAME}">
-              <img src="smart-odpady-logo.png" alt="${APP_NAME}" width="492" height="216" />
-            </a>
-            <span class="sr-only">${APP_NAME}</span>
-          </h1>
-          <p class="home-subtitle">${HOME_SUBTITLE}</p>
+    <main class="app-shell module-theme-scope ui-system-pilot ui-system-pilot--home" ${moduleThemeStyleAttribute()}>
+      ${uiSystemPilotSidebar(user, "dashboard")}
+      <div class="ui-pilot-toolbar">
+        <div class="ui-pilot-toolbar__mode">
+          <span>Interní náhled</span>
+          <small>UI pilot bez změny provozních dat</small>
         </div>
         ${userBar(user)}
+      </div>
+      <section class="home-hero ui-pilot-hero" aria-labelledby="home-title">
+        <div class="home-hero__main">
+          <p class="ui-pilot-eyebrow">Kaiser Smart / hlavní práce</p>
+          <h1 id="home-title" class="home-brand-title">Přehled systému</h1>
+          <p class="home-subtitle">Příjemný provozní vstup do tras, hlášení, zpráv a úkolů. Zachovává reálná oprávnění i stávající API data.</p>
+          <div class="ui-pilot-chip-row" aria-label="Stav pilotu">
+            <span class="ui-pilot-chip ui-pilot-chip--active">UI pilot</span>
+            <span class="ui-pilot-chip">Reálná oprávnění</span>
+            <span class="ui-pilot-chip">Stávající API</span>
+          </div>
+          <div class="ui-pilot-hero__actions">
+            <a class="primary-link" href="${routeHref(COLLECTION_ROUTES_ROUTE)}" data-link>Otevřít trasy svozu</a>
+            <a class="secondary-link" href="#module-section-today-tasks">Dnešní práce</a>
+          </div>
+        </div>
+        <div class="ui-pilot-hero__icon" aria-hidden="true">${uiSystemPilotIcon("dashboard")}</div>
       </section>
       ${homeOperationsPanel(user)}
       <div class="home-module-sections" aria-label="Hlavní moduly">
@@ -21196,27 +21305,33 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
   }
   const isSourceRoutesTab = activeTab === "svozove-trasy";
   return `
-    <main class="app-shell module-page module-theme-scope collection-routes-page" ${moduleThemeStyleAttribute()}>
-      ${userBar(user)}
-      <nav class="topbar" aria-label="Navigace">
-        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
-        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
-      </nav>
+    <main class="app-shell module-page module-theme-scope collection-routes-page ui-system-pilot ui-system-pilot--routes" ${moduleThemeStyleAttribute()}>
+      ${uiSystemPilotSidebar(user, "collection-routes")}
+      <div class="ui-pilot-toolbar">
+        <nav class="topbar" aria-label="Navigace">
+          <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+        </nav>
+        ${userBar(user)}
+      </div>
 
-      ${isSourceRoutesTab ? "" : `
-      <section class="module-detail collection-routes-hero" aria-labelledby="collection-routes-title">
+      <section class="module-detail collection-routes-hero ui-pilot-hero ui-pilot-module-hero" aria-labelledby="collection-routes-title">
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div class="module-detail__body">
           <div class="module-detail__eyebrow">SMART ODPADY / TRASY SVOZU</div>
           <h1 id="collection-routes-title">${escapeHtml(title)}</h1>
-          <p>Správa importů, kontrol a read-only mapování pro svozové trasy.</p>
+          <p>${isSourceRoutesTab ? "Denní trasy, filtry, tiskové podklady a řidičský náhled v jednom pracovním toku." : "Správa kontrol a read-only mapování pro svozové trasy."}</p>
+          <div class="ui-pilot-chip-row" aria-label="Provozní stav modulu">
+            <span class="ui-pilot-chip ui-pilot-chip--active">Read-only pilot</span>
+            <span class="ui-pilot-chip">Reálná data</span>
+            <span class="ui-pilot-chip">Bez zápisu do Vistosu</span>
+          </div>
           <div class="module-detail__status">
             <span>Stav</span>
             <strong>Read-only pilot</strong>
           </div>
         </div>
+        <div class="ui-pilot-hero__icon" aria-hidden="true">${renderModuleIcon(moduleItem)}</div>
       </section>
-      `}
 
       <nav class="collection-routes-tabs" aria-label="Sekce Tras svozu" role="tablist">
         ${visibleTabs.map((tab) => `
