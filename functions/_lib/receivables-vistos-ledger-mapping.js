@@ -95,6 +95,11 @@ function boundedInteger(value, fallback, max) {
   return Math.min(number, max);
 }
 
+function boundedOffset(value) {
+  const number = Math.floor(Number(value));
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+}
+
 function database(env, required = false) {
   const db = env?.[DB_BINDING] || null;
   if (!db && required) {
@@ -173,6 +178,15 @@ function mapCustomerMetadata(row = {}, attempt = {}) {
     zip: firstValue(row, ["Zip", "PSC"]),
     rawKeys: Object.keys(row || {}).slice(0, 60)
   };
+}
+
+export function classifyReceivablesDirectoryIcoValues(values = []) {
+  const unique = [...new Set(values.map((value) => compactDigits(value)).filter(Boolean))];
+  if (!unique.length) return { status: "missing_ico", ico: "" };
+  if (unique.length > 1) return { status: "multiple_ico_candidates", ico: "" };
+  return /^\d{8}$/.test(unique[0])
+    ? { status: "found_valid_ico", ico: unique[0] }
+    : { status: "found_invalid_ico", ico: unique[0] };
 }
 
 function mapInvoiceManager(row = {}, attempt = {}) {
@@ -525,6 +539,112 @@ async function loadCustomerMetadataForCandidate(env, session, candidate = {}) {
   }
 
   return { metadata: null, status: "missing_metadata", attempts };
+}
+
+async function lookupCustomerIco(env, session, candidate = {}) {
+  const attempts = customerLookupAttemptsForCandidate(candidate)
+    .filter((attempt) => !attempt.key.includes("reg_number"));
+  const diagnostics = [];
+  for (const attempt of attempts) {
+    try {
+      const page = await getVistosPage(env, session, attempt.entityName, CUSTOMER_COLUMNS, attempt.filter, 0, 3);
+      const classified = classifyReceivablesDirectoryIcoValues(page.rows.map((row) => mapCustomerMetadata(row, attempt).ico));
+      diagnostics.push({
+        key: attempt.key,
+        entityName: attempt.entityName,
+        ok: true,
+        returnedRows: page.rows.length,
+        status: classified.status
+      });
+      if (classified.status !== "missing_ico") {
+        return { ...classified, sourceEntity: attempt.entityName, sourceAttemptKey: attempt.key, diagnostics };
+      }
+    } catch (error) {
+      diagnostics.push({
+        key: attempt.key,
+        entityName: attempt.entityName,
+        ok: false,
+        code: clean(error?.code),
+        message: clean(error?.message).slice(0, 120)
+      });
+    }
+  }
+  return { status: "missing_ico", ico: "", sourceEntity: "", sourceAttemptKey: "", diagnostics };
+}
+
+export async function auditReceivablesVistosCustomerDirectory(env, options = {}) {
+  const db = database(env, true);
+  const offset = boundedOffset(options.offset);
+  const limit = boundedInteger(options.limit, 25, 80);
+  const countRow = await db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM receivable_customers
+    WHERE TRIM(COALESCE(ico, '')) = ''
+      AND TRIM(COALESCE(visto_company_id, '')) <> ''
+  `).first();
+  const total = numberValue(countRow?.count);
+  const customersResult = await db.prepare(`
+    SELECT id, visto_company_id, visto_branch_id
+    FROM receivable_customers
+    WHERE TRIM(COALESCE(ico, '')) = ''
+      AND TRIM(COALESCE(visto_company_id, '')) <> ''
+    ORDER BY visto_company_id ASC
+    LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+  const customers = customersResult.results || [];
+
+  if (!customers.length) {
+    return {
+      apiStatus: "empty",
+      readOnly: true,
+      writesD1: false,
+      sendsCustomerCommunication: false,
+      startsAutomation: false,
+      results: [],
+      summary: { processed: 0, foundValidIco: 0, foundInvalidIco: 0, missingIco: 0, multipleCandidates: 0 },
+      pagination: { offset, limit, returned: 0, total, nextOffset: offset, done: true }
+    };
+  }
+  if (!isVistosExecuteConfigured(env)) {
+    throw new ReceivablesVistosLedgerMappingError("Vistos API není nakonfigurováno.", 503, "vistos_not_configured");
+  }
+
+  const session = await loginVistosExecute(env);
+  const results = [];
+  for (const customer of customers) {
+    const lookup = await lookupCustomerIco(env, session, {
+      customerCompanyId: clean(customer.visto_company_id),
+      customerBranchId: clean(customer.visto_branch_id)
+    });
+    results.push({
+      customerId: clean(customer.id),
+      vistoCompanyId: clean(customer.visto_company_id),
+      status: lookup.status,
+      ico: lookup.ico,
+      sourceEntity: lookup.sourceEntity,
+      sourceAttemptKey: lookup.sourceAttemptKey,
+      attemptCount: lookup.diagnostics.length,
+      failedAttemptCount: lookup.diagnostics.filter((item) => !item.ok).length
+    });
+  }
+
+  const nextOffset = offset + results.length;
+  return {
+    apiStatus: "ready",
+    readOnly: true,
+    writesD1: false,
+    sendsCustomerCommunication: false,
+    startsAutomation: false,
+    results,
+    summary: {
+      processed: results.length,
+      foundValidIco: results.filter((item) => item.status === "found_valid_ico").length,
+      foundInvalidIco: results.filter((item) => item.status === "found_invalid_ico").length,
+      missingIco: results.filter((item) => item.status === "missing_ico").length,
+      multipleCandidates: results.filter((item) => item.status === "multiple_ico_candidates").length
+    },
+    pagination: { offset, limit, returned: results.length, total, nextOffset, done: nextOffset >= total }
+  };
 }
 
 async function enrichCustomerMetadata(env, candidates = [], options = {}) {

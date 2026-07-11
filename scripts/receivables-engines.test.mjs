@@ -18,9 +18,24 @@ import {
 } from "../functions/_lib/receivables-vistos-preview.js";
 import {
   buildReceivablesVistosLedgerMapping,
+  classifyReceivablesDirectoryIcoValues,
   customerLinkProbeAttemptsForCandidate,
   customerLookupAttemptsForCandidate
 } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
+
+assert.deepEqual(classifyReceivablesDirectoryIcoValues([]), { status: "missing_ico", ico: "" });
+assert.deepEqual(classifyReceivablesDirectoryIcoValues(["26274906", "26274906"]), {
+  status: "found_valid_ico",
+  ico: "26274906"
+});
+assert.deepEqual(classifyReceivablesDirectoryIcoValues(["1234"]), {
+  status: "found_invalid_ico",
+  ico: "1234"
+});
+assert.deepEqual(classifyReceivablesDirectoryIcoValues(["26274906", "12345678"]), {
+  status: "multiple_ico_candidates",
+  ico: ""
+});
 import {
   receivablesKbApiOnboardingStatus,
   receivablesKbApiSandboxProbe
