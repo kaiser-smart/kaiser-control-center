@@ -25,6 +25,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Guard publishing lock
+        shell: bash
+        run: |
+          if [[ -f .publish-lock ]]; then
+            echo "::error::Zverejnovani je zamknute souborem .publish-lock."
+            sed -n '1,5p' .publish-lock
+            exit 1
+          fi
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

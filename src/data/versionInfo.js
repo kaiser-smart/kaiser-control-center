@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.501"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.502"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -21,8 +21,8 @@ export const versionInfo = {
 
 export const versionNews = [
   {
-    title: "UI pilot: sladěná HP a Svozové trasy",
-    text: "Hlavní stránka a Svozové trasy mají zkušební jednotný šedo-zelený vzhled podle schválené reference. Pilot používá Quicksand, stávající oprávnění, reálná API data a zachovává všechny pracovní funkce modulu; nemění backend ani provozní data."
+    title: "Jednotné rozhraní celé aplikace",
+    text: "Přihlášení, hlavní stránka a všechny přihlášené moduly používají společný klidný šedo-zelený design systém, Quicksand a přesnou firemní zelenou #75bd25. Nový shell zachovává stávající oprávnění, API data i pracovní funkce; nemění backend, databázi ani provozní data."
   },
   {
     title: "Datové schránky Plus: jednodušší pracovní navigace",

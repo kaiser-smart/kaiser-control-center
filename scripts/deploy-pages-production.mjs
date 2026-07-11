@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const PROJECT_NAME = "kaiser-control-center-legacy";
 const REQUIRED_BRANCH = "main";
+const PUBLISH_LOCK_FILE = ".publish-lock";
 const PROTECTED_COMMITS = [
   {
     sha: "16074246",
@@ -44,6 +45,18 @@ function fail(message) {
 
 function git(args, options = {}) {
   return run("git", args, options);
+}
+
+function assertPublishingUnlocked() {
+  if (!existsSync(PUBLISH_LOCK_FILE)) {
+    return;
+  }
+
+  const reason = readFileSync(PUBLISH_LOCK_FILE, "utf8").trim();
+  fail([
+    `zverejnovani je zamknute souborem ${PUBLISH_LOCK_FILE}.`,
+    reason || "Odemknuti vyzaduje novy vyslovny pokyn."
+  ].join("\n"));
 }
 
 function assertCleanWorktree() {
@@ -125,6 +138,7 @@ function assertBuiltMeta(head, version) {
   }
 }
 
+assertPublishingUnlocked();
 assertCleanWorktree();
 const { head } = assertProductionHead();
 const version = packageVersion();

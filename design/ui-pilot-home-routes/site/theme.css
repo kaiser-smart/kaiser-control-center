@@ -4,9 +4,9 @@
   --surface: #f0f2f3;
   --surface-soft: #e9edef;
   --white: #ffffff;
-  --primary: #83b444;
-  --primary-action: #538020;
-  --primary-strong: #4a701e;
+  --primary: #75bd25;
+  --primary-action: #75bd25;
+  --primary-strong: #11191d;
   --primary-soft: #d4e2c4;
   --primary-pale: #edf4e7;
   --text: #11191d;
@@ -103,7 +103,7 @@ button {
   overflow: hidden;
   border-radius: 8px;
   background: var(--primary-action);
-  box-shadow: 0 9px 20px rgba(83, 128, 32, 0.22);
+  box-shadow: 0 9px 20px rgba(117, 189, 37, 0.22);
 }
 
 .brand-mark img {
@@ -196,7 +196,7 @@ button {
 }
 
 .nav-item:focus-visible {
-  box-shadow: 0 0 0 3px rgba(131, 180, 68, 0.22);
+  box-shadow: 0 0 0 3px rgba(117, 189, 37, 0.22);
 }
 
 .nav-item-muted {
@@ -338,7 +338,7 @@ button {
   width: 330px;
   height: 330px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(131, 180, 68, 0.13), transparent 68%);
+  background: radial-gradient(circle, rgba(117, 189, 37, 0.13), transparent 68%);
   content: "";
   pointer-events: none;
 }
@@ -427,8 +427,8 @@ button {
 .primary-button {
   border: 1px solid var(--primary-action);
   background: var(--primary-action);
-  color: var(--white);
-  box-shadow: 0 10px 20px rgba(83, 128, 32, 0.24);
+  color: var(--text);
+  box-shadow: 0 10px 20px rgba(117, 189, 37, 0.24);
 }
 
 .secondary-button {
@@ -448,7 +448,7 @@ button {
 
 .primary-button:focus-visible,
 .secondary-button:focus-visible {
-  box-shadow: 0 0 0 3px rgba(131, 180, 68, 0.26);
+  box-shadow: 0 0 0 3px rgba(117, 189, 37, 0.26);
 }
 
 .hero-symbol {

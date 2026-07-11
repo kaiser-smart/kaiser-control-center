@@ -2067,8 +2067,20 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
     moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "data-box-plus"]
   },
   {
-    label: "Provoz a správa",
-    moduleIds: ["fleet", "absence", "receivables", "settings"]
+    label: "Vozidla a servis",
+    moduleIds: ["fleet", "service-maintenance", "tyres"]
+  },
+  {
+    label: "Zákazníci a trasy",
+    moduleIds: ["sampling-routes", "vistos"]
+  },
+  {
+    label: "Finance a reporty",
+    moduleIds: ["receivables", "costs", "reports"]
+  },
+  {
+    label: "Správa systému",
+    moduleIds: ["absence", "users", "settings", "system-check", "self-repair", "feedback"]
   }
 ];
 
@@ -2080,9 +2092,19 @@ const UI_SYSTEM_PILOT_NAV_LABELS = {
   "vehicle-tracking": "Poloha vozidel",
   "data-box-plus": "Datové schránky",
   fleet: "Vozidla",
+  "service-maintenance": "Servis vozidel",
+  tyres: "Pneumatiky",
+  "sampling-routes": "Odběrové trasy",
+  vistos: "Zákazníci / Vistos",
+  costs: "Náklady",
+  reports: "Reporty",
   absence: "Nepřítomnosti",
+  users: "Uživatelé a role",
   receivables: "Nezaplacené faktury",
-  settings: "Nastavení"
+  settings: "Nastavení",
+  "system-check": "Stav systému",
+  "self-repair": "Samoopravy",
+  feedback: "Úkoly a připomínky"
 };
 
 function uiSystemPilotModulesForUser(user) {
@@ -2129,7 +2151,7 @@ function uiSystemPilotSidebar(user, activeModuleId = "dashboard") {
   }).join("");
 
   return `
-    <aside class="ui-pilot-sidebar" aria-label="Hlavní navigace UI pilotu">
+    <aside class="ui-pilot-sidebar" aria-label="Hlavní navigace aplikace">
       <a class="ui-pilot-brand" href="${routeHref("/")}" data-link aria-label="${APP_NAME}">
         <span class="kaiser-logo">kaiser.</span>
         <span class="ui-pilot-brand__copy">
@@ -2141,8 +2163,8 @@ function uiSystemPilotSidebar(user, activeModuleId = "dashboard") {
         ${groups}
       </nav>
       <div class="ui-pilot-sidebar__footer">
-        <span>UI pilot</span>
-        <small>HP + Svozové trasy</small>
+        <span>Nové rozhraní</span>
+        <small>Jednotný styl celé aplikace</small>
       </div>
     </aside>
   `;
@@ -5799,8 +5821,8 @@ function homePage(user) {
       ${uiSystemPilotSidebar(user, "dashboard")}
       <div class="ui-pilot-toolbar">
         <div class="ui-pilot-toolbar__mode">
-          <span>Interní náhled</span>
-          <small>UI pilot bez změny provozních dat</small>
+          <span>Nové rozhraní</span>
+          <small>Bez změny provozních dat</small>
         </div>
         ${userBar(user)}
       </div>
@@ -5809,8 +5831,8 @@ function homePage(user) {
           <p class="ui-pilot-eyebrow">Kaiser Smart / hlavní práce</p>
           <h1 id="home-title" class="home-brand-title">Přehled systému</h1>
           <p class="home-subtitle">Příjemný provozní vstup do tras, hlášení, zpráv a úkolů. Zachovává reálná oprávnění i stávající API data.</p>
-          <div class="ui-pilot-chip-row" aria-label="Stav pilotu">
-            <span class="ui-pilot-chip ui-pilot-chip--active">UI pilot</span>
+          <div class="ui-pilot-chip-row" aria-label="Stav rozhraní">
+            <span class="ui-pilot-chip ui-pilot-chip--active">Nový vzhled</span>
             <span class="ui-pilot-chip">Reálná oprávnění</span>
             <span class="ui-pilot-chip">Stávající API</span>
           </div>
@@ -40147,11 +40169,68 @@ function renderApp() {
   renderAuthenticatedApp(user);
 }
 
+function uiSystemV2ActiveModuleId(path) {
+  const normalizedPath = normalizePath(path);
+
+  if (normalizedPath === ABSENCE_QUICK_ROUTE) {
+    return "quick-absence";
+  }
+
+  const exactModuleId = moduleIdForAiRoute(normalizedPath);
+  if (exactModuleId) {
+    return exactModuleId;
+  }
+
+  const nestedModule = permissionModules.find((moduleItem) => {
+    const moduleRoute = normalizePath(moduleItem.route);
+    return normalizedPath === moduleRoute || normalizedPath.startsWith(`${moduleRoute}/`);
+  });
+
+  return nestedModule?.id || "dashboard";
+}
+
+function applyUiSystemV2() {
+  const shell = app.querySelector(":scope > main.app-shell.module-theme-scope");
+  const user = currentUser();
+
+  if (!shell || !user) {
+    return;
+  }
+
+  const activeModuleId = uiSystemV2ActiveModuleId(window.location.pathname);
+  shell.classList.add("ui-system-v2");
+  shell.dataset.uiModule = activeModuleId;
+
+  if (!shell.querySelector(":scope > .ui-pilot-sidebar")) {
+    shell.insertAdjacentHTML("afterbegin", uiSystemPilotSidebar(user, activeModuleId));
+  }
+
+  if (!shell.querySelector(":scope > .ui-pilot-toolbar, :scope > .ui-system-v2__toolbar")) {
+    const toolbar = document.createElement("div");
+    const topbar = shell.querySelector(":scope > .topbar");
+    const userbar = shell.querySelector(":scope > .user-bar");
+    const sidebar = shell.querySelector(":scope > .ui-pilot-sidebar");
+
+    toolbar.className = "ui-system-v2__toolbar";
+
+    if (topbar) {
+      toolbar.append(topbar);
+    }
+
+    if (userbar) {
+      toolbar.append(userbar);
+    }
+
+    sidebar?.insertAdjacentElement("afterend", toolbar);
+  }
+}
+
 function render() {
   try {
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
     renderApp();
+    applyUiSystemV2();
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
     syncAssistantPromoVideo();
