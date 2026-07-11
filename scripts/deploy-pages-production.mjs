@@ -132,6 +132,7 @@ const backupDate = buildDate();
 
 runVisible("node", ["scripts/check-syntax.mjs"]);
 runVisible("node", ["scripts/collection-route-source-parser.test.mjs"]);
+runVisible("node", ["scripts/collection-daily-routes.test.mjs"]);
 runVisible("node", ["scripts/build.mjs"], {
   env: {
     ...process.env,
