@@ -22,6 +22,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="src/styles.css" />
+    <link rel="stylesheet" href="src/ui-system-pilot.css" />
   </head>
   <body>
     <div id="app"></div>
@@ -35,7 +36,9 @@
         app.innerHTML = `
           <main class="login-shell">
             <section class="login-panel" aria-label="Chyba načtení">
-              <a class="kaiser-logo" href="/" aria-label="Smart odpady">kaiser.</a>
+              <a class="kaiser-logo" href="/" aria-label="Smart odpady">
+                <img class="kaiser-logo__image" src="logo-kaiser.png" alt="Kaiser" width="501" height="320" />
+              </a>
               <h1>Smart odpady</h1>
               <p class="login-subtitle">Aplikace se nepodařila načíst.</p>
               <button class="primary-action" type="button" onclick="window.location.reload()">

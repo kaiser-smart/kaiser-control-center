@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.500"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.503"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Jednotné rozhraní celé aplikace",
+    text: "Přihlášení, hlavní stránka a všechny přihlášené moduly používají společný klidný šedo-zelený design systém, Quicksand a přesnou firemní zelenou #75bd25. Levý brand box používá dodané logo Kaiser a zelená primární tlačítka mají bílý text. Nový shell zachovává stávající oprávnění, API data i pracovní funkce; nemění backend, databázi ani provozní data."
+  },
   {
     title: "Datové schránky Plus: jednodušší pracovní navigace",
     text: "Hlavní navigace obsahuje jen Zprávy, Autopilot a Nastavení. Duplicitní pohledy K doplnění a Archiv zmizely, blokované zprávy sdružuje filtr Vyžaduje zásah, archiv zůstává filtrem a manuál je součástí Autopilota. Pravidla a automatizace zůstávají dostupné v technické správě Nastavení."
