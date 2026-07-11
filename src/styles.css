@@ -34801,7 +34801,7 @@ body:has(.smart-odpady-v2) {
   background: linear-gradient(145deg, #dfe5e8 0%, #edf0f2 43%, #d2d9dd 100%);
 }
 
-body[data-theme="dark"]:has(.smart-odpady-v2) {
+body:has(.smart-odpady-v2[data-v2-theme="dark"]) {
   background: linear-gradient(145deg, #0b1118 0%, #111a24 46%, #070c12 100%);
 }
 
@@ -34866,7 +34866,7 @@ body[data-theme="dark"]:has(.smart-odpady-v2) {
   font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-body[data-theme="dark"] .smart-odpady-v2 {
+.smart-odpady-v2[data-v2-theme="dark"] {
   color-scheme: dark;
   --bg-app: #0b1118;
   --surface-soft: #172230;
@@ -35151,7 +35151,7 @@ body[data-theme="dark"] .smart-odpady-v2 {
   box-shadow: var(--shadow-panel), var(--highlight-edge);
 }
 
-body[data-theme="dark"] .smart-odpady-v2 .tracking-preview-sidebar {
+.smart-odpady-v2[data-v2-theme="dark"] .tracking-preview-sidebar {
   background: var(--tracking-panel-bg);
 }
 

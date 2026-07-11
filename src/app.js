@@ -1925,16 +1925,6 @@ function smartOdpadyV2ThemeSwitcher() {
 function setSmartOdpadyV2Theme(mode) {
   const nextTheme = normalizeSmartOdpadyV2Theme(mode);
   writeSmartOdpadyV2Storage(SMART_ODPADY_V2_THEME_STORAGE_KEY, nextTheme);
-  document.body?.setAttribute("data-theme", nextTheme);
-}
-
-function syncSmartOdpadyV2ThemeRoot(active) {
-  if (active) {
-    document.body?.setAttribute("data-theme", smartOdpadyV2ThemeMode());
-    return;
-  }
-
-  document.body?.removeAttribute("data-theme");
 }
 
 function smartOdpadyV2VisibleNavItems(user) {
@@ -2046,11 +2036,10 @@ function smartOdpadyV2ForbiddenContent(moduleName) {
 }
 
 function smartOdpadyV2Shell(user, activeId, content) {
-  syncSmartOdpadyV2ThemeRoot(true);
   const theme = smartOdpadyV2ThemeMode();
 
   return `
-    <main class="app-shell module-page module-theme-scope tracking-page tracking-page--soft-metal-preview smart-odpady-v2" data-smart-odpady-v2 data-theme="${escapeHtml(theme)}">
+    <main class="app-shell module-page module-theme-scope tracking-page tracking-page--soft-metal-preview smart-odpady-v2" data-smart-odpady-v2 data-v2-theme="${escapeHtml(theme)}">
       <div class="tracking-preview-frame">
         ${smartOdpadyV2UtilityBar(user)}
         <div class="tracking-preview-shell">
@@ -40294,8 +40283,6 @@ function renderAuthenticatedApp(user) {
     renderSmartOdpadyV2(user);
     return;
   }
-
-  syncSmartOdpadyV2ThemeRoot(false);
 
   if (path === DATA_BOX_ROUTE) {
     window.history.replaceState({}, "", routeHref(DATA_BOX_PLUS_ROUTE));
