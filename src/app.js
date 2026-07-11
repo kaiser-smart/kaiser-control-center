@@ -1641,6 +1641,11 @@ const vehicleTrackingLiveState = {
   wimGoogleMarkers: new Map(),
   googleBoundsKey: "",
   googleFocusedLocationId: "",
+  googleRoutePolyline: null,
+  routeLoading: false,
+  routeError: "",
+  routeData: null,
+  routeRequestKey: "",
   autoRefreshTimer: 0
 };
 const vehicleTrackingMapConfigState = {
@@ -14827,6 +14832,21 @@ function vehicleTrackingOperationalDetail(location = null, invalidItem = null) {
   const statusMeta = vehicleTrackingOperationalStatus(location);
   const driver = location.driverName || location.driver || location.vehicle?.driverName || location.vehicle?.driver || "neuveden";
   const selectedRange = vehicleTrackingUiState.routeRange;
+  const routeKey = location._vehicleKey || vehicleTrackingTcarsVehicleKey(location);
+  const route = vehicleTrackingLiveState.routeData?.vehicleKey === routeKey
+    && vehicleTrackingLiveState.routeData?.range === selectedRange
+    ? vehicleTrackingLiveState.routeData
+    : null;
+  const routeMessage = vehicleTrackingLiveState.routeLoading
+    ? "Načítám skutečné GPS body…"
+    : vehicleTrackingLiveState.routeError
+      ? vehicleTrackingLiveState.routeError
+      : route?.pointCount
+        ? `${route.pointCount} skutečných GPS bodů · ${vehicleTrackingSafeDateTime(route.firstRecordedAt)} až ${vehicleTrackingSafeDateTime(route.lastRecordedAt)}`
+        : "Zatím pro tento rozsah nemáme uložené GPS body. Trasa se začne kreslit až z nově zachycených poloh.";
+  const routeSync = route?.lastSync?.finishedAt
+    ? `Poslední cloudový sběr ${vehicleTrackingSafeDateTime(route.lastSync.finishedAt)}.`
+    : "";
   return `
     <aside class="tracking-operational-detail" data-tracking-tcars-location-detail>
       <div class="tracking-operational-detail__head">
@@ -14853,9 +14873,9 @@ function vehicleTrackingOperationalDetail(location = null, invalidItem = null) {
           <div class="tracking-route-panel__head">
             <div>
               <span>Trasa ${escapeHtml(markerVehicle.licensePlate || "vozidla")}</span>
-              <strong>Historie GPS bodů se připravuje</strong>
+              <strong>${route?.pointCount ? "Skutečná trasa na mapě" : "Historie reálných GPS bodů"}</strong>
             </div>
-            <span class="tracking-route-panel__status">Read-only</span>
+            <span class="tracking-route-panel__status">${route?.pointCount ? "Aktivní" : "Read-only"}</span>
           </div>
           <div class="tracking-route-range" role="group" aria-label="Časový rozsah trasy">
             ${[
@@ -14871,7 +14891,7 @@ function vehicleTrackingOperationalDetail(location = null, invalidItem = null) {
               >${label}</button>
             `).join("")}
           </div>
-          <p>Čára za vozidlem se zobrazí, až bude dostupná historie GPS bodů z T-Cars. Teď máme ověřenou pouze aktuální polohu — žádnou trasu nevymýšlíme.</p>
+          <p>${escapeHtml([routeMessage, routeSync].filter(Boolean).join(" "))}</p>
         </section>
       ` : ""}
     </aside>
@@ -15903,6 +15923,8 @@ function clearVehicleTrackingTcarsGoogleMap() {
   vehicleTrackingLiveState.kaiserSiteGoogleMarker = null;
   vehicleTrackingLiveState.wimGoogleMarkers.forEach((marker) => marker.setMap(null));
   vehicleTrackingLiveState.wimGoogleMarkers.clear();
+  vehicleTrackingLiveState.googleRoutePolyline?.setMap(null);
+  vehicleTrackingLiveState.googleRoutePolyline = null;
   vehicleTrackingLiveState.googleMap = null;
   vehicleTrackingLiveState.googleMapNode = null;
   vehicleTrackingLiveState.googleBoundsKey = "";
@@ -16046,6 +16068,34 @@ function syncVehicleTrackingWimGoogleMarkers(maps, map, sites = vehicleTrackingW
   });
 }
 
+function syncVehicleTrackingGoogleRoute(maps, map, selectedLocation = null) {
+  const route = vehicleTrackingLiveState.routeData;
+  const selectedKey = selectedLocation?._vehicleKey || "";
+  const points = route?.vehicleKey === selectedKey && Array.isArray(route?.points) ? route.points : [];
+  const path = points
+    .filter((point) => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)))
+    .map((point) => ({ lat: Number(point.latitude), lng: Number(point.longitude) }));
+
+  if (path.length < 2) {
+    vehicleTrackingLiveState.googleRoutePolyline?.setMap(null);
+    vehicleTrackingLiveState.googleRoutePolyline = null;
+    return;
+  }
+
+  if (!vehicleTrackingLiveState.googleRoutePolyline) {
+    vehicleTrackingLiveState.googleRoutePolyline = new maps.Polyline({
+      clickable: false,
+      geodesic: true,
+      strokeColor: "#B6FF00",
+      strokeOpacity: 0.92,
+      strokeWeight: 5,
+      zIndex: 4
+    });
+  }
+  vehicleTrackingLiveState.googleRoutePolyline.setPath(path);
+  vehicleTrackingLiveState.googleRoutePolyline.setMap(map);
+}
+
 function vehicleTrackingGoogleMapLocations() {
   if (document.querySelector("[data-tracking-operational-view]")) {
     return vehicleTrackingOperationalGroups(vehicleTrackingLiveState.status || {}).filteredValidLocations;
@@ -16106,6 +16156,7 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
 
       ensureVehicleTrackingKaiserSiteGoogleMarker(maps, map);
       syncVehicleTrackingWimGoogleMarkers(maps, map, wimSites);
+      syncVehicleTrackingGoogleRoute(maps, map, selectedLocation);
 
       const boundsKey = vehicleTrackingTcarsBoundsKey(validLocations, wimSites);
       if (options.preserveCamera) {
@@ -16262,6 +16313,49 @@ function setVehicleTrackingRoutePanel(open, range = vehicleTrackingUiState.route
   render();
   syncVehicleTrackingMapMaximizedDom();
   queueVehicleTrackingTcarsGoogleSync(camera ? { preserveCamera: camera } : { forceFit: true });
+  if (vehicleTrackingUiState.routePanelOpen) {
+    void loadVehicleTrackingRoute({ preserveCamera: camera });
+  }
+}
+
+function vehicleTrackingRouteSelectedLocation() {
+  const selectedId = vehicleTrackingLiveState.selectedLocationId;
+  return vehicleTrackingTcarsLocationById(selectedId)
+    || vehicleTrackingTcarsSelectedLocation(vehicleTrackingOperationalGroups(vehicleTrackingLiveState.status || {}).filteredValidLocations);
+}
+
+async function loadVehicleTrackingRoute(options = {}) {
+  const location = vehicleTrackingRouteSelectedLocation();
+  const vehicleKey = location?._vehicleKey || "";
+  const range = vehicleTrackingUiState.routeRange;
+  const requestKey = `${vehicleKey}:${range}`;
+  if (!vehicleKey || vehicleTrackingLiveState.routeLoading || (!options.force && vehicleTrackingLiveState.routeRequestKey === requestKey)) {
+    return;
+  }
+
+  const camera = options.preserveCamera || vehicleTrackingTcarsGoogleCamera();
+  vehicleTrackingLiveState.routeLoading = true;
+  vehicleTrackingLiveState.routeError = "";
+  vehicleTrackingLiveState.routeRequestKey = requestKey;
+  render();
+  syncVehicleTrackingMapMaximizedDom();
+  queueVehicleTrackingTcarsGoogleSync(camera ? { preserveCamera: camera } : { focusSelected: true });
+  try {
+    const result = await apiJson(`/api/vehicle-tracking/history?vehicleKey=${encodeURIComponent(vehicleKey)}&range=${encodeURIComponent(range)}`);
+    if (vehicleTrackingLiveState.routeRequestKey !== requestKey) return;
+    vehicleTrackingLiveState.routeData = result;
+  } catch (error) {
+    if (vehicleTrackingLiveState.routeRequestKey !== requestKey) return;
+    vehicleTrackingLiveState.routeData = null;
+    vehicleTrackingLiveState.routeError = error?.payload?.error || error?.message || "Historii trasy se teď nepodařilo načíst.";
+  } finally {
+    if (vehicleTrackingLiveState.routeRequestKey === requestKey) {
+      vehicleTrackingLiveState.routeLoading = false;
+      render();
+      syncVehicleTrackingMapMaximizedDom();
+      queueVehicleTrackingTcarsGoogleSync(camera ? { preserveCamera: camera } : { focusSelected: true });
+    }
+  }
 }
 
 function updateVehicleTrackingOperationalSearch(input) {
@@ -16296,6 +16390,9 @@ async function refreshVehicleTrackingOperationalData(options = {}) {
   render();
   syncVehicleTrackingMapMaximizedDom();
   queueVehicleTrackingTcarsGoogleSync(preserveCamera ? { preserveCamera } : { forceFit: true });
+  if (vehicleTrackingUiState.routePanelOpen) {
+    void loadVehicleTrackingRoute({ preserveCamera, force: true });
+  }
 }
 
 function stopVehicleTrackingDemoRuntime() {
@@ -38397,6 +38494,9 @@ function handleVehicleTrackingTcarsSelect(locationId, options = {}) {
 
   if (vehicleTrackingLiveState.selectedLocationId !== normalizedId) {
     vehicleTrackingUiState.routePanelOpen = false;
+    vehicleTrackingLiveState.routeData = null;
+    vehicleTrackingLiveState.routeError = "";
+    vehicleTrackingLiveState.routeRequestKey = "";
   }
   vehicleTrackingLiveState.selectedLocationId = normalizedId;
   syncVehicleTrackingTcarsSelectionDom(normalizedId);

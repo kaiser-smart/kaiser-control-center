@@ -5913,6 +5913,31 @@ async function handleApi(request, response) {
     return true;
   }
 
+  if (url.pathname === "/api/vehicle-tracking/history" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "vehicle-tracking", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    sendJson(response, 200, {
+      apiStatus: "waiting",
+      source: "Vývojové prostředí bez cloudové historie",
+      vehicleKey: String(url.searchParams.get("vehicleKey") || "").trim().toLowerCase(),
+      range: ["today", "24h", "7d"].includes(url.searchParams.get("range")) ? url.searchParams.get("range") : "24h",
+      points: [],
+      pointCount: 0,
+      firstRecordedAt: "",
+      lastRecordedAt: "",
+      lastSync: null
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/vehicle-tracking/maps-config" && request.method === "GET") {
     const user = currentDevUser(request);
     if (!user) {
