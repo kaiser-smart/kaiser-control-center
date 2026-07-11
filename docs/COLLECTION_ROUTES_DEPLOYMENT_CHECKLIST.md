@@ -19,7 +19,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - HOTOVO - Hlidac uz nepocita chyby nad celym aktivnim Komunalem, pokud pole `Svoz Kaiser ANO` neni potvrzene nebo nema zadne radky ANO.
 - ROZPRACOVANO - Hlidac Svoz Kaiser kontroluje konzistenci Adresniho mista, intervalu odvozu, svozovych dnu, sudeho/licheho rezimu a platnosti Svoz od/do jen read-only nad radky `Svoz Kaiser ANO`.
 - ROZPRACOVANO - Novy cil tras: Vistos API je zdroj svozovych radku, 13 Excelu zustava jen pomocne parovani vozidel A/B/C.
-- NEZACATO - ostry import do planovacich tabulek.
+- ROZPRACOVANO - Faze 2D-A kopiruje jen vybrane overene radky do nemenneho denniho D1 navrhu; nejde o zapis zpet do Vistosu ani automaticky import.
 - BLOKOVANO - kontaktni osoby a SMS pole 15/30/60 jeste nejsou potvrzene.
 
 ## Smlouvy Komunal
@@ -67,19 +67,22 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Planovani tras
 
-- NEZACATO - Faze 1E neplanuje svozove dny.
+- HOTOVO - Faze 2D-A overi rucne zvolene datum proti potvrzenemu dni a sudemu/lichemu tydnu aktualniho snapshotu.
 - NEZACATO - stabilni tydenni/mesicni patterny.
 
 ## Denni trasy
 
-- NEZACATO - zadne denni behy tras.
+- HOTOVO - migrace 0038 a chranene API ukladaji nemenny denni beh, kopii zastavek, vozidlo, ridice, stav a audit udalosti.
+- HOTOVO - dispecer muze navrh overit, ulozit, priradit ridice, potvrdit, zahajit, dokoncit a znovu otevrit; hotovou/problemovou zastavku muze vratit do planu.
+- HOTOVO - stejny zdrojovy radek nelze zaradit dvakrat ve stejny den a pro jeden den/vuz muze existovat jen jedna trasa.
 - NEZACATO - zadne optimalizovane poradi zastavek.
 
 ## Ridicsky tablet
 
 - ROZPRACOVANO - Faze 2C ma v hlavni zalozce Svozove trasy tlacitko Ridicsky tablet a read-only kabinovy rezim aktualniho filtru; nic nepotvrzuje, nezapisuje, nespousti GPS, T-Cars, navigaci, SMS/e-maily, automatizace ani ostre trasy.
-- ROZPRACOVANO - Faze 2D ma dokumentovany navrh ostreho tabletoveho rezimu vcetne DB/API/auditu/offline sync/GPS/T-Cars bran, ale bez implementace zapisu.
-- NEZACATO - ostry tabletovy rezim s potvrzovanim svozu, fotkami, GPS stopou, offline synchronizaci a dispecerskym auditem.
+- HOTOVO - Faze 2D-A ma samostatny online pohled prirazeneho ridice; role Ridic neziskala pristup k celemu Vistos snapshotu.
+- HOTOVO - `HOTOVO`, `Problem`, `Vyklop` a `Pauza` se ukladaji do D1 s idempotency klicem, stavem pred/po, akterem a serverovym casem; reload nacte ulozeny stav.
+- NEZACATO - fotky, GPS stopa a offline synchronizace.
 
 ## T-Cars
 
@@ -113,10 +116,11 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 - NEZACATO - pro Trasy svozu zatim zadny cron/worker/queue.
 - NEZACATO - pred ostrou automatizaci musi existovat cloud runner, dedupe a audit.
-- BLOKOVANO - Faze 2D ostrych zapisu vyzaduje samostatne potvrzeni DB migraci, API smlouvy, roli, auditnich pravidel a konfliktni logiky.
+- HOTOVO - Faze 2D-A byla samostatne potvrzena; D1/API/opravneni/audit jsou implementovane bez cronu, workeru a queue.
 
 ## Produkce
 
 - ROZPRACOVANO - produkcni read-only pilot existuje.
 - OVERENO - Faze 1E read-only import 13 Excelu a Vistos match byly overeny na produkci pro batch z 2026-07-02.
+- NEZACATO - produkcni overeni Faze 2D-A, migrace 0038 a verze 0.1.519.
 - NEZACATO - produkcni ostry import / planovani / notifikace.

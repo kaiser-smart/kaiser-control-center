@@ -109,7 +109,7 @@ export const modules = [
     route: "/trasy-svozu",
     dashboardRoute: "/trasy-svozu/dashboard",
     icon: CollectionRoutesIcon,
-    status: "Read-only pilot",
+    status: "Řízený pilot",
     ctaLabel: "Zobrazit trasy",
     active: true,
     disabled: false,

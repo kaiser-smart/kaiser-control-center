@@ -1,56 +1,67 @@
-# Svozove trasy - Faze 2D ridicsky tablet, navrh ostreho rezimu
+# Svozove trasy - Faze 2D ridicsky tablet
 
-Stav: navrh architektury, bez implementace ostrych zapisu.
+Stav: Faze 2D-A implementovana v kodu; rizeny online D1 pilot bez Vistos zapisu.
 
-Datum: 2026-07-05
+Aktualizace: 2026-07-12
 
 ## Cil
 
-Faze 2D ma pripravit rozhodnuti, jak se z dnesniho read-only ridicskeho tabletu stane provozni rezim pro svozova auta.
+Faze 2D-A meni read-only tablet na rizeny online provozni pilot pro svozova auta.
 
-Tento dokument neni migrace, neni API smlouva a nespousti ostrou trasu. Popisuje pouze navrh dalsi faze.
+Migrace 0038, API a UI pokryvaji jen schvaleny minimalni rozsah. Offline sync, GPS, T-Cars, navigace, fotky, notifikace, optimalizace a automaticke vytvareni tras zustavaji dalsi samostatnou fazi.
+
+## Implementovany rozsah Faze 2D-A
+
+- Dispecer overi budouci denni trasu nad aktualnim ulozenym Vistos Komunal snapshotem.
+- Do navrhu se zaradi jen radky `Svoz Kaiser ANO` bez otevrene datove kontroly, s potvrzenym Adresnim mistem, odpadem, nadobou, cetnosti a jednoznacnym dnem/tydnem.
+- `1x30` se zatim bez konkretniho potvrzeneho data bezpecne vyradi.
+- Ulozeny navrh je nemennou kopii zdrojovych radku. Pozdeji doplnene Stanoviste ovlivni az budouci navrh.
+- Dispecer priradi aktivniho uzivatele s roli Ridic, trasu potvrdi, sleduje prubeh, dokonci nebo znovu otevre.
+- Ridic vidi jen svoji prirazenou trasu. Muze ji zahajit a online zapsat `HOTOVO`, `Problem`, `Vyklop` a `Pauza`.
+- D1 je zdroj pravdy. Obnoveni stranky nacte ulozeny stav a audit.
+- Vistos zustava pouze read-only a frontend ho nikdy nevola primo.
 
 ## Aktualni stav
 
-- Zdroj trasy je aktualni import 13 Excelu nebo opravny sesit.
-- Vistos match je read-only overeni radku.
-- UI umi filtr den / tyden / auto / odpad / kontrola.
-- UI umi tisk pro ridice, detailni PDF, offline HTML balicek a read-only ridicsky tablet.
-- Ridicsky tablet dnes nic nepotvrzuje, neuklada a neposila.
-- Neexistuje DB model pro denni beh trasy, stop audit, GPS stopu, fotky ani offline synchronizaci.
+- Pro novy denni beh je zdrojem aktualni ulozeny Vistos Komunal snapshot; 13 Excelu zustavaji v diagnosticke vrstve.
+- Vistos je read-only zdroj a nove denni tabulky jsou oddelene od importniho snapshotu.
+- UI umi filtr den / tyden / odpad / kontrola, tiskove podklady a novy dispecersky D1 panel.
+- Ridicsky pohled online uklada povolene akce do D1 a po reloadu je znovu nacte.
+- DB model existuje pro denni beh, nemenne zastavky a udalosti.
+- GPS stopa, fotky a offline synchronizace stale neexistuji.
 
 ## Hlavni principy ostreho rezimu
 
-- 13 Excelu zustava zdroj puvodniho rozsahu trasy.
-- Vistos se pouziva jen pro overeni a doplneni, ne pro pridani dalsich zakazniku.
-- Ostra denni trasa smi vzniknout jen ze schvaleneho importu a schvaleneho filtru.
+- Faze 2D-A pouziva aktualni ulozeny Vistos Komunal snapshot omezeny na `Svoz Kaiser ANO`; 13 Excelu zustava v diagnostice.
+- Vistos se pouze cte. Provozni zmeny se ukladaji vyhradne do D1.
+- Denni trasa smi vzniknout jen z aktualniho snapshotu, rucne zvoleneho data/vozu a radku, ktere projdou backend kontrolou.
 - Ridic na tabletu smi potvrzovat jen zastavky v prirazene trase.
 - Kazda akce ridice musi mit audit: kdo, kdy, auto, trasa, zastavka, stav pred/po.
-- Offline rezim smi uklada lokalni frontu jen jako docasny cache pro synchronizaci, ne jako zdroj pravdy.
-- Zdroj pravdy po synchronizaci musi byt backend DB.
+- Offline rezim ve Fazi 2D-A neni. Pokud bude pozdeji schvalen, lokalni fronta smi byt jen docasny cache.
+- Zdroj pravdy je backend D1.
 
 ## Co bude znamenat Hotovo na zastavce
 
-Navrh stavu zastavky:
+Implementovane stavy zastavky:
 
 - `planned` - zastavka je v denni trase, ridic ji jeste neresil.
-- `arrived` - ridic je na miste nebo ji otevrel v tabletu.
-- `collected` - svoz potvrzen.
-- `skipped` - nesvezeno s duvodem.
+- `done` - ridic potvrdil HOTOVO.
 - `problem` - problem vyzaduje kontrolu dispecera.
-- `reopened` - dispecer nebo opravnena role vratila zastavku k reseni.
 
-Minimalni potvrzeni `collected`:
+Navrat zastavky do planu je auditni udalost `stop_reopened`; vysledny stav je znovu `planned`.
+
+Minimalni potvrzeni `done`:
 
 - stop id,
 - route run id,
 - user id ridice,
-- timestamp v tabletu,
-- timestamp prijeti backendem,
+- serverovy timestamp prijeti backendem,
 - aktualni stav,
 - predchozi stav,
 - volitelna poznamka,
-- volitelna GPS poloha, pokud bude povolena a dostupna.
+- idempotency klic.
+
+Klientske casy a GPS nejsou ve Fazi 2D-A zdroj pravdy ani soucasti zapisu.
 
 ## Problemove stavy
 
@@ -71,38 +82,41 @@ Fotka:
 - nesmi se posilat mimo KSO bez schvaleni,
 - musi mit vazbu na stop audit.
 
-## Navrh DB modelu
+## Implementovany DB model Faze 2D-A
 
-Nutne nove tabulky v dalsi schvalene fazi:
+Migrace: `migrations/0038_create_collection_daily_routes.sql`.
 
-### `collection_route_runs`
+### `collection_daily_route_runs`
 
 Denni beh trasy.
 
-Pole navrh:
+Hlavni implementovana pole:
 
 - `id`
 - `source_batch_id`
-- `day_code`
-- `week_mode`
+- `route_day_code`
+- `route_week_mode`
 - `vehicle_code`
 - `route_date`
 - `status`
 - `created_by_user_id`
-- `assigned_driver_user_id`
+- `driver_user_id`
+- `driver_name`
 - `created_at`
 - `started_at`
-- `finished_at`
+- `confirmed_at`
+- `completed_at`
+- `reopened_at`
 - `metadata_json`
 
-### `collection_route_run_stops`
+### `collection_daily_route_stops`
 
 Kopie zdrojovych radku do konkretni denni trasy.
 
-Pole navrh:
+Hlavni implementovana pole:
 
 - `id`
-- `route_run_id`
+- `run_id`
 - `source_row_id`
 - `route_order`
 - `customer_name`
@@ -113,35 +127,34 @@ Pole navrh:
 - `frequency`
 - `note`
 - `status`
-- `problem_code`
+- `problem_reason`
 - `problem_note`
-- `visited_at`
 - `completed_at`
-- `metadata_json`
+- `source_summary_json`
 
-### `collection_route_stop_events`
+### `collection_daily_route_events`
 
 Audit vsech akci.
 
-Pole navrh:
+Hlavni implementovana pole:
 
 - `id`
-- `route_run_id`
+- `run_id`
 - `stop_id`
 - `event_type`
 - `before_status`
 - `after_status`
-- `user_id`
-- `client_timestamp`
-- `server_timestamp`
-- `latitude`
-- `longitude`
-- `gps_accuracy_m`
-- `source`
+- `actor_user_id`
+- `actor_name`
+- `created_at`
+- `idempotency_key`
+- `reason`
 - `note`
-- `metadata_json`
+- `payload_json`
 
-### `collection_route_sync_batches`
+Nasledujici tabulky jsou pouze budouci navrh a ve Fazi 2D-A nevznikaji.
+
+### `collection_route_sync_batches` (budouci)
 
 Synchronizacni davka z tabletu.
 
@@ -158,7 +171,7 @@ Pole navrh:
 - `created_at`
 - `metadata_json`
 
-### `collection_route_stop_attachments`
+### `collection_route_stop_attachments` (budouci)
 
 Fotky nebo prilohy problemu.
 
@@ -174,9 +187,21 @@ Pole navrh:
 - `created_at`
 - `metadata_json`
 
-## Navrh API
+## Implementovane API Faze 2D-A
 
-Bez migrace a implementace. Jen navrh.
+- `POST /api/collection-routes/daily-routes/preview`
+- `GET|POST /api/collection-routes/daily-routes`
+- `GET|PATCH /api/collection-routes/daily-routes/:runId`
+- `POST /api/collection-routes/daily-routes/:runId/transition`
+- `POST /api/collection-routes/daily-routes/:runId/stops/:stopId/events`
+- `GET /api/collection-routes/daily-routes/drivers`
+- `GET /api/collection-routes/daily-routes/my`
+
+Vsechny dispecerske zapisy vyzaduji `collection-routes:manage`. Ridicske endpointy overuji prihlaseneho uzivatele proti `driver_user_id` konkretni trasy a nedavaji roli Ridic obecne opravneni `collection-routes:view`.
+
+## Puvodni navrh rozsireneho API
+
+Nasledujici body zustavaji jen jako hranice budouci faze s offline synchronizaci, prilohami a GPS.
 
 ### Dispecer
 
