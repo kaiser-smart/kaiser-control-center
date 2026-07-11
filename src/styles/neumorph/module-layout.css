@@ -43,14 +43,18 @@
 
 .nm-app .nm-module-header__copy h1 {
   max-width: 820px;
-  color: var(--nm-text-strong);
-  font-size: clamp(1.55rem, 2.8vw, 2.2rem);
-  line-height: 1.1;
+  color: var(--nm-brand-accent);
+  font-size: clamp(2rem, 3vw, 2.65rem);
+  font-weight: 800;
+  line-height: 1.06;
 }
 
 .nm-app .nm-module-header__copy p:not(.nm-system-eyebrow) {
   max-width: 760px;
-  font-weight: 750;
+  color: var(--nm-text-muted-strong);
+  font-size: clamp(1rem, 1.2vw, 1.12rem);
+  font-weight: 760;
+  line-height: 1.45;
 }
 
 .nm-app .nm-module-header__actions {
@@ -228,7 +232,7 @@
   }
 
   .nm-app .nm-module-header__copy h1 {
-    font-size: clamp(1.55rem, 7vw, 2.05rem);
+    font-size: clamp(1.65rem, 7vw, 2.15rem);
   }
 
   .nm-app .nm-module-header__actions,

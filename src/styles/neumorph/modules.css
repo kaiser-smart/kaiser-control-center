@@ -68,6 +68,16 @@
   object-fit: contain;
 }
 
+.nm-app .nm-module-card__icon img.module-icon__svg,
+.nm-app .nm-module-hero__icon img.module-icon__svg {
+  filter: var(--nm-icon-image-filter-muted);
+}
+
+.nm-app .nm-module-card:hover .nm-module-card__icon img.module-icon__svg,
+.nm-app .nm-module-card:focus-visible .nm-module-card__icon img.module-icon__svg {
+  filter: var(--nm-icon-image-filter-brand);
+}
+
 .nm-app .nm-module-card__body {
   display: grid;
   min-width: 0;

@@ -3,6 +3,7 @@ import {
   buildNeumorphMobileNavigation,
   buildNeumorphNavigation
 } from "./navigation.js";
+import { renderOfficialIconAsset } from "./officialIcons.js";
 
 const NEUMORPH_SIDEBAR_STORAGE_KEY = "smart_odpady_neumorph_sidebar";
 
@@ -50,6 +51,12 @@ function icon(name) {
 }
 
 function moduleIcon(item) {
+  const officialIcon = renderOfficialIconAsset(item?.icon);
+
+  if (officialIcon) {
+    return officialIcon;
+  }
+
   if (typeof item?.module?.icon === "function") {
     return item.module.icon();
   }

@@ -25,8 +25,8 @@ body[data-theme="light"] .nm-app {
   --nm-shadow-control-active: inset 3px 3px 7px rgba(78, 92, 100, 0.11), inset -3px -3px 7px rgba(255, 255, 255, 0.58);
   --nm-shadow-inset-control: inset 4px 4px 10px rgba(78, 92, 100, 0.12), inset -4px -4px 10px rgba(255, 255, 255, 0.62);
   --nm-shell-content-bg: linear-gradient(145deg, rgba(232, 238, 240, 0.34) 0%, rgba(211, 220, 224, 0.24) 100%);
-  --nm-panel-gradient: linear-gradient(145deg, #f7f8f8 0%, #e5eaec 48%, #d8e0e3 100%);
-  --nm-panel-gradient-soft: linear-gradient(145deg, #f4f6f6 0%, #e8edef 52%, #dde4e7 100%);
+  --nm-panel-gradient: linear-gradient(145deg, #ffffff 0%, #f7f9f9 50%, #edf2f3 100%);
+  --nm-panel-gradient-soft: linear-gradient(145deg, #fbfcfc 0%, #f2f6f7 52%, #e7eef0 100%);
   --nm-icon-image-filter-muted: brightness(0) saturate(0%) opacity(0.56);
   --nm-focus-ring: color-mix(in srgb, var(--nm-brand-accent) 32%, var(--nm-border-soft));
   --nm-active-tray-bg: #d0e3c1;

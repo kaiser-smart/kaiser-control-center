@@ -5,6 +5,7 @@ import {
   moduleMigrationLabel,
   moduleStatusTone
 } from "./moduleRegistry.js";
+import { renderOfficialIconAsset } from "./officialIcons.js";
 
 export function escapeHtml(value) {
   return String(value ?? "")
@@ -34,6 +35,12 @@ export function renderInlineIcon(name) {
 }
 
 export function renderModuleAsset(moduleItem) {
+  const officialIcon = renderOfficialIconAsset(moduleIconName(moduleItem?.id));
+
+  if (officialIcon) {
+    return officialIcon;
+  }
+
   if (typeof moduleItem?.icon !== "function") {
     return renderInlineIcon(moduleIconName(moduleItem?.id));
   }
