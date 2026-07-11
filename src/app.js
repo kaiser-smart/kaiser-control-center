@@ -14203,18 +14203,17 @@ function vehicleTrackingTcarsLocationDetail(location = null) {
 
 function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false) {
   const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
-  const displayName = vehicleTrackingTcarsVehicleDisplayName(location);
   const title = vehicleTrackingTcarsMarkerTooltip(location);
   const iconSrc = vehicleTrackingMarkerImageSrc(markerVehicle);
+  const licensePlate = markerVehicle.licensePlate || markerVehicle.internalNumber || "Bez SPZ";
 
   return `
-    <span class="tracking-tcars-google-pin ${selected ? "tracking-tcars-google-pin--selected" : ""}" title="${escapeHtml(title)}">
+    <span class="tracking-tcars-google-pin ${selected ? "tracking-tcars-google-pin--selected" : ""}" title="${escapeHtml(title)}" aria-hidden="true">
       <span class="tracking-tcars-google-pin__icon" aria-hidden="true">
         ${iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" loading="eager" decoding="async" data-tracking-tcars-marker-icon>` : ""}
         <span class="tracking-tcars-google-pin__fallback"></span>
       </span>
-      <strong>${escapeHtml(displayName)}</strong>
-      <span>${escapeHtml(vehicleTrackingTcarsSpeedText(location))}</span>
+      <span class="tracking-tcars-google-pin__plate">${escapeHtml(licensePlate)}</span>
     </span>
   `;
 }
@@ -15493,13 +15492,11 @@ function createVehicleTrackingKaiserSiteGoogleMarker(maps, map) {
     }
 
     onAdd() {
-      this.div = document.createElement("a");
+      this.div = document.createElement("div");
       this.div.className = "tracking-kaiser-site-marker";
       this.div.dataset.trackingKaiserSiteMarker = VEHICLE_TRACKING_KAISER_SITE.id;
-      this.div.href = VEHICLE_TRACKING_KAISER_SITE.mapsUrl;
-      this.div.target = "_blank";
-      this.div.rel = "noopener noreferrer";
-      this.div.setAttribute("aria-label", `${VEHICLE_TRACKING_KAISER_SITE.label}, ${VEHICLE_TRACKING_KAISER_SITE.address} – otevřít v Google Maps`);
+      this.div.setAttribute("role", "img");
+      this.div.setAttribute("aria-label", `${VEHICLE_TRACKING_KAISER_SITE.label}, ${VEHICLE_TRACKING_KAISER_SITE.address}`);
       this.div.title = `${VEHICLE_TRACKING_KAISER_SITE.label}\n${VEHICLE_TRACKING_KAISER_SITE.address}`;
       this.div.innerHTML = `
         <span class="tracking-kaiser-site-marker__pin" aria-hidden="true">
@@ -15507,7 +15504,7 @@ function createVehicleTrackingKaiserSiteGoogleMarker(maps, map) {
             <img src="${escapeHtml(VEHICLE_TRACKING_KAISER_SITE.logoSrc)}" alt="" loading="eager" decoding="async">
           </span>
         </span>
-        <strong>${escapeHtml(VEHICLE_TRACKING_KAISER_SITE.label)}</strong>
+        <span class="tracking-kaiser-site-marker__shadow" aria-hidden="true"></span>
       `;
       this.getPanes().overlayMouseTarget.appendChild(this.div);
     }

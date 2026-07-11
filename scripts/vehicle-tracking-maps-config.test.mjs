@@ -52,7 +52,7 @@ import {
   assert.equal(VEHICLE_TRACKING_KAISER_SITE.latitude, 49.19121);
   assert.equal(VEHICLE_TRACKING_KAISER_SITE.longitude, 16.67013);
   assert.equal(VEHICLE_TRACKING_KAISER_SITE.logoSrc, "/logo-kaiser.png");
-  assert.match(VEHICLE_TRACKING_KAISER_SITE.mapsUrl, /49\.19121%2C16\.67013/);
+  assert.equal("mapsUrl" in VEHICLE_TRACKING_KAISER_SITE, false);
 }
 
 console.log("vehicle-tracking maps config tests: ok");

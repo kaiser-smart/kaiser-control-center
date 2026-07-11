@@ -22,8 +22,7 @@ export const VEHICLE_TRACKING_KAISER_SITE = Object.freeze({
   address: "Trnkova 3052/137, 628 00 Brno",
   latitude: 49.19121,
   longitude: 16.67013,
-  logoSrc: "/logo-kaiser.png",
-  mapsUrl: "https://www.google.com/maps/search/?api=1&query=49.19121%2C16.67013"
+  logoSrc: "/logo-kaiser.png"
 });
 export const VEHICLE_TRACKING_WIM_WAITING = "WIM vrstva ceka na D1 migraci nebo API.";
 export const VEHICLE_TRACKING_WIM_PLACEHOLDER_ICON = "WIM vrstva ceka na finalni graficky podklad od Radima nebo Martina.";

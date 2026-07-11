@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.507"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.508"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: realistické markery bez karet",
+    text: "Vozidla jsou na Google mapě zobrazená jako samostatné průhledné výřezy se stínem a plovoucí registrační značkou. Původní bílá karta, název a rychlost z markeru zmizely; úplné údaje zůstávají v přístupném popisu a detailu vozidla. Kaiser na Trnkově označuje přepracovaný statický 3D špendlík bez odkazu a bez nechtěného otevření dalšího okna."
+  },
   {
     title: "Poloha vozidel: pilot šesti skutečných ikon",
     text: "Mapa a seznam vozidel používají šest dodaných grafických podkladů pro MAN a Mercedes Abroll, Mercedes ramenáč, Škodu Citigo a popelářské vozy Mercedes a MAN. Ikona se vybírá podle přesné normalizované SPZ; ostatní vozidla dál bezpečně používají obecnou ikonu svého typu. Sídlo Kaiser servis na Trnkově je na mapě označené velkým 3D špendlíkem s logem Kaiser."
