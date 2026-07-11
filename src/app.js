@@ -19944,6 +19944,27 @@ function collectionRoutesIssuesFromValue(value) {
     .filter((issue) => issue.issueType || issue.label);
 }
 
+function collectionRoutesVistosOnDemandNote(value = "") {
+  const normalized = normalizeAccessSearchText(value);
+  if (!normalized) {
+    return false;
+  }
+  const tokens = new Set(normalized.split(/[^a-z0-9]+/).filter(Boolean));
+  if (["vyzva", "vyzvu", "vyzvy", "vyzve"].some((token) => tokens.has(token))) {
+    return true;
+  }
+  const compact = normalized.replace(/[^a-z0-9]+/g, "");
+  return /navyzv(?:a|u|y|e)|navyzadani|nazavolani|dlepotreb(?:a|y)?|naobjednani|objednavk/.test(compact);
+}
+
+function collectionRoutesVistosEffectiveIssues(value, onDemand = false) {
+  const issues = collectionRoutesIssuesFromValue(value);
+  if (!onDemand) {
+    return issues;
+  }
+  return issues.filter((issue) => issue.issueType !== "non-route-contract-row");
+}
+
 function collectionRoutesVistosAddressPartsFromItem(item = {}) {
   return {
     street: String(item.addressStreet || "").trim(),
@@ -19961,6 +19982,9 @@ function collectionRoutesVistosGenericAddressPlace(value = "") {
     return true;
   }
   if (["branch", "company", "customer", "directory", "directorybranch", "firma", "pobocka", "zakaznik"].includes(key)) {
+    return true;
+  }
+  if (/\s-\s*\d{8}$/.test(text)) {
     return true;
   }
   return /\s-\s*\d{6,12}$/.test(text) && (
@@ -20140,7 +20164,12 @@ function collectionRoutesContractKey(sourceRow, summary, fallback = "") {
 
 function collectionRoutesVistosContractDetailItem(sourceRow, index) {
   const summary = collectionRoutesImportRowSummary(sourceRow);
-  const issues = collectionRoutesIssuesFromValue(summary.issues || sourceRow.issues);
+  const note = summary.note || sourceRow.note || "";
+  const storedServiceMode = summary.serviceMode || sourceRow.serviceMode || "";
+  const onDemand = summary.onDemand === true || sourceRow.onDemand === true || storedServiceMode === "on_demand" || collectionRoutesVistosOnDemandNote(note);
+  const serviceMode = onDemand ? "on_demand" : storedServiceMode || "regular";
+  const serviceModeLabel = summary.serviceModeLabel || sourceRow.serviceModeLabel || (onDemand ? "Na výzvu" : "");
+  const issues = collectionRoutesVistosEffectiveIssues(summary.issues || sourceRow.issues, onDemand);
   const addressParts = collectionRoutesVistosAddressPartsFromItem({ ...sourceRow, ...summary });
   const addressPlace = collectionRoutesVistosStrictAddressPlace(summary.addressPlaceRaw, sourceRow.addressPlaceRaw);
   const containerCount = collectionRoutesMetricValue(summary.containerCount, 0);
@@ -20153,7 +20182,7 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     containerNameVolume: summary.containerNameVolume ?? sourceRow.containerNameVolume,
     containerVolumeSource: summary.containerVolumeSource || sourceRow.containerVolumeSource || ""
   };
-  const interval = summary.frequency || sourceRow.frequency || "neurčeno";
+  const interval = summary.frequency || sourceRow.frequency || (onDemand ? "Na výzvu" : "neurčeno");
   return {
     order: index + 1,
     contractKey: collectionRoutesContractKey(sourceRow, summary, `contract-row-${index}`),
@@ -20175,8 +20204,11 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
       summary.pickupDays,
       sourceRow.pickupDaysText,
       sourceRow.pickupDays
-    ) || "neurčeno",
-    note: summary.note || sourceRow.note || "",
+    ) || (onDemand ? "Dle výzvy" : "neurčeno"),
+    serviceMode,
+    serviceModeLabel,
+    onDemand,
+    note,
     customerManagerName: summary.customerManagerName || sourceRow.customerManagerName || "",
     customerManagerMobile: summary.customerManagerMobile || sourceRow.customerManagerMobile || "",
     customerManagerEmail: summary.customerManagerEmail || sourceRow.customerManagerEmail || "",
@@ -20188,7 +20220,7 @@ function collectionRoutesVistosContractDetailItem(sourceRow, index) {
     containerVolumeMismatch: Boolean(summary.containerVolumeMismatch || sourceRow.containerVolumeMismatch),
     issues,
     issueLabels: issues.map((issue) => issue.label).filter(Boolean),
-    issueCount: collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, 0),
+    issueCount: onDemand ? issues.length : collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, issues.length),
     containerCount: normalizedContainerCount
   };
 }
@@ -20229,6 +20261,7 @@ function collectionRoutesVistosContractRows() {
       issueLabels: new Set(),
       items: [],
       itemCount: 0,
+      onDemandItemCount: 0,
       containerCount: 0,
       issueCount: 0
     };
@@ -20250,6 +20283,7 @@ function collectionRoutesVistosContractRows() {
 
     existing.items.push(detailItem);
     existing.itemCount += 1;
+    existing.onDemandItemCount += detailItem.onDemand ? 1 : 0;
     existing.containerCount += detailItem.containerCount;
     existing.issueCount += Math.max(0, issueCount);
     contractsByKey.set(key, existing);
@@ -20312,8 +20346,14 @@ function collectionRoutesVistosFilteredContractRows(contractRows = collectionRou
   if (status === "errors") {
     return contractRows.filter((row) => collectionRoutesMetricValue(row.issueCount, 0) > 0);
   }
+  if (status === "on_demand") {
+    return contractRows.filter((row) => collectionRoutesMetricValue(row.onDemandItemCount, 0) > 0);
+  }
   if (status === "ok") {
-    return contractRows.filter((row) => collectionRoutesMetricValue(row.issueCount, 0) === 0);
+    return contractRows.filter((row) => (
+      collectionRoutesMetricValue(row.issueCount, 0) === 0 &&
+      collectionRoutesMetricValue(row.onDemandItemCount, 0) === 0
+    ));
   }
   return contractRows;
 }
@@ -20321,12 +20361,17 @@ function collectionRoutesVistosFilteredContractRows(contractRows = collectionRou
 function collectionRoutesVistosSitesFilterPanel(contractRows = collectionRoutesVistosContractRows()) {
   const selected = collectionRoutesVistosSitesFilterValue("status");
   const errorCount = contractRows.filter((row) => collectionRoutesMetricValue(row.issueCount, 0) > 0).length;
-  const okCount = Math.max(0, contractRows.length - errorCount);
+  const onDemandCount = contractRows.filter((row) => collectionRoutesMetricValue(row.onDemandItemCount, 0) > 0).length;
+  const okCount = contractRows.filter((row) => (
+    collectionRoutesMetricValue(row.issueCount, 0) === 0 &&
+    collectionRoutesMetricValue(row.onDemandItemCount, 0) === 0
+  )).length;
   return `
     <div class="collection-routes-sites-filter" role="group" aria-label="Filtr stanovišť">
       ${[
         ["all", "Všechna", contractRows.length],
         ["errors", "Jen s chybou", errorCount],
+        ["on_demand", "Na výzvu", onDemandCount],
         ["ok", "OK", okCount]
       ].map(([value, label, count]) => `
         <button
@@ -20420,14 +20465,22 @@ function collectionRoutesVistosRouteStatus(row) {
   if (collectionRoutesMetricValue(row?.issueCount, 0) > 0) {
     return { value: "review", label: "Zkontrolovat", tone: "warning" };
   }
+  if (row?.onDemand === true || row?.serviceMode === "on_demand") {
+    return { value: "on_demand", label: "Na výzvu", tone: "waiting" };
+  }
   return { value: "ok", label: "OK", tone: "ok" };
 }
 
 function collectionRoutesVistosRouteRows() {
   return collectionRoutesVistosSourceRows().map((sourceRow, index) => {
     const summary = collectionRoutesImportRowSummary(sourceRow);
-    const issues = collectionRoutesIssuesFromValue(summary.issues || sourceRow.issues);
-    const frequency = summary.frequency || sourceRow.frequency || "";
+    const note = summary.note || sourceRow.note || "";
+    const storedServiceMode = summary.serviceMode || sourceRow.serviceMode || "";
+    const onDemand = summary.onDemand === true || sourceRow.onDemand === true || storedServiceMode === "on_demand" || collectionRoutesVistosOnDemandNote(note);
+    const serviceMode = onDemand ? "on_demand" : storedServiceMode || "regular";
+    const serviceModeLabel = summary.serviceModeLabel || sourceRow.serviceModeLabel || (onDemand ? "Na výzvu" : "");
+    const issues = collectionRoutesVistosEffectiveIssues(summary.issues || sourceRow.issues, onDemand);
+    const frequency = summary.frequency || sourceRow.frequency || (onDemand ? "Na výzvu" : "");
     const pickupDaysRawText = [
       summary.pickupDaysText,
       summary.pickupDays,
@@ -20444,12 +20497,12 @@ function collectionRoutesVistosRouteRows() {
       sourceRow.pickupDays,
       summary.collectionDay,
       sourceRow.collectionDay
-    ) || pickupDaysRawText;
+    ) || pickupDaysRawText || (onDemand ? "Dle výzvy" : "");
     const pickupDayCodes = collectionRoutesVistosPickupDayCodesFromText(pickupDaysText);
     const containerCount = collectionRoutesMetricValue(summary.containerCount ?? sourceRow.containerCount, 0);
     const containerVolume = summary.containerVolume ?? sourceRow.containerVolume ?? "";
-    const issueCount = collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, issues.length);
-    const wasteType = summary.wasteType || sourceRow.wasteType || "ostatní";
+    const issueCount = onDemand ? issues.length : collectionRoutesMetricValue(summary.issueCount ?? sourceRow.issueCount, issues.length);
+    const wasteType = summary.wasteType || sourceRow.wasteType || (onDemand ? "neurčeno" : "ostatní");
     const strictAddressPlace = collectionRoutesVistosStrictAddressPlace(summary.addressPlaceRaw, sourceRow.addressPlaceRaw);
     const routeAddressText = strictAddressPlace || summary.addressRaw || sourceRow.addressRaw || "-";
     const routeRow = {
@@ -20470,11 +20523,18 @@ function collectionRoutesVistosRouteRows() {
       containerVolumeSource: summary.containerVolumeSource || sourceRow.containerVolumeSource || "",
       containerVolumeMismatch: Boolean(summary.containerVolumeMismatch || sourceRow.containerVolumeMismatch),
       frequency,
-      note: summary.note || sourceRow.note || "",
+      serviceMode,
+      serviceModeLabel,
+      onDemand,
+      note,
       pickupDaysText: pickupDaysText || "neurčeno",
       pickupDayCodes,
-      weekMode: collectionRoutesVistosWeekModeFromText(pickupDaysText || pickupDaysRawText || summary.frequency || sourceRow.frequency),
-      weekModes: collectionRoutesVistosWeekModesFromText(pickupDaysText || pickupDaysRawText || summary.frequency || sourceRow.frequency),
+      weekMode: onDemand
+        ? "na výzvu"
+        : collectionRoutesVistosWeekModeFromText(pickupDaysText || pickupDaysRawText || summary.frequency || sourceRow.frequency),
+      weekModes: onDemand
+        ? ["na výzvu"]
+        : collectionRoutesVistosWeekModesFromText(pickupDaysText || pickupDaysRawText || summary.frequency || sourceRow.frequency),
       vehicleCode: summary.vehicleCode || sourceRow.vehicleCode || "all",
       sourceFile: "Vistos API",
       sourceSheet: summary.contractNumber || summary.sourceContractId || sourceRow.sourceContractId || "-",
@@ -20565,7 +20625,7 @@ function collectionRoutesVistosRouteFilterPanel(rows = collectionRoutesVistosRou
         <label>
           <span>Týden</span>
           <select data-collection-routes-vistos-route-filter="week">
-            ${["all", "sudý týden", "lichý týden", "každý týden", "měsíční / 1x30"].map((value) => `
+            ${["all", "na výzvu", "sudý týden", "lichý týden", "každý týden", "měsíční / 1x30"].map((value) => `
               <option value="${escapeHtml(value)}" ${collectionRoutesVistosRouteFilterValue("week") === value ? "selected" : ""}>${collectionRoutesSourceLabel(value)}</option>
             `).join("")}
           </select>
@@ -20580,6 +20640,7 @@ function collectionRoutesVistosRouteFilterPanel(rows = collectionRoutesVistosRou
             ${[
               ["all", "vše"],
               ["ok", "OK"],
+              ["on_demand", "na výzvu"],
               ["review", "zkontrolovat"],
               ["waiting", "čeká"]
             ].map(([value, label]) => `<option value="${escapeHtml(value)}" ${collectionRoutesVistosRouteFilterValue("status") === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
@@ -20690,6 +20751,9 @@ function collectionRoutesVistosSiteStatus(contractRow) {
   }
   if (contractRow.issueCount > 0) {
     return { label: "Zkontrolovat", tone: "warning" };
+  }
+  if (contractRow.onDemandItemCount > 0 && contractRow.onDemandItemCount === contractRow.itemCount) {
+    return { label: "Na výzvu", tone: "waiting" };
   }
   return { label: "OK", tone: "ok" };
 }

@@ -10,6 +10,7 @@ import {
   __pickupDayEntriesFromValuesForTest,
   __pickupDayScheduleFromValuesForTest,
   __preferredVistosAddressPlaceValueForTest,
+  __textLooksLikeOnDemandCollectionServiceForTest,
   __vistosAddressPartsFromAddressPlaceForTest
 } from "../functions/_lib/collection-routes-store.js";
 import {
@@ -268,6 +269,22 @@ function derive(originalText) {
 
 {
   const issues = __addressPlaceQualityIssuesForTest({
+    addressPlaceRaw: "Brno, Ponava, Štefánikova 105/35, PSČ 60200",
+    addressRaw: "Milan Procházka - 62089765"
+  });
+  assert.equal(issues.some((issue) => issue.type === "address-place-loading-address-mismatch"), false);
+}
+
+{
+  const issues = __addressPlaceQualityIssuesForTest({
+    addressPlaceRaw: "Brno, Ponava, Štefánikova 105/35, PSČ 60200",
+    addressRaw: "Olomouc, Hodolany, Tovární 12"
+  });
+  assert.equal(issues.some((issue) => issue.type === "address-place-loading-address-mismatch"), true);
+}
+
+{
+  const issues = __addressPlaceQualityIssuesForTest({
     addressPlaceRaw: "",
     addressRaw: "U Vlečky 726/5c, 617 00 Brno - Komárov",
     siteName: "Stanoviště nesmí být Adresní místo"
@@ -405,6 +422,85 @@ function derive(originalText) {
   assert.equal(row.customerManagerMobile, "+420 777 111 222");
   assert.equal(row.customerManagerEmail, "jana.novakova@example.cz");
   assert.equal(row.issues.some((issue) => issue.type === "missing-address-place"), false);
+}
+
+{
+  [
+    "Výzva",
+    "Vyzva/na výzvu",
+    "Podle telefonické výzvy",
+    "Na zavolání",
+    "Dle potřeby",
+    "Na vyžádání",
+    "Na objednání"
+  ].forEach((value) => {
+    assert.equal(__textLooksLikeOnDemandCollectionServiceForTest(value), true, value);
+  });
+  assert.equal(__textLooksLikeOnDemandCollectionServiceForTest("Vyzvednutí nádoby ve skladu"), false);
+}
+
+{
+  const preview = __buildVistosKommunalPreviewForTest({
+    today: new Date("2026-07-10T12:00:00.000Z"),
+    contracts: [{
+      Id: "nova-bystrice",
+      ContractNumber: "OSPAP-NA-VYZVU",
+      Directory_FK_RecordId: "ospap",
+      Directory_FK_Caption: "OSPAP s.r.o.",
+      Nakladkovaadresa_FK_RecordId: "site-nova-bystrice",
+      Nakladkovaadresa_FK_Caption: "OSPAP, Vídeňská 121",
+      StartDate: "2026-07-10"
+    }],
+    contractRows: [
+      {
+        Id: "row-nova-bystrice-unknown",
+        Contract_FK_RecordId: "nova-bystrice",
+        __vistosAddressPlaceRaw: "Nová Bystřice, Vídeňská 121, PSČ 37833",
+        Stanoviste: "OSPAP, Vídeňská 121",
+        Description: "Vyzva/na výzvu",
+        StartDate: "2026-07-10"
+      },
+      {
+        Id: "row-nova-bystrice-known",
+        Contract_FK_RecordId: "nova-bystrice",
+        Product_FK_RecordId: "product-on-demand",
+        __vistosAddressPlaceRaw: "Nová Bystřice, Vídeňská 121, PSČ 37833",
+        Stanoviste: "OSPAP, Vídeňská 121",
+        Description: "Dle potřeby",
+        StartDate: "2026-07-10"
+      }
+    ],
+    products: [{
+      Id: "product-on-demand",
+      Caption: "SKO / 200301 240 l 1x7",
+      Name: "SKO / 200301 240 l 1x7",
+      Quantity: "1"
+    }]
+  });
+  const row = preview.rows[0];
+  assert.equal(row.addressPlaceRaw, "Nová Bystřice, Vídeňská 121, PSČ 37833");
+  assert.equal(row.stationName, "OSPAP, Vídeňská 121");
+  assert.equal(row.note, "Vyzva/na výzvu");
+  assert.equal(row.serviceMode, "on_demand");
+  assert.equal(row.serviceModeLabel, "Na výzvu");
+  assert.equal(row.onDemand, true);
+  assert.equal(row.mappingStatus, "on_demand");
+  assert.equal(row.frequency, "Na výzvu");
+  assert.equal(row.pickupDaysText, "Dle výzvy");
+  assert.equal(row.wasteType, "");
+  assert.equal(row.containerVolume, 0);
+  assert.equal(row.issues.some((issue) => [
+    "non-route-contract-row",
+    "unknown-product",
+    "unknown-waste-type",
+    "unknown-frequency",
+    "missing-pickup-days",
+    "missing-container-volume",
+    "item-not-collection-mappable"
+  ].includes(issue.type)), false);
+  assert.equal(preview.rows[1].wasteType, "SKO");
+  assert.equal(preview.rows[1].containerVolume, 240);
+  assert.equal(preview.routeDraftRows.length, 0);
 }
 
 {

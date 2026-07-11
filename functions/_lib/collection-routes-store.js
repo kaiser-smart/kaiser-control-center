@@ -2101,12 +2101,13 @@ async function enrichVistosCustomerManagerContacts(env, session, rows = [], cons
 function isGenericVistosAddressPlaceValue(value = "") {
   const key = normalizeVistosMetadataKey(value);
   const text = cleanString(value);
-  const looksLikeCustomerCaption = /\s-\s*\d{6,12}$/.test(text) && (
+  const hasCzechBusinessIdentifier = /\s-\s*\d{8}$/.test(text);
+  const looksLikeOrganizationCaption = /\s-\s*\d{6,12}$/.test(text) && (
     /\b(?:s\.?\s*r\.?\s*o|a\.?\s*s|spol|druzstvo)\b/i.test(text) ||
     text.toLocaleLowerCase("cs").includes("s.r.o") ||
     text.toLocaleLowerCase("cs").includes("a.s")
   );
-  if (looksLikeCustomerCaption) {
+  if (hasCzechBusinessIdentifier || looksLikeOrganizationCaption) {
     return true;
   }
   return [
@@ -3280,13 +3281,28 @@ function textLooksLikeCollectionService(text) {
   return collectionNeedles.some((needle) => normalized.includes(needle) || compact.includes(needle));
 }
 
+function textLooksLikeOnDemandCollectionService(text) {
+  const normalized = normalizeValueKey(text);
+  if (!normalized) {
+    return false;
+  }
+
+  const tokens = new Set(normalized.split(/[^A-Z0-9]+/).filter(Boolean));
+  if (["VYZVA", "VYZVU", "VYZVY", "VYZVE"].some((token) => tokens.has(token))) {
+    return true;
+  }
+
+  const compact = normalized.replace(/[^A-Z0-9]+/g, "");
+  return /NAVYZV(?:A|U|Y|E)|NAVYZADANI|NAZAVOLANI|DLEPOTREB(?:A|Y)?|NAOBJEDNANI|OBJEDNAVK/.test(compact);
+}
+
 function textLooksLikeNonCollectionRouteService(text) {
   const normalized = normalizeValueKey(text);
   const compact = normalized.replace(/\s+/g, "");
   if (!normalized) {
     return false;
   }
-  if (/VYZVA|VYZVU|NAVYZVU|NAZAVOLANI|DLEPOTREB|NAOBJEDNANI|OBJEDNAVK/.test(compact)) {
+  if (textLooksLikeOnDemandCollectionService(text)) {
     return true;
   }
   if (/MIMORADNYVYVOZ|SKARTAC|SANON|VYKUPN|RUCNISBER|LISOVAN|OBCHODOVATELN/.test(compact)) {
@@ -3414,6 +3430,10 @@ function inferVistosContainer(contractRow, product) {
     volumeNameText: cleanString(nameVolume.text),
     volumeMismatch: hasMismatch
   };
+}
+
+export function __textLooksLikeOnDemandCollectionServiceForTest(value = "") {
+  return textLooksLikeOnDemandCollectionService(value);
 }
 
 export function __inferVistosContainerForTest(contractRow = {}, product = null) {
@@ -3578,8 +3598,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const productId = cleanString(contractRow?.Product_FK_RecordId || contractRow?.Product_FK);
       const product = productsById.get(productId) || null;
       const searchText = productSearchText(contractRow, product);
-      const looksOutsideCollectionRoute = textLooksLikeNonCollectionRouteService(searchText);
-      const looksLikeCollection = !looksOutsideCollectionRoute && textLooksLikeCollectionService(searchText);
+      const isOnDemandCollection = textLooksLikeOnDemandCollectionService(contractRow?.Description);
+      const looksOutsideCollectionRoute = !isOnDemandCollection && textLooksLikeNonCollectionRouteService(searchText);
+      const looksLikeCollection = isOnDemandCollection || (!looksOutsideCollectionRoute && textLooksLikeCollectionService(searchText));
       const isOutsideCollectionRoute = looksOutsideCollectionRoute || !looksLikeCollection;
       const textAlias = findVistosCollectionTextAlias(searchText);
       const inferredContainer = inferVistosContainer(contractRow, product);
@@ -3610,7 +3631,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       }
       issues.push(...contractRowValidityIssues(contractRow, today));
 
-      if (isOutsideCollectionRoute) {
+      if (isOnDemandCollection) {
+        // Na výzvu je platný nepravidelný svoz. Nesmí se vydávat za chybnou
+        // pravidelnou trasu ani se zařadit do automatického denního návrhu.
+      } else if (isOutsideCollectionRoute) {
         issues.push({ type: "non-route-contract-row", severity: "info", message: "Položka podle textu patří mimo pravidelnou svozovou trasu." });
       } else {
         if (!productId || !product) {
@@ -3638,7 +3662,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       }
 
       const routeWaste = isOutsideCollectionRoute ? { wasteType: "", wasteCode: "" } : waste;
-      const routeFrequency = isOutsideCollectionRoute ? { frequency: "" } : frequency;
+      const routeFrequency = isOnDemandCollection
+        ? { frequency: "Na výzvu" }
+        : isOutsideCollectionRoute ? { frequency: "" } : frequency;
       const routeContainer = isOutsideCollectionRoute ? { volume: 0, count: 0, type: "" } : container;
       const rowStationValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "siteOptional");
       const rowStationName = firstNonEmpty(
@@ -3668,7 +3694,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
       const pickupToValues = readVistosConsistencyFieldValues(contract, contractRow, consistencyFields, "pickupTo");
       const pickupFrom = firstNonEmpty(...pickupFromValues.map((item) => item.value), contractRow?.StartDate);
       const pickupTo = firstNonEmpty(...pickupToValues.map((item) => item.value), contractRow?.EndDate);
-      const pickupDaySchedule = !isOutsideCollectionRoute && routeFrequency.frequency
+      const pickupDaySchedule = !isOnDemandCollection && !isOutsideCollectionRoute && routeFrequency.frequency
         ? pickupDayScheduleFromValues({ frequency: routeFrequency.frequency, values: pickupDayValues })
         : null;
 
@@ -3677,7 +3703,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         addressRaw,
         siteName
       }));
-      if (!isOutsideCollectionRoute && routeFrequency.frequency) {
+      if (!isOnDemandCollection && !isOutsideCollectionRoute && routeFrequency.frequency) {
         issues.push(...pickupDayConsistencyIssues({
           frequency: routeFrequency.frequency,
           values: pickupDayValues,
@@ -3701,7 +3727,9 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         validTo: isoDateValue(contract?.EndDate),
         pickupFrom: isoDateValue(pickupFrom),
         pickupTo: isoDateValue(pickupTo),
-        pickupDaysText: pickupDaySchedule?.displayText || pickupDayValues.map(pickupDayDisplayValue).map(cleanString).filter(Boolean).join(", "),
+        pickupDaysText: isOnDemandCollection
+          ? "Dle výzvy"
+          : pickupDaySchedule?.displayText || pickupDayValues.map(pickupDayDisplayValue).map(cleanString).filter(Boolean).join(", "),
         pickupDaysInferred: Boolean(pickupDaySchedule?.inferredEntries?.length),
         customerName,
         branchName,
@@ -3727,7 +3755,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         productName: firstNonEmpty(product?.Caption, product?.Name, contractRow?.Name),
         rowName: cleanString(contractRow?.Name),
         note: cleanString(contractRow?.Description),
-        mappingStatus: isOutsideCollectionRoute ? "outside_route" : issues.length ? "needs_review" : "mapped",
+        serviceMode: isOnDemandCollection ? "on_demand" : isOutsideCollectionRoute ? "outside_regular_route" : "regular",
+        serviceModeLabel: isOnDemandCollection ? "Na výzvu" : isOutsideCollectionRoute ? "Mimo pravidelnou trasu" : "Pravidelný svoz",
+        onDemand: isOnDemandCollection,
+        mappingStatus: isOnDemandCollection ? "on_demand" : isOutsideCollectionRoute ? "outside_route" : issues.length ? "needs_review" : "mapped",
         rowKey: `vistos-contract-${contractId}-row-${cleanString(contractRow?.Id) || productId || mappedRows.length + 1}`,
         siteKey: vistosSiteKey(contract),
         locationQuality: sourceSiteId ? "vistos_unverified" : "missing",
@@ -4306,6 +4337,9 @@ function manualRowSummary(row) {
     containerVolumeNameText: row.containerVolumeNameText || "",
     containerVolumeMismatch: Boolean(row.containerVolumeMismatch),
     unitPrice: row.unitPrice || 0,
+    serviceMode: row.serviceMode || "",
+    serviceModeLabel: row.serviceModeLabel || "",
+    onDemand: row.onDemand === true,
     mappingStatus: row.mappingStatus || "",
     note: row.note,
     contact: row.contact,
@@ -4378,6 +4412,9 @@ function buildVistosKommunalMappingGapRows(mappedRows) {
   const rowsByKey = new Map();
 
   for (const row of mappedRows) {
+    if (row.serviceMode === "on_demand" || row.onDemand === true || row.mappingStatus === "on_demand") {
+      continue;
+    }
     const issueTypes = new Set((row.issues || []).map((issue) => cleanString(issue?.type)).filter(Boolean));
     if (!issueTypes.has("item-not-collection-mappable")) {
       continue;
@@ -4454,6 +4491,9 @@ function buildVistosKommunalRouteDraftRows(mappedRows) {
   const rowsByKey = new Map();
 
   for (const row of mappedRows) {
+    if (row.serviceMode === "on_demand" || row.onDemand === true || row.mappingStatus === "on_demand") {
+      continue;
+    }
     const issueTypes = new Set((row.issues || []).map((issue) => cleanString(issue?.type)).filter(Boolean));
     const hasBlockingIssue = Array.from(blockingIssueTypes).some((issueType) => issueTypes.has(issueType));
     if (hasBlockingIssue || !row.wasteType || !row.frequency || !row.containerVolume || !row.siteKey) {
