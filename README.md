@@ -137,8 +137,8 @@ TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN=...
 KSO_SMS_MODE=off
 SENDGRID_API_KEY=...
 EMAIL_PROVIDER=sendgrid
-EMAIL_FROM=...
-EMAIL_REPLY_TO=...
+EMAIL_FROM=sarlota@kaiserservis.cz
+EMAIL_REPLY_TO=sarlota@kaiserservis.cz
 KSO_EMAIL_FROM=sarlota@kaiserservis.cz
 KSO_EMAIL_FROM_NAME=Šarlota Kaiser
 KSO_EMAIL_REPLY_TO=sarlota@kaiserservis.cz
@@ -146,7 +146,7 @@ KSO_INBOUND_EMAIL_WEBHOOK_TOKEN=...
 ABSENCE_APPROVAL_REMINDER_HOURS=24
 ```
 
-`EMAIL_PROVIDER=sendgrid` je doporučené nastavení. Pokud není vyplněné, backend použije SendGrid automaticky, jakmile existuje `SENDGRID_API_KEY`. Uživatelský odesílatel KSO je pevně `Šarlota Kaiser <sarlota@kaiserservis.cz>`; starší `EMAIL_FROM` se bere jen jako legacy konfigurační hodnota a v odchozích KSO e-mailech se nepoužije jako viditelný From.
+`EMAIL_PROVIDER=sendgrid` je doporučené nastavení. Pokud není vyplněné, backend použije SendGrid automaticky, jakmile existuje `SENDGRID_API_KEY`. Uživatelský odesílatel KSO je pevně `Šarlota Kaiser <sarlota@kaiserservis.cz>` a stejná adresa je i v legacy `EMAIL_FROM` / `EMAIL_REPLY_TO`. Samostatnou výjimkou jsou Pohledávky, které mají ve vlastním nastavení odesílatele `fakturace@kaiserservis.cz`.
 
 V produkci se mock OTP nepovolí na větvi `main`; testovací kód `123456` je pouze pro lokální vývoj nebo neprodukční prostředí s `AUTH_MODE=mock`.
 

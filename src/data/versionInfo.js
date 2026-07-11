@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.503"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.504"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "KSO e-maily: jednotná identita Šarloty",
+    text: "Systémové e-maily mimo Pohledávky používají jednotně Šarlota Kaiser <sarlota@kaiserservis.cz> jako From i Reply-To. Pohledávky zůstávají samostatnou výjimkou s odesílatelem fakturace@kaiserservis.cz. Chyba SendGrid 403 nově vysvětlí potřebu ověřit Sender Identity místo technického kódu."
+  },
   {
     title: "Jednotné rozhraní celé aplikace",
     text: "Přihlášení, hlavní stránka a všechny přihlášené moduly používají společný klidný šedo-zelený design systém, Quicksand a přesnou firemní zelenou #75bd25. Levý brand box používá dodané logo Kaiser a zelená primární tlačítka mají bílý text. Nový shell zachovává stávající oprávnění, API data i pracovní funkce; nemění backend, databázi ani provozní data."

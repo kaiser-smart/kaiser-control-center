@@ -1498,6 +1498,15 @@ function driverPartTestEnv(db, offers) {
     notificationInternals.emailRecipients("oplustil@kaiserservis.cz; invalid; patrik@example.test,oplustil@kaiserservis.cz"),
     ["oplustil@kaiserservis.cz", "patrik@example.test"]
   );
+  assert.equal(
+    await notificationInternals.sendGridFailureMessage({
+      status: 403,
+      async json() {
+        return { errors: [{ message: "The from address does not match a verified Sender Identity." }] };
+      }
+    }, "sarlota@kaiserservis.cz"),
+    "SendGrid odmítl odesílatele sarlota@kaiserservis.cz. Ověřte tuto adresu nebo doménu kaiserservis.cz v SendGrid Sender Authentication."
+  );
   assert.deepEqual(
     notificationInternals.parseDriverPartOffers(JSON.stringify({
       offers: [

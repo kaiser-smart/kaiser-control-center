@@ -289,6 +289,26 @@ function missingSmsSettingsMessage({ accountSid, authToken, messagingServiceSid,
   return `Telefon pro ${recipientLabel(recipientName)} je vyplněný, ale chybí produkční nastavení SMS: ${missing.join(", ")}.`;
 }
 
+async function sendGridFailureMessage(response, fromEmail) {
+  let providerMessage = "";
+  try {
+    const payload = await response.json();
+    providerMessage = cleanString(payload?.errors?.[0]?.message);
+  } catch {
+    providerMessage = "";
+  }
+
+  if (response.status === 403 && /verified sender|sender identity|from address/i.test(providerMessage)) {
+    return `SendGrid odmítl odesílatele ${fromEmail}. Ověřte tuto adresu nebo doménu kaiserservis.cz v SendGrid Sender Authentication.`;
+  }
+  if (response.status === 401) {
+    return "SendGrid odmítl produkční API klíč. Zkontrolujte oprávnění SENDGRID_API_KEY pro Mail Send.";
+  }
+  return providerMessage
+    ? `SendGrid odeslání selhalo (${response.status}): ${providerMessage}`
+    : `SendGrid odeslání selhalo (${response.status}).`;
+}
+
 function renderApprovalEmail({ title, headline, intro, request, ctaUrl }) {
   const note = request.note || "bez poznámky";
   return `<!doctype html>
@@ -915,7 +935,7 @@ async function sendEmail(env, {
     });
 
     if (!response.ok) {
-      throw new Error(`SendGrid ${response.status}`);
+      throw new Error(await sendGridFailureMessage(response, identity.fromEmail));
     }
   } catch (error) {
     const errorMessage = cleanString(error?.message) || "SendGrid odeslání selhalo.";
@@ -1424,5 +1444,6 @@ export const __test = {
   driverPartOrderEmailOffers,
   driverPartOrderEmailReadiness,
   parseDriverPartOffers,
-  renderDriverPartOrderEmail
+  renderDriverPartOrderEmail,
+  sendGridFailureMessage
 };
