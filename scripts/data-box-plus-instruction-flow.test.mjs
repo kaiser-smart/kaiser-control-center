@@ -14,7 +14,7 @@ function plan(instruction, overrides = {}, context = {}) {
   return dataBoxPlusInstructionPlanForTest(instruction, { ...message, ...overrides }, [], context);
 }
 
-const helpText = "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, připravit odpověď nebo předat kolegovi.";
+const helpText = "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, odeslat odpověď nebo předat kolegovi.";
 
 for (const instruction of ["co?", "???", "ahoj", "test", "Jaké je tvoje poslání?", "ano", "souhlasím", "proveď"]) {
   const result = plan(instruction);
@@ -66,21 +66,22 @@ const missingNote = plan("přidej poznámku");
 assert.equal(missingNote.outcome, "needs_input");
 assert.equal(missingNote.assistantText, "Jakou interní poznámku mám ke zprávě přidat?");
 
-const replyDraft = plan("odpověz jim");
+const replyDraft = plan("připrav návrh odpovědi bez odeslání");
 assert.equal(replyDraft.intent, "prepare_reply");
 assert.equal(replyDraft.outcome, "draft_ready");
 assert.equal(replyDraft.changesMessage, false);
 assert.equal(replyDraft.sendsEmail, false);
 assert.equal(replyDraft.emailSent, false);
-assert.equal(replyDraft.assistantText, "Připravím návrh odpovědi. Odeslání musí potvrdit člověk.");
+assert.equal(replyDraft.assistantText, "Návrh odpovědi je připravený. Nic nebylo odesláno.");
 assert.match(replyDraft.draftText, /Návrh odpovědi před odesláním/);
 
-const emailDraft = plan("pošli email na radim@example.cz");
-assert.equal(emailDraft.intent, "prepare_reply");
-assert.equal(emailDraft.outcome, "draft_ready");
-assert.equal(emailDraft.recipientEmail, "radim@example.cz");
-assert.equal(emailDraft.sendsEmail, false);
-assert.equal(emailDraft.emailSent, false);
+const emailAction = plan("pošli email na radim@example.cz");
+assert.equal(emailAction.intent, "send_email");
+assert.equal(emailAction.outcome, "waiting_confirmation");
+assert.equal(emailAction.recipientEmail, "radim@example.cz");
+assert.equal(emailAction.sendsEmail, true);
+assert.equal(emailAction.requiresConfirmation, true);
+assert.equal(emailAction.emailSent, false);
 
 const missingEmail = plan("pošli email");
 assert.equal(missingEmail.outcome, "needs_input");
@@ -93,13 +94,24 @@ const suppliedEmail = plan("radim@example.cz", {}, {
   pendingIntent: missingEmail.pendingIntent,
   missingField: missingEmail.missingField
 });
-assert.equal(suppliedEmail.outcome, "draft_ready");
+assert.equal(suppliedEmail.outcome, "waiting_confirmation");
 assert.equal(suppliedEmail.recipientEmail, "radim@example.cz");
-assert.equal(suppliedEmail.sendsEmail, false);
+assert.equal(suppliedEmail.sendsEmail, true);
+
+const typoForward = plan("přepsání zprávy na faktury@kaiserservis.cz");
+assert.equal(typoForward.intent, "send_email");
+assert.equal(typoForward.outcome, "waiting_confirmation");
+assert.equal(typoForward.recipientEmail, "faktury@kaiserservis.cz");
+assert.doesNotMatch(typoForward.assistantText, /návrh/i);
+
+const accountingHandoff = plan("předej zprávu fakturám");
+assert.equal(accountingHandoff.intent, "send_email");
+assert.equal(accountingHandoff.outcome, "waiting_confirmation");
+assert.equal(accountingHandoff.recipientEmail, "faktury@kaiserservis.cz");
 
 const dataBoxDraft = plan("odešli datovou zprávu úřadu");
-assert.equal(dataBoxDraft.outcome, "draft_ready");
-assert.equal(dataBoxDraft.intent, "prepare_reply");
+assert.equal(dataBoxDraft.outcome, "needs_input");
+assert.equal(dataBoxDraft.pendingIntent, "send_data_box_reply");
 assert.equal(dataBoxDraft.changesMessage, false);
 
 const deleteAttempt = plan("smaž zprávu");
@@ -118,8 +130,13 @@ assert.ok(executeSource, "execution source must be present");
 assert.match(executeSource, /interpretDataBoxPlusChat/);
 assert.match(executeSource, /waiting_confirmation/);
 assert.match(storeSource, /sendDataBoxPlusMessageEmail/);
+assert.match(storeSource, /sendDataBoxPlusReply/);
 assert.match(storeSource, /sendCustomerMessage/);
 assert.match(storeSource, /rememberConfirmedDataBoxPlusChatPattern/);
 assert.match(storeSource, /DATA_BOX_PLUS_CONFIRMATION_TTL_MS/);
+const confirmedExecutorSource = storeSource.match(/async function executeDataBoxPlusConfirmedPlan[\s\S]+?\n}\n\nexport async function executeDataBoxPlusMessageInstruction/)?.[0] || "";
+assert.ok(confirmedExecutorSource, "confirmed action executor must be present");
+assert.doesNotMatch(confirmedExecutorSource, /plan\.actionType === "prepare_reply"/);
+assert.match(confirmedExecutorSource, /dataBoxPlusExecutableAction/);
 
 console.log("data-box-plus instruction flow ok");

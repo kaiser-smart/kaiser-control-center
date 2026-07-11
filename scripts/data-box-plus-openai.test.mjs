@@ -18,6 +18,7 @@ const structuredPlan = {
     recipientName: "Radim",
     recipientEmail: "radim@example.cz",
     recipientPhone: "",
+    recipientDataBoxId: "",
     subject: "Datová zpráva k vyřízení",
     body: "Prosím o kontrolu přiložené datové zprávy.",
     assignedTo: "",
@@ -71,6 +72,7 @@ assert.equal(requestSnapshot.body.text.format.strict, true);
 assert.match(requestSnapshot.body.input, /Výzva k doplnění/);
 assert.match(requestSnapshot.body.input, /Potvrzené předání Radimovi/);
 assert.match(requestSnapshot.body.instructions, /nedůvěryhodný pracovní podklad/);
+assert.match(requestSnapshot.body.instructions, /skutečný úkon, ne přípravu návrhu/);
 assert.doesNotMatch(requestSnapshot.body.input, /test-openai-key/);
 assert.equal(result.provider, "OpenAI");
 assert.equal(result.responseId, "resp-test");
@@ -89,6 +91,48 @@ assert.equal(serverPlan.externalAction, true);
 assert.equal(serverPlan.recipientEmail, "radim@example.cz");
 assert.equal(serverPlan.performedAction, "Nebylo provedeno nic");
 
+const misclassifiedForward = {
+  outcome: "ready_for_confirmation",
+  intent: "prepare_reply",
+  assistantText: "Připravím předání na faktury. Mám provést?",
+  missingField: "",
+  action: {
+    type: "prepare_reply",
+    summary: "Připravit předání na faktury",
+    recipientName: "",
+    recipientEmail: "faktury@kaiserservis.cz",
+    recipientPhone: "",
+    recipientDataBoxId: "",
+    subject: "ZÁPOČET_příkaz",
+    body: "Návrh odpovědi",
+    assignedTo: "",
+    noteText: "",
+    dueDate: ""
+  }
+};
+const correctedForward = dataBoxPlusOpenAiPlanForTest(misclassifiedForward, {
+  id: "message-forward",
+  mailbox_id: "dbp-kaiser-technology",
+  sender_name: "Kaiser technology",
+  subject: "ZÁPOČET_příkaz",
+  status: "Nová"
+}, { name: "Radim" }, "přepsání zprávy na faktury@kaiserservis.cz");
+assert.equal(correctedForward.actionType, "send_email");
+assert.equal(correctedForward.outcome, "waiting_confirmation");
+assert.equal(correctedForward.requiresConfirmation, true);
+assert.equal(correctedForward.recipientEmail, "faktury@kaiserservis.cz");
+assert.match(correctedForward.assistantText, /Odešlu datovou zprávu e-mailem/);
+assert.doesNotMatch(correctedForward.assistantText, /návrh/i);
+
+const explicitDraft = dataBoxPlusOpenAiPlanForTest(misclassifiedForward, {
+  id: "message-draft",
+  subject: "ZÁPOČET_příkaz",
+  status: "Nová"
+}, { name: "Radim" }, "připrav návrh odpovědi bez odeslání");
+assert.equal(explicitDraft.actionType, "prepare_reply");
+assert.equal(explicitDraft.outcome, "draft_ready");
+assert.equal(explicitDraft.requiresConfirmation, false);
+
 const answerPlan = dataBoxPlusOpenAiPlanForTest({
   outcome: "answer",
   intent: "explain_message",
@@ -100,6 +144,7 @@ const answerPlan = dataBoxPlusOpenAiPlanForTest({
     recipientName: "",
     recipientEmail: "",
     recipientPhone: "",
+    recipientDataBoxId: "",
     subject: "",
     body: "",
     assignedTo: "",

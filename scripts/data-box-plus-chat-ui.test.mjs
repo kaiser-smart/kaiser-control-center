@@ -74,7 +74,7 @@ const legacySmalltalk = dataBoxPlusHistoryChatEntries([{
 }]);
 assert.equal(
   legacySmalltalk[1].text,
-  "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, připravit odpověď nebo předat kolegovi."
+  "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, odeslat odpověď nebo předat kolegovi."
 );
 
 const legacyAction = dataBoxPlusHistoryChatEntries([{
@@ -109,7 +109,7 @@ const draftHistory = dataBoxPlusHistoryChatEntries([{
     assistantText: "intent: prepare_reply"
   }
 }]);
-assert.equal(draftHistory[1].text, "Připravím návrh odpovědi. Odeslání musí potvrdit člověk.");
+assert.equal(draftHistory[1].text, "Návrh odpovědi je připravený. Nic nebylo odesláno.");
 
 const technicalHistory = dataBoxPlusHistoryChatEntries([{
   id: "technical",
@@ -197,7 +197,14 @@ const detailOverlaySource = appSource.slice(
 );
 assert.doesNotMatch(composeOverlaySource, /dataBoxPlusChatPanel\(message\)/);
 assert.match(detailOverlaySource, /ds-plus-detail-section--chat[\s\S]*dataBoxPlusChatPanel\(message\)/);
-assert.match(appSource, /E-mail nebo SMS odešle jen po potvrzení/);
+assert.match(appSource, /E-mail, SMS nebo odpověď přes ISDS odešle jen po potvrzení/);
+assert.match(appSource, /"Odpověz datovou schránkou"/);
+assert.match(appSource, /send_data_box_reply: "Odeslat datovou zprávu"/);
+const confirmationSource = appSource.slice(
+  appSource.indexOf("function dataBoxPlusChatConfirmationCard"),
+  appSource.indexOf("function dataBoxPlusInstructionCard")
+);
+assert.doesNotMatch(confirmationSource, />Provést<\/button>/);
 const compactChatStyles = styles.slice(styles.lastIndexOf("/* Datove schranky Plus: simple message chat. */"));
 assert.match(compactChatStyles, /width:\s*min\(600px, calc\(100vw - 48px\)\)/);
 assert.match(compactChatStyles, /max-height:\s*min\(680px, calc\(100dvh - 48px\)\)/);

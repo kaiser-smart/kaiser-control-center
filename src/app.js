@@ -21876,7 +21876,7 @@ function dataBoxPlusComposeLauncher() {
     <section class="ds-plus-send-strip" aria-label="Odesílání datových zpráv">
       <div>
         <h2>Odesílání</h2>
-        <p>Nová datová zpráva je samostatný proces. Chat každou akci nejdřív připraví a odeslání e-mailu nebo SMS vždy vyžaduje potvrzení.</p>
+        <p>Nová datová zpráva je samostatný proces. Chat každý úkon nejdřív přesně shrne a po potvrzení ho skutečně provede přes backend.</p>
       </div>
       <button class="primary-action" type="button" data-ds-plus-compose-open>Nová zpráva</button>
     </section>
@@ -21995,7 +21995,7 @@ function dataBoxPlusChatSuggestions(message) {
   const suggestions = [
     "Archivuj jako informativní",
     "Označ jako vyřízené",
-    "Připrav odpověď",
+    "Odpověz datovou schránkou",
     "Předej kolegovi"
   ];
   return `
@@ -22018,6 +22018,7 @@ function dataBoxPlusChatActionLabel(type) {
     internal_note: "Přidat interní poznámku",
     create_task: "Vytvořit interní úkol",
     prepare_reply: "Připravit návrh odpovědi",
+    send_data_box_reply: "Odeslat datovou zprávu",
     send_email: "Odeslat e-mail",
     send_sms: "Odeslat SMS",
     set_reminder: "Uložit termín připomínky",
@@ -22029,7 +22030,7 @@ function dataBoxPlusChatConfirmationCard(entry, message, loading) {
   const action = entry?.proposedAction && typeof entry.proposedAction === "object" ? entry.proposedAction : null;
   const confirmationId = String(action?.confirmationId || entry?.confirmationId || "").trim();
   if (!action || !confirmationId || entry?.outcome !== "waiting_confirmation") return "";
-  const recipient = action.recipientName || action.recipientEmail || action.recipientPhone || action.assignedTo || "";
+  const recipient = action.recipientName || action.recipientEmail || action.recipientPhone || action.recipientDataBoxId || action.assignedTo || "";
   return `
     <section class="ds-plus-chat-confirmation" aria-label="Akce čeká na potvrzení">
       <span class="ds-plus-chat-confirmation__eyebrow">Před provedením zkontrolujte</span>
@@ -22050,7 +22051,7 @@ function dataBoxPlusChatConfirmationCard(entry, message, loading) {
           data-ds-plus-chat-confirm="${escapeHtml(message.id)}"
           data-confirmation-id="${escapeHtml(confirmationId)}"
           ${loading ? "disabled" : ""}
-        >Provést</button>
+        >${escapeHtml(dataBoxPlusChatActionLabel(action.type))}</button>
         <button
           class="secondary-link"
           type="button"
@@ -23057,7 +23058,7 @@ function dataBoxPlusEventLogBlock() {
     {
       createdAt: "",
       title: "Odesílání mimo systém",
-      note: "E-mail nebo SMS se z DSP odešle jen po přesném návrhu a jednorázovém potvrzení člověka."
+      note: "E-mail, SMS nebo odpověď přes datovou schránku se odešle jen po přesném shrnutí úkonu a jednorázovém potvrzení člověka."
     }
   ];
   const events = historyEvents.length ? historyEvents : fallbackEvents;
@@ -23115,12 +23116,12 @@ function dataBoxPlusEventLogBlock() {
     badgeState: cloudSync.isRunning ? "běží" : (latestSync ? "částečně ověřeno" : "čeká na ověření"),
     statuses,
     inactiveItems: [
-      readiness.dataBox?.enabled ? "Odeslání datové zprávy bez hotového serverového scénáře." : "Odesílání datových zpráv z DSP.",
+      readiness.dataBox?.enabled ? "Nová samostatná datová zpráva bez kontextu přijaté zprávy." : "Odesílání datových zpráv z DSP.",
       readiness.email?.enabled ? "Odeslání e-mailu bez jasného adresáta." : "E-mail z DSP.",
       readiness.sms?.enabled ? "Automatické odeslání SMS bez schváleného scénáře." : "SMS z DSP."
     ],
     pilotItems: [
-      "Chatový pokyn nejdřív vytvoří návrh. Akce se provede až po jednorázovém potvrzení a výsledek se zapíše do historie.",
+      "Chatový pokyn úkon přesně shrne. Po jednorázovém potvrzení ho provede backend a až úspěšný výsledek zapíše jako hotový.",
       "Autopilot se učí pouze z potvrzených akcí, které skutečně úspěšně proběhly.",
       "Pokud cloudový běh není čerstvý, automatizace není označená jako běžící."
     ],
@@ -23163,7 +23164,7 @@ function dataBoxPlusSettingsPanel() {
           <ul>
             <li>Autopilot nikdy nemaže datové zprávy.</li>
             <li>Autopilot provede pouze jasný pokyn, který člověk předem potvrdil.</li>
-            <li>E-mail nebo SMS odešle jen po potvrzení. Novou datovou zprávu ani odpověď úřadu přes ISDS zatím neodešle.</li>
+            <li>E-mail, SMS nebo odpověď přes ISDS odešle jen po potvrzení a pouze přes aktivní serverovou službu.</li>
             <li>Když obsah přílohy není načtený nebo chybí vazba, nastaví konkrétní stav.</li>
           </ul>
         </section>
@@ -23252,15 +23253,15 @@ function dataBoxPlusManualPanel() {
           <ul>
             <li>Řídicí centrum ukazuje jen věci, které mají mít dnes pozornost.</li>
             <li>Chat s Autopilotem je nahoře v detailu každé zprávy a má vlastní historii.</li>
-            <li>Autopilot každý pokyn nejdřív shrne, zeptá se „Mám provést?“ a teprve po potvrzení ho zapíše jako provedený.</li>
+            <li>Autopilot každý úkon shrne, zeptá se „Mám provést?“ a až po úspěšném backendovém výsledku ho zapíše jako provedený.</li>
             <li>Detail zprávy rozlišuje obálku zprávy a obsah příloh.</li>
             <li>Když příloha není přečtená, Autopilot nevytvoří falešné shrnutí.</li>
           </ul>
         </section>
         <section class="ds-plus-manual-block ds-plus-manual-block--warning">
           <h3>Nová zpráva a Odpovědět</h3>
-          <p>Ostré odesílání datových zpráv zatím není hotový proces v DSP.</p>
-          <p>Bez další schválené fáze modul datovou zprávu neodešle. Bezpečný další krok je nejdřív vytvořit koncepty, potvrzovací obrazovku, audit a teprve potom napojit skutečné odeslání.</p>
+          <p>Odpověď na přijatou zprávu se po potvrzení odešle přes serverovou DS bránu a zapíše do historie.</p>
+          <p>Nová samostatná datová zpráva bez kontextu přijaté zprávy zatím zůstává oddělený proces a chat ji nevydává za odeslanou.</p>
         </section>
         <section class="ds-plus-manual-block">
           <h3>Co Autopilot nikdy neudělá sám</h3>
@@ -27434,7 +27435,7 @@ function systemCheckMobileItems() {
     { label: "Mobil zobrazuje hlavně DS a zprávy", status: "OK", detail: "Na breakpointu 720px je nahoře přepínač DS, záložky, hledání, filtry a seznam." },
     { label: "Technické boxy jsou na mobilu schované", status: "OK", detail: "Stavové/side panely jsou skryté, pravidla zůstávají dostupná přes záložku Pravidla." },
     { label: "Přílohy jsou v detailu nahoře", status: "OK", detail: "Sekce příloh je před obsahem a technickými detaily." },
-    { label: "Hlavní akce jsou do 2–3 kliků", status: "WARNING", detail: "UI cesty jsou krátké; e-mail, archivace a ostré DS odeslání čekají na backend." },
+    { label: "Hlavní akce jsou do 2–3 kliků", status: "WARNING", detail: "Chatové úkony mají backendové vykonavatele; externí odeslání navíc vyžaduje aktivního providera a potvrzení." },
     { label: "Nechtěný horizontální scroll", status: "NEOVĚŘENO", detail: "Vyžaduje vizuální mobilní kontrolu v prohlížeči." }
   ];
 }
@@ -33175,7 +33176,7 @@ async function runDataBoxPlusInstruction(messageIdValue, instructionValue, optio
         intent: result.action?.intent,
         statusLabel: result.action?.statusLabel,
         understoodAs: result.action?.understoodAs,
-        performedAction: result.action?.outcome === "done" || result.action?.outcome === "draft_ready"
+        performedAction: result.action?.outcome === "done"
           ? result.action?.performedAction
           : "Nebylo provedeno nic",
         proposedAction: result.action?.proposedAction

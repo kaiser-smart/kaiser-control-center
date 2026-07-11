@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.494"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.495"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky Plus: chat skutečně provádí úkony",
+    text: "Potvrzený úkon v chatu má vždy skutečný backendový výsledek. Archivace, vyřízení, předání a interní kroky mění provozní stav; e-mail, SMS a odpověď přes datovou schránku volají příslušnou serverovou službu. Návrh vznikne jen na výslovný pokyn a nikdy se nevydává za provedenou akci."
+  },
   {
     title: "Trasy svozu: OSVČ adresa a režim Na výzvu",
     text: "Kontrola adres už nezaměňuje jméno OSVČ s IČO za nakládkovou adresu. Poznámky Výzva, Na výzvu, Dle potřeby, Na zavolání, Na vyžádání a Na objednání označí nepravidelný svoz jako Na výzvu, zachovají známý odpad a nádobu a nezařadí položku do pravidelného denního návrhu."

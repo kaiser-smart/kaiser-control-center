@@ -147,7 +147,7 @@ function sendReadiness(env = {}) {
       enabled: dataBoxReady,
       label: dataBoxReady ? "zapnuto" : "čeká na DS bránu",
       text: dataBoxReady
-        ? "Serverová brána pro datové zprávy je dostupná. Chatové pokyny se vyhodnocují přes backend."
+        ? "Serverová DS brána je dostupná. Potvrzená odpověď na přijatou zprávu se odešle přes backend a zapíše do historie."
         : "Chybí DATA_BOX_REPLY_ENDPOINT a DATA_BOX_REPLY_API_KEY. Bez nich DSP datovou zprávu neodešle."
     },
     email: {
@@ -1998,12 +1998,131 @@ export async function sendDataBoxPlusMessageEmail(env, messageId, payload = {}, 
   };
 }
 
-export async function sendDataBoxPlusReply(env) {
+export async function sendDataBoxPlusReply(env, messageId, payload = {}, currentUser = {}) {
   const readiness = sendReadiness(env);
   if (!readiness.dataBox.enabled) {
     throw new DataBoxPlusStoreError(readiness.dataBox.text, 503, "data_box_plus_ds_sender_missing");
   }
-  throw new DataBoxPlusStoreError("DS odesílací brána je dostupná, ale DSP nemá dokončenou mapu payloadu pro ostré odeslání datové zprávy.", 501, "data_box_plus_ds_sender_not_implemented");
+  if (payload.confirmed !== true) {
+    throw new DataBoxPlusStoreError("Odeslání datové zprávy vyžaduje finální potvrzení.", 409, "data_box_plus_ds_confirmation_required");
+  }
+
+  const db = dataBoxPlusDatabase(env, true);
+  const id = cleanString(messageId);
+  const message = await getDataBoxPlusMessage(env, id);
+  const recipientDataBoxId = cleanString(payload.recipientDataBoxId || message.senderBoxId || message.recipientBoxId);
+  const body = cleanString(payload.body || payload.text);
+  const subject = cleanString(payload.subject || (message.subject.toLowerCase().startsWith("re:") ? message.subject : `Re: ${message.subject}`));
+  if (!recipientDataBoxId) {
+    throw new DataBoxPlusStoreError("Chybí ID datové schránky příjemce.", 400, "data_box_plus_ds_recipient_missing");
+  }
+  if (!body) {
+    throw new DataBoxPlusStoreError("Chybí přesný text odpovědi přes datovou schránku.", 400, "data_box_plus_ds_body_missing");
+  }
+
+  const endpoint = cleanString(env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
+  const apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
+  const actor = actorName(currentUser);
+  const actionId = idValue("dbp-action");
+  await db.prepare(`
+    INSERT INTO data_box_plus_action_log (
+      id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+    ) VALUES (?, ?, NULL, ?, 'Odeslání datové zprávy', ?, ?, 'sending', ?)
+  `).bind(
+    actionId,
+    id,
+    actor,
+    JSON.stringify({ recipientDataBoxId, subject, bodyPreview: body.slice(0, 500), confirmed: true }),
+    new Date().toISOString(),
+    `${actor} potvrdil odeslání odpovědi do datové schránky ${recipientDataBoxId}.`
+  ).run();
+
+  let response;
+  let result = {};
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        sourceMailboxId: message.mailboxId,
+        originalMessageId: message.id,
+        originalIsdsMessageId: message.isdsMessageId,
+        recipientDataBoxId,
+        subject,
+        body
+      })
+    });
+    result = await response.json().catch(() => ({}));
+  } catch (error) {
+    try {
+      await db.prepare("UPDATE data_box_plus_action_log SET result = 'failed', audit_note = ? WHERE id = ?")
+        .bind(`Odeslání odpovědi přes datovou schránku selhalo: ${cleanString(error?.message || "brána není dostupná")}.`, actionId)
+        .run();
+    } catch (auditError) {
+      console.error("data_box_plus.ds_reply_audit_failed", { message: auditError.message, actionId });
+    }
+    throw new DataBoxPlusStoreError("DS odesílací brána není dostupná.", 502, "data_box_plus_ds_send_failed");
+  }
+
+  const sent = Boolean(response?.ok && result.success !== false);
+  const providerMessageId = cleanString(result.sentMessageId || result.messageId);
+  try {
+    await db.prepare("UPDATE data_box_plus_action_log SET result = ?, audit_note = ? WHERE id = ?")
+      .bind(
+        sent ? "sent" : "failed",
+        sent
+          ? `Odpověď byla odeslaná přes datovou schránku${providerMessageId ? ` jako ${providerMessageId}` : ""}.`
+          : `Odeslání odpovědi přes datovou schránku selhalo: ${cleanString(result.error || result.message || `HTTP ${response?.status || 502}`)}.`,
+        actionId
+      )
+      .run();
+  } catch (error) {
+    console.error("data_box_plus.ds_reply_audit_failed", { message: error.message, actionId });
+  }
+  if (!sent) {
+    throw new DataBoxPlusStoreError(
+      cleanString(result.error || result.message) || `Odeslání odpovědi přes datovou schránku selhalo (${response?.status || 502}).`,
+      502,
+      "data_box_plus_ds_send_failed"
+    );
+  }
+
+  const auditWarnings = [];
+  try {
+    await db.prepare(`
+      UPDATE data_box_plus_messages
+      SET status = 'Odesláno datovou schránkou',
+          assigned_to = ?,
+          suggested_action = 'Odpověď byla odeslána přes datovou schránku.',
+          primary_action = 'Detail historie',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(recipientDataBoxId, id).run();
+    await updateMailboxCounters(db, cleanString(message.mailboxId));
+  } catch (error) {
+    auditWarnings.push("Odpověď byla odeslaná, ale nepodařilo se uložit nový stav zprávy.");
+    console.error("data_box_plus.ds_reply_message_status_failed", { message: error.message, actionId });
+  }
+
+  let updatedMessage = message;
+  try {
+    updatedMessage = await getDataBoxPlusMessage(env, id);
+  } catch (error) {
+    auditWarnings.push("Odpověď byla odeslaná, ale nepodařilo se znovu načíst detail zprávy.");
+    console.error("data_box_plus.ds_reply_message_reload_failed", { message: error.message, actionId });
+  }
+  return {
+    apiStatus: "ready",
+    status: "sent",
+    actionLogId: actionId,
+    providerMessageId,
+    message: updatedMessage,
+    auditWarning: auditWarnings.join(" "),
+    notice: `Hotovo. Odpověď byla odeslána do datové schránky ${recipientDataBoxId}.`
+  };
 }
 
 export async function listDataBoxPlusRecommendations(env, filters = {}) {
@@ -2269,7 +2388,7 @@ function emailRecipientFromInstruction(userInstruction, normalized) {
   return { email: "", label: "", ambiguous: true };
 }
 
-const DATA_BOX_PLUS_CAPABILITY_REPLY = "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, připravit odpověď nebo předat kolegovi.";
+const DATA_BOX_PLUS_CAPABILITY_REPLY = "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, odeslat odpověď nebo předat kolegovi.";
 
 function dataBoxPlusChatWords(value) {
   return searchText([value]).replace(/[^a-z0-9@._-]+/g, " ").replace(/\s+/g, " ").trim();
@@ -2289,7 +2408,7 @@ function dataBoxPlusKnownAction(value) {
   return [
     "archiv", "vyriz", "vyres", "doplnen", "kontrol", "poznamk", "ukol", "odpove",
     "predat", "predej", "prirad", "pripomen", "email", "e-mail", "odesli", "posli",
-    "vozid", "stk", "smaz", "potrebuje pokyn", "nelze provest"
+    "preposl", "presli", "prepsan", "sms", "datov", "vozid", "stk", "smaz", "potrebuje pokyn", "nelze provest"
   ].some((token) => normalized.includes(token));
 }
 
@@ -2322,6 +2441,8 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
     messageId: cleanString(message.id),
     mailboxId: cleanString(message.mailbox_id || message.mailboxId),
     senderName: cleanString(message.sender_name || message.senderName),
+    senderBoxId: cleanString(message.sender_box_id || message.senderBoxId),
+    recipientBoxId: cleanString(message.recipient_box_id || message.recipientBoxId),
     subject: cleanString(message.subject)
   };
   const make = (overrides = {}) => {
@@ -2348,6 +2469,8 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
       confirmationPrompt: "",
       completionText,
       recipientEmail: normalizeEmail(overrides.recipientEmail),
+      recipientPhone: cleanString(overrides.recipientPhone),
+      recipientDataBoxId: cleanString(overrides.recipientDataBoxId),
       recipientLabel: cleanString(overrides.recipientLabel || overrides.recipientEmail || overrides.assignedTo),
       emailSent: false,
       sendsEmail: Boolean(overrides.sendsEmail),
@@ -2355,7 +2478,7 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
       supported: overrides.supported !== false,
       changesMessage: Boolean(overrides.changesMessage),
       writesHistory: true,
-      requiresConfirmation: false,
+      requiresConfirmation: Boolean(overrides.requiresConfirmation),
       requiresInput: outcome === "needs_input",
       pendingIntent: cleanString(overrides.pendingIntent),
       missingField: cleanString(overrides.missingField),
@@ -2363,6 +2486,8 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
       dueDate: cleanString(overrides.dueDate),
       noteText: cleanString(overrides.noteText),
       draftText: cleanString(overrides.draftText),
+      subject: cleanString(overrides.subject),
+      body: cleanString(overrides.body),
       sourceMessage
     };
   };
@@ -2401,8 +2526,8 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
       nextStep: "Otevřít a zkontrolovat návrh",
       primaryAction: "Otevřít návrh",
       performedAction: "Návrh odpovědi připraven",
-      assistantText: "Připravím návrh odpovědi. Odeslání musí potvrdit člověk.",
-      completionText: "Připravím návrh odpovědi. Odeslání musí potvrdit člověk.",
+      assistantText: "Návrh odpovědi je připravený. Nic nebylo odesláno.",
+      completionText: "Návrh odpovědi je připravený. Nic nebylo odesláno.",
       draftText: `Dobrý den,\n\nděkujeme za datovou zprávu „${subject}“. Návrh odpovědi před odesláním doplňte a zkontrolujte.\n\nS pozdravem`,
       recipientEmail,
       recipientLabel,
@@ -2410,6 +2535,30 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
       externalAction: true,
       changesMessage: false,
       auditNote: "Návrh odpovědi byl připraven. Nic nebylo odesláno."
+    });
+  };
+  const sendEmailAction = ({ recipientEmail = "", recipientLabel = "" } = {}) => {
+    const subject = cleanString(message.subject || "Datová zpráva");
+    return make({
+      intent: "send_email",
+      outcome: "waiting_confirmation",
+      statusLabel: "Čeká na potvrzení",
+      actionSummary: `odeslat datovou zprávu e-mailem na ${recipientEmail}`,
+      understoodAs: `odeslání datové zprávy e-mailem na ${recipientEmail}`,
+      resultLabel: `Odesláno na ${recipientEmail}.`,
+      nextStep: "Bez další akce.",
+      performedAction: `E-mail odeslán na ${recipientEmail}`,
+      assistantText: `Odešlu datovou zprávu e-mailem na ${recipientEmail}. Mám provést?`,
+      completionText: `Hotovo. E-mail byl odeslán na ${recipientEmail}.`,
+      recipientEmail,
+      recipientLabel,
+      subject,
+      body: `Předávám datovou zprávu „${subject}“ k vyřízení.`,
+      sendsEmail: true,
+      externalAction: true,
+      changesMessage: true,
+      requiresConfirmation: true,
+      auditNote: "E-mail čeká na finální potvrzení a zatím nebyl odeslán."
     });
   };
 
@@ -2435,7 +2584,25 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
     }
     if (pendingIntent === "send_email") {
       const recipient = emailRecipientFromInstruction(userInstruction, normalized);
-      if (recipient.email) return replyDraft({ recipientEmail: recipient.email, recipientLabel: recipient.label });
+      if (recipient.email) return sendEmailAction({ recipientEmail: recipient.email, recipientLabel: recipient.label });
+    }
+    if (pendingIntent === "send_data_box_reply") {
+      const subject = cleanString(message.subject || "Datová zpráva");
+      return make({
+        intent: "send_data_box_reply",
+        outcome: "waiting_confirmation",
+        statusLabel: "Čeká na potvrzení",
+        actionSummary: "odeslat odpověď přes datovou schránku",
+        understoodAs: "odeslání odpovědi přes datovou schránku",
+        recipientDataBoxId: cleanString(message.sender_box_id || message.senderBoxId),
+        subject: subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`,
+        body: userInstruction,
+        assistantText: "Odešlu odpověď přes datovou schránku. Mám provést?",
+        completionText: "Hotovo. Odpověď byla odeslána přes datovou schránku.",
+        externalAction: true,
+        changesMessage: true,
+        requiresConfirmation: true
+      });
     }
     if (pendingIntent === "set_reminder") {
       const dueDate = dataBoxPlusReminderDate(userInstruction);
@@ -2464,7 +2631,7 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
 
   if ((normalized.includes("datovou zpravu") || normalized.includes("uradu"))
     && (normalized.includes("odesli") || normalized.includes("posli") || normalized.includes("odpovez"))) {
-    return replyDraft();
+    return needsInput("send_data_box_reply", "body", "Jaký přesný text mám přes datovou schránku odeslat?", "odeslání odpovědi přes datovou schránku");
   }
   if (normalized.includes("smaz") || normalized.includes("odstran zpravu")) {
     return noAction({
@@ -2479,11 +2646,17 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
     });
   }
 
-  const emailIntent = normalized.includes("email") || normalized.includes("e-mail") || normalized.includes("posli") || normalized.includes("odesli");
+  const directRecipient = emailRecipientFromInstruction(userInstruction, normalized);
+  if (normalized.includes("sms") && (normalized.includes("posli") || normalized.includes("odesli"))) {
+    return needsInput("send_sms", "recipientPhone", "Chybí telefon a přesný text SMS. Komu a co mám odeslat?", "odeslání SMS");
+  }
+  const emailIntent = normalized.includes("email")
+    || normalized.includes("e-mail")
+    || (Boolean(directRecipient.email) && ["posli", "odesli", "preposl", "presli", "predan", "predej", "predat", "prepsan"].some((token) => normalized.includes(token)));
   if (emailIntent) {
-    const recipient = emailRecipientFromInstruction(userInstruction, normalized);
+    const recipient = directRecipient;
     if (!recipient.email) return needsInput("send_email", "recipientEmail", "Chybí adresát. Komu to mám předat nebo přeposlat?", "odeslání e-mailu");
-    return replyDraft({ recipientEmail: recipient.email, recipientLabel: recipient.label });
+    return sendEmailAction({ recipientEmail: recipient.email, recipientLabel: recipient.label });
   }
   if (normalized.includes("potrebuje pokyn") || (normalized.includes("nechat") && normalized.includes("nevyrizene"))) return make({
     intent: "need_instruction",
@@ -2571,8 +2744,11 @@ function intelligentInstructionPlanFromText(instruction, message = {}, attachmen
       changesMessage: true
     });
   }
-  if (normalized.includes("odpove") || normalized.includes("priprav odpoved")) {
+  if (dataBoxPlusExplicitDraftInstruction(userInstruction)) {
     return replyDraft();
+  }
+  if (normalized.includes("odpove")) {
+    return needsInput("send_data_box_reply", "body", "Jaký přesný text mám přes datovou schránku odeslat?", "odeslání odpovědi přes datovou schránku");
   }
   if (normalized.includes("pripomen")) {
     const dueDate = dataBoxPlusReminderDate(userInstruction);
@@ -2648,6 +2824,23 @@ export function dataBoxPlusInstructionPlanForTest(instruction, message = {}, att
 }
 
 const DATA_BOX_PLUS_CONFIRMATION_TTL_MS = 15 * 60 * 1000;
+const DATA_BOX_PLUS_EXECUTABLE_ACTION_TYPES = new Set([
+  "archive_info",
+  "mark_done",
+  "need_more_info",
+  "mark_cannot_execute",
+  "internal_note",
+  "create_task",
+  "send_data_box_reply",
+  "send_email",
+  "send_sms",
+  "set_reminder",
+  "assign_to_user"
+]);
+
+function dataBoxPlusExecutableAction(type) {
+  return DATA_BOX_PLUS_EXECUTABLE_ACTION_TYPES.has(cleanString(type));
+}
 
 function dataBoxPlusConfirmationDecision(value) {
   const normalized = searchText([value]).replace(/[^a-z0-9]+/g, " ").trim();
@@ -2702,8 +2895,14 @@ function dataBoxPlusActionDefaults(type, message = {}, currentUser = {}) {
       changesMessage: true
     },
     prepare_reply: {
-      completionText: "Hotovo. Návrh odpovědi je připravený k další kontrole.",
+      completionText: "Návrh odpovědi je připravený. Nic nebylo odesláno.",
       changesMessage: false
+    },
+    send_data_box_reply: {
+      messageStatus: "Odesláno datovou schránkou",
+      completionText: "Hotovo. Odpověď byla odeslána přes datovou schránku.",
+      changesMessage: true,
+      externalAction: true
     },
     send_email: {
       messageStatus: "Odesláno e-mailem",
@@ -2740,7 +2939,8 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
   const type = cleanString(action.type || "none");
   const defaults = dataBoxPlusActionDefaults(type, message, currentUser);
   const outcome = cleanString(openAiPlan.outcome || "answer");
-  const ready = outcome === "ready_for_confirmation" && type !== "none";
+  const draftReady = type === "prepare_reply" && outcome !== "needs_input";
+  const ready = outcome === "ready_for_confirmation" && dataBoxPlusExecutableAction(type);
   const recipientEmail = normalizeEmail(action.recipientEmail);
   const recipientPhone = normalizeCustomerPhone(action.recipientPhone);
   const recipientName = cleanString(action.recipientName);
@@ -2749,12 +2949,14 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
   return {
     intent: cleanString(openAiPlan.intent || type || "conversation"),
     actionType: type,
-    outcome: ready ? "waiting_confirmation" : outcome === "needs_input" ? "needs_input" : "answer",
-    statusLabel: ready ? "Čeká na potvrzení" : outcome === "needs_input" ? "Potřebuji doplnit" : "Odpověď",
+    outcome: draftReady ? "draft_ready" : ready ? "waiting_confirmation" : outcome === "needs_input" ? "needs_input" : "answer",
+    statusLabel: draftReady ? "Návrh připraven" : ready ? "Čeká na potvrzení" : outcome === "needs_input" ? "Potřebuji doplnit" : "Odpověď",
     understoodAs: summary,
     actionSummary: summary,
     performedAction: "Nebylo provedeno nic",
-    assistantText: cleanString(openAiPlan.assistantText || "Jak vám mohu s touto zprávou pomoci?"),
+    assistantText: draftReady
+      ? "Návrh odpovědi je připravený. Nic nebylo odesláno."
+      : cleanString(openAiPlan.assistantText || "Jak vám mohu s touto zprávou pomoci?"),
     missingField: cleanString(openAiPlan.missingField),
     messageStatus: cleanString(defaults.messageStatus || message.status || "Nová"),
     archiveStatus: cleanString(defaults.archiveStatus),
@@ -2762,6 +2964,7 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
     recipientName,
     recipientEmail,
     recipientPhone,
+    recipientDataBoxId: cleanString(action.recipientDataBoxId || (type === "send_data_box_reply" ? message.sender_box_id || message.senderBoxId : "")),
     subject: cleanString(action.subject),
     body: cleanString(action.body),
     noteText: cleanString(action.noteText),
@@ -2775,13 +2978,123 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
       messageId: cleanString(message.id),
       mailboxId: cleanString(message.mailbox_id || message.mailboxId),
       senderName: cleanString(message.sender_name || message.senderName),
+      senderBoxId: cleanString(message.sender_box_id || message.senderBoxId),
+      recipientBoxId: cleanString(message.recipient_box_id || message.recipientBoxId),
       subject: cleanString(message.subject)
     }
   };
 }
 
-export function dataBoxPlusOpenAiPlanForTest(openAiPlan = {}, message = {}, currentUser = {}) {
-  return dataBoxPlusServerPlanFromOpenAi(openAiPlan, message, currentUser);
+function dataBoxPlusExplicitDraftInstruction(instruction) {
+  const normalized = searchText([instruction]);
+  return normalized.includes("navrh") || normalized.includes("koncept") || normalized.includes("bez odeslani");
+}
+
+function dataBoxPlusExecutionVerb(instruction) {
+  const normalized = searchText([instruction]);
+  return ["odesli", "posli", "preposl", "presli", "predan", "predej", "predat", "prepsan", "odpovez"]
+    .some((token) => normalized.includes(token));
+}
+
+function enforceDataBoxPlusExecutableIntent(instruction, plan, message = {}) {
+  const normalized = searchText([instruction]);
+  if (!dataBoxPlusExecutionVerb(instruction) || dataBoxPlusExplicitDraftInstruction(instruction)) return plan;
+
+  const recipient = emailRecipientFromInstruction(instruction, normalized);
+  const hasEmailTarget = Boolean(recipient.email || plan.recipientEmail);
+  const emailContext = hasEmailTarget && (
+    normalized.includes("email")
+    || normalized.includes("e-mail")
+    || normalized.includes("preposl")
+    || normalized.includes("presli")
+    || normalized.includes("predan")
+    || normalized.includes("predej")
+    || normalized.includes("predat")
+    || normalized.includes("prepsan")
+    || normalized.includes(" na ")
+  );
+  if (emailContext) {
+    const recipientEmail = recipient.email || plan.recipientEmail;
+    const subject = cleanString(plan.actionType === "send_email" ? plan.subject : "") || cleanString(message.subject || "Datová zpráva");
+    const body = cleanString(plan.actionType === "send_email" ? plan.body : "") || `Předávám datovou zprávu „${cleanString(message.subject || "Datová zpráva")}“ k vyřízení.`;
+    return {
+      ...plan,
+      intent: "send_email",
+      actionType: "send_email",
+      outcome: "waiting_confirmation",
+      statusLabel: "Čeká na potvrzení",
+      understoodAs: `odeslání datové zprávy e-mailem na ${recipientEmail}`,
+      actionSummary: `Odeslat datovou zprávu e-mailem na ${recipientEmail}`,
+      assistantText: `Odešlu datovou zprávu e-mailem na ${recipientEmail}. Mám provést?`,
+      recipientEmail,
+      recipientName: cleanString(plan.recipientName || recipient.label || recipientEmail),
+      subject,
+      body,
+      draftText: "",
+      messageStatus: "Odesláno e-mailem",
+      changesMessage: true,
+      externalAction: true,
+      requiresConfirmation: true,
+      completionText: `Hotovo. E-mail byl odeslán na ${recipientEmail}.`
+    };
+  }
+
+  if (plan.outcome === "needs_input") return plan;
+
+  const dataBoxContext = normalized.includes("datovou zpravu")
+    || normalized.includes("datove schrank")
+    || normalized.includes("datovkou")
+    || normalized.startsWith("odpovez");
+  if (dataBoxContext) {
+    const recipientDataBoxId = cleanString(plan.recipientDataBoxId || message.sender_box_id || message.senderBoxId);
+    const subject = cleanString(plan.subject) || (cleanString(message.subject).toLowerCase().startsWith("re:")
+      ? cleanString(message.subject)
+      : `Re: ${cleanString(message.subject || "Datová zpráva")}`);
+    return {
+      ...plan,
+      intent: "send_data_box_reply",
+      actionType: "send_data_box_reply",
+      outcome: "waiting_confirmation",
+      statusLabel: "Čeká na potvrzení",
+      understoodAs: "odeslání odpovědi přes datovou schránku",
+      actionSummary: "Odeslat odpověď přes datovou schránku",
+      assistantText: "Odešlu odpověď přes datovou schránku. Mám provést?",
+      recipientDataBoxId,
+      subject,
+      body: cleanString(plan.body || plan.draftText),
+      draftText: "",
+      messageStatus: "Odesláno datovou schránkou",
+      changesMessage: true,
+      externalAction: true,
+      requiresConfirmation: true,
+      completionText: "Hotovo. Odpověď byla odeslána přes datovou schránku."
+    };
+  }
+
+  if (normalized.includes("sms")) {
+    return {
+      ...plan,
+      intent: "send_sms",
+      actionType: "send_sms",
+      outcome: "waiting_confirmation",
+      statusLabel: "Čeká na potvrzení",
+      understoodAs: "odeslání SMS",
+      actionSummary: cleanString(plan.actionSummary || "Odeslat SMS"),
+      assistantText: cleanString(plan.assistantText || "Odešlu SMS. Mám provést?"),
+      draftText: "",
+      messageStatus: "Odesláno SMS",
+      changesMessage: true,
+      externalAction: true,
+      requiresConfirmation: true,
+      completionText: "Hotovo. SMS byla odeslána."
+    };
+  }
+  return plan;
+}
+
+export function dataBoxPlusOpenAiPlanForTest(openAiPlan = {}, message = {}, currentUser = {}, instruction = "") {
+  const plan = dataBoxPlusServerPlanFromOpenAi(openAiPlan, message, currentUser);
+  return instruction ? enforceDataBoxPlusExecutableIntent(instruction, plan, message) : plan;
 }
 
 async function dataBoxPlusContactCandidates(db) {
@@ -2860,6 +3173,16 @@ function dataBoxPlusNeedsInput(plan, assistantText, missingField) {
 
 async function completeDataBoxPlusActionDetails(db, plan) {
   if (plan.outcome !== "waiting_confirmation") return plan;
+  if (!dataBoxPlusExecutableAction(plan.actionType)) {
+    return {
+      ...plan,
+      outcome: "cannot_execute",
+      statusLabel: "Nelze provést",
+      assistantText: "Tento úkon nemá skutečný backendový vykonavatel. Nic nebylo provedeno.",
+      performedAction: "Nebylo provedeno nic",
+      requiresConfirmation: false
+    };
+  }
   let completed = { ...plan };
   const requiresContact = ["send_email", "send_sms"].includes(plan.actionType);
   if (requiresContact && plan.recipientName && !(plan.recipientEmail || plan.recipientPhone)) {
@@ -2885,6 +3208,11 @@ async function completeDataBoxPlusActionDetails(db, plan) {
   if (completed.actionType === "send_sms") {
     if (!completed.recipientPhone) return dataBoxPlusNeedsInput(completed, "Chybí platný telefon příjemce. Komu mám SMS poslat?", "recipientPhone");
     if (!completed.body) return dataBoxPlusNeedsInput(completed, "Jaký přesný text mám v SMS odeslat?", "body");
+  }
+  if (completed.actionType === "send_data_box_reply") {
+    if (!completed.recipientDataBoxId) return dataBoxPlusNeedsInput(completed, "Chybí ID datové schránky příjemce.", "recipientDataBoxId");
+    if (!completed.subject) return dataBoxPlusNeedsInput(completed, "Jaký má mít datová zpráva předmět?", "subject");
+    if (!completed.body) return dataBoxPlusNeedsInput(completed, "Jaký přesný text mám přes datovou schránku odeslat?", "body");
   }
   if (completed.actionType === "assign_to_user" && !completed.assignedTo) {
     return dataBoxPlusNeedsInput(completed, "Komu mám zprávu interně předat?", "assignedTo");
@@ -2984,6 +3312,7 @@ async function logDataBoxPlusOpenAiChatTurn(db, messageId, actor, instruction, p
       recipientName: cleanString(plan.recipientName),
       recipientEmail: cleanString(plan.recipientEmail),
       recipientPhone: cleanString(plan.recipientPhone),
+      recipientDataBoxId: cleanString(plan.recipientDataBoxId),
       subject: cleanString(plan.subject),
       body: cleanString(plan.body),
       assignedTo: cleanString(plan.assignedTo),
@@ -3152,6 +3481,7 @@ function dataBoxPlusConfirmationPayload(plan, confirmationId) {
     recipientName: cleanString(plan.recipientName),
     recipientEmail: cleanString(plan.recipientEmail),
     recipientPhone: cleanString(plan.recipientPhone),
+    recipientDataBoxId: cleanString(plan.recipientDataBoxId),
     subject: cleanString(plan.subject),
     body: cleanString(plan.body),
     assignedTo: cleanString(plan.assignedTo),
@@ -3167,10 +3497,18 @@ async function logDataBoxPlusConfirmationReply(db, messageId, actor, instruction
     originalInstruction: cleanString(instruction),
     intent: cleanString(plan.intent || plan.actionType),
     understoodAs: cleanString(plan.actionSummary),
+    actionType: cleanString(plan.actionType),
     performedAction: result === "done" ? cleanString(plan.actionSummary) : "Nebylo provedeno nic",
     outcome: result,
     statusLabel: result === "done" ? "Hotovo" : result === "cancelled" ? "Zrušeno" : "Nelze provést",
     assistantText: cleanString(plan.assistantText),
+    recipientEmail: cleanString(plan.recipientEmail),
+    recipientPhone: cleanString(plan.recipientPhone),
+    recipientDataBoxId: cleanString(plan.recipientDataBoxId),
+    assignedTo: cleanString(plan.assignedTo),
+    subject: cleanString(plan.subject),
+    noteText: cleanString(plan.noteText),
+    dueDate: cleanString(plan.dueDate),
     proposedAction: null,
     confirmationId: cleanString(plan.confirmationId),
     learnedRuleId: cleanString(learnedRuleId)
@@ -3195,8 +3533,8 @@ async function executeDataBoxPlusConfirmedPlan(env, db, message, pendingRow, cur
   const actor = actorName(currentUser);
   const pendingPayload = safeJsonParse(pendingRow.action_payload, {});
   const plan = pendingPayload.plan && typeof pendingPayload.plan === "object" ? pendingPayload.plan : null;
-  if (!plan?.actionType || plan.actionType === "none") {
-    throw new DataBoxPlusStoreError("Připravená akce není platná. Nic nebylo provedeno.", 409, "data_box_plus_confirmation_invalid");
+  if (!plan?.actionType || !dataBoxPlusExecutableAction(plan.actionType)) {
+    throw new DataBoxPlusStoreError("Připravený úkon nemá skutečný backendový vykonavatel. Nic nebylo provedeno.", 409, "data_box_plus_confirmation_invalid");
   }
   if (dataBoxPlusConfirmationExpired(pendingRow)) {
     await db.prepare("UPDATE data_box_plus_action_log SET result = 'expired', audit_note = ? WHERE id = ? AND result = 'waiting_confirmation'")
@@ -3255,6 +3593,16 @@ async function executeDataBoxPlusConfirmedPlan(env, db, message, pendingRow, cur
       updatedMessage = sent.message || message;
       if (cleanString(sent.auditWarning)) auditWarnings.push(cleanString(sent.auditWarning));
       completionText = `Hotovo. E-mail byl odeslán na ${plan.recipientEmail}.`;
+    } else if (plan.actionType === "send_data_box_reply") {
+      const sent = await sendDataBoxPlusReply(env, message.id, {
+        confirmed: true,
+        recipientDataBoxId: plan.recipientDataBoxId,
+        subject: plan.subject,
+        body: plan.body
+      }, currentUser);
+      updatedMessage = sent.message || message;
+      if (cleanString(sent.auditWarning)) auditWarnings.push(cleanString(sent.auditWarning));
+      completionText = sent.notice || "Hotovo. Odpověď byla odeslána přes datovou schránku.";
     } else if (plan.actionType === "send_sms") {
       const sent = await sendCustomerMessage(env, {
         phone: plan.recipientPhone,
@@ -3291,14 +3639,28 @@ async function executeDataBoxPlusConfirmedPlan(env, db, message, pendingRow, cur
         console.error("data_box_plus.sms_message_status_failed", { message: error.message, messageId: message.id });
       }
       completionText = `Hotovo. SMS byla odeslána příjemci ${cleanString(plan.recipientName || plan.recipientPhone)}.`;
-    } else if (plan.actionType === "prepare_reply") {
-      completionText = "Hotovo. Návrh odpovědi je připravený k další kontrole.";
+    } else if (plan.actionType === "internal_note") {
+      await db.prepare(`
+        INSERT INTO data_box_plus_action_log (
+          id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+        ) VALUES (?, ?, NULL, ?, 'Interní poznámka', ?, ?, 'saved', ?)
+      `).bind(
+        idValue("dbp-action"),
+        message.id,
+        actor,
+        JSON.stringify({ noteText: cleanString(plan.noteText), source: "data_box_plus_chat" }),
+        new Date().toISOString(),
+        `${actor} přidal ke zprávě interní poznámku.`
+      ).run();
+      completionText = "Hotovo. Interní poznámka byla přidána do historie zprávy.";
     } else if (plan.changesMessage) {
       await applyIntelligentDataBoxPlusInstruction(db, message, {
         ...plan,
         resultLabel: plan.actionSummary,
         primaryAction: "Detail historie"
       });
+    } else {
+      throw new DataBoxPlusStoreError("Potvrzený úkon nemá ověřitelný výsledek. Nic nebylo provedeno.", 409, "data_box_plus_action_executor_missing");
     }
   } catch (error) {
     const errorMessage = error instanceof DataBoxPlusStoreError
@@ -3336,7 +3698,7 @@ async function executeDataBoxPlusConfirmedPlan(env, db, message, pendingRow, cur
     throw new DataBoxPlusStoreError(errorMessage, 502, "data_box_plus_confirmation_failed");
   }
 
-  if (plan.actionType !== "send_email") {
+  if (!["send_email", "send_data_box_reply"].includes(plan.actionType)) {
     try {
       updatedMessage = await getDataBoxPlusMessage(env, message.id);
     } catch (error) {
@@ -3488,6 +3850,8 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
         today: dataBoxPlusPragueDate(),
         message: {
           senderName: message.sender_name,
+          senderBoxId: message.sender_box_id,
+          recipientBoxId: message.recipient_box_id,
           subject: message.subject,
           status: message.status,
           summary: message.summary,
@@ -3518,6 +3882,7 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
     }
 
     let plan = dataBoxPlusServerPlanFromOpenAi(openAi.plan, message, currentUser);
+    plan = enforceDataBoxPlusExecutableIntent(instruction, plan, message);
     plan = await completeDataBoxPlusActionDetails(db, plan);
     if (plan.outcome === "waiting_confirmation" && !/Mám provést\?\s*$/i.test(plan.assistantText)) {
       plan.assistantText = `${cleanString(plan.assistantText).replace(/\s+$/, "")} Mám provést?`.trim();
