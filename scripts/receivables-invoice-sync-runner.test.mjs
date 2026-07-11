@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { scheduledReceivablesAction } from "../functions/_lib/receivables-invoice-sync-runner.js";
 import {
   assertIncrementalFilter,
+  incrementalPageTotal,
   incrementalWindow
 } from "../functions/_lib/receivables-vistos-invoice-snapshot.js";
 import {
@@ -55,6 +56,21 @@ assert.doesNotThrow(() => assertIncrementalFilter([
 assert.throws(
   () => assertIncrementalFilter([{ Id: "invoice-old", Modified: "2026-07-10T23:59:59Z" }], window),
   (error) => error?.code === "receivables_vistos_modified_filter_unreliable"
+);
+assert.equal(
+  incrementalPageTotal({ rows: [], total: 173620, filtered: 0 }),
+  0,
+  "recordsTotal must not turn an empty filtered result into a running 173620-row batch"
+);
+assert.equal(
+  incrementalPageTotal({ rows: [{ Id: "1" }], total: 173620, filtered: 12 }),
+  12,
+  "recordsFiltered is the authoritative incremental total"
+);
+assert.equal(
+  incrementalPageTotal({ rows: [], total: 173620, filtered: 0 }, 3000, 173620),
+  3000,
+  "an empty continuation page must close at the number of rows already loaded"
 );
 assert.throws(
   () => assertIncrementalFilter([{ Id: "invoice-no-modified" }], window),

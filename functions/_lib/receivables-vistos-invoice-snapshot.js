@@ -439,6 +439,14 @@ export function assertIncrementalFilter(rows, window) {
   }
 }
 
+export function incrementalPageTotal(page = {}, loadedRows = 0, knownTotal = 0) {
+  const filteredTotal = numberValue(page.filtered);
+  if (filteredTotal > 0) return filteredTotal;
+  const pageRows = Array.isArray(page.rows) ? page.rows.length : 0;
+  if (pageRows === 0) return loadedRows;
+  return Math.max(numberValue(knownTotal), loadedRows + pageRows);
+}
+
 function incrementalControlWindow(periodTo) {
   const to = validDate(periodTo) || new Date();
   const from = new Date(to.getTime() - 730 * 24 * 60 * 60 * 1000);
@@ -645,8 +653,8 @@ export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, opt
       };
     }
 
-    const totalRows = invoiceResult.page.filtered || invoiceResult.page.total || invoiceResult.page.rows.length;
-    const capped = Boolean(invoiceResult.page.capped || invoiceResult.page.rows.length < totalRows);
+    const totalRows = incrementalPageTotal(invoiceResult.page);
+    const capped = Boolean(invoiceResult.page.rows.length < totalRows);
     const batchId = randomId("receivable-vistos-invoice-incremental");
     const normalizedRows = invoiceResult.page.rows.map((raw) => {
       const invoice = mapReceivablesVistosInvoice(raw);
@@ -771,7 +779,7 @@ export async function advanceReceivablesVistosInvoiceIncrementalSnapshot(env, op
       diagnostics.push(...pageResult.diagnostics);
       const rows = pageResult.page.rows || [];
       assertIncrementalFilter(rows, window);
-      totalRows = pageResult.page.filtered || pageResult.page.total || totalRows || loadedRows + rows.length;
+      totalRows = incrementalPageTotal(pageResult.page, loadedRows, totalRows);
       if (!rows.length) break;
 
       const storedRows = await storeIncrementalRows(db, batch.id, rows, loadedRows);
