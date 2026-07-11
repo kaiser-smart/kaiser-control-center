@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.509"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.510"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: jednotná 3D limetková flotila",
+    text: "Šest dodaných typů vozidel používá novou sjednocenou sadu čistých izometrických 3D modelů podle schváleného vizuálního vzoru. Kabiny zůstávají bílé, provozní nástavby a akcenty používají limetkovou #B6FF00 a průhledné výřezy dál doplňuje pouze plovoucí SPZ."
+  },
   {
     title: "Ostrá doména smart-odpady.ai",
     text: "Aplikace, interní odkazy, cloudové runnery, monitoring a integrační callbacky používají jako hlavní produkční adresu https://smart-odpady.ai. Původní kaiser-control-center.pages.dev zůstává během řízeného přechodu dostupná jako bezpečná záloha."
