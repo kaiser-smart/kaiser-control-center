@@ -4,10 +4,10 @@
 }
 
 .nm-app .nm-shell {
-  width: min(100%, 1780px);
+  width: min(var(--nm-shell-max-width), calc(100% - calc(var(--nm-shell-page-gutter) * 2)));
   min-height: 100dvh;
   margin: 0 auto;
-  padding: var(--nm-space-5);
+  padding: 15px 0 55px;
   color: var(--nm-text-main);
 }
 
@@ -15,8 +15,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--nm-space-5);
-  padding: 0 var(--nm-space-1) var(--nm-space-5);
+  min-height: 48px;
+  gap: var(--nm-space-4);
+  padding: 0 20px 0 10px;
 }
 
 .nm-app .nm-shell__brand,
@@ -28,32 +29,27 @@
 
 .nm-app .nm-shell__brand {
   min-width: 0;
-  gap: var(--nm-space-4);
+  gap: var(--nm-space-3);
 }
 
 .nm-app .nm-shell__logo {
   display: inline-flex;
   width: 92px;
-  height: 58px;
+  height: auto;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: var(--nm-radius-sm);
   overflow: hidden;
+  border-radius: 0;
+  line-height: 0;
 }
 
 .nm-app .nm-shell__logo img {
   width: 100%;
-  height: 100%;
+  height: auto;
   object-fit: contain;
 }
 
-.nm-app .nm-shell__title {
-  display: grid;
-  gap: var(--nm-space-1);
-}
-
-.nm-app .nm-shell__title span,
 .nm-app .nm-system-eyebrow,
 .nm-app .nm-sidebar__group-label {
   color: var(--nm-brand-accent);
@@ -63,15 +59,48 @@
   text-transform: uppercase;
 }
 
-.nm-app .nm-shell__title strong {
-  color: var(--nm-text-strong);
-  font-size: clamp(1.2rem, 1.6vw, 1.55rem);
-  line-height: 1;
-}
-
 .nm-app .nm-shell__tools {
   justify-content: flex-end;
-  gap: var(--nm-space-3);
+  gap: var(--nm-space-2);
+  flex-wrap: wrap;
+}
+
+.nm-app .nm-shell__home-link {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--nm-radius-md);
+  background: transparent;
+  color: var(--nm-text-muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-decoration: none;
+  transition:
+    border-color var(--nm-transition-base),
+    background-color var(--nm-transition-base),
+    color var(--nm-transition-base),
+    box-shadow var(--nm-transition-base);
+}
+
+.nm-app .nm-shell__home-link:hover,
+.nm-app .nm-shell__home-link:focus-visible {
+  border-color: color-mix(in srgb, var(--nm-brand-accent) 18%, var(--nm-border-soft));
+  background: color-mix(in srgb, var(--nm-brand-accent) 7%, transparent);
+  color: var(--nm-text-main);
+}
+
+.nm-app .nm-shell__home-link:active {
+  box-shadow: var(--nm-shadow-control-active);
+}
+
+.nm-app .nm-shell__home-icon,
+.nm-app .nm-shell__home-icon .nm-icon {
+  width: 17px;
+  height: 17px;
 }
 
 .nm-app .nm-shell__status,
@@ -140,6 +169,7 @@
   grid-template-columns: 268px minmax(0, 1fr);
   gap: var(--nm-space-5);
   align-items: start;
+  margin-top: var(--nm-space-4);
 }
 
 .nm-app .nm-shell--compact .nm-shell__body {
@@ -148,14 +178,21 @@
 
 .nm-app .nm-sidebar {
   position: sticky;
-  top: var(--nm-space-5);
+  top: 16px;
   display: grid;
-  gap: var(--nm-space-4);
-  padding: var(--nm-space-4);
-  border: 1px solid var(--nm-border-soft);
+  gap: var(--nm-space-3);
+  height: fit-content;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  padding: var(--nm-space-3);
+  border: 1px solid color-mix(in srgb, var(--nm-border-soft) 76%, transparent);
   border-radius: var(--nm-radius-xl);
-  background: var(--nm-surface-raised);
+  background: var(--nm-panel-gradient);
   box-shadow: var(--nm-shadow-panel), var(--nm-highlight-edge);
+}
+
+.nm-app[data-theme="light"] .nm-sidebar {
+  background: #ffffff;
 }
 
 .nm-app .nm-sidebar__top {
@@ -171,8 +208,9 @@
 }
 
 .nm-app .nm-sidebar__toggle {
-  width: var(--nm-icon-holder-sm);
-  height: var(--nm-icon-holder-sm);
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
   border: 1px solid var(--nm-border-soft);
   border-radius: var(--nm-radius-md);
   background: var(--nm-surface-control);
@@ -183,28 +221,35 @@
 .nm-app .nm-sidebar__nav,
 .nm-app .nm-sidebar__group {
   display: grid;
-  gap: var(--nm-space-3);
+  gap: var(--nm-sidebar-gap);
+}
+
+.nm-app .nm-sidebar__nav {
+  max-height: calc(100dvh - 128px);
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
 }
 
 .nm-app .nm-sidebar__group + .nm-sidebar__group {
-  padding-top: var(--nm-space-3);
+  padding-top: var(--nm-sidebar-group-gap);
   border-top: 1px solid var(--nm-border-soft);
 }
 
 .nm-app .nm-sidebar__item {
   display: grid;
-  min-height: var(--nm-control-height-lg);
-  grid-template-columns: var(--nm-icon-holder-sm) minmax(0, 1fr) auto;
+  min-height: var(--nm-sidebar-item-height);
+  grid-template-columns: var(--nm-sidebar-icon-size) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--nm-space-3);
-  border: 1px solid color-mix(in srgb, var(--nm-border-soft) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nm-border-soft) 58%, transparent);
   border-radius: var(--nm-radius-md);
-  background: color-mix(in srgb, var(--nm-surface-raised) 82%, var(--nm-surface-control));
+  background: color-mix(in srgb, var(--nm-surface-control) 38%, transparent);
   color: var(--nm-text-muted-strong);
   font-weight: 850;
-  padding: var(--nm-space-2) var(--nm-space-3);
+  padding: 0 var(--nm-space-3);
   text-decoration: none;
-  box-shadow: var(--nm-shadow-control);
+  box-shadow: none;
 }
 
 .nm-app .nm-sidebar__item:hover,
@@ -215,9 +260,10 @@
 }
 
 .nm-app .nm-sidebar__item--active {
-  border-color: var(--nm-state-success-border);
-  background: var(--nm-state-success-bg);
-  color: var(--nm-text-strong);
+  border-color: var(--nm-active-tray-border);
+  background: var(--nm-active-tray-bg);
+  color: var(--nm-active-tray-text);
+  box-shadow: var(--nm-active-tray-shadow);
 }
 
 .nm-app .nm-sidebar__item--planned {
@@ -225,9 +271,15 @@
 }
 
 .nm-app .nm-sidebar__icon {
-  width: var(--nm-icon-holder-sm);
-  height: var(--nm-icon-holder-sm);
+  width: var(--nm-sidebar-icon-size);
+  height: var(--nm-sidebar-icon-size);
   border-radius: var(--nm-radius-md);
+  color: color-mix(in srgb, var(--nm-text-muted-strong) 80%, transparent);
+}
+
+.nm-app .nm-sidebar__item:hover .nm-sidebar__icon,
+.nm-app .nm-sidebar__item:focus-visible .nm-sidebar__icon,
+.nm-app .nm-sidebar__item--active .nm-sidebar__icon {
   color: var(--nm-brand-accent);
 }
 
@@ -274,7 +326,13 @@
 .nm-app .nm-shell__content {
   display: grid;
   min-width: 0;
-  gap: var(--nm-space-5);
+  gap: clamp(14px, 1.4vw, var(--nm-space-5));
+  padding: clamp(6px, 0.9vw, var(--nm-space-4));
+  border: 1px solid transparent;
+  border-top-color: color-mix(in srgb, var(--nm-border-soft) 18%, transparent);
+  border-radius: var(--nm-radius-xl);
+  background: var(--nm-shell-content-bg);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--nm-text-inverse) 28%, transparent);
 }
 
 .nm-app .nm-system-preview,

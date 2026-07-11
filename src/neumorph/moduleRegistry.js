@@ -406,12 +406,13 @@ export function buildNeumorphNavigationItems({ user = null, currentPath = NEUMOR
 }
 
 export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BASE_ROUTE } = {}) {
-  const navigationItems = buildNeumorphNavigationItems({ user, currentPath });
+  const navigationItems = buildNeumorphNavigationItems({ user, currentPath })
+    .filter((item) => item.id !== "dashboard");
 
   const groups = [
     {
-      id: "migration",
-      label: "Migrace",
+      id: "overview",
+      label: "Prehled",
       items: [
         {
           id: "home",
@@ -426,20 +427,6 @@ export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BA
           mobilePriority: 1,
           activeMatch: [NEUMORPH_BASE_ROUTE],
           active: normalizePath(currentPath) === NEUMORPH_BASE_ROUTE
-        },
-        {
-          id: "system-preview",
-          label: "System preview",
-          shortLabel: "System",
-          href: NEUMORPH_SYSTEM_PREVIEW_ROUTE,
-          route: NEUMORPH_SYSTEM_PREVIEW_ROUTE,
-          group: "migration",
-          order: 1,
-          permission: "dashboard",
-          icon: "components",
-          mobilePriority: 20,
-          activeMatch: [NEUMORPH_SYSTEM_PREVIEW_ROUTE],
-          active: normalizePath(currentPath) === NEUMORPH_SYSTEM_PREVIEW_ROUTE
         }
       ]
     }
@@ -451,6 +438,27 @@ export function buildNeumorphNavigation({ user = null, currentPath = NEUMORPH_BA
     if (items.length) {
       groups.push({ ...group, items });
     }
+  });
+
+  groups.push({
+    id: "system-preview",
+    label: "System",
+    items: [
+      {
+        id: "system-preview",
+        label: "System preview",
+        shortLabel: "System",
+        href: NEUMORPH_SYSTEM_PREVIEW_ROUTE,
+        route: NEUMORPH_SYSTEM_PREVIEW_ROUTE,
+        group: "system-preview",
+        order: 1,
+        permission: "dashboard",
+        icon: "components",
+        mobilePriority: 20,
+        activeMatch: [NEUMORPH_SYSTEM_PREVIEW_ROUTE],
+        active: normalizePath(currentPath) === NEUMORPH_SYSTEM_PREVIEW_ROUTE
+      }
+    ]
   });
 
   return groups;

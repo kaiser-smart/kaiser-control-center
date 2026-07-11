@@ -20,10 +20,10 @@ function runtimeConfigModuleSource(env = process.env) {
 
 function versionedTemplate() {
   return template
-    .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
-    .replace('href="src/neumorphic-preview.css"', `href="src/neumorphic-preview.css?v=${assetVersion}"`)
-    .replace('href="src/styles/theme.css"', `href="src/styles/theme.css?v=${assetVersion}"`)
-    .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
+    .replace('href="src/styles.css"', `href="/src/styles.css?v=${assetVersion}"`)
+    .replace('href="src/neumorphic-preview.css"', `href="/src/neumorphic-preview.css?v=${assetVersion}"`)
+    .replace('href="src/styles/theme.css"', `href="/src/styles/theme.css?v=${assetVersion}"`)
+    .replace('src="src/app.js"', `src="/src/app.js?v=${assetVersion}"`);
 }
 
 async function copyDir(from, to) {
@@ -101,7 +101,8 @@ await writeFile(path.join(dist, "_redirects"), [
   "/sledovani-vozidel/* /index.html 200",
   "/datova-schranka /datova-schranka/index.html 200",
   "/datova-schranka/* /datova-schranka/index.html 200",
-  "/neumorph* /index.html 200",
+  "/neumorph /neumorph/index.html 200",
+  "/neumorph/* /index.html 200",
   "/design/neumorphic* /index.html 200",
   "/design/theme-system* /index.html 200"
 ].join("\n") + "\n");

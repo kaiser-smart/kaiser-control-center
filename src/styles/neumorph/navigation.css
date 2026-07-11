@@ -4,13 +4,13 @@
 }
 
 .nm-app .nm-shell__header {
-  min-height: 68px;
-  padding: 0 var(--nm-space-2) var(--nm-space-5);
+  min-height: 48px;
+  padding: 0 20px 0 10px;
 }
 
 .nm-app .nm-shell__logo {
-  width: 88px;
-  height: 56px;
+  width: 92px;
+  height: auto;
   box-shadow: none;
 }
 
@@ -61,6 +61,7 @@
 .nm-app .nm-shell__body {
   min-width: 0;
   grid-template-columns: var(--nm-sidebar-width-expanded) minmax(0, 1fr);
+  gap: var(--nm-space-5);
   transition: grid-template-columns var(--nm-transition-base);
 }
 
@@ -73,8 +74,11 @@
   gap: var(--nm-space-3);
   overflow: hidden;
   padding: var(--nm-space-3);
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--nm-surface-raised) 82%, var(--nm-surface-soft)) 0%, var(--nm-surface-raised) 52%, color-mix(in srgb, var(--nm-surface-inset) 42%, var(--nm-surface-raised)) 100%);
+  background: var(--nm-panel-gradient);
+}
+
+.nm-app[data-theme="light"] .nm-sidebar {
+  background: #ffffff;
 }
 
 .nm-app .nm-sidebar__top {
@@ -157,10 +161,24 @@
   height: 100%;
 }
 
+.nm-app .nm-sidebar__icon img.module-icon__svg,
+.nm-app .nm-mobile-nav__item img.module-icon__svg,
+.nm-app .nm-mobile-more__icon img.module-icon__svg {
+  filter: var(--nm-icon-image-filter-muted);
+}
+
 .nm-app .nm-sidebar__item:hover .nm-sidebar__icon,
 .nm-app .nm-sidebar__item:focus-visible .nm-sidebar__icon,
 .nm-app .nm-sidebar__item--active .nm-sidebar__icon {
   color: var(--nm-brand-accent);
+}
+
+.nm-app .nm-sidebar__item:hover .nm-sidebar__icon img.module-icon__svg,
+.nm-app .nm-sidebar__item:focus-visible .nm-sidebar__icon img.module-icon__svg,
+.nm-app .nm-sidebar__item--active .nm-sidebar__icon img.module-icon__svg,
+.nm-app .nm-mobile-nav__item--active img.module-icon__svg,
+.nm-app .nm-mobile-more__item--active img.module-icon__svg {
+  filter: var(--nm-icon-image-filter-brand);
 }
 
 .nm-app .nm-sidebar__text {

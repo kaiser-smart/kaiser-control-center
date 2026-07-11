@@ -28,6 +28,11 @@
   --nm-shadow-control-hover: 0 2px 6px rgba(78, 92, 100, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.7);
   --nm-shadow-control-active: inset 3px 3px 7px rgba(78, 92, 100, 0.11), inset -3px -3px 7px rgba(255, 255, 255, 0.58);
   --nm-shadow-inset-control: inset 4px 4px 10px rgba(78, 92, 100, 0.12), inset -4px -4px 10px rgba(255, 255, 255, 0.62);
+  --nm-shell-max-width: 1360px;
+  --nm-shell-page-gutter: 14px;
+  --nm-shell-content-bg: linear-gradient(145deg, rgba(232, 238, 240, 0.34) 0%, rgba(211, 220, 224, 0.24) 100%);
+  --nm-panel-gradient: linear-gradient(145deg, #f7f8f8 0%, #e5eaec 48%, #d8e0e3 100%);
+  --nm-panel-gradient-soft: linear-gradient(145deg, #f4f6f6 0%, #e8edef 52%, #dde4e7 100%);
 
   --nm-radius-sm: 8px;
   --nm-radius-md: 12px;
@@ -53,11 +58,11 @@
   --nm-icon-holder-lg: 64px;
   --nm-icon-holder-xl: 88px;
 
-  --nm-sidebar-width-expanded: 256px;
-  --nm-sidebar-width-compact: 74px;
+  --nm-sidebar-width-expanded: 244px;
+  --nm-sidebar-width-compact: 70px;
   --nm-sidebar-item-height: 48px;
-  --nm-sidebar-icon-size: 26px;
-  --nm-sidebar-gap: 7px;
+  --nm-sidebar-icon-size: 28px;
+  --nm-sidebar-gap: 6px;
   --nm-sidebar-group-gap: 14px;
 
   --nm-control-height-sm: 34px;
@@ -67,6 +72,9 @@
   --nm-chip-padding-x: 12px;
 
   --nm-focus-ring: color-mix(in srgb, var(--nm-brand-accent) 32%, var(--nm-border-soft));
+  --nm-icon-stroke: 2.1;
+  --nm-icon-image-filter-muted: brightness(0) saturate(0%) opacity(0.56);
+  --nm-icon-image-filter-brand: brightness(0) saturate(100%) invert(62%) sepia(84%) saturate(495%) hue-rotate(46deg) brightness(92%) contrast(87%);
   --nm-transition-fast: 140ms ease;
   --nm-transition-base: 180ms ease;
 

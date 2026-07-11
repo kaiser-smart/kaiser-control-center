@@ -41,6 +41,7 @@ function icon(name) {
     menu: '<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>',
     more: '<circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle>',
     close: '<path d="M6 6l12 12M18 6 6 18"></path>',
+    back: '<path d="M15 18 9 12l6-6"></path><path d="M10 12h10"></path>',
     sun: '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>',
     moon: '<path d="M20.1 14.2A7.8 7.8 0 0 1 9.8 3.9a8.4 8.4 0 1 0 10.3 10.3Z"></path>'
   };
@@ -212,11 +213,9 @@ function renderMobileMorePanel(routeHref, user, currentPath) {
   `;
 }
 
-function renderHeader({ routeHref, theme, user, context }) {
+function renderHeader({ routeHref, theme, user }) {
   const userLabel = user?.name || "Interni nahled";
   const resolvedRole = user?.role ? roleLabel(user.role) : "Preview";
-  const contextTitle = context?.title || "Neumorph system";
-  const contextGroup = context?.group || "Migracni nahled";
 
   return `
     <header class="nm-shell__header">
@@ -224,14 +223,13 @@ function renderHeader({ routeHref, theme, user, context }) {
         <a class="nm-shell__logo" href="${routeHref("/")}" data-link aria-label="Zpet do Kaiser Smart">
           <img src="/kaiser_logo.png" alt="Kaiser">
         </a>
-        <div class="nm-shell__title">
-          <span>Kaiser Smart</span>
-          <strong>${escapeHtml(contextTitle)}</strong>
-          <small>${escapeHtml(contextGroup)}</small>
-        </div>
+        <a class="nm-shell__home-link" href="${routeHref("/")}" data-link>
+          <span class="nm-shell__home-icon" aria-hidden="true">${icon("back")}</span>
+          Zpet na HP
+        </a>
       </div>
       <div class="nm-shell__tools">
-        <span class="nm-shell__status">Migracni nahled</span>
+        <span class="nm-shell__status">Neumorph preview</span>
         ${renderThemeToggle(theme)}
         <span class="nm-shell__user">
           <strong>${escapeHtml(userLabel)}</strong>
