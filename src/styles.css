@@ -32050,14 +32050,14 @@ body:has(.ds-plus-page) {
   align-items: center;
 }
 
-.ds-plus-message-row__unread {
+.ds-plus-message-row__unresolved {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: transparent;
 }
 
-.ds-plus-message-row--unread .ds-plus-message-row__unread {
+.ds-plus-message-row--unresolved .ds-plus-message-row__unresolved {
   background: #1976d2;
   box-shadow: 0 0 0 3px #e7f1fb;
 }

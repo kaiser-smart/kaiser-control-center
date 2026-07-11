@@ -363,7 +363,6 @@ const DATA_BOX_PLUS_TABS = [
   { id: "manual", label: "Manuál" }
 ];
 const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 30 * 60 * 1000;
-const DATA_BOX_PLUS_READ_MESSAGE_IDS_KEY = "data-box-plus-read-message-ids";
 const DATA_BOX_PLUS_MODEL_FLAG = {
   label: "Model: ostrý DSP",
   detail: "Oddělený backend, bezpečné interní pokyny a audit. Odeslání mimo systém zůstává pouze návrhem."
@@ -1264,8 +1263,7 @@ const dataBoxPlusState = {
   activeTab: "messages",
   selectedMessageId: "",
   chatMessageId: "",
-  filter: "unread",
-  readMessageIds: [],
+  filter: "new",
   search: "",
   rulesSearch: "",
   rulesType: "all",
@@ -21024,39 +21022,9 @@ function dataBoxPlusMessages() {
   return Array.isArray(dataBoxPlusState.messages) ? dataBoxPlusState.messages : [];
 }
 
-function dataBoxPlusReadMessageIds() {
-  const stateIds = Array.isArray(dataBoxPlusState.readMessageIds)
-    ? dataBoxPlusState.readMessageIds.map((id) => String(id || "").trim()).filter(Boolean)
-    : [];
-  let storedIds = [];
-  try {
-    const raw = window.localStorage.getItem(DATA_BOX_PLUS_READ_MESSAGE_IDS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    storedIds = Array.isArray(parsed) ? parsed.map((id) => String(id || "").trim()).filter(Boolean) : [];
-  } catch {
-    storedIds = [];
-  }
-  return new Set([...stateIds, ...storedIds]);
-}
-
-function dataBoxPlusIsUnreadMessage(message) {
-  const status = dataBoxPlusSearchText([message?.status]);
-  return Boolean(message?.id)
-    && ["nova", "nove", "new"].includes(status)
-    && !dataBoxPlusReadMessageIds().has(String(message.id));
-}
-
-function dataBoxPlusMarkMessageRead(messageId) {
-  const id = String(messageId || "").trim();
-  if (!id) return;
-  const ids = dataBoxPlusReadMessageIds();
-  ids.add(id);
-  dataBoxPlusState.readMessageIds = Array.from(ids);
-  try {
-    window.localStorage.setItem(DATA_BOX_PLUS_READ_MESSAGE_IDS_KEY, JSON.stringify(dataBoxPlusState.readMessageIds));
-  } catch {
-    // Local read state is only a UI convenience when storage is unavailable.
-  }
+function dataBoxPlusIsUnresolvedMessage(message) {
+  const state = dataBoxPlusSearchText([dataBoxPlusMessageWorkflow(message).state]);
+  return !["archivovano", "vyreseno", "odeslano e-mailem", "odeslano emailem"].includes(state);
 }
 
 function dataBoxPlusRecommendations({ includeClosed = false } = {}) {
@@ -22470,7 +22438,6 @@ function dataBoxPlusCommandCenter() {
 
 function dataBoxPlusFilterOptions() {
   return [
-    ["unread", "Nepřečtené"],
     ["new", "Nové"],
     ["today", "Dnes k vyřízení"],
     ["confirmations", "K doplnění"],
@@ -22493,7 +22460,6 @@ function dataBoxPlusMessageMatchesFilter(message, filter) {
   const normalized = dataBoxPlusSearchText([message.type, message.status, message.subject, message.senderName]);
   const workflow = dataBoxPlusMessageWorkflow(message);
   if (filter === "all") return true;
-  if (filter === "unread") return dataBoxPlusIsUnreadMessage(message);
   if (filter === "new") return workflow.state === "Nová";
   if (filter === "today") return dataBoxPlusIsDueToday(message);
   if (filter === "confirmations") return ["Potřebuje upřesnit", "Potřebuje adresáta", "Chybí vozidlo", "Chybí příloha", "Nelze provést"].includes(workflow.state);
@@ -22532,11 +22498,11 @@ function dataBoxPlusFilteredMessages() {
 }
 
 function dataBoxPlusMessageRow(message) {
-  const unread = dataBoxPlusIsUnreadMessage(message);
+  const unresolved = dataBoxPlusIsUnresolvedMessage(message);
 
   return `
-    <article class="ds-plus-message-row ${unread ? "ds-plus-message-row--unread" : ""}">
-      <div class="ds-plus-message-row__unread" aria-label="${unread ? "Nepřečteno" : "Přečteno"}" ${unread ? "" : "aria-hidden=\"true\""}></div>
+    <article class="ds-plus-message-row ${unresolved ? "ds-plus-message-row--unresolved" : ""}">
+      <div class="ds-plus-message-row__unresolved" aria-label="${unresolved ? "Nepřečteno" : "Přečteno"}" ${unresolved ? "" : "aria-hidden=\"true\""}></div>
       <div class="ds-plus-message-row__body">
         <div class="ds-plus-message-row__top">
           <strong>${escapeHtml(message.senderName)}</strong>
@@ -42307,7 +42273,6 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusChat) {
     event.preventDefault();
     dataBoxPlusState.chatMessageId = dataBoxPlusChat.dataset.dsPlusChat || "";
-    dataBoxPlusMarkMessageRead(dataBoxPlusState.chatMessageId);
     dataBoxPlusState.selectedMessageId = "";
     dataBoxPlusState.notice = "";
     await loadDataBoxPlusMessageDetail(dataBoxPlusState.chatMessageId);
@@ -42321,7 +42286,6 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusOpen) {
     event.preventDefault();
     dataBoxPlusState.selectedMessageId = dataBoxPlusOpen.dataset.dsPlusOpen || "";
-    dataBoxPlusMarkMessageRead(dataBoxPlusState.selectedMessageId);
     dataBoxPlusState.chatMessageId = "";
     dataBoxPlusState.notice = "";
     await loadDataBoxPlusMessageDetail(dataBoxPlusState.selectedMessageId);

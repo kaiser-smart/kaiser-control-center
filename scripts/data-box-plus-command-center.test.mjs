@@ -18,15 +18,16 @@ const filterOptionsSource = appSource.slice(
 
 assert.match(appSource, /activeTab: "messages"/);
 assert.doesNotMatch(appSource.match(/const DATA_BOX_PLUS_TABS = \[[\s\S]*?\];/)?.[0] || "", /Řídicí centrum/);
-assert.match(filterOptionsSource, /\["unread", "Nepřečtené"\]/);
+assert.match(filterOptionsSource, /\["new", "Nové"\]/);
 assert.match(filterOptionsSource, /\["all", "Vše"\]/);
-assert.ok(filterOptionsSource.indexOf('["unread", "Nepřečtené"]') < filterOptionsSource.indexOf('["all", "Vše"]'));
+assert.doesNotMatch(filterOptionsSource, /Nepřečtené/);
+assert.ok(filterOptionsSource.indexOf('["new", "Nové"]') < filterOptionsSource.indexOf('["all", "Vše"]'));
 assert.match(messageRowSource, /data-ds-plus-open=/);
 assert.match(messageRowSource, /data-ds-plus-chat=/);
 assert.doesNotMatch(messageRowSource, /dataBoxPlusCompactWorkflow|dataBoxPlusRenderWorkflowAction|Pravděpodobně|Bez další akce|Potřebuje pokyn/);
-assert.match(appSource, /function dataBoxPlusIsUnreadMessage/);
-assert.match(appSource, /dataBoxPlusMarkMessageRead\(dataBoxPlusState\.selectedMessageId\)/);
-assert.match(styles, /\.ds-plus-message-row--unread[\s\S]*background: #1976d2/);
+assert.match(appSource, /function dataBoxPlusIsUnresolvedMessage/);
+assert.doesNotMatch(appSource, /dataBoxPlusMarkMessageRead|dataBoxPlusReadMessageIds/);
+assert.match(styles, /\.ds-plus-message-row--unresolved[\s\S]*background: #1976d2/);
 
 assert.match(composeSource, /data-ds-plus-compose-recipient/);
 assert.match(composeSource, /data-ds-plus-compose-form/);
