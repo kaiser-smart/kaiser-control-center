@@ -1,6 +1,6 @@
 # Svozove trasy - Faze 2D ridicsky tablet
 
-Stav: Faze 2D-A implementovana v kodu; rizeny online D1 pilot bez Vistos zapisu.
+Stav: Faze 2D-A nasazena a overena v produkci; rizeny online D1 pilot bez Vistos zapisu.
 
 Aktualizace: 2026-07-12
 

@@ -122,5 +122,5 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 - ROZPRACOVANO - produkcni read-only pilot existuje.
 - OVERENO - Faze 1E read-only import 13 Excelu a Vistos match byly overeny na produkci pro batch z 2026-07-02.
-- NEZACATO - produkcni overeni Faze 2D-A, migrace 0038 a verze 0.1.519.
+- OVERENO - Faze 2D-A, migrace 0038 a verze 0.1.519 byly 2026-07-12 overeny v produkci: prihlaseny dispecersky pohled, prazdny vychozi stav, ochrana API a responzivita desktop/tablet/mobil; po overeni zustalo 0 tras, 0 zastavek a 0 udalosti.
 - NEZACATO - produkcni ostry import / planovani / notifikace.
