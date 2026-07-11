@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.510"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.511"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: celá 3D flotila a směr z T-Cars",
+    text: "Všechny aktuální typy vozidel mají vlastní schválený průhledný izometrický 3D model v limetkové barvě. Ikona se nejdřív přiřadí podle SPZ a jako bezpečný doplněk také podle názvu nebo popisu vozidla. Mapa používá stávající azimut z T-Cars pro natočení vozidla; po výběru je panel SPZ a rychlosti větší a čitelnější i na mobilu."
+  },
   {
     title: "Poloha vozidel: jednotná 3D limetková flotila",
     text: "Šest dodaných typů vozidel používá novou sjednocenou sadu čistých izometrických 3D modelů podle schváleného vizuálního vzoru. Po výběru vozidla se vektorová Google mapa přiblíží, nakloní podle směru jízdy a zobrazí kompaktní plovoucí panel SPZ a rychlosti. Přepínač Mapa 3D / Letecký 3D dovolí stejnou jízdu zobrazit na čistém nebo satelitním podkladu; přehled flotily zůstává shora."

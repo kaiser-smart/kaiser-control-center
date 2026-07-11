@@ -124,8 +124,47 @@ export const VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE = Object.freeze({
   "1BP8373": "/vehicles/icons/mercedes-popelarske.png",
   "3BN3558": "/vehicles/icons/mercedes-popelarske.png",
   "3BE2831": "/vehicles/icons/mercedes-popelarske.png",
-  "6B93840": "/vehicles/icons/man-popelarske.png"
+  "6B93840": "/vehicles/icons/man-popelarske.png",
+  "1BV6295": "/vehicles/icons/mercedes-skrin.png",
+  "2BE2247": "/vehicles/icons/mercedes-skrin.png",
+  "3BI2007": "/vehicles/icons/daf-abroll.png",
+  "2BR0904": "/vehicles/icons/man-ramenac.png",
+  "9B46276": "/vehicles/icons/fuso-abroll.png",
+  "2BJ7654": "/vehicles/icons/iveco-rioned.png",
+  "1BI4520": "/vehicles/icons/man-cisterna-mala.png",
+  "9C83570": "/vehicles/icons/mercedes-ibos.png",
+  "5B14417": "/vehicles/icons/man-cisterna-velka.png",
+  "5E73753": "/vehicles/icons/man-cisterna-velka.png",
+  "1BC3390": "/vehicles/icons/man-cisterna-velka.png",
+  "3BK4123": "/vehicles/icons/skoda-kamiq.png",
+  "3BI9901": "/vehicles/icons/skoda-kamiq.png",
+  "9B29971": "/vehicles/icons/opel-astra.png",
+  "8B42064": "/vehicles/icons/opel-astra.png",
+  "3BK5611": "/vehicles/icons/toyota-proace.png",
+  "2BK7741": "/vehicles/icons/mercedes-vito.png",
+  "3BH3767": "/vehicles/icons/actros-vlek.png",
+  "HYUNDAIVZV": "/vehicles/icons/hyundai-vzv.png",
+  "VIN000098": "/vehicles/icons/hyundai-vzv.png",
+  "2BS6064": "/vehicles/icons/daf-ibos.png"
 });
+
+const VEHICLE_TRACKING_CUSTOM_ICON_BY_TEXT = Object.freeze([
+  [/\b(?:mercedes|mb)\b.*\b(?:skrin|skříň|box)\b|\bskrin(?:ovy|ový)?\b/, "/vehicles/icons/mercedes-skrin.png"],
+  [/\b(?:daf)\b.*\b(?:abroll|hooklift|nosi[cč])\b|\babroll\b.*\bdaf\b/, "/vehicles/icons/daf-abroll.png"],
+  [/\b(?:man)\b.*\b(?:ramenac|ramenáč|hak)\b|\bramenac\b/, "/vehicles/icons/man-ramenac.png"],
+  [/\b(?:fuso)\b.*\b(?:abroll|hooklift|nosi[cč])\b|\bfuso\s*abroll\b/, "/vehicles/icons/fuso-abroll.png"],
+  [/\b(?:iveco)\b.*\b(?:rioned|cisteni|čištění)\b|\brioned\b/, "/vehicles/icons/iveco-rioned.png"],
+  [/\b(?:mercedes|mb)\b.*\b(?:ibos|cisterna|cistern)\b|\bmercedes\s+ibos\b/, "/vehicles/icons/mercedes-ibos.png"],
+  [/\b(?:daf)\b.*\b(?:ibos|cisterna|cistern)\b|\bdaf\s+ibos\b/, "/vehicles/icons/daf-ibos.png"],
+  [/\b(?:man)\b.*\b(?:cisterna|cistern|tanker)\b.*\b(?:mala|malá|3m3|3 m3)\b/, "/vehicles/icons/man-cisterna-mala.png"],
+  [/\b(?:man)\b.*\b(?:cisterna|cistern|tanker)\b/, "/vehicles/icons/man-cisterna-velka.png"],
+  [/\b(?:skoda|škoda)\b.*\b(?:kamiq|kamiq)\b|\bkamiq\b/, "/vehicles/icons/skoda-kamiq.png"],
+  [/\b(?:opel)\b.*\b(?:astra)\b|\bopel\s+astra\b/, "/vehicles/icons/opel-astra.png"],
+  [/\b(?:toyota)\b.*\b(?:proace)\b|\bproace\b/, "/vehicles/icons/toyota-proace.png"],
+  [/\b(?:mercedes|mb)\b.*\b(?:vito)\b|\bvito\b/, "/vehicles/icons/mercedes-vito.png"],
+  [/\b(?:actros|mercedes)\b.*\b(?:vlek|naves|návěs|trailer)\b|\bactros\s+vlek\b/, "/vehicles/icons/actros-vlek.png"],
+  [/\b(?:hyundai)\b.*\b(?:vzv|forklift|vidle)\b|\b(?:vzv|forklift)\b/, "/vehicles/icons/hyundai-vzv.png"]
+]);
 
 const VEHICLE_ICON_TYPE_ALIASES = {
   collection_truck: "collection_truck",
@@ -378,6 +417,7 @@ export function normalizeVehicleTrackingLicensePlate(value = "") {
 
 export function vehicleTrackingCustomIconForVehicle(vehicle = {}) {
   const nestedVehicle = vehicle.vehicle || {};
+  const relatedVehicle = vehicle.fleetVehicle || vehicle.pairedVehicle || {};
   const licensePlates = [
     vehicle.licensePlate,
     vehicle.registrationNumber,
@@ -391,6 +431,37 @@ export function vehicleTrackingCustomIconForVehicle(vehicle = {}) {
     const normalized = normalizeVehicleTrackingLicensePlate(licensePlate);
     const icon = VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE[normalized];
     if (icon) {
+      return icon;
+    }
+  }
+
+  const vehicleText = [
+    vehicle.name,
+    vehicle.description,
+    vehicle.model,
+    vehicle.vehicleName,
+    vehicle.internalNumber,
+    vehicle.type,
+    vehicle.vehicleType,
+    vehicle.bodyType,
+    nestedVehicle.name,
+    nestedVehicle.description,
+    nestedVehicle.model,
+    nestedVehicle.vehicleName,
+    nestedVehicle.type,
+    nestedVehicle.vehicleType,
+    nestedVehicle.bodyType,
+    relatedVehicle.name,
+    relatedVehicle.description,
+    relatedVehicle.model,
+    relatedVehicle.vehicleName,
+    relatedVehicle.type,
+    relatedVehicle.vehicleType,
+    relatedVehicle.bodyType
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  for (const [pattern, icon] of VEHICLE_TRACKING_CUSTOM_ICON_BY_TEXT) {
+    if (pattern.test(vehicleText)) {
       return icon;
     }
   }

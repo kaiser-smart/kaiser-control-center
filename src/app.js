@@ -14040,6 +14040,8 @@ function vehicleTrackingTcarsIconType(location = {}) {
 
 function vehicleTrackingTcarsMarkerVehicle(location = {}) {
   const vehicle = location.vehicle || {};
+  const rawHeading = vehicleTrackingCoordinateValue(location.heading);
+  const heading = rawHeading === null ? 0 : ((rawHeading % 360) + 360) % 360;
   return {
     ...vehicle,
     ...location,
@@ -14047,7 +14049,7 @@ function vehicleTrackingTcarsMarkerVehicle(location = {}) {
     internalNumber: location.internalNumber || vehicle.internalNumber || location.licensePlate || vehicle.licensePlate || location.externalVehicleId || "",
     licensePlate: location.licensePlate || vehicle.licensePlate || "",
     status: location.status || "no_signal",
-    heading: vehicleTrackingCoordinateValue(location.heading) || 0
+    heading
   };
 }
 

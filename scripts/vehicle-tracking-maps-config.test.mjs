@@ -44,7 +44,12 @@ import {
   assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "2BC 1984" }), "/vehicles/icons/skoda-citigo.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ vehicle: { licensePlate: "3BN 3558" } }), "/vehicles/icons/mercedes-popelarske.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "6B9 3840" }), "/vehicles/icons/man-popelarske.png");
-  assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "3BI 2007" }), "");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "3BI 2007" }), "/vehicles/icons/daf-abroll.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "2BJ 7654" }), "/vehicles/icons/iveco-rioned.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "Hyundai VZV" }), "/vehicles/icons/hyundai-vzv.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ vehicle: { description: "Mercedes Vito servis" } }), "/vehicles/icons/mercedes-vito.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ name: "MAN cisterna 3 m3" }), "/vehicles/icons/man-cisterna-mala.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ model: "Toyota Proace" }), "/vehicles/icons/toyota-proace.png");
 }
 
 {
