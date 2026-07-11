@@ -108,6 +108,9 @@ const mockPartslink24WorkflowUrl = "https://github.com/kaiser-smart/kaiser-contr
 let mockModuleFeedback = [];
 let mockSelfRepairCases = [];
 let mockSelfRepairAudit = new Map();
+let mockSelfRepairAutomationRuns = [];
+let mockSelfRepairRunnerRuns = [];
+let mockSelfRepairMonitorStatus = "active";
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
 let mockCollectionRouteBatches = [];
@@ -2464,25 +2467,182 @@ function createMockSelfRepairCase(user, payload = {}) {
 function mockSelfRepairDetail(id) {
   const item = mockSelfRepairCases.find((entry) => entry.id === id) || null;
   if (!item) return null;
+  const evidence = item.source === "cloud_monitor"
+    ? [
+        {
+          id: `self-repair-monitor-evidence-${id}`,
+          caseId: id,
+          evidenceType: "cloud_monitor_finding",
+          label: "Důkaz hodinové read-only kontroly",
+          contentText: item.actualBehavior,
+          metadata: { source: "cloud_monitor", route: item.sourceRoute, readOnly: true },
+          createdByUserId: item.reporterUserId,
+          createdAt: item.createdAt
+        },
+        {
+          id: `self-repair-prompt-evidence-${id}`,
+          caseId: id,
+          evidenceType: "codex_prompt_draft",
+          label: "Návrh promptu pro Codex – nespouštět automaticky",
+          contentText: item.promptDraft,
+          metadata: { codexExecuted: false, repoWrite: false, deployment: false, notificationSent: false },
+          createdByUserId: item.reporterUserId,
+          createdAt: item.createdAt
+        }
+      ]
+    : [{
+        id: `self-repair-evidence-${id}`,
+        caseId: id,
+        evidenceType: "user_report_context",
+        label: "Kontext uživatelského hlášení",
+        contentText: item.description,
+        metadata: {
+          userSupplied: true,
+          sourceRoute: item.sourceRoute,
+          buildVersion: item.buildVersion,
+          buildCommit: item.buildCommit,
+          browserInfo: item.browserInfo
+        },
+        createdByUserId: item.reporterUserId,
+        createdAt: item.createdAt
+      }];
   return {
     case: item,
-    evidence: [{
-      id: `self-repair-evidence-${id}`,
-      caseId: id,
-      evidenceType: "user_report_context",
-      label: "Kontext uživatelského hlášení",
-      contentText: item.description,
-      metadata: {
-        userSupplied: true,
-        sourceRoute: item.sourceRoute,
-        buildVersion: item.buildVersion,
-        buildCommit: item.buildCommit,
-        browserInfo: item.browserInfo
-      },
-      createdByUserId: item.reporterUserId,
-      createdAt: item.createdAt
-    }],
+    evidence,
     audit: mockSelfRepairAudit.get(id) || []
+  };
+}
+
+function createMockSelfRepairMonitorFinding() {
+  const fingerprint = "mock:cloud-monitor:route-asset-version:/samoopravy";
+  const existingIndex = mockSelfRepairCases.findIndex((item) => item.fingerprint === fingerprint && item.source === "cloud_monitor");
+  const now = new Date().toISOString();
+  if (existingIndex >= 0) {
+    const existing = mockSelfRepairCases[existingIndex];
+    const updated = { ...existing, occurrenceCount: Number(existing.occurrenceCount || 1) + 1, lastSeenAt: now, updatedAt: now };
+    mockSelfRepairCases = [updated, ...mockSelfRepairCases.filter((_, index) => index !== existingIndex)];
+    return { case: updated, created: false, deduplicated: true };
+  }
+
+  const id = `self-repair-case-${randomUUID()}`;
+  const promptDraft = [
+    "NÁVRH PROMPTU PRO CODEX – NESPOUŠTĚT AUTOMATICKY",
+    "",
+    "Repozitář: kaiser-control-center",
+    "Produkce: https://kaiser-control-center.pages.dev/",
+    "Kontrolovaná cesta: /samoopravy",
+    "",
+    "Nález: Lokální test zobrazení návrhu promptu",
+    "Požadovaný bezpečný postup: nález nejdřív ověř read-only a bez nového lidského schválení nic neupravuj.",
+    "",
+    "Codex spuštěn: NE. Repozitář změněn: NE. Nasazení: NE. E-mail: NE."
+  ].join("\n");
+  const item = {
+    id,
+    feedbackId: "",
+    source: "cloud_monitor",
+    caseType: "bug",
+    caseTypeLabel: "Chyba",
+    status: "new",
+    statusLabel: MOCK_SELF_REPAIR_STATUS_LABELS.new,
+    priority: "Důležitá",
+    riskLevel: "orange",
+    riskLabel: MOCK_SELF_REPAIR_RISK_LABELS.orange,
+    moduleKey: "self-repair",
+    moduleName: "Samoopravy",
+    targetRepoKey: "kaiser-control-center",
+    targetProductionUrl: "https://kaiser-control-center.pages.dev/",
+    title: "Lokální test: kontrola verze assetů",
+    description: "Lokální mock ověřuje zobrazení automatického read-only nálezu a návrhu promptu.",
+    expectedBehavior: "HTML obsahuje assety stejné verze jako route manifest.",
+    actualBehavior: "Lokální test simuluje rozdílnou verzi assetu; do produkce se tento případ nezapisuje.",
+    reproductionSteps: "Otevřít lokální /samoopravy a zkontrolovat detail případu.",
+    sourceRoute: "/samoopravy",
+    buildVersion: "v0.1.498",
+    buildCommit: "local-mock",
+    browserInfo: "",
+    reporterUserId: "cloud:self-repair-monitor",
+    reporterUserName: "Hodinový cloud monitor",
+    fingerprint,
+    occurrenceCount: 1,
+    firstSeenAt: now,
+    lastSeenAt: now,
+    triageSummary: "Automatický read-only nález k ručnímu ověření.",
+    internalNote: "",
+    promptDraft,
+    createdAt: now,
+    updatedAt: now,
+    updatedByUserId: "cloud:self-repair-monitor"
+  };
+  mockSelfRepairCases = [item, ...mockSelfRepairCases];
+  mockSelfRepairAudit.set(id, [mockSelfRepairAuditEntry(
+    id,
+    { id: "cloud:self-repair-monitor", name: "Hodinový cloud monitor" },
+    "created_from_cloud_monitor",
+    "Lokální read-only nález. Prompt je pouze návrh; Codex, repozitář, deploy ani e-mail nebyly spuštěny.",
+    null,
+    { status: "new", riskLevel: "orange", promptDraftPrepared: true, codexExecuted: false }
+  )]);
+  return { case: item, created: true, deduplicated: false };
+}
+
+function runMockSelfRepairMonitor(user) {
+  if (mockSelfRepairMonitorStatus !== "active") {
+    return { status: "skipped", message: "Hodinový monitor je pozastavený.", routesChecked: 0, findingsTotal: 0 };
+  }
+  const now = new Date();
+  const dedupeKey = `self-repair-monitor:self-repair-hourly-monitor-proposal:${now.toISOString().slice(0, 13)}`;
+  const existing = mockSelfRepairAutomationRuns.find((item) => item.dedupeKey === dedupeKey);
+  if (existing) {
+    return { status: "skipped", message: "Kontrola pro tuto hodinu už proběhla.", routesChecked: 0, findingsTotal: 0 };
+  }
+
+  const startedAt = now.toISOString();
+  const result = createMockSelfRepairMonitorFinding();
+  const finishedAt = new Date().toISOString();
+  const automationRun = {
+    id: `module-automation-run-${randomUUID()}`,
+    ruleId: "self-repair-hourly-monitor-proposal",
+    moduleKey: "self-repair",
+    startedAt,
+    finishedAt,
+    status: "dry_run",
+    message: "Lokální read-only kontrola: 47 stránek, 1 testovací nález. Codex, deploy a e-mail jsou vypnuté.",
+    triggeredBy: `admin-manual:${user.id}`,
+    dedupeKey
+  };
+  const runnerRun = {
+    id: `module-automation-runner-run-${randomUUID()}`,
+    moduleKey: "self-repair",
+    runnerName: "self-repair-phase2a-hourly-monitor",
+    startedAt,
+    scheduledAt: startedAt,
+    finishedAt,
+    triggeredBy: `admin-manual:${user.id}`,
+    status: "dry_run",
+    rulesTotal: 47,
+    dryRunCount: 1,
+    skippedCount: result.deduplicated ? 1 : 0,
+    failedCount: 0,
+    message: automationRun.message,
+    cron: "7 * * * *",
+    timeZone: "Europe/Prague"
+  };
+  mockSelfRepairAutomationRuns = [automationRun, ...mockSelfRepairAutomationRuns];
+  mockSelfRepairRunnerRuns = [runnerRun, ...mockSelfRepairRunnerRuns];
+  return {
+    status: "dry_run",
+    message: automationRun.message,
+    routesTotal: 47,
+    routesChecked: 47,
+    findingsTotal: 1,
+    newCases: result.created ? 1 : 0,
+    deduplicatedCases: result.deduplicated ? 1 : 0,
+    codexExecuted: false,
+    repoWrite: false,
+    pullRequestCreated: false,
+    deploymentStarted: false,
+    notificationSent: false
   };
 }
 
@@ -2550,38 +2710,44 @@ function updateMockSelfRepairCase(user, id, payload = {}) {
 
 function mockSelfRepairRules() {
   const now = new Date().toISOString();
+  const latestRun = mockSelfRepairRunnerRuns[0] || null;
+  const nextRunAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   return [
     {
       id: "self-repair-phase1-safety-boundary",
       moduleKey: "self-repair",
-      title: "Fáze 1 pouze eviduje a třídí podněty",
-      description: "Bez následného schválení se nesmí měnit kód, otevírat pull request, nasazovat ani posílat zprávy.",
+      title: "Fáze 2A dovoluje pouze read-only monitoring a návrh promptu",
+      description: "Bez dalšího schválení se nesmí spustit Codex, měnit kód, otevírat pull request, nasazovat ani posílat zprávy.",
       type: "rule",
       status: "active",
-      conditions: { phase: "1", requiresHumanApproval: true },
-      actions: { blocked: ["code_change", "deployment", "email"] },
+      conditions: { phase: "2A", requiresHumanApproval: true },
+      actions: { blocked: ["codex_execution", "code_change", "pull_request", "deployment", "email"] },
       isAutomation: false,
       triggerType: "manual",
       createdByUserId: "migration-0034",
-      updatedByUserId: "migration-0034",
+      updatedByUserId: "migration-0035",
       createdAt: now,
       updatedAt: now
     },
     {
       id: "self-repair-hourly-monitor-proposal",
       moduleKey: "self-repair",
-      title: "Budoucí hodinová kontrola aplikace",
-      description: "Pouze návrh. Ve Fázi 1 se nic samo nekontroluje, neopravuje, nenasazuje ani neposílá.",
+      title: "Hodinová read-only kontrola aplikace",
+      description: "Každou hodinu čte manifest a stránky, zapisuje a slučuje nálezy a připraví návrh promptu. Codex nespouští.",
       type: "automation",
-      status: "draft",
+      status: mockSelfRepairMonitorStatus,
       conditions: { intervalMinutes: 60, mode: "read_only" },
-      actions: { createCaseOnly: true, runCodex: false, deploy: false, notify: false },
+      actions: { createCaseOnly: true, preparePromptDraft: true, runCodex: false, deploy: false, notify: false },
       isAutomation: true,
       triggerType: "time",
-      scheduleCron: "",
-      cloudRunner: "",
+      scheduleCron: "7 * * * *",
+      cloudRunner: "self-repair-phase2a-hourly-monitor",
+      lastRunAt: latestRun?.finishedAt || "",
+      nextRunAt: mockSelfRepairMonitorStatus === "active" ? nextRunAt : "",
+      lastRunStatus: latestRun?.status || "",
+      lastRunMessage: latestRun?.message || "Čeká na první ověřený cloudový běh.",
       createdByUserId: "migration-0034",
-      updatedByUserId: "migration-0034",
+      updatedByUserId: "migration-0035",
       createdAt: now,
       updatedAt: now
     }
@@ -7104,9 +7270,11 @@ async function handleApi(request, response) {
       return true;
     }
     const summary = mockSelfRepairSummary();
+    const latestRun = mockSelfRepairRunnerRuns[0] || null;
+    const monitorActive = mockSelfRepairMonitorStatus === "active";
     sendJson(response, 200, {
       apiStatus: "ready",
-      phase: "phase1_evidence_and_triage",
+      phase: "phase2a_hourly_read_only_monitor",
       generatedAt: new Date().toISOString(),
       summary: {
         ...summary,
@@ -7116,15 +7284,52 @@ async function handleApi(request, response) {
       capabilities: {
         userReports: "ready",
         triage: "ready",
-        hourlyMonitor: "off",
-        promptPreparation: "off",
+        hourlyMonitor: monitorActive ? latestRun ? "ready" : "waiting" : "off",
+        promptPreparation: monitorActive ? "ready" : "off",
         codexExecution: "off",
         pullRequests: "off",
         deployment: "off",
         userEmail: "off"
       },
-      note: "Lokální test Fáze 1: nic se samo neopravuje, neposílá ani nenasazuje."
+      monitor: {
+        active: monitorActive,
+        ruleStatus: mockSelfRepairMonitorStatus,
+        scheduleCron: "7 * * * *",
+        cloudRunner: "self-repair-phase2a-hourly-monitor",
+        lastRunAt: latestRun?.finishedAt || "",
+        nextRunAt: monitorActive ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : "",
+        lastRunStatus: latestRun?.status || "",
+        lastRunMessage: latestRun?.message || "Čeká na první ověřený cloudový běh.",
+        latestRunRecent: Boolean(latestRun),
+        routesChecked: Number(latestRun?.rulesTotal || 0),
+        findings: Number(latestRun?.dryRunCount || 0),
+        deduplicatedCases: Number(latestRun?.skippedCount || 0),
+        failedCount: Number(latestRun?.failedCount || 0),
+        triggeredBy: latestRun?.triggeredBy || "",
+        monitorCases: mockSelfRepairCases.filter((item) => item.source === "cloud_monitor").length,
+        promptDrafts: mockSelfRepairCases.filter((item) => item.source === "cloud_monitor" && item.promptDraft).length
+      },
+      note: "Lokální test Fáze 2A: monitor jen čte, zapisuje nález a připraví návrh promptu. Codex, repozitář, deploy a e-mail jsou vypnuté."
     });
+    return true;
+  }
+
+  if (url.pathname === "/api/self-repair/monitor/run" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "self-repair", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const payload = await readJsonBody(request);
+    if (payload?.confirmReadOnly !== true) {
+      sendJson(response, 400, { error: "Read-only kontrola vyžaduje výslovné potvrzení.", apiStatus: "ready" });
+      return true;
+    }
+    sendJson(response, 200, { ...runMockSelfRepairMonitor(user), apiStatus: "ready" });
     return true;
   }
 
@@ -7245,7 +7450,33 @@ async function handleApi(request, response) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
       return true;
     }
-    sendJson(response, 200, { runs: [], runnerRuns: [], apiStatus: "ready" });
+    sendJson(response, 200, {
+      runs: mockSelfRepairAutomationRuns,
+      runnerRuns: mockSelfRepairRunnerRuns,
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  const selfRepairRuleToggleMatch = /^\/api\/modules\/self-repair\/rules\/([^/]+)\/(activate|deactivate)$/.exec(url.pathname);
+  if (selfRepairRuleToggleMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    const ruleId = decodeURIComponent(selfRepairRuleToggleMatch[1]);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "self-repair", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    if (ruleId !== "self-repair-hourly-monitor-proposal") {
+      sendJson(response, 403, { error: "Měnit lze pouze stav pevné hodinové read-only kontroly.", apiStatus: "ready" });
+      return true;
+    }
+    mockSelfRepairMonitorStatus = selfRepairRuleToggleMatch[2] === "activate" ? "active" : "inactive";
+    const rule = mockSelfRepairRules().find((item) => item.id === ruleId);
+    sendJson(response, 200, { rule, apiStatus: "ready", codexExecuted: false, deploymentStarted: false, notificationSent: false });
     return true;
   }
 
@@ -7260,9 +7491,9 @@ async function handleApi(request, response) {
       auditLog: [{
         id: `mock-rule-audit-${decodeURIComponent(selfRepairRuleAuditMatch[1])}`,
         action: "seed",
-        changedByUserId: "migration-0034",
+        changedByUserId: "migration-0035",
         changedAt: new Date().toISOString(),
-        note: "Výchozí pravidlo Fáze 1."
+        note: "Bezpečnostní hranice a hodinový read-only monitor Fáze 2A."
       }],
       apiStatus: "ready"
     });
@@ -7271,7 +7502,7 @@ async function handleApi(request, response) {
 
   if (url.pathname.startsWith("/api/modules/self-repair/") && request.method !== "GET") {
     sendJson(response, 403, {
-      error: "Samoopravy jsou ve Fázi 1 read-only. Pravidla ani automatizace se teď nesmí měnit.",
+      error: "Ve Fázi 2A lze pouze pozastavit nebo aktivovat pevnou hodinovou read-only kontrolu. Jiné pravidlo se nesmí měnit.",
       apiStatus: "ready"
     });
     return true;

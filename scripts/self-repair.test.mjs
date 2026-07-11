@@ -70,7 +70,9 @@ class D1Database {
 const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(readFileSync(new URL("../migrations/0007_create_module_feedback.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0015_create_module_rules.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/0016_create_module_automation_runner_runs.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0034_create_self_repair_cases.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/0035_activate_self_repair_hourly_monitor.sql", import.meta.url), "utf8"));
 
 const env = { SMART_ODPADY_DB: new D1Database(sqlite) };
 const reporter = {
@@ -179,7 +181,9 @@ assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_case_audi
 const status = await getSelfRepairStatus(env);
 assert.equal(status.summary.total, 1);
 assert.equal(status.summary.redRiskCount, 1);
-assert.equal(status.capabilities.hourlyMonitor, "off");
+assert.equal(status.phase, "phase2a_hourly_read_only_monitor");
+assert.equal(status.capabilities.hourlyMonitor, "waiting");
+assert.equal(status.capabilities.promptPreparation, "ready");
 assert.equal(status.capabilities.codexExecution, "off");
 assert.equal(status.capabilities.deployment, "off");
 assert.equal(status.capabilities.userEmail, "off");
@@ -189,9 +193,9 @@ const proposedAutomation = sqlite.prepare(`
   FROM module_rules
   WHERE id = 'self-repair-hourly-monitor-proposal'
 `).get();
-assert.equal(proposedAutomation.status, "draft");
-assert.equal(proposedAutomation.schedule_cron, "");
-assert.equal(proposedAutomation.cloud_runner, "");
+assert.equal(proposedAutomation.status, "active");
+assert.equal(proposedAutomation.schedule_cron, "7 * * * *");
+assert.equal(proposedAutomation.cloud_runner, "self-repair-phase2a-hourly-monitor");
 
 await assert.rejects(
   createUserReportedSelfRepairCase(env, reporter, {
@@ -203,4 +207,4 @@ await assert.rejects(
 );
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_cases").get().count, 1);
 
-console.log("Self-repair Phase 1 tests passed.");
+console.log("Self-repair Phase 2A evidence and triage tests passed.");

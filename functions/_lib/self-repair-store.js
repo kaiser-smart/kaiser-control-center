@@ -1,4 +1,8 @@
 import { targetForSelfRepairReport } from "./self-repair-targets.js";
+import {
+  SELF_REPAIR_MONITOR_PROMPT_VERSION,
+  SELF_REPAIR_MONITOR_TARGET_URL
+} from "./self-repair-monitor-config.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const CASE_TYPES = new Set(["bug", "improvement"]);
@@ -83,6 +87,10 @@ function cleanText(value, maxLength = 4000) {
 function nullableText(value, maxLength) {
   const cleaned = cleanText(value, maxLength);
   return cleaned || null;
+}
+
+function nowIso() {
+  return new Date().toISOString();
 }
 
 function randomId(prefix) {
@@ -192,7 +200,7 @@ function dbError(error) {
   const message = cleanText(error?.message, 1000);
   if (message.includes("no such table")) {
     return new SelfRepairStoreError(
-      "Tabulky Samooprav nejsou v D1 připravené. Je nutné nejprve samostatně schválit a spustit migraci 0034.",
+      "Tabulky Samooprav nejsou v D1 připravené. Je nutné nejprve spustit poslední schválené migrace Samooprav.",
       503,
       "self_repair_migration_missing"
     );
@@ -504,6 +512,314 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
   }
 }
 
+function cloudMonitorTarget(finding = {}) {
+  const routeKey = cleanText(finding.route, 600).split("/").filter(Boolean)[0] || "dashboard";
+  const moduleTarget = targetForSelfRepairReport(finding.moduleKey) ||
+    targetForSelfRepairReport(routeKey) ||
+    targetForSelfRepairReport("dashboard");
+  return {
+    ...moduleTarget,
+    repoKey: "kaiser-control-center",
+    productionUrl: SELF_REPAIR_MONITOR_TARGET_URL
+  };
+}
+
+function normalizeCloudMonitorFinding(finding = {}, context = {}) {
+  const target = cloudMonitorTarget(finding);
+  const route = sanitizeSelfRepairSourceRoute(finding.route) || "/";
+  const checkKey = cleanText(finding.key || `${finding.type || "route_check"}:${route}`, 300);
+  const title = cleanText(finding.title || `Produkční kontrola: ${route}`, 240);
+  const expected = cleanText(finding.expected || "Produkční stránka vrací HTTP 200, HTML a assety stejné verze buildu.", 5000);
+  const actual = cleanText(finding.actual || finding.message || "Kontrola vrátila neočekávaný stav.", 5000);
+  const description = cleanText(
+    finding.description || `Hodinová read-only kontrola našla problém na produkční cestě ${route}.`,
+    8000
+  );
+  const reproductionSteps = cleanText(
+    finding.reproductionSteps || `Otevřít ${route} na produkční adrese a ověřit HTTP stav, typ odpovědi a verzi app.js/styles.css.`,
+    8000
+  );
+
+  return {
+    target,
+    route,
+    checkKey,
+    title,
+    expected,
+    actual,
+    description,
+    reproductionSteps,
+    checkType: cleanText(finding.type || "route_check", 100),
+    httpStatus: Number.isFinite(Number(finding.httpStatus)) ? Number(finding.httpStatus) : null,
+    durationMs: Number.isFinite(Number(finding.durationMs)) ? Number(finding.durationMs) : 0,
+    observedAt: cleanText(context.observedAt, 80) || nowIso(),
+    buildVersion: cleanText(context.buildVersion, 100),
+    buildCommit: cleanText(context.buildCommit, 160),
+    monitorRunId: cleanText(context.monitorRunId, 200)
+  };
+}
+
+export function buildCloudMonitorPromptDraft(finding = {}, context = {}) {
+  const normalized = normalizeCloudMonitorFinding(finding, context);
+  return [
+    "NÁVRH PROMPTU PRO CODEX – NESPOUŠTĚT AUTOMATICKY",
+    "",
+    `Repozitář: ${normalized.target.repoKey}`,
+    `Produkce: ${normalized.target.productionUrl}`,
+    `Kontrolovaná cesta: ${normalized.route}`,
+    `Build: ${normalized.buildVersion || "neuvedeno"} / ${normalized.buildCommit || "neuvedeno"}`,
+    "",
+    `Nález: ${normalized.title}`,
+    `Skutečný stav: ${normalized.actual}`,
+    `Očekávaný stav: ${normalized.expected}`,
+    `Postup ověření: ${normalized.reproductionSteps}`,
+    "",
+    "Požadovaný bezpečný postup:",
+    "1. Nejdřív přečti aktuální PŘÍRUČKA.md a ověř zdroj pravdy, větev a produkční buildMeta.",
+    "2. Nález reprodukuj read-only kontrolou. Pokud se nepotvrdí, nic neupravuj a vysvětli proč.",
+    "3. Pokud se potvrdí, připrav minimální návrh opravy, dotčené soubory, rizika a testy.",
+    "4. Bez nového lidského schválení neměň kód, DB, Cloudflare, secrets ani produkční data.",
+    "5. Nespouštěj automatický commit, pull request, merge, deploy, e-mail ani jinou notifikaci.",
+    "",
+    "Akceptace budoucí opravy:",
+    `- cesta ${normalized.route} vrací očekávaný stav a správný obsah,`,
+    "- syntax, cílené testy, build a git diff --check projdou,",
+    "- produkce se ověří až po samostatně schváleném nasazení.",
+    "",
+    `Monitor run: ${normalized.monitorRunId || "neuvedeno"}`,
+    "Codex spuštěn: NE. Repozitář změněn: NE. Nasazení: NE. E-mail: NE."
+  ].join("\n");
+}
+
+async function activeCloudMonitorCaseRow(db, fingerprint) {
+  return db.prepare(`
+    SELECT *
+    FROM self_repair_cases
+    WHERE source = 'cloud_monitor'
+      AND fingerprint = ?
+      AND status NOT IN ('rejected', 'duplicate', 'closed')
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(fingerprint).first();
+}
+
+async function incrementCloudMonitorCase(db, existingRow, normalized, promptDraft, evidenceMetadata, promptMetadata) {
+  const caseId = cleanText(existingRow?.id, 200);
+  await db.prepare(`
+    UPDATE self_repair_cases
+    SET
+      occurrence_count = occurrence_count + 1,
+      last_seen_at = ?,
+      actual_behavior = ?,
+      build_version = ?,
+      build_commit = ?,
+      updated_at = ?,
+      updated_by_user_id = 'cloud:self-repair-monitor'
+    WHERE id = ?
+  `).bind(
+    normalized.observedAt,
+    nullableText(normalized.actual, 5000),
+    nullableText(normalized.buildVersion, 100),
+    nullableText(normalized.buildCommit, 160),
+    normalized.observedAt,
+    caseId
+  ).run();
+
+  await db.prepare(`
+    UPDATE self_repair_case_evidence
+    SET content_text = ?, metadata_json = ?, created_at = ?
+    WHERE case_id = ? AND evidence_type = 'cloud_monitor_finding'
+  `).bind(
+    normalized.actual,
+    safeJson(evidenceMetadata, {}),
+    normalized.observedAt,
+    caseId
+  ).run();
+  await db.prepare(`
+    UPDATE self_repair_case_evidence
+    SET content_text = ?, metadata_json = ?, created_at = ?
+    WHERE case_id = ? AND evidence_type = 'codex_prompt_draft'
+  `).bind(
+    promptDraft,
+    safeJson(promptMetadata, {}),
+    normalized.observedAt,
+    caseId
+  ).run();
+
+  const updatedRow = await caseRow(db, caseId);
+  return {
+    case: rowToCase(updatedRow),
+    created: false,
+    deduplicated: true,
+    promptDraftPrepared: true,
+    promptDraftRefreshed: true
+  };
+}
+
+export async function upsertCloudMonitorSelfRepairCase(env, finding = {}, context = {}) {
+  const db = database(env, true);
+  const normalized = normalizeCloudMonitorFinding(finding, context);
+  const fingerprint = await selfRepairFingerprint({
+    moduleKey: normalized.target.moduleKey,
+    caseType: "bug",
+    title: normalized.checkKey,
+    actualBehavior: normalized.checkKey
+  });
+  const promptDraft = buildCloudMonitorPromptDraft(finding, context);
+  const evidenceMetadata = {
+    source: "cloud_monitor",
+    checkKey: normalized.checkKey,
+    checkType: normalized.checkType,
+    route: normalized.route,
+    httpStatus: normalized.httpStatus,
+    durationMs: normalized.durationMs,
+    expected: normalized.expected,
+    actual: normalized.actual,
+    monitorRunId: normalized.monitorRunId,
+    buildVersion: normalized.buildVersion,
+    buildCommit: normalized.buildCommit,
+    readOnly: true
+  };
+  const promptMetadata = {
+    template: SELF_REPAIR_MONITOR_PROMPT_VERSION,
+    generatedDeterministically: true,
+    codexExecuted: false,
+    repoWrite: false,
+    pullRequest: false,
+    deployment: false,
+    notificationSent: false
+  };
+
+  try {
+    const existingRow = await activeCloudMonitorCaseRow(db, fingerprint);
+    if (existingRow) {
+      return incrementCloudMonitorCase(db, existingRow, normalized, promptDraft, evidenceMetadata, promptMetadata);
+    }
+
+    if (typeof db.batch !== "function") {
+      throw new SelfRepairStoreError(
+        "Databáze nepodporuje atomický zápis monitorovacího případu.",
+        503,
+        "self_repair_monitor_batch_unavailable"
+      );
+    }
+
+    const caseId = randomId("self-repair-case");
+    const findingEvidenceId = randomId("self-repair-evidence");
+    const promptEvidenceId = randomId("self-repair-evidence");
+    const auditId = randomId("self-repair-audit");
+    const reporterUserId = "cloud:self-repair-monitor";
+    const reporterUserName = "Hodinový cloud monitor";
+
+    try {
+      await db.batch([
+        db.prepare(`
+          INSERT INTO self_repair_cases (
+            id, feedback_id, source, case_type, status, priority, risk_level,
+            module_key, module_name, target_repo_key, target_production_url,
+            title, description, expected_behavior, actual_behavior, reproduction_steps,
+            source_route, build_version, build_commit, browser_info,
+            reporter_user_id, reporter_user_name, fingerprint, occurrence_count,
+            first_seen_at, last_seen_at, triage_summary, internal_note,
+            created_at, updated_at, updated_by_user_id
+          ) VALUES (?, NULL, 'cloud_monitor', 'bug', 'new', 'Důležitá', 'orange', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 1, ?, ?, ?, NULL, ?, ?, ?)
+        `).bind(
+          caseId,
+          normalized.target.moduleKey,
+          normalized.target.moduleName,
+          normalized.target.repoKey,
+          normalized.target.productionUrl,
+          normalized.title,
+          normalized.description,
+          nullableText(normalized.expected, 5000),
+          nullableText(normalized.actual, 5000),
+          nullableText(normalized.reproductionSteps, 8000),
+          normalized.route,
+          nullableText(normalized.buildVersion, 100),
+          nullableText(normalized.buildCommit, 160),
+          reporterUserId,
+          reporterUserName,
+          fingerprint,
+          normalized.observedAt,
+          normalized.observedAt,
+          "Automatický read-only nález. Před opravou vyžaduje ruční ověření a samostatné schválení.",
+          normalized.observedAt,
+          normalized.observedAt,
+          reporterUserId
+        ),
+        db.prepare(`
+          INSERT INTO self_repair_case_evidence (
+            id, case_id, evidence_type, label, content_text, metadata_json,
+            created_by_user_id, created_at
+          ) VALUES (?, ?, 'cloud_monitor_finding', 'Důkaz hodinové read-only kontroly', ?, ?, ?, ?)
+        `).bind(
+          findingEvidenceId,
+          caseId,
+          normalized.actual,
+          safeJson(evidenceMetadata, {}),
+          reporterUserId,
+          normalized.observedAt
+        ),
+        db.prepare(`
+          INSERT INTO self_repair_case_evidence (
+            id, case_id, evidence_type, label, content_text, metadata_json,
+            created_by_user_id, created_at
+          ) VALUES (?, ?, 'codex_prompt_draft', 'Návrh promptu pro Codex – nespouštět automaticky', ?, ?, ?, ?)
+        `).bind(
+          promptEvidenceId,
+          caseId,
+          promptDraft,
+          safeJson(promptMetadata, {}),
+          reporterUserId,
+          normalized.observedAt
+        ),
+        db.prepare(`
+          INSERT INTO self_repair_case_audit_log (
+            id, case_id, action, changed_by_user_id, changed_by_user_name,
+            changed_at, before_json, after_json, note
+          ) VALUES (?, ?, 'created_from_cloud_monitor', ?, ?, ?, NULL, ?, ?)
+        `).bind(
+          auditId,
+          caseId,
+          reporterUserId,
+          reporterUserName,
+          normalized.observedAt,
+          safeJson({
+            status: "new",
+            riskLevel: "orange",
+            moduleKey: normalized.target.moduleKey,
+            targetRepoKey: normalized.target.repoKey,
+            monitorRunId: normalized.monitorRunId,
+            promptDraftPrepared: true,
+            codexExecuted: false
+          }),
+          "Případ vytvořen hodinovým read-only monitorem. Prompt je pouze návrh; Codex, repozitář, deploy ani e-mail nebyly spuštěny."
+        )
+      ]);
+    } catch (error) {
+      const message = cleanText(error?.message, 1000).toLowerCase();
+      if (!message.includes("unique") && !message.includes("constraint")) {
+        throw error;
+      }
+
+      const racedRow = await activeCloudMonitorCaseRow(db, fingerprint);
+      if (!racedRow) throw error;
+      return incrementCloudMonitorCase(db, racedRow, normalized, promptDraft, evidenceMetadata, promptMetadata);
+    }
+
+    return {
+      case: rowToCase(await caseRow(db, caseId)),
+      created: true,
+      deduplicated: false,
+      promptDraftPrepared: true,
+      promptDraft
+    };
+  } catch (error) {
+    if (error instanceof SelfRepairStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
 function filteredCases(items, filters = {}) {
   const status = cleanText(filters.status, 80).toLowerCase();
   const riskLevel = cleanText(filters.riskLevel || filters.risk, 80).toLowerCase();
@@ -743,21 +1059,67 @@ export async function updateSelfRepairCase(env, currentUser, id, input = {}) {
 export async function getSelfRepairStatus(env) {
   const db = database(env, true);
   try {
-    const row = await db.prepare(`
-      SELECT
-        COUNT(*) AS total,
-        SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS new_count,
-        SUM(CASE WHEN status IN ('confirmed', 'planned') THEN 1 ELSE 0 END) AS planned_count,
-        SUM(CASE WHEN risk_level = 'red' THEN 1 ELSE 0 END) AS red_risk_count,
-        MAX(created_at) AS last_case_at,
-        MAX(updated_at) AS last_updated_at
-      FROM self_repair_cases
-    `).first();
+    const [row, monitorRule, latestRunnerRun, monitorCaseRow, promptRow] = await Promise.all([
+      db.prepare(`
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS new_count,
+          SUM(CASE WHEN status IN ('confirmed', 'planned') THEN 1 ELSE 0 END) AS planned_count,
+          SUM(CASE WHEN risk_level = 'red' THEN 1 ELSE 0 END) AS red_risk_count,
+          MAX(created_at) AS last_case_at,
+          MAX(updated_at) AS last_updated_at
+        FROM self_repair_cases
+      `).first(),
+      db.prepare(`
+        SELECT status, schedule_cron, cloud_runner, last_run_at, next_run_at,
+               last_run_status, last_run_message
+        FROM module_rules
+        WHERE module_key = 'self-repair'
+          AND id = 'self-repair-hourly-monitor-proposal'
+        LIMIT 1
+      `).first(),
+      db.prepare(`
+        SELECT id, started_at, scheduled_at, finished_at, triggered_by, status,
+               rules_total, dry_run_count, skipped_count, failed_count,
+               message, error_code, cron, time_zone
+        FROM module_automation_runner_runs
+        WHERE module_key = 'self-repair'
+        ORDER BY started_at DESC
+        LIMIT 1
+      `).first(),
+      db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM self_repair_cases
+        WHERE source = 'cloud_monitor'
+      `).first(),
+      db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM self_repair_case_evidence
+        WHERE evidence_type = 'codex_prompt_draft'
+      `).first()
+    ]);
+    const monitorActive = cleanText(monitorRule?.status, 80) === "active";
+    const latestRunAt = cleanText(latestRunnerRun?.finished_at || latestRunnerRun?.started_at, 80);
+    const latestRunMs = Date.parse(latestRunAt);
+    const latestRunAgeMs = Date.now() - latestRunMs;
+    const latestRunRecent = Number.isFinite(latestRunMs) &&
+      latestRunAgeMs >= -5 * 60 * 1000 &&
+      latestRunAgeMs <= 90 * 60 * 1000;
+    const latestRunStatus = cleanText(latestRunnerRun?.status, 80);
+    const monitorCapability = !monitorActive
+      ? "off"
+      : !latestRunnerRun
+        ? "waiting"
+        : ["error", "partial_error"].includes(latestRunStatus)
+          ? "warning"
+          : latestRunRecent
+            ? "ready"
+            : "warning";
 
     return {
       apiStatus: "ready",
-      phase: "phase1_evidence_and_triage",
-      generatedAt: new Date().toISOString(),
+      phase: "phase2a_hourly_read_only_monitor",
+      generatedAt: nowIso(),
       summary: {
         total: Number(row?.total || 0),
         newCount: Number(row?.new_count || 0),
@@ -769,14 +1131,32 @@ export async function getSelfRepairStatus(env) {
       capabilities: {
         userReports: "ready",
         triage: "ready",
-        hourlyMonitor: "off",
-        promptPreparation: "off",
+        hourlyMonitor: monitorCapability,
+        promptPreparation: monitorActive ? "ready" : "off",
         codexExecution: "off",
         pullRequests: "off",
         deployment: "off",
         userEmail: "off"
       },
-      note: "Fáze 1 pouze ukládá, třídí a audituje případy. Nic samo neopravuje, neposílá ani nenasazuje."
+      monitor: {
+        active: monitorActive,
+        ruleStatus: cleanText(monitorRule?.status, 80) || "missing",
+        scheduleCron: cleanText(monitorRule?.schedule_cron, 100),
+        cloudRunner: cleanText(monitorRule?.cloud_runner, 200),
+        lastRunAt: cleanText(monitorRule?.last_run_at || latestRunAt, 80),
+        nextRunAt: cleanText(monitorRule?.next_run_at, 80),
+        lastRunStatus: cleanText(monitorRule?.last_run_status || latestRunStatus, 80),
+        lastRunMessage: cleanText(monitorRule?.last_run_message || latestRunnerRun?.message, 4000),
+        latestRunRecent,
+        routesChecked: Number(latestRunnerRun?.rules_total || 0),
+        findings: Number(latestRunnerRun?.dry_run_count || 0),
+        deduplicatedCases: Number(latestRunnerRun?.skipped_count || 0),
+        failedCount: Number(latestRunnerRun?.failed_count || 0),
+        triggeredBy: cleanText(latestRunnerRun?.triggered_by, 200),
+        monitorCases: Number(monitorCaseRow?.count || 0),
+        promptDrafts: Number(promptRow?.count || 0)
+      },
+      note: "Fáze 2A každou hodinu pouze čte produkční stránky, zapisuje a deduplikuje nálezy a připravuje návrhy promptů. Codex, zápis do repozitáře, pull request, deploy a e-mail zůstávají vypnuté."
     };
   } catch (error) {
     throw dbError(error);

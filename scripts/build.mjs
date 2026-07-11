@@ -50,27 +50,47 @@ async function fileExists(filePath) {
   }
 }
 
-const routes = new Set([
-  "/",
-  "/sarlota",
-  "/pripominky",
-  "/dovolena-nemoc/rychle-zadani",
-  "/dovolena-nemoc/moje-zadosti",
-  "/dovolena-nemoc/nova-zadost",
-  "/dovolena-nemoc/ke-schvaleni",
-  "/dovolena-nemoc/kalendar",
-  "/dovolena-nemoc/zamestnanci",
-  "/dovolena-nemoc/notifikace",
-  "/dovolena-nemoc/reporty",
-  "/dovolena-nemoc/pravidla-automatizace",
-  "/dovolena-nemoc/nastaveni",
-  "/pohledavky/settings",
-  "/pohledavky/import",
-  "/receivables",
-  "/receivables/settings",
-  ...modules.map((moduleItem) => moduleItem.route),
-  ...modules.map((moduleItem) => moduleItem.dashboardRoute).filter(Boolean)
-]);
+const fixedRouteEntries = [
+  { path: "/", moduleKey: "dashboard", label: "Hlavní stránka" },
+  { path: "/sarlota", moduleKey: "dashboard", label: "Šarlota" },
+  { path: "/pripominky", moduleKey: "feedback", label: "Připomínky" },
+  { path: "/dovolena-nemoc/rychle-zadani", moduleKey: "absence", label: "Nepřítomnosti – rychlé zadání" },
+  { path: "/dovolena-nemoc/moje-zadosti", moduleKey: "absence", label: "Nepřítomnosti – moje žádosti" },
+  { path: "/dovolena-nemoc/nova-zadost", moduleKey: "absence", label: "Nepřítomnosti – nová žádost" },
+  { path: "/dovolena-nemoc/ke-schvaleni", moduleKey: "absence", label: "Nepřítomnosti – ke schválení" },
+  { path: "/dovolena-nemoc/kalendar", moduleKey: "absence", label: "Nepřítomnosti – kalendář" },
+  { path: "/dovolena-nemoc/zamestnanci", moduleKey: "absence", label: "Nepřítomnosti – zaměstnanci" },
+  { path: "/dovolena-nemoc/notifikace", moduleKey: "absence", label: "Nepřítomnosti – notifikace" },
+  { path: "/dovolena-nemoc/reporty", moduleKey: "absence", label: "Nepřítomnosti – reporty" },
+  { path: "/dovolena-nemoc/pravidla-automatizace", moduleKey: "absence", label: "Nepřítomnosti – pravidla" },
+  { path: "/dovolena-nemoc/nastaveni", moduleKey: "absence", label: "Nepřítomnosti – nastavení" },
+  { path: "/pohledavky/settings", moduleKey: "receivables", label: "Pohledávky – nastavení" },
+  { path: "/pohledavky/import", moduleKey: "receivables", label: "Pohledávky – import" },
+  { path: "/receivables", moduleKey: "receivables", label: "Pohledávky – kompatibilní adresa" },
+  { path: "/receivables/settings", moduleKey: "receivables", label: "Pohledávky – kompatibilní nastavení" }
+];
+const routeEntryByPath = new Map();
+
+for (const entry of [
+  ...fixedRouteEntries,
+  ...modules.map((moduleItem) => ({
+    path: moduleItem.route,
+    moduleKey: moduleItem.id,
+    label: moduleItem.title
+  })),
+  ...modules.filter((moduleItem) => Boolean(moduleItem.dashboardRoute)).map((moduleItem) => ({
+    path: moduleItem.dashboardRoute,
+    moduleKey: moduleItem.id,
+    label: `${moduleItem.title} – dashboard`
+  }))
+]) {
+  if (!routeEntryByPath.has(entry.path)) {
+    routeEntryByPath.set(entry.path, entry);
+  }
+}
+
+const routeEntries = [...routeEntryByPath.values()];
+const routes = new Set(routeEntries.map((entry) => entry.path));
 
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
@@ -82,6 +102,19 @@ await writeFile(
 await writeFile(
   path.join(dist, "src/data/runtimeConfig.js"),
   runtimeConfigModuleSource()
+);
+await writeFile(
+  path.join(dist, "route-manifest.json"),
+  `${JSON.stringify({
+    schemaVersion: 1,
+    build: {
+      version: buildMeta.version,
+      branch: buildMeta.branch,
+      commit: buildMeta.commit,
+      backupDate: buildMeta.backupDate
+    },
+    routes: routeEntries
+  }, null, 2)}\n`
 );
 if (await fileExists(publicDir)) {
   await copyDir(publicDir, dist);

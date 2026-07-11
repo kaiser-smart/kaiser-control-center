@@ -4,6 +4,7 @@ import {
   normalizeModuleRuleModuleKey,
   setModuleRuleStatus
 } from "../../../../../_lib/module-rules-store.js";
+import { isSelfRepairMonitorRule } from "../../../../../_lib/self-repair-monitor-config.js";
 
 function routeParams(request, params) {
   const parts = new URL(request.url).pathname.split("/").filter(Boolean);
@@ -23,6 +24,10 @@ function moduleRulesError(error) {
 }
 
 function moduleRulesReadOnlyPilotResponse(route) {
+  if (isSelfRepairMonitorRule(route.moduleKey, route.id)) {
+    return null;
+  }
+
   if (!["collection-routes", "receivables", "self-repair"].includes(route.moduleKey)) {
     return null;
   }

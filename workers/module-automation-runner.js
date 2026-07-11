@@ -1,5 +1,7 @@
 import { runModuleAutomationDryRun } from "../functions/_lib/module-automation-dry-run.js";
 import { runCollectionRoutesSnapshotAutomation } from "../functions/_lib/collection-routes-automation-runner.js";
+import { runSelfRepairHourlyMonitor } from "../functions/_lib/self-repair-monitor-runner.js";
+import { SELF_REPAIR_MONITOR_CRON } from "../functions/_lib/self-repair-monitor-config.js";
 
 const COLLECTION_ROUTES_CRON = "*/15 * * * *";
 const ABSENCE_CRON = "15 3 * * *";
@@ -52,6 +54,30 @@ export default {
         return;
       }
 
+      if (controller.cron === SELF_REPAIR_MONITOR_CRON) {
+        const summary = await runSelfRepairHourlyMonitor(env, {
+          scheduledTime: controller.scheduledTime,
+          triggeredBy: "cloudflare-cron"
+        });
+
+        console.log("self_repair_hourly_monitor.completed", {
+          mode: summary.mode,
+          status: summary.status,
+          runnerRunId: summary.runnerRunId,
+          routesChecked: summary.routesChecked,
+          findingsTotal: summary.findingsTotal,
+          newCases: summary.newCases,
+          deduplicatedCases: summary.deduplicatedCases,
+          failedCount: summary.failedCount,
+          codexExecuted: false,
+          repoWrite: false,
+          pullRequestCreated: false,
+          deploymentStarted: false,
+          notificationSent: false
+        });
+        return;
+      }
+
       console.log("module_automation_runner.skipped_unknown_cron", {
         cron: controller.cron,
         emailSms: "disabled",
@@ -75,7 +101,15 @@ export default {
         cron: ABSENCE_CRON,
         mode: "dry-run"
       },
-      message: "Cloud runner automaticky čte Trasy svozu jako read-only Vistos snapshot a dál eviduje původní dry-run automatizace."
+      selfRepair: {
+        cron: SELF_REPAIR_MONITOR_CRON,
+        mode: "hourly-read-only-monitor",
+        codexExecution: "disabled",
+        repoWrite: "disabled",
+        deployment: "disabled",
+        notification: "disabled"
+      },
+      message: "Cloud runner čte Trasy svozu, eviduje původní dry-run automatizace a každou hodinu provádí read-only kontrolu Samooprav."
     });
   }
 };

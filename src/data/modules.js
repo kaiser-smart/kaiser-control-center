@@ -234,10 +234,10 @@ export const modules = [
   {
     id: "self-repair",
     title: "Samoopravy",
-    description: "Evidence chyb a drobných úprav, jejich bezpečné třídění a audit dalšího postupu.",
+    description: "Evidence chyb, hodinová read-only kontrola, deduplikace nálezů a návrhy promptů k ruční kontrole.",
     route: "/samoopravy",
     icon: SettingsIcon,
-    status: "Pilot Fáze 1",
+    status: "Fáze 2A · monitor běží",
     ctaLabel: "Zobrazit případy",
     active: true,
     disabled: false,

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.497"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.498"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Samoopravy: hodinový read-only cloud monitor",
+    text: "Cloud Worker každou hodinu ověří nasazené stránky, zapíše a sloučí nálezy a připraví návrh promptu k ruční kontrole. Codex, změny repozitáře, pull request, nasazení a e-mail zůstávají vypnuté."
+  },
+  {
     title: "Datové schránky Plus: chat skutečně provádí úkony",
     text: "Potvrzený úkon v chatu má vždy skutečný backendový výsledek. Archivace, vyřízení, předání a interní kroky mění provozní stav; e-mail, SMS a odpověď přes datovou schránku volají příslušnou serverovou službu. Návrh vznikne jen na výslovný pokyn a nikdy se nevydává za provedenou akci."
   },
@@ -30,7 +34,7 @@ export const versionNews = [
   },
   {
     title: "Samoopravy: bezpečná evidence chyb a úprav",
-    text: "Uživatelé mohou v Připomínkách nahlásit chybu nebo drobnou úpravu včetně kontextu stránky. Admin a Management mají nový modul pro ruční třídění, riziko a audit. Fáze 1 nic sama neopravuje, nespouští Codex, nenasazuje ani neposílá e-mail."
+    text: "Uživatelé mohou v Připomínkách nahlásit chybu nebo drobnou úpravu včetně kontextu stránky. Admin a Management mají modul pro ruční třídění, riziko a audit. Automatická oprava, Codex, nasazení a e-mail zůstávají vypnuté."
   },
   {
     title: "Pohledávky: funkční záložky Zákazníci a Dry-run",

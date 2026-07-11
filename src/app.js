@@ -900,6 +900,7 @@ const selfRepairState = {
   loading: false,
   detailLoading: false,
   savingId: "",
+  monitorRunning: false,
   apiStatus: "waiting",
   error: "",
   message: ""
@@ -4021,6 +4022,15 @@ function moduleEventLogConfig(moduleItem = {}) {
   if (moduleId === SELF_REPAIR_MODULE_KEY) {
     const latestCase = selfRepairState.cases[0] || null;
     const latestAudit = selfRepairState.detail?.audit?.[0] || null;
+    const monitor = selfRepairState.statusData?.monitor || {};
+    const monitorCapability = selfRepairState.statusData?.capabilities?.hourlyMonitor || "waiting";
+    const monitorState = monitorCapability === "ready"
+      ? "běží"
+      : monitorCapability === "warning"
+        ? "vyžaduje pozornost"
+        : monitorCapability === "off"
+          ? "vypnuto"
+          : "čeká na první běh";
     const apiState = selfRepairState.error
       ? "vyžaduje pozornost"
       : selfRepairState.apiStatus === "ready"
@@ -4033,36 +4043,44 @@ function moduleEventLogConfig(moduleItem = {}) {
       statuses: [
         moduleEventLogStatus("Evidence případů", apiState, selfRepairState.error || "Případy se čtou a ukládají přes chráněné cloud API a D1."),
         moduleEventLogStatus("Ruční třídění a audit", apiState, "Změny stavu a rizika zapisuje backend společně s auditním záznamem."),
-        moduleEventLogStatus("Hodinová kontrola", "vypnuto", "Ve Fázi 1 není zapnutá žádná pravidelná cloudová kontrola."),
-        moduleEventLogStatus("Příprava promptu a Codex", "vypnuto", "Žádný případ se automaticky neposílá do ChatGPT ani Codexu."),
+        moduleEventLogStatus("Hodinová kontrola", monitorState, monitor.lastRunMessage || "Read-only cloud monitor čeká na první ověřený běh."),
+        moduleEventLogStatus("Příprava promptu", monitor.active ? "aktivní" : "vypnuto", "Nález dostane deterministický návrh promptu k ruční kontrole."),
+        moduleEventLogStatus("Spuštění Codexu", "vypnuto", "Návrh promptu se nikam automaticky neposílá a Codex se nespouští."),
         moduleEventLogStatus("Pull request a nasazení", "vypnuto", "Modul nemá oprávnění měnit repozitář ani produkci."),
-        moduleEventLogStatus("E-mail uživateli", "vypnuto", "Po uložení nebo uzavření případu se ve Fázi 1 žádný e-mail neodesílá.")
+        moduleEventLogStatus("E-mail uživateli", "vypnuto", "Po uložení nebo uzavření případu se žádný e-mail neodesílá.")
       ],
       inactiveItems: [
-        "Hodinový cloud monitor aplikace.",
-        "Automatické vytvoření promptu a spuštění Codexu.",
+        "Automatické spuštění Codexu nebo změna kódu.",
         "Automatický pull request, merge nebo produkční deploy.",
         "E-mail uživateli po uzavření případu."
       ],
       pilotItems: [
         "Uživatelský formulář ukládá případ, kontext a audit.",
         "Admin a Management mohou ručně zatřídit stav, prioritu a riziko.",
-        "Návrh hodinové kontroly je v seznamu pravidel pouze jako neaktivní návrh."
+        "Cloud monitor každou hodinu read-only ověří nasazené stránky.",
+        "Nález se deduplikuje a dostane návrh promptu bez spuštění Codexu."
       ],
       events: [
+        monitor.lastRunAt
+          ? moduleEventLogEvent(monitor.lastRunAt, "Poslední hodinová kontrola", monitorState, monitor.lastRunMessage || `Zkontrolováno ${Number(monitor.routesChecked || 0)} stránek.`)
+          : moduleEventLogEvent("", "Hodinová kontrola", monitorState, monitor.active ? "Čeká na první ověřený cloudový běh." : "Monitor je pozastavený."),
         latestCase
           ? moduleEventLogEvent(latestCase.createdAt, "Poslední uložený případ", latestCase.statusLabel, `${latestCase.moduleName}: ${latestCase.title}`)
           : moduleEventLogEvent("", "Evidence případů", apiState, selfRepairState.loaded ? "Zatím není uložený žádný případ." : "Čeká se na načtení cloud evidence."),
         latestAudit
           ? moduleEventLogEvent(latestAudit.changedAt, "Poslední auditní změna", "zapsáno", latestAudit.note || latestAudit.action)
           : moduleEventLogEvent("", "Audit změn", "čeká na ověření", "Vyberte případ pro zobrazení jeho auditní historie."),
-        moduleEventLogEvent("", "Automatické opravy", "vypnuto", "Fáze 1 nic sama neopravuje, neposílá ani nenasazuje.")
+        moduleEventLogEvent("", "Automatické opravy", "vypnuto", "Fáze 2A nic sama neopravuje, neposílá ani nenasazuje.")
       ],
       diagnostics: [
         moduleEventLogDiagnostic("apiStatus", selfRepairState.apiStatus),
         moduleEventLogDiagnostic("loaded", selfRepairState.loaded ? "true" : "false"),
         moduleEventLogDiagnostic("cases", selfRepairState.cases.length),
-        moduleEventLogDiagnostic("phase", selfRepairState.statusData?.phase || "phase1_evidence_and_triage"),
+        moduleEventLogDiagnostic("phase", selfRepairState.statusData?.phase || "phase2a_hourly_read_only_monitor"),
+        moduleEventLogDiagnostic("monitorCron", monitor.scheduleCron || "neuvedeno"),
+        moduleEventLogDiagnostic("monitorRunner", monitor.cloudRunner || "neuvedeno"),
+        moduleEventLogDiagnostic("routesChecked", Number(monitor.routesChecked || 0)),
+        moduleEventLogDiagnostic("findings", Number(monitor.findings || 0)),
         moduleEventLogDiagnostic("lastError", selfRepairState.error || "bez chyby")
       ]
     };
@@ -7832,6 +7850,18 @@ function moduleRuleUserLabel(userId) {
     return "Migrace 0015";
   }
 
+  if (cleaned === "migration-0034") {
+    return "Založení Samooprav";
+  }
+
+  if (cleaned === "migration-0035") {
+    return "Aktivace Fáze 2A";
+  }
+
+  if (cleaned === "self-repair-phase2a-hourly-monitor") {
+    return "Hodinový cloud monitor";
+  }
+
   const user = adminUsersState.users.find((item) => String(item.id || "").trim() === cleaned) ||
     accessState.users.find((item) => String(item.id || "").trim() === cleaned);
   return user?.name || cleaned;
@@ -7848,7 +7878,18 @@ function moduleRuleModuleLabel(moduleKey) {
   if (key === RECEIVABLES_MODULE_KEY) {
     return "Pohledávky";
   }
+  if (key === SELF_REPAIR_MODULE_KEY) {
+    return "Samoopravy";
+  }
   return key || "-";
+}
+
+function moduleRuleRunnerLabel(value) {
+  const runner = String(value || "").trim();
+  if (runner === "self-repair-phase2a-hourly-monitor") {
+    return "Hodinový cloud monitor";
+  }
+  return runner || "Nenastaveno";
 }
 
 function moduleRuleJsonPreview(value) {
@@ -7913,6 +7954,7 @@ function moduleAutomationRunStatusLabel(status) {
 function moduleAutomationRunnerRunStatusLabel(status) {
   const labels = {
     running: "Běží",
+    success: "OK",
     dry_run: "Dry-run",
     skipped: "Přeskočeno",
     partial_error: "Částečná chyba",
@@ -8148,7 +8190,7 @@ function moduleRuleForm(canManage) {
   `;
 }
 
-function moduleRulesAutomationRow(item, canManage) {
+function moduleRulesAutomationRow(item, { canEdit = false, canToggle = false } = {}) {
   const searchText = moduleRulesAutomationSearchText(item);
   const hidden = moduleRulesAutomationMatchesFilters(item) ? "" : " hidden";
   const trigger = [
@@ -8158,14 +8200,14 @@ function moduleRulesAutomationRow(item, canManage) {
   const impact = item.isAutomation
     ? "Cloud dry-run bez ostrých akcí"
     : "Backend/cloud pravidlo";
-  const actionCell = canManage
+  const actionCell = canEdit || canToggle
     ? `
       <div class="module-rules-row-actions">
         <button class="secondary-link" type="button" data-module-rule-select="${escapeHtml(item.id)}">Detail</button>
-        <button class="secondary-link" type="button" data-module-rule-edit="${escapeHtml(item.id)}">Upravit</button>
-        <button class="secondary-link" type="button" data-module-rule-toggle="${escapeHtml(item.id)}" data-next-status="${item.status === "active" ? "inactive" : "active"}">
+        ${canEdit ? `<button class="secondary-link" type="button" data-module-rule-edit="${escapeHtml(item.id)}">Upravit</button>` : ""}
+        ${canToggle ? `<button class="secondary-link" type="button" data-module-rule-toggle="${escapeHtml(item.id)}" data-next-status="${item.status === "active" ? "inactive" : "active"}">
           ${item.status === "active" ? "Deaktivovat" : "Aktivovat"}
-        </button>
+        </button>` : ""}
       </div>
     `
     : '<span class="module-rules-readonly">Read-only</span>';
@@ -8266,7 +8308,7 @@ function moduleRuleDetail(humanDetail = false) {
         </article>
         <article>
           <span>Cloud runner</span>
-          <strong>${escapeHtml(selected.cloudRunner || "Fáze 2")}</strong>
+          <strong>${escapeHtml(moduleRuleRunnerLabel(selected.cloudRunner))}</strong>
         </article>
       </div>
       ${humanDetail ? `
@@ -8313,9 +8355,13 @@ function moduleRulesAutomationPanel({
   description = "",
   cloudNote = "",
   readOnly = false,
-  humanDetail = false
+  humanDetail = false,
+  toggleOnly = false,
+  toggleRuleIds = []
 }) {
   const canManage = !readOnly && (hasPermission(user, moduleKey, "manage") || isFullAccessRole(user));
+  const canEdit = canManage && !toggleOnly;
+  const allowedToggleIds = new Set(toggleRuleIds.map((value) => String(value || "")));
   const statusLabel = moduleRulesState.loading
     ? "Načítám cloud API"
     : moduleRulesState.apiStatus === "ready"
@@ -8343,7 +8389,10 @@ function moduleRulesAutomationPanel({
     ? "Read-only evidence pravidel je načtená z cloud API."
     : "Ostrá pravidla jsou načtená z cloud DB.";
   const rows = rules.length
-    ? rules.map((item) => moduleRulesAutomationRow(item, canManage)).join("")
+    ? rules.map((item) => moduleRulesAutomationRow(item, {
+        canEdit,
+        canToggle: canManage && (!toggleOnly || allowedToggleIds.has(item.id))
+      })).join("")
     : `<tr><td colspan="11">${moduleRulesState.loading ? loadingRulesText : emptyRulesText}</td></tr>`;
 
   return `
@@ -8384,7 +8433,7 @@ function moduleRulesAutomationPanel({
         </label>
       </div>
 
-      ${canManage ? `
+      ${canEdit ? `
         <div class="module-rules-actions">
           <button class="primary-action" type="button" data-module-rule-new="rule" ${moduleRulesState.saving ? "disabled" : ""}>Nové pravidlo</button>
           <button class="secondary-link" type="button" data-module-rule-new="automation" ${moduleRulesState.saving ? "disabled" : ""}>Nová automatizace</button>
@@ -8395,7 +8444,7 @@ function moduleRulesAutomationPanel({
         </div>
       ` : ""}
 
-      ${moduleRuleForm(canManage)}
+      ${moduleRuleForm(canEdit)}
 
       <div class="module-rules-status-grid">
         <article>
@@ -27607,11 +27656,21 @@ function selfRepairSummaryGrid() {
 
 function selfRepairCapabilityGrid() {
   const ready = selfRepairState.apiStatus === "ready" && !selfRepairState.error;
+  const capabilities = selfRepairState.statusData?.capabilities || {};
+  const monitor = selfRepairState.statusData?.monitor || {};
+  const capability = (value, readyLabel = "Připraveno") => {
+    if (value === "ready") return [readyLabel, "ready"];
+    if (value === "warning") return ["Pozor", "warning"];
+    if (value === "waiting") return ["Čeká", "waiting"];
+    return ["Vypnuto", "off"];
+  };
+  const hourly = capability(capabilities.hourlyMonitor, "Běží");
+  const prompt = capability(capabilities.promptPreparation);
   const items = [
     ["Uživatelská hlášení", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
     ["Ruční třídění", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
-    ["Hodinová kontrola", "Vypnuto", "off"],
-    ["Příprava promptu", "Vypnuto", "off"],
+    ["Hodinová kontrola", hourly[0], hourly[1]],
+    ["Příprava promptu", prompt[0], prompt[1]],
     ["Codex oprava", "Vypnuto", "off"],
     ["Nasazení", "Vypnuto", "off"],
     ["E-mail uživateli", "Vypnuto", "off"]
@@ -27630,7 +27689,13 @@ function selfRepairCapabilityGrid() {
           </article>
         `).join("")}
       </div>
-      <p>Fáze 1 pouze eviduje, třídí a audituje. Automatická změna kódu bude samostatná fáze s dalším schválením.</p>
+      <div class="self-repair-monitor-summary" aria-label="Poslední běh hodinové kontroly">
+        <article><span>Poslední kontrola</span><strong>${escapeHtml(monitor.lastRunAt ? formatDateTime(monitor.lastRunAt) : "čeká na první běh")}</strong></article>
+        <article><span>Další kontrola</span><strong>${escapeHtml(monitor.active ? formatDateTime(monitor.nextRunAt) || "do hodiny" : "pozastavena")}</strong></article>
+        <article><span>Zkontrolované stránky</span><strong>${escapeHtml(Number(monitor.routesChecked || 0))}</strong></article>
+        <article><span>Nálezy</span><strong>${escapeHtml(Number(monitor.findings || 0))}</strong></article>
+      </div>
+      <p>Fáze 2A pouze čte veřejné produkční stránky, ukládá a slučuje nálezy a připravuje návrh promptu. Codex ani žádná oprava se automaticky nespouští.</p>
     </section>
   `;
 }
@@ -27706,6 +27771,35 @@ function selfRepairAuditTimeline(audit = []) {
   `;
 }
 
+function selfRepairEvidencePanels(evidence = []) {
+  const promptDraft = evidence.find((entry) => entry?.evidenceType === "codex_prompt_draft");
+  const monitorFinding = evidence.find((entry) => entry?.evidenceType === "cloud_monitor_finding");
+  if (!promptDraft && !monitorFinding) return "";
+
+  return `
+    <section class="self-repair-evidence-panel" aria-labelledby="self-repair-evidence-title">
+      <div>
+        <p class="module-detail__eyebrow">Read-only důkaz</p>
+        <h3 id="self-repair-evidence-title">Výstup hodinové kontroly</h3>
+      </div>
+      ${monitorFinding ? `
+        <article class="self-repair-monitor-finding">
+          <span>Nalezený stav</span>
+          <p>${escapeHtml(monitorFinding.contentText || "Bez čitelného popisu.")}</p>
+          <small>Monitor pouze četl produkční stránku a zapsal výsledek.</small>
+        </article>
+      ` : ""}
+      ${promptDraft ? `
+        <details class="self-repair-prompt-draft">
+          <summary>Návrh promptu · Codex nebyl spuštěn</summary>
+          <p>Text je připravený k ruční kontrole. Jeho vytvoření nezměnilo kód ani produkci.</p>
+          <pre>${escapeHtml(promptDraft.contentText || "Návrh promptu není dostupný.")}</pre>
+        </details>
+      ` : ""}
+    </section>
+  `;
+}
+
 function selfRepairCaseDetail(user) {
   if (selfRepairState.detailLoading) {
     return '<section class="self-repair-detail"><p class="self-repair-empty">Načítám detail…</p></section>';
@@ -27745,6 +27839,8 @@ function selfRepairCaseDetail(user) {
         <div><dt>Uživatel</dt><dd>${escapeHtml(item.reporterUserName)}</dd></div>
         <div><dt>Důkazy / kontext</dt><dd>${escapeHtml(evidence.length)}</dd></div>
       </dl>
+
+      ${selfRepairEvidencePanels(evidence)}
 
       ${canManage ? `
         <form class="self-repair-management" data-self-repair-case-form data-self-repair-case-id="${escapeHtml(item.id)}">
@@ -27792,6 +27888,7 @@ function selfRepairPage(moduleItem, user) {
   ensureSelfRepairData();
   ensureModuleRulesData(SELF_REPAIR_MODULE_KEY);
   const items = filteredSelfRepairCases();
+  const canManage = hasPermission(user, SELF_REPAIR_MODULE_KEY, "manage") || isFullAccessRole(user);
   const listContent = selfRepairState.loading && !selfRepairState.loaded
     ? '<p class="self-repair-empty">Načítám případy…</p>'
     : items.length
@@ -27809,12 +27906,13 @@ function selfRepairPage(moduleItem, user) {
       <section class="module-detail self-repair-hero" aria-labelledby="module-title">
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div class="module-detail__body">
-          <div class="module-detail__eyebrow">Bezpečná evidence a třídění</div>
+          <div class="module-detail__eyebrow">Read-only monitoring a bezpečná evidence</div>
           <h1 id="module-title">Samoopravy</h1>
-          <p>Jedno místo pro chyby a drobné úpravy z provozu. Fáze 1 připravuje ověřitelná data pro další rozhodnutí.</p>
-          <div class="module-detail__status"><span>Stav</span><strong>Pilot Fáze 1 · bez automatických oprav</strong></div>
+          <p>Jedno místo pro chyby a drobné úpravy z provozu. Fáze 2A každou hodinu zkontroluje veřejné stránky a připraví nález k ručnímu rozhodnutí.</p>
+          <div class="module-detail__status"><span>Stav</span><strong>Fáze 2A · hodinový monitor · bez automatických oprav</strong></div>
           <div class="module-actions">
             <a class="primary-link" href="${routeHref(`${FEEDBACK_ROUTE}?new=report&module=self-repair&sourceRoute=${encodeURIComponent(SELF_REPAIR_ROUTE)}#feedback-report`)}" data-link>Nahlásit problém</a>
+            ${canManage ? `<button class="secondary-link" type="button" data-self-repair-monitor-run ${selfRepairState.monitorRunning ? "disabled" : ""}>${selfRepairState.monitorRunning ? "Kontroluji…" : "Spustit read-only kontrolu"}</button>` : ""}
             <button class="secondary-link" type="button" data-self-repair-refresh ${selfRepairState.loading ? "disabled" : ""}>${selfRepairState.loading ? "Načítám…" : "Obnovit případy"}</button>
           </div>
         </div>
@@ -27844,10 +27942,12 @@ function selfRepairPage(moduleItem, user) {
         moduleKey: SELF_REPAIR_MODULE_KEY,
         moduleName: "Samoopravy",
         user,
-        description: "Pravdivá evidence hranic Fáze 1 a návrhu budoucí hodinové kontroly.",
-        cloudNote: "Hodinová automatizace je pouze návrh. Nic se samo nekontroluje, neopravuje, nenasazuje ani neposílá.",
-        readOnly: true,
-        humanDetail: true
+        description: "Pevně omezená hodinová read-only kontrola a bezpečnostní hranice Fáze 2A.",
+        cloudNote: "Monitor lze pozastavit nebo znovu aktivovat. Vždy jen čte veřejné stránky, zapisuje nálezy a připravuje návrh promptu; Codex, repozitář, nasazení a e-mail jsou vypnuté.",
+        readOnly: false,
+        humanDetail: true,
+        toggleOnly: true,
+        toggleRuleIds: ["self-repair-hourly-monitor-proposal"]
       })}
       ${genericModuleSettingsSection(moduleItem)}
     </main>
@@ -32569,7 +32669,7 @@ function selfRepairReportPanel(user, moduleOptions) {
           <h2 id="self-repair-report-title">Nahlásit problém v aplikaci</h2>
           <p>Napište, co nefunguje a kde. Hlášení se bezpečně uloží k prověření.</p>
         </div>
-        <span class="self-repair-report__phase">Fáze 1 · evidence</span>
+        <span class="self-repair-report__phase">Fáze 2A · evidence</span>
       </div>
 
       <div class="self-repair-report__notice" role="note">
@@ -37452,6 +37552,45 @@ async function loadSelfRepairData(options = {}) {
   } finally {
     selfRepairState.loading = false;
     if (options.renderAfter !== false) render();
+  }
+}
+
+async function runSelfRepairMonitorNow() {
+  if (selfRepairState.monitorRunning) return;
+  if (!hasPermission(currentUser(), SELF_REPAIR_MODULE_KEY, "manage") && !isFullAccessRole(currentUser())) {
+    selfRepairState.error = "Nemáte oprávnění spustit read-only kontrolu.";
+    render();
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Spustit read-only kontrolu veřejných produkčních stránek? Kontrola zapíše log a případné nálezy s návrhem promptu. Codex, změna kódu, nasazení ani e-mail se nespustí."
+  );
+  if (!confirmed) return;
+
+  selfRepairState.monitorRunning = true;
+  selfRepairState.error = "";
+  selfRepairState.message = "Spouštím read-only kontrolu. Nic se neopravuje ani nenasazuje.";
+  render();
+
+  try {
+    const result = await apiJson("/api/self-repair/monitor/run", {
+      method: "POST",
+      body: JSON.stringify({ confirmReadOnly: true })
+    });
+    await Promise.all([
+      loadSelfRepairData({ renderAfter: false }),
+      loadModuleRules(SELF_REPAIR_MODULE_KEY, { renderAfter: false })
+    ]);
+    selfRepairState.message = result.status === "skipped"
+      ? "Kontrola pro tuto hodinu už proběhla; duplicitní spuštění bylo bezpečně zastaveno."
+      : `Read-only kontrola dokončena: ${Number(result.routesChecked || 0)} stránek, ${Number(result.findingsTotal || 0)} nálezů. Codex, nasazení ani e-mail se nespustily.`;
+  } catch (error) {
+    selfRepairState.error = error.payload?.error || error.message || "Read-only kontrolu se teď nepodařilo spustit.";
+    selfRepairState.message = "";
+  } finally {
+    selfRepairState.monitorRunning = false;
+    render();
   }
 }
 
@@ -43377,6 +43516,13 @@ document.addEventListener("click", async (event) => {
   if (selfRepairRefresh) {
     event.preventDefault();
     await loadSelfRepairData({ force: true });
+    return;
+  }
+
+  const selfRepairMonitorRun = event.target.closest("[data-self-repair-monitor-run]");
+  if (selfRepairMonitorRun) {
+    event.preventDefault();
+    await runSelfRepairMonitorNow();
     return;
   }
 

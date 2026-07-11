@@ -25995,7 +25995,33 @@ body:has(.data-box-page) .data-box-side-card--sync {
 
 .self-repair-state--ready { color: #337b12; }
 .self-repair-state--waiting { color: #8b6412; }
+.self-repair-state--warning { color: #a04418; }
 .self-repair-state--off { color: #69736d; }
+
+.self-repair-monitor-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.self-repair-monitor-summary article {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--theme-border, rgba(66, 80, 74, 0.12));
+  border-radius: 10px;
+}
+
+.self-repair-monitor-summary span {
+  color: var(--theme-muted, var(--muted));
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.self-repair-monitor-summary strong {
+  overflow-wrap: anywhere;
+}
 
 .self-repair-summary {
   display: grid;
@@ -26179,6 +26205,76 @@ body:has(.data-box-page) .data-box-side-card--sync {
   overflow-wrap: anywhere;
 }
 
+.self-repair-evidence-panel {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid var(--theme-border, rgba(66, 80, 74, 0.14));
+  border-radius: 14px;
+  background: var(--theme-card, #fff);
+}
+
+.self-repair-evidence-panel h3,
+.self-repair-monitor-finding p,
+.self-repair-prompt-draft p {
+  margin: 0;
+}
+
+.self-repair-monitor-finding {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--theme-bg-surface, #f5f8f3);
+}
+
+.self-repair-monitor-finding > span {
+  color: var(--theme-muted, var(--muted));
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.self-repair-monitor-finding p,
+.self-repair-monitor-finding small {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.self-repair-prompt-draft {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(75, 121, 43, 0.22);
+  border-radius: 12px;
+  background: #f4f9f0;
+}
+
+.self-repair-prompt-draft summary {
+  cursor: pointer;
+  color: var(--theme-primary, #4f901f);
+  font-weight: 900;
+}
+
+.self-repair-prompt-draft p {
+  padding-top: 10px;
+  color: var(--theme-muted, var(--muted));
+  font-weight: 700;
+}
+
+.self-repair-prompt-draft pre {
+  max-width: 100%;
+  max-height: 440px;
+  margin: 12px 0 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #17211b;
+  color: #edf7ea;
+  font: 600 0.78rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .self-repair-management,
 .self-repair-audit-panel {
   padding: 15px;
@@ -26232,6 +26328,7 @@ body:has(.data-box-page) .data-box-side-card--sync {
 @media (max-width: 900px) {
   .self-repair-workspace { grid-template-columns: 1fr; }
   .self-repair-detail__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .self-repair-monitor-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
@@ -26243,7 +26340,8 @@ body:has(.data-box-page) .data-box-side-card--sync {
   .self-repair-management,
   .self-repair-filters,
   .self-repair-detail__content,
-  .self-repair-detail__facts { grid-template-columns: 1fr; }
+  .self-repair-detail__facts,
+  .self-repair-monitor-summary { grid-template-columns: 1fr; }
   .self-repair-capabilities__grid,
   .self-repair-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .self-repair-filters__actions { grid-column: 1; }
