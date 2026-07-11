@@ -84,6 +84,7 @@ import { buildReceivablesVistosLedgerMapping } from "../functions/_lib/receivabl
 import { receivablesVistosInvoiceLookbackWindow } from "../functions/_lib/receivables-vistos-preview.js";
 import { calculateCustomerPaymentRating } from "../functions/_lib/receivables-rating-engine.js";
 import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-plus-store.js";
+import { targetForSelfRepairReport } from "../functions/_lib/self-repair-targets.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -105,6 +106,8 @@ let mockFleetAssignments = new Map();
 let mockPartslink24Searches = [];
 const mockPartslink24WorkflowUrl = "https://github.com/kaiser-smart/kaiser-control-center/actions/workflows/partslink24-vin-pilot.yml";
 let mockModuleFeedback = [];
+let mockSelfRepairCases = [];
+let mockSelfRepairAudit = new Map();
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
 let mockCollectionRouteBatches = [];
@@ -2331,6 +2334,258 @@ function mockFeedbackResolvedNotification(feedback, payload) {
   return author?.email
     ? { status: "sent", recipientName: author.name || feedback.userName }
     : { status: "skipped", recipientName: feedback.userName, errorMessage: `Chybí e-mail příjemce: ${feedback.userName}.` };
+}
+
+const MOCK_SELF_REPAIR_STATUS_LABELS = {
+  new: "Nové",
+  needs_details: "Čeká na doplnění",
+  confirmed: "Potvrzeno",
+  planned: "Připraveno k opravě",
+  rejected: "Zamítnuto",
+  duplicate: "Duplicitní",
+  closed: "Uzavřeno"
+};
+const MOCK_SELF_REPAIR_RISK_LABELS = {
+  unclassified: "Nezatříděno",
+  green: "Nízké riziko",
+  orange: "Vyžaduje kontrolu",
+  red: "Vysoké riziko"
+};
+
+function mockSelfRepairSummary() {
+  return {
+    total: mockSelfRepairCases.length,
+    newCount: mockSelfRepairCases.filter((item) => item.status === "new").length,
+    needsDetailsCount: mockSelfRepairCases.filter((item) => item.status === "needs_details").length,
+    plannedCount: mockSelfRepairCases.filter((item) => ["confirmed", "planned"].includes(item.status)).length,
+    closedCount: mockSelfRepairCases.filter((item) => ["closed", "rejected", "duplicate"].includes(item.status)).length,
+    redRiskCount: mockSelfRepairCases.filter((item) => item.riskLevel === "red").length,
+    unclassifiedCount: mockSelfRepairCases.filter((item) => item.riskLevel === "unclassified").length
+  };
+}
+
+function mockSelfRepairAuditEntry(caseId, user, action, note, before = null, after = null) {
+  return {
+    id: `self-repair-audit-${randomUUID()}`,
+    caseId,
+    action,
+    changedByUserId: user?.id || "",
+    changedByUserName: user?.name || user?.email || "Uživatel",
+    changedAt: new Date().toISOString(),
+    before,
+    after,
+    note
+  };
+}
+
+function createMockSelfRepairCase(user, payload = {}) {
+  const target = targetForSelfRepairReport(payload.moduleId || payload.moduleKey);
+  const title = String(payload.title || "").trim();
+  const description = String(payload.description || "").trim();
+  if (!target) {
+    const error = new Error("Vyberte platný modul aplikace.");
+    error.status = 400;
+    throw error;
+  }
+  if (!title || !description) {
+    const error = new Error("Vyplňte název a popis problému.");
+    error.status = 400;
+    throw error;
+  }
+
+  const now = new Date().toISOString();
+  const id = `self-repair-case-${randomUUID()}`;
+  const feedbackId = `module-feedback-${randomUUID()}`;
+  const caseType = payload.caseType === "improvement" ? "improvement" : "bug";
+  const priority = FEEDBACK_PRIORITIES.includes(payload.priority) ? payload.priority : "Běžná";
+  const sourceRoute = String(payload.sourceRoute || "").startsWith("/") ? String(payload.sourceRoute).slice(0, 600) : "";
+  const item = {
+    id,
+    feedbackId,
+    source: "user_feedback",
+    caseType,
+    caseTypeLabel: caseType === "improvement" ? "Drobná úprava" : "Chyba",
+    status: "new",
+    statusLabel: MOCK_SELF_REPAIR_STATUS_LABELS.new,
+    priority,
+    riskLevel: "unclassified",
+    riskLabel: MOCK_SELF_REPAIR_RISK_LABELS.unclassified,
+    moduleKey: target.moduleKey,
+    moduleName: target.moduleName,
+    targetRepoKey: target.repoKey,
+    targetProductionUrl: target.productionUrl,
+    title,
+    description,
+    expectedBehavior: String(payload.expectedBehavior || "").trim(),
+    actualBehavior: String(payload.actualBehavior || "").trim(),
+    reproductionSteps: String(payload.reproductionSteps || "").trim(),
+    sourceRoute,
+    buildVersion: String(payload.buildVersion || "").trim(),
+    buildCommit: String(payload.buildCommit || "").trim(),
+    browserInfo: String(payload.browserInfo || "").trim(),
+    reporterUserId: user.id,
+    reporterUserName: user.name || user.email || "Uživatel",
+    fingerprint: `mock:${target.moduleKey}:${title.toLowerCase()}`,
+    occurrenceCount: 1,
+    firstSeenAt: now,
+    lastSeenAt: now,
+    triageSummary: "",
+    internalNote: "",
+    createdAt: now,
+    updatedAt: now,
+    updatedByUserId: user.id
+  };
+  const feedback = normalizeFeedback({
+    id: feedbackId,
+    moduleId: target.moduleKey,
+    moduleName: target.moduleName,
+    userId: user.id,
+    userName: user.name || user.email || "Uživatel",
+    userRole: user.role,
+    message: `[Samoopravy · ${item.caseTypeLabel}] ${title}\n\n${description}`,
+    priority,
+    status: "Nová",
+    createdAt: now,
+    internalNote: ""
+  });
+  mockSelfRepairCases = [item, ...mockSelfRepairCases];
+  mockModuleFeedback = [feedback, ...mockModuleFeedback];
+  mockSelfRepairAudit.set(id, [mockSelfRepairAuditEntry(
+    id,
+    user,
+    "created_from_user_feedback",
+    "Lokální test: případ uložen bez automatické opravy, e-mailu a nasazení.",
+    null,
+    { status: "new", riskLevel: "unclassified", feedbackId }
+  )]);
+  return { case: item, feedback };
+}
+
+function mockSelfRepairDetail(id) {
+  const item = mockSelfRepairCases.find((entry) => entry.id === id) || null;
+  if (!item) return null;
+  return {
+    case: item,
+    evidence: [{
+      id: `self-repair-evidence-${id}`,
+      caseId: id,
+      evidenceType: "user_report_context",
+      label: "Kontext uživatelského hlášení",
+      contentText: item.description,
+      metadata: {
+        userSupplied: true,
+        sourceRoute: item.sourceRoute,
+        buildVersion: item.buildVersion,
+        buildCommit: item.buildCommit,
+        browserInfo: item.browserInfo
+      },
+      createdByUserId: item.reporterUserId,
+      createdAt: item.createdAt
+    }],
+    audit: mockSelfRepairAudit.get(id) || []
+  };
+}
+
+function updateMockSelfRepairCase(user, id, payload = {}) {
+  const index = mockSelfRepairCases.findIndex((item) => item.id === id);
+  if (index < 0) {
+    const error = new Error("Případ nebyl nalezen.");
+    error.status = 404;
+    throw error;
+  }
+  const existing = mockSelfRepairCases[index];
+  const status = Object.hasOwn(payload, "status") && MOCK_SELF_REPAIR_STATUS_LABELS[payload.status]
+    ? payload.status
+    : existing.status;
+  const riskLevel = Object.hasOwn(payload, "riskLevel") && MOCK_SELF_REPAIR_RISK_LABELS[payload.riskLevel]
+    ? payload.riskLevel
+    : existing.riskLevel;
+  const priority = FEEDBACK_PRIORITIES.includes(payload.priority) ? payload.priority : existing.priority;
+  const updated = {
+    ...existing,
+    status,
+    statusLabel: MOCK_SELF_REPAIR_STATUS_LABELS[status],
+    riskLevel,
+    riskLabel: MOCK_SELF_REPAIR_RISK_LABELS[riskLevel],
+    priority,
+    triageSummary: Object.hasOwn(payload, "triageSummary") ? String(payload.triageSummary || "").trim() : existing.triageSummary,
+    internalNote: Object.hasOwn(payload, "internalNote") ? String(payload.internalNote || "").trim() : existing.internalNote,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: user.id
+  };
+  mockSelfRepairCases = [
+    ...mockSelfRepairCases.slice(0, index),
+    updated,
+    ...mockSelfRepairCases.slice(index + 1)
+  ];
+  const feedbackIndex = mockModuleFeedback.findIndex((item) => item.id === updated.feedbackId);
+  if (feedbackIndex >= 0) {
+    const feedbackStatus = {
+      new: "Nová",
+      needs_details: "Převzato",
+      confirmed: "V řešení",
+      planned: "V řešení",
+      rejected: "Zamítnuto",
+      duplicate: "Archiv",
+      closed: "Hotovo"
+    }[status] || "Nová";
+    mockModuleFeedback[feedbackIndex] = normalizeFeedback({
+      ...mockModuleFeedback[feedbackIndex],
+      status: feedbackStatus,
+      priority,
+      internalNote: updated.internalNote
+    });
+  }
+  const audit = mockSelfRepairAudit.get(id) || [];
+  mockSelfRepairAudit.set(id, [mockSelfRepairAuditEntry(
+    id,
+    user,
+    "triage_updated",
+    String(payload.auditNote || "Ruční třídění v lokálním testu."),
+    { status: existing.status, riskLevel: existing.riskLevel, priority: existing.priority },
+    { status, riskLevel, priority }
+  ), ...audit]);
+  return updated;
+}
+
+function mockSelfRepairRules() {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: "self-repair-phase1-safety-boundary",
+      moduleKey: "self-repair",
+      title: "Fáze 1 pouze eviduje a třídí podněty",
+      description: "Bez následného schválení se nesmí měnit kód, otevírat pull request, nasazovat ani posílat zprávy.",
+      type: "rule",
+      status: "active",
+      conditions: { phase: "1", requiresHumanApproval: true },
+      actions: { blocked: ["code_change", "deployment", "email"] },
+      isAutomation: false,
+      triggerType: "manual",
+      createdByUserId: "migration-0034",
+      updatedByUserId: "migration-0034",
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "self-repair-hourly-monitor-proposal",
+      moduleKey: "self-repair",
+      title: "Budoucí hodinová kontrola aplikace",
+      description: "Pouze návrh. Ve Fázi 1 se nic samo nekontroluje, neopravuje, nenasazuje ani neposílá.",
+      type: "automation",
+      status: "draft",
+      conditions: { intervalMinutes: 60, mode: "read_only" },
+      actions: { createCaseOnly: true, runCodex: false, deploy: false, notify: false },
+      isAutomation: true,
+      triggerType: "time",
+      scheduleCron: "",
+      cloudRunner: "",
+      createdByUserId: "migration-0034",
+      updatedByUserId: "migration-0034",
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
 }
 
 function fullEmployeeName(employee) {
@@ -6838,6 +7093,190 @@ async function handleApi(request, response) {
     return true;
   }
 
+  if (url.pathname === "/api/self-repair/status" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "self-repair", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const summary = mockSelfRepairSummary();
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      phase: "phase1_evidence_and_triage",
+      generatedAt: new Date().toISOString(),
+      summary: {
+        ...summary,
+        lastCaseAt: mockSelfRepairCases[0]?.createdAt || "",
+        lastUpdatedAt: mockSelfRepairCases[0]?.updatedAt || ""
+      },
+      capabilities: {
+        userReports: "ready",
+        triage: "ready",
+        hourlyMonitor: "off",
+        promptPreparation: "off",
+        codexExecution: "off",
+        pullRequests: "off",
+        deployment: "off",
+        userEmail: "off"
+      },
+      note: "Lokální test Fáze 1: nic se samo neopravuje, neposílá ani nenasazuje."
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/self-repair/cases" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "self-repair", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    sendJson(response, 200, {
+      cases: mockSelfRepairCases,
+      summary: mockSelfRepairSummary(),
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/self-repair/cases" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "feedback", "create")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    try {
+      const result = createMockSelfRepairCase(user, await readJsonBody(request));
+      sendJson(response, 201, {
+        ...result,
+        apiStatus: "ready",
+        automationStarted: false,
+        notificationSent: false
+      });
+    } catch (error) {
+      sendJson(response, error.status || 500, { error: error.message || "Hlášení se nepodařilo uložit.", apiStatus: "ready" });
+    }
+    return true;
+  }
+
+  const selfRepairDetailMatch = /^\/api\/self-repair\/cases\/([^/]+)$/.exec(url.pathname);
+  if (selfRepairDetailMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "self-repair", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const detail = mockSelfRepairDetail(decodeURIComponent(selfRepairDetailMatch[1]));
+    if (!detail) {
+      sendJson(response, 404, { error: "Případ nebyl nalezen." });
+      return true;
+    }
+    sendJson(response, 200, { ...detail, apiStatus: "ready" });
+    return true;
+  }
+
+  if (selfRepairDetailMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "self-repair", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    try {
+      const item = updateMockSelfRepairCase(user, decodeURIComponent(selfRepairDetailMatch[1]), await readJsonBody(request));
+      sendJson(response, 200, { case: item, apiStatus: "ready", automationStarted: false, notificationSent: false });
+    } catch (error) {
+      sendJson(response, error.status || 500, { error: error.message || "Případ se nepodařilo uložit." });
+    }
+    return true;
+  }
+
+  const selfRepairAuditMatch = /^\/api\/self-repair\/cases\/([^/]+)\/audit$/.exec(url.pathname);
+  if (selfRepairAuditMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "self-repair", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const id = decodeURIComponent(selfRepairAuditMatch[1]);
+    sendJson(response, 200, { audit: mockSelfRepairAudit.get(id) || [], apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/modules/self-repair/rules" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "self-repair", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    sendJson(response, 200, { rules: mockSelfRepairRules(), apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/modules/self-repair/automation-runs" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    sendJson(response, 200, { runs: [], runnerRuns: [], apiStatus: "ready" });
+    return true;
+  }
+
+  const selfRepairRuleAuditMatch = /^\/api\/modules\/self-repair\/rules\/([^/]+)\/audit$/.exec(url.pathname);
+  if (selfRepairRuleAuditMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    sendJson(response, 200, {
+      auditLog: [{
+        id: `mock-rule-audit-${decodeURIComponent(selfRepairRuleAuditMatch[1])}`,
+        action: "seed",
+        changedByUserId: "migration-0034",
+        changedAt: new Date().toISOString(),
+        note: "Výchozí pravidlo Fáze 1."
+      }],
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname.startsWith("/api/modules/self-repair/") && request.method !== "GET") {
+    sendJson(response, 403, {
+      error: "Samoopravy jsou ve Fázi 1 read-only. Pravidla ani automatizace se teď nesmí měnit.",
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/module-feedback" && request.method === "GET") {
     const user = currentDevUser(request);
     if (!user) {
@@ -6911,7 +7350,15 @@ async function handleApi(request, response) {
 
     try {
       const payload = await readJsonBody(request);
-      const updatedFeedback = updateMockModuleFeedback(user, decodeURIComponent(moduleFeedbackPatchMatch[1]), payload);
+      const feedbackId = decodeURIComponent(moduleFeedbackPatchMatch[1]);
+      if (mockSelfRepairCases.some((item) => item.feedbackId === feedbackId)) {
+        sendJson(response, 409, {
+          error: "Tento podnět patří do modulu Samoopravy. E-mail je ve Fázi 1 vypnutý.",
+          apiStatus: "ready"
+        });
+        return true;
+      }
+      const updatedFeedback = updateMockModuleFeedback(user, feedbackId, payload);
       const { previousStatus, ...feedback } = updatedFeedback;
       const notification = feedback.status === "Hotovo" && previousStatus !== "Hotovo"
         ? mockFeedbackResolvedNotification(feedback, payload)

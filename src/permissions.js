@@ -15,6 +15,7 @@ export const PERMISSION_MODULES = [
   "reports",
   "users",
   "settings",
+  "self-repair",
   "absence",
   "feedback"
 ];
@@ -69,6 +70,7 @@ const MODULE_ALIASES = {
   reporty: "reports",
   uzivatele: "users",
   nastaveni: "settings",
+  samoopravy: "self-repair",
   "dovolena-nemoc": "absence",
   pripominky: "feedback"
 };

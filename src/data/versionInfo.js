@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.492"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.493"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Samoopravy: bezpečná evidence chyb a úprav",
+    text: "Uživatelé mohou v Připomínkách nahlásit chybu nebo drobnou úpravu včetně kontextu stránky. Admin a Management mají nový modul pro ruční třídění, riziko a audit. Fáze 1 nic sama neopravuje, nespouští Codex, nenasazuje ani neposílá e-mail."
+  },
   {
     title: "Pohledávky: funkční záložky Zákazníci a Dry-run",
     text: "Záložky Zákazníci a Dry-run v Pohledávkách po kliknutí skutečně posunou stránku na správný blok a zobrazí aktivní stav. Funguje také přímý odkaz a návrat historií."

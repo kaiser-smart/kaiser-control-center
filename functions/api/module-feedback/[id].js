@@ -4,6 +4,7 @@ import {
   updateModuleFeedbackRecord
 } from "../../_lib/module-feedback-store.js";
 import { sendModuleFeedbackResolvedNotification } from "../../_lib/notification-service.js";
+import { selfRepairCaseIdForFeedback } from "../../_lib/self-repair-store.js";
 
 function routeFeedbackId(request, params) {
   const id = params?.id || new URL(request.url).pathname.split("/").at(-1);
@@ -40,7 +41,16 @@ export async function onRequestPatch({ request, env, params }) {
 
   try {
     const payload = await readJson(request);
-    const updatedFeedback = await updateModuleFeedbackRecord(env, user, routeFeedbackId(request, params), payload);
+    const feedbackId = routeFeedbackId(request, params);
+    const selfRepairCaseId = await selfRepairCaseIdForFeedback(env, feedbackId);
+    if (selfRepairCaseId) {
+      throw new ModuleFeedbackStoreError(
+        "Tento podnět patří do modulu Samoopravy. Stav a poznámku upravte tam; e-mail je ve Fázi 1 vypnutý.",
+        409,
+        "module_feedback_self_repair_managed_separately"
+      );
+    }
+    const updatedFeedback = await updateModuleFeedbackRecord(env, user, feedbackId, payload);
     const { previousStatus, ...feedback } = updatedFeedback;
     let notification = null;
 

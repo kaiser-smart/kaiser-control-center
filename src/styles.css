@@ -25797,6 +25797,475 @@ body:has(.data-box-page) .data-box-side-card--sync {
   }
 }
 
+/* Samoopravy: Fáze 1 evidence a ruční třídění */
+.user-bar__report {
+  color: var(--theme-primary, #4f901f);
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.self-repair-report,
+.self-repair-capabilities,
+.self-repair-summary article,
+.self-repair-filters,
+.self-repair-list,
+.self-repair-detail {
+  border: 1px solid var(--theme-border, rgba(66, 80, 74, 0.14));
+  border-radius: var(--theme-card-radius, 18px);
+  background: var(--theme-card, #ffffff);
+  box-shadow: var(--theme-shadow-card, 0 16px 42px rgba(37, 50, 39, 0.08));
+}
+
+.self-repair-report {
+  display: grid;
+  gap: 16px;
+  padding: clamp(16px, 3vw, 24px);
+}
+
+.self-repair-report__head,
+.self-repair-detail__head,
+.self-repair-list__head,
+.self-repair-management__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.self-repair-report__head h2,
+.self-repair-list__head h2,
+.self-repair-detail__head h2,
+.self-repair-capabilities h2 {
+  margin: 6px 0 0;
+  color: var(--theme-text, var(--ink));
+}
+
+.self-repair-report__head p,
+.self-repair-capabilities > p,
+.self-repair-management__head p {
+  margin: 7px 0 0;
+  color: var(--theme-muted, var(--muted));
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.self-repair-report__phase {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: rgba(117, 189, 37, 0.12);
+  color: #3f7d17;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.self-repair-report__notice {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--theme-primary, #75bd25);
+  border-radius: 10px;
+  background: rgba(117, 189, 37, 0.08);
+}
+
+.self-repair-report__notice span {
+  color: var(--theme-muted, var(--muted));
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.self-repair-report__form,
+.self-repair-management {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.self-repair-report__form label,
+.self-repair-management label,
+.self-repair-filters label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--theme-muted, var(--steel));
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.self-repair-report__form input,
+.self-repair-report__form select,
+.self-repair-report__form textarea,
+.self-repair-management select,
+.self-repair-management textarea,
+.self-repair-filters input,
+.self-repair-filters select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--theme-border, rgba(66, 80, 74, 0.18));
+  border-radius: 8px;
+  background: var(--theme-card, #ffffff);
+  color: var(--theme-text, var(--ink));
+  font: inherit;
+  font-weight: 800;
+}
+
+.self-repair-report__form input,
+.self-repair-report__form select,
+.self-repair-management select,
+.self-repair-filters input,
+.self-repair-filters select {
+  padding: 0 12px;
+}
+
+.self-repair-report__form textarea,
+.self-repair-management textarea {
+  resize: vertical;
+  padding: 12px;
+  line-height: 1.45;
+}
+
+.self-repair-report__wide,
+.self-repair-report__actions,
+.self-repair-report__form .feedback-create__error,
+.self-repair-management__head,
+.self-repair-management__wide,
+.self-repair-management__actions {
+  grid-column: 1 / -1;
+}
+
+.self-repair-report__actions,
+.self-repair-management__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.feedback-create__notice small {
+  display: block;
+  margin-top: 4px;
+  color: inherit;
+}
+
+.self-repair-page {
+  gap: 18px;
+}
+
+.self-repair-hero {
+  align-items: center;
+}
+
+.self-repair-capabilities {
+  display: grid;
+  gap: 16px;
+  padding: clamp(16px, 3vw, 22px);
+}
+
+.self-repair-capabilities__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.self-repair-capabilities__grid article {
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+  min-height: 96px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--theme-bg-surface, #f5f8f3);
+}
+
+.self-repair-capabilities__grid article > span,
+.self-repair-summary article > span {
+  color: var(--theme-muted, var(--muted));
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.self-repair-state {
+  font-size: 0.88rem;
+}
+
+.self-repair-state--ready { color: #337b12; }
+.self-repair-state--waiting { color: #8b6412; }
+.self-repair-state--off { color: #69736d; }
+
+.self-repair-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.self-repair-summary article {
+  display: grid;
+  gap: 7px;
+  padding: 16px;
+}
+
+.self-repair-summary strong {
+  color: var(--theme-text, var(--ink));
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.self-repair-filters {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(150px, 0.9fr) minmax(160px, 1fr) minmax(220px, 1.4fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 15px;
+}
+
+.self-repair-filters__actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+}
+
+.self-repair-filters__actions button {
+  min-height: 46px;
+}
+
+.self-repair-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.self-repair-list,
+.self-repair-detail {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+}
+
+.self-repair-list__head > span {
+  color: var(--theme-muted, var(--muted));
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.self-repair-case {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid var(--theme-border, rgba(66, 80, 74, 0.14));
+  border-radius: 14px;
+  background: var(--theme-card, #ffffff);
+}
+
+.self-repair-case.is-selected {
+  border-color: var(--theme-primary, #75bd25);
+  box-shadow: 0 0 0 3px rgba(117, 189, 37, 0.1);
+}
+
+.self-repair-case__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.self-repair-case__head > div > span {
+  color: var(--theme-primary, #4f901f);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.self-repair-case h3 {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+
+.self-repair-case > p,
+.self-repair-detail__content p {
+  margin: 0;
+  color: var(--theme-muted, var(--muted));
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.self-repair-case__risk,
+.self-repair-case__status,
+.self-repair-case__meta > span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eef2ee;
+  color: #5f6b64;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.self-repair-case__risk--ready,
+.self-repair-case__status--ready { background: #e7f6e0; color: #337b12; }
+.self-repair-case__risk--warning,
+.self-repair-case__status--warning { background: #fff2d7; color: #8b6412; }
+.self-repair-case__risk--danger { background: #ffe6e2; color: #a62b22; }
+.self-repair-case__status--progress { background: #e7f0fb; color: #245e9c; }
+.self-repair-case__status--new { background: #f1e9fb; color: #6f3d9d; }
+
+.self-repair-case__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.self-repair-case > button {
+  justify-self: start;
+}
+
+.self-repair-empty {
+  margin: 0;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--theme-bg-surface, #f5f8f3);
+  color: var(--theme-muted, var(--muted));
+  font-weight: 800;
+  text-align: center;
+}
+
+.self-repair-detail__content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.self-repair-detail__content article {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--theme-bg-surface, #f5f8f3);
+}
+
+.self-repair-detail__content span,
+.self-repair-detail__facts dt {
+  color: var(--theme-muted, var(--muted));
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.self-repair-detail__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.self-repair-detail__facts div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--theme-border, rgba(66, 80, 74, 0.12));
+  border-radius: 10px;
+}
+
+.self-repair-detail__facts dd {
+  margin: 4px 0 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.self-repair-management,
+.self-repair-audit-panel {
+  padding: 15px;
+  border: 1px solid var(--theme-border, rgba(66, 80, 74, 0.14));
+  border-radius: 14px;
+}
+
+.self-repair-management__head h3,
+.self-repair-audit-panel h3 {
+  margin: 0;
+}
+
+.self-repair-audit {
+  display: grid;
+  gap: 9px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.self-repair-audit li {
+  display: grid;
+  grid-template-columns: minmax(125px, auto) minmax(110px, auto) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--theme-bg-surface, #f5f8f3);
+}
+
+.self-repair-audit p,
+.self-repair-audit small {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.self-repair-audit span,
+.self-repair-audit small {
+  color: var(--theme-muted, var(--muted));
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+@media (max-width: 1180px) {
+  .self-repair-capabilities__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .self-repair-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .self-repair-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .self-repair-filters__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .self-repair-workspace { grid-template-columns: 1fr; }
+  .self-repair-detail__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .self-repair-report__head,
+  .self-repair-detail__head,
+  .self-repair-list__head,
+  .self-repair-case__head { display: grid; }
+  .self-repair-report__form,
+  .self-repair-management,
+  .self-repair-filters,
+  .self-repair-detail__content,
+  .self-repair-detail__facts { grid-template-columns: 1fr; }
+  .self-repair-capabilities__grid,
+  .self-repair-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .self-repair-filters__actions { grid-column: 1; }
+  .self-repair-report__actions,
+  .self-repair-management__actions { justify-content: stretch; }
+  .self-repair-report__actions button,
+  .self-repair-management__actions button { width: 100%; }
+  .self-repair-audit li { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 430px) {
+  .self-repair-report,
+  .self-repair-capabilities,
+  .self-repair-list,
+  .self-repair-detail { padding: 14px; }
+  .self-repair-capabilities__grid,
+  .self-repair-summary { grid-template-columns: 1fr; }
+  .self-repair-summary article { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .self-repair-case > button,
+  .self-repair-detail__head button { width: 100%; }
+}
+
 @media (min-width: 768px) and (max-width: 1023px) {
   .ai-voice-assistant-panel {
     width: min(560px, calc(100vw - 48px));

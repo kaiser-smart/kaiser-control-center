@@ -23,11 +23,15 @@ function moduleRulesError(error) {
 }
 
 function moduleRulesReadOnlyPilotResponse(route) {
-  if (!["collection-routes", "receivables"].includes(route.moduleKey)) {
+  if (!["collection-routes", "receivables", "self-repair"].includes(route.moduleKey)) {
     return null;
   }
 
-  const moduleName = route.moduleKey === "receivables" ? "Pohledávky" : "Trasy svozu";
+  const moduleName = route.moduleKey === "receivables"
+    ? "Pohledávky"
+    : route.moduleKey === "self-repair"
+      ? "Samoopravy"
+      : "Trasy svozu";
   return json({
     error: `${moduleName} jsou v bezpečném dry-run režimu. Pravidla ani automatizace se teď nesmí aktivovat.`,
     apiStatus: "ready"

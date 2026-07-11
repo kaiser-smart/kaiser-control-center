@@ -230,6 +230,18 @@ export const modules = [
     active: true,
     disabled: false,
     order: 13.5
+  },
+  {
+    id: "self-repair",
+    title: "Samoopravy",
+    description: "Evidence chyb a drobných úprav, jejich bezpečné třídění a audit dalšího postupu.",
+    route: "/samoopravy",
+    icon: SettingsIcon,
+    status: "Pilot Fáze 1",
+    ctaLabel: "Zobrazit případy",
+    active: true,
+    disabled: false,
+    order: 13.6
   }
 ];
 

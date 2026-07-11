@@ -7,6 +7,7 @@ import { AiWelcomeModal } from "./components/AiWelcomeModal.js";
 import { ElevenLabsAssistantProvider } from "./ElevenLabsAssistantProvider.js";
 import { VersionBackupInfo } from "./components/VersionBackupInfo.js";
 import { VersionNewsInfo } from "./components/VersionNewsInfo.js";
+import { buildMeta } from "./data/buildMeta.js";
 import { AppearanceSettingsBox } from "./components/AppearanceSettingsBox.js";
 import { SarlotaStatusPanel } from "./components/SarlotaStatusPanel.js";
 import { QuickAbsenceIcon, ReportsIcon } from "./components/icons/index.js";
@@ -235,6 +236,23 @@ const SARLOTA_OPEN_QUERY_VALUE = "sarlota";
 const SARLOTA_PANEL_STATUS_ENDPOINT = "/api/ai/elevenlabs/sarlota-panel-status";
 const SARLOTA_VOICE_WRITE_TEST_ENDPOINT = "/api/ai/elevenlabs/sarlota-voice-write-test";
 const FEEDBACK_ROUTE = "/pripominky";
+const SELF_REPAIR_ROUTE = "/samoopravy";
+const SELF_REPAIR_MODULE_KEY = "self-repair";
+const SELF_REPAIR_STATUS_OPTIONS = [
+  { value: "new", label: "Nové" },
+  { value: "needs_details", label: "Čeká na doplnění" },
+  { value: "confirmed", label: "Potvrzeno" },
+  { value: "planned", label: "Připraveno k opravě" },
+  { value: "rejected", label: "Zamítnuto" },
+  { value: "duplicate", label: "Duplicitní" },
+  { value: "closed", label: "Uzavřeno" }
+];
+const SELF_REPAIR_RISK_OPTIONS = [
+  { value: "unclassified", label: "Nezatříděno" },
+  { value: "green", label: "Nízké riziko" },
+  { value: "orange", label: "Vyžaduje kontrolu" },
+  { value: "red", label: "Vysoké riziko" }
+];
 const FLEET_ROUTE = "/vozovy-park";
 const RECEIVABLES_ROUTE = "/pohledavky";
 const RECEIVABLES_ALIAS_ROUTE = "/receivables";
@@ -348,7 +366,7 @@ const HOME_MODULE_SECTIONS = [
     id: "system-settings",
     title: "Systém a nastavení",
     description: "Správa přístupů, nastavení a kontrola stavu aplikace.",
-    moduleIds: ["users", "settings", "system-check"]
+    moduleIds: ["users", "settings", "system-check", "self-repair"]
   }
 ];
 const DATA_BOX_PLUS_MODULE_KEY = "data-box-plus";
@@ -856,6 +874,44 @@ const feedbackCreateState = {
   message: "",
   error: "",
   draft: feedbackCreateDefaultDraft()
+};
+const selfRepairFilters = {
+  status: "",
+  riskLevel: "",
+  moduleKey: "",
+  search: ""
+};
+const selfRepairState = {
+  cases: [],
+  summary: {
+    total: 0,
+    newCount: 0,
+    needsDetailsCount: 0,
+    plannedCount: 0,
+    closedCount: 0,
+    redRiskCount: 0,
+    unclassifiedCount: 0
+  },
+  statusData: null,
+  selectedId: "",
+  detail: null,
+  loaded: false,
+  loading: false,
+  detailLoading: false,
+  savingId: "",
+  apiStatus: "waiting",
+  error: "",
+  message: ""
+};
+const selfRepairReportState = {
+  saving: false,
+  message: "",
+  error: "",
+  createdCaseId: "",
+  contextApplied: false,
+  contextKey: "",
+  draft: selfRepairReportDefaultDraft(),
+  baseline: selfRepairReportDefaultDraft()
 };
 function notificationDefaultDateFrom() {
   const date = new Date();
@@ -3961,6 +4017,56 @@ function moduleEventLogConfig(moduleItem = {}) {
     };
   }
 
+  if (moduleId === SELF_REPAIR_MODULE_KEY) {
+    const latestCase = selfRepairState.cases[0] || null;
+    const latestAudit = selfRepairState.detail?.audit?.[0] || null;
+    const apiState = selfRepairState.error
+      ? "vyžaduje pozornost"
+      : selfRepairState.apiStatus === "ready"
+        ? "částečně ověřeno"
+        : "čeká na ověření";
+    return {
+      moduleKey: SELF_REPAIR_MODULE_KEY,
+      moduleName: "Samoopravy",
+      badgeState: apiState,
+      statuses: [
+        moduleEventLogStatus("Evidence případů", apiState, selfRepairState.error || "Případy se čtou a ukládají přes chráněné cloud API a D1."),
+        moduleEventLogStatus("Ruční třídění a audit", apiState, "Změny stavu a rizika zapisuje backend společně s auditním záznamem."),
+        moduleEventLogStatus("Hodinová kontrola", "vypnuto", "Ve Fázi 1 není zapnutá žádná pravidelná cloudová kontrola."),
+        moduleEventLogStatus("Příprava promptu a Codex", "vypnuto", "Žádný případ se automaticky neposílá do ChatGPT ani Codexu."),
+        moduleEventLogStatus("Pull request a nasazení", "vypnuto", "Modul nemá oprávnění měnit repozitář ani produkci."),
+        moduleEventLogStatus("E-mail uživateli", "vypnuto", "Po uložení nebo uzavření případu se ve Fázi 1 žádný e-mail neodesílá.")
+      ],
+      inactiveItems: [
+        "Hodinový cloud monitor aplikace.",
+        "Automatické vytvoření promptu a spuštění Codexu.",
+        "Automatický pull request, merge nebo produkční deploy.",
+        "E-mail uživateli po uzavření případu."
+      ],
+      pilotItems: [
+        "Uživatelský formulář ukládá případ, kontext a audit.",
+        "Admin a Management mohou ručně zatřídit stav, prioritu a riziko.",
+        "Návrh hodinové kontroly je v seznamu pravidel pouze jako neaktivní návrh."
+      ],
+      events: [
+        latestCase
+          ? moduleEventLogEvent(latestCase.createdAt, "Poslední uložený případ", latestCase.statusLabel, `${latestCase.moduleName}: ${latestCase.title}`)
+          : moduleEventLogEvent("", "Evidence případů", apiState, selfRepairState.loaded ? "Zatím není uložený žádný případ." : "Čeká se na načtení cloud evidence."),
+        latestAudit
+          ? moduleEventLogEvent(latestAudit.changedAt, "Poslední auditní změna", "zapsáno", latestAudit.note || latestAudit.action)
+          : moduleEventLogEvent("", "Audit změn", "čeká na ověření", "Vyberte případ pro zobrazení jeho auditní historie."),
+        moduleEventLogEvent("", "Automatické opravy", "vypnuto", "Fáze 1 nic sama neopravuje, neposílá ani nenasazuje.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("apiStatus", selfRepairState.apiStatus),
+        moduleEventLogDiagnostic("loaded", selfRepairState.loaded ? "true" : "false"),
+        moduleEventLogDiagnostic("cases", selfRepairState.cases.length),
+        moduleEventLogDiagnostic("phase", selfRepairState.statusData?.phase || "phase1_evidence_and_triage"),
+        moduleEventLogDiagnostic("lastError", selfRepairState.error || "bez chyby")
+      ]
+    };
+  }
+
   if (moduleId === "system-check") {
     return {
       moduleKey: "system-check",
@@ -4051,11 +4157,19 @@ function optionList(options, selected, emptyLabel = "Vše") {
 }
 
 function userBar(user) {
+  const reportModuleKey = moduleIdForAiRoute(normalizePath(window.location.pathname)) || "dashboard";
+  const sourceRoute = `${normalizePath(window.location.pathname)}${window.location.search || ""}${window.location.hash || ""}`;
+  const reportHref = `${FEEDBACK_ROUTE}?new=report&module=${encodeURIComponent(reportModuleKey)}&sourceRoute=${encodeURIComponent(sourceRoute)}#feedback-report`;
+  const reportLink = hasPermission(user, "feedback", "create")
+    ? `<a class="user-bar__report" href="${escapeHtml(routeHref(reportHref))}" data-link>Nahlásit chybu</a>`
+    : "";
+
   return `
     <div class="user-bar" aria-label="Přihlášený uživatel">
       <div class="user-bar__identity">
         <span class="user-bar__name">${escapeHtml(user.name || user.email || "Uživatel")}</span>
         <span class="user-bar__role">${escapeHtml(roleLabel(user.role))}</span>
+        ${reportLink}
       </div>
       <button class="logout-button" type="button" data-logout>Odhlásit</button>
     </div>
@@ -4918,6 +5032,22 @@ function currentFeedbackCreateDirtyTarget() {
   };
 }
 
+function currentSelfRepairReportDirtyTarget() {
+  if (normalizePath(window.location.pathname) !== FEEDBACK_ROUTE || !hasPermission(currentUser(), "feedback", "create")) {
+    return null;
+  }
+
+  const form = document.querySelector("[data-self-repair-report-form]");
+  const current = form ? updateSelfRepairReportDraft(form) : selfRepairReportState.draft;
+  return {
+    type: "self-repair-report",
+    form,
+    current,
+    baseline: selfRepairReportState.baseline,
+    isDirty: selfRepairReportDraftIsDirty(current)
+  };
+}
+
 function currentDirtyTarget() {
   const accessTarget = currentAccessDirtyTarget();
 
@@ -4941,6 +5071,12 @@ function currentDirtyTarget() {
 
   if (feedbackCreateTarget?.isDirty) {
     return feedbackCreateTarget;
+  }
+
+  const selfRepairReportTarget = currentSelfRepairReportDirtyTarget();
+
+  if (selfRepairReportTarget?.isDirty) {
+    return selfRepairReportTarget;
   }
 
   const employeeTarget = currentEmployeeCardDirtyTarget();
@@ -27364,6 +27500,294 @@ function systemCheckPage(moduleItem, user) {
   `;
 }
 
+function selfRepairRiskTone(riskLevel) {
+  return {
+    unclassified: "neutral",
+    green: "ready",
+    orange: "warning",
+    red: "danger"
+  }[riskLevel] || "neutral";
+}
+
+function selfRepairStatusTone(status) {
+  if (status === "closed") return "ready";
+  if (["rejected", "duplicate"].includes(status)) return "neutral";
+  if (["confirmed", "planned"].includes(status)) return "progress";
+  if (status === "needs_details") return "warning";
+  return "new";
+}
+
+function selfRepairSummaryGrid() {
+  const summary = selfRepairState.summary;
+  const cards = [
+    ["Celkem případů", summary.total],
+    ["Nové", summary.newCount],
+    ["Čeká na doplnění", summary.needsDetailsCount],
+    ["K opravě", summary.plannedCount],
+    ["Nezatříděné riziko", summary.unclassifiedCount],
+    ["Vysoké riziko", summary.redRiskCount]
+  ];
+  return `
+    <div class="self-repair-summary" aria-label="Souhrn případů">
+      ${cards.map(([label, value]) => `
+        <article>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(Number(value || 0))}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function selfRepairCapabilityGrid() {
+  const ready = selfRepairState.apiStatus === "ready" && !selfRepairState.error;
+  const items = [
+    ["Uživatelská hlášení", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
+    ["Ruční třídění", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
+    ["Hodinová kontrola", "Vypnuto", "off"],
+    ["Příprava promptu", "Vypnuto", "off"],
+    ["Codex oprava", "Vypnuto", "off"],
+    ["Nasazení", "Vypnuto", "off"],
+    ["E-mail uživateli", "Vypnuto", "off"]
+  ];
+  return `
+    <section class="self-repair-capabilities" aria-labelledby="self-repair-capabilities-title">
+      <div>
+        <p class="module-detail__eyebrow">Pravdivý provozní stav</p>
+        <h2 id="self-repair-capabilities-title">Co modul skutečně dělá</h2>
+      </div>
+      <div class="self-repair-capabilities__grid">
+        ${items.map(([label, value, tone]) => `
+          <article>
+            <span>${escapeHtml(label)}</span>
+            <strong class="self-repair-state self-repair-state--${tone}">${escapeHtml(value)}</strong>
+          </article>
+        `).join("")}
+      </div>
+      <p>Fáze 1 pouze eviduje, třídí a audituje. Automatická změna kódu bude samostatná fáze s dalším schválením.</p>
+    </section>
+  `;
+}
+
+function selfRepairFilterPanel() {
+  const moduleOptions = orderedModules.map((item) => ({ value: item.id, label: item.title }));
+  return `
+    <form class="self-repair-filters" data-self-repair-filters>
+      <label>
+        <span>Stav</span>
+        <select name="status" data-self-repair-filter>${optionList(SELF_REPAIR_STATUS_OPTIONS, selfRepairFilters.status)}</select>
+      </label>
+      <label>
+        <span>Riziko</span>
+        <select name="riskLevel" data-self-repair-filter>${optionList(SELF_REPAIR_RISK_OPTIONS, selfRepairFilters.riskLevel)}</select>
+      </label>
+      <label>
+        <span>Modul</span>
+        <select name="moduleKey" data-self-repair-filter>${optionList(moduleOptions, selfRepairFilters.moduleKey)}</select>
+      </label>
+      <label class="self-repair-filters__search">
+        <span>Vyhledat</span>
+        <input name="search" value="${escapeHtml(selfRepairFilters.search)}" data-self-repair-filter placeholder="Název, popis nebo uživatel" />
+      </label>
+      <div class="self-repair-filters__actions">
+        <button class="primary-action" type="submit">Filtrovat</button>
+        <button class="secondary-link" type="button" data-self-repair-reset>Reset</button>
+      </div>
+    </form>
+  `;
+}
+
+function selfRepairCaseCard(item) {
+  const selected = item.id === selfRepairState.selectedId;
+  return `
+    <article class="self-repair-case ${selected ? "is-selected" : ""}">
+      <div class="self-repair-case__head">
+        <div>
+          <span>${escapeHtml(item.moduleName)} · ${escapeHtml(item.caseTypeLabel)}</span>
+          <h3>${escapeHtml(item.title)}</h3>
+        </div>
+        <span class="self-repair-case__risk self-repair-case__risk--${selfRepairRiskTone(item.riskLevel)}">${escapeHtml(item.riskLabel)}</span>
+      </div>
+      <p>${escapeHtml(item.description)}</p>
+      <div class="self-repair-case__meta">
+        <span class="self-repair-case__status self-repair-case__status--${selfRepairStatusTone(item.status)}">${escapeHtml(item.statusLabel)}</span>
+        <span>${escapeHtml(item.priority)}</span>
+        <span>${escapeHtml(item.reporterUserName)}</span>
+        <span>${escapeHtml(formatDateTime(item.createdAt) || "bez času")}</span>
+      </div>
+      <button class="secondary-link" type="button" data-self-repair-select="${escapeHtml(item.id)}">
+        ${selected ? "Vybraný detail" : "Otevřít detail"}
+      </button>
+    </article>
+  `;
+}
+
+function selfRepairAuditTimeline(audit = []) {
+  if (!audit.length) {
+    return '<p class="self-repair-empty">Zatím není zapsaná žádná změna.</p>';
+  }
+  return `
+    <ol class="self-repair-audit">
+      ${audit.map((entry) => `
+        <li>
+          <span>${escapeHtml(formatDateTime(entry.changedAt) || "bez času")}</span>
+          <strong>${escapeHtml(entry.action || "Změna")}</strong>
+          <p>${escapeHtml(entry.note || "Bez poznámky")}</p>
+          <small>${escapeHtml(entry.changedByUserName || entry.changedByUserId || "Systém")}</small>
+        </li>
+      `).join("")}
+    </ol>
+  `;
+}
+
+function selfRepairCaseDetail(user) {
+  if (selfRepairState.detailLoading) {
+    return '<section class="self-repair-detail"><p class="self-repair-empty">Načítám detail…</p></section>';
+  }
+  const detail = selfRepairState.detail;
+  const item = detail?.case;
+  if (!item) {
+    return '<section class="self-repair-detail"><p class="self-repair-empty">Vyberte případ ze seznamu.</p></section>';
+  }
+  const canManage = hasPermission(user, SELF_REPAIR_MODULE_KEY, "manage");
+  const saving = selfRepairState.savingId === item.id;
+  const disabled = saving ? "disabled" : "";
+  const evidence = Array.isArray(detail.evidence) ? detail.evidence : [];
+
+  return `
+    <section class="self-repair-detail" aria-labelledby="self-repair-detail-title">
+      <div class="self-repair-detail__head">
+        <div>
+          <p class="module-detail__eyebrow">Detail případu</p>
+          <h2 id="self-repair-detail-title">${escapeHtml(item.title)}</h2>
+        </div>
+        <button class="secondary-link" type="button" data-self-repair-detail-close>Zavřít</button>
+      </div>
+
+      <div class="self-repair-detail__content">
+        <article><span>Popis</span><p>${escapeHtml(item.description)}</p></article>
+        <article><span>Skutečný stav</span><p>${escapeHtml(item.actualBehavior || "Neuvedeno")}</p></article>
+        <article><span>Očekávaný stav</span><p>${escapeHtml(item.expectedBehavior || "Neuvedeno")}</p></article>
+        <article><span>Postup zopakování</span><p>${escapeHtml(item.reproductionSteps || "Neuvedeno")}</p></article>
+      </div>
+
+      <dl class="self-repair-detail__facts">
+        <div><dt>Modul</dt><dd>${escapeHtml(item.moduleName)}</dd></div>
+        <div><dt>Cílový repozitář</dt><dd>${escapeHtml(item.targetRepoKey)}</dd></div>
+        <div><dt>Zdrojová stránka</dt><dd>${escapeHtml(item.sourceRoute || "Neuvedeno")}</dd></div>
+        <div><dt>Verze</dt><dd>${escapeHtml(item.buildVersion || "Neuvedeno")}</dd></div>
+        <div><dt>Uživatel</dt><dd>${escapeHtml(item.reporterUserName)}</dd></div>
+        <div><dt>Důkazy / kontext</dt><dd>${escapeHtml(evidence.length)}</dd></div>
+      </dl>
+
+      ${canManage ? `
+        <form class="self-repair-management" data-self-repair-case-form data-self-repair-case-id="${escapeHtml(item.id)}">
+          <div class="self-repair-management__head">
+            <div>
+              <h3>Ruční třídění</h3>
+              <p>Změna se uloží do auditu. Žádná oprava ani e-mail se tím nespustí.</p>
+            </div>
+          </div>
+          <label>
+            <span>Stav</span>
+            <select name="status" ${disabled}>${optionList(SELF_REPAIR_STATUS_OPTIONS, item.status, "Vyberte stav")}</select>
+          </label>
+          <label>
+            <span>Riziko</span>
+            <select name="riskLevel" ${disabled}>${optionList(SELF_REPAIR_RISK_OPTIONS, item.riskLevel, "Vyberte riziko")}</select>
+          </label>
+          <label>
+            <span>Priorita</span>
+            <select name="priority" ${disabled}>${optionList(FEEDBACK_PRIORITIES, item.priority, "Vyberte prioritu")}</select>
+          </label>
+          <label class="self-repair-management__wide">
+            <span>Shrnutí pro další krok</span>
+            <textarea name="triageSummary" rows="4" maxlength="5000" ${disabled}>${escapeHtml(item.triageSummary)}</textarea>
+          </label>
+          <label class="self-repair-management__wide">
+            <span>Interní poznámka</span>
+            <textarea name="internalNote" rows="3" maxlength="8000" ${disabled}>${escapeHtml(item.internalNote)}</textarea>
+          </label>
+          <div class="self-repair-management__actions">
+            <button class="primary-action" type="submit" ${disabled}>${saving ? "Ukládám…" : "Uložit třídění"}</button>
+          </div>
+        </form>
+      ` : ""}
+
+      <section class="self-repair-audit-panel">
+        <h3>Audit případu</h3>
+        ${selfRepairAuditTimeline(detail.audit)}
+      </section>
+    </section>
+  `;
+}
+
+function selfRepairPage(moduleItem, user) {
+  ensureSelfRepairData();
+  ensureModuleRulesData(SELF_REPAIR_MODULE_KEY);
+  const items = filteredSelfRepairCases();
+  const listContent = selfRepairState.loading && !selfRepairState.loaded
+    ? '<p class="self-repair-empty">Načítám případy…</p>'
+    : items.length
+      ? items.map(selfRepairCaseCard).join("")
+      : '<p class="self-repair-empty">Podle zvolených filtrů tu není žádný případ.</p>';
+
+  return `
+    <main class="app-shell module-page module-theme-scope self-repair-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+
+      <section class="module-detail self-repair-hero" aria-labelledby="module-title">
+        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        <div class="module-detail__body">
+          <div class="module-detail__eyebrow">Bezpečná evidence a třídění</div>
+          <h1 id="module-title">Samoopravy</h1>
+          <p>Jedno místo pro chyby a drobné úpravy z provozu. Fáze 1 připravuje ověřitelná data pro další rozhodnutí.</p>
+          <div class="module-detail__status"><span>Stav</span><strong>Pilot Fáze 1 · bez automatických oprav</strong></div>
+          <div class="module-actions">
+            <a class="primary-link" href="${routeHref(`${FEEDBACK_ROUTE}?new=report&module=self-repair&sourceRoute=${encodeURIComponent(SELF_REPAIR_ROUTE)}#feedback-report`)}" data-link>Nahlásit problém</a>
+            <button class="secondary-link" type="button" data-self-repair-refresh ${selfRepairState.loading ? "disabled" : ""}>${selfRepairState.loading ? "Načítám…" : "Obnovit případy"}</button>
+          </div>
+        </div>
+      </section>
+
+      ${selfRepairState.error ? `<p class="module-feedback__error" role="alert">${escapeHtml(selfRepairState.error)}</p>` : ""}
+      ${selfRepairState.message ? `<p class="module-feedback__notice" role="status">${escapeHtml(selfRepairState.message)}</p>` : ""}
+      ${selfRepairCapabilityGrid()}
+      ${selfRepairSummaryGrid()}
+      ${selfRepairFilterPanel()}
+
+      <div class="self-repair-workspace">
+        <section class="self-repair-list" aria-labelledby="self-repair-list-title">
+          <div class="self-repair-list__head">
+            <div>
+              <p class="module-detail__eyebrow">Fronta</p>
+              <h2 id="self-repair-list-title">Případy k prověření</h2>
+            </div>
+            <span>${escapeHtml(items.length)} zobrazeno</span>
+          </div>
+          ${listContent}
+        </section>
+        ${selfRepairCaseDetail(user)}
+      </div>
+
+      ${moduleRulesAutomationPanel({
+        moduleKey: SELF_REPAIR_MODULE_KEY,
+        moduleName: "Samoopravy",
+        user,
+        description: "Pravdivá evidence hranic Fáze 1 a návrhu budoucí hodinové kontroly.",
+        cloudNote: "Hodinová automatizace je pouze návrh. Nic se samo nekontroluje, neopravuje, nenasazuje ani neposílá.",
+        readOnly: true,
+        humanDetail: true
+      })}
+      ${genericModuleSettingsSection(moduleItem)}
+    </main>
+  `;
+}
+
 function driverReportSelectedIdFromUrl() {
   return new URL(window.location.href).searchParams.get("request") || "";
 }
@@ -31243,6 +31667,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
     return systemCheckPage(moduleItem, user);
   }
 
+  if (moduleItem.id === SELF_REPAIR_MODULE_KEY) {
+    return selfRepairPage(moduleItem, user);
+  }
+
   const isTyres = moduleItem.id === "tyres";
   const title = isDashboard ? moduleItem.pageTitle : moduleItem.title;
   const description = isTyres && !isDashboard
@@ -31914,7 +32342,7 @@ function canCreateCentralFeedback(user) {
 }
 
 function feedbackModuleOptions() {
-  return orderedModules.map((moduleItem) => ({
+  return [...orderedModules, feedbackMenuItem].map((moduleItem) => ({
     value: moduleItem.id === "absence" ? "dovolena-nemoc" : moduleItem.id,
     label: moduleItem.title
   }));
@@ -31940,6 +32368,203 @@ function updateFeedbackCreateDraft(form) {
 function feedbackCreateDraftIsDirty(draft = feedbackCreateState.draft) {
   const emptyDraft = feedbackCreateDefaultDraft();
   return Object.keys(emptyDraft).some((key) => String(draft[key] || "") !== String(emptyDraft[key] || ""));
+}
+
+function selfRepairReportDefaultDraft(context = {}) {
+  return {
+    caseType: "bug",
+    moduleId: String(context.moduleId || ""),
+    title: "",
+    description: "",
+    actualBehavior: "",
+    expectedBehavior: "",
+    reproductionSteps: "",
+    priority: "Běžná",
+    sourceRoute: String(context.sourceRoute || "")
+  };
+}
+
+function selfRepairReportModuleOptionValue(moduleKey) {
+  const normalized = String(moduleKey || "").trim();
+  return normalized === "absence" ? "dovolena-nemoc" : normalized;
+}
+
+function syncSelfRepairReportContext() {
+  const params = new URLSearchParams(window.location.search);
+  const contextKey = `${params.get("module") || ""}|${params.get("sourceRoute") || ""}`;
+  if (selfRepairReportState.contextApplied && selfRepairReportState.contextKey === contextKey) return;
+
+  const moduleOptions = feedbackModuleOptions();
+  const optionValues = new Set(moduleOptions.map((option) => option.value));
+  const requestedModule = selfRepairReportModuleOptionValue(params.get("module"));
+  const currentModule = selfRepairReportModuleOptionValue(moduleIdForAiRoute(params.get("sourceRoute") || window.location.pathname));
+  const moduleId = optionValues.has(requestedModule)
+    ? requestedModule
+    : optionValues.has(currentModule)
+      ? currentModule
+      : "dashboard";
+  const requestedSourceRoute = String(params.get("sourceRoute") || "").trim();
+  const sourceRoute = requestedSourceRoute.startsWith("/") && !requestedSourceRoute.startsWith("//")
+    ? requestedSourceRoute
+    : normalizePath(window.location.pathname);
+  const draft = selfRepairReportDefaultDraft({ moduleId, sourceRoute });
+
+  selfRepairReportState.draft = { ...draft };
+  selfRepairReportState.baseline = { ...draft };
+  selfRepairReportState.contextApplied = true;
+  selfRepairReportState.contextKey = contextKey;
+}
+
+function updateSelfRepairReportDraft(form) {
+  if (!form) return selfRepairReportState.draft;
+
+  selfRepairReportState.draft = {
+    caseType: form.elements.caseType?.value || "bug",
+    moduleId: form.elements.moduleId?.value || "",
+    title: form.elements.title?.value.trim() || "",
+    description: form.elements.description?.value.trim() || "",
+    actualBehavior: form.elements.actualBehavior?.value.trim() || "",
+    expectedBehavior: form.elements.expectedBehavior?.value.trim() || "",
+    reproductionSteps: form.elements.reproductionSteps?.value.trim() || "",
+    priority: form.elements.priority?.value || "Běžná",
+    sourceRoute: selfRepairReportState.draft.sourceRoute || normalizePath(window.location.pathname)
+  };
+  return selfRepairReportState.draft;
+}
+
+function selfRepairReportDraftIsDirty(draft = selfRepairReportState.draft) {
+  return Object.keys(selfRepairReportState.baseline).some((key) => (
+    String(draft[key] || "") !== String(selfRepairReportState.baseline[key] || "")
+  ));
+}
+
+function resetSelfRepairReportAfterSubmit(context = {}) {
+  const draft = selfRepairReportDefaultDraft({
+    moduleId: context.moduleId || selfRepairReportState.draft.moduleId,
+    sourceRoute: context.sourceRoute || selfRepairReportState.draft.sourceRoute
+  });
+  selfRepairReportState.draft = { ...draft };
+  selfRepairReportState.baseline = { ...draft };
+}
+
+async function submitSelfRepairReport(form) {
+  if (!form || selfRepairReportState.saving || !hasPermission(currentUser(), "feedback", "create")) {
+    return false;
+  }
+
+  if (!form.reportValidity()) return false;
+
+  const draft = updateSelfRepairReportDraft(form);
+  selfRepairReportState.saving = true;
+  selfRepairReportState.error = "";
+  selfRepairReportState.message = "";
+  selfRepairReportState.createdCaseId = "";
+  render();
+
+  try {
+    const result = await apiJson("/api/self-repair/cases", {
+      method: "POST",
+      body: JSON.stringify({
+        ...draft,
+        buildVersion: buildMeta.version || "v0.1.493",
+        buildCommit: buildMeta.commit || "",
+        browserInfo: navigator.userAgent || ""
+      })
+    });
+    selfRepairReportState.message = "Hlášení je uložené. Administrátor ho zkontroluje a zatřídí; nic se samo neopravilo ani neodeslalo.";
+    selfRepairReportState.createdCaseId = result.case?.id || "";
+    resetSelfRepairReportAfterSubmit(draft);
+    if (result.feedback) {
+      const normalized = normalizeFeedback(result.feedback);
+      feedbackState.items = [normalized, ...feedbackState.items.filter((item) => item.id !== normalized.id)];
+    }
+    selfRepairState.loaded = false;
+    return true;
+  } catch (error) {
+    selfRepairReportState.error = error.payload?.error || error.message || "Hlášení se teď nepodařilo uložit.";
+    return false;
+  } finally {
+    selfRepairReportState.saving = false;
+    render();
+  }
+}
+
+function selfRepairReportPanel(user, moduleOptions) {
+  if (!hasPermission(user, "feedback", "create")) return "";
+  syncSelfRepairReportContext();
+
+  const draft = selfRepairReportState.draft;
+  const disabled = selfRepairReportState.saving ? "disabled" : "";
+  return `
+    <section class="self-repair-report" id="feedback-report" aria-labelledby="self-repair-report-title">
+      <div class="self-repair-report__head">
+        <div>
+          <p class="module-detail__eyebrow">Chyba nebo drobná úprava</p>
+          <h2 id="self-repair-report-title">Nahlásit problém v aplikaci</h2>
+          <p>Napište, co nefunguje a kde. Hlášení se bezpečně uloží k prověření.</p>
+        </div>
+        <span class="self-repair-report__phase">Fáze 1 · evidence</span>
+      </div>
+
+      <div class="self-repair-report__notice" role="note">
+        <strong>Co se stane teď</strong>
+        <span>Vznikne případ a auditní záznam. Codex, nasazení ani e-mail se automaticky nespustí.</span>
+      </div>
+
+      ${selfRepairReportState.message ? `
+        <p class="feedback-create__notice" role="status">
+          ${escapeHtml(selfRepairReportState.message)}
+          ${selfRepairReportState.createdCaseId ? `<small>ID: ${escapeHtml(selfRepairReportState.createdCaseId)}</small>` : ""}
+        </p>
+      ` : ""}
+
+      <form class="self-repair-report__form" data-self-repair-report-form>
+        <label>
+          <span>Typ</span>
+          <select name="caseType" data-self-repair-report-field ${disabled}>
+            <option value="bug" ${draft.caseType === "bug" ? "selected" : ""}>Chyba</option>
+            <option value="improvement" ${draft.caseType === "improvement" ? "selected" : ""}>Drobná úprava</option>
+          </select>
+        </label>
+        <label>
+          <span>Modul</span>
+          <select name="moduleId" data-self-repair-report-field required ${disabled}>
+            ${optionList(moduleOptions, draft.moduleId, "Vyberte modul")}
+          </select>
+        </label>
+        <label>
+          <span>Priorita</span>
+          <select name="priority" data-self-repair-report-field ${disabled}>
+            ${optionList(FEEDBACK_PRIORITIES, draft.priority, "Vyberte prioritu")}
+          </select>
+        </label>
+        <label class="self-repair-report__wide">
+          <span>Stručný název</span>
+          <input name="title" value="${escapeHtml(draft.title)}" data-self-repair-report-field maxlength="240" placeholder="Např. Nejde zadat rozměr pneumatiky" required ${disabled} />
+        </label>
+        <label class="self-repair-report__wide">
+          <span>Popis problému</span>
+          <textarea name="description" data-self-repair-report-field rows="4" maxlength="8000" placeholder="Co jste chtěli udělat a co vám v tom brání?" required ${disabled}>${escapeHtml(draft.description)}</textarea>
+        </label>
+        <label>
+          <span>Co se děje nyní</span>
+          <textarea name="actualBehavior" data-self-repair-report-field rows="4" maxlength="5000" placeholder="Např. pole hodnotu odmítne" ${disabled}>${escapeHtml(draft.actualBehavior)}</textarea>
+        </label>
+        <label>
+          <span>Co jste očekávali</span>
+          <textarea name="expectedBehavior" data-self-repair-report-field rows="4" maxlength="5000" placeholder="Např. rozměr se uloží" ${disabled}>${escapeHtml(draft.expectedBehavior)}</textarea>
+        </label>
+        <label class="self-repair-report__wide">
+          <span>Jak problém zopakovat</span>
+          <textarea name="reproductionSteps" data-self-repair-report-field rows="3" maxlength="8000" placeholder="1. Otevřu Pneumatiky  2. Vyberu vozidlo  3. Zadám rozměr…" ${disabled}>${escapeHtml(draft.reproductionSteps)}</textarea>
+        </label>
+        <div class="self-repair-report__actions">
+          <button class="primary-action" type="submit" ${disabled}>${selfRepairReportState.saving ? "Ukládám…" : "Odeslat hlášení"}</button>
+        </div>
+        ${selfRepairReportState.error ? `<p class="feedback-create__error" role="alert">${escapeHtml(selfRepairReportState.error)}</p>` : ""}
+      </form>
+    </section>
+  `;
 }
 
 function feedbackCreateModuleName(moduleId) {
@@ -32057,6 +32682,7 @@ function feedbackAdminItem(item, canEdit) {
   const cardState = feedbackCardMessage(item.id);
   const isSaving = feedbackState.savingId === item.id;
   const disabled = isSaving ? "disabled" : "";
+  const isSelfRepairTicket = String(item.message || "").startsWith("[Samoopravy ·");
 
   return `
     <article class="feedback-ticket">
@@ -32088,7 +32714,13 @@ function feedbackAdminItem(item, canEdit) {
         </div>
       </dl>
 
-      ${canEdit ? `
+      ${canEdit ? (isSelfRepairTicket ? `
+        <section class="feedback-ticket__readonly feedback-ticket__readonly--self-repair" aria-label="Správa v Samoopravách">
+          <strong>Správa v Samoopravách</strong>
+          <p>Stav, riziko a interní poznámku upravte v modulu Samoopravy. E-mail uživateli je ve Fázi 1 vypnutý.</p>
+          <a class="secondary-link" href="${routeHref(SELF_REPAIR_ROUTE)}" data-link>Otevřít Samoopravy</a>
+        </section>
+      ` : `
         <form class="feedback-ticket__management" data-feedback-update-form data-feedback-id="${escapeHtml(item.id)}">
           <h3>Správa připomínky</h3>
           <label class="module-feedback__field">
@@ -32124,7 +32756,7 @@ function feedbackAdminItem(item, canEdit) {
           ${cardState.message ? `<p class="feedback-ticket__notice">${escapeHtml(cardState.message)}</p>` : ""}
           ${cardState.error ? `<p class="feedback-ticket__error">${escapeHtml(cardState.error)}</p>` : ""}
         </form>
-      ` : `
+      `) : `
         <section class="feedback-ticket__readonly" aria-label="Stav připomínky">
           <strong>Správa připomínky</strong>
           <span>${escapeHtml(item.status)}</span>
@@ -32191,6 +32823,7 @@ function feedbackPage(user) {
           ` : ""}
         </div>
 
+        ${selfRepairReportPanel(user, moduleOptions)}
         ${feedbackCreatePanel(user, moduleOptions)}
 
         <div class="feedback-stats" aria-label="Dashboard připomínek">
@@ -36648,6 +37281,192 @@ async function loadModuleFeedback(options = {}) {
   }
 }
 
+function selfRepairStatusLabel(status) {
+  return SELF_REPAIR_STATUS_OPTIONS.find((option) => option.value === status)?.label || status || "Neznámý stav";
+}
+
+function selfRepairRiskLabel(riskLevel) {
+  return SELF_REPAIR_RISK_OPTIONS.find((option) => option.value === riskLevel)?.label || riskLevel || "Nezatříděno";
+}
+
+function normalizeSelfRepairCase(item = {}) {
+  const status = String(item.status || "new");
+  const riskLevel = String(item.riskLevel || "unclassified");
+  return {
+    ...item,
+    id: String(item.id || ""),
+    feedbackId: String(item.feedbackId || ""),
+    caseType: String(item.caseType || "bug"),
+    caseTypeLabel: String(item.caseTypeLabel || (item.caseType === "improvement" ? "Drobná úprava" : "Chyba")),
+    status,
+    statusLabel: String(item.statusLabel || selfRepairStatusLabel(status)),
+    riskLevel,
+    riskLabel: String(item.riskLabel || selfRepairRiskLabel(riskLevel)),
+    priority: String(item.priority || "Běžná"),
+    moduleKey: String(item.moduleKey || ""),
+    moduleName: String(item.moduleName || ""),
+    targetRepoKey: String(item.targetRepoKey || ""),
+    targetProductionUrl: String(item.targetProductionUrl || ""),
+    title: String(item.title || ""),
+    description: String(item.description || ""),
+    expectedBehavior: String(item.expectedBehavior || ""),
+    actualBehavior: String(item.actualBehavior || ""),
+    reproductionSteps: String(item.reproductionSteps || ""),
+    sourceRoute: String(item.sourceRoute || ""),
+    buildVersion: String(item.buildVersion || ""),
+    buildCommit: String(item.buildCommit || ""),
+    browserInfo: String(item.browserInfo || ""),
+    reporterUserName: String(item.reporterUserName || "Uživatel"),
+    triageSummary: String(item.triageSummary || ""),
+    internalNote: String(item.internalNote || ""),
+    createdAt: String(item.createdAt || ""),
+    updatedAt: String(item.updatedAt || "")
+  };
+}
+
+function ensureSelfRepairData(options = {}) {
+  if (!authState.user || selfRepairState.loading || !hasPermission(authState.user, SELF_REPAIR_MODULE_KEY, "view")) {
+    return;
+  }
+  if (!selfRepairState.loaded || options.force) {
+    void loadSelfRepairData(options);
+  }
+}
+
+async function loadSelfRepairData(options = {}) {
+  if (!authState.user || selfRepairState.loading || !hasPermission(authState.user, SELF_REPAIR_MODULE_KEY, "view")) {
+    return;
+  }
+
+  selfRepairState.loading = true;
+  selfRepairState.error = "";
+  if (options.force) selfRepairState.message = "";
+
+  try {
+    const [casesResult, statusResult] = await Promise.all([
+      apiJson("/api/self-repair/cases?limit=500"),
+      apiJson("/api/self-repair/status").catch((error) => ({
+        apiStatus: error.payload?.apiStatus || "waiting",
+        error: error.payload?.error || error.message
+      }))
+    ]);
+    selfRepairState.cases = (casesResult.cases || []).map(normalizeSelfRepairCase);
+    selfRepairState.summary = { ...selfRepairState.summary, ...(casesResult.summary || {}) };
+    selfRepairState.statusData = statusResult;
+    selfRepairState.apiStatus = casesResult.apiStatus || statusResult.apiStatus || "ready";
+    selfRepairState.loaded = true;
+
+    if (!selfRepairState.cases.some((item) => item.id === selfRepairState.selectedId)) {
+      selfRepairState.selectedId = selfRepairState.cases[0]?.id || "";
+    }
+
+    if (selfRepairState.selectedId) {
+      const detailResult = await apiJson(`/api/self-repair/cases/${encodeURIComponent(selfRepairState.selectedId)}`);
+      selfRepairState.detail = {
+        case: normalizeSelfRepairCase(detailResult.case),
+        evidence: Array.isArray(detailResult.evidence) ? detailResult.evidence : [],
+        audit: Array.isArray(detailResult.audit) ? detailResult.audit : []
+      };
+    } else {
+      selfRepairState.detail = null;
+    }
+
+    if (options.force) selfRepairState.message = "Případy a provozní stav byly obnoveny.";
+  } catch (error) {
+    selfRepairState.loaded = true;
+    selfRepairState.apiStatus = error.payload?.apiStatus || "waiting";
+    selfRepairState.error = error.payload?.error || error.message || "Případy Samooprav se teď nepodařilo načíst.";
+  } finally {
+    selfRepairState.loading = false;
+    if (options.renderAfter !== false) render();
+  }
+}
+
+async function loadSelfRepairDetail(id, options = {}) {
+  const caseId = String(id || "");
+  if (!caseId || selfRepairState.detailLoading) return;
+  selfRepairState.selectedId = caseId;
+  selfRepairState.detailLoading = true;
+  selfRepairState.error = "";
+  if (options.renderBefore !== false) render();
+
+  try {
+    const result = await apiJson(`/api/self-repair/cases/${encodeURIComponent(caseId)}`);
+    selfRepairState.detail = {
+      case: normalizeSelfRepairCase(result.case),
+      evidence: Array.isArray(result.evidence) ? result.evidence : [],
+      audit: Array.isArray(result.audit) ? result.audit : []
+    };
+  } catch (error) {
+    selfRepairState.error = error.payload?.error || error.message || "Detail případu se teď nepodařilo načíst.";
+  } finally {
+    selfRepairState.detailLoading = false;
+    if (options.renderAfter !== false) render();
+  }
+}
+
+function applySelfRepairFilters(form) {
+  if (!form) return;
+  selfRepairFilters.status = form.elements.status?.value || "";
+  selfRepairFilters.riskLevel = form.elements.riskLevel?.value || "";
+  selfRepairFilters.moduleKey = form.elements.moduleKey?.value || "";
+  selfRepairFilters.search = form.elements.search?.value.trim() || "";
+  render();
+}
+
+function resetSelfRepairFilters() {
+  Object.assign(selfRepairFilters, { status: "", riskLevel: "", moduleKey: "", search: "" });
+  render();
+}
+
+function filteredSelfRepairCases() {
+  const search = selfRepairFilters.search.toLowerCase();
+  return selfRepairState.cases.filter((item) => {
+    if (selfRepairFilters.status && item.status !== selfRepairFilters.status) return false;
+    if (selfRepairFilters.riskLevel && item.riskLevel !== selfRepairFilters.riskLevel) return false;
+    if (selfRepairFilters.moduleKey && item.moduleKey !== selfRepairFilters.moduleKey) return false;
+    if (search) {
+      const haystack = [item.title, item.description, item.moduleName, item.reporterUserName, item.triageSummary].join(" ").toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+async function updateSelfRepairCaseFromForm(form) {
+  const caseId = String(form?.dataset.selfRepairCaseId || "");
+  if (!caseId || selfRepairState.savingId) return false;
+  selfRepairState.savingId = caseId;
+  selfRepairState.error = "";
+  selfRepairState.message = "";
+  render();
+
+  try {
+    const result = await apiJson(`/api/self-repair/cases/${encodeURIComponent(caseId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: form.elements.status?.value || "new",
+        riskLevel: form.elements.riskLevel?.value || "unclassified",
+        priority: form.elements.priority?.value || "Běžná",
+        triageSummary: form.elements.triageSummary?.value.trim() || "",
+        internalNote: form.elements.internalNote?.value.trim() || "",
+        auditNote: "Ruční třídění ve správě Samooprav."
+      })
+    });
+    const updated = normalizeSelfRepairCase(result.case);
+    selfRepairState.cases = selfRepairState.cases.map((item) => item.id === caseId ? updated : item);
+    selfRepairState.message = "Případ je uložený a změna je v auditu. Žádná oprava, zpráva ani nasazení se nespustily.";
+    await loadSelfRepairDetail(caseId, { renderBefore: false, renderAfter: false });
+    return true;
+  } catch (error) {
+    selfRepairState.error = error.payload?.error || error.message || "Případ se teď nepodařilo uložit.";
+    return false;
+  } finally {
+    selfRepairState.savingId = "";
+    render();
+  }
+}
+
 function normalizeNotificationLog(item) {
   return {
     id: String(item?.id || ""),
@@ -38976,6 +39795,10 @@ function renderAuthenticatedApp(user) {
     if (moduleItem.id === "system-check") {
       ensureSystemCheckData();
     }
+    if (moduleItem.id === SELF_REPAIR_MODULE_KEY) {
+      ensureSelfRepairData();
+      ensureModuleRulesData(SELF_REPAIR_MODULE_KEY);
+    }
     return;
   }
 
@@ -39279,7 +40102,7 @@ async function updateFeedbackCard(form) {
       ...feedbackState.cardMessages,
       [id]: {
         message: "",
-        error: missing ? `Čeká na API: ${missing}` : "Změny se nepodařilo uložit"
+        error: missing ? `Čeká na API: ${missing}` : error.payload?.error || "Změny se nepodařilo uložit"
       }
     };
   } finally {
@@ -41212,6 +42035,12 @@ async function saveDirtyChanges() {
     return submitCentralModuleFeedback(feedbackCreateTarget.form);
   }
 
+  const selfRepairReportTarget = currentSelfRepairReportDirtyTarget();
+
+  if (selfRepairReportTarget?.isDirty) {
+    return submitSelfRepairReport(selfRepairReportTarget.form);
+  }
+
   const employeeTarget = currentEmployeeCardDirtyTarget();
   let savedEmployeeSection = false;
 
@@ -41258,6 +42087,15 @@ function discardDirtyChanges() {
 
   if (feedbackCreateTarget?.isDirty) {
     resetFeedbackCreateState();
+    render();
+    return;
+  }
+
+  const selfRepairReportTarget = currentSelfRepairReportDirtyTarget();
+
+  if (selfRepairReportTarget?.isDirty) {
+    selfRepairReportState.draft = { ...selfRepairReportState.baseline };
+    selfRepairReportState.error = "";
     render();
     return;
   }
@@ -41704,6 +42542,27 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const selfRepairReportForm = event.target.closest("[data-self-repair-report-form]");
+  if (selfRepairReportForm) {
+    event.preventDefault();
+    await submitSelfRepairReport(selfRepairReportForm);
+    return;
+  }
+
+  const selfRepairCaseForm = event.target.closest("[data-self-repair-case-form]");
+  if (selfRepairCaseForm) {
+    event.preventDefault();
+    await updateSelfRepairCaseFromForm(selfRepairCaseForm);
+    return;
+  }
+
+  const selfRepairFiltersForm = event.target.closest("[data-self-repair-filters]");
+  if (selfRepairFiltersForm) {
+    event.preventDefault();
+    applySelfRepairFilters(selfRepairFiltersForm);
+    return;
+  }
+
   const absenceFilterForm = event.target.closest("[data-absence-filter-form]");
   if (absenceFilterForm) {
     event.preventDefault();
@@ -41888,6 +42747,18 @@ document.addEventListener("input", (event) => {
   if (feedbackCreateField) {
     const form = feedbackCreateField.closest("[data-feedback-create-form]");
     updateFeedbackCreateDraft(form);
+    return;
+  }
+
+  const selfRepairFilter = event.target.closest("[data-self-repair-filter]");
+  if (selfRepairFilter && selfRepairFilter.tagName === "SELECT") {
+    applySelfRepairFilters(selfRepairFilter.closest("[data-self-repair-filters]"));
+    return;
+  }
+
+  const selfRepairReportField = event.target.closest("[data-self-repair-report-field]");
+  if (selfRepairReportField) {
+    updateSelfRepairReportDraft(selfRepairReportField.closest("[data-self-repair-report-form]"));
     return;
   }
 
@@ -42088,6 +42959,12 @@ document.addEventListener("change", async (event) => {
   if (feedbackCreateField) {
     const form = feedbackCreateField.closest("[data-feedback-create-form]");
     updateFeedbackCreateDraft(form);
+    return;
+  }
+
+  const selfRepairReportField = event.target.closest("[data-self-repair-report-field]");
+  if (selfRepairReportField) {
+    updateSelfRepairReportDraft(selfRepairReportField.closest("[data-self-repair-report-form]"));
     return;
   }
 
@@ -42420,6 +43297,36 @@ document.addEventListener("click", async (event) => {
   if (systemCheckRefresh) {
     event.preventDefault();
     await loadSystemCheckStatus({ force: true });
+    return;
+  }
+
+  const selfRepairRefresh = event.target.closest("[data-self-repair-refresh]");
+  if (selfRepairRefresh) {
+    event.preventDefault();
+    await loadSelfRepairData({ force: true });
+    return;
+  }
+
+  const selfRepairSelect = event.target.closest("[data-self-repair-select]");
+  if (selfRepairSelect) {
+    event.preventDefault();
+    await loadSelfRepairDetail(selfRepairSelect.dataset.selfRepairSelect || "");
+    return;
+  }
+
+  const selfRepairDetailClose = event.target.closest("[data-self-repair-detail-close]");
+  if (selfRepairDetailClose) {
+    event.preventDefault();
+    selfRepairState.selectedId = "";
+    selfRepairState.detail = null;
+    render();
+    return;
+  }
+
+  const selfRepairReset = event.target.closest("[data-self-repair-reset]");
+  if (selfRepairReset) {
+    event.preventDefault();
+    resetSelfRepairFilters();
     return;
   }
 
