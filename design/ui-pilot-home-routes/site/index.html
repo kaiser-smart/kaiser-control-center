@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="Samostatný statický UI pilot Kaiser Smart: hlavní stránka a Svozové trasy." />
+    <title>Přehled systému | Kaiser UI pilot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./theme.css" />
+  </head>
+  <body>
+    <main class="preview-shell">
+      <aside class="sidebar" aria-label="Navigace náhledu">
+        <button class="brand" type="button" data-screen-target="home" aria-label="Otevřít hlavní stránku">
+          <span class="brand-mark"><img src="./logo-kaiser.svg" alt="Kaiser" /></span>
+          <span class="brand-copy"><strong>Smart odpady</strong><small>Provozní systém</small></span>
+        </button>
+
+        <nav class="sidebar-nav" aria-label="Obrazovky pilotu">
+          <section class="nav-group" aria-labelledby="nav-overview-title">
+            <p id="nav-overview-title">Přehled</p>
+            <button class="nav-item" type="button" data-screen-target="home">
+              <span class="nav-icon" aria-hidden="true">⌂</span><span>Přehled</span>
+            </button>
+          </section>
+          <section class="nav-group" aria-labelledby="nav-work-title">
+            <p id="nav-work-title">Hlavní práce</p>
+            <button class="nav-item nav-item-muted" type="button"><span class="nav-icon" aria-hidden="true">✓</span><span>Rychlé zadání</span></button>
+            <button class="nav-item" type="button" data-screen-target="routes"><span class="nav-icon" aria-hidden="true">↗</span><span>Trasy svozu</span></button>
+            <button class="nav-item nav-item-muted" type="button"><span class="nav-icon" aria-hidden="true">!</span><span>Hlášení z vozidel</span></button>
+            <button class="nav-item nav-item-muted" type="button"><span class="nav-icon" aria-hidden="true">●</span><span>Poloha vozidel</span></button>
+            <button class="nav-item nav-item-muted" type="button"><span class="nav-icon" aria-hidden="true">▤</span><span>Datové schránky</span></button>
+          </section>
+          <section class="nav-group" aria-labelledby="nav-admin-title">
+            <p id="nav-admin-title">Provoz a správa</p>
+            <button class="nav-item nav-item-muted" type="button"><span class="nav-icon" aria-hidden="true">▰</span><span>Vozidla</span></button>
+            <button class="nav-item nav-item-muted" type="button"><span class="nav-icon" aria-hidden="true">□</span><span>Nepřítomnosti</span></button>
+            <button class="nav-item nav-item-muted" type="button"><span class="nav-icon" aria-hidden="true">◎</span><span>Nezaplacené faktury</span></button>
+          </section>
+        </nav>
+
+        <div class="pilot-note"><strong>UI pilot</strong><span>HP + Svozové trasy</span></div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div class="preview-badge"><strong>Samostatný náhled</strong><span>Bez přihlášení, API a provozních dat</span></div>
+          <div class="screen-switch" aria-label="Přepnout obrazovku">
+            <button type="button" data-screen-target="home">HP</button>
+            <button type="button" data-screen-target="routes">Svozové trasy</button>
+          </div>
+        </header>
+
+        <div class="screen" data-screen="home">
+          <section class="hero" aria-labelledby="home-title">
+            <div class="hero-copy">
+              <p class="eyebrow">Kaiser Smart / hlavní práce</p>
+              <h1 id="home-title">Přehled systému</h1>
+              <p>Příjemný provozní vstup do tras, hlášení, zpráv a úkolů. Jedna klidná vizuální řeč pro každodenní práci.</p>
+              <div class="chips" aria-label="Stav pilotu">
+                <span class="chip chip-active">UI pilot</span><span class="chip">Reálná struktura</span><span class="chip">Bez provozních dat</span>
+              </div>
+              <div class="hero-actions">
+                <button class="primary-button" type="button" data-screen-target="routes">Otevřít trasy svozu</button>
+                <a class="secondary-button" href="#today">Dnešní práce</a>
+              </div>
+            </div>
+            <div class="hero-symbol" aria-hidden="true"><span>↗</span></div>
+          </section>
+
+          <section class="attention-panel" id="today" aria-labelledby="attention-title">
+            <div class="section-heading">
+              <div><p class="eyebrow">Dnešní provoz</p><h2 id="attention-title">Co dnes vyžaduje pozornost?</h2></div>
+              <p>Trasy, hlášení, zprávy a datové problémy v jednom klidném pracovním pohledu.</p>
+            </div>
+            <div class="metric-grid">
+              <article class="metric-card metric-card-active"><strong>8</strong><span>tras dnes</span><small>2 čekají na kontrolu</small></article>
+              <article class="metric-card"><strong>3</strong><span>hlášení z vozidel</span><small>1 nové hlášení</small></article>
+              <article class="metric-card"><strong>1</strong><span>datová zpráva</span><small>čeká na předání</small></article>
+              <article class="metric-card"><strong>0</strong><span>kritických chyb</span><small>provoz bez blokace</small></article>
+            </div>
+          </section>
+
+          <section class="task-panel" aria-labelledby="tasks-title">
+            <div class="section-heading compact-heading"><div><p class="eyebrow">Denní práce</p><h2 id="tasks-title">Dnes k řešení</h2></div><p>Nejdřív trasy, hlášení a zprávy.</p></div>
+            <div class="task-grid">
+              <button class="task-card" type="button" data-screen-target="routes">
+                <span class="task-icon" aria-hidden="true">↗</span><span class="status-pill">Jen náhled</span>
+                <strong>Svozové trasy</strong><p>Dnešní svozy, podklady pro řidiče a problémy v trase.</p><span class="card-action">Zobrazit trasy</span>
+              </button>
+              <article class="task-card"><span class="task-icon" aria-hidden="true">!</span><span class="status-pill">Pilotní provoz</span><strong>Hlášení z vozidel</strong><p>Závady, požadavky a servisní podněty z provozu.</p><span class="card-action">Zobrazit hlášení</span></article>
+              <article class="task-card"><span class="task-icon" aria-hidden="true">▤</span><span class="status-pill status-pill-waiting">Čeká na kontrolu</span><strong>Datové schránky</strong><p>Firemní zprávy k vyřízení, předání nebo archivaci.</p><span class="card-action">Zpracovat zprávy</span></article>
+            </div>
+          </section>
+        </div>
+
+        <div class="screen" data-screen="routes" hidden>
+          <section class="hero route-hero" aria-labelledby="routes-title">
+            <div class="hero-copy">
+              <p class="eyebrow">Kaiser Smart / trasy svozu</p>
+              <h1 id="routes-title">Trasy svozu</h1>
+              <p>Denní trasy, filtry, tiskové podklady a řidičský náhled v jednom srozumitelném pracovním toku.</p>
+              <div class="chips"><span class="chip chip-active">Read-only pilot</span><span class="chip">Ukázková data</span><span class="chip">Bez zápisu do Vistosu</span></div>
+            </div>
+            <div class="hero-symbol" aria-hidden="true"><span>↗</span></div>
+          </section>
+
+          <nav class="route-tabs" aria-label="Sekce Tras svozu">
+            <button class="is-active" type="button">Svozové trasy</button><button type="button">Stanoviště</button><button type="button">Pravidla</button><button type="button">Nastavení</button><button type="button">Interní správa</button>
+          </nav>
+
+          <section class="route-panel" aria-labelledby="route-panel-title">
+            <div class="route-panel-head">
+              <div><p class="eyebrow">Svozové trasy</p><h2 id="route-panel-title">Svozové trasy</h2><p>Filtr, tisk a řidičský náhled trasy.</p></div>
+              <div class="route-statuses"><span>Snapshot připraven</span><span>Aktualizováno 9:30</span></div>
+            </div>
+
+            <section class="filter-card" aria-labelledby="filter-title">
+              <div class="filter-head"><div><p class="eyebrow">Filtr trasy</p><h3 id="filter-title">Vistos Svoz Kaiser</h3></div><span class="count-pill">24 položek</span></div>
+              <div class="filter-grid">
+                <label>Den svozu<select><option>Pondělí</option><option>Úterý</option><option>Středa</option></select></label>
+                <label>Týden<select><option>Každý týden</option><option>Sudý týden</option><option>Lichý týden</option></select></label>
+                <fieldset><legend>Odpad</legend><div class="waste-chips"><button class="is-active" type="button">vše</button><button type="button">SKO</button><button type="button">BIO</button><button type="button">PAPÍR</button><button type="button">PLAST</button></div></fieldset>
+                <label>Stav<select><option>vše</option><option>OK</option><option>zkontrolovat</option></select></label>
+              </div>
+              <div class="route-actions" aria-label="Ukázkové akce trasy">
+                <button class="primary-button" type="button">Řidičský tablet</button><button class="secondary-button" type="button">Tisk pro řidiče</button><button class="secondary-button" type="button">Detailní PDF</button><button class="secondary-button" type="button">Offline balíček</button>
+              </div>
+            </section>
+
+            <div class="route-metrics">
+              <article><span>Zdroj</span><strong>Vistos API</strong><small>read-only náhled</small></article>
+              <article><span>Zastávky</span><strong>24</strong><small>v aktuálním filtru</small></article>
+              <article><span>Nádoby</span><strong>63</strong><small>celkem na trase</small></article>
+              <article><span>Ke kontrole</span><strong>2</strong><small>neúplné mapování</small></article>
+            </div>
+          </section>
+        </div>
+
+        <footer><strong>Samostatný statický UI náhled.</strong> Neobsahuje přihlášení, API, osobní ani provozní data.</footer>
+      </section>
+    </main>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
