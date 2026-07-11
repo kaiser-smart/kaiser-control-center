@@ -3,7 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const repoRoot = path.resolve(root, "../..");
 const sourceDir = path.join(root, "site");
 const distDir = path.join(root, "dist");
 const publicDir = path.join(distDir, "server", "public");
@@ -35,7 +34,6 @@ const workerSource = `export default {
 
 await rm(distDir, { recursive: true, force: true });
 await copyDir(sourceDir, publicDir);
-await copyFile(path.join(repoRoot, "public", "logo-kaiser.svg"), path.join(publicDir, "logo-kaiser.svg"));
 await mkdir(path.join(distDir, "server"), { recursive: true });
 await writeFile(path.join(distDir, "server", "index.js"), workerSource);
 await mkdir(path.join(distDir, ".openai"), { recursive: true });
