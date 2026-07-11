@@ -223,6 +223,11 @@ function renderMobileMorePanel(routeHref, user, currentPath) {
 function renderHeader({ routeHref, theme, user }) {
   const userLabel = user?.name || "Interni nahled";
   const resolvedRole = user?.role ? roleLabel(user.role) : "Preview";
+  const userAction = user?.previewOnly
+    ? '<span class="nm-shell__status">Veřejný náhled</span>'
+    : user
+      ? '<button class="nm-shell__logout" type="button" data-logout>Odhlásit</button>'
+      : "";
 
   return `
     <header class="nm-shell__header">
@@ -242,6 +247,7 @@ function renderHeader({ routeHref, theme, user }) {
           <strong>${escapeHtml(userLabel)}</strong>
           <small>${escapeHtml(resolvedRole)}</small>
         </span>
+        ${userAction}
       </div>
     </header>
   `;

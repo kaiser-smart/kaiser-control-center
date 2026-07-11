@@ -104,7 +104,8 @@
 }
 
 .nm-app .nm-shell__status,
-.nm-app .nm-shell__user {
+.nm-app .nm-shell__user,
+.nm-app .nm-shell__logout {
   display: inline-flex;
   min-height: var(--nm-control-height-sm);
   align-items: center;
@@ -116,6 +117,24 @@
   font-weight: 800;
   padding: 0 var(--nm-space-4);
   white-space: nowrap;
+}
+
+.nm-app .nm-shell__logout {
+  cursor: pointer;
+  font: inherit;
+  transition:
+    background-color var(--nm-transition-base),
+    border-color var(--nm-transition-base),
+    color var(--nm-transition-base),
+    box-shadow var(--nm-transition-base);
+}
+
+.nm-app .nm-shell__logout:hover,
+.nm-app .nm-shell__logout:focus-visible {
+  border-color: var(--nm-active-tray-border);
+  background: var(--nm-active-tray-bg);
+  color: var(--nm-text-strong);
+  box-shadow: var(--nm-shadow-control-hover);
 }
 
 .nm-app .nm-theme-toggle {

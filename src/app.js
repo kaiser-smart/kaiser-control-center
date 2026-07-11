@@ -27083,6 +27083,9 @@ function neumorphDriverReportsRuntime(user) {
 
 function neumorphRuntimeContext(user) {
   return {
+    dataBox: {
+      unreadCount: dataBoxTotalUnreadCount()
+    },
     driverReports: neumorphDriverReportsRuntime(user),
     fleet: neumorphFleetRuntime(user),
     collectionRoutes: neumorphCollectionRoutesRuntime(user),
@@ -27093,6 +27096,10 @@ function neumorphRuntimeContext(user) {
 function ensureNeumorphRuntimeData(path, user) {
   if (!user) {
     return;
+  }
+
+  if (path === "/neumorph") {
+    ensureDataBoxData();
   }
 
   const needsCollectionRoutes = canViewModule(user, COLLECTION_ROUTES_MODULE_KEY) && (
