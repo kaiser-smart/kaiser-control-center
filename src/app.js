@@ -1065,7 +1065,19 @@ const receivablesState = {
   fullRatingJobCompleted: false,
   fullRatingJobError: "",
   fullRatingJobProcessed: 0,
-  fullRatingJobTotal: 0
+  fullRatingJobTotal: 0,
+  directoryAuditRunning: false,
+  directoryAuditCompleted: false,
+  directoryAuditError: "",
+  directoryAuditProcessed: 0,
+  directoryAuditTotal: 0,
+  directoryAuditSummary: {
+    foundValidIco: 0,
+    foundInvalidIco: 0,
+    missingIco: 0,
+    multipleCandidates: 0
+  },
+  directoryAuditSources: {}
 };
 
 const driverReportsState = {
@@ -31253,6 +31265,9 @@ function routeReceivablesContext(pathname = window.location.pathname) {
   if (rest === "/import") {
     return { view: "import", path };
   }
+  if (rest === "/directory-audit") {
+    return { view: "directory-audit", path };
+  }
   if (rest === "/settings") {
     return { view: "settings", path };
   }
@@ -32715,6 +32730,46 @@ function receivablesImportSection() {
   `;
 }
 
+function receivablesDirectoryAuditSection() {
+  const summary = receivablesState.directoryAuditSummary;
+  const progress = receivablesState.directoryAuditTotal
+    ? Math.round((receivablesState.directoryAuditProcessed / receivablesState.directoryAuditTotal) * 100)
+    : 0;
+  const sources = Object.entries(receivablesState.directoryAuditSources)
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-directory-audit-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Read-only Vistos Directory audit</p>
+          <h2 id="receivables-directory-audit-title">Kontrola chybějících IČO</h2>
+          <p>Cílený lookup pouze podle Vistos company/branch klíčů. Bez D1 zápisu, ISIR, ratingu a komunikace.</p>
+        </div>
+        ${receivablesPill(
+          receivablesState.directoryAuditCompleted ? "dokončeno" : receivablesState.directoryAuditRunning ? `${progress} %` : "čeká",
+          receivablesState.directoryAuditError ? "danger" : receivablesState.directoryAuditCompleted ? "ready" : "warning"
+        )}
+      </div>
+      ${receivablesState.directoryAuditError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.directoryAuditError)}</p>` : ""}
+      <div class="receivables-detail-grid">
+        <article><span>Zkontrolováno</span><strong>${escapeHtml(receivablesState.directoryAuditProcessed)} / ${escapeHtml(receivablesState.directoryAuditTotal || 690)}</strong></article>
+        <article><span>Nalezené validní IČO</span><strong>${escapeHtml(summary.foundValidIco)}</strong></article>
+        <article><span>Nevalidní IČO</span><strong>${escapeHtml(summary.foundInvalidIco)}</strong></article>
+        <article><span>Bez IČO ve Vistosu</span><strong>${escapeHtml(summary.missingIco)}</strong></article>
+        <article><span>Více kandidátů</span><strong>${escapeHtml(summary.multipleCandidates)}</strong></article>
+      </div>
+      <div class="receivables-table-wrap">
+        <table class="receivables-table receivables-table--compact">
+          <thead><tr><th>Potvrzená entita / lookup</th><th>Počet</th></tr></thead>
+          <tbody>
+            ${sources.map(([source, count]) => `<tr><td>${escapeHtml(source)}</td><td>${escapeHtml(count)}</td></tr>`).join("") || `<tr><td colspan="2">Zatím bez potvrzeného zdroje.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesCustomerDetailSection() {
   const detail = receivablesState.customerDetail;
   if (receivablesState.customerLoading) {
@@ -32993,6 +33048,8 @@ function receivablesPage(moduleItem, user, isDashboard = false, context = { view
   const activeTab = receivablesActiveTab(view, window.location.hash);
   const content = view === "customer"
     ? receivablesCustomerDetailSection()
+    : view === "directory-audit"
+      ? receivablesDirectoryAuditSection()
     : view === "import"
       ? receivablesImportSection()
     : view === "settings"
@@ -35150,6 +35207,41 @@ async function runReceivablesFullRatingJob() {
   }
 }
 
+async function runReceivablesDirectoryAudit() {
+  if (receivablesState.directoryAuditRunning || receivablesState.directoryAuditCompleted) return;
+  receivablesState.directoryAuditRunning = true;
+  receivablesState.directoryAuditError = "";
+  let offset = 0;
+  try {
+    while (true) {
+      const result = await apiJson(`/api/receivables/vistos/customer-directory-audit?offset=${offset}&limit=25`);
+      if (result.readOnly !== true || result.writesD1 !== false) {
+        throw new Error("Auditní endpoint nepotvrdil read-only režim.");
+      }
+      const summary = result.summary || {};
+      for (const key of ["foundValidIco", "foundInvalidIco", "missingIco", "multipleCandidates"]) {
+        receivablesState.directoryAuditSummary[key] += Number(summary[key] || 0);
+      }
+      for (const item of result.results || []) {
+        if (!item.sourceEntity || !item.sourceAttemptKey) continue;
+        const source = `${item.sourceEntity} · ${item.sourceAttemptKey}`;
+        receivablesState.directoryAuditSources[source] = (receivablesState.directoryAuditSources[source] || 0) + 1;
+      }
+      receivablesState.directoryAuditProcessed += Number(result.pagination?.returned || 0);
+      receivablesState.directoryAuditTotal = Number(result.pagination?.total || 0);
+      offset = Number(result.pagination?.nextOffset || offset);
+      render();
+      if (result.pagination?.done) break;
+    }
+    receivablesState.directoryAuditCompleted = true;
+  } catch (error) {
+    receivablesState.directoryAuditError = error.payload?.error || error.message || "Vistos Directory audit se nepodařilo dokončit.";
+  } finally {
+    receivablesState.directoryAuditRunning = false;
+    render();
+  }
+}
+
 function ensureReceivablesData(context = { view: "dashboard" }) {
   if (!receivablesState.dashboardLoaded && !receivablesState.dashboardLoading) {
     void loadReceivablesDashboard();
@@ -35185,6 +35277,10 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "import" && receivablesFullRatingJobRequested()) {
     void runReceivablesFullRatingJob();
+  }
+
+  if (context.view === "directory-audit") {
+    void runReceivablesDirectoryAudit();
   }
 
   if (

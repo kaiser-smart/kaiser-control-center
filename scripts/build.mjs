@@ -67,6 +67,7 @@ const fixedRouteEntries = [
   { path: "/dovolena-nemoc/nastaveni", moduleKey: "absence", label: "Nepřítomnosti – nastavení" },
   { path: "/pohledavky/settings", moduleKey: "receivables", label: "Pohledávky – nastavení" },
   { path: "/pohledavky/import", moduleKey: "receivables", label: "Pohledávky – import" },
+  { path: "/pohledavky/directory-audit", moduleKey: "receivables", label: "Pohledávky – Vistos Directory audit" },
   { path: "/receivables", moduleKey: "receivables", label: "Pohledávky – kompatibilní adresa" },
   { path: "/receivables/settings", moduleKey: "receivables", label: "Pohledávky – kompatibilní nastavení" }
 ];
