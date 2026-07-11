@@ -415,6 +415,17 @@ export function normalizeVehicleTrackingLicensePlate(value = "") {
     .replace(/[^A-Z0-9]/g, "");
 }
 
+export function vehicleTrackingVisualHeading(heading, speedKmh) {
+  const speed = Number(speedKmh);
+  const rawHeading = Number(heading);
+
+  if (!Number.isFinite(speed) || speed <= 2 || !Number.isFinite(rawHeading)) {
+    return 0;
+  }
+
+  return ((rawHeading % 360) + 360) % 360;
+}
+
 export function vehicleTrackingCustomIconForVehicle(vehicle = {}) {
   const nestedVehicle = vehicle.vehicle || {};
   const relatedVehicle = vehicle.fleetVehicle || vehicle.pairedVehicle || {};

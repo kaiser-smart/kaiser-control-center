@@ -201,7 +201,8 @@ import {
   vehicleTrackingCustomIconForVehicle,
   vehicleTrackingIconForType,
   vehicleTrackingStatusLabel,
-  vehicleTrackingStatusTone
+  vehicleTrackingStatusTone,
+  vehicleTrackingVisualHeading
 } from "./data/vehicleTracking.js";
 import {
   DATA_BOX_MODULE_KEY,
@@ -14041,8 +14042,7 @@ function vehicleTrackingTcarsIconType(location = {}) {
 
 function vehicleTrackingTcarsMarkerVehicle(location = {}) {
   const vehicle = location.vehicle || {};
-  const rawHeading = vehicleTrackingCoordinateValue(location.heading);
-  const heading = rawHeading === null ? 0 : ((rawHeading % 360) + 360) % 360;
+  const heading = vehicleTrackingVisualHeading(location.heading, location.speedKmh);
   return {
     ...vehicle,
     ...location,

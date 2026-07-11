@@ -4,7 +4,8 @@ import { vehicleTrackingMapsConfigPayload } from "../functions/api/vehicle-track
 import {
   VEHICLE_TRACKING_KAISER_SITE,
   normalizeVehicleTrackingLicensePlate,
-  vehicleTrackingCustomIconForVehicle
+  vehicleTrackingCustomIconForVehicle,
+  vehicleTrackingVisualHeading
 } from "../src/data/vehicleTracking.js";
 
 {
@@ -50,6 +51,14 @@ import {
   assert.equal(vehicleTrackingCustomIconForVehicle({ vehicle: { description: "Mercedes Vito servis" } }), "/vehicles/icons/mercedes-vito.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ name: "MAN cisterna 3 m3" }), "/vehicles/icons/man-cisterna-mala.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ model: "Toyota Proace" }), "/vehicles/icons/toyota-proace.png");
+}
+
+{
+  assert.equal(vehicleTrackingVisualHeading(215, 0), 0);
+  assert.equal(vehicleTrackingVisualHeading(215, 2), 0);
+  assert.equal(vehicleTrackingVisualHeading(215, 3), 215);
+  assert.equal(vehicleTrackingVisualHeading(-90, 24), 270);
+  assert.equal(vehicleTrackingVisualHeading("neplatné", 24), 0);
 }
 
 {
