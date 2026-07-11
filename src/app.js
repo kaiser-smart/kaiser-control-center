@@ -39188,7 +39188,7 @@ async function loadNotificationCenter(options = {}) {
     return;
   }
 
-  if (notificationCenterState.loading) {
+  if (notificationCenterState.loading || (notificationCenterState.loaded && options.force !== true)) {
     return;
   }
 
@@ -39236,7 +39236,7 @@ async function loadCustomerMessaging(options = {}) {
     return;
   }
 
-  if (customerMessagingState.loading) {
+  if (customerMessagingState.loading || (customerMessagingState.loaded && options.force !== true)) {
     return;
   }
 
@@ -39373,7 +39373,7 @@ async function submitCustomerOptOut(form) {
     });
     customerMessagingState.message = "Opt-out číslo bylo přidané.";
     customerMessagingState.optOutDraft = { phone: "", reason: "" };
-    await loadCustomerMessaging({ render: false });
+    await loadCustomerMessaging({ render: false, force: true });
   } catch (error) {
     customerMessagingState.optOutError = error.payload?.error || "Opt-out číslo se nepodařilo přidat.";
   } finally {
@@ -39397,7 +39397,7 @@ async function removeCustomerOptOut(phone) {
       method: "DELETE"
     });
     customerMessagingState.message = "Opt-out číslo bylo odebrané.";
-    await loadCustomerMessaging({ render: false });
+    await loadCustomerMessaging({ render: false, force: true });
   } catch (error) {
     customerMessagingState.optOutError = error.payload?.error || "Opt-out číslo se nepodařilo odebrat.";
   } finally {
