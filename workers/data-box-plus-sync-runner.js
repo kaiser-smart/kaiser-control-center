@@ -1,5 +1,5 @@
 function appBaseUrl(env) {
-  return String(env.APP_BASE_URL || "https://kaiser-control-center.pages.dev").replace(/\/+$/, "");
+  return String(env.APP_BASE_URL || "https://smart-odpady.ai").replace(/\/+$/, "");
 }
 
 export default {

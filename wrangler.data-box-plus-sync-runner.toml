@@ -4,7 +4,7 @@ compatibility_date = "2026-07-08"
 workers_dev = false
 
 [vars]
-APP_BASE_URL = "https://kaiser-control-center.pages.dev"
+APP_BASE_URL = "https://smart-odpady.ai"
 DATA_BOX_PLUS_BACKGROUND_ENABLED = "true"
 
 [[d1_databases]]

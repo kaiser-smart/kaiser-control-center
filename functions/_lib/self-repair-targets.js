@@ -2,7 +2,7 @@ const DEFAULT_TARGET = Object.freeze({
   moduleKey: "dashboard",
   moduleName: "Hlavní aplikace",
   repoKey: "kaiser-control-center",
-  productionUrl: "https://kaiser-control-center.pages.dev/"
+  productionUrl: "https://smart-odpady.ai/"
 });
 
 const TARGETS = Object.freeze({

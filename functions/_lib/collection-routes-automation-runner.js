@@ -12,7 +12,7 @@ const TIME_ZONE = "Europe/Prague";
 const SLOT_MS = 15 * 60 * 1000;
 
 function appBaseUrl(env) {
-  return cleanString(env?.APP_BASE_URL || "https://kaiser-control-center.pages.dev").replace(/\/+$/, "");
+  return cleanString(env?.APP_BASE_URL || "https://smart-odpady.ai").replace(/\/+$/, "");
 }
 
 function cleanString(value) {

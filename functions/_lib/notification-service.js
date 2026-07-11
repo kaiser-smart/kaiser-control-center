@@ -140,7 +140,7 @@ function randomId(prefix) {
 }
 
 function appBaseUrl(env) {
-  return cleanString(env.APP_BASE_URL) || "https://kaiser-control-center.pages.dev";
+  return cleanString(env.APP_BASE_URL) || "https://smart-odpady.ai";
 }
 
 function approvalUrl(env) {

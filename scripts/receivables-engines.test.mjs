@@ -135,7 +135,7 @@ assert.match(buildIsirCuzkIcoRequest("26274906"), /<maxRelevanceVysledku>2<\/max
   assert.equal(status.items.some((entry) => entry.id === "software_statement" && !entry.configured), true);
   assert.equal(status.safety.callsKbApi, false);
   assert.equal(status.onboardingPackage.nextAction.id, "qualified_certificate");
-  assert.equal(status.onboardingPackage.callbackUrl, "https://kaiser-control-center.pages.dev/api/receivables/kb/oauth/callback");
+  assert.equal(status.onboardingPackage.callbackUrl, "https://smart-odpady.ai/api/receivables/kb/oauth/callback");
   assert.equal(status.onboardingPackage.secretPlan.some((entry) => entry.key === "KB_ADAA_REFRESH_TOKEN" && !entry.configured), true);
   assert.equal(JSON.stringify(status.onboardingPackage).includes("secret-oauth"), false);
   assert.equal(status.onboardingPackage.safety.callsKbApi, false);

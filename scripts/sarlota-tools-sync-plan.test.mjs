@@ -41,6 +41,12 @@ const agentConfig = {
   }
 };
 
+{
+  const tools = expectedTools({});
+  const driverContextTool = tools.find((tool) => tool.name === "get_driver_report_context");
+  assert.equal(driverContextTool.api_schema.url, "https://smart-odpady.ai/api/voice/driver-report-context");
+}
+
 const legacyClientWorkspaceTool = {
   id: "tool-driver-context",
   tool_config: {

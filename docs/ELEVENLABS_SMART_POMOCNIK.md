@@ -301,7 +301,7 @@ POST /api/voice/sarlota
 Produkční URL:
 
 ```text
-https://kaiser-control-center.pages.dev/api/voice/sarlota
+https://smart-odpady.ai/api/voice/sarlota
 ```
 
 Webhook z ElevenLabs musí posílat jeden z těchto autentizačních údajů:

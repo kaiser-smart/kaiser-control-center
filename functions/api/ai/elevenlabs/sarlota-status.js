@@ -681,7 +681,7 @@ async function voiceWebhookSelfCheckForStatus(env, user) {
 
   try {
     const response = await driverReportContextVoiceWebhook({
-      request: new Request("https://kaiser-control-center.pages.dev/api/voice/driver-report-context", {
+      request: new Request("https://smart-odpady.ai/api/voice/driver-report-context", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

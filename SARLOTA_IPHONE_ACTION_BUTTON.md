@@ -5,7 +5,7 @@
 3. Přidej akci `Otevřít URL`.
 4. Vlož URL:
 
-   `https://kaiser-control-center.pages.dev/sarlota`
+   `https://smart-odpady.ai/sarlota`
 
 5. V Nastavení iPhonu otevři `Akční tlačítko`.
 6. Vyber `Zkratka`.
