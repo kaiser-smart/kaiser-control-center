@@ -354,7 +354,6 @@ const HOME_MODULE_SECTIONS = [
 const DATA_BOX_PLUS_MODULE_KEY = "data-box-plus";
 const DATA_BOX_PLUS_ROUTE = "/datove-schranky-plus";
 const DATA_BOX_PLUS_TABS = [
-  { id: "command", label: "Řídicí centrum" },
   { id: "messages", label: "Zprávy" },
   { id: "autopilot", label: "Autopilot" },
   { id: "confirmations", label: "K doplnění" },
@@ -364,6 +363,7 @@ const DATA_BOX_PLUS_TABS = [
   { id: "manual", label: "Manuál" }
 ];
 const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const DATA_BOX_PLUS_READ_MESSAGE_IDS_KEY = "data-box-plus-read-message-ids";
 const DATA_BOX_PLUS_MODEL_FLAG = {
   label: "Model: ostrý DSP",
   detail: "Oddělený backend, bezpečné interní pokyny a audit. Odeslání mimo systém zůstává pouze návrhem."
@@ -1261,11 +1261,11 @@ const dataBoxState = {
   error: ""
 };
 const dataBoxPlusState = {
-  activeTab: "command",
-  commandCenterPage: 1,
+  activeTab: "messages",
   selectedMessageId: "",
   chatMessageId: "",
-  filter: "all",
+  filter: "unread",
+  readMessageIds: [],
   search: "",
   rulesSearch: "",
   rulesType: "all",
@@ -21024,6 +21024,41 @@ function dataBoxPlusMessages() {
   return Array.isArray(dataBoxPlusState.messages) ? dataBoxPlusState.messages : [];
 }
 
+function dataBoxPlusReadMessageIds() {
+  const stateIds = Array.isArray(dataBoxPlusState.readMessageIds)
+    ? dataBoxPlusState.readMessageIds.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+  let storedIds = [];
+  try {
+    const raw = window.localStorage.getItem(DATA_BOX_PLUS_READ_MESSAGE_IDS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    storedIds = Array.isArray(parsed) ? parsed.map((id) => String(id || "").trim()).filter(Boolean) : [];
+  } catch {
+    storedIds = [];
+  }
+  return new Set([...stateIds, ...storedIds]);
+}
+
+function dataBoxPlusIsUnreadMessage(message) {
+  const status = dataBoxPlusSearchText([message?.status]);
+  return Boolean(message?.id)
+    && ["nova", "nove", "new"].includes(status)
+    && !dataBoxPlusReadMessageIds().has(String(message.id));
+}
+
+function dataBoxPlusMarkMessageRead(messageId) {
+  const id = String(messageId || "").trim();
+  if (!id) return;
+  const ids = dataBoxPlusReadMessageIds();
+  ids.add(id);
+  dataBoxPlusState.readMessageIds = Array.from(ids);
+  try {
+    window.localStorage.setItem(DATA_BOX_PLUS_READ_MESSAGE_IDS_KEY, JSON.stringify(dataBoxPlusState.readMessageIds));
+  } catch {
+    // Local read state is only a UI convenience when storage is unavailable.
+  }
+}
+
 function dataBoxPlusRecommendations({ includeClosed = false } = {}) {
   const recommendations = Array.isArray(dataBoxPlusState.recommendations) ? dataBoxPlusState.recommendations : [];
   if (includeClosed) return recommendations;
@@ -22435,7 +22470,7 @@ function dataBoxPlusCommandCenter() {
 
 function dataBoxPlusFilterOptions() {
   return [
-    ["all", "Vše"],
+    ["unread", "Nepřečtené"],
     ["new", "Nové"],
     ["today", "Dnes k vyřízení"],
     ["confirmations", "K doplnění"],
@@ -22449,7 +22484,8 @@ function dataBoxPlusFilterOptions() {
     ["technical", "Technická oznámení"],
     ["safe", "Potřebuje pokyn"],
     ["archive", "Archivované"],
-    ["problem", "Problém"]
+    ["problem", "Problém"],
+    ["all", "Vše"]
   ];
 }
 
@@ -22457,6 +22493,7 @@ function dataBoxPlusMessageMatchesFilter(message, filter) {
   const normalized = dataBoxPlusSearchText([message.type, message.status, message.subject, message.senderName]);
   const workflow = dataBoxPlusMessageWorkflow(message);
   if (filter === "all") return true;
+  if (filter === "unread") return dataBoxPlusIsUnreadMessage(message);
   if (filter === "new") return workflow.state === "Nová";
   if (filter === "today") return dataBoxPlusIsDueToday(message);
   if (filter === "confirmations") return ["Potřebuje upřesnit", "Potřebuje adresáta", "Chybí vozidlo", "Chybí příloha", "Nelze provést"].includes(workflow.state);
@@ -22495,30 +22532,21 @@ function dataBoxPlusFilteredMessages() {
 }
 
 function dataBoxPlusMessageRow(message) {
-  const mailbox = dataBoxPlusMailbox(message);
-  const workflow = dataBoxPlusMessageWorkflow(message);
-  const nextStep = dataBoxPlusOverviewNextStep(message, workflow);
-  const action = dataBoxPlusOverviewAction(message, workflow);
+  const unread = dataBoxPlusIsUnreadMessage(message);
 
   return `
-    <article class="ds-plus-message-row ds-plus-message-row--${escapeHtml(workflow.tone)}">
-      <div class="ds-plus-message-row__priority ds-plus-message-row__priority--${escapeHtml(workflow.tone)}" aria-label="${escapeHtml(workflow.state)}">${escapeHtml(["Nelze provést", "Chybí vozidlo", "Chybí příloha"].includes(workflow.state) ? "!" : workflow.closed ? "✓" : ["Potřebuje upřesnit", "Potřebuje adresáta"].includes(workflow.state) ? "…" : "•")}</div>
+    <article class="ds-plus-message-row ${unread ? "ds-plus-message-row--unread" : ""}">
+      <div class="ds-plus-message-row__unread" aria-label="${unread ? "Nepřečteno" : "Přečteno"}" ${unread ? "" : "aria-hidden=\"true\""}></div>
       <div class="ds-plus-message-row__body">
         <div class="ds-plus-message-row__top">
           <strong>${escapeHtml(message.senderName)}</strong>
           <span>${escapeHtml(formatDateTime(message.deliveredAt))}</span>
         </div>
         <h3>${escapeHtml(message.subject)}</h3>
-        <div class="ds-plus-message-row__meta">
-          <span>${escapeHtml(mailbox?.name || "Schránka")}</span>
-          <span class="ds-plus-message-row__id">${escapeHtml(message.id)}</span>
-        </div>
       </div>
-      <div class="ds-plus-message-row__action">
-        ${dataBoxPlusCompactWorkflow(workflow, nextStep)}
-        <div class="ds-plus-message-row__buttons">
-          ${dataBoxPlusRenderWorkflowAction(action)}
-        </div>
+      <div class="ds-plus-message-row__buttons">
+        <button class="primary-action" type="button" data-ds-plus-open="${escapeHtml(message.id)}">Otevřít</button>
+        <button class="secondary-link" type="button" data-ds-plus-chat="${escapeHtml(message.id)}">Chat s Autopilotem</button>
       </div>
     </article>
   `;
@@ -23333,7 +23361,7 @@ function dataBoxPlusActivePanel() {
   if (dataBoxPlusState.activeTab === "archive") return dataBoxPlusArchivePanel();
   if (dataBoxPlusState.activeTab === "settings") return dataBoxPlusSettingsPanel();
   if (dataBoxPlusState.activeTab === "manual") return dataBoxPlusManualPanel();
-  return dataBoxPlusCommandCenter();
+  return dataBoxPlusMessagesPanel();
 }
 
 function dataBoxPlusPage(moduleItem, user) {
@@ -42175,7 +42203,7 @@ document.addEventListener("click", async (event) => {
   const dataBoxPlusTab = event.target.closest("[data-ds-plus-tab]");
   if (dataBoxPlusTab) {
     event.preventDefault();
-    dataBoxPlusState.activeTab = dataBoxPlusTab.dataset.dsPlusTab || "command";
+    dataBoxPlusState.activeTab = dataBoxPlusTab.dataset.dsPlusTab || "messages";
     dataBoxPlusState.notice = "";
     render();
     return;
@@ -42279,6 +42307,7 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusChat) {
     event.preventDefault();
     dataBoxPlusState.chatMessageId = dataBoxPlusChat.dataset.dsPlusChat || "";
+    dataBoxPlusMarkMessageRead(dataBoxPlusState.chatMessageId);
     dataBoxPlusState.selectedMessageId = "";
     dataBoxPlusState.notice = "";
     await loadDataBoxPlusMessageDetail(dataBoxPlusState.chatMessageId);
@@ -42292,6 +42321,7 @@ document.addEventListener("click", async (event) => {
   if (dataBoxPlusOpen) {
     event.preventDefault();
     dataBoxPlusState.selectedMessageId = dataBoxPlusOpen.dataset.dsPlusOpen || "";
+    dataBoxPlusMarkMessageRead(dataBoxPlusState.selectedMessageId);
     dataBoxPlusState.chatMessageId = "";
     dataBoxPlusState.notice = "";
     await loadDataBoxPlusMessageDetail(dataBoxPlusState.selectedMessageId);

@@ -32044,10 +32044,22 @@ body:has(.ds-plus-page) {
 
 .ds-plus-message-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) minmax(220px, 0.62fr);
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   gap: 10px;
   padding: 10px 12px;
   align-items: center;
+}
+
+.ds-plus-message-row__unread {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.ds-plus-message-row--unread .ds-plus-message-row__unread {
+  background: #1976d2;
+  box-shadow: 0 0 0 3px #e7f1fb;
 }
 
 .ds-plus-message-row__priority {
@@ -32127,6 +32139,8 @@ body:has(.ds-plus-page) {
 
 .ds-plus-message-row__buttons {
   display: flex;
+  align-items: center;
+  gap: 8px;
   justify-content: flex-start;
   flex: 0 0 auto;
 }
@@ -33457,11 +33471,15 @@ body:has(.ds-plus-page) {
   }
 
   .ds-plus-message-row {
-    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-columns: 16px minmax(0, 1fr);
   }
 
   .ds-plus-message-row__action {
     grid-column: 1 / -1;
+  }
+
+  .ds-plus-message-row__buttons {
+    grid-column: 2;
   }
 
   .ds-plus-header {
@@ -33650,13 +33668,9 @@ body:has(.ds-plus-page) {
   }
 
   .ds-plus-message-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 14px minmax(0, 1fr);
     gap: 8px;
     padding: 9px 10px;
-  }
-
-  .ds-plus-message-row__priority {
-    display: none;
   }
 
   .ds-plus-message-row__top {
@@ -33682,7 +33696,17 @@ body:has(.ds-plus-page) {
   }
 
   .ds-plus-message-row__buttons {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
     width: 100%;
+  }
+
+  .ds-plus-message-row__buttons button {
+    width: 100%;
+    min-height: 34px;
+    justify-content: center;
   }
 
   .ds-plus-message-row__action .ds-plus-action-with-help {
