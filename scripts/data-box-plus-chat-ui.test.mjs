@@ -4,6 +4,7 @@ import {
   dataBoxPlusConversationEntries,
   dataBoxPlusHistoryChatEntries,
   dataBoxPlusPendingChatEntries,
+  dataBoxPlusResolveConfirmationEntries,
   dataBoxPlusResolvePendingChatEntries
 } from "../src/data/dataBoxPlusChat.js";
 
@@ -159,6 +160,15 @@ const resolvedConfirmation = dataBoxPlusResolvePendingChatEntries(
 );
 assert.equal(resolvedConfirmation[1].proposedAction.type, "send_sms");
 assert.equal(resolvedConfirmation[1].outcome, "waiting_confirmation");
+
+const completedConfirmation = dataBoxPlusResolveConfirmationEntries(
+  resolvedConfirmation,
+  "audit-confirm-local",
+  "done"
+);
+assert.equal(completedConfirmation[1].outcome, "done");
+assert.equal(completedConfirmation[1].confirmationId, "");
+assert.equal(completedConfirmation[1].proposedAction, undefined);
 
 const merged = dataBoxPlusConversationEntries([
   ...history,

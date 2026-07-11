@@ -156,3 +156,18 @@ export function dataBoxPlusResolvePendingChatEntries(localEntries = [], requestI
     return { ...entry, auditId: cleanText(auditId) };
   });
 }
+
+export function dataBoxPlusResolveConfirmationEntries(localEntries = [], confirmationId = "", outcome = "confirmed") {
+  const id = cleanText(confirmationId);
+  if (!id) return Array.isArray(localEntries) ? [...localEntries] : [];
+  return (Array.isArray(localEntries) ? localEntries : []).map((entry) => {
+    const entryConfirmationId = cleanText(entry?.proposedAction?.confirmationId || entry?.confirmationId);
+    if (entryConfirmationId !== id) return entry;
+    return {
+      ...entry,
+      outcome: cleanText(outcome) || "confirmed",
+      confirmationId: "",
+      proposedAction: undefined
+    };
+  });
+}

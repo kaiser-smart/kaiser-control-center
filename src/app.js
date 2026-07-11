@@ -19,6 +19,7 @@ import { normalizeAiRoute } from "./elevenLabsClientTools.js";
 import {
   dataBoxPlusConversationEntries,
   dataBoxPlusPendingChatEntries,
+  dataBoxPlusResolveConfirmationEntries,
   dataBoxPlusResolvePendingChatEntries
 } from "./data/dataBoxPlusChat.js";
 import {
@@ -33164,6 +33165,13 @@ async function runDataBoxPlusInstruction(messageIdValue, instructionValue, optio
       })
     });
     const assistantText = result.notice || result.action?.assistantText || "Hotovo. Provedeno.";
+    if (options.confirmationId) {
+      dataBoxPlusState.instructionChats[messageId] = dataBoxPlusResolveConfirmationEntries(
+        dataBoxPlusState.instructionChats[messageId],
+        options.confirmationId,
+        result.action?.outcome || result.status
+      );
+    }
     dataBoxPlusState.instructionChats[messageId] = dataBoxPlusResolvePendingChatEntries(
       dataBoxPlusState.instructionChats[messageId],
       requestId,
