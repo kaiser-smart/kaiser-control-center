@@ -319,6 +319,36 @@ const ABSENCE_TAB_ROUTES = {
   "rules-automation": "/dovolena-nemoc/pravidla-automatizace",
   settings: "/dovolena-nemoc/nastaveni"
 };
+const SMART_ODPADY_V2_BASE_ROUTE = "/smart-odpady-v2";
+const SMART_ODPADY_V2_DASHBOARD_ROUTE = `${SMART_ODPADY_V2_BASE_ROUTE}/dashboard`;
+const SMART_ODPADY_V2_REPORTS_ROUTE = `${SMART_ODPADY_V2_BASE_ROUTE}/hlaseni`;
+const SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE = `${SMART_ODPADY_V2_BASE_ROUTE}/sledovani-vozidel`;
+const SMART_ODPADY_V2_THEME_STORAGE_KEY = "smart_odpady_v2_theme";
+const SMART_ODPADY_V2_SIDEBAR_STORAGE_KEY = "smart_odpady_v2_sidebar_collapsed";
+const SMART_ODPADY_V2_ICON_ASSET_VERSION = "0.1.330";
+const SMART_ODPADY_V2_NAV_ITEMS = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    route: SMART_ODPADY_V2_DASHBOARD_ROUTE,
+    moduleId: "dashboard",
+    icon: "dashboard"
+  },
+  {
+    id: "reports",
+    label: "Hlášení",
+    route: SMART_ODPADY_V2_REPORTS_ROUTE,
+    moduleId: "absence",
+    icon: "absence"
+  },
+  {
+    id: "vehicle-tracking",
+    label: "Sledování vozidel",
+    route: SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE,
+    moduleId: "vehicle-tracking",
+    icon: "vehicleTracking"
+  }
+];
 const quickAbsenceMenuItem = {
   id: "quick-absence",
   title: "Rychlé zadání",
@@ -1673,6 +1703,34 @@ function normalizePath(pathname) {
   return path.replace(/\/+$/, "") || "/";
 }
 
+function pathMatchesRouteBase(path, routeBase) {
+  return path === routeBase || path.startsWith(`${routeBase}/`);
+}
+
+function isSmartOdpadyV2Path(pathname = window.location.pathname) {
+  return pathMatchesRouteBase(normalizePath(pathname), SMART_ODPADY_V2_BASE_ROUTE);
+}
+
+function smartOdpadyV2ActiveRouteId(pathname = window.location.pathname) {
+  const path = normalizePath(pathname);
+
+  if (pathMatchesRouteBase(path, SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE)) {
+    return "vehicle-tracking";
+  }
+
+  if (pathMatchesRouteBase(path, SMART_ODPADY_V2_REPORTS_ROUTE)) {
+    return "reports";
+  }
+
+  return "dashboard";
+}
+
+function isVehicleTrackingRuntimePath(pathname = window.location.pathname) {
+  const path = normalizePath(pathname);
+  return pathMatchesRouteBase(path, VEHICLE_TRACKING_BASE_ROUTE) ||
+    pathMatchesRouteBase(path, SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE);
+}
+
 function isCollectionRoutesPath(pathname = window.location.pathname) {
   return normalizePath(pathname).startsWith(COLLECTION_ROUTES_ROUTE);
 }
@@ -1720,12 +1778,15 @@ function routeFleetVehicleId(path) {
 }
 
 function routeVehicleTrackingContext(path) {
-  if (!path.startsWith(`${VEHICLE_TRACKING_BASE_ROUTE}/`)) {
+  const routeBase = [VEHICLE_TRACKING_BASE_ROUTE, SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE]
+    .find((baseRoute) => path.startsWith(`${baseRoute}/`));
+
+  if (!routeBase) {
     return null;
   }
 
   const parts = path
-    .slice(`${VEHICLE_TRACKING_BASE_ROUTE}/`.length)
+    .slice(`${routeBase}/`.length)
     .split("/")
     .map((part) => decodeURIComponent(part || "").trim())
     .filter(Boolean);
@@ -1767,6 +1828,240 @@ function absenceModuleItem() {
 
 function renderModuleIcon(moduleItem) {
   return moduleItem.icon();
+}
+
+function smartOdpadyV2IconFile(file) {
+  return `<img class="smart-odpady-v2-icon-img theme-icon-img" src="/design-icons/${escapeHtml(file)}?v=${SMART_ODPADY_V2_ICON_ASSET_VERSION}" alt="" aria-hidden="true" loading="lazy">`;
+}
+
+function smartOdpadyV2Icon(name) {
+  const icons = {
+    dashboard: "001.svg",
+    absence: "012.svg",
+    vehicleTracking: "vehicle-tracking.svg",
+    menu: "021.svg",
+    topMail: "top-mail.svg",
+    topLogin: "top-login.svg",
+    topPhone: "top-phone.svg"
+  };
+
+  return smartOdpadyV2IconFile(icons[name] || icons.dashboard);
+}
+
+function normalizeSmartOdpadyV2Theme(mode) {
+  return mode === "dark" ? "dark" : "light";
+}
+
+function readSmartOdpadyV2Storage(key, fallback = "") {
+  try {
+    return window.localStorage?.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeSmartOdpadyV2Storage(key, value) {
+  try {
+    window.localStorage?.setItem(key, value);
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function smartOdpadyV2ThemeMode() {
+  return normalizeSmartOdpadyV2Theme(readSmartOdpadyV2Storage(SMART_ODPADY_V2_THEME_STORAGE_KEY, "light"));
+}
+
+function smartOdpadyV2SidebarCollapsed() {
+  return readSmartOdpadyV2Storage(SMART_ODPADY_V2_SIDEBAR_STORAGE_KEY, "false") === "true";
+}
+
+function smartOdpadyV2ThemeIcon(mode) {
+  if (mode === "dark") {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M20.1 14.2A7.8 7.8 0 0 1 9.8 3.9a8.4 8.4 0 1 0 10.3 10.3Z"></path>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="4"></circle>
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+    </svg>
+  `;
+}
+
+function smartOdpadyV2ThemeSwitcher() {
+  const currentTheme = smartOdpadyV2ThemeMode();
+  const isDark = currentTheme === "dark";
+  const nextTheme = isDark ? "light" : "dark";
+  const label = isDark ? "Noc" : "Den";
+  const nextLabel = isDark ? "denní" : "noční";
+
+  return `
+    <button
+      class="tracking-theme-switcher tracking-theme-switcher--${escapeHtml(currentTheme)}"
+      type="button"
+      role="switch"
+      aria-checked="${isDark ? "true" : "false"}"
+      aria-label="Přepnout na ${escapeHtml(nextLabel)} motiv"
+      data-smart-odpady-v2-theme="${escapeHtml(nextTheme)}"
+      data-smart-odpady-v2-theme-toggle
+    >
+      <span class="tracking-theme-switcher__track" aria-hidden="true">
+        <span class="tracking-theme-switcher__icon tracking-theme-switcher__icon--sun">${smartOdpadyV2ThemeIcon("light")}</span>
+        <span class="tracking-theme-switcher__icon tracking-theme-switcher__icon--moon">${smartOdpadyV2ThemeIcon("dark")}</span>
+        <span class="tracking-theme-switcher__thumb">
+          <span class="tracking-theme-switcher__thumb-icon">${smartOdpadyV2ThemeIcon(currentTheme)}</span>
+        </span>
+      </span>
+      <span class="tracking-theme-switcher__label">${escapeHtml(label)}</span>
+    </button>
+  `;
+}
+
+function setSmartOdpadyV2Theme(mode) {
+  const nextTheme = normalizeSmartOdpadyV2Theme(mode);
+  writeSmartOdpadyV2Storage(SMART_ODPADY_V2_THEME_STORAGE_KEY, nextTheme);
+  document.body?.setAttribute("data-theme", nextTheme);
+}
+
+function syncSmartOdpadyV2ThemeRoot(active) {
+  if (active) {
+    document.body?.setAttribute("data-theme", smartOdpadyV2ThemeMode());
+    return;
+  }
+
+  document.body?.removeAttribute("data-theme");
+}
+
+function smartOdpadyV2VisibleNavItems(user) {
+  return SMART_ODPADY_V2_NAV_ITEMS.filter((item) => canViewModule(user, item.moduleId));
+}
+
+function smartOdpadyV2UtilityShortcuts() {
+  const shortcuts = [
+    { icon: "topMail", label: "Pošta" },
+    { icon: "topLogin", label: "Přihlášení" },
+    { icon: "topPhone", label: "Telefon" }
+  ];
+
+  return `
+    <div class="tracking-utility-shortcuts" aria-label="Rychlé systémové zkratky">
+      ${shortcuts.map((item) => `
+        <span class="tracking-utility-icon-button icon-tone-graphite" role="img" aria-label="${escapeHtml(item.label)}" title="${escapeHtml(item.label)}">
+          ${smartOdpadyV2Icon(item.icon)}
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+function smartOdpadyV2UtilityBar(user) {
+  const roleText = roleLabel(user?.role || "readonly").toUpperCase();
+
+  return `
+    <nav class="tracking-utility-bar" aria-label="Systémová lišta Smart Odpady V2">
+      <div class="tracking-utility-bar__brand">
+        <a class="tracking-utility-logo" href="${routeHref(SMART_ODPADY_V2_DASHBOARD_ROUTE)}" data-link aria-label="Smart Odpady V2">
+          <img src="/kaiser_logo.png?v=${SMART_ODPADY_V2_ICON_ASSET_VERSION}" alt="" loading="eager" decoding="async">
+        </a>
+        <a class="tracking-home-link" href="${routeHref("/")}" data-link>
+          <span class="tracking-home-link__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M19 12H5"></path>
+              <path d="m12 5-7 7 7 7"></path>
+            </svg>
+          </span>
+          <span>Zpět na HP</span>
+        </a>
+      </div>
+      <div class="tracking-utility-bar__tools">
+        ${smartOdpadyV2ThemeSwitcher()}
+        <span class="tracking-preview-role-chip">${escapeHtml(roleText)}</span>
+        ${smartOdpadyV2UtilityShortcuts()}
+        <button class="tracking-utility-logout" type="button" data-logout>Odhlásit</button>
+      </div>
+    </nav>
+  `;
+}
+
+function smartOdpadyV2Sidebar(activeId, user) {
+  const collapsed = smartOdpadyV2SidebarCollapsed();
+  const items = smartOdpadyV2VisibleNavItems(user);
+
+  return `
+    <div class="tracking-preview-sidebar-stack">
+      <aside class="tracking-preview-sidebar ${collapsed ? "sidebar--compact" : "sidebar--expanded"}" aria-label="Navigace Smart Odpady V2" data-smart-odpady-v2-sidebar>
+        <input
+          class="tracking-preview-sidebar__state sr-only"
+          type="checkbox"
+          id="smart-odpady-v2-sidebar-state"
+          ${collapsed ? "" : "checked"}
+          data-smart-odpady-v2-sidebar-state
+        >
+        <div class="tracking-preview-sidebar__head tracking-preview-sidebar__head--controls-only">
+          <label class="tracking-preview-sidebar__toggle icon-tone-graphite" for="smart-odpady-v2-sidebar-state" title="Přepnout menu">
+            ${smartOdpadyV2Icon("menu")}
+            <span class="tracking-preview-sidebar__toggle-label">Menu</span>
+          </label>
+        </div>
+        <nav class="tracking-preview-sidebar__nav" aria-label="Moduly Smart Odpady V2">
+          <div class="tracking-preview-nav-group">
+            <span class="tracking-preview-nav-group__label">Smart Odpady V2</span>
+            ${items.map((item) => {
+              const active = item.id === activeId;
+              return `
+                <a
+                  class="tracking-preview-nav-item ${active ? "tracking-preview-nav-item--active" : ""}"
+                  href="${routeHref(item.route)}"
+                  data-link
+                  title="${escapeHtml(item.label)}"
+                  ${active ? 'aria-current="page"' : ""}
+                >
+                  <span class="tracking-preview-nav-item__icon tracking-preview-nav-item__icon--${escapeHtml(item.id)} icon-tone-${active ? "green" : "graphite"}">${smartOdpadyV2Icon(item.icon)}</span>
+                  <span class="tracking-preview-nav-item__label">${escapeHtml(item.label)}</span>
+                </a>
+              `;
+            }).join("")}
+          </div>
+        </nav>
+      </aside>
+    </div>
+  `;
+}
+
+function smartOdpadyV2ForbiddenContent(moduleName) {
+  return `
+    <section class="module-detail tracking-hero smart-odpady-v2-panel" aria-labelledby="smart-odpady-v2-forbidden-title">
+      <div class="module-detail__body">
+        <div class="module-detail__eyebrow">SMART ODPADY V2</div>
+        <h1 id="smart-odpady-v2-forbidden-title">Bez oprávnění</h1>
+        <p>Pro modul ${escapeHtml(moduleName)} nemáte v aktuální roli povolený přístup.</p>
+      </div>
+    </section>
+  `;
+}
+
+function smartOdpadyV2Shell(user, activeId, content) {
+  syncSmartOdpadyV2ThemeRoot(true);
+  const theme = smartOdpadyV2ThemeMode();
+
+  return `
+    <main class="app-shell module-page module-theme-scope tracking-page tracking-page--soft-metal-preview smart-odpady-v2" data-smart-odpady-v2 data-theme="${escapeHtml(theme)}">
+      <div class="tracking-preview-frame">
+        ${smartOdpadyV2UtilityBar(user)}
+        <div class="tracking-preview-shell">
+          ${smartOdpadyV2Sidebar(activeId, user)}
+          <div class="tracking-preview-content">
+            ${content}
+          </div>
+        </div>
+      </div>
+    </main>
+  `;
 }
 
 function statusBadge(moduleItem) {
@@ -15281,7 +15576,7 @@ function applyVehicleTrackingDemoFrame(elapsedMs) {
 }
 
 function vehicleTrackingDemoFrame(now = vehicleTrackingDemoCurrentTime()) {
-  if (!normalizePath(window.location.pathname).startsWith(VEHICLE_TRACKING_BASE_ROUTE)) {
+  if (!isVehicleTrackingRuntimePath()) {
     stopVehicleTrackingDemoRuntime();
     return;
   }
@@ -15300,7 +15595,7 @@ function vehicleTrackingDemoFrame(now = vehicleTrackingDemoCurrentTime()) {
 }
 
 function syncVehicleTrackingDemoRuntime() {
-  const isTrackingPage = normalizePath(window.location.pathname).startsWith(VEHICLE_TRACKING_BASE_ROUTE);
+  const isTrackingPage = isVehicleTrackingRuntimePath();
   if (!isTrackingPage || !document.querySelector("[data-tracking-demo-map]")) {
     stopVehicleTrackingDemoRuntime();
     clearVehicleTrackingGoogleMap();
@@ -15398,6 +15693,214 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
       </div>
     </main>
   `;
+}
+
+function smartOdpadyV2DashboardContent(user) {
+  ensureDataBoxData();
+  if (canViewModule(user, "driver-reports")) {
+    ensureDriverReportsData();
+  }
+  const modulesForUser = hasPermission(user, "absence", "create")
+    ? [quickAbsenceMenuItem, ...menuModules(user)]
+    : menuModules(user);
+
+  return `
+    <section class="module-detail tracking-hero smart-odpady-v2-hero" aria-labelledby="smart-odpady-v2-dashboard-title">
+      <div class="module-detail__body">
+        <div class="module-detail__eyebrow">KAISER SMART / DASHBOARD</div>
+        <h1 id="smart-odpady-v2-dashboard-title">Přehled systému</h1>
+        <p>${escapeHtml(HOME_SUBTITLE)}</p>
+        <div class="module-detail__status">
+          <span>Stav</span>
+          <strong>Funkční přehled</strong>
+        </div>
+      </div>
+      <div class="smart-odpady-v2-hero__icon" aria-hidden="true">${smartOdpadyV2Icon("dashboard")}</div>
+    </section>
+    ${homeOperationsPanel(user)}
+    <div class="home-module-sections smart-odpady-v2-dashboard-sections" aria-label="Hlavní moduly">
+      ${homeModuleSections(modulesForUser, user)}
+    </div>
+    ${VersionNewsInfo()}
+    ${VersionBackupInfo()}
+  `;
+}
+
+function smartOdpadyV2AbsenceRouteForTab(tabId, options = {}) {
+  const safeTab = tabId && tabId !== "dashboard" ? tabId : "";
+  const params = new URLSearchParams();
+  if (safeTab) {
+    params.set("tab", safeTab);
+  }
+  if (options.employeeId) {
+    params.set("employeeId", options.employeeId);
+  }
+
+  const query = params.toString();
+  return query ? `${SMART_ODPADY_V2_REPORTS_ROUTE}?${query}` : SMART_ODPADY_V2_REPORTS_ROUTE;
+}
+
+function smartOdpadyV2AbsenceTabFromUrl(user) {
+  const params = new URL(window.location.href).searchParams;
+  const requestedTab = params.get("tab") || absenceUiState.tab || "dashboard";
+  return resolveAbsenceTab(user, requestedTab);
+}
+
+function smartOdpadyV2RewriteAbsenceLinks(html) {
+  return Object.entries(ABSENCE_TAB_ROUTES).reduce((output, [tabId, route]) => {
+    const originalHref = `href="${routeHref(route)}"`;
+    const nextHref = `href="${routeHref(smartOdpadyV2AbsenceRouteForTab(tabId))}"`;
+    return output.replaceAll(originalHref, nextHref);
+  }, html).replace(
+    new RegExp(`href="${routeHref(EMPLOYEE_CARD_ROUTE_PREFIX)}/([^"]+)"`, "g"),
+    (_match, employeeId) => `href="${routeHref(smartOdpadyV2AbsenceRouteForTab("employee-card", { employeeId }))}"`
+  );
+}
+
+function smartOdpadyV2ReportsContent(user) {
+  const moduleItem = absenceModuleItem();
+  const activeTab = smartOdpadyV2AbsenceTabFromUrl(user);
+  const employeeId = new URL(window.location.href).searchParams.get("employeeId") || "";
+  const context = employeeId ? { employeeId } : { tab: activeTab };
+  const tabs = absenceTabsForUser(user);
+  const isQuickTab = activeTab === "quick";
+  const heroDataStatus = isQuickTab ? null : absenceDataStatus();
+  absenceUiState.tab = activeTab;
+
+  const content = `
+    <section class="absence-hero absence-hero--app smart-odpady-v2-hero" aria-labelledby="smart-odpady-v2-reports-title">
+      <div class="module-detail__icon">${smartOdpadyV2Icon("absence")}</div>
+      <div>
+        <div class="module-detail__eyebrow">SMART ODPADY / HLÁŠENÍ</div>
+        <h1 id="smart-odpady-v2-reports-title">${isQuickTab ? "Rychlé zadání" : "Hlášení"}</h1>
+        <p>${isQuickTab ? "Typ, datum, odeslat." : `Stav: <strong>${escapeHtml(heroDataStatus.label)}</strong> · ${escapeHtml(heroDataStatus.detail)}`}</p>
+      </div>
+      ${isQuickTab ? "" : `<div class="absence-command-actions absence-command-actions--hero">
+        ${hasPermission(user, "absence", "create") ? `<a class="primary-action" href="${routeHref(smartOdpadyV2AbsenceRouteForTab("new"))}" data-link>Nová dovolená</a>` : ""}
+        ${hasPermission(user, "absence", "create") ? '<button class="secondary-link" type="button" data-absence-tab="new">Přidat nemoc</button>' : ""}
+        ${canUseAbsenceTab(user, "approval") ? `<a class="secondary-link" href="${routeHref(smartOdpadyV2AbsenceRouteForTab("approval"))}" data-link>Schvalování</a>` : ""}
+      </div>`}
+    </section>
+
+    <nav class="absence-tabs" aria-label="Menu modulu Hlášení">
+      ${tabs.map((tab) => `
+        <a
+          class="absence-tab ${tab.id === activeTab ? "absence-tab--active" : ""}"
+          href="${routeHref(smartOdpadyV2AbsenceRouteForTab(tab.id))}"
+          data-link
+        >
+          ${escapeHtml(tab.label)}
+        </a>
+      `).join("")}
+    </nav>
+
+    ${absenceUiState.message ? `<p class="module-feedback__notice">${escapeHtml(absenceUiState.message)}</p>` : ""}
+    ${absenceUiState.error ? `<p class="module-feedback__error">${escapeHtml(absenceUiState.error)}</p>` : ""}
+    ${absenceActiveContent(activeTab, user, context)}
+  `;
+
+  return smartOdpadyV2RewriteAbsenceLinks(content);
+}
+
+function smartOdpadyV2VehicleTrackingContent(user, context = {}) {
+  const moduleItem = orderedModules.find((item) => item.id === "vehicle-tracking");
+  const vehicleId = context.vehicleId || "";
+  const view = context.view || "map";
+  const sourceMode = vehicleTrackingActiveSourceMode();
+  const visibleVehicles = vehicleTrackingDemoVisibleVehicles();
+  const selectedVehicle = vehicleTrackingDemoSelectedVehicle(vehicleId, visibleVehicles);
+  if (selectedVehicle) {
+    vehicleTrackingDemoState.selectedVehicleId = selectedVehicle.id;
+  }
+
+  return `
+    <section class="module-detail tracking-hero smart-odpady-v2-hero" aria-labelledby="smart-odpady-v2-tracking-title">
+      <div class="module-detail__body">
+        <div class="module-detail__eyebrow">SMART ODPADY / SLEDOVÁNÍ VOZIDEL</div>
+        <h1 id="smart-odpady-v2-tracking-title">Sledování vozidel</h1>
+        <p>Primární poloha vozidel bude z T-Cars jednotek. Demo režim zůstává jako bezpečná ukázka bez reálných GPS dat.</p>
+        <div class="module-detail__status">
+          <span>Stav</span>
+          <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
+        </div>
+        <div class="module-actions">
+          ${vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE)}
+          ${vehicleTrackingAction("Správa GPS napojení")}
+        </div>
+      </div>
+      <div class="smart-odpady-v2-hero__icon smart-odpady-v2-hero__icon--tracking" aria-hidden="true">${smartOdpadyV2Icon("vehicleTracking")}</div>
+    </section>
+
+    ${vehicleTrackingSourceModePanel()}
+    ${sourceMode === "demo" ? vehicleTrackingDemoBanner() : ""}
+    ${vehicleTrackingTabs(view, sourceMode)}
+    <div class="tracking-layout tracking-demo-layout">
+      ${sourceMode === "demo" ? `
+        ${vehicleTrackingMapSection(visibleVehicles, selectedVehicle)}
+        ${vehicleTrackingListSection(visibleVehicles, selectedVehicle)}
+        ${vehicleTrackingDetailSection(selectedVehicle)}
+      ` : `
+        ${vehicleTrackingTcarsStatusSection()}
+        ${vehicleTrackingTcarsPairingSection()}
+      `}
+      ${vehicleTrackingGeofencingDraftPanel()}
+      ${vehicleTrackingApiSection()}
+      ${vehicleTrackingSettingsSection()}
+      <div id="tracking-rules">
+        ${vehicleTrackingRulesAutomation(user)}
+      </div>
+    </div>
+  `;
+}
+
+function renderSmartOdpadyV2(user) {
+  const path = normalizePath(window.location.pathname);
+  if (path === SMART_ODPADY_V2_BASE_ROUTE) {
+    window.history.replaceState({}, "", routeHref(SMART_ODPADY_V2_DASHBOARD_ROUTE));
+    lastRenderedUrl = window.location.href;
+  }
+
+  const activeId = smartOdpadyV2ActiveRouteId();
+  const navItem = SMART_ODPADY_V2_NAV_ITEMS.find((item) => item.id === activeId) || SMART_ODPADY_V2_NAV_ITEMS[0];
+  const canView = canViewModule(user, navItem.moduleId);
+
+  if (!canView) {
+    app.innerHTML = smartOdpadyV2Shell(user, activeId, smartOdpadyV2ForbiddenContent(navItem.label));
+    document.title = `Bez oprávnění | ${APP_NAME}`;
+    return;
+  }
+
+  if (activeId === "reports") {
+    const activeTab = smartOdpadyV2AbsenceTabFromUrl(user);
+    loadEmployeeList();
+    loadAbsenceRequests();
+    if (activeTab === "approval" || activeTab === "dashboard") {
+      loadAbsenceApprovalRequests();
+    }
+    if (activeTab === "quick") {
+      loadQuickAbsenceRequests();
+    }
+    app.innerHTML = smartOdpadyV2Shell(user, activeId, smartOdpadyV2ReportsContent(user));
+    document.title = `Hlášení | ${APP_NAME}`;
+    return;
+  }
+
+  if (activeId === "vehicle-tracking") {
+    const trackingContext = routeVehicleTrackingContext(normalizePath(window.location.pathname)) || {};
+    if (vehicleTrackingActiveSourceMode() === "tcars") {
+      loadVehicleTrackingStatus();
+      loadVehicleTrackingWimSites();
+      queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
+    }
+    app.innerHTML = smartOdpadyV2Shell(user, activeId, smartOdpadyV2VehicleTrackingContent(user, trackingContext));
+    document.title = `Sledování vozidel | ${APP_NAME}`;
+    return;
+  }
+
+  ensureCollectionRoutesSvozKaiserWatchdog(user);
+  app.innerHTML = smartOdpadyV2Shell(user, "dashboard", smartOdpadyV2DashboardContent(user));
+  ensureDataBoxPlusHomeStatus(user);
+  document.title = `Smart Odpady V2 | ${APP_NAME}`;
 }
 
 function collectionRoutesCanViewPilot(user) {
@@ -39787,6 +40290,13 @@ function renderAuthenticatedApp(user) {
   const userDashboardRoutes = new Map(visibleDashboardRoutes(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   const sarlotaDeepLink = prepareSarlotaDeepLinkPanel();
 
+  if (isSmartOdpadyV2Path(path)) {
+    renderSmartOdpadyV2(user);
+    return;
+  }
+
+  syncSmartOdpadyV2ThemeRoot(false);
+
   if (path === DATA_BOX_ROUTE) {
     window.history.replaceState({}, "", routeHref(DATA_BOX_PLUS_ROUTE));
     lastRenderedUrl = window.location.href;
@@ -42946,6 +43456,17 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const smartOdpadyV2SidebarState = event.target.closest("[data-smart-odpady-v2-sidebar-state]");
+  if (smartOdpadyV2SidebarState) {
+    writeSmartOdpadyV2Storage(SMART_ODPADY_V2_SIDEBAR_STORAGE_KEY, smartOdpadyV2SidebarState.checked ? "false" : "true");
+    const sidebar = smartOdpadyV2SidebarState.closest("[data-smart-odpady-v2-sidebar]");
+    if (sidebar) {
+      sidebar.classList.toggle("sidebar--expanded", smartOdpadyV2SidebarState.checked);
+      sidebar.classList.toggle("sidebar--compact", !smartOdpadyV2SidebarState.checked);
+    }
+    return;
+  }
+
   const driverReportField = event.target.closest("[data-driver-report-form] input, [data-driver-report-form] select, [data-driver-report-form] textarea");
   if (driverReportField) {
     const form = driverReportField.closest("[data-driver-report-form]");
@@ -43203,6 +43724,14 @@ document.addEventListener("pointerup", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  const smartOdpadyV2ThemeToggle = event.target.closest("[data-smart-odpady-v2-theme-toggle]");
+  if (smartOdpadyV2ThemeToggle) {
+    event.preventDefault();
+    setSmartOdpadyV2Theme(smartOdpadyV2ThemeToggle.dataset.smartOdpadyV2Theme || "light");
+    render();
+    return;
+  }
+
   const dataBoxPlusCommandPage = event.target.closest("[data-ds-plus-command-page]");
   if (dataBoxPlusCommandPage) {
     event.preventDefault();
@@ -44043,6 +44572,15 @@ document.addEventListener("click", async (event) => {
   if (absenceTab) {
     const nextTab = absenceTab.dataset.absenceTab || "dashboard";
     const resolvedTab = resolveAbsenceTab(currentUser(), nextTab);
+    if (pathMatchesRouteBase(normalizePath(window.location.pathname), SMART_ODPADY_V2_REPORTS_ROUTE)) {
+      guardedAccessAction(() => {
+        absenceUiState.tab = resolvedTab;
+        setAbsenceNotice("");
+        navigateToUrl(routeHref(smartOdpadyV2AbsenceRouteForTab(resolvedTab)));
+      });
+      return;
+    }
+
     if (resolvedTab === "employee-card") {
       guardedAccessAction(() => navigateToUrl(routeHref(absenceRouteForTab("employee-card"))));
       return;

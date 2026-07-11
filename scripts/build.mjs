@@ -51,6 +51,10 @@ async function fileExists(filePath) {
 }
 
 const fixedRouteEntries = [
+  { path: "/smart-odpady-v2", moduleKey: "dashboard", label: "Smart Odpady V2" },
+  { path: "/smart-odpady-v2/dashboard", moduleKey: "dashboard", label: "Smart Odpady V2 - Dashboard" },
+  { path: "/smart-odpady-v2/hlaseni", moduleKey: "absence", label: "Smart Odpady V2 - Hlaseni" },
+  { path: "/smart-odpady-v2/sledovani-vozidel", moduleKey: "vehicle-tracking", label: "Smart Odpady V2 - Sledovani vozidel" },
   { path: "/", moduleKey: "dashboard", label: "Hlavní stránka" },
   { path: "/sarlota", moduleKey: "dashboard", label: "Šarlota" },
   { path: "/pripominky", moduleKey: "feedback", label: "Připomínky" },
@@ -122,6 +126,7 @@ if (await fileExists(publicDir)) {
 await writeFile(path.join(dist, "index.html"), versionedTemplate());
 await writeFile(path.join(dist, "404.html"), versionedTemplate());
 await writeFile(path.join(dist, "_redirects"), [
+  "/smart-odpady-v2/* /index.html 200",
   "/sarlota /sarlota/index.html 200",
   "/dovolena-nemoc/* /index.html 200",
   "/vozovy-park/* /index.html 200",
