@@ -180,6 +180,7 @@ export const VEHICLE_TRACKING_LIST_COLUMNS = [
 
 export const VEHICLE_TRACKING_API_ENDPOINTS = [
   "GET /api/vehicle-tracking/status",
+  "GET /api/vehicle-tracking/maps-config",
   "GET /api/vehicle-tracking/wim-sites",
   "GET /api/vehicle-tracking/wim-alerts",
   "POST /api/vehicle-tracking/tcars/sync",

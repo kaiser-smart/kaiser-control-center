@@ -85,6 +85,7 @@ import { receivablesVistosInvoiceLookbackWindow } from "../functions/_lib/receiv
 import { calculateCustomerPaymentRating } from "../functions/_lib/receivables-rating-engine.js";
 import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-plus-store.js";
 import { targetForSelfRepairReport } from "../functions/_lib/self-repair-targets.js";
+import { vehicleTrackingMapsConfigPayload } from "../functions/api/vehicle-tracking/maps-config.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -5909,6 +5910,21 @@ async function handleApi(request, response) {
     }
 
     sendJson(response, 200, await loadTcarsStatusPayload(process.env));
+    return true;
+  }
+
+  if (url.pathname === "/api/vehicle-tracking/maps-config" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "vehicle-tracking", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    sendJson(response, 200, vehicleTrackingMapsConfigPayload(process.env));
     return true;
   }
 

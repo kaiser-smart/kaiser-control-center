@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.504"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.505"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: čistá mapa a provozní přehled",
+    text: "Hlavní obrazovka ukazuje Google mapu, souhrn poloh, hledání, stavové filtry, volitelnou WIM vrstvu a kompaktní detail vozidla. Mapu lze zvětšit přes celé pracovní okno a zavřít tlačítkem nebo klávesou Escape. Technické údaje T-Cars, párování, API, geofencing, logy a pravidla jsou přesunuté do Nastavení. Google Maps klíč se načítá až po přihlášení přes chráněné API a zůstává mimo repozitář."
+  },
   {
     title: "KSO e-maily: jednotná identita Šarloty",
     text: "Systémové e-maily mimo Pohledávky používají jednotně Šarlota Kaiser <sarlota@kaiserservis.cz> jako From i Reply-To. Pohledávky zůstávají samostatnou výjimkou s odesílatelem fakturace@kaiserservis.cz. Chyba SendGrid 403 nově vysvětlí potřebu ověřit Sender Identity místo technického kódu."
