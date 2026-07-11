@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.505"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.506"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -21,8 +21,12 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Poloha vozidel: WIM vrstva odložena",
+    text: "Hlavní provozní mapa už nenačítá ani nezobrazuje body WIM vah. Rozpracované read-only podklady zůstávají pouze v Nastavení, aby je bylo možné později bezpečně dokončit bez zásahu do poloh vozidel."
+  },
+  {
     title: "Poloha vozidel: čistá mapa a provozní přehled",
-    text: "Hlavní obrazovka ukazuje Google mapu, souhrn poloh, hledání, stavové filtry, volitelnou WIM vrstvu a kompaktní detail vozidla. Mapu lze zvětšit přes celé pracovní okno a zavřít tlačítkem nebo klávesou Escape. Technické údaje T-Cars, párování, API, geofencing, logy a pravidla jsou přesunuté do Nastavení. Google Maps klíč se načítá až po přihlášení přes chráněné API a zůstává mimo repozitář."
+    text: "Hlavní obrazovka ukazuje Google mapu, souhrn poloh, hledání, stavové filtry a kompaktní detail vozidla. Mapu lze zvětšit přes celé pracovní okno a zavřít tlačítkem nebo klávesou Escape. Technické údaje T-Cars, párování, API, geofencing, logy a pravidla jsou přesunuté do Nastavení. Google Maps klíč se načítá až po přihlášení přes chráněné API a zůstává mimo repozitář."
   },
   {
     title: "KSO e-maily: jednotná identita Šarloty",

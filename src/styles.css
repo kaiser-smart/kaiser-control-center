@@ -25979,25 +25979,6 @@ body:has(.data-box-page) .data-box-side-card--sync {
   gap: 8px;
 }
 
-.tracking-layer-toggle {
-  min-height: 40px;
-  padding: 0 13px;
-  border: 1px solid #d7e0d3;
-  border-radius: 12px;
-  background: #f4f7f3;
-  color: #52605a;
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.tracking-layer-toggle--active {
-  border-color: rgba(117, 189, 37, 0.45);
-  background: #eaf6df;
-  color: #3f7710;
-}
-
 .tracking-operational-map-shell {
   position: relative;
   min-height: clamp(430px, 52vw, 620px);
@@ -26501,7 +26482,7 @@ body.tracking-map-is-maximized {
 
   .tracking-operational-map-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     justify-content: stretch;
   }
 

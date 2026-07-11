@@ -1643,7 +1643,6 @@ const vehicleTrackingMapConfigState = {
 const vehicleTrackingUiState = {
   search: "",
   filter: "all",
-  showWimLayer: false,
   mapMaximized: false
 };
 
@@ -14572,9 +14571,6 @@ function vehicleTrackingOperationalSection() {
             <span>${escapeHtml(hasGoogleMapsKey ? `${groups.filteredValidLocations.length} zobrazených poloh` : mapLoading ? "Připravuji mapu…" : "Mapa není nakonfigurovaná")}</span>
           </div>
           <div class="tracking-operational-map-actions">
-            <button class="tracking-layer-toggle ${vehicleTrackingUiState.showWimLayer ? "tracking-layer-toggle--active" : ""}" type="button" data-tracking-wim-toggle aria-pressed="${vehicleTrackingUiState.showWimLayer ? "true" : "false"}">
-              WIM váhy
-            </button>
             <button class="secondary-link" type="button" data-tracking-map-maximize aria-expanded="${vehicleTrackingUiState.mapMaximized ? "true" : "false"}">
               ${vehicleTrackingUiState.mapMaximized ? "Zmenšit mapu" : "Zvětšit mapu"}
             </button>
@@ -15607,7 +15603,7 @@ function vehicleTrackingGoogleMapLocations() {
 }
 
 function vehicleTrackingGoogleMapWimSites() {
-  if (document.querySelector("[data-tracking-operational-view]") && !vehicleTrackingUiState.showWimLayer) {
+  if (document.querySelector("[data-tracking-operational-view]")) {
     return [];
   }
   return vehicleTrackingWimSitesForMap();
@@ -15724,18 +15720,10 @@ function setVehicleTrackingOperationalFilter(filter) {
   queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
 }
 
-function toggleVehicleTrackingWimLayer() {
-  vehicleTrackingUiState.showWimLayer = !vehicleTrackingUiState.showWimLayer;
-  render();
-  syncVehicleTrackingMapMaximizedDom();
-  queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
-}
-
 async function refreshVehicleTrackingOperationalData() {
   await Promise.all([
     loadVehicleTrackingMapConfig({ force: true, renderAfter: false }),
-    loadVehicleTrackingStatus({ force: true, renderAfter: false }),
-    loadVehicleTrackingWimSites({ force: true, renderAfter: false })
+    loadVehicleTrackingStatus({ force: true, renderAfter: false })
   ]);
   render();
   syncVehicleTrackingMapMaximizedDom();
@@ -36820,7 +36808,6 @@ function resetVehicleTrackingLiveState() {
   vehicleTrackingMapConfigState.error = "";
   vehicleTrackingUiState.search = "";
   vehicleTrackingUiState.filter = "all";
-  vehicleTrackingUiState.showWimLayer = false;
   vehicleTrackingUiState.mapMaximized = false;
   document.documentElement.classList.remove("tracking-map-is-maximized");
   document.body?.classList.remove("tracking-map-is-maximized");
@@ -37826,7 +37813,6 @@ function handleVehicleTrackingSourceMode(mode) {
 
   if (mode === "tcars") {
     loadVehicleTrackingStatus();
-    loadVehicleTrackingWimSites();
     queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
   } else {
     clearVehicleTrackingTcarsGoogleMap();
@@ -40585,7 +40571,6 @@ function renderAuthenticatedApp(user) {
     if (vehicleTrackingActiveSourceMode() === "tcars") {
       loadVehicleTrackingMapConfig();
       loadVehicleTrackingStatus();
-      loadVehicleTrackingWimSites();
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     return;
@@ -40629,7 +40614,6 @@ function renderAuthenticatedApp(user) {
     if (moduleItem.id === "vehicle-tracking" && vehicleTrackingActiveSourceMode() === "tcars") {
       loadVehicleTrackingMapConfig();
       loadVehicleTrackingStatus();
-      loadVehicleTrackingWimSites();
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     if (moduleItem.id === "settings" && hasPermission(user, "vehicle-tracking", "view")) {
@@ -44378,13 +44362,6 @@ document.addEventListener("click", async (event) => {
   if (trackingOperationalFilter) {
     event.preventDefault();
     setVehicleTrackingOperationalFilter(trackingOperationalFilter.dataset.trackingOperationalFilter || "all");
-    return;
-  }
-
-  const trackingWimToggle = event.target.closest("[data-tracking-wim-toggle]");
-  if (trackingWimToggle) {
-    event.preventDefault();
-    toggleVehicleTrackingWimLayer();
     return;
   }
 
