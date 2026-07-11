@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.514"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.515"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Hlavní Dashboard: provoz a ekonomika flotily",
+    text: "Hlavní stránka je nově skutečný read-only Dashboard firmy. Management vidí prioritní návrhy grafů Produktivní vs. přejezdové km a Výnos/km vs. náklad/km bez vymyšlených hodnot; aktuální provoz používá existující T-Cars, hlášení, trasy a datové zprávy podle oprávnění."
+  },
   {
     title: "Poloha vozidel: kalibrovaný směr a ovladač trasy",
     text: "3D ikony nově oddělují skutečný azimut T-Cars pro kameru mapy od vizuální korekce podle typu ikony, takže kabina míří po směru jízdy. Detail vybraného vozidla má tlačítko Trasa s rozsahem dnes, 24 hodin a 7 dní; čára se zapne až po napojení historie skutečných GPS bodů."
