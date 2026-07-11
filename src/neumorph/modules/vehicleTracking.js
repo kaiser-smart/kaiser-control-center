@@ -44,7 +44,7 @@ function renderMetric(metric) {
 
 function renderToolbar(viewModel) {
   return `
-    <section class="nm-toolbar nm-vehicle-toolbar" aria-label="Nastroje sledovani vozidel">
+    <section class="nm-toolbar nm-vehicle-toolbar" aria-label="Nástroje sledování vozidel">
       <div class="nm-vehicle-toolbar__source">
         <span class="nm-chip nm-chip--success">T-Cars read-only</span>
         <span class="nm-chip">${escapeHtml(viewModel.apiStatus)}</span>
@@ -58,7 +58,7 @@ function renderToolbar(viewModel) {
       </div>
       <div class="nm-toolbar__actions">
         <a class="nm-button nm-button--secondary" href="${escapeHtml(viewModel.routeHref("/sledovani-vozidel"))}" data-link>
-          Puvodni modul
+          Původní modul
         </a>
       </div>
     </section>
@@ -105,9 +105,9 @@ function renderVehicleList(viewModel) {
       <div class="nm-section-head">
         <div>
           <p class="nm-system-eyebrow">T-Cars vozidla</p>
-          <h2 id="nm-vehicle-list-title">Aktualni polohy</h2>
+          <h2 id="nm-vehicle-list-title">Aktuální polohy</h2>
         </div>
-        <span class="nm-chip nm-chip--info">${escapeHtml(formatNumber(viewModel.vehicles.length))} validnich</span>
+        <span class="nm-chip nm-chip--info">${escapeHtml(formatNumber(viewModel.vehicles.length))} validních</span>
       </div>
       ${viewModel.vehicles.length ? `
         <div class="nm-vehicle-list">
@@ -115,8 +115,8 @@ function renderVehicleList(viewModel) {
         </div>
       ` : renderNeumorphState({
         type: viewModel.loading ? "loading" : "empty",
-        title: viewModel.loading ? "Nacitam vozidla" : "Bez validnich poloh",
-        description: viewModel.loading ? "Cekam na odpoved Smart odpady API." : "T-Cars zatim nevratil zadne vozidlo s validni GPS polohou."
+        title: viewModel.loading ? "Načítám vozidla" : "Bez validních poloh",
+        description: viewModel.loading ? "Čekám na odpověď Smart odpady API." : "T-Cars zatím nevrátil žádné vozidlo s validní GPS polohou."
       })}
     </section>
   `;
@@ -163,15 +163,15 @@ function renderMap(viewModel) {
           <p class="nm-system-eyebrow">Mapa</p>
           <h2 id="nm-vehicle-map-title">Poloha vozidel</h2>
         </div>
-        <span class="nm-chip nm-chip--${hasGoogle ? "success" : "warning"}">${escapeHtml(hasGoogle ? "Google Maps" : "projekce souradnic")}</span>
+        <span class="nm-chip nm-chip--${hasGoogle ? "success" : "warning"}">${escapeHtml(hasGoogle ? "Google Maps" : "projekce souřadnic")}</span>
       </div>
       <div class="nm-vehicle-map-shell ${hasGoogle ? "nm-vehicle-map-shell--google" : "nm-vehicle-map-shell--static"}">
         ${hasGoogle ? `
           <div class="tracking-google-map tracking-tcars-google-map nm-vehicle-google-map" data-tracking-tcars-google-map aria-label="Google mapa T-Cars poloh"></div>
           ${viewModel.vehicles.length ? "" : `
             <div class="nm-vehicle-map-empty" role="status">
-              <strong>Bez validnich markeru</strong>
-              <span>Mapa je pripravena, ale API zatim neposlalo validni GPS polohy.</span>
+              <strong>Bez validních markerů</strong>
+              <span>Mapa je připravená, ale API zatím neposlalo validní GPS polohy.</span>
             </div>
           `}
         ` : `
@@ -182,8 +182,8 @@ function renderMap(viewModel) {
           ${viewModel.map.wimSites.map(renderStaticWimMarker).join("")}
           ${viewModel.map.vehicles.length || viewModel.map.wimSites.length ? "" : `
             <div class="nm-vehicle-map-empty" role="status">
-              <strong>Bez souradnic</strong>
-              <span>T-Cars ani WIM API zatim nedodalo mapove body.</span>
+              <strong>Bez souřadnic</strong>
+              <span>T-Cars ani WIM API zatím nedodalo mapové body.</span>
             </div>
           `}
         `}
@@ -191,7 +191,7 @@ function renderMap(viewModel) {
       <div class="nm-vehicle-map-legend" aria-label="Legenda mapy">
         <span><i class="nm-vehicle-map-dot nm-vehicle-map-dot--vehicle"></i>vozidlo</span>
         <span><i class="nm-vehicle-map-dot nm-vehicle-map-dot--wim"></i>WIM</span>
-        <span><i class="nm-vehicle-map-dot nm-vehicle-map-dot--selected"></i>vybrano</span>
+        <span><i class="nm-vehicle-map-dot nm-vehicle-map-dot--selected"></i>vybráno</span>
       </div>
     </section>
   `;
@@ -219,8 +219,8 @@ function renderVehicleDetail(viewModel) {
         </div>
         ${renderNeumorphState({
           type: "empty",
-          title: "Detail ceka na vozidlo",
-          description: "Vyberte vozidlo s validni T-Cars polohou."
+          title: "Detail čeká na vozidlo",
+          description: "Vyberte vozidlo s validní T-Cars polohou."
         })}
       </section>
     `;
@@ -241,14 +241,14 @@ function renderVehicleDetail(viewModel) {
         </div>
       </div>
       <div class="nm-vehicle-detail__grid">
-        ${detailField("Interni cislo", vehicle.internalNumber)}
-        ${detailField("Ridic", vehicle.driverName)}
+        ${detailField("Interní číslo", vehicle.internalNumber)}
+        ${detailField("Řidič", vehicle.driverName)}
         ${detailField("Rychlost", vehicle.speedText)}
-        ${detailField("Posledni GPS", vehicle.lastGpsText)}
+        ${detailField("Poslední GPS", vehicle.lastGpsText)}
         ${detailField("Adresa", vehicle.address)}
-        ${detailField("Souradnice", vehicle.coordinates)}
+        ${detailField("Souřadnice", vehicle.coordinates)}
         ${detailField("GPS jednotka", vehicle.gpsUnitId)}
-        ${detailField("Stav GPS", vehicle.invalidReason || "Validni poloha")}
+        ${detailField("Stav GPS", vehicle.invalidReason || "Validní poloha")}
       </div>
     </section>
   `;
@@ -263,8 +263,8 @@ function renderInvalidVehicles(viewModel) {
     <section class="nm-panel nm-vehicle-invalid" aria-labelledby="nm-vehicle-invalid-title">
       <div class="nm-section-head">
         <div>
-          <p class="nm-system-eyebrow">Bez validni GPS</p>
-          <h2 id="nm-vehicle-invalid-title">Oddelena vozidla</h2>
+          <p class="nm-system-eyebrow">Bez validní GPS</p>
+          <h2 id="nm-vehicle-invalid-title">Oddělená vozidla</h2>
         </div>
         <span class="nm-chip nm-chip--warning">${escapeHtml(formatNumber(viewModel.invalidVehicles.length))}</span>
       </div>
@@ -275,7 +275,7 @@ function renderInvalidVehicles(viewModel) {
             <div>
               <strong>${escapeHtml(vehicle.name)}</strong>
               <span>${escapeHtml(vehicle.licensePlate)} / ${escapeHtml(vehicle.lastGpsText)}</span>
-              <small>${escapeHtml(vehicle.invalidReason || "Bez validni GPS polohy")}</small>
+              <small>${escapeHtml(vehicle.invalidReason || "Bez validní GPS polohy")}</small>
             </div>
           </article>
         `).join("")}
@@ -291,7 +291,7 @@ function renderWimPanel(viewModel) {
       <div class="nm-section-head">
         <div>
           <p class="nm-system-eyebrow">WIM vrstva</p>
-          <h2 id="nm-vehicle-wim-title">Vahy a alerty</h2>
+          <h2 id="nm-vehicle-wim-title">Váhy a alerty</h2>
         </div>
         <span class="nm-chip nm-chip--${escapeHtml(viewModel.wim.apiStatus === "ready" ? "success" : "warning")}">${escapeHtml(viewModel.wim.apiStatus)}</span>
       </div>
@@ -303,15 +303,15 @@ function renderWimPanel(viewModel) {
             ${detailField("Komunikace", site.road)}
             ${detailField("Kilometr", site.kmLabel)}
             ${detailField("Strana", site.sideLabel)}
-            ${detailField("Zarizeni", String(site.deviceCount))}
+            ${detailField("Zařízení", String(site.deviceCount))}
             ${detailField("Kvalita GPS", site.coordinateQuality)}
             ${detailField("Zdroj", site.sourceLabel)}
           </div>
         </div>
       ` : renderNeumorphState({
         type: viewModel.wim.loading ? "loading" : "empty",
-        title: viewModel.wim.loading ? "Nacitam WIM" : "Bez WIM bodu",
-        description: viewModel.wim.loading ? "Cekam na WIM API." : "WIM vrstva zatim nema dostupne body."
+        title: viewModel.wim.loading ? "Načítám WIM" : "Bez WIM bodů",
+        description: viewModel.wim.loading ? "Čekám na WIM API." : "WIM vrstva zatím nemá dostupné body."
       })}
     </section>
   `;
@@ -323,9 +323,9 @@ function renderDiagnostics(viewModel) {
       <div class="nm-section-head">
         <div>
           <p class="nm-system-eyebrow">Diagnostika</p>
-          <h2 id="nm-vehicle-diagnostics-title">T-Cars napojeni</h2>
+          <h2 id="nm-vehicle-diagnostics-title">T-Cars napojení</h2>
         </div>
-        <span class="nm-chip">${escapeHtml(viewModel.configured ? "konfigurovano" : "ceka na konfiguraci")}</span>
+        <span class="nm-chip">${escapeHtml(viewModel.configured ? "konfigurováno" : "čeká na konfiguraci")}</span>
       </div>
       <div class="nm-vehicle-config-grid">
         ${viewModel.configItems.slice(0, 8).map((item) => detailField(item.label, item.value)).join("")}
@@ -340,8 +340,8 @@ export function renderNeumorphVehicleTracking({ user = null, routeHref = (route)
   if (!viewModel.canView) {
     return renderNeumorphState({
       type: "warning",
-      title: "Bez pristupu ke sledovani vozidel",
-      description: viewModel.error || "Aktualni role nema opravneni vehicle-tracking:view."
+      title: "Bez přístupu ke sledování vozidel",
+      description: viewModel.error || "Aktuální role nemá oprávnění vehicle-tracking:view."
     });
   }
 
@@ -350,16 +350,16 @@ export function renderNeumorphVehicleTracking({ user = null, routeHref = (route)
       ${renderNeumorphModuleHeader({
         moduleItem: vehicleTrackingModule,
         eyebrow: "Smart odpady / provoz",
-        title: "Sledovani vozidel",
-        description: "Funkcni neumorph pohled nad realnym T-Cars a WIM runtime bez demo dat.",
-        status: "realny runtime",
+        title: "Sledování vozidel",
+        description: "Funkční neumorph pohled nad reálným T-Cars a WIM runtime bez demo dat.",
+        status: "reálný runtime",
         statusTone: viewModel.error ? "danger" : viewModel.loaded ? "success" : "warning",
         actions: [
-          { label: "Puvodni modul", href: routeHref("/sledovani-vozidel"), variant: "secondary" },
-          { label: "Vozovy park", href: routeHref("/vozovy-park"), variant: "primary" }
+          { label: "Původní modul", href: routeHref("/sledovani-vozidel"), variant: "secondary" },
+          { label: "Vozový park", href: routeHref("/vozovy-park"), variant: "primary" }
         ],
         meta: [
-          viewModel.hasGoogleMapsKey ? "Google mapa aktivni" : "fallback mapa",
+          viewModel.hasGoogleMapsKey ? "Google mapa aktivní" : "fallback mapa",
           viewModel.canExport ? "export povolen" : "read-only"
         ]
       })}
@@ -371,7 +371,7 @@ export function renderNeumorphVehicleTracking({ user = null, routeHref = (route)
           ${renderMap(viewModel)}
           ${renderVehicleDetail(viewModel)}
         </div>
-        <aside class="nm-vehicle-aside" aria-label="Seznam vozidel a souvisejici stavy">
+        <aside class="nm-vehicle-aside" aria-label="Seznam vozidel a související stavy">
           ${renderVehicleList(viewModel)}
           ${renderInvalidVehicles(viewModel)}
         </aside>
