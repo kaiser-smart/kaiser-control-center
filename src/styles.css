@@ -8898,6 +8898,10 @@ h1 {
   transform: translate(-50%, -72%) scale(1.1);
 }
 
+.tracking-tcars-google-marker--focused {
+  z-index: 10 !important;
+}
+
 .tracking-kaiser-site-marker {
   position: absolute;
   z-index: 7;
@@ -9008,6 +9012,75 @@ h1 {
   background: transparent;
 }
 
+.tracking-tcars-google-pin__callout {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  display: grid;
+  width: 152px;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 14px 14px 14px 5px;
+  background:
+    linear-gradient(135deg, rgba(43, 57, 48, 0.9) 0%, rgba(30, 40, 34, 0.84) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 12px 26px rgba(20, 29, 23, 0.3),
+    0 0 0 3px rgba(182, 255, 0, 0.12);
+  color: #ffffff;
+  line-height: 1.1;
+  pointer-events: none;
+  text-align: left;
+  transform: translateX(-50%);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+.tracking-tcars-google-pin__callout::after {
+  position: absolute;
+  bottom: -7px;
+  left: 22px;
+  width: 14px;
+  height: 14px;
+  border-right: 1px solid rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(30, 40, 34, 0.88);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.tracking-tcars-google-pin__callout > span {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tracking-tcars-google-pin__callout small {
+  color: #d9e2dc;
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.tracking-tcars-google-pin__callout strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-tcars-google-pin__callout > span + span {
+  padding-top: 5px;
+  border-top: 1px solid rgba(182, 255, 0, 0.46);
+}
+
 .tracking-tcars-google-pin__icon::after {
   position: absolute;
   z-index: -1;
@@ -9091,6 +9164,10 @@ h1 {
 
 .tracking-tcars-google-pin--selected {
   filter: drop-shadow(0 0 10px rgba(182, 255, 0, 0.78));
+}
+
+.tracking-tcars-google-pin--focused .tracking-tcars-google-pin__plate {
+  visibility: hidden;
 }
 
 .tracking-tcars-google-pin--selected .tracking-tcars-google-pin__icon img,
@@ -26104,6 +26181,42 @@ body:has(.data-box-page) .data-box-side-card--sync {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.tracking-map-view-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  padding: 3px;
+  border: 1px solid rgba(51, 65, 55, 0.14);
+  border-radius: 999px;
+  background: #edf1ef;
+}
+
+.tracking-map-view-switch__button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #52605a;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 850;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 160ms ease, box-shadow 160ms ease, color 160ms ease;
+}
+
+.tracking-map-view-switch__button--active {
+  background: #b6ff00;
+  box-shadow: 0 5px 14px rgba(83, 127, 17, 0.22);
+  color: #172018;
+}
+
+.tracking-map-view-switch__button:focus-visible {
+  outline: 3px solid #172018;
+  outline-offset: 1px;
 }
 
 .tracking-operational-map-shell {

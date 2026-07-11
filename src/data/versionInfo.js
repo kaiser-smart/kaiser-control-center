@@ -22,7 +22,7 @@ export const versionInfo = {
 export const versionNews = [
   {
     title: "Poloha vozidel: jednotná 3D limetková flotila",
-    text: "Šest dodaných typů vozidel používá novou sjednocenou sadu čistých izometrických 3D modelů podle schváleného vizuálního vzoru. Kabiny zůstávají bílé, provozní nástavby a akcenty používají limetkovou #B6FF00 a průhledné výřezy dál doplňuje pouze plovoucí SPZ."
+    text: "Šest dodaných typů vozidel používá novou sjednocenou sadu čistých izometrických 3D modelů podle schváleného vizuálního vzoru. Po výběru vozidla se vektorová Google mapa přiblíží, nakloní podle směru jízdy a zobrazí kompaktní plovoucí panel SPZ a rychlosti. Přepínač Mapa 3D / Letecký 3D dovolí stejnou jízdu zobrazit na čistém nebo satelitním podkladu; přehled flotily zůstává shora."
   },
   {
     title: "Ostrá doména smart-odpady.ai",

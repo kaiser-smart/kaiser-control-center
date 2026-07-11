@@ -1646,7 +1646,8 @@ const vehicleTrackingMapConfigState = {
 const vehicleTrackingUiState = {
   search: "",
   filter: "all",
-  mapMaximized: false
+  mapMaximized: false,
+  mapView: "road"
 };
 
 let vehicleTrackingAudioContext = null;
@@ -14201,14 +14202,21 @@ function vehicleTrackingTcarsLocationDetail(location = null) {
   `;
 }
 
-function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false) {
+function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false, focused = false) {
   const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
   const title = vehicleTrackingTcarsMarkerTooltip(location);
   const iconSrc = vehicleTrackingMarkerImageSrc(markerVehicle);
   const licensePlate = markerVehicle.licensePlate || markerVehicle.internalNumber || "Bez SPZ";
+  const speed = vehicleTrackingTcarsSpeedText(location);
 
   return `
-    <span class="tracking-tcars-google-pin ${selected ? "tracking-tcars-google-pin--selected" : ""}" title="${escapeHtml(title)}" aria-hidden="true">
+    <span class="tracking-tcars-google-pin ${selected ? "tracking-tcars-google-pin--selected" : ""} ${focused ? "tracking-tcars-google-pin--focused" : ""}" title="${escapeHtml(title)}" aria-hidden="true">
+      ${focused ? `
+        <span class="tracking-tcars-google-pin__callout">
+          <span><small>SPZ</small><strong>${escapeHtml(licensePlate)}</strong></span>
+          <span><small>Rychlost</small><strong>${escapeHtml(speed)}</strong></span>
+        </span>
+      ` : ""}
       <span class="tracking-tcars-google-pin__icon" aria-hidden="true">
         ${iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" loading="eager" decoding="async" data-tracking-tcars-marker-icon>` : ""}
         <span class="tracking-tcars-google-pin__fallback"></span>
@@ -14574,6 +14582,10 @@ function vehicleTrackingOperationalSection() {
             <span>${escapeHtml(hasGoogleMapsKey ? `${groups.filteredValidLocations.length} zobrazených poloh` : mapLoading ? "Připravuji mapu…" : "Mapa není nakonfigurovaná")}</span>
           </div>
           <div class="tracking-operational-map-actions">
+            <div class="tracking-map-view-switch" role="group" aria-label="Zobrazení mapy">
+              <button class="tracking-map-view-switch__button ${vehicleTrackingUiState.mapView === "road" ? "tracking-map-view-switch__button--active" : ""}" type="button" data-tracking-map-view="road" aria-pressed="${vehicleTrackingUiState.mapView === "road" ? "true" : "false"}">Mapa 3D</button>
+              <button class="tracking-map-view-switch__button ${vehicleTrackingUiState.mapView === "aerial" ? "tracking-map-view-switch__button--active" : ""}" type="button" data-tracking-map-view="aerial" aria-pressed="${vehicleTrackingUiState.mapView === "aerial" ? "true" : "false"}">Letecký 3D</button>
+            </div>
             <button class="secondary-link" type="button" data-tracking-map-maximize aria-expanded="${vehicleTrackingUiState.mapMaximized ? "true" : "false"}">
               ${vehicleTrackingUiState.mapMaximized ? "Zmenšit mapu" : "Zvětšit mapu"}
             </button>
@@ -15444,12 +15456,14 @@ function createVehicleTrackingTcarsGoogleMarker(maps, map, location) {
       const projection = this.getProjection();
       const point = projection.fromLatLngToDivPixel(new maps.LatLng(this.location.latitude, this.location.longitude));
       const markerVehicle = vehicleTrackingTcarsMarkerVehicle(this.location);
+      const focused = this.selected && vehicleTrackingLiveState.googleFocusedLocationId === this.location._locationId;
       this.div.style.left = `${point.x}px`;
       this.div.style.top = `${point.y}px`;
       this.div.style.setProperty("--heading", `${markerVehicle.heading.toFixed(2)}deg`);
       this.div.className = [
         "tracking-tcars-google-marker",
-        this.selected ? "tracking-tcars-google-marker--selected" : ""
+        this.selected ? "tracking-tcars-google-marker--selected" : "",
+        focused ? "tracking-tcars-google-marker--focused" : ""
       ].filter(Boolean).join(" ");
     }
 
@@ -15465,11 +15479,14 @@ function createVehicleTrackingTcarsGoogleMarker(maps, map, location) {
       const markerVehicle = vehicleTrackingTcarsMarkerVehicle(this.location);
       const displayName = vehicleTrackingTcarsVehicleDisplayName(this.location);
       const licensePlate = markerVehicle.licensePlate ? `, SPZ ${markerVehicle.licensePlate}` : "";
-      this.div.setAttribute("aria-label", `Vybrat vozidlo ${displayName}${licensePlate}`);
+      const focused = this.selected && vehicleTrackingLiveState.googleFocusedLocationId === this.location._locationId;
+      const speed = vehicleTrackingTcarsSpeedText(this.location);
+      this.div.setAttribute("aria-label", `${focused ? "Vybrané vozidlo" : "Vybrat vozidlo"} ${displayName}${licensePlate}, rychlost ${speed}`);
+      this.div.setAttribute("aria-pressed", focused ? "true" : "false");
       this.div.setAttribute("title", vehicleTrackingTcarsMarkerTooltip(this.location));
       this.div.dataset.trackingTcarsSelect = this.location._locationId;
       this.div.dataset.trackingTcarsGoogleMarker = this.location._locationId;
-      this.div.innerHTML = vehicleTrackingTcarsGoogleMarkerContent(this.location, this.selected);
+      this.div.innerHTML = vehicleTrackingTcarsGoogleMarkerContent(this.location, this.selected, focused);
     }
 
     update(location, selected) {
@@ -15563,9 +15580,14 @@ function initializeVehicleTrackingTcarsGoogleMap(maps, node) {
     clickableIcons: false,
     fullscreenControl: true,
     gestureHandling: "greedy",
-    mapTypeControl: true,
+    headingInteractionEnabled: true,
+    mapTypeControl: false,
+    mapTypeId: vehicleTrackingUiState.mapView === "aerial" ? maps.MapTypeId.HYBRID : maps.MapTypeId.ROADMAP,
+    renderingType: maps.RenderingType?.VECTOR || "VECTOR",
+    rotateControl: true,
     scrollwheel: true,
-    streetViewControl: false
+    streetViewControl: false,
+    tiltInteractionEnabled: true
   });
 
   vehicleTrackingLiveState.googleMap = map;
@@ -15589,6 +15611,11 @@ function vehicleTrackingTcarsBoundsKey(locations = [], wimSites = vehicleTrackin
 }
 
 function fitVehicleTrackingTcarsGoogleMap(maps, map, locations = []) {
+  map.setHeading?.(0);
+  map.setTilt?.(0);
+  vehicleTrackingLiveState.googleFocusedLocationId = "";
+  vehicleTrackingLiveState.googleMapNode?.setAttribute("aria-label", "Google mapa aktuálních poloh vozidel");
+
   if (!locations.length) {
     map.setCenter(DEMO_VEHICLE_TRACKING_MAP_CENTER);
     map.setZoom(11);
@@ -15618,9 +15645,25 @@ function focusVehicleTrackingTcarsGoogleMap(locationId) {
     return;
   }
 
-  map.panTo({ lat: location.latitude, lng: location.longitude });
-  map.setZoom(Math.max(map.getZoom() || 11, 15));
+  const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
+  const headingValue = Number(markerVehicle.heading);
+  const heading = Number.isFinite(headingValue) ? ((headingValue % 360) + 360) % 360 : 0;
+  const center = { lat: location.latitude, lng: location.longitude };
+  const aerial = vehicleTrackingUiState.mapView === "aerial";
+  map.setMapTypeId?.(aerial ? "hybrid" : "roadmap");
+  if (typeof map.moveCamera === "function") {
+    map.moveCamera({ center, zoom: aerial ? 18 : 17, tilt: aerial ? 67 : 50, heading });
+  } else {
+    map.panTo(center);
+    map.setZoom(aerial ? 18 : 17);
+    map.setHeading?.(heading);
+    map.setTilt?.(aerial ? 67 : 50);
+  }
   vehicleTrackingLiveState.googleFocusedLocationId = locationId;
+  vehicleTrackingLiveState.googleMapNode?.setAttribute(
+    "aria-label",
+    `3D Google mapa vybraného vozidla ${markerVehicle.licensePlate || vehicleTrackingTcarsVehicleDisplayName(location)}`
+  );
 }
 
 function focusVehicleTrackingWimGoogleMap(siteId) {
@@ -15631,6 +15674,8 @@ function focusVehicleTrackingWimGoogleMap(siteId) {
     return;
   }
 
+  map.setHeading?.(0);
+  map.setTilt?.(0);
   map.panTo({ lat: site.latitude, lng: site.longitude });
   map.setZoom(Math.max(map.getZoom() || 8, 13));
   vehicleTrackingLiveState.googleFocusedLocationId = `wim:${siteId}`;
@@ -15688,6 +15733,16 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
       const wimSites = vehicleTrackingGoogleMapWimSites();
       const activeIds = new Set(validLocations.map((location) => location._locationId));
       const selectedLocation = vehicleTrackingTcarsSelectedLocation(validLocations);
+      const selectedId = selectedLocation?._locationId || "";
+      const selectedWimId = vehicleTrackingSelectedWimSite(wimSites)?.id || "";
+
+      if (options.focusSelected && selectedId) {
+        vehicleTrackingLiveState.googleFocusedLocationId = selectedId;
+      } else if (options.focusWimSelected && selectedWimId) {
+        vehicleTrackingLiveState.googleFocusedLocationId = `wim:${selectedWimId}`;
+      } else if (options.forceFit) {
+        vehicleTrackingLiveState.googleFocusedLocationId = "";
+      }
 
       vehicleTrackingLiveState.googleMarkers.forEach((marker, markerId) => {
         if (!activeIds.has(markerId)) {
@@ -15712,8 +15767,6 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
       syncVehicleTrackingWimGoogleMarkers(maps, map, wimSites);
 
       const boundsKey = vehicleTrackingTcarsBoundsKey(validLocations, wimSites);
-      const selectedId = selectedLocation?._locationId || "";
-      const selectedWimId = vehicleTrackingSelectedWimSite(wimSites)?.id || "";
       if (options.focusWimSelected && selectedWimId) {
         focusVehicleTrackingWimGoogleMap(selectedWimId);
       } else if (options.focusSelected && selectedId) {
@@ -15763,8 +15816,33 @@ function setVehicleTrackingMapMaximized(maximized) {
     if (map && window.google?.maps?.event) {
       window.google.maps.event.trigger(map, "resize");
     }
-    queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
+    const keepSelectedVehicleFocused = Boolean(vehicleTrackingLiveState.googleFocusedLocationId)
+      && !vehicleTrackingLiveState.googleFocusedLocationId.startsWith("wim:");
+    queueVehicleTrackingTcarsGoogleSync({
+      forceFit: !keepSelectedVehicleFocused,
+      focusSelected: keepSelectedVehicleFocused
+    });
   });
+}
+
+function setVehicleTrackingMapView(view) {
+  if (!["road", "aerial"].includes(view)) {
+    return;
+  }
+
+  vehicleTrackingUiState.mapView = view;
+  document.querySelectorAll("[data-tracking-map-view]").forEach((button) => {
+    const active = button.dataset.trackingMapView === view;
+    button.classList.toggle("tracking-map-view-switch__button--active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+
+  const map = vehicleTrackingLiveState.googleMap;
+  map?.setMapTypeId?.(view === "aerial" ? "hybrid" : "roadmap");
+  const focusedLocationId = vehicleTrackingLiveState.googleFocusedLocationId;
+  if (focusedLocationId && !focusedLocationId.startsWith("wim:")) {
+    focusVehicleTrackingTcarsGoogleMap(focusedLocationId);
+  }
 }
 
 function updateVehicleTrackingOperationalSearch(input) {
@@ -36882,6 +36960,7 @@ function resetVehicleTrackingLiveState() {
   vehicleTrackingUiState.search = "";
   vehicleTrackingUiState.filter = "all";
   vehicleTrackingUiState.mapMaximized = false;
+  vehicleTrackingUiState.mapView = "road";
   document.documentElement.classList.remove("tracking-map-is-maximized");
   document.body?.classList.remove("tracking-map-is-maximized");
 }
@@ -44442,6 +44521,13 @@ document.addEventListener("click", async (event) => {
   if (trackingMapMaximize) {
     event.preventDefault();
     setVehicleTrackingMapMaximized(!vehicleTrackingUiState.mapMaximized);
+    return;
+  }
+
+  const trackingMapView = event.target.closest("[data-tracking-map-view]");
+  if (trackingMapView) {
+    event.preventDefault();
+    setVehicleTrackingMapView(trackingMapView.dataset.trackingMapView || "road");
     return;
   }
 
