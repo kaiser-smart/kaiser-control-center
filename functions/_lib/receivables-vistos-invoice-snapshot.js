@@ -13,6 +13,7 @@ import {
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const SNAPSHOT_IMPORT_KIND = "vistos_invoice_snapshot";
+const INCREMENTAL_IMPORT_KIND = "vistos_invoice_incremental";
 const SNAPSHOT_SOURCE = "vistos";
 const DEFAULT_PAGE_SIZE = 1000;
 const DEFAULT_MAX_PAGES = 5;
@@ -21,6 +22,7 @@ const DEFAULT_LOOKBACK_MONTHS = 24;
 const DEFAULT_ADVANCE_PAGE_SIZE = 1000;
 const DEFAULT_ADVANCE_PAGES_PER_RUN = 1;
 const MAX_ADVANCE_PAGES_PER_RUN = 3;
+const DEFAULT_INCREMENTAL_OVERLAP_HOURS = 6;
 
 const INVOICE_COLUMNS = [
   "Id",
@@ -183,7 +185,7 @@ async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
     months: options.invoiceLookbackMonths || DEFAULT_LOOKBACK_MONTHS,
     now: options.now
   });
-  const filter = invoiceLookback.filter;
+  const filter = options.filter && typeof options.filter === "object" ? options.filter : invoiceLookback.filter;
   const pageSize = boundedInteger(options.pageSize, DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE);
   const maxPages = boundedInteger(options.maxPages, DEFAULT_MAX_PAGES, MAX_MAX_PAGES);
 
@@ -351,6 +353,100 @@ async function latestSnapshotBatch(db) {
   `).bind(SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first();
 }
 
+async function latestIncrementalBatch(db, onlyRunning = false) {
+  return db.prepare(`
+    SELECT *
+    FROM receivable_import_batches
+    WHERE source = ? AND import_kind = ?
+      ${onlyRunning ? "AND status = 'incremental_running'" : ""}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(SNAPSHOT_SOURCE, INCREMENTAL_IMPORT_KIND).first();
+}
+
+function validDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function vistosDateTime(value) {
+  const date = validDate(value);
+  if (!date) return "";
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+export function incrementalWindow(checkpoint, options = {}) {
+  const periodTo = validDate(options.periodTo) || new Date();
+  const sourceCheckpoint = validDate(checkpoint) || new Date(periodTo.getTime() - 24 * 60 * 60 * 1000);
+  const overlapHours = boundedInteger(
+    options.overlapHours,
+    DEFAULT_INCREMENTAL_OVERLAP_HOURS,
+    24
+  );
+  const periodFrom = new Date(sourceCheckpoint.getTime() - overlapHours * 60 * 60 * 1000);
+  return {
+    checkpoint: sourceCheckpoint.toISOString(),
+    overlapHours,
+    periodFrom: periodFrom.toISOString(),
+    periodTo: periodTo.toISOString(),
+    filter: {
+      Modified_From: vistosDateTime(periodFrom),
+      Modified_To: vistosDateTime(periodTo)
+    }
+  };
+}
+
+function rawModifiedDate(row = {}) {
+  return validDate(row.Modified || row.modified || row.Updated || row.updated);
+}
+
+export function assertIncrementalFilter(rows, window) {
+  const from = validDate(window.periodFrom);
+  const to = validDate(window.periodTo);
+  if (!from || !to) {
+    throw new ReceivablesVistosInvoiceSnapshotError(
+      "Časové okno inkrementálního Vistos načítání není platné.",
+      400,
+      "receivables_incremental_window_invalid"
+    );
+  }
+
+  const invalidRows = rows.filter((row) => {
+    const modified = rawModifiedDate(row);
+    return !modified || modified < from || modified > new Date(to.getTime() + 60 * 1000);
+  });
+  if (invalidRows.length) {
+    throw new ReceivablesVistosInvoiceSnapshotError(
+      "Vistos nepotvrdil filtr změněných faktur. Inkrementální staging byl bezpečně zastaven.",
+      502,
+      "receivables_vistos_modified_filter_unreliable"
+    );
+  }
+}
+
+async function incrementalCheckpoint(db) {
+  const incremental = await db.prepare(`
+    SELECT parser_summary_json, updated_at
+    FROM receivable_import_batches
+    WHERE source = ? AND import_kind = ? AND status = 'incremental'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(SNAPSHOT_SOURCE, INCREMENTAL_IMPORT_KIND).first();
+  const incrementalSummary = parseJson(incremental?.parser_summary_json, {});
+  if (validDate(incrementalSummary?.periodTo || incremental?.updated_at)) {
+    return incrementalSummary.periodTo || incremental.updated_at;
+  }
+
+  const snapshot = await db.prepare(`
+    SELECT updated_at
+    FROM receivable_import_batches
+    WHERE source = ? AND import_kind = ? AND status = 'snapshot'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first();
+  return validDate(snapshot?.updated_at) ? snapshot.updated_at : null;
+}
+
 export async function getLatestReceivablesVistosInvoiceSnapshot(env, options = {}) {
   const db = database(env);
   if (!db) {
@@ -389,6 +485,284 @@ export async function getLatestReceivablesVistosInvoiceSnapshot(env, options = {
       pagination: { page, pageSize, totalRows },
       apiStatus: "ready"
     };
+  } catch (error) {
+    throw snapshotError(error);
+  }
+}
+
+async function storeIncrementalRows(db, batchId, rows, rowOffset = 0) {
+  const normalizedRows = rows.map((raw, index) => {
+    const invoice = mapReceivablesVistosInvoice(raw);
+    const issues = invoiceIssues(invoice);
+    return {
+      rowNumber: rowOffset + index + 1,
+      invoice,
+      raw,
+      issues,
+      previewStatus: issues.length ? "review" : "ready"
+    };
+  });
+  const statements = normalizedRows.map((row) => db.prepare(`
+    INSERT OR REPLACE INTO receivable_import_rows (
+      id, batch_id, row_number, entity_kind, preview_status, confidence,
+      issue_code, issue_message, normalized_json, raw_payload
+    )
+    VALUES (?, ?, ?, 'vistos_invoice', ?, ?, ?, ?, ?, ?)
+  `).bind(
+    randomId("receivable-vistos-invoice-incremental-row"),
+    batchId,
+    row.rowNumber,
+    row.previewStatus,
+    row.issues.length ? 0.55 : 0.95,
+    row.issues[0] || null,
+    row.issues.join(", ") || null,
+    safeJson(row.invoice),
+    safeJson(row.raw)
+  ));
+  for (let index = 0; index < statements.length; index += 100) {
+    await db.batch(statements.slice(index, index + 100));
+  }
+  return normalizedRows;
+}
+
+function incrementalResult(batch, summary) {
+  return {
+    apiStatus: "ready",
+    mode: "vistos-invoice-incremental",
+    batch: {
+      id: batch.id,
+      importKind: INCREMENTAL_IMPORT_KIND,
+      status: batch.status,
+      rowCount: summary.loadedRows,
+      acceptedCount: summary.acceptedCount,
+      reviewCount: summary.reviewCount
+    },
+    summary,
+    readOnly: true,
+    writesD1: true,
+    writesLedger: false,
+    createsReceivableRecords: false,
+    sendsCustomerCommunication: false,
+    startsAutomation: false,
+    calculatesRealRating: false,
+    importsKbPayments: false
+  };
+}
+
+export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, options = {}) {
+  const db = database(env, true);
+  if (!isVistosExecuteConfigured(env)) {
+    throw new ReceivablesVistosInvoiceSnapshotError(
+      "Vistos API není nakonfigurováno.",
+      503,
+      "vistos_api_not_configured"
+    );
+  }
+
+  try {
+    const checkpoint = options.checkpoint || await incrementalCheckpoint(db);
+    if (!checkpoint) {
+      throw new ReceivablesVistosInvoiceSnapshotError(
+        "Inkrementální načítání čeká na dokončený úplný Vistos snapshot.",
+        409,
+        "receivables_incremental_checkpoint_missing"
+      );
+    }
+    const window = incrementalWindow(checkpoint, options);
+    const session = await loginVistosExecute(env);
+    const invoiceResult = await loadFirstWorkingInvoiceEntity(env, session, {
+      ...options,
+      entityName: env?.VISTOS_RECEIVABLES_INVOICE_ENTITY,
+      filter: window.filter,
+      pageSize: options.vistosPageSize || DEFAULT_ADVANCE_PAGE_SIZE,
+      maxPages: options.maxPages || MAX_ADVANCE_PAGES_PER_RUN
+    });
+    if (!invoiceResult.diagnostics.some((item) => item.ok)) {
+      throw new ReceivablesVistosInvoiceSnapshotError(
+        "Vistos nepotvrdil filtr změněných faktur. Inkrementální staging nebyl vytvořen.",
+        502,
+        "receivables_vistos_modified_filter_not_supported"
+      );
+    }
+    assertIncrementalFilter(invoiceResult.page.rows, window);
+
+    const totalRows = invoiceResult.page.filtered || invoiceResult.page.total || invoiceResult.page.rows.length;
+    const capped = Boolean(invoiceResult.page.capped || invoiceResult.page.rows.length < totalRows);
+    const batchId = randomId("receivable-vistos-invoice-incremental");
+    const normalizedRows = invoiceResult.page.rows.map((raw) => {
+      const invoice = mapReceivablesVistosInvoice(raw);
+      const issues = invoiceIssues(invoice);
+      return { invoice, raw, issues, previewStatus: issues.length ? "review" : "ready" };
+    });
+    const acceptedCount = normalizedRows.filter((row) => row.previewStatus === "ready").length;
+    const reviewCount = normalizedRows.length - acceptedCount;
+    const summary = {
+      mode: "vistos-invoice-incremental",
+      source: SNAPSHOT_SOURCE,
+      sourceMode: "read_only_vistos_execute",
+      invoiceEntity: invoiceResult.entityName,
+      invoiceColumns: invoiceResult.columns,
+      modifiedWindow: window,
+      periodFrom: window.periodFrom,
+      periodTo: window.periodTo,
+      loadedRows: normalizedRows.length,
+      totalRows,
+      acceptedCount,
+      reviewCount,
+      ignoredCount: 0,
+      issueCounts: countIssues(normalizedRows),
+      capped,
+      pageSize: invoiceResult.pageSize,
+      maxPages: invoiceResult.maxPages,
+      readOnly: true,
+      writesD1: true,
+      writesLedger: false,
+      createsReceivableRecords: false,
+      sendsCustomerCommunication: false,
+      startsAutomation: false,
+      calculatesRealRating: false,
+      importsKbPayments: false
+    };
+    const rawPayload = {
+      trigger: clean(options.triggeredBy) || "cloud-runner-incremental",
+      source: SNAPSHOT_SOURCE,
+      importKind: INCREMENTAL_IMPORT_KIND,
+      invoiceEntity: invoiceResult.entityName,
+      modifiedWindow: window,
+      diagnostics: invoiceResult.diagnostics,
+      readOnly: true,
+      writesLedger: false,
+      calculatesRealRating: false,
+      sendsCustomerCommunication: false,
+      startsAutomation: false
+    };
+
+    await db.prepare(`
+      INSERT INTO receivable_import_batches (
+        id, source, import_kind, status, filename, row_count, accepted_count,
+        review_count, ignored_count, created_by_user_id, parser_summary_json, raw_payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+    `).bind(
+      batchId,
+      SNAPSHOT_SOURCE,
+      INCREMENTAL_IMPORT_KIND,
+      capped ? "incremental_running" : "incremental",
+      `vistos-invoices-modified-${window.periodFrom.slice(0, 10)}`,
+      normalizedRows.length,
+      acceptedCount,
+      reviewCount,
+      clean(options.createdByUserId) || null,
+      safeJson(summary),
+      safeJson(rawPayload)
+    ).run();
+    await storeIncrementalRows(db, batchId, invoiceResult.page.rows, 0);
+
+    return incrementalResult({
+      id: batchId,
+      status: capped ? "incremental_running" : "incremental"
+    }, summary);
+  } catch (error) {
+    throw snapshotError(error);
+  }
+}
+
+export async function advanceReceivablesVistosInvoiceIncrementalSnapshot(env, options = {}) {
+  const db = database(env, true);
+  const batchRow = await latestIncrementalBatch(db, true);
+  if (!batchRow) {
+    return createReceivablesVistosInvoiceIncrementalSnapshot(env, options);
+  }
+
+  try {
+    const batch = rowToBatch(batchRow);
+    const summary = batch.parserSummary || {};
+    const window = summary.modifiedWindow || batch.rawPayload?.modifiedWindow;
+    if (!window?.filter || !window?.periodFrom || !window?.periodTo) {
+      throw new ReceivablesVistosInvoiceSnapshotError(
+        "Rozpracovaný inkrementální snapshot nemá ověřitelné časové okno.",
+        409,
+        "receivables_incremental_window_missing"
+      );
+    }
+    const countRow = await db.prepare("SELECT COUNT(*) AS count FROM receivable_import_rows WHERE batch_id = ?")
+      .bind(batch.id)
+      .first();
+    const loadedBefore = numberValue(countRow?.count, summary.loadedRows);
+    const knownTotal = numberValue(summary.totalRows);
+    const session = await loginVistosExecute(env);
+    const pageSize = boundedInteger(options.vistosPageSize, DEFAULT_ADVANCE_PAGE_SIZE, DEFAULT_PAGE_SIZE);
+    const pagesPerRun = boundedInteger(options.pagesPerRun, DEFAULT_ADVANCE_PAGES_PER_RUN, MAX_ADVANCE_PAGES_PER_RUN);
+    let loadedRows = loadedBefore;
+    let totalRows = knownTotal;
+    let acceptedCount = numberValue(summary.acceptedCount);
+    let reviewCount = numberValue(summary.reviewCount);
+    let issueCounts = Array.isArray(summary.issueCounts) ? summary.issueCounts : [];
+    const diagnostics = [];
+
+    for (let pageIndex = 0; pageIndex < pagesPerRun; pageIndex += 1) {
+      const pageResult = await loadInvoicePage(env, session, {
+        entityName: summary.invoiceEntity || batch.rawPayload?.invoiceEntity,
+        columns: summary.invoiceColumns,
+        filter: window.filter,
+        start: loadedRows,
+        vistosPageSize: pageSize
+      });
+      diagnostics.push(...pageResult.diagnostics);
+      const rows = pageResult.page.rows || [];
+      assertIncrementalFilter(rows, window);
+      totalRows = pageResult.page.filtered || pageResult.page.total || totalRows || loadedRows + rows.length;
+      if (!rows.length) break;
+
+      const storedRows = await storeIncrementalRows(db, batch.id, rows, loadedRows);
+      acceptedCount += storedRows.filter((row) => row.previewStatus === "ready").length;
+      reviewCount += storedRows.filter((row) => row.previewStatus === "review").length;
+      issueCounts = mergeIssueCounts(issueCounts, countIssues(storedRows));
+      loadedRows += storedRows.length;
+      if ((totalRows > 0 && loadedRows >= totalRows) || rows.length < pageSize) break;
+    }
+
+    const capped = Boolean(totalRows && loadedRows < totalRows);
+    const status = capped ? "incremental_running" : "incremental";
+    const updatedSummary = {
+      ...summary,
+      loadedRows,
+      totalRows,
+      acceptedCount,
+      reviewCount,
+      issueCounts,
+      capped,
+      pageSize,
+      readOnly: true,
+      writesD1: true,
+      writesLedger: false,
+      calculatesRealRating: false,
+      sendsCustomerCommunication: false,
+      startsAutomation: false,
+      importsKbPayments: false
+    };
+    await db.prepare(`
+      UPDATE receivable_import_batches
+      SET status = ?, row_count = ?, accepted_count = ?, review_count = ?,
+          parser_summary_json = ?, raw_payload = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      status,
+      loadedRows,
+      acceptedCount,
+      reviewCount,
+      safeJson(updatedSummary),
+      safeJson({
+        ...(batch.rawPayload || {}),
+        diagnostics: diagnostics.slice(-20),
+        readOnly: true,
+        writesLedger: false,
+        calculatesRealRating: false,
+        sendsCustomerCommunication: false,
+        startsAutomation: false
+      }),
+      batch.id
+    ).run();
+    return incrementalResult({ id: batch.id, status }, updatedSummary);
   } catch (error) {
     throw snapshotError(error);
   }

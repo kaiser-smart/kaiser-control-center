@@ -1,5 +1,6 @@
 import { runModuleAutomationDryRun } from "../functions/_lib/module-automation-dry-run.js";
 import { runCollectionRoutesSnapshotAutomation } from "../functions/_lib/collection-routes-automation-runner.js";
+import { runReceivablesInvoiceSyncAutomation } from "../functions/_lib/receivables-invoice-sync-runner.js";
 import { runSelfRepairHourlyMonitor } from "../functions/_lib/self-repair-monitor-runner.js";
 import { SELF_REPAIR_MONITOR_CRON } from "../functions/_lib/self-repair-monitor-config.js";
 
@@ -10,11 +11,18 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
       if (controller.cron === COLLECTION_ROUTES_CRON) {
-        const summary = await runCollectionRoutesSnapshotAutomation(env, {
-          scheduledTime: controller.scheduledTime,
-          cron: controller.cron,
-          triggeredBy: "cloudflare-cron"
-        });
+        const [summary, receivables] = await Promise.all([
+          runCollectionRoutesSnapshotAutomation(env, {
+            scheduledTime: controller.scheduledTime,
+            cron: controller.cron,
+            triggeredBy: "cloudflare-cron"
+          }),
+          runReceivablesInvoiceSyncAutomation(env, {
+            scheduledTime: controller.scheduledTime,
+            cron: controller.cron,
+            triggeredBy: "cloudflare-cron"
+          })
+        ]);
 
         console.log("collection_routes_snapshot_runner.completed", {
           mode: summary.mode,
@@ -29,6 +37,21 @@ export default {
           emailSms: "disabled",
           operationalRoutes: "disabled",
           vistosWrites: "disabled"
+        });
+        console.log("receivables_invoice_sync_runner.completed", {
+          mode: receivables.mode,
+          status: receivables.status,
+          runnerRunId: receivables.runnerRunId,
+          moduleKey: receivables.moduleKey,
+          action: receivables.action,
+          batchId: receivables.batchId,
+          rowCount: receivables.rowCount,
+          totalRows: receivables.totalRows,
+          ledgerWrites: "disabled",
+          ratingCalculation: "disabled",
+          isir: "disabled",
+          customerCommunication: "disabled",
+          kbPayments: "disabled"
         });
         return;
       }
@@ -97,6 +120,17 @@ export default {
         cron: COLLECTION_ROUTES_CRON,
         mode: "read-only-vistos-snapshot"
       },
+      receivables: {
+        cron: COLLECTION_ROUTES_CRON,
+        timeZone: "Europe/Prague",
+        incrementalTimes: ["06:30", "10:30", "14:30", "18:30"],
+        weeklyFull: "Sunday 02:30 Europe/Prague",
+        mode: "staging-only-vistos-invoices",
+        ledgerWrites: "disabled",
+        ratingCalculation: "disabled",
+        customerCommunication: "disabled",
+        kbPayments: "disabled"
+      },
       absence: {
         cron: ABSENCE_CRON,
         mode: "dry-run"
@@ -109,7 +143,7 @@ export default {
         deployment: "disabled",
         notification: "disabled"
       },
-      message: "Cloud runner čte Trasy svozu, eviduje původní dry-run automatizace a každou hodinu provádí read-only kontrolu Samooprav."
+      message: "Cloud runner čte Trasy svozu, ukládá staging-only Vistos faktury Pohledávek, eviduje dry-run automatizace a provádí read-only kontrolu Samooprav."
     });
   }
 };
