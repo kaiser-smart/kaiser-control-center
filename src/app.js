@@ -1631,7 +1631,8 @@ const vehicleTrackingLiveState = {
   kaiserSiteGoogleMarker: null,
   wimGoogleMarkers: new Map(),
   googleBoundsKey: "",
-  googleFocusedLocationId: ""
+  googleFocusedLocationId: "",
+  autoRefreshTimer: 0
 };
 const vehicleTrackingMapConfigState = {
   loaded: false,
@@ -14556,7 +14557,7 @@ function vehicleTrackingOperationalSection() {
         <div>
           <span class="tracking-operational__eyebrow">Živý provozní přehled</span>
           <h2 id="tracking-operational-title">Kde jsou vozidla právě teď</h2>
-          <p>Mapa a základní údaje na jednom místě. Data se pouze čtou z T-Cars.</p>
+          <p>Mapa a základní údaje na jednom místě. Při otevřené mapě se data read-only obnovují každých 60 s.</p>
         </div>
         <button class="primary-action tracking-operational-refresh" type="button" data-tracking-operational-refresh ${loading ? "disabled" : ""}>
           ${loading ? "Načítám…" : "Obnovit polohy"}
@@ -15769,7 +15770,27 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
       syncVehicleTrackingWimGoogleMarkers(maps, map, wimSites);
 
       const boundsKey = vehicleTrackingTcarsBoundsKey(validLocations, wimSites);
-      if (options.focusWimSelected && selectedWimId) {
+      if (options.preserveCamera) {
+        const camera = options.preserveCamera;
+        const center = selectedId
+          ? { lat: selectedLocation.latitude, lng: selectedLocation.longitude }
+          : camera.center;
+        const zoom = Number.isFinite(camera.zoom) ? camera.zoom : map.getZoom?.() || 12;
+        const heading = Number.isFinite(camera.heading) ? camera.heading : map.getHeading?.() || 0;
+        const tilt = Number.isFinite(camera.tilt) ? camera.tilt : map.getTilt?.() || 0;
+        if (camera.mapTypeId) {
+          map.setMapTypeId?.(camera.mapTypeId);
+        }
+        if (typeof map.moveCamera === "function") {
+          map.moveCamera({ center, zoom, heading, tilt });
+        } else {
+          map.setCenter(center);
+          map.setZoom(zoom);
+          map.setHeading?.(heading);
+          map.setTilt?.(tilt);
+        }
+        vehicleTrackingLiveState.googleFocusedLocationId = selectedId;
+      } else if (options.focusWimSelected && selectedWimId) {
         focusVehicleTrackingWimGoogleMap(selectedWimId);
       } else if (options.focusSelected && selectedId) {
         focusVehicleTrackingTcarsGoogleMap(selectedId);
@@ -15795,6 +15816,55 @@ function queueVehicleTrackingTcarsGoogleSync(options = {}) {
   window.requestAnimationFrame(() => {
     syncVehicleTrackingTcarsGoogleMap(options);
   });
+}
+
+function vehicleTrackingTcarsGoogleCamera() {
+  const map = vehicleTrackingLiveState.googleMap;
+  const center = map?.getCenter?.();
+  const point = center?.toJSON?.();
+
+  if (!map || !point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) {
+    return null;
+  }
+
+  return {
+    center: { lat: point.lat, lng: point.lng },
+    zoom: Number(map.getZoom?.()),
+    heading: Number(map.getHeading?.()),
+    tilt: Number(map.getTilt?.()),
+    mapTypeId: String(map.getMapTypeId?.() || "")
+  };
+}
+
+function resetVehicleTrackingAutoRefreshTimer() {
+  if (vehicleTrackingLiveState.autoRefreshTimer) {
+    window.clearTimeout(vehicleTrackingLiveState.autoRefreshTimer);
+  }
+  vehicleTrackingLiveState.autoRefreshTimer = 0;
+}
+
+function vehicleTrackingAutoRefreshActive() {
+  return Boolean(
+    authState.user
+      && !document.hidden
+      && vehicleTrackingActiveSourceMode() === "tcars"
+      && normalizePath(window.location.pathname) === VEHICLE_TRACKING_ROUTE
+      && document.querySelector("[data-tracking-operational-view]")
+  );
+}
+
+function scheduleVehicleTrackingAutoRefresh() {
+  resetVehicleTrackingAutoRefreshTimer();
+
+  if (!vehicleTrackingAutoRefreshActive()) {
+    return;
+  }
+
+  vehicleTrackingLiveState.autoRefreshTimer = window.setTimeout(async () => {
+    vehicleTrackingLiveState.autoRefreshTimer = 0;
+    await refreshVehicleTrackingOperationalData({ preserveCamera: true });
+    scheduleVehicleTrackingAutoRefresh();
+  }, 60 * 1000);
 }
 
 function syncVehicleTrackingMapMaximizedDom() {
@@ -15873,14 +15943,12 @@ function setVehicleTrackingOperationalFilter(filter) {
   queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
 }
 
-async function refreshVehicleTrackingOperationalData() {
-  await Promise.all([
-    loadVehicleTrackingMapConfig({ force: true, renderAfter: false }),
-    loadVehicleTrackingStatus({ force: true, renderAfter: false })
-  ]);
+async function refreshVehicleTrackingOperationalData(options = {}) {
+  const preserveCamera = options.preserveCamera === false ? null : vehicleTrackingTcarsGoogleCamera();
+  await loadVehicleTrackingStatus({ force: true, renderAfter: false });
   render();
   syncVehicleTrackingMapMaximizedDom();
-  queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
+  queueVehicleTrackingTcarsGoogleSync(preserveCamera ? { preserveCamera } : { forceFit: true });
 }
 
 function stopVehicleTrackingDemoRuntime() {
@@ -36935,6 +37003,7 @@ function resetDataBoxState() {
 }
 
 function resetVehicleTrackingLiveState() {
+  resetVehicleTrackingAutoRefreshTimer();
   clearVehicleTrackingTcarsGoogleMap();
   vehicleTrackingLiveState.sourceMode = "tcars";
   vehicleTrackingLiveState.loaded = false;
@@ -40934,6 +41003,7 @@ function render() {
     app.insertAdjacentHTML("beforeend", accessUnsavedChangesGuard.renderModal());
     scrollToQuickAbsenceEntry();
     scrollToVehicleTrackingSettingsHash();
+    scheduleVehicleTrackingAutoRefresh();
   } catch (error) {
     console.error("smart_odpady_render_failed", error);
     app.innerHTML = appErrorPage();
@@ -44061,6 +44131,11 @@ document.addEventListener("change", async (event) => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     syncAiVoiceWakeLock({ renderAfter: true });
+    if (vehicleTrackingAutoRefreshActive()) {
+      void refreshVehicleTrackingOperationalData({ preserveCamera: true }).finally(scheduleVehicleTrackingAutoRefresh);
+    }
+  } else {
+    resetVehicleTrackingAutoRefreshTimer();
   }
 });
 

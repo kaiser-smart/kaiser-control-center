@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.511"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.512"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: plynulá obnova mapy po 60 sekundách",
+    text: "Při otevřené mapě Smart odpady každých 60 sekund znovu načte read-only aktuální polohy z T-Cars. Vybrané vozidlo zůstává ve stejném přiblížení, náklonu a mapovém režimu; střed se jen posune na novou GPS pozici. Skutečná historická čára jízdy čeká na zdroj jednotlivých GPS bodů — dostupná kniha jízd T-Cars obsahuje zatím časy a kilometry, ne trasové body."
+  },
   {
     title: "Poloha vozidel: celá 3D flotila a směr z T-Cars",
     text: "Všechny aktuální typy vozidel mají vlastní schválený průhledný izometrický 3D model v limetkové barvě. Ikona se nejdřív přiřadí podle SPZ a jako bezpečný doplněk také podle názvu nebo popisu vozidla. Mapa používá stávající azimut z T-Cars pro natočení vozidla; po výběru je panel SPZ a rychlosti větší a čitelnější i na mobilu."
