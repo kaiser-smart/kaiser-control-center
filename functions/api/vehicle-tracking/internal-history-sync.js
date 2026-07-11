@@ -18,7 +18,10 @@ function matches(left, right) {
 }
 
 export async function onRequestPost({ request, env }) {
-  if (!matches(token(request), String(env.VEHICLE_TRACKING_HISTORY_SYNC_TOKEN || "").trim())) {
+  const receivedToken = token(request);
+  const isDedicatedHistoryRunner = matches(receivedToken, String(env.VEHICLE_TRACKING_HISTORY_SYNC_TOKEN || "").trim());
+  const isExistingCloudRunner = matches(receivedToken, String(env.DATA_BOX_PLUS_SYNC_TOKEN || "").trim());
+  if (!isDedicatedHistoryRunner && !isExistingCloudRunner) {
     return json({ error: "Interní sběr GPS historie není povolen." }, 401);
   }
   if (!env.SMART_ODPADY_DB) return json({ error: "Chybí D1 binding SMART_ODPADY_DB." }, 503);
