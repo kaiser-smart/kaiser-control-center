@@ -383,7 +383,7 @@ const DATA_BOX_PLUS_TABS = [
 const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const DATA_BOX_PLUS_MODEL_FLAG = {
   label: "Model: ostrý DSP",
-  detail: "Oddělený backend, bezpečné interní pokyny a audit. Odeslání mimo systém zůstává pouze návrhem."
+  detail: "Oddělený backend, jednorázové potvrzení a audit. Úspěch se zobrazí až po skutečném provedení."
 };
 const NOTIFICATION_CHANNEL_LABELS = {
   email: "E-mail",

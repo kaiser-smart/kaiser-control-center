@@ -198,6 +198,8 @@ const detailOverlaySource = appSource.slice(
 assert.doesNotMatch(composeOverlaySource, /dataBoxPlusChatPanel\(message\)/);
 assert.match(detailOverlaySource, /ds-plus-detail-section--chat[\s\S]*dataBoxPlusChatPanel\(message\)/);
 assert.match(appSource, /E-mail, SMS nebo odpověď přes ISDS odešle jen po potvrzení/);
+assert.match(appSource, /Úspěch se zobrazí až po skutečném provedení/);
+assert.doesNotMatch(appSource, /Odeslání mimo systém zůstává pouze návrhem/);
 assert.match(appSource, /"Odpověz datovou schránkou"/);
 assert.match(appSource, /send_data_box_reply: "Odeslat datovou zprávu"/);
 const confirmationSource = appSource.slice(
