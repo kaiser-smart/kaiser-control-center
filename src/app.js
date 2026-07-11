@@ -174,6 +174,7 @@ import {
   VEHICLE_TRACKING_ICON_REQUIREMENTS,
   VEHICLE_TRACKING_ICON_TYPES,
   VEHICLE_TRACKING_ICON_WAITING,
+  VEHICLE_TRACKING_KAISER_SITE,
   VEHICLE_TRACKING_LIST_COLUMNS,
   VEHICLE_TRACKING_LOADING,
   VEHICLE_TRACKING_NO_SIGNAL,
@@ -197,6 +198,7 @@ import {
   VEHICLE_TRACKING_WIM_WAITING,
   VEHICLE_TRIP_FIELDS,
   VEHICLE_TRIP_POINT_FIELDS,
+  vehicleTrackingCustomIconForVehicle,
   vehicleTrackingIconForType,
   vehicleTrackingStatusLabel,
   vehicleTrackingStatusTone
@@ -1626,6 +1628,7 @@ const vehicleTrackingLiveState = {
   googleMapNode: null,
   googleMap: null,
   googleMarkers: new Map(),
+  kaiserSiteGoogleMarker: null,
   wimGoogleMarkers: new Map(),
   googleBoundsKey: "",
   googleFocusedLocationId: ""
@@ -12676,7 +12679,8 @@ function vehicleTrackingIconTypeForVehicle(vehicle = {}) {
 function vehicleTrackingMarkerImageSrc(vehicle = {}, options = {}) {
   const mappedImage = vehicleTrackingIconTypeForVehicle(vehicle)?.primary || "";
   const explicitImage = options.imageSrc || vehicle.iconSrc || vehicle.iconUrl || vehicle.imageSrc || "";
-  return mappedImage || explicitImage;
+  const customImage = vehicleTrackingCustomIconForVehicle(vehicle);
+  return explicitImage || customImage || mappedImage;
 }
 
 function vehicleTrackingMarkerContent(vehicle = {}, options = {}) {
@@ -15480,9 +15484,68 @@ function createVehicleTrackingTcarsGoogleMarker(maps, map, location) {
   return new VehicleTrackingTcarsMarker(location);
 }
 
+function createVehicleTrackingKaiserSiteGoogleMarker(maps, map) {
+  class VehicleTrackingKaiserSiteMarker extends maps.OverlayView {
+    constructor() {
+      super();
+      this.div = null;
+      this.setMap(map);
+    }
+
+    onAdd() {
+      this.div = document.createElement("a");
+      this.div.className = "tracking-kaiser-site-marker";
+      this.div.dataset.trackingKaiserSiteMarker = VEHICLE_TRACKING_KAISER_SITE.id;
+      this.div.href = VEHICLE_TRACKING_KAISER_SITE.mapsUrl;
+      this.div.target = "_blank";
+      this.div.rel = "noopener noreferrer";
+      this.div.setAttribute("aria-label", `${VEHICLE_TRACKING_KAISER_SITE.label}, ${VEHICLE_TRACKING_KAISER_SITE.address} – otevřít v Google Maps`);
+      this.div.title = `${VEHICLE_TRACKING_KAISER_SITE.label}\n${VEHICLE_TRACKING_KAISER_SITE.address}`;
+      this.div.innerHTML = `
+        <span class="tracking-kaiser-site-marker__pin" aria-hidden="true">
+          <span class="tracking-kaiser-site-marker__face">
+            <img src="${escapeHtml(VEHICLE_TRACKING_KAISER_SITE.logoSrc)}" alt="" loading="eager" decoding="async">
+          </span>
+        </span>
+        <strong>${escapeHtml(VEHICLE_TRACKING_KAISER_SITE.label)}</strong>
+      `;
+      this.getPanes().overlayMouseTarget.appendChild(this.div);
+    }
+
+    draw() {
+      if (!this.div) {
+        return;
+      }
+      const projection = this.getProjection();
+      const point = projection.fromLatLngToDivPixel(new maps.LatLng(
+        VEHICLE_TRACKING_KAISER_SITE.latitude,
+        VEHICLE_TRACKING_KAISER_SITE.longitude
+      ));
+      this.div.style.left = `${point.x}px`;
+      this.div.style.top = `${point.y}px`;
+    }
+
+    onRemove() {
+      this.div?.remove();
+      this.div = null;
+    }
+  }
+
+  return new VehicleTrackingKaiserSiteMarker();
+}
+
+function ensureVehicleTrackingKaiserSiteGoogleMarker(maps, map) {
+  if (!vehicleTrackingLiveState.kaiserSiteGoogleMarker) {
+    vehicleTrackingLiveState.kaiserSiteGoogleMarker = createVehicleTrackingKaiserSiteGoogleMarker(maps, map);
+  }
+  return vehicleTrackingLiveState.kaiserSiteGoogleMarker;
+}
+
 function clearVehicleTrackingTcarsGoogleMap() {
   vehicleTrackingLiveState.googleMarkers.forEach((marker) => marker.setMap(null));
   vehicleTrackingLiveState.googleMarkers.clear();
+  vehicleTrackingLiveState.kaiserSiteGoogleMarker?.setMap(null);
+  vehicleTrackingLiveState.kaiserSiteGoogleMarker = null;
   vehicleTrackingLiveState.wimGoogleMarkers.forEach((marker) => marker.setMap(null));
   vehicleTrackingLiveState.wimGoogleMarkers.clear();
   vehicleTrackingLiveState.googleMap = null;
@@ -15516,7 +15579,12 @@ function initializeVehicleTrackingTcarsGoogleMap(maps, node) {
 function vehicleTrackingTcarsBoundsKey(locations = [], wimSites = vehicleTrackingWimSitesForMap()) {
   return [
     ...locations.map((location) => ({ id: location._locationId, latitude: location.latitude, longitude: location.longitude })),
-    ...wimSites.map((site) => ({ id: `wim-${site.id}`, latitude: site.latitude, longitude: site.longitude }))
+    ...wimSites.map((site) => ({ id: `wim-${site.id}`, latitude: site.latitude, longitude: site.longitude })),
+    {
+      id: VEHICLE_TRACKING_KAISER_SITE.id,
+      latitude: VEHICLE_TRACKING_KAISER_SITE.latitude,
+      longitude: VEHICLE_TRACKING_KAISER_SITE.longitude
+    }
   ]
     .map((location) => `${location.id}:${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`)
     .sort()
@@ -15643,6 +15711,7 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
         vehicleTrackingLiveState.googleMarkers.set(location._locationId, marker);
       });
 
+      ensureVehicleTrackingKaiserSiteGoogleMarker(maps, map);
       syncVehicleTrackingWimGoogleMarkers(maps, map, wimSites);
 
       const boundsKey = vehicleTrackingTcarsBoundsKey(validLocations, wimSites);
@@ -15653,7 +15722,14 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
       } else if (options.focusSelected && selectedId) {
         focusVehicleTrackingTcarsGoogleMap(selectedId);
       } else if (options.forceFit || boundsKey !== vehicleTrackingLiveState.googleBoundsKey) {
-        fitVehicleTrackingTcarsGoogleMap(maps, map, [...validLocations, ...wimSites]);
+        fitVehicleTrackingTcarsGoogleMap(maps, map, [
+          ...validLocations,
+          ...wimSites,
+          {
+            latitude: VEHICLE_TRACKING_KAISER_SITE.latitude,
+            longitude: VEHICLE_TRACKING_KAISER_SITE.longitude
+          }
+        ]);
         vehicleTrackingLiveState.googleBoundsKey = boundsKey;
       }
     })

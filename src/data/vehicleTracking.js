@@ -16,6 +16,15 @@ export const VEHICLE_TRACKING_STALE_POSITION_WARNING = "Pozice některých vozid
 export const VEHICLE_TRACKING_API_ERROR_MODE_WARNING = "T-Cars API se nepodařilo načíst. Demo mapa se nezapíná automaticky a zůstává oddělená v demo režimu.";
 export const VEHICLE_TRACKING_TABLET_ROLE = "Primární poloha vozidla je z T-Cars jednotky. Android tablet slouží jako vozidlový terminál.";
 export const VEHICLE_TRACKING_ICON_FOLDER = "/vehicles/icons/";
+export const VEHICLE_TRACKING_KAISER_SITE = Object.freeze({
+  id: "kaiser-trnkova",
+  label: "Kaiser servis",
+  address: "Trnkova 3052/137, 628 00 Brno",
+  latitude: 49.19121,
+  longitude: 16.67013,
+  logoSrc: "/logo-kaiser.png",
+  mapsUrl: "https://www.google.com/maps/search/?api=1&query=49.19121%2C16.67013"
+});
 export const VEHICLE_TRACKING_WIM_WAITING = "WIM vrstva ceka na D1 migraci nebo API.";
 export const VEHICLE_TRACKING_WIM_PLACEHOLDER_ICON = "WIM vrstva ceka na finalni graficky podklad od Radima nebo Martina.";
 export const VEHICLE_TRACKING_WIM_ALERT_PILOT = "15km SMS a app alert jsou zatim evidovany jako navrh automatizace bez ostreho odesilani.";
@@ -100,6 +109,24 @@ export const VEHICLE_ICON_WEBP_BY_TYPE = {
   car: "/vehicles/icons/osobni-vozidlo.webp",
   trailer: "/vehicles/icons/prives-naves.webp"
 };
+
+export const VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE = Object.freeze({
+  "8B43007": "/vehicles/icons/man-abroll.png",
+  "1BM1150": "/vehicles/icons/man-abroll.png",
+  "3BF1394": "/vehicles/icons/mercedes-abroll.png",
+  "1BR6359": "/vehicles/icons/mercedes-abroll.png",
+  "2BD8835": "/vehicles/icons/mercedes-abroll.png",
+  "3BP5305": "/vehicles/icons/mercedes-abroll.png",
+  "3BH5548": "/vehicles/icons/mercedes-ramenac.png",
+  "5B80857": "/vehicles/icons/mercedes-ramenac.png",
+  "3BP2836": "/vehicles/icons/mercedes-ramenac.png",
+  "2BC1983": "/vehicles/icons/skoda-citigo.png",
+  "2BC1984": "/vehicles/icons/skoda-citigo.png",
+  "1BP8373": "/vehicles/icons/mercedes-popelarske.png",
+  "3BN3558": "/vehicles/icons/mercedes-popelarske.png",
+  "3BE2831": "/vehicles/icons/mercedes-popelarske.png",
+  "6B93840": "/vehicles/icons/man-popelarske.png"
+});
 
 const VEHICLE_ICON_TYPE_ALIASES = {
   collection_truck: "collection_truck",
@@ -339,4 +366,35 @@ export function vehicleTrackingIconTypeKey(value = "") {
 export function vehicleTrackingIconForType(value = "") {
   const key = vehicleTrackingIconTypeKey(value);
   return VEHICLE_TRACKING_ICON_TYPES.find((type) => type.key === key) || null;
+}
+
+export function normalizeVehicleTrackingLicensePlate(value = "") {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+export function vehicleTrackingCustomIconForVehicle(vehicle = {}) {
+  const nestedVehicle = vehicle.vehicle || {};
+  const licensePlates = [
+    vehicle.licensePlate,
+    vehicle.registrationNumber,
+    vehicle.spz,
+    nestedVehicle.licensePlate,
+    nestedVehicle.registrationNumber,
+    nestedVehicle.spz
+  ];
+
+  for (const licensePlate of licensePlates) {
+    const normalized = normalizeVehicleTrackingLicensePlate(licensePlate);
+    const icon = VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE[normalized];
+    if (icon) {
+      return icon;
+    }
+  }
+
+  return "";
 }
