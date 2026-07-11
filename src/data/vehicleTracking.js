@@ -109,6 +109,19 @@ export const VEHICLE_ICON_WEBP_BY_TYPE = {
   trailer: "/vehicles/icons/prives-naves.webp"
 };
 
+// Dodané 3D ikony jsou kreslené pohledem zleva dole. Nulový azimut T-Cars je
+// ale sever, proto se jejich vizuální směr kalibruje odděleně od směru mapy.
+// Profily zůstávají samostatné, abychom mohli jednotlivé typy později doladit
+// bez zásahu do GPS dat nebo kamery mapy.
+export const VEHICLE_TRACKING_ICON_HEADING_OFFSETS = Object.freeze({
+  collection_truck: 135,
+  container_truck: 135,
+  van: 135,
+  special: 135,
+  car: 135,
+  trailer: 135
+});
+
 export const VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE = Object.freeze({
   "8B43007": "/vehicles/icons/man-abroll.png",
   "1BM1150": "/vehicles/icons/man-abroll.png",
@@ -415,15 +428,38 @@ export function normalizeVehicleTrackingLicensePlate(value = "") {
     .replace(/[^A-Z0-9]/g, "");
 }
 
-export function vehicleTrackingVisualHeading(heading, speedKmh) {
+export function vehicleTrackingVisualHeading(heading, speedKmh, visualOffset = 0) {
   const speed = Number(speedKmh);
   const rawHeading = Number(heading);
+  const offset = Number(visualOffset);
 
   if (!Number.isFinite(speed) || speed <= 2 || !Number.isFinite(rawHeading)) {
     return 0;
   }
 
-  return ((rawHeading % 360) + 360) % 360;
+  return ((rawHeading + (Number.isFinite(offset) ? offset : 0)) % 360 + 360) % 360;
+}
+
+export function vehicleTrackingHeadingOffsetForVehicle(vehicle = {}) {
+  const nestedVehicle = vehicle.vehicle || {};
+  const relatedVehicle = vehicle.fleetVehicle || vehicle.pairedVehicle || {};
+  const iconType = vehicleTrackingIconTypeKey(
+    vehicle.iconType
+      || vehicle.vehicleType
+      || vehicle.type
+      || vehicle.bodyType
+      || nestedVehicle.iconType
+      || nestedVehicle.vehicleType
+      || nestedVehicle.type
+      || nestedVehicle.bodyType
+      || relatedVehicle.iconType
+      || relatedVehicle.vehicleType
+      || relatedVehicle.type
+      || relatedVehicle.bodyType
+      || ""
+  );
+
+  return VEHICLE_TRACKING_ICON_HEADING_OFFSETS[iconType] || 0;
 }
 
 export function vehicleTrackingCustomIconForVehicle(vehicle = {}) {

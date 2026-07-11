@@ -199,6 +199,7 @@ import {
   VEHICLE_TRIP_FIELDS,
   VEHICLE_TRIP_POINT_FIELDS,
   vehicleTrackingCustomIconForVehicle,
+  vehicleTrackingHeadingOffsetForVehicle,
   vehicleTrackingIconForType,
   vehicleTrackingStatusLabel,
   vehicleTrackingStatusTone,
@@ -1649,7 +1650,9 @@ const vehicleTrackingUiState = {
   search: "",
   filter: "all",
   mapMaximized: false,
-  mapView: "road"
+  mapView: "road",
+  routePanelOpen: false,
+  routeRange: "24h"
 };
 
 let vehicleTrackingAudioContext = null;
@@ -14042,15 +14045,20 @@ function vehicleTrackingTcarsIconType(location = {}) {
 
 function vehicleTrackingTcarsMarkerVehicle(location = {}) {
   const vehicle = location.vehicle || {};
-  const heading = vehicleTrackingVisualHeading(location.heading, location.speedKmh);
-  return {
+  const iconType = vehicleTrackingTcarsIconType(location);
+  const markerVehicle = {
     ...vehicle,
     ...location,
-    iconType: vehicleTrackingTcarsIconType(location),
+    iconType
+  };
+  const mapHeading = vehicleTrackingVisualHeading(location.heading, location.speedKmh);
+  return {
+    ...markerVehicle,
     internalNumber: location.internalNumber || vehicle.internalNumber || location.licensePlate || vehicle.licensePlate || location.externalVehicleId || "",
     licensePlate: location.licensePlate || vehicle.licensePlate || "",
     status: location.status || "no_signal",
-    heading
+    mapHeading,
+    heading: vehicleTrackingVisualHeading(mapHeading, location.speedKmh, vehicleTrackingHeadingOffsetForVehicle(markerVehicle))
   };
 }
 
@@ -14523,6 +14531,7 @@ function vehicleTrackingOperationalDetail(location = null, invalidItem = null) {
   const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
   const statusMeta = vehicleTrackingOperationalStatus(location);
   const driver = location.driverName || location.driver || location.vehicle?.driverName || location.vehicle?.driver || "neuveden";
+  const selectedRange = vehicleTrackingUiState.routeRange;
   return `
     <aside class="tracking-operational-detail" data-tracking-tcars-location-detail>
       <div class="tracking-operational-detail__head">
@@ -14536,6 +14545,40 @@ function vehicleTrackingOperationalDetail(location = null, invalidItem = null) {
         <div><dt>Poslední GPS</dt><dd>${escapeHtml(vehicleTrackingSafeDateTime(vehicleTrackingTcarsGpsDateValue(location)))}</dd></div>
         <div class="tracking-operational-detail__wide"><dt>Poloha</dt><dd>${escapeHtml(location.address || `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`)}</dd></div>
       </dl>
+      <div class="tracking-operational-detail__actions">
+        <button
+          class="primary-action tracking-operational-route-button"
+          type="button"
+          data-tracking-route-toggle
+          aria-expanded="${vehicleTrackingUiState.routePanelOpen ? "true" : "false"}"
+        >${vehicleTrackingUiState.routePanelOpen ? "Skrýt trasu" : "Trasa"}</button>
+      </div>
+      ${vehicleTrackingUiState.routePanelOpen ? `
+        <section class="tracking-route-panel" aria-label="Trasa vybraného vozidla">
+          <div class="tracking-route-panel__head">
+            <div>
+              <span>Trasa ${escapeHtml(markerVehicle.licensePlate || "vozidla")}</span>
+              <strong>Historie GPS bodů se připravuje</strong>
+            </div>
+            <span class="tracking-route-panel__status">Read-only</span>
+          </div>
+          <div class="tracking-route-range" role="group" aria-label="Časový rozsah trasy">
+            ${[
+              ["today", "Dnes"],
+              ["24h", "24 hodin"],
+              ["7d", "7 dní"]
+            ].map(([value, label]) => `
+              <button
+                class="tracking-route-range__button ${selectedRange === value ? "tracking-route-range__button--active" : ""}"
+                type="button"
+                data-tracking-route-range="${value}"
+                aria-pressed="${selectedRange === value ? "true" : "false"}"
+              >${label}</button>
+            `).join("")}
+          </div>
+          <p>Čára za vozidlem se zobrazí, až bude dostupná historie GPS bodů z T-Cars. Teď máme ověřenou pouze aktuální polohu — žádnou trasu nevymýšlíme.</p>
+        </section>
+      ` : ""}
     </aside>
   `;
 }
@@ -15649,7 +15692,7 @@ function focusVehicleTrackingTcarsGoogleMap(locationId) {
   }
 
   const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
-  const headingValue = Number(markerVehicle.heading);
+  const headingValue = Number(markerVehicle.mapHeading);
   const heading = Number.isFinite(headingValue) ? ((headingValue % 360) + 360) % 360 : 0;
   const center = { lat: location.latitude, lng: location.longitude };
   const aerial = vehicleTrackingUiState.mapView === "aerial";
@@ -15915,6 +15958,15 @@ function setVehicleTrackingMapView(view) {
   if (focusedLocationId && !focusedLocationId.startsWith("wim:")) {
     focusVehicleTrackingTcarsGoogleMap(focusedLocationId);
   }
+}
+
+function setVehicleTrackingRoutePanel(open, range = vehicleTrackingUiState.routeRange) {
+  const camera = vehicleTrackingTcarsGoogleCamera();
+  vehicleTrackingUiState.routePanelOpen = Boolean(open);
+  vehicleTrackingUiState.routeRange = ["today", "24h", "7d"].includes(range) ? range : "24h";
+  render();
+  syncVehicleTrackingMapMaximizedDom();
+  queueVehicleTrackingTcarsGoogleSync(camera ? { preserveCamera: camera } : { forceFit: true });
 }
 
 function updateVehicleTrackingOperationalSearch(input) {
@@ -38048,6 +38100,9 @@ function handleVehicleTrackingTcarsSelect(locationId, options = {}) {
     return;
   }
 
+  if (vehicleTrackingLiveState.selectedLocationId !== normalizedId) {
+    vehicleTrackingUiState.routePanelOpen = false;
+  }
   vehicleTrackingLiveState.selectedLocationId = normalizedId;
   syncVehicleTrackingTcarsSelectionDom(normalizedId);
   queueVehicleTrackingTcarsGoogleSync({ focusSelected: options.focusMap !== false });
@@ -44584,6 +44639,20 @@ document.addEventListener("click", async (event) => {
   if (trackingOperationalRefresh) {
     event.preventDefault();
     await refreshVehicleTrackingOperationalData();
+    return;
+  }
+
+  const trackingRouteToggle = event.target.closest("[data-tracking-route-toggle]");
+  if (trackingRouteToggle) {
+    event.preventDefault();
+    setVehicleTrackingRoutePanel(!vehicleTrackingUiState.routePanelOpen);
+    return;
+  }
+
+  const trackingRouteRange = event.target.closest("[data-tracking-route-range]");
+  if (trackingRouteRange) {
+    event.preventDefault();
+    setVehicleTrackingRoutePanel(true, trackingRouteRange.dataset.trackingRouteRange || "24h");
     return;
   }
 

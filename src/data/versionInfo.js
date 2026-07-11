@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.513"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.514"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: kalibrovaný směr a ovladač trasy",
+    text: "3D ikony nově oddělují skutečný azimut T-Cars pro kameru mapy od vizuální korekce podle typu ikony, takže kabina míří po směru jízdy. Detail vybraného vozidla má tlačítko Trasa s rozsahem dnes, 24 hodin a 7 dní; čára se zapne až po napojení historie skutečných GPS bodů."
+  },
   {
     title: "Poloha vozidel: stojící auta zůstávají správně otočená",
     text: "Při rychlosti do 2 km/h mapa už nepoužívá poslední, často zastaralý azimut z GPS jednotky. Stojící 3D vozidlo proto zůstává v jednotné správné orientaci; natočení podle T-Cars se zapne až při skutečném pohybu nad 2 km/h."

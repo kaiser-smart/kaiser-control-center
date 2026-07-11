@@ -5,6 +5,7 @@ import {
   VEHICLE_TRACKING_KAISER_SITE,
   normalizeVehicleTrackingLicensePlate,
   vehicleTrackingCustomIconForVehicle,
+  vehicleTrackingHeadingOffsetForVehicle,
   vehicleTrackingVisualHeading
 } from "../src/data/vehicleTracking.js";
 
@@ -58,7 +59,10 @@ import {
   assert.equal(vehicleTrackingVisualHeading(215, 2), 0);
   assert.equal(vehicleTrackingVisualHeading(215, 3), 215);
   assert.equal(vehicleTrackingVisualHeading(-90, 24), 270);
+  assert.equal(vehicleTrackingVisualHeading(215, 24, 135), 350);
   assert.equal(vehicleTrackingVisualHeading("neplatné", 24), 0);
+  assert.equal(vehicleTrackingHeadingOffsetForVehicle({ iconType: "collection_truck" }), 135);
+  assert.equal(vehicleTrackingHeadingOffsetForVehicle({ iconType: "car" }), 135);
 }
 
 {

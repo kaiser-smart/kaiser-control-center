@@ -26545,6 +26545,99 @@ button.tracking-operational-vehicle:hover,
   grid-column: 1 / -1;
 }
 
+.tracking-operational-detail__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tracking-operational-route-button {
+  min-height: 42px;
+  padding-inline: 18px;
+  border: 0;
+  border-radius: 13px;
+  background: #75bd25;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.tracking-route-panel {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid rgba(117, 189, 37, 0.36);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #f8fff2 0%, #eef7e7 100%);
+}
+
+.tracking-route-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tracking-route-panel__head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tracking-route-panel__head span:first-child {
+  color: #5a981a;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tracking-route-panel__head strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.tracking-route-panel__status {
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: rgba(117, 189, 37, 0.14);
+  color: #44770e;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.tracking-route-range {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tracking-route-range__button {
+  min-height: 34px;
+  border: 1px solid #cfddc8;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #52605a;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.tracking-route-range__button--active {
+  border-color: #75bd25;
+  background: #75bd25;
+  color: #ffffff;
+}
+
+.tracking-route-panel p {
+  margin: 0;
+  color: #59685d;
+  font-size: 0.77rem;
+  font-weight: 750;
+  line-height: 1.42;
+}
+
 .tracking-operational-detail--empty,
 .tracking-operational-empty {
   place-content: center;
@@ -26767,6 +26860,11 @@ body.tracking-map-is-maximized {
 
   .tracking-operational-detail__wide {
     grid-column: auto;
+  }
+
+  .tracking-operational-detail__actions,
+  .tracking-operational-route-button {
+    width: 100%;
   }
 
   .tracking-operational-alert {
