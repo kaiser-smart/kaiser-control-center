@@ -94,6 +94,7 @@ assert.equal(hasPermission({ ...manager, active: true }, "self-repair", "manage"
 
 assert.equal(resolveSelfRepairTarget("pneumatiky").repoKey, "kaiser-pneu-evidence");
 assert.equal(resolveSelfRepairTarget("tyres").productionUrl, "https://kaiser-smart.github.io/kaiser-pneu-evidence/");
+assert.equal(resolveSelfRepairTarget("dashboard").productionUrl, "https://smart-odpady.ai/");
 assert.equal(targetForSelfRepairReport("unknown-module"), null);
 assert.equal(sanitizeSelfRepairSourceRoute("/pneumatiky?vehicle=1#detail"), "/pneumatiky?vehicle=1#detail");
 assert.equal(sanitizeSelfRepairSourceRoute("https://attacker.example/steal"), "");

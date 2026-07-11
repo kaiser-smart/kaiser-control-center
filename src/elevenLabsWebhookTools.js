@@ -1,4 +1,4 @@
-const DEFAULT_APP_BASE_URL = "https://kaiser-control-center.pages.dev";
+const DEFAULT_APP_BASE_URL = "https://smart-odpady.ai";
 const DEFAULT_VOICE_WEBHOOK_TOKEN_ENV_LABEL = "voice_assistant_webhook_token";
 
 function cleanString(value) {

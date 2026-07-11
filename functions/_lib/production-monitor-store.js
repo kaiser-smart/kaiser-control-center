@@ -1,5 +1,5 @@
 const MONITOR_DB_BINDING = "SMART_ODPADY_DB";
-const DEFAULT_TARGET_URL = "https://kaiser-control-center.pages.dev/";
+const DEFAULT_TARGET_URL = "https://smart-odpady.ai/";
 const VALID_STATUS = new Set(["OK", "WARNING", "ERROR", "NEOVĚŘENO"]);
 
 export class ProductionMonitorStoreError extends Error {

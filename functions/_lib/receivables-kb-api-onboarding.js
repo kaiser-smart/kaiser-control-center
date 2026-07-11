@@ -180,7 +180,7 @@ function onboardingStep(id, label, description, requiredEnv, env) {
 
 function buildReceivablesKbOnboardingPackage(env, onboarding) {
   const callbackUrl = cleanString(env.KB_ADAA_REDIRECT_URI)
-    || "https://kaiser-control-center.pages.dev/api/receivables/kb/oauth/callback";
+    || "https://smart-odpady.ai/api/receivables/kb/oauth/callback";
   const steps = [
     onboardingStep(
       "qualified_certificate",

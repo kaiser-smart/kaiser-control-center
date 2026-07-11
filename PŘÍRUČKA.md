@@ -773,6 +773,10 @@ Nejdřív vždy vytvořit společný komponent / pattern, společné API a pilot
 
 Veřejná adresa aplikace je:
 
+https://smart-odpady.ai/
+
+Dočasná záložní adresa během řízeného přechodu:
+
 https://kaiser-control-center.pages.dev/
 
 Veřejná adresa evidence Pneumatiky je:

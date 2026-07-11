@@ -1411,8 +1411,8 @@ function driverPartTestEnv(db, offers) {
         ]
       })
     },
-    ctaUrl: "https://kaiser-control-center.pages.dev/hlaseni-ridicu?request=driver-report-email-preview",
-    patrikUrl: "https://kaiser-control-center.pages.dev/dovolena-nemoc/zamestnanci/patrik-istvanek"
+    ctaUrl: "https://smart-odpady.ai/hlaseni-ridicu?request=driver-report-email-preview",
+    patrikUrl: "https://smart-odpady.ai/dovolena-nemoc/zamestnanci/patrik-istvanek"
   });
   assert.match(emailHtml, /3 nejlevnější nabídky/);
   assert.match(emailHtml, /https:\/\/example\.test\/a/);

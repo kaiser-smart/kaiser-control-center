@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.508"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.509"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Ostrá doména smart-odpady.ai",
+    text: "Aplikace, interní odkazy, cloudové runnery, monitoring a integrační callbacky používají jako hlavní produkční adresu https://smart-odpady.ai. Původní kaiser-control-center.pages.dev zůstává během řízeného přechodu dostupná jako bezpečná záloha."
+  },
   {
     title: "Poloha vozidel: realistické markery bez karet",
     text: "Vozidla jsou na Google mapě zobrazená jako samostatné průhledné výřezy se stínem a plovoucí registrační značkou. Původní bílá karta, název a rychlost z markeru zmizely; úplné údaje zůstávají v přístupném popisu a detailu vozidla. Kaiser na Trnkově označuje přepracovaný statický 3D špendlík bez odkazu a bez nechtěného otevření dalšího okna."
