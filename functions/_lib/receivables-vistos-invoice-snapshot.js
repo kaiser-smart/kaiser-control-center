@@ -181,6 +181,7 @@ function mergeIssueCounts(left = [], right = []) {
 
 async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
   const diagnostics = [];
+  let firstSuccessful = null;
   const invoiceLookback = receivablesVistosInvoiceLookbackWindow({
     months: options.invoiceLookbackMonths || DEFAULT_LOOKBACK_MONTHS,
     now: options.now
@@ -207,6 +208,16 @@ async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
         capped: Boolean(page.capped),
         filter
       });
+      if (!firstSuccessful) {
+        firstSuccessful = {
+          entityName,
+          columns: attempt.columns,
+          page,
+          invoiceLookback,
+          pageSize,
+          maxPages
+        };
+      }
       if (page.rows.length > 0) {
         return { entityName, columns: attempt.columns, page, diagnostics, invoiceLookback, pageSize, maxPages };
       }
@@ -220,6 +231,10 @@ async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
         filter
       });
     }
+  }
+
+  if (firstSuccessful) {
+    return { ...firstSuccessful, diagnostics };
   }
 
   return {
@@ -424,6 +439,19 @@ export function assertIncrementalFilter(rows, window) {
   }
 }
 
+function incrementalControlWindow(periodTo) {
+  const to = validDate(periodTo) || new Date();
+  const from = new Date(to.getTime() - 730 * 24 * 60 * 60 * 1000);
+  return {
+    periodFrom: from.toISOString(),
+    periodTo: to.toISOString(),
+    filter: {
+      Modified_From: vistosDateTime(from),
+      Modified_To: vistosDateTime(to)
+    }
+  };
+}
+
 async function incrementalCheckpoint(db) {
   const incremental = await db.prepare(`
     SELECT parser_summary_json, updated_at
@@ -585,6 +613,37 @@ export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, opt
       );
     }
     assertIncrementalFilter(invoiceResult.page.rows, window);
+    let modifiedFilterProbe = {
+      verified: invoiceResult.page.rows.length > 0,
+      mode: invoiceResult.page.rows.length > 0 ? "incremental_rows" : "wide_control",
+      returnedRows: invoiceResult.page.rows.length
+    };
+    if (!invoiceResult.page.rows.length) {
+      const controlWindow = incrementalControlWindow(window.periodTo);
+      const controlResult = await loadInvoicePage(env, session, {
+        entityName: invoiceResult.entityName,
+        columns: invoiceResult.columns,
+        filter: controlWindow.filter,
+        start: 0,
+        vistosPageSize: 1
+      });
+      if (!controlResult.page.rows.length) {
+        throw new ReceivablesVistosInvoiceSnapshotError(
+          "Vistos v kontrolním okně nepotvrdil filtr Modified. Nulový inkrementální běh nebyl uložen.",
+          502,
+          "receivables_vistos_modified_filter_unverified"
+        );
+      }
+      assertIncrementalFilter(controlResult.page.rows, controlWindow);
+      modifiedFilterProbe = {
+        verified: true,
+        mode: "wide_control",
+        returnedRows: controlResult.page.rows.length,
+        periodFrom: controlWindow.periodFrom,
+        periodTo: controlWindow.periodTo,
+        diagnostics: controlResult.diagnostics
+      };
+    }
 
     const totalRows = invoiceResult.page.filtered || invoiceResult.page.total || invoiceResult.page.rows.length;
     const capped = Boolean(invoiceResult.page.capped || invoiceResult.page.rows.length < totalRows);
@@ -603,6 +662,7 @@ export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, opt
       invoiceEntity: invoiceResult.entityName,
       invoiceColumns: invoiceResult.columns,
       modifiedWindow: window,
+      modifiedFilterProbe,
       periodFrom: window.periodFrom,
       periodTo: window.periodTo,
       loadedRows: normalizedRows.length,
@@ -629,6 +689,7 @@ export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, opt
       importKind: INCREMENTAL_IMPORT_KIND,
       invoiceEntity: invoiceResult.entityName,
       modifiedWindow: window,
+      modifiedFilterProbe,
       diagnostics: invoiceResult.diagnostics,
       readOnly: true,
       writesLedger: false,

@@ -25,6 +25,16 @@ assert.equal(
   "Sunday 02:30 Europe/Prague must schedule full reconciliation"
 );
 assert.equal(
+  scheduledReceivablesAction(new Date("2026-10-25T00:30:00.000Z")),
+  "full",
+  "the first repeated 02:30 during DST fallback must select the weekly full action"
+);
+assert.equal(
+  scheduledReceivablesAction(new Date("2026-10-25T01:30:00.000Z")),
+  "full",
+  "the repeated 02:30 is handled by the runner dedupe key"
+);
+assert.equal(
   scheduledReceivablesAction(new Date("2026-07-11T04:15:00.000Z")),
   "",
   "unscheduled quarter-hour must not start a new sync"
