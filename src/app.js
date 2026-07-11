@@ -375,11 +375,7 @@ const DATA_BOX_PLUS_ROUTE = "/datove-schranky-plus";
 const DATA_BOX_PLUS_TABS = [
   { id: "messages", label: "Zprávy" },
   { id: "autopilot", label: "Autopilot" },
-  { id: "confirmations", label: "K doplnění" },
-  { id: "rules", label: "Pravidla a učení" },
-  { id: "archive", label: "Archiv" },
-  { id: "settings", label: "Nastavení" },
-  { id: "manual", label: "Manuál" }
+  { id: "settings", label: "Nastavení" }
 ];
 const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const DATA_BOX_PLUS_MODEL_FLAG = {
@@ -22505,7 +22501,7 @@ function dataBoxPlusMetricItems() {
   return [
     ["Nové", workflows.filter((workflow) => workflow.state === "Nová").length, "neutral"],
     ["Potřebuje pokyn", workflows.filter((workflow) => workflow.state === "Potřebuje pokyn").length, "warning"],
-    ["K doplnění", workflows.filter((workflow) => ["Potřebuje upřesnit", "Potřebuje adresáta", "Chybí vozidlo", "Chybí příloha", "Nelze provést"].includes(workflow.state)).length, "warning"],
+    ["Vyžaduje zásah", workflows.filter((workflow) => ["Potřebuje upřesnit", "Potřebuje adresáta", "Chybí vozidlo", "Chybí příloha", "Nelze provést"].includes(workflow.state)).length, "warning"],
     ["Vyřešeno dnes", workflows.filter((workflow) => workflow.state === "Vyřešeno").length, "success"],
     ["Nelze provést", workflows.filter((workflow) => workflow.state === "Nelze provést").length, "danger"]
   ];
@@ -22673,7 +22669,7 @@ function dataBoxPlusCommandCenter() {
           </ul>
         </section>
         <section class="ds-plus-side-block ds-plus-side-block--risk">
-          <h2>K doplnění</h2>
+          <h2>Vyžaduje zásah</h2>
           <ul>
             ${blockedMessages.length ? blockedMessages.map((message) => `<li>${escapeHtml(message.subject)}</li>`).join("") : `<li>Nic nechybí.</li>`}
           </ul>
@@ -22691,7 +22687,6 @@ function dataBoxPlusFilterOptions() {
   return [
     ["new", "Nové"],
     ["today", "Dnes k vyřízení"],
-    ["confirmations", "K doplnění"],
     ["invoice", "Faktury"],
     ["reminder", "Upomínky"],
     ["office", "Úřady"],
@@ -22702,7 +22697,7 @@ function dataBoxPlusFilterOptions() {
     ["technical", "Technická oznámení"],
     ["safe", "Potřebuje pokyn"],
     ["archive", "Archivované"],
-    ["problem", "Problém"],
+    ["problem", "Vyžaduje zásah"],
     ["all", "Vše"]
   ];
 }
@@ -22713,7 +22708,6 @@ function dataBoxPlusMessageMatchesFilter(message, filter) {
   if (filter === "all") return true;
   if (filter === "new") return workflow.state === "Nová";
   if (filter === "today") return dataBoxPlusIsDueToday(message);
-  if (filter === "confirmations") return ["Potřebuje upřesnit", "Potřebuje adresáta", "Chybí vozidlo", "Chybí příloha", "Nelze provést"].includes(workflow.state);
   if (filter === "invoice") return normalized.includes("faktur");
   if (filter === "reminder") return normalized.includes("upom");
   if (filter === "office") return normalized.includes("urad");
@@ -22723,7 +22717,7 @@ function dataBoxPlusMessageMatchesFilter(message, filter) {
   if (filter === "vehicles") return normalized.includes("vozid");
   if (filter === "technical") return normalized.includes("technick");
   if (filter === "archive") return workflow.state === "Archivováno" || workflow.state === "Vyřešeno";
-  if (filter === "problem") return workflow.state === "Nelze provést";
+  if (filter === "problem") return ["Potřebuje upřesnit", "Potřebuje adresáta", "Chybí vozidlo", "Chybí příloha", "Nelze provést"].includes(workflow.state);
   if (filter === "safe") return workflow.state === "Potřebuje pokyn";
   return true;
 }
@@ -22802,25 +22796,6 @@ function dataBoxPlusMessagesPanel() {
   `;
 }
 
-function dataBoxPlusConfirmationsPanel() {
-  const rows = dataBoxPlusMessages()
-    .filter((message) => ["Potřebuje upřesnit", "Potřebuje adresáta", "Chybí vozidlo", "Chybí příloha", "Nelze provést"].includes(dataBoxPlusMessageWorkflow(message).state));
-  return `
-    <section class="ds-plus-workspace" aria-labelledby="ds-plus-confirm-title">
-      <div class="ds-plus-section-head">
-        <div>
-          <span>Chybějící údaje</span>
-          <h2 id="ds-plus-confirm-title">K doplnění</h2>
-        </div>
-      </div>
-      <div class="ds-plus-priority-list">
-        ${rows.length ? rows.map(dataBoxPlusMessageRow).join("") : `<p class="ds-plus-empty">Žádná zpráva teď nepotřebuje doplnění.</p>`}
-      </div>
-      ${dataBoxPlusState.notice ? `<p class="ds-plus-notice" role="status">${escapeHtml(dataBoxPlusState.notice)}</p>` : ""}
-    </section>
-  `;
-}
-
 function dataBoxPlusAutopilotPanel() {
   const groups = [
     ["Co provede z chatu", [
@@ -22880,6 +22855,7 @@ function dataBoxPlusAutopilotPanel() {
           `).join("")}
         </div>
       </section>
+      ${dataBoxPlusAutopilotHelp()}
     </section>
   `;
 }
@@ -22898,16 +22874,17 @@ function dataBoxPlusRulesPanel() {
   const rules = dataBoxPlusFilteredRules();
   return `
     <section class="ds-plus-workspace" aria-labelledby="ds-plus-rules-title">
-      <div class="ds-plus-section-head ds-plus-section-head--stack">
+      <div class="ds-plus-section-head">
         <div>
-          <span>Seznam pravidel a automatizace</span>
-          <h2 id="ds-plus-rules-title">Pravidla a učení</h2>
+          <span>Technická správa</span>
+          <h2 id="ds-plus-rules-title">Seznam pravidel a automatizace</h2>
         </div>
-        <div class="ds-plus-rules-controls">
-          <label><span>Hledat</span><input type="search" value="${escapeHtml(dataBoxPlusState.rulesSearch)}" placeholder="Název, popis, dopad nebo autor" data-ds-plus-rules-search /></label>
-          <label><span>Typ</span><select data-ds-plus-rules-type>${["all", "Pravidlo", "Automatizace"].map((value) => `<option value="${escapeHtml(value)}" ${dataBoxPlusState.rulesType === value ? "selected" : ""}>${escapeHtml(value === "all" ? "Vše" : value)}</option>`).join("")}</select></label>
-          <label><span>Stav</span><select data-ds-plus-rules-status>${["all", "Nové pravidlo", "Učí se", "Spolehlivé", "Autonomní", "Pozastavené", "Rizikové"].map((value) => `<option value="${escapeHtml(value)}" ${dataBoxPlusState.rulesStatus === value ? "selected" : ""}>${escapeHtml(value === "all" ? "Vše" : value)}</option>`).join("")}</select></label>
-        </div>
+        <button class="secondary-link" type="button" data-ds-plus-tab="settings">Zpět do Nastavení</button>
+      </div>
+      <div class="ds-plus-rules-controls">
+        <label><span>Hledat</span><input type="search" value="${escapeHtml(dataBoxPlusState.rulesSearch)}" placeholder="Název, popis, dopad nebo autor" data-ds-plus-rules-search /></label>
+        <label><span>Typ</span><select data-ds-plus-rules-type>${["all", "Pravidlo", "Automatizace"].map((value) => `<option value="${escapeHtml(value)}" ${dataBoxPlusState.rulesType === value ? "selected" : ""}>${escapeHtml(value === "all" ? "Vše" : value)}</option>`).join("")}</select></label>
+        <label><span>Stav</span><select data-ds-plus-rules-status>${["all", "Nové pravidlo", "Učí se", "Spolehlivé", "Autonomní", "Pozastavené", "Rizikové"].map((value) => `<option value="${escapeHtml(value)}" ${dataBoxPlusState.rulesStatus === value ? "selected" : ""}>${escapeHtml(value === "all" ? "Vše" : value)}</option>`).join("")}</select></label>
       </div>
       <div class="ds-plus-rule-list">
         ${rules.length ? rules.map((rule) => `
@@ -22936,24 +22913,6 @@ function dataBoxPlusRulesPanel() {
             </div>
           </article>
         `).join("") : `<p class="ds-plus-empty">Pravidla Autopilota se načtou z ostrého backendu po dokončení prvního spuštění.</p>`}
-      </div>
-    </section>
-  `;
-}
-
-function dataBoxPlusArchivePanel() {
-  const archived = dataBoxPlusMessages().filter((message) => message.status === "Archivované" || message.riskLevel === "Nízké");
-  const autopilotDone = dataBoxPlusAutopilotDoneItems();
-  return `
-    <section class="ds-plus-workspace" aria-labelledby="ds-plus-archive-title">
-      <div class="ds-plus-section-head">
-        <div><span>Bezpečný firemní archiv</span><h2 id="ds-plus-archive-title">Archiv</h2></div>
-      </div>
-      <div class="ds-plus-archive-summary">
-        ${autopilotDone.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
-      </div>
-      <div class="ds-plus-message-list">
-        ${archived.length ? archived.map(dataBoxPlusMessageRow).join("") : `<p class="ds-plus-empty">Archiv se začne plnit po potvrzených nebo autonomních nízkorizikových krocích.</p>`}
       </div>
     </section>
   `;
@@ -23233,6 +23192,14 @@ function dataBoxPlusSettingsPanel() {
             ${["Potřebuje pokyn", "Provádí pokyn", "Potřebuje adresáta", "Potřebuje upřesnit", "Chybí příloha", "Nelze provést"].map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
           </div>
         </section>
+        <details class="ds-plus-settings-block ds-plus-settings-block--wide ds-plus-collapsible-panel">
+          <summary>Technická správa</summary>
+          <div class="ds-plus-collapsible-panel__content">
+            <h3>Pravidla a automatizace</h3>
+            <p>Pravidla, stav učení a audit zůstávají oddělené od běžné práce se zprávami.</p>
+            <button class="secondary-action" type="button" data-ds-plus-tab="rules">Otevřít pravidla a automatizace</button>
+          </div>
+        </details>
         ${dataBoxPlusEventLogBlock()}
         <section class="ds-plus-settings-block ds-plus-settings-block--wide">
           <h3>Datové entity ostré fáze</h3>
@@ -23265,15 +23232,10 @@ function dataBoxPlusSettingsPanel() {
   `;
 }
 
-function dataBoxPlusManualPanel() {
+function dataBoxPlusAutopilotHelp() {
   return `
-    <section class="ds-plus-workspace" aria-labelledby="ds-plus-manual-title">
-      <div class="ds-plus-section-head">
-        <div>
-          <span>Provozní manuál</span>
-          <h2 id="ds-plus-manual-title">Jak Datové schránky Plus používat</h2>
-        </div>
-      </div>
+    <details class="ds-plus-autopilot-help ds-plus-collapsible-panel">
+      <summary>Jak Datové schránky Plus používat</summary>
       <div class="ds-plus-manual-grid">
         <section class="ds-plus-manual-block">
           <h3>Co modul dělá po ověřeném napojení</h3>
@@ -23336,7 +23298,7 @@ function dataBoxPlusManualPanel() {
           </ul>
         </section>
       </div>
-    </section>
+    </details>
   `;
 }
 
@@ -23573,11 +23535,8 @@ function dataBoxPlusChatOverlay() {
 function dataBoxPlusActivePanel() {
   if (dataBoxPlusState.activeTab === "messages") return dataBoxPlusMessagesPanel();
   if (dataBoxPlusState.activeTab === "autopilot") return dataBoxPlusAutopilotPanel();
-  if (dataBoxPlusState.activeTab === "confirmations") return dataBoxPlusConfirmationsPanel();
   if (dataBoxPlusState.activeTab === "rules") return dataBoxPlusRulesPanel();
-  if (dataBoxPlusState.activeTab === "archive") return dataBoxPlusArchivePanel();
   if (dataBoxPlusState.activeTab === "settings") return dataBoxPlusSettingsPanel();
-  if (dataBoxPlusState.activeTab === "manual") return dataBoxPlusManualPanel();
   return dataBoxPlusMessagesPanel();
 }
 

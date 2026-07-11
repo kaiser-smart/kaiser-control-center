@@ -33333,6 +33333,36 @@ body:has(.ds-plus-page) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.ds-plus-collapsible-panel {
+  border: 1px solid #e4e9e1;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.ds-plus-autopilot-help {
+  margin-top: 14px;
+}
+
+.ds-plus-collapsible-panel summary {
+  cursor: pointer;
+  color: #1f2a22;
+  font-weight: 750;
+}
+
+.ds-plus-collapsible-panel > .ds-plus-manual-grid,
+.ds-plus-collapsible-panel__content {
+  margin-top: 14px;
+}
+
+.ds-plus-collapsible-panel__content h3 {
+  margin: 0 0 8px;
+}
+
+.ds-plus-collapsible-panel__content p {
+  margin: 0 0 12px;
+}
+
 .ds-plus-settings-block {
   padding: 16px;
 }
