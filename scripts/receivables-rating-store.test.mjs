@@ -178,7 +178,7 @@ for (let index = 1; index <= 6; index += 1) {
 sqlite.prepare(`
   INSERT INTO receivable_import_batches (
     id, import_kind, source, filename, status, row_count, accepted_count, review_count, ignored_count
-  ) VALUES (?, ?, ?, ?, 'preview', 1, 1, 0, 0)
+  ) VALUES (?, ?, ?, ?, 'snapshot', 1, 1, 0, 0)
 `).run("batch-vistos", "vistos_invoice_snapshot", "vistos", "vistos.json");
 sqlite.prepare(`
   INSERT INTO receivable_import_rows (
@@ -190,6 +190,11 @@ sqlite.prepare(`
   variableSymbol: "2601000999",
   customerCompanyId: "vistos-ledger-customer",
   customerCompanyName: "Ledger Test s.r.o.",
+  customerBranchId: "vistos-ledger-branch",
+  ico: "12345678",
+  dic: "CZ12345678",
+  billingEmail: "fakturace@example.test",
+  standardDueDays: 14,
   issueDate: "2026-06-01",
   dueDate: "2026-06-15",
   totalAmount: 1210,
@@ -213,6 +218,53 @@ sqlite.prepare(`
   assert.equal(storedInvoice.open_amount, 1210);
   assert.equal(storedInvoice.status, "unpaid");
   assert.deepEqual(JSON.parse(storedInvoice.data_quality_flags_json), ["INVOICE_AMOUNT_MISMATCH", "MISSING_REMAINING_AMOUNT"]);
+  sqlite.prepare(`
+    UPDATE receivable_import_batches
+    SET row_count = 2, accepted_count = 2
+    WHERE id = 'batch-vistos'
+  `).run();
+  sqlite.prepare(`
+    INSERT INTO receivable_import_rows (
+      id, batch_id, row_number, entity_kind, preview_status, normalized_json
+    ) VALUES (?, ?, 2, 'vistos_invoice', 'ready', ?)
+  `).run("row-vistos-without-metadata", "batch-vistos", JSON.stringify({
+    vistoInvoiceId: "vistos-ledger-invoice-without-metadata",
+    invoiceNumber: "2601001000",
+    variableSymbol: "2601001000",
+    customerCompanyId: "vistos-ledger-customer",
+    issueDate: "2026-06-02",
+    dueDate: "2026-06-16",
+    totalAmount: 100,
+    paidAmount: 100,
+    openAmount: 0,
+    isPaid: true,
+    currency: "CZK"
+  }));
+  await syncReceivablesVistosLedger(env, { batchId: "batch-vistos", offset: 1, persist: true }, user);
+  const storedCustomer = sqlite.prepare(`
+    SELECT company_name, ico, dic, visto_branch_id, billing_email, standard_due_days
+    FROM receivable_customers
+    WHERE visto_company_id = 'vistos-ledger-customer'
+  `).get();
+  assert.deepEqual({ ...storedCustomer }, {
+    company_name: "Ledger Test s.r.o.",
+    ico: "12345678",
+    dic: "CZ12345678",
+    visto_branch_id: "vistos-ledger-branch",
+    billing_email: "fakturace@example.test",
+    standard_due_days: 14
+  });
+  sqlite.prepare(`
+    INSERT INTO receivable_import_batches (
+      id, import_kind, source, filename, status, row_count, accepted_count, review_count, ignored_count, created_at
+    ) VALUES (?, ?, ?, ?, 'snapshot_running', 1, 1, 0, 0, '2026-07-11 00:00:00')
+  `).run("batch-vistos-running", "vistos_invoice_snapshot", "vistos", "vistos-running.json");
+  const latestCompleted = await syncReceivablesVistosLedger(env, {}, user);
+  assert.equal(latestCompleted.batchId, "batch-vistos");
+  await assert.rejects(
+    syncReceivablesVistosLedger(env, { batchId: "batch-vistos-running" }, user),
+    (error) => error.code === "receivables_vistos_snapshot_not_complete" && error.status === 409
+  );
   const customerList = await listReceivableCustomers(env);
   assert.equal(customerList.customers[0].package.totalOpenAmount, 1210);
   assert.equal(customerList.customers[0].package.totalOverdueAmount, 1210);

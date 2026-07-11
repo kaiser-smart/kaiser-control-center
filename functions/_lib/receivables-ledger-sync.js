@@ -81,6 +81,15 @@ async function latestBatch(db, importKind) {
   `).bind(importKind).first();
 }
 
+async function latestCompletedVistosBatch(db) {
+  return db.prepare(`
+    SELECT * FROM receivable_import_batches
+    WHERE import_kind = ? AND status = 'snapshot'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(VISTOS_IMPORT_KIND).first();
+}
+
 async function selectedBatch(db, importKind, batchId) {
   if (!cleanString(batchId)) return latestBatch(db, importKind);
   return db.prepare(`
@@ -152,8 +161,17 @@ export async function syncReceivablesVistosLedger(env, payload = {}, user = null
   const offset = boundedInteger(payload.offset, 0, 10_000_000);
   const limit = Math.max(1, boundedInteger(payload.limit, 100, 250));
   try {
-    const batch = await selectedBatch(db, VISTOS_IMPORT_KIND, payload.batchId);
+    const batch = cleanString(payload.batchId)
+      ? await selectedBatch(db, VISTOS_IMPORT_KIND, payload.batchId)
+      : await latestCompletedVistosBatch(db);
     if (!batch) throw new ReceivablesLedgerSyncError("Vistos snapshot nebyl nalezen.", 404, "receivables_vistos_snapshot_missing");
+    if (cleanString(batch.status) !== "snapshot") {
+      throw new ReceivablesLedgerSyncError(
+        "Vistos snapshot ještě není dokončený.",
+        409,
+        "receivables_vistos_snapshot_not_complete"
+      );
+    }
     const rowsResult = await db.prepare(`
       SELECT row_number, preview_status, issue_code, normalized_json
       FROM receivable_import_rows
@@ -178,7 +196,8 @@ export async function syncReceivablesVistosLedger(env, payload = {}, user = null
       }
       const customerId = stableId("receivable-customer", companyId);
       const ledgerInvoiceId = stableId("receivable-invoice", invoiceId);
-      const customerName = cleanString(invoice.customerCompanyName || invoice.customerName || companyId);
+      const sourceCustomerName = cleanString(invoice.customerCompanyName || invoice.customerName);
+      const customerName = sourceCustomerName || companyId;
       const { totalAmount, paidAmount, openAmount } = amounts;
       const status = invoiceStatus(invoice, paidAmount, openAmount);
       customerIds.add(customerId);
@@ -203,15 +222,20 @@ export async function syncReceivablesVistosLedger(env, payload = {}, user = null
         ),
         db.prepare(`
           UPDATE receivable_customers
-          SET company_name = ?, ico = ?, dic = ?, visto_branch_id = ?, billing_email = ?,
-              standard_due_days = ?, customer_link_confidence = 'HIGH', updated_at = CURRENT_TIMESTAMP
+          SET company_name = COALESCE(NULLIF(?, ''), company_name),
+              ico = COALESCE(NULLIF(?, ''), ico),
+              dic = COALESCE(NULLIF(?, ''), dic),
+              visto_branch_id = COALESCE(NULLIF(?, ''), visto_branch_id),
+              billing_email = COALESCE(NULLIF(?, ''), billing_email),
+              standard_due_days = COALESCE(?, standard_due_days),
+              customer_link_confidence = 'HIGH', updated_at = CURRENT_TIMESTAMP
           WHERE visto_company_id = ?
         `).bind(
-          customerName,
-          cleanString(invoice.ico) || null,
-          cleanString(invoice.dic) || null,
-          cleanString(invoice.customerBranchId) || null,
-          cleanString(invoice.billingEmail) || null,
+          sourceCustomerName,
+          cleanString(invoice.ico),
+          cleanString(invoice.dic),
+          cleanString(invoice.customerBranchId),
+          cleanString(invoice.billingEmail),
           numberValue(invoice.standardDueDays) || null,
           companyId
         ),
