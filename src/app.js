@@ -14514,21 +14514,20 @@ function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false
   const title = vehicleTrackingTcarsMarkerTooltip(location);
   const iconSrc = vehicleTrackingMarkerImageSrc(markerVehicle);
   const licensePlate = markerVehicle.licensePlate || markerVehicle.internalNumber || "Bez SPZ";
+  const vehicleName = vehicleTrackingTcarsVehicleDisplayName(location);
   const speed = vehicleTrackingTcarsSpeedText(location);
 
   return `
     <span class="tracking-tcars-google-pin ${selected ? "tracking-tcars-google-pin--selected" : ""} ${focused ? "tracking-tcars-google-pin--focused" : ""}" title="${escapeHtml(title)}" aria-hidden="true">
-      ${focused ? `
-        <span class="tracking-tcars-google-pin__callout">
-          <span><small>SPZ</small><strong>${escapeHtml(licensePlate)}</strong></span>
-          <span><small>Rychlost</small><strong>${escapeHtml(speed)}</strong></span>
-        </span>
-      ` : ""}
+      <span class="tracking-tcars-google-pin__label">
+        <strong>${escapeHtml(vehicleName)}</strong>
+        <span><small>SPZ</small><b>${escapeHtml(licensePlate)}</b></span>
+        <span><small>Rychlost</small><b>${escapeHtml(speed)}</b></span>
+      </span>
       <span class="tracking-tcars-google-pin__icon" aria-hidden="true">
         ${iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" loading="eager" decoding="async" data-tracking-tcars-marker-icon>` : ""}
         <span class="tracking-tcars-google-pin__fallback"></span>
       </span>
-      <span class="tracking-tcars-google-pin__plate">${escapeHtml(licensePlate)}</span>
     </span>
   `;
 }

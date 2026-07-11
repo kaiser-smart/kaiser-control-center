@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.515"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.516"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -23,6 +23,14 @@ export const versionNews = [
   {
     title: "Hlavní Dashboard: provoz a ekonomika flotily",
     text: "Hlavní stránka je nově skutečný read-only Dashboard firmy. Management vidí prioritní návrhy grafů Produktivní vs. přejezdové km a Výnos/km vs. náklad/km bez vymyšlených hodnot; aktuální provoz používá existující T-Cars, hlášení, trasy a datové zprávy podle oprávnění."
+  },
+  {
+    title: "Poloha vozidel: čisté 3D ikony a limetkový štítek",
+    text: "Citigo, Kamiq, Audi A1, Mercedes Abroll, Mercedes ramenáč a Rioned mají čisté průhledné výřezy bez pozadí a bez stínu. Nad každým vozidlem je limetkový štítek s názvem, SPZ a aktuální rychlostí; samotné vozidlo zůstává bez barevné aury i vrženého stínu."
+  },
+  {
+    title: "Poloha vozidel: skutečná historie tras",
+    text: "Trasa vybraného vozidla čte pouze uložené GPS body z T-Cars a kreslí je přímo do Google mapy pro dnešek, 24 hodin nebo 7 dní. Body se sbírají cloudovým během po minutě, mají audit posledních běhů a po 30 dnech se automaticky mažou; neexistující trasa se nikdy nedopočítává."
   },
   {
     title: "Poloha vozidel: kalibrovaný směr a ovladač trasy",

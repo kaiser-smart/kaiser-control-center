@@ -8880,13 +8880,13 @@ h1 {
 .tracking-tcars-google-marker {
   position: absolute;
   display: inline-flex;
-  width: 112px;
-  min-width: 112px;
-  min-height: 84px;
+  width: 142px;
+  min-width: 142px;
+  min-height: 136px;
   align-items: center;
   justify-content: center;
   padding: 0;
-  transform: translate(-50%, -72%);
+  transform: translate(-50%, -76%);
   border: 0;
   background: transparent;
   font: inherit;
@@ -8983,7 +8983,7 @@ h1 {
 .tracking-tcars-google-pin {
   position: relative;
   display: flex;
-  width: 112px;
+  width: 136px;
   min-width: 0;
   max-width: none;
   flex-direction: column;
@@ -9012,90 +9012,72 @@ h1 {
   background: transparent;
 }
 
-.tracking-tcars-google-pin__callout {
-  position: absolute;
+.tracking-tcars-google-pin__label {
+  position: relative;
   z-index: 5;
-  bottom: calc(100% + 2px);
-  left: 50%;
   display: grid;
   box-sizing: border-box;
-  width: 210px;
-  gap: 8px;
-  padding: 13px 15px;
-  border: 1px solid rgba(226, 255, 200, 0.84);
-  border-radius: 17px 17px 17px 6px;
-  background:
-    linear-gradient(135deg, rgba(39, 58, 43, 0.96) 0%, rgba(25, 37, 30, 0.92) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    0 14px 30px rgba(20, 29, 23, 0.36),
-    0 0 0 4px rgba(182, 255, 0, 0.14);
-  color: #ffffff;
+  width: 136px;
+  gap: 3px;
+  margin-bottom: -4px;
+  padding: 7px 9px 8px;
+  border: 1px solid rgba(20, 35, 16, 0.38);
+  border-radius: 12px 12px 9px 9px;
+  background: #B6FF00;
+  color: #12200e;
   line-height: 1.1;
   pointer-events: none;
   text-align: left;
-  transform: translateX(-50%);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
 }
 
-.tracking-tcars-google-pin__callout::after {
+.tracking-tcars-google-pin__label::after {
   position: absolute;
-  bottom: -8px;
-  left: 27px;
-  width: 16px;
-  height: 16px;
-  border-right: 1px solid rgba(226, 255, 200, 0.7);
-  border-bottom: 1px solid rgba(226, 255, 200, 0.7);
-  background: rgba(25, 37, 30, 0.94);
+  right: 50%;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid rgba(20, 35, 16, 0.38);
+  border-bottom: 1px solid rgba(20, 35, 16, 0.38);
+  background: #B6FF00;
   content: "";
-  transform: rotate(45deg);
+  transform: translateX(50%) rotate(45deg);
 }
 
-.tracking-tcars-google-pin__callout > span {
+.tracking-tcars-google-pin__label > span {
   display: flex;
   min-width: 0;
   align-items: baseline;
   justify-content: space-between;
-  gap: 14px;
+  gap: 7px;
 }
 
-.tracking-tcars-google-pin__callout small {
-  color: #d9e2dc;
-  color: #e5f0e8;
-  font-size: 0.72rem;
-  font-weight: 760;
+.tracking-tcars-google-pin__label small {
+  color: rgba(18, 32, 14, 0.76);
+  font-size: 0.49rem;
+  font-weight: 900;
   letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
-.tracking-tcars-google-pin__callout strong {
+.tracking-tcars-google-pin__label strong {
   min-width: 0;
   overflow: hidden;
-  color: #ffffff;
-  font-size: 0.92rem;
-  font-weight: 900;
+  color: #10200c;
+  font-size: 0.62rem;
+  font-weight: 950;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tracking-tcars-google-pin__callout > span + span {
-  padding-top: 8px;
-  border-top: 1px solid rgba(182, 255, 0, 0.58);
-}
-
-.tracking-tcars-google-pin__icon::after {
-  position: absolute;
-  z-index: -1;
-  right: 9px;
-  bottom: 6px;
-  left: 9px;
-  height: 11px;
-  border-radius: 50%;
-  background: rgba(27, 35, 29, 0.28);
-  content: "";
-  filter: blur(5px);
-  transform: perspective(50px) rotateX(58deg);
+.tracking-tcars-google-pin__label b {
+  min-width: 0;
+  overflow: hidden;
+  color: #12200e;
+  font-size: 0.55rem;
+  font-weight: 950;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tracking-tcars-google-pin__icon img {
@@ -9105,7 +9087,7 @@ h1 {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 7px 5px rgba(24, 31, 26, 0.3));
+  filter: none;
   transform: translateY(-2px) rotate(var(--heading, 0deg));
   transform-origin: 50% 86%;
   transition: filter 160ms ease, transform 160ms ease;
@@ -9118,44 +9100,11 @@ h1 {
   border: 2px solid rgba(255, 255, 255, 0.9);
   border-radius: 12px 16px 8px 8px;
   background: linear-gradient(135deg, #75bd25 0%, #2f7d4c 100%);
-  box-shadow: 0 7px 8px rgba(24, 31, 26, 0.26), inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
 }
 
 .tracking-tcars-google-pin--fallback .tracking-tcars-google-pin__fallback {
   display: inline-flex;
-}
-
-.tracking-tcars-google-pin__plate {
-  position: relative;
-  z-index: 2;
-  display: inline-flex;
-  min-width: 48px;
-  min-height: 18px;
-  max-width: 102px;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  margin-top: -8px;
-  padding: 3px 7px 3px 11px;
-  border: 1px solid #4f5552;
-  border-radius: 3px;
-  background: linear-gradient(180deg, #ffffff 0%, #edf0ed 100%);
-  box-shadow: 0 5px 10px rgba(24, 31, 26, 0.28);
-  color: #111614;
-  font-size: 0.58rem;
-  font-weight: 950;
-  letter-spacing: 0.055em;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tracking-tcars-google-pin__plate::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 6px;
-  background: #174ca0;
-  content: "";
 }
 
 .tracking-tcars-map-note {
@@ -9166,17 +9115,13 @@ h1 {
 }
 
 .tracking-tcars-google-pin--selected {
-  filter: drop-shadow(0 0 10px rgba(182, 255, 0, 0.78));
-}
-
-.tracking-tcars-google-pin--focused .tracking-tcars-google-pin__plate {
-  visibility: hidden;
+  filter: none;
 }
 
 .tracking-tcars-google-pin--selected .tracking-tcars-google-pin__icon img,
 .tracking-tcars-google-marker:hover .tracking-tcars-google-pin__icon img,
 .tracking-tcars-google-marker:focus-visible .tracking-tcars-google-pin__icon img {
-  filter: drop-shadow(0 9px 7px rgba(24, 31, 26, 0.36));
+  filter: none;
   transform: translateY(-5px) rotate(var(--heading, 0deg)) scale(1.04);
 }
 
