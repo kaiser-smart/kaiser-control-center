@@ -20,8 +20,8 @@ function runtimeConfigModuleSource(env = process.env) {
 
 function versionedTemplate() {
   return template
-    .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
-    .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
+    .replace('href="src/styles.css"', `href="/src/styles.css?v=${assetVersion}"`)
+    .replace('src="src/app.js"', `src="/src/app.js?v=${assetVersion}"`);
 }
 
 async function copyDir(from, to) {
