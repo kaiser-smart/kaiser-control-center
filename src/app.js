@@ -27,6 +27,11 @@ import {
   receivablesHashTargetId
 } from "./data/receivablesNavigation.js";
 import {
+  SMART_ODPADY_V2_DEMO_DASHBOARD,
+  SMART_ODPADY_V2_DEMO_REPORTS,
+  SMART_ODPADY_V2_DEMO_USER
+} from "./smart-odpady-v2/demoData.js";
+import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
   ABSENCE_REPORT_TIME,
@@ -323,6 +328,10 @@ const SMART_ODPADY_V2_BASE_ROUTE = "/smart-odpady-v2";
 const SMART_ODPADY_V2_DASHBOARD_ROUTE = `${SMART_ODPADY_V2_BASE_ROUTE}/dashboard`;
 const SMART_ODPADY_V2_REPORTS_ROUTE = `${SMART_ODPADY_V2_BASE_ROUTE}/hlaseni`;
 const SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE = `${SMART_ODPADY_V2_BASE_ROUTE}/sledovani-vozidel`;
+const SMART_ODPADY_V2_DEMO_BASE_ROUTE = "/smart-odpady-v2-demo";
+const SMART_ODPADY_V2_DEMO_DASHBOARD_ROUTE = `${SMART_ODPADY_V2_DEMO_BASE_ROUTE}/dashboard`;
+const SMART_ODPADY_V2_DEMO_REPORTS_ROUTE = `${SMART_ODPADY_V2_DEMO_BASE_ROUTE}/hlaseni`;
+const SMART_ODPADY_V2_DEMO_VEHICLE_TRACKING_ROUTE = `${SMART_ODPADY_V2_DEMO_BASE_ROUTE}/sledovani-vozidel`;
 const SMART_ODPADY_V2_THEME_STORAGE_KEY = "smart_odpady_v2_theme";
 const SMART_ODPADY_V2_SIDEBAR_STORAGE_KEY = "smart_odpady_v2_sidebar_collapsed";
 const SMART_ODPADY_V2_ICON_ASSET_VERSION = "0.1.330";
@@ -826,6 +835,7 @@ let authState = {
   error: "",
   mockCode: false
 };
+let authBootstrapStarted = false;
 
 const adminUsersState = {
   loaded: false,
@@ -1151,6 +1161,20 @@ const absenceUiState = {
   actionLoadingId: "",
   rejectRequestId: "",
   rejectReason: ""
+};
+const smartOdpadyV2DemoState = {
+  reports: SMART_ODPADY_V2_DEMO_REPORTS.requests.map((request) => ({ ...request })),
+  reportsTab: "overview",
+  selectedReportId: SMART_ODPADY_V2_DEMO_REPORTS.requests[0]?.id || "",
+  message: "",
+  error: "",
+  draft: {
+    employeeName: "Zaměstnanec C",
+    type: "Dovolená",
+    dateFrom: "2026-07-27",
+    dateTo: "2026-07-29",
+    note: ""
+  }
 };
 const absenceSettingsState = {
   loaded: false,
@@ -1711,14 +1735,47 @@ function isSmartOdpadyV2Path(pathname = window.location.pathname) {
   return pathMatchesRouteBase(normalizePath(pathname), SMART_ODPADY_V2_BASE_ROUTE);
 }
 
-function smartOdpadyV2ActiveRouteId(pathname = window.location.pathname) {
-  const path = normalizePath(pathname);
+function isSmartOdpadyV2DemoPath(pathname = window.location.pathname) {
+  return pathMatchesRouteBase(normalizePath(pathname), SMART_ODPADY_V2_DEMO_BASE_ROUTE);
+}
 
-  if (pathMatchesRouteBase(path, SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE)) {
+function smartOdpadyV2ModeFromPath(pathname = window.location.pathname) {
+  return isSmartOdpadyV2DemoPath(pathname) ? "demo" : "live";
+}
+
+function smartOdpadyV2RouteConfig(mode = "live") {
+  const isDemo = mode === "demo";
+  return {
+    base: isDemo ? SMART_ODPADY_V2_DEMO_BASE_ROUTE : SMART_ODPADY_V2_BASE_ROUTE,
+    dashboard: isDemo ? SMART_ODPADY_V2_DEMO_DASHBOARD_ROUTE : SMART_ODPADY_V2_DASHBOARD_ROUTE,
+    reports: isDemo ? SMART_ODPADY_V2_DEMO_REPORTS_ROUTE : SMART_ODPADY_V2_REPORTS_ROUTE,
+    vehicleTracking: isDemo ? SMART_ODPADY_V2_DEMO_VEHICLE_TRACKING_ROUTE : SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE
+  };
+}
+
+function smartOdpadyV2NavItems(mode = "live") {
+  const routes = smartOdpadyV2RouteConfig(mode);
+  const routeById = {
+    dashboard: routes.dashboard,
+    reports: routes.reports,
+    "vehicle-tracking": routes.vehicleTracking
+  };
+
+  return SMART_ODPADY_V2_NAV_ITEMS.map((item) => ({
+    ...item,
+    route: routeById[item.id] || item.route
+  }));
+}
+
+function smartOdpadyV2ActiveRouteId(pathname = window.location.pathname, mode = smartOdpadyV2ModeFromPath(pathname)) {
+  const path = normalizePath(pathname);
+  const routes = smartOdpadyV2RouteConfig(mode);
+
+  if (pathMatchesRouteBase(path, routes.vehicleTracking)) {
     return "vehicle-tracking";
   }
 
-  if (pathMatchesRouteBase(path, SMART_ODPADY_V2_REPORTS_ROUTE)) {
+  if (pathMatchesRouteBase(path, routes.reports)) {
     return "reports";
   }
 
@@ -1728,7 +1785,8 @@ function smartOdpadyV2ActiveRouteId(pathname = window.location.pathname) {
 function isVehicleTrackingRuntimePath(pathname = window.location.pathname) {
   const path = normalizePath(pathname);
   return pathMatchesRouteBase(path, VEHICLE_TRACKING_BASE_ROUTE) ||
-    pathMatchesRouteBase(path, SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE);
+    pathMatchesRouteBase(path, SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE) ||
+    pathMatchesRouteBase(path, SMART_ODPADY_V2_DEMO_VEHICLE_TRACKING_ROUTE);
 }
 
 function isCollectionRoutesPath(pathname = window.location.pathname) {
@@ -1778,7 +1836,11 @@ function routeFleetVehicleId(path) {
 }
 
 function routeVehicleTrackingContext(path) {
-  const routeBase = [VEHICLE_TRACKING_BASE_ROUTE, SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE]
+  const routeBase = [
+    VEHICLE_TRACKING_BASE_ROUTE,
+    SMART_ODPADY_V2_VEHICLE_TRACKING_ROUTE,
+    SMART_ODPADY_V2_DEMO_VEHICLE_TRACKING_ROUTE
+  ]
     .find((baseRoute) => path.startsWith(`${baseRoute}/`));
 
   if (!routeBase) {
@@ -1927,8 +1989,13 @@ function setSmartOdpadyV2Theme(mode) {
   writeSmartOdpadyV2Storage(SMART_ODPADY_V2_THEME_STORAGE_KEY, nextTheme);
 }
 
-function smartOdpadyV2VisibleNavItems(user) {
-  return SMART_ODPADY_V2_NAV_ITEMS.filter((item) => canViewModule(user, item.moduleId));
+function smartOdpadyV2VisibleNavItems(user, mode = "live") {
+  const items = smartOdpadyV2NavItems(mode);
+  if (mode === "demo") {
+    return items;
+  }
+
+  return items.filter((item) => canViewModule(user, item.moduleId));
 }
 
 function smartOdpadyV2UtilityShortcuts() {
@@ -1949,13 +2016,15 @@ function smartOdpadyV2UtilityShortcuts() {
   `;
 }
 
-function smartOdpadyV2UtilityBar(user) {
-  const roleText = roleLabel(user?.role || "readonly").toUpperCase();
+function smartOdpadyV2UtilityBar(user, mode = "live") {
+  const isDemo = mode === "demo";
+  const roleText = isDemo ? "DEMO" : roleLabel(user?.role || "readonly").toUpperCase();
+  const routes = smartOdpadyV2RouteConfig(mode);
 
   return `
     <nav class="tracking-utility-bar" aria-label="Systémová lišta Smart Odpady V2">
       <div class="tracking-utility-bar__brand">
-        <a class="tracking-utility-logo" href="${routeHref(SMART_ODPADY_V2_DASHBOARD_ROUTE)}" data-link aria-label="Smart Odpady V2">
+        <a class="tracking-utility-logo" href="${routeHref(routes.dashboard)}" data-link aria-label="Smart Odpady V2">
           <img src="/kaiser_logo.png?v=${SMART_ODPADY_V2_ICON_ASSET_VERSION}" alt="" loading="eager" decoding="async">
         </a>
         <a class="tracking-home-link" href="${routeHref("/")}" data-link>
@@ -1972,15 +2041,17 @@ function smartOdpadyV2UtilityBar(user) {
         ${smartOdpadyV2ThemeSwitcher()}
         <span class="tracking-preview-role-chip">${escapeHtml(roleText)}</span>
         ${smartOdpadyV2UtilityShortcuts()}
-        <button class="tracking-utility-logout" type="button" data-logout>Odhlásit</button>
+        ${isDemo
+          ? '<span class="tracking-utility-logout smart-odpady-v2-demo-auth-state">Demo bez přihlášení</span>'
+          : '<button class="tracking-utility-logout" type="button" data-logout>Odhlásit</button>'}
       </div>
     </nav>
   `;
 }
 
-function smartOdpadyV2Sidebar(activeId, user) {
+function smartOdpadyV2Sidebar(activeId, user, mode = "live") {
   const collapsed = smartOdpadyV2SidebarCollapsed();
-  const items = smartOdpadyV2VisibleNavItems(user);
+  const items = smartOdpadyV2VisibleNavItems(user, mode);
 
   return `
     <div class="tracking-preview-sidebar-stack">
@@ -2035,15 +2106,27 @@ function smartOdpadyV2ForbiddenContent(moduleName) {
   `;
 }
 
-function smartOdpadyV2Shell(user, activeId, content) {
+function smartOdpadyV2DemoNotice() {
+  return `
+    <section class="smart-odpady-v2-demo-banner" aria-label="Označení demo režimu">
+      <strong>DEMO – ukázková data, bez napojení na provoz</strong>
+      <span>Tato ukázka slouží pouze k prezentaci vzhledu a ovládání. Změny se neukládají.</span>
+    </section>
+  `;
+}
+
+function smartOdpadyV2Shell(user, activeId, content, options = {}) {
   const theme = smartOdpadyV2ThemeMode();
+  const mode = options.mode === "demo" ? "demo" : "live";
+  const isDemo = mode === "demo";
 
   return `
-    <main class="app-shell module-page module-theme-scope tracking-page tracking-page--soft-metal-preview smart-odpady-v2" data-smart-odpady-v2 data-v2-theme="${escapeHtml(theme)}">
+    <main class="app-shell module-page module-theme-scope tracking-page tracking-page--soft-metal-preview smart-odpady-v2 ${isDemo ? "smart-odpady-v2--demo" : ""}" data-smart-odpady-v2 data-v2-mode="${escapeHtml(mode)}" data-v2-theme="${escapeHtml(theme)}">
       <div class="tracking-preview-frame">
-        ${smartOdpadyV2UtilityBar(user)}
+        ${smartOdpadyV2UtilityBar(user, mode)}
+        ${isDemo ? smartOdpadyV2DemoNotice() : ""}
         <div class="tracking-preview-shell">
-          ${smartOdpadyV2Sidebar(activeId, user)}
+          ${smartOdpadyV2Sidebar(activeId, user, mode)}
           <div class="tracking-preview-content">
             ${content}
           </div>
@@ -15684,6 +15767,442 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
   `;
 }
 
+function smartOdpadyV2DemoRouteForTarget(target) {
+  const routes = smartOdpadyV2RouteConfig("demo");
+  if (target === "reports") {
+    return routes.reports;
+  }
+  if (target === "vehicle-tracking") {
+    return routes.vehicleTracking;
+  }
+  return routes.dashboard;
+}
+
+function smartOdpadyV2DemoFeedback() {
+  return `
+    ${smartOdpadyV2DemoState.message ? `<p class="module-feedback__notice smart-odpady-v2-demo-feedback">${escapeHtml(smartOdpadyV2DemoState.message)}</p>` : ""}
+    ${smartOdpadyV2DemoState.error ? `<p class="module-feedback__error smart-odpady-v2-demo-feedback">${escapeHtml(smartOdpadyV2DemoState.error)}</p>` : ""}
+  `;
+}
+
+function setSmartOdpadyV2DemoNotice(message, error = "") {
+  smartOdpadyV2DemoState.message = message || "";
+  smartOdpadyV2DemoState.error = error || "";
+}
+
+function smartOdpadyV2DemoMetricCard(metric) {
+  return `
+    <article class="smart-odpady-v2-demo-metric smart-odpady-v2-demo-metric--${escapeHtml(metric.tone || "neutral")}">
+      <span>${escapeHtml(metric.label)}</span>
+      <strong>${escapeHtml(metric.value)}</strong>
+      <small>${escapeHtml(metric.note)}</small>
+    </article>
+  `;
+}
+
+function smartOdpadyV2DemoModuleCard(moduleItem) {
+  return `
+    <a class="module-card smart-odpady-v2-demo-module-card" href="${routeHref(smartOdpadyV2DemoRouteForTarget(moduleItem.id))}" data-link>
+      <div class="module-card__icon icon-tone-${moduleItem.id === "dashboard" ? "green" : "graphite"}" aria-hidden="true">
+        ${smartOdpadyV2Icon(moduleItem.icon)}
+      </div>
+      <div>
+        <span class="status-badge status-badge--ready">${escapeHtml(moduleItem.status)}</span>
+        <h3>${escapeHtml(moduleItem.title)}</h3>
+        <p>${escapeHtml(moduleItem.description)}</p>
+      </div>
+    </a>
+  `;
+}
+
+function smartOdpadyV2DemoDashboardContent() {
+  const data = SMART_ODPADY_V2_DEMO_DASHBOARD;
+
+  return `
+    <section class="module-detail tracking-hero smart-odpady-v2-hero" aria-labelledby="smart-odpady-v2-demo-dashboard-title">
+      <div class="module-detail__body">
+        <div class="module-detail__eyebrow">KAISER SMART / DEMO DASHBOARD</div>
+        <h1 id="smart-odpady-v2-demo-dashboard-title">Přehled systému</h1>
+        <p>Veřejná ukázka V2 prostředí se syntetickými daty. Reálné API, session ani zápisy nejsou použité.</p>
+        <div class="module-detail__status">
+          <span>Režim</span>
+          <strong>Veřejné demo</strong>
+        </div>
+      </div>
+      <div class="smart-odpady-v2-hero__icon" aria-hidden="true">${smartOdpadyV2Icon("dashboard")}</div>
+    </section>
+
+    ${smartOdpadyV2DemoFeedback()}
+
+    <section class="home-ops-panel smart-odpady-v2-demo-ops" aria-labelledby="smart-odpady-v2-demo-ops-title">
+      <div class="home-ops-panel__copy">
+        <p class="home-ops-panel__eyebrow">Dnešní provoz</p>
+        <h2 id="smart-odpady-v2-demo-ops-title">Co dnes hoří?</h2>
+        <p>Ukázkové metriky odpovídají typům údajů z produkčního dashboardu, ale nejsou napojené na provozní data.</p>
+      </div>
+      <div class="smart-odpady-v2-demo-metrics" aria-label="Demo provozní stav">
+        ${data.metrics.map(smartOdpadyV2DemoMetricCard).join("")}
+      </div>
+    </section>
+
+    <section class="module-section smart-odpady-v2-demo-dashboard-grid" aria-labelledby="smart-odpady-v2-demo-alerts-title">
+      <div class="module-section__header">
+        <div>
+          <span>Upozornění</span>
+          <h2 id="smart-odpady-v2-demo-alerts-title">Co vyžaduje kontrolu</h2>
+        </div>
+      </div>
+      <div class="smart-odpady-v2-demo-alert-list">
+        ${data.alerts.map((alert) => `
+          <article class="smart-odpady-v2-demo-alert">
+            <span>${escapeHtml(alert.status)}</span>
+            <strong>${escapeHtml(alert.title)}</strong>
+            <p>${escapeHtml(alert.text)}</p>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+
+    <section class="module-section smart-odpady-v2-demo-actions" aria-labelledby="smart-odpady-v2-demo-actions-title">
+      <div class="module-section__header">
+        <div>
+          <span>Rychlé akce</span>
+          <h2 id="smart-odpady-v2-demo-actions-title">Bezpečné demo ovládání</h2>
+        </div>
+      </div>
+      <div class="smart-odpady-v2-demo-action-row">
+        ${data.actions.map((action) => action.target === "notice"
+          ? `<button class="secondary-link" type="button" data-smart-odpady-v2-demo-action="notice">${escapeHtml(action.label)}</button>`
+          : `<a class="primary-link" href="${routeHref(smartOdpadyV2DemoRouteForTarget(action.target))}" data-link>${escapeHtml(action.label)}</a>`
+        ).join("")}
+      </div>
+    </section>
+
+    <div class="home-module-sections smart-odpady-v2-dashboard-sections" aria-label="Demo moduly">
+      ${data.modules.map(smartOdpadyV2DemoModuleCard).join("")}
+    </div>
+  `;
+}
+
+function smartOdpadyV2DemoReportTabs(activeTab = smartOdpadyV2DemoState.reportsTab) {
+  const tabs = [
+    { id: "overview", label: "Přehled" },
+    { id: "new", label: "Nové hlášení" },
+    { id: "approval", label: "Schvalování" },
+    { id: "calendar", label: "Kalendář" }
+  ];
+
+  return `
+    <nav class="absence-tabs smart-odpady-v2-demo-tabs" aria-label="Menu demo hlášení">
+      ${tabs.map((tab) => `
+        <button
+          class="absence-tab ${tab.id === activeTab ? "absence-tab--active" : ""}"
+          type="button"
+          data-smart-odpady-v2-demo-report-tab="${escapeHtml(tab.id)}"
+        >
+          ${escapeHtml(tab.label)}
+        </button>
+      `).join("")}
+    </nav>
+  `;
+}
+
+function smartOdpadyV2DemoReportTerm(request) {
+  const from = formatAbsenceDate(request.dateFrom);
+  const to = formatAbsenceDate(request.dateTo || request.dateFrom);
+  const time = request.startTime && request.endTime ? ` · ${request.startTime}-${request.endTime}` : "";
+  return `${from}${request.dateTo && request.dateTo !== request.dateFrom ? ` – ${to}` : ""}${time}`;
+}
+
+function smartOdpadyV2DemoReportList(requests = smartOdpadyV2DemoState.reports) {
+  return `
+    <div class="absence-table-wrap smart-odpady-v2-demo-report-table">
+      <table class="absence-table">
+        <thead>
+          <tr>
+            <th>Typ</th>
+            <th>Osoba</th>
+            <th>Termín</th>
+            <th>Stav</th>
+            <th>Akce</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${requests.map((request) => `
+            <tr class="${smartOdpadyV2DemoState.selectedReportId === request.id ? "absence-table-row--selected" : ""}">
+              <td data-label="Typ">${absenceTypeBadge(request.type)}</td>
+              <td data-label="Osoba"><strong>${escapeHtml(request.employeeName)}</strong><span>${escapeHtml(request.department || "Demo provoz")}</span></td>
+              <td data-label="Termín">${escapeHtml(smartOdpadyV2DemoReportTerm(request))}</td>
+              <td data-label="Stav">${absenceStatusBadge(request.status)}</td>
+              <td data-label="Akce">
+                <div class="users-actions">
+                  <button class="secondary-link secondary-link--compact" type="button" data-smart-odpady-v2-demo-report-detail="${escapeHtml(request.id)}">Detail</button>
+                  ${request.status === "pending_approval"
+                    ? `<button class="text-action text-action--compact" type="button" data-smart-odpady-v2-demo-report-action="approve" data-demo-report-id="${escapeHtml(request.id)}">Schválit</button>`
+                    : ""}
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function smartOdpadyV2DemoReportDetail() {
+  const selected = smartOdpadyV2DemoState.reports.find((request) => request.id === smartOdpadyV2DemoState.selectedReportId) ||
+    smartOdpadyV2DemoState.reports[0];
+
+  if (!selected) {
+    return '<section class="absence-panel"><p class="absence-empty">V demo seznamu není žádné hlášení.</p></section>';
+  }
+
+  return `
+    <section class="absence-panel smart-odpady-v2-demo-report-detail" aria-labelledby="smart-odpady-v2-demo-report-detail-title">
+      <div class="absence-panel__header">
+        <div>
+          <span>Detail</span>
+          <h3 id="smart-odpady-v2-demo-report-detail-title">${escapeHtml(selected.employeeName)}</h3>
+        </div>
+        ${absenceStatusBadge(selected.status)}
+      </div>
+      <div class="tracking-detail-grid">
+        ${vehicleTrackingDemoDetailField("Typ", selected.type)}
+        ${vehicleTrackingDemoDetailField("Termín", smartOdpadyV2DemoReportTerm(selected))}
+        ${vehicleTrackingDemoDetailField("Pracoviště", selected.department || "Demo provoz")}
+        ${vehicleTrackingDemoDetailField("Poznámka", selected.note || "Bez poznámky")}
+      </div>
+      <div class="tracking-actions">
+        <button class="secondary-link" type="button" data-smart-odpady-v2-demo-report-action="edit" data-demo-report-id="${escapeHtml(selected.id)}">Editovat demo</button>
+        <button class="secondary-link" type="button" data-smart-odpady-v2-demo-report-action="cancel" data-demo-report-id="${escapeHtml(selected.id)}">Zrušit demo</button>
+      </div>
+    </section>
+  `;
+}
+
+function smartOdpadyV2DemoReportForm() {
+  const draft = smartOdpadyV2DemoState.draft;
+
+  return `
+    <section class="absence-panel smart-odpady-v2-demo-report-form-panel" aria-labelledby="smart-odpady-v2-demo-report-form-title">
+      <div class="absence-panel__header">
+        <div>
+          <span>Formulář</span>
+          <h3 id="smart-odpady-v2-demo-report-form-title">Nové demo hlášení</h3>
+        </div>
+      </div>
+      <form class="absence-form smart-odpady-v2-demo-report-form" data-smart-odpady-v2-demo-report-form novalidate>
+        <label>
+          <span>Osoba</span>
+          <input name="employeeName" type="text" value="${escapeHtml(draft.employeeName)}" autocomplete="off" required>
+        </label>
+        <label>
+          <span>Typ hlášení</span>
+          <select name="type" required>
+            ${ABSENCE_TYPES.slice(0, 6).map((type) => `<option value="${escapeHtml(type)}" ${draft.type === type ? "selected" : ""}>${escapeHtml(type)}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          <span>Datum od</span>
+          <input name="dateFrom" type="date" value="${escapeHtml(draft.dateFrom)}" required>
+        </label>
+        <label>
+          <span>Datum do</span>
+          <input name="dateTo" type="date" value="${escapeHtml(draft.dateTo)}" required>
+        </label>
+        <label class="absence-form__wide">
+          <span>Poznámka</span>
+          <textarea name="note" rows="3" placeholder="Jen ukázkový text, nic se neukládá.">${escapeHtml(draft.note)}</textarea>
+        </label>
+        <div class="absence-form__actions">
+          <button class="primary-action absence-form__submit" type="submit">Odeslat demo hlášení</button>
+          <button class="secondary-link" type="button" data-smart-odpady-v2-demo-action="notice">Ukázat demo potvrzení</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function smartOdpadyV2DemoReportsBody() {
+  const activeTab = smartOdpadyV2DemoState.reportsTab;
+  const pending = smartOdpadyV2DemoState.reports.filter((request) => request.status === "pending_approval");
+
+  if (activeTab === "new") {
+    return `
+      ${smartOdpadyV2DemoReportForm()}
+      ${smartOdpadyV2DemoReportList()}
+    `;
+  }
+
+  if (activeTab === "approval") {
+    return `
+      <section class="absence-panel">
+        <div class="absence-panel__header">
+          <div>
+            <span>Workflow</span>
+            <h3>Čeká na schválení</h3>
+          </div>
+        </div>
+        ${pending.length ? smartOdpadyV2DemoReportList(pending) : '<p class="absence-empty">V demo režimu teď nic nečeká na schválení.</p>'}
+      </section>
+      ${smartOdpadyV2DemoReportDetail()}
+    `;
+  }
+
+  if (activeTab === "calendar") {
+    return `
+      <section class="absence-panel smart-odpady-v2-demo-calendar" aria-labelledby="smart-odpady-v2-demo-calendar-title">
+        <div class="absence-panel__header">
+          <div>
+            <span>Kalendář</span>
+            <h3 id="smart-odpady-v2-demo-calendar-title">Ukázkový měsíční přehled</h3>
+          </div>
+        </div>
+        <div class="smart-odpady-v2-demo-calendar-grid">
+          ${smartOdpadyV2DemoState.reports.map((request) => `
+            <article>
+              <span>${escapeHtml(smartOdpadyV2DemoReportTerm(request))}</span>
+              <strong>${escapeHtml(request.employeeName)}</strong>
+              <small>${escapeHtml(request.type)}</small>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="absence-panel smart-odpady-v2-demo-report-summary">
+      <div class="absence-stats">
+        ${[
+          ["Celkem hlášení", smartOdpadyV2DemoState.reports.length],
+          ["Ke schválení", pending.length],
+          ["Schváleno / evidováno", smartOdpadyV2DemoState.reports.filter((item) => ["approved", "recorded"].includes(item.status)).length]
+        ].map(([label, value]) => `
+          <article class="absence-stat">
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(value)}</strong>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+    ${smartOdpadyV2DemoReportList()}
+    ${smartOdpadyV2DemoReportDetail()}
+  `;
+}
+
+function smartOdpadyV2DemoReportsContent() {
+  return `
+    <section class="absence-hero absence-hero--app smart-odpady-v2-hero" aria-labelledby="smart-odpady-v2-demo-reports-title">
+      <div class="module-detail__icon">${smartOdpadyV2Icon("absence")}</div>
+      <div>
+        <div class="module-detail__eyebrow">SMART ODPADY / DEMO HLÁŠENÍ</div>
+        <h1 id="smart-odpady-v2-demo-reports-title">Hlášení</h1>
+        <p>Veřejná ukázka struktury modulu Dovolená / Nemoc. Formulář, schvalování i detail mění pouze lokální stav stránky.</p>
+      </div>
+      <div class="absence-command-actions absence-command-actions--hero">
+        <button class="primary-action" type="button" data-smart-odpady-v2-demo-report-tab="new">Nové hlášení</button>
+        <button class="secondary-link" type="button" data-smart-odpady-v2-demo-report-tab="approval">Schvalování</button>
+      </div>
+    </section>
+
+    ${smartOdpadyV2DemoReportTabs()}
+    ${smartOdpadyV2DemoFeedback()}
+    ${smartOdpadyV2DemoReportsBody()}
+  `;
+}
+
+function smartOdpadyV2DemoReportFormData(form) {
+  return {
+    employeeName: String(form.elements.employeeName?.value || "").trim(),
+    type: String(form.elements.type?.value || "").trim(),
+    dateFrom: String(form.elements.dateFrom?.value || "").trim(),
+    dateTo: String(form.elements.dateTo?.value || "").trim(),
+    note: String(form.elements.note?.value || "").trim()
+  };
+}
+
+function submitSmartOdpadyV2DemoReport(form) {
+  const draft = smartOdpadyV2DemoReportFormData(form);
+  smartOdpadyV2DemoState.draft = { ...smartOdpadyV2DemoState.draft, ...draft };
+
+  if (!draft.employeeName || !draft.type || !draft.dateFrom || !draft.dateTo) {
+    setSmartOdpadyV2DemoNotice("", "Vyplňte osobu, typ hlášení a obě data. Demo nic neodeslalo.");
+    render();
+    return;
+  }
+
+  if (absenceDateValue(draft.dateTo) < absenceDateValue(draft.dateFrom)) {
+    setSmartOdpadyV2DemoNotice("", "Datum do nesmí být před datem od. Demo nic neodeslalo.");
+    render();
+    return;
+  }
+
+  const request = {
+    id: `demo-report-${Date.now()}`,
+    employeeName: draft.employeeName,
+    type: draft.type,
+    status: initialStatusForAbsenceType(draft.type),
+    dateFrom: draft.dateFrom,
+    dateTo: draft.dateTo,
+    note: draft.note || "Nové demo hlášení vytvořené jen v paměti stránky.",
+    department: "Demo provoz"
+  };
+
+  smartOdpadyV2DemoState.reports = [request, ...smartOdpadyV2DemoState.reports];
+  smartOdpadyV2DemoState.selectedReportId = request.id;
+  smartOdpadyV2DemoState.reportsTab = "overview";
+  smartOdpadyV2DemoState.draft = {
+    employeeName: "Zaměstnanec C",
+    type: "Dovolená",
+    dateFrom: draft.dateFrom,
+    dateTo: draft.dateTo,
+    note: ""
+  };
+  setSmartOdpadyV2DemoNotice("Demo režim – hlášení nebylo odesláno ani uloženo.");
+  render();
+}
+
+function handleSmartOdpadyV2DemoReportAction(action, reportId = "") {
+  const report = smartOdpadyV2DemoState.reports.find((item) => item.id === reportId);
+  if (!report) {
+    setSmartOdpadyV2DemoNotice("", "Demo záznam už není dostupný.");
+    render();
+    return;
+  }
+
+  if (action === "approve") {
+    report.status = "approved";
+    smartOdpadyV2DemoState.selectedReportId = report.id;
+    setSmartOdpadyV2DemoNotice("Demo režim – změna nebyla uložena.");
+    render();
+    return;
+  }
+
+  if (action === "cancel") {
+    report.status = "cancelled";
+    smartOdpadyV2DemoState.selectedReportId = report.id;
+    setSmartOdpadyV2DemoNotice("Demo režim – změna nebyla uložena.");
+    render();
+    return;
+  }
+
+  if (action === "edit") {
+    smartOdpadyV2DemoState.reportsTab = "new";
+    smartOdpadyV2DemoState.selectedReportId = report.id;
+    smartOdpadyV2DemoState.draft = {
+      employeeName: report.employeeName,
+      type: report.type,
+      dateFrom: report.dateFrom,
+      dateTo: report.dateTo || report.dateFrom,
+      note: report.note || ""
+    };
+    setSmartOdpadyV2DemoNotice("Demo režim – záznam je předvyplněný ve formuláři, nic se neukládá.");
+    render();
+  }
+}
+
 function smartOdpadyV2DashboardContent(user) {
   ensureDataBoxData();
   if (canViewModule(user, "driver-reports")) {
@@ -15791,11 +16310,13 @@ function smartOdpadyV2ReportsContent(user) {
   return smartOdpadyV2RewriteAbsenceLinks(content);
 }
 
-function smartOdpadyV2VehicleTrackingContent(user, context = {}) {
+function smartOdpadyV2VehicleTrackingContent(user, context = {}, options = {}) {
+  const mode = options.mode === "demo" ? "demo" : "live";
+  const isDemo = mode === "demo";
   const moduleItem = orderedModules.find((item) => item.id === "vehicle-tracking");
   const vehicleId = context.vehicleId || "";
   const view = context.view || "map";
-  const sourceMode = vehicleTrackingActiveSourceMode();
+  const sourceMode = isDemo ? "demo" : vehicleTrackingActiveSourceMode();
   const visibleVehicles = vehicleTrackingDemoVisibleVehicles();
   const selectedVehicle = vehicleTrackingDemoSelectedVehicle(vehicleId, visibleVehicles);
   if (selectedVehicle) {
@@ -15807,20 +16328,24 @@ function smartOdpadyV2VehicleTrackingContent(user, context = {}) {
       <div class="module-detail__body">
         <div class="module-detail__eyebrow">SMART ODPADY / SLEDOVÁNÍ VOZIDEL</div>
         <h1 id="smart-odpady-v2-tracking-title">Sledování vozidel</h1>
-        <p>Primární poloha vozidel bude z T-Cars jednotek. Demo režim zůstává jako bezpečná ukázka bez reálných GPS dat.</p>
+        <p>${isDemo
+          ? "Veřejná ukázka mapy, KPI, filtrů a detailu vozidla. Všechny polohy jsou syntetické a nelze je zaměnit za provozní GPS data."
+          : "Primární poloha vozidel bude z T-Cars jednotek. Demo režim zůstává jako bezpečná ukázka bez reálných GPS dat."}</p>
         <div class="module-detail__status">
-          <span>Stav</span>
-          <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
+          <span>${isDemo ? "Režim" : "Stav"}</span>
+          <strong>${isDemo ? "Veřejné demo" : escapeHtml(moduleStatusLabel(moduleItem))}</strong>
         </div>
         <div class="module-actions">
-          ${vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE)}
-          ${vehicleTrackingAction("Správa GPS napojení")}
+          ${isDemo
+            ? '<button class="primary-action" type="button" data-smart-odpady-v2-demo-action="notice">Demo potvrzení</button><button class="secondary-link" type="button" data-tracking-demo-control="reset">Reset demo mapy</button>'
+            : `${vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE)}${vehicleTrackingAction("Správa GPS napojení")}`}
         </div>
       </div>
       <div class="smart-odpady-v2-hero__icon smart-odpady-v2-hero__icon--tracking" aria-hidden="true">${smartOdpadyV2Icon("vehicleTracking")}</div>
     </section>
 
-    ${vehicleTrackingSourceModePanel()}
+    ${isDemo ? smartOdpadyV2DemoFeedback() : ""}
+    ${isDemo ? "" : vehicleTrackingSourceModePanel()}
     ${sourceMode === "demo" ? vehicleTrackingDemoBanner() : ""}
     ${vehicleTrackingTabs(view, sourceMode)}
     <div class="tracking-layout tracking-demo-layout">
@@ -15835,9 +16360,7 @@ function smartOdpadyV2VehicleTrackingContent(user, context = {}) {
       ${vehicleTrackingGeofencingDraftPanel()}
       ${vehicleTrackingApiSection()}
       ${vehicleTrackingSettingsSection()}
-      <div id="tracking-rules">
-        ${vehicleTrackingRulesAutomation(user)}
-      </div>
+      ${isDemo ? "" : `<div id="tracking-rules">${vehicleTrackingRulesAutomation(user)}</div>`}
     </div>
   `;
 }
@@ -15890,6 +16413,40 @@ function renderSmartOdpadyV2(user) {
   app.innerHTML = smartOdpadyV2Shell(user, "dashboard", smartOdpadyV2DashboardContent(user));
   ensureDataBoxPlusHomeStatus(user);
   document.title = `Smart Odpady V2 | ${APP_NAME}`;
+}
+
+function renderSmartOdpadyV2Demo() {
+  const path = normalizePath(window.location.pathname);
+  const routes = smartOdpadyV2RouteConfig("demo");
+  if (path === routes.base) {
+    window.history.replaceState({}, "", routeHref(routes.dashboard));
+    lastRenderedUrl = window.location.href;
+  }
+
+  const activeId = smartOdpadyV2ActiveRouteId(window.location.pathname, "demo");
+  const user = SMART_ODPADY_V2_DEMO_USER;
+  const shellOptions = { mode: "demo" };
+
+  if (activeId === "reports") {
+    app.innerHTML = smartOdpadyV2Shell(user, activeId, smartOdpadyV2DemoReportsContent(), shellOptions);
+    document.title = `Demo Hlášení | ${APP_NAME}`;
+    return;
+  }
+
+  if (activeId === "vehicle-tracking") {
+    const trackingContext = routeVehicleTrackingContext(normalizePath(window.location.pathname)) || {};
+    app.innerHTML = smartOdpadyV2Shell(
+      user,
+      activeId,
+      smartOdpadyV2VehicleTrackingContent(user, trackingContext, shellOptions),
+      shellOptions
+    );
+    document.title = `Demo Sledování vozidel | ${APP_NAME}`;
+    return;
+  }
+
+  app.innerHTML = smartOdpadyV2Shell(user, "dashboard", smartOdpadyV2DemoDashboardContent(), shellOptions);
+  document.title = `Demo Smart Odpady V2 | ${APP_NAME}`;
 }
 
 function collectionRoutesCanViewPilot(user) {
@@ -40506,6 +41063,11 @@ function renderAuthenticatedApp(user) {
 }
 
 function renderApp() {
+  if (isSmartOdpadyV2DemoPath()) {
+    renderSmartOdpadyV2Demo();
+    return;
+  }
+
   if (authState.status === "loading") {
     app.innerHTML = loadingPage();
     document.title = `Přihlášení | ${APP_NAME}`;
@@ -40552,6 +41114,7 @@ function render() {
 }
 
 async function bootstrapAuth() {
+  authBootstrapStarted = true;
   try {
     const result = await apiJson("/api/me");
     authState = {
@@ -40596,6 +41159,12 @@ const accessUnsavedChangesGuard = useUnsavedChangesGuard({
 function navigateToUrl(url) {
   window.history.pushState({}, "", url);
   lastRenderedUrl = window.location.href;
+  if (!isSmartOdpadyV2DemoPath() && authState.status === "loading" && !authBootstrapStarted) {
+    render();
+    bootstrapAuth();
+    scrollToReceivablesHashTarget();
+    return;
+  }
   render();
   scrollToReceivablesHashTarget();
 }
@@ -42950,6 +43519,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const smartOdpadyV2DemoReportForm = event.target.closest("[data-smart-odpady-v2-demo-report-form]");
+  if (smartOdpadyV2DemoReportForm) {
+    event.preventDefault();
+    submitSmartOdpadyV2DemoReport(smartOdpadyV2DemoReportForm);
+    return;
+  }
+
   const appearanceForm = event.target.closest("[data-appearance-form]");
   if (appearanceForm) {
     event.preventDefault();
@@ -43715,6 +44291,42 @@ document.addEventListener("click", async (event) => {
   if (smartOdpadyV2ThemeToggle) {
     event.preventDefault();
     setSmartOdpadyV2Theme(smartOdpadyV2ThemeToggle.dataset.smartOdpadyV2Theme || "light");
+    render();
+    return;
+  }
+
+  const smartOdpadyV2DemoReportTab = event.target.closest("[data-smart-odpady-v2-demo-report-tab]");
+  if (smartOdpadyV2DemoReportTab) {
+    event.preventDefault();
+    smartOdpadyV2DemoState.reportsTab = smartOdpadyV2DemoReportTab.dataset.smartOdpadyV2DemoReportTab || "overview";
+    setSmartOdpadyV2DemoNotice("");
+    render();
+    return;
+  }
+
+  const smartOdpadyV2DemoReportDetail = event.target.closest("[data-smart-odpady-v2-demo-report-detail]");
+  if (smartOdpadyV2DemoReportDetail) {
+    event.preventDefault();
+    smartOdpadyV2DemoState.selectedReportId = smartOdpadyV2DemoReportDetail.dataset.smartOdpadyV2DemoReportDetail || "";
+    setSmartOdpadyV2DemoNotice("");
+    render();
+    return;
+  }
+
+  const smartOdpadyV2DemoReportAction = event.target.closest("[data-smart-odpady-v2-demo-report-action]");
+  if (smartOdpadyV2DemoReportAction) {
+    event.preventDefault();
+    handleSmartOdpadyV2DemoReportAction(
+      smartOdpadyV2DemoReportAction.dataset.smartOdpadyV2DemoReportAction || "",
+      smartOdpadyV2DemoReportAction.dataset.demoReportId || ""
+    );
+    return;
+  }
+
+  const smartOdpadyV2DemoAction = event.target.closest("[data-smart-odpady-v2-demo-action]");
+  if (smartOdpadyV2DemoAction) {
+    event.preventDefault();
+    setSmartOdpadyV2DemoNotice("Demo režim – změna nebyla uložena.");
     render();
     return;
   }
@@ -45411,4 +46023,6 @@ window.addEventListener("popstate", handlePopStateNavigation);
 window.addEventListener("hashchange", handleHashChangeNavigation);
 render();
 probeAiAssistantAvatarAssets();
-bootstrapAuth();
+if (!isSmartOdpadyV2DemoPath()) {
+  bootstrapAuth();
+}
