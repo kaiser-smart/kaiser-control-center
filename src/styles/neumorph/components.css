@@ -23,17 +23,17 @@
   min-width: 0;
   border: 1px solid var(--nm-border-soft);
   border-radius: var(--nm-radius-lg);
-  background: var(--nm-surface-raised);
+  background: var(--nm-panel-gradient);
   box-shadow: var(--nm-shadow-panel), var(--nm-highlight-edge);
   color: var(--nm-text-main);
 }
 
 .nm-app .nm-panel {
-  padding: var(--nm-space-6);
+  padding: var(--nm-space-5);
 }
 
 .nm-app .nm-card {
-  padding: var(--nm-space-5);
+  padding: var(--nm-space-4);
   box-shadow: var(--nm-shadow-card), var(--nm-highlight-edge);
 }
 
@@ -53,7 +53,7 @@
   border-radius: var(--nm-radius-md);
   background: var(--nm-surface-control);
   color: var(--nm-text-main);
-  font-weight: 800;
+  font-weight: 850;
   line-height: 1;
   text-decoration: none;
   box-shadow: var(--nm-shadow-control);
@@ -96,6 +96,7 @@
 
 .nm-app .nm-button--secondary {
   background: color-mix(in srgb, var(--nm-surface-raised) 88%, var(--nm-surface-soft));
+  color: var(--nm-text-muted-strong);
 }
 
 .nm-app .nm-button--subtle {
@@ -121,7 +122,7 @@
   background: color-mix(in srgb, var(--nm-surface-raised) 86%, var(--nm-surface-soft));
   color: var(--nm-text-muted-strong);
   font-size: 0.82rem;
-  font-weight: 800;
+  font-weight: 850;
   line-height: 1;
   white-space: nowrap;
 }

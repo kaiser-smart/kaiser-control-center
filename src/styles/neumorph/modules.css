@@ -22,19 +22,19 @@
 .nm-app .nm-module-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: var(--nm-space-4);
+  gap: var(--nm-space-3);
 }
 
 .nm-app .nm-module-card {
   display: grid;
-  min-height: 132px;
+  min-height: 118px;
   grid-template-columns: var(--nm-icon-holder-md) minmax(0, 1fr);
   gap: var(--nm-space-4);
   align-items: center;
-  padding: var(--nm-space-5);
+  padding: var(--nm-space-4);
   border: 1px solid var(--nm-border-soft);
   border-radius: var(--nm-radius-lg);
-  background: var(--nm-surface-raised);
+  background: var(--nm-panel-gradient-soft);
   color: var(--nm-text-main);
   text-decoration: none;
   box-shadow: var(--nm-shadow-card), var(--nm-highlight-edge);
@@ -53,6 +53,11 @@
 
 .nm-app .nm-module-card__icon,
 .nm-app .nm-module-hero__icon {
+  color: var(--nm-text-muted-strong);
+}
+
+.nm-app .nm-module-card:hover .nm-module-card__icon,
+.nm-app .nm-module-card:focus-visible .nm-module-card__icon {
   color: var(--nm-brand-accent);
 }
 
@@ -87,7 +92,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--nm-text-muted);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-weight: 700;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -140,6 +145,7 @@
 
 .nm-app .nm-module-kpi {
   display: grid;
+  min-height: 112px;
   align-content: start;
   gap: var(--nm-space-2);
 }

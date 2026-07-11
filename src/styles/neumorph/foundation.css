@@ -98,13 +98,21 @@
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.35;
+  stroke-width: var(--nm-icon-stroke);
 }
 
 .nm-app .module-icon__svg {
   display: block;
   flex: 0 0 auto;
   object-fit: contain;
+}
+
+.nm-app .module-icon__svg :is(path, rect, circle, ellipse, line, polyline, polygon) {
+  stroke: currentColor !important;
+}
+
+.nm-app .module-icon__svg :is(path, rect, circle, ellipse, line, polyline, polygon):not([fill="none"]) {
+  fill: none;
 }
 
 .nm-app .nm-icon svg,

@@ -10,7 +10,7 @@
 
 .nm-app .nm-dashboard-metric {
   display: grid;
-  min-height: 132px;
+  min-height: 112px;
   align-content: space-between;
   gap: var(--nm-space-2);
 }
@@ -47,10 +47,10 @@
 }
 
 .nm-app .nm-dashboard-layout > .nm-dashboard-section {
-  padding: var(--nm-space-5);
+  padding: var(--nm-space-4);
   border: 1px solid var(--nm-border-soft);
   border-radius: var(--nm-radius-xl);
-  background: color-mix(in srgb, var(--nm-surface-raised) 78%, var(--nm-surface-soft));
+  background: var(--nm-panel-gradient-soft);
   box-shadow: var(--nm-shadow-card), var(--nm-highlight-edge);
 }
 

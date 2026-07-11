@@ -76,21 +76,21 @@ export function renderNeumorphModuleHeader({
 
   return `
     <header class="nm-module-header">
-      <div class="nm-module-header__identity">
-        <span class="nm-icon-holder nm-icon-holder--active nm-module-header__icon" aria-hidden="true">
+      <div class="nm-module-header__copy">
+        <p class="nm-system-eyebrow">${escapeHtml(resolvedEyebrow)}</p>
+        <h1>${escapeHtml(resolvedTitle)}</h1>
+        ${resolvedDescription ? `<p>${escapeHtml(resolvedDescription)}</p>` : ""}
+        <div class="nm-cluster nm-module-header__meta">
+          <span class="nm-chip nm-chip--${resolvedTone}">${escapeHtml(resolvedStatus)}</span>
+          ${meta.map((item) => `<span class="nm-chip">${escapeHtml(item)}</span>`).join("")}
+        </div>
+        ${actions.length ? `<div class="nm-module-header__actions">${actions.map(renderAction).join("")}</div>` : ""}
+      </div>
+      <div class="nm-module-header__visual" aria-hidden="true">
+        <span class="nm-module-header__icon">
           ${renderModuleAsset(moduleItem)}
         </span>
-        <div class="nm-module-header__copy">
-          <p class="nm-system-eyebrow">${escapeHtml(resolvedEyebrow)}</p>
-          <h1>${escapeHtml(resolvedTitle)}</h1>
-          ${resolvedDescription ? `<p>${escapeHtml(resolvedDescription)}</p>` : ""}
-          <div class="nm-cluster nm-module-header__meta">
-            <span class="nm-chip nm-chip--${resolvedTone}">${escapeHtml(resolvedStatus)}</span>
-            ${meta.map((item) => `<span class="nm-chip">${escapeHtml(item)}</span>`).join("")}
-          </div>
-        </div>
       </div>
-      ${actions.length ? `<div class="nm-module-header__actions">${actions.map(renderAction).join("")}</div>` : ""}
     </header>
   `;
 }
