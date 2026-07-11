@@ -8983,7 +8983,7 @@ h1 {
 .tracking-tcars-google-pin {
   position: relative;
   display: flex;
-  width: 136px;
+  width: 156px;
   min-width: 0;
   max-width: none;
   flex-direction: column;
@@ -9017,10 +9017,10 @@ h1 {
   z-index: 5;
   display: grid;
   box-sizing: border-box;
-  width: 136px;
+  width: 156px;
   gap: 3px;
   margin-bottom: -4px;
-  padding: 7px 9px 8px;
+  padding: 8px 10px 9px;
   border: 1px solid rgba(20, 35, 16, 0.38);
   border-radius: 12px 12px 9px 9px;
   background: #B6FF00;
@@ -9063,7 +9063,7 @@ h1 {
   min-width: 0;
   overflow: hidden;
   color: #10200c;
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   font-weight: 950;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9073,7 +9073,7 @@ h1 {
   min-width: 0;
   overflow: hidden;
   color: #12200e;
-  font-size: 0.55rem;
+  font-size: 0.59rem;
   font-weight: 950;
   text-align: right;
   text-overflow: ellipsis;

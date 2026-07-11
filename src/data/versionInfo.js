@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.516"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.517"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: rozšířená sada čistých 3D ikon",
+    text: "Přibyly dodané transparentní výřezy pro FUSO, cisterny MAN, Mercedes a DAF, techniku Manitou, dodávky Ford, Mercedes a Toyota i vozy Škoda a Opel. Ikony se přiřazují podle SPZ a názvu/modelu, bez stínu kolem vozidla; limetkový štítek nad vozidlem je větší a čitelnější."
+  },
   {
     title: "Hlavní Dashboard: provoz a ekonomika flotily",
     text: "Hlavní stránka je nově skutečný read-only Dashboard firmy. Management vidí prioritní návrhy grafů Produktivní vs. přejezdové km a Výnos/km vs. náklad/km bez vymyšlených hodnot; aktuální provoz používá existující T-Cars, hlášení, trasy a datové zprávy podle oprávnění."

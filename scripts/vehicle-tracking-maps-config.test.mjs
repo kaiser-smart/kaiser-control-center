@@ -48,11 +48,19 @@ import {
   assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "6B9 3840" }), "/vehicles/icons/man-popelarske.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "3BI 2007" }), "/vehicles/icons/daf-abroll.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "2BJ 7654" }), "/vehicles/icons/iveco-rioned-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "9B4 6276" }), "/vehicles/icons/fuso-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "9C8 3570" }), "/vehicles/icons/mercedes-cisterna-milanek-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ name: "JCM Manitou MLT 630" }), "/vehicles/icons/manitou-mlt-630-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ name: "JCB Manitou MT 625H" }), "/vehicles/icons/manitou-mt-625h-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ name: "Ford Tranzit dodávka" }), "/vehicles/icons/ford-transit-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ name: "Mercedes Citan" }), "/vehicles/icons/mercedes-citan-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ model: "Škoda Karoq" }), "/vehicles/icons/skoda-karoq-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ model: "Opel Grandland" }), "/vehicles/icons/opel-grandland-v2.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ model: "Audi A1" }), "/vehicles/icons/audi-a1-v2.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ licensePlate: "Hyundai VZV" }), "/vehicles/icons/hyundai-vzv.png");
   assert.equal(vehicleTrackingCustomIconForVehicle({ vehicle: { description: "Mercedes Vito servis" } }), "/vehicles/icons/mercedes-vito.png");
-  assert.equal(vehicleTrackingCustomIconForVehicle({ name: "MAN cisterna 3 m3" }), "/vehicles/icons/man-cisterna-mala.png");
-  assert.equal(vehicleTrackingCustomIconForVehicle({ model: "Toyota Proace" }), "/vehicles/icons/toyota-proace.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ name: "MAN cisterna 3 m3" }), "/vehicles/icons/man-cisterna-v2.png");
+  assert.equal(vehicleTrackingCustomIconForVehicle({ model: "Toyota Proace" }), "/vehicles/icons/toyota-proace-v2.png");
 }
 
 {
