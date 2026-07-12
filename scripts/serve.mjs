@@ -3933,6 +3933,63 @@ function mockReceivablesIncrementalLedgerDiff() {
   };
 }
 
+function mockReceivablesPaymentReconciliation() {
+  const rows = [
+    {
+      invoiceId: "mock-reconciliation-1",
+      invoiceNumber: "2601103364",
+      variableSymbol: "2601103364",
+      customerId: "receivable-customer:action",
+      companyName: "ACTION PROJEKT AND BUILDING s.r.o.",
+      ico: "07767374",
+      totalAmount: 201300,
+      matchedAmount: 201300,
+      matchedPaymentCount: 1,
+      before: { status: "unpaid", paidAmount: 0, openAmount: 201300, paidDate: "" },
+      after: { status: "paid", paidAmount: 201300, openAmount: 0, paidDate: "2026-07-10" },
+      requiresUpdate: true,
+      protectedStatus: false
+    },
+    {
+      invoiceId: "mock-reconciliation-2",
+      invoiceNumber: "2601102658",
+      variableSymbol: "2601102658",
+      customerId: "receivable-customer:bareko",
+      companyName: "Bareko služby s.r.o.",
+      ico: "09767053",
+      totalAmount: 50000,
+      matchedAmount: 25000,
+      matchedPaymentCount: 1,
+      before: { status: "unpaid", paidAmount: 0, openAmount: 50000, paidDate: "" },
+      after: { status: "partially_paid", paidAmount: 25000, openAmount: 25000, paidDate: "" },
+      requiresUpdate: true,
+      protectedStatus: false
+    }
+  ];
+  return {
+    apiStatus: "ready",
+    previewFingerprint: "fnv1a32:local-preview",
+    summary: {
+      evidenceInvoiceCount: rows.length,
+      pendingCount: rows.length,
+      fullyCoveredCount: 1,
+      partiallyCoveredCount: 1,
+      protectedCount: 0,
+      affectedCustomerCount: 2,
+      matchedAmountTotal: 226300,
+      openAmountReduction: 226300
+    },
+    rows,
+    pagination: { page: 1, pageSize: 10, totalRows: rows.length },
+    readOnly: true,
+    writesLedger: false,
+    writesAudit: false,
+    recalculatesRatings: false,
+    sendsCustomerCommunication: false,
+    startsAutomation: false
+  };
+}
+
 function mockReceivablesVistosLedgerMapping() {
   const snapshot = mockReceivablesVistosInvoiceSnapshot();
   const rows = snapshot.rows.map((row) => ({
@@ -4428,6 +4485,19 @@ async function handleApi(request, response) {
       sendsCustomerCommunication: false,
       startsAutomation: false
     });
+    return true;
+  }
+  if (url.pathname === "/api/receivables/payments/reconciliation" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "receivables", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    sendJson(response, 200, mockReceivablesPaymentReconciliation());
     return true;
   }
 

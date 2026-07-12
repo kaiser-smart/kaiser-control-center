@@ -1060,6 +1060,11 @@ const receivablesState = {
   incrementalLedgerDiffLoading: false,
   incrementalLedgerDiffError: "",
   incrementalLedgerDiffPagination: null,
+  paymentReconciliation: null,
+  paymentReconciliationLoaded: false,
+  paymentReconciliationLoading: false,
+  paymentReconciliationError: "",
+  paymentReconciliationPagination: null,
   ledgerMapping: null,
   ledgerMappingLoaded: false,
   ledgerMappingLoading: false,
@@ -32368,6 +32373,95 @@ function receivablesIncrementalLedgerDiffPanel() {
   `;
 }
 
+function receivablesPaymentReconciliationPaginationControls(pagination = {}) {
+  const page = Number(pagination.page || 1);
+  const pageSize = Number(pagination.pageSize || 10);
+  const totalRows = Number(pagination.totalRows || 0);
+  const totalPages = Math.max(1, Math.ceil(totalRows / Math.max(1, pageSize)));
+  const start = totalRows ? ((page - 1) * pageSize) + 1 : 0;
+  const end = Math.min(totalRows, page * pageSize);
+  return `
+    <div class="receivables-pagination" aria-label="Stránkování kontroly spárovaných plateb">
+      <span>${escapeHtml(start)}-${escapeHtml(end)} z ${escapeHtml(totalRows)} · 10 řádků na stránku</span>
+      <button class="secondary-link" type="button" data-receivables-reconciliation-page="${escapeHtml(page - 1)}" ${page <= 1 || receivablesState.paymentReconciliationLoading ? "disabled" : ""}>Předchozí</button>
+      <button class="secondary-link" type="button" data-receivables-reconciliation-page="${escapeHtml(page + 1)}" ${page >= totalPages || receivablesState.paymentReconciliationLoading ? "disabled" : ""}>Další</button>
+    </div>
+  `;
+}
+
+function receivablesPaymentReconciliationPanel() {
+  const preview = receivablesState.paymentReconciliation;
+  const summary = preview?.summary || {};
+  const rows = Array.isArray(preview?.rows) ? preview.rows : [];
+  const pagination = receivablesState.paymentReconciliationPagination || preview?.pagination || {};
+  const pendingCount = Number(summary.pendingCount || 0);
+  const statusLabel = receivablesState.paymentReconciliationLoading
+    ? "načítám"
+    : receivablesState.paymentReconciliationError
+      ? "chyba"
+      : !preview ? "čeká" : pendingCount ? "čeká na dorovnání" : "ověřeno";
+  const statusTone = receivablesState.paymentReconciliationError ? "danger" : pendingCount || !preview ? "warning" : "ready";
+  const cards = [
+    ["Faktury s platební stopou", summary.evidenceInvoiceCount || 0],
+    ["Čeká na dorovnání", pendingCount],
+    ["Plně pokryté", summary.fullyCoveredCount || 0],
+    ["Částečně pokryté", summary.partiallyCoveredCount || 0],
+    ["Dotčené firmy", summary.affectedCustomerCount || 0],
+    ["Snížení otevřeného zůstatku", formatReceivableMoney(summary.openAmountReduction || 0)]
+  ];
+  const table = rows.length ? `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact receivables-table--payment-reconciliation">
+        <thead><tr><th>Firma</th><th>Faktura</th><th>Stav</th><th>Spárované platby</th><th>Uhrazeno</th><th>Otevřeno</th><th>Datum doplacení</th><th>Výsledek</th></tr></thead>
+        <tbody>
+          ${rows.map((row) => `<tr>
+            <td data-label="Firma"><strong>${escapeHtml(row.companyName || row.customerId || "-")}</strong>${row.ico ? `<br><span>IČO ${escapeHtml(row.ico)}</span>` : ""}</td>
+            <td data-label="Faktura"><strong>${escapeHtml(row.invoiceNumber || row.invoiceId || "-")}</strong><br><span>VS ${escapeHtml(row.variableSymbol || "-")}</span></td>
+            <td data-label="Stav">${escapeHtml(row.before?.status || "-")} → ${escapeHtml(row.after?.status || "-")}</td>
+            <td data-label="Spárované platby">${escapeHtml(row.matchedPaymentCount || 0)} · ${escapeHtml(formatReceivableMoney(row.matchedAmount || 0))}</td>
+            <td data-label="Uhrazeno">${escapeHtml(formatReceivableMoney(row.before?.paidAmount || 0))} → ${escapeHtml(formatReceivableMoney(row.after?.paidAmount || 0))}</td>
+            <td data-label="Otevřeno">${escapeHtml(formatReceivableMoney(row.before?.openAmount || 0))} → ${escapeHtml(formatReceivableMoney(row.after?.openAmount || 0))}</td>
+            <td data-label="Datum doplacení">${escapeHtml(row.after?.paidDate || "-")}</td>
+            <td data-label="Výsledek">${row.protectedStatus
+              ? receivablesPill("chráněný stav", "warning")
+              : row.requiresUpdate ? receivablesPill("čeká na dorovnání", "warning") : receivablesPill("dorovnáno", "ready")}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  ` : `<p class="receivables-empty">Nejsou nalezené faktury s potvrzenou spárovanou platbou a touto datovou odchylkou.</p>`;
+
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-payment-reconciliation-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Potvrzené platby → stav faktury</p>
+          <h2 id="receivables-payment-reconciliation-title">Kontrola dorovnání úhrad</h2>
+          <p>Automatický read-only přehled porovnává potvrzené spárované platby se stavem faktur. Zobrazení nic nezapisuje a nespouští rating ani komunikaci.</p>
+        </div>
+        ${receivablesPill(statusLabel, statusTone)}
+      </div>
+      ${receivablesState.paymentReconciliationError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.paymentReconciliationError)}</p>` : ""}
+      <div class="receivables-import-summary" aria-label="Souhrn kontroly dorovnání úhrad">
+        ${cards.map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("")}
+      </div>
+      <dl class="receivables-diagnostics-list">
+        <div><dt>Zdroj</dt><dd>pouze potvrzené matched / auto_matched platby</dd></div>
+        <div><dt>Tolerance</dt><dd>max. 1 Kč nebo 0,1 % částky faktury</dd></div>
+        <div><dt>Pojistky</dt><dd>UI zápis vypnut · rating vypnut · komunikace vypnuta · audit při řízeném dorovnání</dd></div>
+      </dl>
+      ${receivablesInvoiceBlock({
+        title: "Faktury s potvrzenou platební stopou",
+        description: "Jeden read-only blok, maximálně 10 řádků na stránku.",
+        visibleCount: rows.length,
+        totalCount: Number(pagination.totalRows || summary.evidenceInvoiceCount || 0),
+        controls: receivablesPaymentReconciliationPaginationControls(pagination),
+        content: table
+      })}
+    </section>
+  `;
+}
+
 function receivablesKbOnboardingTone(item = {}) {
   return item.configured ? "ready" : "waiting";
 }
@@ -33216,6 +33310,7 @@ function receivablesImportSection() {
   return `
     ${receivablesKbApiOnboardingPanel()}
     ${receivablesInvoiceSnapshotPanel()}
+    ${receivablesPaymentReconciliationPanel()}
     ${receivablesIncrementalLedgerDiffPanel()}
     ${receivablesLedgerMappingPanel()}
   `;
@@ -35582,6 +35677,28 @@ async function loadReceivablesIncrementalLedgerDiff(options = {}) {
   }
 }
 
+async function loadReceivablesPaymentReconciliation(options = {}) {
+  if (receivablesState.paymentReconciliationLoading) return;
+  receivablesState.paymentReconciliationLoading = true;
+  receivablesState.paymentReconciliationError = "";
+  try {
+    const params = new URLSearchParams({
+      page: String(options.page || receivablesState.paymentReconciliationPagination?.page || 1),
+      pageSize: "10"
+    });
+    const result = await apiJson(`/api/receivables/payments/reconciliation?${params.toString()}`);
+    receivablesState.paymentReconciliation = result;
+    receivablesState.paymentReconciliationPagination = result.pagination || null;
+    receivablesState.paymentReconciliationLoaded = true;
+  } catch (error) {
+    receivablesState.paymentReconciliationError = error.payload?.error || error.message || "Kontrolu dorovnání úhrad se teď nepodařilo načíst.";
+    receivablesState.paymentReconciliationLoaded = true;
+  } finally {
+    receivablesState.paymentReconciliationLoading = false;
+    if (options.renderAfter !== false) render();
+  }
+}
+
 async function loadReceivablesKbOnboarding(options = {}) {
   if (receivablesState.kbOnboardingLoading) {
     return;
@@ -35782,6 +35899,10 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "import" && !receivablesState.incrementalLedgerDiffLoaded && !receivablesState.incrementalLedgerDiffLoading) {
     void loadReceivablesIncrementalLedgerDiff();
+  }
+
+  if (context.view === "import" && !receivablesState.paymentReconciliationLoaded && !receivablesState.paymentReconciliationLoading) {
+    void loadReceivablesPaymentReconciliation();
   }
 
   if (context.view === "import" && !receivablesState.kbOnboardingLoaded && !receivablesState.kbOnboardingLoading) {
@@ -45939,6 +46060,14 @@ document.addEventListener("click", async (event) => {
     if (Number.isFinite(page) && page > 0) {
       await loadReceivablesIncrementalLedgerDiff({ page, renderAfter: true });
     }
+    return;
+  }
+
+  const receivablesReconciliationPage = event.target.closest("[data-receivables-reconciliation-page]");
+  if (receivablesReconciliationPage) {
+    event.preventDefault();
+    const page = Number(receivablesReconciliationPage.dataset.receivablesReconciliationPage || 1);
+    if (page > 0) await loadReceivablesPaymentReconciliation({ page });
     return;
   }
 

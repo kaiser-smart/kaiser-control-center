@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.520"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.521"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: kontrolované dorovnání úhrad",
+    text: "Import automaticky zobrazuje read-only porovnání potvrzených spárovaných plateb se stavem faktur. Chráněné backendové dorovnání používá toleranci, odmítá zastaralý preview otisk a ukládá původní i nový stav do auditu; ratingy ani zákaznickou komunikaci nespouští."
+  },
   {
     title: "Svozové trasy: připravenost na 900 Stanovišť",
     text: "Velké denní trasy se ukládají v menším počtu bezpečných databázových operací a dispečerský i řidičský seznam zobrazuje zastávky postupně po 100. Zátěžové testy pokrývají 60, 300, 900 i 1000 zastávek; Vistos zůstává pouze read-only."

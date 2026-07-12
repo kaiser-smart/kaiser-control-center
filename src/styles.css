@@ -32362,7 +32362,8 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   min-width: 520px;
 }
 
-.receivables-table--incremental-diff td {
+.receivables-table--incremental-diff td,
+.receivables-table--payment-reconciliation td {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -32542,7 +32543,8 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
     border-bottom: 0;
   }
 
-  .receivables-table--incremental-diff .receivables-pill {
+  .receivables-table--incremental-diff .receivables-pill,
+  .receivables-table--payment-reconciliation .receivables-pill {
     max-width: 100%;
     white-space: normal;
   }
