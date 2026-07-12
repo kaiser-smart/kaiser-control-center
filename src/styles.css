@@ -37279,7 +37279,17 @@ body:has(.ds-plus-page) {
   gap: 9px;
 }
 
-.collection-routes-test-notification-confirm {
+.collection-routes-test-notification-locked {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: rgba(169, 32, 32, 0.07);
+  color: #861919;
+  font-weight: 800;
+}
+
+.collection-routes-test-notification-confirm,
+.collection-routes-test-notification-retry {
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -37288,23 +37298,28 @@ body:has(.ds-plus-page) {
   background: #fff;
 }
 
-.collection-routes-test-notification-confirm > strong {
+.collection-routes-test-notification-confirm > strong,
+.collection-routes-test-notification-retry > strong {
   color: #861919;
   font-size: 1.05rem;
 }
 
 .collection-routes-test-notification-confirm > span,
-.collection-routes-test-notification-confirm label {
+.collection-routes-test-notification-confirm label,
+.collection-routes-test-notification-retry > span,
+.collection-routes-test-notification-retry label {
   color: var(--steel);
 }
 
-.collection-routes-test-notification-confirm label {
+.collection-routes-test-notification-confirm label,
+.collection-routes-test-notification-retry label {
   display: flex;
   gap: 9px;
   align-items: flex-start;
 }
 
-.collection-routes-test-notification-confirm input {
+.collection-routes-test-notification-confirm input,
+.collection-routes-test-notification-retry input {
   width: 19px;
   height: 19px;
   margin-top: 2px;
@@ -37559,6 +37574,7 @@ body:has(.ds-plus-page) {
   .collection-routes-test-empty .primary-action,
   .collection-routes-test-notification-actions .secondary-link,
   .collection-routes-test-notification-confirm .primary-action,
+  .collection-routes-test-notification-retry .primary-action,
   .collection-routes-test-notification-job .secondary-link {
     width: 100%;
   }

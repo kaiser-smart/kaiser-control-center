@@ -101,7 +101,8 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 ## Notifikace
 
 - HOTOVO - pouze pro TEST Brno 500 existuje rucne potvrzena idempotentni uloha skutecnych SMS a e-mailu na jeden chraneny kontakt; zalozeni dat ani trasy nic neposila.
-- ROZPRACOVANO - pred prvnim produkcnim overenim se posle presne 1 SMS a 1 e-mail, zkontroluje provider ID a audit; cela trasa se nespousti.
+- HOTOVO - castecna TEST uloha se po reloadu obnovi a muze zopakovat jen failed kanal bez provider ID; jiz odeslany e-mail se znovu neposle a nova uplna davka je zablokovana.
+- ROZPRACOVANO - prvni produkcni e-mail odesel a je v auditu; jedina SMS selhala pred Twiliem. Migrace 0032 je aplikovana, ale provozni rezim zakaznickych SMS je stale `off` a nesmi se zmenit bez samostatneho potvrzeni.
 - NEZACATO - ostre zakaznicke SMS a e-maily podle kontaktu z Vistosu.
 - NEZACATO - zadne temporary tracking linky.
 
@@ -135,5 +136,5 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - OVERENO - Faze 1E read-only import 13 Excelu a Vistos match byly overeny na produkci pro batch z 2026-07-02.
 - OVERENO - Faze 2D-A, migrace 0038 a verze 0.1.519 byly 2026-07-12 overeny v produkci: prihlaseny dispecersky pohled, prazdny vychozi stav, ochrana API a responzivita desktop/tablet/mobil; po overeni zustalo 0 tras, 0 zastavek a 0 udalosti.
 - NEZACATO - produkcni overeni Faze 2D-B a verze 0.1.520.
-- NEZACATO - produkcni nasazeni a overeni TEST Brno 500 ve verzi 0.1.524, samostatne TEST D1 a presne 1 SMS + 1 e-mail.
+- ROZPRACOVANO - TEST Brno 500 verze 0.1.524 je v produkci v samostatne TEST D1: 500 stanovist, 1 trasa, 198 zastavek a 1 odeslany e-mail jsou overene. Bezpecne opakovani jedine failed SMS je pripraveno ve verzi 0.1.526; odeslani ceka na potvrzeny rezim `live`.
 - NEZACATO - produkcni ostry import / planovani / notifikace.

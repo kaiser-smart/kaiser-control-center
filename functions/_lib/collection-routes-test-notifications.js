@@ -1,4 +1,4 @@
-import { sendCustomerMessage } from "./customer-messaging-service.js";
+import { customerMessagingStatus, sendCustomerMessage } from "./customer-messaging-service.js";
 import { sendCollectionRouteTestEmail } from "./notification-service.js";
 import { getCollectionDailyRoute } from "./collection-daily-routes-store.js";
 import {
@@ -99,6 +99,39 @@ function rowToItem(row) {
     createdAt: cleanString(row.created_at),
     updatedAt: cleanString(row.updated_at),
     payload: parseJson(row.payload_json, {})
+  };
+}
+
+function retrySummary(items = []) {
+  let smsFailedCount = 0;
+  let emailFailedCount = 0;
+  let retryableSmsCount = 0;
+  let retryableEmailCount = 0;
+
+  for (const item of items) {
+    if (item.smsStatus === "failed") {
+      smsFailedCount += 1;
+      if (!item.smsProviderId) retryableSmsCount += 1;
+    }
+    if (item.emailStatus === "failed") {
+      emailFailedCount += 1;
+      if (!item.emailProviderId) retryableEmailCount += 1;
+    }
+  }
+
+  const failedCount = smsFailedCount + emailFailedCount;
+  const retryableCount = retryableSmsCount + retryableEmailCount;
+  return {
+    failedCount,
+    smsFailedCount,
+    emailFailedCount,
+    retryableCount,
+    retryableSmsCount,
+    retryableEmailCount,
+    confirmation: retryableCount
+      ? `retry-test-notification-${retryableCount}-failed-channels`
+      : "",
+    actualExternalSend: retryableCount > 0
   };
 }
 
@@ -274,11 +307,175 @@ export async function getCollectionRoutesTestNotificationJob(env, user, jobId) {
   assertCollectionRoutesTestManager(user);
   const db = collectionRoutesTestDatabase(env, true);
   const job = rowToJob(await loadJobRow(db, jobId));
+  const items = await loadJobItems(db, job.id, 500);
   return {
     job,
-    items: await loadJobItems(db, job.id, 500),
+    items,
+    retry: retrySummary(items),
     apiStatus: "ready"
   };
+}
+
+export async function getLatestCollectionRoutesTestNotificationJob(env, user, runId) {
+  assertCollectionRoutesTestManager(user);
+  const normalizedRunId = cleanString(runId);
+  if (!normalizedRunId) {
+    throw new CollectionRoutesTestStoreError(
+      "Chybí ID testovací trasy.",
+      400,
+      "collection_routes_test_notification_run_required"
+    );
+  }
+  await getCollectionDailyRoute(env, user, normalizedRunId, { scope: "test" });
+  const db = collectionRoutesTestDatabase(env, true);
+  const row = await db.prepare(`
+    SELECT *
+    FROM collection_route_test_notification_jobs
+    WHERE run_id = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  `).bind(normalizedRunId).first();
+  if (!row) {
+    return { job: null, items: [], retry: retrySummary([]), apiStatus: "ready" };
+  }
+  return getCollectionRoutesTestNotificationJob(env, user, row.id);
+}
+
+function retryHistoryEntry(user, summary, retryableItems, retriedAt) {
+  const priorErrors = [];
+  for (const item of retryableItems) {
+    if (item.smsStatus === "failed" && !item.smsProviderId) {
+      priorErrors.push({ itemId: item.id, channel: "sms", error: cleanString(item.smsError).slice(0, 500) });
+    }
+    if (item.emailStatus === "failed" && !item.emailProviderId) {
+      priorErrors.push({ itemId: item.id, channel: "email", error: cleanString(item.emailError).slice(0, 500) });
+    }
+  }
+  return {
+    retriedAt,
+    actorUserId: cleanString(user?.id),
+    actorName: cleanString(user?.name || user?.email || user?.phone),
+    smsCount: summary.retryableSmsCount,
+    emailCount: summary.retryableEmailCount,
+    priorErrors: priorErrors.slice(0, 20)
+  };
+}
+
+function retryChannelStatements(db, jobId, channel, itemIds, updatedAt) {
+  const statusColumn = channel === "sms" ? "sms_status" : "email_status";
+  const tokenColumn = channel === "sms" ? "sms_claim_token" : "email_claim_token";
+  const providerColumn = channel === "sms" ? "sms_provider_id" : "email_provider_id";
+  const errorColumn = channel === "sms" ? "sms_error" : "email_error";
+  return chunks(itemIds, D1_MAX_BOUND_PARAMETERS - 2).map((itemIdChunk) => db.prepare(`
+    UPDATE collection_route_test_notification_items
+    SET ${statusColumn} = 'pending', ${tokenColumn} = '', ${errorColumn} = '', updated_at = ?
+    WHERE job_id = ?
+      AND ${statusColumn} = 'failed'
+      AND ${providerColumn} = ''
+      AND id IN (${itemIdChunk.map(() => "?").join(", ")})
+  `).bind(updatedAt, jobId, ...itemIdChunk));
+}
+
+export async function retryCollectionRoutesTestNotificationFailures(env, user, jobId, input = {}) {
+  assertCollectionRoutesTestManager(user);
+  const db = collectionRoutesTestDatabase(env, true);
+  const jobRow = await loadJobRow(db, jobId);
+  const job = rowToJob(jobRow);
+  const items = await loadJobItems(db, job.id, 500);
+  const summary = retrySummary(items);
+
+  if (job.pendingCount > 0) {
+    throw new CollectionRoutesTestStoreError(
+      "Odesílací úloha ještě obsahuje čekající zprávy. Nejdřív dokonči aktuální zpracování.",
+      409,
+      "collection_routes_test_notification_retry_in_progress"
+    );
+  }
+  if (!summary.retryableCount) {
+    throw new CollectionRoutesTestStoreError(
+      "Úloha nemá žádný bezpečně opakovatelný neúspěšný kanál.",
+      409,
+      "collection_routes_test_notification_retry_empty"
+    );
+  }
+  if (cleanString(input.confirmation) !== summary.confirmation) {
+    throw new CollectionRoutesTestStoreError(
+      `Opakování vyžaduje potvrzení ${summary.confirmation}.`,
+      400,
+      "collection_routes_test_notification_retry_confirmation_required"
+    );
+  }
+  if (
+    numberValue(input.expectedFailedCount, -1) !== summary.failedCount ||
+    numberValue(input.expectedRetryableCount, -1) !== summary.retryableCount
+  ) {
+    throw new CollectionRoutesTestStoreError(
+      "Počet neúspěšných zpráv se změnil. Nejdřív znovu načti stav úlohy.",
+      409,
+      "collection_routes_test_notification_retry_count_changed"
+    );
+  }
+  if (cleanString(input.expectedJobUpdatedAt) !== job.updatedAt) {
+    throw new CollectionRoutesTestStoreError(
+      "Stav odesílací úlohy se změnil. Nejdřív ho znovu načti.",
+      409,
+      "collection_routes_test_notification_retry_stale"
+    );
+  }
+
+  if (summary.retryableSmsCount > 0) {
+    const messagingStatus = customerMessagingStatus(env);
+    if (messagingStatus.mode !== "live" || !messagingStatus.twilioConfigured) {
+      throw new CollectionRoutesTestStoreError(
+        "Opakování SMS je zablokované: zákaznické SMS musí mít režim live a kompletní Twilio ENV.",
+        409,
+        "collection_routes_test_notification_sms_not_live"
+      );
+    }
+  }
+
+  const retryableItems = items.filter((item) =>
+    (item.smsStatus === "failed" && !item.smsProviderId) ||
+    (item.emailStatus === "failed" && !item.emailProviderId)
+  );
+  const smsItemIds = retryableItems
+    .filter((item) => item.smsStatus === "failed" && !item.smsProviderId)
+    .map((item) => item.id);
+  const emailItemIds = retryableItems
+    .filter((item) => item.emailStatus === "failed" && !item.emailProviderId)
+    .map((item) => item.id);
+  const updatedAt = nowIso();
+  const metadata = parseJson(jobRow.metadata_json, {});
+  const retryHistory = Array.isArray(metadata.retryHistory) ? metadata.retryHistory.slice(-19) : [];
+  retryHistory.push(retryHistoryEntry(user, summary, retryableItems, updatedAt));
+
+  await db.batch([
+    ...retryChannelStatements(db, job.id, "sms", smsItemIds, updatedAt),
+    ...retryChannelStatements(db, job.id, "email", emailItemIds, updatedAt),
+    db.prepare(`
+      UPDATE collection_route_test_notification_jobs
+      SET status = 'running',
+          sent_count = (
+            SELECT SUM(CASE WHEN sms_status = 'sent' THEN 1 ELSE 0 END) +
+                   SUM(CASE WHEN email_status = 'sent' THEN 1 ELSE 0 END)
+            FROM collection_route_test_notification_items WHERE job_id = ?
+          ),
+          failed_count = (
+            SELECT SUM(CASE WHEN sms_status = 'failed' THEN 1 ELSE 0 END) +
+                   SUM(CASE WHEN email_status = 'failed' THEN 1 ELSE 0 END)
+            FROM collection_route_test_notification_items WHERE job_id = ?
+          ),
+          pending_count = (
+            SELECT SUM(CASE WHEN sms_status IN ('pending', 'sending') THEN 1 ELSE 0 END) +
+                   SUM(CASE WHEN email_status IN ('pending', 'sending') THEN 1 ELSE 0 END)
+            FROM collection_route_test_notification_items WHERE job_id = ?
+          ),
+          metadata_json = ?, updated_at = ?, completed_at = NULL
+      WHERE id = ?
+    `).bind(job.id, job.id, job.id, jsonString({ ...metadata, retryHistory }), updatedAt, job.id)
+  ]);
+
+  return getCollectionRoutesTestNotificationJob(env, user, job.id);
 }
 
 async function claimChannel(db, itemId, channel) {
@@ -445,6 +642,7 @@ export const __test = {
   MAX_STOPS_PER_PROCESS,
   selectedStops,
   smsVariables,
+  retrySummary,
   rowToJob,
   rowToItem,
   itemInsertStatements

@@ -1,6 +1,8 @@
 # Svozove trasy - TEST Brno 500
 
-Stav: implementovano v kodu, pred prvnim produkcnim overenim.
+Stav: produkcni TEST sada a jedna trasa overeny; prvni e-mail odeslan, prvni SMS
+zustala zablokovana pred Twiliem kvuli chybejici komunikacni migraci a vypnutemu
+rezimu zakaznickych SMS.
 
 Aktualizace: 2026-07-12
 
@@ -71,6 +73,17 @@ Kazdy kanal se pred volanim poskytovatele atomicky oznaci jako `sending`. Pokud
 by worker spadl po prijeti zpravy poskytovatelem, polozka se automaticky
 neopakuje, aby nevznikla duplicitni zprava.
 
+Pokud kanal skonci jako `failed` bez provider ID, Manager/Admin muze po novem
+explicitnim potvrzeni vratit do fronty pouze tento konkretni kanal. Odeslany
+e-mail nebo SMS se stavem `sent` zustane nedotceny. Kanal s provider ID se
+automaticky neopakuje. Rozpracovana nebo castecna uloha se nacte z TEST D1 i po
+obnoveni stranky a UI v tomto stavu nenabidne zalozeni nove uplne davky.
+
+Opakovani SMS backend povoli jen pri kompletnim Twilio ENV a rezimu `live`.
+Migrace `0032_create_customer_messaging.sql` byla do hlavni produkcni D1
+aplikovana 2026-07-12; vytvorila tri prazdne komunikacni tabulky. Samotny prechod
+z rezimu `off` na `live` vyzaduje samostatne provozni potvrzeni.
+
 Neexistuje cron, worker ani queue, ktera by zpravy spustila automaticky.
 
 ## API
@@ -78,8 +91,10 @@ Neexistuje cron, worker ani queue, ktera by zpravy spustila automaticky.
 - `GET|POST /api/collection-routes/test-dataset`
 - `POST /api/collection-routes/test-notifications/preview`
 - `POST /api/collection-routes/test-notifications`
+- `GET /api/collection-routes/test-notifications?runId=:runId`
 - `GET /api/collection-routes/test-notifications/:jobId`
 - `POST /api/collection-routes/test-notifications/:jobId/process`
+- `POST /api/collection-routes/test-notifications/:jobId/retry-failures`
 - Stavajici denni trasy prijimaji `scope=test` v query nebo JSON body.
 
 ## Akceptacni kontrola
@@ -91,5 +106,8 @@ Neexistuje cron, worker ani queue, ktera by zpravy spustila automaticky.
 - TEST trasa nevytvori zadny beh v hlavni produkcni D1.
 - Dispecer, Ridic a Readonly nedostanou TEST data ani pres prime API.
 - Opakovane zpracovani dokoncene ulohy neodesle SMS ani e-mail podruhe.
-- Prvni produkcni smoke test smi odeslat pouze 1 SMS a 1 e-mail na chraneny
-  testovaci kontakt; cela trasa se pri nasazeni nespousti.
+- Castecna uloha s odeslanym e-mailem zopakuje jen failed SMS bez provider ID;
+  puvodni e-mailove provider ID zustane beze zmeny.
+- Prvni produkcni smoke test odeslal 1 e-mail na chraneny testovaci kontakt.
+  Opakovani jedine SMS ceka na samostatne potvrzeni rezimu `live`; cela trasa se
+  pri nasazeni nespousti.

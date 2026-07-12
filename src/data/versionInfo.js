@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.525"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.526"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: bezpečné opakování jediného neúspěšného kanálu",
+    text: "Částečně dokončená TEST odesílací úloha se po reloadu znovu načte a dovolí zopakovat jen neúspěšnou SMS nebo e-mail bez provider ID. Již odeslaný kanál zůstává nedotčený, nová úplná dávka je v částečném stavu zablokovaná a SMS se nepřipraví, dokud Twilio nemá režim live."
+  },
   {
     title: "Pohledávky: důkazní rozpad příchozích úhrad",
     text: "Kontrolní fronta odděluje přesný historický protiúčet, přesný název, konflikty variabilního symbolu, interní kandidáty a položky bez dostatečného důkazu. Jde pouze o read-only podklady k ručnímu potvrzení; automatické párování, ratingy i zákaznická komunikace zůstávají beze změny."

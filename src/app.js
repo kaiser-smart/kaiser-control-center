@@ -21063,12 +21063,26 @@ function collectionDailyRoutesList() {
   `;
 }
 
+function collectionRoutesTestNotificationRetryButtonLabel(retry = {}) {
+  const smsCount = Number(retry.retryableSmsCount || 0);
+  const emailCount = Number(retry.retryableEmailCount || 0);
+  if (smsCount === 1 && emailCount === 0) return "Opakovat pouze 1 neúspěšnou SMS";
+  if (emailCount === 1 && smsCount === 0) return "Opakovat pouze 1 neúspěšný e-mail";
+  return `Opakovat pouze ${smsCount + emailCount} neúspěšných zpráv`;
+}
+
 function collectionRoutesTestNotificationPanel(detail) {
   if (!collectionDailyRouteIsTestScope() || !detail?.run) return "";
   const stops = Array.isArray(detail.stops) ? detail.stops : [];
   const preview = collectionRoutesPilotState.testNotificationPreview;
-  const job = collectionRoutesPilotState.testNotificationJob?.job || null;
+  const jobResult = collectionRoutesPilotState.testNotificationJob;
+  const job = jobResult?.job || null;
+  const retry = jobResult?.retry || {};
   const pending = collectionRoutesPilotState.testNotificationPending;
+  const canPrepareNew = !job || job.status === "completed";
+  const canRetryFailures = job?.status === "partial" &&
+    !Number(job.pendingCount || 0) &&
+    Number(retry.retryableCount || 0) > 0;
   return `
     <section class="collection-routes-test-notifications" aria-labelledby="collection-routes-test-notifications-title">
       <header>
@@ -21081,10 +21095,12 @@ function collectionRoutesTestNotificationPanel(detail) {
       </header>
       ${collectionRoutesPilotState.testNotificationError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.testNotificationError)}</p>` : ""}
       ${collectionRoutesPilotState.testNotificationMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.testNotificationMessage)}</p>` : ""}
-      <div class="collection-routes-test-notification-actions">
-        <button class="secondary-link" type="button" data-collection-routes-test-notification-preview="one" ${!stops.length || pending ? "disabled" : ""}>Připravit 1 SMS + 1 e-mail</button>
-        <button class="secondary-link" type="button" data-collection-routes-test-notification-preview="all" ${!stops.length || pending ? "disabled" : ""}>Připravit zprávy pro celou trasu</button>
-      </div>
+      ${canPrepareNew ? `
+        <div class="collection-routes-test-notification-actions">
+          <button class="secondary-link" type="button" data-collection-routes-test-notification-preview="one" ${!stops.length || pending ? "disabled" : ""}>Připravit 1 SMS + 1 e-mail</button>
+          <button class="secondary-link" type="button" data-collection-routes-test-notification-preview="all" ${!stops.length || pending ? "disabled" : ""}>Připravit zprávy pro celou trasu</button>
+        </div>
+      ` : `<p class="collection-routes-test-notification-locked">Existuje rozpracovaná odesílací úloha. Novou úplnou dávku nelze připravit, dokud se tato úloha bezpečně neuzavře.</p>`}
       ${preview ? `
         <form class="collection-routes-test-notification-confirm" data-collection-routes-test-notification-confirm-form>
           <strong>Skutečně odejde ${escapeHtml(preview.smsCount)} SMS a ${escapeHtml(preview.emailCount)} e-mailů.</strong>
@@ -21097,7 +21113,17 @@ function collectionRoutesTestNotificationPanel(detail) {
         <div class="collection-routes-test-notification-job">
           <strong>Odesílací úloha: ${escapeHtml(job.status)}</strong>
           <span>Odesláno ${escapeHtml(job.sentCount)} · selhalo ${escapeHtml(job.failedCount)} · čeká ${escapeHtml(job.pendingCount)}</span>
+          ${Number(retry.failedCount || 0) ? `<span>Selhala ${escapeHtml(retry.smsFailedCount || 0)} SMS, ${escapeHtml(retry.emailFailedCount || 0)} e-mailů.</span>` : ""}
           ${job.pendingCount ? `<button class="secondary-link" type="button" data-collection-routes-test-notification-resume ${pending ? "disabled" : ""}>Pokračovat v odesílání</button>` : ""}
+          ${canRetryFailures ? `
+            <form class="collection-routes-test-notification-retry" data-collection-routes-test-notification-retry-form>
+              <strong>${escapeHtml(collectionRoutesTestNotificationRetryButtonLabel(retry))}</strong>
+              <span>K opakování se připraví jen kanály bez provider ID. Již odeslané zprávy, včetně e-mailu, zůstanou nedotčené.</span>
+              <label><input type="checkbox" name="confirmed" required> Potvrzuju skutečné opakování pouze ${escapeHtml(retry.retryableCount)} neúspěšných zpráv.</label>
+              <button class="primary-action" type="submit" ${pending ? "disabled" : ""}>${escapeHtml(collectionRoutesTestNotificationRetryButtonLabel(retry))}</button>
+            </form>
+          ` : ""}
+          ${job.status === "partial" && Number(retry.failedCount || 0) > Number(retry.retryableCount || 0) ? `<span class="module-feedback__error">Kanál s provider ID se z bezpečnostních důvodů automaticky neopakuje.</span>` : ""}
         </div>
       ` : ""}
     </section>
@@ -36517,6 +36543,23 @@ async function switchCollectionDailyRouteScope(scope) {
   await loadCollectionDailyRoutes({ force: true });
 }
 
+async function loadLatestCollectionRoutesTestNotificationJob(runId) {
+  const id = String(runId || "").trim();
+  if (!collectionDailyRouteIsTestScope() || !id) {
+    collectionRoutesPilotState.testNotificationJob = null;
+    return;
+  }
+  collectionRoutesPilotState.testNotificationPreview = null;
+  collectionRoutesPilotState.testNotificationJob = null;
+  collectionRoutesPilotState.testNotificationError = "";
+  try {
+    const result = await apiJson(`/api/collection-routes/test-notifications?runId=${encodeURIComponent(id)}`);
+    collectionRoutesPilotState.testNotificationJob = result?.job ? result : null;
+  } catch (error) {
+    collectionRoutesPilotState.testNotificationError = error.payload?.error || error.message || "Poslední testovací odesílací úlohu se nepodařilo načíst.";
+  }
+}
+
 async function prepareCollectionRoutesTestNotifications(mode) {
   const detail = collectionRoutesPilotState.dailyRouteDetail;
   if (!collectionDailyRouteIsTestScope() || !detail?.run || collectionRoutesPilotState.testNotificationPending) return;
@@ -36572,6 +36615,37 @@ async function processCollectionRoutesTestNotificationJob() {
       : `Odesílání skončilo: ${job?.sentCount || 0} odesláno, ${job?.failedCount || 0} selhalo.`;
   } catch (error) {
     collectionRoutesPilotState.testNotificationError = error.payload?.error || error.message || "Skutečné testovací zprávy se nepodařilo odeslat.";
+  } finally {
+    collectionRoutesPilotState.testNotificationPending = "";
+    render();
+  }
+}
+
+async function retryCollectionRoutesTestNotificationFailures() {
+  const jobResult = collectionRoutesPilotState.testNotificationJob;
+  const job = jobResult?.job;
+  const retry = jobResult?.retry;
+  if (!job?.id || !retry?.retryableCount || collectionRoutesPilotState.testNotificationPending) return;
+  collectionRoutesPilotState.testNotificationPending = "retry";
+  collectionRoutesPilotState.testNotificationError = "";
+  collectionRoutesPilotState.testNotificationMessage = "";
+  render();
+  try {
+    const result = await apiJson(`/api/collection-routes/test-notifications/${encodeURIComponent(job.id)}/retry-failures`, {
+      method: "POST",
+      body: JSON.stringify({
+        confirmation: retry.confirmation,
+        expectedFailedCount: retry.failedCount,
+        expectedRetryableCount: retry.retryableCount,
+        expectedJobUpdatedAt: job.updatedAt
+      })
+    });
+    collectionRoutesPilotState.testNotificationJob = result;
+    collectionRoutesPilotState.testNotificationMessage = `K opakování bylo připraveno pouze ${result.job?.pendingCount || 0} neúspěšných zpráv. Již odeslané kanály se neopakují.`;
+    collectionRoutesPilotState.testNotificationPending = "";
+    await processCollectionRoutesTestNotificationJob();
+  } catch (error) {
+    collectionRoutesPilotState.testNotificationError = error.payload?.error || error.message || "Neúspěšné testovací zprávy se nepodařilo bezpečně zopakovat.";
   } finally {
     collectionRoutesPilotState.testNotificationPending = "";
     render();
@@ -36640,6 +36714,11 @@ async function loadCollectionDailyRouteDetail(runId, options = {}) {
   try {
     const result = await apiJson(`/api/collection-routes/daily-routes/${encodeURIComponent(id)}${collectionDailyRouteScopeQuery()}`);
     applyCollectionDailyRouteDetail(result.route);
+    if (collectionDailyRouteIsTestScope()) {
+      await loadLatestCollectionRoutesTestNotificationJob(result.route?.run?.id);
+    } else {
+      collectionRoutesPilotState.testNotificationJob = null;
+    }
     collectionRoutesPilotState.dailyRouteError = "";
   } catch (error) {
     collectionRoutesPilotState.dailyRouteDetail = null;
@@ -45503,6 +45582,15 @@ document.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (collectionRoutesTestNotificationConfirmForm.elements.confirmed?.checked) {
       await createAndProcessCollectionRoutesTestNotificationJob();
+    }
+    return;
+  }
+
+  const collectionRoutesTestNotificationRetryForm = event.target.closest("[data-collection-routes-test-notification-retry-form]");
+  if (collectionRoutesTestNotificationRetryForm) {
+    event.preventDefault();
+    if (collectionRoutesTestNotificationRetryForm.elements.confirmed?.checked) {
+      await retryCollectionRoutesTestNotificationFailures();
     }
     return;
   }

@@ -15,8 +15,10 @@ import {
 } from "../functions/_lib/collection-daily-routes-store.js";
 import {
   createCollectionRoutesTestNotificationJob,
+  getLatestCollectionRoutesTestNotificationJob,
   previewCollectionRoutesTestNotifications,
-  processCollectionRoutesTestNotificationJob
+  processCollectionRoutesTestNotificationJob,
+  retryCollectionRoutesTestNotificationFailures
 } from "../functions/_lib/collection-routes-test-notifications.js";
 
 class D1Statement {
@@ -95,7 +97,11 @@ function environment(d1) {
   return {
     COLLECTION_ROUTES_TEST_DB: d1,
     COLLECTION_ROUTES_TEST_SMS_TO: "+420600000000",
-    COLLECTION_ROUTES_TEST_EMAIL_TO: "route-test@example.invalid"
+    COLLECTION_ROUTES_TEST_EMAIL_TO: "route-test@example.invalid",
+    KSO_CUSTOMER_MESSAGING_MODE: "live",
+    TWILIO_ACCOUNT_SID: "AC-TEST",
+    TWILIO_AUTH_TOKEN: "test-token",
+    TWILIO_MESSAGING_SERVICE_SID: "MG-TEST"
   };
 }
 
@@ -186,16 +192,18 @@ const manager = {
   });
   assert.equal(repeatedJobResult.job.id, jobResult.job.id);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_notification_jobs").get().count, 1);
+  const latestJobResult = await getLatestCollectionRoutesTestNotificationJob(env, manager, route.run.id);
+  assert.equal(latestJobResult.job.id, jobResult.job.id, "Reload trasy musí obnovit poslední odesílací úlohu.");
   let smsCalls = 0;
   let emailCalls = 0;
-  const processed = await processCollectionRoutesTestNotificationJob(env, manager, jobResult.job.id, {
+  const firstProcessed = await processCollectionRoutesTestNotificationJob(env, manager, jobResult.job.id, {
     limit: 1,
     senders: {
       sms: async (_env, context) => {
         smsCalls += 1;
         assert.equal(context.recipient.phone, env.COLLECTION_ROUTES_TEST_SMS_TO);
         assert.equal(context.stop.id, route.stops[0].id);
-        return { sent: true, status: "accepted", twilioMessageSid: "SM-TEST-ONE" };
+        return { sent: false, status: "failed", errorMessage: "Twilio prerequisite missing" };
       },
       email: async (_env, context) => {
         emailCalls += 1;
@@ -205,13 +213,84 @@ const manager = {
       }
     }
   });
+  assert.equal(firstProcessed.job.status, "partial");
+  assert.equal(firstProcessed.job.sentCount, 1);
+  assert.equal(firstProcessed.job.failedCount, 1);
+  assert.equal(firstProcessed.job.pendingCount, 0);
+  assert.equal(firstProcessed.items[0].smsProviderId, "");
+  assert.equal(firstProcessed.items[0].smsStatus, "failed");
+  assert.equal(firstProcessed.items[0].emailProviderId, "SG-TEST-ONE");
+  assert.equal(firstProcessed.items[0].emailStatus, "sent");
+  assert.equal(firstProcessed.retry.smsFailedCount, 1);
+  assert.equal(firstProcessed.retry.emailFailedCount, 0);
+  assert.equal(firstProcessed.retry.retryableSmsCount, 1);
+  assert.equal(firstProcessed.retry.retryableCount, 1);
+  assert.equal(smsCalls, 1);
+  assert.equal(emailCalls, 1);
+
+  await assert.rejects(
+    retryCollectionRoutesTestNotificationFailures(env, manager, jobResult.job.id, {
+      confirmation: "wrong",
+      expectedFailedCount: 1,
+      expectedRetryableCount: 1,
+      expectedJobUpdatedAt: firstProcessed.job.updatedAt
+    }),
+    (error) => error?.code === "collection_routes_test_notification_retry_confirmation_required"
+  );
+  await assert.rejects(
+    retryCollectionRoutesTestNotificationFailures(
+      { ...env, KSO_CUSTOMER_MESSAGING_MODE: "off" },
+      manager,
+      jobResult.job.id,
+      {
+        confirmation: firstProcessed.retry.confirmation,
+        expectedFailedCount: firstProcessed.retry.failedCount,
+        expectedRetryableCount: firstProcessed.retry.retryableCount,
+        expectedJobUpdatedAt: firstProcessed.job.updatedAt
+      }
+    ),
+    (error) => error?.code === "collection_routes_test_notification_sms_not_live"
+  );
+
+  const retryPrepared = await retryCollectionRoutesTestNotificationFailures(env, manager, jobResult.job.id, {
+    confirmation: firstProcessed.retry.confirmation,
+    expectedFailedCount: firstProcessed.retry.failedCount,
+    expectedRetryableCount: firstProcessed.retry.retryableCount,
+    expectedJobUpdatedAt: firstProcessed.job.updatedAt
+  });
+  assert.equal(retryPrepared.job.status, "running");
+  assert.equal(retryPrepared.job.sentCount, 1);
+  assert.equal(retryPrepared.job.failedCount, 0);
+  assert.equal(retryPrepared.job.pendingCount, 1);
+  assert.equal(retryPrepared.items[0].smsStatus, "pending");
+  assert.equal(retryPrepared.items[0].emailStatus, "sent");
+  assert.equal(retryPrepared.items[0].emailProviderId, "SG-TEST-ONE");
+  assert.equal(retryPrepared.job.metadata.retryHistory.length, 1);
+  assert.equal(retryPrepared.job.metadata.retryHistory[0].smsCount, 1);
+  assert.equal(retryPrepared.job.metadata.retryHistory[0].emailCount, 0);
+  assert.equal(retryPrepared.job.metadata.retryHistory[0].priorErrors[0].error, "Twilio prerequisite missing");
+
+  const processed = await processCollectionRoutesTestNotificationJob(env, manager, jobResult.job.id, {
+    limit: 1,
+    senders: {
+      sms: async () => {
+        smsCalls += 1;
+        return { sent: true, status: "accepted", twilioMessageSid: "SM-TEST-ONE" };
+      },
+      email: async () => {
+        emailCalls += 1;
+        return { status: "sent", providerMessageId: "SHOULD-NOT-SEND" };
+      }
+    }
+  });
   assert.equal(processed.job.status, "completed");
   assert.equal(processed.job.sentCount, 2);
   assert.equal(processed.job.failedCount, 0);
+  assert.equal(processed.job.pendingCount, 0);
   assert.equal(processed.items[0].smsProviderId, "SM-TEST-ONE");
-  assert.equal(processed.items[0].emailProviderId, "SG-TEST-ONE");
-  assert.equal(smsCalls, 1);
-  assert.equal(emailCalls, 1);
+  assert.equal(processed.items[0].emailProviderId, "SG-TEST-ONE", "Odeslaný e-mail musí zachovat původní provider ID.");
+  assert.equal(smsCalls, 2, "Neúspěšná SMS se smí zopakovat právě jednou.");
+  assert.equal(emailCalls, 1, "Odeslaný e-mail se při opakování SMS nesmí zavolat znovu.");
 
   await processCollectionRoutesTestNotificationJob(env, manager, jobResult.job.id, {
     limit: 1,
@@ -220,8 +299,17 @@ const manager = {
       email: async () => { emailCalls += 1; return { status: "sent" }; }
     }
   });
-  assert.equal(smsCalls, 1, "Dokončená úloha nesmí SMS odeslat znovu.");
+  assert.equal(smsCalls, 2, "Dokončená úloha nesmí SMS odeslat znovu.");
   assert.equal(emailCalls, 1, "Dokončená úloha nesmí e-mail odeslat znovu.");
+  await assert.rejects(
+    retryCollectionRoutesTestNotificationFailures(env, manager, jobResult.job.id, {
+      confirmation: firstProcessed.retry.confirmation,
+      expectedFailedCount: 1,
+      expectedRetryableCount: 1,
+      expectedJobUpdatedAt: firstProcessed.job.updatedAt
+    }),
+    (error) => error?.code === "collection_routes_test_notification_retry_empty"
+  );
   assert.equal(sqlite.prepare(`
     SELECT COUNT(*) AS count
     FROM collection_import_rows

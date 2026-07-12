@@ -15,6 +15,10 @@ for (const marker of [
   "Četnost 1x30 je v sadě",
   "data-collection-routes-test-notification-confirm-form",
   "Potvrzuju skutečné odeslání",
+  "data-collection-routes-test-notification-retry-form",
+  "Opakovat pouze 1 neúspěšnou SMS",
+  "Již odeslané zprávy, včetně e-mailu, zůstanou nedotčené.",
+  "Novou úplnou dávku nelze připravit",
   "collectionRoutesCanUseTestDataset"
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
@@ -40,6 +44,18 @@ assert.ok(
   "Skutečné odeslání musí potvrdit přesný počet zpráv a při opakování použít stejný klíč."
 );
 assert.ok(
+  appSource.includes("expectedFailedCount: retry.failedCount") &&
+    appSource.includes("expectedRetryableCount: retry.retryableCount") &&
+    appSource.includes("expectedJobUpdatedAt: job.updatedAt") &&
+    appSource.includes("confirmation: retry.confirmation"),
+  "Opakování musí potvrdit přesný počet neúspěšných a bezpečně opakovatelných kanálů."
+);
+assert.ok(
+  appSource.includes("/api/collection-routes/test-notifications?runId=") &&
+    appSource.includes('const canPrepareNew = !job || job.status === "completed"'),
+  "Reload musí obnovit rozpracovanou úlohu a částečný stav nesmí nabídnout novou úplnou dávku."
+);
+assert.ok(
   !appSource.includes("COLLECTION_ROUTES_TEST_SMS_TO") && !appSource.includes("COLLECTION_ROUTES_TEST_EMAIL_TO"),
   "Chráněné příjemce nesmí obsahovat frontendový zdroj."
 );
@@ -48,6 +64,7 @@ for (const marker of [
   ".collection-routes-test-dataset",
   ".collection-routes-test-notifications",
   ".collection-routes-test-badge",
+  ".collection-routes-test-notification-retry",
   "@media (max-width: 640px)"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
