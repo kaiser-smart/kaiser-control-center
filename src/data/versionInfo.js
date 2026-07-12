@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.526"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.527"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: jednoduchý dispečerský pracovní tok",
+    text: "Hlavní záložka ukazuje denní trasy, vytvoření nové trasy a jeden jasný další krok. Detail načte prvních 10 zastávek s hledáním; tisk, PDF, offline balíček a zdrojový Vistos přehled jsou pod Dalšími možnostmi. TEST Brno 500 včetně skutečných testovacích zpráv je oddělený ve Správě pro Management a Admin."
+  },
   {
     title: "Svozové trasy: bezpečné opakování jediného neúspěšného kanálu",
     text: "Částečně dokončená TEST odesílací úloha se po reloadu znovu načte a dovolí zopakovat jen neúspěšnou SMS nebo e-mail bez provider ID. Již odeslaný kanál zůstává nedotčený, nová úplná dávka je v částečném stavu zablokovaná a SMS se nepřipraví, dokud Twilio nemá režim live."

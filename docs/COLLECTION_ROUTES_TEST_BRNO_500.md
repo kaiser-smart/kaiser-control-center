@@ -1,8 +1,8 @@
 # Svozove trasy - TEST Brno 500
 
 Stav: produkcni TEST sada a jedna trasa overeny; prvni e-mail odeslan, prvni SMS
-zustala zablokovana pred Twiliem kvuli chybejici komunikacni migraci a vypnutemu
-rezimu zakaznickych SMS.
+selhala pred Twiliem. Komunikacni migrace je aplikovana a rezim SMS je `live`,
+ale bezpecne opakovani jedine failed SMS zatim nebylo rucne spustene.
 
 Aktualizace: 2026-07-12
 
@@ -14,6 +14,10 @@ odesilaci ulohy smichaly s Vistosem a hlavni produkcni D1.
 
 TEST sada je viditelna pouze aktivnim uzivatelum s roli `management` nebo
 `admin`, kteri maji opravneni `collection-routes:manage`.
+
+V rozhrani je cela TEST sada, testovaci trasy i skutecne testovaci zpravy pouze
+v zalozce `Sprava`. Hlavni zalozka `Dnesni trasy` se pri navratu vzdy prepne na
+ostra data a TEST obsah s nimi nemicha.
 
 ## Data
 
@@ -81,8 +85,9 @@ obnoveni stranky a UI v tomto stavu nenabidne zalozeni nove uplne davky.
 
 Opakovani SMS backend povoli jen pri kompletnim Twilio ENV a rezimu `live`.
 Migrace `0032_create_customer_messaging.sql` byla do hlavni produkcni D1
-aplikovana 2026-07-12; vytvorila tri prazdne komunikacni tabulky. Samotny prechod
-z rezimu `off` na `live` vyzaduje samostatne provozni potvrzeni.
+aplikovana 2026-07-12; vytvorila tri komunikacni tabulky. Prechod do rezimu
+`live` byl samostatne potvrzeny a nastaveny. Samotne opakovani failed SMS zustava
+samostatnou rucne potvrzovanou akci a tato UI uprava ho nespousti.
 
 Neexistuje cron, worker ani queue, ktera by zpravy spustila automaticky.
 

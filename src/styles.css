@@ -36833,6 +36833,92 @@ body:has(.ds-plus-page) {
   color: var(--ink);
 }
 
+.collection-routes-dispatcher-head {
+  align-items: center;
+}
+
+.collection-routes-dispatcher-head .secondary-link,
+.collection-daily-route-create-toggle {
+  flex: 0 0 auto;
+}
+
+.collection-daily-route-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collection-daily-route-overview article {
+  display: grid;
+  gap: 3px;
+  min-height: 74px;
+  align-content: center;
+  padding: 11px 13px;
+  border: 1px solid rgba(66, 80, 74, 0.11);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.collection-daily-route-overview article.is-active {
+  border-color: rgba(117, 189, 37, 0.3);
+  background: #f3faec;
+}
+
+.collection-daily-route-overview article.is-warning {
+  border-color: rgba(190, 126, 25, 0.28);
+  background: #fff7e8;
+}
+
+.collection-daily-route-overview span {
+  color: var(--steel);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.collection-daily-route-overview strong {
+  color: var(--ink);
+  font-size: 1.4rem;
+}
+
+.collection-daily-route-create-panel {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid rgba(117, 189, 37, 0.3);
+  border-radius: 13px;
+  background: #f7fbf3;
+}
+
+.collection-daily-route-create-panel > header,
+.collection-routes-dispatcher-tools > header,
+.collection-routes-dispatcher-source-status {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.collection-daily-route-create-panel > header div,
+.collection-routes-dispatcher-tools > header div {
+  display: grid;
+  gap: 2px;
+}
+
+.collection-daily-route-create-panel > header span,
+.collection-routes-dispatcher-tools > header span:first-child {
+  color: #467d1c;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.collection-daily-route-create-panel > header small,
+.collection-routes-dispatcher-source-status {
+  color: var(--steel);
+  font-weight: 700;
+}
+
 .collection-daily-route-form {
   display: grid;
   grid-template-columns: minmax(155px, 0.8fr) minmax(190px, 1fr) minmax(170px, 1fr) auto;
@@ -37021,6 +37107,22 @@ body:has(.ds-plus-page) {
   font-weight: 700;
 }
 
+.collection-daily-route-card__action {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(66, 80, 74, 0.09);
+  color: #467d1c;
+  font-size: 0.82rem;
+}
+
+.collection-daily-route-card.is-selected .collection-daily-route-card__action {
+  color: #315f12;
+}
+
 .collection-daily-route-status {
   display: inline-flex;
   width: fit-content;
@@ -37055,6 +37157,126 @@ body:has(.ds-plus-page) {
   overflow-x: auto;
   border: 1px solid rgba(66, 80, 74, 0.1);
   border-radius: 10px;
+}
+
+.collection-daily-route-settings {
+  border: 1px solid rgba(66, 80, 74, 0.11);
+  border-radius: 10px;
+  background: #fbfcfa;
+}
+
+.collection-daily-route-settings summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 13px;
+  color: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.collection-daily-route-settings summary small {
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-daily-route-settings .collection-daily-route-assign,
+.collection-daily-route-settings > .secondary-link {
+  margin: 0 13px 13px;
+}
+
+.collection-daily-route-next-step {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  border: 1px solid rgba(117, 189, 37, 0.32);
+  border-radius: 12px;
+  background: #f1f9e9;
+}
+
+.collection-daily-route-next-step > div {
+  display: grid;
+  gap: 3px;
+}
+
+.collection-daily-route-next-step span {
+  color: #467d1c;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.collection-daily-route-next-step small {
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-daily-route-stops-head {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+}
+
+.collection-daily-route-stops-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.collection-daily-route-stops-head > div span {
+  color: var(--steel);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.collection-daily-route-stops-head > div strong {
+  color: var(--ink);
+  font-size: 1.3rem;
+}
+
+.collection-daily-route-stops-head label {
+  width: min(420px, 100%);
+}
+
+.collection-daily-route-stops-head input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid rgba(66, 80, 74, 0.19);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+}
+
+.collection-routes-dispatcher-tools {
+  display: grid;
+  gap: 13px;
+  margin-top: 2px;
+  padding: 16px;
+  border: 1px solid rgba(66, 80, 74, 0.14);
+  border-radius: 14px;
+  background: #f7f8f7;
+}
+
+.collection-routes-dispatcher-source-status {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.collection-routes-dispatcher-source-status p {
+  margin: 0;
+}
+
+.collection-routes-internal-group--test {
+  border-color: rgba(169, 32, 32, 0.25);
 }
 
 .collection-daily-route-pagination {
@@ -37518,6 +37740,10 @@ body:has(.ds-plus-page) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .collection-daily-route-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .collection-daily-route-audit li {
     grid-template-columns: 1fr;
     gap: 3px;
@@ -37541,7 +37767,12 @@ body:has(.ds-plus-page) {
   .collection-daily-route-detail > header,
   .collection-daily-driver-route > header,
   .collection-routes-test-dataset > header,
-  .collection-routes-test-notifications > header {
+  .collection-routes-test-notifications > header,
+  .collection-daily-route-create-panel > header,
+  .collection-routes-dispatcher-tools > header,
+  .collection-routes-dispatcher-source-status,
+  .collection-daily-route-next-step,
+  .collection-daily-route-stops-head {
     display: grid;
   }
 
@@ -37554,8 +37785,24 @@ body:has(.ds-plus-page) {
   .collection-daily-route-form button,
   .collection-daily-route-actions .primary-action,
   .collection-daily-route-actions .secondary-link,
-  .collection-daily-route-assign button {
+  .collection-daily-route-assign button,
+  .collection-daily-route-create-toggle,
+  .collection-routes-dispatcher-head .secondary-link,
+  .collection-daily-route-next-step .primary-action {
     width: 100%;
+  }
+
+  .collection-daily-route-create-panel,
+  .collection-routes-dispatcher-tools {
+    padding: 12px;
+  }
+
+  .collection-daily-route-stops-head label {
+    width: 100%;
+  }
+
+  .collection-daily-route-settings summary {
+    align-items: flex-start;
   }
 
   .collection-daily-route-pagination {
