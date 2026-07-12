@@ -288,7 +288,7 @@ async function applyRows(db, rows, fingerprint, user) {
           )
           SELECT ?, 'receivable_invoice', id, customer_id, 'payment_state_reconciled', ?, ?, ?, ?
           FROM receivable_invoices
-          WHERE id = ? AND status = ? AND paid_amount = ? AND open_amount = ?
+          WHERE id = ? AND status = ? AND ABS(paid_amount - ?) <= 0.01 AND ABS(open_amount - ?) <= 0.01
             AND COALESCE(paid_date, '') = ?
         `).bind(
           randomId("receivable-audit"),
@@ -305,7 +305,7 @@ async function applyRows(db, rows, fingerprint, user) {
         db.prepare(`
           UPDATE receivable_invoices
           SET paid_amount = ?, open_amount = ?, status = ?, paid_date = NULLIF(?, ''), updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND status = ? AND paid_amount = ? AND open_amount = ?
+          WHERE id = ? AND status = ? AND ABS(paid_amount - ?) <= 0.01 AND ABS(open_amount - ?) <= 0.01
             AND COALESCE(paid_date, '') = ?
         `).bind(
           row.after.paidAmount,

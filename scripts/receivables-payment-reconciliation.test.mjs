@@ -102,7 +102,7 @@ sqlite.prepare(`
   INSERT INTO receivable_invoices (
     id, invoice_number, variable_symbol, customer_id, total_amount, paid_amount, open_amount,
     currency, status, data_quality_flags_json
-  ) VALUES ('invoice-1', '26010001', '26010001', 'customer-1', 10000, 0, 10000,
+  ) VALUES ('invoice-1', '26010001', '26010001', 'customer-1', 10000, 0, 10000.0000000000007,
     'CZK', 'unpaid', '["INVOICE_AMOUNT_MISMATCH","MISSING_REMAINING_AMOUNT"]')
 `).run();
 sqlite.prepare(`
