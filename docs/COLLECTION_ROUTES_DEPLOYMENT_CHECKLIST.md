@@ -30,6 +30,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Stanoviste
 
+- HOTOVO - oddelena sada TEST Brno 500 obsahuje 500 jedinecnych verejnych adresnich bodu Brna s GPS; zadny radek se nezapisuje do Vistosu ani hlavni D1.
 - ROZPRACOVANO - preview uklada stanoviste do pilotnich tabulek.
 - ROZPRACOVANO - zalozka Stanoviste ukazuje radkovy read-only seznam z Vistos Komunal exportu; bez Excel pracovnich textu, bez zapisu do Vistosu a bez ostrych tras.
 - ROZPRACOVANO - zalozka Stanoviste nacita Vistos read-only data automaticky bez rucniho refresh workflow pro bezne uzivatele.
@@ -39,18 +40,21 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Nadoby
 
+- HOTOVO - TEST Brno 500 pouziva vyhradne schvalene objemy 120, 240 a 1100 l.
 - ROZPRACOVANO - preview se pokousi odvodit objem a pocet z produktu/polozky.
 - ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici nadoby ve zdrojovych 13 Excelech.
 - BLOKOVANO - presne strukturovane pole nadoby musi byt potvrzene na datech.
 
 ## Cetnosti
 
+- HOTOVO - TEST Brno 500 obsahuje vsechny schvalene cetnosti `1x7`, `2x7`, `3x7`, `5x7`, `1x14`, `1x30`; `1x30` denni planovac bez konkretniho data zamerne vyradi.
 - ROZPRACOVANO - preview odvozuje `1x7`, `2x7`, `3x7`, `5x7`, `1x14`, `1x30`.
 - ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici frekvenci ve zdrojovych 13 Excelech.
 - BLOKOVANO - rozpor PAPIR `1x30` vs. "1x tydne" musi potvrdit Radim/Martin.
 
 ## Kontakty
 
+- HOTOVO - synteticke firmy TEST maji kontakty `RadimN TestN`; skutecny telefon a e-mail jsou jednotne serverove cile, nehodnoty ve frontendovem kodu.
 - BLOKOVANO - presna API vazba kontaktu neni potvrzena.
 - NEZACATO - import kontaktu pro notifikace.
 
@@ -72,6 +76,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Denni trasy
 
+- HOTOVO - Management/Admin muze prepnout denni planovac do `TEST Brno 500`; behy a zastavky se ukladaji vyhradne v samostatne TEST D1.
 - HOTOVO - migrace 0038 a chranene API ukladaji nemenny denni beh, kopii zastavek, vozidlo, ridice, stav a audit udalosti.
 - HOTOVO - dispecer muze navrh overit, ulozit, priradit ridice, potvrdit, zahajit, dokoncit a znovu otevrit; hotovou/problemovou zastavku muze vratit do planu.
 - HOTOVO - stejny zdrojovy radek nelze zaradit dvakrat ve stejny den a pro jeden den/vuz muze existovat jen jedna trasa.
@@ -95,7 +100,9 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Notifikace
 
-- NEZACATO - zadne SMS ani e-maily.
+- HOTOVO - pouze pro TEST Brno 500 existuje rucne potvrzena idempotentni uloha skutecnych SMS a e-mailu na jeden chraneny kontakt; zalozeni dat ani trasy nic neposila.
+- ROZPRACOVANO - pred prvnim produkcnim overenim se posle presne 1 SMS a 1 e-mail, zkontroluje provider ID a audit; cela trasa se nespousti.
+- NEZACATO - ostre zakaznicke SMS a e-maily podle kontaktu z Vistosu.
 - NEZACATO - zadne temporary tracking linky.
 
 ## Evidence odpadu
@@ -118,6 +125,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 ## Automatizace
 
 - NEZACATO - pro Trasy svozu zatim zadny cron/worker/queue.
+- HOTOVO - TEST odesilani je pouze rucni backendova uloha po nejvyse 5 zastavkach na volani; zadny cloudovy casovac ji nemuze spustit.
 - NEZACATO - pred ostrou automatizaci musi existovat cloud runner, dedupe a audit.
 - HOTOVO - Faze 2D-A byla samostatne potvrzena; D1/API/opravneni/audit jsou implementovane bez cronu, workeru a queue.
 
@@ -127,4 +135,5 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - OVERENO - Faze 1E read-only import 13 Excelu a Vistos match byly overeny na produkci pro batch z 2026-07-02.
 - OVERENO - Faze 2D-A, migrace 0038 a verze 0.1.519 byly 2026-07-12 overeny v produkci: prihlaseny dispecersky pohled, prazdny vychozi stav, ochrana API a responzivita desktop/tablet/mobil; po overeni zustalo 0 tras, 0 zastavek a 0 udalosti.
 - NEZACATO - produkcni overeni Faze 2D-B a verze 0.1.520.
+- NEZACATO - produkcni nasazeni a overeni TEST Brno 500 ve verzi 0.1.524, samostatne TEST D1 a presne 1 SMS + 1 e-mail.
 - NEZACATO - produkcni ostry import / planovani / notifikace.

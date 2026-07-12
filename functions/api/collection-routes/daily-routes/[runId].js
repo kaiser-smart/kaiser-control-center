@@ -12,7 +12,10 @@ export async function onRequestGet({ request, env, params }) {
   const user = await currentUser(env, request);
   if (!user) return json({ error: "Nepřihlášeno." }, 401);
   try {
-    const route = await getCollectionDailyRoute(env, user, collectionDailyRouteRunId(request, params));
+    const url = new URL(request.url);
+    const route = await getCollectionDailyRoute(env, user, collectionDailyRouteRunId(request, params), {
+      scope: url.searchParams.get("scope")
+    });
     return json({ route, apiStatus: "ready" });
   } catch (error) {
     return collectionDailyRoutesErrorResponse(error, "Denní trasu se teď nepodařilo načíst.");

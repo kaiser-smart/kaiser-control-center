@@ -1438,6 +1438,57 @@ export async function sendMedicalExamReminders(env, exams) {
   return results;
 }
 
+export async function sendCollectionRouteTestEmail(env, {
+  to,
+  run = {},
+  stop = {},
+  dispatchItemId = ""
+} = {}) {
+  const customerName = cleanString(stop.customerName || "Testovací zákazník");
+  const stationName = cleanString(stop.stationName || "Testovací stanoviště");
+  const address = cleanString(stop.addressText || "Brno");
+  const routeDate = cleanString(run.routeDate || "neuvedeno");
+  const vehicle = cleanString(run.vehicleLabel || run.vehicleRegistration || run.vehicleCode || "neuvedeno");
+  const waste = cleanString(stop.wasteType || "neuvedeno");
+  const container = stop.containerVolume
+    ? `${Number(stop.containerCount || 1)}× ${Number(stop.containerVolume)} l`
+    : "neuvedeno";
+  const subject = `[TEST SVOZ] ${customerName} · ${routeDate}`;
+  const messagePreview = `[TEST SVOZ] ${customerName}, ${stationName}, ${address}, ${waste}, ${container}.`;
+  const html = `
+    <!doctype html>
+    <html lang="cs">
+      <head><meta charset="utf-8"><title>${htmlEscape(subject)}</title></head>
+      <body style="font-family:Arial,sans-serif;color:#1f2921;line-height:1.5;">
+        <main style="max-width:640px;margin:0 auto;padding:24px;">
+          <p style="display:inline-block;margin:0 0 20px;padding:6px 10px;border-radius:999px;background:#a92020;color:#fff;font-weight:700;">TESTOVACÍ ZPRÁVA</p>
+          <h1 style="font-size:24px;margin:0 0 16px;">Test svozové trasy</h1>
+          <p>Tato zpráva vznikla v oddělené sadě TEST Brno 500. Nejde o skutečného zákazníka ani skutečný svoz.</p>
+          <dl>
+            <dt style="font-weight:700;">Firma</dt><dd>${htmlEscape(customerName)}</dd>
+            <dt style="font-weight:700;">Stanoviště</dt><dd>${htmlEscape(stationName)}</dd>
+            <dt style="font-weight:700;">Adresa</dt><dd>${htmlEscape(address)}</dd>
+            <dt style="font-weight:700;">Datum a vůz</dt><dd>${htmlEscape(routeDate)} · ${htmlEscape(vehicle)}</dd>
+            <dt style="font-weight:700;">Odpad a nádoba</dt><dd>${htmlEscape(waste)} · ${htmlEscape(container)}</dd>
+          </dl>
+        </main>
+      </body>
+    </html>
+  `;
+  return sendEmail(env, {
+    type: "collection_route_test_email",
+    to: cleanString(to),
+    subject,
+    html,
+    relatedEntityId: cleanString(dispatchItemId || stop.id),
+    recipientName: "Radim · TEST Brno 500",
+    fromName: "Kaiser servis · TEST SVOZ",
+    moduleId: "collection-routes",
+    relatedEntityType: "collection_route_test_notification",
+    messagePreview
+  });
+}
+
 export const __test = {
   emailRecipients,
   buildDriverPartOrderEmailPreview,

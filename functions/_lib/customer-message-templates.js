@@ -27,6 +27,12 @@ export const CUSTOMER_MESSAGE_TEMPLATES = {
     internalOnly: true,
     body: "Kaiser servis: {message}"
   },
+  collection_route_test: {
+    label: "TEST svozové trasy",
+    category: "transactional",
+    internalOnly: true,
+    body: "[TEST SVOZ] {company}; {station}; {date}; {waste} {container}. Nejde o skutečný svoz."
+  },
   missing_information: {
     label: "Doplnění údajů",
     category: "transactional",

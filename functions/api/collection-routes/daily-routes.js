@@ -6,15 +6,16 @@ import {
 } from "../../_lib/collection-daily-routes-store.js";
 
 export async function onRequestGet({ request, env }) {
-  const { response } = await requireUserPermission(env, request, "collection-routes", "manage");
+  const { user, response } = await requireUserPermission(env, request, "collection-routes", "manage");
   if (response) return response;
   try {
     const url = new URL(request.url);
     const routes = await listCollectionDailyRoutes(env, {
       status: url.searchParams.get("status"),
       routeDate: url.searchParams.get("routeDate"),
-      limit: url.searchParams.get("limit")
-    });
+      limit: url.searchParams.get("limit"),
+      scope: url.searchParams.get("scope")
+    }, user);
     return json({ routes, apiStatus: "ready" });
   } catch (error) {
     return collectionDailyRoutesErrorResponse(error, "Seznam denních tras se teď nepodařilo načíst.");

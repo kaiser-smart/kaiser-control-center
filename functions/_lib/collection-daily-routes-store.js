@@ -1,8 +1,12 @@
 import { getUsers } from "./auth.js";
 import { getLatestCollectionRoutesVistosSnapshot } from "./collection-routes-store.js";
+import { getCollectionRoutesTestSnapshot } from "./collection-routes-test-store.js";
 import { hasPermission, isUserActive, normalizeRole } from "../../src/permissions.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
+const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
+export const COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION = "production";
+export const COLLECTION_DAILY_ROUTE_SCOPE_TEST = "test";
 const ROUTE_STATUSES = new Set(["draft", "confirmed", "active", "completed"]);
 const STOP_ACTIONS = new Set(["done", "problem", "dump", "break", "reset"]);
 const D1_MAX_BOUND_PARAMETERS = 100;
@@ -109,16 +113,57 @@ function normalizeText(value) {
     .trim();
 }
 
-function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+export function collectionDailyRouteScope(value) {
+  const scope = cleanString(value).toLowerCase();
+  if (!scope || scope === COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION) {
+    return COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION;
+  }
+  if (scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST) {
+    return COLLECTION_DAILY_ROUTE_SCOPE_TEST;
+  }
+  throw new CollectionDailyRoutesError(
+    "Neplatný datový režim denní trasy.",
+    400,
+    "collection_daily_route_scope_invalid"
+  );
+}
+
+function assertScopeAccess(user, scope) {
+  if (scope !== COLLECTION_DAILY_ROUTE_SCOPE_TEST) return;
+  const role = normalizeRole(user?.role);
+  if (!user || !["admin", "management"].includes(role)) {
+    throw new CollectionDailyRoutesError(
+      "Testovací denní trasy jsou dostupné pouze roli Management a Admin.",
+      403,
+      "collection_daily_route_test_forbidden"
+    );
+  }
+}
+
+function database(env, required = false, scopeValue = COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION) {
+  const scope = collectionDailyRouteScope(scopeValue);
+  const binding = scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST ? TEST_DB_BINDING : DB_BINDING;
+  const db = env?.[binding] || null;
   if (!db && required) {
     throw new CollectionDailyRoutesError(
-      "Provozní úložiště denních Svozových tras není nastavené.",
+      scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
+        ? "Oddělené úložiště TEST Brno 500 není nastavené."
+        : "Provozní úložiště denních Svozových tras není nastavené.",
       503,
-      "collection_daily_routes_database_missing"
+      scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
+        ? "collection_daily_routes_test_database_missing"
+        : "collection_daily_routes_database_missing"
     );
   }
   return db;
+}
+
+async function snapshotForScope(env, user, scope) {
+  if (scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST) {
+    assertScopeAccess(user, scope);
+    return getCollectionRoutesTestSnapshot(env, user, { limit: 10000 });
+  }
+  return getLatestCollectionRoutesVistosSnapshot(env, { limit: 10000, svozKaiserOnly: true });
 }
 
 function dbError(error) {
@@ -363,14 +408,24 @@ async function scheduledStopsForDate(db, routeDate) {
   return new Map((result.results || []).map((row) => [cleanString(row.source_row_id), cleanString(row.run_id)]));
 }
 
-export async function previewCollectionDailyRoute(env, input = {}) {
-  const db = database(env, true);
+export async function previewCollectionDailyRoute(env, userOrInput = {}, maybeInput) {
+  const user = maybeInput === undefined ? null : userOrInput;
+  const input = maybeInput === undefined ? userOrInput : maybeInput;
+  const scope = collectionDailyRouteScope(input.scope);
+  assertScopeAccess(user, scope);
+  const db = database(env, true, scope);
   const dateInfo = collectionDailyRouteDateInfo(input.routeDate);
   const vehicle = vehicleByCode(input.vehicleCode);
   try {
-    const snapshot = await getLatestCollectionRoutesVistosSnapshot(env, { limit: 10000, svozKaiserOnly: true });
+    const snapshot = await snapshotForScope(env, user, scope);
     if (!snapshot.batch?.id) {
-      throw new CollectionDailyRoutesError("Není dostupný žádný připravený Vistos Komunál snapshot.", 409, "collection_daily_route_snapshot_missing");
+      throw new CollectionDailyRoutesError(
+        scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
+          ? "Není dostupná připravená sada TEST Brno 500."
+          : "Není dostupný žádný připravený Vistos Komunál snapshot.",
+        409,
+        "collection_daily_route_snapshot_missing"
+      );
     }
     const expectedBatchId = cleanString(input.sourceBatchId);
     if (expectedBatchId && expectedBatchId !== snapshot.batch.id) {
@@ -406,6 +461,7 @@ export async function previewCollectionDailyRoute(env, input = {}) {
     const eligibleRows = evaluated.filter((row) => row.eligible);
     const excludedRows = evaluated.filter((row) => !row.eligible);
     return {
+      scope,
       sourceBatchId: snapshot.batch.id,
       sourceBatchCreatedAt: snapshot.batch.createdAt,
       sourceMode: snapshot.sourceMode,
@@ -426,11 +482,16 @@ export async function previewCollectionDailyRoute(env, input = {}) {
 function rowToRun(row, summary = null) {
   if (!row) return null;
   const status = cleanString(row.status);
+  const metadata = parseJson(row.metadata_json, {});
+  const sourceMode = cleanString(row.source_mode);
   return {
     id: cleanString(row.id),
     routeKey: cleanString(row.route_key),
     sourceBatchId: cleanString(row.source_batch_id),
-    sourceMode: cleanString(row.source_mode),
+    sourceMode,
+    scope: metadata.dataScope === COLLECTION_DAILY_ROUTE_SCOPE_TEST || sourceMode === "synthetic-brno-test"
+      ? COLLECTION_DAILY_ROUTE_SCOPE_TEST
+      : COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION,
     routeDate: cleanString(row.route_date),
     dayCode: cleanString(row.route_day_code),
     weekMode: cleanString(row.route_week_mode),
@@ -443,7 +504,7 @@ function rowToRun(row, summary = null) {
     status: ROUTE_STATUSES.has(status) ? status : "draft",
     stopCount: numberValue(row.stop_count),
     excludedCount: numberValue(row.excluded_count),
-    metadata: parseJson(row.metadata_json, {}),
+    metadata,
     createdByUserId: cleanString(row.created_by_user_id),
     createdByName: cleanString(row.created_by_name),
     confirmedByUserId: cleanString(row.confirmed_by_user_id),
@@ -603,7 +664,9 @@ function collectionDailyRouteStopInsertStatements(db, {
 
 export async function createCollectionDailyRouteDraft(env, user, input = {}) {
   assertManage(user);
-  const db = database(env, true);
+  const scope = collectionDailyRouteScope(input.scope);
+  assertScopeAccess(user, scope);
+  const db = database(env, true, scope);
   try {
     const requestedDate = collectionDailyRouteDateInfo(input.routeDate);
     const requestedVehicle = vehicleByCode(input.vehicleCode);
@@ -612,7 +675,7 @@ export async function createCollectionDailyRouteDraft(env, user, input = {}) {
     if (alreadyStored) {
       throw new CollectionDailyRoutesError("Pro vybraný den a vůz už denní trasa existuje.", 409, "collection_daily_route_already_exists");
     }
-    const preview = await previewCollectionDailyRoute(env, input);
+    const preview = await previewCollectionDailyRoute(env, user, input);
     if (!preview.eligibleRows.length) {
       throw new CollectionDailyRoutesError(
         "Návrh neobsahuje žádné ověřené stanoviště pro vybraný den.",
@@ -621,7 +684,7 @@ export async function createCollectionDailyRouteDraft(env, user, input = {}) {
       );
     }
     const routeKey = requestedRouteKey;
-    const snapshot = await getLatestCollectionRoutesVistosSnapshot(env, { limit: 10000, svozKaiserOnly: true });
+    const snapshot = await snapshotForScope(env, user, scope);
     if (snapshot.batch?.id !== preview.sourceBatchId) {
       throw new CollectionDailyRoutesError("Zdrojový snapshot se během uložení změnil. Návrh znovu ověřte.", 409, "collection_daily_route_snapshot_changed");
     }
@@ -652,6 +715,7 @@ export async function createCollectionDailyRouteDraft(env, user, input = {}) {
       preview.eligibleCount,
       preview.excludedCount,
       jsonString({
+        dataScope: scope,
         sourceBatchCreatedAt: preview.sourceBatchCreatedAt,
         selectedCount: preview.selectedCount,
         excludedRows: preview.excludedRows.map((row) => ({ sourceRowId: row.sourceRowId, reason: row.reason }))
@@ -688,8 +752,10 @@ export async function createCollectionDailyRouteDraft(env, user, input = {}) {
   }
 }
 
-export async function listCollectionDailyRoutes(env, input = {}) {
-  const db = database(env, true);
+export async function listCollectionDailyRoutes(env, input = {}, user = null) {
+  const scope = collectionDailyRouteScope(input.scope);
+  assertScopeAccess(user, scope);
+  const db = database(env, true, scope);
   const status = cleanString(input.status);
   const routeDate = cleanString(input.routeDate);
   const limit = Math.max(1, Math.min(numberValue(input.limit, 60), 200));
@@ -724,8 +790,10 @@ export async function listCollectionDailyRoutes(env, input = {}) {
   }
 }
 
-export async function getCollectionDailyRoute(env, user, runId) {
-  const db = database(env, true);
+export async function getCollectionDailyRoute(env, user, runId, input = {}) {
+  const scope = collectionDailyRouteScope(input.scope);
+  assertScopeAccess(user, scope);
+  const db = database(env, true, scope);
   try {
     const runRow = await loadRunRow(db, runId);
     assertCanReadRun(user, runRow);
@@ -761,7 +829,9 @@ async function driverById(env, driverUserId) {
 
 export async function assignCollectionDailyRouteDriver(env, user, runId, input = {}) {
   assertManage(user);
-  const db = database(env, true);
+  const scope = collectionDailyRouteScope(input.scope);
+  assertScopeAccess(user, scope);
+  const db = database(env, true, scope);
   try {
     const run = await loadRunRow(db, runId);
     if (!["draft", "confirmed"].includes(cleanString(run.status))) {
@@ -816,7 +886,9 @@ async function eventByIdempotency(db, key) {
 }
 
 export async function transitionCollectionDailyRoute(env, user, runId, input = {}) {
-  const db = database(env, true);
+  const scope = collectionDailyRouteScope(input.scope);
+  assertScopeAccess(user, scope);
+  const db = database(env, true, scope);
   const action = cleanString(input.action).toLowerCase();
   if (!new Set(["confirm", "start", "complete", "reopen"]).has(action)) {
     throw new CollectionDailyRoutesError("Neplatná změna stavu denní trasy.", 400, "collection_daily_route_transition_invalid");
@@ -911,7 +983,9 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
 }
 
 export async function recordCollectionDailyRouteStopEvent(env, user, runId, stopId, input = {}) {
-  const db = database(env, true);
+  const scope = collectionDailyRouteScope(input.scope);
+  assertScopeAccess(user, scope);
+  const db = database(env, true, scope);
   const action = cleanString(input.action).toLowerCase();
   if (!STOP_ACTIONS.has(action)) {
     throw new CollectionDailyRoutesError("Neplatná akce řidiče.", 400, "collection_daily_route_stop_action_invalid");

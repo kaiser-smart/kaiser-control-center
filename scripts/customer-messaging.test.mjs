@@ -216,7 +216,11 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     time: "09:00",
     address: "Praha 1",
     message: "Posádka dorazí později.",
-    url: "https://example.test/form"
+    url: "https://example.test/form",
+    company: "Test 1 s.r.o.",
+    station: "TEST 1 · stanoviště 1",
+    waste: "SKO",
+    container: "1×240l"
   });
   assert.equal(templateAlwaysIncludesStop(rendered.body), true, `${key} musí obsahovat STOP větu`);
 }

@@ -1,0 +1,67 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const wranglerSource = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+
+for (const marker of [
+  "TEST Brno 500",
+  "Management · oddělená testovací data",
+  'data-collection-daily-route-scope="production"',
+  'data-collection-daily-route-scope="test"',
+  "Připravit 1 SMS + 1 e-mail",
+  "Připravit zprávy pro celou trasu",
+  "Četnost 1x30 je v sadě",
+  "data-collection-routes-test-notification-confirm-form",
+  "Potvrzuju skutečné odeslání",
+  "collectionRoutesCanUseTestDataset"
+]) {
+  assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
+}
+
+assert.ok(
+  appSource.includes("function collectionDailyRouteTestDate") &&
+    appSource.includes("collectionRoutesPilotState.dailyRouteDate = collectionDailyRouteTestDate"),
+  "TEST režim musí o víkendu nabídnout nejbližší pracovní den."
+);
+
+assert.ok(
+  appSource.includes('["admin", "management"].includes(normalizeRole(user?.role))'),
+  "TEST režim musí být omezený na Admin a Management."
+);
+assert.ok(
+  appSource.includes('confirmation: "create-test-brno-500"'),
+  "Založení TEST dat musí posílat explicitní potvrzení."
+);
+assert.ok(
+  appSource.includes("expectedMessageCount: preview.messageCount") &&
+    appSource.includes("idempotencyKey: preview.idempotencyKey"),
+  "Skutečné odeslání musí potvrdit přesný počet zpráv a při opakování použít stejný klíč."
+);
+assert.ok(
+  !appSource.includes("COLLECTION_ROUTES_TEST_SMS_TO") && !appSource.includes("COLLECTION_ROUTES_TEST_EMAIL_TO"),
+  "Chráněné příjemce nesmí obsahovat frontendový zdroj."
+);
+
+for (const marker of [
+  ".collection-routes-test-dataset",
+  ".collection-routes-test-notifications",
+  ".collection-routes-test-badge",
+  "@media (max-width: 640px)"
+]) {
+  assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
+}
+
+assert.ok(
+  wranglerSource.includes('binding = "COLLECTION_ROUTES_TEST_DB"') &&
+    wranglerSource.includes('database_name = "smart-odpady-routes-test"'),
+  "Pages konfigurace musí používat samostatný TEST D1 binding."
+);
+assert.ok(
+  !wranglerSource.includes("COLLECTION_ROUTES_TEST_SMS_TO") &&
+    !wranglerSource.includes("COLLECTION_ROUTES_TEST_EMAIL_TO"),
+  "Skuteční testovací příjemci musí zůstat mimo verzovanou Pages konfiguraci."
+);
+
+console.log("Collection routes TEST Brno 500 UI tests passed.");

@@ -37109,6 +37109,207 @@ body:has(.ds-plus-page) {
   color: var(--steel);
 }
 
+.collection-routes-test-dataset,
+.collection-routes-test-notifications {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(169, 32, 32, 0.38);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 244, 244, 0.98), #fff 66%);
+}
+
+.collection-routes-test-dataset > header,
+.collection-routes-test-notifications > header {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.collection-routes-test-dataset h3,
+.collection-routes-test-notifications h4 {
+  margin: 2px 0 5px;
+  color: var(--ink);
+}
+
+.collection-routes-test-dataset header p,
+.collection-routes-test-notifications header p {
+  margin: 0;
+  color: var(--steel);
+}
+
+.collection-routes-test-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 29px;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #a92020;
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.collection-routes-test-scope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 5px;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.collection-routes-test-scope button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--steel);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.collection-routes-test-scope button.is-active {
+  background: var(--color-primary, #75bd25);
+  color: #fff;
+  box-shadow: 0 6px 15px rgba(65, 98, 43, 0.15);
+}
+
+.collection-routes-test-scope button[data-collection-daily-route-scope="test"].is-active {
+  background: #a92020;
+  box-shadow: 0 6px 15px rgba(169, 32, 32, 0.16);
+}
+
+.collection-routes-test-empty,
+.collection-routes-test-notification-job {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border: 1px dashed rgba(169, 32, 32, 0.34);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--steel);
+}
+
+.collection-routes-test-empty strong,
+.collection-routes-test-notification-job strong {
+  color: var(--ink);
+}
+
+.collection-routes-test-empty .primary-action {
+  width: fit-content;
+}
+
+.collection-routes-test-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.collection-routes-test-kpis article {
+  border-color: rgba(169, 32, 32, 0.16);
+  background: #fff;
+}
+
+.collection-routes-test-kpis article strong {
+  font-size: 1.15rem;
+}
+
+.collection-routes-test-recipient {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: rgba(169, 32, 32, 0.07);
+  color: var(--steel);
+}
+
+.collection-routes-test-facts {
+  display: grid;
+  gap: 5px;
+  padding: 11px 13px;
+  border: 1px solid rgba(66, 80, 74, 0.1);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--steel);
+}
+
+.collection-routes-test-facts p {
+  margin: 0;
+}
+
+.collection-routes-test-facts strong {
+  color: var(--ink);
+}
+
+.collection-routes-test-recipient strong {
+  color: #861919;
+}
+
+.collection-routes-test-sites {
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.collection-routes-test-sites > summary {
+  padding: 12px 14px;
+  color: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.collection-routes-test-sites .collection-daily-route-table-wrap {
+  margin: 0 12px 12px;
+}
+
+.collection-routes-test-sites .collection-daily-route-pagination {
+  margin: 0 12px 12px;
+}
+
+.collection-routes-test-notifications {
+  margin-top: 2px;
+}
+
+.collection-routes-test-notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.collection-routes-test-notification-confirm {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 2px solid rgba(169, 32, 32, 0.46);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.collection-routes-test-notification-confirm > strong {
+  color: #861919;
+  font-size: 1.05rem;
+}
+
+.collection-routes-test-notification-confirm > span,
+.collection-routes-test-notification-confirm label {
+  color: var(--steel);
+}
+
+.collection-routes-test-notification-confirm label {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+
+.collection-routes-test-notification-confirm input {
+  width: 19px;
+  height: 19px;
+  margin-top: 2px;
+}
+
 .collection-daily-route-table tr.is-problem {
   background: #fff8ea;
 }
@@ -37306,6 +37507,10 @@ body:has(.ds-plus-page) {
     grid-template-columns: 1fr;
     gap: 3px;
   }
+
+  .collection-routes-test-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -37319,7 +37524,9 @@ body:has(.ds-plus-page) {
 
   .collection-daily-routes__head,
   .collection-daily-route-detail > header,
-  .collection-daily-driver-route > header {
+  .collection-daily-driver-route > header,
+  .collection-routes-test-dataset > header,
+  .collection-routes-test-notifications > header {
     display: grid;
   }
 
@@ -37341,6 +37548,18 @@ body:has(.ds-plus-page) {
   }
 
   .collection-daily-route-pagination .secondary-link {
+    width: 100%;
+  }
+
+  .collection-routes-test-scope,
+  .collection-routes-test-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-test-empty .primary-action,
+  .collection-routes-test-notification-actions .secondary-link,
+  .collection-routes-test-notification-confirm .primary-action,
+  .collection-routes-test-notification-job .secondary-link {
     width: 100%;
   }
 
