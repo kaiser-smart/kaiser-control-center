@@ -8,8 +8,8 @@ import {
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
 const TEST_SMS_TO_ENV = "COLLECTION_ROUTES_TEST_SMS_TO";
 const TEST_EMAIL_TO_ENV = "COLLECTION_ROUTES_TEST_EMAIL_TO";
-const TEST_DATASET_ID = "collection-route-test-dataset-brno-500-v1";
-const TEST_BATCH_ID = "collection-import-batch-test-brno-500-v1";
+const TEST_DATASET_ID = "collection-route-test-dataset-brno-500-v2";
+const TEST_BATCH_ID = "collection-import-batch-test-brno-500-v2";
 const D1_MAX_BOUND_PARAMETERS = 100;
 const IMPORT_ROW_BINDINGS = 9;
 const IMPORT_ROWS_PER_INSERT = Math.floor(D1_MAX_BOUND_PARAMETERS / IMPORT_ROW_BINDINGS);
@@ -155,7 +155,7 @@ function rowToImportRow(row) {
 
 function importRowStatements(db, rows, createdAt) {
   const values = rows.map((row, index) => [
-    `collection-import-row-test-brno-${String(index + 1).padStart(4, "0")}`,
+    `collection-import-row-test-brno-v2-${String(index + 1).padStart(4, "0")}`,
     TEST_BATCH_ID,
     row.rowNumber,
     row.sourceEntity,

@@ -127,6 +127,36 @@ assert.match(__collectionDailyRouteEligibilityForTest({
   summary: summary({ frequency: "1x30", pickupDaysText: "pondělí lichá" }),
   issues: []
 }, "2026-07-13").reason, /Měsíční četnost/);
+assert.equal(__collectionDailyRouteEligibilityForTest({
+  id: "monthly-confirmed",
+  rowNumber: 2,
+  summary: summary({
+    frequency: "1x30",
+    pickupDaysText: "2. pondělí v měsíci",
+    pickupSchedule: { mode: "monthly-weekday", dayCodes: ["PO"], parities: ["all"], weekOfMonth: 2 }
+  }),
+  issues: []
+}, "2026-07-13").eligible, true);
+assert.match(__collectionDailyRouteEligibilityForTest({
+  id: "monthly-wrong-occurrence",
+  rowNumber: 2,
+  summary: summary({
+    frequency: "1x30",
+    pickupDaysText: "2. pondělí v měsíci",
+    pickupSchedule: { mode: "monthly-weekday", dayCodes: ["PO"], parities: ["all"], weekOfMonth: 2 }
+  }),
+  issues: []
+}, "2026-07-20").reason, /2\. pondělí v měsíci/);
+assert.match(__collectionDailyRouteEligibilityForTest({
+  id: "monthly-wrong-weekday",
+  rowNumber: 2,
+  summary: summary({
+    frequency: "1x30",
+    pickupDaysText: "2. pondělí v měsíci",
+    pickupSchedule: { mode: "monthly-weekday", dayCodes: ["PO"], parities: ["all"], weekOfMonth: 2 }
+  }),
+  issues: []
+}, "2026-07-14").reason, /není plánovaná na úterý/);
 assert.match(__collectionDailyRouteEligibilityForTest({
   id: "missing-address-place",
   rowNumber: 3,

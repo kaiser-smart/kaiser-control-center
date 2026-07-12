@@ -340,6 +340,43 @@ const manager = {
 
 {
   const { sqlite, d1 } = openDatabase();
+  sqlite.prepare(`
+    INSERT INTO collection_import_batches (
+      id, source, source_mode, status, api_status, message, row_count,
+      issue_count, created_by_user_id, created_at, finished_at, metadata_json
+    ) VALUES (
+      'collection-import-batch-test-brno-500-v1', 'synthetic-test', 'synthetic-brno-test',
+      'preview', 'ready', 'Původní TEST sada.', 0, 0, 'manager-test',
+      '2026-07-01T08:00:00.000Z', '2026-07-01T08:00:00.000Z', '{}'
+    )
+  `).run();
+  sqlite.prepare(`
+    INSERT INTO collection_route_test_datasets (
+      id, dataset_key, name, status, source_batch_id, seed, company_count,
+      site_count, address_source, metadata_json, created_by_user_id,
+      created_by_name, created_at, updated_at
+    ) VALUES (
+      'collection-route-test-dataset-brno-500-v1', 'brno-500-v1', 'TEST Brno 500 v1',
+      'ready', 'collection-import-batch-test-brno-500-v1', 1, 100, 500,
+      'historic-test', '{}', 'manager-test', 'Manager Test',
+      '2026-07-01T08:00:00.000Z', '2026-07-01T08:00:00.000Z'
+    )
+  `).run();
+
+  const created = await ensureCollectionRoutesTestDataset(environment(d1), manager, {
+    confirmation: "create-test-brno-500"
+  });
+  assert.equal(created.created, true);
+  assert.equal(created.dataset.key, "brno-500-v2");
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_datasets").get().count, 2);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_batches").get().count, 2);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 500);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_datasets WHERE dataset_key = 'brno-500-v1'").get().count, 1);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_datasets WHERE dataset_key = 'brno-500-v2'").get().count, 1);
+}
+
+{
+  const { sqlite, d1 } = openDatabase();
   d1.failBatchStatement = 5;
   await assert.rejects(
     ensureCollectionRoutesTestDataset(environment(d1), manager, {

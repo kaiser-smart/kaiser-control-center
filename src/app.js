@@ -21003,7 +21003,7 @@ function collectionRoutesTestDatasetPanel(user) {
         <div class="collection-routes-test-facts">
           <p><strong>Odpady:</strong> 350 SKO · 60 PAPÍR · 45 PLAST · 25 BIO · 20 SKLO</p>
           <p><strong>Četnosti:</strong> 1x7 · 2x7 · 3x7 · 5x7 · 1x14 · 1x30</p>
-          <p>Četnost 1x30 je v sadě, ale denní návrh ji bez konkrétního data záměrně vyřadí.</p>
+          <p>Dny u četností Nx7 se zrcadlí 1:1 v lichém i sudém týdnu. Četnost 1x14 zůstává v jedné paritě a 1x30 má pevný pracovní den i pořadí v měsíci.</p>
         </div>
         <p class="collection-routes-test-recipient"><strong>Skutečné testovací zprávy:</strong> SMS ${escapeHtml(recipientPhone)} · e-mail ${escapeHtml(recipientEmail)}. Odesílají se až po samostatném potvrzení konkrétní trasy.</p>
         <details class="collection-routes-test-sites">

@@ -308,6 +308,24 @@ function isMonthlyFrequency(value) {
   return /1\s*x\s*30|mesic|monthly/.test(normalizeText(value));
 }
 
+function monthlyScheduleEligibility(summary, dateInfo) {
+  const schedule = summary?.pickupSchedule;
+  const dayCodes = Array.isArray(schedule?.dayCodes) ? schedule.dayCodes.map(cleanString).filter(Boolean) : [];
+  const weekOfMonth = Number(schedule?.weekOfMonth);
+  if (schedule?.mode !== "monthly-weekday" || dayCodes.length !== 1 || !Number.isInteger(weekOfMonth) || weekOfMonth < 1 || weekOfMonth > 5) {
+    return { ok: false, reason: "Měsíční četnost nemá potvrzený pevný pracovní den v měsíci." };
+  }
+  if (dayCodes[0] !== dateInfo.dayCode) {
+    return { ok: false, reason: `Položka není plánovaná na ${dateInfo.dayLabel}.` };
+  }
+  const dayOfMonth = Number(dateInfo.routeDate.slice(8, 10));
+  const actualWeekOfMonth = Math.floor((dayOfMonth - 1) / 7) + 1;
+  if (actualWeekOfMonth !== weekOfMonth) {
+    return { ok: false, reason: `Položka je plánovaná na ${weekOfMonth}. ${dateInfo.dayLabel} v měsíci.` };
+  }
+  return { ok: true, reason: "" };
+}
+
 function routeAddress(summary = {}) {
   const addressPlace = cleanString(summary.addressPlaceRaw);
   const addressPlaceKey = normalizeText(addressPlace).replace(/[^a-z0-9]+/g, "");
@@ -373,12 +391,13 @@ function eligibility(row, dateInfo, scheduledRunId = "") {
   if (!result.frequency) {
     return { ...result, reason: "Chybí potvrzená četnost svozu." };
   }
-  if (isMonthlyFrequency(result.frequency)) {
-    return { ...result, reason: "Měsíční četnost zatím nemá potvrzené konkrétní datum svozu." };
-  }
   const dateRange = withinDateRange(dateInfo.routeDate, summary);
   if (!dateRange.ok) {
     return { ...result, reason: dateRange.reason };
+  }
+  if (isMonthlyFrequency(result.frequency)) {
+    const monthly = monthlyScheduleEligibility(summary, dateInfo);
+    return monthly.ok ? { ...result, eligible: true } : { ...result, reason: monthly.reason };
   }
   const schedule = pickupScheduleEntries(result.pickupDaysText);
   if (!schedule.length) {

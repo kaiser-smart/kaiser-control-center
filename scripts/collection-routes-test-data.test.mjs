@@ -33,6 +33,36 @@ assert.equal(first.summary.wasteCounts.SKO, 350);
 assert.equal(Object.values(first.summary.wasteCounts).reduce((sum, value) => sum + value, 0), 500);
 assert.deepEqual(Object.keys(first.summary.frequencyCounts).sort(), ["1x14", "1x30", "1x7", "2x7", "3x7", "5x7"]);
 
+const weeklyDayCounts = { "1x7": 1, "2x7": 2, "3x7": 3, "5x7": 5 };
+for (const [frequency, dayCount] of Object.entries(weeklyDayCounts)) {
+  const rows = first.rows.filter((row) => row.frequency === frequency);
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every((row) => row.pickupSchedule.mode === "weekly"));
+  assert.ok(rows.every((row) => row.pickupSchedule.dayCodes.length === dayCount));
+  assert.ok(rows.every((row) => row.pickupSchedule.parities.join(",") === "odd,even"));
+  assert.ok(rows.every((row) => {
+    const entries = row.pickupDaysText.split(", ");
+    return entries.length === dayCount * 2 && row.pickupSchedule.dayCodes.every((_dayCode, index) => {
+      const odd = entries[index * 2].replace(/ lichá$/, "");
+      const even = entries[(index * 2) + 1].replace(/ sudá$/, "");
+      return entries[index * 2].endsWith(" lichá") && entries[(index * 2) + 1].endsWith(" sudá") && odd === even;
+    });
+  }), `${frequency} musí mít každý den zrcadlený 1:1 do lichého i sudého týdne.`);
+}
+
+const fortnightlyRows = first.rows.filter((row) => row.frequency === "1x14");
+assert.ok(fortnightlyRows.every((row) => row.pickupSchedule.mode === "fortnightly"));
+assert.ok(fortnightlyRows.every((row) => row.pickupSchedule.dayCodes.length === 1));
+assert.ok(fortnightlyRows.every((row) => row.pickupSchedule.parities.length === 1));
+
+const monthlyRows = first.rows.filter((row) => row.frequency === "1x30");
+assert.equal(monthlyRows.length, 25);
+assert.ok(monthlyRows.every((row) => row.pickupSchedule.mode === "monthly-weekday"));
+assert.ok(monthlyRows.every((row) => row.pickupSchedule.dayCodes.length === 1));
+assert.ok(monthlyRows.every((row) => row.pickupSchedule.parities.join(",") === "all"));
+assert.ok(monthlyRows.every((row) => row.pickupSchedule.weekOfMonth >= 1 && row.pickupSchedule.weekOfMonth <= 4));
+assert.ok(monthlyRows.every((row) => /^\d\. (pondělí|úterý|středa|čtvrtek|pátek) v měsíci$/.test(row.pickupDaysText)));
+
 for (let companyNumber = 1; companyNumber <= 100; companyNumber += 1) {
   const companyRows = first.rows.filter((row) => row.customerName === `Test ${companyNumber} s.r.o.`);
   assert.equal(companyRows.length, 5);

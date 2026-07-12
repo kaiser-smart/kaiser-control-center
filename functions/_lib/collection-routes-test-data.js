@@ -4,7 +4,7 @@ import {
   COLLECTION_ROUTES_TEST_BRNO_ADDRESS_SOURCE
 } from "../_data/collection-routes-test-brno-addresses.generated.js";
 
-export const COLLECTION_ROUTES_TEST_DATASET_KEY = "brno-500-v1";
+export const COLLECTION_ROUTES_TEST_DATASET_KEY = "brno-500-v2";
 export const COLLECTION_ROUTES_TEST_DATASET_NAME = "TEST Brno 500";
 export const COLLECTION_ROUTES_TEST_COMPANY_COUNT = 100;
 export const COLLECTION_ROUTES_TEST_SITE_COUNT = 500;
@@ -33,17 +33,23 @@ const CONTAINER_DISTRIBUTION = Object.freeze([
   Object.freeze({ value: 1100, count: 100 })
 ]);
 
-const WEEKDAYS = Object.freeze(["pondělí", "úterý", "středa", "čtvrtek", "pátek"]);
+const WEEKDAYS = Object.freeze([
+  Object.freeze({ code: "PO", label: "pondělí" }),
+  Object.freeze({ code: "ÚT", label: "úterý" }),
+  Object.freeze({ code: "ST", label: "středa" }),
+  Object.freeze({ code: "ČT", label: "čtvrtek" }),
+  Object.freeze({ code: "PÁ", label: "pátek" })
+]);
 const TWO_DAY_PATTERNS = Object.freeze([
-  "pondělí, čtvrtek",
-  "úterý, pátek",
-  "pondělí, středa",
-  "středa, pátek"
+  Object.freeze([WEEKDAYS[0], WEEKDAYS[3]]),
+  Object.freeze([WEEKDAYS[1], WEEKDAYS[4]]),
+  Object.freeze([WEEKDAYS[0], WEEKDAYS[2]]),
+  Object.freeze([WEEKDAYS[2], WEEKDAYS[4]])
 ]);
 const THREE_DAY_PATTERNS = Object.freeze([
-  "pondělí, středa, pátek",
-  "úterý, čtvrtek, pátek",
-  "pondělí, úterý, čtvrtek"
+  Object.freeze([WEEKDAYS[0], WEEKDAYS[2], WEEKDAYS[4]]),
+  Object.freeze([WEEKDAYS[1], WEEKDAYS[3], WEEKDAYS[4]]),
+  Object.freeze([WEEKDAYS[0], WEEKDAYS[1], WEEKDAYS[3]])
 ]);
 
 function cleanString(value) {
@@ -79,15 +85,48 @@ function expandedDistribution(definitions) {
   ));
 }
 
-function pickupDaysText(frequency, index) {
-  if (frequency === "1x7") return WEEKDAYS[index % WEEKDAYS.length];
+function weeklyDays(frequency, index) {
+  if (frequency === "1x7") return [WEEKDAYS[index % WEEKDAYS.length]];
   if (frequency === "2x7") return TWO_DAY_PATTERNS[index % TWO_DAY_PATTERNS.length];
   if (frequency === "3x7") return THREE_DAY_PATTERNS[index % THREE_DAY_PATTERNS.length];
-  if (frequency === "5x7") return WEEKDAYS.join(", ");
-  if (frequency === "1x14") {
-    return `${WEEKDAYS[index % WEEKDAYS.length]} ${index % 2 === 0 ? "sudá" : "lichá"}`;
+  if (frequency === "5x7") return WEEKDAYS;
+  return [];
+}
+
+function pickupSchedule(frequency, index) {
+  const days = weeklyDays(frequency, index);
+  if (days.length) {
+    return {
+      mode: "weekly",
+      dayCodes: days.map((day) => day.code),
+      parities: ["odd", "even"]
+    };
   }
-  return WEEKDAYS[index % WEEKDAYS.length];
+  if (frequency === "1x14") {
+    return {
+      mode: "fortnightly",
+      dayCodes: [WEEKDAYS[index % WEEKDAYS.length].code],
+      parities: [index % 2 === 0 ? "even" : "odd"]
+    };
+  }
+  return {
+    mode: "monthly-weekday",
+    dayCodes: [WEEKDAYS[index % WEEKDAYS.length].code],
+    parities: ["all"],
+    weekOfMonth: (index % 4) + 1
+  };
+}
+
+function pickupDaysText(frequency, index) {
+  const schedule = pickupSchedule(frequency, index);
+  const days = schedule.dayCodes.map((dayCode) => WEEKDAYS.find((day) => day.code === dayCode));
+  if (schedule.mode === "weekly") {
+    return days.flatMap((day) => [`${day.label} lichá`, `${day.label} sudá`]).join(", ");
+  }
+  if (schedule.mode === "fortnightly") {
+    return `${days[0].label} ${schedule.parities[0] === "even" ? "sudá" : "lichá"}`;
+  }
+  return `${schedule.weekOfMonth}. ${days[0].label} v měsíci`;
 }
 
 function validateRecipient({ phone, email }) {
@@ -154,6 +193,7 @@ export function buildCollectionRoutesTestDataset({
       wasteCode: waste.wasteCode,
       frequency,
       pickupDaysText: pickupDaysText(frequency, index),
+      pickupSchedule: pickupSchedule(frequency, index),
       containerVolume,
       containerCount: quantityRandom() < 0.82 ? 1 : (quantityRandom() < 0.9 ? 2 : 3),
       containerType: "nádoba",
@@ -206,6 +246,7 @@ export const __test = {
   WASTE_DISTRIBUTION,
   FREQUENCY_DISTRIBUTION,
   CONTAINER_DISTRIBUTION,
+  pickupSchedule,
   pickupDaysText,
   validateRecipient
 };
