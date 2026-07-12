@@ -18,6 +18,7 @@ for (const marker of [
   "TEST v2",
   "data-collection-routes-test-site-detail",
   "collectionRoutesTestSiteDetailTable",
+  'testDatasetExpandedRowKeys.length ? "open" : ""',
   "data-collection-routes-test-notification-confirm-form",
   "Potvrzuju skutečné odeslání",
   "data-collection-routes-test-notification-retry-form",

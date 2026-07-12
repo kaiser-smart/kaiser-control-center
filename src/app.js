@@ -21012,7 +21012,7 @@ function collectionRoutesTestDatasetPanel(user) {
           <p>Dny u četností Nx7 se zrcadlí 1:1 v lichém i sudém týdnu. Četnost 1x14 zůstává v jedné paritě a 1x30 má pevný pracovní den i pořadí v měsíci.</p>
         </div>
         <p class="collection-routes-test-recipient"><strong>Skutečné testovací zprávy:</strong> SMS ${escapeHtml(recipientPhone)} · e-mail ${escapeHtml(recipientEmail)}. Odesílají se až po samostatném potvrzení konkrétní trasy.</p>
-        <details class="collection-routes-test-sites">
+        <details class="collection-routes-test-sites" ${collectionRoutesPilotState.testDatasetExpandedRowKeys.length ? "open" : ""}>
           <summary>Testovací stanoviště (${escapeHtml(rows.length)})</summary>
           <div class="collection-routes-sites-table collection-routes-preview-table">
             <table>
