@@ -1,6 +1,6 @@
 # Svozove trasy - Faze 2D ridicsky tablet
 
-Stav: Faze 2D-A nasazena a overena v produkci; rizeny online D1 pilot bez Vistos zapisu.
+Stav: Faze 2D-A nasazena a overena v produkci; Faze 2D-B implementovana a otestovana v kodu, produkcni overeni ceka na nasazeni.
 
 Aktualizace: 2026-07-12
 
@@ -20,6 +20,15 @@ Migrace 0038, API a UI pokryvaji jen schvaleny minimalni rozsah. Offline sync, G
 - Ridic vidi jen svoji prirazenou trasu. Muze ji zahajit a online zapsat `HOTOVO`, `Problem`, `Vyklop` a `Pauza`.
 - D1 je zdroj pravdy. Obnoveni stranky nacte ulozeny stav a audit.
 - Vistos zustava pouze read-only a frontend ho nikdy nevola primo.
+
+## Implementovany rozsah Faze 2D-B
+
+- Ukladani zastavek pouziva vicenasobne `INSERT` dotazy po nejvyse 4 radcich, tedy pod limitem 100 D1 parametru na dotaz.
+- Jedna nemenne transakcni davka porad obsahuje beh, vsechny zastavky a auditni udalost; chyba vrati celou davku zpet.
+- Zatezovy test 900 zastavek pouziva 236 D1 operaci misto puvodnich 911; hranicnich 1000 zastavek pouziva 261 operaci.
+- Dispecersky i ridicsky seznam vlozi do DOM nejprve 100 zastavek a dalsi odkryva po 100. Aktualni ridicska zastavka a souhrnne pocty zustavaji viditelne nezavisle na seznamu.
+- Samostatny test pokryva 60, 300, 900 a 1000 zastavek vcetne poradi, poctu ulozenych radku, auditu a limitu databazovych operaci.
+- Faze 2D-B nemeni DB schema, opravneni, Vistos, automatizace ani externi integrace.
 
 ## Aktualni stav
 

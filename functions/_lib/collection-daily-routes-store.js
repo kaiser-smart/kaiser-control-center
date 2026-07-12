@@ -5,6 +5,15 @@ import { hasPermission, isUserActive, normalizeRole } from "../../src/permission
 const DB_BINDING = "SMART_ODPADY_DB";
 const ROUTE_STATUSES = new Set(["draft", "confirmed", "active", "completed"]);
 const STOP_ACTIONS = new Set(["done", "problem", "dump", "break", "reset"]);
+const D1_MAX_BOUND_PARAMETERS = 100;
+const DAILY_ROUTE_STOP_BOUND_VALUES_BEFORE_STATUS = 19;
+const DAILY_ROUTE_STOP_BOUND_VALUES_AFTER_STATUS = 3;
+const DAILY_ROUTE_STOP_BOUND_PARAMETERS =
+  DAILY_ROUTE_STOP_BOUND_VALUES_BEFORE_STATUS + DAILY_ROUTE_STOP_BOUND_VALUES_AFTER_STATUS;
+const DAILY_ROUTE_STOPS_PER_INSERT = Math.max(
+  1,
+  Math.floor(D1_MAX_BOUND_PARAMETERS / DAILY_ROUTE_STOP_BOUND_PARAMETERS)
+);
 const DAY_CODES = ["NE", "PO", "ÚT", "ST", "ČT", "PÁ", "SO"];
 const DAY_LABELS = {
   NE: "neděle",
@@ -70,6 +79,14 @@ function jsonString(value) {
   } catch {
     return "{}";
   }
+}
+
+function chunkValues(values, size) {
+  const chunks = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
 }
 
 function nowIso() {
@@ -539,6 +556,51 @@ async function detailFromRow(db, runRow) {
   return { run: rowToRun(runRow, summary), stops, events };
 }
 
+function collectionDailyRouteStopInsertStatements(db, {
+  preview,
+  sourceRows,
+  runId,
+  createdAt
+}) {
+  const valueRows = preview.eligibleRows.map((eligibleRow, index) => {
+    const sourceRow = sourceRows.get(eligibleRow.sourceRowId);
+    const summary = sourceRow?.summary || {};
+    return [
+      randomId("collection-daily-stop"),
+      runId,
+      preview.dateInfo.routeDate,
+      preview.sourceBatchId,
+      eligibleRow.sourceRowId,
+      index + 1,
+      cleanString(summary.customerName),
+      routeAddress(summary),
+      cleanString(summary.stationName || summary.siteName),
+      cleanString(summary.wasteType),
+      cleanString(summary.wasteCode),
+      numberValue(summary.containerVolume),
+      Math.max(1, numberValue(summary.containerCount, 1)),
+      cleanString(summary.containerType),
+      cleanString(summary.frequency),
+      cleanString(summary.pickupDaysText || summary.pickupDays),
+      cleanString(summary.contractNumber || summary.sourceContractId),
+      cleanString(summary.sourceContractId || summary.contractId),
+      cleanString(summary.note),
+      jsonString(summary),
+      createdAt,
+      createdAt
+    ];
+  });
+  const placeholderRow = `(${new Array(DAILY_ROUTE_STOP_BOUND_VALUES_BEFORE_STATUS).fill("?").join(", ")}, 'planned', ${new Array(DAILY_ROUTE_STOP_BOUND_VALUES_AFTER_STATUS).fill("?").join(", ")})`;
+  return chunkValues(valueRows, DAILY_ROUTE_STOPS_PER_INSERT).map((valueChunk) => db.prepare(`
+    INSERT INTO collection_daily_route_stops (
+      id, run_id, route_date, source_batch_id, source_row_id, route_order,
+      customer_name, address_text, station_name, waste_type, waste_code,
+      container_volume, container_count, container_type, frequency, pickup_days_text,
+      contract_number, source_contract_id, note, status, source_summary_json, created_at, updated_at
+    ) VALUES ${valueChunk.map(() => placeholderRow).join(", ")}
+  `).bind(...valueChunk.flat()));
+}
+
 export async function createCollectionDailyRouteDraft(env, user, input = {}) {
   assertManage(user);
   const db = database(env, true);
@@ -599,40 +661,11 @@ export async function createCollectionDailyRouteDraft(env, user, input = {}) {
       createdAt,
       createdAt
     );
-    const stopInserts = preview.eligibleRows.map((eligibleRow, index) => {
-      const sourceRow = sourceRows.get(eligibleRow.sourceRowId);
-      const summary = sourceRow?.summary || {};
-      return db.prepare(`
-        INSERT INTO collection_daily_route_stops (
-          id, run_id, route_date, source_batch_id, source_row_id, route_order,
-          customer_name, address_text, station_name, waste_type, waste_code,
-          container_volume, container_count, container_type, frequency, pickup_days_text,
-          contract_number, source_contract_id, note, status, source_summary_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?)
-      `).bind(
-        randomId("collection-daily-stop"),
-        runId,
-        preview.dateInfo.routeDate,
-        preview.sourceBatchId,
-        eligibleRow.sourceRowId,
-        index + 1,
-        cleanString(summary.customerName),
-        routeAddress(summary),
-        cleanString(summary.stationName || summary.siteName),
-        cleanString(summary.wasteType),
-        cleanString(summary.wasteCode),
-        numberValue(summary.containerVolume),
-        Math.max(1, numberValue(summary.containerCount, 1)),
-        cleanString(summary.containerType),
-        cleanString(summary.frequency),
-        cleanString(summary.pickupDaysText || summary.pickupDays),
-        cleanString(summary.contractNumber || summary.sourceContractId),
-        cleanString(summary.sourceContractId || summary.contractId),
-        cleanString(summary.note),
-        jsonString(summary),
-        createdAt,
-        createdAt
-      );
+    const stopInserts = collectionDailyRouteStopInsertStatements(db, {
+      preview,
+      sourceRows,
+      runId,
+      createdAt
     });
     const eventInsert = db.prepare(`
       INSERT INTO collection_daily_route_events (

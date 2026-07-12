@@ -37044,6 +37044,29 @@ body:has(.ds-plus-page) {
   border-radius: 10px;
 }
 
+.collection-daily-route-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 13px;
+  border: 1px solid rgba(66, 80, 74, 0.11);
+  border-radius: 10px;
+  background: #f7faf5;
+  color: var(--steel);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.collection-daily-driver-all-stops .collection-daily-route-pagination {
+  margin: 0 13px 13px;
+}
+
+.collection-daily-route-pagination strong {
+  color: var(--ink);
+}
+
 .collection-daily-route-table {
   width: 100%;
   min-width: 720px;
@@ -37297,6 +37320,14 @@ body:has(.ds-plus-page) {
   .collection-daily-route-actions .primary-action,
   .collection-daily-route-actions .secondary-link,
   .collection-daily-route-assign button {
+    width: 100%;
+  }
+
+  .collection-daily-route-pagination {
+    align-items: stretch;
+  }
+
+  .collection-daily-route-pagination .secondary-link {
     width: 100%;
   }
 

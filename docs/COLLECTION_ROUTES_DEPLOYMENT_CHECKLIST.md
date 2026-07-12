@@ -75,6 +75,9 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - HOTOVO - migrace 0038 a chranene API ukladaji nemenny denni beh, kopii zastavek, vozidlo, ridice, stav a audit udalosti.
 - HOTOVO - dispecer muze navrh overit, ulozit, priradit ridice, potvrdit, zahajit, dokoncit a znovu otevrit; hotovou/problemovou zastavku muze vratit do planu.
 - HOTOVO - stejny zdrojovy radek nelze zaradit dvakrat ve stejny den a pro jeden den/vuz muze existovat jen jedna trasa.
+- HOTOVO - Faze 2D-B uklada 900 zastavek v 236 D1 operacich a 1000 zastavek v 261 operacich; zustava pod internim testovacim stropem 300 operaci.
+- HOTOVO - dispecersky i ridicsky seznam vykresli prvnich 100 zastavek a dalsi zobrazuje po 100, aby velka trasa nezahltila stranku.
+- HOTOVO - zatezove testy pokryvaji 60, 300, 900 a 1000 zastavek bez zmeny DB schematu, Vistosu nebo opravneni.
 - NEZACATO - zadne optimalizovane poradi zastavek.
 
 ## Ridicsky tablet
@@ -123,4 +126,5 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - ROZPRACOVANO - produkcni read-only pilot existuje.
 - OVERENO - Faze 1E read-only import 13 Excelu a Vistos match byly overeny na produkci pro batch z 2026-07-02.
 - OVERENO - Faze 2D-A, migrace 0038 a verze 0.1.519 byly 2026-07-12 overeny v produkci: prihlaseny dispecersky pohled, prazdny vychozi stav, ochrana API a responzivita desktop/tablet/mobil; po overeni zustalo 0 tras, 0 zastavek a 0 udalosti.
+- NEZACATO - produkcni overeni Faze 2D-B a verze 0.1.520.
 - NEZACATO - produkcni ostry import / planovani / notifikace.

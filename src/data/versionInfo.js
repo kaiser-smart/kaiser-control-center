@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.519"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.520"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: připravenost na 900 Stanovišť",
+    text: "Velké denní trasy se ukládají v menším počtu bezpečných databázových operací a dispečerský i řidičský seznam zobrazuje zastávky postupně po 100. Zátěžové testy pokrývají 60, 300, 900 i 1000 zastávek; Vistos zůstává pouze read-only."
+  },
   {
     title: "Svozové trasy: řízené denní jízdy",
     text: "Dispečer může z ověřených řádků uložit neměnný denní návrh, přiřadit řidiče, trasu potvrdit a sledovat průběh. Řidič má vlastní pohled s akcemi HOTOVO, Problém, Výklop a Pauza; stav i audit se ukládají v systému a po obnovení pokračují. Vistos zůstává pouze read-only a nové Stanoviště ovlivní až budoucí návrhy."

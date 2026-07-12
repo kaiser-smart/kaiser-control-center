@@ -34,6 +34,11 @@ import {
   receivablesHashTargetId
 } from "./data/receivablesNavigation.js";
 import {
+  COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE,
+  collectionDailyRouteNextVisibleStopCount,
+  collectionDailyRouteVisibleStopCount
+} from "./data/collectionDailyRoutesScale.js";
+import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
   ABSENCE_REPORT_TIME,
@@ -1291,12 +1296,14 @@ const collectionRoutesPilotState = {
   dailyRoutePreview: null,
   dailyRouteSelectedId: "",
   dailyRouteDetail: null,
+  dailyRouteStopsVisible: COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE,
   dailyRoutePending: "",
   dailyRouteMessage: "",
   dailyRouteError: "",
   myDailyRouteLoaded: false,
   myDailyRouteLoading: false,
   myDailyRoute: null,
+  myDailyRouteStopsVisible: COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE,
   myDailyRoutePending: "",
   myDailyRouteMessage: "",
   myDailyRouteError: "",
@@ -20925,6 +20932,12 @@ function collectionDailyRouteDispatcherDetail() {
   const { run } = detail;
   const stops = Array.isArray(detail.stops) ? detail.stops : [];
   const events = Array.isArray(detail.events) ? detail.events : [];
+  const visibleStopCount = collectionDailyRouteVisibleStopCount(
+    stops.length,
+    collectionRoutesPilotState.dailyRouteStopsVisible
+  );
+  const visibleStops = stops.slice(0, visibleStopCount);
+  const remainingStops = Math.max(0, stops.length - visibleStopCount);
   const summary = run.summary || {};
   const pending = collectionRoutesPilotState.dailyRoutePending;
   const canAssign = ["draft", "confirmed"].includes(run.status);
@@ -20970,7 +20983,7 @@ function collectionDailyRouteDispatcherDetail() {
         <table class="collection-daily-route-table">
           <thead><tr><th>#</th><th>Zákazník a stanoviště</th><th>Odpad / nádoba</th><th>Stav</th><th>Akce</th></tr></thead>
           <tbody>
-            ${stops.map((stop) => `
+            ${visibleStops.map((stop) => `
               <tr class="is-${escapeHtml(stop.status)}">
                 <td data-label="#">${escapeHtml(stop.routeOrder)}</td>
                 <td data-label="Zákazník"><strong>${escapeHtml(stop.customerName || "-")}</strong><span>${escapeHtml(stop.stationName || stop.addressText || "-")}</span><small>${escapeHtml(stop.stationName ? stop.addressText : "")}</small></td>
@@ -20982,6 +20995,16 @@ function collectionDailyRouteDispatcherDetail() {
           </tbody>
         </table>
       </div>
+      ${stops.length > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? `
+        <div class="collection-daily-route-pagination" aria-live="polite">
+          <span>Zobrazeno ${escapeHtml(visibleStopCount)} z ${escapeHtml(stops.length)} zastávek.</span>
+          ${remainingStops ? `
+            <button class="secondary-link" type="button" data-collection-daily-route-show-more>
+              Zobrazit dalších ${escapeHtml(Math.min(COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE, remainingStops))} zastávek
+            </button>
+          ` : `<strong>Zobrazeny všechny zastávky.</strong>`}
+        </div>
+      ` : ""}
 
       <details class="collection-daily-route-audit">
         <summary>Audit trasy (${escapeHtml(events.length)})</summary>
@@ -21047,6 +21070,12 @@ function collectionDailyRouteDriverPage(moduleItem, user) {
   const detail = collectionRoutesPilotState.myDailyRoute;
   const run = detail?.run || null;
   const stops = Array.isArray(detail?.stops) ? detail.stops : [];
+  const visibleStopCount = collectionDailyRouteVisibleStopCount(
+    stops.length,
+    collectionRoutesPilotState.myDailyRouteStopsVisible
+  );
+  const visibleStops = stops.slice(0, visibleStopCount);
+  const remainingStops = Math.max(0, stops.length - visibleStopCount);
   const currentStop = stops.find((stop) => stop.status === "planned") || null;
   const eventStopId = currentStop?.id || stops[0]?.id || "route";
   const pending = collectionRoutesPilotState.myDailyRoutePending;
@@ -21087,7 +21116,20 @@ function collectionDailyRouteDriverPage(moduleItem, user) {
             </article>
           ` : ""}
           ${run.status === "active" && !currentStop ? `<div class="collection-daily-driver-complete"><strong>Všechny zastávky jsou vyřízené.</strong><button class="primary-action" type="button" data-collection-daily-driver-transition="complete" ${pending ? "disabled" : ""}>Dokončit trasu</button></div>` : ""}
-          <details class="collection-daily-driver-all-stops"><summary>Všechny zastávky (${escapeHtml(stops.length)})</summary>${collectionDailyRouteDriverStopList(stops)}</details>
+          <details class="collection-daily-driver-all-stops" ${visibleStopCount > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? "open" : ""}>
+            <summary>Všechny zastávky (${escapeHtml(stops.length)})</summary>
+            ${collectionDailyRouteDriverStopList(visibleStops)}
+            ${stops.length > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? `
+              <div class="collection-daily-route-pagination" aria-live="polite">
+                <span>Zobrazeno ${escapeHtml(visibleStopCount)} z ${escapeHtml(stops.length)} zastávek.</span>
+                ${remainingStops ? `
+                  <button class="secondary-link" type="button" data-collection-daily-driver-show-more>
+                    Zobrazit dalších ${escapeHtml(Math.min(COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE, remainingStops))} zastávek
+                  </button>
+                ` : `<strong>Zobrazeny všechny zastávky.</strong>`}
+              </div>
+            ` : ""}
+          </details>
         </section>
       ` : ""}
     </main>
@@ -35894,8 +35936,12 @@ function collectionDailyRouteIdempotencyKey(prefix) {
 
 function applyCollectionDailyRouteDetail(detail, message = "") {
   if (!detail?.run) return;
+  const previousRunId = collectionRoutesPilotState.dailyRouteDetail?.run?.id || "";
   collectionRoutesPilotState.dailyRouteDetail = detail;
   collectionRoutesPilotState.dailyRouteSelectedId = detail.run.id;
+  if (previousRunId !== detail.run.id) {
+    collectionRoutesPilotState.dailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
+  }
   const routeIndex = collectionRoutesPilotState.dailyRoutes.findIndex((route) => route.id === detail.run.id);
   if (routeIndex >= 0) {
     collectionRoutesPilotState.dailyRoutes.splice(routeIndex, 1, detail.run);
@@ -35903,6 +35949,16 @@ function applyCollectionDailyRouteDetail(detail, message = "") {
     collectionRoutesPilotState.dailyRoutes.unshift(detail.run);
   }
   if (message) collectionRoutesPilotState.dailyRouteMessage = message;
+}
+
+function applyMyCollectionDailyRoute(detail, message = "") {
+  const previousRunId = collectionRoutesPilotState.myDailyRoute?.run?.id || "";
+  const nextRunId = detail?.run?.id || "";
+  collectionRoutesPilotState.myDailyRoute = detail || null;
+  if (previousRunId !== nextRunId) {
+    collectionRoutesPilotState.myDailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
+  }
+  if (message) collectionRoutesPilotState.myDailyRouteMessage = message;
 }
 
 async function loadCollectionDailyRouteDetail(runId, options = {}) {
@@ -35914,6 +35970,7 @@ async function loadCollectionDailyRouteDetail(runId, options = {}) {
     collectionRoutesPilotState.dailyRouteError = "";
   } catch (error) {
     collectionRoutesPilotState.dailyRouteDetail = null;
+    collectionRoutesPilotState.dailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
     collectionRoutesPilotState.dailyRouteError = error.payload?.error || error.message || "Detail denní trasy se nepodařilo načíst.";
   }
   if (options.renderAfter !== false) render();
@@ -35943,6 +36000,7 @@ async function loadCollectionDailyRoutes(options = {}) {
       await loadCollectionDailyRouteDetail(selectedId, { renderAfter: false });
     } else {
       collectionRoutesPilotState.dailyRouteDetail = null;
+      collectionRoutesPilotState.dailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
     }
   } catch (error) {
     collectionRoutesPilotState.dailyRouteError = error.payload?.error || error.message || "Denní trasy se nepodařilo načíst.";
@@ -36089,10 +36147,10 @@ async function loadMyCollectionDailyRoute(options = {}) {
   if (options.renderAfter !== false) render();
   try {
     const result = await apiJson("/api/collection-routes/daily-routes/my");
-    collectionRoutesPilotState.myDailyRoute = result.route || null;
+    applyMyCollectionDailyRoute(result.route || null);
     collectionRoutesPilotState.myDailyRouteLoaded = true;
   } catch (error) {
-    collectionRoutesPilotState.myDailyRoute = null;
+    applyMyCollectionDailyRoute(null);
     collectionRoutesPilotState.myDailyRouteLoaded = false;
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Přiřazenou trasu se nepodařilo načíst.";
   } finally {
@@ -36113,8 +36171,10 @@ async function transitionMyCollectionDailyRoute(action) {
       method: "POST",
       body: JSON.stringify({ action, idempotencyKey: collectionDailyRouteIdempotencyKey(`driver-${action}`) })
     });
-    collectionRoutesPilotState.myDailyRoute = result.route || null;
-    collectionRoutesPilotState.myDailyRouteMessage = action === "start" ? "Trasa byla zahájena." : "Trasa byla dokončena.";
+    applyMyCollectionDailyRoute(
+      result.route || null,
+      action === "start" ? "Trasa byla zahájena." : "Trasa byla dokončena."
+    );
   } catch (error) {
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Stav trasy se nepodařilo uložit.";
   } finally {
@@ -36140,13 +36200,12 @@ async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
         idempotencyKey: collectionDailyRouteIdempotencyKey(`driver-${action}`)
       })
     });
-    collectionRoutesPilotState.myDailyRoute = result.route || null;
-    collectionRoutesPilotState.myDailyRouteMessage = {
+    applyMyCollectionDailyRoute(result.route || null, {
       done: "Zastávka je uložená jako HOTOVO.",
       problem: "Problém byl uložen a dispečer ho vidí.",
       dump: "Výklop byl zapsán do auditu trasy.",
       break: "Pauza byla zapsána do auditu trasy."
-    }[action] || "Akce byla uložena.";
+    }[action] || "Akce byla uložena.");
   } catch (error) {
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Akci se nepodařilo uložit.";
   } finally {
@@ -41795,12 +41854,14 @@ async function logout() {
   collectionRoutesPilotState.dailyRoutePreview = null;
   collectionRoutesPilotState.dailyRouteSelectedId = "";
   collectionRoutesPilotState.dailyRouteDetail = null;
+  collectionRoutesPilotState.dailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
   collectionRoutesPilotState.dailyRoutePending = "";
   collectionRoutesPilotState.dailyRouteMessage = "";
   collectionRoutesPilotState.dailyRouteError = "";
   collectionRoutesPilotState.myDailyRouteLoaded = false;
   collectionRoutesPilotState.myDailyRouteLoading = false;
   collectionRoutesPilotState.myDailyRoute = null;
+  collectionRoutesPilotState.myDailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
   collectionRoutesPilotState.myDailyRoutePending = "";
   collectionRoutesPilotState.myDailyRouteMessage = "";
   collectionRoutesPilotState.myDailyRouteError = "";
@@ -45970,6 +46031,30 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyRoutesRefresh) {
     event.preventDefault();
     if (!collectionDailyRoutesRefresh.disabled) await loadCollectionDailyRoutes({ force: true });
+    return;
+  }
+
+  const collectionDailyRouteShowMore = event.target.closest("[data-collection-daily-route-show-more]");
+  if (collectionDailyRouteShowMore) {
+    event.preventDefault();
+    const stopCount = collectionRoutesPilotState.dailyRouteDetail?.stops?.length || 0;
+    collectionRoutesPilotState.dailyRouteStopsVisible = collectionDailyRouteNextVisibleStopCount(
+      stopCount,
+      collectionRoutesPilotState.dailyRouteStopsVisible
+    );
+    render();
+    return;
+  }
+
+  const collectionDailyDriverShowMore = event.target.closest("[data-collection-daily-driver-show-more]");
+  if (collectionDailyDriverShowMore) {
+    event.preventDefault();
+    const stopCount = collectionRoutesPilotState.myDailyRoute?.stops?.length || 0;
+    collectionRoutesPilotState.myDailyRouteStopsVisible = collectionDailyRouteNextVisibleStopCount(
+      stopCount,
+      collectionRoutesPilotState.myDailyRouteStopsVisible
+    );
+    render();
     return;
   }
 
