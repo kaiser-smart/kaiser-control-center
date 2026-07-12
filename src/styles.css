@@ -32362,6 +32362,11 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
   min-width: 520px;
 }
 
+.receivables-table--incremental-diff td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .receivables-pill {
   display: inline-flex;
   align-items: center;
@@ -32533,7 +32538,13 @@ body:has(.data-box-page) .data-box-attachment-item__body strong {
     display: grid;
     grid-template-columns: minmax(110px, 44%) 1fr;
     gap: 8px;
+    min-width: 0;
     border-bottom: 0;
+  }
+
+  .receivables-table--incremental-diff .receivables-pill {
+    max-width: 100%;
+    white-space: normal;
   }
 
   .receivables-table td::before {

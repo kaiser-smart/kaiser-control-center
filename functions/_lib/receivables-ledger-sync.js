@@ -105,7 +105,7 @@ async function runStatements(db, statements) {
   }
 }
 
-function invoiceStatus(invoice, paidAmount, openAmount) {
+export function invoiceStatus(invoice, paidAmount, openAmount) {
   const sourceStatus = cleanString(invoice.status).toLowerCase();
   if (sourceStatus.includes("spor") || sourceStatus === "disputed") return "disputed";
   const sourcePaid = optionalBoolean(invoice.isPaid);
@@ -116,7 +116,7 @@ function invoiceStatus(invoice, paidAmount, openAmount) {
   return "unpaid";
 }
 
-function invoiceAmounts(invoice) {
+export function invoiceAmounts(invoice) {
   const totalAmount = numberValue(invoice.totalAmount ?? invoice.priceWithTax);
   const paidAmount = Math.max(0, numberValue(invoice.paidAmount));
   const computedOpenAmount = Math.max(0, totalAmount - paidAmount);
@@ -131,7 +131,7 @@ function invoiceAmounts(invoice) {
   return { totalAmount, paidAmount, openAmount, sourceOpenAmount, computedOpenAmount, sourcePaid };
 }
 
-function invoiceFlags(row, invoice, amounts) {
+export function invoiceFlags(row, invoice, amounts) {
   const flags = [];
   if (cleanString(row.preview_status) === "review" || cleanString(row.preview_status) === "needs_review") {
     const issue = cleanString(row.issue_code).toUpperCase();
