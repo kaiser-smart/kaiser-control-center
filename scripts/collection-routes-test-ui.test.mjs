@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const mantraSource = readFileSync(new URL("../src/data/collectionRoutesMantra.js", import.meta.url), "utf8");
 const wranglerSource = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
 
 for (const marker of [
@@ -25,7 +26,15 @@ for (const marker of [
   "Opakovat pouze 1 neúspěšnou SMS",
   "Již odeslané zprávy, včetně e-mailu, zůstanou nedotčené.",
   "Novou úplnou dávku nelze připravit",
-  "collectionRoutesCanUseTestDataset"
+  "collectionRoutesCanUseTestDataset",
+  "data-collection-routes-mantra",
+  "data-collection-routes-mantra-toggle",
+  "mantraExpanded = !collectionRoutesPilotState.mantraExpanded",
+  "NÁHLED · NIC NESPOUŠTÍ",
+  "Ruční TEST pilot · bez AI optimalizace",
+  "Připravit ruční TEST návrh",
+  "ruční pilot bez AI",
+  "TEST · RUČNÍ PILOT"
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
@@ -91,10 +100,41 @@ for (const marker of [
   ".collection-routes-test-notifications",
   ".collection-routes-test-badge",
   ".collection-routes-test-notification-retry",
-  "@media (max-width: 640px)"
+  "@media (max-width: 640px)",
+  ".collection-routes-mantra",
+  ".collection-routes-mantra__highlights",
+  ".collection-daily-routes__reality"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }
+
+for (const marker of [
+  "KSO Svozový autopilot – provozní mantra",
+  "Read-only návrh pravidel",
+  "Četnosti Nx7 musí být v lichém a sudém týdnu přesně zrcadlené 1:1",
+  "A – 3BN 3558",
+  "B – 1BP 8373",
+  "C – 3BE 2831",
+  "120 l: 3 minuty",
+  "1100 l: 5 minut",
+  "SAKO Brno, a.s.",
+  "Hamburger Recycling CZ s.r.o.",
+  "FCC Česká republika",
+  "Kompostárna Fertia",
+  "JIŽ HOTOVO",
+  "MUSÍM JET VYSYPAT",
+  "Bez výslovného potvrzení dispečerky nic neměň ani neodesílej",
+  "Paměť musí být cloudová"
+]) {
+  assert.ok(mantraSource.includes(marker), `Provozní mantra postrádá závazný bod: ${marker}`);
+}
+
+assert.ok(
+  mantraSource.includes("Tato verze nic sama neodesílá") &&
+    mantraSource.includes("nezapisuje do Vistosu") &&
+    mantraSource.includes("Dokud práh není schválený, neodesílej automatické upozornění"),
+  "Read-only mantra musí přímo zakazovat falešnou automatizaci, produkční zápisy a neodsouhlasené alerty."
+);
 
 assert.ok(
   wranglerSource.includes('binding = "COLLECTION_ROUTES_TEST_DB"') &&

@@ -36807,6 +36807,214 @@ body:has(.ds-plus-page) {
   }
 }
 
+/* Svozové trasy – read-only provozní mantra */
+.collection-routes-mantra {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid rgba(117, 189, 37, 0.3);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(247, 252, 242, 0.96), #fff 62%);
+}
+
+.collection-routes-mantra__head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.collection-routes-mantra__head h3 {
+  margin: 2px 0 5px;
+  color: var(--ink);
+}
+
+.collection-routes-mantra__head p:last-child {
+  max-width: 780px;
+  margin: 0;
+  color: var(--steel);
+}
+
+.collection-routes-mantra__status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid rgba(190, 126, 25, 0.24);
+  border-radius: 999px;
+  background: #fff7e8;
+  color: #75501a;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+
+.collection-routes-mantra__highlights,
+.collection-daily-routes__reality {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.collection-routes-mantra__highlights article {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(66, 80, 74, 0.11);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.collection-routes-mantra__highlights article > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(117, 189, 37, 0.14);
+  color: #467d1c;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.collection-routes-mantra__highlights strong {
+  color: var(--ink);
+}
+
+.collection-routes-mantra__highlights p {
+  margin: 3px 0 0;
+  color: var(--steel);
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+
+.collection-routes-mantra__detail {
+  overflow: hidden;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.collection-routes-mantra__detail > button {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.collection-routes-mantra__detail > button:hover {
+  background: rgba(117, 189, 37, 0.06);
+}
+
+.collection-routes-mantra__detail > button span {
+  font-weight: 900;
+}
+
+.collection-routes-mantra__detail > button small {
+  color: var(--steel);
+  font-weight: 650;
+  text-align: right;
+}
+
+.collection-routes-mantra__content {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.collection-routes-mantra__truth {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border-left: 4px solid rgba(190, 126, 25, 0.62);
+  border-radius: 9px;
+  background: #fff8ec;
+}
+
+.collection-routes-mantra__truth strong {
+  color: #75501a;
+}
+
+.collection-routes-mantra__truth span {
+  color: var(--steel);
+  font-size: 0.84rem;
+}
+
+.collection-routes-mantra__content pre {
+  max-height: 66vh;
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 10px;
+  background: #f8faf7;
+  color: var(--ink);
+  font: 650 0.84rem/1.55 Quicksand, system-ui, sans-serif;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.collection-routes-mantra__content footer {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, auto);
+  gap: 10px 18px;
+  align-items: start;
+}
+
+.collection-routes-mantra__content footer > div {
+  display: grid;
+  gap: 2px;
+}
+
+.collection-routes-mantra__content footer span,
+.collection-routes-mantra__content footer > small {
+  color: var(--steel);
+  font-size: 0.8rem;
+}
+
+.collection-routes-mantra__content footer > small {
+  grid-column: 1 / -1;
+}
+
+.collection-routes-mantra__content nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.collection-routes-mantra__content nav a {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid rgba(66, 80, 74, 0.14);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.collection-routes-mantra__content nav a:hover {
+  border-color: rgba(117, 189, 37, 0.48);
+  color: #467d1c;
+}
+
 /* Denní Svozové trasy – řízený D1 pilot */
 .collection-daily-routes {
   display: grid;
@@ -36851,6 +37059,44 @@ body:has(.ds-plus-page) {
   display: grid;
   gap: 6px;
   min-width: 0;
+}
+
+.collection-daily-route-form > div small {
+  color: var(--steel);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.collection-daily-routes__reality article {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(66, 80, 74, 0.11);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.collection-daily-routes__reality article.is-future {
+  border-style: dashed;
+  background: #f8faf7;
+}
+
+.collection-daily-routes__reality span,
+.collection-daily-routes__reality small {
+  color: var(--steel);
+  font-size: 0.76rem;
+}
+
+.collection-daily-routes__reality span {
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.collection-daily-routes__reality strong {
+  color: var(--ink);
 }
 
 .collection-daily-route-form label > span,
@@ -36976,12 +37222,19 @@ body:has(.ds-plus-page) {
 
 .collection-daily-routes__saved > div:first-child {
   display: flex;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
 }
 
 .collection-daily-routes__saved h4 {
   margin: 0;
+}
+
+.collection-daily-routes__saved p {
+  margin: 3px 0 0;
+  color: var(--steel);
+  font-size: 0.8rem;
 }
 
 .collection-daily-route-list {
@@ -37522,6 +37775,16 @@ body:has(.ds-plus-page) {
 }
 
 @media (max-width: 900px) {
+  .collection-routes-mantra__highlights,
+  .collection-daily-routes__reality {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collection-routes-mantra__highlights article:last-child,
+  .collection-daily-routes__reality article:last-child {
+    grid-column: 1 / -1;
+  }
+
   .collection-daily-route-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -37537,6 +37800,52 @@ body:has(.ds-plus-page) {
 }
 
 @media (max-width: 640px) {
+  .collection-routes-mantra {
+    padding: 13px;
+    border-radius: 13px;
+  }
+
+  .collection-routes-mantra__head,
+  .collection-routes-mantra__detail > button {
+    display: grid;
+  }
+
+  .collection-routes-mantra__status {
+    white-space: normal;
+  }
+
+  .collection-routes-mantra__highlights,
+  .collection-daily-routes__reality {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-mantra__highlights article:last-child,
+  .collection-daily-routes__reality article:last-child {
+    grid-column: auto;
+  }
+
+  .collection-routes-mantra__detail > button small {
+    text-align: left;
+  }
+
+  .collection-routes-mantra__content pre {
+    max-height: 72vh;
+    padding: 12px;
+    font-size: 0.8rem;
+  }
+
+  .collection-routes-mantra__content footer {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-routes-mantra__content nav {
+    justify-content: flex-start;
+  }
+
+  .collection-routes-mantra__content footer > small {
+    grid-column: auto;
+  }
+
   .collection-daily-routes,
   .collection-daily-route-preview,
   .collection-daily-route-detail,
@@ -37576,6 +37885,10 @@ body:has(.ds-plus-page) {
 
   .collection-daily-route-pagination .secondary-link {
     width: 100%;
+  }
+
+  .collection-daily-routes__saved > div:first-child {
+    display: grid;
   }
 
   .collection-routes-test-scope,
