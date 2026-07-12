@@ -3839,6 +3839,100 @@ function mockReceivablesVistosInvoiceSnapshot() {
   };
 }
 
+function mockReceivablesIncrementalLedgerDiff() {
+  const rows = [
+    {
+      rowNumber: 1,
+      stagingStatus: "ready",
+      classification: "changed",
+      invoiceId: "mock-invoice-1",
+      invoiceNumber: "2601100803",
+      variableSymbol: "2601100803",
+      customerId: "receivable-customer:53545",
+      customerName: "Firma Alfa s.r.o.",
+      dueDate: "2026-07-05",
+      totalAmount: 11890.19,
+      paidAmount: 11890.19,
+      openAmount: 0,
+      status: "paid",
+      changes: [
+        { key: "paidAmount", label: "Uhrazeno", before: 0, after: 11890.19, category: "payment" },
+        { key: "openAmount", label: "Otevřený zůstatek", before: 11890.19, after: 0, category: "payment" },
+        { key: "status", label: "Stav úhrady", before: "unpaid", after: "paid", category: "payment" }
+      ],
+      conflictReasons: [],
+      dataQualityFlags: [],
+      ratingImpact: { relevant: true, affectedCustomerIds: ["receivable-customer:53545"] }
+    },
+    {
+      rowNumber: 2,
+      stagingStatus: "ready",
+      classification: "unchanged",
+      invoiceId: "mock-invoice-2",
+      invoiceNumber: "2601102423",
+      variableSymbol: "2601102423",
+      customerId: "receivable-customer:86267",
+      customerName: "Firma Beta a.s.",
+      dueDate: "2026-06-24",
+      totalAmount: 8288.5,
+      paidAmount: 0,
+      openAmount: 8288.5,
+      status: "unpaid",
+      changes: [],
+      conflictReasons: [],
+      dataQualityFlags: ["INVOICE_AMOUNT_MISMATCH", "MISSING_REMAINING_AMOUNT"],
+      ratingImpact: { relevant: false, affectedCustomerIds: ["receivable-customer:86267"] }
+    },
+    {
+      rowNumber: 3,
+      stagingStatus: "review",
+      classification: "conflict",
+      invoiceId: "mock-invoice-3",
+      invoiceNumber: "2601102276",
+      variableSymbol: "2601102276",
+      customerId: "",
+      customerName: "Neurčený zákazník",
+      dueDate: "2026-07-05",
+      totalAmount: 1966.25,
+      paidAmount: 0,
+      openAmount: 1966.25,
+      status: "unpaid",
+      changes: [],
+      conflictReasons: ["CUSTOMER_LINK_NOT_RELIABLE"],
+      dataQualityFlags: ["CUSTOMER_LINK_NOT_RELIABLE"],
+      ratingImpact: { relevant: false, affectedCustomerIds: [] }
+    }
+  ];
+  return {
+    apiStatus: "ready",
+    batch: {
+      id: "mock-vistos-invoice-incremental",
+      status: "incremental",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      periodFrom: "2026-07-12T02:30:00.000Z",
+      periodTo: "2026-07-12T12:30:00.000Z",
+      filterVerified: true
+    },
+    summary: {
+      totalRows: rows.length,
+      newCount: 0,
+      changedCount: 1,
+      unchangedCount: 1,
+      conflictCount: 1,
+      ratingRelevantCount: 1,
+      affectedCustomerCount: 1
+    },
+    rows,
+    pagination: { page: 1, pageSize: 10, totalRows: rows.length },
+    readOnly: true,
+    writesLedger: false,
+    calculatesRealRating: false,
+    sendsCustomerCommunication: false,
+    importsKbPayments: false
+  };
+}
+
 function mockReceivablesVistosLedgerMapping() {
   const snapshot = mockReceivablesVistosInvoiceSnapshot();
   const rows = snapshot.rows.map((row) => ({
@@ -4363,6 +4457,10 @@ async function handleApi(request, response) {
         },
         mode: "local_mock"
       });
+      return true;
+    }
+    if (url.pathname === "/api/receivables/vistos/incremental-ledger-diff") {
+      sendJson(response, 200, mockReceivablesIncrementalLedgerDiff());
       return true;
     }
     if (url.pathname === "/api/receivables/vistos/ledger-mapping") {

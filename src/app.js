@@ -1050,6 +1050,11 @@ const receivablesState = {
   invoiceSnapshotMessage: "",
   invoiceSnapshotAdvanceRuns: 0,
   invoiceSnapshotAdvanceTimer: 0,
+  incrementalLedgerDiff: null,
+  incrementalLedgerDiffLoaded: false,
+  incrementalLedgerDiffLoading: false,
+  incrementalLedgerDiffError: "",
+  incrementalLedgerDiffPagination: null,
   ledgerMapping: null,
   ledgerMappingLoaded: false,
   ledgerMappingLoading: false,
@@ -32216,6 +32221,111 @@ function receivablesInvoiceSnapshotPanel() {
   `;
 }
 
+function receivablesIncrementalDiffClassification(value) {
+  const labels = {
+    new: "nová",
+    changed: "změněná",
+    unchanged: "beze změny",
+    conflict: "konflikt"
+  };
+  const tones = { new: "ready", changed: "warning", unchanged: "ready", conflict: "danger" };
+  return receivablesPill(labels[value] || value || "-", tones[value] || "warning");
+}
+
+function receivablesIncrementalDiffChangeText(change = {}) {
+  const moneyKeys = new Set(["totalAmount", "paidAmount", "openAmount"]);
+  const before = moneyKeys.has(change.key) ? formatReceivableMoney(change.before) : (change.before || "-");
+  const after = moneyKeys.has(change.key) ? formatReceivableMoney(change.after) : (change.after || "-");
+  return `${change.label || change.key}: ${before} → ${after}`;
+}
+
+function receivablesIncrementalDiffPaginationControls(pagination = {}) {
+  const page = Number(pagination.page || 1);
+  const pageSize = Number(pagination.pageSize || 10);
+  const totalRows = Number(pagination.totalRows || 0);
+  const totalPages = Math.max(1, Math.ceil(totalRows / Math.max(1, pageSize)));
+  const start = totalRows ? ((page - 1) * pageSize) + 1 : 0;
+  const end = Math.min(totalRows, page * pageSize);
+  return `
+    <div class="receivables-pagination" aria-label="Stránkování změn inkrementálního snapshotu">
+      <span>${escapeHtml(start)}-${escapeHtml(end)} z ${escapeHtml(totalRows)} · 10 řádků na stránku</span>
+      <button class="secondary-link" type="button" data-receivables-diff-page="${escapeHtml(page - 1)}" ${page <= 1 || receivablesState.incrementalLedgerDiffLoading ? "disabled" : ""}>Předchozí</button>
+      <button class="secondary-link" type="button" data-receivables-diff-page="${escapeHtml(page + 1)}" ${page >= totalPages || receivablesState.incrementalLedgerDiffLoading ? "disabled" : ""}>Další</button>
+    </div>
+  `;
+}
+
+function receivablesIncrementalLedgerDiffPanel() {
+  const diff = receivablesState.incrementalLedgerDiff;
+  const summary = diff?.summary || {};
+  const batch = diff?.batch || {};
+  const rows = Array.isArray(diff?.rows) ? diff.rows : [];
+  const pagination = receivablesState.incrementalLedgerDiffPagination || diff?.pagination || {};
+  const cards = [
+    ["Řádků v batchi", summary.totalRows || 0],
+    ["Nové", summary.newCount || 0],
+    ["Změněné", summary.changedCount || 0],
+    ["Beze změny", summary.unchangedCount || 0],
+    ["Konflikty", summary.conflictCount || 0],
+    ["Faktury pro rating", summary.ratingRelevantCount || 0],
+    ["Dotčené ratingy", summary.affectedCustomerCount || 0]
+  ];
+  const table = rows.length ? `
+    <div class="receivables-table-wrap">
+      <table class="receivables-table receivables-table--compact receivables-table--incremental-diff">
+        <thead><tr><th>Faktura</th><th>Zákazník</th><th>Výsledek</th><th>Změny proti ledgeru</th><th>Úhrada</th><th>Otevřeno</th><th>Rating</th><th>Data quality</th></tr></thead>
+        <tbody>
+          ${rows.map((row) => {
+            const changes = (row.changes || []).map(receivablesIncrementalDiffChangeText);
+            const reasons = row.conflictReasons || [];
+            const quality = row.dataQualityFlags || [];
+            return `<tr>
+              <td data-label="Faktura"><strong>${escapeHtml(row.invoiceNumber || row.invoiceId || "-")}</strong><br><span>VS ${escapeHtml(row.variableSymbol || "-")}</span></td>
+              <td data-label="Zákazník">${escapeHtml(row.customerName || row.customerId || "-")}</td>
+              <td data-label="Výsledek">${receivablesIncrementalDiffClassification(row.classification)}</td>
+              <td data-label="Změny proti ledgeru">${escapeHtml(changes.join(" · ") || reasons.join(", ") || "žádné")}</td>
+              <td data-label="Úhrada">${escapeHtml(formatReceivableMoney(row.paidAmount))}<br><span>${escapeHtml(row.status || "-")}</span></td>
+              <td data-label="Otevřeno">${escapeHtml(formatReceivableMoney(row.openAmount))}</td>
+              <td data-label="Rating">${row.ratingImpact?.relevant ? receivablesPill("ovlivní preview", "warning") : receivablesPill("bez dopadu", "ready")}</td>
+              <td data-label="Data quality">${quality.length ? escapeHtml(quality.join(", ")) : receivablesPill("čisté", "ready")}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  ` : `<p class="receivables-empty">Poslední inkrementální běh neobsahuje žádné změněné faktury.</p>`;
+
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-incremental-diff-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Vistos staging → ledger preview</p>
+          <h2 id="receivables-incremental-diff-title">Změny faktur proti ledgeru</h2>
+          <p>Automatické read-only porovnání posledního dokončeného inkrementálního batchu. Nic nezapisuje a rating pouze označuje jako budoucí dopad.</p>
+        </div>
+        ${receivablesPill(receivablesState.incrementalLedgerDiffLoading ? "načítám" : batch.filterVerified ? "ověřeno" : "read-only", batch.filterVerified ? "ready" : "warning")}
+      </div>
+      ${receivablesState.incrementalLedgerDiffError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.incrementalLedgerDiffError)}</p>` : ""}
+      <div class="receivables-import-summary" aria-label="Souhrn změn faktur proti ledgeru">
+        ${cards.map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("")}
+      </div>
+      <dl class="receivables-diagnostics-list">
+        <div><dt>Batch</dt><dd>${escapeHtml(batch.id || "-")}</dd></div>
+        <div><dt>Období změn</dt><dd>${escapeHtml(batch.periodFrom || "-")} → ${escapeHtml(batch.periodTo || "-")}</dd></div>
+        <div><dt>Pojistky</dt><dd>ledger zápis vypnut · rating výpočet vypnut · komunikace vypnuta</dd></div>
+      </dl>
+      ${receivablesInvoiceBlock({
+        title: "Faktury v posledním inkrementálním batchi",
+        description: "Jeden blok read-only rozdílů, maximálně 10 řádků na stránku.",
+        visibleCount: rows.length,
+        totalCount: Number(pagination.totalRows || summary.totalRows || 0),
+        controls: receivablesIncrementalDiffPaginationControls(pagination),
+        content: table
+      })}
+    </section>
+  `;
+}
+
 function receivablesKbOnboardingTone(item = {}) {
   return item.configured ? "ready" : "waiting";
 }
@@ -33064,6 +33174,7 @@ function receivablesImportSection() {
   return `
     ${receivablesKbApiOnboardingPanel()}
     ${receivablesInvoiceSnapshotPanel()}
+    ${receivablesIncrementalLedgerDiffPanel()}
     ${receivablesLedgerMappingPanel()}
   `;
 }
@@ -35407,6 +35518,28 @@ async function loadReceivablesLedgerMapping(options = {}) {
   }
 }
 
+async function loadReceivablesIncrementalLedgerDiff(options = {}) {
+  if (receivablesState.incrementalLedgerDiffLoading) return;
+  receivablesState.incrementalLedgerDiffLoading = true;
+  receivablesState.incrementalLedgerDiffError = "";
+  try {
+    const params = new URLSearchParams({
+      page: String(options.page || receivablesState.incrementalLedgerDiffPagination?.page || 1),
+      pageSize: "10"
+    });
+    const result = await apiJson(`/api/receivables/vistos/incremental-ledger-diff?${params.toString()}`);
+    receivablesState.incrementalLedgerDiff = result;
+    receivablesState.incrementalLedgerDiffPagination = result.pagination || null;
+    receivablesState.incrementalLedgerDiffLoaded = true;
+  } catch (error) {
+    receivablesState.incrementalLedgerDiffError = error.payload?.error || error.message || "Read-only porovnání změn faktur se teď nepodařilo načíst.";
+    receivablesState.incrementalLedgerDiffLoaded = true;
+  } finally {
+    receivablesState.incrementalLedgerDiffLoading = false;
+    if (options.renderAfter !== false) render();
+  }
+}
+
 async function loadReceivablesKbOnboarding(options = {}) {
   if (receivablesState.kbOnboardingLoading) {
     return;
@@ -35603,6 +35736,10 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "import" && !receivablesState.invoiceSnapshotLoaded && !receivablesState.invoiceSnapshotLoading) {
     void loadReceivablesInvoiceSnapshot();
+  }
+
+  if (context.view === "import" && !receivablesState.incrementalLedgerDiffLoaded && !receivablesState.incrementalLedgerDiffLoading) {
+    void loadReceivablesIncrementalLedgerDiff();
   }
 
   if (context.view === "import" && !receivablesState.kbOnboardingLoaded && !receivablesState.kbOnboardingLoading) {
@@ -45730,6 +45867,16 @@ document.addEventListener("click", async (event) => {
     const page = Number(receivablesInvoicePage.dataset.receivablesInvoicePage || 1);
     if (Number.isFinite(page) && page > 0) {
       await loadReceivablesInvoiceSnapshot({ page, pageSize: 10, renderAfter: true });
+    }
+    return;
+  }
+
+  const receivablesDiffPage = event.target.closest("[data-receivables-diff-page]");
+  if (receivablesDiffPage) {
+    event.preventDefault();
+    const page = Number(receivablesDiffPage.dataset.receivablesDiffPage || 1);
+    if (Number.isFinite(page) && page > 0) {
+      await loadReceivablesIncrementalLedgerDiff({ page, renderAfter: true });
     }
     return;
   }
