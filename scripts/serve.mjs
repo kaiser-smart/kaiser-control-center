@@ -4389,15 +4389,22 @@ async function handleApi(request, response) {
       unmatchedPaymentReview: {
         totalCount: 1249,
         totalAmount: 131125802.41,
+        receivableReviewCount: 1230,
+        receivableReviewAmount: 129776100.21,
+        technicalMovementCount: 19,
+        technicalMovementAmount: 1349702.2,
         duplicateCandidateCount: 22,
         duplicateCandidateAmount: 5161512.88,
         safeAutoMatchCount: 0,
         blocksAutomation: true,
         buckets: [
-          { code: "missing_variable_symbol", paymentCount: 595, amountTotal: 88549055.15 },
-          { code: "variable_symbol_without_invoice", paymentCount: 342, amountTotal: 32699610.54 },
-          { code: "exact_variable_symbol_over_invoice_total", paymentCount: 302, amountTotal: 9814636.42 },
-          { code: "payment_before_invoice", paymentCount: 10, amountTotal: 62500.3 }
+          { code: "missing_variable_symbol", paymentCount: 576, amountTotal: 87199352.95, reviewKind: "receivable" },
+          { code: "variable_symbol_without_invoice", paymentCount: 342, amountTotal: 32699610.54, reviewKind: "receivable" },
+          { code: "exact_variable_symbol_over_invoice_total", paymentCount: 302, amountTotal: 9814636.42, reviewKind: "receivable" },
+          { code: "payment_before_invoice", paymentCount: 10, amountTotal: 62500.3, reviewKind: "receivable" },
+          { code: "technical_purchase_refund", paymentCount: 12, amountTotal: 23404.2, reviewKind: "technical" },
+          { code: "technical_atm_deposit", paymentCount: 6, amountTotal: 1321000, reviewKind: "technical" },
+          { code: "technical_mobile_reversal", paymentCount: 1, amountTotal: 5298, reviewKind: "technical" }
         ]
       },
       customers: [{ ...fixture.customer, package: fixture.package, rating: fixture.rating }]

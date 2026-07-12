@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.522"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.523"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: příchozí pohyby bez záměny směru",
+    text: "Kontrolní fronta jasně ukazuje pouze příchozí pohyby. Vratky nákupů, ATM vklady a storna jsou oddělené jako technické kredity mimo pohledávky; pracovní počet a částka k párování zahrnují jen příchozí úhrady."
+  },
   {
     title: "Pohledávky: kontrolované dorovnání úhrad",
     text: "Import automaticky zobrazuje read-only porovnání potvrzených spárovaných plateb se stavem faktur. Chráněné backendové dorovnání používá toleranci včetně haléřových odchylek databáze, odmítá zastaralý preview otisk a ukládá původní i nový stav do auditu; ratingy ani zákaznickou komunikaci nespouští."

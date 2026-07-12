@@ -31861,7 +31861,10 @@ function receivablesUnmatchedPaymentReview() {
     multiple_invoice_candidates: "VS odpovídá více fakturám",
     exact_variable_symbol_over_invoice_total: "Přesný VS, součet převyšuje fakturu",
     exact_variable_symbol_requires_review: "Přesný VS vyžaduje další kontrolu",
-    payment_before_invoice: "Platba je před vystavením faktury"
+    payment_before_invoice: "Platba je před vystavením faktury",
+    technical_purchase_refund: "Vrácení nákupu",
+    technical_atm_deposit: "Vklad přes ATM",
+    technical_mobile_reversal: "Storno mobilní platby"
   };
   const buckets = Array.isArray(review.buckets) ? review.buckets : [];
   return `
@@ -31869,27 +31872,31 @@ function receivablesUnmatchedPaymentReview() {
       <div class="receivables-panel__head">
         <div>
           <p class="module-feedback__eyebrow">Kontrolní fronta</p>
-          <h2 id="receivables-unmatched-title">Nespárované bankovní platby</h2>
-          <p>Nejasné položky zůstávají bez spárování. Dokud fronta není vyřešená, ostrá zákaznická automatizace zůstává blokovaná.</p>
+          <h2 id="receivables-unmatched-title">Nespárované příchozí pohyby</h2>
+          <p>Příchozí úhrady bez bezpečné vazby na fakturu zůstávají ke kontrole. Vratky, ATM vklady a storna jsou oddělené jako technické pohyby mimo pohledávky.</p>
         </div>
-        ${receivablesPill(`${review.totalCount || 0} ke kontrole`, review.totalCount ? "warning" : "ready")}
+        ${receivablesPill(`${review.receivableReviewCount || 0} úhrad ke kontrole`, review.receivableReviewCount ? "warning" : "ready")}
       </div>
       <div class="receivables-detail-grid">
-        <article><span>Počet</span><strong>${escapeHtml(review.totalCount || 0)}</strong></article>
-        <article><span>Částka</span><strong>${escapeHtml(formatReceivableMoney(review.totalAmount))}</strong></article>
+        <article><span>Příchozí pohyby</span><strong>${escapeHtml(review.totalCount || 0)}</strong></article>
+        <article><span>Úhrady k párování</span><strong>${escapeHtml(review.receivableReviewCount || 0)}</strong></article>
+        <article><span>Částka úhrad k párování</span><strong>${escapeHtml(formatReceivableMoney(review.receivableReviewAmount))}</strong></article>
+        <article><span>Technické pohyby</span><strong>${escapeHtml(review.technicalMovementCount || 0)}</strong></article>
         <article><span>Kandidáti duplicity</span><strong>${escapeHtml(review.duplicateCandidateCount || 0)}</strong></article>
         <article><span>Bezpečně k auto-matchi</span><strong>${escapeHtml(review.safeAutoMatchCount || 0)}</strong></article>
       </div>
       <div class="receivables-table-wrap">
         <table class="receivables-table receivables-table--compact">
-          <thead><tr><th>Důvod</th><th>Počet</th><th>Částka</th><th>Rozhodnutí</th></tr></thead>
+          <thead><tr><th>Typ / důvod</th><th>Počet</th><th>Částka</th><th>Rozhodnutí</th></tr></thead>
           <tbody>
             ${buckets.map((bucket) => `
               <tr>
-                <td data-label="Důvod">${escapeHtml(labels[bucket.code] || bucket.code || "Neurčeno")}</td>
+                <td data-label="Typ / důvod">${escapeHtml(labels[bucket.code] || bucket.code || "Neurčeno")}</td>
                 <td data-label="Počet">${escapeHtml(bucket.paymentCount || 0)}</td>
                 <td data-label="Částka">${escapeHtml(formatReceivableMoney(bucket.amountTotal))}</td>
-                <td data-label="Rozhodnutí">${receivablesPill("ruční kontrola", "warning")}</td>
+                <td data-label="Rozhodnutí">${bucket.reviewKind === "technical"
+                  ? receivablesPill("mimo pohledávky", "ready")
+                  : receivablesPill("ruční kontrola", "warning")}</td>
               </tr>
             `).join("") || `<tr><td colspan="4">Fronta je prázdná.</td></tr>`}
           </tbody>

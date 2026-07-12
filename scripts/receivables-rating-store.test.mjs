@@ -334,14 +334,15 @@ sqlite.prepare(`
 
 const insertReviewPayment = sqlite.prepare(`
   INSERT INTO receivable_payment_transactions (
-    id, source, booking_date, amount, variable_symbol, data_quality_flags_json
-  ) VALUES (?, 'kb_csv', ?, ?, ?, ?)
+    id, source, booking_date, amount, variable_symbol, transaction_type, data_quality_flags_json
+  ) VALUES (?, 'kb_csv', ?, ?, ?, ?, ?)
 `);
 insertReviewPayment.run(
   "payment-review-no-vs",
   "2026-06-20",
   50,
   "",
+  "Prichozi uhrada",
   JSON.stringify(["PAYMENT_WITHOUT_VS", "UNMATCHED_PAYMENT", "DUPLICATE_PAYMENT_CANDIDATE"])
 );
 insertReviewPayment.run(
@@ -349,6 +350,7 @@ insertReviewPayment.run(
   "2026-06-20",
   60,
   "9999999999",
+  "Prichozi uhrada",
   JSON.stringify(["UNMATCHED_PAYMENT"])
 );
 insertReviewPayment.run(
@@ -356,6 +358,7 @@ insertReviewPayment.run(
   "2026-06-20",
   150,
   "9910000001",
+  "Prichozi uhrada",
   JSON.stringify(["UNMATCHED_PAYMENT", "PAYMENT_MATCH_LOW_CONFIDENCE"])
 );
 insertReviewPayment.run(
@@ -363,15 +366,28 @@ insertReviewPayment.run(
   "2026-05-20",
   100,
   "9910000002",
+  "Prichozi uhrada",
   JSON.stringify(["UNMATCHED_PAYMENT", "PAYMENT_MATCH_LOW_CONFIDENCE"])
+);
+insertReviewPayment.run(
+  "payment-review-refund",
+  "2026-06-20",
+  40,
+  "",
+  "Vraceni nakupu",
+  JSON.stringify(["PAYMENT_WITHOUT_VS", "UNMATCHED_PAYMENT"])
 );
 
 {
   const dashboard = await getReceivablesDashboard(env, { today: "2026-07-10" });
   const buckets = new Map(dashboard.unmatchedPaymentReview.buckets.map((bucket) => [bucket.code, bucket]));
   assert.equal(dashboard.sourceStatus.insolvency, "isir_read_only_preview");
-  assert.equal(dashboard.unmatchedPaymentReview.totalCount, 4);
-  assert.equal(dashboard.unmatchedPaymentReview.totalAmount, 360);
+  assert.equal(dashboard.unmatchedPaymentReview.totalCount, 5);
+  assert.equal(dashboard.unmatchedPaymentReview.totalAmount, 400);
+  assert.equal(dashboard.unmatchedPaymentReview.receivableReviewCount, 4);
+  assert.equal(dashboard.unmatchedPaymentReview.receivableReviewAmount, 360);
+  assert.equal(dashboard.unmatchedPaymentReview.technicalMovementCount, 1);
+  assert.equal(dashboard.unmatchedPaymentReview.technicalMovementAmount, 40);
   assert.equal(dashboard.unmatchedPaymentReview.duplicateCandidateCount, 1);
   assert.equal(dashboard.unmatchedPaymentReview.safeAutoMatchCount, 0);
   assert.equal(dashboard.unmatchedPaymentReview.blocksAutomation, true);
@@ -379,6 +395,8 @@ insertReviewPayment.run(
   assert.equal(buckets.get("variable_symbol_without_invoice").paymentCount, 1);
   assert.equal(buckets.get("exact_variable_symbol_over_invoice_total").paymentCount, 1);
   assert.equal(buckets.get("payment_before_invoice").paymentCount, 1);
+  assert.equal(buckets.get("technical_purchase_refund").paymentCount, 1);
+  assert.equal(buckets.get("technical_purchase_refund").reviewKind, "technical");
 }
 
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM receivable_communication_events").get().count, 0);

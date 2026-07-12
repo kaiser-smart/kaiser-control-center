@@ -146,6 +146,10 @@ function emptyDashboard(apiStatus = "waiting", message = "D1 databáze pro Pohle
     unmatchedPaymentReview: {
       totalCount: 0,
       totalAmount: 0,
+      receivableReviewCount: 0,
+      receivableReviewAmount: 0,
+      technicalMovementCount: 0,
+      technicalMovementAmount: 0,
       duplicateCandidateCount: 0,
       duplicateCandidateAmount: 0,
       safeAutoMatchCount: 0,
@@ -456,7 +460,7 @@ async function countScalar(db, sql, ...bindings) {
 async function unmatchedPaymentReviewSummary(db) {
   const result = await db.prepare(`
     WITH unmatched AS (
-      SELECT id, amount, booking_date, variable_symbol, data_quality_flags_json
+      SELECT id, amount, booking_date, variable_symbol, transaction_type, data_quality_flags_json
       FROM receivable_payment_transactions
       WHERE amount > 0
         AND data_quality_flags_json LIKE '%UNMATCHED_PAYMENT%'
@@ -483,6 +487,9 @@ async function unmatchedPaymentReviewSummary(db) {
         u.amount,
         u.data_quality_flags_json,
         CASE
+          WHEN LOWER(COALESCE(u.transaction_type, '')) = 'vraceni nakupu' THEN 'technical_purchase_refund'
+          WHEN LOWER(COALESCE(u.transaction_type, '')) = 'vklad pres atm' THEN 'technical_atm_deposit'
+          WHEN LOWER(COALESCE(u.transaction_type, '')) = 'storno mobilni platby' THEN 'technical_mobile_reversal'
           WHEN COALESCE(u.variable_symbol, '') = '' THEN 'missing_variable_symbol'
           WHEN i.variable_symbol IS NULL THEN 'variable_symbol_without_invoice'
           WHEN i.invoice_count > 1 THEN 'multiple_invoice_candidates'
@@ -503,21 +510,30 @@ async function unmatchedPaymentReviewSummary(db) {
       ROUND(SUM(CASE WHEN data_quality_flags_json LIKE '%DUPLICATE_PAYMENT_CANDIDATE%' THEN amount ELSE 0 END), 2) AS duplicate_amount
     FROM classified
     GROUP BY bucket
-    ORDER BY payment_count DESC
+    ORDER BY CASE WHEN bucket LIKE 'technical_%' THEN 1 ELSE 0 END, payment_count DESC
   `).all();
 
   const buckets = (result.results || []).map((row) => ({
     code: cleanString(row.bucket),
     paymentCount: numberValue(row.payment_count),
-    amountTotal: numberValue(row.amount_total)
+    amountTotal: numberValue(row.amount_total),
+    reviewKind: cleanString(row.bucket).startsWith("technical_") ? "technical" : "receivable"
   }));
+  const receivableBuckets = buckets.filter((bucket) => bucket.reviewKind === "receivable");
+  const technicalBuckets = buckets.filter((bucket) => bucket.reviewKind === "technical");
+  const sumCount = (items) => items.reduce((sum, bucket) => sum + bucket.paymentCount, 0);
+  const sumAmount = (items) => Math.round(items.reduce((sum, bucket) => sum + bucket.amountTotal, 0) * 100) / 100;
   return {
-    totalCount: buckets.reduce((sum, bucket) => sum + bucket.paymentCount, 0),
-    totalAmount: Math.round(buckets.reduce((sum, bucket) => sum + bucket.amountTotal, 0) * 100) / 100,
-    duplicateCandidateCount: (result.results || []).reduce((sum, row) => sum + numberValue(row.duplicate_count), 0),
-    duplicateCandidateAmount: Math.round((result.results || []).reduce((sum, row) => sum + numberValue(row.duplicate_amount), 0) * 100) / 100,
+    totalCount: sumCount(buckets),
+    totalAmount: sumAmount(buckets),
+    receivableReviewCount: sumCount(receivableBuckets),
+    receivableReviewAmount: sumAmount(receivableBuckets),
+    technicalMovementCount: sumCount(technicalBuckets),
+    technicalMovementAmount: sumAmount(technicalBuckets),
+    duplicateCandidateCount: (result.results || []).reduce((sum, row) => cleanString(row.bucket).startsWith("technical_") ? sum : sum + numberValue(row.duplicate_count), 0),
+    duplicateCandidateAmount: Math.round((result.results || []).reduce((sum, row) => cleanString(row.bucket).startsWith("technical_") ? sum : sum + numberValue(row.duplicate_amount), 0) * 100) / 100,
     safeAutoMatchCount: 0,
-    blocksAutomation: true,
+    blocksAutomation: sumCount(receivableBuckets) > 0,
     buckets
   };
 }
