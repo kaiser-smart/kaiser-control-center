@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.530"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.531"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: TEST řádky ve stejném tvaru jako ostrá data",
+    text: "TEST stanoviště i uložená denní trasa zobrazují stejnou pracovní strukturu jako ostré řádky: stav, pořadí, zákazníka, stanoviště, odpad a nádobu, interval, den svozu a smlouvu. Starší uložené TEST trasy z původní sady jsou viditelně označené jako archivní v1."
+  },
   {
     title: "Svozové trasy: skutečné dny svozu v TEST datech",
     text: "TEST Brno 500 nově zrcadlí každý týdenní svoz 1:1 do lichého i sudého týdne, například středa lichá a středa sudá. Četnost 1x14 zůstává v jedné paritě a 1x30 používá pevný pracovní den s pořadím v měsíci, podle kterého lze sestavit denní trasu."

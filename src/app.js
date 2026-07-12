@@ -20894,6 +20894,11 @@ function collectionDailyRouteStopStatusLabel(status) {
   return { planned: "Čeká", done: "Hotovo", problem: "Problém" }[status] || status || "-";
 }
 
+function collectionDailyRouteStopStatusBadge(status) {
+  const tone = status === "done" ? "ok" : status === "problem" ? "warning" : "waiting";
+  return `<span class="collection-routes-site-status collection-routes-site-status--${tone}">${escapeHtml(collectionDailyRouteStopStatusLabel(status))}</span>`;
+}
+
 function collectionDailyRouteEventLabel(eventType) {
   return {
     route_created: "Návrh uložen",
@@ -21008,18 +21013,39 @@ function collectionRoutesTestDatasetPanel(user) {
         <p class="collection-routes-test-recipient"><strong>Skutečné testovací zprávy:</strong> SMS ${escapeHtml(recipientPhone)} · e-mail ${escapeHtml(recipientEmail)}. Odesílají se až po samostatném potvrzení konkrétní trasy.</p>
         <details class="collection-routes-test-sites">
           <summary>Testovací stanoviště (${escapeHtml(rows.length)})</summary>
-          <div class="collection-daily-route-table-wrap">
-            <table class="collection-daily-route-table">
-              <thead><tr><th>#</th><th>Firma a stanoviště</th><th>Adresa / GPS</th><th>Odpad</th><th>Četnost</th></tr></thead>
+          <div class="collection-routes-sites-table collection-routes-preview-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Stav</th>
+                  <th>Pořadí</th>
+                  <th>Zákazník</th>
+                  <th>Stanoviště</th>
+                  <th>Odpad / nádoba</th>
+                  <th>Interval</th>
+                  <th>Den svozu</th>
+                  <th>Smlouva</th>
+                </tr>
+              </thead>
               <tbody>
                 ${visibleRows.map((item) => {
                   const row = item.summary || {};
-                  return `<tr>
-                    <td data-label="#">${escapeHtml(item.rowNumber)}</td>
-                    <td data-label="Firma"><strong>${escapeHtml(row.customerName || "-")}</strong><span>${escapeHtml(row.stationName || "-")}</span><small>${escapeHtml(row.contact || "-")}</small></td>
-                    <td data-label="Adresa"><strong>${escapeHtml(row.addressRaw || "-")}</strong><small>${escapeHtml(`${row.latitude || "-"}, ${row.longitude || "-"}`)}</small></td>
-                    <td data-label="Odpad">${escapeHtml(row.wasteType || "-")} · ${escapeHtml(row.containerCount || 1)}× ${escapeHtml(row.containerVolume || "-")} l</td>
-                    <td data-label="Četnost">${escapeHtml(row.frequency || "-")}<small>${escapeHtml(row.pickupDaysText || "-")}</small></td>
+                  const hasIssue = Number(row.issueCount || item.issues?.length || 0) > 0;
+                  const onDemand = row.onDemand === true || row.serviceMode === "on_demand";
+                  const status = hasIssue
+                    ? { label: "Zkontrolovat", tone: "warning" }
+                    : onDemand
+                      ? { label: "Na výzvu", tone: "waiting" }
+                      : { label: "OK", tone: "ok" };
+                  return `<tr class="collection-routes-site-contract-row ${hasIssue ? "collection-routes-site-contract-row--danger" : ""}">
+                    <td data-label="Stav"><span class="collection-routes-site-status collection-routes-site-status--${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span></td>
+                    <td data-label="Pořadí">${escapeHtml(item.rowNumber)}</td>
+                    <td data-label="Zákazník">${escapeHtml(row.customerName || "-")}</td>
+                    <td data-label="Stanoviště"><strong>${escapeHtml(row.stationName || row.addressRaw || "-")}</strong>${row.stationName && row.addressRaw ? `<span>${escapeHtml(row.addressRaw)}</span>` : ""}</td>
+                    <td data-label="Odpad / nádoba"><strong>${escapeHtml(collectionRoutesSourceDriverWasteLabel(row))}</strong><span>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</span></td>
+                    <td data-label="Interval">${escapeHtml(row.frequency || "-")}</td>
+                    <td data-label="Den svozu">${escapeHtml(row.pickupDaysText || "-")}</td>
+                    <td data-label="Smlouva"><strong>${escapeHtml(row.contractNumber || "-")}</strong></td>
                   </tr>`;
                 }).join("")}
               </tbody>
@@ -21035,6 +21061,18 @@ function collectionRoutesTestDatasetPanel(user) {
       ` : ""}
     </section>
   `;
+}
+
+function collectionDailyRouteTestDatasetBadge(route = {}) {
+  if (route.scope !== "test") return "";
+  const sourceBatchId = String(route.sourceBatchId || "");
+  if (sourceBatchId.includes("brno-500-v1")) {
+    return `<span class="collection-daily-route-status">Archivní TEST v1</span>`;
+  }
+  if (sourceBatchId.includes("brno-500-v2")) {
+    return `<span class="collection-daily-route-status collection-daily-route-status--ready">TEST v2</span>`;
+  }
+  return `<span class="collection-daily-route-status">TEST</span>`;
 }
 
 function collectionDailyRoutesList() {
@@ -21053,7 +21091,7 @@ function collectionDailyRoutesList() {
         const selected = route.id === collectionRoutesPilotState.dailyRouteSelectedId;
         return `
           <button class="collection-daily-route-card ${selected ? "is-selected" : ""}" type="button" data-collection-daily-route-select="${escapeHtml(route.id)}">
-            <span>${collectionDailyRouteStatusBadge(route.status)} <small>${escapeHtml(route.vehicleLabel || route.vehicleRegistration || route.vehicleCode)}</small></span>
+            <span>${collectionDailyRouteStatusBadge(route.status)} ${collectionDailyRouteTestDatasetBadge(route)} <small>${escapeHtml(route.vehicleLabel || route.vehicleRegistration || route.vehicleCode)}</small></span>
             <strong>${escapeHtml(collectionDailyRouteDateLabel(route.routeDate))}</strong>
             <small>${escapeHtml(route.driverName || "Řidič nepřiřazen")} · ${escapeHtml(completed)}/${escapeHtml(route.stopCount || 0)} vyřízeno${summary.problemCount ? ` · ${escapeHtml(summary.problemCount)} problém` : ""}</small>
           </button>
@@ -21154,7 +21192,10 @@ function collectionDailyRouteDispatcherDetail() {
           <h3>${escapeHtml(run.title || collectionDailyRouteDateLabel(run.routeDate))}</h3>
           <p>${escapeHtml(run.vehicleLabel || run.vehicleRegistration)} · ${escapeHtml(run.driverName || "řidič nepřiřazen")} · snapshot se po uložení nemění</p>
         </div>
-        ${collectionDailyRouteStatusBadge(run.status)}
+        <div class="collection-daily-route-detail__badges">
+          ${collectionDailyRouteTestDatasetBadge(run)}
+          ${collectionDailyRouteStatusBadge(run.status)}
+        </div>
       </header>
 
       <div class="collection-daily-route-kpis">
@@ -21183,16 +21224,20 @@ function collectionDailyRouteDispatcherDetail() {
         ${run.status === "active" && !canComplete ? `<span>Dokončit půjde po vyřízení všech čekajících zastávek.</span>` : ""}
       </div>
 
-      <div class="collection-daily-route-table-wrap">
+      <div class="collection-daily-route-table-wrap collection-routes-sites-table collection-routes-preview-table">
         <table class="collection-daily-route-table">
-          <thead><tr><th>#</th><th>Zákazník a stanoviště</th><th>Odpad / nádoba</th><th>Stav</th><th>Akce</th></tr></thead>
+          <thead><tr><th>Stav</th><th>Pořadí</th><th>Zákazník</th><th>Stanoviště</th><th>Odpad / nádoba</th><th>Interval</th><th>Den svozu</th><th>Smlouva</th><th>Akce</th></tr></thead>
           <tbody>
             ${visibleStops.map((stop) => `
-              <tr class="is-${escapeHtml(stop.status)}">
-                <td data-label="#">${escapeHtml(stop.routeOrder)}</td>
-                <td data-label="Zákazník"><strong>${escapeHtml(stop.customerName || "-")}</strong><span>${escapeHtml(stop.stationName || stop.addressText || "-")}</span><small>${escapeHtml(stop.stationName ? stop.addressText : "")}</small></td>
-                <td data-label="Odpad">${escapeHtml(stop.wasteType || "-")} · ${escapeHtml(stop.containerCount || 1)}× ${escapeHtml(stop.containerVolume || "-")} l</td>
-                <td data-label="Stav"><strong>${escapeHtml(collectionDailyRouteStopStatusLabel(stop.status))}</strong>${stop.problemReason ? `<small>${escapeHtml(stop.problemReason)}</small>` : ""}</td>
+              <tr class="collection-routes-site-contract-row is-${escapeHtml(stop.status)}">
+                <td data-label="Stav">${collectionDailyRouteStopStatusBadge(stop.status)}${stop.problemReason ? `<small>${escapeHtml(stop.problemReason)}</small>` : ""}</td>
+                <td data-label="Pořadí">${escapeHtml(stop.routeOrder)}</td>
+                <td data-label="Zákazník">${escapeHtml(stop.customerName || "-")}</td>
+                <td data-label="Stanoviště"><strong>${escapeHtml(stop.stationName || stop.addressText || "-")}</strong>${stop.stationName && stop.addressText ? `<span>${escapeHtml(stop.addressText)}</span>` : ""}</td>
+                <td data-label="Odpad / nádoba"><strong>${escapeHtml(collectionRoutesSourceDriverWasteLabel(stop))}</strong><span>${escapeHtml(collectionRoutesSourceDriverContainerLabel(stop))}</span></td>
+                <td data-label="Interval">${escapeHtml(stop.frequency || "-")}</td>
+                <td data-label="Den svozu">${escapeHtml(stop.pickupDaysText || "-")}</td>
+                <td data-label="Smlouva"><strong>${escapeHtml(stop.contractNumber || "-")}</strong></td>
                 <td data-label="Akce">${run.status === "active" && ["done", "problem"].includes(stop.status) ? `<button class="text-action" type="button" data-collection-daily-route-reset-stop="${escapeHtml(stop.id)}" ${pending ? "disabled" : ""}>Vrátit do plánu</button>` : "-"}</td>
               </tr>
             `).join("")}

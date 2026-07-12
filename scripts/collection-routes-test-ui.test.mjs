@@ -14,6 +14,8 @@ for (const marker of [
   "Připravit zprávy pro celou trasu",
   "Dny u četností Nx7 se zrcadlí 1:1",
   "1x30 má pevný pracovní den i pořadí v měsíci",
+  "Archivní TEST v1",
+  "TEST v2",
   "data-collection-routes-test-notification-confirm-form",
   "Potvrzuju skutečné odeslání",
   "data-collection-routes-test-notification-retry-form",
@@ -24,6 +26,19 @@ for (const marker of [
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
+
+for (const column of ["Stav", "Pořadí", "Zákazník", "Stanoviště", "Odpad / nádoba", "Interval", "Den svozu", "Smlouva"]) {
+  assert.ok(
+    appSource.includes(`<th>${column}</th>`) && appSource.includes(`data-label="${column}"`),
+    `TEST řádek musí stejně jako ostrá data obsahovat sloupec ${column}.`
+  );
+}
+
+assert.ok(
+  appSource.includes("collection-routes-sites-table collection-routes-preview-table") &&
+    appSource.includes("collection-daily-route-table-wrap collection-routes-sites-table collection-routes-preview-table"),
+  "TEST zdrojový řádek i uložená trasa musí používat stejný responzivní tabulkový vzor jako ostrá data."
+);
 
 assert.ok(
   appSource.includes("function collectionDailyRouteTestDate") &&

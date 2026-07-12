@@ -37021,6 +37021,14 @@ body:has(.ds-plus-page) {
   font-weight: 700;
 }
 
+.collection-daily-route-detail__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .collection-daily-route-status {
   display: inline-flex;
   width: fit-content;
@@ -37261,7 +37269,7 @@ body:has(.ds-plus-page) {
   cursor: pointer;
 }
 
-.collection-routes-test-sites .collection-daily-route-table-wrap {
+.collection-routes-test-sites .collection-routes-preview-table {
   margin: 0 12px 12px;
 }
 
@@ -37543,6 +37551,10 @@ body:has(.ds-plus-page) {
   .collection-routes-test-dataset > header,
   .collection-routes-test-notifications > header {
     display: grid;
+  }
+
+  .collection-daily-route-detail__badges {
+    justify-content: flex-start;
   }
 
   .collection-daily-route-form,

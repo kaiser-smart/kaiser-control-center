@@ -238,6 +238,9 @@ assert.equal(created.run.status, "draft");
 assert.equal(created.run.stopCount, 1);
 assert.equal(created.run.excludedCount, 3);
 assert.equal(created.stops[0].customerName, "Test zákazník");
+assert.equal(created.stops[0].frequency, "1x7");
+assert.equal(created.stops[0].pickupDaysText, "pondělí lichá, pondělí sudá (dopočteno)");
+assert.equal(created.stops[0].contractNumber, "KS-001");
 await assert.rejects(
   createCollectionDailyRouteDraft(env, readonly, { routeDate: "2026-07-14", vehicleCode: "A", sourceRowIds: ["row-tuesday"] }),
   (error) => error.status === 403

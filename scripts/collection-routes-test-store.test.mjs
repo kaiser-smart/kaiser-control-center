@@ -136,6 +136,7 @@ const manager = {
     vehicleCode: "A"
   });
   assert.equal(preview.scope, "test");
+  assert.equal(preview.sourceBatchId, "collection-import-batch-test-brno-500-v2");
   assert.equal(preview.selectedCount, 500);
   assert.ok(preview.eligibleCount > 0 && preview.eligibleCount < 500);
   const route = await createCollectionDailyRouteDraft(env, manager, {
@@ -145,7 +146,10 @@ const manager = {
     sourceBatchId: preview.sourceBatchId
   });
   assert.equal(route.run.scope, "test");
+  assert.equal(route.run.sourceBatchId, "collection-import-batch-test-brno-500-v2");
   assert.equal(route.stops.length, preview.eligibleCount);
+  assert.ok(route.stops.every((stop) => stop.sourceBatchId === "collection-import-batch-test-brno-500-v2"));
+  assert.ok(route.stops.every((stop) => stop.frequency && stop.pickupDaysText && stop.contractNumber));
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_runs").get().count, 1);
   assert.equal(productionSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_runs").get().count, 0);
   assert.equal((await listCollectionDailyRoutes(env, { scope: "test" }, manager)).length, 1);
