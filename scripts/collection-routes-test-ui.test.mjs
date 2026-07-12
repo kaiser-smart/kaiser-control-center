@@ -24,53 +24,6 @@ for (const marker of [
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
 
-for (const marker of [
-  "Dnešní trasy",
-  "Vytvořit novou trasu",
-  "Dokončit přípravu",
-  "Sledovat průběh",
-  "Další možnosti",
-  "data-collection-daily-route-stop-search",
-  "Zobrazit všechny zastávky",
-  "const COLLECTION_DAILY_ROUTE_COMPACT_STOP_COUNT = 10",
-  "function collectionDailyRouteCompactVisibleStopCount",
-  "data-collection-routes-source-print-driver",
-  "data-collection-routes-source-print-pdf",
-  "data-collection-routes-source-offline-package",
-  'data-collection-routes-source-view="driver"'
-]) {
-  assert.ok(appSource.includes(marker), `Zjednodušený dispečerský tok postrádá: ${marker}`);
-}
-
-assert.ok(
-  appSource.includes("const visibleStopCount = collectionDailyRouteCompactVisibleStopCount(") &&
-    !appSource.includes("const visibleStopCount = collectionDailyRouteVisibleStopCount(\n    filteredStops.length"),
-  "Dispečerský detail nesmí zdědit minimálně 100 řádků ze škálovacího helperu pro řidiče."
-);
-
-const dispatcherPanelSource = appSource.slice(
-  appSource.indexOf("function collectionDailyRoutesDispatcherPanel"),
-  appSource.indexOf("function collectionDailyRouteDriverStopList")
-);
-const internalSectionSource = appSource.slice(
-  appSource.indexOf("function collectionRoutesInternalSection"),
-  appSource.indexOf("function collectionRoutesActiveSection")
-);
-assert.ok(
-  !dispatcherPanelSource.includes("collectionRoutesTestDatasetPanel(user)"),
-  "TEST Brno 500 nesmí být vložený do hlavního dispečerského panelu."
-);
-assert.ok(
-  internalSectionSource.includes("collectionRoutesTestDatasetPanel(user)") &&
-    internalSectionSource.includes("collectionDailyRoutesDispatcherPanel([])"),
-  "TEST data, trasy a zprávy musí být společně ve Správě."
-);
-assert.ok(
-  appSource.includes("return collectionRoutesCanRunImportPreview(user) || collectionRoutesCanUseTestDataset(user);") &&
-    internalSectionSource.includes("canViewTechnical"),
-  "Management musí vidět TEST Správu a technické části musí dál respektovat stávající oprávnění."
-);
-
 assert.ok(
   appSource.includes("function collectionDailyRouteTestDate") &&
     appSource.includes("collectionRoutesPilotState.dailyRouteDate = collectionDailyRouteTestDate"),
@@ -112,11 +65,7 @@ for (const marker of [
   ".collection-routes-test-notifications",
   ".collection-routes-test-badge",
   ".collection-routes-test-notification-retry",
-  "@media (max-width: 640px)",
-  ".collection-daily-route-overview",
-  ".collection-daily-route-next-step",
-  ".collection-daily-route-stops-head",
-  ".collection-routes-dispatcher-tools"
+  "@media (max-width: 640px)"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }

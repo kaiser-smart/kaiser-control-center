@@ -81,7 +81,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - HOTOVO - dispecer muze navrh overit, ulozit, priradit ridice, potvrdit, zahajit, dokoncit a znovu otevrit; hotovou/problemovou zastavku muze vratit do planu.
 - HOTOVO - stejny zdrojovy radek nelze zaradit dvakrat ve stejny den a pro jeden den/vuz muze existovat jen jedna trasa.
 - HOTOVO - Faze 2D-B uklada 900 zastavek v 236 D1 operacich a 1000 zastavek v 261 operacich; zustava pod internim testovacim stropem 300 operaci.
-- HOTOVO - dispecersky detail ukazuje prvnich 10 zastavek, umi hledat podle firmy, ulice, odpadu a stavu a vsechny zastavky rozbali az na vyzadani; ridicsky seznam zustava strankovany po 100.
+- HOTOVO - dispecersky i ridicsky seznam vykresli prvnich 100 zastavek a dalsi zobrazuje po 100, aby velka trasa nezahltila stranku.
 - HOTOVO - zatezove testy pokryvaji 60, 300, 900 a 1000 zastavek bez zmeny DB schematu, Vistosu nebo opravneni.
 - NEZACATO - zadne optimalizovane poradi zastavek.
 
@@ -102,7 +102,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 - HOTOVO - pouze pro TEST Brno 500 existuje rucne potvrzena idempotentni uloha skutecnych SMS a e-mailu na jeden chraneny kontakt; zalozeni dat ani trasy nic neposila.
 - HOTOVO - castecna TEST uloha se po reloadu obnovi a muze zopakovat jen failed kanal bez provider ID; jiz odeslany e-mail se znovu neposle a nova uplna davka je zablokovana.
-- ROZPRACOVANO - prvni produkcni e-mail odesel a je v auditu; jedina SMS selhala pred Twiliem. Migrace 0032 je aplikovana a provozni rezim SMS je po samostatnem potvrzeni nastaveny na `live`; bezpecne opakovani jedine failed SMS zatim nebylo spustene.
+- ROZPRACOVANO - prvni produkcni e-mail odesel a je v auditu; jedina SMS selhala pred Twiliem. Migrace 0032 je aplikovana, ale provozni rezim zakaznickych SMS je stale `off` a nesmi se zmenit bez samostatneho potvrzeni.
 - NEZACATO - ostre zakaznicke SMS a e-maily podle kontaktu z Vistosu.
 - NEZACATO - zadne temporary tracking linky.
 
@@ -116,7 +116,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## PDF offline
 
-- HOTOVO - hlavni zalozka Dnesni trasy obsahuje pouze provozni prehled, vytvoreni trasy a detail; tisk, PDF, offline balicek a zdrojovy Vistos prehled jsou schovane pod Dalsi moznosti.
+- HOTOVO - hlavni zalozka Svozove trasy je uklizena na read-only tiskovy filtr, souhrn a ridicsky nahled; technicka sprava je v zalozce Sprava dat tras.
 - HOTOVO - read-only PDF/tiskovy nahled aktualniho filtru Svozovych tras obsahuje souhrn, zdrojovy Excel/list/radek a Vistos match problem.
 - HOTOVO - read-only ridicsky tiskovy nahled aktualniho filtru ukazuje prakticky seznam zastavek vcetne odpadu, nadoby, frekvence a poznamky bez navigace, GPS, T-Cars, potvrzovani svozu a ostre trasy.
 - HOTOVO - chytry filtr Auto A/B/C dnes, zitra a pozitri nastavuje den, sudy/lichy tyden a auto pro tiskovy nahled; trasu neplanuje a nic nezapisuje.
@@ -136,6 +136,5 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - OVERENO - Faze 1E read-only import 13 Excelu a Vistos match byly overeny na produkci pro batch z 2026-07-02.
 - OVERENO - Faze 2D-A, migrace 0038 a verze 0.1.519 byly 2026-07-12 overeny v produkci: prihlaseny dispecersky pohled, prazdny vychozi stav, ochrana API a responzivita desktop/tablet/mobil; po overeni zustalo 0 tras, 0 zastavek a 0 udalosti.
 - NEZACATO - produkcni overeni Faze 2D-B a verze 0.1.520.
-- ROZPRACOVANO - TEST Brno 500 verze 0.1.524 je v produkci v samostatne TEST D1: 500 stanovist, 1 trasa, 198 zastavek a 1 odeslany e-mail jsou overene. Bezpecne opakovani jedine failed SMS je pripraveno ve verzi 0.1.526; rezim `live` je nastaveny, ale opakovani zatim nebylo spustene.
-- ROZPRACOVANO - verze 0.1.528 presouva TEST Brno 500, TEST trasy a skutecne testovaci zpravy do samostatne sekce Sprava; hlavni dispecerska zalozka je bez TEST dat a dlouhe Vistos tabulky a detail ukazuje skutecne jen prvnich 10 zastavek.
+- ROZPRACOVANO - TEST Brno 500 verze 0.1.524 je v produkci v samostatne TEST D1: 500 stanovist, 1 trasa, 198 zastavek a 1 odeslany e-mail jsou overene. Bezpecne opakovani jedine failed SMS je pripraveno ve verzi 0.1.526; rozhrani bylo ve verzi 0.1.529 vraceno do stavu pred zjednodusenim. Odeslani SMS se tim nespousti.
 - NEZACATO - produkcni ostry import / planovani / notifikace.

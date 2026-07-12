@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.528"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.529"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -21,8 +21,8 @@ export const versionInfo = {
 
 export const versionNews = [
   {
-    title: "Svozové trasy: jednoduchý dispečerský pracovní tok",
-    text: "Hlavní záložka ukazuje denní trasy, vytvoření nové trasy a jeden jasný další krok. Detail načte prvních 10 zastávek s hledáním; tisk, PDF, offline balíček a zdrojový Vistos přehled jsou pod Dalšími možnostmi. TEST Brno 500 včetně skutečných testovacích zpráv je oddělený ve Správě pro Management a Admin."
+    title: "Svozové trasy: návrat původního rozhraní",
+    text: "Rozhraní je vrácené do stavu před zjednodušením dispečerského pohledu. TEST Brno 500, Řidičský tablet, tisk, PDF, offline balíček i původní ovládání tras jsou znovu přímo dostupné; databáze, API, uložené trasy a historie testovacích zpráv zůstaly beze změny."
   },
   {
     title: "Svozové trasy: bezpečné opakování jediného neúspěšného kanálu",
