@@ -4395,16 +4395,30 @@ async function handleApi(request, response) {
         technicalMovementAmount: 1349702.2,
         duplicateCandidateCount: 22,
         duplicateCandidateAmount: 5161512.88,
+        uniqueAccountCandidateCount: 125,
+        uniqueNameCandidateCount: 3,
+        exactVsConflictCount: 312,
+        internalCandidateCount: 0,
+        insufficientEvidenceCount: 790,
         safeAutoMatchCount: 0,
         blocksAutomation: true,
         buckets: [
-          { code: "missing_variable_symbol", paymentCount: 576, amountTotal: 87199352.95, reviewKind: "receivable" },
-          { code: "variable_symbol_without_invoice", paymentCount: 342, amountTotal: 32699610.54, reviewKind: "receivable" },
+          { code: "missing_variable_symbol", paymentCount: 595, amountTotal: 88549055.15, reviewKind: "receivable" },
+          { code: "variable_symbol_without_invoice", paymentCount: 323, amountTotal: 31349908.34, reviewKind: "receivable" },
           { code: "exact_variable_symbol_over_invoice_total", paymentCount: 302, amountTotal: 9814636.42, reviewKind: "receivable" },
           { code: "payment_before_invoice", paymentCount: 10, amountTotal: 62500.3, reviewKind: "receivable" },
           { code: "technical_purchase_refund", paymentCount: 12, amountTotal: 23404.2, reviewKind: "technical" },
           { code: "technical_atm_deposit", paymentCount: 6, amountTotal: 1321000, reviewKind: "technical" },
           { code: "technical_mobile_reversal", paymentCount: 1, amountTotal: 5298, reviewKind: "technical" }
+        ],
+        evidenceBuckets: [
+          { code: "no_vs_no_history", paymentCount: 556, amountTotal: 87510231.67, reviewKind: "receivable" },
+          { code: "exact_vs_amount_conflict", paymentCount: 302, amountTotal: 9814636.42, reviewKind: "receivable" },
+          { code: "vs_without_invoice", paymentCount: 234, amountTotal: 29863891.15, reviewKind: "receivable" },
+          { code: "historical_account_unique", paymentCount: 125, amountTotal: 2504881.67, reviewKind: "receivable" },
+          { code: "technical_movement", paymentCount: 19, amountTotal: 1349702.2, reviewKind: "technical" },
+          { code: "exact_vs_date_conflict", paymentCount: 10, amountTotal: 62500.3, reviewKind: "receivable" },
+          { code: "historical_name_unique", paymentCount: 3, amountTotal: 19959, reviewKind: "receivable" }
         ]
       },
       customers: [{ ...fixture.customer, package: fixture.package, rating: fixture.rating }]

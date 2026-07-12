@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.524"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.525"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: důkazní rozpad příchozích úhrad",
+    text: "Kontrolní fronta odděluje přesný historický protiúčet, přesný název, konflikty variabilního symbolu, interní kandidáty a položky bez dostatečného důkazu. Jde pouze o read-only podklady k ručnímu potvrzení; automatické párování, ratingy i zákaznická komunikace zůstávají beze změny."
+  },
   {
     title: "Svozové trasy: oddělený TEST Brno 500",
     text: "Management a Admin mohou pracovat s 500 syntetickými stanovišti na skutečných adresních bodech Brna v samostatné TEST databázi. Firmy, kontakty, odpady, nádoby 120/240/1100 l a četnosti jsou testovací; ostrá data a Vistos zůstávají oddělené. Skutečné testovací SMS a e-maily jdou výhradně na chráněný kontakt po přesném ručním potvrzení počtu zpráv."

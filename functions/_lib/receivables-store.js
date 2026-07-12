@@ -150,11 +150,17 @@ function emptyDashboard(apiStatus = "waiting", message = "D1 databáze pro Pohle
       receivableReviewAmount: 0,
       technicalMovementCount: 0,
       technicalMovementAmount: 0,
+      uniqueAccountCandidateCount: 0,
+      uniqueNameCandidateCount: 0,
+      exactVsConflictCount: 0,
+      internalCandidateCount: 0,
+      insufficientEvidenceCount: 0,
       duplicateCandidateCount: 0,
       duplicateCandidateAmount: 0,
       safeAutoMatchCount: 0,
       blocksAutomation: true,
-      buckets: []
+      buckets: [],
+      evidenceBuckets: []
     }
   };
 }
@@ -460,7 +466,8 @@ async function countScalar(db, sql, ...bindings) {
 async function unmatchedPaymentReviewSummary(db) {
   const result = await db.prepare(`
     WITH unmatched AS (
-      SELECT id, amount, booking_date, variable_symbol, transaction_type, data_quality_flags_json
+      SELECT id, amount, booking_date, variable_symbol, transaction_type,
+             counterparty_account, counterparty_name, data_quality_flags_json
       FROM receivable_payment_transactions
       WHERE amount > 0
         AND data_quality_flags_json LIKE '%UNMATCHED_PAYMENT%'
@@ -482,6 +489,26 @@ async function unmatchedPaymentReviewSummary(db) {
       WHERE COALESCE(variable_symbol, '') <> ''
       GROUP BY variable_symbol
     ),
+    account_profile AS (
+      SELECT
+        t.counterparty_account,
+        COUNT(DISTINCT m.customer_id) AS customer_count
+      FROM receivable_payment_matches m
+      JOIN receivable_payment_transactions t ON t.id = m.payment_transaction_id
+      WHERE m.status IN ('matched', 'auto_matched')
+        AND COALESCE(t.counterparty_account, '') <> ''
+      GROUP BY t.counterparty_account
+    ),
+    name_profile AS (
+      SELECT
+        LOWER(TRIM(t.counterparty_name)) AS counterparty_name_key,
+        COUNT(DISTINCT m.customer_id) AS customer_count
+      FROM receivable_payment_matches m
+      JOIN receivable_payment_transactions t ON t.id = m.payment_transaction_id
+      WHERE m.status IN ('matched', 'auto_matched')
+        AND COALESCE(t.counterparty_name, '') <> ''
+      GROUP BY LOWER(TRIM(t.counterparty_name))
+    ),
     classified AS (
       SELECT
         u.amount,
@@ -490,6 +517,7 @@ async function unmatchedPaymentReviewSummary(db) {
           WHEN LOWER(COALESCE(u.transaction_type, '')) = 'vraceni nakupu' THEN 'technical_purchase_refund'
           WHEN LOWER(COALESCE(u.transaction_type, '')) = 'vklad pres atm' THEN 'technical_atm_deposit'
           WHEN LOWER(COALESCE(u.transaction_type, '')) = 'storno mobilni platby' THEN 'technical_mobile_reversal'
+          WHEN u.data_quality_flags_json LIKE '%INTERNAL_COMPANY_CANDIDATE%' THEN 'internal_company_candidate'
           WHEN COALESCE(u.variable_symbol, '') = '' THEN 'missing_variable_symbol'
           WHEN i.variable_symbol IS NULL THEN 'variable_symbol_without_invoice'
           WHEN i.invoice_count > 1 THEN 'multiple_invoice_candidates'
@@ -497,32 +525,81 @@ async function unmatchedPaymentReviewSummary(db) {
           WHEN p.payment_amount > i.invoice_amount + MAX(1, ABS(i.invoice_amount) * 0.001)
             THEN 'exact_variable_symbol_over_invoice_total'
           ELSE 'exact_variable_symbol_requires_review'
-        END AS bucket
+        END AS bucket,
+        CASE
+          WHEN LOWER(COALESCE(u.transaction_type, '')) IN ('vraceni nakupu', 'vklad pres atm', 'storno mobilni platby')
+            THEN 'technical_movement'
+          WHEN u.data_quality_flags_json LIKE '%INTERNAL_COMPANY_CANDIDATE%' THEN 'internal_flagged'
+          WHEN i.invoice_count = 1 AND p.first_booking_date < i.first_issue_date THEN 'exact_vs_date_conflict'
+          WHEN i.invoice_count = 1
+            AND p.payment_amount > i.invoice_amount + MAX(1, ABS(i.invoice_amount) * 0.001)
+            THEN 'exact_vs_amount_conflict'
+          WHEN i.invoice_count = 1 THEN 'exact_vs_requires_review'
+          WHEN i.invoice_count > 1 THEN 'ambiguous_vs'
+          WHEN ap.customer_count = 1 THEN 'historical_account_unique'
+          WHEN np.customer_count = 1 THEN 'historical_name_unique'
+          WHEN COALESCE(u.variable_symbol, '') = '' THEN 'no_vs_no_history'
+          ELSE 'vs_without_invoice'
+        END AS evidence
       FROM unmatched u
       LEFT JOIN invoice_vs i ON i.variable_symbol = u.variable_symbol
       LEFT JOIN payment_vs p ON p.variable_symbol = u.variable_symbol
+      LEFT JOIN account_profile ap ON ap.counterparty_account = u.counterparty_account
+      LEFT JOIN name_profile np ON np.counterparty_name_key = LOWER(TRIM(u.counterparty_name))
     )
     SELECT
       bucket,
+      evidence,
       COUNT(*) AS payment_count,
       ROUND(SUM(amount), 2) AS amount_total,
       SUM(CASE WHEN data_quality_flags_json LIKE '%DUPLICATE_PAYMENT_CANDIDATE%' THEN 1 ELSE 0 END) AS duplicate_count,
       ROUND(SUM(CASE WHEN data_quality_flags_json LIKE '%DUPLICATE_PAYMENT_CANDIDATE%' THEN amount ELSE 0 END), 2) AS duplicate_amount
     FROM classified
-    GROUP BY bucket
-    ORDER BY CASE WHEN bucket LIKE 'technical_%' THEN 1 ELSE 0 END, payment_count DESC
+    GROUP BY bucket, evidence
   `).all();
 
-  const buckets = (result.results || []).map((row) => ({
-    code: cleanString(row.bucket),
-    paymentCount: numberValue(row.payment_count),
-    amountTotal: numberValue(row.amount_total),
-    reviewKind: cleanString(row.bucket).startsWith("technical_") ? "technical" : "receivable"
-  }));
+  function aggregateRows(key) {
+    const aggregate = new Map();
+    for (const row of result.results || []) {
+      const code = cleanString(row[key]);
+      const current = aggregate.get(code) || { code, paymentCount: 0, amountTotal: 0, duplicateCount: 0, duplicateAmount: 0 };
+      current.paymentCount += numberValue(row.payment_count);
+      current.amountTotal += numberValue(row.amount_total);
+      current.duplicateCount += numberValue(row.duplicate_count);
+      current.duplicateAmount += numberValue(row.duplicate_amount);
+      aggregate.set(code, current);
+    }
+    return [...aggregate.values()].map((row) => ({
+      ...row,
+      amountTotal: Math.round(row.amountTotal * 100) / 100,
+      duplicateAmount: Math.round(row.duplicateAmount * 100) / 100
+    }));
+  }
+  const buckets = aggregateRows("bucket")
+    .map((row) => ({
+      ...row,
+      reviewKind: row.code.startsWith("technical_")
+        ? "technical"
+        : row.code === "internal_company_candidate"
+          ? "internal"
+          : "receivable"
+    }))
+    .sort((left, right) => Number(left.reviewKind !== "receivable") - Number(right.reviewKind !== "receivable") || right.paymentCount - left.paymentCount);
+  const evidenceBuckets = aggregateRows("evidence")
+    .map((row) => ({
+      ...row,
+      reviewKind: row.code === "technical_movement"
+        ? "technical"
+        : row.code === "internal_flagged"
+          ? "internal"
+          : "receivable"
+    }))
+    .sort((left, right) => Number(left.reviewKind !== "receivable") - Number(right.reviewKind !== "receivable") || right.paymentCount - left.paymentCount);
   const receivableBuckets = buckets.filter((bucket) => bucket.reviewKind === "receivable");
   const technicalBuckets = buckets.filter((bucket) => bucket.reviewKind === "technical");
   const sumCount = (items) => items.reduce((sum, bucket) => sum + bucket.paymentCount, 0);
   const sumAmount = (items) => Math.round(items.reduce((sum, bucket) => sum + bucket.amountTotal, 0) * 100) / 100;
+  const evidenceCount = (...codes) => sumCount(evidenceBuckets.filter((bucket) => codes.includes(bucket.code)));
   return {
     totalCount: sumCount(buckets),
     totalAmount: sumAmount(buckets),
@@ -530,11 +607,17 @@ async function unmatchedPaymentReviewSummary(db) {
     receivableReviewAmount: sumAmount(receivableBuckets),
     technicalMovementCount: sumCount(technicalBuckets),
     technicalMovementAmount: sumAmount(technicalBuckets),
-    duplicateCandidateCount: (result.results || []).reduce((sum, row) => cleanString(row.bucket).startsWith("technical_") ? sum : sum + numberValue(row.duplicate_count), 0),
-    duplicateCandidateAmount: Math.round((result.results || []).reduce((sum, row) => cleanString(row.bucket).startsWith("technical_") ? sum : sum + numberValue(row.duplicate_amount), 0) * 100) / 100,
+    uniqueAccountCandidateCount: evidenceCount("historical_account_unique"),
+    uniqueNameCandidateCount: evidenceCount("historical_name_unique"),
+    exactVsConflictCount: evidenceCount("exact_vs_amount_conflict", "exact_vs_date_conflict"),
+    internalCandidateCount: evidenceCount("internal_flagged"),
+    insufficientEvidenceCount: evidenceCount("no_vs_no_history", "vs_without_invoice"),
+    duplicateCandidateCount: receivableBuckets.reduce((sum, row) => sum + row.duplicateCount, 0),
+    duplicateCandidateAmount: Math.round(receivableBuckets.reduce((sum, row) => sum + row.duplicateAmount, 0) * 100) / 100,
     safeAutoMatchCount: 0,
     blocksAutomation: sumCount(receivableBuckets) > 0,
-    buckets
+    buckets,
+    evidenceBuckets
   };
 }
 

@@ -32038,9 +32038,33 @@ function receivablesUnmatchedPaymentReview() {
     payment_before_invoice: "Platba je před vystavením faktury",
     technical_purchase_refund: "Vrácení nákupu",
     technical_atm_deposit: "Vklad přes ATM",
-    technical_mobile_reversal: "Storno mobilní platby"
+    technical_mobile_reversal: "Storno mobilní platby",
+    internal_company_candidate: "Ověřený interní kandidát"
+  };
+  const evidenceLabels = {
+    historical_account_unique: "Jednoznačný známý protiúčet",
+    historical_name_unique: "Jednoznačný historický název",
+    exact_vs_amount_conflict: "Přesný VS, konflikt částky",
+    exact_vs_date_conflict: "Přesný VS, platba před fakturou",
+    exact_vs_requires_review: "Přesný VS vyžaduje kontrolu",
+    ambiguous_vs: "VS odpovídá více fakturám",
+    no_vs_no_history: "Bez VS a bez historie",
+    vs_without_invoice: "VS bez faktury a bez historie",
+    internal_flagged: "Ověřený interní kandidát"
   };
   const buckets = Array.isArray(review.buckets) ? review.buckets : [];
+  const evidenceBuckets = (Array.isArray(review.evidenceBuckets) ? review.evidenceBuckets : [])
+    .filter((bucket) => bucket.code !== "technical_movement");
+  const evidenceDecision = (bucket) => {
+    if (bucket.reviewKind === "internal") return receivablesPill("interní kontrola", "warning");
+    if (["historical_account_unique", "historical_name_unique"].includes(bucket.code)) {
+      return receivablesPill("k ručnímu potvrzení", "warning");
+    }
+    if (["exact_vs_amount_conflict", "exact_vs_date_conflict", "exact_vs_requires_review", "ambiguous_vs"].includes(bucket.code)) {
+      return receivablesPill("řešit konflikt", "warning");
+    }
+    return receivablesPill("bez shody", "warning");
+  };
   return `
     <section class="receivables-panel" aria-labelledby="receivables-unmatched-title">
       <div class="receivables-panel__head">
@@ -32070,9 +32094,42 @@ function receivablesUnmatchedPaymentReview() {
                 <td data-label="Částka">${escapeHtml(formatReceivableMoney(bucket.amountTotal))}</td>
                 <td data-label="Rozhodnutí">${bucket.reviewKind === "technical"
                   ? receivablesPill("mimo pohledávky", "ready")
-                  : receivablesPill("ruční kontrola", "warning")}</td>
+                  : bucket.reviewKind === "internal"
+                    ? receivablesPill("interní kontrola", "warning")
+                    : receivablesPill("ruční kontrola", "warning")}</td>
               </tr>
             `).join("") || `<tr><td colspan="4">Fronta je prázdná.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">Důkazní rozpad úhrad</p>
+          <h3>Co lze doložit bez automatického párování</h3>
+          <p>Historický účet nebo přesný název pouze označí kandidáta. Žádná položka se tím automaticky nepřipojí k faktuře ani zákazníkovi.</p>
+        </div>
+        ${receivablesPill("auto-match 0", "ready")}
+      </div>
+      <div class="receivables-detail-grid">
+        <article><span>Známý protiúčet</span><strong>${escapeHtml(review.uniqueAccountCandidateCount || 0)}</strong></article>
+        <article><span>Historický název</span><strong>${escapeHtml(review.uniqueNameCandidateCount || 0)}</strong></article>
+        <article><span>Přesný VS s konfliktem</span><strong>${escapeHtml(review.exactVsConflictCount || 0)}</strong></article>
+        <article><span>Interní kandidáti</span><strong>${escapeHtml(review.internalCandidateCount || 0)}</strong></article>
+        <article><span>Bez dostatečného důkazu</span><strong>${escapeHtml(review.insufficientEvidenceCount || 0)}</strong></article>
+        <article><span>Bezpečně k auto-matchi</span><strong>${escapeHtml(review.safeAutoMatchCount || 0)}</strong></article>
+      </div>
+      <div class="receivables-table-wrap">
+        <table class="receivables-table receivables-table--compact">
+          <thead><tr><th>Důkaz</th><th>Počet</th><th>Částka</th><th>Rozhodnutí</th></tr></thead>
+          <tbody>
+            ${evidenceBuckets.map((bucket) => `
+              <tr>
+                <td data-label="Důkaz">${escapeHtml(evidenceLabels[bucket.code] || bucket.code || "Neurčeno")}</td>
+                <td data-label="Počet">${escapeHtml(bucket.paymentCount || 0)}</td>
+                <td data-label="Částka">${escapeHtml(formatReceivableMoney(bucket.amountTotal))}</td>
+                <td data-label="Rozhodnutí">${evidenceDecision(bucket)}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="4">Důkazní rozpad není k dispozici.</td></tr>`}
           </tbody>
         </table>
       </div>
