@@ -16,6 +16,8 @@ for (const marker of [
   "1x30 má pevný pracovní den i pořadí v měsíci",
   "Archivní TEST v1",
   "TEST v2",
+  "data-collection-routes-test-site-detail",
+  "collectionRoutesTestSiteDetailTable",
   "data-collection-routes-test-notification-confirm-form",
   "Potvrzuju skutečné odeslání",
   "data-collection-routes-test-notification-retry-form",
@@ -39,6 +41,13 @@ assert.ok(
     appSource.includes("collection-daily-route-table-wrap collection-routes-sites-table collection-routes-preview-table"),
   "TEST zdrojový řádek i uložená trasa musí používat stejný responzivní tabulkový vzor jako ostrá data."
 );
+
+for (const detailColumn of ["Od-do", "Adresní místo", "Stanoviště", "Odpad", "Nádoba", "Interval", "Den svozu", "Poznámka", "Zákaznický manažer"]) {
+  assert.ok(
+    appSource.includes(`<th>${detailColumn}</th>`) && appSource.includes(`data-label="${detailColumn}"`),
+    `TEST detail musí stejně jako ostrý detail obsahovat pole ${detailColumn}.`
+  );
+}
 
 assert.ok(
   appSource.includes("function collectionDailyRouteTestDate") &&

@@ -1316,6 +1316,7 @@ const collectionRoutesPilotState = {
   testDataset: null,
   testDatasetRows: [],
   testDatasetRowsVisible: COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE,
+  testDatasetExpandedRowKeys: [],
   testDatasetPending: "",
   testDatasetMessage: "",
   testDatasetError: "",
@@ -21030,6 +21031,8 @@ function collectionRoutesTestDatasetPanel(user) {
               <tbody>
                 ${visibleRows.map((item) => {
                   const row = item.summary || {};
+                  const detailKey = String(item.id || row.rowKey || item.rowNumber || "");
+                  const expanded = collectionRoutesPilotState.testDatasetExpandedRowKeys.includes(detailKey);
                   const hasIssue = Number(row.issueCount || item.issues?.length || 0) > 0;
                   const onDemand = row.onDemand === true || row.serviceMode === "on_demand";
                   const status = hasIssue
@@ -21045,8 +21048,20 @@ function collectionRoutesTestDatasetPanel(user) {
                     <td data-label="Odpad / nádoba"><strong>${escapeHtml(collectionRoutesSourceDriverWasteLabel(row))}</strong><span>${escapeHtml(collectionRoutesSourceDriverContainerLabel(row))}</span></td>
                     <td data-label="Interval">${escapeHtml(row.frequency || "-")}</td>
                     <td data-label="Den svozu">${escapeHtml(row.pickupDaysText || "-")}</td>
-                    <td data-label="Smlouva"><strong>${escapeHtml(row.contractNumber || "-")}</strong></td>
-                  </tr>`;
+                    <td data-label="Smlouva">
+                      <strong>${escapeHtml(row.contractNumber || "-")}</strong>
+                      <button class="secondary-link collection-routes-site-detail-toggle" type="button" data-collection-routes-test-site-detail="${escapeHtml(detailKey)}" aria-expanded="${expanded ? "true" : "false"}">
+                        ${expanded ? "Skrýt detail" : "Detail"}
+                      </button>
+                    </td>
+                  </tr>
+                  ${expanded ? `
+                    <tr class="collection-routes-site-detail-row">
+                      <td class="collection-routes-site-detail-cell" colspan="8">
+                        ${collectionRoutesTestSiteDetailTable(item)}
+                      </td>
+                    </tr>
+                  ` : ""}`;
                 }).join("")}
               </tbody>
             </table>
@@ -21061,6 +21076,41 @@ function collectionRoutesTestDatasetPanel(user) {
       ` : ""}
     </section>
   `;
+}
+
+function collectionRoutesTestSiteDetailTable(item = {}) {
+  const row = item.summary || {};
+  const issues = Array.isArray(item.issues) ? item.issues : Array.isArray(row.issues) ? row.issues : [];
+  const addressPlace = String(row.addressPlaceRaw || "").trim();
+  const manager = String(row.customerManagerName || row.contact || "").trim();
+  return collectionRoutesVistosContractDetailTable({
+    contractNumber: row.contractNumber || "-",
+    items: [{
+      dateRange: collectionRoutesVistosDateRangeLabel(row.pickupFrom, row.pickupTo),
+      addressPlace: addressPlace || "chybí Adresní místo",
+      addressPlaceMissing: !addressPlace,
+      addressPartsLabel: "",
+      stationName: row.stationName || row.siteName || "-",
+      waste: [collectionRoutesSourceWasteLabel(row.wasteType || row.wasteCode || "ostatní"), row.wasteCode].filter(Boolean).join(" / "),
+      container: collectionRoutesSourceDriverContainerLabel(row),
+      containerEvidenceLabel: "",
+      interval: row.frequency || "neurčeno",
+      pickupDays: row.pickupDaysText || row.pickupDays || "neurčeno",
+      note: row.note || "-",
+      customerManagerContact: manager || "-",
+      issueCount: Math.max(Number(row.issueCount || 0), issues.length),
+      issues
+    }]
+  });
+}
+
+function toggleCollectionRoutesTestSiteDetail(detailKey) {
+  if (!detailKey) return;
+  const keys = collectionRoutesPilotState.testDatasetExpandedRowKeys;
+  collectionRoutesPilotState.testDatasetExpandedRowKeys = keys.includes(detailKey)
+    ? keys.filter((key) => key !== detailKey)
+    : [...keys, detailKey];
+  render();
 }
 
 function collectionDailyRouteTestDatasetBadge(route = {}) {
@@ -36530,6 +36580,7 @@ async function loadCollectionRoutesTestDataset(options = {}) {
     collectionRoutesPilotState.testDataset = result.dataset || null;
     collectionRoutesPilotState.testDatasetRows = Array.isArray(result.rows) ? result.rows : [];
     collectionRoutesPilotState.testDatasetRowsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
+    collectionRoutesPilotState.testDatasetExpandedRowKeys = [];
     collectionRoutesPilotState.testDatasetLoaded = true;
   } catch (error) {
     collectionRoutesPilotState.testDataset = null;
@@ -36556,6 +36607,7 @@ async function createCollectionRoutesTestDataset() {
     collectionRoutesPilotState.testDataset = result.dataset || null;
     collectionRoutesPilotState.testDatasetRows = Array.isArray(result.rows) ? result.rows : [];
     collectionRoutesPilotState.testDatasetRowsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
+    collectionRoutesPilotState.testDatasetExpandedRowKeys = [];
     collectionRoutesPilotState.testDatasetLoaded = true;
     collectionRoutesPilotState.testDatasetMessage = result.created
       ? "Oddělená sada TEST Brno 500 byla založená. Žádná SMS ani e-mail se tím neodeslaly."
@@ -42661,6 +42713,7 @@ async function logout() {
   collectionRoutesPilotState.testDataset = null;
   collectionRoutesPilotState.testDatasetRows = [];
   collectionRoutesPilotState.testDatasetRowsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
+  collectionRoutesPilotState.testDatasetExpandedRowKeys = [];
   collectionRoutesPilotState.testDatasetPending = "";
   collectionRoutesPilotState.testDatasetMessage = "";
   collectionRoutesPilotState.testDatasetError = "";
@@ -46862,6 +46915,13 @@ document.addEventListener("click", async (event) => {
       collectionRoutesPilotState.testDatasetRowsVisible
     );
     render();
+    return;
+  }
+
+  const collectionRoutesTestSiteDetail = event.target.closest("[data-collection-routes-test-site-detail]");
+  if (collectionRoutesTestSiteDetail) {
+    event.preventDefault();
+    toggleCollectionRoutesTestSiteDetail(collectionRoutesTestSiteDetail.dataset.collectionRoutesTestSiteDetail || "");
     return;
   }
 

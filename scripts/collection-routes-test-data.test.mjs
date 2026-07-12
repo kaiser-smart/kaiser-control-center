@@ -22,6 +22,8 @@ assert.equal(new Set(first.rows.map((row) => row.siteKey)).size, 500);
 assert.equal(new Set(first.rows.map((row) => row.customerName)).size, 100);
 assert.ok(first.rows.every((row) => row.customerName.startsWith("Test ") && row.customerName.endsWith(" s.r.o.")));
 assert.ok(first.rows.every((row) => row.phone === input.phone && row.email === input.email));
+assert.ok(first.rows.every((row) => row.addressPlaceRaw && row.stationName));
+assert.ok(first.rows.every((row) => row.note && row.customerManagerName));
 assert.ok(first.rows.every((row) => row.dataScope === "test" && row.svozKaiserIncluded === true));
 assert.ok(first.rows.every((row) => row.issueCount === 0 && row.issues.length === 0));
 assert.ok(first.rows.every((row) => row.addressCity === "Brno" && row.addressRaw.includes("Brno")));
