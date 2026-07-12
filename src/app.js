@@ -21076,6 +21076,13 @@ function collectionDailyRouteFilteredStops(stops = []) {
   ].join(" ")).includes(query));
 }
 
+function collectionDailyRouteCompactVisibleStopCount(total, requested = COLLECTION_DAILY_ROUTE_COMPACT_STOP_COUNT) {
+  const stopCount = Math.max(0, Math.floor(Number(total) || 0));
+  if (!stopCount) return 0;
+  const requestedCount = Math.max(1, Math.floor(Number(requested) || COLLECTION_DAILY_ROUTE_COMPACT_STOP_COUNT));
+  return Math.min(stopCount, requestedCount);
+}
+
 function collectionDailyRoutesList() {
   const routes = Array.isArray(collectionRoutesPilotState.dailyRoutes) ? collectionRoutesPilotState.dailyRoutes : [];
   if (collectionRoutesPilotState.dailyRoutesLoading && !routes.length) {
@@ -21180,7 +21187,7 @@ function collectionDailyRouteDispatcherDetail() {
   const stops = Array.isArray(detail.stops) ? detail.stops : [];
   const filteredStops = collectionDailyRouteFilteredStops(stops);
   const events = Array.isArray(detail.events) ? detail.events : [];
-  const visibleStopCount = collectionDailyRouteVisibleStopCount(
+  const visibleStopCount = collectionDailyRouteCompactVisibleStopCount(
     filteredStops.length,
     collectionRoutesPilotState.dailyRouteStopsVisible
   );

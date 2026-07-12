@@ -137,5 +137,5 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - OVERENO - Faze 2D-A, migrace 0038 a verze 0.1.519 byly 2026-07-12 overeny v produkci: prihlaseny dispecersky pohled, prazdny vychozi stav, ochrana API a responzivita desktop/tablet/mobil; po overeni zustalo 0 tras, 0 zastavek a 0 udalosti.
 - NEZACATO - produkcni overeni Faze 2D-B a verze 0.1.520.
 - ROZPRACOVANO - TEST Brno 500 verze 0.1.524 je v produkci v samostatne TEST D1: 500 stanovist, 1 trasa, 198 zastavek a 1 odeslany e-mail jsou overene. Bezpecne opakovani jedine failed SMS je pripraveno ve verzi 0.1.526; rezim `live` je nastaveny, ale opakovani zatim nebylo spustene.
-- ROZPRACOVANO - verze 0.1.527 presouva TEST Brno 500, TEST trasy a skutecne testovaci zpravy do samostatne sekce Sprava; hlavni dispecerska zalozka je bez TEST dat a dlouhe Vistos tabulky.
+- ROZPRACOVANO - verze 0.1.528 presouva TEST Brno 500, TEST trasy a skutecne testovaci zpravy do samostatne sekce Sprava; hlavni dispecerska zalozka je bez TEST dat a dlouhe Vistos tabulky a detail ukazuje skutecne jen prvnich 10 zastavek.
 - NEZACATO - produkcni ostry import / planovani / notifikace.

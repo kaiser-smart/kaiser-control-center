@@ -33,6 +33,7 @@ for (const marker of [
   "data-collection-daily-route-stop-search",
   "Zobrazit všechny zastávky",
   "const COLLECTION_DAILY_ROUTE_COMPACT_STOP_COUNT = 10",
+  "function collectionDailyRouteCompactVisibleStopCount",
   "data-collection-routes-source-print-driver",
   "data-collection-routes-source-print-pdf",
   "data-collection-routes-source-offline-package",
@@ -40,6 +41,12 @@ for (const marker of [
 ]) {
   assert.ok(appSource.includes(marker), `Zjednodušený dispečerský tok postrádá: ${marker}`);
 }
+
+assert.ok(
+  appSource.includes("const visibleStopCount = collectionDailyRouteCompactVisibleStopCount(") &&
+    !appSource.includes("const visibleStopCount = collectionDailyRouteVisibleStopCount(\n    filteredStops.length"),
+  "Dispečerský detail nesmí zdědit minimálně 100 řádků ze škálovacího helperu pro řidiče."
+);
 
 const dispatcherPanelSource = appSource.slice(
   appSource.indexOf("function collectionDailyRoutesDispatcherPanel"),
