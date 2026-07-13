@@ -1688,3 +1688,5 @@ Pokud uživatel musí přemýšlet, co tlačítko znamená, nebo nevidí celou i
 - Po kliknutí na konkrétní box je uživatel v chlívku dané DS a vidí jen data této schránky.
 - Detail zprávy má být pracovní read-only detail nebo okno pro řešení zprávy.
 - Bez potvrzeného API nesmí UI předstírat funkční odpověď, přeposlání, mazání, změnu stavu ani stahování příloh.
+- Pokud zadání říká `vytvoř chat` nebo `chat k datové zprávě`, znamená to serverový AI chat nad konkrétní zprávou, jejími přílohami, historií a kanonickým adresářem kontaktů. Nesmí se vytvořit lokální simulátor, pevně napsané větvení podle klíčových slov ani chat, který si vymýšlí kontakty nebo stav provedení akce.
+- Prompt takového chatu patří do chráněného Nastavení daného modulu; frontend jej nesmí nahrazovat vlastním promptem. Akce mimo systém, zejména e-mail, zůstávají serverové a vyžadují potvrzení uživatele.

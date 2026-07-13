@@ -814,7 +814,8 @@ async function sendEmail(env, {
   fromName = "Smart odpady",
   moduleId = "dovolena-nemoc",
   relatedEntityType = "absence_request",
-  messagePreview = ""
+  messagePreview = "",
+  attachments = []
 }) {
   const apiKey = cleanString(env.SENDGRID_API_KEY || env.EMAIL_API_KEY);
   const provider = cleanString(env.EMAIL_PROVIDER || (apiKey ? "sendgrid" : "")).toLowerCase();
@@ -930,7 +931,8 @@ async function sendEmail(env, {
           kso_entity_type: audit.entityType,
           kso_entity_id: audit.entityId || ""
         },
-        content: [{ type: "text/html", value: html }]
+        content: [{ type: "text/html", value: html }],
+        ...(Array.isArray(attachments) && attachments.length ? { attachments } : {})
       })
     });
 
@@ -1243,7 +1245,8 @@ export async function sendDataBoxForwardNotification(env, message, options = {})
     fromName: cleanString(options.fromName || "Kaiser Smart"),
     moduleId: "data-box-plus",
     relatedEntityType: "data_box_message",
-    messagePreview: title
+    messagePreview: title,
+    attachments: Array.isArray(options.attachments) ? options.attachments : []
   });
 }
 
