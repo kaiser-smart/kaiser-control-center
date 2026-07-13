@@ -25,6 +25,17 @@ assert.equal(url.searchParams.get("style"), "logistics.day");
 assert.equal(url.searchParams.getAll("overlay").length, 2);
 assert.ok(url.searchParams.getAll("overlay")[0].includes("label=A"));
 assert.ok(url.searchParams.getAll("overlay")[1].includes("label=F"));
+assert.ok(decodeURIComponent(url.pathname).includes("center:"));
+assert.ok(decodeURIComponent(url.pathname).includes(";zoom=18"));
+assert.ok(!decodeURIComponent(url.pathname).includes("overlay:padding=64"));
+
+const farPointsUrl = buildCollectionRoutesHereMapImageUrl({ HERE_MAPS_API_KEY: "test-key" }, {
+  addressLatitude: 49.19125931950087,
+  addressLongitude: 16.670211574110382,
+  measuredLatitude: 49.194,
+  measuredLongitude: 16.674
+});
+assert.ok(decodeURIComponent(farPointsUrl.pathname).includes("overlay:padding=64"));
 
 assert.ok(envExample.includes("HERE_MAPS_API_KEY="), "Příklad prostředí musí popsat serverový HERE API key.");
 assert.ok(!appSource.includes("HERE_MAPS_API_KEY"), "Serverový HERE secret nesmí obsahovat frontendový zdroj.");

@@ -4,6 +4,8 @@ const HERE_MAP_IMAGE_BASE_URL = "https://image.maps.hereapi.com/mia/v3";
 const HERE_MAP_IMAGE_WIDTH = 960;
 const HERE_MAP_IMAGE_HEIGHT = 420;
 const HERE_MAP_IMAGE_TIMEOUT_MS = 12000;
+const HERE_MAP_CLOSE_POINTS_MAX_DISTANCE_METERS = 80;
+const EARTH_RADIUS_METERS = 6371000;
 
 function coordinate(value, minimum, maximum) {
   const normalized = String(value ?? "").trim();
@@ -31,6 +33,31 @@ function markerOverlay(mapPoint, label, color) {
   ].join(";");
 }
 
+function distanceMeters(first, second) {
+  const toRadians = (degrees) => degrees * (Math.PI / 180);
+  const latitudeDelta = toRadians(second.lat - first.lat);
+  const longitudeDelta = toRadians(second.lng - first.lng);
+  const firstLatitude = toRadians(first.lat);
+  const secondLatitude = toRadians(second.lat);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(firstLatitude) * Math.cos(secondLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(haversine)));
+}
+
+function mapView(points) {
+  if (points.length === 1) {
+    return `center:${points[0].lat},${points[0].lng};zoom=18`;
+  }
+  if (distanceMeters(points[0], points[1]) <= HERE_MAP_CLOSE_POINTS_MAX_DISTANCE_METERS) {
+    const midpoint = {
+      lat: (points[0].lat + points[1].lat) / 2,
+      lng: (points[0].lng + points[1].lng) / 2
+    };
+    return `center:${midpoint.lat},${midpoint.lng};zoom=18`;
+  }
+  return "overlay:padding=64";
+}
+
 export function buildCollectionRoutesHereMapImageUrl(env = {}, input = {}) {
   const apiKey = String(env.HERE_MAPS_API_KEY || "").trim();
   if (!apiKey) throw new Error("here_map_key_missing");
@@ -40,9 +67,7 @@ export function buildCollectionRoutesHereMapImageUrl(env = {}, input = {}) {
   const points = [address, measured].filter(Boolean);
   if (!points.length) throw new Error("here_map_coordinates_missing");
 
-  const view = points.length > 1
-    ? "overlay:padding=64"
-    : `center:${points[0].lat},${points[0].lng};zoom=18`;
+  const view = mapView(points);
   const url = new URL(
     `${HERE_MAP_IMAGE_BASE_URL}/base/mc/${view}/${HERE_MAP_IMAGE_WIDTH}x${HERE_MAP_IMAGE_HEIGHT}/png`
   );

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.541"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.542"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: čitelný kontext HERE mapy",
+    text: "Blízký adresní a fyzický GPS bod se zobrazí v pevném uličním přiblížení, takže tablet místo metrového výřezu budovy ukáže i okolní příjezd. U vzdálenější odchylky mapa nadále automaticky zobrazí oba body."
+  },
   {
     title: "Poloha vozidel: jednotné skleněné cedule a čistá mapa",
     text: "Všechny čtyři varianty info cedule používají společný skleněný materiál, typografii, rámeček a stín. Celorepublikový přehled ukazuje jen vozidla s přesným GPS hrotem; velká cedule se objeví až po kliknutí na vůz nebo při bližším přiblížení mapy."
