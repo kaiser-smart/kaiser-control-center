@@ -41,6 +41,10 @@ import {
 import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
+  collectionRouteGpsPrompt,
+  summarizeCollectionRouteGpsSamples
+} from "./data/collectionRouteGps.js";
+import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
   ABSENCE_REPORT_TIME,
@@ -1335,6 +1339,16 @@ const collectionRoutesPilotState = {
   testNotificationPending: "",
   testNotificationMessage: "",
   testNotificationError: "",
+  testOperationalConfig: null,
+  testOperationalConfigLoading: false,
+  testOperationalConfigError: "",
+  testGpsConfirmations: [],
+  testGpsLoading: false,
+  testGpsPending: "",
+  testGpsMessage: "",
+  testGpsError: "",
+  testGpsPreview: null,
+  testGpsVoiceListening: false,
   myDailyRouteLoaded: false,
   myDailyRouteLoading: false,
   myDailyRoute: null,
@@ -20921,7 +20935,8 @@ function collectionDailyRouteEventLabel(eventType) {
     done: "HOTOVO",
     problem: "Problém",
     dump: "Výklop",
-    break: "Pauza"
+    break: "Pauza",
+    gps_position_confirmed: "Fyzická GPS změřena"
   }[eventType] || eventType || "Událost";
 }
 
@@ -21080,6 +21095,7 @@ function collectionRouteHerePilotPanel() {
   const loading = collectionRoutesPilotState.hereOptimizationLoading;
   const pending = collectionRoutesPilotState.hereOptimizationPending;
   const blockers = Array.isArray(readiness?.blockers) ? readiness.blockers : [];
+  const warnings = Array.isArray(readiness?.warnings) ? readiness.warnings : [];
   const availableWasteTypes = Array.isArray(readiness?.availableWasteTypes) && readiness.availableWasteTypes.length
     ? readiness.availableWasteTypes
     : ["SKO", "PAPIR", "PLAST", "BIO", "SKLO"];
@@ -21118,6 +21134,12 @@ function collectionRouteHerePilotPanel() {
         <div class="collection-route-here__blockers">
           <strong>Co ještě chybí</strong>
           <ul>${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </div>
+      ` : ""}
+      ${warnings.length ? `
+        <div class="collection-route-here__blockers">
+          <strong>TEST předpoklady</strong>
+          <ul>${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
         </div>
       ` : ""}
       ${run?.status === "completed" ? `
@@ -21407,6 +21429,143 @@ function collectionDailyRoutesList() {
   `;
 }
 
+function collectionRoutesTestOperationalConfigPanel() {
+  if (!collectionDailyRouteIsTestScope()) return "";
+  if (collectionRoutesPilotState.testOperationalConfigLoading) {
+    return `<p class="module-feedback__notice">Načítám TEST depo, výsypy, směnu a vozidla...</p>`;
+  }
+  if (collectionRoutesPilotState.testOperationalConfigError) {
+    return `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.testOperationalConfigError)}</p>`;
+  }
+  const payload = collectionRoutesPilotState.testOperationalConfig;
+  const config = payload?.config || {};
+  if (!payload) return "";
+  const depot = config.depot || {};
+  const shift = config.shift || {};
+  const dumpSites = Array.isArray(config.dumpSites) ? config.dumpSites : [];
+  const vehicles = Array.isArray(config.vehicles) ? config.vehicles : [];
+  const gpsSummary = payload.gpsSummary || {};
+  return `
+    <section class="collection-routes-test-operations" aria-labelledby="collection-routes-test-operations-title">
+      <header>
+        <div>
+          <p class="module-feedback__eyebrow">Výpočetní vstupy TEST</p>
+          <h3 id="collection-routes-test-operations-title">Depo, výsypy, směna a vozidla</h3>
+          <p>Souřadnice jsou dohledané adresní body. Vjezdy a technické rozměry zůstávají viditelně označené jako TEST odhad, dokud je nepotvrdí fyzické měření nebo technický průkaz.</p>
+        </div>
+        <span class="collection-routes-test-badge">TEST ODHADY</span>
+      </header>
+      <div class="collection-routes-test-operations__facts">
+        <article><span>Depo</span><strong>${escapeHtml(depot.name || "-")}</strong><small>${escapeHtml(depot.address || "-")}</small></article>
+        <article><span>Směna</span><strong>${escapeHtml(`${shift.start || "-"}–${shift.end || "-"}`)}</strong><small>${escapeHtml(shift.timezone || "Europe/Prague")} · TEST předpoklad</small></article>
+        <article><span>Výsypy</span><strong>${escapeHtml(dumpSites.length)}</strong><small>Adresní body, skutečné vjezdy čekají na ověření.</small></article>
+        <article><span>Fyzické GPS</span><strong>${escapeHtml(gpsSummary.totalCount || 0)}</strong><small>${escapeHtml(gpsSummary.reviewCount || 0)} čeká na kontrolu.</small></article>
+      </div>
+      <details>
+        <summary>Ukázat provozní podklady TEST</summary>
+        <div class="collection-routes-test-operations__detail">
+          <div>
+            <h4>Místa výsypu</h4>
+            <ul>${dumpSites.map((site) => `<li><strong>${escapeHtml(site.name || "-")}</strong><span>${escapeHtml(site.address || "-")} · ${escapeHtml((site.wasteTypes || []).join(", ") || "odpad neurčen")} · výsyp ${escapeHtml(site.serviceMinutes || "-")} min (TEST)</span></li>`).join("")}</ul>
+          </div>
+          <div>
+            <h4>Vozidla</h4>
+            <ul>${vehicles.map((vehicle) => `<li><strong>${escapeHtml(`Vůz ${vehicle.code || "-"} · ${vehicle.registration || "-"}`)}</strong><span>${escapeHtml(`${vehicle.truck?.lengthCm || "-"} × ${vehicle.truck?.widthCm || "-"} × ${vehicle.truck?.heightCm || "-"} cm · ${vehicle.truck?.grossWeightKg || "-"} kg`)} · konzervativní TEST obálka</span></li>`).join("")}</ul>
+          </div>
+        </div>
+      </details>
+    </section>
+  `;
+}
+
+function collectionRoutesTestGpsStatusLabel(confirmation = {}) {
+  if (confirmation.status === "verified") return "Ověřeno";
+  if (confirmation.status === "needs-review") return "Změřeno · čeká na kontrolu";
+  return "Změřeno řidičem";
+}
+
+function collectionRoutesTestGpsPanel(detail) {
+  if (!collectionDailyRouteIsTestScope() || !detail?.run) return "";
+  const { run } = detail;
+  const stops = Array.isArray(detail.stops) ? detail.stops : [];
+  const currentStop = stops.find((stop) => stop.status === "planned") || null;
+  const confirmation = currentStop
+    ? collectionRoutesPilotState.testGpsConfirmations.find((item) => item.stopId === currentStop.id) || null
+    : null;
+  const preview = collectionRoutesPilotState.testGpsPreview;
+  const pending = collectionRoutesPilotState.testGpsPending;
+  const addressingName = collectionRoutesTestGpsAddressingName(run);
+  const prompt = collectionRouteGpsPrompt(addressingName);
+  return `
+    <section class="collection-routes-test-gps" aria-labelledby="collection-routes-test-gps-title">
+      <header>
+        <div>
+          <p class="module-feedback__eyebrow">TEST řidičského displeje</p>
+          <h4 id="collection-routes-test-gps-title">Fyzické potvrzení GPS stanoviště</h4>
+          <p>Tablet uloží nový auditní bod. Původní adresní souřadnice se nepřepisují.</p>
+        </div>
+        <span class="collection-routes-test-badge">TEST · GPS</span>
+      </header>
+      ${collectionRoutesPilotState.testGpsError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.testGpsError)}</p>` : ""}
+      ${collectionRoutesPilotState.testGpsMessage ? `<p class="module-feedback__notice" role="status">${escapeHtml(collectionRoutesPilotState.testGpsMessage)}</p>` : ""}
+      ${run.status !== "active" ? `
+        <div class="collection-routes-test-gps__waiting"><strong>Nejdřív spusť TEST trasu.</strong><span>GPS měření se zpřístupní až u zahájené trasy, aby se nemohlo uložit k nesprávnému dni nebo vozidlu.</span></div>
+      ` : !currentStop ? `
+        <div class="collection-routes-test-gps__waiting"><strong>Všechna stanoviště jsou vyřízená.</strong><span>Pro tuto trasu už není čekající bod k měření.</span></div>
+      ` : `
+        <div class="collection-routes-test-gps__stop">
+          <span>Aktuální stanoviště #${escapeHtml(currentStop.routeOrder)}</span>
+          <strong>${escapeHtml(currentStop.stationName || currentStop.customerName || "-")}</strong>
+          <small>${escapeHtml(currentStop.addressText || "-")}</small>
+        </div>
+        ${confirmation ? `
+          <div class="collection-routes-test-gps__confirmed">
+            <strong>${escapeHtml(collectionRoutesTestGpsStatusLabel(confirmation))}</strong>
+            <span>Přesnost ${escapeHtml(Math.round(confirmation.accuracyMeters || 0))} m · od adresního bodu ${escapeHtml(Math.round(confirmation.distanceFromAddressMeters || 0))} m</span>
+            <small>${confirmation.routingCandidate ? "Použitelné jako TEST navigační kandidát." : "Bod se bez kontroly nepoužije jako navigační cíl."}</small>
+          </div>
+        ` : `
+          <div class="collection-routes-test-gps__sarlota">
+            <span aria-hidden="true">Š</span>
+            <p>${escapeHtml(prompt)}</p>
+            <button type="button" data-collection-routes-test-gps-speak>Přehrát pokyn Šarloty</button>
+          </div>
+          <button
+            class="collection-routes-test-gps__rugged-button"
+            type="button"
+            data-collection-routes-test-gps-capture
+            ${pending ? "disabled" : ""}
+          >
+            <span>${pending === "capture" ? "MĚŘÍM GPS…" : "POTVRDIT GPS STANOVIŠTĚ"}</span>
+            <small>Velké tlačítko pro déšť, mráz a pracovní rukavice</small>
+          </button>
+          <button
+            class="collection-routes-test-gps__voice-button"
+            type="button"
+            data-collection-routes-test-gps-voice
+            ${pending || collectionRoutesPilotState.testGpsVoiceListening ? "disabled" : ""}
+          >${collectionRoutesPilotState.testGpsVoiceListening ? "Šarlota poslouchá…" : "Říct Šarlotě: Potvrď GPS"}</button>
+        `}
+      `}
+      ${preview ? `
+        <div class="collection-routes-test-gps__confirm" role="dialog" aria-modal="true" aria-label="Potvrzení fyzického GPS stanoviště">
+          <div>
+            <span>GPS připravená</span>
+            <strong>${escapeHtml(preview.stopTitle || "Stanoviště")}</strong>
+            <small>Přesnost ${escapeHtml(Math.round(preview.accuracy || 0))} m · ${escapeHtml(preview.sampleCount || 0)} měření</small>
+          </div>
+          <p>Jedním klepnutím uložíš fyzický bod do TEST auditu. Nic se neodešle zákazníkovi a původní adresa zůstane beze změny.</p>
+          <button class="collection-routes-test-gps__rugged-button collection-routes-test-gps__rugged-button--save" type="button" data-collection-routes-test-gps-save ${pending ? "disabled" : ""}>
+            <span>${pending === "save" ? "UKLÁDÁM…" : "ULOŽIT FYZICKOU GPS"}</span>
+            <small>Jediné velké finální klepnutí</small>
+          </button>
+          <button class="collection-routes-test-gps__cancel" type="button" data-collection-routes-test-gps-cancel ${pending ? "disabled" : ""}>Zrušit měření</button>
+        </div>
+      ` : ""}
+    </section>
+  `;
+}
+
 function collectionRoutesTestNotificationRetryButtonLabel(retry = {}) {
   const smsCount = Number(retry.retryableSmsCount || 0);
   const emailCount = Number(retry.retryableEmailCount || 0);
@@ -21562,6 +21721,8 @@ function collectionDailyRouteDispatcherDetail() {
         </div>
       ` : ""}
 
+      ${collectionRoutesTestGpsPanel(detail)}
+
       ${collectionRoutesTestNotificationPanel(detail)}
 
       <details class="collection-daily-route-audit">
@@ -21596,6 +21757,7 @@ function collectionDailyRoutesDispatcherPanel(rows = []) {
   return `
     ${mantraPanel}
     ${collectionRoutesTestDatasetPanel(user)}
+    ${collectionRoutesTestOperationalConfigPanel()}
     <section class="collection-daily-routes" aria-labelledby="collection-daily-routes-title">
       <header class="collection-daily-routes__head">
         <div>
@@ -36842,6 +37004,29 @@ function resetCollectionDailyRoutesForScope() {
   collectionRoutesPilotState.testNotificationPending = "";
   collectionRoutesPilotState.testNotificationMessage = "";
   collectionRoutesPilotState.testNotificationError = "";
+  collectionRoutesPilotState.testGpsConfirmations = [];
+  collectionRoutesPilotState.testGpsLoading = false;
+  collectionRoutesPilotState.testGpsPending = "";
+  collectionRoutesPilotState.testGpsMessage = "";
+  collectionRoutesPilotState.testGpsError = "";
+  collectionRoutesPilotState.testGpsPreview = null;
+  collectionRoutesPilotState.testGpsVoiceListening = false;
+}
+
+async function loadCollectionRoutesTestOperationalConfig(options = {}) {
+  if (!collectionRoutesCanUseTestDataset(currentUser()) || collectionRoutesPilotState.testOperationalConfigLoading) return;
+  if (collectionRoutesPilotState.testOperationalConfig && options.force !== true) return;
+  collectionRoutesPilotState.testOperationalConfigLoading = true;
+  collectionRoutesPilotState.testOperationalConfigError = "";
+  try {
+    collectionRoutesPilotState.testOperationalConfig = await apiJson("/api/collection-routes/test-operational-config");
+  } catch (error) {
+    collectionRoutesPilotState.testOperationalConfig = null;
+    collectionRoutesPilotState.testOperationalConfigError = error.payload?.error || error.message || "TEST provozní vstupy se nepodařilo načíst.";
+  } finally {
+    collectionRoutesPilotState.testOperationalConfigLoading = false;
+  }
+  if (options.renderAfter !== false) render();
 }
 
 async function loadCollectionRoutesTestDataset(options = {}) {
@@ -36868,6 +37053,10 @@ async function loadCollectionRoutesTestDataset(options = {}) {
   } finally {
     collectionRoutesPilotState.testDatasetLoading = false;
   }
+  await loadCollectionRoutesTestOperationalConfig({
+    force: options.force === true,
+    renderAfter: false
+  });
   if (options.renderAfter !== false) render();
 }
 
@@ -36935,6 +37124,252 @@ async function loadLatestCollectionRoutesTestNotificationJob(runId) {
     collectionRoutesPilotState.testNotificationJob = result?.job ? result : null;
   } catch (error) {
     collectionRoutesPilotState.testNotificationError = error.payload?.error || error.message || "Poslední testovací odesílací úlohu se nepodařilo načíst.";
+  }
+}
+
+async function loadCollectionRoutesTestGpsConfirmations(runId) {
+  const id = String(runId || "").trim();
+  if (!collectionDailyRouteIsTestScope() || !id) {
+    collectionRoutesPilotState.testGpsConfirmations = [];
+    return;
+  }
+  collectionRoutesPilotState.testGpsLoading = true;
+  collectionRoutesPilotState.testGpsError = "";
+  try {
+    const result = await apiJson(`/api/collection-routes/test-gps-confirmations?runId=${encodeURIComponent(id)}`);
+    collectionRoutesPilotState.testGpsConfirmations = Array.isArray(result.confirmations) ? result.confirmations : [];
+  } catch (error) {
+    collectionRoutesPilotState.testGpsConfirmations = [];
+    collectionRoutesPilotState.testGpsError = error.payload?.error || error.message || "GPS měření TEST trasy se nepodařilo načíst.";
+  } finally {
+    collectionRoutesPilotState.testGpsLoading = false;
+  }
+}
+
+function collectionRoutesTestGpsAddressingName(run = {}) {
+  return collectionRoutesPilotState.dailyRouteDrivers
+    .find((driver) => driver.id === run.driverUserId)?.addressingName || run.metadata?.driverAddressingName || "";
+}
+
+function speakCollectionRoutesTestGps(text) {
+  const message = String(text || "").trim();
+  if (!message || typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.lang = "cs-CZ";
+    utterance.rate = 0.96;
+    utterance.pitch = 1.02;
+    utterance.voice = aiVoiceDemoVoice();
+    window.speechSynthesis.speak(utterance);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function vibrateCollectionRoutesTestGps(pattern = 35) {
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(pattern);
+    }
+  } catch {
+    // Vibrace je pouze doplňková odezva tabletu.
+  }
+}
+
+function collectionRoutesTestGpsCaptureOptions() {
+  const capture = collectionRoutesPilotState.testOperationalConfig?.config?.gpsCapture || {};
+  return {
+    minimumSamples: Number(capture.minimumSamples) || 3,
+    maxAccuracy: Number(capture.maxAccuracyMeters) || 30,
+    stationarySpeed: Number(capture.stationarySpeedMps) || 1.5
+  };
+}
+
+function collectCollectionRoutesTestGpsSamples() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Tablet nepodporuje GPS polohu."));
+      return;
+    }
+    const samples = [];
+    const options = collectionRoutesTestGpsCaptureOptions();
+    const targetSamples = Math.max(options.minimumSamples, 5);
+    let watchId = null;
+    let finished = false;
+    const finish = (callback, value) => {
+      if (finished) return;
+      finished = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      clearTimeout(timer);
+      callback(value);
+    };
+    const timer = window.setTimeout(() => {
+      if (samples.length >= options.minimumSamples) {
+        finish(resolve, samples);
+      } else {
+        finish(reject, new Error("GPS nestihla načíst dost přesných měření. Zkus to znovu venku u nádob."));
+      }
+    }, 15000);
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          samples.push({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            speed: position.coords.speed,
+            capturedAt: new Date(position.timestamp || Date.now()).toISOString()
+          });
+          if (samples.length >= targetSamples) finish(resolve, samples);
+        },
+        (error) => {
+          const message = error?.code === 1
+            ? "Poloha není povolená. Povol GPS pro tento web a zkus to znovu."
+            : "GPS polohu se nepodařilo načíst. Zkus to znovu venku u nádob.";
+          finish(reject, new Error(message));
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
+      );
+    } catch (error) {
+      finish(reject, error);
+    }
+  });
+}
+
+async function prepareCollectionRoutesTestGpsCapture() {
+  const detail = collectionRoutesPilotState.dailyRouteDetail;
+  const run = detail?.run;
+  const stop = detail?.stops?.find((item) => item.status === "planned");
+  if (!collectionDailyRouteIsTestScope() || run?.status !== "active" || !stop || collectionRoutesPilotState.testGpsPending) return;
+  collectionRoutesPilotState.testGpsPending = "capture";
+  collectionRoutesPilotState.testGpsPreview = null;
+  collectionRoutesPilotState.testGpsMessage = "Šarlota načítá několik GPS měření. Vozidlo musí stát přímo u nádob.";
+  collectionRoutesPilotState.testGpsError = "";
+  vibrateCollectionRoutesTestGps(35);
+  speakCollectionRoutesTestGps("Rozumím. Změřím GPS stanoviště. Vozidlo musí stát přímo u nádob.");
+  render();
+  try {
+    const result = summarizeCollectionRouteGpsSamples(
+      await collectCollectionRoutesTestGpsSamples(),
+      collectionRoutesTestGpsCaptureOptions()
+    );
+    if (!result.ok) throw new Error(result.message);
+    collectionRoutesPilotState.testGpsPreview = {
+      ...result.point,
+      runId: run.id,
+      stopId: stop.id,
+      stopTitle: stop.stationName || stop.customerName || stop.addressText,
+      addressText: stop.addressText || "",
+      idempotencyKey: collectionDailyRouteIdempotencyKey("test-gps-confirmation")
+    };
+    vibrateCollectionRoutesTestGps([45, 60, 45]);
+    collectionRoutesPilotState.testGpsMessage = "Měření je připravené. Zkontroluj stanoviště a fyzicky potvrď uložení.";
+    speakCollectionRoutesTestGps(`Měření je připravené s přesností ${Math.round(result.point.accuracy)} metrů. Pro uložení klepni na potvrzovací tlačítko.`);
+  } catch (error) {
+    collectionRoutesPilotState.testGpsError = error.message || "GPS měření se nepodařilo připravit.";
+    collectionRoutesPilotState.testGpsMessage = "";
+    speakCollectionRoutesTestGps(collectionRoutesPilotState.testGpsError);
+  } finally {
+    collectionRoutesPilotState.testGpsPending = "";
+    render();
+  }
+}
+
+async function saveCollectionRoutesTestGpsCapture() {
+  const preview = collectionRoutesPilotState.testGpsPreview;
+  if (!preview || collectionRoutesPilotState.testGpsPending) return;
+  collectionRoutesPilotState.testGpsPending = "save";
+  collectionRoutesPilotState.testGpsError = "";
+  collectionRoutesPilotState.testGpsMessage = "Ukládám fyzické GPS měření do TEST auditu...";
+  render();
+  try {
+    const result = await apiJson("/api/collection-routes/test-gps-confirmations", {
+      method: "POST",
+      body: JSON.stringify({
+        runId: preview.runId,
+        stopId: preview.stopId,
+        latitude: preview.latitude,
+        longitude: preview.longitude,
+        accuracyMeters: preview.accuracy,
+        sampleCount: preview.sampleCount,
+        speedMps: preview.speed,
+        capturedAt: preview.capturedAt,
+        idempotencyKey: preview.idempotencyKey
+      })
+    });
+    const confirmation = result.confirmation || {};
+    collectionRoutesPilotState.testGpsPreview = null;
+    collectionRoutesPilotState.testGpsMessage = confirmation.routingCandidate
+      ? `GPS stanoviště je fyzicky změřená s přesností ${Math.round(confirmation.accuracyMeters || 0)} m.`
+      : "GPS stanoviště je změřená a čeká na kontrolu odchylky nebo přesnosti.";
+    speakCollectionRoutesTestGps(
+      confirmation.routingCandidate
+        ? `Děkuji, polohu jsem uložila s přesností ${Math.round(confirmation.accuracyMeters || 0)} metrů.`
+        : "Děkuji, polohu jsem uložila a předala ke kontrole."
+    );
+    vibrateCollectionRoutesTestGps([70, 70, 140]);
+    await loadCollectionDailyRouteDetail(preview.runId, { renderAfter: false });
+    await loadCollectionRoutesTestOperationalConfig({ force: true, renderAfter: false });
+  } catch (error) {
+    collectionRoutesPilotState.testGpsError = error.payload?.error || error.message || "GPS stanoviště se nepodařilo uložit.";
+    collectionRoutesPilotState.testGpsMessage = "";
+    speakCollectionRoutesTestGps(collectionRoutesPilotState.testGpsError);
+  } finally {
+    collectionRoutesPilotState.testGpsPending = "";
+    render();
+  }
+}
+
+function cancelCollectionRoutesTestGpsCapture() {
+  collectionRoutesPilotState.testGpsPreview = null;
+  collectionRoutesPilotState.testGpsMessage = "GPS měření nebylo uložené.";
+  collectionRoutesPilotState.testGpsError = "";
+  render();
+}
+
+function startCollectionRoutesTestGpsVoiceCommand() {
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Recognition) {
+    collectionRoutesPilotState.testGpsError = "Hlasový povel tento prohlížeč nepodporuje. Použij tlačítko Potvrdit GPS stanoviště.";
+    render();
+    return;
+  }
+  if (collectionRoutesPilotState.testGpsVoiceListening) return;
+  const recognition = new Recognition();
+  recognition.lang = "cs-CZ";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  collectionRoutesPilotState.testGpsVoiceListening = true;
+  collectionRoutesPilotState.testGpsError = "";
+  collectionRoutesPilotState.testGpsMessage = "Šarlota poslouchá. Řekni: Potvrď GPS stanoviště.";
+  render();
+  recognition.onresult = async (event) => {
+    const transcript = String(event.results?.[0]?.[0]?.transcript || "").trim();
+    if (/(potvr|zmer|změř|gps|polo|stanovi)/i.test(transcript)) {
+      collectionRoutesPilotState.testGpsMessage = `Šarlota rozuměla: „${transcript}“`;
+      await prepareCollectionRoutesTestGpsCapture();
+    } else {
+      collectionRoutesPilotState.testGpsError = `Šarlota nerozuměla povelu „${transcript || "bez přepisu"}“. Zkus říct: Potvrď GPS stanoviště.`;
+      render();
+    }
+  };
+  recognition.onerror = (event) => {
+    collectionRoutesPilotState.testGpsError = event.error === "not-allowed"
+      ? "Mikrofon není povolený. Povol mikrofon pro tento web a zkus to znovu."
+      : "Hlasový povel se nepodařilo načíst. Použij tlačítko Potvrdit GPS stanoviště.";
+  };
+  recognition.onend = () => {
+    collectionRoutesPilotState.testGpsVoiceListening = false;
+    render();
+  };
+  try {
+    recognition.start();
+  } catch (error) {
+    collectionRoutesPilotState.testGpsVoiceListening = false;
+    collectionRoutesPilotState.testGpsError = error.message || "Mikrofon se nepodařilo spustit.";
+    render();
   }
 }
 
@@ -37093,9 +37528,13 @@ async function loadCollectionDailyRouteDetail(runId, options = {}) {
     const result = await apiJson(`/api/collection-routes/daily-routes/${encodeURIComponent(id)}${collectionDailyRouteScopeQuery()}`);
     applyCollectionDailyRouteDetail(result.route);
     if (collectionDailyRouteIsTestScope()) {
-      await loadLatestCollectionRoutesTestNotificationJob(result.route?.run?.id);
+      await Promise.all([
+        loadLatestCollectionRoutesTestNotificationJob(result.route?.run?.id),
+        loadCollectionRoutesTestGpsConfirmations(result.route?.run?.id)
+      ]);
     } else {
       collectionRoutesPilotState.testNotificationJob = null;
+      collectionRoutesPilotState.testGpsConfirmations = [];
     }
     collectionRoutesPilotState.dailyRouteError = "";
   } catch (error) {
@@ -43120,6 +43559,16 @@ async function logout() {
   collectionRoutesPilotState.testNotificationPending = "";
   collectionRoutesPilotState.testNotificationMessage = "";
   collectionRoutesPilotState.testNotificationError = "";
+  collectionRoutesPilotState.testOperationalConfig = null;
+  collectionRoutesPilotState.testOperationalConfigLoading = false;
+  collectionRoutesPilotState.testOperationalConfigError = "";
+  collectionRoutesPilotState.testGpsConfirmations = [];
+  collectionRoutesPilotState.testGpsLoading = false;
+  collectionRoutesPilotState.testGpsPending = "";
+  collectionRoutesPilotState.testGpsMessage = "";
+  collectionRoutesPilotState.testGpsError = "";
+  collectionRoutesPilotState.testGpsPreview = null;
+  collectionRoutesPilotState.testGpsVoiceListening = false;
   collectionRoutesPilotState.myDailyRouteLoaded = false;
   collectionRoutesPilotState.myDailyRouteLoading = false;
   collectionRoutesPilotState.myDailyRoute = null;
@@ -47445,6 +47894,43 @@ document.addEventListener("click", async (event) => {
       collectionRoutesPilotState.dailyRouteStopsVisible
     );
     render();
+    return;
+  }
+
+  const collectionRoutesTestGpsSpeak = event.target.closest("[data-collection-routes-test-gps-speak]");
+  if (collectionRoutesTestGpsSpeak) {
+    event.preventDefault();
+    const run = collectionRoutesPilotState.dailyRouteDetail?.run || {};
+    speakCollectionRoutesTestGps(collectionRouteGpsPrompt(collectionRoutesTestGpsAddressingName(run)));
+    vibrateCollectionRoutesTestGps(30);
+    return;
+  }
+
+  const collectionRoutesTestGpsCapture = event.target.closest("[data-collection-routes-test-gps-capture]");
+  if (collectionRoutesTestGpsCapture) {
+    event.preventDefault();
+    if (!collectionRoutesTestGpsCapture.disabled) await prepareCollectionRoutesTestGpsCapture();
+    return;
+  }
+
+  const collectionRoutesTestGpsVoice = event.target.closest("[data-collection-routes-test-gps-voice]");
+  if (collectionRoutesTestGpsVoice) {
+    event.preventDefault();
+    if (!collectionRoutesTestGpsVoice.disabled) startCollectionRoutesTestGpsVoiceCommand();
+    return;
+  }
+
+  const collectionRoutesTestGpsSave = event.target.closest("[data-collection-routes-test-gps-save]");
+  if (collectionRoutesTestGpsSave) {
+    event.preventDefault();
+    if (!collectionRoutesTestGpsSave.disabled) await saveCollectionRoutesTestGpsCapture();
+    return;
+  }
+
+  const collectionRoutesTestGpsCancel = event.target.closest("[data-collection-routes-test-gps-cancel]");
+  if (collectionRoutesTestGpsCancel) {
+    event.preventDefault();
+    if (!collectionRoutesTestGpsCancel.disabled) cancelCollectionRoutesTestGpsCapture();
     return;
   }
 

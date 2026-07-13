@@ -46,7 +46,13 @@ for (const marker of [
   "start-here-test-readonly",
   "/api/collection-routes/here-optimization",
   "Žádné automatické opakování neběží",
-  "TEST · READ-ONLY VÝPOČET"
+  "TEST · READ-ONLY VÝPOČET",
+  "Fyzické potvrzení GPS stanoviště",
+  "data-collection-routes-test-gps-capture",
+  "data-collection-routes-test-gps-voice",
+  "data-collection-routes-test-gps-save",
+  "preview.idempotencyKey",
+  "/api/collection-routes/test-gps-confirmations"
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
@@ -125,14 +131,16 @@ for (const marker of [
   ".collection-routes-calculation__truth",
   ".collection-route-here",
   ".collection-route-here__facts",
-  ".collection-route-here__actions"
+  ".collection-route-here__actions",
+  ".collection-routes-test-gps__rugged-button",
+  ".collection-routes-test-gps__confirm"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }
 
 for (const marker of [
   "KSO Svozový autopilot – provozní mantra",
-  "Read-only návrh pravidel",
+  "TEST návrh pravidel",
   "Četnosti Nx7 musí být v lichém a sudém týdnu přesně zrcadlené 1:1",
   "A – 3BN 3558",
   "B – 1BP 8373",
@@ -145,6 +153,8 @@ for (const marker of [
   "Kompostárna Fertia",
   "JIŽ HOTOVO",
   "MUSÍM JET VYSYPAT",
+  "FYZICKÉ GPS MAPOVÁNÍ STANOVIŠTĚ",
+  "minimálně 120 px vysoké a na úzkém displeji 132 px",
   "Bez výslovného potvrzení dispečerky nic neměň ani neodesílej",
   "Paměť musí být cloudová"
 ]) {

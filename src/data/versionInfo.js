@@ -25,6 +25,14 @@ export const versionNews = [
     text: "Vozidlo na mapě zůstává stále vodorovné bez rotace podle azimutu. Informační cedule je těsně nad vozidlem a samostatná šipka pod vozidlem označuje přesnou GPS polohu; data T-Cars ani výběr vozidla se nemění."
   },
   {
+    title: "Svozové trasy: fyzické GPS stanoviště se Šarlotou",
+    text: "Oddělený TEST režim umí z tabletu načíst více GPS vzorků u nádob, odmítne pohyb nebo slabou přesnost a připraví auditní bod bez přepsání adresy. Hlasová Šarlota přečte pokyn a rozpozná povel k měření; skutečný zápis vyžaduje jediné velké finální klepnutí vhodné pro déšť, mráz, horko a pracovní rukavice."
+  },
+  {
+    title: "Svozové trasy: TEST depo, výsypy a truck profily",
+    text: "TEST D1 má dohledané adresní body depa a výsypů, pracovní směnu, časy výsypu a konzervativní profily vozidel A/B/C. Vjezdy, rozměry a hmotnosti jsou pravdivě označené jako TEST odhady, dokud je nepotvrdí fyzické měření nebo technický průkaz."
+  },
+  {
     title: "Svozové trasy: HERE silniční read-only pilot",
     text: "TEST trasa má navazující serverový pilot HERE Tour Planning pro nákladní vozidla v ČR. Ověřuje jednu komoditu, souřadnice, směnu, rozměry vozidel, kapacitu a správné místo výsypu; placený výpočet lze spustit jen ručně po doplnění D1 konfigurace a serverového OAuth. Výsledek má audit, nic nepřepisuje v provozní trase a nic neodesílá řidičům ani zákazníkům."
   },
