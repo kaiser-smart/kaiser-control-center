@@ -3847,6 +3847,7 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
         instruction,
         history,
         learningRules,
+        currentUser: { name: actorName(currentUser), email: cleanString(currentUser?.email) },
         today: dataBoxPlusPragueDate(),
         message: {
           senderName: message.sender_name,
