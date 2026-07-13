@@ -9505,24 +9505,25 @@ h1 {
 .tracking-tcars-google-pin__label {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(222, 255, 235, 0.72);
-  border-radius: 18px 18px 13px 13px;
+  border: 2px solid rgba(220, 255, 237, 0.62);
+  border-radius: 21px 21px 15px 15px;
   background:
-    radial-gradient(120% 88% at 7% -16%, rgba(239, 255, 246, 0.38) 0%, rgba(239, 255, 246, 0) 44%),
-    linear-gradient(136deg, rgba(55, 91, 73, 0.88) 0%, rgba(22, 53, 39, 0.9) 52%, rgba(12, 35, 25, 0.94) 100%);
+    linear-gradient(120deg, rgba(235, 255, 246, 0.23) 0%, rgba(235, 255, 246, 0.03) 27%, rgba(255, 255, 255, 0) 50%),
+    radial-gradient(120% 88% at 7% -16%, rgba(207, 255, 225, 0.3) 0%, rgba(239, 255, 246, 0) 44%),
+    linear-gradient(136deg, rgba(77, 119, 96, 0.48) 0%, rgba(26, 64, 45, 0.56) 52%, rgba(10, 35, 25, 0.64) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 0 0 1px rgba(180, 255, 209, 0.1),
-    0 14px 30px rgba(11, 32, 22, 0.28),
-    0 3px 8px rgba(10, 26, 18, 0.22);
+    inset 0 1px 0 rgba(255, 255, 255, 0.56),
+    inset 0 0 0 1px rgba(180, 255, 209, 0.18),
+    0 16px 32px rgba(11, 32, 22, 0.22),
+    0 3px 8px rgba(10, 26, 18, 0.16);
   color: #f4fff7;
-  backdrop-filter: blur(15px) saturate(1.12);
+  backdrop-filter: blur(7px) saturate(1.16);
 }
 
 .tracking-tcars-google-pin__label::after {
   position: absolute;
   inset: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: inherit;
   content: "";
   pointer-events: none;
@@ -9533,8 +9534,8 @@ h1 {
   gap: 8px;
   padding: 10px;
   background:
-    radial-gradient(130% 95% at 7% -18%, rgba(239, 255, 246, 0.42) 0%, rgba(239, 255, 246, 0) 42%),
-    linear-gradient(136deg, rgba(56, 96, 73, 0.88) 0%, rgba(24, 58, 41, 0.91) 52%, rgba(12, 35, 25, 0.95) 100%);
+    radial-gradient(130% 95% at 7% -18%, rgba(239, 255, 246, 0.32) 0%, rgba(239, 255, 246, 0) 42%),
+    linear-gradient(136deg, rgba(56, 96, 73, 0.46) 0%, rgba(24, 58, 41, 0.56) 52%, rgba(12, 35, 25, 0.65) 100%);
   color: #f4fff7;
 }
 
@@ -9578,8 +9579,8 @@ h1 {
 .tracking-marker-compact__metrics > span,
 .tracking-marker-telemetry__grid > span,
 .tracking-marker-telemetry__event {
-  border-color: rgba(226, 255, 237, 0.14);
-  background: rgba(239, 255, 246, 0.08);
+  border-color: rgba(226, 255, 237, 0.25);
+  background: rgba(9, 31, 21, 0.34);
 }
 
 .tracking-marker-compact__metrics small,
@@ -9590,19 +9591,37 @@ h1 {
 }
 
 .tracking-tcars-google-pin__label--plate {
-  width: 188px;
+  width: 210px;
   gap: 6px;
   padding: 9px;
   color: #f4fff7;
   filter: none;
 }
 
+.tracking-marker-vehicle-name,
+.tracking-marker-gauge__vehicle,
+.tracking-marker-telemetry__vehicle {
+  min-width: 0;
+  overflow: hidden;
+  color: #f7fff9;
+  font-size: 0.71rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-marker-vehicle-name {
+  padding: 1px 2px 2px;
+}
+
 .tracking-marker-plate,
 .tracking-marker-speed-board {
-  border: 1px solid rgba(226, 255, 237, 0.17);
+  border: 1px solid rgba(226, 255, 237, 0.27);
   border-radius: 10px;
-  background: rgba(239, 255, 246, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: rgba(8, 30, 20, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .tracking-marker-plate {
@@ -9635,35 +9654,35 @@ h1 {
 }
 
 .tracking-tcars-google-pin__label--speedometer {
-  width: 188px;
-  height: 126px;
+  width: 220px;
+  height: 154px;
   overflow: hidden;
   padding: 0;
   border-width: 1px;
   border-radius: 18px 18px 13px 13px;
   background:
-    radial-gradient(100% 100% at 98% -4%, rgba(182, 255, 0, 0.13), rgba(182, 255, 0, 0) 48%),
-    linear-gradient(136deg, rgba(55, 91, 73, 0.89), rgba(16, 45, 32, 0.95));
+    radial-gradient(100% 100% at 98% -4%, rgba(182, 255, 0, 0.15), rgba(182, 255, 0, 0) 48%),
+    linear-gradient(136deg, rgba(55, 91, 73, 0.46), rgba(16, 45, 32, 0.62));
 }
 
 .tracking-tcars-google-pin__label--speedometer::before {
   position: absolute;
-  top: 11px;
-  left: 11px;
-  width: 102px;
-  height: 102px;
+  top: 25px;
+  left: 51px;
+  width: 116px;
+  height: 116px;
   border: 1px solid rgba(226, 255, 237, 0.29);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 43% 35%, rgba(96, 124, 109, 0.52) 0 7%, rgba(27, 45, 36, 0.94) 39%, rgba(9, 21, 14, 0.96) 100%);
-  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.045), 0 8px 16px rgba(0, 0, 0, 0.22);
+    radial-gradient(circle at 43% 35%, rgba(137, 180, 152, 0.46) 0 7%, rgba(27, 59, 43, 0.72) 39%, rgba(9, 27, 18, 0.8) 100%);
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.09), 0 8px 16px rgba(0, 0, 0, 0.18);
   content: "";
 }
 
 .tracking-marker-gauge__caption {
   position: absolute;
   z-index: 5;
-  top: 14px;
+  top: 8px;
   right: 12px;
   color: #b9d8c2;
   font-size: 0.42rem;
@@ -9672,29 +9691,26 @@ h1 {
   text-transform: uppercase;
 }
 
-.tracking-marker-gauge__ticks {
-  z-index: 2;
-  top: 17px;
-  right: auto;
-  bottom: auto;
-  left: 17px;
-  width: 90px;
-  height: 90px;
-  background: repeating-conic-gradient(from -132deg, rgba(232, 255, 241, 0.7) 0deg 1.2deg, transparent 1.2deg 13.2deg);
+.tracking-marker-gauge__vehicle {
+  position: absolute;
+  z-index: 6;
+  top: 9px;
+  left: 12px;
+  max-width: 145px;
 }
 
 .tracking-marker-gauge__needle {
   z-index: 4;
-  left: 60px;
-  bottom: 62px;
+  left: 108px;
+  bottom: 80px;
   width: 4px;
-  height: 37px;
+  height: 34px;
 }
 
 .tracking-marker-gauge__hub {
   z-index: 5;
-  left: 62px;
-  top: 63px;
+  left: 104px;
+  top: 76px;
   width: 12px;
   height: 12px;
   border-color: #5a7163;
@@ -9703,41 +9719,59 @@ h1 {
 
 .tracking-marker-gauge__value {
   z-index: 5;
-  right: auto;
-  bottom: 22px;
-  left: 16px;
-  width: 92px;
+  right: 0;
+  top: 57px;
+  bottom: auto;
+  left: 0;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  width: 100%;
+  text-align: center;
 }
 
 .tracking-marker-gauge__value b {
   color: #f8fffa;
-  font-size: 1.15rem;
+  font-size: 2.05rem;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
 }
 
 .tracking-marker-gauge__value small {
   color: #cbe8d4;
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 800;
 }
 
 .tracking-marker-gauge__plate {
-  top: 34px;
-  right: 10px;
+  top: auto;
+  right: 50%;
+  bottom: 8px;
   left: auto;
-  max-width: 58px;
-  padding: 5px 6px;
+  max-width: 176px;
+  padding: 5px 10px;
   border: 1px solid rgba(226, 255, 237, 0.16);
-  background: rgba(239, 255, 246, 0.09);
+  background: rgba(7, 28, 18, 0.34);
   color: #f6fff8;
-  font-size: 0.43rem;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  transform: translateX(50%);
 }
 
 .tracking-tcars-google-pin__label--telemetry {
-  width: 206px;
+  width: 214px;
   gap: 7px;
   padding: 10px;
   border-radius: 18px 18px 13px 13px;
   background:
     radial-gradient(125% 92% at 7% -18%, rgba(239, 255, 246, 0.3) 0%, rgba(239, 255, 246, 0) 44%),
-    linear-gradient(136deg, rgba(55, 91, 73, 0.9) 0%, rgba(20, 51, 37, 0.93) 54%, rgba(12, 35, 25, 0.96) 100%);
+    linear-gradient(136deg, rgba(55, 91, 73, 0.47) 0%, rgba(20, 51, 37, 0.59) 54%, rgba(12, 35, 25, 0.66) 100%);
+}
+
+.tracking-marker-telemetry__vehicle {
+  padding: 1px 2px 0;
 }
 
 .tracking-marker-telemetry__top {
@@ -9833,12 +9867,12 @@ h1 {
   }
 
   .tracking-tcars-google-pin__label--speedometer {
-    width: 170px;
-    height: 120px;
+    width: 196px;
+    height: 144px;
   }
 
   .tracking-tcars-google-pin__label--telemetry {
-    width: 184px;
+    width: 190px;
   }
 
   .tracking-marker-gauge__caption {
@@ -9846,8 +9880,7 @@ h1 {
   }
 
   .tracking-marker-gauge__plate {
-    right: 8px;
-    max-width: 50px;
+    max-width: 150px;
   }
 }
 

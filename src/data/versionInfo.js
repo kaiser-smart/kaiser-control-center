@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.541"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.542"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: skutečné skleněné panely",
+    text: "Info cedule jsou nyní průsvitné akrylátové panely s viditelnou mapou pod materiálem, světlou hranou a vnitřními skleněnými bloky. Každá varianta zobrazuje název vozidla; rychlost v budíku je bez stupnice výrazně uprostřed a SPZ je větší a čitelná."
+  },
   {
     title: "Poloha vozidel: jednotné skleněné cedule a čistá mapa",
     text: "Všechny čtyři varianty info cedule používají společný skleněný materiál, typografii, rámeček a stín. Celorepublikový přehled ukazuje jen vozidla s přesným GPS hrotem; velká cedule se objeví až po kliknutí na vůz nebo při bližším přiblížení mapy."
