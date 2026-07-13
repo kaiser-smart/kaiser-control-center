@@ -15,6 +15,12 @@ import { ElevenLabsAssistantProvider } from "./ElevenLabsAssistantProvider.js";
 import { VersionBackupInfo } from "./components/VersionBackupInfo.js";
 import { VersionNewsInfo } from "./components/VersionNewsInfo.js";
 import { buildMeta } from "./data/buildMeta.js";
+import {
+  DEFAULT_VEHICLE_TRACKING_PREFERENCES,
+  VEHICLE_TRACKING_INFO_STYLES,
+  normalizeVehicleTrackingInfoStyle,
+  normalizeVehicleTrackingPreferences
+} from "./data/vehicleTrackingPreferences.js";
 import { AppearanceSettingsBox } from "./components/AppearanceSettingsBox.js";
 import { SarlotaStatusPanel } from "./components/SarlotaStatusPanel.js";
 import { QuickAbsenceIcon, ReportsIcon } from "./components/icons/index.js";
@@ -1740,6 +1746,11 @@ const vehicleTrackingUiState = {
   filter: "all",
   mapMaximized: false,
   mapView: "road",
+  infoStyle: DEFAULT_VEHICLE_TRACKING_PREFERENCES.infoStyle,
+  preferencesLoaded: false,
+  preferencesLoading: false,
+  preferencesSaving: false,
+  preferencesMessage: "",
   routePanelOpen: false,
   routeRange: "24h"
 };
@@ -14512,6 +14523,94 @@ function vehicleTrackingTcarsSpeedText(location = {}) {
     : "neuvedeno";
 }
 
+function vehicleTrackingTcarsNumericValue(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function vehicleTrackingTcarsOdometerText(location = {}) {
+  const value = vehicleTrackingTcarsNumericValue(location.odometerKm);
+  return value === null ? "" : `${Math.round(value).toLocaleString("cs-CZ")} km`;
+}
+
+function vehicleTrackingTcarsVoltageText(location = {}) {
+  const value = vehicleTrackingTcarsNumericValue(location.voltage);
+  return value === null ? "" : `${value.toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} V`;
+}
+
+function vehicleTrackingTcarsInfoPanel(location = {}, markerVehicle = {}) {
+  const style = normalizeVehicleTrackingInfoStyle(vehicleTrackingUiState.infoStyle);
+  const licensePlate = markerVehicle.licensePlate || markerVehicle.internalNumber || "Bez SPZ";
+  const vehicleName = vehicleTrackingTcarsVehicleDisplayName(location);
+  const speedValue = vehicleTrackingTcarsNumericValue(location.speedKmh);
+  const speedNumber = speedValue === null ? "–" : String(Math.max(0, Math.round(speedValue)));
+  const speedText = speedValue === null ? "neuvedeno" : `${speedNumber} km/h`;
+
+  if (style === "plate") {
+    return `
+      <span class="tracking-tcars-google-pin__label tracking-tcars-google-pin__label--plate">
+        <span class="tracking-marker-plate">
+          <i aria-hidden="true">CZ</i><small>SPZ</small><b>${escapeHtml(licensePlate)}</b>
+        </span>
+        <span class="tracking-marker-speed-board">
+          <small>Rychlost</small><b>${escapeHtml(speedNumber)}</b><em>km/h</em>
+        </span>
+      </span>
+    `;
+  }
+
+  if (style === "speedometer") {
+    const clampedSpeed = Math.min(180, Math.max(0, speedValue || 0));
+    const angle = -132 + (clampedSpeed / 180) * 264;
+    return `
+      <span class="tracking-tcars-google-pin__label tracking-tcars-google-pin__label--speedometer" style="--tracking-speed-angle:${angle.toFixed(2)}deg">
+        <span class="tracking-marker-gauge__ticks" aria-hidden="true"></span>
+        <span class="tracking-marker-gauge__needle" aria-hidden="true"></span>
+        <span class="tracking-marker-gauge__hub" aria-hidden="true"></span>
+        <span class="tracking-marker-gauge__value"><b>${escapeHtml(speedNumber)}</b><small>km/h</small></span>
+        <span class="tracking-marker-gauge__plate">${escapeHtml(licensePlate)}</span>
+      </span>
+    `;
+  }
+
+  if (style === "telemetry") {
+    const odometer = vehicleTrackingTcarsOdometerText(location);
+    const voltage = vehicleTrackingTcarsVoltageText(location);
+    const ignition = location.ignition === true ? "Zapnuto" : location.ignition === false ? "Vypnuto" : "";
+    const eventText = String(location.eventText || "").trim();
+    const rows = [
+      ["Rychlost", speedText],
+      ["Tachometr", odometer],
+      ["Zapalování", ignition],
+      ["Napětí", voltage]
+    ].filter(([, value]) => value);
+    return `
+      <span class="tracking-tcars-google-pin__label tracking-tcars-google-pin__label--telemetry">
+        <span class="tracking-marker-telemetry__top"><small>SPZ</small><b>${escapeHtml(licensePlate)}</b><i aria-hidden="true"></i></span>
+        <span class="tracking-marker-telemetry__grid">
+          ${rows.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></span>`).join("")}
+        </span>
+        <span class="tracking-marker-telemetry__event tracking-marker-telemetry__event--${location.emergency === true ? "alert" : "ok"}">
+          <i aria-hidden="true">${location.emergency === true ? "!" : "✓"}</i>
+          <span><small>Událost</small><b>${escapeHtml(eventText || (location.emergency === true ? "Nouzový stav" : "Bez aktivní události"))}</b></span>
+        </span>
+      </span>
+    `;
+  }
+
+  return `
+    <span class="tracking-tcars-google-pin__label tracking-tcars-google-pin__label--compact">
+      <span class="tracking-marker-compact__shine" aria-hidden="true"></span>
+      <span class="tracking-marker-compact__head"><i aria-hidden="true"></i><strong>${escapeHtml(vehicleName)}</strong><em>LIVE</em></span>
+      <span class="tracking-marker-compact__metrics">
+        <span><small>SPZ</small><b>${escapeHtml(licensePlate)}</b></span>
+        <span><small>Rychlost</small><b>${escapeHtml(speedText)}</b></span>
+      </span>
+    </span>
+  `;
+}
+
 function vehicleTrackingTcarsMarkerTooltip(location = {}) {
   const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
   return [
@@ -14615,22 +14714,21 @@ function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false
   const markerVehicle = vehicleTrackingTcarsMarkerVehicle(location);
   const title = vehicleTrackingTcarsMarkerTooltip(location);
   const iconSrc = vehicleTrackingMarkerImageSrc(markerVehicle);
-  const licensePlate = markerVehicle.licensePlate || markerVehicle.internalNumber || "Bez SPZ";
-  const vehicleName = vehicleTrackingTcarsVehicleDisplayName(location);
-  const speed = vehicleTrackingTcarsSpeedText(location);
+  const infoStyle = normalizeVehicleTrackingInfoStyle(vehicleTrackingUiState.infoStyle);
 
   return `
-    <span class="tracking-tcars-google-pin ${selected ? "tracking-tcars-google-pin--selected" : ""} ${focused ? "tracking-tcars-google-pin--focused" : ""}" title="${escapeHtml(title)}" aria-hidden="true">
-      <span class="tracking-tcars-google-pin__label">
-        <strong>${escapeHtml(vehicleName)}</strong>
-        <span><small>SPZ</small><b>${escapeHtml(licensePlate)}</b></span>
-        <span><small>Rychlost</small><b>${escapeHtml(speed)}</b></span>
-      </span>
+    <span class="tracking-tcars-google-pin tracking-tcars-google-pin--${escapeHtml(infoStyle)} ${selected ? "tracking-tcars-google-pin--selected" : ""} ${focused ? "tracking-tcars-google-pin--focused" : ""}" title="${escapeHtml(title)}" aria-hidden="true">
+      ${vehicleTrackingTcarsInfoPanel(location, markerVehicle)}
       <span class="tracking-tcars-google-pin__icon" aria-hidden="true">
         ${iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" loading="eager" decoding="async" data-tracking-tcars-marker-icon>` : ""}
         <span class="tracking-tcars-google-pin__fallback"></span>
       </span>
-      <span class="tracking-tcars-google-pin__position" aria-hidden="true"></span>
+      <span class="tracking-tcars-google-pin__position" aria-hidden="true">
+        <svg viewBox="0 0 34 38" focusable="false">
+          <path class="tracking-position-arrow__body" d="M13 3.5C13 2.12 14.12 1 15.5 1h3C19.88 1 21 2.12 21 3.5V17h6.15c2.08 0 3.25 2.39 1.97 4.03L19.36 35.1c-1.2 1.9-3.52 1.9-4.72 0L4.88 21.03C3.6 19.39 4.77 17 6.85 17H13V3.5Z"/>
+          <path class="tracking-position-arrow__glint" d="M16 4h2v15.4h6.35L17 31.1 9.65 19.4H16V4Z"/>
+        </svg>
+      </span>
     </span>
   `;
 }
@@ -15041,6 +15139,14 @@ function vehicleTrackingOperationalSection() {
             <span>${escapeHtml(hasGoogleMapsKey ? `${groups.filteredValidLocations.length} zobrazených poloh` : mapLoading ? "Připravuji mapu…" : "Mapa není nakonfigurovaná")}</span>
           </div>
           <div class="tracking-operational-map-actions">
+            <label class="tracking-info-style-control">
+              <span>Zobrazení info cedule</span>
+              <select data-tracking-info-style ${vehicleTrackingUiState.preferencesSaving ? "disabled" : ""}>
+                ${VEHICLE_TRACKING_INFO_STYLES.map((item) => `
+                  <option value="${escapeHtml(item.id)}" ${vehicleTrackingUiState.infoStyle === item.id ? "selected" : ""}>${escapeHtml(item.label)}</option>
+                `).join("")}
+              </select>
+            </label>
             <div class="tracking-map-view-switch" role="group" aria-label="Zobrazení mapy">
               <button class="tracking-map-view-switch__button ${vehicleTrackingUiState.mapView === "road" ? "tracking-map-view-switch__button--active" : ""}" type="button" data-tracking-map-view="road" aria-pressed="${vehicleTrackingUiState.mapView === "road" ? "true" : "false"}">Mapa 3D</button>
               <button class="tracking-map-view-switch__button ${vehicleTrackingUiState.mapView === "aerial" ? "tracking-map-view-switch__button--active" : ""}" type="button" data-tracking-map-view="aerial" aria-pressed="${vehicleTrackingUiState.mapView === "aerial" ? "true" : "false"}">Letecký 3D</button>
@@ -15050,6 +15156,7 @@ function vehicleTrackingOperationalSection() {
             </button>
           </div>
         </div>
+        ${vehicleTrackingUiState.preferencesMessage ? `<p class="tracking-info-style-message" role="status">${escapeHtml(vehicleTrackingUiState.preferencesMessage)}</p>` : ""}
         <div class="tracking-operational-map-shell">
           ${hasGoogleMapsKey ? `
             <div class="tracking-google-map tracking-tcars-google-map tracking-operational-google-map" data-tracking-tcars-google-map aria-label="Google mapa aktuálních poloh vozidel"></div>
@@ -40227,6 +40334,63 @@ async function loadVehicleTrackingStatus(options = {}) {
   }
 }
 
+async function loadVehicleTrackingPreferences(options = {}) {
+  const { force = false, renderAfter = true } = options;
+  if (vehicleTrackingUiState.preferencesLoading || (vehicleTrackingUiState.preferencesLoaded && !force)) return;
+  if (!hasPermission(currentUser(), "vehicle-tracking", "view")) return;
+
+  vehicleTrackingUiState.preferencesLoading = true;
+  try {
+    const result = await apiJson("/api/vehicle-tracking/preferences");
+    const preferences = normalizeVehicleTrackingPreferences(result.preferences || {});
+    vehicleTrackingUiState.infoStyle = preferences.infoStyle;
+    vehicleTrackingUiState.preferencesLoaded = true;
+    vehicleTrackingUiState.preferencesMessage = "";
+  } catch (error) {
+    vehicleTrackingUiState.preferencesLoaded = true;
+    vehicleTrackingUiState.preferencesMessage = "Používám výchozí vzhled; osobní volbu se nepodařilo načíst.";
+  } finally {
+    vehicleTrackingUiState.preferencesLoading = false;
+  }
+
+  if (renderAfter) {
+    const camera = vehicleTrackingTcarsGoogleCamera();
+    render();
+    syncVehicleTrackingMapMaximizedDom();
+    queueVehicleTrackingTcarsGoogleSync(camera ? { preserveCamera: camera } : { forceFit: true });
+  }
+}
+
+async function saveVehicleTrackingInfoStyle(value) {
+  const nextStyle = normalizeVehicleTrackingInfoStyle(value);
+  const previousStyle = vehicleTrackingUiState.infoStyle;
+  const camera = vehicleTrackingTcarsGoogleCamera();
+  vehicleTrackingUiState.infoStyle = nextStyle;
+  vehicleTrackingUiState.preferencesSaving = true;
+  vehicleTrackingUiState.preferencesMessage = "Ukládám tvoji volbu…";
+  render();
+  syncVehicleTrackingMapMaximizedDom();
+  queueVehicleTrackingTcarsGoogleSync(camera ? { preserveCamera: camera } : { forceFit: true });
+
+  try {
+    const result = await apiJson("/api/vehicle-tracking/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({ infoStyle: nextStyle })
+    });
+    vehicleTrackingUiState.infoStyle = normalizeVehicleTrackingPreferences(result.preferences || {}).infoStyle;
+    vehicleTrackingUiState.preferencesLoaded = true;
+    vehicleTrackingUiState.preferencesMessage = "Vzhled cedule je uložený pro tvůj účet.";
+  } catch (error) {
+    vehicleTrackingUiState.infoStyle = previousStyle;
+    vehicleTrackingUiState.preferencesMessage = error?.payload?.error || "Volbu se nepodařilo uložit.";
+  } finally {
+    vehicleTrackingUiState.preferencesSaving = false;
+    render();
+    syncVehicleTrackingMapMaximizedDom();
+    queueVehicleTrackingTcarsGoogleSync(camera ? { preserveCamera: camera } : { forceFit: true });
+  }
+}
+
 async function loadVehicleTrackingMapConfig(options = {}) {
   const { force = false, renderAfter = true } = options;
 
@@ -40483,6 +40647,7 @@ function handleVehicleTrackingSourceMode(mode) {
   render();
 
   if (mode === "tcars") {
+    loadVehicleTrackingPreferences();
     loadVehicleTrackingStatus();
     queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
   } else {
@@ -43286,6 +43451,7 @@ function renderAuthenticatedApp(user) {
     document.title = `${trackingContext.view === "today-trip" ? "Dnešní trasa" : trackingContext.view === "history" ? "Historie jízd" : "Detail sledování vozidla"} | ${APP_NAME}`;
     if (vehicleTrackingActiveSourceMode() === "tcars") {
       loadVehicleTrackingMapConfig();
+      loadVehicleTrackingPreferences();
       loadVehicleTrackingStatus();
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
@@ -43329,11 +43495,13 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === "vehicle-tracking" && vehicleTrackingActiveSourceMode() === "tcars") {
       loadVehicleTrackingMapConfig();
+      loadVehicleTrackingPreferences();
       loadVehicleTrackingStatus();
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     if (moduleItem.id === "settings" && hasPermission(user, "vehicle-tracking", "view")) {
       loadVehicleTrackingMapConfig();
+      loadVehicleTrackingPreferences();
       loadVehicleTrackingStatus();
       loadVehicleTrackingWimSites();
       ensureModuleRulesData("vehicle-tracking");
@@ -46455,6 +46623,12 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const trackingInfoStyle = event.target.closest("[data-tracking-info-style]");
+  if (trackingInfoStyle) {
+    await saveVehicleTrackingInfoStyle(trackingInfoStyle.value);
+    return;
+  }
+
   const driverReportField = event.target.closest("[data-driver-report-form] input, [data-driver-report-form] select, [data-driver-report-form] textarea");
   if (driverReportField) {
     const form = driverReportField.closest("[data-driver-report-form]");

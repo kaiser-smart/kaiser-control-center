@@ -361,8 +361,12 @@ function parseTcarsPosition(block, refs) {
     updatedAt: gps.recordedAt || new Date().toISOString(),
     gpsValid: gps.gpsValid,
     odometerKm: gps.odometerKm,
+    altitude: gps.altitude,
     ignition: gps.ignition,
+    emergency: gps.emergency,
+    eventCode: gps.eventCode,
     eventText: gps.eventText,
+    voltage: gps.voltage,
     vehicle
   };
 }
