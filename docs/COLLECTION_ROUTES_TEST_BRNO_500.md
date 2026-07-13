@@ -45,12 +45,33 @@ poradi:
 1. `migrations/0017_create_collection_routes_phase1a.sql`
 2. `migrations/0038_create_collection_daily_routes.sql`
 3. `migrations/test/0001_create_collection_routes_test_control.sql`
+4. `migrations/test/0002_create_collection_route_here_optimization.sql`
+5. `migrations/test/0003_configure_collection_route_test_operations_and_gps.sql`
 
-Treti migrace se nesmi aplikovat do hlavni produkcni D1.
+Zadna migrace z `migrations/test` se nesmi aplikovat do hlavni produkcni D1.
 
 Backend pri `scope=test` vzdy znovu overi roli Management/Admin a vybere TEST
 binding. Pouhe ID trasy nebo zmena dotazu proto neumozni precist ani zapsat TEST
 trasu pres hlavni databazi.
+
+## Fyzicke GPS stanoviste
+
+Ridicsky TEST nahled u aktivni trasy umi nacist vice GPS vzorku a pripravi
+fyzicky bod u nadob. Hlasova Sarlota muze mereni spustit, ale ulozeni vzdy
+vyzaduje jedno rucni finalni potvrzeni na velkem tlacitku. Tlacitko ma na
+uzkem displeji minimalni vysku 132 px a na vetsim displeji 120 px.
+
+Backend prijme bod pouze pri alespon trech vzorcich, presnosti nejvyse 30 m a
+rychlosti nejvyse 1,5 m/s. Vyrazne odchylena poloha se ulozi jako
+`needs-review` a bez kontroly neni navigacnim cilem. Puvodni adresa ani jeji GPS
+se fyzickym merenim nikdy neprepisuji. Historie obsahuje trasu, zastavku,
+ridice, vozidlo, presnost, pocet vzorku, rychlost, vzdalenost od adresniho bodu,
+stav a idempotencni klic.
+
+Migrace `0003` soucasne uklada pouze TEST provozni podklady depa, vysypu,
+smeny a konzervativnich truck profilu A/B/C. Rozmery, hmotnosti, cas vysypu a
+nektere vjezdy jsou oznacene jako odhad a pred ostrym pouzitim vyzaduji
+technicky prukaz nebo fyzicke overeni.
 
 ## Skutecne SMS a e-maily
 
@@ -95,6 +116,8 @@ Neexistuje cron, worker ani queue, ktera by zpravy spustila automaticky.
 - `GET /api/collection-routes/test-notifications/:jobId`
 - `POST /api/collection-routes/test-notifications/:jobId/process`
 - `POST /api/collection-routes/test-notifications/:jobId/retry-failures`
+- `GET /api/collection-routes/test-operational-config`
+- `GET|POST /api/collection-routes/test-gps-confirmations`
 - Stavajici denni trasy prijimaji `scope=test` v query nebo JSON body.
 
 ## Akceptacni kontrola
@@ -104,6 +127,9 @@ Neexistuje cron, worker ani queue, ktera by zpravy spustila automaticky.
 - Vsechny adresy maji jedinecne zdrojove ID a GPS v rozsahu Brna.
 - Chyba uprostred zalozeni vrati celou TEST davku zpet.
 - TEST trasa nevytvori zadny beh v hlavni produkcni D1.
+- Fyzicke GPS mereni neprepise zdrojovou adresu ani jeji souradnice.
+- Pohybujici se vozidlo, malo vzorku nebo slaba presnost se odmitnou pred zapisem.
+- Hlasovy povel sam nedokonci zapis bez velkeho finalniho tlacitka.
 - Dispecer, Ridic a Readonly nedostanou TEST data ani pres prime API.
 - Opakovane zpracovani dokoncene ulohy neodesle SMS ani e-mail podruhe.
 - Castecna uloha s odeslanym e-mailem zopakuje jen failed SMS bez provider ID;

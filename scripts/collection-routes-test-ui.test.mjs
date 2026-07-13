@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { COLLECTION_ROUTES_MANTRA } from "../src/data/collectionRoutesMantra.js";
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
@@ -30,6 +31,10 @@ for (const marker of [
   "collectionRoutesCanUseTestDataset",
   "data-collection-routes-mantra",
   "data-collection-routes-mantra-toggle",
+  "data-collection-routes-mantra-audit",
+  "Poslední úprava",
+  "Co se změnilo",
+  "Provedl",
   "mantraExpanded = !collectionRoutesPilotState.mantraExpanded",
   "NÁHLED · NIC NESPOUŠTÍ",
   "TEST výpočetní pilot · kapacita + HERE",
@@ -46,7 +51,13 @@ for (const marker of [
   "start-here-test-readonly",
   "/api/collection-routes/here-optimization",
   "Žádné automatické opakování neběží",
-  "TEST · READ-ONLY VÝPOČET"
+  "TEST · READ-ONLY VÝPOČET",
+  "Fyzické potvrzení GPS stanoviště",
+  "data-collection-routes-test-gps-capture",
+  "data-collection-routes-test-gps-voice",
+  "data-collection-routes-test-gps-save",
+  "preview.idempotencyKey",
+  "/api/collection-routes/test-gps-confirmations"
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
@@ -119,20 +130,23 @@ for (const marker of [
   "@media (max-width: 640px)",
   ".collection-routes-mantra",
   ".collection-routes-mantra__highlights",
+  ".collection-routes-mantra__audit",
   ".collection-daily-routes__reality",
   ".collection-routes-calculation",
   ".collection-routes-calculation__vehicles",
   ".collection-routes-calculation__truth",
   ".collection-route-here",
   ".collection-route-here__facts",
-  ".collection-route-here__actions"
+  ".collection-route-here__actions",
+  ".collection-routes-test-gps__rugged-button",
+  ".collection-routes-test-gps__confirm"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }
 
 for (const marker of [
   "KSO Svozový autopilot – provozní mantra",
-  "Read-only návrh pravidel",
+  "TEST návrh pravidel",
   "Četnosti Nx7 musí být v lichém a sudém týdnu přesně zrcadlené 1:1",
   "A – 3BN 3558",
   "B – 1BP 8373",
@@ -145,6 +159,8 @@ for (const marker of [
   "Kompostárna Fertia",
   "JIŽ HOTOVO",
   "MUSÍM JET VYSYPAT",
+  "FYZICKÉ GPS MAPOVÁNÍ STANOVIŠTĚ",
+  "minimálně 120 px vysoké a na úzkém displeji 132 px",
   "Bez výslovného potvrzení dispečerky nic neměň ani neodesílej",
   "Paměť musí být cloudová"
 ]) {
@@ -156,6 +172,16 @@ assert.ok(
     mantraSource.includes("nezapisuje do Vistosu") &&
     mantraSource.includes("Dokud práh není schválený, neodesílej automatické upozornění"),
   "Read-only mantra musí přímo zakazovat falešnou automatizaci, produkční zápisy a neodsouhlasené alerty."
+);
+
+const mantraChangeWordCount = String(COLLECTION_ROUTES_MANTRA.lastChange || "").trim().split(/\s+/).filter(Boolean).length;
+assert.ok(
+  mantraChangeWordCount >= 4 && mantraChangeWordCount <= 5,
+  "Krátký popis poslední úpravy Mantry musí mít 4 až 5 slov."
+);
+assert.ok(
+  Number.isFinite(Date.parse(COLLECTION_ROUTES_MANTRA.updatedAtIso)) && COLLECTION_ROUTES_MANTRA.updatedBy,
+  "Mantra musí mít strojově čitelný čas a autora poslední úpravy."
 );
 
 for (const marker of [

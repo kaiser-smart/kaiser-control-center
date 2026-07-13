@@ -2,6 +2,7 @@ import { getUsers } from "./auth.js";
 import { getLatestCollectionRoutesVistosSnapshot } from "./collection-routes-store.js";
 import { getCollectionRoutesTestSnapshot } from "./collection-routes-test-store.js";
 import { hasPermission, isUserActive, normalizeRole } from "../../src/permissions.js";
+import { userDynamicVariablesForAi } from "./ai-people-summary.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
@@ -834,7 +835,12 @@ export async function listCollectionDailyRouteDrivers(env) {
     const users = await getUsers(env);
     return users
       .filter((user) => isUserActive(user) && normalizeRole(user.role) === "ridic")
-      .map((user) => ({ id: cleanString(user.id), name: cleanString(user.name || user.email || user.phone), role: "ridic" }))
+      .map((user) => ({
+        id: cleanString(user.id),
+        name: cleanString(user.name || user.email || user.phone),
+        addressingName: cleanString(userDynamicVariablesForAi(user).user_first_name_friendly_vocative),
+        role: "ridic"
+      }))
       .filter((user) => user.id && user.name)
       .sort((left, right) => left.name.localeCompare(right.name, "cs"));
   } catch (error) {
@@ -872,6 +878,11 @@ export async function assignCollectionDailyRouteDriver(env, user, runId, input =
     const actorName = cleanString(user?.name || user?.email || user?.phone);
     const driverId = cleanString(driver?.id);
     const driverName = cleanString(driver?.name || driver?.email || driver?.phone);
+    const driverAddressingName = driver ? cleanString(userDynamicVariablesForAi(driver).user_first_name_friendly_vocative) : "";
+    const metadata = {
+      ...parseJson(run.metadata_json, {}),
+      driverAddressingName
+    };
     const idempotencyKey = cleanString(input.idempotencyKey) || `driver-assigned:${run.id}:${driverId || "none"}:${updatedAt}`;
     if (await eventByIdempotency(db, idempotencyKey)) {
       return detailFromRow(db, await loadRunRow(db, run.id));
@@ -879,9 +890,9 @@ export async function assignCollectionDailyRouteDriver(env, user, runId, input =
     await db.batch([
       db.prepare(`
         UPDATE collection_daily_route_runs
-        SET driver_user_id = ?, driver_name = ?, updated_at = ?
+        SET driver_user_id = ?, driver_name = ?, metadata_json = ?, updated_at = ?
         WHERE id = ?
-      `).bind(driverId, driverName, updatedAt, run.id),
+      `).bind(driverId, driverName, jsonString(metadata), updatedAt, run.id),
       db.prepare(`
         INSERT INTO collection_daily_route_events (
           id, run_id, event_type, before_status, after_status, note, idempotency_key,

@@ -37311,6 +37311,43 @@ body:has(.ds-plus-page) {
   background: #fff;
 }
 
+.collection-routes-mantra__audit {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.9fr) minmax(220px, 1.5fr) minmax(120px, 0.65fr);
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(66, 80, 74, 0.12);
+  border-radius: 11px;
+  background: rgba(66, 80, 74, 0.1);
+}
+
+.collection-routes-mantra__audit > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--color-primary, #75bd25) 5%, #fff);
+}
+
+.collection-routes-mantra__audit dt {
+  color: var(--steel);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.collection-routes-mantra__audit dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .collection-routes-mantra__detail > button {
   display: flex;
   width: 100%;
@@ -38058,6 +38095,327 @@ body:has(.ds-plus-page) {
   font-size: 0.78rem;
 }
 
+.collection-routes-test-operations,
+.collection-routes-test-gps {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--color-primary, #75bd25) 34%, transparent);
+  border-radius: 15px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--color-primary, #75bd25) 8%, #fff), #fff 68%);
+}
+
+.collection-routes-test-operations > header,
+.collection-routes-test-gps > header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.collection-routes-test-operations h3,
+.collection-routes-test-gps h4 {
+  margin: 2px 0 5px;
+  color: var(--ink);
+}
+
+.collection-routes-test-operations header p:last-child,
+.collection-routes-test-gps header p:last-child {
+  max-width: 820px;
+  margin: 0;
+  color: var(--steel);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.collection-routes-test-operations__facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.collection-routes-test-operations__facts article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(66, 80, 74, 0.11);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.collection-routes-test-operations__facts span {
+  color: var(--steel);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.collection-routes-test-operations__facts strong,
+.collection-routes-test-operations__facts small {
+  overflow-wrap: anywhere;
+}
+
+.collection-routes-test-operations__facts small,
+.collection-routes-test-operations__detail span {
+  color: var(--steel);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.collection-routes-test-operations details {
+  padding: 11px 13px;
+  border: 1px solid rgba(66, 80, 74, 0.11);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.collection-routes-test-operations summary {
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.collection-routes-test-operations__detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding-top: 12px;
+}
+
+.collection-routes-test-operations__detail h4 {
+  margin: 0 0 8px;
+}
+
+.collection-routes-test-operations__detail ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collection-routes-test-operations__detail li {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(66, 80, 74, 0.09);
+}
+
+.collection-routes-test-gps {
+  border-width: 2px;
+}
+
+.collection-routes-test-gps__waiting,
+.collection-routes-test-gps__stop,
+.collection-routes-test-gps__confirmed {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.collection-routes-test-gps__stop {
+  border-left: 6px solid var(--color-primary, #75bd25);
+}
+
+.collection-routes-test-gps__stop > span {
+  color: var(--steel);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.collection-routes-test-gps__stop > strong {
+  color: var(--ink);
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+}
+
+.collection-routes-test-gps__stop > small,
+.collection-routes-test-gps__waiting span,
+.collection-routes-test-gps__confirmed span,
+.collection-routes-test-gps__confirmed small {
+  color: var(--steel);
+  line-height: 1.45;
+}
+
+.collection-routes-test-gps__confirmed {
+  border: 1px solid color-mix(in srgb, var(--color-primary, #75bd25) 38%, transparent);
+  background: color-mix(in srgb, var(--color-primary, #75bd25) 8%, #fff);
+}
+
+.collection-routes-test-gps__sarlota {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid rgba(80, 105, 96, 0.15);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.collection-routes-test-gps__sarlota > span {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary, #75bd25);
+  color: #fff;
+  font-size: 1.45rem;
+  font-weight: 900;
+}
+
+.collection-routes-test-gps__sarlota p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.collection-routes-test-gps__sarlota button,
+.collection-routes-test-gps__voice-button,
+.collection-routes-test-gps__cancel {
+  min-height: 54px;
+  padding: 11px 16px;
+  border: 1px solid rgba(66, 80, 74, 0.16);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.collection-routes-test-gps__voice-button {
+  width: 100%;
+  min-height: 68px;
+  border-color: color-mix(in srgb, var(--color-primary, #75bd25) 35%, transparent);
+  background: color-mix(in srgb, var(--color-primary, #75bd25) 7%, #fff);
+  font-size: 1rem;
+}
+
+.collection-routes-test-gps__rugged-button {
+  position: sticky;
+  bottom: 12px;
+  z-index: 8;
+  display: grid;
+  width: 100%;
+  min-height: 120px;
+  place-items: center;
+  gap: 6px;
+  padding: 20px 24px;
+  border: 3px solid color-mix(in srgb, var(--color-primary, #75bd25) 74%, #2f6518);
+  border-radius: 18px;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--color-primary, #75bd25) 28%, transparent), inset 0 -4px 0 rgba(0, 0, 0, 0.12);
+  background: var(--color-primary, #75bd25);
+  color: var(--color-primary-contrast, #fff);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.collection-routes-test-gps__rugged-button > span {
+  font-size: clamp(1.35rem, 3.2vw, 2.1rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+
+.collection-routes-test-gps__rugged-button > small {
+  color: inherit;
+  font-size: clamp(0.78rem, 1.6vw, 0.95rem);
+  font-weight: 700;
+  opacity: 0.92;
+}
+
+.collection-routes-test-gps__rugged-button:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--color-primary, #75bd25) 25%, transparent), inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+}
+
+.collection-routes-test-gps__rugged-button:focus-visible {
+  outline: 5px solid rgba(27, 55, 41, 0.32);
+  outline-offset: 4px;
+}
+
+.collection-routes-test-gps__rugged-button:disabled,
+.collection-routes-test-gps__voice-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.collection-routes-test-gps__confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: grid;
+  max-height: 100dvh;
+  align-content: center;
+  gap: 16px;
+  overflow: auto;
+  padding: clamp(16px, 4vw, 44px);
+  background: rgba(15, 25, 21, 0.82);
+  backdrop-filter: blur(7px);
+}
+
+.collection-routes-test-gps__confirm > div,
+.collection-routes-test-gps__confirm > p,
+.collection-routes-test-gps__confirm > button {
+  width: min(760px, 100%);
+  margin-inline: auto;
+}
+
+.collection-routes-test-gps__confirm > div {
+  display: grid;
+  gap: 5px;
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.collection-routes-test-gps__confirm > div > span {
+  color: #467d1c;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.collection-routes-test-gps__confirm > div > strong {
+  color: var(--ink);
+  font-size: clamp(1.25rem, 3vw, 1.8rem);
+}
+
+.collection-routes-test-gps__confirm > div > small {
+  color: var(--steel);
+}
+
+.collection-routes-test-gps__confirm > p {
+  box-sizing: border-box;
+  margin-block: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.collection-routes-test-gps__rugged-button--save {
+  position: static;
+  min-height: 132px;
+}
+
+.collection-routes-test-gps__cancel {
+  min-height: 64px;
+}
+
 .collection-daily-route-assign label {
   min-width: min(300px, 100%);
 }
@@ -38708,12 +39066,18 @@ body:has(.ds-plus-page) {
     grid-column: auto;
   }
 
+  .collection-routes-mantra__audit {
+    grid-template-columns: 1fr;
+  }
+
   .collection-daily-routes,
   .collection-daily-route-preview,
   .collection-daily-route-detail,
   .collection-daily-driver-route,
   .collection-routes-calculation,
-  .collection-route-here {
+  .collection-route-here,
+  .collection-routes-test-operations,
+  .collection-routes-test-gps {
     padding: 13px;
     border-radius: 13px;
   }
@@ -38722,7 +39086,9 @@ body:has(.ds-plus-page) {
   .collection-daily-route-detail > header,
   .collection-daily-driver-route > header,
   .collection-routes-test-dataset > header,
-  .collection-routes-test-notifications > header {
+  .collection-routes-test-notifications > header,
+  .collection-routes-test-operations > header,
+  .collection-routes-test-gps > header {
     display: grid;
   }
 
@@ -38745,6 +39111,8 @@ body:has(.ds-plus-page) {
   .collection-routes-calculation__totals,
   .collection-route-here__facts,
   .collection-route-here__result-kpis,
+  .collection-routes-test-operations__facts,
+  .collection-routes-test-operations__detail,
   .collection-daily-driver-problem {
     grid-template-columns: 1fr;
   }
@@ -38784,5 +39152,19 @@ body:has(.ds-plus-page) {
 
   .collection-daily-driver-current {
     padding: 15px;
+  }
+
+  .collection-routes-test-gps__sarlota {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .collection-routes-test-gps__sarlota button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .collection-routes-test-gps__rugged-button {
+    min-height: 132px;
+    padding-inline: 16px;
   }
 }
