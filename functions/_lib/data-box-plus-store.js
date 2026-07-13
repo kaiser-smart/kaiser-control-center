@@ -5,6 +5,8 @@ import {
   fetchDataBoxMessageAttachments,
   fetchDataBoxMessageMetadata
 } from "./data-box-isds-client.js";
+import { CONTACT_USERS } from "./contact-users.js";
+import { sendDataBoxForwardNotification } from "./notification-service.js";
 
 const EXPECTED_MAILBOX_COUNT = 7;
 const DEFAULT_LIMIT = 100;
@@ -27,6 +29,16 @@ const MAILBOX_NAMES = [
   "Kaisermanuv nadacni fond",
   "Kaiser holding"
 ];
+const DATA_BOX_PLUS_PROMPT_KEY = "autopilot_prompt";
+const MAX_FORWARDED_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const DEFAULT_DATA_BOX_PLUS_PROMPT = [
+  "Jsi Autopilot Datových schránek Kaiser Smart.",
+  "Pracuješ pouze nad předanou konkrétní zprávou, jejími přílohami a kanonickým adresářem kontaktů.",
+  "Nikdy nevymýšlej kontakt ani netvrď, že se e-mail nebo archivace již staly.",
+  "Pokud uživatel chce přeposlat a potom archivovat, vytvoř jediný plán email_then_archive s kanonickým contactId.",
+  "Pokud kontakt není v adresáři jednoznačný, zeptej se stručně; pokud je jednoznačný, neptej se znovu.",
+  "Vrať jen JSON: actionType (email_then_archive|archive|review), contactId, assistantText, recommendedAction, risk."
+].join(" ");
 
 export class DataBoxPlusStoreError extends Error {
   constructor(message, status = 400, code = "data_box_plus_error") {
@@ -72,6 +84,26 @@ function bytesToBase64(bytes) {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary);
+}
+
+async function dataBoxPlusEmailAttachments(env, messageId) {
+  const db = dataBoxPlusDatabase(env, true);
+  const bucket = dataBoxPlusDocumentsBucket(env);
+  const rows = await db.prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name").bind(messageId).all();
+  if (!(rows.results || []).length) return [];
+  if (!bucket) throw new DataBoxPlusStoreError("Přílohy nelze přeposlat: chybí cloudové úložiště.", 503, "data_box_plus_email_storage_missing");
+  const files = [];
+  let totalBytes = 0;
+  for (const attachment of rows.results || []) {
+    if (!cleanString(attachment.storage_key)) throw new DataBoxPlusStoreError(`Příloha ${cleanString(attachment.file_name) || "zprávy"} není uložená.`, 409, "data_box_plus_email_attachment_unavailable");
+    const object = await bucket.get(attachment.storage_key);
+    if (!object) throw new DataBoxPlusStoreError(`Příloha ${cleanString(attachment.file_name) || "zprávy"} nebyla nalezena.`, 404, "data_box_plus_email_attachment_missing");
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    totalBytes += bytes.byteLength;
+    if (totalBytes > MAX_FORWARDED_ATTACHMENT_BYTES) throw new DataBoxPlusStoreError("Přílohy jsou pro bezpečné přeposlání e-mailem příliš velké (limit 20 MB).", 413, "data_box_plus_email_attachments_too_large");
+    files.push({ content: bytesToBase64(bytes), filename: cleanString(attachment.file_name) || "priloha", type: cleanString(attachment.mime_type) || "application/octet-stream", disposition: "attachment" });
+  }
+  return files;
 }
 
 function base64ToBytes(value) {
@@ -179,6 +211,49 @@ function dbError(error) {
     );
   }
   return new DataBoxPlusStoreError("Datove schranky Plus se ted nepodarilo nacist.", 500, "data_box_plus_store_failed");
+}
+
+function canonicalContacts() {
+  const seen = new Set();
+  return CONTACT_USERS
+    .filter((contact) => cleanString(contact.email))
+    .filter((contact) => {
+      const key = cleanString(contact.name).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((contact) => ({ id: cleanString(contact.id), name: cleanString(contact.name), email: cleanString(contact.email) }));
+}
+
+async function dataBoxPlusPrompt(db) {
+  const row = await db.prepare("SELECT value FROM data_box_plus_settings WHERE key = ? LIMIT 1").bind(DATA_BOX_PLUS_PROMPT_KEY).first();
+  return cleanString(row?.value) || DEFAULT_DATA_BOX_PLUS_PROMPT;
+}
+
+export async function getDataBoxPlusChatSettings(env) {
+  const db = dataBoxPlusDatabase(env, true);
+  try {
+    return { prompt: await dataBoxPlusPrompt(db), contacts: canonicalContacts() };
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
+export async function saveDataBoxPlusChatSettings(env, body = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const prompt = cleanString(body.prompt);
+  if (prompt.length < 40) throw new DataBoxPlusStoreError("Prompt Autopilota musí mít alespoň 40 znaků.", 400, "data_box_plus_prompt_invalid");
+  try {
+    await db.prepare(`INSERT INTO data_box_plus_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`)
+      .bind(DATA_BOX_PLUS_PROMPT_KEY, prompt).run();
+    return { prompt, contacts: canonicalContacts() };
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
 }
 
 function plusMailboxId(account = {}) {
@@ -1852,7 +1927,61 @@ async function recommendationById(db, id) {
   return recommendation;
 }
 
-function instructionPlanFromText(instruction, message = {}, attachments = []) {
+async function instructionPlanFromText(env, instruction, message = {}, attachments = [], db) {
+  const userInstruction = cleanString(instruction);
+  const apiKey = cleanString(env.OPENAI_API_KEY || env.DATA_BOX_AI_OPENAI_API_KEY);
+  if (!apiKey) {
+    throw new DataBoxPlusStoreError("Chat Autopilota není připraven: chybí serverový OpenAI klíč.", 503, "data_box_plus_chat_openai_missing");
+  }
+  const contacts = canonicalContacts();
+  const prompt = await dataBoxPlusPrompt(db);
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: cleanString(env.DATA_BOX_PLUS_MODEL || env.OPENAI_MODEL || "gpt-4o-mini"),
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: JSON.stringify({
+          instruction: userInstruction,
+          message: { subject: message.subject, sender: message.sender_name, deliveredAt: message.delivered_at || message.received_at },
+          attachments: attachments.map((item) => ({ name: item.file_name, text: cleanString(item.extracted_text).slice(0, 6000) })),
+          contacts,
+          output: { actionType: "email_then_archive|archive|review", contactId: "only a listed id", assistantText: "short Czech response", recommendedAction: "short Czech action", risk: "Nízké|Střední|Vysoké" }
+        }) }
+      ]
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new DataBoxPlusStoreError(cleanString(payload?.error?.message) || "Chat Autopilota se nepodařilo načíst.", 502, "data_box_plus_chat_openai_failed");
+  let answer = {};
+  try { answer = JSON.parse(cleanString(payload?.choices?.[0]?.message?.content)); } catch {
+    throw new DataBoxPlusStoreError("Chat Autopilota vrátil neplatnou odpověď.", 502, "data_box_plus_chat_invalid_response");
+  }
+  const actionType = cleanString(answer.actionType);
+  const contact = contacts.find((item) => item.id === cleanString(answer.contactId));
+  const base = {
+    userInstruction, sendsOutsideSystem: actionType === "email_then_archive", deletesMessage: false,
+    writesHistory: true, createsLearningPattern: true, risk: cleanString(answer.risk) || "Střední",
+    evidence: `Pokyn uživatele: ${userInstruction}; rozhodnutí vytvořil Chat Autopilota.`
+  };
+  if (actionType === "email_then_archive" && contact) return {
+    ...base, actionType, contactId: contact.id, recipientEmail: contact.email, assignedTo: contact.name,
+    confirmLabel: "Potvrdit e-mail a archivaci", recommendedAction: `Přeposlat na ${contact.email} a po úspěšném odeslání archivovat.`,
+    assistantText: cleanString(answer.assistantText) || `Připravím přeposlání na ${contact.name} a následnou archivaci.`,
+    afterConfirm: "Nejprve se odešle úplná zpráva včetně příloh. Archivace proběhne pouze po úspěšném odeslání.",
+    messageStatus: "Archivováno", archiveStatus: "archived", resultLabel: "Připraveno k přeposlání a archivaci.", nextStep: "Potvrdit odeslání.", performedAction: "Přeposlání e-mailem a následná archivace", auditNote: "Připraven plán e-mailu a následné archivace."
+  };
+  if (actionType === "archive") return {
+    ...base, actionType: "archive", confirmLabel: "Potvrdit archivaci", recommendedAction: cleanString(answer.recommendedAction) || "Archivovat zprávu.",
+    assistantText: cleanString(answer.assistantText) || "Připravím archivaci.", afterConfirm: "Zpráva se označí jako archivovaná.", messageStatus: "Archivováno", archiveStatus: "archived", assignedTo: "", resultLabel: "Zpráva bude archivována.", nextStep: "Bez další akce.", performedAction: "Archivace zprávy", auditNote: "Připravená archivace zprávy."
+  };
+  return { ...base, actionType: "review", confirmLabel: "Potvrdit předání k ručnímu řešení", recommendedAction: cleanString(answer.recommendedAction) || "Nechat k ručnímu řešení.", assistantText: cleanString(answer.assistantText) || "Tato zpráva potřebuje ruční rozhodnutí.", afterConfirm: "Zpráva zůstane otevřená.", messageStatus: "Čeká na pokyn", archiveStatus: "active", assignedTo: "", resultLabel: "Zpráva zůstává otevřená.", nextStep: "Ruční rozhodnutí.", performedAction: "Ponechání k ručnímu řešení", auditNote: "Chat doporučil ruční řešení." };
+}
+
+function legacyInstructionPlanFromText(instruction, message = {}, attachments = []) {
   const userInstruction = cleanString(instruction);
   if (!userInstruction) {
     throw new DataBoxPlusStoreError("Napiš pokyn pro Autopilota.", 400, "data_box_plus_instruction_missing");
@@ -2258,7 +2387,7 @@ export async function prepareDataBoxPlusMessageInstruction(env, messageId, curre
       .prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name")
       .bind(id)
       .all();
-    const plan = instructionPlanFromText(instruction, message, attachments.results || []);
+    const plan = await instructionPlanFromText(env, instruction, message, attachments.results || [], db);
     const recommendationId = idValue("dbp-instruction");
     const actor = actorName(currentUser);
     const actionId = idValue("dbp-action");
@@ -2364,9 +2493,24 @@ export async function confirmDataBoxPlusRecommendation(env, recommendationId, cu
   const db = dataBoxPlusDatabase(env, true);
   try {
     const recommendation = await recommendationById(db, recommendationId);
+    if (cleanString(recommendation.status) === "confirmed") {
+      throw new DataBoxPlusStoreError("Tento plán už byl potvrzený.", 409, "data_box_plus_recommendation_already_confirmed");
+    }
     const actor = cleanString(currentUser?.name || currentUser?.email || currentUser?.id || "system");
     const actionId = idValue("dbp-action");
     const actionInfo = recommendationConfirmAction(recommendation, body);
+    const plan = recommendation.instructionPlan || {};
+    if (cleanString(plan.actionType) === "email_then_archive") {
+      const message = await getDataBoxPlusMessage(env, recommendation.messageId);
+      const attachments = await dataBoxPlusEmailAttachments(env, recommendation.messageId);
+      const recipientEmail = cleanString(plan.recipientEmail);
+      if (!recipientEmail) throw new DataBoxPlusStoreError("Plán e-mailu nemá kanonického příjemce.", 400, "data_box_plus_email_recipient_missing");
+      const result = await sendDataBoxForwardNotification(env, {
+        id: message.id, subject: message.subject, senderName: message.senderName,
+        deliveredAt: message.deliveredAt, dataBoxLabel: cleanString(message.mailboxId), attachments: message.attachments
+      }, { recipientEmail, subject: message.subject, fromName: "Kaiser Smart", attachments });
+      if (result.status !== "sent") throw new DataBoxPlusStoreError(result.errorMessage || "E-mail se nepodařilo odeslat; zpráva nebyla archivována.", 502, "data_box_plus_email_send_failed");
+    }
     const messageUpdated = await applyRecommendationActionToMessage(db, recommendation, actionInfo);
     const rememberPattern = body.rememberPattern !== false;
     const learnedRuleId = rememberPattern

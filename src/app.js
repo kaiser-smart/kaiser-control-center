@@ -1185,7 +1185,9 @@ const dataBoxPlusState = {
   learning: null,
   instructionDrafts: {},
   instructionLoadingId: "",
-  instructionRemember: {}
+  instructionRemember: {},
+  chatSettings: { prompt: "", contacts: [] },
+  chatSettingsSaving: false
 };
 const dataBoxPlusHomeState = {
   loaded: false,
@@ -21694,12 +21696,15 @@ function dataBoxPlusSettingsPanel() {
         </section>
         <section class="ds-plus-settings-block">
           <h3>Kontakty pro předávání</h3>
-          <dl>
-            <div><dt>Faktury</dt><dd>faktury@kaiserservis.cz</dd></div>
-            <div><dt>Právní</dt><dd>GT Brno</dd></div>
-            <div><dt>Vozidla</dt><dd>Garážmistr</dd></div>
-            <div><dt>Provoz</dt><dd>Dispečink</dd></div>
-          </dl>
+          <dl>${(dataBoxPlusState.chatSettings.contacts || []).map((contact) => `<div><dt>${escapeHtml(contact.name)}</dt><dd>${escapeHtml(contact.email)}</dd></div>`).join("") || "<div><dd>Načítám kanonický adresář…</dd></div>"}</dl>
+        </section>
+        <section class="ds-plus-settings-block ds-plus-settings-block--wide">
+          <h3>Prompt Autopilota</h3>
+          <p>Tento serverový prompt řídí chat nad datovou zprávou. Kontakty se berou výhradně z kanonického adresáře.</p>
+          <form data-ds-plus-chat-settings-form>
+            <textarea name="prompt" rows="8" required ${dataBoxPlusState.chatSettingsSaving ? "disabled" : ""}>${escapeHtml(dataBoxPlusState.chatSettings.prompt || "")}</textarea>
+            <button class="primary-action" type="submit" ${dataBoxPlusState.chatSettingsSaving ? "disabled" : ""}>${escapeHtml(dataBoxPlusState.chatSettingsSaving ? "Ukládám…" : "Uložit prompt")}</button>
+          </form>
         </section>
         <section class="ds-plus-settings-block">
           <h3>Úrovně autonomie</h3>
@@ -30188,12 +30193,13 @@ async function loadDataBoxPlusData(options = {}) {
   dataBoxPlusState.loading = true;
   dataBoxPlusState.error = "";
   try {
-    const [statusResult, messagesResult, recommendationsResult, rulesResult, syncRunsResult] = await Promise.all([
+    const [statusResult, messagesResult, recommendationsResult, rulesResult, syncRunsResult, chatSettingsResult] = await Promise.all([
       apiJson("/api/data-box-plus/status"),
       apiJson("/api/data-box-plus/messages?limit=150"),
       apiJson("/api/data-box-plus/recommendations?status=all&limit=150"),
       apiJson("/api/data-box-plus/rules"),
-      apiJson("/api/data-box-plus/sync-runs?limit=20")
+      apiJson("/api/data-box-plus/sync-runs?limit=20"),
+      apiJson("/api/data-box-plus/chat-settings")
     ]);
     dataBoxPlusState.apiStatus = statusResult.apiStatus || "ready";
     dataBoxPlusState.mailboxes = Array.isArray(statusResult.mailboxes) ? statusResult.mailboxes : [];
@@ -30202,6 +30208,7 @@ async function loadDataBoxPlusData(options = {}) {
     dataBoxPlusState.recommendations = Array.isArray(recommendationsResult.recommendations) ? recommendationsResult.recommendations : [];
     dataBoxPlusState.rules = Array.isArray(rulesResult.rules) ? rulesResult.rules : [];
     dataBoxPlusState.syncRuns = Array.isArray(syncRunsResult.syncRuns) ? syncRunsResult.syncRuns : [];
+    dataBoxPlusState.chatSettings = chatSettingsResult || { prompt: "", contacts: [] };
     dataBoxPlusState.loaded = true;
     dataBoxPlusState.lastLoadedAt = now;
   } catch (error) {
@@ -30239,6 +30246,25 @@ async function loadDataBoxPlusMessageDetail(messageId) {
     }
   } catch (error) {
     dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Detail zprávy se teď nepodařilo načíst.");
+  }
+}
+
+async function saveDataBoxPlusChatSettings(form) {
+  const prompt = String(form?.elements?.prompt?.value || "").trim();
+  if (!prompt) return;
+  dataBoxPlusState.chatSettingsSaving = true;
+  render();
+  try {
+    dataBoxPlusState.chatSettings = await apiJson("/api/data-box-plus/chat-settings", {
+      method: "PUT",
+      body: JSON.stringify({ prompt })
+    });
+    dataBoxPlusState.notice = "Prompt Autopilota je uložený. Nové chaty jej použijí na serveru.";
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Prompt se nepodařilo uložit.");
+  } finally {
+    dataBoxPlusState.chatSettingsSaving = false;
+    render();
   }
 }
 
@@ -38785,6 +38811,13 @@ document.addEventListener("submit", async (event) => {
   }
 
   const dataBoxPlusMailboxForm = event.target.closest("[data-ds-plus-mailbox-form]");
+  const dataBoxPlusChatSettingsForm = event.target.closest("[data-ds-plus-chat-settings-form]");
+  if (dataBoxPlusChatSettingsForm) {
+    event.preventDefault();
+    await saveDataBoxPlusChatSettings(dataBoxPlusChatSettingsForm);
+    return;
+  }
+
   if (dataBoxPlusMailboxForm) {
     event.preventDefault();
     await saveDataBoxPlusMailboxForm(dataBoxPlusMailboxForm);

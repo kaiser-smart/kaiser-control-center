@@ -1,6 +1,8 @@
 import { getDataBoxMessage, updateDataBoxMessagesAiStatus } from "./data-box-store.js";
 import { sendDataBoxForwardNotification } from "./notification-service.js";
 
+const MAX_FORWARDED_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
 const DB_BINDING = "SMART_ODPADY_DB";
 const ACTION_STATUSES = new Set(["prepared", "requires_confirmation", "confirmed", "sent", "archived", "blocked", "failed", "skipped"]);
 
@@ -27,6 +29,44 @@ function database(env, required = false) {
 
 function cleanString(value) {
   return String(value ?? "").trim();
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+async function emailAttachmentsForMessage(env, message) {
+  const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
+  if (!attachments.length) return [];
+  const bucket = env.SMART_ODPADY_DOCUMENTS;
+  if (!bucket) {
+    throw new DataBoxActionError("Přílohy nelze přeposlat: chybí cloudové úložiště Datové schránky.", 503, "data_box_email_storage_missing");
+  }
+  const result = [];
+  let totalBytes = 0;
+  for (const attachment of attachments) {
+    if (cleanString(attachment.status) !== "stored" || !cleanString(attachment.storageKey)) {
+      throw new DataBoxActionError(`Příloha ${cleanString(attachment.filename) || "datové zprávy"} není uložená a nelze ji bezpečně přeposlat.`, 409, "data_box_email_attachment_unavailable");
+    }
+    const object = await bucket.get(attachment.storageKey);
+    if (!object) {
+      throw new DataBoxActionError(`Příloha ${cleanString(attachment.filename) || "datové zprávy"} nebyla v úložišti nalezena.`, 404, "data_box_email_attachment_missing");
+    }
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    totalBytes += bytes.byteLength;
+    if (totalBytes > MAX_FORWARDED_ATTACHMENT_BYTES) {
+      throw new DataBoxActionError("Přílohy jsou pro bezpečné přeposlání e-mailem příliš velké (limit 20 MB).", 413, "data_box_email_attachments_too_large");
+    }
+    result.push({
+      content: bytesToBase64(bytes),
+      filename: cleanString(attachment.filename) || "priloha",
+      type: cleanString(attachment.contentType) || "application/octet-stream",
+      disposition: "attachment"
+    });
+  }
+  return result;
 }
 
 function nullableString(value) {
@@ -310,11 +350,14 @@ export async function sendDataBoxMessageEmail(env, messageId, payload = {}, curr
     userId: cleanString(currentUser?.id)
   });
 
+  const attachments = await emailAttachmentsForMessage(env, message);
+
   const result = await sendDataBoxForwardNotification(env, message, {
     recipientEmail,
     subject,
     body,
-    fromName: "Kaiser Smart"
+    fromName: "Kaiser Smart",
+    attachments
   });
 
   const nextStatus = result.status === "sent" ? "sent" : result.status === "skipped" ? "blocked" : "failed";
@@ -523,11 +566,13 @@ export async function confirmDataBoxAction(env, actionId, payload = {}, currentU
       throw new DataBoxActionError("Nelze potvrdit e-mail: chybí platný příjemce.", 400, "data_box_email_recipient_missing");
     }
 
+    const attachments = await emailAttachmentsForMessage(env, message);
     const result = await sendDataBoxForwardNotification(env, message, {
       recipientEmail,
       subject: action.subject || message.subject || "Datová zpráva",
       body: action.bodyPreview || action.result?.reason || "",
-      fromName: "Kaiser Smart"
+      fromName: "Kaiser Smart",
+      attachments
     });
     const nextStatus = result.status === "sent" ? "sent" : result.status === "skipped" ? "blocked" : "failed";
     const updatedAction = await updateAction(db, action.id, {
