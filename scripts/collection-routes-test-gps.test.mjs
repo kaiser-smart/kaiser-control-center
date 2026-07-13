@@ -101,9 +101,9 @@ function seedRoute(sqlite) {
       route_week_mode, vehicle_code, vehicle_registration, vehicle_label,
       driver_user_id, driver_name, title, status, stop_count, metadata_json
     ) VALUES (
-      'run-test', '2026-07-13|A', 'batch-test', 'synthetic-brno-test', '2026-07-13', 'PO',
-      'odd-even', 'A', '3BN 3558', 'Vůz A · 3BN 3558',
-      'driver-mirek', 'Miroslav Vašek', 'TEST trasa', 'active', 1, '{"scope":"test"}'
+      'run-test', '2026-07-13|FIELD|stationary-field-test', 'batch-test', 'synthetic-brno-test', '2026-07-13', 'PO',
+      'odd-even', 'FIELD', '', 'Stacionární TEST tabletu',
+      '', '', 'Stacionární TEST GPS', 'active', 1, '{"dataScope":"test","testMode":"stationary-field-test","fieldTesterUserId":"manager-test","fieldTesterName":"Manager Test","sendsNotifications":false}'
     )
   `).run();
   sqlite.prepare(`
@@ -130,6 +130,14 @@ const driver = {
   id: "driver-mirek",
   name: "Miroslav Vašek",
   role: "ridic",
+  status: "active",
+  active: true
+};
+
+const otherManager = {
+  id: "other-manager",
+  name: "Jiný Manager",
+  role: "management",
   status: "active",
   active: true
 };
@@ -172,6 +180,20 @@ const driver = {
     (error) => error?.code === "collection_routes_test_forbidden"
   );
   await assert.rejects(
+    confirmCollectionRoutesTestGps(env, otherManager, {
+      runId: "run-test",
+      stopId: "stop-test",
+      latitude: 49.19126,
+      longitude: 16.67021,
+      accuracyMeters: 6,
+      sampleCount: 3,
+      speedMps: 0,
+      capturedAt: new Date().toISOString(),
+      idempotencyKey: "wrong-tester"
+    }),
+    (error) => error?.code === "collection_routes_test_gps_field_tester_mismatch"
+  );
+  await assert.rejects(
     confirmCollectionRoutesTestGps(env, manager, {
       runId: "run-test",
       stopId: "stop-test",
@@ -198,8 +220,13 @@ const driver = {
     idempotencyKey: "gps-one"
   });
   assert.equal(saved.reused, false);
-  assert.equal(saved.confirmation.status, "driver-measured");
+  assert.equal(saved.confirmation.status, "field-tester-measured");
   assert.equal(saved.confirmation.routingCandidate, true);
+  assert.equal(saved.confirmation.source, "field-tester-tablet-gps");
+  assert.equal(saved.confirmation.fieldTesterUserId, manager.id);
+  assert.equal(saved.confirmation.fieldTesterName, manager.name);
+  assert.equal(saved.confirmation.driverUserId, "");
+  assert.equal(saved.confirmation.driverName, "");
   assert.ok(saved.confirmation.distanceFromAddressMeters < 5);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_gps_confirmations").get().count, 1);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE event_type = 'gps_position_confirmed'").get().count, 1);
@@ -247,7 +274,9 @@ const driver = {
   assert.equal(review.confirmation.routingCandidate, false);
   const list = await listCollectionRoutesTestGpsConfirmations(env, manager, { runId: "run-test" });
   assert.equal(list.confirmations.length, 2);
-  assert.equal((await getCollectionRoutesTestOperationalConfig(env, manager)).gpsSummary.reviewCount, 1);
+  const finalConfig = await getCollectionRoutesTestOperationalConfig(env, manager);
+  assert.equal(finalConfig.gpsSummary.measuredCount, 1);
+  assert.equal(finalConfig.gpsSummary.reviewCount, 1);
 }
 
 console.log("collection routes TEST GPS tests: ok");

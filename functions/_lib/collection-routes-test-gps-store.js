@@ -2,6 +2,10 @@ import {
   assertCollectionRoutesTestManager,
   collectionRoutesTestDatabase
 } from "./collection-routes-test-store.js";
+import {
+  COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
+  isCollectionDailyRouteStationaryFieldTest
+} from "./collection-daily-routes-store.js";
 
 const MAX_ACCURACY_METERS = 30;
 const ROUTING_CANDIDATE_ACCURACY_METERS = 15;
@@ -99,6 +103,8 @@ function rowToConfirmation(row) {
     status: cleanString(row.status),
     routingCandidate: Number(row.routing_candidate) === 1,
     source: cleanString(row.source),
+    fieldTesterUserId: cleanString(row.source) === "field-tester-tablet-gps" ? cleanString(row.created_by_user_id) : "",
+    fieldTesterName: cleanString(row.source) === "field-tester-tablet-gps" ? cleanString(row.created_by_name) : "",
     capturedAt: cleanString(row.captured_at),
     createdByUserId: cleanString(row.created_by_user_id),
     createdByName: cleanString(row.created_by_name),
@@ -127,7 +133,7 @@ function dbError(error) {
   );
 }
 
-async function loadRunAndStop(db, runId, stopId) {
+async function loadActiveRun(db, runId) {
   const run = await db.prepare(`
     SELECT * FROM collection_daily_route_runs WHERE id = ? LIMIT 1
   `).bind(runId).first();
@@ -141,6 +147,10 @@ async function loadRunAndStop(db, runId, stopId) {
       "collection_routes_test_gps_route_not_active"
     );
   }
+  return run;
+}
+
+async function loadPlannedStop(db, runId, stopId) {
   const stop = await db.prepare(`
     SELECT * FROM collection_daily_route_stops WHERE id = ? AND run_id = ? LIMIT 1
   `).bind(stopId, runId).first();
@@ -158,7 +168,7 @@ async function loadRunAndStop(db, runId, stopId) {
       "collection_routes_test_gps_stop_not_planned"
     );
   }
-  return { run, stop };
+  return stop;
 }
 
 function capturePoint(input = {}) {
@@ -187,7 +197,7 @@ function capturePoint(input = {}) {
   }
   if (speedMps !== null && speedMps > STATIONARY_SPEED_MPS) {
     throw new CollectionRoutesTestGpsError(
-      "Vozidlo se podle tabletu ještě pohybuje. GPS potvrď až po zastavení.",
+      "Tablet se podle GPS ještě pohybuje. Polohu potvrď až po zastavení.",
       409,
       "collection_routes_test_gps_vehicle_moving"
     );
@@ -219,7 +229,7 @@ export async function getCollectionRoutesTestOperationalConfig(env, user) {
       db.prepare(`
         SELECT
           COUNT(*) AS total_count,
-          SUM(CASE WHEN status = 'driver-measured' THEN 1 ELSE 0 END) AS measured_count,
+          SUM(CASE WHEN status IN ('driver-measured', 'field-tester-measured') THEN 1 ELSE 0 END) AS measured_count,
           SUM(CASE WHEN status = 'needs-review' THEN 1 ELSE 0 END) AS review_count,
           SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) AS verified_count
         FROM collection_route_test_gps_confirmations
@@ -286,6 +296,20 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
     );
   }
   try {
+    const run = await loadActiveRun(db, runId);
+    const stationaryFieldTest = isCollectionDailyRouteStationaryFieldTest(run);
+    const runMetadata = parseJson(run.metadata_json, {});
+    if (stationaryFieldTest && (
+      cleanString(runMetadata.testMode) !== COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD ||
+      !cleanString(runMetadata.fieldTesterUserId) ||
+      cleanString(user?.id) !== cleanString(runMetadata.fieldTesterUserId)
+    )) {
+      throw new CollectionRoutesTestGpsError(
+        "GPS tohoto stacionárního TESTU může uložit pouze terénní tester, který jej založil.",
+        403,
+        "collection_routes_test_gps_field_tester_mismatch"
+      );
+    }
     const existing = await existingByIdempotency(db, idempotencyKey);
     if (existing) {
       if (cleanString(existing.run_id) !== runId || cleanString(existing.stop_id) !== stopId) {
@@ -298,7 +322,7 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
       return { confirmation: rowToConfirmation(existing), reused: true };
     }
     const point = capturePoint(input);
-    const { run, stop } = await loadRunAndStop(db, runId, stopId);
+    const stop = await loadPlannedStop(db, runId, stopId);
     const sourceSummary = parseJson(stop.source_summary_json, {});
     const addressLatitude = numberValue(sourceSummary.latitude);
     const addressLongitude = numberValue(sourceSummary.longitude);
@@ -310,7 +334,8 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
       : null;
     const needsReview = point.accuracyMeters > ROUTING_CANDIDATE_ACCURACY_METERS ||
       distance === null || distance > REVIEW_DISTANCE_METERS;
-    const status = needsReview ? "needs-review" : "driver-measured";
+    const status = needsReview ? "needs-review" : stationaryFieldTest ? "field-tester-measured" : "driver-measured";
+    const source = stationaryFieldTest ? "field-tester-tablet-gps" : "driver-tablet-gps";
     const routingCandidate = needsReview ? 0 : 1;
     const createdAt = nowIso();
     const id = randomId("collection-route-test-gps");
@@ -327,7 +352,7 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
           accuracy_m, sample_count, speed_mps, distance_from_address_m, status,
           routing_candidate, source, idempotency_key, captured_at,
           created_by_user_id, created_by_name, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'driver-tablet-gps', ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id,
         run.id,
@@ -346,6 +371,7 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
         distance,
         status,
         routingCandidate,
+        source,
         idempotencyKey,
         point.capturedAt,
         actorId,
@@ -376,7 +402,9 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
           sampleCount: point.sampleCount,
           distanceFromAddressMeters: distance,
           routingCandidate: Boolean(routingCandidate),
-          dataScope: "test"
+          dataScope: "test",
+          testMode: stationaryFieldTest ? COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD : "",
+          fieldTesterUserId: stationaryFieldTest ? actorId : ""
         })
       ),
       db.prepare(`UPDATE collection_daily_route_runs SET updated_at = ? WHERE id = ?`).bind(createdAt, run.id)

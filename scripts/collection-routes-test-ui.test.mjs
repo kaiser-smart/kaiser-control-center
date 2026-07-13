@@ -14,6 +14,12 @@ for (const marker of [
   "Trnkova 3052/137, 628 00 Brno",
   "Management · oddělená testovací data",
   "TEST ŘIDIČSKÉHO TABLETU",
+  "Stacionární TEST řidičského tabletu",
+  "stationary-field-test",
+  "Terénní tester",
+  "Bez jízdy",
+  "OVĚŘIT JEDEN TEST BOD",
+  "POTVRDIT STACIONÁRNÍ TEST",
   "OTEVŘÍT TEST TABLETU",
   "SPUSTIT TEST TABLETU",
   "Řidičský tablet · zdrojový náhled",
@@ -28,6 +34,8 @@ for (const marker of [
   "HERE mapa aktuálního TEST stanoviště",
   "/api/collection-routes/here-map-image",
   "Fyzická GPS řidiče",
+  "Fyzická GPS testera",
+  "Změřeno terénním testerem",
   'data-collection-daily-route-scope="production"',
   'data-collection-daily-route-scope="test"',
   "Připravit 1 SMS + 1 e-mail",
@@ -192,7 +200,10 @@ for (const marker of [
   "TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko",
   "Řidičský TEST zobrazuje nad GPS tlačítkem HERE mapový výřez aktuálního stanoviště",
   "Bez výslovného potvrzení dispečerky nic neměň ani neodesílej",
-  "Paměť musí být cloudová"
+  "Paměť musí být cloudová",
+  "Stacionární terénní TEST smí obsahovat přesně jediný bod",
+  "skutečné datum přítomnosti testera",
+  "Změřeno terénním testerem"
 ]) {
   assert.ok(mantraSource.includes(marker), `Provozní mantra postrádá závazný bod: ${marker}`);
 }
@@ -223,6 +234,13 @@ const tabletWorkspaceEnd = appSource.indexOf("function collectionRoutesTestDatas
 const tabletWorkspaceSource = appSource.slice(tabletWorkspaceStart, tabletWorkspaceEnd);
 assert.ok(tabletWorkspaceStart >= 0 && tabletWorkspaceEnd > tabletWorkspaceStart, "Samostatný TEST tablet musí mít vlastní vykreslovací tok.");
 assert.ok(!tabletWorkspaceSource.includes("<table"), "Samostatný TEST tablet nesmí obsahovat tabulku 501 stanovišť.");
+assert.ok(!tabletWorkspaceSource.includes("data-collection-daily-route-assign-form"), "Stacionární TEST nesmí předstírat přiřazení řidiče.");
+assert.ok(
+  appSource.includes("collectionRoutesIsStationaryFieldTestRun") &&
+    appSource.includes("preview.testMode ||") &&
+    appSource.includes("collectionRoutesPilotState.dailyRoutes.filter(collectionRoutesIsStationaryFieldTestRun)"),
+  "Tabletový TEST musí být oddělený typ trasy a nesmí převzít starou vícestopou TEST trasu."
+);
 
 const dispatcherDetailStart = appSource.indexOf("function collectionDailyRouteDispatcherDetail");
 const dispatcherDetailEnd = appSource.indexOf("function collectionDailyRoutesDispatcherPanel", dispatcherDetailStart);
