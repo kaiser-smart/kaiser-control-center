@@ -137,6 +137,7 @@ runVisible("node", ["scripts/collection-daily-routes-scale.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-test-data.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-test-store.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-readonly-calculator.test.mjs"]);
+runVisible("node", ["scripts/collection-routes-here-map-image.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-test-ui.test.mjs"]);
 runVisible("node", ["scripts/customer-messaging.test.mjs"]);
 runVisible("node", ["scripts/build.mjs"], {

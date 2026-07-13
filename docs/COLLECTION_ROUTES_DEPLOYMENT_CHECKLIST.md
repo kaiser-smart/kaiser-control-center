@@ -30,7 +30,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Stanoviste
 
-- HOTOVO - oddelena sada TEST Brno 500 obsahuje 500 jedinecnych verejnych adresnich bodu Brna s GPS; zadny radek se nezapisuje do Vistosu ani hlavni D1.
+- HOTOVO - oddelena sada TEST Brno 501 obsahuje 500 jedinecnych verejnych adresnich bodu Brna a polni bod `Firma test 501` na Trnkove; zadny radek se nezapisuje do Vistosu ani hlavni D1.
 - ROZPRACOVANO - preview uklada stanoviste do pilotnich tabulek.
 - ROZPRACOVANO - zalozka Stanoviste ukazuje radkovy read-only seznam z Vistos Komunal exportu; bez Excel pracovnich textu, bez zapisu do Vistosu a bez ostrych tras.
 - ROZPRACOVANO - zalozka Stanoviste nacita Vistos read-only data automaticky bez rucniho refresh workflow pro bezne uzivatele.
@@ -40,14 +40,14 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Nadoby
 
-- HOTOVO - TEST Brno 500 pouziva vyhradne schvalene objemy 120, 240 a 1100 l.
+- HOTOVO - TEST Brno 501 pouziva vyhradne schvalene objemy 120, 240 a 1100 l.
 - ROZPRACOVANO - preview se pokousi odvodit objem a pocet z produktu/polozky.
 - ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici nadoby ve zdrojovych 13 Excelech.
 - BLOKOVANO - presne strukturovane pole nadoby musi byt potvrzene na datech.
 
 ## Cetnosti
 
-- HOTOVO - TEST Brno 500 obsahuje vsechny schvalene cetnosti `1x7`, `2x7`, `3x7`, `5x7`, `1x14`, `1x30`; `1x30` denni planovac bez konkretniho data zamerne vyradi.
+- HOTOVO - TEST Brno 501 obsahuje vsechny schvalene cetnosti `1x7`, `2x7`, `3x7`, `5x7`, `1x14`, `1x30`; `1x30` denni planovac bez konkretniho data zamerne vyradi.
 - ROZPRACOVANO - preview odvozuje `1x7`, `2x7`, `3x7`, `5x7`, `1x14`, `1x30`.
 - ROZPRACOVANO - Svozove trasy maji read-only panel radku k oprave pro chybejici frekvenci ve zdrojovych 13 Excelech.
 - BLOKOVANO - rozpor PAPIR `1x30` vs. "1x tydne" musi potvrdit Radim/Martin.
@@ -76,7 +76,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Denni trasy
 
-- HOTOVO - Management/Admin muze prepnout denni planovac do `TEST Brno 500`; behy a zastavky se ukladaji vyhradne v samostatne TEST D1.
+- HOTOVO - Management/Admin muze prepnout denni planovac do `TEST Brno 501`; behy a zastavky se ukladaji vyhradne v samostatne TEST D1.
 - HOTOVO - migrace 0038 a chranene API ukladaji nemenny denni beh, kopii zastavek, vozidlo, ridice, stav a audit udalosti.
 - HOTOVO - dispecer muze navrh overit, ulozit, priradit ridice, potvrdit, zahajit, dokoncit a znovu otevrit; hotovou/problemovou zastavku muze vratit do planu.
 - HOTOVO - stejny zdrojovy radek nelze zaradit dvakrat ve stejny den a pro jeden den/vuz muze existovat jen jedna trasa.
@@ -91,6 +91,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 - HOTOVO - Faze 2D-A ma samostatny online pohled prirazeneho ridice; role Ridic neziskala pristup k celemu Vistos snapshotu.
 - HOTOVO - `HOTOVO`, `Problem`, `Vyklop` a `Pauza` se ukladaji do D1 s idempotency klicem, stavem pred/po, akterem a serverovym casem; reload nacte ulozeny stav.
 - NEZACATO - fotky, GPS stopa a offline synchronizace.
+- HOTOVO - samostatny TEST tabletu ma velke ovladani pro rukavice, hlasovou Sarlotu a HERE mapovy obrazek pres backend bez odhaleni API klice.
 
 ## T-Cars
 
@@ -100,7 +101,7 @@ drive, nez ma DB, API, cloud automatizace, audit, opravneni a produkcni overeni.
 
 ## Notifikace
 
-- HOTOVO - pouze pro TEST Brno 500 existuje rucne potvrzena idempotentni uloha skutecnych SMS a e-mailu na jeden chraneny kontakt; zalozeni dat ani trasy nic neposila.
+- HOTOVO - pouze pro TEST Brno 501 existuje rucne potvrzena idempotentni uloha skutecnych SMS a e-mailu na jeden chraneny kontakt; zalozeni dat ani trasy nic neposila.
 - HOTOVO - castecna TEST uloha se po reloadu obnovi a muze zopakovat jen failed kanal bez provider ID; jiz odeslany e-mail se znovu neposle a nova uplna davka je zablokovana.
 - ROZPRACOVANO - prvni produkcni e-mail odesel a je v auditu; jedina SMS selhala pred Twiliem. Migrace 0032 je aplikovana, ale provozni rezim zakaznickych SMS je stale `off` a nesmi se zmenit bez samostatneho potvrzeni.
 - NEZACATO - ostre zakaznicke SMS a e-maily podle kontaktu z Vistosu.

@@ -9,8 +9,25 @@ const calculatorSource = readFileSync(new URL("../src/data/collectionRoutesReado
 const wranglerSource = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
 
 for (const marker of [
-  "TEST Brno 500",
+  "TEST Brno 501",
+  "Firma test 501",
+  "Trnkova 3052/137, 628 00 Brno",
   "Management · oddělená testovací data",
+  "TEST ŘIDIČSKÉHO TABLETU",
+  "OTEVŘÍT TEST TABLETU",
+  "SPUSTIT TEST TABLETU",
+  "Řidičský tablet · zdrojový náhled",
+  "collectionRoutesTestTabletWorkspace",
+  "data-collection-routes-test-tablet-open",
+  "data-collection-routes-test-tablet-close",
+  "data-collection-routes-test-tablet-dialog",
+  "Mapový výřez u nádoby",
+  "NÁHLED · NENÍ NAVIGACE",
+  "data-collection-routes-test-tablet-map",
+  "syncCollectionRoutesTestTabletHereMap",
+  "HERE mapa aktuálního TEST stanoviště",
+  "/api/collection-routes/here-map-image",
+  "Fyzická GPS řidiče",
   'data-collection-daily-route-scope="production"',
   'data-collection-daily-route-scope="test"',
   "Připravit 1 SMS + 1 e-mail",
@@ -121,9 +138,20 @@ assert.ok(
   !appSource.includes("HERE_ACCESS_KEY_ID") && !appSource.includes("HERE_ACCESS_KEY_SECRET"),
   "HERE OAuth přístupy nesmí obsahovat frontendový zdroj."
 );
+assert.ok(
+  !appSource.includes("HERE_MAPS_API_KEY"),
+  "Serverový HERE mapový klíč nesmí obsahovat frontendový zdroj."
+);
 
 for (const marker of [
   ".collection-routes-test-dataset",
+  ".collection-routes-test-tablet-entry",
+  ".collection-routes-test-tablet-overlay",
+  ".collection-routes-test-tablet-workspace",
+  ".collection-routes-test-tablet-steps",
+  ".collection-routes-test-tablet-form",
+  ".collection-routes-test-tablet-map",
+  ".collection-routes-test-tablet-map__canvas",
   ".collection-routes-test-notifications",
   ".collection-routes-test-badge",
   ".collection-routes-test-notification-retry",
@@ -161,6 +189,8 @@ for (const marker of [
   "MUSÍM JET VYSYPAT",
   "FYZICKÉ GPS MAPOVÁNÍ STANOVIŠTĚ",
   "minimálně 120 px vysoké a na úzkém displeji 132 px",
+  "TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko",
+  "Řidičský TEST zobrazuje nad GPS tlačítkem HERE mapový výřez aktuálního stanoviště",
   "Bez výslovného potvrzení dispečerky nic neměň ani neodesílej",
   "Paměť musí být cloudová"
 ]) {
@@ -183,6 +213,30 @@ assert.ok(
   Number.isFinite(Date.parse(COLLECTION_ROUTES_MANTRA.updatedAtIso)) && COLLECTION_ROUTES_MANTRA.updatedBy,
   "Mantra musí mít strojově čitelný čas a autora poslední úpravy."
 );
+
+const tabletWorkspaceStart = appSource.indexOf("function collectionRoutesTestTabletWorkspace");
+const tabletWorkspaceEnd = appSource.indexOf("function collectionRoutesTestDatasetPanel", tabletWorkspaceStart);
+const tabletWorkspaceSource = appSource.slice(tabletWorkspaceStart, tabletWorkspaceEnd);
+assert.ok(tabletWorkspaceStart >= 0 && tabletWorkspaceEnd > tabletWorkspaceStart, "Samostatný TEST tablet musí mít vlastní vykreslovací tok.");
+assert.ok(!tabletWorkspaceSource.includes("<table"), "Samostatný TEST tablet nesmí obsahovat tabulku 501 stanovišť.");
+
+const dispatcherDetailStart = appSource.indexOf("function collectionDailyRouteDispatcherDetail");
+const dispatcherDetailEnd = appSource.indexOf("function collectionDailyRoutesDispatcherPanel", dispatcherDetailStart);
+const dispatcherDetailSource = appSource.slice(dispatcherDetailStart, dispatcherDetailEnd);
+assert.ok(
+  dispatcherDetailSource.indexOf("collectionRoutesTestGpsPanel(detail)") < dispatcherDetailSource.indexOf("collection-daily-route-table-wrap"),
+  "GPS panel musí být i v běžném detailu před dlouhou tabulkou zastávek."
+);
+
+const tabletMapStart = appSource.indexOf("function collectionRoutesTestTabletMapPanel");
+const tabletMapEnd = appSource.indexOf("function collectionRoutesTestGpsPanel", tabletMapStart);
+const tabletMapSource = appSource.slice(tabletMapStart, tabletMapEnd);
+assert.ok(tabletMapStart >= 0 && tabletMapEnd > tabletMapStart, "TEST tablet musí mít vlastní bezpečný mapový výřez.");
+for (const forbiddenMapField of ["customerName", "driverName", "contractNumber", "recipientPhone", "recipientEmail"]) {
+  assert.ok(!tabletMapSource.includes(forbiddenMapField), `Mapový provider nesmí dostat pole ${forbiddenMapField}.`);
+}
+assert.ok(!tabletMapSource.includes("Google"), "Tabletový mapový výřez nesmí používat Google mapu.");
+assert.ok(tabletMapSource.includes("HERE") && tabletMapSource.includes("chráněný backend"));
 
 for (const marker of [
   "120: 3",
@@ -215,4 +269,4 @@ assert.ok(
   "Skuteční testovací příjemci musí zůstat mimo verzovanou Pages konfiguraci."
 );
 
-console.log("Collection routes TEST Brno 500 UI tests passed.");
+console.log("Collection routes TEST Brno 501 UI tests passed.");

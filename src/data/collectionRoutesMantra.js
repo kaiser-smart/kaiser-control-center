@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.3",
-  updatedAt: "13. 7. 2026 04:26",
-  updatedAtIso: "2026-07-13T04:26:00+02:00",
-  lastChange: "Přidáno auditní pole Mantry",
+  version: "1.6",
+  updatedAt: "13. 7. 2026 08:24",
+  updatedAtIso: "2026-07-13T08:24:22+02:00",
+  lastChange: "Přidána HERE mapa a stanoviště",
   updatedBy: "Codex",
   status: "TEST návrh · řízené GPS",
   title: "Svozový autopilot – provozní mantra",
@@ -28,7 +28,8 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
   sources: [
     { label: "Zaměstnanci", url: "/dovolena-nemoc/zamestnanci" },
     { label: "SAKO Brno", url: "https://www.sako.cz" },
-    { label: "Google Navigation Connect", url: "https://developers.google.com/maps/documentation/navigation/connect/overview" },
+    { label: "HERE Map Image API", url: "https://docs.here.com/map-rendering/docs/introduction-map-image-api" },
+    { label: "HERE Tour Planning", url: "https://www.here.com/platform/here-tour-planning" },
     { label: "Apify Waze Traffic Scraper", url: "https://apify.com/sian.agency/waze-traffic-scraper" }
   ],
   prompt: `NÁZEV
@@ -176,6 +177,12 @@ Každou změnu vysvětli a předlož ke schválení. Bez výslovného potvrzení
 
 ŘIDIČSKÝ TABLET
 Řidič musí vidět další stanoviště, zákazníka a adresu, nádoby a odpad, poznámku, navigaci, stav trasy a kontakt na dispečink.
+
+TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko a samostatný přehled bez dlouhé tabulky stanovišť. Příprava ukazuje vždy jen následující krok: TEST data, trasa, řidič a spuštění tabletu. Zdrojový kabinový náhled musí být zřetelně odlišený od skutečného TEST GPS režimu.
+
+Řidičský TEST zobrazuje nad GPS tlačítkem HERE mapový výřez aktuálního stanoviště. Před fyzickým měřením označuje adresní bod, po změření současně rozliší adresní bod a fyzickou GPS řidiče. Mapa je pouze náhled, dokud není dokončená navigace. Mapový obrázek načítá chráněný backend KSO; HERE API klíč nesmí dostat tablet ani frontend. HERE se předávají jen souřadnice TEST bodu, nikdy název zákazníka, kontakt ani smluvní údaje.
+
+Výchozí polní stanoviště je Firma test 501, Trnkova 3052/137, 628 00 Brno. Má četnost 1x7 a středu zrcadlenou 1:1 do lichého i sudého týdne. Ve středeční TEST trase se řadí jako první bod, aby šlo GPS tabletu ověřit bez odklikávání stovek jiných stanovišť.
 
 Hlavní tlačítka budoucího cílového řešení:
 - JIŽ HOTOVO,

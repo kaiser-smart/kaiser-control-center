@@ -1,10 +1,10 @@
-# Svozove trasy - TEST Brno 500
+# Svozove trasy - TEST Brno 501
 
 Stav: produkcni TEST sada a jedna trasa overeny; prvni e-mail odeslan, prvni SMS
 zustala zablokovana pred Twiliem kvuli chybejici komunikacni migraci a vypnutemu
 rezimu zakaznickych SMS.
 
-Aktualizace: 2026-07-12
+Aktualizace: 2026-07-13
 
 ## Cil
 
@@ -17,16 +17,19 @@ TEST sada je viditelna pouze aktivnim uzivatelum s roli `management` nebo
 
 ## Data
 
-- 100 firem `Test 1 s.r.o.` az `Test 100 s.r.o.`.
-- Kazda firma ma 5 stanovist, celkem presne 500.
+- 100 firem `Test 1 s.r.o.` az `Test 100 s.r.o.`, kazda s 5 stanovisti.
+- Samostatna `Firma test 501` ma stanoviste `Trnkova 3052/137, 628 00 Brno`.
+- Celkem je 101 firem a presne 501 stanovist.
 - Kontakt firmy N je `RadimN TestN`.
 - Telefon a e-mail se nacitaji pouze ze serverovych promennych
   `COLLECTION_ROUTES_TEST_SMS_TO` a `COLLECTION_ROUTES_TEST_EMAIL_TO`.
 - Nadoby jsou pouze 120, 240 a 1100 litru.
-- Odpady: presne 350 SKO, 60 PAPIR, 45 PLAST, 25 BIO a 20 SKLO.
+- Odpady: presne 351 SKO, 60 PAPIR, 45 PLAST, 25 BIO a 20 SKLO.
 - Cetnosti: `1x7`, `2x7`, `3x7`, `5x7`, `1x14` a `1x30`.
-- Adresy a GPS jsou 500 jedinecnych verejnych adresnich bodu Brna z
+- Zakladnich 500 adres a GPS jsou jedinecne verejne adresni body Brna z
   [GIS Brno - adresni mista](https://gis.brno.cz/ags1/rest/services/Hosted/OD_adresni_mista_Brno/FeatureServer/0).
+- Bod 501 na Trnkove ma potvrzenou adresni GPS a slouzi jako prvni stredecni
+  zastavka pro fyzicky test tabletu.
 - Generovani je deterministicke se seedem `20260712`; aktualizace adres se dela
   pouze skriptem `scripts/generate-collection-routes-brno-addresses.mjs`.
 
@@ -47,6 +50,7 @@ poradi:
 3. `migrations/test/0001_create_collection_routes_test_control.sql`
 4. `migrations/test/0002_create_collection_route_here_optimization.sql`
 5. `migrations/test/0003_configure_collection_route_test_operations_and_gps.sql`
+6. `migrations/test/0004_add_collection_route_field_test_site_501.sql`
 
 Zadna migrace z `migrations/test` se nesmi aplikovat do hlavni produkcni D1.
 
@@ -73,9 +77,36 @@ smeny a konzervativnich truck profilu A/B/C. Rozmery, hmotnosti, cas vysypu a
 nektere vjezdy jsou oznacene jako odhad a pred ostrym pouzitim vyzaduji
 technicky prukaz nebo fyzicke overeni.
 
+## HERE mapovy vyrez
+
+Ridicsky TEST ukazuje staticky mapovy vyrez HERE s adresnim bodem `A` a po
+mereni take fyzickou GPS `F`. Tablet vola pouze chranene KSO API
+`/api/collection-routes/here-map-image`; API klic `HERE_MAPS_API_KEY` zustava
+na serveru a nikdy se neposila do HTML nebo JavaScriptu prohlizece. HERE dostane
+jen souradnice bodu, ne firmu, kontakt, smlouvu ani poznamku.
+
+Pokud HERE neni aktivni nebo mapovy obrazek selze, GPS tlacitko, hlasova Sarlota
+a ulozeni auditu zustavaji dostupne. Mapa je nahled, ne navigace.
+
+## Test na Android tabletu
+
+KSO se zatim neinstaluje z Google Play. Neni to offline Android aplikace ani
+hotova PWA. Pro polni TEST staci aktualni Chrome a internetove pripojeni:
+
+1. Otevrit `https://smart-odpady.ai/trasy-svozu` a prihlasit se Kaiser uctem.
+2. V Chrome povolit webu presnou polohu; pro hlasovou Sarlotu take mikrofon.
+3. Otevrit `Svozove trasy` a klepnout na velke `OTEVRIT TEST TABLETU`.
+4. Pro `Firma test 501` zvolit stredu, vytvorit TEST trasu, priradit ridice,
+   potvrdit ji a spustit TEST tabletu.
+5. Po zastaveni primo u nadoby pouzit hlasovou vyzvu nebo velke GPS tlacitko a
+   dokoncit zapis jednim velkym potvrzenim.
+
+Volitelne lze v menu Chrome zvolit `Pridat na plochu`. Jde pouze o pohodlnou
+ikonu pro spusteni webu; aplikace stale potrebuje internet.
+
 ## Skutecne SMS a e-maily
 
-Zalozeni 500 stanovist ani ulozeni TEST trasy neposila zadnou zpravu.
+Zalozeni 501 stanovist ani ulozeni TEST trasy neposila zadnou zpravu.
 
 Skutecne odeslani ma samostatny tok:
 
@@ -118,12 +149,14 @@ Neexistuje cron, worker ani queue, ktera by zpravy spustila automaticky.
 - `POST /api/collection-routes/test-notifications/:jobId/retry-failures`
 - `GET /api/collection-routes/test-operational-config`
 - `GET|POST /api/collection-routes/test-gps-confirmations`
+- `GET /api/collection-routes/here-map-image`
 - Stavajici denni trasy prijimaji `scope=test` v query nebo JSON body.
 
 ## Akceptacni kontrola
 
-- Datovy generator vrati presne 500 radku a 100 firem po 5 stanovistich.
-- Presne 350 radku je SKO a zadna nadoba nema jiny objem nez 120/240/1100 l.
+- Datovy generator vrati presne 501 radku a 101 firem.
+- Presne 351 radku je SKO a zadna nadoba nema jiny objem nez 120/240/1100 l.
+- `Firma test 501` je na Trnkove a ma stredu zrcadlenou do licheho i sudeho tydne.
 - Vsechny adresy maji jedinecne zdrojove ID a GPS v rozsahu Brna.
 - Chyba uprostred zalozeni vrati celou TEST davku zpet.
 - TEST trasa nevytvori zadny beh v hlavni produkcni D1.

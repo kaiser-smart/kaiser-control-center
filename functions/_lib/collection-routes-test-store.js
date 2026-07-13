@@ -2,6 +2,7 @@ import { normalizeRole } from "../../src/permissions.js";
 import {
   COLLECTION_ROUTES_TEST_DATASET_KEY,
   COLLECTION_ROUTES_TEST_DATASET_NAME,
+  COLLECTION_ROUTES_TEST_SITE_COUNT,
   buildCollectionRoutesTestDataset
 } from "./collection-routes-test-data.js";
 
@@ -59,7 +60,7 @@ function testDatabase(env, required = false) {
   const db = env?.[TEST_DB_BINDING] || null;
   if (!db && required) {
     throw new CollectionRoutesTestStoreError(
-      "Oddělená databáze TEST Brno 500 není připojená.",
+      "Oddělená databáze TEST Brno 501 není připojená.",
       503,
       "collection_routes_test_database_missing"
     );
@@ -92,7 +93,7 @@ export function assertCollectionRoutesTestManager(user) {
   const role = normalizeRole(user?.role);
   if (!user || !["admin", "management"].includes(role)) {
     throw new CollectionRoutesTestStoreError(
-      "Testovací sada Brno 500 je dostupná pouze roli Management a Admin.",
+      "Testovací sada Brno 501 je dostupná pouze roli Management a Admin.",
       403,
       "collection_routes_test_forbidden"
     );
@@ -111,7 +112,7 @@ function storeError(error) {
   }
   console.error("collection_routes_test.store_failed", { message });
   return new CollectionRoutesTestStoreError(
-    "Testovací sada Brno 500 se teď nepodařila načíst nebo uložit.",
+    "Testovací sada Brno 501 se teď nepodařila načíst nebo uložit.",
     500,
     "collection_routes_test_store_failed"
   );
@@ -185,18 +186,24 @@ async function loadDatasetRow(db) {
   `).bind(COLLECTION_ROUTES_TEST_DATASET_KEY).first();
 }
 
-async function loadDatasetRows(db, batchId, limit = 500) {
+async function loadDatasetRows(db, batchId, limit = COLLECTION_ROUTES_TEST_SITE_COUNT) {
   const result = await db.prepare(`
     SELECT *
     FROM collection_import_rows
     WHERE batch_id = ?
-    ORDER BY row_number ASC
+    ORDER BY CASE WHEN source_id = 'test-field-site-501' THEN 0 ELSE 1 END, row_number ASC
     LIMIT ?
-  `).bind(batchId, Math.max(1, Math.min(Number(limit) || 500, 500))).all();
+  `).bind(
+    batchId,
+    Math.max(1, Math.min(Number(limit) || COLLECTION_ROUTES_TEST_SITE_COUNT, COLLECTION_ROUTES_TEST_SITE_COUNT))
+  ).all();
   return (result.results || []).map(rowToImportRow);
 }
 
-export async function getCollectionRoutesTestDataset(env, user, { includeRows = true, limit = 500 } = {}) {
+export async function getCollectionRoutesTestDataset(env, user, {
+  includeRows = true,
+  limit = COLLECTION_ROUTES_TEST_SITE_COUNT
+} = {}) {
   assertCollectionRoutesTestManager(user);
   const db = testDatabase(env, true);
   try {
@@ -238,7 +245,7 @@ export async function ensureCollectionRoutesTestDataset(env, user, { confirmatio
   try {
     const existing = rowToDataset(await loadDatasetRow(db));
     if (existing) {
-      const rows = await loadDatasetRows(db, existing.sourceBatchId, 500);
+      const rows = await loadDatasetRows(db, existing.sourceBatchId, COLLECTION_ROUTES_TEST_SITE_COUNT);
       return { created: false, dataset: existing, rows, apiStatus: "ready" };
     }
 
@@ -248,7 +255,7 @@ export async function ensureCollectionRoutesTestDataset(env, user, { confirmatio
     const actorId = cleanString(user?.id);
     const actorName = cleanString(user?.name || user?.email || user?.phone);
     const batchMetadata = {
-      phase: "TEST-Brno-500",
+      phase: "TEST-Brno-501",
       mode: "synthetic-brno-test",
       source: "gis-brno-open-data",
       datasetKey: generated.key,
@@ -270,7 +277,7 @@ export async function ensureCollectionRoutesTestDataset(env, user, { confirmatio
       ) VALUES (?, 'synthetic-test', 'synthetic-brno-test', 'preview', 'ready', ?, ?, 0, ?, ?, ?, ?)
     `).bind(
       TEST_BATCH_ID,
-      "Oddělená testovací sada 500 veřejných adresních bodů Brna.",
+      "Oddělená testovací sada 501 stanovišť Brna včetně fyzického GPS testu na Trnkově.",
       generated.rows.length,
       actorId,
       createdAt,
@@ -312,7 +319,7 @@ export async function ensureCollectionRoutesTestDataset(env, user, { confirmatio
     return {
       created: true,
       dataset,
-      rows: await loadDatasetRows(db, TEST_BATCH_ID, 500),
+      rows: await loadDatasetRows(db, TEST_BATCH_ID, COLLECTION_ROUTES_TEST_SITE_COUNT),
       apiStatus: "ready"
     };
   } catch (error) {
@@ -353,7 +360,7 @@ export async function getCollectionRoutesTestSnapshot(env, user, { limit = 10000
       sourceMode: "synthetic-brno-test",
       status: "preview",
       apiStatus: "ready",
-      message: "Oddělená testovací sada Brno 500.",
+      message: "Oddělená testovací sada Brno 501.",
       rowCount: result.dataset.siteCount,
       issueCount: 0,
       createdByUserId: result.dataset.createdByUserId,

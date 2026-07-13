@@ -5,10 +5,21 @@ import {
 } from "../_data/collection-routes-test-brno-addresses.generated.js";
 
 export const COLLECTION_ROUTES_TEST_DATASET_KEY = "brno-500-v2";
-export const COLLECTION_ROUTES_TEST_DATASET_NAME = "TEST Brno 500";
-export const COLLECTION_ROUTES_TEST_COMPANY_COUNT = 100;
-export const COLLECTION_ROUTES_TEST_SITE_COUNT = 500;
+export const COLLECTION_ROUTES_TEST_DATASET_NAME = "TEST Brno 501";
+export const COLLECTION_ROUTES_TEST_BASE_SITE_COUNT = 500;
+export const COLLECTION_ROUTES_TEST_COMPANY_COUNT = 101;
+export const COLLECTION_ROUTES_TEST_SITE_COUNT = 501;
 export const COLLECTION_ROUTES_TEST_ALLOWED_CONTAINER_VOLUMES = Object.freeze([120, 240, 1100]);
+
+export const COLLECTION_ROUTES_FIELD_TEST_SITE = Object.freeze({
+  rowNumber: 501,
+  sourceId: "test-field-site-501",
+  customerName: "Firma test 501",
+  stationName: "Firma test 501 · stanoviště Trnkova",
+  addressText: "Trnkova 3052/137, 628 00 Brno",
+  latitude: 49.19125931950087,
+  longitude: 16.670211574110382
+});
 
 const WASTE_DISTRIBUTION = Object.freeze([
   Object.freeze({ wasteType: "SKO", wasteCode: "200301", count: 350 }),
@@ -141,14 +152,88 @@ function validateRecipient({ phone, email }) {
   return { phone: normalizedPhone, email: normalizedEmail };
 }
 
+function fieldTestSiteRow(recipient) {
+  const site = COLLECTION_ROUTES_FIELD_TEST_SITE;
+  const contactName = "Radim · TEST 501";
+  return {
+    rowNumber: site.rowNumber,
+    sourceEntity: "synthetic-field-test-site",
+    sourceId: site.sourceId,
+    sourceContractId: "test-contract-field-501",
+    sourceCustomerId: "test-company-field-501",
+    sourceSiteId: "test-site-field-501",
+    contractId: "test-contract-field-501",
+    contractRowId: "test-contract-row-501",
+    contractNumber: "TEST-501",
+    customerName: site.customerName,
+    branchName: site.customerName,
+    addressRaw: site.addressText,
+    addressPlaceRaw: site.addressText,
+    addressStreet: "Trnkova 3052/137",
+    addressCity: "Brno",
+    addressRegion: "Líšeň",
+    addressCountry: "Česko",
+    addressPostalCode: "62800",
+    stationName: site.stationName,
+    siteName: site.stationName,
+    productId: "test-product-200301",
+    productName: "SKO 120 l",
+    rowName: "SKO · 120 l · 1x7",
+    wasteType: "SKO",
+    wasteCode: "200301",
+    frequency: "1x7",
+    pickupDaysText: "středa lichá, středa sudá",
+    pickupSchedule: {
+      mode: "weekly",
+      dayCodes: ["ST"],
+      parities: ["odd", "even"]
+    },
+    containerVolume: 120,
+    containerCount: 1,
+    containerType: "nádoba",
+    serviceMode: "regular",
+    onDemand: false,
+    mappingStatus: "test-ready",
+    note: "TESTOVACÍ DATA · výchozí stanoviště pro fyzický GPS test tabletu · bez vazby na skutečného zákazníka.",
+    contact: contactName,
+    phone: recipient.phone,
+    email: recipient.email,
+    customerManagerName: contactName,
+    customerManagerMobile: recipient.phone,
+    customerManagerEmail: recipient.email,
+    rowKey: `${COLLECTION_ROUTES_TEST_DATASET_KEY}|row|501`,
+    siteKey: `${COLLECTION_ROUTES_TEST_DATASET_KEY}|site|field-501`,
+    locationQuality: "confirmed-test-open-data",
+    latitude: site.latitude,
+    longitude: site.longitude,
+    svozKaiserValue: "TEST",
+    svozKaiserIncluded: true,
+    issueCount: 0,
+    issues: [],
+    dataScope: "test",
+    testDatasetKey: COLLECTION_ROUTES_TEST_DATASET_KEY,
+    addressSourceId: "gis-brno-trnkova-3052-137",
+    addressSource: COLLECTION_ROUTES_TEST_BRNO_ADDRESS_SOURCE,
+    fieldTestPriority: true
+  };
+}
+
+function countBy(rows, field) {
+  return rows.reduce((counts, row) => {
+    const key = String(row[field]);
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+}
+
 export function buildCollectionRoutesTestDataset({
   phone,
   email,
   addresses = COLLECTION_ROUTES_TEST_BRNO_ADDRESSES,
   seed = COLLECTION_ROUTES_TEST_BRNO_ADDRESS_SEED
 } = {}) {
-  if (!Array.isArray(addresses) || addresses.length !== COLLECTION_ROUTES_TEST_SITE_COUNT) {
-    throw new Error(`Testovací sada vyžaduje přesně ${COLLECTION_ROUTES_TEST_SITE_COUNT} adresních bodů.`);
+  if (!Array.isArray(addresses) || addresses.length !== COLLECTION_ROUTES_TEST_BASE_SITE_COUNT) {
+    throw new Error(`Testovací sada vyžaduje přesně ${COLLECTION_ROUTES_TEST_BASE_SITE_COUNT} výchozích adresních bodů.`);
   }
   const recipient = validateRecipient({ phone, email });
   const wastes = shuffled(expandedDistribution(WASTE_DISTRIBUTION), seed + 11);
@@ -222,6 +307,7 @@ export function buildCollectionRoutesTestDataset({
       addressSource: COLLECTION_ROUTES_TEST_BRNO_ADDRESS_SOURCE
     };
   });
+  rows.push(fieldTestSiteRow(recipient));
 
   return {
     key: COLLECTION_ROUTES_TEST_DATASET_KEY,
@@ -235,9 +321,9 @@ export function buildCollectionRoutesTestDataset({
     summary: {
       companyCount: COLLECTION_ROUTES_TEST_COMPANY_COUNT,
       siteCount: rows.length,
-      wasteCounts: Object.fromEntries(WASTE_DISTRIBUTION.map((item) => [item.wasteType, item.count])),
-      frequencyCounts: Object.fromEntries(FREQUENCY_DISTRIBUTION.map((item) => [item.value, item.count])),
-      containerVolumeCounts: Object.fromEntries(CONTAINER_DISTRIBUTION.map((item) => [String(item.value), item.count]))
+      wasteCounts: countBy(rows, "wasteType"),
+      frequencyCounts: countBy(rows, "frequency"),
+      containerVolumeCounts: countBy(rows, "containerVolume")
     }
   };
 }
@@ -248,5 +334,6 @@ export const __test = {
   CONTAINER_DISTRIBUTION,
   pickupSchedule,
   pickupDaysText,
-  validateRecipient
+  validateRecipient,
+  fieldTestSiteRow
 };

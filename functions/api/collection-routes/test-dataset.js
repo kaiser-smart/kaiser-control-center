@@ -10,7 +10,7 @@ function errorResponse(error) {
     return json({ error: error.message, code: error.code, apiStatus: "waiting" }, error.status);
   }
   console.error("collection_routes_test.api_failed", { message: error?.message });
-  return json({ error: "Testovací sada Brno 500 se teď nepodařila zpracovat.", apiStatus: "waiting" }, 500);
+  return json({ error: "Testovací sada Brno 501 se teď nepodařila zpracovat.", apiStatus: "waiting" }, 500);
 }
 
 export async function onRequestGet({ request, env }) {
