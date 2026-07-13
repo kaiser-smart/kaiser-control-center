@@ -117,6 +117,12 @@ const tcarsClientSource = readFileSync(new URL("../functions/_lib/tcars-client.j
   assert.doesNotMatch(markerContent, /<svg/);
   assert.match(markerContent, /tracking-tcars-google-pin__label--speedometer/);
   assert.match(markerContent, /tracking-tcars-google-pin__label--telemetry/);
+  assert.match(markerContent, /tracking-marker-gauge__vehicle/);
+  assert.match(markerContent, /tracking-marker-telemetry__vehicle/);
+  assert.match(markerContent, /tracking-marker-vehicle-name/);
+  assert.doesNotMatch(markerContent, /tracking-marker-gauge__ticks/);
+  assert.doesNotMatch(markerContent, /tracking-marker-gauge__needle/);
+  assert.doesNotMatch(markerContent, /tracking-marker-gauge__hub/);
   assert.doesNotMatch(markerOverlay, /setProperty\("--heading"/);
   assert.match(styleSource, /\.tracking-tcars-google-marker\s*\{[\s\S]*?transform:\s*translate\(-50%, -100%\)/);
   assert.match(styleSource, /\.tracking-tcars-google-pin__icon img\s*\{[\s\S]*?transform:\s*translateY\(-8px\);/);
@@ -124,6 +130,7 @@ const tcarsClientSource = readFileSync(new URL("../functions/_lib/tcars-client.j
   assert.match(markerOverlay, /vehicleTrackingTcarsMarkerDetailsVisible\(map, this\.selected, focused\)/);
   assert.match(styleSource, /\.tracking-tcars-google-marker--overview[\s\S]*?\.tracking-tcars-google-pin__label/);
   assert.match(styleSource, /\.tracking-position-pin\s*\{[\s\S]*?border-radius:\s*50% 50% 50%/);
+  assert.match(styleSource, /\.tracking-marker-gauge__value b\s*\{[\s\S]*?font-size:\s*2\.05rem/);
   assert.match(appSource, /data-tracking-info-style/);
   assert.match(tcarsClientSource, /voltage:\s*gps\.voltage/);
   assert.match(tcarsClientSource, /emergency:\s*gps\.emergency/);

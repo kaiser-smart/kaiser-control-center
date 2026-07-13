@@ -14579,6 +14579,7 @@ function vehicleTrackingTcarsInfoPanel(location = {}, markerVehicle = {}) {
   if (style === "plate") {
     return `
       <span class="tracking-tcars-google-pin__label tracking-tcars-google-pin__label--plate">
+        <span class="tracking-marker-vehicle-name">${escapeHtml(vehicleName)}</span>
         <span class="tracking-marker-plate">
           <i aria-hidden="true">CZ</i><small>SPZ</small><b>${escapeHtml(licensePlate)}</b>
         </span>
@@ -14594,10 +14595,8 @@ function vehicleTrackingTcarsInfoPanel(location = {}, markerVehicle = {}) {
     const angle = -132 + (clampedSpeed / 180) * 264;
     return `
       <span class="tracking-tcars-google-pin__label tracking-tcars-google-pin__label--speedometer" style="--tracking-speed-angle:${angle.toFixed(2)}deg">
+        <span class="tracking-marker-gauge__vehicle">${escapeHtml(vehicleName)}</span>
         <span class="tracking-marker-gauge__caption">Rychlost</span>
-        <span class="tracking-marker-gauge__ticks" aria-hidden="true"></span>
-        <span class="tracking-marker-gauge__needle" aria-hidden="true"></span>
-        <span class="tracking-marker-gauge__hub" aria-hidden="true"></span>
         <span class="tracking-marker-gauge__value"><b>${escapeHtml(speedNumber)}</b><small>km/h</small></span>
         <span class="tracking-marker-gauge__plate">${escapeHtml(licensePlate)}</span>
       </span>
@@ -14617,6 +14616,7 @@ function vehicleTrackingTcarsInfoPanel(location = {}, markerVehicle = {}) {
     ].filter(([, value]) => value);
     return `
       <span class="tracking-tcars-google-pin__label tracking-tcars-google-pin__label--telemetry">
+        <span class="tracking-marker-telemetry__vehicle">${escapeHtml(vehicleName)}</span>
         <span class="tracking-marker-telemetry__top"><small>SPZ</small><b>${escapeHtml(licensePlate)}</b><i aria-hidden="true"></i></span>
         <span class="tracking-marker-telemetry__grid">
           ${rows.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></span>`).join("")}
