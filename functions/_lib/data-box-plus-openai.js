@@ -185,6 +185,7 @@ function requestPayload(model, input = {}) {
       "Pro odpověď přes datovou schránku použij send_data_box_reply. Příjemcem je odesílatel původní zprávy, pokud uživatel neurčí jinou datovou schránku.",
       "Nevymýšlej e-mail, telefon, jméno, datum ani obsah. Pokud chybí, zeptej se.",
       "KanONICKÝ kontakt currentUser je důvěryhodný. Výrazy můj e-mail, já nebo jeho celé jméno znamenají přesně tento kontakt; neptej se znovu na e-mail.",
+      "knownUsers je kanonický adresář. Pokud je v pokynu serverově vyřešený příjemce, použij jeho e-mail přesně a připrav send_email.",
       "Nikdy nenavrhuj smazání datové zprávy. Přímé odeslání přes ISDS smí backend provést jen po potvrzení člověka.",
       "Učené vzory jsou pouze nápověda z dříve potvrzených akcí. Nejsou povolením něco provést bez potvrzení.",
       "Vracíš pouze JSON podle zadaného schématu."
@@ -203,6 +204,7 @@ function requestPayload(model, input = {}) {
       conversation: publicConversation(input),
       confirmedLearningRules: publicLearningRules(input),
       currentUser: input.currentUser,
+      knownUsers: input.knownUsers,
       today: cleanString(input.today),
       timezone: "Europe/Prague"
     }),

@@ -17,6 +17,7 @@ import {
   interpretDataBoxPlusChat
 } from "./data-box-plus-openai.js";
 import { sendDataBoxForwardNotification } from "./notification-service.js";
+import { CONTACT_USERS } from "./contact-users.js";
 
 const EXPECTED_MAILBOX_COUNT = 7;
 const DEFAULT_LIMIT = 100;
@@ -51,6 +52,15 @@ export class DataBoxPlusStoreError extends Error {
 
 function cleanString(value) {
   return String(value ?? "").trim();
+}
+
+function normalizedPerson(value) {
+  return cleanString(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function dataBoxPlusKnownUsers(currentUser = {}) {
+  const users = [...CONTACT_USERS, currentUser].filter((user) => cleanString(user?.email) && user?.active !== false && cleanString(user?.status).toLowerCase() !== "disabled");
+  return [...new Map(users.map((user) => [normalizedPerson(user.name || user.email), { id: cleanString(user.id), name: cleanString(user.name), email: cleanString(user.email), role: cleanString(user.role) }])).values()];
 }
 
 function numberValue(value, fallback = 0) {
@@ -3841,10 +3851,17 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
 
     const history = await dataBoxPlusChatHistoryForOpenAi(db, id);
     const learningRules = await dataBoxPlusLearningRulesForOpenAi(db);
+    const knownUsers = dataBoxPlusKnownUsers(currentUser);
+    const normalizedInstruction = normalizedPerson(instruction);
+    const targetUser = normalizedInstruction.includes("muj email") || normalizedInstruction.includes("moje email") || normalizedInstruction.includes("ja ")
+      ? knownUsers.find((user) => normalizedPerson(user.email) === normalizedPerson(currentUser.email) || normalizedPerson(user.name) === normalizedPerson(currentUser.name))
+      : knownUsers.find((user) => normalizedInstruction.includes(normalizedPerson(user.name)));
+    const resolvedInstruction = targetUser ? `${instruction}\nServerově vyřešený příjemce e-mailu: ${targetUser.name} <${targetUser.email}>.` : instruction;
     let openAi;
     try {
       openAi = await interpretDataBoxPlusChat(env, {
-        instruction,
+        instruction: resolvedInstruction,
+        knownUsers,
         history,
         learningRules,
         currentUser: { name: actorName(currentUser), email: cleanString(currentUser?.email) },
