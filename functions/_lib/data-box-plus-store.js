@@ -17,7 +17,7 @@ import {
   interpretDataBoxPlusChat
 } from "./data-box-plus-openai.js";
 import { sendDataBoxForwardNotification } from "./notification-service.js";
-import { CONTACT_USERS } from "./contact-users.js";
+import { buildDataBoxPlusChatContext } from "./data-box-plus-chat-context.js";
 
 const EXPECTED_MAILBOX_COUNT = 7;
 const DEFAULT_LIMIT = 100;
@@ -58,9 +58,10 @@ function normalizedPerson(value) {
   return cleanString(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-function dataBoxPlusKnownUsers(currentUser = {}) {
-  const users = [...CONTACT_USERS, currentUser].filter((user) => cleanString(user?.email) && user?.active !== false && cleanString(user?.status).toLowerCase() !== "disabled");
-  return [...new Map(users.map((user) => [normalizedPerson(user.name || user.email), { id: cleanString(user.id), name: cleanString(user.name), email: cleanString(user.email), role: cleanString(user.role) }])).values()];
+function dataBoxPlusSelfReference(instruction) {
+  const normalized = normalizedPerson(instruction).replace(/[^a-z0-9@]+/g, " ").trim();
+  return ["muj email", "moje email", "muj mail", "moje mail", "na sebe", "sobe", "pro me"]
+    .some((phrase) => normalized.includes(phrase));
 }
 
 function numberValue(value, fallback = 0) {
@@ -2965,7 +2966,7 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
     actionSummary: summary,
     performedAction: "Nebylo provedeno nic",
     assistantText: draftReady
-      ? "Návrh odpovědi je připravený. Nic nebylo odesláno."
+      ? "Návrh jsem připravil do pole Odpověď. Nic nebylo odesláno."
       : cleanString(openAiPlan.assistantText || "Jak vám mohu s touto zprávou pomoci?"),
     missingField: cleanString(openAiPlan.missingField),
     messageStatus: cleanString(defaults.messageStatus || message.status || "Nová"),
@@ -3106,7 +3107,7 @@ function enforceDataBoxPlusExecutableIntent(instruction, plan, message = {}, cur
 
 export function dataBoxPlusOpenAiPlanForTest(openAiPlan = {}, message = {}, currentUser = {}, instruction = "") {
   const plan = dataBoxPlusServerPlanFromOpenAi(openAiPlan, message, currentUser);
-  return instruction ? enforceDataBoxPlusExecutableIntent(instruction, plan, message) : plan;
+  return instruction ? enforceDataBoxPlusExecutableIntent(instruction, plan, message, currentUser) : plan;
 }
 
 async function dataBoxPlusContactCandidates(db) {
@@ -3853,11 +3854,13 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
 
     const history = await dataBoxPlusChatHistoryForOpenAi(db, id);
     const learningRules = await dataBoxPlusLearningRulesForOpenAi(db);
-    const knownUsers = dataBoxPlusKnownUsers(currentUser);
+    const chatContext = await buildDataBoxPlusChatContext(env, currentUser);
+    const knownUsers = chatContext.knownUsers;
     const normalizedInstruction = normalizedPerson(instruction);
-    const targetUser = normalizedInstruction.includes("muj email") || normalizedInstruction.includes("moje email") || normalizedInstruction.includes("ja ")
-      ? knownUsers.find((user) => normalizedPerson(user.email) === normalizedPerson(currentUser.email) || normalizedPerson(user.name) === normalizedPerson(currentUser.name))
-      : knownUsers.find((user) => normalizedInstruction.includes(normalizedPerson(user.name)));
+    const matchingUsers = knownUsers.filter((user) => normalizedInstruction.includes(normalizedPerson(user.name)));
+    const targetUser = dataBoxPlusSelfReference(instruction)
+      ? chatContext.currentUser
+      : matchingUsers.length === 1 ? matchingUsers[0] : null;
     const resolvedInstruction = targetUser ? `${instruction}\nServerově vyřešený příjemce e-mailu: ${targetUser.name} <${targetUser.email}>.` : instruction;
     let openAi;
     try {
@@ -3866,7 +3869,8 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
         knownUsers,
         history,
         learningRules,
-        currentUser: { name: actorName(currentUser), email: cleanString(currentUser?.email) },
+        appContext: chatContext.application,
+        currentUser: chatContext.currentUser,
         today: dataBoxPlusPragueDate(),
         message: {
           senderName: message.sender_name,

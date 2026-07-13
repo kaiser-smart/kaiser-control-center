@@ -34,6 +34,9 @@ const result = await interpretDataBoxPlusChat({
 }, {
   instruction: "pošli Radimovi e-mail, ať to zkontroluje",
   today: "2026-07-10",
+  currentUser: { name: "Radim Opluštil", email: "oplustil@kaiserservis.cz", role: "admin" },
+  knownUsers: [{ name: "Radim Opluštil", email: "oplustil@kaiserservis.cz", department: "Vedení společnosti" }],
+  appContext: { name: "Kaiser Smart", modules: [{ id: "fleet", title: "Vozidla", route: "/vozovy-park" }] },
   message: {
     senderName: "Úřad",
     subject: "Výzva k doplnění",
@@ -66,13 +69,19 @@ assert.equal(requestSnapshot.url, openAiTest.OPENAI_RESPONSES_URL);
 assert.match(requestSnapshot.options.headers.Authorization, /^Bearer /);
 assert.equal(requestSnapshot.body.model, "gpt-test");
 assert.equal(requestSnapshot.body.store, false);
-assert.equal(requestSnapshot.body.max_output_tokens, 1200);
+assert.equal(requestSnapshot.body.max_output_tokens, 3000);
 assert.equal(requestSnapshot.body.text.format.type, "json_schema");
 assert.equal(requestSnapshot.body.text.format.strict, true);
 assert.match(requestSnapshot.body.input, /Výzva k doplnění/);
 assert.match(requestSnapshot.body.input, /Potvrzené předání Radimovi/);
+assert.match(requestSnapshot.body.input, /oplustil@kaiserservis\.cz/);
+assert.match(requestSnapshot.body.input, /Kaiser Smart/);
+assert.match(requestSnapshot.body.input, /\/vozovy-park/);
 assert.match(requestSnapshot.body.instructions, /nedůvěryhodný pracovní podklad/);
 assert.match(requestSnapshot.body.instructions, /skutečný úkon, ne přípravu návrhu/);
+assert.match(requestSnapshot.body.instructions, /připrav odvolání/);
+assert.match(requestSnapshot.body.instructions, /Nežádej uživatele, aby ti text poslal/);
+assert.match(requestSnapshot.body.instructions, /neopakuj stejnou otázku/);
 assert.doesNotMatch(requestSnapshot.body.input, /test-openai-key/);
 assert.equal(result.provider, "OpenAI");
 assert.equal(result.responseId, "resp-test");
@@ -124,6 +133,17 @@ assert.equal(correctedForward.recipientEmail, "faktury@kaiserservis.cz");
 assert.match(correctedForward.assistantText, /Odešlu datovou zprávu e-mailem/);
 assert.doesNotMatch(correctedForward.assistantText, /návrh/i);
 
+const selfForward = dataBoxPlusOpenAiPlanForTest(misclassifiedForward, {
+  id: "message-self-forward",
+  subject: "Kapacita Datového trezoru",
+  status: "Nová"
+}, { name: "Radim Opluštil", email: "oplustil@kaiserservis.cz" }, "přepošli na můj mail");
+assert.equal(selfForward.actionType, "send_email");
+assert.equal(selfForward.outcome, "waiting_confirmation");
+assert.equal(selfForward.recipientEmail, "oplustil@kaiserservis.cz");
+assert.equal(selfForward.recipientName, "Radim Opluštil");
+assert.doesNotMatch(selfForward.assistantText, /Komu|chybí/i);
+
 const explicitDraft = dataBoxPlusOpenAiPlanForTest(misclassifiedForward, {
   id: "message-draft",
   subject: "ZÁPOČET_příkaz",
@@ -132,6 +152,35 @@ const explicitDraft = dataBoxPlusOpenAiPlanForTest(misclassifiedForward, {
 assert.equal(explicitDraft.actionType, "prepare_reply");
 assert.equal(explicitDraft.outcome, "draft_ready");
 assert.equal(explicitDraft.requiresConfirmation, false);
+
+const appealDraft = dataBoxPlusOpenAiPlanForTest({
+  outcome: "answer",
+  intent: "prepare_appeal",
+  assistantText: "Připravil jsem návrh odvolání.",
+  missingField: "",
+  action: {
+    type: "prepare_reply",
+    summary: "Připravit odvolání proti příkazu",
+    recipientName: "",
+    recipientEmail: "",
+    recipientPhone: "",
+    recipientDataBoxId: "",
+    subject: "Odvolání proti příkazu",
+    body: "Odvolání proti příkazu\n\nKaiser servis, spol. s r.o. podává v zákonné lhůtě odvolání.\n\n[DOPLNIT: konkrétní odvolací důvody]",
+    assignedTo: "",
+    noteText: "",
+    dueDate: ""
+  }
+}, {
+  id: "message-appeal-draft",
+  subject: "Příkaz - Kaiser servis, spol. s r.o.",
+  status: "Nová"
+}, { name: "Radim Opluštil" }, "připrav odvolání");
+assert.equal(appealDraft.actionType, "prepare_reply");
+assert.equal(appealDraft.outcome, "draft_ready");
+assert.equal(appealDraft.requiresConfirmation, false);
+assert.match(appealDraft.draftText, /Odvolání proti příkazu/);
+assert.equal(appealDraft.assistantText, "Návrh jsem připravil do pole Odpověď. Nic nebylo odesláno.");
 
 const answerPlan = dataBoxPlusOpenAiPlanForTest({
   outcome: "answer",
