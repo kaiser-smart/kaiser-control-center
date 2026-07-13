@@ -2,17 +2,17 @@ export const VEHICLE_TRACKING_INFO_STYLES = [
   {
     id: "compact",
     label: "Kaiser karta",
-    description: "Hravá prémiová karta se jménem, SPZ a rychlostí."
+    description: "Kompaktní skleněná karta se jménem, SPZ a rychlostí."
   },
   {
     id: "plate",
     label: "SPZ tabule",
-    description: "Výrazná SPZ a rychlost ve stylu dopravní tabule."
+    description: "Skleněný panel se zvýrazněnou SPZ a rychlostí."
   },
   {
     id: "speedometer",
     label: "Budík",
-    description: "Rychlost jako živý analogový přístroj."
+    description: "Skleněný panel s živým analogovým budíkem."
   },
   {
     id: "telemetry",

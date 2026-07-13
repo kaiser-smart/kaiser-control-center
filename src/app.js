@@ -14553,6 +14553,19 @@ function vehicleTrackingTcarsVoltageText(location = {}) {
   return value === null ? "" : `${value.toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} V`;
 }
 
+function vehicleTrackingTcarsMarkerDetailsVisible(map, selected = false, focused = false) {
+  if (selected || focused) {
+    return true;
+  }
+
+  if (window.matchMedia?.("(max-width: 720px)")?.matches) {
+    return false;
+  }
+
+  const zoom = Number(map?.getZoom?.());
+  return Number.isFinite(zoom) && zoom >= 14;
+}
+
 function vehicleTrackingTcarsInfoPanel(location = {}, markerVehicle = {}) {
   const style = normalizeVehicleTrackingInfoStyle(vehicleTrackingUiState.infoStyle);
   const licensePlate = markerVehicle.licensePlate || markerVehicle.internalNumber || "Bez SPZ";
@@ -14579,6 +14592,7 @@ function vehicleTrackingTcarsInfoPanel(location = {}, markerVehicle = {}) {
     const angle = -132 + (clampedSpeed / 180) * 264;
     return `
       <span class="tracking-tcars-google-pin__label tracking-tcars-google-pin__label--speedometer" style="--tracking-speed-angle:${angle.toFixed(2)}deg">
+        <span class="tracking-marker-gauge__caption">Rychlost</span>
         <span class="tracking-marker-gauge__ticks" aria-hidden="true"></span>
         <span class="tracking-marker-gauge__needle" aria-hidden="true"></span>
         <span class="tracking-marker-gauge__hub" aria-hidden="true"></span>
@@ -14738,10 +14752,7 @@ function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false
         <span class="tracking-tcars-google-pin__fallback"></span>
       </span>
       <span class="tracking-tcars-google-pin__position" aria-hidden="true">
-        <svg viewBox="0 0 34 38" focusable="false">
-          <path class="tracking-position-arrow__body" d="M13 3.5C13 2.12 14.12 1 15.5 1h3C19.88 1 21 2.12 21 3.5V17h6.15c2.08 0 3.25 2.39 1.97 4.03L19.36 35.1c-1.2 1.9-3.52 1.9-4.72 0L4.88 21.03C3.6 19.39 4.77 17 6.85 17H13V3.5Z"/>
-          <path class="tracking-position-arrow__glint" d="M16 4h2v15.4h6.35L17 31.1 9.65 19.4H16V4Z"/>
-        </svg>
+        <span class="tracking-position-pin" aria-hidden="true"></span>
       </span>
     </span>
   `;
@@ -16036,12 +16047,14 @@ function createVehicleTrackingTcarsGoogleMarker(maps, map, location) {
       const projection = this.getProjection();
       const point = projection.fromLatLngToDivPixel(new maps.LatLng(this.location.latitude, this.location.longitude));
       const focused = this.selected && vehicleTrackingLiveState.googleFocusedLocationId === this.location._locationId;
+      const detailsVisible = vehicleTrackingTcarsMarkerDetailsVisible(map, this.selected, focused);
       this.div.style.left = `${point.x}px`;
       this.div.style.top = `${point.y}px`;
       this.div.className = [
         "tracking-tcars-google-marker",
         this.selected ? "tracking-tcars-google-marker--selected" : "",
-        focused ? "tracking-tcars-google-marker--focused" : ""
+        focused ? "tracking-tcars-google-marker--focused" : "",
+        detailsVisible ? "tracking-tcars-google-marker--details" : "tracking-tcars-google-marker--overview"
       ].filter(Boolean).join(" ");
     }
 
@@ -16172,6 +16185,9 @@ function initializeVehicleTrackingTcarsGoogleMap(maps, node) {
 
   vehicleTrackingLiveState.googleMap = map;
   vehicleTrackingLiveState.googleMapNode = node;
+  maps.event.addListener(map, "zoom_changed", () => {
+    vehicleTrackingLiveState.googleMarkers.forEach((marker) => marker.draw());
+  });
   return map;
 }
 
@@ -16341,7 +16357,10 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
       const wimSites = vehicleTrackingGoogleMapWimSites();
       const activeIds = new Set(validLocations.map((location) => location._locationId));
       const selectedLocation = vehicleTrackingTcarsSelectedLocation(validLocations);
-      const selectedId = selectedLocation?._locationId || "";
+      const selectedId = vehicleTrackingLiveState.selectedLocationId
+        && selectedLocation?._locationId === vehicleTrackingLiveState.selectedLocationId
+        ? selectedLocation._locationId
+        : "";
       const selectedWimId = vehicleTrackingSelectedWimSite(wimSites)?.id || "";
 
       if (options.focusSelected && selectedId) {
@@ -16360,7 +16379,7 @@ function syncVehicleTrackingTcarsGoogleMap(options = {}) {
       });
 
       validLocations.forEach((location) => {
-        const selected = selectedLocation?._locationId === location._locationId;
+        const selected = selectedId === location._locationId;
         const existingMarker = vehicleTrackingLiveState.googleMarkers.get(location._locationId);
         if (existingMarker) {
           existingMarker.update(location, selected);

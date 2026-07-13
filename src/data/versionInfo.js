@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.538"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.539"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: jednotné skleněné cedule a čistá mapa",
+    text: "Všechny čtyři varianty info cedule používají společný skleněný materiál, typografii, rámeček a stín. Celorepublikový přehled ukazuje jen vozidla s přesným GPS hrotem; velká cedule se objeví až po kliknutí na vůz nebo při bližším přiblížení mapy."
+  },
   {
     title: "Poloha vozidel: osobní prémiové info cedule",
     text: "Každý uživatel si na mapě volí vlastní styl info cedule: hravou Kaiser kartu, SPZ tabuli, analogový budík nebo palubní panel. Palubní panel ukazuje jen reálné hodnoty dostupné z T-Cars; osobní volba se ukládá k účtu. GPS hrot je nově čistá zaoblená vektorová šipka."
