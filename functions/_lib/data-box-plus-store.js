@@ -18,6 +18,7 @@ import {
 } from "./data-box-plus-openai.js";
 import { sendDataBoxForwardNotification } from "./notification-service.js";
 import { buildDataBoxPlusChatContext } from "./data-box-plus-chat-context.js";
+import { loadFleetVehiclesWithAssignments } from "./fleet-vehicles-store.js";
 
 const EXPECTED_MAILBOX_COUNT = 7;
 const DEFAULT_LIMIT = 100;
@@ -62,6 +63,21 @@ function dataBoxPlusSelfReference(instruction) {
   const normalized = normalizedPerson(instruction).replace(/[^a-z0-9@]+/g, " ").trim();
   return ["muj email", "moje email", "muj mail", "moje mail", "na sebe", "sobe", "pro me"]
     .some((phrase) => normalized.includes(phrase));
+}
+
+function dataBoxPlusNoOperationInstruction(instruction) {
+  const normalized = normalizedPerson(instruction).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  return [
+    "nic",
+    "nic nedelej",
+    "nic neprovadej",
+    "ne",
+    "nechci",
+    "nech to",
+    "nechci nic",
+    "zrus to",
+    "zrusit"
+  ].includes(normalized);
 }
 
 function numberValue(value, fallback = 0) {
@@ -2856,7 +2872,7 @@ function dataBoxPlusExecutableAction(type) {
 function dataBoxPlusConfirmationDecision(value) {
   const normalized = searchText([value]).replace(/[^a-z0-9]+/g, " ").trim();
   if (["ano", "proved", "provedte", "potvrzuji", "souhlasim", "souhlas", "ok"].includes(normalized)) return "confirm";
-  if (["ne", "zrus", "zrusit", "storno", "neprovadet", "nesouhlasim"].includes(normalized)) return "cancel";
+  if (["ne", "nic", "nic nedelej", "nic neprovadej", "nech to", "nechci nic", "zrus", "zrus to", "zrusit", "storno", "neprovadet", "nesouhlasim"].includes(normalized)) return "cancel";
   return "new_instruction";
 }
 
@@ -3007,6 +3023,66 @@ function dataBoxPlusExecutionVerb(instruction) {
     .some((token) => normalized.includes(token));
 }
 
+function dataBoxPlusInstructionAuthorizesAction(instruction, actionType) {
+  const normalized = searchText([instruction]);
+  const type = cleanString(actionType);
+  if (!type || type === "none") return true;
+  if (type === "prepare_reply") {
+    return /\b(priprav|sepis|vytvor|napis|navrh|koncept|odvolan|vyjadren|namitk|odpoved)\w*/.test(normalized);
+  }
+  if (type === "archive_info") return normalized.includes("archiv");
+  if (type === "mark_done") return /\b(vyrid|vyres|hotov|oznac)\w*/.test(normalized);
+  if (type === "need_more_info") return /\b(dopln|upres|chybi|potrebuje)\w*/.test(normalized);
+  if (type === "mark_cannot_execute") return /\b(nelze|nemoz|neprovedit)\w*/.test(normalized);
+  if (type === "internal_note") return normalized.includes("poznam");
+  if (type === "create_task") return normalized.includes("ukol");
+  if (type === "set_reminder") return /\b(pripomen|pripomink|termin)\w*/.test(normalized);
+  if (type === "assign_to_user") return /\b(predat|predej|prirad|deleg)\w*/.test(normalized);
+  if (type === "send_sms") return normalized.includes("sms") && dataBoxPlusExecutionVerb(instruction);
+  if (type === "send_email") {
+    return dataBoxPlusExecutionVerb(instruction)
+      && (normalized.includes("email") || normalized.includes("e-mail") || normalized.includes("mail") || normalized.includes("preposl") || normalized.includes("presli") || normalized.includes("prepsan") || /[^\s<>\"]+@[^\s<>\"]+\.[^\s<>\",.]+/i.test(instruction));
+  }
+  if (type === "send_data_box_reply") {
+    return dataBoxPlusExecutionVerb(instruction)
+      && (normalized.includes("datov") || normalized.includes("odpovez") || normalized.includes("datovkou"));
+  }
+  return false;
+}
+
+function dataBoxPlusPendingInputAllowsAction(pendingRow, instruction, actionType) {
+  if (!pendingRow?.id || dataBoxPlusNoOperationInstruction(instruction) || dataBoxPlusSmalltalk(instruction)) return false;
+  const payload = safeJsonParse(pendingRow.action_payload, {});
+  const pendingPlan = payload.plan && typeof payload.plan === "object" ? payload.plan : {};
+  return Boolean(
+    cleanString(payload.missingField || pendingPlan.missingField)
+    && cleanString(pendingPlan.actionType) === cleanString(actionType)
+  );
+}
+
+function groundDataBoxPlusPlan(instruction, plan, pendingInput = null) {
+  const actionType = cleanString(plan?.actionType);
+  if (!actionType || actionType === "none") return plan;
+  if (dataBoxPlusInstructionAuthorizesAction(instruction, actionType)) return plan;
+  if (dataBoxPlusPendingInputAllowsAction(pendingInput, instruction, actionType)) return plan;
+  return {
+    ...plan,
+    intent: "conversation",
+    actionType: "none",
+    outcome: "answer",
+    statusLabel: "Odpověď",
+    understoodAs: "konverzace bez jednoznačného aktuálního příkazu",
+    actionSummary: "Nebylo provedeno nic",
+    performedAction: "Nebylo provedeno nic",
+    assistantText: "Rozumím. K tomuto pokynu nemám jednoznačnou akci k provedení. Nic jsem nepřipravil ani neprovedl.",
+    missingField: "",
+    draftText: "",
+    changesMessage: false,
+    externalAction: false,
+    requiresConfirmation: false
+  };
+}
+
 function enforceDataBoxPlusExecutableIntent(instruction, plan, message = {}, currentUser = {}) {
   const normalized = searchText([instruction]);
   if (!dataBoxPlusExecutionVerb(instruction) || dataBoxPlusExplicitDraftInstruction(instruction)) return plan;
@@ -3107,7 +3183,9 @@ function enforceDataBoxPlusExecutableIntent(instruction, plan, message = {}, cur
 
 export function dataBoxPlusOpenAiPlanForTest(openAiPlan = {}, message = {}, currentUser = {}, instruction = "") {
   const plan = dataBoxPlusServerPlanFromOpenAi(openAiPlan, message, currentUser);
-  return instruction ? enforceDataBoxPlusExecutableIntent(instruction, plan, message, currentUser) : plan;
+  return instruction
+    ? groundDataBoxPlusPlan(instruction, enforceDataBoxPlusExecutableIntent(instruction, plan, message, currentUser))
+    : plan;
 }
 
 async function dataBoxPlusContactCandidates(db) {
@@ -3251,11 +3329,188 @@ async function dataBoxPlusChatHistoryForOpenAi(db, messageId) {
     const payload = safeJsonParse(row.action_payload, {});
     const instruction = cleanString(payload.originalInstruction || payload.userInstruction);
     const assistantText = cleanString(payload.assistantText);
+    const state = cleanString(row.result);
     return [
-      ...(instruction ? [{ role: "user", text: instruction }] : []),
-      ...(assistantText ? [{ role: "assistant", text: assistantText }] : [])
+      ...(instruction ? [{ role: "user", text: instruction, state }] : []),
+      ...(assistantText ? [{ role: "assistant", text: assistantText, state }] : [])
     ];
   });
+}
+
+function dataBoxPlusAvailableChatTools(chatContext = {}) {
+  const names = ["get_current_user_profile", "get_application_modules"];
+  if ((chatContext.application?.modules || []).some((module) => module.id === "fleet" && module.permittedActions?.includes("view"))) {
+    names.push("search_fleet_vehicles_by_driver");
+  }
+  return names;
+}
+
+function dataBoxPlusDriverSearchTokens(value) {
+  const stopWords = new Set(["ridic", "ridice", "ridici", "vozidlo", "vozidla", "auto", "auta", "pan", "pani"]);
+  return normalizedPerson(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !stopWords.has(token));
+}
+
+function dataBoxPlusFleetVehicleForChat(vehicle = {}) {
+  const licensePlate = cleanString(vehicle.licensePlate || vehicle.tcarsLicensePlate);
+  const label = [vehicle.brand, vehicle.model, vehicle.internalNumber]
+    .map(cleanString)
+    .filter(Boolean)
+    .filter((value, index, values) => values.findIndex((candidate) => normalizedPerson(candidate) === normalizedPerson(value)) === index)
+    .slice(0, 3)
+    .join(" ") || licensePlate || "Vozidlo";
+  return {
+    id: cleanString(vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId),
+    label,
+    licensePlate,
+    vehicleType: cleanString(vehicle.vehicleType || vehicle.bodyType),
+    assignedDriverName: cleanString(vehicle.assignedDriverName),
+    status: cleanString(vehicle.status)
+  };
+}
+
+function dataBoxPlusDriverCandidateMatches(candidate = {}, tokens = []) {
+  const candidateTokens = dataBoxPlusDriverSearchTokens(candidate.name);
+  return candidateTokens.length && tokens.every((token) => candidateTokens.includes(token));
+}
+
+function dataBoxPlusDriverIdentityForChat(fleet = {}, requestedName = "") {
+  const tokens = dataBoxPlusDriverSearchTokens(requestedName);
+  const candidates = (Array.isArray(fleet.driverCandidates) ? fleet.driverCandidates : [])
+    .filter((candidate) => dataBoxPlusDriverCandidateMatches(candidate, tokens));
+  if (candidates.length > 1) {
+    return {
+      ambiguous: true,
+      candidates: candidates.slice(0, 8).map((candidate) => ({
+        id: cleanString(candidate.id),
+        userId: cleanString(candidate.userId),
+        name: cleanString(candidate.name),
+        department: cleanString(candidate.department),
+        position: cleanString(candidate.position)
+      }))
+    };
+  }
+  if (candidates.length === 1) {
+    const candidate = candidates[0];
+    return {
+      ambiguous: false,
+      verified: true,
+      matchMode: "canonical_driver",
+      id: cleanString(candidate.id),
+      userId: cleanString(candidate.userId),
+      name: cleanString(candidate.name),
+      lookupIds: [candidate.id, candidate.userId].map(cleanString).filter(Boolean)
+    };
+  }
+
+  const matchingNames = [...new Set((Array.isArray(fleet.vehicles) ? fleet.vehicles : [])
+    .map((vehicle) => cleanString(vehicle.assignedDriverName))
+    .filter(Boolean)
+    .filter((name) => dataBoxPlusDriverCandidateMatches({ name }, tokens)))];
+  if (matchingNames.length > 1) {
+    return {
+      ambiguous: true,
+      candidates: matchingNames.slice(0, 8).map((name) => ({ id: "", userId: "", name, department: "", position: "" }))
+    };
+  }
+  return {
+    ambiguous: false,
+    verified: false,
+    matchMode: matchingNames.length === 1 ? "fleet_assigned_name" : "no_match",
+    id: "",
+    userId: "",
+    name: matchingNames[0] || requestedName,
+    lookupIds: []
+  };
+}
+
+export async function executeDataBoxPlusChatReadTool(env, currentUser, chatContext, call = {}) {
+  const name = cleanString(call.name);
+  const args = call.arguments && typeof call.arguments === "object" ? call.arguments : {};
+  if (name === "get_current_user_profile") {
+    return { ok: true, verified: true, user: chatContext.currentUser };
+  }
+  if (name === "get_application_modules") {
+    return {
+      ok: true,
+      verified: true,
+      application: {
+        name: cleanString(chatContext.application?.name),
+        purpose: cleanString(chatContext.application?.purpose),
+        modules: Array.isArray(chatContext.application?.modules) ? chatContext.application.modules : []
+      }
+    };
+  }
+  if (name !== "search_fleet_vehicles_by_driver") {
+    return { ok: false, verified: false, errorCode: "unsupported_chat_tool" };
+  }
+  const fleetAllowed = (chatContext.application?.modules || [])
+    .some((module) => module.id === "fleet" && module.permittedActions?.includes("view"));
+  if (!fleetAllowed) {
+    return { ok: false, verified: false, errorCode: "fleet_permission_denied" };
+  }
+  const requestedDriver = cleanString(args.driverName);
+  const driverName = dataBoxPlusSelfReference(requestedDriver) || ["ja", "moje", "muj"].includes(normalizedPerson(requestedDriver))
+    ? cleanString(chatContext.currentUser?.name)
+    : requestedDriver;
+  const driverTokens = dataBoxPlusDriverSearchTokens(driverName);
+  if (!driverTokens.length) {
+    return { ok: false, verified: false, errorCode: "driver_name_missing" };
+  }
+  try {
+    const fleet = await loadFleetVehiclesWithAssignments(env, currentUser);
+    if (cleanString(fleet.apiStatus) !== "ready") {
+      return {
+        ok: false,
+        verified: false,
+        errorCode: "fleet_data_unavailable",
+        source: cleanString(fleet.source || fleet.provider)
+      };
+    }
+    const identity = dataBoxPlusDriverIdentityForChat(fleet, driverName);
+    if (identity.ambiguous) {
+      return {
+        ok: true,
+        verified: true,
+        readOnly: true,
+        ambiguous: true,
+        driverName,
+        source: cleanString(fleet.source || fleet.provider),
+        candidates: identity.candidates,
+        count: 0,
+        vehicles: []
+      };
+    }
+    const identityIds = new Set(identity.lookupIds || []);
+    const resolvedDriverName = normalizedPerson(identity.name);
+    const vehicles = (Array.isArray(fleet.vehicles) ? fleet.vehicles : [])
+      .filter((vehicle) => {
+        const assignedDriverId = cleanString(vehicle.assignedDriverId);
+        if (assignedDriverId && identityIds.has(assignedDriverId)) return true;
+        if (resolvedDriverName && normalizedPerson(vehicle.assignedDriverName) === resolvedDriverName) return true;
+        if (identity.matchMode !== "no_match") return false;
+        const assignedTokens = dataBoxPlusDriverSearchTokens(vehicle.assignedDriverName);
+        return assignedTokens.length && driverTokens.every((token) => assignedTokens.includes(token));
+      })
+      .map(dataBoxPlusFleetVehicleForChat);
+    return {
+      ok: true,
+      verified: true,
+      readOnly: true,
+      driverName: identity.name || driverName,
+      driverIdentityVerified: identity.verified,
+      matchMode: identity.matchMode,
+      source: cleanString(fleet.source || fleet.provider),
+      count: vehicles.length,
+      vehicles
+    };
+  } catch (error) {
+    console.error("data_box_plus.chat_fleet_tool_failed", { message: cleanString(error?.message) });
+    return { ok: false, verified: false, errorCode: "fleet_lookup_failed" };
+  }
 }
 
 async function dataBoxPlusLearningRulesForOpenAi(db) {
@@ -3791,6 +4046,7 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
     const attachments = await db.prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name").bind(id).all();
     const actor = actorName(currentUser);
     const pendingConfirmation = await latestDataBoxPlusPendingConfirmation(db, id, actor);
+    const pendingInput = await latestPendingDataBoxPlusChatAction(db, id, actor);
     const requestedConfirmationId = cleanString(body.confirmationId);
     const decision = dataBoxPlusConfirmationDecision(instruction);
     if (pendingConfirmation?.id && requestedConfirmationId && requestedConfirmationId !== cleanString(pendingConfirmation.id)) {
@@ -3844,6 +4100,40 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
         .bind(`${actor} zadal nový pokyn. Předchozí návrh byl uzavřen bez provedení.`, pendingConfirmation.id)
         .run();
     }
+    if (dataBoxPlusNoOperationInstruction(instruction)) {
+      await closePendingDataBoxPlusChatActions(
+        db,
+        id,
+        actor,
+        "cancelled",
+        `${actor} odmítl nebo ukončil rozpracovaný záměr. Nic nebylo provedeno.`
+      );
+      const noActionPlan = {
+        intent: "no_action",
+        actionType: "none",
+        outcome: "answer",
+        statusLabel: "Bez akce",
+        understoodAs: "ukončení rozpracovaného záměru bez provedení",
+        actionSummary: "Nebylo provedeno nic",
+        performedAction: "Nebylo provedeno nic",
+        assistantText: "Rozumím. Nic neprovedu.",
+        missingField: "",
+        draftText: "",
+        changesMessage: false,
+        externalAction: false,
+        requiresConfirmation: false
+      };
+      const auditId = await logDataBoxPlusOpenAiChatTurn(db, id, actor, instruction, noActionPlan, { provider: "server" });
+      return {
+        apiStatus: "ready",
+        status: "answer",
+        action: noActionPlan,
+        message: await getDataBoxPlusMessage(env, id),
+        auditId,
+        provider: "server",
+        notice: noActionPlan.assistantText
+      };
+    }
     await closePendingDataBoxPlusChatActions(
       db,
       id,
@@ -3871,6 +4161,7 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
         learningRules,
         appContext: chatContext.application,
         currentUser: chatContext.currentUser,
+        availableTools: dataBoxPlusAvailableChatTools(chatContext),
         today: dataBoxPlusPragueDate(),
         message: {
           senderName: message.sender_name,
@@ -3881,6 +4172,8 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
           summary: message.summary,
           attachmentText: (attachments.results || []).map((attachment) => cleanString(attachment.extracted_text)).filter(Boolean).join("\n\n")
         }
+      }, {
+        executeTool: (call) => executeDataBoxPlusChatReadTool(env, currentUser, chatContext, call)
       });
     } catch (error) {
       const messageText = error instanceof DataBoxPlusOpenAiError
@@ -3907,6 +4200,7 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
 
     let plan = dataBoxPlusServerPlanFromOpenAi(openAi.plan, message, currentUser);
     plan = enforceDataBoxPlusExecutableIntent(instruction, plan, message, currentUser);
+    plan = groundDataBoxPlusPlan(instruction, plan, pendingInput);
     plan = await completeDataBoxPlusActionDetails(db, plan);
     if (plan.outcome === "waiting_confirmation" && !/Mám provést\?\s*$/i.test(plan.assistantText)) {
       plan.assistantText = `${cleanString(plan.assistantText).replace(/\s+$/, "")} Mám provést?`.trim();

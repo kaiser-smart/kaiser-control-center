@@ -300,6 +300,114 @@ try {
   assert.equal(database.messageMutationCount, 1);
   assert.equal(openAiRequestCount, 1);
 
+  const noActionDatabase = new FakeD1();
+  const noActionResult = await executeDataBoxPlusMessageInstruction(
+    { ...env, SMART_ODPADY_DB: noActionDatabase },
+    noActionDatabase.message.id,
+    currentUser,
+    { instruction: "nic" }
+  );
+  assert.equal(noActionResult.status, "answer");
+  assert.equal(noActionResult.action.actionType, "none");
+  assert.equal(noActionResult.action.requiresConfirmation, false);
+  assert.equal(noActionResult.notice, "Rozumím. Nic neprovedu.");
+  assert.equal(noActionDatabase.messageMutationCount, 0);
+  assert.equal(openAiRequestCount, 1);
+
+  const orphanYesDatabase = new FakeD1();
+  currentOpenAiPlan = {
+    outcome: "ready_for_confirmation",
+    intent: "archive_info",
+    assistantText: "Mohu ji archivovat jako informativní. Mám provést?",
+    missingField: "",
+    action: {
+      type: "archive_info",
+      summary: "Archivovat zprávu jako informativní",
+      recipientName: "",
+      recipientEmail: "",
+      recipientPhone: "",
+      recipientDataBoxId: "",
+      subject: "",
+      body: "",
+      assignedTo: "",
+      noteText: "",
+      dueDate: ""
+    }
+  };
+  const orphanYes = await executeDataBoxPlusMessageInstruction(
+    { ...env, SMART_ODPADY_DB: orphanYesDatabase },
+    orphanYesDatabase.message.id,
+    currentUser,
+    { instruction: "ano" }
+  );
+  assert.equal(orphanYes.status, "answer");
+  assert.equal(orphanYes.action.actionType, "none");
+  assert.equal(orphanYes.action.requiresConfirmation, false);
+  assert.equal(orphanYesDatabase.messageMutationCount, 0);
+
+  const greetingDatabase = new FakeD1();
+  currentOpenAiPlan = {
+    outcome: "ready_for_confirmation",
+    intent: "assign_to_user",
+    assistantText: "Předám zprávu Lucii Ježkové. Mám provést?",
+    missingField: "",
+    action: {
+      type: "assign_to_user",
+      summary: "Předat Lucii Ježkové",
+      recipientName: "Lucie Ježková",
+      recipientEmail: "",
+      recipientPhone: "",
+      recipientDataBoxId: "",
+      subject: "",
+      body: "",
+      assignedTo: "Lucie Ježková",
+      noteText: "",
+      dueDate: ""
+    }
+  };
+  const greeting = await executeDataBoxPlusMessageInstruction(
+    { ...env, SMART_ODPADY_DB: greetingDatabase },
+    greetingDatabase.message.id,
+    currentUser,
+    { instruction: "ahoj" }
+  );
+  assert.equal(greeting.status, "answer");
+  assert.equal(greeting.action.actionType, "none");
+  assert.equal(greeting.action.requiresConfirmation, false);
+  assert.doesNotMatch(greeting.notice, /Lucii|Mám provést/);
+  assert.equal(greetingDatabase.messageMutationCount, 0);
+
+  const selfMailDatabase = new FakeD1();
+  currentOpenAiPlan = {
+    outcome: "needs_input",
+    intent: "send_email",
+    assistantText: "Kam přesně to mám poslat? Potřebuji cílový e-mail.",
+    missingField: "recipientEmail",
+    action: {
+      type: "send_email",
+      summary: "Přeposlat datovou zprávu e-mailem",
+      recipientName: "",
+      recipientEmail: "",
+      recipientPhone: "",
+      recipientDataBoxId: "",
+      subject: "",
+      body: "",
+      assignedTo: "",
+      noteText: "",
+      dueDate: ""
+    }
+  };
+  const selfMail = await executeDataBoxPlusMessageInstruction(
+    { ...env, SMART_ODPADY_DB: selfMailDatabase },
+    selfMailDatabase.message.id,
+    { id: "radim-oplustil", name: "Radim Opluštil", email: "oplustil@kaiserservis.cz", role: "admin", active: true, status: "active" },
+    { instruction: "přeposlal na můj mail" }
+  );
+  assert.equal(selfMail.status, "waiting_confirmation");
+  assert.equal(selfMail.action.actionType, "send_email");
+  assert.equal(selfMail.action.recipientEmail, "oplustil@kaiserservis.cz");
+  assert.doesNotMatch(selfMail.notice, /Kam přesně|Potřebuji cílový e-mail/);
+
   const emailDatabase = new FakeD1();
   const emailEnv = {
     ...env,
@@ -472,7 +580,7 @@ try {
   );
   assert.equal(failedDatabase.rules.length, 0);
   assert.equal(failedDatabase.actionLogs.some((row) => row.result === "failed"), true);
-  assert.equal(openAiRequestCount, 5);
+  assert.equal(openAiRequestCount, 8);
 } finally {
   globalThis.fetch = originalFetch;
 }

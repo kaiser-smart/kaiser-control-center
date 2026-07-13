@@ -44,7 +44,7 @@ const result = await interpretDataBoxPlusChat({
     summary: "Je potřeba doplnit dokument.",
     attachmentText: "Lhůta pro doplnění je 15. 7. 2026."
   },
-  history: [{ role: "assistant", text: "Komu mám zprávu předat?" }],
+  history: [{ role: "assistant", text: "Komu mám zprávu předat?", state: "superseded" }],
   learningRules: [{
     description: "Potvrzené předání Radimovi",
     conditions: "Odesílatel: Úřad",
@@ -77,6 +77,7 @@ assert.match(requestSnapshot.body.input, /Potvrzené předání Radimovi/);
 assert.match(requestSnapshot.body.input, /oplustil@kaiserservis\.cz/);
 assert.match(requestSnapshot.body.input, /Kaiser Smart/);
 assert.match(requestSnapshot.body.input, /\/vozovy-park/);
+assert.match(requestSnapshot.body.input, /superseded/);
 assert.match(requestSnapshot.body.instructions, /nedůvěryhodný pracovní podklad/);
 assert.match(requestSnapshot.body.instructions, /skutečný úkon, ne přípravu návrhu/);
 assert.match(requestSnapshot.body.instructions, /připrav odvolání/);
@@ -86,6 +87,95 @@ assert.doesNotMatch(requestSnapshot.body.input, /test-openai-key/);
 assert.equal(result.provider, "OpenAI");
 assert.equal(result.responseId, "resp-test");
 assert.equal(result.plan.action.type, "send_email");
+
+const fleetAnswerPlan = {
+  outcome: "answer",
+  intent: "fleet_lookup",
+  assistantText: "Řidič Opluštil má přiřazená vozidla KS 101 a KS 204.",
+  missingField: "",
+  action: {
+    type: "none",
+    summary: "Vypsat ověřená vozidla řidiče",
+    recipientName: "",
+    recipientEmail: "",
+    recipientPhone: "",
+    recipientDataBoxId: "",
+    subject: "",
+    body: "",
+    assignedTo: "",
+    noteText: "",
+    dueDate: ""
+  }
+};
+const fleetRequests = [];
+const fleetToolCalls = [];
+const fleetResult = await interpretDataBoxPlusChat({
+  OPENAI_API_KEY: "test-openai-key",
+  DATA_BOX_PLUS_OPENAI_MODEL: "gpt-test"
+}, {
+  instruction: "ano",
+  availableTools: ["get_current_user_profile", "search_fleet_vehicles_by_driver"],
+  history: [
+    { role: "user", text: "vyjmenuj vozidla u kterých je řidič Opluštil", state: "answer" },
+    { role: "assistant", text: "Mohu dohledat vozidla v modulu Vozidla podle řidiče Opluštil.", state: "answer" }
+  ],
+  currentUser: { name: "Radim Opluštil", email: "oplustil@kaiserservis.cz" },
+  appContext: { name: "Kaiser Smart", modules: [{ id: "fleet", title: "Vozidla", route: "/vozovy-park" }] },
+  message: { subject: "Informativní zpráva" }
+}, {
+  async executeTool(call) {
+    fleetToolCalls.push(call);
+    return {
+      ok: true,
+      verified: true,
+      readOnly: true,
+      driverName: "Opluštil",
+      count: 2,
+      vehicles: [
+        { label: "KS 101", licensePlate: "1AB 0101" },
+        { label: "KS 204", licensePlate: "2AB 0204" }
+      ]
+    };
+  },
+  fetchImpl: async (url, options) => {
+    const body = JSON.parse(options.body);
+    fleetRequests.push(body);
+    if (fleetRequests.length === 1) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            id: "resp-fleet-tool",
+            output: [{
+              type: "function_call",
+              call_id: "call-fleet-1",
+              name: "search_fleet_vehicles_by_driver",
+              arguments: JSON.stringify({ driverName: "Opluštil" })
+            }]
+          };
+        }
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { id: "resp-fleet-final", output_text: JSON.stringify(fleetAnswerPlan) };
+      }
+    };
+  }
+});
+assert.equal(fleetRequests.length, 2);
+assert.deepEqual(fleetRequests[0].tool_choice, { type: "function", name: "search_fleet_vehicles_by_driver" });
+assert.equal(fleetRequests[0].parallel_tool_calls, false);
+assert.equal(fleetRequests[1].tool_choice, "none");
+assert.ok(Array.isArray(fleetRequests[1].input));
+assert.match(JSON.stringify(fleetRequests[1].input), /function_call_output/);
+assert.match(JSON.stringify(fleetRequests[1].input), /KS 101/);
+assert.deepEqual(fleetToolCalls, [{ name: "search_fleet_vehicles_by_driver", arguments: { driverName: "Opluštil" } }]);
+assert.deepEqual(fleetResult.usedTools, ["search_fleet_vehicles_by_driver"]);
+assert.equal(fleetResult.plan.action.type, "none");
 
 const forcedAppealRequest = openAiTest.requestPayload("gpt-test", {
   instruction: "připrav odvolání",
@@ -223,6 +313,53 @@ const answerPlan = dataBoxPlusOpenAiPlanForTest({
 assert.equal(answerPlan.outcome, "answer");
 assert.equal(answerPlan.requiresConfirmation, false);
 assert.equal(answerPlan.changesMessage, false);
+
+const hallucinatedAssignment = dataBoxPlusOpenAiPlanForTest({
+  outcome: "ready_for_confirmation",
+  intent: "assign_to_user",
+  assistantText: "Předám zprávu Lucii Ježkové. Mám provést?",
+  missingField: "",
+  action: {
+    type: "assign_to_user",
+    summary: "Předat Lucii Ježkové",
+    recipientName: "Lucie Ježková",
+    recipientEmail: "",
+    recipientPhone: "",
+    recipientDataBoxId: "",
+    subject: "",
+    body: "",
+    assignedTo: "Lucie Ježková",
+    noteText: "",
+    dueDate: ""
+  }
+}, { status: "Nová" }, { name: "Radim Opluštil" }, "nic");
+assert.equal(hallucinatedAssignment.actionType, "none");
+assert.equal(hallucinatedAssignment.outcome, "answer");
+assert.equal(hallucinatedAssignment.requiresConfirmation, false);
+assert.doesNotMatch(hallucinatedAssignment.assistantText, /Lucii|Mám provést/);
+
+const revivedArchive = dataBoxPlusOpenAiPlanForTest({
+  outcome: "ready_for_confirmation",
+  intent: "archive_info",
+  assistantText: "Mohu ji archivovat jako informativní. Mám provést?",
+  missingField: "",
+  action: {
+    type: "archive_info",
+    summary: "Archivovat zprávu",
+    recipientName: "",
+    recipientEmail: "",
+    recipientPhone: "",
+    recipientDataBoxId: "",
+    subject: "",
+    body: "",
+    assignedTo: "",
+    noteText: "",
+    dueDate: ""
+  }
+}, { status: "Nová" }, { name: "Radim Opluštil" }, "ano");
+assert.equal(revivedArchive.actionType, "none");
+assert.equal(revivedArchive.outcome, "answer");
+assert.equal(revivedArchive.requiresConfirmation, false);
 
 assert.deepEqual(dataBoxPlusOpenAiStatus({}), {
   configured: false,

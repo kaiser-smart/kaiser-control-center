@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.546",
+  "version": "0.1.547",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,7 @@
     "test:dashboard": "node scripts/main-dashboard.test.mjs",
     "test:vehicle-tracking": "node scripts/vehicle-tracking-maps-config.test.mjs && node scripts/vehicle-tracking-history.test.mjs && node scripts/vehicle-tracking-preferences.test.mjs",
     "test:receivables": "node scripts/receivables-engines.test.mjs && node scripts/receivables-rating-store.test.mjs && node scripts/receivables-navigation.test.mjs && node scripts/receivables-invoice-sync-runner.test.mjs && node scripts/receivables-incremental-ledger-diff.test.mjs && node scripts/receivables-payment-reconciliation.test.mjs",
-    "test:data-box-plus": "node scripts/data-box-plus-chat-context.test.mjs && node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs && node scripts/data-box-plus-command-center.test.mjs",
+    "test:data-box-plus": "node scripts/data-box-plus-chat-context.test.mjs && node scripts/data-box-plus-chat-tools.test.mjs && node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs && node scripts/data-box-plus-command-center.test.mjs",
     "test:customer-messaging": "node scripts/customer-messaging.test.mjs",
     "test:build-assets": "node scripts/version-module-imports.test.mjs && node scripts/build.mjs",
     "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs && node scripts/collection-daily-routes.test.mjs && node scripts/collection-daily-routes-scale.test.mjs && node scripts/collection-routes-test-data.test.mjs && node scripts/collection-routes-test-store.test.mjs && node scripts/collection-routes-readonly-calculator.test.mjs && node scripts/collection-route-here-optimization.test.mjs && node scripts/collection-routes-here-map-image.test.mjs && node scripts/collection-routes-test-gps.test.mjs && node scripts/collection-routes-test-ui.test.mjs",

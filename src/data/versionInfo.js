@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.546"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.547"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky: chat drží aktuální záměr a čte skutečná data",
+    text: "Serverový AI chat už neobnoví zrušenou archivaci ani nevytvoří předání z odpovědi nic, ahoj nebo osiřelého ano. Vlastní profil čte z kanonického přihlášeného uživatele a vozidla podle řidiče dohledává read-only nástrojem z aktuálního Vozového parku s kontrolou oprávnění."
+  },
   {
     title: "HP: vždy aktuální verze a novinky",
     text: "Produkční build nově přidává verzi nasazení ke všem vnitřním JavaScript modulům. Po nové verzi se proto okamžitě načte aktuální buildMeta i seznam novinek a prohlížeč nezůstane ve staré čtyřhodinové cache."
