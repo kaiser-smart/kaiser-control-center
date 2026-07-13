@@ -3006,11 +3006,13 @@ function dataBoxPlusExecutionVerb(instruction) {
     .some((token) => normalized.includes(token));
 }
 
-function enforceDataBoxPlusExecutableIntent(instruction, plan, message = {}) {
+function enforceDataBoxPlusExecutableIntent(instruction, plan, message = {}, currentUser = {}) {
   const normalized = searchText([instruction]);
   if (!dataBoxPlusExecutionVerb(instruction) || dataBoxPlusExplicitDraftInstruction(instruction)) return plan;
 
-  const recipient = emailRecipientFromInstruction(instruction, normalized);
+  const selfEmail = normalizeEmail(currentUser?.email);
+  const selfTarget = selfEmail && (normalized.includes("muj email") || normalized.includes("moje email") || normalized.includes("muj mail") || normalized.includes("moje mail"));
+  const recipient = selfTarget ? { email: selfEmail, label: cleanString(currentUser?.name) || selfEmail } : emailRecipientFromInstruction(instruction, normalized);
   const hasEmailTarget = Boolean(recipient.email || plan.recipientEmail);
   const emailContext = hasEmailTarget && (
     normalized.includes("email")
@@ -3900,7 +3902,7 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
     }
 
     let plan = dataBoxPlusServerPlanFromOpenAi(openAi.plan, message, currentUser);
-    plan = enforceDataBoxPlusExecutableIntent(instruction, plan, message);
+    plan = enforceDataBoxPlusExecutableIntent(instruction, plan, message, currentUser);
     plan = await completeDataBoxPlusActionDetails(db, plan);
     if (plan.outcome === "waiting_confirmation" && !/Mám provést\?\s*$/i.test(plan.assistantText)) {
       plan.assistantText = `${cleanString(plan.assistantText).replace(/\s+$/, "")} Mám provést?`.trim();
