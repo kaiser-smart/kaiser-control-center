@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.536"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.537"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Poloha vozidel: stabilní marker GPS",
+    text: "Vozidlo na mapě zůstává stále vodorovné bez rotace podle azimutu. Informační cedule je těsně nad vozidlem a samostatná šipka pod vozidlem označuje přesnou GPS polohu; data T-Cars ani výběr vozidla se nemění."
+  },
   {
     title: "Svozové trasy: HERE silniční read-only pilot",
     text: "TEST trasa má navazující serverový pilot HERE Tour Planning pro nákladní vozidla v ČR. Ověřuje jednu komoditu, souřadnice, směnu, rozměry vozidel, kapacitu a správné místo výsypu; placený výpočet lze spustit jen ručně po doplnění D1 konfigurace a serverového OAuth. Výsledek má audit, nic nepřepisuje v provozní trase a nic neodesílá řidičům ani zákazníkům."
