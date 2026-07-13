@@ -107,10 +107,12 @@ const draftHistory = dataBoxPlusHistoryChatEntries([{
   payload: {
     originalInstruction: "odpověz jim",
     outcome: "draft_ready",
-    assistantText: "intent: prepare_reply"
+    assistantText: "intent: prepare_reply",
+    draftText: "Dobrý den,\n\npodáváme tímto odvolání proti příkazu."
   }
 }]);
-assert.equal(draftHistory[1].text, "Návrh odpovědi je připravený. Nic nebylo odesláno.");
+assert.match(draftHistory[1].text, /^Návrh odpovědi je připravený\. Nic nebylo odesláno\./);
+assert.match(draftHistory[1].text, /podáváme tímto odvolání proti příkazu/);
 
 const technicalHistory = dataBoxPlusHistoryChatEntries([{
   id: "technical",

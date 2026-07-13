@@ -2973,6 +2973,7 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
   const recipientName = cleanString(action.recipientName);
   const assignedTo = cleanString(action.assignedTo || recipientName || defaults.assignedTo);
   const summary = cleanString(action.summary || "Navržená akce");
+  const draftText = type === "prepare_reply" ? cleanString(action.body) : "";
   return {
     intent: cleanString(openAiPlan.intent || type || "conversation"),
     actionType: type,
@@ -2982,7 +2983,7 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
     actionSummary: summary,
     performedAction: "Nebylo provedeno nic",
     assistantText: draftReady
-      ? "Návrh jsem připravil do pole Odpověď. Nic nebylo odesláno."
+      ? dataBoxPlusDraftAssistantText(draftText)
       : cleanString(openAiPlan.assistantText || "Jak vám mohu s touto zprávou pomoci?"),
     missingField: cleanString(openAiPlan.missingField),
     messageStatus: cleanString(defaults.messageStatus || message.status || "Nová"),
@@ -2996,7 +2997,7 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
     body: cleanString(action.body),
     noteText: cleanString(action.noteText),
     dueDate: cleanString(action.dueDate),
-    draftText: type === "prepare_reply" ? cleanString(action.body) : "",
+    draftText,
     changesMessage: Boolean(defaults.changesMessage),
     externalAction: Boolean(defaults.externalAction),
     requiresConfirmation: ready,
@@ -3010,6 +3011,12 @@ function dataBoxPlusServerPlanFromOpenAi(openAiPlan = {}, message = {}, currentU
       subject: cleanString(message.subject)
     }
   };
+}
+
+export function dataBoxPlusDraftAssistantText(draftText = "") {
+  const draft = cleanString(draftText);
+  const notice = "Návrh odpovědi je připravený. Nic nebylo odesláno.";
+  return draft ? `${notice}\n\n${draft}` : notice;
 }
 
 function dataBoxPlusExplicitDraftInstruction(instruction) {

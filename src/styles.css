@@ -36362,6 +36362,7 @@ body:has(.ds-plus-page) {
   font-size: 0.9rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .ds-plus-chat-message--user {

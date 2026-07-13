@@ -8,6 +8,12 @@ function eventTime(value) {
 }
 
 const SIMPLE_CHAT_HELP = "Napište mi, co mám s touto datovou zprávou udělat. Můžu ji archivovat, označit jako vyřízenou, odeslat odpověď nebo předat kolegovi.";
+const DRAFT_READY_NOTICE = "Návrh odpovědi je připravený. Nic nebylo odesláno.";
+
+export function dataBoxPlusVisibleDraftText(draftText = "") {
+  const draft = cleanText(draftText);
+  return draft ? `${DRAFT_READY_NOTICE}\n\n${draft}` : DRAFT_READY_NOTICE;
+}
 
 function simpleChatWords(value) {
   return cleanText(value)
@@ -35,7 +41,7 @@ function humanAssistantText(event, payload, instruction) {
     return SIMPLE_CHAT_HELP;
   }
   if (outcome === "draft_ready") {
-    return "Návrh odpovědi je připravený. Nic nebylo odesláno.";
+    return dataBoxPlusVisibleDraftText(payload.draftText || payload.plan?.draftText);
   }
   const raw = cleanText(payload.assistantText || event?.assistantText || event?.auditNote || payload.performedAction);
   const performed = raw.match(/Systém provedl:\s*(.+?)(?:\.\s*Nový stav:|$)/i)?.[1];

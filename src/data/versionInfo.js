@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.547"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.548"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky: připravený návrh je opravdu vidět",
+    text: "Když chat sepíše odvolání, vyjádření nebo jiný návrh odpovědi, zobrazí celý text přímo v konverzaci. Už netvrdí jen, že návrh připravil, aniž by ho uživateli ukázal."
+  },
   {
     title: "Datové schránky: chat drží aktuální záměr a čte skutečná data",
     text: "Serverový AI chat už neobnoví zrušenou archivaci ani nevytvoří předání z odpovědi nic, ahoj nebo osiřelého ano. Vlastní profil čte z kanonického přihlášeného uživatele a vozidla podle řidiče dohledává read-only nástrojem z aktuálního Vozového parku s kontrolou oprávnění."

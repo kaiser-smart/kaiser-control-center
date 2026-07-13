@@ -289,7 +289,8 @@ assert.equal(appealDraft.actionType, "prepare_reply");
 assert.equal(appealDraft.outcome, "draft_ready");
 assert.equal(appealDraft.requiresConfirmation, false);
 assert.match(appealDraft.draftText, /Odvolání proti příkazu/);
-assert.equal(appealDraft.assistantText, "Návrh jsem připravil do pole Odpověď. Nic nebylo odesláno.");
+assert.match(appealDraft.assistantText, /^Návrh odpovědi je připravený\. Nic nebylo odesláno\./);
+assert.match(appealDraft.assistantText, /Kaiser servis, spol\. s r\.o\. podává v zákonné lhůtě odvolání/);
 
 const answerPlan = dataBoxPlusOpenAiPlanForTest({
   outcome: "answer",
