@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const mantraSource = readFileSync(new URL("../src/data/collectionRoutesMantra.js", import.meta.url), "utf8");
+const calculatorSource = readFileSync(new URL("../src/data/collectionRoutesReadonlyCalculator.js", import.meta.url), "utf8");
 const wranglerSource = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
 
 for (const marker of [
@@ -31,10 +32,13 @@ for (const marker of [
   "data-collection-routes-mantra-toggle",
   "mantraExpanded = !collectionRoutesPilotState.mantraExpanded",
   "NÁHLED · NIC NESPOUŠTÍ",
-  "Ruční TEST pilot · bez AI optimalizace",
-  "Připravit ruční TEST návrh",
-  "ruční pilot bez AI",
-  "TEST · RUČNÍ PILOT"
+  "TEST výpočetní pilot · bez AI a navigace",
+  "Ověřit stanoviště pro datum",
+  "Spočítat read-only návrh A/B/C",
+  "data-collection-routes-readonly-calculate",
+  "data-collection-routes-readonly-calculation",
+  "calculateCollectionRoutesReadonlyPlan",
+  "TEST · READ-ONLY VÝPOČET"
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
@@ -103,7 +107,10 @@ for (const marker of [
   "@media (max-width: 640px)",
   ".collection-routes-mantra",
   ".collection-routes-mantra__highlights",
-  ".collection-daily-routes__reality"
+  ".collection-daily-routes__reality",
+  ".collection-routes-calculation",
+  ".collection-routes-calculation__vehicles",
+  ".collection-routes-calculation__truth"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }
@@ -134,6 +141,26 @@ assert.ok(
     mantraSource.includes("nezapisuje do Vistosu") &&
     mantraSource.includes("Dokud práh není schválený, neodesílej automatické upozornění"),
   "Read-only mantra musí přímo zakazovat falešnou automatizaci, produkční zápisy a neodsouhlasené alerty."
+);
+
+for (const marker of [
+  "120: 3",
+  "240: 3",
+  "1100: 5",
+  "knownWeightTons",
+  "estimatedDumpCount",
+  "READ-ONLY · POTŘEBUJE DOPLNĚNÍ",
+  "Neurčuje pořadí ulic ani optimální trasu",
+  "writesData: false",
+  "sendsNotifications: false"
+]) {
+  assert.ok(calculatorSource.includes(marker), `Read-only výpočetní jádro postrádá: ${marker}`);
+}
+assert.ok(
+  !calculatorSource.includes("localStorage") &&
+    !calculatorSource.includes("sessionStorage") &&
+    !calculatorSource.includes("fetch("),
+  "Výpočetní jádro nesmí ukládat data ani samo volat API."
 );
 
 assert.ok(

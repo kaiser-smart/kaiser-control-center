@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.534"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.535"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: read-only výpočet A/B/C",
+    text: "TEST pilot po ověření svozového dne deterministicky rozděluje stanoviště mezi vozy A, B a C podle čistého času obsluhy, odhadované hmotnosti a známých kapacit. Ukazuje provozní okna a chybějící podklady; nic neukládá, nepočítá pořadí ulic ani km a nespouští AI, navigaci nebo komunikaci."
+  },
   {
     title: "Svozové trasy: provozní mantra autopilota",
     text: "Záložka Svozové trasy má rozbalitelný read-only prompt s pravidly svozových dnů, kapacit, výsypů, zaměstnanců, komunikace a budoucího učení. TEST denní plán je nově pravdivě označený jako ruční pilot bez AI optimalizace; nic se samo nepřeplánuje ani neodešle."

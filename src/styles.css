@@ -37061,7 +37061,8 @@ body:has(.ds-plus-page) {
   min-width: 0;
 }
 
-.collection-daily-route-form > div small {
+.collection-daily-route-form > div small,
+.collection-daily-route-form label small {
   color: var(--steel);
   font-size: 0.75rem;
   font-weight: 650;
@@ -37209,6 +37210,243 @@ body:has(.ds-plus-page) {
   color: var(--steel);
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.collection-routes-calculation {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(117, 189, 37, 0.34);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(244, 251, 237, 0.98), #fff 58%);
+}
+
+.collection-routes-calculation__head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.collection-routes-calculation__head h4 {
+  margin: 2px 0 4px;
+  color: var(--ink);
+  font-size: 1.15rem;
+}
+
+.collection-routes-calculation__head p:last-child {
+  max-width: 760px;
+  margin: 0;
+  color: var(--steel);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.collection-routes-calculation__status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 30px;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid rgba(190, 126, 25, 0.28);
+  border-radius: 999px;
+  background: #fff7e8;
+  color: #75501a;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.025em;
+}
+
+.collection-routes-calculation__totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collection-routes-calculation__totals article {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(66, 80, 74, 0.11);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.collection-routes-calculation__totals span,
+.collection-routes-calculation__totals small {
+  color: var(--steel);
+  font-size: 0.74rem;
+}
+
+.collection-routes-calculation__totals span {
+  font-weight: 900;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.collection-routes-calculation__totals strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 1.16rem;
+}
+
+.collection-routes-calculation__vehicles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.collection-routes-calculation__vehicle {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid rgba(66, 80, 74, 0.13);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.collection-routes-calculation__vehicle > header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.collection-routes-calculation__vehicle > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.collection-routes-calculation__vehicle > header span {
+  color: var(--steel);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.collection-routes-calculation__vehicle > header strong {
+  color: var(--ink);
+}
+
+.collection-routes-calculation__vehicle > header b {
+  color: #467d1c;
+  font-size: 0.77rem;
+  white-space: nowrap;
+}
+
+.collection-routes-calculation__vehicle-kpis {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #f7f9f5;
+  color: var(--steel);
+  font-size: 0.76rem;
+}
+
+.collection-routes-calculation__vehicle-kpis span {
+  overflow-wrap: anywhere;
+}
+
+.collection-routes-calculation__vehicle-kpis strong {
+  color: var(--ink);
+}
+
+.collection-routes-calculation__vehicle > ul,
+.collection-routes-calculation__truth ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collection-routes-calculation__waste {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid rgba(66, 80, 74, 0.1);
+  border-left: 4px solid rgba(117, 189, 37, 0.54);
+  border-radius: 9px;
+  background: #fbfcfa;
+}
+
+.collection-routes-calculation__waste--verify {
+  border-left-color: rgba(190, 126, 25, 0.72);
+  background: #fffaf1;
+}
+
+.collection-routes-calculation__waste--blocked {
+  border-left-color: rgba(154, 45, 36, 0.72);
+  background: #fff7f5;
+}
+
+.collection-routes-calculation__waste > div {
+  display: grid;
+  gap: 2px;
+}
+
+.collection-routes-calculation__waste strong {
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.collection-routes-calculation__waste span,
+.collection-routes-calculation__waste small {
+  overflow-wrap: anywhere;
+  color: var(--steel);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.collection-routes-calculation__truth {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.collection-routes-calculation__truth article {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(190, 126, 25, 0.19);
+  border-radius: 10px;
+  background: #fffaf1;
+}
+
+.collection-routes-calculation__truth strong {
+  color: #75501a;
+}
+
+.collection-routes-calculation__truth ul {
+  list-style: disc;
+  padding-left: 18px;
+  color: var(--steel);
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.collection-routes-calculation > footer {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-left: 4px solid rgba(117, 189, 37, 0.64);
+  border-radius: 9px;
+  background: #f1f9e9;
+}
+
+.collection-routes-calculation > footer strong {
+  color: #467d1c;
+}
+
+.collection-routes-calculation > footer span {
+  color: var(--steel);
+  font-size: 0.8rem;
 }
 
 .collection-daily-route-assign label {
@@ -37789,6 +38027,15 @@ body:has(.ds-plus-page) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .collection-routes-calculation__totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collection-routes-calculation__vehicles,
+  .collection-routes-calculation__truth {
+    grid-template-columns: 1fr;
+  }
+
   .collection-daily-route-audit li {
     grid-template-columns: 1fr;
     gap: 3px;
@@ -37849,7 +38096,8 @@ body:has(.ds-plus-page) {
   .collection-daily-routes,
   .collection-daily-route-preview,
   .collection-daily-route-detail,
-  .collection-daily-driver-route {
+  .collection-daily-driver-route,
+  .collection-routes-calculation {
     padding: 13px;
     border-radius: 13px;
   }
@@ -37862,12 +38110,21 @@ body:has(.ds-plus-page) {
     display: grid;
   }
 
+  .collection-routes-calculation__head {
+    display: grid;
+  }
+
+  .collection-routes-calculation__status {
+    white-space: normal;
+  }
+
   .collection-daily-route-detail__badges {
     justify-content: flex-start;
   }
 
   .collection-daily-route-form,
   .collection-daily-route-kpis,
+  .collection-routes-calculation__totals,
   .collection-daily-driver-problem {
     grid-template-columns: 1fr;
   }

@@ -39,6 +39,7 @@ import {
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
 import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js";
+import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
@@ -1307,6 +1308,7 @@ const collectionRoutesPilotState = {
   dailyRouteDate: "",
   dailyRouteVehicleCode: "A",
   dailyRoutePreview: null,
+  dailyRouteCalculation: null,
   dailyRouteSelectedId: "",
   dailyRouteDetail: null,
   dailyRouteStopsVisible: COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE,
@@ -20937,7 +20939,7 @@ function collectionDailyRoutePreviewPanel() {
         <article class="is-ready"><span>${isTest ? "Pro zvolený den" : "Zařaditelné"}</span><strong>${escapeHtml(preview.eligibleCount || 0)}</strong></article>
         <article class="${excludedRows.length ? "is-warning" : ""}"><span>${isTest ? "Nezařadí se" : "Vyřazené"}</span><strong>${escapeHtml(preview.excludedCount || 0)}</strong></article>
       </div>
-      <p><strong>${escapeHtml(collectionDailyRouteDateLabel(preview.dateInfo?.routeDate))}</strong> · ${escapeHtml(preview.vehicle?.label || "-")} · ${isTest ? "ruční TEST výběr bez AI optimalizace" : `zdrojový snapshot ${escapeHtml(formatDateTime(preview.sourceBatchCreatedAt) || "-")}`}</p>
+      <p><strong>${escapeHtml(collectionDailyRouteDateLabel(preview.dateInfo?.routeDate))}</strong> · ${escapeHtml(preview.vehicle?.label || "-")} · ${isTest ? "ověřený výběr pro read-only výpočet" : `zdrojový snapshot ${escapeHtml(formatDateTime(preview.sourceBatchCreatedAt) || "-")}`}</p>
       ${excludedRows.length ? `
         <details>
           <summary>Proč se ${escapeHtml(excludedRows.length)} řádků nezařadí</summary>
@@ -20950,12 +20952,94 @@ function collectionDailyRoutePreviewPanel() {
         </details>
       ` : ""}
       <div class="collection-daily-route-actions">
-        <button class="primary-action" type="button" data-collection-daily-route-create ${preview.eligibleCount && !collectionRoutesPilotState.dailyRoutePending ? "" : "disabled"}>
+        ${isTest ? `<button class="primary-action" type="button" data-collection-routes-readonly-calculate ${preview.eligibleCount && !collectionRoutesPilotState.dailyRoutePending ? "" : "disabled"}>Spočítat read-only návrh A/B/C</button>` : ""}
+        <button class="${isTest ? "secondary-link" : "primary-action"}" type="button" data-collection-daily-route-create ${preview.eligibleCount && !collectionRoutesPilotState.dailyRoutePending ? "" : "disabled"}>
           ${collectionRoutesPilotState.dailyRoutePending === "create" ? "Ukládám návrh..." : isTest ? "Uložit ruční TEST trasu" : "Uložit neměnný návrh"}
         </button>
-        <span>${isTest ? "Uloží se pouze do oddělené TEST databáze. Nejde o optimální AI trasu a žádná zpráva se tím neodešle." : "Návrh se uloží pouze v systému. Do Vistosu se nic neodesílá."}</span>
+        <span>${isTest ? "Výpočet nic neukládá. Ruční TEST trasa se uloží jen po samostatném kliknutí; nejde o optimální AI trasu a žádná zpráva se neodešle." : "Návrh se uloží pouze v systému. Do Vistosu se nic neodesílá."}</span>
       </div>
     </div>
+  `;
+}
+
+function collectionRoutesReadonlyMinutesLabel(value) {
+  const minutes = Math.max(0, Number(value) || 0);
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (!hours) return `${remainder} min`;
+  return remainder ? `${hours} h ${remainder} min` : `${hours} h`;
+}
+
+function collectionRoutesReadonlyWeightLabel(value, unknownCount = 0) {
+  const weight = Number(value) || 0;
+  return `${weight.toLocaleString("cs-CZ", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} t${unknownCount ? ` + ${unknownCount} bez odhadu` : ""}`;
+}
+
+function collectionRoutesReadonlyWasteRow(waste = {}) {
+  const capacity = waste.capacityKnown
+    ? `${collectionRoutesReadonlyWeightLabel(waste.knownWeightTons)} / ${String(waste.capacityTons).replace(".", ",")} t na jednu náplň`
+    : `${waste.knownWeightTons ? collectionRoutesReadonlyWeightLabel(waste.knownWeightTons, waste.unknownWeightStopCount) : "hmotnost neurčena"} · kapacita chybí`;
+  const dumps = waste.estimatedDumpCount
+    ? `${waste.estimatedDumpCount} ${waste.estimatedDumpCount === 1 ? "výsyp" : waste.estimatedDumpCount < 5 ? "výsypy" : "výsypů"} včetně konečného`
+    : "počet výsypů nelze určit";
+  const window = waste.operatingWindow || {};
+  return `
+    <li class="collection-routes-calculation__waste collection-routes-calculation__waste--${escapeHtml(window.status || "verify")}">
+      <div><strong>${escapeHtml(waste.wasteLabel || waste.wasteType || "Odpad")}</strong><span>${escapeHtml(waste.stopCount || 0)} stanovišť · ${escapeHtml(waste.containerCount || 0)} nádob · ${escapeHtml(collectionRoutesReadonlyMinutesLabel(waste.serviceMinutes))}</span></div>
+      <div><span>${escapeHtml(capacity)}</span><span>${escapeHtml(dumps)}</span></div>
+      <small>${escapeHtml(window.label || "Výsyp neurčen")} · ${escapeHtml(window.note || "Vyžaduje ověření.")}</small>
+    </li>
+  `;
+}
+
+function collectionRoutesReadonlyCalculationPanel() {
+  const calculation = collectionRoutesPilotState.dailyRouteCalculation;
+  if (!calculation || !collectionDailyRouteIsTestScope()) return "";
+  const totals = calculation.totals || {};
+  const vehicles = Array.isArray(calculation.vehicles) ? calculation.vehicles : [];
+  const blockers = Array.isArray(calculation.blockers) ? calculation.blockers : [];
+  const limitations = Array.isArray(calculation.limitations) ? calculation.limitations : [];
+  return `
+    <section class="collection-routes-calculation" aria-labelledby="collection-routes-calculation-title" data-collection-routes-readonly-calculation>
+      <header class="collection-routes-calculation__head">
+        <div>
+          <p class="module-feedback__eyebrow">Deterministický výpočet · verze ${escapeHtml(calculation.version || "1.0")}</p>
+          <h4 id="collection-routes-calculation-title">Read-only rozdělení mezi A/B/C</h4>
+          <p>Výsledek vychází z ověřených TEST stanovišť pro ${escapeHtml(collectionDailyRouteDateLabel(calculation.routeDate))}. Nejde o pořadí jízdy ani schválenou trasu.</p>
+        </div>
+        <span class="collection-routes-calculation__status">${escapeHtml(calculation.statusLabel || "READ-ONLY")}</span>
+      </header>
+      <div class="collection-routes-calculation__totals" aria-label="Souhrn read-only výpočtu">
+        <article><span>Stanoviště</span><strong>${escapeHtml(totals.stopCount || 0)}</strong></article>
+        <article><span>Nádoby</span><strong>${escapeHtml(totals.containerCount || 0)}</strong></article>
+        <article><span>Čistá obsluha</span><strong>${escapeHtml(collectionRoutesReadonlyMinutesLabel(totals.serviceMinutes))}</strong><small>bez přejezdů a výsypů</small></article>
+        <article><span>Známá hmotnost</span><strong>${escapeHtml(collectionRoutesReadonlyWeightLabel(totals.knownWeightTons, totals.unknownWeightStopCount))}</strong></article>
+      </div>
+      <div class="collection-routes-calculation__vehicles">
+        ${vehicles.map((vehicle) => `
+          <article class="collection-routes-calculation__vehicle">
+            <header><div><span>Vůz ${escapeHtml(vehicle.code)}</span><strong>${escapeHtml(vehicle.registration)}</strong></div><b>${escapeHtml(vehicle.stopCount)} stanovišť</b></header>
+            <div class="collection-routes-calculation__vehicle-kpis">
+              <span><strong>${escapeHtml(vehicle.containerCount)}</strong> nádob</span>
+              <span><strong>${escapeHtml(collectionRoutesReadonlyMinutesLabel(vehicle.serviceMinutes))}</strong> čistá obsluha</span>
+              <span><strong>${escapeHtml(collectionRoutesReadonlyWeightLabel(vehicle.knownWeightTons, vehicle.unknownWeightStopCount))}</strong></span>
+            </div>
+            <ul>${(vehicle.wasteSummaries || []).map(collectionRoutesReadonlyWasteRow).join("") || "<li>Pro tento vůz nevychází žádné stanoviště.</li>"}</ul>
+          </article>
+        `).join("")}
+      </div>
+      <div class="collection-routes-calculation__truth">
+        <article>
+          <strong>Co chybí před ostrou trasou</strong>
+          <ul>${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Žádná další datová blokace nebyla nalezena.</li>"}</ul>
+        </article>
+        <article>
+          <strong>Hranice tohoto výpočtu</strong>
+          <ul>${limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </article>
+      </div>
+      <footer><strong>Nic se neuložilo ani neodeslalo.</strong><span>Výpočet existuje jen v tomto otevřeném náhledu. Vistos, TEST databáze, uložené trasy i zákazníci zůstali beze změny.</span></footer>
+    </section>
   `;
 }
 
@@ -21397,28 +21481,29 @@ function collectionDailyRoutesDispatcherPanel(rows = []) {
     <section class="collection-daily-routes" aria-labelledby="collection-daily-routes-title">
       <header class="collection-daily-routes__head">
         <div>
-          <p class="module-feedback__eyebrow">${isTest ? "Ruční TEST pilot · bez AI optimalizace" : "Řízený online pilot"}</p>
-          <h3 id="collection-daily-routes-title">${isTest ? "Příprava TEST denní trasy" : "Denní trasy a řidiči"}</h3>
-          <p>${isTest ? "Vyber datum a jedno testované vozidlo. Systém použije jen stanoviště, která na daný den opravdu připadají; rozdělení mezi A/B/C bude řešit až 3. krok." : "Dispečer ověří právě zobrazené řádky, uloží jejich neměnnou kopii, přiřadí řidiče a sleduje průběh."}</p>
+          <p class="module-feedback__eyebrow">${isTest ? "TEST výpočetní pilot · bez AI a navigace" : "Řízený online pilot"}</p>
+          <h3 id="collection-daily-routes-title">${isTest ? "Příprava a read-only výpočet TEST trasy" : "Denní trasy a řidiči"}</h3>
+          <p>${isTest ? "Datum nejdřív vybere platná stanoviště. Potom lze spočítat deterministické rozdělení A/B/C podle času, hmotnosti a známé kapacity. Pořadí jízdy, km a doprava zatím nejsou součástí výpočtu." : "Dispečer ověří právě zobrazené řádky, uloží jejich neměnnou kopii, přiřadí řidiče a sleduje průběh."}</p>
         </div>
-        <span class="employee-card-status employee-card-status--${isTest ? "warning" : "ready"}">${isTest ? "TEST · RUČNÍ PILOT" : "Uloženo v systému · Vistos beze změny"}</span>
+        <span class="employee-card-status employee-card-status--${isTest ? "warning" : "ready"}">${isTest ? "TEST · READ-ONLY VÝPOČET" : "Uloženo v systému · Vistos beze změny"}</span>
       </header>
       ${isTest ? `
         <div class="collection-daily-routes__reality" aria-label="Co znamená současný TEST krok">
           <article><span>Zdroj</span><strong>${escapeHtml(testSiteCount)} TEST stanovišť</strong><small>Do dne vstoupí jen platné termíny.</small></article>
-          <article><span>Současný krok</span><strong>Ruční pilot</strong><small>Jedno vybrané vozidlo, bez optimalizace.</small></article>
-          <article class="is-future"><span>3. krok</span><strong>AI autopilot</strong><small>A/B/C, km, kapacity, časy a výsypy.</small></article>
+          <article><span>Současný krok</span><strong>Výpočet A/B/C</strong><small>Časy, hmotnosti, kapacity a okna výsypů.</small></article>
+          <article class="is-future"><span>Zatím chybí</span><strong>Pořadí a km</strong><small>Navigace, doprava, Waze a dostupnost posádek.</small></article>
         </div>
       ` : ""}
       ${collectionRoutesPilotState.dailyRouteMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.dailyRouteMessage)}</p>` : ""}
       ${collectionRoutesPilotState.dailyRouteError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.dailyRouteError)}</p>` : ""}
       <form class="collection-daily-route-form" data-collection-daily-route-preview-form data-source-row-ids="${escapeHtml(JSON.stringify(sourceIds))}" data-route-scope="${isTest ? "test" : "production"}">
         <label><span>${isTest ? "Datum svozu" : "Datum trasy"}</span><input type="date" name="routeDate" value="${escapeHtml(collectionRoutesPilotState.dailyRouteDate)}" required></label>
-        <label><span>${isTest ? "Testované vozidlo" : "Vůz"}</span><select name="vehicleCode">${collectionRoutesPilotState.dailyRouteVehicles.map((vehicle) => `<option value="${escapeHtml(vehicle.code)}" ${vehicle.code === collectionRoutesPilotState.dailyRouteVehicleCode ? "selected" : ""}>${escapeHtml(vehicle.label)}</option>`).join("")}</select></label>
-        <div><span>${isTest ? "Zdrojová data" : "Rozsah"}</span><strong>${isTest ? `${escapeHtml(testSiteCount)} TEST stanovišť` : `${escapeHtml(sourceIds.length)} právě zobrazených řádků`}</strong>${isTest ? "<small>Výběr pro den se ukáže v dalším kroku.</small>" : ""}</div>
-        <button class="secondary-link" type="submit" ${sourceReady && !collectionRoutesPilotState.dailyRoutePending ? "" : "disabled"}>${collectionRoutesPilotState.dailyRoutePending === "preview" ? (isTest ? "Připravuji..." : "Ověřuji...") : (isTest ? "Připravit ruční TEST návrh" : "Zkontrolovat zobrazené řádky")}</button>
+        <label><span>${isTest ? "Vůz pro ruční uložení" : "Vůz"}</span><select name="vehicleCode">${collectionRoutesPilotState.dailyRouteVehicles.map((vehicle) => `<option value="${escapeHtml(vehicle.code)}" ${vehicle.code === collectionRoutesPilotState.dailyRouteVehicleCode ? "selected" : ""}>${escapeHtml(vehicle.label)}</option>`).join("")}</select>${isTest ? "<small>Read-only výpočet vždy porovná A, B i C.</small>" : ""}</label>
+        <div><span>${isTest ? "Zdrojová data" : "Rozsah"}</span><strong>${isTest ? `${escapeHtml(testSiteCount)} TEST stanovišť` : `${escapeHtml(sourceIds.length)} právě zobrazených řádků`}</strong>${isTest ? "<small>Nejdřív se ověří, která stanoviště připadají na datum.</small>" : ""}</div>
+        <button class="secondary-link" type="submit" ${sourceReady && !collectionRoutesPilotState.dailyRoutePending ? "" : "disabled"}>${collectionRoutesPilotState.dailyRoutePending === "preview" ? (isTest ? "Ověřuji stanoviště..." : "Ověřuji...") : (isTest ? "Ověřit stanoviště pro datum" : "Zkontrolovat zobrazené řádky")}</button>
       </form>
       ${collectionDailyRoutePreviewPanel()}
+      ${collectionRoutesReadonlyCalculationPanel()}
       <div class="collection-daily-routes__saved">
         <div><div><h4>${isTest ? "Uložené ruční TEST trasy" : "Uložené denní trasy"}</h4>${isTest ? "<p>Historie pilotu; žádná z těchto tras není označená jako AI optimalizovaná.</p>" : ""}</div><button class="text-action" type="button" data-collection-daily-routes-refresh ${collectionRoutesPilotState.dailyRoutesLoading ? "disabled" : ""}>${isTest ? "Načíst aktuální seznam" : "Obnovit"}</button></div>
         ${collectionDailyRoutesList()}
@@ -36621,6 +36706,7 @@ function resetCollectionDailyRoutesForScope() {
   collectionRoutesPilotState.dailyRoutesLoading = false;
   collectionRoutesPilotState.dailyRoutes = [];
   collectionRoutesPilotState.dailyRoutePreview = null;
+  collectionRoutesPilotState.dailyRouteCalculation = null;
   collectionRoutesPilotState.dailyRouteSelectedId = "";
   collectionRoutesPilotState.dailyRouteDetail = null;
   collectionRoutesPilotState.dailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
@@ -36644,6 +36730,7 @@ async function loadCollectionRoutesTestDataset(options = {}) {
     const result = await apiJson("/api/collection-routes/test-dataset?limit=500");
     collectionRoutesPilotState.testDataset = result.dataset || null;
     collectionRoutesPilotState.testDatasetRows = Array.isArray(result.rows) ? result.rows : [];
+    collectionRoutesPilotState.dailyRouteCalculation = null;
     collectionRoutesPilotState.testDatasetRowsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
     collectionRoutesPilotState.testDatasetExpandedRowKeys = [];
     collectionRoutesPilotState.testDatasetLoaded = true;
@@ -36671,6 +36758,7 @@ async function createCollectionRoutesTestDataset() {
     });
     collectionRoutesPilotState.testDataset = result.dataset || null;
     collectionRoutesPilotState.testDatasetRows = Array.isArray(result.rows) ? result.rows : [];
+    collectionRoutesPilotState.dailyRouteCalculation = null;
     collectionRoutesPilotState.testDatasetRowsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
     collectionRoutesPilotState.testDatasetExpandedRowKeys = [];
     collectionRoutesPilotState.testDatasetLoaded = true;
@@ -36939,6 +37027,7 @@ async function previewCollectionDailyRoute(form) {
   collectionRoutesPilotState.dailyRouteVehicleCode = vehicleCode;
   collectionRoutesPilotState.dailyRoutePending = "preview";
   collectionRoutesPilotState.dailyRoutePreview = null;
+  collectionRoutesPilotState.dailyRouteCalculation = null;
   collectionRoutesPilotState.dailyRouteMessage = "";
   collectionRoutesPilotState.dailyRouteError = "";
   render();
@@ -36949,7 +37038,9 @@ async function previewCollectionDailyRoute(form) {
     });
     collectionRoutesPilotState.dailyRoutePreview = result.preview || null;
     collectionRoutesPilotState.dailyRouteMessage = result.preview?.eligibleCount
-      ? "Návrh je ověřený. Zkontroluj vyřazené řádky a teprve potom ho ulož."
+      ? collectionDailyRouteIsTestScope()
+        ? "Stanoviště pro den jsou ověřená. Teď můžeš spočítat read-only rozdělení A/B/C."
+        : "Návrh je ověřený. Zkontroluj vyřazené řádky a teprve potom ho ulož."
       : "Pro zvolený den není v tomto výběru žádná ověřená zastávka.";
   } catch (error) {
     collectionRoutesPilotState.dailyRouteError = error.payload?.error || error.message || "Návrh denní trasy se nepodařilo ověřit.";
@@ -36957,6 +37048,22 @@ async function previewCollectionDailyRoute(form) {
     collectionRoutesPilotState.dailyRoutePending = "";
     render();
   }
+}
+
+function calculateCollectionDailyRouteReadonlyPlan() {
+  const preview = collectionRoutesPilotState.dailyRoutePreview;
+  if (!collectionDailyRouteIsTestScope() || !preview?.eligibleCount) return;
+  collectionRoutesPilotState.dailyRouteCalculation = calculateCollectionRoutesReadonlyPlan({
+    routeDate: preview.dateInfo?.routeDate,
+    dateInfo: preview.dateInfo || {},
+    eligibleRows: Array.isArray(preview.eligibleRows) ? preview.eligibleRows : [],
+    sourceRows: Array.isArray(collectionRoutesPilotState.testDatasetRows)
+      ? collectionRoutesPilotState.testDatasetRows
+      : []
+  });
+  collectionRoutesPilotState.dailyRouteMessage = "Read-only výpočet A/B/C je připravený. Nic se neuložilo ani neodeslalo.";
+  collectionRoutesPilotState.dailyRouteError = "";
+  render();
 }
 
 async function createCollectionDailyRoute() {
@@ -36977,6 +37084,7 @@ async function createCollectionDailyRoute() {
       }))
     });
     collectionRoutesPilotState.dailyRoutePreview = null;
+    collectionRoutesPilotState.dailyRouteCalculation = null;
     applyCollectionDailyRouteDetail(result.route, "Neměnný návrh denní trasy byl uložen. Teď přiřaď řidiče a trasu potvrď.");
     collectionRoutesPilotState.dailyRoutesLoaded = true;
   } catch (error) {
@@ -42767,6 +42875,7 @@ async function logout() {
   collectionRoutesPilotState.dailyRoutes = [];
   collectionRoutesPilotState.dailyRouteDrivers = [];
   collectionRoutesPilotState.dailyRoutePreview = null;
+  collectionRoutesPilotState.dailyRouteCalculation = null;
   collectionRoutesPilotState.dailyRouteSelectedId = "";
   collectionRoutesPilotState.dailyRouteDetail = null;
   collectionRoutesPilotState.dailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
@@ -46225,6 +46334,7 @@ document.addEventListener("change", async (event) => {
     collectionRoutesPilotState.dailyRouteDate = String(form?.elements.routeDate?.value || "").trim();
     collectionRoutesPilotState.dailyRouteVehicleCode = String(form?.elements.vehicleCode?.value || "A").trim();
     collectionRoutesPilotState.dailyRoutePreview = null;
+    collectionRoutesPilotState.dailyRouteCalculation = null;
     collectionRoutesPilotState.dailyRouteMessage = "Po změně data nebo vozu návrh znovu ověř.";
     collectionRoutesPilotState.dailyRouteError = "";
     render();
@@ -47013,6 +47123,13 @@ document.addEventListener("click", async (event) => {
     if (!collectionRoutesTestNotificationResume.disabled) {
       await processCollectionRoutesTestNotificationJob();
     }
+    return;
+  }
+
+  const collectionRoutesReadonlyCalculate = event.target.closest("[data-collection-routes-readonly-calculate]");
+  if (collectionRoutesReadonlyCalculate) {
+    event.preventDefault();
+    if (!collectionRoutesReadonlyCalculate.disabled) calculateCollectionDailyRouteReadonlyPlan();
     return;
   }
 
