@@ -13,6 +13,7 @@ import {
   createCollectionDailyRouteDraft,
   getCollectionDailyRoute,
   getMyCollectionDailyRoute,
+  listCollectionDailyRouteDrivers,
   listCollectionDailyRoutes,
   previewCollectionDailyRoute,
   recordCollectionDailyRouteStopEvent,
@@ -202,7 +203,7 @@ insertImportRow(sqlite, {
 });
 
 const dispatcher = { id: "dispatcher-1", name: "Dispečer Test", role: "dispecer", status: "active", active: true };
-const driver = { id: "driver-1", name: "Řidič Test", role: "ridic", status: "active", active: true };
+const driver = { id: "driver-1", name: "Miroslav Vašek", role: "ridic", status: "active", active: true };
 const otherDriver = { id: "driver-2", name: "Jiný řidič", role: "ridic", status: "active", active: true };
 const readonly = { id: "readonly-1", name: "Readonly Test", role: "readonly", status: "active", active: true };
 const env = {
@@ -210,6 +211,9 @@ const env = {
   AUTH_USERS_JSON: JSON.stringify([dispatcher, driver, otherDriver, readonly]),
   AUTH_SESSION_SECRET: "collection-daily-routes-test-session-secret"
 };
+
+const availableDrivers = await listCollectionDailyRouteDrivers(env);
+assert.equal(availableDrivers.find((item) => item.id === driver.id)?.addressingName, "Miroslave");
 
 async function authenticatedRequest(url, user) {
   const cookie = (await createSessionCookie(env, user)).split(";")[0];
@@ -262,6 +266,7 @@ const assigned = await assignCollectionDailyRouteDriver(env, dispatcher, created
 });
 assert.equal(assigned.run.driverUserId, driver.id);
 assert.equal(assigned.run.driverName, driver.name);
+assert.equal(assigned.run.metadata.driverAddressingName, "Miroslave");
 
 const confirmed = await transitionCollectionDailyRoute(env, dispatcher, created.run.id, {
   action: "confirm",

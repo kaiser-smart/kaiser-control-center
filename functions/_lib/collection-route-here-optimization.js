@@ -159,7 +159,9 @@ function dumpSiteForWaste(config, wasteType) {
 function configurationBlockers(settings, wasteType) {
   const blockers = [];
   const config = settings.config || {};
-  if (settings.status !== "ready") blockers.push("Provozní konfigurace HERE v TEST D1 zatím není potvrzená.");
+  if (!["ready", "test-estimate"].includes(settings.status)) {
+    blockers.push("Provozní konfigurace HERE v TEST D1 zatím není potvrzená.");
+  }
   if (!validCoordinate(config?.depot?.latitude, config?.depot?.longitude)) {
     blockers.push("Chybí potvrzené souřadnice výjezdového depa.");
   }
@@ -189,6 +191,22 @@ function configurationBlockers(settings, wasteType) {
     }
   }
   return blockers;
+}
+
+function configurationWarnings(settings, wasteType) {
+  const config = settings.config || {};
+  const warnings = [];
+  if (settings.status === "test-estimate") {
+    warnings.push("Rozměry, hmotnosti, směna a doby výsypu jsou konzervativní TEST odhady; před ostrým použitím vyžadují technické ověření.");
+  }
+  if (cleanString(config?.depot?.routingPointStatus).startsWith("needs-")) {
+    warnings.push("Depo zatím používá adresní bod; vjezd pro svozové vozidlo čeká na fyzické potvrzení.");
+  }
+  const dumpSite = dumpSiteForWaste(config, wasteType);
+  if (cleanString(dumpSite?.routingPointStatus).startsWith("needs-")) {
+    warnings.push(`${WASTE_LABELS[wasteType] || wasteType}: výsyp zatím používá adresní bod a čeká na ověření skutečného vjezdu.`);
+  }
+  return warnings;
 }
 
 function stopFacts(stop, wasteType) {
@@ -307,6 +325,7 @@ export async function getCollectionRouteHereReadiness(env, user, input = {}) {
       configurationUpdatedAt: settings.updatedAt,
       oauthConfigured: oauth.configured,
       blockers: [...new Set(blockers)],
+      warnings: [...new Set(configurationWarnings(settings, wasteType))],
       latestRun: await latestRun(db, preview.dateInfo.routeDate, wasteType),
       limits: { maxStops: MAX_STOPS, oneWasteTypePerRun: true },
       writesOperationalRoute: false,
