@@ -8880,13 +8880,14 @@ h1 {
 .tracking-tcars-google-marker {
   position: absolute;
   display: inline-flex;
-  width: 142px;
-  min-width: 142px;
-  min-height: 136px;
-  align-items: center;
+  width: 156px;
+  min-width: 156px;
+  min-height: 0;
+  align-items: flex-end;
   justify-content: center;
   padding: 0;
-  transform: translate(-50%, -76%);
+  transform: translate(-50%, -100%);
+  transform-origin: 50% 100%;
   border: 0;
   background: transparent;
   font: inherit;
@@ -8895,7 +8896,7 @@ h1 {
 
 .tracking-tcars-google-marker--selected {
   z-index: 8 !important;
-  transform: translate(-50%, -72%) scale(1.1);
+  transform: translate(-50%, -100%) scale(1.06);
 }
 
 .tracking-tcars-google-marker--focused {
@@ -9005,7 +9006,7 @@ h1 {
   position: relative;
   display: grid;
   width: 104px;
-  height: 68px;
+  height: 58px;
   align-items: center;
   justify-content: center;
   overflow: visible;
@@ -9019,7 +9020,7 @@ h1 {
   box-sizing: border-box;
   width: 156px;
   gap: 3px;
-  margin-bottom: -4px;
+  margin-bottom: -8px;
   padding: 8px 10px 9px;
   border: 1px solid rgba(20, 35, 16, 0.38);
   border-radius: 12px 12px 9px 9px;
@@ -9028,19 +9029,6 @@ h1 {
   line-height: 1.1;
   pointer-events: none;
   text-align: left;
-}
-
-.tracking-tcars-google-pin__label::after {
-  position: absolute;
-  right: 50%;
-  bottom: -5px;
-  width: 10px;
-  height: 10px;
-  border-right: 1px solid rgba(20, 35, 16, 0.38);
-  border-bottom: 1px solid rgba(20, 35, 16, 0.38);
-  background: #B6FF00;
-  content: "";
-  transform: translateX(50%) rotate(45deg);
 }
 
 .tracking-tcars-google-pin__label > span {
@@ -9088,9 +9076,22 @@ h1 {
   height: 100%;
   object-fit: contain;
   filter: none;
-  transform: translateY(-2px) rotate(var(--heading, 0deg));
-  transform-origin: 50% 86%;
+  transform: translateY(-8px);
+  transform-origin: 50% 50%;
   transition: filter 160ms ease, transform 160ms ease;
+}
+
+.tracking-tcars-google-pin__position {
+  position: relative;
+  z-index: 0;
+  display: block;
+  width: 30px;
+  height: 28px;
+  margin-top: -2px;
+  background: #245e3c;
+  clip-path: polygon(38% 0, 62% 0, 62% 43%, 88% 43%, 50% 100%, 12% 43%, 38% 43%);
+  filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 4px 3px rgba(24, 35, 27, 0.34));
+  pointer-events: none;
 }
 
 .tracking-tcars-google-pin__fallback {
@@ -9122,13 +9123,39 @@ h1 {
 .tracking-tcars-google-marker:hover .tracking-tcars-google-pin__icon img,
 .tracking-tcars-google-marker:focus-visible .tracking-tcars-google-pin__icon img {
   filter: none;
-  transform: translateY(-5px) rotate(var(--heading, 0deg)) scale(1.04);
+  transform: translateY(-10px) scale(1.04);
 }
 
 .tracking-tcars-google-marker:focus-visible {
   outline: 3px solid #172018;
   outline-offset: 4px;
   border-radius: 18px;
+}
+
+@media (max-width: 720px) {
+  .tracking-tcars-google-marker {
+    width: 138px;
+    min-width: 138px;
+  }
+
+  .tracking-tcars-google-pin,
+  .tracking-tcars-google-pin__label {
+    width: 138px;
+  }
+
+  .tracking-tcars-google-pin__label {
+    padding: 7px 9px 8px;
+  }
+
+  .tracking-tcars-google-pin__icon {
+    width: 92px;
+    height: 54px;
+  }
+
+  .tracking-tcars-google-pin__position {
+    width: 28px;
+    height: 26px;
+  }
 }
 
 .tracking-wim-google-marker {

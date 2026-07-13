@@ -14630,6 +14630,7 @@ function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false
         ${iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" loading="eager" decoding="async" data-tracking-tcars-marker-icon>` : ""}
         <span class="tracking-tcars-google-pin__fallback"></span>
       </span>
+      <span class="tracking-tcars-google-pin__position" aria-hidden="true"></span>
     </span>
   `;
 }
@@ -15913,11 +15914,9 @@ function createVehicleTrackingTcarsGoogleMarker(maps, map, location) {
       }
       const projection = this.getProjection();
       const point = projection.fromLatLngToDivPixel(new maps.LatLng(this.location.latitude, this.location.longitude));
-      const markerVehicle = vehicleTrackingTcarsMarkerVehicle(this.location);
       const focused = this.selected && vehicleTrackingLiveState.googleFocusedLocationId === this.location._locationId;
       this.div.style.left = `${point.x}px`;
       this.div.style.top = `${point.y}px`;
-      this.div.style.setProperty("--heading", `${markerVehicle.heading.toFixed(2)}deg`);
       this.div.className = [
         "tracking-tcars-google-marker",
         this.selected ? "tracking-tcars-google-marker--selected" : "",

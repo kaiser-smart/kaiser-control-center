@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { vehicleTrackingMapsConfigPayload } from "../functions/api/vehicle-tracking/maps-config.js";
 import {
@@ -8,6 +9,9 @@ import {
   vehicleTrackingHeadingOffsetForVehicle,
   vehicleTrackingVisualHeading
 } from "../src/data/vehicleTracking.js";
+
+const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
 {
   const payload = vehicleTrackingMapsConfigPayload({});
@@ -80,6 +84,24 @@ import {
   assert.equal(VEHICLE_TRACKING_KAISER_SITE.longitude, 16.67013);
   assert.equal(VEHICLE_TRACKING_KAISER_SITE.logoSrc, "/logo-kaiser.png");
   assert.equal("mapsUrl" in VEHICLE_TRACKING_KAISER_SITE, false);
+}
+
+{
+  const markerContent = appSource.slice(
+    appSource.indexOf("function vehicleTrackingTcarsGoogleMarkerContent"),
+    appSource.indexOf("function vehicleTrackingTcarsInvalidSection")
+  );
+  const markerOverlay = appSource.slice(
+    appSource.indexOf("function createVehicleTrackingTcarsGoogleMarker"),
+    appSource.indexOf("function clearVehicleTrackingTcarsGoogleMap")
+  );
+
+  assert.match(markerContent, /tracking-tcars-google-pin__position/);
+  assert.doesNotMatch(markerOverlay, /setProperty\("--heading"/);
+  assert.match(styleSource, /\.tracking-tcars-google-marker\s*\{[\s\S]*?transform:\s*translate\(-50%, -100%\)/);
+  assert.match(styleSource, /\.tracking-tcars-google-pin__icon img\s*\{[\s\S]*?transform:\s*translateY\(-8px\);/);
+  assert.doesNotMatch(styleSource, /tracking-tcars-google-pin__icon img[\s\S]{0,420}rotate\(var\(--heading/);
+  assert.match(styleSource, /\.tracking-tcars-google-pin__position\s*\{[\s\S]*?clip-path:\s*polygon\(/);
 }
 
 console.log("vehicle-tracking maps config tests: ok");
