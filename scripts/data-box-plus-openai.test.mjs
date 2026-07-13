@@ -87,6 +87,25 @@ assert.equal(result.provider, "OpenAI");
 assert.equal(result.responseId, "resp-test");
 assert.equal(result.plan.action.type, "send_email");
 
+const forcedAppealRequest = openAiTest.requestPayload("gpt-test", {
+  instruction: "připrav odvolání",
+  message: { subject: "Příkaz - Kaiser servis, spol. s r.o." },
+  history: []
+});
+assert.deepEqual(forcedAppealRequest.text.format.schema.properties.outcome.enum, ["answer"]);
+assert.deepEqual(forcedAppealRequest.text.format.schema.properties.action.properties.type.enum, ["prepare_reply"]);
+assert.equal(forcedAppealRequest.text.format.schema.properties.action.properties.body.minLength, 1);
+assert.match(forcedAppealRequest.input, /"serverIntent"/);
+assert.match(forcedAppealRequest.input, /\[DOPLNIT\]/);
+
+assert.equal(openAiTest.draftDocumentRequest({
+  instruction: "připrav",
+  history: [
+    { role: "user", text: "připrav odvolání" },
+    { role: "assistant", text: "Mám připravit odvolání, nebo mi pošlete jeho text?" }
+  ]
+}), true);
+
 const serverPlan = dataBoxPlusOpenAiPlanForTest(structuredPlan, {
   id: "message-1",
   mailbox_id: "mailbox-1",

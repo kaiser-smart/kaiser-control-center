@@ -60,7 +60,23 @@ export function dataBoxPlusOpenAiStatus(env = {}) {
   };
 }
 
-function outputSchema() {
+function normalizedIntentText(value) {
+  return cleanString(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function draftDocumentRequest(input = {}) {
+  const instruction = normalizedIntentText(input.instruction);
+  const conversation = publicConversation(input);
+  const recentContext = normalizedIntentText(conversation.slice(-6).map((entry) => entry.text).join(" "));
+  const prepareVerb = /\b(priprav|sepis|sepiste|vytvor|vytvorte|napis|napiste)\b/.test(instruction);
+  const documentTerm = /\b(odvolan|vyjadren|namitk|zadost|dopis|odpoved|navrh|koncept|stanovisk)\w*/.test(instruction);
+  const shortFollowUp = /^(?:ano\s+)?priprav(?:\s+to)?[.!?]*$/.test(instruction);
+  const documentInHistory = /\b(odvolan|vyjadren|namitk|zadost|dopis|odpoved|navrh|koncept|stanovisk)\w*/.test(recentContext);
+  return (prepareVerb && documentTerm) || (shortFollowUp && documentInHistory);
+}
+
+function outputSchema(options = {}) {
+  const forcePrepareReply = options.forcePrepareReply === true;
   return {
     type: "object",
     additionalProperties: false,
@@ -68,7 +84,7 @@ function outputSchema() {
     properties: {
       outcome: {
         type: "string",
-        enum: ["answer", "needs_input", "ready_for_confirmation"]
+        enum: forcePrepareReply ? ["answer"] : ["answer", "needs_input", "ready_for_confirmation"]
       },
       intent: { type: "string" },
       assistantText: { type: "string" },
@@ -90,14 +106,14 @@ function outputSchema() {
           "dueDate"
         ],
         properties: {
-          type: { type: "string", enum: ACTION_TYPES },
+          type: { type: "string", enum: forcePrepareReply ? ["prepare_reply"] : ACTION_TYPES },
           summary: { type: "string" },
           recipientName: { type: "string" },
           recipientEmail: { type: "string" },
           recipientPhone: { type: "string" },
           recipientDataBoxId: { type: "string" },
           subject: { type: "string" },
-          body: { type: "string" },
+          body: forcePrepareReply ? { type: "string", minLength: 1 } : { type: "string" },
           assignedTo: { type: "string" },
           noteText: { type: "string" },
           dueDate: { type: "string" }
@@ -167,6 +183,12 @@ function publicLearningRules(input = {}) {
 }
 
 function requestPayload(model, input = {}) {
+  const forcePrepareReply = draftDocumentRequest(input);
+  const serverIntent = forcePrepareReply ? {
+    actionType: "prepare_reply",
+    outcome: "answer",
+    rule: "Vytvoř nyní neprázdný návrh dokumentu. Nežádej další podklady; chybějící fakta označ [DOPLNIT]."
+  } : null;
   return {
     model,
     store: false,
@@ -185,6 +207,7 @@ function requestPayload(model, input = {}) {
       "Pokyn jako připrav odvolání, sepiš vyjádření nebo vytvoř odpověď znamená: rovnou napiš úplný použitelný návrh do action.body, použij action.type prepare_reply a outcome answer. Nežádej uživatele, aby ti text poslal.",
       "Když uživatel po tvé otázce odpoví jen připrav, pokračuj podle bezprostřední historie a návrh skutečně vytvoř; neopakuj stejnou otázku.",
       "Návrh opři o konkrétní obsah zprávy a příloh. Chybějící konkrétní údaj označ [DOPLNIT], ale nevymýšlej jej a kvůli němu neblokuj vytvoření návrhu.",
+      "Pokud je vyplněný serverIntent, je to důvěryhodné rozhodnutí backendu. Dodrž přesně jeho actionType a outcome a nikdy je neměň na needs_input.",
       "Pro odpověď přes datovou schránku použij send_data_box_reply. Příjemcem je odesílatel původní zprávy, pokud uživatel neurčí jinou datovou schránku.",
       "Nevymýšlej e-mail, telefon, jméno, datum ani obsah. Pokud chybí, zeptej se.",
       "Kanonický kontakt currentUser je důvěryhodný. Výrazy můj e-mail, já nebo jeho celé jméno znamenají přesně tento kontakt; neptej se znovu na e-mail.",
@@ -210,6 +233,7 @@ function requestPayload(model, input = {}) {
       },
       conversation: publicConversation(input),
       confirmedLearningRules: publicLearningRules(input),
+      serverIntent,
       appContext: input.appContext,
       currentUser: input.currentUser,
       knownUsers: input.knownUsers,
@@ -222,7 +246,7 @@ function requestPayload(model, input = {}) {
         type: "json_schema",
         name: "data_box_plus_chat_plan",
         strict: true,
-        schema: outputSchema()
+        schema: outputSchema({ forcePrepareReply })
       }
     }
   };
@@ -283,6 +307,7 @@ export const __test = {
   DEFAULT_MODEL,
   OPENAI_RESPONSES_URL,
   extractOutputText,
+  draftDocumentRequest,
   outputSchema,
   requestPayload
 };
