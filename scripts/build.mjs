@@ -2,6 +2,7 @@ import { access, mkdir, readdir, rm, stat, copyFile, readFile, writeFile } from 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
+import { versionModuleImports } from "./version-module-imports.mjs";
 import { modules } from "../src/data/modules.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -10,7 +11,8 @@ const src = path.join(root, "src");
 const publicDir = path.join(root, "public");
 const template = await readFile(path.join(root, "index.html"), "utf8");
 const buildMeta = await resolveBuildMeta(root);
-const assetVersion = encodeURIComponent(buildMeta.version || buildMeta.commit || buildMeta.backupDate || String(Date.now()));
+const buildVersion = buildMeta.version || buildMeta.commit || buildMeta.backupDate || String(Date.now());
+const assetVersion = encodeURIComponent(buildVersion);
 
 function runtimeConfigModuleSource(env = process.env) {
   return `export const runtimeConfig = ${JSON.stringify({
@@ -48,6 +50,31 @@ async function fileExists(filePath) {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function versionCopiedModuleImports(directory) {
+  const entries = await readdir(directory);
+
+  for (const entry of entries) {
+    const filePath = path.join(directory, entry);
+    const info = await stat(filePath);
+
+    if (info.isDirectory()) {
+      await versionCopiedModuleImports(filePath);
+      continue;
+    }
+
+    if (!entry.endsWith(".js")) {
+      continue;
+    }
+
+    const sourceText = await readFile(filePath, "utf8");
+    const versionedText = versionModuleImports(sourceText, buildVersion);
+
+    if (versionedText !== sourceText) {
+      await writeFile(filePath, versionedText);
+    }
   }
 }
 
@@ -105,6 +132,7 @@ await writeFile(
   path.join(dist, "src/data/runtimeConfig.js"),
   runtimeConfigModuleSource()
 );
+await versionCopiedModuleImports(path.join(dist, "src"));
 await writeFile(
   path.join(dist, "route-manifest.json"),
   `${JSON.stringify({

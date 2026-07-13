@@ -109,6 +109,9 @@ function packageVersion() {
 function assertBuiltMeta(head, version) {
   const metaSource = readFileSync("dist/src/data/buildMeta.js", "utf8");
   const routeHtml = readFileSync("dist/trasy-svozu/index.html", "utf8");
+  const appSource = readFileSync("dist/src/app.js", "utf8");
+  const versionNewsSource = readFileSync("dist/src/components/VersionNewsInfo.js", "utf8");
+  const versionInfoSource = readFileSync("dist/src/data/versionInfo.js", "utf8");
   const shortHead = head.slice(0, 7);
 
   if (!metaSource.includes(`"version": "${version}"`)) {
@@ -123,6 +126,15 @@ function assertBuiltMeta(head, version) {
   if (!routeHtml.includes(`src/app.js?v=${version}`) || !routeHtml.includes(`src/styles.css?v=${version}`)) {
     fail(`HTML /trasy-svozu nema asset cache-buster ${version}.`);
   }
+  if (!appSource.includes(`./components/VersionNewsInfo.js?v=${version}`)) {
+    fail(`app.js nema vnoreny cache-buster ${version} pro novinky.`);
+  }
+  if (!versionNewsSource.includes(`../data/versionInfo.js?v=${version}`)) {
+    fail(`VersionNewsInfo.js nema vnoreny cache-buster ${version}.`);
+  }
+  if (!versionInfoSource.includes(`./buildMeta.js?v=${version}`)) {
+    fail(`versionInfo.js nema vnoreny cache-buster ${version} pro buildMeta.`);
+  }
 }
 
 assertCleanWorktree();
@@ -131,6 +143,7 @@ const version = packageVersion();
 const backupDate = buildDate();
 
 runVisible("node", ["scripts/check-syntax.mjs"]);
+runVisible("node", ["scripts/version-module-imports.test.mjs"]);
 runVisible("node", ["scripts/collection-route-source-parser.test.mjs"]);
 runVisible("node", ["scripts/collection-daily-routes.test.mjs"]);
 runVisible("node", ["scripts/collection-daily-routes-scale.test.mjs"]);
