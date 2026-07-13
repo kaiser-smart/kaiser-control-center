@@ -1463,7 +1463,7 @@ export async function sendCollectionRouteTestEmail(env, {
         <main style="max-width:640px;margin:0 auto;padding:24px;">
           <p style="display:inline-block;margin:0 0 20px;padding:6px 10px;border-radius:999px;background:#a92020;color:#fff;font-weight:700;">TESTOVACÍ ZPRÁVA</p>
           <h1 style="font-size:24px;margin:0 0 16px;">Test svozové trasy</h1>
-          <p>Tato zpráva vznikla v oddělené sadě TEST Brno 500. Nejde o skutečného zákazníka ani skutečný svoz.</p>
+          <p>Tato zpráva vznikla v oddělené sadě TEST Brno 501. Nejde o skutečného zákazníka ani skutečný svoz.</p>
           <dl>
             <dt style="font-weight:700;">Firma</dt><dd>${htmlEscape(customerName)}</dd>
             <dt style="font-weight:700;">Stanoviště</dt><dd>${htmlEscape(stationName)}</dd>
@@ -1481,7 +1481,7 @@ export async function sendCollectionRouteTestEmail(env, {
     subject,
     html,
     relatedEntityId: cleanString(dispatchItemId || stop.id),
-    recipientName: "Radim · TEST Brno 500",
+    recipientName: "Radim · TEST Brno 501",
     fromName: "Kaiser servis · TEST SVOZ",
     moduleId: "collection-routes",
     relatedEntityType: "collection_route_test_notification",

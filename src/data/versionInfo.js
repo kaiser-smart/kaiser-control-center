@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.538"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.540"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,14 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: HERE mapa a Firma test 501",
+    text: "Řidičský TEST používá statický HERE mapový výřez načítaný přes chráněný backend, takže API klíč neopouští server. Oddělená sada má nově 501 stanovišť; Firma test 501 na adrese Trnkova 3052/137 je záměrně první středeční bod pro fyzický GPS test tabletu."
+  },
+  {
+    title: "Svozové trasy: přímý TEST řidičského tabletu",
+    text: "V horní části TEST Brno 501 je výrazné tlačítko, které otevře samostatný tabletový přehled bez dlouhé tabulky. Přehled bezpečně provede přípravou TEST trasy, přiřazením řidiče a spuštěním a potom zobrazí mapový výřez adresního i fyzicky změřeného bodu, hlasovou Šarlotu a velké GPS tlačítko pro pracovní rukavice."
+  },
   {
     title: "Poloha vozidel: osobní prémiové info cedule",
     text: "Každý uživatel si na mapě volí vlastní styl info cedule: hravou Kaiser kartu, SPZ tabuli, analogový budík nebo palubní panel. Palubní panel ukazuje jen reálné hodnoty dostupné z T-Cars; osobní volba se ukládá k účtu. GPS hrot je nově čistá zaoblená vektorová šipka."
@@ -62,11 +70,11 @@ export const versionNews = [
   },
   {
     title: "Svozové trasy: skutečné dny svozu v TEST datech",
-    text: "TEST Brno 500 nově zrcadlí každý týdenní svoz 1:1 do lichého i sudého týdne, například středa lichá a středa sudá. Četnost 1x14 zůstává v jedné paritě a 1x30 používá pevný pracovní den s pořadím v měsíci, podle kterého lze sestavit denní trasu."
+    text: "TEST Brno 501 zrcadlí každý týdenní svoz 1:1 do lichého i sudého týdne, například středa lichá a středa sudá. Četnost 1x14 zůstává v jedné paritě a 1x30 používá pevný pracovní den s pořadím v měsíci, podle kterého lze sestavit denní trasu."
   },
   {
     title: "Svozové trasy: návrat původního rozhraní",
-    text: "Rozhraní je vrácené do stavu před zjednodušením dispečerského pohledu. TEST Brno 500, Řidičský tablet, tisk, PDF, offline balíček i původní ovládání tras jsou znovu přímo dostupné; databáze, API, uložené trasy a historie testovacích zpráv zůstaly beze změny."
+    text: "Rozhraní je vrácené do stavu před zjednodušením dispečerského pohledu. TEST Brno 501, Řidičský tablet, tisk, PDF, offline balíček i původní ovládání tras jsou znovu přímo dostupné; databáze, API, uložené trasy a historie testovacích zpráv zůstaly beze změny."
   },
   {
     title: "Svozové trasy: bezpečné opakování jediného neúspěšného kanálu",
@@ -77,8 +85,8 @@ export const versionNews = [
     text: "Kontrolní fronta odděluje přesný historický protiúčet, přesný název, konflikty variabilního symbolu, interní kandidáty a položky bez dostatečného důkazu. Jde pouze o read-only podklady k ručnímu potvrzení; automatické párování, ratingy i zákaznická komunikace zůstávají beze změny."
   },
   {
-    title: "Svozové trasy: oddělený TEST Brno 500",
-    text: "Management a Admin mohou pracovat s 500 syntetickými stanovišti na skutečných adresních bodech Brna v samostatné TEST databázi. Firmy, kontakty, odpady, nádoby 120/240/1100 l a četnosti jsou testovací; ostrá data a Vistos zůstávají oddělené. Skutečné testovací SMS a e-maily jdou výhradně na chráněný kontakt po přesném ručním potvrzení počtu zpráv."
+    title: "Svozové trasy: oddělený TEST Brno 501",
+    text: "Management a Admin mohou pracovat s 501 testovacími stanovišti na skutečných adresních bodech Brna v samostatné TEST databázi. Firmy, kontakty, odpady, nádoby 120/240/1100 l a četnosti jsou testovací; ostrá data a Vistos zůstávají oddělené. Skutečné testovací SMS a e-maily jdou výhradně na chráněný kontakt po přesném ručním potvrzení počtu zpráv."
   },
   {
     title: "Pohledávky: příchozí pohyby bez záměny směru",

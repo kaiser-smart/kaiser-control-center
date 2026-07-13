@@ -173,7 +173,7 @@ const readiness = await getCollectionRouteHereReadiness(env, manager, {
 });
 assert.equal(readiness.ready, true, readiness.blockers.join("\n"));
 assert.ok(readiness.eligibleCount > 0);
-assert.ok(readiness.eligibleCount < 500);
+assert.ok(readiness.eligibleCount < 501);
 assert.deepEqual(readiness.availableWasteTypes.sort(), ["BIO", "PAPIR", "PLAST", "SKLO", "SKO"].sort());
 
 const coordinateRow = sqlite.prepare("SELECT summary_json FROM collection_import_rows WHERE id = ?")

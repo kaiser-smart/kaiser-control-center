@@ -86,7 +86,8 @@ function openDatabase() {
   for (const migration of [
     "../migrations/0017_create_collection_routes_phase1a.sql",
     "../migrations/0038_create_collection_daily_routes.sql",
-    "../migrations/test/0001_create_collection_routes_test_control.sql"
+    "../migrations/test/0001_create_collection_routes_test_control.sql",
+    "../migrations/test/0004_add_collection_route_field_test_site_501.sql"
   ]) {
     sqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
   }
@@ -122,13 +123,15 @@ const manager = {
     confirmation: "create-test-brno-500"
   });
   assert.equal(created.created, true);
-  assert.equal(created.dataset.siteCount, 500);
-  assert.equal(created.dataset.companyCount, 100);
-  assert.equal(created.rows.length, 500);
+  assert.equal(created.dataset.siteCount, 501);
+  assert.equal(created.dataset.companyCount, 101);
+  assert.equal(created.rows.length, 501);
+  assert.equal(created.rows[0].summary.customerName, "Firma test 501");
+  assert.equal(created.rows[0].summary.addressPlaceRaw, "Trnkova 3052/137, 628 00 Brno");
   assert.ok(d1.batchSizes[0] < 60, `Založení použilo příliš mnoho D1 operací: ${d1.batchSizes[0]}`);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_datasets").get().count, 1);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_batches").get().count, 1);
-  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 500);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 501);
 
   const preview = await previewCollectionDailyRoute(env, manager, {
     scope: "test",
@@ -137,8 +140,8 @@ const manager = {
   });
   assert.equal(preview.scope, "test");
   assert.equal(preview.sourceBatchId, "collection-import-batch-test-brno-500-v2");
-  assert.equal(preview.selectedCount, 500);
-  assert.ok(preview.eligibleCount > 0 && preview.eligibleCount < 500);
+  assert.equal(preview.selectedCount, 501);
+  assert.ok(preview.eligibleCount > 0 && preview.eligibleCount < 501);
   const route = await createCollectionDailyRouteDraft(env, manager, {
     scope: "test",
     routeDate: "2026-07-13",
@@ -318,7 +321,7 @@ const manager = {
     SELECT COUNT(*) AS count
     FROM collection_import_rows
     WHERE json_extract(summary_json, '$.wasteType') = 'SKO'
-  `).get().count, 350);
+  `).get().count, 351);
   assert.equal(sqlite.prepare(`
     SELECT COUNT(*) AS count
     FROM collection_import_rows
@@ -332,14 +335,14 @@ const manager = {
 
   const snapshot = await getCollectionRoutesTestSnapshot(env, manager);
   assert.equal(snapshot.sourceMode, "synthetic-brno-test");
-  assert.equal(snapshot.rowCount, 500);
+  assert.equal(snapshot.rowCount, 501);
   assert.ok(snapshot.rows.every((row) => row.summary.dataScope === "test"));
 
   const repeated = await ensureCollectionRoutesTestDataset(env, manager, {
     confirmation: "create-test-brno-500"
   });
   assert.equal(repeated.created, false);
-  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 500);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 501);
 }
 
 {
@@ -374,7 +377,7 @@ const manager = {
   assert.equal(created.dataset.key, "brno-500-v2");
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_datasets").get().count, 2);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_batches").get().count, 2);
-  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 500);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 501);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_datasets WHERE dataset_key = 'brno-500-v1'").get().count, 1);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_datasets WHERE dataset_key = 'brno-500-v2'").get().count, 1);
 }
@@ -391,6 +394,73 @@ const manager = {
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_datasets").get().count, 0);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_batches").get().count, 0);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 0);
+}
+
+{
+  const sqlite = new DatabaseSync(":memory:");
+  for (const migration of [
+    "../migrations/0017_create_collection_routes_phase1a.sql",
+    "../migrations/0038_create_collection_daily_routes.sql",
+    "../migrations/test/0001_create_collection_routes_test_control.sql"
+  ]) {
+    sqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
+  }
+  sqlite.prepare(`
+    INSERT INTO collection_import_batches (
+      id, source, source_mode, status, api_status, message, row_count,
+      issue_count, created_by_user_id, created_at, finished_at, metadata_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+  `).run(
+    "collection-import-batch-test-brno-500-v2",
+    "synthetic-test",
+    "synthetic-brno-test",
+    "preview",
+    "ready",
+    "Původní sada 500",
+    500,
+    0,
+    "manager-test",
+    JSON.stringify({ summary: { siteCount: 500, wasteCounts: { SKO: 350 } } })
+  );
+  sqlite.prepare(`
+    INSERT INTO collection_route_test_datasets (
+      id, dataset_key, name, status, source_batch_id, seed, company_count, site_count,
+      address_source, metadata_json, created_by_user_id, created_by_name, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `).run(
+    "collection-route-test-dataset-brno-500-v2",
+    "brno-500-v2",
+    "TEST Brno 500",
+    "ready",
+    "collection-import-batch-test-brno-500-v2",
+    20260712,
+    100,
+    500,
+    "gis-brno-open-data",
+    JSON.stringify({
+      recipientPhone: "+420600000000",
+      recipientEmail: "route-test@example.invalid",
+      summary: { siteCount: 500, wasteCounts: { SKO: 350 } }
+    }),
+    "manager-test",
+    "Manager Test"
+  );
+  const migration = readFileSync(
+    new URL("../migrations/test/0004_add_collection_route_field_test_site_501.sql", import.meta.url),
+    "utf8"
+  );
+  sqlite.exec(migration);
+  sqlite.exec(migration);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows WHERE source_id = ?").get("test-field-site-501").count, 1);
+  const fieldRow = JSON.parse(sqlite.prepare("SELECT summary_json FROM collection_import_rows WHERE source_id = ?").get("test-field-site-501").summary_json);
+  assert.equal(fieldRow.customerName, "Firma test 501");
+  assert.equal(fieldRow.phone, "+420600000000");
+  assert.equal(fieldRow.pickupDaysText, "středa lichá, středa sudá");
+  const migratedDataset = sqlite.prepare("SELECT name, company_count, site_count, metadata_json FROM collection_route_test_datasets WHERE dataset_key = ?").get("brno-500-v2");
+  assert.equal(migratedDataset.name, "TEST Brno 501");
+  assert.equal(migratedDataset.company_count, 101);
+  assert.equal(migratedDataset.site_count, 501);
+  assert.equal(JSON.parse(migratedDataset.metadata_json).summary.wasteCounts.SKO, 351);
 }
 
 await assert.rejects(
@@ -414,4 +484,4 @@ await assert.rejects(
   (error) => error instanceof CollectionRoutesTestStoreError && error.code === "collection_routes_test_recipient_missing"
 );
 
-console.log("Collection routes TEST Brno 500 store tests passed.");
+console.log("Collection routes TEST Brno 501 store tests passed.");
