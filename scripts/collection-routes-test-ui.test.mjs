@@ -213,6 +213,10 @@ assert.ok(
   Number.isFinite(Date.parse(COLLECTION_ROUTES_MANTRA.updatedAtIso)) && COLLECTION_ROUTES_MANTRA.updatedBy,
   "Mantra musí mít strojově čitelný čas a autora poslední úpravy."
 );
+assert.ok(
+  appSource.includes(`./data/collectionRoutesMantra.js?v=${COLLECTION_ROUTES_MANTRA.version}`),
+  "Import Mantry musí používat její verzi, aby produkční prohlížeč nezobrazil starý audit z cache."
+);
 
 const tabletWorkspaceStart = appSource.indexOf("function collectionRoutesTestTabletWorkspace");
 const tabletWorkspaceEnd = appSource.indexOf("function collectionRoutesTestDatasetPanel", tabletWorkspaceStart);

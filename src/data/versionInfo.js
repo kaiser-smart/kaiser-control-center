@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.543"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.544"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: vždy aktuální Mantra",
+    text: "Import provozní Mantry je navázaný na její vlastní verzi. Po další úpravě tak produkční prohlížeč načte nový čas, krátký popis změny i autora a neponechá starý modul v cache."
+  },
   {
     title: "Svozové trasy: čitelný kontext HERE mapy",
     text: "Blízký adresní a fyzický GPS bod se zobrazí v pevném uličním přiblížení, takže tablet místo metrového výřezu budovy ukáže i okolní příjezd. U vzdálenější odchylky mapa nadále automaticky zobrazí oba body."

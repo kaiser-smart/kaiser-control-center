@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.7",
-  updatedAt: "13. 7. 2026 10:11",
-  updatedAtIso: "2026-07-13T10:11:46+02:00",
-  lastChange: "Opraven kontext HERE mapy",
+  version: "1.8",
+  updatedAt: "13. 7. 2026 10:51",
+  updatedAtIso: "2026-07-13T10:51:18+02:00",
+  lastChange: "Zajištěno načtení aktuální Mantry",
   updatedBy: "Codex",
   status: "TEST návrh · řízené GPS",
   title: "Svozový autopilot – provozní mantra",
