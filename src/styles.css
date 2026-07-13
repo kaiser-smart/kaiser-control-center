@@ -8880,8 +8880,8 @@ h1 {
 .tracking-tcars-google-marker {
   position: absolute;
   display: inline-flex;
-  width: 156px;
-  min-width: 156px;
+  width: 204px;
+  min-width: 204px;
   min-height: 0;
   align-items: flex-end;
   justify-content: center;
@@ -8984,7 +8984,7 @@ h1 {
 .tracking-tcars-google-pin {
   position: relative;
   display: flex;
-  width: 156px;
+  width: 204px;
   min-width: 0;
   max-width: none;
   flex-direction: column;
@@ -9016,57 +9016,361 @@ h1 {
 .tracking-tcars-google-pin__label {
   position: relative;
   z-index: 5;
-  display: grid;
   box-sizing: border-box;
-  width: 156px;
-  gap: 3px;
-  margin-bottom: -8px;
-  padding: 8px 10px 9px;
-  border: 1px solid rgba(20, 35, 16, 0.38);
-  border-radius: 12px 12px 9px 9px;
-  background: #B6FF00;
-  color: #12200e;
+  margin-bottom: -9px;
   line-height: 1.1;
   pointer-events: none;
   text-align: left;
 }
 
-.tracking-tcars-google-pin__label > span {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
+.tracking-tcars-google-pin__label--compact {
+  display: grid;
+  width: 168px;
   gap: 7px;
+  overflow: hidden;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: 17px 17px 11px 11px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.78), transparent 34%),
+    linear-gradient(135deg, rgba(210, 255, 110, 0.97) 0%, #b6ff00 45%, #84d92d 100%);
+  color: #12200e;
+  box-shadow:
+    inset 0 0 0 1px rgba(38, 88, 22, 0.16),
+    inset 0 -10px 20px rgba(63, 126, 28, 0.13),
+    0 10px 24px rgba(22, 50, 30, 0.2),
+    0 2px 4px rgba(22, 50, 30, 0.16);
+  backdrop-filter: blur(9px) saturate(1.12);
 }
 
-.tracking-tcars-google-pin__label small {
-  color: rgba(18, 32, 14, 0.76);
-  font-size: 0.49rem;
+.tracking-marker-compact__shine {
+  position: absolute;
+  top: -18px;
+  left: 18px;
+  width: 68px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.48);
+  filter: blur(9px);
+  transform: rotate(-10deg);
+}
+
+.tracking-marker-compact__head {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  gap: 5px;
+  align-items: center;
+}
+
+.tracking-marker-compact__head > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1f6f43;
+  box-shadow: 0 0 0 3px rgba(31, 111, 67, 0.14), 0 0 10px rgba(31, 111, 67, 0.48);
+}
+
+.tracking-marker-compact__head > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #132612;
+  font-size: 0.67rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-marker-compact__head > em {
+  padding: 3px 5px 2px;
+  border: 1px solid rgba(30, 95, 52, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  color: #1b633d;
+  font-size: 0.38rem;
+  font-style: normal;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.tracking-marker-compact__metrics {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.tracking-marker-compact__metrics > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.tracking-marker-compact__metrics small,
+.tracking-marker-telemetry__top small,
+.tracking-marker-telemetry__grid small,
+.tracking-marker-telemetry__event small {
+  font-size: 0.4rem;
   font-weight: 900;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.055em;
   text-transform: uppercase;
 }
 
-.tracking-tcars-google-pin__label strong {
+.tracking-marker-compact__metrics b {
   min-width: 0;
   overflow: hidden;
   color: #10200c;
-  font-size: 0.66rem;
+  font-size: 0.57rem;
   font-weight: 950;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tracking-tcars-google-pin__label b {
-  min-width: 0;
+.tracking-tcars-google-pin__label--plate {
+  display: grid;
+  width: 160px;
+  gap: 4px;
+  color: #111;
+  filter: drop-shadow(0 8px 12px rgba(20, 35, 25, 0.24));
+}
+
+.tracking-marker-plate {
+  display: grid;
+  grid-template-columns: 21px auto 1fr;
+  gap: 5px;
+  align-items: center;
   overflow: hidden;
-  color: #12200e;
-  font-size: 0.59rem;
+  min-height: 30px;
+  border: 2px solid #343b37;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fff 0%, #e8ece8 100%);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.86);
+}
+
+.tracking-marker-plate i {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  background: linear-gradient(180deg, #3477d5, #174eaa);
+  color: white;
+  font-size: 0.38rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.tracking-marker-plate small {
+  font-size: 0.42rem;
+  font-weight: 900;
+}
+
+.tracking-marker-plate b {
+  padding-right: 8px;
+  font-size: 0.78rem;
   font-weight: 950;
+  letter-spacing: 0.045em;
   text-align: right;
+}
+
+.tracking-marker-speed-board {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 5px;
+  align-items: end;
+  padding: 6px 9px 7px;
+  border: 2px solid #343b37;
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(246, 255, 243, 0.98), rgba(209, 228, 204, 0.98));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.76);
+}
+
+.tracking-marker-speed-board small {
+  align-self: start;
+  font-size: 0.48rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tracking-marker-speed-board b {
+  font-size: 1.52rem;
+  line-height: 0.85;
+}
+
+.tracking-marker-speed-board em {
+  font-size: 0.56rem;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.tracking-tcars-google-pin__label--speedometer {
+  position: relative;
+  display: block;
+  width: 132px;
+  height: 132px;
+  overflow: hidden;
+  border: 4px solid rgba(221, 228, 223, 0.96);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 44% 38%, #353b38 0 12%, #151a17 56%, #080b09 100%);
+  color: white;
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 255, 255, 0.12),
+    inset 0 -18px 28px rgba(0, 0, 0, 0.44),
+    0 12px 24px rgba(15, 25, 18, 0.32),
+    0 0 0 1px rgba(31, 61, 42, 0.5);
+}
+
+.tracking-marker-gauge__ticks {
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from -132deg, rgba(255,255,255,.82) 0deg 1.4deg, transparent 1.4deg 13.2deg);
+  mask: radial-gradient(circle, transparent 0 72%, #000 73% 100%);
+  -webkit-mask: radial-gradient(circle, transparent 0 72%, #000 73% 100%);
+}
+
+.tracking-marker-gauge__needle {
+  position: absolute;
+  z-index: 3;
+  left: calc(50% - 2px);
+  bottom: 48%;
+  width: 4px;
+  height: 48px;
+  border-radius: 999px 999px 2px 2px;
+  background: linear-gradient(90deg, #ff7466, #df2518 55%, #8b130d);
+  box-shadow: 0 2px 4px rgba(0,0,0,.48), 0 0 8px rgba(239, 53, 37, .28);
+  transform: rotate(var(--tracking-speed-angle));
+  transform-origin: 50% 100%;
+}
+
+.tracking-marker-gauge__hub {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 52%;
+  width: 14px;
+  height: 14px;
+  border: 3px solid #4a504d;
+  border-radius: 50%;
+  background: #151a17;
+  transform: translate(-50%, -50%);
+}
+
+.tracking-marker-gauge__value {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: 19px;
+  left: 0;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 3px;
+}
+
+.tracking-marker-gauge__value b { font-size: 1.25rem; line-height: .82; }
+.tracking-marker-gauge__value small { color: #dce3df; font-size: .48rem; font-weight: 800; }
+.tracking-marker-gauge__plate {
+  position: absolute;
+  z-index: 5;
+  top: 15px;
+  left: 50%;
+  max-width: 88px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.1);
+  color: #eef4f0;
+  font-size: .44rem;
+  font-weight: 900;
   text-overflow: ellipsis;
+  transform: translateX(-50%);
   white-space: nowrap;
 }
+
+.tracking-tcars-google-pin__label--telemetry {
+  display: grid;
+  width: 198px;
+  gap: 7px;
+  overflow: hidden;
+  padding: 10px;
+  border: 1px solid rgba(214, 255, 233, 0.7);
+  border-radius: 18px 18px 12px 12px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(209, 255, 228, 0.22), transparent 38%),
+    linear-gradient(145deg, rgba(30, 67, 48, 0.91), rgba(12, 31, 21, 0.94));
+  color: #f5fff8;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.12),
+    0 13px 28px rgba(12, 29, 19, 0.3),
+    0 0 20px rgba(90, 198, 128, 0.09);
+  backdrop-filter: blur(12px) saturate(1.2);
+}
+
+.tracking-marker-telemetry__top {
+  display: grid;
+  grid-template-columns: auto 1fr 7px;
+  gap: 6px;
+  align-items: center;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(217,255,231,.22);
+}
+
+.tracking-marker-telemetry__top small { color: #bde1c9; }
+.tracking-marker-telemetry__top b { font-size: .7rem; letter-spacing: .045em; text-align: right; }
+.tracking-marker-telemetry__top i { width: 7px; height: 7px; border-radius: 50%; background:#b6ff00; box-shadow:0 0 9px #b6ff00; }
+
+.tracking-marker-telemetry__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.tracking-marker-telemetry__grid > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid rgba(220,255,233,.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,.065);
+}
+
+.tracking-marker-telemetry__grid small,
+.tracking-marker-telemetry__event small { color:#a9cab4; }
+.tracking-marker-telemetry__grid b { overflow:hidden; font-size:.55rem; text-overflow:ellipsis; white-space:nowrap; }
+
+.tracking-marker-telemetry__event {
+  display: grid;
+  grid-template-columns: 22px minmax(0,1fr);
+  gap: 7px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 9px;
+  background: rgba(255,255,255,.075);
+}
+
+.tracking-marker-telemetry__event > i {
+  display:grid;
+  width:22px;
+  height:22px;
+  place-items:center;
+  border-radius:50%;
+  background:#50c878;
+  color:#0f2b1b;
+  font-size:.7rem;
+  font-style:normal;
+  font-weight:950;
+}
+
+.tracking-marker-telemetry__event--alert > i { background:#ff695d; color:white; }
+.tracking-marker-telemetry__event > span { display:grid; gap:2px; min-width:0; }
+.tracking-marker-telemetry__event b { overflow:hidden; font-size:.5rem; text-overflow:ellipsis; white-space:nowrap; }
 
 .tracking-tcars-google-pin__icon img {
   position: relative;
@@ -9085,13 +9389,29 @@ h1 {
   position: relative;
   z-index: 0;
   display: block;
-  width: 30px;
-  height: 28px;
-  margin-top: -2px;
-  background: #245e3c;
-  clip-path: polygon(38% 0, 62% 0, 62% 43%, 88% 43%, 50% 100%, 12% 43%, 38% 43%);
-  filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 4px 3px rgba(24, 35, 27, 0.34));
+  width: 34px;
+  height: 38px;
+  margin-top: -10px;
   pointer-events: none;
+}
+
+.tracking-tcars-google-pin__position svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 5px 5px rgba(18, 41, 27, 0.28));
+}
+
+.tracking-position-arrow__body {
+  fill: #236c46;
+  stroke: rgba(255, 255, 255, 0.96);
+  stroke-linejoin: round;
+  stroke-width: 2.2px;
+}
+
+.tracking-position-arrow__glint {
+  fill: rgba(255, 255, 255, 0.16);
 }
 
 .tracking-tcars-google-pin__fallback {
@@ -9134,18 +9454,19 @@ h1 {
 
 @media (max-width: 720px) {
   .tracking-tcars-google-marker {
-    width: 138px;
-    min-width: 138px;
+    width: 184px;
+    min-width: 184px;
   }
 
-  .tracking-tcars-google-pin,
-  .tracking-tcars-google-pin__label {
-    width: 138px;
+  .tracking-tcars-google-pin {
+    width: 184px;
   }
 
-  .tracking-tcars-google-pin__label {
-    padding: 7px 9px 8px;
-  }
+  .tracking-tcars-google-pin__label--compact { width: 154px; }
+  .tracking-tcars-google-pin__label--plate { width: 150px; }
+  .tracking-tcars-google-pin__label--speedometer { width: 116px; height: 116px; }
+  .tracking-tcars-google-pin__label--telemetry { width: 180px; padding: 8px; }
+  .tracking-marker-gauge__needle { height: 41px; }
 
   .tracking-tcars-google-pin__icon {
     width: 92px;
@@ -9153,8 +9474,8 @@ h1 {
   }
 
   .tracking-tcars-google-pin__position {
-    width: 28px;
-    height: 26px;
+    width: 31px;
+    height: 35px;
   }
 }
 
@@ -26158,6 +26479,54 @@ body:has(.data-box-page) .data-box-side-card--sync {
   gap: 8px;
 }
 
+.tracking-info-style-control {
+  display: grid;
+  grid-template-columns: auto minmax(118px, 1fr);
+  gap: 7px;
+  align-items: center;
+  min-height: 42px;
+  padding: 4px 5px 4px 11px;
+  border: 1px solid rgba(51, 65, 55, 0.14);
+  border-radius: 999px;
+  background: rgba(245, 248, 246, 0.96);
+}
+
+.tracking-operational-map-stage__bar .tracking-info-style-control > span {
+  color: #435149;
+  font-size: 0.67rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.tracking-info-style-control select {
+  min-height: 34px;
+  padding: 0 30px 0 11px;
+  border: 1px solid rgba(42, 89, 58, 0.2);
+  border-radius: 999px;
+  background: #fff;
+  color: #173523;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.tracking-info-style-control select:focus-visible {
+  outline: 3px solid rgba(182, 255, 0, 0.82);
+  outline-offset: 1px;
+}
+
+.tracking-info-style-message {
+  margin: 0;
+  padding: 7px 14px;
+  border-top: 1px solid rgba(51, 65, 55, 0.1);
+  background: #f7faf8;
+  color: #4e5e55;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: right;
+}
+
 .tracking-map-view-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -26797,6 +27166,21 @@ body.tracking-map-is-maximized {
   .tracking-operational-map-actions > * {
     width: 100%;
     justify-content: center;
+  }
+
+  .tracking-info-style-control {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 7px;
+    border-radius: 12px;
+  }
+
+  .tracking-info-style-control select {
+    width: 100%;
+  }
+
+  .tracking-info-style-message {
+    text-align: left;
   }
 
   .tracking-operational-map-shell,

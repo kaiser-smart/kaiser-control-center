@@ -9,9 +9,24 @@ import {
   vehicleTrackingHeadingOffsetForVehicle,
   vehicleTrackingVisualHeading
 } from "../src/data/vehicleTracking.js";
+import {
+  DEFAULT_VEHICLE_TRACKING_PREFERENCES,
+  VEHICLE_TRACKING_INFO_STYLES,
+  normalizeVehicleTrackingInfoStyle,
+  normalizeVehicleTrackingPreferences
+} from "../src/data/vehicleTrackingPreferences.js";
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const tcarsClientSource = readFileSync(new URL("../functions/_lib/tcars-client.js", import.meta.url), "utf8");
+
+{
+  assert.equal(DEFAULT_VEHICLE_TRACKING_PREFERENCES.infoStyle, "compact");
+  assert.deepEqual(VEHICLE_TRACKING_INFO_STYLES.map((item) => item.id), ["compact", "plate", "speedometer", "telemetry"]);
+  assert.equal(normalizeVehicleTrackingInfoStyle(" speedometer "), "speedometer");
+  assert.equal(normalizeVehicleTrackingInfoStyle("unknown"), "compact");
+  assert.equal(normalizeVehicleTrackingPreferences({ infoStyle: "telemetry" }).infoStyle, "telemetry");
+}
 
 {
   const payload = vehicleTrackingMapsConfigPayload({});
@@ -88,7 +103,7 @@ const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), 
 
 {
   const markerContent = appSource.slice(
-    appSource.indexOf("function vehicleTrackingTcarsGoogleMarkerContent"),
+    appSource.indexOf("function vehicleTrackingTcarsInfoPanel"),
     appSource.indexOf("function vehicleTrackingTcarsInvalidSection")
   );
   const markerOverlay = appSource.slice(
@@ -97,11 +112,18 @@ const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), 
   );
 
   assert.match(markerContent, /tracking-tcars-google-pin__position/);
+  assert.match(markerContent, /tracking-position-arrow__body/);
+  assert.match(markerContent, /tracking-tcars-google-pin__label--speedometer/);
+  assert.match(markerContent, /tracking-tcars-google-pin__label--telemetry/);
   assert.doesNotMatch(markerOverlay, /setProperty\("--heading"/);
   assert.match(styleSource, /\.tracking-tcars-google-marker\s*\{[\s\S]*?transform:\s*translate\(-50%, -100%\)/);
   assert.match(styleSource, /\.tracking-tcars-google-pin__icon img\s*\{[\s\S]*?transform:\s*translateY\(-8px\);/);
   assert.doesNotMatch(styleSource, /tracking-tcars-google-pin__icon img[\s\S]{0,420}rotate\(var\(--heading/);
-  assert.match(styleSource, /\.tracking-tcars-google-pin__position\s*\{[\s\S]*?clip-path:\s*polygon\(/);
+  assert.doesNotMatch(styleSource, /\.tracking-tcars-google-pin__position\s*\{[\s\S]{0,360}?clip-path:\s*polygon\(/);
+  assert.match(styleSource, /\.tracking-position-arrow__body\s*\{[\s\S]*?stroke-linejoin:\s*round/);
+  assert.match(appSource, /data-tracking-info-style/);
+  assert.match(tcarsClientSource, /voltage:\s*gps\.voltage/);
+  assert.match(tcarsClientSource, /emergency:\s*gps\.emergency/);
 }
 
 console.log("vehicle-tracking maps config tests: ok");

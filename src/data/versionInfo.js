@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Poloha vozidel: osobní prémiové info cedule",
+    text: "Každý uživatel si na mapě volí vlastní styl info cedule: hravou Kaiser kartu, SPZ tabuli, analogový budík nebo palubní panel. Palubní panel ukazuje jen reálné hodnoty dostupné z T-Cars; osobní volba se ukládá k účtu. GPS hrot je nově čistá zaoblená vektorová šipka."
+  },
+  {
     title: "Svozové trasy: Mantra ukazuje poslední změnu",
     text: "Pod provozní Mantrou je vždy vidět přesný čas poslední úpravy, krátké čtyř až pětislovné shrnutí změny a autor. Údaje se spravují společně s verzovaným promptem, takže nezůstanou schované jen v rozbaleném textu."
   },
