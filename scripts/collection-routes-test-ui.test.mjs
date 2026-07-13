@@ -32,12 +32,20 @@ for (const marker of [
   "data-collection-routes-mantra-toggle",
   "mantraExpanded = !collectionRoutesPilotState.mantraExpanded",
   "NÁHLED · NIC NESPOUŠTÍ",
-  "TEST výpočetní pilot · bez AI a navigace",
+  "TEST výpočetní pilot · kapacita + HERE",
   "Ověřit stanoviště pro datum",
   "Spočítat read-only návrh A/B/C",
   "data-collection-routes-readonly-calculate",
   "data-collection-routes-readonly-calculation",
   "calculateCollectionRoutesReadonlyPlan",
+  "HERE Tour Planning · ČR · truck routing",
+  "data-collection-route-here-waste",
+  "data-collection-route-here-readiness",
+  "data-collection-route-here-start",
+  "data-collection-route-here-refresh",
+  "start-here-test-readonly",
+  "/api/collection-routes/here-optimization",
+  "Žádné automatické opakování neběží",
   "TEST · READ-ONLY VÝPOČET"
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
@@ -98,6 +106,10 @@ assert.ok(
   !appSource.includes("COLLECTION_ROUTES_TEST_SMS_TO") && !appSource.includes("COLLECTION_ROUTES_TEST_EMAIL_TO"),
   "Chráněné příjemce nesmí obsahovat frontendový zdroj."
 );
+assert.ok(
+  !appSource.includes("HERE_ACCESS_KEY_ID") && !appSource.includes("HERE_ACCESS_KEY_SECRET"),
+  "HERE OAuth přístupy nesmí obsahovat frontendový zdroj."
+);
 
 for (const marker of [
   ".collection-routes-test-dataset",
@@ -110,7 +122,10 @@ for (const marker of [
   ".collection-daily-routes__reality",
   ".collection-routes-calculation",
   ".collection-routes-calculation__vehicles",
-  ".collection-routes-calculation__truth"
+  ".collection-routes-calculation__truth",
+  ".collection-route-here",
+  ".collection-route-here__facts",
+  ".collection-route-here__actions"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }

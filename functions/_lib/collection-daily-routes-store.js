@@ -360,6 +360,13 @@ function eligibility(row, dateInfo, scheduledRunId = "") {
     stationName: cleanString(summary.stationName || summary.siteName),
     wasteType: cleanString(summary.wasteType),
     containerVolume: numberValue(summary.containerVolume),
+    containerCount: Math.max(1, Math.floor(numberValue(summary.containerCount, 1))),
+    latitude: summary.latitude !== null && cleanString(summary.latitude) && Number.isFinite(Number(summary.latitude))
+      ? Number(summary.latitude)
+      : null,
+    longitude: summary.longitude !== null && cleanString(summary.longitude) && Number.isFinite(Number(summary.longitude))
+      ? Number(summary.longitude)
+      : null,
     frequency: cleanString(summary.frequency),
     pickupDaysText: cleanString(summary.pickupDaysText || summary.pickupDays),
     contractNumber: cleanString(summary.contractNumber || summary.sourceContractId),

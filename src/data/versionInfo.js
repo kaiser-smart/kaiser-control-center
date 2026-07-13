@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.535"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.536"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: HERE silniční read-only pilot",
+    text: "TEST trasa má navazující serverový pilot HERE Tour Planning pro nákladní vozidla v ČR. Ověřuje jednu komoditu, souřadnice, směnu, rozměry vozidel, kapacitu a správné místo výsypu; placený výpočet lze spustit jen ručně po doplnění D1 konfigurace a serverového OAuth. Výsledek má audit, nic nepřepisuje v provozní trase a nic neodesílá řidičům ani zákazníkům."
+  },
   {
     title: "Svozové trasy: read-only výpočet A/B/C",
     text: "TEST pilot po ověření svozového dne deterministicky rozděluje stanoviště mezi vozy A, B a C podle čistého času obsluhy, odhadované hmotnosti a známých kapacit. Ukazuje provozní okna a chybějící podklady; nic neukládá, nepočítá pořadí ulic ani km a nespouští AI, navigaci nebo komunikaci."
