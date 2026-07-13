@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { COLLECTION_ROUTES_MANTRA } from "../src/data/collectionRoutesMantra.js";
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
@@ -30,6 +31,10 @@ for (const marker of [
   "collectionRoutesCanUseTestDataset",
   "data-collection-routes-mantra",
   "data-collection-routes-mantra-toggle",
+  "data-collection-routes-mantra-audit",
+  "Poslední úprava",
+  "Co se změnilo",
+  "Provedl",
   "mantraExpanded = !collectionRoutesPilotState.mantraExpanded",
   "NÁHLED · NIC NESPOUŠTÍ",
   "TEST výpočetní pilot · kapacita + HERE",
@@ -125,6 +130,7 @@ for (const marker of [
   "@media (max-width: 640px)",
   ".collection-routes-mantra",
   ".collection-routes-mantra__highlights",
+  ".collection-routes-mantra__audit",
   ".collection-daily-routes__reality",
   ".collection-routes-calculation",
   ".collection-routes-calculation__vehicles",
@@ -166,6 +172,16 @@ assert.ok(
     mantraSource.includes("nezapisuje do Vistosu") &&
     mantraSource.includes("Dokud práh není schválený, neodesílej automatické upozornění"),
   "Read-only mantra musí přímo zakazovat falešnou automatizaci, produkční zápisy a neodsouhlasené alerty."
+);
+
+const mantraChangeWordCount = String(COLLECTION_ROUTES_MANTRA.lastChange || "").trim().split(/\s+/).filter(Boolean).length;
+assert.ok(
+  mantraChangeWordCount >= 4 && mantraChangeWordCount <= 5,
+  "Krátký popis poslední úpravy Mantry musí mít 4 až 5 slov."
+);
+assert.ok(
+  Number.isFinite(Date.parse(COLLECTION_ROUTES_MANTRA.updatedAtIso)) && COLLECTION_ROUTES_MANTRA.updatedBy,
+  "Mantra musí mít strojově čitelný čas a autora poslední úpravy."
 );
 
 for (const marker of [

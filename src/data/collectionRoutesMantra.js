@@ -1,6 +1,9 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.2",
-  updatedAt: "13. 7. 2026",
+  version: "1.3",
+  updatedAt: "13. 7. 2026 04:26",
+  updatedAtIso: "2026-07-13T04:26:00+02:00",
+  lastChange: "Přidáno auditní pole Mantry",
+  updatedBy: "Codex",
   status: "TEST návrh · řízené GPS",
   title: "Svozový autopilot – provozní mantra",
   summary: "Závazná pravidla pro budoucí AI plánování. Aktuální TEST pouze zobrazuje podklady a po ručním potvrzení ukládá auditní GPS; neplánuje, neposílá a nemění Vistos.",

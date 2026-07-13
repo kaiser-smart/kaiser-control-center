@@ -21370,7 +21370,7 @@ function collectionRoutesMantraPanel() {
             return `<a href="${escapeHtml(href)}" ${external ? 'target="_blank" rel="noopener noreferrer"' : ""}>${escapeHtml(source.label)}</a>`;
           }).join("")}
         </nav>
-        <small>${escapeHtml(mantra.status)} · aktualizováno ${escapeHtml(mantra.updatedAt)}</small>
+        <small>${escapeHtml(mantra.status)}</small>
       </footer>
     </div>
   `;
@@ -21399,6 +21399,20 @@ function collectionRoutesMantraPanel() {
         </button>
         ${expanded ? content : ""}
       </div>
+      <dl class="collection-routes-mantra__audit" aria-label="Poslední úprava provozní mantry" data-collection-routes-mantra-audit>
+        <div>
+          <dt>Poslední úprava</dt>
+          <dd><time datetime="${escapeHtml(mantra.updatedAtIso)}">${escapeHtml(mantra.updatedAt)}</time></dd>
+        </div>
+        <div>
+          <dt>Co se změnilo</dt>
+          <dd>${escapeHtml(mantra.lastChange)}</dd>
+        </div>
+        <div>
+          <dt>Provedl</dt>
+          <dd>${escapeHtml(mantra.updatedBy)}</dd>
+        </div>
+      </dl>
     </section>
   `;
 }

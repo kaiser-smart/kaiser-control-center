@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.537"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.538"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: Mantra ukazuje poslední změnu",
+    text: "Pod provozní Mantrou je vždy vidět přesný čas poslední úpravy, krátké čtyř až pětislovné shrnutí změny a autor. Údaje se spravují společně s verzovaným promptem, takže nezůstanou schované jen v rozbaleném textu."
+  },
   {
     title: "Poloha vozidel: stabilní marker GPS",
     text: "Vozidlo na mapě zůstává stále vodorovné bez rotace podle azimutu. Informační cedule je těsně nad vozidlem a samostatná šipka pod vozidlem označuje přesnou GPS polohu; data T-Cars ani výběr vozidla se nemění."
