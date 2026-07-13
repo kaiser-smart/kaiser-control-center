@@ -35253,6 +35253,47 @@ body:has(.ds-plus-page) {
   grid-column: 1 / -1;
 }
 
+.ds-plus-ai-prompt {
+  display: grid;
+  gap: 12px;
+}
+
+.ds-plus-ai-prompt__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 16px;
+  align-items: flex-start;
+}
+
+.ds-plus-ai-prompt__head h3,
+.ds-plus-ai-prompt__head p {
+  margin: 0;
+}
+
+.ds-plus-ai-prompt__head span {
+  border: 1px solid #cfe0cc;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #f4faf2;
+  color: #42654a;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.ds-plus-ai-prompt textarea {
+  width: 100%;
+  min-height: 300px;
+  resize: vertical;
+  border: 1px solid #d8e2d5;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8faf7;
+  color: #263228;
+  font: 500 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
 .ds-plus-model-note {
   display: flex;
   flex-wrap: wrap;

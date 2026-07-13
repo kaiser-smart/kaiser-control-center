@@ -14,6 +14,7 @@ import {
 import {
   DataBoxPlusOpenAiError,
   dataBoxPlusOpenAiStatus,
+  dataBoxPlusSystemPrompt,
   interpretDataBoxPlusChat
 } from "./data-box-plus-openai.js";
 import { sendDataBoxForwardNotification } from "./notification-service.js";
@@ -1430,6 +1431,12 @@ export async function getDataBoxPlusStatus(env) {
         strongAreas: ["Faktury", "Registr smluv", "ČSSZ"]
       },
       sendReadiness: sendReadiness(env),
+      aiPrompt: {
+        source: "server",
+        editable: false,
+        model: dataBoxPlusOpenAiStatus(env).model,
+        text: dataBoxPlusSystemPrompt()
+      },
       background: {
         intervalMinutes: 30,
         enabled: cleanString(env.DATA_BOX_PLUS_BACKGROUND_ENABLED || "true") !== "false",

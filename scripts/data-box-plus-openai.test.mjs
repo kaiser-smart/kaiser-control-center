@@ -3,6 +3,7 @@ import {
   DataBoxPlusOpenAiError,
   __test as openAiTest,
   dataBoxPlusOpenAiStatus,
+  dataBoxPlusSystemPrompt,
   interpretDataBoxPlusChat
 } from "../functions/_lib/data-box-plus-openai.js";
 import { dataBoxPlusOpenAiPlanForTest } from "../functions/_lib/data-box-plus-store.js";
@@ -26,6 +27,12 @@ const structuredPlan = {
     dueDate: ""
   }
 };
+
+const serverSystemPrompt = dataBoxPlusSystemPrompt();
+assert.match(serverSystemPrompt, /currentInstruction je jediný nový pokyn/);
+assert.match(serverSystemPrompt, /search_fleet_vehicles_by_driver/);
+assert.match(serverSystemPrompt, /připrav odvolání/);
+assert.equal(openAiTest.requestPayload("gpt-test", { instruction: "ahoj" }).instructions, serverSystemPrompt);
 
 let requestSnapshot = null;
 const result = await interpretDataBoxPlusChat({

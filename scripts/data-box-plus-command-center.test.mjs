@@ -68,10 +68,13 @@ assert.doesNotMatch(appSource, /function dataBoxPlusManualPanel/);
 assert.doesNotMatch(appSource, /function dataBoxPlusConfirmationsPanel/);
 assert.doesNotMatch(appSource, /function dataBoxPlusArchivePanel/);
 assert.match(settingsSource, /Technická správa[\s\S]*data-ds-plus-tab="rules"[\s\S]*Otevřít pravidla a automatizace/);
+assert.match(settingsSource, /Prompt serverového AI chatu[\s\S]*readonly[\s\S]*aiPrompt\.text/);
+assert.doesNotMatch(settingsSource, /data-ds-plus-prompt-save|Uložit prompt/);
 assert.match(rulesSource, /Seznam pravidel a automatizace[\s\S]*data-ds-plus-tab="settings"[\s\S]*Zpět do Nastavení/);
 assert.match(activePanelSource, /activeTab === "rules"/);
 assert.doesNotMatch(activePanelSource, /confirmations|archive|manual/);
 assert.match(styles, /\.ds-plus-collapsible-panel\s*\{/);
+assert.match(styles, /\.ds-plus-ai-prompt textarea\s*\{/);
 
 assert.match(composeSource, /data-ds-plus-compose-recipient/);
 assert.match(composeSource, /data-ds-plus-compose-form/);

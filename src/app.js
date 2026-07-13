@@ -1455,6 +1455,7 @@ const dataBoxPlusState = {
   rules: [],
   syncRuns: [],
   sendReadiness: null,
+  aiPrompt: null,
   learning: null,
   instructionDrafts: {},
   instructionChats: {},
@@ -26073,6 +26074,9 @@ function dataBoxPlusEventLogBlock() {
 
 function dataBoxPlusSettingsPanel() {
   const mailboxes = dataBoxPlusMailboxes();
+  const aiPrompt = dataBoxPlusState.aiPrompt && typeof dataBoxPlusState.aiPrompt === "object"
+    ? dataBoxPlusState.aiPrompt
+    : {};
   return `
     <section class="ds-plus-workspace" aria-labelledby="ds-plus-settings-title">
       <div class="ds-plus-section-head">
@@ -26095,6 +26099,16 @@ function dataBoxPlusSettingsPanel() {
             <li>E-mail, SMS nebo odpověď přes ISDS odešle jen po potvrzení a pouze přes aktivní serverovou službu.</li>
             <li>Když obsah přílohy není načtený nebo chybí vazba, nastaví konkrétní stav.</li>
           </ul>
+        </section>
+        <section class="ds-plus-settings-block ds-plus-settings-block--wide ds-plus-ai-prompt">
+          <div class="ds-plus-ai-prompt__head">
+            <div>
+              <h3>Prompt serverového AI chatu</h3>
+              <p>Skutečný system prompt používaný serverovým OpenAI chatem. Frontend ho nenahrazuje ani neupravuje.</p>
+            </div>
+            <span>Server · jen pro čtení${aiPrompt.model ? ` · ${escapeHtml(aiPrompt.model)}` : ""}</span>
+          </div>
+          <textarea rows="18" readonly aria-label="Prompt serverového AI chatu">${escapeHtml(aiPrompt.text || "Serverový prompt se nepodařilo načíst.")}</textarea>
         </section>
         <section class="ds-plus-settings-block">
           <h3>Kontakty pro předávání</h3>
@@ -36397,6 +36411,7 @@ async function loadDataBoxPlusData(options = {}) {
     dataBoxPlusState.apiStatus = statusResult.apiStatus || "ready";
     dataBoxPlusState.mailboxes = Array.isArray(statusResult.mailboxes) ? statusResult.mailboxes : [];
     dataBoxPlusState.sendReadiness = statusResult.sendReadiness || null;
+    dataBoxPlusState.aiPrompt = statusResult.aiPrompt || null;
     dataBoxPlusState.learning = statusResult.learning || null;
     dataBoxPlusState.messages = Array.isArray(messagesResult.messages) ? messagesResult.messages : [];
     dataBoxPlusState.recommendations = Array.isArray(recommendationsResult.recommendations) ? recommendationsResult.recommendations : [];
