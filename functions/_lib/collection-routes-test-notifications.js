@@ -262,7 +262,7 @@ export async function createCollectionRoutesTestNotificationJob(env, user, input
   const datasetResult = await getCollectionRoutesTestDataset(env, user, { includeRows: false });
   if (!datasetResult.dataset) {
     throw new CollectionRoutesTestStoreError(
-      "Testovací sada Brno 500 není založená.",
+      "Testovací sada Brno 501 není založená.",
       409,
       "collection_routes_test_dataset_missing"
     );

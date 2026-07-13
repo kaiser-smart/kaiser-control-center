@@ -148,7 +148,7 @@ function database(env, required = false, scopeValue = COLLECTION_DAILY_ROUTE_SCO
   if (!db && required) {
     throw new CollectionDailyRoutesError(
       scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
-        ? "Oddělené úložiště TEST Brno 500 není nastavené."
+        ? "Oddělené úložiště TEST Brno 501 není nastavené."
         : "Provozní úložiště denních Svozových tras není nastavené.",
       503,
       scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
@@ -448,7 +448,7 @@ export async function previewCollectionDailyRoute(env, userOrInput = {}, maybeIn
     if (!snapshot.batch?.id) {
       throw new CollectionDailyRoutesError(
         scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
-          ? "Není dostupná připravená sada TEST Brno 500."
+          ? "Není dostupná připravená sada TEST Brno 501."
           : "Není dostupný žádný připravený Vistos Komunál snapshot.",
         409,
         "collection_daily_route_snapshot_missing"

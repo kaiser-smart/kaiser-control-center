@@ -92,9 +92,9 @@ const scaleCalculation = calculateCollectionRoutesReadonlyPlan({
   eligibleRows: generatedSourceRows.map((row) => ({ sourceRowId: row.id })),
   sourceRows: generatedSourceRows
 });
-assert.equal(scaleCalculation.totals.stopCount, 500);
-assert.equal(scaleCalculation.vehicles.reduce((sum, vehicle) => sum + vehicle.stopCount, 0), 500);
-assert.ok(scaleCalculation.totals.containerCount >= 500);
+assert.equal(scaleCalculation.totals.stopCount, 501);
+assert.equal(scaleCalculation.vehicles.reduce((sum, vehicle) => sum + vehicle.stopCount, 0), 501);
+assert.ok(scaleCalculation.totals.containerCount >= 501);
 assert.ok(scaleCalculation.totals.serviceMinutes > 0);
 assert.ok(scaleCalculation.totals.knownWeightTons > 0);
 
