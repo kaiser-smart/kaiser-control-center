@@ -1,6 +1,9 @@
 import { customerMessagingStatus, sendCustomerMessage } from "./customer-messaging-service.js";
 import { sendCollectionRouteTestEmail } from "./notification-service.js";
-import { getCollectionDailyRoute } from "./collection-daily-routes-store.js";
+import {
+  getCollectionDailyRoute,
+  isCollectionDailyRouteStationaryFieldTest
+} from "./collection-daily-routes-store.js";
 import {
   CollectionRoutesTestStoreError,
   assertCollectionRoutesTestManager,
@@ -185,6 +188,13 @@ export async function previewCollectionRoutesTestNotifications(env, user, {
 } = {}) {
   assertCollectionRoutesTestManager(user);
   const detail = await getCollectionDailyRoute(env, user, runId, { scope: "test" });
+  if (isCollectionDailyRouteStationaryFieldTest(detail.run)) {
+    throw new CollectionRoutesTestStoreError(
+      "Stacionární terénní TEST nesmí odesílat SMS ani e-maily.",
+      409,
+      "collection_routes_test_notification_stationary_field_forbidden"
+    );
+  }
   const stops = selectedStops(detail, stopIds);
   if (!stops.length) {
     throw new CollectionRoutesTestStoreError(

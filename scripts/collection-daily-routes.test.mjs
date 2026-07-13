@@ -5,9 +5,12 @@ import { DatabaseSync } from "node:sqlite";
 import { createSessionCookie } from "../functions/_lib/auth.js";
 import { onRequestGet as listDailyRoutesApi } from "../functions/api/collection-routes/daily-routes.js";
 import { onRequestGet as myDailyRouteApi } from "../functions/api/collection-routes/daily-routes/my.js";
+import { previewCollectionRoutesTestNotifications } from "../functions/_lib/collection-routes-test-notifications.js";
 import {
   __collectionDailyRouteEligibilityForTest,
   __collectionDailyRoutePickupScheduleForTest,
+  COLLECTION_DAILY_ROUTE_FIELD_TEST_SOURCE_ID,
+  COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
   assignCollectionDailyRouteDriver,
   collectionDailyRouteDateInfo,
   createCollectionDailyRouteDraft,
@@ -362,5 +365,135 @@ const routes = await listCollectionDailyRoutes(env, { limit: 10 });
 assert.equal(routes.length, 1);
 assert.equal(routes[0].summary.problemCount, 1);
 assert.ok((await getCollectionDailyRoute(env, driver, created.run.id)).events.length >= 9);
+
+const fieldSqlite = new DatabaseSync(":memory:");
+for (const migration of [
+  "../migrations/0017_create_collection_routes_phase1a.sql",
+  "../migrations/0038_create_collection_daily_routes.sql",
+  "../migrations/test/0001_create_collection_routes_test_control.sql"
+]) {
+  fieldSqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
+}
+fieldSqlite.prepare(`
+  INSERT INTO collection_import_batches (
+    id, source, source_mode, status, api_status, message, row_count, issue_count,
+    created_by_user_id, created_at, finished_at, metadata_json
+  ) VALUES (
+    'field-batch', 'synthetic-test', 'synthetic-brno-test', 'preview', 'ready', 'field test', 2, 0,
+    'tomas-manager', '2026-07-13T08:00:00.000Z', '2026-07-13T08:00:00.000Z', '{}'
+  )
+`).run();
+fieldSqlite.prepare(`
+  INSERT INTO collection_route_test_datasets (
+    id, dataset_key, name, status, source_batch_id, seed, company_count, site_count,
+    address_source, metadata_json, created_by_user_id, created_by_name, created_at, updated_at
+  ) VALUES (
+    'field-dataset', 'brno-500-v2', 'TEST Brno 501', 'ready', 'field-batch', 20260711, 2, 2,
+    'TEST', '{}', 'tomas-manager', 'Tomáš Test', '2026-07-13T08:00:00.000Z', '2026-07-13T08:00:00.000Z'
+  )
+`).run();
+const fieldSummary = summary({
+  sourceId: COLLECTION_DAILY_ROUTE_FIELD_TEST_SOURCE_ID,
+  customerName: "Firma test 501",
+  stationName: "Firma test 501 · stanoviště Trnkova",
+  siteName: "Firma test 501 · stanoviště Trnkova",
+  addressRaw: "Trnkova 3052/137, 628 00 Brno",
+  addressPlaceRaw: "Trnkova 3052/137, 628 00 Brno",
+  pickupDaysText: "středa lichá, středa sudá",
+  containerVolume: 120,
+  latitude: 49.19125931950087,
+  longitude: 16.670211574110382
+});
+fieldSqlite.prepare(`
+  INSERT INTO collection_import_rows (
+    id, batch_id, row_number, source_entity, source_id, status, summary_json, issues_json, created_at
+  ) VALUES ('field-row', 'field-batch', 501, 'synthetic-field-test-site', ?, 'preview', ?, '[]', CURRENT_TIMESTAMP)
+`).run(COLLECTION_DAILY_ROUTE_FIELD_TEST_SOURCE_ID, JSON.stringify(fieldSummary));
+fieldSqlite.prepare(`
+  INSERT INTO collection_import_rows (
+    id, batch_id, row_number, source_entity, source_id, status, summary_json, issues_json, created_at
+  ) VALUES ('decoy-row', 'field-batch', 1, 'synthetic-test-site', 'decoy-site', 'preview', ?, '[]', CURRENT_TIMESTAMP)
+`).run(JSON.stringify(summary({
+  sourceId: "decoy-site",
+  customerName: "Nesmí se zařadit",
+  pickupDaysText: "úterý lichá, úterý sudá"
+})));
+
+const tomasManager = {
+  id: "tomas-manager",
+  name: "Tomáš Test",
+  role: "management",
+  status: "active",
+  active: true
+};
+const otherManager = {
+  id: "other-manager",
+  name: "Jiný Manager",
+  role: "management",
+  status: "active",
+  active: true
+};
+const fieldEnv = {
+  COLLECTION_ROUTES_TEST_DB: new D1Database(fieldSqlite),
+  AUTH_USERS_JSON: JSON.stringify([tomasManager, otherManager])
+};
+const fieldPreview = await previewCollectionDailyRoute(fieldEnv, tomasManager, {
+  scope: "test",
+  testMode: COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
+  routeDate: "2026-07-14",
+  vehicleCode: "A",
+  sourceRowIds: ["decoy-row"]
+});
+assert.equal(fieldPreview.testMode, COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD);
+assert.equal(fieldPreview.vehicle.code, "FIELD");
+assert.equal(fieldPreview.scheduleBypassed, true);
+assert.equal(fieldPreview.selectedCount, 1);
+assert.equal(fieldPreview.eligibleCount, 1);
+assert.equal(fieldPreview.eligibleRows[0].sourceRowId, "field-row");
+assert.equal(fieldPreview.eligibleRows[0].customerName, "Firma test 501");
+
+const fieldRoute = await createCollectionDailyRouteDraft(fieldEnv, tomasManager, {
+  scope: "test",
+  testMode: COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
+  routeDate: "2026-07-14",
+  vehicleCode: "FIELD",
+  sourceBatchId: "field-batch",
+  sourceRowIds: ["decoy-row"]
+});
+assert.equal(fieldRoute.run.vehicleCode, "FIELD");
+assert.equal(fieldRoute.run.driverUserId, "");
+assert.equal(fieldRoute.run.metadata.fieldTesterUserId, tomasManager.id);
+assert.equal(fieldRoute.run.metadata.fieldTesterName, tomasManager.name);
+assert.equal(fieldRoute.run.metadata.fieldTesterRole, "management");
+assert.equal(fieldRoute.run.metadata.scheduleBypassedForPhysicalTest, true);
+assert.equal(fieldRoute.run.metadata.sendsNotifications, false);
+assert.equal(fieldRoute.stops.length, 1);
+assert.equal(fieldRoute.stops[0].customerName, "Firma test 501");
+assert.match(fieldRoute.stops[0].addressText, /Trnkova 3052\/137/);
+await assert.rejects(
+  assignCollectionDailyRouteDriver(fieldEnv, tomasManager, fieldRoute.run.id, { scope: "test", driverUserId: "driver-1" }),
+  (error) => error.code === "collection_daily_route_field_test_driver_forbidden"
+);
+await assert.rejects(
+  transitionCollectionDailyRoute(fieldEnv, otherManager, fieldRoute.run.id, { scope: "test", action: "confirm" }),
+  (error) => error.code === "collection_daily_route_field_tester_mismatch"
+);
+const fieldConfirmed = await transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+  scope: "test",
+  action: "confirm",
+  idempotencyKey: "field-confirm"
+});
+assert.equal(fieldConfirmed.run.status, "confirmed");
+assert.equal(fieldConfirmed.run.driverUserId, "");
+const fieldStarted = await transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+  scope: "test",
+  action: "start",
+  idempotencyKey: "field-start"
+});
+assert.equal(fieldStarted.run.status, "active");
+await assert.rejects(
+  previewCollectionRoutesTestNotifications(fieldEnv, tomasManager, { runId: fieldRoute.run.id }),
+  (error) => error.code === "collection_routes_test_notification_stationary_field_forbidden"
+);
 
 console.log("collection daily routes tests: ok");

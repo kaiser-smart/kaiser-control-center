@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.8",
-  updatedAt: "13. 7. 2026 10:51",
-  updatedAtIso: "2026-07-13T10:51:18+02:00",
-  lastChange: "Zajištěno načtení aktuální Mantry",
+  version: "1.9",
+  updatedAt: "13. 7. 2026 13:33",
+  updatedAtIso: "2026-07-13T13:33:54+02:00",
+  lastChange: "Přidán stacionární terénní tester",
   updatedBy: "Codex",
   status: "TEST návrh · řízené GPS",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Aktuální TEST pouze zobrazuje podklady a po ručním potvrzení ukládá auditní GPS; neplánuje, neposílá a nemění Vistos.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Aktuální TEST pouze zobrazuje podklady a po ručním potvrzení ukládá auditní GPS řidiče nebo stacionárního terénního testera; neplánuje, neposílá a nemění Vistos.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -22,7 +22,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     },
     {
       title: "GPS se potvrzuje fyzicky",
-      text: "Adresní bod se nikdy tiše nepřepíše. Popeláři změří skutečné místo u nádob po zastavení; hlasová Šarlota pomůže a zápis dokončí jedno velké klepnutí."
+      text: "Adresní bod se nikdy tiše nepřepíše. Řidič nebo pověřený terénní tester změří skutečné místo u nádob po zastavení; hlasová Šarlota pomůže a zápis dokončí jedno velké klepnutí."
     }
   ],
   sources: [
@@ -178,9 +178,13 @@ Každou změnu vysvětli a předlož ke schválení. Bez výslovného potvrzení
 ŘIDIČSKÝ TABLET
 Řidič musí vidět další stanoviště, zákazníka a adresu, nádoby a odpad, poznámku, navigaci, stav trasy a kontakt na dispečink.
 
-TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko a samostatný přehled bez dlouhé tabulky stanovišť. Příprava ukazuje vždy jen následující krok: TEST data, trasa, řidič a spuštění tabletu. Zdrojový kabinový náhled musí být zřetelně odlišený od skutečného TEST GPS režimu.
+TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko a samostatný přehled bez dlouhé tabulky stanovišť. Stacionární terénní TEST ukazuje vždy jen následující krok: TEST data, jeden bod, tester a spuštění tabletu. Zdrojový kabinový náhled musí být zřetelně odlišený od skutečného TEST GPS režimu.
 
-Řidičský TEST zobrazuje nad GPS tlačítkem HERE mapový výřez aktuálního stanoviště. Před fyzickým měřením označuje adresní bod, po změření současně rozliší adresní bod a fyzickou GPS řidiče. Mapa je pouze náhled, dokud není dokončená navigace. Mapový obrázek načítá chráněný backend KSO; HERE API klíč nesmí dostat tablet ani frontend. HERE se předávají jen souřadnice TEST bodu, nikdy název zákazníka, kontakt ani smluvní údaje.
+Stacionární terénní TEST smí obsahovat přesně jediný bod Firma test 501 na Trnkově. Nemá svozové vozidlo, řidiče ani jízdu a nesmí připravit nebo odeslat zákaznickou SMS, RCS či e-mail. Přihlášený aktivní uživatel s rolí Admin nebo Management se uloží odděleně jako terénní tester; audit nesmí předstírat jiného řidiče. TEST může potvrdit, spustit a GPS uložit pouze tentýž tester.
+
+Pro fyzickou zkoušku lze zvolit skutečné datum přítomnosti testera, i když nejde o uloženou středu. Tato jediná výjimka platí pouze uvnitř režimu stacionárního GPS TESTU, nikdy nemění četnost 1x7 ani zrcadlenou středu v TEST stanovišti a nesmí se použít při skutečném plánování svozu.
+
+Řidičský TEST zobrazuje nad GPS tlačítkem HERE mapový výřez aktuálního stanoviště. Před fyzickým měřením označuje adresní bod, po změření současně rozliší adresní bod a fyzickou GPS řidiče nebo terénního testera. Mapa je pouze náhled, dokud není dokončená navigace. Mapový obrázek načítá chráněný backend KSO; HERE API klíč nesmí dostat tablet ani frontend. HERE se předávají jen souřadnice TEST bodu, nikdy název zákazníka, kontakt ani smluvní údaje.
 
 Výchozí polní stanoviště je Firma test 501, Trnkova 3052/137, 628 00 Brno. Má četnost 1x7 a středu zrcadlenou 1:1 do lichého i sudého týdne. Ve středeční TEST trase se řadí jako první bod, aby šlo GPS tabletu ověřit bez odklikávání stovek jiných stanovišť.
 
@@ -199,13 +203,15 @@ Každé stanoviště má oddělený původní adresní bod a fyzicky naměřený
 
 Pokud stanoviště ještě není fyzicky změřené, Šarlota řidiče po zastavení přátelsky osloví ověřeným jménem z backendu, například: „Miroslave, toto stanoviště ještě nemáme fyzicky potvrzené. Až zastavíš přímo u nádob, klepni na Potvrdit GPS stanoviště.“
 
+Ve stacionárním terénním TESTU osloví Šarlota stejně přátelsky přihlášeného testera a vyzve jej, aby zůstal s tabletem stát přímo u nádoby. Nesmí mluvit o pohybu svozového vozidla, které v tomto TESTU neexistuje.
+
 Řidič může hlasem říct „Šarloto, potvrď GPS stanoviště“. Hlasový povel smí spustit načtení více GPS vzorků, ale sám nesmí dokončit zápis. Po změření se otevře jedno velké finální potvrzení v aplikaci.
 
 Tlačítko pro fyzické GPS musí být přes celou dostupnou šířku, minimálně 120 px vysoké a na úzkém displeji 132 px, kontrastní, čitelné v dešti, mrazu, horku a ovladatelné v pracovních rukavicích. Řidič se nesmí trefovat do malého prvku ani potvrzovat technický formulář.
 
 GPS ukládej pouze po zastavení vozidla. Ulož přesnost, počet vzorků, čas, řidiče, vozidlo, trasu, stanoviště, vzdálenost od adresního bodu a zdroj měření. Slabou GPS odmítni lidskou větou a nabídni nové měření. Výraznou odchylku označ ke kontrole; řidiče neobviňuj a bod bez kontroly nepoužij jako ostrý navigační cíl.
 
-Stavy fyzické polohy jsou: Nezmapováno, Změřeno řidičem, Čeká na kontrolu a Ověřeno. Historie měření je auditovatelná. Šarlota po úspěchu stručně potvrdí například: „Děkuji, polohu jsem uložila s přesností šest metrů.“
+Stavy fyzické polohy jsou: Nezmapováno, Změřeno řidičem, Změřeno terénním testerem, Čeká na kontrolu a Ověřeno. Historie měření je auditovatelná a vždy ukazuje skutečného autora. Šarlota po úspěchu stručně potvrdí například: „Děkuji, polohu jsem uložila s přesností šest metrů.“
 
 Šarlota ani tablet nesmí řidiče vyzývat ke klikání, čtení nebo mapování za jízdy. Hlasová výzva se spustí až po zastavení a nesmí se obtěžujícím způsobem opakovat.
 
