@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.555"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.556"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky: opravené posouvání historie chatu",
+    text: "Historie chatu k datové zprávě používá průběžný flexový tok bublin, takže dlouhé konverzace mají skutečný posuvný rozsah. Starší zprávy jsou dostupné myší, trackpadem i klávesnicí; vlastní odeslání se tím nemění."
+  },
   {
     title: "Datové schránky: posouvatelná historie chatu",
     text: "Dlouhá konverzace v chatu k datové zprávě má vlastní skutečně posouvatelný panel. Po otevření se ukáže poslední zpráva, starší zůstanou dostupné kolečkem, trackpadem i klávesnicí."
