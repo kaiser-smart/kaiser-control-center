@@ -36908,6 +36908,12 @@ body:has(.ds-plus-page) {
   color: color-mix(in srgb, var(--ui-pilot-primary, var(--color-primary)) 76%, #1b251d);
 }
 
+.main-dashboard-state--running {
+  border-color: color-mix(in srgb, var(--color-primary) 34%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 12%, #ffffff);
+  color: color-mix(in srgb, var(--color-primary) 78%, #1b251d);
+}
+
 .main-dashboard-economics-metric > .main-dashboard-state {
   grid-column: 1 / -1;
 }

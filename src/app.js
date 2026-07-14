@@ -6102,7 +6102,7 @@ function mainDashboardEconomicsSection(user) {
         ${MAIN_DASHBOARD_ECONOMICS_SOURCES.map((source) => `
           <article>
             <div><strong>${escapeHtml(source.label)}</strong><small>${escapeHtml(source.detail)}</small></div>
-            <span class="main-dashboard-state main-dashboard-state--waiting">Čeká</span>
+            <span class="main-dashboard-state main-dashboard-state--${escapeHtml(source.state || "waiting")}">${escapeHtml(source.status || "Čeká")}</span>
           </article>
         `).join("")}
       </div>

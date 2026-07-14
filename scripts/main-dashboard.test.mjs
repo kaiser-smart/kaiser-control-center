@@ -16,6 +16,13 @@ import {
   assert.equal(mainDashboardPeriod("unknown").id, "30d");
   assert.equal(MAIN_DASHBOARD_ECONOMICS_METRICS.length, 5);
   assert.equal(MAIN_DASHBOARD_ECONOMICS_SOURCES.length, 3);
+  assert.deepEqual(MAIN_DASHBOARD_ECONOMICS_SOURCES.find((source) => source.id === "cost-data"), {
+    id: "cost-data",
+    label: "Náklady a PHM",
+    state: "running",
+    status: "Běží",
+    detail: "Cloudová synchronizace ORWII PHM běží automaticky; první import se zapisuje do provozní databáze při pravidelném běhu."
+  });
 }
 
 {

@@ -15,7 +15,13 @@ export const MAIN_DASHBOARD_ECONOMICS_METRICS = Object.freeze([
 export const MAIN_DASHBOARD_ECONOMICS_SOURCES = Object.freeze([
   { id: "trip-history", label: "Historie jízd", state: "waiting", detail: "Čeká na skutečné GPS body a ujeté úseky." },
   { id: "job-pairing", label: "Párování zakázek", state: "waiting", detail: "Vazba vozidlo → jízda → zakázka není nasazená." },
-  { id: "cost-data", label: "Náklady a PHM", state: "waiting", detail: "Čeká na ověřené přímé náklady a spotřebu." }
+  {
+    id: "cost-data",
+    label: "Náklady a PHM",
+    state: "running",
+    status: "Běží",
+    detail: "Cloudová synchronizace ORWII PHM běží automaticky; první import se zapisuje do provozní databáze při pravidelném běhu."
+  }
 ]);
 
 function numericOrNull(value) {
