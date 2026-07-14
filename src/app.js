@@ -231,7 +231,6 @@ import {
 } from "./data/vehicleTracking.js";
 import {
   DATA_BOX_MODULE_KEY,
-  DATA_BOX_ROUTE,
   DATA_BOX_TABS
 } from "./data/dataBox.js";
 import {
@@ -27694,7 +27693,7 @@ function dataBoxSettingsPanel(user) {
       ${dataBoxHumanRulesPanel()}
       ${dataBoxMailboxesSettingsPanel()}
       ${dataBoxSafetySettingsPanel()}
-      ${moduleEventLogForModule({ id: DATA_BOX_MODULE_KEY, title: "Datová schránka", route: DATA_BOX_ROUTE, status: "ROZPRACOVÁN" }, { className: "module-event-log--data-box" })}
+      ${moduleEventLogForModule({ id: DATA_BOX_MODULE_KEY, title: "Datová schránka", route: DATA_BOX_PLUS_ROUTE, status: "ROZPRACOVÁN" }, { className: "module-event-log--data-box" })}
       <details class="data-box-diagnostics-panel">
         <summary>Diagnostika</summary>
         <div class="data-box-diagnostics-panel__body">
@@ -44336,13 +44335,6 @@ function renderAuthenticatedApp(user) {
   const userDashboardRoutes = new Map(visibleDashboardRoutes(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   const sarlotaDeepLink = prepareSarlotaDeepLinkPanel();
 
-  if (path === DATA_BOX_ROUTE) {
-    window.history.replaceState({}, "", routeHref(DATA_BOX_PLUS_ROUTE));
-    lastRenderedUrl = window.location.href;
-    render();
-    return;
-  }
-
   if (hasPermission(user, "feedback", "view")) {
     loadModuleFeedback({ render: true });
   }
@@ -49816,10 +49808,6 @@ document.addEventListener("click", async (event) => {
     dataBoxState.replyDraftOpen = false;
     dataBoxState.replyDraftText = "";
     dataBoxState.replyDraftError = "";
-    if (normalizePath(window.location.pathname) === DATA_BOX_ROUTE && window.location.hash) {
-      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
-      lastRenderedUrl = window.location.href;
-    }
     render();
     return;
   }

@@ -1,5 +1,4 @@
 export const DATA_BOX_MODULE_KEY = "data-box";
-export const DATA_BOX_ROUTE = "/datove-schranky-plus";
 
 export const DATA_BOX_TABS = [
   { id: "overview", label: "Přehled", shortLabel: "Přehled" },
