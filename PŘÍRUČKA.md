@@ -1492,6 +1492,15 @@ Při každé změně Šarloty ověřit:
 - Synchronizace ElevenLabs client tools smí proběhnout jen přes chráněný backendový postup: nejdřív read-only návrh, potom explicitní `apply: true`, kontrola správného agenta Šarloty a ověření, že se nemění system prompt, first message ani model.
 - Synchronizace doplňkového prompt bloku smí proběhnout jen přes chráněný backendový postup: nejdřív read-only návrh, potom explicitní `apply: true`, kontrola správného agenta Šarloty a append pouze schváleného bloku bez změny first message, modelu a tools.
 
+### 17.10 Povinnost testovat na straně Codexu
+
+- Radim není tester. Po každé úpravě Šarloty, ElevenLabs, hlasu, chatu nebo Datových schránek provede Codex sám přiměřený test UI, API, produkce a přesně dotčeného toku.
+- Test nesmí být předán Radimovi větou typu `řekni testovací větu`, `zkus to prosím` ani jiným požadavkem na ruční ověření, pokud existuje bezpečný způsob, jak jej provést z Codexu.
+- U chatu s dlouhou historií Codex ověří skutečné posouvání myší nebo trackpadem, klávesnicí a programové přesunutí na poslední zprávu. Nestačí ověřit, že je v CSS uvedeno `overflow-y: auto`.
+- Hlasový test používá pouze bezpečný nesenzitivní pokyn, neprovádí akci nad zprávou, a ověřuje minimálně povolení mikrofonu, signed URL, WebSocket, předání dynamic variables, audio vstup, přepis a odpověď. Po testu se relace zavře.
+- Pokud zařízení Codexu nemá audio-loopback pro skutečný vstup do mikrofonu, Codex ověří produkční připojení i deterministický integrační tok s emulovaným PCM vstupem a odpovědí. Výsledek musí poctivě označit jako omezený hardwarem; nesmí tvrdit, že skutečný přepis byl ověřen.
+- U citlivých nebo zapisujících akcí zůstává test read-only, dokud uživatel výslovně neschválí konkrétní ostrý dopad. Tato hranice nikdy není důvodem přenést testování na Radima.
+
 ## 18. Obecná pravidla UI/UX všech modulů
 
 ### 18.1 Vzhled modulů

@@ -25073,7 +25073,7 @@ function dataBoxPlusInstructionCard(message) {
 
   return `
     <section class="ds-plus-instruction-card ds-plus-chat-window" aria-label="Chat k datové zprávě">
-      <div class="ds-plus-chat-window__messages" data-ds-plus-chat-messages aria-live="polite" aria-busy="${loading ? "true" : "false"}">
+      <div class="ds-plus-chat-window__messages" data-ds-plus-chat-messages tabindex="0" aria-live="polite" aria-busy="${loading ? "true" : "false"}">
         ${conversation.length ? conversation.map((entry) => `
           <div class="ds-plus-chat-message ds-plus-chat-message--${entry.role === "user" ? "user" : "assistant"} ${entry.pending ? "ds-plus-chat-message--pending" : ""} ${entry.error ? "ds-plus-chat-message--error" : ""}">
             <span>${entry.role === "user" ? "Radim" : "Autopilot"}</span>

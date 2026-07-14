@@ -36367,7 +36367,7 @@ body:has(.ds-plus-page) {
   min-height: 132px;
   max-height: min(360px, calc(100dvh - 250px));
   display: grid;
-  align-content: end;
+  align-content: start;
   gap: 9px;
   overflow-x: hidden;
   overflow-y: auto;
