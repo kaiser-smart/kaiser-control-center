@@ -22,6 +22,9 @@ for (const marker of [
   "POTVRDIT STACIONÁRNÍ TEST",
   "OTEVŘÍT TEST TABLETU",
   "SPUSTIT TEST TABLETU",
+  "DOKONČIT TEST TABLETU",
+  "GPS měření je uložené. TEST můžeš dokončit",
+  "Kontrola navigačního bodu proběhne samostatně.",
   "Řidičský tablet · zdrojový náhled",
   "collectionRoutesTestTabletWorkspace",
   "data-collection-routes-test-tablet-open",
@@ -175,6 +178,7 @@ for (const marker of [
   ".collection-route-here__facts",
   ".collection-route-here__actions",
   ".collection-routes-test-gps__rugged-button",
+  ".collection-routes-test-gps__rugged-button--finish",
   ".collection-routes-test-gps__confirm"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
@@ -207,6 +211,17 @@ for (const marker of [
 ]) {
   assert.ok(mantraSource.includes(marker), `Provozní mantra postrádá závazný bod: ${marker}`);
 }
+
+assert.ok(
+  appSource.includes("collectionRoutesStationaryFieldGpsReady") &&
+    appSource.includes('data-collection-daily-route-transition="complete"'),
+  "Uložené stacionární GPS měření musí zpřístupnit explicitní dokončení TESTU tabletu."
+);
+assert.ok(
+  mantraSource.includes("Čeká na kontrolu\u201c blokuje použití bodu v navigaci") &&
+    mantraSource.includes("Bez uloženého GPS měření dokončení nepovol"),
+  "Mantra musí oddělit dokončení fyzického TESTU od schválení navigačního bodu."
+);
 
 assert.ok(
   mantraSource.includes("Tato verze nic sama neodesílá") &&

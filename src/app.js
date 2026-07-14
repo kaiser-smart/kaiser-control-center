@@ -44,7 +44,7 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.9";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.10";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRouteGpsPrompt,
@@ -21346,8 +21346,21 @@ function collectionRoutesTestTabletNextLabel() {
   if (!run) return "Připravíme datum a jeden TEST bod";
   if (run.status === "draft") return "Další krok: potvrdit stacionární TEST";
   if (run.status === "confirmed") return "Další krok: spustit TEST tabletu";
-  if (run.status === "active") return "Tablet je připravený k testování";
+  if (run.status === "active") {
+    return collectionRoutesStationaryFieldGpsReady(collectionRoutesPilotState.dailyRouteDetail)
+      ? "Další krok: dokončit TEST tabletu"
+      : "Tablet je připravený k GPS měření";
+  }
   return "Vyber nebo znovu otevři stacionární TEST";
+}
+
+function collectionRoutesStationaryFieldGpsReady(detail) {
+  if (!collectionRoutesIsStationaryFieldTestRun(detail?.run)) return false;
+  const plannedStops = (Array.isArray(detail?.stops) ? detail.stops : [])
+    .filter((stop) => stop.status === "planned");
+  if (!plannedStops.length) return false;
+  return plannedStops.every((stop) => collectionRoutesPilotState.testGpsConfirmations
+    .some((confirmation) => confirmation.stopId === stop.id));
 }
 
 function collectionRoutesTestTabletEntryCard() {
@@ -22022,6 +22035,7 @@ function collectionRoutesTestGpsPanel(detail, options = {}) {
   const titleId = options.titleId || "collection-routes-test-gps-title";
   const tabletMode = options.tabletMode === true;
   const stationaryFieldTest = collectionRoutesIsStationaryFieldTestRun(run);
+  const routePending = collectionRoutesPilotState.dailyRoutePending;
   return `
     <section class="collection-routes-test-gps ${tabletMode ? "collection-routes-test-gps--tablet" : ""}" aria-labelledby="${escapeHtml(titleId)}">
       <header>
@@ -22047,10 +22061,25 @@ function collectionRoutesTestGpsPanel(detail, options = {}) {
         </div>
         ${confirmation ? `
           <div class="collection-routes-test-gps__confirmed">
-            <strong>${escapeHtml(collectionRoutesTestGpsStatusLabel(confirmation))}</strong>
+            <strong>GPS měření je uložené</strong>
             <span>Přesnost ${escapeHtml(Math.round(confirmation.accuracyMeters || 0))} m · od adresního bodu ${escapeHtml(Math.round(confirmation.distanceFromAddressMeters || 0))} m</span>
-            <small>${confirmation.routingCandidate ? "Použitelné jako TEST navigační kandidát." : "Bod se bez kontroly nepoužije jako navigační cíl."}</small>
+            <small>${confirmation.routingCandidate
+              ? `Navigační bod: ${escapeHtml(collectionRoutesTestGpsStatusLabel(confirmation))}. Použitelný jako TEST kandidát.`
+              : `Navigační bod: ${escapeHtml(collectionRoutesTestGpsStatusLabel(confirmation))}. Bez kontroly se nepoužije jako navigační cíl.`}</small>
           </div>
+          ${stationaryFieldTest ? `
+            <button
+              class="collection-routes-test-gps__rugged-button collection-routes-test-gps__rugged-button--finish"
+              type="button"
+              data-collection-daily-route-transition="complete"
+              ${routePending ? "disabled" : ""}
+            >
+              <span>${routePending === "complete" ? "DOKONČUJI TEST…" : "DOKONČIT TEST TABLETU"}</span>
+              <small>${confirmation.routingCandidate
+                ? "GPS je uložená. Jedním velkým klepnutím uzavřeš fyzický TEST."
+                : "GPS je uložená. Kontrola navigačního bodu proběhne samostatně."}</small>
+            </button>
+          ` : ""}
         ` : `
           <div class="collection-routes-test-gps__sarlota">
             <span aria-hidden="true">Š</span>
@@ -22178,7 +22207,10 @@ function collectionDailyRouteDispatcherDetail() {
   const isTest = run.scope === "test";
   const stationaryFieldTest = collectionRoutesIsStationaryFieldTestRun(run);
   const canAssign = !stationaryFieldTest && ["draft", "confirmed"].includes(run.status);
-  const canComplete = run.status === "active" && Number(summary.plannedCount || 0) === 0;
+  const stationaryGpsReady = collectionRoutesStationaryFieldGpsReady(detail);
+  const canComplete = run.status === "active" && (
+    Number(summary.plannedCount || 0) === 0 || stationaryGpsReady
+  );
   const actorLabel = stationaryFieldTest
     ? `Terénní tester ${collectionRoutesStationaryFieldTesterName(run)} · bez jízdy a zpráv`
     : `${run.driverName || "řidič nepřiřazen"} · ${isTest ? "ruční pilot bez AI optimalizace" : "snapshot se po uložení nemění"}`;
@@ -22217,9 +22249,9 @@ function collectionDailyRouteDispatcherDetail() {
       <div class="collection-daily-route-actions">
         ${run.status === "draft" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="confirm" ${(stationaryFieldTest || run.driverUserId) && !pending ? "" : "disabled"}>${stationaryFieldTest ? "Potvrdit stacionární TEST" : isTest ? "Potvrdit ruční TEST trasu" : "Potvrdit trasu"}</button>` : ""}
         ${run.status === "confirmed" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="start" ${pending ? "disabled" : ""}>${stationaryFieldTest ? "Spustit TEST tabletu" : isTest ? "Spustit ruční TEST trasu" : "Zahájit trasu"}</button>` : ""}
-        ${run.status === "active" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="complete" ${canComplete && !pending ? "" : "disabled"}>${isTest ? "Dokončit TEST trasu" : "Dokončit trasu"}</button>` : ""}
+        ${run.status === "active" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="complete" ${canComplete && !pending ? "" : "disabled"}>${stationaryFieldTest ? "Dokončit TEST tabletu" : isTest ? "Dokončit TEST trasu" : "Dokončit trasu"}</button>` : ""}
         ${run.status === "completed" ? `<button class="secondary-link" type="button" data-collection-daily-route-transition="reopen" ${pending ? "disabled" : ""}>Znovu otevřít</button>` : ""}
-        ${run.status === "active" && !canComplete ? `<span>Dokončit půjde po vyřízení všech čekajících zastávek.</span>` : ""}
+        ${run.status === "active" && !canComplete ? `<span>${stationaryFieldTest ? "Dokončit půjde po uložení fyzického GPS měření." : "Dokončit půjde po vyřízení všech čekajících zastávek."}</span>` : ""}
       </div>
 
       ${!collectionRoutesPilotState.testTabletOpen ? collectionRoutesTestGpsPanel(detail) : ""}
@@ -37903,12 +37935,12 @@ async function saveCollectionRoutesTestGpsCapture() {
     const confirmation = result.confirmation || {};
     collectionRoutesPilotState.testGpsPreview = null;
     collectionRoutesPilotState.testGpsMessage = confirmation.routingCandidate
-      ? `GPS stanoviště je fyzicky změřená s přesností ${Math.round(confirmation.accuracyMeters || 0)} m.`
-      : "GPS stanoviště je změřená a čeká na kontrolu odchylky nebo přesnosti.";
+      ? "GPS měření je uložené a použitelné jako TEST navigační kandidát. Dokonči TEST tabletu."
+      : "GPS měření je uložené. TEST můžeš dokončit; bod se do navigace nepoužije, dokud ho dispečerka nezkontroluje.";
     speakCollectionRoutesTestGps(
       confirmation.routingCandidate
-        ? `Děkuji, polohu jsem uložila s přesností ${Math.round(confirmation.accuracyMeters || 0)} metrů.`
-        : "Děkuji, polohu jsem uložila a předala ke kontrole."
+        ? `Děkuji, polohu jsem uložila s přesností ${Math.round(confirmation.accuracyMeters || 0)} metrů. Teď klepni na Dokončit test tabletu.`
+        : "Děkuji, polohu jsem uložila. Kontrolu navigačního bodu vyřeší dispečerka. Teď klepni na Dokončit test tabletu."
     );
     vibrateCollectionRoutesTestGps([70, 70, 140]);
     await loadCollectionDailyRouteDetail(preview.runId, { renderAfter: false });

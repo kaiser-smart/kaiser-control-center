@@ -1072,15 +1072,41 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
     if (action === "confirm" && !stationaryFieldTest && !cleanString(run.driver_user_id)) {
       throw new CollectionDailyRoutesError("Před potvrzením přiřaďte trase řidiče.", 409, "collection_daily_route_driver_required");
     }
+    let stationaryStopsCompletedFromGps = [];
     if (action === "complete") {
-      const planned = await db.prepare(`
-        SELECT COUNT(*) AS count
+      const plannedResult = await db.prepare(`
+        SELECT id
         FROM collection_daily_route_stops
         WHERE run_id = ? AND status = 'planned'
-      `).bind(run.id).first();
-      if (numberValue(planned?.count) > 0) {
+        ORDER BY route_order ASC
+      `).bind(run.id).all();
+      const plannedStops = plannedResult.results || [];
+      if (plannedStops.length > 0 && stationaryFieldTest) {
+        const gpsResult = await db.prepare(`
+          SELECT stop.id
+          FROM collection_daily_route_stops AS stop
+          WHERE stop.run_id = ?
+            AND stop.status = 'planned'
+            AND EXISTS (
+              SELECT 1
+              FROM collection_route_test_gps_confirmations AS gps
+              WHERE gps.run_id = stop.run_id AND gps.stop_id = stop.id
+            )
+          ORDER BY stop.route_order ASC
+        `).bind(run.id).all();
+        const gpsStopIds = new Set((gpsResult.results || []).map((row) => cleanString(row.id)));
+        const missingGpsCount = plannedStops.filter((stop) => !gpsStopIds.has(cleanString(stop.id))).length;
+        if (missingGpsCount > 0) {
+          throw new CollectionDailyRoutesError(
+            "TEST tabletu nelze dokončit, dokud není uložené fyzické GPS měření stanoviště.",
+            409,
+            "collection_daily_route_test_gps_required"
+          );
+        }
+        stationaryStopsCompletedFromGps = plannedStops;
+      } else if (plannedStops.length > 0) {
         throw new CollectionDailyRoutesError(
-          `Trasu nelze dokončit: ${numberValue(planned.count)} zastávek ještě čeká.`,
+          `Trasu nelze dokončit: ${plannedStops.length} zastávek ještě čeká.`,
           409,
           "collection_daily_route_stops_pending"
         );
@@ -1105,7 +1131,46 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
       bindings.push(actorId, actorName, changedAt);
     }
     bindings.push(run.id);
-    await db.batch([
+    const statements = [];
+    if (action === "complete" && stationaryStopsCompletedFromGps.length) {
+      statements.push(db.prepare(`
+        UPDATE collection_daily_route_stops
+        SET status = 'done',
+            problem_reason = '',
+            problem_note = '',
+            completed_at = ?,
+            last_event_at = ?,
+            updated_at = ?
+        WHERE run_id = ?
+          AND status = 'planned'
+          AND EXISTS (
+            SELECT 1
+            FROM collection_route_test_gps_confirmations AS gps
+            WHERE gps.run_id = collection_daily_route_stops.run_id
+              AND gps.stop_id = collection_daily_route_stops.id
+          )
+      `).bind(changedAt, changedAt, changedAt, run.id));
+      stationaryStopsCompletedFromGps.forEach((stop) => {
+        statements.push(db.prepare(`
+          INSERT INTO collection_daily_route_events (
+            id, run_id, stop_id, event_type, before_status, after_status, reason, note,
+            idempotency_key, actor_user_id, actor_name, created_at, payload_json
+          ) VALUES (?, ?, ?, 'done', 'planned', 'done', ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          randomId("collection-daily-event"),
+          run.id,
+          cleanString(stop.id),
+          "gps-test-completed",
+          "Fyzické GPS měření je uložené; stanoviště bylo dokončeno společně s TESTEM tabletu.",
+          `stationary-test-stop-done:${run.id}:${cleanString(stop.id)}:${idempotencyKey || changedAt}`,
+          actorId,
+          actorName,
+          changedAt,
+          jsonString({ action, source: "stationary-field-test-gps" })
+        ));
+      });
+    }
+    statements.push(
       db.prepare(`UPDATE collection_daily_route_runs SET ${updates.join(", ")} WHERE id = ?`).bind(...bindings),
       db.prepare(`
         INSERT INTO collection_daily_route_events (
@@ -1118,14 +1183,17 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
         transition.eventType,
         transition.from,
         transition.to,
-        cleanString(input.note),
+        cleanString(input.note) || (stationaryStopsCompletedFromGps.length
+          ? "Stacionární TEST tabletu byl dokončen po uloženém fyzickém GPS měření."
+          : ""),
         idempotencyKey || `${transition.eventType}:${run.id}:${changedAt}`,
         actorId,
         actorName,
         changedAt,
-        jsonString({ action })
+        jsonString({ action, completedStopIds: stationaryStopsCompletedFromGps.map((stop) => cleanString(stop.id)) })
       )
-    ]);
+    );
+    await db.batch(statements);
     return detailFromRow(db, await loadRunRow(db, run.id));
   } catch (error) {
     throw dbError(error);

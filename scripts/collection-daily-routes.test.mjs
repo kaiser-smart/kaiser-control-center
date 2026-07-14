@@ -6,6 +6,7 @@ import { createSessionCookie } from "../functions/_lib/auth.js";
 import { onRequestGet as listDailyRoutesApi } from "../functions/api/collection-routes/daily-routes.js";
 import { onRequestGet as myDailyRouteApi } from "../functions/api/collection-routes/daily-routes/my.js";
 import { previewCollectionRoutesTestNotifications } from "../functions/_lib/collection-routes-test-notifications.js";
+import { confirmCollectionRoutesTestGps } from "../functions/_lib/collection-routes-test-gps-store.js";
 import {
   __collectionDailyRouteEligibilityForTest,
   __collectionDailyRoutePickupScheduleForTest,
@@ -370,7 +371,9 @@ const fieldSqlite = new DatabaseSync(":memory:");
 for (const migration of [
   "../migrations/0017_create_collection_routes_phase1a.sql",
   "../migrations/0038_create_collection_daily_routes.sql",
-  "../migrations/test/0001_create_collection_routes_test_control.sql"
+  "../migrations/test/0001_create_collection_routes_test_control.sql",
+  "../migrations/test/0002_create_collection_route_here_optimization.sql",
+  "../migrations/test/0003_configure_collection_route_test_operations_and_gps.sql"
 ]) {
   fieldSqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
 }
@@ -491,6 +494,94 @@ const fieldStarted = await transitionCollectionDailyRoute(fieldEnv, tomasManager
   idempotencyKey: "field-start"
 });
 assert.equal(fieldStarted.run.status, "active");
+await assert.rejects(
+  transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+    scope: "test",
+    action: "complete",
+    idempotencyKey: "field-complete-without-gps"
+  }),
+  (error) => error.code === "collection_daily_route_test_gps_required"
+);
+const fieldGpsNeedsReview = await confirmCollectionRoutesTestGps(fieldEnv, tomasManager, {
+  runId: fieldRoute.run.id,
+  stopId: fieldRoute.stops[0].id,
+  latitude: fieldSummary.latitude,
+  longitude: fieldSummary.longitude,
+  accuracyMeters: 22,
+  sampleCount: 3,
+  speedMps: 0,
+  capturedAt: new Date().toISOString(),
+  idempotencyKey: "field-gps-needs-review"
+});
+assert.equal(fieldGpsNeedsReview.confirmation.status, "needs-review");
+assert.equal(fieldGpsNeedsReview.confirmation.routingCandidate, false);
+const fieldCompletedWithReview = await transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+  scope: "test",
+  action: "complete",
+  idempotencyKey: "field-complete-with-gps-review"
+});
+assert.equal(fieldCompletedWithReview.run.status, "completed");
+assert.equal(fieldCompletedWithReview.run.summary.plannedCount, 0);
+assert.equal(fieldCompletedWithReview.run.summary.doneCount, 1);
+assert.equal(fieldCompletedWithReview.stops[0].status, "done");
+assert.equal(
+  fieldSqlite.prepare("SELECT status FROM collection_route_test_gps_confirmations WHERE id = ?")
+    .get(fieldGpsNeedsReview.confirmation.id).status,
+  "needs-review"
+);
+assert.equal(
+  fieldSqlite.prepare("SELECT routing_candidate FROM collection_route_test_gps_confirmations WHERE id = ?")
+    .get(fieldGpsNeedsReview.confirmation.id).routing_candidate,
+  0
+);
+assert.equal(
+  fieldSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE run_id = ? AND event_type = 'done'")
+    .get(fieldRoute.run.id).count,
+  1
+);
+assert.equal((await transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+  scope: "test",
+  action: "complete",
+  idempotencyKey: "field-complete-with-gps-review"
+})).run.status, "completed");
+
+const accurateFieldRoute = await createCollectionDailyRouteDraft(fieldEnv, tomasManager, {
+  scope: "test",
+  testMode: COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
+  routeDate: "2026-07-15",
+  vehicleCode: "FIELD",
+  sourceBatchId: "field-batch"
+});
+await transitionCollectionDailyRoute(fieldEnv, tomasManager, accurateFieldRoute.run.id, {
+  scope: "test",
+  action: "confirm",
+  idempotencyKey: "accurate-field-confirm"
+});
+await transitionCollectionDailyRoute(fieldEnv, tomasManager, accurateFieldRoute.run.id, {
+  scope: "test",
+  action: "start",
+  idempotencyKey: "accurate-field-start"
+});
+const accurateFieldGps = await confirmCollectionRoutesTestGps(fieldEnv, tomasManager, {
+  runId: accurateFieldRoute.run.id,
+  stopId: accurateFieldRoute.stops[0].id,
+  latitude: fieldSummary.latitude,
+  longitude: fieldSummary.longitude,
+  accuracyMeters: 10,
+  sampleCount: 4,
+  speedMps: 0,
+  capturedAt: new Date().toISOString(),
+  idempotencyKey: "accurate-field-gps"
+});
+assert.equal(accurateFieldGps.confirmation.status, "field-tester-measured");
+assert.equal(accurateFieldGps.confirmation.routingCandidate, true);
+const accurateFieldCompleted = await transitionCollectionDailyRoute(fieldEnv, tomasManager, accurateFieldRoute.run.id, {
+  scope: "test",
+  action: "complete",
+  idempotencyKey: "accurate-field-complete"
+});
+assert.equal(accurateFieldCompleted.run.status, "completed");
+assert.equal(accurateFieldCompleted.stops[0].status, "done");
 await assert.rejects(
   previewCollectionRoutesTestNotifications(fieldEnv, tomasManager, { runId: fieldRoute.run.id }),
   (error) => error.code === "collection_routes_test_notification_stationary_field_forbidden"

@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.9",
-  updatedAt: "13. 7. 2026 13:33",
-  updatedAtIso: "2026-07-13T13:33:54+02:00",
-  lastChange: "Přidán stacionární terénní tester",
+  version: "1.10",
+  updatedAt: "14. 7. 2026 10:45",
+  updatedAtIso: "2026-07-14T10:45:00+02:00",
+  lastChange: "Odděleno dokončení a kontrola GPS",
   updatedBy: "Codex",
   status: "TEST návrh · řízené GPS",
   title: "Svozový autopilot – provozní mantra",
@@ -212,6 +212,8 @@ Tlačítko pro fyzické GPS musí být přes celou dostupnou šířku, minimáln
 GPS ukládej pouze po zastavení vozidla. Ulož přesnost, počet vzorků, čas, řidiče, vozidlo, trasu, stanoviště, vzdálenost od adresního bodu a zdroj měření. Slabou GPS odmítni lidskou větou a nabídni nové měření. Výraznou odchylku označ ke kontrole; řidiče neobviňuj a bod bez kontroly nepoužij jako ostrý navigační cíl.
 
 Stavy fyzické polohy jsou: Nezmapováno, Změřeno řidičem, Změřeno terénním testerem, Čeká na kontrolu a Ověřeno. Historie měření je auditovatelná a vždy ukazuje skutečného autora. Šarlota po úspěchu stručně potvrdí například: „Děkuji, polohu jsem uložila s přesností šest metrů.“
+
+Uložení fyzického měření a schválení navigačního bodu jsou dva oddělené stavy. „Čeká na kontrolu“ blokuje použití bodu v navigaci, ale nesmí blokovat dokončení fyzického TESTU. Po uloženém měření nabídni přes celou šířku velké tlačítko „DOKONČIT TEST TABLETU“. Bez uloženého GPS měření dokončení nepovol.
 
 Šarlota ani tablet nesmí řidiče vyzývat ke klikání, čtení nebo mapování za jízdy. Hlasová výzva se spustí až po zastavení a nesmí se obtěžujícím způsobem opakovat.
 
