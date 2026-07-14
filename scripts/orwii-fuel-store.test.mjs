@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { matchFuelTransactionToVehicle, normalizeOrwiiFuelTransaction } from "../functions/_lib/orwii-fuel-store.js";
-const transaction = normalizeOrwiiFuelTransaction({ id: "TX-1", dateTime: "2026-07-14T08:30:00Z", liters: "45,5", licensePlate: "1AB 2345", chipId: "CHIP-7" });
-assert.equal(transaction.externalId, "TX-1"); assert.equal(transaction.liters, 45.5);
+const transaction = normalizeOrwiiFuelTransaction({ transactionId: 101, from: 1784017800000, volumeInLitres: "45,5", vehicleIdentifierValue: "CHIP-7", price: { value: 1800 }, pricePerUnit: { value: 39.56 }, vehicle: { id: "orwii-vehicle-1", registrationNumber: "1AB 2345", counterType: "OdometerInMeters", currentCounterState: 183400 } });
+assert.equal(transaction.externalId, "101"); assert.equal(transaction.liters, 45.5);
+assert.equal(transaction.odometerKm, 183.4); assert.equal(transaction.licensePlate, "1AB 2345");
 const vehicle = { id: "vehicle-1", licensePlate: "1AB2345", fuelChipId: "chip-7" };
 assert.deepEqual(matchFuelTransactionToVehicle(transaction, [vehicle]), { status: "matched", method: "fuel_chip_id", vehicleId: "vehicle-1" });
 assert.equal(matchFuelTransactionToVehicle({ ...transaction, chipId: "", licensePlate: "9ZZ9999" }, [vehicle]).status, "unmatched");
