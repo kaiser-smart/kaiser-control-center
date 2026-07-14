@@ -4793,7 +4793,7 @@ async function handleApi(request, response) {
     const driverNoteHandled = Boolean(mockDriverClean(driverNote)) ||
       ["provided", "declined", "none", "no_note", "bez_poznamky", "empty", "skipped"].includes(driverNoteStatus);
     if (!driverNoteHandled) {
-      const reply = "Doplníte k tomu ještě poznámku? Například kdy se problém projevuje, odkud jde zvuk, nebo jestli auto normálně jede. Pokud nic doplnit nechceš, řekni: bez poznámky.";
+      const reply = "Doplníš k tomu ještě poznámku? Například kdy se problém projevuje, odkud jde zvuk, nebo jestli auto normálně jede. Pokud nic doplnit nechceš, řekni: bez poznámky.";
       sendJson(response, 200, {
         ok: false,
         status: "needs_input",

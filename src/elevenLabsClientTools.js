@@ -109,6 +109,9 @@ const DRIVER_REPORT_VEHICLE_SELECTED_MESSAGE = "Vozidlo je vybrané v aplikaci."
 const DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
 const DRIVER_REPORT_NO_VERIFIED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
 const DRIVER_REPORT_VEHICLE_PICKER_SELECTION_TTL_MS = 5 * 60 * 1000;
+const COLLECTION_ROUTE_GPS_TOOL_NAME = "prepare_collection_route_gps_capture";
+const COLLECTION_ROUTE_GPS_ROUTE = "/trasy-svozu";
+const COLLECTION_ROUTE_GPS_WRONG_TOOL_MESSAGE = "Pro GPS stanoviště není potřeba vybírat vozidlo. Připravím GPS měření přímo ve Svozových trasách.";
 
 export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   {
@@ -137,6 +140,14 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
     parameters: [
       { name: "type", type: "string", required: true },
       { name: "message", type: "string", required: true }
+    ]
+  },
+  {
+    name: COLLECTION_ROUTE_GPS_TOOL_NAME,
+    description: "Ve Svozových trasách připraví fyzické GPS měření aktuálního TEST stanoviště. Použij ho pro povel potvrdit, změřit nebo zmapovat GPS stanoviště. Nikdy kvůli tomu neotvírej výběr vozidla. Nástroj nic neukládá; finální uložení vždy vyžaduje fyzické klepnutí člověka v KSO.",
+    parameters: [
+      { name: "transcriptIntent", type: "string", required: false },
+      { name: "currentModuleRoute", type: "string", required: false }
     ]
   },
   {
@@ -327,7 +338,8 @@ export function createElevenLabsClientTools({
   confirm = async () => false,
   toast = () => {},
   highlight = () => {},
-  requestJson = null
+  requestJson = null,
+  prepareCollectionRouteGpsCapture = null
 } = {}) {
   function guardedRoute(route) {
     const normalizedRoute = normalizeAiRoute(route);
@@ -1057,6 +1069,20 @@ export function createElevenLabsClientTools({
   }
 
   async function showDriverVehiclePicker(parameters = {}) {
+    if (isCollectionRouteGpsIntent(parameters)) {
+      return {
+        ok: false,
+        status: "wrong_tool_for_collection_gps",
+        errorCode: "COLLECTION_ROUTE_GPS_TOOL_REQUIRED",
+        pickerOpened: false,
+        nextTool: COLLECTION_ROUTE_GPS_TOOL_NAME,
+        message: COLLECTION_ROUTE_GPS_WRONG_TOOL_MESSAGE,
+        messageForAssistant: `${COLLECTION_ROUTE_GPS_WRONG_TOOL_MESSAGE} Hned zavolej ${COLLECTION_ROUTE_GPS_TOOL_NAME}.`,
+        answerText: COLLECTION_ROUTE_GPS_WRONG_TOOL_MESSAGE,
+        apiStatus: "ready"
+      };
+    }
+
     const sessionKey = driverReportSessionKey(parameters);
     const calledDiagnostic = driverVehiclePickerDiagnostic("show_driver_vehicle_picker", "called", { sessionKey });
     let result;
@@ -1205,6 +1231,36 @@ export function createElevenLabsClientTools({
 
     return /\b(vozidlo|vozidla|auto|auta|vuz|spz|ridic|driver|vehicle|driver_report|hlaseni_ridicu)\b/.test(text) ||
       (inDriverReports && /\b(toto|tohle|prvni|druhe|vyber|select|option|moznost)\b/.test(text));
+  }
+
+  function isCollectionRouteGpsIntent(parameters = {}) {
+    const actualRoute = typeof window !== "undefined"
+      ? normalizeAiRoute(window.location?.pathname || "")
+      : "";
+    const requestedRoute = normalizeAiRoute(
+      parameters.currentModuleRoute
+      || parameters.current_module_route
+      || parameters.route
+      || ""
+    );
+    const inCollectionRoutes = actualRoute === COLLECTION_ROUTE_GPS_ROUTE || requestedRoute === COLLECTION_ROUTE_GPS_ROUTE;
+    if (!inCollectionRoutes) {
+      return false;
+    }
+
+    const text = normalizeKey([
+      parameters.transcriptIntent,
+      parameters.transcript_intent,
+      parameters.intent,
+      parameters.query,
+      parameters.message,
+      parameters.currentModule,
+      parameters.current_module
+    ].filter(Boolean).join(" "));
+    const mentionsGpsPoint = text.includes("gps") && (text.includes("stanovist") || text.includes("poloh"));
+    const mentionsStationAction = text.includes("stanovist") && /(potvrd|zmer|zmap|mapuj|nacti|uloz)/.test(text);
+
+    return mentionsGpsPoint || mentionsStationAction;
   }
 
   function absenceDayPartValue(value, halfDay = null) {
@@ -1759,6 +1815,65 @@ export function createElevenLabsClientTools({
 
       toast({ type, message });
       return { ok: true, type, message };
+    },
+
+    async prepare_collection_route_gps_capture(parameters = {}) {
+      const currentRoute = typeof window !== "undefined"
+        ? normalizeAiRoute(window.location?.pathname || "")
+        : "";
+      if (currentRoute !== COLLECTION_ROUTE_GPS_ROUTE) {
+        return {
+          ok: false,
+          status: "wrong_module",
+          measurementPrepared: false,
+          saved: false,
+          finalTapRequired: true,
+          vehicleSelectionRequired: false,
+          answerText: "GPS stanoviště připravím jen v otevřeném modulu Svozové trasy.",
+          messageForAssistant: "Požádej uživatele, aby otevřel Svozové trasy. Neotvírej výběr vozidla."
+        };
+      }
+      if (typeof prepareCollectionRouteGpsCapture !== "function") {
+        return {
+          ok: false,
+          status: "unavailable",
+          measurementPrepared: false,
+          saved: false,
+          finalTapRequired: true,
+          vehicleSelectionRequired: false,
+          answerText: "GPS měření teď nejde připravit. Použij velké tlačítko Potvrdit GPS stanoviště.",
+          messageForAssistant: "GPS měření není dostupné. Neotvírej výběr vozidla."
+        };
+      }
+
+      try {
+        const result = await prepareCollectionRouteGpsCapture({
+          ...parameters,
+          currentModuleRoute: currentRoute
+        });
+        return result && typeof result === "object"
+          ? result
+          : {
+              ok: false,
+              status: "failed",
+              measurementPrepared: false,
+              saved: false,
+              finalTapRequired: true,
+              vehicleSelectionRequired: false,
+              answerText: "GPS měření se nepodařilo připravit. Použij velké tlačítko Potvrdit GPS stanoviště."
+            };
+      } catch (_) {
+        return {
+          ok: false,
+          status: "failed",
+          measurementPrepared: false,
+          saved: false,
+          finalTapRequired: true,
+          vehicleSelectionRequired: false,
+          answerText: "GPS měření se nepodařilo připravit. Použij velké tlačítko Potvrdit GPS stanoviště.",
+          messageForAssistant: "Řekni stručně, že měření selhalo. Neotvírej výběr vozidla."
+        };
+      }
     },
 
     async show_driver_vehicle_picker(parameters = {}) {

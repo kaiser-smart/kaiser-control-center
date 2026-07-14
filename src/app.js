@@ -44,7 +44,7 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.10";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.11";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRouteGpsPrompt,
@@ -1603,7 +1603,8 @@ const elevenLabsAssistant = ElevenLabsAssistantProvider({
     confirm: (payload) => requestAiConfirmation(payload),
     toast: (payload) => showAiToast(payload),
     highlight: (payload) => showAiHighlight(payload),
-    requestJson: (path, options) => apiJson(path, options)
+    requestJson: (path, options) => apiJson(path, options),
+    prepareCollectionRouteGpsCapture: (parameters) => prepareCollectionRoutesTestGpsFromSarlota(parameters)
   }
 });
 
@@ -37907,6 +37908,109 @@ async function prepareCollectionRoutesTestGpsCapture() {
     collectionRoutesPilotState.testGpsPending = "";
     render();
   }
+}
+
+async function prepareCollectionRoutesTestGpsFromSarlota() {
+  const detail = collectionRoutesPilotState.dailyRouteDetail;
+  const run = detail?.run;
+  const stop = detail?.stops?.find((item) => item.status === "planned") || null;
+  const confirmation = stop
+    ? collectionRoutesPilotState.testGpsConfirmations.find((item) => item.stopId === stop.id) || null
+    : null;
+  const baseResult = {
+    saved: false,
+    finalTapRequired: true,
+    vehicleSelectionRequired: false
+  };
+
+  if (normalizePath(window.location.pathname) !== COLLECTION_ROUTES_ROUTE) {
+    return {
+      ...baseResult,
+      ok: false,
+      status: "wrong_module",
+      measurementPrepared: false,
+      answerText: "GPS stanoviště připravím jen v otevřeném modulu Svozové trasy."
+    };
+  }
+  if (!collectionDailyRouteIsTestScope()) {
+    return {
+      ...baseResult,
+      ok: false,
+      status: "test_scope_required",
+      measurementPrepared: false,
+      answerText: "Nejdřív otevři oddělený TEST řidičského tabletu. Ostrou trasu hlasem neměním."
+    };
+  }
+  if (run?.status !== "active") {
+    return {
+      ...baseResult,
+      ok: false,
+      status: "active_test_required",
+      measurementPrepared: false,
+      answerText: "Nejdřív spusť TEST tabletu. Potom připravím GPS měření aktuálního stanoviště."
+    };
+  }
+  if (!stop) {
+    return {
+      ...baseResult,
+      ok: false,
+      status: "no_planned_stop",
+      measurementPrepared: false,
+      answerText: "V TESTU už není čekající stanoviště k GPS měření."
+    };
+  }
+  if (confirmation) {
+    return {
+      ...baseResult,
+      ok: true,
+      status: "already_saved",
+      measurementPrepared: false,
+      saved: true,
+      finalTapRequired: false,
+      answerText: "GPS stanoviště už je uložené. Klepni na velké tlačítko Dokončit test tabletu.",
+      messageForAssistant: "GPS bod už KSO eviduje jako uložený. Neotvírej výběr vozidla a vyzvi k dokončení TESTU."
+    };
+  }
+  if (collectionRoutesPilotState.testGpsPending) {
+    return {
+      ...baseResult,
+      ok: false,
+      status: "measurement_in_progress",
+      measurementPrepared: false,
+      answerText: "GPS měření už probíhá. Zůstaň s tabletem stát přímo u nádoby."
+    };
+  }
+  if (collectionRoutesPilotState.testGpsPreview?.stopId === stop.id) {
+    return {
+      ...baseResult,
+      ok: true,
+      status: "measurement_ready",
+      measurementPrepared: true,
+      answerText: "Měření je připravené. Pro uložení klepni na velké tlačítko Uložit fyzickou GPS.",
+      messageForAssistant: "Řekni, že měření je připravené a finální uložení vyžaduje fyzické klepnutí. Nikdy netvrď, že je GPS uložená."
+    };
+  }
+
+  await prepareCollectionRoutesTestGpsCapture();
+
+  if (collectionRoutesPilotState.testGpsPreview?.stopId === stop.id) {
+    return {
+      ...baseResult,
+      ok: true,
+      status: "measurement_ready",
+      measurementPrepared: true,
+      answerText: "Měření je připravené. Pro uložení klepni na velké tlačítko Uložit fyzickou GPS.",
+      messageForAssistant: "Řekni, že měření je připravené a finální uložení vyžaduje fyzické klepnutí. Nikdy netvrď, že je GPS uložená."
+    };
+  }
+
+  return {
+    ...baseResult,
+    ok: false,
+    status: "measurement_failed",
+    measurementPrepared: false,
+    answerText: collectionRoutesPilotState.testGpsError || "GPS měření se nepodařilo připravit. Použij velké tlačítko Potvrdit GPS stanoviště."
+  };
 }
 
 async function saveCollectionRoutesTestGpsCapture() {

@@ -27,7 +27,7 @@ function signedUrlEndpoint(apiBaseUrl, assistantId, options = {}) {
     query.set("diagnosticMode", DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE);
   }
   const currentRoute = String(options.currentRoute || "").trim();
-  if (currentRoute === "/datove-schranky-plus") {
+  if (["/datove-schranky-plus", "/trasy-svozu"].includes(currentRoute)) {
     query.set("currentRoute", currentRoute);
   }
   return `${base}/api/ai/elevenlabs/signed-url?${query.toString()}`;
@@ -91,7 +91,7 @@ function microphoneErrorMessage(error) {
   const errorName = String(error?.name || "").trim();
 
   if (errorName === "NotAllowedError" || errorName === "SecurityError" || errorName === "PermissionDeniedError") {
-    return "Mikrofon není povolený. Povolte mikrofon pro tento web a zkuste to znovu.";
+    return "Mikrofon není povolený. Povol mikrofon pro tento web a zkus to znovu.";
   }
 
   if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
@@ -102,7 +102,7 @@ function microphoneErrorMessage(error) {
     return "Mikrofon se nepodařilo spustit. Může ho používat jiná aplikace.";
   }
 
-  return "Mikrofon se nepodařilo spustit. Zkontrolujte oprávnění prohlížeče a zkuste to znovu.";
+  return "Mikrofon se nepodařilo spustit. Zkontroluj oprávnění prohlížeče a zkus to znovu.";
 }
 
 function isMicrophonePermissionDenied(error) {
@@ -134,7 +134,7 @@ function createVoiceTimeoutError(message, code) {
 
 function createMicrophoneTimeoutError() {
   return createVoiceTimeoutError(
-    "Mikrofon čeká na povolení. Povolte mikrofon pro tento web a klepněte znovu.",
+    "Mikrofon čeká na povolení. Povol mikrofon pro tento web a klepni znovu.",
     "voice_microphone_timeout"
   );
 }
@@ -750,7 +750,7 @@ export function useElevenLabsAssistant({
     }
 
     if (!audioReady) {
-      callbacks.onAudioWarning?.("Zvuk v mobilním prohlížeči se nepodařilo připravit. Zkontrolujte hlasitost, tichý režim a povolený zvuk pro prohlížeč.");
+      callbacks.onAudioWarning?.("Zvuk v mobilním prohlížeči se nepodařilo připravit. Zkontroluj hlasitost, tichý režim a povolený zvuk pro prohlížeč.");
     }
 
     let mediaStream = null;

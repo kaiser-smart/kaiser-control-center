@@ -5,7 +5,7 @@ const STATUS_DONE = "Hotovo";
 const STATUS_MIC_DENIED = "Mikrofon není povolený";
 const STATUS_UNSUPPORTED = "Hlasové ovládání není podporované";
 
-const MIC_DENIED_NOTICE = "Mikrofon není povolený. Povolte mikrofon v nastavení prohlížeče a zkuste to znovu.";
+const MIC_DENIED_NOTICE = "Mikrofon není povolený. Povol mikrofon v nastavení prohlížeče a zkus to znovu.";
 const UNSUPPORTED_NOTICE = "Hlasové ovládání v tomto prohlížeči nejde. Použij textový dotaz.";
 const INSECURE_CONTEXT_NOTICE = "Mikrofon jde spustit jen přes zabezpečené HTTPS připojení.";
 const MEDIA_DEVICES_UNSUPPORTED_NOTICE = "Prohlížeč nepodporuje přístup k mikrofonu. Použij textový dotaz.";

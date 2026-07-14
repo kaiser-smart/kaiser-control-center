@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 
 import { __test as promptSyncTest } from "../functions/api/ai/elevenlabs/sarlota-prompt-sync.js";
-import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSystemPrompt.js";
+import {
+  SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
+  SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE
+} from "../src/sarlota/sarlotaSystemPrompt.js";
 
 {
   assert.equal(promptSyncTest.PROMPT_RULE_MARKER, "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL");
   assert.equal(promptSyncTest.LEGACY_PROMPT_RULE_MARKERS.includes(promptSyncTest.PROMPT_RULE_MARKER), false);
   assert.equal(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE.includes(promptSyncTest.PROMPT_RULE_REQUIRED_PHRASE), true);
+  assert.equal(promptSyncTest.COLLECTION_ROUTES_GPS_RULE_MARKER, "SVOZOVÉ TRASY / GPS STANOVIŠTĚ");
+  assert.equal(
+    SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_GPS_RULE_REQUIRED_PHRASE),
+    true
+  );
 }
 
 {
@@ -17,9 +25,30 @@ import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSyst
 
   assert.equal(promptSyncTest.promptHasCurrentRule(prompt), true);
   assert.equal(promptSyncTest.promptHasDataBoxContextRule(prompt), false);
+  assert.equal(promptSyncTest.promptHasCollectionRoutesGpsRule(prompt), false);
   assert.deepEqual(promptSyncTest.forbiddenPromptPhrases(prompt), []);
   assert.equal(promptSyncTest.promptHasLegacyRule(prompt), false);
   assert.equal(promptSyncTest.stripDriverReportPromptBlocks(prompt), prompt);
+}
+
+{
+  const prompt = [
+    "Jsi Šarlota.",
+    promptSyncTest.COLLECTION_ROUTES_GPS_RULE_BLOCK,
+    "Bezpečný zbytek promptu."
+  ].join("\n");
+  const stripped = promptSyncTest.stripCollectionRoutesGpsPromptBlocks(prompt);
+
+  assert.equal(promptSyncTest.promptHasCollectionRoutesGpsRule(prompt), true);
+  assert.equal(stripped.includes(promptSyncTest.COLLECTION_ROUTES_GPS_RULE_MARKER), false);
+  assert.equal(stripped.includes("Bezpečný zbytek promptu."), true);
+}
+
+{
+  const unrelatedLine = `Bezpečný starší text pouze zmiňuje ${promptSyncTest.COLLECTION_ROUTES_GPS_RULE_MARKER}, ale není synchronizovaným blokem.`;
+  const stripped = promptSyncTest.stripCollectionRoutesGpsPromptBlocks(unrelatedLine);
+
+  assert.equal(stripped, unrelatedLine);
 }
 
 {
@@ -109,7 +138,40 @@ import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSyst
   assert.equal(plan.ready, true);
   assert.equal(plan.prompt.willAppendDriverReportVehicleRule, true);
   assert.equal(plan.prompt.willAppendDataBoxContextRule, true);
+  assert.equal(plan.prompt.willAppendCollectionRoutesGpsRule, true);
   assert.equal(plan.prompt.willRemoveForbiddenDriverReportPhrases, true);
+}
+
+{
+  const completePrompt = [
+    "Jsi Šarlota.",
+    SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
+    promptSyncTest.DATA_BOX_CONTEXT_RULE_BLOCK,
+    promptSyncTest.COLLECTION_ROUTES_GPS_RULE_BLOCK
+  ].join("\n");
+  const plan = promptSyncTest.buildPlan({
+    ok: true,
+    assistantConfig: {
+      assistantKey: "sarlota",
+      displayName: "Šarlota – Smart odpady",
+      expectedAgentNames: ["Šarlota – Smart odpady"]
+    },
+    agentConfig: {
+      name: "Šarlota – Smart odpady",
+      conversation_config: {
+        agent: {
+          first_message: "{{intro_announcement}}",
+          prompt: { prompt: completePrompt }
+        }
+      }
+    }
+  });
+
+  assert.equal(plan.prompt.currentRulePresent, true);
+  assert.equal(plan.prompt.dataBoxContextRulePresent, true);
+  assert.equal(plan.prompt.collectionRoutesGpsRulePresent, true);
+  assert.equal(plan.alreadyApplied, true);
+  assert.equal(plan.ready, false);
 }
 
 {
