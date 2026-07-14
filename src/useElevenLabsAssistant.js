@@ -27,7 +27,7 @@ function signedUrlEndpoint(apiBaseUrl, assistantId, options = {}) {
     query.set("diagnosticMode", DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE);
   }
   const currentRoute = String(options.currentRoute || "").trim();
-  if (currentRoute === "/datova-schranka" || currentRoute === "/datove-schranky-plus") {
+  if (currentRoute === "/datove-schranky-plus") {
     query.set("currentRoute", currentRoute);
   }
   return `${base}/api/ai/elevenlabs/signed-url?${query.toString()}`;

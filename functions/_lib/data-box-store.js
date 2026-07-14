@@ -918,7 +918,7 @@ export async function dataBoxAssistantContext(env) {
 
   return {
     module: "Datová schránka",
-    route: "/datova-schranka",
+    route: "/datove-schranky-plus",
     state: status?.apiStatus === "ready" ? "read_only" : "unavailable",
     apiStatus: cleanString(status?.apiStatus || "waiting"),
     integrationStatus: cleanString(status?.integrationStatus || "inactive"),

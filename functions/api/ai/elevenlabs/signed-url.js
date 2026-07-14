@@ -129,7 +129,7 @@ function fallbackDriverReportVehicleVariables() {
 }
 
 function dataBoxContextVariables(context = {}) {
-  const route = cleanString(context.route || "/datova-schranka");
+  const route = cleanString(context.route || "/datove-schranky-plus");
   return {
     current_module: cleanString(context.module || "Datová schránka"),
     current_module_route: route,
@@ -224,7 +224,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
   if (omitDriverReportVehicleContext) {
     contextWarnings.push("driver_report_vehicle_omitted_for_diagnostic");
   }
-  const dataBoxVariables = requestedRoute === "/datova-schranka"
+  const dataBoxVariables = requestedRoute === "/datove-schranky-plus"
     ? await optionalContext(
       "data_box",
       async () => dataBoxContextVariables(await dataBoxAssistantContext(env)),

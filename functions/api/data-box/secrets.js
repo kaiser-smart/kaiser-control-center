@@ -224,7 +224,7 @@ function page(env, options = {}) {
   const message = cleanString(options.message);
   const error = cleanString(options.error);
   const results = Array.isArray(options.results) ? options.results : [];
-  const appUrl = "https://smart-odpady.ai/datova-schranka/";
+  const appUrl = "https://smart-odpady.ai/datove-schranky-plus/";
 
   return `<!doctype html>
 <html lang="cs">

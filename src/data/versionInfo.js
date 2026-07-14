@@ -318,7 +318,7 @@ export const versionNews = [
   },
   {
     title: "Datové schránky Plus: odstranění staré Datové schránky",
-    text: "Starý modul /datova-schranka byl odstraněný z hlavní stránky a oprávnění. Původní URL bezpečně přesměruje do Datových schránek Plus a provozní odkazy už míří na DSP."
+    text: "Datové schránky používají jednotnou provozní trasu Datových schránek Plus."
   },
   {
     title: "Datové schránky Plus: ostrý e-mail",
