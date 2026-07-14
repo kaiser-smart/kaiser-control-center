@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.552"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.553"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: GPS bez výběru vozidla",
+    text: "Ve Svozových trasách globální hlasová Šarlota po povelu k potvrzení GPS spustí měření aktuálního TEST stanoviště přímo. Neotevře výběr auta ani se neptá na SPZ; samotné uložení dál vyžaduje velké fyzické klepnutí člověka."
+  },
   {
     title: "Svozové trasy: kontrola GPS už neblokuje TEST",
     text: "Po uloženém fyzickém měření tablet ukáže obří tlačítko DOKONČIT TEST TABLETU. Bod s horší přesností dál bezpečně čeká na kontrolu a nejde do navigace, ale fyzický test lze uzavřít; funguje to i pro už rozpracované měření na Trnkově."
