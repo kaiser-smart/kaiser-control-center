@@ -10,7 +10,10 @@ import {
   ELEVENLABS_CLIENT_TOOL_SCHEMAS,
   createElevenLabsClientTools
 } from "../src/elevenLabsClientTools.js";
-import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSystemPrompt.js";
+import {
+  SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
+  SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE
+} from "../src/sarlota/sarlotaSystemPrompt.js";
 import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
 
 const REQUIRED_DRIVER_REPORT_TOOLS = [
@@ -19,7 +22,8 @@ const REQUIRED_DRIVER_REPORT_TOOLS = [
   "show_driver_vehicle_picker",
   "get_driver_vehicle_picker_selection",
   "validate_driver_vehicle_spz",
-  "create_driver_part_request"
+  "create_driver_part_request",
+  "prepare_collection_route_gps_capture"
 ];
 
 function assertNoSecret(value = "") {
@@ -82,6 +86,12 @@ function assertNoSecret(value = "") {
 }
 
 {
+  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /current_module_route `\/trasy-svozu`/);
+  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /vždy zavolej prepare_collection_route_gps_capture/);
+  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /nikdy nevolej get_driver_report_context/);
+  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /show_driver_vehicle_picker/);
+  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /Finální uložení vždy vyžaduje fyzické klepnutí/);
+
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Jaký tam jsou vozidla\?/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Jaký tam mám\?/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Ty tam vidíš co\?/);
@@ -99,7 +109,7 @@ function assertNoSecret(value = "") {
   assert.doesNotMatch(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Konkrétní vozidlo smíš[^.]*právě jedno vozidlo/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej, že je hotovo/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej, že je něco předané Patrikovi nebo Kamilovi/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníte k tomu ještě poznámku/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníš k tomu ještě poznámku/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmationSource `voice-intake`/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Po vyřízení poznámky už se neptej `Mám hlášení uložit\?`/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /driverPartRequest\.reportId/);

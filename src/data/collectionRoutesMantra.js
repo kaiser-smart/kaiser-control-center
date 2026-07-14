@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.10",
-  updatedAt: "14. 7. 2026 10:45",
-  updatedAtIso: "2026-07-14T10:45:00+02:00",
-  lastChange: "Odděleno dokončení a kontrola GPS",
+  version: "1.11",
+  updatedAt: "14. 7. 2026 11:40",
+  updatedAtIso: "2026-07-14T11:40:00+02:00",
+  lastChange: "GPS bez výběru vozidla",
   updatedBy: "Codex",
   status: "TEST návrh · řízené GPS",
   title: "Svozový autopilot – provozní mantra",
@@ -22,7 +22,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     },
     {
       title: "GPS se potvrzuje fyzicky",
-      text: "Adresní bod se nikdy tiše nepřepíše. Řidič nebo pověřený terénní tester změří skutečné místo u nádob po zastavení; hlasová Šarlota pomůže a zápis dokončí jedno velké klepnutí."
+      text: "Adresní bod se nikdy tiše nepřepíše. Řidič nebo pověřený terénní tester změří skutečné místo u nádob po zastavení; hlasová Šarlota spustí měření bez výběru vozidla a zápis dokončí jedno velké klepnutí."
     }
   ],
   sources: [
@@ -206,6 +206,8 @@ Pokud stanoviště ještě není fyzicky změřené, Šarlota řidiče po zastav
 Ve stacionárním terénním TESTU osloví Šarlota stejně přátelsky přihlášeného testera a vyzve jej, aby zůstal s tabletem stát přímo u nádoby. Nesmí mluvit o pohybu svozového vozidla, které v tomto TESTU neexistuje.
 
 Řidič může hlasem říct „Šarloto, potvrď GPS stanoviště“. Hlasový povel smí spustit načtení více GPS vzorků, ale sám nesmí dokončit zápis. Po změření se otevře jedno velké finální potvrzení v aplikaci.
+
+Globální hlasová Šarlota musí ve Svozových trasách pro tento povel použít nástroj prepare_collection_route_gps_capture. Nesmí otevřít výběr vozidla, ptát se na auto ani SPZ. Nástroj pouze připraví měření; fyzický GPS bod se uloží až po velkém ručním klepnutí člověka v KSO.
 
 Tlačítko pro fyzické GPS musí být přes celou dostupnou šířku, minimálně 120 px vysoké a na úzkém displeji 132 px, kontrastní, čitelné v dešti, mrazu, horku a ovladatelné v pracovních rukavicích. Řidič se nesmí trefovat do malého prvku ani potvrzovat technický formulář.
 

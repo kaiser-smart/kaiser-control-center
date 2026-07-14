@@ -149,6 +149,20 @@ function dataBoxContextVariables(context = {}) {
   };
 }
 
+export function collectionRoutesContextVariables() {
+  return {
+    current_module: "Svozové trasy",
+    current_module_route: "/trasy-svozu",
+    current_module_context: JSON.stringify({
+      module: "Svozové trasy",
+      route: "/trasy-svozu",
+      mode: "authenticated-ui",
+      gpsMode: "test-only",
+      safety: "Hlas smí GPS měření pouze připravit. Uložení fyzického bodu vyžaduje ruční klepnutí v KSO a nesmí otevřít výběr vozidla."
+    })
+  };
+}
+
 function fallbackIntroAnnouncement(user) {
   return {
     enabled: false,
@@ -235,12 +249,16 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
       contextWarnings
     )
     : {};
+  const collectionRoutesVariables = assistant.assistantType === "sarlota" && requestedRoute === "/trasy-svozu"
+    ? collectionRoutesContextVariables()
+    : {};
   const dynamicVariables = {
     ...userDynamicVariables,
     ...introAnnouncement.variables,
     ...humanTouchVariables,
     ...driverReportVehicleVariables,
     ...dataBoxVariables,
+    ...collectionRoutesVariables,
     assistant_key: assistant.assistantKey,
     assistant_display_name: assistant.displayName,
     assistant_is_test: assistant.isTest ? "true" : "false"

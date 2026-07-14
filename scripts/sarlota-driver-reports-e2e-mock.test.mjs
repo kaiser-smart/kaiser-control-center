@@ -434,7 +434,7 @@ async function testVoiceCreateConfirmationGuards() {
 
   const prepared = await prepareVoiceCreate(env);
   assert.equal(prepared.status, "needs_input");
-  assert.match(prepared.reply, /Doplníte k tomu ještě poznámku/);
+  assert.match(prepared.reply, /Doplníš k tomu ještě poznámku/);
 
   const questionOnly = await prepareVoiceCreate(env, {
     parameters: {
@@ -442,7 +442,7 @@ async function testVoiceCreateConfirmationGuards() {
     }
   });
   assert.equal(questionOnly.status, "needs_input");
-  assert.match(questionOnly.reply, /Doplníte k tomu ještě poznámku/);
+  assert.match(questionOnly.reply, /Doplníš k tomu ještě poznámku/);
 
   const afterNote = await prepareVoiceCreate(env, {
     parameters: {
