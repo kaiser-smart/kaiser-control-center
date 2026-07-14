@@ -230,6 +230,11 @@ assert.match(compactChatStyles, /\.ds-plus-chat-window__messages\s*\{[\s\S]*alig
 assert.match(compactChatStyles, /overflow-y:\s*auto/);
 assert.match(compactChatStyles, /\.ds-plus-chat-message--user\s*\{[\s\S]*align-self:\s*flex-end/);
 assert.match(appSource, /data-ds-plus-chat-messages tabindex="0"/);
+assert.match(appSource, /function scrollDataBoxPlusChatHistoryByKeyboard\(event\)/);
+assert.match(appSource, /ArrowDown: arrowStep/);
+assert.match(appSource, /PageUp: -pageStep/);
+assert.match(appSource, /messages\.scrollTop = 0/);
+assert.match(appSource, /messages\.scrollTop = messages\.scrollHeight/);
 assert.match(compactChatStyles, /\.ds-plus-chat-confirmation/);
 assert.match(compactChatStyles, /\.ds-plus-detail-section--chat/);
 assert.match(compactChatStyles, /@media \(max-width: 720px\)[\s\S]*height:\s*100dvh/);

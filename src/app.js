@@ -25073,7 +25073,7 @@ function dataBoxPlusInstructionCard(message) {
 
   return `
     <section class="ds-plus-instruction-card ds-plus-chat-window" aria-label="Chat k datové zprávě">
-      <div class="ds-plus-chat-window__messages" data-ds-plus-chat-messages tabindex="0" aria-live="polite" aria-busy="${loading ? "true" : "false"}">
+      <div class="ds-plus-chat-window__messages" data-ds-plus-chat-messages tabindex="0" aria-label="Historie chatu. Pro posun použijte šipky, Page Up nebo Page Down." aria-live="polite" aria-busy="${loading ? "true" : "false"}">
         ${conversation.length ? conversation.map((entry) => `
           <div class="ds-plus-chat-message ds-plus-chat-message--${entry.role === "user" ? "user" : "assistant"} ${entry.pending ? "ds-plus-chat-message--pending" : ""} ${entry.error ? "ds-plus-chat-message--error" : ""}">
             <span>${entry.role === "user" ? "Radim" : "Autopilot"}</span>
@@ -36588,6 +36588,35 @@ function scrollDataBoxPlusChatToLatest() {
     const messages = document.querySelector("[data-ds-plus-chat-messages]");
     if (messages) messages.scrollTop = messages.scrollHeight;
   });
+}
+
+function scrollDataBoxPlusChatHistoryByKeyboard(event) {
+  const messages = event.target?.closest?.("[data-ds-plus-chat-messages]");
+  if (!messages || event.altKey || event.ctrlKey || event.metaKey) return;
+
+  const pageStep = Math.max(48, Math.round(messages.clientHeight * 0.85));
+  const arrowStep = Math.max(40, Math.round(pageStep / 8));
+  const offsets = {
+    ArrowDown: arrowStep,
+    ArrowUp: -arrowStep,
+    PageDown: pageStep,
+    PageUp: -pageStep
+  };
+
+  if (event.key === "Home") {
+    event.preventDefault();
+    messages.scrollTop = 0;
+    return;
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+  if (!Object.hasOwn(offsets, event.key)) return;
+
+  event.preventDefault();
+  messages.scrollBy(0, offsets[event.key]);
 }
 
 async function confirmDataBoxPlusRecommendation(recommendationId, actionTypeOverride = "") {
@@ -49973,6 +50002,7 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  scrollDataBoxPlusChatHistoryByKeyboard(event);
   if (event.key === "Escape" && collectionRoutesPilotState.testTabletOpen) {
     event.preventDefault();
     closeCollectionRoutesTestTablet();
