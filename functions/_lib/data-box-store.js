@@ -911,6 +911,27 @@ export async function getDataBoxStatus(env) {
   }
 }
 
+export async function dataBoxAssistantContext(env) {
+  const status = await getDataBoxStatus(env);
+  const summary = status?.summary || {};
+  const mailboxes = Array.isArray(status?.dataBoxes) ? status.dataBoxes : [];
+
+  return {
+    module: "Datová schránka",
+    route: "/datova-schranka",
+    state: status?.apiStatus === "ready" ? "read_only" : "unavailable",
+    apiStatus: cleanString(status?.apiStatus || "waiting"),
+    integrationStatus: cleanString(status?.integrationStatus || "inactive"),
+    mode: cleanString(status?.mode || "pilot"),
+    mailboxesCount: mailboxes.length,
+    receivedCount: numberValue(summary.received),
+    sentCount: numberValue(summary.sent),
+    attachmentsCount: numberValue(summary.attachments),
+    lastSyncAt: cleanString(summary.lastSyncAt),
+    safety: "Zprávy lze pouze číst. Chat nesmí tvrdit, že něco odeslal, archivoval, smazal nebo změnil. Obsah datových zpráv ani příloh není v tomto kontextu k dispozici."
+  };
+}
+
 async function syncDataBoxAccount(db, env, account, currentUser, startedAt, knownObservedIds = new Set()) {
   const dataBox = await ensureDataBoxForAccount(db, account);
   const runId = await createSyncRun(db, dataBox, currentUser, startedAt);

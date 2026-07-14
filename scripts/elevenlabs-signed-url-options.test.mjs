@@ -15,6 +15,7 @@ import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
 }
 
 const requestedPaths = [];
+globalThis.window = { location: { pathname: "/datova-schranka" } };
 const assistant = useElevenLabsAssistant({
   signedUrlOptions: (assistantId, sessionContext = {}) => ({
     omitDriverReportVehicleContext: ["sarlota", "sarlota-smart-2"].includes(assistantId) && sessionContext.interfaceMode === "voice"
@@ -33,6 +34,7 @@ const assistant = useElevenLabsAssistant({
 await assistant.prepareSignedUrl("sarlota", { interfaceMode: "voice" });
 assert.match(requestedPaths.at(-1), /assistant=sarlota/);
 assert.match(requestedPaths.at(-1), /diagnosticMode=identity_no_driver_vehicles/);
+assert.match(requestedPaths.at(-1), /currentRoute=%2Fdatova-schranka/);
 
 await assistant.prepareSignedUrl("sarlota-smart-2", { interfaceMode: "voice" });
 assert.match(requestedPaths.at(-1), /assistant=sarlota-smart-2/);
@@ -64,5 +66,7 @@ const standardAssistant = useElevenLabsAssistant({
 await standardAssistant.prepareSignedUrl("sarlota", { interfaceMode: "voice" });
 assert.match(requestedPaths.at(-1), /assistant=sarlota/);
 assert.doesNotMatch(requestedPaths.at(-1), /diagnosticMode=/);
+
+delete globalThis.window;
 
 console.log("elevenlabs signed-url option tests passed");

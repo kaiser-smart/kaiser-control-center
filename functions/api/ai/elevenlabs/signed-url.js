@@ -9,6 +9,7 @@ import {
   userDynamicVariablesForAi
 } from "../../../_lib/ai-people-summary.js";
 import { driverReportVehicleDynamicVariables } from "../../../_lib/fleet-vehicles-store.js";
+import { dataBoxAssistantContext } from "../../../_lib/data-box-store.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import {
   assistantConfigFromRequest,
@@ -127,6 +128,27 @@ function fallbackDriverReportVehicleVariables() {
   };
 }
 
+function dataBoxContextVariables(context = {}) {
+  const route = cleanString(context.route || "/datova-schranka");
+  return {
+    current_module: cleanString(context.module || "Datová schránka"),
+    current_module_route: route,
+    current_module_context: JSON.stringify({
+      module: cleanString(context.module || "Datová schránka"),
+      state: cleanString(context.state || "unavailable"),
+      apiStatus: cleanString(context.apiStatus || "waiting"),
+      integrationStatus: cleanString(context.integrationStatus || "inactive"),
+      mode: cleanString(context.mode || "pilot"),
+      mailboxesCount: Number(context.mailboxesCount || 0),
+      receivedCount: Number(context.receivedCount || 0),
+      sentCount: Number(context.sentCount || 0),
+      attachmentsCount: Number(context.attachmentsCount || 0),
+      lastSyncAt: cleanString(context.lastSyncAt),
+      safety: cleanString(context.safety)
+    })
+  };
+}
+
 function fallbackIntroAnnouncement(user) {
   return {
     enabled: false,
@@ -177,6 +199,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
   const agentId = assistant.agentId;
   const contextWarnings = [];
   const omitDriverReportVehicleContext = shouldOmitDriverReportVehicleContext(request, assistant);
+  const requestedRoute = cleanString(new URL(request.url).searchParams.get("currentRoute"));
   const userDynamicVariables = userDynamicVariablesForAi(user);
   const introAnnouncement = await optionalContext(
     "intro_announcement",
@@ -201,11 +224,23 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
   if (omitDriverReportVehicleContext) {
     contextWarnings.push("driver_report_vehicle_omitted_for_diagnostic");
   }
+  const dataBoxVariables = requestedRoute === "/datova-schranka"
+    ? await optionalContext(
+      "data_box",
+      async () => dataBoxContextVariables(await dataBoxAssistantContext(env)),
+      () => dataBoxContextVariables({
+        state: "unavailable",
+        safety: "Kontext Datové schránky se nepodařilo načíst. Nevymýšlej si stav, obsah zpráv ani provedené akce."
+      }),
+      contextWarnings
+    )
+    : {};
   const dynamicVariables = {
     ...userDynamicVariables,
     ...introAnnouncement.variables,
     ...humanTouchVariables,
     ...driverReportVehicleVariables,
+    ...dataBoxVariables,
     assistant_key: assistant.assistantKey,
     assistant_display_name: assistant.displayName,
     assistant_is_test: assistant.isTest ? "true" : "false"

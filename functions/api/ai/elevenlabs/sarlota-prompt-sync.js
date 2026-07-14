@@ -26,6 +26,15 @@ const PROMPT_RULE_MARKER = DRIVER_REPORT_PROMPT_RULE_MARKER;
 const LEGACY_PROMPT_RULE_MARKERS = DRIVER_REPORT_PROMPT_LEGACY_RULE_MARKERS;
 const PROMPT_RULE_REQUIRED_PHRASE = DRIVER_REPORT_PROMPT_REQUIRED_PHRASE;
 const PROMPT_RULE_BLOCK = driverReportPromptRuleBlock();
+const DATA_BOX_CONTEXT_RULE_MARKER = "KONTEXT MODULU DATOVÁ SCHRÁNKA";
+const DATA_BOX_CONTEXT_RULE_REQUIRED_PHRASE = "Když je current_module Datová schránka";
+const DATA_BOX_CONTEXT_RULE_BLOCK = [
+  "",
+  DATA_BOX_CONTEXT_RULE_MARKER,
+  "Když je current_module Datová schránka, pracuj výhradně s hodnotou current_module_context z KSO backendu.",
+  "Jasně rozlišuj read-only stav, pilot a nedostupná data. Nikdy si nevymýšlej obsah datových zpráv, příloh, odesílatele, příjemce ani stav konkrétní akce.",
+  "Nikdy netvrď, že se datová zpráva odeslala, archivovala, smazala nebo změnila. Pro obsah konkrétní zprávy požádej o její bezpečné otevření v aplikaci."
+].join("\n");
 const PROMPT_PATHS = [
   ["conversation_config", "agent", "prompt", "prompt"],
   ["conversation_config", "agent", "prompt", "system_prompt"],
@@ -88,6 +97,12 @@ function promptHasCurrentRule(promptText) {
   return driverReportPromptHasCurrentRule(promptText);
 }
 
+function promptHasDataBoxContextRule(promptText) {
+  const text = cleanString(promptText);
+  return text.includes(DATA_BOX_CONTEXT_RULE_MARKER)
+    && text.includes(DATA_BOX_CONTEXT_RULE_REQUIRED_PHRASE);
+}
+
 function forbiddenPromptPhrases(promptText) {
   return driverReportPromptForbiddenPhrases(promptText);
 }
@@ -102,6 +117,22 @@ function promptHasLegacyRule(promptText) {
 
 function lineHasForbiddenPromptPhrase(line) {
   return driverReportPromptLineHasForbiddenPhrase(line);
+}
+
+function stripDataBoxContextPromptBlocks(promptText) {
+  const lines = String(promptText || "").split("\n");
+  const result = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.includes(DATA_BOX_CONTEXT_RULE_MARKER)) {
+      index += 3;
+      continue;
+    }
+    result.push(line);
+  }
+
+  return result.join("\n").trimEnd();
 }
 
 function bodyForPromptPatch(path, nextPrompt) {
@@ -211,16 +242,17 @@ function buildPlan(context) {
   const agentNameMatches = elevenLabsAgentNameMatchesExpected(context.agentConfig?.name, context.assistantConfig);
   const firstMessageMatches = firstMessage === FIRST_MESSAGE_TEMPLATE;
   const hasCurrentRule = promptHasCurrentRule(promptPath.value);
+  const hasDataBoxContextRule = promptHasDataBoxContextRule(promptPath.value);
   const hasLegacyRule = promptHasLegacyRule(promptPath.value);
   const hasLegacyUnsafeExample = promptHasLegacyUnsafeDriverReportExample(promptPath.value);
   const forbiddenPhrases = forbiddenPromptPhrases(promptPath.value);
   const hasForbiddenPhrases = forbiddenPhrases.length > 0;
-  const promptNeedsPatch = !hasCurrentRule || hasLegacyRule || hasLegacyUnsafeExample || hasForbiddenPhrases;
+  const promptNeedsPatch = !hasCurrentRule || !hasDataBoxContextRule || hasLegacyRule || hasLegacyUnsafeExample || hasForbiddenPhrases;
 
   return {
     mode: "dry_run",
     ready: agentNameMatches && firstMessageMatches && promptNeedsPatch,
-    alreadyApplied: hasCurrentRule && !hasLegacyRule && !hasLegacyUnsafeExample && !hasForbiddenPhrases,
+    alreadyApplied: hasCurrentRule && hasDataBoxContextRule && !hasLegacyRule && !hasLegacyUnsafeExample && !hasForbiddenPhrases,
     generatedAt: new Date().toISOString(),
     assistant: assistantPublicMetadata(context.assistantConfig),
     agent: {
@@ -233,9 +265,11 @@ function buildPlan(context) {
       path: promptPath.pathText,
       currentLength: promptPath.value.length,
       currentRulePresent: hasCurrentRule,
+      dataBoxContextRulePresent: hasDataBoxContextRule,
       legacyRulePresent: hasLegacyRule,
       forbiddenPhrasesPresent: forbiddenPhrases,
       willAppendDriverReportVehicleRule: promptNeedsPatch,
+      willAppendDataBoxContextRule: !hasDataBoxContextRule,
       willRemoveLegacyDriverReportVehicleRule: hasLegacyRule,
       willRemoveLegacyUnsafeExample: hasLegacyUnsafeExample,
       willRemoveForbiddenDriverReportPhrases: hasForbiddenPhrases
@@ -322,8 +356,8 @@ async function applyPayload(env, assistantConfig, user = null) {
   }
 
   const promptPath = writablePromptPathFromAgent(context.agentConfig);
-  const cleanedPrompt = stripLegacyDriverReportExamples(stripDriverReportPromptBlocks(promptPath.value));
-  const nextPrompt = `${cleanedPrompt}${PROMPT_RULE_BLOCK}`;
+  const cleanedPrompt = stripDataBoxContextPromptBlocks(stripLegacyDriverReportExamples(stripDriverReportPromptBlocks(promptPath.value)));
+  const nextPrompt = `${cleanedPrompt}${PROMPT_RULE_BLOCK}${DATA_BOX_CONTEXT_RULE_BLOCK}`;
   const patchBody = bodyForPromptPatch(promptPath.path, nextPrompt);
 
   try {
@@ -355,7 +389,7 @@ async function applyPayload(env, assistantConfig, user = null) {
   });
   const verifiedPrompt = promptPathFromAgent(verifiedAgentConfig);
   const verified = verifiedPrompt
-    ? promptHasCurrentRule(verifiedPrompt.value) && forbiddenPromptPhrases(verifiedPrompt.value).length === 0
+    ? promptHasCurrentRule(verifiedPrompt.value) && promptHasDataBoxContextRule(verifiedPrompt.value) && forbiddenPromptPhrases(verifiedPrompt.value).length === 0
     : false;
 
   return json({
@@ -463,11 +497,16 @@ export const __test = {
   PROMPT_RULE_MARKER,
   LEGACY_PROMPT_RULE_MARKERS,
   PROMPT_RULE_REQUIRED_PHRASE,
+  DATA_BOX_CONTEXT_RULE_MARKER,
+  DATA_BOX_CONTEXT_RULE_REQUIRED_PHRASE,
+  DATA_BOX_CONTEXT_RULE_BLOCK,
   forbiddenPromptPhrases,
   lineHasForbiddenPromptPhrase,
   buildPlan,
   promptHasCurrentRule,
+  promptHasDataBoxContextRule,
   promptHasLegacyRule,
   stripDriverReportPromptBlocks,
+  stripDataBoxContextPromptBlocks,
   upstreamErrorSummary
 };

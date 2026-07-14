@@ -26,6 +26,10 @@ function signedUrlEndpoint(apiBaseUrl, assistantId, options = {}) {
   if (options.omitDriverReportVehicleContext === true) {
     query.set("diagnosticMode", DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE);
   }
+  const currentRoute = String(options.currentRoute || "").trim();
+  if (currentRoute === "/datova-schranka" || currentRoute === "/datove-schranky-plus") {
+    query.set("currentRoute", currentRoute);
+  }
   return `${base}/api/ai/elevenlabs/signed-url?${query.toString()}`;
 }
 
@@ -424,7 +428,11 @@ export function useElevenLabsAssistant({
   async function prepareSignedUrl(assistantId = DEFAULT_AI_ASSISTANT_ID, sessionContext = {}) {
     const assistant = assistantById(assistantId);
     const loadJson = fetchJson || defaultFetchJson;
-    return loadJson(signedUrlEndpoint(apiBaseUrl, assistant.id, signedUrlOptionsFor(assistant.id, sessionContext)));
+    const currentRoute = typeof window === "undefined" ? "" : String(window.location?.pathname || "");
+    return loadJson(signedUrlEndpoint(apiBaseUrl, assistant.id, {
+      ...signedUrlOptionsFor(assistant.id, sessionContext),
+      currentRoute
+    }));
   }
 
   function closeTextSession(reason = "reset") {

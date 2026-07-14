@@ -16,9 +16,23 @@ import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSyst
   ].join("\n");
 
   assert.equal(promptSyncTest.promptHasCurrentRule(prompt), true);
+  assert.equal(promptSyncTest.promptHasDataBoxContextRule(prompt), false);
   assert.deepEqual(promptSyncTest.forbiddenPromptPhrases(prompt), []);
   assert.equal(promptSyncTest.promptHasLegacyRule(prompt), false);
   assert.equal(promptSyncTest.stripDriverReportPromptBlocks(prompt), prompt);
+}
+
+{
+  const prompt = [
+    "Jsi Šarlota.",
+    promptSyncTest.DATA_BOX_CONTEXT_RULE_BLOCK,
+    "Bezpečný zbytek promptu."
+  ].join("\n");
+  const stripped = promptSyncTest.stripDataBoxContextPromptBlocks(prompt);
+
+  assert.equal(promptSyncTest.promptHasDataBoxContextRule(prompt), true);
+  assert.equal(stripped.includes(promptSyncTest.DATA_BOX_CONTEXT_RULE_MARKER), false);
+  assert.equal(stripped.includes("Bezpečný zbytek promptu."), true);
 }
 
 {
@@ -94,6 +108,7 @@ import { SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE } from "../src/sarlota/sarlotaSyst
   assert.equal(plan.alreadyApplied, false);
   assert.equal(plan.ready, true);
   assert.equal(plan.prompt.willAppendDriverReportVehicleRule, true);
+  assert.equal(plan.prompt.willAppendDataBoxContextRule, true);
   assert.equal(plan.prompt.willRemoveForbiddenDriverReportPhrases, true);
 }
 

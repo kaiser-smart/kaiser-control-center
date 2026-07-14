@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.549"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.550"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: kontext Datové schránky",
+    text: "Chat při otevření v Datové schránce dostane pouze read-only souhrn skutečného modulu. Rozpozná stav integrace a počty, ale bez bezpečného otevření si nevymýšlí obsah zpráv, příloh ani provedené kroky."
+  },
   {
     title: "Datové schránky: skutečný prompt je v Nastavení",
     text: "Nastavení modulu zobrazuje v samostatném read-only okně přesný system prompt, který server posílá do OpenAI Responses API. Frontend nemá vlastní kopii promptu a nemůže ho potichu nahradit."
