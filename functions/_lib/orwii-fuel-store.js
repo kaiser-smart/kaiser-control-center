@@ -39,7 +39,7 @@ export function orwiiFuelStatus(env = {}) {
     runner: SYNC_RUNNER_NAME,
     schedule: "17 * * * *",
     message: config.configured
-      ? "ORWII Basic přístup je nastavený pro cloudovou hodinovou synchronizaci. Náhled zůstává read-only."
+      ? "ORWII přístup je nastavený pro cloudovou hodinovou synchronizaci přes krátkodobý Bearer token. Náhled zůstává read-only."
       : "ORWII přístup není nastavený. Doplňte Cloudflare secrets ORWII_API_USERNAME a ORWII_API_PASSWORD; hodnoty nepatří do frontendu ani repozitáře."
   };
 }
@@ -90,12 +90,29 @@ function asUnixMilliseconds(date, endOfDay = false) {
   if (!Number.isFinite(value)) throw new OrwiiFuelStoreError("Datum se nepodařilo převést pro ORWII.", 400, "orwii_date_invalid");
   return String(value);
 }
-async function fetchOrwiiJson(config, path, params = {}) {
+async function fetchOrwiiBearerToken(config) {
+  let response;
+  try {
+    response = await fetch(`${config.baseUrl}/getShortLivedToken`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ email: config.username, password: config.password }).toString()
+    });
+  } catch (error) {
+    throw new OrwiiFuelStoreError(`ORWII token API není dostupné: ${cleanString(error?.message) || "chyba sítě"}.`, 502, "orwii_token_unreachable");
+  }
+  if (!response.ok) throw new OrwiiFuelStoreError(`ORWII token API vrátilo HTTP ${response.status}.`, 502, "orwii_token_http_error");
+  let payload;
+  try { payload = await response.json(); } catch { throw new OrwiiFuelStoreError("ORWII token API nevrátilo platný JSON.", 502, "orwii_token_json_invalid"); }
+  const token = cleanString(payload?.token);
+  if (!token) throw new OrwiiFuelStoreError("ORWII token API nevrátilo přístupový token.", 502, "orwii_token_missing");
+  return token;
+}
+async function fetchOrwiiJson(config, token, path, params = {}) {
   const url = new URL(`${config.baseUrl}${path}`);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
-  const basic = btoa(`${config.username}:${config.password}`);
   let response;
-  try { response = await fetch(url, { headers: { Accept: "application/json", Authorization: `Basic ${basic}` } }); } catch (error) { throw new OrwiiFuelStoreError(`ORWII API není dostupné: ${cleanString(error?.message) || "chyba sítě"}.`, 502, "orwii_unreachable"); }
+  try { response = await fetch(url, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }); } catch (error) { throw new OrwiiFuelStoreError(`ORWII API není dostupné: ${cleanString(error?.message) || "chyba sítě"}.`, 502, "orwii_unreachable"); }
   if (!response.ok) throw new OrwiiFuelStoreError(`ORWII API vrátilo HTTP ${response.status}.`, 502, "orwii_http_error");
   try { return await response.json(); } catch { throw new OrwiiFuelStoreError("ORWII API nevrátilo platný JSON.", 502, "orwii_json_invalid"); }
 }
@@ -103,8 +120,9 @@ async function fetchTransactions(env, { from = "", to = "" } = {}) {
   const config = apiConfig(env);
   if (!config.configured) throw new OrwiiFuelStoreError(orwiiFuelStatus(env).message, 503, "orwii_not_configured");
   if (!from || !to) throw new OrwiiFuelStoreError("Pro ORWII vyplňte datum od i do.", 400, "orwii_date_range_required");
-  const stations = transactionRows(await fetchOrwiiJson(config, "/getFillingStations"));
-  const results = await Promise.all(stations.map((station) => fetchOrwiiJson(config, "/getRefuellings", { fillingStationId: station.id, from: asUnixMilliseconds(from), to: asUnixMilliseconds(to, true) })));
+  const token = await fetchOrwiiBearerToken(config);
+  const stations = transactionRows(await fetchOrwiiJson(config, token, "/getFillingStations"));
+  const results = await Promise.all(stations.map((station) => fetchOrwiiJson(config, token, "/getRefuellings", { fillingStationId: station.id, from: asUnixMilliseconds(from), to: asUnixMilliseconds(to, true) })));
   return results.flatMap(transactionRows).slice(0, MAX_TRANSACTIONS);
 }
 export async function previewOrwiiFuelTransactions(env, user, input = {}) {
