@@ -1,0 +1,3 @@
+import { json, requireUserPermission } from "../../../_lib/auth.js";
+import { OrwiiFuelStoreError, listOrwiiFuelTransactions } from "../../../_lib/orwii-fuel-store.js";
+export async function onRequestGet({ request, env }) { const { response } = await requireUserPermission(env, request, "fleet", "view"); if (response) return response; try { return json(await listOrwiiFuelTransactions(env, new URL(request.url).searchParams.get("limit"))); } catch (error) { if (error instanceof OrwiiFuelStoreError) return json({ error: error.message, code: error.code, apiStatus: "waiting" }, error.status); return json({ error: "Historii tankování se nepodařilo načíst.", apiStatus: "waiting" }, 500); } }
