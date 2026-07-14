@@ -39429,6 +39429,13 @@ body:has(.ds-plus-page) {
   min-height: 132px;
 }
 
+.collection-routes-test-gps__rugged-button--finish {
+  min-height: 132px;
+  border-color: #194f24;
+  background: linear-gradient(180deg, #318f3f 0%, #1f722d 100%);
+  box-shadow: 0 12px 30px rgba(24, 91, 38, 0.34), inset 0 -4px 0 rgba(0, 0, 0, 0.16);
+}
+
 .collection-routes-test-gps__cancel {
   min-height: 64px;
 }

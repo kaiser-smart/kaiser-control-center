@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.550"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.551"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: kontrola GPS už neblokuje TEST",
+    text: "Po uloženém fyzickém měření tablet ukáže obří tlačítko DOKONČIT TEST TABLETU. Bod s horší přesností dál bezpečně čeká na kontrolu a nejde do navigace, ale fyzický test lze uzavřít; funguje to i pro už rozpracované měření na Trnkově."
+  },
   {
     title: "Šarlota: kontext Datové schránky",
     text: "Chat při otevření v Datové schránce dostane pouze read-only souhrn skutečného modulu. Rozpozná stav integrace a počty, ale bez bezpečného otevření si nevymýšlí obsah zpráv, příloh ani provedené kroky."
