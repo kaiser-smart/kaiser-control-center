@@ -4,6 +4,9 @@ import { licensePlateKey, normalizeLicensePlate, vehicleLicensePlateValue } from
 const DB_BINDING = "SMART_ODPADY_DB";
 const ORWII_API_BASE_URL = "https://api007.orwii.com:7080";
 const MAX_TRANSACTIONS = 2_000;
+const SYNC_LOOKBACK_DAYS = 3;
+const INITIAL_SYNC_LOOKBACK_DAYS = 31;
+const SYNC_RUNNER_NAME = "orwii-fuel-cloud-sync";
 
 export class OrwiiFuelStoreError extends Error {
   constructor(message, status = 400, code = "orwii_fuel_error") { super(message); this.status = status; this.code = code; }
@@ -28,7 +31,17 @@ function apiConfig(env = {}) {
 }
 export function orwiiFuelStatus(env = {}) {
   const config = apiConfig(env);
-  return { apiStatus: config.configured ? "ready" : "off", configured: config.configured, mode: "manual-read-only-preview", automation: "off", message: config.configured ? "ORWII Basic přístup je nastavený pro ruční read-only náhled." : "ORWII přístup není nastavený. Doplňte Cloudflare secrets ORWII_API_USERNAME a ORWII_API_PASSWORD; hodnoty nepatří do frontendu ani repozitáře." };
+  return {
+    apiStatus: config.configured ? "ready" : "off",
+    configured: config.configured,
+    mode: "cloud-scheduled-sync",
+    automation: config.configured ? "scheduled" : "off",
+    runner: SYNC_RUNNER_NAME,
+    schedule: "17 * * * *",
+    message: config.configured
+      ? "ORWII Basic přístup je nastavený pro cloudovou hodinovou synchronizaci. Náhled zůstává read-only."
+      : "ORWII přístup není nastavený. Doplňte Cloudflare secrets ORWII_API_USERNAME a ORWII_API_PASSWORD; hodnoty nepatří do frontendu ani repozitáře."
+  };
 }
 function dateValue(value, label) {
   const result = cleanString(value);
@@ -105,5 +118,137 @@ export async function previewOrwiiFuelTransactions(env, user, input = {}) {
 export async function listOrwiiFuelTransactions(env, limit = 100) {
   const db = database(env, true); const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
   const result = await db.prepare(`SELECT * FROM fleet_orwii_fuel_transactions ORDER BY occurred_at DESC, updated_at DESC LIMIT ?`).bind(safeLimit).all();
-  return { apiStatus: "ready", mode: "manual-import", transactions: result.results || [] };
+  return { apiStatus: "ready", mode: "cloud-scheduled-sync", transactions: result.results || [] };
+}
+
+function randomId(prefix) {
+  const suffix = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${suffix}`;
+}
+
+function isoDateDaysAgo(days, now = new Date()) {
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days));
+  return date.toISOString().slice(0, 10);
+}
+
+function isUniqueRunningSyncError(error) {
+  const message = cleanString(error?.message);
+  return message.includes("UNIQUE constraint failed") || message.includes("idx_fleet_orwii_fuel_single_running");
+}
+
+async function lastSuccessfulSync(db) {
+  return db.prepare(`
+    SELECT requested_to
+    FROM fleet_orwii_fuel_sync_runs
+    WHERE status = 'completed'
+    ORDER BY finished_at DESC
+    LIMIT 1
+  `).first();
+}
+
+function transactionStatements(db, transaction) {
+  const match = transaction.match || {};
+  return db.prepare(`
+    INSERT INTO fleet_orwii_fuel_transactions (
+      external_id, occurred_at, fuel_type, liters, unit_price, total_price, odometer_km,
+      license_plate, orwii_vehicle_id, fuel_chip_id, matched_vehicle_id, match_status,
+      match_method, source_payload_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(external_id) DO UPDATE SET
+      occurred_at = excluded.occurred_at,
+      fuel_type = excluded.fuel_type,
+      liters = excluded.liters,
+      unit_price = excluded.unit_price,
+      total_price = excluded.total_price,
+      odometer_km = excluded.odometer_km,
+      license_plate = excluded.license_plate,
+      orwii_vehicle_id = excluded.orwii_vehicle_id,
+      fuel_chip_id = excluded.fuel_chip_id,
+      matched_vehicle_id = excluded.matched_vehicle_id,
+      match_status = excluded.match_status,
+      match_method = excluded.match_method,
+      source_payload_json = excluded.source_payload_json,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    transaction.externalId, transaction.timestamp || null, transaction.fuelType || null,
+    transaction.liters, transaction.unitPrice, transaction.totalPrice, transaction.odometerKm,
+    transaction.licensePlate || null, transaction.vehicleExternalId || null, transaction.chipId || null,
+    match.vehicleId || null, match.status || "unmatched", match.method || null,
+    JSON.stringify(transaction.raw || {})
+  );
+}
+
+async function upsertTransactions(db, transactions) {
+  for (let index = 0; index < transactions.length; index += 50) {
+    await db.batch(transactions.slice(index, index + 50).map((transaction) => transactionStatements(db, transaction)));
+  }
+}
+
+/**
+ * Cloudflare Worker entry point. It only reads ORWII and upserts an auditable
+ * D1 mirror; it never creates fuel transactions in an external system.
+ */
+export async function runOrwiiFuelSyncAutomation(env, options = {}) {
+  const db = database(env, true);
+  const now = new Date(Number(options.scheduledTime || Date.now()));
+  const startedAt = new Date().toISOString();
+  const previous = await lastSuccessfulSync(db);
+  const from = isoDateDaysAgo(previous?.requested_to ? SYNC_LOOKBACK_DAYS : INITIAL_SYNC_LOOKBACK_DAYS, now);
+  const to = isoDateDaysAgo(0, now);
+  const run = {
+    id: randomId("orwii-fuel-sync-run"),
+    startedAt,
+    from,
+    to,
+    triggeredBy: cleanString(options.triggeredBy) || "cloudflare-cron"
+  };
+
+  try {
+    await db.prepare(`
+      INSERT INTO fleet_orwii_fuel_sync_runs (
+        id, status, started_at, requested_from, requested_to, started_by_user_id, started_by_name
+      ) VALUES (?, 'running', ?, ?, ?, ?, ?)
+    `).bind(run.id, run.startedAt, run.from, run.to, "system", SYNC_RUNNER_NAME).run();
+  } catch (error) {
+    if (isUniqueRunningSyncError(error)) {
+      return { mode: "cloud-scheduled-sync", status: "skipped", reason: "another_run_active", runner: SYNC_RUNNER_NAME, from, to };
+    }
+    throw error;
+  }
+
+  try {
+    const [rows, fleet] = await Promise.all([
+      fetchTransactions(env, { from, to }),
+      loadFleetVehiclesWithAssignments(env, { id: "system", name: SYNC_RUNNER_NAME, role: "admin" })
+    ]);
+    const transactions = rows.map((row, index) => {
+      const transaction = normalizeOrwiiFuelTransaction(row, index);
+      return { ...transaction, match: matchFuelTransactionToVehicle(transaction, fleet.vehicles || []) };
+    });
+    await upsertTransactions(db, transactions);
+    const summary = transactions.reduce((result, item) => {
+      result[item.match.status] = (result[item.match.status] || 0) + 1;
+      return result;
+    }, { matched: 0, unmatched: 0, ambiguous: 0 });
+    const finishedAt = new Date().toISOString();
+    await db.prepare(`
+      UPDATE fleet_orwii_fuel_sync_runs
+      SET status = 'completed', finished_at = ?, transaction_count = ?, matched_count = ?,
+          unmatched_count = ?, ambiguous_count = ?
+      WHERE id = ?
+    `).bind(finishedAt, transactions.length, summary.matched, summary.unmatched, summary.ambiguous, run.id).run();
+    return { mode: "cloud-scheduled-sync", status: "completed", runner: SYNC_RUNNER_NAME, runId: run.id, from, to, transactionCount: transactions.length, ...summary };
+  } catch (error) {
+    const finishedAt = new Date().toISOString();
+    const code = cleanString(error?.code) || "orwii_sync_failed";
+    const message = cleanString(error?.message) || "Cloudová synchronizace ORWII selhala.";
+    await db.prepare(`
+      UPDATE fleet_orwii_fuel_sync_runs
+      SET status = 'error', finished_at = ?, error_code = ?, error_message = ?
+      WHERE id = ?
+    `).bind(finishedAt, code, message, run.id).run();
+    throw error;
+  }
 }
