@@ -2,7 +2,7 @@ import { loadFleetVehiclesWithAssignments } from "./fleet-vehicles-store.js";
 import { licensePlateKey, normalizeLicensePlate, vehicleLicensePlateValue } from "../../src/data/licensePlate.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
-const DEFAULT_PATH = "/api/fuel-transactions";
+const ORWII_API_BASE_URL = "https://api007.orwii.com:7080";
 const MAX_TRANSACTIONS = 2_000;
 
 export class OrwiiFuelStoreError extends Error {
@@ -21,16 +21,14 @@ function database(env, required = false) {
   return db;
 }
 function apiConfig(env = {}) {
-  const baseUrl = cleanString(env.ORWII_API_BASE_URL).replace(/\/+$/, "");
-  const token = cleanString(env.ORWII_API_TOKEN);
-  const path = cleanString(env.ORWII_API_TRANSACTIONS_PATH || DEFAULT_PATH);
-  const authHeader = cleanString(env.ORWII_API_AUTH_HEADER || "Authorization");
-  const authScheme = cleanString(env.ORWII_API_AUTH_SCHEME || "Bearer");
-  return { baseUrl, token, path: path.startsWith("/") ? path : `/${path}`, authHeader, authScheme, configured: Boolean(baseUrl && token) };
+  const baseUrl = cleanString(env.ORWII_API_BASE_URL || ORWII_API_BASE_URL).replace(/\/+$/, "");
+  const username = cleanString(env.ORWII_API_USERNAME);
+  const password = cleanString(env.ORWII_API_PASSWORD);
+  return { baseUrl, username, password, configured: Boolean(baseUrl && username && password) };
 }
 export function orwiiFuelStatus(env = {}) {
   const config = apiConfig(env);
-  return { apiStatus: config.configured ? "waiting" : "off", configured: config.configured, mode: "manual-read-only-preview", automation: "off", message: config.configured ? "ORWII přístup je nastavený. Před prvním ostrým importem je nutné ověřit endpoint a strukturu odpovědi." : "ORWII přístup není nastavený. Doplňte Cloudflare secrets ORWII_API_BASE_URL a ORWII_API_TOKEN; hodnoty nepatří do frontendu ani repozitáře." };
+  return { apiStatus: config.configured ? "ready" : "off", configured: config.configured, mode: "manual-read-only-preview", automation: "off", message: config.configured ? "ORWII Basic přístup je nastavený pro ruční read-only náhled." : "ORWII přístup není nastavený. Doplňte Cloudflare secrets ORWII_API_USERNAME a ORWII_API_PASSWORD; hodnoty nepatří do frontendu ani repozitáře." };
 }
 function dateValue(value, label) {
   const result = cleanString(value);
@@ -47,15 +45,17 @@ function pick(row, keys) { for (const key of keys) { const value = row?.[key]; i
 export function normalizeOrwiiFuelTransaction(row = {}, index = 0) {
   const externalId = cleanString(pick(row, ["id", "transactionId", "transaction_id", "uuid", "receiptId", "receipt_id"]));
   if (!externalId) throw new OrwiiFuelStoreError(`Řádek ${index + 1} z ORWII nemá unikátní ID transakce.`, 422, "orwii_transaction_id_missing");
-  const timestamp = cleanString(pick(row, ["timestamp", "dateTime", "datetime", "occurredAt", "occurred_at", "createdAt", "created_at", "date"]));
-  const liters = numberValue(pick(row, ["liters", "volume", "quantity", "amountLiters", "amount_liters"]));
-  const fuelType = cleanString(pick(row, ["fuelType", "fuel_type", "product", "productName", "fuel"]));
-  const licensePlate = normalizeLicensePlate(pick(row, ["licensePlate", "license_plate", "plate", "vehiclePlate", "vehicle_plate"]));
-  const vehicleExternalId = cleanString(pick(row, ["vehicleId", "vehicle_id", "vehicleExternalId", "vehicle_external_id"]));
-  const chipId = cleanString(pick(row, ["chipId", "chip_id", "cardId", "card_id", "rfid", "tagId", "tag_id"]));
-  const odometerKm = numberValue(pick(row, ["odometerKm", "odometer_km", "odometer", "mileage"]));
-  const unitPrice = numberValue(pick(row, ["unitPrice", "unit_price", "pricePerLiter", "price_per_liter"]));
-  const totalPrice = numberValue(pick(row, ["totalPrice", "total_price", "amount", "total"]));
+  const fromMilliseconds = numberValue(row.from);
+  const timestamp = fromMilliseconds ? new Date(fromMilliseconds).toISOString() : cleanString(pick(row, ["timestamp", "dateTime", "datetime", "occurredAt", "occurred_at", "createdAt", "created_at", "date"]));
+  const liters = numberValue(row.volumeInLitres ?? pick(row, ["liters", "volume", "quantity", "amountLiters", "amount_liters"]));
+  const fuelType = cleanString(row.productType?.name || row.productType?.productType || pick(row, ["fuelType", "fuel_type", "product", "productName", "fuel"]));
+  const licensePlate = normalizeLicensePlate(row.vehicle?.registrationNumber || pick(row, ["licensePlate", "license_plate", "plate", "vehiclePlate", "vehicle_plate"]));
+  const vehicleExternalId = cleanString(row.vehicle?.id || pick(row, ["vehicleId", "vehicle_id", "vehicleExternalId", "vehicle_external_id"]));
+  const chipId = cleanString(row.vehicleIdentifierValue || pick(row, ["chipId", "chip_id", "cardId", "card_id", "rfid", "tagId", "tag_id"]));
+  const rawOdometer = numberValue(row.vehicle?.currentCounterState ?? pick(row, ["odometerKm", "odometer_km", "odometer", "mileage"]));
+  const odometerKm = row.vehicle?.counterType === "OdometerInMeters" && rawOdometer !== null ? rawOdometer / 1000 : rawOdometer;
+  const unitPrice = numberValue(row.pricePerUnit?.value ?? pick(row, ["unitPrice", "unit_price", "pricePerLiter", "price_per_liter"]));
+  const totalPrice = numberValue(row.price?.value ?? pick(row, ["totalPrice", "total_price", "amount", "total"]));
   return { externalId, timestamp, liters, fuelType, licensePlate, vehicleExternalId, chipId, odometerKm, unitPrice, totalPrice, raw: row };
 }
 function vehicleId(vehicle = {}) { return cleanString(vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId); }
@@ -72,17 +72,27 @@ export function matchFuelTransactionToVehicle(transaction, vehicles = []) {
   const candidates = [...byExternalId, ...byChip, ...byPlate].map(vehicleId).filter(Boolean);
   return { status: candidates.length > 1 ? "ambiguous" : "unmatched", method: "", vehicleId: "", candidates: [...new Set(candidates)] };
 }
+function asUnixMilliseconds(date, endOfDay = false) {
+  const value = new Date(`${date}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`).getTime();
+  if (!Number.isFinite(value)) throw new OrwiiFuelStoreError("Datum se nepodařilo převést pro ORWII.", 400, "orwii_date_invalid");
+  return String(value);
+}
+async function fetchOrwiiJson(config, path, params = {}) {
+  const url = new URL(`${config.baseUrl}${path}`);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+  const basic = btoa(`${config.username}:${config.password}`);
+  let response;
+  try { response = await fetch(url, { headers: { Accept: "application/json", Authorization: `Basic ${basic}` } }); } catch (error) { throw new OrwiiFuelStoreError(`ORWII API není dostupné: ${cleanString(error?.message) || "chyba sítě"}.`, 502, "orwii_unreachable"); }
+  if (!response.ok) throw new OrwiiFuelStoreError(`ORWII API vrátilo HTTP ${response.status}.`, 502, "orwii_http_error");
+  try { return await response.json(); } catch { throw new OrwiiFuelStoreError("ORWII API nevrátilo platný JSON.", 502, "orwii_json_invalid"); }
+}
 async function fetchTransactions(env, { from = "", to = "" } = {}) {
   const config = apiConfig(env);
   if (!config.configured) throw new OrwiiFuelStoreError(orwiiFuelStatus(env).message, 503, "orwii_not_configured");
-  const url = new URL(`${config.baseUrl}${config.path}`);
-  if (from) url.searchParams.set("from", from);
-  if (to) url.searchParams.set("to", to);
-  const authorization = config.authScheme ? `${config.authScheme} ${config.token}` : config.token;
-  let response;
-  try { response = await fetch(url, { headers: { Accept: "application/json", [config.authHeader]: authorization } }); } catch (error) { throw new OrwiiFuelStoreError(`ORWII API není dostupné: ${cleanString(error?.message) || "chyba sítě"}.`, 502, "orwii_unreachable"); }
-  if (!response.ok) throw new OrwiiFuelStoreError(`ORWII API vrátilo HTTP ${response.status}.`, 502, "orwii_http_error");
-  try { return transactionRows(await response.json()).slice(0, MAX_TRANSACTIONS); } catch (error) { if (error instanceof OrwiiFuelStoreError) throw error; throw new OrwiiFuelStoreError("ORWII API nevrátilo platný JSON.", 502, "orwii_json_invalid"); }
+  if (!from || !to) throw new OrwiiFuelStoreError("Pro ORWII vyplňte datum od i do.", 400, "orwii_date_range_required");
+  const stations = transactionRows(await fetchOrwiiJson(config, "/getFillingStations"));
+  const results = await Promise.all(stations.map((station) => fetchOrwiiJson(config, "/getRefuellings", { fillingStationId: station.id, from: asUnixMilliseconds(from), to: asUnixMilliseconds(to, true) })));
+  return results.flatMap(transactionRows).slice(0, MAX_TRANSACTIONS);
 }
 export async function previewOrwiiFuelTransactions(env, user, input = {}) {
   const from = dateValue(input.from, "Datum od"); const to = dateValue(input.to, "Datum do");
