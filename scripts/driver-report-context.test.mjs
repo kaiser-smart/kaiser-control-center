@@ -1006,7 +1006,7 @@ for (const [name, payload] of [
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Pokud řekne jen fragment SPZ/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej VIN/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nevidím bezpečně přiřazené vozidlo\. Nadiktuj mi prosím SPZ\./);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníte k tomu ještě poznámku/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníš k tomu ještě poznámku/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmationSource `voice-intake`/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /driverPartRequest\.reportId/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Hlášení se mi nepodařilo zapsat/);

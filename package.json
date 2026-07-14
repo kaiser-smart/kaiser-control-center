@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.553",
+  "version": "0.1.554",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "deploy:pages:production": "node scripts/deploy-pages-production.mjs",
     "deploy:pages:production:check": "node scripts/deploy-pages-production.mjs --check-only",
     "lint": "node scripts/check-syntax.mjs",
-    "test:elevenlabs": "node scripts/elevenlabs-signed-url-options.test.mjs",
+    "test:elevenlabs": "node scripts/elevenlabs-signed-url-options.test.mjs && node scripts/sarlota-collection-route-gps.test.mjs && node scripts/sarlota-tools-sync-plan.test.mjs && node scripts/sarlota-prompt-sync-plan.test.mjs && node scripts/sarlota-voice-smoke.test.mjs",
     "test:elevenlabs-assistants": "node scripts/elevenlabs-assistant-config.test.mjs",
     "test:driver-reports": "node scripts/driver-report-context.test.mjs",
     "test:dashboard": "node scripts/main-dashboard.test.mjs",

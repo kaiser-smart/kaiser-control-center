@@ -84,6 +84,10 @@ for (const marker of [
   "data-collection-routes-test-gps-capture",
   "data-collection-routes-test-gps-voice",
   "data-collection-routes-test-gps-save",
+  "prepareCollectionRouteGpsCapture",
+  "prepareCollectionRoutesTestGpsFromSarlota",
+  "vehicleSelectionRequired: false",
+  "finalTapRequired: true",
   "preview.idempotencyKey",
   "/api/collection-routes/test-gps-confirmations"
 ]) {
@@ -200,6 +204,9 @@ for (const marker of [
   "JIŽ HOTOVO",
   "MUSÍM JET VYSYPAT",
   "FYZICKÉ GPS MAPOVÁNÍ STANOVIŠTĚ",
+  "prepare_collection_route_gps_capture",
+  "Nesmí otevřít výběr vozidla",
+  "fyzický GPS bod se uloží až po velkém ručním klepnutí",
   "minimálně 120 px vysoké a na úzkém displeji 132 px",
   "TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko",
   "Řidičský TEST zobrazuje nad GPS tlačítkem HERE mapový výřez aktuálního stanoviště",

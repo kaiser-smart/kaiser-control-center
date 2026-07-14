@@ -1161,7 +1161,7 @@ function driverPartNoteHandled(payload = {}, draft = {}) {
 }
 
 function driverPartNoteMissingMessage() {
-  return "Doplníte k tomu ještě poznámku? Například kdy se problém projevuje, odkud jde zvuk, nebo jestli auto normálně jede. Pokud nic doplnit nechceš, řekni: bez poznámky.";
+  return "Doplníš k tomu ještě poznámku? Například kdy se problém projevuje, odkud jde zvuk, nebo jestli auto normálně jede. Pokud nic doplnit nechceš, řekni: bez poznámky.";
 }
 
 function driverPartVoiceIntakeTrusted(payload = {}, draft = {}) {
