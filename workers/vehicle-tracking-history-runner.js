@@ -6,6 +6,10 @@ function isAnalyticsDue(scheduledTime) {
   return new Date(scheduledTime).getUTCMinutes() % 5 === 0;
 }
 
+function isTripJobPairingDue(scheduledTime) {
+  return new Date(scheduledTime).getUTCMinutes() % 15 === 0;
+}
+
 async function postInternal(env, path, body) {
   const token = String(env.VEHICLE_TRACKING_HISTORY_SYNC_TOKEN || "").trim();
   const response = await fetch(`${appBaseUrl(env)}${path}`, {
@@ -46,6 +50,23 @@ async function syncAnalytics(env, scheduledAt) {
   });
 }
 
+async function syncTripJobPairing(env, scheduledAt) {
+  const summary = await postInternal(env, "/api/vehicle-tracking/internal-trip-job-pairing-sync", {
+    scheduledAt,
+    days: 7,
+    triggeredBy: "cloudflare-cron"
+  });
+  console.log("vehicle_tracking_trip_job_pairing.completed", {
+    runId: summary.runId,
+    status: summary.status,
+    aliasesReady: summary.summary?.aliasesReady || 0,
+    tripsSeen: summary.summary?.tripsSeen || 0,
+    candidateTrips: summary.summary?.candidateTrips || 0,
+    unclassifiedTrips: summary.summary?.unclassifiedTrips || 0,
+    dashboardActivationAllowed: false
+  });
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     if (!String(env.VEHICLE_TRACKING_HISTORY_SYNC_TOKEN || "").trim()) {
@@ -57,9 +78,11 @@ export default {
       console.error("vehicle_tracking_history.failed", { message: error?.message || "unknown" });
     }));
     if (isAnalyticsDue(controller.scheduledTime)) {
-      ctx.waitUntil(syncAnalytics(env, scheduledAt).catch((error) => {
-        console.error("vehicle_tracking_analytics.failed", { message: error?.message || "unknown" });
-      }));
+      ctx.waitUntil(syncAnalytics(env, scheduledAt)
+        .then(() => isTripJobPairingDue(controller.scheduledTime) ? syncTripJobPairing(env, scheduledAt) : null)
+        .catch((error) => {
+          console.error("vehicle_tracking_analytics_or_pairing.failed", { message: error?.message || "unknown" });
+        }));
     }
   },
 
@@ -68,7 +91,10 @@ export default {
       status: "ready",
       historyIntervalMinutes: 1,
       analyticsIntervalMinutes: 5,
-      message: "GPS historie se ukládá každou minutu a bezpečné souhrny jízd se přepočítávají každých 5 minut."
+      tripJobPairingIntervalMinutes: 15,
+      tripJobPairingPhase: "read-only-pilot",
+      dashboardActivationAllowed: false,
+      message: "GPS historie se ukládá každou minutu, souhrny jízd se přepočítávají každých 5 minut a read-only párovací pilot běží každých 15 minut."
     });
   }
 };
