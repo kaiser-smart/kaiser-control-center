@@ -1073,6 +1073,7 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
       throw new CollectionDailyRoutesError("Před potvrzením přiřaďte trase řidiče.", 409, "collection_daily_route_driver_required");
     }
     let stationaryStopsCompletedFromGps = [];
+    let stationaryStopsReopened = [];
     if (action === "complete") {
       const plannedResult = await db.prepare(`
         SELECT id
@@ -1111,6 +1112,16 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
           "collection_daily_route_stops_pending"
         );
       }
+    }
+    if (action === "reopen" && stationaryFieldTest) {
+      const stopsResult = await db.prepare(`
+        SELECT id, status
+        FROM collection_daily_route_stops
+        WHERE run_id = ?
+          AND status IN ('done', 'problem')
+        ORDER BY route_order ASC
+      `).bind(run.id).all();
+      stationaryStopsReopened = stopsResult.results || [];
     }
     const changedAt = nowIso();
     const actorId = cleanString(user?.id);
@@ -1170,6 +1181,39 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
         ));
       });
     }
+    if (action === "reopen" && stationaryStopsReopened.length) {
+      statements.push(db.prepare(`
+        UPDATE collection_daily_route_stops
+        SET status = 'planned',
+            problem_reason = '',
+            problem_note = '',
+            completed_at = NULL,
+            last_event_at = ?,
+            updated_at = ?
+        WHERE run_id = ?
+          AND status IN ('done', 'problem')
+      `).bind(changedAt, changedAt, run.id));
+      stationaryStopsReopened.forEach((stop) => {
+        statements.push(db.prepare(`
+          INSERT INTO collection_daily_route_events (
+            id, run_id, stop_id, event_type, before_status, after_status, reason, note,
+            idempotency_key, actor_user_id, actor_name, created_at, payload_json
+          ) VALUES (?, ?, ?, 'stop_reopened', ?, 'planned', ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          randomId("collection-daily-event"),
+          run.id,
+          cleanString(stop.id),
+          cleanString(stop.status),
+          "Stacionární TEST byl znovu otevřen pro další fyzickou zkoušku.",
+          "Jediný TEST bod se bezpečně vrátil do stavu čeká; uložené GPS měření zůstalo v auditu.",
+          `stationary-reopen-stop:${run.id}:${cleanString(stop.id)}:${idempotencyKey || changedAt}`,
+          actorId,
+          actorName,
+          changedAt,
+          jsonString({ action, source: "stationary-field-test-reopen" })
+        ));
+      });
+    }
     statements.push(
       db.prepare(`UPDATE collection_daily_route_runs SET ${updates.join(", ")} WHERE id = ?`).bind(...bindings),
       db.prepare(`
@@ -1190,7 +1234,11 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
         actorId,
         actorName,
         changedAt,
-        jsonString({ action, completedStopIds: stationaryStopsCompletedFromGps.map((stop) => cleanString(stop.id)) })
+        jsonString({
+          action,
+          completedStopIds: stationaryStopsCompletedFromGps.map((stop) => cleanString(stop.id)),
+          reopenedStopIds: stationaryStopsReopened.map((stop) => cleanString(stop.id))
+        })
       )
     );
     await db.batch(statements);

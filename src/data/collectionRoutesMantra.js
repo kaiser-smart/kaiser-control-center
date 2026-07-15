@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.12",
-  updatedAt: "15. 7. 2026 09:25",
-  updatedAtIso: "2026-07-15T09:25:00+02:00",
-  lastChange: "TEST hlášení s fotografií",
+  version: "1.13",
+  updatedAt: "15. 7. 2026 10:30",
+  updatedAtIso: "2026-07-15T10:30:00+02:00",
+  lastChange: "Opakování TESTU vrací bod",
   updatedBy: "Codex",
   status: "TEST návrh · GPS a hlášení",
   title: "Svozový autopilot – provozní mantra",
@@ -183,6 +183,8 @@ Každou změnu vysvětli a předlož ke schválení. Bez výslovného potvrzení
 TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko a samostatný přehled bez dlouhé tabulky stanovišť. Stacionární terénní TEST ukazuje vždy jen následující krok: TEST data, jeden bod, tester a spuštění tabletu. Zdrojový kabinový náhled musí být zřetelně odlišený od skutečného TEST GPS režimu.
 
 Stacionární terénní TEST smí obsahovat přesně jediný bod Firma test 501 na Trnkově. Nemá svozové vozidlo, řidiče ani jízdu a nesmí připravit nebo odeslat zákaznickou SMS, RCS či e-mail. Přihlášený aktivní uživatel s rolí Admin nebo Management se uloží odděleně jako terénní tester; audit nesmí předstírat jiného řidiče. TEST může potvrdit, spustit a GPS uložit pouze tentýž tester.
+
+Při vědomém znovu otevření dokončeného stacionárního TESTU se jeho jediný bod vrátí do stavu čeká, aby se znovu zpřístupilo GPS a fotografické TEST hlášení. Uložené GPS měření zůstává v auditu a původní adresa se nemění.
 
 Pro fyzickou zkoušku lze zvolit skutečné datum přítomnosti testera, i když nejde o uloženou středu. Tato jediná výjimka platí pouze uvnitř režimu stacionárního GPS TESTU, nikdy nemění četnost 1x7 ani zrcadlenou středu v TEST stanovišti a nesmí se použít při skutečném plánování svozu.
 
