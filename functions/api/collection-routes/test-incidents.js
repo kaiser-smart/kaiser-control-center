@@ -4,6 +4,7 @@ import {
   listCollectionRoutesTestIncidents,
   reportCollectionRoutesTestIncident
 } from "../../_lib/collection-routes-test-incidents-store.js";
+import { listCollectionRoutesTestIncidentWorkflows } from "../../_lib/collection-routes-test-incident-workflow.js";
 
 const MAX_PHOTO_SIZE_BYTES = 6 * 1024 * 1024;
 
@@ -44,8 +45,19 @@ export async function onRequestGet({ request, env }) {
   if (response) return response;
   try {
     const url = new URL(request.url);
+    const runId = url.searchParams.get("runId");
+    const [incidentsResult, workflows] = await Promise.all([
+      listCollectionRoutesTestIncidents(env, user, { runId }),
+      listCollectionRoutesTestIncidentWorkflows(env, user, runId)
+    ]);
+    const workflowByIncident = new Map(workflows.map((workflow) => [workflow.incidentId, workflow]));
     return json({
-      ...(await listCollectionRoutesTestIncidents(env, user, { runId: url.searchParams.get("runId") })),
+      ...incidentsResult,
+      incidents: incidentsResult.incidents.map((incident) => ({
+        ...incident,
+        workflow: workflowByIncident.get(incident.id) || null
+      })),
+      protectedIncidentWorkflowAvailable: true,
       apiStatus: "ready"
     });
   } catch (error) {
@@ -85,7 +97,8 @@ export async function onRequestPost({ request, env }) {
       ...result,
       apiStatus: "ready",
       sendsNotifications: false,
-      changesRoute: false
+      changesRoute: false,
+      nextStep: "protected-workflow-preview"
     }, result.reused ? 200 : 201);
   } catch (error) {
     return errorResponse(error);

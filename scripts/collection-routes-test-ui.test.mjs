@@ -93,9 +93,14 @@ for (const marker of [
   "Přeplněná nádoba",
   "Poškozená nádoba",
   "Nelze se dostat do firmy",
-  "ODESLAT TESTOVACÍ HLÁŠENÍ",
-  "Uloženo jen v TESTU",
-  "Neodešle se e-mail, SMS ani RCS",
+  "PŘIPRAVIT TEST HLÁŠENÍ",
+  "POTVRDIT TEST E-MAIL A PLÁN",
+  "CHRÁNĚNÝ TEST E-MAIL",
+  "Skutečný zákazník ani dispečerka zprávu nedostanou",
+  "TEST A · jedeme kolem do 24 h",
+  "TEST B · nejedeme kolem do 24 h",
+  "KLIDNÁ ODPOVĚĎ",
+  "VYHROCENÁ ODPOVĚĎ",
   "capture=\"environment\"",
   "accept=\"image/*\"",
   "data-collection-routes-test-incident-open",
@@ -103,10 +108,14 @@ for (const marker of [
   "data-collection-routes-test-incident-form",
   "compressCollectionRoutesTestIncidentPhoto",
   "prepareCollectionRoutesTestIncidentFromSarlota",
+  "confirmCollectionRoutesTestIncidentWorkflow",
+  "simulateCollectionRoutesTestIncidentReply",
   "finalTapRequired: true",
   "sendsNotifications: false",
   "changesRoute: false",
-  "/api/collection-routes/test-incidents"
+  "/api/collection-routes/test-incidents",
+  "/workflow",
+  "/reply"
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
@@ -205,7 +214,11 @@ for (const marker of [
   ".collection-routes-test-incidents__buttons",
   ".collection-routes-test-incident-modal",
   ".collection-routes-test-incident-camera",
-  ".collection-routes-test-incident-submit"
+  ".collection-routes-test-incident-submit",
+  ".collection-routes-test-incident-scenarios",
+  ".collection-routes-test-incident-confirmation",
+  ".collection-routes-test-incident-result",
+  ".collection-routes-test-incident-replies"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }
@@ -240,7 +253,12 @@ for (const marker of [
   "TEST HLÁŠENÍ STANOVIŠTĚ",
   "prepare_collection_route_test_incident",
   "PŘEPLNĚNÁ NÁDOBA, POŠKOZENÁ NÁDOBA a NELZE SE DOSTAT DO FIRMY",
-  "nesmí odeslat e-mail, SMS ani RCS"
+  "PŘEPLNĚNÁ NEBO POŠKOZENÁ NÁDOBA",
+  "NELZE SE DOSTAT DO FIRMY",
+  "TEST KOMUNIKACE A ESKALACE",
+  "POTVRDIT TEST E-MAIL A PLÁN",
+  "nejvýše šesti e-mailových pokusů",
+  "Skutečný zákazník ani skutečná dispečerka nesmí být kontaktováni"
 ]) {
   assert.ok(mantraSource.includes(marker), `Provozní mantra postrádá závazný bod: ${marker}`);
 }
@@ -257,8 +275,9 @@ assert.ok(
 );
 
 assert.ok(
-  mantraSource.includes("Tato verze nic sama neodesílá") &&
-    mantraSource.includes("nezapisuje do Vistosu") &&
+  mantraSource.includes("Workflow smí odeslat e-mail pouze na chráněný COLLECTION_ROUTES_TEST_EMAIL_TO") &&
+    mantraSource.includes("Odeslání vyžaduje druhé velké fyzické tlačítko") &&
+    mantraSource.includes("do Vistosu nezapisuje") &&
     mantraSource.includes("Dokud práh není schválený, neodesílej automatické upozornění"),
   "Read-only mantra musí přímo zakazovat falešnou automatizaci, produkční zápisy a neodsouhlasené alerty."
 );

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.564"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.565"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: chráněný TEST incidentního workflow",
+    text: "Přeplněná a poškozená nádoba se po fotografii předá logicky dostupné dispečerce; nepřístupná firma ověří náhradní bezplatný TEST svoz do 24 hodin nebo připomínku před standardním termínem. Každý e-mail vyžaduje fyzické potvrzení a míří jen na chráněný TEST kontakt; zákazníci, dispečerky, ostré trasy, Vistos, SMS a RCS zůstávají nedotčené."
+  },
   {
     title: "Vozidla: auditované párování GPS jízd a zakázek",
     text: "Cloudový read-only pilot každých 15 minut propojuje stabilní vozidla A/B/C s GPS jízdami a pouze dokončenými denními trasami. Nejisté jízdy zůstávají nezařazené, každý běh má D1 audit a ekonomický dashboard se nezapne, dokud data neprojdou kvalitativní branou."

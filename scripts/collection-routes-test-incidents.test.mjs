@@ -11,6 +11,19 @@ import {
   __test as incidentApiTest,
   detectCollectionRouteTestIncidentImageType
 } from "../functions/api/collection-routes/test-incidents.js";
+import {
+  __test as workflowTest,
+  confirmCollectionRoutesTestIncidentWorkflow,
+  previewCollectionRoutesTestIncidentWorkflow,
+  processDueCollectionRouteIncidentTestReminders,
+  simulateCollectionRoutesTestIncidentReply
+} from "../functions/_lib/collection-routes-test-incident-workflow.js";
+import {
+  composeCollectionRouteIncidentMessage,
+  collectionRouteIncidentFallbackMessage,
+  collectionRouteIncidentRequiresEscalation
+} from "../functions/_lib/collection-route-incident-ai.js";
+import { __test as notificationTest } from "../functions/_lib/notification-service.js";
 
 class D1Statement {
   constructor(owner, sql, values = []) {
@@ -91,7 +104,8 @@ function openDatabase() {
     "../migrations/0017_create_collection_routes_phase1a.sql",
     "../migrations/0038_create_collection_daily_routes.sql",
     "../migrations/test/0001_create_collection_routes_test_control.sql",
-    "../migrations/test/0005_create_collection_route_test_incidents.sql"
+    "../migrations/test/0005_create_collection_route_test_incidents.sql",
+    "../migrations/test/0006_create_collection_route_test_incident_workflows.sql"
   ]) {
     sqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
   }
@@ -136,6 +150,26 @@ function seedRoute(sqlite) {
       'Firma test 501', 'Trnkova 3052/137, 628 00 Brno', 'Firma test 501 · stanoviště Trnkova', 'planned', ?
     )
   `).run(summary);
+  sqlite.prepare("UPDATE collection_daily_route_stops SET waste_type = 'SKO', waste_code = '200301', container_volume = 120, container_count = 1, frequency = '1x7', pickup_days_text = 'středa lichá, středa sudá' WHERE id = 'stop-test'").run();
+}
+
+function openProductionDatabase() {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec(readFileSync(new URL("../migrations/0004_create_employee_cards.sql", import.meta.url), "utf8"));
+  sqlite.exec(readFileSync(new URL("../migrations/0006_create_absence_requests.sql", import.meta.url), "utf8"));
+  for (const [id, firstName, lastName, email, status = "v práci"] of [
+    ["employee-lenka", "Lenka", "Kouřilová", "lenka@example.invalid"],
+    ["employee-ulyana", "Ulyana", "Bartošová", "ulyana@example.invalid"],
+    ["employee-simona", "Simona", "Šefčíková", "simona@example.invalid", "dovolená"]
+  ]) {
+    sqlite.prepare(`
+      INSERT INTO employee_cards (
+        id, user_id, first_name, last_name, email, role, department, position,
+        employment_status, current_absence_status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 'management', 'Provoz', 'Dispečerka', 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(id, `${id}-user`, firstName, lastName, email, status);
+  }
+  return { sqlite, d1: new D1Database(sqlite) };
 }
 
 const manager = {
@@ -265,6 +299,231 @@ assert.equal(incidentApiTest.MAX_PHOTO_SIZE_BYTES, 6 * 1024 * 1024);
   );
   assert.equal(bucket.objects.size, 0, "R2 fotografie se při chybě D1 musí odstranit.");
   assert.equal(bucket.deleted.length, 1);
+}
+
+assert.equal(collectionRouteIncidentRequiresEscalation("Předám to právníkovi a médiím."), true);
+assert.equal(collectionRouteIncidentRequiresEscalation("Děkuji, nádoby budou přístupné."), false);
+assert.equal(
+  notificationTest.protectedCollectionRouteIncidentRecipient(
+    { COLLECTION_ROUTES_TEST_EMAIL_TO: "protected@example.invalid" },
+    "customer@example.invalid"
+  ).ok,
+  false,
+  "Incidentní e-mail nesmí přijmout jiného než chráněného TEST příjemce."
+);
+assert.equal(
+  notificationTest.protectedCollectionRouteIncidentRecipient(
+    { COLLECTION_ROUTES_TEST_EMAIL_TO: "protected@example.invalid" },
+    "protected@example.invalid"
+  ).ok,
+  true
+);
+assert.match(
+  collectionRouteIncidentFallbackMessage({
+    audience: "customer-recovery",
+    recoveryBranch: "route-within-24h",
+    stationName: "Trnkova",
+    eventAt: "2026-07-15T08:00:00.000Z",
+    etaAt: "2026-07-16T07:00:00.000Z"
+  }).body,
+  /mimořádný bezplatný svoz/i
+);
+
+{
+  let requestBody = null;
+  const generated = await composeCollectionRouteIncidentMessage({ OPENAI_API_KEY: "server-test-key" }, {
+    audience: "customer-recovery",
+    incidentType: "site_inaccessible",
+    recoveryBranch: "route-within-24h",
+    stationName: "Firma test 501",
+    eventAt: "2026-07-15T08:00:00.000Z",
+    etaAt: "2026-07-16T07:00:00.000Z"
+  }, {
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body);
+      return new Response(JSON.stringify({
+        output_text: JSON.stringify({
+          subject: "[TEST SVOZ] Náhradní svoz",
+          body: "Dobrý den, zítra přijedeme v potvrzeném TEST čase.",
+          classification: "normal",
+          escalate: false,
+          reason: "friendly-copy"
+        })
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+  });
+  assert.equal(generated.aiStatus, "generated");
+  assert.equal(generated.escalate, false);
+  assert.equal(requestBody.text.format.type, "json_schema");
+  assert.match(requestBody.instructions, /Nikdy neměň zadaný výsledek plánování/);
+}
+
+{
+  let called = false;
+  const escalated = await composeCollectionRouteIncidentMessage({ OPENAI_API_KEY: "server-test-key" }, {
+    audience: "customer-reply",
+    customerReply: "Předám to právníkovi a médiím."
+  }, {
+    fetchImpl: async () => {
+      called = true;
+      throw new Error("must not call");
+    }
+  });
+  assert.equal(called, false, "Deterministická eskalace musí mít před AI přednost.");
+  assert.equal(escalated.escalate, true);
+  assert.equal(escalated.aiStatus, "skipped-safety-escalation");
+}
+
+{
+  const { sqlite, d1 } = openDatabase();
+  const production = openProductionDatabase();
+  seedRoute(sqlite);
+  const bucket = new FakeR2Bucket();
+  const sent = [];
+  const mockSend = async (_env, input) => {
+    sent.push(input);
+    return { status: "sent", providerMessageId: `sendgrid-test-${sent.length}` };
+  };
+  const env = {
+    COLLECTION_ROUTES_TEST_DB: d1,
+    SMART_ODPADY_DB: production.d1,
+    SMART_ODPADY_DOCUMENTS: bucket,
+    COLLECTION_ROUTES_TEST_EMAIL_TO: "protected-test@example.invalid"
+  };
+  const fixedNow = "2026-07-15T10:00:00.000Z";
+  const options = {
+    now: fixedNow,
+    sendDispatcherEmail: mockSend,
+    sendCustomerEmail: mockSend
+  };
+
+  const damaged = await reportCollectionRoutesTestIncident(env, manager, {
+    runId: "run-test",
+    stopId: "stop-test",
+    type: "damaged_container",
+    note: "Prasklé víko.",
+    idempotencyKey: "workflow-damaged"
+  }, { body: jpeg, contentType: "image/jpeg", sizeBytes: jpeg.length });
+  const damagedPreview = await previewCollectionRoutesTestIncidentWorkflow(env, manager, damaged.incident.id, {}, options);
+  assert.equal(damagedPreview.dispatcher.name, "Lenka Kouřilová");
+  assert.equal(damagedPreview.plan.branch, "dispatcher-only");
+  assert.equal(damagedPreview.canConfirm, true);
+  assert.equal(damagedPreview.finalTapRequired, true);
+  assert.equal(damagedPreview.sms, "disabled");
+  assert.equal(damagedPreview.rcs, "disabled");
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_incident_workflows").get().count, 0, "Preview nesmí zapisovat workflow.");
+
+  await assert.rejects(
+    confirmCollectionRoutesTestIncidentWorkflow(env, manager, damaged.incident.id, {
+      confirmation: "wrong",
+      idempotencyKey: damagedPreview.idempotencyKey
+    }, options),
+    (error) => error?.code === "collection_routes_test_incident_workflow_confirmation_required"
+  );
+
+  const damagedResult = await confirmCollectionRoutesTestIncidentWorkflow(env, manager, damaged.incident.id, {
+    confirmation: workflowTest.CONFIRMATION,
+    idempotencyKey: damagedPreview.idempotencyKey
+  }, options);
+  assert.equal(damagedResult.workflow.status, "completed-test");
+  assert.equal(damagedResult.workflow.dispatcherEmailStatus, "sent");
+  assert.equal(damagedResult.workflow.changesOperationalRoute, false);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, "protected-test@example.invalid");
+  assert.equal(sent[0].logicalRecipientName, "Lenka Kouřilová");
+  assert.equal(sent[0].attachments.length, 1);
+
+  const damagedRepeated = await confirmCollectionRoutesTestIncidentWorkflow(env, manager, damaged.incident.id, {
+    confirmation: workflowTest.CONFIRMATION,
+    idempotencyKey: damagedPreview.idempotencyKey
+  }, options);
+  assert.equal(damagedRepeated.reused, true);
+  assert.equal(sent.length, 1, "Opakované potvrzení nesmí poslat druhý e-mail.");
+
+  const inaccessibleRoute = await reportCollectionRoutesTestIncident(env, manager, {
+    runId: "run-test",
+    stopId: "stop-test",
+    type: "site_inaccessible",
+    note: "Před nádobami stojí auto.",
+    idempotencyKey: "workflow-inaccessible-route"
+  }, { body: jpeg, contentType: "image/jpeg", sizeBytes: jpeg.length });
+  const routePreview = await previewCollectionRoutesTestIncidentWorkflow(env, manager, inaccessibleRoute.incident.id, {
+    testScenario: "route_within_24h"
+  }, options);
+  assert.equal(routePreview.plan.branch, "route-within-24h");
+  assert.equal(routePreview.createsTestRouteOverlay, true);
+  assert.equal(routePreview.plan.candidate.vehicleRegistration, "1BP 8373");
+  const routeResult = await confirmCollectionRoutesTestIncidentWorkflow(env, manager, inaccessibleRoute.incident.id, {
+    testScenario: "route_within_24h",
+    confirmation: workflowTest.CONFIRMATION,
+    idempotencyKey: routePreview.idempotencyKey
+  }, options);
+  assert.equal(routeResult.workflow.recoveryStop.freeOfCharge, true);
+  assert.equal(routeResult.workflow.recoveryStop.routeOverlay, true);
+  assert.equal(routeResult.workflow.customerEmailStatus, "sent");
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_recovery_stops").get().count, 1);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_stops").get().count, 1, "TEST overlay nesmí přepsat skutečnou denní trasu.");
+
+  const inaccessibleStandard = await reportCollectionRoutesTestIncident(env, manager, {
+    runId: "run-test",
+    stopId: "stop-test",
+    type: "site_inaccessible",
+    note: "Brána je zamčená.",
+    idempotencyKey: "workflow-inaccessible-standard"
+  }, { body: jpeg, contentType: "image/jpeg", sizeBytes: jpeg.length });
+  const standardPreview = await previewCollectionRoutesTestIncidentWorkflow(env, manager, inaccessibleStandard.incident.id, {
+    testScenario: "next_standard_pickup"
+  }, options);
+  assert.equal(standardPreview.plan.branch, "next-standard-pickup");
+  assert.equal(
+    new Date(standardPreview.plan.nextStandardPickupAt).getTime() - new Date(standardPreview.plan.policyReminderDueAt).getTime(),
+    30 * 60 * 1000
+  );
+  const standardResult = await confirmCollectionRoutesTestIncidentWorkflow(env, manager, inaccessibleStandard.incident.id, {
+    testScenario: "next_standard_pickup",
+    confirmation: workflowTest.CONFIRMATION,
+    idempotencyKey: standardPreview.idempotencyKey
+  }, options);
+  assert.equal(standardResult.workflow.reminderStatus, "scheduled-test");
+  assert.equal(sent.length, 3);
+
+  const reminderSummary = await processDueCollectionRouteIncidentTestReminders(env, {
+    now: new Date(new Date(standardResult.workflow.testReminderDueAt).getTime() + 1000).toISOString()
+  }, options);
+  assert.deepEqual(
+    { checked: reminderSummary.checked, sent: reminderSummary.sent, failed: reminderSummary.failed, skipped: reminderSummary.skipped },
+    { checked: 1, sent: 1, failed: 0, skipped: 0 }
+  );
+  assert.equal(sent.length, 4);
+
+  const calmReply = await simulateCollectionRoutesTestIncidentReply(env, manager, inaccessibleStandard.incident.id, {
+    reply: "Děkuji, nádoby budou přístupné.",
+    confirmation: workflowTest.REPLY_CONFIRMATION,
+    idempotencyKey: "reply-calm"
+  }, options);
+  assert.equal(calmReply.escalationRequired, false);
+  assert.equal(calmReply.actionType, "customer_auto_reply_email");
+  assert.equal(calmReply.sendStatus, "sent");
+
+  const heatedReply = await simulateCollectionRoutesTestIncidentReply(env, manager, inaccessibleStandard.incident.id, {
+    reply: "Podám stížnost, předám to právníkovi a médiím.",
+    confirmation: workflowTest.REPLY_CONFIRMATION,
+    idempotencyKey: "reply-heated"
+  }, options);
+  assert.equal(heatedReply.escalationRequired, true);
+  assert.equal(heatedReply.actionType, "dispatcher_escalation_email");
+  assert.equal(heatedReply.sendStatus, "sent");
+  assert.match(heatedReply.answer, /předána dispečerce/i);
+  assert.equal(sent.length, 6);
+  assert.equal(sqlite.prepare("SELECT claimed_count FROM collection_route_test_incident_email_guard WHERE guard_key = ?").get(workflowTest.EMAIL_GUARD_KEY).claimed_count, 6);
+
+  const limitedReply = await simulateCollectionRoutesTestIncidentReply(env, manager, inaccessibleStandard.incident.id, {
+    reply: "Ještě jednou děkuji.",
+    confirmation: workflowTest.REPLY_CONFIRMATION,
+    idempotencyKey: "reply-over-limit"
+  }, options);
+  assert.equal(limitedReply.sendStatus, "skipped");
+  assert.equal(sent.length, 6, "Ochranný limit nesmí pustit sedmý TEST e-mail.");
 }
 
 console.log("collection routes TEST incident tests: ok");
