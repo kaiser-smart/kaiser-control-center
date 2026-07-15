@@ -4,7 +4,7 @@ Stav: produkcni TEST sada a jedna trasa overeny; prvni e-mail odeslan, prvni SMS
 zustala zablokovana pred Twiliem kvuli chybejici komunikacni migraci a vypnutemu
 rezimu zakaznickych SMS.
 
-Aktualizace: 2026-07-13
+Aktualizace: 2026-07-15
 
 ## Cil
 
@@ -51,6 +51,7 @@ poradi:
 4. `migrations/test/0002_create_collection_route_here_optimization.sql`
 5. `migrations/test/0003_configure_collection_route_test_operations_and_gps.sql`
 6. `migrations/test/0004_add_collection_route_field_test_site_501.sql`
+7. `migrations/test/0005_create_collection_route_test_incidents.sql`
 
 Zadna migrace z `migrations/test` se nesmi aplikovat do hlavni produkcni D1.
 
@@ -88,6 +89,21 @@ jen souradnice bodu, ne firmu, kontakt, smlouvu ani poznamku.
 Pokud HERE neni aktivni nebo mapovy obrazek selze, GPS tlacitko, hlasova Sarlota
 a ulozeni auditu zustavaji dostupne. Mapa je nahled, ne navigace.
 
+## Fotograficka TEST hlaseni
+
+Aktivni stacionarni TEST ma tri velke volby: preplnena nadoba, poskozena nadoba
+a nelze se dostat do firmy. Volba otevre dvoukrokovy postup: vyfotit stav,
+zkontrolovat nahled a ulozit velkym fyzickym tlacitkem. Poznamka je nepovinna.
+
+Tablet fotografii zmensi na maximalni rozmer 1600 px a prevede na JPEG. Backend
+overi skutecny format JPEG/PNG/WebP a limit 6 MB. Soubor je ulozen v chranenem
+R2 pod TEST prefixem; D1 zaznam obsahuje typ, run, stop, skutecneho testera,
+cas, idempotencni klic a audit. Pri chybe D1 se uz nahrany R2 objekt odstrani.
+
+Hlasovy nastroj `prepare_collection_route_test_incident` pouze otevre formular.
+Bez fotografie a fyzickeho klepnuti nic neulozi. Tato faze technicky neposila
+e-mail, SMS ani RCS, nekontaktuje dispecink nebo zakaznika a nemeni trasu.
+
 ## Test na Android tabletu
 
 KSO se zatim neinstaluje z Google Play. Neni to offline Android aplikace ani
@@ -96,8 +112,9 @@ hotova PWA. Pro polni TEST staci aktualni Chrome a internetove pripojeni:
 1. Otevrit `https://smart-odpady.ai/trasy-svozu` a prihlasit se Kaiser uctem.
 2. V Chrome povolit webu presnou polohu; pro hlasovou Sarlotu take mikrofon.
 3. Otevrit `Svozove trasy` a klepnout na velke `OTEVRIT TEST TABLETU`.
-4. Pro `Firma test 501` zvolit stredu, vytvorit TEST trasu, priradit ridice,
-   potvrdit ji a spustit TEST tabletu.
+4. Pro `Firma test 501` zvolit skutecne datum testu, vytvorit stacionarni TEST,
+   potvrdit jej a spustit TEST tabletu. Prihlaseny Manager se ulozi jako terenni
+   tester; vozidlo ani ridic se nevybiraji.
 5. Po zastaveni primo u nadoby pouzit hlasovou vyzvu nebo velke GPS tlacitko a
    dokoncit zapis jednim velkym potvrzenim.
 

@@ -1,14 +1,31 @@
 # Svozove trasy - Faze 2D ridicsky tablet
 
-Stav: Faze 2D-A nasazena a overena v produkci; Faze 2D-B implementovana a otestovana v kodu, produkcni overeni ceka na nasazeni.
+Stav: Faze 2D-A a 2D-B zustavaji provoznim zakladem. Oddeleny stacionarni TEST na Trnkove ma auditni GPS a od 2026-07-15 take tri fotograficka TEST hlaseni bez komunikace a bez zmeny trasy.
 
-Aktualizace: 2026-07-12
+Aktualizace: 2026-07-15
 
 ## Cil
 
 Faze 2D-A meni read-only tablet na rizeny online provozni pilot pro svozova auta.
 
-Migrace 0038, API a UI pokryvaji jen schvaleny minimalni rozsah. Offline sync, GPS, T-Cars, navigace, fotky, notifikace, optimalizace a automaticke vytvareni tras zustavaji dalsi samostatnou fazi.
+Migrace 0038, API a UI pokryvaji jen schvaleny minimalni ostry rozsah. Offline sync, T-Cars, navigace, ostre fotky, notifikace, optimalizace a automaticke vytvareni tras zustavaji dalsi samostatnou fazi. GPS a fotky popsane nize existuji pouze v oddelene TEST databazi a nesmi se vydavat za ostry provoz.
+
+## Oddeleny stacionarni TEST 2026-07-15
+
+- Jediny povoleny bod je `Firma test 501`, Trnkova 3052/137, Brno.
+- TEST muze zalozit, spustit a zapisovat pouze prihlaseny uzivatel role Admin nebo Management; zapis incidentu navic overuje stejneho terenniho testera, ktery beh zalozil.
+- GPS se uklada do `COLLECTION_ROUTES_TEST_DB`; puvodni adresni bod se neprepisuje.
+- Incidenty `overfilled_container`, `damaged_container` a `site_inaccessible` se ukladaji do tabulek z migrace `migrations/test/0005_create_collection_route_test_incidents.sql`.
+- Fotografie se na tabletu zmensi na nejvyse 1600 px, prevede na JPEG a server znovu overi skutecny format a limit 6 MB.
+- Soubor je v R2 `SMART_ODPADY_DOCUMENTS` pod oddelenym prefixem `collection-routes/test-incidents/`; prohlizeni vede pres chraneny KSO endpoint, nikoliv verejnou R2 adresu.
+- Kazdy zapis ma idempotency klic, autora, cas, vazbu na run/stop a vlastni audit i udalost v auditu denni trasy. Stav zastavky se nezmeni.
+- Hlasovy nastroj `prepare_collection_route_test_incident` pouze otevre spravny formular. Fotografie a velke fyzicke potvrzeni cloveka jsou povinne.
+- Tato faze technicky neposila e-mail, SMS ani RCS, nevybira dispecerku, nekontaktuje zakaznika a nevytvari ani nemeni dnesni ci zitrejsi trasu.
+
+TEST API:
+
+- `GET|POST /api/collection-routes/test-incidents`
+- `GET /api/collection-routes/test-incidents/:incidentId/photo`
 
 ## Implementovany rozsah Faze 2D-A
 
@@ -37,7 +54,7 @@ Migrace 0038, API a UI pokryvaji jen schvaleny minimalni rozsah. Offline sync, G
 - UI umi filtr den / tyden / odpad / kontrola, tiskove podklady a novy dispecersky D1 panel.
 - Ridicsky pohled online uklada povolene akce do D1 a po reloadu je znovu nacte.
 - DB model existuje pro denni beh, nemenne zastavky a udalosti.
-- GPS stopa, fotky a offline synchronizace stale neexistuji.
+- V ostrem ridicskem provozu GPS stopa, fotky a offline synchronizace stale neexistuji. Oddeleny stacionarni TEST ma vlastni GPS a tri fotograficka hlaseni podle bezpecnostnich omezeni vyse.
 
 ## Hlavni principy ostreho rezimu
 
@@ -84,7 +101,7 @@ Preddefinovane duvody:
 - zamceno / nelze se dostat,
 - jina poznamka.
 
-Fotka:
+Fotka v budoucim ostrem rezimu:
 
 - smi byt jen volitelna prilohu problemu,
 - musi mit limit velikosti,
@@ -161,7 +178,7 @@ Hlavni implementovana pole:
 - `note`
 - `payload_json`
 
-Nasledujici tabulky jsou pouze budouci navrh a ve Fazi 2D-A nevznikaji.
+Nasledujici tabulky jsou pouze budouci navrh pro ostry rezim a ve Fazi 2D-A nevznikaji. Nezamenuji se s oddelenymi TEST tabulkami `collection_route_test_incidents` a `collection_route_test_incident_events`.
 
 ### `collection_route_sync_batches` (budouci)
 

@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.560",
+  "version": "0.1.561",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,7 +20,7 @@
     "test:data-box-plus": "node scripts/data-box-plus-chat-context.test.mjs && node scripts/data-box-plus-chat-tools.test.mjs && node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs && node scripts/data-box-plus-command-center.test.mjs",
     "test:customer-messaging": "node scripts/customer-messaging.test.mjs",
     "test:build-assets": "node scripts/version-module-imports.test.mjs && node scripts/build.mjs",
-    "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs && node scripts/collection-daily-routes.test.mjs && node scripts/collection-daily-routes-scale.test.mjs && node scripts/collection-routes-test-data.test.mjs && node scripts/collection-routes-test-store.test.mjs && node scripts/collection-routes-readonly-calculator.test.mjs && node scripts/collection-route-here-optimization.test.mjs && node scripts/collection-routes-here-map-image.test.mjs && node scripts/collection-routes-test-gps.test.mjs && node scripts/collection-routes-test-ui.test.mjs",
+    "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs && node scripts/collection-daily-routes.test.mjs && node scripts/collection-daily-routes-scale.test.mjs && node scripts/collection-routes-test-data.test.mjs && node scripts/collection-routes-test-store.test.mjs && node scripts/collection-routes-readonly-calculator.test.mjs && node scripts/collection-route-here-optimization.test.mjs && node scripts/collection-routes-here-map-image.test.mjs && node scripts/collection-routes-test-gps.test.mjs && node scripts/collection-routes-test-incidents.test.mjs && node scripts/collection-routes-test-ui.test.mjs",
     "test:self-repair": "node scripts/self-repair.test.mjs && node scripts/self-repair-monitor.test.mjs",
     "test:partslink24": "node scripts/partslink24_vin_pilot.test.mjs",
     "test:partslink24:kso": "node scripts/partslink24_kso_phase1.test.mjs",

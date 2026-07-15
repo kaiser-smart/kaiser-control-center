@@ -2901,35 +2901,20 @@ function completePickupDayEntriesForFrequency(frequency = "", entries = []) {
   const expected = expectedPickupCountsForFrequency(frequency);
   const completed = entries.map((entry) => ({ ...entry, inferred: false }));
 
-  if (
-    expected.mode === "weekly" &&
-    expected.perWeek === 1 &&
-    completed.length === 1 &&
-    ["odd", "even"].includes(completed[0].parity)
-  ) {
-    const oppositeParity = pickupParityOpposite(completed[0].parity);
-    completed.push({
-      ...completed[0],
-      parity: oppositeParity,
-      inferred: true,
-      source: `${completed[0].source || pickupDayEntryDisplayValue(completed[0])} · dopočteno z intervalu 1x7`
-    });
-  }
-
-  if (
-    expected.mode === "weekly" &&
-    expected.perWeek === 2 &&
-    completed.length === 2 &&
+  const canMirrorWeeklyParity = expected.mode === "weekly" &&
+    expected.perWeek >= 1 &&
+    completed.length === expected.perWeek &&
     completed.every((entry) => ["odd", "even"].includes(entry.parity)) &&
     completed.every((entry) => entry.parity === completed[0].parity) &&
-    new Set(completed.map((entry) => entry.day)).size === 2
-  ) {
+    new Set(completed.map((entry) => entry.day)).size === expected.perWeek;
+
+  if (canMirrorWeeklyParity) {
     const oppositeParity = pickupParityOpposite(completed[0].parity);
     completed.push(...completed.map((entry) => ({
       ...entry,
       parity: oppositeParity,
       inferred: true,
-      source: `${entry.source || pickupDayEntryDisplayValue(entry)} · dopočteno z intervalu 2x7`
+      source: `${entry.source || pickupDayEntryDisplayValue(entry)} · dopočteno z intervalu ${expected.perWeek}x7`
     })));
   }
 

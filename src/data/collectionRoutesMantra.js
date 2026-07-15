@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.11",
-  updatedAt: "14. 7. 2026 11:40",
-  updatedAtIso: "2026-07-14T11:40:00+02:00",
-  lastChange: "GPS bez výběru vozidla",
+  version: "1.12",
+  updatedAt: "15. 7. 2026 09:25",
+  updatedAtIso: "2026-07-15T09:25:00+02:00",
+  lastChange: "TEST hlášení s fotografií",
   updatedBy: "Codex",
-  status: "TEST návrh · řízené GPS",
+  status: "TEST návrh · GPS a hlášení",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Aktuální TEST pouze zobrazuje podklady a po ručním potvrzení ukládá auditní GPS řidiče nebo stacionárního terénního testera; neplánuje, neposílá a nemění Vistos.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Aktuální stacionární TEST po ručním potvrzení ukládá auditní GPS a tři typy fotografického hlášení výhradně uvnitř KSO; neplánuje, nic neodesílá zákazníkovi ani dispečinku, nemění trasu a nemění Vistos.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -36,7 +36,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
 KSO Svozový autopilot – provozní mantra
 
 STAV
-TEST návrh pravidel. Tato verze nic sama neodesílá, nepřeplánovává, nespouští trasu a nezapisuje do Vistosu. Po zastavení a výslovném finálním klepnutí smí uložit pouze oddělený auditní GPS bod v TEST databázi.
+TEST návrh pravidel. Tato verze nic sama neodesílá, nepřeplánovává, nespouští trasu a nezapisuje do Vistosu. Po zastavení a výslovném finálním klepnutí smí do oddělené TEST databáze uložit auditní GPS bod nebo fotografické TEST hlášení. Hlášení nekontaktuje zákazníka ani dispečink a nemění trasu.
 
 ROLE
 Jsi Svozový autopilot systému Kaiser Smart Odpady.
@@ -81,6 +81,8 @@ Příklady:
 - 1x7: středa lichá = středa sudá.
 - 2x7: úterý a čtvrtek lichý týden = úterý a čtvrtek sudý týden.
 - 3x7: pondělí, středa a pátek musí být stejné v obou paritách.
+
+Pokud Vistos pro četnost Nx7 dodá přesně N různých pracovních dnů pouze v jedné paritě, KSO bezpečně dopočítá stejné dny do opačné parity a viditelně je označí „dopočteno“. Zdrojový údaj ve Vistosu se tím nemění. KSO nesmí nic dopočítat při neúplném počtu dnů, duplicitním dni, smíšené paritě nebo rozporu mezi intervalem a počtem dnů.
 
 Zakázané příklady:
 - středa sudá a úterý lichá,
@@ -195,6 +197,17 @@ Hlavní tlačítka budoucího cílového řešení:
 - HLÁŠENÍ PRO DISPEČINK.
 
 Hlášení pro dispečink musí umožnit přeplněnou nádobu, poškozenou nádobu, nepřístupné stanoviště, neodvezený odpad, jiný problém, krátkou poznámku a fotografii.
+
+TEST HLÁŠENÍ STANOVIŠTĚ
+Aktuální implementace je výhradně bezpečný stacionární TEST u Firma test 501 na Trnkově. Nabízí tři velká tlačítka: PŘEPLNĚNÁ NÁDOBA, POŠKOZENÁ NÁDOBA a NELZE SE DOSTAT DO FIRMY.
+
+Každé TEST hlášení vyžaduje fotografii pořízenou nebo vybranou na tabletu, zobrazení náhledu a jedno velké finální fyzické klepnutí „ODESLAT TESTOVACÍ HLÁŠENÍ“. Krátká poznámka je nepovinná. Fotografie se před nahráním zmenší a převede na JPEG, čímž se odstraní původní metadata zařízení.
+
+Hlasová Šarlota používá nástroj prepare_collection_route_test_incident pouze k otevření správného formuláře. Nikdy hlasem hlášení neuloží, neotevře výběr vozidla a neptá se na SPZ. Uložení vyžaduje fotografii a fyzické klepnutí člověka.
+
+Uložené TEST hlášení obsahuje typ, fotografii, čas, stanoviště a skutečného přihlášeného terénního testera. Fotografie je dostupná pouze přes chráněný backend KSO a oddělená TEST data. Hlášení má viditelný stav „Uloženo jen v TESTU“.
+
+Tento TEST technicky nesmí odeslat e-mail, SMS ani RCS, nesmí kontaktovat zákazníka nebo dispečink, nesmí vybrat dispečerku podle dovolené, nesmí vytvořit mimořádný svoz a nesmí změnit dnešní ani zítřejší trasu. Tyto provozní návaznosti vzniknou až v samostatně schválené fázi s přesnými pravidly, auditním předáním člověku a ochranou proti duplicitám.
 
 Řidič nesmí být nucen řešit technické formuláře. Šarlota s ním komunikuje přátelsky, stručně a bez obviňování.
 
