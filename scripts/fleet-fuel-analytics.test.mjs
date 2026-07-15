@@ -33,6 +33,8 @@ const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf
 const styleSource = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 assert.match(appSource, /Seznam tankování/);
 assert.match(appSource, /PHM podle období a vozidel/);
+assert.match(appSource, /transakční hodnota CZK z ORWII/);
+assert.doesNotMatch(appSource, /Cena PHM/);
 assert.match(appSource, /Report tankování a PHM/);
 assert.match(appSource, /data-fuel-period/);
 assert.doesNotMatch(appSource, /Načíst tankování|Načíst PHM|Importovat tankování/);

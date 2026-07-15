@@ -22,7 +22,7 @@ export const versionInfo = {
 export const versionNews = [
   {
     title: "Vozidla: automatické tankování a statistiky PHM",
-    text: "Vozový park má záložku Tankování s automatickým ORWII přehledem. Skutečné litry a ceny se promítají do Nákladů, Reportů, detailu vozidla a ekonomiky HP; nespárované záznamy zůstávají oddělené a synchronizace není závislá na otevření modulu."
+    text: "Vozový park má záložku Tankování s automatickým ORWII přehledem. Skutečné litry a transakční hodnoty ORWII se promítají do Nákladů, Reportů, detailu vozidla a ekonomiky HP; účetní pořizovací náklad zůstává oddělený, nespárované záznamy se nepřiřazují odhadem."
   },
   {
     title: "Datové schránky: klávesnicové posouvání historie chatu",

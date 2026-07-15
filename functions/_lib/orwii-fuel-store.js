@@ -274,7 +274,9 @@ export function buildOrwiiFuelAnalytics(rows = [], options = {}) {
     dataRules: {
       companyTotals: "all_valid_transactions",
       vehicleTotals: "matched_only",
-      costPerKm: "requires_verified_same_period_mileage"
+      costPerKm: "requires_verified_same_period_mileage",
+      priceSemantics: "orwii_transaction_value_not_verified_accounting_cost",
+      currency: "CZK"
     }
   };
 }

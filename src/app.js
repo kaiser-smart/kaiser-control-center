@@ -11538,8 +11538,8 @@ function fuelKpis() {
   const items = [
     ["Tankování", fuelNumber(summary.transactionCount, { maximumFractionDigits: 0 }), "validní záznamy"],
     ["Načerpáno", fuelLiters(summary.liters), "všechna vozidla"],
-    ["Cena PHM", fuelMoney(summary.totalCost), "z oceněných záznamů"],
-    ["Průměrná cena", summary.averageUnitPrice === null ? "—" : `${fuelNumber(summary.averageUnitPrice, { maximumFractionDigits: 2 })} Kč/l`, "vážená podle litrů"],
+    ["Hodnota dle ORWII", fuelMoney(summary.totalCost), "transakční CZK, ne účetní náklad"],
+    ["Cena dle ORWII", summary.averageUnitPrice === null ? "—" : `${fuelNumber(summary.averageUnitPrice, { maximumFractionDigits: 2 })} Kč/l`, "vážená podle oceněných litrů"],
     ["Spárování", coverage, `${summary.matchedCount} z ${summary.transactionCount}`],
     ["K přiřazení", fuelNumber(summary.unmatchedCount + summary.ambiguousCount, { maximumFractionDigits: 0 }), "nezapočítáno vozidlům"]
   ];
@@ -11566,7 +11566,7 @@ function fuelTrend() {
   if (!rows.length) return `<div class="fuel-data-state"><strong>Bez tankování v tomto období.</strong><span>Graf se doplní automaticky s další synchronizací ORWII.</span></div>`;
   const max = Math.max(...rows.map((row) => Number(row.totalCost) || 0), 1);
   return `
-    <div class="fuel-trend" aria-label="Vývoj ceny PHM podle dnů">
+    <div class="fuel-trend" aria-label="Vývoj transakční hodnoty ORWII podle dnů">
       ${rows.map((row) => {
         const height = Math.max(8, Math.round(((Number(row.totalCost) || 0) / max) * 100));
         return `<article title="${escapeHtml(`${row.key}: ${fuelMoney(row.totalCost)}, ${fuelLiters(row.liters)}`)}"><span style="--fuel-bar:${height}%"></span><small>${escapeHtml(String(row.key || "").slice(5))}</small></article>`;
@@ -11581,7 +11581,7 @@ function fuelVehicleTable() {
   return `
     <div class="fuel-table-wrap">
       <table class="fuel-table">
-        <thead><tr><th>Vozidlo</th><th>Tankování</th><th>Litry</th><th>Cena PHM</th><th>Průměr Kč/l</th></tr></thead>
+        <thead><tr><th>Vozidlo</th><th>Tankování</th><th>Litry</th><th>Hodnota ORWII</th><th>ORWII Kč/l</th></tr></thead>
         <tbody>${rows.map((row) => `
           <tr>
             <td><strong>${escapeHtml(row.label || row.key)}</strong></td>
@@ -11614,7 +11614,7 @@ function fuelTransactionsTable() {
   return `
     <div class="fuel-table-wrap">
       <table class="fuel-table fuel-table--transactions">
-        <thead><tr><th>Datum</th><th>SPZ</th><th>Palivo</th><th>Litry</th><th>Cena/l</th><th>Celkem</th><th>Stav</th></tr></thead>
+        <thead><tr><th>Datum</th><th>SPZ</th><th>Palivo</th><th>Litry</th><th>ORWII Kč/l</th><th>Hodnota ORWII</th><th>Stav</th></tr></thead>
         <tbody>${rows.map((row) => `
           <tr>
             <td>${escapeHtml(formatDateTime(row.occurredAt) || row.occurredAt || "—")}</td>
@@ -11640,7 +11640,7 @@ function fuelAnalyticsPanel(options = {}) {
       </header>
       ${fuelStatusMarkup()}
       ${hasData ? `${fuelKpis()}${fuelCoverageNotice()}${options.showTrend ? fuelTrend() : ""}${options.showVehicles ? fuelVehicleTable() : ""}${options.showFilters ? fuelFilters() : ""}${options.showTransactions ? fuelTransactionsTable() : ""}` : ""}
-      <footer class="fuel-source-note">Zdroj se synchronizuje v Cloudflare každou hodinu. Otevření této stránky synchronizaci nespouští ani neovlivňuje.</footer>
+      <footer class="fuel-source-note">Zdroj se synchronizuje v Cloudflare každou hodinu. Otevření stránky synchronizaci nespouští. Cena je transakční hodnota CZK z ORWII, nikoli automaticky ověřený účetní pořizovací náklad PHM.</footer>
     </div>
   `;
 }
@@ -11653,7 +11653,7 @@ function fleetCostsDetail(vehicle = {}) {
     ["Servis", vehicle.serviceCosts],
     ["Pneumatiky", vehicle.tyreCosts],
     ["Pojištění", vehicle.insuranceCosts],
-    ["Palivo", fuel ? fuelMoney(fuel.totalCost) : vehicle.fuelCosts],
+    ["PHM dle ORWII", fuel ? fuelMoney(fuel.totalCost) : vehicle.fuelCosts],
     ["Načerpáno", fuel ? fuelLiters(fuel.liters) : null],
     ["Počet tankování", fuel ? fuelNumber(fuel.transactionCount, { maximumFractionDigits: 0 }) : null],
     ["Mytí", vehicle.washCosts],
@@ -13096,7 +13096,7 @@ function fleetCostsSection(activeId) {
         { badge: false }
       )}
       ${fuelAnalyticsPanel({
-        eyebrow: "Skutečný napojený nákladový zdroj",
+        eyebrow: "Napojený provozní zdroj",
         title: "PHM z ORWII",
         detail: "Firemní součet zahrnuje validní tankování; rozpad podle vozidla pouze bezpečně spárované záznamy.",
         showTrend: true,
@@ -35331,7 +35331,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
   const costsPanel = moduleItem.id === "costs"
-    ? `<section class="module-panel fuel-module-panel" aria-labelledby="fuel-costs-module-title"><h2 id="fuel-costs-module-title">Náklady na PHM</h2>${fuelAnalyticsPanel({ title: "PHM podle období a vozidel", detail: "První skutečný nákladový zdroj modulu Náklady.", showTrend: true, showVehicles: true, showTransactions: true })}</section>`
+    ? `<section class="module-panel fuel-module-panel" aria-labelledby="fuel-costs-module-title"><h2 id="fuel-costs-module-title">PHM · hodnota ORWII</h2>${fuelAnalyticsPanel({ title: "PHM podle období a vozidel", detail: "Provozní litry a transakční hodnota z ORWII. Účetní pořizovací náklad zůstává samostatný zdroj.", showTrend: true, showVehicles: true, showTransactions: true })}</section>`
     : "";
   const reportsPanel = moduleItem.id === "reports"
     ? `<section class="module-panel fuel-module-panel" aria-labelledby="fuel-report-module-title"><h2 id="fuel-report-module-title">Report tankování a PHM</h2>${fuelAnalyticsPanel({ title: "Vývoj tankování", detail: "Read-only provozní report za zvolené období.", showTrend: true, showVehicles: true, showTransactions: true })}</section>${notificationCenterSection(user)}${customerMessagingSection(user)}`
