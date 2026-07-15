@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.14",
-  updatedAt: "15. 7. 2026 11:54",
-  updatedAtIso: "2026-07-15T11:54:13+02:00",
-  lastChange: "Incidenty posílají chráněné TEST e-maily",
+  version: "1.15",
+  updatedAt: "15. 7. 2026 21:01",
+  updatedAtIso: "2026-07-15T21:01:02+02:00",
+  lastChange: "Úplné načtení Adresního místa",
   updatedBy: "Codex",
   status: "TEST návrh · incidentní workflow",
   title: "Svozový autopilot – provozní mantra",
@@ -71,6 +71,8 @@ Nevymýšlej chybějící adresu, kontakt, otevírací dobu, hmotnost, polohu an
 
 ADRESNÍ A SMLUVNÍ PRAVIDLO
 Adresní místo a Stanoviště jsou dvě různá pole. Adresní místo se nesmí nahrazovat názvem Stanoviště ani technickým rozpadem svozové adresy.
+
+KSO musí pro každý aktivní řádek Svoz Kaiser = ANO dokončit čtecí načtení skutečného Adresního místa. Pokud čtení selže nebo dosáhne ochranného limitu, označ to jako technickou chybu načtení KSO, ne jako chybu zákazníka ve Vistosu, a stanoviště nezařazuj do návrhu trasy.
 
 Pole Od-do určuje platnost smlouvy. Do návrhu nesmí vstoupit stanoviště před začátkem nebo po skončení platnosti smlouvy. Chybějící nebo nejasné Od-do označ k prověření.
 

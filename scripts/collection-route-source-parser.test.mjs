@@ -4,6 +4,9 @@ import { __inferCollectionRouteContainerForTest } from "../functions/_lib/collec
 import {
   __addressPlaceQualityIssuesForTest,
   __buildVistosKommunalPreviewForTest,
+  __buildVistosSvozKaiserWatchdogForTest,
+  __collectionRoutesSiteAddressTextForTest,
+  __enrichVistosRowsByIdForTest,
   __inferVistosContainerForTest,
   __pickupDayConsistencyIssuesForTest,
   __pickupDayDisplayValueForTest,
@@ -368,6 +371,59 @@ function derive(originalText) {
 }
 
 {
+  const sourceRows = Array.from({ length: 181 }, (_, index) => ({ Id: String(index + 1) }));
+  const loadedIds = [];
+  const enriched = await __enrichVistosRowsByIdForTest({
+    rows: sourceRows,
+    maxRows: 1000,
+    concurrency: 4,
+    loadDetail: async (_env, _session, _entityName, id) => {
+      loadedIds.push(id);
+      return {
+        row: {
+          Id: id,
+          __vistosAddressPlaceRaw: `Brno, Testovací ${id}, PSČ 60200`
+        }
+      };
+    }
+  });
+  assert.equal(enriched.diagnostics.totalRows, 181);
+  assert.equal(enriched.diagnostics.requested, 181);
+  assert.equal(enriched.diagnostics.succeeded, 181);
+  assert.equal(enriched.diagnostics.skipped, 0);
+  assert.equal(enriched.diagnostics.capped, false);
+  assert.equal(new Set(loadedIds).size, 181);
+  assert.equal(enriched.rows[180].__vistosAddressPlaceRaw, "Brno, Testovací 181, PSČ 60200");
+}
+
+{
+  const sourceRows = Array.from({ length: 181 }, (_, index) => ({ Id: String(index + 1) }));
+  const capped = await __enrichVistosRowsByIdForTest({
+    rows: sourceRows,
+    maxRows: 150,
+    loadDetail: async (_env, _session, _entityName, id) => ({ row: { Id: id } })
+  });
+  assert.equal(capped.diagnostics.requested, 150);
+  assert.equal(capped.diagnostics.skipped, 31);
+  assert.equal(capped.diagnostics.capped, true);
+  assert.equal(capped.rows[150].__vistosDetailEnrichmentSkipped, true);
+}
+
+{
+  assert.equal(__collectionRoutesSiteAddressTextForTest({
+    addressPlaceRaw: "Brno, Komárov, Plotní 471/22, PSČ 60200",
+    addressRaw: "bikeplac s.r.o. - provozovna Plotní - Brno,Plotní 471/22"
+  }, "vistos"), "Brno, Komárov, Plotní 471/22, PSČ 60200");
+  assert.equal(__collectionRoutesSiteAddressTextForTest({
+    addressPlaceRaw: "",
+    addressRaw: "Technická adresa nesmí být fallback"
+  }, "vistos"), "");
+  assert.equal(__collectionRoutesSiteAddressTextForTest({
+    addressRaw: "Ruční importní adresa"
+  }, "manual"), "Ruční importní adresa");
+}
+
+{
   const parts = __vistosAddressPartsFromAddressPlaceForTest("Brno, Komárov, U vlečky 726/5c, PSČ 61700");
   assert.equal(parts.addressCity, "Brno");
   assert.equal(parts.addressStreet, "U vlečky 726/5c");
@@ -497,6 +553,97 @@ function derive(originalText) {
   assert.equal(row.customerManagerMobile, "+420 777 111 222");
   assert.equal(row.customerManagerEmail, "jana.novakova@example.cz");
   assert.equal(row.issues.some((issue) => issue.type === "missing-address-place"), false);
+}
+
+{
+  const preview = __buildVistosKommunalPreviewForTest({
+    today: new Date("2026-07-15T00:00:00.000Z"),
+    contracts: [{
+      Id: "bikeplac",
+      ContractNumber: "2025-0310 SPLI",
+      Directory_FK_RecordId: "29253039",
+      Directory_FK_Caption: "bikeplac s.r.o. - 29253039",
+      Nakladkovaadresa_FK_RecordId: "site-bikeplac",
+      Nakladkovaadresa_FK_Caption: "bikeplac s.r.o. - provozovna Plotní - Brno,Plotní 471/22",
+      StartDate: "2026-07-01"
+    }],
+    contractRows: [{
+      Id: "row-bikeplac",
+      Contract_FK_RecordId: "bikeplac",
+      Product_FK_RecordId: "product-bikeplac",
+      Stanoviste: "Plotní 22, Brno",
+      StartDate: "2026-07-01"
+    }],
+    products: [{
+      Id: "product-bikeplac",
+      Caption: "SKO / 200301 240 l 1x14",
+      Name: "SKO / 200301 240 l 1x14",
+      Quantity: "1"
+    }]
+  });
+  assert.equal(preview.rows[0].issues.some((issue) => issue.type === "missing-address-place"), true);
+  assert.equal(preview.routeDraftRows.length, 0);
+}
+
+{
+  const preview = __buildVistosKommunalPreviewForTest({
+    today: new Date("2026-07-15T00:00:00.000Z"),
+    contracts: [{
+      Id: "read-failed",
+      ContractNumber: "READ-FAILED",
+      Directory_FK_RecordId: "customer-read-failed",
+      Directory_FK_Caption: "Test načtení",
+      Nakladkovaadresa_FK_RecordId: "site-read-failed",
+      Nakladkovaadresa_FK_Caption: "Technická adresa",
+      StartDate: "2026-07-01"
+    }],
+    contractRows: [{
+      Id: "row-read-failed",
+      Contract_FK_RecordId: "read-failed",
+      Product_FK_RecordId: "product-read-failed",
+      __vistosDetailEnrichmentFailed: true,
+      StartDate: "2026-07-01"
+    }],
+    products: [{
+      Id: "product-read-failed",
+      Caption: "SKO / 200301 240 l 1x7",
+      Name: "SKO / 200301 240 l 1x7",
+      Quantity: "1"
+    }]
+  });
+  assert.equal(preview.rows[0].issues.some((issue) => issue.type === "address-place-read-incomplete"), true);
+  assert.equal(preview.rows[0].issues.some((issue) => issue.type === "missing-address-place"), false);
+  assert.equal(preview.routeDraftRows.length, 0);
+}
+
+{
+  const watchdog = __buildVistosSvozKaiserWatchdogForTest({
+    rows: [{
+      svozKaiserIncluded: true,
+      siteKey: "vistos-site-bikeplac",
+      customerName: "bikeplac s.r.o. - 29253039",
+      siteName: "Plotní 22, Brno",
+      contractNumber: "2025-0310 SPLI",
+      issues: [{
+        type: "missing-address-place",
+        severity: "error",
+        message: "Chybí Adresní místo."
+      }]
+    }],
+    summary: { contractCount: 1, itemCount: 1 },
+    metadata: {
+      svozKaiserField: {
+        confirmed: true,
+        entityName: "ContractRow",
+        columnName: "SvozKaiser",
+        caption: "Svoz Kaiser"
+      }
+    }
+  });
+  assert.equal(watchdog.summary.checkedRows, 1);
+  assert.equal(watchdog.summary.errorCount, 1);
+  assert.equal(watchdog.issueSummary[0].issueType, "missing-address-place");
+  assert.equal(watchdog.siteAlerts[0].customerName, "bikeplac s.r.o. - 29253039");
 }
 
 {

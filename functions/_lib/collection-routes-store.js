@@ -12,6 +12,7 @@ const DEFAULT_VISTOS_DISCOVERY_PATHS = ["/Contract", "/ServiceList"];
 const VISTOS_EXECUTE_API_SUFFIX = "/API/VistosAPI";
 const VISTOS_EXECUTE_PAGE_SIZE = 1000;
 const VISTOS_EXECUTE_MAX_PAGES = 80;
+const VISTOS_DETAIL_ENRICHMENT_CONCURRENCY = 4;
 const VISTOS_KOMUNAL_PERSIST_ROWS_LIMIT = 10000;
 const VISTOS_KOMUNAL_CONTRACT_FILTER = {
   Status_FK: 74,
@@ -20,6 +21,8 @@ const VISTOS_KOMUNAL_CONTRACT_FILTER = {
 const VISTOS_SVOZ_KAISER_WATCHDOG_ISSUE_TYPES = new Set([
   "missing-customer",
   "missing-loading-address",
+  "missing-address-place",
+  "address-place-read-incomplete",
   "incomplete-address-place",
   "address-place-missing-number",
   "address-place-possible-typo",
@@ -1179,41 +1182,93 @@ function mergeVistosDetailRow(baseRow = {}, detailRow = {}) {
   return merged;
 }
 
-async function enrichVistosRowsById(env, session, entityName, rows = [], columns = [], { maxRows = 25 } = {}) {
-  const limitedRows = rows.slice(0, Math.max(0, maxRows));
+async function enrichVistosRowsById(env, session, entityName, rows = [], columns = [], {
+  maxRows = 25,
+  concurrency = 1,
+  loadDetail = getVistosById
+} = {}) {
+  const normalizedMaxRows = Number.isFinite(Number(maxRows))
+    ? Math.max(0, Math.floor(Number(maxRows)))
+    : 25;
+  const normalizedConcurrency = Number.isFinite(Number(concurrency))
+    ? Math.max(1, Math.min(8, Math.floor(Number(concurrency))))
+    : 1;
+  const limitedRows = rows.slice(0, normalizedMaxRows);
   const detailColumns = Array.from(new Set(columns)).filter(Boolean);
   const detailsById = new Map();
-  const diagnostics = {
-    entityName,
-    requested: limitedRows.length,
-    succeeded: 0,
-    failed: 0,
-    maxRows
-  };
+  const selectedIds = new Set();
+  const failedIds = new Set();
+  let missingIdCount = 0;
 
   for (const row of limitedRows) {
     const id = cleanString(row?.Id || row?.RecordId);
-    if (!id || detailsById.has(id)) {
+    if (!id) {
+      missingIdCount += 1;
       continue;
     }
+    selectedIds.add(id);
+  }
 
-    try {
-      const detail = await getVistosById(env, session, entityName, id, detailColumns);
-      if (detail.row && Object.keys(detail.row).length) {
-        detailsById.set(id, mergeVistosDetailRow(row, detail.row));
+  const diagnostics = {
+    entityName,
+    totalRows: rows.length,
+    requested: selectedIds.size,
+    succeeded: 0,
+    failed: 0,
+    skipped: Math.max(0, rows.length - limitedRows.length),
+    missingIds: missingIdCount,
+    capped: rows.length > limitedRows.length,
+    maxRows: normalizedMaxRows,
+    concurrency: normalizedConcurrency
+  };
+
+  const rowsById = new Map();
+  for (const row of limitedRows) {
+    const id = cleanString(row?.Id || row?.RecordId);
+    if (id && !rowsById.has(id)) {
+      rowsById.set(id, row);
+    }
+  }
+
+  const rowsToLoad = Array.from(rowsById.entries());
+  for (let index = 0; index < rowsToLoad.length; index += normalizedConcurrency) {
+    const chunk = rowsToLoad.slice(index, index + normalizedConcurrency);
+    const results = await Promise.all(chunk.map(async ([id, row]) => {
+      try {
+        const detail = await loadDetail(env, session, entityName, id, detailColumns);
+        if (detail?.row && Object.keys(detail.row).length) {
+          return { id, row: mergeVistosDetailRow(row, detail.row), ok: true };
+        }
+      } catch {
+        // Diagnostika rozliší selhání čtení KSO od skutečně chybějícího pole ve Vistosu.
+      }
+      return { id, row: null, ok: false };
+    }));
+
+    for (const result of results) {
+      if (result.ok) {
+        detailsById.set(result.id, result.row);
         diagnostics.succeeded += 1;
       } else {
+        failedIds.add(result.id);
         diagnostics.failed += 1;
       }
-    } catch {
-      diagnostics.failed += 1;
     }
   }
 
   return {
-    rows: rows.map((row) => {
+    rows: rows.map((row, index) => {
       const id = cleanString(row?.Id || row?.RecordId);
-      return detailsById.get(id) || row;
+      if (detailsById.has(id)) {
+        return detailsById.get(id);
+      }
+      if (!id || failedIds.has(id)) {
+        return { ...row, __vistosDetailEnrichmentFailed: true };
+      }
+      if (index >= limitedRows.length && !selectedIds.has(id)) {
+        return { ...row, __vistosDetailEnrichmentSkipped: true };
+      }
+      return row;
     }),
     diagnostics
   };
@@ -3184,9 +3239,28 @@ const VISTOS_ADDRESS_PLACE_QUALITY_ISSUE_TYPES = new Set([
   "missing-address-place",
   "incomplete-address-place",
   "address-place-missing-number",
-  "address-place-suspicious-text",
+  "address-place-possible-typo",
   "address-place-loading-address-mismatch"
 ]);
+
+const VISTOS_ADDRESS_PLACE_REVIEW_ISSUE_TYPES = new Set([
+  ...VISTOS_ADDRESS_PLACE_QUALITY_ISSUE_TYPES,
+  "address-place-read-incomplete"
+]);
+
+function addressPlaceSourceIssues({ addressPlaceRaw, addressRaw, sourceRows = [] }) {
+  const readIncomplete = !cleanString(addressPlaceRaw) && sourceRows.some((row) => (
+    row?.__vistosDetailEnrichmentFailed === true || row?.__vistosDetailEnrichmentSkipped === true
+  ));
+  if (readIncomplete) {
+    return [{
+      type: "address-place-read-incomplete",
+      severity: "error",
+      message: "KSO nedokončilo čtecí načtení Adresního místa z Vistosu. Zdrojová data zatím neopravujte."
+    }];
+  }
+  return addressPlaceQualityIssues({ addressPlaceRaw, addressRaw });
+}
 
 function productSearchText(contractRow, product) {
   return [
@@ -3457,6 +3531,32 @@ export function __buildVistosKommunalPreviewForTest(input = {}) {
   return buildVistosKommunalPreview(input);
 }
 
+export async function __enrichVistosRowsByIdForTest(input = {}) {
+  if (typeof input.loadDetail !== "function") {
+    throw new Error("Test enrichment vyžaduje loadDetail stub.");
+  }
+  return enrichVistosRowsById(
+    {},
+    {},
+    input.entityName || "ContractRow",
+    Array.isArray(input.rows) ? input.rows : [],
+    Array.isArray(input.columns) ? input.columns : ["Id", "PickupAddressRuian"],
+    {
+      maxRows: input.maxRows ?? COLLECTION_ROUTES_VISTOS_MAX_ROWS,
+      concurrency: input.concurrency ?? VISTOS_DETAIL_ENRICHMENT_CONCURRENCY,
+      loadDetail: input.loadDetail
+    }
+  );
+}
+
+export function __buildVistosSvozKaiserWatchdogForTest(preview = {}, apiStatus = "ready") {
+  return buildVistosSvozKaiserWatchdog(preview, apiStatus);
+}
+
+export function __collectionRoutesSiteAddressTextForTest(row = {}, siteSourceSystem = "") {
+  return collectionRoutesSiteAddressText(row, siteSourceSystem);
+}
+
 function vistosSiteKey(contract) {
   const sourceSiteId = firstNonEmpty(fkRecordId(contract, "Nakladkovaadresa_FK"), fkRecordId(contract, "DirectoryBranch_FK"));
   if (sourceSiteId) {
@@ -3529,7 +3629,11 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
     if (possibleSiteIds.size > 1 && !rowHasExplicitLoadingAddress(contract)) {
       baseIssues.push({ type: "multiple-sites-contract", severity: "info", message: "Smlouva má více možných adresních vazeb bez jasné nakládkové adresy." });
     }
-    baseIssues.push(...addressPlaceQualityIssues({ addressPlaceRaw, addressRaw }));
+    baseIssues.push(...addressPlaceSourceIssues({
+      addressPlaceRaw,
+      addressRaw,
+      sourceRows: [contract]
+    }));
 
     if (!contractRowsForContract.length) {
       const svozKaiserValue = rowSvozKaiserValue(contract, null, svozKaiserField);
@@ -3609,7 +3713,7 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
             (inferredContainer.fieldVolume && inferredContainer.nameVolume && inferredContainer.fieldVolume !== inferredContainer.nameVolume)
         }
         : inferredContainer;
-      const issues = baseIssues.filter((issue) => !VISTOS_ADDRESS_PLACE_QUALITY_ISSUE_TYPES.has(issue.type));
+      const issues = baseIssues.filter((issue) => !VISTOS_ADDRESS_PLACE_REVIEW_ISSUE_TYPES.has(issue.type));
 
       if (!isoDateValue(contractRow?.StartDate)) {
         issues.push({ type: "missing-contract-row-start-date", severity: "warning", message: "Položka smlouvy zatím nemá začátek platnosti z Vistosu." });
@@ -3683,10 +3787,10 @@ function buildVistosKommunalPreview({ contracts, contractRows, products, totals 
         ? pickupDayScheduleFromValues({ frequency: routeFrequency.frequency, values: pickupDayValues })
         : null;
 
-      issues.push(...addressPlaceQualityIssues({
+      issues.push(...addressPlaceSourceIssues({
         addressPlaceRaw: rowAddressPlaceRaw,
         addressRaw,
-        siteName
+        sourceRows: [contract, contractRow]
       }));
       if (!isOnDemandCollection && !isOutsideCollectionRoute && routeFrequency.frequency) {
         issues.push(...pickupDayConsistencyIssues({
@@ -3942,6 +4046,7 @@ function watchdogIssueLabel(issueType = "") {
     "missing-customer": "Chybí zákazník",
     "missing-loading-address": "Chybí svozová/nakládková adresa",
     "missing-address-place": "Chybí Adresní místo",
+    "address-place-read-incomplete": "Adresní místo se nenačetlo z Vistosu",
     "incomplete-address-place": "Neúplné adresní místo",
     "address-place-missing-number": "Adresní místo bez čísla",
     "address-place-possible-typo": "Možný překlep v adresním místě",
@@ -3978,6 +4083,7 @@ function watchdogIssueAction(issueType = "") {
     "missing-customer": "Doplnit zákazníka / sídlo ve Vistosu.",
     "missing-loading-address": "Doplnit svozovou nebo nakládkovou adresu ve Vistosu.",
     "missing-address-place": "Doplnit skutečné pole Adresní místo ve Vistosu; nepřebírat Stanoviště jako náhradu.",
+    "address-place-read-incomplete": "Zopakovat read-only načtení KSO; zdrojová data ve Vistosu zatím neměnit.",
     "incomplete-address-place": "Doplnit úplné Adresní místo ve Vistosu.",
     "address-place-missing-number": "Doplnit číslo popisné/orientační v Adresním místě.",
     "address-place-possible-typo": "Zkontrolovat překlep nebo poškozený zápis v Adresním místě.",
@@ -4271,12 +4377,24 @@ export function buildCollectionRoutesManualImportPreview({ text, filename = "", 
 }
 
 function siteLocationQuality(row) {
+  if ((row.issues || []).some((issue) => [
+    "missing-address-place",
+    "address-place-read-incomplete"
+  ].includes(issue.type))) {
+    return "missing";
+  }
   if (row.locationQuality) {
     return row.locationQuality;
   }
   return row.issues.some((issue) => issue.type === "missing-address" || issue.type === "unclear-location")
     ? "missing"
     : "approximate";
+}
+
+function collectionRoutesSiteAddressText(row = {}, siteSourceSystem = "") {
+  return normalizeVistosMetadataKey(siteSourceSystem) === "vistos"
+    ? cleanString(row.addressPlaceRaw)
+    : cleanString(row.addressRaw);
 }
 
 function manualRowSummary(row) {
@@ -4464,6 +4582,7 @@ function buildVistosKommunalMappingGapRows(mappedRows) {
 
 function buildVistosKommunalRouteDraftRows(mappedRows) {
   const blockingIssueTypes = new Set([
+    ...VISTOS_ADDRESS_PLACE_REVIEW_ISSUE_TYPES,
     "non-route-contract-row",
     "item-not-collection-mappable",
     "unknown-waste-type",
@@ -4700,7 +4819,7 @@ async function persistCollectionRoutesImportPreview(env, user, preview, {
             cleanString(row.sourceSiteId) || row.siteKey,
             row.customerName,
             row.siteName,
-            row.addressRaw,
+            collectionRoutesSiteAddressText(row, siteSourceSystem),
             locationQuality,
             batchId,
             createdAt,
@@ -4965,7 +5084,10 @@ async function loadVistosKommunalPreviewData(env) {
     "Contract",
     svozKaiserContractsForDetail,
     contractColumns,
-    { maxRows: 50 }
+    {
+      maxRows: COLLECTION_ROUTES_VISTOS_MAX_ROWS,
+      concurrency: VISTOS_DETAIL_ENRICHMENT_CONCURRENCY
+    }
   );
   if (contractDetailEnrichment.rows.length) {
     const enrichedContractsById = new Map(contractDetailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
@@ -4978,19 +5100,31 @@ async function loadVistosKommunalPreviewData(env) {
     "ContractRow",
     svozKaiserRowsForDetail,
     contractRowColumns,
-    { maxRows: 150 }
+    {
+      maxRows: COLLECTION_ROUTES_VISTOS_MAX_ROWS,
+      concurrency: VISTOS_DETAIL_ENRICHMENT_CONCURRENCY
+    }
   );
   if (detailEnrichment.rows.length) {
     const enrichedById = new Map(detailEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
     contractRowsForKommunalContracts = contractRowsForKommunalContracts.map((row) => enrichedById.get(cleanString(row?.Id || row?.RecordId)) || row);
   }
+  const svozKaiserContractsAfterDetail = kommunalContracts.filter((contract) => (
+    svozKaiserContractIds.has(cleanString(contract?.Id || contract?.RecordId))
+  ));
+  const svozKaiserRowIds = new Set(svozKaiserRowsForDetail
+    .map((row) => cleanString(row?.Id || row?.RecordId))
+    .filter(Boolean));
+  const svozKaiserRowsAfterDetail = contractRowsForKommunalContracts.filter((row) => (
+    svozKaiserRowIds.has(cleanString(row?.Id || row?.RecordId))
+  ));
   const addressPlaceContractEnrichment = await enrichVistosAddressPlaceReferences(
     env,
     session,
-    kommunalContracts,
+    svozKaiserContractsAfterDetail,
     consistencyFields,
     "Contract",
-    { maxRows: 100 }
+    { maxRows: COLLECTION_ROUTES_VISTOS_MAX_ROWS }
   );
   if (addressPlaceContractEnrichment.rows.length) {
     const enrichedAddressContractsById = new Map(addressPlaceContractEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
@@ -5000,10 +5134,10 @@ async function loadVistosKommunalPreviewData(env) {
   const addressPlaceRowEnrichment = await enrichVistosAddressPlaceReferences(
     env,
     session,
-    contractRowsForKommunalContracts,
+    svozKaiserRowsAfterDetail,
     consistencyFields,
     "ContractRow",
-    { maxRows: 150 }
+    { maxRows: COLLECTION_ROUTES_VISTOS_MAX_ROWS }
   );
   if (addressPlaceRowEnrichment.rows.length) {
     const enrichedAddressRowsById = new Map(addressPlaceRowEnrichment.rows.map((row) => [cleanString(row?.Id || row?.RecordId), row]));
@@ -5046,8 +5180,14 @@ async function loadVistosKommunalPreviewData(env) {
     contractRowsUsedForPreview: relevantContractRows.length,
     contractsDetailEnriched: contractDetailEnrichment.diagnostics.succeeded,
     contractsDetailEnrichmentFailed: contractDetailEnrichment.diagnostics.failed,
+    contractsDetailRequested: contractDetailEnrichment.diagnostics.requested,
+    contractsDetailSkipped: contractDetailEnrichment.diagnostics.skipped,
+    contractsDetailCapped: contractDetailEnrichment.diagnostics.capped,
     contractRowsDetailEnriched: detailEnrichment.diagnostics.succeeded,
     contractRowsDetailEnrichmentFailed: detailEnrichment.diagnostics.failed,
+    contractRowsDetailRequested: detailEnrichment.diagnostics.requested,
+    contractRowsDetailSkipped: detailEnrichment.diagnostics.skipped,
+    contractRowsDetailCapped: detailEnrichment.diagnostics.capped,
     addressPlacesRequested: addressPlaceContractEnrichment.diagnostics.requested + addressPlaceRowEnrichment.diagnostics.requested,
     addressPlacesEnriched: addressPlaceContractEnrichment.diagnostics.succeeded + addressPlaceRowEnrichment.diagnostics.succeeded,
     addressPlacesFailed: addressPlaceContractEnrichment.diagnostics.failed + addressPlaceRowEnrichment.diagnostics.failed,

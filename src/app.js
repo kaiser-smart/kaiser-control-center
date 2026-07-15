@@ -52,7 +52,7 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.14";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.15";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRouteGpsPrompt,
@@ -17404,6 +17404,18 @@ const COLLECTION_ROUTES_KOMMUNAL_ISSUE_DEFINITIONS = {
     action: "Doplnit adresu stanoviště ve Vistosu.",
     group: "source"
   },
+  "missing-address-place": {
+    label: "Chybí Adresní místo",
+    priority: "zdrojová data",
+    action: "Doplnit skutečné Adresní místo ve Vistosu; Stanoviště ani technickou adresu nepoužívat jako náhradu.",
+    group: "source"
+  },
+  "address-place-read-incomplete": {
+    label: "Adresní místo se nenačetlo z Vistosu",
+    priority: "technické načtení",
+    action: "Zopakovat read-only načtení KSO; zdrojová data ve Vistosu zatím neměnit.",
+    group: "check"
+  },
   "incomplete-address-place": {
     label: "Neúplné adresní místo",
     priority: "zdrojová data",
@@ -17952,6 +17964,12 @@ function collectionRoutesKommunalRouteDraftRows(metadata = {}) {
   }
 
   const blockingIssueTypes = new Set([
+    "missing-address-place",
+    "address-place-read-incomplete",
+    "incomplete-address-place",
+    "address-place-missing-number",
+    "address-place-possible-typo",
+    "address-place-loading-address-mismatch",
     "non-route-contract-row",
     "item-not-collection-mappable",
     "unknown-waste-type",
