@@ -1,4 +1,4 @@
-export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-15-collection-route-test-incidents";
+export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-15-collection-route-test-incident-workflow";
 
 export const SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE = [
   "SVOZOVÉ TRASY / GPS STANOVIŠTĚ",
@@ -20,7 +20,7 @@ export const SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE = [
   "Když uživatel řekne nelze se dostat do firmy, nepřístupná firma, nádoby jsou zaskládané nebo podobně, zavolej prepare_collection_route_test_incident s incidentType site_inaccessible.",
   "Pro tyto záměry nikdy nevolej get_driver_report_context, show_driver_vehicle_picker ani get_driver_vehicle_picker_selection a nikdy se neptej na vozidlo nebo SPZ.",
   "prepare_collection_route_test_incident pouze otevře správný TEST formulář. Nic neukládá, neodesílá e-mail, SMS ani RCS, nekontaktuje zákazníka nebo dispečink a nemění trasu.",
-  "Fotografie a velké finální fyzické klepnutí člověka v KSO jsou vždy povinné.",
+  "Fotografie, její uložení a případné následné odeslání chráněného TEST e-mailu mají v KSO samostatná fyzická potvrzení člověka. Hlas nesmí potvrdit ani jeden krok.",
   "Když výsledek vrátí incidentPrepared true a finalTapRequired true, řekni stručně answerText a nikdy netvrď, že je hlášení uložené nebo odeslané.",
   "Při jiném stavu přečti stručně answerText z výsledku a nevymýšlej náhradní krok."
 ].join(" ");

@@ -1492,12 +1492,113 @@ export async function sendCollectionRouteTestEmail(env, {
   });
 }
 
+function collectionRouteIncidentParagraphs(value) {
+  return cleanString(value)
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p style="margin:0 0 14px;">${htmlEscape(paragraph).replaceAll("\n", "<br>")}</p>`)
+    .join("");
+}
+
+function protectedCollectionRouteIncidentRecipient(env, requestedTo) {
+  const protectedTo = cleanString(env.COLLECTION_ROUTES_TEST_EMAIL_TO).toLowerCase();
+  const requested = cleanString(requestedTo).toLowerCase();
+  if (!protectedTo || !requested || requested !== protectedTo) {
+    return {
+      ok: false,
+      recipient: "",
+      errorMessage: "TEST incident lze odeslat pouze na chráněný COLLECTION_ROUTES_TEST_EMAIL_TO."
+    };
+  }
+  return { ok: true, recipient: cleanString(env.COLLECTION_ROUTES_TEST_EMAIL_TO), errorMessage: "" };
+}
+
+function collectionRouteIncidentEmailHtml({
+  subject,
+  body,
+  logicalRecipientName,
+  logicalRecipientEmail,
+  incidentLabel,
+  stationName,
+  address,
+  workflowLabel
+}) {
+  return `
+    <!doctype html>
+    <html lang="cs">
+      <head><meta charset="utf-8"><title>${htmlEscape(subject)}</title></head>
+      <body style="font-family:Arial,sans-serif;color:#1f2921;line-height:1.55;background:#f5f7f3;margin:0;padding:20px;">
+        <main style="max-width:680px;margin:0 auto;padding:26px;background:#fff;border:2px solid #a92020;border-radius:16px;">
+          <p style="display:inline-block;margin:0 0 18px;padding:7px 11px;border-radius:999px;background:#a92020;color:#fff;font-weight:700;">CHRÁNĚNÝ TEST · NEJDE SKUTEČNÉMU ZÁKAZNÍKOVI ANI DISPEČERCE</p>
+          <h1 style="font-size:24px;margin:0 0 16px;">${htmlEscape(incidentLabel || "TEST svozový incident")}</h1>
+          ${collectionRouteIncidentParagraphs(body)}
+          <div style="margin-top:22px;padding:14px;border-radius:12px;background:#f0f6e9;">
+            <strong>Audit TESTU</strong>
+            <dl style="margin:10px 0 0;">
+              <dt style="font-weight:700;">Logický příjemce</dt><dd>${htmlEscape(logicalRecipientName || "neuvedeno")}${logicalRecipientEmail ? ` · ${htmlEscape(logicalRecipientEmail)}` : ""}</dd>
+              <dt style="font-weight:700;">Stanoviště</dt><dd>${htmlEscape(stationName || "neuvedeno")}</dd>
+              <dt style="font-weight:700;">Adresa</dt><dd>${htmlEscape(address || "neuvedeno")}</dd>
+              <dt style="font-weight:700;">Výsledek workflow</dt><dd>${htmlEscape(workflowLabel || "TEST")}</dd>
+            </dl>
+          </div>
+          <p style="margin:18px 0 0;color:#5b665f;font-size:13px;">SMS a RCS jsou v tomto TESTU technicky vypnuté. Případná fotografie je přiložená pouze pro ověření tabletového postupu.</p>
+        </main>
+      </body>
+    </html>
+  `;
+}
+
+export async function sendCollectionRouteIncidentDispatcherTestEmail(env, input = {}) {
+  const recipient = protectedCollectionRouteIncidentRecipient(env, input.to);
+  if (!recipient.ok) return { status: "skipped", errorMessage: recipient.errorMessage };
+  const subject = cleanString(input.subject).startsWith("[TEST")
+    ? cleanString(input.subject)
+    : `[TEST DISPEČINK] ${cleanString(input.subject || "Hlášení ze stanoviště")}`;
+  const messagePreview = `[TEST incident] ${cleanString(input.incidentLabel)} · ${cleanString(input.stationName)} · logický příjemce ${cleanString(input.logicalRecipientName)}.`;
+  return sendEmail(env, {
+    type: "collection_route_incident_dispatcher_test_email",
+    to: recipient.recipient,
+    subject,
+    html: collectionRouteIncidentEmailHtml({ ...input, subject }),
+    relatedEntityId: cleanString(input.workflowId),
+    recipientName: "Chráněný příjemce TESTU svozu",
+    fromName: "Kaiser servis · TEST incident",
+    moduleId: "collection-routes",
+    relatedEntityType: "collection_route_test_incident_workflow",
+    messagePreview,
+    attachments: Array.isArray(input.attachments) ? input.attachments : []
+  });
+}
+
+export async function sendCollectionRouteIncidentCustomerTestEmail(env, input = {}) {
+  const recipient = protectedCollectionRouteIncidentRecipient(env, input.to);
+  if (!recipient.ok) return { status: "skipped", errorMessage: recipient.errorMessage };
+  const subject = cleanString(input.subject).startsWith("[TEST")
+    ? cleanString(input.subject)
+    : `[TEST SVOZ] ${cleanString(input.subject || "Informace ke svozu")}`;
+  const messagePreview = `[TEST zákaznická zpráva] ${cleanString(input.stationName)} · logický příjemce ${cleanString(input.logicalRecipientName)}.`;
+  return sendEmail(env, {
+    type: cleanString(input.type || "collection_route_incident_customer_test_email"),
+    to: recipient.recipient,
+    subject,
+    html: collectionRouteIncidentEmailHtml({ ...input, subject }),
+    relatedEntityId: cleanString(input.workflowId),
+    recipientName: "Chráněný příjemce TESTU svozu",
+    fromName: "Kaiser servis · TEST svoz",
+    moduleId: "collection-routes",
+    relatedEntityType: "collection_route_test_incident_workflow",
+    messagePreview,
+    attachments: Array.isArray(input.attachments) ? input.attachments : []
+  });
+}
+
 export const __test = {
   emailRecipients,
   buildDriverPartOrderEmailPreview,
+  collectionRouteIncidentEmailHtml,
   driverPartOrderEmailOffers,
   driverPartOrderEmailReadiness,
   parseDriverPartOffers,
+  protectedCollectionRouteIncidentRecipient,
   renderDriverPartOrderEmail,
   sendGridFailureMessage
 };

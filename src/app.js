@@ -52,7 +52,7 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.13";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.14";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRouteGpsPrompt,
@@ -1376,6 +1376,9 @@ const collectionRoutesPilotState = {
   testIncidentMessage: "",
   testIncidentError: "",
   testIncidentDraft: null,
+  testIncidentReplyPending: "",
+  testIncidentReplyMessage: "",
+  testIncidentReplyError: "",
   testTabletOpen: false,
   testTabletMapNode: null,
   myDailyRouteLoaded: false,
@@ -21691,7 +21694,7 @@ function collectionRoutesTestTabletEntryCard() {
       <div>
         <span>Polní TEST · GPS · hlasová Šarlota</span>
         <h4 id="collection-routes-test-tablet-entry-title">TEST ŘIDIČSKÉHO TABLETU</h4>
-        <p>Stacionární zkouška jediného bodu bez řidiče, auta, jízdy a zákaznických zpráv.</p>
+        <p>Stacionární zkouška jediného bodu bez řidiče, auta a jízdy; případný e-mail míří jen na chráněný TEST kontakt.</p>
         <small>Polní bod: Firma test 501 · Trnkova 3052/137, 628 00 Brno</small>
         <strong>${escapeHtml(collectionRoutesTestTabletNextLabel())}</strong>
         ${routeMeta}
@@ -22341,26 +22344,157 @@ function collectionRoutesTestIncidentTypeLabel(type) {
   return COLLECTION_ROUTES_TEST_INCIDENT_TYPES[String(type || "").trim()] || "TEST hlášení";
 }
 
+function collectionRoutesTestIncidentBranchLabel(branch) {
+  if (branch === "route-within-24h") return "Náhradní bezplatný svoz do 24 hodin";
+  if (branch === "next-standard-pickup") return "Další standardní svoz + připomínka";
+  return "Předání dostupné dispečerce";
+}
+
+function collectionRoutesTestIncidentWorkflowEffect(preview = {}) {
+  const plan = preview.plan || preview;
+  if (plan.branch === "route-within-24h") {
+    return `TEST overlay zařadí mimořádný bezplatný bod pro ${plan.candidate?.vehicleLabel || plan.candidate?.vehicleRegistration || "jiný vůz"} přibližně ${formatDateTime(plan.candidate?.etaAt)}. Ostrá trasa se nezmění.`;
+  }
+  if (plan.branch === "next-standard-pickup") {
+    return `Do 24 hodin není vhodná TEST trasa. Další standardní svoz je ${formatDateTime(plan.nextStandardPickupAt)}; živé pravidlo připomínky je 30 minut předem. Pro Tomášův TEST poběží zrychlená připomínka ${formatDateTime(plan.testReminderDueAt)}.`;
+  }
+  return "Fotografie a popis se předají vybrané dostupné dispečerce. Žádná trasa se automaticky nezmění.";
+}
+
 function collectionRoutesTestIncidentModal(run, stop) {
   const draft = collectionRoutesPilotState.testIncidentDraft;
   if (!draft || !run || !stop) return "";
   const typeLabel = collectionRoutesTestIncidentTypeLabel(draft.type);
   const pending = collectionRoutesPilotState.testIncidentPending;
   const hasPhoto = Boolean(draft.photo && draft.previewUrl);
+  const preview = draft.workflowPreview || null;
+  const workflow = draft.workflow || null;
+
+  if (workflow) {
+    const emailStatus = workflow.dispatcherEmailStatus !== "not-required"
+      ? workflow.dispatcherEmailStatus
+      : workflow.customerEmailStatus;
+    const sent = emailStatus === "sent";
+    return `
+      <div class="collection-routes-test-incident-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-result-title">
+        <div class="collection-routes-test-incident-modal__card collection-routes-test-incident-modal__card--result">
+          <header>
+            <div>
+              <span>TEST hlášení · výsledek</span>
+              <h4 id="collection-routes-test-incident-result-title">${escapeHtml(typeLabel)}</h4>
+              <p>${escapeHtml(stop.stationName || stop.customerName || "Firma test 501")} · ${escapeHtml(stop.addressText || "Trnkova 3052/137, Brno")}</p>
+            </div>
+            <button type="button" data-collection-routes-test-incident-close ${collectionRoutesPilotState.testIncidentReplyPending ? "disabled" : ""}>Zavřít</button>
+          </header>
+          <div class="collection-routes-test-incident-result ${sent ? "is-success" : "is-error"}">
+            <strong>${sent ? "TEST workflow je dokončený" : "TEST e-mail se nepodařilo dokončit"}</strong>
+            <span>${sent ? "SendGrid přijal zprávu pouze pro chráněný TEST kontakt." : escapeHtml(workflow.lastError || "Výsledek čeká na kontrolu.")}</span>
+          </div>
+          <div class="collection-routes-test-incident-result__facts">
+            <article><span>Dostupná dispečerka</span><strong>${escapeHtml(workflow.dispatcher?.name || "nenalezena")}</strong><small>${escapeHtml(workflow.dispatcher?.availability || "")}</small></article>
+            <article><span>Rozhodnutí Autopilota</span><strong>${escapeHtml(collectionRoutesTestIncidentBranchLabel(workflow.recoveryBranch))}</strong><small>Deterministický TEST výpočet, ne rozhodnutí AI</small></article>
+            <article><span>Skutečný příjemce</span><strong>Chráněný TEST e-mail</strong><small>Žádný zákazník ani dispečerka nebyli kontaktováni</small></article>
+            <article><span>Kanály</span><strong>E-mail: ${escapeHtml(emailStatus)}</strong><small>SMS vypnuta · RCS vypnuto</small></article>
+          </div>
+          <div class="collection-routes-test-incident-modal__review">
+            <strong>${escapeHtml(collectionRoutesTestIncidentBranchLabel(workflow.recoveryBranch))}</strong>
+            <span>${escapeHtml(collectionRoutesTestIncidentWorkflowEffect(workflow))}</span>
+            ${workflow.recoveryStop ? `<small>TEST bod ${escapeHtml(workflow.recoveryStop.status)} · zdarma · pouze overlay</small>` : ""}
+            ${workflow.reminderStatus !== "not-required" ? `<small>Připomínka: ${escapeHtml(workflow.reminderStatus)}</small>` : ""}
+          </div>
+          ${draft.type === "site_inaccessible" && sent ? `
+            <section class="collection-routes-test-incident-replies" aria-labelledby="collection-routes-test-incident-replies-title">
+              <header>
+                <strong id="collection-routes-test-incident-replies-title">TEST serverové komunikace</strong>
+                <span>Každé tlačítko je fyzické potvrzení dalšího chráněného TEST e-mailu.</span>
+              </header>
+              ${collectionRoutesPilotState.testIncidentReplyMessage ? `<p class="module-feedback__notice" role="status">${escapeHtml(collectionRoutesPilotState.testIncidentReplyMessage)}</p>` : ""}
+              ${collectionRoutesPilotState.testIncidentReplyError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.testIncidentReplyError)}</p>` : ""}
+              <div>
+                <button type="button" data-collection-routes-test-incident-reply="calm" ${collectionRoutesPilotState.testIncidentReplyPending ? "disabled" : ""}>
+                  <span>${collectionRoutesPilotState.testIncidentReplyPending === "calm" ? "ZPRACOVÁVÁM…" : "KLIDNÁ ODPOVĚĎ"}</span>
+                  <small>AI připraví milou TEST odpověď</small>
+                </button>
+                <button type="button" class="is-escalation" data-collection-routes-test-incident-reply="heated" ${collectionRoutesPilotState.testIncidentReplyPending ? "disabled" : ""}>
+                  <span>${collectionRoutesPilotState.testIncidentReplyPending === "heated" ? "PŘEDÁVÁM…" : "VYHROCENÁ ODPOVĚĎ"}</span>
+                  <small>Bez auto-odpovědi okamžitě dispečerce</small>
+                </button>
+              </div>
+            </section>
+          ` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  if (preview) {
+    const canConfirm = preview.canConfirm === true;
+    return `
+      <div class="collection-routes-test-incident-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-confirm-title">
+        <form class="collection-routes-test-incident-modal__card collection-routes-test-incident-modal__card--confirm" data-collection-routes-test-incident-workflow-form>
+          <header>
+            <div>
+              <span>TEST hlášení · krok 3 ze 3</span>
+              <h4 id="collection-routes-test-incident-confirm-title">Zkontroluj účinek</h4>
+              <p>${escapeHtml(typeLabel)} · ${escapeHtml(stop.stationName || stop.customerName || "Firma test 501")}</p>
+            </div>
+            <button type="button" data-collection-routes-test-incident-close ${pending ? "disabled" : ""}>Zavřít</button>
+          </header>
+          <div class="collection-routes-test-incident-modal__safety">
+            <strong>Skutečný zákazník ani dispečerka zprávu nedostanou</strong>
+            <span>Po potvrzení odejde právě 1 e-mail jen na chráněný TEST kontakt. SMS a RCS jsou vypnuté. Limit celého polního TESTU je 6 e-mailových pokusů; zbývá ${escapeHtml(preview.emailGuard?.remaining ?? 0)}.</span>
+          </div>
+          <img class="collection-routes-test-incident-modal__preview" src="${escapeHtml(draft.incident?.photoUrl || draft.previewUrl)}" alt="Uložená TEST fotografie ${escapeHtml(typeLabel.toLowerCase())}">
+          <div class="collection-routes-test-incident-confirmation">
+            <article>
+              <span>Logický příjemce</span>
+              <strong>${escapeHtml(preview.logicalRecipient?.name || "neuvedeno")}</strong>
+              <small>Ve skutečnosti chráněný TEST e-mail</small>
+            </article>
+            <article>
+              <span>Dostupná dispečerka</span>
+              <strong>${escapeHtml(preview.dispatcher?.name || "nenalezena")}</strong>
+              <small>${escapeHtml(preview.dispatcher?.availability || "")}</small>
+            </article>
+            <article>
+              <span>Autopilot</span>
+              <strong>${escapeHtml(collectionRoutesTestIncidentBranchLabel(preview.plan?.branch))}</strong>
+              <small>AI nemění tento výpočet</small>
+            </article>
+          </div>
+          <div class="collection-routes-test-incident-modal__review">
+            <strong>Co se po potvrzení stane</strong>
+            <span>${escapeHtml(collectionRoutesTestIncidentWorkflowEffect(preview))}</span>
+            <small>${escapeHtml(preview.plan?.reason || "")}</small>
+          </div>
+          <div class="collection-routes-test-incident-message-preview">
+            <strong>${escapeHtml(preview.messagePreview?.subject || "Náhled zprávy")}</strong>
+            <p>${escapeHtml(preview.messagePreview?.body || "")}</p>
+          </div>
+          ${preview.blockers?.length ? `<p class="module-feedback__error" role="alert">${escapeHtml(preview.blockers.join(" "))}</p>` : ""}
+          <button class="collection-routes-test-incident-submit collection-routes-test-incident-submit--confirm" type="submit" ${pending || !canConfirm ? "disabled" : ""}>
+            <span>${pending === "workflow" ? "ODESÍLÁM CHRÁNĚNÝ TEST…" : "POTVRDIT TEST E-MAIL A PLÁN"}</span>
+            <small>Velké finální fyzické klepnutí člověka</small>
+          </button>
+        </form>
+      </div>
+    `;
+  }
+
   return `
     <div class="collection-routes-test-incident-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-modal-title">
       <form class="collection-routes-test-incident-modal__card ${hasPhoto ? "is-review" : ""}" data-collection-routes-test-incident-form>
         <header>
           <div>
-            <span>TEST hlášení · krok ${hasPhoto ? "2 ze 2" : "1 ze 2"}</span>
+              <span>TEST hlášení · krok ${hasPhoto ? "2 ze 3" : "1 ze 3"}</span>
             <h4 id="collection-routes-test-incident-modal-title">${escapeHtml(typeLabel)}</h4>
             <p>${escapeHtml(stop.stationName || stop.customerName || "Firma test 501")} · ${escapeHtml(stop.addressText || "Trnkova 3052/137, Brno")}</p>
           </div>
           <button type="button" data-collection-routes-test-incident-close ${pending ? "disabled" : ""}>Zavřít</button>
         </header>
         <div class="collection-routes-test-incident-modal__safety">
-          <strong>Jen bezpečný TEST uvnitř KSO</strong>
-          <span>Neodešle se e-mail, SMS ani RCS. Zákazník nebude kontaktován a trasa se nezmění.</span>
+          <strong>Fotografie se nejdřív uloží jen do TESTU</strong>
+          <span>Tento krok nic neodešle. Až potom uvidíš přesný plán, dostupnou dispečerku a samostatné velké finální potvrzení chráněného TEST e-mailu.</span>
         </div>
         ${hasPhoto ? `
           <img class="collection-routes-test-incident-modal__preview" src="${escapeHtml(draft.previewUrl)}" alt="Náhled TEST fotografie ${escapeHtml(typeLabel.toLowerCase())}">
@@ -22368,19 +22502,32 @@ function collectionRoutesTestIncidentModal(run, stop) {
             <span>Krátká poznámka (nepovinná)</span>
             <textarea name="note" maxlength="500" rows="3" placeholder="Například: nádoba je přeplněná vedle vjezdu">${escapeHtml(draft.note || "")}</textarea>
           </label>
+          ${draft.type === "site_inaccessible" ? `
+            <fieldset class="collection-routes-test-incident-scenarios">
+              <legend>Co má Tomáš v této zkoušce ověřit?</legend>
+              <label>
+                <input type="radio" name="testScenario" value="route_within_24h" ${draft.testScenario !== "next_standard_pickup" ? "checked" : ""}>
+                <span><strong>TEST A · jedeme kolem do 24 h</strong><small>Naplánuje zítřejší bezplatný TEST overlay.</small></span>
+              </label>
+              <label>
+                <input type="radio" name="testScenario" value="next_standard_pickup" ${draft.testScenario === "next_standard_pickup" ? "checked" : ""}>
+                <span><strong>TEST B · nejedeme kolem do 24 h</strong><small>Omluva + připomínka před standardním svozem.</small></span>
+              </label>
+            </fieldset>
+          ` : ""}
           <label class="collection-routes-test-incident-camera collection-routes-test-incident-camera--secondary">
             <span>VYFOTIT ZNOVU</span>
             <small>Nahradí pouze tento náhled</small>
             <input type="file" accept="image/*" capture="environment" data-collection-routes-test-incident-photo ${pending ? "disabled" : ""}>
           </label>
           <div class="collection-routes-test-incident-modal__review">
-            <strong>Po klepnutí se uloží:</strong>
+            <strong>Po tomto klepnutí se připraví:</strong>
             <span>${escapeHtml(typeLabel)}, fotografie, čas, stanoviště a skutečný přihlášený tester.</span>
-            <small>Stav zůstane „Uloženo jen v TESTU“.</small>
+            <small>Ještě se nic neodešle. Následuje kontrola účinku.</small>
           </div>
           <button class="collection-routes-test-incident-submit" type="submit" ${pending ? "disabled" : ""}>
-            <span>${pending === "save" ? "UKLÁDÁM TEST…" : "ODESLAT TESTOVACÍ HLÁŠENÍ"}</span>
-            <small>Velké finální klepnutí člověka</small>
+            <span>${pending === "save" ? "UKLÁDÁM FOTOGRAFII…" : "PŘIPRAVIT TEST HLÁŠENÍ"}</span>
+            <small>Uloží fotografii, nic ještě neodešle</small>
           </button>
         ` : `
           <div class="collection-routes-test-incident-modal__instruction">
@@ -22412,7 +22559,7 @@ function collectionRoutesTestIncidentPanel(run, stop) {
           <h4 id="collection-routes-test-incidents-title">Co je na stanovišti?</h4>
           <p>Klepni na jeden velký typ problému. Hlasem můžeš říct například „Šarloto, přeplněná nádoba“.</p>
         </div>
-        <b>BEZ ODESLÁNÍ ZÁKAZNÍKOVI</b>
+        <b>CHRÁNĚNÝ TEST E-MAIL</b>
       </header>
       ${collectionRoutesPilotState.testIncidentMessage ? `<p class="module-feedback__notice" role="status">${escapeHtml(collectionRoutesPilotState.testIncidentMessage)}</p>` : ""}
       ${collectionRoutesPilotState.testIncidentError && !collectionRoutesPilotState.testIncidentDraft ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.testIncidentError)}</p>` : ""}
@@ -22420,14 +22567,16 @@ function collectionRoutesTestIncidentPanel(run, stop) {
         ${Object.entries(COLLECTION_ROUTES_TEST_INCIDENT_TYPES).map(([type, label]) => `
           <button type="button" data-collection-routes-test-incident-open="${escapeHtml(type)}" ${collectionRoutesPilotState.testIncidentPending ? "disabled" : ""}>
             <span>${escapeHtml(label.toUpperCase())}</span>
-            <small>Vyfotit → zkontrolovat → uložit TEST</small>
+            <small>Vyfotit → zkontrolovat → potvrdit účinek</small>
           </button>
         `).join("")}
       </div>
       <div class="collection-routes-test-incidents__truth">
         <span>✓ Fotografie v chráněném KSO</span>
-        <span>× Žádný e-mail, SMS ani RCS</span>
-        <span>× Žádná změna trasy</span>
+        <span>✓ E-mail jen chráněnému TEST příjemci</span>
+        <span>× Žádný skutečný zákazník ani dispečerka</span>
+        <span>× Žádná ostrá trasa ani Vistos</span>
+        <span>× SMS a RCS vypnuté</span>
       </div>
       ${collectionRoutesPilotState.testIncidentsLoading ? `<p class="collection-routes-test-incidents__loading">Načítám uložená TEST hlášení…</p>` : ""}
       ${incidents.length ? `
@@ -22438,7 +22587,7 @@ function collectionRoutesTestIncidentPanel(run, stop) {
               <article>
                 <div>
                   <strong>${escapeHtml(incident.typeLabel || collectionRoutesTestIncidentTypeLabel(incident.type))}</strong>
-                  <span>Uloženo jen v TESTU · ${escapeHtml(formatDateTime(incident.createdAt))}</span>
+                  <span>${incident.workflow ? escapeHtml(collectionRoutesTestIncidentBranchLabel(incident.workflow.recoveryBranch)) : "Fotografie uložena · čeká na potvrzení workflow"} · ${escapeHtml(formatDateTime(incident.createdAt))}</span>
                   <small>${escapeHtml(incident.createdByName || "Přihlášený tester")}${incident.note ? ` · ${escapeHtml(incident.note)}` : ""}</small>
                 </div>
                 <a href="${escapeHtml(incident.photoUrl)}" target="_blank" rel="noopener">Zobrazit fotografii</a>
@@ -38060,6 +38209,9 @@ function resetCollectionDailyRoutesForScope() {
   collectionRoutesPilotState.testIncidentPending = "";
   collectionRoutesPilotState.testIncidentMessage = "";
   collectionRoutesPilotState.testIncidentError = "";
+  collectionRoutesPilotState.testIncidentReplyPending = "";
+  collectionRoutesPilotState.testIncidentReplyMessage = "";
+  collectionRoutesPilotState.testIncidentReplyError = "";
   clearCollectionRoutesTestIncidentDraft();
 }
 
@@ -38276,6 +38428,9 @@ function clearCollectionRoutesTestIncidentDraft() {
     }
   }
   collectionRoutesPilotState.testIncidentDraft = null;
+  collectionRoutesPilotState.testIncidentReplyPending = "";
+  collectionRoutesPilotState.testIncidentReplyMessage = "";
+  collectionRoutesPilotState.testIncidentReplyError = "";
 }
 
 function collectionRoutesTestIncidentContext() {
@@ -38307,20 +38462,24 @@ function openCollectionRoutesTestIncident(type, options = {}) {
     photo: null,
     previewUrl: "",
     note: "",
+    testScenario: normalizedType === "site_inaccessible" ? "route_within_24h" : "",
+    incident: null,
+    workflowPreview: null,
+    workflow: null,
     idempotencyKey: collectionDailyRouteIdempotencyKey("test-incident")
   };
   collectionRoutesPilotState.testIncidentError = "";
   collectionRoutesPilotState.testIncidentMessage = "";
   if (options.speak !== false) {
     const label = collectionRoutesTestIncidentTypeLabel(normalizedType).toLowerCase();
-    speakCollectionRoutesTestGps(`Rozumím. Otevřela jsem TEST hlášení ${label}. Vyfoť stav a potom hlášení odešli velkým tlačítkem.`);
+    speakCollectionRoutesTestGps(`Rozumím. Otevřela jsem TEST hlášení ${label}. Vyfoť stav, klepni na velké tlačítko Připravit testovací hlášení a potom potvrď účinek dalším velkým tlačítkem.`);
   }
   if (options.renderAfter !== false) render();
   return true;
 }
 
 function closeCollectionRoutesTestIncident() {
-  if (collectionRoutesPilotState.testIncidentPending) return;
+  if (collectionRoutesPilotState.testIncidentPending || collectionRoutesPilotState.testIncidentReplyPending) return;
   clearCollectionRoutesTestIncidentDraft();
   collectionRoutesPilotState.testIncidentError = "";
   render();
@@ -38401,7 +38560,7 @@ async function selectCollectionRoutesTestIncidentPhoto(input) {
     draft.photo = photo;
     draft.previewUrl = URL.createObjectURL(photo);
     collectionRoutesPilotState.testIncidentMessage = "Fotografie je připravená. Zkontroluj náhled a odešli TEST hlášení velkým tlačítkem.";
-    speakCollectionRoutesTestGps("Fotografie je připravená. Zkontroluj ji a potom klepni na velké tlačítko Odeslat testovací hlášení.");
+    speakCollectionRoutesTestGps("Fotografie je připravená. Zkontroluj ji a potom klepni na velké tlačítko Připravit testovací hlášení. Ještě se nic neodešle.");
     vibrateCollectionRoutesTestGps([45, 60, 45]);
   } catch (error) {
     collectionRoutesPilotState.testIncidentError = error.message || "Fotografii se nepodařilo připravit.";
@@ -38416,6 +38575,9 @@ async function saveCollectionRoutesTestIncident(form) {
   const draft = collectionRoutesPilotState.testIncidentDraft;
   if (!draft?.photo || collectionRoutesPilotState.testIncidentPending) return;
   draft.note = String(form?.elements?.note?.value || "").trim().slice(0, 500);
+  if (draft.type === "site_inaccessible") {
+    draft.testScenario = String(form?.elements?.testScenario?.value || "route_within_24h").trim();
+  }
   collectionRoutesPilotState.testIncidentPending = "save";
   collectionRoutesPilotState.testIncidentError = "";
   render();
@@ -38430,16 +38592,104 @@ async function saveCollectionRoutesTestIncident(form) {
     const result = await apiJson("/api/collection-routes/test-incidents", { method: "POST", body });
     const label = result.incident?.typeLabel || collectionRoutesTestIncidentTypeLabel(draft.type);
     const runId = draft.runId;
-    clearCollectionRoutesTestIncidentDraft();
-    collectionRoutesPilotState.testIncidentMessage = `${label}: uloženo jen v TESTU. Nic se neodeslalo zákazníkovi ani dispečinku a trasa se nezměnila.`;
+    draft.incident = result.incident;
+    const workflowResult = await apiJson(`/api/collection-routes/test-incidents/${encodeURIComponent(result.incident.id)}/workflow?testScenario=${encodeURIComponent(draft.testScenario || "")}`);
+    if (workflowResult.workflow) {
+      draft.workflow = workflowResult.workflow;
+      draft.workflowPreview = null;
+    } else {
+      draft.workflowPreview = workflowResult;
+    }
+    draft.photo = null;
+    collectionRoutesPilotState.testIncidentMessage = `${label}: fotografie je bezpečně uložená. Teď zkontroluj přesný účinek a až potom jej potvrď velkým tlačítkem.`;
     await loadCollectionRoutesTestIncidents(runId);
-    speakCollectionRoutesTestGps("Děkuji. TEST hlášení jsem uložila uvnitř KSO. Nic jsem neposlala zákazníkovi ani dispečinku a trasu jsem nezměnila.");
+    speakCollectionRoutesTestGps("Děkuji. Fotografii jsem bezpečně uložila. Teď prosím zkontroluj dostupnou dispečerku, zprávu a plán. Nic jsem ještě neodeslala.");
     vibrateCollectionRoutesTestGps([70, 70, 140]);
   } catch (error) {
-    collectionRoutesPilotState.testIncidentError = error.payload?.error || error.message || "TEST hlášení se nepodařilo uložit.";
+    const detail = error.payload?.error || error.message || "Incidentní TEST se nepodařilo připravit.";
+    collectionRoutesPilotState.testIncidentError = draft.incident
+      ? `Fotografie je uložená, ale náhled účinku se nepodařilo načíst: ${detail}`
+      : detail;
     speakCollectionRoutesTestGps(collectionRoutesPilotState.testIncidentError);
   } finally {
     collectionRoutesPilotState.testIncidentPending = "";
+    render();
+  }
+}
+
+async function confirmCollectionRoutesTestIncidentWorkflow() {
+  const draft = collectionRoutesPilotState.testIncidentDraft;
+  const preview = draft?.workflowPreview;
+  const incidentId = draft?.incident?.id;
+  if (!preview || !incidentId || collectionRoutesPilotState.testIncidentPending) return;
+  collectionRoutesPilotState.testIncidentPending = "workflow";
+  collectionRoutesPilotState.testIncidentError = "";
+  render();
+  try {
+    const result = await apiJson(`/api/collection-routes/test-incidents/${encodeURIComponent(incidentId)}/workflow`, {
+      method: "POST",
+      body: {
+        testScenario: draft.testScenario || "",
+        confirmation: preview.confirmation,
+        idempotencyKey: preview.idempotencyKey
+      }
+    });
+    draft.workflow = result.workflow;
+    draft.workflowPreview = null;
+    collectionRoutesPilotState.testIncidentMessage = `${collectionRoutesTestIncidentTypeLabel(draft.type)}: chráněný TEST workflow dokončen.`;
+    await loadCollectionRoutesTestIncidents(draft.runId);
+    const emailStatus = result.workflow?.dispatcherEmailStatus !== "not-required"
+      ? result.workflow?.dispatcherEmailStatus
+      : result.workflow?.customerEmailStatus;
+    if (emailStatus === "sent") {
+      speakCollectionRoutesTestGps("Hotovo. Chráněný testovací e-mail byl přijatý poskytovatelem. Skutečného zákazníka ani dispečerku jsem nekontaktovala.");
+      vibrateCollectionRoutesTestGps([90, 70, 180]);
+    } else {
+      speakCollectionRoutesTestGps("Testovací e-mail se nepodařilo dokončit. Skutečný zákazník ani dispečerka nebyli kontaktováni.");
+    }
+  } catch (error) {
+    collectionRoutesPilotState.testIncidentError = error.payload?.error || error.message || "Chráněný TEST workflow se nepodařilo potvrdit.";
+    speakCollectionRoutesTestGps(collectionRoutesPilotState.testIncidentError);
+  } finally {
+    collectionRoutesPilotState.testIncidentPending = "";
+    render();
+  }
+}
+
+async function simulateCollectionRoutesTestIncidentReply(kind) {
+  const draft = collectionRoutesPilotState.testIncidentDraft;
+  const incidentId = draft?.incident?.id;
+  if (!incidentId || !draft?.workflow || collectionRoutesPilotState.testIncidentReplyPending) return;
+  const normalizedKind = kind === "heated" ? "heated" : "calm";
+  const reply = normalizedKind === "heated"
+    ? "Tohle je nepřijatelné. Podám stížnost a předám věc právníkovi i médiím."
+    : "Děkuji za informaci. Nádoby budou v domluveném termínu přístupné.";
+  collectionRoutesPilotState.testIncidentReplyPending = normalizedKind;
+  collectionRoutesPilotState.testIncidentReplyMessage = "";
+  collectionRoutesPilotState.testIncidentReplyError = "";
+  render();
+  try {
+    const result = await apiJson(`/api/collection-routes/test-incidents/${encodeURIComponent(incidentId)}/reply`, {
+      method: "POST",
+      body: {
+        reply,
+        confirmation: "confirm-test-customer-reply",
+        idempotencyKey: collectionDailyRouteIdempotencyKey(`test-incident-reply-${normalizedKind}`)
+      }
+    });
+    collectionRoutesPilotState.testIncidentReplyMessage = result.answer || (result.escalationRequired
+      ? "Vyhrocená komunikace byla předaná dispečerce."
+      : "Klidná TEST odpověď byla zpracovaná.");
+    draft.workflow.escalationStatus = result.escalationRequired ? "dispatcher-required-test" : "not-required";
+    speakCollectionRoutesTestGps(result.escalationRequired
+      ? `Komunikaci jsem nepokračovala automaticky a předala jsem ji dispečerce ${result.dispatcherName || "Kaiser"}.`
+      : "Klidnou testovací odpověď jsem připravila a odeslala jen na chráněný testovací kontakt.");
+    vibrateCollectionRoutesTestGps(result.escalationRequired ? [120, 70, 120] : [60, 50, 120]);
+  } catch (error) {
+    collectionRoutesPilotState.testIncidentReplyError = error.payload?.error || error.message || "Simulovanou komunikaci se nepodařilo zpracovat.";
+    speakCollectionRoutesTestGps(collectionRoutesPilotState.testIncidentReplyError);
+  } finally {
+    collectionRoutesPilotState.testIncidentReplyPending = "";
     render();
   }
 }
@@ -38472,8 +38722,8 @@ async function prepareCollectionRoutesTestIncidentFromSarlota(parameters = {}) {
     ok: true,
     status: "incident_ready_for_photo",
     incidentPrepared: true,
-    answerText: `Otevřela jsem TEST hlášení ${label}. Vyfoť stav a potom ho odešli velkým tlačítkem.`,
-    messageForAssistant: "Hlášení je pouze připravené. Nikdy netvrď, že bylo uložené nebo odeslané. Finální zápis vyžaduje fotografii a fyzické klepnutí člověka."
+    answerText: `Otevřela jsem TEST hlášení ${label}. Vyfoť stav, zkontroluj účinek a potom ho potvrď velkým tlačítkem.`,
+    messageForAssistant: "Hlášení je pouze připravené. Nikdy netvrď, že bylo uložené nebo odeslané. Fotografie i následný chráněný TEST e-mail vyžadují samostatné fyzické klepnutí člověka."
   };
 }
 
@@ -45155,6 +45405,9 @@ async function logout() {
   collectionRoutesPilotState.testIncidentPending = "";
   collectionRoutesPilotState.testIncidentMessage = "";
   collectionRoutesPilotState.testIncidentError = "";
+  collectionRoutesPilotState.testIncidentReplyPending = "";
+  collectionRoutesPilotState.testIncidentReplyMessage = "";
+  collectionRoutesPilotState.testIncidentReplyError = "";
   clearCollectionRoutesTestIncidentDraft();
   collectionRoutesPilotState.myDailyRouteLoaded = false;
   collectionRoutesPilotState.myDailyRouteLoading = false;
@@ -48132,6 +48385,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const collectionRoutesTestIncidentWorkflowForm = event.target.closest("[data-collection-routes-test-incident-workflow-form]");
+  if (collectionRoutesTestIncidentWorkflowForm) {
+    event.preventDefault();
+    await confirmCollectionRoutesTestIncidentWorkflow();
+    return;
+  }
+
   const collectionRoutesTestNotificationConfirmForm = event.target.closest("[data-collection-routes-test-notification-confirm-form]");
   if (collectionRoutesTestNotificationConfirmForm) {
     event.preventDefault();
@@ -48530,6 +48790,14 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const collectionRoutesTestIncidentScenario = event.target.closest("[data-collection-routes-test-incident-form] input[name='testScenario']");
+  if (collectionRoutesTestIncidentScenario) {
+    if (collectionRoutesPilotState.testIncidentDraft) {
+      collectionRoutesPilotState.testIncidentDraft.testScenario = collectionRoutesTestIncidentScenario.value || "route_within_24h";
+    }
+    return;
+  }
+
   const collectionRoutesTestIncidentPhoto = event.target.closest("[data-collection-routes-test-incident-photo]");
   if (collectionRoutesTestIncidentPhoto) {
     await selectCollectionRoutesTestIncidentPhoto(collectionRoutesTestIncidentPhoto);
@@ -49622,6 +49890,15 @@ document.addEventListener("click", async (event) => {
   if (collectionRoutesTestIncidentClose) {
     event.preventDefault();
     if (!collectionRoutesTestIncidentClose.disabled) closeCollectionRoutesTestIncident();
+    return;
+  }
+
+  const collectionRoutesTestIncidentReply = event.target.closest("[data-collection-routes-test-incident-reply]");
+  if (collectionRoutesTestIncidentReply) {
+    event.preventDefault();
+    if (!collectionRoutesTestIncidentReply.disabled) {
+      await simulateCollectionRoutesTestIncidentReply(collectionRoutesTestIncidentReply.dataset.collectionRoutesTestIncidentReply || "calm");
+    }
     return;
   }
 

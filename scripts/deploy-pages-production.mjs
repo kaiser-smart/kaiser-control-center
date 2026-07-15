@@ -152,6 +152,7 @@ runVisible("node", ["scripts/collection-routes-test-store.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-readonly-calculator.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-here-map-image.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-test-incidents.test.mjs"]);
+runVisible("node", ["scripts/collection-routes-incident-reminder-runner.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-test-ui.test.mjs"]);
 runVisible("node", ["scripts/elevenlabs-signed-url-options.test.mjs"]);
 runVisible("node", ["scripts/sarlota-collection-route-gps.test.mjs"]);

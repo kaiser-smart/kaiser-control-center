@@ -3,13 +3,36 @@ import { runCollectionRoutesSnapshotAutomation } from "../functions/_lib/collect
 import { runReceivablesInvoiceSyncAutomation } from "../functions/_lib/receivables-invoice-sync-runner.js";
 import { runSelfRepairHourlyMonitor } from "../functions/_lib/self-repair-monitor-runner.js";
 import { SELF_REPAIR_MONITOR_CRON } from "../functions/_lib/self-repair-monitor-config.js";
+import { runCollectionRouteIncidentReminderAutomation } from "../functions/_lib/collection-routes-incident-reminder-runner.js";
 
 const COLLECTION_ROUTES_CRON = "*/15 * * * *";
+const COLLECTION_ROUTE_INCIDENT_REMINDER_CRON = "*/5 * * * *";
 const ABSENCE_CRON = "15 3 * * *";
 
 export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
+      if (controller.cron === COLLECTION_ROUTE_INCIDENT_REMINDER_CRON) {
+        const summary = await runCollectionRouteIncidentReminderAutomation(env, {
+          scheduledTime: controller.scheduledTime,
+          cron: controller.cron,
+          triggeredBy: "cloudflare-cron"
+        });
+        console.log("collection_route_incident_test_reminder.completed", {
+          status: summary.status,
+          checked: summary.checked || 0,
+          sent: summary.sent || 0,
+          failed: summary.failed || 0,
+          skipped: summary.skipped || 0,
+          protectedTestOnly: true,
+          realCustomerCommunication: "disabled",
+          realDispatcherCommunication: "disabled",
+          sms: "disabled",
+          rcs: "disabled"
+        });
+        return;
+      }
+
       if (controller.cron === COLLECTION_ROUTES_CRON) {
         const [summary, receivables] = await Promise.all([
           runCollectionRoutesSnapshotAutomation(env, {
@@ -112,10 +135,20 @@ export default {
   async fetch() {
     return Response.json({
       status: "ready",
-      mode: "read-only-cloud-runner",
+      mode: "safe-cloud-runner",
       manualRun: "disabled",
-      emailSms: "disabled",
+      operationalEmailSms: "disabled",
       operationalRoutes: "disabled",
+      collectionRouteIncidentTestReminders: {
+        cron: COLLECTION_ROUTE_INCIDENT_REMINDER_CRON,
+        mode: "protected-test-email-only",
+        actualRecipient: "COLLECTION_ROUTES_TEST_EMAIL_TO",
+        maxEmailAttempts: 6,
+        realCustomerCommunication: "disabled",
+        realDispatcherCommunication: "disabled",
+        sms: "disabled",
+        rcs: "disabled"
+      },
       collectionRoutes: {
         cron: COLLECTION_ROUTES_CRON,
         mode: "read-only-vistos-snapshot"
@@ -143,7 +176,7 @@ export default {
         deployment: "disabled",
         notification: "disabled"
       },
-      message: "Cloud runner čte Trasy svozu, ukládá staging-only Vistos faktury Pohledávek, eviduje dry-run automatizace a provádí read-only kontrolu Samooprav."
+      message: "Cloud runner čte Trasy svozu, hlídá chráněné TEST připomínky incidentů, ukládá staging-only Vistos faktury Pohledávek, eviduje dry-run automatizace a provádí read-only kontrolu Samooprav."
     });
   }
 };
