@@ -78,6 +78,11 @@ class FakeD1 {
         .reverse()
         .find((row) => row.message_id === bindings[0] && row.actor === bindings[1] && row.result === "waiting_confirmation") || null;
     }
+    if (sql.includes("FROM data_box_plus_action_log") && sql.includes("result = 'needs_input'")) {
+      return [...this.actionLogs]
+        .reverse()
+        .find((row) => row.message_id === bindings[0] && row.actor === bindings[1] && row.result === "needs_input") || null;
+    }
     if (sql.includes("FROM data_box_plus_action_log") && sql.includes("WHERE id = ?")) {
       return this.actionLogs.find((row) => (
         row.id === bindings[0]
@@ -266,39 +271,54 @@ globalThis.fetch = async (url, options = {}) => {
 };
 
 try {
-  const proposal = await executeDataBoxPlusMessageInstruction(env, database.message.id, currentUser, {
+  const markedDone = await executeDataBoxPlusMessageInstruction(env, database.message.id, currentUser, {
     instruction: "označ zprávu jako vyřízenou"
   });
-  assert.equal(proposal.status, "waiting_confirmation");
-  assert.equal(proposal.action.requiresConfirmation, true);
-  assert.equal(database.message.status, "Nová");
-  assert.equal(database.messageMutationCount, 0);
-  assert.equal(openAiRequestCount, 1);
-
-  const confirmationId = proposal.action.confirmationId;
-  assert.ok(confirmationId);
-  const confirmed = await executeDataBoxPlusMessageInstruction(env, database.message.id, currentUser, {
-    instruction: "ano",
-    confirmationId
-  });
-  assert.equal(confirmed.status, "done");
-  assert.equal(confirmed.action.outcome, "done");
+  assert.equal(markedDone.status, "done");
+  assert.equal(markedDone.action.requiresConfirmation, false);
   assert.equal(database.message.status, "Vyřešeno");
   assert.equal(database.messageMutationCount, 1);
-  assert.equal(database.rules.length, 1);
-  assert.equal(database.rules[0].confirmed_count, 1);
-  assert.equal(openAiRequestCount, 1);
+  assert.match(markedDone.notice, /^Hotovo\. Zpráva byla označena jako vyřízená\.$/);
+  assert.equal(database.actionLogs.at(-1).result, "done");
+  assert.match(database.actionLogs.at(-1).audit_note, /Systém provedl/);
+  assert.equal(openAiRequestCount, 0);
 
-  await assert.rejects(
-    () => executeDataBoxPlusMessageInstruction(env, database.message.id, currentUser, {
-      instruction: "ano",
-      confirmationId
-    }),
-    (error) => error instanceof DataBoxPlusStoreError
-      && error.code === "data_box_plus_confirmation_already_used"
+  const archiveDatabase = new FakeD1();
+  const archived = await executeDataBoxPlusMessageInstruction(
+    { ...env, SMART_ODPADY_DB: archiveDatabase },
+    archiveDatabase.message.id,
+    currentUser,
+    { instruction: "archivuj jako informativní" }
   );
-  assert.equal(database.messageMutationCount, 1);
-  assert.equal(openAiRequestCount, 1);
+  assert.equal(archived.status, "done");
+  assert.equal(archiveDatabase.message.status, "Archivováno");
+  assert.equal(archiveDatabase.message.archive_status, "archived");
+  assert.equal(archiveDatabase.messageMutationCount, 1);
+  assert.match(archived.notice, /^Hotovo\. Zpráva byla archivována jako informativní\.$/);
+  assert.equal(openAiRequestCount, 0);
+
+  const handoffDatabase = new FakeD1();
+  const handoffQuestion = await executeDataBoxPlusMessageInstruction(
+    { ...env, SMART_ODPADY_DB: handoffDatabase },
+    handoffDatabase.message.id,
+    currentUser,
+    { instruction: "předej kolegovi" }
+  );
+  assert.equal(handoffQuestion.status, "needs_input");
+  assert.equal(handoffDatabase.messageMutationCount, 0);
+  assert.equal(handoffQuestion.notice, "Chybí adresát. Komu mám zprávu interně předat?");
+  assert.equal(openAiRequestCount, 0);
+  const handedOff = await executeDataBoxPlusMessageInstruction(
+    { ...env, SMART_ODPADY_DB: handoffDatabase },
+    handoffDatabase.message.id,
+    currentUser,
+    { instruction: "Milan Gaží" }
+  );
+  assert.equal(handedOff.status, "done");
+  assert.equal(handoffDatabase.message.status, "Předáno kolegovi");
+  assert.equal(handoffDatabase.message.assigned_to, "Milan Gaží");
+  assert.equal(handoffDatabase.messageMutationCount, 1);
+  assert.equal(openAiRequestCount, 0);
 
   const noActionDatabase = new FakeD1();
   const noActionResult = await executeDataBoxPlusMessageInstruction(
@@ -312,7 +332,7 @@ try {
   assert.equal(noActionResult.action.requiresConfirmation, false);
   assert.equal(noActionResult.notice, "Rozumím. Nic neprovedu.");
   assert.equal(noActionDatabase.messageMutationCount, 0);
-  assert.equal(openAiRequestCount, 1);
+  assert.equal(openAiRequestCount, 0);
 
   const orphanYesDatabase = new FakeD1();
   currentOpenAiPlan = {
@@ -567,20 +587,16 @@ try {
       dueDate: ""
     }
   };
-  const failedProposal = await executeDataBoxPlusMessageInstruction(failedEnv, failedDatabase.message.id, currentUser, {
-    instruction: "označ zprávu jako vyřízenou"
-  });
   await assert.rejects(
     () => executeDataBoxPlusMessageInstruction(failedEnv, failedDatabase.message.id, currentUser, {
-      instruction: "ano",
-      confirmationId: failedProposal.action.confirmationId
+      instruction: "označ zprávu jako vyřízenou"
     }),
     (error) => error instanceof DataBoxPlusStoreError
-      && error.code === "data_box_plus_confirmation_failed"
+      && error.code === "data_box_plus_store_failed"
   );
   assert.equal(failedDatabase.rules.length, 0);
-  assert.equal(failedDatabase.actionLogs.some((row) => row.result === "failed"), true);
-  assert.equal(openAiRequestCount, 8);
+  assert.equal(failedDatabase.actionLogs.some((row) => row.result === "done"), false);
+  assert.equal(openAiRequestCount, 6);
 } finally {
   globalThis.fetch = originalFetch;
 }

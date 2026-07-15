@@ -99,6 +99,19 @@ const legacyMissingRecipient = dataBoxPlusHistoryChatEntries([{
 assert.equal(legacyMissingRecipient[1].text, "Chybí adresát. Komu to mám předat nebo přeposlat?");
 assert.doesNotMatch(legacyMissingRecipient[1].text, /^Hotovo\./);
 
+const internalHandoffQuestion = dataBoxPlusHistoryChatEntries([{
+  id: "internal-handoff-question",
+  actionType: "Chatový pokyn",
+  result: "needs_input",
+  createdAt: "2026-07-10T05:02:45.000Z",
+  payload: {
+    originalInstruction: "předej kolegovi",
+    outcome: "needs_input",
+    assistantText: "Chybí adresát. Komu mám zprávu interně předat?"
+  }
+}]);
+assert.equal(internalHandoffQuestion[1].text, "Chybí adresát. Komu mám zprávu interně předat?");
+
 const draftHistory = dataBoxPlusHistoryChatEntries([{
   id: "draft",
   actionType: "Chatový pokyn",
@@ -219,6 +232,13 @@ const confirmationSource = appSource.slice(
   appSource.indexOf("function dataBoxPlusInstructionCard")
 );
 assert.doesNotMatch(confirmationSource, />Provést<\/button>/);
+const instructionSource = appSource.slice(
+  appSource.indexOf("function dataBoxPlusInstructionCard"),
+  appSource.indexOf("function dataBoxPlusChatPanel")
+);
+assert.match(instructionSource, /Provést změnu \/ úkol/);
+assert.match(instructionSource, /Změna nebo úkol pro datovou zprávu/);
+assert.match(instructionSource, /Interní změna se provede hned/);
 const compactChatStyles = styles.slice(styles.lastIndexOf("/* Datove schranky Plus: simple message chat. */"));
 assert.match(compactChatStyles, /width:\s*min\(600px, calc\(100vw - 48px\)\)/);
 assert.match(compactChatStyles, /max-height:\s*min\(680px, calc\(100dvh - 48px\)\)/);
@@ -236,6 +256,8 @@ assert.match(appSource, /PageUp: -pageStep/);
 assert.match(appSource, /messages\.scrollTop = 0/);
 assert.match(appSource, /messages\.scrollTop = messages\.scrollHeight/);
 assert.match(compactChatStyles, /\.ds-plus-chat-confirmation/);
+assert.match(compactChatStyles, /\.ds-plus-chat-command/);
+assert.match(compactChatStyles, /\.ds-plus-chat-command \.ds-plus-chat-composer\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(168px, max-content\)/);
 assert.match(compactChatStyles, /\.ds-plus-detail-section--chat/);
 assert.match(compactChatStyles, /@media \(max-width: 720px\)[\s\S]*height:\s*100dvh/);
 assert.doesNotMatch(compactChatStyles.split("@media (max-width: 720px)")[0], /height:\s*100dvh/);

@@ -44,6 +44,9 @@ function humanAssistantText(event, payload, instruction) {
     return dataBoxPlusVisibleDraftText(payload.draftText || payload.plan?.draftText);
   }
   const raw = cleanText(payload.assistantText || event?.assistantText || event?.auditNote || payload.performedAction);
+  if (outcome === "needs_input" && explicitAssistantText) {
+    return raw.replace(/^Hotovo\.\s*/i, "") || "Potřebuji doplnit chybějící údaj.";
+  }
   const performed = raw.match(/Systém provedl:\s*(.+?)(?:\.\s*Nový stav:|$)/i)?.[1];
   const missingWords = simpleChatWords(performed || raw);
   const missingRecipient = missingWords.includes("chybi adresat") || missingWords.includes("adresat chybi");

@@ -1704,3 +1704,10 @@ Pokud uživatel musí přemýšlet, co tlačítko znamená, nebo nevidí celou i
 - Trasa `/datova-schranka` se nepoužívá v navigaci, aplikaci, testech ani v integracích.
 - Pokud zadání říká `vytvoř chat` nebo `chat k datové zprávě`, znamená to serverový AI chat nad konkrétní zprávou, jejími přílohami, historií a kanonickým adresářem kontaktů. Nesmí se vytvořit lokální simulátor, pevně napsané větvení podle klíčových slov ani chat, který si vymýšlí kontakty nebo stav provedení akce.
 - Prompt takového chatu patří do chráněného Nastavení daného modulu; frontend jej nesmí nahrazovat vlastním promptem. Akce mimo systém, zejména e-mail, zůstávají serverové a vyžadují potvrzení uživatele.
+
+### 19.4 Chatový formulář a přímé interní pokyny
+
+- V dialogu chatu musí vždy zůstat samostatný formulář `Provést změnu / úkol`; chatová historie a rychlé návrhy jej nenahrazují.
+- Jednoznačný bezpečný interní pokyn, například archivace, označení jako vyřízené, vytvoření interního úkolu nebo interní předání se po odeslání formuláře skutečně provede, zapíše do historie a vrátí přesné `Hotovo.`. Nesmí odpovědět jen `připravím` ani čekat na druhé potvrzení.
+- Odeslání mimo systém (e-mail, SMS, odpověď datovou schránkou) zůstává samostatným návrhem s konkrétním potvrzením.
+- Frontend nesmí přepsat konkrétní serverovou otázku či výsledek obecnou frází. Když u předání chybí adresát, musí se přesně zeptat, komu má být zpráva interně předána.

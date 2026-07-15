@@ -3202,6 +3202,35 @@ export function dataBoxPlusOpenAiPlanForTest(openAiPlan = {}, message = {}, curr
     : plan;
 }
 
+const DATA_BOX_PLUS_SERVER_DIRECT_ACTIONS = new Set([
+  "archive_info",
+  "mark_done",
+  "need_more_info",
+  "mark_cannot_execute",
+  "assign_to_user",
+  "create_task",
+  "set_reminder"
+]);
+
+function dataBoxPlusServerDirectActionPlan(instruction, message = {}, attachments = [], context = {}, currentUser = {}) {
+  const directPlan = intelligentInstructionPlanFromText(instruction, message, attachments, context);
+  const actionType = cleanString(directPlan.intent);
+  if (
+    directPlan.outcome === "done"
+    && directPlan.changesMessage
+    && DATA_BOX_PLUS_SERVER_DIRECT_ACTIONS.has(actionType)
+  ) return directPlan;
+
+  // Předání bez adresáta není akce. Server proto musí vrátit přesnou otázku
+  // na chybějící údaj, ne obecnou odpověď od GPT.
+  if (
+    directPlan.outcome === "needs_input"
+    && cleanString(directPlan.pendingIntent) === "assign_to_user"
+  ) return directPlan;
+
+  return null;
+}
+
 async function dataBoxPlusContactCandidates(db) {
   const candidates = new Map();
   const add = (item = {}) => {
@@ -4166,28 +4195,62 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
       ? chatContext.currentUser
       : matchingUsers.length === 1 ? matchingUsers[0] : null;
     const resolvedInstruction = targetUser ? `${instruction}\nServerově vyřešený příjemce e-mailu: ${targetUser.name} <${targetUser.email}>.` : instruction;
+    const pendingInputPayload = safeJsonParse(pendingInput?.action_payload, {});
+    const serverDirectPlan = dataBoxPlusServerDirectActionPlan(
+      instruction,
+      message,
+      attachments.results || [],
+      {
+        actor,
+        pendingIntent: cleanString(pendingInputPayload.pendingIntent || pendingInputPayload.plan?.pendingIntent)
+      },
+      currentUser
+    );
+    if (serverDirectPlan) {
+      if (serverDirectPlan.outcome === "done") {
+        await applyIntelligentDataBoxPlusInstruction(db, message, serverDirectPlan);
+      }
+      const auditId = await logIntelligentDataBoxPlusInstruction(
+        db,
+        id,
+        actor,
+        instruction,
+        serverDirectPlan,
+        serverDirectPlan.outcome,
+        { previousStatus: message.status }
+      );
+      return {
+        apiStatus: "ready",
+        status: serverDirectPlan.outcome,
+        action: serverDirectPlan,
+        message: await getDataBoxPlusMessage(env, id),
+        auditId,
+        provider: "server",
+        notice: serverDirectPlan.assistantText
+      };
+    }
     let openAi;
     try {
       openAi = await interpretDataBoxPlusChat(env, {
-        instruction: resolvedInstruction,
-        knownUsers,
-        history,
-        learningRules,
-        appContext: chatContext.application,
-        currentUser: chatContext.currentUser,
-        availableTools: dataBoxPlusAvailableChatTools(chatContext),
-        today: dataBoxPlusPragueDate(),
-        message: {
-          senderName: message.sender_name,
-          senderBoxId: message.sender_box_id,
-          recipientBoxId: message.recipient_box_id,
-          subject: message.subject,
-          status: message.status,
-          summary: message.summary,
-          attachmentText: (attachments.results || []).map((attachment) => cleanString(attachment.extracted_text)).filter(Boolean).join("\n\n")
-        }
-      }, {
-        executeTool: (call) => executeDataBoxPlusChatReadTool(env, currentUser, chatContext, call)
+          instruction: resolvedInstruction,
+          knownUsers,
+          history,
+          learningRules,
+          appContext: chatContext.application,
+          currentUser: chatContext.currentUser,
+          availableTools: dataBoxPlusAvailableChatTools(chatContext),
+          today: dataBoxPlusPragueDate(),
+          message: {
+            senderName: message.sender_name,
+            senderBoxId: message.sender_box_id,
+            recipientBoxId: message.recipient_box_id,
+            subject: message.subject,
+            status: message.status,
+            summary: message.summary,
+            attachmentText: (attachments.results || []).map((attachment) => cleanString(attachment.extracted_text)).filter(Boolean).join("\n\n")
+          }
+        }, {
+          executeTool: (call) => executeDataBoxPlusChatReadTool(env, currentUser, chatContext, call)
       });
     } catch (error) {
       const messageText = error instanceof DataBoxPlusOpenAiError

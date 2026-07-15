@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.565"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.566"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky: formulář změny a skutečné interní kroky",
+    text: "V chatu k datové zprávě je zpět samostatný formulář Provést změnu / úkol. Archivace, označení jako vyřízené a interní předání se po jasném pokynu skutečně zapíší do historie a potvrdí výsledkem; e-mail a odpověď datovou schránkou dál vyžadují samostatné potvrzení."
+  },
   {
     title: "Svozové trasy: chráněný TEST incidentního workflow",
     text: "Přeplněná a poškozená nádoba se po fotografii předá logicky dostupné dispečerce; nepřístupná firma ověří náhradní bezplatný TEST svoz do 24 hodin nebo připomínku před standardním termínem. Každý e-mail vyžaduje fyzické potvrzení a míří jen na chráněný TEST kontakt; zákazníci, dispečerky, ostré trasy, Vistos, SMS a RCS zůstávají nedotčené."

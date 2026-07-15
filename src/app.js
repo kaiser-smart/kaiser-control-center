@@ -25671,18 +25671,24 @@ function dataBoxPlusInstructionCard(message) {
       </div>
       <div class="ds-plus-chat-window__footer">
         ${dataBoxPlusChatSuggestions(message)}
-        <form class="ds-plus-chat-composer" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
-          <textarea
-            name="instruction"
-            rows="2"
-            aria-label="Zpráva pro Autopilota"
-            placeholder="Napište, co mám se zprávou udělat…"
-            ${loading ? "disabled" : ""}
-          >${escapeHtml(draft)}</textarea>
-          <button class="primary-action" type="submit" aria-label="Odeslat zprávu Autopilotovi" title="Odeslat" ${loading ? "disabled" : ""}>
-            ${loading ? `<span class="ds-plus-chat-composer__loading" aria-hidden="true"></span>` : `<span aria-hidden="true">→</span>`}
-          </button>
-        </form>
+        <section class="ds-plus-chat-command" aria-labelledby="ds-plus-chat-command-${escapeHtml(message.id)}">
+          <div class="ds-plus-chat-command__head">
+            <h3 id="ds-plus-chat-command-${escapeHtml(message.id)}">Provést změnu / úkol</h3>
+            <p>Interní změna se provede hned a zapíše do historie. Odeslání mimo systém vyžaduje samostatné potvrzení.</p>
+          </div>
+          <form class="ds-plus-chat-composer" data-ds-plus-instruction-form data-message-id="${escapeHtml(message.id)}">
+            <textarea
+              name="instruction"
+              rows="2"
+              aria-label="Změna nebo úkol pro datovou zprávu"
+              placeholder="Napište změnu nebo úkol k této zprávě…"
+              ${loading ? "disabled" : ""}
+            >${escapeHtml(draft)}</textarea>
+            <button class="primary-action" type="submit" aria-label="Provést změnu nebo úkol" ${loading ? "disabled" : ""}>
+              ${loading ? `<span class="ds-plus-chat-composer__loading" aria-hidden="true"></span>` : "Provést změnu / úkol"}
+            </button>
+          </form>
+        </section>
       </div>
     </section>
   `;
