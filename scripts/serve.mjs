@@ -6156,6 +6156,67 @@ async function handleApi(request, response) {
     return true;
   }
 
+  if (url.pathname === "/api/vehicle-tracking/analytics" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "vehicle-tracking", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const period = ["today", "7d", "30d"].includes(url.searchParams.get("period"))
+      ? url.searchParams.get("period")
+      : "30d";
+    const multipliers = { today: 0.08, "7d": 0.34, "30d": 1 };
+    const vehicles = [
+      ["101", "3BK 4123", 1842.6, 92],
+      ["102", "8B4 3007", 1517.2, 88],
+      ["103", "3BN 3558", 1264.9, 95],
+      ["104", "2BD 8835", 918.4, 79],
+      ["105", "9B4 6276", 611.7, 91],
+      ["106", "3BI 2007", 402.3, 74]
+    ].map(([vehicleKey, licensePlate, baseKm, coveragePercent]) => ({
+      vehicleKey,
+      licensePlate,
+      totalKm: Math.round(baseKm * multipliers[period] * 10) / 10,
+      tripCount: Math.max(1, Math.round(baseKm * multipliers[period] / 24)),
+      movingMinutes: Math.round(baseKm * multipliers[period] * 1.8),
+      pointCount: Math.round(baseKm * multipliers[period] * 6),
+      validSegmentCount: 100,
+      rejectedSegmentCount: Math.round((10000 / coveragePercent) - 100),
+      coveragePercent,
+      qualityStatus: coveragePercent >= 90 ? "ready" : coveragePercent >= 70 ? "partial" : "insufficient",
+      firstRecordedAt: "2026-07-15T04:00:00.000Z",
+      lastRecordedAt: "2026-07-15T07:00:00.000Z"
+    }));
+    const totalKm = vehicles.reduce((sum, vehicle) => sum + vehicle.totalKm, 0);
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      source: "Lokální vizuální test GPS analytiky",
+      distanceSource: "gps_geometry",
+      period,
+      summary: {
+        vehicleCount: vehicles.length,
+        totalKm: Math.round(totalKm * 10) / 10,
+        tripCount: vehicles.reduce((sum, vehicle) => sum + vehicle.tripCount, 0),
+        movingMinutes: vehicles.reduce((sum, vehicle) => sum + vehicle.movingMinutes, 0),
+        pointCount: vehicles.reduce((sum, vehicle) => sum + vehicle.pointCount, 0),
+        coveragePercent: 87,
+        qualityStatus: "partial",
+        lastCalculatedAt: new Date().toISOString(),
+        lastGpsAt: new Date().toISOString(),
+        freshnessMinutes: 0
+      },
+      vehicles,
+      trips: [],
+      lastRun: { status: "ok", message: "Lokální vizuální test." }
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/vehicle-tracking/maps-config" && request.method === "GET") {
     const user = currentDevUser(request);
     if (!user) {

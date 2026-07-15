@@ -7,6 +7,7 @@ import {
   mainDashboardDistanceCompositionRows,
   mainDashboardEconomicsReady,
   mainDashboardPeriod,
+  mainDashboardTripHistorySource,
   mainDashboardUnitEconomicsRows,
   mainDashboardVehicleSnapshot
 } from "../src/data/mainDashboard.js";
@@ -14,7 +15,7 @@ import {
 {
   assert.equal(mainDashboardPeriod("today").label, "Dnes");
   assert.equal(mainDashboardPeriod("unknown").id, "30d");
-  assert.equal(MAIN_DASHBOARD_ECONOMICS_METRICS.length, 5);
+  assert.equal(MAIN_DASHBOARD_ECONOMICS_METRICS.length, 6);
   assert.equal(MAIN_DASHBOARD_ECONOMICS_SOURCES.length, 3);
   assert.deepEqual(MAIN_DASHBOARD_ECONOMICS_SOURCES.find((source) => source.id === "cost-data"), {
     id: "cost-data",
@@ -23,6 +24,19 @@ import {
     status: "Běží",
     detail: "ORWII PHM se automaticky synchronizuje do D1 a je dostupné pro read-only statistiky. Úplné přímé náklady čekají na další zdroje."
   });
+}
+
+{
+  const source = mainDashboardTripHistorySource({
+    apiStatus: "ready",
+    summary: { vehicleCount: 52, totalKm: 1234.5 }
+  });
+  assert.equal(source.state, "running");
+  assert.equal(source.status, "Běží");
+  assert.match(source.detail, /52 vozidel/);
+  assert.match(source.detail, /1\s234,5 GPS km/);
+  assert.equal(mainDashboardTripHistorySource(null, { loading: true }).status, "Ověřuji");
+  assert.equal(mainDashboardTripHistorySource(null, { error: "fail" }).state, "warning");
 }
 
 {
