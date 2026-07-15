@@ -6,6 +6,7 @@ export const MAIN_DASHBOARD_PERIODS = Object.freeze([
 
 export const MAIN_DASHBOARD_ECONOMICS_METRICS = Object.freeze([
   { id: "jobs", label: "Odjeté zakázky", source: "Vozidlo ↔ zakázka" },
+  { id: "total-distance", label: "Celkové km", source: "GPS historie T-Cars" },
   { id: "productive-share", label: "Produktivní km", source: "Historie jízd + zakázka" },
   { id: "revenue-km", label: "Výnos / km", source: "Výnos zakázky / celkové km" },
   { id: "cost-km", label: "Náklad / km", source: "Přímé náklady / celkové km" },
@@ -120,4 +121,48 @@ export function mainDashboardUnitEconomicsRows(rows = []) {
 
 export function mainDashboardEconomicsReady(sourceStates = {}) {
   return MAIN_DASHBOARD_ECONOMICS_SOURCES.every((source) => sourceStates[source.id] === "ready");
+}
+
+export function mainDashboardTripHistorySource(analytics = null, options = {}) {
+  const loading = options.loading === true;
+  const error = String(options.error || "").trim();
+  if (error) {
+    return {
+      id: "trip-history",
+      label: "Historie jízd",
+      state: "warning",
+      status: "Kontrola",
+      detail: "Cloudový sběr zůstává aktivní, ale poslední souhrn jízd se nepodařilo ověřit."
+    };
+  }
+  const summary = analytics?.summary || {};
+  const vehicleCount = Number(summary.vehicleCount || 0);
+  const totalKm = Number(summary.totalKm || 0);
+  if (analytics?.apiStatus === "ready" && vehicleCount > 0) {
+    return {
+      id: "trip-history",
+      label: "Historie jízd",
+      state: "running",
+      status: "Běží",
+      detail: `${vehicleCount} vozidel má ověřené GPS úseky. Za zvolené období je evidováno ${totalKm.toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} GPS km.`
+    };
+  }
+  if (analytics?.apiStatus === "stale" && vehicleCount > 0) {
+    return {
+      id: "trip-history",
+      label: "Historie jízd",
+      state: "warning",
+      status: "Zastaralé",
+      detail: "GPS úseky jsou uložené, ale poslední cloudový přepočet je starší než 20 minut."
+    };
+  }
+  return {
+    id: "trip-history",
+    label: "Historie jízd",
+    state: "waiting",
+    status: loading ? "Ověřuji" : "Čeká",
+    detail: loading
+      ? "Ověřuji poslední cloudový přepočet skutečných GPS úseků."
+      : "Čeká na první ověřený souhrn skutečných GPS úseků."
+  };
 }

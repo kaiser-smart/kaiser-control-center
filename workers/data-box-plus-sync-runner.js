@@ -17,21 +17,6 @@ async function postInternal(env, path, token, body = undefined) {
   });
 }
 
-async function syncVehicleTrackingHistory(env, token, scheduledAt) {
-  const response = await postInternal(env, "/api/vehicle-tracking/internal-history-sync", token, { scheduledAt });
-  const summary = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    console.error("vehicle_tracking_history.failed", { status: response.status, error: summary.error || "Sběr GPS historie se nepodařil." });
-    return;
-  }
-  console.log("vehicle_tracking_history.completed", {
-    status: summary.status,
-    runId: summary.runId,
-    pointsWritten: summary.pointsWritten || 0,
-    pointsSeen: summary.pointsSeen || 0
-  });
-}
-
 async function syncDataBoxPlus(env, token, scheduledAt) {
   const response = await postInternal(env, "/api/data-box-plus/internal-sync", token, { scheduledAt });
   const summary = await response.json().catch(() => ({}));
@@ -61,7 +46,6 @@ export default {
       return;
     }
     const scheduledAt = new Date(controller.scheduledTime).toISOString();
-    ctx.waitUntil(syncVehicleTrackingHistory(env, token, scheduledAt));
     if (isDataBoxDue(controller.scheduledTime)) {
       ctx.waitUntil(syncDataBoxPlus(env, token, scheduledAt));
     }
@@ -70,9 +54,8 @@ export default {
   async fetch() {
     return Response.json({
       status: "ready",
-      vehicleTrackingIntervalMinutes: 1,
       dataBoxPlusIntervalMinutes: 30,
-      message: "GPS historie se ukládá každou minutu. Datové schránky Plus se načítají každých 30 minut. Rizikové akce čekají na potvrzení."
+      message: "Datové schránky Plus se načítají každých 30 minut. GPS historie má vlastní oddělený cloudový Worker. Rizikové akce čekají na potvrzení."
     });
   }
 };

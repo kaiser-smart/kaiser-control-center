@@ -37163,7 +37163,7 @@ body:has(.ds-plus-page) {
 
 .main-dashboard-economics-metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -37171,7 +37171,7 @@ body:has(.ds-plus-page) {
   display: grid;
   min-width: 0;
   min-height: 116px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-content: space-between;
   align-items: start;
@@ -37203,10 +37203,17 @@ body:has(.ds-plus-page) {
 }
 
 .main-dashboard-economics-metric > strong {
+  grid-column: 1 / -1;
   color: #9ba5a0;
-  font-size: 1.8rem;
+  font-size: 1.55rem;
   font-weight: 600;
   line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.main-dashboard-economics-metric--live > strong {
+  color: var(--ui-pilot-text, var(--ink));
+  font-size: clamp(1.05rem, 1.35vw, 1.35rem);
 }
 
 .main-dashboard-state {
@@ -37240,6 +37247,12 @@ body:has(.ds-plus-page) {
   border-color: color-mix(in srgb, var(--color-primary) 34%, transparent);
   background: color-mix(in srgb, var(--color-primary) 12%, #ffffff);
   color: color-mix(in srgb, var(--color-primary) 78%, #1b251d);
+}
+
+.main-dashboard-state--warning {
+  border-color: rgba(179, 122, 44, 0.34);
+  background: #fbf2df;
+  color: #704b12;
 }
 
 .main-dashboard-economics-metric > .main-dashboard-state {
@@ -37394,6 +37407,69 @@ body:has(.ds-plus-page) {
   font-size: 0.76rem;
   font-weight: 500;
   line-height: 1.4;
+}
+
+.main-dashboard-distance-list {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  align-content: start;
+  overflow: auto;
+  padding: 2px 4px 2px 0;
+}
+
+.main-dashboard-distance-row {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.main-dashboard-distance-row > div {
+  display: flex;
+  min-width: 0;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.main-dashboard-distance-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-pilot-text, var(--ink));
+  font-size: 0.77rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-dashboard-distance-row > div > span {
+  color: var(--ui-pilot-text, var(--ink));
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.main-dashboard-distance-row__track {
+  display: block;
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(122, 136, 142, 0.18);
+  border-radius: 999px;
+  background: rgba(226, 231, 233, 0.7);
+}
+
+.main-dashboard-distance-row__track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #a6b0ab;
+}
+
+.main-dashboard-distance-row small {
+  color: var(--ui-pilot-muted, var(--muted));
+  font-size: 0.65rem;
+  font-weight: 500;
 }
 
 .main-dashboard-chart__empty-bars,

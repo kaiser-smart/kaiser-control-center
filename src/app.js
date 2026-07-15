@@ -4,6 +4,7 @@ import {
   MAIN_DASHBOARD_ECONOMICS_SOURCES,
   MAIN_DASHBOARD_PERIODS,
   mainDashboardPeriod,
+  mainDashboardTripHistorySource,
   mainDashboardVehicleSnapshot
 } from "./data/mainDashboard.js";
 import {
@@ -1806,6 +1807,12 @@ const vehicleTrackingUiState = {
 };
 const mainDashboardUiState = {
   period: "30d"
+};
+const vehicleTrackingAnalyticsState = {
+  loading: false,
+  loadedPeriod: "",
+  analytics: null,
+  error: ""
 };
 
 let vehicleTrackingAudioContext = null;
@@ -4024,6 +4031,14 @@ function moduleEventLogConfig(moduleItem = {}) {
 
   if (moduleId === "vehicle-tracking") {
     const summary = vehicleTrackingTcarsStatusSummary(vehicleTrackingLiveState.status || {}, vehicleTrackingLiveState.error);
+    const analytics = vehicleTrackingAnalyticsState.analytics;
+    const historyState = vehicleTrackingAnalyticsState.error
+      ? "chyba"
+      : analytics?.apiStatus === "ready"
+        ? "ověřeno"
+        : analytics?.apiStatus === "stale"
+          ? "zastaralé"
+          : "čeká na ověření";
     const gpsState = vehicleTrackingLiveState.error
       ? "chyba"
       : summary.apiStatus === "ready" && summary.isLive && summary.liveVerified
@@ -4033,9 +4048,12 @@ function moduleEventLogConfig(moduleItem = {}) {
     return {
       moduleKey: "vehicle-tracking",
       moduleName: "Sledování vozidel",
-      badgeState: vehicleTrackingLiveState.error || vehicleTrackingLiveState.wimError ? "vyžaduje pozornost" : gpsState,
+      badgeState: vehicleTrackingLiveState.error || vehicleTrackingLiveState.wimError || vehicleTrackingAnalyticsState.error ? "vyžaduje pozornost" : historyState,
       statuses: [
         moduleEventLogStatus("T-Cars API / GPS", gpsState, vehicleTrackingLiveState.error || "GPS data se neoznačují jako běžící, dokud není doložený čerstvý live stav."),
+        moduleEventLogStatus("Historie jízd", historyState, vehicleTrackingAnalyticsState.error || (analytics?.summary?.lastCalculatedAt
+          ? `Cloudový přepočet skončil ${vehicleTrackingSafeDateTime(analytics.summary.lastCalculatedAt)}. GPS vzdálenost se počítá jen z validních úseků.`
+          : "Čeká se na doložený cloudový přepočet jízd.")),
         moduleEventLogStatus("WIM váhy", wimState, vehicleTrackingLiveState.wimError || "WIM vrstva je read-only stav z API a není to odesílací automatizace."),
         moduleEventLogStatus("Geofencing 15 km", "jen návrh", "Geofencing alerty jsou návrh bez ostrého cloud runneru."),
         moduleEventLogStatus("SMS / app alert", "vypnuto", "Bez cloud runneru, deduplikace a audit logu se neodesílá SMS ani app upozornění."),
@@ -4057,6 +4075,10 @@ function moduleEventLogConfig(moduleItem = {}) {
         vehicleTrackingLiveState.wimError
           ? moduleEventLogEvent("", "WIM váhy", "chyba", vehicleTrackingLiveState.wimError)
           : moduleEventLogEvent("", "WIM váhy", wimState, vehicleTrackingLiveState.wimLoaded ? `Načteno ${vehicleTrackingLiveState.wimSites.length} WIM míst.` : "Čeká se na načtení WIM míst."),
+        moduleEventLogEvent(analytics?.summary?.lastCalculatedAt || "", "Historie jízd", historyState,
+          analytics?.summary?.vehicleCount
+            ? `${analytics.summary.vehicleCount} vozidel · ${mainDashboardKm(analytics.summary.totalKm)} GPS vzdálenosti za zvolené období.`
+            : "Čeká se na první ověřený souhrn."),
         moduleEventLogEvent("", "Geofencing alert", "jen návrh", "Alerty jsou návrh bez ostrého odesílání.")
       ],
       diagnostics: [
@@ -4064,6 +4086,10 @@ function moduleEventLogConfig(moduleItem = {}) {
         moduleEventLogDiagnostic("tcars.loaded", vehicleTrackingLiveState.loaded ? "true" : "false"),
         moduleEventLogDiagnostic("tcars.apiStatus", summary.apiStatus || "neuvedeno"),
         moduleEventLogDiagnostic("tcars.dataMode", summary.dataMode || "neuvedeno"),
+        moduleEventLogDiagnostic("history.apiStatus", analytics?.apiStatus || "neuvedeno"),
+        moduleEventLogDiagnostic("history.lastCalculatedAt", analytics?.summary?.lastCalculatedAt || "neuvedeno"),
+        moduleEventLogDiagnostic("history.vehicleCount", analytics?.summary?.vehicleCount || 0),
+        moduleEventLogDiagnostic("history.coveragePercent", analytics?.summary?.coveragePercent ?? "neuvedeno"),
         moduleEventLogDiagnostic("wim.loaded", vehicleTrackingLiveState.wimLoaded ? "true" : "false"),
         moduleEventLogDiagnostic("wimApiStatus", vehicleTrackingLiveState.wimApiStatus),
         moduleEventLogDiagnostic("lastError", vehicleTrackingLiveState.error || vehicleTrackingLiveState.wimError || "bez chyby")
@@ -6034,7 +6060,34 @@ function mainDashboardPeriodControl() {
   `;
 }
 
+function mainDashboardKm(value) {
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? `${number.toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} km`
+    : "—";
+}
+
 function mainDashboardEconomicsMetric(metric) {
+  if (metric.id === "total-distance") {
+    const analytics = vehicleTrackingAnalyticsState.analytics;
+    const totalKm = Number(analytics?.summary?.totalKm);
+    const hasValue = analytics?.apiStatus === "ready" && Number.isFinite(totalKm);
+    const state = vehicleTrackingAnalyticsState.error
+      ? "Kontrola"
+      : vehicleTrackingAnalyticsState.loading
+        ? "Ověřuji"
+        : hasValue
+          ? "GPS vzdálenost"
+          : "Čeká na data";
+    const tone = hasValue ? "running" : vehicleTrackingAnalyticsState.error ? "warning" : "waiting";
+    return `
+      <article class="main-dashboard-economics-metric ${hasValue ? "main-dashboard-economics-metric--live" : ""}">
+        <div><span>${escapeHtml(metric.label)}</span><small>${escapeHtml(metric.source)}</small></div>
+        <strong>${escapeHtml(hasValue ? mainDashboardKm(totalKm) : "—")}</strong>
+        <span class="main-dashboard-state main-dashboard-state--${escapeHtml(tone)}">${escapeHtml(state)}</span>
+      </article>
+    `;
+  }
   return `
     <article class="main-dashboard-economics-metric">
       <div><span>${escapeHtml(metric.label)}</span><small>${escapeHtml(metric.source)}</small></div>
@@ -6045,6 +6098,34 @@ function mainDashboardEconomicsMetric(metric) {
 }
 
 function mainDashboardDistanceChart(period, user) {
+  const analytics = vehicleTrackingAnalyticsState.analytics;
+  const rows = analytics?.apiStatus === "ready"
+    ? (analytics.vehicles || []).filter((vehicle) => Number(vehicle.totalKm) > 0).slice(0, 10)
+    : [];
+  const maxKm = Math.max(0, ...rows.map((row) => Number(row.totalKm) || 0));
+  const chartBody = rows.length ? `
+    <div class="main-dashboard-distance-list" role="list" aria-label="GPS kilometry podle vozidla">
+      ${rows.map((row) => {
+        const totalKm = Number(row.totalKm) || 0;
+        const width = maxKm > 0 ? Math.max(4, totalKm / maxKm * 100) : 0;
+        return `
+          <article class="main-dashboard-distance-row" role="listitem">
+            <div><strong>${escapeHtml(row.licensePlate || row.vehicleKey || "Vozidlo")}</strong><span>${escapeHtml(mainDashboardKm(totalKm))}</span></div>
+            <span class="main-dashboard-distance-row__track" aria-hidden="true"><i style="width:${width.toFixed(2)}%"></i></span>
+            <small>Nezařazené km · pokrytí ${escapeHtml(`${Number(row.coveragePercent || 0).toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} %`)}</small>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  ` : `
+    <div class="main-dashboard-chart__empty" role="status">
+      <div class="main-dashboard-chart__empty-bars" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <strong>${vehicleTrackingAnalyticsState.loading ? "Ověřuji cloudový souhrn jízd." : "Čeká na první ověřený souhrn GPS kilometrů."}</strong>
+      <p>Dashboard nezapočítává demo ani odhadované kilometry.</p>
+    </div>
+  `;
   return `
     <article class="main-dashboard-chart main-dashboard-chart--distance" data-main-dashboard-distance-chart>
       <header class="main-dashboard-chart__header">
@@ -6053,20 +6134,14 @@ function mainDashboardDistanceChart(period, user) {
           <h3>Produktivní vs. přejezdové km</h3>
           <p>Podíl a skutečné kilometry za ${escapeHtml(period.context)}. Nezařazené km zůstanou samostatně, dokud je nepůjde bezpečně přiřadit.</p>
         </div>
-        <span class="main-dashboard-state main-dashboard-state--proposal">UI návrh</span>
+        <span class="main-dashboard-state main-dashboard-state--${rows.length ? "running" : "waiting"}">${rows.length ? "GPS data" : "Čeká"}</span>
       </header>
       <div class="main-dashboard-chart__legend" aria-label="Budoucí kategorie kilometrů">
         <span><i class="main-dashboard-chart__swatch main-dashboard-chart__swatch--productive"></i>Produktivní km</span>
         <span><i class="main-dashboard-chart__swatch main-dashboard-chart__swatch--deadhead"></i>Přejezdové km</span>
         <span><i class="main-dashboard-chart__swatch main-dashboard-chart__swatch--unknown"></i>Nezařazené km</span>
       </div>
-      <div class="main-dashboard-chart__empty" role="status">
-        <div class="main-dashboard-chart__empty-bars" aria-hidden="true">
-          <span></span><span></span><span></span><span></span>
-        </div>
-        <strong>Čeká na historii jízd a párování vozidla se zakázkou.</strong>
-        <p>Dashboard nezapočítává demo ani odhadované kilometry.</p>
-      </div>
+      ${chartBody}
       <footer><span>Řazení po nasazení: nejvyšší podíl přejezdů první</span>${canViewModule(user, "vehicle-tracking") ? `<a href="${routeHref(VEHICLE_TRACKING_ROUTE)}" data-link>Otevřít Sledování vozidel</a>` : ""}</footer>
     </article>
   `;
@@ -6103,6 +6178,12 @@ function mainDashboardEconomicsSection(user) {
   }
 
   const period = mainDashboardPeriod(mainDashboardUiState.period);
+  const sources = MAIN_DASHBOARD_ECONOMICS_SOURCES.map((source) => source.id === "trip-history"
+    ? mainDashboardTripHistorySource(vehicleTrackingAnalyticsState.analytics, {
+      loading: vehicleTrackingAnalyticsState.loading,
+      error: vehicleTrackingAnalyticsState.error
+    })
+    : source);
   return `
     <section class="main-dashboard-economics" data-main-dashboard-economics aria-labelledby="main-dashboard-economics-title">
       <div class="main-dashboard-section-head">
@@ -6135,10 +6216,10 @@ function mainDashboardEconomicsSection(user) {
       <div class="main-dashboard-readiness" aria-label="Připravenost dat pro ekonomiku flotily">
         <div>
           <span class="main-dashboard-eyebrow">Datová připravenost</span>
-          <strong>PHM je funkční; úplná ekonomika čeká na další zdroje.</strong>
-          <small>Tankování má D1, read-only analytické API a automatickou cloudovou synchronizaci. Kilometry, zakázky a další náklady zůstávají oddělené.</small>
+          <strong>PHM a GPS historie jsou napojené; úplná ekonomika čeká na zakázky a další náklady.</strong>
+          <small>Tankování i GPS souhrny používají cloudovou databázi a automatický běh. GPS kilometry zůstávají nezařazené, dokud neexistuje bezpečná vazba na zakázku.</small>
         </div>
-        ${MAIN_DASHBOARD_ECONOMICS_SOURCES.map((source) => `
+        ${sources.map((source) => `
           <article>
             <div><strong>${escapeHtml(source.label)}</strong><small>${escapeHtml(source.detail)}</small></div>
             <span class="main-dashboard-state main-dashboard-state--${escapeHtml(source.state || "waiting")}">${escapeHtml(source.status || "Čeká")}</span>
@@ -17017,7 +17098,7 @@ function vehicleTrackingRulesAutomation(user) {
     moduleName: "Sledovani vozidel",
     user,
     description: "Cloud evidence pravidel a automatizaci pro GPS sledovani, T-Cars, WIM vrstvu a budouci 15km upozorneni ridicum.",
-    cloudNote: "WIM vrstva je read-only pres API. SMS/app alert 15 km pred vahou je zatim navrh automatizace bez ostreho cloud geofencing runneru a bez odesilani SMS."
+    cloudNote: "Historie T-Cars ma vlastni cloudovy beh: body kazdou minutu a souhrny jizd po peti minutach. WIM vrstva je read-only pres API. SMS/app alert 15 km pred vahou je zatim navrh bez odesilani SMS."
   });
 }
 
@@ -42286,6 +42367,31 @@ async function loadFleetFuelAnalytics(options = {}) {
   if (renderAfter) render();
 }
 
+async function loadVehicleTrackingAnalytics(options = {}) {
+  const period = mainDashboardPeriod(options.period || mainDashboardUiState.period).id;
+  const force = Boolean(options.force);
+  const renderAfter = options.renderAfter !== false;
+  if (vehicleTrackingAnalyticsState.loading) return;
+  if (!hasPermission(currentUser(), "vehicle-tracking", "view")) return;
+  if (!force && vehicleTrackingAnalyticsState.loadedPeriod === period && vehicleTrackingAnalyticsState.analytics) return;
+
+  vehicleTrackingAnalyticsState.loading = true;
+  vehicleTrackingAnalyticsState.error = "";
+  if (vehicleTrackingAnalyticsState.loadedPeriod !== period) vehicleTrackingAnalyticsState.analytics = null;
+  try {
+    const result = await apiJson(`/api/vehicle-tracking/analytics?period=${encodeURIComponent(period)}`);
+    vehicleTrackingAnalyticsState.analytics = result;
+    vehicleTrackingAnalyticsState.loadedPeriod = period;
+  } catch (error) {
+    vehicleTrackingAnalyticsState.analytics = null;
+    vehicleTrackingAnalyticsState.loadedPeriod = "";
+    vehicleTrackingAnalyticsState.error = error?.payload?.error || error?.message || "Statistiky jízd se teď nepodařilo načíst.";
+  } finally {
+    vehicleTrackingAnalyticsState.loading = false;
+  }
+  if (renderAfter) render();
+}
+
 function updateFleetVehicleFilter(field) {
   const name = field?.name;
   if (!name || !Object.prototype.hasOwnProperty.call(fleetUiState.vehicleFilters, name)) {
@@ -45121,6 +45227,9 @@ function renderAuthenticatedApp(user) {
     if (hasPermission(user, "fleet", "view") && mainDashboardCanSeeEconomics(user)) {
       void loadFleetFuelAnalytics({ period: mainDashboardUiState.period });
     }
+    if (hasPermission(user, "vehicle-tracking", "view") && mainDashboardCanSeeEconomics(user)) {
+      void loadVehicleTrackingAnalytics({ period: mainDashboardUiState.period });
+    }
     document.title = `Dashboard firmy | ${APP_NAME}`;
     return;
   }
@@ -45215,6 +45324,7 @@ function renderAuthenticatedApp(user) {
       loadVehicleTrackingMapConfig();
       loadVehicleTrackingPreferences();
       loadVehicleTrackingStatus();
+      void loadVehicleTrackingAnalytics({ period: "30d" });
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     return;
@@ -45263,12 +45373,14 @@ function renderAuthenticatedApp(user) {
       loadVehicleTrackingMapConfig();
       loadVehicleTrackingPreferences();
       loadVehicleTrackingStatus();
+      void loadVehicleTrackingAnalytics({ period: "30d" });
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
     if (moduleItem.id === "settings" && hasPermission(user, "vehicle-tracking", "view")) {
       loadVehicleTrackingMapConfig();
       loadVehicleTrackingPreferences();
       loadVehicleTrackingStatus();
+      void loadVehicleTrackingAnalytics({ period: "30d" });
       loadVehicleTrackingWimSites();
       ensureModuleRulesData("vehicle-tracking");
     }
@@ -48729,9 +48841,12 @@ document.addEventListener("click", async (event) => {
   if (mainDashboardPeriodButton) {
     event.preventDefault();
     mainDashboardUiState.period = mainDashboardPeriod(mainDashboardPeriodButton.dataset.mainDashboardPeriod).id;
-    const fuelLoading = loadFleetFuelAnalytics({ period: mainDashboardUiState.period });
+    const loading = Promise.all([
+      loadFleetFuelAnalytics({ period: mainDashboardUiState.period }),
+      loadVehicleTrackingAnalytics({ period: mainDashboardUiState.period })
+    ]);
     render();
-    await fuelLoading;
+    await loading;
     return;
   }
 

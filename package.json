@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.561",
+  "version": "0.1.562",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
     "test:driver-reports": "node scripts/driver-report-context.test.mjs",
     "test:dashboard": "node scripts/main-dashboard.test.mjs",
     "test:orwii-fuel": "node scripts/orwii-fuel-store.test.mjs && node scripts/fleet-fuel-analytics.test.mjs",
-    "test:vehicle-tracking": "node scripts/vehicle-tracking-maps-config.test.mjs && node scripts/vehicle-tracking-history.test.mjs && node scripts/vehicle-tracking-preferences.test.mjs",
+    "test:vehicle-tracking": "node scripts/vehicle-tracking-maps-config.test.mjs && node scripts/vehicle-tracking-history.test.mjs && node scripts/vehicle-tracking-analytics.test.mjs && node scripts/vehicle-tracking-preferences.test.mjs",
     "test:receivables": "node scripts/receivables-engines.test.mjs && node scripts/receivables-rating-store.test.mjs && node scripts/receivables-navigation.test.mjs && node scripts/receivables-invoice-sync-runner.test.mjs && node scripts/receivables-incremental-ledger-diff.test.mjs && node scripts/receivables-payment-reconciliation.test.mjs",
     "test:data-box-plus": "node scripts/data-box-plus-chat-context.test.mjs && node scripts/data-box-plus-chat-tools.test.mjs && node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs && node scripts/data-box-plus-command-center.test.mjs",
     "test:customer-messaging": "node scripts/customer-messaging.test.mjs",
