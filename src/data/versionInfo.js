@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.566"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.567"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: úplné Adresní místo z Vistosu",
+    text: "KSO načítá skutečné Adresní místo pro všechny aktivní řádky Svoz Kaiser ANO v bezpečných dávkách, ne jen pro prvních 150. Chyba čtení KSO se nově nezamění za chybějící údaj ve Vistosu, hlídač ji zachytí a technická svozová adresa ani Stanoviště se nepoužijí jako náhrada."
+  },
   {
     title: "Datové schránky: formulář změny a skutečné interní kroky",
     text: "V chatu k datové zprávě je zpět samostatný formulář Provést změnu / úkol. Archivace, označení jako vyřízené a interní předání se po jasném pokynu skutečně zapíší do historie a potvrdí výsledkem; e-mail a odpověď datovou schránkou dál vyžadují samostatné potvrzení."

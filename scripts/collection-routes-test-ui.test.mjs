@@ -128,6 +128,12 @@ for (const column of ["Stav", "Pořadí", "Zákazník", "Stanoviště", "Odpad /
 }
 
 assert.ok(
+  appSource.includes('"missing-address-place": {') &&
+    appSource.includes('"address-place-read-incomplete": {'),
+  "UI musí rozlišit skutečně chybějící Adresní místo od technicky nedokončeného načtení KSO."
+);
+
+assert.ok(
   appSource.includes("collection-routes-sites-table collection-routes-preview-table") &&
     appSource.includes("collection-daily-route-table-wrap collection-routes-sites-table collection-routes-preview-table"),
   "TEST zdrojový řádek i uložená trasa musí používat stejný responzivní tabulkový vzor jako ostrá data."
