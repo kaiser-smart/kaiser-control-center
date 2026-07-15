@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { matchFuelTransactionToVehicle, normalizeOrwiiFuelTransaction, orwiiFuelStatus, previewOrwiiFuelTransactions } from "../functions/_lib/orwii-fuel-store.js";
+import {
+  buildOrwiiFuelAnalytics,
+  getOrwiiFuelAnalytics,
+  matchFuelTransactionToVehicle,
+  normalizeOrwiiFuelTransaction,
+  orwiiFuelStatus,
+  previewOrwiiFuelTransactions
+} from "../functions/_lib/orwii-fuel-store.js";
 const transaction = normalizeOrwiiFuelTransaction({ transactionId: 101, from: 1784017800000, volumeInLitres: "45,5", vehicleIdentifierValue: "CHIP-7", price: { value: 1800 }, pricePerUnit: { value: 39.56 }, vehicle: { id: "orwii-vehicle-1", registrationNumber: "1AB 2345", counterType: "OdometerInMeters", currentCounterState: 183400 } });
 assert.equal(transaction.externalId, "101"); assert.equal(transaction.liters, 45.5);
 assert.equal(transaction.odometerKm, 183.4); assert.equal(transaction.licensePlate, "1AB 2345");
@@ -36,4 +43,42 @@ try {
 } finally {
   globalThis.fetch = originalFetch;
 }
+
+const analyticsRows = [
+  { external_id: "a", occurred_at: "2026-07-14T08:00:00.000Z", fuel_type: "Nafta", liters: 40, unit_price: 38, total_price: 1520, license_plate: "1AB 2345", matched_vehicle_id: "vehicle-1", match_status: "matched", match_method: "license_plate" },
+  { external_id: "b", occurred_at: "2026-07-14T12:00:00.000Z", fuel_type: "Nafta", liters: 20, unit_price: 40, total_price: null, license_plate: "9ZZ 9999", matched_vehicle_id: null, match_status: "unmatched", match_method: null },
+  { external_id: "c", occurred_at: "2026-07-15T07:00:00.000Z", fuel_type: "AdBlue", liters: 10, unit_price: null, total_price: null, license_plate: "", matched_vehicle_id: null, match_status: "ambiguous", match_method: null }
+];
+const analytics = buildOrwiiFuelAnalytics(analyticsRows, { period: "30d", range: { from: "2026-06-16", to: "2026-07-15" } });
+assert.equal(analytics.summary.transactionCount, 3);
+assert.equal(analytics.summary.liters, 70);
+assert.equal(analytics.summary.totalCost, 2320);
+assert.equal(analytics.summary.averageUnitPrice, 38.667);
+assert.equal(analytics.summary.priceCoverage, 0.6667);
+assert.equal(analytics.summary.matchedCount, 1);
+assert.equal(analytics.summary.unmatchedCount, 1);
+assert.equal(analytics.summary.ambiguousCount, 1);
+assert.equal(analytics.summary.matchCoverage, 0.3333);
+assert.equal(analytics.byVehicle.length, 1);
+assert.equal(analytics.byVehicle[0].key, "vehicle-1");
+assert.equal(analytics.byVehicle[0].totalCost, 1520);
+assert.equal(analytics.byDay.length, 2);
+assert.equal(analytics.recentTransactions[0].externalId, "a");
+assert.equal(Object.hasOwn(analytics.recentTransactions[0], "sourcePayloadJson"), false);
+
+const d1Calls = [];
+const fakeDb = {
+  prepare(sql) {
+    const call = { sql, params: [] };
+    d1Calls.push(call);
+    return {
+      bind(...params) { call.params = params; return this; },
+      async all() { return { results: analyticsRows }; }
+    };
+  }
+};
+const databaseAnalytics = await getOrwiiFuelAnalytics({ SMART_ODPADY_DB: fakeDb }, { period: "7d", now: new Date("2026-07-15T12:00:00.000Z") });
+assert.deepEqual(databaseAnalytics.range, { from: "2026-07-09", to: "2026-07-15" });
+assert.deepEqual(d1Calls[0].params, ["2026-07-09T00:00:00.000Z", "2026-07-16T00:00:00.000Z"]);
+await assert.rejects(() => getOrwiiFuelAnalytics({ SMART_ODPADY_DB: fakeDb }, { period: "invalid" }), /Neplatné období/);
 console.log("orwii-fuel-store tests passed");

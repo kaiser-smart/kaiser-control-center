@@ -17,7 +17,8 @@ export const FLEET_API_ENDPOINTS = [
   "POST /api/vehicles/:id/documents",
   "DELETE /api/vehicle-documents/:documentId",
   "GET /api/vehicles/summary",
-  "POST /api/fleet/vistos-vehicles-preview"
+  "POST /api/fleet/vistos-vehicles-preview",
+  "GET /api/fleet/orwii-fuel/analytics"
 ];
 
 export const FLEET_DASHBOARD_METRICS = [
@@ -79,6 +80,7 @@ export const FLEET_TERM_DEFINITIONS = [
 export const FLEET_REQUIRED_SECTIONS = [
   { id: "overview", label: "Přehled" },
   { id: "vehicles", label: "Vozidla" },
+  { id: "fuel", label: "Tankování" },
   { id: "terms", label: "Termíny" },
   { id: "service", label: "Servis" },
   { id: "costs", label: "Náklady" },

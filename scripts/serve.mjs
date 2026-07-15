@@ -86,6 +86,7 @@ import { calculateCustomerPaymentRating } from "../functions/_lib/receivables-ra
 import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-plus-store.js";
 import { targetForSelfRepairReport } from "../functions/_lib/self-repair-targets.js";
 import { vehicleTrackingMapsConfigPayload } from "../functions/api/vehicle-tracking/maps-config.js";
+import { buildOrwiiFuelAnalytics } from "../functions/_lib/orwii-fuel-store.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -6084,6 +6085,34 @@ async function handleApi(request, response) {
     }
 
     sendJson(response, 200, await loadDevFleetPayload());
+    return true;
+  }
+
+  if (url.pathname === "/api/fleet/orwii-fuel/analytics" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "fleet", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const period = ["today", "7d", "30d", "12m", "all"].includes(url.searchParams.get("period")) ? url.searchParams.get("period") : "30d";
+    const fleet = await loadDevFleetPayload();
+    const matchedVehicleId = String(fleet.vehicles?.[0]?.id || "mock-vehicle-1");
+    const now = Date.now();
+    const occurredAt = (daysAgo, hour) => new Date(now - daysAgo * 86400000 - hour * 3600000).toISOString();
+    const mockRows = [
+      { external_id: "mock-fuel-1", occurred_at: occurredAt(0, 2), fuel_type: "Nafta", liters: 42.8, unit_price: 37.9, total_price: 1622.12, license_plate: fleet.vehicles?.[0]?.licensePlate || "1AB 2345", matched_vehicle_id: matchedVehicleId, match_status: "matched", match_method: "license_plate" },
+      { external_id: "mock-fuel-2", occurred_at: occurredAt(2, 4), fuel_type: "Nafta", liters: 61.2, unit_price: 38.1, total_price: 2331.72, license_plate: "2BC 3456", matched_vehicle_id: null, match_status: "unmatched", match_method: null },
+      { external_id: "mock-fuel-3", occurred_at: occurredAt(8, 3), fuel_type: "Nafta", liters: 55.4, unit_price: 37.7, total_price: 2088.58, license_plate: fleet.vehicles?.[0]?.licensePlate || "1AB 2345", matched_vehicle_id: matchedVehicleId, match_status: "matched", match_method: "license_plate" },
+      { external_id: "mock-fuel-4", occurred_at: occurredAt(18, 5), fuel_type: "AdBlue", liters: 18.5, unit_price: 18.9, total_price: 349.65, license_plate: "", matched_vehicle_id: null, match_status: "ambiguous", match_method: null },
+      { external_id: "mock-fuel-5", occurred_at: occurredAt(120, 3), fuel_type: "Nafta", liters: 49.6, unit_price: 36.8, total_price: 1825.28, license_plate: fleet.vehicles?.[0]?.licensePlate || "1AB 2345", matched_vehicle_id: matchedVehicleId, match_status: "matched", match_method: "license_plate" }
+    ];
+    const maxDays = period === "today" ? 1 : period === "7d" ? 7 : period === "30d" ? 30 : period === "12m" ? 365 : Number.POSITIVE_INFINITY;
+    const rows = mockRows.filter((row) => now - new Date(row.occurred_at).getTime() <= maxDays * 86400000);
+    sendJson(response, 200, buildOrwiiFuelAnalytics(rows, { period, range: null }));
     return true;
   }
 

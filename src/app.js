@@ -6,6 +6,13 @@ import {
   mainDashboardPeriod,
   mainDashboardVehicleSnapshot
 } from "./data/mainDashboard.js";
+import {
+  ORWII_FUEL_PERIODS,
+  filterOrwiiFuelTransactions,
+  orwiiFuelPeriod,
+  orwiiFuelSummary,
+  orwiiFuelVehicleSummary
+} from "./data/orwiiFuelAnalytics.js";
 import { AiAssistantChat } from "./components/AiAssistantChat.js";
 import { AiAssistantLauncher } from "./components/AiAssistantLauncher.js";
 import { AiAssistantPromoModal } from "./components/AiAssistantPromoModal.js";
@@ -1701,6 +1708,17 @@ const fleetUiState = {
     defects: "all",
     search: ""
   }
+};
+
+const fleetFuelState = {
+  loading: false,
+  loadedPeriod: "",
+  period: "30d",
+  analytics: null,
+  error: "",
+  search: "",
+  status: "all",
+  fuelType: "all"
 };
 
 const vehicleTrackingDemoState = {
@@ -6088,6 +6106,15 @@ function mainDashboardEconomicsSection(user) {
         ${MAIN_DASHBOARD_ECONOMICS_METRICS.map(mainDashboardEconomicsMetric).join("")}
       </div>
 
+      ${fuelAnalyticsPanel({
+        compact: true,
+        showPeriods: false,
+        eyebrow: "Skutečná data · PHM",
+        title: "Tankování za zvolené období",
+        detail: "PHM je napojené. Náklad/km, výnos a marže zůstávají oddělené, dokud nemají všechny ověřené vstupy.",
+        showTrend: true
+      })}
+
       <div class="main-dashboard-chart-grid">
         ${mainDashboardDistanceChart(period, user)}
         ${mainDashboardUnitEconomicsChart(period, user)}
@@ -6096,8 +6123,8 @@ function mainDashboardEconomicsSection(user) {
       <div class="main-dashboard-readiness" aria-label="Připravenost dat pro ekonomiku flotily">
         <div>
           <span class="main-dashboard-eyebrow">Datová připravenost</span>
-          <strong>Ekonomika zatím není funkční proces.</strong>
-          <small>Jde o UI návrh bez DB, nového API, automatizace a zápisu provozních dat.</small>
+          <strong>PHM je funkční; úplná ekonomika čeká na další zdroje.</strong>
+          <small>Tankování má D1, read-only analytické API a automatickou cloudovou synchronizaci. Kilometry, zakázky a další náklady zůstávají oddělené.</small>
         </div>
         ${MAIN_DASHBOARD_ECONOMICS_SOURCES.map((source) => `
           <article>
@@ -11452,19 +11479,188 @@ function fleetDocumentsDetail() {
   `;
 }
 
+function fuelNumber(value, options = {}) {
+  if (value === null || value === undefined || value === "") return "—";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "—";
+  return number.toLocaleString("cs-CZ", {
+    minimumFractionDigits: options.minimumFractionDigits ?? 0,
+    maximumFractionDigits: options.maximumFractionDigits ?? 1
+  });
+}
+
+function fuelMoney(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? `${fuelNumber(number, { maximumFractionDigits: 0 })} Kč` : "—";
+}
+
+function fuelLiters(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? `${fuelNumber(number, { maximumFractionDigits: 1 })} l` : "—";
+}
+
+function fuelMatchLabel(status = "") {
+  if (status === "matched") return "Spárováno";
+  if (status === "ambiguous") return "Nejednoznačné";
+  return "Nespárováno";
+}
+
+function fuelPeriodControls() {
+  return `
+    <div class="fuel-periods" role="group" aria-label="Období tankování">
+      ${ORWII_FUEL_PERIODS.map((period) => `
+        <button
+          class="fuel-period ${period.id === fleetFuelState.period ? "fuel-period--active" : ""}"
+          type="button"
+          data-fuel-period="${escapeHtml(period.id)}"
+          aria-pressed="${period.id === fleetFuelState.period ? "true" : "false"}"
+        >${escapeHtml(period.label)}</button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function fuelStatusMarkup() {
+  if (fleetFuelState.loading && !fleetFuelState.analytics) {
+    return `<div class="fuel-data-state" role="status"><strong>Tankování se načítá automaticky.</strong><span>Zdroj: hodinová cloudová synchronizace ORWII.</span></div>`;
+  }
+  if (fleetFuelState.error) {
+    return `<div class="fuel-data-state fuel-data-state--error" role="alert"><strong>Statistiky PHM nejsou dostupné.</strong><span>${escapeHtml(fleetFuelState.error)}</span></div>`;
+  }
+  return "";
+}
+
+function fuelKpis() {
+  const summary = orwiiFuelSummary(fleetFuelState.analytics || {});
+  const coverage = summary.transactionCount ? `${fuelNumber(summary.matchCoverage * 100, { maximumFractionDigits: 0 })} %` : "—";
+  const items = [
+    ["Tankování", fuelNumber(summary.transactionCount, { maximumFractionDigits: 0 }), "validní záznamy"],
+    ["Načerpáno", fuelLiters(summary.liters), "všechna vozidla"],
+    ["Cena PHM", fuelMoney(summary.totalCost), "z oceněných záznamů"],
+    ["Průměrná cena", summary.averageUnitPrice === null ? "—" : `${fuelNumber(summary.averageUnitPrice, { maximumFractionDigits: 2 })} Kč/l`, "vážená podle litrů"],
+    ["Spárování", coverage, `${summary.matchedCount} z ${summary.transactionCount}`],
+    ["K přiřazení", fuelNumber(summary.unmatchedCount + summary.ambiguousCount, { maximumFractionDigits: 0 }), "nezapočítáno vozidlům"]
+  ];
+  return `
+    <div class="fuel-kpis" aria-label="Souhrn tankování">
+      ${items.map(([label, value, detail]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></article>`).join("")}
+    </div>
+  `;
+}
+
+function fuelCoverageNotice() {
+  const summary = orwiiFuelSummary(fleetFuelState.analytics || {});
+  if (!summary.transactionCount || (!summary.unmatchedCount && !summary.ambiguousCount)) return "";
+  return `
+    <div class="fuel-coverage-notice" role="status">
+      <strong>${escapeHtml(String(summary.unmatchedCount + summary.ambiguousCount))} tankování zatím není bezpečně přiřazeno k vozidlu.</strong>
+      <span>Je zahrnuto ve firemních součtech, ale ne ve statistikách konkrétních vozidel, pořadí ani ceně vozidla.</span>
+    </div>
+  `;
+}
+
+function fuelTrend() {
+  const rows = (Array.isArray(fleetFuelState.analytics?.byDay) ? fleetFuelState.analytics.byDay : []).slice(-14);
+  if (!rows.length) return `<div class="fuel-data-state"><strong>Bez tankování v tomto období.</strong><span>Graf se doplní automaticky s další synchronizací ORWII.</span></div>`;
+  const max = Math.max(...rows.map((row) => Number(row.totalCost) || 0), 1);
+  return `
+    <div class="fuel-trend" aria-label="Vývoj ceny PHM podle dnů">
+      ${rows.map((row) => {
+        const height = Math.max(8, Math.round(((Number(row.totalCost) || 0) / max) * 100));
+        return `<article title="${escapeHtml(`${row.key}: ${fuelMoney(row.totalCost)}, ${fuelLiters(row.liters)}`)}"><span style="--fuel-bar:${height}%"></span><small>${escapeHtml(String(row.key || "").slice(5))}</small></article>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function fuelVehicleTable() {
+  const rows = Array.isArray(fleetFuelState.analytics?.byVehicle) ? fleetFuelState.analytics.byVehicle : [];
+  if (!rows.length) return `<div class="fuel-data-state"><strong>Zatím bez bezpečně spárovaných vozidel.</strong><span>Po spárování se zde automaticky objeví náklady, litry a počet tankování podle vozidla.</span></div>`;
+  return `
+    <div class="fuel-table-wrap">
+      <table class="fuel-table">
+        <thead><tr><th>Vozidlo</th><th>Tankování</th><th>Litry</th><th>Cena PHM</th><th>Průměr Kč/l</th></tr></thead>
+        <tbody>${rows.map((row) => `
+          <tr>
+            <td><strong>${escapeHtml(row.label || row.key)}</strong></td>
+            <td>${escapeHtml(fuelNumber(row.transactionCount, { maximumFractionDigits: 0 }))}</td>
+            <td>${escapeHtml(fuelLiters(row.liters))}</td>
+            <td>${escapeHtml(fuelMoney(row.totalCost))}</td>
+            <td>${escapeHtml(row.averageUnitPrice === null ? "—" : `${fuelNumber(row.averageUnitPrice, { maximumFractionDigits: 2 })} Kč/l`)}</td>
+          </tr>`).join("")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function fuelFilters() {
+  const fuelTypes = [...new Set((fleetFuelState.analytics?.recentTransactions || []).map((item) => item.fuelType || "Neuvedeno"))].sort();
+  return `
+    <div class="fuel-filters">
+      <label><span>Hledat</span><input type="search" value="${escapeHtml(fleetFuelState.search)}" placeholder="SPZ, čip nebo ID" data-fuel-filter="search"></label>
+      <label><span>Spárování</span><select data-fuel-filter="status">
+        ${[["all", "Vše"], ["matched", "Spárováno"], ["unmatched", "Nespárováno"], ["ambiguous", "Nejednoznačné"]].map(([value, label]) => `<option value="${value}" ${fleetFuelState.status === value ? "selected" : ""}>${label}</option>`).join("")}
+      </select></label>
+      <label><span>Palivo</span><select data-fuel-filter="fuelType"><option value="all">Všechna paliva</option>${fuelTypes.map((value) => `<option value="${escapeHtml(value)}" ${fleetFuelState.fuelType === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select></label>
+    </div>
+  `;
+}
+
+function fuelTransactionsTable() {
+  const rows = filterOrwiiFuelTransactions(fleetFuelState.analytics?.recentTransactions || [], fleetFuelState);
+  if (!rows.length) return `<div class="fuel-data-state"><strong>Žádné tankování neodpovídá filtru.</strong><span>Změň období nebo filtr.</span></div>`;
+  return `
+    <div class="fuel-table-wrap">
+      <table class="fuel-table fuel-table--transactions">
+        <thead><tr><th>Datum</th><th>SPZ</th><th>Palivo</th><th>Litry</th><th>Cena/l</th><th>Celkem</th><th>Stav</th></tr></thead>
+        <tbody>${rows.map((row) => `
+          <tr>
+            <td>${escapeHtml(formatDateTime(row.occurredAt) || row.occurredAt || "—")}</td>
+            <td><strong>${escapeHtml(row.licensePlate || "Bez SPZ")}</strong></td>
+            <td>${escapeHtml(row.fuelType || "Neuvedeno")}</td>
+            <td>${escapeHtml(fuelLiters(row.liters))}</td>
+            <td>${escapeHtml(row.unitPrice === null ? "—" : `${fuelNumber(row.unitPrice, { maximumFractionDigits: 2 })} Kč`)}</td>
+            <td>${escapeHtml(fuelMoney(row.totalPrice))}</td>
+            <td><span class="fuel-match fuel-match--${escapeHtml(row.matchStatus || "unmatched")}">${escapeHtml(fuelMatchLabel(row.matchStatus))}</span></td>
+          </tr>`).join("")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function fuelAnalyticsPanel(options = {}) {
+  const hasData = Boolean(fleetFuelState.analytics);
+  return `
+    <div class="fuel-analytics ${options.compact ? "fuel-analytics--compact" : ""}">
+      <header class="fuel-analytics__head">
+        <div><span>${escapeHtml(options.eyebrow || "ORWII · automatická synchronizace")}</span><h3>${escapeHtml(options.title || "Tankování a PHM")}</h3><p>${escapeHtml(options.detail || "Skutečná tankování z vnitrofiremní čerpací stanice.")}</p></div>
+        ${options.showPeriods === false ? "" : fuelPeriodControls()}
+      </header>
+      ${fuelStatusMarkup()}
+      ${hasData ? `${fuelKpis()}${fuelCoverageNotice()}${options.showTrend ? fuelTrend() : ""}${options.showVehicles ? fuelVehicleTable() : ""}${options.showFilters ? fuelFilters() : ""}${options.showTransactions ? fuelTransactionsTable() : ""}` : ""}
+      <footer class="fuel-source-note">Zdroj se synchronizuje v Cloudflare každou hodinu. Otevření této stránky synchronizaci nespouští ani neovlivňuje.</footer>
+    </div>
+  `;
+}
+
 function fleetCostsDetail(vehicle = {}) {
+  const fuel = orwiiFuelVehicleSummary(fleetFuelState.analytics || {}, vehicle.id);
   const rows = [
     ["Náklady tento měsíc", vehicle.costsThisMonth],
     ["Náklady za 12 měsíců", vehicle.costsLast12Months],
     ["Servis", vehicle.serviceCosts],
     ["Pneumatiky", vehicle.tyreCosts],
     ["Pojištění", vehicle.insuranceCosts],
-    ["Palivo", vehicle.fuelCosts],
+    ["Palivo", fuel ? fuelMoney(fuel.totalCost) : vehicle.fuelCosts],
+    ["Načerpáno", fuel ? fuelLiters(fuel.liters) : null],
+    ["Počet tankování", fuel ? fuelNumber(fuel.transactionCount, { maximumFractionDigits: 0 }) : null],
     ["Mytí", vehicle.washCosts],
     ["Opravy", vehicle.repairCosts],
     ["Mimořádné náklady", vehicle.extraCosts]
   ];
-  const hasCosts = rows.some(([, value]) => value !== undefined && value !== null && value !== "");
+  const hasCosts = Boolean(fuel) || rows.some(([, value]) => value !== undefined && value !== null && value !== "");
   return `
     <article class="fleet-detail-card">
       <div class="fleet-card-head">
@@ -11481,8 +11677,8 @@ function fleetCostsDetail(vehicle = {}) {
         </div>
       ` : `
         <div class="fleet-empty-state fleet-empty-state--calm">
-          <strong>Náklady zatím nejsou napojené</strong>
-          <span>Nákladové anomálie se tady ukážou po napojení faktur, servisu, paliva nebo dalších nákladových zdrojů.</span>
+          <strong>Bez bezpečně spárovaného tankování</strong>
+          <span>PHM se u vozidla zobrazí až po jednoznačném spárování. Nespárované záznamy se sem nepřičítají odhadem.</span>
         </div>
       `}
     </article>
@@ -12802,6 +12998,26 @@ function fleetTermsSection(activeId) {
   `;
 }
 
+function fleetFuelSection(activeId) {
+  return `
+    <section class="fleet-section fleet-section--wide" id="fleet-fuel" aria-labelledby="fleet-fuel-title" ${fleetPanelAttributes("fuel", activeId)}>
+      ${fleetSectionHeader(
+        "fleet-fuel-title",
+        "Tankování",
+        "Automatický seznam a statistiky tankování z vnitrofiremní čerpací stanice.",
+        { badge: false }
+      )}
+      ${fuelAnalyticsPanel({
+        title: "Seznam tankování",
+        detail: "Přehled se aktualizuje z cloudového zrcadla ORWII bez závislosti na otevření modulu.",
+        showTrend: true,
+        showFilters: true,
+        showTransactions: true
+      })}
+    </section>
+  `;
+}
+
 function fleetServiceSection(activeId) {
   const serviceCases = fleetVehiclesState.vehicles
     .flatMap((vehicle) => fleetDriverReportSummary(vehicle).openReports
@@ -12879,17 +13095,24 @@ function fleetCostsSection(activeId) {
         "Ekonomika vozidel, dodavatelé, servis, pojištění, palivo a anomálie.",
         { badge: false }
       )}
+      ${fuelAnalyticsPanel({
+        eyebrow: "Skutečný napojený nákladový zdroj",
+        title: "PHM z ORWII",
+        detail: "Firemní součet zahrnuje validní tankování; rozpad podle vozidla pouze bezpečně spárované záznamy.",
+        showTrend: true,
+        showVehicles: true
+      })}
       <div class="fleet-cost-overview">
-        ${["Podle vozidla", "Podle typu", "Podle dodavatele", "Servis", "Pojištění", "Pneumatiky", "Palivo", "Mimořádné opravy", "Cena na km", "Cena na měsíc"].map((label) => `
+        ${["Servis", "Pojištění", "Pneumatiky", "Mimořádné opravy", "Celková cena na km", "Celková cena na měsíc"].map((label) => `
           <article>
             <span>${escapeHtml(label)}</span>
-            <strong>Bez napojených nákladů</strong>
+            <strong>Čeká na další zdroj</strong>
           </article>
         `).join("")}
       </div>
-      <div class="fleet-empty-state fleet-empty-state--calm">
-        <strong>Bez nákladových záznamů</strong>
-        <span>Nákladové anomálie se zobrazí po napojení faktur, servisních nákladů, pojištění, paliva nebo dalších nákladových zdrojů.</span>
+      <div class="fuel-coverage-notice fuel-coverage-notice--neutral">
+        <strong>Celkový Náklad/km zatím nelze bezpečně dopočítat.</strong>
+        <span>Vyžaduje ověřené kilometry za stejné období a další přímé náklady. PHM se nezamění za úplné náklady vozidla.</span>
       </div>
     </section>
   `;
@@ -13006,6 +13229,7 @@ function fleetModulePage(moduleItem, user, options = {}) {
       <div class="fleet-content">
         ${fleetDashboardSection(activeTab)}
         ${fleetVehiclesSection(activeTab)}
+        ${fleetFuelSection(activeTab)}
         ${fleetDetailSection(vehicleId, activeTab)}
         ${fleetTermsSection(activeTab)}
         ${fleetServiceSection(activeTab)}
@@ -35106,8 +35330,11 @@ function modulePage(moduleItem, user, isDashboard = false) {
     : "";
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
-  const reportsPanel = moduleItem.id === "reports" && !isDashboard
-    ? `${notificationCenterSection(user)}${customerMessagingSection(user)}`
+  const costsPanel = moduleItem.id === "costs"
+    ? `<section class="module-panel fuel-module-panel" aria-labelledby="fuel-costs-module-title"><h2 id="fuel-costs-module-title">Náklady na PHM</h2>${fuelAnalyticsPanel({ title: "PHM podle období a vozidel", detail: "První skutečný nákladový zdroj modulu Náklady.", showTrend: true, showVehicles: true, showTransactions: true })}</section>`
+    : "";
+  const reportsPanel = moduleItem.id === "reports"
+    ? `<section class="module-panel fuel-module-panel" aria-labelledby="fuel-report-module-title"><h2 id="fuel-report-module-title">Report tankování a PHM</h2>${fuelAnalyticsPanel({ title: "Vývoj tankování", detail: "Read-only provozní report za zvolené období.", showTrend: true, showVehicles: true, showTransactions: true })}</section>${notificationCenterSection(user)}${customerMessagingSection(user)}`
     : "";
   const genericSettingsPanel = !isDashboard && moduleItem.id !== "dashboard" ? genericModuleSettingsSection(moduleItem) : "";
 
@@ -35137,6 +35364,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
       </section>
       ${usersPanel}
       ${settingsPanel}
+      ${costsPanel}
       ${reportsPanel}
       ${genericSettingsPanel}
     </main>
@@ -41657,6 +41885,32 @@ async function loadFleetVehicles(options = {}) {
   }
 }
 
+async function loadFleetFuelAnalytics(options = {}) {
+  const period = orwiiFuelPeriod(options.period || fleetFuelState.period).id;
+  const force = Boolean(options.force);
+  const renderAfter = options.renderAfter !== false;
+  if (fleetFuelState.loading) return;
+  if (!hasPermission(currentUser(), "fleet", "view")) return;
+  if (!force && fleetFuelState.loadedPeriod === period && fleetFuelState.analytics) return;
+
+  fleetFuelState.loading = true;
+  fleetFuelState.period = period;
+  fleetFuelState.error = "";
+  if (fleetFuelState.loadedPeriod !== period) fleetFuelState.analytics = null;
+  try {
+    const result = await apiJson(`/api/fleet/orwii-fuel/analytics?period=${encodeURIComponent(period)}`);
+    fleetFuelState.analytics = result;
+    fleetFuelState.loadedPeriod = period;
+  } catch (error) {
+    fleetFuelState.analytics = null;
+    fleetFuelState.loadedPeriod = "";
+    fleetFuelState.error = error?.payload?.error || error?.message || "Statistiky tankování se teď nepodařilo načíst.";
+  } finally {
+    fleetFuelState.loading = false;
+  }
+  if (renderAfter) render();
+}
+
 function updateFleetVehicleFilter(field) {
   const name = field?.name;
   if (!name || !Object.prototype.hasOwnProperty.call(fleetUiState.vehicleFilters, name)) {
@@ -44483,6 +44737,9 @@ function renderAuthenticatedApp(user) {
     ensureCollectionRoutesSvozKaiserWatchdog(user);
     app.innerHTML = homePage(user);
     ensureDataBoxPlusHomeStatus(user);
+    if (hasPermission(user, "fleet", "view") && mainDashboardCanSeeEconomics(user)) {
+      void loadFleetFuelAnalytics({ period: mainDashboardUiState.period });
+    }
     document.title = `Dashboard firmy | ${APP_NAME}`;
     return;
   }
@@ -44558,6 +44815,7 @@ function renderAuthenticatedApp(user) {
     app.innerHTML = fleetModulePage(moduleItem, user, { vehicleId: fleetVehicleId });
     document.title = `Detail vozidla | ${APP_NAME}`;
     loadFleetVehicles();
+    void loadFleetFuelAnalytics();
     return;
   }
 
@@ -44607,6 +44865,10 @@ function renderAuthenticatedApp(user) {
     if (moduleItem.id === "reports") {
       loadNotificationCenter();
       loadCustomerMessaging();
+      void loadFleetFuelAnalytics();
+    }
+    if (moduleItem.id === "costs") {
+      void loadFleetFuelAnalytics();
     }
     if (moduleItem.id === "absence") {
       loadEmployeeList();
@@ -44631,6 +44893,7 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === "fleet") {
       loadFleetVehicles();
+      void loadFleetFuelAnalytics();
     }
     if (moduleItem.id === "driver-reports") {
       ensureDriverReportsData();
@@ -44672,6 +44935,10 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === "fleet") {
       loadFleetVehicles();
+      void loadFleetFuelAnalytics();
+    }
+    if (moduleItem.id === "costs" || moduleItem.id === "reports") {
+      void loadFleetFuelAnalytics();
     }
     if (moduleItem.id === "driver-reports") {
       ensureDriverReportsData();
@@ -47595,6 +47862,22 @@ document.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const fuelSearch = event.target.closest("[data-fuel-filter='search']");
+  if (fuelSearch) {
+    const start = fuelSearch.selectionStart;
+    const end = fuelSearch.selectionEnd;
+    fleetFuelState.search = fuelSearch.value || "";
+    render();
+    requestAnimationFrame(() => {
+      const input = document.querySelector("[data-fuel-filter='search']");
+      if (input) {
+        input.focus();
+        if (start !== null && end !== null) input.setSelectionRange(start, end);
+      }
+    });
+    return;
+  }
+
   const driverReportField = event.target.closest("[data-driver-report-form] input, [data-driver-report-form] textarea, [data-driver-report-form] select");
   if (driverReportField) {
     const form = driverReportField.closest("[data-driver-report-form]");
@@ -47747,6 +48030,15 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const fuelFilter = event.target.closest("[data-fuel-filter]");
+  if (fuelFilter) {
+    const key = fuelFilter.dataset.fuelFilter;
+    if (key === "status") fleetFuelState.status = fuelFilter.value || "all";
+    if (key === "fuelType") fleetFuelState.fuelType = fuelFilter.value || "all";
+    render();
+    return;
+  }
+
   const trackingInfoStyle = event.target.closest("[data-tracking-info-style]");
   if (trackingInfoStyle) {
     await saveVehicleTrackingInfoStyle(trackingInfoStyle.value);
@@ -48043,7 +48335,18 @@ document.addEventListener("click", async (event) => {
   if (mainDashboardPeriodButton) {
     event.preventDefault();
     mainDashboardUiState.period = mainDashboardPeriod(mainDashboardPeriodButton.dataset.mainDashboardPeriod).id;
+    const fuelLoading = loadFleetFuelAnalytics({ period: mainDashboardUiState.period });
     render();
+    await fuelLoading;
+    return;
+  }
+
+  const fuelPeriodButton = event.target.closest("[data-fuel-period]");
+  if (fuelPeriodButton) {
+    event.preventDefault();
+    const fuelLoading = loadFleetFuelAnalytics({ period: fuelPeriodButton.dataset.fuelPeriod || "30d" });
+    render();
+    await fuelLoading;
     return;
   }
 

@@ -139,6 +139,159 @@ export async function listOrwiiFuelTransactions(env, limit = 100) {
   return { apiStatus: "ready", mode: "cloud-scheduled-sync", transactions: result.results || [] };
 }
 
+const ORWII_FUEL_ANALYTICS_PERIODS = new Set(["today", "7d", "30d", "12m", "all"]);
+
+function analyticsPeriod(value) {
+  const period = cleanString(value || "30d").toLowerCase();
+  if (!ORWII_FUEL_ANALYTICS_PERIODS.has(period)) {
+    throw new OrwiiFuelStoreError("Neplatné období statistik PHM.", 400, "orwii_analytics_period_invalid");
+  }
+  return period;
+}
+
+function utcDateDaysAgo(days, now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days)).toISOString().slice(0, 10);
+}
+
+function analyticsRange(period, now = new Date()) {
+  const to = utcDateDaysAgo(0, now);
+  if (period === "all") return { from: "", to };
+  const days = period === "today" ? 0 : period === "7d" ? 6 : period === "12m" ? 364 : 29;
+  return { from: utcDateDaysAgo(days, now), to };
+}
+
+function finiteNumber(value) {
+  if (value === null || value === undefined || cleanString(value) === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function transactionCost(row = {}) {
+  const total = finiteNumber(row.total_price);
+  if (total !== null && total >= 0) return total;
+  const liters = finiteNumber(row.liters);
+  const unitPrice = finiteNumber(row.unit_price);
+  return liters !== null && liters >= 0 && unitPrice !== null && unitPrice >= 0 ? liters * unitPrice : null;
+}
+
+function rounded(value, digits = 2) {
+  if (!Number.isFinite(value)) return null;
+  const factor = 10 ** digits;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
+
+function fuelAggregate(rows = []) {
+  const result = {
+    transactionCount: 0,
+    liters: 0,
+    totalCost: 0,
+    pricedCount: 0,
+    pricedLiters: 0,
+    matchedCount: 0,
+    unmatchedCount: 0,
+    ambiguousCount: 0
+  };
+  for (const row of rows) {
+    result.transactionCount += 1;
+    const liters = finiteNumber(row.liters);
+    if (liters !== null && liters >= 0) result.liters += liters;
+    const cost = transactionCost(row);
+    if (cost !== null) {
+      result.totalCost += cost;
+      result.pricedCount += 1;
+      if (liters !== null && liters >= 0) result.pricedLiters += liters;
+    }
+    const status = cleanString(row.match_status || "unmatched").toLowerCase();
+    if (status === "matched") result.matchedCount += 1;
+    else if (status === "ambiguous") result.ambiguousCount += 1;
+    else result.unmatchedCount += 1;
+  }
+  return {
+    ...result,
+    liters: rounded(result.liters),
+    totalCost: result.pricedCount > 0 ? rounded(result.totalCost) : null,
+    averageUnitPrice: result.pricedLiters > 0 ? rounded(result.totalCost / result.pricedLiters, 3) : null,
+    priceCoverage: result.transactionCount > 0 ? rounded(result.pricedCount / result.transactionCount, 4) : 0,
+    matchCoverage: result.transactionCount > 0 ? rounded(result.matchedCount / result.transactionCount, 4) : 0
+  };
+}
+
+function groupFuelRows(rows, keyForRow, labelForRow = keyForRow) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = cleanString(keyForRow(row));
+    if (!key) continue;
+    const current = groups.get(key) || { key, label: cleanString(labelForRow(row)) || key, rows: [] };
+    current.rows.push(row);
+    groups.set(key, current);
+  }
+  return [...groups.values()].map((group) => ({ key: group.key, label: group.label, ...fuelAggregate(group.rows) }));
+}
+
+export function buildOrwiiFuelAnalytics(rows = [], options = {}) {
+  const transactions = (Array.isArray(rows) ? rows : []).filter((row) => row && typeof row === "object");
+  const summary = fuelAggregate(transactions);
+  const matchedRows = transactions.filter((row) => cleanString(row.match_status).toLowerCase() === "matched" && cleanString(row.matched_vehicle_id));
+  const byVehicle = groupFuelRows(
+    matchedRows,
+    (row) => row.matched_vehicle_id,
+    (row) => row.license_plate || row.matched_vehicle_id
+  ).sort((left, right) => Number(right.totalCost || 0) - Number(left.totalCost || 0) || right.liters - left.liters);
+  const byDay = groupFuelRows(
+    transactions,
+    (row) => cleanString(row.occurred_at).slice(0, 10)
+  ).sort((left, right) => left.key.localeCompare(right.key));
+  const byFuelType = groupFuelRows(
+    transactions,
+    (row) => row.fuel_type || "Neuvedeno"
+  ).sort((left, right) => right.liters - left.liters);
+  const recentTransactions = transactions.slice(0, 200).map((row) => ({
+    externalId: cleanString(row.external_id),
+    occurredAt: cleanString(row.occurred_at),
+    fuelType: cleanString(row.fuel_type),
+    liters: finiteNumber(row.liters),
+    unitPrice: finiteNumber(row.unit_price),
+    totalPrice: transactionCost(row),
+    odometerKm: finiteNumber(row.odometer_km),
+    licensePlate: cleanString(row.license_plate),
+    orwiiVehicleId: cleanString(row.orwii_vehicle_id),
+    fuelChipId: cleanString(row.fuel_chip_id),
+    matchedVehicleId: cleanString(row.matched_vehicle_id),
+    matchStatus: cleanString(row.match_status || "unmatched"),
+    matchMethod: cleanString(row.match_method)
+  }));
+  return {
+    apiStatus: "ready",
+    mode: "cloud-scheduled-sync",
+    period: cleanString(options.period || "30d"),
+    range: options.range || null,
+    summary,
+    byVehicle,
+    byDay,
+    byFuelType,
+    recentTransactions,
+    generatedAt: new Date().toISOString(),
+    dataRules: {
+      companyTotals: "all_valid_transactions",
+      vehicleTotals: "matched_only",
+      costPerKm: "requires_verified_same_period_mileage"
+    }
+  };
+}
+
+export async function getOrwiiFuelAnalytics(env, options = {}) {
+  const db = database(env, true);
+  const period = analyticsPeriod(options.period);
+  const range = analyticsRange(period, options.now instanceof Date ? options.now : new Date());
+  const columns = `external_id, occurred_at, fuel_type, liters, unit_price, total_price, odometer_km,
+    license_plate, orwii_vehicle_id, fuel_chip_id, matched_vehicle_id, match_status, match_method`;
+  const statement = range.from
+    ? db.prepare(`SELECT ${columns} FROM fleet_orwii_fuel_transactions WHERE occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at DESC, updated_at DESC`).bind(`${range.from}T00:00:00.000Z`, `${utcDateDaysAgo(-1, new Date(`${range.to}T00:00:00.000Z`))}T00:00:00.000Z`)
+    : db.prepare(`SELECT ${columns} FROM fleet_orwii_fuel_transactions ORDER BY occurred_at DESC, updated_at DESC`);
+  const result = await statement.all();
+  return buildOrwiiFuelAnalytics(result.results || [], { period, range });
+}
+
 function randomId(prefix) {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()

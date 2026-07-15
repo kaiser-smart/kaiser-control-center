@@ -21,7 +21,7 @@ import {
     label: "Náklady a PHM",
     state: "running",
     status: "Běží",
-    detail: "Cloudová synchronizace ORWII PHM běží automaticky; první import se zapisuje do provozní databáze při pravidelném běhu."
+    detail: "ORWII PHM se automaticky synchronizuje do D1 a je dostupné pro read-only statistiky. Úplné přímé náklady čekají na další zdroje."
   });
 }
 
@@ -80,6 +80,7 @@ import {
   assert.match(appSource, /Výnos\/km vs\. náklad\/km/);
   assert.match(appSource, /Nezařazené km/);
   assert.match(appSource, /data-main-dashboard-period/);
+  assert.match(appSource, /Tankování za zvolené období/);
   assert.match(styleSource, /\.main-dashboard-economics/);
   assert.match(styleSource, /\.main-dashboard-chart/);
 }

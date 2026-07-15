@@ -20,7 +20,7 @@ export const MAIN_DASHBOARD_ECONOMICS_SOURCES = Object.freeze([
     label: "Náklady a PHM",
     state: "running",
     status: "Běží",
-    detail: "Cloudová synchronizace ORWII PHM běží automaticky; první import se zapisuje do provozní databáze při pravidelném běhu."
+    detail: "ORWII PHM se automaticky synchronizuje do D1 a je dostupné pro read-only statistiky. Úplné přímé náklady čekají na další zdroje."
   }
 ]);
 

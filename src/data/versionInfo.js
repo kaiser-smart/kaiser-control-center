@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Vozidla: automatické tankování a statistiky PHM",
+    text: "Vozový park má záložku Tankování s automatickým ORWII přehledem. Skutečné litry a ceny se promítají do Nákladů, Reportů, detailu vozidla a ekonomiky HP; nespárované záznamy zůstávají oddělené a synchronizace není závislá na otevření modulu."
+  },
+  {
     title: "Datové schránky: klávesnicové posouvání historie chatu",
     text: "Po zaostření historie posouvají šipky řádkově a Page Up/Page Down po stránkách; Home otevře začátek a End poslední zprávu. Myš a trackpad zůstávají beze změny."
   },
