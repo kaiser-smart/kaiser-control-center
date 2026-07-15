@@ -110,6 +110,7 @@ const DRIVER_REPORT_UNVERIFIED_VEHICLE_MESSAGE = "Nevidím bezpečně přiřazen
 const DRIVER_REPORT_NO_VERIFIED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES";
 const DRIVER_REPORT_VEHICLE_PICKER_SELECTION_TTL_MS = 5 * 60 * 1000;
 const COLLECTION_ROUTE_GPS_TOOL_NAME = "prepare_collection_route_gps_capture";
+const COLLECTION_ROUTE_TEST_INCIDENT_TOOL_NAME = "prepare_collection_route_test_incident";
 const COLLECTION_ROUTE_GPS_ROUTE = "/trasy-svozu";
 const COLLECTION_ROUTE_GPS_WRONG_TOOL_MESSAGE = "Pro GPS stanoviště není potřeba vybírat vozidlo. Připravím GPS měření přímo ve Svozových trasách.";
 
@@ -146,6 +147,15 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
     name: COLLECTION_ROUTE_GPS_TOOL_NAME,
     description: "Ve Svozových trasách připraví fyzické GPS měření aktuálního TEST stanoviště. Použij ho pro povel potvrdit, změřit nebo zmapovat GPS stanoviště. Nikdy kvůli tomu neotvírej výběr vozidla. Nástroj nic neukládá; finální uložení vždy vyžaduje fyzické klepnutí člověka v KSO.",
     parameters: [
+      { name: "transcriptIntent", type: "string", required: false },
+      { name: "currentModuleRoute", type: "string", required: false }
+    ]
+  },
+  {
+    name: COLLECTION_ROUTE_TEST_INCIDENT_TOOL_NAME,
+    description: "Ve Svozových trasách otevře bezpečný formulář TEST hlášení pro přeplněnou nádobu, poškozenou nádobu nebo nepřístupnou firmu. Nástroj nic neukládá ani neodesílá. Fotografie a velké fyzické klepnutí člověka v KSO jsou vždy povinné.",
+    parameters: [
+      { name: "incidentType", type: "string", required: true, description: "Použij pouze overfilled_container, damaged_container nebo site_inaccessible." },
       { name: "transcriptIntent", type: "string", required: false },
       { name: "currentModuleRoute", type: "string", required: false }
     ]
@@ -339,7 +349,8 @@ export function createElevenLabsClientTools({
   toast = () => {},
   highlight = () => {},
   requestJson = null,
-  prepareCollectionRouteGpsCapture = null
+  prepareCollectionRouteGpsCapture = null,
+  prepareCollectionRouteTestIncident = null
 } = {}) {
   function guardedRoute(route) {
     const normalizedRoute = normalizeAiRoute(route);
@@ -1082,6 +1093,19 @@ export function createElevenLabsClientTools({
         apiStatus: "ready"
       };
     }
+    if (isCollectionRouteTestIncidentIntent(parameters)) {
+      return {
+        ok: false,
+        status: "wrong_tool_for_collection_incident",
+        errorCode: "COLLECTION_ROUTE_TEST_INCIDENT_TOOL_REQUIRED",
+        pickerOpened: false,
+        nextTool: COLLECTION_ROUTE_TEST_INCIDENT_TOOL_NAME,
+        message: "Pro hlášení ze stanoviště není potřeba vybírat vozidlo.",
+        messageForAssistant: `Neotvírej výběr vozidla. Hned zavolej ${COLLECTION_ROUTE_TEST_INCIDENT_TOOL_NAME} se správným incidentType.`,
+        answerText: "Pro hlášení ze stanoviště není potřeba vybírat vozidlo.",
+        apiStatus: "ready"
+      };
+    }
 
     const sessionKey = driverReportSessionKey(parameters);
     const calledDiagnostic = driverVehiclePickerDiagnostic("show_driver_vehicle_picker", "called", { sessionKey });
@@ -1261,6 +1285,27 @@ export function createElevenLabsClientTools({
     const mentionsStationAction = text.includes("stanovist") && /(potvrd|zmer|zmap|mapuj|nacti|uloz)/.test(text);
 
     return mentionsGpsPoint || mentionsStationAction;
+  }
+
+  function isCollectionRouteTestIncidentIntent(parameters = {}) {
+    const actualRoute = typeof window !== "undefined"
+      ? normalizeAiRoute(window.location?.pathname || "")
+      : "";
+    const requestedRoute = normalizeAiRoute(
+      parameters.currentModuleRoute
+      || parameters.current_module_route
+      || parameters.route
+      || ""
+    );
+    if (actualRoute !== COLLECTION_ROUTE_GPS_ROUTE && requestedRoute !== COLLECTION_ROUTE_GPS_ROUTE) return false;
+    const text = normalizeKey([
+      parameters.transcriptIntent,
+      parameters.transcript_intent,
+      parameters.intent,
+      parameters.query,
+      parameters.message
+    ].filter(Boolean).join(" "));
+    return /(prepln|poskoz|nepristup|nelze se dostat|neda se dostat|nemuzu se dostat)/.test(text);
   }
 
   function absenceDayPartValue(value, halfDay = null) {
@@ -1872,6 +1917,84 @@ export function createElevenLabsClientTools({
           vehicleSelectionRequired: false,
           answerText: "GPS měření se nepodařilo připravit. Použij velké tlačítko Potvrdit GPS stanoviště.",
           messageForAssistant: "Řekni stručně, že měření selhalo. Neotvírej výběr vozidla."
+        };
+      }
+    },
+
+    async prepare_collection_route_test_incident(parameters = {}) {
+      const currentRoute = typeof window !== "undefined"
+        ? normalizeAiRoute(window.location?.pathname || "")
+        : "";
+      const incidentType = cleanString(parameters.incidentType || parameters.incident_type || parameters.type);
+      if (currentRoute !== COLLECTION_ROUTE_GPS_ROUTE) {
+        return {
+          ok: false,
+          status: "wrong_module",
+          incidentPrepared: false,
+          saved: false,
+          finalTapRequired: true,
+          photoRequired: true,
+          sendsNotifications: false,
+          changesRoute: false,
+          answerText: "TEST hlášení připravím jen v otevřeném modulu Svozové trasy."
+        };
+      }
+      if (!["overfilled_container", "damaged_container", "site_inaccessible"].includes(incidentType)) {
+        return {
+          ok: false,
+          status: "incident_type_required",
+          incidentPrepared: false,
+          saved: false,
+          finalTapRequired: true,
+          photoRequired: true,
+          sendsNotifications: false,
+          changesRoute: false,
+          answerText: "Řekni, jestli jde o přeplněnou nádobu, poškozenou nádobu nebo nepřístupnou firmu."
+        };
+      }
+      if (typeof prepareCollectionRouteTestIncident !== "function") {
+        return {
+          ok: false,
+          status: "unavailable",
+          incidentPrepared: false,
+          saved: false,
+          finalTapRequired: true,
+          photoRequired: true,
+          sendsNotifications: false,
+          changesRoute: false,
+          answerText: "TEST hlášení teď nejde hlasem připravit. Použij jedno ze tří velkých tlačítek v tabletu."
+        };
+      }
+      try {
+        const result = await prepareCollectionRouteTestIncident({
+          ...parameters,
+          incidentType,
+          currentModuleRoute: currentRoute
+        });
+        return result && typeof result === "object"
+          ? result
+          : {
+              ok: false,
+              status: "failed",
+              incidentPrepared: false,
+              saved: false,
+              finalTapRequired: true,
+              photoRequired: true,
+              sendsNotifications: false,
+              changesRoute: false,
+              answerText: "TEST hlášení se nepodařilo připravit. Použij jedno ze tří velkých tlačítek."
+            };
+      } catch (_) {
+        return {
+          ok: false,
+          status: "failed",
+          incidentPrepared: false,
+          saved: false,
+          finalTapRequired: true,
+          photoRequired: true,
+          sendsNotifications: false,
+          changesRoute: false,
+          answerText: "TEST hlášení se nepodařilo připravit. Použij jedno ze tří velkých tlačítek."
         };
       }
     },

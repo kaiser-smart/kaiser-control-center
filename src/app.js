@@ -51,7 +51,7 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.11";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.12";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRouteGpsPrompt,
@@ -1233,6 +1233,11 @@ const systemCheckState = {
 };
 const COLLECTION_ROUTES_STATIONARY_FIELD_TEST_MODE = "stationary-field-test";
 const COLLECTION_ROUTES_STATIONARY_FIELD_SOURCE_ID = "test-field-site-501";
+const COLLECTION_ROUTES_TEST_INCIDENT_TYPES = Object.freeze({
+  overfilled_container: "Přeplněná nádoba",
+  damaged_container: "Poškozená nádoba",
+  site_inaccessible: "Nelze se dostat do firmy"
+});
 
 const collectionRoutesPilotState = {
   loaded: false,
@@ -1364,6 +1369,12 @@ const collectionRoutesPilotState = {
   testGpsError: "",
   testGpsPreview: null,
   testGpsVoiceListening: false,
+  testIncidents: [],
+  testIncidentsLoading: false,
+  testIncidentPending: "",
+  testIncidentMessage: "",
+  testIncidentError: "",
+  testIncidentDraft: null,
   testTabletOpen: false,
   testTabletMapNode: null,
   myDailyRouteLoaded: false,
@@ -1611,7 +1622,8 @@ const elevenLabsAssistant = ElevenLabsAssistantProvider({
     toast: (payload) => showAiToast(payload),
     highlight: (payload) => showAiHighlight(payload),
     requestJson: (path, options) => apiJson(path, options),
-    prepareCollectionRouteGpsCapture: (parameters) => prepareCollectionRoutesTestGpsFromSarlota(parameters)
+    prepareCollectionRouteGpsCapture: (parameters) => prepareCollectionRoutesTestGpsFromSarlota(parameters),
+    prepareCollectionRouteTestIncident: (parameters) => prepareCollectionRoutesTestIncidentFromSarlota(parameters)
   }
 });
 
@@ -22244,6 +22256,121 @@ function syncCollectionRoutesTestTabletHereMap() {
   }
 }
 
+function collectionRoutesTestIncidentTypeLabel(type) {
+  return COLLECTION_ROUTES_TEST_INCIDENT_TYPES[String(type || "").trim()] || "TEST hlášení";
+}
+
+function collectionRoutesTestIncidentModal(run, stop) {
+  const draft = collectionRoutesPilotState.testIncidentDraft;
+  if (!draft || !run || !stop) return "";
+  const typeLabel = collectionRoutesTestIncidentTypeLabel(draft.type);
+  const pending = collectionRoutesPilotState.testIncidentPending;
+  const hasPhoto = Boolean(draft.photo && draft.previewUrl);
+  return `
+    <div class="collection-routes-test-incident-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-modal-title">
+      <form class="collection-routes-test-incident-modal__card ${hasPhoto ? "is-review" : ""}" data-collection-routes-test-incident-form>
+        <header>
+          <div>
+            <span>TEST hlášení · krok ${hasPhoto ? "2 ze 2" : "1 ze 2"}</span>
+            <h4 id="collection-routes-test-incident-modal-title">${escapeHtml(typeLabel)}</h4>
+            <p>${escapeHtml(stop.stationName || stop.customerName || "Firma test 501")} · ${escapeHtml(stop.addressText || "Trnkova 3052/137, Brno")}</p>
+          </div>
+          <button type="button" data-collection-routes-test-incident-close ${pending ? "disabled" : ""}>Zavřít</button>
+        </header>
+        <div class="collection-routes-test-incident-modal__safety">
+          <strong>Jen bezpečný TEST uvnitř KSO</strong>
+          <span>Neodešle se e-mail, SMS ani RCS. Zákazník nebude kontaktován a trasa se nezmění.</span>
+        </div>
+        ${hasPhoto ? `
+          <img class="collection-routes-test-incident-modal__preview" src="${escapeHtml(draft.previewUrl)}" alt="Náhled TEST fotografie ${escapeHtml(typeLabel.toLowerCase())}">
+          <label class="collection-routes-test-incident-modal__note">
+            <span>Krátká poznámka (nepovinná)</span>
+            <textarea name="note" maxlength="500" rows="3" placeholder="Například: nádoba je přeplněná vedle vjezdu">${escapeHtml(draft.note || "")}</textarea>
+          </label>
+          <label class="collection-routes-test-incident-camera collection-routes-test-incident-camera--secondary">
+            <span>VYFOTIT ZNOVU</span>
+            <small>Nahradí pouze tento náhled</small>
+            <input type="file" accept="image/*" capture="environment" data-collection-routes-test-incident-photo ${pending ? "disabled" : ""}>
+          </label>
+          <div class="collection-routes-test-incident-modal__review">
+            <strong>Po klepnutí se uloží:</strong>
+            <span>${escapeHtml(typeLabel)}, fotografie, čas, stanoviště a skutečný přihlášený tester.</span>
+            <small>Stav zůstane „Uloženo jen v TESTU“.</small>
+          </div>
+          <button class="collection-routes-test-incident-submit" type="submit" ${pending ? "disabled" : ""}>
+            <span>${pending === "save" ? "UKLÁDÁM TEST…" : "ODESLAT TESTOVACÍ HLÁŠENÍ"}</span>
+            <small>Velké finální klepnutí člověka</small>
+          </button>
+        ` : `
+          <div class="collection-routes-test-incident-modal__instruction">
+            <span aria-hidden="true">Š</span>
+            <p>Vyfoť ${draft.type === "site_inaccessible" ? "překážku nebo důvod, proč se do firmy nelze dostat" : draft.type === "damaged_container" ? "poškozenou nádobu tak, aby bylo poškození dobře vidět" : "přeplněnou nádobu i její okolí"}. Potom zkontroluj náhled.</p>
+          </div>
+          <label class="collection-routes-test-incident-camera">
+            <span>${pending === "photo" ? "PŘIPRAVUJI FOTKU…" : "VYFOTIT STAV"}</span>
+            <small>Otevře zadní fotoaparát tabletu</small>
+            <input type="file" accept="image/*" capture="environment" data-collection-routes-test-incident-photo ${pending ? "disabled" : ""}>
+          </label>
+        `}
+        ${collectionRoutesPilotState.testIncidentError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.testIncidentError)}</p>` : ""}
+      </form>
+    </div>
+  `;
+}
+
+function collectionRoutesTestIncidentPanel(run, stop) {
+  if (!collectionRoutesIsStationaryFieldTestRun(run) || run.status !== "active" || !stop) return "";
+  const incidents = Array.isArray(collectionRoutesPilotState.testIncidents)
+    ? collectionRoutesPilotState.testIncidents
+    : [];
+  return `
+    <section class="collection-routes-test-incidents" aria-labelledby="collection-routes-test-incidents-title">
+      <header>
+        <div>
+          <span>Řidičské hlášení · bezpečný TEST</span>
+          <h4 id="collection-routes-test-incidents-title">Co je na stanovišti?</h4>
+          <p>Klepni na jeden velký typ problému. Hlasem můžeš říct například „Šarloto, přeplněná nádoba“.</p>
+        </div>
+        <b>BEZ ODESLÁNÍ ZÁKAZNÍKOVI</b>
+      </header>
+      ${collectionRoutesPilotState.testIncidentMessage ? `<p class="module-feedback__notice" role="status">${escapeHtml(collectionRoutesPilotState.testIncidentMessage)}</p>` : ""}
+      ${collectionRoutesPilotState.testIncidentError && !collectionRoutesPilotState.testIncidentDraft ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.testIncidentError)}</p>` : ""}
+      <div class="collection-routes-test-incidents__buttons">
+        ${Object.entries(COLLECTION_ROUTES_TEST_INCIDENT_TYPES).map(([type, label]) => `
+          <button type="button" data-collection-routes-test-incident-open="${escapeHtml(type)}" ${collectionRoutesPilotState.testIncidentPending ? "disabled" : ""}>
+            <span>${escapeHtml(label.toUpperCase())}</span>
+            <small>Vyfotit → zkontrolovat → uložit TEST</small>
+          </button>
+        `).join("")}
+      </div>
+      <div class="collection-routes-test-incidents__truth">
+        <span>✓ Fotografie v chráněném KSO</span>
+        <span>× Žádný e-mail, SMS ani RCS</span>
+        <span>× Žádná změna trasy</span>
+      </div>
+      ${collectionRoutesPilotState.testIncidentsLoading ? `<p class="collection-routes-test-incidents__loading">Načítám uložená TEST hlášení…</p>` : ""}
+      ${incidents.length ? `
+        <details class="collection-routes-test-incidents__history">
+          <summary>Uložená TEST hlášení (${escapeHtml(incidents.length)})</summary>
+          <div>
+            ${incidents.map((incident) => `
+              <article>
+                <div>
+                  <strong>${escapeHtml(incident.typeLabel || collectionRoutesTestIncidentTypeLabel(incident.type))}</strong>
+                  <span>Uloženo jen v TESTU · ${escapeHtml(formatDateTime(incident.createdAt))}</span>
+                  <small>${escapeHtml(incident.createdByName || "Přihlášený tester")}${incident.note ? ` · ${escapeHtml(incident.note)}` : ""}</small>
+                </div>
+                <a href="${escapeHtml(incident.photoUrl)}" target="_blank" rel="noopener">Zobrazit fotografii</a>
+              </article>
+            `).join("")}
+          </div>
+        </details>
+      ` : ""}
+      ${collectionRoutesTestIncidentModal(run, stop)}
+    </section>
+  `;
+}
+
 function collectionRoutesTestGpsPanel(detail, options = {}) {
   if (!collectionDailyRouteIsTestScope() || !detail?.run) return "";
   const { run } = detail;
@@ -22283,6 +22410,7 @@ function collectionRoutesTestGpsPanel(detail, options = {}) {
           <strong>${escapeHtml(currentStop.stationName || currentStop.customerName || "-")}</strong>
           <small>${escapeHtml(currentStop.addressText || "-")}</small>
         </div>
+        ${collectionRoutesTestIncidentPanel(run, currentStop)}
         ${confirmation ? `
           <div class="collection-routes-test-gps__confirmed">
             <strong>GPS měření je uložené</strong>
@@ -37846,6 +37974,12 @@ function resetCollectionDailyRoutesForScope() {
   collectionRoutesPilotState.testGpsError = "";
   collectionRoutesPilotState.testGpsPreview = null;
   collectionRoutesPilotState.testGpsVoiceListening = false;
+  collectionRoutesPilotState.testIncidents = [];
+  collectionRoutesPilotState.testIncidentsLoading = false;
+  collectionRoutesPilotState.testIncidentPending = "";
+  collectionRoutesPilotState.testIncidentMessage = "";
+  collectionRoutesPilotState.testIncidentError = "";
+  clearCollectionRoutesTestIncidentDraft();
 }
 
 async function loadCollectionRoutesTestOperationalConfig(options = {}) {
@@ -37986,6 +38120,7 @@ function closeCollectionRoutesTestTablet() {
   collectionRoutesPilotState.testTabletOpen = false;
   collectionRoutesPilotState.testGpsPreview = null;
   collectionRoutesPilotState.testGpsVoiceListening = false;
+  clearCollectionRoutesTestIncidentDraft();
   try {
     window.speechSynthesis?.cancel();
   } catch {
@@ -38029,6 +38164,236 @@ async function loadCollectionRoutesTestGpsConfirmations(runId) {
   } finally {
     collectionRoutesPilotState.testGpsLoading = false;
   }
+}
+
+async function loadCollectionRoutesTestIncidents(runId) {
+  const id = String(runId || "").trim();
+  if (!collectionDailyRouteIsTestScope() || !id) {
+    collectionRoutesPilotState.testIncidents = [];
+    return;
+  }
+  collectionRoutesPilotState.testIncidentsLoading = true;
+  collectionRoutesPilotState.testIncidentError = "";
+  try {
+    const result = await apiJson(`/api/collection-routes/test-incidents?runId=${encodeURIComponent(id)}`);
+    collectionRoutesPilotState.testIncidents = Array.isArray(result.incidents) ? result.incidents : [];
+  } catch (error) {
+    collectionRoutesPilotState.testIncidents = [];
+    collectionRoutesPilotState.testIncidentError = error.payload?.error || error.message || "TEST hlášení se nepodařilo načíst.";
+  } finally {
+    collectionRoutesPilotState.testIncidentsLoading = false;
+  }
+}
+
+function clearCollectionRoutesTestIncidentDraft() {
+  const previewUrl = collectionRoutesPilotState.testIncidentDraft?.previewUrl;
+  if (previewUrl) {
+    try {
+      URL.revokeObjectURL(previewUrl);
+    } catch {
+      // Object URL žije jen v otevřeném TEST dialogu.
+    }
+  }
+  collectionRoutesPilotState.testIncidentDraft = null;
+}
+
+function collectionRoutesTestIncidentContext() {
+  const detail = collectionRoutesPilotState.dailyRouteDetail;
+  const run = detail?.run || null;
+  const stop = detail?.stops?.find((item) => item.status === "planned") || null;
+  return { detail, run, stop };
+}
+
+function openCollectionRoutesTestIncident(type, options = {}) {
+  const normalizedType = String(type || "").trim();
+  const { run, stop } = collectionRoutesTestIncidentContext();
+  if (
+    !COLLECTION_ROUTES_TEST_INCIDENT_TYPES[normalizedType] ||
+    !collectionDailyRouteIsTestScope() ||
+    !collectionRoutesIsStationaryFieldTestRun(run) ||
+    run?.status !== "active" ||
+    !stop
+  ) {
+    collectionRoutesPilotState.testIncidentError = "Hlášení lze připravit jen v aktivním stacionárním TESTU u Firma test 501.";
+    if (options.renderAfter !== false) render();
+    return false;
+  }
+  clearCollectionRoutesTestIncidentDraft();
+  collectionRoutesPilotState.testIncidentDraft = {
+    type: normalizedType,
+    runId: run.id,
+    stopId: stop.id,
+    photo: null,
+    previewUrl: "",
+    note: "",
+    idempotencyKey: collectionDailyRouteIdempotencyKey("test-incident")
+  };
+  collectionRoutesPilotState.testIncidentError = "";
+  collectionRoutesPilotState.testIncidentMessage = "";
+  if (options.speak !== false) {
+    const label = collectionRoutesTestIncidentTypeLabel(normalizedType).toLowerCase();
+    speakCollectionRoutesTestGps(`Rozumím. Otevřela jsem TEST hlášení ${label}. Vyfoť stav a potom hlášení odešli velkým tlačítkem.`);
+  }
+  if (options.renderAfter !== false) render();
+  return true;
+}
+
+function closeCollectionRoutesTestIncident() {
+  if (collectionRoutesPilotState.testIncidentPending) return;
+  clearCollectionRoutesTestIncidentDraft();
+  collectionRoutesPilotState.testIncidentError = "";
+  render();
+}
+
+function loadCollectionRoutesTestIncidentImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Fotografii se nepodařilo načíst."));
+    };
+    image.src = url;
+  });
+}
+
+async function compressCollectionRoutesTestIncidentPhoto(file) {
+  if (!file || !String(file.type || "").startsWith("image/")) {
+    throw new Error("Vyber fotografii nádoby nebo přístupu do firmy.");
+  }
+  if (Number(file.size || 0) > 20 * 1024 * 1024) {
+    throw new Error("Původní fotografie je příliš velká. Maximum je 20 MB.");
+  }
+  let source = null;
+  let width = 0;
+  let height = 0;
+  let closeSource = () => {};
+  try {
+    if (typeof createImageBitmap === "function") {
+      source = await createImageBitmap(file, { imageOrientation: "from-image" })
+        .catch(() => createImageBitmap(file));
+      width = source.width;
+      height = source.height;
+      closeSource = () => source.close?.();
+    } else {
+      source = await loadCollectionRoutesTestIncidentImage(file);
+      width = source.naturalWidth || source.width;
+      height = source.naturalHeight || source.height;
+    }
+    if (!width || !height) throw new Error("Fotografie nemá platné rozměry.");
+    const scale = Math.min(1, 1600 / Math.max(width, height));
+    const targetWidth = Math.max(1, Math.round(width * scale));
+    const targetHeight = Math.max(1, Math.round(height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("Tablet neumí fotografii bezpečně připravit.");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, targetWidth, targetHeight);
+    context.drawImage(source, 0, 0, targetWidth, targetHeight);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob || blob.size <= 0) throw new Error("Fotografii se nepodařilo zmenšit.");
+    if (blob.size > 6 * 1024 * 1024) throw new Error("Připravená fotografie je stále příliš velká. Vyfoť ji znovu.");
+    return blob;
+  } finally {
+    closeSource();
+  }
+}
+
+async function selectCollectionRoutesTestIncidentPhoto(input) {
+  const draft = collectionRoutesPilotState.testIncidentDraft;
+  const file = input?.files?.[0] || null;
+  if (!draft || !file || collectionRoutesPilotState.testIncidentPending) return;
+  const note = document.querySelector("[data-collection-routes-test-incident-form] textarea[name='note']")?.value;
+  if (typeof note === "string") draft.note = note.slice(0, 500);
+  collectionRoutesPilotState.testIncidentPending = "photo";
+  collectionRoutesPilotState.testIncidentError = "";
+  render();
+  try {
+    const photo = await compressCollectionRoutesTestIncidentPhoto(file);
+    if (draft.previewUrl) URL.revokeObjectURL(draft.previewUrl);
+    draft.photo = photo;
+    draft.previewUrl = URL.createObjectURL(photo);
+    collectionRoutesPilotState.testIncidentMessage = "Fotografie je připravená. Zkontroluj náhled a odešli TEST hlášení velkým tlačítkem.";
+    speakCollectionRoutesTestGps("Fotografie je připravená. Zkontroluj ji a potom klepni na velké tlačítko Odeslat testovací hlášení.");
+    vibrateCollectionRoutesTestGps([45, 60, 45]);
+  } catch (error) {
+    collectionRoutesPilotState.testIncidentError = error.message || "Fotografii se nepodařilo připravit.";
+    speakCollectionRoutesTestGps(collectionRoutesPilotState.testIncidentError);
+  } finally {
+    collectionRoutesPilotState.testIncidentPending = "";
+    render();
+  }
+}
+
+async function saveCollectionRoutesTestIncident(form) {
+  const draft = collectionRoutesPilotState.testIncidentDraft;
+  if (!draft?.photo || collectionRoutesPilotState.testIncidentPending) return;
+  draft.note = String(form?.elements?.note?.value || "").trim().slice(0, 500);
+  collectionRoutesPilotState.testIncidentPending = "save";
+  collectionRoutesPilotState.testIncidentError = "";
+  render();
+  try {
+    const body = new FormData();
+    body.set("runId", draft.runId);
+    body.set("stopId", draft.stopId);
+    body.set("type", draft.type);
+    body.set("note", draft.note);
+    body.set("idempotencyKey", draft.idempotencyKey);
+    body.set("photo", draft.photo, "test-hlaseni.jpg");
+    const result = await apiJson("/api/collection-routes/test-incidents", { method: "POST", body });
+    const label = result.incident?.typeLabel || collectionRoutesTestIncidentTypeLabel(draft.type);
+    const runId = draft.runId;
+    clearCollectionRoutesTestIncidentDraft();
+    collectionRoutesPilotState.testIncidentMessage = `${label}: uloženo jen v TESTU. Nic se neodeslalo zákazníkovi ani dispečinku a trasa se nezměnila.`;
+    await loadCollectionRoutesTestIncidents(runId);
+    speakCollectionRoutesTestGps("Děkuji. TEST hlášení jsem uložila uvnitř KSO. Nic jsem neposlala zákazníkovi ani dispečinku a trasu jsem nezměnila.");
+    vibrateCollectionRoutesTestGps([70, 70, 140]);
+  } catch (error) {
+    collectionRoutesPilotState.testIncidentError = error.payload?.error || error.message || "TEST hlášení se nepodařilo uložit.";
+    speakCollectionRoutesTestGps(collectionRoutesPilotState.testIncidentError);
+  } finally {
+    collectionRoutesPilotState.testIncidentPending = "";
+    render();
+  }
+}
+
+async function prepareCollectionRoutesTestIncidentFromSarlota(parameters = {}) {
+  const type = String(parameters.incidentType || parameters.type || "").trim();
+  const baseResult = {
+    saved: false,
+    incidentPrepared: false,
+    finalTapRequired: true,
+    photoRequired: true,
+    sendsNotifications: false,
+    changesRoute: false
+  };
+  if (normalizePath(window.location.pathname) !== COLLECTION_ROUTES_ROUTE) {
+    return { ...baseResult, ok: false, status: "wrong_module", answerText: "TEST hlášení připravím jen v otevřeném modulu Svozové trasy." };
+  }
+  if (!COLLECTION_ROUTES_TEST_INCIDENT_TYPES[type]) {
+    return { ...baseResult, ok: false, status: "incident_type_required", answerText: "Řekni, jestli jde o přeplněnou nádobu, poškozenou nádobu nebo nepřístupnou firmu." };
+  }
+  if (collectionRoutesPilotState.testIncidentPending) {
+    return { ...baseResult, ok: false, status: "incident_in_progress", answerText: "Předchozí TEST hlášení se právě zpracovává." };
+  }
+  if (!openCollectionRoutesTestIncident(type, { speak: false, renderAfter: true })) {
+    return { ...baseResult, ok: false, status: "active_test_required", answerText: collectionRoutesPilotState.testIncidentError };
+  }
+  const label = collectionRoutesTestIncidentTypeLabel(type).toLowerCase();
+  return {
+    ...baseResult,
+    ok: true,
+    status: "incident_ready_for_photo",
+    incidentPrepared: true,
+    answerText: `Otevřela jsem TEST hlášení ${label}. Vyfoť stav a potom ho odešli velkým tlačítkem.`,
+    messageForAssistant: "Hlášení je pouze připravené. Nikdy netvrď, že bylo uložené nebo odeslané. Finální zápis vyžaduje fotografii a fyzické klepnutí člověka."
+  };
 }
 
 function collectionRoutesTestGpsAddressingName(run = {}) {
@@ -38490,6 +38855,12 @@ async function createAndProcessCollectionRoutesTestNotificationJob() {
 function applyCollectionDailyRouteDetail(detail, message = "") {
   if (!detail?.run) return;
   const previousRunId = collectionRoutesPilotState.dailyRouteDetail?.run?.id || "";
+  if (previousRunId && previousRunId !== detail.run.id) {
+    clearCollectionRoutesTestIncidentDraft();
+    collectionRoutesPilotState.testIncidents = [];
+    collectionRoutesPilotState.testIncidentMessage = "";
+    collectionRoutesPilotState.testIncidentError = "";
+  }
   collectionRoutesPilotState.dailyRouteDetail = detail;
   collectionRoutesPilotState.dailyRouteSelectedId = detail.run.id;
   if (previousRunId !== detail.run.id) {
@@ -38524,7 +38895,10 @@ async function loadCollectionDailyRouteDetail(runId, options = {}) {
       if (collectionRoutesIsStationaryFieldTestRun(result.route?.run)) {
         collectionRoutesPilotState.testNotificationJob = null;
         collectionRoutesPilotState.testNotificationPreview = null;
-        await loadCollectionRoutesTestGpsConfirmations(result.route?.run?.id);
+        await Promise.all([
+          loadCollectionRoutesTestGpsConfirmations(result.route?.run?.id),
+          loadCollectionRoutesTestIncidents(result.route?.run?.id)
+        ]);
       } else {
         await Promise.all([
           loadLatestCollectionRoutesTestNotificationJob(result.route?.run?.id),
@@ -38534,6 +38908,7 @@ async function loadCollectionDailyRouteDetail(runId, options = {}) {
     } else {
       collectionRoutesPilotState.testNotificationJob = null;
       collectionRoutesPilotState.testGpsConfirmations = [];
+      collectionRoutesPilotState.testIncidents = [];
     }
     collectionRoutesPilotState.dailyRouteError = "";
   } catch (error) {
@@ -44669,6 +45044,12 @@ async function logout() {
   collectionRoutesPilotState.testGpsError = "";
   collectionRoutesPilotState.testGpsPreview = null;
   collectionRoutesPilotState.testGpsVoiceListening = false;
+  collectionRoutesPilotState.testIncidents = [];
+  collectionRoutesPilotState.testIncidentsLoading = false;
+  collectionRoutesPilotState.testIncidentPending = "";
+  collectionRoutesPilotState.testIncidentMessage = "";
+  collectionRoutesPilotState.testIncidentError = "";
+  clearCollectionRoutesTestIncidentDraft();
   collectionRoutesPilotState.myDailyRouteLoaded = false;
   collectionRoutesPilotState.myDailyRouteLoading = false;
   collectionRoutesPilotState.myDailyRoute = null;
@@ -47632,6 +48013,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const collectionRoutesTestIncidentForm = event.target.closest("[data-collection-routes-test-incident-form]");
+  if (collectionRoutesTestIncidentForm) {
+    event.preventDefault();
+    await saveCollectionRoutesTestIncident(collectionRoutesTestIncidentForm);
+    return;
+  }
+
   const collectionRoutesTestNotificationConfirmForm = event.target.closest("[data-collection-routes-test-notification-confirm-form]");
   if (collectionRoutesTestNotificationConfirmForm) {
     event.preventDefault();
@@ -48030,6 +48418,12 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const collectionRoutesTestIncidentPhoto = event.target.closest("[data-collection-routes-test-incident-photo]");
+  if (collectionRoutesTestIncidentPhoto) {
+    await selectCollectionRoutesTestIncidentPhoto(collectionRoutesTestIncidentPhoto);
+    return;
+  }
+
   const fuelFilter = event.target.closest("[data-fuel-filter]");
   if (fuelFilter) {
     const key = fuelFilter.dataset.fuelFilter;
@@ -49097,6 +49491,22 @@ document.addEventListener("click", async (event) => {
   if (collectionRoutesTestGpsCancel) {
     event.preventDefault();
     if (!collectionRoutesTestGpsCancel.disabled) cancelCollectionRoutesTestGpsCapture();
+    return;
+  }
+
+  const collectionRoutesTestIncidentOpen = event.target.closest("[data-collection-routes-test-incident-open]");
+  if (collectionRoutesTestIncidentOpen) {
+    event.preventDefault();
+    if (!collectionRoutesTestIncidentOpen.disabled) {
+      openCollectionRoutesTestIncident(collectionRoutesTestIncidentOpen.dataset.collectionRoutesTestIncidentOpen || "");
+    }
+    return;
+  }
+
+  const collectionRoutesTestIncidentClose = event.target.closest("[data-collection-routes-test-incident-close]");
+  if (collectionRoutesTestIncidentClose) {
+    event.preventDefault();
+    if (!collectionRoutesTestIncidentClose.disabled) closeCollectionRoutesTestIncident();
     return;
   }
 

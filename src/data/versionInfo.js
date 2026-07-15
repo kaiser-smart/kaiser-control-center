@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.557"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.561"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,14 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: fotografická TEST hlášení z tabletu",
+    text: "Stacionární TEST na Trnkově má tři velká tlačítka pro přeplněnou nádobu, poškozenou nádobu a nepřístupnou firmu. Tablet připraví fotografii bez původních metadat, ukáže náhled a uloží hlášení až po velkém fyzickém klepnutí; v této fázi se nic neposílá zákazníkovi ani dispečinku a trasa se nemění."
+  },
+  {
+    title: "Svozové trasy: zrcadlení všech týdenních četností",
+    text: "Pokud Vistos u četnosti Nx7 dodá přesně N různých dnů jen pro lichý nebo jen pro sudý týden, KSO dopočítá stejné dny do druhé parity a označí je jako dopočtené. Funguje to i pro 3x7 pondělí, středa, pátek; neúplná, duplicitní ani smíšená data se automaticky nedoplňují."
+  },
   {
     title: "Vozidla: automatické tankování a statistiky PHM",
     text: "Vozový park má záložku Tankování s automatickým ORWII přehledem. Skutečné litry a transakční hodnoty ORWII se promítají do Nákladů, Reportů, detailu vozidla a ekonomiky HP; účetní pořizovací náklad zůstává oddělený, nespárované záznamy se nepřiřazují odhadem."

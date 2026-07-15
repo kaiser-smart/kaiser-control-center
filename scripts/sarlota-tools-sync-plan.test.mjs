@@ -45,10 +45,14 @@ const agentConfig = {
   const tools = expectedTools({});
   const driverContextTool = tools.find((tool) => tool.name === "get_driver_report_context");
   const collectionGpsTool = tools.find((tool) => tool.name === "prepare_collection_route_gps_capture");
+  const collectionIncidentTool = tools.find((tool) => tool.name === "prepare_collection_route_test_incident");
   assert.equal(driverContextTool.api_schema.url, "https://smart-odpady.ai/api/voice/driver-report-context");
   assert.equal(collectionGpsTool.type, "client");
   assert.match(collectionGpsTool.description, /Nikdy kvůli tomu neotvírej výběr vozidla/);
   assert.match(collectionGpsTool.description, /finální uložení vždy vyžaduje fyzické klepnutí/);
+  assert.equal(collectionIncidentTool.type, "client");
+  assert.match(collectionIncidentTool.description, /nic neukládá ani neodesílá/);
+  assert.match(collectionIncidentTool.description, /Fotografie a velké fyzické klepnutí/);
 }
 
 const legacyClientWorkspaceTool = {

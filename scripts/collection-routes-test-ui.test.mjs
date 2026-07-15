@@ -89,7 +89,24 @@ for (const marker of [
   "vehicleSelectionRequired: false",
   "finalTapRequired: true",
   "preview.idempotencyKey",
-  "/api/collection-routes/test-gps-confirmations"
+  "/api/collection-routes/test-gps-confirmations",
+  "Přeplněná nádoba",
+  "Poškozená nádoba",
+  "Nelze se dostat do firmy",
+  "ODESLAT TESTOVACÍ HLÁŠENÍ",
+  "Uloženo jen v TESTU",
+  "Neodešle se e-mail, SMS ani RCS",
+  "capture=\"environment\"",
+  "accept=\"image/*\"",
+  "data-collection-routes-test-incident-open",
+  "data-collection-routes-test-incident-photo",
+  "data-collection-routes-test-incident-form",
+  "compressCollectionRoutesTestIncidentPhoto",
+  "prepareCollectionRoutesTestIncidentFromSarlota",
+  "finalTapRequired: true",
+  "sendsNotifications: false",
+  "changesRoute: false",
+  "/api/collection-routes/test-incidents"
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
@@ -183,7 +200,12 @@ for (const marker of [
   ".collection-route-here__actions",
   ".collection-routes-test-gps__rugged-button",
   ".collection-routes-test-gps__rugged-button--finish",
-  ".collection-routes-test-gps__confirm"
+  ".collection-routes-test-gps__confirm",
+  ".collection-routes-test-incidents",
+  ".collection-routes-test-incidents__buttons",
+  ".collection-routes-test-incident-modal",
+  ".collection-routes-test-incident-camera",
+  ".collection-routes-test-incident-submit"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }
@@ -214,7 +236,11 @@ for (const marker of [
   "Paměť musí být cloudová",
   "Stacionární terénní TEST smí obsahovat přesně jediný bod",
   "skutečné datum přítomnosti testera",
-  "Změřeno terénním testerem"
+  "Změřeno terénním testerem",
+  "TEST HLÁŠENÍ STANOVIŠTĚ",
+  "prepare_collection_route_test_incident",
+  "PŘEPLNĚNÁ NÁDOBA, POŠKOZENÁ NÁDOBA a NELZE SE DOSTAT DO FIRMY",
+  "nesmí odeslat e-mail, SMS ani RCS"
 ]) {
   assert.ok(mantraSource.includes(marker), `Provozní mantra postrádá závazný bod: ${marker}`);
 }
@@ -273,7 +299,7 @@ assert.ok(
 );
 
 const tabletMapStart = appSource.indexOf("function collectionRoutesTestTabletMapPanel");
-const tabletMapEnd = appSource.indexOf("function collectionRoutesTestGpsPanel", tabletMapStart);
+const tabletMapEnd = appSource.indexOf("function clearCollectionRoutesTestTabletHereMap", tabletMapStart);
 const tabletMapSource = appSource.slice(tabletMapStart, tabletMapEnd);
 assert.ok(tabletMapStart >= 0 && tabletMapEnd > tabletMapStart, "TEST tablet musí mít vlastní bezpečný mapový výřez.");
 for (const forbiddenMapField of ["customerName", "driverName", "contractNumber", "recipientPhone", "recipientEmail"]) {

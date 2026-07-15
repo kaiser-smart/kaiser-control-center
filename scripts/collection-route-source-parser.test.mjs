@@ -187,6 +187,81 @@ function derive(originalText) {
 {
   const values = [
     {
+      value: "18330",
+      rawValue: "18330",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    },
+    {
+      value: "18332",
+      rawValue: "18332",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    },
+    {
+      value: "18334",
+      rawValue: "18334",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    }
+  ];
+  const schedule = __pickupDayScheduleFromValuesForTest({ frequency: "3x7", values });
+  const issues = __pickupDayConsistencyIssuesForTest({ frequency: "3x7", values, fieldConfirmed: true, schedule });
+  assert.equal(
+    schedule.displayText,
+    "pondělí lichá, středa lichá, pátek lichá, pondělí sudá (dopočteno), středa sudá (dopočteno), pátek sudá (dopočteno)"
+  );
+  assert.equal(schedule.inferredEntries.length, 3);
+  assert.equal(issues.length, 0);
+}
+
+{
+  const values = [
+    {
+      value: "18330",
+      rawValue: "18330",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    },
+    {
+      value: "18332",
+      rawValue: "18332",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    }
+  ];
+  const schedule = __pickupDayScheduleFromValuesForTest({ frequency: "3x7", values });
+  assert.equal(schedule.inferredEntries.length, 0);
+}
+
+{
+  const values = [
+    {
+      value: "18330",
+      rawValue: "18330",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    },
+    {
+      value: "18339",
+      rawValue: "18339",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    },
+    {
+      value: "18334",
+      rawValue: "18334",
+      caption: "Svozový den",
+      columnName: "CollectionDay_FK"
+    }
+  ];
+  const schedule = __pickupDayScheduleFromValuesForTest({ frequency: "3x7", values });
+  assert.equal(schedule.inferredEntries.length, 0);
+}
+
+{
+  const values = [
+    {
       value: "18337",
       rawValue: "18337",
       caption: "Svozový den",

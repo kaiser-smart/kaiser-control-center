@@ -1,4 +1,4 @@
-export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-14-collection-route-gps";
+export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-15-collection-route-test-incidents";
 
 export const SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE = [
   "SVOZOVÉ TRASY / GPS STANOVIŠTĚ",
@@ -9,6 +9,19 @@ export const SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE = [
   "Finální uložení vždy vyžaduje fyzické klepnutí člověka na velké tlačítko v KSO.",
   "Když výsledek vrátí measurementPrepared true a finalTapRequired true, řekni stručně: `Měření je připravené. Pro uložení klepni na velké tlačítko Uložit fyzickou GPS.`",
   "Nikdy neříkej, že je GPS uložená, pokud výsledek nevrátí status already_saved a saved true.",
+  "Při jiném stavu přečti stručně answerText z výsledku a nevymýšlej náhradní krok."
+].join(" ");
+
+export const SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE = [
+  "SVOZOVÉ TRASY / TEST HLÁŠENÍ STANOVIŠTĚ",
+  "Toto pravidlo platí pouze v otevřeném modulu Svozové trasy a v aktivním stacionárním TESTU řidičského tabletu.",
+  "Když uživatel řekne přeplněná popelnice, přeplněná nádoba nebo podobně, zavolej prepare_collection_route_test_incident s incidentType overfilled_container.",
+  "Když uživatel řekne poškozená popelnice, poškozená nádoba nebo podobně, zavolej prepare_collection_route_test_incident s incidentType damaged_container.",
+  "Když uživatel řekne nelze se dostat do firmy, nepřístupná firma, nádoby jsou zaskládané nebo podobně, zavolej prepare_collection_route_test_incident s incidentType site_inaccessible.",
+  "Pro tyto záměry nikdy nevolej get_driver_report_context, show_driver_vehicle_picker ani get_driver_vehicle_picker_selection a nikdy se neptej na vozidlo nebo SPZ.",
+  "prepare_collection_route_test_incident pouze otevře správný TEST formulář. Nic neukládá, neodesílá e-mail, SMS ani RCS, nekontaktuje zákazníka nebo dispečink a nemění trasu.",
+  "Fotografie a velké finální fyzické klepnutí člověka v KSO jsou vždy povinné.",
+  "Když výsledek vrátí incidentPrepared true a finalTapRequired true, řekni stručně answerText a nikdy netvrď, že je hlášení uložené nebo odeslané.",
   "Při jiném stavu přečti stručně answerText z výsledku a nevymýšlej náhradní krok."
 ].join(" ");
 
@@ -86,6 +99,7 @@ export const SARLOTA_WRITE_RULES = [
   "Pro dovolenou, nemoc, OČR, lékaře, náhradní volno, neplacené volno a jinou nepřítomnost používej nástroj create_absence_request.",
   "Pro hlášení náhradního dílu v Hlášení řidičů používej nástroj create_driver_part_request.",
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
+  SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE,
   SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
   "V Hlášení řidičů smíš říct konkrétní vozidla jen z aktuálního backend výsledku get_driver_report_context s vehiclesVerified: true.",
   "Pokud backend dodá SPZ a VIN vozidla přes ověřený seznam, UI výběr nebo ruční ověření SPZ, můžeš říct jen ověřený název/SPZ. VIN nepředstírej a nepřebírej z neověřeného zdroje.",

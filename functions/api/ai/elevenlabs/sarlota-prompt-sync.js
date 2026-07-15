@@ -18,7 +18,10 @@ import {
   assistantPublicMetadata,
   resolveElevenLabsAssistantConfig
 } from "../../../../src/elevenLabsAssistants.js";
-import { SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
+import {
+  SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
+  SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE
+} from "../../../../src/sarlota/sarlotaSystemPrompt.js";
 
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/convai";
@@ -41,6 +44,12 @@ const COLLECTION_ROUTES_GPS_RULE_REQUIRED_PHRASE = "vždy zavolej prepare_collec
 const COLLECTION_ROUTES_GPS_RULE_BLOCK = [
   "",
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE
+].join("\n");
+const COLLECTION_ROUTES_INCIDENT_RULE_MARKER = "SVOZOVÉ TRASY / TEST HLÁŠENÍ STANOVIŠTĚ";
+const COLLECTION_ROUTES_INCIDENT_RULE_REQUIRED_PHRASE = "zavolej prepare_collection_route_test_incident";
+const COLLECTION_ROUTES_INCIDENT_RULE_BLOCK = [
+  "",
+  SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE
 ].join("\n");
 const PROMPT_PATHS = [
   ["conversation_config", "agent", "prompt", "prompt"],
@@ -117,6 +126,13 @@ function promptHasCollectionRoutesGpsRule(promptText) {
     && text.includes(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE);
 }
 
+function promptHasCollectionRoutesIncidentRule(promptText) {
+  const text = cleanString(promptText);
+  return text.includes(COLLECTION_ROUTES_INCIDENT_RULE_MARKER)
+    && text.includes(COLLECTION_ROUTES_INCIDENT_RULE_REQUIRED_PHRASE)
+    && text.includes(SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE);
+}
+
 function forbiddenPromptPhrases(promptText) {
   return driverReportPromptForbiddenPhrases(promptText);
 }
@@ -154,6 +170,16 @@ function stripCollectionRoutesGpsPromptBlocks(promptText) {
     .replaceAll(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, "")
     .split("\n")
     .filter((line) => cleanString(line) !== COLLECTION_ROUTES_GPS_RULE_MARKER)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
+function stripCollectionRoutesIncidentPromptBlocks(promptText) {
+  return String(promptText || "")
+    .replaceAll(SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE, "")
+    .split("\n")
+    .filter((line) => cleanString(line) !== COLLECTION_ROUTES_INCIDENT_RULE_MARKER)
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd();
@@ -268,16 +294,17 @@ function buildPlan(context) {
   const hasCurrentRule = promptHasCurrentRule(promptPath.value);
   const hasDataBoxContextRule = promptHasDataBoxContextRule(promptPath.value);
   const hasCollectionRoutesGpsRule = promptHasCollectionRoutesGpsRule(promptPath.value);
+  const hasCollectionRoutesIncidentRule = promptHasCollectionRoutesIncidentRule(promptPath.value);
   const hasLegacyRule = promptHasLegacyRule(promptPath.value);
   const hasLegacyUnsafeExample = promptHasLegacyUnsafeDriverReportExample(promptPath.value);
   const forbiddenPhrases = forbiddenPromptPhrases(promptPath.value);
   const hasForbiddenPhrases = forbiddenPhrases.length > 0;
-  const promptNeedsPatch = !hasCurrentRule || !hasDataBoxContextRule || !hasCollectionRoutesGpsRule || hasLegacyRule || hasLegacyUnsafeExample || hasForbiddenPhrases;
+  const promptNeedsPatch = !hasCurrentRule || !hasDataBoxContextRule || !hasCollectionRoutesGpsRule || !hasCollectionRoutesIncidentRule || hasLegacyRule || hasLegacyUnsafeExample || hasForbiddenPhrases;
 
   return {
     mode: "dry_run",
     ready: agentNameMatches && firstMessageMatches && promptNeedsPatch,
-    alreadyApplied: hasCurrentRule && hasDataBoxContextRule && hasCollectionRoutesGpsRule && !hasLegacyRule && !hasLegacyUnsafeExample && !hasForbiddenPhrases,
+    alreadyApplied: hasCurrentRule && hasDataBoxContextRule && hasCollectionRoutesGpsRule && hasCollectionRoutesIncidentRule && !hasLegacyRule && !hasLegacyUnsafeExample && !hasForbiddenPhrases,
     generatedAt: new Date().toISOString(),
     assistant: assistantPublicMetadata(context.assistantConfig),
     agent: {
@@ -292,11 +319,13 @@ function buildPlan(context) {
       currentRulePresent: hasCurrentRule,
       dataBoxContextRulePresent: hasDataBoxContextRule,
       collectionRoutesGpsRulePresent: hasCollectionRoutesGpsRule,
+      collectionRoutesIncidentRulePresent: hasCollectionRoutesIncidentRule,
       legacyRulePresent: hasLegacyRule,
       forbiddenPhrasesPresent: forbiddenPhrases,
       willAppendDriverReportVehicleRule: promptNeedsPatch,
       willAppendDataBoxContextRule: !hasDataBoxContextRule,
       willAppendCollectionRoutesGpsRule: !hasCollectionRoutesGpsRule,
+      willAppendCollectionRoutesIncidentRule: !hasCollectionRoutesIncidentRule,
       willRemoveLegacyDriverReportVehicleRule: hasLegacyRule,
       willRemoveLegacyUnsafeExample: hasLegacyUnsafeExample,
       willRemoveForbiddenDriverReportPhrases: hasForbiddenPhrases
@@ -383,10 +412,10 @@ async function applyPayload(env, assistantConfig, user = null) {
   }
 
   const promptPath = writablePromptPathFromAgent(context.agentConfig);
-  const cleanedPrompt = stripCollectionRoutesGpsPromptBlocks(
+  const cleanedPrompt = stripCollectionRoutesIncidentPromptBlocks(stripCollectionRoutesGpsPromptBlocks(
     stripDataBoxContextPromptBlocks(stripLegacyDriverReportExamples(stripDriverReportPromptBlocks(promptPath.value)))
-  );
-  const nextPrompt = `${cleanedPrompt}${PROMPT_RULE_BLOCK}${DATA_BOX_CONTEXT_RULE_BLOCK}${COLLECTION_ROUTES_GPS_RULE_BLOCK}`;
+  ));
+  const nextPrompt = `${cleanedPrompt}${PROMPT_RULE_BLOCK}${DATA_BOX_CONTEXT_RULE_BLOCK}${COLLECTION_ROUTES_GPS_RULE_BLOCK}${COLLECTION_ROUTES_INCIDENT_RULE_BLOCK}`;
   const patchBody = bodyForPromptPatch(promptPath.path, nextPrompt);
 
   try {
@@ -421,6 +450,7 @@ async function applyPayload(env, assistantConfig, user = null) {
     ? promptHasCurrentRule(verifiedPrompt.value)
       && promptHasDataBoxContextRule(verifiedPrompt.value)
       && promptHasCollectionRoutesGpsRule(verifiedPrompt.value)
+      && promptHasCollectionRoutesIncidentRule(verifiedPrompt.value)
       && forbiddenPromptPhrases(verifiedPrompt.value).length === 0
     : false;
 
@@ -535,15 +565,20 @@ export const __test = {
   COLLECTION_ROUTES_GPS_RULE_MARKER,
   COLLECTION_ROUTES_GPS_RULE_REQUIRED_PHRASE,
   COLLECTION_ROUTES_GPS_RULE_BLOCK,
+  COLLECTION_ROUTES_INCIDENT_RULE_MARKER,
+  COLLECTION_ROUTES_INCIDENT_RULE_REQUIRED_PHRASE,
+  COLLECTION_ROUTES_INCIDENT_RULE_BLOCK,
   forbiddenPromptPhrases,
   lineHasForbiddenPromptPhrase,
   buildPlan,
   promptHasCurrentRule,
   promptHasDataBoxContextRule,
   promptHasCollectionRoutesGpsRule,
+  promptHasCollectionRoutesIncidentRule,
   promptHasLegacyRule,
   stripDriverReportPromptBlocks,
   stripDataBoxContextPromptBlocks,
   stripCollectionRoutesGpsPromptBlocks,
+  stripCollectionRoutesIncidentPromptBlocks,
   upstreamErrorSummary
 };
