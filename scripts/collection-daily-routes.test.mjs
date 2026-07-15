@@ -544,6 +544,33 @@ assert.equal((await transitionCollectionDailyRoute(fieldEnv, tomasManager, field
   action: "complete",
   idempotencyKey: "field-complete-with-gps-review"
 })).run.status, "completed");
+await assert.rejects(
+  transitionCollectionDailyRoute(fieldEnv, otherManager, fieldRoute.run.id, {
+    scope: "test",
+    action: "reopen",
+    idempotencyKey: "field-reopen-other-manager"
+  }),
+  (error) => error.code === "collection_daily_route_field_tester_mismatch"
+);
+const fieldReopened = await transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+  scope: "test",
+  action: "reopen",
+  idempotencyKey: "field-reopen-for-incidents"
+});
+assert.equal(fieldReopened.run.status, "active");
+assert.equal(fieldReopened.run.summary.plannedCount, 1);
+assert.equal(fieldReopened.run.summary.doneCount, 0);
+assert.equal(fieldReopened.stops[0].status, "planned");
+assert.equal(
+  fieldSqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_gps_confirmations WHERE id = ?")
+    .get(fieldGpsNeedsReview.confirmation.id).count,
+  1
+);
+assert.equal(
+  fieldSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE run_id = ? AND event_type = 'stop_reopened'")
+    .get(fieldRoute.run.id).count,
+  1
+);
 
 const accurateFieldRoute = await createCollectionDailyRouteDraft(fieldEnv, tomasManager, {
   scope: "test",

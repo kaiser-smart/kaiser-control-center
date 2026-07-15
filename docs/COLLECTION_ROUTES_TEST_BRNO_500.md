@@ -115,7 +115,13 @@ hotova PWA. Pro polni TEST staci aktualni Chrome a internetove pripojeni:
 4. Pro `Firma test 501` zvolit skutecne datum testu, vytvorit stacionarni TEST,
    potvrdit jej a spustit TEST tabletu. Prihlaseny Manager se ulozi jako terenni
    tester; vozidlo ani ridic se nevybiraji.
-5. Po zastaveni primo u nadoby pouzit hlasovou vyzvu nebo velke GPS tlacitko a
+5. Pokud je ulozeny TEST uz dokoncen, stejny terenni tester pouzije
+   `ZNOVU OTEVRIT TEST`. Jediny bod se automaticky vrati do stavu `planned`,
+   ale puvodni GPS mereni zustane v auditu.
+6. Vyzkouset vsechny tri fotograficke volby. Kazda musi vyzadovat fotografii,
+   zobrazit nahled a ulozit zaznam az po velkem fyzickem potvrzeni. Trasa zustane
+   aktivni a zadna SMS, RCS ani e-mail se neodesle.
+7. Po zastaveni primo u nadoby pouzit hlasovou vyzvu nebo velke GPS tlacitko a
    dokoncit zapis jednim velkym potvrzenim.
 
 Volitelne lze v menu Chrome zvolit `Pridat na plochu`. Jde pouze o pohodlnou

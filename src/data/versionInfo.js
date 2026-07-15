@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.562"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.563"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: opakovaný TEST tabletu",
+    text: "Když Tomáš vědomě znovu otevře dokončený stacionární TEST na Trnkově, jediný bod se bezpečně vrátí do stavu čeká a zpřístupní tři fotografická hlášení. Uložené GPS měření zůstane v auditu; žádná zpráva se neodešle a trasa ani Vistos se nezmění."
+  },
   {
     title: "Poloha vozidel: automatická historie jízd a GPS kilometry",
     text: "Samostatný cloudový běh ukládá skutečné body T-Cars každou minutu a po pěti minutách z nich vytváří auditované jízdy a denní souhrny. Dashboard porovnává skutečné GPS kilometry vozidel, nepřeklene výpadek signálu přímkou a všechny dosud nespárované kilometry drží pravdivě jako nezařazené."
