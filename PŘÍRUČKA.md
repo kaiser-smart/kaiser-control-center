@@ -721,6 +721,22 @@ Na HP musí být vidět:
 - datum změny,
 - stav aplikace.
 
+### Historie změn / Novinky na HP
+
+Zápis do Historie změn (Novinky ve verzi) je povinnou součástí každé významné změny. Platí pro každého vývojáře i pro Codex.
+
+Každý zápis musí konkrétně uvést:
+- dotčený modul nebo oblast,
+- co se skutečně změnilo,
+- praktický dopad nebo změnu chování,
+- stav ověření a podstatné omezení, pokud existuje.
+
+HP musí zobrazovat přesný, člověkem napsaný název a popis daného zápisu. Nesmí je přepisovat, zkracovat ani nahrazovat šablonou odvozenou jen z názvu modulu.
+
+Zakázané jsou obecné nebo opakované věty bez konkrétní informace, například „Menší provozní úprava v aplikaci“, „Přehled je čitelnější“ nebo „lepší podklady pro denní práci“. Stejná změna smí mít v jednom vydání pouze jeden věcný zápis; duplicity nejsou přípustné.
+
+Před commitem a nasazením musí autor zkontrolovat, že se na HP zobrazuje konkrétní obsah odpovídající skutečné změně a že Historie neobsahuje šablonový ani duplicitní text. Nesplnění tohoto pravidla je blokující chyba pro review, commit i deploy.
+
 ## 5. Responzivita
 
 Responzivita je povinná.
