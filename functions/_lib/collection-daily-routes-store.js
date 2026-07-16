@@ -3,6 +3,10 @@ import { getLatestCollectionRoutesVistosSnapshot } from "./collection-routes-sto
 import { getCollectionRoutesTestSnapshot } from "./collection-routes-test-store.js";
 import { hasPermission, isUserActive, normalizeRole } from "../../src/permissions.js";
 import { userDynamicVariablesForAi } from "./ai-people-summary.js";
+import {
+  calculateCollectionRoutesReadonlyPlan,
+  COLLECTION_ROUTES_READONLY_CALCULATOR_VERSION
+} from "../../src/data/collectionRoutesReadonlyCalculator.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
@@ -103,6 +107,37 @@ function chunkValues(values, size) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function pragueDateValue(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Prague",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(now);
+}
+
+function dateDaysAfter(routeDate, days) {
+  const date = new Date(`${routeDate}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function safeAutomationMetadata(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return {
+    ruleId: cleanString(value.ruleId),
+    runner: cleanString(value.runner),
+    generatedAt: cleanString(value.generatedAt),
+    planVersion: cleanString(value.planVersion),
+    planStatus: cleanString(value.planStatus),
+    blockers: (Array.isArray(value.blockers) ? value.blockers : []).map(cleanString).filter(Boolean).slice(0, 50),
+    limitations: (Array.isArray(value.limitations) ? value.limitations : []).map(cleanString).filter(Boolean).slice(0, 50),
+    autoConfirmed: false,
+    sendsNotifications: false,
+    writesExternalSystems: false
+  };
 }
 
 function randomId(prefix) {
@@ -832,6 +867,7 @@ export async function createCollectionDailyRouteDraft(env, user, input = {}) {
         sourceBatchCreatedAt: preview.sourceBatchCreatedAt,
         selectedCount: preview.selectedCount,
         excludedRows: preview.excludedRows.map((row) => ({ sourceRowId: row.sourceRowId, reason: row.reason })),
+        automation: safeAutomationMetadata(input.automationMetadata),
         ...(stationaryFieldTest ? {
           fieldTestSourceId: COLLECTION_DAILY_ROUTE_FIELD_TEST_SOURCE_ID,
           fieldTesterUserId: actorId,
@@ -879,6 +915,166 @@ export async function createCollectionDailyRouteDraft(env, user, input = {}) {
   } catch (error) {
     throw dbError(error);
   }
+}
+
+export async function prepareCollectionDailyRouteDraftsAutomation(env, options = {}) {
+  const db = database(env, true, COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION);
+  const now = options.now instanceof Date
+    ? options.now
+    : new Date(Number(options.scheduledTime || Date.now()));
+  const generatedAt = new Date().toISOString();
+  const today = pragueDateValue(now);
+  const routeDates = [...new Set(
+    (Array.isArray(options.routeDates) && options.routeDates.length
+      ? options.routeDates
+      : [today, dateDaysAfter(today, 1)])
+      .map(routeDateValue)
+  )].slice(0, 2);
+  const snapshot = await snapshotForScope(env, null, COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION);
+  if (!snapshot.batch?.id) {
+    return {
+      status: "skipped",
+      reason: "snapshot_missing",
+      message: "Denní návrhy nebyly připravené: chybí platný Vistos snapshot.",
+      routeDates,
+      createdRuns: 0,
+      createdStops: 0
+    };
+  }
+  const snapshotCreatedAt = new Date(snapshot.batch.createdAt || "");
+  const maxSnapshotAgeMs = Math.max(15 * 60 * 1000, Number(options.maxSnapshotAgeMs || 60 * 60 * 1000));
+  if (Number.isNaN(snapshotCreatedAt.getTime()) || now.getTime() - snapshotCreatedAt.getTime() > maxSnapshotAgeMs) {
+    return {
+      status: "skipped",
+      reason: "snapshot_stale",
+      message: "Denní návrhy nebyly připravené: poslední Vistos snapshot je starší než povolená hodina.",
+      sourceBatchId: snapshot.batch.id,
+      routeDates,
+      createdRuns: 0,
+      createdStops: 0
+    };
+  }
+
+  const systemUser = {
+    id: "system:collection-routes-draft-preparation",
+    name: "Cloudová příprava denních tras",
+    role: "admin",
+    status: "active",
+    active: true
+  };
+  const dateResults = [];
+  let createdRuns = 0;
+  let createdStops = 0;
+
+  for (const routeDate of routeDates) {
+    const existingResult = await db.prepare(`
+      SELECT vehicle_code, id, status
+      FROM collection_daily_route_runs
+      WHERE route_date = ? AND vehicle_code IN ('A', 'B', 'C')
+    `).bind(routeDate).all();
+    const existingCodes = new Set((existingResult.results || []).map((row) => cleanString(row.vehicle_code)));
+    if (existingCodes.size) {
+      dateResults.push({
+        routeDate,
+        status: "skipped",
+        reason: "date_already_prepared",
+        message: "Pro tento den už existuje denní trasa. Cloud ji kvůli bezpečnosti nepřepisuje ani nedoplňuje z novějšího snapshotu.",
+        createdRuns: 0,
+        createdStops: 0
+      });
+      continue;
+    }
+    const availableVehicleCodes = COLLECTION_DAILY_ROUTE_VEHICLES.map((vehicle) => vehicle.code);
+
+    const preview = await previewCollectionDailyRoute(env, systemUser, {
+      scope: COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION,
+      routeDate,
+      vehicleCode: availableVehicleCodes[0],
+      sourceBatchId: snapshot.batch.id
+    });
+    if (!preview.eligibleRows.length) {
+      dateResults.push({ routeDate, status: "empty", reason: "no_eligible_stops", createdRuns: 0, createdStops: 0 });
+      continue;
+    }
+    const plan = calculateCollectionRoutesReadonlyPlan({
+      routeDate,
+      dateInfo: preview.dateInfo,
+      eligibleRows: preview.eligibleRows,
+      sourceRows: snapshot.rows,
+      vehicleCodes: availableVehicleCodes
+    });
+    if (!plan.vehicles.length) {
+      dateResults.push({ routeDate, status: "skipped", reason: "no_available_vehicle", createdRuns: 0, createdStops: 0 });
+      continue;
+    }
+    if (plan.vehicles.some((vehicle) => vehicle.stops.length > 1000)) {
+      dateResults.push({
+        routeDate,
+        status: "skipped",
+        reason: "vehicle_stop_limit_exceeded",
+        message: "Návrh překročil bezpečný limit 1000 zastávek na vozidlo.",
+        createdRuns: 0,
+        createdStops: 0
+      });
+      continue;
+    }
+
+    let dateCreatedRuns = 0;
+    let dateCreatedStops = 0;
+    for (const vehicle of plan.vehicles.filter((item) => item.stops.length)) {
+      try {
+        const route = await createCollectionDailyRouteDraft(env, systemUser, {
+          scope: COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION,
+          routeDate,
+          vehicleCode: vehicle.code,
+          sourceBatchId: snapshot.batch.id,
+          sourceRowIds: vehicle.stops.map((stop) => stop.sourceRowId),
+          title: `Automatický návrh · ${preview.dateInfo.dayLabel} ${routeDate} · ${vehicle.label}`,
+          automationMetadata: {
+            ruleId: "collection-routes-daily-draft-preparation-phase1b",
+            runner: "collection-routes-daily-draft-preparation-15m",
+            generatedAt,
+            planVersion: COLLECTION_ROUTES_READONLY_CALCULATOR_VERSION,
+            planStatus: plan.status,
+            blockers: plan.blockers,
+            limitations: plan.limitations
+          }
+        });
+        dateCreatedRuns += 1;
+        dateCreatedStops += Number(route.run?.stopCount || route.stops?.length || 0);
+      } catch (error) {
+        if (error?.code !== "collection_daily_route_already_exists") throw error;
+      }
+    }
+    createdRuns += dateCreatedRuns;
+    createdStops += dateCreatedStops;
+    dateResults.push({
+      routeDate,
+      status: dateCreatedRuns ? "prepared" : "skipped",
+      reason: dateCreatedRuns ? "drafts_created" : "no_new_drafts",
+      createdRuns: dateCreatedRuns,
+      createdStops: dateCreatedStops,
+      planStatus: plan.status,
+      blockerCount: plan.blockers.length
+    });
+  }
+
+  return {
+    status: "completed",
+    sourceBatchId: snapshot.batch.id,
+    sourceBatchCreatedAt: snapshot.batch.createdAt,
+    routeDates,
+    createdRuns,
+    createdStops,
+    autoConfirmed: false,
+    autoStarted: false,
+    autoCompleted: false,
+    notificationsSent: false,
+    dateResults,
+    message: createdRuns
+      ? `Cloud připravil ${createdRuns} návrhů denních tras se ${createdStops} zastávkami. Návrhy nejsou potvrzené ani spuštěné.`
+      : "Cloudový běh nenašel nový bezpečný návrh denní trasy; existující trasy ani zastávky nezměnil."
+  };
 }
 
 export async function listCollectionDailyRoutes(env, input = {}, user = null) {

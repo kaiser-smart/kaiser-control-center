@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.567"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.568"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozidla a trasy: autonomní cloudová příprava",
+    text: "T-Cars každou minutu obnovuje v D1 jednoznačné aliasy master flotily a ORWII podle nich automaticky znovu páruje i starší tankování. Po čerstvém Vistos snapshotu cloud bez otevření modulu připraví nepotvrzené návrhy tras pro dnešek a zítřek; nic automaticky nepotvrdí, nespustí, nedokončí ani neodešle."
+  },
   {
     title: "Svozové trasy: úplné Adresní místo z Vistosu",
     text: "KSO načítá skutečné Adresní místo pro všechny aktivní řádky Svoz Kaiser ANO v bezpečných dávkách, ne jen pro prvních 150. Chyba čtení KSO se nově nezamění za chybějící údaj ve Vistosu, hlídač ji zachytí a technická svozová adresa ani Stanoviště se nepoužijí jako náhrada."

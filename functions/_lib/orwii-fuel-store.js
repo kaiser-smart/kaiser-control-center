@@ -1,4 +1,8 @@
 import { loadFleetVehiclesWithAssignments } from "./fleet-vehicles-store.js";
+import {
+  loadFleetVehiclesFromAliases,
+  persistMatchedOrwiiAliases
+} from "./fleet-vehicle-aliases.js";
 import { licensePlateKey, normalizeLicensePlate, vehicleLicensePlateValue } from "../../src/data/licensePlate.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
@@ -7,6 +11,7 @@ const MAX_TRANSACTIONS = 2_000;
 const SYNC_LOOKBACK_DAYS = 3;
 const INITIAL_SYNC_LOOKBACK_DAYS = 31;
 const SYNC_RUNNER_NAME = "orwii-fuel-cloud-sync";
+const SYNC_RULE_ID = "fleet-orwii-automatic-matching-phase1b";
 
 export class OrwiiFuelStoreError extends Error {
   constructor(message, status = 400, code = "orwii_fuel_error") { super(message); this.status = status; this.code = code; }
@@ -73,17 +78,43 @@ export function normalizeOrwiiFuelTransaction(row = {}, index = 0) {
 }
 function vehicleId(vehicle = {}) { return cleanString(vehicle.id || vehicle.vehicleId || vehicle.tcarsVehicleId); }
 function normalizedChip(value) { return cleanString(value).toLowerCase().replace(/[^a-z0-9]/g, ""); }
+function uniqueVehicles(vehicles = []) {
+  const result = new Map();
+  for (const vehicle of vehicles) {
+    const id = vehicleId(vehicle);
+    if (id && !result.has(id)) result.set(id, vehicle);
+  }
+  return [...result.values()];
+}
 export function matchFuelTransactionToVehicle(transaction, vehicles = []) {
-  const byExternalId = transaction.vehicleExternalId ? vehicles.filter((vehicle) => cleanString(vehicle.orwiiVehicleId || vehicle.orwii_vehicle_id) === transaction.vehicleExternalId) : [];
-  if (byExternalId.length === 1) return { status: "matched", method: "orwii_vehicle_id", vehicleId: vehicleId(byExternalId[0]) };
+  const byExternalId = transaction.vehicleExternalId ? uniqueVehicles(vehicles.filter((vehicle) => {
+    const aliases = [vehicle.orwiiVehicleId, vehicle.orwii_vehicle_id, ...(Array.isArray(vehicle.orwiiVehicleIds) ? vehicle.orwiiVehicleIds : [])]
+      .map(cleanString)
+      .filter(Boolean);
+    return aliases.includes(transaction.vehicleExternalId);
+  })) : [];
   const chip = normalizedChip(transaction.chipId);
-  const byChip = chip ? vehicles.filter((vehicle) => normalizedChip(vehicle.fuelChipId || vehicle.fuel_chip_id) === chip) : [];
-  if (byChip.length === 1) return { status: "matched", method: "fuel_chip_id", vehicleId: vehicleId(byChip[0]) };
+  const byChip = chip ? uniqueVehicles(vehicles.filter((vehicle) => {
+    const aliases = [vehicle.fuelChipId, vehicle.fuel_chip_id, ...(Array.isArray(vehicle.fuelChipIds) ? vehicle.fuelChipIds : [])]
+      .map(normalizedChip)
+      .filter(Boolean);
+    return aliases.includes(chip);
+  })) : [];
   const plate = licensePlateKey(transaction.licensePlate);
-  const byPlate = plate ? vehicles.filter((vehicle) => licensePlateKey(normalizeLicensePlate(vehicleLicensePlateValue(vehicle))) === plate) : [];
-  if (byPlate.length === 1) return { status: "matched", method: "license_plate", vehicleId: vehicleId(byPlate[0]) };
-  const candidates = [...byExternalId, ...byChip, ...byPlate].map(vehicleId).filter(Boolean);
-  return { status: candidates.length > 1 ? "ambiguous" : "unmatched", method: "", vehicleId: "", candidates: [...new Set(candidates)] };
+  const byPlate = plate ? uniqueVehicles(vehicles.filter((vehicle) => licensePlateKey(normalizeLicensePlate(vehicleLicensePlateValue(vehicle))) === plate)) : [];
+  const candidates = [...new Set([...byExternalId, ...byChip, ...byPlate].map(vehicleId).filter(Boolean))];
+  const anyAmbiguousSignal = [byExternalId, byChip, byPlate].some((matches) => matches.length > 1);
+  if (candidates.length !== 1 || anyAmbiguousSignal) {
+    return { status: candidates.length || anyAmbiguousSignal ? "ambiguous" : "unmatched", method: "", vehicleId: "", candidates };
+  }
+  const matchedVehicleId = candidates[0];
+  if (byExternalId.some((vehicle) => vehicleId(vehicle) === matchedVehicleId)) {
+    return { status: "matched", method: "orwii_vehicle_id", vehicleId: matchedVehicleId };
+  }
+  if (byChip.some((vehicle) => vehicleId(vehicle) === matchedVehicleId)) {
+    return { status: "matched", method: "fuel_chip_id", vehicleId: matchedVehicleId };
+  }
+  return { status: "matched", method: "license_plate", vehicleId: matchedVehicleId };
 }
 function asUnixMilliseconds(date, endOfDay = false) {
   const value = new Date(`${date}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`).getTime();
@@ -321,6 +352,14 @@ async function lastSuccessfulSync(db) {
   `).first();
 }
 
+async function updateOrwiiRuleState(db, { finishedAt, status, message }) {
+  await db.prepare(`
+    UPDATE module_rules
+    SET last_run_at = ?, last_run_status = ?, last_run_message = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(finishedAt, status, message, finishedAt, SYNC_RULE_ID).run();
+}
+
 function transactionStatements(db, transaction) {
   const match = transaction.match || {};
   return db.prepare(`
@@ -359,6 +398,99 @@ async function upsertTransactions(db, transactions) {
   }
 }
 
+function storedTransaction(row = {}) {
+  return {
+    externalId: cleanString(row.external_id),
+    timestamp: cleanString(row.occurred_at),
+    fuelType: cleanString(row.fuel_type),
+    liters: finiteNumber(row.liters),
+    unitPrice: finiteNumber(row.unit_price),
+    totalPrice: finiteNumber(row.total_price),
+    odometerKm: finiteNumber(row.odometer_km),
+    licensePlate: normalizeLicensePlate(row.license_plate),
+    vehicleExternalId: cleanString(row.orwii_vehicle_id),
+    chipId: cleanString(row.fuel_chip_id),
+    previousMatch: {
+      vehicleId: cleanString(row.matched_vehicle_id),
+      status: cleanString(row.match_status || "unmatched"),
+      method: cleanString(row.match_method)
+    },
+    raw: {}
+  };
+}
+
+async function loadStoredTransactions(db) {
+  const result = await db.prepare(`
+    SELECT external_id, occurred_at, fuel_type, liters, unit_price, total_price, odometer_km,
+           license_plate, orwii_vehicle_id, fuel_chip_id, matched_vehicle_id, match_status, match_method
+    FROM fleet_orwii_fuel_transactions
+    ORDER BY occurred_at DESC, external_id
+  `).all();
+  return (result.results || []).map(storedTransaction);
+}
+
+function matchTransactions(transactions, vehicles) {
+  return transactions.map((transaction) => ({
+    ...transaction,
+    match: matchFuelTransactionToVehicle(transaction, vehicles)
+  }));
+}
+
+function reconciliationStatement(db, transaction, updatedAt) {
+  const match = transaction.match || {};
+  return db.prepare(`
+    UPDATE fleet_orwii_fuel_transactions
+    SET matched_vehicle_id = ?, match_status = ?, match_method = ?, updated_at = ?
+    WHERE external_id = ?
+      AND (
+        COALESCE(matched_vehicle_id, '') <> ?
+        OR COALESCE(match_status, '') <> ?
+        OR COALESCE(match_method, '') <> ?
+      )
+  `).bind(
+    match.vehicleId || null,
+    match.status || "unmatched",
+    match.method || null,
+    updatedAt,
+    transaction.externalId,
+    match.vehicleId || "",
+    match.status || "unmatched",
+    match.method || ""
+  );
+}
+
+function matchSummary(transactions = []) {
+  return transactions.reduce((result, transaction) => {
+    const status = cleanString(transaction?.match?.status || "unmatched");
+    result[status] = (result[status] || 0) + 1;
+    return result;
+  }, { matched: 0, unmatched: 0, ambiguous: 0 });
+}
+
+export async function reconcileStoredOrwiiFuelTransactions(db, options = {}) {
+  const updatedAt = cleanString(options.updatedAt) || new Date().toISOString();
+  const stored = await loadStoredTransactions(db);
+  let vehicles = await loadFleetVehiclesFromAliases(db);
+  const firstPass = matchTransactions(stored, vehicles);
+  await persistMatchedOrwiiAliases(db, firstPass, { updatedAt });
+  vehicles = await loadFleetVehiclesFromAliases(db);
+  const reconciled = matchTransactions(stored, vehicles);
+  const statements = reconciled.map((transaction) => reconciliationStatement(db, transaction, updatedAt));
+  const results = [];
+  for (let index = 0; index < statements.length; index += 50) {
+    results.push(...await db.batch(statements.slice(index, index + 50)));
+  }
+  await persistMatchedOrwiiAliases(db, reconciled, { updatedAt });
+  const updated = results.reduce((total, result) => total + Number(result?.meta?.changes || 0), 0);
+  return {
+    total: reconciled.length,
+    updated,
+    vehicles: vehicles.length,
+    summary: matchSummary(reconciled),
+    transactions: reconciled
+  };
+}
+
 /**
  * Cloudflare Worker entry point. It only reads ORWII and upserts an auditable
  * D1 mirror; it never creates fuel transactions in an external system.
@@ -392,27 +524,53 @@ export async function runOrwiiFuelSyncAutomation(env, options = {}) {
   }
 
   try {
-    const [rows, fleet] = await Promise.all([
+    const [rows, fleetVehicles] = await Promise.all([
       fetchTransactions(env, { from, to }),
-      loadFleetVehiclesWithAssignments(env, { id: "system", name: SYNC_RUNNER_NAME, role: "admin" })
+      loadFleetVehiclesFromAliases(db)
     ]);
     const transactions = rows.map((row, index) => {
       const transaction = normalizeOrwiiFuelTransaction(row, index);
-      return { ...transaction, match: matchFuelTransactionToVehicle(transaction, fleet.vehicles || []) };
+      return { ...transaction, match: matchFuelTransactionToVehicle(transaction, fleetVehicles) };
     });
     await upsertTransactions(db, transactions);
-    const summary = transactions.reduce((result, item) => {
-      result[item.match.status] = (result[item.match.status] || 0) + 1;
-      return result;
-    }, { matched: 0, unmatched: 0, ambiguous: 0 });
+    const reconciliation = await reconcileStoredOrwiiFuelTransactions(db);
+    const fetchedIds = new Set(transactions.map((transaction) => transaction.externalId));
+    const fetchedTransactions = reconciliation.transactions.filter((transaction) => fetchedIds.has(transaction.externalId));
+    const summary = matchSummary(fetchedTransactions);
     const finishedAt = new Date().toISOString();
     await db.prepare(`
       UPDATE fleet_orwii_fuel_sync_runs
       SET status = 'completed', finished_at = ?, transaction_count = ?, matched_count = ?,
-          unmatched_count = ?, ambiguous_count = ?
+          unmatched_count = ?, ambiguous_count = ?, reprocessed_count = ?,
+          stored_transaction_count = ?, stored_matched_count = ?
       WHERE id = ?
-    `).bind(finishedAt, transactions.length, summary.matched, summary.unmatched, summary.ambiguous, run.id).run();
-    return { mode: "cloud-scheduled-sync", status: "completed", runner: SYNC_RUNNER_NAME, runId: run.id, from, to, transactionCount: transactions.length, ...summary };
+    `).bind(
+      finishedAt,
+      transactions.length,
+      summary.matched,
+      summary.unmatched,
+      summary.ambiguous,
+      reconciliation.updated,
+      reconciliation.total,
+      reconciliation.summary.matched,
+      run.id
+    ).run();
+    const ruleMessage = `ORWII načteno ${transactions.length}; v D1 spárováno ${reconciliation.summary.matched} z ${reconciliation.total}; změněno ${reconciliation.updated}.`;
+    await updateOrwiiRuleState(db, { finishedAt, status: "completed", message: ruleMessage });
+    return {
+      mode: "cloud-scheduled-sync",
+      status: "completed",
+      runner: SYNC_RUNNER_NAME,
+      runId: run.id,
+      from,
+      to,
+      transactionCount: transactions.length,
+      ...summary,
+      reprocessedCount: reconciliation.updated,
+      storedTransactionCount: reconciliation.total,
+      storedMatchedCount: reconciliation.summary.matched,
+      fleetVehicleCount: reconciliation.vehicles
+    };
   } catch (error) {
     const finishedAt = new Date().toISOString();
     const code = cleanString(error?.code) || "orwii_sync_failed";
@@ -422,6 +580,7 @@ export async function runOrwiiFuelSyncAutomation(env, options = {}) {
       SET status = 'error', finished_at = ?, error_code = ?, error_message = ?
       WHERE id = ?
     `).bind(finishedAt, code, message, run.id).run();
+    await updateOrwiiRuleState(db, { finishedAt, status: "error", message: "Cloudová synchronizace nebo párování ORWII selhalo." });
     throw error;
   }
 }

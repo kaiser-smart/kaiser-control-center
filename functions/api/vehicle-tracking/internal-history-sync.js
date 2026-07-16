@@ -4,6 +4,10 @@ import {
   vehicleTrackingHistoryPoint,
   vehicleTrackingHistoryRetentionBefore
 } from "../../_lib/vehicle-tracking-history.js";
+import {
+  tcarsFleetAliasCandidate,
+  upsertFleetVehicleAliasesFromTcars
+} from "../../_lib/fleet-vehicle-aliases.js";
 
 function token(request) {
   const value = request.headers.get("Authorization") || "";
@@ -43,15 +47,59 @@ export async function onRequestPost({ request, env }) {
       item.speedKmh, item.heading, item.address, item.recordedAt, item.receivedAt, "tcars"
     ));
     const writeResults = statements.length ? await env.SMART_ODPADY_DB.batch(statements) : [];
+    const fleetAliases = await upsertFleetVehicleAliasesFromTcars(
+      env.SMART_ODPADY_DB,
+      (status.locations || []).map(tcarsFleetAliasCandidate),
+      {
+      updatedAt: startedAt
+      }
+    );
     await env.SMART_ODPADY_DB.prepare("DELETE FROM vehicle_tracking_gps_points WHERE recorded_at < ?")
       .bind(vehicleTrackingHistoryRetentionBefore(new Date(startedAt))).run();
     const pointsWritten = writeResults.reduce((total, result) => total + Number(result?.meta?.changes || 0), 0);
-    await env.SMART_ODPADY_DB.prepare(`INSERT INTO vehicle_tracking_history_runs (id, started_at, finished_at, status, points_written, message) VALUES (?, ?, ?, 'ok', ?, ?)`)
-      .bind(runId, startedAt, new Date().toISOString(), pointsWritten, "Aktuální GPS body byly read-only uloženy z T-Cars.").run();
-    return json({ status: "ok", runId, pointsWritten, pointsSeen: points.length, startedAt });
+    await env.SMART_ODPADY_DB.prepare(`
+      INSERT INTO vehicle_tracking_history_runs (
+        id, started_at, finished_at, status, points_written, fleet_aliases_seen, fleet_aliases_written, message
+      ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
+    `).bind(
+      runId,
+      startedAt,
+      new Date().toISOString(),
+      pointsWritten,
+      fleetAliases.seen,
+      fleetAliases.written,
+      "Aktuální GPS body a read-only master aliasy flotily byly uloženy z T-Cars."
+    ).run();
+    await env.SMART_ODPADY_DB.prepare(`
+      UPDATE module_rules
+      SET last_run_at = ?, last_run_status = 'completed', last_run_message = ?, updated_at = ?
+      WHERE id = 'vehicle-tracking-fleet-master-alias-sync-phase1b'
+    `).bind(
+      new Date().toISOString(),
+      `T-Cars master aliasy: viděno ${fleetAliases.seen}, zapsáno ${fleetAliases.written}.`,
+      new Date().toISOString()
+    ).run();
+    return json({
+      status: "ok",
+      runId,
+      pointsWritten,
+      pointsSeen: points.length,
+      fleetAliasesSeen: fleetAliases.seen,
+      fleetAliasesWritten: fleetAliases.written,
+      startedAt
+    });
   } catch (error) {
     await env.SMART_ODPADY_DB.prepare(`INSERT INTO vehicle_tracking_history_runs (id, started_at, finished_at, status, message, error_code) VALUES (?, ?, ?, 'error', ?, ?)`)
       .bind(runId, startedAt, new Date().toISOString(), "Sběr GPS historie selhal.", String(error?.message || "unknown").slice(0, 160)).run().catch(() => {});
+    await env.SMART_ODPADY_DB.prepare(`
+      UPDATE module_rules
+      SET last_run_at = ?, last_run_status = 'error', last_run_message = ?, updated_at = ?
+      WHERE id = 'vehicle-tracking-fleet-master-alias-sync-phase1b'
+    `).bind(
+      new Date().toISOString(),
+      "Sběr GPS historie nebo aktualizace aliasů flotily selhala.",
+      new Date().toISOString()
+    ).run().catch(() => {});
     return json({ error: "Sběr GPS historie se nepodařil.", runId }, 502);
   }
 }

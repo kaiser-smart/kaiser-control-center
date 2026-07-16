@@ -257,8 +257,17 @@ export function calculateCollectionRoutesReadonlyPlan({
   routeDate = "",
   dateInfo = {},
   eligibleRows = [],
-  sourceRows = []
+  sourceRows = [],
+  vehicleCodes = []
 } = {}) {
+  const requestedVehicleCodes = new Set(
+    (Array.isArray(vehicleCodes) ? vehicleCodes : [])
+      .map((value) => cleanString(value).toUpperCase())
+      .filter(Boolean)
+  );
+  const availableVehicles = requestedVehicleCodes.size
+    ? VEHICLES.filter((vehicle) => requestedVehicleCodes.has(vehicle.code))
+    : VEHICLES;
   const sourceMap = sourceRowsById(sourceRows);
   const stops = eligibleRows
     .map((eligibleRow, index) => {
@@ -280,7 +289,7 @@ export function calculateCollectionRoutesReadonlyPlan({
       routeDate: cleanString(routeDate || dateInfo?.routeDate),
       dateInfo: { ...dateInfo },
       totals: { stopCount: 0, containerCount: 0, serviceMinutes: 0, knownWeightTons: 0, unknownWeightStopCount: 0 },
-      vehicles: VEHICLES.map((vehicle) => summarizedVehicle(emptyVehicle(vehicle))),
+      vehicles: availableVehicles.map((vehicle) => summarizedVehicle(emptyVehicle(vehicle))),
       blockers: ["Pro vybraný den nejsou žádná ověřená TEST stanoviště."],
       limitations: [],
       createsRoute: false,
@@ -289,7 +298,23 @@ export function calculateCollectionRoutesReadonlyPlan({
     };
   }
 
-  const vehicles = VEHICLES.map(emptyVehicle);
+  const vehicles = availableVehicles.map(emptyVehicle);
+  if (!vehicles.length) {
+    return {
+      version: COLLECTION_ROUTES_READONLY_CALCULATOR_VERSION,
+      status: "blocked",
+      statusLabel: "BLOKOVÁNO",
+      routeDate: cleanString(routeDate || dateInfo?.routeDate),
+      dateInfo: { ...dateInfo },
+      totals: { stopCount: stops.length, containerCount: 0, serviceMinutes: 0, knownWeightTons: 0, unknownWeightStopCount: 0 },
+      vehicles: [],
+      blockers: ["Pro přípravu návrhu není dostupný žádný povolený vůz."],
+      limitations: [],
+      createsRoute: false,
+      writesData: false,
+      sendsNotifications: false
+    };
+  }
   for (const stop of stops) {
     const selectedVehicle = [...vehicles].sort((left, right) => compareAssignmentCandidates(left, right, stop))[0];
     assignStop(selectedVehicle, stop);
@@ -305,7 +330,7 @@ export function calculateCollectionRoutesReadonlyPlan({
     if (!presentWasteTypes.has(wasteType)) continue;
     const window = operatingWindow(wasteType);
     if (window.status === "blocked") blockers.push(`${WASTE_LABELS[wasteType] || wasteType}: ${window.note}`);
-    const capacityMissing = VEHICLES.some((vehicle) => !vehicleCapacity(vehicle, wasteType));
+    const capacityMissing = availableVehicles.some((vehicle) => !vehicleCapacity(vehicle, wasteType));
     if (capacityMissing) blockers.push(`${WASTE_LABELS[wasteType] || wasteType}: chybí potvrzená hmotnostní kapacita vozidel.`);
     const weightMissing = stops.some((stop) => stop.wasteType === wasteType && !stop.weightKnown);
     if (weightMissing) blockers.push(`${WASTE_LABELS[wasteType] || wasteType}: chybí potvrzený hmotnostní odhad nádoby.`);

@@ -1,5 +1,8 @@
 import { runModuleAutomationDryRun } from "../functions/_lib/module-automation-dry-run.js";
-import { runCollectionRoutesSnapshotAutomation } from "../functions/_lib/collection-routes-automation-runner.js";
+import {
+  runCollectionDailyRoutePreparationAutomation,
+  runCollectionRoutesSnapshotAutomation
+} from "../functions/_lib/collection-routes-automation-runner.js";
 import { runReceivablesInvoiceSyncAutomation } from "../functions/_lib/receivables-invoice-sync-runner.js";
 import { runSelfRepairHourlyMonitor } from "../functions/_lib/self-repair-monitor-runner.js";
 import { SELF_REPAIR_MONITOR_CRON } from "../functions/_lib/self-repair-monitor-config.js";
@@ -34,18 +37,27 @@ export default {
       }
 
       if (controller.cron === COLLECTION_ROUTES_CRON) {
-        const [summary, receivables] = await Promise.all([
-          runCollectionRoutesSnapshotAutomation(env, {
-            scheduledTime: controller.scheduledTime,
-            cron: controller.cron,
-            triggeredBy: "cloudflare-cron"
-          }),
+        const [collectionRoutes, receivables] = await Promise.all([
+          (async () => {
+            const snapshot = await runCollectionRoutesSnapshotAutomation(env, {
+              scheduledTime: controller.scheduledTime,
+              cron: controller.cron,
+              triggeredBy: "cloudflare-cron"
+            });
+            const preparation = await runCollectionDailyRoutePreparationAutomation(env, {
+              scheduledTime: controller.scheduledTime,
+              cron: controller.cron,
+              triggeredBy: "cloudflare-cron"
+            });
+            return { snapshot, preparation };
+          })(),
           runReceivablesInvoiceSyncAutomation(env, {
             scheduledTime: controller.scheduledTime,
             cron: controller.cron,
             triggeredBy: "cloudflare-cron"
           })
         ]);
+        const { snapshot: summary, preparation } = collectionRoutes;
 
         console.log("collection_routes_snapshot_runner.completed", {
           mode: summary.mode,
@@ -58,8 +70,20 @@ export default {
           skippedCount: summary.skippedCount,
           errorCount: summary.errorCount,
           emailSms: "disabled",
-          operationalRoutes: "disabled",
+          operationalRoutes: "draft-only",
           vistosWrites: "disabled"
+        });
+        console.log("collection_routes_daily_draft_preparation.completed", {
+          mode: preparation.mode,
+          status: preparation.status,
+          runnerRunId: preparation.runnerRunId,
+          sourceBatchId: preparation.sourceBatchId,
+          createdRuns: preparation.createdRuns || 0,
+          createdStops: preparation.createdStops || 0,
+          autoConfirmed: false,
+          autoStarted: false,
+          autoCompleted: false,
+          notificationsSent: false
         });
         console.log("receivables_invoice_sync_runner.completed", {
           mode: receivables.mode,
@@ -127,7 +151,7 @@ export default {
       console.log("module_automation_runner.skipped_unknown_cron", {
         cron: controller.cron,
         emailSms: "disabled",
-        operationalRoutes: "disabled"
+        operationalRoutes: "draft-only"
       });
     })());
   },
@@ -151,7 +175,12 @@ export default {
       },
       collectionRoutes: {
         cron: COLLECTION_ROUTES_CRON,
-        mode: "read-only-vistos-snapshot"
+        mode: "read-only-vistos-snapshot-and-draft-preparation",
+        preparesDates: ["today", "tomorrow"],
+        autoConfirm: false,
+        autoStart: false,
+        autoComplete: false,
+        notifications: "disabled"
       },
       receivables: {
         cron: COLLECTION_ROUTES_CRON,
@@ -176,7 +205,7 @@ export default {
         deployment: "disabled",
         notification: "disabled"
       },
-      message: "Cloud runner čte Trasy svozu, hlídá chráněné TEST připomínky incidentů, ukládá staging-only Vistos faktury Pohledávek, eviduje dry-run automatizace a provádí read-only kontrolu Samooprav."
+      message: "Cloud runner čte Trasy svozu, připravuje pouze nepotvrzené denní návrhy, hlídá chráněné TEST připomínky incidentů, ukládá staging-only Vistos faktury Pohledávek, eviduje dry-run automatizace a provádí read-only kontrolu Samooprav."
     });
   }
 };

@@ -2,12 +2,15 @@ import {
   createCollectionRoutesVistosKommunalPreview,
   isVistosExecuteConfigured
 } from "./collection-routes-store.js";
+import { prepareCollectionDailyRouteDraftsAutomation } from "./collection-daily-routes-store.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const DATABASE_NAME = "smart-odpady";
 const MODULE_KEY = "collection-routes";
-const RUNNER_NAME = "collection-routes-vistos-snapshot-15m";
-const RULE_ID = "collection-routes-vistos-snapshot-15m";
+const SNAPSHOT_RUNNER_NAME = "collection-routes-vistos-snapshot-15m";
+const SNAPSHOT_RULE_ID = "collection-routes-vistos-snapshot-15m";
+const PREPARATION_RUNNER_NAME = "collection-routes-daily-draft-preparation-15m";
+const PREPARATION_RULE_ID = "collection-routes-daily-draft-preparation-phase1b";
 const TIME_ZONE = "Europe/Prague";
 const SLOT_MS = 15 * 60 * 1000;
 
@@ -44,7 +47,7 @@ function slotIso(now) {
 }
 
 function dedupeKey(now) {
-  return ["read-only-snapshot", RUNNER_NAME, slotIso(now)].join(":");
+  return ["read-only-snapshot", SNAPSHOT_RUNNER_NAME, slotIso(now)].join(":");
 }
 
 function isUniqueDedupeError(error) {
@@ -80,7 +83,7 @@ async function insertRunnerRun(db, run) {
     .bind(
       run.id,
       MODULE_KEY,
-      RUNNER_NAME,
+      cleanString(run.runnerName || SNAPSHOT_RUNNER_NAME),
       run.startedAt,
       nullableString(run.scheduledAt),
       nullableString(run.finishedAt),
@@ -146,7 +149,7 @@ async function insertAutomationRun(db, run) {
     `)
     .bind(
       run.id,
-      RULE_ID,
+      cleanString(run.ruleId || SNAPSHOT_RULE_ID),
       MODULE_KEY,
       run.startedAt,
       nullableString(run.finishedAt),
@@ -176,6 +179,24 @@ async function updateAutomationRun(db, run) {
     .run();
 }
 
+async function updateRuleRunState(db, ruleId, run) {
+  await db.prepare(`
+    UPDATE module_rules
+    SET last_run_at = ?, last_run_status = ?, last_run_message = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(
+    nullableString(run.finishedAt),
+    nullableString(run.status),
+    nullableString(run.message),
+    nullableString(run.finishedAt),
+    ruleId
+  ).run();
+}
+
+function preparationDedupeKey(now) {
+  return ["daily-draft-preparation", PREPARATION_RUNNER_NAME, slotIso(now)].join(":");
+}
+
 async function runPagesSnapshot(env, scheduledAt) {
   const token = cleanString(env?.COLLECTION_ROUTES_RUNNER_TOKEN);
   if (!token) {
@@ -195,7 +216,7 @@ async function runPagesSnapshot(env, scheduledAt) {
     },
     body: JSON.stringify({
       scheduledAt,
-      runner: RUNNER_NAME
+      runner: SNAPSHOT_RUNNER_NAME
     })
   });
   const payload = await response.json().catch(() => ({}));
@@ -258,9 +279,10 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
       message: `Běh přeskočen: snapshot pro slot ${slotIso(now)} už existuje.`,
       errorCode: ""
     });
+    await updateRuleRunState(db, SNAPSHOT_RULE_ID, { finishedAt, status: "skipped", message: `Běh přeskočen: snapshot pro slot ${slotIso(now)} už existuje.` });
     return {
       mode: "read-only-snapshot",
-      runner: RUNNER_NAME,
+      runner: SNAPSHOT_RUNNER_NAME,
       runnerRunId,
       moduleKey: MODULE_KEY,
       status: "skipped",
@@ -277,7 +299,7 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
     let result;
     if (isVistosExecuteConfigured(env)) {
       result = await createCollectionRoutesVistosKommunalPreview(env, {
-        id: `cloud-runner:${RUNNER_NAME}`
+        id: `cloud-runner:${SNAPSHOT_RUNNER_NAME}`
       }, {
         derivedRowsLimit: 0
       });
@@ -302,9 +324,10 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
           message: pagesResult.message,
           errorCode: pagesResult.errorCode
         });
+        await updateRuleRunState(db, SNAPSHOT_RULE_ID, { finishedAt, status: "skipped", message: pagesResult.message });
         return {
           mode: "read-only-snapshot",
-          runner: RUNNER_NAME,
+          runner: SNAPSHOT_RUNNER_NAME,
           runnerRunId,
           moduleKey: MODULE_KEY,
           status: "skipped",
@@ -345,10 +368,11 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
       message,
       errorCode: ready ? "" : "vistos_snapshot_waiting"
     });
+    await updateRuleRunState(db, SNAPSHOT_RULE_ID, { finishedAt, status, message });
 
     return {
       mode: "read-only-snapshot",
-      runner: RUNNER_NAME,
+      runner: SNAPSHOT_RUNNER_NAME,
       runnerRunId,
       moduleKey: MODULE_KEY,
       status,
@@ -380,6 +404,124 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
       message,
       errorCode: "collection_routes_snapshot_failed"
     });
+    await updateRuleRunState(db, SNAPSHOT_RULE_ID, { finishedAt, status: "error", message });
+    throw error;
+  }
+}
+
+export async function runCollectionDailyRoutePreparationAutomation(env, options = {}) {
+  const db = database(env);
+  const now = new Date(Number(options.scheduledTime || Date.now()));
+  const startedAt = new Date().toISOString();
+  const runnerRunId = randomId("module-automation-runner-run");
+  const automationRunId = randomId("module-automation-run");
+  const key = preparationDedupeKey(now);
+  const cron = cleanString(options.cron || "*/15 * * * *");
+  const triggeredBy = cleanString(options.triggeredBy || "cloudflare-cron");
+
+  await insertRunnerRun(db, {
+    id: runnerRunId,
+    runnerName: PREPARATION_RUNNER_NAME,
+    startedAt,
+    scheduledAt: now.toISOString(),
+    triggeredBy,
+    status: "running",
+    rulesTotal: 1,
+    cron,
+    message: "Cloud runner připravuje pouze nepotvrzené návrhy tras pro dnešek a zítřek."
+  });
+
+  try {
+    await insertAutomationRun(db, {
+      id: automationRunId,
+      ruleId: PREPARATION_RULE_ID,
+      startedAt,
+      status: "running",
+      message: "Příprava nepotvrzených denních návrhů tras spuštěna.",
+      triggeredBy,
+      dedupeKey: key
+    });
+  } catch (error) {
+    if (!isUniqueDedupeError(error)) throw error;
+    const finishedAt = new Date().toISOString();
+    const message = `Běh přeskočen: příprava pro slot ${slotIso(now)} už existuje.`;
+    await updateRunnerRun(db, {
+      id: runnerRunId,
+      finishedAt,
+      status: "skipped",
+      skippedCount: 1,
+      message,
+      errorCode: ""
+    });
+    return {
+      mode: "cloud-draft-preparation",
+      runner: PREPARATION_RUNNER_NAME,
+      runnerRunId,
+      moduleKey: MODULE_KEY,
+      status: "skipped",
+      message,
+      createdRuns: 0,
+      createdStops: 0,
+      cron,
+      dedupeKey: key
+    };
+  }
+
+  try {
+    const result = await prepareCollectionDailyRouteDraftsAutomation(env, {
+      scheduledTime: now.getTime(),
+      now,
+      maxSnapshotAgeMs: options.maxSnapshotAgeMs
+    });
+    const finishedAt = new Date().toISOString();
+    const status = result.status === "completed" ? "completed" : "skipped";
+    const errorCode = status === "completed" ? "" : cleanString(result.reason || "daily_route_preparation_skipped");
+    await updateAutomationRun(db, {
+      id: automationRunId,
+      finishedAt,
+      status,
+      message: result.message,
+      errorCode
+    });
+    await updateRunnerRun(db, {
+      id: runnerRunId,
+      finishedAt,
+      status,
+      dryRunCount: 0,
+      skippedCount: status === "skipped" ? 1 : 0,
+      failedCount: 0,
+      message: result.message,
+      errorCode
+    });
+    await updateRuleRunState(db, PREPARATION_RULE_ID, { finishedAt, status, message: result.message });
+    return {
+      mode: "cloud-draft-preparation",
+      runner: PREPARATION_RUNNER_NAME,
+      runnerRunId,
+      moduleKey: MODULE_KEY,
+      cron,
+      dedupeKey: key,
+      ...result
+    };
+  } catch (error) {
+    const finishedAt = new Date().toISOString();
+    const message = "Cloudová příprava denních návrhů tras selhala. Existující trasy a zastávky zůstaly beze změny.";
+    await updateAutomationRun(db, {
+      id: automationRunId,
+      finishedAt,
+      status: "error",
+      message,
+      errorCode: "collection_daily_route_preparation_failed"
+    });
+    await updateRunnerRun(db, {
+      id: runnerRunId,
+      finishedAt,
+      status: "error",
+      failedCount: 1,
+      message,
+      errorCode: "collection_daily_route_preparation_failed"
+    });
+    await updateRuleRunState(db, PREPARATION_RULE_ID, { finishedAt, status: "error", message });
     throw error;
   }
 }

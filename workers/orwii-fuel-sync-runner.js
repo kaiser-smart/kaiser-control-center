@@ -30,6 +30,8 @@ export default {
       mode: "cloud-scheduled-sync",
       cron: ORWII_FUEL_SYNC_CRON,
       writes: "D1 audit mirror only",
+      fleetMatching: "d1-master-aliases",
+      historicalReprocessing: "automatic",
       externalWrites: "disabled",
       manualRun: "disabled",
       message: "ORWII tankování se čte každou hodinu v minutě 17 a ukládá se do D1 včetně auditu běhů."

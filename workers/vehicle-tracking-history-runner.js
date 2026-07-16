@@ -32,7 +32,9 @@ async function syncHistory(env, scheduledAt) {
   console.log("vehicle_tracking_history.completed", {
     runId: summary.runId,
     pointsWritten: summary.pointsWritten || 0,
-    pointsSeen: summary.pointsSeen || 0
+    pointsSeen: summary.pointsSeen || 0,
+    fleetAliasesSeen: summary.fleetAliasesSeen || 0,
+    fleetAliasesWritten: summary.fleetAliasesWritten || 0
   });
 }
 
@@ -93,8 +95,9 @@ export default {
       analyticsIntervalMinutes: 5,
       tripJobPairingIntervalMinutes: 15,
       tripJobPairingPhase: "read-only-pilot",
+      fleetMasterAliasSync: "tcars-readonly-d1",
       dashboardActivationAllowed: false,
-      message: "GPS historie se ukládá každou minutu, souhrny jízd se přepočítávají každých 5 minut a read-only párovací pilot běží každých 15 minut."
+      message: "GPS historie a read-only aliasy master flotily se ukládají každou minutu, souhrny jízd se přepočítávají každých 5 minut a read-only párovací pilot běží každých 15 minut."
     });
   }
 };

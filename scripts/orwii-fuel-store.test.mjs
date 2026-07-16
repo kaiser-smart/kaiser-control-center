@@ -13,6 +13,10 @@ assert.equal(transaction.odometerKm, 183.4); assert.equal(transaction.licensePla
 const vehicle = { id: "vehicle-1", licensePlate: "1AB2345", fuelChipId: "chip-7" };
 assert.deepEqual(matchFuelTransactionToVehicle(transaction, [vehicle]), { status: "matched", method: "fuel_chip_id", vehicleId: "vehicle-1" });
 assert.equal(matchFuelTransactionToVehicle({ ...transaction, chipId: "", licensePlate: "9ZZ9999" }, [vehicle]).status, "unmatched");
+assert.equal(matchFuelTransactionToVehicle(transaction, [
+  vehicle,
+  { id: "vehicle-2", licensePlate: "1AB2345", orwiiVehicleId: "different" }
+]).status, "ambiguous");
 assert.throws(() => normalizeOrwiiFuelTransaction({ liters: 10 }), /unikátní ID/);
 assert.deepEqual(
   { mode: orwiiFuelStatus({ ORWII_API_USERNAME: "user", ORWII_API_PASSWORD: "secret" }).mode, automation: orwiiFuelStatus({ ORWII_API_USERNAME: "user", ORWII_API_PASSWORD: "secret" }).automation },
