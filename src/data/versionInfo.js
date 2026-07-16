@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.572"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.573"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "RCS: prokazatelný souhlas zákazníka",
+    text: "Veřejný formulář Kaiser ukládá samostatný souhlas s provozní a transakční RCS komunikací do cloudové D1 včetně přesného znění, verze a zdrojové stránky. Formulář sám žádnou RCS ani SMS neposílá; STOP blokaci smí zrušit pouze nový výslovný souhlas."
+  },
   {
     title: "Tankování: název vozidla v seznamu",
     text: "Seznam tankování nově zobrazuje vedle SPZ také název vozidla přímo z ORWII. Název je součástí hledání; u transakcí bez přiřazeného vozidla zůstává pravdivá pomlčka. Automatická cloudová synchronizace se nemění."

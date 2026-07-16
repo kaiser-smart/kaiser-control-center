@@ -160,6 +160,7 @@ runVisible("node", ["scripts/sarlota-tools-sync-plan.test.mjs"]);
 runVisible("node", ["scripts/sarlota-prompt-sync-plan.test.mjs"]);
 runVisible("node", ["scripts/sarlota-voice-smoke.test.mjs"]);
 runVisible("node", ["scripts/customer-messaging.test.mjs"]);
+runVisible("node", ["scripts/rcs-consent.test.mjs"]);
 runVisible("node", ["scripts/build.mjs"], {
   env: {
     ...process.env,
