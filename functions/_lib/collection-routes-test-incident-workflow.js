@@ -12,12 +12,17 @@ import {
 } from "./collection-route-incident-ai.js";
 import {
   sendCollectionRouteIncidentCustomerTestEmail,
+  sendCollectionRouteIncidentDispatcherLiveEmail,
+  sendCollectionRouteIncidentDispatcherLiveSms,
   sendCollectionRouteIncidentDispatcherTestEmail
 } from "./notification-service.js";
 
 const PRODUCTION_DB_BINDING = "SMART_ODPADY_DB";
 const INCIDENT_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
 const EMAIL_GUARD_KEY = "physical-tablet-test-20260715";
+const LIVE_DISPATCH_GUARD_KEY = "physical-tablet-live-dispatch-20260716";
+const LIVE_DISPATCH_GUARD_MAX = 12;
+const LIVE_DISPATCH_MODE = "live-internal-pilot";
 const CONFIRMATION = "confirm-test-incident-workflow";
 const REPLY_CONFIRMATION = "confirm-test-customer-reply";
 const ALLOWED_SCENARIOS = new Set(["route_within_24h", "next_standard_pickup"]);
@@ -83,6 +88,15 @@ function incidentTypeLabel(value) {
   if (type === "damaged_container") return "Poškozená nádoba";
   if (type === "site_inaccessible") return "Nelze se dostat do firmy";
   return "Hlášení ze stanoviště";
+}
+
+function isLiveDispatcherIncident(value) {
+  return ["overfilled_container", "damaged_container"].includes(cleanString(value));
+}
+
+function liveDispatcherModeEnabled(env = {}) {
+  const production = cleanString(env.APP_ENV).toLowerCase() === "production" || cleanString(env.CF_PAGES_BRANCH).toLowerCase() === "main";
+  return production && cleanString(env.COLLECTION_ROUTES_INCIDENT_DISPATCH_MODE).toLowerCase() === LIVE_DISPATCH_MODE;
 }
 
 function pragueDate(value) {
@@ -288,10 +302,26 @@ export async function resolveAvailableCollectionRouteDispatcher(env, testDb, opt
   const db = productionDatabase(env, true);
   const today = pragueDate(options.now || Date.now());
   const result = await db.prepare(`
-    SELECT id, user_id, first_name, last_name, email, position, department,
-      employment_status, current_absence_status
-    FROM employee_cards
-    WHERE employment_status = 'active'
+    SELECT
+      e.id,
+      e.user_id,
+      e.first_name,
+      e.last_name,
+      e.position,
+      e.department,
+      e.employment_status,
+      e.current_absence_status,
+      u.id AS kso_user_id,
+      u.email AS kso_user_email,
+      u.phone AS kso_user_phone,
+      u.role AS kso_user_role,
+      u.status AS kso_user_status,
+      u.active AS kso_user_active
+    FROM employee_cards e
+    JOIN users u ON u.id = e.user_id
+    WHERE e.employment_status = 'active'
+      AND u.active = 1
+      AND lower(COALESCE(u.status, 'active')) IN ('active', 'aktivní')
   `).all();
   const allowed = new Map(DISPATCHER_ORDER.map((name, index) => [normalizeText(name), index]));
   const candidates = (result.results || [])
@@ -304,9 +334,11 @@ export async function resolveAvailableCollectionRouteDispatcher(env, testDb, opt
     const absent = cardUnavailable || await employeeIsAbsent(db, candidate, today);
     return {
       id: cleanString(candidate.id || candidate.user_id),
-      userId: cleanString(candidate.user_id),
+      userId: cleanString(candidate.kso_user_id || candidate.user_id),
       name: candidate.name,
-      email: cleanString(candidate.email),
+      email: cleanString(candidate.kso_user_email),
+      phone: cleanString(candidate.kso_user_phone),
+      role: cleanString(candidate.kso_user_role),
       position: cleanString(candidate.position),
       department: cleanString(candidate.department),
       absent,
@@ -316,13 +348,13 @@ export async function resolveAvailableCollectionRouteDispatcher(env, testDb, opt
     };
   }));
   const available = availability
-    .filter((item) => !item.absent && item.email)
+    .filter((item) => !item.absent && item.email && item.phone)
     .sort((left, right) => left.assignedCount - right.assignedCount || left.order - right.order || left.name.localeCompare(right.name, "cs"));
   return {
     selected: available[0] || null,
     candidates: availability,
     checkedDate: today,
-    source: "SMART_ODPADY_DB.employee_cards + absence_requests"
+    source: "SMART_ODPADY_DB.users + employee_cards + absence_requests"
   };
 }
 
@@ -418,12 +450,24 @@ async function emailGuardStatus(db) {
   return { max, claimed, remaining: Math.max(0, max - claimed) };
 }
 
+async function liveDispatchGuardStatus(db) {
+  const row = await db.prepare(`
+    SELECT max_count, claimed_count FROM collection_route_test_incident_email_guard WHERE guard_key = ? LIMIT 1
+  `).bind(LIVE_DISPATCH_GUARD_KEY).first();
+  const max = numberValue(row?.max_count, LIVE_DISPATCH_GUARD_MAX);
+  const claimed = numberValue(row?.claimed_count, 0);
+  return { max, claimed, remaining: Math.max(0, max - claimed) };
+}
+
 function workflowIdempotency(incidentId, scenarioKey) {
   return `test-incident-workflow:${cleanString(incidentId)}:${cleanString(scenarioKey || "dispatcher-only")}`;
 }
 
 function rowToWorkflow(row, actions = [], recoveryStop = null) {
   if (!row) return null;
+  const metadata = parseJson(row.metadata_json, {});
+  const liveDispatcherNotification = metadata.liveDispatcherNotification === true;
+  const smsAction = actions.find((action) => action.type === "dispatcher_live_sms") || null;
   return {
     id: cleanString(row.id),
     incidentId: cleanString(row.incident_id),
@@ -435,7 +479,8 @@ function rowToWorkflow(row, actions = [], recoveryStop = null) {
       employeeId: cleanString(row.dispatcher_employee_id),
       name: cleanString(row.dispatcher_name),
       email: cleanString(row.dispatcher_email),
-      availability: cleanString(row.dispatcher_availability)
+      availability: cleanString(row.dispatcher_availability),
+      phoneConfigured: metadata.dispatcherPhoneConfigured === true
     },
     recoveryBranch: cleanString(row.recovery_branch),
     candidate: cleanString(row.candidate_route_label) ? {
@@ -453,6 +498,7 @@ function rowToWorkflow(row, actions = [], recoveryStop = null) {
     testReminderDueAt: cleanString(row.test_reminder_due_at),
     reminderStatus: cleanString(row.reminder_status),
     dispatcherEmailStatus: cleanString(row.dispatcher_email_status),
+    dispatcherSmsStatus: cleanString(smsAction?.status || "not-required"),
     customerEmailStatus: cleanString(row.customer_email_status),
     aiStatus: cleanString(row.ai_status),
     aiModel: cleanString(row.ai_model),
@@ -460,15 +506,20 @@ function rowToWorkflow(row, actions = [], recoveryStop = null) {
     messageSubject: cleanString(row.message_subject),
     messageBody: cleanString(row.message_body),
     lastError: cleanString(row.last_error),
-    metadata: parseJson(row.metadata_json, {}),
+    metadata,
     actions,
     createdByUserId: cleanString(row.created_by_user_id),
     createdByName: cleanString(row.created_by_name),
     createdAt: cleanString(row.created_at),
     updatedAt: cleanString(row.updated_at),
     completedAt: cleanString(row.completed_at),
-    actualRecipientLabel: "Chráněný TEST e-mail; skutečný zákazník ani dispečerka nejsou kontaktováni",
-    channels: { email: "protected-test-only", sms: "disabled", rcs: "disabled" },
+    liveDispatcherNotification,
+    actualRecipientLabel: liveDispatcherNotification
+      ? `Skutečný interní e-mail a SMS uživatelce KSO ${cleanString(row.dispatcher_name)}`
+      : "Chráněný TEST e-mail; skutečný zákazník ani dispečerka nejsou kontaktováni",
+    channels: liveDispatcherNotification
+      ? { email: "live-internal", sms: "live-internal", rcs: "disabled" }
+      : { email: "protected-test-only", sms: "disabled", rcs: "disabled" },
     changesOperationalRoute: false,
     changesVistos: false
   };
@@ -536,6 +587,7 @@ export async function previewCollectionRoutesTestIncidentWorkflow(env, user, inc
       };
     }
     const isInaccessible = cleanString(incident.incident_type) === "site_inaccessible";
+    const liveDispatcherNotification = isLiveDispatcherIncident(incident.incident_type);
     const scenarioKey = isInaccessible
       ? cleanString(input.testScenario || "route_within_24h")
       : "";
@@ -549,12 +601,20 @@ export async function previewCollectionRoutesTestIncidentWorkflow(env, user, inc
     const scenario = isInaccessible ? await loadScenario(db, scenarioKey) : null;
     const dispatcherResult = await resolveAvailableCollectionRouteDispatcher(env, db, { now: options.now });
     const plan = deterministicRecoveryPlan(incident, scenario, options.now || Date.now());
-    const guard = await emailGuardStatus(db);
-    const recipientConfigured = Boolean(protectedRecipient(env));
+    const guard = liveDispatcherNotification
+      ? await liveDispatchGuardStatus(db)
+      : await emailGuardStatus(db);
+    const liveModeEnabled = !liveDispatcherNotification || liveDispatcherModeEnabled(env);
     const dispatcherAvailable = Boolean(dispatcherResult.selected);
+    const recipientConfigured = liveDispatcherNotification
+      ? Boolean(dispatcherResult.selected?.email && dispatcherResult.selected?.phone)
+      : Boolean(protectedRecipient(env));
     const logicalRecipient = isInaccessible
       ? { name: cleanString(incident.customer_name || "Firma test 501"), email: "" }
-      : { name: cleanString(dispatcherResult.selected?.name), email: cleanString(dispatcherResult.selected?.email) };
+      : {
+        name: cleanString(dispatcherResult.selected?.name),
+        email: cleanString(dispatcherResult.selected?.email)
+      };
     const fallback = collectionRouteIncidentFallbackMessage({
       audience: isInaccessible ? "customer-recovery" : "dispatcher",
       incidentType: cleanString(incident.incident_type),
@@ -587,22 +647,32 @@ export async function previewCollectionRoutesTestIncidentWorkflow(env, user, inc
       dispatcherSource: dispatcherResult.source,
       plan,
       logicalRecipient,
-      actualRecipientLabel: "Chráněný TEST e-mail; skutečný zákazník ani dispečerka nejsou kontaktováni",
+      liveDispatcherNotification,
+      actualRecipientLabel: liveDispatcherNotification
+        ? `Skutečný interní e-mail a SMS uživatelce KSO ${cleanString(dispatcherResult.selected?.name)}`
+        : "Chráněný TEST e-mail; skutečný zákazník ani dispečerka nejsou kontaktováni",
       messagePreview: fallback,
       emailGuard: guard,
+      notificationGuard: guard,
       aiConfigured: Boolean(cleanString(env.OPENAI_API_KEY)),
-      canConfirm: recipientConfigured && dispatcherAvailable && guard.remaining >= 1,
+      canConfirm: liveModeEnabled && recipientConfigured && dispatcherAvailable && guard.remaining >= 1,
       blockers: [
-        ...(!recipientConfigured ? ["Chybí chráněný COLLECTION_ROUTES_TEST_EMAIL_TO."] : []),
-        ...(!dispatcherAvailable ? ["V Kartách zaměstnanců není dostupná dispečerka s e-mailem."] : []),
-        ...(guard.remaining < 1 ? ["Byl vyčerpán pevný limit šesti TEST e-mailových pokusů."] : [])
+        ...(!liveModeEnabled ? ["Ostrý interní pilot e-mailu a SMS není na produkčním backendu povolený."] : []),
+        ...(!recipientConfigured && !liveDispatcherNotification ? ["Chybí chráněný COLLECTION_ROUTES_TEST_EMAIL_TO."] : []),
+        ...(!dispatcherAvailable ? [liveDispatcherNotification
+          ? "V KSO není dostupná aktivní dispečerka s e-mailem, telefonem a evidencí přítomnosti."
+          : "V KSO není dostupná aktivní dispečerka s e-mailem a evidencí přítomnosti."] : []),
+        ...(guard.remaining < 1 ? [liveDispatcherNotification
+          ? "Byl vyčerpán limit 12 ostrých interních ověřovacích hlášení."
+          : "Byl vyčerpán pevný limit šesti TEST e-mailových pokusů."] : [])
       ],
       confirmation: CONFIRMATION,
       idempotencyKey: workflowIdempotency(incidentId, scenarioKey),
       finalTapRequired: true,
-      protectedTestEmailOnly: true,
+      protectedTestEmailOnly: !liveDispatcherNotification,
       expectedEmailCount: 1,
-      sms: "disabled",
+      expectedSmsCount: liveDispatcherNotification ? 1 : 0,
+      sms: liveDispatcherNotification ? "live-internal" : "disabled",
       rcs: "disabled",
       changesOperationalRoute: false,
       createsTestRouteOverlay: plan.branch === "route-within-24h"
@@ -673,14 +743,47 @@ async function claimEmailGuard(db, actionId, claimToken, now) {
   return actionChanges === 1;
 }
 
-async function finishEmailAction(db, actionId, result, now) {
+async function ensureLiveDispatchGuard(db, now) {
+  await db.prepare(`
+    INSERT OR IGNORE INTO collection_route_test_incident_email_guard (
+      guard_key, max_count, claimed_count, description, created_at, updated_at
+    ) VALUES (?, ?, 0, ?, ?, ?)
+  `).bind(
+    LIVE_DISPATCH_GUARD_KEY,
+    LIVE_DISPATCH_GUARD_MAX,
+    "Ostrý interní ověřovací pilot: nejvýše 12 dvojic e-mail + SMS pouze dostupné aktivní dispečerce z KSO.",
+    now,
+    now
+  ).run();
+}
+
+async function claimLiveDispatchGuard(db, actionIds, claimToken, now) {
+  await ensureLiveDispatchGuard(db, now);
+  const guardResult = await db.prepare(`
+    UPDATE collection_route_test_incident_email_guard
+    SET claimed_count = claimed_count + 1, updated_at = ?
+    WHERE guard_key = ? AND claimed_count < max_count
+  `).bind(now, LIVE_DISPATCH_GUARD_KEY).run();
+  const changes = numberValue(guardResult?.meta?.changes ?? guardResult?.meta?.rows_written);
+  if (changes < 1) return false;
+  const ids = (actionIds || []).map(cleanString).filter(Boolean);
+  const results = await db.batch(ids.map((actionId) => db.prepare(`
+    UPDATE collection_route_test_incident_actions
+    SET status = 'sending', claim_token = ?, attempts = attempts + 1, updated_at = ?
+    WHERE id = ? AND status = 'pending'
+  `).bind(claimToken, now, actionId)));
+  return results.every((result) => numberValue(result?.meta?.changes ?? result?.meta?.rows_written) === 1);
+}
+
+async function finishNotificationAction(db, actionId, result, provider, now) {
   const status = result?.status === "sent" ? "sent" : "failed";
   await db.prepare(`
     UPDATE collection_route_test_incident_actions
-    SET status = ?, provider = 'SendGrid', provider_message_id = ?, error_message = ?, sent_at = ?, updated_at = ?
+    SET status = ?, provider = ?, provider_message_id = ?, error_message = ?, sent_at = ?, updated_at = ?
     WHERE id = ?
   `).bind(
     status,
+    provider,
     cleanString(result?.providerMessageId),
     cleanString(result?.errorMessage),
     status === "sent" ? now : null,
@@ -690,11 +793,23 @@ async function finishEmailAction(db, actionId, result, now) {
   return status;
 }
 
-function workflowInsertStatements(db, { incident, preview, workflowId, actionId, reminderActionId, recoveryStopId, message, user, now }) {
+async function finishEmailAction(db, actionId, result, now) {
+  return finishNotificationAction(db, actionId, result, "SendGrid", now);
+}
+
+async function finishSmsAction(db, actionId, result, now) {
+  return finishNotificationAction(db, actionId, result, "Twilio", now);
+}
+
+function workflowInsertStatements(db, { incident, preview, workflowId, actionId, smsActionId, reminderActionId, recoveryStopId, message, user, now }) {
   const plan = preview.plan;
   const dispatcher = preview.dispatcher || {};
   const scenarioKey = cleanString(preview.testScenario?.key);
   const isDispatcher = cleanString(incident.incident_type) !== "site_inaccessible";
+  const liveDispatcherNotification = preview.liveDispatcherNotification === true;
+  const actualEmailRecipient = liveDispatcherNotification
+    ? cleanString(dispatcher.email)
+    : protectedRecipient({ COLLECTION_ROUTES_TEST_EMAIL_TO: preview.__protectedRecipient }, true);
   const statements = [
     db.prepare(`
       INSERT INTO collection_route_test_incident_workflows (
@@ -744,14 +859,16 @@ function workflowInsertStatements(db, { incident, preview, workflowId, actionId,
       jsonString({
         dataScope: "test",
         testMode: COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
-        actualRecipientProtected: true,
+        liveDispatcherNotification,
+        dispatcherPhoneConfigured: Boolean(cleanString(dispatcher.phone)),
+        actualRecipientProtected: !liveDispatcherNotification,
         noRealCustomerContact: true,
-        noRealDispatcherContact: true,
+        noRealDispatcherContact: !liveDispatcherNotification,
         noOperationalRouteChange: true,
         noVistosWrite: true,
         planner: "deterministic-controlled-test-dataset",
         plannerReason: plan.reason,
-        sms: "disabled",
+        sms: liveDispatcherNotification ? "live-internal" : "disabled",
         rcs: "disabled"
       })
     ),
@@ -764,17 +881,47 @@ function workflowInsertStatements(db, { incident, preview, workflowId, actionId,
     `).bind(
       actionId,
       workflowId,
-      isDispatcher ? "dispatcher_email" : "customer_recovery_email",
+      liveDispatcherNotification ? "dispatcher_live_email" : "customer_recovery_email",
       `${workflowId}:initial-email`,
       cleanString(preview.logicalRecipient?.name),
       cleanString(preview.logicalRecipient?.email),
-      protectedRecipient({ COLLECTION_ROUTES_TEST_EMAIL_TO: preview.__protectedRecipient }, true),
+      actualEmailRecipient,
       now,
       now,
       now,
-      jsonString({ subject: message.subject, body: message.body, protectedTestOnly: true })
+      jsonString({
+        subject: message.subject,
+        body: message.body,
+        protectedTestOnly: !liveDispatcherNotification,
+        liveDispatcherNotification
+      })
     )
   ];
+
+  if (liveDispatcherNotification && smsActionId) {
+    statements.push(db.prepare(`
+      INSERT INTO collection_route_test_incident_actions (
+        id, workflow_id, action_type, status, dedupe_key,
+        logical_recipient_name, logical_recipient_email, actual_recipient,
+        due_at, created_at, updated_at, payload_json
+      ) VALUES (?, ?, 'dispatcher_live_sms', 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      smsActionId,
+      workflowId,
+      `${workflowId}:initial-sms`,
+      cleanString(preview.logicalRecipient?.name),
+      cleanString(preview.logicalRecipient?.email),
+      cleanString(dispatcher.phone),
+      now,
+      now,
+      now,
+      jsonString({
+        liveDispatcherNotification: true,
+        protectedTestOnly: false,
+        incidentType: cleanString(incident.incident_type)
+      })
+    ));
+  }
 
   if (recoveryStopId) {
     statements.push(db.prepare(`
@@ -837,7 +984,7 @@ export async function confirmCollectionRoutesTestIncidentWorkflow(env, user, inc
     assertCollectionRoutesTestManager(user);
     if (cleanString(input.confirmation) !== CONFIRMATION) {
       throw new CollectionRoutesTestIncidentWorkflowError(
-        "Finální TEST e-mail a plán vyžadují velké fyzické potvrzení člověka.",
+        "Finální incidentní odeslání a případný TEST plán vyžadují velké fyzické potvrzení člověka.",
         400,
         "collection_routes_test_incident_workflow_confirmation_required"
       );
@@ -861,8 +1008,9 @@ export async function confirmCollectionRoutesTestIncidentWorkflow(env, user, inc
         "collection_routes_test_incident_workflow_preview_changed"
       );
     }
-    const protectedTo = protectedRecipient(env, true);
-    preview.__protectedRecipient = protectedTo;
+    const liveDispatcherNotification = preview.liveDispatcherNotification === true;
+    const protectedTo = liveDispatcherNotification ? "" : protectedRecipient(env, true);
+    if (!liveDispatcherNotification) preview.__protectedRecipient = protectedTo;
     const isDispatcher = cleanString(incident.incident_type) !== "site_inaccessible";
     const message = await composeCollectionRouteIncidentMessage(env, {
       audience: isDispatcher ? "dispatcher" : "customer-recovery",
@@ -878,10 +1026,14 @@ export async function confirmCollectionRoutesTestIncidentWorkflow(env, user, inc
       testerName: cleanString(incident.created_by_name),
       note: cleanString(incident.note)
     }, options);
+    const attachment = await incidentPhotoAttachment(env, incident);
     const currentActor = actor(user);
     const now = nowIso();
     const workflowId = randomId("collection-route-test-incident-workflow");
     const actionId = randomId("collection-route-test-incident-action");
+    const smsActionId = liveDispatcherNotification
+      ? randomId("collection-route-test-incident-action")
+      : "";
     const recoveryStopId = preview.plan.branch === "route-within-24h"
       ? randomId("collection-route-test-recovery-stop")
       : "";
@@ -893,12 +1045,147 @@ export async function confirmCollectionRoutesTestIncidentWorkflow(env, user, inc
       preview,
       workflowId,
       actionId,
+      smsActionId,
       reminderActionId,
       recoveryStopId,
       message,
       user: currentActor,
       now
     }));
+
+    if (liveDispatcherNotification) {
+      const liveActionIds = [actionId, smsActionId];
+      const claimed = await claimLiveDispatchGuard(db, liveActionIds, randomId("live-dispatch-claim"), now);
+      if (!claimed) {
+        const errorMessage = "Limit 12 ostrých interních ověřovacích hlášení byl vyčerpán.";
+        await db.batch([
+          ...liveActionIds.map((id) => db.prepare(`
+            UPDATE collection_route_test_incident_actions
+            SET status = 'skipped', error_message = ?, updated_at = ? WHERE id = ?
+          `).bind(errorMessage, now, id)),
+          db.prepare(`
+            UPDATE collection_route_test_incident_workflows
+            SET status = 'blocked-live-internal', last_error = ?, updated_at = ? WHERE id = ?
+          `).bind(errorMessage, now, workflowId)
+        ]);
+        throw new CollectionRoutesTestIncidentWorkflowError(
+          `${errorMessage} Nic se neodeslalo.`,
+          409,
+          "collection_routes_test_incident_live_dispatch_limit_reached"
+        );
+      }
+
+      const dispatcher = preview.dispatcher || {};
+      const liveInput = {
+        workflowId,
+        subject: message.subject,
+        body: message.body,
+        recipientName: cleanString(dispatcher.name),
+        logicalRecipientName: cleanString(dispatcher.name),
+        logicalRecipientEmail: cleanString(dispatcher.email),
+        ksoRecipientVerified: true,
+        incidentLabel: incidentTypeLabel(incident.incident_type),
+        stationName: cleanString(incident.station_name),
+        address: cleanString(incident.address_text),
+        testerName: cleanString(incident.created_by_name || currentActor.name),
+        workflowLabel: preview.plan.reason
+      };
+      const sendLiveEmail = options.sendDispatcherEmail || sendCollectionRouteIncidentDispatcherLiveEmail;
+      const sendLiveSms = options.sendDispatcherSms || sendCollectionRouteIncidentDispatcherLiveSms;
+      const safelySend = async (sender, channelInput) => {
+        try {
+          return await sender(env, channelInput);
+        } catch (error) {
+          return { status: "failed", errorMessage: cleanString(error?.message || "Poskytovatel odeslání selhal.") };
+        }
+      };
+      const [emailResult, smsResult] = await Promise.all([
+        safelySend(sendLiveEmail, { ...liveInput, to: cleanString(dispatcher.email), attachments: [attachment] }),
+        safelySend(sendLiveSms, { ...liveInput, to: cleanString(dispatcher.phone) })
+      ]);
+      const [emailStatus, smsStatus] = await Promise.all([
+        finishEmailAction(db, actionId, emailResult, nowIso()),
+        finishSmsAction(db, smsActionId, smsResult, nowIso())
+      ]);
+      const sentCount = [emailStatus, smsStatus].filter((status) => status === "sent").length;
+      const workflowStatus = sentCount === 2
+        ? "completed-live-internal"
+        : sentCount === 1
+          ? "partial-live-internal"
+          : "failed-live-internal";
+      const incidentStatus = sentCount === 2
+        ? "workflow-completed-live-internal"
+        : sentCount === 1
+          ? "workflow-partial-live-internal"
+          : "workflow-failed-live-internal";
+      const completedAt = nowIso();
+      const lastError = [emailResult?.errorMessage, smsResult?.errorMessage].map(cleanString).filter(Boolean).join(" ");
+      const incidentMetadata = {
+        ...parseJson(incident.metadata_json, {}),
+        workflowId,
+        liveDispatcherNotification: true,
+        protectedTestEmailOnly: false,
+        actualRecipientProtected: false,
+        noRealCustomerContact: true,
+        noRealDispatcherContact: false,
+        noOperationalRouteChange: true,
+        noVistosWrite: true,
+        emailStatus,
+        smsStatus
+      };
+      await db.batch([
+        db.prepare(`
+          UPDATE collection_route_test_incident_workflows
+          SET status = ?, dispatcher_email_status = ?, customer_email_status = 'not-required',
+            reminder_status = 'not-required', last_error = ?, completed_at = ?, updated_at = ?, metadata_json = ?
+          WHERE id = ?
+        `).bind(
+          workflowStatus,
+          emailStatus,
+          lastError,
+          completedAt,
+          completedAt,
+          jsonString({
+            ...parseJson((await db.prepare(`SELECT metadata_json FROM collection_route_test_incident_workflows WHERE id = ?`).bind(workflowId).first())?.metadata_json, {}),
+            emailStatus,
+            smsStatus
+          }),
+          workflowId
+        ),
+        db.prepare(`
+          UPDATE collection_route_test_incidents SET status = ?, updated_at = ?, metadata_json = ? WHERE id = ?
+        `).bind(incidentStatus, completedAt, jsonString(incidentMetadata), incident.id),
+        db.prepare(`
+          INSERT INTO collection_route_test_incident_events (
+            id, incident_id, run_id, stop_id, event_type, actor_user_id, actor_name, created_at, payload_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          randomId("collection-route-test-incident-event"),
+          incident.id,
+          incident.run_id,
+          incident.stop_id,
+          sentCount === 2
+            ? "workflow-confirmed-live-dispatch"
+            : sentCount === 1
+              ? "workflow-partial-live-dispatch"
+              : "workflow-notification-failed-live-dispatch",
+          currentActor.id,
+          currentActor.name,
+          completedAt,
+          jsonString({
+            workflowId,
+            emailStatus,
+            smsStatus,
+            liveDispatcherNotification: true,
+            noRealCustomerContact: true,
+            noOperationalRouteChange: true,
+            noVistosWrite: true
+          })
+        )
+      ]);
+      const row = await db.prepare(`SELECT * FROM collection_route_test_incident_workflows WHERE id = ? LIMIT 1`).bind(workflowId).first();
+      return { workflow: await loadWorkflowDetail(db, row), reused: false };
+    }
 
     const claimToken = randomId("test-email-claim");
     const claimed = await claimEmailGuard(db, actionId, claimToken, now);
@@ -914,7 +1201,6 @@ export async function confirmCollectionRoutesTestIncidentWorkflow(env, user, inc
       );
     }
 
-    const attachment = await incidentPhotoAttachment(env, incident);
     const emailInput = {
       to: protectedTo,
       workflowId,
@@ -1274,9 +1560,14 @@ export const __test = {
   CONFIRMATION,
   DISPATCHER_ORDER,
   EMAIL_GUARD_KEY,
+  LIVE_DISPATCH_GUARD_KEY,
+  LIVE_DISPATCH_GUARD_MAX,
+  LIVE_DISPATCH_MODE,
   REPLY_CONFIRMATION,
   deterministicRecoveryPlan,
   incidentTypeLabel,
+  isLiveDispatcherIncident,
+  liveDispatcherModeEnabled,
   nextStandardPickupAt,
   normalizeText,
   pragueDate,

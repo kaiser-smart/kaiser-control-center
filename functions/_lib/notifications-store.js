@@ -17,6 +17,8 @@ const TYPES = new Set([
   "driver_part_urgent_email",
   "driver_part_service_tech_sms",
   "driver_part_ready_driver_sms",
+  "collection_route_incident_dispatcher_live_email",
+  "collection_route_incident_dispatcher_live_sms",
   "communication_inbound_reply",
   "twilio_delivery_status",
   "sms_inbound_reply"

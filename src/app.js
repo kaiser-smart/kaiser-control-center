@@ -52,7 +52,7 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.15";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.16";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRouteGpsPrompt,
@@ -455,6 +455,8 @@ const NOTIFICATION_TYPE_LABELS = {
   driver_part_urgent_email: "Urgentní servisní e-mail",
   driver_part_service_tech_sms: "ND SMS servis",
   driver_part_ready_driver_sms: "ND SMS řidiči",
+  collection_route_incident_dispatcher_live_email: "Svoz · incident dispečerce",
+  collection_route_incident_dispatcher_live_sms: "Svoz · incident SMS dispečerce",
   communication_inbound_reply: "Příchozí odpověď",
   twilio_delivery_status: "Twilio stav doručení",
   sms_inbound_reply: "Příchozí SMS odpověď"
@@ -21712,7 +21714,7 @@ function collectionRoutesTestTabletEntryCard() {
       <div>
         <span>Polní TEST · GPS · hlasová Šarlota</span>
         <h4 id="collection-routes-test-tablet-entry-title">TEST ŘIDIČSKÉHO TABLETU</h4>
-        <p>Stacionární zkouška jediného bodu bez řidiče, auta a jízdy; případný e-mail míří jen na chráněný TEST kontakt.</p>
+        <p>Stacionární zkouška jediného bodu bez řidiče, auta a jízdy. Přeplněná či poškozená nádoba může po velkém potvrzení skutečně informovat dispečerku KSO; zákazník zůstává vždy bez kontaktu.</p>
         <small>Polní bod: Firma test 501 · Trnkova 3052/137, 628 00 Brno</small>
         <strong>${escapeHtml(collectionRoutesTestTabletNextLabel())}</strong>
         ${routeMeta}
@@ -22389,10 +22391,14 @@ function collectionRoutesTestIncidentModal(run, stop) {
   const workflow = draft.workflow || null;
 
   if (workflow) {
+    const liveDispatcherNotification = workflow.liveDispatcherNotification === true;
     const emailStatus = workflow.dispatcherEmailStatus !== "not-required"
       ? workflow.dispatcherEmailStatus
       : workflow.customerEmailStatus;
-    const sent = emailStatus === "sent";
+    const smsStatus = workflow.dispatcherSmsStatus || "not-required";
+    const sent = liveDispatcherNotification
+      ? emailStatus === "sent" && smsStatus === "sent"
+      : emailStatus === "sent";
     return `
       <div class="collection-routes-test-incident-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-result-title">
         <div class="collection-routes-test-incident-modal__card collection-routes-test-incident-modal__card--result">
@@ -22405,14 +22411,20 @@ function collectionRoutesTestIncidentModal(run, stop) {
             <button type="button" data-collection-routes-test-incident-close ${collectionRoutesPilotState.testIncidentReplyPending ? "disabled" : ""}>Zavřít</button>
           </header>
           <div class="collection-routes-test-incident-result ${sent ? "is-success" : "is-error"}">
-            <strong>${sent ? "TEST workflow je dokončený" : "TEST e-mail se nepodařilo dokončit"}</strong>
-            <span>${sent ? "SendGrid přijal zprávu pouze pro chráněný TEST kontakt." : escapeHtml(workflow.lastError || "Výsledek čeká na kontrolu.")}</span>
+            <strong>${sent
+              ? liveDispatcherNotification ? "Interní hlášení bylo skutečně odesláno" : "TEST workflow je dokončený"
+              : liveDispatcherNotification ? "Interní hlášení není kompletně odeslané" : "TEST e-mail se nepodařilo dokončit"}</strong>
+            <span>${sent
+              ? liveDispatcherNotification
+                ? "SendGrid přijal e-mail a Twilio přijalo SMS pro zobrazenou dispečerku KSO."
+                : "SendGrid přijal zprávu pouze pro chráněný TEST kontakt."
+              : escapeHtml(workflow.lastError || "Výsledek čeká na kontrolu.")}</span>
           </div>
           <div class="collection-routes-test-incident-result__facts">
             <article><span>Dostupná dispečerka</span><strong>${escapeHtml(workflow.dispatcher?.name || "nenalezena")}</strong><small>${escapeHtml(workflow.dispatcher?.availability || "")}</small></article>
             <article><span>Rozhodnutí Autopilota</span><strong>${escapeHtml(collectionRoutesTestIncidentBranchLabel(workflow.recoveryBranch))}</strong><small>Deterministický TEST výpočet, ne rozhodnutí AI</small></article>
-            <article><span>Skutečný příjemce</span><strong>Chráněný TEST e-mail</strong><small>Žádný zákazník ani dispečerka nebyli kontaktováni</small></article>
-            <article><span>Kanály</span><strong>E-mail: ${escapeHtml(emailStatus)}</strong><small>SMS vypnuta · RCS vypnuto</small></article>
+            <article><span>Skutečný příjemce</span><strong>${liveDispatcherNotification ? escapeHtml(workflow.dispatcher?.name || "dispečerka KSO") : "Chráněný TEST e-mail"}</strong><small>${liveDispatcherNotification ? "Interní kontakt ověřený v KSO · zákazník nekontaktován" : "Žádný zákazník ani dispečerka nebyli kontaktováni"}</small></article>
+            <article><span>Kanály</span><strong>E-mail: ${escapeHtml(emailStatus)}</strong><small>${liveDispatcherNotification ? `SMS: ${escapeHtml(smsStatus)} · RCS vypnuto` : "SMS vypnuta · RCS vypnuto"}</small></article>
           </div>
           <div class="collection-routes-test-incident-modal__review">
             <strong>${escapeHtml(collectionRoutesTestIncidentBranchLabel(workflow.recoveryBranch))}</strong>
@@ -22447,6 +22459,7 @@ function collectionRoutesTestIncidentModal(run, stop) {
 
   if (preview) {
     const canConfirm = preview.canConfirm === true;
+    const liveDispatcherNotification = preview.liveDispatcherNotification === true;
     return `
       <div class="collection-routes-test-incident-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-confirm-title">
         <form class="collection-routes-test-incident-modal__card collection-routes-test-incident-modal__card--confirm" data-collection-routes-test-incident-workflow-form>
@@ -22459,15 +22472,17 @@ function collectionRoutesTestIncidentModal(run, stop) {
             <button type="button" data-collection-routes-test-incident-close ${pending ? "disabled" : ""}>Zavřít</button>
           </header>
           <div class="collection-routes-test-incident-modal__safety">
-            <strong>Skutečný zákazník ani dispečerka zprávu nedostanou</strong>
-            <span>Po potvrzení odejde právě 1 e-mail jen na chráněný TEST kontakt. SMS a RCS jsou vypnuté. Limit celého polního TESTU je 6 e-mailových pokusů; zbývá ${escapeHtml(preview.emailGuard?.remaining ?? 0)}.</span>
+            <strong>${liveDispatcherNotification ? "Skutečný interní e-mail a SMS odejdou zobrazené dispečerce" : "Skutečný zákazník ani dispečerka zprávu nedostanou"}</strong>
+            <span>${liveDispatcherNotification
+              ? `Až po velkém potvrzení odejde 1 interní e-mail s fotografií a 1 SMS aktivní dostupné uživatelce KSO. Zákazník, ostrá trasa a Vistos zůstanou beze změny. Zbývá ${escapeHtml(preview.notificationGuard?.remaining ?? 0)} ověřovacích dvojic.`
+              : `Po potvrzení odejde právě 1 e-mail jen na chráněný TEST kontakt. SMS a RCS jsou vypnuté. Limit celého polního TESTU je 6 e-mailových pokusů; zbývá ${escapeHtml(preview.emailGuard?.remaining ?? 0)}.`}</span>
           </div>
           <img class="collection-routes-test-incident-modal__preview" src="${escapeHtml(draft.incident?.photoUrl || draft.previewUrl)}" alt="Uložená TEST fotografie ${escapeHtml(typeLabel.toLowerCase())}">
           <div class="collection-routes-test-incident-confirmation">
             <article>
               <span>Logický příjemce</span>
               <strong>${escapeHtml(preview.logicalRecipient?.name || "neuvedeno")}</strong>
-              <small>Ve skutečnosti chráněný TEST e-mail</small>
+              <small>${liveDispatcherNotification ? "Skutečný interní příjemce ověřený backendem KSO" : "Ve skutečnosti chráněný TEST e-mail"}</small>
             </article>
             <article>
               <span>Dostupná dispečerka</span>
@@ -22491,7 +22506,9 @@ function collectionRoutesTestIncidentModal(run, stop) {
           </div>
           ${preview.blockers?.length ? `<p class="module-feedback__error" role="alert">${escapeHtml(preview.blockers.join(" "))}</p>` : ""}
           <button class="collection-routes-test-incident-submit collection-routes-test-incident-submit--confirm" type="submit" ${pending || !canConfirm ? "disabled" : ""}>
-            <span>${pending === "workflow" ? "ODESÍLÁM CHRÁNĚNÝ TEST…" : "POTVRDIT TEST E-MAIL A PLÁN"}</span>
+            <span>${pending === "workflow"
+              ? liveDispatcherNotification ? "ODESÍLÁM E-MAIL A SMS…" : "ODESÍLÁM CHRÁNĚNÝ TEST…"
+              : liveDispatcherNotification ? "ODESLAT E-MAIL + SMS DISPEČERCE" : "POTVRDIT TEST E-MAIL A PLÁN"}</span>
             <small>Velké finální fyzické klepnutí člověka</small>
           </button>
         </form>
@@ -22512,7 +22529,9 @@ function collectionRoutesTestIncidentModal(run, stop) {
         </header>
         <div class="collection-routes-test-incident-modal__safety">
           <strong>Fotografie se nejdřív uloží jen do TESTU</strong>
-          <span>Tento krok nic neodešle. Až potom uvidíš přesný plán, dostupnou dispečerku a samostatné velké finální potvrzení chráněného TEST e-mailu.</span>
+          <span>${draft.type === "site_inaccessible"
+            ? "Tento krok nic neodešle. Až potom uvidíš přesný plán, dostupnou dispečerku a samostatné velké finální potvrzení chráněného TEST e-mailu."
+            : "Tento krok nic neodešle. Až potom uvidíš vybranou dostupnou dispečerku KSO a samostatné velké potvrzení skutečného interního e-mailu s fotografií a SMS."}</span>
         </div>
         ${hasPhoto ? `
           <img class="collection-routes-test-incident-modal__preview" src="${escapeHtml(draft.previewUrl)}" alt="Náhled TEST fotografie ${escapeHtml(typeLabel.toLowerCase())}">
@@ -22577,7 +22596,7 @@ function collectionRoutesTestIncidentPanel(run, stop) {
           <h4 id="collection-routes-test-incidents-title">Co je na stanovišti?</h4>
           <p>Klepni na jeden velký typ problému. Hlasem můžeš říct například „Šarloto, přeplněná nádoba“.</p>
         </div>
-        <b>CHRÁNĚNÝ TEST E-MAIL</b>
+        <b>INTERNÍ E-MAIL + SMS</b>
       </header>
       ${collectionRoutesPilotState.testIncidentMessage ? `<p class="module-feedback__notice" role="status">${escapeHtml(collectionRoutesPilotState.testIncidentMessage)}</p>` : ""}
       ${collectionRoutesPilotState.testIncidentError && !collectionRoutesPilotState.testIncidentDraft ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.testIncidentError)}</p>` : ""}
@@ -22591,10 +22610,11 @@ function collectionRoutesTestIncidentPanel(run, stop) {
       </div>
       <div class="collection-routes-test-incidents__truth">
         <span>✓ Fotografie v chráněném KSO</span>
-        <span>✓ E-mail jen chráněnému TEST příjemci</span>
-        <span>× Žádný skutečný zákazník ani dispečerka</span>
+        <span>✓ Přeplněná/poškozená: po potvrzení interní e-mail + SMS dispečerce KSO</span>
+        <span>✓ Nepřístupná firma: zákaznická komunikace jen chráněný TEST</span>
+        <span>× Žádný skutečný zákazník</span>
         <span>× Žádná ostrá trasa ani Vistos</span>
-        <span>× SMS a RCS vypnuté</span>
+        <span>× RCS vypnuté</span>
       </div>
       ${collectionRoutesPilotState.testIncidentsLoading ? `<p class="collection-routes-test-incidents__loading">Načítám uložená TEST hlášení…</p>` : ""}
       ${incidents.length ? `
@@ -38627,7 +38647,9 @@ async function saveCollectionRoutesTestIncident(form) {
     draft.photo = null;
     collectionRoutesPilotState.testIncidentMessage = `${label}: fotografie je bezpečně uložená. Teď zkontroluj přesný účinek a až potom jej potvrď velkým tlačítkem.`;
     await loadCollectionRoutesTestIncidents(runId);
-    speakCollectionRoutesTestGps("Děkuji. Fotografii jsem bezpečně uložila. Teď prosím zkontroluj dostupnou dispečerku, zprávu a plán. Nic jsem ještě neodeslala.");
+    speakCollectionRoutesTestGps(workflowResult.liveDispatcherNotification === true
+      ? "Děkuji. Fotografii jsem bezpečně uložila. Nic jsem ještě neodeslala. Zkontroluj prosím dispečerku a potom velkým tlačítkem potvrď skutečný interní e-mail a SMS."
+      : "Děkuji. Fotografii jsem bezpečně uložila. Teď prosím zkontroluj dostupnou dispečerku, zprávu a plán. Nic jsem ještě neodeslala.");
     vibrateCollectionRoutesTestGps([70, 70, 140]);
   } catch (error) {
     const detail = error.payload?.error || error.message || "Incidentní TEST se nepodařilo připravit.";
@@ -38660,12 +38682,21 @@ async function confirmCollectionRoutesTestIncidentWorkflow() {
     });
     draft.workflow = result.workflow;
     draft.workflowPreview = null;
-    collectionRoutesPilotState.testIncidentMessage = `${collectionRoutesTestIncidentTypeLabel(draft.type)}: chráněný TEST workflow dokončen.`;
+    const liveDispatcherNotification = result.workflow?.liveDispatcherNotification === true;
+    collectionRoutesPilotState.testIncidentMessage = liveDispatcherNotification
+      ? `${collectionRoutesTestIncidentTypeLabel(draft.type)}: interní e-mail a SMS zpracovány.`
+      : `${collectionRoutesTestIncidentTypeLabel(draft.type)}: chráněný TEST workflow dokončen.`;
     await loadCollectionRoutesTestIncidents(draft.runId);
     const emailStatus = result.workflow?.dispatcherEmailStatus !== "not-required"
       ? result.workflow?.dispatcherEmailStatus
       : result.workflow?.customerEmailStatus;
-    if (emailStatus === "sent") {
+    const smsStatus = result.workflow?.dispatcherSmsStatus || "not-required";
+    if (liveDispatcherNotification && emailStatus === "sent" && smsStatus === "sent") {
+      speakCollectionRoutesTestGps(`Hotovo. E-mail i SMS byly skutečně odeslané dispečerce ${result.workflow?.dispatcher?.name || "KSO"}. Zákazníka jsem nekontaktovala.`);
+      vibrateCollectionRoutesTestGps([90, 70, 180]);
+    } else if (liveDispatcherNotification) {
+      speakCollectionRoutesTestGps(`Pozor. Interní hlášení není kompletní. E-mail má stav ${emailStatus || "neznámý"} a SMS ${smsStatus || "neznámý"}. Zákazníka jsem nekontaktovala.`);
+    } else if (emailStatus === "sent") {
       speakCollectionRoutesTestGps("Hotovo. Chráněný testovací e-mail byl přijatý poskytovatelem. Skutečného zákazníka ani dispečerku jsem nekontaktovala.");
       vibrateCollectionRoutesTestGps([90, 70, 180]);
     } else {
@@ -38741,13 +38772,16 @@ async function prepareCollectionRoutesTestIncidentFromSarlota(parameters = {}) {
     return { ...baseResult, ok: false, status: "active_test_required", answerText: collectionRoutesPilotState.testIncidentError };
   }
   const label = collectionRoutesTestIncidentTypeLabel(type).toLowerCase();
+  const finalEffect = type === "site_inaccessible"
+    ? "Následný zákaznický e-mail zůstává chráněný TEST."
+    : "Následné skutečné interní odeslání e-mailu a SMS dispečerce vyžaduje samostatné velké potvrzení člověka.";
   return {
     ...baseResult,
     ok: true,
     status: "incident_ready_for_photo",
     incidentPrepared: true,
     answerText: `Otevřela jsem TEST hlášení ${label}. Vyfoť stav, zkontroluj účinek a potom ho potvrď velkým tlačítkem.`,
-    messageForAssistant: "Hlášení je pouze připravené. Nikdy netvrď, že bylo uložené nebo odeslané. Fotografie i následný chráněný TEST e-mail vyžadují samostatné fyzické klepnutí člověka."
+    messageForAssistant: `Hlášení je pouze připravené. Nikdy netvrď, že bylo uložené nebo odeslané. Fotografie vyžaduje fyzické klepnutí člověka. ${finalEffect}`
   };
 }
 
