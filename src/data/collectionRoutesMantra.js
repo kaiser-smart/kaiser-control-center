@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.17",
-  updatedAt: "16. 7. 2026 12:45",
-  updatedAtIso: "2026-07-16T12:45:14+02:00",
-  lastChange: "ElevenLabs hlas a skutečný tester",
+  version: "1.18",
+  updatedAt: "16. 7. 2026 13:11",
+  updatedAtIso: "2026-07-16T13:11:00+02:00",
+  lastChange: "Schválená grafika incidentních e-mailů",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",

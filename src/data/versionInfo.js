@@ -21,8 +21,8 @@ export const versionInfo = {
 
 export const versionNews = [
   {
-    title: "Řidičský tablet: skutečný hlas Šarloty",
-    text: "Všechny mluvené pokyny Svozových tras používají produkční ElevenLabs hlas Šarloty bez systémového čtení. Při výpadku zůstane viditelný text a chyba; tablet nikdy nepřejde na strojový hlas. Incident uvádí terénního testera z uzamčeného TESTU a interní SMS se vejde do jediného 160znakového segmentu."
+    title: "Svoz: hlas Šarloty a schválené e-maily",
+    text: "Všechny mluvené pokyny Svozových tras používají produkční ElevenLabs hlas Šarloty bez systémového čtení. Incidentní e-mail nově používá schválenou grafiku Smart odpady, uvádí terénního testera z uzamčeného TESTU a interní SMS se vejde do jediného 160znakového segmentu."
   },
   {
     title: "Svozové trasy: interní incident dispečerce",

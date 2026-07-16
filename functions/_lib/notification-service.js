@@ -1500,8 +1500,96 @@ export async function sendCollectionRouteTestEmail(env, {
 function collectionRouteIncidentParagraphs(value) {
   return cleanString(value)
     .split(/\n{2,}/)
-    .map((paragraph) => `<p style="margin:0 0 14px;">${htmlEscape(paragraph).replaceAll("\n", "<br>")}</p>`)
+    .map((paragraph) => `<p style="margin:0 0 14px 0;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:16px;line-height:25px;font-weight:500;color:#3f4a45;">${htmlEscape(paragraph).replaceAll("\n", "<br>")}</p>`)
     .join("");
+}
+
+function collectionRouteIncidentApprovedEmailHtml({
+  subject,
+  badge,
+  headline,
+  subtitle,
+  body,
+  detailsTitle,
+  details = [],
+  notice,
+  protectedTest = false
+}) {
+  const badgeBackground = protectedTest ? "#fff1f1" : "#edf7e3";
+  const badgeColor = protectedTest ? "#a92020" : "#476f1d";
+  const detailRows = details.map(({ label, value }, index) => `
+    <tr>
+      <td style="width:34%;padding:${index ? "12px" : "0"} 16px 12px 0;border-bottom:1px solid #e5eadf;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;font-weight:700;color:#6b776a;vertical-align:top;">${htmlEscape(label)}</td>
+      <td style="padding:${index ? "12px" : "0"} 0 12px 0;border-bottom:1px solid #e5eadf;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:15px;line-height:22px;font-weight:700;color:#1f2921;vertical-align:top;">${htmlEscape(value || "neuvedeno")}</td>
+    </tr>
+  `).join("");
+
+  return `<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${htmlEscape(subject)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    @media only screen and (max-width:520px) {
+      .kso-email-card-cell { padding:30px 24px 32px 24px !important; }
+      .kso-email-headline { font-size:32px !important; line-height:38px !important; letter-spacing:-0.7px !important; }
+      .kso-email-subtitle { font-size:17px !important; line-height:25px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#f7f9f4;font-family:'Quicksand',Arial,Helvetica,sans-serif;color:#1f2921;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7f9f4;">
+    <tr>
+      <td align="center" style="padding:42px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;table-layout:fixed;background:#ffffff;border:1px solid #e1e6de;border-radius:16px;box-shadow:0 24px 64px rgba(31,41,33,0.14);overflow:hidden;">
+          <tr>
+            <td class="kso-email-card-cell" style="padding:40px 42px 42px 42px;word-break:break-word;overflow-wrap:anywhere;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 30px 0;">
+                <tr>
+                  <td style="background:#75bd25;border-radius:14px;padding:12px 24px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 2px 5px rgba(117,189,37,0.28);">
+                    <span style="display:block;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:28px;line-height:32px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">kaiser.</span>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="display:inline-block;margin:0 0 18px 0;padding:7px 11px;border-radius:999px;background:${badgeBackground};font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;font-weight:800;letter-spacing:0.2px;color:${badgeColor};">${htmlEscape(badge)}</p>
+              <h1 class="kso-email-headline" style="margin:0 0 12px 0;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:40px;line-height:46px;font-weight:800;letter-spacing:-1.2px;color:#1f2921;overflow-wrap:anywhere;">${htmlEscape(headline)}</h1>
+              <p class="kso-email-subtitle" style="margin:0 0 28px 0;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:19px;line-height:28px;font-weight:700;color:#6b776a;overflow-wrap:anywhere;">${htmlEscape(subtitle)}</p>
+
+              <div style="margin:0 0 26px 0;">
+                ${collectionRouteIncidentParagraphs(body)}
+              </div>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 24px 0;background:#f8fbf4;border:1px solid #dfe8d9;border-radius:14px;">
+                <tr>
+                  <td style="padding:20px 22px 10px 22px;">
+                    <p style="margin:0 0 16px 0;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:17px;line-height:24px;font-weight:800;color:#1f2921;">${htmlEscape(detailsTitle)}</p>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;table-layout:fixed;">
+                      ${detailRows}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;">
+                <tr>
+                  <td style="background:#f5f7f2;border-radius:14px;padding:18px 20px;">
+                    <p style="margin:0;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;font-weight:600;color:#667064;">${htmlEscape(notice)}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:30px 0 0 0;font-family:'Quicksand',Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;font-weight:500;color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
 function protectedCollectionRouteIncidentRecipient(env, requestedTo) {
@@ -1527,29 +1615,23 @@ function collectionRouteIncidentEmailHtml({
   address,
   workflowLabel
 }) {
-  return `
-    <!doctype html>
-    <html lang="cs">
-      <head><meta charset="utf-8"><title>${htmlEscape(subject)}</title></head>
-      <body style="font-family:Arial,sans-serif;color:#1f2921;line-height:1.55;background:#f5f7f3;margin:0;padding:20px;">
-        <main style="max-width:680px;margin:0 auto;padding:26px;background:#fff;border:2px solid #a92020;border-radius:16px;">
-          <p style="display:inline-block;margin:0 0 18px;padding:7px 11px;border-radius:999px;background:#a92020;color:#fff;font-weight:700;">CHRÁNĚNÝ TEST · NEJDE SKUTEČNÉMU ZÁKAZNÍKOVI ANI DISPEČERCE</p>
-          <h1 style="font-size:24px;margin:0 0 16px;">${htmlEscape(incidentLabel || "TEST svozový incident")}</h1>
-          ${collectionRouteIncidentParagraphs(body)}
-          <div style="margin-top:22px;padding:14px;border-radius:12px;background:#f0f6e9;">
-            <strong>Audit TESTU</strong>
-            <dl style="margin:10px 0 0;">
-              <dt style="font-weight:700;">Logický příjemce</dt><dd>${htmlEscape(logicalRecipientName || "neuvedeno")}${logicalRecipientEmail ? ` · ${htmlEscape(logicalRecipientEmail)}` : ""}</dd>
-              <dt style="font-weight:700;">Stanoviště</dt><dd>${htmlEscape(stationName || "neuvedeno")}</dd>
-              <dt style="font-weight:700;">Adresa</dt><dd>${htmlEscape(address || "neuvedeno")}</dd>
-              <dt style="font-weight:700;">Výsledek workflow</dt><dd>${htmlEscape(workflowLabel || "TEST")}</dd>
-            </dl>
-          </div>
-          <p style="margin:18px 0 0;color:#5b665f;font-size:13px;">SMS a RCS jsou v tomto TESTU technicky vypnuté. Případná fotografie je přiložená pouze pro ověření tabletového postupu.</p>
-        </main>
-      </body>
-    </html>
-  `;
+  const logicalRecipient = `${cleanString(logicalRecipientName || "neuvedeno")}${logicalRecipientEmail ? ` · ${cleanString(logicalRecipientEmail)}` : ""}`;
+  return collectionRouteIncidentApprovedEmailHtml({
+    subject,
+    badge: "CHRÁNĚNÝ TEST · BEZ KONTAKTU ZÁKAZNÍKA",
+    headline: incidentLabel || "TEST svozový incident",
+    subtitle: "Bezpečný náhled incidentního workflow Svozových tras",
+    body,
+    detailsTitle: "Audit TESTU",
+    details: [
+      { label: "Logický příjemce", value: logicalRecipient },
+      { label: "Stanoviště", value: stationName },
+      { label: "Adresa", value: address },
+      { label: "Výsledek workflow", value: workflowLabel || "TEST" }
+    ],
+    notice: "SMS a RCS jsou v tomto TESTU technicky vypnuté. Skutečný zákazník ani dispečerka nebyli kontaktováni. Případná fotografie slouží pouze k ověření tabletového postupu.",
+    protectedTest: true
+  });
 }
 
 function collectionRouteIncidentLiveDispatcherEmailHtml({
@@ -1562,30 +1644,21 @@ function collectionRouteIncidentLiveDispatcherEmailHtml({
   testerName,
   workflowLabel
 }) {
-  return `
-    <!doctype html>
-    <html lang="cs">
-      <head><meta charset="utf-8"><title>${htmlEscape(subject)}</title></head>
-      <body style="font-family:Arial,sans-serif;color:#1f2921;line-height:1.55;background:#f5f7f3;margin:0;padding:20px;">
-        <main style="max-width:680px;margin:0 auto;padding:26px;background:#fff;border:2px solid #70bd18;border-radius:16px;">
-          <p style="display:inline-block;margin:0 0 18px;padding:7px 11px;border-radius:999px;background:#1f2921;color:#fff;font-weight:700;">OVĚŘOVACÍ TEST KSO · SKUTEČNÁ INTERNÍ ZPRÁVA</p>
-          <h1 style="font-size:24px;margin:0 0 16px;">${htmlEscape(incidentLabel || "Hlášení ze stanoviště")}</h1>
-          <p style="margin:0 0 14px;">${htmlEscape(recipientName || "Dispečerko")}, toto interní hlášení bylo po velkém fyzickém potvrzení řidiče skutečně odesláno z KSO.</p>
-          ${collectionRouteIncidentParagraphs(body)}
-          <div style="margin-top:22px;padding:14px;border-radius:12px;background:#f0f6e9;">
-            <strong>Údaje hlášení</strong>
-            <dl style="margin:10px 0 0;">
-              <dt style="font-weight:700;">Stanoviště</dt><dd>${htmlEscape(stationName || "neuvedeno")}</dd>
-              <dt style="font-weight:700;">Adresa</dt><dd>${htmlEscape(address || "neuvedeno")}</dd>
-              <dt style="font-weight:700;">Nahlásil</dt><dd>${htmlEscape(testerName || "přihlášený uživatel KSO")}</dd>
-              <dt style="font-weight:700;">Pracovní větev</dt><dd>${htmlEscape(workflowLabel || "Předání dispečinku")}</dd>
-            </dl>
-          </div>
-          <p style="margin:18px 0 0;color:#5b665f;font-size:13px;">Zákazník nebyl kontaktován. TEST nemění ostrou trasu ani data ve Vistosu. Fotografie je přiložena k tomuto e-mailu.</p>
-        </main>
-      </body>
-    </html>
-  `;
+  return collectionRouteIncidentApprovedEmailHtml({
+    subject,
+    badge: "OVĚŘOVACÍ TEST KSO · INTERNÍ ZPRÁVA",
+    headline: incidentLabel || "Hlášení ze stanoviště",
+    subtitle: `Hlášení pro ${cleanString(recipientName || "dispečink KSO")}`,
+    body,
+    detailsTitle: "Údaje hlášení",
+    details: [
+      { label: "Stanoviště", value: stationName },
+      { label: "Adresa", value: address },
+      { label: "Nahlásil", value: testerName || "přihlášený uživatel KSO" },
+      { label: "Pracovní větev", value: workflowLabel || "Předání dispečinku" }
+    ],
+    notice: "Fotografie je přiložená k tomuto e-mailu. Zákazník nebyl kontaktován, TEST nemění ostrou trasu ani data ve Vistosu."
+  });
 }
 
 export function collectionRouteIncidentLiveDispatcherSmsBody(input = {}) {

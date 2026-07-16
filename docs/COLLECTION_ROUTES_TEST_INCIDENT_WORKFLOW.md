@@ -10,7 +10,7 @@ Tato fáze ověřuje celý uživatelský a serverový tok na jediném stacionár
 - otevřít hlasem Šarloty nebo velkým tlačítkem přeplněnou nádobu, poškozenou nádobu a nepřístupnou firmu;
 - vyfotit stav zadním fotoaparátem, odstranit původní metadata, zobrazit náhled a uložit fotografii do chráněného R2;
 - po uložení fotografie zobrazit samostatný náhled účinku, dostupnou dispečerku, logického příjemce, text zprávy a větev plánování;
-- u přeplněné nebo poškozené nádoby skutečně odeslat interní e-mail s fotografií a SMS dostupné dispečerce KSO až po druhém velkém fyzickém potvrzení;
+- u přeplněné nebo poškozené nádoby skutečně odeslat interní e-mail se schválenou grafikou Smart odpady, fotografií a SMS dostupné dispečerce KSO až po druhém velkém fyzickém potvrzení;
 - u nepřístupné firmy dál odesílat pouze na chráněný TEST e-mail a nikdy nekontaktovat zákazníka;
 - zobrazit auditovaný výsledek přímo v tabletu;
 - u nepřístupné firmy simulovat klidnou a vyhrocenou odpověď zákazníka.
@@ -37,7 +37,7 @@ Backend čte propojené `SMART_ODPADY_DB.users`, `employee_cards` a `absence_req
 
 Vyřadí neaktivní osobu, osobu bez trvalého propojení uživatele a Karty zaměstnance, osobu bez e-mailu či telefonu v KSO a osobu s aktuální schválenou nebo evidovanou nepřítomností. Simona se nepoužije, dokud takové trvalé propojení nemá. Z dostupných kandidátek backend vybere stabilně nejméně zatíženou podle otevřených TEST workflow. Když není dostupná žádná, odeslání se zablokuje.
 
-E-mail má viditelný štítek **OVĚŘOVACÍ TEST KSO · SKUTEČNÁ INTERNÍ ZPRÁVA**, přiloženou fotografii a údaje stanoviště. Oznamovatel se přebírá z uzamčeného stacionárního TESTU, nikoli z případného jiného jména potvrzující session. SMS je bez diakritiky, nejvýše 160 znaků, vejde se do jediného segmentu, neobsahuje fotografii a odkazuje na e-mail. Obě zprávy výslovně uvádějí, že zákazník nebyl kontaktován a trasa ani Vistos se nemění.
+E-mail používá schválenou grafiku `src/email-templates/baseEmailTemplate.html`: značku **kaiser.**, bílou kartu širokou nejvýše 640 px, Quicksand s bezpečným fallbackem a zelené informační bloky. Má viditelný štítek **OVĚŘOVACÍ TEST KSO · INTERNÍ ZPRÁVA**, přiloženou fotografii a údaje stanoviště. Oznamovatel se přebírá z uzamčeného stacionárního TESTU, nikoli z případného jiného jména potvrzující session. SMS je bez diakritiky, nejvýše 160 znaků, vejde se do jediného segmentu, neobsahuje fotografii a odkazuje na e-mail. Obě zprávy výslovně uvádějí, že zákazník nebyl kontaktován a trasa ani Vistos se nemění.
 
 ## Nepřístupná firma
 

@@ -97,7 +97,7 @@ export function collectionRouteIncidentFallbackMessage(input = {}) {
 
   return {
     subject: `[TEST DISPEČINK] ${label} · ${stationName}`,
-    body: `${dispatcherName}, řidič nahlásil událost „${label}“ na TEST stanovišti ${stationName}, ${address}, přibližně ${eventAt}. Tester: ${cleanString(input.testerName || "neuvedeno")}. Poznámka: ${cleanString(input.note || "bez poznámky")}. Fotografie je přiložená. Prosíme o prověření a další rozhodnutí.`,
+    body: `${dispatcherName}, ${label.toLocaleLowerCase("cs-CZ")}: ${stationName}, ${address}, přibližně ${eventAt}. Nahlásil: ${cleanString(input.testerName || "neuvedeno")}. Poznámka: ${cleanString(input.note || "bez poznámky")}. Fotografie je přiložená. Prosíme o prověření.`,
     classification: "internal",
     escalate: false,
     reason: "fallback-dispatcher"
@@ -138,6 +138,7 @@ function buildRequest(model, input, fallback) {
     instructions: [
       "Jsi serverová komunikační vrstva KSO pro bezpečný TEST svozových incidentů.",
       "Piš česky, mile, přirozeně, stručně a bez obviňování řidiče nebo zákazníka.",
+      "Interní hlášení dispečerovi drž nejvýše kolem 450 znaků a osobu řidiče označ slovem Nahlásil, nikdy Tester.",
       "Nikdy neměň zadaný výsledek plánování, čas, vozidlo, příjemce ani provozní větev.",
       "Nevymýšlej kontakt, termín, kapacitu ani provedenou akci.",
       "Je-li vstup rozhořčený, právní, výhružný, mediální nebo žádá stížnost či náhradu škody, nastav escalate=true a classification=escalate.",
