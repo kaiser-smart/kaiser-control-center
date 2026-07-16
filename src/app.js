@@ -11585,7 +11585,7 @@ function fuelFilters() {
   const fuelTypes = [...new Set((fleetFuelState.analytics?.recentTransactions || []).map((item) => item.fuelType || "Neuvedeno"))].sort();
   return `
     <div class="fuel-filters">
-      <label><span>Hledat</span><input type="search" value="${escapeHtml(fleetFuelState.search)}" placeholder="SPZ, čip nebo ID" data-fuel-filter="search"></label>
+      <label><span>Hledat</span><input type="search" value="${escapeHtml(fleetFuelState.search)}" placeholder="Název vozidla, SPZ, čip nebo ID" data-fuel-filter="search"></label>
       <label><span>Spárování</span><select data-fuel-filter="status">
         ${[["all", "Vše"], ["matched", "Spárováno"], ["unmatched", "Nespárováno"], ["ambiguous", "Nejednoznačné"]].map(([value, label]) => `<option value="${value}" ${fleetFuelState.status === value ? "selected" : ""}>${label}</option>`).join("")}
       </select></label>
@@ -11600,11 +11600,12 @@ function fuelTransactionsTable() {
   return `
     <div class="fuel-table-wrap">
       <table class="fuel-table fuel-table--transactions">
-        <thead><tr><th>Datum</th><th>SPZ</th><th>Palivo</th><th>Litry</th><th>ORWII Kč/l</th><th>Hodnota ORWII</th><th>Stav</th></tr></thead>
+        <thead><tr><th>Datum</th><th>SPZ</th><th>Název vozidla</th><th>Palivo</th><th>Litry</th><th>ORWII Kč/l</th><th>Hodnota ORWII</th><th>Stav</th></tr></thead>
         <tbody>${rows.map((row) => `
           <tr>
             <td>${escapeHtml(formatDateTime(row.occurredAt) || row.occurredAt || "—")}</td>
             <td><strong>${escapeHtml(row.licensePlate || "Bez SPZ")}</strong></td>
+            <td>${escapeHtml(row.vehicleName || "—")}</td>
             <td>${escapeHtml(row.fuelType || "Neuvedeno")}</td>
             <td>${escapeHtml(fuelLiters(row.liters))}</td>
             <td>${escapeHtml(row.unitPrice === null ? "—" : `${fuelNumber(row.unitPrice, { maximumFractionDigits: 2 })} Kč`)}</td>

@@ -49,7 +49,7 @@ try {
 }
 
 const analyticsRows = [
-  { external_id: "a", occurred_at: "2026-07-14T08:00:00.000Z", fuel_type: "Nafta", liters: 40, unit_price: 38, total_price: 1520, license_plate: "1AB 2345", matched_vehicle_id: "vehicle-1", match_status: "matched", match_method: "license_plate" },
+  { external_id: "a", occurred_at: "2026-07-14T08:00:00.000Z", fuel_type: "Nafta", liters: 40, unit_price: 38, total_price: 1520, license_plate: "1AB 2345", vehicle_name: "Lis 101", matched_vehicle_id: "vehicle-1", match_status: "matched", match_method: "license_plate" },
   { external_id: "b", occurred_at: "2026-07-14T12:00:00.000Z", fuel_type: "Nafta", liters: 20, unit_price: 40, total_price: null, license_plate: "9ZZ 9999", matched_vehicle_id: null, match_status: "unmatched", match_method: null },
   { external_id: "c", occurred_at: "2026-07-15T07:00:00.000Z", fuel_type: "AdBlue", liters: 10, unit_price: null, total_price: null, license_plate: "", matched_vehicle_id: null, match_status: "ambiguous", match_method: null }
 ];
@@ -68,6 +68,7 @@ assert.equal(analytics.byVehicle[0].key, "vehicle-1");
 assert.equal(analytics.byVehicle[0].totalCost, 1520);
 assert.equal(analytics.byDay.length, 2);
 assert.equal(analytics.recentTransactions[0].externalId, "a");
+assert.equal(analytics.recentTransactions[0].vehicleName, "Lis 101");
 assert.equal(Object.hasOwn(analytics.recentTransactions[0], "sourcePayloadJson"), false);
 
 const d1Calls = [];
@@ -84,5 +85,6 @@ const fakeDb = {
 const databaseAnalytics = await getOrwiiFuelAnalytics({ SMART_ODPADY_DB: fakeDb }, { period: "7d", now: new Date("2026-07-15T12:00:00.000Z") });
 assert.deepEqual(databaseAnalytics.range, { from: "2026-07-09", to: "2026-07-15" });
 assert.deepEqual(d1Calls[0].params, ["2026-07-09T00:00:00.000Z", "2026-07-16T00:00:00.000Z"]);
+assert.match(d1Calls[0].sql, /json_extract\(source_payload_json, '\$\.vehicle\.name'\) AS vehicle_name/);
 await assert.rejects(() => getOrwiiFuelAnalytics({ SMART_ODPADY_DB: fakeDb }, { period: "invalid" }), /Neplatné období/);
 console.log("orwii-fuel-store tests passed");

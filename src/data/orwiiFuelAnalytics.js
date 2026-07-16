@@ -42,7 +42,7 @@ export function filterOrwiiFuelTransactions(transactions = [], filters = {}) {
     if (status !== "all" && String(item?.matchStatus || "unmatched") !== status) return false;
     if (fuelType !== "all" && String(item?.fuelType || "Neuvedeno") !== fuelType) return false;
     if (!search) return true;
-    return [item?.licensePlate, item?.fuelChipId, item?.orwiiVehicleId, item?.externalId, item?.fuelType]
+    return [item?.vehicleName, item?.licensePlate, item?.fuelChipId, item?.orwiiVehicleId, item?.externalId, item?.fuelType]
       .some((value) => String(value || "").toLocaleLowerCase("cs-CZ").includes(search));
   });
 }

@@ -23,11 +23,12 @@ assert.equal(orwiiFuelVehicleSummary(analytics, "vehicle-1").totalCost, 1520);
 assert.equal(orwiiFuelVehicleSummary(analytics, "vehicle-2"), null);
 
 const transactions = [
-  { externalId: "a", licensePlate: "1AB 2345", fuelType: "Nafta", matchStatus: "matched" },
+  { externalId: "a", vehicleName: "Lis 101", licensePlate: "1AB 2345", fuelType: "Nafta", matchStatus: "matched" },
   { externalId: "b", licensePlate: "9ZZ 9999", fuelType: "AdBlue", matchStatus: "unmatched" }
 ];
 assert.equal(filterOrwiiFuelTransactions(transactions, { status: "matched" }).length, 1);
 assert.equal(filterOrwiiFuelTransactions(transactions, { search: "9zz", fuelType: "all", status: "all" })[0].externalId, "b");
+assert.equal(filterOrwiiFuelTransactions(transactions, { search: "lis 101", fuelType: "all", status: "all" })[0].externalId, "a");
 
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
@@ -37,6 +38,9 @@ assert.match(appSource, /transakční hodnota CZK z ORWII/);
 assert.doesNotMatch(appSource, /Cena PHM/);
 assert.match(appSource, /Report tankování a PHM/);
 assert.match(appSource, /data-fuel-period/);
+assert.match(appSource, /<th>Název vozidla<\/th>/);
+assert.match(appSource, /row\.vehicleName \|\| "—"/);
+assert.match(appSource, /Název vozidla, SPZ, čip nebo ID/);
 assert.doesNotMatch(appSource, /Načíst tankování|Načíst PHM|Importovat tankování/);
 assert.match(styleSource, /\.fuel-kpis/);
 assert.match(styleSource, /@media \(max-width: 430px\)/);

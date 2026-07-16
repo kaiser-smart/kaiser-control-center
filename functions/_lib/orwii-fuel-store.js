@@ -285,6 +285,7 @@ export function buildOrwiiFuelAnalytics(rows = [], options = {}) {
     totalPrice: transactionCost(row),
     odometerKm: finiteNumber(row.odometer_km),
     licensePlate: cleanString(row.license_plate),
+    vehicleName: cleanString(row.vehicle_name),
     orwiiVehicleId: cleanString(row.orwii_vehicle_id),
     fuelChipId: cleanString(row.fuel_chip_id),
     matchedVehicleId: cleanString(row.matched_vehicle_id),
@@ -317,7 +318,8 @@ export async function getOrwiiFuelAnalytics(env, options = {}) {
   const period = analyticsPeriod(options.period);
   const range = analyticsRange(period, options.now instanceof Date ? options.now : new Date());
   const columns = `external_id, occurred_at, fuel_type, liters, unit_price, total_price, odometer_km,
-    license_plate, orwii_vehicle_id, fuel_chip_id, matched_vehicle_id, match_status, match_method`;
+    license_plate, json_extract(source_payload_json, '$.vehicle.name') AS vehicle_name,
+    orwii_vehicle_id, fuel_chip_id, matched_vehicle_id, match_status, match_method`;
   const statement = range.from
     ? db.prepare(`SELECT ${columns} FROM fleet_orwii_fuel_transactions WHERE occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at DESC, updated_at DESC`).bind(`${range.from}T00:00:00.000Z`, `${utcDateDaysAgo(-1, new Date(`${range.to}T00:00:00.000Z`))}T00:00:00.000Z`)
     : db.prepare(`SELECT ${columns} FROM fleet_orwii_fuel_transactions ORDER BY occurred_at DESC, updated_at DESC`);
