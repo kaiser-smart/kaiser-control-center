@@ -1,15 +1,16 @@
 # Svozové trasy – interní pilot incidentního workflow
 
-## Rozsah verze 0.1.569
+## Rozsah verze 0.1.570
 
 Tato fáze ověřuje celý uživatelský a serverový tok na jediném stacionárním stanovišti Firma test 501, Trnkova 3052/137, Brno. Nejde o ostré řízení svozu.
 
 Řidičský tablet umí:
 
+- přehrávat všechny pokyny produkčním hlasem Šarloty z ElevenLabs bez systémového `speechSynthesis`; při výpadku zůstává text a viditelná chyba, nikoli náhradní strojový hlas;
 - otevřít hlasem Šarloty nebo velkým tlačítkem přeplněnou nádobu, poškozenou nádobu a nepřístupnou firmu;
 - vyfotit stav zadním fotoaparátem, odstranit původní metadata, zobrazit náhled a uložit fotografii do chráněného R2;
 - po uložení fotografie zobrazit samostatný náhled účinku, dostupnou dispečerku, logického příjemce, text zprávy a větev plánování;
-- u přeplněné nebo poškozené nádoby skutečně odeslat interní e-mail s fotografií a SMS dostupné dispečerce KSO až po druhém velkém fyzickém potvrzení;
+- u přeplněné nebo poškozené nádoby skutečně odeslat interní e-mail se schválenou grafikou Smart odpady, fotografií a SMS dostupné dispečerce KSO až po druhém velkém fyzickém potvrzení;
 - u nepřístupné firmy dál odesílat pouze na chráněný TEST e-mail a nikdy nekontaktovat zákazníka;
 - zobrazit auditovaný výsledek přímo v tabletu;
 - u nepřístupné firmy simulovat klidnou a vyhrocenou odpověď zákazníka.
@@ -21,7 +22,7 @@ Tato fáze ověřuje celý uživatelský a serverový tok na jediném stacionár
 - Samostatný databázový guard povolí nejvýše 12 ostrých interních dvojic e-mail + SMS. Jedno fyzické potvrzení spotřebuje právě jednu dvojici; opakování stejného workflow nic dalšího neodešle.
 - Nepřístupná firma, zákaznické odpovědi, eskalace a připomínky zůstávají chráněný TEST. Jejich skutečný e-mailový příjemce se musí přesně shodovat s tajným `COLLECTION_ROUTES_TEST_EMAIL_TO` a společný guard povolí nejvýše šest pokusů.
 - Zákaznická SMS a veškeré RCS jsou technicky vypnuté. Interní SMS je povolená jen u přeplněné nebo poškozené nádoby.
-- Hlasová Šarlota jen otevře formulář. Neuloží fotografii, neodešle e-mail a nezmění plán.
+- Hlasová Šarlota jen otevře formulář. Neuloží fotografii, neodešle e-mail a nezmění plán. Pevné hlasové pokyny používají ElevenLabs bez oprávnění k mikrofonu; systémové čtení je zakázané.
 - Incident nemění produkční `collection_daily_route_stops`, Vistos ani ostrou denní trasu.
 - Náhradní bezplatný svoz vzniká pouze v `collection_route_test_recovery_stops` jako zřetelný TEST route overlay.
 - Všechny akce mají deduplikační klíč, auditní stav a poskytovatelský výsledek.
@@ -36,7 +37,7 @@ Backend čte propojené `SMART_ODPADY_DB.users`, `employee_cards` a `absence_req
 
 Vyřadí neaktivní osobu, osobu bez trvalého propojení uživatele a Karty zaměstnance, osobu bez e-mailu či telefonu v KSO a osobu s aktuální schválenou nebo evidovanou nepřítomností. Simona se nepoužije, dokud takové trvalé propojení nemá. Z dostupných kandidátek backend vybere stabilně nejméně zatíženou podle otevřených TEST workflow. Když není dostupná žádná, odeslání se zablokuje.
 
-E-mail má viditelný štítek **OVĚŘOVACÍ TEST KSO · SKUTEČNÁ INTERNÍ ZPRÁVA**, přiloženou fotografii a údaje stanoviště. SMS je stručná, neobsahuje fotografii a odkazuje na e-mail. Obě zprávy výslovně uvádějí, že zákazník nebyl kontaktován a trasa ani Vistos se nemění.
+E-mail používá schválenou grafiku `src/email-templates/baseEmailTemplate.html`: značku **kaiser.**, bílou kartu širokou nejvýše 640 px, Quicksand s bezpečným fallbackem a zelené informační bloky. Má viditelný štítek **OVĚŘOVACÍ TEST KSO · INTERNÍ ZPRÁVA**, přiloženou fotografii a údaje stanoviště. Oznamovatel se přebírá z uzamčeného stacionárního TESTU, nikoli z případného jiného jména potvrzující session. SMS je bez diakritiky, nejvýše 160 znaků, vejde se do jediného segmentu, neobsahuje fotografii a odkazuje na e-mail. Obě zprávy výslovně uvádějí, že zákazník nebyl kontaktován a trasa ani Vistos se nemění.
 
 ## Nepřístupná firma
 

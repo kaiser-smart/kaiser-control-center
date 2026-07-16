@@ -203,6 +203,14 @@ function assertFieldTester(run, user) {
   }
 }
 
+function fieldTesterActor(run, user) {
+  const metadata = parseJson(run?.metadata_json, {});
+  return {
+    id: cleanString(metadata.fieldTesterUserId || user?.id || user?.email),
+    name: cleanString(metadata.fieldTesterName || user?.name || user?.email || "Terénní tester")
+  };
+}
+
 async function existingIncident(db, idempotencyKey) {
   if (!idempotencyKey) return null;
   return db.prepare(`
@@ -278,12 +286,14 @@ export async function reportCollectionRoutesTestIncident(env, user, input = {}, 
     const id = randomId("collection-route-test-incident");
     storageKey = `collection-routes/test-incidents/${encodeURIComponent(runId)}/${id}.${extensionForContentType(photo.contentType)}`;
     const createdAt = nowIso();
-    const actorId = cleanString(user?.id || user?.email);
-    const actorName = cleanString(user?.name || user?.email || "Uživatel");
+    const reporter = fieldTesterActor(run, user);
+    const actorId = reporter.id;
+    const actorName = reporter.name;
     const metadata = {
       dataScope: "test",
       testMode: COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
       siteSourceId: cleanString(stop.source_row_id),
+      reporterSource: "stationary-field-test-run",
       noNotifications: true,
       noCustomerContact: true,
       noRouteChange: true

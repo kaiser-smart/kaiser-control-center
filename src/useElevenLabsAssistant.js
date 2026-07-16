@@ -1204,9 +1204,10 @@ export function useElevenLabsAssistant({
     });
   }
 
-  async function sendVoiceMessage(assistantId = DEFAULT_AI_ASSISTANT_ID, message = "") {
+  async function sendVoiceMessage(assistantId = DEFAULT_AI_ASSISTANT_ID, message = "", options = {}) {
     const assistant = assistantById(assistantId);
     const text = String(message || "").trim();
+    const instructionOnly = options.instructionOnly === true;
 
     if (!text) {
       throw new Error("Napište nebo nadiktujte dotaz pro Šarlotu.");
@@ -1338,7 +1339,10 @@ export function useElevenLabsAssistant({
         window.clearTimeout(connectionTimer);
         sendJson({
           type: "conversation_initiation_client_data",
-          dynamic_variables: dynamicVariablesForSession(signedUrlSession, "voice")
+          dynamic_variables: {
+            ...dynamicVariablesForSession(signedUrlSession, instructionOnly ? "voice-instruction" : "voice"),
+            voice_instruction_only: instructionOnly
+          }
         });
         metadataFallbackTimer = window.setTimeout(sendUserMessage, TEXT_METADATA_FALLBACK_MS);
       });
@@ -1369,7 +1373,23 @@ export function useElevenLabsAssistant({
         }
 
         if (payload.type === "client_tool_call") {
-          sendClientToolResult(socket, payload.client_tool_call);
+          if (instructionOnly) {
+            const toolCallId = String(payload.client_tool_call?.tool_call_id || "").trim();
+            if (toolCallId) {
+              sendJson({
+                type: "client_tool_result",
+                tool_call_id: toolCallId,
+                result: JSON.stringify({
+                  ok: false,
+                  status: "disabled_for_voice_instruction",
+                  error: "Přehrání pevného hlasového pokynu nesmí spouštět nástroje ani měnit stav."
+                }),
+                is_error: true
+              });
+            }
+          } else {
+            sendClientToolResult(socket, payload.client_tool_call);
+          }
           return;
         }
 

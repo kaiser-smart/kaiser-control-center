@@ -52,12 +52,18 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.16";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.18";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRouteGpsPrompt,
   summarizeCollectionRouteGpsSamples
 } from "./data/collectionRouteGps.js";
+import {
+  COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
+  COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
+  collectionRoutesSarlotaAudioWasPlayed,
+  collectionRoutesSarlotaVoiceRequest
+} from "./data/collectionRoutesSarlotaVoice.js";
 import {
   ABSENCE_REPORT_DAY,
   ABSENCE_REPORT_EMAIL,
@@ -1372,6 +1378,8 @@ const collectionRoutesPilotState = {
   testGpsError: "",
   testGpsPreview: null,
   testGpsVoiceListening: false,
+  testGpsVoicePlaying: false,
+  testGpsVoiceError: "",
   testIncidents: [],
   testIncidentsLoading: false,
   testIncidentPending: "",
@@ -1398,6 +1406,7 @@ const collectionRoutesPilotState = {
 };
 let collectionRoutesSitesAutoRefreshTimer = null;
 let collectionRoutesSitesCountdownTimer = null;
+let collectionRoutesSarlotaVoiceRequestId = 0;
 const dataBoxState = {
   loaded: false,
   loading: false,
@@ -22701,10 +22710,25 @@ function collectionRoutesTestGpsPanel(detail, options = {}) {
             </button>
           ` : ""}
         ` : `
-          <div class="collection-routes-test-gps__sarlota">
+          <div
+            class="collection-routes-test-gps__sarlota"
+            data-collection-routes-test-voice-provider="${COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER}"
+          >
             <span aria-hidden="true">Š</span>
-            <p>${escapeHtml(prompt)}</p>
-            <button type="button" data-collection-routes-test-gps-speak>Přehrát pokyn Šarloty</button>
+            <div>
+              <p>${escapeHtml(prompt)}</p>
+              <small>${collectionRoutesPilotState.testGpsVoicePlaying
+                ? "Šarlota z ElevenLabs právě mluví…"
+                : "Hlas: ElevenLabs Šarlota · systémové čtení vypnuto"}</small>
+              ${collectionRoutesPilotState.testGpsVoiceError
+                ? `<small class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.testGpsVoiceError)}</small>`
+                : ""}
+            </div>
+            <button
+              type="button"
+              data-collection-routes-test-gps-speak
+              ${collectionRoutesPilotState.testGpsVoicePlaying ? "disabled" : ""}
+            >${collectionRoutesPilotState.testGpsVoicePlaying ? "Šarlota mluví…" : "Přehrát pokyn Šarloty"}</button>
           </div>
           <button
             class="collection-routes-test-gps__rugged-button"
@@ -38248,6 +38272,8 @@ function resetCollectionDailyRoutesForScope() {
   collectionRoutesPilotState.testGpsError = "";
   collectionRoutesPilotState.testGpsPreview = null;
   collectionRoutesPilotState.testGpsVoiceListening = false;
+  collectionRoutesPilotState.testGpsVoicePlaying = false;
+  collectionRoutesPilotState.testGpsVoiceError = "";
   collectionRoutesPilotState.testIncidents = [];
   collectionRoutesPilotState.testIncidentsLoading = false;
   collectionRoutesPilotState.testIncidentPending = "";
@@ -38397,12 +38423,11 @@ function closeCollectionRoutesTestTablet() {
   collectionRoutesPilotState.testTabletOpen = false;
   collectionRoutesPilotState.testGpsPreview = null;
   collectionRoutesPilotState.testGpsVoiceListening = false;
+  collectionRoutesPilotState.testGpsVoicePlaying = false;
+  collectionRoutesPilotState.testGpsVoiceError = "";
   clearCollectionRoutesTestIncidentDraft();
-  try {
-    window.speechSynthesis?.cancel();
-  } catch {
-    // Hlas je pouze doplňková vrstva TEST tabletu.
-  }
+  collectionRoutesSarlotaVoiceRequestId += 1;
+  elevenLabsAssistant.stopVoiceAudio?.();
   render();
   setTimeout(() => document.querySelector("[data-collection-routes-test-tablet-open]")?.focus(), 0);
 }
@@ -38790,20 +38815,47 @@ function collectionRoutesTestGpsAddressingName(run = {}) {
     .find((driver) => driver.id === run.driverUserId)?.addressingName || run.metadata?.driverAddressingName || "";
 }
 
-function speakCollectionRoutesTestGps(text) {
-  const message = String(text || "").trim();
-  if (!message || typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+function unlockCollectionRoutesSarlotaAudio() {
   try {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.lang = "cs-CZ";
-    utterance.rate = 0.96;
-    utterance.pitch = 1.02;
-    utterance.voice = aiVoiceDemoVoice();
-    window.speechSynthesis.speak(utterance);
-    return true;
+    void elevenLabsAssistant.unlockVoiceAudio?.();
   } catch {
+    // Pokyn zůstává viditelný; systémový hlas se nikdy nepoužije jako náhrada.
+  }
+}
+
+async function speakCollectionRoutesTestGps(text) {
+  const message = String(text || "").trim();
+  if (!message || typeof window === "undefined") return false;
+  const voiceRequest = collectionRoutesSarlotaVoiceRequest(message);
+  if (!voiceRequest) return false;
+  const requestId = ++collectionRoutesSarlotaVoiceRequestId;
+  collectionRoutesPilotState.testGpsVoicePlaying = true;
+  collectionRoutesPilotState.testGpsVoiceError = "";
+  render();
+  try {
+    const result = await elevenLabsAssistant.sendVoiceMessage(
+      COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
+      voiceRequest,
+      { instructionOnly: true }
+    );
+    if (requestId !== collectionRoutesSarlotaVoiceRequestId) return false;
+    if (!collectionRoutesSarlotaAudioWasPlayed(result)) {
+      throw new Error("ElevenLabs nevrátil přehratelný zvuk Šarloty.");
+    }
+    return true;
+  } catch (error) {
+    if (requestId !== collectionRoutesSarlotaVoiceRequestId) return false;
+    console.warn("collection_routes.sarlota_voice_failed", {
+      provider: COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
+      message: String(error?.payload?.error || error?.message || "voice_failed")
+    });
+    collectionRoutesPilotState.testGpsVoiceError = "Hlas Šarloty z ElevenLabs se nepodařilo přehrát. Pokyn zůstává viditelný; systémový hlas je vypnutý.";
     return false;
+  } finally {
+    if (requestId === collectionRoutesSarlotaVoiceRequestId) {
+      collectionRoutesPilotState.testGpsVoicePlaying = false;
+      render();
+    }
   }
 }
 
@@ -45458,6 +45510,8 @@ async function logout() {
   collectionRoutesPilotState.testGpsError = "";
   collectionRoutesPilotState.testGpsPreview = null;
   collectionRoutesPilotState.testGpsVoiceListening = false;
+  collectionRoutesPilotState.testGpsVoicePlaying = false;
+  collectionRoutesPilotState.testGpsVoiceError = "";
   collectionRoutesPilotState.testIncidents = [];
   collectionRoutesPilotState.testIncidentsLoading = false;
   collectionRoutesPilotState.testIncidentPending = "";
@@ -48858,6 +48912,7 @@ document.addEventListener("change", async (event) => {
 
   const collectionRoutesTestIncidentPhoto = event.target.closest("[data-collection-routes-test-incident-photo]");
   if (collectionRoutesTestIncidentPhoto) {
+    unlockCollectionRoutesSarlotaAudio();
     await selectCollectionRoutesTestIncidentPhoto(collectionRoutesTestIncidentPhoto);
     return;
   }
@@ -49155,6 +49210,10 @@ document.addEventListener("pointerup", (event) => {
 }, true);
 
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-collection-routes-test-tablet-dialog]")) {
+    unlockCollectionRoutesSarlotaAudio();
+  }
+
   const collectionRoutesMantraToggle = event.target.closest("[data-collection-routes-mantra-toggle]");
   if (collectionRoutesMantraToggle) {
     event.preventDefault();
@@ -49901,9 +49960,11 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesTestGpsSpeak = event.target.closest("[data-collection-routes-test-gps-speak]");
   if (collectionRoutesTestGpsSpeak) {
     event.preventDefault();
-    const run = collectionRoutesPilotState.dailyRouteDetail?.run || {};
-    speakCollectionRoutesTestGps(collectionRouteGpsPrompt(collectionRoutesTestGpsAddressingName(run)));
-    vibrateCollectionRoutesTestGps(30);
+    if (!collectionRoutesTestGpsSpeak.disabled) {
+      const run = collectionRoutesPilotState.dailyRouteDetail?.run || {};
+      vibrateCollectionRoutesTestGps(30);
+      await speakCollectionRoutesTestGps(collectionRouteGpsPrompt(collectionRoutesTestGpsAddressingName(run)));
+    }
     return;
   }
 

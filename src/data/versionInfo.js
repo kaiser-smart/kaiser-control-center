@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.569"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.570"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: hlas Šarloty a schválené e-maily",
+    text: "Všechny mluvené pokyny Svozových tras používají produkční ElevenLabs hlas Šarloty bez systémového čtení. Incidentní e-mail nově používá schválenou grafiku Smart odpady, uvádí terénního testera z uzamčeného TESTU a interní SMS se vejde do jediného 160znakového segmentu."
+  },
   {
     title: "Svozové trasy: interní incident dispečerce",
     text: "Přeplněná nebo poškozená nádoba po fotografii a druhém velkém potvrzení skutečně odešle dostupné aktivní dispečerce ověřené v KSO interní e-mail s fotografií a SMS. Zákazník, nepřístupná firma, ostrá trasa a Vistos zůstávají chráněné a beze změny; každý kanál má audit, provider ID, deduplikaci a pevný limit pilotu."

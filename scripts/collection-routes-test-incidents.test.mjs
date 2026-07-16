@@ -142,7 +142,7 @@ function seedRoute(sqlite) {
       'run-test', '2026-07-15|FIELD|stationary-field-test', 'batch-test', 'synthetic-brno-test', '2026-07-15', 'ST',
       'odd-even', 'FIELD', '', 'Stacionární TEST tabletu',
       '', '', 'Stacionární TEST incidentů', 'active', 1,
-      '{"dataScope":"test","testMode":"stationary-field-test","fieldTesterUserId":"manager-test","fieldTesterName":"Manager Test","sendsNotifications":false}'
+      '{"dataScope":"test","testMode":"stationary-field-test","fieldTesterUserId":"manager-test","fieldTesterName":"Tomáš Gáži","sendsNotifications":false}'
     )
   `).run();
   sqlite.prepare(`
@@ -250,6 +250,8 @@ assert.equal(incidentApiTest.MAX_PHOTO_SIZE_BYTES, 6 * 1024 * 1024);
   assert.equal(saved.incident.typeLabel, "Přeplněná nádoba");
   assert.equal(saved.incident.status, "recorded-test");
   assert.equal(saved.incident.createdByUserId, manager.id);
+  assert.equal(saved.incident.createdByName, "Tomáš Gáži", "Oznamovatel se musí převzít z uzamčeného terénního TESTU, ne z názvu aktuální session.");
+  assert.equal(saved.incident.metadata.reporterSource, "stationary-field-test-run");
   assert.equal(saved.incident.metadata.noNotifications, true);
   assert.equal(saved.incident.metadata.noCustomerContact, true);
   assert.equal(saved.incident.metadata.noRouteChange, true);
@@ -328,15 +330,48 @@ assert.equal(
   ).ok,
   true
 );
-assert.match(
-  notificationTest.collectionRouteIncidentLiveDispatcherSmsBody({
-    incidentLabel: "Poškozená nádoba",
-    stationName: "Firma test 501",
-    address: "Trnkova 3052/137, Brno",
-    testerName: "Tomáš Gáži"
-  }),
-  /OVĚŘOVACÍ TEST.*Poškozená nádoba.*Zákazník nebyl kontaktován/i
-);
+const dispatcherSms = notificationTest.collectionRouteIncidentLiveDispatcherSmsBody({
+  incidentLabel: "Poškozená nádoba",
+  stationName: "Firma test 501",
+  address: "Trnkova 3052/137, Brno",
+  testerName: "Tomáš Gáži"
+});
+assert.match(dispatcherSms, /^KSO: Poskozena nadoba, Firma test 501\. Hlasi Tomas Gazi\./);
+assert.match(dispatcherSms, /Foto\/detail v e-mailu/);
+assert.match(dispatcherSms, /Bez kontaktu zakaznika; trasa\/Vistos beze zmen\.$/);
+assert.equal(dispatcherSms.length <= 160, true, "Interní SMS musí zůstat v jediném 160znakovém segmentu.");
+assert.doesNotMatch(dispatcherSms, /[^\x20-\x7e]/, "Interní SMS musí být bez Unicode znaků prodražujících segmentaci.");
+const dispatcherEmailHtml = notificationTest.collectionRouteIncidentLiveDispatcherEmailHtml({
+  subject: "[OVĚŘOVACÍ TEST KSO] Poškozená nádoba",
+  body: "Lenka Kouřilová, poškozená nádoba na stanovišti Firma test 501. Nahlásil: Tomáš Gáži. Fotografie je přiložená.",
+  recipientName: "Lenka Kouřilová",
+  incidentLabel: "Poškozená nádoba",
+  stationName: "Firma test 501 · stanoviště Trnkova",
+  address: "Trnkova 3052/137, 628 00 Brno",
+  testerName: "Tomáš Gáži",
+  workflowLabel: "Předání dispečinku"
+});
+assert.match(dispatcherEmailHtml, /kaiser\./, "Incidentní e-mail musí používat schválenou značku Kaiser.");
+assert.match(dispatcherEmailHtml, /font-family:'Quicksand',Arial,Helvetica,sans-serif/, "Incidentní e-mail musí používat schválenou typografii.");
+assert.match(dispatcherEmailHtml, /max-width:640px/, "Incidentní e-mail musí používat schválenou šířku karty.");
+assert.match(dispatcherEmailHtml, /@media only screen and \(max-width:520px\)/, "Incidentní e-mail musí mít mobilní pravidla.");
+assert.match(dispatcherEmailHtml, /table-layout:fixed/, "Incidentní e-mail se na úzkém displeji nesmí roztáhnout mimo kartu.");
+assert.match(dispatcherEmailHtml, /background:#75bd25/, "Incidentní e-mail musí používat schválenou zelenou značku.");
+assert.match(dispatcherEmailHtml, /Nahlásil<\/td>[\s\S]*Tomáš Gáži/, "Incidentní e-mail musí uvést skutečného terénního testera.");
+assert.doesNotMatch(dispatcherEmailHtml, /border:2px solid/, "Provizorní incidentní grafika se nesmí vrátit.");
+assert.doesNotMatch(dispatcherEmailHtml, /font-family:Arial,sans-serif/, "Provizorní systémová typografie se nesmí vrátit.");
+const protectedEmailHtml = notificationTest.collectionRouteIncidentEmailHtml({
+  subject: "[TEST SVOZ] Nepřístupné nádoby",
+  body: "Dobrý den, toto je chráněný TEST.",
+  logicalRecipientName: "Firma test 501",
+  incidentLabel: "Nepřístupné nádoby",
+  stationName: "Firma test 501 · stanoviště Trnkova",
+  address: "Trnkova 3052/137, 628 00 Brno",
+  workflowLabel: "Bez kontaktu zákazníka"
+});
+assert.match(protectedEmailHtml, /kaiser\./);
+assert.match(protectedEmailHtml, /CHRÁNĚNÝ TEST · BEZ KONTAKTU ZÁKAZNÍKA/);
+assert.doesNotMatch(protectedEmailHtml, /border:2px solid/);
 assert.equal(
   (await sendCollectionRouteIncidentDispatcherLiveEmail({}, {
     to: "lenka@example.invalid",
