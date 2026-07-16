@@ -1127,6 +1127,14 @@ Pokud asset chybí, Codex má napsat:
 
 ## 14. Ověření produkčních notifikací
 
+### 14.1 Povinná schválená grafika e-mailů
+
+- Každý e-mail odesílaný z KSO musí použít schválený kanonický vzor ze `src/email-templates/baseEmailTemplate.html` nebo serverový renderer, který je s tímto vzorem prokazatelně graficky shodný.
+- Schválený vzhled tvoří zelené logo `kaiser.`, bílá karta s maximální šířkou 640 px, schválené barvy, písmo Quicksand s bezpečným fallbackem, inline styly a responzivní sazba pro mobilní zobrazení.
+- Modul nesmí vytvářet vlastní provizorní grafiku e-mailu, barevný rám, tmavý testovací pruh ani jinou odchylku od schváleného vzoru.
+- Pokud schválená šablona nebo její serverový renderer není dostupný, e-mail se nesmí odeslat v náhradní grafice. Systém musí odeslání bezpečně zastavit a zobrazit chybu.
+- Novou grafickou variantu lze nasadit pouze po výslovném schválení Radimem nebo Martinem a po úpravě kanonického vzoru; teprve potom ji smějí převzít jednotlivé moduly.
+
 Pokud Radim zadá nastavení nebo opravu odesílání e-mailů / SMS a zároveň požádá o odeslání, Codex má po nastavení provést jeden kontrolní ostrý test přes existující produkční API / backend aplikace.
 
 Kontrolní test musí:
@@ -1348,6 +1356,14 @@ Vistos `Ridic_FK`, T-Cars řidič, telefon, SPZ nebo jméno lze používat jen j
 Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 
 ## 17. Šarlota / ElevenLabs – pravidla integrace
+
+### 17.0 Jediný povolený hlas
+
+- Veškerý hlas KSO, včetně pevných pokynů, upozornění, potvrzení a běžné konverzace, smí vytvářet pouze serverová Šarlota přes ElevenLabs.
+- V produkčním i testovacím rozhraní jsou zakázané Web Speech API, `speechSynthesis`, `SpeechSynthesisUtterance`, systémové čtení prohlížeče nebo Androidu, lokální TTS a jiný hlasový poskytovatel.
+- Při nedostupnosti ElevenLabs musí rozhraní zobrazit čitelný text a pravdivou chybu. Nesmí tiše přepnout na strojové čtení ani předstírat úspěšné přehrání.
+- Pevný hlasový pokyn nesmí přes client tools vyvolat provozní akci; akci vždy potvrzuje člověk samostatným ovládacím prvkem.
+- ElevenLabs API klíč zůstává pouze na backendu. Frontend smí získat jen bezpečný serverový signed URL nebo serverem připravený zvukový tok.
 
 ### 17.1 Rozlišování stavů
 

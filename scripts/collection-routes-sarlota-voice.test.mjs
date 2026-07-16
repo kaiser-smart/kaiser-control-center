@@ -37,6 +37,11 @@ assert.equal(collectionRoutesSarlotaAudioWasPlayed({
 }), false);
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+assert.doesNotMatch(
+  appSource,
+  /speechSynthesis|SpeechSynthesisUtterance/,
+  "KSO nesmí obsahovat systémové TTS; veškerý hlas musí jít přes serverovou Šarlotu z ElevenLabs."
+);
 const voiceFunctionStart = appSource.indexOf("async function speakCollectionRoutesTestGps");
 const voiceFunctionEnd = appSource.indexOf("function vibrateCollectionRoutesTestGps", voiceFunctionStart);
 assert.ok(voiceFunctionStart >= 0 && voiceFunctionEnd > voiceFunctionStart);

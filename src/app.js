@@ -669,38 +669,6 @@ const AI_VOICE_DOCK_STATES = [
   "disconnected",
   "error"
 ];
-const AI_VOICE_DEMO_SCRIPT = [
-  {
-    speaker: "user",
-    label: "Uživatel Kaiser smart",
-    text: "Ahoj Kaiser smart, potřebuju zadat dovolenou na pátek."
-  },
-  {
-    speaker: "ai",
-    label: "AI Smart pomocník",
-    text: "Jasně. Na hlavní stránce klepni na Rychlé zadání, vyber Chci dovolenou a zkontroluj datum."
-  },
-  {
-    speaker: "user",
-    label: "Uživatel Kaiser smart",
-    text: "A když budu nemocný?"
-  },
-  {
-    speaker: "ai",
-    label: "AI Smart pomocník",
-    text: "Nemoc zadáš stejnou cestou. Systém ji zaeviduje a kancelář ji uvidí v modulu Dovolená a Nemoc."
-  },
-  {
-    speaker: "user",
-    label: "Uživatel Kaiser smart",
-    text: "Kde se potom žádost schvaluje?"
-  },
-  {
-    speaker: "ai",
-    label: "AI Smart pomocník",
-    text: "Nadřízený ji najde v části Ke schválení. Po schválení nebo zamítnutí přijde zaměstnanci SMS."
-  }
-];
 const EMPLOYMENT_STATUS_OPTIONS = [
   { value: "active", label: "Aktivní" },
   { value: "inactive", label: "Neaktivní" }
@@ -1587,7 +1555,6 @@ const aiAssistantState = {
   highlightMessage: "",
   messages: [createAiAssistantMessage("bot", AI_INITIAL_MESSAGE)]
 };
-let aiVoiceDemoTimer = 0;
 let aiVoiceStateTimer = 0;
 let aiToastTimer = 0;
 let aiConfirmationResolver = null;
@@ -3109,9 +3076,6 @@ function closeAiAssistant() {
   clearAiVoiceStateTimer();
   void releaseAiVoiceWakeLock({ renderAfter: false });
   cancelAiTextRequest();
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-  }
   speechRecognition.stop({ status: false });
   aiAssistantState.chatOpen = false;
   aiAssistantState.welcomeVisible = false;
@@ -3195,33 +3159,7 @@ async function submitAiAssistantQuestion(question, options = {}) {
   }
 }
 
-function aiVoiceDemoDelay(line) {
-  return Math.max(3800, Math.min(6200, 1900 + String(line?.text || "").length * 58));
-}
-
-function aiVoiceDemoVoice() {
-  if (!("speechSynthesis" in window)) {
-    return null;
-  }
-
-  const voices = window.speechSynthesis.getVoices?.() || [];
-  return voices.find((voice) => voice.lang?.toLowerCase().startsWith("cs")) || voices[0] || null;
-}
-
-function clearAiVoiceDemoTimer() {
-  if (aiVoiceDemoTimer) {
-    window.clearTimeout(aiVoiceDemoTimer);
-    aiVoiceDemoTimer = 0;
-  }
-}
-
 function stopAiVoiceDemo(options = {}) {
-  clearAiVoiceDemoTimer();
-
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-  }
-
   aiAssistantState.demoPlaying = false;
   aiAssistantState.demoSpeaker = "";
   aiAssistantState.demoSpeakerLabel = "";
@@ -3233,65 +3171,6 @@ function stopAiVoiceDemo(options = {}) {
   if (options.renderAfter !== false) {
     renderAiAssistantLayerOnly();
   }
-}
-
-function playAiVoiceDemoLine(index = 0) {
-  if (!aiAssistantState.demoPlaying || index >= AI_VOICE_DEMO_SCRIPT.length) {
-    stopAiVoiceDemo({ renderAfter: false });
-    aiAssistantState.demoStatus = "Ukázka dokončena.";
-    renderAiAssistantLayerOnly();
-    return;
-  }
-
-  const line = AI_VOICE_DEMO_SCRIPT[index];
-  aiAssistantState.demoSpeaker = line.speaker;
-  aiAssistantState.demoSpeakerLabel = line.label;
-  aiAssistantState.demoLine = line.text;
-  aiAssistantState.demoStatus = line.speaker === "ai" ? "Mluví AI Smart pomocník…" : "Mluví uživatel Kaiser smart…";
-  aiAssistantState.voiceStatus = AI_STATUS_DEMO;
-  aiAssistantState.isListening = true;
-  renderAiAssistantLayerOnly();
-
-  const next = () => {
-    clearAiVoiceDemoTimer();
-    aiVoiceDemoTimer = window.setTimeout(() => playAiVoiceDemoLine(index + 1), 260);
-  };
-
-  if ("speechSynthesis" in window) {
-    const utterance = new SpeechSynthesisUtterance(line.text);
-    utterance.lang = "cs-CZ";
-    utterance.rate = line.speaker === "ai" ? 0.94 : 1.02;
-    utterance.pitch = line.speaker === "ai" ? 0.96 : 1.08;
-    utterance.voice = aiVoiceDemoVoice();
-    window.speechSynthesis.speak(utterance);
-  } else {
-    aiAssistantState.demoStatus = "Zvuková ukázka není v tomto prohlížeči podporovaná, přehrávám textově.";
-    renderAiAssistantLayerOnly();
-  }
-
-  aiVoiceDemoTimer = window.setTimeout(() => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-    next();
-  }, aiVoiceDemoDelay(line));
-}
-
-function startAiVoiceDemo() {
-  if (aiAssistantState.demoPlaying) {
-    stopAiVoiceDemo();
-    return;
-  }
-
-  speechRecognition.stop({ status: false });
-  clearAiVoiceDemoTimer();
-  aiAssistantState.demoPlaying = true;
-  aiAssistantState.demoSpeaker = "";
-  aiAssistantState.demoSpeakerLabel = "";
-  aiAssistantState.demoLine = "";
-  aiAssistantState.demoStatus = "Spouštím ukázkovou komunikaci…";
-  aiAssistantState.voiceNotice = "";
-  playAiVoiceDemoLine(0);
 }
 
 async function prepareElevenLabsVoiceSession() {
