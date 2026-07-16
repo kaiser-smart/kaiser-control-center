@@ -39753,6 +39753,24 @@ body:has(.ds-plus-page) {
   line-height: 1.45;
 }
 
+.collection-routes-test-gps__sarlota > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.collection-routes-test-gps__sarlota > div > small {
+  color: var(--steel);
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.collection-routes-test-gps__sarlota > div > .module-feedback__error {
+  margin: 2px 0 0;
+  color: #9e1d1d;
+}
+
 .collection-routes-test-gps__sarlota button,
 .collection-routes-test-gps__voice-button,
 .collection-routes-test-gps__cancel {
@@ -39766,6 +39784,11 @@ body:has(.ds-plus-page) {
   font-weight: 800;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.collection-routes-test-gps__sarlota button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .collection-routes-test-gps__voice-button {

@@ -142,7 +142,7 @@ function seedRoute(sqlite) {
       'run-test', '2026-07-15|FIELD|stationary-field-test', 'batch-test', 'synthetic-brno-test', '2026-07-15', 'ST',
       'odd-even', 'FIELD', '', 'Stacionární TEST tabletu',
       '', '', 'Stacionární TEST incidentů', 'active', 1,
-      '{"dataScope":"test","testMode":"stationary-field-test","fieldTesterUserId":"manager-test","fieldTesterName":"Manager Test","sendsNotifications":false}'
+      '{"dataScope":"test","testMode":"stationary-field-test","fieldTesterUserId":"manager-test","fieldTesterName":"Tomáš Gáži","sendsNotifications":false}'
     )
   `).run();
   sqlite.prepare(`
@@ -250,6 +250,8 @@ assert.equal(incidentApiTest.MAX_PHOTO_SIZE_BYTES, 6 * 1024 * 1024);
   assert.equal(saved.incident.typeLabel, "Přeplněná nádoba");
   assert.equal(saved.incident.status, "recorded-test");
   assert.equal(saved.incident.createdByUserId, manager.id);
+  assert.equal(saved.incident.createdByName, "Tomáš Gáži", "Oznamovatel se musí převzít z uzamčeného terénního TESTU, ne z názvu aktuální session.");
+  assert.equal(saved.incident.metadata.reporterSource, "stationary-field-test-run");
   assert.equal(saved.incident.metadata.noNotifications, true);
   assert.equal(saved.incident.metadata.noCustomerContact, true);
   assert.equal(saved.incident.metadata.noRouteChange, true);
@@ -328,15 +330,17 @@ assert.equal(
   ).ok,
   true
 );
-assert.match(
-  notificationTest.collectionRouteIncidentLiveDispatcherSmsBody({
-    incidentLabel: "Poškozená nádoba",
-    stationName: "Firma test 501",
-    address: "Trnkova 3052/137, Brno",
-    testerName: "Tomáš Gáži"
-  }),
-  /OVĚŘOVACÍ TEST.*Poškozená nádoba.*Zákazník nebyl kontaktován/i
-);
+const dispatcherSms = notificationTest.collectionRouteIncidentLiveDispatcherSmsBody({
+  incidentLabel: "Poškozená nádoba",
+  stationName: "Firma test 501",
+  address: "Trnkova 3052/137, Brno",
+  testerName: "Tomáš Gáži"
+});
+assert.match(dispatcherSms, /^KSO: Poskozena nadoba, Firma test 501\. Hlasi Tomas Gazi\./);
+assert.match(dispatcherSms, /Foto\/detail v e-mailu/);
+assert.match(dispatcherSms, /Bez kontaktu zakaznika; trasa\/Vistos beze zmen\.$/);
+assert.equal(dispatcherSms.length <= 160, true, "Interní SMS musí zůstat v jediném 160znakovém segmentu.");
+assert.doesNotMatch(dispatcherSms, /[^\x20-\x7e]/, "Interní SMS musí být bez Unicode znaků prodražujících segmentaci.");
 assert.equal(
   (await sendCollectionRouteIncidentDispatcherLiveEmail({}, {
     to: "lenka@example.invalid",

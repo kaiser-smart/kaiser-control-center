@@ -1589,12 +1589,21 @@ function collectionRouteIncidentLiveDispatcherEmailHtml({
 }
 
 export function collectionRouteIncidentLiveDispatcherSmsBody(input = {}) {
-  const incidentLabel = cleanString(input.incidentLabel || "Hlášení ze stanoviště");
-  const stationName = cleanString(input.stationName || "Firma test 501");
-  const address = cleanString(input.address);
-  const testerName = cleanString(input.testerName || "uživatel KSO");
-  const body = `KSO – OVĚŘOVACÍ TEST. ${incidentLabel}: ${stationName}${address ? `, ${address}` : ""}. Nahlásil ${testerName}. Fotografie je v e-mailu. Zákazník nebyl kontaktován; trasa ani Vistos se nemění.`;
-  return body.length > 480 ? `${body.slice(0, 477)}...` : body;
+  const smsText = (value, fallback, maxLength) => cleanString(value || fallback)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7e]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength)
+    .trim();
+  const incidentLabel = smsText(input.incidentLabel, "Hlaseni ze stanoviste", 34);
+  const stationName = smsText(input.stationName, "Firma test 501", 34);
+  const testerName = smsText(input.testerName, "uzivatel KSO", 28);
+  const prefix = `KSO: ${incidentLabel}, ${stationName}. Hlasi ${testerName}.`;
+  const suffix = " Foto/detail v e-mailu. Bez kontaktu zakaznika; trasa/Vistos beze zmen.";
+  const availablePrefixLength = Math.max(0, 160 - suffix.length);
+  return `${prefix.slice(0, availablePrefixLength).trimEnd()}${suffix}`;
 }
 
 function verifiedKsoDispatcherRecipient(input = {}, channel = "e-mail") {
