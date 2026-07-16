@@ -1149,7 +1149,12 @@ async function sendSms(env, {
       subjectToken: audit.subjectToken,
       messagePreview: body
     });
-    return { status: "sent", recipientName: cleanRecipientName };
+    return {
+      status: "sent",
+      recipientName: cleanRecipientName,
+      providerMessageId,
+      providerStatus: cleanString(responsePayload.status || "sent")
+    };
   } catch (error) {
     await updateOutgoingCommunicationAudit(env, audit, {
       status: "failed",
@@ -1547,6 +1552,97 @@ function collectionRouteIncidentEmailHtml({
   `;
 }
 
+function collectionRouteIncidentLiveDispatcherEmailHtml({
+  subject,
+  body,
+  recipientName,
+  incidentLabel,
+  stationName,
+  address,
+  testerName,
+  workflowLabel
+}) {
+  return `
+    <!doctype html>
+    <html lang="cs">
+      <head><meta charset="utf-8"><title>${htmlEscape(subject)}</title></head>
+      <body style="font-family:Arial,sans-serif;color:#1f2921;line-height:1.55;background:#f5f7f3;margin:0;padding:20px;">
+        <main style="max-width:680px;margin:0 auto;padding:26px;background:#fff;border:2px solid #70bd18;border-radius:16px;">
+          <p style="display:inline-block;margin:0 0 18px;padding:7px 11px;border-radius:999px;background:#1f2921;color:#fff;font-weight:700;">OVĚŘOVACÍ TEST KSO · SKUTEČNÁ INTERNÍ ZPRÁVA</p>
+          <h1 style="font-size:24px;margin:0 0 16px;">${htmlEscape(incidentLabel || "Hlášení ze stanoviště")}</h1>
+          <p style="margin:0 0 14px;">${htmlEscape(recipientName || "Dispečerko")}, toto interní hlášení bylo po velkém fyzickém potvrzení řidiče skutečně odesláno z KSO.</p>
+          ${collectionRouteIncidentParagraphs(body)}
+          <div style="margin-top:22px;padding:14px;border-radius:12px;background:#f0f6e9;">
+            <strong>Údaje hlášení</strong>
+            <dl style="margin:10px 0 0;">
+              <dt style="font-weight:700;">Stanoviště</dt><dd>${htmlEscape(stationName || "neuvedeno")}</dd>
+              <dt style="font-weight:700;">Adresa</dt><dd>${htmlEscape(address || "neuvedeno")}</dd>
+              <dt style="font-weight:700;">Nahlásil</dt><dd>${htmlEscape(testerName || "přihlášený uživatel KSO")}</dd>
+              <dt style="font-weight:700;">Pracovní větev</dt><dd>${htmlEscape(workflowLabel || "Předání dispečinku")}</dd>
+            </dl>
+          </div>
+          <p style="margin:18px 0 0;color:#5b665f;font-size:13px;">Zákazník nebyl kontaktován. TEST nemění ostrou trasu ani data ve Vistosu. Fotografie je přiložena k tomuto e-mailu.</p>
+        </main>
+      </body>
+    </html>
+  `;
+}
+
+export function collectionRouteIncidentLiveDispatcherSmsBody(input = {}) {
+  const incidentLabel = cleanString(input.incidentLabel || "Hlášení ze stanoviště");
+  const stationName = cleanString(input.stationName || "Firma test 501");
+  const address = cleanString(input.address);
+  const testerName = cleanString(input.testerName || "uživatel KSO");
+  const body = `KSO – OVĚŘOVACÍ TEST. ${incidentLabel}: ${stationName}${address ? `, ${address}` : ""}. Nahlásil ${testerName}. Fotografie je v e-mailu. Zákazník nebyl kontaktován; trasa ani Vistos se nemění.`;
+  return body.length > 480 ? `${body.slice(0, 477)}...` : body;
+}
+
+function verifiedKsoDispatcherRecipient(input = {}, channel = "e-mail") {
+  if (input.ksoRecipientVerified !== true) {
+    return {
+      ok: false,
+      errorMessage: `Ostrý interní ${channel} lze odeslat pouze backendem ověřenému aktivnímu uživateli KSO.`
+    };
+  }
+  return { ok: true, errorMessage: "" };
+}
+
+export async function sendCollectionRouteIncidentDispatcherLiveEmail(env, input = {}) {
+  const verified = verifiedKsoDispatcherRecipient(input, "e-mail");
+  if (!verified.ok) return { status: "skipped", errorMessage: verified.errorMessage };
+  const to = cleanString(input.to);
+  const subjectSource = cleanString(input.subject || "Hlášení ze stanoviště").replace(/^\[[^\]]+\]\s*/, "");
+  const subject = `[OVĚŘOVACÍ TEST KSO] ${subjectSource}`;
+  const messagePreview = `[Ostrý interní pilot] ${cleanString(input.incidentLabel)} · ${cleanString(input.stationName)} · ${cleanString(input.recipientName)}.`;
+  return sendEmail(env, {
+    type: "collection_route_incident_dispatcher_live_email",
+    to,
+    subject,
+    html: collectionRouteIncidentLiveDispatcherEmailHtml({ ...input, subject }),
+    relatedEntityId: cleanString(input.workflowId),
+    recipientName: cleanString(input.recipientName),
+    fromName: "KSO Svoz · interní incident",
+    moduleId: "collection-routes",
+    relatedEntityType: "collection_route_test_incident_workflow",
+    messagePreview,
+    attachments: Array.isArray(input.attachments) ? input.attachments : []
+  });
+}
+
+export async function sendCollectionRouteIncidentDispatcherLiveSms(env, input = {}) {
+  const verified = verifiedKsoDispatcherRecipient(input, "SMS");
+  if (!verified.ok) return { status: "skipped", errorMessage: verified.errorMessage };
+  return sendSms(env, {
+    type: "collection_route_incident_dispatcher_live_sms",
+    to: cleanString(input.to),
+    body: collectionRouteIncidentLiveDispatcherSmsBody(input),
+    relatedEntityId: cleanString(input.workflowId),
+    recipientName: cleanString(input.recipientName),
+    moduleId: "collection-routes",
+    relatedEntityType: "collection_route_test_incident_workflow"
+  });
+}
+
 export async function sendCollectionRouteIncidentDispatcherTestEmail(env, input = {}) {
   const recipient = protectedCollectionRouteIncidentRecipient(env, input.to);
   if (!recipient.ok) return { status: "skipped", errorMessage: recipient.errorMessage };
@@ -1595,6 +1691,8 @@ export const __test = {
   emailRecipients,
   buildDriverPartOrderEmailPreview,
   collectionRouteIncidentEmailHtml,
+  collectionRouteIncidentLiveDispatcherEmailHtml,
+  collectionRouteIncidentLiveDispatcherSmsBody,
   driverPartOrderEmailOffers,
   driverPartOrderEmailReadiness,
   parseDriverPartOffers,

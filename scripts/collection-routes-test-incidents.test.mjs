@@ -23,7 +23,11 @@ import {
   collectionRouteIncidentFallbackMessage,
   collectionRouteIncidentRequiresEscalation
 } from "../functions/_lib/collection-route-incident-ai.js";
-import { __test as notificationTest } from "../functions/_lib/notification-service.js";
+import {
+  __test as notificationTest,
+  sendCollectionRouteIncidentDispatcherLiveEmail,
+  sendCollectionRouteIncidentDispatcherLiveSms
+} from "../functions/_lib/notification-service.js";
 
 class D1Statement {
   constructor(owner, sql, values = []) {
@@ -155,13 +159,19 @@ function seedRoute(sqlite) {
 
 function openProductionDatabase() {
   const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec(readFileSync(new URL("../migrations/0001_create_users.sql", import.meta.url), "utf8"));
   sqlite.exec(readFileSync(new URL("../migrations/0004_create_employee_cards.sql", import.meta.url), "utf8"));
   sqlite.exec(readFileSync(new URL("../migrations/0006_create_absence_requests.sql", import.meta.url), "utf8"));
-  for (const [id, firstName, lastName, email, status = "v práci"] of [
-    ["employee-lenka", "Lenka", "Kouřilová", "lenka@example.invalid"],
-    ["employee-ulyana", "Ulyana", "Bartošová", "ulyana@example.invalid"],
-    ["employee-simona", "Simona", "Šefčíková", "simona@example.invalid", "dovolená"]
+  for (const [id, firstName, lastName, email, phone, status = "v práci"] of [
+    ["employee-lenka", "Lenka", "Kouřilová", "lenka@example.invalid", "+420601000001"],
+    ["employee-ulyana", "Ulyana", "Bartošová", "ulyana@example.invalid", "+420601000002"],
+    ["employee-simona", "Simona", "Šefčíková", "simona@example.invalid", "+420601000003", "dovolená"]
   ]) {
+    sqlite.prepare(`
+      INSERT INTO users (
+        id, name, email, phone, role, status, active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'management', 'active', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(`${id}-user`, `${firstName} ${lastName}`, email, phone);
     sqlite.prepare(`
       INSERT INTO employee_cards (
         id, user_id, first_name, last_name, email, role, department, position,
@@ -319,6 +329,31 @@ assert.equal(
   true
 );
 assert.match(
+  notificationTest.collectionRouteIncidentLiveDispatcherSmsBody({
+    incidentLabel: "Poškozená nádoba",
+    stationName: "Firma test 501",
+    address: "Trnkova 3052/137, Brno",
+    testerName: "Tomáš Gáži"
+  }),
+  /OVĚŘOVACÍ TEST.*Poškozená nádoba.*Zákazník nebyl kontaktován/i
+);
+assert.equal(
+  (await sendCollectionRouteIncidentDispatcherLiveEmail({}, {
+    to: "lenka@example.invalid",
+    ksoRecipientVerified: false
+  })).status,
+  "skipped",
+  "Ostrý interní e-mail nesmí přijmout příjemce neověřeného backendem KSO."
+);
+assert.equal(
+  (await sendCollectionRouteIncidentDispatcherLiveSms({}, {
+    to: "+420601000001",
+    ksoRecipientVerified: false
+  })).status,
+  "skipped",
+  "Ostrá interní SMS nesmí přijmout příjemce neověřeného backendem KSO."
+);
+assert.match(
   collectionRouteIncidentFallbackMessage({
     audience: "customer-recovery",
     recoveryBranch: "route-within-24h",
@@ -380,20 +415,28 @@ assert.match(
   seedRoute(sqlite);
   const bucket = new FakeR2Bucket();
   const sent = [];
+  const sentSms = [];
   const mockSend = async (_env, input) => {
     sent.push(input);
     return { status: "sent", providerMessageId: `sendgrid-test-${sent.length}` };
+  };
+  const mockSms = async (_env, input) => {
+    sentSms.push(input);
+    return { status: "sent", providerMessageId: `twilio-test-${sentSms.length}`, providerStatus: "accepted" };
   };
   const env = {
     COLLECTION_ROUTES_TEST_DB: d1,
     SMART_ODPADY_DB: production.d1,
     SMART_ODPADY_DOCUMENTS: bucket,
-    COLLECTION_ROUTES_TEST_EMAIL_TO: "protected-test@example.invalid"
+    COLLECTION_ROUTES_TEST_EMAIL_TO: "protected-test@example.invalid",
+    APP_ENV: "production",
+    COLLECTION_ROUTES_INCIDENT_DISPATCH_MODE: workflowTest.LIVE_DISPATCH_MODE
   };
   const fixedNow = "2026-07-15T10:00:00.000Z";
   const options = {
     now: fixedNow,
     sendDispatcherEmail: mockSend,
+    sendDispatcherSms: mockSms,
     sendCustomerEmail: mockSend
   };
 
@@ -409,9 +452,14 @@ assert.match(
   assert.equal(damagedPreview.plan.branch, "dispatcher-only");
   assert.equal(damagedPreview.canConfirm, true);
   assert.equal(damagedPreview.finalTapRequired, true);
-  assert.equal(damagedPreview.sms, "disabled");
+  assert.equal(damagedPreview.liveDispatcherNotification, true);
+  assert.equal(damagedPreview.protectedTestEmailOnly, false);
+  assert.equal(damagedPreview.sms, "live-internal");
+  assert.equal(damagedPreview.expectedSmsCount, 1);
   assert.equal(damagedPreview.rcs, "disabled");
+  assert.match(damagedPreview.actualRecipientLabel, /Skutečný interní e-mail a SMS.*Lenka Kouřilová/);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_incident_workflows").get().count, 0, "Preview nesmí zapisovat workflow.");
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_incident_email_guard WHERE guard_key = ?").get(workflowTest.LIVE_DISPATCH_GUARD_KEY).count, 0, "Preview nesmí zapisovat ostrý guard.");
 
   await assert.rejects(
     confirmCollectionRoutesTestIncidentWorkflow(env, manager, damaged.incident.id, {
@@ -425,13 +473,21 @@ assert.match(
     confirmation: workflowTest.CONFIRMATION,
     idempotencyKey: damagedPreview.idempotencyKey
   }, options);
-  assert.equal(damagedResult.workflow.status, "completed-test");
+  assert.equal(damagedResult.workflow.status, "completed-live-internal");
   assert.equal(damagedResult.workflow.dispatcherEmailStatus, "sent");
+  assert.equal(damagedResult.workflow.dispatcherSmsStatus, "sent");
+  assert.equal(damagedResult.workflow.liveDispatcherNotification, true);
   assert.equal(damagedResult.workflow.changesOperationalRoute, false);
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].to, "protected-test@example.invalid");
+  assert.equal(sentSms.length, 1);
+  assert.equal(sent[0].to, "lenka@example.invalid");
+  assert.equal(sentSms[0].to, "+420601000001");
+  assert.equal(sent[0].ksoRecipientVerified, true);
+  assert.equal(sentSms[0].ksoRecipientVerified, true);
   assert.equal(sent[0].logicalRecipientName, "Lenka Kouřilová");
   assert.equal(sent[0].attachments.length, 1);
+  assert.equal(sqlite.prepare("SELECT claimed_count FROM collection_route_test_incident_email_guard WHERE guard_key = ?").get(workflowTest.LIVE_DISPATCH_GUARD_KEY).claimed_count, 1);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_incident_actions WHERE workflow_id = ?").get(damagedResult.workflow.id).count, 2);
 
   const damagedRepeated = await confirmCollectionRoutesTestIncidentWorkflow(env, manager, damaged.incident.id, {
     confirmation: workflowTest.CONFIRMATION,
@@ -439,6 +495,7 @@ assert.match(
   }, options);
   assert.equal(damagedRepeated.reused, true);
   assert.equal(sent.length, 1, "Opakované potvrzení nesmí poslat druhý e-mail.");
+  assert.equal(sentSms.length, 1, "Opakované potvrzení nesmí poslat druhou SMS.");
 
   const inaccessibleRoute = await reportCollectionRoutesTestIncident(env, manager, {
     runId: "run-test",
@@ -451,6 +508,9 @@ assert.match(
     testScenario: "route_within_24h"
   }, options);
   assert.equal(routePreview.plan.branch, "route-within-24h");
+  assert.equal(routePreview.liveDispatcherNotification, false);
+  assert.equal(routePreview.protectedTestEmailOnly, true);
+  assert.equal(routePreview.sms, "disabled");
   assert.equal(routePreview.createsTestRouteOverlay, true);
   assert.equal(routePreview.plan.candidate.vehicleRegistration, "1BP 8373");
   const routeResult = await confirmCollectionRoutesTestIncidentWorkflow(env, manager, inaccessibleRoute.incident.id, {
@@ -515,6 +575,15 @@ assert.match(
   assert.equal(heatedReply.sendStatus, "sent");
   assert.match(heatedReply.answer, /předána dispečerce/i);
   assert.equal(sent.length, 6);
+  assert.equal(sqlite.prepare("SELECT claimed_count FROM collection_route_test_incident_email_guard WHERE guard_key = ?").get(workflowTest.EMAIL_GUARD_KEY).claimed_count, 5);
+
+  const finalAllowedReply = await simulateCollectionRoutesTestIncidentReply(env, manager, inaccessibleStandard.incident.id, {
+    reply: "Děkuji za další vysvětlení.",
+    confirmation: workflowTest.REPLY_CONFIRMATION,
+    idempotencyKey: "reply-final-allowed"
+  }, options);
+  assert.equal(finalAllowedReply.sendStatus, "sent");
+  assert.equal(sent.length, 7);
   assert.equal(sqlite.prepare("SELECT claimed_count FROM collection_route_test_incident_email_guard WHERE guard_key = ?").get(workflowTest.EMAIL_GUARD_KEY).claimed_count, 6);
 
   const limitedReply = await simulateCollectionRoutesTestIncidentReply(env, manager, inaccessibleStandard.incident.id, {
@@ -523,7 +592,44 @@ assert.match(
     idempotencyKey: "reply-over-limit"
   }, options);
   assert.equal(limitedReply.sendStatus, "skipped");
-  assert.equal(sent.length, 6, "Ochranný limit nesmí pustit sedmý TEST e-mail.");
+  assert.equal(sent.length, 7, "Ochranný limit nesmí pustit sedmý chráněný TEST e-mail.");
+  assert.equal(sentSms.length, 1, "Chráněná zákaznická větev nesmí poslat SMS.");
+}
+
+{
+  const { sqlite, d1 } = openDatabase();
+  const production = openProductionDatabase();
+  seedRoute(sqlite);
+  const bucket = new FakeR2Bucket();
+  const env = {
+    COLLECTION_ROUTES_TEST_DB: d1,
+    SMART_ODPADY_DB: production.d1,
+    SMART_ODPADY_DOCUMENTS: bucket,
+    APP_ENV: "production"
+  };
+  const incident = await reportCollectionRoutesTestIncident(env, manager, {
+    runId: "run-test",
+    stopId: "stop-test",
+    type: "overfilled_container",
+    idempotencyKey: "workflow-live-mode-and-partial"
+  }, { body: jpeg, contentType: "image/jpeg", sizeBytes: jpeg.length });
+  const blockedPreview = await previewCollectionRoutesTestIncidentWorkflow(env, manager, incident.incident.id, {});
+  assert.equal(blockedPreview.canConfirm, false);
+  assert.match(blockedPreview.blockers.join(" "), /pilot e-mailu a SMS není.*povolený/i);
+
+  env.COLLECTION_ROUTES_INCIDENT_DISPATCH_MODE = workflowTest.LIVE_DISPATCH_MODE;
+  const preview = await previewCollectionRoutesTestIncidentWorkflow(env, manager, incident.incident.id, {});
+  const result = await confirmCollectionRoutesTestIncidentWorkflow(env, manager, incident.incident.id, {
+    confirmation: workflowTest.CONFIRMATION,
+    idempotencyKey: preview.idempotencyKey
+  }, {
+    sendDispatcherEmail: async () => ({ status: "sent", providerMessageId: "sendgrid-partial" }),
+    sendDispatcherSms: async () => ({ status: "failed", errorMessage: "Twilio test failure" })
+  });
+  assert.equal(result.workflow.status, "partial-live-internal");
+  assert.equal(result.workflow.dispatcherEmailStatus, "sent");
+  assert.equal(result.workflow.dispatcherSmsStatus, "failed");
+  assert.match(result.workflow.lastError, /Twilio test failure/);
 }
 
 console.log("collection routes TEST incident tests: ok");

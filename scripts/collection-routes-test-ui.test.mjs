@@ -95,7 +95,9 @@ for (const marker of [
   "Nelze se dostat do firmy",
   "PŘIPRAVIT TEST HLÁŠENÍ",
   "POTVRDIT TEST E-MAIL A PLÁN",
-  "CHRÁNĚNÝ TEST E-MAIL",
+  "ODESLAT E-MAIL + SMS DISPEČERCE",
+  "INTERNÍ E-MAIL + SMS",
+  "Skutečný interní e-mail a SMS odejdou zobrazené dispečerce",
   "Skutečný zákazník ani dispečerka zprávu nedostanou",
   "TEST A · jedeme kolem do 24 h",
   "TEST B · nejedeme kolem do 24 h",
@@ -231,7 +233,7 @@ for (const marker of [
 
 for (const marker of [
   "KSO Svozový autopilot – provozní mantra",
-  "TEST návrh pravidel",
+  "Ostrý interní pilot se zákaznickou komunikací stále v TESTU",
   "Četnosti Nx7 musí být v lichém a sudém týdnu přesně zrcadlené 1:1",
   "A – 3BN 3558",
   "B – 1BP 8373",
@@ -262,9 +264,10 @@ for (const marker of [
   "PŘEPLNĚNÁ NEBO POŠKOZENÁ NÁDOBA",
   "NELZE SE DOSTAT DO FIRMY",
   "TEST KOMUNIKACE A ESKALACE",
-  "POTVRDIT TEST E-MAIL A PLÁN",
+  "ODESLAT E-MAIL + SMS DISPEČERCE",
+  "nejvýše 12 dvojic e-mail + SMS",
   "nejvýše šesti e-mailových pokusů",
-  "Skutečný zákazník ani skutečná dispečerka nesmí být kontaktováni"
+  "Skutečný zákazník nesmí být kontaktován"
 ]) {
   assert.ok(mantraSource.includes(marker), `Provozní mantra postrádá závazný bod: ${marker}`);
 }
@@ -281,8 +284,9 @@ assert.ok(
 );
 
 assert.ok(
-  mantraSource.includes("Workflow smí odeslat e-mail pouze na chráněný COLLECTION_ROUTES_TEST_EMAIL_TO") &&
-    mantraSource.includes("Odeslání vyžaduje druhé velké fyzické tlačítko") &&
+  mantraSource.includes("U nepřístupné firmy smí každý e-mail fyzicky mířit pouze na chráněný COLLECTION_ROUTES_TEST_EMAIL_TO") &&
+    mantraSource.includes("skutečný interní e-mail s fotografií") &&
+    mantraSource.includes("odeslání vyžaduje druhé velké fyzické tlačítko") &&
     mantraSource.includes("do Vistosu nezapisuje") &&
     mantraSource.includes("Dokud práh není schválený, neodesílej automatické upozornění"),
   "Read-only mantra musí přímo zakazovat falešnou automatizaci, produkční zápisy a neodsouhlasené alerty."
