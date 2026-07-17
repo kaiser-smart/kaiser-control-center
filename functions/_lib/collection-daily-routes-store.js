@@ -7,6 +7,7 @@ import {
   calculateCollectionRoutesReadonlyPlan,
   COLLECTION_ROUTES_READONLY_CALCULATOR_VERSION
 } from "../../src/data/collectionRoutesReadonlyCalculator.js";
+import { COLLECTION_ROUTE_VEHICLES } from "../../src/data/collectionRouteVehicles.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
@@ -57,11 +58,11 @@ const PICKUP_DAY_ID_LABELS = {
   18343: "neděle sudá"
 };
 
-export const COLLECTION_DAILY_ROUTE_VEHICLES = Object.freeze([
-  Object.freeze({ code: "A", registration: "3BN 3558", label: "Vůz A · 3BN 3558" }),
-  Object.freeze({ code: "B", registration: "1BP 8373", label: "Vůz B · 1BP 8373" }),
-  Object.freeze({ code: "C", registration: "3BE 2831", label: "Vůz C · 3BE 2831" })
-]);
+export const COLLECTION_DAILY_ROUTE_VEHICLES = Object.freeze(COLLECTION_ROUTE_VEHICLES.map((vehicle) => Object.freeze({
+  code: vehicle.code,
+  registration: vehicle.registration,
+  label: vehicle.label
+})));
 
 export class CollectionDailyRoutesError extends Error {
   constructor(message, status = 400, code = "collection_daily_routes_error") {

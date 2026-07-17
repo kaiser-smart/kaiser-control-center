@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Svozové trasy: potvrzené parametry vozidel",
+    text: "Výpočty tras a HERE truck profily používají potvrzené hmotnosti a rozměry vozidel A, B a C. Nepřekročitelná nosnost je 5,5 t pro 3BN 3558, 5,8 t pro 1BP 8373 a 9,6 t pro 3BE 2831; původní konzervativní TEST odhady už nejsou zdrojem výpočtu."
+  },
+  {
     title: "Datové schránky: interní read-only třídění",
     text: "Radimův interní pilot nahrazuje chatový autopilot třemi srozumitelnými frontami K vyřízení, Předané a Hotové nad aktuálními daty. Pilot pouze čte existující chráněné API, nic neodesílá ani nemění a ostatním uživatelům ponechává dosavadní rozhraní."
   },

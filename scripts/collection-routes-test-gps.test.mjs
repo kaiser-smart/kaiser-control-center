@@ -6,6 +6,7 @@ import {
   collectionRouteGpsPrompt,
   summarizeCollectionRouteGpsSamples
 } from "../src/data/collectionRouteGps.js";
+import { COLLECTION_ROUTE_VEHICLES } from "../src/data/collectionRouteVehicles.js";
 import {
   CollectionRoutesTestGpsError,
   collectionRoutesGpsDistanceMeters,
@@ -69,7 +70,8 @@ function openDatabase() {
     "../migrations/0038_create_collection_daily_routes.sql",
     "../migrations/test/0001_create_collection_routes_test_control.sql",
     "../migrations/test/0002_create_collection_route_here_optimization.sql",
-    "../migrations/test/0003_configure_collection_route_test_operations_and_gps.sql"
+    "../migrations/test/0003_configure_collection_route_test_operations_and_gps.sql",
+    "../migrations/test/0007_update_collection_route_vehicle_specs.sql"
   ]) {
     sqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
   }
@@ -173,7 +175,36 @@ const otherManager = {
   assert.equal(config.config.depot.address, "Trnkova 3052/137, 628 00 Brno");
   assert.equal(config.config.dumpSites.length, 5);
   assert.equal(config.config.vehicles.length, 3);
-  assert.equal(config.config.vehicles[0].technicalDataQuality, "conservative-test-estimate");
+  assert.equal(config.config.vehicleTechnicalDataVersion, "confirmed-2026-07-17");
+  assert.equal(config.config.vehicles[0].technicalDataQuality, "confirmed");
+  assert.equal(config.config.vehicles[0].truck.weightPerAxleKg, null);
+  assert.deepEqual(
+    config.config.vehicles.map((vehicle) => [
+      vehicle.code,
+      vehicle.registration,
+      vehicle.capacitiesTons.SKO,
+      vehicle.truck.emptyWeightKg,
+      vehicle.truck.grossWeightKg,
+      vehicle.truck.payloadCapacityKg,
+      vehicle.truck.lengthCm,
+      vehicle.truck.widthCm,
+      vehicle.truck.heightCm
+    ]),
+    COLLECTION_ROUTE_VEHICLES.map((vehicle) => [
+      vehicle.code,
+      vehicle.registration,
+      vehicle.capacitiesTons.SKO,
+      vehicle.technical.emptyWeightKg,
+      vehicle.technical.maximumPermittedWeightKg,
+      vehicle.technical.payloadCapacityKg,
+      vehicle.technical.dimensions.lengthCm,
+      vehicle.technical.dimensions.widthCm,
+      vehicle.technical.dimensions.heightCm
+    ])
+  );
+  for (const vehicle of config.config.vehicles) {
+    assert.equal(vehicle.truck.grossWeightKg - vehicle.truck.emptyWeightKg, vehicle.truck.payloadCapacityKg);
+  }
 
   await assert.rejects(
     confirmCollectionRoutesTestGps(env, driver, {}),

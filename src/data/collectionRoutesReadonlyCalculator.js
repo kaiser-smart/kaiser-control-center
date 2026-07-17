@@ -1,4 +1,6 @@
-export const COLLECTION_ROUTES_READONLY_CALCULATOR_VERSION = "1.0";
+import { COLLECTION_ROUTE_VEHICLES } from "./collectionRouteVehicles.js";
+
+export const COLLECTION_ROUTES_READONLY_CALCULATOR_VERSION = "1.1";
 
 const SERVICE_MINUTES_BY_VOLUME = Object.freeze({
   120: 3,
@@ -13,26 +15,13 @@ const WEIGHT_TONS_BY_WASTE_AND_VOLUME = Object.freeze({
   SKLO: Object.freeze({ 120: 0.002, 240: 0.003, 1100: 0.014 })
 });
 
-const VEHICLES = Object.freeze([
-  Object.freeze({
-    code: "A",
-    registration: "3BN 3558",
-    label: "Vůz A · 3BN 3558",
-    capacities: Object.freeze({ SKO: 6, PAPIR: 2, PLAST: 1 })
-  }),
-  Object.freeze({
-    code: "B",
-    registration: "1BP 8373",
-    label: "Vůz B · 1BP 8373",
-    capacities: Object.freeze({ SKO: 6, PAPIR: 2, PLAST: 1 })
-  }),
-  Object.freeze({
-    code: "C",
-    registration: "3BE 2831",
-    label: "Vůz C · 3BE 2831",
-    capacities: Object.freeze({ SKO: 8, PAPIR: 2.5, PLAST: 1 })
-  })
-]);
+const VEHICLES = Object.freeze(COLLECTION_ROUTE_VEHICLES.map((vehicle) => Object.freeze({
+  code: vehicle.code,
+  registration: vehicle.registration,
+  label: vehicle.label,
+  capacities: vehicle.capacitiesTons,
+  technical: vehicle.technical
+})));
 
 const WASTE_ORDER = Object.freeze(["SKO", "PAPIR", "PLAST", "BIO", "SKLO", "OSTATNI"]);
 
@@ -237,6 +226,8 @@ function summarizedVehicle(vehicle) {
     code: vehicle.code,
     registration: vehicle.registration,
     label: vehicle.label,
+    capacities: { ...vehicle.capacities },
+    technical: vehicle.technical,
     stopCount: vehicle.stopCount,
     containerCount: vehicle.containerCount,
     serviceMinutes: vehicle.serviceMinutes,
