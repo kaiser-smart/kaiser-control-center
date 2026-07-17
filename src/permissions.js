@@ -40,7 +40,7 @@ export const ROLE_DESCRIPTIONS = {
   kancelar: "Administrativa, zákazníci, reporty, dovolené a základní práce s uživateli.",
   garazmistr: "Vozidla, servis, pneumatiky, hlášení závad a týmové schvalování.",
   dispecer: "Trasy, svozy, řidiči a provozní přehled.",
-  ridic: "Jednoduché zadávání hlášení, dovolené a vlastních provozních údajů.",
+  ridic: "Uzamčený Řidičský displej s výhradně vlastní přiřazenou svozovou trasou.",
   readonly: "Pouze čtení vybraných modulů bez úprav."
 };
 
@@ -126,6 +126,7 @@ export const ROLE_PERMISSIONS = {
     ...actions("fleet", ["view"]),
     ...actions("vehicle-tracking", ["view"]),
     ...actions("driver-reports", ["view", "create"]),
+    ...actions("collection-routes", ["view"]),
     ...actions("absence", ["view", "create"]),
     ...actions("feedback", ["view", "create"])
   ],
@@ -264,6 +265,10 @@ export function hasPermission(user, moduleId, action = "view") {
 
   if (moduleListIncludes(user.deniedModules, normalizedModuleId)) {
     return false;
+  }
+
+  if (role === "ridic" && normalizedModuleId === "collection-routes" && normalizedAction === "view") {
+    return true;
   }
 
   if (normalizedAction === "view" && moduleListIncludes(user.allowedModules, normalizedModuleId)) {

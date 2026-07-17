@@ -540,6 +540,16 @@ Adresní a provozní pole se nesmí zaměňovat:
 - Provozní svozová adresa pro trasu se primárně skládá ze skutečného `Adresní místo`; technické části `Svozová adresa - ulice/město/PSČ` jsou jen pomocný rozpad a nesmí přebít správné Adresní místo.
 - Pokud skutečné Adresní místo chybí, Smart musí ukázat chybu k opravě, ne doplnit náhradu z jiného pole.
 
+### 12.1 Řidičský displej a oprávnění role Řidič
+
+- Aktivní uživatel s rolí `Řidič` se po přihlášení i při pokusu otevřít jiný interní modul vždy vrací přímo na `/trasy-svozu`.
+- Řidič nesmí vidět HP, postranní menu, administraci, Mantru, TEST management ani dispečerský pohled Svozových tras.
+- Řidičský displej je na tabletu jediná uzamčená pracovní obrazovka bez hlavního posouvání; vyskakovací hlášení a přehled celé trasy mají vlastní posun a zřetelné zavření.
+- Hlavní pracovní plocha obsahuje aktuální stanoviště, adresu, odpad a nádoby, poznámku, read-only HERE mapu, stav trasy, Šarlotu a velké akce `HOTOVO`, `HLÁŠENÍ PRO DISPEČINK`, `MUSÍM JET VYSYPAT`, `PŘESTÁVKA` a `CELÁ TRASA`.
+- Přístup se nesmí řídit jménem řidiče. Backend vždy porovnává stabilní ID přihlášeného uživatele s `driver_user_id` denní trasy.
+- Oprávnění `collection-routes:view` dává řidiči pouze vstup do vlastního Řidičského displeje. Nesmí otevřít seznam tras, dispečerskou správu ani trasu jiného řidiče ani přes přímé API URL.
+- Role Management, Admin a Dispečer si zachovávají svůj dosavadní pracovní pohled; nesmějí být přesměrovány do řidičského kiosku.
+
 ## 2. Ukládání dat
 
 Aplikace běží a ukládá data pouze přes cloud / API.

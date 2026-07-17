@@ -52,7 +52,12 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.20";
+import {
+  COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE,
+  collectionRoutesDriverKioskRedirectPath,
+  isCollectionRoutesDriverKioskUser
+} from "./data/collectionRoutesDriverKiosk.js?v=1.0";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.21";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -325,7 +330,7 @@ const RECEIVABLES_TABS = [
   { id: "dry-run", label: "Dry-run", route: `${RECEIVABLES_ROUTE}#receivables-dry-run` },
   { id: "settings", label: "Nastavení", route: `${RECEIVABLES_ROUTE}/settings` }
 ];
-const COLLECTION_ROUTES_ROUTE = "/trasy-svozu";
+const COLLECTION_ROUTES_ROUTE = COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE;
 const COLLECTION_ROUTES_MODULE_KEY = "collection-routes";
 const COLLECTION_ROUTES_PHASE_NOTICE = "Read-only přehled tras svozu.";
 const COLLECTION_ROUTES_TABS = [
@@ -1978,12 +1983,7 @@ function statusBadge(moduleItem) {
 }
 
 function visibleModules(user) {
-  const visible = filterModulesByUser(user, orderedModules);
-  if (normalizeRole(user?.role) !== "ridic" || visible.some((moduleItem) => moduleItem.id === COLLECTION_ROUTES_MODULE_KEY)) {
-    return visible;
-  }
-  const driverRoutesModule = orderedModules.find((moduleItem) => moduleItem.id === COLLECTION_ROUTES_MODULE_KEY);
-  return driverRoutesModule ? [...visible, driverRoutesModule].sort((left, right) => left.order - right.order) : visible;
+  return filterModulesByUser(user, orderedModules);
 }
 
 function menuModules(user) {
@@ -22336,13 +22336,63 @@ function collectionRoutesTestTabletMapPanel(stop, confirmation = null) {
   `;
 }
 
+function collectionDailyRouteDriverMapPanel(stop) {
+  const addressLatitude = collectionRoutesTestMapCoordinate(stop?.latitude ?? stop?.sourceSummary?.latitude);
+  const addressLongitude = collectionRoutesTestMapCoordinate(stop?.longitude ?? stop?.sourceSummary?.longitude);
+  const hasAddressPoint = addressLatitude !== null && addressLongitude !== null;
+  const mapImageUrl = collectionRoutesTestTabletMapImageUrl({
+    addressLatitude,
+    addressLongitude
+  });
+
+  return `
+    <section class="collection-daily-driver-map" aria-labelledby="collection-daily-driver-map-title">
+      <header>
+        <div>
+          <span>HERE MAPA</span>
+          <strong id="collection-daily-driver-map-title">Aktuální stanoviště</strong>
+        </div>
+        <b>NÁHLED · NAVIGACE SE PŘIPRAVUJE</b>
+      </header>
+      ${hasAddressPoint ? `
+        <div
+          class="collection-routes-test-tablet-map__canvas collection-daily-driver-map__canvas"
+          data-collection-routes-driver-map
+          data-address-latitude="${escapeHtml(addressLatitude)}"
+          data-address-longitude="${escapeHtml(addressLongitude)}"
+          aria-label="HERE mapa aktuálního stanoviště"
+        >
+          <img
+            src="${escapeHtml(mapImageUrl)}"
+            alt="HERE mapový výřez aktuálního stanoviště"
+            data-collection-routes-test-tablet-map-image
+          >
+          <div class="collection-routes-test-tablet-map__waiting">
+            <strong>Načítám HERE mapu…</strong>
+            <span>Trasa zůstává dostupná i bez mapového podkladu.</span>
+          </div>
+        </div>
+      ` : `
+        <div class="collection-routes-test-tablet-map__waiting collection-daily-driver-map__waiting">
+          <strong>Souřadnice stanoviště zatím chybí.</strong>
+          <span>Pokračuj podle adresy; dispečink může bod doplnit.</span>
+        </div>
+      `}
+      <footer>
+        ${hasAddressPoint ? `<span><i class="is-address"></i> Adresní bod stanoviště</span>` : ""}
+        <small>Mapu načítá chráněný backend KSO; HERE klíč není v tabletu.</small>
+      </footer>
+    </section>
+  `;
+}
+
 function clearCollectionRoutesTestTabletHereMap() {
   collectionRoutesPilotState.testTabletMapNode?.classList.remove("is-loaded", "is-error");
   collectionRoutesPilotState.testTabletMapNode = null;
 }
 
 function syncCollectionRoutesTestTabletHereMap() {
-  const node = document.querySelector("[data-collection-routes-test-tablet-map]");
+  const node = document.querySelector("[data-collection-routes-test-tablet-map], [data-collection-routes-driver-map]");
   const image = node?.querySelector("[data-collection-routes-test-tablet-map-image]");
   if (!node || !image) {
     clearCollectionRoutesTestTabletHereMap();
@@ -22360,7 +22410,9 @@ function syncCollectionRoutesTestTabletHereMap() {
     node.classList.remove("is-loaded");
     const waiting = node.querySelector(".collection-routes-test-tablet-map__waiting");
     if (waiting) {
-      waiting.innerHTML = "<strong>HERE mapa zatím není aktivní.</strong><span>GPS test může bezpečně pokračovat i bez mapového podkladu.</span>";
+      waiting.innerHTML = node.hasAttribute("data-collection-routes-driver-map")
+        ? "<strong>HERE mapa teď není dostupná.</strong><span>Pokračuj bezpečně podle adresy a pokynů dispečinku.</span>"
+        : "<strong>HERE mapa zatím není aktivní.</strong><span>GPS test může bezpečně pokračovat i bez mapového podkladu.</span>";
     }
   };
 
@@ -23064,7 +23116,7 @@ function collectionDailyRouteDriverStopList(stops = []) {
   `;
 }
 
-function collectionDailyRouteDriverPage(moduleItem, user) {
+function collectionDailyRouteDriverPage(_moduleItem, user) {
   const detail = collectionRoutesPilotState.myDailyRoute;
   const run = detail?.run || null;
   const stops = Array.isArray(detail?.stops) ? detail.stops : [];
@@ -23078,56 +23130,93 @@ function collectionDailyRouteDriverPage(moduleItem, user) {
   const eventStopId = currentStop?.id || stops[0]?.id || "route";
   const pending = collectionRoutesPilotState.myDailyRoutePending;
   const summary = run?.summary || {};
+  const vehicleLabel = run?.vehicleLabel || run?.vehicleRegistration || run?.vehicleCode || "Vozidlo nepřiřazeno";
   return `
-    <main class="app-shell module-page module-theme-scope collection-daily-driver-page" ${moduleThemeStyleAttribute()}>
-      ${userBar(user)}
-      <nav class="topbar" aria-label="Navigace"><a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a></nav>
-      <section class="module-detail collection-daily-driver-hero" aria-labelledby="collection-daily-driver-title">
-        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
-        <div class="module-detail__body"><div class="module-detail__eyebrow">SMART ODPADY / MOJE TRASA</div><h1 id="collection-daily-driver-title">Moje svozová trasa</h1><p>Pořadí a stav zastávek se bezpečně ukládají v systému. Po obnovení stránky pokračuješ tam, kde jsi skončil.</p></div>
-      </section>
-      ${collectionRoutesPilotState.myDailyRouteLoading ? `<p class="module-feedback__notice">Načítám přiřazenou trasu...</p>` : ""}
-      ${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}
-      ${collectionRoutesPilotState.myDailyRouteMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.myDailyRouteMessage)}</p>` : ""}
-      ${!run && collectionRoutesPilotState.myDailyRouteLoaded ? `<section class="collection-daily-driver-empty"><strong>Nemáš přiřazenou žádnou trasu.</strong><span>Dispečer ji nejdřív připraví, přiřadí a potvrdí.</span></section>` : ""}
+    <main class="collection-daily-driver-page" data-collection-daily-driver-kiosk ${moduleThemeStyleAttribute()}>
+      <header class="collection-daily-driver-kiosk-bar">
+        <div class="collection-daily-driver-kiosk-brand">
+          <strong>kaiser.</strong>
+          <span>ŘIDIČSKÝ DISPLEJ</span>
+        </div>
+        <div class="collection-daily-driver-kiosk-user">
+          <span>${escapeHtml(user.name || user.email || "Řidič")}</span>
+          <b>${escapeHtml(roleLabel(user.role))}</b>
+          <button type="button" data-logout>Odhlásit</button>
+        </div>
+      </header>
+      <div class="collection-daily-driver-feedback" aria-live="polite">
+        ${collectionRoutesPilotState.myDailyRouteLoading ? `<p class="module-feedback__notice">Načítám tvoji přiřazenou trasu…</p>` : ""}
+        ${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}
+        ${collectionRoutesPilotState.myDailyRouteMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.myDailyRouteMessage)}</p>` : ""}
+      </div>
+      ${!run && collectionRoutesPilotState.myDailyRouteLoaded ? `<section class="collection-daily-driver-empty"><strong>Dnes nemáš přiřazenou trasu.</strong><span>Jakmile ji dispečink potvrdí a přiřadí přímo tobě, objeví se tady.</span><button class="secondary-link" type="button" data-collection-daily-driver-refresh>OBNOVIT</button></section>` : ""}
       ${run ? `
         <section class="collection-daily-driver-route">
-          <header><div><span>${escapeHtml(collectionDailyRouteDateLabel(run.routeDate))}</span><h2>${escapeHtml(run.vehicleLabel || run.vehicleRegistration || run.vehicleCode)}</h2><small>${escapeHtml(run.title || "Denní trasa")}</small></div><div class="collection-daily-driver-header-actions">${collectionDailyRouteStatusBadge(run.status)}<button class="text-action" type="button" data-collection-daily-driver-refresh ${collectionRoutesPilotState.myDailyRouteLoading ? "disabled" : ""}>Obnovit</button></div></header>
-          <div class="collection-daily-route-kpis"><article><span>Čeká</span><strong>${escapeHtml(summary.plannedCount || 0)}</strong></article><article class="is-ready"><span>Hotovo</span><strong>${escapeHtml(summary.doneCount || 0)}</strong></article><article class="${summary.problemCount ? "is-warning" : ""}"><span>Problém</span><strong>${escapeHtml(summary.problemCount || 0)}</strong></article></div>
-          ${run.status === "confirmed" ? `<button class="primary-action collection-daily-driver-primary" type="button" data-collection-daily-driver-transition="start" ${pending ? "disabled" : ""}>Zahájit trasu</button>` : ""}
+          <header class="collection-daily-driver-route-head">
+            <div class="collection-daily-driver-route-identity">
+              <span>${escapeHtml(collectionDailyRouteDateLabel(run.routeDate))}</span>
+              <strong>${escapeHtml(vehicleLabel)}</strong>
+              <small>${escapeHtml(run.title || "Denní trasa")}</small>
+            </div>
+            <div class="collection-daily-driver-route-kpis">
+              <article><span>ČEKÁ</span><strong>${escapeHtml(summary.plannedCount || 0)}</strong></article>
+              <article class="is-ready"><span>HOTOVO</span><strong>${escapeHtml(summary.doneCount || 0)}</strong></article>
+              <article class="${summary.problemCount ? "is-warning" : ""}"><span>PROBLÉM</span><strong>${escapeHtml(summary.problemCount || 0)}</strong></article>
+            </div>
+            <div class="collection-daily-driver-header-actions">
+              ${collectionDailyRouteStatusBadge(run.status)}
+              <button type="button" data-collection-daily-driver-refresh ${collectionRoutesPilotState.myDailyRouteLoading ? "disabled" : ""}>OBNOVIT</button>
+            </div>
+          </header>
+          ${run.status === "confirmed" ? `<div class="collection-daily-driver-start"><strong>Trasa je připravená.</strong><span>Po zahájení se zobrazí první stanoviště a pracovní tlačítka.</span><button class="primary-action collection-daily-driver-primary" type="button" data-collection-daily-driver-transition="start" ${pending ? "disabled" : ""}>ZAHÁJIT TRASU</button></div>` : ""}
+          ${run.status === "draft" ? `<div class="collection-daily-driver-complete"><strong>Trasa čeká na potvrzení dispečinku.</strong><span>Zatím ji nemůžeš zahájit.</span></div>` : ""}
           ${run.status === "completed" ? `<div class="collection-daily-driver-complete"><strong>Trasa je dokončená.</strong><span>Pokud je potřeba oprava, znovu ji otevře dispečer.</span></div>` : ""}
           ${run.status === "active" && currentStop ? `
-            <article class="collection-daily-driver-current">
-              <span>Zastávka ${escapeHtml(currentStop.routeOrder)} z ${escapeHtml(stops.length)}</span>
-              <h2>${escapeHtml(currentStop.customerName || "-")}</h2>
-              ${currentStop.stationName ? `<strong>${escapeHtml(currentStop.stationName)}</strong>` : ""}
-              <p>${escapeHtml(currentStop.addressText || "-")}</p>
-              <div><b>${escapeHtml(currentStop.wasteType || "-")}</b><span>${escapeHtml(currentStop.containerCount || 1)}× ${escapeHtml(currentStop.containerVolume || "-")} l · ${escapeHtml(currentStop.frequency || "-")}</span></div>
-              ${currentStop.note ? `<aside>${escapeHtml(currentStop.note)}</aside>` : ""}
-              <button class="primary-action collection-daily-driver-done" type="button" data-collection-daily-driver-event="done" data-stop-id="${escapeHtml(currentStop.id)}" ${pending ? "disabled" : ""}>HOTOVO</button>
-              <form class="collection-daily-driver-problem" data-collection-daily-driver-problem-form data-stop-id="${escapeHtml(currentStop.id)}">
-                <label><span>Problém</span><select name="reason" required><option value="">Vyber důvod</option><option>Nádoba není přístupná</option><option>Nádoba nebyla přistavená</option><option>Kontaminovaný odpad</option><option>Poškozená nádoba</option><option>Jiný problém</option></select></label>
-                <label><span>Poznámka</span><input name="note" maxlength="500" placeholder="Krátké upřesnění"></label>
-                <button class="secondary-link" type="submit" ${pending ? "disabled" : ""}>Uložit problém</button>
-              </form>
-              <div class="collection-daily-driver-secondary-actions"><button type="button" data-collection-daily-driver-event="dump" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>Výklop</button><button type="button" data-collection-daily-driver-event="break" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>Pauza</button></div>
-            </article>
+            <div class="collection-daily-driver-workspace">
+              <article class="collection-daily-driver-current">
+                <header>
+                  <span>ZASTÁVKA ${escapeHtml(currentStop.routeOrder)} / ${escapeHtml(stops.length)}</span>
+                  <h1>${escapeHtml(currentStop.customerName || "-")}</h1>
+                  ${currentStop.stationName ? `<strong>${escapeHtml(currentStop.stationName)}</strong>` : ""}
+                </header>
+                <p class="collection-daily-driver-address">${escapeHtml(currentStop.addressText || "-")}</p>
+                <div class="collection-daily-driver-waste"><b>${escapeHtml(currentStop.wasteType || "-")}</b><span>${escapeHtml(currentStop.containerCount || 1)}× ${escapeHtml(currentStop.containerVolume || "-")} l · ${escapeHtml(currentStop.frequency || "-")}</span></div>
+                ${currentStop.note ? `<aside>${escapeHtml(currentStop.note)}</aside>` : ""}
+                ${collectionDailyRouteDriverMapPanel(currentStop)}
+              </article>
+              <aside class="collection-daily-driver-actions" aria-label="Pracovní akce řidiče">
+                <button class="collection-daily-driver-action collection-daily-driver-action--done" type="button" data-collection-daily-driver-event="done" data-stop-id="${escapeHtml(currentStop.id)}" ${pending ? "disabled" : ""}>HOTOVO</button>
+                <details class="collection-daily-driver-action-sheet">
+                  <summary class="collection-daily-driver-action collection-daily-driver-action--report">HLÁŠENÍ PRO DISPEČINK</summary>
+                  <div class="collection-daily-driver-sheet" role="dialog" aria-modal="true" aria-labelledby="collection-daily-driver-problem-title">
+                    <header><div><span>STANOVIŠTĚ ${escapeHtml(currentStop.routeOrder)}</span><h2 id="collection-daily-driver-problem-title">Hlášení pro dispečink</h2></div><button type="button" data-collection-daily-driver-sheet-close aria-label="Zavřít hlášení">ZAVŘÍT</button></header>
+                    <p>${escapeHtml(currentStop.customerName || "-")} · ${escapeHtml(currentStop.addressText || "-")}</p>
+                    <form class="collection-daily-driver-problem" data-collection-daily-driver-problem-form data-stop-id="${escapeHtml(currentStop.id)}">
+                      <label><span>Co se stalo?</span><select name="reason" required><option value="">Vyber důvod</option><option>Přeplněná nádoba</option><option>Poškozená nádoba</option><option>Nádoba není přístupná</option><option>Nelze se dostat do firmy</option><option>Nádoba nebyla přistavená</option><option>Kontaminovaný odpad</option><option>Jiný problém</option></select></label>
+                      <label><span>Krátká poznámka</span><input name="note" maxlength="500" placeholder="Co má dispečink vědět?"></label>
+                      <button class="primary-action" type="submit" ${pending ? "disabled" : ""}>ODESLAT HLÁŠENÍ DISPEČINKU</button>
+                    </form>
+                  </div>
+                </details>
+                <button class="collection-daily-driver-action" type="button" data-collection-daily-driver-event="dump" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>MUSÍM JET VYSYPAT</button>
+                <button class="collection-daily-driver-action" type="button" data-collection-daily-driver-event="break" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>PŘESTÁVKA</button>
+                <details class="collection-daily-driver-action-sheet">
+                  <summary class="collection-daily-driver-action">CELÁ TRASA</summary>
+                  <div class="collection-daily-driver-sheet" role="dialog" aria-modal="true" aria-labelledby="collection-daily-driver-stops-title">
+                    <header><div><span>${escapeHtml(collectionDailyRouteDateLabel(run.routeDate))}</span><h2 id="collection-daily-driver-stops-title">Celá trasa · ${escapeHtml(vehicleLabel)}</h2></div><button type="button" data-collection-daily-driver-sheet-close aria-label="Zavřít celou trasu">ZAVŘÍT</button></header>
+                    ${collectionDailyRouteDriverStopList(visibleStops)}
+                    ${stops.length > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? `
+                      <div class="collection-daily-route-pagination" aria-live="polite">
+                        <span>Zobrazeno ${escapeHtml(visibleStopCount)} z ${escapeHtml(stops.length)} zastávek.</span>
+                        ${remainingStops ? `<button class="secondary-link" type="button" data-collection-daily-driver-show-more>ZOBRAZIT DALŠÍ (${escapeHtml(Math.min(COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE, remainingStops))})</button>` : `<strong>Zobrazeny všechny zastávky.</strong>`}
+                      </div>
+                    ` : ""}
+                  </div>
+                </details>
+              </aside>
+            </div>
           ` : ""}
           ${run.status === "active" && !currentStop ? `<div class="collection-daily-driver-complete"><strong>Všechny zastávky jsou vyřízené.</strong><button class="primary-action" type="button" data-collection-daily-driver-transition="complete" ${pending ? "disabled" : ""}>Dokončit trasu</button></div>` : ""}
-          <details class="collection-daily-driver-all-stops" ${visibleStopCount > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? "open" : ""}>
-            <summary>Všechny zastávky (${escapeHtml(stops.length)})</summary>
-            ${collectionDailyRouteDriverStopList(visibleStops)}
-            ${stops.length > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? `
-              <div class="collection-daily-route-pagination" aria-live="polite">
-                <span>Zobrazeno ${escapeHtml(visibleStopCount)} z ${escapeHtml(stops.length)} zastávek.</span>
-                ${remainingStops ? `
-                  <button class="secondary-link" type="button" data-collection-daily-driver-show-more>
-                    Zobrazit dalších ${escapeHtml(Math.min(COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE, remainingStops))} zastávek
-                  </button>
-                ` : `<strong>Zobrazeny všechny zastávky.</strong>`}
-              </div>
-            ` : ""}
-          </details>
         </section>
       ` : ""}
     </main>
@@ -40112,7 +40201,7 @@ async function loadMyCollectionDailyRoute(options = {}) {
     collectionRoutesPilotState.myDailyRouteLoaded = true;
   } catch (error) {
     applyMyCollectionDailyRoute(null);
-    collectionRoutesPilotState.myDailyRouteLoaded = false;
+    collectionRoutesPilotState.myDailyRouteLoaded = true;
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Přiřazenou trasu se nepodařilo načíst.";
   } finally {
     collectionRoutesPilotState.myDailyRouteLoading = false;
@@ -46019,6 +46108,13 @@ function prepareSarlotaDeepLinkPanel() {
 
 function renderAuthenticatedApp(user) {
   const path = normalizePath(window.location.pathname);
+  const driverRedirectPath = collectionRoutesDriverKioskRedirectPath(user, path);
+  if (driverRedirectPath) {
+    window.history.replaceState({}, "", routeHref(driverRedirectPath));
+    lastRenderedUrl = window.location.href;
+    renderAuthenticatedApp(user);
+    return;
+  }
   const triagePreviewRoute = dataBoxPlusTriagePreviewActive(user) && path === DATA_BOX_PLUS_ROUTE;
   syncDataBoxPlusTriageAssistantBoundary(path, user);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
@@ -46209,7 +46305,9 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === COLLECTION_ROUTES_MODULE_KEY) {
       if (normalizeRole(user?.role) === "ridic") {
-        void loadMyCollectionDailyRoute();
+        queueMicrotask(() => {
+          void loadMyCollectionDailyRoute();
+        });
       } else {
         ensureCollectionRoutesSvozKaiserWatchdog(user);
         void loadCollectionRoutesPilot();
@@ -46321,7 +46419,11 @@ function applyUiSystemV2() {
   const shell = app.querySelector(":scope > main.app-shell.module-theme-scope");
   const user = currentUser();
 
-  if (!shell || !user) {
+  if (
+    !shell
+    || !user
+    || (isCollectionRoutesDriverKioskUser(user) && normalizePath(window.location.pathname) === COLLECTION_ROUTES_ROUTE)
+  ) {
     return;
   }
 
@@ -46353,11 +46455,22 @@ function applyUiSystemV2() {
   }
 }
 
+function syncCollectionRoutesDriverKioskDocumentState() {
+  const user = authState.user ? currentUser() : null;
+  const active = Boolean(
+    isCollectionRoutesDriverKioskUser(user)
+    && normalizePath(window.location.pathname) === COLLECTION_ROUTES_ROUTE
+  );
+  document.documentElement.classList.toggle("collection-driver-kiosk-active", active);
+  document.body?.classList.toggle("collection-driver-kiosk-active", active);
+}
+
 function render() {
   try {
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
     renderApp();
+    syncCollectionRoutesDriverKioskDocumentState();
     applyUiSystemV2();
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
@@ -50595,6 +50708,16 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const collectionDailyDriverSheetClose = event.target.closest("[data-collection-daily-driver-sheet-close]");
+  if (collectionDailyDriverSheetClose) {
+    event.preventDefault();
+    const sheet = collectionDailyDriverSheetClose.closest("details.collection-daily-driver-action-sheet");
+    const summary = sheet?.querySelector(":scope > summary");
+    sheet?.removeAttribute("open");
+    summary?.focus();
+    return;
+  }
+
   const collectionDailyDriverTransition = event.target.closest("[data-collection-daily-driver-transition]");
   if (collectionDailyDriverTransition) {
     event.preventDefault();
@@ -51789,6 +51912,15 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("keydown", (event) => {
   scrollDataBoxPlusChatHistoryByKeyboard(event);
+  if (event.key === "Escape") {
+    const driverSheet = document.querySelector("details.collection-daily-driver-action-sheet[open]");
+    if (driverSheet) {
+      event.preventDefault();
+      driverSheet.removeAttribute("open");
+      driverSheet.querySelector(":scope > summary")?.focus();
+      return;
+    }
+  }
   if (event.key === "Escape" && collectionRoutesPilotState.testTabletOpen) {
     event.preventDefault();
     if (collectionRoutesPilotState.testIncidentDraft) {

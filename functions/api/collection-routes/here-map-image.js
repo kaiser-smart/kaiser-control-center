@@ -85,7 +85,7 @@ function errorResponse(message, status, code) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const { response } = await requireUserPermission(env, request, "collection-routes", "manage");
+  const { response } = await requireUserPermission(env, request, "collection-routes", "view");
   if (response) return response;
 
   const requestUrl = new URL(request.url);

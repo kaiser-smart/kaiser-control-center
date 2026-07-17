@@ -4274,6 +4274,75 @@ function mockReceivablesRatingFixture() {
   return { customer, invoices, rating, package: pack };
 }
 
+function mockCollectionDailyRouteForDriver(user) {
+  const routeDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Prague",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+  const stops = [
+    {
+      id: "local-driver-stop-1",
+      routeOrder: 1,
+      status: "planned",
+      customerName: "Firma test 501",
+      stationName: "stanoviště Trnkova",
+      addressText: "Trnkova 3052/137, 628 00 Brno",
+      wasteType: "SKO",
+      containerCount: 1,
+      containerVolume: 1100,
+      frequency: "1x7",
+      note: "Nádoby jsou za vjezdem vlevo.",
+      sourceSummary: { latitude: 49.18481, longitude: 16.67697 }
+    },
+    {
+      id: "local-driver-stop-2",
+      routeOrder: 2,
+      status: "planned",
+      customerName: "Kaiser servis, spol. s r.o.",
+      stationName: "centrální dispečink",
+      addressText: "Trnkova 3052/137, 628 00 Brno",
+      wasteType: "PAPÍR",
+      containerCount: 2,
+      containerVolume: 240,
+      frequency: "1x14",
+      note: "",
+      sourceSummary: { latitude: 49.18481, longitude: 16.67697 }
+    },
+    {
+      id: "local-driver-stop-3",
+      routeOrder: 3,
+      status: "planned",
+      customerName: "Lokální zkouška řidiče",
+      stationName: "další stanoviště",
+      addressText: "Zaoralova 21, 628 00 Brno",
+      wasteType: "PLAST",
+      containerCount: 1,
+      containerVolume: 1100,
+      frequency: "1x7",
+      note: "",
+      sourceSummary: { latitude: 49.20643, longitude: 16.68783 }
+    }
+  ];
+  return {
+    run: {
+      id: "local-driver-route",
+      routeDate,
+      title: "Lokální ověření Řidičského displeje",
+      status: "active",
+      vehicleCode: "A",
+      vehicleLabel: "Vůz A · 3BN 3558",
+      vehicleRegistration: "3BN 3558",
+      driverUserId: user.id,
+      driverName: user.name || user.email || "Řidič",
+      summary: { plannedCount: stops.length, doneCount: 0, problemCount: 0 }
+    },
+    stops,
+    events: []
+  };
+}
+
 async function handleApi(request, response) {
   const url = new URL(request.url || "/", "http://localhost");
 
@@ -4362,6 +4431,23 @@ async function handleApi(request, response) {
         actions: ["view", "create", "edit", "delete", "approve", "export", "manage"]
           .filter((action) => hasPermission(user, moduleItem.id, action))
       })),
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/collection-routes/daily-routes/my" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    sendJson(response, 200, {
+      route: mockCollectionDailyRouteForDriver(user),
       apiStatus: "ready"
     });
     return true;
