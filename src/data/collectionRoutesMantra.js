@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.19",
-  updatedAt: "17. 7. 2026 08:38",
-  updatedAtIso: "2026-07-17T08:38:00+02:00",
-  lastChange: "Jednorázové potvrzení incidentního odeslání",
+  version: "1.20",
+  updatedAt: "17. 7. 2026 09:33",
+  updatedAtIso: "2026-07-17T09:33:00+02:00",
+  lastChange: "Přehledný výběr terénního testera",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po kontrole účinku a samostatném vyskakovacím potvrzení skutečně odeslat právě jeden interní e-mail a jednu jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Řidičský tablet nikdy tiše nezamění vybraný TEST ani jeho testera; bez ručního výběru nabídne pouze TEST přihlášeného uživatele. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po kontrole účinku a samostatném vyskakovacím potvrzení skutečně odeslat právě jeden interní e-mail a jednu jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -185,6 +185,8 @@ Každou změnu vysvětli a předlož ke schválení. Bez výslovného potvrzení
 Veškeré mluvené pokyny Řidičského tabletu musí vytvářet produkční agentka Šarlota z ElevenLabs. Web Speech API, speechSynthesis, systémový hlas Androidu a jiná strojová náhrada jsou v tomto modulu zakázané. Pokud ElevenLabs není dostupné, ponech pokyn čitelně na obrazovce a zobraz stručnou chybu; systémové čtení nikdy nespouštěj. Přehrání pevného pokynu nesmí vyžadovat zapnutí mikrofonu ani spustit nástroj, měření, zápis nebo odeslání.
 
 TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko a samostatný přehled bez dlouhé tabulky stanovišť. Stacionární terénní TEST ukazuje vždy jen následující krok: TEST data, jeden bod, tester a spuštění tabletu. Zdrojový kabinový náhled musí být zřetelně odlišený od skutečného TEST GPS režimu.
+
+Řidičský tablet nesmí tiše zaměnit vybraný TEST ani jeho terénního testera. Bez výslovného výběru smí nabídnout pouze vlastní TEST právě přihlášeného uživatele. Výslovně vybraný dokončený TEST zůstane vybraný i tehdy, když existuje jiný aktivní TEST. Cizí TEST je pouze náhled bez tlačítek pro potvrzení, spuštění, znovuotevření, GPS nebo hlášení. Staré stacionární TESTY patří do sbalené historie a nesmí zaplnit hlavní seznam ručních výpočetních tras.
 
 Stacionární terénní TEST smí obsahovat přesně jediný bod Firma test 501 na Trnkově. Nemá svozové vozidlo, řidiče ani jízdu a nesmí připravit nebo odeslat zákaznickou SMS, RCS či e-mail. U přeplněné nebo poškozené nádoby však může po samostatném velkém potvrzení odeslat pouze interní e-mail a SMS backendem ověřené dispečerce KSO. Přihlášený aktivní uživatel s rolí Admin nebo Management se uloží odděleně jako terénní tester; audit nesmí předstírat jiného řidiče. TEST může potvrdit, spustit a GPS uložit pouze tentýž tester.
 

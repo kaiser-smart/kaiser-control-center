@@ -39887,6 +39887,7 @@ body:has(.ds-plus-page) {
 
 .collection-routes-test-tablet-next {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
@@ -39900,6 +39901,35 @@ body:has(.ds-plus-page) {
 .collection-routes-test-tablet-next span,
 .collection-routes-test-tablet-empty span {
   color: var(--steel);
+}
+
+.collection-routes-test-tablet-owner-warning {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(173, 101, 12, 0.28);
+  border-radius: 12px;
+  background: #fff8ec;
+}
+
+.collection-routes-test-tablet-owner-warning > div {
+  display: grid;
+  gap: 4px;
+}
+
+.collection-routes-test-tablet-owner-warning strong {
+  color: #70430e;
+}
+
+.collection-routes-test-tablet-owner-warning span {
+  color: var(--steel);
+  line-height: 1.45;
+}
+
+.collection-routes-test-tablet-owner-warning .primary-action {
+  min-height: 64px;
 }
 
 .collection-routes-test-tablet-empty,
@@ -41800,7 +41830,8 @@ body:has(.ds-plus-page) {
   .collection-routes-test-tablet-routes > div,
   .collection-routes-test-tablet-form,
   .collection-routes-test-tablet-summary,
-  .collection-routes-test-tablet-driver {
+  .collection-routes-test-tablet-driver,
+  .collection-routes-test-tablet-owner-warning {
     grid-template-columns: 1fr;
   }
 
@@ -41831,6 +41862,7 @@ body:has(.ds-plus-page) {
   .collection-routes-test-tablet-driver .secondary-link,
   .collection-routes-test-tablet-next .primary-action,
   .collection-routes-test-tablet-next .secondary-link,
+  .collection-routes-test-tablet-owner-warning .primary-action,
   .collection-routes-test-tablet-empty .primary-action {
     width: 100%;
   }

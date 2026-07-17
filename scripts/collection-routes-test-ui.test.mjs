@@ -1,12 +1,58 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { COLLECTION_ROUTES_MANTRA } from "../src/data/collectionRoutesMantra.js";
+import {
+  collectionRoutesFieldTestOwnedByUser,
+  selectCollectionRoutesFieldTestRun
+} from "../src/data/collectionRoutesFieldTestSelection.js";
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const mantraSource = readFileSync(new URL("../src/data/collectionRoutesMantra.js", import.meta.url), "utf8");
 const calculatorSource = readFileSync(new URL("../src/data/collectionRoutesReadonlyCalculator.js", import.meta.url), "utf8");
 const wranglerSource = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+
+const radimActiveTest = {
+  id: "field-radim-active",
+  status: "active",
+  metadata: { fieldTesterUserId: "radim" }
+};
+const tomasCompletedTest = {
+  id: "field-tomas-completed",
+  status: "completed",
+  metadata: { fieldTesterUserId: "tomas" }
+};
+const tomasDraftTest = {
+  id: "field-tomas-draft",
+  status: "draft",
+  metadata: { fieldTesterUserId: "tomas" }
+};
+
+assert.equal(collectionRoutesFieldTestOwnedByUser(tomasCompletedTest, "tomas"), true);
+assert.equal(collectionRoutesFieldTestOwnedByUser(tomasCompletedTest, "radim"), false);
+assert.equal(
+  selectCollectionRoutesFieldTestRun([radimActiveTest, tomasCompletedTest], { userId: "tomas" })?.id,
+  "field-tomas-completed",
+  "Tomášovi se nesmí místo jeho dokončeného TESTU automaticky otevřít Radimův aktivní TEST."
+);
+assert.equal(
+  selectCollectionRoutesFieldTestRun([radimActiveTest, tomasCompletedTest, tomasDraftTest], { userId: "tomas" })?.id,
+  "field-tomas-draft",
+  "Bez ručního výběru se má testerovi nabídnout jeho vlastní nejbližší rozpracovaný TEST."
+);
+assert.equal(
+  selectCollectionRoutesFieldTestRun([radimActiveTest, tomasCompletedTest], {
+    userId: "tomas",
+    selectedRunId: "field-tomas-completed"
+  })?.id,
+  "field-tomas-completed",
+  "Výslovně vybraný TEST se nesmí po otevření tabletu tiše přepnout."
+);
+assert.equal(
+  selectCollectionRoutesFieldTestRun([radimActiveTest], { userId: "tomas" }),
+  null,
+  "Cizí aktivní TEST se nesmí automaticky vydávat za Tomášův pracovní TEST."
+);
 
 for (const marker of [
   "TEST Brno 501",
@@ -15,6 +61,14 @@ for (const marker of [
   "Management · oddělená testovací data",
   "TEST ŘIDIČSKÉHO TABLETU",
   "Stacionární TEST řidičského tabletu",
+  "Historie testů tabletu",
+  "Můj TEST",
+  "Jen náhled",
+  "Tester se výběrem historie nemění",
+  "ZPĚT NA MŮJ TEST",
+  "PŘIPRAVIT NOVÝ TEST",
+  "testTabletSelectedRunId",
+  "collectionRoutesStationaryFieldTestOwnedByCurrentUser",
   "stationary-field-test",
   "Terénní tester",
   "Bez jízdy",
@@ -210,6 +264,7 @@ for (const marker of [
   ".collection-routes-test-tablet-workspace",
   ".collection-routes-test-tablet-steps",
   ".collection-routes-test-tablet-form",
+  ".collection-routes-test-tablet-owner-warning",
   ".collection-routes-test-tablet-map",
   ".collection-routes-test-tablet-map__canvas",
   ".collection-routes-test-notifications",
@@ -270,6 +325,9 @@ for (const marker of [
   "SMS musí být bez diakritiky, nejvýše 160 znaků a v jednom segmentu",
   "minimálně 120 px vysoké a na úzkém displeji 132 px",
   "TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko",
+  "Řidičský tablet nesmí tiše zaměnit vybraný TEST ani jeho terénního testera",
+  "Cizí TEST je pouze náhled bez tlačítek",
+  "Staré stacionární TESTY patří do sbalené historie",
   "Řidičský TEST zobrazuje nad GPS tlačítkem HERE mapový výřez aktuálního stanoviště",
   "Bez výslovného potvrzení dispečerky nic neměň ani neodesílej",
   "Paměť musí být cloudová",
@@ -353,9 +411,32 @@ assert.ok(
   "Tabletový TEST musí být oddělený typ trasy a nesmí převzít starou vícestopou TEST trasu."
 );
 
+const tabletOpenStart = appSource.indexOf("async function openCollectionRoutesTestTablet");
+const tabletOpenEnd = appSource.indexOf("function closeCollectionRoutesTestTablet", tabletOpenStart);
+const tabletOpenSource = appSource.slice(tabletOpenStart, tabletOpenEnd);
+assert.ok(
+  tabletOpenStart >= 0 && tabletOpenEnd > tabletOpenStart &&
+    tabletOpenSource.includes("testTabletSelectedRunId") &&
+    !tabletOpenSource.includes('currentRun.status === "completed"'),
+  "Otevření tabletu musí zachovat výslovně vybraný TEST a nesmí dokončený Tomášův TEST přepsat aktivním Radimovým."
+);
+
+const dailyRoutesListStart = appSource.indexOf("function collectionDailyRoutesList");
+const dailyRoutesListEnd = appSource.indexOf("function collectionRoutesTestOperationalConfigPanel", dailyRoutesListStart);
+const dailyRoutesListSource = appSource.slice(dailyRoutesListStart, dailyRoutesListEnd);
+assert.ok(
+  dailyRoutesListSource.includes("!collectionRoutesIsStationaryFieldTestRun(route)") &&
+    dailyRoutesListSource.includes("Testy tabletu najdeš pouze v jejich přehledné historii"),
+  "Stacionární testy tabletu nesmí znovu zaplnit hlavní seznam ručních výpočetních tras."
+);
+
 const dispatcherDetailStart = appSource.indexOf("function collectionDailyRouteDispatcherDetail");
 const dispatcherDetailEnd = appSource.indexOf("function collectionDailyRoutesDispatcherPanel", dispatcherDetailStart);
 const dispatcherDetailSource = appSource.slice(dispatcherDetailStart, dispatcherDetailEnd);
+assert.ok(
+  dispatcherDetailSource.includes('if (stationaryFieldTest) return "";'),
+  "Detail stacionárního TESTU se má zobrazit pouze v odděleném tabletovém okně."
+);
 assert.ok(
   dispatcherDetailSource.indexOf("collectionRoutesTestGpsPanel(detail)") < dispatcherDetailSource.indexOf("collection-daily-route-table-wrap"),
   "GPS panel musí být i v běžném detailu před dlouhou tabulkou zastávek."

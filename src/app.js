@@ -52,8 +52,12 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.19";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.20";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
+import {
+  collectionRoutesFieldTestOwnedByUser,
+  selectCollectionRoutesFieldTestRun
+} from "./data/collectionRoutesFieldTestSelection.js?v=1.0";
 import {
   collectionRouteGpsPrompt,
   summarizeCollectionRouteGpsSamples
@@ -1374,6 +1378,7 @@ const collectionRoutesPilotState = {
   testIncidentReplyMessage: "",
   testIncidentReplyError: "",
   testTabletOpen: false,
+  testTabletSelectedRunId: "",
   testTabletMapNode: null,
   myDailyRouteLoaded: false,
   myDailyRouteLoading: false,
@@ -21648,11 +21653,29 @@ function collectionRoutesTestTabletRun() {
   return collectionRoutesIsStationaryFieldTestRun(run) ? run : null;
 }
 
-function collectionRoutesTestTabletNextLabel() {
+function collectionRoutesStationaryFieldTestRoutes() {
+  return Array.isArray(collectionRoutesPilotState.dailyRoutes)
+    ? collectionRoutesPilotState.dailyRoutes.filter(collectionRoutesIsStationaryFieldTestRun)
+    : [];
+}
+
+function collectionRoutesStationaryFieldTestOwnedByCurrentUser(run = {}) {
+  return collectionRoutesFieldTestOwnedByUser(run, currentUser()?.id);
+}
+
+function collectionRoutesTestTabletPreferredRoute(options = {}) {
+  return selectCollectionRoutesFieldTestRun(collectionRoutesStationaryFieldTestRoutes(), {
+    userId: currentUser()?.id,
+    selectedRunId: options.respectSelected === false
+      ? ""
+      : collectionRoutesPilotState.testTabletSelectedRunId
+  });
+}
+
+function collectionRoutesTestTabletNextLabel(run = collectionRoutesTestTabletPreferredRoute()) {
   if (!collectionDailyRouteIsTestScope()) return "Otevře oddělený TEST režim";
   if (collectionRoutesPilotState.testDatasetLoading || collectionRoutesPilotState.dailyRoutesLoading) return "Načítám TEST data a trasy";
   if (!collectionRoutesPilotState.testDataset) return "Nejdřív založíme TEST data";
-  const run = collectionRoutesTestTabletRun();
   if (!run) return "Připravíme datum a jeden TEST bod";
   if (run.status === "draft") return "Další krok: potvrdit stacionární TEST";
   if (run.status === "confirmed") return "Další krok: spustit TEST tabletu";
@@ -21674,7 +21697,7 @@ function collectionRoutesStationaryFieldGpsReady(detail) {
 }
 
 function collectionRoutesTestTabletEntryCard() {
-  const run = collectionRoutesTestTabletRun();
+  const run = collectionRoutesTestTabletPreferredRoute();
   const routeMeta = run
     ? `<small>${escapeHtml(collectionDailyRouteDateLabel(run.routeDate))} · ${escapeHtml(collectionRoutesStationaryFieldTesterName(run))} · bez jízdy</small>`
     : "";
@@ -21722,28 +21745,30 @@ function collectionRoutesTestTabletSteps() {
 }
 
 function collectionRoutesTestTabletRouteChooser() {
-  const routes = Array.isArray(collectionRoutesPilotState.dailyRoutes)
-    ? collectionRoutesPilotState.dailyRoutes.filter(collectionRoutesIsStationaryFieldTestRun)
-    : [];
+  const routes = collectionRoutesStationaryFieldTestRoutes();
   if (!routes.length) return "";
   const selectedId = collectionRoutesPilotState.dailyRouteSelectedId;
   return `
-    <details class="collection-routes-test-tablet-routes" ${collectionRoutesTestTabletRun() ? "" : "open"}>
-      <summary>Vybrat uložený stacionární TEST (${escapeHtml(routes.length)})</summary>
+    <details class="collection-routes-test-tablet-routes">
+      <summary>Historie testů tabletu (${escapeHtml(routes.length)})</summary>
       <div>
-        ${routes.slice(0, 20).map((route) => `
-          <button
-            class="collection-routes-test-tablet-route ${route.id === selectedId ? "is-selected" : ""}"
-            type="button"
-            data-collection-daily-route-select="${escapeHtml(route.id)}"
-          >
-            <span>${collectionRoutesStationaryFieldStatusBadge(route.status)} <b>Bez jízdy</b></span>
-            <strong>${escapeHtml(collectionDailyRouteDateLabel(route.routeDate))}</strong>
-            <small>${escapeHtml(collectionRoutesStationaryFieldTesterName(route))}</small>
-          </button>
-        `).join("")}
+        ${routes.slice(0, 20).map((route) => {
+          const ownTest = collectionRoutesStationaryFieldTestOwnedByCurrentUser(route);
+          return `
+            <button
+              class="collection-routes-test-tablet-route ${route.id === selectedId ? "is-selected" : ""}"
+              type="button"
+              data-collection-daily-route-select="${escapeHtml(route.id)}"
+            >
+              <span>${collectionRoutesStationaryFieldStatusBadge(route.status)} <b>${ownTest ? "Můj TEST" : "Jen náhled"}</b></span>
+              <strong>${escapeHtml(collectionDailyRouteDateLabel(route.routeDate))}</strong>
+              <small>${escapeHtml(collectionRoutesStationaryFieldTesterName(route))}</small>
+            </button>
+          `;
+        }).join("")}
       </div>
-      ${routes.length > 20 ? `<small>Zobrazeno 20 nejnovějších tras. Starší zůstávají v běžném seznamu.</small>` : ""}
+      <small>Historie slouží jen k dohledání starší zkoušky. Tester se výběrem historie nemění.</small>
+      ${routes.length > 20 ? `<small>Zobrazeno 20 nejnovějších tras. Starší zůstávají uložené v auditu KSO.</small>` : ""}
     </details>
   `;
 }
@@ -21815,6 +21840,8 @@ function collectionRoutesTestTabletCurrentRoutePanel() {
   const summary = run.summary || {};
   const pending = collectionRoutesPilotState.dailyRoutePending;
   const testerName = collectionRoutesStationaryFieldTesterName(run);
+  const ownTest = collectionRoutesStationaryFieldTestOwnedByCurrentUser(run);
+  const ownRoute = collectionRoutesTestTabletPreferredRoute({ respectSelected: false });
   return `
     <section class="collection-routes-test-tablet-current" aria-labelledby="collection-routes-test-tablet-current-title">
       <header>
@@ -21830,15 +21857,28 @@ function collectionRoutesTestTabletCurrentRoutePanel() {
         <span><b>${escapeHtml(summary.doneCount || 0)}</b> hotovo</span>
         <span><b>${escapeHtml(summary.problemCount || 0)}</b> problém</span>
       </div>
-      <div class="collection-routes-test-tablet-next">
-        ${run.status === "draft" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="confirm" ${pending ? "disabled" : ""}>POTVRDIT STACIONÁRNÍ TEST</button>` : ""}
-        ${run.status === "confirmed" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="start" ${pending ? "disabled" : ""}>SPUSTIT TEST TABLETU</button>` : ""}
-        ${run.status === "completed" ? `
-          <div><strong>Tento stacionární TEST je dokončený.</strong><span>Vyber jiný uložený TEST, nebo jej vědomě znovu otevři.</span></div>
-          <button class="secondary-link" type="button" data-collection-daily-route-transition="reopen" ${pending ? "disabled" : ""}>ZNOVU OTEVŘÍT TEST</button>
-        ` : ""}
-      </div>
-      ${run.status === "active" ? collectionRoutesTestGpsPanel(detail, {
+      ${ownTest ? `
+        <div class="collection-routes-test-tablet-next">
+          ${run.status === "draft" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="confirm" ${pending ? "disabled" : ""}>POTVRDIT STACIONÁRNÍ TEST</button>` : ""}
+          ${run.status === "confirmed" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="start" ${pending ? "disabled" : ""}>SPUSTIT TEST TABLETU</button>` : ""}
+          ${run.status === "completed" ? `
+            <div><strong>Tento TEST je dokončený.</strong><span>Můžeš jej znovu otevřít, nebo připravit nový test s dnešním testerem.</span></div>
+            <button class="secondary-link" type="button" data-collection-daily-route-transition="reopen" ${pending ? "disabled" : ""}>ZNOVU OTEVŘÍT TEST</button>
+            <button class="secondary-link" type="button" data-collection-routes-test-tablet-new ${pending ? "disabled" : ""}>PŘIPRAVIT NOVÝ TEST</button>
+          ` : ""}
+        </div>
+      ` : `
+        <div class="collection-routes-test-tablet-owner-warning" role="status">
+          <div>
+            <strong>Toto je pouze náhled testu uživatele ${escapeHtml(testerName)}.</strong>
+            <span>Přihlášený uživatel jej nemůže potvrdit, spustit, znovu otevřít ani do něj uložit GPS. Výběr historie testera nemění.</span>
+          </div>
+          <button class="primary-action" type="button" data-collection-routes-test-tablet-own ${pending ? "disabled" : ""}>
+            ${ownRoute ? "ZPĚT NA MŮJ TEST" : "PŘIPRAVIT MŮJ TEST"}
+          </button>
+        </div>
+      `}
+      ${run.status === "active" && ownTest ? collectionRoutesTestGpsPanel(detail, {
         titleId: "collection-routes-test-tablet-gps-title",
         tabletMode: true
       }) : ""}
@@ -22127,12 +22167,15 @@ function collectionRoutesMantraPanel() {
 }
 
 function collectionDailyRoutesList() {
-  const routes = Array.isArray(collectionRoutesPilotState.dailyRoutes) ? collectionRoutesPilotState.dailyRoutes : [];
-  if (collectionRoutesPilotState.dailyRoutesLoading && !routes.length) {
+  const allRoutes = Array.isArray(collectionRoutesPilotState.dailyRoutes) ? collectionRoutesPilotState.dailyRoutes : [];
+  const routes = collectionDailyRouteIsTestScope()
+    ? allRoutes.filter((route) => !collectionRoutesIsStationaryFieldTestRun(route))
+    : allRoutes;
+  if (collectionRoutesPilotState.dailyRoutesLoading && !allRoutes.length) {
     return `<p class="module-feedback__notice">Načítám uložené denní trasy...</p>`;
   }
   if (!routes.length) {
-    return `<p class="module-feedback__notice">Zatím není uložená žádná denní trasa.</p>`;
+    return `<p class="module-feedback__notice">${collectionDailyRouteIsTestScope() ? "Zatím není uložená žádná ruční TEST trasa. Testy tabletu najdeš pouze v jejich přehledné historii." : "Zatím není uložená žádná denní trasa."}</p>`;
   }
   return `
     <div class="collection-daily-route-list" aria-label="Uložené denní trasy">
@@ -22860,6 +22903,7 @@ function collectionDailyRouteDispatcherDetail() {
   const pending = collectionRoutesPilotState.dailyRoutePending;
   const isTest = run.scope === "test";
   const stationaryFieldTest = collectionRoutesIsStationaryFieldTestRun(run);
+  if (stationaryFieldTest) return "";
   const canAssign = !stationaryFieldTest && ["draft", "confirmed"].includes(run.status);
   const stationaryGpsReady = collectionRoutesStationaryFieldGpsReady(detail);
   const canComplete = run.status === "active" && (
@@ -23004,7 +23048,7 @@ function collectionDailyRoutesDispatcherPanel(rows = []) {
       ${collectionRoutesReadonlyCalculationPanel()}
       ${collectionRouteHerePilotPanel()}
       <div class="collection-daily-routes__saved">
-        <div><div><h4>${isTest ? "Uložené ruční TEST trasy" : "Uložené denní trasy"}</h4>${isTest ? "<p>Historie pilotu; žádná z těchto tras není označená jako AI optimalizovaná.</p>" : ""}</div><button class="text-action" type="button" data-collection-daily-routes-refresh ${collectionRoutesPilotState.dailyRoutesLoading ? "disabled" : ""}>${isTest ? "Načíst aktuální seznam" : "Obnovit"}</button></div>
+        <div><div><h4>${isTest ? "Ruční TEST trasy" : "Uložené denní trasy"}</h4>${isTest ? "<p>Testy tabletu mají vlastní zavřenou historii. Tady zůstávají jen ručně uložené výpočetní trasy bez AI optimalizace.</p>" : ""}</div><button class="text-action" type="button" data-collection-daily-routes-refresh ${collectionRoutesPilotState.dailyRoutesLoading ? "disabled" : ""}>${isTest ? "Načíst aktuální seznam" : "Obnovit"}</button></div>
         ${collectionDailyRoutesList()}
       </div>
       ${collectionDailyRouteDispatcherDetail()}
@@ -38638,6 +38682,7 @@ function resetCollectionDailyRoutesForScope() {
   collectionRoutesPilotState.testIncidentReplyPending = "";
   collectionRoutesPilotState.testIncidentReplyMessage = "";
   collectionRoutesPilotState.testIncidentReplyError = "";
+  collectionRoutesPilotState.testTabletSelectedRunId = "";
   clearCollectionRoutesTestIncidentDraft();
 }
 
@@ -38739,17 +38784,6 @@ async function switchCollectionDailyRouteScope(scope) {
   await loadCollectionDailyRoutes({ force: true });
 }
 
-function collectionRoutesTestTabletPreferredRoute() {
-  const routes = Array.isArray(collectionRoutesPilotState.dailyRoutes)
-    ? collectionRoutesPilotState.dailyRoutes.filter(collectionRoutesIsStationaryFieldTestRun)
-    : [];
-  return routes.find((route) => route.status === "active") ||
-    routes.find((route) => route.status === "confirmed") ||
-    routes.find((route) => route.status === "draft") ||
-    routes[0] ||
-    null;
-}
-
 async function openCollectionRoutesTestTablet() {
   if (!collectionRoutesCanUseTestDataset(currentUser())) return;
   collectionRoutesPilotState.testTabletOpen = true;
@@ -38768,11 +38802,44 @@ async function openCollectionRoutesTestTablet() {
 
   const currentRun = collectionRoutesTestTabletRun();
   const preferredRoute = collectionRoutesTestTabletPreferredRoute();
-  if ((!currentRun || currentRun.status === "completed") && preferredRoute?.id && preferredRoute.id !== currentRun?.id) {
+  if (preferredRoute?.id && preferredRoute.id !== currentRun?.id) {
+    collectionRoutesPilotState.testTabletSelectedRunId = preferredRoute.id;
     await loadCollectionDailyRouteDetail(preferredRoute.id, { renderAfter: false });
+  } else if (preferredRoute?.id) {
+    collectionRoutesPilotState.testTabletSelectedRunId = preferredRoute.id;
+  } else if (currentRun) {
+    collectionRoutesPilotState.dailyRouteSelectedId = "";
+    collectionRoutesPilotState.dailyRouteDetail = null;
   }
   render();
   setTimeout(() => document.querySelector("[data-collection-routes-test-tablet-dialog]")?.focus(), 0);
+}
+
+function prepareNewCollectionRoutesTestTablet() {
+  if (collectionRoutesPilotState.dailyRoutePending) return;
+  collectionRoutesPilotState.testTabletSelectedRunId = "";
+  collectionRoutesPilotState.dailyRouteSelectedId = "";
+  collectionRoutesPilotState.dailyRouteDetail = null;
+  collectionRoutesPilotState.dailyRoutePreview = null;
+  collectionRoutesPilotState.dailyRouteMessage = "";
+  collectionRoutesPilotState.dailyRouteError = "";
+  collectionRoutesPilotState.testGpsConfirmations = [];
+  collectionRoutesPilotState.testIncidents = [];
+  clearCollectionRoutesTestIncidentDraft();
+  render();
+  setTimeout(() => document.querySelector(".collection-routes-test-tablet-form input[name='routeDate']")?.focus(), 0);
+}
+
+async function openOwnCollectionRoutesTestTablet() {
+  if (collectionRoutesPilotState.dailyRoutePending) return;
+  collectionRoutesPilotState.testTabletSelectedRunId = "";
+  const ownRoute = collectionRoutesTestTabletPreferredRoute({ respectSelected: false });
+  if (!ownRoute?.id) {
+    prepareNewCollectionRoutesTestTablet();
+    return;
+  }
+  collectionRoutesPilotState.testTabletSelectedRunId = ownRoute.id;
+  await loadCollectionDailyRouteDetail(ownRoute.id);
 }
 
 function closeCollectionRoutesTestTablet() {
@@ -39941,6 +40008,9 @@ async function createCollectionDailyRoute() {
     collectionRoutesPilotState.dailyRouteCalculation = null;
     collectionRoutesPilotState.hereOptimizationReadiness = null;
     collectionRoutesPilotState.hereOptimizationRun = null;
+    if (preview.testMode === COLLECTION_ROUTES_STATIONARY_FIELD_TEST_MODE && result.route?.run?.id) {
+      collectionRoutesPilotState.testTabletSelectedRunId = result.route.run.id;
+    }
     applyCollectionDailyRouteDetail(
       result.route,
       preview.testMode === COLLECTION_ROUTES_STATIONARY_FIELD_TEST_MODE
@@ -50277,6 +50347,20 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const collectionRoutesTestTabletOwn = event.target.closest("[data-collection-routes-test-tablet-own]");
+  if (collectionRoutesTestTabletOwn) {
+    event.preventDefault();
+    if (!collectionRoutesTestTabletOwn.disabled) await openOwnCollectionRoutesTestTablet();
+    return;
+  }
+
+  const collectionRoutesTestTabletNew = event.target.closest("[data-collection-routes-test-tablet-new]");
+  if (collectionRoutesTestTabletNew) {
+    event.preventDefault();
+    if (!collectionRoutesTestTabletNew.disabled) prepareNewCollectionRoutesTestTablet();
+    return;
+  }
+
   const collectionDailyRouteScope = event.target.closest("[data-collection-daily-route-scope]");
   if (collectionDailyRouteScope) {
     event.preventDefault();
@@ -50380,6 +50464,10 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyRouteSelect) {
     event.preventDefault();
     const runId = collectionDailyRouteSelect.dataset.collectionDailyRouteSelect || "";
+    const selectedRun = collectionRoutesStationaryFieldTestRoutes().find((route) => route.id === runId);
+    if (collectionRoutesPilotState.testTabletOpen && selectedRun) {
+      collectionRoutesPilotState.testTabletSelectedRunId = runId;
+    }
     collectionRoutesPilotState.dailyRouteSelectedId = runId;
     collectionRoutesPilotState.dailyRouteMessage = "";
     collectionRoutesPilotState.dailyRouteError = "";
