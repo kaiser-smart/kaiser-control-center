@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.576"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.577"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: Řidič vidí jen svůj displej",
+    text: "Účet s rolí Řidič se po přihlášení vždy otevře přímo do Řidičského displeje bez HP, menu a administrace. Na tabletu bez hlavního posouvání vidí aktuální stanoviště, HERE mapu a pět velkých pracovních voleb; backend mu podle uživatelského ID povolí pouze vlastní přiřazenou trasu. Management zůstává beze změny."
+  },
   {
     title: "Svoz: přehledný TEST tabletu bez záměny testera",
     text: "Tablet zachová výslovně vybraný test a bez výběru nabídne pouze test přihlášeného uživatele. Tomášův dokončený test už nepřepíše Radimův aktivní test; cizí test je jasně označený jako náhled a starší zkoušky jsou uklizené ve sbalené historii mimo hlavní seznam ručních tras."

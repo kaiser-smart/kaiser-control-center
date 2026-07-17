@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.20",
-  updatedAt: "17. 7. 2026 09:33",
-  updatedAtIso: "2026-07-17T09:33:00+02:00",
-  lastChange: "Přehledný výběr terénního testera",
+  version: "1.21",
+  updatedAt: "17. 7. 2026 10:35",
+  updatedAtIso: "2026-07-17T10:35:00+02:00",
+  lastChange: "Řidič vidí jen svoji trasu",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Řidičský tablet nikdy tiše nezamění vybraný TEST ani jeho testera; bez ručního výběru nabídne pouze TEST přihlášeného uživatele. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po kontrole účinku a samostatném vyskakovacím potvrzení skutečně odeslat právě jeden interní e-mail a jednu jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Řidičský tablet nikdy tiše nezamění vybraný TEST ani jeho testera; bez ručního výběru nabídne pouze TEST přihlášeného uživatele. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po kontrole účinku a samostatném vyskakovacím potvrzení skutečně odeslat právě jeden interní e-mail a jednu jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -21,8 +21,8 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
       text: "Proveditelnost, větev náhradního svozu a příjemce určuje deterministický backend. AI smí upravit milé znění a rozpoznat vyhrocenou komunikaci; ostrá změna dál vyžaduje rozhodnutí dispečerky."
     },
     {
-      title: "GPS se potvrzuje fyzicky",
-      text: "Adresní bod se nikdy tiše nepřepíše. Řidič nebo pověřený terénní tester změří skutečné místo u nádob po zastavení; Šarlota mluví výhradně produkčním hlasem ElevenLabs, spustí měření bez výběru vozidla a zápis dokončí jedno velké klepnutí."
+      title: "Řidič vidí jen svoji trasu",
+      text: "Role Řidič se vždy otevře do jediné tabletové obrazovky bez HP, menu a administrace. Backend podle uživatelského ID povolí jen přiřazenou trasu; cizí trasa zůstane zakázaná i přes přímý odkaz."
     }
   ],
   sources: [
@@ -180,6 +180,10 @@ Odpovídej jménem, mile a stručně. Příklad: „Lenko, dvě auta dnešní pl
 Každou změnu vysvětli a předlož ke schválení. Bez výslovného potvrzení dispečerky nic neměň ani neodesílej.
 
 ŘIDIČSKÝ TABLET
+Aktivní uživatel s rolí Řidič se po přihlášení i při pokusu otevřít jiný modul vždy vrátí na /trasy-svozu. Nesmí vidět HP, postranní menu, administraci, Mantru, TEST management ani cizí denní trasu. Na serveru se vlastnictví trasy ověřuje výhradně stabilním uživatelským ID; samotné oprávnění „zobrazit Svozové trasy“ nesmí řidiči otevřít trasu jiného řidiče.
+
+Na tabletu tvoří Řidičský displej jednu uzamčenou pracovní obrazovku bez hlavního posouvání. Ukazuje pouze aktuální stanoviště, adresu, odpad a nádoby, poznámku, read-only HERE mapový výřez, stav trasy, Šarlotu a velké volby HOTOVO, HLÁŠENÍ PRO DISPEČINK, MUSÍM JET VYSYPAT, PŘESTÁVKA a CELÁ TRASA. Hlášení a celá trasa se otevírají jako samostatné přehledné vrstvy s vlastním posouváním a zřetelným zavřením. Na telefonu je kvůli bezpečné čitelnosti povolen svislý posun.
+
 Řidič musí vidět další stanoviště, zákazníka a adresu, nádoby a odpad, poznámku, navigaci, stav trasy a kontakt na dispečink.
 
 Veškeré mluvené pokyny Řidičského tabletu musí vytvářet produkční agentka Šarlota z ElevenLabs. Web Speech API, speechSynthesis, systémový hlas Androidu a jiná strojová náhrada jsou v tomto modulu zakázané. Pokud ElevenLabs není dostupné, ponech pokyn čitelně na obrazovce a zobraz stručnou chybu; systémové čtení nikdy nespouštěj. Přehrání pevného pokynu nesmí vyžadovat zapnutí mikrofonu ani spustit nástroj, měření, zápis nebo odeslání.

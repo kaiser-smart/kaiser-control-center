@@ -275,7 +275,11 @@ function assertCanReadRun(user, run) {
   if (!user) {
     throw new CollectionDailyRoutesError("Nepřihlášeno.", 401, "collection_daily_routes_unauthenticated");
   }
-  if (isAssignedDriver(user, run) || hasPermission(user, "collection-routes", "view")) {
+  if (normalizeRole(user?.role) === "ridic") {
+    if (isAssignedDriver(user, run)) return;
+    throw new CollectionDailyRoutesError("Řidič může zobrazit pouze svoji přiřazenou trasu.", 403, "collection_daily_routes_forbidden");
+  }
+  if (hasPermission(user, "collection-routes", "view")) {
     return;
   }
   throw new CollectionDailyRoutesError("Nemáte oprávnění zobrazit tuto denní trasu.", 403, "collection_daily_routes_forbidden");
