@@ -57,23 +57,29 @@ class D1Statement {
 class D1Database {
   constructor(database) {
     this.database = database;
+    this.batchQueue = Promise.resolve();
   }
 
   prepare(sql) {
     return new D1Statement(this, sql);
   }
 
-  async batch(statements) {
-    this.database.exec("BEGIN");
-    try {
-      const result = [];
-      for (const statement of statements) result.push(await statement.run());
-      this.database.exec("COMMIT");
-      return result;
-    } catch (error) {
-      this.database.exec("ROLLBACK");
-      throw error;
-    }
+  batch(statements) {
+    const execute = async () => {
+      this.database.exec("BEGIN");
+      try {
+        const result = [];
+        for (const statement of statements) result.push(await statement.run());
+        this.database.exec("COMMIT");
+        return result;
+      } catch (error) {
+        this.database.exec("ROLLBACK");
+        throw error;
+      }
+    };
+    const pending = this.batchQueue.then(execute, execute);
+    this.batchQueue = pending.then(() => undefined, () => undefined);
+    return pending;
   }
 }
 
@@ -442,6 +448,60 @@ assert.match(
   assert.equal(called, false, "Deterministická eskalace musí mít před AI přednost.");
   assert.equal(escalated.escalate, true);
   assert.equal(escalated.aiStatus, "skipped-safety-escalation");
+}
+
+{
+  const { sqlite, d1 } = openDatabase();
+  const production = openProductionDatabase();
+  seedRoute(sqlite);
+  const bucket = new FakeR2Bucket();
+  const sent = [];
+  const sentSms = [];
+  const env = {
+    COLLECTION_ROUTES_TEST_DB: d1,
+    SMART_ODPADY_DB: production.d1,
+    SMART_ODPADY_DOCUMENTS: bucket,
+    APP_ENV: "production",
+    COLLECTION_ROUTES_INCIDENT_DISPATCH_MODE: workflowTest.LIVE_DISPATCH_MODE
+  };
+  const incident = await reportCollectionRoutesTestIncident(env, manager, {
+    runId: "run-test",
+    stopId: "stop-test",
+    type: "overfilled_container",
+    note: "Souběžný TEST jediného hlášení.",
+    idempotencyKey: "workflow-one-hundred-concurrent"
+  }, { body: jpeg, contentType: "image/jpeg", sizeBytes: jpeg.length });
+  const options = {
+    now: "2026-07-17T02:30:00.000Z",
+    workflowReusePollAttempts: 100,
+    workflowReusePollDelayMs: 1,
+    sendDispatcherEmail: async (_env, input) => {
+      sent.push(input);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { status: "sent", providerMessageId: "sendgrid-concurrent-one" };
+    },
+    sendDispatcherSms: async (_env, input) => {
+      sentSms.push(input);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { status: "sent", providerMessageId: "twilio-concurrent-one", providerStatus: "accepted" };
+    }
+  };
+  const preview = await previewCollectionRoutesTestIncidentWorkflow(env, manager, incident.incident.id, {}, options);
+  const confirmations = await Promise.all(Array.from({ length: 100 }, () => (
+    confirmCollectionRoutesTestIncidentWorkflow(env, manager, incident.incident.id, {
+      confirmation: workflowTest.CONFIRMATION,
+      idempotencyKey: preview.idempotencyKey
+    }, options)
+  )));
+
+  assert.equal(confirmations.filter((result) => result.reused !== true).length, 1, "Ze 100 souběžných potvrzení smí odesílat pouze jeden vítězný požadavek.");
+  assert.equal(new Set(confirmations.map((result) => result.workflow.id)).size, 1, "Všech 100 požadavků musí skončit u stejného uloženého workflow.");
+  assert.ok(confirmations.every((result) => result.workflow.status === "completed-live-internal"));
+  assert.equal(sent.length, 1, "Sto souběžných potvrzení musí vytvořit právě jeden e-mail.");
+  assert.equal(sentSms.length, 1, "Sto souběžných potvrzení musí vytvořit právě jednu SMS.");
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_incident_workflows").get().count, 1);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_route_test_incident_actions").get().count, 2);
+  assert.equal(sqlite.prepare("SELECT claimed_count FROM collection_route_test_incident_email_guard WHERE guard_key = ?").get(workflowTest.LIVE_DISPATCH_GUARD_KEY).claimed_count, 1);
 }
 
 {

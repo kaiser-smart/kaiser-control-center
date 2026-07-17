@@ -25,6 +25,8 @@ const LIVE_DISPATCH_GUARD_MAX = 12;
 const LIVE_DISPATCH_MODE = "live-internal-pilot";
 const CONFIRMATION = "confirm-test-incident-workflow";
 const REPLY_CONFIRMATION = "confirm-test-customer-reply";
+const WORKFLOW_REUSE_POLL_ATTEMPTS = 30;
+const WORKFLOW_REUSE_POLL_DELAY_MS = 100;
 const ALLOWED_SCENARIOS = new Set(["route_within_24h", "next_standard_pickup"]);
 const DISPATCHER_ORDER = ["Lenka Kouřilová", "Ulyana Bartošová", "Simona Šefčíková"];
 
@@ -572,6 +574,28 @@ async function existingWorkflow(db, incidentId) {
   return db.prepare(`SELECT * FROM collection_route_test_incident_workflows WHERE incident_id = ? LIMIT 1`).bind(incidentId).first();
 }
 
+function workflowInsertConflict(error) {
+  const message = cleanString(error?.message);
+  return /unique constraint failed[\s\S]*collection_route_test_incident_workflows[.](incident_id|idempotency_key)/i.test(message)
+    || /idx_collection_route_test_incident_workflows_(incident|idempotency)/i.test(message);
+}
+
+function workflowStillProcessing(row) {
+  return cleanString(row?.status) === "processing-test";
+}
+
+async function reusableWorkflowRow(db, incidentId, initialRow = null, options = {}) {
+  let row = initialRow || await existingWorkflow(db, incidentId);
+  const attempts = Math.max(1, Math.min(60, numberValue(options.workflowReusePollAttempts, WORKFLOW_REUSE_POLL_ATTEMPTS)));
+  const delayMs = Math.max(0, Math.min(500, numberValue(options.workflowReusePollDelayMs, WORKFLOW_REUSE_POLL_DELAY_MS)));
+  const wait = options.waitForWorkflowReuse || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  for (let attempt = 0; row && workflowStillProcessing(row) && attempt < attempts; attempt += 1) {
+    await wait(delayMs);
+    row = await existingWorkflow(db, incidentId);
+  }
+  return row;
+}
+
 export async function previewCollectionRoutesTestIncidentWorkflow(env, user, incidentId, input = {}, options = {}) {
   try {
     assertCollectionRoutesTestManager(user);
@@ -992,7 +1016,10 @@ export async function confirmCollectionRoutesTestIncidentWorkflow(env, user, inc
     const db = collectionRoutesTestDatabase(env, true);
     const incident = await loadIncidentContext(db, incidentId, user);
     const stored = await existingWorkflow(db, cleanString(incidentId));
-    if (stored) return { workflow: await loadWorkflowDetail(db, stored), reused: true };
+    if (stored) {
+      const reusable = await reusableWorkflowRow(db, cleanString(incidentId), stored, options);
+      return { workflow: await loadWorkflowDetail(db, reusable), reused: true };
+    }
     const preview = await previewCollectionRoutesTestIncidentWorkflow(env, user, incidentId, input, options);
     if (!preview.canConfirm) {
       throw new CollectionRoutesTestIncidentWorkflowError(
@@ -1040,18 +1067,25 @@ export async function confirmCollectionRoutesTestIncidentWorkflow(env, user, inc
     const reminderActionId = preview.plan.branch === "next-standard-pickup"
       ? randomId("collection-route-test-incident-action")
       : "";
-    await db.batch(workflowInsertStatements(db, {
-      incident,
-      preview,
-      workflowId,
-      actionId,
-      smsActionId,
-      reminderActionId,
-      recoveryStopId,
-      message,
-      user: currentActor,
-      now
-    }));
+    try {
+      await db.batch(workflowInsertStatements(db, {
+        incident,
+        preview,
+        workflowId,
+        actionId,
+        smsActionId,
+        reminderActionId,
+        recoveryStopId,
+        message,
+        user: currentActor,
+        now
+      }));
+    } catch (error) {
+      if (!workflowInsertConflict(error)) throw error;
+      const reusable = await reusableWorkflowRow(db, cleanString(incidentId), null, options);
+      if (!reusable) throw error;
+      return { workflow: await loadWorkflowDetail(db, reusable), reused: true };
+    }
 
     if (liveDispatcherNotification) {
       const liveActionIds = [actionId, smsActionId];

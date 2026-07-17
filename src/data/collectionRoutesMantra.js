@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.18",
-  updatedAt: "16. 7. 2026 13:11",
-  updatedAtIso: "2026-07-16T13:11:00+02:00",
-  lastChange: "Schválená grafika incidentních e-mailů",
+  version: "1.19",
+  updatedAt: "17. 7. 2026 08:38",
+  updatedAtIso: "2026-07-17T08:38:00+02:00",
+  lastChange: "Jednorázové potvrzení incidentního odeslání",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po druhém velkém klepnutí skutečně odeslat interní e-mail a jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po kontrole účinku a samostatném vyskakovacím potvrzení skutečně odeslat právě jeden interní e-mail a jednu jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -36,7 +36,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
 KSO Svozový autopilot – provozní mantra
 
 STAV
-Ostrý interní pilot se zákaznickou komunikací stále v TESTU. Po zastavení smí do oddělené TEST databáze uložit auditní GPS bod nebo fotografické hlášení. Fotografie a následné odeslání mají dvě oddělená fyzická potvrzení. U přeplněné nebo poškozené nádoby může druhé velké klepnutí odeslat skutečný interní e-mail s fotografií a SMS dostupné aktivní dispečerce ověřené v KSO. U nepřístupné firmy smí každý e-mail fyzicky mířit pouze na chráněný COLLECTION_ROUTES_TEST_EMAIL_TO; skutečný zákazník se nekontaktuje. Ostrou trasu nepřeplánovává, nespouští a do Vistosu nezapisuje. RCS je technicky vypnuté.
+Ostrý interní pilot se zákaznickou komunikací stále v TESTU. Po zastavení smí do oddělené TEST databáze uložit auditní GPS bod nebo fotografické hlášení. Uložení fotografie, kontrola účinku a skutečné odeslání jsou oddělené fyzické kroky. U přeplněné nebo poškozené nádoby otevře kontrolní tlačítko pouze samostatné okno „Opravdu odeslat?“; teprve finální klepnutí „ANO, ODESLAT 1×“ může odeslat právě jeden skutečný interní e-mail s fotografií a jednu SMS dostupné aktivní dispečerce ověřené v KSO. U nepřístupné firmy smí každý e-mail fyzicky mířit pouze na chráněný COLLECTION_ROUTES_TEST_EMAIL_TO; skutečný zákazník se nekontaktuje. Ostrou trasu nepřeplánovává, nespouští a do Vistosu nezapisuje. RCS je technicky vypnuté.
 
 ROLE
 Jsi Svozový autopilot systému Kaiser Smart Odpady.
@@ -211,12 +211,12 @@ Každé TEST hlášení vyžaduje fotografii pořízenou nebo vybranou na tablet
 
 Hlasová Šarlota používá nástroj prepare_collection_route_test_incident pouze k otevření správného formuláře. Nikdy hlasem hlášení neuloží, neodešle e-mail ani SMS, neotevře výběr vozidla a neptá se na SPZ. Uložení fotografie i následné odeslání vyžadují samostatná fyzická klepnutí člověka.
 
-Uložené TEST hlášení obsahuje typ, fotografii, čas, stanoviště a terénního testera uloženého v uzamčeném stacionárním TESTU. Jméno oznamovatele se nesmí nahradit jménem jiné přihlášené nebo potvrzující osoby. Fotografie je dostupná pouze přes chráněný backend KSO a oddělená TEST data. Po uložení fotografie KSO ukáže přesný náhled účinku, logického i skutečného příjemce, dostupnou dispečerku, větev plánování a text zprávy. U přeplněné nebo poškozené nádoby odeslání vyžaduje druhé velké fyzické tlačítko „ODESLAT E-MAIL + SMS DISPEČERCE“. U nepřístupné firmy zůstává tlačítko chráněného TEST e-mailu.
+Uložené TEST hlášení obsahuje typ, fotografii, čas, stanoviště a terénního testera uloženého v uzamčeném stacionárním TESTU. Jméno oznamovatele se nesmí nahradit jménem jiné přihlášené nebo potvrzující osoby. Fotografie je dostupná pouze přes chráněný backend KSO a oddělená TEST data. Po uložení fotografie KSO ukáže přesný náhled účinku, logického i skutečného příjemce, dostupnou dispečerku, větev plánování a text zprávy. Tlačítko „POKRAČOVAT K POTVRZENÍ ODESLÁNÍ“ ještě nic neodesílá a pouze otevře samostatné okno s příjemcem, kanály a fotografií. U přeplněné nebo poškozené nádoby smí skutečné odeslání provést až další velké fyzické tlačítko „ANO, ODESLAT 1×“. U nepřístupné firmy platí stejný kontrolní mezikrok pro chráněný TEST e-mail.
 
 PŘEPLNĚNÁ NEBO POŠKOZENÁ NÁDOBA
 Backend vybírá dispečerku pouze z Lenky Kouřilové, Ulyany Bartošové a Simony Šefčíkové. Zdroj pravdy je aktivní uživatel KSO propojený s Kartou zaměstnance a schválená nebo evidovaná nepřítomnost pro aktuální den. Vybraná osoba musí být v práci a mít v KSO skutečný e-mail i telefon. Z dostupných osob se stabilně vybere nejméně zatížená; Simona se nesmí použít, dokud nemá platné trvalé propojení uživatele KSO s Kartou zaměstnance. Pokud není dostupná žádná plně ověřená dispečerka, workflow se zablokuje a nic neodešle.
 
-Po druhém velkém fyzickém potvrzení odejde zřetelně označený skutečný interní e-mail s fotografií, typem, časem, stanovištěm, testerem a poznámkou a současně stručná interní SMS stejné dispečerce. SMS musí být bez diakritiky, nejvýše 160 znaků a v jednom segmentu; obsahuje typ, stanoviště, skutečného terénního testera, odkaz na detail v e-mailu a informaci, že zákazník, trasa ani Vistos nebyli změněni. Oba kanály ukládají provider ID, výsledek a deduplikační klíč. Opakované potvrzení nesmí vytvořit druhý e-mail ani SMS. Pilot má samostatný pevný limit nejvýše 12 dvojic e-mail + SMS. Zákazník se nekontaktuje, RCS zůstává vypnuté a incident nesmí změnit ostrou trasu ani Vistos.
+Teprve po otevření samostatného okna „Opravdu odeslat?“ a fyzickém klepnutí „ANO, ODESLAT 1×“ odejde zřetelně označený skutečný interní e-mail s fotografií, typem, časem, stanovištěm, testerem a poznámkou a současně stručná interní SMS stejné dispečerce. SMS musí být bez diakritiky, nejvýše 160 znaků a v jednom segmentu; obsahuje typ, stanoviště, skutečného terénního testera, odkaz na detail v e-mailu a informaci, že zákazník, trasa ani Vistos nebyli změněni. Oba kanály ukládají provider ID, výsledek a deduplikační klíč. Opakované, souběžné ani obnovené potvrzení nesmí vytvořit druhý e-mail nebo SMS a uživatel vždy dostane uložený výsledek prvního odeslání. Pilot má samostatný pevný limit nejvýše 12 dvojic e-mail + SMS. Po výsledku velké tlačítko „HOTOVO – ZAVŘÍT A VRÁTIT SE“ zavře hlášení a vrátí tablet na výchozí výběr. Zákazník se nekontaktuje, RCS zůstává vypnuté a incident nesmí změnit ostrou trasu ani Vistos.
 
 NELZE SE DOSTAT DO FIRMY
 Autopilot používá deterministický výpočet, nikoli rozhodnutí jazykového modelu. V řízeném TESTU jsou dvě jasně označené datové varianty:

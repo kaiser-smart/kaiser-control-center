@@ -40767,6 +40767,10 @@ body:has(.ds-plus-page) {
   object-fit: contain;
 }
 
+.collection-routes-test-incident-modal__preview--compact {
+  max-height: 210px;
+}
+
 .collection-routes-test-incident-modal__note {
   display: grid;
   gap: 6px;
@@ -40835,6 +40839,22 @@ body:has(.ds-plus-page) {
   width: min(900px, 100%);
 }
 
+.collection-routes-test-incident-modal__card--final-confirm {
+  width: min(720px, 100%);
+  border: 3px solid rgba(169, 32, 32, 0.42);
+}
+
+.collection-routes-test-incident-final-warning {
+  display: grid;
+  gap: 6px;
+  padding: 15px;
+  border: 2px solid rgba(169, 32, 32, 0.3);
+  border-radius: 13px;
+  background: #fff2ef;
+  color: #782323;
+  line-height: 1.45;
+}
+
 .collection-routes-test-incident-confirmation,
 .collection-routes-test-incident-result__facts {
   display: grid;
@@ -40865,6 +40885,47 @@ body:has(.ds-plus-page) {
 .collection-routes-test-incident-result__facts small {
   color: var(--steel);
   line-height: 1.35;
+}
+
+.collection-routes-test-incident-final-actions {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(280px, 1.25fr);
+  gap: 12px;
+}
+
+.collection-routes-test-incident-final-back {
+  display: grid;
+  min-height: 124px;
+  place-content: center;
+  gap: 6px;
+  padding: 18px;
+  border: 3px solid rgba(66, 80, 74, 0.32);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.collection-routes-test-incident-final-back > span {
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.collection-routes-test-incident-final-back > small {
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-routes-test-incident-final-back:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.collection-routes-test-incident-submit--final {
+  min-height: 124px;
 }
 
 .collection-routes-test-incident-message-preview {
@@ -40968,6 +41029,10 @@ body:has(.ds-plus-page) {
   background: linear-gradient(180deg, #318f3f 0%, #1f722d 100%);
 }
 
+.collection-routes-test-incident-result-close {
+  min-height: 108px;
+}
+
 @media (min-width: 761px) and (max-height: 820px) {
   .collection-routes-test-incident-modal__card.is-review {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -41057,8 +41122,13 @@ body:has(.ds-plus-page) {
 
   .collection-routes-test-incident-confirmation,
   .collection-routes-test-incident-result__facts,
-  .collection-routes-test-incident-replies > div {
+  .collection-routes-test-incident-replies > div,
+  .collection-routes-test-incident-final-actions {
     grid-template-columns: 1fr;
+  }
+
+  .collection-routes-test-incident-final-back {
+    min-height: 86px;
   }
 
   .collection-routes-test-incident-replies button {
