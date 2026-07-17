@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.575"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.576"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: přehledný TEST tabletu bez záměny testera",
+    text: "Tablet zachová výslovně vybraný test a bez výběru nabídne pouze test přihlášeného uživatele. Tomášův dokončený test už nepřepíše Radimův aktivní test; cizí test je jasně označený jako náhled a starší zkoušky jsou uklizené ve sbalené historii mimo hlavní seznam ručních tras."
+  },
   {
     title: "Svoz: jednorázové potvrzení hlášení",
     text: "Kontrolní náhled incidentu už nic přímo neodesílá a nejdřív otevře samostatné okno Opravdu odeslat? Finální tlačítko se okamžitě zamkne, backend vrací uložený výsledek i při souběhu a automatický test 100 požadavků potvrzuje právě 1 e-mail a 1 SMS; po výsledku velké tlačítko vrátí tablet na výchozí výběr."
