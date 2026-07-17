@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.579"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.580"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: stabilní odkaz na TEST řidiče",
+    text: "Samostatná adresa /trasy-svozu/test zachová TEST scope při přihlášení i obnovení stránky. Původní odkaz se scope=test se po přihlášení automaticky převede na stabilní adresu; produkční trasy a oprávnění se nemění."
+  },
   {
     title: "Svoz: plnohodnotný izolovaný TEST řidiče",
     text: "Řidičský TEST používá standardní pracovní ovládání včetně přestávky, výsypu a hlášení pro dispečink. Akce se ukládají pouze do odděleného TEST auditu pod přihlášeným řidičem; žádná zpráva, Vistos ani ostrá trasa se nemění."

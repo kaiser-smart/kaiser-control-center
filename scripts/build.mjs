@@ -93,6 +93,7 @@ const fixedRouteEntries = [
   { path: "/dovolena-nemoc/reporty", moduleKey: "absence", label: "Nepřítomnosti – reporty" },
   { path: "/dovolena-nemoc/pravidla-automatizace", moduleKey: "absence", label: "Nepřítomnosti – pravidla" },
   { path: "/dovolena-nemoc/nastaveni", moduleKey: "absence", label: "Nepřítomnosti – nastavení" },
+  { path: "/trasy-svozu/test", moduleKey: "collection-routes", label: "Svozové trasy – TEST řidiče" },
   { path: "/pohledavky/settings", moduleKey: "receivables", label: "Pohledávky – nastavení" },
   { path: "/pohledavky/import", moduleKey: "receivables", label: "Pohledávky – import" },
   { path: "/pohledavky/directory-audit", moduleKey: "receivables", label: "Pohledávky – Vistos Directory audit" },

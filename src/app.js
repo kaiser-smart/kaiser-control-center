@@ -54,7 +54,11 @@ import {
 } from "./data/collectionDailyRoutesScale.js";
 import {
   COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE,
+  COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE,
+  collectionRoutesDriverKioskCanonicalPath,
   collectionRoutesDriverKioskRedirectPath,
+  collectionRoutesDriverKioskScope,
+  isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.0";
 import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.21";
@@ -21335,7 +21339,7 @@ function collectionDailyRouteIsTestScope() {
 function collectionDailyRouteDriverScope() {
   if (collectionRoutesPilotState.myDailyRoute?.run?.scope === "test") return "test";
   if (typeof window === "undefined") return "production";
-  return new URLSearchParams(window.location.search).get("scope") === "test" ? "test" : "production";
+  return collectionRoutesDriverKioskScope(window.location.pathname, window.location.search);
 }
 
 function collectionDailyRouteDriverScopeQuery() {
@@ -46138,6 +46142,13 @@ function prepareSarlotaDeepLinkPanel() {
 
 function renderAuthenticatedApp(user) {
   const path = normalizePath(window.location.pathname);
+  const canonicalDriverPath = collectionRoutesDriverKioskCanonicalPath(user, path, window.location.search);
+  if (canonicalDriverPath) {
+    window.history.replaceState({}, "", routeHref(canonicalDriverPath));
+    lastRenderedUrl = window.location.href;
+    renderAuthenticatedApp(user);
+    return;
+  }
   const driverRedirectPath = collectionRoutesDriverKioskRedirectPath(user, path);
   if (driverRedirectPath) {
     window.history.replaceState({}, "", routeHref(driverRedirectPath));
@@ -46148,6 +46159,9 @@ function renderAuthenticatedApp(user) {
   const triagePreviewRoute = dataBoxPlusTriagePreviewActive(user) && path === DATA_BOX_PLUS_ROUTE;
   syncDataBoxPlusTriageAssistantBoundary(path, user);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
+  if (isCollectionRoutesDriverKioskUser(user) && userPrimaryRoutes.has(COLLECTION_ROUTES_ROUTE)) {
+    userPrimaryRoutes.set(COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE, userPrimaryRoutes.get(COLLECTION_ROUTES_ROUTE));
+  }
   const userDashboardRoutes = new Map(visibleDashboardRoutes(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   const sarlotaDeepLink = triagePreviewRoute ? false : prepareSarlotaDeepLinkPanel();
 
@@ -46452,7 +46466,7 @@ function applyUiSystemV2() {
   if (
     !shell
     || !user
-    || (isCollectionRoutesDriverKioskUser(user) && normalizePath(window.location.pathname) === COLLECTION_ROUTES_ROUTE)
+    || (isCollectionRoutesDriverKioskUser(user) && isCollectionRoutesDriverKioskPath(window.location.pathname))
   ) {
     return;
   }
@@ -46489,7 +46503,7 @@ function syncCollectionRoutesDriverKioskDocumentState() {
   const user = authState.user ? currentUser() : null;
   const active = Boolean(
     isCollectionRoutesDriverKioskUser(user)
-    && normalizePath(window.location.pathname) === COLLECTION_ROUTES_ROUTE
+    && isCollectionRoutesDriverKioskPath(window.location.pathname)
   );
   document.documentElement.classList.toggle("collection-driver-kiosk-active", active);
   document.body?.classList.toggle("collection-driver-kiosk-active", active);

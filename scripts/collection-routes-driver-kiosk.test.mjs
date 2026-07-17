@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 
 import {
   COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE,
+  COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE,
+  collectionRoutesDriverKioskCanonicalPath,
   collectionRoutesDriverKioskRedirectPath,
+  collectionRoutesDriverKioskScope,
+  isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "../src/data/collectionRoutesDriverKiosk.js";
 import { hasPermission } from "../src/permissions.js";
@@ -19,13 +23,22 @@ const driver = {
 const manager = { id: "manager-1", role: "management", status: "active", active: true };
 
 assert.equal(COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE, "/trasy-svozu");
+assert.equal(COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE, "/trasy-svozu/test");
 assert.equal(isCollectionRoutesDriverKioskUser(driver), true);
 assert.equal(isCollectionRoutesDriverKioskUser(manager), false);
 assert.equal(isCollectionRoutesDriverKioskUser({ ...driver, active: false }), false);
 assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/"), "/trasy-svozu");
 assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/vozovy-park"), "/trasy-svozu");
 assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/trasy-svozu/"), "");
+assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/trasy-svozu/test"), "");
 assert.equal(collectionRoutesDriverKioskRedirectPath(manager, "/vozovy-park"), "");
+assert.equal(isCollectionRoutesDriverKioskPath("/trasy-svozu/test/"), true);
+assert.equal(collectionRoutesDriverKioskScope("/trasy-svozu", "?scope=test"), "test");
+assert.equal(collectionRoutesDriverKioskScope("/trasy-svozu/test", ""), "test");
+assert.equal(collectionRoutesDriverKioskScope("/trasy-svozu", ""), "production");
+assert.equal(collectionRoutesDriverKioskCanonicalPath(driver, "/trasy-svozu", "?scope=test"), "/trasy-svozu/test");
+assert.equal(collectionRoutesDriverKioskCanonicalPath(driver, "/trasy-svozu", ""), "");
+assert.equal(collectionRoutesDriverKioskCanonicalPath(manager, "/trasy-svozu", "?scope=test"), "");
 
 assert.equal(
   hasPermission(driver, "collection-routes", "view"),
@@ -44,6 +57,7 @@ const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), 
 const storeSource = readFileSync(new URL("../functions/_lib/collection-daily-routes-store.js", import.meta.url), "utf8");
 const hereEndpointSource = readFileSync(new URL("../functions/api/collection-routes/here-map-image.js", import.meta.url), "utf8");
 const devServerSource = readFileSync(new URL("./serve.mjs", import.meta.url), "utf8");
+const buildSource = readFileSync(new URL("./build.mjs", import.meta.url), "utf8");
 
 const driverPageStart = appSource.indexOf("function collectionDailyRouteDriverPage");
 const driverPageEnd = appSource.indexOf("function collectionRoutesSourceRoutesSection", driverPageStart);
@@ -100,9 +114,15 @@ assert.ok(
 );
 assert.ok(
   appSource.includes("function collectionDailyRouteDriverScope()")
-    && appSource.includes('new URLSearchParams(window.location.search).get("scope") === "test"')
+    && appSource.includes("collectionRoutesDriverKioskScope(window.location.pathname, window.location.search)")
     && appSource.includes("collectionDailyRouteDriverScopePayload"),
   "Řidičský TEST musí používat explicitní scope=test pro načtení i zápis."
+);
+assert.ok(
+  appSource.includes("collectionRoutesDriverKioskCanonicalPath(user, path, window.location.search)")
+    && appSource.includes("userPrimaryRoutes.set(COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE")
+    && buildSource.includes('{ path: "/trasy-svozu/test", moduleKey: "collection-routes"'),
+  "Stabilní TEST cesta musí přežít přihlášení, načíst řidičský modul a vzniknout v produkčním buildu."
 );
 assert.ok(
   storeSource.includes('if (normalizeRole(user?.role) === "ridic")')
