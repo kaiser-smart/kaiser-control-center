@@ -74,25 +74,42 @@ for (const marker of [
   "MUSÍM JET VYSYPAT",
   "PŘESTÁVKA",
   "CELÁ TRASA",
-  "collection-daily-driver-test-badge\">TEST",
-  "ODESLAT HLÁŠENÍ",
-  "Testovací režim · bez externího doručení",
-  "data-collection-daily-driver-sheet-close"
+  "IZOLOVANÝ TEST · BEZ JÍZDY",
+  "data-collection-driver-panel=\"report\"",
+  "data-collection-driver-panel=\"dump\"",
+  "data-collection-driver-panel=\"break\"",
+  "ZAPNOUT ŠARLOTU"
 ]) {
   assert.ok(driverPageSource.includes(marker), `Řidičský displej postrádá prvek: ${marker}`);
 }
 
 assert.ok(
   appSource.includes("function collectionDailyRouteDriverMapPanel")
-    && appSource.includes("function collectionDailyRouteDriverMapMarker")
+    && appSource.includes("function syncCollectionDailyDriverInteractiveMap")
     && appSource.includes("data-collection-routes-driver-map")
-    && appSource.includes("MAPA CELÉ TRASY")
+    && appSource.includes("AKTUÁLNÍ ÚSEK PO SILNICI")
     && appSource.includes("Výjezd: Trnkova 3052/137, Brno")
     && appSource.includes("Aktuální pořadí trasy")
-    && appSource.includes("data-collection-route-map-marker")
+    && appSource.includes("data-collection-driver-map-control=\"zoom-in\"")
+    && appSource.includes("data-collection-driver-map-mode=\"overview\"")
+    && appSource.includes("collection-daily-driver-map-spider-line")
+    && appSource.includes("data-collection-driver-navigate")
     && driverMapSource.includes("Optimalizováno HERE"),
-  "Řidičský displej musí zobrazit chráněnou HERE mapu celé přidělené trasy."
+  "Řidičský displej musí zobrazit ovladatelnou HERE mapu aktuálního úseku i celé trasy."
 );
+
+assert.equal(driverPageSource.includes("<details"), false, "Pracovní akce řidiče nesmí být schované v rozbalovacím detailu.");
+assert.equal(driverPageSource.includes("<select"), false, "Hlášení řidiče nesmí používat rozbalovací select.");
+for (const marker of [
+  "VYFOTIT STAV",
+  "POTVRDIT A ULOŽIT HLÁŠENÍ",
+  "ZOBRAZIT NA MAPĚ",
+  "NAVIGOVAT SEM",
+  "JSEM ZPĚT NA TRASE",
+  "UKONČIT PŘESTÁVKU"
+]) {
+  assert.ok(appSource.includes(marker), `Krokový tablet postrádá prvek: ${marker}`);
+}
 
 assert.ok(
   appSource.includes("collection-daily-driver-finish-workspace")
@@ -110,8 +127,9 @@ for (const marker of [
   "overflow: hidden",
   ".collection-daily-driver-workspace",
   ".collection-daily-driver-test-badge",
-  ".collection-daily-driver-action-sheet[open]::before",
-  ".collection-daily-driver-sheet"
+  ".collection-daily-driver-modal",
+  ".collection-daily-driver-map__controls",
+  ".collection-daily-driver-photo-button"
 ]) {
   assert.ok(styleSource.includes(marker), `Tabletový kiosk postrádá styl: ${marker}`);
 }
@@ -168,7 +186,9 @@ assert.ok(
   devServerSource.includes("mockDailyRouteTransitionMatch")
     && devServerSource.includes("mockDailyRouteStopEventMatch")
     && devServerSource.includes("mockDailyRouteMapMatch")
-    && devServerSource.includes('eventType: `stop_${action}`')
+    && devServerSource.includes("mockDailyRouteNavigationMatch")
+    && devServerSource.includes("mockDailyRouteReportMatch")
+    && devServerSource.includes("eventType: action")
     && devServerSource.includes("externalEffectsDisabled: true")
     && devServerSource.includes("notificationsDisabled: true")
     && devServerSource.includes("vistosWritesDisabled: true")

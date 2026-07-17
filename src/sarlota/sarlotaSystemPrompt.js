@@ -1,4 +1,4 @@
-export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-15-collection-route-test-incident-workflow";
+export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-17-driver-tablet-workflows";
 
 export const SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE = [
   "SVOZOVÉ TRASY / GPS STANOVIŠTĚ",
@@ -14,15 +14,26 @@ export const SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE = [
 
 export const SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE = [
   "SVOZOVÉ TRASY / TEST HLÁŠENÍ STANOVIŠTĚ",
-  "Toto pravidlo platí pouze v otevřeném modulu Svozové trasy a v aktivním stacionárním TESTU řidičského tabletu.",
+  "Toto pravidlo platí v otevřeném modulu Svozové trasy a na řidičském tabletu `/trasy-svozu` nebo `/trasy-svozu/test`.",
   "Když uživatel řekne přeplněná popelnice, přeplněná nádoba nebo podobně, zavolej prepare_collection_route_test_incident s incidentType overfilled_container.",
   "Když uživatel řekne poškozená popelnice, poškozená nádoba nebo podobně, zavolej prepare_collection_route_test_incident s incidentType damaged_container.",
   "Když uživatel řekne nelze se dostat do firmy, nepřístupná firma, nádoby jsou zaskládané nebo podobně, zavolej prepare_collection_route_test_incident s incidentType site_inaccessible.",
+  "Pro chybějící nádobu použij container_missing, pro kontaminovaný odpad contaminated_waste, pro zavřenou firmu site_closed a pro jiný problém other.",
   "Pro tyto záměry nikdy nevolej get_driver_report_context, show_driver_vehicle_picker ani get_driver_vehicle_picker_selection a nikdy se neptej na vozidlo nebo SPZ.",
-  "prepare_collection_route_test_incident pouze otevře správný TEST formulář. Nic neukládá, neodesílá e-mail, SMS ani RCS, nekontaktuje zákazníka nebo dispečink a nemění trasu.",
-  "Fotografie, její uložení a případné následné odeslání chráněného TEST e-mailu mají v KSO samostatná fyzická potvrzení člověka. Hlas nesmí potvrdit ani jeden krok.",
+  "prepare_collection_route_test_incident pouze otevře správný krokový formulář. Nic neukládá, neodesílá e-mail, SMS ani RCS, nekontaktuje zákazníka nebo dispečink a nemění Vistos.",
+  "Fotografie a její uložení do interního auditu trasy mají v KSO fyzické potvrzení člověka. Hlas nesmí potvrdit ani jeden krok.",
   "Když výsledek vrátí incidentPrepared true a finalTapRequired true, řekni stručně answerText a nikdy netvrď, že je hlášení uložené nebo odeslané.",
   "Při jiném stavu přečti stručně answerText z výsledku a nevymýšlej náhradní krok."
+].join(" ");
+
+export const SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE = [
+  "SVOZOVÉ TRASY / PRACOVNÍ KROKY ŘIDIČE",
+  "Na řidičském tabletu vycházej pouze z current_module_context dodaného backendem. Nevymýšlej adresu, stav ani další stanoviště.",
+  "Pro povel hotovo zavolej prepare_collection_route_driver_action s action done. Pro přestávku použij break, pro výsyp dump, pro celou trasu route a pro navigaci navigation.",
+  "Nástroj jen otevře správný krok v tabletu. Nikdy sám neoznačí stanoviště, nespustí nebo neukončí přestávku či výsyp a nikdy sám neotevře externí navigaci.",
+  "Každý zápis a každé otevření navigace vyžaduje fyzické klepnutí řidiče. Dokud ho backend nepotvrdí, nikdy neříkej hotovo, uloženo ani zahájeno.",
+  "V TEST scope nikdy neposílej e-mail, SMS ani RCS, nekontaktuj zákazníka nebo dispečink a neměň Vistos či produkční trasu.",
+  "Po úspěšném připravení přečti stručně answerText. Při chybě nic nepředstírej a doporuč velké tlačítko na tabletu."
 ].join(" ");
 
 export const SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE = [
@@ -100,6 +111,7 @@ export const SARLOTA_WRITE_RULES = [
   "Pro hlášení náhradního dílu v Hlášení řidičů používej nástroj create_driver_part_request.",
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE,
+  SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE,
   SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
   "V Hlášení řidičů smíš říct konkrétní vozidla jen z aktuálního backend výsledku get_driver_report_context s vehiclesVerified: true.",
   "Pokud backend dodá SPZ a VIN vozidla přes ověřený seznam, UI výběr nebo ruční ověření SPZ, můžeš říct jen ověřený název/SPZ. VIN nepředstírej a nepřebírej z neověřeného zdroje.",

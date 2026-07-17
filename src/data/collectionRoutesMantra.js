@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.22",
-  updatedAt: "17. 7. 2026 19:56",
-  updatedAtIso: "2026-07-17T19:56:00+02:00",
-  lastChange: "Trasa na mapě řidiče",
+  version: "1.23",
+  updatedAt: "17. 7. 2026 22:06",
+  updatedAtIso: "2026-07-17T22:06:00+02:00",
+  lastChange: "Pracovní workflow řidičského tabletu",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Mapa zobrazuje výjezd z Trnkovy a barevný stav všech přidělených stanovišť; za optimalizované se pořadí označí pouze při přesně doloženém a skutečně použitém výsledku HERE. Řidičský tablet nikdy tiše nezamění vybraný TEST ani jeho testera; bez ručního výběru nabídne pouze TEST přihlášeného uživatele. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po kontrole účinku a samostatném vyskakovacím potvrzení skutečně odeslat právě jeden interní e-mail a jednu jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Mapa je ovladatelná dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a nabízí fyzicky potvrzené otevření navigace. Za optimalizované se pořadí označí pouze při přesně doloženém a skutečně použitém výsledku HERE. Pracovní volby HOTOVO, hlášení s povinnou fotografií, výsyp a přestávka mají velký krokový postup bez rozbalovacích polí. Šarlota zná přihlášeného řidiče a aktuální trasu, ale hlasem pouze připraví obrazovku; zápis nebo navigace vždy vyžadují fyzické klepnutí. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -182,9 +182,15 @@ Každou změnu vysvětli a předlož ke schválení. Bez výslovného potvrzení
 ŘIDIČSKÝ TABLET
 Aktivní uživatel s rolí Řidič se po přihlášení i při pokusu otevřít jiný modul vždy vrátí na /trasy-svozu. Nesmí vidět HP, postranní menu, administraci, Mantru, TEST management ani cizí denní trasu. Na serveru se vlastnictví trasy ověřuje výhradně stabilním uživatelským ID; samotné oprávnění „zobrazit Svozové trasy“ nesmí řidiči otevřít trasu jiného řidiče.
 
-Na tabletu tvoří Řidičský displej jednu uzamčenou pracovní obrazovku bez hlavního posouvání. Ukazuje pouze aktuální stanoviště, adresu, odpad a nádoby, poznámku, read-only HERE mapový výřez, stav trasy, Šarlotu a velké volby HOTOVO, HLÁŠENÍ PRO DISPEČINK, MUSÍM JET VYSYPAT, PŘESTÁVKA a CELÁ TRASA. Hlášení a celá trasa se otevírají jako samostatné přehledné vrstvy s vlastním posouváním a zřetelným zavřením. Na telefonu je kvůli bezpečné čitelnosti povolen svislý posun.
+Na tabletu tvoří Řidičský displej jednu uzamčenou pracovní obrazovku bez hlavního posouvání. Ukazuje aktuální stanoviště, adresu, odpad a nádoby, poznámku, dotykově ovladatelnou HERE mapu, stav trasy, Šarlotu a velké volby HOTOVO, HLÁŠENÍ PRO DISPEČINK, MUSÍM JET VYSYPAT, PŘESTÁVKA a CELÁ TRASA. Mapa má dva pravdivé režimy: skutečný silniční úsek od posledního známého bodu k aktuálnímu stanovišti a přehled celé trasy. Lze ji posouvat, přibližovat a vrátit na trasu; nesmí zůstat pouhým statickým výřezem. Hlášení, provozní kroky a celá trasa se otevírají jako samostatné přehledné vrstvy s vlastním posouváním a zřetelným zavřením. Na telefonu je kvůli bezpečné čitelnosti povolen svislý posun.
 
 Řidič musí vidět další stanoviště, zákazníka a adresu, nádoby a odpad, poznámku, navigaci, stav trasy a kontakt na dispečink.
+
+CELÁ TRASA vždy uvádí zákazníka i úplnou adresu každého stanoviště a dovolí bod zobrazit na mapě. NAVIGOVAT otevře externí navigaci až po fyzickém klepnutí řidiče; Šarlota ani automatický skript ji nesmí spustit samy.
+
+HLÁŠENÍ PRO DISPEČINK je pevný krokový postup bez rozbalovacích polí: velké tlačítko typu problému, povinná fotografie, volitelná krátká poznámka a závěrečná kontrola. Přestávka má samostatný začátek a konec. Výsyp nabízí jen backendem schválená výsypná místa, samostatný odjezd a návrat. HOTOVO posune aktuální stanoviště a mapu až po fyzickém potvrzení.
+
+V izolovaném TEST scope se hlášení, přestávka, výsyp a HOTOVO ukládají výhradně do odděleného TEST auditu. Actor je vždy skutečně přihlášený uživatel; physicalTesterName je pouze TEST metadata. Žádný TEST krok nesmí volat komunikační službu, odeslat e-mail, SMS nebo RCS, zapsat do Vistosu ani změnit produkční trasu.
 
 Veškeré mluvené pokyny Řidičského tabletu musí vytvářet produkční agentka Šarlota z ElevenLabs. Web Speech API, speechSynthesis, systémový hlas Androidu a jiná strojová náhrada jsou v tomto modulu zakázané. Pokud ElevenLabs není dostupné, ponech pokyn čitelně na obrazovce a zobraz stručnou chybu; systémové čtení nikdy nespouštěj. Přehrání pevného pokynu nesmí vyžadovat zapnutí mikrofonu ani spustit nástroj, měření, zápis nebo odeslání.
 

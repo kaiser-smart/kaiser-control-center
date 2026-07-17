@@ -61,7 +61,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.0";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.22";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.23";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -1244,6 +1244,15 @@ const COLLECTION_ROUTES_TEST_INCIDENT_TYPES = Object.freeze({
   damaged_container: "Poškozená nádoba",
   site_inaccessible: "Nelze se dostat do firmy"
 });
+const COLLECTION_DAILY_DRIVER_REPORT_TYPES = Object.freeze({
+  overfilled_container: "Přeplněná nádoba",
+  damaged_container: "Poškozená nádoba",
+  site_inaccessible: "Stanoviště není přístupné",
+  container_missing: "Nádoba není na místě",
+  contaminated_waste: "Kontaminovaný odpad",
+  site_closed: "Firma je zavřená",
+  other: "Jiný problém"
+});
 
 const collectionRoutesPilotState = {
   loaded: false,
@@ -1396,6 +1405,18 @@ const collectionRoutesPilotState = {
   myDailyRoutePending: "",
   myDailyRouteMessage: "",
   myDailyRouteError: "",
+  myDailyRoutePanel: "",
+  myDailyRouteMapMode: "leg",
+  myDailyRouteMapFocusStopId: "",
+  myDailyRouteReportStep: "type",
+  myDailyRouteReportType: "",
+  myDailyRouteReportNote: "",
+  myDailyRouteReportPhoto: null,
+  myDailyRouteReportPreviewUrl: "",
+  myDailyRouteReportError: "",
+  myDailyRouteDumpDestinationId: "",
+  myDailyRouteSarlotaEnabled: false,
+  myDailyRouteSarlotaMessage: "",
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -1405,6 +1426,16 @@ const collectionRoutesPilotState = {
 let collectionRoutesSitesAutoRefreshTimer = null;
 let collectionRoutesSitesCountdownTimer = null;
 let collectionRoutesSarlotaVoiceRequestId = 0;
+const collectionDailyDriverMapRuntime = {
+  node: null,
+  image: null,
+  svg: null,
+  routeCache: new Map(),
+  view: null,
+  pointerId: null,
+  pointerStart: null,
+  viewStart: null
+};
 const dataBoxState = {
   loaded: false,
   loading: false,
@@ -1642,7 +1673,8 @@ const elevenLabsAssistant = ElevenLabsAssistantProvider({
     highlight: (payload) => showAiHighlight(payload),
     requestJson: (path, options) => apiJson(path, options),
     prepareCollectionRouteGpsCapture: (parameters) => prepareCollectionRoutesTestGpsFromSarlota(parameters),
-    prepareCollectionRouteTestIncident: (parameters) => prepareCollectionRoutesTestIncidentFromSarlota(parameters)
+    prepareCollectionRouteTestIncident: (parameters) => prepareCollectionRoutesTestIncidentFromSarlota(parameters),
+    prepareCollectionRouteDriverAction: (parameters) => prepareCollectionDailyRouteDriverActionFromSarlota(parameters)
   }
 });
 
@@ -22354,55 +22386,30 @@ function collectionRoutesTestTabletMapPanel(stop, confirmation = null) {
   `;
 }
 
-function collectionDailyRouteDriverMapMarker(point, pointCount) {
-  const status = ["planned", "done", "problem"].includes(point?.status) ? point.status : "planned";
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return "";
-  const current = point?.current === true;
-  const showOrder = current || status !== "planned" || pointCount <= 60;
-  const scale = current ? 1 : pointCount > 120 ? 0.62 : pointCount > 60 ? 0.74 : 0.88;
-  const order = Number(point?.routeOrder) || 0;
-  const accessibleLabel = `${order}. ${point?.label || "Stanoviště"} · ${collectionDailyRouteStopStatusLabel(status)}${current ? " · aktuální" : ""}`;
-  return `
-    <g
-      class="collection-daily-driver-map-pin is-${escapeHtml(status)} ${current ? "is-current" : ""}"
-      transform="translate(${escapeHtml(x)} ${escapeHtml(y)}) scale(${escapeHtml(scale)})"
-      data-collection-route-map-marker="${escapeHtml(point?.stopId || "")}"
-      data-collection-route-map-status="${escapeHtml(status)}"
-    >
-      <title>${escapeHtml(accessibleLabel)}</title>
-      ${current ? `<circle class="collection-daily-driver-map-pin__halo" r="17"></circle>` : ""}
-      <path d="M0 14C-2 8-11 1-11-7A11 11 0 1 1 11-7C11 1 2 8 0 14Z"></path>
-      <circle r="6.5" cy="-7"></circle>
-      ${showOrder ? `<text x="0" y="-4.2">${escapeHtml(order)}</text>` : ""}
-    </g>
-  `;
-}
-
 function collectionDailyRouteDriverMapPanel(detail, currentStop) {
   const run = detail?.run || {};
   const driverMap = detail?.driverMap || null;
   const points = Array.isArray(driverMap?.points) ? driverMap.points : [];
   const depot = driverMap?.depot || null;
   const view = driverMap?.view || {};
-  const hasMap = points.length > 0 && depot && Number(view.width) > 0 && Number(view.height) > 0;
+  const hasMap = points.length > 0 && depot && Number(view.zoom) > 0;
   const ordering = driverMap?.ordering || { mode: "current-order", label: "Aktuální pořadí trasy" };
-  const scopeQuery = run.scope === "test" ? "?scope=test" : "";
-  const versionSeparator = scopeQuery ? "&" : "?";
-  const mapImageUrl = `/api/collection-routes/daily-routes/${encodeURIComponent(run.id || "")}/map${scopeQuery}${versionSeparator}v=${encodeURIComponent(run.updatedAt || currentStop?.updatedAt || "route")}`;
-  const width = Number(view.width) || 960;
-  const height = Number(view.height) || 420;
-  const depotX = Number(depot?.x);
-  const depotY = Number(depot?.y);
+  const mapMode = collectionRoutesPilotState.myDailyRouteMapMode === "overview" ? "overview" : "leg";
+  const scopeQuery = run.scope === "test" ? "scope=test&" : "";
+  const mapImageUrl = `/api/collection-routes/daily-routes/${encodeURIComponent(run.id || "")}/map?${scopeQuery}centerLatitude=${encodeURIComponent(view.centerLatitude || depot?.latitude || "")}&centerLongitude=${encodeURIComponent(view.centerLongitude || depot?.longitude || "")}&zoom=${encodeURIComponent(view.zoom || 14)}&width=960&height=420&v=${encodeURIComponent(run.updatedAt || currentStop?.updatedAt || "route")}`;
   const missingCount = Math.max(0, Number(driverMap?.totalStopCount || 0) - Number(driverMap?.mappedStopCount || 0));
+  const destination = points.find((point) => point.stopId === currentStop?.id) || null;
+  const destinationText = currentStop?.addressText || destination?.address || "";
+  const navigationHref = destinationText
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination?.latitude && destination?.longitude ? `${destination.latitude},${destination.longitude}` : destinationText)}&travelmode=driving&dir_action=navigate`
+    : "";
 
   return `
-    <section class="collection-daily-driver-map" aria-labelledby="collection-daily-driver-map-title" data-collection-route-order-mode="${escapeHtml(ordering.mode)}">
+    <section class="collection-daily-driver-map" aria-labelledby="collection-daily-driver-map-title" data-collection-route-order-mode="${escapeHtml(ordering.mode)}" data-collection-driver-map-mode="${escapeHtml(mapMode)}">
       <header>
         <div>
-          <span>MAPA CELÉ TRASY</span>
-          <strong id="collection-daily-driver-map-title">Výjezd: Trnkova 3052/137, Brno</strong>
+          <span>${mapMode === "leg" ? "AKTUÁLNÍ ÚSEK PO SILNICI" : "CELÁ TRASA"}</span>
+          <strong id="collection-daily-driver-map-title">${mapMode === "leg" && currentStop ? `Další bod: ${escapeHtml(currentStop.addressText || currentStop.stationName || currentStop.customerName || "stanoviště")}` : "Výjezd: Trnkova 3052/137, Brno"}</strong>
         </div>
         <b class="${ordering.mode === "here-optimized" ? "is-optimized" : ""}">${escapeHtml(ordering.label)}</b>
       </header>
@@ -22410,31 +22417,25 @@ function collectionDailyRouteDriverMapPanel(detail, currentStop) {
         <div
           class="collection-routes-test-tablet-map__canvas collection-daily-driver-map__canvas"
           data-collection-routes-driver-map
-          aria-label="HERE mapa celé přidělené trasy s ${escapeHtml(points.length)} stanovišti"
+          data-run-id="${escapeHtml(run.id || "")}"
+          data-scope="${escapeHtml(run.scope || "production")}"
+          aria-label="Interaktivní HERE mapa přidělené trasy"
         >
           <img
             src="${escapeHtml(mapImageUrl)}"
-            alt="HERE mapový podklad celé přidělené trasy"
+            alt="HERE mapový podklad aktuálního úseku"
             data-collection-routes-test-tablet-map-image
+            draggable="false"
           >
-          <svg
-            class="collection-daily-driver-map__pins"
-            viewBox="0 0 ${escapeHtml(width)} ${escapeHtml(height)}"
-            preserveAspectRatio="xMidYMid slice"
-            aria-hidden="true"
-          >
-            ${Number.isFinite(depotX) && Number.isFinite(depotY) ? `
-              <g class="collection-daily-driver-map-depot" transform="translate(${escapeHtml(depotX)} ${escapeHtml(depotY)})">
-                <circle class="collection-daily-driver-map-depot__halo" r="16"></circle>
-                <rect x="-9" y="-9" width="18" height="18" rx="4"></rect>
-                <text x="0" y="3.5">D</text>
-              </g>
-            ` : ""}
-            ${points.map((point) => collectionDailyRouteDriverMapMarker(point, points.length)).join("")}
-          </svg>
+          <svg class="collection-daily-driver-map__pins" aria-hidden="true" data-collection-driver-map-overlay></svg>
+          <div class="collection-daily-driver-map__controls" aria-label="Ovládání mapy">
+            <button type="button" data-collection-driver-map-control="zoom-in" aria-label="Přiblížit mapu">+</button>
+            <button type="button" data-collection-driver-map-control="zoom-out" aria-label="Oddálit mapu">−</button>
+            <button type="button" data-collection-driver-map-control="fit">VYCENTROVAT</button>
+          </div>
           <div class="collection-routes-test-tablet-map__waiting">
-            <strong>Načítám bezpečnou HERE mapu celé trasy…</strong>
-            <span>Stanoviště a pracovní tlačítka zůstávají dostupná i bez mapového podkladu.</span>
+            <strong>Načítám bezpečnou HERE mapu a trasu po silnici…</strong>
+            <span>Mapu můžeš posouvat prstem a přibližovat tlačítky.</span>
           </div>
         </div>
       ` : `
@@ -22443,13 +22444,18 @@ function collectionDailyRouteDriverMapPanel(detail, currentStop) {
           <span>Pokračuj podle adres; dispečink může adresní body doplnit.</span>
         </div>
       `}
+      <div class="collection-daily-driver-map__primary-actions">
+        <button type="button" class="${mapMode === "leg" ? "is-active" : ""}" data-collection-driver-map-mode="leg" ${currentStop ? "" : "disabled"}>AKTUÁLNÍ ÚSEK</button>
+        <button type="button" class="${mapMode === "overview" ? "is-active" : ""}" data-collection-driver-map-mode="overview">CELÁ TRASA</button>
+        ${navigationHref ? `<a href="${escapeHtml(navigationHref)}" target="_blank" rel="noopener noreferrer" data-collection-driver-navigate>NAVIGOVAT</a>` : ""}
+      </div>
       <footer>
         <span><i class="is-depot"></i> Depo</span>
         <span><i class="is-planned"></i> Čeká</span>
         <span><i class="is-current"></i> Aktuální</span>
         <span><i class="is-done"></i> Hotovo</span>
         <span><i class="is-problem"></i> Problém</span>
-        <small>Zobrazeno ${escapeHtml(points.length)} z ${escapeHtml(driverMap?.totalStopCount || points.length)} bodů${missingCount ? ` · ${escapeHtml(missingCount)} bez souřadnic` : ""}. HERE klíč zůstává na backendu.</small>
+        <small>Zobrazeno ${escapeHtml(points.length)} z ${escapeHtml(driverMap?.totalStopCount || points.length)} bodů${missingCount ? ` · ${escapeHtml(missingCount)} bez souřadnic` : ""}. Silniční úsek počítá HERE; navigace se otevře až po klepnutí.</small>
       </footer>
     </section>
   `;
@@ -22460,8 +22466,278 @@ function clearCollectionRoutesTestTabletHereMap() {
   collectionRoutesPilotState.testTabletMapNode = null;
 }
 
+function collectionDailyDriverMercator(latitude, longitude) {
+  const safeLatitude = Math.max(-85.05112878, Math.min(85.05112878, Number(latitude) || 0));
+  const sinLatitude = Math.sin(safeLatitude * Math.PI / 180);
+  return {
+    x: ((Number(longitude) || 0) + 180) / 360,
+    y: 0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI)
+  };
+}
+
+function collectionDailyDriverMercatorCoordinate(point = {}) {
+  return {
+    longitude: Number(point.x) * 360 - 180,
+    latitude: Math.atan(Math.sinh(Math.PI * (1 - 2 * Number(point.y)))) * 180 / Math.PI
+  };
+}
+
+function collectionDailyDriverMapCoordinatesForMode(detail, mode) {
+  const driverMap = detail?.driverMap || {};
+  const points = Array.isArray(driverMap.points) ? driverMap.points : [];
+  const depot = driverMap.depot || null;
+  if (mode === "overview") return [depot, ...points].filter(Boolean);
+  const stops = Array.isArray(detail?.stops) ? detail.stops : [];
+  const selectedId = collectionRoutesPilotState.myDailyRouteMapFocusStopId;
+  const targetStop = stops.find((stop) => stop.id === selectedId)
+    || stops.find((stop) => stop.status === "planned")
+    || (detail?.run?.scope === "test" ? stops.find((stop) => stop.status === "problem") : null);
+  const target = points.find((point) => point.stopId === targetStop?.id) || null;
+  const previousStop = [...stops]
+    .filter((stop) => Number(stop.routeOrder) < Number(targetStop?.routeOrder))
+    .sort((a, b) => Number(b.routeOrder) - Number(a.routeOrder))[0];
+  const origin = points.find((point) => point.stopId === previousStop?.id) || depot;
+  return [origin, target].filter(Boolean);
+}
+
+function collectionDailyDriverFitView(coordinates, width, height) {
+  const projected = (Array.isArray(coordinates) ? coordinates : [])
+    .filter((point) => Number.isFinite(Number(point?.latitude)) && Number.isFinite(Number(point?.longitude)))
+    .map((point) => collectionDailyDriverMercator(point.latitude, point.longitude));
+  if (!projected.length) return null;
+  const minX = Math.min(...projected.map((point) => point.x));
+  const maxX = Math.max(...projected.map((point) => point.x));
+  const minY = Math.min(...projected.map((point) => point.y));
+  const maxY = Math.max(...projected.map((point) => point.y));
+  const rangeX = Math.max(0.00000001, maxX - minX);
+  const rangeY = Math.max(0.00000001, maxY - minY);
+  const zoomX = Math.log2(Math.max(1, width - 110) / (rangeX * 256));
+  const zoomY = Math.log2(Math.max(1, height - 110) / (rangeY * 256));
+  const center = collectionDailyDriverMercatorCoordinate({ x: (minX + maxX) / 2, y: (minY + maxY) / 2 });
+  return {
+    centerLatitude: center.latitude,
+    centerLongitude: center.longitude,
+    zoom: Math.max(3, Math.min(18, Math.floor(Math.min(zoomX, zoomY)))),
+    width,
+    height
+  };
+}
+
+function collectionDailyDriverProject(point, view) {
+  const projected = collectionDailyDriverMercator(point.latitude, point.longitude);
+  const center = collectionDailyDriverMercator(view.centerLatitude, view.centerLongitude);
+  const worldSize = 256 * (2 ** view.zoom);
+  return {
+    x: view.width / 2 + (projected.x - center.x) * worldSize,
+    y: view.height / 2 + (projected.y - center.y) * worldSize
+  };
+}
+
+function collectionDailyDriverMapImageUrl(node, view) {
+  const params = new URLSearchParams({
+    centerLatitude: String(view.centerLatitude),
+    centerLongitude: String(view.centerLongitude),
+    zoom: String(view.zoom),
+    width: String(Math.max(320, Math.min(1280, Math.round(view.width)))),
+    height: String(Math.max(180, Math.min(720, Math.round(view.height)))),
+    v: String(Date.now())
+  });
+  if (node.dataset.scope === "test") params.set("scope", "test");
+  return `/api/collection-routes/daily-routes/${encodeURIComponent(node.dataset.runId || "")}/map?${params.toString()}`;
+}
+
+function collectionDailyDriverMapMarkerMarkup(point, screen, options = {}) {
+  const status = ["planned", "done", "problem"].includes(point?.status) ? point.status : "planned";
+  const current = point?.current === true || options.current === true;
+  const order = Number(point?.routeOrder) || 0;
+  return `<g class="collection-daily-driver-map-pin is-${escapeHtml(status)} ${current ? "is-current" : ""}" transform="translate(${screen.x.toFixed(1)} ${screen.y.toFixed(1)})"><title>${escapeHtml(`${order}. ${point?.label || "Stanoviště"} · ${collectionDailyRouteStopStatusLabel(status)}`)}</title>${current ? `<circle class="collection-daily-driver-map-pin__halo" r="19"></circle>` : ""}<path d="M0 15C-2 8-12 1-12-8A12 12 0 1 1 12-8C12 1 2 8 0 15Z"></path><circle r="7" cy="-8"></circle><text x="0" y="-5">${escapeHtml(order || "•")}</text></g>`;
+}
+
+function renderCollectionDailyDriverMapOverlay(routePoints = []) {
+  const runtime = collectionDailyDriverMapRuntime;
+  const detail = collectionRoutesPilotState.myDailyRoute;
+  const driverMap = detail?.driverMap || {};
+  const points = Array.isArray(driverMap.points) ? driverMap.points : [];
+  const view = runtime.view;
+  if (!runtime.svg || !view) return;
+  runtime.svg.setAttribute("viewBox", `0 0 ${view.width} ${view.height}`);
+  const mode = collectionRoutesPilotState.myDailyRouteMapMode === "overview" ? "overview" : "leg";
+  const coordinates = mode === "overview"
+    ? [driverMap.depot, ...points].filter(Boolean)
+    : routePoints.length ? routePoints : collectionDailyDriverMapCoordinatesForMode(detail, mode);
+  const projectedPath = coordinates
+    .filter((point) => Number.isFinite(Number(point?.latitude)) && Number.isFinite(Number(point?.longitude)))
+    .map((point) => collectionDailyDriverProject(point, view));
+  const path = projectedPath.length > 1
+    ? `<path class="collection-daily-driver-map__route-line" d="${projectedPath.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ")}"></path>`
+    : "";
+  const visiblePoints = mode === "overview" ? points : collectionDailyDriverMapCoordinatesForMode(detail, "leg").filter((point) => point?.kind === "stop");
+  const markers = [];
+  const connectors = [];
+  const buckets = new Map();
+  for (const point of visiblePoints) {
+    const screen = collectionDailyDriverProject(point, view);
+    if (screen.x < -30 || screen.y < -30 || screen.x > view.width + 30 || screen.y > view.height + 30) continue;
+    if (mode !== "overview") {
+      markers.push(collectionDailyDriverMapMarkerMarkup(point, screen));
+      continue;
+    }
+    const key = `${Math.round(screen.x / 44)}:${Math.round(screen.y / 44)}`;
+    const bucket = buckets.get(key) || { points: [], x: 0, y: 0 };
+    bucket.points.push(point);
+    bucket.x += screen.x;
+    bucket.y += screen.y;
+    buckets.set(key, bucket);
+  }
+  for (const bucket of buckets.values()) {
+    const screen = { x: bucket.x / bucket.points.length, y: bucket.y / bucket.points.length };
+    if (bucket.points.length === 1) {
+      markers.push(collectionDailyDriverMapMarkerMarkup(bucket.points[0], screen));
+      continue;
+    }
+    const currentPoint = bucket.points.find((point) => point.current === true);
+    if (bucket.points.length <= 6) {
+      if (currentPoint) markers.push(collectionDailyDriverMapMarkerMarkup(currentPoint, screen));
+      const spreadPoints = currentPoint ? bucket.points.filter((point) => point !== currentPoint) : bucket.points;
+      const spreadRadius = currentPoint ? 36 : 30;
+      spreadPoints.forEach((point, index) => {
+        const angle = (-Math.PI / 2) + ((Math.PI * 2 * index) / spreadPoints.length);
+        const spreadScreen = {
+          x: screen.x + (Math.cos(angle) * spreadRadius),
+          y: screen.y + (Math.sin(angle) * spreadRadius)
+        };
+        connectors.push(`<line class="collection-daily-driver-map-spider-line" x1="${screen.x.toFixed(1)}" y1="${screen.y.toFixed(1)}" x2="${spreadScreen.x.toFixed(1)}" y2="${spreadScreen.y.toFixed(1)}"></line>`);
+        markers.push(collectionDailyDriverMapMarkerMarkup(point, spreadScreen));
+      });
+      continue;
+    }
+    if (currentPoint) {
+      markers.push(collectionDailyDriverMapMarkerMarkup(currentPoint, screen));
+      markers.push(`<g class="collection-daily-driver-map-cluster" transform="translate(${(screen.x + 38).toFixed(1)} ${screen.y.toFixed(1)})"><circle r="17"></circle><text y="5">+${bucket.points.length - 1}</text></g>`);
+    } else {
+      markers.push(`<g class="collection-daily-driver-map-cluster" transform="translate(${screen.x.toFixed(1)} ${screen.y.toFixed(1)})"><circle r="17"></circle><text y="5">${bucket.points.length}</text></g>`);
+    }
+  }
+  const depotScreen = driverMap.depot ? collectionDailyDriverProject(driverMap.depot, view) : null;
+  const depot = depotScreen && depotScreen.x > -30 && depotScreen.y > -30 && depotScreen.x < view.width + 30 && depotScreen.y < view.height + 30
+    ? `<g class="collection-daily-driver-map-depot" transform="translate(${depotScreen.x.toFixed(1)} ${depotScreen.y.toFixed(1)})"><circle class="collection-daily-driver-map-depot__halo" r="17"></circle><rect x="-10" y="-10" width="20" height="20" rx="4"></rect><text x="0" y="4">D</text></g>`
+    : "";
+  runtime.svg.innerHTML = `${path}${connectors.join("")}${depot}${markers.join("")}`;
+}
+
+function updateCollectionDailyDriverMapImage() {
+  const runtime = collectionDailyDriverMapRuntime;
+  if (!runtime.node || !runtime.image || !runtime.view) return;
+  runtime.node.classList.remove("is-loaded", "is-error");
+  runtime.image.src = collectionDailyDriverMapImageUrl(runtime.node, runtime.view);
+}
+
+async function loadCollectionDailyDriverRoadGeometry() {
+  const detail = collectionRoutesPilotState.myDailyRoute;
+  const run = detail?.run;
+  const mode = collectionRoutesPilotState.myDailyRouteMapMode === "overview" ? "overview" : "leg";
+  if (!run || mode !== "leg") {
+    renderCollectionDailyDriverMapOverlay([]);
+    return;
+  }
+  const coordinates = collectionDailyDriverMapCoordinatesForMode(detail, "leg");
+  const origin = coordinates[0];
+  const destination = coordinates[1];
+  if (!origin || !destination) {
+    renderCollectionDailyDriverMapOverlay([]);
+    return;
+  }
+  const fromPointId = origin.kind === "depot" ? "depot" : origin.stopId;
+  const toPointId = destination.stopId;
+  const cacheKey = `${run.id}:${fromPointId}:${toPointId}`;
+  if (collectionDailyDriverMapRuntime.routeCache.has(cacheKey)) {
+    renderCollectionDailyDriverMapOverlay(collectionDailyDriverMapRuntime.routeCache.get(cacheKey));
+    return;
+  }
+  try {
+    const params = new URLSearchParams({ fromPointId, toPointId });
+    if (run.scope === "test") params.set("scope", "test");
+    const result = await apiJson(`/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/navigation?${params.toString()}`);
+    const routePoints = Array.isArray(result.navigation?.points) ? result.navigation.points : [];
+    collectionDailyDriverMapRuntime.routeCache.set(cacheKey, routePoints);
+    renderCollectionDailyDriverMapOverlay(routePoints);
+  } catch (error) {
+    renderCollectionDailyDriverMapOverlay([]);
+    const waiting = collectionDailyDriverMapRuntime.node?.querySelector(".collection-routes-test-tablet-map__waiting");
+    if (waiting && !collectionDailyDriverMapRuntime.node?.classList.contains("is-loaded")) {
+      waiting.innerHTML = `<strong>Silniční úsek HERE teď není dostupný.</strong><span>${escapeHtml(error.payload?.error || "Mapa dál funguje; navigaci můžeš otevřít tlačítkem.")}</span>`;
+    }
+  }
+}
+
+function syncCollectionDailyDriverInteractiveMap(options = {}) {
+  const node = document.querySelector("[data-collection-routes-driver-map]");
+  const image = node?.querySelector("[data-collection-routes-test-tablet-map-image]");
+  const svg = node?.querySelector("[data-collection-driver-map-overlay]");
+  if (!node || !image || !svg) {
+    collectionDailyDriverMapRuntime.node = null;
+    return;
+  }
+  const width = Math.max(320, Math.min(1280, Math.round(node.clientWidth || 960)));
+  const height = Math.max(180, Math.min(720, Math.round(node.clientHeight || 420)));
+  const mode = collectionRoutesPilotState.myDailyRouteMapMode === "overview" ? "overview" : "leg";
+  const fit = collectionDailyDriverFitView(collectionDailyDriverMapCoordinatesForMode(collectionRoutesPilotState.myDailyRoute, mode), width, height);
+  collectionDailyDriverMapRuntime.node = node;
+  collectionDailyDriverMapRuntime.image = image;
+  collectionDailyDriverMapRuntime.svg = svg;
+  collectionDailyDriverMapRuntime.view = options.keepView && collectionDailyDriverMapRuntime.view
+    ? { ...collectionDailyDriverMapRuntime.view, width, height }
+    : fit;
+  const showLoaded = () => {
+    if (!node.isConnected) return;
+    node.classList.add("is-loaded");
+    node.classList.remove("is-error");
+  };
+  const showError = () => {
+    if (!node.isConnected) return;
+    node.classList.add("is-error");
+    node.classList.remove("is-loaded");
+  };
+  image.addEventListener("load", showLoaded, { once: true });
+  image.addEventListener("error", showError, { once: true });
+  if (image.complete && image.naturalWidth > 0) showLoaded();
+  node.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button, a")) return;
+    node.setPointerCapture?.(event.pointerId);
+    collectionDailyDriverMapRuntime.pointerId = event.pointerId;
+    collectionDailyDriverMapRuntime.pointerStart = { x: event.clientX, y: event.clientY };
+    collectionDailyDriverMapRuntime.viewStart = { ...collectionDailyDriverMapRuntime.view };
+  });
+  node.addEventListener("pointermove", (event) => {
+    const runtime = collectionDailyDriverMapRuntime;
+    if (runtime.pointerId !== event.pointerId || !runtime.pointerStart || !runtime.viewStart) return;
+    event.preventDefault();
+    const worldSize = 256 * (2 ** runtime.viewStart.zoom);
+    const center = collectionDailyDriverMercator(runtime.viewStart.centerLatitude, runtime.viewStart.centerLongitude);
+    const next = collectionDailyDriverMercatorCoordinate({
+      x: center.x - (event.clientX - runtime.pointerStart.x) / worldSize,
+      y: center.y - (event.clientY - runtime.pointerStart.y) / worldSize
+    });
+    runtime.view = { ...runtime.view, centerLatitude: next.latitude, centerLongitude: next.longitude };
+    renderCollectionDailyDriverMapOverlay([]);
+  });
+  const finishPointer = (event) => {
+    if (collectionDailyDriverMapRuntime.pointerId !== event.pointerId) return;
+    collectionDailyDriverMapRuntime.pointerId = null;
+    updateCollectionDailyDriverMapImage();
+    void loadCollectionDailyDriverRoadGeometry();
+  };
+  node.addEventListener("pointerup", finishPointer);
+  node.addEventListener("pointercancel", finishPointer);
+  if (fit) {
+    updateCollectionDailyDriverMapImage();
+    renderCollectionDailyDriverMapOverlay([]);
+    void loadCollectionDailyDriverRoadGeometry();
+  }
+}
+
 function syncCollectionRoutesTestTabletHereMap() {
-  const node = document.querySelector("[data-collection-routes-test-tablet-map], [data-collection-routes-driver-map]");
+  const node = document.querySelector("[data-collection-routes-test-tablet-map]");
   const image = node?.querySelector("[data-collection-routes-test-tablet-map-image]");
   if (!node || !image) {
     clearCollectionRoutesTestTabletHereMap();
@@ -23110,7 +23386,7 @@ function collectionDailyRouteDispatcherDetail() {
       <details class="collection-daily-route-audit">
         <summary>Audit trasy (${escapeHtml(events.length)})</summary>
         <ol>
-          ${events.slice(0, 100).map((event) => `<li><time>${escapeHtml(formatDateTime(event.createdAt))}</time><strong>${escapeHtml(collectionDailyRouteEventLabel(event.eventType))}</strong><span>${escapeHtml(event.actorName || "Systém")}${event.reason ? ` · ${escapeHtml(event.reason)}` : ""}${event.note ? ` · ${escapeHtml(event.note)}` : ""}</span></li>`).join("")}
+          ${events.slice(0, 100).map((event) => `<li><time>${escapeHtml(formatDateTime(event.createdAt))}</time><strong>${escapeHtml(collectionDailyRouteEventLabel(event.eventType))}</strong><span>${escapeHtml(event.actorName || "Systém")}${event.reason ? ` · ${escapeHtml(event.reason)}` : ""}${event.note ? ` · ${escapeHtml(event.note)}` : ""}${event.payload?.photoUrl ? ` · <a href="${escapeHtml(event.payload.photoUrl)}" target="_blank" rel="noopener noreferrer">Fotografie hlášení</a>` : ""}</span></li>`).join("")}
         </ol>
       </details>
     </div>
@@ -23180,9 +23456,53 @@ function collectionDailyRoutesDispatcherPanel(rows = []) {
 function collectionDailyRouteDriverStopList(stops = []) {
   return `
     <ol class="collection-daily-driver-stop-list">
-      ${stops.map((stop) => `<li class="is-${escapeHtml(stop.status)}"><span>${escapeHtml(stop.routeOrder)}</span><div><strong>${escapeHtml(stop.customerName || "-")}</strong><small>${escapeHtml(stop.stationName || stop.addressText || "-")}</small></div><b>${escapeHtml(collectionDailyRouteStopStatusLabel(stop.status))}</b></li>`).join("")}
+      ${stops.map((stop) => {
+        const destination = stop.latitude && stop.longitude ? `${stop.latitude},${stop.longitude}` : stop.addressText;
+        const navigationHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination || "")}&travelmode=driving&dir_action=navigate`;
+        return `<li class="is-${escapeHtml(stop.status)}"><span>${escapeHtml(stop.routeOrder)}</span><div class="collection-daily-driver-stop-list__identity"><strong>${escapeHtml(stop.customerName || "-")}</strong><small>${escapeHtml(stop.stationName || "Stanoviště bez názvu")}</small><p>${escapeHtml(stop.addressText || "Adresa není uvedená")}</p><div><button type="button" data-collection-driver-show-stop="${escapeHtml(stop.id)}">ZOBRAZIT NA MAPĚ</button><a href="${escapeHtml(navigationHref)}" target="_blank" rel="noopener noreferrer">NAVIGOVAT SEM</a></div></div><b>${escapeHtml(collectionDailyRouteStopStatusLabel(stop.status))}</b></li>`;
+      }).join("")}
     </ol>
   `;
+}
+
+function collectionDailyDriverLatestOperation(detail, action) {
+  const event = (Array.isArray(detail?.events) ? detail.events : [])
+    .find((item) => item.eventType === action && ["started", "ended"].includes(item.payload?.phase));
+  return event?.payload?.phase === "started" ? event : null;
+}
+
+function collectionDailyDriverPanel(detail, currentStop, visibleStops, remainingStops, vehicleLabel) {
+  const panel = collectionRoutesPilotState.myDailyRoutePanel;
+  if (!panel) return "";
+  const pending = collectionRoutesPilotState.myDailyRoutePending;
+  const run = detail?.run || {};
+  const testScope = run.scope === "test";
+  const close = `<button type="button" class="collection-daily-driver-modal__close" data-collection-driver-panel-close aria-label="Zavřít">ZAVŘÍT</button>`;
+  if (panel === "done" && currentStop) {
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-done-title"><section><header><div><span>FYZICKÉ POTVRZENÍ</span><h2 id="collection-driver-done-title">Je stanoviště opravdu hotové?</h2><p>${escapeHtml(currentStop.customerName || "-")} · ${escapeHtml(currentStop.addressText || "-")}</p></div>${close}</header><div class="collection-daily-driver-operation-active"><strong>Šarlota tento krok sama nepotvrdí.</strong><span>Klepnutím uložíš HOTOVO pod svým přihlášeným účtem.</span><button class="primary-action" type="button" data-collection-daily-driver-event="done" data-stop-id="${escapeHtml(currentStop.id)}" ${pending ? "disabled" : ""}>ANO, STANOVIŠTĚ JE HOTOVÉ</button></div></section></div>`;
+  }
+  if (panel === "route") {
+    const stopCount = Array.isArray(detail?.stops) ? detail.stops.length : 0;
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-route-panel-title"><section><header><div><span>PRACOVNÍ SEZNAM</span><h2 id="collection-driver-route-panel-title">Celá trasa · ${escapeHtml(vehicleLabel)}</h2></div>${close}</header>${collectionDailyRouteDriverStopList(visibleStops)}${remainingStops ? `<button type="button" class="collection-daily-driver-modal__more" data-collection-daily-driver-show-more>ZOBRAZIT DALŠÍ (${escapeHtml(Math.min(COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE, remainingStops))})</button>` : `<p class="collection-daily-driver-modal__all">Zobrazeno všech ${escapeHtml(stopCount)} stanovišť.</p>`}</section></div>`;
+  }
+  if (panel === "report" && currentStop) {
+    const step = collectionRoutesPilotState.myDailyRouteReportStep || "type";
+    const type = collectionRoutesPilotState.myDailyRouteReportType;
+    const photoReady = Boolean(collectionRoutesPilotState.myDailyRouteReportPhoto && collectionRoutesPilotState.myDailyRouteReportPreviewUrl);
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-report-title"><section><header><div><span>HLÁŠENÍ · KROK ${step === "type" ? "1/3" : step === "photo" ? "2/3" : "3/3"}</span><h2 id="collection-driver-report-title">Hlášení pro dispečink</h2><p>${escapeHtml(currentStop.customerName || "-")} · ${escapeHtml(currentStop.addressText || "-")}</p></div>${close}</header>${testScope ? `<p class="collection-daily-driver-modal__test">TEST · nic se neposílá zákazníkovi ani mimo interní audit trasy</p>` : ""}${collectionRoutesPilotState.myDailyRouteReportError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.myDailyRouteReportError)}</p>` : ""}${step === "type" ? `<div class="collection-daily-driver-choice-grid" aria-label="Vyber důvod">${Object.entries(COLLECTION_DAILY_DRIVER_REPORT_TYPES).map(([value, label]) => `<button type="button" data-collection-driver-report-type="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><small>POKRAČOVAT</small></button>`).join("")}</div>` : ""}${step === "photo" ? `<div class="collection-daily-driver-photo-step"><strong>${escapeHtml(COLLECTION_DAILY_DRIVER_REPORT_TYPES[type] || "Problém")}</strong><p>Vyfoť skutečný stav. Fotografie je povinná, aby dispečink nemusel zjišťovat situaci po telefonu.</p><label class="collection-daily-driver-photo-button"><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-collection-driver-report-photo><span>${photoReady ? "VYFOTIT ZNOVU" : "VYFOTIT STAV"}</span></label>${photoReady ? `<img src="${escapeHtml(collectionRoutesPilotState.myDailyRouteReportPreviewUrl)}" alt="Náhled fotografie hlášení"><button type="button" class="primary-action" data-collection-driver-report-next="review">FOTKA JE V POŘÁDKU</button>` : ""}<button type="button" data-collection-driver-report-back="type">ZPĚT</button></div>` : ""}${step === "review" ? `<form class="collection-daily-driver-report-review" data-collection-driver-report-form data-stop-id="${escapeHtml(currentStop.id)}"><div><img src="${escapeHtml(collectionRoutesPilotState.myDailyRouteReportPreviewUrl)}" alt="Fotografie k odeslání"><strong>${escapeHtml(COLLECTION_DAILY_DRIVER_REPORT_TYPES[type] || "Problém")}</strong></div><label><span>Krátká poznámka pro dispečink</span><textarea name="note" maxlength="500" rows="4" placeholder="Co má dispečink vědět?">${escapeHtml(collectionRoutesPilotState.myDailyRouteReportNote)}</textarea></label><button class="primary-action" type="submit" ${pending ? "disabled" : ""}>${pending ? "UKLÁDÁM HLÁŠENÍ…" : "POTVRDIT A ULOŽIT HLÁŠENÍ"}</button><button type="button" data-collection-driver-report-back="photo" ${pending ? "disabled" : ""}>ZPĚT K FOTCE</button></form>` : ""}</section></div>`;
+  }
+  if (panel === "dump") {
+    const active = collectionDailyDriverLatestOperation(detail, "dump");
+    const sites = Array.isArray(detail?.driverOperations?.dumpSites) ? detail.driverOperations.dumpSites : [];
+    const selected = sites.find((site) => site.id === (active?.payload?.destination?.id || collectionRoutesPilotState.myDailyRouteDumpDestinationId));
+    const navigationHref = selected ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${selected.latitude},${selected.longitude}`)}&travelmode=driving&dir_action=navigate` : "";
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-dump-title"><section><header><div><span>VÝSYP</span><h2 id="collection-driver-dump-title">Musím jet vysypat</h2></div>${close}</header>${active ? `<div class="collection-daily-driver-operation-active"><strong>Výsyp je aktivní</strong><span>${escapeHtml(active.payload?.destination?.name || selected?.name || "Vybrané místo")}</span>${navigationHref ? `<a href="${escapeHtml(navigationHref)}" target="_blank" rel="noopener noreferrer">NAVIGOVAT NA VÝSYP</a>` : ""}<button type="button" class="primary-action" data-collection-driver-operation="dump" data-phase="ended" data-stop-id="${escapeHtml(currentStop?.id || active.stopId || "route")}" ${pending ? "disabled" : ""}>JSEM ZPĚT NA TRASE</button></div>` : sites.length ? `<p>Vyber místo výsypu. Trasa stanovišť se tím nemění.</p><div class="collection-daily-driver-choice-grid">${sites.map((site) => `<button type="button" class="${collectionRoutesPilotState.myDailyRouteDumpDestinationId === site.id ? "is-selected" : ""}" data-collection-driver-dump-site="${escapeHtml(site.id)}"><span>${escapeHtml(site.name)}</span><small>${escapeHtml(site.address)}</small></button>`).join("")}</div>${selected ? `<button type="button" class="primary-action" data-collection-driver-operation="dump" data-phase="started" data-stop-id="${escapeHtml(currentStop?.id || "route")}" ${pending ? "disabled" : ""}>POTVRDIT ODJEZD NA VÝSYP</button>` : ""}` : `<div class="collection-daily-driver-operation-empty"><strong>Místo výsypu není potvrzené.</strong><span>Pokračuj v trase a spoj se s dispečinkem hlasem. Tablet si místo nevymyslí.</span></div>`}</section></div>`;
+  }
+  if (panel === "break") {
+    const active = collectionDailyDriverLatestOperation(detail, "break");
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-break-title"><section><header><div><span>PŘESTÁVKA</span><h2 id="collection-driver-break-title">${active ? "Přestávka právě běží" : "Zahájit přestávku"}</h2></div>${close}</header><div class="collection-daily-driver-operation-active ${active ? "is-running" : ""}"><strong>${active ? `Od ${escapeHtml(new Date(active.createdAt).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }))}` : "Trasa zůstane bezpečně na aktuálním stanovišti."}</strong><span>${active ? "Po návratu jedním klepnutím pokračuj." : "Dispečink uvidí začátek i konec v interním auditu."}</span><button type="button" class="primary-action" data-collection-driver-operation="break" data-phase="${active ? "ended" : "started"}" data-stop-id="${escapeHtml(currentStop?.id || active?.stopId || "route")}" ${pending ? "disabled" : ""}>${active ? "UKONČIT PŘESTÁVKU" : "ZAHÁJIT PŘESTÁVKU"}</button></div></section></div>`;
+  }
+  return "";
 }
 
 function collectionDailyRouteDriverPage(_moduleItem, user) {
@@ -23196,9 +23516,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
   );
   const visibleStops = stops.slice(0, visibleStopCount);
   const remainingStops = Math.max(0, stops.length - visibleStopCount);
-  const currentStop = stops.find((stop) => stop.status === "planned")
-    || (testScope ? stops.find((stop) => stop.status === "problem") : null)
-    || null;
+  const currentStop = stops.find((stop) => stop.status === "planned") || null;
   const eventStopId = currentStop?.id || stops[0]?.id || "route";
   const pending = collectionRoutesPilotState.myDailyRoutePending;
   const summary = run?.summary || {};
@@ -23209,7 +23527,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
         <div class="collection-daily-driver-kiosk-brand">
           <strong>kaiser.</strong>
           <span>ŘIDIČSKÝ DISPLEJ</span>
-          ${testScope ? `<b class="collection-daily-driver-test-badge">TEST</b>` : ""}
+          ${testScope ? `<b class="collection-daily-driver-test-badge">IZOLOVANÝ TEST · BEZ JÍZDY</b>` : ""}
         </div>
         <div class="collection-daily-driver-kiosk-user">
           <span>${escapeHtml(user.name || user.email || "Řidič")}</span>
@@ -23230,6 +23548,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               <span>${escapeHtml(collectionDailyRouteDateLabel(run.routeDate))}</span>
               <strong>${escapeHtml(vehicleLabel)}</strong>
               <small>${escapeHtml(run.title || "Denní trasa")}</small>
+              ${testScope ? `<small class="collection-daily-driver-test-identity">actor ${escapeHtml(user.name || "Miroslav Vašek")} · fyzicky ${escapeHtml(run.metadata?.physicalTesterName || "Tomáš Gaží")}</small>` : ""}
             </div>
             <div class="collection-daily-driver-route-kpis">
               <article><span>ČEKÁ</span><strong>${escapeHtml(summary.plannedCount || 0)}</strong></article>
@@ -23241,7 +23560,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               <button type="button" data-collection-daily-driver-refresh ${collectionRoutesPilotState.myDailyRouteLoading ? "disabled" : ""}>OBNOVIT</button>
             </div>
           </header>
-          ${run.status === "confirmed" ? `<div class="collection-daily-driver-start"><strong>Trasa je připravená.</strong><span>Po zahájení se zobrazí stanoviště a pracovní tlačítka.</span><button class="primary-action collection-daily-driver-primary" type="button" data-collection-daily-driver-transition="start" ${pending ? "disabled" : ""}>ZAHÁJIT TRASU</button></div>` : ""}
+          ${run.status === "confirmed" ? `<div class="collection-daily-driver-start"><strong>Trasa je připravená.</strong><span>Po zahájení se zobrazí mapa, navigace a pracovní kroky.</span><button class="primary-action collection-daily-driver-primary" type="button" data-collection-daily-driver-transition="start" ${pending ? "disabled" : ""}>${testScope ? "ZAHÁJIT TEST" : "ZAHÁJIT TRASU"}</button></div>` : ""}
           ${run.status === "draft" ? `<div class="collection-daily-driver-complete"><strong>Trasa čeká na potvrzení dispečinku.</strong><span>Zatím ji nemůžeš zahájit.</span></div>` : ""}
           ${run.status === "completed" ? `<div class="collection-daily-driver-complete"><strong>Trasa je dokončená.</strong><span>Pokud je potřeba oprava, znovu ji otevře dispečer.</span></div>` : ""}
           ${run.status === "active" && currentStop ? `
@@ -23259,34 +23578,12 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               </article>
               <aside class="collection-daily-driver-actions" aria-label="Pracovní akce řidiče">
                 <button class="collection-daily-driver-action collection-daily-driver-action--done" type="button" data-collection-daily-driver-event="done" data-stop-id="${escapeHtml(currentStop.id)}" ${pending ? "disabled" : ""}>HOTOVO</button>
-                ${currentStop.status === "planned" ? `<details class="collection-daily-driver-action-sheet">
-                  <summary class="collection-daily-driver-action collection-daily-driver-action--report">HLÁŠENÍ PRO DISPEČINK</summary>
-                  <div class="collection-daily-driver-sheet" role="dialog" aria-modal="true" aria-labelledby="collection-daily-driver-problem-title">
-                    <header><div><span>STANOVIŠTĚ ${escapeHtml(currentStop.routeOrder)}</span><h2 id="collection-daily-driver-problem-title">Hlášení pro dispečink</h2></div><button type="button" data-collection-daily-driver-sheet-close aria-label="Zavřít hlášení">ZAVŘÍT</button></header>
-                    <p>${escapeHtml(currentStop.customerName || "-")} · ${escapeHtml(currentStop.addressText || "-")}</p>
-                    ${testScope ? `<p class="collection-daily-driver-test-note">Testovací režim · bez externího doručení</p>` : ""}
-                    <form class="collection-daily-driver-problem" data-collection-daily-driver-problem-form data-stop-id="${escapeHtml(currentStop.id)}">
-                      <label><span>Co se stalo?</span><select name="reason" required><option value="">Vyber důvod</option><option>Přeplněná nádoba</option><option>Poškozená nádoba</option><option>Nádoba není přístupná</option><option>Nelze se dostat do firmy</option><option>Nádoba nebyla přistavená</option><option>Kontaminovaný odpad</option><option>Jiný problém</option></select></label>
-                      <label><span>Krátká poznámka</span><input name="note" maxlength="500" placeholder="Co má dispečink vědět?"></label>
-                      <button class="primary-action" type="submit" ${pending ? "disabled" : ""}>ODESLAT HLÁŠENÍ</button>
-                    </form>
-                  </div>
-                </details>` : ""}
-                <button class="collection-daily-driver-action" type="button" data-collection-daily-driver-event="dump" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>MUSÍM JET VYSYPAT</button>
-                <button class="collection-daily-driver-action" type="button" data-collection-daily-driver-event="break" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>PŘESTÁVKA</button>
-                <details class="collection-daily-driver-action-sheet">
-                  <summary class="collection-daily-driver-action">CELÁ TRASA</summary>
-                  <div class="collection-daily-driver-sheet" role="dialog" aria-modal="true" aria-labelledby="collection-daily-driver-stops-title">
-                    <header><div><span>${escapeHtml(collectionDailyRouteDateLabel(run.routeDate))}</span><h2 id="collection-daily-driver-stops-title">Celá trasa · ${escapeHtml(vehicleLabel)}</h2></div><button type="button" data-collection-daily-driver-sheet-close aria-label="Zavřít celou trasu">ZAVŘÍT</button></header>
-                    ${collectionDailyRouteDriverStopList(visibleStops)}
-                    ${stops.length > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? `
-                      <div class="collection-daily-route-pagination" aria-live="polite">
-                        <span>Zobrazeno ${escapeHtml(visibleStopCount)} z ${escapeHtml(stops.length)} zastávek.</span>
-                        ${remainingStops ? `<button class="secondary-link" type="button" data-collection-daily-driver-show-more>ZOBRAZIT DALŠÍ (${escapeHtml(Math.min(COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE, remainingStops))})</button>` : `<strong>Zobrazeny všechny zastávky.</strong>`}
-                      </div>
-                    ` : ""}
-                  </div>
-                </details>
+                <button class="collection-daily-driver-action collection-daily-driver-action--report" type="button" data-collection-driver-panel="report" ${pending ? "disabled" : ""}>HLÁŠENÍ PRO DISPEČINK</button>
+                <button class="collection-daily-driver-action ${collectionDailyDriverLatestOperation(detail, "dump") ? "is-active" : ""}" type="button" data-collection-driver-panel="dump" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>${collectionDailyDriverLatestOperation(detail, "dump") ? "VÝSYP · NÁVRAT" : "MUSÍM JET VYSYPAT"}</button>
+                <button class="collection-daily-driver-action ${collectionDailyDriverLatestOperation(detail, "break") ? "is-active" : ""}" type="button" data-collection-driver-panel="break" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>${collectionDailyDriverLatestOperation(detail, "break") ? "PŘESTÁVKA BĚŽÍ" : "PŘESTÁVKA"}</button>
+                <button class="collection-daily-driver-action" type="button" data-collection-driver-panel="route">CELÁ TRASA</button>
+                <button class="collection-daily-driver-action collection-daily-driver-action--sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "is-active" : ""}" type="button" data-collection-driver-sarlota>${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "ŠARLOTA POSLOUCHÁ" : "ZAPNOUT ŠARLOTU"}</button>
+                ${collectionRoutesPilotState.myDailyRouteSarlotaMessage ? `<p class="collection-daily-driver-sarlota-status">${escapeHtml(collectionRoutesPilotState.myDailyRouteSarlotaMessage)}</p>` : ""}
               </aside>
             </div>
           ` : ""}
@@ -23301,6 +23598,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
             </div>
           ` : ""}
         </section>
+        ${collectionDailyDriverPanel(detail, currentStop, visibleStops, remainingStops, vehicleLabel)}
       ` : ""}
     </main>
   `;
@@ -39400,8 +39698,33 @@ async function prepareCollectionRoutesTestIncidentFromSarlota(parameters = {}) {
     finalTapRequired: true,
     photoRequired: true,
     sendsNotifications: false,
-    changesRoute: false
+    changesRoute: false,
+    writesVistos: false
   };
+  const driverTablet = normalizeRole(currentUser()?.role) === "ridic"
+    && isCollectionRoutesDriverKioskPath(window.location.pathname);
+  if (driverTablet) {
+    const currentStop = collectionRoutesPilotState.myDailyRoute?.stops?.find((stop) => stop.status === "planned");
+    if (!COLLECTION_DAILY_DRIVER_REPORT_TYPES[type]) {
+      return { ...baseResult, ok: false, status: "incident_type_required", answerText: "Řekni stručně důvod hlášení. Potom ho připravím k vyfocení." };
+    }
+    if (!currentStop || collectionRoutesPilotState.myDailyRoute?.run?.status !== "active") {
+      return { ...baseResult, ok: false, status: "active_route_required", answerText: "Teď není otevřené aktivní stanoviště, ke kterému by šlo hlášení připravit." };
+    }
+    clearCollectionDailyDriverReport();
+    collectionRoutesPilotState.myDailyRouteReportType = type;
+    collectionRoutesPilotState.myDailyRouteReportStep = "photo";
+    collectionRoutesPilotState.myDailyRoutePanel = "report";
+    render();
+    return {
+      ...baseResult,
+      ok: true,
+      status: "incident_ready_for_photo",
+      incidentPrepared: true,
+      answerText: `Připravila jsem hlášení ${COLLECTION_DAILY_DRIVER_REPORT_TYPES[type].toLowerCase()}. Teď fyzicky vyfoť stav a uložení potvrď velkým tlačítkem.`,
+      messageForAssistant: "Hlášení je pouze otevřené k fotografii. Nikdy netvrď, že je uložené nebo odeslané."
+    };
+  }
   if (normalizePath(window.location.pathname) !== COLLECTION_ROUTES_ROUTE) {
     return { ...baseResult, ok: false, status: "wrong_module", answerText: "TEST hlášení připravím jen v otevřeném modulu Svozové trasy." };
   }
@@ -39425,6 +39748,56 @@ async function prepareCollectionRoutesTestIncidentFromSarlota(parameters = {}) {
     incidentPrepared: true,
     answerText: `Otevřela jsem TEST hlášení ${label}. Vyfoť stav, zkontroluj účinek a potom ho potvrď velkým tlačítkem.`,
     messageForAssistant: `Hlášení je pouze připravené. Nikdy netvrď, že bylo uložené nebo odeslané. Fotografie vyžaduje fyzické klepnutí člověka. ${finalEffect}`
+  };
+}
+
+async function prepareCollectionDailyRouteDriverActionFromSarlota(parameters = {}) {
+  const action = String(parameters.action || "").trim().toLowerCase();
+  const detail = collectionRoutesPilotState.myDailyRoute;
+  const currentStop = detail?.stops?.find((stop) => stop.status === "planned") || null;
+  const baseResult = {
+    saved: false,
+    prepared: false,
+    finalTapRequired: true,
+    sendsNotifications: false,
+    writesVistos: false,
+    changesRoute: false
+  };
+  if (normalizeRole(currentUser()?.role) !== "ridic" || !isCollectionRoutesDriverKioskPath(window.location.pathname)) {
+    return { ...baseResult, ok: false, status: "wrong_module", answerText: "Tento krok připravím jen na otevřeném řidičském tabletu Svozových tras." };
+  }
+  if (!detail?.run || detail.run.status !== "active") {
+    return { ...baseResult, ok: false, status: "active_route_required", answerText: "Trasa teď není zahájená." };
+  }
+  if (["done", "break", "dump", "navigation"].includes(action) && !currentStop) {
+    return { ...baseResult, ok: false, status: "current_stop_required", answerText: "V trase už není čekající stanoviště." };
+  }
+  const panelByAction = { done: "done", break: "break", dump: "dump", route: "route" };
+  if (panelByAction[action]) {
+    collectionRoutesPilotState.myDailyRoutePanel = panelByAction[action];
+  }
+  if (action === "navigation") {
+    collectionRoutesPilotState.myDailyRouteMapMode = "leg";
+    collectionRoutesPilotState.myDailyRouteMapFocusStopId = currentStop?.id || "";
+    collectionRoutesPilotState.myDailyRoutePanel = "";
+    collectionRoutesPilotState.myDailyRouteMessage = "Navigace je připravená. Spusť ji fyzickým tlačítkem NAVIGOVAT na mapě.";
+  }
+  render();
+  const answers = {
+    done: "Otevřela jsem potvrzení HOTOVO. Zkontroluj stanoviště a klepni na velké potvrzovací tlačítko.",
+    break: "Otevřela jsem přestávku. Začátek nebo konec potvrď velkým tlačítkem.",
+    dump: "Otevřela jsem výsyp. Vyber místo a odjezd potvrď velkým tlačítkem.",
+    route: "Otevřela jsem celou trasu. U každého stanoviště vidíš zákazníka, adresu, mapu i navigaci.",
+    navigation: `Navigace na ${currentStop?.addressText || "aktuální stanoviště"} je připravená. Spusť ji tlačítkem Navigovat.`
+  };
+  return {
+    ...baseResult,
+    ok: true,
+    status: "driver_action_ready_for_tap",
+    prepared: true,
+    action,
+    answerText: answers[action] || "Krok je připravený k fyzickému potvrzení.",
+    messageForAssistant: "Akce je pouze připravená v tabletu. Nikdy netvrď, že byla zapsaná, dokončená nebo že se otevřela externí navigace."
   };
 }
 
@@ -39940,8 +40313,115 @@ function applyMyCollectionDailyRoute(detail, message = "") {
   collectionRoutesPilotState.myDailyRoute = detail || null;
   if (previousRunId !== nextRunId) {
     collectionRoutesPilotState.myDailyRouteStopsVisible = COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE;
+    collectionRoutesPilotState.myDailyRoutePanel = "";
+    collectionRoutesPilotState.myDailyRouteMapMode = "leg";
+    collectionRoutesPilotState.myDailyRouteMapFocusStopId = "";
+    collectionDailyDriverMapRuntime.routeCache.clear();
   }
   if (message) collectionRoutesPilotState.myDailyRouteMessage = message;
+}
+
+function clearCollectionDailyDriverReport() {
+  if (collectionRoutesPilotState.myDailyRouteReportPreviewUrl) {
+    try {
+      URL.revokeObjectURL(collectionRoutesPilotState.myDailyRouteReportPreviewUrl);
+    } catch {
+      // Náhled žije pouze v otevřeném kroku hlášení.
+    }
+  }
+  collectionRoutesPilotState.myDailyRouteReportStep = "type";
+  collectionRoutesPilotState.myDailyRouteReportType = "";
+  collectionRoutesPilotState.myDailyRouteReportNote = "";
+  collectionRoutesPilotState.myDailyRouteReportPhoto = null;
+  collectionRoutesPilotState.myDailyRouteReportPreviewUrl = "";
+  collectionRoutesPilotState.myDailyRouteReportError = "";
+}
+
+function closeCollectionDailyDriverPanel() {
+  if (collectionRoutesPilotState.myDailyRoutePending) return;
+  if (collectionRoutesPilotState.myDailyRoutePanel === "report") clearCollectionDailyDriverReport();
+  collectionRoutesPilotState.myDailyRoutePanel = "";
+  render();
+}
+
+async function selectCollectionDailyDriverReportPhoto(input) {
+  const file = input?.files?.[0] || null;
+  if (!file || collectionRoutesPilotState.myDailyRoutePending) return;
+  collectionRoutesPilotState.myDailyRouteReportError = "";
+  collectionRoutesPilotState.myDailyRoutePending = "report-photo";
+  render();
+  try {
+    const photo = await compressCollectionRoutesTestIncidentPhoto(file);
+    if (collectionRoutesPilotState.myDailyRouteReportPreviewUrl) {
+      URL.revokeObjectURL(collectionRoutesPilotState.myDailyRouteReportPreviewUrl);
+    }
+    collectionRoutesPilotState.myDailyRouteReportPhoto = photo;
+    collectionRoutesPilotState.myDailyRouteReportPreviewUrl = URL.createObjectURL(photo);
+    collectionRoutesPilotState.myDailyRouteMessage = "Fotografie je připravená k bezpečnému uložení.";
+    vibrateCollectionRoutesTestGps([40, 50, 40]);
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteReportError = error.message || "Fotografii se nepodařilo připravit.";
+  } finally {
+    collectionRoutesPilotState.myDailyRoutePending = "";
+    render();
+  }
+}
+
+async function submitCollectionDailyDriverReport(form) {
+  const run = collectionRoutesPilotState.myDailyRoute?.run;
+  const stopId = String(form?.dataset?.stopId || "").trim();
+  const photo = collectionRoutesPilotState.myDailyRouteReportPhoto;
+  const type = collectionRoutesPilotState.myDailyRouteReportType;
+  if (!run || !stopId || !photo || !COLLECTION_DAILY_DRIVER_REPORT_TYPES[type]) {
+    collectionRoutesPilotState.myDailyRouteReportError = "Dokonči důvod a fotografii hlášení.";
+    render();
+    return;
+  }
+  const note = String(form.elements.note?.value || "").trim().slice(0, 500);
+  collectionRoutesPilotState.myDailyRouteReportNote = note;
+  collectionRoutesPilotState.myDailyRoutePending = `report:${stopId}`;
+  collectionRoutesPilotState.myDailyRouteReportError = "";
+  render();
+  try {
+    const body = new FormData();
+    body.set("type", type);
+    body.set("note", note);
+    body.set("idempotencyKey", collectionDailyRouteIdempotencyKey("driver-report"));
+    if (run.scope === "test") body.set("scope", "test");
+    body.set("photo", photo, "hlaseni.jpg");
+    const result = await apiJson(`/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/stops/${encodeURIComponent(stopId)}/report`, {
+      method: "POST",
+      body
+    });
+    clearCollectionDailyDriverReport();
+    collectionRoutesPilotState.myDailyRoutePanel = "";
+    collectionRoutesPilotState.myDailyRouteMapMode = "leg";
+    collectionRoutesPilotState.myDailyRouteMapFocusStopId = "";
+    applyMyCollectionDailyRoute(result.route || null, run.scope === "test"
+      ? "TEST hlášení s fotografií je v interním auditu. Nic se nikam neposlalo."
+      : "Hlášení s fotografií je uložené pro dispečink.");
+    if (collectionRoutesPilotState.myDailyRouteSarlotaEnabled) {
+      void speakCollectionRoutesTestGps("Hlášení je uložené. Na mapě máš další stanoviště.");
+    }
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteReportError = error.payload?.error || error.message || "Hlášení se nepodařilo uložit.";
+  } finally {
+    collectionRoutesPilotState.myDailyRoutePending = "";
+    render();
+  }
+}
+
+async function enableCollectionDailyDriverSarlota() {
+  collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
+  collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota zná aktuální trasu. Řekni, co potřebuješ; zápis vždy čeká na klepnutí.";
+  openAiAssistant("voice", { assistantId: "sarlota", renderAfter: false });
+  render();
+  try {
+    await startElevenLabsVoiceRecognition();
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteSarlotaMessage = error.message || "Šarlotu se nepodařilo připojit.";
+    render();
+  }
 }
 
 async function loadCollectionDailyRouteDetail(runId, options = {}) {
@@ -40333,10 +40813,19 @@ async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
         action,
         reason: input.reason || "",
         note: input.note || "",
+        payload: input.payload && typeof input.payload === "object" ? input.payload : {},
         idempotencyKey: collectionDailyRouteIdempotencyKey(`driver-${action}`)
       }))
     });
     const testScope = collectionDailyRouteDriverScope() === "test";
+    if (["dump", "break"].includes(action) && input.payload?.phase === "ended") {
+      collectionRoutesPilotState.myDailyRoutePanel = "";
+    }
+    if (action === "done") {
+      collectionRoutesPilotState.myDailyRoutePanel = "";
+      collectionRoutesPilotState.myDailyRouteMapMode = "leg";
+      collectionRoutesPilotState.myDailyRouteMapFocusStopId = "";
+    }
     applyMyCollectionDailyRoute(result.route || null, testScope
       ? {
         done: "Zastávka je uložená jako HOTOVO.",
@@ -40350,6 +40839,12 @@ async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
         dump: "Výklop byl zapsán do auditu trasy.",
         break: "Pauza byla zapsána do auditu trasy."
       }[action] || "Akce byla uložena.");
+    if (action === "done" && collectionRoutesPilotState.myDailyRouteSarlotaEnabled) {
+      const nextStop = result.route?.stops?.find((stop) => stop.status === "planned");
+      void speakCollectionRoutesTestGps(nextStop
+        ? `Hotovo. Další stanoviště je ${nextStop.customerName || nextStop.stationName || nextStop.addressText}. Navigaci spusť tlačítkem Navigovat.`
+        : "Hotovo. Všechna stanoviště jsou vyřízená.");
+    }
   } catch (error) {
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Akci se nepodařilo uložit.";
   } finally {
@@ -46581,6 +47076,7 @@ function render() {
     syncAssistantPromoVideo();
     syncVehicleTrackingDemoRuntime();
     syncCollectionRoutesTestTabletHereMap();
+    syncCollectionDailyDriverInteractiveMap();
     if (aiAssistantState.welcomeVisible && aiAssistantState.welcomeAnimate) {
       aiAssistantState.welcomeAnimate = false;
     }
@@ -48988,6 +49484,13 @@ function changeAccessUserRole(select) {
 }
 
 document.addEventListener("submit", async (event) => {
+  const collectionDailyDriverReportForm = event.target.closest("[data-collection-driver-report-form]");
+  if (collectionDailyDriverReportForm) {
+    event.preventDefault();
+    await submitCollectionDailyDriverReport(collectionDailyDriverReportForm);
+    return;
+  }
+
   const aiForm = event.target.closest("[data-ai-form]");
   if (aiForm) {
     event.preventDefault();
@@ -49208,20 +49711,6 @@ document.addEventListener("submit", async (event) => {
   if (collectionDailyRouteAssignForm) {
     event.preventDefault();
     await assignCollectionDailyRouteDriver(collectionDailyRouteAssignForm);
-    return;
-  }
-
-  const collectionDailyDriverProblemForm = event.target.closest("[data-collection-daily-driver-problem-form]");
-  if (collectionDailyDriverProblemForm) {
-    event.preventDefault();
-    await recordMyCollectionDailyRouteEvent(
-      "problem",
-      collectionDailyDriverProblemForm.dataset.stopId || "",
-      {
-        reason: String(collectionDailyDriverProblemForm.elements.reason?.value || "").trim(),
-        note: String(collectionDailyDriverProblemForm.elements.note?.value || "").trim()
-      }
-    );
     return;
   }
 
@@ -49587,6 +50076,13 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const collectionDailyDriverReportPhoto = event.target.closest("[data-collection-driver-report-photo]");
+  if (collectionDailyDriverReportPhoto) {
+    unlockCollectionRoutesSarlotaAudio();
+    await selectCollectionDailyDriverReportPhoto(collectionDailyDriverReportPhoto);
+    return;
+  }
+
   const collectionRoutesTestIncidentScenario = event.target.closest("[data-collection-routes-test-incident-form] input[name='testScenario']");
   if (collectionRoutesTestIncidentScenario) {
     if (collectionRoutesPilotState.testIncidentDraft) {
@@ -50812,13 +51308,112 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  const collectionDailyDriverSheetClose = event.target.closest("[data-collection-daily-driver-sheet-close]");
-  if (collectionDailyDriverSheetClose) {
+  const collectionDailyDriverPanelClose = event.target.closest("[data-collection-driver-panel-close]");
+  if (collectionDailyDriverPanelClose) {
     event.preventDefault();
-    const sheet = collectionDailyDriverSheetClose.closest("details.collection-daily-driver-action-sheet");
-    const summary = sheet?.querySelector(":scope > summary");
-    sheet?.removeAttribute("open");
-    summary?.focus();
+    closeCollectionDailyDriverPanel();
+    return;
+  }
+
+  const collectionDailyDriverPanelOpen = event.target.closest("[data-collection-driver-panel]");
+  if (collectionDailyDriverPanelOpen) {
+    event.preventDefault();
+    const panel = collectionDailyDriverPanelOpen.dataset.collectionDriverPanel || "";
+    if (panel === "report") clearCollectionDailyDriverReport();
+    collectionRoutesPilotState.myDailyRoutePanel = panel;
+    render();
+    return;
+  }
+
+  const collectionDailyDriverReportType = event.target.closest("[data-collection-driver-report-type]");
+  if (collectionDailyDriverReportType) {
+    event.preventDefault();
+    collectionRoutesPilotState.myDailyRouteReportType = collectionDailyDriverReportType.dataset.collectionDriverReportType || "";
+    collectionRoutesPilotState.myDailyRouteReportStep = "photo";
+    collectionRoutesPilotState.myDailyRouteReportError = "";
+    render();
+    return;
+  }
+
+  const collectionDailyDriverReportNext = event.target.closest("[data-collection-driver-report-next]");
+  if (collectionDailyDriverReportNext) {
+    event.preventDefault();
+    if (collectionRoutesPilotState.myDailyRouteReportPhoto) {
+      collectionRoutesPilotState.myDailyRouteReportStep = collectionDailyDriverReportNext.dataset.collectionDriverReportNext || "review";
+      render();
+    }
+    return;
+  }
+
+  const collectionDailyDriverReportBack = event.target.closest("[data-collection-driver-report-back]");
+  if (collectionDailyDriverReportBack) {
+    event.preventDefault();
+    collectionRoutesPilotState.myDailyRouteReportStep = collectionDailyDriverReportBack.dataset.collectionDriverReportBack || "type";
+    render();
+    return;
+  }
+
+  const collectionDailyDriverDumpSite = event.target.closest("[data-collection-driver-dump-site]");
+  if (collectionDailyDriverDumpSite) {
+    event.preventDefault();
+    collectionRoutesPilotState.myDailyRouteDumpDestinationId = collectionDailyDriverDumpSite.dataset.collectionDriverDumpSite || "";
+    render();
+    return;
+  }
+
+  const collectionDailyDriverOperation = event.target.closest("[data-collection-driver-operation]");
+  if (collectionDailyDriverOperation) {
+    event.preventDefault();
+    const action = collectionDailyDriverOperation.dataset.collectionDriverOperation || "";
+    const destination = collectionRoutesPilotState.myDailyRouteDumpDestinationId;
+    await recordMyCollectionDailyRouteEvent(action, collectionDailyDriverOperation.dataset.stopId || "", {
+      payload: {
+        phase: collectionDailyDriverOperation.dataset.phase || "started",
+        ...(action === "dump" && destination ? { destinationId: destination } : {})
+      }
+    });
+    return;
+  }
+
+  const collectionDailyDriverShowStop = event.target.closest("[data-collection-driver-show-stop]");
+  if (collectionDailyDriverShowStop) {
+    event.preventDefault();
+    collectionRoutesPilotState.myDailyRouteMapFocusStopId = collectionDailyDriverShowStop.dataset.collectionDriverShowStop || "";
+    collectionRoutesPilotState.myDailyRouteMapMode = "leg";
+    collectionRoutesPilotState.myDailyRoutePanel = "";
+    render();
+    return;
+  }
+
+  const collectionDailyDriverMapMode = event.target.closest("[data-collection-driver-map-mode]");
+  if (collectionDailyDriverMapMode) {
+    event.preventDefault();
+    collectionRoutesPilotState.myDailyRouteMapMode = collectionDailyDriverMapMode.dataset.collectionDriverMapMode === "overview" ? "overview" : "leg";
+    if (collectionRoutesPilotState.myDailyRouteMapMode === "overview") collectionRoutesPilotState.myDailyRouteMapFocusStopId = "";
+    render();
+    return;
+  }
+
+  const collectionDailyDriverMapControl = event.target.closest("[data-collection-driver-map-control]");
+  if (collectionDailyDriverMapControl) {
+    event.preventDefault();
+    const action = collectionDailyDriverMapControl.dataset.collectionDriverMapControl || "";
+    const runtime = collectionDailyDriverMapRuntime;
+    if (action === "fit") {
+      syncCollectionDailyDriverInteractiveMap();
+    } else if (runtime.view) {
+      runtime.view.zoom = Math.max(3, Math.min(20, runtime.view.zoom + (action === "zoom-in" ? 1 : -1)));
+      updateCollectionDailyDriverMapImage();
+      renderCollectionDailyDriverMapOverlay([]);
+      void loadCollectionDailyDriverRoadGeometry();
+    }
+    return;
+  }
+
+  const collectionDailyDriverSarlota = event.target.closest("[data-collection-driver-sarlota]");
+  if (collectionDailyDriverSarlota) {
+    event.preventDefault();
+    await enableCollectionDailyDriverSarlota();
     return;
   }
 

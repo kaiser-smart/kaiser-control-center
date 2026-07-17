@@ -10,6 +10,7 @@ globalThis.window = { location: { pathname: "/trasy-svozu" } };
 
 let captureCalls = 0;
 let incidentCalls = 0;
+let driverActionCalls = 0;
 let requestCalls = 0;
 const tools = createElevenLabsClientTools({
   prepareCollectionRouteGpsCapture: async (parameters) => {
@@ -42,6 +43,19 @@ const tools = createElevenLabsClientTools({
       answerText: "Otevřela jsem TEST hlášení."
     };
   },
+  prepareCollectionRouteDriverAction: async (parameters) => {
+    driverActionCalls += 1;
+    assert.equal(parameters.currentModuleRoute, "/trasy-svozu/test");
+    assert.equal(parameters.action, "break");
+    return {
+      ok: true,
+      status: "driver_action_ready_for_tap",
+      prepared: true,
+      saved: false,
+      finalTapRequired: true,
+      answerText: "Přestávka je připravená k potvrzení."
+    };
+  },
   requestJson: async () => {
     requestCalls += 1;
     throw new Error("Výběr vozidla se pro GPS stanoviště nesmí načíst.");
@@ -60,6 +74,13 @@ const tools = createElevenLabsClientTools({
   assert.ok(schema);
   assert.match(schema.description, /nic neukládá ani neodesílá/);
   assert.match(schema.description, /velké fyzické klepnutí člověka/);
+}
+
+{
+  const schema = ELEVENLABS_CLIENT_TOOL_SCHEMAS.find((tool) => tool.name === "prepare_collection_route_driver_action");
+  assert.ok(schema);
+  assert.match(schema.description, /nikdy sám nezapisuje stav/i);
+  assert.match(schema.description, /fyzické klepnutí řidiče/i);
 }
 
 {
@@ -102,6 +123,20 @@ const tools = createElevenLabsClientTools({
   assert.equal(result.pickerOpened, false);
   assert.equal(result.nextTool, "prepare_collection_route_test_incident");
   assert.equal(requestCalls, 0);
+}
+
+{
+  globalThis.window.location.pathname = "/trasy-svozu/test";
+  const result = await tools.prepare_collection_route_driver_action({
+    action: "break",
+    transcriptIntent: "Dávám si přestávku"
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.prepared, true);
+  assert.equal(result.saved, false);
+  assert.equal(result.finalTapRequired, true);
+  assert.equal(driverActionCalls, 1);
+  globalThis.window.location.pathname = "/trasy-svozu";
 }
 
 {

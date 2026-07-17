@@ -10,6 +10,7 @@ import {
 } from "../../../_lib/ai-people-summary.js";
 import { driverReportVehicleDynamicVariables } from "../../../_lib/fleet-vehicles-store.js";
 import { dataBoxAssistantContext } from "../../../_lib/data-box-store.js";
+import { getMyCollectionDailyRoute } from "../../../_lib/collection-daily-routes-store.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import {
   assistantConfigFromRequest,
@@ -149,17 +150,49 @@ function dataBoxContextVariables(context = {}) {
   };
 }
 
-export function collectionRoutesContextVariables() {
+export async function collectionRoutesContextVariables(env, user, requestedRoute = "/trasy-svozu", detailOverride = undefined) {
+  const scope = requestedRoute === "/trasy-svozu/test" ? "test" : "production";
+  const detail = detailOverride === undefined
+    ? await getMyCollectionDailyRoute(env, user, { scope })
+    : detailOverride;
+  const run = detail?.run || null;
+  const stops = Array.isArray(detail?.stops) ? detail.stops : [];
+  const currentStop = stops.find((stop) => stop.status === "planned") || null;
+  const nextStop = currentStop;
   return {
     current_module: "Svozové trasy",
-    current_module_route: "/trasy-svozu",
+    current_module_route: requestedRoute,
     current_module_context: JSON.stringify({
       module: "Svozové trasy",
-      route: "/trasy-svozu",
-      mode: "authenticated-ui",
-      gpsMode: "test-only",
-      safety: "Hlas smí GPS měření pouze připravit. Uložení fyzického bodu vyžaduje ruční klepnutí v KSO a nesmí otevřít výběr vozidla."
-    })
+      route: requestedRoute,
+      mode: "driver-tablet",
+      dataScope: scope,
+      routeId: cleanString(run?.id),
+      routeStatus: cleanString(run?.status || "none"),
+      actorUserId: cleanString(user?.id),
+      actorName: cleanString(user?.name || user?.email),
+      vehicle: cleanString(run?.vehicleLabel || run?.vehicleRegistration || run?.vehicleCode),
+      plannedCount: Number(run?.summary?.plannedCount || 0),
+      doneCount: Number(run?.summary?.doneCount || 0),
+      problemCount: Number(run?.summary?.problemCount || 0),
+      currentStop: currentStop ? {
+        id: cleanString(currentStop.id),
+        order: Number(currentStop.routeOrder || 0),
+        customerName: cleanString(currentStop.customerName),
+        stationName: cleanString(currentStop.stationName),
+        address: cleanString(currentStop.addressText),
+        wasteType: cleanString(currentStop.wasteType)
+      } : null,
+      nextNavigationAddress: cleanString(nextStop?.addressText),
+      physicalTesterName: scope === "test" ? cleanString(run?.metadata?.physicalTesterName || "Tomáš Gaží") : "",
+      navigationMode: "physical-tap-opens-google-maps",
+      safety: "Šarlota smí vysvětlovat aktuální trasu a připravit hlášení. Nesmí sama označit HOTOVO, spustit či ukončit přestávku nebo výsyp ani uložit hlášení. Každý zápis vyžaduje fyzické klepnutí řidiče. Nikdy neposílej zákaznickou zprávu a nikdy nezapisuj do Vistosu."
+    }),
+    collection_route_scope: scope,
+    collection_route_status: cleanString(run?.status || "none"),
+    collection_route_current_stop: cleanString(currentStop?.customerName || currentStop?.stationName),
+    collection_route_current_address: cleanString(currentStop?.addressText),
+    collection_route_safety: "Všechny zápisy čekají na fyzické potvrzení v tabletu."
   };
 }
 
@@ -249,8 +282,22 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
       contextWarnings
     )
     : {};
-  const collectionRoutesVariables = assistant.assistantType === "sarlota" && requestedRoute === "/trasy-svozu"
-    ? collectionRoutesContextVariables()
+  const collectionRoutesVariables = assistant.assistantType === "sarlota" && requestedRoute.startsWith("/trasy-svozu")
+    ? await optionalContext(
+      "collection_routes",
+      () => collectionRoutesContextVariables(env, user, requestedRoute),
+      () => ({
+        current_module: "Svozové trasy",
+        current_module_route: requestedRoute,
+        current_module_context: JSON.stringify({
+          module: "Svozové trasy",
+          route: requestedRoute,
+          state: "unavailable",
+          safety: "Kontext trasy se nepodařilo načíst. Nevymýšlej si stanoviště ani stav a neprováděj žádný zápis."
+        })
+      }),
+      contextWarnings
+    )
     : {};
   const dynamicVariables = {
     ...userDynamicVariables,

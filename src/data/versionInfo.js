@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.581"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.582"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: skutečný pracovní displej řidiče",
+    text: "Tablet má ovladatelnou mapu aktuálního úseku i celé trasy, přímou navigaci, adresní seznam, krokové hlášení s povinnou fotografií, přestávku, výsyp a hlasovou Šarlotu. V izolovaném TESTU se všechny zápisy drží pouze v TEST auditu pod přihlášeným Miroslavem; žádná zpráva se neodesílá a Vistos ani ostrá trasa se nemění."
+  },
   {
     title: "Svoz: celá trasa na mapě řidiče",
     text: "Řidičský displej zobrazuje výjezd z Trnkovy a všechna přidělená stanoviště barevnými špendlíky. Aktuální bod je oranžový, hotový zelený a problém červený; překrývající se body se rozestoupí. Štítek Optimalizováno HERE se ukáže jen při přesné shodě pořadí s dokončeným HERE výpočtem použitým na trase."

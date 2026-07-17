@@ -19,6 +19,7 @@ import {
   resolveElevenLabsAssistantConfig
 } from "../../../../src/elevenLabsAssistants.js";
 import {
+  SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE
 } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
@@ -50,6 +51,12 @@ const COLLECTION_ROUTES_INCIDENT_RULE_REQUIRED_PHRASE = "zavolej prepare_collect
 const COLLECTION_ROUTES_INCIDENT_RULE_BLOCK = [
   "",
   SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE
+].join("\n");
+const COLLECTION_ROUTES_DRIVER_ACTION_RULE_MARKER = "SVOZOVÉ TRASY / PRACOVNÍ KROKY ŘIDIČE";
+const COLLECTION_ROUTES_DRIVER_ACTION_RULE_REQUIRED_PHRASE = "zavolej prepare_collection_route_driver_action";
+const COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK = [
+  "",
+  SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE
 ].join("\n");
 const PROMPT_PATHS = [
   ["conversation_config", "agent", "prompt", "prompt"],
@@ -133,6 +140,13 @@ function promptHasCollectionRoutesIncidentRule(promptText) {
     && text.includes(SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE);
 }
 
+function promptHasCollectionRoutesDriverActionRule(promptText) {
+  const text = cleanString(promptText);
+  return text.includes(COLLECTION_ROUTES_DRIVER_ACTION_RULE_MARKER)
+    && text.includes(COLLECTION_ROUTES_DRIVER_ACTION_RULE_REQUIRED_PHRASE)
+    && text.includes(SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE);
+}
+
 function forbiddenPromptPhrases(promptText) {
   return driverReportPromptForbiddenPhrases(promptText);
 }
@@ -180,6 +194,16 @@ function stripCollectionRoutesIncidentPromptBlocks(promptText) {
     .replaceAll(SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE, "")
     .split("\n")
     .filter((line) => cleanString(line) !== COLLECTION_ROUTES_INCIDENT_RULE_MARKER)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
+function stripCollectionRoutesDriverActionPromptBlocks(promptText) {
+  return String(promptText || "")
+    .replaceAll(SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE, "")
+    .split("\n")
+    .filter((line) => cleanString(line) !== COLLECTION_ROUTES_DRIVER_ACTION_RULE_MARKER)
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd();
@@ -295,16 +319,17 @@ function buildPlan(context) {
   const hasDataBoxContextRule = promptHasDataBoxContextRule(promptPath.value);
   const hasCollectionRoutesGpsRule = promptHasCollectionRoutesGpsRule(promptPath.value);
   const hasCollectionRoutesIncidentRule = promptHasCollectionRoutesIncidentRule(promptPath.value);
+  const hasCollectionRoutesDriverActionRule = promptHasCollectionRoutesDriverActionRule(promptPath.value);
   const hasLegacyRule = promptHasLegacyRule(promptPath.value);
   const hasLegacyUnsafeExample = promptHasLegacyUnsafeDriverReportExample(promptPath.value);
   const forbiddenPhrases = forbiddenPromptPhrases(promptPath.value);
   const hasForbiddenPhrases = forbiddenPhrases.length > 0;
-  const promptNeedsPatch = !hasCurrentRule || !hasDataBoxContextRule || !hasCollectionRoutesGpsRule || !hasCollectionRoutesIncidentRule || hasLegacyRule || hasLegacyUnsafeExample || hasForbiddenPhrases;
+  const promptNeedsPatch = !hasCurrentRule || !hasDataBoxContextRule || !hasCollectionRoutesGpsRule || !hasCollectionRoutesIncidentRule || !hasCollectionRoutesDriverActionRule || hasLegacyRule || hasLegacyUnsafeExample || hasForbiddenPhrases;
 
   return {
     mode: "dry_run",
     ready: agentNameMatches && firstMessageMatches && promptNeedsPatch,
-    alreadyApplied: hasCurrentRule && hasDataBoxContextRule && hasCollectionRoutesGpsRule && hasCollectionRoutesIncidentRule && !hasLegacyRule && !hasLegacyUnsafeExample && !hasForbiddenPhrases,
+    alreadyApplied: hasCurrentRule && hasDataBoxContextRule && hasCollectionRoutesGpsRule && hasCollectionRoutesIncidentRule && hasCollectionRoutesDriverActionRule && !hasLegacyRule && !hasLegacyUnsafeExample && !hasForbiddenPhrases,
     generatedAt: new Date().toISOString(),
     assistant: assistantPublicMetadata(context.assistantConfig),
     agent: {
@@ -320,12 +345,14 @@ function buildPlan(context) {
       dataBoxContextRulePresent: hasDataBoxContextRule,
       collectionRoutesGpsRulePresent: hasCollectionRoutesGpsRule,
       collectionRoutesIncidentRulePresent: hasCollectionRoutesIncidentRule,
+      collectionRoutesDriverActionRulePresent: hasCollectionRoutesDriverActionRule,
       legacyRulePresent: hasLegacyRule,
       forbiddenPhrasesPresent: forbiddenPhrases,
       willAppendDriverReportVehicleRule: promptNeedsPatch,
       willAppendDataBoxContextRule: !hasDataBoxContextRule,
       willAppendCollectionRoutesGpsRule: !hasCollectionRoutesGpsRule,
       willAppendCollectionRoutesIncidentRule: !hasCollectionRoutesIncidentRule,
+      willAppendCollectionRoutesDriverActionRule: !hasCollectionRoutesDriverActionRule,
       willRemoveLegacyDriverReportVehicleRule: hasLegacyRule,
       willRemoveLegacyUnsafeExample: hasLegacyUnsafeExample,
       willRemoveForbiddenDriverReportPhrases: hasForbiddenPhrases
@@ -412,10 +439,10 @@ async function applyPayload(env, assistantConfig, user = null) {
   }
 
   const promptPath = writablePromptPathFromAgent(context.agentConfig);
-  const cleanedPrompt = stripCollectionRoutesIncidentPromptBlocks(stripCollectionRoutesGpsPromptBlocks(
+  const cleanedPrompt = stripCollectionRoutesDriverActionPromptBlocks(stripCollectionRoutesIncidentPromptBlocks(stripCollectionRoutesGpsPromptBlocks(
     stripDataBoxContextPromptBlocks(stripLegacyDriverReportExamples(stripDriverReportPromptBlocks(promptPath.value)))
-  ));
-  const nextPrompt = `${cleanedPrompt}${PROMPT_RULE_BLOCK}${DATA_BOX_CONTEXT_RULE_BLOCK}${COLLECTION_ROUTES_GPS_RULE_BLOCK}${COLLECTION_ROUTES_INCIDENT_RULE_BLOCK}`;
+  )));
+  const nextPrompt = `${cleanedPrompt}${PROMPT_RULE_BLOCK}${DATA_BOX_CONTEXT_RULE_BLOCK}${COLLECTION_ROUTES_GPS_RULE_BLOCK}${COLLECTION_ROUTES_INCIDENT_RULE_BLOCK}${COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK}`;
   const patchBody = bodyForPromptPatch(promptPath.path, nextPrompt);
 
   try {
@@ -568,6 +595,9 @@ export const __test = {
   COLLECTION_ROUTES_INCIDENT_RULE_MARKER,
   COLLECTION_ROUTES_INCIDENT_RULE_REQUIRED_PHRASE,
   COLLECTION_ROUTES_INCIDENT_RULE_BLOCK,
+  COLLECTION_ROUTES_DRIVER_ACTION_RULE_MARKER,
+  COLLECTION_ROUTES_DRIVER_ACTION_RULE_REQUIRED_PHRASE,
+  COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK,
   forbiddenPromptPhrases,
   lineHasForbiddenPromptPhrase,
   buildPlan,
@@ -575,10 +605,12 @@ export const __test = {
   promptHasDataBoxContextRule,
   promptHasCollectionRoutesGpsRule,
   promptHasCollectionRoutesIncidentRule,
+  promptHasCollectionRoutesDriverActionRule,
   promptHasLegacyRule,
   stripDriverReportPromptBlocks,
   stripDataBoxContextPromptBlocks,
   stripCollectionRoutesGpsPromptBlocks,
   stripCollectionRoutesIncidentPromptBlocks,
+  stripCollectionRoutesDriverActionPromptBlocks,
   upstreamErrorSummary
 };

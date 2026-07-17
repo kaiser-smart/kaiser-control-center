@@ -111,7 +111,9 @@ const DRIVER_REPORT_NO_VERIFIED_VEHICLES_REASON = "NO_VERIFIED_ASSIGNED_VEHICLES
 const DRIVER_REPORT_VEHICLE_PICKER_SELECTION_TTL_MS = 5 * 60 * 1000;
 const COLLECTION_ROUTE_GPS_TOOL_NAME = "prepare_collection_route_gps_capture";
 const COLLECTION_ROUTE_TEST_INCIDENT_TOOL_NAME = "prepare_collection_route_test_incident";
+const COLLECTION_ROUTE_DRIVER_ACTION_TOOL_NAME = "prepare_collection_route_driver_action";
 const COLLECTION_ROUTE_GPS_ROUTE = "/trasy-svozu";
+const COLLECTION_ROUTE_DRIVER_TEST_ROUTE = "/trasy-svozu/test";
 const COLLECTION_ROUTE_GPS_WRONG_TOOL_MESSAGE = "Pro GPS stanoviště není potřeba vybírat vozidlo. Připravím GPS měření přímo ve Svozových trasách.";
 
 export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
@@ -153,9 +155,18 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: COLLECTION_ROUTE_TEST_INCIDENT_TOOL_NAME,
-    description: "Ve Svozových trasách otevře bezpečný formulář TEST hlášení pro přeplněnou nádobu, poškozenou nádobu nebo nepřístupnou firmu. Nástroj nic neukládá ani neodesílá. Fotografie a velké fyzické klepnutí člověka v KSO jsou vždy povinné.",
+    description: "Ve Svozových trasách otevře bezpečný krokový formulář hlášení pro dispečink. Nástroj nic neukládá ani neodesílá. Fotografie a velké fyzické klepnutí člověka v KSO jsou vždy povinné.",
     parameters: [
-      { name: "incidentType", type: "string", required: true, description: "Použij pouze overfilled_container, damaged_container nebo site_inaccessible." },
+      { name: "incidentType", type: "string", required: true, description: "Použij overfilled_container, damaged_container, site_inaccessible, container_missing, contaminated_waste, site_closed nebo other." },
+      { name: "transcriptIntent", type: "string", required: false },
+      { name: "currentModuleRoute", type: "string", required: false }
+    ]
+  },
+  {
+    name: COLLECTION_ROUTE_DRIVER_ACTION_TOOL_NAME,
+    description: "Na řidičském tabletu Svozových tras pouze otevře bezpečný krok pro HOTOVO, přestávku, výsyp, celou trasu nebo navigaci. Nástroj nikdy sám nezapisuje stav a nikdy nespouští externí komunikaci. Každý zápis nebo otevření navigace vyžaduje fyzické klepnutí řidiče.",
+    parameters: [
+      { name: "action", type: "string", required: true, description: "Použij done, break, dump, route nebo navigation." },
       { name: "transcriptIntent", type: "string", required: false },
       { name: "currentModuleRoute", type: "string", required: false }
     ]
@@ -350,7 +361,8 @@ export function createElevenLabsClientTools({
   highlight = () => {},
   requestJson = null,
   prepareCollectionRouteGpsCapture = null,
-  prepareCollectionRouteTestIncident = null
+  prepareCollectionRouteTestIncident = null,
+  prepareCollectionRouteDriverAction = null
 } = {}) {
   function guardedRoute(route) {
     const normalizedRoute = normalizeAiRoute(route);
@@ -1297,7 +1309,8 @@ export function createElevenLabsClientTools({
       || parameters.route
       || ""
     );
-    if (actualRoute !== COLLECTION_ROUTE_GPS_ROUTE && requestedRoute !== COLLECTION_ROUTE_GPS_ROUTE) return false;
+    if (![COLLECTION_ROUTE_GPS_ROUTE, COLLECTION_ROUTE_DRIVER_TEST_ROUTE].includes(actualRoute)
+      && ![COLLECTION_ROUTE_GPS_ROUTE, COLLECTION_ROUTE_DRIVER_TEST_ROUTE].includes(requestedRoute)) return false;
     const text = normalizeKey([
       parameters.transcriptIntent,
       parameters.transcript_intent,
@@ -1305,7 +1318,7 @@ export function createElevenLabsClientTools({
       parameters.query,
       parameters.message
     ].filter(Boolean).join(" "));
-    return /(prepln|poskoz|nepristup|nelze se dostat|neda se dostat|nemuzu se dostat)/.test(text);
+    return /(prepln|poskoz|nepristup|nelze se dostat|neda se dostat|nemuzu se dostat|chybi nadob|neni nadob|kontamin|firma zavren|zavreno|jiny problem)/.test(text);
   }
 
   function absenceDayPartValue(value, halfDay = null) {
@@ -1866,7 +1879,7 @@ export function createElevenLabsClientTools({
       const currentRoute = typeof window !== "undefined"
         ? normalizeAiRoute(window.location?.pathname || "")
         : "";
-      if (currentRoute !== COLLECTION_ROUTE_GPS_ROUTE) {
+      if (![COLLECTION_ROUTE_GPS_ROUTE, COLLECTION_ROUTE_DRIVER_TEST_ROUTE].includes(currentRoute)) {
         return {
           ok: false,
           status: "wrong_module",
@@ -1926,7 +1939,7 @@ export function createElevenLabsClientTools({
         ? normalizeAiRoute(window.location?.pathname || "")
         : "";
       const incidentType = cleanString(parameters.incidentType || parameters.incident_type || parameters.type);
-      if (currentRoute !== COLLECTION_ROUTE_GPS_ROUTE) {
+      if (![COLLECTION_ROUTE_GPS_ROUTE, COLLECTION_ROUTE_DRIVER_TEST_ROUTE].includes(currentRoute)) {
         return {
           ok: false,
           status: "wrong_module",
@@ -1936,10 +1949,10 @@ export function createElevenLabsClientTools({
           photoRequired: true,
           sendsNotifications: false,
           changesRoute: false,
-          answerText: "TEST hlášení připravím jen v otevřeném modulu Svozové trasy."
+          answerText: "Hlášení připravím jen v otevřeném modulu Svozové trasy."
         };
       }
-      if (!["overfilled_container", "damaged_container", "site_inaccessible"].includes(incidentType)) {
+      if (!["overfilled_container", "damaged_container", "site_inaccessible", "container_missing", "contaminated_waste", "site_closed", "other"].includes(incidentType)) {
         return {
           ok: false,
           status: "incident_type_required",
@@ -1949,7 +1962,7 @@ export function createElevenLabsClientTools({
           photoRequired: true,
           sendsNotifications: false,
           changesRoute: false,
-          answerText: "Řekni, jestli jde o přeplněnou nádobu, poškozenou nádobu nebo nepřístupnou firmu."
+          answerText: "Řekni stručně, co je na stanovišti špatně."
         };
       }
       if (typeof prepareCollectionRouteTestIncident !== "function") {
@@ -1962,7 +1975,7 @@ export function createElevenLabsClientTools({
           photoRequired: true,
           sendsNotifications: false,
           changesRoute: false,
-          answerText: "TEST hlášení teď nejde hlasem připravit. Použij jedno ze tří velkých tlačítek v tabletu."
+          answerText: "Hlášení teď nejde hlasem připravit. Použij velké tlačítko Hlášení pro dispečink."
         };
       }
       try {
@@ -1995,6 +2008,59 @@ export function createElevenLabsClientTools({
           sendsNotifications: false,
           changesRoute: false,
           answerText: "TEST hlášení se nepodařilo připravit. Použij jedno ze tří velkých tlačítek."
+        };
+      }
+    },
+
+    async prepare_collection_route_driver_action(parameters = {}) {
+      const currentRoute = typeof window !== "undefined"
+        ? normalizeAiRoute(window.location?.pathname || "")
+        : "";
+      const action = cleanString(parameters.action).toLowerCase();
+      if (![COLLECTION_ROUTE_GPS_ROUTE, COLLECTION_ROUTE_DRIVER_TEST_ROUTE].includes(currentRoute)) {
+        return {
+          ok: false,
+          status: "wrong_module",
+          prepared: false,
+          saved: false,
+          finalTapRequired: true,
+          answerText: "Tento krok připravím jen na otevřeném řidičském tabletu Svozových tras."
+        };
+      }
+      if (!["done", "break", "dump", "route", "navigation"].includes(action)) {
+        return {
+          ok: false,
+          status: "action_required",
+          prepared: false,
+          saved: false,
+          finalTapRequired: true,
+          answerText: "Řekni, jestli chceš potvrdit stanoviště, přestávku, výsyp, celou trasu nebo navigaci."
+        };
+      }
+      if (typeof prepareCollectionRouteDriverAction !== "function") {
+        return {
+          ok: false,
+          status: "unavailable",
+          prepared: false,
+          saved: false,
+          finalTapRequired: true,
+          answerText: "Krok teď nejde připravit hlasem. Použij velké tlačítko na tabletu."
+        };
+      }
+      try {
+        return await prepareCollectionRouteDriverAction({
+          ...parameters,
+          action,
+          currentModuleRoute: currentRoute
+        });
+      } catch (_) {
+        return {
+          ok: false,
+          status: "failed",
+          prepared: false,
+          saved: false,
+          finalTapRequired: true,
+          answerText: "Krok se nepodařilo připravit. Použij velké tlačítko na tabletu."
         };
       }
     },

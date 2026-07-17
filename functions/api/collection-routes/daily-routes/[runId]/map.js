@@ -16,6 +16,23 @@ function errorResponse(message, status, code) {
   return json({ error: message, apiStatus: "waiting", code }, status);
 }
 
+function boundedNumber(value, minimum, maximum, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= minimum && number <= maximum ? number : fallback;
+}
+
+export function requestedCollectionDailyRouteMapView(url, driverMap = {}) {
+  const source = driverMap?.view || {};
+  return {
+    width: Math.round(boundedNumber(url.searchParams.get("width"), 320, 1280, Number(source.width) || 960)),
+    height: Math.round(boundedNumber(url.searchParams.get("height"), 180, 720, Number(source.height) || 420)),
+    padding: Number(source.padding) || 48,
+    centerLatitude: boundedNumber(url.searchParams.get("centerLatitude"), -85, 85, Number(source.centerLatitude)),
+    centerLongitude: boundedNumber(url.searchParams.get("centerLongitude"), -180, 180, Number(source.centerLongitude)),
+    zoom: Math.round(boundedNumber(url.searchParams.get("zoom"), 3, 20, Number(source.zoom)))
+  };
+}
+
 export async function onRequestGet({ request, env, params }) {
   const user = await currentUser(env, request);
   if (!user) return json({ error: "Nepřihlášeno." }, 401);
@@ -32,7 +49,10 @@ export async function onRequestGet({ request, env, params }) {
 
   let hereUrl;
   try {
-    hereUrl = buildCollectionDailyRouteHereMapImageUrl(env, detail?.driverMap);
+    hereUrl = buildCollectionDailyRouteHereMapImageUrl(env, {
+      ...(detail?.driverMap || {}),
+      view: requestedCollectionDailyRouteMapView(requestUrl, detail?.driverMap)
+    });
   } catch (error) {
     if (error?.message === "here_map_key_missing") {
       return errorResponse(

@@ -23,7 +23,9 @@ const REQUIRED_DRIVER_REPORT_TOOLS = [
   "get_driver_vehicle_picker_selection",
   "validate_driver_vehicle_spz",
   "create_driver_part_request",
-  "prepare_collection_route_gps_capture"
+  "prepare_collection_route_gps_capture",
+  "prepare_collection_route_test_incident",
+  "prepare_collection_route_driver_action"
 ];
 
 function assertNoSecret(value = "") {

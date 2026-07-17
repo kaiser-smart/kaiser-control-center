@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { __test as promptSyncTest } from "../functions/api/ai/elevenlabs/sarlota-prompt-sync.js";
 import {
+  SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE,
   SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE
@@ -19,6 +20,11 @@ import {
   assert.equal(promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_MARKER, "SVOZOVÉ TRASY / TEST HLÁŠENÍ STANOVIŠTĚ");
   assert.equal(
     SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_REQUIRED_PHRASE),
+    true
+  );
+  assert.equal(promptSyncTest.COLLECTION_ROUTES_DRIVER_ACTION_RULE_MARKER, "SVOZOVÉ TRASY / PRACOVNÍ KROKY ŘIDIČE");
+  assert.equal(
+    SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_DRIVER_ACTION_RULE_REQUIRED_PHRASE),
     true
   );
 }
@@ -168,7 +174,8 @@ import {
     SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
     promptSyncTest.DATA_BOX_CONTEXT_RULE_BLOCK,
     promptSyncTest.COLLECTION_ROUTES_GPS_RULE_BLOCK,
-    promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_BLOCK
+    promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_BLOCK,
+    promptSyncTest.COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK
   ].join("\n");
   const plan = promptSyncTest.buildPlan({
     ok: true,
@@ -192,6 +199,7 @@ import {
   assert.equal(plan.prompt.dataBoxContextRulePresent, true);
   assert.equal(plan.prompt.collectionRoutesGpsRulePresent, true);
   assert.equal(plan.prompt.collectionRoutesIncidentRulePresent, true);
+  assert.equal(plan.prompt.collectionRoutesDriverActionRulePresent, true);
   assert.equal(plan.alreadyApplied, true);
   assert.equal(plan.ready, false);
 }

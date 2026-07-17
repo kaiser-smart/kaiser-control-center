@@ -6,7 +6,10 @@ import { createSessionCookie } from "../functions/_lib/auth.js";
 import { onRequestGet as listDailyRoutesApi } from "../functions/api/collection-routes/daily-routes.js";
 import { onRequestGet as myDailyRouteApi } from "../functions/api/collection-routes/daily-routes/my.js";
 import { onRequestGet as driverRouteMapApi } from "../functions/api/collection-routes/daily-routes/[runId]/map.js";
+import { onRequestGet as driverRouteNavigationApi } from "../functions/api/collection-routes/daily-routes/[runId]/navigation.js";
 import { onRequestPost as stopEventApi } from "../functions/api/collection-routes/daily-routes/[runId]/stops/[stopId]/events.js";
+import { onRequestPost as driverReportApi } from "../functions/api/collection-routes/daily-routes/[runId]/stops/[stopId]/report.js";
+import { onRequestGet as driverReportPhotoApi } from "../functions/api/collection-routes/daily-routes/[runId]/reports/[reportId]/photo.js";
 import { previewCollectionRoutesTestNotifications } from "../functions/_lib/collection-routes-test-notifications.js";
 import { confirmCollectionRoutesTestGps } from "../functions/_lib/collection-routes-test-gps-store.js";
 import {
@@ -73,6 +76,30 @@ class D1Database {
       this.database.exec("ROLLBACK");
       throw error;
     }
+  }
+}
+
+class FakeR2Bucket {
+  constructor() {
+    this.objects = new Map();
+    this.deleted = [];
+  }
+
+  async put(key, body, options = {}) {
+    this.objects.set(key, {
+      body: body instanceof Uint8Array ? body : new Uint8Array(body || []),
+      httpMetadata: options.httpMetadata || {},
+      customMetadata: options.customMetadata || {}
+    });
+  }
+
+  async get(key) {
+    return this.objects.get(key) || null;
+  }
+
+  async delete(key) {
+    this.deleted.push(key);
+    this.objects.delete(key);
   }
 }
 
@@ -610,7 +637,9 @@ for (const migration of [
   "../migrations/0001_create_users.sql",
   "../migrations/0002_add_user_manager.sql",
   "../migrations/0017_create_collection_routes_phase1a.sql",
-  "../migrations/0038_create_collection_daily_routes.sql"
+  "../migrations/0038_create_collection_daily_routes.sql",
+  "../migrations/test/0002_create_collection_route_here_optimization.sql",
+  "../migrations/test/0003_configure_collection_route_test_operations_and_gps.sql"
 ]) {
   isolatedTestSqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
 }
@@ -700,6 +729,7 @@ const isolatedAdmin = {
 const isolatedEnv = {
   SMART_ODPADY_DB: new D1Database(isolatedProductionSqlite),
   COLLECTION_ROUTES_TEST_DB: new D1Database(isolatedTestSqlite),
+  SMART_ODPADY_DOCUMENTS: new FakeR2Bucket(),
   AUTH_USERS_JSON: JSON.stringify([miroslav, foreignDriver, isolatedManager, isolatedAdmin]),
   AUTH_SESSION_SECRET: "isolated-driver-tablet-test-session-secret"
 };
@@ -852,6 +882,52 @@ const foreignDriverListResponse = await listDailyRoutesApi({
 });
 assert.equal(foreignDriverListResponse.status, 403);
 
+const navigationFetch = async (url) => {
+  assert.equal(new URL(url).hostname, "router.hereapi.com");
+  assert.equal(new URL(url).searchParams.get("transportMode"), "truck");
+  return new Response(JSON.stringify({
+    routes: [{
+      sections: [{
+        polyline: "BFoz5xJ67i1B1B7PzIhaxL7Y",
+        summary: { length: 1250, duration: 240 }
+      }]
+    }]
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+};
+const navigationEnv = { ...isolatedEnv, HERE_MAPS_API_KEY: "server-only-test-key", __HERE_ROUTING_FETCH: navigationFetch };
+const ownNavigationResponse = await driverRouteNavigationApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/navigation?scope=test&fromPointId=depot&toPointId=${seededStopId}`,
+    miroslav
+  ),
+  env: navigationEnv,
+  params: { runId: seededRunId }
+});
+assert.equal(ownNavigationResponse.status, 200);
+const ownNavigation = await ownNavigationResponse.json();
+assert.equal(ownNavigation.navigation.provider, "here-routing-v8");
+assert.equal(ownNavigation.navigation.mode, "truck");
+assert.equal(ownNavigation.navigation.summary.lengthMeters, 1250);
+assert.ok(ownNavigation.navigation.points.length >= 2);
+const foreignNavigationResponse = await driverRouteNavigationApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/navigation?scope=test&fromPointId=depot&toPointId=${seededStopId}`,
+    foreignDriver
+  ),
+  env: navigationEnv,
+  params: { runId: seededRunId }
+});
+assert.equal(foreignNavigationResponse.status, 404, "Cizí řidič nesmí získat ani geometrii cizí TEST trasy.");
+const productionNavigationResponse = await driverRouteNavigationApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/navigation?fromPointId=depot&toPointId=${seededStopId}`,
+    miroslav
+  ),
+  env: navigationEnv,
+  params: { runId: seededRunId }
+});
+assert.equal(productionNavigationResponse.status, 404, "Produkční scope nesmí vrátit geometrii TEST trasy.");
+
 await transitionCollectionDailyRoute(isolatedEnv, miroslav, seededRunId, {
   scope: "test",
   action: "start",
@@ -864,7 +940,12 @@ const breakApiResponse = await stopEventApi({
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "test", action: "break", idempotencyKey: "miroslav-isolated-test-break" })
+      body: JSON.stringify({
+        scope: "test",
+        action: "break",
+        payload: { phase: "started" },
+        idempotencyKey: "miroslav-isolated-test-break-start"
+      })
     }
   ),
   env: isolatedEnv,
@@ -873,16 +954,96 @@ const breakApiResponse = await stopEventApi({
 assert.equal(breakApiResponse.status, 200);
 await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, seededStopId, {
   scope: "test",
-  action: "dump",
-  idempotencyKey: "miroslav-isolated-test-dump"
+  action: "break",
+  payload: { phase: "ended" },
+  idempotencyKey: "miroslav-isolated-test-break-end"
 });
+const dumpStarted = await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, seededStopId, {
+  scope: "test",
+  action: "dump",
+  payload: { phase: "started", destinationId: "sako-brno" },
+  idempotencyKey: "miroslav-isolated-test-dump-start"
+});
+assert.equal(dumpStarted.events.find((event) => event.idempotencyKey === "miroslav-isolated-test-dump-start").payload.destination.name, "SAKO Brno");
 await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, seededStopId, {
   scope: "test",
-  action: "problem",
-  reason: "Přeplněná nádoba",
-  note: "Izolovaný TEST hlášení",
-  idempotencyKey: "miroslav-isolated-test-problem"
+  action: "dump",
+  payload: { phase: "ended" },
+  idempotencyKey: "miroslav-isolated-test-dump-end"
 });
+
+function reportForm(idempotencyKey) {
+  const form = new FormData();
+  form.set("scope", "test");
+  form.set("type", "overfilled_container");
+  form.set("note", "Izolované TEST hlášení s fotografií");
+  form.set("idempotencyKey", idempotencyKey);
+  form.set("photo", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" }), "hlaseni.jpg");
+  return form;
+}
+const foreignReportResponse = await driverReportApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/stops/${seededStopId}/report`,
+    foreignDriver,
+    { method: "POST", body: reportForm("foreign-report") }
+  ),
+  env: isolatedEnv,
+  params: { runId: seededRunId, stopId: seededStopId }
+});
+assert.equal(foreignReportResponse.status, 404, "Cizí řidič nesmí zapsat ani odvodit cizí TEST hlášení.");
+assert.equal(isolatedEnv.SMART_ODPADY_DOCUMENTS.objects.size, 0);
+const productionScopeReportResponse = await driverReportApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/stops/${seededStopId}/report`,
+    miroslav,
+    { method: "POST", body: (() => {
+      const form = reportForm("production-scope-report");
+      form.delete("scope");
+      return form;
+    })() }
+  ),
+  env: isolatedEnv,
+  params: { runId: seededRunId, stopId: seededStopId }
+});
+assert.equal(productionScopeReportResponse.status, 404, "Produkční scope nesmí přijmout hlášení pro TEST trasu.");
+assert.equal(isolatedEnv.SMART_ODPADY_DOCUMENTS.objects.size, 0);
+const reportResponse = await driverReportApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/stops/${seededStopId}/report`,
+    miroslav,
+    { method: "POST", body: reportForm("miroslav-isolated-test-report") }
+  ),
+  env: isolatedEnv,
+  params: { runId: seededRunId, stopId: seededStopId }
+});
+assert.equal(reportResponse.status, 201);
+const reportResult = await reportResponse.json();
+assert.equal(reportResult.report.actorUserId, miroslav.id);
+assert.equal(reportResult.report.actorName, miroslav.name);
+assert.equal(reportResult.report.payload.sendsNotifications, false);
+assert.equal(reportResult.report.payload.changesVistos, false);
+assert.equal(reportResult.sendsNotifications, false);
+assert.equal(reportResult.writesVistos, false);
+assert.equal(isolatedEnv.SMART_ODPADY_DOCUMENTS.objects.size, 1);
+const ownPhotoResponse = await driverReportPhotoApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai${reportResult.report.payload.photoUrl}`,
+    miroslav
+  ),
+  env: isolatedEnv,
+  params: { runId: seededRunId, reportId: reportResult.report.id }
+});
+assert.equal(ownPhotoResponse.status, 200);
+assert.equal(ownPhotoResponse.headers.get("Content-Type"), "image/jpeg");
+const foreignPhotoResponse = await driverReportPhotoApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai${reportResult.report.payload.photoUrl}`,
+    foreignDriver
+  ),
+  env: isolatedEnv,
+  params: { runId: seededRunId, reportId: reportResult.report.id }
+});
+assert.equal(foreignPhotoResponse.status, 404, "Cizí řidič nesmí načíst fotografii hlášení.");
 await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, seededStopId, {
   scope: "test",
   action: "done",
@@ -896,10 +1057,10 @@ const completedIsolatedTest = await transitionCollectionDailyRoute(isolatedEnv, 
 assert.equal(completedIsolatedTest.run.status, "completed");
 assert.ok(completedIsolatedTest.events.every((event) => event.actorUserId === miroslav.id));
 assert.ok(completedIsolatedTest.events.every((event) => event.actorName === miroslav.name));
-for (const eventType of ["break", "dump", "problem", "done"]) {
+for (const [eventType, count] of [["break", 2], ["dump", 2], ["problem", 1], ["done", 1]]) {
   assert.equal(
     isolatedTestSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE run_id = ? AND event_type = ?").get(seededRunId, eventType).count,
-    1,
+    count,
     `Izolovaný TEST musí auditovat akci ${eventType}.`
   );
 }

@@ -14,6 +14,7 @@ import {
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
+const DOCUMENT_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
 export const COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION = "production";
 export const COLLECTION_DAILY_ROUTE_SCOPE_TEST = "test";
 export const COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD = "stationary-field-test";
@@ -25,6 +26,17 @@ export const COLLECTION_DAILY_ROUTE_FIELD_TEST_VEHICLE = Object.freeze({
 });
 const ROUTE_STATUSES = new Set(["draft", "confirmed", "active", "completed"]);
 const STOP_ACTIONS = new Set(["done", "problem", "dump", "break", "reset"]);
+const DRIVER_OPERATION_PHASES = new Set(["started", "ended"]);
+const DRIVER_REPORT_TYPES = new Map([
+  ["overfilled_container", "Přeplněná nádoba"],
+  ["damaged_container", "Poškozená nádoba"],
+  ["site_inaccessible", "Nádoba nebo firma není přístupná"],
+  ["container_missing", "Nádoba není na místě"],
+  ["contaminated_waste", "Nevhodný nebo kontaminovaný odpad"],
+  ["site_closed", "Provozovna je zavřená"],
+  ["other", "Jiný problém"]
+]);
+const DRIVER_REPORT_MAX_NOTE_LENGTH = 500;
 const D1_MAX_BOUND_PARAMETERS = 100;
 const DAILY_ROUTE_STOP_BOUND_VALUES_BEFORE_STATUS = 19;
 const DAILY_ROUTE_STOP_BOUND_VALUES_AFTER_STATUS = 3;
@@ -236,6 +248,92 @@ function database(env, required = false, scopeValue = COLLECTION_DAILY_ROUTE_SCO
     );
   }
   return db;
+}
+
+function documentBucket(env, required = false) {
+  const bucket = env?.[DOCUMENT_BUCKET_BINDING] || null;
+  if (!bucket && required) {
+    throw new CollectionDailyRoutesError(
+      "Cloudové úložiště fotografií hlášení není připojené.",
+      503,
+      "collection_daily_route_report_bucket_missing"
+    );
+  }
+  return bucket;
+}
+
+function validPublicCoordinate(value, minimum, maximum) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= minimum && number <= maximum ? number : null;
+}
+
+function publicDriverDumpSite(site = {}) {
+  const latitude = validPublicCoordinate(site.latitude, -90, 90);
+  const longitude = validPublicCoordinate(site.longitude, -180, 180);
+  const id = cleanString(site.id);
+  const name = cleanString(site.name);
+  const address = cleanString(site.address);
+  if (!id || !name || !address || latitude === null || longitude === null) return null;
+  return {
+    id,
+    name,
+    address,
+    latitude,
+    longitude,
+    role: cleanString(site.role),
+    wasteTypes: (Array.isArray(site.wasteTypes) ? site.wasteTypes : []).map(cleanString).filter(Boolean),
+    openingHours: cleanString(site.openingHours),
+    routingPointStatus: cleanString(site.routingPointStatus),
+    serviceMinutes: Math.max(0, numberValue(site.serviceMinutes))
+  };
+}
+
+async function driverOperationsForRun(db, runRow, stops = []) {
+  const currentStop = (Array.isArray(stops) ? stops : []).find((stop) => cleanString(stop.status) === "planned")
+    || (Array.isArray(stops) ? stops : []).find((stop) => cleanString(stop.status) === "problem")
+    || null;
+  const wasteType = cleanString(currentStop?.wasteType).toUpperCase();
+  if (runDataScope(runRow) !== COLLECTION_DAILY_ROUTE_SCOPE_TEST) {
+    return {
+      dumpSites: [],
+      wasteType,
+      source: "production-config-not-connected",
+      status: "waiting",
+      testEstimate: false
+    };
+  }
+  try {
+    const settings = await db.prepare(`
+      SELECT status, config_json, updated_at
+      FROM collection_route_here_settings
+      WHERE scope = 'test'
+      LIMIT 1
+    `).first();
+    const config = parseJson(settings?.config_json, {});
+    const dumpSites = (Array.isArray(config.dumpSites) ? config.dumpSites : [])
+      .map(publicDriverDumpSite)
+      .filter(Boolean)
+      .filter((site) => !wasteType || !site.wasteTypes.length || site.wasteTypes.includes(wasteType));
+    return {
+      dumpSites,
+      wasteType,
+      source: "test-operational-config",
+      status: cleanString(settings?.status) || "draft",
+      updatedAt: cleanString(settings?.updated_at),
+      testEstimate: true
+    };
+  } catch (error) {
+    if (/no such table[^\n]*collection_route_here_settings/i.test(cleanString(error?.message))) {
+      return {
+        dumpSites: [],
+        wasteType,
+        source: "test-operational-config-missing",
+        status: "waiting",
+        testEstimate: true
+      };
+    }
+    throw error;
+  }
 }
 
 async function snapshotForScope(env, user, scope) {
@@ -842,7 +940,8 @@ async function detailFromRow(db, runRow) {
     run,
     stops,
     events,
-    driverMap: buildCollectionDailyRouteDriverMap(run, stops, { routeOptimization })
+    driverMap: buildCollectionDailyRouteDriverMap(run, stops, { routeOptimization }),
+    driverOperations: await driverOperationsForRun(db, runRow, stops)
   };
 }
 
@@ -1297,7 +1396,7 @@ export async function assignCollectionDailyRouteDriver(env, user, runId, input =
       driverAddressingName
     };
     const idempotencyKey = cleanString(input.idempotencyKey) || `driver-assigned:${run.id}:${driverId || "none"}:${updatedAt}`;
-    if (await eventByIdempotency(db, idempotencyKey)) {
+    if (await eventByIdempotency(db, idempotencyKey, run.id)) {
       return detailFromRow(db, await loadRunRow(db, run.id));
     }
     await db.batch([
@@ -1330,8 +1429,14 @@ export async function assignCollectionDailyRouteDriver(env, user, runId, input =
   }
 }
 
-async function eventByIdempotency(db, key) {
+async function eventByIdempotency(db, key, runId = "") {
   if (!key) return null;
+  const normalizedRunId = cleanString(runId);
+  if (normalizedRunId) {
+    return db.prepare("SELECT * FROM collection_daily_route_events WHERE idempotency_key = ? AND run_id = ? LIMIT 1")
+      .bind(key, normalizedRunId)
+      .first();
+  }
   return db.prepare("SELECT * FROM collection_daily_route_events WHERE idempotency_key = ? LIMIT 1").bind(key).first();
 }
 
@@ -1357,7 +1462,7 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
       assertCanOperateRun(user, run);
     }
     const idempotencyKey = cleanString(input.idempotencyKey);
-    const existingEvent = await eventByIdempotency(db, idempotencyKey);
+    const existingEvent = await eventByIdempotency(db, idempotencyKey, run.id);
     if (existingEvent) {
       return detailFromRow(db, await loadRunRow(db, run.id));
     }
@@ -1554,6 +1659,59 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
   }
 }
 
+async function safeDriverOperationPayload(db, run, stop, action, input = {}) {
+  if (!["break", "dump"].includes(action)) {
+    return input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  }
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const phase = cleanString(source.phase).toLowerCase();
+  if (!phase) {
+    return { phase: "recorded", source: "legacy-driver-action" };
+  }
+  if (!DRIVER_OPERATION_PHASES.has(phase)) {
+    throw new CollectionDailyRoutesError(
+      action === "break" ? "Neplatný krok přestávky." : "Neplatný krok výsypu.",
+      400,
+      "collection_daily_route_operation_phase_invalid"
+    );
+  }
+  if (action === "break") {
+    return {
+      phase,
+      source: "driver-tablet-workflow"
+    };
+  }
+  const destinationId = cleanString(source.destinationId);
+  if (phase === "ended" && !destinationId) {
+    return {
+      phase,
+      source: "driver-tablet-workflow"
+    };
+  }
+  const operations = await driverOperationsForRun(db, run, stop ? [rowToStop(stop)] : []);
+  const destination = operations.dumpSites.find((site) => site.id === destinationId) || null;
+  if (!destination) {
+    throw new CollectionDailyRoutesError(
+      "Vyber povolené místo výsypu pro aktuální odpad.",
+      400,
+      "collection_daily_route_dump_destination_invalid"
+    );
+  }
+  return {
+    phase,
+    source: "driver-tablet-workflow",
+    destination: {
+      id: destination.id,
+      name: destination.name,
+      address: destination.address,
+      latitude: destination.latitude,
+      longitude: destination.longitude,
+      role: destination.role,
+      testEstimate: operations.testEstimate === true
+    }
+  };
+}
+
 export async function recordCollectionDailyRouteStopEvent(env, user, runId, stopId, input = {}) {
   const scope = collectionDailyRouteScope(input.scope);
   assertTestScopeReader(user, scope);
@@ -1577,7 +1735,7 @@ export async function recordCollectionDailyRouteStopEvent(env, user, runId, stop
       throw new CollectionDailyRoutesError("Akce lze zapisovat jen do zahájené trasy.", 409, "collection_daily_route_not_active");
     }
     const idempotencyKey = cleanString(input.idempotencyKey);
-    const existingEvent = await eventByIdempotency(db, idempotencyKey);
+    const existingEvent = await eventByIdempotency(db, idempotencyKey, run.id);
     if (existingEvent) {
       return detailFromRow(db, await loadRunRow(db, run.id));
     }
@@ -1610,6 +1768,7 @@ export async function recordCollectionDailyRouteStopEvent(env, user, runId, stop
     const createdAt = nowIso();
     const actorId = cleanString(user?.id);
     const actorName = cleanString(user?.name || user?.email || user?.phone);
+    const safePayload = await safeDriverOperationPayload(db, run, stop, action, input.payload);
     const statements = [];
     if (stop && ["done", "problem", "reset"].includes(action)) {
       statements.push(db.prepare(`
@@ -1650,11 +1809,242 @@ export async function recordCollectionDailyRouteStopEvent(env, user, runId, stop
       actorId,
       actorName,
       createdAt,
-      jsonString(input.payload || {})
+      jsonString(safePayload)
     ));
     statements.push(db.prepare("UPDATE collection_daily_route_runs SET updated_at = ? WHERE id = ?").bind(createdAt, run.id));
     await db.batch(statements);
     return detailFromRow(db, await loadRunRow(db, run.id));
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+function driverReportType(value) {
+  const type = cleanString(value);
+  if (!DRIVER_REPORT_TYPES.has(type)) {
+    throw new CollectionDailyRoutesError(
+      "Vyber konkrétní důvod hlášení.",
+      400,
+      "collection_daily_route_report_type_invalid"
+    );
+  }
+  return type;
+}
+
+function driverReportNote(value) {
+  const note = cleanString(value);
+  if (note.length > DRIVER_REPORT_MAX_NOTE_LENGTH) {
+    throw new CollectionDailyRoutesError(
+      `Poznámka může mít nejvýše ${DRIVER_REPORT_MAX_NOTE_LENGTH} znaků.`,
+      400,
+      "collection_daily_route_report_note_too_long"
+    );
+  }
+  return note;
+}
+
+function driverReportPhoto(value = {}) {
+  const contentType = cleanString(value.contentType).toLowerCase();
+  const sizeBytes = Number(value.sizeBytes) || 0;
+  if (!value.body || !["image/jpeg", "image/png", "image/webp"].includes(contentType) || sizeBytes <= 0) {
+    throw new CollectionDailyRoutesError(
+      "Hlášení vyžaduje platnou fotografii JPEG, PNG nebo WebP.",
+      400,
+      "collection_daily_route_report_photo_invalid"
+    );
+  }
+  return { body: value.body, contentType, sizeBytes };
+}
+
+function driverReportPhotoExtension(contentType) {
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
+  return "jpg";
+}
+
+export async function recordCollectionDailyRouteReport(env, user, runId, stopId, input = {}, photoValue = {}) {
+  const scope = collectionDailyRouteScope(input.scope);
+  assertTestScopeReader(user, scope);
+  const db = database(env, true, scope);
+  const bucket = documentBucket(env, true);
+  let storageKey = "";
+  let eventCommitted = false;
+  try {
+    const run = await loadRunRow(db, runId);
+    assertRunMatchesScope(run, scope);
+    assertTestRunAccess(user, run, scope);
+    assertCanOperateRun(user, run);
+    if (cleanString(run.status) !== "active") {
+      throw new CollectionDailyRoutesError(
+        "Hlášení lze uložit jen do zahájené trasy.",
+        409,
+        "collection_daily_route_not_active"
+      );
+    }
+    const idempotencyKey = cleanString(input.idempotencyKey);
+    if (!idempotencyKey) {
+      throw new CollectionDailyRoutesError(
+        "Hlášení nemá ochranu proti duplicitnímu odeslání.",
+        400,
+        "collection_daily_route_report_idempotency_required"
+      );
+    }
+    const existingEvent = await eventByIdempotency(db, idempotencyKey, run.id);
+    if (existingEvent) {
+      return {
+        report: rowToEvent(existingEvent),
+        route: await detailFromRow(db, await loadRunRow(db, run.id)),
+        reused: true,
+        sendsNotifications: false,
+        writesVistos: false
+      };
+    }
+    const stop = await loadStopRow(db, run.id, stopId);
+    if (cleanString(stop.status) !== "planned") {
+      throw new CollectionDailyRoutesError(
+        "Hlášení lze uložit jen u čekajícího stanoviště.",
+        409,
+        "collection_daily_route_stop_conflict"
+      );
+    }
+    const type = driverReportType(input.type);
+    const typeLabel = DRIVER_REPORT_TYPES.get(type);
+    const note = driverReportNote(input.note);
+    const photo = driverReportPhoto(photoValue);
+    const reportId = randomId("collection-daily-report");
+    const extension = driverReportPhotoExtension(photo.contentType);
+    storageKey = `collection-routes/daily-route-reports/${scope}/${encodeURIComponent(run.id)}/${reportId}.${extension}`;
+    const createdAt = nowIso();
+    const actorId = cleanString(user?.id);
+    const actorName = cleanString(user?.name || user?.email || user?.phone);
+    const photoUrl = `/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/reports/${encodeURIComponent(reportId)}/photo?scope=${encodeURIComponent(scope)}`;
+    const payload = {
+      workflow: "driver-dispatch-report",
+      reportId,
+      reportType: type,
+      reportTypeLabel: typeLabel,
+      photoStorageKey: storageKey,
+      photoContentType: photo.contentType,
+      photoSizeBytes: photo.sizeBytes,
+      photoUrl,
+      dataScope: scope,
+      sendsNotifications: false,
+      changesVistos: false,
+      changesProductionRoute: scope === COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION,
+      physicalConfirmationRequired: true
+    };
+    await bucket.put(storageKey, photo.body, {
+      httpMetadata: { contentType: photo.contentType },
+      customMetadata: {
+        reportId,
+        runId: cleanString(run.id),
+        stopId: cleanString(stop.id),
+        dataScope: scope,
+        uploadedByUserId: actorId
+      }
+    });
+    await db.batch([
+      db.prepare(`
+        UPDATE collection_daily_route_stops
+        SET status = 'problem',
+            problem_reason = ?,
+            problem_note = ?,
+            last_event_at = ?,
+            updated_at = ?
+        WHERE id = ? AND run_id = ?
+      `).bind(typeLabel, note, createdAt, createdAt, stop.id, run.id),
+      db.prepare(`
+        INSERT INTO collection_daily_route_events (
+          id, run_id, stop_id, event_type, before_status, after_status, reason, note,
+          idempotency_key, actor_user_id, actor_name, created_at, payload_json
+        ) VALUES (?, ?, ?, 'problem', 'planned', 'problem', ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        reportId,
+        run.id,
+        stop.id,
+        typeLabel,
+        note,
+        idempotencyKey,
+        actorId,
+        actorName,
+        createdAt,
+        jsonString(payload)
+      ),
+      db.prepare("UPDATE collection_daily_route_runs SET updated_at = ? WHERE id = ?").bind(createdAt, run.id)
+    ]);
+    eventCommitted = true;
+    return {
+      report: {
+        id: reportId,
+        runId: cleanString(run.id),
+        stopId: cleanString(stop.id),
+        eventType: "problem",
+        beforeStatus: "planned",
+        afterStatus: "problem",
+        reason: typeLabel,
+        note,
+        idempotencyKey,
+        actorUserId: actorId,
+        actorName,
+        createdAt,
+        payload
+      },
+      route: await detailFromRow(db, await loadRunRow(db, run.id)),
+      reused: false,
+      sendsNotifications: false,
+      writesVistos: false
+    };
+  } catch (error) {
+    if (storageKey && !eventCommitted) {
+      await bucket.delete(storageKey).catch(() => {});
+    }
+    throw dbError(error);
+  }
+}
+
+export async function getCollectionDailyRouteReportPhoto(env, user, runId, reportId, input = {}) {
+  const scope = collectionDailyRouteScope(input.scope);
+  assertTestScopeReader(user, scope);
+  const db = database(env, true, scope);
+  try {
+    const run = await loadRunRow(db, runId);
+    assertRunMatchesScope(run, scope);
+    assertTestRunAccess(user, run, scope);
+    assertCanReadRun(user, run);
+    const event = await db.prepare(`
+      SELECT *
+      FROM collection_daily_route_events
+      WHERE id = ? AND run_id = ? AND event_type = 'problem'
+      LIMIT 1
+    `).bind(cleanString(reportId), cleanString(run.id)).first();
+    if (!event) {
+      throw new CollectionDailyRoutesError(
+        "Fotografie hlášení nebyla nalezená.",
+        404,
+        "collection_daily_route_report_photo_not_found"
+      );
+    }
+    const payload = parseJson(event.payload_json, {});
+    const storageKey = cleanString(payload.photoStorageKey);
+    if (!storageKey || cleanString(payload.reportId) !== cleanString(reportId)) {
+      throw new CollectionDailyRoutesError(
+        "Událost neobsahuje fotografii hlášení.",
+        404,
+        "collection_daily_route_report_photo_not_found"
+      );
+    }
+    const object = await documentBucket(env, true).get(storageKey);
+    if (!object) {
+      throw new CollectionDailyRoutesError(
+        "Fotografie hlášení nebyla v cloudovém úložišti nalezená.",
+        404,
+        "collection_daily_route_report_photo_not_found"
+      );
+    }
+    return {
+      body: object.body,
+      contentType: cleanString(payload.photoContentType || object.httpMetadata?.contentType) || "image/jpeg"
+    };
   } catch (error) {
     throw dbError(error);
   }

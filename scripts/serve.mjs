@@ -127,6 +127,7 @@ let mockCollectionRouteContainers = [];
 let mockCollectionRouteSourceBatches = [];
 let mockCollectionRouteSourceFiles = [];
 let mockCollectionRouteSourceRows = [];
+const mockCollectionDailyRouteReportPhotos = new Map();
 let mockDataBoxSyncRuns = [];
 let mockDataBoxActions = [];
 let mockDataBoxPlusPendingAction = null;
@@ -4374,7 +4375,30 @@ function ensureMockCollectionDailyRouteForDriver(user, options = {}) {
       summary: { plannedCount: visibleStops.length, doneCount: 0, problemCount: 0 }
     },
     stops: visibleStops,
-    events: []
+    events: [],
+    driverOperations: testScope ? {
+      dumpSites: [{
+        id: "sako-brno",
+        name: "SAKO Brno",
+        address: "Jedovnická 4247/2, 628 00 Brno",
+        latitude: 49.190562,
+        longitude: 16.666214,
+        role: "primary",
+        wasteTypes: ["SKO"],
+        openingHours: "06:00-17:00",
+        testEstimate: true
+      }],
+      wasteType: "SKO",
+      source: "local-test-operational-config",
+      status: "test-estimate",
+      testEstimate: true
+    } : {
+      dumpSites: [],
+      wasteType: "",
+      source: "production-config-not-connected",
+      status: "waiting",
+      testEstimate: false
+    }
   };
   route.driverMap = buildCollectionDailyRouteDriverMap(route.run, route.stops);
   mockCollectionDailyRoutesByDriver.set(stateKey, route);
@@ -4415,10 +4439,13 @@ function appendMockCollectionDailyRouteEvent(route, user, input = {}) {
       externalEffectsDisabled: true,
       notificationsDisabled: true,
       vistosWritesDisabled: true,
-      productionRouteWritesDisabled: true
+      productionRouteWritesDisabled: true,
+      ...(input.payload && typeof input.payload === "object" ? input.payload : {})
     }
   };
-  route.events.push(event);
+  // Produkční detail vrací události od nejnovější; lokální simulace musí mít
+  // stejné pořadí, jinak ukončená přestávka nebo výsyp vypadá jako aktivní.
+  route.events.unshift(event);
   return event;
 }
 
@@ -4569,6 +4596,50 @@ async function handleApi(request, response) {
     return true;
   }
 
+  const mockDailyRouteNavigationMatch = url.pathname.match(/^\/api\/collection-routes\/daily-routes\/([^/]+)\/navigation$/);
+  if (mockDailyRouteNavigationMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const scope = url.searchParams.get("scope") === "test" ? "test" : "production";
+    const route = ensureMockCollectionDailyRouteForDriver(user, { scope });
+    if (route.run.id !== decodeURIComponent(mockDailyRouteNavigationMatch[1])) {
+      sendJson(response, 404, { error: "Trasa nebyla nalezena." });
+      return true;
+    }
+    const target = route.driverMap?.points?.find((point) => point.stopId === url.searchParams.get("toPointId"));
+    const origin = route.driverMap?.points?.find((point) => point.stopId === url.searchParams.get("fromPointId")) || route.driverMap?.depot;
+    if (!origin || !target) {
+      sendJson(response, 409, { error: "Pro úsek chybí souřadnice." });
+      return true;
+    }
+    const middle = {
+      latitude: (origin.latitude + target.latitude) / 2 + 0.001,
+      longitude: (origin.longitude + target.longitude) / 2 - 0.001
+    };
+    sendJson(response, 200, {
+      navigation: {
+        provider: "local-here-routing-simulation",
+        mode: "truck",
+        origin,
+        destination: target,
+        points: [origin, middle, target],
+        summary: { lengthMeters: 1800, durationSeconds: 320 },
+        sendsNotifications: false,
+        writesRoute: false,
+        exposesApiKey: false
+      },
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
   const mockDailyRouteTransitionMatch = url.pathname.match(/^\/api\/collection-routes\/daily-routes\/([^/]+)\/transition$/);
   if (mockDailyRouteTransitionMatch && request.method === "POST") {
     const user = currentDevUser(request);
@@ -4661,12 +4732,26 @@ async function handleApi(request, response) {
     }
     appendMockCollectionDailyRouteEvent(route, user, {
       stopId,
-      eventType: `stop_${action}`,
+      eventType: action,
       beforeStatus,
       afterStatus: stop.status,
       reason: String(payload.reason || "").trim(),
       note: String(payload.note || "").trim(),
-      idempotencyKey
+      idempotencyKey,
+      payload: action === "dump" && payload.payload?.phase === "started"
+        ? {
+          phase: "started",
+          source: "driver-tablet-workflow",
+          destination: {
+            id: "sako-brno",
+            name: "SAKO Brno",
+            address: "Jedovnická 4247/2, 628 00 Brno",
+            latitude: 49.190562,
+            longitude: 16.666214,
+            testEstimate: true
+          }
+        }
+        : { phase: payload.payload?.phase || "recorded", source: "driver-tablet-workflow" }
     });
     refreshMockCollectionDailyRouteSummary(route);
     sendJson(response, 200, {
@@ -4674,6 +4759,97 @@ async function handleApi(request, response) {
       apiStatus: "ready",
       mock: true
     });
+    return true;
+  }
+
+  const mockDailyRouteReportMatch = url.pathname.match(/^\/api\/collection-routes\/daily-routes\/([^/]+)\/stops\/([^/]+)\/report$/);
+  if (mockDailyRouteReportMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const { fields, files } = await readMultipartFormData(request);
+    const scope = fields.get("scope") === "test" ? "test" : "production";
+    const route = ensureMockCollectionDailyRouteForDriver(user, { scope });
+    const runId = decodeURIComponent(mockDailyRouteReportMatch[1]);
+    const stopId = decodeURIComponent(mockDailyRouteReportMatch[2]);
+    const stop = route.stops.find((item) => item.id === stopId);
+    const photo = files.get("photo");
+    if (route.run.id !== runId || !stop) {
+      sendJson(response, 404, { error: "Trasa nebo stanoviště nebyly nalezené." });
+      return true;
+    }
+    if (!photo?.buffer?.length) {
+      sendJson(response, 400, { error: "Hlášení musí obsahovat fotografii." });
+      return true;
+    }
+    const reportId = `local-driver-report-${randomUUID()}`;
+    const beforeStatus = stop.status;
+    stop.status = "problem";
+    stop.problemReason = fields.get("type") || "other";
+    stop.problemNote = fields.get("note") || "";
+    const photoUrl = `/api/collection-routes/daily-routes/${encodeURIComponent(runId)}/reports/${encodeURIComponent(reportId)}/photo?scope=${encodeURIComponent(scope)}`;
+    mockCollectionDailyRouteReportPhotos.set(reportId, {
+      userId: user.id,
+      runId,
+      scope,
+      contentType: photo.type || "image/jpeg",
+      buffer: photo.buffer
+    });
+    const report = appendMockCollectionDailyRouteEvent(route, user, {
+      stopId,
+      eventType: "problem",
+      beforeStatus,
+      afterStatus: "problem",
+      reason: fields.get("type") || "other",
+      note: fields.get("note") || "",
+      idempotencyKey: fields.get("idempotencyKey") || "",
+      payload: {
+        workflow: "driver-dispatch-report",
+        reportId,
+        photoUrl,
+        sendsNotifications: false,
+        changesVistos: false,
+        localSimulation: true
+      }
+    });
+    report.id = reportId;
+    refreshMockCollectionDailyRouteSummary(route);
+    sendJson(response, 201, {
+      report,
+      route: structuredClone(route),
+      sendsNotifications: false,
+      writesVistos: false,
+      apiStatus: "ready",
+      mock: true
+    });
+    return true;
+  }
+
+  const mockDailyRouteReportPhotoMatch = url.pathname.match(/^\/api\/collection-routes\/daily-routes\/([^/]+)\/reports\/([^/]+)\/photo$/);
+  if (mockDailyRouteReportPhotoMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    const reportId = decodeURIComponent(mockDailyRouteReportPhotoMatch[2]);
+    const photo = mockCollectionDailyRouteReportPhotos.get(reportId);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!photo || photo.userId !== user.id || photo.runId !== decodeURIComponent(mockDailyRouteReportPhotoMatch[1])) {
+      sendJson(response, 404, { error: "Fotografie nebyla nalezena." });
+      return true;
+    }
+    response.writeHead(200, {
+      "Content-Type": photo.contentType,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
+    response.end(photo.buffer);
     return true;
   }
 

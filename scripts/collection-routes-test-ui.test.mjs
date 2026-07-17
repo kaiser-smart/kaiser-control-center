@@ -443,7 +443,7 @@ assert.ok(
 );
 
 const tabletMapStart = appSource.indexOf("function collectionRoutesTestTabletMapPanel");
-const tabletMapEnd = appSource.indexOf("function clearCollectionRoutesTestTabletHereMap", tabletMapStart);
+const tabletMapEnd = appSource.indexOf("function collectionDailyRouteDriverMapPanel", tabletMapStart);
 const tabletMapSource = appSource.slice(tabletMapStart, tabletMapEnd);
 assert.ok(tabletMapStart >= 0 && tabletMapEnd > tabletMapStart, "TEST tablet musí mít vlastní bezpečný mapový výřez.");
 for (const forbiddenMapField of ["customerName", "driverName", "contractNumber", "recipientPhone", "recipientEmail"]) {
