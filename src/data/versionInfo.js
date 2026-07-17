@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.578"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.579"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -21,8 +21,8 @@ export const versionInfo = {
 
 export const versionNews = [
   {
-    title: "Svoz: izolovaný TEST tabletu pro Miroslava",
-    text: "Explicitní TEST odkaz načte z oddělené D1 pouze jediný bod Firma test 501 přiřazený účtu Miroslav Vašek. Tomáš Gaží je vedený jen jako fyzický tester v TEST metadata; audit zůstává pod přihlášeným Miroslavem a TEST nemůže poslat e-mail, SMS, RCS ani změnit Vistos či ostrou trasu."
+    title: "Svoz: plnohodnotný izolovaný TEST řidiče",
+    text: "Řidičský TEST používá standardní pracovní ovládání včetně přestávky, výsypu a hlášení pro dispečink. Akce se ukládají pouze do odděleného TEST auditu pod přihlášeným řidičem; žádná zpráva, Vistos ani ostrá trasa se nemění."
   },
   {
     title: "Svoz: Řidič vidí jen svůj displej",

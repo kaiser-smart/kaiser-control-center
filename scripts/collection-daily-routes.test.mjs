@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createSessionCookie } from "../functions/_lib/auth.js";
 import { onRequestGet as listDailyRoutesApi } from "../functions/api/collection-routes/daily-routes.js";
 import { onRequestGet as myDailyRouteApi } from "../functions/api/collection-routes/daily-routes/my.js";
+import { onRequestPost as stopEventApi } from "../functions/api/collection-routes/daily-routes/[runId]/stops/[stopId]/events.js";
 import { previewCollectionRoutesTestNotifications } from "../functions/_lib/collection-routes-test-notifications.js";
 import { confirmCollectionRoutesTestGps } from "../functions/_lib/collection-routes-test-gps-store.js";
 import {
@@ -738,9 +739,11 @@ await assert.rejects(
 );
 assert.equal((await listCollectionDailyRoutes(isolatedEnv, { scope: "test" }, isolatedManager)).length, 1);
 
-async function isolatedAuthenticatedRequest(url, user) {
+async function isolatedAuthenticatedRequest(url, user, init = {}) {
   const cookie = (await createSessionCookie(isolatedEnv, user)).split(";")[0];
-  return new Request(url, { headers: { Cookie: cookie } });
+  const headers = new Headers(init.headers || {});
+  headers.set("Cookie", cookie);
+  return new Request(url, { ...init, headers });
 }
 
 const miroslavTestApiResponse = await myDailyRouteApi({
@@ -772,6 +775,32 @@ await transitionCollectionDailyRoute(isolatedEnv, miroslav, seededRunId, {
   action: "start",
   idempotencyKey: "miroslav-isolated-test-start"
 });
+const breakApiResponse = await stopEventApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/stops/${seededStopId}/events`,
+    miroslav,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "test", action: "break", idempotencyKey: "miroslav-isolated-test-break" })
+    }
+  ),
+  env: isolatedEnv,
+  params: { runId: seededRunId, stopId: seededStopId }
+});
+assert.equal(breakApiResponse.status, 200);
+await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, seededStopId, {
+  scope: "test",
+  action: "dump",
+  idempotencyKey: "miroslav-isolated-test-dump"
+});
+await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, seededStopId, {
+  scope: "test",
+  action: "problem",
+  reason: "Přeplněná nádoba",
+  note: "Izolovaný TEST hlášení",
+  idempotencyKey: "miroslav-isolated-test-problem"
+});
 await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, seededStopId, {
   scope: "test",
   action: "done",
@@ -785,6 +814,13 @@ const completedIsolatedTest = await transitionCollectionDailyRoute(isolatedEnv, 
 assert.equal(completedIsolatedTest.run.status, "completed");
 assert.ok(completedIsolatedTest.events.every((event) => event.actorUserId === miroslav.id));
 assert.ok(completedIsolatedTest.events.every((event) => event.actorName === miroslav.name));
+for (const eventType of ["break", "dump", "problem", "done"]) {
+  assert.equal(
+    isolatedTestSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE run_id = ? AND event_type = ?").get(seededRunId, eventType).count,
+    1,
+    `Izolovaný TEST musí auditovat akci ${eventType}.`
+  );
+}
 assert.equal(isolatedProductionSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_runs").get().count, 0);
 assert.equal(isolatedProductionSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events").get().count, 0);
 await assert.rejects(

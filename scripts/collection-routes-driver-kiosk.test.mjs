@@ -58,9 +58,9 @@ for (const marker of [
   "MUSÍM JET VYSYPAT",
   "PŘESTÁVKA",
   "CELÁ TRASA",
-  "IZOLOVANÝ TEST · BEZ JÍZDY",
-  "ULOŽIT JEN DO TEST AUDITU",
-  "physicalTesterName",
+  "collection-daily-driver-test-badge\">TEST",
+  "ODESLAT HLÁŠENÍ",
+  "Testovací režim · bez externího doručení",
   "data-collection-daily-driver-sheet-close"
 ]) {
   assert.ok(driverPageSource.includes(marker), `Řidičský displej postrádá prvek: ${marker}`);
@@ -82,7 +82,6 @@ for (const marker of [
   "overflow: hidden",
   ".collection-daily-driver-workspace",
   ".collection-daily-driver-test-badge",
-  ".collection-daily-driver-test-context",
   ".collection-daily-driver-action-sheet[open]::before",
   ".collection-daily-driver-sheet"
 ]) {

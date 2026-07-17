@@ -23134,7 +23134,6 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
   const detail = collectionRoutesPilotState.myDailyRoute;
   const run = detail?.run || null;
   const testScope = collectionDailyRouteDriverScope() === "test";
-  const physicalTesterName = String(run?.metadata?.physicalTesterName || "").trim();
   const stops = Array.isArray(detail?.stops) ? detail.stops : [];
   const visibleStopCount = collectionDailyRouteVisibleStopCount(
     stops.length,
@@ -23142,7 +23141,9 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
   );
   const visibleStops = stops.slice(0, visibleStopCount);
   const remainingStops = Math.max(0, stops.length - visibleStopCount);
-  const currentStop = stops.find((stop) => stop.status === "planned") || null;
+  const currentStop = stops.find((stop) => stop.status === "planned")
+    || (testScope ? stops.find((stop) => stop.status === "problem") : null)
+    || null;
   const eventStopId = currentStop?.id || stops[0]?.id || "route";
   const pending = collectionRoutesPilotState.myDailyRoutePending;
   const summary = run?.summary || {};
@@ -23153,7 +23154,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
         <div class="collection-daily-driver-kiosk-brand">
           <strong>kaiser.</strong>
           <span>ŘIDIČSKÝ DISPLEJ</span>
-          ${testScope ? `<b class="collection-daily-driver-test-badge">IZOLOVANÝ TEST · BEZ JÍZDY</b>` : ""}
+          ${testScope ? `<b class="collection-daily-driver-test-badge">TEST</b>` : ""}
         </div>
         <div class="collection-daily-driver-kiosk-user">
           <span>${escapeHtml(user.name || user.email || "Řidič")}</span>
@@ -23162,17 +23163,16 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
         </div>
       </header>
       <div class="collection-daily-driver-feedback" aria-live="polite">
-        ${collectionRoutesPilotState.myDailyRouteLoading ? `<p class="module-feedback__notice">${testScope ? "Načítám tvůj izolovaný TEST…" : "Načítám tvoji přiřazenou trasu…"}</p>` : ""}
+        ${collectionRoutesPilotState.myDailyRouteLoading ? `<p class="module-feedback__notice">Načítám tvoji přiřazenou trasu…</p>` : ""}
         ${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}
         ${collectionRoutesPilotState.myDailyRouteMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.myDailyRouteMessage)}</p>` : ""}
       </div>
-      ${!run && collectionRoutesPilotState.myDailyRouteLoaded ? `<section class="collection-daily-driver-empty"><strong>${testScope ? "Nemáš přiřazený žádný izolovaný TEST." : "Dnes nemáš přiřazenou trasu."}</strong><span>${testScope ? "TEST se zobrazí jen účtu, kterému je v oddělené TEST databázi výslovně přiřazený." : "Jakmile ji dispečink potvrdí a přiřadí přímo tobě, objeví se tady."}</span><button class="secondary-link" type="button" data-collection-daily-driver-refresh>OBNOVIT</button></section>` : ""}
+      ${!run && collectionRoutesPilotState.myDailyRouteLoaded ? `<section class="collection-daily-driver-empty"><strong>${testScope ? "Nemáš přiřazenou testovací trasu." : "Dnes nemáš přiřazenou trasu."}</strong><span>Jakmile ji dispečink potvrdí a přiřadí přímo tobě, objeví se tady.</span><button class="secondary-link" type="button" data-collection-daily-driver-refresh>OBNOVIT</button></section>` : ""}
       ${run ? `
         <section class="collection-daily-driver-route">
           <header class="collection-daily-driver-route-head">
             <div class="collection-daily-driver-route-identity">
               <span>${escapeHtml(collectionDailyRouteDateLabel(run.routeDate))}</span>
-              ${testScope ? `<b class="collection-daily-driver-test-context">TEST · actor ${escapeHtml(user.name || run.driverName || "Řidič")}${physicalTesterName ? ` · fyzicky ${escapeHtml(physicalTesterName)}` : ""} · nic se neodesílá</b>` : ""}
               <strong>${escapeHtml(vehicleLabel)}</strong>
               <small>${escapeHtml(run.title || "Denní trasa")}</small>
             </div>
@@ -23186,7 +23186,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               <button type="button" data-collection-daily-driver-refresh ${collectionRoutesPilotState.myDailyRouteLoading ? "disabled" : ""}>OBNOVIT</button>
             </div>
           </header>
-          ${run.status === "confirmed" ? `<div class="collection-daily-driver-start"><strong>${testScope ? "Izolovaný TEST je připravený." : "Trasa je připravená."}</strong><span>${testScope ? "Jde o jediný bod bez jízdy; všechny akce zůstávají pouze v TEST auditu." : "Po zahájení se zobrazí první stanoviště a pracovní tlačítka."}</span><button class="primary-action collection-daily-driver-primary" type="button" data-collection-daily-driver-transition="start" ${pending ? "disabled" : ""}>${testScope ? "ZAHÁJIT TEST" : "ZAHÁJIT TRASU"}</button></div>` : ""}
+          ${run.status === "confirmed" ? `<div class="collection-daily-driver-start"><strong>Trasa je připravená.</strong><span>Po zahájení se zobrazí stanoviště a pracovní tlačítka.</span><button class="primary-action collection-daily-driver-primary" type="button" data-collection-daily-driver-transition="start" ${pending ? "disabled" : ""}>ZAHÁJIT TRASU</button></div>` : ""}
           ${run.status === "draft" ? `<div class="collection-daily-driver-complete"><strong>Trasa čeká na potvrzení dispečinku.</strong><span>Zatím ji nemůžeš zahájit.</span></div>` : ""}
           ${run.status === "completed" ? `<div class="collection-daily-driver-complete"><strong>Trasa je dokončená.</strong><span>Pokud je potřeba oprava, znovu ji otevře dispečer.</span></div>` : ""}
           ${run.status === "active" && currentStop ? `
@@ -23204,21 +23204,21 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               </article>
               <aside class="collection-daily-driver-actions" aria-label="Pracovní akce řidiče">
                 <button class="collection-daily-driver-action collection-daily-driver-action--done" type="button" data-collection-daily-driver-event="done" data-stop-id="${escapeHtml(currentStop.id)}" ${pending ? "disabled" : ""}>HOTOVO</button>
-                <details class="collection-daily-driver-action-sheet">
-                  <summary class="collection-daily-driver-action collection-daily-driver-action--report">${testScope ? "TEST ZÁZNAM PROBLÉMU" : "HLÁŠENÍ PRO DISPEČINK"}</summary>
+                ${currentStop.status === "planned" ? `<details class="collection-daily-driver-action-sheet">
+                  <summary class="collection-daily-driver-action collection-daily-driver-action--report">HLÁŠENÍ PRO DISPEČINK</summary>
                   <div class="collection-daily-driver-sheet" role="dialog" aria-modal="true" aria-labelledby="collection-daily-driver-problem-title">
-                    <header><div><span>STANOVIŠTĚ ${escapeHtml(currentStop.routeOrder)}</span><h2 id="collection-daily-driver-problem-title">${testScope ? "TEST záznam problému" : "Hlášení pro dispečink"}</h2></div><button type="button" data-collection-daily-driver-sheet-close aria-label="Zavřít hlášení">ZAVŘÍT</button></header>
+                    <header><div><span>STANOVIŠTĚ ${escapeHtml(currentStop.routeOrder)}</span><h2 id="collection-daily-driver-problem-title">Hlášení pro dispečink</h2></div><button type="button" data-collection-daily-driver-sheet-close aria-label="Zavřít hlášení">ZAVŘÍT</button></header>
                     <p>${escapeHtml(currentStop.customerName || "-")} · ${escapeHtml(currentStop.addressText || "-")}</p>
-                    ${testScope ? `<p class="collection-daily-driver-test-note">Uloží se pouze do odděleného TEST D1 auditu. Neodešle se e-mail, SMS, RCS ani dispečerská či zákaznická notifikace.</p>` : ""}
+                    ${testScope ? `<p class="collection-daily-driver-test-note">Testovací režim · bez externího doručení</p>` : ""}
                     <form class="collection-daily-driver-problem" data-collection-daily-driver-problem-form data-stop-id="${escapeHtml(currentStop.id)}">
                       <label><span>Co se stalo?</span><select name="reason" required><option value="">Vyber důvod</option><option>Přeplněná nádoba</option><option>Poškozená nádoba</option><option>Nádoba není přístupná</option><option>Nelze se dostat do firmy</option><option>Nádoba nebyla přistavená</option><option>Kontaminovaný odpad</option><option>Jiný problém</option></select></label>
-                      <label><span>Krátká poznámka</span><input name="note" maxlength="500" placeholder="${testScope ? "Co se má uložit do TEST auditu?" : "Co má dispečink vědět?"}"></label>
-                      <button class="primary-action" type="submit" ${pending ? "disabled" : ""}>${testScope ? "ULOŽIT JEN DO TEST AUDITU" : "ODESLAT HLÁŠENÍ DISPEČINKU"}</button>
+                      <label><span>Krátká poznámka</span><input name="note" maxlength="500" placeholder="Co má dispečink vědět?"></label>
+                      <button class="primary-action" type="submit" ${pending ? "disabled" : ""}>ODESLAT HLÁŠENÍ</button>
                     </form>
                   </div>
-                </details>
-                ${testScope ? "" : `<button class="collection-daily-driver-action" type="button" data-collection-daily-driver-event="dump" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>MUSÍM JET VYSYPAT</button>`}
-                ${testScope ? "" : `<button class="collection-daily-driver-action" type="button" data-collection-daily-driver-event="break" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>PŘESTÁVKA</button>`}
+                </details>` : ""}
+                <button class="collection-daily-driver-action" type="button" data-collection-daily-driver-event="dump" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>MUSÍM JET VYSYPAT</button>
+                <button class="collection-daily-driver-action" type="button" data-collection-daily-driver-event="break" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>PŘESTÁVKA</button>
                 <details class="collection-daily-driver-action-sheet">
                   <summary class="collection-daily-driver-action">CELÁ TRASA</summary>
                   <div class="collection-daily-driver-sheet" role="dialog" aria-modal="true" aria-labelledby="collection-daily-driver-stops-title">
@@ -23235,7 +23235,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               </aside>
             </div>
           ` : ""}
-          ${run.status === "active" && !currentStop ? `<div class="collection-daily-driver-complete"><strong>${testScope ? "Jediný TEST bod je vyřízený." : "Všechny zastávky jsou vyřízené."}</strong><button class="primary-action" type="button" data-collection-daily-driver-transition="complete" ${pending ? "disabled" : ""}>${testScope ? "DOKONČIT TEST" : "Dokončit trasu"}</button></div>` : ""}
+          ${run.status === "active" && !currentStop ? `<div class="collection-daily-driver-complete"><strong>Všechny zastávky jsou vyřízené.</strong><button class="primary-action" type="button" data-collection-daily-driver-transition="complete" ${pending ? "disabled" : ""}>DOKONČIT TRASU</button></div>` : ""}
         </section>
       ` : ""}
     </main>
@@ -40245,9 +40245,7 @@ async function transitionMyCollectionDailyRoute(action) {
     });
     applyMyCollectionDailyRoute(
       result.route || null,
-      collectionDailyRouteDriverScope() === "test"
-        ? action === "start" ? "Izolovaný TEST byl zahájen." : "Izolovaný TEST byl dokončen."
-        : action === "start" ? "Trasa byla zahájena." : "Trasa byla dokončena."
+      action === "start" ? "Trasa byla zahájena." : "Trasa byla dokončena."
     );
   } catch (error) {
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Stav trasy se nepodařilo uložit.";
@@ -40277,9 +40275,11 @@ async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
     const testScope = collectionDailyRouteDriverScope() === "test";
     applyMyCollectionDailyRoute(result.route || null, testScope
       ? {
-        done: "TEST bod je uložený jako HOTOVO pouze v odděleném auditu.",
-        problem: "Problém je uložený pouze v TEST auditu; nic se neodeslalo."
-      }[action] || "Akce byla uložená pouze do TEST auditu."
+        done: "Zastávka je uložená jako HOTOVO.",
+        problem: "Hlášení bylo přijato v testovacím režimu.",
+        dump: "Výsyp byl zapsán do testovacího auditu.",
+        break: "Přestávka byla zapsána do testovacího auditu."
+      }[action] || "Akce byla uložena."
       : {
         done: "Zastávka je uložená jako HOTOVO.",
         problem: "Problém byl uložen a dispečer ho vidí.",
