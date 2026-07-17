@@ -3,6 +3,7 @@ import {
   collectionRoutesTestDatabase
 } from "./collection-routes-test-store.js";
 import {
+  collectionDailyRouteExternalEffectsDisabled,
   COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
   isCollectionDailyRouteStationaryFieldTest
 } from "./collection-daily-routes-store.js";
@@ -270,6 +271,13 @@ async function loadIncidentContext(db, incidentId, user = null, { requireActiveT
       "Workflow je povolený pouze pro stacionární TEST Firma test 501.",
       409,
       "collection_routes_test_incident_workflow_stationary_test_required"
+    );
+  }
+  if (collectionDailyRouteExternalEffectsDisabled({ metadata_json: row.run_metadata_json })) {
+    throw new CollectionRoutesTestIncidentWorkflowError(
+      "Tento izolovaný TEST má všechny e-maily, SMS, RCS a dispečerské notifikace trvale vypnuté.",
+      409,
+      "collection_routes_test_incident_workflow_notifications_disabled"
     );
   }
   if (requireActiveTester) assertFieldTester(row, user);

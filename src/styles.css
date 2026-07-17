@@ -41635,6 +41635,45 @@ body.collection-driver-kiosk-active #app {
   letter-spacing: 0.06em;
 }
 
+.collection-daily-driver-test-badge,
+.collection-daily-driver-test-context {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  background: #8f241f;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.045em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.collection-daily-driver-test-badge {
+  padding: 7px 11px;
+}
+
+.collection-daily-driver-test-context {
+  margin: 2px 0;
+  padding: 5px 9px;
+}
+
+.collection-daily-driver-page.is-isolated-test .collection-daily-driver-route {
+  border-color: rgba(143, 36, 31, 0.42);
+  box-shadow: 0 18px 48px rgba(143, 36, 31, 0.12);
+}
+
+.collection-daily-driver-test-note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(143, 36, 31, 0.24);
+  border-radius: 10px;
+  background: #fff3f1;
+  color: #6e211d;
+  font-weight: 800;
+}
+
 .collection-daily-driver-kiosk-user > span {
   font-weight: 900;
 }

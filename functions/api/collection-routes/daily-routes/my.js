@@ -6,7 +6,10 @@ export async function onRequestGet({ request, env }) {
   const user = await currentUser(env, request);
   if (!user) return json({ error: "Nepřihlášeno." }, 401);
   try {
-    const route = await getMyCollectionDailyRoute(env, user);
+    const url = new URL(request.url);
+    const route = await getMyCollectionDailyRoute(env, user, {
+      scope: url.searchParams.get("scope")
+    });
     return json({ route, apiStatus: "ready" });
   } catch (error) {
     return collectionDailyRoutesErrorResponse(error, "Přiřazenou denní trasu se teď nepodařilo načíst.");

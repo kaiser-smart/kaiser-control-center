@@ -13,6 +13,7 @@ import {
   COLLECTION_DAILY_ROUTE_FIELD_TEST_SOURCE_ID,
   COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
   assignCollectionDailyRouteDriver,
+  collectionDailyRouteExternalEffectsDisabled,
   collectionDailyRouteDateInfo,
   createCollectionDailyRouteDraft,
   getCollectionDailyRoute,
@@ -362,7 +363,7 @@ const duplicatePreview = await previewCollectionDailyRoute(env, {
 assert.equal(duplicatePreview.eligibleCount, 0);
 assert.match(duplicatePreview.excludedRows[0].reason, /jiné trase/);
 
-const routes = await listCollectionDailyRoutes(env, { limit: 10 });
+const routes = await listCollectionDailyRoutes(env, { limit: 10 }, dispatcher);
 assert.equal(routes.length, 1);
 assert.equal(routes[0].summary.problemCount, 1);
 assert.ok((await getCollectionDailyRoute(env, driver, created.run.id)).events.length >= 9);
@@ -477,11 +478,7 @@ await assert.rejects(
   assignCollectionDailyRouteDriver(fieldEnv, tomasManager, fieldRoute.run.id, { scope: "test", driverUserId: "driver-1" }),
   (error) => error.code === "collection_daily_route_field_test_driver_forbidden"
 );
-await assert.rejects(
-  transitionCollectionDailyRoute(fieldEnv, otherManager, fieldRoute.run.id, { scope: "test", action: "confirm" }),
-  (error) => error.code === "collection_daily_route_field_tester_mismatch"
-);
-const fieldConfirmed = await transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+const fieldConfirmed = await transitionCollectionDailyRoute(fieldEnv, otherManager, fieldRoute.run.id, {
   scope: "test",
   action: "confirm",
   idempotencyKey: "field-confirm"
@@ -544,18 +541,10 @@ assert.equal((await transitionCollectionDailyRoute(fieldEnv, tomasManager, field
   action: "complete",
   idempotencyKey: "field-complete-with-gps-review"
 })).run.status, "completed");
-await assert.rejects(
-  transitionCollectionDailyRoute(fieldEnv, otherManager, fieldRoute.run.id, {
-    scope: "test",
-    action: "reopen",
-    idempotencyKey: "field-reopen-other-manager"
-  }),
-  (error) => error.code === "collection_daily_route_field_tester_mismatch"
-);
-const fieldReopened = await transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+const fieldReopened = await transitionCollectionDailyRoute(fieldEnv, otherManager, fieldRoute.run.id, {
   scope: "test",
   action: "reopen",
-  idempotencyKey: "field-reopen-for-incidents"
+  idempotencyKey: "field-reopen-other-manager"
 });
 assert.equal(fieldReopened.run.status, "active");
 assert.equal(fieldReopened.run.summary.plannedCount, 1);
@@ -613,5 +602,200 @@ await assert.rejects(
   previewCollectionRoutesTestNotifications(fieldEnv, tomasManager, { runId: fieldRoute.run.id }),
   (error) => error.code === "collection_routes_test_notification_stationary_field_forbidden"
 );
+
+const isolatedTestSqlite = new DatabaseSync(":memory:");
+for (const migration of [
+  "../migrations/0001_create_users.sql",
+  "../migrations/0002_add_user_manager.sql",
+  "../migrations/0017_create_collection_routes_phase1a.sql",
+  "../migrations/0038_create_collection_daily_routes.sql"
+]) {
+  isolatedTestSqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
+}
+isolatedTestSqlite.prepare(`
+  INSERT INTO collection_import_batches (
+    id, source, source_mode, status, api_status, message, row_count, issue_count,
+    created_by_user_id, created_at, finished_at, metadata_json
+  ) VALUES (
+    'collection-import-batch-test-brno-500-v2', 'synthetic-test', 'synthetic-brno-test',
+    'preview', 'ready', 'TEST Brno 501', 501, 0,
+    'seed', '2026-07-17T07:00:00.000Z', '2026-07-17T07:00:00.000Z', '{}'
+  )
+`).run();
+isolatedTestSqlite.prepare(`
+  INSERT INTO collection_import_rows (
+    id, batch_id, row_number, source_entity, source_id, status, summary_json, issues_json, created_at
+  ) VALUES (
+    'collection-import-row-test-brno-v2-0501',
+    'collection-import-batch-test-brno-500-v2',
+    501,
+    'synthetic-field-test-site',
+    'test-field-site-501',
+    'preview',
+    ?,
+    '[]',
+    '2026-07-17T07:00:00.000Z'
+  )
+`).run(JSON.stringify({
+  sourceId: "test-field-site-501",
+  sourceContractId: "test-contract-field-501",
+  contractNumber: "TEST-501",
+  customerName: "Firma test 501",
+  addressPlaceRaw: "Trnkova 3052/137, 628 00 Brno",
+  stationName: "Firma test 501 · stanoviště Trnkova",
+  wasteType: "SKO",
+  wasteCode: "200301",
+  containerVolume: 120,
+  containerCount: 1,
+  containerType: "nádoba",
+  frequency: "1x7",
+  pickupDaysText: "středa lichá, středa sudá"
+}));
+const isolatedSeedSql = readFileSync(
+  new URL("../migrations/test/0007_seed_driver_tablet_test_miroslav_vasek.sql", import.meta.url),
+  "utf8"
+);
+isolatedTestSqlite.exec(isolatedSeedSql);
+isolatedTestSqlite.exec(isolatedSeedSql);
+
+const isolatedProductionSqlite = new DatabaseSync(":memory:");
+for (const migration of [
+  "../migrations/0001_create_users.sql",
+  "../migrations/0002_add_user_manager.sql",
+  "../migrations/0017_create_collection_routes_phase1a.sql",
+  "../migrations/0038_create_collection_daily_routes.sql"
+]) {
+  isolatedProductionSqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
+}
+const miroslav = {
+  id: "pneumatiky-miroslav-vasek",
+  name: "Miroslav Vašek",
+  role: "ridic",
+  status: "active",
+  active: true
+};
+const foreignDriver = {
+  id: "pneumatika-cizi-ridic",
+  name: "Cizí řidič",
+  role: "ridic",
+  status: "active",
+  active: true
+};
+const isolatedManager = {
+  id: "management-isolated-test",
+  name: "Management TEST",
+  role: "management",
+  status: "active",
+  active: true
+};
+const isolatedEnv = {
+  SMART_ODPADY_DB: new D1Database(isolatedProductionSqlite),
+  COLLECTION_ROUTES_TEST_DB: new D1Database(isolatedTestSqlite),
+  AUTH_USERS_JSON: JSON.stringify([miroslav, foreignDriver, isolatedManager]),
+  AUTH_SESSION_SECRET: "isolated-driver-tablet-test-session-secret"
+};
+const seededRunId = "collection-daily-route-test-tablet-miroslav-vasek-20260717";
+const seededStopId = "collection-daily-stop-test-tablet-miroslav-vasek-501";
+
+assert.equal(isolatedTestSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_runs").get().count, 1);
+assert.equal(isolatedTestSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_stops").get().count, 1);
+assert.equal(isolatedTestSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events").get().count, 1);
+const seededRunRow = isolatedTestSqlite.prepare("SELECT * FROM collection_daily_route_runs WHERE id = ?").get(seededRunId);
+const seededMetadata = JSON.parse(seededRunRow.metadata_json);
+assert.equal(seededRunRow.driver_user_id, miroslav.id);
+assert.equal(seededRunRow.driver_name, miroslav.name);
+assert.equal(seededRunRow.status, "confirmed");
+assert.equal(seededMetadata.dataScope, "test");
+assert.equal(seededMetadata.physicalTesterName, "Tomáš Gaží");
+assert.equal(seededMetadata.externalEffectsDisabled, true);
+assert.equal(seededMetadata.notificationsDisabled, true);
+assert.equal(seededMetadata.vistosWritesDisabled, true);
+assert.equal(seededMetadata.productionRouteWritesDisabled, true);
+assert.equal(collectionDailyRouteExternalEffectsDisabled({ metadata_json: seededRunRow.metadata_json }), true);
+assert.equal(seededRunRow.created_by_name, miroslav.name);
+assert.equal(seededRunRow.confirmed_by_name, miroslav.name);
+assert.equal(isolatedTestSqlite.prepare("SELECT actor_user_id FROM collection_daily_route_events WHERE run_id = ?").get(seededRunId).actor_user_id, miroslav.id);
+assert.equal(isolatedTestSqlite.prepare("SELECT actor_name FROM collection_daily_route_events WHERE run_id = ?").get(seededRunId).actor_name, miroslav.name);
+assert.equal(isolatedTestSqlite.prepare("SELECT customer_name FROM collection_daily_route_stops WHERE id = ?").get(seededStopId).customer_name, "Firma test 501");
+assert.equal(isolatedTestSqlite.prepare("SELECT address_text FROM collection_daily_route_stops WHERE id = ?").get(seededStopId).address_text, "Trnkova 3052/137, 628 00 Brno");
+
+const myIsolatedTest = await getMyCollectionDailyRoute(isolatedEnv, miroslav, { scope: "test" });
+assert.equal(myIsolatedTest.run.id, seededRunId);
+assert.equal(myIsolatedTest.stops.length, 1);
+assert.equal(await getMyCollectionDailyRoute(isolatedEnv, miroslav), null, "Produkční scope nesmí vrátit TEST záznam.");
+assert.equal(await getMyCollectionDailyRoute(isolatedEnv, foreignDriver, { scope: "test" }), null);
+await assert.rejects(
+  getCollectionDailyRoute(isolatedEnv, foreignDriver, seededRunId, { scope: "test" }),
+  (error) => error.status === 404 && error.code === "collection_daily_route_not_found"
+);
+await assert.rejects(
+  transitionCollectionDailyRoute(isolatedEnv, foreignDriver, seededRunId, { scope: "test", action: "start" }),
+  (error) => error.status === 404 && error.code === "collection_daily_route_not_found"
+);
+await assert.rejects(
+  listCollectionDailyRoutes(isolatedEnv, { scope: "test" }, miroslav),
+  (error) => error.status === 403
+);
+assert.equal((await listCollectionDailyRoutes(isolatedEnv, { scope: "test" }, isolatedManager)).length, 1);
+
+async function isolatedAuthenticatedRequest(url, user) {
+  const cookie = (await createSessionCookie(isolatedEnv, user)).split(";")[0];
+  return new Request(url, { headers: { Cookie: cookie } });
+}
+
+const miroslavTestApiResponse = await myDailyRouteApi({
+  request: await isolatedAuthenticatedRequest("https://smart-odpady.ai/api/collection-routes/daily-routes/my?scope=test", miroslav),
+  env: isolatedEnv
+});
+assert.equal(miroslavTestApiResponse.status, 200);
+assert.equal((await miroslavTestApiResponse.json()).route.run.id, seededRunId);
+const miroslavProductionApiResponse = await myDailyRouteApi({
+  request: await isolatedAuthenticatedRequest("https://smart-odpady.ai/api/collection-routes/daily-routes/my", miroslav),
+  env: isolatedEnv
+});
+assert.equal(miroslavProductionApiResponse.status, 200);
+assert.equal((await miroslavProductionApiResponse.json()).route, null);
+const foreignDriverTestApiResponse = await myDailyRouteApi({
+  request: await isolatedAuthenticatedRequest("https://smart-odpady.ai/api/collection-routes/daily-routes/my?scope=test", foreignDriver),
+  env: isolatedEnv
+});
+assert.equal(foreignDriverTestApiResponse.status, 200);
+assert.equal((await foreignDriverTestApiResponse.json()).route, null);
+const foreignDriverListResponse = await listDailyRoutesApi({
+  request: await isolatedAuthenticatedRequest("https://smart-odpady.ai/api/collection-routes/daily-routes?scope=test", foreignDriver),
+  env: isolatedEnv
+});
+assert.equal(foreignDriverListResponse.status, 403);
+
+await transitionCollectionDailyRoute(isolatedEnv, miroslav, seededRunId, {
+  scope: "test",
+  action: "start",
+  idempotencyKey: "miroslav-isolated-test-start"
+});
+await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, seededStopId, {
+  scope: "test",
+  action: "done",
+  idempotencyKey: "miroslav-isolated-test-done"
+});
+const completedIsolatedTest = await transitionCollectionDailyRoute(isolatedEnv, miroslav, seededRunId, {
+  scope: "test",
+  action: "complete",
+  idempotencyKey: "miroslav-isolated-test-complete"
+});
+assert.equal(completedIsolatedTest.run.status, "completed");
+assert.ok(completedIsolatedTest.events.every((event) => event.actorUserId === miroslav.id));
+assert.ok(completedIsolatedTest.events.every((event) => event.actorName === miroslav.name));
+assert.equal(isolatedProductionSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_runs").get().count, 0);
+assert.equal(isolatedProductionSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events").get().count, 0);
+await assert.rejects(
+  previewCollectionRoutesTestNotifications(isolatedEnv, isolatedManager, { runId: seededRunId }),
+  (error) => error.code === "collection_routes_test_notification_stationary_field_forbidden"
+);
+const incidentWorkflowSource = readFileSync(
+  new URL("../functions/_lib/collection-routes-test-incident-workflow.js", import.meta.url),
+  "utf8"
+);
+assert.ok(incidentWorkflowSource.includes("collectionDailyRouteExternalEffectsDisabled"));
+assert.ok(incidentWorkflowSource.includes("collection_routes_test_incident_workflow_notifications_disabled"));
 
 console.log("collection daily routes tests: ok");

@@ -171,16 +171,36 @@ export function collectionDailyRouteScope(value) {
   );
 }
 
-function assertScopeAccess(user, scope) {
+function isCollectionDailyRouteTestManager(user) {
+  return Boolean(
+    isUserActive(user) && ["admin", "management"].includes(normalizeRole(user?.role))
+  );
+}
+
+function assertTestScopeManager(user, scope) {
   if (scope !== COLLECTION_DAILY_ROUTE_SCOPE_TEST) return;
-  const role = normalizeRole(user?.role);
-  if (!user || !["admin", "management"].includes(role)) {
+  if (!isCollectionDailyRouteTestManager(user)) {
     throw new CollectionDailyRoutesError(
       "Testovací denní trasy jsou dostupné pouze roli Management a Admin.",
       403,
       "collection_daily_route_test_forbidden"
     );
   }
+}
+
+function assertTestScopeReader(user, scope) {
+  if (scope !== COLLECTION_DAILY_ROUTE_SCOPE_TEST) return;
+  if (
+    isCollectionDailyRouteTestManager(user)
+    || (isUserActive(user) && normalizeRole(user?.role) === "ridic")
+  ) {
+    return;
+  }
+  throw new CollectionDailyRoutesError(
+    "Testovací denní trasa není tomuto uživateli dostupná.",
+    403,
+    "collection_daily_route_test_forbidden"
+  );
 }
 
 function collectionDailyRouteTestMode(scope, value) {
@@ -216,7 +236,7 @@ function database(env, required = false, scopeValue = COLLECTION_DAILY_ROUTE_SCO
 
 async function snapshotForScope(env, user, scope) {
   if (scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST) {
-    assertScopeAccess(user, scope);
+    assertTestScopeManager(user, scope);
     return getCollectionRoutesTestSnapshot(env, user, { limit: 10000 });
   }
   return getLatestCollectionRoutesVistosSnapshot(env, { limit: 10000, svozKaiserOnly: true });
@@ -292,6 +312,40 @@ function assertCanOperateRun(user, run) {
   throw new CollectionDailyRoutesError("Tuto trasu může ovládat jen přiřazený řidič nebo dispečer.", 403, "collection_daily_routes_forbidden");
 }
 
+function runDataScope(run = {}) {
+  const metadata = run?.metadata && typeof run.metadata === "object"
+    ? run.metadata
+    : parseJson(run?.metadata_json, {});
+  const sourceMode = cleanString(run?.source_mode || run?.sourceMode);
+  return metadata.dataScope === COLLECTION_DAILY_ROUTE_SCOPE_TEST || sourceMode === "synthetic-brno-test"
+    ? COLLECTION_DAILY_ROUTE_SCOPE_TEST
+    : COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION;
+}
+
+function assertRunMatchesScope(run, scope) {
+  if (runDataScope(run) === scope) return;
+  throw new CollectionDailyRoutesError(
+    "Denní trasa nebyla nalezena.",
+    404,
+    "collection_daily_route_not_found"
+  );
+}
+
+function assertTestRunAccess(user, run, scope) {
+  if (
+    scope !== COLLECTION_DAILY_ROUTE_SCOPE_TEST
+    || isCollectionDailyRouteTestManager(user)
+    || isAssignedDriver(user, run)
+  ) {
+    return;
+  }
+  throw new CollectionDailyRoutesError(
+    "TEST trasa nebyla nalezena.",
+    404,
+    "collection_daily_route_not_found"
+  );
+}
+
 export function isCollectionDailyRouteStationaryFieldTest(run = {}) {
   const metadata = run?.metadata && typeof run.metadata === "object"
     ? run.metadata
@@ -299,15 +353,19 @@ export function isCollectionDailyRouteStationaryFieldTest(run = {}) {
   return cleanString(metadata.testMode) === COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD;
 }
 
-function assertStationaryFieldTester(user, run) {
-  if (!isCollectionDailyRouteStationaryFieldTest(run)) return;
+export function collectionDailyRouteExternalEffectsDisabled(run = {}) {
   const metadata = run?.metadata && typeof run.metadata === "object"
     ? run.metadata
     : parseJson(run?.metadata_json, {});
-  const testerUserId = cleanString(metadata.fieldTesterUserId);
-  if (!testerUserId || !isUserActive(user) || cleanString(user?.id) !== testerUserId) {
+  return metadata.externalEffectsDisabled === true
+    || metadata.notificationsDisabled === true;
+}
+
+function assertStationaryFieldTester(user, run) {
+  if (!isCollectionDailyRouteStationaryFieldTest(run)) return;
+  if (!isCollectionDailyRouteTestManager(user) && !isAssignedDriver(user, run)) {
     throw new CollectionDailyRoutesError(
-      "Tento stacionární TEST může ovládat pouze terénní tester, který jej založil.",
+      "Tento stacionární TEST může ovládat pouze přiřazený řidič nebo role Management a Admin.",
       403,
       "collection_daily_route_field_tester_mismatch"
     );
@@ -523,7 +581,7 @@ export async function previewCollectionDailyRoute(env, userOrInput = {}, maybeIn
   const user = maybeInput === undefined ? null : userOrInput;
   const input = maybeInput === undefined ? userOrInput : maybeInput;
   const scope = collectionDailyRouteScope(input.scope);
-  assertScopeAccess(user, scope);
+  assertTestScopeManager(user, scope);
   const testMode = collectionDailyRouteTestMode(scope, input.testMode);
   const stationaryFieldTest = testMode === COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD;
   const db = database(env, true, scope);
@@ -624,9 +682,7 @@ function rowToRun(row, summary = null) {
     routeKey: cleanString(row.route_key),
     sourceBatchId: cleanString(row.source_batch_id),
     sourceMode,
-    scope: metadata.dataScope === COLLECTION_DAILY_ROUTE_SCOPE_TEST || sourceMode === "synthetic-brno-test"
-      ? COLLECTION_DAILY_ROUTE_SCOPE_TEST
-      : COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION,
+    scope: runDataScope({ ...row, metadata }),
     routeDate: cleanString(row.route_date),
     dayCode: cleanString(row.route_day_code),
     weekMode: cleanString(row.route_week_mode),
@@ -800,7 +856,7 @@ function collectionDailyRouteStopInsertStatements(db, {
 export async function createCollectionDailyRouteDraft(env, user, input = {}) {
   assertManage(user);
   const scope = collectionDailyRouteScope(input.scope);
-  assertScopeAccess(user, scope);
+  assertTestScopeManager(user, scope);
   const testMode = collectionDailyRouteTestMode(scope, input.testMode);
   const stationaryFieldTest = testMode === COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD;
   const db = database(env, true, scope);
@@ -1082,14 +1138,21 @@ export async function prepareCollectionDailyRouteDraftsAutomation(env, options =
 }
 
 export async function listCollectionDailyRoutes(env, input = {}, user = null) {
+  assertManage(user);
   const scope = collectionDailyRouteScope(input.scope);
-  assertScopeAccess(user, scope);
+  assertTestScopeManager(user, scope);
   const db = database(env, true, scope);
   const status = cleanString(input.status);
   const routeDate = cleanString(input.routeDate);
   const limit = Math.max(1, Math.min(numberValue(input.limit, 60), 200));
   const conditions = [];
   const bindings = [];
+  if (scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST) {
+    conditions.push("(r.source_mode = 'synthetic-brno-test' OR COALESCE(CASE WHEN json_valid(r.metadata_json) THEN json_extract(r.metadata_json, '$.dataScope') ELSE '' END, '') = 'test')");
+  } else {
+    conditions.push("r.source_mode <> 'synthetic-brno-test'");
+    conditions.push("COALESCE(CASE WHEN json_valid(r.metadata_json) THEN json_extract(r.metadata_json, '$.dataScope') ELSE '' END, '') <> 'test'");
+  }
   if (status && status !== "all") {
     conditions.push("r.status = ?");
     bindings.push(status);
@@ -1121,10 +1184,12 @@ export async function listCollectionDailyRoutes(env, input = {}, user = null) {
 
 export async function getCollectionDailyRoute(env, user, runId, input = {}) {
   const scope = collectionDailyRouteScope(input.scope);
-  assertScopeAccess(user, scope);
+  assertTestScopeReader(user, scope);
   const db = database(env, true, scope);
   try {
     const runRow = await loadRunRow(db, runId);
+    assertRunMatchesScope(runRow, scope);
+    assertTestRunAccess(user, runRow, scope);
     assertCanReadRun(user, runRow);
     return detailFromRow(db, runRow);
   } catch (error) {
@@ -1164,10 +1229,11 @@ async function driverById(env, driverUserId) {
 export async function assignCollectionDailyRouteDriver(env, user, runId, input = {}) {
   assertManage(user);
   const scope = collectionDailyRouteScope(input.scope);
-  assertScopeAccess(user, scope);
+  assertTestScopeManager(user, scope);
   const db = database(env, true, scope);
   try {
     const run = await loadRunRow(db, runId);
+    assertRunMatchesScope(run, scope);
     if (isCollectionDailyRouteStationaryFieldTest(run)) {
       throw new CollectionDailyRoutesError(
         "Stacionární terénní TEST nemá řidiče ani svozové vozidlo.",
@@ -1233,7 +1299,7 @@ async function eventByIdempotency(db, key) {
 
 export async function transitionCollectionDailyRoute(env, user, runId, input = {}) {
   const scope = collectionDailyRouteScope(input.scope);
-  assertScopeAccess(user, scope);
+  assertTestScopeReader(user, scope);
   const db = database(env, true, scope);
   const action = cleanString(input.action).toLowerCase();
   if (!new Set(["confirm", "start", "complete", "reopen"]).has(action)) {
@@ -1241,6 +1307,8 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
   }
   try {
     const run = await loadRunRow(db, runId);
+    assertRunMatchesScope(run, scope);
+    assertTestRunAccess(user, run, scope);
     const stationaryFieldTest = isCollectionDailyRouteStationaryFieldTest(run);
     if (stationaryFieldTest) {
       assertStationaryFieldTester(user, run);
@@ -1450,7 +1518,7 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
 
 export async function recordCollectionDailyRouteStopEvent(env, user, runId, stopId, input = {}) {
   const scope = collectionDailyRouteScope(input.scope);
-  assertScopeAccess(user, scope);
+  assertTestScopeReader(user, scope);
   const db = database(env, true, scope);
   const action = cleanString(input.action).toLowerCase();
   if (!STOP_ACTIONS.has(action)) {
@@ -1458,6 +1526,8 @@ export async function recordCollectionDailyRouteStopEvent(env, user, runId, stop
   }
   try {
     const run = await loadRunRow(db, runId);
+    assertRunMatchesScope(run, scope);
+    assertTestRunAccess(user, run, scope);
     if (isCollectionDailyRouteStationaryFieldTest(run)) {
       assertStationaryFieldTester(user, run);
     }
@@ -1563,17 +1633,30 @@ function pragueDate() {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-export async function getMyCollectionDailyRoute(env, user) {
+export async function getMyCollectionDailyRoute(env, user, input = {}) {
   if (!user) {
     throw new CollectionDailyRoutesError("Nepřihlášeno.", 401, "collection_daily_routes_unauthenticated");
   }
-  const db = database(env, true);
+  if (!isUserActive(user) || normalizeRole(user?.role) !== "ridic" || !cleanString(user?.id)) {
+    throw new CollectionDailyRoutesError(
+      "Vlastní řidičská trasa je dostupná pouze aktivní roli Řidič.",
+      403,
+      "collection_daily_routes_forbidden"
+    );
+  }
+  const scope = collectionDailyRouteScope(input.scope);
+  assertTestScopeReader(user, scope);
+  const db = database(env, true, scope);
+  const scopeCondition = scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
+    ? "(source_mode = 'synthetic-brno-test' OR COALESCE(CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.dataScope') ELSE '' END, '') = 'test')"
+    : "source_mode <> 'synthetic-brno-test' AND COALESCE(CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.dataScope') ELSE '' END, '') <> 'test'";
   try {
     const row = await db.prepare(`
       SELECT *
       FROM collection_daily_route_runs
       WHERE driver_user_id = ?
         AND status IN ('confirmed', 'active', 'completed')
+        AND ${scopeCondition}
       ORDER BY
         CASE status WHEN 'active' THEN 0 WHEN 'confirmed' THEN 1 ELSE 2 END,
         CASE WHEN route_date >= ? THEN 0 ELSE 1 END,
@@ -1584,6 +1667,9 @@ export async function getMyCollectionDailyRoute(env, user) {
     if (!row) {
       return null;
     }
+    assertRunMatchesScope(row, scope);
+    assertTestRunAccess(user, row, scope);
+    assertCanReadRun(user, row);
     return detailFromRow(db, row);
   } catch (error) {
     throw dbError(error);

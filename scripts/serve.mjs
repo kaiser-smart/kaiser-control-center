@@ -4274,7 +4274,8 @@ function mockReceivablesRatingFixture() {
   return { customer, invoices, rating, package: pack };
 }
 
-function mockCollectionDailyRouteForDriver(user) {
+function mockCollectionDailyRouteForDriver(user, options = {}) {
+  const testScope = options.scope === "test";
   const routeDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Prague",
     year: "numeric",
@@ -4325,20 +4326,33 @@ function mockCollectionDailyRouteForDriver(user) {
       sourceSummary: { latitude: 49.20643, longitude: 16.68783 }
     }
   ];
+  const visibleStops = testScope ? stops.slice(0, 1) : stops;
   return {
     run: {
-      id: "local-driver-route",
+      id: testScope ? "local-driver-test-route" : "local-driver-route",
+      scope: testScope ? "test" : "production",
       routeDate,
-      title: "Lokální ověření Řidičského displeje",
+      title: testScope
+        ? "IZOLOVANÝ TEST tabletu · Firma test 501 · bez jízdy"
+        : "Lokální ověření Řidičského displeje",
       status: "active",
-      vehicleCode: "A",
-      vehicleLabel: "Vůz A · 3BN 3558",
-      vehicleRegistration: "3BN 3558",
+      vehicleCode: testScope ? "FIELD" : "A",
+      vehicleLabel: testScope ? "Stacionární TEST tabletu · bez jízdy" : "Vůz A · 3BN 3558",
+      vehicleRegistration: testScope ? "" : "3BN 3558",
       driverUserId: user.id,
       driverName: user.name || user.email || "Řidič",
-      summary: { plannedCount: stops.length, doneCount: 0, problemCount: 0 }
+      metadata: testScope ? {
+        dataScope: "test",
+        testMode: "stationary-field-test",
+        physicalTesterName: "Tomáš Gaží",
+        externalEffectsDisabled: true,
+        notificationsDisabled: true,
+        vistosWritesDisabled: true,
+        productionRouteWritesDisabled: true
+      } : {},
+      summary: { plannedCount: visibleStops.length, doneCount: 0, problemCount: 0 }
     },
-    stops,
+    stops: visibleStops,
     events: []
   };
 }
@@ -4447,7 +4461,7 @@ async function handleApi(request, response) {
       return true;
     }
     sendJson(response, 200, {
-      route: mockCollectionDailyRouteForDriver(user),
+      route: mockCollectionDailyRouteForDriver(user, { scope: url.searchParams.get("scope") }),
       apiStatus: "ready"
     });
     return true;

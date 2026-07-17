@@ -52,12 +52,21 @@ poradi:
 5. `migrations/test/0003_configure_collection_route_test_operations_and_gps.sql`
 6. `migrations/test/0004_add_collection_route_field_test_site_501.sql`
 7. `migrations/test/0005_create_collection_route_test_incidents.sql`
+8. `migrations/test/0006_create_collection_route_test_incident_workflows.sql`
+9. `migrations/test/0007_seed_driver_tablet_test_miroslav_vasek.sql`
 
 Zadna migrace z `migrations/test` se nesmi aplikovat do hlavni produkcni D1.
 
-Backend pri `scope=test` vzdy znovu overi roli Management/Admin a vybere TEST
-binding. Pouhe ID trasy nebo zmena dotazu proto neumozni precist ani zapsat TEST
-trasu pres hlavni databazi.
+Backend pri `scope=test` vzdy vybere TEST binding. Management/Admin muze TEST
+trasy spravovat a listovat; aktivni role Ridic smi pres osobni endpoint nacist a
+obsluhovat pouze zaznam, jehoz `driver_user_id` presne odpovida prihlasenemu
+uzivateli. Ridic nema TEST seznam ani spravu a cizi ID se maskuje jako nenalezene.
+Produkční scope navic vyslovne vylucuje TEST metadata a synteticky zdroj.
+
+Migrace `0007` pridava idempotentne jeden stacionarni TEST bod pro ucet
+`pneumatiky-miroslav-vasek`. Fyzicky tester je jen metadata
+`physicalTesterName`; audit pouziva prihlaseny ucet. Metadata tohoto zaznamu
+zakazuji notifikace, zapis do Vistosu i zapis do produkcni trasy.
 
 ## Fyzicke GPS stanoviste
 

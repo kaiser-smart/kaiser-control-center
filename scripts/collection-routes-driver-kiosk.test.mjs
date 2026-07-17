@@ -58,6 +58,9 @@ for (const marker of [
   "MUSÍM JET VYSYPAT",
   "PŘESTÁVKA",
   "CELÁ TRASA",
+  "IZOLOVANÝ TEST · BEZ JÍZDY",
+  "ULOŽIT JEN DO TEST AUDITU",
+  "physicalTesterName",
   "data-collection-daily-driver-sheet-close"
 ]) {
   assert.ok(driverPageSource.includes(marker), `Řidičský displej postrádá prvek: ${marker}`);
@@ -78,6 +81,8 @@ for (const marker of [
   "height: 100dvh",
   "overflow: hidden",
   ".collection-daily-driver-workspace",
+  ".collection-daily-driver-test-badge",
+  ".collection-daily-driver-test-context",
   ".collection-daily-driver-action-sheet[open]::before",
   ".collection-daily-driver-sheet"
 ]) {
@@ -95,6 +100,12 @@ assert.ok(
   "Automatické načtení nesmí zanořit render ani při chybě opakovat požadavek bez konce."
 );
 assert.ok(
+  appSource.includes("function collectionDailyRouteDriverScope()")
+    && appSource.includes('new URLSearchParams(window.location.search).get("scope") === "test"')
+    && appSource.includes("collectionDailyRouteDriverScopePayload"),
+  "Řidičský TEST musí používat explicitní scope=test pro načtení i zápis."
+);
+assert.ok(
   storeSource.includes('if (normalizeRole(user?.role) === "ridic")')
     && storeSource.includes("Řidič může zobrazit pouze svoji přiřazenou trasu."),
   "Backend musí řidiči odmítnout cizí trasu i po přidání view oprávnění."
@@ -106,7 +117,7 @@ assert.ok(
 assert.ok(
   devServerSource.includes('url.pathname === "/api/collection-routes/daily-routes/my"')
     && devServerSource.includes('normalizeRole(user.role) !== "ridic"')
-    && devServerSource.includes("mockCollectionDailyRouteForDriver(user)"),
+    && devServerSource.includes('mockCollectionDailyRouteForDriver(user, { scope: url.searchParams.get("scope") })'),
   "Lokální prohlížečový test musí mít osobní ukázkovou trasu dostupnou jen roli Řidič."
 );
 
