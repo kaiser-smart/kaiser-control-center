@@ -2,7 +2,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
   version: "1.22",
   updatedAt: "17. 7. 2026 19:56",
   updatedAtIso: "2026-07-17T19:56:00+02:00",
-  lastChange: "Celá přidělená trasa na mapě řidiče",
+  lastChange: "Trasa na mapě řidiče",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
