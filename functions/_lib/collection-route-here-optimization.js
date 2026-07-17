@@ -184,10 +184,24 @@ function configurationBlockers(settings, wasteType) {
     if (!positiveNumber(vehicle?.capacitiesTons?.[wasteType])) {
       blockers.push(`Vůz ${code}: chybí kapacita pro ${WASTE_LABELS[wasteType] || wasteType}.`);
     }
-    const missingTruckFields = ["heightCm", "widthCm", "lengthCm", "grossWeightKg", "currentWeightKg", "weightPerAxleKg"]
+    const missingTruckFields = ["heightCm", "widthCm", "lengthCm", "emptyWeightKg", "grossWeightKg", "payloadCapacityKg"]
       .filter((field) => !positiveNumber(vehicle?.truck?.[field]));
     if (missingTruckFields.length) {
-      blockers.push(`Vůz ${code}: chybí rozměry nebo hmotnosti pro bezpečný truck routing.`);
+      blockers.push(`Vůz ${code}: chybí potvrzené rozměry nebo hmotnosti pro bezpečný truck routing.`);
+    } else {
+      const emptyWeightKg = positiveNumber(vehicle.truck.emptyWeightKg);
+      const grossWeightKg = positiveNumber(vehicle.truck.grossWeightKg);
+      const payloadCapacityKg = positiveNumber(vehicle.truck.payloadCapacityKg);
+      if (Math.round(grossWeightKg - emptyWeightKg) !== Math.round(payloadCapacityKg)) {
+        blockers.push(`Vůz ${code}: nejvyšší hmotnost, prázdná hmotnost a nosnost si neodpovídají.`);
+      }
+      const wasteCapacityKg = positiveNumber(vehicle?.capacitiesTons?.[wasteType]) * 1000;
+      if (wasteCapacityKg > payloadCapacityKg) {
+        blockers.push(`Vůz ${code}: kapacita pro ${WASTE_LABELS[wasteType] || wasteType} překračuje potvrzenou nosnost.`);
+      }
+    }
+    if (!positiveNumber(vehicle?.truck?.weightPerAxleKg)) {
+      blockers.push(`Vůz ${code}: chybí potvrzené nejvyšší zatížení nápravy.`);
     }
   }
   return blockers;
@@ -197,7 +211,14 @@ function configurationWarnings(settings, wasteType) {
   const config = settings.config || {};
   const warnings = [];
   if (settings.status === "test-estimate") {
-    warnings.push("Rozměry, hmotnosti, směna a doby výsypu jsou konzervativní TEST odhady; před ostrým použitím vyžadují technické ověření.");
+    warnings.push("Směna, doby výsypu a vjezdy zůstávají TEST podklady; před ostrým použitím vyžadují provozní ověření.");
+  }
+  const unconfirmedVehicles = configuredVehicles(config)
+    .filter((vehicle) => cleanString(vehicle?.technicalDataQuality) !== "confirmed")
+    .map((vehicle) => cleanString(vehicle?.code))
+    .filter(Boolean);
+  if (unconfirmedVehicles.length) {
+    warnings.push(`Technické parametry vozidel ${unconfirmedVehicles.join(", ")} nejsou potvrzené.`);
   }
   if (cleanString(config?.depot?.routingPointStatus).startsWith("needs-")) {
     warnings.push("Depo zatím používá adresní bod; vjezd pro svozové vozidlo čeká na fyzické potvrzení.");
@@ -358,8 +379,17 @@ function localDateTime(routeDate, time, timezone) {
   return `${routeDate}T${cleanString(time)}:00${timezoneOffset(routeDate, timezone)}`;
 }
 
-function hereProfile(vehicle) {
+function conservativeCurrentWeightKg(vehicle, wasteType) {
+  const truck = vehicle?.truck || {};
+  const grossWeightKg = positiveNumber(truck.grossWeightKg);
+  const emptyWeightKg = positiveNumber(truck.emptyWeightKg);
+  const wasteCapacityKg = positiveNumber(vehicle?.capacitiesTons?.[wasteType]) * 1000;
+  return Math.min(grossWeightKg, emptyWeightKg + wasteCapacityKg);
+}
+
+function hereProfile(vehicle, wasteType) {
   const truck = vehicle.truck || {};
+  const weightPerAxleKg = positiveNumber(truck.weightPerAxleKg);
   return {
     name: `kaiser_truck_${cleanString(vehicle.code).toLowerCase()}`,
     type: "truck",
@@ -369,8 +399,8 @@ function hereProfile(vehicle) {
       width: Math.round(positiveNumber(truck.widthCm)),
       length: Math.round(positiveNumber(truck.lengthCm)),
       grossWeight: Math.round(positiveNumber(truck.grossWeightKg)),
-      currentWeight: Math.round(positiveNumber(truck.currentWeightKg)),
-      weightPerAxle: Math.round(positiveNumber(truck.weightPerAxleKg))
+      currentWeight: Math.round(conservativeCurrentWeightKg(vehicle, wasteType)),
+      ...(weightPerAxleKg ? { weightPerAxle: Math.round(weightPerAxleKg) } : {})
     }
   };
 }
@@ -415,7 +445,7 @@ export function buildCollectionRouteHereProblem(readiness) {
           amount: 1
         };
       }),
-      profiles: vehicles.map(hereProfile)
+      profiles: vehicles.map((vehicle) => hereProfile(vehicle, readiness.wasteType))
     },
     plan: {
       jobs: readiness._stops.map((stop) => ({

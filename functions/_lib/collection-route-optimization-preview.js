@@ -1,3 +1,5 @@
+import { COLLECTION_ROUTE_VEHICLES as COLLECTION_ROUTE_VEHICLE_SPECS } from "../../src/data/collectionRouteVehicles.js";
+
 export const COLLECTION_ROUTE_OPTIMIZATION_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 export const COLLECTION_ROUTE_OPTIMIZATION_MAX_FILES = 20;
 export const COLLECTION_ROUTE_OPTIMIZATION_MAX_ROWS = 5000;
@@ -11,29 +13,14 @@ const legacyTextDecoder = (() => {
   }
 })();
 
-export const COLLECTION_ROUTE_VEHICLES = [
-  {
-    code: "A",
-    registrationNumber: "3BN 3558",
-    label: "A - 3BN 3558",
-    driver: "Jakub Kozlíček",
-    capacityTons: { SKO: 6, PAPIR: 2, PLAST: 1 }
-  },
-  {
-    code: "B",
-    registrationNumber: "1BP 8373",
-    label: "B - 1BP 8373",
-    driver: "Miroslav Vašek",
-    capacityTons: { SKO: 6, PAPIR: 2, PLAST: 1 }
-  },
-  {
-    code: "C",
-    registrationNumber: "3BE 2831",
-    label: "C - 3BE 2831",
-    driver: "Miroslav Florián",
-    capacityTons: { SKO: 8, PAPIR: 2.5, PLAST: 1 }
-  }
-];
+export const COLLECTION_ROUTE_VEHICLES = Object.freeze(COLLECTION_ROUTE_VEHICLE_SPECS.map((vehicle) => Object.freeze({
+  code: vehicle.code,
+  registrationNumber: vehicle.registration,
+  label: `${vehicle.code} - ${vehicle.registration}`,
+  driver: vehicle.defaultDriver,
+  capacityTons: vehicle.capacitiesTons,
+  technical: vehicle.technical
+})));
 
 const WEEKDAY_LABELS = ["PO", "ÚT", "ST", "ČT", "PÁ"];
 const DEFAULT_DAY_VEHICLES = {

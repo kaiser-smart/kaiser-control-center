@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.18",
-  updatedAt: "16. 7. 2026 13:11",
-  updatedAtIso: "2026-07-16T13:11:00+02:00",
-  lastChange: "Schválená grafika incidentních e-mailů",
+  version: "1.19",
+  updatedAt: "17. 7. 2026 02:39",
+  updatedAtIso: "2026-07-17T02:39:40+02:00",
+  lastChange: "Potvrzené parametry svozových vozidel",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -104,12 +104,19 @@ C – 3BE 2831 – výchozí řidič Miroslav Florián.
 
 Před plánováním vždy ověř přítomnost řidiče, provozuschopnost vozidla, dostupnost vozidla v T-Cars a aktuální přiřazení řidiče. Výchozí přiřazení není oprávnění. Dispečerka může řidiče změnit, ale změna musí být potvrzená a auditovaná.
 
-KAPACITY VOZIDEL
-A – 3BN 3558: SKO přibližně 6 t, papír 2 t, plast 1 t.
-B – 1BP 8373: SKO přibližně 6 t, papír 2 t, plast 1 t.
-C – 3BE 2831: SKO přibližně 8 t, papír 2,5 t, plast 1 t.
+POTVRZENÉ TECHNICKÉ PARAMETRY VOZIDEL
+A – 3BN 3558: prázdná hmotnost 13 500 kg; nejvyšší povolená hmotnost 19 000 kg; nosnost 5 500 kg; rozměry (d × š × v) 8,50 × 2,40 × 3,50 m.
+B – 1BP 8373: prázdná hmotnost 13 200 kg; nejvyšší povolená hmotnost 19 000 kg; nosnost 5 800 kg; rozměry (d × š × v) 8,50 × 2,40 × 3,50 m.
+C – 3BE 2831: prázdná hmotnost 15 400 kg; nejvyšší povolená hmotnost 25 000 kg; nosnost 9 600 kg; rozměry (d × š × v) 9,40 × 2,40 × 3,50 m.
 
-Kapacita je orientační bezpečnostní hranice, ne cíl k překročení. Pro BIO a sklo zatím není potvrzená hmotnostní kapacita vozidel. Nevymýšlej ji a označ ji jako chybějící provozní údaj.
+Pro všechny výpočty je nosnost nepřekročitelný hmotnostní limit vozidla. U vozidla C vždy používej 9,6 t. Výpočet nákladu začíná prázdnou hmotností a přičítá odhadovaný odpad. Nejvyšší povolená hmotnost se nesmí překročit.
+
+PROVOZNÍ LIMITY PODLE ODPADU
+- SKO: A 5,5 t; B 5,8 t; C 9,6 t.
+- Papír: A 2 t; B 2 t; C 2,5 t.
+- Plast: A 1 t; B 1 t; C 1 t.
+
+Pro daný odpad vždy použij nižší z provozního limitu a celkové nosnosti. Pro BIO a sklo zatím není potvrzený nižší provozní limit podle druhu odpadu; celková hmotnost však vždy musí zůstat pod potvrzenou nosností. Maximální zatížení nápravy zatím nebylo dodáno. Nevymýšlej ho a do jeho doplnění zablokuj bezpečný HERE truck výpočet závislý na omezení náprav.
 
 PRŮMĚRNÁ DOBA OBSLUHY
 Doba výsypu jedné nádoby:

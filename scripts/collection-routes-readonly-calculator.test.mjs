@@ -3,6 +3,7 @@ import {
   calculateCollectionRoutesReadonlyPlan,
   collectionRoutesCalculatorWasteType
 } from "../src/data/collectionRoutesReadonlyCalculator.js";
+import { COLLECTION_ROUTE_VEHICLES } from "../src/data/collectionRouteVehicles.js";
 import { buildCollectionRoutesTestDataset } from "../functions/_lib/collection-routes-test-data.js";
 
 function sourceRow(id, rowNumber, summary) {
@@ -25,7 +26,7 @@ const calculation = calculateCollectionRoutesReadonlyPlan({
   sourceRows
 });
 
-assert.equal(calculation.version, "1.0");
+assert.equal(calculation.version, "1.1");
 assert.equal(calculation.status, "needs-review");
 assert.equal(calculation.statusLabel, "READ-ONLY · POTŘEBUJE DOPLNĚNÍ");
 assert.deepEqual(calculation.totals, {
@@ -42,6 +43,23 @@ assert.equal(calculation.vehicles.reduce((sum, vehicle) => sum + vehicle.service
 assert.equal(calculation.createsRoute, false);
 assert.equal(calculation.writesData, false);
 assert.equal(calculation.sendsNotifications, false);
+assert.deepEqual(
+  calculation.vehicles.map((vehicle) => [vehicle.code, vehicle.capacities.SKO]),
+  [["A", 5.5], ["B", 5.8], ["C", 9.6]]
+);
+
+for (const vehicle of COLLECTION_ROUTE_VEHICLES) {
+  assert.equal(
+    vehicle.technical.maximumPermittedWeightKg - vehicle.technical.emptyWeightKg,
+    vehicle.technical.payloadCapacityKg,
+    `Vůz ${vehicle.code} musí mít nosnost rovnou rozdílu nejvyšší a prázdné hmotnosti.`
+  );
+  assert.ok(
+    Object.values(vehicle.capacitiesTons).every((capacityTons) => capacityTons * 1000 <= vehicle.technical.payloadCapacityKg),
+    `Provozní kapacita vozu ${vehicle.code} nesmí překročit nosnost.`
+  );
+}
+assert.equal(COLLECTION_ROUTE_VEHICLES.find((vehicle) => vehicle.code === "C")?.capacitiesTons.SKO, 9.6);
 
 const wasteSummaries = calculation.vehicles.flatMap((vehicle) => vehicle.wasteSummaries);
 assert.ok(wasteSummaries.some((waste) => waste.wasteType === "SKO" && waste.capacityKnown));

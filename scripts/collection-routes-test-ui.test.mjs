@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { COLLECTION_ROUTES_MANTRA } from "../src/data/collectionRoutesMantra.js";
+import { COLLECTION_ROUTE_VEHICLES } from "../src/data/collectionRouteVehicles.js";
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const mantraSource = readFileSync(new URL("../src/data/collectionRoutesMantra.js", import.meta.url), "utf8");
 const calculatorSource = readFileSync(new URL("../src/data/collectionRoutesReadonlyCalculator.js", import.meta.url), "utf8");
+const vehicleSpecsSource = readFileSync(new URL("../src/data/collectionRouteVehicles.js", import.meta.url), "utf8");
 const wranglerSource = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
 
 for (const marker of [
@@ -309,6 +311,15 @@ assert.ok(
 assert.ok(
   appSource.includes(`./data/collectionRoutesMantra.js?v=${COLLECTION_ROUTES_MANTRA.version}`),
   "Import Mantry musí používat její verzi, aby produkční prohlížeč nezobrazil starý audit z cache."
+);
+assert.equal(COLLECTION_ROUTE_VEHICLES.find((vehicle) => vehicle.code === "C")?.capacitiesTons.SKO, 9.6);
+assert.ok(
+  vehicleSpecsSource.includes("maximumPermittedWeightKg") &&
+    vehicleSpecsSource.includes("payloadCapacityKg") &&
+    mantraSource.includes("U vozidla C vždy používej 9,6 t") &&
+    appSource.includes("VOZIDLA POTVRZENA · TEST") &&
+    appSource.includes("Zatížení nápravy chybí"),
+  "Mantra a TEST UI musí používat potvrzené technické parametry vozidel a pravdivě ukázat chybějící nápravový limit."
 );
 
 const tabletWorkspaceStart = appSource.indexOf("function collectionRoutesTestTabletWorkspace");

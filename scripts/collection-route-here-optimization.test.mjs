@@ -10,6 +10,10 @@ import {
   startCollectionRouteHereRun
 } from "../functions/_lib/collection-route-here-optimization.js";
 import { buildHereOAuthTokenRequest, hereOAuthConfiguration } from "../functions/_lib/here-oauth.js";
+import {
+  COLLECTION_ROUTE_VEHICLES,
+  collectionRouteVehicleHereConfig
+} from "../src/data/collectionRouteVehicles.js";
 
 class D1Statement {
   constructor(owner, sql, values = []) {
@@ -81,23 +85,7 @@ const manager = {
   active: true
 };
 
-function vehicle(code, registration, capacitiesTons) {
-  return {
-    code,
-    registration,
-    capacitiesTons,
-    truck: {
-      heightCm: 360,
-      widthCm: 255,
-      lengthCm: 950,
-      grossWeightKg: 18000,
-      currentWeightKg: 12000,
-      weightPerAxleKg: 7000
-    }
-  };
-}
-
-function readyConfig() {
+function readyConfig({ includeAxleLimits = true } = {}) {
   return {
     timezone: "Europe/Prague",
     trafficMode: "liveOrHistorical",
@@ -108,11 +96,17 @@ function readyConfig() {
     },
     shift: { start: "06:00", end: "16:00" },
     requiredVehicleCodes: ["A", "B", "C"],
-    vehicles: [
-      vehicle("A", "3BN 3558", { SKO: 6, PAPIR: 2, PLAST: 1 }),
-      vehicle("B", "1BP 8373", { SKO: 6, PAPIR: 2, PLAST: 1 }),
-      vehicle("C", "3BE 2831", { SKO: 8, PAPIR: 2.5, PLAST: 1 })
-    ],
+    vehicles: COLLECTION_ROUTE_VEHICLES.map((vehicle) => {
+      const config = collectionRouteVehicleHereConfig(vehicle);
+      return {
+        ...config,
+        truck: {
+          ...config.truck,
+          weightPerAxleKg: includeAxleLimits ? 7000 : null
+        },
+        axleDataQuality: includeAxleLimits ? "confirmed-test-fixture" : "missing"
+      };
+    }),
     dumpSites: [{
       id: "sako-test",
       wasteTypes: ["SKO"],
@@ -146,9 +140,26 @@ sqlite.prepare(`
   UPDATE collection_route_here_settings
   SET status = 'ready', config_json = ?, updated_at = '2026-07-13T08:00:00.000Z'
   WHERE scope = 'test'
-`).run(JSON.stringify(readyConfig()));
+`).run(JSON.stringify(readyConfig({ includeAxleLimits: false })));
 env.HERE_ACCESS_KEY_ID = "here-access-key-id-test";
 env.HERE_ACCESS_KEY_SECRET = "here-access-key-secret-test";
+
+const missingAxleReadiness = await getCollectionRouteHereReadiness(env, manager, {
+  routeDate: "2026-07-13",
+  wasteType: "SKO"
+});
+assert.equal(missingAxleReadiness.ready, false);
+assert.ok(missingAxleReadiness.blockers.some((item) => item.includes("zatížení nápravy")));
+assert.throws(
+  () => buildCollectionRouteHereProblem(missingAxleReadiness),
+  (error) => error?.code === "collection_route_here_not_ready"
+);
+
+sqlite.prepare(`
+  UPDATE collection_route_here_settings
+  SET config_json = ?, updated_at = '2026-07-13T08:01:00.000Z'
+  WHERE scope = 'test'
+`).run(JSON.stringify(readyConfig({ includeAxleLimits: true })));
 
 assert.deepEqual(hereOAuthConfiguration(env).missing, []);
 const tokenRequest = await buildHereOAuthTokenRequest(env, {
@@ -204,6 +215,26 @@ assert.equal(problem.fleet.types.length, 3);
 assert.equal(problem.fleet.profiles.length, 3);
 assert.ok(problem.fleet.profiles.every((profile) => profile.type === "truck"));
 assert.ok(problem.fleet.profiles.every((profile) => profile.options.height > 0 && profile.options.grossWeight > 0));
+assert.deepEqual(
+  problem.fleet.types.map((vehicle) => [vehicle.id, vehicle.capacity[0]]),
+  [["kaiser_vehicle_a", 5500], ["kaiser_vehicle_b", 5800], ["kaiser_vehicle_c", 9600]]
+);
+assert.deepEqual(
+  problem.fleet.profiles.map((profile) => [
+    profile.name,
+    profile.options.length,
+    profile.options.width,
+    profile.options.height,
+    profile.options.grossWeight,
+    profile.options.currentWeight,
+    profile.options.weightPerAxle
+  ]),
+  [
+    ["kaiser_truck_a", 850, 240, 350, 19000, 19000, 7000],
+    ["kaiser_truck_b", 850, 240, 350, 19000, 19000, 7000],
+    ["kaiser_truck_c", 940, 240, 350, 25000, 25000, 7000]
+  ]
+);
 assert.equal(problem.plan.jobs.length, readiness.eligibleCount);
 assert.ok(problem.plan.jobs.every((job) => job.tasks.pickups[0].demand[0] > 0));
 assert.ok(problem.fleet.types.every((item) => item.shifts[0].reloads[0].duration === 720));

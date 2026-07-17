@@ -52,8 +52,12 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.18";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.19";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
+import {
+  COLLECTION_ROUTE_VEHICLES,
+  collectionRouteVehicleByCode
+} from "./data/collectionRouteVehicles.js";
 import {
   collectionRouteGpsPrompt,
   summarizeCollectionRouteGpsSamples
@@ -1317,11 +1321,11 @@ const collectionRoutesPilotState = {
   dailyRoutesLoading: false,
   dailyRoutes: [],
   dailyRouteDrivers: [],
-  dailyRouteVehicles: [
-    { code: "A", registration: "3BN 3558", label: "Vůz A · 3BN 3558" },
-    { code: "B", registration: "1BP 8373", label: "Vůz B · 1BP 8373" },
-    { code: "C", registration: "3BE 2831", label: "Vůz C · 3BE 2831" }
-  ],
+  dailyRouteVehicles: COLLECTION_ROUTE_VEHICLES.map((vehicle) => ({
+    code: vehicle.code,
+    registration: vehicle.registration,
+    label: vehicle.label
+  })),
   dailyRouteDate: "",
   dailyRouteVehicleCode: "A",
   dailyRoutePreview: null,
@@ -18030,11 +18034,11 @@ const COLLECTION_ROUTES_DAILY_DRAFT_DAYS = [
   { code: "PÁ", label: "Pátek" }
 ];
 
-const COLLECTION_ROUTES_DAILY_DRAFT_VEHICLES = [
-  { code: "A", registrationNumber: "3BN 3558", label: "A 3BN 3558" },
-  { code: "B", registrationNumber: "1BP 8373", label: "B 1BP 8373" },
-  { code: "C", registrationNumber: "3BE 2831", label: "C 3BE 2831" }
-];
+const COLLECTION_ROUTES_DAILY_DRAFT_VEHICLES = COLLECTION_ROUTE_VEHICLES.map((vehicle) => ({
+  code: vehicle.code,
+  registrationNumber: vehicle.registration,
+  label: vehicle.shortLabel
+}));
 
 function collectionRoutesDailyDraftDayRank(dayCode = "") {
   const index = COLLECTION_ROUTES_DAILY_DRAFT_DAYS.findIndex((day) => day.code === dayCode);
@@ -20231,12 +20235,7 @@ function collectionRoutesSourceDriverModeMeta(label, value) {
 }
 
 function collectionRoutesSourceDriverVehiclePlate(value) {
-  const plates = {
-    A: "3BN 3558",
-    B: "1BP 8373",
-    C: "3BE 2831"
-  };
-  return plates[value] || "-";
+  return collectionRouteVehicleByCode(value)?.registration || "-";
 }
 
 function collectionRoutesSourceDriverVehicleRouteLabel(value) {
@@ -22153,6 +22152,13 @@ function collectionDailyRoutesList() {
   `;
 }
 
+function collectionRoutesTestVehicleWeightLabel(value) {
+  const weight = Number(value);
+  return Number.isFinite(weight) && weight > 0
+    ? `${new Intl.NumberFormat("cs-CZ").format(Math.round(weight))} kg`
+    : "neuvedeno";
+}
+
 function collectionRoutesTestOperationalConfigPanel() {
   if (!collectionDailyRouteIsTestScope()) return "";
   if (collectionRoutesPilotState.testOperationalConfigLoading) {
@@ -22169,15 +22175,20 @@ function collectionRoutesTestOperationalConfigPanel() {
   const dumpSites = Array.isArray(config.dumpSites) ? config.dumpSites : [];
   const vehicles = Array.isArray(config.vehicles) ? config.vehicles : [];
   const gpsSummary = payload.gpsSummary || {};
+  const vehicleTechnicalDataConfirmed = vehicles.length > 0 && vehicles.every((vehicle) => (
+    vehicle?.technicalDataQuality === "confirmed"
+  ));
   return `
     <section class="collection-routes-test-operations" aria-labelledby="collection-routes-test-operations-title">
       <header>
         <div>
           <p class="module-feedback__eyebrow">Výpočetní vstupy TEST</p>
           <h3 id="collection-routes-test-operations-title">Depo, výsypy, směna a vozidla</h3>
-          <p>Souřadnice jsou dohledané adresní body. Vjezdy a technické rozměry zůstávají viditelně označené jako TEST odhad, dokud je nepotvrdí fyzické měření nebo technický průkaz.</p>
+          <p>${vehicleTechnicalDataConfirmed
+            ? "Hmotnosti a rozměry vozidel A/B/C jsou potvrzené. Vjezdy, směna a doby výsypu zůstávají TEST podklady. Zatížení nápravy chybí, proto se bezpečný HERE výpočet zatím nespustí."
+            : "Vjezdy, směna, doby výsypu i technické parametry vozidel zůstávají TEST odhad, dokud nebudou potvrzené."}</p>
         </div>
-        <span class="collection-routes-test-badge">TEST ODHADY</span>
+        <span class="collection-routes-test-badge">${vehicleTechnicalDataConfirmed ? "VOZIDLA POTVRZENA · TEST" : "TEST ODHADY"}</span>
       </header>
       <div class="collection-routes-test-operations__facts">
         <article><span>Depo</span><strong>${escapeHtml(depot.name || "-")}</strong><small>${escapeHtml(depot.address || "-")}</small></article>
@@ -22194,7 +22205,11 @@ function collectionRoutesTestOperationalConfigPanel() {
           </div>
           <div>
             <h4>Vozidla</h4>
-            <ul>${vehicles.map((vehicle) => `<li><strong>${escapeHtml(`Vůz ${vehicle.code || "-"} · ${vehicle.registration || "-"}`)}</strong><span>${escapeHtml(`${vehicle.truck?.lengthCm || "-"} × ${vehicle.truck?.widthCm || "-"} × ${vehicle.truck?.heightCm || "-"} cm · ${vehicle.truck?.grossWeightKg || "-"} kg`)} · konzervativní TEST obálka</span></li>`).join("")}</ul>
+            <ul>${vehicles.map((vehicle) => {
+              const truck = vehicle.truck || {};
+              const confirmed = vehicle.technicalDataQuality === "confirmed";
+              return `<li><strong>${escapeHtml(`Vůz ${vehicle.code || "-"} · ${vehicle.registration || "-"}`)}</strong><span>${escapeHtml(`${truck.lengthCm || "-"} × ${truck.widthCm || "-"} × ${truck.heightCm || "-"} cm · prázdná ${collectionRoutesTestVehicleWeightLabel(truck.emptyWeightKg)} · nejvýše ${collectionRoutesTestVehicleWeightLabel(truck.grossWeightKg)} · nosnost ${collectionRoutesTestVehicleWeightLabel(truck.payloadCapacityKg)}`)} · ${confirmed ? "potvrzené údaje" : "TEST odhad"}${truck.weightPerAxleKg ? "" : " · zatížení nápravy chybí"}</span></li>`;
+            }).join("")}</ul>
           </div>
         </div>
       </details>
