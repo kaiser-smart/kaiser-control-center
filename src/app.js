@@ -52,7 +52,7 @@ import {
   collectionDailyRouteNextVisibleStopCount,
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.18";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.19";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRouteGpsPrompt,
@@ -22369,6 +22369,7 @@ function collectionRoutesTestIncidentModal(run, stop) {
     const sent = liveDispatcherNotification
       ? emailStatus === "sent" && smsStatus === "sent"
       : emailStatus === "sent";
+    const reused = draft.workflowReused === true;
     return `
       <div class="collection-routes-test-incident-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-result-title">
         <div class="collection-routes-test-incident-modal__card collection-routes-test-incident-modal__card--result">
@@ -22382,12 +22383,16 @@ function collectionRoutesTestIncidentModal(run, stop) {
           </header>
           <div class="collection-routes-test-incident-result ${sent ? "is-success" : "is-error"}">
             <strong>${sent
-              ? liveDispatcherNotification ? "Interní hlášení bylo skutečně odesláno" : "TEST workflow je dokončený"
+              ? reused
+                ? "Hlášení už bylo odesláno dříve"
+                : liveDispatcherNotification ? "Interní hlášení bylo skutečně odesláno 1×" : "TEST workflow je dokončený"
               : liveDispatcherNotification ? "Interní hlášení není kompletně odeslané" : "TEST e-mail se nepodařilo dokončit"}</strong>
             <span>${sent
-              ? liveDispatcherNotification
-                ? "SendGrid přijal e-mail a Twilio přijalo SMS pro zobrazenou dispečerku KSO."
-                : "SendGrid přijal zprávu pouze pro chráněný TEST kontakt."
+              ? reused
+                ? "Server vrátil uložený výsledek. Žádný další e-mail ani SMS nevytvořil."
+                : liveDispatcherNotification
+                  ? "SendGrid přijal právě 1 e-mail a Twilio právě 1 SMS pro zobrazenou dispečerku KSO."
+                  : "SendGrid přijal zprávu pouze pro chráněný TEST kontakt."
               : escapeHtml(workflow.lastError || "Výsledek čeká na kontrolu.")}</span>
           </div>
           <div class="collection-routes-test-incident-result__facts">
@@ -22422,6 +22427,10 @@ function collectionRoutesTestIncidentModal(run, stop) {
               </div>
             </section>
           ` : ""}
+          <button class="collection-routes-test-incident-submit collection-routes-test-incident-result-close" type="button" data-collection-routes-test-incident-close ${collectionRoutesPilotState.testIncidentReplyPending ? "disabled" : ""}>
+            <span>${sent ? "HOTOVO – ZAVŘÍT A VRÁTIT SE" : "ZAVŘÍT A VRÁTIT SE BEZ DALŠÍHO ODESLÁNÍ"}</span>
+            <small>Zpět na výchozí výběr hlášení</small>
+          </button>
         </div>
       </div>
     `;
@@ -22430,9 +22439,51 @@ function collectionRoutesTestIncidentModal(run, stop) {
   if (preview) {
     const canConfirm = preview.canConfirm === true;
     const liveDispatcherNotification = preview.liveDispatcherNotification === true;
+    const actualRecipient = liveDispatcherNotification
+      ? preview.dispatcher?.name || "dostupná dispečerka KSO"
+      : "chráněný TEST kontakt";
+    const notificationSummary = liveDispatcherNotification
+      ? "1 e-mail s fotografií + 1 SMS"
+      : "1 chráněný TEST e-mail s fotografií";
+    if (draft.finalSendConfirmationOpen === true) {
+      return `
+        <div class="collection-routes-test-incident-modal" role="alertdialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-final-confirm-title" aria-describedby="collection-routes-test-incident-final-confirm-description">
+          <form class="collection-routes-test-incident-modal__card collection-routes-test-incident-modal__card--final-confirm" data-collection-routes-test-incident-workflow-form>
+            <header>
+              <div>
+                <span>Finální potvrzení člověka</span>
+                <h4 id="collection-routes-test-incident-final-confirm-title">Opravdu odeslat?</h4>
+                <p>${escapeHtml(typeLabel)} · ${escapeHtml(stop.stationName || stop.customerName || "Firma test 501")}</p>
+              </div>
+            </header>
+            <div class="collection-routes-test-incident-final-warning" id="collection-routes-test-incident-final-confirm-description">
+              <strong>Odešle se pouze jednou</strong>
+              <span>${escapeHtml(notificationSummary)} příjemci ${escapeHtml(actualRecipient)}. Opakované klepnutí ani obnovení stránky nesmí vytvořit další zprávu.</span>
+            </div>
+            <img class="collection-routes-test-incident-modal__preview collection-routes-test-incident-modal__preview--compact" src="${escapeHtml(draft.incident?.photoUrl || draft.previewUrl)}" alt="Fotografie přiložená k hlášení ${escapeHtml(typeLabel.toLowerCase())}">
+            <div class="collection-routes-test-incident-confirmation collection-routes-test-incident-confirmation--final">
+              <article><span>Příjemce</span><strong>${escapeHtml(actualRecipient)}</strong><small>${liveDispatcherNotification ? "Aktivní dostupná uživatelka ověřená backendem KSO" : "Žádný skutečný zákazník"}</small></article>
+              <article><span>Odešle se</span><strong>${escapeHtml(notificationSummary)}</strong><small>Jediný serverový pokus s uloženým auditem</small></article>
+              <article><span>Nezmění se</span><strong>Trasa ani Vistos</strong><small>RCS vypnuto · zákazník nekontaktován</small></article>
+            </div>
+            ${collectionRoutesPilotState.testIncidentError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.testIncidentError)}</p>` : ""}
+            <div class="collection-routes-test-incident-final-actions">
+              <button class="collection-routes-test-incident-final-back" type="button" data-collection-routes-test-incident-final-back ${pending ? "disabled" : ""}>
+                <span>ZPĚT KE KONTROLE</span>
+                <small>Nic se neodešle</small>
+              </button>
+              <button class="collection-routes-test-incident-submit collection-routes-test-incident-submit--final" type="submit" ${pending || !canConfirm ? "disabled" : ""}>
+                <span>${pending === "workflow" ? "ODESÍLÁM PRÁVĚ 1×…" : "ANO, ODESLAT 1×"}</span>
+                <small>${pending === "workflow" ? "Tlačítko je zamčené, vyčkej na výsledek" : "Poslední fyzické potvrzení člověka"}</small>
+              </button>
+            </div>
+          </form>
+        </div>
+      `;
+    }
     return `
       <div class="collection-routes-test-incident-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-test-incident-confirm-title">
-        <form class="collection-routes-test-incident-modal__card collection-routes-test-incident-modal__card--confirm" data-collection-routes-test-incident-workflow-form>
+        <form class="collection-routes-test-incident-modal__card collection-routes-test-incident-modal__card--confirm" data-collection-routes-test-incident-workflow-review-form>
           <header>
             <div>
               <span>TEST hlášení · krok 3 ze 3</span>
@@ -22476,10 +22527,8 @@ function collectionRoutesTestIncidentModal(run, stop) {
           </div>
           ${preview.blockers?.length ? `<p class="module-feedback__error" role="alert">${escapeHtml(preview.blockers.join(" "))}</p>` : ""}
           <button class="collection-routes-test-incident-submit collection-routes-test-incident-submit--confirm" type="submit" ${pending || !canConfirm ? "disabled" : ""}>
-            <span>${pending === "workflow"
-              ? liveDispatcherNotification ? "ODESÍLÁM E-MAIL A SMS…" : "ODESÍLÁM CHRÁNĚNÝ TEST…"
-              : liveDispatcherNotification ? "ODESLAT E-MAIL + SMS DISPEČERCE" : "POTVRDIT TEST E-MAIL A PLÁN"}</span>
-            <small>Velké finální fyzické klepnutí člověka</small>
+            <span>${liveDispatcherNotification ? "POKRAČOVAT K POTVRZENÍ ODESLÁNÍ" : "POKRAČOVAT K POTVRZENÍ TESTU"}</span>
+            <small>Toto klepnutí ještě nic neodešle</small>
           </button>
         </form>
       </div>
@@ -38842,6 +38891,8 @@ function openCollectionRoutesTestIncident(type, options = {}) {
     incident: null,
     workflowPreview: null,
     workflow: null,
+    workflowReused: false,
+    finalSendConfirmationOpen: false,
     idempotencyKey: collectionDailyRouteIdempotencyKey("test-incident")
   };
   collectionRoutesPilotState.testIncidentError = "";
@@ -38859,6 +38910,25 @@ function closeCollectionRoutesTestIncident() {
   clearCollectionRoutesTestIncidentDraft();
   collectionRoutesPilotState.testIncidentError = "";
   render();
+  setTimeout(() => document.querySelector("[data-collection-routes-test-incident-open]")?.focus(), 0);
+}
+
+function openCollectionRoutesTestIncidentFinalConfirmation() {
+  const draft = collectionRoutesPilotState.testIncidentDraft;
+  if (!draft?.workflowPreview || draft.workflow || collectionRoutesPilotState.testIncidentPending) return;
+  draft.finalSendConfirmationOpen = true;
+  collectionRoutesPilotState.testIncidentError = "";
+  render();
+  setTimeout(() => document.querySelector("[data-collection-routes-test-incident-final-back]")?.focus(), 0);
+}
+
+function closeCollectionRoutesTestIncidentFinalConfirmation() {
+  const draft = collectionRoutesPilotState.testIncidentDraft;
+  if (!draft?.finalSendConfirmationOpen || collectionRoutesPilotState.testIncidentPending) return;
+  draft.finalSendConfirmationOpen = false;
+  collectionRoutesPilotState.testIncidentError = "";
+  render();
+  setTimeout(() => document.querySelector("[data-collection-routes-test-incident-workflow-review-form] .collection-routes-test-incident-submit")?.focus(), 0);
 }
 
 function loadCollectionRoutesTestIncidentImage(file) {
@@ -38999,7 +39069,7 @@ async function confirmCollectionRoutesTestIncidentWorkflow() {
   const draft = collectionRoutesPilotState.testIncidentDraft;
   const preview = draft?.workflowPreview;
   const incidentId = draft?.incident?.id;
-  if (!preview || !incidentId || collectionRoutesPilotState.testIncidentPending) return;
+  if (!preview || !incidentId || draft.finalSendConfirmationOpen !== true || collectionRoutesPilotState.testIncidentPending) return;
   collectionRoutesPilotState.testIncidentPending = "workflow";
   collectionRoutesPilotState.testIncidentError = "";
   render();
@@ -39014,6 +39084,8 @@ async function confirmCollectionRoutesTestIncidentWorkflow() {
     });
     draft.workflow = result.workflow;
     draft.workflowPreview = null;
+    draft.finalSendConfirmationOpen = false;
+    draft.workflowReused = result.reused === true;
     const liveDispatcherNotification = result.workflow?.liveDispatcherNotification === true;
     collectionRoutesPilotState.testIncidentMessage = liveDispatcherNotification
       ? `${collectionRoutesTestIncidentTypeLabel(draft.type)}: interní e-mail a SMS zpracovány.`
@@ -48806,6 +48878,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const collectionRoutesTestIncidentWorkflowReviewForm = event.target.closest("[data-collection-routes-test-incident-workflow-review-form]");
+  if (collectionRoutesTestIncidentWorkflowReviewForm) {
+    event.preventDefault();
+    openCollectionRoutesTestIncidentFinalConfirmation();
+    return;
+  }
+
   const collectionRoutesTestIncidentWorkflowForm = event.target.closest("[data-collection-routes-test-incident-workflow-form]");
   if (collectionRoutesTestIncidentWorkflowForm) {
     event.preventDefault();
@@ -50400,6 +50479,13 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const collectionRoutesTestIncidentFinalBack = event.target.closest("[data-collection-routes-test-incident-final-back]");
+  if (collectionRoutesTestIncidentFinalBack) {
+    event.preventDefault();
+    if (!collectionRoutesTestIncidentFinalBack.disabled) closeCollectionRoutesTestIncidentFinalConfirmation();
+    return;
+  }
+
   const collectionRoutesTestIncidentReply = event.target.closest("[data-collection-routes-test-incident-reply]");
   if (collectionRoutesTestIncidentReply) {
     event.preventDefault();
@@ -51617,7 +51703,16 @@ document.addEventListener("keydown", (event) => {
   scrollDataBoxPlusChatHistoryByKeyboard(event);
   if (event.key === "Escape" && collectionRoutesPilotState.testTabletOpen) {
     event.preventDefault();
-    closeCollectionRoutesTestTablet();
+    if (collectionRoutesPilotState.testIncidentDraft) {
+      if (collectionRoutesPilotState.testIncidentPending || collectionRoutesPilotState.testIncidentReplyPending) return;
+      if (collectionRoutesPilotState.testIncidentDraft.finalSendConfirmationOpen) {
+        closeCollectionRoutesTestIncidentFinalConfirmation();
+      } else {
+        closeCollectionRoutesTestIncident();
+      }
+    } else {
+      closeCollectionRoutesTestTablet();
+    }
     return;
   }
   if (event.key === "Escape" && vehicleTrackingUiState.mapMaximized) {

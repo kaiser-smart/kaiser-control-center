@@ -96,8 +96,12 @@ for (const marker of [
   "Poškozená nádoba",
   "Nelze se dostat do firmy",
   "PŘIPRAVIT TEST HLÁŠENÍ",
-  "POTVRDIT TEST E-MAIL A PLÁN",
-  "ODESLAT E-MAIL + SMS DISPEČERCE",
+  "POKRAČOVAT K POTVRZENÍ TESTU",
+  "POKRAČOVAT K POTVRZENÍ ODESLÁNÍ",
+  "Opravdu odeslat?",
+  "Odešle se pouze jednou",
+  "ANO, ODESLAT 1×",
+  "HOTOVO – ZAVŘÍT A VRÁTIT SE",
   "INTERNÍ E-MAIL + SMS",
   "Skutečný interní e-mail a SMS odejdou zobrazené dispečerce",
   "Skutečný zákazník ani dispečerka zprávu nedostanou",
@@ -110,8 +114,13 @@ for (const marker of [
   "data-collection-routes-test-incident-open",
   "data-collection-routes-test-incident-photo",
   "data-collection-routes-test-incident-form",
+  "data-collection-routes-test-incident-workflow-review-form",
+  "data-collection-routes-test-incident-workflow-form",
+  "data-collection-routes-test-incident-final-back",
   "compressCollectionRoutesTestIncidentPhoto",
   "prepareCollectionRoutesTestIncidentFromSarlota",
+  "openCollectionRoutesTestIncidentFinalConfirmation",
+  "closeCollectionRoutesTestIncidentFinalConfirmation",
   "confirmCollectionRoutesTestIncidentWorkflow",
   "simulateCollectionRoutesTestIncidentReply",
   "finalTapRequired: true",
@@ -227,7 +236,11 @@ for (const marker of [
   ".collection-routes-test-incident-submit",
   ".collection-routes-test-incident-scenarios",
   ".collection-routes-test-incident-confirmation",
+  ".collection-routes-test-incident-final-warning",
+  ".collection-routes-test-incident-final-actions",
+  ".collection-routes-test-incident-final-back",
   ".collection-routes-test-incident-result",
+  ".collection-routes-test-incident-result-close",
   ".collection-routes-test-incident-replies"
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
@@ -269,13 +282,28 @@ for (const marker of [
   "PŘEPLNĚNÁ NEBO POŠKOZENÁ NÁDOBA",
   "NELZE SE DOSTAT DO FIRMY",
   "TEST KOMUNIKACE A ESKALACE",
-  "ODESLAT E-MAIL + SMS DISPEČERCE",
+  "POKRAČOVAT K POTVRZENÍ ODESLÁNÍ",
+  "ANO, ODESLAT 1×",
+  "HOTOVO – ZAVŘÍT A VRÁTIT SE",
   "nejvýše 12 dvojic e-mail + SMS",
   "nejvýše šesti e-mailových pokusů",
   "Skutečný zákazník nesmí být kontaktován"
 ]) {
   assert.ok(mantraSource.includes(marker), `Provozní mantra postrádá závazný bod: ${marker}`);
 }
+
+assert.ok(
+  appSource.includes("draft.finalSendConfirmationOpen !== true") &&
+    appSource.includes('collectionRoutesPilotState.testIncidentPending = "workflow"') &&
+    appSource.includes("draft.workflowReused = result.reused === true"),
+  "Finální odeslání musí vyžadovat otevřené potvrzení, okamžitě zamknout tlačítko a rozpoznat uložený výsledek."
+);
+assert.ok(
+  appSource.includes("if (collectionRoutesPilotState.testIncidentPending || collectionRoutesPilotState.testIncidentReplyPending) return;") &&
+    appSource.includes("closeCollectionRoutesTestIncidentFinalConfirmation();") &&
+    appSource.includes('document.querySelector("[data-collection-routes-test-incident-open]")?.focus()'),
+  "Během odesílání se dialog nesmí zavřít; po výsledku se musí bezpečně vrátit na výchozí výběr hlášení."
+);
 
 assert.ok(
   appSource.includes("collectionRoutesStationaryFieldGpsReady") &&
@@ -291,7 +319,8 @@ assert.ok(
 assert.ok(
   mantraSource.includes("U nepřístupné firmy smí každý e-mail fyzicky mířit pouze na chráněný COLLECTION_ROUTES_TEST_EMAIL_TO") &&
     mantraSource.includes("skutečný interní e-mail s fotografií") &&
-    mantraSource.includes("odeslání vyžaduje druhé velké fyzické tlačítko") &&
+    mantraSource.includes("samostatné okno „Opravdu odeslat?“") &&
+    mantraSource.includes("Opakované, souběžné ani obnovené potvrzení nesmí vytvořit druhý e-mail nebo SMS") &&
     mantraSource.includes("do Vistosu nezapisuje") &&
     mantraSource.includes("Dokud práh není schválený, neodesílej automatické upozornění"),
   "Read-only mantra musí přímo zakazovat falešnou automatizaci, produkční zápisy a neodsouhlasené alerty."
