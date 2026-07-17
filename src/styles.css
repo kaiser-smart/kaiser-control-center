@@ -41821,6 +41821,18 @@ body.collection-driver-kiosk-active #app {
   overflow: hidden;
 }
 
+.collection-daily-driver-finish-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.85fr);
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.collection-daily-driver-finish-workspace > .collection-daily-driver-map {
+  min-height: 0;
+}
+
 .collection-daily-driver-current {
   display: grid;
   grid-template-rows: auto auto auto auto minmax(120px, 1fr);
@@ -41832,6 +41844,10 @@ body.collection-driver-kiosk-active #app {
   border: 2px solid rgba(117, 189, 37, 0.34);
   border-radius: 14px;
   background: #f8fcf3;
+}
+
+.collection-daily-driver-current > .collection-daily-driver-map {
+  grid-row: -2 / -1;
 }
 
 .collection-daily-driver-current > header {
@@ -41924,10 +41940,78 @@ body.collection-driver-kiosk-active #app {
   background: #eef1ec;
 }
 
+.collection-daily-driver-map > header b.is-optimized {
+  background: #e7f5dc;
+  color: #315f12;
+}
+
 .collection-daily-driver-map__canvas {
   min-height: 0;
   height: 100%;
   border-radius: 8px;
+}
+
+.collection-daily-driver-map__pins {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.collection-daily-driver-map-pin > path {
+  fill: #397bd1;
+  stroke: #fff;
+  stroke-width: 2.5;
+  paint-order: stroke;
+}
+
+.collection-daily-driver-map-pin > circle:not(.collection-daily-driver-map-pin__halo) {
+  fill: #397bd1;
+}
+
+.collection-daily-driver-map-pin > text,
+.collection-daily-driver-map-depot > text {
+  fill: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(25, 35, 30, 0.6);
+  stroke-width: 1.2px;
+}
+
+.collection-daily-driver-map-pin.is-done > path,
+.collection-daily-driver-map-pin.is-done > circle:not(.collection-daily-driver-map-pin__halo) {
+  fill: #45a329;
+}
+
+.collection-daily-driver-map-pin.is-problem > path,
+.collection-daily-driver-map-pin.is-problem > circle:not(.collection-daily-driver-map-pin__halo) {
+  fill: #c43333;
+}
+
+.collection-daily-driver-map-pin.is-current > path,
+.collection-daily-driver-map-pin.is-current > circle:not(.collection-daily-driver-map-pin__halo) {
+  fill: #e28a17;
+}
+
+.collection-daily-driver-map-pin__halo,
+.collection-daily-driver-map-depot__halo {
+  fill: rgba(226, 138, 23, 0.26);
+  stroke: #fff;
+  stroke-width: 2px;
+}
+
+.collection-daily-driver-map-depot > rect {
+  fill: #263228;
+  stroke: #fff;
+  stroke-width: 2.5px;
+}
+
+.collection-daily-driver-map-depot__halo {
+  fill: rgba(38, 50, 40, 0.22);
 }
 
 .collection-daily-driver-map__waiting {
@@ -41935,6 +42019,7 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-map > footer {
+  flex-wrap: wrap;
   color: var(--steel, #5f6e66);
   font-size: 0.68rem;
 }
@@ -41951,6 +42036,31 @@ body.collection-driver-kiosk-active #app {
   height: 10px;
   border-radius: 50%;
   background: #75bd25;
+}
+
+.collection-daily-driver-map > footer i.is-depot {
+  border-radius: 3px;
+  background: #263228;
+}
+
+.collection-daily-driver-map > footer i.is-planned {
+  background: #397bd1;
+}
+
+.collection-daily-driver-map > footer i.is-current {
+  background: #e28a17;
+}
+
+.collection-daily-driver-map > footer i.is-done {
+  background: #45a329;
+}
+
+.collection-daily-driver-map > footer i.is-problem {
+  background: #c43333;
+}
+
+.collection-daily-driver-map > footer small {
+  margin-left: auto;
 }
 
 .collection-daily-driver-actions {

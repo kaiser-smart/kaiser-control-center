@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.580"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.581"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: celá trasa na mapě řidiče",
+    text: "Řidičský displej zobrazuje výjezd z Trnkovy a všechna přidělená stanoviště barevnými špendlíky. Aktuální bod je oranžový, hotový zelený a problém červený; překrývající se body se rozestoupí. Štítek Optimalizováno HERE se ukáže jen při přesné shodě pořadí s dokončeným HERE výpočtem použitým na trase."
+  },
   {
     title: "Svoz: stabilní odkaz na TEST řidiče",
     text: "Samostatná adresa /trasy-svozu/test zachová TEST scope při přihlášení i obnovení stránky. Původní odkaz se scope=test se po přihlášení automaticky převede na stabilní adresu; produkční trasy a oprávnění se nemění."

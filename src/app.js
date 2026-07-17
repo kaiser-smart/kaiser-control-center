@@ -22354,51 +22354,102 @@ function collectionRoutesTestTabletMapPanel(stop, confirmation = null) {
   `;
 }
 
-function collectionDailyRouteDriverMapPanel(stop) {
-  const addressLatitude = collectionRoutesTestMapCoordinate(stop?.latitude ?? stop?.sourceSummary?.latitude);
-  const addressLongitude = collectionRoutesTestMapCoordinate(stop?.longitude ?? stop?.sourceSummary?.longitude);
-  const hasAddressPoint = addressLatitude !== null && addressLongitude !== null;
-  const mapImageUrl = collectionRoutesTestTabletMapImageUrl({
-    addressLatitude,
-    addressLongitude
-  });
+function collectionDailyRouteDriverMapMarker(point, pointCount) {
+  const status = ["planned", "done", "problem"].includes(point?.status) ? point.status : "planned";
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return "";
+  const current = point?.current === true;
+  const showOrder = current || status !== "planned" || pointCount <= 60;
+  const scale = current ? 1 : pointCount > 120 ? 0.62 : pointCount > 60 ? 0.74 : 0.88;
+  const order = Number(point?.routeOrder) || 0;
+  const accessibleLabel = `${order}. ${point?.label || "Stanoviště"} · ${collectionDailyRouteStopStatusLabel(status)}${current ? " · aktuální" : ""}`;
+  return `
+    <g
+      class="collection-daily-driver-map-pin is-${escapeHtml(status)} ${current ? "is-current" : ""}"
+      transform="translate(${escapeHtml(x)} ${escapeHtml(y)}) scale(${escapeHtml(scale)})"
+      data-collection-route-map-marker="${escapeHtml(point?.stopId || "")}"
+      data-collection-route-map-status="${escapeHtml(status)}"
+    >
+      <title>${escapeHtml(accessibleLabel)}</title>
+      ${current ? `<circle class="collection-daily-driver-map-pin__halo" r="17"></circle>` : ""}
+      <path d="M0 14C-2 8-11 1-11-7A11 11 0 1 1 11-7C11 1 2 8 0 14Z"></path>
+      <circle r="6.5" cy="-7"></circle>
+      ${showOrder ? `<text x="0" y="-4.2">${escapeHtml(order)}</text>` : ""}
+    </g>
+  `;
+}
+
+function collectionDailyRouteDriverMapPanel(detail, currentStop) {
+  const run = detail?.run || {};
+  const driverMap = detail?.driverMap || null;
+  const points = Array.isArray(driverMap?.points) ? driverMap.points : [];
+  const depot = driverMap?.depot || null;
+  const view = driverMap?.view || {};
+  const hasMap = points.length > 0 && depot && Number(view.width) > 0 && Number(view.height) > 0;
+  const ordering = driverMap?.ordering || { mode: "current-order", label: "Aktuální pořadí trasy" };
+  const scopeQuery = run.scope === "test" ? "?scope=test" : "";
+  const versionSeparator = scopeQuery ? "&" : "?";
+  const mapImageUrl = `/api/collection-routes/daily-routes/${encodeURIComponent(run.id || "")}/map${scopeQuery}${versionSeparator}v=${encodeURIComponent(run.updatedAt || currentStop?.updatedAt || "route")}`;
+  const width = Number(view.width) || 960;
+  const height = Number(view.height) || 420;
+  const depotX = Number(depot?.x);
+  const depotY = Number(depot?.y);
+  const missingCount = Math.max(0, Number(driverMap?.totalStopCount || 0) - Number(driverMap?.mappedStopCount || 0));
 
   return `
-    <section class="collection-daily-driver-map" aria-labelledby="collection-daily-driver-map-title">
+    <section class="collection-daily-driver-map" aria-labelledby="collection-daily-driver-map-title" data-collection-route-order-mode="${escapeHtml(ordering.mode)}">
       <header>
         <div>
-          <span>HERE MAPA</span>
-          <strong id="collection-daily-driver-map-title">Aktuální stanoviště</strong>
+          <span>MAPA CELÉ TRASY</span>
+          <strong id="collection-daily-driver-map-title">Výjezd: Trnkova 3052/137, Brno</strong>
         </div>
-        <b>NÁHLED · NAVIGACE SE PŘIPRAVUJE</b>
+        <b class="${ordering.mode === "here-optimized" ? "is-optimized" : ""}">${escapeHtml(ordering.label)}</b>
       </header>
-      ${hasAddressPoint ? `
+      ${hasMap ? `
         <div
           class="collection-routes-test-tablet-map__canvas collection-daily-driver-map__canvas"
           data-collection-routes-driver-map
-          data-address-latitude="${escapeHtml(addressLatitude)}"
-          data-address-longitude="${escapeHtml(addressLongitude)}"
-          aria-label="HERE mapa aktuálního stanoviště"
+          aria-label="HERE mapa celé přidělené trasy s ${escapeHtml(points.length)} stanovišti"
         >
           <img
             src="${escapeHtml(mapImageUrl)}"
-            alt="HERE mapový výřez aktuálního stanoviště"
+            alt="HERE mapový podklad celé přidělené trasy"
             data-collection-routes-test-tablet-map-image
           >
+          <svg
+            class="collection-daily-driver-map__pins"
+            viewBox="0 0 ${escapeHtml(width)} ${escapeHtml(height)}"
+            preserveAspectRatio="xMidYMid slice"
+            aria-hidden="true"
+          >
+            ${Number.isFinite(depotX) && Number.isFinite(depotY) ? `
+              <g class="collection-daily-driver-map-depot" transform="translate(${escapeHtml(depotX)} ${escapeHtml(depotY)})">
+                <circle class="collection-daily-driver-map-depot__halo" r="16"></circle>
+                <rect x="-9" y="-9" width="18" height="18" rx="4"></rect>
+                <text x="0" y="3.5">D</text>
+              </g>
+            ` : ""}
+            ${points.map((point) => collectionDailyRouteDriverMapMarker(point, points.length)).join("")}
+          </svg>
           <div class="collection-routes-test-tablet-map__waiting">
-            <strong>Načítám HERE mapu…</strong>
-            <span>Trasa zůstává dostupná i bez mapového podkladu.</span>
+            <strong>Načítám bezpečnou HERE mapu celé trasy…</strong>
+            <span>Stanoviště a pracovní tlačítka zůstávají dostupná i bez mapového podkladu.</span>
           </div>
         </div>
       ` : `
         <div class="collection-routes-test-tablet-map__waiting collection-daily-driver-map__waiting">
-          <strong>Souřadnice stanoviště zatím chybí.</strong>
-          <span>Pokračuj podle adresy; dispečink může bod doplnit.</span>
+          <strong>Stanoviště zatím nemají použitelné souřadnice.</strong>
+          <span>Pokračuj podle adres; dispečink může adresní body doplnit.</span>
         </div>
       `}
       <footer>
-        ${hasAddressPoint ? `<span><i class="is-address"></i> Adresní bod stanoviště</span>` : ""}
-        <small>Mapu načítá chráněný backend KSO; HERE klíč není v tabletu.</small>
+        <span><i class="is-depot"></i> Depo</span>
+        <span><i class="is-planned"></i> Čeká</span>
+        <span><i class="is-current"></i> Aktuální</span>
+        <span><i class="is-done"></i> Hotovo</span>
+        <span><i class="is-problem"></i> Problém</span>
+        <small>Zobrazeno ${escapeHtml(points.length)} z ${escapeHtml(driverMap?.totalStopCount || points.length)} bodů${missingCount ? ` · ${escapeHtml(missingCount)} bez souřadnic` : ""}. HERE klíč zůstává na backendu.</small>
       </footer>
     </section>
   `;
@@ -23204,7 +23255,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
                 <p class="collection-daily-driver-address">${escapeHtml(currentStop.addressText || "-")}</p>
                 <div class="collection-daily-driver-waste"><b>${escapeHtml(currentStop.wasteType || "-")}</b><span>${escapeHtml(currentStop.containerCount || 1)}× ${escapeHtml(currentStop.containerVolume || "-")} l · ${escapeHtml(currentStop.frequency || "-")}</span></div>
                 ${currentStop.note ? `<aside>${escapeHtml(currentStop.note)}</aside>` : ""}
-                ${collectionDailyRouteDriverMapPanel(currentStop)}
+                ${collectionDailyRouteDriverMapPanel(detail, currentStop)}
               </article>
               <aside class="collection-daily-driver-actions" aria-label="Pracovní akce řidiče">
                 <button class="collection-daily-driver-action collection-daily-driver-action--done" type="button" data-collection-daily-driver-event="done" data-stop-id="${escapeHtml(currentStop.id)}" ${pending ? "disabled" : ""}>HOTOVO</button>
@@ -23239,7 +23290,16 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               </aside>
             </div>
           ` : ""}
-          ${run.status === "active" && !currentStop ? `<div class="collection-daily-driver-complete"><strong>Všechny zastávky jsou vyřízené.</strong><button class="primary-action" type="button" data-collection-daily-driver-transition="complete" ${pending ? "disabled" : ""}>DOKONČIT TRASU</button></div>` : ""}
+          ${run.status === "active" && !currentStop ? `
+            <div class="collection-daily-driver-finish-workspace">
+              ${collectionDailyRouteDriverMapPanel(detail, null)}
+              <div class="collection-daily-driver-complete">
+                <strong>Všechny zastávky jsou vyřízené.</strong>
+                <span>Na mapě jsou obsloužená stanoviště potvrzená zeleně.</span>
+                <button class="primary-action" type="button" data-collection-daily-driver-transition="complete" ${pending ? "disabled" : ""}>${testScope ? "DOKONČIT TEST" : "DOKONČIT TRASU"}</button>
+              </div>
+            </div>
+          ` : ""}
         </section>
       ` : ""}
     </main>

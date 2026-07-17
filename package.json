@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.580",
+  "version": "0.1.581",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,7 +21,7 @@
     "test:customer-messaging": "node scripts/customer-messaging.test.mjs",
     "test:rcs-consent": "node scripts/rcs-consent.test.mjs",
     "test:build-assets": "node scripts/version-module-imports.test.mjs && node scripts/build.mjs",
-    "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs && node scripts/collection-daily-routes.test.mjs && node scripts/collection-daily-routes-scale.test.mjs && node scripts/collection-routes-cloud-preparation.test.mjs && node scripts/collection-routes-test-data.test.mjs && node scripts/collection-routes-test-store.test.mjs && node scripts/collection-routes-readonly-calculator.test.mjs && node scripts/collection-route-here-optimization.test.mjs && node scripts/collection-routes-here-map-image.test.mjs && node scripts/collection-routes-driver-kiosk.test.mjs && node scripts/collection-routes-test-gps.test.mjs && node scripts/collection-routes-test-incidents.test.mjs && node scripts/collection-routes-sarlota-voice.test.mjs && node scripts/collection-routes-incident-reminder-runner.test.mjs && node scripts/collection-routes-test-ui.test.mjs",
+    "test:collection-routes": "node scripts/collection-route-source-parser.test.mjs && node scripts/collection-daily-routes.test.mjs && node scripts/collection-daily-routes-scale.test.mjs && node scripts/collection-routes-cloud-preparation.test.mjs && node scripts/collection-routes-test-data.test.mjs && node scripts/collection-routes-test-store.test.mjs && node scripts/collection-routes-readonly-calculator.test.mjs && node scripts/collection-route-here-optimization.test.mjs && node scripts/collection-routes-here-map-image.test.mjs && node scripts/collection-daily-route-map.test.mjs && node scripts/collection-routes-driver-kiosk.test.mjs && node scripts/collection-routes-test-gps.test.mjs && node scripts/collection-routes-test-incidents.test.mjs && node scripts/collection-routes-sarlota-voice.test.mjs && node scripts/collection-routes-incident-reminder-runner.test.mjs && node scripts/collection-routes-test-ui.test.mjs",
     "test:self-repair": "node scripts/self-repair.test.mjs && node scripts/self-repair-monitor.test.mjs",
     "test:partslink24": "node scripts/partslink24_vin_pilot.test.mjs",
     "test:partslink24:kso": "node scripts/partslink24_kso_phase1.test.mjs",

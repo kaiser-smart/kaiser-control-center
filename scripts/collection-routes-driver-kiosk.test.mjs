@@ -56,6 +56,8 @@ const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8"
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const storeSource = readFileSync(new URL("../functions/_lib/collection-daily-routes-store.js", import.meta.url), "utf8");
 const hereEndpointSource = readFileSync(new URL("../functions/api/collection-routes/here-map-image.js", import.meta.url), "utf8");
+const driverMapEndpointSource = readFileSync(new URL("../functions/api/collection-routes/daily-routes/[runId]/map.js", import.meta.url), "utf8");
+const driverMapSource = readFileSync(new URL("../functions/_lib/collection-daily-route-map.js", import.meta.url), "utf8");
 const devServerSource = readFileSync(new URL("./serve.mjs", import.meta.url), "utf8");
 const buildSource = readFileSync(new URL("./build.mjs", import.meta.url), "utf8");
 
@@ -82,8 +84,20 @@ for (const marker of [
 
 assert.ok(
   appSource.includes("function collectionDailyRouteDriverMapPanel")
-    && appSource.includes("data-collection-routes-driver-map"),
-  "Řidičský displej musí zobrazit chráněnou HERE mapu aktuálního stanoviště."
+    && appSource.includes("function collectionDailyRouteDriverMapMarker")
+    && appSource.includes("data-collection-routes-driver-map")
+    && appSource.includes("MAPA CELÉ TRASY")
+    && appSource.includes("Výjezd: Trnkova 3052/137, Brno")
+    && appSource.includes("Aktuální pořadí trasy")
+    && appSource.includes("data-collection-route-map-marker")
+    && driverMapSource.includes("Optimalizováno HERE"),
+  "Řidičský displej musí zobrazit chráněnou HERE mapu celé přidělené trasy."
+);
+
+assert.ok(
+  appSource.includes("collection-daily-driver-finish-workspace")
+    && appSource.includes("Na mapě jsou obsloužená stanoviště potvrzená zeleně."),
+  "Mapa musí zůstat viditelná i po obsloužení posledního stanoviště."
 );
 
 for (const forbidden of ["userBar(user)", "Zpět na HP", "uiSystemPilotSidebar", "collection-routes-mantra"]) {
@@ -134,10 +148,32 @@ assert.ok(
   "HERE mapa řidiče musí být read-only a dostupná bez manage oprávnění."
 );
 assert.ok(
+  driverMapEndpointSource.includes("getCollectionDailyRoute(env, user, runId")
+    && driverMapEndpointSource.includes("buildCollectionDailyRouteHereMapImageUrl")
+    && !driverMapEndpointSource.includes("collection-routes\", \"manage"),
+  "Mapa celé trasy musí použít stejnou serverovou kontrolu přidělené trasy a nesmí vyžadovat manage oprávnění."
+);
+assert.ok(
   devServerSource.includes('url.pathname === "/api/collection-routes/daily-routes/my"')
     && devServerSource.includes('normalizeRole(user.role) !== "ridic"')
     && devServerSource.includes('mockCollectionDailyRouteForDriver(user, { scope: url.searchParams.get("scope") })'),
   "Lokální prohlížečový test musí mít osobní ukázkovou trasu dostupnou jen roli Řidič."
+);
+assert.ok(
+  devServerSource.includes('user.id === "pneumatiky-miroslav-vasek"')
+    && devServerSource.includes('email: "radim@nanolab.cz"'),
+  "Lokální simulace musí otevřít Miroslavův účet přes dohodnutý testovací e-mail."
+);
+assert.ok(
+  devServerSource.includes("mockDailyRouteTransitionMatch")
+    && devServerSource.includes("mockDailyRouteStopEventMatch")
+    && devServerSource.includes("mockDailyRouteMapMatch")
+    && devServerSource.includes('eventType: `stop_${action}`')
+    && devServerSource.includes("externalEffectsDisabled: true")
+    && devServerSource.includes("notificationsDisabled: true")
+    && devServerSource.includes("vistosWritesDisabled: true")
+    && devServerSource.includes("productionRouteWritesDisabled: true"),
+  "Lokální Miroslavův displej musí umět bezpečně nasimulovat trasu i hlášení bez externích dopadů."
 );
 
 console.log("Collection routes driver kiosk tests passed.");

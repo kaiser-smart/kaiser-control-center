@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.21",
-  updatedAt: "17. 7. 2026 10:35",
-  updatedAtIso: "2026-07-17T10:35:00+02:00",
-  lastChange: "Řidič vidí jen svoji trasu",
+  version: "1.22",
+  updatedAt: "17. 7. 2026 19:56",
+  updatedAtIso: "2026-07-17T19:56:00+02:00",
+  lastChange: "Celá přidělená trasa na mapě řidiče",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Řidičský tablet nikdy tiše nezamění vybraný TEST ani jeho testera; bez ručního výběru nabídne pouze TEST přihlášeného uživatele. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po kontrole účinku a samostatném vyskakovacím potvrzení skutečně odeslat právě jeden interní e-mail a jednu jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Mapa zobrazuje výjezd z Trnkovy a barevný stav všech přidělených stanovišť; za optimalizované se pořadí označí pouze při přesně doloženém a skutečně použitém výsledku HERE. Řidičský tablet nikdy tiše nezamění vybraný TEST ani jeho testera; bez ručního výběru nabídne pouze TEST přihlášeného uživatele. Veškeré mluvené pokyny Řidičského tabletu používají produkční hlas Šarloty z ElevenLabs; systémové čtení je zakázané. Stacionární pilot po odděleném ručním potvrzení ukládá fotografii. U přeplněné nebo poškozené nádoby může až po kontrole účinku a samostatném vyskakovacím potvrzení skutečně odeslat právě jeden interní e-mail a jednu jednosegmentovou SMS dostupné dispečerce z KSO; oznamovatel se bere z uzamčeného terénního TESTU. Zákaznická větev zůstává chráněný TEST, zákazník se nekontaktuje, ostrá trasa a Vistos se nemění a RCS je vypnuté.",
   highlights: [
     {
       title: "Svozový den je závazný",
