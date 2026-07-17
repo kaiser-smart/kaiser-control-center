@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.573"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.574"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky: interní read-only třídění",
+    text: "Radimův interní pilot nahrazuje chatový autopilot třemi srozumitelnými frontami K vyřízení, Předané a Hotové nad aktuálními daty. Pilot pouze čte existující chráněné API, nic neodesílá ani nemění a ostatním uživatelům ponechává dosavadní rozhraní."
+  },
   {
     title: "RCS: prokazatelný souhlas zákazníka",
     text: "Veřejný formulář Kaiser ukládá samostatný souhlas s provozní a transakční RCS komunikací do cloudové D1 včetně přesného znění, verze a zdrojové stránky. Formulář sám žádnou RCS ani SMS neposílá; STOP blokaci smí zrušit pouze nový výslovný souhlas."

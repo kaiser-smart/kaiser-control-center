@@ -130,6 +130,7 @@ let mockDataBoxPlusPendingAction = null;
 let mockDataBoxPlusMessage = {
   id: "mock-data-box-plus-message",
   mailboxId: "mock-data-box-plus-mailbox",
+  direction: "received",
   senderName: "Automat Registr vozidel (Ministerstvo dopravy)",
   subject: "Informace o konci platnosti technické prohlídky u vozidla registrační značky 3BE2831",
   deliveredAt: "2026-06-28T08:52:00.000Z",
@@ -213,7 +214,8 @@ const contentTypes = new Map([
 
 function runtimeConfigModuleSource(env = process.env) {
   return `export const runtimeConfig = ${JSON.stringify({
-    googleMapsApiKey: env.VITE_GOOGLE_MAPS_API_KEY || ""
+    googleMapsApiKey: env.VITE_GOOGLE_MAPS_API_KEY || "",
+    dataBoxPlusTriagePreview: ["1", "true"].includes(String(env.DATA_BOX_PLUS_TRIAGE_PREVIEW || "").toLowerCase())
   }, null, 2)};\n`;
 }
 

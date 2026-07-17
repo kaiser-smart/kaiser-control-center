@@ -860,6 +860,7 @@ function rowToMessage(row, attachments = [], actionLogs = []) {
     id: cleanString(row.id),
     mailboxId: cleanString(row.mailbox_id),
     isdsMessageId: cleanString(row.isds_message_id),
+    direction: cleanString(row.direction || "received"),
     senderName: cleanString(row.sender_name) || "Datová schránka",
     senderBoxId: cleanString(row.sender_box_id),
     recipientBoxId: cleanString(row.recipient_box_id),
