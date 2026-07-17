@@ -251,6 +251,15 @@ import {
   DATA_BOX_PLUS_ENTITY_MODEL,
   DATA_BOX_PLUS_LEARNING_PLAN
 } from "./data/dataBoxPlus.js";
+import {
+  DATA_BOX_PLUS_TRIAGE_QUEUES,
+  dataBoxPlusTriageCounts,
+  dataBoxPlusTriageItem,
+  dataBoxPlusTriageItems,
+  dataBoxPlusTriagePreviewEnabled,
+  readDataBoxPlusTriageDetail,
+  readDataBoxPlusTriageSnapshot
+} from "./data/dataBoxPlusTriage.js";
 
 const app = document.querySelector("#app");
 const orderedModules = [...modules].sort((a, b) => a.order - b.order);
@@ -418,6 +427,13 @@ const HOME_MODULE_SECTIONS = [
 ];
 const DATA_BOX_PLUS_MODULE_KEY = "data-box-plus";
 const DATA_BOX_PLUS_ROUTE = "/datove-schranky-plus";
+function dataBoxPlusTriagePreviewActive(user = authState.user ? currentUser() : null) {
+  return dataBoxPlusTriagePreviewEnabled(
+    runtimeConfig.dataBoxPlusTriagePreview,
+    window.location.hostname,
+    user?.id
+  );
+}
 const DATA_BOX_PLUS_TABS = [
   { id: "messages", label: "Zprávy" },
   { id: "autopilot", label: "Autopilot" },
@@ -1435,6 +1451,12 @@ const dataBoxPlusState = {
   activeTab: "messages",
   selectedMessageId: "",
   chatMessageId: "",
+  triageMailboxId: "",
+  triageQueue: "todo",
+  triageSearch: "",
+  triageSelectedMessageId: "",
+  triageReturnMessageId: "",
+  triageDetailError: "",
   filter: "new",
   search: "",
   rulesSearch: "",
@@ -1559,6 +1581,7 @@ let aiVoiceStateTimer = 0;
 let aiToastTimer = 0;
 let aiConfirmationResolver = null;
 let aiTextRequestId = 0;
+let dataBoxPlusTriageAssistantSuspended = false;
 let aiVoiceWeakInputReadings = 0;
 let aiVoiceHapticSession = {
   connected: false,
@@ -3070,7 +3093,7 @@ function dismissAiAssistantWelcome() {
   renderAiAssistantLayerOnly();
 }
 
-function closeAiAssistant() {
+function closeAiAssistant(options = {}) {
   stopAiVoiceDemo({ renderAfter: false });
   elevenLabsAssistant.stopVoiceAudio?.();
   clearAiVoiceStateTimer();
@@ -3080,14 +3103,68 @@ function closeAiAssistant() {
   aiAssistantState.chatOpen = false;
   aiAssistantState.welcomeVisible = false;
   aiAssistantState.welcomeAnimate = false;
-  aiAssistantState.launcherVisible = true;
+  aiAssistantState.launcherVisible = options.launcherVisible !== false;
   aiAssistantState.isListening = false;
   aiAssistantState.voiceStatus = AI_STATUS_DONE;
   aiAssistantState.voiceUiState = "idle";
   aiAssistantState.voiceWakeLockStatus = "idle";
   aiAssistantState.sarlotaDeepLinkQuickStart = false;
   clearSarlotaDeepLinkUrl();
-  renderAiAssistantLayerOnly();
+  if (options.renderAfter !== false) {
+    renderAiAssistantLayerOnly();
+  }
+}
+
+function dataBoxPlusTriageAssistantIsActive() {
+  return Boolean(
+    aiAssistantState.chatOpen
+    || aiAssistantState.welcomeVisible
+    || aiAssistantState.launcherVisible
+    || aiAssistantState.isListening
+    || aiAssistantState.textSending
+    || aiAssistantState.confirmation
+    || aiAssistantState.toast
+    || aiAssistantState.highlightMessage
+    || assistantPromoState.visible
+    || isAiVoiceSessionActive()
+    || shouldShowAiVoiceDock()
+  );
+}
+
+function suspendAiAssistantForDataBoxPlusTriage() {
+  closeAiAssistant({ renderAfter: false, launcherVisible: false });
+  const confirmationResolver = aiConfirmationResolver;
+  aiConfirmationResolver = null;
+  aiAssistantState.confirmation = null;
+  aiAssistantState.toast = null;
+  aiAssistantState.highlightMessage = "";
+  assistantPromoState.visible = false;
+  if (aiToastTimer) {
+    window.clearTimeout(aiToastTimer);
+    aiToastTimer = 0;
+  }
+  confirmationResolver?.(false);
+  dataBoxPlusTriageAssistantSuspended = true;
+}
+
+function syncDataBoxPlusTriageAssistantBoundary(path, user = authState.user ? currentUser() : null) {
+  const triagePreviewActive = dataBoxPlusTriagePreviewActive(user) && path === DATA_BOX_PLUS_ROUTE;
+  if (triagePreviewActive) {
+    if (sarlotaOpenQuery().trim().toLowerCase() === SARLOTA_OPEN_QUERY_VALUE) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("open");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      lastRenderedUrl = window.location.href;
+    }
+    if (!dataBoxPlusTriageAssistantSuspended || dataBoxPlusTriageAssistantIsActive()) {
+      suspendAiAssistantForDataBoxPlusTriage();
+    }
+    return;
+  }
+  if (dataBoxPlusTriageAssistantSuspended) {
+    aiAssistantState.launcherVisible = AI_ASSISTANT_LAUNCHER_DEFAULT_VISIBLE;
+    dataBoxPlusTriageAssistantSuspended = false;
+  }
 }
 
 async function submitAiAssistantQuestion(question, options = {}) {
@@ -3493,7 +3570,11 @@ function navigateFromAiAssistant(route) {
 function renderAiAssistantLayer() {
   const user = authState.user ? currentUser() : null;
 
-  if (!user || !isUserActive(user)) {
+  if (
+    !user
+    || !isUserActive(user)
+    || (dataBoxPlusTriagePreviewActive(user) && normalizePath(window.location.pathname) === DATA_BOX_PLUS_ROUTE)
+  ) {
     return "";
   }
 
@@ -26278,6 +26359,334 @@ function dataBoxPlusMessagesPanel() {
   `;
 }
 
+function dataBoxPlusTriageMailboxOptions() {
+  return [...dataBoxPlusMailboxes()].sort((left, right) => {
+    const leftSlot = Number(left?.slot || 0);
+    const rightSlot = Number(right?.slot || 0);
+    if (leftSlot && rightSlot && leftSlot !== rightSlot) return leftSlot - rightSlot;
+    return String(left?.name || "").localeCompare(String(right?.name || ""), "cs");
+  });
+}
+
+function dataBoxPlusTriageStatusNotice() {
+  if (dataBoxPlusState.loading && !dataBoxPlusState.loaded) {
+    return `
+      <div class="ds-plus-status-note" role="status">
+        <strong>Načítám aktuální zprávy</strong>
+        <span>Nový pracovní inbox čte pouze současný stav schránek a zpráv.</span>
+      </div>
+    `;
+  }
+  if (dataBoxPlusState.error) {
+    return `
+      <div class="ds-plus-status-note ds-plus-status-note--warning" role="status">
+        <strong>Data se nepodařilo načíst</strong>
+        <span>${escapeHtml(dataBoxPlusHumanError(dataBoxPlusState.error))}</span>
+      </div>
+    `;
+  }
+  if (dataBoxPlusState.triageDetailError) {
+    return `
+      <div class="ds-plus-status-note ds-plus-status-note--warning" role="status">
+        <strong>Detail se nepodařilo načíst</strong>
+        <span>${escapeHtml(dataBoxPlusState.triageDetailError)}</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="ds-plus-status-note ds-plus-triage-readonly-note" role="status">
+      <strong>Read-only pilot</strong>
+      <span>Fronty jsou místní pohled nad aktuálními daty. Nic nepředávají, nearchivují ani nemění.</span>
+    </div>
+  `;
+}
+
+function dataBoxPlusTriageMailboxCard(mailbox) {
+  const counts = dataBoxPlusTriageCounts(dataBoxPlusMessages(), dataBoxPlusMailboxes(), { mailboxId: mailbox.id });
+  const syncLabel = mailbox.lastSync
+    ? `Načteno ${formatDateTime(mailbox.lastSync)}`
+    : "Čas posledního načtení není k dispozici";
+  return `
+    <article class="ds-plus-triage-mailbox">
+      <div class="ds-plus-triage-mailbox__head">
+        <div>
+          <span>${escapeHtml(mailbox.company || "Datová schránka")}</span>
+          <h2>${escapeHtml(mailbox.name || mailbox.company || "Datová schránka")}</h2>
+        </div>
+        <span class="ds-plus-badge ds-plus-badge--${dataBoxPlusSearchText([mailbox.status, mailbox.connectionStatus]).includes("aktivni") ? "success" : "quiet"}">${escapeHtml(mailbox.status || "stav neověřen")}</span>
+      </div>
+      <p>${escapeHtml(syncLabel)}</p>
+      <dl class="ds-plus-triage-mailbox__counts" aria-label="Počty v načteném výběru">
+        <div><dt>K vyřízení</dt><dd>${escapeHtml(counts.todo)}</dd></div>
+        <div><dt>Předané</dt><dd>${escapeHtml(counts.handed)}</dd></div>
+        <div><dt>Hotové</dt><dd>${escapeHtml(counts.done)}</dd></div>
+      </dl>
+      <button class="primary-action" type="button" data-ds-plus-triage-mailbox="${escapeHtml(mailbox.id)}">Otevřít ${escapeHtml(mailbox.name || "schránku")}</button>
+    </article>
+  `;
+}
+
+function dataBoxPlusTriageMailboxChooser() {
+  const mailboxes = dataBoxPlusTriageMailboxOptions();
+  return `
+    <section class="ds-plus-workspace ds-plus-triage-workspace" aria-labelledby="ds-plus-triage-mailboxes-title">
+      <div class="ds-plus-section-head">
+        <div>
+          <span>První krok</span>
+          <h2 id="ds-plus-triage-mailboxes-title">Vyber datovou schránku</h2>
+          <p>Po otevření zůstaneš pouze ve zprávách jedné firmy.</p>
+        </div>
+        <span class="ds-plus-state-pill">Načtený výběr · max. 150 zpráv</span>
+      </div>
+      <div class="ds-plus-triage-mailboxes">
+        ${mailboxes.length ? mailboxes.map(dataBoxPlusTriageMailboxCard).join("") : `<p class="ds-plus-empty">Zatím není dostupná žádná schránka.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function dataBoxPlusTriageQueueNav(counts) {
+  return `
+    <nav class="ds-plus-triage-queues" role="tablist" aria-label="Pracovní stav zpráv">
+      ${DATA_BOX_PLUS_TRIAGE_QUEUES.map((queue) => {
+        const active = dataBoxPlusState.triageQueue === queue.id;
+        return `
+          <button
+            class="ds-plus-triage-queue ${active ? "ds-plus-triage-queue--active" : ""}"
+            type="button"
+            role="tab"
+            aria-selected="${active ? "true" : "false"}"
+            data-ds-plus-triage-queue="${escapeHtml(queue.id)}"
+          >
+            <span>${escapeHtml(queue.label)}</span>
+            <strong>${escapeHtml(counts[queue.id] || 0)}</strong>
+          </button>
+        `;
+      }).join("")}
+    </nav>
+  `;
+}
+
+function dataBoxPlusTriageItemContext(item) {
+  if (item.queueId === "handed") {
+    return ["Předáno komu", item.assignedTo || item.target || "Odpovědná osoba"];
+  }
+  if (item.queueId === "done") {
+    return ["Výsledek", item.microstateLabel];
+  }
+  return ["Navržený cíl", item.target || "Zatím neurčeno"];
+}
+
+function dataBoxPlusTriageMessageRow(item) {
+  const [contextLabel, contextValue] = dataBoxPlusTriageItemContext(item);
+  const dueLabel = item.dueDate ? `Lhůta ${item.dueDate}` : "Bez zjištěné lhůty";
+  return `
+    <article class="ds-plus-triage-row ds-plus-triage-row--${escapeHtml(item.tone)}" data-ds-plus-triage-row="${escapeHtml(item.id)}">
+      <div class="ds-plus-triage-row__body">
+        <div class="ds-plus-triage-row__meta">
+          <span>${escapeHtml(item.senderName)}</span>
+          <span>${escapeHtml(formatDateTime(item.deliveredAt))}</span>
+        </div>
+        <h3>${escapeHtml(item.subject)}</h3>
+        <div class="ds-plus-triage-row__labels">
+          <span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(item.tone)}">${escapeHtml(item.microstateLabel)}</span>
+          ${item.riskLevel ? `<span>${escapeHtml(item.riskLevel)}</span>` : ""}
+          <span>${escapeHtml(dueLabel)}</span>
+        </div>
+      </div>
+      <div class="ds-plus-triage-row__context">
+        <span>${escapeHtml(contextLabel)}</span>
+        <strong>${escapeHtml(contextValue)}</strong>
+        <small>Aktuální serverový stav: ${escapeHtml(item.sourceStatus || "neuveden")}</small>
+      </div>
+      <div class="ds-plus-triage-row__action">
+        <button
+          class="primary-action"
+          type="button"
+          data-ds-plus-triage-open="${escapeHtml(item.id)}"
+          aria-label="${escapeHtml(`${item.actionLabel}: otevřít detail zprávy`)}"
+        >${escapeHtml(item.actionLabel)}</button>
+        <small>V pilotu pouze otevře detail.</small>
+      </div>
+    </article>
+  `;
+}
+
+function dataBoxPlusTriageInbox() {
+  const mailboxes = dataBoxPlusTriageMailboxOptions();
+  const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === dataBoxPlusState.triageMailboxId) || null;
+  if (!selectedMailbox) return dataBoxPlusTriageMailboxChooser();
+
+  const counts = dataBoxPlusTriageCounts(dataBoxPlusMessages(), mailboxes, { mailboxId: selectedMailbox.id });
+  const items = dataBoxPlusTriageItems(dataBoxPlusMessages(), mailboxes, {
+    mailboxId: selectedMailbox.id,
+    queueId: dataBoxPlusState.triageQueue,
+    query: dataBoxPlusState.triageSearch
+  });
+  const syncLabel = selectedMailbox.lastSync
+    ? `Naposledy načteno ${formatDateTime(selectedMailbox.lastSync)}`
+    : "Čas posledního načtení není k dispozici";
+
+  return `
+    <section class="ds-plus-workspace ds-plus-triage-workspace" aria-labelledby="ds-plus-triage-inbox-title">
+      <div class="ds-plus-triage-context">
+        <button class="secondary-link" type="button" data-ds-plus-triage-back-mailboxes>← Všechny schránky</button>
+        <div>
+          <span>${escapeHtml(selectedMailbox.company || "Datová schránka")}</span>
+          <h2 id="ds-plus-triage-inbox-title">${escapeHtml(selectedMailbox.name || selectedMailbox.company || "Datová schránka")}</h2>
+          <p>${escapeHtml(syncLabel)}</p>
+        </div>
+        <span class="ds-plus-state-pill">Pouze tato schránka</span>
+      </div>
+      ${dataBoxPlusTriageQueueNav(counts)}
+      <div class="ds-plus-triage-tools">
+        <label class="ds-plus-search">
+          <span>Hledat v této schránce</span>
+          <input
+            type="search"
+            value="${escapeHtml(dataBoxPlusState.triageSearch)}"
+            placeholder="Odesílatel, předmět, stav nebo cíl"
+            data-ds-plus-triage-search
+          />
+        </label>
+        <span>${escapeHtml(`${items.length} zpráv v tomto pohledu · počty jsou z načteného výběru`)}</span>
+      </div>
+      <div class="ds-plus-triage-list" role="tabpanel" aria-label="${escapeHtml(DATA_BOX_PLUS_TRIAGE_QUEUES.find((queue) => queue.id === dataBoxPlusState.triageQueue)?.label || "K vyřízení")}">
+        ${items.length ? items.map(dataBoxPlusTriageMessageRow).join("") : `<p class="ds-plus-empty">V tomto pohledu teď není žádná zpráva.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function dataBoxPlusTriageHistory(message) {
+  const history = Array.isArray(message.history) ? message.history : [];
+  return `
+    <section class="ds-plus-detail-section">
+      <h3>Historie</h3>
+      ${history.length ? `
+        <ol class="ds-plus-triage-history">
+          ${history.map((event) => `
+            <li>
+              <span>${escapeHtml(formatDateTime(event.createdAt))}</span>
+              <strong>${escapeHtml(event.actionType || event.result || "Událost")}</strong>
+              ${event.actor ? `<small>${escapeHtml(event.actor)}</small>` : ""}
+              ${event.auditNote ? `<p>${escapeHtml(event.auditNote)}</p>` : ""}
+            </li>
+          `).join("")}
+        </ol>
+      ` : `<p class="ds-plus-empty">U této zprávy zatím není dostupná historie.</p>`}
+    </section>
+  `;
+}
+
+function dataBoxPlusTriageAttachments(message) {
+  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+  return `
+    <section class="ds-plus-detail-section">
+      <h3>Přílohy</h3>
+      <div class="ds-plus-attachments">
+        ${attachments.length ? attachments.map((attachment) => `
+          <article class="ds-plus-attachment ds-plus-attachment--${escapeHtml(dataBoxPlusTone(attachment.storageStatus))}">
+            <div>
+              <strong>${escapeHtml(attachment.fileName || "Příloha")}</strong>
+              <span>${escapeHtml([attachment.mimeType, attachment.size].filter(Boolean).join(" · ") || "Typ a velikost nejsou uvedené")}</span>
+              <small>${escapeHtml([attachment.storageStatus, attachment.textExtractionStatus].filter(Boolean).join(" · ") || "Stav přílohy není uvedený")}</small>
+            </div>
+            ${attachment.errorReason ? `<p class="ds-plus-attachment-error">Přílohu se nepodařilo načíst.</p><details><summary>Zobrazit technický důvod</summary><p>${escapeHtml(attachment.errorReason)}</p></details>` : ""}
+            ${attachment.extractedText ? `<details><summary>Zobrazit načtený text</summary><p>${escapeHtml(attachment.extractedText)}</p></details>` : ""}
+          </article>
+        `).join("") : `<p class="ds-plus-empty">U zprávy nejsou dostupné žádné načtené přílohy.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function dataBoxPlusTriageDetailOverlay() {
+  const message = dataBoxPlusMessageById(dataBoxPlusState.triageSelectedMessageId);
+  if (!message || !dataBoxPlusState.triageSelectedMessageId) return "";
+  const mailbox = dataBoxPlusMailbox(message);
+  const item = dataBoxPlusTriageItem(message, { mailbox });
+  const facts = Array.isArray(message.facts) && message.facts.length ? dataBoxPlusFacts(message) : "";
+  const [contextLabel, contextValue] = dataBoxPlusTriageItemContext(item);
+  return `
+    <div class="ds-plus-detail-overlay ds-plus-triage-detail-overlay" role="presentation">
+      <button class="ds-plus-detail-backdrop" type="button" tabindex="-1" data-ds-plus-triage-close aria-label="Zavřít zprávu"></button>
+      <section class="ds-plus-detail ds-plus-triage-detail" role="dialog" aria-modal="true" aria-labelledby="ds-plus-triage-detail-title">
+        <div class="ds-plus-detail__head">
+          <div>
+            <span>${escapeHtml(mailbox?.name || "Schránka")} · ${escapeHtml(item.laneLabel)}</span>
+            <h2 id="ds-plus-triage-detail-title">${escapeHtml(message.subject)}</h2>
+          </div>
+          <button class="secondary-link" type="button" data-ds-plus-triage-close data-ds-plus-triage-close-button>Zavřít</button>
+        </div>
+        <div class="ds-plus-detail__body">
+          <section class="ds-plus-detail-section ds-plus-detail-section--header">
+            <dl>
+              <div><dt>Odesílatel</dt><dd>${escapeHtml(message.senderName)}</dd></div>
+              <div><dt>Doručeno</dt><dd>${escapeHtml(formatDateTime(message.deliveredAt))}</dd></div>
+              <div><dt>Schránka</dt><dd>${escapeHtml(mailbox?.name || "Schránka")}</dd></div>
+            </dl>
+          </section>
+          ${dataBoxPlusSummary(message)}
+          ${facts}
+          ${dataBoxPlusTriageAttachments(message)}
+          <section class="ds-plus-detail-section ds-plus-triage-routing" aria-labelledby="ds-plus-triage-routing-title">
+            <div class="ds-plus-triage-routing__head">
+              <div>
+                <span>${escapeHtml(item.laneLabel)}</span>
+                <h3 id="ds-plus-triage-routing-title">${escapeHtml(item.microstateLabel)}</h3>
+              </div>
+              <span class="ds-plus-work-state ds-plus-work-state--${escapeHtml(item.tone)}">${escapeHtml(item.laneLabel)}</span>
+            </div>
+            <dl>
+              <div><dt>${escapeHtml(contextLabel)}</dt><dd>${escapeHtml(contextValue)}</dd></div>
+              <div><dt>Další krok</dt><dd>${escapeHtml(item.actionLabel)}</dd></div>
+              <div><dt>Zdroj</dt><dd>Aktuální serverový stav · bez odhadu confidence</dd></div>
+            </dl>
+            <p>Read-only pilot: tento detail nic nepředává, nearchivuje ani nemění.</p>
+          </section>
+          ${dataBoxPlusTriageHistory(message)}
+          <details class="ds-plus-triage-chat-note">
+            <summary>Zeptat se k této zprávě</summary>
+            <p>Chat už není hlavní ovládání rozřazování. V tomto pilotu je vypnutý; později může pouze vysvětlit obsah otevřené zprávy.</p>
+          </details>
+          ${dataBoxPlusTechnicalInfo(message)}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function dataBoxPlusTriagePage(moduleItem, user) {
+  return `
+    <main class="app-shell module-page module-theme-scope ds-plus-page ds-plus-triage-preview" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+      <section class="ds-plus-header ds-plus-triage-header" aria-labelledby="ds-plus-title">
+        <div class="ds-plus-header__main">
+          <div class="ds-plus-header__flags">
+            <span class="ds-plus-eyebrow">Nový pracovní inbox · lokální pilot</span>
+            <span class="ds-plus-model-flag">Bez zápisu do provozu</span>
+          </div>
+          <h1 id="ds-plus-title">${escapeHtml(moduleItem.title)}</h1>
+          <p>Nejdřív vybereš firmu. Potom řešíš zprávy pouze ve třech jasných stavech.</p>
+        </div>
+        <div class="ds-plus-header__state" aria-label="Stav pilotu">
+          <span>Stav pilotu</span>
+          <strong>${escapeHtml(dataBoxPlusState.loading ? "Načítá data" : "Read-only")}</strong>
+          <small>K vyřízení · Předané · Hotové</small>
+        </div>
+      </section>
+      ${dataBoxPlusTriageStatusNotice()}
+      ${dataBoxPlusTriageInbox()}
+      ${dataBoxPlusTriageDetailOverlay()}
+    </main>
+  `;
+}
+
 function dataBoxPlusAutopilotPanel() {
   const groups = [
     ["Co provede z chatu", [
@@ -27036,6 +27445,9 @@ function dataBoxPlusActivePanel() {
 }
 
 function dataBoxPlusPage(moduleItem, user) {
+  if (dataBoxPlusTriagePreviewActive(user)) {
+    return dataBoxPlusTriagePage(moduleItem, user);
+  }
   return `
     <main class="app-shell module-page module-theme-scope ds-plus-page" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
@@ -36937,10 +37349,19 @@ async function loadDataBoxPlusHomeStatus(options = {}) {
   dataBoxPlusHomeState.loading = true;
   dataBoxPlusHomeState.error = "";
   try {
-    const statusResult = await apiJson("/api/data-box-plus/status");
-    const summary = statusResult.summary || {};
-    dataBoxPlusHomeState.newCount = Number(summary.newCount || 0) || 0;
-    dataBoxPlusHomeState.unresolvedCount = Number(summary.unresolvedCount || 0) || 0;
+    if (dataBoxPlusTriagePreviewActive()) {
+      const [statusResult, messagesResult] = await readDataBoxPlusTriageSnapshot(apiJson);
+      const messages = Array.isArray(messagesResult.messages) ? messagesResult.messages : [];
+      const mailboxes = Array.isArray(statusResult.mailboxes) ? statusResult.mailboxes : [];
+      const counts = dataBoxPlusTriageCounts(messages, mailboxes);
+      dataBoxPlusHomeState.newCount = Number(counts.todo || 0) || 0;
+      dataBoxPlusHomeState.unresolvedCount = Number(counts.todo || 0) + Number(counts.handed || 0);
+    } else {
+      const statusResult = await apiJson("/api/data-box-plus/status");
+      const summary = statusResult.summary || {};
+      dataBoxPlusHomeState.newCount = Number(summary.newCount || 0) || 0;
+      dataBoxPlusHomeState.unresolvedCount = Number(summary.unresolvedCount || 0) || 0;
+    }
     dataBoxPlusHomeState.loaded = true;
     dataBoxPlusHomeState.lastLoadedAt = now;
   } catch (error) {
@@ -36967,13 +37388,15 @@ async function loadDataBoxPlusData(options = {}) {
   dataBoxPlusState.loading = true;
   dataBoxPlusState.error = "";
   try {
-    const [statusResult, messagesResult, recommendationsResult, rulesResult, syncRunsResult] = await Promise.all([
-      apiJson("/api/data-box-plus/status"),
-      apiJson("/api/data-box-plus/messages?limit=150"),
-      apiJson("/api/data-box-plus/recommendations?status=all&limit=150"),
-      apiJson("/api/data-box-plus/rules"),
-      apiJson("/api/data-box-plus/sync-runs?limit=20")
-    ]);
+    const [statusResult, messagesResult, recommendationsResult, rulesResult, syncRunsResult] = dataBoxPlusTriagePreviewActive()
+      ? await readDataBoxPlusTriageSnapshot(apiJson)
+      : await Promise.all([
+        apiJson("/api/data-box-plus/status"),
+        apiJson("/api/data-box-plus/messages?limit=150"),
+        apiJson("/api/data-box-plus/recommendations?status=all&limit=150"),
+        apiJson("/api/data-box-plus/rules"),
+        apiJson("/api/data-box-plus/sync-runs?limit=20")
+      ]);
     dataBoxPlusState.apiStatus = statusResult.apiStatus || "ready";
     dataBoxPlusState.mailboxes = Array.isArray(statusResult.mailboxes) ? statusResult.mailboxes : [];
     dataBoxPlusState.sendReadiness = statusResult.sendReadiness || null;
@@ -37005,7 +37428,9 @@ async function loadDataBoxPlusMessageDetail(messageId) {
   const id = String(messageId || "");
   if (!id) return;
   try {
-    const result = await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(id)}`);
+    const result = dataBoxPlusTriagePreviewActive()
+      ? await readDataBoxPlusTriageDetail(apiJson, id)
+      : await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(id)}`);
     if (result.message?.id) {
       const index = dataBoxPlusState.messages.findIndex((message) => message.id === result.message.id);
       if (index >= 0) {
@@ -37018,8 +37443,10 @@ async function loadDataBoxPlusMessageDetail(messageId) {
         dataBoxPlusState.messages = [result.message, ...dataBoxPlusState.messages];
       }
     }
+    return true;
   } catch (error) {
     dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Detail zprávy se teď nepodařilo načíst.");
+    return false;
   }
 }
 
@@ -45450,9 +45877,11 @@ function prepareSarlotaDeepLinkPanel() {
 
 function renderAuthenticatedApp(user) {
   const path = normalizePath(window.location.pathname);
+  const triagePreviewRoute = dataBoxPlusTriagePreviewActive(user) && path === DATA_BOX_PLUS_ROUTE;
+  syncDataBoxPlusTriageAssistantBoundary(path, user);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   const userDashboardRoutes = new Map(visibleDashboardRoutes(user).map((moduleItem) => [moduleItem.route, moduleItem]));
-  const sarlotaDeepLink = prepareSarlotaDeepLinkPanel();
+  const sarlotaDeepLink = triagePreviewRoute ? false : prepareSarlotaDeepLinkPanel();
 
   if (hasPermission(user, "feedback", "view")) {
     loadModuleFeedback({ render: true });
@@ -48660,6 +49089,16 @@ document.addEventListener("input", (event) => {
     return;
   }
 
+  const dataBoxPlusTriageSearch = event.target.closest("[data-ds-plus-triage-search]");
+  if (dataBoxPlusTriageSearch) {
+    const start = dataBoxPlusTriageSearch.selectionStart;
+    const end = dataBoxPlusTriageSearch.selectionEnd;
+    dataBoxPlusState.triageSearch = dataBoxPlusTriageSearch.value || "";
+    render();
+    restoreDataBoxPlusInputFocus("[data-ds-plus-triage-search]", start, end);
+    return;
+  }
+
   const dataBoxPlusSearch = event.target.closest("[data-ds-plus-search]");
   if (dataBoxPlusSearch) {
     const start = dataBoxPlusSearch.selectionStart;
@@ -49128,6 +49567,75 @@ document.addEventListener("click", async (event) => {
   if (mainDashboardRefresh) {
     event.preventDefault();
     await loadVehicleTrackingStatus({ force: true });
+    return;
+  }
+
+  const dataBoxPlusTriageMailbox = event.target.closest("[data-ds-plus-triage-mailbox]");
+  if (dataBoxPlusTriageMailbox) {
+    event.preventDefault();
+    dataBoxPlusState.triageMailboxId = dataBoxPlusTriageMailbox.dataset.dsPlusTriageMailbox || "";
+    dataBoxPlusState.triageQueue = "todo";
+    dataBoxPlusState.triageSearch = "";
+    dataBoxPlusState.triageSelectedMessageId = "";
+    dataBoxPlusState.triageDetailError = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusTriageBack = event.target.closest("[data-ds-plus-triage-back-mailboxes]");
+  if (dataBoxPlusTriageBack) {
+    event.preventDefault();
+    dataBoxPlusState.triageMailboxId = "";
+    dataBoxPlusState.triageQueue = "todo";
+    dataBoxPlusState.triageSearch = "";
+    dataBoxPlusState.triageSelectedMessageId = "";
+    dataBoxPlusState.triageDetailError = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusTriageQueue = event.target.closest("[data-ds-plus-triage-queue]");
+  if (dataBoxPlusTriageQueue) {
+    event.preventDefault();
+    dataBoxPlusState.triageQueue = dataBoxPlusTriageQueue.dataset.dsPlusTriageQueue || "todo";
+    dataBoxPlusState.triageSelectedMessageId = "";
+    dataBoxPlusState.triageDetailError = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusTriageOpen = event.target.closest("[data-ds-plus-triage-open]");
+  if (dataBoxPlusTriageOpen) {
+    event.preventDefault();
+    const messageId = dataBoxPlusTriageOpen.dataset.dsPlusTriageOpen || "";
+    dataBoxPlusState.triageSelectedMessageId = messageId;
+    dataBoxPlusState.triageReturnMessageId = messageId;
+    dataBoxPlusState.triageDetailError = "";
+    dataBoxPlusState.notice = "";
+    const detailLoaded = await loadDataBoxPlusMessageDetail(messageId);
+    if (!detailLoaded) {
+      dataBoxPlusState.triageSelectedMessageId = "";
+      dataBoxPlusState.triageDetailError = dataBoxPlusState.notice || "Detail zprávy se teď nepodařilo načíst.";
+      render();
+      requestAnimationFrame(() => document.querySelector(`[data-ds-plus-triage-open="${CSS.escape(messageId)}"]`)?.focus());
+      return;
+    }
+    render();
+    requestAnimationFrame(() => document.querySelector("[data-ds-plus-triage-close-button]")?.focus());
+    return;
+  }
+
+  const dataBoxPlusTriageClose = event.target.closest("[data-ds-plus-triage-close]");
+  if (dataBoxPlusTriageClose) {
+    event.preventDefault();
+    const returnMessageId = dataBoxPlusState.triageReturnMessageId;
+    dataBoxPlusState.triageSelectedMessageId = "";
+    dataBoxPlusState.triageDetailError = "";
+    render();
+    requestAnimationFrame(() => {
+      if (!returnMessageId) return;
+      document.querySelector(`[data-ds-plus-triage-open="${CSS.escape(returnMessageId)}"]`)?.focus();
+    });
     return;
   }
 
@@ -51121,6 +51629,49 @@ document.addEventListener("keydown", (event) => {
   if (dataBoxPlusInstructionInput && event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
     dataBoxPlusInstructionInput.closest("form")?.requestSubmit();
+    return;
+  }
+  if (event.key === "Tab" && dataBoxPlusState.triageSelectedMessageId) {
+    const dialog = document.querySelector(".ds-plus-triage-detail[role='dialog']");
+    if (!dialog) return;
+    const focusableElements = [...dialog.querySelectorAll(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+    )].filter((element) => {
+      const style = window.getComputedStyle(element);
+      return !element.hidden && style.display !== "none" && style.visibility !== "hidden";
+    });
+    if (!focusableElements.length) {
+      event.preventDefault();
+      return;
+    }
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    if (!dialog.contains(document.activeElement)) {
+      event.preventDefault();
+      (event.shiftKey ? lastElement : firstElement).focus();
+      return;
+    }
+    if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+      return;
+    }
+    if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+      return;
+    }
+  }
+  if (event.key === "Escape" && dataBoxPlusState.triageSelectedMessageId) {
+    event.preventDefault();
+    const returnMessageId = dataBoxPlusState.triageReturnMessageId;
+    dataBoxPlusState.triageSelectedMessageId = "";
+    dataBoxPlusState.triageDetailError = "";
+    render();
+    requestAnimationFrame(() => {
+      if (!returnMessageId) return;
+      document.querySelector(`[data-ds-plus-triage-open="${CSS.escape(returnMessageId)}"]`)?.focus();
+    });
     return;
   }
   if (event.key === "Escape" && dataBoxPlusState.chatMessageId) {

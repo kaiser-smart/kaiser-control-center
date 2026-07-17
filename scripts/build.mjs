@@ -16,7 +16,8 @@ const assetVersion = encodeURIComponent(buildVersion);
 
 function runtimeConfigModuleSource(env = process.env) {
   return `export const runtimeConfig = ${JSON.stringify({
-    googleMapsApiKey: env.VITE_GOOGLE_MAPS_API_KEY || ""
+    googleMapsApiKey: env.VITE_GOOGLE_MAPS_API_KEY || "",
+    dataBoxPlusTriagePreview: ["1", "true"].includes(String(env.DATA_BOX_PLUS_TRIAGE_PREVIEW || "").toLowerCase())
   }, null, 2)};\n`;
 }
 
