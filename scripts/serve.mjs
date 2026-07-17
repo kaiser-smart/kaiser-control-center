@@ -83,6 +83,7 @@ import {
 import { buildReceivablesVistosLedgerMapping } from "../functions/_lib/receivables-vistos-ledger-mapping.js";
 import { receivablesVistosInvoiceLookbackWindow } from "../functions/_lib/receivables-vistos-preview.js";
 import { calculateCustomerPaymentRating } from "../functions/_lib/receivables-rating-engine.js";
+import { buildCollectionDailyRouteDriverMap } from "../functions/_lib/collection-daily-route-map.js";
 import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-plus-store.js";
 import { targetForSelfRepairReport } from "../functions/_lib/self-repair-targets.js";
 import { vehicleTrackingMapsConfigPayload } from "../functions/api/vehicle-tracking/maps-config.js";
@@ -94,7 +95,9 @@ const publicRoot = path.join(root, requestedRoot);
 const preferredPort = Number(process.env.PORT || 5173);
 const devCookieName = "smart_odpady_dev_session";
 const devSessions = new Map();
-let mockUsers = DEFAULT_USERS.map((user) => ({ ...user }));
+let mockUsers = DEFAULT_USERS.map((user) => user.id === "pneumatiky-miroslav-vasek"
+  ? { ...user, email: "radim@nanolab.cz" }
+  : { ...user });
 let mockThemeSettings = normalizeThemeSettings(DEFAULT_THEME_SETTINGS);
 let mockAbsenceSettings = normalizeAbsenceSettings();
 let mockEmployeeCards = new Map();
@@ -4274,8 +4277,18 @@ function mockReceivablesRatingFixture() {
   return { customer, invoices, rating, package: pack };
 }
 
-function mockCollectionDailyRouteForDriver(user, options = {}) {
+const mockCollectionDailyRoutesByDriver = new Map();
+
+function mockCollectionDailyRouteKey(user, options = {}) {
+  return `${String(user?.id || "").trim()}|${options.scope === "test" ? "test" : "production"}`;
+}
+
+function ensureMockCollectionDailyRouteForDriver(user, options = {}) {
   const testScope = options.scope === "test";
+  const stateKey = mockCollectionDailyRouteKey(user, options);
+  if (mockCollectionDailyRoutesByDriver.has(stateKey)) {
+    return mockCollectionDailyRoutesByDriver.get(stateKey);
+  }
   const routeDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Prague",
     year: "numeric",
@@ -4327,7 +4340,7 @@ function mockCollectionDailyRouteForDriver(user, options = {}) {
     }
   ];
   const visibleStops = testScope ? stops.slice(0, 1) : stops;
-  return {
+  const route = {
     run: {
       id: testScope ? "local-driver-test-route" : "local-driver-route",
       scope: testScope ? "test" : "production",
@@ -4335,7 +4348,7 @@ function mockCollectionDailyRouteForDriver(user, options = {}) {
       title: testScope
         ? "IZOLOVANÝ TEST tabletu · Firma test 501 · bez jízdy"
         : "Lokální ověření Řidičského displeje",
-      status: "active",
+      status: testScope ? "confirmed" : "active",
       vehicleCode: testScope ? "FIELD" : "A",
       vehicleLabel: testScope ? "Stacionární TEST tabletu · bez jízdy" : "Vůz A · 3BN 3558",
       vehicleRegistration: testScope ? "" : "3BN 3558",
@@ -4349,12 +4362,64 @@ function mockCollectionDailyRouteForDriver(user, options = {}) {
         notificationsDisabled: true,
         vistosWritesDisabled: true,
         productionRouteWritesDisabled: true
-      } : {},
+      } : {
+        routeOptimization: {
+          provider: "here-tour-planning",
+          status: "completed",
+          runId: "local-here-optimization-completed",
+          appliedToRoute: true,
+          completedAt: "2026-07-17T08:00:00.000Z"
+        }
+      },
       summary: { plannedCount: visibleStops.length, doneCount: 0, problemCount: 0 }
     },
     stops: visibleStops,
     events: []
   };
+  route.driverMap = buildCollectionDailyRouteDriverMap(route.run, route.stops);
+  mockCollectionDailyRoutesByDriver.set(stateKey, route);
+  return route;
+}
+
+function mockCollectionDailyRouteForDriver(user, options = {}) {
+  return structuredClone(ensureMockCollectionDailyRouteForDriver(user, options));
+}
+
+function refreshMockCollectionDailyRouteSummary(route) {
+  const stops = Array.isArray(route?.stops) ? route.stops : [];
+  route.run.summary = {
+    plannedCount: stops.filter((stop) => stop.status === "planned").length,
+    doneCount: stops.filter((stop) => stop.status === "done").length,
+    problemCount: stops.filter((stop) => stop.status === "problem").length
+  };
+  route.driverMap = buildCollectionDailyRouteDriverMap(route.run, route.stops);
+}
+
+function appendMockCollectionDailyRouteEvent(route, user, input = {}) {
+  const event = {
+    id: `local-driver-event-${randomUUID()}`,
+    runId: route.run.id,
+    stopId: input.stopId || "",
+    eventType: input.eventType || "driver_action",
+    beforeStatus: input.beforeStatus || "",
+    afterStatus: input.afterStatus || "",
+    reason: input.reason || "",
+    note: input.note || "",
+    idempotencyKey: input.idempotencyKey || "",
+    actorUserId: user.id,
+    actorName: user.name || user.email || "Řidič",
+    createdAt: new Date().toISOString(),
+    payload: {
+      dataScope: route.run.scope,
+      localSimulation: true,
+      externalEffectsDisabled: true,
+      notificationsDisabled: true,
+      vistosWritesDisabled: true,
+      productionRouteWritesDisabled: true
+    }
+  };
+  route.events.push(event);
+  return event;
 }
 
 async function handleApi(request, response) {
@@ -4463,6 +4528,151 @@ async function handleApi(request, response) {
     sendJson(response, 200, {
       route: mockCollectionDailyRouteForDriver(user, { scope: url.searchParams.get("scope") }),
       apiStatus: "ready"
+    });
+    return true;
+  }
+
+  const mockDailyRouteMapMatch = url.pathname.match(/^\/api\/collection-routes\/daily-routes\/([^/]+)\/map$/);
+  if (mockDailyRouteMapMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const scope = url.searchParams.get("scope") === "test" ? "test" : "production";
+    const route = ensureMockCollectionDailyRouteForDriver(user, { scope });
+    const runId = decodeURIComponent(mockDailyRouteMapMatch[1]);
+    if (route.run.id !== runId) {
+      sendJson(response, 404, { error: "Trasa nebyla nalezena." });
+      return true;
+    }
+    response.writeHead(200, {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
+    response.end(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420">
+        <rect width="960" height="420" fill="#edf1ec"/>
+        <path d="M-40 350 C180 250 310 315 510 190 S800 40 1010 105" fill="none" stroke="#ffffff" stroke-width="48"/>
+        <path d="M-40 350 C180 250 310 315 510 190 S800 40 1010 105" fill="none" stroke="#cfd6d0" stroke-width="3"/>
+        <path d="M170 -20 C210 120 390 150 430 440" fill="none" stroke="#ffffff" stroke-width="30"/>
+        <path d="M170 -20 C210 120 390 150 430 440" fill="none" stroke="#d5dbd5" stroke-width="2"/>
+        <g fill="#dce6d8"><rect x="45" y="60" width="110" height="62" rx="8"/><rect x="690" y="250" width="140" height="72" rx="8"/><rect x="520" y="45" width="120" height="60" rx="8"/></g>
+        <text x="24" y="400" fill="#6d786f" font-family="sans-serif" font-size="16">Lokální mapový podklad · bezpečná simulace</text>
+      </svg>
+    `);
+    return true;
+  }
+
+  const mockDailyRouteTransitionMatch = url.pathname.match(/^\/api\/collection-routes\/daily-routes\/([^/]+)\/transition$/);
+  if (mockDailyRouteTransitionMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const payload = await readJsonBody(request);
+    const scope = payload.scope === "test" ? "test" : "production";
+    const route = ensureMockCollectionDailyRouteForDriver(user, { scope });
+    const runId = decodeURIComponent(mockDailyRouteTransitionMatch[1]);
+    if (route.run.id !== runId) {
+      sendJson(response, 404, { error: "Trasa nebyla nalezena." });
+      return true;
+    }
+    const action = String(payload.action || "").trim().toLowerCase();
+    const beforeStatus = route.run.status;
+    if (action === "start" && route.run.status === "confirmed") {
+      route.run.status = "active";
+    } else if (action === "complete" && route.run.status === "active") {
+      route.run.status = "completed";
+    } else if (action === "reopen" && route.run.status === "completed") {
+      route.run.status = "confirmed";
+    } else {
+      sendJson(response, 400, { error: "Tento přechod stavu teď není povolený." });
+      return true;
+    }
+    appendMockCollectionDailyRouteEvent(route, user, {
+      eventType: `route_${action}`,
+      beforeStatus,
+      afterStatus: route.run.status,
+      idempotencyKey: String(payload.idempotencyKey || "")
+    });
+    refreshMockCollectionDailyRouteSummary(route);
+    sendJson(response, 200, {
+      route: structuredClone(route),
+      apiStatus: "ready",
+      mock: true
+    });
+    return true;
+  }
+
+  const mockDailyRouteStopEventMatch = url.pathname.match(/^\/api\/collection-routes\/daily-routes\/([^/]+)\/stops\/([^/]+)\/events$/);
+  if (mockDailyRouteStopEventMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    const payload = await readJsonBody(request);
+    const scope = payload.scope === "test" ? "test" : "production";
+    const route = ensureMockCollectionDailyRouteForDriver(user, { scope });
+    const runId = decodeURIComponent(mockDailyRouteStopEventMatch[1]);
+    const stopId = decodeURIComponent(mockDailyRouteStopEventMatch[2]);
+    if (route.run.id !== runId) {
+      sendJson(response, 404, { error: "Trasa nebyla nalezena." });
+      return true;
+    }
+    if (route.run.status !== "active") {
+      sendJson(response, 400, { error: "Akci lze uložit pouze na zahájené trase." });
+      return true;
+    }
+    const stop = route.stops.find((item) => item.id === stopId);
+    if (!stop) {
+      sendJson(response, 404, { error: "Zastávka nebyla nalezena." });
+      return true;
+    }
+    const idempotencyKey = String(payload.idempotencyKey || "").trim();
+    if (idempotencyKey && route.events.some((event) => event.idempotencyKey === idempotencyKey)) {
+      sendJson(response, 200, { route: structuredClone(route), apiStatus: "ready", mock: true });
+      return true;
+    }
+    const action = String(payload.action || "").trim().toLowerCase();
+    const beforeStatus = stop.status;
+    if (action === "done") {
+      stop.status = "done";
+    } else if (action === "problem") {
+      stop.status = "problem";
+    } else if (action !== "dump" && action !== "break") {
+      sendJson(response, 400, { error: "Neznámá řidičská akce." });
+      return true;
+    }
+    appendMockCollectionDailyRouteEvent(route, user, {
+      stopId,
+      eventType: `stop_${action}`,
+      beforeStatus,
+      afterStatus: stop.status,
+      reason: String(payload.reason || "").trim(),
+      note: String(payload.note || "").trim(),
+      idempotencyKey
+    });
+    refreshMockCollectionDailyRouteSummary(route);
+    sendJson(response, 200, {
+      route: structuredClone(route),
+      apiStatus: "ready",
+      mock: true
     });
     return true;
   }

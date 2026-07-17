@@ -7,6 +7,10 @@ import {
   calculateCollectionRoutesReadonlyPlan,
   COLLECTION_ROUTES_READONLY_CALCULATOR_VERSION
 } from "../../src/data/collectionRoutesReadonlyCalculator.js";
+import {
+  buildCollectionDailyRouteDriverMap,
+  matchCollectionDailyRouteHereOptimization
+} from "./collection-daily-route-map.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
@@ -792,10 +796,37 @@ async function loadStopRow(db, runId, stopId) {
   return row;
 }
 
+async function collectionDailyRouteHereCandidates(db, runRow) {
+  if (runDataScope(runRow) !== COLLECTION_DAILY_ROUTE_SCOPE_TEST) return [];
+  try {
+    const result = await db.prepare(`
+      SELECT id, status, provider, result_json, completed_at
+      FROM collection_route_here_runs
+      WHERE scope = 'test'
+        AND status = 'completed'
+        AND route_date = ?
+        AND source_batch_id = ?
+      ORDER BY completed_at DESC, updated_at DESC
+      LIMIT 20
+    `).bind(cleanString(runRow.route_date), cleanString(runRow.source_batch_id)).all();
+    return (result.results || []).map((row) => ({
+      id: cleanString(row.id),
+      status: cleanString(row.status),
+      provider: cleanString(row.provider),
+      result: parseJson(row.result_json, {}),
+      completedAt: cleanString(row.completed_at)
+    }));
+  } catch (error) {
+    if (/no such table[^\n]*collection_route_here_runs/i.test(cleanString(error?.message))) return [];
+    throw error;
+  }
+}
+
 async function detailFromRow(db, runRow) {
-  const [stopsResult, eventsResult] = await Promise.all([
+  const [stopsResult, eventsResult, hereCandidates] = await Promise.all([
     db.prepare(`SELECT * FROM collection_daily_route_stops WHERE run_id = ? ORDER BY route_order ASC`).bind(runRow.id).all(),
-    db.prepare(`SELECT * FROM collection_daily_route_events WHERE run_id = ? ORDER BY created_at DESC LIMIT 500`).bind(runRow.id).all()
+    db.prepare(`SELECT * FROM collection_daily_route_events WHERE run_id = ? ORDER BY created_at DESC LIMIT 500`).bind(runRow.id).all(),
+    collectionDailyRouteHereCandidates(db, runRow)
   ]);
   const stops = (stopsResult.results || []).map(rowToStop);
   const events = (eventsResult.results || []).map(rowToEvent);
@@ -805,7 +836,14 @@ async function detailFromRow(db, runRow) {
     problemCount: stops.filter((stop) => stop.status === "problem").length,
     eventCount: events.length
   };
-  return { run: rowToRun(runRow, summary), stops, events };
+  const run = rowToRun(runRow, summary);
+  const routeOptimization = matchCollectionDailyRouteHereOptimization(run, stops, hereCandidates);
+  return {
+    run,
+    stops,
+    events,
+    driverMap: buildCollectionDailyRouteDriverMap(run, stops, { routeOptimization })
+  };
 }
 
 function collectionDailyRouteStopInsertStatements(db, {

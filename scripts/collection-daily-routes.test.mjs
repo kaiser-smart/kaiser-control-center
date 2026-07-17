@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createSessionCookie } from "../functions/_lib/auth.js";
 import { onRequestGet as listDailyRoutesApi } from "../functions/api/collection-routes/daily-routes.js";
 import { onRequestGet as myDailyRouteApi } from "../functions/api/collection-routes/daily-routes/my.js";
+import { onRequestGet as driverRouteMapApi } from "../functions/api/collection-routes/daily-routes/[runId]/map.js";
 import { onRequestPost as stopEventApi } from "../functions/api/collection-routes/daily-routes/[runId]/stops/[stopId]/events.js";
 import { previewCollectionRoutesTestNotifications } from "../functions/_lib/collection-routes-test-notifications.js";
 import { confirmCollectionRoutesTestGps } from "../functions/_lib/collection-routes-test-gps-store.js";
@@ -689,10 +690,17 @@ const isolatedManager = {
   status: "active",
   active: true
 };
+const isolatedAdmin = {
+  id: "admin-isolated-test",
+  name: "Admin TEST",
+  role: "admin",
+  status: "active",
+  active: true
+};
 const isolatedEnv = {
   SMART_ODPADY_DB: new D1Database(isolatedProductionSqlite),
   COLLECTION_ROUTES_TEST_DB: new D1Database(isolatedTestSqlite),
-  AUTH_USERS_JSON: JSON.stringify([miroslav, foreignDriver, isolatedManager]),
+  AUTH_USERS_JSON: JSON.stringify([miroslav, foreignDriver, isolatedManager, isolatedAdmin]),
   AUTH_SESSION_SECRET: "isolated-driver-tablet-test-session-secret"
 };
 const seededRunId = "collection-daily-route-test-tablet-miroslav-vasek-20260717";
@@ -723,6 +731,10 @@ assert.equal(isolatedTestSqlite.prepare("SELECT address_text FROM collection_dai
 const myIsolatedTest = await getMyCollectionDailyRoute(isolatedEnv, miroslav, { scope: "test" });
 assert.equal(myIsolatedTest.run.id, seededRunId);
 assert.equal(myIsolatedTest.stops.length, 1);
+assert.equal(myIsolatedTest.driverMap.totalStopCount, 1);
+assert.equal(myIsolatedTest.driverMap.mappedStopCount, 1);
+assert.equal(myIsolatedTest.driverMap.points[0].current, true);
+assert.equal(myIsolatedTest.driverMap.ordering.mode, "current-order");
 assert.equal(await getMyCollectionDailyRoute(isolatedEnv, miroslav), null, "Produkční scope nesmí vrátit TEST záznam.");
 assert.equal(await getMyCollectionDailyRoute(isolatedEnv, foreignDriver, { scope: "test" }), null);
 await assert.rejects(
@@ -744,6 +756,76 @@ async function isolatedAuthenticatedRequest(url, user, init = {}) {
   const headers = new Headers(init.headers || {});
   headers.set("Cookie", cookie);
   return new Request(url, { ...init, headers });
+}
+
+const originalRouteMapFetch = globalThis.fetch;
+let routeMapProviderCalls = 0;
+globalThis.fetch = async (url) => {
+  routeMapProviderCalls += 1;
+  assert.equal(new URL(url).hostname, "image.maps.hereapi.com");
+  return new Response(new Uint8Array([137, 80, 78, 71]), {
+    status: 200,
+    headers: { "Content-Type": "image/png" }
+  });
+};
+try {
+  const mapEnv = { ...isolatedEnv, HERE_MAPS_API_KEY: "server-only-test-key" };
+  const ownMapResponse = await driverRouteMapApi({
+    request: await isolatedAuthenticatedRequest(
+      `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/map?scope=test`,
+      miroslav
+    ),
+    env: mapEnv,
+    params: { runId: seededRunId }
+  });
+  assert.equal(ownMapResponse.status, 200);
+  assert.equal(ownMapResponse.headers.get("Content-Type"), "image/png");
+  assert.equal(routeMapProviderCalls, 1);
+
+  for (const privilegedUser of [isolatedManager, isolatedAdmin]) {
+    const privilegedMapResponse = await driverRouteMapApi({
+      request: await isolatedAuthenticatedRequest(
+        `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/map?scope=test`,
+        privilegedUser
+      ),
+      env: mapEnv,
+      params: { runId: seededRunId }
+    });
+    assert.equal(privilegedMapResponse.status, 200, `${privilegedUser.role} musí zachovat správu TEST mapy.`);
+  }
+  assert.equal(routeMapProviderCalls, 3);
+
+  const foreignMapResponse = await driverRouteMapApi({
+    request: await isolatedAuthenticatedRequest(
+      `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/map?scope=test`,
+      foreignDriver
+    ),
+    env: mapEnv,
+    params: { runId: seededRunId }
+  });
+  assert.equal(foreignMapResponse.status, 404, "Cizí řidič nesmí zjistit ani existenci TEST mapy.");
+  assert.equal(routeMapProviderCalls, 3, "Cizí řidič nesmí vyvolat HERE požadavek pro cizí trasu.");
+
+  const productionScopeMapResponse = await driverRouteMapApi({
+    request: await isolatedAuthenticatedRequest(
+      `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/map`,
+      miroslav
+    ),
+    env: mapEnv,
+    params: { runId: seededRunId }
+  });
+  assert.equal(productionScopeMapResponse.status, 404, "Produkční scope nesmí načíst TEST mapu.");
+  assert.equal(routeMapProviderCalls, 3);
+
+  const anonymousMapResponse = await driverRouteMapApi({
+    request: new Request(`https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/map?scope=test`),
+    env: mapEnv,
+    params: { runId: seededRunId }
+  });
+  assert.equal(anonymousMapResponse.status, 401);
+  assert.equal(routeMapProviderCalls, 3);
+} finally {
+  globalThis.fetch = originalRouteMapFetch;
 }
 
 const miroslavTestApiResponse = await myDailyRouteApi({
