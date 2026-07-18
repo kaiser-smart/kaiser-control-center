@@ -47348,6 +47348,12 @@ function renderApp() {
     return;
   }
 
+  if (isCollectionRoutesDriverKioskUser(user) && collectionDriverBlackviewSimulatorRequested()) {
+    app.innerHTML = collectionDriverBlackviewSimulatorPage();
+    document.title = `Blackview simulátor | ${APP_NAME}`;
+    return;
+  }
+
   renderAuthenticatedApp(user);
 }
 
@@ -47411,14 +47417,64 @@ function applyUiSystemV2() {
   }
 }
 
+const COLLECTION_DRIVER_BLACKVIEW_SIMULATOR_DEVICE = "blackview";
+
+function collectionDriverBlackviewSimulatorRequested() {
+  if (normalizePath(window.location.pathname) !== COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE) {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).get("device") === COLLECTION_DRIVER_BLACKVIEW_SIMULATOR_DEVICE;
+}
+
+function collectionDriverBlackviewSimulatorFrameUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("device");
+  url.hash = "";
+  return `${url.pathname}${url.search}`;
+}
+
+function collectionDriverBlackviewSimulatorPage() {
+  const frameUrl = collectionDriverBlackviewSimulatorFrameUrl();
+  return `
+    <main class="collection-driver-blackview-simulator-shell" data-collection-driver-blackview-simulator>
+      <header>
+        <div>
+          <strong>Blackview Active 7 LTE · 11″</strong>
+          <span>Interaktivní řidičský displej · 960 × 600 CSS px · na šířku</span>
+        </div>
+        <a href="${escapeHtml(frameUrl)}">Otevřít bez simulace</a>
+      </header>
+      <div class="collection-driver-blackview-simulator-frame">
+        <iframe
+          src="${escapeHtml(frameUrl)}"
+          title="Řidičský displej Blackview Active 7 LTE"
+          width="960"
+          height="600"
+          loading="eager"
+          allow="camera; microphone; geolocation; fullscreen"
+          allowfullscreen
+          data-collection-driver-blackview-frame
+        ></iframe>
+      </div>
+    </main>
+  `;
+}
+
 function syncCollectionRoutesDriverKioskDocumentState() {
   const user = authState.user ? currentUser() : null;
+  const blackviewSimulatorActive = Boolean(
+    isCollectionRoutesDriverKioskUser(user)
+    && collectionDriverBlackviewSimulatorRequested()
+  );
   const active = Boolean(
     isCollectionRoutesDriverKioskUser(user)
     && isCollectionRoutesDriverKioskPath(window.location.pathname)
+    && !blackviewSimulatorActive
   );
   document.documentElement.classList.toggle("collection-driver-kiosk-active", active);
   document.body?.classList.toggle("collection-driver-kiosk-active", active);
+  document.documentElement.classList.toggle("collection-driver-blackview-simulator-active", blackviewSimulatorActive);
+  document.body?.classList.toggle("collection-driver-blackview-simulator-active", blackviewSimulatorActive);
 }
 
 function syncCollectionDailyDriverViewportDiagnostics() {

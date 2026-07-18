@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.592"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.593"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: trvalý interaktivní simulátor Blackview",
+    text: "Izolovaná TEST adresa s parametrem device=blackview zobrazí skutečný řidičský displej ve stabilním interaktivním rámci 960 × 600 CSS px. Simulace zůstává zachovaná i při ručním testování v pravém prohlížeči a nemění API, data ani ostré trasy."
+  },
   {
     title: "Svoz: skutečná HERE optimalizace celé přidělené trasy",
     text: "HERE Waypoints Sequence přepočítá pořadí až 200 čekajících stanovišť jednoho vozu podle silnic, živé dopravy a potvrzených rozměrů a hmotnosti. Hotové a problémové body zůstanou v historii, uložení má audit a přehled celé trasy kreslí silniční geometrii po úsecích místo přímých modrých spojnic. Potvrzený profil vozu zůstává bezpečně použitelný i při dočasně nedostupném cloudovém profilovém registru."
