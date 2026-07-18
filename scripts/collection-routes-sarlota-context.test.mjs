@@ -26,7 +26,8 @@ assert.match(memoryApiSource, /requireUserPermission\(env, request, "collection-
 assert.doesNotMatch(memoryApiSource, /requireUserPermission\(env, request, "dashboard", "view"\)/);
 assert.match(localServerSource, /"\/api\/ai\/collection-routes\/context"/);
 assert.match(localServerSource, /"\/api\/ai\/sarlota\/memory"/);
-assert.match(localServerSource, /@kaiser\\\.local\$\/i/);
+assert.match(localServerSource, /buildCollectionRoutesSarlotaContext\(\{\}, user, \{/);
+assert.doesNotMatch(localServerSource, /introAnnouncement:\s*`Ahoj Mirku\.[^`]*Svačinu máš\?/);
 
 function d1Database(sqlite) {
   return {
@@ -203,9 +204,17 @@ const routeDetail = {
     status: "active",
     title: "TEST trasa",
     routeDate: "2026-07-18",
+    driverUserId: miroslav.id,
+    vehicleCode: "B",
+    vehicleRegistration: "1BP 8373",
     vehicleLabel: "Míra · 1BP 8373",
     summary: { plannedCount: 2, doneCount: 1, problemCount: 0 },
-    metadata: { physicalTesterName: "Tomáš Gaží" }
+    metadata: {
+      physicalTesterName: "Tomáš Gaží",
+      crewUserIds: [miroslav.id, manager.id],
+      plannedStartAt: "2026-07-18T06:00:00+02:00",
+      plannedEndAt: "2026-07-18T14:00:00+02:00"
+    }
   },
   stops: [
     { id: "stop-1", routeOrder: 1, status: "planned", customerName: "Firma 1", addressText: "Trnkova 1", wasteType: "SKO" },
@@ -223,20 +232,37 @@ const context = await buildCollectionRoutesSarlotaContext({}, miroslav, {
       vehicles: [{ vehicleId: "v-1", displayName: "Míra", spz: "1BP 8373", type: "svoz" }]
     }
   },
-  weatherOverride: { verified: true, summary: "Brno: 24 °C, jasno" },
+  weatherOverride: {
+    status: "verified",
+    verified: true,
+    summary: "Brno: 24 °C, jasno. Během směny bez výrazného počasí.",
+    hazards: [],
+    forecast: { horizonHours: 12 }
+  },
   newsOverride: readyNews,
   availabilityOverride: [],
   memoryOverride: memory
 });
 assert.equal(context.route.id, "route-miroslav");
+assert.equal(context.route.totalCount, 2);
+assert.equal(context.route.driverVerified, true);
 assert.equal(context.route.currentStop.customerName, "Firma 1");
 assert.equal(context.route.followingStop.customerName, "Firma 2");
+assert.equal(context.vehicle.status, "verified");
+assert.equal(context.vehicle.registration, "1BP 8373");
+assert.equal(context.crew.verified, true);
+assert.deepEqual(context.crew.members.map((item) => item.name), ["Miroslav Vašek", "Jan Vedoucí"]);
+assert.equal(context.schedule.verified, true);
+assert.equal(context.readiness.canOperate, true);
+assert.deepEqual(context.readiness.blockers, []);
 assert.equal(context.vehicles.verified, true);
 assert.equal(context.news.status, "ready");
 assert.equal(context.news.source, "iROZHLAS");
 assert.equal(context.news.items.length, 3);
-assert.match(context.introAnnouncement, /Ahoj Mirku\./);
-assert.match(context.introAnnouncement, /Svačinu máš/);
+assert.match(context.introAnnouncement, /Ahoj Mirku, ahoj posádko\./);
+assert.match(context.introAnnouncement, /TEST trasa, 2 stanoviště/);
+assert.match(context.introAnnouncement, /Vozidlo Míra · 1BP 8373 sedí s denní trasou/);
+assert.match(context.introAnnouncement, /můžeme vyrazit|Můžeme vyrazit/);
 assert.equal(JSON.stringify(context).includes("Tomáš Gaží"), false, "Fyzický TESTER nesmí vstoupit do hlasového kontextu řidiče.");
 assert.deepEqual(context.safety, {
   readOnlyContext: true,
@@ -245,6 +271,49 @@ assert.deepEqual(context.safety, {
   changesVistos: false,
   changesProductionRoute: false
 });
+
+const unconfirmedCrew = await buildCollectionRoutesSarlotaContext({}, miroslav, {
+  scope: "test",
+  detailOverride: {
+    ...routeDetail,
+    run: { ...routeDetail.run, status: "confirmed", metadata: {} }
+  },
+  usersOverride: [miroslav, manager],
+  vehiclesOverride: { payload: { vehiclesVerified: false } },
+  weatherOverride: { status: "unavailable", verified: false },
+  newsOverride: unavailableNews,
+  availabilityOverride: [],
+  memoryOverride: { available: true, consent: false, previouslySpoken: false, summary: "" }
+});
+assert.equal(unconfirmedCrew.crew.status, "unconfirmed");
+assert.equal(unconfirmedCrew.readiness.canStart, true, "Neznámá osádka a počasí jsou pravdivá varování, ne důvod vymyslet data nebo zablokovat TEST.");
+assert.ok(unconfirmedCrew.readiness.warnings.some((item) => item.code === "crew_unconfirmed"));
+assert.ok(unconfirmedCrew.readiness.warnings.some((item) => item.code === "weather_unavailable"));
+assert.doesNotMatch(unconfirmedCrew.introAnnouncement, /kluci|posádko/);
+
+const vehicleMismatch = await buildCollectionRoutesSarlotaContext({}, miroslav, {
+  scope: "production",
+  date: "2026-07-18",
+  detailOverride: {
+    ...routeDetail,
+    run: { ...routeDetail.run, scope: "production", status: "confirmed", metadata: {} }
+  },
+  usersOverride: [miroslav],
+  vehiclesOverride: {
+    payload: {
+      vehiclesVerified: true,
+      vehiclesCount: 1,
+      vehicles: [{ vehicleId: "v-2", displayName: "Kouba", spz: "3BN 3558", type: "svoz" }]
+    }
+  },
+  weatherOverride: { status: "verified", verified: true, summary: "Brno: 18 °C, jasno.", hazards: [] },
+  newsOverride: unavailableNews,
+  availabilityOverride: [],
+  memoryOverride: { available: true, consent: false, previouslySpoken: false, summary: "" }
+});
+assert.equal(vehicleMismatch.readiness.canStart, false);
+assert.ok(vehicleMismatch.readiness.blockers.some((item) => item.code === "vehicle_mismatch"));
+assert.match(vehicleMismatch.introAnnouncement, /trasu teď nemůžeme bezpečně zahájit/);
 
 await assert.rejects(
   () => buildCollectionRoutesSarlotaContext({}, { ...miroslav, id: "cizi", role: "readonly" }, {
@@ -261,7 +330,11 @@ await assert.rejects(
 const variables = await collectionRoutesContextVariables({}, miroslav, "/trasy-svozu/test", routeDetail);
 assert.equal(variables.collection_route_scope, "test");
 assert.equal(variables.collection_route_news_status, "test_override");
+assert.equal(variables.collection_route_total_count, "2");
+assert.equal(variables.collection_route_vehicle, "Míra · 1BP 8373");
+assert.equal(variables.collection_route_crew_status, "incomplete");
 assert.match(variables.current_module_context, /HERE truck navigation/);
+assert.match(variables.current_module_context, /"totalCount":2/);
 assert.doesNotMatch(variables.current_module_context, /Tomáš Gaží|physicalTesterName/);
 
 const toolSchema = ELEVENLABS_CLIENT_TOOL_SCHEMAS.find((item) => item.name === "get_collection_routes_context");

@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.34",
-  updatedAt: "18. 7. 2026 18:06",
-  updatedAtIso: "2026-07-18T18:06:00+02:00",
-  lastChange: "Čisté ukončení automatické Šarloty",
+  version: "1.35",
+  updatedAt: "18. 7. 2026 19:09",
+  updatedAtIso: "2026-07-18T19:09:55+02:00",
+  lastChange: "Ověřený start směny se Šarlotou",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -30,7 +30,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     },
     {
       title: "Šarlota čte, člověk potvrzuje",
-      text: "Řidičská Šarlota načítá pouze vlastní trasu a omezený ověřený pracovní kontext včetně nejvýše tří titulků z oficiálního RSS iROZHLAS. Paměť je dobrovolná a ukládá jen pracovní témata; každý provozní zápis dál vyžaduje fyzické potvrzení."
+      text: "Před startem backend znovu ověří přihlášeného řidiče, datum a vozidlo vlastní trasy. Neznámou osádku nebo počasí přizná bez domýšlení. Paměť je dobrovolná a ukládá jen pracovní témata; každý provozní zápis dál vyžaduje fyzické potvrzení."
     }
   ],
   sources: [
@@ -221,7 +221,7 @@ Hlasová Šarlota je samostatná přátelská konverzační asistentka. Po fyzic
 
 Když automaticky spuštěná Šarlota mluví, poslouchá nebo přemýšlí, Řidičský displej místo technického obrazu mikrofonu ukáže kompaktní holografickou Šarlotu. Hologram nezakrývá navigační pokyn ani mapové ovládání, zachovává dostupné ukončení hlasu a respektuje omezení animací zařízení. Mikrofonový panel se zobrazí pouze po ručním ZAPNOUT ŠARLOTU; první systémová žádost prohlížeče o povolení mikrofonu zůstává pravdivě viditelná. Blackview simulátor vykreslí hologram jen uvnitř skutečného řidičského displeje, nikdy současně také v obalovém náhledu.
 
-Řidič potvrzuje převzetí dnešní trasy a volbu pracovní paměti v jednom okně a jedním finálním klepnutím. Pokud paměť výslovně nezaškrtne, nezapne se ani se nic neuloží; již povolená paměť zůstává viditelně zapnutá a její smazání je samostatný krok. Potom se zvuk tabletu připraví ve stejném uživatelském gestu, načte se oprávněný read-only kontext trasy a Šarlota přes ElevenLabs zahájí úvodní přivítání i navazující rozhovor. Automaticky zahájená relace místo mikrofonového panelu po celou dobu ukazuje holografickou Šarlotu se stavy Mluvím, Poslouchám a Přemýšlím; mikrofonový panel se ukáže jen při ručním ZAPNOUT ŠARLOTU. Technický mikrofonový vstup je při obou rozhovorech aktivní a první systémovou žádost prohlížeče o oprávnění nelze skrýt. Pokud kontext, mikrofon, signed URL, WebSocket nebo audio selže, tablet zobrazí pravdivou chybu a nesmí použít systémové TTS ani předstírat přehrání.
+Řidič potvrzuje převzetí dnešní trasy a volbu pracovní paměti v jednom okně a jedním finálním klepnutím. Okno předem ukazuje backendem ověřeného řidiče, vozidlo, počet stanovišť, pravdivý stav osádky a počasí pro následující směnu. Těsně před zápisem backend znovu ověří vlastní přiřazení, datum a vozidlo; rozpor start zablokuje. Neznámá osádka, plánovaný konec nebo nedostupné počasí zůstávají viditelným varováním a nesmějí se nahradit odhadem. Pokud paměť výslovně nezaškrtne, nezapne se ani se nic neuloží; již povolená paměť zůstává viditelně zapnutá a její smazání je samostatný krok. Potom se zvuk tabletu připraví ve stejném uživatelském gestu, načte se oprávněný read-only kontext trasy a Šarlota přes ElevenLabs zahájí úvodní přivítání i navazující rozhovor. Automaticky zahájená relace místo mikrofonového panelu po celou dobu ukazuje holografickou Šarlotu se stavy Mluvím, Poslouchám a Přemýšlím; mikrofonový panel se ukáže jen při ručním ZAPNOUT ŠARLOTU. Technický mikrofonový vstup je při obou rozhovorech aktivní a první systémovou žádost prohlížeče o oprávnění nelze skrýt. Pokud kontext, mikrofon, signed URL, WebSocket nebo audio selže, tablet zobrazí pravdivou chybu a nesmí použít systémové TTS ani předstírat přehrání.
 
 Šarlota smí podle oprávnění načítat dnešní trasu, ověřený seznam a přiřazení vozidel, aktuální počasí, firemní adresář v rozsahu jméno, příjmení, funkce a schválený služební telefon a e-mail, dostupnost a dovolenou bez soukromého nebo zdravotního důvodu a ověřenou organizační vazbu nadřízeného. Stručný přehled zpráv načítá výhradně z oficiálního RSS iROZHLAS; smí říct nejvýše tři přesné titulky se zdrojem a časem načtení. Neoficiální scraping, přebírání popisů a předčítání celých článků je zakázané.
 

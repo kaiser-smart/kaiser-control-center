@@ -193,7 +193,12 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
       actorUserId: cleanString(user?.id),
       actorName: cleanString(user?.name || user?.email),
       vehicle: cleanString(route.vehicleLabel),
+      assignedVehicle: context.vehicle,
       vehiclesVerified: context.vehicles.verified,
+      crew: context.crew,
+      schedule: context.schedule,
+      readiness: context.readiness,
+      totalCount: Number(route.totalCount || 0),
       plannedCount: Number(route.plannedCount || 0),
       doneCount: Number(route.doneCount || 0),
       problemCount: Number(route.problemCount || 0),
@@ -207,6 +212,19 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
     intro_announcement: context.introAnnouncement,
     collection_route_scope: scope,
     collection_route_status: cleanString(route.status || "none"),
+    collection_route_title: cleanString(route.title),
+    collection_route_total_count: String(Number(route.totalCount || 0)),
+    collection_route_remaining_count: String(Number(route.plannedCount || 0)),
+    collection_route_vehicle: cleanString(context.vehicle?.label),
+    collection_route_vehicle_status: cleanString(context.vehicle?.status || "missing"),
+    collection_route_crew_status: cleanString(context.crew?.status || "unconfirmed"),
+    collection_route_crew: context.crew?.verified
+      ? context.crew.members.map((member) => cleanString(member.name)).filter(Boolean).join(", ")
+      : "",
+    collection_route_start_ready: context.readiness?.canStart ? "ano" : "ne",
+    collection_route_start_blockers: Array.isArray(context.readiness?.blockers)
+      ? context.readiness.blockers.map((item) => cleanString(item.message)).filter(Boolean).join(" | ")
+      : "",
     collection_route_current_stop: cleanString(route.currentStop?.customerName || route.currentStop?.stationName),
     collection_route_current_address: cleanString(route.currentStop?.address),
     collection_route_following_stop: cleanString(route.followingStop?.customerName || route.followingStop?.stationName),

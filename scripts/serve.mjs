@@ -90,6 +90,7 @@ import { targetForSelfRepairReport } from "../functions/_lib/self-repair-targets
 import { vehicleTrackingMapsConfigPayload } from "../functions/api/vehicle-tracking/maps-config.js";
 import { buildOrwiiFuelAnalytics } from "../functions/_lib/orwii-fuel-store.js";
 import { classifySarlotaMemoryTopics } from "../functions/_lib/sarlota-user-memory.js";
+import { buildCollectionRoutesSarlotaContext } from "../functions/_lib/collection-routes-sarlota-context.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -4441,98 +4442,53 @@ function saveMockSarlotaMemory(user, memory) {
 
 async function mockCollectionRoutesSarlotaContext(user, scope = "production") {
   const detail = mockCollectionDailyRouteForDriver(user, { scope });
-  const stops = Array.isArray(detail.stops) ? detail.stops : [];
-  const currentStop = stops.find((stop) => stop.status === "planned") || null;
-  const followingStop = currentStop
-    ? stops
-      .filter((stop) => stop.status === "planned" && Number(stop.routeOrder) > Number(currentStop.routeOrder))
-      .sort((left, right) => Number(left.routeOrder) - Number(right.routeOrder))[0] || null
-    : null;
   const date = detail.run.routeDate;
-  const availability = new Map(mockAbsenceRequests
+  const availability = mockAbsenceRequests
     .filter((item) => ["approved", "recorded"].includes(String(item.status || "")))
     .filter((item) => String(item.dateFrom || "") <= date && String(item.dateTo || "") >= date)
-    .map((item) => [String(item.employeeId || "").trim().toLowerCase(), {
-      status: String(item.type || "") === "vacation" ? "vacation" : "unavailable",
+    .map((item) => ({
+      employeeId: String(item.employeeId || "").trim(),
+      availability: String(item.type || "") === "vacation" ? "vacation" : "unavailable",
       label: String(item.type || "") === "vacation" ? "Dovolená" : "Mimo pracoviště",
       dateFrom: String(item.dateFrom || ""),
       dateTo: String(item.dateTo || "")
-    }]));
-  const activeUsers = mockUsers.filter((item) => item.status === "active" && item.active !== false);
-  const usersById = new Map(activeUsers.map((item) => [String(item.id || "").trim().toLowerCase(), item]));
-  const directory = activeUsers.slice(0, 120).map((item) => {
-    const manager = usersById.get(String(item.managerId || "").trim().toLowerCase());
-    return {
-      id: item.id,
-      name: item.name || "",
-      workEmail: /@kaiser\.local$/i.test(String(item.email || "")) ? "" : item.email || "",
-      workPhone: item.phone || "",
-      function: item.position || roleLabel(item.role),
-      manager: manager ? { id: manager.id, name: manager.name || "" } : null,
-      availability: availability.get(String(item.id || "").trim().toLowerCase()) || {
-        status: "available",
-        label: "V práci",
-        dateFrom: "",
-        dateTo: ""
-      }
-    };
-  });
+    }));
   const memory = mockSarlotaMemoryForUser(user);
   const news = await currentSarlotaNews();
-  return {
-    actor: { id: user.id, name: user.name || "", role: user.role },
-    scope: scope === "test" ? "test" : "production",
+  const vehicles = detail.run.vehicleRegistration
+    ? [{
+      vehicleId: `local-${detail.run.vehicleCode || "vehicle"}`,
+      displayName: detail.run.vehicleLabel,
+      spz: detail.run.vehicleRegistration,
+      type: "svoz"
+    }]
+    : [];
+  const context = await buildCollectionRoutesSarlotaContext({}, user, {
+    scope,
     date,
-    route: {
-      assigned: true,
-      id: detail.run.id,
-      scope: detail.run.scope,
-      status: detail.run.status,
-      title: detail.run.title,
-      routeDate: detail.run.routeDate,
-      vehicleLabel: detail.run.vehicleLabel,
-      plannedCount: Number(detail.run.summary?.plannedCount || 0),
-      doneCount: Number(detail.run.summary?.doneCount || 0),
-      problemCount: Number(detail.run.summary?.problemCount || 0),
-      currentStop: currentStop ? {
-        id: currentStop.id,
-        order: Number(currentStop.routeOrder || 0),
-        customerName: currentStop.customerName || "",
-        stationName: currentStop.stationName || "",
-        address: currentStop.addressText || "",
-        wasteType: currentStop.wasteType || ""
-      } : null,
-      followingStop: followingStop ? {
-        id: followingStop.id,
-        order: Number(followingStop.routeOrder || 0),
-        customerName: followingStop.customerName || "",
-        stationName: followingStop.stationName || "",
-        address: followingStop.addressText || ""
-      } : null
+    detailOverride: detail,
+    usersOverride: mockUsers,
+    vehiclesOverride: {
+      payload: {
+        vehiclesVerified: true,
+        vehiclesCount: vehicles.length,
+        vehicles
+      }
     },
-    vehicles: { verified: true, count: 0, items: [], fallbackQuestion: "" },
-    weather: {
+    weatherOverride: {
       verified: true,
       simulated: true,
       source: "local-test-simulation",
       status: "ready",
-      summary: "Simulované počasí pro Brno: 24 °C, jasno"
+      summary: "Simulované počasí pro Brno: 24 °C, jasno. Během směny bez výrazného počasí.",
+      hazards: [],
+      forecast: { horizonHours: 12 }
     },
-    directory,
-    directoryPolicy: "Pouze jméno, pracovní kontakt, funkce, nadřízený a bezpečný stav dostupnosti.",
-    news,
-    memory,
-    introAnnouncement: `Ahoj Mirku. Dnešní trasu mám načtenou. Svačinu máš? Simulované počasí pro Brno: 24 °C, jasno. Budu hlídat trasu, počasí a hlášení.`,
-    safety: {
-      readOnlyContext: true,
-      requiresPhysicalConfirmationForWrites: true,
-      sendsNotifications: false,
-      changesVistos: false,
-      changesProductionRoute: false
-    },
-    localSimulation: true,
-    apiStatus: "ready"
-  };
+    availabilityOverride: availability,
+    memoryOverride: memory,
+    newsOverride: news
+  });
+  return { ...context, localSimulation: true };
 }
 
 function refreshMockCollectionDailyRouteSummary(route) {

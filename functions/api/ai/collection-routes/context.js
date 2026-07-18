@@ -22,9 +22,16 @@ export async function onRequestGet({ request, env }) {
       input: { scope: context.scope, date: context.date },
       result: {
         routeAssigned: context.route.assigned,
+        routeCanStart: context.readiness.canStart,
+        routeBlockerCount: context.readiness.blockers.length,
+        routeWarningCount: context.readiness.warnings.length,
+        crewVerified: context.crew.verified,
+        assignedVehicleStatus: context.vehicle.status,
         vehiclesVerified: context.vehicles.verified,
         directoryCount: context.directory.length,
         memoryConsent: context.memory.consent,
+        weatherStatus: context.weather.status,
+        weatherHazardCount: Array.isArray(context.weather.hazards) ? context.weather.hazards.length : 0,
         newsStatus: context.news.status,
         newsItemCount: context.news.items.length
       },

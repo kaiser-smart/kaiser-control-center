@@ -63,7 +63,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.1";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.34";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.35";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -24055,15 +24055,34 @@ function collectionDailyDriverPanel(detail, currentStop, visibleStops, remaining
   const close = `<button type="button" class="collection-daily-driver-modal__close" data-collection-driver-panel-close aria-label="Zavřít">ZAVŘÍT</button>`;
   if (panel === "route-confirmation") {
     const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory || {};
+    const context = collectionRoutesPilotState.myDailyRouteSarlotaContext || {};
+    const readiness = context.readiness || {};
+    const crew = context.crew || {};
+    const vehicle = context.vehicle || {};
+    const weather = context.weather || {};
     const memoryConsent = memory.consent === true;
     const memoryAvailable = memory.available === true;
     const stopCount = Array.isArray(detail?.stops) ? detail.stops.length : 0;
+    const routeCanStart = readiness.canStart === true;
+    const blockers = Array.isArray(readiness.blockers) ? readiness.blockers : [];
+    const warnings = Array.isArray(readiness.warnings) ? readiness.warnings : [];
+    const crewLabel = crew.verified && Array.isArray(crew.members) && crew.members.length
+      ? crew.members.map((member) => member.name).filter(Boolean).join(", ")
+      : "Zatím nepotvrzená";
+    const weatherLabel = weather.verified && weather.summary
+      ? weather.summary
+      : "Počasí se teď nepodařilo ověřit";
+    const validationFeedback = blockers.length
+      ? `<div class="collection-daily-driver-route-confirmation__feedback is-blocking" role="alert"><strong>TRASU TEĎ NELZE ZAHÁJIT</strong>${blockers.map((item) => `<span>${escapeHtml(item.message || "Údaj trasy se neshoduje.")}</span>`).join("")}</div>`
+      : warnings.length
+        ? `<div class="collection-daily-driver-route-confirmation__feedback" role="status"><strong>CO ZATÍM NENÍ POTVRZENÉ</strong>${warnings.slice(0, 3).map((item) => `<span>${escapeHtml(item.message || "Dílčí údaj není dostupný.")}</span>`).join("")}</div>`
+        : "";
     const memoryChoice = memoryConsent
       ? `<div class="collection-daily-driver-route-confirmation__memory is-enabled"><strong>Pracovní paměť je zapnutá</strong><span>Šarlota může navázat na stručná pracovní témata. Zvuk ani celý přepis se neukládá.</span><small>Vypnutí a smazání zůstává samostatně v nastavení paměti po zahájení trasy.</small></div>`
       : memoryAvailable
         ? `<label class="collection-daily-driver-route-confirmation__memory"><input type="checkbox" name="useMemory" value="yes"><span><strong>Zapnout pracovní paměť Šarloty</strong><small>Uloží se jen stručná pracovní témata, například trasa, počasí nebo výsyp. Zvuk, celý přepis ani soukromé údaje se neukládají.</small></span></label><p class="collection-daily-driver-route-confirmation__memory-note">Když volbu nezaškrtneš, Šarlota se spustí bez paměti.</p>`
         : `<div class="collection-daily-driver-route-confirmation__memory is-unavailable"><strong>Pracovní paměť teď není dostupná</strong><span>Trasu můžeš potvrdit a Šarlota se spustí bez ní.</span></div>`;
-    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-route-confirmation-title"><section><header><div><span>DNEŠNÍ TRASA · JEDEN KROK</span><h2 id="collection-driver-route-confirmation-title">Potvrdit a zahájit trasu</h2><p>${escapeHtml(run.title || vehicleLabel)} · ${escapeHtml(vehicleLabel)}</p></div>${close}</header>${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}<form class="collection-daily-driver-route-confirmation" data-collection-driver-route-confirmation-form><div class="collection-daily-driver-route-confirmation__summary"><article><span>STANOVIŠTĚ</span><strong>${escapeHtml(stopCount)}</strong></article><article><span>PO STARTU</span><strong>MAPA + ŠARLOTA</strong></article></div>${memoryChoice}<button class="primary-action" type="submit" ${pending ? "disabled" : ""}>${pending ? "PŘIPRAVUJI…" : testScope ? "POTVRDIT A ZAHÁJIT TEST" : "POTVRDIT A ZAHÁJIT TRASU"}</button><small class="collection-daily-driver-route-confirmation__safety">Toto klepnutí zahájí přidělenou trasu. Šarlota nic dalšího sama neuloží ani neodešle.</small></form></section></div>`;
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-route-confirmation-title"><section><header><div><span>DNEŠNÍ TRASA · JEDEN KROK</span><h2 id="collection-driver-route-confirmation-title">Potvrdit a zahájit trasu</h2><p>${escapeHtml(run.title || vehicleLabel)} · ${escapeHtml(vehicleLabel)}</p></div>${close}</header>${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}<form class="collection-daily-driver-route-confirmation" data-collection-driver-route-confirmation-form><div class="collection-daily-driver-route-confirmation__summary"><article><span>ŘIDIČ</span><strong>${escapeHtml(context.actor?.name || run.driverName || "Neověřený")}</strong></article><article><span>VOZIDLO</span><strong>${escapeHtml(vehicle.label || vehicleLabel || "Nepřiřazené")}</strong></article><article><span>STANOVIŠTĚ</span><strong>${escapeHtml(stopCount)}</strong></article><article><span>OSÁDKA</span><strong>${escapeHtml(crewLabel)}</strong></article><article class="is-wide"><span>POČASÍ PRO SMĚNU</span><strong>${escapeHtml(weatherLabel)}</strong></article></div>${validationFeedback}${memoryChoice}<button class="primary-action" type="submit" ${pending || !routeCanStart ? "disabled" : ""}>${pending ? "PŘIPRAVUJI…" : testScope ? "POTVRDIT A ZAHÁJIT TEST" : "POTVRDIT A ZAHÁJIT TRASU"}</button><small class="collection-daily-driver-route-confirmation__safety">Toto klepnutí zahájí pouze tvoji přidělenou trasu a zvolenou pracovní paměť. Šarlota nic dalšího sama neuloží ani neodešle.</small></form></section></div>`;
   }
   if (panel === "sarlota-memory") {
     const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory || {};
@@ -41163,8 +41182,17 @@ async function confirmAndStartMyCollectionDailyRoute(form) {
   const run = collectionRoutesPilotState.myDailyRoute?.run;
   if (!run?.id || run.status !== "confirmed" || collectionRoutesPilotState.myDailyRoutePending) return;
   void elevenLabsAssistant.unlockVoiceAudio?.();
+  const requestedMemory = Boolean(form?.elements?.useMemory?.checked);
+  const context = await loadCollectionRoutesSarlotaContext();
+  if (!context) return;
+  if (context.readiness?.canStart !== true) {
+    const blocker = Array.isArray(context.readiness?.blockers) ? context.readiness.blockers[0] : null;
+    collectionRoutesPilotState.myDailyRouteError = blocker?.message || "Dnešní trasu se nepodařilo bezpečně ověřit. Trasa nebyla zahájená.";
+    render();
+    return;
+  }
   const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory || {};
-  const useMemory = memory.consent === true || Boolean(form?.elements?.useMemory?.checked);
+  const useMemory = memory.consent === true || requestedMemory;
 
   if (useMemory && memory.consent !== true) {
     collectionRoutesPilotState.myDailyRoutePending = "sarlota-memory";
