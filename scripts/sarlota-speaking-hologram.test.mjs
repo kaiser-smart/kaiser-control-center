@@ -17,9 +17,36 @@ const speakingHtml = AiAssistantLauncher({
 
 assert.match(speakingHtml, /ai-sarlota-speaking-hologram/);
 assert.match(speakingHtml, /sarlota-hologram-driver\.webp/);
-assert.match(speakingHtml, /Šarlota mluví/);
+assert.match(speakingHtml, /Šarlota · Mluvím/);
 assert.match(speakingHtml, /data-ai-stop-voice/);
 assert.doesNotMatch(speakingHtml, /Mikrofon|Zobrazit Šarlotu/);
+
+const automaticListeningHtml = AiAssistantLauncher({
+  visible: true,
+  voiceActive: true,
+  voiceUiState: "listening",
+  voiceStatus: "Poslouchám…",
+  isListening: true,
+  speakingHologram: true,
+  hologramPath: sarlota.hologramPath,
+  assistantName: sarlota.name
+});
+
+assert.match(automaticListeningHtml, /ai-sarlota-speaking-hologram/);
+assert.match(automaticListeningHtml, /Šarlota · Poslouchám/);
+assert.doesNotMatch(automaticListeningHtml, /Mikrofon|ai-assistant-voice-dock/);
+
+const automaticProcessingHtml = AiAssistantLauncher({
+  visible: true,
+  voiceActive: true,
+  voiceUiState: "processing",
+  speakingHologram: true,
+  hologramPath: sarlota.hologramPath,
+  assistantName: sarlota.name
+});
+
+assert.match(automaticProcessingHtml, /Šarlota · Přemýšlím/);
+assert.doesNotMatch(automaticProcessingHtml, /Mikrofon|ai-assistant-voice-dock/);
 
 const listeningHtml = AiAssistantLauncher({
   visible: true,
@@ -49,6 +76,7 @@ assert.match(appSource, /if \(collectionDriverBlackviewSimulatorRequested\(\)\) 
 assert.match(appSource, /params\.get\("gps"\) === COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE/);
 assert.match(appSource, /params\.get\("sarlota"\) === "speaking"/);
 assert.match(appSource, /aiAssistantState\.voiceUiState === "assistantSpeaking"/);
+assert.match(appSource, /collectionRoutesPilotState\.myDailyRouteSarlotaAutoSession/);
 assert.match(appSource, /open: aiAssistantState\.chatOpen && !collectionRoutesSpeakingHologram/);
 assert.match(styleSource, /body:has\(\.collection-daily-driver-map\.is-fullscreen\) \.ai-sarlota-speaking-hologram/);
 assert.match(styleSource, /\.collection-driver-kiosk-active \.ai-sarlota-speaking-hologram/);
