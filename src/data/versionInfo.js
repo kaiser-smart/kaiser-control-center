@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.605"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.606"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Samoopravy: hodinová kontrola znovu pokrývá celou aplikaci",
+    text: "Monitor bezpečně zvládne současných 49 produkčních cest a build nově zastaví přidání další cesty dřív, než by překročila cloudový limit. Chyba uvádí skutečný počet cest; Codex, nasazení a e-mail zůstávají vypnuté."
+  },
   {
     title: "Šarlota: hologram při hlasové odpovědi",
     text: "Když Šarlota na řidičském tabletu přehrává úvod nebo odpověď, technickou plochu mikrofonu nahradí kompaktní animovaný hologram. Mikrofonní stav zůstává jen pro poslouchání, povolení a pravdivou chybu; mapa i ukončení hlasu zůstávají dostupné."

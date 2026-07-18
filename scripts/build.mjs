@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
 import { versionModuleImports } from "./version-module-imports.mjs";
 import { modules } from "../src/data/modules.js";
+import { selfRepairMonitorRouteCapacity } from "../functions/_lib/self-repair-monitor-config.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(root, "dist");
@@ -122,6 +123,14 @@ for (const entry of [
 
 const routeEntries = [...routeEntryByPath.values()];
 const routes = new Set(routeEntries.map((entry) => entry.path));
+const monitorCapacity = selfRepairMonitorRouteCapacity(routeEntries.length);
+
+if (!monitorCapacity.ok) {
+  throw new Error(
+    `Build zastaven: route manifest obsahuje ${monitorCapacity.routeCount} cest, ` +
+    `ale hodinový monitor bezpečně podporuje nejvýše ${monitorCapacity.maxRoutes}.`
+  );
+}
 
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
