@@ -1,4 +1,8 @@
 import { COLLECTION_DAILY_ROUTE_MAP_DEPOT } from "./collection-daily-route-map.js";
+import {
+  appendHereRoutingTruckProfile,
+  loadCollectionRouteVehicleProfile
+} from "./collection-route-vehicle-profiles.js";
 
 const HERE_ROUTING_BASE_URL = "https://router.hereapi.com/v8/routes";
 const FLEXIBLE_POLYLINE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -152,6 +156,88 @@ function appendSectionPoints(target, sectionPoints) {
   }
 }
 
+function vehicleNotice(payload = {}) {
+  const route = Array.isArray(payload?.routes) ? payload.routes[0] : null;
+  const notices = [
+    ...(Array.isArray(payload?.notices) ? payload.notices : []),
+    ...(Array.isArray(route?.notices) ? route.notices : []),
+    ...(Array.isArray(route?.sections) ? route.sections.flatMap((section) => Array.isArray(section?.notices) ? section.notices : []) : [])
+  ];
+  return notices.find((notice) => (
+    cleanString(notice?.severity).toLowerCase() === "critical"
+    && ["violatedVehicleRestriction", "currentWeightExceedsLimit", "violatedBlockedRoad"]
+      .includes(cleanString(notice?.code))
+  )) || null;
+}
+
+async function requestHereRoute(env, input = {}, options = {}) {
+  const apiKey = cleanString(env.HERE_MAPS_API_KEY);
+  if (!apiKey) {
+    throw new CollectionDailyRouteNavigationError(
+      "HERE navigace není na serveru nastavená.",
+      503,
+      "collection_daily_route_navigation_here_key_missing"
+    );
+  }
+  const profile = input.vehicleProfile || await loadCollectionRouteVehicleProfile(env, input.run || {});
+  const stationaryNoDrive = input?.run?.metadata?.stationaryNoDrive === true
+    || cleanString(input?.run?.vehicleCode).toUpperCase() === "FIELD";
+  if (!profile && !stationaryNoDrive) {
+    throw new CollectionDailyRouteNavigationError(
+      "Pro přidělený vůz chybí potvrzené rozměry a hmotnosti.",
+      409,
+      "collection_daily_route_navigation_vehicle_profile_missing"
+    );
+  }
+  const url = new URL(HERE_ROUTING_BASE_URL);
+  url.searchParams.set("transportMode", "truck");
+  url.searchParams.set("origin", `${input.origin.latitude},${input.origin.longitude}`);
+  url.searchParams.set("destination", `${input.destination.latitude},${input.destination.longitude}`);
+  for (const via of Array.isArray(input.via) ? input.via : []) {
+    url.searchParams.append("via", `${via.latitude},${via.longitude}`);
+  }
+  url.searchParams.set("return", input.actions ? "polyline,summary,actions,instructions" : "polyline,summary");
+  if (input.actions) url.searchParams.set("lang", "cs-CZ");
+  if (profile) appendHereRoutingTruckProfile(url.searchParams, profile);
+  url.searchParams.set("apiKey", apiKey);
+  const fetchImpl = options.fetchImpl || fetch;
+  let response;
+  try {
+    response = await fetchImpl(url.toString(), { headers: { Accept: "application/json" } });
+  } catch {
+    throw new CollectionDailyRouteNavigationError(
+      "HERE trasu se teď nepodařilo načíst.",
+      502,
+      "collection_daily_route_navigation_here_unreachable"
+    );
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new CollectionDailyRouteNavigationError(
+      "HERE trasu se teď nepodařilo vypočítat.",
+      502,
+      "collection_daily_route_navigation_here_failed"
+    );
+  }
+  const notice = vehicleNotice(payload);
+  if (notice) {
+    throw new CollectionDailyRouteNavigationError(
+      "HERE našel na trase kritické omezení pro rozměry nebo hmotnost vozu.",
+      409,
+      "collection_daily_route_navigation_vehicle_restriction"
+    );
+  }
+  const sections = Array.isArray(payload?.routes?.[0]?.sections) ? payload.routes[0].sections : [];
+  if (!sections.length) {
+    throw new CollectionDailyRouteNavigationError(
+      "HERE pro tento úsek nenašel trasu.",
+      404,
+      "collection_daily_route_navigation_route_missing"
+    );
+  }
+  return { sections, profile };
+}
+
 export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = {}, input = {}, options = {}) {
   const driverMap = detail?.driverMap || {};
   const liveLatitude = coordinate(input.originLatitude, -90, 90);
@@ -175,50 +261,12 @@ export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = 
       "collection_daily_route_navigation_coordinates_missing"
     );
   }
-  const apiKey = cleanString(env.HERE_MAPS_API_KEY);
-  if (!apiKey) {
-    throw new CollectionDailyRouteNavigationError(
-      "HERE navigace není na serveru nastavená.",
-      503,
-      "collection_daily_route_navigation_here_key_missing"
-    );
-  }
-  const url = new URL(HERE_ROUTING_BASE_URL);
-  url.searchParams.set("transportMode", "truck");
-  url.searchParams.set("origin", `${origin.latitude},${origin.longitude}`);
-  url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
-  url.searchParams.set("return", "polyline,summary,actions,instructions");
-  url.searchParams.set("lang", "cs-CZ");
-  url.searchParams.set("apiKey", apiKey);
-  const fetchImpl = options.fetchImpl || fetch;
-  let response;
-  try {
-    response = await fetchImpl(url.toString(), {
-      headers: { Accept: "application/json" }
-    });
-  } catch {
-    throw new CollectionDailyRouteNavigationError(
-      "HERE trasu se teď nepodařilo načíst.",
-      502,
-      "collection_daily_route_navigation_here_unreachable"
-    );
-  }
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new CollectionDailyRouteNavigationError(
-      "HERE trasu se teď nepodařilo vypočítat.",
-      502,
-      "collection_daily_route_navigation_here_failed"
-    );
-  }
-  const sections = Array.isArray(payload?.routes?.[0]?.sections) ? payload.routes[0].sections : [];
-  if (!sections.length) {
-    throw new CollectionDailyRouteNavigationError(
-      "HERE pro tento úsek nenašel trasu.",
-      404,
-      "collection_daily_route_navigation_route_missing"
-    );
-  }
+  const { sections, profile } = await requestHereRoute(env, {
+    run: detail?.run,
+    origin,
+    destination,
+    actions: true
+  }, options);
   const points = [];
   const maneuvers = [];
   let lengthMeters = 0;
@@ -264,6 +312,82 @@ export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = 
       durationSeconds: Math.round(durationSeconds)
     },
     maneuvers,
+    vehicleProfile: profile,
+    sendsNotifications: false,
+    writesRoute: false,
+    exposesApiKey: false
+  };
+}
+
+function overviewRoutePoints(detail = {}) {
+  const driverMap = detail?.driverMap || {};
+  const depot = pointFromMapItem(driverMap.depot || COLLECTION_DAILY_ROUTE_MAP_DEPOT);
+  const stops = (Array.isArray(driverMap.points) ? driverMap.points : [])
+    .slice()
+    .sort((left, right) => Number(left?.routeOrder) - Number(right?.routeOrder))
+    .map(pointFromMapItem)
+    .filter(Boolean);
+  return depot ? [depot, ...stops, depot] : [];
+}
+
+export async function buildCollectionDailyRouteOverviewGeometry(env = {}, detail = {}, options = {}) {
+  const coordinates = overviewRoutePoints(detail);
+  if (coordinates.length < 3) {
+    throw new CollectionDailyRouteNavigationError(
+      "Celá trasa nemá dost použitelných souřadnic.",
+      409,
+      "collection_daily_route_navigation_overview_coordinates_missing"
+    );
+  }
+  const profile = await loadCollectionRouteVehicleProfile(env, detail?.run || {});
+  if (!profile) {
+    throw new CollectionDailyRouteNavigationError(
+      "Pro přidělený vůz chybí potvrzené rozměry a hmotnosti.",
+      409,
+      "collection_daily_route_navigation_vehicle_profile_missing"
+    );
+  }
+  const points = [];
+  let lengthMeters = 0;
+  let durationSeconds = 0;
+  let providerCalls = 0;
+  const maxEdgesPerRequest = 40;
+  for (let startIndex = 0; startIndex < coordinates.length - 1; startIndex += maxEdgesPerRequest) {
+    const endIndex = Math.min(coordinates.length - 1, startIndex + maxEdgesPerRequest);
+    const { sections } = await requestHereRoute(env, {
+      run: detail?.run,
+      vehicleProfile: profile,
+      origin: coordinates[startIndex],
+      destination: coordinates[endIndex],
+      via: coordinates.slice(startIndex + 1, endIndex),
+      actions: false
+    }, options);
+    providerCalls += 1;
+    for (const section of sections) {
+      if (cleanString(section?.polyline)) {
+        appendSectionPoints(points, decodeHereFlexiblePolyline(section.polyline));
+      }
+      lengthMeters += Number(section?.summary?.length) || 0;
+      durationSeconds += Number(section?.summary?.duration) || 0;
+    }
+  }
+  if (points.length < 2) {
+    throw new CollectionDailyRouteNavigationError(
+      "HERE celá trasa nemá použitelnou silniční geometrii.",
+      502,
+      "collection_daily_route_navigation_overview_geometry_missing"
+    );
+  }
+  return {
+    provider: "here-routing-v8",
+    mode: "truck",
+    points,
+    summary: {
+      lengthMeters: Math.round(lengthMeters),
+      durationSeconds: Math.round(durationSeconds)
+    },
+    vehicleProfile: profile,
+    providerCalls,
     sendsNotifications: false,
     writesRoute: false,
     exposesApiKey: false
@@ -272,5 +396,7 @@ export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = 
 
 export const __test = {
   HERE_ROUTING_BASE_URL,
-  navigationPoint
+  navigationPoint,
+  overviewRoutePoints,
+  vehicleNotice
 };

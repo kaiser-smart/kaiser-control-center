@@ -61,7 +61,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.0";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.25";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.26";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -22488,6 +22488,7 @@ function collectionDailyRouteDriverMapPanel(detail, currentStop) {
       <div class="collection-daily-driver-map__primary-actions">
         <button type="button" class="${mapMode === "leg" ? "is-active" : ""}" data-collection-driver-map-mode="leg" ${currentStop ? "" : "disabled"}>AKTUÁLNÍ ÚSEK</button>
         <button type="button" class="${mapMode === "overview" ? "is-active" : ""}" data-collection-driver-map-mode="overview">CELÁ TRASA</button>
+        ${run.scope === "test" && ordering.mode !== "here-optimized" ? `<button type="button" class="collection-daily-driver-navigation-button" data-collection-driver-here-sequence ${collectionRoutesPilotState.myDailyRoutePending ? "disabled" : ""}>${collectionRoutesPilotState.myDailyRoutePending === "here-sequence" ? "HERE POČÍTÁ…" : "OPTIMALIZOVAT HERE"}</button>` : ""}
         ${currentStop ? `<button type="button" class="collection-daily-driver-navigation-button ${navigationActive ? "is-active" : ""}" data-collection-driver-navigation="${navigationActive ? "stop" : "start"}">${navigationActive ? "UKONČIT NAVIGACI" : "SPUSTIT NAVIGACI"}</button>` : ""}
         ${navigationHref ? `<a href="${escapeHtml(navigationHref)}" target="_blank" rel="noopener noreferrer" data-collection-driver-navigate>OTEVŘÍT EXTERNĚ</a>` : ""}
       </div>
@@ -22610,7 +22611,7 @@ function renderCollectionDailyDriverMapOverlay(routePoints = []) {
   runtime.svg.setAttribute("viewBox", `0 0 ${view.width} ${view.height}`);
   const mode = collectionRoutesPilotState.myDailyRouteMapMode === "overview" ? "overview" : "leg";
   const coordinates = mode === "overview"
-    ? [driverMap.depot, ...points].filter(Boolean)
+    ? routePoints
     : routePoints.length ? routePoints : collectionDailyDriverMapCoordinatesForMode(detail, mode);
   const projectedPath = coordinates
     .filter((point) => Number.isFinite(Number(point?.latitude)) && Number.isFinite(Number(point?.longitude)))
@@ -22706,8 +22707,29 @@ async function loadCollectionDailyDriverRoadGeometry() {
   const detail = collectionRoutesPilotState.myDailyRoute;
   const run = detail?.run;
   const mode = collectionRoutesPilotState.myDailyRouteMapMode === "overview" ? "overview" : "leg";
-  if (!run || mode !== "leg") {
+  if (!run) {
     renderCollectionDailyDriverMapOverlay([]);
+    return;
+  }
+  if (mode === "overview") {
+    const cacheKey = `${run.id}:overview:${run.updatedAt || "route"}`;
+    if (collectionDailyDriverMapRuntime.routeCache.has(cacheKey)) {
+      renderCollectionDailyDriverMapOverlay(collectionDailyDriverMapRuntime.routeCache.get(cacheKey));
+      return;
+    }
+    try {
+      const scopeQuery = run.scope === "test" ? "?scope=test" : "";
+      const result = await apiJson(`/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/route-geometry${scopeQuery}`);
+      const routePoints = Array.isArray(result.geometry?.points) ? result.geometry.points : [];
+      collectionDailyDriverMapRuntime.routeCache.set(cacheKey, routePoints);
+      renderCollectionDailyDriverMapOverlay(routePoints);
+    } catch (error) {
+      renderCollectionDailyDriverMapOverlay([]);
+      const waiting = collectionDailyDriverMapRuntime.node?.querySelector(".collection-routes-test-tablet-map__waiting");
+      if (waiting && !collectionDailyDriverMapRuntime.node?.classList.contains("is-loaded")) {
+        waiting.innerHTML = `<strong>Silniční průběh celé trasy HERE teď není dostupný.</strong><span>${escapeHtml(error.payload?.error || "Body zůstávají na mapě bez falešných přímých spojnic.")}</span>`;
+      }
+    }
     return;
   }
   const coordinates = collectionDailyDriverMapCoordinatesForMode(detail, "leg");
@@ -41079,6 +41101,34 @@ async function transitionMyCollectionDailyRoute(action) {
   }
 }
 
+async function optimizeMyCollectionDailyRouteWithHere() {
+  const run = collectionRoutesPilotState.myDailyRoute?.run;
+  if (!run?.id || run.scope !== "test" || collectionRoutesPilotState.myDailyRoutePending) return;
+  collectionRoutesPilotState.myDailyRoutePending = "here-sequence";
+  collectionRoutesPilotState.myDailyRouteError = "";
+  collectionRoutesPilotState.myDailyRouteMessage = "HERE počítá pořadí všech čekajících stanovišť podle silnic, dopravy a profilu vozu…";
+  render();
+  try {
+    const result = await apiJson(`/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/here-sequence`, {
+      method: "POST",
+      body: JSON.stringify({
+        confirmation: "optimize-own-test-route-here",
+        idempotencyKey: collectionDailyRouteIdempotencyKey("driver-here-sequence")
+      })
+    });
+    collectionDailyDriverMapRuntime.routeCache.clear();
+    collectionRoutesPilotState.myDailyRouteMapMode = "overview";
+    collectionRoutesPilotState.myDailyRouteMapFocusStopId = "";
+    applyMyCollectionDailyRoute(result.detail || null, "HERE přepočítal a uložil pořadí čekajících stanovišť. Hotové a problémové body zůstaly zachované.");
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "HERE optimalizaci se nepodařilo dokončit.";
+    collectionRoutesPilotState.myDailyRouteMessage = "";
+  } finally {
+    collectionRoutesPilotState.myDailyRoutePending = "";
+    render();
+  }
+}
+
 async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
   const runId = collectionRoutesPilotState.myDailyRoute?.run?.id;
   if (!runId || !stopId || !action) return;
@@ -51720,6 +51770,13 @@ document.addEventListener("click", async (event) => {
       renderCollectionDailyDriverMapOverlay([]);
       void loadCollectionDailyDriverRoadGeometry();
     }
+    return;
+  }
+
+  const collectionDailyDriverHereSequence = event.target.closest("[data-collection-driver-here-sequence]");
+  if (collectionDailyDriverHereSequence) {
+    event.preventDefault();
+    if (!collectionDailyDriverHereSequence.disabled) await optimizeMyCollectionDailyRouteWithHere();
     return;
   }
 

@@ -181,8 +181,19 @@ assert.ok(
 );
 
 for (const marker of [
-  "HERE Tour Planning je autorita pro pořadí stanovišť pouze tehdy",
-  "skutečné rozměry a hmotnost konkrétního vozidla",
+  "OPTIMALIZOVAT HERE",
+  "/here-sequence",
+  "/route-geometry",
+  "optimize-own-test-route-here",
+  "routePoints",
+  "Body zůstávají na mapě bez falešných přímých spojnic."
+]) {
+  assert.ok(appSource.includes(marker), `Řidičský displej postrádá HERE optimalizaci nebo silniční geometrii: ${marker}`);
+}
+
+for (const marker of [
+  "HERE Waypoints Sequence počítá pořadí stanovišť jedné již přidělené trasy",
+  "potvrzeným technickým profilem konkrétního vozidla",
   "Google Maps je pouze externí nouzové otevření"
 ]) {
   assert.ok(mantraSource.includes(marker), `Mantra postrádá pravidlo navigace: ${marker}`);

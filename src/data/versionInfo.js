@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.584"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.585"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: skutečná HERE optimalizace celé přidělené trasy",
+    text: "HERE Waypoints Sequence přepočítá pořadí až 200 čekajících stanovišť jednoho vozu podle silnic, živé dopravy a potvrzených rozměrů a hmotnosti. Hotové a problémové body zůstanou v historii, uložení má audit a přehled celé trasy kreslí silniční geometrii po úsecích místo přímých modrých spojnic."
+  },
   {
     title: "Svoz: displej pro Blackview Active 7",
     text: "Řidičský displej je nově regresně hlídaný pro 11″ Blackview Active 7 LTE v režimu na šířku: fyzicky 1920 × 1200 a cílově 960 × 600 CSS px. Hlavní plocha zůstává bez posouvání, mapa má na nízkém viewportu dostupné všechny ovladače a pracovní volby mají velké plochy pro rukavice."

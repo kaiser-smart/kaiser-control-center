@@ -61,6 +61,21 @@ assert.equal(optimizedMap.ordering.mode, "here-optimized");
 assert.equal(optimizedMap.ordering.label, "Optimalizováno HERE");
 assert.equal(optimizedMap.ordering.optimizationRunId, "here-run-completed");
 
+const sequenceOptimizedMap = buildCollectionDailyRouteDriverMap({
+  id: "route-sequence-optimized",
+  scope: "test",
+  metadata: {
+    routeOptimization: {
+      provider: "here-waypoints-sequence-v8",
+      status: "completed",
+      runId: "here-sequence-completed",
+      appliedToRoute: true
+    }
+  }
+}, stops);
+assert.equal(sequenceOptimizedMap.ordering.mode, "here-optimized");
+assert.equal(sequenceOptimizedMap.ordering.optimizationRunId, "here-sequence-completed");
+
 const unlinkedResultMap = buildCollectionDailyRouteDriverMap({
   scope: "test",
   metadata: {

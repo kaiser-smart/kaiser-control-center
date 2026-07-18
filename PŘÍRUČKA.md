@@ -1302,6 +1302,14 @@ V Kaiser Smart musí být jasně oddělené tyto identity:
 - Zdroj pravdy pro aktuální GPS/polohu vozidla je T-Cars.
 - Vistos je externí zdroj obchodních/provozních dat a může pomáhat s mapováním, ale nesmí řídit oprávnění v Kaiser Smart.
 
+#### 16.1.1 Potvrzená provozní data nesmí zůstat jen v chatu nebo Mantře
+
+- Potvrzený provozní údaj, který používá backend, integrace nebo bezpečnostní výpočet, musí být ve stejném schváleném celku uložený do strukturovaného cloudového zdroje pravdy příslušného modulu.
+- Chat, Mantra, komentář, úkol ani popis pull requestu nejsou samy o sobě provozní databáze.
+- Mantra shrnuje pravidla a hodnoty pro člověka; backend je musí načítat ze strukturovaného zdroje pravdy, ne parsovat z textu Mantry.
+- Každá změna potvrzeného master údaje musí mít původ, autora, čas, audit a regresní test. Odvozená TEST konfigurace musí odkazovat na master zdroj a nesmí potvrzenou hodnotu nahradit odhadem.
+- Pokud pro potvrzený údaj ještě neexistuje vhodné strukturované pole nebo tabulka, musí návrh výslovně zahrnout jejich bezpečné doplnění. Není dovoleno údaj pouze přepsat do dalšího promptu a prohlásit jej za uložený.
+
 ### 16.2 Povinná vazba
 
 Dlouhodobý správný model je:
@@ -1330,6 +1338,8 @@ Nikdy se nesmí rozhodovat oprávnění podle:
 ### 16.4 Vozový park a řidiči
 
 Vozový park je master evidence vozidel.
+
+Potvrzené rozměry, prázdná a nejvyšší povolená hmotnost a nosnost svozových vozidel patří do technického profilu Vozového parku. HERE a jiné bezpečnostní výpočty je načítají z tohoto profilu. Neznámé zatížení náprav se nesmí odhadovat; parametr se vynechá a údaj zůstane viditelně nepotvrzený.
 
 Přiřazení řidiče k vozidlu má směřovat na zaměstnance, ne pouze na textové jméno nebo uživatele.
 
