@@ -47,6 +47,7 @@ const harness = uiActionAuditHarnessHtml(stylesSource);
 assert.match(harness, /Izolovaný audit odezvy tlačítek/);
 assert.match(harness, /dataset\.uiDuplicateBlocked/);
 assert.match(harness, /button\.disabled = true/);
+assert.match(harness, /}, 3000\);/);
 assert.doesNotMatch(harness, /\bfetch\s*\(/);
 assert.doesNotMatch(harness, /XMLHttpRequest/);
 

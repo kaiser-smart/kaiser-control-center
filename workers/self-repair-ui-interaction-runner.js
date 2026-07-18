@@ -66,10 +66,17 @@ async function runIsolatedBrowserAudit(env, input = {}) {
       }
 
       await button.click({ timeout: 5_000 });
-      const busyObserved = await button.getAttribute("data-ui-busy-observed");
-      const busyState = await button.getAttribute("data-ui-action-state");
-      const ariaBusy = await button.getAttribute("aria-busy");
-      const disabled = await button.isDisabled();
+      const {
+        busyObserved,
+        busyState,
+        ariaBusy,
+        disabled
+      } = await button.evaluate((node) => ({
+        busyObserved: node.dataset.uiBusyObserved || "",
+        busyState: node.dataset.uiActionState || "",
+        ariaBusy: node.getAttribute("aria-busy") || "",
+        disabled: node.disabled === true
+      }));
       if (busyObserved !== "true" || busyState !== "busy" || ariaBusy !== "true" || !disabled) {
         findings.push(browserFinding(
           action,
@@ -78,9 +85,13 @@ async function runIsolatedBrowserAudit(env, input = {}) {
         ));
       }
 
-      await button.evaluate((node) => node.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-      const duplicateBlocked = Number(await button.getAttribute("data-ui-duplicate-blocked") || 0);
-      const actionCount = Number(await button.getAttribute("data-ui-action-count") || 0);
+      const { duplicateBlocked, actionCount } = await button.evaluate((node) => {
+        node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        return {
+          duplicateBlocked: Number(node.dataset.uiDuplicateBlocked || 0),
+          actionCount: Number(node.dataset.uiActionCount || 0)
+        };
+      });
       if (duplicateBlocked !== 1 || actionCount !== 1) {
         findings.push(browserFinding(
           action,
@@ -92,7 +103,7 @@ async function runIsolatedBrowserAudit(env, input = {}) {
       await page.waitForFunction(
         (targetSelector) => document.querySelector(targetSelector)?.dataset.uiActionState === "success",
         selector,
-        { timeout: 5_000 }
+        { timeout: 10_000 }
       );
       const finalState = await button.getAttribute("data-ui-action-state");
       const finalAriaBusy = await button.getAttribute("aria-busy");

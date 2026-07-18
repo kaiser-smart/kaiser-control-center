@@ -235,7 +235,7 @@ export function uiActionAuditHarnessHtml(stylesSource = "") {
             button.setAttribute("aria-busy", "false");
             button.disabled = false;
             button.textContent = item.successLabel;
-          }, 350);
+          }, 3000);
         });
         root.appendChild(button);
       }
