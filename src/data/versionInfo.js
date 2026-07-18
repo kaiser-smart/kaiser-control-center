@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.601"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.602"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: pravdivý stav zpráv v hlasovém kontextu",
+    text: "Hlasový nástroj Svozových tras už správně popisuje oficiální RSS iROZHLAS a do ElevenLabs předává skutečný stav zdroje. Při výpadku vrací nedostupnost bez vymyšlených titulků; read-only kontext nic nezapisuje ani neodesílá."
+  },
   {
     title: "Šarlota: náhled promptu oddělený od zápisu",
     text: "Správce nejdřív načte chráněný read-only plán bez textu promptu a bez secretů. Zápis do ElevenLabs má samostatné tlačítko a nové potvrzení; neúspěšné hlasové připojení už nenechá řidičský tablet ve falešném stavu Šarlota poslouchá."

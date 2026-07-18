@@ -214,7 +214,7 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
     collection_route_weather: context.weather?.verified ? cleanString(context.weather.summary) : "Počasí se nepodařilo ověřit.",
     collection_route_memory_enabled: context.memory?.consent ? "ano" : "ne",
     collection_route_memory_summary: context.memory?.consent ? cleanString(context.memory.summary) : "",
-    collection_route_news_status: "nenastaveno",
+    collection_route_news_status: cleanString(context.news?.status || "unavailable"),
     collection_route_safety: "Všechny zápisy čekají na fyzické potvrzení v tabletu."
   };
 }

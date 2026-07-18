@@ -260,11 +260,14 @@ await assert.rejects(
 
 const variables = await collectionRoutesContextVariables({}, miroslav, "/trasy-svozu/test", routeDetail);
 assert.equal(variables.collection_route_scope, "test");
+assert.equal(variables.collection_route_news_status, "test_override");
 assert.match(variables.current_module_context, /HERE truck navigation/);
 assert.doesNotMatch(variables.current_module_context, /Tomáš Gaží|physicalTesterName/);
 
 const toolSchema = ELEVENLABS_CLIENT_TOOL_SCHEMAS.find((item) => item.name === "get_collection_routes_context");
 assert.ok(toolSchema);
+assert.match(toolSchema.description, /oficiálního RSS iROZHLAS/);
+assert.match(toolSchema.description, /unavailable/);
 let requestedPath = "";
 const tools = createElevenLabsClientTools({
   requestJson: async (path) => {

@@ -148,7 +148,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "get_collection_routes_context",
-    description: "Read-only načte z KSO vlastní dnešní trasu přihlášeného řidiče, ověřená přiřazená vozidla, počasí, omezený služební adresář, dostupnost, nadřízené a bezpečnou pracovní paměť. Nic nezapisuje, neposílá ani nemění. Pro zprávy vrací pravdivý stav nenastaveno, dokud není připojený oficiální zdroj.",
+    description: "Read-only načte z KSO vlastní dnešní trasu přihlášeného řidiče, ověřená přiřazená vozidla, počasí, omezený služební adresář, dostupnost, nadřízené, bezpečnou pracovní paměť a nejvýše tři aktuální titulky z oficiálního RSS iROZHLAS. Nic nezapisuje, neposílá ani nemění. Když zdroj zpráv není dostupný, vrátí pravdivý stav unavailable bez vymýšlení titulků.",
     parameters: [
       { name: "date", type: "string", required: false },
       { name: "scope", type: "string", required: false }
@@ -1914,7 +1914,7 @@ export function createElevenLabsClientTools({
           route: null,
           vehicles: { verified: false, count: 0, items: [] },
           directory: [],
-          news: { status: "not_configured", items: [] },
+          news: { status: "unavailable", source: "iROZHLAS", items: [] },
           answerText: error?.payload?.error || "Kontext řidiče a trasy se teď nepodařilo načíst. Nic si nevymýšlej."
         };
       }
