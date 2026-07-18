@@ -225,6 +225,8 @@ assert.equal(builtRequest.body.get("mode"), "fastest;truck;traffic:enabled");
 assert.equal(builtRequest.body.get("departure"), "now");
 assert.equal(builtRequest.body.get("height"), "350cm");
 assert.equal([...builtRequest.body.keys()].filter((key) => key.startsWith("destination")).length, 3);
+assert.match(builtRequest.body.get("destination1"), /;st:\d+$/);
+assert.equal(builtRequest.body.toString().includes("interruptible%3Afalse"), false);
 
 let providerCalls = 0;
 const sequenceFetch = async (url, options = {}) => {
