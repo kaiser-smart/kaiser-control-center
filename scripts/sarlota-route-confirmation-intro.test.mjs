@@ -28,6 +28,11 @@ assert.match(enableSource, /await startCollectionDailyDriverSarlota\(options\);/
 assert.match(appSource, /const automaticSession = options\.invocation === "automatic";/);
 assert.match(appSource, /myDailyRouteSarlotaAutoSession = automaticSession;/);
 assert.match(appSource, /Můžeš s ní rovnou mluvit/);
+assert.match(
+  appSource,
+  /isCollectionRoutesPath\(normalizePath\(window\.location\.pathname\)\)\s*&& collectionRoutesPilotState\.myDailyRouteSarlotaAutoSession\s*\) \{\s*closeAiAssistant\(\{ launcherVisible: false \}\);\s*return;/,
+  "Ukončení automatické relace musí zavřít hlasové okno; mikrofonový panel smí otevřít jen ruční spuštění."
+);
 
 assert.match(appSource, /data-collection-driver-route-confirmation-open/);
 assert.match(appSource, /data-collection-driver-route-confirmation-form/);
