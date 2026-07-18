@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.583"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.584"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: displej pro Blackview Active 7",
+    text: "Řidičský displej je nově regresně hlídaný pro 11″ Blackview Active 7 LTE v režimu na šířku: fyzicky 1920 × 1200 a cílově 960 × 600 CSS px. Hlavní plocha zůstává bez posouvání, mapa má na nízkém viewportu dostupné všechny ovladače a pracovní volby mají velké plochy pro rukavice."
+  },
   {
     title: "Svoz: mapa přes celý tablet a živá navigace",
     text: "Řidič může HERE mapu roztáhnout přes celý 11″ displej, posouvat ji a přibližovat tlačítky, kolečkem i dvěma prsty. Živá navigace vede od aktuální GPS polohy k právě obsluhovanému stanovišti, další zastávka je vidět předem, TEST mapování stanoviště je znovu dostupné a hlášení přijme až pět fotografií."

@@ -42698,9 +42698,7 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-driver-kiosk-active .ai-assistant-launcher {
-  right: auto;
-  bottom: 18px;
-  left: 18px;
+  display: none;
 }
 
 @media (max-height: 680px) and (min-width: 700px) {
@@ -42736,6 +42734,175 @@ body.collection-driver-kiosk-active #app {
   .collection-daily-driver-action-sheet > summary {
     min-height: 50px;
     padding: 7px 10px;
+  }
+}
+
+/* Blackview Active 7 LTE · 11\" 16:10 · referenční viewport 960 × 600 CSS px. */
+@media (min-width: 900px) and (max-width: 1024px) and (min-height: 500px) and (max-height: 640px) and (orientation: landscape) {
+  .collection-daily-driver-page {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 4px;
+    height: 100dvh;
+    padding: 5px;
+    overflow: hidden;
+  }
+
+  .collection-daily-driver-kiosk-bar {
+    min-height: 44px;
+    gap: 8px;
+    padding: 3px 8px;
+    border-radius: 10px;
+  }
+
+  .collection-daily-driver-kiosk-brand,
+  .collection-daily-driver-kiosk-user {
+    gap: 7px;
+  }
+
+  .collection-daily-driver-kiosk-brand strong {
+    font-size: 1.35rem;
+  }
+
+  .collection-daily-driver-kiosk-user button,
+  .collection-daily-driver-header-actions button {
+    min-height: 42px;
+    padding-inline: 10px;
+  }
+
+  .collection-daily-driver-route {
+    gap: 4px;
+    padding: 4px;
+    border-radius: 11px;
+  }
+
+  .collection-daily-driver-route-head {
+    grid-template-columns: minmax(150px, 1fr) auto auto;
+    gap: 7px;
+    padding: 3px 6px;
+  }
+
+  .collection-daily-driver-route-identity > strong {
+    font-size: 1rem;
+  }
+
+  .collection-daily-driver-route-identity small {
+    max-width: 34ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .collection-daily-driver-route-kpis article {
+    min-width: 58px;
+    padding: 4px 7px;
+  }
+
+  .collection-daily-driver-route-kpis strong {
+    font-size: 1rem;
+  }
+
+  .collection-daily-driver-workspace,
+  .collection-daily-driver-finish-workspace {
+    grid-template-columns: minmax(0, 1.65fr) minmax(292px, 0.85fr);
+    gap: 5px;
+  }
+
+  .collection-daily-driver-current {
+    grid-template-rows: auto auto auto auto auto minmax(112px, 1fr);
+    gap: 3px;
+    padding: 6px;
+    border-radius: 10px;
+  }
+
+  .collection-daily-driver-current h1 {
+    font-size: clamp(1.2rem, 2.3vw, 1.55rem);
+  }
+
+  .collection-daily-driver-address {
+    font-size: 0.96rem;
+  }
+
+  .collection-daily-driver-current > aside,
+  .collection-daily-driver-next-stop {
+    padding: 4px 7px;
+  }
+
+  .collection-daily-driver-map {
+    gap: 3px;
+  }
+
+  .collection-daily-driver-map > header,
+  .collection-daily-driver-map > footer {
+    gap: 5px;
+    padding: 2px 5px;
+  }
+
+  .collection-daily-driver-map > footer small {
+    display: none;
+  }
+
+  .collection-daily-driver-map__controls {
+    top: 6px;
+    right: 6px;
+    left: 6px;
+    grid-template-columns: repeat(4, max-content);
+    justify-content: end;
+    gap: 5px;
+  }
+
+  .collection-daily-driver-map__controls button {
+    min-width: 56px;
+    min-height: 56px;
+    padding-inline: 10px;
+  }
+
+  .collection-daily-driver-map__primary-actions {
+    gap: 4px;
+    padding-inline: 5px;
+  }
+
+  .collection-daily-driver-map__primary-actions button,
+  .collection-daily-driver-map__primary-actions a {
+    min-height: 52px;
+    padding: 5px 7px;
+    font-size: 0.65rem;
+  }
+
+  .collection-daily-driver-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(56px, 1fr);
+    gap: 5px;
+  }
+
+  .collection-daily-driver-action {
+    min-height: 56px;
+    padding: 7px 9px;
+    font-size: clamp(0.78rem, 1.45vw, 0.96rem);
+  }
+
+  .collection-daily-driver-action--done,
+  .collection-daily-driver-action--report,
+  .collection-daily-driver-sarlota-status {
+    grid-column: 1 / -1;
+  }
+
+  .collection-daily-driver-page.is-isolated-test .collection-daily-driver-action--sarlota {
+    grid-column: 1 / -1;
+  }
+
+  .collection-daily-driver-modal__close,
+  .collection-daily-driver-modal__more,
+  .collection-daily-driver-choice-grid button,
+  .collection-daily-driver-photo-button span,
+  .collection-daily-driver-operation-active a,
+  .collection-daily-driver-report-review .primary-action,
+  .collection-daily-driver-operation-active .primary-action {
+    min-height: 56px;
+  }
+
+  .collection-daily-driver-map.is-fullscreen {
+    height: 100dvh;
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
   }
 }
 
