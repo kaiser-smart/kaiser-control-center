@@ -63,7 +63,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.1";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.31";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.32";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -3668,6 +3668,9 @@ function navigateFromAiAssistant(route) {
 
 function collectionRoutesSarlotaSpeakingPreviewRequested() {
   if (normalizePath(window.location.pathname) !== COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE) {
+    return false;
+  }
+  if (collectionDriverBlackviewSimulatorRequested()) {
     return false;
   }
   const params = new URLSearchParams(window.location.search);
