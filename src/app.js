@@ -63,7 +63,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.1";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.33";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.34";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -52814,6 +52814,13 @@ document.addEventListener("click", async (event) => {
 
   const aiStopVoice = event.target.closest("[data-ai-stop-voice]");
   if (aiStopVoice) {
+    if (
+      isCollectionRoutesPath(normalizePath(window.location.pathname))
+      && collectionRoutesPilotState.myDailyRouteSarlotaAutoSession
+    ) {
+      closeAiAssistant({ launcherVisible: false });
+      return;
+    }
     stopAiVoiceRecognition();
     return;
   }
