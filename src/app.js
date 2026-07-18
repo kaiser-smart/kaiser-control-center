@@ -22474,20 +22474,22 @@ function collectionDailyDriverSimulatedGpsPanel(detail, currentStop) {
     ? `${runtime.simulatedLabel || "Jízda po HERE trase"} · ${runtime.simulatedSpeed}×`
     : runtime.simulatedLabel || "Připraveno u TEST depa";
   return `
-    <aside class="collection-daily-driver-simulated-gps" aria-label="Ovládání simulované TEST polohy" data-collection-driver-simulated-gps-panel>
-      <div>
-        <span>SIMULOVANÁ POLOHA · NEJDE O GPS</span>
+    <details class="collection-daily-driver-simulated-gps" aria-label="Ovládání simulované TEST polohy" data-collection-driver-simulated-gps-panel>
+      <summary>
+        <span>TEST POLOHA</span>
         <strong>${escapeHtml(status)}</strong>
-        <small>Jen tento otevřený TEST. Nic se neukládá do GPS mapování ani provozních dat.</small>
+      </summary>
+      <div class="collection-daily-driver-simulated-gps__body">
+        <small>SIMULOVANÁ POLOHA · NEJDE O GPS. Platí jen pro tento otevřený TEST a nic neukládá do GPS ani provozních dat.</small>
+        <nav aria-label="Kroky simulované polohy">
+          <button type="button" data-collection-driver-simulated-gps="depot">DEPO</button>
+          <button type="button" data-collection-driver-simulated-gps="current" ${currentStop ? "" : "disabled"}>AKTUÁLNÍ BOD</button>
+          <button type="button" data-collection-driver-simulated-gps="next" ${hasFollowingStop ? "" : "disabled"}>DALŠÍ BOD</button>
+          <button type="button" class="${runtime.simulatedPlaybackActive ? "is-active" : ""}" data-collection-driver-simulated-gps="${runtime.simulatedPlaybackActive ? "pause" : "play"}">${runtime.simulatedPlaybackActive ? "PAUZA" : active ? "JET PO TRASE" : "SPUSTIT JÍZDU"}</button>
+          <button type="button" data-collection-driver-simulated-gps="speed">RYCHLOST ${escapeHtml(runtime.simulatedSpeed)}×</button>
+        </nav>
       </div>
-      <nav aria-label="Kroky simulované polohy">
-        <button type="button" data-collection-driver-simulated-gps="depot">DEPO</button>
-        <button type="button" data-collection-driver-simulated-gps="current" ${currentStop ? "" : "disabled"}>AKTUÁLNÍ BOD</button>
-        <button type="button" data-collection-driver-simulated-gps="next" ${hasFollowingStop ? "" : "disabled"}>DALŠÍ BOD</button>
-        <button type="button" class="${runtime.simulatedPlaybackActive ? "is-active" : ""}" data-collection-driver-simulated-gps="${runtime.simulatedPlaybackActive ? "pause" : "play"}">${runtime.simulatedPlaybackActive ? "PAUZA" : active ? "JET PO TRASE" : "SPUSTIT JÍZDU"}</button>
-        <button type="button" data-collection-driver-simulated-gps="speed">RYCHLOST ${escapeHtml(runtime.simulatedSpeed)}×</button>
-      </nav>
-    </aside>
+    </details>
   `;
 }
 
@@ -22549,8 +22551,8 @@ function collectionDailyRouteDriverMapPanel(detail, currentStop) {
           <div class="collection-daily-driver-map__controls" aria-label="Ovládání mapy">
             <button type="button" data-collection-driver-map-control="zoom-in" aria-label="Přiblížit mapu">+</button>
             <button type="button" data-collection-driver-map-control="zoom-out" aria-label="Oddálit mapu">−</button>
-            <button type="button" data-collection-driver-map-control="fit">VYCENTROVAT</button>
-            <button type="button" data-collection-driver-map-control="fullscreen">${fullscreen ? "ZAVŘÍT MAPU" : "MAPA PŘES CELÝ DISPLEJ"}</button>
+            <button type="button" data-collection-driver-map-control="fit">STŘED</button>
+            <button type="button" data-collection-driver-map-control="fullscreen">${fullscreen ? "ZPĚT K OBSLUZE" : "CELÁ MAPA"}</button>
           </div>
           <div class="collection-routes-test-tablet-map__waiting">
             <strong>Načítám bezpečnou HERE mapu a trasu po silnici…</strong>
@@ -22564,11 +22566,11 @@ function collectionDailyRouteDriverMapPanel(detail, currentStop) {
         </div>
       `}
       <div class="collection-daily-driver-map__primary-actions">
-        <button type="button" class="${mapMode === "leg" ? "is-active" : ""}" data-collection-driver-map-mode="leg" ${currentStop ? "" : "disabled"}>AKTUÁLNÍ ÚSEK</button>
+        <button type="button" class="${mapMode === "leg" ? "is-active" : ""}" data-collection-driver-map-mode="leg" ${currentStop ? "" : "disabled"}>ÚSEK</button>
         <button type="button" class="${mapMode === "overview" ? "is-active" : ""}" data-collection-driver-map-mode="overview">CELÁ TRASA</button>
         ${run.scope === "test" && ordering.mode !== "here-optimized" ? `<button type="button" class="collection-daily-driver-navigation-button" data-collection-driver-here-sequence ${collectionRoutesPilotState.myDailyRoutePending ? "disabled" : ""}>${collectionRoutesPilotState.myDailyRoutePending === "here-sequence" ? "HERE POČÍTÁ…" : "OPTIMALIZOVAT HERE"}</button>` : ""}
         ${currentStop ? `<button type="button" class="collection-daily-driver-navigation-button ${navigationActive ? "is-active" : ""}" data-collection-driver-navigation="${navigationActive ? "stop" : "start"}">${navigationActive ? "UKONČIT NAVIGACI" : "SPUSTIT NAVIGACI"}</button>` : ""}
-        ${navigationHref ? `<a href="${escapeHtml(navigationHref)}" target="_blank" rel="noopener noreferrer" data-collection-driver-navigate>OTEVŘÍT EXTERNĚ</a>` : ""}
+        ${navigationHref ? `<a href="${escapeHtml(navigationHref)}" target="_blank" rel="noopener noreferrer" data-collection-driver-navigate>GOOGLE MAPY</a>` : ""}
       </div>
       <footer>
         <span><i class="is-depot"></i> Depo</span>
@@ -24130,15 +24132,19 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
           ${run.status === "active" && currentStop ? `
             <div class="collection-daily-driver-workspace">
               <article class="collection-daily-driver-current">
-                <header>
-                  <span>ZASTÁVKA ${escapeHtml(currentStop.routeOrder)} / ${escapeHtml(stops.length)}</span>
-                  <h1>${escapeHtml(currentStop.customerName || "-")}</h1>
-                  ${currentStop.stationName ? `<strong>${escapeHtml(currentStop.stationName)}</strong>` : ""}
-                </header>
-                <p class="collection-daily-driver-address">${escapeHtml(currentStop.addressText || "-")}</p>
-                <div class="collection-daily-driver-waste"><b>${escapeHtml(currentStop.wasteType || "-")}</b><span>${escapeHtml(currentStop.containerCount || 1)}× ${escapeHtml(currentStop.containerVolume || "-")} l · ${escapeHtml(currentStop.frequency || "-")}</span></div>
-                ${currentStop.note ? `<aside>${escapeHtml(currentStop.note)}</aside>` : ""}
-                ${nextStop ? `<section class="collection-daily-driver-next-stop" aria-label="Následující zastávka"><span>NÁSLEDUJÍCÍ ZASTÁVKA · ${escapeHtml(nextStop.routeOrder)}</span><strong>${escapeHtml(nextStop.customerName || nextStop.stationName || "Stanoviště")}</strong><small>${escapeHtml(nextStop.addressText || "Adresa není uvedená")}</small></section>` : `<section class="collection-daily-driver-next-stop" aria-label="Následující zastávka"><span>NÁSLEDUJÍCÍ ZASTÁVKA</span><strong>KONEC TRASY</strong><small>Po obsloužení potvrď dokončení TESTU.</small></section>`}
+                <section class="collection-daily-driver-stop-overview" aria-label="Aktuální a následující stanoviště">
+                  <header>
+                    <span>ZASTÁVKA ${escapeHtml(currentStop.routeOrder)} / ${escapeHtml(stops.length)}</span>
+                    <h1>${escapeHtml(currentStop.customerName || "-")}</h1>
+                    ${currentStop.stationName ? `<strong>${escapeHtml(currentStop.stationName)}</strong>` : ""}
+                  </header>
+                  <div class="collection-daily-driver-stop-meta">
+                    <p class="collection-daily-driver-address">${escapeHtml(currentStop.addressText || "-")}</p>
+                    <div class="collection-daily-driver-waste"><b>${escapeHtml(currentStop.wasteType || "-")}</b><span>${escapeHtml(currentStop.containerCount || 1)}× ${escapeHtml(currentStop.containerVolume || "-")} l · ${escapeHtml(currentStop.frequency || "-")}</span></div>
+                    ${currentStop.note ? `<aside>${escapeHtml(currentStop.note)}</aside>` : ""}
+                  </div>
+                  ${nextStop ? `<section class="collection-daily-driver-next-stop" aria-label="Následující zastávka"><span>NÁSLEDUJÍCÍ ZASTÁVKA · ${escapeHtml(nextStop.routeOrder)}</span><strong>${escapeHtml(nextStop.customerName || nextStop.stationName || "Stanoviště")}</strong><small>${escapeHtml(nextStop.addressText || "Adresa není uvedená")}</small></section>` : `<section class="collection-daily-driver-next-stop" aria-label="Následující zastávka"><span>NÁSLEDUJÍCÍ ZASTÁVKA</span><strong>KONEC TRASY</strong><small>Po obsloužení potvrď dokončení trasy.</small></section>`}
+                </section>
                 ${collectionDailyRouteDriverMapPanel(detail, currentStop)}
               </article>
               <aside class="collection-daily-driver-actions" aria-label="Pracovní akce řidiče">

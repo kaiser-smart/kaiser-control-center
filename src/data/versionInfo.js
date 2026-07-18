@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.603"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.604"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Řidičský displej: mapa jako hlavní pracovní plocha",
+    text: "Na 11palcovém Blackview má HERE mapa garantovanou pracovní výšku. Informace o stanovišti jsou kompaktní, TEST poloha je sbalená a mapové režimy i navigace zůstávají dostupné bez dalšího pevného řádku pod mapou."
+  },
   {
     title: "Samoopravy: čistá pracovní fronta bez TEST konzole",
     text: "Hlavní obrazovka ukazuje stručný stav hodinové kontroly, aktivní případy a jasné vyřízení. Staré uzavřené testy se ve výchozí frontě nezobrazují; ruční kontrola, pravidla, automatizace, audit a diagnostika zůstávají bezpečně dostupné ve sbalené Technické správě."
