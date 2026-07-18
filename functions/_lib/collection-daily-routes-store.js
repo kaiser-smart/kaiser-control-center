@@ -1334,6 +1334,116 @@ export async function getCollectionDailyRoute(env, user, runId, input = {}) {
   }
 }
 
+export async function applyCollectionDailyRouteHereOrder(env, user, runId, input = {}) {
+  const scope = collectionDailyRouteScope(input.scope);
+  if (scope !== COLLECTION_DAILY_ROUTE_SCOPE_TEST) {
+    throw new CollectionDailyRoutesError(
+      "HERE pořadí lze tímto krokem uložit jen do odděleného TEST scope.",
+      403,
+      "collection_daily_route_here_apply_test_only"
+    );
+  }
+  assertTestScopeReader(user, scope);
+  const idempotencyKey = cleanString(input.idempotencyKey);
+  if (!idempotencyKey) {
+    throw new CollectionDailyRoutesError(
+      "Chybí ochrana proti dvojímu uložení HERE pořadí.",
+      400,
+      "collection_daily_route_here_apply_idempotency_missing"
+    );
+  }
+  const optimizedStopIds = Array.isArray(input.optimizedStopIds)
+    ? input.optimizedStopIds.map(cleanString).filter(Boolean)
+    : [];
+  const db = database(env, true, scope);
+  try {
+    const runRow = await loadRunRow(db, runId);
+    assertRunMatchesScope(runRow, scope);
+    assertTestRunAccess(user, runRow, scope);
+    assertCanReadRun(user, runRow);
+    if (!["confirmed", "active"].includes(cleanString(runRow.status))) {
+      throw new CollectionDailyRoutesError(
+        "HERE pořadí lze uložit jen do připravené nebo zahájené TEST trasy.",
+        409,
+        "collection_daily_route_here_apply_status_invalid"
+      );
+    }
+    const repeated = await eventByIdempotency(db, idempotencyKey, runRow.id);
+    if (repeated) return detailFromRow(db, await loadRunRow(db, runRow.id));
+    const detail = await detailFromRow(db, runRow);
+    const plannedStops = detail.stops.filter((stop) => stop.status === "planned");
+    const plannedIds = plannedStops.map((stop) => stop.id);
+    if (
+      optimizedStopIds.length !== plannedIds.length
+      || new Set(optimizedStopIds).size !== optimizedStopIds.length
+      || plannedIds.some((stopId) => !optimizedStopIds.includes(stopId))
+    ) {
+      throw new CollectionDailyRoutesError(
+        "Seznam čekajících stanovišť se během HERE výpočtu změnil.",
+        409,
+        "collection_daily_route_here_apply_stop_set_changed"
+      );
+    }
+    const historicalStops = detail.stops
+      .filter((stop) => stop.status !== "planned")
+      .sort((left, right) => left.routeOrder - right.routeOrder);
+    const orderedStopIds = [...historicalStops.map((stop) => stop.id), ...optimizedStopIds];
+    const timestamp = nowIso();
+    const optimization = {
+      provider: cleanString(input.provider) || "here-waypoints-sequence-v8",
+      status: "completed",
+      runId: cleanString(input.optimizationRunId) || randomId("here-sequence"),
+      appliedToRoute: true,
+      completedAt: cleanString(input.completedAt) || timestamp,
+      optimizedStopCount: optimizedStopIds.length,
+      preservedHistoricalStopCount: historicalStops.length,
+      trafficMode: cleanString(input.trafficMode) || "live",
+      objective: cleanString(input.objective) || "time",
+      vehicleProfile: input.vehicleProfile && typeof input.vehicleProfile === "object" ? input.vehicleProfile : {},
+      source: "assigned-test-route",
+      writesVistos: false,
+      writesProductionRoute: false,
+      sendsNotifications: false
+    };
+    const metadata = {
+      ...(detail.run.metadata || {}),
+      routeOptimization: optimization
+    };
+    const orderEntries = orderedStopIds.map((stopId, index) => ({ stopId, routeOrder: index + 1 }));
+    const statements = chunkValues(orderEntries, 30).map((entries) => {
+      const caseSql = entries.map(() => "WHEN ? THEN ?").join(" ");
+      const inSql = entries.map(() => "?").join(", ");
+      const bindings = entries.flatMap((entry) => [entry.stopId, entry.routeOrder]);
+      return db.prepare(`
+        UPDATE collection_daily_route_stops
+        SET route_order = CASE id ${caseSql} ELSE route_order END,
+            updated_at = ?
+        WHERE run_id = ? AND id IN (${inSql})
+      `).bind(...bindings, timestamp, runRow.id, ...entries.map((entry) => entry.stopId));
+    });
+    statements.push(db.prepare(`
+      UPDATE collection_daily_route_runs
+      SET metadata_json = ?, updated_at = ?
+      WHERE id = ?
+    `).bind(jsonString(metadata), timestamp, runRow.id));
+    statements.push(db.prepare(`
+      INSERT INTO collection_daily_route_events (
+        id, run_id, event_type, before_status, after_status, reason, note,
+        idempotency_key, actor_user_id, actor_name, created_at, payload_json
+      ) VALUES (?, ?, 'route_here_optimized', ?, ?, 'here-waypoints-sequence', ?, ?, ?, ?, ?, ?)
+    `).bind(
+      randomId("collection-daily-event"), runRow.id, cleanString(runRow.status), cleanString(runRow.status),
+      `HERE přepočítal pořadí ${optimizedStopIds.length} čekajících stanovišť; historie zůstala zachovaná.`,
+      idempotencyKey, cleanString(user?.id || user?.email), cleanString(user?.name || user?.email || "Uživatel"),
+      timestamp, jsonString(optimization)
+    ));
+    await db.batch(statements);
+    return detailFromRow(db, await loadRunRow(db, runRow.id));
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
 export async function listCollectionDailyRouteDrivers(env) {
   try {
     const users = await getUsers(env);

@@ -149,7 +149,7 @@ function orderingEvidence(run = {}, explicitEvidence = null) {
       : {};
   const provider = cleanString(evidence.provider);
   const runId = cleanString(evidence.runId);
-  const hereApplied = provider === "here-tour-planning"
+  const hereApplied = ["here-tour-planning", "here-waypoints-sequence-v8"].includes(provider)
     && cleanString(evidence.status) === "completed"
     && evidence.appliedToRoute === true
     && Boolean(runId);

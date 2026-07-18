@@ -42143,6 +42143,18 @@ body.collection-driver-kiosk-active #app {
   color: #fff;
 }
 
+.collection-daily-driver-map__primary-actions [data-collection-driver-here-sequence] {
+  border-color: #4f8f1d;
+  background: #edf8e5;
+  color: #315f12;
+}
+
+@media (min-width: 700px) {
+  .collection-daily-driver-map__primary-actions:has([data-collection-driver-here-sequence]) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
 .collection-daily-driver-map-pin > path {
   fill: #397bd1;
   stroke: #fff;

@@ -285,6 +285,51 @@ function mergeAssignment(vehicle, assignment = null) {
   };
 }
 
+function rowToTechnicalProfile(row = {}) {
+  return {
+    vehicleCode: cleanString(row.vehicle_code),
+    driverLabel: cleanString(row.driver_label),
+    licensePlate: cleanString(row.license_plate),
+    emptyWeightKg: Number(row.empty_weight_kg) || 0,
+    grossWeightKg: Number(row.gross_weight_kg) || 0,
+    payloadCapacityKg: Number(row.payload_capacity_kg) || 0,
+    lengthCm: Number(row.length_cm) || 0,
+    widthCm: Number(row.width_cm) || 0,
+    heightCm: Number(row.height_cm) || 0,
+    weightPerAxleKg: row.weight_per_axle_kg == null ? null : Number(row.weight_per_axle_kg) || null,
+    dataQuality: cleanString(row.data_quality),
+    confirmedByName: cleanString(row.confirmed_by_name),
+    confirmedAt: cleanString(row.confirmed_at),
+    source: "fleet_vehicle_technical_profiles"
+  };
+}
+
+async function loadTechnicalProfiles(env) {
+  const db = database(env);
+  if (!db) return [];
+  try {
+    const result = await db.prepare(`
+      SELECT *
+      FROM fleet_vehicle_technical_profiles
+      WHERE active = 1
+      ORDER BY vehicle_code ASC, license_plate ASC
+    `).all();
+    return (result.results || []).map(rowToTechnicalProfile);
+  } catch (error) {
+    if (/no such table[^\n]*fleet_vehicle_technical_profiles/i.test(safeErrorMessage(error))) return [];
+    throw error;
+  }
+}
+
+function technicalProfileForVehicle(vehicle = {}, profiles = []) {
+  const plate = normalizedPlate(vehicle.licensePlate || vehicle.tcarsLicensePlate);
+  return profiles.find((profile) => plate && normalizedPlate(profile.licensePlate) === plate) || null;
+}
+
+function mergeTechnicalProfile(vehicle, profile = null) {
+  return profile ? { ...vehicle, technicalProfile: profile } : vehicle;
+}
+
 async function loadAssignments(env) {
   const db = database(env);
 
@@ -643,10 +688,16 @@ export async function loadFleetVehiclesWithAssignments(env = {}, user = null) {
           cleanString(tcarsPayload?.message)
         ].filter(Boolean).join(" ")
       };
-  const { assignments, assignmentApiStatus, assignmentMessage } = await loadAssignments(env);
-  const driverCandidates = await loadFleetDriverCandidates(env, user);
+  const [{ assignments, assignmentApiStatus, assignmentMessage }, driverCandidates, technicalProfiles] = await Promise.all([
+    loadAssignments(env),
+    loadFleetDriverCandidates(env, user),
+    loadTechnicalProfiles(env)
+  ]);
   const vehicles = (Array.isArray(basePayload?.vehicles) ? basePayload.vehicles : [])
-    .map((vehicle) => mergeAssignment(vehicle, assignmentForVehicle(vehicle, assignments)));
+    .map((vehicle) => mergeTechnicalProfile(
+      mergeAssignment(vehicle, assignmentForVehicle(vehicle, assignments)),
+      technicalProfileForVehicle(vehicle, technicalProfiles)
+    ));
 
   return {
     ...basePayload,
@@ -655,6 +706,8 @@ export async function loadFleetVehiclesWithAssignments(env = {}, user = null) {
     summary: summaryWithAssignments(basePayload?.summary, vehicles),
     assignmentApiStatus,
     assignmentMessage,
+    technicalProfileApiStatus: technicalProfiles.length ? "ready" : "waiting",
+    technicalProfileCount: technicalProfiles.length,
     message: [
       cleanString(basePayload?.message),
       assignmentMessage

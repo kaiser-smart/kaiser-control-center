@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.25",
-  updatedAt: "18. 7. 2026 02:27",
-  updatedAtIso: "2026-07-18T02:27:00+02:00",
-  lastChange: "Blackview a tabletová ergonomie",
+  version: "1.26",
+  updatedAt: "18. 7. 2026 03:09",
+  updatedAtIso: "2026-07-18T03:09:00+02:00",
+  lastChange: "HERE pořadí a profily vozů",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Závazným referenčním zařízením je 11″ Blackview Active 7 LTE v režimu na šířku: fyzicky 1920 × 1200, při běžném měřítku cílově 960 × 600 CSS px. Mapa je ovladatelná přes celý tablet dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a po fyzickém spuštění vede z živé GPS polohy pokyny HERE. Za optimalizované se pořadí označí pouze při přesně doloženém a skutečně použitém výsledku HERE. Pracovní volby HOTOVO, hlášení s jednou až pěti fotografiemi, výsyp, přestávka a TEST mapování stanoviště mají velký krokový postup bez rozbalovacích polí. Šarlota zná přihlášeného řidiče a aktuální trasu, ale hlasem pouze připraví obrazovku; zápis nebo navigace vždy vyžadují fyzické klepnutí. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
+  summary: "Závazná pravidla pro ostrý Řidičský displej a bezpečné plánování; oddělený TEST scope slouží jen k ověření bez dopadu na zákazníky a ostré trasy. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Závazným referenčním zařízením je 11″ Blackview Active 7 LTE v režimu na šířku: fyzicky 1920 × 1200, při běžném měřítku cílově 960 × 600 CSS px. Mapa je ovladatelná přes celý tablet dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a po fyzickém spuštění vede z živé GPS polohy pokyny HERE. Pořadí přidělené trasy do 200 čekajících bodů počítá HERE Waypoints Sequence v režimu truck s dopravou; více vozů, kapacity a směny řeší HERE Tour Planning. Za optimalizované se pořadí označí pouze po úplném výsledku HERE a skutečném auditovaném uložení. Pracovní volby HOTOVO, hlášení s jednou až pěti fotografiemi, výsyp, přestávka a mapování stanoviště mají velký krokový postup bez rozbalovacích polí. Šarlota zná přihlášeného řidiče a aktuální trasu, ale hlasem pouze připraví obrazovku; zápis nebo navigace vždy vyžadují fyzické klepnutí. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -69,6 +69,8 @@ Používej pouze aktuální ověřená data z backendu Kaiser Smart Odpady:
 
 Nevymýšlej chybějící adresu, kontakt, otevírací dobu, hmotnost, polohu ani souhlas. Chybějící nebo rozporný údaj označ jako blokaci.
 
+Potvrzené provozní údaje nesmí zůstat pouze v této Mantře nebo v chatu. Musí být současně uložené ve strukturovaném zdroji pravdy Vozového parku s původem, auditní historií a regresním testem. Odvozená konfigurace HERE na tento master odkazuje a nesmí potvrzené hodnoty přepsat odhadem.
+
 ADRESNÍ A SMLUVNÍ PRAVIDLO
 Adresní místo a Stanoviště jsou dvě různá pole. Adresní místo se nesmí nahrazovat názvem Stanoviště ani technickým rozpadem svozové adresy.
 
@@ -101,6 +103,13 @@ VOZIDLA A VÝCHOZÍ ŘIDIČI
 A – 3BN 3558 – Popeláři Kouba – výchozí řidič Jakub Kozlíček.
 B – 1BP 8373 – Popelář Ceček – výchozí řidič Miroslav Vašek.
 C – 3BE 2831 – výchozí řidič Miroslav Florián.
+
+POTVRZENÉ TECHNICKÉ PROFILY PRO HERE
+A / Kouba / 3BN 3558: prázdná hmotnost 13 500 kg, nejvyšší povolená hmotnost 19 000 kg, nosnost 5 500 kg, délka 8,50 m, šířka 2,40 m, výška 3,50 m.
+B / Míra / 1BP 8373: prázdná hmotnost 13 200 kg, nejvyšší povolená hmotnost 19 000 kg, nosnost 5 800 kg, délka 8,50 m, šířka 2,40 m, výška 3,50 m.
+C / Florian / 3BE 2831: prázdná hmotnost 15 400 kg, nejvyšší povolená hmotnost 25 000 kg, nosnost 9 600 kg, délka 9,40 m, šířka 2,40 m, výška 3,50 m.
+
+Dokud není známá aktuální hmotnost nákladu, HERE dostane konzervativně nejvyšší povolenou hmotnost. Zatížení náprav nebylo potvrzené, proto se nesmí odhadnout ani odeslat jako vymyšlený parametr.
 
 Před plánováním vždy ověř přítomnost řidiče, provozuschopnost vozidla, dostupnost vozidla v T-Cars a aktuální přiřazení řidiče. Výchozí přiřazení není oprávnění. Dispečerka může řidiče změnit, ale změna musí být potvrzená a auditovaná.
 
@@ -186,7 +195,7 @@ Na tabletu tvoří Řidičský displej jednu uzamčenou pracovní obrazovku bez 
 
 Závazné referenční zařízení Řidičského displeje je Blackview Active 7 LTE, 11″, fyzické rozlišení 1920 × 1200, poměr 16:10, Android 15, používaný na šířku. Akceptační viewport je 960 × 600 CSS px a musí se ověřit také fyzický render 1920 × 1200. Hlavní plocha používá 100dvh, nesmí mít vlastní svislý ani vodorovný posun a musí se přizpůsobit lištám mobilního Chrome. Mapa přes celý displej nesmí překrýt ani oříznout zoom, vycentrování nebo zavření. Hlavní pracovní volby a ovládání mapy musí mít velké dotykové plochy použitelné v pracovních rukavicích a nesmí se zmenšit pod 56 CSS px. Pro diagnostiku se bez ukládání provozních nebo osobních dat zaznamená do DOM skutečné innerWidth, innerHeight, devicePixelRatio a rozměr obrazovky tabletu.
 
-HERE Tour Planning je autorita pro pořadí stanovišť pouze tehdy, když dispečer dokončený výpočet vědomě použije a uložené pořadí se s ním přesně shoduje; jinak displej pravdivě uvádí Aktuální pořadí trasy. Silniční úsek a navigaci uvnitř KSO počítá HERE Routing v režimu truck s dopravou podle času výpočtu. Před ostrým použitím musí požadavek obsahovat skutečné rozměry a hmotnost konkrétního vozidla. Google Maps je pouze externí nouzové otevření právě jednoho cíle v režimu běžného auta; nesmí měnit pořadí stanovišť ani být autoritou pro trasu svozového vozu.
+HERE Waypoints Sequence počítá pořadí stanovišť jedné již přidělené trasy; s výjezdem a návratem do depa smí mít nejvýše 200 čekajících stanovišť. HERE Tour Planning počítá rozdělení mezi více vozů, kapacity, směny a výsypy. Výsledek je autoritou pouze tehdy, když je úplný a backend jej auditovaně uloží; jinak displej pravdivě uvádí Aktuální pořadí trasy. Hotové a problémové body jsou historie a nový výpočet jejich stav nemaže. Silniční průběh celé trasy i aktuální úsek kreslí HERE Routing podle silniční sítě, nikoli přímými spojnicemi; dlouhá trasa se načítá po bezpečných úsecích. Navigaci uvnitř KSO počítá HERE Routing v režimu truck s dopravou podle času výpočtu a s potvrzeným technickým profilem konkrétního vozidla. Google Maps je pouze externí nouzové otevření právě jednoho cíle v režimu běžného auta; nesmí měnit pořadí stanovišť ani být autoritou pro trasu svozového vozu.
 
 Řidič musí vidět další stanoviště, zákazníka a adresu, nádoby a odpad, poznámku, navigaci, stav trasy a kontakt na dispečink.
 

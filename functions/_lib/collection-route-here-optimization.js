@@ -184,7 +184,7 @@ function configurationBlockers(settings, wasteType) {
     if (!positiveNumber(vehicle?.capacitiesTons?.[wasteType])) {
       blockers.push(`Vůz ${code}: chybí kapacita pro ${WASTE_LABELS[wasteType] || wasteType}.`);
     }
-    const missingTruckFields = ["heightCm", "widthCm", "lengthCm", "grossWeightKg", "currentWeightKg", "weightPerAxleKg"]
+    const missingTruckFields = ["heightCm", "widthCm", "lengthCm", "grossWeightKg", "currentWeightKg"]
       .filter((field) => !positiveNumber(vehicle?.truck?.[field]));
     if (missingTruckFields.length) {
       blockers.push(`Vůz ${code}: chybí rozměry nebo hmotnosti pro bezpečný truck routing.`);
@@ -360,6 +360,7 @@ function localDateTime(routeDate, time, timezone) {
 
 function hereProfile(vehicle) {
   const truck = vehicle.truck || {};
+  const weightPerAxleKg = positiveNumber(truck.weightPerAxleKg);
   return {
     name: `kaiser_truck_${cleanString(vehicle.code).toLowerCase()}`,
     type: "truck",
@@ -370,7 +371,7 @@ function hereProfile(vehicle) {
       length: Math.round(positiveNumber(truck.lengthCm)),
       grossWeight: Math.round(positiveNumber(truck.grossWeightKg)),
       currentWeight: Math.round(positiveNumber(truck.currentWeightKg)),
-      weightPerAxle: Math.round(positiveNumber(truck.weightPerAxleKg))
+      ...(weightPerAxleKg ? { weightPerAxle: Math.round(weightPerAxleKg) } : {})
     }
   };
 }
