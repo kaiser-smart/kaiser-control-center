@@ -22035,7 +22035,7 @@ function collectionRoutesTestTabletCurrentRoutePanel() {
         <span><b>${escapeHtml(summary.doneCount || 0)}</b> hotovo</span>
         <span><b>${escapeHtml(summary.problemCount || 0)}</b> problém</span>
       </div>
-      ${ownTest ? `
+      ${ownTest && !canManage ? `
         <div class="collection-routes-test-tablet-next">
           ${run.status === "draft" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="confirm" ${pending ? "disabled" : ""}>POTVRDIT STACIONÁRNÍ TEST</button>` : ""}
           ${run.status === "confirmed" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="start" ${pending ? "disabled" : ""}>SPUSTIT TEST TABLETU</button>` : ""}
