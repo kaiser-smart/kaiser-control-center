@@ -29,8 +29,12 @@ assert.match(enableSource, /if \(promptForMemory && context\.memory\?\.available
 assert.match(enableSource, /collectionRoutesPilotState\.myDailyRoutePanel = "";/);
 assert.match(enableSource, /await startCollectionDailyDriverSarlota\(options\);/);
 assert.match(appSource, /const automaticSession = options\.invocation === "automatic";/);
+assert.match(appSource, /const automaticRetryCount = Math\.max\(0, Number\(options\.automaticRetryCount \|\| 0\)\);/);
 assert.match(appSource, /myDailyRouteSarlotaAutoSession = automaticSession;/);
 assert.match(appSource, /Můžeš s ní rovnou mluvit/);
+assert.match(appSource, /automaticSession && error\?\.code === "voice_disconnected" && automaticRetryCount < 1/);
+assert.match(appSource, /Šarlotu jednou automaticky znovu připojuji/);
+assert.match(appSource, /automaticRetryCount: automaticRetryCount \+ 1/);
 assert.match(
   appSource,
   /isCollectionRoutesPath\(normalizePath\(window\.location\.pathname\)\)\s*&& collectionRoutesPilotState\.myDailyRouteSarlotaAutoSession\s*\) \{\s*closeAiAssistant\(\{ launcherVisible: false \}\);\s*return;/,

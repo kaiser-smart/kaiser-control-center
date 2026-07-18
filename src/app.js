@@ -41445,6 +41445,7 @@ async function confirmAndStartMyCollectionDailyRoute(form) {
 
 async function startCollectionDailyDriverSarlota(options = {}) {
   const automaticSession = options.invocation === "automatic";
+  const automaticRetryCount = Math.max(0, Number(options.automaticRetryCount || 0));
   collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
   collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
   collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = automaticSession;
@@ -41467,6 +41468,21 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       render();
     },
     onFailed: (error) => {
+      if (automaticSession && error?.code === "voice_disconnected" && automaticRetryCount < 1) {
+        collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
+        collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
+        collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = true;
+        collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Spojení se přerušilo. Šarlotu jednou automaticky znovu připojuji…";
+        render();
+        window.setTimeout(() => {
+          if (!collectionRoutesPilotState.myDailyRouteSarlotaAutoSession) return;
+          void startCollectionDailyDriverSarlota({
+            ...options,
+            automaticRetryCount: automaticRetryCount + 1
+          });
+        }, 800);
+        return;
+      }
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = error?.code === "voice_stopped"
