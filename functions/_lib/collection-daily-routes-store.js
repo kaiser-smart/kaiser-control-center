@@ -1555,7 +1555,7 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
   assertTestScopeReader(user, scope);
   const db = database(env, true, scope);
   const action = cleanString(input.action).toLowerCase();
-  if (!new Set(["confirm", "start", "complete", "reopen"]).has(action)) {
+  if (!new Set(["confirm", "start", "complete", "reopen", "prepare"]).has(action)) {
     throw new CollectionDailyRoutesError("Neplatná změna stavu denní trasy.", 400, "collection_daily_route_transition_invalid");
   }
   try {
@@ -1563,10 +1563,17 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
     assertRunMatchesScope(run, scope);
     assertTestRunAccess(user, run, scope);
     const stationaryFieldTest = isCollectionDailyRouteStationaryFieldTest(run);
+    if (action === "prepare" && (scope !== COLLECTION_DAILY_ROUTE_SCOPE_TEST || !stationaryFieldTest)) {
+      throw new CollectionDailyRoutesError(
+        "K opakování lze připravit pouze stacionární TEST tabletu.",
+        400,
+        "collection_daily_route_prepare_invalid"
+      );
+    }
     if (stationaryFieldTest) {
       assertStationaryFieldTester(user, run);
     }
-    if (["confirm", "reopen"].includes(action)) {
+    if (["confirm", "reopen", "prepare"].includes(action)) {
       assertManage(user);
     } else {
       assertCanOperateRun(user, run);
@@ -1580,7 +1587,8 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
       confirm: { from: "draft", to: "confirmed", eventType: "route_confirmed" },
       start: { from: "confirmed", to: "active", eventType: "route_started" },
       complete: { from: "active", to: "completed", eventType: "route_completed" },
-      reopen: { from: "completed", to: "active", eventType: "route_reopened" }
+      reopen: { from: "completed", to: "active", eventType: "route_reopened" },
+      prepare: { from: "completed", to: "confirmed", eventType: "route_test_prepared" }
     };
     const transition = transitions[action];
     if (cleanString(run.status) !== transition.from) {
@@ -1634,7 +1642,7 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
         );
       }
     }
-    if (action === "reopen" && stationaryFieldTest) {
+    if (["reopen", "prepare"].includes(action) && stationaryFieldTest) {
       const stopsResult = await db.prepare(`
         SELECT id, status
         FROM collection_daily_route_stops
@@ -1660,6 +1668,19 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
       bindings.push(actorId, actorName, changedAt);
     } else if (action === "reopen") {
       updates.push("reopened_by_user_id = ?", "reopened_by_name = ?", "reopened_at = ?", "completed_at = NULL");
+      bindings.push(actorId, actorName, changedAt);
+    } else if (action === "prepare") {
+      updates.push(
+        "confirmed_by_user_id = ?",
+        "confirmed_by_name = ?",
+        "confirmed_at = ?",
+        "started_by_user_id = ''",
+        "started_by_name = ''",
+        "started_at = NULL",
+        "completed_by_user_id = ''",
+        "completed_by_name = ''",
+        "completed_at = NULL"
+      );
       bindings.push(actorId, actorName, changedAt);
     }
     bindings.push(run.id);
@@ -1702,7 +1723,7 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
         ));
       });
     }
-    if (action === "reopen" && stationaryStopsReopened.length) {
+    if (["reopen", "prepare"].includes(action) && stationaryStopsReopened.length) {
       statements.push(db.prepare(`
         UPDATE collection_daily_route_stops
         SET status = 'planned',
@@ -1725,13 +1746,15 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
           run.id,
           cleanString(stop.id),
           cleanString(stop.status),
-          "Stacionární TEST byl znovu otevřen pro další fyzickou zkoušku.",
+          action === "prepare"
+            ? "Stacionární TEST byl připraven k novému zahájení řidičem."
+            : "Stacionární TEST byl znovu otevřen pro další fyzickou zkoušku.",
           "Jediný TEST bod se bezpečně vrátil do stavu čeká; uložené GPS měření zůstalo v auditu.",
-          `stationary-reopen-stop:${run.id}:${cleanString(stop.id)}:${idempotencyKey || changedAt}`,
+          `stationary-${action}-stop:${run.id}:${cleanString(stop.id)}:${idempotencyKey || changedAt}`,
           actorId,
           actorName,
           changedAt,
-          jsonString({ action, source: "stationary-field-test-reopen" })
+          jsonString({ action, source: action === "prepare" ? "stationary-field-test-prepare" : "stationary-field-test-reopen" })
         ));
       });
     }
