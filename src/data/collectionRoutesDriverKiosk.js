@@ -2,6 +2,7 @@ import { isUserActive, normalizeRole } from "../permissions.js";
 
 export const COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE = "/trasy-svozu";
 export const COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE = "/trasy-svozu/test";
+export const COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE = "simulated";
 
 function normalizedPathname(pathname) {
   const value = String(pathname || "/").trim() || "/";
@@ -22,6 +23,12 @@ export function isCollectionRoutesDriverKioskPath(pathname) {
 export function collectionRoutesDriverKioskScope(pathname, search = "") {
   if (normalizedPathname(pathname) === COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE) return "test";
   return new URLSearchParams(String(search || "")).get("scope") === "test" ? "test" : "production";
+}
+
+export function collectionRoutesDriverSimulatedGpsEnabled(pathname, search = "", routeScope = "") {
+  return normalizedPathname(pathname) === COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE
+    && String(routeScope || "").trim().toLowerCase() === "test"
+    && new URLSearchParams(String(search || "")).get("gps") === COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE;
 }
 
 export function collectionRoutesDriverKioskCanonicalPath(user, pathname, search = "") {

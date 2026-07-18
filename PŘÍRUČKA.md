@@ -1377,12 +1377,15 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 
 ## 17. Šarlota / ElevenLabs – pravidla integrace
 
-### 17.0 Jediný povolený hlas
+### 17.0 Dva oddělené hlasové systémy
 
-- Veškerý hlas KSO, včetně pevných pokynů, upozornění, potvrzení a běžné konverzace, smí vytvářet pouze serverová Šarlota přes ElevenLabs.
-- V produkčním i testovacím rozhraní jsou zakázané Web Speech API, `speechSynthesis`, `SpeechSynthesisUtterance`, systémové čtení prohlížeče nebo Androidu, lokální TTS a jiný hlasový poskytovatel.
-- Při nedostupnosti ElevenLabs musí rozhraní zobrazit čitelný text a pravdivou chybu. Nesmí tiše přepnout na strojové čtení ani předstírat úspěšné přehrání.
-- Pevný hlasový pokyn nesmí přes client tools vyvolat provozní akci; akci vždy potvrzuje člověk samostatným ovládacím prvkem.
+- Hlas navigace a hlasová Šarlota jsou dva samostatné systémy a nesmějí si vzájemně přebírat odpovědnost.
+- Hlas navigace používá pouze deterministické české pokyny navigačního systému HERE, například vzdálenost k manévru, odbočení nebo změnu trasy. Nevede rozhovor, nepoužívá agentic AI a neprovádí provozní úkony.
+- Navigační pokyn má vždy zvukovou prioritu. Při manévru se hlasová Šarlota ztiší nebo pozastaví.
+- Hlasová Šarlota používá serverovou konverzační vrstvu ElevenLabs. Vysvětluje pracovní kontext a přes KSO client tools smí pouze připravit povolený krok; provozní účinek vyžaduje backendové oprávnění, audit a fyzické potvrzení člověka.
+- Web Speech API, `speechSynthesis`, `SpeechSynthesisUtterance`, systémové čtení prohlížeče nebo Androidu a lokální TTS jsou zakázané jako náhrada hlasové Šarloty. Toto pravidlo nezakazuje samostatný deterministický hlas skutečné HERE navigace.
+- Při nedostupnosti ElevenLabs musí rozhraní zobrazit čitelný text a pravdivou chybu. Nesmí tiše přepnout na jinou konverzační Šarlotu ani předstírat úspěšné přehrání.
+- Pevný hlasový pokyn Šarloty nesmí přes client tools vyvolat provozní akci; akci vždy potvrzuje člověk samostatným ovládacím prvkem.
 - ElevenLabs API klíč zůstává pouze na backendu. Frontend smí získat jen bezpečný serverový signed URL nebo serverem připravený zvukový tok.
 
 ### 17.1 Rozlišování stavů

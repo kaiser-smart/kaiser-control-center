@@ -41971,17 +41971,78 @@ body.collection-driver-kiosk-active #app {
   position: fixed;
   inset: 0;
   z-index: 1200;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
   width: 100vw;
   height: 100dvh;
-  padding: 10px;
+  padding: 0;
   border-radius: 0;
-  background: #fff;
+  background: #e9eee8;
   box-shadow: none;
 }
 
 .collection-daily-driver-map.is-fullscreen.is-navigation-active {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.collection-daily-driver-map.has-simulated-gps {
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+}
+
+.collection-daily-driver-map.has-simulated-gps.is-navigation-active {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+}
+
+.collection-daily-driver-map.is-fullscreen.has-simulated-gps,
+.collection-daily-driver-map.is-fullscreen.has-simulated-gps.is-navigation-active {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.collection-daily-driver-map.is-fullscreen > header,
+.collection-daily-driver-map.is-fullscreen > .collection-daily-driver-simulated-gps,
+.collection-daily-driver-map.is-fullscreen > .collection-daily-driver-map__primary-actions,
+.collection-daily-driver-map.is-fullscreen > footer {
+  display: none;
+}
+
+.collection-daily-driver-map.is-fullscreen > .collection-daily-driver-map__canvas {
+  grid-row: 1;
+  border-radius: 0;
+}
+
+.collection-daily-driver-map.is-fullscreen > .collection-daily-driver-navigation-guidance {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  z-index: 7;
+  width: min(620px, calc(100% - 24px));
+  padding: 7px 11px;
+  border-width: 2px;
+  background: rgba(237, 245, 255, 0.95);
+  box-shadow: 0 6px 22px rgba(22, 36, 25, 0.22);
+  pointer-events: none;
+}
+
+.collection-daily-driver-map.is-fullscreen > .collection-daily-driver-navigation-guidance strong {
+  overflow: hidden;
+  font-size: clamp(0.95rem, 2.1vw, 1.25rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-daily-driver-map.is-fullscreen .collection-daily-driver-map__controls {
+  top: 10px;
+  right: 10px;
+  left: auto;
+  grid-template-columns: repeat(4, max-content);
+  justify-content: end;
+}
+
+.collection-daily-driver-map.is-fullscreen .collection-daily-driver-map__controls button {
+  min-width: 52px;
+  min-height: 52px;
+  padding-inline: 10px;
 }
 
 .collection-daily-driver-navigation-guidance {
@@ -42002,6 +42063,79 @@ body.collection-driver-kiosk-active #app {
 
 .collection-daily-driver-navigation-guidance strong {
   font-size: clamp(1rem, 2.3vw, 1.45rem);
+}
+
+.collection-daily-driver-simulated-gps {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 2px solid #a82b20;
+  border-radius: 10px;
+  background: #fff0ed;
+  color: #51201b;
+}
+
+.collection-daily-driver-simulated-gps > div {
+  display: grid;
+  min-width: 190px;
+  gap: 1px;
+}
+
+.collection-daily-driver-simulated-gps span {
+  color: #a82b20;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.collection-daily-driver-simulated-gps strong,
+.collection-daily-driver-simulated-gps small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-daily-driver-simulated-gps strong {
+  font-size: 0.82rem;
+}
+
+.collection-daily-driver-simulated-gps small {
+  color: #71443e;
+  font-size: 0.64rem;
+}
+
+.collection-daily-driver-simulated-gps nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.collection-daily-driver-simulated-gps button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgb(168 43 32 / 34%);
+  border-radius: 8px;
+  background: #fff;
+  color: #68231c;
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.collection-daily-driver-simulated-gps button.is-active {
+  border-color: #a82b20;
+  background: #a82b20;
+  color: #fff;
+}
+
+.collection-daily-driver-simulated-gps button:disabled {
+  opacity: 0.42;
 }
 
 .collection-daily-driver-map > header,
@@ -42353,6 +42487,28 @@ body.collection-driver-kiosk-active #app {
   font-size: 0.72rem;
   font-weight: 800;
   text-align: center;
+}
+
+.collection-daily-driver-sarlota-memory-button {
+  min-height: 34px;
+  border: 2px solid #b8acef;
+  border-radius: 12px;
+  background: #faf8ff;
+  color: #49389f;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.collection-daily-driver-operation-active.is-sarlota-memory {
+  border-color: #7868dd;
+  background: #f7f4ff;
+}
+
+.collection-daily-driver-operation-active.is-sarlota-memory small {
+  color: #5d5387;
+  font-weight: 700;
 }
 
 .collection-daily-driver-action:disabled {
@@ -42966,6 +43122,29 @@ body.collection-driver-blackview-simulator-active #app {
     display: none;
   }
 
+  .collection-daily-driver-simulated-gps {
+    gap: 6px;
+    padding: 4px 6px;
+  }
+
+  .collection-daily-driver-simulated-gps > div {
+    min-width: 164px;
+  }
+
+  .collection-daily-driver-simulated-gps small {
+    display: none;
+  }
+
+  .collection-daily-driver-simulated-gps nav {
+    gap: 3px;
+  }
+
+  .collection-daily-driver-simulated-gps button {
+    min-height: 48px;
+    padding-inline: 7px;
+    font-size: 0.61rem;
+  }
+
   .collection-daily-driver-map__controls {
     top: 6px;
     right: 6px;
@@ -43007,7 +43186,8 @@ body.collection-driver-blackview-simulator-active #app {
 
   .collection-daily-driver-action--done,
   .collection-daily-driver-action--report,
-  .collection-daily-driver-sarlota-status {
+  .collection-daily-driver-sarlota-status,
+  .collection-daily-driver-sarlota-memory-button {
     grid-column: 1 / -1;
   }
 
@@ -43027,7 +43207,7 @@ body.collection-driver-blackview-simulator-active #app {
 
   .collection-daily-driver-map.is-fullscreen {
     height: 100dvh;
-    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    padding: 0;
   }
 }
 
