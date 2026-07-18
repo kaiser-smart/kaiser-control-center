@@ -217,6 +217,7 @@ const contentTypes = new Map([
   [".json", "application/json; charset=utf-8"],
   [".mp4", "video/mp4"],
   [".png", "image/png"],
+  [".webp", "image/webp"],
   [".svg", "image/svg+xml"]
 ]);
 

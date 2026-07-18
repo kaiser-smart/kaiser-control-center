@@ -36,10 +36,32 @@ export function AiAssistantLauncher({
   voiceActive = false,
   voiceUiState = "",
   voiceStatus = "",
-  isListening = false
+  isListening = false,
+  speakingHologram = false,
+  hologramPath = "",
+  assistantName = "Šarlota"
 } = {}) {
   if (!visible) {
     return "";
+  }
+
+  if (speakingHologram && hologramPath) {
+    return `
+      <aside class="ai-sarlota-speaking-hologram" role="status" aria-live="polite" aria-label="${escapeHtml(assistantName)} právě mluví">
+        <div class="ai-sarlota-speaking-hologram__figure" aria-hidden="true">
+          <span class="ai-sarlota-speaking-hologram__glow"></span>
+          <img src="${escapeHtml(hologramPath)}" alt="" />
+          <span class="ai-sarlota-speaking-hologram__scan"></span>
+        </div>
+        <div class="ai-sarlota-speaking-hologram__status">
+          <strong>${escapeHtml(assistantName)} mluví</strong>
+          <span class="ai-sarlota-speaking-hologram__wave" aria-hidden="true">
+            <i></i><i></i><i></i><i></i>
+          </span>
+          <button type="button" data-ai-stop-voice>Ukončit</button>
+        </div>
+      </aside>
+    `;
   }
 
   if (voiceActive) {
