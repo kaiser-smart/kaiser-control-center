@@ -45,6 +45,7 @@ assert.ok(existsSync(assetPath), "Průhledný hologram Šarloty musí být souč
 assert.ok(statSync(assetPath).size < 400_000, "Hologram musí zůstat lehký pro tabletový Chrome.");
 assert.match(appSource, /collectionRoutesSpeakingHologram/);
 assert.match(appSource, /function collectionRoutesSarlotaSpeakingPreviewRequested\(\)/);
+assert.match(appSource, /if \(collectionDriverBlackviewSimulatorRequested\(\)\) \{\s+return false;\s+\}/);
 assert.match(appSource, /params\.get\("gps"\) === COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE/);
 assert.match(appSource, /params\.get\("sarlota"\) === "speaking"/);
 assert.match(appSource, /aiAssistantState\.voiceUiState === "assistantSpeaking"/);
