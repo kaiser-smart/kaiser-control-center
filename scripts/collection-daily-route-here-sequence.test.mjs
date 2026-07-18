@@ -15,7 +15,8 @@ import {
   appendHereRoutingTruckProfile,
   appendHereWaypointSequenceTruckProfile,
   confirmedCollectionRouteVehicleProfile,
-  CONFIRMED_COLLECTION_ROUTE_VEHICLE_PROFILES
+  CONFIRMED_COLLECTION_ROUTE_VEHICLE_PROFILES,
+  loadCollectionRouteVehicleProfile
 } from "../functions/_lib/collection-route-vehicle-profiles.js";
 import { getCollectionDailyRoute } from "../functions/_lib/collection-daily-routes-store.js";
 
@@ -126,6 +127,15 @@ assert.equal(appendHereWaypointSequenceTruckProfile(sequenceParams, vehicleA), t
 assert.equal(sequenceParams.get("height"), "350cm");
 assert.equal(sequenceParams.get("limitedWeight"), "19000kg");
 assert.equal(sequenceParams.has("weightPerAxle"), false);
+const cloudFailureFallback = await loadCollectionRouteVehicleProfile({
+  SMART_ODPADY_DB: {
+    prepare() {
+      throw new Error("D1 profilová tabulka je dočasně nedostupná");
+    }
+  }
+}, { vehicleCode: "A", vehicleRegistration: "3BN 3558" });
+assert.equal(cloudFailureFallback.registration, "3BN 3558");
+assert.equal(cloudFailureFallback.currentWeightKg, 19000);
 
 const sqlite = new DatabaseSync(":memory:");
 for (const migration of [
