@@ -404,6 +404,7 @@ function promptSyncBlockLabels(prompt = {}) {
   return [
     [prompt.willAppendDriverReportVehicleRule, "Hlášení řidičů a vozidla"],
     [prompt.willAppendDataBoxContextRule, "Datová schránka"],
+    [prompt.willAppendCollectionRoutesCrewTabletRule, "Svozové trasy: tablet osádky a úvodní hlášení"],
     [prompt.willAppendCollectionRoutesContextRule, "Svozové trasy: kontext, počasí, zprávy a paměť"],
     [prompt.willAppendCollectionRoutesGpsRule, "Svozové trasy: GPS stanoviště"],
     [prompt.willAppendCollectionRoutesIncidentRule, "Svozové trasy: hlášení stanoviště"],

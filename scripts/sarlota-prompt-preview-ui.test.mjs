@@ -39,6 +39,7 @@ const readyPlan = {
     path: "conversation_config.agent.prompt.prompt",
     currentLength: 8421,
     currentPromptText: "TAJNY_TEXT_PROMPTU_SE_NESMI_ZOBRAZIT",
+    willAppendCollectionRoutesCrewTabletRule: true,
     willAppendCollectionRoutesContextRule: true,
     willAppendCollectionRoutesDriverActionRule: true,
     legacyRulePresent: false,
@@ -62,6 +63,7 @@ const previewHtml = SarlotaStatusPanel({
 assert.match(previewHtml, /Načíst náhled promptu/);
 assert.match(previewHtml, /data-sarlota-prompt-plan/);
 assert.match(previewHtml, /NÁHLED · BEZ ZÁPISU/);
+assert.match(previewHtml, /Svozové trasy: tablet osádky a úvodní hlášení/);
 assert.match(previewHtml, /Svozové trasy: kontext, počasí, zprávy a paměť/);
 assert.match(previewHtml, /conversation_config\.agent\.prompt\.prompt/);
 assert.match(previewHtml, /data-sarlota-prompt-apply/);
@@ -102,6 +104,7 @@ assert.match(applySource, /method: "POST"/);
 assert.match(applySource, /apply: true/);
 assert.match(appSource, /data-sarlota-prompt-apply/);
 assert.match(appSource, /data-sarlota-prompt-plan-cancel/);
+assert.match(appSource, /willAppendCollectionRoutesCrewTabletRule, "Svozové trasy: tablet osádky a úvodní hlášení"/);
 assert.match(appSource, /myDailyRouteSarlotaConnecting/);
 assert.match(appSource, /options\.onFailed\?\.\(error\)/);
 
