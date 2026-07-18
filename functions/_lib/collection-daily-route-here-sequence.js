@@ -137,7 +137,7 @@ export function buildCollectionDailyRouteHereSequenceRequest(readiness = {}, det
     waypointToStopId[waypointId] = stop.id;
     params.set(
       `destination${index + 1}`,
-      `${waypointId};${stop.latitude},${stop.longitude};st:${stopServiceSeconds(stop)},interruptible:false`
+      `${waypointId};${stop.latitude},${stop.longitude};st:${stopServiceSeconds(stop)}`
     );
   });
   const url = new URL(HERE_WAYPOINT_SEQUENCE_URL);
