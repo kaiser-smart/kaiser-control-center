@@ -309,6 +309,8 @@ const SARLOTA_VOICE_WRITE_TEST_ENDPOINT = "/api/ai/elevenlabs/sarlota-voice-writ
 const FEEDBACK_ROUTE = "/pripominky";
 const SELF_REPAIR_ROUTE = "/samoopravy";
 const SELF_REPAIR_MODULE_KEY = "self-repair";
+const SELF_REPAIR_ACTIVE_FILTER_VALUE = "active";
+const SELF_REPAIR_ARCHIVED_STATUSES = new Set(["closed", "rejected", "duplicate"]);
 const SELF_REPAIR_STATUS_OPTIONS = [
   { value: "new", label: "Nové" },
   { value: "needs_details", label: "Čeká na doplnění" },
@@ -921,7 +923,7 @@ const feedbackCreateState = {
   draft: feedbackCreateDefaultDraft()
 };
 const selfRepairFilters = {
-  status: "",
+  status: SELF_REPAIR_ACTIVE_FILTER_VALUE,
   riskLevel: "",
   moduleKey: "",
   search: ""
@@ -32626,15 +32628,18 @@ function selfRepairStatusTone(status) {
   return "new";
 }
 
+function selfRepairCaseIsArchived(item) {
+  return SELF_REPAIR_ARCHIVED_STATUSES.has(String(item?.status || ""));
+}
+
 function selfRepairSummaryGrid() {
-  const summary = selfRepairState.summary;
+  const activeCases = selfRepairState.cases.filter((item) => !selfRepairCaseIsArchived(item));
   const cards = [
-    ["Celkem případů", summary.total],
-    ["Nové", summary.newCount],
-    ["Čeká na doplnění", summary.needsDetailsCount],
-    ["K opravě", summary.plannedCount],
-    ["Nezatříděné riziko", summary.unclassifiedCount],
-    ["Vysoké riziko", summary.redRiskCount]
+    ["Otevřené", activeCases.length],
+    ["Nové", activeCases.filter((item) => item.status === "new").length],
+    ["Čeká na doplnění", activeCases.filter((item) => item.status === "needs_details").length],
+    ["K opravě", activeCases.filter((item) => item.status === "planned").length],
+    ["Vysoké riziko", activeCases.filter((item) => item.riskLevel === "red").length]
   ];
   return `
     <div class="self-repair-summary" aria-label="Souhrn případů">
@@ -32645,6 +32650,40 @@ function selfRepairSummaryGrid() {
         </article>
       `).join("")}
     </div>
+  `;
+}
+
+function selfRepairOperationalOverview() {
+  const monitor = selfRepairState.statusData?.monitor || {};
+  const capability = selfRepairState.statusData?.capabilities?.hourlyMonitor || "waiting";
+  const state = capability === "ready"
+    ? ["Kontrola běží", "ready"]
+    : capability === "warning"
+      ? ["Vyžaduje pozornost", "warning"]
+      : capability === "off"
+        ? ["Pozastaveno", "off"]
+        : ["Čeká na ověření", "waiting"];
+  const description = capability === "ready" && monitor.active
+    ? "Kontrola běží v cloudu i bez otevřené aplikace. Případné chyby pouze uloží k prověření; kód, nasazení ani e-mail sama nemění."
+    : "Stav kontroly čeká na ověření nebo je pozastavený. Případné chyby se ukládají pouze k prověření; kód, nasazení ani e-mail se automaticky nemění.";
+
+  return `
+    <section class="self-repair-overview" aria-labelledby="self-repair-overview-title">
+      <div class="self-repair-overview__head">
+        <div>
+          <p class="module-detail__eyebrow">Provozní stav</p>
+          <h2 id="self-repair-overview-title">Hodinová kontrola aplikace</h2>
+        </div>
+        <strong class="self-repair-state self-repair-state--${state[1]}">${escapeHtml(state[0])}</strong>
+      </div>
+      <div class="self-repair-monitor-summary" aria-label="Poslední běh hodinové kontroly">
+        <article><span>Poslední kontrola</span><strong>${escapeHtml(monitor.lastRunAt ? formatDateTime(monitor.lastRunAt) : "čeká na první běh")}</strong></article>
+        <article><span>Další kontrola</span><strong>${escapeHtml(monitor.active ? formatDateTime(monitor.nextRunAt) || "do hodiny" : "pozastavena")}</strong></article>
+        <article><span>Zkontrolované stránky</span><strong>${escapeHtml(Number(monitor.routesChecked || 0))}</strong></article>
+        <article><span>Nálezy</span><strong>${escapeHtml(Number(monitor.findings || 0))}</strong></article>
+      </div>
+      <p>${escapeHtml(description)}</p>
+    </section>
   `;
 }
 
@@ -32662,7 +32701,7 @@ function selfRepairCapabilityGrid() {
   const prompt = capability(capabilities.promptPreparation);
   const items = [
     ["Uživatelská hlášení", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
-    ["Ruční třídění", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
+    ["Vyřízení případu", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
     ["Hodinová kontrola", hourly[0], hourly[1]],
     ["Příprava promptu", prompt[0], prompt[1]],
     ["Codex oprava", "Vypnuto", "off"],
@@ -32672,8 +32711,8 @@ function selfRepairCapabilityGrid() {
   return `
     <section class="self-repair-capabilities" aria-labelledby="self-repair-capabilities-title">
       <div>
-        <p class="module-detail__eyebrow">Pravdivý provozní stav</p>
-        <h2 id="self-repair-capabilities-title">Co modul skutečně dělá</h2>
+        <p class="module-detail__eyebrow">Technická kontrola funkcí</p>
+        <h2 id="self-repair-capabilities-title">Podrobný stav Samooprav</h2>
       </div>
       <div class="self-repair-capabilities__grid">
         ${items.map(([label, value, tone]) => `
@@ -32696,11 +32735,15 @@ function selfRepairCapabilityGrid() {
 
 function selfRepairFilterPanel() {
   const moduleOptions = orderedModules.map((item) => ({ value: item.id, label: item.title }));
+  const statusOptions = [
+    { value: SELF_REPAIR_ACTIVE_FILTER_VALUE, label: "Aktivní případy" },
+    ...SELF_REPAIR_STATUS_OPTIONS
+  ];
   return `
     <form class="self-repair-filters" data-self-repair-filters>
       <label>
         <span>Stav</span>
-        <select name="status" data-self-repair-filter>${optionList(SELF_REPAIR_STATUS_OPTIONS, selfRepairFilters.status)}</select>
+        <select name="status" data-self-repair-filter>${optionList(statusOptions, selfRepairFilters.status, "Všechny případy")}</select>
       </label>
       <label>
         <span>Riziko</span>
@@ -32825,23 +32868,12 @@ function selfRepairCaseDetail(user) {
         <article><span>Postup zopakování</span><p>${escapeHtml(item.reproductionSteps || "Neuvedeno")}</p></article>
       </div>
 
-      <dl class="self-repair-detail__facts">
-        <div><dt>Modul</dt><dd>${escapeHtml(item.moduleName)}</dd></div>
-        <div><dt>Cílový repozitář</dt><dd>${escapeHtml(item.targetRepoKey)}</dd></div>
-        <div><dt>Zdrojová stránka</dt><dd>${escapeHtml(item.sourceRoute || "Neuvedeno")}</dd></div>
-        <div><dt>Verze</dt><dd>${escapeHtml(item.buildVersion || "Neuvedeno")}</dd></div>
-        <div><dt>Uživatel</dt><dd>${escapeHtml(item.reporterUserName)}</dd></div>
-        <div><dt>Důkazy / kontext</dt><dd>${escapeHtml(evidence.length)}</dd></div>
-      </dl>
-
-      ${selfRepairEvidencePanels(evidence)}
-
       ${canManage ? `
         <form class="self-repair-management" data-self-repair-case-form data-self-repair-case-id="${escapeHtml(item.id)}">
           <div class="self-repair-management__head">
             <div>
-              <h3>Ruční třídění</h3>
-              <p>Změna se uloží do auditu. Žádná oprava ani e-mail se tím nespustí.</p>
+              <h3>Vyřízení případu</h3>
+              <p>Nastav stav, riziko a další krok. Změna se uloží do historie; žádná oprava ani e-mail se tím nespustí.</p>
             </div>
           </div>
           <label>
@@ -32865,16 +32897,69 @@ function selfRepairCaseDetail(user) {
             <textarea name="internalNote" rows="3" maxlength="8000" ${disabled}>${escapeHtml(item.internalNote)}</textarea>
           </label>
           <div class="self-repair-management__actions">
-            <button class="primary-action" type="submit" ${disabled}>${saving ? "Ukládám…" : "Uložit třídění"}</button>
+            <button class="primary-action" type="submit" ${disabled}>${saving ? "Ukládám…" : "Uložit vyřízení"}</button>
           </div>
         </form>
       ` : ""}
 
-      <section class="self-repair-audit-panel">
-        <h3>Audit případu</h3>
-        ${selfRepairAuditTimeline(detail.audit)}
-      </section>
+      <details class="self-repair-case-history">
+        <summary>Historie a technické podklady</summary>
+        <div class="self-repair-case-history__content">
+          <dl class="self-repair-detail__facts">
+            <div><dt>Modul</dt><dd>${escapeHtml(item.moduleName)}</dd></div>
+            <div><dt>Cílový repozitář</dt><dd>${escapeHtml(item.targetRepoKey)}</dd></div>
+            <div><dt>Zdrojová stránka</dt><dd>${escapeHtml(item.sourceRoute || "Neuvedeno")}</dd></div>
+            <div><dt>Verze</dt><dd>${escapeHtml(item.buildVersion || "Neuvedeno")}</dd></div>
+            <div><dt>Uživatel</dt><dd>${escapeHtml(item.reporterUserName)}</dd></div>
+            <div><dt>Důkazy / kontext</dt><dd>${escapeHtml(evidence.length)}</dd></div>
+          </dl>
+          ${selfRepairEvidencePanels(evidence)}
+          <section class="self-repair-audit-panel">
+            <h3>Historie změn</h3>
+            ${selfRepairAuditTimeline(detail.audit)}
+          </section>
+        </div>
+      </details>
     </section>
+  `;
+}
+
+function selfRepairTechnicalManagement(moduleItem, user) {
+  const canManage = hasPermission(user, SELF_REPAIR_MODULE_KEY, "manage") || isFullAccessRole(user);
+  return `
+    <details class="self-repair-technical">
+      <summary>
+        <span>
+          <strong>Technická správa</strong>
+          <small>Ruční kontrola, pravidla, automatizace a provozní logy</small>
+        </span>
+      </summary>
+      <div class="self-repair-technical__content">
+        ${canManage ? `
+          <section class="self-repair-service-actions" aria-labelledby="self-repair-service-title">
+            <div>
+              <p class="module-detail__eyebrow">Servisní nástroje</p>
+              <h2 id="self-repair-service-title">Ruční kontrola produkčních stránek</h2>
+              <p>Kontrola pouze čte veřejné stránky a zapíše nálezy. Nic neopraví, nenasadí ani neodešle.</p>
+            </div>
+            <button class="secondary-link" type="button" data-self-repair-monitor-run ${selfRepairState.monitorRunning ? "disabled" : ""}>${selfRepairState.monitorRunning ? "Kontroluji…" : "Spustit servisní kontrolu"}</button>
+          </section>
+        ` : ""}
+        ${selfRepairCapabilityGrid()}
+        ${moduleRulesAutomationPanel({
+          moduleKey: SELF_REPAIR_MODULE_KEY,
+          moduleName: "Samoopravy",
+          user,
+          description: "Pevně omezená hodinová read-only kontrola a bezpečnostní hranice Fáze 2A.",
+          cloudNote: "Monitor lze pozastavit nebo znovu aktivovat. Vždy jen čte veřejné stránky, zapisuje nálezy a připravuje návrh promptu; Codex, repozitář, nasazení a e-mail jsou vypnuté.",
+          readOnly: false,
+          humanDetail: true,
+          toggleOnly: true,
+          toggleRuleIds: ["self-repair-hourly-monitor-proposal"]
+        })}
+        ${genericModuleSettingsSection(moduleItem)}
+      </div>
+    </details>
   `;
 }
 
@@ -32882,12 +32967,13 @@ function selfRepairPage(moduleItem, user) {
   ensureSelfRepairData();
   ensureModuleRulesData(SELF_REPAIR_MODULE_KEY);
   const items = filteredSelfRepairCases();
-  const canManage = hasPermission(user, SELF_REPAIR_MODULE_KEY, "manage") || isFullAccessRole(user);
   const listContent = selfRepairState.loading && !selfRepairState.loaded
     ? '<p class="self-repair-empty">Načítám případy…</p>'
     : items.length
       ? items.map(selfRepairCaseCard).join("")
-      : '<p class="self-repair-empty">Podle zvolených filtrů tu není žádný případ.</p>';
+      : selfRepairFilters.status === SELF_REPAIR_ACTIVE_FILTER_VALUE
+        ? '<p class="self-repair-empty">Žádný aktivní případ. Teď není potřeba nic řešit.</p>'
+        : '<p class="self-repair-empty">Podle zvolených filtrů tu není žádný případ.</p>';
 
   return `
     <main class="app-shell module-page module-theme-scope self-repair-page" ${moduleThemeStyleAttribute()}>
@@ -32900,21 +32986,19 @@ function selfRepairPage(moduleItem, user) {
       <section class="module-detail self-repair-hero" aria-labelledby="module-title">
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div class="module-detail__body">
-          <div class="module-detail__eyebrow">Read-only monitoring a bezpečná evidence</div>
+          <div class="module-detail__eyebrow">Kontrola chyb a bezpečná evidence</div>
           <h1 id="module-title">Samoopravy</h1>
-          <p>Jedno místo pro chyby a drobné úpravy z provozu. Fáze 2A každou hodinu zkontroluje veřejné stránky a připraví nález k ručnímu rozhodnutí.</p>
-          <div class="module-detail__status"><span>Stav</span><strong>Fáze 2A · hodinový monitor · bez automatických oprav</strong></div>
+          <p>Jedno místo pro chyby a drobné úpravy z provozu. Systém je pravidelně hledá a ukládá k bezpečnému vyřízení.</p>
+          <div class="module-detail__status"><span>Stav</span><strong>Hodinová kontrola · opravy vždy potvrzuje člověk</strong></div>
           <div class="module-actions">
             <a class="primary-link" href="${routeHref(`${FEEDBACK_ROUTE}?new=report&module=self-repair&sourceRoute=${encodeURIComponent(SELF_REPAIR_ROUTE)}#feedback-report`)}" data-link>Nahlásit problém</a>
-            ${canManage ? `<button class="secondary-link" type="button" data-self-repair-monitor-run ${selfRepairState.monitorRunning ? "disabled" : ""}>${selfRepairState.monitorRunning ? "Kontroluji…" : "Spustit read-only kontrolu"}</button>` : ""}
-            <button class="secondary-link" type="button" data-self-repair-refresh ${selfRepairState.loading ? "disabled" : ""}>${selfRepairState.loading ? "Načítám…" : "Obnovit případy"}</button>
           </div>
         </div>
       </section>
 
       ${selfRepairState.error ? `<p class="module-feedback__error" role="alert">${escapeHtml(selfRepairState.error)}</p>` : ""}
       ${selfRepairState.message ? `<p class="module-feedback__notice" role="status">${escapeHtml(selfRepairState.message)}</p>` : ""}
-      ${selfRepairCapabilityGrid()}
+      ${selfRepairOperationalOverview()}
       ${selfRepairSummaryGrid()}
       ${selfRepairFilterPanel()}
 
@@ -32925,25 +33009,17 @@ function selfRepairPage(moduleItem, user) {
               <p class="module-detail__eyebrow">Fronta</p>
               <h2 id="self-repair-list-title">Případy k prověření</h2>
             </div>
-            <span>${escapeHtml(items.length)} zobrazeno</span>
+            <div class="self-repair-list__actions">
+              <span>${escapeHtml(items.length)} zobrazeno</span>
+              <button class="secondary-link" type="button" data-self-repair-refresh ${selfRepairState.loading ? "disabled" : ""}>${selfRepairState.loading ? "Načítám…" : "Obnovit seznam"}</button>
+            </div>
           </div>
           ${listContent}
         </section>
         ${selfRepairCaseDetail(user)}
       </div>
 
-      ${moduleRulesAutomationPanel({
-        moduleKey: SELF_REPAIR_MODULE_KEY,
-        moduleName: "Samoopravy",
-        user,
-        description: "Pevně omezená hodinová read-only kontrola a bezpečnostní hranice Fáze 2A.",
-        cloudNote: "Monitor lze pozastavit nebo znovu aktivovat. Vždy jen čte veřejné stránky, zapisuje nálezy a připravuje návrh promptu; Codex, repozitář, nasazení a e-mail jsou vypnuté.",
-        readOnly: false,
-        humanDetail: true,
-        toggleOnly: true,
-        toggleRuleIds: ["self-repair-hourly-monitor-proposal"]
-      })}
-      ${genericModuleSettingsSection(moduleItem)}
+      ${selfRepairTechnicalManagement(moduleItem, user)}
     </main>
   `;
 }
@@ -45099,8 +45175,12 @@ async function loadSelfRepairData(options = {}) {
     selfRepairState.apiStatus = casesResult.apiStatus || statusResult.apiStatus || "ready";
     selfRepairState.loaded = true;
 
-    if (!selfRepairState.cases.some((item) => item.id === selfRepairState.selectedId)) {
-      selfRepairState.selectedId = selfRepairState.cases[0]?.id || "";
+    const selectedCase = selfRepairState.cases.find((item) => item.id === selfRepairState.selectedId);
+    if (
+      !selectedCase ||
+      (selfRepairFilters.status === SELF_REPAIR_ACTIVE_FILTER_VALUE && selfRepairCaseIsArchived(selectedCase))
+    ) {
+      selfRepairState.selectedId = selfRepairState.cases.find((item) => !selfRepairCaseIsArchived(item))?.id || "";
     }
 
     if (selfRepairState.selectedId) {
@@ -45193,18 +45273,36 @@ function applySelfRepairFilters(form) {
   selfRepairFilters.riskLevel = form.elements.riskLevel?.value || "";
   selfRepairFilters.moduleKey = form.elements.moduleKey?.value || "";
   selfRepairFilters.search = form.elements.search?.value.trim() || "";
+  if (!filteredSelfRepairCases().some((item) => item.id === selfRepairState.selectedId)) {
+    selfRepairState.selectedId = "";
+    selfRepairState.detail = null;
+  }
   render();
 }
 
 function resetSelfRepairFilters() {
-  Object.assign(selfRepairFilters, { status: "", riskLevel: "", moduleKey: "", search: "" });
+  Object.assign(selfRepairFilters, {
+    status: SELF_REPAIR_ACTIVE_FILTER_VALUE,
+    riskLevel: "",
+    moduleKey: "",
+    search: ""
+  });
+  if (selfRepairState.detail?.case && selfRepairCaseIsArchived(selfRepairState.detail.case)) {
+    selfRepairState.selectedId = "";
+    selfRepairState.detail = null;
+  }
   render();
 }
 
 function filteredSelfRepairCases() {
   const search = selfRepairFilters.search.toLowerCase();
   return selfRepairState.cases.filter((item) => {
-    if (selfRepairFilters.status && item.status !== selfRepairFilters.status) return false;
+    if (selfRepairFilters.status === SELF_REPAIR_ACTIVE_FILTER_VALUE && selfRepairCaseIsArchived(item)) return false;
+    if (
+      selfRepairFilters.status &&
+      selfRepairFilters.status !== SELF_REPAIR_ACTIVE_FILTER_VALUE &&
+      item.status !== selfRepairFilters.status
+    ) return false;
     if (selfRepairFilters.riskLevel && item.riskLevel !== selfRepairFilters.riskLevel) return false;
     if (selfRepairFilters.moduleKey && item.moduleKey !== selfRepairFilters.moduleKey) return false;
     if (search) {
@@ -45232,7 +45330,7 @@ async function updateSelfRepairCaseFromForm(form) {
         priority: form.elements.priority?.value || "Běžná",
         triageSummary: form.elements.triageSummary?.value.trim() || "",
         internalNote: form.elements.internalNote?.value.trim() || "",
-        auditNote: "Ruční třídění ve správě Samooprav."
+        auditNote: "Ruční vyřízení ve správě Samooprav."
       })
     });
     const updated = normalizeSelfRepairCase(result.case);
