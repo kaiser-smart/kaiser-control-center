@@ -21149,7 +21149,7 @@ function collectionRoutesSourceRouteViewSwitch(rows = collectionRoutesSourceDisp
   const selectedView = collectionRoutesSourceRouteView();
   const options = [
     ["print", "Přehled k tisku", "Tabulka zastávek pro kontrolu a tisk"],
-    ["driver", "Řidičský tablet · náhled", "Kabinový náhled bez TEST GPS"],
+    ["driver", "Řidičský tablet · náhled", "Kabinový náhled bez fyzického GPS"],
     ["map", "Mapa / GPS", "Připravenost trasy bez navigace"]
   ];
   return `
@@ -21756,17 +21756,17 @@ function collectionRoutesTestTabletPreferredRoute(options = {}) {
 
 function collectionRoutesTestTabletNextLabel(run = collectionRoutesTestTabletPreferredRoute()) {
   if (!collectionDailyRouteIsTestScope()) return "Otevře oddělený TEST režim";
-  if (collectionRoutesPilotState.testDatasetLoading || collectionRoutesPilotState.dailyRoutesLoading) return "Načítám TEST data a trasy";
-  if (!collectionRoutesPilotState.testDataset) return "Nejdřív založíme TEST data";
-  if (!run) return "Připravíme datum a jeden TEST bod";
-  if (run.status === "draft") return "Další krok: potvrdit stacionární TEST";
-  if (run.status === "confirmed") return "Další krok: spustit TEST tabletu";
+  if (collectionRoutesPilotState.testDatasetLoading || collectionRoutesPilotState.dailyRoutesLoading) return "Načítám oddělená data a trasy";
+  if (!collectionRoutesPilotState.testDataset) return "Nejdřív založíme oddělená data";
+  if (!run) return "Připravíme datum a jeden bod";
+  if (run.status === "draft") return "Další krok: potvrdit stacionární zkoušku";
+  if (run.status === "confirmed") return "Další krok: spustit tablet";
   if (run.status === "active") {
     return collectionRoutesStationaryFieldGpsReady(collectionRoutesPilotState.dailyRouteDetail)
-      ? "Další krok: dokončit TEST tabletu"
+      ? "Další krok: dokončit zkoušku tabletu"
       : "Tablet je připravený k GPS měření";
   }
-  return "Vyber nebo znovu otevři stacionární TEST";
+  return "Vyber nebo znovu otevři stacionární zkoušku";
 }
 
 function collectionRoutesStationaryFieldGpsReady(detail) {
@@ -21787,15 +21787,15 @@ function collectionRoutesTestTabletEntryCard() {
     <aside class="collection-routes-test-tablet-entry" aria-labelledby="collection-routes-test-tablet-entry-title">
       <div class="collection-routes-test-tablet-entry__icon" aria-hidden="true">▣</div>
       <div>
-        <span>Polní TEST · GPS · hlasová Šarlota</span>
-        <h4 id="collection-routes-test-tablet-entry-title">TEST ŘIDIČSKÉHO TABLETU</h4>
+        <span>Polní režim · GPS · hlasová Šarlota</span>
+        <h4 id="collection-routes-test-tablet-entry-title">ŘIDIČSKÝ TABLET</h4>
         <p>Stacionární zkouška jediného bodu bez řidiče, auta a jízdy. Přeplněná či poškozená nádoba může po velkém potvrzení skutečně informovat dispečerku KSO; zákazník zůstává vždy bez kontaktu.</p>
         <small>Polní bod: Firma test 501 · Trnkova 3052/137, 628 00 Brno</small>
         <strong>${escapeHtml(collectionRoutesTestTabletNextLabel())}</strong>
         ${routeMeta}
       </div>
       <button class="collection-routes-test-tablet-entry__button" type="button" data-collection-routes-test-tablet-open>
-        OTEVŘÍT TEST TABLETU
+        OTEVŘÍT TABLET
       </button>
     </aside>
   `;
@@ -22014,8 +22014,7 @@ function collectionRoutesTestTabletWorkspace() {
 }
 
 function collectionRoutesTestDatasetPanel(user) {
-  if (!collectionRoutesCanUseTestDataset(user)) return "";
-  const isTest = collectionDailyRouteIsTestScope();
+  if (!collectionRoutesCanUseTestDataset(user) || !collectionDailyRouteIsTestScope()) return "";
   const dataset = collectionRoutesPilotState.testDataset;
   const rows = Array.isArray(collectionRoutesPilotState.testDatasetRows)
     ? collectionRoutesPilotState.testDatasetRows
@@ -22030,33 +22029,29 @@ function collectionRoutesTestDatasetPanel(user) {
   const recipientPhone = dataset?.metadata?.recipientPhone || "chráněný serverový cíl";
   const recipientEmail = dataset?.metadata?.recipientEmail || "chráněný serverový cíl";
   return `
-    <section class="collection-routes-test-dataset ${isTest ? "is-active" : ""}" aria-labelledby="collection-routes-test-dataset-title">
+    <section class="collection-routes-test-dataset is-active" aria-labelledby="collection-routes-test-dataset-title">
       <header>
         <div>
-          <p class="module-feedback__eyebrow">Management · oddělená testovací data</p>
-          <h3 id="collection-routes-test-dataset-title">TEST Brno 501</h3>
-          <p>Veřejné adresní body Brna a smyšlené firmy. Testovací D1 je fyzicky oddělená od Vistosu a ostrých tras.</p>
+          <p class="module-feedback__eyebrow">Management · oddělená data</p>
+          <h3 id="collection-routes-test-dataset-title">Svozové trasy · Brno 501</h3>
+          <p>Umělé firmy a veřejné adresní body Brna. Toto prostředí je fyzicky oddělené od Vistosu a ostrých tras.</p>
         </div>
-        <span class="collection-routes-test-badge">TEST</span>
+        <span class="collection-routes-test-badge">IZOLOVANÝ TEST</span>
       </header>
-      <div class="collection-routes-test-scope" role="group" aria-label="Datový režim denních tras">
-        <button type="button" class="${isTest ? "" : "is-active"}" data-collection-daily-route-scope="production">Ostrá data</button>
-        <button type="button" class="${isTest ? "is-active" : ""}" data-collection-daily-route-scope="test">TEST Brno 501</button>
-      </div>
       ${collectionRoutesTestTabletEntryCard()}
       ${collectionRoutesPilotState.testDatasetError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.testDatasetError)}</p>` : ""}
       ${collectionRoutesPilotState.testDatasetMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.testDatasetMessage)}</p>` : ""}
-      ${isTest && collectionRoutesPilotState.testDatasetLoading ? `<p class="module-feedback__notice">Načítám oddělenou testovací sadu...</p>` : ""}
-      ${isTest && !collectionRoutesPilotState.testDatasetLoading && !dataset ? `
+      ${collectionRoutesPilotState.testDatasetLoading ? `<p class="module-feedback__notice">Načítám oddělenou datovou sadu...</p>` : ""}
+      ${!collectionRoutesPilotState.testDatasetLoading && !dataset ? `
         <div class="collection-routes-test-empty">
-          <strong>Testovací databáze je prázdná.</strong>
+          <strong>Oddělená databáze je prázdná.</strong>
           <span>Založení vytvoří 101 firem a 501 stanovišť včetně Firma test 501 na Trnkově. Nic se nezapíše do Vistosu a žádná zpráva se ještě neodešle.</span>
           <button class="primary-action" type="button" data-collection-routes-test-dataset-create ${collectionRoutesPilotState.testDatasetPending ? "disabled" : ""}>
-            ${collectionRoutesPilotState.testDatasetPending === "create" ? "Zakládám TEST Brno 501..." : "Založit oddělenou sadu TEST Brno 501"}
+            ${collectionRoutesPilotState.testDatasetPending === "create" ? "Zakládám sadu Brno 501..." : "Založit oddělenou sadu Brno 501"}
           </button>
         </div>
       ` : ""}
-      ${isTest && dataset ? `
+      ${dataset ? `
         <div class="collection-daily-route-kpis collection-routes-test-kpis">
           <article><span>Firmy</span><strong>${escapeHtml(dataset.companyCount || 100)}</strong></article>
           <article><span>Stanoviště</span><strong>${escapeHtml(dataset.siteCount || rows.length)}</strong></article>
@@ -22068,9 +22063,9 @@ function collectionRoutesTestDatasetPanel(user) {
           <p><strong>Četnosti:</strong> 1x7 · 2x7 · 3x7 · 5x7 · 1x14 · 1x30</p>
           <p>Dny u četností Nx7 se zrcadlí 1:1 v lichém i sudém týdnu. Četnost 1x14 zůstává v jedné paritě a 1x30 má pevný pracovní den i pořadí v měsíci.</p>
         </div>
-        <p class="collection-routes-test-recipient"><strong>Skutečné testovací zprávy:</strong> SMS ${escapeHtml(recipientPhone)} · e-mail ${escapeHtml(recipientEmail)}. Odesílají se až po samostatném potvrzení konkrétní trasy.</p>
+        <p class="collection-routes-test-recipient"><strong>Interní zkušební zprávy:</strong> SMS ${escapeHtml(recipientPhone)} · e-mail ${escapeHtml(recipientEmail)}. Odesílají se až po samostatném potvrzení konkrétní trasy.</p>
         <details class="collection-routes-test-sites" ${collectionRoutesPilotState.testDatasetExpandedRowKeys.length ? "open" : ""}>
-          <summary>Testovací stanoviště (${escapeHtml(rows.length)})</summary>
+          <summary>Stanoviště (${escapeHtml(rows.length)})</summary>
           <div class="collection-routes-sites-table collection-routes-preview-table">
             <table>
               <thead>
@@ -22206,44 +22201,44 @@ function collectionRoutesMantraPanel() {
     </div>
   `;
   return `
-    <section class="collection-routes-mantra" aria-labelledby="collection-routes-mantra-title" data-collection-routes-mantra>
-      <header class="collection-routes-mantra__head">
-        <div>
-          <p class="module-feedback__eyebrow">Provozní mantra · verze ${escapeHtml(mantra.version)}</p>
-          <h3 id="collection-routes-mantra-title">${escapeHtml(mantra.title)}</h3>
-          <p>${escapeHtml(mantra.summary)}</p>
+    <section class="collection-routes-mantra ${expanded ? "is-expanded" : ""}" aria-labelledby="collection-routes-mantra-title" data-collection-routes-mantra>
+      <button class="collection-routes-mantra__summary" type="button" data-collection-routes-mantra-toggle aria-expanded="${expanded ? "true" : "false"}">
+        <span class="collection-routes-mantra__summary-copy">
+          <span>PROVOZNÍ MANTRA · READ-ONLY NÁHLED</span>
+          <strong id="collection-routes-mantra-title">${escapeHtml(mantra.title)}</strong>
+          <small>Verze ${escapeHtml(mantra.version)} · poslední úprava ${escapeHtml(mantra.updatedAt)}</small>
+        </span>
+        <span class="collection-routes-mantra__status">NIC NESPOUŠTÍ</span>
+        <span class="collection-routes-mantra__action">${expanded ? "SBALIT" : "ROZBALIT"}</span>
+      </button>
+      ${expanded ? `
+        <div class="collection-routes-mantra__body">
+          <p class="collection-routes-mantra__lead">${escapeHtml(mantra.summary)}</p>
+          <div class="collection-routes-mantra__highlights">
+            ${mantra.highlights.map((item, index) => `
+              <article>
+                <span>${escapeHtml(index + 1)}</span>
+                <div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.text)}</p></div>
+              </article>
+            `).join("")}
+          </div>
+          ${content}
+          <dl class="collection-routes-mantra__audit" aria-label="Poslední úprava provozní mantry" data-collection-routes-mantra-audit>
+            <div>
+              <dt>Poslední úprava</dt>
+              <dd><time datetime="${escapeHtml(mantra.updatedAtIso)}">${escapeHtml(mantra.updatedAt)}</time></dd>
+            </div>
+            <div>
+              <dt>Co se změnilo</dt>
+              <dd>${escapeHtml(mantra.lastChange)}</dd>
+            </div>
+            <div>
+              <dt>Provedl</dt>
+              <dd>${escapeHtml(mantra.updatedBy)}</dd>
+            </div>
+          </dl>
         </div>
-        <span class="collection-routes-mantra__status">NÁHLED · NIC NESPOUŠTÍ</span>
-      </header>
-      <div class="collection-routes-mantra__highlights">
-        ${mantra.highlights.map((item, index) => `
-          <article>
-            <span>${escapeHtml(index + 1)}</span>
-            <div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.text)}</p></div>
-          </article>
-        `).join("")}
-      </div>
-      <div class="collection-routes-mantra__detail">
-        <button type="button" data-collection-routes-mantra-toggle aria-expanded="${expanded ? "true" : "false"}">
-          <span>${expanded ? "Skrýt celý prompt" : "Zobrazit celý prompt"}</span>
-          <small>Pravidla vozidel, kapacit, výsypů, lidí, komunikace a budoucího učení.</small>
-        </button>
-        ${expanded ? content : ""}
-      </div>
-      <dl class="collection-routes-mantra__audit" aria-label="Poslední úprava provozní mantry" data-collection-routes-mantra-audit>
-        <div>
-          <dt>Poslední úprava</dt>
-          <dd><time datetime="${escapeHtml(mantra.updatedAtIso)}">${escapeHtml(mantra.updatedAt)}</time></dd>
-        </div>
-        <div>
-          <dt>Co se změnilo</dt>
-          <dd>${escapeHtml(mantra.lastChange)}</dd>
-        </div>
-        <div>
-          <dt>Provedl</dt>
-          <dd>${escapeHtml(mantra.updatedBy)}</dd>
-        </div>
-      </dl>
+      ` : ""}
     </section>
   `;
 }
@@ -22257,7 +22252,7 @@ function collectionDailyRoutesList() {
     return `<p class="module-feedback__notice">Načítám uložené denní trasy...</p>`;
   }
   if (!routes.length) {
-    return `<p class="module-feedback__notice">${collectionDailyRouteIsTestScope() ? "Zatím není uložená žádná ruční TEST trasa. Testy tabletu najdeš pouze v jejich přehledné historii." : "Zatím není uložená žádná denní trasa."}</p>`;
+    return `<p class="module-feedback__notice">${collectionDailyRouteIsTestScope() ? "Zatím není uložená žádná ruční trasa. Zkoušky tabletu najdeš pouze v jejich přehledné historii." : "Zatím není uložená žádná denní trasa."}</p>`;
   }
   return `
     <div class="collection-daily-route-list" aria-label="Uložené denní trasy">
@@ -22281,7 +22276,7 @@ function collectionDailyRoutesList() {
 function collectionRoutesTestOperationalConfigPanel() {
   if (!collectionDailyRouteIsTestScope()) return "";
   if (collectionRoutesPilotState.testOperationalConfigLoading) {
-    return `<p class="module-feedback__notice">Načítám TEST depo, výsypy, směnu a vozidla...</p>`;
+    return `<p class="module-feedback__notice">Načítám depo, výsypy, směnu a vozidla...</p>`;
   }
   if (collectionRoutesPilotState.testOperationalConfigError) {
     return `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.testOperationalConfigError)}</p>`;
@@ -22298,28 +22293,28 @@ function collectionRoutesTestOperationalConfigPanel() {
     <section class="collection-routes-test-operations" aria-labelledby="collection-routes-test-operations-title">
       <header>
         <div>
-          <p class="module-feedback__eyebrow">Výpočetní vstupy TEST</p>
+          <p class="module-feedback__eyebrow">Výpočetní vstupy</p>
           <h3 id="collection-routes-test-operations-title">Depo, výsypy, směna a vozidla</h3>
-          <p>Souřadnice jsou dohledané adresní body. Vjezdy a technické rozměry zůstávají viditelně označené jako TEST odhad, dokud je nepotvrdí fyzické měření nebo technický průkaz.</p>
+          <p>Souřadnice jsou dohledané adresní body. Vjezdy a technické rozměry zůstávají označené jako neověřený odhad, dokud je nepotvrdí fyzické měření nebo technický průkaz.</p>
         </div>
-        <span class="collection-routes-test-badge">TEST ODHADY</span>
+        <span class="collection-routes-test-badge">NEOVĚŘENÉ ODHADY</span>
       </header>
       <div class="collection-routes-test-operations__facts">
         <article><span>Depo</span><strong>${escapeHtml(depot.name || "-")}</strong><small>${escapeHtml(depot.address || "-")}</small></article>
-        <article><span>Směna</span><strong>${escapeHtml(`${shift.start || "-"}–${shift.end || "-"}`)}</strong><small>${escapeHtml(shift.timezone || "Europe/Prague")} · TEST předpoklad</small></article>
+        <article><span>Směna</span><strong>${escapeHtml(`${shift.start || "-"}–${shift.end || "-"}`)}</strong><small>${escapeHtml(shift.timezone || "Europe/Prague")} · pracovní předpoklad</small></article>
         <article><span>Výsypy</span><strong>${escapeHtml(dumpSites.length)}</strong><small>Adresní body, skutečné vjezdy čekají na ověření.</small></article>
         <article><span>Fyzické GPS</span><strong>${escapeHtml(gpsSummary.totalCount || 0)}</strong><small>${escapeHtml(gpsSummary.reviewCount || 0)} čeká na kontrolu.</small></article>
       </div>
       <details>
-        <summary>Ukázat provozní podklady TEST</summary>
+        <summary>Ukázat provozní podklady</summary>
         <div class="collection-routes-test-operations__detail">
           <div>
             <h4>Místa výsypu</h4>
-            <ul>${dumpSites.map((site) => `<li><strong>${escapeHtml(site.name || "-")}</strong><span>${escapeHtml(site.address || "-")} · ${escapeHtml((site.wasteTypes || []).join(", ") || "odpad neurčen")} · výsyp ${escapeHtml(site.serviceMinutes || "-")} min (TEST)</span></li>`).join("")}</ul>
+            <ul>${dumpSites.map((site) => `<li><strong>${escapeHtml(site.name || "-")}</strong><span>${escapeHtml(site.address || "-")} · ${escapeHtml((site.wasteTypes || []).join(", ") || "odpad neurčen")} · výsyp ${escapeHtml(site.serviceMinutes || "-")} min (odhad)</span></li>`).join("")}</ul>
           </div>
           <div>
             <h4>Vozidla</h4>
-            <ul>${vehicles.map((vehicle) => `<li><strong>${escapeHtml(`Vůz ${vehicle.code || "-"} · ${vehicle.registration || "-"}`)}</strong><span>${escapeHtml(`${vehicle.truck?.lengthCm || "-"} × ${vehicle.truck?.widthCm || "-"} × ${vehicle.truck?.heightCm || "-"} cm · ${vehicle.truck?.grossWeightKg || "-"} kg`)} · konzervativní TEST obálka</span></li>`).join("")}</ul>
+            <ul>${vehicles.map((vehicle) => `<li><strong>${escapeHtml(`Vůz ${vehicle.code || "-"} · ${vehicle.registration || "-"}`)}</strong><span>${escapeHtml(`${vehicle.truck?.lengthCm || "-"} × ${vehicle.truck?.widthCm || "-"} × ${vehicle.truck?.heightCm || "-"} cm · ${vehicle.truck?.grossWeightKg || "-"} kg`)} · konzervativní neověřená obálka</span></li>`).join("")}</ul>
           </div>
         </div>
       </details>
@@ -23935,22 +23930,22 @@ function collectionDailyRoutesDispatcherPanel(rows = []) {
   const testSiteCount = Number(collectionRoutesPilotState.testDataset?.siteCount || collectionRoutesPilotState.testDatasetRows.length || 0);
   const sourceReady = isTest ? testSiteCount > 0 : sourceIds.length > 0;
   return `
+    ${isTest ? collectionRoutesTestDatasetPanel(user) : ""}
     ${mantraPanel}
-    ${collectionRoutesTestDatasetPanel(user)}
     ${collectionRoutesTestTabletWorkspace()}
     ${collectionRoutesTestOperationalConfigPanel()}
     <section class="collection-daily-routes" aria-labelledby="collection-daily-routes-title">
       <header class="collection-daily-routes__head">
         <div>
-          <p class="module-feedback__eyebrow">${isTest ? "TEST výpočetní pilot · kapacita + HERE" : "Řízený online pilot"}</p>
-          <h3 id="collection-daily-routes-title">${isTest ? "Příprava a read-only výpočet TEST trasy" : "Denní trasy a řidiči"}</h3>
+          <p class="module-feedback__eyebrow">${isTest ? "Výpočetní pilot · kapacita + HERE" : "Řízený online pilot"}</p>
+          <h3 id="collection-daily-routes-title">${isTest ? "Příprava a read-only výpočet trasy" : "Denní trasy a řidiči"}</h3>
           <p>${isTest ? "Datum nejdřív vybere platná stanoviště. Deterministický krok ověří čas, hmotnost a kapacity; navazující HERE pilot připraví pořadí jízdy, km, časy a výsypy pro jednu zvolenou komoditu." : "Dispečer ověří právě zobrazené řádky, uloží jejich neměnnou kopii, přiřadí řidiče a sleduje průběh."}</p>
         </div>
-        <span class="employee-card-status employee-card-status--${isTest ? "warning" : "ready"}">${isTest ? "TEST · READ-ONLY VÝPOČET" : "Uloženo v systému · Vistos beze změny"}</span>
+        <span class="employee-card-status employee-card-status--${isTest ? "warning" : "ready"}">${isTest ? "READ-ONLY VÝPOČET" : "Uloženo v systému · Vistos beze změny"}</span>
       </header>
       ${isTest ? `
-        <div class="collection-daily-routes__reality" aria-label="Co znamená současný TEST krok">
-          <article><span>Zdroj</span><strong>${escapeHtml(testSiteCount)} TEST stanovišť</strong><small>Do dne vstoupí jen platné termíny.</small></article>
+        <div class="collection-daily-routes__reality" aria-label="Co znamená současný krok">
+          <article><span>Zdroj</span><strong>${escapeHtml(testSiteCount)} stanovišť</strong><small>Do dne vstoupí jen platné termíny.</small></article>
           <article><span>Současný krok</span><strong>Výpočet A/B/C</strong><small>Časy, hmotnosti, kapacity a okna výsypů.</small></article>
           <article class="is-future"><span>Navazující krok</span><strong>HERE silniční návrh</strong><small>Pořadí, km, doprava a výsypy; čeká na potvrzené provozní vstupy.</small></article>
         </div>
@@ -23960,14 +23955,14 @@ function collectionDailyRoutesDispatcherPanel(rows = []) {
       <form class="collection-daily-route-form" data-collection-daily-route-preview-form data-source-row-ids="${escapeHtml(JSON.stringify(sourceIds))}" data-route-scope="${isTest ? "test" : "production"}">
         <label><span>${isTest ? "Datum svozu" : "Datum trasy"}</span><input type="date" name="routeDate" value="${escapeHtml(collectionRoutesPilotState.dailyRouteDate)}" required></label>
         <label><span>${isTest ? "Vůz pro ruční uložení" : "Vůz"}</span><select name="vehicleCode">${collectionRoutesPilotState.dailyRouteVehicles.map((vehicle) => `<option value="${escapeHtml(vehicle.code)}" ${vehicle.code === collectionRoutesPilotState.dailyRouteVehicleCode ? "selected" : ""}>${escapeHtml(vehicle.label)}</option>`).join("")}</select>${isTest ? "<small>Read-only výpočet vždy porovná A, B i C.</small>" : ""}</label>
-        <div><span>${isTest ? "Zdrojová data" : "Rozsah"}</span><strong>${isTest ? `${escapeHtml(testSiteCount)} TEST stanovišť` : `${escapeHtml(sourceIds.length)} právě zobrazených řádků`}</strong>${isTest ? "<small>Nejdřív se ověří, která stanoviště připadají na datum.</small>" : ""}</div>
+        <div><span>${isTest ? "Zdrojová data" : "Rozsah"}</span><strong>${isTest ? `${escapeHtml(testSiteCount)} stanovišť` : `${escapeHtml(sourceIds.length)} právě zobrazených řádků`}</strong>${isTest ? "<small>Nejdřív se ověří, která stanoviště připadají na datum.</small>" : ""}</div>
         <button class="secondary-link" type="submit" ${sourceReady && !collectionRoutesPilotState.dailyRoutePending ? "" : "disabled"}>${collectionRoutesPilotState.dailyRoutePending === "preview" ? (isTest ? "Ověřuji stanoviště..." : "Ověřuji...") : (isTest ? "Ověřit stanoviště pro datum" : "Zkontrolovat zobrazené řádky")}</button>
       </form>
       ${collectionDailyRoutePreviewPanel()}
       ${collectionRoutesReadonlyCalculationPanel()}
       ${collectionRouteHerePilotPanel()}
       <div class="collection-daily-routes__saved">
-        <div><div><h4>${isTest ? "Ruční TEST trasy" : "Uložené denní trasy"}</h4>${isTest ? "<p>Testy tabletu mají vlastní zavřenou historii. Tady zůstávají jen ručně uložené výpočetní trasy bez AI optimalizace.</p>" : ""}</div><button class="text-action" type="button" data-collection-daily-routes-refresh ${collectionRoutesPilotState.dailyRoutesLoading ? "disabled" : ""}>${isTest ? "Načíst aktuální seznam" : "Obnovit"}</button></div>
+        <div><div><h4>${isTest ? "Ruční trasy" : "Uložené denní trasy"}</h4>${isTest ? "<p>Stacionární zkoušky tabletu mají vlastní zavřenou historii. Tady zůstávají jen ručně uložené výpočetní trasy bez AI optimalizace.</p>" : ""}</div><button class="text-action" type="button" data-collection-daily-routes-refresh ${collectionRoutesPilotState.dailyRoutesLoading ? "disabled" : ""}>${isTest ? "Načíst aktuální seznam" : "Obnovit"}</button></div>
         ${collectionDailyRoutesList()}
       </div>
       ${collectionDailyRouteDispatcherDetail()}
@@ -24061,6 +24056,9 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
   const pending = collectionRoutesPilotState.myDailyRoutePending;
   const summary = run?.summary || {};
   const vehicleLabel = run?.vehicleLabel || run?.vehicleRegistration || run?.vehicleCode || "Vozidlo nepřiřazeno";
+  const stationaryFieldTest = collectionRoutesIsStationaryFieldTestRun(run);
+  const driverRouteLabel = stationaryFieldTest ? "Stacionární tablet · bez jízdy" : vehicleLabel;
+  const driverRouteTitle = stationaryFieldTest ? "Firma test 501 · jeden bod · bez jízdy" : run?.title || "Denní trasa";
   return `
     <main class="collection-daily-driver-page ${testScope ? "is-isolated-test" : ""}" data-collection-daily-driver-kiosk ${moduleThemeStyleAttribute()}>
       <header class="collection-daily-driver-kiosk-bar">
@@ -24086,8 +24084,8 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
           <header class="collection-daily-driver-route-head">
             <div class="collection-daily-driver-route-identity">
               <span>${escapeHtml(collectionDailyRouteDateLabel(run.routeDate))}</span>
-              <strong>${escapeHtml(vehicleLabel)}</strong>
-              <small>${escapeHtml(run.title || "Denní trasa")}</small>
+              <strong>${escapeHtml(driverRouteLabel)}</strong>
+              <small>${escapeHtml(driverRouteTitle)}</small>
             </div>
             <div class="collection-daily-driver-route-kpis">
               <article><span>ČEKÁ</span><strong>${escapeHtml(summary.plannedCount || 0)}</strong></article>
@@ -47450,8 +47448,21 @@ function renderAuthenticatedApp(user) {
   const triagePreviewRoute = dataBoxPlusTriagePreviewActive(user) && path === DATA_BOX_PLUS_ROUTE;
   syncDataBoxPlusTriageAssistantBoundary(path, user);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
-  if (isCollectionRoutesDriverKioskUser(user) && userPrimaryRoutes.has(COLLECTION_ROUTES_ROUTE)) {
+  if (
+    (isCollectionRoutesDriverKioskUser(user) || collectionRoutesCanUseTestDataset(user))
+    && userPrimaryRoutes.has(COLLECTION_ROUTES_ROUTE)
+  ) {
     userPrimaryRoutes.set(COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE, userPrimaryRoutes.get(COLLECTION_ROUTES_ROUTE));
+  }
+  if (
+    collectionRoutesCanUseTestDataset(user)
+    && [COLLECTION_ROUTES_ROUTE, COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE].includes(path)
+  ) {
+    const requestedScope = path === COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE ? "test" : "production";
+    if (collectionRoutesPilotState.dailyRouteScope !== requestedScope) {
+      collectionRoutesPilotState.dailyRouteScope = requestedScope;
+      resetCollectionDailyRoutesForScope();
+    }
   }
   const userDashboardRoutes = new Map(visibleDashboardRoutes(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   const sarlotaDeepLink = triagePreviewRoute ? false : prepareSarlotaDeepLinkPanel();
@@ -47646,7 +47657,11 @@ function renderAuthenticatedApp(user) {
       } else {
         ensureCollectionRoutesSvozKaiserWatchdog(user);
         void loadCollectionRoutesPilot();
-        void loadCollectionDailyRoutes();
+        if (collectionDailyRouteIsTestScope()) {
+          void loadCollectionRoutesTestDataset({ renderAfter: false }).then(() => loadCollectionDailyRoutes({ force: true }));
+        } else {
+          void loadCollectionDailyRoutes();
+        }
       }
     }
     if (moduleItem.id === RECEIVABLES_MODULE_KEY) {

@@ -59,8 +59,8 @@ for (const marker of [
   "TEST Brno 501",
   "Firma test 501",
   "Trnkova 3052/137, 628 00 Brno",
-  "Management · oddělená testovací data",
-  "TEST ŘIDIČSKÉHO TABLETU",
+  "Management · oddělená data",
+  "ŘIDIČSKÝ TABLET",
   "Stacionární TEST řidičského tabletu",
   "Historie testů tabletu",
   "Můj TEST",
@@ -75,7 +75,7 @@ for (const marker of [
   "Bez jízdy",
   "OVĚŘIT JEDEN TEST BOD",
   "POTVRDIT STACIONÁRNÍ TEST",
-  "OTEVŘÍT TEST TABLETU",
+  "OTEVŘÍT TABLET",
   "SPUSTIT TEST TABLETU",
   "DOKONČIT TEST TABLETU",
   "GPS měření je uložené. TEST můžeš dokončit",
@@ -94,8 +94,6 @@ for (const marker of [
   "Fyzická GPS řidiče",
   "Fyzická GPS testera",
   "Změřeno terénním testerem",
-  'data-collection-daily-route-scope="production"',
-  'data-collection-daily-route-scope="test"',
   "Připravit 1 SMS + 1 e-mail",
   "Připravit zprávy pro celou trasu",
   "Dny u četností Nx7 se zrcadlí 1:1",
@@ -119,8 +117,12 @@ for (const marker of [
   "Co se změnilo",
   "Provedl",
   "mantraExpanded = !collectionRoutesPilotState.mantraExpanded",
-  "NÁHLED · NIC NESPOUŠTÍ",
-  "TEST výpočetní pilot · kapacita + HERE",
+  "PROVOZNÍ MANTRA · READ-ONLY NÁHLED",
+  "NIC NESPOUŠTÍ",
+  "ROZBALIT",
+  "Stacionární tablet · bez jízdy",
+  "Firma test 501 · jeden bod · bez jízdy",
+  "Výpočetní pilot · kapacita + HERE",
   "Ověřit stanoviště pro datum",
   "Spočítat read-only návrh A/B/C",
   "data-collection-routes-readonly-calculate",
@@ -134,7 +136,7 @@ for (const marker of [
   "start-here-test-readonly",
   "/api/collection-routes/here-optimization",
   "Žádné automatické opakování neběží",
-  "TEST · READ-ONLY VÝPOČET",
+  "READ-ONLY VÝPOČET",
   "Fyzické potvrzení GPS stanoviště",
   "data-collection-routes-test-gps-capture",
   "data-collection-routes-test-voice-provider",
@@ -196,6 +198,26 @@ for (const marker of [
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
+
+const testDatasetPanelSource = appSource.slice(
+  appSource.indexOf("function collectionRoutesTestDatasetPanel"),
+  appSource.indexOf("function collectionRoutesTestSiteDetailTable")
+);
+assert.ok(
+  testDatasetPanelSource.includes("!collectionDailyRouteIsTestScope()") &&
+    !testDatasetPanelSource.includes("data-collection-daily-route-scope"),
+  "Ostrá stránka nesmí vykreslit TEST dataset ani přepínač datového režimu."
+);
+assert.ok(
+  appSource.includes('${isTest ? collectionRoutesTestDatasetPanel(user) : ""}') &&
+    appSource.includes("PROVOZNÍ MANTRA · READ-ONLY NÁHLED"),
+  "Oddělený dataset smí být jen v TEST scope a Mantra musí začínat nízkým read-only náhledem."
+);
+assert.ok(
+  appSource.includes("isCollectionRoutesDriverKioskUser(user) || collectionRoutesCanUseTestDataset(user)") &&
+    appSource.includes('const requestedScope = path === COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE ? "test" : "production"'),
+  "Přímá /trasy-svozu/test musí zachovat oddělený scope řidiči i oprávněné správě bez přepínače na ostré stránce."
+);
 
 for (const column of ["Stav", "Pořadí", "Zákazník", "Stanoviště", "Odpad / nádoba", "Interval", "Den svozu", "Smlouva"]) {
   assert.ok(
@@ -456,7 +478,7 @@ const dailyRoutesListEnd = appSource.indexOf("function collectionRoutesTestOpera
 const dailyRoutesListSource = appSource.slice(dailyRoutesListStart, dailyRoutesListEnd);
 assert.ok(
   dailyRoutesListSource.includes("!collectionRoutesIsStationaryFieldTestRun(route)") &&
-    dailyRoutesListSource.includes("Testy tabletu najdeš pouze v jejich přehledné historii"),
+    dailyRoutesListSource.includes("Zkoušky tabletu najdeš pouze v jejich přehledné historii"),
   "Stacionární testy tabletu nesmí znovu zaplnit hlavní seznam ručních výpočetních tras."
 );
 

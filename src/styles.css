@@ -38613,30 +38613,81 @@ body:has(.ds-plus-page) {
 /* Svozové trasy – read-only provozní mantra */
 .collection-routes-mantra {
   display: grid;
-  gap: 14px;
   margin-bottom: 16px;
-  padding: 18px;
+  overflow: hidden;
   border: 1px solid rgba(117, 189, 37, 0.3);
   border-radius: 16px;
   background: linear-gradient(145deg, rgba(247, 252, 242, 0.96), #fff 62%);
 }
 
-.collection-routes-mantra__head {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.collection-routes-mantra__head h3 {
-  margin: 2px 0 5px;
+.collection-routes-mantra__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  width: 100%;
+  min-height: 76px;
+  align-items: center;
+  padding: 11px 14px;
+  border: 0;
+  background: transparent;
   color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
-.collection-routes-mantra__head p:last-child {
-  max-width: 780px;
-  margin: 0;
+.collection-routes-mantra__summary:hover {
+  background: rgba(117, 189, 37, 0.06);
+}
+
+.collection-routes-mantra__summary-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.collection-routes-mantra__summary-copy > span {
+  color: #467d1c;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.045em;
+}
+
+.collection-routes-mantra__summary-copy > strong {
+  overflow: hidden;
+  font-size: 0.98rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-routes-mantra__summary-copy > small,
+.collection-routes-mantra__lead {
   color: var(--steel);
+  font-size: 0.76rem;
+}
+
+.collection-routes-mantra__action {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  padding: 7px 12px;
+  border: 1px solid rgba(66, 80, 74, 0.16);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.collection-routes-mantra__body {
+  display: grid;
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+
+.collection-routes-mantra__lead {
+  margin: 0;
+  line-height: 1.45;
 }
 
 .collection-routes-mantra__status {
@@ -38696,13 +38747,6 @@ body:has(.ds-plus-page) {
   line-height: 1.45;
 }
 
-.collection-routes-mantra__detail {
-  overflow: hidden;
-  border: 1px solid rgba(66, 80, 74, 0.12);
-  border-radius: 12px;
-  background: #fff;
-}
-
 .collection-routes-mantra__audit {
   display: grid;
   grid-template-columns: minmax(190px, 0.9fr) minmax(220px, 1.5fr) minmax(120px, 0.65fr);
@@ -38740,39 +38784,9 @@ body:has(.ds-plus-page) {
   line-height: 1.35;
 }
 
-.collection-routes-mantra__detail > button {
-  display: flex;
-  width: 100%;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 13px 14px;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-
-.collection-routes-mantra__detail > button:hover {
-  background: rgba(117, 189, 37, 0.06);
-}
-
-.collection-routes-mantra__detail > button span {
-  font-weight: 900;
-}
-
-.collection-routes-mantra__detail > button small {
-  color: var(--steel);
-  font-weight: 650;
-  text-align: right;
-}
-
 .collection-routes-mantra__content {
   display: grid;
   gap: 12px;
-  padding: 0 14px 14px;
 }
 
 .collection-routes-mantra__truth {
@@ -41397,38 +41411,6 @@ body:has(.ds-plus-page) {
   letter-spacing: 0.08em;
 }
 
-.collection-routes-test-scope {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 5px;
-  border: 1px solid rgba(66, 80, 74, 0.12);
-  border-radius: 12px;
-  background: #fff;
-}
-
-.collection-routes-test-scope button {
-  min-height: 42px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--steel);
-  font: inherit;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.collection-routes-test-scope button.is-active {
-  background: var(--color-primary, #75bd25);
-  color: #fff;
-  box-shadow: 0 6px 15px rgba(65, 98, 43, 0.15);
-}
-
-.collection-routes-test-scope button[data-collection-daily-route-scope="test"].is-active {
-  background: #a92020;
-  box-shadow: 0 6px 15px rgba(169, 32, 32, 0.16);
-}
-
 .collection-routes-test-empty,
 .collection-routes-test-notification-job {
   display: grid;
@@ -43431,13 +43413,17 @@ body.collection-driver-blackview-simulator-active #app {
   }
 
   .collection-routes-mantra {
-    padding: 13px;
     border-radius: 13px;
   }
 
-  .collection-routes-mantra__head,
-  .collection-routes-mantra__detail > button {
-    display: grid;
+  .collection-routes-mantra__summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .collection-routes-mantra__summary-copy > strong {
+    white-space: normal;
   }
 
   .collection-routes-mantra__status {
@@ -43452,10 +43438,6 @@ body.collection-driver-blackview-simulator-active #app {
   .collection-routes-mantra__highlights article:last-child,
   .collection-daily-routes__reality article:last-child {
     grid-column: auto;
-  }
-
-  .collection-routes-mantra__detail > button small {
-    text-align: left;
   }
 
   .collection-routes-mantra__content pre {
@@ -43547,7 +43529,6 @@ body.collection-driver-blackview-simulator-active #app {
     display: grid;
   }
 
-  .collection-routes-test-scope,
   .collection-routes-test-kpis {
     grid-template-columns: 1fr;
   }
