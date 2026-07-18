@@ -110,7 +110,16 @@ export async function loadCollectionRouteVehicleProfile(env = {}, input = {}) {
     `).bind(registration, code, registration).first();
     return normalizeProfile(row, "fleet-vehicle-technical-profiles") || fallback;
   } catch (error) {
-    if (/no such table[^\n]*fleet_vehicle_technical_profiles/i.test(cleanString(error?.message))) return fallback;
+    const message = cleanString(error?.message);
+    if (/no such table[^\n]*fleet_vehicle_technical_profiles/i.test(message)) return fallback;
+    if (fallback) {
+      console.warn("collection_route_vehicle_profile.cloud_read_failed", {
+        vehicleCode: code,
+        registration,
+        message
+      });
+      return fallback;
+    }
     throw error;
   }
 }
