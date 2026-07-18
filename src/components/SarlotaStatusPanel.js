@@ -400,6 +400,68 @@ function voiceWriteTestControls(test = {}, syncing = false) {
   `;
 }
 
+function promptSyncBlockLabels(prompt = {}) {
+  return [
+    [prompt.willAppendDriverReportVehicleRule, "Hlášení řidičů a vozidla"],
+    [prompt.willAppendDataBoxContextRule, "Datová schránka"],
+    [prompt.willAppendCollectionRoutesContextRule, "Svozové trasy: kontext, počasí, zprávy a paměť"],
+    [prompt.willAppendCollectionRoutesGpsRule, "Svozové trasy: GPS stanoviště"],
+    [prompt.willAppendCollectionRoutesIncidentRule, "Svozové trasy: hlášení stanoviště"],
+    [prompt.willAppendCollectionRoutesDriverActionRule, "Svozové trasy: pracovní kroky řidiče"]
+  ].filter(([missing]) => missing).map(([, label]) => label);
+}
+
+function promptSyncPreview(plan = null, syncing = false) {
+  if (!plan) {
+    return "";
+  }
+
+  const prompt = plan.prompt || {};
+  const agent = plan.agent || {};
+  const plannedBlocks = promptSyncBlockLabels(prompt);
+  const alreadyApplied = plan.alreadyApplied === true;
+  const ready = plan.ready === true;
+  const badgeTone = alreadyApplied ? "ok" : ready ? "waiting" : "error";
+  const badgeLabel = alreadyApplied ? "SYNCHRONIZOVÁNO" : ready ? "NÁHLED · BEZ ZÁPISU" : "NELZE BEZPEČNĚ ZAPSAT";
+  const matchLabel = (value, okText) => value === true ? okText : value === false ? "nesedí" : "neověřeno";
+  const blocks = plannedBlocks.length
+    ? plannedBlocks.map((label) => `<li>${escapeHtml(label)}</li>`).join("")
+    : alreadyApplied
+      ? "<li>Žádný chybějící spravovaný blok</li>"
+      : ready
+        ? "<li>Spravované bloky budou pouze sjednocené na aktuální bezpečnou verzi.</li>"
+        : "<li>Plán bloků není bez ověřené konfigurace dostupný.</li>";
+
+  return `
+    <section class="sarlota-status__prompt-plan" data-sarlota-prompt-plan>
+      <div class="sarlota-status__prompt-plan-head">
+        <div>
+          <span class="sarlota-status__badge sarlota-status__badge--${escapeHtml(badgeTone)}">${escapeHtml(badgeLabel)}</span>
+          <h3>Náhled změny ElevenLabs promptu</h3>
+          <p>Tento náhled je pouze čtecí. Prompt, first message, model ani tools se zatím nemění.</p>
+        </div>
+      </div>
+      <dl class="sarlota-status__prompt-plan-grid">
+        ${diagnosticLine("Agent", escapeHtml(`${plan.assistant?.assistantDisplayName || agent.expectedName || "Šarlota"} · ${matchLabel(agent.nameMatches, "ověřen")}`))}
+        ${diagnosticLine("First message", escapeHtml(matchLabel(agent.firstMessageMatches, "{{intro_announcement}} ověřeno")))}
+        ${diagnosticLine("Cesta promptu", escapeHtml(prompt.path || "nenalezena"))}
+        ${diagnosticLine("Délka nyní", escapeHtml(`${Number(prompt.currentLength || 0)} znaků`))}
+      </dl>
+      <div class="sarlota-status__prompt-plan-blocks">
+        <strong>Spravované bloky k doplnění nebo sjednocení</strong>
+        <ul>${blocks}</ul>
+        ${prompt.legacyRulePresent ? "<p>Starý blok vozidel bude odstraněný.</p>" : ""}
+        ${safeArray(prompt.forbiddenPhrasesPresent).length ? `<p>Budou odstraněné zakázané zastaralé fráze: ${escapeHtml(safeArray(prompt.forbiddenPhrasesPresent).length)}.</p>` : ""}
+      </div>
+      <p class="sarlota-status__prompt-plan-safety">Do prohlížeče se nevrací text promptu, API klíč, Agent ID ani signed URL. Zápis znovu načte živého agenta a projde backendovou bezpečnostní kontrolou.</p>
+      <div class="sarlota-status__prompt-plan-actions">
+        ${ready ? `<button class="primary-action" type="button" data-sarlota-prompt-apply ${syncing ? "disabled" : ""}>ZAPSAT DO ELEVENLABS</button>` : ""}
+        <button class="secondary-link" type="button" data-sarlota-prompt-plan-cancel ${syncing ? "disabled" : ""}>${alreadyApplied ? "ZAVŘÍT NÁHLED" : "ZRUŠIT NÁHLED"}</button>
+      </div>
+    </section>
+  `;
+}
+
 export function SarlotaStatusPanel({
   status = null,
   loading = false,
@@ -409,7 +471,8 @@ export function SarlotaStatusPanel({
   syncError = "",
   selectedAssistantKey = "sarlota",
   voiceDiagnostics = {},
-  voiceWriteTest = {}
+  voiceWriteTest = {},
+  promptSyncPlan = null
 } = {}) {
   const data = status || {};
   const selectedConfig = ELEVENLABS_ASSISTANT_CONFIGS[selectedAssistantKey] || ELEVENLABS_ASSISTANT_CONFIGS.sarlota;
@@ -510,7 +573,7 @@ export function SarlotaStatusPanel({
             ${omitDriverReportVehicleContext ? "Vypnout test bez vozidel" : "Test: bez vozidel v hlasu"}
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-prompt-sync ${promptSyncDisabled ? "disabled" : ""}>
-            Doplnit prompt
+            Načíst náhled promptu
           </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-voice-write-test ${voiceWriteTestDisabled ? "disabled" : ""}>
             Test voice zápisu
@@ -524,6 +587,7 @@ export function SarlotaStatusPanel({
       ${error ? `<p class="module-feedback__error" role="alert">${escapeHtml(error)}</p>` : ""}
       ${syncError ? `<p class="module-feedback__error" role="alert">${escapeHtml(syncError)}</p>` : ""}
       ${syncMessage ? `<p class="module-feedback__success" role="status">${escapeHtml(syncMessage)}</p>` : ""}
+      ${promptSyncPreview(promptSyncPlan, syncing)}
       ${voiceWriteTestControls(voiceWriteTest, syncing)}
       <dl class="sarlota-status__grid">
         ${rows}

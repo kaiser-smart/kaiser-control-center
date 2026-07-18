@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.600"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.601"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: náhled promptu oddělený od zápisu",
+    text: "Správce nejdřív načte chráněný read-only plán bez textu promptu a bez secretů. Zápis do ElevenLabs má samostatné tlačítko a nové potvrzení; neúspěšné hlasové připojení už nenechá řidičský tablet ve falešném stavu Šarlota poslouchá."
+  },
   {
     title: "Svozové trasy: přehledný ostrý modul a sbalená Mantra",
     text: "Ostrá stránka už nezobrazuje testovací dataset ani přepínač režimu. Oddělené prostředí zůstává pouze na přímé testovací adrese s jedním jasným označením; provozní Mantra je výchozí nízký read-only náhled a celý obsah rozbalí až vědomé kliknutí."

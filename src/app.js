@@ -881,6 +881,7 @@ const sarlotaStatusState = {
   error: "",
   syncMessage: "",
   syncError: "",
+  promptSyncPlan: null,
   voiceWriteTest: {
     plan: null,
     selectedVehicleId: ""
@@ -1424,6 +1425,7 @@ const collectionRoutesPilotState = {
   myDailyRouteReportError: "",
   myDailyRouteDumpDestinationId: "",
   myDailyRouteSarlotaEnabled: false,
+  myDailyRouteSarlotaConnecting: false,
   myDailyRouteSarlotaMessage: "",
   myDailyRouteSarlotaContext: null,
   myDailyRouteSarlotaMemoryLoaded: false,
@@ -3181,9 +3183,19 @@ function closeAiAssistant(options = {}) {
   aiAssistantState.voiceUiState = "idle";
   aiAssistantState.voiceWakeLockStatus = "idle";
   aiAssistantState.sarlotaDeepLinkQuickStart = false;
+  const collectionRoutesVoiceClosed = isCollectionRoutesPath(normalizePath(window.location.pathname));
+  if (collectionRoutesVoiceClosed) {
+    collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit.";
+  }
   clearSarlotaDeepLinkUrl();
   if (options.renderAfter !== false) {
-    renderAiAssistantLayerOnly();
+    if (collectionRoutesVoiceClosed) {
+      render();
+    } else {
+      renderAiAssistantLayerOnly();
+    }
   }
 }
 
@@ -3339,7 +3351,7 @@ async function prepareElevenLabsVoiceSession() {
   }
 }
 
-async function startElevenLabsVoiceRecognition() {
+async function startElevenLabsVoiceRecognition(options = {}) {
   stopAiVoiceDemo({ renderAfter: false });
   speechRecognition.stop({ status: false });
   const requestId = ++aiTextRequestId;
@@ -3372,6 +3384,7 @@ async function startElevenLabsVoiceRecognition() {
         aiAssistantState.elevenLabsConfiguredByAssistant[assistant.id] = true;
         aiAssistantState.elevenLabsStatus = `ElevenLabs agent ${session.assistantName || assistant.name} je připojený.`;
         setAiVoiceUiState("ready", AI_VOICE_READY_LABEL, ["Připojeno", "Mikrofon", "ElevenLabs"]);
+        options.onConnected?.(session);
         triggerAiVoiceSessionHaptic("connected");
         renderAiAssistantLayerOnly();
       },
@@ -3489,6 +3502,7 @@ async function startElevenLabsVoiceRecognition() {
     }
 
     aiAssistantState.isListening = false;
+    options.onFailed?.(error);
     if (error?.code === "voice_stopped") {
       aiAssistantState.voiceStatus = AI_VOICE_MUTED_LABEL;
       aiAssistantState.voiceUiState = "muted";
@@ -3609,8 +3623,18 @@ function stopAiVoiceRecognition() {
   aiAssistantState.voiceUiState = "muted";
   aiAssistantState.voiceStatus = AI_VOICE_MUTED_LABEL;
   aiAssistantState.voiceTags = ["Mikrofon vypnutý", "Klepni", "Připraven"];
+  const collectionRoutesVoiceStopped = isCollectionRoutesPath(normalizePath(window.location.pathname));
+  if (collectionRoutesVoiceStopped) {
+    collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit.";
+  }
   void releaseAiVoiceWakeLock({ renderAfter: false });
-  renderAiAssistantLayerOnly();
+  if (collectionRoutesVoiceStopped) {
+    render();
+  } else {
+    renderAiAssistantLayerOnly();
+  }
 }
 
 function navigateFromAiAssistant(route) {
@@ -6615,7 +6639,8 @@ function settingsManagementSection(user) {
       syncError: sarlotaStatusState.syncError,
       selectedAssistantKey: sarlotaStatusState.assistantKey,
       voiceDiagnostics: sarlotaVoiceDiagnosticsState,
-      voiceWriteTest: sarlotaStatusState.voiceWriteTest
+      voiceWriteTest: sarlotaStatusState.voiceWriteTest,
+      promptSyncPlan: sarlotaStatusState.promptSyncPlan
     })}
     ${AppearanceSettingsBox({
       draftSettings: themeState.draft,
@@ -24121,7 +24146,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
                 <button class="collection-daily-driver-action ${collectionDailyDriverLatestOperation(detail, "break") ? "is-active" : ""}" type="button" data-collection-driver-panel="break" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>${collectionDailyDriverLatestOperation(detail, "break") ? "PŘESTÁVKA BĚŽÍ" : "PŘESTÁVKA"}</button>
                 <button class="collection-daily-driver-action" type="button" data-collection-driver-panel="route">CELÁ TRASA</button>
                 ${testScope ? `<button class="collection-daily-driver-action collection-daily-driver-action--mapping" type="button" data-collection-driver-panel="mapping">MAPOVÁNÍ STANOVIŠTĚ</button>` : ""}
-                <button class="collection-daily-driver-action collection-daily-driver-action--sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "is-active" : ""}" type="button" data-collection-driver-sarlota>${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "ŠARLOTA POSLOUCHÁ" : "ZAPNOUT ŠARLOTU"}</button>
+                <button class="collection-daily-driver-action collection-daily-driver-action--sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "is-active" : ""}" type="button" data-collection-driver-sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaConnecting ? "disabled" : ""}>${collectionRoutesPilotState.myDailyRouteSarlotaConnecting ? "PŘIPOJUJI ŠARLOTU…" : collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "ŠARLOTA POSLOUCHÁ" : "ZAPNOUT ŠARLOTU"}</button>
                 ${collectionRoutesPilotState.myDailyRouteSarlotaMessage ? `<p class="collection-daily-driver-sarlota-status">${escapeHtml(collectionRoutesPilotState.myDailyRouteSarlotaMessage)}</p>` : ""}
                 ${collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded ? `<button class="collection-daily-driver-sarlota-memory-button" type="button" data-collection-driver-sarlota-memory>${collectionRoutesPilotState.myDailyRouteSarlotaMemory?.consent ? "PAMĚŤ: ZAPNUTÁ" : "PAMĚŤ: VYPNUTÁ"}</button>` : ""}
               </aside>
@@ -41003,23 +41028,34 @@ async function loadCollectionRoutesSarlotaContext() {
 }
 
 async function startCollectionDailyDriverSarlota() {
-  collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
+  collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
+  collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
   const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory;
-  collectionRoutesPilotState.myDailyRouteSarlotaMessage = memory?.consent
-    ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Zápis vždy čeká na klepnutí."
-    : "Šarlota zná aktuální trasu. Paměť je vypnutá a zápis vždy čeká na klepnutí.";
+  collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Připojuji Šarlotu přes ElevenLabs…";
   openAiAssistant("voice", { assistantId: "sarlota", renderAfter: false });
   render();
-  try {
-    await startElevenLabsVoiceRecognition();
-  } catch (error) {
-    collectionRoutesPilotState.myDailyRouteSarlotaMessage = error.message || "Šarlotu se nepodařilo připojit.";
-    render();
-  }
+  void startElevenLabsVoiceRecognition({
+    onConnected: () => {
+      collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
+      collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+      collectionRoutesPilotState.myDailyRouteSarlotaMessage = memory?.consent
+        ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Zápis vždy čeká na klepnutí."
+        : "Šarlota zná aktuální trasu. Paměť je vypnutá a zápis vždy čeká na klepnutí.";
+      render();
+    },
+    onFailed: (error) => {
+      collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
+      collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+      collectionRoutesPilotState.myDailyRouteSarlotaMessage = error?.code === "voice_stopped"
+        ? "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit."
+        : "Šarlota se nepřipojila. Zkontroluj hlášku u mikrofonu a klepni znovu na ZAPNOUT ŠARLOTU.";
+      render();
+    }
+  });
 }
 
 async function enableCollectionDailyDriverSarlota() {
-  if (collectionRoutesPilotState.myDailyRouteSarlotaEnabled) return;
+  if (collectionRoutesPilotState.myDailyRouteSarlotaEnabled || collectionRoutesPilotState.myDailyRouteSarlotaConnecting) return;
   void elevenLabsAssistant.unlockVoiceAudio?.();
   const context = await loadCollectionRoutesSarlotaContext();
   if (!context) return;
@@ -46394,6 +46430,7 @@ function selectSarlotaAssistant(assistantKey) {
   sarlotaStatusState.error = "";
   sarlotaStatusState.syncError = "";
   sarlotaStatusState.syncMessage = "";
+  sarlotaStatusState.promptSyncPlan = null;
   void loadSarlotaStatus({ force: true });
 }
 
@@ -46450,38 +46487,71 @@ async function syncSarlotaPrompt() {
 
   try {
     const plan = await apiJson(`/api/ai/elevenlabs/sarlota-prompt-sync?${sarlotaAssistantApiQuery()}`);
+    sarlotaStatusState.promptSyncPlan = plan;
     const forbiddenPromptPhrases = Array.isArray(plan.prompt?.forbiddenPhrasesPresent)
       ? plan.prompt.forbiddenPhrasesPresent
       : [];
 
     if (plan.alreadyApplied && !forbiddenPromptPhrases.length) {
-      sarlotaStatusState.syncMessage = "Pravidlo už v ElevenLabs promptu je.";
+      sarlotaStatusState.syncMessage = "ElevenLabs prompt už obsahuje všechny spravované bezpečné bloky.";
       await loadSarlotaStatus({ force: true, renderAfter: false });
       return;
     }
 
     if (!plan.ready) {
-      sarlotaStatusState.syncError = "Prompt nejde bezpečně upravit. Zkontroluj název agenta, first message a cestu promptu.";
+      sarlotaStatusState.syncError = plan.message || "Prompt nejde bezpečně upravit. Zkontroluj název agenta, first message a cestu promptu.";
       sarlotaStatusState.syncMessage = "";
       return;
     }
 
-    if (!window.confirm(sarlotaPromptSyncConfirmText(plan))) {
-      sarlotaStatusState.syncMessage = "Synchronizace promptu zrušena.";
-      return;
-    }
-
-    sarlotaStatusState.syncMessage = "Doplňuji ElevenLabs prompt...";
+    sarlotaStatusState.syncMessage = "Read-only náhled je připravený. Do ElevenLabs se nic nezapsalo.";
+  } catch (error) {
+    console.error("smart_odpady_sarlota_prompt_sync_preview_failed", error);
+    sarlotaStatusState.promptSyncPlan = null;
+    sarlotaStatusState.syncError = error.payload?.error || "Náhled synchronizace promptu se nepodařilo načíst.";
+    sarlotaStatusState.syncMessage = "";
+  } finally {
+    sarlotaStatusState.syncing = false;
     render();
+  }
+}
 
+function cancelSarlotaPromptSyncPreview() {
+  if (sarlotaStatusState.syncing) return;
+  sarlotaStatusState.promptSyncPlan = null;
+  sarlotaStatusState.syncMessage = "Náhled promptu byl zavřený. Nic se nezapsalo.";
+  sarlotaStatusState.syncError = "";
+  render();
+}
+
+async function applySarlotaPromptSync() {
+  const plan = sarlotaStatusState.promptSyncPlan;
+  if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user) || plan?.ready !== true) {
+    return;
+  }
+
+  if (!window.confirm(sarlotaPromptSyncConfirmText(plan))) {
+    sarlotaStatusState.syncMessage = "Zápis promptu zrušen. Náhled zůstává otevřený a nic se nezměnilo.";
+    sarlotaStatusState.syncError = "";
+    render();
+    return;
+  }
+
+  sarlotaStatusState.syncing = true;
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Doplňuji ElevenLabs prompt...";
+  render();
+
+  try {
     const result = await apiJson("/api/ai/elevenlabs/sarlota-prompt-sync", {
       method: "POST",
       body: JSON.stringify({ apply: true, assistant: selectedSarlotaAssistantConfig().assistantKey })
     });
 
+    sarlotaStatusState.promptSyncPlan = null;
     sarlotaStatusState.syncMessage = result.status === "ok"
       ? "ElevenLabs prompt Šarloty je synchronizovaný."
-      : "Prompt byl uložen částečně, zkontroluj prosím stav Šarloty.";
+      : "Prompt byl uložen částečně, zkontroluj stav Šarloty.";
     await loadSarlotaStatus({ force: true, renderAfter: false });
   } catch (error) {
     console.error("smart_odpady_sarlota_prompt_sync_failed", error);
@@ -51728,6 +51798,20 @@ document.addEventListener("click", async (event) => {
   if (sarlotaPromptSync) {
     event.preventDefault();
     await syncSarlotaPrompt();
+    return;
+  }
+
+  const sarlotaPromptApply = event.target.closest("[data-sarlota-prompt-apply]");
+  if (sarlotaPromptApply) {
+    event.preventDefault();
+    await applySarlotaPromptSync();
+    return;
+  }
+
+  const sarlotaPromptPlanCancel = event.target.closest("[data-sarlota-prompt-plan-cancel]");
+  if (sarlotaPromptPlanCancel) {
+    event.preventDefault();
+    cancelSarlotaPromptSyncPreview();
     return;
   }
 
