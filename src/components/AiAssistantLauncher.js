@@ -31,6 +31,26 @@ function voiceDockTitle(state, listening) {
   return "Šarlota je aktivní";
 }
 
+function hologramStatus(state, listening) {
+  if (state === "connecting" || state === "ready") {
+    return { label: "Připojuji se", aria: "se připojuje" };
+  }
+
+  if (state === "processing") {
+    return { label: "Přemýšlím", aria: "zpracovává odpověď" };
+  }
+
+  if (listening || state === "listening" || state === "userSpeaking") {
+    return { label: "Poslouchám", aria: "poslouchá řidiče" };
+  }
+
+  if (state === "microphoneDenied" || state === "disconnected" || state === "error") {
+    return { label: "Spojení čeká", aria: "čeká na ruční obnovení spojení" };
+  }
+
+  return { label: "Mluvím", aria: "právě mluví" };
+}
+
 export function AiAssistantLauncher({
   visible = false,
   voiceActive = false,
@@ -46,15 +66,16 @@ export function AiAssistantLauncher({
   }
 
   if (speakingHologram && hologramPath) {
+    const hologram = hologramStatus(voiceUiState, isListening);
     return `
-      <aside class="ai-sarlota-speaking-hologram" role="status" aria-live="polite" aria-label="${escapeHtml(assistantName)} právě mluví">
+      <aside class="ai-sarlota-speaking-hologram ai-sarlota-speaking-hologram--state-${escapeHtml(voiceUiState || "active")}" role="status" aria-live="polite" aria-label="${escapeHtml(assistantName)} ${escapeHtml(hologram.aria)}">
         <div class="ai-sarlota-speaking-hologram__figure" aria-hidden="true">
           <span class="ai-sarlota-speaking-hologram__glow"></span>
           <img src="${escapeHtml(hologramPath)}" alt="" />
           <span class="ai-sarlota-speaking-hologram__scan"></span>
         </div>
         <div class="ai-sarlota-speaking-hologram__status">
-          <strong>${escapeHtml(assistantName)} mluví</strong>
+          <strong>${escapeHtml(assistantName)} · ${escapeHtml(hologram.label)}</strong>
           <span class="ai-sarlota-speaking-hologram__wave" aria-hidden="true">
             <i></i><i></i><i></i><i></i>
           </span>

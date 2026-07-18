@@ -63,7 +63,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.1";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.32";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.33";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -1428,6 +1428,7 @@ const collectionRoutesPilotState = {
   myDailyRouteDumpDestinationId: "",
   myDailyRouteSarlotaEnabled: false,
   myDailyRouteSarlotaConnecting: false,
+  myDailyRouteSarlotaAutoSession: false,
   myDailyRouteSarlotaMessage: "",
   myDailyRouteSarlotaContext: null,
   myDailyRouteSarlotaMemoryLoaded: false,
@@ -3189,6 +3190,7 @@ function closeAiAssistant(options = {}) {
   if (collectionRoutesVoiceClosed) {
     collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
     collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
     collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit.";
   }
   clearSarlotaDeepLinkUrl();
@@ -3629,6 +3631,7 @@ function stopAiVoiceRecognition() {
   if (collectionRoutesVoiceStopped) {
     collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
     collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
     collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit.";
   }
   void releaseAiVoiceWakeLock({ renderAfter: false });
@@ -3696,7 +3699,10 @@ function renderAiAssistantLayer() {
     || (
       isCollectionRoutesPath(normalizePath(window.location.pathname))
       && aiAssistantState.mode === "voice"
-      && aiAssistantState.voiceUiState === "assistantSpeaking"
+      && (
+        aiAssistantState.voiceUiState === "assistantSpeaking"
+        || collectionRoutesPilotState.myDailyRouteSarlotaAutoSession
+      )
     )
   );
 
@@ -24047,6 +24053,18 @@ function collectionDailyDriverPanel(detail, currentStop, visibleStops, remaining
   const run = detail?.run || {};
   const testScope = run.scope === "test";
   const close = `<button type="button" class="collection-daily-driver-modal__close" data-collection-driver-panel-close aria-label="Zavřít">ZAVŘÍT</button>`;
+  if (panel === "route-confirmation") {
+    const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory || {};
+    const memoryConsent = memory.consent === true;
+    const memoryAvailable = memory.available === true;
+    const stopCount = Array.isArray(detail?.stops) ? detail.stops.length : 0;
+    const memoryChoice = memoryConsent
+      ? `<div class="collection-daily-driver-route-confirmation__memory is-enabled"><strong>Pracovní paměť je zapnutá</strong><span>Šarlota může navázat na stručná pracovní témata. Zvuk ani celý přepis se neukládá.</span><small>Vypnutí a smazání zůstává samostatně v nastavení paměti po zahájení trasy.</small></div>`
+      : memoryAvailable
+        ? `<label class="collection-daily-driver-route-confirmation__memory"><input type="checkbox" name="useMemory" value="yes"><span><strong>Zapnout pracovní paměť Šarloty</strong><small>Uloží se jen stručná pracovní témata, například trasa, počasí nebo výsyp. Zvuk, celý přepis ani soukromé údaje se neukládají.</small></span></label><p class="collection-daily-driver-route-confirmation__memory-note">Když volbu nezaškrtneš, Šarlota se spustí bez paměti.</p>`
+        : `<div class="collection-daily-driver-route-confirmation__memory is-unavailable"><strong>Pracovní paměť teď není dostupná</strong><span>Trasu můžeš potvrdit a Šarlota se spustí bez ní.</span></div>`;
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-route-confirmation-title"><section><header><div><span>DNEŠNÍ TRASA · JEDEN KROK</span><h2 id="collection-driver-route-confirmation-title">Potvrdit a zahájit trasu</h2><p>${escapeHtml(run.title || vehicleLabel)} · ${escapeHtml(vehicleLabel)}</p></div>${close}</header>${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}<form class="collection-daily-driver-route-confirmation" data-collection-driver-route-confirmation-form><div class="collection-daily-driver-route-confirmation__summary"><article><span>STANOVIŠTĚ</span><strong>${escapeHtml(stopCount)}</strong></article><article><span>PO STARTU</span><strong>MAPA + ŠARLOTA</strong></article></div>${memoryChoice}<button class="primary-action" type="submit" ${pending ? "disabled" : ""}>${pending ? "PŘIPRAVUJI…" : testScope ? "POTVRDIT A ZAHÁJIT TEST" : "POTVRDIT A ZAHÁJIT TRASU"}</button><small class="collection-daily-driver-route-confirmation__safety">Toto klepnutí zahájí přidělenou trasu. Šarlota nic dalšího sama neuloží ani neodešle.</small></form></section></div>`;
+  }
   if (panel === "sarlota-memory") {
     const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory || {};
     const consent = memory.consent === true;
@@ -24149,7 +24167,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               <button type="button" data-collection-daily-driver-refresh ${collectionRoutesPilotState.myDailyRouteLoading ? "disabled" : ""}>OBNOVIT</button>
             </div>
           </header>
-          ${run.status === "confirmed" ? `<div class="collection-daily-driver-start"><strong>Trasa je připravená.</strong><span>Po zahájení se zobrazí mapa, navigace a pracovní kroky.</span><button class="primary-action collection-daily-driver-primary" type="button" data-collection-daily-driver-transition="start" ${pending ? "disabled" : ""}>${testScope ? "ZAHÁJIT TEST" : "ZAHÁJIT TRASU"}</button></div>` : ""}
+          ${run.status === "confirmed" ? `<div class="collection-daily-driver-start"><strong>Dnešní trasa je připravená.</strong><span>V jednom okně potvrdíš trasu i pracovní paměť Šarloty.</span><button class="primary-action collection-daily-driver-primary" type="button" data-collection-driver-route-confirmation-open ${pending ? "disabled" : ""}>POTVRDIT DNEŠNÍ TRASU</button></div>` : ""}
           ${run.status === "draft" ? `<div class="collection-daily-driver-complete"><strong>Trasa čeká na potvrzení dispečinku.</strong><span>Zatím ji nemůžeš zahájit.</span></div>` : ""}
           ${run.status === "completed" ? `<div class="collection-daily-driver-complete"><strong>Trasa je dokončená.</strong><span>Pokud je potřeba oprava, znovu ji otevře dispečer.</span></div>` : ""}
           ${run.status === "active" && currentStop ? `
@@ -41132,20 +41150,67 @@ async function loadCollectionRoutesSarlotaContext() {
   }
 }
 
-async function startCollectionDailyDriverSarlota() {
+async function openCollectionDailyDriverRouteConfirmation() {
+  if (collectionRoutesPilotState.myDailyRoutePending) return;
+  void elevenLabsAssistant.unlockVoiceAudio?.();
+  const context = await loadCollectionRoutesSarlotaContext();
+  if (!context) return;
+  collectionRoutesPilotState.myDailyRoutePanel = "route-confirmation";
+  render();
+}
+
+async function confirmAndStartMyCollectionDailyRoute(form) {
+  const run = collectionRoutesPilotState.myDailyRoute?.run;
+  if (!run?.id || run.status !== "confirmed" || collectionRoutesPilotState.myDailyRoutePending) return;
+  void elevenLabsAssistant.unlockVoiceAudio?.();
+  const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory || {};
+  const useMemory = memory.consent === true || Boolean(form?.elements?.useMemory?.checked);
+
+  if (useMemory && memory.consent !== true) {
+    collectionRoutesPilotState.myDailyRoutePending = "sarlota-memory";
+    collectionRoutesPilotState.myDailyRouteError = "";
+    render();
+    try {
+      const result = await apiJson("/api/ai/sarlota/memory", {
+        method: "POST",
+        body: JSON.stringify({ action: "consent", consent: true })
+      });
+      collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = true;
+      collectionRoutesPilotState.myDailyRouteSarlotaMemory = result.memory || null;
+    } catch (error) {
+      collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Pracovní paměť se nepodařilo nastavit. Trasa nebyla zahájená.";
+      return;
+    } finally {
+      collectionRoutesPilotState.myDailyRoutePending = "";
+      render();
+    }
+  }
+
+  collectionRoutesPilotState.myDailyRoutePanel = "";
+  await transitionMyCollectionDailyRoute("start");
+}
+
+async function startCollectionDailyDriverSarlota(options = {}) {
+  const automaticSession = options.invocation === "automatic";
   collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
   collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
+  collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = automaticSession;
   const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory;
-  collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Připojuji Šarlotu přes ElevenLabs…";
+  collectionRoutesPilotState.myDailyRouteSarlotaMessage = automaticSession
+    ? "Šarlota tě vítá a po úvodu zůstane připravená k rozhovoru."
+    : "Připojuji Šarlotu přes ElevenLabs…";
   openAiAssistant("voice", { assistantId: "sarlota", renderAfter: false });
+  if (automaticSession) {
+    setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Úvodní přivítání", "Hologram", "ElevenLabs"]);
+  }
   render();
   void startElevenLabsVoiceRecognition({
     onConnected: () => {
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = memory?.consent
-        ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Zápis vždy čeká na klepnutí."
-        : "Šarlota zná aktuální trasu. Paměť je vypnutá a zápis vždy čeká na klepnutí.";
+        ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Můžeš s ní rovnou mluvit; zápis vždy čeká na klepnutí."
+        : "Šarlota zná aktuální trasu. Můžeš s ní rovnou mluvit; paměť je vypnutá a zápis vždy čeká na klepnutí.";
       render();
     },
     onFailed: (error) => {
@@ -41153,23 +41218,27 @@ async function startCollectionDailyDriverSarlota() {
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = error?.code === "voice_stopped"
         ? "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit."
-        : "Šarlota se nepřipojila. Zkontroluj hlášku u mikrofonu a klepni znovu na ZAPNOUT ŠARLOTU.";
+        : automaticSession
+          ? "Automatický rozhovor se nepřipojil. Klepni na ZAPNOUT ŠARLOTU a použij ruční mikrofonový režim."
+          : "Šarlota se nepřipojila. Zkontroluj hlášku u mikrofonu a klepni znovu na ZAPNOUT ŠARLOTU.";
       render();
     }
   });
 }
 
-async function enableCollectionDailyDriverSarlota() {
+async function enableCollectionDailyDriverSarlota(options = {}) {
   if (collectionRoutesPilotState.myDailyRouteSarlotaEnabled || collectionRoutesPilotState.myDailyRouteSarlotaConnecting) return;
   void elevenLabsAssistant.unlockVoiceAudio?.();
   const context = await loadCollectionRoutesSarlotaContext();
   if (!context) return;
-  if (context.memory?.available && context.memory?.consent !== true) {
+  const promptForMemory = options.promptForMemory !== false;
+  if (promptForMemory && context.memory?.available && context.memory?.consent !== true) {
     collectionRoutesPilotState.myDailyRoutePanel = "sarlota-memory";
     render();
     return;
   }
-  await startCollectionDailyDriverSarlota();
+  collectionRoutesPilotState.myDailyRoutePanel = "";
+  await startCollectionDailyDriverSarlota(options);
 }
 
 async function grantCollectionRoutesSarlotaMemoryAndStart() {
@@ -41626,7 +41695,9 @@ async function transitionMyCollectionDailyRoute(action) {
     render();
   }
   if (startSarlotaAfterTransition) {
-    await enableCollectionDailyDriverSarlota();
+    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Trasa je zahájená. Připravuji úvodní přivítání Šarloty…";
+    render();
+    await enableCollectionDailyDriverSarlota({ promptForMemory: false, invocation: "automatic" });
   }
 }
 
@@ -50513,6 +50584,13 @@ function changeAccessUserRole(select) {
 }
 
 document.addEventListener("submit", async (event) => {
+  const collectionDailyDriverRouteConfirmationForm = event.target.closest("[data-collection-driver-route-confirmation-form]");
+  if (collectionDailyDriverRouteConfirmationForm) {
+    event.preventDefault();
+    await confirmAndStartMyCollectionDailyRoute(collectionDailyDriverRouteConfirmationForm);
+    return;
+  }
+
   const collectionDailyDriverReportForm = event.target.closest("[data-collection-driver-report-form]");
   if (collectionDailyDriverReportForm) {
     event.preventDefault();
@@ -52355,6 +52433,13 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverPanelClose) {
     event.preventDefault();
     closeCollectionDailyDriverPanel();
+    return;
+  }
+
+  const collectionDailyDriverRouteConfirmationOpen = event.target.closest("[data-collection-driver-route-confirmation-open]");
+  if (collectionDailyDriverRouteConfirmationOpen) {
+    event.preventDefault();
+    if (!collectionDailyDriverRouteConfirmationOpen.disabled) await openCollectionDailyDriverRouteConfirmation();
     return;
   }
 

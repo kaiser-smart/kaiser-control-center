@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.32",
-  updatedAt: "18. 7. 2026 16:59",
-  updatedAtIso: "2026-07-18T16:59:00+02:00",
-  lastChange: "Jediná Šarlota v simulátoru",
+  version: "1.33",
+  updatedAt: "18. 7. 2026 17:28",
+  updatedAtIso: "2026-07-18T17:28:00+02:00",
+  lastChange: "Úvod Šarloty po převzetí trasy",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -220,6 +220,8 @@ Hlas navigace a hlasová Šarlota jsou dva oddělené systémy. Hlas navigace v 
 Hlasová Šarlota je samostatná přátelská konverzační asistentka. Po fyzickém potvrzení dnešní trasy může ověřeného řidiče krátce a lehce vtipně přivítat, například se zeptat na svačiny, shrnout počasí a potvrdit, že bude hlídat pracovní kontext. Oslovuje jen osoby skutečně potvrzené backendem a nesmí si domýšlet posádku.
 
 Když Šarlota sama přehrává úvodní hlášku nebo hlasovou odpověď, Řidičský displej místo technického obrazu mikrofonu ukáže kompaktní holografickou Šarlotu. Hologram je dočasný, nezakrývá navigační pokyn ani mapové ovládání, zachovává dostupné ukončení hlasu a respektuje omezení animací zařízení. Mikrofon a jeho pravdivý stav se zobrazují pouze při poslouchání řidiče, žádosti o povolení nebo chybě vstupu. Blackview simulátor vykreslí hologram jen uvnitř skutečného řidičského displeje, nikdy současně také v obalovém náhledu.
+
+Řidič potvrzuje převzetí dnešní trasy a volbu pracovní paměti v jednom okně a jedním finálním klepnutím. Pokud paměť výslovně nezaškrtne, nezapne se ani se nic neuloží; již povolená paměť zůstává viditelně zapnutá a její smazání je samostatný krok. Potom se zvuk tabletu připraví ve stejném uživatelském gestu, načte se oprávněný read-only kontext trasy a Šarlota přes ElevenLabs zahájí úvodní přivítání i navazující rozhovor. Automaticky zahájená relace místo mikrofonového panelu po celou dobu ukazuje holografickou Šarlotu se stavy Mluvím, Poslouchám a Přemýšlím; mikrofonový panel se ukáže jen při ručním ZAPNOUT ŠARLOTU. Technický mikrofonový vstup je při obou rozhovorech aktivní a první systémovou žádost prohlížeče o oprávnění nelze skrýt. Pokud kontext, mikrofon, signed URL, WebSocket nebo audio selže, tablet zobrazí pravdivou chybu a nesmí použít systémové TTS ani předstírat přehrání.
 
 Šarlota smí podle oprávnění načítat dnešní trasu, ověřený seznam a přiřazení vozidel, aktuální počasí, firemní adresář v rozsahu jméno, příjmení, funkce a schválený služební telefon a e-mail, dostupnost a dovolenou bez soukromého nebo zdravotního důvodu a ověřenou organizační vazbu nadřízeného. Stručný přehled zpráv načítá výhradně z oficiálního RSS iROZHLAS; smí říct nejvýše tři přesné titulky se zdrojem a časem načtení. Neoficiální scraping, přebírání popisů a předčítání celých článků je zakázané.
 

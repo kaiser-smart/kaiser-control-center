@@ -42997,6 +42997,77 @@ body.collection-driver-kiosk-active #app {
   font-weight: 700;
 }
 
+.collection-daily-driver-route-confirmation {
+  display: grid;
+  gap: 14px;
+}
+
+.collection-daily-driver-route-confirmation__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.collection-daily-driver-route-confirmation__summary article {
+  display: grid;
+  gap: 3px;
+  min-height: 68px;
+  align-content: center;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: #edf8e5;
+}
+
+.collection-daily-driver-route-confirmation__summary span {
+  color: #467d1c;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.collection-daily-driver-route-confirmation__memory {
+  display: flex;
+  min-height: 92px;
+  align-items: center;
+  gap: 14px;
+  padding: 15px;
+  border: 3px solid #7868dd;
+  border-radius: 14px;
+  background: #f7f4ff;
+  color: #302657;
+}
+
+.collection-daily-driver-route-confirmation__memory input {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  accent-color: #6653d3;
+}
+
+.collection-daily-driver-route-confirmation__memory > span,
+.collection-daily-driver-route-confirmation__memory.is-enabled,
+.collection-daily-driver-route-confirmation__memory.is-unavailable {
+  display: grid;
+  gap: 5px;
+}
+
+.collection-daily-driver-route-confirmation__memory small,
+.collection-daily-driver-route-confirmation__memory-note,
+.collection-daily-driver-route-confirmation__safety {
+  color: #5d5387;
+  font-weight: 700;
+}
+
+.collection-daily-driver-route-confirmation__memory-note,
+.collection-daily-driver-route-confirmation__safety {
+  margin: 0;
+  text-align: center;
+}
+
+.collection-daily-driver-route-confirmation > .primary-action {
+  min-height: 76px;
+  font-size: 1.08rem;
+}
+
 .collection-daily-driver-action:disabled {
   cursor: wait;
   opacity: 0.55;
