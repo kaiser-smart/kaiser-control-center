@@ -17,6 +17,7 @@ import {
   createElevenLabsClientTools,
   ELEVENLABS_CLIENT_TOOL_SCHEMAS
 } from "../src/elevenLabsClientTools.js";
+import { currentSarlotaNews, parseIrozhlasRss, __test as newsTest } from "../functions/_lib/sarlota-news.js";
 
 const memoryApiSource = readFileSync(new URL("../functions/api/ai/sarlota/memory.js", import.meta.url), "utf8");
 const localServerSource = readFileSync(new URL("./serve.mjs", import.meta.url), "utf8");
@@ -57,6 +58,71 @@ const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(readFileSync(new URL("../migrations/0011_create_ai_action_logs.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0045_create_sarlota_user_memory.sql", import.meta.url), "utf8"));
 const env = { SMART_ODPADY_DB: d1Database(sqlite), SARLOTA_ORGANIZATION_ID: "kaiser-test" };
+
+const rssFixture = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"><channel>
+  <item><title>První &amp; ověřený titulek</title><link>https://www.irozhlas.cz/zpravy-domov/prvni</link><pubDate>Sat, 18 Jul 2026 11:23:00 +0200</pubDate><description>Celý popis se nesmí předat.</description></item>
+  <item><title><![CDATA[Druhý titulek]]></title><link>https://www.irozhlas.cz/zpravy-svet/druhy</link><pubDate>Sat, 18 Jul 2026 11:15:00 +0200</pubDate></item>
+  <item><title>Nedůvěryhodný odkaz</title><link>https://example.com/podvrh</link><pubDate>Sat, 18 Jul 2026 11:10:00 +0200</pubDate></item>
+  <item><title>Třetí titulek</title><link>https://www.irozhlas.cz/ekonomika/treti</link><pubDate>Sat, 18 Jul 2026 11:05:00 +0200</pubDate></item>
+</channel></rss>`;
+
+const parsedNews = parseIrozhlasRss(rssFixture);
+assert.equal(parsedNews.length, 3);
+assert.equal(parsedNews[0].title, "První & ověřený titulek");
+assert.equal(parsedNews[0].url, "https://www.irozhlas.cz/zpravy-domov/prvni");
+assert.equal(parsedNews[0].publishedAt, "2026-07-18T09:23:00.000Z");
+assert.equal(JSON.stringify(parsedNews).includes("Celý popis"), false);
+assert.equal(JSON.stringify(parsedNews).includes("example.com"), false);
+
+newsTest.clearCache();
+let rssFetchCount = 0;
+const readyNews = await currentSarlotaNews({
+  now: () => new Date("2026-07-18T09:30:00.000Z"),
+  fetchImpl: async (url, options) => {
+    rssFetchCount += 1;
+    assert.equal(url, newsTest.NEWS_FEED_URL);
+    assert.equal(options.redirect, "error");
+    return new Response(rssFixture, {
+      status: 200,
+      headers: { "content-type": "application/rss+xml; charset=utf-8" }
+    });
+  }
+});
+assert.equal(readyNews.status, "ready");
+assert.equal(readyNews.source, "iROZHLAS");
+assert.equal(readyNews.items.length, 3);
+assert.equal(readyNews.fetchedAt, "2026-07-18T09:30:00.000Z");
+const cachedNews = await currentSarlotaNews({
+  now: () => new Date("2026-07-18T09:31:00.000Z"),
+  fetchImpl: async () => {
+    rssFetchCount += 1;
+    throw new Error("cache_should_prevent_fetch");
+  }
+});
+assert.equal(cachedNews.status, "ready");
+assert.equal(rssFetchCount, 1);
+
+newsTest.clearCache();
+const unavailableNews = await currentSarlotaNews({
+  now: () => new Date("2026-07-18T09:32:00.000Z"),
+  timeoutMs: 10,
+  fetchImpl: async (_url, options) => new Promise((_, reject) => {
+    options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+  })
+});
+assert.equal(unavailableNews.status, "unavailable");
+assert.deepEqual(unavailableNews.items, []);
+
+newsTest.clearCache();
+const invalidNews = await currentSarlotaNews({
+  now: () => new Date("2026-07-18T09:33:00.000Z"),
+  fetchImpl: async () => new Response("<html>neplatný obsah</html>", {
+    status: 200,
+    headers: { "content-type": "text/html" }
+  })
+});
+assert.equal(invalidNews.status, "invalid_response");
 const miroslav = {
   id: "pneumatika-miroslav-vasek",
   name: "Miroslav Vašek",
@@ -158,6 +224,7 @@ const context = await buildCollectionRoutesSarlotaContext({}, miroslav, {
     }
   },
   weatherOverride: { verified: true, summary: "Brno: 24 °C, jasno" },
+  newsOverride: readyNews,
   availabilityOverride: [],
   memoryOverride: memory
 });
@@ -165,7 +232,9 @@ assert.equal(context.route.id, "route-miroslav");
 assert.equal(context.route.currentStop.customerName, "Firma 1");
 assert.equal(context.route.followingStop.customerName, "Firma 2");
 assert.equal(context.vehicles.verified, true);
-assert.equal(context.news.status, "not_configured");
+assert.equal(context.news.status, "ready");
+assert.equal(context.news.source, "iROZHLAS");
+assert.equal(context.news.items.length, 3);
 assert.match(context.introAnnouncement, /Ahoj Mirku\./);
 assert.match(context.introAnnouncement, /Svačinu máš/);
 assert.equal(JSON.stringify(context).includes("Tomáš Gaží"), false, "Fyzický TESTER nesmí vstoupit do hlasového kontextu řidiče.");
@@ -206,7 +275,7 @@ const tools = createElevenLabsClientTools({
 const toolContext = await tools.get_collection_routes_context({ date: "2026-07-18" });
 assert.equal(toolContext.ok, true);
 assert.match(requestedPath, /^\/api\/ai\/collection-routes\/context\?/);
-assert.equal(toolContext.news.status, "not_configured");
+assert.equal(toolContext.news.status, "ready");
 
 memory = await setSarlotaMemoryConsent(env, miroslav, false);
 assert.equal(memory.consent, false);

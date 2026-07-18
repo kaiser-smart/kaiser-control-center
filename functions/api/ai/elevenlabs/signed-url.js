@@ -159,6 +159,14 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
       usersOverride: [user],
       vehiclesOverride: {},
       weatherOverride: { ok: false, verified: false, status: "test_override" },
+      newsOverride: {
+        ok: false,
+        status: "test_override",
+        source: "iROZHLAS",
+        sourceUrl: "https://www.irozhlas.cz/rss/irozhlas",
+        fetchedAt: "",
+        items: []
+      },
       availabilityOverride: [],
       memoryOverride: {
         available: false,

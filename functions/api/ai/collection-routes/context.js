@@ -24,7 +24,9 @@ export async function onRequestGet({ request, env }) {
         routeAssigned: context.route.assigned,
         vehiclesVerified: context.vehicles.verified,
         directoryCount: context.directory.length,
-        memoryConsent: context.memory.consent
+        memoryConsent: context.memory.consent,
+        newsStatus: context.news.status,
+        newsItemCount: context.news.items.length
       },
       status: "ok"
     });

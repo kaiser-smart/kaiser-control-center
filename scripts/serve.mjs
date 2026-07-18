@@ -22,6 +22,7 @@ import {
   normalizeMedicalExamCategory
 } from "../src/data/medicalExamRules.js";
 import { renderMedicalExamRequestDocument } from "../functions/_lib/medical-exam-request-template.js";
+import { currentSarlotaNews } from "../functions/_lib/sarlota-news.js";
 import {
   FLEET_VISTOS_IMPORT_MAX_FILE_SIZE_BYTES,
   buildFleetVistosImportPreview
@@ -4437,7 +4438,7 @@ function saveMockSarlotaMemory(user, memory) {
   return structuredClone(memory);
 }
 
-function mockCollectionRoutesSarlotaContext(user, scope = "production") {
+async function mockCollectionRoutesSarlotaContext(user, scope = "production") {
   const detail = mockCollectionDailyRouteForDriver(user, { scope });
   const stops = Array.isArray(detail.stops) ? detail.stops : [];
   const currentStop = stops.find((stop) => stop.status === "planned") || null;
@@ -4476,6 +4477,7 @@ function mockCollectionRoutesSarlotaContext(user, scope = "production") {
     };
   });
   const memory = mockSarlotaMemoryForUser(user);
+  const news = await currentSarlotaNews();
   return {
     actor: { id: user.id, name: user.name || "", role: user.role },
     scope: scope === "test" ? "test" : "production",
@@ -4517,12 +4519,7 @@ function mockCollectionRoutesSarlotaContext(user, scope = "production") {
     },
     directory,
     directoryPolicy: "Pouze jméno, pracovní kontakt, funkce, nadřízený a bezpečný stav dostupnosti.",
-    news: {
-      status: "not_configured",
-      source: "Novinky.cz",
-      items: [],
-      message: "Oficiální zdroj zpráv zatím není nastavený; obsah se nescrapuje."
-    },
+    news,
     memory,
     introAnnouncement: `Ahoj Mirku. Dnešní trasu mám načtenou. Svačinu máš? Simulované počasí pro Brno: 24 °C, jasno. Budu hlídat trasu, počasí a hlášení.`,
     safety: {
@@ -4682,7 +4679,7 @@ async function handleApi(request, response) {
     }
     const scope = url.searchParams.get("scope") === "test" ? "test" : "production";
     sendJson(response, 200, {
-      context: mockCollectionRoutesSarlotaContext(user, scope),
+      context: await mockCollectionRoutesSarlotaContext(user, scope),
       apiStatus: "ready"
     });
     return true;

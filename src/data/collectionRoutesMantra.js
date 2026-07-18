@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.29",
-  updatedAt: "18. 7. 2026 11:02",
-  updatedAtIso: "2026-07-18T11:02:24+02:00",
-  lastChange: "Bezpečný kontext a paměť Šarloty",
+  version: "1.30",
+  updatedAt: "18. 7. 2026 11:45",
+  updatedAtIso: "2026-07-18T11:45:00+02:00",
+  lastChange: "Oficiální RSS iROZHLAS pro Šarlotu",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -30,7 +30,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     },
     {
       title: "Šarlota čte, člověk potvrzuje",
-      text: "Řidičská Šarlota načítá pouze vlastní trasu a omezený ověřený pracovní kontext. Paměť je dobrovolná a ukládá jen pracovní témata; každý provozní zápis dál vyžaduje fyzické potvrzení."
+      text: "Řidičská Šarlota načítá pouze vlastní trasu a omezený ověřený pracovní kontext včetně nejvýše tří titulků z oficiálního RSS iROZHLAS. Paměť je dobrovolná a ukládá jen pracovní témata; každý provozní zápis dál vyžaduje fyzické potvrzení."
     }
   ],
   sources: [
@@ -38,6 +38,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     { label: "SAKO Brno", url: "https://www.sako.cz" },
     { label: "HERE Map Image API", url: "https://docs.here.com/map-rendering/docs/introduction-map-image-api" },
     { label: "HERE Tour Planning", url: "https://www.here.com/platform/here-tour-planning" },
+    { label: "iROZHLAS RSS", url: "https://www.irozhlas.cz/rss" },
     { label: "Apify Waze Traffic Scraper", url: "https://apify.com/sian.agency/waze-traffic-scraper" }
   ],
   prompt: `NÁZEV
@@ -218,7 +219,7 @@ Hlas navigace a hlasová Šarlota jsou dva oddělené systémy. Hlas navigace v 
 
 Hlasová Šarlota je samostatná přátelská konverzační asistentka. Po fyzickém potvrzení dnešní trasy může ověřeného řidiče krátce a lehce vtipně přivítat, například se zeptat na svačiny, shrnout počasí a potvrdit, že bude hlídat pracovní kontext. Oslovuje jen osoby skutečně potvrzené backendem a nesmí si domýšlet posádku.
 
-Šarlota smí podle oprávnění načítat dnešní trasu, ověřený seznam a přiřazení vozidel, aktuální počasí, firemní adresář v rozsahu jméno, příjmení, funkce a schválený služební telefon a e-mail, dostupnost a dovolenou bez soukromého nebo zdravotního důvodu a ověřenou organizační vazbu nadřízeného. Stručné zprávy z Novinky.cz smí načítat pouze přes oficiální nebo smluvně schválené rozhraní, s uvedením zdroje a času; neoficiální scraping a přebírání celých článků je zakázané.
+Šarlota smí podle oprávnění načítat dnešní trasu, ověřený seznam a přiřazení vozidel, aktuální počasí, firemní adresář v rozsahu jméno, příjmení, funkce a schválený služební telefon a e-mail, dostupnost a dovolenou bez soukromého nebo zdravotního důvodu a ověřenou organizační vazbu nadřízeného. Stručný přehled zpráv načítá výhradně z oficiálního RSS iROZHLAS; smí říct nejvýše tři přesné titulky se zdrojem a časem načtení. Neoficiální scraping, přebírání popisů a předčítání celých článků je zakázané.
 
 Šarlota může hlasem zjistit záměr a připravit krokové hlášení přeplnění nebo jiného problému, fotografii, přestávku nebo výsyp. Hlas sám nesmí dokončit zápis, odeslat zprávu, změnit trasu, spustit navigaci ani označit stanoviště jako hotové. Konečný účinek vyžaduje oprávněné API, audit a fyzické potvrzení člověka.
 

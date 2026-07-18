@@ -4,6 +4,7 @@ import { getMyCollectionDailyRoute } from "./collection-daily-routes-store.js";
 import { driverReportContextForUser } from "./driver-report-context.js";
 import { userDynamicVariablesForAi } from "./ai-people-summary.js";
 import { currentSarlotaWeather } from "./sarlota-weather.js";
+import { currentSarlotaNews } from "./sarlota-news.js";
 import { getSarlotaUserMemory } from "./sarlota-user-memory.js";
 import { hasPermission, isUserActive, normalizeRole, roleLabel } from "../../src/permissions.js";
 
@@ -179,7 +180,7 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
     : await getMyCollectionDailyRoute(env, user, { scope });
   const users = options.usersOverride !== undefined ? options.usersOverride : await getUsers(env);
   const userIds = users.map((item) => cleanString(item.id)).filter(Boolean);
-  const [vehicleResult, weather, availability, memory] = await Promise.all([
+  const [vehicleResult, weather, availability, memory, news] = await Promise.all([
     options.vehiclesOverride !== undefined
       ? options.vehiclesOverride
       : safeLoad(() => driverReportContextForUser(env, user, { currentModule: "collection-routes" }), {}),
@@ -191,7 +192,17 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
       : safeLoad(() => listEmployeeAvailabilityForSarlota(env, { date, userIds }), []),
     options.memoryOverride !== undefined
       ? options.memoryOverride
-      : getSarlotaUserMemory(env, user)
+      : getSarlotaUserMemory(env, user),
+    options.newsOverride !== undefined
+      ? options.newsOverride
+      : safeLoad(() => currentSarlotaNews(), {
+        ok: false,
+        status: "unavailable",
+        source: "iROZHLAS",
+        sourceUrl: "https://www.irozhlas.cz/rss/irozhlas",
+        fetchedAt: "",
+        items: []
+      })
   ]);
   const route = safeRoute(detail);
   const vehicles = safeVehicles(vehicleResult);
@@ -209,11 +220,14 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
     },
     directory,
     directoryPolicy: "Pouze jméno, pracovní kontakt, funkce, nadřízený a bezpečný stav dostupnosti bez soukromého nebo zdravotního důvodu.",
-    news: {
-      status: "not_configured",
-      source: "Novinky.cz",
+    news: news?.status === "ready" ? news : {
+      ok: false,
+      status: cleanString(news?.status || "unavailable"),
+      source: "iROZHLAS",
+      sourceUrl: "https://www.irozhlas.cz/rss/irozhlas",
+      fetchedAt: cleanString(news?.fetchedAt),
       items: [],
-      message: "Oficiální nebo smluvně schválený zdroj zpráv zatím není nastavený. Obsah se nesmí scrapovat."
+      message: "Aktuální přehled zpráv iROZHLAS se teď nepodařilo bezpečně načíst."
     },
     memory,
     introAnnouncement: introAnnouncement(user, route, weather, memory),

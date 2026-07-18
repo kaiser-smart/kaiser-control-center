@@ -2,7 +2,7 @@
 
 Stav: implementovaný read-only základ, ostrá autonomie zakázaná
 
-Aktualizace: 18. 7. 2026 11:02
+Aktualizace: 18. 7. 2026 11:45
 
 Vlastník rozhodnutí: Radim
 
@@ -12,7 +12,7 @@ Implementovaný základ načítá pro přihlášenou aktivní roli Řidič pouze
 
 Paměť je oddělená podle firmy a stabilního KSO user ID. Ukládá pouze klasifikovaná pracovní témata a počet rozhovorů; zvuk, celý přepis ani odpověď Šarloty neukládá. Řidič ji může odmítnout nebo později vypnout a smazat.
 
-Zdroj zpráv Novinky.cz je záměrně ve stavu `not_configured`, dokud nebude doložené oficiální nebo smluvně schválené rozhraní. Neoficiální scraping je zakázaný. Konfigurace nástroje a promptu v produkčním ElevenLabs agentovi ještě vyžaduje samostatný chráněný synchronizační krok.
+Backend načítá nejvýše tři aktuální titulky z oficiálního RSS iROZHLAS. Do hlasového kontextu předává pouze titulek, odkaz, čas vydání, zdroj a čas načtení; popis ani celý článek nepřebírá. Při chybě vrátí pravdivý stav `unavailable`. Konfigurace nástroje a promptu v produkčním ElevenLabs agentovi ještě vyžaduje samostatný chráněný synchronizační krok.
 
 ## Dva oddělené hlasové systémy
 
@@ -32,9 +32,9 @@ Hlas navigace a hlasová Šarlota jsou dva samostatné systémy.
 - dnešní přiřazenou trasu, její stav, stanoviště, výsypy a povolené provozní kroky,
 - firemní adresář Kaiser pouze v rozsahu jméno, příjmení, funkce a schválený služební telefon a e-mail,
 - dostupnost, dovolenou a nadřízeného; u nepřítomnosti nesmí sdělovat diagnózu, soukromý důvod ani jiná HR data,
-- stručný přehled aktuálních zpráv z Novinky.cz, pouze z oficiálního nebo smluvně schváleného rozhraní.
+- nejvýše tři aktuální titulky z oficiálního RSS iROZHLAS, včetně zdroje a času načtení.
 
-Novinky.cz se nesmí neoficiálně scrapovat. Šarlota smí podat krátký souhrn titulku a uvést zdroj; nesmí ukládat nebo předčítat celé chráněné články. Počasí i zprávy musí být označeny časem načtení a při chybě se nesmí vydávat za aktuální.
+Šarlota nesmí scrapovat žádný zpravodajský web. Smí přesně přečíst nejvýše tři titulky z oficiálního RSS iROZHLAS a uvést zdroj; nesmí přebírat popis ani předčítat celý článek. Počasí i zprávy musí být označeny časem načtení a při chybě se nesmí vydávat za aktuální.
 
 ## Zahájení pracovního dne
 

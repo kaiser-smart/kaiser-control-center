@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.597"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.598"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: aktuální titulky z oficiálního RSS",
+    text: "Řidičská Šarlota načítá nejvýše tři aktuální titulky z oficiálního RSS iROZHLAS. Kontext obsahuje zdroj a čas načtení, nepřebírá popisy ani celé články a při výpadku pravdivě oznámí nedostupnost bez scrapingu nebo vymyšlených zpráv."
+  },
   {
     title: "Svoz: bezpečný pracovní kontext Šarloty",
     text: "Řidičská Šarlota načítá vlastní trasu, ověřená vozidla, počasí, omezený služební adresář, dostupnost a nadřízeného. Dobrovolná paměť ukládá jen pracovní témata odděleně podle účtu; zvuk ani celý přepis neukládá a každý provozní zápis dál čeká na fyzické potvrzení."

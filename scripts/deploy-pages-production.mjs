@@ -161,6 +161,7 @@ runVisible("node", ["scripts/collection-routes-incident-reminder-runner.test.mjs
 runVisible("node", ["scripts/collection-routes-test-ui.test.mjs"]);
 runVisible("node", ["scripts/elevenlabs-signed-url-options.test.mjs"]);
 runVisible("node", ["scripts/sarlota-collection-route-gps.test.mjs"]);
+runVisible("node", ["scripts/collection-routes-sarlota-context.test.mjs"]);
 runVisible("node", ["scripts/sarlota-tools-sync-plan.test.mjs"]);
 runVisible("node", ["scripts/sarlota-prompt-sync-plan.test.mjs"]);
 runVisible("node", ["scripts/sarlota-voice-smoke.test.mjs"]);
