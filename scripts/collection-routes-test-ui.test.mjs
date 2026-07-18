@@ -9,6 +9,7 @@ import {
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const mantraSource = readFileSync(new URL("../src/data/collectionRoutesMantra.js", import.meta.url), "utf8");
+const sarlotaVisionSource = readFileSync(new URL("../docs/COLLECTION_ROUTES_VOICE_SARLOTA_VISION.md", import.meta.url), "utf8");
 const calculatorSource = readFileSync(new URL("../src/data/collectionRoutesReadonlyCalculator.js", import.meta.url), "utf8");
 const wranglerSource = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
 
@@ -320,8 +321,14 @@ for (const marker of [
   "prepare_collection_route_gps_capture",
   "Nesmí otevřít výběr vozidla",
   "fyzický GPS bod se uloží až po velkém ručním klepnutí",
-  "Veškeré mluvené pokyny Řidičského tabletu musí vytvářet produkční agentka Šarlota z ElevenLabs",
-  "speechSynthesis, systémový hlas Androidu a jiná strojová náhrada jsou v tomto modulu zakázané",
+  "HLAS NAVIGACE A HLASOVÁ ŠARLOTA",
+  "Hlas navigace a hlasová Šarlota jsou dva oddělené systémy",
+  "Navigační pokyn má vždy zvukovou prioritu",
+  "aktuální počasí",
+  "ověřený seznam a přiřazení vozidel",
+  "Novinky.cz",
+  "neoficiální scraping a přebírání celých článků je zakázané",
+  "dlouhodobou paměť vázanou na stabilní KSO user ID a firmu",
   "SMS musí být bez diakritiky, nejvýše 160 znaků a v jednom segmentu",
   "minimálně 120 px vysoké a na úzkém displeji 132 px",
   "TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko",
@@ -348,6 +355,20 @@ for (const marker of [
   "Skutečný zákazník nesmí být kontaktován"
 ]) {
   assert.ok(mantraSource.includes(marker), `Provozní mantra postrádá závazný bod: ${marker}`);
+}
+
+for (const marker of [
+  "Hlas navigace a hlasová Šarlota jsou dva samostatné systémy",
+  "Agentic AI nebo jazykový model nesmí tvořit ani přeformulovávat kritické navigační pokyny",
+  "jméno, příjmení, funkce a schválený služební telefon a e-mail",
+  "dovolenou a nadřízeného",
+  "stručný přehled aktuálních zpráv z Novinky.cz",
+  "Až po fyzickém klepnutí na potvrzení",
+  "dlouhodobou paměť vázanou na stabilní KSO user ID a firmu",
+  "ne nepřetržitou nahrávku hlasu",
+  "Neznamená automatické povolení nových integrací"
+]) {
+  assert.ok(sarlotaVisionSource.includes(marker), `Produktová vize hlasové Šarloty postrádá: ${marker}`);
 }
 
 assert.ok(

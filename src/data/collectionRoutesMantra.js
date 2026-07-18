@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.27",
-  updatedAt: "18. 7. 2026 04:28",
-  updatedAtIso: "2026-07-18T04:28:00+02:00",
-  lastChange: "HERE omezení vozidla v mapě",
+  version: "1.28",
+  updatedAt: "18. 7. 2026 10:20",
+  updatedAtIso: "2026-07-18T10:20:48+02:00",
+  lastChange: "Oddělení navigace a hlasové Šarloty",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro ostrý Řidičský displej a bezpečné plánování; oddělený TEST scope slouží jen k ověření bez dopadu na zákazníky a ostré trasy. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Závazným referenčním zařízením je 11″ Blackview Active 7 LTE v režimu na šířku: fyzicky 1920 × 1200, při běžném měřítku cílově 960 × 600 CSS px. Mapa je ovladatelná přes celý tablet dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a po fyzickém spuštění vede z živé GPS polohy pokyny HERE. Pořadí přidělené trasy do 200 čekajících bodů počítá HERE Waypoints Sequence v režimu truck s dopravou; více vozů, kapacity a směny řeší HERE Tour Planning. Za optimalizované se pořadí označí pouze po úplném výsledku HERE a skutečném auditovaném uložení. Celkový silniční přehled smí při kritickém omezení vozu zůstat zobrazený pouze s výrazným varováním; navigace omezeného úseku zůstává zablokovaná. Pracovní volby HOTOVO, hlášení s jednou až pěti fotografiemi, výsyp, přestávka a mapování stanoviště mají velký krokový postup bez rozbalovacích polí. Šarlota zná přihlášeného řidiče a aktuální trasu, ale hlasem pouze připraví obrazovku; zápis nebo navigace vždy vyžadují fyzické klepnutí. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
+  summary: "Závazná pravidla pro ostrý Řidičský displej a bezpečné plánování; oddělený TEST scope slouží jen k ověření bez dopadu na zákazníky a ostré trasy. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Závazným referenčním zařízením je 11″ Blackview Active 7 LTE v režimu na šířku: fyzicky 1920 × 1200, při běžném měřítku cílově 960 × 600 CSS px. Mapa je ovladatelná přes celý tablet dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a po fyzickém spuštění vede z živé GPS polohy pokyny HERE. Pořadí přidělené trasy do 200 čekajících bodů počítá HERE Waypoints Sequence v režimu truck s dopravou; více vozů, kapacity a směny řeší HERE Tour Planning. Za optimalizované se pořadí označí pouze po úplném výsledku HERE a skutečném auditovaném uložení. Celkový silniční přehled smí při kritickém omezení vozu zůstat zobrazený pouze s výrazným varováním; navigace omezeného úseku zůstává zablokovaná. Pracovní volby HOTOVO, hlášení s jednou až pěti fotografiemi, výsyp, přestávka a mapování stanoviště mají velký krokový postup bez rozbalovacích polí. Hlas navigace a hlasová Šarlota jsou oddělené: navigace pouze česky vede podle deterministických pokynů HERE a má zvukovou prioritu; Šarlota vede přátelský rozhovor, načítá oprávněný pracovní kontext a pouze připravuje auditované provozní úkony k fyzickému potvrzení. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -23,6 +23,10 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     {
       title: "Řidič vidí jen svoji trasu",
       text: "Role Řidič se vždy otevře do jediné tabletové obrazovky bez HP, menu a administrace. Backend podle uživatelského ID povolí jen přiřazenou trasu; cizí trasa zůstane zakázaná i přes přímý odkaz."
+    },
+    {
+      title: "Navigace není Šarlota",
+      text: "Hlas navigace pouze česky přehrává deterministické pokyny HERE. Hlasová Šarlota je oddělená konverzační asistentka a při manévru se vždy ztiší nebo pozastaví."
     }
   ],
   sources: [
@@ -205,7 +209,18 @@ HLÁŠENÍ PRO DISPEČINK je pevný krokový postup bez rozbalovacích polí: ve
 
 V izolovaném TEST scope se hlášení, přestávka, výsyp a HOTOVO ukládají výhradně do odděleného TEST auditu. Actor je vždy skutečně přihlášený uživatel; physicalTesterName je pouze TEST metadata. Žádný TEST krok nesmí volat komunikační službu, odeslat e-mail, SMS nebo RCS, zapsat do Vistosu ani změnit produkční trasu.
 
-Veškeré mluvené pokyny Řidičského tabletu musí vytvářet produkční agentka Šarlota z ElevenLabs. Web Speech API, speechSynthesis, systémový hlas Androidu a jiná strojová náhrada jsou v tomto modulu zakázané. Pokud ElevenLabs není dostupné, ponech pokyn čitelně na obrazovce a zobraz stručnou chybu; systémové čtení nikdy nespouštěj. Přehrání pevného pokynu nesmí vyžadovat zapnutí mikrofonu ani spustit nástroj, měření, zápis nebo odeslání.
+HLAS NAVIGACE A HLASOVÁ ŠARLOTA
+Hlas navigace a hlasová Šarlota jsou dva oddělené systémy. Hlas navigace v češtině pouze přehrává deterministické pokyny HERE, například vzdálenost k manévru, odbočení, změnu trasy nebo bezpečnostní upozornění. Nevede rozhovor, nepoužívá agentic AI a neprovádí provozní úkony. Navigační pokyn má vždy zvukovou prioritu a při manévru Šarlotu ztiší nebo pozastaví.
+
+Hlasová Šarlota je samostatná přátelská konverzační asistentka. Po fyzickém potvrzení dnešní trasy může ověřeného řidiče krátce a lehce vtipně přivítat, například se zeptat na svačiny, shrnout počasí a potvrdit, že bude hlídat pracovní kontext. Oslovuje jen osoby skutečně potvrzené backendem a nesmí si domýšlet posádku.
+
+Šarlota smí podle oprávnění načítat dnešní trasu, ověřený seznam a přiřazení vozidel, aktuální počasí, firemní adresář v rozsahu jméno, příjmení, funkce a schválený služební telefon a e-mail, dostupnost a dovolenou bez soukromého nebo zdravotního důvodu a ověřenou organizační vazbu nadřízeného. Stručné zprávy z Novinky.cz smí načítat pouze přes oficiální nebo smluvně schválené rozhraní, s uvedením zdroje a času; neoficiální scraping a přebírání celých článků je zakázané.
+
+Šarlota může hlasem zjistit záměr a připravit krokové hlášení přeplnění nebo jiného problému, fotografii, přestávku nebo výsyp. Hlas sám nesmí dokončit zápis, odeslat zprávu, změnit trasu, spustit navigaci ani označit stanoviště jako hotové. Konečný účinek vyžaduje oprávněné API, audit a fyzické potvrzení člověka.
+
+Šarlota má mít dlouhodobou paměť vázanou na stabilní KSO user ID a firmu, aby bezpečně poznala, zda s daným uživatelem již hovořila. Ukládá jen stručné strukturované pracovní shrnutí, nikoli nepřetržitou hlasovou nahrávku. Paměť se nesmí sdílet mezi zaměstnanci a nesmí obsahovat hesla, zdravotní informace, soukromé rozhovory ani nepotřebné osobní údaje. Musí mít původ, čas, dobu uchování a možnost bezpečného odstranění.
+
+Podrobná schválená produktová vize je v docs/COLLECTION_ROUTES_VOICE_SARLOTA_VISION.md. Neznamená automatické povolení nových integrací nebo ostrých zápisů.
 
 TEST řidičského tabletu musí mít na začátku modulu jedno zřetelné tlačítko a samostatný přehled bez dlouhé tabulky stanovišť. Stacionární terénní TEST ukazuje vždy jen následující krok: TEST data, jeden bod, tester a spuštění tabletu. Zdrojový kabinový náhled musí být zřetelně odlišený od skutečného TEST GPS režimu.
 

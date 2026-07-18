@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.593"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.596"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,18 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: uložená vize hlasové Šarloty",
+    text: "Mantra 1.28 a samostatná produktová specifikace trvale oddělují český hlas HERE navigace od konverzační Šarloty. Vize ukládá budoucí kontext počasí, trasy, vozidel, služebního adresáře, dostupnosti, nadřízených, zpráv a bezpečné paměti rozhovorů bez povolení ostrých autonomních zápisů."
+  },
+  {
+    title: "Svoz: mapa skutečně přes celý displej",
+    text: "Režim celé mapy na 11″ tabletu skryje TEST ovládání, provozní tlačítka i legendu. HERE mapa využije celých 960 × 600 CSS px a ponechá jen mapové ovladače a kompaktní navigační pokyn."
+  },
+  {
+    title: "Svoz: bezpečná simulace polohy na PC",
+    text: "Izolovaný řidičský TEST s parametrem gps=simulated umí bez systémové GPS přesunout tablet na depo, aktuální nebo následující stanoviště a přehrát jízdu po skutečné HERE geometrii. Simulovaná poloha je výrazně označená, žije jen v otevřené stránce a nikdy nevstoupí do fyzického GPS mapování, Vistosu ani ostrých tras."
+  },
   {
     title: "Svoz: trvalý interaktivní simulátor Blackview",
     text: "Izolovaná TEST adresa s parametrem device=blackview zobrazí skutečný řidičský displej ve stabilním interaktivním rámci 960 × 600 CSS px. Simulace zůstává zachovaná i při ručním testování v pravém prohlížeči a nemění API, data ani ostré trasy."

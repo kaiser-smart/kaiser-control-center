@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 
 import {
   COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE,
+  COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE,
   COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE,
   collectionRoutesDriverKioskCanonicalPath,
   collectionRoutesDriverKioskRedirectPath,
   collectionRoutesDriverKioskScope,
+  collectionRoutesDriverSimulatedGpsEnabled,
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "../src/data/collectionRoutesDriverKiosk.js";
@@ -24,6 +26,7 @@ const manager = { id: "manager-1", role: "management", status: "active", active:
 
 assert.equal(COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE, "/trasy-svozu");
 assert.equal(COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE, "/trasy-svozu/test");
+assert.equal(COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE, "simulated");
 assert.equal(isCollectionRoutesDriverKioskUser(driver), true);
 assert.equal(isCollectionRoutesDriverKioskUser(manager), false);
 assert.equal(isCollectionRoutesDriverKioskUser({ ...driver, active: false }), false);
@@ -39,6 +42,11 @@ assert.equal(collectionRoutesDriverKioskScope("/trasy-svozu", ""), "production")
 assert.equal(collectionRoutesDriverKioskCanonicalPath(driver, "/trasy-svozu", "?scope=test"), "/trasy-svozu/test");
 assert.equal(collectionRoutesDriverKioskCanonicalPath(driver, "/trasy-svozu", ""), "");
 assert.equal(collectionRoutesDriverKioskCanonicalPath(manager, "/trasy-svozu", "?scope=test"), "");
+assert.equal(collectionRoutesDriverSimulatedGpsEnabled("/trasy-svozu/test", "?gps=simulated", "test"), true);
+assert.equal(collectionRoutesDriverSimulatedGpsEnabled("/trasy-svozu/test/", "?gps=simulated", "test"), true);
+assert.equal(collectionRoutesDriverSimulatedGpsEnabled("/trasy-svozu", "?gps=simulated&scope=test", "test"), false);
+assert.equal(collectionRoutesDriverSimulatedGpsEnabled("/trasy-svozu/test", "?gps=simulated", "production"), false);
+assert.equal(collectionRoutesDriverSimulatedGpsEnabled("/trasy-svozu/test", "?gps=browser", "test"), false);
 
 assert.equal(
   hasPermission(driver, "collection-routes", "view"),
@@ -150,6 +158,19 @@ for (const marker of [
 }
 
 for (const marker of [
+  ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-simulated-gps",
+  ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-map__primary-actions",
+  ".collection-daily-driver-map.is-fullscreen > footer",
+  ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-navigation-guidance"
+]) {
+  assert.ok(styleSource.includes(marker), `Celá mapa nesmí ponechat překážký přes mapový podklad: ${marker}`);
+}
+assert.ok(
+  appSource.includes('fullscreen ? "ZAVŘÍT MAPU" : "MAPA PŘES CELÝ DISPLEJ"'),
+  "Celá mapa musí mít krátké a jednoznačné zavírací tlačítko."
+);
+
+for (const marker of [
   "Blackview Active 7 LTE",
   "1920 × 1200",
   "960 × 600 CSS px",
@@ -195,6 +216,52 @@ assert.ok(
     && styleSource.includes("height: 600px"),
   "TEST URL musí nabídnout trvalý interaktivní simulátor Blackview 960 × 600 bez vnořeného simulátoru."
 );
+
+for (const marker of [
+  "SIMULOVANÁ POLOHA · NEJDE O GPS",
+  "SIMULOVANÁ NAVIGACE · HERE",
+  "data-collection-driver-simulated-gps=\"depot\"",
+  "data-collection-driver-simulated-gps=\"current\"",
+  "data-collection-driver-simulated-gps=\"next\"",
+  "SPUSTIT JÍZDU",
+  "JET PO TRASE",
+  "RYCHLOST",
+  "simulated-test-position",
+  "function collectionDailyDriverSimulatedGpsEnabled",
+  "function applyCollectionDailyDriverNavigationPoint",
+  "function scheduleCollectionDailyDriverSimulatedPlayback"
+]) {
+  assert.ok(appSource.includes(marker), `TEST simulace polohy postrádá ochranu nebo ovládání: ${marker}`);
+}
+assert.ok(
+  styleSource.includes(".collection-daily-driver-simulated-gps")
+    && styleSource.includes("min-height: 44px")
+    && styleSource.includes(".collection-daily-driver-map.has-simulated-gps"),
+  "Simulace polohy musí být zřetelná a ovladatelná na 11palcovém tabletu."
+);
+assert.equal(appSource.includes("sessionStorage"), false, "Simulovaná poloha se nesmí ukládat do sessionStorage.");
+assert.equal(appSource.includes("localStorage"), false, "Simulovaná poloha se nesmí ukládat do localStorage.");
+const physicalGpsCaptureSource = appSource.slice(
+  appSource.indexOf("function collectCollectionRoutesTestGpsSamples"),
+  appSource.indexOf("function collectionRoutesActiveGpsDetail")
+);
+assert.ok(
+  physicalGpsCaptureSource.includes("navigator.geolocation.watchPosition")
+    && !physicalGpsCaptureSource.includes("simulated-test-position"),
+  "Fyzické mapování stanoviště musí dál používat skutečnou geolokaci a nesmí přijmout simulaci."
+);
+const simulatedGpsRuntimeSource = appSource.slice(
+  appSource.indexOf("function clearCollectionDailyDriverSimulatedPlayback"),
+  appSource.indexOf("function syncCollectionRoutesTestTabletHereMap")
+);
+assert.equal(simulatedGpsRuntimeSource.includes('method: "POST"'), false, "Simulace polohy nesmí zapisovat přes API.");
+for (const forbidden of ["test-gps-confirmations", "notifications", "Vistos", "sessionStorage", "localStorage"]) {
+  assert.equal(
+    simulatedGpsRuntimeSource.includes(forbidden),
+    false,
+    `Simulace polohy nesmí zasahovat do chráněného toku: ${forbidden}`
+  );
+}
 
 for (const marker of [
   "OPTIMALIZOVAT HERE",
