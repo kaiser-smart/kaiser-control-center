@@ -173,6 +173,14 @@ function vehicleNotice(payload = {}) {
   )) || null;
 }
 
+function publicVehicleNotice(notice = {}) {
+  return {
+    code: cleanString(notice?.code) || "vehicleRestriction",
+    severity: cleanString(notice?.severity) || "critical",
+    title: cleanString(notice?.title || notice?.message) || "HERE našel kritické omezení pro potvrzený profil vozu."
+  };
+}
+
 async function requestHereRoute(env, input = {}, options = {}) {
   const apiKey = cleanString(env.HERE_MAPS_API_KEY);
   if (!apiKey) {
@@ -245,7 +253,7 @@ async function requestHereRoute(env, input = {}, options = {}) {
     );
   }
   const notice = vehicleNotice(payload);
-  if (notice) {
+  if (notice && input.allowCriticalNotices !== true) {
     throw new CollectionDailyRouteNavigationError(
       "HERE našel na trase kritické omezení pro rozměry nebo hmotnost vozu.",
       409,
@@ -260,7 +268,11 @@ async function requestHereRoute(env, input = {}, options = {}) {
       "collection_daily_route_navigation_route_missing"
     );
   }
-  return { sections, profile };
+  return {
+    sections,
+    profile,
+    criticalVehicleNotice: notice ? publicVehicleNotice(notice) : null
+  };
 }
 
 export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = {}, input = {}, options = {}) {
@@ -381,7 +393,8 @@ export async function buildCollectionDailyRouteOverviewGeometry(env = {}, detail
       origin: coordinates[startIndex],
       destination: coordinates[endIndex],
       via: coordinates.slice(startIndex + 1, endIndex),
-      actions: false
+      actions: false,
+      allowCriticalNotices: true
     });
   }
   const routeResults = [];
@@ -394,7 +407,16 @@ export async function buildCollectionDailyRouteOverviewGeometry(env = {}, detail
   const points = [];
   let lengthMeters = 0;
   let durationSeconds = 0;
-  for (const { sections } of routeResults) {
+  const warnings = [];
+  const warningKeys = new Set();
+  for (const { sections, criticalVehicleNotice } of routeResults) {
+    if (criticalVehicleNotice) {
+      const warningKey = `${criticalVehicleNotice.code}:${criticalVehicleNotice.title}`;
+      if (!warningKeys.has(warningKey)) {
+        warningKeys.add(warningKey);
+        warnings.push(criticalVehicleNotice);
+      }
+    }
     for (const section of sections) {
       if (cleanString(section?.polyline)) {
         appendSectionPoints(points, decodeHereFlexiblePolyline(section.polyline));
@@ -420,6 +442,8 @@ export async function buildCollectionDailyRouteOverviewGeometry(env = {}, detail
     },
     vehicleProfile: profile,
     providerCalls: routeResults.length,
+    warnings,
+    safeForNavigation: warnings.length === 0,
     sendsNotifications: false,
     writesRoute: false,
     exposesApiKey: false
@@ -433,5 +457,6 @@ export const __test = {
   OVERVIEW_PROVIDER_CONCURRENCY,
   navigationPoint,
   overviewRoutePoints,
+  publicVehicleNotice,
   vehicleNotice
 };

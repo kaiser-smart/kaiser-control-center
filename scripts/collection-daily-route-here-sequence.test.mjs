@@ -301,7 +301,35 @@ const geometry = await buildCollectionDailyRouteOverviewGeometry(env, optimized.
 assert.equal(routingCalls, 1);
 assert.equal(geometry.vehicleProfile.registration, "3BN 3558");
 assert.equal(geometry.writesRoute, false);
+assert.equal(geometry.safeForNavigation, true);
+assert.deepEqual(geometry.warnings, []);
 assert.ok(geometry.points.length >= 2);
+
+const restrictedRoutingFetch = async () => new Response(JSON.stringify({
+  routes: [{
+    notices: [{
+      code: "violatedVehicleRestriction",
+      severity: "critical",
+      title: "Truck access restriction"
+    }],
+    sections: [{ polyline: routePolyline, summary: { length: 1000, duration: 120 } }]
+  }]
+}), { status: 200, headers: { "Content-Type": "application/json" } });
+const restrictedOverview = await buildCollectionDailyRouteOverviewGeometry(env, optimized.detail, { fetchImpl: restrictedRoutingFetch });
+assert.equal(restrictedOverview.points.length >= 2, true);
+assert.equal(restrictedOverview.safeForNavigation, false);
+assert.deepEqual(restrictedOverview.warnings, [{
+  code: "violatedVehicleRestriction",
+  severity: "critical",
+  title: "Truck access restriction"
+}]);
+await assert.rejects(
+  buildCollectionDailyRouteLegNavigation(env, optimized.detail, {
+    fromPointId: "depot",
+    toPointId: "planned-5"
+  }, { fetchImpl: restrictedRoutingFetch }),
+  (error) => error.code === "collection_daily_route_navigation_vehicle_restriction"
+);
 
 const scaleDetail = {
   run: optimized.detail.run,

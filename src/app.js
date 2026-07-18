@@ -61,7 +61,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.0";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.26";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.27";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -22707,7 +22707,7 @@ async function loadCollectionDailyDriverRoadGeometry() {
   const detail = collectionRoutesPilotState.myDailyRoute;
   const run = detail?.run;
   const mode = collectionRoutesPilotState.myDailyRouteMapMode === "overview" ? "overview" : "leg";
-  collectionDailyDriverMapRuntime.node?.classList.remove("is-route-error");
+  collectionDailyDriverMapRuntime.node?.classList.remove("is-route-error", "is-route-warning");
   if (!run) {
     renderCollectionDailyDriverMapOverlay([]);
     return;
@@ -22715,15 +22715,21 @@ async function loadCollectionDailyDriverRoadGeometry() {
   if (mode === "overview") {
     const cacheKey = `${run.id}:overview:${run.updatedAt || "route"}`;
     if (collectionDailyDriverMapRuntime.routeCache.has(cacheKey)) {
-      renderCollectionDailyDriverMapOverlay(collectionDailyDriverMapRuntime.routeCache.get(cacheKey));
+      const cached = collectionDailyDriverMapRuntime.routeCache.get(cacheKey);
+      const routePoints = Array.isArray(cached) ? cached : cached?.points || [];
+      const warnings = Array.isArray(cached?.warnings) ? cached.warnings : [];
+      renderCollectionDailyDriverMapOverlay(routePoints);
+      syncCollectionDailyDriverRouteWarnings(warnings);
       return;
     }
     try {
       const scopeQuery = run.scope === "test" ? "?scope=test" : "";
       const result = await apiJson(`/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/route-geometry${scopeQuery}`);
       const routePoints = Array.isArray(result.geometry?.points) ? result.geometry.points : [];
-      collectionDailyDriverMapRuntime.routeCache.set(cacheKey, routePoints);
+      const warnings = Array.isArray(result.geometry?.warnings) ? result.geometry.warnings : [];
+      collectionDailyDriverMapRuntime.routeCache.set(cacheKey, { points: routePoints, warnings });
       renderCollectionDailyDriverMapOverlay(routePoints);
+      syncCollectionDailyDriverRouteWarnings(warnings);
     } catch (error) {
       renderCollectionDailyDriverMapOverlay([]);
       const waiting = collectionDailyDriverMapRuntime.node?.querySelector(".collection-routes-test-tablet-map__waiting");
@@ -22778,6 +22784,18 @@ async function loadCollectionDailyDriverRoadGeometry() {
     if (waiting) {
       waiting.innerHTML = `<strong>Silniční úsek HERE teď není dostupný.</strong><span>${escapeHtml(error.payload?.error || "Mapa dál funguje; navigaci můžeš otevřít tlačítkem.")}</span>`;
     }
+  }
+}
+
+function syncCollectionDailyDriverRouteWarnings(warnings = []) {
+  const node = collectionDailyDriverMapRuntime.node;
+  if (!node) return;
+  node.classList.remove("is-route-warning");
+  if (!Array.isArray(warnings) || !warnings.length) return;
+  node.classList.add("is-route-warning");
+  const waiting = node.querySelector(".collection-routes-test-tablet-map__waiting");
+  if (waiting) {
+    waiting.innerHTML = "<strong>POZOR · HERE našel omezení pro tento vůz.</strong><span>Celá trasa je zobrazena po silnicích jen pro přehled. Omezený úsek nesmíš projet bez bezpečného ověření; navigace bod–bod zůstává zablokovaná.</span>";
   }
 }
 
