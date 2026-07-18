@@ -84,6 +84,7 @@ for (const marker of [
   "PŘESTÁVKA",
   "CELÁ TRASA",
   "NÁSLEDUJÍCÍ ZASTÁVKA",
+  "collection-daily-driver-stop-overview",
   "MAPOVÁNÍ STANOVIŠTĚ",
   "IZOLOVANÝ TEST · BEZ JÍZDY",
   "data-collection-driver-panel=\"report\"",
@@ -106,6 +107,8 @@ assert.ok(
     && appSource.includes("data-collection-driver-navigation=\"")
     && appSource.includes("navigator.geolocation.watchPosition")
     && appSource.includes("data-collection-driver-map-mode=\"overview\"")
+    && appSource.includes("<details class=\"collection-daily-driver-simulated-gps\"")
+    && appSource.includes("TEST POLOHA")
     && appSource.includes("collection-daily-driver-map-spider-line")
     && appSource.includes("data-collection-driver-navigate")
     && driverMapSource.includes("Optimalizováno HERE"),
@@ -166,8 +169,17 @@ for (const marker of [
   assert.ok(styleSource.includes(marker), `Celá mapa nesmí ponechat překážký přes mapový podklad: ${marker}`);
 }
 assert.ok(
-  appSource.includes('fullscreen ? "ZAVŘÍT MAPU" : "MAPA PŘES CELÝ DISPLEJ"'),
-  "Celá mapa musí mít krátké a jednoznačné zavírací tlačítko."
+  appSource.includes('fullscreen ? "ZPĚT K OBSLUZE" : "CELÁ MAPA"'),
+  "Celá mapa musí mít krátké otevření a jednoznačný návrat k obsluze."
+);
+
+assert.ok(
+  styleSource.includes(".collection-daily-driver-stop-overview")
+    && styleSource.includes("min-height: clamp(260px, 54dvh, 340px)")
+    && styleSource.includes(".collection-daily-driver-map__primary-actions")
+    && styleSource.includes("position: absolute")
+    && styleSource.includes(".collection-daily-driver-feedback"),
+  "Blackview musí dát mapě garantovanou pracovní výšku a pomocné prvky přesunout do kompaktních vrstev."
 );
 
 for (const marker of [
@@ -236,8 +248,9 @@ for (const marker of [
 assert.ok(
   styleSource.includes(".collection-daily-driver-simulated-gps")
     && styleSource.includes("min-height: 44px")
-    && styleSource.includes(".collection-daily-driver-map.has-simulated-gps"),
-  "Simulace polohy musí být zřetelná a ovladatelná na 11palcovém tabletu."
+    && styleSource.includes(".collection-daily-driver-simulated-gps > summary")
+    && styleSource.includes('content: "ROZBALIT"'),
+  "Simulace polohy musí být na 11palcovém tabletu zřetelná, sbalená a ovladatelná."
 );
 assert.equal(appSource.includes("sessionStorage"), false, "Simulovaná poloha se nesmí ukládat do sessionStorage.");
 assert.equal(appSource.includes("localStorage"), false, "Simulovaná poloha se nesmí ukládat do localStorage.");
