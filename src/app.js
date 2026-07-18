@@ -63,7 +63,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.1";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.30";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.31";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -3666,6 +3666,15 @@ function navigateFromAiAssistant(route) {
   guardedAccessAction(() => navigateToUrl(routeHref(normalizedRoute)));
 }
 
+function collectionRoutesSarlotaSpeakingPreviewRequested() {
+  if (normalizePath(window.location.pathname) !== COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE) {
+    return false;
+  }
+  const params = new URLSearchParams(window.location.search);
+  return params.get("gps") === COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE
+    && params.get("sarlota") === "speaking";
+}
+
 function renderAiAssistantLayer() {
   const user = authState.user ? currentUser() : null;
 
@@ -3679,6 +3688,14 @@ function renderAiAssistantLayer() {
 
   const assistant = selectedAiAssistant();
   const promoVisible = assistantPromoState.visible && shouldAutoShowAssistantPromo();
+  const collectionRoutesSpeakingHologram = assistant.id === "sarlota" && (
+    collectionRoutesSarlotaSpeakingPreviewRequested()
+    || (
+      isCollectionRoutesPath(normalizePath(window.location.pathname))
+      && aiAssistantState.mode === "voice"
+      && aiAssistantState.voiceUiState === "assistantSpeaking"
+    )
+  );
 
   const content = [
     AiWelcomeModal({
@@ -3686,7 +3703,7 @@ function renderAiAssistantLayer() {
       animate: aiAssistantState.welcomeAnimate && !promoVisible && shouldShowAiWelcomeModal()
     }),
     AiAssistantChat({
-      open: aiAssistantState.chatOpen,
+      open: aiAssistantState.chatOpen && !collectionRoutesSpeakingHologram,
       mode: aiAssistantState.mode,
       messages: aiAssistantState.messages,
       input: aiAssistantState.input,
@@ -3716,11 +3733,14 @@ function renderAiAssistantLayer() {
       demoStatus: aiAssistantState.demoStatus
     }),
     AiAssistantLauncher({
-      visible: !promoVisible && ((aiAssistantState.launcherVisible && !aiAssistantState.chatOpen && !aiAssistantState.welcomeVisible) || shouldShowAiVoiceDock()),
+      visible: !promoVisible && (collectionRoutesSpeakingHologram || ((aiAssistantState.launcherVisible && !aiAssistantState.chatOpen && !aiAssistantState.welcomeVisible) || shouldShowAiVoiceDock())),
       voiceActive: shouldShowAiVoiceDock(),
       voiceUiState: aiAssistantState.voiceUiState,
       voiceStatus: aiAssistantState.voiceStatus,
-      isListening: aiAssistantState.isListening
+      isListening: aiAssistantState.isListening,
+      speakingHologram: collectionRoutesSpeakingHologram,
+      hologramPath: assistant.hologramPath,
+      assistantName: assistant.name
     }),
     AiConfirmationModal({ confirmation: aiAssistantState.confirmation }),
     renderAiToast(),

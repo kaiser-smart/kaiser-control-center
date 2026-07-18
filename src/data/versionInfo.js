@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.604"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.605"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: hologram při hlasové odpovědi",
+    text: "Když Šarlota na řidičském tabletu přehrává úvod nebo odpověď, technickou plochu mikrofonu nahradí kompaktní animovaný hologram. Mikrofonní stav zůstává jen pro poslouchání, povolení a pravdivou chybu; mapa i ukončení hlasu zůstávají dostupné."
+  },
   {
     title: "Řidičský displej: mapa jako hlavní pracovní plocha",
     text: "Na 11palcovém Blackview má HERE mapa garantovanou pracovní výšku. Informace o stanovišti jsou kompaktní, TEST poloha je sbalená a mapové režimy i navigace zůstávají dostupné bez dalšího pevného řádku pod mapou."

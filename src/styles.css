@@ -12897,6 +12897,198 @@ h1 {
   transform: rotate(18deg);
 }
 
+.ai-sarlota-speaking-hologram {
+  position: fixed;
+  left: 14px;
+  bottom: 10px;
+  z-index: 57;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 138px);
+  gap: 8px;
+  max-width: min(258px, calc(100vw - 28px));
+  align-items: end;
+  pointer-events: none;
+  filter: drop-shadow(0 18px 26px rgba(0, 54, 92, 0.26));
+}
+
+.ai-sarlota-speaking-hologram__figure {
+  position: relative;
+  width: 112px;
+  height: 172px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.ai-sarlota-speaking-hologram__figure img {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  filter:
+    drop-shadow(0 0 10px rgba(105, 220, 255, 0.9))
+    drop-shadow(0 0 22px rgba(0, 132, 255, 0.48));
+  animation: sarlota-hologram-speaking 1.35s ease-in-out infinite;
+}
+
+.ai-sarlota-speaking-hologram__glow {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  z-index: 1;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(89, 213, 255, 0.48);
+  box-shadow:
+    0 0 18px rgba(89, 213, 255, 0.9),
+    0 0 36px rgba(0, 123, 255, 0.56);
+  animation: sarlota-hologram-glow 1.35s ease-in-out infinite;
+}
+
+.ai-sarlota-speaking-hologram__scan {
+  position: absolute;
+  inset: -35% 0 auto;
+  z-index: 3;
+  height: 24%;
+  background: linear-gradient(180deg, transparent, rgba(207, 250, 255, 0.3), transparent);
+  mix-blend-mode: screen;
+  animation: sarlota-hologram-scan 2.15s linear infinite;
+}
+
+.ai-sarlota-speaking-hologram__status {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 11px 12px;
+  border: 1px solid rgba(124, 224, 255, 0.58);
+  border-radius: 14px;
+  background: rgba(3, 24, 38, 0.88);
+  color: #f4fdff;
+  box-shadow:
+    0 12px 28px rgba(0, 36, 64, 0.28),
+    inset 0 0 18px rgba(57, 195, 255, 0.08);
+  pointer-events: auto;
+}
+
+.ai-sarlota-speaking-hologram__status strong {
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.ai-sarlota-speaking-hologram__status button {
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid rgba(137, 231, 255, 0.58);
+  border-radius: 10px;
+  background: rgba(236, 252, 255, 0.12);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.ai-sarlota-speaking-hologram__status button:focus-visible {
+  outline: 3px solid #b7ec2f;
+  outline-offset: 3px;
+}
+
+.ai-sarlota-speaking-hologram__wave {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 5px;
+}
+
+.ai-sarlota-speaking-hologram__wave i {
+  display: block;
+  width: 4px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #d6fbff, #38c7ff);
+  box-shadow: 0 0 10px rgba(56, 199, 255, 0.72);
+  animation: sarlota-hologram-wave 720ms ease-in-out infinite;
+}
+
+.ai-sarlota-speaking-hologram__wave i:nth-child(2) {
+  height: 20px;
+  animation-delay: -180ms;
+}
+
+.ai-sarlota-speaking-hologram__wave i:nth-child(3) {
+  height: 15px;
+  animation-delay: -360ms;
+}
+
+.ai-sarlota-speaking-hologram__wave i:nth-child(4) {
+  height: 7px;
+  animation-delay: -540ms;
+}
+
+.collection-driver-kiosk-active .ai-sarlota-speaking-hologram {
+  bottom: 54px;
+}
+
+body:has(.collection-daily-driver-map.is-fullscreen) .ai-sarlota-speaking-hologram {
+  left: auto;
+  right: 14px;
+  bottom: 12px;
+  z-index: 1201;
+}
+
+@keyframes sarlota-hologram-speaking {
+  0%,
+  100% {
+    opacity: 0.84;
+    transform: translateY(1px) scale(0.99);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.01);
+  }
+}
+
+@keyframes sarlota-hologram-glow {
+  0%,
+  100% {
+    opacity: 0.52;
+    transform: scaleX(0.88);
+  }
+
+  50% {
+    opacity: 0.92;
+    transform: scaleX(1.05);
+  }
+}
+
+@keyframes sarlota-hologram-scan {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(560%);
+  }
+}
+
+@keyframes sarlota-hologram-wave {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+    opacity: 0.58;
+  }
+
+  50% {
+    transform: scaleY(1.15);
+    opacity: 1;
+  }
+}
+
 .ai-assistant-voice-dock {
   position: fixed;
   right: 18px;
@@ -13001,6 +13193,18 @@ h1 {
 }
 
 @media (max-width: 430px) {
+  .ai-sarlota-speaking-hologram {
+    left: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    grid-template-columns: 88px minmax(0, 124px);
+    max-width: calc(100vw - 16px);
+  }
+
+  .ai-sarlota-speaking-hologram__figure {
+    width: 88px;
+    height: 136px;
+  }
+
   .ai-assistant-voice-dock {
     left: 10px;
     right: 10px;
@@ -29820,6 +30024,10 @@ body.tracking-map-is-maximized {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ai-sarlota-speaking-hologram__figure img,
+  .ai-sarlota-speaking-hologram__glow,
+  .ai-sarlota-speaking-hologram__scan,
+  .ai-sarlota-speaking-hologram__wave i,
   .ai-voice-assistant-panel--minimal.ai-voice-assistant-panel--state-listening .ai-voice-assistant-panel__mic::before,
   .ai-voice-assistant-panel--minimal.ai-voice-assistant-panel--state-userSpeaking .ai-voice-assistant-panel__mic::before,
   .ai-voice-assistant-panel--minimal.ai-voice-assistant-panel--state-assistantSpeaking .ai-voice-assistant-panel__mic::before,
