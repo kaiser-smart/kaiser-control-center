@@ -180,6 +180,22 @@ assert.ok(
   "Řidičský displej musí automaticky zaznamenat skutečný viewport Blackview bez provozního zápisu."
 );
 
+assert.ok(
+  appSource.includes("function collectionDriverBlackviewSimulatorRequested()")
+    && appSource.includes('new URLSearchParams(window.location.search).get("device")')
+    && appSource.includes("COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE")
+    && appSource.includes("data-collection-driver-blackview-simulator")
+    && appSource.includes("data-collection-driver-blackview-frame")
+    && appSource.includes('width="960"')
+    && appSource.includes('height="600"')
+    && appSource.includes('url.searchParams.delete("device")')
+    && styleSource.includes("collection-driver-blackview-simulator-active")
+    && styleSource.includes(".collection-driver-blackview-simulator-frame iframe")
+    && styleSource.includes("width: 960px")
+    && styleSource.includes("height: 600px"),
+  "TEST URL musí nabídnout trvalý interaktivní simulátor Blackview 960 × 600 bez vnořeného simulátoru."
+);
+
 for (const marker of [
   "OPTIMALIZOVAT HERE",
   "/here-sequence",
