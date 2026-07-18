@@ -9,7 +9,8 @@ import {
 } from "../functions/_lib/collection-daily-route-here-sequence.js";
 import {
   buildCollectionDailyRouteOverviewGeometry,
-  buildCollectionDailyRouteLegNavigation
+  buildCollectionDailyRouteLegNavigation,
+  __test as navigationTest
 } from "../functions/_lib/collection-daily-route-navigation.js";
 import {
   appendHereRoutingTruckProfile,
@@ -301,6 +302,45 @@ assert.equal(routingCalls, 1);
 assert.equal(geometry.vehicleProfile.registration, "3BN 3558");
 assert.equal(geometry.writesRoute, false);
 assert.ok(geometry.points.length >= 2);
+
+const scaleDetail = {
+  run: optimized.detail.run,
+  driverMap: {
+    ...optimized.detail.driverMap,
+    totalStopCount: 198,
+    mappedStopCount: 198,
+    points: Array.from({ length: 198 }, (_, index) => ({
+      stopId: `scale-stop-${index + 1}`,
+      label: `TEST ${index + 1}`,
+      address: `Veřejný adresní bod ${index + 1}, Brno`,
+      latitude: 49.18 + ((index % 20) * 0.001),
+      longitude: 16.55 + (Math.floor(index / 20) * 0.002),
+      routeOrder: index + 1,
+      status: "planned"
+    }))
+  }
+};
+let scaleRoutingCalls = 0;
+let activeRoutingCalls = 0;
+let maxActiveRoutingCalls = 0;
+const scaleRoutingFetch = async () => {
+  scaleRoutingCalls += 1;
+  activeRoutingCalls += 1;
+  maxActiveRoutingCalls = Math.max(maxActiveRoutingCalls, activeRoutingCalls);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  activeRoutingCalls -= 1;
+  return new Response(JSON.stringify({
+    routes: [{ sections: [{ polyline: routePolyline, summary: { length: 1000, duration: 120 } }] }]
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+};
+const scaleGeometry = await buildCollectionDailyRouteOverviewGeometry(env, scaleDetail, { fetchImpl: scaleRoutingFetch });
+const scaleEdges = scaleDetail.driverMap.points.length + 1;
+assert.equal(scaleRoutingCalls, Math.ceil(scaleEdges / navigationTest.OVERVIEW_MAX_EDGES_PER_REQUEST));
+assert.equal(scaleGeometry.providerCalls, scaleRoutingCalls);
+assert.ok(maxActiveRoutingCalls > 1, "Části celé trasy se musí počítat souběžně.");
+assert.ok(maxActiveRoutingCalls <= navigationTest.OVERVIEW_PROVIDER_CONCURRENCY);
+assert.equal(scaleGeometry.writesRoute, false);
+assert.equal(scaleGeometry.sendsNotifications, false);
 
 const leg = await buildCollectionDailyRouteLegNavigation(env, optimized.detail, {
   fromPointId: "depot",

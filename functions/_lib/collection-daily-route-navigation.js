@@ -6,6 +6,9 @@ import {
 
 const HERE_ROUTING_BASE_URL = "https://router.hereapi.com/v8/routes";
 const FLEXIBLE_POLYLINE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const HERE_ROUTING_TIMEOUT_MS = 15_000;
+const OVERVIEW_MAX_EDGES_PER_REQUEST = 25;
+const OVERVIEW_PROVIDER_CONCURRENCY = 4;
 
 export class CollectionDailyRouteNavigationError extends Error {
   constructor(message, status = 400, code = "collection_daily_route_navigation_error") {
@@ -201,18 +204,40 @@ async function requestHereRoute(env, input = {}, options = {}) {
   if (profile) appendHereRoutingTruckProfile(url.searchParams, profile);
   url.searchParams.set("apiKey", apiKey);
   const fetchImpl = options.fetchImpl || fetch;
+  const abortController = typeof AbortController === "function" ? new AbortController() : null;
+  const timeoutMs = Math.max(1_000, Number(options.timeoutMs) || HERE_ROUTING_TIMEOUT_MS);
+  const timeoutId = abortController
+    ? setTimeout(() => abortController.abort(), timeoutMs)
+    : null;
   let response;
   try {
-    response = await fetchImpl(url.toString(), { headers: { Accept: "application/json" } });
+    response = await fetchImpl(url.toString(), {
+      headers: { Accept: "application/json" },
+      ...(abortController ? { signal: abortController.signal } : {})
+    });
   } catch {
+    if (abortController?.signal?.aborted) {
+      throw new CollectionDailyRouteNavigationError(
+        "HERE výpočet silničního průběhu překročil bezpečný časový limit.",
+        504,
+        "collection_daily_route_navigation_here_timeout"
+      );
+    }
     throw new CollectionDailyRouteNavigationError(
       "HERE trasu se teď nepodařilo načíst.",
       502,
       "collection_daily_route_navigation_here_unreachable"
     );
+  } finally {
+    if (timeoutId !== null) clearTimeout(timeoutId);
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    console.warn("collection_daily_route_navigation.provider_failed", {
+      providerStatus: response.status,
+      providerCode: cleanString(payload?.code || payload?.errorCode),
+      message: cleanString(payload?.title || payload?.detail || payload?.message) || "HERE response without JSON message"
+    });
     throw new CollectionDailyRouteNavigationError(
       "HERE trasu se teď nepodařilo vypočítat.",
       502,
@@ -347,22 +372,29 @@ export async function buildCollectionDailyRouteOverviewGeometry(env = {}, detail
       "collection_daily_route_navigation_vehicle_profile_missing"
     );
   }
-  const points = [];
-  let lengthMeters = 0;
-  let durationSeconds = 0;
-  let providerCalls = 0;
-  const maxEdgesPerRequest = 40;
-  for (let startIndex = 0; startIndex < coordinates.length - 1; startIndex += maxEdgesPerRequest) {
-    const endIndex = Math.min(coordinates.length - 1, startIndex + maxEdgesPerRequest);
-    const { sections } = await requestHereRoute(env, {
+  const requests = [];
+  for (let startIndex = 0; startIndex < coordinates.length - 1; startIndex += OVERVIEW_MAX_EDGES_PER_REQUEST) {
+    const endIndex = Math.min(coordinates.length - 1, startIndex + OVERVIEW_MAX_EDGES_PER_REQUEST);
+    requests.push({
       run: detail?.run,
       vehicleProfile: profile,
       origin: coordinates[startIndex],
       destination: coordinates[endIndex],
       via: coordinates.slice(startIndex + 1, endIndex),
       actions: false
-    }, options);
-    providerCalls += 1;
+    });
+  }
+  const routeResults = [];
+  for (let index = 0; index < requests.length; index += OVERVIEW_PROVIDER_CONCURRENCY) {
+    const batch = requests.slice(index, index + OVERVIEW_PROVIDER_CONCURRENCY);
+    routeResults.push(...await Promise.all(
+      batch.map((request) => requestHereRoute(env, request, options))
+    ));
+  }
+  const points = [];
+  let lengthMeters = 0;
+  let durationSeconds = 0;
+  for (const { sections } of routeResults) {
     for (const section of sections) {
       if (cleanString(section?.polyline)) {
         appendSectionPoints(points, decodeHereFlexiblePolyline(section.polyline));
@@ -387,7 +419,7 @@ export async function buildCollectionDailyRouteOverviewGeometry(env = {}, detail
       durationSeconds: Math.round(durationSeconds)
     },
     vehicleProfile: profile,
-    providerCalls,
+    providerCalls: routeResults.length,
     sendsNotifications: false,
     writesRoute: false,
     exposesApiKey: false
@@ -396,6 +428,9 @@ export async function buildCollectionDailyRouteOverviewGeometry(env = {}, detail
 
 export const __test = {
   HERE_ROUTING_BASE_URL,
+  HERE_ROUTING_TIMEOUT_MS,
+  OVERVIEW_MAX_EDGES_PER_REQUEST,
+  OVERVIEW_PROVIDER_CONCURRENCY,
   navigationPoint,
   overviewRoutePoints,
   vehicleNotice

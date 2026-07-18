@@ -22707,6 +22707,7 @@ async function loadCollectionDailyDriverRoadGeometry() {
   const detail = collectionRoutesPilotState.myDailyRoute;
   const run = detail?.run;
   const mode = collectionRoutesPilotState.myDailyRouteMapMode === "overview" ? "overview" : "leg";
+  collectionDailyDriverMapRuntime.node?.classList.remove("is-route-error");
   if (!run) {
     renderCollectionDailyDriverMapOverlay([]);
     return;
@@ -22726,7 +22727,8 @@ async function loadCollectionDailyDriverRoadGeometry() {
     } catch (error) {
       renderCollectionDailyDriverMapOverlay([]);
       const waiting = collectionDailyDriverMapRuntime.node?.querySelector(".collection-routes-test-tablet-map__waiting");
-      if (waiting && !collectionDailyDriverMapRuntime.node?.classList.contains("is-loaded")) {
+      collectionDailyDriverMapRuntime.node?.classList.add("is-route-error");
+      if (waiting) {
         waiting.innerHTML = `<strong>Silniční průběh celé trasy HERE teď není dostupný.</strong><span>${escapeHtml(error.payload?.error || "Body zůstávají na mapě bez falešných přímých spojnic.")}</span>`;
       }
     }
@@ -22772,7 +22774,8 @@ async function loadCollectionDailyDriverRoadGeometry() {
     syncCollectionDailyDriverNavigationGuidance();
     renderCollectionDailyDriverMapOverlay([]);
     const waiting = collectionDailyDriverMapRuntime.node?.querySelector(".collection-routes-test-tablet-map__waiting");
-    if (waiting && !collectionDailyDriverMapRuntime.node?.classList.contains("is-loaded")) {
+    collectionDailyDriverMapRuntime.node?.classList.add("is-route-error");
+    if (waiting) {
       waiting.innerHTML = `<strong>Silniční úsek HERE teď není dostupný.</strong><span>${escapeHtml(error.payload?.error || "Mapa dál funguje; navigaci můžeš otevřít tlačítkem.")}</span>`;
     }
   }

@@ -40031,6 +40031,18 @@ body:has(.ds-plus-page) {
   opacity: 0;
 }
 
+.collection-routes-test-tablet-map__canvas.is-route-error > .collection-routes-test-tablet-map__waiting {
+  inset: auto 12px 12px;
+  visibility: visible;
+  min-height: 0;
+  border: 2px solid #a3342b;
+  border-radius: 12px;
+  background: rgba(255, 247, 245, 0.96);
+  color: #70241f;
+  opacity: 1;
+  pointer-events: none;
+}
+
 .collection-routes-test-tablet-map__canvas.is-error > img {
   display: none;
 }
