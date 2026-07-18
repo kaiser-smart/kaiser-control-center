@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.615"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.616"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: správce připraví správný TEST",
+    text: "Admin a Management mají v pracovním okně vždy správcovský krok pro trasu přiřazenou Miroslavovi. Starší vlastnictví záznamu už tuto akci neschová a okno se nepřepne na nabídku určenou terénnímu testerovi."
+  },
   {
     title: "Svozové trasy: TEST pracoviště se načte jen jednou",
     text: "Zkušební stránka po načtení dat zůstane připravená k práci. Trasy se už při každém překreslení nenačítají znovu a hlavní doporučené tlačítko proto nezůstává zablokované na stavu Načítám."

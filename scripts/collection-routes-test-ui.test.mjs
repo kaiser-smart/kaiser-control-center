@@ -73,6 +73,7 @@ for (const marker of [
   "data-collection-daily-route-transition=\"prepare\"",
   "testTabletSelectedRunId",
   "collectionRoutesStationaryFieldTestOwnedByCurrentUser",
+  "ownTest && !canManage",
   "stationary-field-test",
   "Terénní tester",
   "Bez jízdy",
