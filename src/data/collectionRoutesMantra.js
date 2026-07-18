@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.28",
-  updatedAt: "18. 7. 2026 10:20",
-  updatedAtIso: "2026-07-18T10:20:48+02:00",
-  lastChange: "Oddělení navigace a hlasové Šarloty",
+  version: "1.29",
+  updatedAt: "18. 7. 2026 11:02",
+  updatedAtIso: "2026-07-18T11:02:24+02:00",
+  lastChange: "Bezpečný kontext a paměť Šarloty",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -27,6 +27,10 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     {
       title: "Navigace není Šarlota",
       text: "Hlas navigace pouze česky přehrává deterministické pokyny HERE. Hlasová Šarlota je oddělená konverzační asistentka a při manévru se vždy ztiší nebo pozastaví."
+    },
+    {
+      title: "Šarlota čte, člověk potvrzuje",
+      text: "Řidičská Šarlota načítá pouze vlastní trasu a omezený ověřený pracovní kontext. Paměť je dobrovolná a ukládá jen pracovní témata; každý provozní zápis dál vyžaduje fyzické potvrzení."
     }
   ],
   sources: [

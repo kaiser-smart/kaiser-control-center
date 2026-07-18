@@ -10,7 +10,7 @@ import {
 } from "../../../_lib/ai-people-summary.js";
 import { driverReportVehicleDynamicVariables } from "../../../_lib/fleet-vehicles-store.js";
 import { dataBoxAssistantContext } from "../../../_lib/data-box-store.js";
-import { getMyCollectionDailyRoute } from "../../../_lib/collection-daily-routes-store.js";
+import { buildCollectionRoutesSarlotaContext } from "../../../_lib/collection-routes-sarlota-context.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import {
   assistantConfigFromRequest,
@@ -152,13 +152,26 @@ function dataBoxContextVariables(context = {}) {
 
 export async function collectionRoutesContextVariables(env, user, requestedRoute = "/trasy-svozu", detailOverride = undefined) {
   const scope = requestedRoute === "/trasy-svozu/test" ? "test" : "production";
-  const detail = detailOverride === undefined
-    ? await getMyCollectionDailyRoute(env, user, { scope })
-    : detailOverride;
-  const run = detail?.run || null;
-  const stops = Array.isArray(detail?.stops) ? detail.stops : [];
-  const currentStop = stops.find((stop) => stop.status === "planned") || null;
-  const nextStop = currentStop;
+  const context = await buildCollectionRoutesSarlotaContext(env, user, {
+    scope,
+    ...(detailOverride === undefined ? {} : {
+      detailOverride,
+      usersOverride: [user],
+      vehiclesOverride: {},
+      weatherOverride: { ok: false, verified: false, status: "test_override" },
+      availabilityOverride: [],
+      memoryOverride: {
+        available: false,
+        consent: false,
+        previouslySpoken: false,
+        conversationCount: 0,
+        topics: [],
+        summary: "",
+        apiStatus: "waiting"
+      }
+    })
+  });
+  const route = context.route;
   return {
     current_module: "Svozové trasy",
     current_module_route: requestedRoute,
@@ -167,31 +180,33 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
       route: requestedRoute,
       mode: "driver-tablet",
       dataScope: scope,
-      routeId: cleanString(run?.id),
-      routeStatus: cleanString(run?.status || "none"),
+      routeId: cleanString(route.id),
+      routeStatus: cleanString(route.status || "none"),
       actorUserId: cleanString(user?.id),
       actorName: cleanString(user?.name || user?.email),
-      vehicle: cleanString(run?.vehicleLabel || run?.vehicleRegistration || run?.vehicleCode),
-      plannedCount: Number(run?.summary?.plannedCount || 0),
-      doneCount: Number(run?.summary?.doneCount || 0),
-      problemCount: Number(run?.summary?.problemCount || 0),
-      currentStop: currentStop ? {
-        id: cleanString(currentStop.id),
-        order: Number(currentStop.routeOrder || 0),
-        customerName: cleanString(currentStop.customerName),
-        stationName: cleanString(currentStop.stationName),
-        address: cleanString(currentStop.addressText),
-        wasteType: cleanString(currentStop.wasteType)
-      } : null,
-      nextNavigationAddress: cleanString(nextStop?.addressText),
-      physicalTesterName: scope === "test" ? cleanString(run?.metadata?.physicalTesterName || "Tomáš Gaží") : "",
-      navigationMode: "physical-tap-opens-google-maps",
+      vehicle: cleanString(route.vehicleLabel),
+      vehiclesVerified: context.vehicles.verified,
+      plannedCount: Number(route.plannedCount || 0),
+      doneCount: Number(route.doneCount || 0),
+      problemCount: Number(route.problemCount || 0),
+      currentStop: route.currentStop,
+      followingStop: route.followingStop,
+      weather: context.weather?.verified ? cleanString(context.weather.summary) : "neověřeno",
+      memorySummary: context.memory?.consent ? cleanString(context.memory.summary) : "paměť není povolená",
+      navigationMode: "HERE truck navigation; spuštění vždy fyzickým klepnutím",
       safety: "Šarlota smí vysvětlovat aktuální trasu a připravit hlášení. Nesmí sama označit HOTOVO, spustit či ukončit přestávku nebo výsyp ani uložit hlášení. Každý zápis vyžaduje fyzické klepnutí řidiče. Nikdy neposílej zákaznickou zprávu a nikdy nezapisuj do Vistosu."
     }),
+    intro_announcement: context.introAnnouncement,
     collection_route_scope: scope,
-    collection_route_status: cleanString(run?.status || "none"),
-    collection_route_current_stop: cleanString(currentStop?.customerName || currentStop?.stationName),
-    collection_route_current_address: cleanString(currentStop?.addressText),
+    collection_route_status: cleanString(route.status || "none"),
+    collection_route_current_stop: cleanString(route.currentStop?.customerName || route.currentStop?.stationName),
+    collection_route_current_address: cleanString(route.currentStop?.address),
+    collection_route_following_stop: cleanString(route.followingStop?.customerName || route.followingStop?.stationName),
+    collection_route_following_address: cleanString(route.followingStop?.address),
+    collection_route_weather: context.weather?.verified ? cleanString(context.weather.summary) : "Počasí se nepodařilo ověřit.",
+    collection_route_memory_enabled: context.memory?.consent ? "ano" : "ne",
+    collection_route_memory_summary: context.memory?.consent ? cleanString(context.memory.summary) : "",
+    collection_route_news_status: "nenastaveno",
     collection_route_safety: "Všechny zápisy čekají na fyzické potvrzení v tabletu."
   };
 }

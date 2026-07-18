@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.596"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.597"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: bezpečný pracovní kontext Šarloty",
+    text: "Řidičská Šarlota načítá vlastní trasu, ověřená vozidla, počasí, omezený služební adresář, dostupnost a nadřízeného. Dobrovolná paměť ukládá jen pracovní témata odděleně podle účtu; zvuk ani celý přepis neukládá a každý provozní zápis dál čeká na fyzické potvrzení."
+  },
   {
     title: "Svoz: uložená vize hlasové Šarloty",
     text: "Mantra 1.28 a samostatná produktová specifikace trvale oddělují český hlas HERE navigace od konverzační Šarloty. Vize ukládá budoucí kontext počasí, trasy, vozidel, služebního adresáře, dostupnosti, nadřízených, zpráv a bezpečné paměti rozhovorů bez povolení ostrých autonomních zápisů."

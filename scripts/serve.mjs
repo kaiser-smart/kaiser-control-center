@@ -88,6 +88,7 @@ import { dataBoxPlusInstructionPlanForTest } from "../functions/_lib/data-box-pl
 import { targetForSelfRepairReport } from "../functions/_lib/self-repair-targets.js";
 import { vehicleTrackingMapsConfigPayload } from "../functions/api/vehicle-tracking/maps-config.js";
 import { buildOrwiiFuelAnalytics } from "../functions/_lib/orwii-fuel-store.js";
+import { classifySarlotaMemoryTopics } from "../functions/_lib/sarlota-user-memory.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -129,6 +130,7 @@ let mockCollectionRouteSourceFiles = [];
 let mockCollectionRouteSourceRows = [];
 const mockCollectionDailyRouteReportPhotos = new Map();
 const mockCollectionDailyRouteGpsConfirmations = new Map();
+const mockSarlotaUserMemory = new Map();
 let mockDataBoxSyncRuns = [];
 let mockDataBoxActions = [];
 let mockDataBoxPlusPendingAction = null;
@@ -4412,6 +4414,129 @@ function mockCollectionDailyRouteForDriver(user, options = {}) {
   return structuredClone(ensureMockCollectionDailyRouteForDriver(user, options));
 }
 
+function mockSarlotaMemoryForUser(user) {
+  const key = String(user?.id || "").trim().toLowerCase();
+  const memory = mockSarlotaUserMemory.get(key);
+  return structuredClone(memory || {
+    available: true,
+    consent: false,
+    consentStatus: "pending",
+    previouslySpoken: false,
+    conversationCount: 0,
+    topics: [],
+    summary: "",
+    lastConversationAt: "",
+    apiStatus: "ready",
+    localSimulation: true
+  });
+}
+
+function saveMockSarlotaMemory(user, memory) {
+  const key = String(user?.id || "").trim().toLowerCase();
+  mockSarlotaUserMemory.set(key, structuredClone(memory));
+  return structuredClone(memory);
+}
+
+function mockCollectionRoutesSarlotaContext(user, scope = "production") {
+  const detail = mockCollectionDailyRouteForDriver(user, { scope });
+  const stops = Array.isArray(detail.stops) ? detail.stops : [];
+  const currentStop = stops.find((stop) => stop.status === "planned") || null;
+  const followingStop = currentStop
+    ? stops
+      .filter((stop) => stop.status === "planned" && Number(stop.routeOrder) > Number(currentStop.routeOrder))
+      .sort((left, right) => Number(left.routeOrder) - Number(right.routeOrder))[0] || null
+    : null;
+  const date = detail.run.routeDate;
+  const availability = new Map(mockAbsenceRequests
+    .filter((item) => ["approved", "recorded"].includes(String(item.status || "")))
+    .filter((item) => String(item.dateFrom || "") <= date && String(item.dateTo || "") >= date)
+    .map((item) => [String(item.employeeId || "").trim().toLowerCase(), {
+      status: String(item.type || "") === "vacation" ? "vacation" : "unavailable",
+      label: String(item.type || "") === "vacation" ? "Dovolená" : "Mimo pracoviště",
+      dateFrom: String(item.dateFrom || ""),
+      dateTo: String(item.dateTo || "")
+    }]));
+  const activeUsers = mockUsers.filter((item) => item.status === "active" && item.active !== false);
+  const usersById = new Map(activeUsers.map((item) => [String(item.id || "").trim().toLowerCase(), item]));
+  const directory = activeUsers.slice(0, 120).map((item) => {
+    const manager = usersById.get(String(item.managerId || "").trim().toLowerCase());
+    return {
+      id: item.id,
+      name: item.name || "",
+      workEmail: /@kaiser\.local$/i.test(String(item.email || "")) ? "" : item.email || "",
+      workPhone: item.phone || "",
+      function: item.position || roleLabel(item.role),
+      manager: manager ? { id: manager.id, name: manager.name || "" } : null,
+      availability: availability.get(String(item.id || "").trim().toLowerCase()) || {
+        status: "available",
+        label: "V práci",
+        dateFrom: "",
+        dateTo: ""
+      }
+    };
+  });
+  const memory = mockSarlotaMemoryForUser(user);
+  return {
+    actor: { id: user.id, name: user.name || "", role: user.role },
+    scope: scope === "test" ? "test" : "production",
+    date,
+    route: {
+      assigned: true,
+      id: detail.run.id,
+      scope: detail.run.scope,
+      status: detail.run.status,
+      title: detail.run.title,
+      routeDate: detail.run.routeDate,
+      vehicleLabel: detail.run.vehicleLabel,
+      plannedCount: Number(detail.run.summary?.plannedCount || 0),
+      doneCount: Number(detail.run.summary?.doneCount || 0),
+      problemCount: Number(detail.run.summary?.problemCount || 0),
+      currentStop: currentStop ? {
+        id: currentStop.id,
+        order: Number(currentStop.routeOrder || 0),
+        customerName: currentStop.customerName || "",
+        stationName: currentStop.stationName || "",
+        address: currentStop.addressText || "",
+        wasteType: currentStop.wasteType || ""
+      } : null,
+      followingStop: followingStop ? {
+        id: followingStop.id,
+        order: Number(followingStop.routeOrder || 0),
+        customerName: followingStop.customerName || "",
+        stationName: followingStop.stationName || "",
+        address: followingStop.addressText || ""
+      } : null
+    },
+    vehicles: { verified: true, count: 0, items: [], fallbackQuestion: "" },
+    weather: {
+      verified: true,
+      simulated: true,
+      source: "local-test-simulation",
+      status: "ready",
+      summary: "Simulované počasí pro Brno: 24 °C, jasno"
+    },
+    directory,
+    directoryPolicy: "Pouze jméno, pracovní kontakt, funkce, nadřízený a bezpečný stav dostupnosti.",
+    news: {
+      status: "not_configured",
+      source: "Novinky.cz",
+      items: [],
+      message: "Oficiální zdroj zpráv zatím není nastavený; obsah se nescrapuje."
+    },
+    memory,
+    introAnnouncement: `Ahoj Mirku. Dnešní trasu mám načtenou. Svačinu máš? Simulované počasí pro Brno: 24 °C, jasno. Budu hlídat trasu, počasí a hlášení.`,
+    safety: {
+      readOnlyContext: true,
+      requiresPhysicalConfirmationForWrites: true,
+      sendsNotifications: false,
+      changesVistos: false,
+      changesProductionRoute: false
+    },
+    localSimulation: true,
+    apiStatus: "ready"
+  };
+}
+
 function refreshMockCollectionDailyRouteSummary(route) {
   const stops = Array.isArray(route?.stops) ? route.stops : [];
   route.run.summary = {
@@ -4542,6 +4667,97 @@ async function handleApi(request, response) {
       })),
       apiStatus: "ready"
     });
+    return true;
+  }
+
+  if (url.pathname === "/api/ai/collection-routes/context" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno.", apiStatus: "waiting" });
+      return true;
+    }
+    if (normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "Kontext je dostupný pouze aktivnímu řidiči.", apiStatus: "waiting" });
+      return true;
+    }
+    const scope = url.searchParams.get("scope") === "test" ? "test" : "production";
+    sendJson(response, 200, {
+      context: mockCollectionRoutesSarlotaContext(user, scope),
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/ai/sarlota/memory" && ["GET", "POST", "DELETE"].includes(request.method)) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno.", apiStatus: "waiting" });
+      return true;
+    }
+    if (!hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "K tomu nemáš oprávnění.", apiStatus: "waiting" });
+      return true;
+    }
+    if (request.method === "GET") {
+      sendJson(response, 200, { memory: mockSarlotaMemoryForUser(user), apiStatus: "ready" });
+      return true;
+    }
+    const input = request.method === "POST" ? await readJsonBody(request) : {};
+    if (request.method === "DELETE" || (input.action === "consent" && input.consent !== true)) {
+      const memory = saveMockSarlotaMemory(user, {
+        available: true,
+        consent: false,
+        consentStatus: "revoked",
+        previouslySpoken: false,
+        conversationCount: 0,
+        topics: [],
+        summary: "",
+        lastConversationAt: "",
+        apiStatus: "ready",
+        localSimulation: true
+      });
+      sendJson(response, 200, { memory, apiStatus: "ready" });
+      return true;
+    }
+    if (input.action === "consent" && input.consent === true) {
+      const current = mockSarlotaMemoryForUser(user);
+      const memory = saveMockSarlotaMemory(user, {
+        ...current,
+        available: true,
+        consent: true,
+        consentStatus: "granted",
+        apiStatus: "ready",
+        localSimulation: true
+      });
+      sendJson(response, 200, { memory, apiStatus: "ready" });
+      return true;
+    }
+    if (input.action === "remember_exchange") {
+      const current = mockSarlotaMemoryForUser(user);
+      if (!current.consent) {
+        sendJson(response, 200, { memory: { ...current, remembered: false, reason: "consent_required" }, apiStatus: "ready" });
+        return true;
+      }
+      const topics = classifySarlotaMemoryTopics(input.userTranscript);
+      const mergedTopics = [...new Set([...(current.topics || []), ...topics])].slice(-8);
+      const conversationId = String(input.conversationId || "").slice(0, 160);
+      const exchangeKey = `${conversationId || "bez-id"}:${topics.join("|")}`.slice(0, 500);
+      const newConversation = conversationId !== String(current.lastConversationId || "");
+      const memory = saveMockSarlotaMemory(user, {
+        ...current,
+        previouslySpoken: true,
+        conversationCount: Number(current.conversationCount || 0) + (newConversation ? 1 : 0),
+        topics: mergedTopics,
+        summary: `Předchozí pracovní témata: ${mergedTopics.join(", ")}.`,
+        lastConversationId: conversationId,
+        lastExchangeKey: exchangeKey,
+        lastConversationAt: new Date().toISOString(),
+        remembered: true
+      });
+      sendJson(response, 200, { memory, apiStatus: "ready" });
+      return true;
+    }
+    sendJson(response, 400, { error: "Neznámá akce paměti Šarloty.", apiStatus: "waiting" });
     return true;
   }
 

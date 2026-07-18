@@ -20,7 +20,7 @@ import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
 {
   const variables = await collectionRoutesContextVariables(
     {},
-    { id: "pneumatiky-miroslav-vasek", name: "Miroslav Vašek" },
+    { id: "pneumatiky-miroslav-vasek", name: "Miroslav Vašek", role: "ridic", status: "active", active: true },
     "/trasy-svozu/test",
     {
       run: {
@@ -48,7 +48,7 @@ import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
   assert.equal(context.mode, "driver-tablet");
   assert.equal(context.dataScope, "test");
   assert.equal(context.actorName, "Miroslav Vašek");
-  assert.equal(context.physicalTesterName, "Tomáš Gaží");
+  assert.equal("physicalTesterName" in context, false, "Jméno fyzického testera nepatří do hlasového kontextu řidiče.");
   assert.equal(context.currentStop.customerName, "Firma test 501");
   assert.match(context.safety, /fyzické klepnutí/);
   assert.match(context.safety, /Vistosu/);

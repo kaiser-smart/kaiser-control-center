@@ -63,7 +63,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.1";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.28";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.29";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -1425,6 +1425,9 @@ const collectionRoutesPilotState = {
   myDailyRouteDumpDestinationId: "",
   myDailyRouteSarlotaEnabled: false,
   myDailyRouteSarlotaMessage: "",
+  myDailyRouteSarlotaContext: null,
+  myDailyRouteSarlotaMemoryLoaded: false,
+  myDailyRouteSarlotaMemory: null,
   selectedSiteId: "",
   selectedSiteDetail: null,
   activeTab: "dashboard",
@@ -1434,6 +1437,10 @@ const collectionRoutesPilotState = {
 let collectionRoutesSitesAutoRefreshTimer = null;
 let collectionRoutesSitesCountdownTimer = null;
 let collectionRoutesSarlotaVoiceRequestId = 0;
+const collectionRoutesSarlotaMemoryRuntime = {
+  timer: null,
+  lastExchangeKey: ""
+};
 const collectionDailyDriverMapRuntime = {
   node: null,
   image: null,
@@ -3427,6 +3434,7 @@ async function startElevenLabsVoiceRecognition() {
         }
         aiAssistantState.isListening = false;
         aiAssistantState.voiceAnswer = event.text || "";
+        scheduleCollectionRoutesSarlotaMemoryExchange(event.conversationId, aiAssistantState.voiceAnswer);
         setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Šarlota odpovídá", "Čekám na audio", "ElevenLabs"]);
         renderAiAssistantLayerOnly();
       },
@@ -23992,6 +24000,11 @@ function collectionDailyDriverPanel(detail, currentStop, visibleStops, remaining
   const run = detail?.run || {};
   const testScope = run.scope === "test";
   const close = `<button type="button" class="collection-daily-driver-modal__close" data-collection-driver-panel-close aria-label="Zavřít">ZAVŘÍT</button>`;
+  if (panel === "sarlota-memory") {
+    const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory || {};
+    const consent = memory.consent === true;
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-sarlota-memory-title"><section><header><div><span>HLASOVÁ ŠARLOTA</span><h2 id="collection-driver-sarlota-memory-title">Pracovní paměť Šarloty</h2><p>Paměť patří jen tvému KSO účtu a firmě Kaiser.</p></div>${close}</header>${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}${consent ? `<div class="collection-daily-driver-operation-active is-sarlota-memory"><strong>Paměť je zapnutá</strong><span>${escapeHtml(memory.summary || "Zatím nemáme uložené žádné pracovní téma.")}</span><small>Ukládají se jen témata rozhovoru. Zvuk ani přepis se neukládá.</small><button type="button" class="primary-action" data-collection-driver-sarlota-memory-start ${pending ? "disabled" : ""}>SPUSTIT ŠARLOTU</button><button type="button" data-collection-driver-sarlota-memory-delete ${pending ? "disabled" : ""}>VYPNOUT A SMAZAT PAMĚŤ</button></div>` : `<div class="collection-daily-driver-operation-active is-sarlota-memory"><strong>Povolit pracovní paměť?</strong><span>Šarlota si zapamatuje jen stručná pracovní témata, například trasu, počasí nebo výsyp. Neukládá zvuk, celý přepis ani soukromé údaje.</span><button type="button" class="primary-action" data-collection-driver-sarlota-memory-consent="grant" ${pending ? "disabled" : ""}>POVOLIT A SPUSTIT ŠARLOTU</button><button type="button" data-collection-driver-sarlota-memory-consent="skip" ${pending ? "disabled" : ""}>SPUSTIT BEZ PAMĚTI</button></div>`}</section></div>`;
+  }
   if (panel === "done" && currentStop) {
     return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-done-title"><section><header><div><span>FYZICKÉ POTVRZENÍ</span><h2 id="collection-driver-done-title">Je stanoviště opravdu hotové?</h2><p>${escapeHtml(currentStop.customerName || "-")} · ${escapeHtml(currentStop.addressText || "-")}</p></div>${close}</header><div class="collection-daily-driver-operation-active"><strong>Šarlota tento krok sama nepotvrdí.</strong><span>Klepnutím uložíš HOTOVO pod svým přihlášeným účtem.</span><button class="primary-action" type="button" data-collection-daily-driver-event="done" data-stop-id="${escapeHtml(currentStop.id)}" ${pending ? "disabled" : ""}>ANO, STANOVIŠTĚ JE HOTOVÉ</button></div></section></div>`;
   }
@@ -24112,6 +24125,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
                 ${testScope ? `<button class="collection-daily-driver-action collection-daily-driver-action--mapping" type="button" data-collection-driver-panel="mapping">MAPOVÁNÍ STANOVIŠTĚ</button>` : ""}
                 <button class="collection-daily-driver-action collection-daily-driver-action--sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "is-active" : ""}" type="button" data-collection-driver-sarlota>${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "ŠARLOTA POSLOUCHÁ" : "ZAPNOUT ŠARLOTU"}</button>
                 ${collectionRoutesPilotState.myDailyRouteSarlotaMessage ? `<p class="collection-daily-driver-sarlota-status">${escapeHtml(collectionRoutesPilotState.myDailyRouteSarlotaMessage)}</p>` : ""}
+                ${collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded ? `<button class="collection-daily-driver-sarlota-memory-button" type="button" data-collection-driver-sarlota-memory>${collectionRoutesPilotState.myDailyRouteSarlotaMemory?.consent ? "PAMĚŤ: ZAPNUTÁ" : "PAMĚŤ: VYPNUTÁ"}</button>` : ""}
               </aside>
             </div>
           ` : ""}
@@ -40961,9 +40975,41 @@ async function submitCollectionDailyDriverReport(form) {
   }
 }
 
-async function enableCollectionDailyDriverSarlota() {
+function applyCollectionRoutesSarlotaContext(result = {}) {
+  const context = result.context || null;
+  collectionRoutesPilotState.myDailyRouteSarlotaContext = context;
+  collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = true;
+  collectionRoutesPilotState.myDailyRouteSarlotaMemory = context?.memory || {
+    available: false,
+    consent: false,
+    apiStatus: "waiting"
+  };
+  return context;
+}
+
+async function loadCollectionRoutesSarlotaContext() {
+  const run = collectionRoutesPilotState.myDailyRoute?.run;
+  const scope = run?.scope === "test" ? "test" : "production";
+  collectionRoutesPilotState.myDailyRoutePending = "sarlota-context";
+  collectionRoutesPilotState.myDailyRouteError = "";
+  render();
+  try {
+    return applyCollectionRoutesSarlotaContext(await apiJson(`/api/ai/collection-routes/context?scope=${encodeURIComponent(scope)}`));
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Kontext Šarloty se nepodařilo načíst.";
+    return null;
+  } finally {
+    collectionRoutesPilotState.myDailyRoutePending = "";
+    render();
+  }
+}
+
+async function startCollectionDailyDriverSarlota() {
   collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
-  collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota zná aktuální trasu. Řekni, co potřebuješ; zápis vždy čeká na klepnutí.";
+  const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory;
+  collectionRoutesPilotState.myDailyRouteSarlotaMessage = memory?.consent
+    ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Zápis vždy čeká na klepnutí."
+    : "Šarlota zná aktuální trasu. Paměť je vypnutá a zápis vždy čeká na klepnutí.";
   openAiAssistant("voice", { assistantId: "sarlota", renderAfter: false });
   render();
   try {
@@ -40972,6 +41018,87 @@ async function enableCollectionDailyDriverSarlota() {
     collectionRoutesPilotState.myDailyRouteSarlotaMessage = error.message || "Šarlotu se nepodařilo připojit.";
     render();
   }
+}
+
+async function enableCollectionDailyDriverSarlota() {
+  if (collectionRoutesPilotState.myDailyRouteSarlotaEnabled) return;
+  void elevenLabsAssistant.unlockVoiceAudio?.();
+  const context = await loadCollectionRoutesSarlotaContext();
+  if (!context) return;
+  if (context.memory?.available && context.memory?.consent !== true) {
+    collectionRoutesPilotState.myDailyRoutePanel = "sarlota-memory";
+    render();
+    return;
+  }
+  await startCollectionDailyDriverSarlota();
+}
+
+async function grantCollectionRoutesSarlotaMemoryAndStart() {
+  collectionRoutesPilotState.myDailyRoutePending = "sarlota-memory";
+  collectionRoutesPilotState.myDailyRouteError = "";
+  render();
+  try {
+    const result = await apiJson("/api/ai/sarlota/memory", {
+      method: "POST",
+      body: JSON.stringify({ action: "consent", consent: true })
+    });
+    collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = true;
+    collectionRoutesPilotState.myDailyRouteSarlotaMemory = result.memory || null;
+    collectionRoutesPilotState.myDailyRoutePanel = "";
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Paměť Šarloty se nepodařilo povolit.";
+    return;
+  } finally {
+    collectionRoutesPilotState.myDailyRoutePending = "";
+    render();
+  }
+  await startCollectionDailyDriverSarlota();
+}
+
+async function deleteCollectionRoutesSarlotaMemory() {
+  collectionRoutesPilotState.myDailyRoutePending = "sarlota-memory";
+  collectionRoutesPilotState.myDailyRouteError = "";
+  render();
+  try {
+    const result = await apiJson("/api/ai/sarlota/memory", { method: "DELETE" });
+    collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = true;
+    collectionRoutesPilotState.myDailyRouteSarlotaMemory = result.memory || null;
+    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Pracovní paměť byla vypnutá a smazaná.";
+    collectionRoutesPilotState.myDailyRoutePanel = "";
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Paměť Šarloty se nepodařilo smazat.";
+  } finally {
+    collectionRoutesPilotState.myDailyRoutePending = "";
+    render();
+  }
+}
+
+function scheduleCollectionRoutesSarlotaMemoryExchange(conversationId, assistantAnswer) {
+  if (!window.location.pathname.startsWith("/trasy-svozu")) return;
+  if (collectionRoutesPilotState.myDailyRouteSarlotaMemory?.consent !== true) return;
+  const userTranscript = String(aiAssistantState.voiceTranscript || "").trim();
+  const answer = String(assistantAnswer || "").trim();
+  if (!userTranscript || !answer) return;
+  const exchangeKey = `${String(conversationId || "")}:${userTranscript}:${answer}`;
+  if (collectionRoutesSarlotaMemoryRuntime.lastExchangeKey === exchangeKey) return;
+  window.clearTimeout(collectionRoutesSarlotaMemoryRuntime.timer);
+  collectionRoutesSarlotaMemoryRuntime.timer = window.setTimeout(async () => {
+    try {
+      const result = await apiJson("/api/ai/sarlota/memory", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "remember_exchange",
+          conversationId: String(conversationId || ""),
+          userTranscript,
+          assistantAnswer
+        })
+      });
+      collectionRoutesSarlotaMemoryRuntime.lastExchangeKey = exchangeKey;
+      collectionRoutesPilotState.myDailyRouteSarlotaMemory = result.memory || collectionRoutesPilotState.myDailyRouteSarlotaMemory;
+    } catch (error) {
+      console.error("collection_routes_sarlota.memory_update_failed", { message: error.message });
+    }
+  }, 1800);
 }
 
 async function loadCollectionDailyRouteDetail(runId, options = {}) {
@@ -41331,6 +41458,8 @@ async function loadMyCollectionDailyRoute(options = {}) {
 async function transitionMyCollectionDailyRoute(action) {
   const runId = collectionRoutesPilotState.myDailyRoute?.run?.id;
   if (!runId || !action) return;
+  if (action === "start") void elevenLabsAssistant.unlockVoiceAudio?.();
+  let startSarlotaAfterTransition = false;
   collectionRoutesPilotState.myDailyRoutePending = action;
   collectionRoutesPilotState.myDailyRouteError = "";
   collectionRoutesPilotState.myDailyRouteMessage = "";
@@ -41350,11 +41479,15 @@ async function transitionMyCollectionDailyRoute(action) {
       result.route || null,
       action === "start" ? "Trasa byla zahájena." : "Trasa byla dokončena."
     );
+    startSarlotaAfterTransition = action === "start";
   } catch (error) {
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Stav trasy se nepodařilo uložit.";
   } finally {
     collectionRoutesPilotState.myDailyRoutePending = "";
     render();
+  }
+  if (startSarlotaAfterTransition) {
+    await enableCollectionDailyDriverSarlota();
   }
 }
 
@@ -52120,6 +52253,43 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverSarlota) {
     event.preventDefault();
     await enableCollectionDailyDriverSarlota();
+    return;
+  }
+
+  const collectionDailyDriverSarlotaMemoryOpen = event.target.closest("[data-collection-driver-sarlota-memory]");
+  if (collectionDailyDriverSarlotaMemoryOpen) {
+    event.preventDefault();
+    collectionRoutesPilotState.myDailyRoutePanel = "sarlota-memory";
+    render();
+    return;
+  }
+
+  const collectionDailyDriverSarlotaMemoryConsent = event.target.closest("[data-collection-driver-sarlota-memory-consent]");
+  if (collectionDailyDriverSarlotaMemoryConsent) {
+    event.preventDefault();
+    if (collectionDailyDriverSarlotaMemoryConsent.dataset.collectionDriverSarlotaMemoryConsent === "grant") {
+      await grantCollectionRoutesSarlotaMemoryAndStart();
+    } else {
+      collectionRoutesPilotState.myDailyRoutePanel = "";
+      render();
+      await startCollectionDailyDriverSarlota();
+    }
+    return;
+  }
+
+  const collectionDailyDriverSarlotaMemoryStart = event.target.closest("[data-collection-driver-sarlota-memory-start]");
+  if (collectionDailyDriverSarlotaMemoryStart) {
+    event.preventDefault();
+    collectionRoutesPilotState.myDailyRoutePanel = "";
+    render();
+    await startCollectionDailyDriverSarlota();
+    return;
+  }
+
+  const collectionDailyDriverSarlotaMemoryDelete = event.target.closest("[data-collection-driver-sarlota-memory-delete]");
+  if (collectionDailyDriverSarlotaMemoryDelete) {
+    event.preventDefault();
+    await deleteCollectionRoutesSarlotaMemory();
     return;
   }
 

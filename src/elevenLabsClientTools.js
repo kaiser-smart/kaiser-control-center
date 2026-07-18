@@ -19,6 +19,7 @@ export const AI_ALLOWED_ROUTES = [
   "/datove-schranky-plus",
   "/servis-udrzba",
   "/trasy-svozu",
+  "/trasy-svozu/test",
   "/trasy-vzorku",
   "/vistos",
   "/naklady",
@@ -143,6 +144,14 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
     parameters: [
       { name: "type", type: "string", required: true },
       { name: "message", type: "string", required: true }
+    ]
+  },
+  {
+    name: "get_collection_routes_context",
+    description: "Read-only načte z KSO vlastní dnešní trasu přihlášeného řidiče, ověřená přiřazená vozidla, počasí, omezený služební adresář, dostupnost, nadřízené a bezpečnou pracovní paměť. Nic nezapisuje, neposílá ani nemění. Pro zprávy vrací pravdivý stav nenastaveno, dokud není připojený oficiální zdroj.",
+    parameters: [
+      { name: "date", type: "string", required: false },
+      { name: "scope", type: "string", required: false }
     ]
   },
   {
@@ -1873,6 +1882,42 @@ export function createElevenLabsClientTools({
 
       toast({ type, message });
       return { ok: true, type, message };
+    },
+
+    async get_collection_routes_context(parameters = {}) {
+      const currentRoute = typeof window !== "undefined"
+        ? normalizeAiRoute(window.location?.pathname || "")
+        : COLLECTION_ROUTE_GPS_ROUTE;
+      const scope = currentRoute === COLLECTION_ROUTE_DRIVER_TEST_ROUTE ? "test" : "production";
+      if (![COLLECTION_ROUTE_GPS_ROUTE, COLLECTION_ROUTE_DRIVER_TEST_ROUTE].includes(currentRoute)) {
+        return {
+          ok: false,
+          status: "wrong_module",
+          answerText: "Kontext Svozových tras načtu jen na otevřeném řidičském tabletu."
+        };
+      }
+      try {
+        const result = await readJson("/api/ai/collection-routes/context", {
+          scope,
+          date: parameters.date
+        });
+        return {
+          ok: true,
+          status: "ready",
+          ...(result.context || {}),
+          answerText: "Kontext řidiče a trasy je načtený z KSO."
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          status: "unavailable",
+          route: null,
+          vehicles: { verified: false, count: 0, items: [] },
+          directory: [],
+          news: { status: "not_configured", items: [] },
+          answerText: error?.payload?.error || "Kontext řidiče a trasy se teď nepodařilo načíst. Nic si nevymýšlej."
+        };
+      }
     },
 
     async prepare_collection_route_gps_capture(parameters = {}) {

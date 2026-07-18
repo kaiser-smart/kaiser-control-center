@@ -561,6 +561,33 @@ export async function listPendingAbsenceRequests(env, users, currentUser, option
   return requests;
 }
 
+export async function listEmployeeAvailabilityForSarlota(env, options = {}) {
+  const db = absenceDatabase(env, true);
+  const date = dateValue(options.date) || new Date().toISOString().slice(0, 10);
+  const userIds = new Set((Array.isArray(options.userIds) ? options.userIds : [])
+    .map((value) => cleanString(value).toLowerCase())
+    .filter(Boolean));
+  const result = await db.prepare(`
+    SELECT employee_id, type, date_from, date_to
+    FROM absence_requests
+    WHERE status IN ('approved', 'recorded')
+      AND date_from <= ?
+      AND date_to >= ?
+    ORDER BY date_from ASC, created_at ASC
+    LIMIT 300
+  `).bind(date, date).all();
+
+  return (result.results || [])
+    .map((row) => ({
+      employeeId: cleanString(row.employee_id),
+      availability: cleanString(row.type) === "vacation" ? "vacation" : "unavailable",
+      label: cleanString(row.type) === "vacation" ? "Dovolená" : "Mimo pracoviště",
+      dateFrom: dateValue(row.date_from),
+      dateTo: dateValue(row.date_to)
+    }))
+    .filter((item) => item.employeeId && (!userIds.size || userIds.has(item.employeeId.toLowerCase())));
+}
+
 export async function getAbsenceRequestRecord(env, users, currentUser, requestId) {
   const db = absenceDatabase(env, true);
   const request = await requestById(db, requestId, true);

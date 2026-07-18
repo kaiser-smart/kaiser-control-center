@@ -1,8 +1,18 @@
 # Hlasová Šarlota ve Svozových trasách
 
-Stav: schválená cílová produktová vize, zatím neimplementovat jako ostrou autonomii  
-Aktualizace: 18. 7. 2026 10:20  
+Stav: implementovaný read-only základ, ostrá autonomie zakázaná
+
+Aktualizace: 18. 7. 2026 11:02
+
 Vlastník rozhodnutí: Radim
+
+## Aktuální implementační stav
+
+Implementovaný základ načítá pro přihlášenou aktivní roli Řidič pouze vlastní denní trasu, ověřená přiřazená vozidla, počasí, omezený služební adresář, dostupnost, nadřízeného a dobrovolnou pracovní paměť. Kontext je read-only a všechny provozní zápisy dál vyžadují fyzické potvrzení v tabletu.
+
+Paměť je oddělená podle firmy a stabilního KSO user ID. Ukládá pouze klasifikovaná pracovní témata a počet rozhovorů; zvuk, celý přepis ani odpověď Šarloty neukládá. Řidič ji může odmítnout nebo později vypnout a smazat.
+
+Zdroj zpráv Novinky.cz je záměrně ve stavu `not_configured`, dokud nebude doložené oficiální nebo smluvně schválené rozhraní. Neoficiální scraping je zakázaný. Konfigurace nástroje a promptu v produkčním ElevenLabs agentovi ještě vyžaduje samostatný chráněný synchronizační krok.
 
 ## Dva oddělené hlasové systémy
 
@@ -64,4 +74,4 @@ Hlas nesmí sám dokončit zápis, odeslat zprávu, změnit trasu ani označit s
 
 ## Implementační hranice
 
-Tento dokument ukládá schválenou produktovou vizi. Neznamená automatické povolení nových integrací, čtení osobních dat, ukládání paměti nebo ostrých hlasových zápisů. Každý zdroj dostane samostatný read-only kontrakt, oprávnění, audit, testy a teprve potom schválené akce.
+Tento dokument ukládá schválenou produktovou vizi a stav read-only základu. Neznamená automatické povolení nových integrací nebo ostrých hlasových zápisů. Každý další zdroj a každá zapisující akce musí dostat samostatný kontrakt, oprávnění, audit, testy a výslovné schválení.
