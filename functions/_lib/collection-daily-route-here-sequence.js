@@ -218,26 +218,38 @@ export async function optimizeCollectionDailyRouteHereSequence(env, user, runId,
       },
       body: request.body.toString()
     });
-  } catch {
+  } catch (error) {
+    console.error("collection_daily_route_here_sequence.provider_unreachable", {
+      message: cleanString(error?.message)
+    });
     throw new CollectionDailyRouteHereSequenceError(
       "HERE optimalizaci se teď nepodařilo odeslat.",
-      502,
+      503,
       "collection_daily_route_here_sequence_unreachable"
     );
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    const providerMessage = cleanString(payload?.errors?.[0]?.message || payload?.message);
+    console.error("collection_daily_route_here_sequence.provider_failed", {
+      providerStatus: response.status,
+      message: providerMessage || "HERE response without JSON message"
+    });
     throw new CollectionDailyRouteHereSequenceError(
-      cleanString(payload?.errors?.[0]?.message || payload?.message) || "HERE optimalizaci odmítl.",
-      502,
+      providerMessage || "HERE optimalizaci odmítl.",
+      424,
       "collection_daily_route_here_sequence_provider_failed"
     );
   }
   const stopIds = optimizedStopIds(payload, request.waypointToStopId);
   if (stopIds.length !== readiness.plannedStopCount || new Set(stopIds).size !== stopIds.length) {
+    console.error("collection_daily_route_here_sequence.provider_incomplete", {
+      expectedStopCount: readiness.plannedStopCount,
+      returnedStopCount: stopIds.length
+    });
     throw new CollectionDailyRouteHereSequenceError(
       "HERE nevrátil úplné a jednoznačné pořadí všech čekajících stanovišť.",
-      502,
+      424,
       "collection_daily_route_here_sequence_incomplete"
     );
   }
