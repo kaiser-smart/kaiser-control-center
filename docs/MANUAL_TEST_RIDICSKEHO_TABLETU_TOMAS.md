@@ -4,18 +4,20 @@
 
 1. Na 11″ tabletu otevři `https://smart-odpady.ai/trasy-svozu/test`.
 2. Přihlas se existujícím účtem Miroslav Vašek. Tomášův účet se nepoužívá.
-3. Zkontroluj červený štítek **IZOLOVANÝ TEST · BEZ JÍZDY** a údaje **actor Miroslav Vašek** / **fyzicky Tomáš Gaží**.
+3. Zkontroluj červený štítek **IZOLOVANÝ TEST · BEZ JÍZDY**, firmu **Firma test 501** a adresu **Trnkova 3052/137, 628 00 Brno**. Auditní identita se na pracovní obrazovce nevypisuje: zápisy se serverově ukládají pod Miroslavem, Tomáš zůstává jen v TEST metadatech.
 
 ## Co postupně vyzkoušet
 
 1. Klepni na **ZAHÁJIT TEST**.
-2. Na mapě zkus posun prstem, přiblížení a volby **AKTUÁLNÍ ÚSEK** / **CELÁ TRASA**.
-3. V **CELÁ TRASA** ověř zákazníka i adresu. **ZOBRAZIT NA MAPĚ** vrátí vybraný bod do mapy; **NAVIGOVAT SEM** pouze otevře navigaci.
-4. Otevři **HLÁŠENÍ PRO DISPEČINK**, zvol problém velkým tlačítkem, pořiď fotografii, případně dopiš krátkou poznámku a dokonči kontrolní krok. V TESTU se hlášení pouze bezpečně uloží – nic se nikomu neposílá.
-5. Vyzkoušej **PŘESTÁVKA**: zahájit a ukončit.
-6. Vyzkoušej **MUSÍM JET VYSYPAT**: vybrat nabídnuté místo, zahájit výsyp a po návratu jej ukončit.
-7. Přes **ŠARLOTA** lze hlasem připravit hlášení, přestávku, výsyp, celou trasu nebo navigaci. Šarlota sama nic neuloží ani nespustí; poslední krok vždy potvrď rukou.
-8. Klepni na **HOTOVO** a ověř, že se posune aktuální stanoviště a mapa. Na konci klepni na **DOKONČIT TEST**.
+2. Na mapě zkus posun jedním prstem, přiblížení **+ / −** a dvěma prsty. Klepni na **MAPA PŘES CELÝ DISPLEJ**, ověř celou plochu 11″ tabletu a zavři ji tlačítkem nebo klávesou Zpět/Escape.
+3. Přepni **AKTUÁLNÍ ÚSEK** / **CELÁ TRASA**. Ověř kartu **NÁSLEDUJÍCÍ ZASTÁVKA**; u tohoto jediného TEST bodu správně hlásí konec trasy.
+4. Klepni na **SPUSTIT NAVIGACI**, povol polohu a ověř modrý bod, silniční čáru a pokyn HERE. Nikam nevyjížděj. Potom navigaci ukonči.
+5. Otevři **MAPOVÁNÍ STANOVIŠTĚ**, změř GPS a ulož ji až druhým fyzickým klepnutím. Tím se nemění adresní bod, Vistos ani ostrá trasa.
+6. Otevři **HLÁŠENÍ PRO DISPEČINK**, zvol problém a pořiď první fotografii. Na otázku **DALŠÍ FOTKA?** vyzkoušej **ANO** i **NE**; lze uložit nejvýše 5 fotek. Případně dopiš krátkou poznámku a potvrď. V TESTU se hlášení pouze bezpečně uloží – nic se nikomu neposílá.
+7. Vyzkoušej **PŘESTÁVKA**: zahájit a ukončit.
+8. Vyzkoušej **MUSÍM JET VYSYPAT**: vybrat nabídnuté místo, zahájit výsyp a po návratu jej ukončit. Nikam skutečně nejezdi.
+9. Přes **ŠARLOTA** lze hlasem připravit pracovní krok. Šarlota sama nic neuloží; poslední krok vždy potvrď rukou.
+10. Klepni na **HOTOVO** a ověř zelené potvrzení stanoviště. Na konci klepni na **DOKONČIT TEST**.
 
 ## Když něco nesedí
 

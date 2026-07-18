@@ -128,6 +128,7 @@ let mockCollectionRouteSourceBatches = [];
 let mockCollectionRouteSourceFiles = [];
 let mockCollectionRouteSourceRows = [];
 const mockCollectionDailyRouteReportPhotos = new Map();
+const mockCollectionDailyRouteGpsConfirmations = new Map();
 let mockDataBoxSyncRuns = [];
 let mockDataBoxActions = [];
 let mockDataBoxPlusPendingAction = null;
@@ -404,11 +405,13 @@ async function readMultipartFormData(request) {
     }
 
     if (disposition.filename) {
-      files.set(fieldName, {
+      const file = {
         name: disposition.filename,
         type: headers.get("content-type") || "application/octet-stream",
         buffer: Buffer.from(content, "latin1")
-      });
+      };
+      const existing = files.get(fieldName);
+      files.set(fieldName, existing ? (Array.isArray(existing) ? [...existing, file] : [existing, file]) : file);
     } else {
       fields.set(fieldName, Buffer.from(content, "latin1").toString("utf8"));
     }
@@ -4559,6 +4562,59 @@ async function handleApi(request, response) {
     return true;
   }
 
+  if (url.pathname === "/api/collection-routes/test-gps-confirmations" && ["GET", "POST"].includes(request.method)) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const payload = request.method === "POST" ? await readJsonBody(request) : {};
+    const runId = String(request.method === "POST" ? payload.runId : url.searchParams.get("runId") || "");
+    const route = ensureMockCollectionDailyRouteForDriver(user, { scope: "test" });
+    if (route.run.id !== runId) {
+      sendJson(response, 404, { error: "TEST trasa nebyla nalezena." });
+      return true;
+    }
+    const key = `${user.id}:${runId}`;
+    const confirmations = mockCollectionDailyRouteGpsConfirmations.get(key) || [];
+    if (request.method === "GET") {
+      sendJson(response, 200, { confirmations: structuredClone(confirmations), dataScope: "test", apiStatus: "ready" });
+      return true;
+    }
+    const stop = route.stops.find((item) => item.id === String(payload.stopId || "") && item.status === "planned");
+    if (!stop || route.run.status !== "active") {
+      sendJson(response, 409, { error: "GPS lze uložit pouze k aktuálnímu stanovišti zahájeného TESTU." });
+      return true;
+    }
+    const existing = confirmations.find((item) => item.idempotencyKey === payload.idempotencyKey);
+    if (existing) {
+      sendJson(response, 200, { confirmation: structuredClone(existing), reused: true, apiStatus: "ready" });
+      return true;
+    }
+    const confirmation = {
+      id: `local-driver-gps-${randomUUID()}`,
+      runId,
+      stopId: stop.id,
+      latitude: Number(payload.latitude),
+      longitude: Number(payload.longitude),
+      accuracyMeters: Number(payload.accuracyMeters),
+      sampleCount: Number(payload.sampleCount),
+      speedMps: Number(payload.speedMps) || 0,
+      distanceFromAddressMeters: 4,
+      status: "driver-measured",
+      routingCandidate: true,
+      source: "driver-tablet-gps",
+      idempotencyKey: String(payload.idempotencyKey || ""),
+      createdByUserId: user.id,
+      createdByName: user.name || user.email || "Řidič",
+      capturedAt: String(payload.capturedAt || new Date().toISOString())
+    };
+    confirmations.unshift(confirmation);
+    mockCollectionDailyRouteGpsConfirmations.set(key, confirmations);
+    sendJson(response, 201, { confirmation: structuredClone(confirmation), reused: false, apiStatus: "ready" });
+    return true;
+  }
+
   const mockDailyRouteMapMatch = url.pathname.match(/^\/api\/collection-routes\/daily-routes\/([^/]+)\/map$/);
   if (mockDailyRouteMapMatch && request.method === "GET") {
     const user = currentDevUser(request);
@@ -4614,7 +4670,11 @@ async function handleApi(request, response) {
       return true;
     }
     const target = route.driverMap?.points?.find((point) => point.stopId === url.searchParams.get("toPointId"));
-    const origin = route.driverMap?.points?.find((point) => point.stopId === url.searchParams.get("fromPointId")) || route.driverMap?.depot;
+    const liveLatitude = Number(url.searchParams.get("originLatitude"));
+    const liveLongitude = Number(url.searchParams.get("originLongitude"));
+    const origin = Number.isFinite(liveLatitude) && Number.isFinite(liveLongitude)
+      ? { id: "live-position", kind: "live", label: "Moje poloha", latitude: liveLatitude, longitude: liveLongitude }
+      : route.driverMap?.points?.find((point) => point.stopId === url.searchParams.get("fromPointId")) || route.driverMap?.depot;
     if (!origin || !target) {
       sendJson(response, 409, { error: "Pro úsek chybí souřadnice." });
       return true;
@@ -4631,6 +4691,7 @@ async function handleApi(request, response) {
         destination: target,
         points: [origin, middle, target],
         summary: { lengthMeters: 1800, durationSeconds: 320 },
+        maneuvers: [{ action: "depart", direction: "straight", instruction: "Pokračuj po vyznačené trase k dalšímu stanovišti.", lengthMeters: 1800, durationSeconds: 320 }],
         sendsNotifications: false,
         writesRoute: false,
         exposesApiKey: false
@@ -4779,12 +4840,12 @@ async function handleApi(request, response) {
     const runId = decodeURIComponent(mockDailyRouteReportMatch[1]);
     const stopId = decodeURIComponent(mockDailyRouteReportMatch[2]);
     const stop = route.stops.find((item) => item.id === stopId);
-    const photo = files.get("photo");
+    const uploadedPhotos = Array.isArray(files.get("photo")) ? files.get("photo") : [files.get("photo")].filter(Boolean);
     if (route.run.id !== runId || !stop) {
       sendJson(response, 404, { error: "Trasa nebo stanoviště nebyly nalezené." });
       return true;
     }
-    if (!photo?.buffer?.length) {
+    if (!uploadedPhotos.length || uploadedPhotos.some((photo) => !photo?.buffer?.length) || uploadedPhotos.length > 5) {
       sendJson(response, 400, { error: "Hlášení musí obsahovat fotografii." });
       return true;
     }
@@ -4793,13 +4854,17 @@ async function handleApi(request, response) {
     stop.status = "problem";
     stop.problemReason = fields.get("type") || "other";
     stop.problemNote = fields.get("note") || "";
-    const photoUrl = `/api/collection-routes/daily-routes/${encodeURIComponent(runId)}/reports/${encodeURIComponent(reportId)}/photo?scope=${encodeURIComponent(scope)}`;
+    const storedPhotos = uploadedPhotos.map((photo, index) => ({
+      contentType: photo.type || "image/jpeg",
+      buffer: photo.buffer,
+      url: `/api/collection-routes/daily-routes/${encodeURIComponent(runId)}/reports/${encodeURIComponent(reportId)}/photo?scope=${encodeURIComponent(scope)}&index=${index}`
+    }));
+    const photoUrl = storedPhotos[0].url;
     mockCollectionDailyRouteReportPhotos.set(reportId, {
       userId: user.id,
       runId,
       scope,
-      contentType: photo.type || "image/jpeg",
-      buffer: photo.buffer
+      photos: storedPhotos
     });
     const report = appendMockCollectionDailyRouteEvent(route, user, {
       stopId,
@@ -4813,6 +4878,8 @@ async function handleApi(request, response) {
         workflow: "driver-dispatch-report",
         reportId,
         photoUrl,
+        photoCount: storedPhotos.length,
+        photos: storedPhotos.map((photo) => ({ url: photo.url, contentType: photo.contentType, sizeBytes: photo.buffer.length })),
         sendsNotifications: false,
         changesVistos: false,
         localSimulation: true
@@ -4835,12 +4902,14 @@ async function handleApi(request, response) {
   if (mockDailyRouteReportPhotoMatch && request.method === "GET") {
     const user = currentDevUser(request);
     const reportId = decodeURIComponent(mockDailyRouteReportPhotoMatch[2]);
-    const photo = mockCollectionDailyRouteReportPhotos.get(reportId);
+    const storedReport = mockCollectionDailyRouteReportPhotos.get(reportId);
+    const photoIndex = Math.max(0, Math.min(4, Math.floor(Number(url.searchParams.get("index")) || 0)));
+    const photo = storedReport?.photos?.[photoIndex] || null;
     if (!user) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
       return true;
     }
-    if (!photo || photo.userId !== user.id || photo.runId !== decodeURIComponent(mockDailyRouteReportPhotoMatch[1])) {
+    if (!photo || storedReport.userId !== user.id || storedReport.runId !== decodeURIComponent(mockDailyRouteReportPhotoMatch[1])) {
       sendJson(response, 404, { error: "Fotografie nebyla nalezena." });
       return true;
     }

@@ -177,7 +177,7 @@ const otherManager = {
 
   await assert.rejects(
     confirmCollectionRoutesTestGps(env, driver, {}),
-    (error) => error?.code === "collection_routes_test_forbidden"
+    (error) => error?.code === "collection_routes_test_gps_input_required"
   );
   await assert.rejects(
     confirmCollectionRoutesTestGps(env, otherManager, {

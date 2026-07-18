@@ -18,7 +18,7 @@ export async function onRequestGet({ request, env, params }) {
       user,
       pathParam(request, params, "runId", "daily-routes", 1),
       pathParam(request, params, "reportId", "reports", 1),
-      { scope: url.searchParams.get("scope") }
+      { scope: url.searchParams.get("scope"), photoIndex: url.searchParams.get("index") }
     );
     return new Response(photo.body, {
       headers: {

@@ -1862,12 +1862,12 @@ function driverReportPhotoExtension(contentType) {
   return "jpg";
 }
 
-export async function recordCollectionDailyRouteReport(env, user, runId, stopId, input = {}, photoValue = {}) {
+export async function recordCollectionDailyRouteReport(env, user, runId, stopId, input = {}, photoValues = []) {
   const scope = collectionDailyRouteScope(input.scope);
   assertTestScopeReader(user, scope);
   const db = database(env, true, scope);
   const bucket = documentBucket(env, true);
-  let storageKey = "";
+  const storageKeys = [];
   let eventCommitted = false;
   try {
     const run = await loadRunRow(db, runId);
@@ -1910,39 +1910,64 @@ export async function recordCollectionDailyRouteReport(env, user, runId, stopId,
     const type = driverReportType(input.type);
     const typeLabel = DRIVER_REPORT_TYPES.get(type);
     const note = driverReportNote(input.note);
-    const photo = driverReportPhoto(photoValue);
+    const photos = (Array.isArray(photoValues) ? photoValues : [photoValues]).map(driverReportPhoto);
+    if (!photos.length || photos.length > 5) {
+      throw new CollectionDailyRoutesError(
+        "Hlášení musí obsahovat 1 až 5 fotografií.",
+        400,
+        "collection_daily_route_report_photo_count_invalid"
+      );
+    }
     const reportId = randomId("collection-daily-report");
-    const extension = driverReportPhotoExtension(photo.contentType);
-    storageKey = `collection-routes/daily-route-reports/${scope}/${encodeURIComponent(run.id)}/${reportId}.${extension}`;
+    const storedPhotos = photos.map((photo, index) => {
+      const extension = driverReportPhotoExtension(photo.contentType);
+      const storageKey = `collection-routes/daily-route-reports/${scope}/${encodeURIComponent(run.id)}/${reportId}-${index + 1}.${extension}`;
+      storageKeys.push(storageKey);
+      return {
+        ...photo,
+        storageKey,
+        url: `/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/reports/${encodeURIComponent(reportId)}/photo?scope=${encodeURIComponent(scope)}&index=${index}`
+      };
+    });
     const createdAt = nowIso();
     const actorId = cleanString(user?.id);
     const actorName = cleanString(user?.name || user?.email || user?.phone);
-    const photoUrl = `/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/reports/${encodeURIComponent(reportId)}/photo?scope=${encodeURIComponent(scope)}`;
+    const firstPhoto = storedPhotos[0];
     const payload = {
       workflow: "driver-dispatch-report",
       reportId,
       reportType: type,
       reportTypeLabel: typeLabel,
-      photoStorageKey: storageKey,
-      photoContentType: photo.contentType,
-      photoSizeBytes: photo.sizeBytes,
-      photoUrl,
+      photoStorageKey: firstPhoto.storageKey,
+      photoContentType: firstPhoto.contentType,
+      photoSizeBytes: firstPhoto.sizeBytes,
+      photoUrl: firstPhoto.url,
+      photoCount: storedPhotos.length,
+      photos: storedPhotos.map((photo) => ({
+        storageKey: photo.storageKey,
+        contentType: photo.contentType,
+        sizeBytes: photo.sizeBytes,
+        url: photo.url
+      })),
       dataScope: scope,
       sendsNotifications: false,
       changesVistos: false,
       changesProductionRoute: scope === COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION,
       physicalConfirmationRequired: true
     };
-    await bucket.put(storageKey, photo.body, {
-      httpMetadata: { contentType: photo.contentType },
-      customMetadata: {
-        reportId,
-        runId: cleanString(run.id),
-        stopId: cleanString(stop.id),
-        dataScope: scope,
-        uploadedByUserId: actorId
-      }
-    });
+    for (const [index, photo] of storedPhotos.entries()) {
+      await bucket.put(photo.storageKey, photo.body, {
+        httpMetadata: { contentType: photo.contentType },
+        customMetadata: {
+          reportId,
+          runId: cleanString(run.id),
+          stopId: cleanString(stop.id),
+          photoIndex: String(index),
+          dataScope: scope,
+          uploadedByUserId: actorId
+        }
+      });
+    }
     await db.batch([
       db.prepare(`
         UPDATE collection_daily_route_stops
@@ -1995,8 +2020,8 @@ export async function recordCollectionDailyRouteReport(env, user, runId, stopId,
       writesVistos: false
     };
   } catch (error) {
-    if (storageKey && !eventCommitted) {
-      await bucket.delete(storageKey).catch(() => {});
+    if (storageKeys.length && !eventCommitted) {
+      for (const storageKey of storageKeys) await bucket.delete(storageKey).catch(() => {});
     }
     throw dbError(error);
   }
@@ -2025,7 +2050,24 @@ export async function getCollectionDailyRouteReportPhoto(env, user, runId, repor
       );
     }
     const payload = parseJson(event.payload_json, {});
-    const storageKey = cleanString(payload.photoStorageKey);
+    const photoIndex = Math.floor(Number(input.photoIndex) || 0);
+    if (photoIndex < 0 || photoIndex > 4) {
+      throw new CollectionDailyRoutesError(
+        "Pořadí fotografie není platné.",
+        400,
+        "collection_daily_route_report_photo_index_invalid"
+      );
+    }
+    const payloadPhotos = Array.isArray(payload.photos) && payload.photos.length
+      ? payload.photos
+      : [{
+          storageKey: payload.photoStorageKey,
+          contentType: payload.photoContentType,
+          sizeBytes: payload.photoSizeBytes,
+          url: payload.photoUrl
+        }];
+    const selectedPhoto = payloadPhotos[photoIndex] || null;
+    const storageKey = cleanString(selectedPhoto?.storageKey);
     if (!storageKey || cleanString(payload.reportId) !== cleanString(reportId)) {
       throw new CollectionDailyRoutesError(
         "Událost neobsahuje fotografii hlášení.",
@@ -2043,7 +2085,7 @@ export async function getCollectionDailyRouteReportPhoto(env, user, runId, repor
     }
     return {
       body: object.body,
-      contentType: cleanString(payload.photoContentType || object.httpMetadata?.contentType) || "image/jpeg"
+      contentType: cleanString(selectedPhoto?.contentType || object.httpMetadata?.contentType) || "image/jpeg"
     };
   } catch (error) {
     throw dbError(error);

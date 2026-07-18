@@ -7,11 +7,15 @@ import { onRequestGet as listDailyRoutesApi } from "../functions/api/collection-
 import { onRequestGet as myDailyRouteApi } from "../functions/api/collection-routes/daily-routes/my.js";
 import { onRequestGet as driverRouteMapApi } from "../functions/api/collection-routes/daily-routes/[runId]/map.js";
 import { onRequestGet as driverRouteNavigationApi } from "../functions/api/collection-routes/daily-routes/[runId]/navigation.js";
+import { onRequestGet as testGpsListApi } from "../functions/api/collection-routes/test-gps-confirmations.js";
 import { onRequestPost as stopEventApi } from "../functions/api/collection-routes/daily-routes/[runId]/stops/[stopId]/events.js";
 import { onRequestPost as driverReportApi } from "../functions/api/collection-routes/daily-routes/[runId]/stops/[stopId]/report.js";
 import { onRequestGet as driverReportPhotoApi } from "../functions/api/collection-routes/daily-routes/[runId]/reports/[reportId]/photo.js";
 import { previewCollectionRoutesTestNotifications } from "../functions/_lib/collection-routes-test-notifications.js";
-import { confirmCollectionRoutesTestGps } from "../functions/_lib/collection-routes-test-gps-store.js";
+import {
+  confirmCollectionRoutesTestGps,
+  listCollectionRoutesTestGpsConfirmations
+} from "../functions/_lib/collection-routes-test-gps-store.js";
 import {
   __collectionDailyRouteEligibilityForTest,
   __collectionDailyRoutePickupScheduleForTest,
@@ -882,14 +886,18 @@ const foreignDriverListResponse = await listDailyRoutesApi({
 });
 assert.equal(foreignDriverListResponse.status, 403);
 
+const navigationRequests = [];
 const navigationFetch = async (url) => {
+  navigationRequests.push(new URL(url));
   assert.equal(new URL(url).hostname, "router.hereapi.com");
   assert.equal(new URL(url).searchParams.get("transportMode"), "truck");
+  assert.equal(new URL(url).searchParams.get("return"), "polyline,summary,actions,instructions");
   return new Response(JSON.stringify({
     routes: [{
       sections: [{
         polyline: "BFoz5xJ67i1B1B7PzIhaxL7Y",
-        summary: { length: 1250, duration: 240 }
+        summary: { length: 1250, duration: 240 },
+        turnByTurnActions: [{ action: "turn", direction: "right", instruction: "Odboč vpravo.", offset: 0, length: 140, duration: 30 }]
       }]
     }]
   }), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -909,6 +917,17 @@ assert.equal(ownNavigation.navigation.provider, "here-routing-v8");
 assert.equal(ownNavigation.navigation.mode, "truck");
 assert.equal(ownNavigation.navigation.summary.lengthMeters, 1250);
 assert.ok(ownNavigation.navigation.points.length >= 2);
+assert.equal(ownNavigation.navigation.maneuvers[0].instruction, "Odboč vpravo.");
+const liveNavigationResponse = await driverRouteNavigationApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/navigation?scope=test&fromPointId=live-position&toPointId=${seededStopId}&originLatitude=49.1901&originLongitude=16.6681`,
+    miroslav
+  ),
+  env: navigationEnv,
+  params: { runId: seededRunId }
+});
+assert.equal(liveNavigationResponse.status, 200);
+assert.equal(navigationRequests.at(-1).searchParams.get("origin"), "49.1901,16.6681");
 const foreignNavigationResponse = await driverRouteNavigationApi({
   request: await isolatedAuthenticatedRequest(
     `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/navigation?scope=test&fromPointId=depot&toPointId=${seededStopId}`,
@@ -933,6 +952,50 @@ await transitionCollectionDailyRoute(isolatedEnv, miroslav, seededRunId, {
   action: "start",
   idempotencyKey: "miroslav-isolated-test-start"
 });
+const miroslavGps = await confirmCollectionRoutesTestGps(isolatedEnv, miroslav, {
+  runId: seededRunId,
+  stopId: seededStopId,
+  latitude: 49.19126,
+  longitude: 16.67021,
+  accuracyMeters: 7,
+  sampleCount: 4,
+  speedMps: 0,
+  capturedAt: new Date().toISOString(),
+  idempotencyKey: "miroslav-own-gps"
+});
+assert.equal(miroslavGps.confirmation.createdByUserId, miroslav.id);
+assert.equal((await listCollectionRoutesTestGpsConfirmations(isolatedEnv, miroslav, { runId: seededRunId })).confirmations.length, 1);
+const ownGpsApiResponse = await testGpsListApi({
+  request: await isolatedAuthenticatedRequest(`https://smart-odpady.ai/api/collection-routes/test-gps-confirmations?runId=${seededRunId}`, miroslav),
+  env: isolatedEnv
+});
+assert.equal(ownGpsApiResponse.status, 200);
+assert.equal((await ownGpsApiResponse.json()).confirmations.length, 1);
+const foreignGpsApiResponse = await testGpsListApi({
+  request: await isolatedAuthenticatedRequest(`https://smart-odpady.ai/api/collection-routes/test-gps-confirmations?runId=${seededRunId}`, foreignDriver),
+  env: isolatedEnv
+});
+assert.equal(foreignGpsApiResponse.status, 404);
+await assert.rejects(
+  listCollectionRoutesTestGpsConfirmations(isolatedEnv, foreignDriver, { runId: seededRunId }),
+  (error) => error?.status === 404,
+  "Cizí řidič nesmí získat ani GPS metadata cizí TEST trasy."
+);
+await assert.rejects(
+  confirmCollectionRoutesTestGps(isolatedEnv, foreignDriver, {
+    runId: seededRunId,
+    stopId: seededStopId,
+    latitude: 49.19126,
+    longitude: 16.67021,
+    accuracyMeters: 7,
+    sampleCount: 4,
+    speedMps: 0,
+    capturedAt: new Date().toISOString(),
+    idempotencyKey: "foreign-driver-gps"
+  }),
+  (error) => error?.status === 404,
+  "Cizí řidič nesmí uložit GPS do cizí TEST trasy."
+);
 const breakApiResponse = await stopEventApi({
   request: await isolatedAuthenticatedRequest(
     `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/stops/${seededStopId}/events`,
@@ -972,13 +1035,15 @@ await recordCollectionDailyRouteStopEvent(isolatedEnv, miroslav, seededRunId, se
   idempotencyKey: "miroslav-isolated-test-dump-end"
 });
 
-function reportForm(idempotencyKey) {
+function reportForm(idempotencyKey, photoCount = 1) {
   const form = new FormData();
   form.set("scope", "test");
   form.set("type", "overfilled_container");
   form.set("note", "Izolované TEST hlášení s fotografií");
   form.set("idempotencyKey", idempotencyKey);
-  form.set("photo", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" }), "hlaseni.jpg");
+  for (let index = 0; index < photoCount; index += 1) {
+    form.append("photo", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9, index])], { type: "image/jpeg" }), `hlaseni-${index + 1}.jpg`);
+  }
   return form;
 }
 const foreignReportResponse = await driverReportApi({
@@ -1011,7 +1076,7 @@ const reportResponse = await driverReportApi({
   request: await isolatedAuthenticatedRequest(
     `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/stops/${seededStopId}/report`,
     miroslav,
-    { method: "POST", body: reportForm("miroslav-isolated-test-report") }
+    { method: "POST", body: reportForm("miroslav-isolated-test-report", 2) }
   ),
   env: isolatedEnv,
   params: { runId: seededRunId, stopId: seededStopId }
@@ -1022,9 +1087,11 @@ assert.equal(reportResult.report.actorUserId, miroslav.id);
 assert.equal(reportResult.report.actorName, miroslav.name);
 assert.equal(reportResult.report.payload.sendsNotifications, false);
 assert.equal(reportResult.report.payload.changesVistos, false);
+assert.equal(reportResult.report.payload.photoCount, 2);
+assert.equal(reportResult.report.payload.photos.length, 2);
 assert.equal(reportResult.sendsNotifications, false);
 assert.equal(reportResult.writesVistos, false);
-assert.equal(isolatedEnv.SMART_ODPADY_DOCUMENTS.objects.size, 1);
+assert.equal(isolatedEnv.SMART_ODPADY_DOCUMENTS.objects.size, 2);
 const ownPhotoResponse = await driverReportPhotoApi({
   request: await isolatedAuthenticatedRequest(
     `https://smart-odpady.ai${reportResult.report.payload.photoUrl}`,
@@ -1035,6 +1102,15 @@ const ownPhotoResponse = await driverReportPhotoApi({
 });
 assert.equal(ownPhotoResponse.status, 200);
 assert.equal(ownPhotoResponse.headers.get("Content-Type"), "image/jpeg");
+const secondPhotoResponse = await driverReportPhotoApi({
+  request: await isolatedAuthenticatedRequest(
+    `https://smart-odpady.ai${reportResult.report.payload.photos[1].url}`,
+    miroslav
+  ),
+  env: isolatedEnv,
+  params: { runId: seededRunId, reportId: reportResult.report.id }
+});
+assert.equal(secondPhotoResponse.status, 200);
 const foreignPhotoResponse = await driverReportPhotoApi({
   request: await isolatedAuthenticatedRequest(
     `https://smart-odpady.ai${reportResult.report.payload.photoUrl}`,

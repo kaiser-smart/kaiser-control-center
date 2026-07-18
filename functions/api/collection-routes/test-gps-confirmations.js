@@ -1,4 +1,4 @@
-import { json, readJson, requireUserPermission } from "../../_lib/auth.js";
+import { currentUser, json, readJson } from "../../_lib/auth.js";
 import {
   CollectionRoutesTestGpsError,
   confirmCollectionRoutesTestGps,
@@ -14,8 +14,8 @@ function errorResponse(error) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const { user, response } = await requireUserPermission(env, request, "collection-routes", "manage");
-  if (response) return response;
+  const user = await currentUser(env, request);
+  if (!user) return json({ error: "Nepřihlášeno." }, 401);
   try {
     const url = new URL(request.url);
     return json({
@@ -28,8 +28,8 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPost({ request, env }) {
-  const { user, response } = await requireUserPermission(env, request, "collection-routes", "manage");
-  if (response) return response;
+  const user = await currentUser(env, request);
+  if (!user) return json({ error: "Nepřihlášeno." }, 401);
   try {
     const result = await confirmCollectionRoutesTestGps(env, user, await readJson(request));
     return json({ ...result, apiStatus: "ready" }, result.reused ? 200 : 201);

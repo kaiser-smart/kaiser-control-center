@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.23",
-  updatedAt: "17. 7. 2026 22:06",
-  updatedAtIso: "2026-07-17T22:06:00+02:00",
-  lastChange: "Pracovní workflow řidičského tabletu",
+  version: "1.24",
+  updatedAt: "18. 7. 2026 01:50",
+  updatedAtIso: "2026-07-18T01:50:00+02:00",
+  lastChange: "Živá navigace a mapování stanoviště",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Mapa je ovladatelná dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a nabízí fyzicky potvrzené otevření navigace. Za optimalizované se pořadí označí pouze při přesně doloženém a skutečně použitém výsledku HERE. Pracovní volby HOTOVO, hlášení s povinnou fotografií, výsyp a přestávka mají velký krokový postup bez rozbalovacích polí. Šarlota zná přihlášeného řidiče a aktuální trasu, ale hlasem pouze připraví obrazovku; zápis nebo navigace vždy vyžadují fyzické klepnutí. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Mapa je ovladatelná přes celý tablet dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a po fyzickém spuštění vede z živé GPS polohy pokyny HERE. Za optimalizované se pořadí označí pouze při přesně doloženém a skutečně použitém výsledku HERE. Pracovní volby HOTOVO, hlášení s jednou až pěti fotografiemi, výsyp, přestávka a TEST mapování stanoviště mají velký krokový postup bez rozbalovacích polí. Šarlota zná přihlášeného řidiče a aktuální trasu, ale hlasem pouze připraví obrazovku; zápis nebo navigace vždy vyžadují fyzické klepnutí. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
   highlights: [
     {
       title: "Svozový den je závazný",

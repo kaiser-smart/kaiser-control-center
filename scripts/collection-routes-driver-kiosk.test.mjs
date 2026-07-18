@@ -74,6 +74,8 @@ for (const marker of [
   "MUSÍM JET VYSYPAT",
   "PŘESTÁVKA",
   "CELÁ TRASA",
+  "NÁSLEDUJÍCÍ ZASTÁVKA",
+  "MAPOVÁNÍ STANOVIŠTĚ",
   "IZOLOVANÝ TEST · BEZ JÍZDY",
   "data-collection-driver-panel=\"report\"",
   "data-collection-driver-panel=\"dump\"",
@@ -91,6 +93,9 @@ assert.ok(
     && appSource.includes("Výjezd: Trnkova 3052/137, Brno")
     && appSource.includes("Aktuální pořadí trasy")
     && appSource.includes("data-collection-driver-map-control=\"zoom-in\"")
+    && appSource.includes("data-collection-driver-map-control=\"fullscreen\"")
+    && appSource.includes("data-collection-driver-navigation=\"")
+    && appSource.includes("navigator.geolocation.watchPosition")
     && appSource.includes("data-collection-driver-map-mode=\"overview\"")
     && appSource.includes("collection-daily-driver-map-spider-line")
     && appSource.includes("data-collection-driver-navigate")
@@ -102,7 +107,12 @@ assert.equal(driverPageSource.includes("<details"), false, "Pracovní akce řidi
 assert.equal(driverPageSource.includes("<select"), false, "Hlášení řidiče nesmí používat rozbalovací select.");
 for (const marker of [
   "VYFOTIT STAV",
+  "DALŠÍ FOTKA?",
+  "ANO · PŘIDAT DALŠÍ FOTKU",
+  "NE · POKRAČOVAT",
   "POTVRDIT A ULOŽIT HLÁŠENÍ",
+  "ZMĚŘIT GPS STANOVIŠTĚ",
+  "ULOŽIT FYZICKOU GPS",
   "ZOBRAZIT NA MAPĚ",
   "NAVIGOVAT SEM",
   "JSEM ZPĚT NA TRASE",
@@ -110,6 +120,7 @@ for (const marker of [
 ]) {
   assert.ok(appSource.includes(marker), `Krokový tablet postrádá prvek: ${marker}`);
 }
+assert.equal(driverPageSource.includes("collection-daily-driver-test-identity"), false, "Řidičský displej nesmí vypisovat auditní identitu testera.");
 
 assert.ok(
   appSource.includes("collection-daily-driver-finish-workspace")
@@ -129,6 +140,9 @@ for (const marker of [
   ".collection-daily-driver-test-badge",
   ".collection-daily-driver-modal",
   ".collection-daily-driver-map__controls",
+  ".collection-daily-driver-map.is-fullscreen",
+  ".collection-daily-driver-navigation-guidance",
+  ".collection-daily-driver-next-stop",
   ".collection-daily-driver-photo-button"
 ]) {
   assert.ok(styleSource.includes(marker), `Tabletový kiosk postrádá styl: ${marker}`);

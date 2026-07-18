@@ -6,6 +6,7 @@ import {
   COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD,
   isCollectionDailyRouteStationaryFieldTest
 } from "./collection-daily-routes-store.js";
+import { isUserActive, normalizeRole } from "../../src/permissions.js";
 
 const MAX_ACCURACY_METERS = 30;
 const ROUTING_CANDIDATE_ACCURACY_METERS = 15;
@@ -133,6 +134,23 @@ function dbError(error) {
   );
 }
 
+function assertCollectionRoutesTestGpsRunAccess(user, run) {
+  const role = normalizeRole(user?.role);
+  if (user && ["admin", "management"].includes(role)) return;
+  if (
+    user
+    && isUserActive(user)
+    && role === "ridic"
+    && cleanString(user.id)
+    && cleanString(user.id) === cleanString(run?.driver_user_id)
+  ) return;
+  throw new CollectionRoutesTestGpsError(
+    "TEST trasa nebyla nalezena.",
+    404,
+    "collection_routes_test_gps_run_not_found"
+  );
+}
+
 async function loadActiveRun(db, runId) {
   const run = await db.prepare(`
     SELECT * FROM collection_daily_route_runs WHERE id = ? LIMIT 1
@@ -256,17 +274,17 @@ export async function getCollectionRoutesTestOperationalConfig(env, user) {
 }
 
 export async function listCollectionRoutesTestGpsConfirmations(env, user, { runId } = {}) {
-  assertCollectionRoutesTestManager(user);
   const normalizedRunId = cleanString(runId);
   if (!normalizedRunId) {
     throw new CollectionRoutesTestGpsError("Chybí TEST trasa pro načtení GPS.", 400, "collection_routes_test_gps_run_required");
   }
   const db = collectionRoutesTestDatabase(env, true);
   try {
-    const run = await db.prepare(`SELECT id FROM collection_daily_route_runs WHERE id = ? LIMIT 1`).bind(normalizedRunId).first();
+    const run = await db.prepare(`SELECT * FROM collection_daily_route_runs WHERE id = ? LIMIT 1`).bind(normalizedRunId).first();
     if (!run) {
       throw new CollectionRoutesTestGpsError("TEST trasa nebyla nalezena.", 404, "collection_routes_test_gps_run_not_found");
     }
+    assertCollectionRoutesTestGpsRunAccess(user, run);
     const result = await db.prepare(`
       SELECT * FROM collection_route_test_gps_confirmations
       WHERE run_id = ?
@@ -283,7 +301,6 @@ export async function listCollectionRoutesTestGpsConfirmations(env, user, { runI
 }
 
 export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
-  assertCollectionRoutesTestManager(user);
   const db = collectionRoutesTestDatabase(env, true);
   const runId = cleanString(input.runId);
   const stopId = cleanString(input.stopId);
@@ -297,12 +314,14 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
   }
   try {
     const run = await loadActiveRun(db, runId);
+    assertCollectionRoutesTestGpsRunAccess(user, run);
     const stationaryFieldTest = isCollectionDailyRouteStationaryFieldTest(run);
     const runMetadata = parseJson(run.metadata_json, {});
-    if (stationaryFieldTest && (
+    const fieldTesterUserId = cleanString(runMetadata.fieldTesterUserId);
+    const stationaryFieldCapture = stationaryFieldTest && Boolean(fieldTesterUserId);
+    if (stationaryFieldCapture && (
       cleanString(runMetadata.testMode) !== COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD ||
-      !cleanString(runMetadata.fieldTesterUserId) ||
-      cleanString(user?.id) !== cleanString(runMetadata.fieldTesterUserId)
+      cleanString(user?.id) !== fieldTesterUserId
     )) {
       throw new CollectionRoutesTestGpsError(
         "GPS tohoto stacionárního TESTU může uložit pouze terénní tester, který jej založil.",
@@ -334,8 +353,8 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
       : null;
     const needsReview = point.accuracyMeters > ROUTING_CANDIDATE_ACCURACY_METERS ||
       distance === null || distance > REVIEW_DISTANCE_METERS;
-    const status = needsReview ? "needs-review" : stationaryFieldTest ? "field-tester-measured" : "driver-measured";
-    const source = stationaryFieldTest ? "field-tester-tablet-gps" : "driver-tablet-gps";
+    const status = needsReview ? "needs-review" : stationaryFieldCapture ? "field-tester-measured" : "driver-measured";
+    const source = stationaryFieldCapture ? "field-tester-tablet-gps" : "driver-tablet-gps";
     const routingCandidate = needsReview ? 0 : 1;
     const createdAt = nowIso();
     const id = randomId("collection-route-test-gps");
@@ -404,7 +423,7 @@ export async function confirmCollectionRoutesTestGps(env, user, input = {}) {
           routingCandidate: Boolean(routingCandidate),
           dataScope: "test",
           testMode: stationaryFieldTest ? COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD : "",
-          fieldTesterUserId: stationaryFieldTest ? actorId : ""
+          fieldTesterUserId: stationaryFieldCapture ? actorId : ""
         })
       ),
       db.prepare(`UPDATE collection_daily_route_runs SET updated_at = ? WHERE id = ?`).bind(createdAt, run.id)

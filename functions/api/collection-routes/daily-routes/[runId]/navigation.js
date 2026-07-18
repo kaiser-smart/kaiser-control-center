@@ -23,7 +23,9 @@ export async function onRequestGet({ request, env, params }) {
     );
     const navigation = await buildCollectionDailyRouteLegNavigation(env, detail, {
       fromPointId: url.searchParams.get("fromPointId"),
-      toPointId: url.searchParams.get("toPointId")
+      toPointId: url.searchParams.get("toPointId"),
+      originLatitude: url.searchParams.get("originLatitude"),
+      originLongitude: url.searchParams.get("originLongitude")
     }, {
       fetchImpl: env?.__HERE_ROUTING_FETCH || fetch
     });

@@ -154,7 +154,19 @@ function appendSectionPoints(target, sectionPoints) {
 
 export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = {}, input = {}, options = {}) {
   const driverMap = detail?.driverMap || {};
-  const origin = navigationPoint(driverMap, input.fromPointId);
+  const liveLatitude = coordinate(input.originLatitude, -90, 90);
+  const liveLongitude = coordinate(input.originLongitude, -180, 180);
+  const hasLiveOriginInput = cleanString(input.originLatitude) || cleanString(input.originLongitude);
+  if (hasLiveOriginInput && (liveLatitude === null || liveLongitude === null)) {
+    throw new CollectionDailyRouteNavigationError(
+      "Živá poloha tabletu není platná.",
+      400,
+      "collection_daily_route_navigation_origin_invalid"
+    );
+  }
+  const origin = hasLiveOriginInput
+    ? { id: "live-position", label: "Moje poloha", address: "", latitude: liveLatitude, longitude: liveLongitude }
+    : navigationPoint(driverMap, input.fromPointId);
   const destination = navigationPoint(driverMap, input.toPointId);
   if (!origin || !destination) {
     throw new CollectionDailyRouteNavigationError(
@@ -175,7 +187,7 @@ export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = 
   url.searchParams.set("transportMode", "truck");
   url.searchParams.set("origin", `${origin.latitude},${origin.longitude}`);
   url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
-  url.searchParams.set("return", "polyline,summary");
+  url.searchParams.set("return", "polyline,summary,actions,instructions");
   url.searchParams.set("lang", "cs-CZ");
   url.searchParams.set("apiKey", apiKey);
   const fetchImpl = options.fetchImpl || fetch;
@@ -208,14 +220,31 @@ export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = 
     );
   }
   const points = [];
+  const maneuvers = [];
   let lengthMeters = 0;
   let durationSeconds = 0;
   for (const section of sections) {
+    const sectionPoints = cleanString(section?.polyline) ? decodeHereFlexiblePolyline(section.polyline) : [];
     if (cleanString(section?.polyline)) {
-      appendSectionPoints(points, decodeHereFlexiblePolyline(section.polyline));
+      appendSectionPoints(points, sectionPoints);
     }
     lengthMeters += Number(section?.summary?.length) || 0;
     durationSeconds += Number(section?.summary?.duration) || 0;
+    const actions = Array.isArray(section?.turnByTurnActions)
+      ? section.turnByTurnActions
+      : Array.isArray(section?.actions) ? section.actions : [];
+    for (const action of actions) {
+      const offset = Math.max(0, Math.min(sectionPoints.length - 1, Number(action?.offset) || 0));
+      const point = sectionPoints[offset] || null;
+      maneuvers.push({
+        action: cleanString(action?.action),
+        direction: cleanString(action?.direction),
+        instruction: cleanString(action?.instruction) || "Pokračuj podle vyznačené trasy.",
+        lengthMeters: Math.round(Number(action?.length) || 0),
+        durationSeconds: Math.round(Number(action?.duration) || 0),
+        ...(point ? { latitude: point.latitude, longitude: point.longitude } : {})
+      });
+    }
   }
   if (points.length < 2) {
     throw new CollectionDailyRouteNavigationError(
@@ -234,6 +263,7 @@ export async function buildCollectionDailyRouteLegNavigation(env = {}, detail = 
       lengthMeters: Math.round(lengthMeters),
       durationSeconds: Math.round(durationSeconds)
     },
+    maneuvers,
     sendsNotifications: false,
     writesRoute: false,
     exposesApiKey: false

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.582"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.583"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svoz: mapa přes celý tablet a živá navigace",
+    text: "Řidič může HERE mapu roztáhnout přes celý 11″ displej, posouvat ji a přibližovat tlačítky, kolečkem i dvěma prsty. Živá navigace vede od aktuální GPS polohy k právě obsluhovanému stanovišti, další zastávka je vidět předem, TEST mapování stanoviště je znovu dostupné a hlášení přijme až pět fotografií."
+  },
   {
     title: "Svoz: skutečný pracovní displej řidiče",
     text: "Tablet má ovladatelnou mapu aktuálního úseku i celé trasy, přímou navigaci, adresní seznam, krokové hlášení s povinnou fotografií, přestávku, výsyp a hlasovou Šarlotu. V izolovaném TESTU se všechny zápisy drží pouze v TEST auditu pod přihlášeným Miroslavem; žádná zpráva se neodesílá a Vistos ani ostrá trasa se nemění."
