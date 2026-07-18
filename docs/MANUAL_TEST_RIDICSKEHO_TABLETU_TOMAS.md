@@ -2,7 +2,7 @@
 
 ## Přihlášení
 
-1. Na 11″ tabletu otevři `https://smart-odpady.ai/trasy-svozu/test`.
+1. Na tabletu **Blackview Active 7 LTE** otočeném na šířku otevři `https://smart-odpady.ai/trasy-svozu/test`. Displej nech v běžném systémovém měřítku.
 2. Přihlas se existujícím účtem Miroslav Vašek. Tomášův účet se nepoužívá.
 3. Zkontroluj červený štítek **IZOLOVANÝ TEST · BEZ JÍZDY**, firmu **Firma test 501** a adresu **Trnkova 3052/137, 628 00 Brno**. Auditní identita se na pracovní obrazovce nevypisuje: zápisy se serverově ukládají pod Miroslavem, Tomáš zůstává jen v TEST metadatech.
 

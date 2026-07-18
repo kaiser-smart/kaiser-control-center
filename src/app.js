@@ -61,7 +61,7 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.0";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.24";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.25";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -47350,12 +47350,36 @@ function syncCollectionRoutesDriverKioskDocumentState() {
   document.body?.classList.toggle("collection-driver-kiosk-active", active);
 }
 
+function syncCollectionDailyDriverViewportDiagnostics() {
+  const kiosk = document.querySelector("[data-collection-daily-driver-kiosk]");
+  if (!kiosk) return;
+  const innerWidth = Math.max(0, Math.round(window.innerWidth || document.documentElement.clientWidth || 0));
+  const innerHeight = Math.max(0, Math.round(window.innerHeight || document.documentElement.clientHeight || 0));
+  const devicePixelRatio = Math.max(1, Number(window.devicePixelRatio) || 1);
+  const screenWidth = Math.max(0, Math.round(window.screen?.width || 0));
+  const screenHeight = Math.max(0, Math.round(window.screen?.height || 0));
+  const isBlackviewActive7Viewport = innerWidth >= 900
+    && innerWidth <= 1024
+    && innerHeight >= 500
+    && innerHeight <= 640
+    && innerWidth > innerHeight;
+  kiosk.dataset.collectionDriverViewportProfile = isBlackviewActive7Viewport
+    ? "blackview-active-7-landscape"
+    : "responsive";
+  kiosk.dataset.collectionDriverInnerWidth = String(innerWidth);
+  kiosk.dataset.collectionDriverInnerHeight = String(innerHeight);
+  kiosk.dataset.collectionDriverDevicePixelRatio = devicePixelRatio.toFixed(2);
+  kiosk.dataset.collectionDriverScreenWidth = String(screenWidth);
+  kiosk.dataset.collectionDriverScreenHeight = String(screenHeight);
+}
+
 function render() {
   try {
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
     renderApp();
     syncCollectionRoutesDriverKioskDocumentState();
+    syncCollectionDailyDriverViewportDiagnostics();
     applyUiSystemV2();
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
@@ -53019,6 +53043,8 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("beforeunload", (event) => accessUnsavedChangesGuard.beforeUnload(event));
 window.addEventListener("popstate", handlePopStateNavigation);
 window.addEventListener("hashchange", handleHashChangeNavigation);
+window.addEventListener("resize", syncCollectionDailyDriverViewportDiagnostics, { passive: true });
+window.visualViewport?.addEventListener("resize", syncCollectionDailyDriverViewportDiagnostics, { passive: true });
 render();
 probeAiAssistantAvatarAssets();
 bootstrapAuth();

@@ -1,12 +1,12 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.24",
-  updatedAt: "18. 7. 2026 01:50",
-  updatedAtIso: "2026-07-18T01:50:00+02:00",
-  lastChange: "Živá navigace a mapování stanoviště",
+  version: "1.25",
+  updatedAt: "18. 7. 2026 02:27",
+  updatedAtIso: "2026-07-18T02:27:00+02:00",
+  lastChange: "Blackview a tabletová ergonomie",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
-  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Mapa je ovladatelná přes celý tablet dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a po fyzickém spuštění vede z živé GPS polohy pokyny HERE. Za optimalizované se pořadí označí pouze při přesně doloženém a skutečně použitém výsledku HERE. Pracovní volby HOTOVO, hlášení s jednou až pěti fotografiemi, výsyp, přestávka a TEST mapování stanoviště mají velký krokový postup bez rozbalovacích polí. Šarlota zná přihlášeného řidiče a aktuální trasu, ale hlasem pouze připraví obrazovku; zápis nebo navigace vždy vyžadují fyzické klepnutí. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
+  summary: "Závazná pravidla pro budoucí AI plánování. Aktivní účet s rolí Řidič se v KSO vždy otevře přímo do uzamčeného Řidičského displeje a uvidí pouze svoji trasu přiřazenou podle uživatelského ID; cizí trasy, HP, menu a administrace zůstávají nedostupné. Závazným referenčním zařízením je 11″ Blackview Active 7 LTE v režimu na šířku: fyzicky 1920 × 1200, při běžném měřítku cílově 960 × 600 CSS px. Mapa je ovladatelná přes celý tablet dotykem, ukazuje skutečný silniční úsek k aktuálnímu stanovišti nebo celou trasu a po fyzickém spuštění vede z živé GPS polohy pokyny HERE. Za optimalizované se pořadí označí pouze při přesně doloženém a skutečně použitém výsledku HERE. Pracovní volby HOTOVO, hlášení s jednou až pěti fotografiemi, výsyp, přestávka a TEST mapování stanoviště mají velký krokový postup bez rozbalovacích polí. Šarlota zná přihlášeného řidiče a aktuální trasu, ale hlasem pouze připraví obrazovku; zápis nebo navigace vždy vyžadují fyzické klepnutí. Izolovaný TEST řidiče ukládá pouze TEST audit pod přihlášeným aktérem, fyzického testera drží jen v TEST metadatech a nikdy neposílá e-mail, SMS ani RCS, nezapisuje do Vistosu a nemění ostrou trasu.",
   highlights: [
     {
       title: "Svozový den je závazný",
@@ -183,6 +183,10 @@ Každou změnu vysvětli a předlož ke schválení. Bez výslovného potvrzení
 Aktivní uživatel s rolí Řidič se po přihlášení i při pokusu otevřít jiný modul vždy vrátí na /trasy-svozu. Nesmí vidět HP, postranní menu, administraci, Mantru, TEST management ani cizí denní trasu. Na serveru se vlastnictví trasy ověřuje výhradně stabilním uživatelským ID; samotné oprávnění „zobrazit Svozové trasy“ nesmí řidiči otevřít trasu jiného řidiče.
 
 Na tabletu tvoří Řidičský displej jednu uzamčenou pracovní obrazovku bez hlavního posouvání. Ukazuje aktuální stanoviště, adresu, odpad a nádoby, poznámku, dotykově ovladatelnou HERE mapu, stav trasy, Šarlotu a velké volby HOTOVO, HLÁŠENÍ PRO DISPEČINK, MUSÍM JET VYSYPAT, PŘESTÁVKA a CELÁ TRASA. Mapa má dva pravdivé režimy: skutečný silniční úsek od posledního známého bodu k aktuálnímu stanovišti a přehled celé trasy. Lze ji posouvat, přibližovat a vrátit na trasu; nesmí zůstat pouhým statickým výřezem. Hlášení, provozní kroky a celá trasa se otevírají jako samostatné přehledné vrstvy s vlastním posouváním a zřetelným zavřením. Na telefonu je kvůli bezpečné čitelnosti povolen svislý posun.
+
+Závazné referenční zařízení Řidičského displeje je Blackview Active 7 LTE, 11″, fyzické rozlišení 1920 × 1200, poměr 16:10, Android 15, používaný na šířku. Akceptační viewport je 960 × 600 CSS px a musí se ověřit také fyzický render 1920 × 1200. Hlavní plocha používá 100dvh, nesmí mít vlastní svislý ani vodorovný posun a musí se přizpůsobit lištám mobilního Chrome. Mapa přes celý displej nesmí překrýt ani oříznout zoom, vycentrování nebo zavření. Hlavní pracovní volby a ovládání mapy musí mít velké dotykové plochy použitelné v pracovních rukavicích a nesmí se zmenšit pod 56 CSS px. Pro diagnostiku se bez ukládání provozních nebo osobních dat zaznamená do DOM skutečné innerWidth, innerHeight, devicePixelRatio a rozměr obrazovky tabletu.
+
+HERE Tour Planning je autorita pro pořadí stanovišť pouze tehdy, když dispečer dokončený výpočet vědomě použije a uložené pořadí se s ním přesně shoduje; jinak displej pravdivě uvádí Aktuální pořadí trasy. Silniční úsek a navigaci uvnitř KSO počítá HERE Routing v režimu truck s dopravou podle času výpočtu. Před ostrým použitím musí požadavek obsahovat skutečné rozměry a hmotnost konkrétního vozidla. Google Maps je pouze externí nouzové otevření právě jednoho cíle v režimu běžného auta; nesmí měnit pořadí stanovišť ani být autoritou pro trasu svozového vozu.
 
 Řidič musí vidět další stanoviště, zákazníka a adresu, nádoby a odpad, poznámku, navigaci, stav trasy a kontakt na dispečink.
 

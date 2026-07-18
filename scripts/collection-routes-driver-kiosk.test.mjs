@@ -54,6 +54,7 @@ assert.equal(hasPermission({
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const mantraSource = readFileSync(new URL("../src/data/collectionRoutesMantra.js", import.meta.url), "utf8");
 const storeSource = readFileSync(new URL("../functions/_lib/collection-daily-routes-store.js", import.meta.url), "utf8");
 const hereEndpointSource = readFileSync(new URL("../functions/api/collection-routes/here-map-image.js", import.meta.url), "utf8");
 const driverMapEndpointSource = readFileSync(new URL("../functions/api/collection-routes/daily-routes/[runId]/map.js", import.meta.url), "utf8");
@@ -146,6 +147,45 @@ for (const marker of [
   ".collection-daily-driver-photo-button"
 ]) {
   assert.ok(styleSource.includes(marker), `Tabletový kiosk postrádá styl: ${marker}`);
+}
+
+for (const marker of [
+  "Blackview Active 7 LTE",
+  "1920 × 1200",
+  "960 × 600 CSS px",
+  "min-width: 900px",
+  "max-width: 1024px",
+  "min-height: 500px",
+  "max-height: 640px",
+  "grid-template-columns: repeat(4, max-content)",
+  "min-height: 56px",
+  ".collection-driver-kiosk-active .ai-assistant-launcher",
+  "display: none"
+]) {
+  assert.ok(
+    styleSource.includes(marker) || mantraSource.includes(marker),
+    `Regrese Blackview Active 7 postrádá parametr: ${marker}`
+  );
+}
+
+assert.ok(
+  appSource.includes("function syncCollectionDailyDriverViewportDiagnostics()")
+    && appSource.includes("window.innerWidth")
+    && appSource.includes("window.innerHeight")
+    && appSource.includes("window.devicePixelRatio")
+    && appSource.includes("data-collection-daily-driver-kiosk")
+    && appSource.includes("collectionDriverViewportProfile")
+    && appSource.includes("blackview-active-7-landscape")
+    && appSource.includes("window.visualViewport?.addEventListener"),
+  "Řidičský displej musí automaticky zaznamenat skutečný viewport Blackview bez provozního zápisu."
+);
+
+for (const marker of [
+  "HERE Tour Planning je autorita pro pořadí stanovišť pouze tehdy",
+  "skutečné rozměry a hmotnost konkrétního vozidla",
+  "Google Maps je pouze externí nouzové otevření"
+]) {
+  assert.ok(mantraSource.includes(marker), `Mantra postrádá pravidlo navigace: ${marker}`);
 }
 
 assert.ok(
