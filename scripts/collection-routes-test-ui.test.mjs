@@ -68,6 +68,9 @@ for (const marker of [
   "Tester se výběrem historie nemění",
   "ZPĚT NA MŮJ TEST",
   "PŘIPRAVIT NOVÝ TEST",
+  "PŘIPRAVIT TEST TABLETU",
+  "PŘIPRAVIT TEST PRO MIROSLAVA",
+  "data-collection-daily-route-transition=\"prepare\"",
   "testTabletSelectedRunId",
   "collectionRoutesStationaryFieldTestOwnedByCurrentUser",
   "stationary-field-test",
@@ -75,13 +78,18 @@ for (const marker of [
   "Bez jízdy",
   "OVĚŘIT JEDEN TEST BOD",
   "POTVRDIT STACIONÁRNÍ TEST",
-  "OTEVŘÍT TABLET",
+  "OTEVŘÍT TEST TABLETU",
   "SPUSTIT TEST TABLETU",
   "DOKONČIT TEST TABLETU",
   "GPS měření je uložené. TEST můžeš dokončit",
   "Kontrola navigačního bodu proběhne samostatně.",
   "Řidičský tablet · zdrojový náhled",
   "collectionRoutesTestTabletWorkspace",
+  "collectionRoutesTestHomeSection",
+  "Zkušební pracoviště tabletu",
+  "DOPORUČENÝ DALŠÍ KROK",
+  "Plánování trasy a HERE",
+  "Data, bezpečnost a provozní podklady",
   "data-collection-routes-test-tablet-open",
   "data-collection-routes-test-tablet-close",
   "data-collection-routes-test-tablet-dialog",
@@ -209,9 +217,10 @@ assert.ok(
   "Ostrá stránka nesmí vykreslit TEST dataset ani přepínač datového režimu."
 );
 assert.ok(
-  appSource.includes('${isTest ? collectionRoutesTestDatasetPanel(user) : ""}') &&
+  appSource.includes('isTest && options.showTestPrelude !== false ? collectionRoutesTestDatasetPanel(user) : ""') &&
+    appSource.includes("return collectionRoutesTestHomeSection(user)") &&
     appSource.includes("PROVOZNÍ MANTRA · READ-ONLY NÁHLED"),
-  "Oddělený dataset smí být jen v TEST scope a Mantra musí začínat nízkým read-only náhledem."
+  "Oddělený dataset smí být jen v TEST scope, hlavní úkol musí mít vlastní pracoviště a Mantra musí zůstat read-only."
 );
 assert.ok(
   appSource.includes("isCollectionRoutesDriverKioskUser(user) || collectionRoutesCanUseTestDataset(user)") &&

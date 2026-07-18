@@ -942,6 +942,19 @@ body:has(.ui-system-pilot) {
 }
 
 @media (max-width: 1180px) {
+  .ui-system-pilot.collection-routes-page--test {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(100% - 20px, 1080px);
+  }
+
+  .ui-system-pilot.collection-routes-page--test > :not(.ui-pilot-sidebar) {
+    grid-column: 1;
+  }
+
+  .ui-system-pilot.collection-routes-page--test .ui-pilot-sidebar {
+    display: none;
+  }
+
   .ui-system-pilot {
     grid-template-columns: 226px minmax(0, 1fr);
     gap: 18px;
