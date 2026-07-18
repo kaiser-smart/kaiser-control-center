@@ -43018,6 +43018,17 @@ body.collection-driver-kiosk-active #app {
   background: #edf8e5;
 }
 
+.collection-daily-driver-route-confirmation__summary article.is-wide {
+  grid-column: 1 / -1;
+  min-height: 58px;
+}
+
+.collection-daily-driver-route-confirmation__summary article strong {
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+
 .collection-daily-driver-route-confirmation__summary span {
   color: #467d1c;
   font-size: 0.7rem;
@@ -43034,6 +43045,30 @@ body.collection-driver-kiosk-active #app {
   border-radius: 14px;
   background: #f7f4ff;
   color: #302657;
+}
+
+.collection-daily-driver-route-confirmation__feedback {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 2px solid #d5a339;
+  border-radius: 12px;
+  background: #fff8e9;
+  color: #5f4311;
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.collection-daily-driver-route-confirmation__feedback strong {
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.collection-daily-driver-route-confirmation__feedback.is-blocking {
+  border-color: #c5352c;
+  background: #fff0ee;
+  color: #81211b;
 }
 
 .collection-daily-driver-route-confirmation__memory input {
@@ -43772,6 +43807,97 @@ body.collection-driver-blackview-simulator-active #app {
   .collection-daily-driver-report-review .primary-action,
   .collection-daily-driver-operation-active .primary-action {
     min-height: 56px;
+  }
+
+  .collection-daily-driver-modal {
+    padding: 4px;
+  }
+
+  .collection-daily-driver-modal > section {
+    max-height: calc(100dvh - 8px);
+    gap: 6px;
+    padding: 8px;
+    border-width: 2px;
+    border-radius: 12px;
+  }
+
+  .collection-daily-driver-modal > section > header {
+    top: -8px;
+    gap: 8px;
+    margin: -8px -8px 0;
+    padding: 7px 8px;
+  }
+
+  .collection-daily-driver-modal h2 {
+    font-size: 1.2rem;
+  }
+
+  .collection-daily-driver-modal header p {
+    max-width: 760px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .collection-daily-driver-modal__close,
+  .collection-daily-driver-modal__more {
+    min-height: 44px;
+    padding: 5px 12px;
+  }
+
+  .collection-daily-driver-route-confirmation {
+    gap: 6px;
+  }
+
+  .collection-daily-driver-route-confirmation__summary {
+    gap: 6px;
+  }
+
+  .collection-daily-driver-route-confirmation__summary article,
+  .collection-daily-driver-route-confirmation__summary article.is-wide {
+    min-height: 46px;
+    gap: 1px;
+    padding: 5px 9px;
+    border-radius: 9px;
+  }
+
+  .collection-daily-driver-route-confirmation__feedback {
+    gap: 2px;
+    padding: 6px 9px;
+    border-radius: 9px;
+    font-size: 0.67rem;
+    line-height: 1.15;
+  }
+
+  .collection-daily-driver-route-confirmation__memory {
+    min-height: 64px;
+    gap: 10px;
+    padding: 8px 10px;
+    border-width: 2px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+  }
+
+  .collection-daily-driver-route-confirmation__memory input {
+    width: 28px;
+    height: 28px;
+  }
+
+  .collection-daily-driver-route-confirmation__memory > span,
+  .collection-daily-driver-route-confirmation__memory.is-enabled,
+  .collection-daily-driver-route-confirmation__memory.is-unavailable {
+    gap: 2px;
+  }
+
+  .collection-daily-driver-route-confirmation__memory-note,
+  .collection-daily-driver-route-confirmation__safety {
+    font-size: 0.65rem;
+    line-height: 1.15;
+  }
+
+  .collection-daily-driver-route-confirmation > .primary-action {
+    min-height: 54px;
+    font-size: 0.9rem;
   }
 
   .collection-daily-driver-map.is-fullscreen {
