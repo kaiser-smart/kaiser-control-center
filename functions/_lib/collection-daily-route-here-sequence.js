@@ -1,6 +1,7 @@
 import {
   applyCollectionDailyRouteHereOrder,
   COLLECTION_DAILY_ROUTE_SCOPE_TEST,
+  CollectionDailyRoutesError,
   getCollectionDailyRoute
 } from "./collection-daily-routes-store.js";
 import { COLLECTION_DAILY_ROUTE_MAP_DEPOT } from "./collection-daily-route-map.js";
@@ -91,6 +92,17 @@ function publicReadiness(readiness = {}) {
   return result;
 }
 
+function throwHereSequenceStageError(error, stage, message, code) {
+  if (error instanceof CollectionDailyRouteHereSequenceError || error instanceof CollectionDailyRoutesError) {
+    throw error;
+  }
+  console.error("collection_daily_route_here_sequence.stage_failed", {
+    stage,
+    message: cleanString(error?.message)
+  });
+  throw new CollectionDailyRouteHereSequenceError(message, 500, code);
+}
+
 function startPoint(readiness = {}, detail = {}) {
   const historical = [...(readiness.historical || [])].sort((left, right) => Number(left.routeOrder) - Number(right.routeOrder));
   const last = historical[historical.length - 1];
@@ -172,8 +184,29 @@ export async function optimizeCollectionDailyRouteHereSequence(env, user, runId,
       "collection_daily_route_here_sequence_key_missing"
     );
   }
-  const { detail, readiness } = await getCollectionDailyRouteHereSequenceReadiness(env, user, runId);
-  const request = buildCollectionDailyRouteHereSequenceRequest(readiness, detail, apiKey);
+  let detail;
+  let readiness;
+  try {
+    ({ detail, readiness } = await getCollectionDailyRouteHereSequenceReadiness(env, user, runId));
+  } catch (error) {
+    throwHereSequenceStageError(
+      error,
+      "route-readiness",
+      "Nepodařilo se načíst přidělenou TEST trasu a potvrzený profil vozu.",
+      "collection_daily_route_here_sequence_readiness_failed"
+    );
+  }
+  let request;
+  try {
+    request = buildCollectionDailyRouteHereSequenceRequest(readiness, detail, apiKey);
+  } catch (error) {
+    throwHereSequenceStageError(
+      error,
+      "request-build",
+      "Nepodařilo se připravit bezpečný HERE výpočet.",
+      "collection_daily_route_here_sequence_request_failed"
+    );
+  }
   const fetchImpl = options.fetchImpl || fetch;
   let response;
   try {
@@ -209,17 +242,27 @@ export async function optimizeCollectionDailyRouteHereSequence(env, user, runId,
     );
   }
   const completedAt = new Date().toISOString();
-  const optimizedDetail = await applyCollectionDailyRouteHereOrder(env, user, runId, {
-    scope: COLLECTION_DAILY_ROUTE_SCOPE_TEST,
-    idempotencyKey,
-    optimizedStopIds: stopIds,
-    provider: "here-waypoints-sequence-v8",
-    optimizationRunId: request.requestId,
-    completedAt,
-    trafficMode: "live",
-    objective: "time",
-    vehicleProfile: readiness.profile
-  });
+  let optimizedDetail;
+  try {
+    optimizedDetail = await applyCollectionDailyRouteHereOrder(env, user, runId, {
+      scope: COLLECTION_DAILY_ROUTE_SCOPE_TEST,
+      idempotencyKey,
+      optimizedStopIds: stopIds,
+      provider: "here-waypoints-sequence-v8",
+      optimizationRunId: request.requestId,
+      completedAt,
+      trafficMode: "live",
+      objective: "time",
+      vehicleProfile: readiness.profile
+    });
+  } catch (error) {
+    throwHereSequenceStageError(
+      error,
+      "route-save",
+      "HERE pořadí bylo vypočtené, ale nepodařilo se ho bezpečně uložit do TEST trasy.",
+      "collection_daily_route_here_sequence_save_failed"
+    );
+  }
   return {
     detail: optimizedDetail,
     optimization: optimizedDetail?.run?.metadata?.routeOptimization || {},
