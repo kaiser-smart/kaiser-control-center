@@ -1370,6 +1370,7 @@ const collectionRoutesPilotState = {
   dailyRoutePending: "",
   dailyRouteMessage: "",
   dailyRouteError: "",
+  testWorkspaceLoadRequested: false,
   testDatasetLoaded: false,
   testDatasetLoading: false,
   testDataset: null,
@@ -40035,6 +40036,7 @@ function collectionDailyRouteIdempotencyKey(prefix) {
 }
 
 function resetCollectionDailyRoutesForScope() {
+  collectionRoutesPilotState.testWorkspaceLoadRequested = false;
   collectionRoutesPilotState.dailyRoutesLoaded = false;
   collectionRoutesPilotState.dailyRoutesLoading = false;
   collectionRoutesPilotState.dailyRoutes = [];
@@ -40122,6 +40124,15 @@ async function loadCollectionRoutesTestDataset(options = {}) {
     renderAfter: false
   });
   if (options.renderAfter !== false) render();
+}
+
+function ensureCollectionRoutesTestWorkspaceData() {
+  if (!collectionDailyRouteIsTestScope() || collectionRoutesPilotState.testWorkspaceLoadRequested) return;
+  collectionRoutesPilotState.testWorkspaceLoadRequested = true;
+  void loadCollectionRoutesTestDataset({ renderAfter: false }).then(() => {
+    if (!collectionDailyRouteIsTestScope()) return;
+    return loadCollectionDailyRoutes();
+  });
 }
 
 async function createCollectionRoutesTestDataset() {
@@ -47860,6 +47871,7 @@ async function logout() {
   collectionRoutesPilotState.dailyRoutePending = "";
   collectionRoutesPilotState.dailyRouteMessage = "";
   collectionRoutesPilotState.dailyRouteError = "";
+  collectionRoutesPilotState.testWorkspaceLoadRequested = false;
   collectionRoutesPilotState.testDatasetLoaded = false;
   collectionRoutesPilotState.testDatasetLoading = false;
   collectionRoutesPilotState.testDataset = null;
@@ -48171,7 +48183,7 @@ function renderAuthenticatedApp(user) {
         ensureCollectionRoutesSvozKaiserWatchdog(user);
         void loadCollectionRoutesPilot();
         if (collectionDailyRouteIsTestScope()) {
-          void loadCollectionRoutesTestDataset({ renderAfter: false }).then(() => loadCollectionDailyRoutes({ force: true }));
+          ensureCollectionRoutesTestWorkspaceData();
         } else {
           void loadCollectionDailyRoutes();
         }

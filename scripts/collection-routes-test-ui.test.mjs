@@ -227,6 +227,13 @@ assert.ok(
     appSource.includes('const requestedScope = path === COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE ? "test" : "production"'),
   "Přímá /trasy-svozu/test musí zachovat oddělený scope řidiči i oprávněné správě bez přepínače na ostré stránce."
 );
+assert.ok(
+  appSource.includes("function ensureCollectionRoutesTestWorkspaceData()") &&
+    appSource.includes("collectionRoutesPilotState.testWorkspaceLoadRequested = true") &&
+    appSource.includes("ensureCollectionRoutesTestWorkspaceData();") &&
+    !appSource.includes("loadCollectionRoutesTestDataset({ renderAfter: false }).then(() => loadCollectionDailyRoutes({ force: true }))"),
+  "TEST pracoviště nesmí po každém renderu vynutit další načtení tras a nechat hlavní akci trvale ve stavu NAČÍTÁM."
+);
 
 for (const column of ["Stav", "Pořadí", "Zákazník", "Stanoviště", "Odpad / nádoba", "Interval", "Den svozu", "Smlouva"]) {
   assert.ok(
