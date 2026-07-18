@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const mantraSource = readFileSync(new URL("../src/data/collectionRoutesMantra.js", import.meta.url), "utf8");
+const systemPromptSource = readFileSync(new URL("../src/sarlota/sarlotaSystemPrompt.js", import.meta.url), "utf8");
+const sourcePrompt = readFileSync(new URL("../docs/SARLOTA_COLLECTION_CREW_TABLET_SOURCE_PROMPT.md", import.meta.url), "utf8");
 
 const transitionStart = appSource.indexOf("async function transitionMyCollectionDailyRoute(action)");
 const transitionEnd = appSource.indexOf("async function optimizeMyCollectionDailyRouteWithHere", transitionStart);
@@ -65,5 +67,12 @@ assert.match(mantraSource, /paměť výslovně nezaškrtne, nezapne se ani se ni
 assert.match(mantraSource, /mikrofonový panel se ukáže jen při ručním ZAPNOUT ŠARLOTU/);
 assert.match(mantraSource, /Mluvím, Poslouchám a Přemýšlím/);
 assert.match(mantraSource, /signed URL, WebSocket nebo audio selže/);
+assert.match(mantraSource, /přečte přesně jednou kompletní backendové intro_announcement/);
+assert.match(mantraSource, /Na potvrzení trasy se znovu neptá/);
+assert.match(systemPromptSource, /SVOZOVÉ TRASY \/ TABLET OSÁDKY A ÚVODNÍ HLÁŠENÍ/);
+assert.match(systemPromptSource, /Přečti ji jednou beze změny/);
+assert.match(systemPromptSource, /neptej se znovu na potvrzení trasy/);
+assert.match(systemPromptSource, /Hlas HERE navigace je samostatný systém/);
+assert.match(sourcePrompt, /BEZPEČNÝ PROVOZNÍ VÝTAH JE AKTIVNÍ/);
 
 console.log("Šarlota route confirmation intro tests passed.");

@@ -7,9 +7,9 @@ Tento seznam uchovává produktové vstupy odděleně od živého runtime prompt
 - Dokument: [SARLOTA_COLLECTION_CREW_TABLET_SOURCE_PROMPT.md](./SARLOTA_COLLECTION_CREW_TABLET_SOURCE_PROMPT.md)
 - Autor vstupu: Radim Opluštil
 - Datum uložení: 18. 7. 2026
-- Stav: uložený zdrojový návrh; neaktivní
-- Živý ElevenLabs prompt změněn: NE
-- Runtime implementace všech požadavků: NE
+- Stav: uložený úplný zdroj; bezpečný provozní výtah aktivní
+- Živý ElevenLabs prompt změněn: ANO, minimálním merge blokem `SVOZOVÉ TRASY / TABLET OSÁDKY A ÚVODNÍ HLÁŠENÍ`
+- Runtime implementace všech požadavků: ČÁSTEČNÁ; aktivní funkce a otevřené body jsou přesně uvedené ve zdrojovém dokumentu
 - Některé údaje mohou být neaktuální nebo nepřesné: ANO
 - Vyžaduje bezpečný rozpad na ověřené API zdroje a samostatně schvalované implementační kroky: ANO
 
@@ -22,4 +22,4 @@ Tento seznam uchovává produktové vstupy odděleně od živého runtime prompt
 - Veřejné zprávy: oficiální RSS adaptér `functions/_lib/sarlota-news.js`
 - Pracovní paměť: consent-first strukturovaná témata v `functions/_lib/sarlota-user-memory.js`
 
-Před každou změnou živého agenta je nutné načíst aktuální ElevenLabs konfiguraci read-only, připravit minimální merge plán a samostatně potvrdit `apply: true`.
+Před každou další změnou živého agenta je nutné načíst aktuální ElevenLabs konfiguraci read-only, připravit minimální merge plán a samostatně potvrdit `apply: true`.

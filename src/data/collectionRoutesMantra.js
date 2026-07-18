@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.35",
-  updatedAt: "18. 7. 2026 19:09",
-  updatedAtIso: "2026-07-18T19:09:55+02:00",
-  lastChange: "Ověřený start směny se Šarlotou",
+  version: "1.36",
+  updatedAt: "18. 7. 2026 21:55",
+  updatedAtIso: "2026-07-18T21:55:59+02:00",
+  lastChange: "Úvodní hlášení podle promptu",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -30,7 +30,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     },
     {
       title: "Šarlota čte, člověk potvrzuje",
-      text: "Před startem backend znovu ověří přihlášeného řidiče, datum a vozidlo vlastní trasy. Neznámou osádku nebo počasí přizná bez domýšlení. Paměť je dobrovolná a ukládá jen pracovní témata; každý provozní zápis dál vyžaduje fyzické potvrzení."
+      text: "Před startem backend znovu ověří přihlášeného řidiče, datum a vozidlo vlastní trasy. Po fyzickém potvrzení přečte Šarlota přesně jedno backendové přivítání podle ověřené trasy, osádky, vozidla, počasí a povolené pracovní paměti; nic nepřidává ani si nevymýšlí. Každý provozní zápis dál vyžaduje fyzické potvrzení."
     }
   ],
   sources: [
@@ -217,7 +217,7 @@ V izolovaném TEST scope se hlášení, přestávka, výsyp a HOTOVO ukládají 
 HLAS NAVIGACE A HLASOVÁ ŠARLOTA
 Hlas navigace a hlasová Šarlota jsou dva oddělené systémy. Hlas navigace v češtině pouze přehrává deterministické pokyny HERE, například vzdálenost k manévru, odbočení, změnu trasy nebo bezpečnostní upozornění. Nevede rozhovor, nepoužívá agentic AI a neprovádí provozní úkony. Navigační pokyn má vždy zvukovou prioritu a při manévru Šarlotu ztiší nebo pozastaví.
 
-Hlasová Šarlota je samostatná přátelská konverzační asistentka. Po fyzickém potvrzení dnešní trasy může ověřeného řidiče krátce a lehce vtipně přivítat, například se zeptat na svačiny, shrnout počasí a potvrdit, že bude hlídat pracovní kontext. Oslovuje jen osoby skutečně potvrzené backendem a nesmí si domýšlet posádku.
+Hlasová Šarlota je samostatná přátelská konverzační asistentka. Po fyzickém potvrzení dnešní trasy přečte přesně jednou kompletní backendové intro_announcement a nic k němu nepřidává. Přivítání musí říct, že dnešní trasu má načtenou a potvrzenou, stručně uvést ověřený rozsah směny, vozidlo a relevantní počasí, přirozeně dát najevo, že lze vyrazit, a slíbit hlídání trasy, zastávek i důležitých věcí po cestě. Může být lehce vtipné, například zmínit svačiny nebo kafe. Na potvrzení trasy se znovu neptá, protože to už proběhlo fyzickým klepnutím. Oslovuje jen osoby skutečně potvrzené backendem a nesmí si domýšlet posádku, vozidlo, počasí ani paměť.
 
 Když automaticky spuštěná Šarlota mluví, poslouchá nebo přemýšlí, Řidičský displej místo technického obrazu mikrofonu ukáže kompaktní holografickou Šarlotu. Hologram nezakrývá navigační pokyn ani mapové ovládání, zachovává dostupné ukončení hlasu a respektuje omezení animací zařízení. Mikrofonový panel se zobrazí pouze po ručním ZAPNOUT ŠARLOTU; první systémová žádost prohlížeče o povolení mikrofonu zůstává pravdivě viditelná. Blackview simulátor vykreslí hologram jen uvnitř skutečného řidičského displeje, nikdy současně také v obalovém náhledu.
 

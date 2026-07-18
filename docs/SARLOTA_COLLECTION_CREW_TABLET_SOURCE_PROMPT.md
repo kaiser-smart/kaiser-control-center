@@ -4,10 +4,12 @@
 
 - Typ: zdrojový produktový prompt od Radima Opluštila.
 - Uloženo: 18. 7. 2026.
-- Stav: **ULOŽENO, NEAKTIVNÍ, NENÍ TO ŽIVÝ ELEVENLABS PROMPT ANI PROVOZNÍ ZDROJ PRAVDY**.
+- Stav: **ULOŽENÝ ÚPLNÝ ZDROJ; BEZPEČNÝ PROVOZNÍ VÝTAH JE AKTIVNÍ V KSO A SYNCHRONIZOVANÝ DO ELEVENLABS**.
 - Účel: trvalý vstup pro návrh a další bezpečnou implementaci Hlasové Šarloty ve Svozových trasách.
-- Živá synchronizace ElevenLabs: NEPROVEDENA.
-- Změna frontend/backend/API/DB/Cloudflare: NEPROVEDENA.
+- Živá synchronizace ElevenLabs: provedena minimálním merge postupem; původní text se do agenta nekopíruje slepě.
+- Aktivní runtime: backendové `intro_announcement`, oprávněný kontext trasy, vozidla, osádky, počasí, pracovních kontaktů, dostupnosti, nadřízených, zpráv a dobrovolné pracovní paměti.
+- Bezpečnost: hlas HERE navigace zůstává oddělený; každý provozní zápis a otevření externí navigace dál vyžaduje fyzické potvrzení.
+- Databázová migrace: žádná.
 
 ## Povinné interpretační pravidlo
 
@@ -26,16 +28,16 @@ Při budoucí implementaci platí vždy:
 9. Hlasové potvrzení nesmí samo provést zápis, telefonát, zprávu, změnu trasy ani jiný provozní účinek. Rizikový krok vyžaduje backendové oprávnění, audit a fyzické potvrzení v UI.
 10. Formulace „načti“, „zjisti“, „hlídej“ a „pamatuj si“ v původním textu popisují cílové chování. Samy o sobě neznamenají, že potřebné API, tool, DB nebo cloudový runner už existuje.
 
-## Otevřené body před případným zapojením do živého promptu
+## Stav zapojení do živého promptu
 
-- Ověřit aktuální živý ElevenLabs system prompt, first message, model, hlas, tools a dynamic variables read-only postupem.
-- Rozhodnout pořadí: současný tablet fyzicky potvrdí trasu a následně spustí Šarlotu; původní text navrhuje, aby Šarlota nejprve promluvila a požádala o potvrzení.
-- Doložit backendový zdroj dnešní osádky a jeho oprávnění.
-- Doložit bezpečné KSO API pro pracovní kontakty, nadřízené, zastupování a nepřítomnosti.
-- Doložit zdroj provozního stavu vozidla a aktivních závad.
-- Doložit T‑Cars tok pro bezpečné rozpoznání jízdy; T‑Cars nesmí řídit oprávnění.
-- Navrhnout a schválit přesnou strukturu dlouhodobé pracovní paměti nad rámec současných stručných témat.
-- Každý budoucí blok synchronizovat pouze minimálním merge postupem po read-only náhledu; nepřepisovat živého agenta tímto dokumentem.
+- Aktivní: řidič v jednom fyzickém kroku potvrdí trasu a volbu pracovní paměti; teprve potom zazní backendové úvodní hlášení a pokračuje obousměrný rozhovor.
+- Aktivní: úvod vychází pouze z ověřeného řidiče, trasy, počtu stanovišť, vozidla, osádky, počasí a povolené paměti. Neověřené údaje přizná a nevymyslí.
+- Aktivní: český ženský hlas, krátké přirozené věty, lehký situační humor mimo rizikové situace a maximálně jedna otázka.
+- Aktivní: pracovní kontakty, funkce, nadřízený a bezpečný stav dostupnosti bez soukromých a zdravotních údajů.
+- Aktivní: oficiální RSS iROZHLAS a ověřené počasí Open‑Meteo; při výpadku se nic nevymýšlí.
+- Aktivní: dobrovolná strukturovaná pracovní paměť bez audia, úplných přepisů a soukromých rozhovorů.
+- Neaktivní do samostatného ověření: T‑Cars rozpoznání pohybu, automatické sledování závad a další nové nástroje, které backend zatím bezpečně neposkytuje.
+- Každý budoucí blok se dál synchronizuje pouze minimálním merge postupem po read-only náhledu; tento úplný zdrojový dokument se do živého agenta nepřepisuje naslepo.
 
 ---
 

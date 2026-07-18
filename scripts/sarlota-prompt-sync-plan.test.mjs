@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { __test as promptSyncTest } from "../functions/api/ai/elevenlabs/sarlota-prompt-sync.js";
 import {
+  SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
@@ -14,6 +15,11 @@ import {
   assert.equal(promptSyncTest.LEGACY_PROMPT_RULE_MARKERS.includes(promptSyncTest.PROMPT_RULE_MARKER), false);
   assert.equal(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE.includes(promptSyncTest.PROMPT_RULE_REQUIRED_PHRASE), true);
   assert.equal(promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_MARKER, "SVOZOVÉ TRASY / KONTEXT A PRACOVNÍ PAMĚŤ");
+  assert.equal(promptSyncTest.COLLECTION_ROUTES_CREW_TABLET_RULE_MARKER, "SVOZOVÉ TRASY / TABLET OSÁDKY A ÚVODNÍ HLÁŠENÍ");
+  assert.equal(
+    SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_CREW_TABLET_RULE_REQUIRED_PHRASE),
+    true
+  );
   assert.equal(
     SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_REQUIRED_PHRASE),
     true
@@ -73,10 +79,25 @@ import {
 
   assert.equal(patched.includes("Bezpečný vlastní text."), true);
   assert.equal(patched.includes(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE), true);
+  assert.equal(patched.includes(SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE), true);
+  assert.equal(patched.split(SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE).length - 1, 1);
   assert.equal(patched.split(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE).length - 1, 1);
   assert.equal(patched.includes(promptSyncTest.COLLECTION_ROUTES_GPS_RULE_BLOCK), true);
   assert.equal(patched.includes(promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_BLOCK), true);
   assert.equal(patched.includes(promptSyncTest.COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK), true);
+}
+
+{
+  const prompt = [
+    "Jsi Šarlota.",
+    promptSyncTest.COLLECTION_ROUTES_CREW_TABLET_RULE_BLOCK,
+    "Bezpečný zbytek promptu."
+  ].join("\n");
+  const stripped = promptSyncTest.stripCollectionRoutesCrewTabletPromptBlocks(prompt);
+
+  assert.equal(promptSyncTest.promptHasCollectionRoutesCrewTabletRule(prompt), true);
+  assert.equal(stripped.includes(promptSyncTest.COLLECTION_ROUTES_CREW_TABLET_RULE_MARKER), false);
+  assert.equal(stripped.includes("Bezpečný zbytek promptu."), true);
 }
 
 {
@@ -224,6 +245,7 @@ import {
     "Jsi Šarlota.",
     SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
     promptSyncTest.DATA_BOX_CONTEXT_RULE_BLOCK,
+    promptSyncTest.COLLECTION_ROUTES_CREW_TABLET_RULE_BLOCK,
     promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_BLOCK,
     promptSyncTest.COLLECTION_ROUTES_GPS_RULE_BLOCK,
     promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_BLOCK,
@@ -249,6 +271,7 @@ import {
 
   assert.equal(plan.prompt.currentRulePresent, true);
   assert.equal(plan.prompt.dataBoxContextRulePresent, true);
+  assert.equal(plan.prompt.collectionRoutesCrewTabletRulePresent, true);
   assert.equal(plan.prompt.collectionRoutesContextRulePresent, true);
   assert.equal(plan.prompt.collectionRoutesGpsRulePresent, true);
   assert.equal(plan.prompt.collectionRoutesIncidentRulePresent, true);

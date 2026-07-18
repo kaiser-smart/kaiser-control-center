@@ -279,14 +279,19 @@ function introAnnouncement(user, route, vehicle, crew, weather, memory, readines
   if (readiness.blockers.length) {
     return `Ahoj ${vocative}. Dnešní údaje se neshodují a trasu teď nemůžeme bezpečně zahájit. ${readiness.blockers[0].message}`.slice(0, 520);
   }
-  const parts = [`Ahoj ${vocative}${crew.verified && crew.members.length ? ", ahoj posádko" : ""}.`];
-  if (route.status === "active") {
-    parts.push("Dnešní trasa je potvrzená.");
-  } else {
-    parts.push(route.assigned ? "Dnešní trasu mám načtenou." : "Dnešní trasu zatím nemám potvrzenou.");
-  }
+  const crewConfirmed = crew.verified && crew.members.length;
+  const variant = deterministicVariant(`${route.id}:${route.routeDate}`) % 3;
+  const greetings = crewConfirmed
+    ? [`Ahoj ${vocative}, ahoj posádko.`, `Dobré ráno ${vocative}, zdravím posádku.`, `Ahoj ${vocative}, zdravím všechny na palubě.`]
+    : [`Ahoj ${vocative}.`, `Dobré ráno ${vocative}.`, `Ahoj ${vocative}, jsem připravená.`];
+  const parts = [greetings[variant]];
+  parts.push(route.status === "active"
+    ? "Dnešní trasu mám načtenou a potvrzenou."
+    : route.assigned
+      ? "Dnešní trasu mám načtenou."
+      : "Dnešní trasu zatím nemám potvrzenou.");
   if (route.title && route.totalCount) {
-    parts.push(`${route.title}, ${stopCountText(route.totalCount)}.`);
+    parts.push(`${route.title}. Čeká nás ${stopCountText(route.totalCount)}.`);
   } else if (route.totalCount) {
     parts.push(`Čeká nás ${stopCountText(route.totalCount)}.`);
   }
@@ -303,16 +308,24 @@ function introAnnouncement(user, route, vehicle, crew, weather, memory, readines
   }
   const riskyWeather = Array.isArray(weather?.hazards)
     && weather.hazards.some((hazard) => ["warning", "danger"].includes(cleanString(hazard?.severity)));
-  parts.push("Můžeme vyrazit.");
-  if (!riskyWeather && crew.verified && crew.members.length) {
+  if (riskyWeather) {
+    parts.push("Můžeme vyrazit, první zastávky ale vezměte opatrně.");
+  } else if (crewConfirmed) {
     const lightLines = [
-      "Jestli jsou svačiny na palubě, dnešek je připravený.",
-      "Kafe může zůstat po ruce, trasu budu hlídat já.",
-      "Dobrou náladu bereme s sebou, zbytek pohlídám."
+      "Jestli máte svačiny, můžeme vyrazit.",
+      "Jestli máte kafe a svačiny, můžeme vyrazit.",
+      "Jestli je posádka připravená, můžeme vyrazit."
     ];
-    parts.push(lightLines[deterministicVariant(`${route.id}:${route.routeDate}`) % lightLines.length]);
+    parts.push(lightLines[variant]);
+  } else {
+    const lightLines = [
+      "Jestli máš svačinu, můžeme vyrazit.",
+      "Jestli máš kafe po ruce, můžeme vyrazit.",
+      "Můžeme vyrazit."
+    ];
+    parts.push(lightLines[variant]);
   }
-  parts.push("Budu hlídat trasu, zastávky a důležitá hlášení.");
+  parts.push("Budu hlídat trasu, zastávky i všechno důležité po cestě.");
   return parts.join(" ").replace(/\.\./g, ".").slice(0, 520);
 }
 

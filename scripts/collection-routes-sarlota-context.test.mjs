@@ -259,10 +259,15 @@ assert.equal(context.vehicles.verified, true);
 assert.equal(context.news.status, "ready");
 assert.equal(context.news.source, "iROZHLAS");
 assert.equal(context.news.items.length, 3);
-assert.match(context.introAnnouncement, /Ahoj Mirku, ahoj posádko\./);
-assert.match(context.introAnnouncement, /TEST trasa, 2 stanoviště/);
+assert.match(context.introAnnouncement, /Mirku/);
+assert.match(context.introAnnouncement, /posádku|posádko|všechny na palubě/);
+assert.match(context.introAnnouncement, /Dnešní trasu mám načtenou a potvrzenou\./);
+assert.match(context.introAnnouncement, /TEST trasa\. Čeká nás 2 stanoviště\./);
 assert.match(context.introAnnouncement, /Vozidlo Míra · 1BP 8373 sedí s denní trasou/);
+assert.match(context.introAnnouncement, /Brno: 24 °C, jasno/);
 assert.match(context.introAnnouncement, /můžeme vyrazit|Můžeme vyrazit/);
+assert.match(context.introAnnouncement, /Budu hlídat trasu, zastávky i všechno důležité po cestě\./);
+assert.doesNotMatch(context.introAnnouncement, /Potvrdíš|potvrdit trasu/);
 assert.equal(JSON.stringify(context).includes("Tomáš Gaží"), false, "Fyzický TESTER nesmí vstoupit do hlasového kontextu řidiče.");
 assert.deepEqual(context.safety, {
   readOnlyContext: true,
@@ -290,6 +295,8 @@ assert.equal(unconfirmedCrew.readiness.canStart, true, "Neznámá osádka a poč
 assert.ok(unconfirmedCrew.readiness.warnings.some((item) => item.code === "crew_unconfirmed"));
 assert.ok(unconfirmedCrew.readiness.warnings.some((item) => item.code === "weather_unavailable"));
 assert.doesNotMatch(unconfirmedCrew.introAnnouncement, /kluci|posádko/);
+assert.match(unconfirmedCrew.introAnnouncement, /Dnešní trasu mám načtenou/);
+assert.match(unconfirmedCrew.introAnnouncement, /Aktuální počasí se mi teď nepodařilo ověřit/);
 
 const vehicleMismatch = await buildCollectionRoutesSarlotaContext({}, miroslav, {
   scope: "production",
