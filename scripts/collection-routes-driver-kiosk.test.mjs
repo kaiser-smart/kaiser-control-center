@@ -71,7 +71,7 @@ const devServerSource = readFileSync(new URL("./serve.mjs", import.meta.url), "u
 const buildSource = readFileSync(new URL("./build.mjs", import.meta.url), "utf8");
 
 const driverPageStart = appSource.indexOf("function collectionDailyRouteDriverPage");
-const driverPageEnd = appSource.indexOf("function collectionRoutesSourceRoutesSection", driverPageStart);
+const driverPageEnd = appSource.indexOf("function collectionRoutesTestHomeSection", driverPageStart);
 assert.ok(driverPageStart >= 0 && driverPageEnd > driverPageStart);
 const driverPageSource = appSource.slice(driverPageStart, driverPageEnd);
 

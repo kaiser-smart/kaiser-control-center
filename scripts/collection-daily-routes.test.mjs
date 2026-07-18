@@ -593,6 +593,33 @@ assert.equal(
     .get(fieldRoute.run.id).count,
   1
 );
+const fieldCompletedAgain = await transitionCollectionDailyRoute(fieldEnv, tomasManager, fieldRoute.run.id, {
+  scope: "test",
+  action: "complete",
+  idempotencyKey: "field-complete-again"
+});
+assert.equal(fieldCompletedAgain.run.status, "completed");
+const fieldPrepared = await transitionCollectionDailyRoute(fieldEnv, otherManager, fieldRoute.run.id, {
+  scope: "test",
+  action: "prepare",
+  idempotencyKey: "field-prepare-other-manager"
+});
+assert.equal(fieldPrepared.run.status, "confirmed");
+assert.equal(fieldPrepared.run.summary.plannedCount, 1);
+assert.equal(fieldPrepared.run.summary.doneCount, 0);
+assert.equal(fieldPrepared.stops[0].status, "planned");
+assert.equal(
+  fieldSqlite.prepare("SELECT actor_user_id FROM collection_daily_route_events WHERE run_id = ? AND event_type = 'route_test_prepared'")
+    .get(fieldRoute.run.id).actor_user_id,
+  otherManager.id
+);
+await assert.rejects(
+  transitionCollectionDailyRoute(env, dispatcher, completed.run.id, {
+    action: "prepare",
+    idempotencyKey: "production-prepare-forbidden"
+  }),
+  (error) => error.code === "collection_daily_route_prepare_invalid"
+);
 
 const accurateFieldRoute = await createCollectionDailyRouteDraft(fieldEnv, tomasManager, {
   scope: "test",
