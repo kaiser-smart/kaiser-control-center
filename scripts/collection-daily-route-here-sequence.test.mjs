@@ -19,6 +19,7 @@ import {
   loadCollectionRouteVehicleProfile
 } from "../functions/_lib/collection-route-vehicle-profiles.js";
 import { getCollectionDailyRoute } from "../functions/_lib/collection-daily-routes-store.js";
+import { collectionDailyRouteHereSequenceErrorResponse } from "../functions/api/collection-routes/daily-routes/[runId]/here-sequence.js";
 
 class D1Statement {
   constructor(owner, sql, values = []) {
@@ -127,6 +128,13 @@ assert.equal(appendHereWaypointSequenceTruckProfile(sequenceParams, vehicleA), t
 assert.equal(sequenceParams.get("height"), "350cm");
 assert.equal(sequenceParams.get("limitedWeight"), "19000kg");
 assert.equal(sequenceParams.has("weightPerAxle"), false);
+const serializedRuntimeError = collectionDailyRouteHereSequenceErrorResponse({
+  message: "HERE výpočet byl bezpečně odmítnut.",
+  status: 409,
+  code: "collection_daily_route_here_sequence_runtime_test"
+});
+assert.equal(serializedRuntimeError.status, 409);
+assert.equal((await serializedRuntimeError.json()).code, "collection_daily_route_here_sequence_runtime_test");
 const cloudFailureFallback = await loadCollectionRouteVehicleProfile({
   SMART_ODPADY_DB: {
     prepare() {
