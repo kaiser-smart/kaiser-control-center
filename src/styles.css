@@ -40043,6 +40043,22 @@ body:has(.ds-plus-page) {
   pointer-events: none;
 }
 
+.collection-routes-test-tablet-map__canvas.is-route-warning > .collection-routes-test-tablet-map__waiting {
+  inset: auto 12px 12px;
+  visibility: visible;
+  min-height: 0;
+  border: 2px solid #b86400;
+  border-radius: 12px;
+  background: rgba(255, 247, 222, 0.97);
+  color: #704000;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.collection-routes-test-tablet-map__canvas.is-route-warning .collection-daily-driver-map__route-line {
+  stroke: #c76500;
+}
+
 .collection-routes-test-tablet-map__canvas.is-error > img {
   display: none;
 }
