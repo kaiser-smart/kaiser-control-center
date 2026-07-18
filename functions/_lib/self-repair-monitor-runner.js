@@ -6,7 +6,8 @@ import {
   SELF_REPAIR_MONITOR_RULE_ID,
   SELF_REPAIR_MONITOR_RUNNER_NAME,
   SELF_REPAIR_MONITOR_TARGET_URL,
-  SELF_REPAIR_MONITOR_TIME_ZONE
+  SELF_REPAIR_MONITOR_TIME_ZONE,
+  selfRepairMonitorRouteCapacity
 } from "./self-repair-monitor-config.js";
 import { upsertCloudMonitorSelfRepairCase } from "./self-repair-store.js";
 
@@ -242,9 +243,16 @@ function normalizeManifest(text) {
   const version = cleanString(parsed?.build?.version, 100);
   const commit = cleanString(parsed?.build?.commit, 160);
   const rawRoutes = Array.isArray(parsed?.routes) ? parsed.routes : [];
-  if (!version || !commit || !rawRoutes.length || rawRoutes.length > SELF_REPAIR_MONITOR_MAX_ROUTES) {
+  if (!version || !commit || !rawRoutes.length) {
     throw new SelfRepairMonitorError(
       "Produkční route manifest nemá platný build nebo počet cest.",
+      "self_repair_monitor_manifest_incomplete"
+    );
+  }
+  const capacity = selfRepairMonitorRouteCapacity(rawRoutes.length);
+  if (!capacity.ok) {
+    throw new SelfRepairMonitorError(
+      `Produkční route manifest obsahuje ${capacity.routeCount} cest; bezpečný limit monitoru je ${SELF_REPAIR_MONITOR_MAX_ROUTES}.`,
       "self_repair_monitor_manifest_incomplete"
     );
   }

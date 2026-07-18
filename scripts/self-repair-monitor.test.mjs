@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
 import { runSelfRepairHourlyMonitor } from "../functions/_lib/self-repair-monitor-runner.js";
+import {
+  SELF_REPAIR_MONITOR_MAX_ROUTES,
+  selfRepairMonitorRouteCapacity
+} from "../functions/_lib/self-repair-monitor-config.js";
 import { getSelfRepairStatus } from "../functions/_lib/self-repair-store.js";
 
 class D1Statement {
@@ -107,6 +111,44 @@ function failedManifestFetch(input) {
   }
   return healthyFetch(input);
 }
+
+function capacityManifest(routeCount) {
+  return {
+    schemaVersion: 1,
+    build: { version: "0.1.607", branch: "main", commit: "capacity607" },
+    routes: Array.from({ length: routeCount }, (_, index) => ({
+      path: index === 0 ? "/" : `/capacity-${index}`,
+      moduleKey: "system-check",
+      label: `Kapacitní cesta ${index + 1}`
+    }))
+  };
+}
+
+function capacityFetch(routeCount) {
+  const routeManifest = capacityManifest(routeCount);
+  return (input) => {
+    const url = new URL(input);
+    if (url.pathname === "/route-manifest.json") {
+      return Promise.resolve(Response.json(routeManifest));
+    }
+    return Promise.resolve(new Response(routeHtml(routeManifest.build.version), {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" }
+    }));
+  };
+}
+
+assert.deepEqual(selfRepairMonitorRouteCapacity(SELF_REPAIR_MONITOR_MAX_ROUTES), {
+  routeCount: 49,
+  maxRoutes: 49,
+  externalSubrequests: 50,
+  ok: true
+});
+assert.equal(selfRepairMonitorRouteCapacity(SELF_REPAIR_MONITOR_MAX_ROUTES + 1).ok, false);
+assert.match(
+  readFileSync(new URL("./build.mjs", import.meta.url), "utf8"),
+  /selfRepairMonitorRouteCapacity\(routeEntries\.length\)/
+);
 
 const sqlite = new DatabaseSync(":memory:");
 applyMigration(sqlite, "0007_create_module_feedback.sql");
@@ -283,6 +325,25 @@ assert.equal(failedRun.codexExecuted, false);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_cases").get().count, 2);
 assert.equal(sqlite.prepare("SELECT status FROM module_automation_runner_runs ORDER BY started_at DESC LIMIT 1").get().status, "error");
 
+const capacityRun = await runSelfRepairHourlyMonitor(env, {
+  scheduledTime: firstHour + 4 * 60 * 60 * 1000,
+  triggeredBy: "cloudflare-cron",
+  fetchImpl: capacityFetch(SELF_REPAIR_MONITOR_MAX_ROUTES)
+});
+assert.equal(capacityRun.status, "success");
+assert.equal(capacityRun.routesTotal, 49);
+assert.equal(capacityRun.routesChecked, 49);
+
+const overflowRun = await runSelfRepairHourlyMonitor(env, {
+  scheduledTime: firstHour + 5 * 60 * 60 * 1000,
+  triggeredBy: "cloudflare-cron",
+  fetchImpl: capacityFetch(SELF_REPAIR_MONITOR_MAX_ROUTES + 1)
+});
+assert.equal(overflowRun.status, "error");
+assert.equal(overflowRun.errorCode, "self_repair_monitor_manifest_incomplete");
+assert.match(overflowRun.message, /obsahuje 50 cest/);
+assert.match(overflowRun.message, /limit monitoru je 49/);
+
 const status = await getSelfRepairStatus(env);
 assert.equal(status.phase, "phase2a_hourly_read_only_monitor");
 assert.equal(status.capabilities.hourlyMonitor, "warning");
@@ -290,7 +351,7 @@ assert.equal(status.capabilities.promptPreparation, "ready");
 assert.equal(status.capabilities.codexExecution, "off");
 assert.equal(status.capabilities.deployment, "off");
 assert.equal(status.capabilities.userEmail, "off");
-assert.equal(status.monitor.monitorCases, 2);
-assert.equal(status.monitor.promptDrafts, 2);
+assert.equal(status.monitor.monitorCases, 3);
+assert.equal(status.monitor.promptDrafts, 3);
 
 console.log("Self-repair Phase 2A hourly monitor tests passed.");
