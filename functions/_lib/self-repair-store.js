@@ -708,8 +708,14 @@ export async function upsertCloudMonitorSelfRepairCase(env, finding = {}, contex
     const findingEvidenceId = randomId("self-repair-evidence");
     const promptEvidenceId = randomId("self-repair-evidence");
     const auditId = randomId("self-repair-audit");
-    const reporterUserId = "cloud:self-repair-monitor";
-    const reporterUserName = "Hodinový cloud monitor";
+    const reporterUserId = cleanText(context.reporterUserId, 200) || "cloud:self-repair-monitor";
+    const reporterUserName = cleanText(context.reporterUserName, 240) || "Cloudový read-only monitor";
+    const evidenceLabel = reporterUserId === "cloud:self-repair-ui-scan"
+      ? "Důkaz denního syntetického UI auditu"
+      : "Důkaz hodinové read-only kontroly";
+    const auditNote = reporterUserId === "cloud:self-repair-ui-scan"
+      ? "Případ vytvořen denním syntetickým UI auditem. Produkční tlačítka se neklikala; Prompt je pouze návrh a Codex, repozitář, deploy ani e-mail nebyly spuštěny."
+      : "Případ vytvořen hodinovým read-only monitorem. Prompt je pouze návrh; Codex, repozitář, deploy ani e-mail nebyly spuštěny.";
 
     try {
       await db.batch([
@@ -751,10 +757,11 @@ export async function upsertCloudMonitorSelfRepairCase(env, finding = {}, contex
           INSERT INTO self_repair_case_evidence (
             id, case_id, evidence_type, label, content_text, metadata_json,
             created_by_user_id, created_at
-          ) VALUES (?, ?, 'cloud_monitor_finding', 'Důkaz hodinové read-only kontroly', ?, ?, ?, ?)
+          ) VALUES (?, ?, 'cloud_monitor_finding', ?, ?, ?, ?, ?)
         `).bind(
           findingEvidenceId,
           caseId,
+          evidenceLabel,
           normalized.actual,
           safeJson(evidenceMetadata, {}),
           reporterUserId,
@@ -793,7 +800,7 @@ export async function upsertCloudMonitorSelfRepairCase(env, finding = {}, contex
             promptDraftPrepared: true,
             codexExecuted: false
           }),
-          "Případ vytvořen hodinovým read-only monitorem. Prompt je pouze návrh; Codex, repozitář, deploy ani e-mail nebyly spuštěny."
+          auditNote
         )
       ]);
     } catch (error) {
@@ -1059,7 +1066,7 @@ export async function updateSelfRepairCase(env, currentUser, id, input = {}) {
 export async function getSelfRepairStatus(env) {
   const db = database(env, true);
   try {
-    const [row, monitorRule, latestRunnerRun, monitorCaseRow, promptRow] = await Promise.all([
+    const [row, monitorRule, latestRunnerRun, uiScanRule, latestUiScanRun, monitorCaseRow, promptRow] = await Promise.all([
       db.prepare(`
         SELECT
           COUNT(*) AS total,
@@ -1084,6 +1091,25 @@ export async function getSelfRepairStatus(env) {
                message, error_code, cron, time_zone
         FROM module_automation_runner_runs
         WHERE module_key = 'self-repair'
+          AND runner_name = 'self-repair-phase2a-hourly-monitor'
+        ORDER BY started_at DESC
+        LIMIT 1
+      `).first(),
+      db.prepare(`
+        SELECT status, schedule_cron, cloud_runner, last_run_at, next_run_at,
+               last_run_status, last_run_message
+        FROM module_rules
+        WHERE module_key = 'self-repair'
+          AND id = 'self-repair-daily-ui-interaction-scan'
+        LIMIT 1
+      `).first(),
+      db.prepare(`
+        SELECT id, started_at, scheduled_at, finished_at, triggered_by, status,
+               rules_total, dry_run_count, skipped_count, failed_count,
+               message, error_code, cron, time_zone
+        FROM module_automation_runner_runs
+        WHERE module_key = 'self-repair'
+          AND runner_name = 'self-repair-phase2b-daily-ui-interaction-scan'
         ORDER BY started_at DESC
         LIMIT 1
       `).first(),
@@ -1115,10 +1141,29 @@ export async function getSelfRepairStatus(env) {
           : latestRunRecent
             ? "ready"
             : "warning";
+    const uiScanActive = cleanText(uiScanRule?.status, 80) === "active";
+    const latestUiScanAt = cleanText(latestUiScanRun?.finished_at || latestUiScanRun?.started_at, 80);
+    const latestUiScanMs = Date.parse(latestUiScanAt);
+    const latestUiScanAgeMs = Date.now() - latestUiScanMs;
+    const latestUiScanRecent = Number.isFinite(latestUiScanMs) &&
+      latestUiScanAgeMs >= -5 * 60 * 1000 &&
+      latestUiScanAgeMs <= 26 * 60 * 60 * 1000;
+    const latestUiScanStatus = cleanText(latestUiScanRun?.status, 80);
+    const uiScanCapability = !uiScanActive
+      ? "off"
+      : !latestUiScanRun
+        ? "waiting"
+        : ["error", "partial_error"].includes(latestUiScanStatus)
+          ? "warning"
+          : latestUiScanRecent
+            ? "ready"
+            : "warning";
 
     return {
       apiStatus: "ready",
-      phase: "phase2a_hourly_read_only_monitor",
+      phase: uiScanActive
+        ? "phase2b_read_only_and_synthetic_ui_scan"
+        : "phase2a_hourly_read_only_monitor",
       generatedAt: nowIso(),
       summary: {
         total: Number(row?.total || 0),
@@ -1132,6 +1177,7 @@ export async function getSelfRepairStatus(env) {
         userReports: "ready",
         triage: "ready",
         hourlyMonitor: monitorCapability,
+        dailyUiInteractionScan: uiScanCapability,
         promptPreparation: monitorActive ? "ready" : "off",
         codexExecution: "off",
         pullRequests: "off",
@@ -1156,7 +1202,28 @@ export async function getSelfRepairStatus(env) {
         monitorCases: Number(monitorCaseRow?.count || 0),
         promptDrafts: Number(promptRow?.count || 0)
       },
-      note: "Fáze 2A každou hodinu pouze čte produkční stránky, zapisuje a deduplikuje nálezy a připravuje návrhy promptů. Codex, zápis do repozitáře, pull request, deploy a e-mail zůstávají vypnuté."
+      uiInteractionScan: {
+        active: uiScanActive,
+        ruleStatus: cleanText(uiScanRule?.status, 80) || "missing",
+        scheduleCron: cleanText(uiScanRule?.schedule_cron, 100),
+        cloudRunner: cleanText(uiScanRule?.cloud_runner, 200),
+        lastRunAt: cleanText(uiScanRule?.last_run_at || latestUiScanAt, 80),
+        nextRunAt: cleanText(uiScanRule?.next_run_at, 80),
+        lastRunStatus: cleanText(uiScanRule?.last_run_status || latestUiScanStatus, 80),
+        lastRunMessage: cleanText(uiScanRule?.last_run_message || latestUiScanRun?.message, 4000),
+        latestRunRecent: latestUiScanRecent,
+        actionsChecked: Number(latestUiScanRun?.rules_total || 0),
+        findings: Number(latestUiScanRun?.dry_run_count || 0),
+        deduplicatedCases: Number(latestUiScanRun?.skipped_count || 0),
+        failedCount: Number(latestUiScanRun?.failed_count || 0),
+        triggeredBy: cleanText(latestUiScanRun?.triggered_by, 200),
+        realProductionClicks: false,
+        authenticatedSession: false,
+        browserNetwork: "blocked"
+      },
+      note: uiScanActive
+        ? "Hodinový monitor pouze čte produkční stránky. Denní UI audit stahuje produkční kód a CSS přes GET a kliká výhradně v izolované syntetické stránce bez přihlášení a s blokovanou sítí. Codex, zápis do repozitáře, pull request, deploy a e-mail zůstávají vypnuté."
+        : "Fáze 2A každou hodinu pouze čte produkční stránky, zapisuje a deduplikuje nálezy a připravuje návrhy promptů. Codex, zápis do repozitáře, pull request, deploy a e-mail zůstávají vypnuté."
     };
   } catch (error) {
     throw dbError(error);

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.610"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.611"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Samoopravy: bezpečný denní audit odezvy tlačítek",
+    text: "Produkční kód a CSS se jednou denně načtou pouze přes GET. Kliknutí probíhají výhradně v izolované syntetické stránce bez přihlášení, cookies a síťového přístupu; ostrá tlačítka se nikdy nespouštějí. Servisní refresh z Vistosu a další evidované obnovovací akce nově okamžitě ukážou průběh, zamknou dvojklik a zobrazí výsledek."
+  },
   {
     title: "Šarlota: ověřený start směny",
     text: "Potvrzení dnešní trasy nyní ukazuje ověřeného řidiče, vozidlo, stav osádky, počet stanovišť a počasí pro směnu. Těsně před startem backend znovu ověří datum, vlastní přiřazení a vozidlo; rozpor start zablokuje, zatímco chybějící osádka nebo počasí zůstanou pravdivě označené bez domýšlení."

@@ -6,4 +6,17 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      '@cloudflare/playwright':
+        specifier: 1.3.0
+        version: 1.3.0
+
+packages:
+
+  '@cloudflare/playwright@1.3.0':
+    resolution: {integrity: sha512-WOlpXzfJ7noXmW8qE/qlU7MbVHyt9IzxxwPcTGeh2+YQS1gqNIe3fl99AZvBsheH0o7oCePYtL9wRV1KPCYghQ==}
+
+snapshots:
+
+  '@cloudflare/playwright@1.3.0': {}

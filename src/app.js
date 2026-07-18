@@ -24,6 +24,10 @@ import { VersionBackupInfo } from "./components/VersionBackupInfo.js";
 import { VersionNewsInfo } from "./components/VersionNewsInfo.js";
 import { buildMeta } from "./data/buildMeta.js";
 import {
+  uiActionContractAttributes,
+  uiActionContractView
+} from "./data/uiActionContract.js";
+import {
   DEFAULT_VEHICLE_TRACKING_PREFERENCES,
   VEHICLE_TRACKING_INFO_STYLES,
   normalizeVehicleTrackingInfoStyle,
@@ -1283,6 +1287,7 @@ const collectionRoutesPilotState = {
   kommunalPairingLoadAttempted: false,
   kommunalPairingLoading: false,
   kommunalPairingRefreshMode: "",
+  kommunalPairingRefreshFeedback: "",
   kommunalPairingError: "",
   kommunalPairingLoadedAt: "",
   kommunalPairingSource: "",
@@ -4467,12 +4472,21 @@ function moduleEventLogConfig(moduleItem = {}) {
     const latestCase = selfRepairState.cases[0] || null;
     const latestAudit = selfRepairState.detail?.audit?.[0] || null;
     const monitor = selfRepairState.statusData?.monitor || {};
+    const uiScan = selfRepairState.statusData?.uiInteractionScan || {};
     const monitorCapability = selfRepairState.statusData?.capabilities?.hourlyMonitor || "waiting";
+    const uiScanCapability = selfRepairState.statusData?.capabilities?.dailyUiInteractionScan || "waiting";
     const monitorState = monitorCapability === "ready"
       ? "běží"
       : monitorCapability === "warning"
         ? "vyžaduje pozornost"
         : monitorCapability === "off"
+          ? "vypnuto"
+          : "čeká na první běh";
+    const uiScanState = uiScanCapability === "ready"
+      ? "běží denně"
+      : uiScanCapability === "warning"
+        ? "vyžaduje pozornost"
+        : uiScanCapability === "off"
           ? "vypnuto"
           : "čeká na první běh";
     const apiState = selfRepairState.error
@@ -4488,6 +4502,7 @@ function moduleEventLogConfig(moduleItem = {}) {
         moduleEventLogStatus("Evidence případů", apiState, selfRepairState.error || "Případy se čtou a ukládají přes chráněné cloud API a D1."),
         moduleEventLogStatus("Ruční třídění a audit", apiState, "Změny stavu a rizika zapisuje backend společně s auditním záznamem."),
         moduleEventLogStatus("Hodinová kontrola", monitorState, monitor.lastRunMessage || "Read-only cloud monitor čeká na první ověřený běh."),
+        moduleEventLogStatus("Denní odezva tlačítek", uiScanState, uiScan.lastRunMessage || "Syntetický Browser Run audit čeká na první ověřený běh. Produkční akce nekliká."),
         moduleEventLogStatus("Příprava promptu", monitor.active ? "aktivní" : "vypnuto", "Nález dostane deterministický návrh promptu k ruční kontrole."),
         moduleEventLogStatus("Spuštění Codexu", "vypnuto", "Návrh promptu se nikam automaticky neposílá a Codex se nespouští."),
         moduleEventLogStatus("Pull request a nasazení", "vypnuto", "Modul nemá oprávnění měnit repozitář ani produkci."),
@@ -4502,27 +4517,35 @@ function moduleEventLogConfig(moduleItem = {}) {
         "Uživatelský formulář ukládá případ, kontext a audit.",
         "Admin a Management mohou ručně zatřídit stav, prioritu a riziko.",
         "Cloud monitor každou hodinu read-only ověří nasazené stránky.",
+        "Denní audit načte produkční kód a CSS, ale kliká pouze v izolované stránce bez přihlášení a s blokovanou sítí.",
         "Nález se deduplikuje a dostane návrh promptu bez spuštění Codexu."
       ],
       events: [
         monitor.lastRunAt
           ? moduleEventLogEvent(monitor.lastRunAt, "Poslední hodinová kontrola", monitorState, monitor.lastRunMessage || `Zkontrolováno ${Number(monitor.routesChecked || 0)} stránek.`)
           : moduleEventLogEvent("", "Hodinová kontrola", monitorState, monitor.active ? "Čeká na první ověřený cloudový běh." : "Monitor je pozastavený."),
+        uiScan.lastRunAt
+          ? moduleEventLogEvent(uiScan.lastRunAt, "Poslední denní UI audit", uiScanState, uiScan.lastRunMessage || `Bezpečně otestováno ${Number(uiScan.actionsChecked || 0)} akcí.`)
+          : moduleEventLogEvent("", "Denní UI audit", uiScanState, uiScan.active ? "Čeká na první ověřený syntetický běh." : "Denní audit je pozastavený."),
         latestCase
           ? moduleEventLogEvent(latestCase.createdAt, "Poslední uložený případ", latestCase.statusLabel, `${latestCase.moduleName}: ${latestCase.title}`)
           : moduleEventLogEvent("", "Evidence případů", apiState, selfRepairState.loaded ? "Zatím není uložený žádný případ." : "Čeká se na načtení cloud evidence."),
         latestAudit
           ? moduleEventLogEvent(latestAudit.changedAt, "Poslední auditní změna", "zapsáno", latestAudit.note || latestAudit.action)
           : moduleEventLogEvent("", "Audit změn", "čeká na ověření", "Vyberte případ pro zobrazení jeho auditní historie."),
-        moduleEventLogEvent("", "Automatické opravy", "vypnuto", "Fáze 2A nic sama neopravuje, neposílá ani nenasazuje.")
+        moduleEventLogEvent("", "Automatické opravy", "vypnuto", "Samoopravy nic samy neopravují, neposílají ani nenasazují.")
       ],
       diagnostics: [
         moduleEventLogDiagnostic("apiStatus", selfRepairState.apiStatus),
         moduleEventLogDiagnostic("loaded", selfRepairState.loaded ? "true" : "false"),
         moduleEventLogDiagnostic("cases", selfRepairState.cases.length),
-        moduleEventLogDiagnostic("phase", selfRepairState.statusData?.phase || "phase2a_hourly_read_only_monitor"),
+        moduleEventLogDiagnostic("phase", selfRepairState.statusData?.phase || "phase2b_read_only_and_synthetic_ui_scan"),
         moduleEventLogDiagnostic("monitorCron", monitor.scheduleCron || "neuvedeno"),
         moduleEventLogDiagnostic("monitorRunner", monitor.cloudRunner || "neuvedeno"),
+        moduleEventLogDiagnostic("uiScanCron", uiScan.scheduleCron || "neuvedeno"),
+        moduleEventLogDiagnostic("uiScanRunner", uiScan.cloudRunner || "neuvedeno"),
+        moduleEventLogDiagnostic("realProductionClicks", "false"),
+        moduleEventLogDiagnostic("uiScanBrowserNetwork", uiScan.browserNetwork || "blocked"),
         moduleEventLogDiagnostic("routesChecked", Number(monitor.routesChecked || 0)),
         moduleEventLogDiagnostic("findings", Number(monitor.findings || 0)),
         moduleEventLogDiagnostic("lastError", selfRepairState.error || "bez chyby")
@@ -19096,6 +19119,7 @@ function collectionRoutesResetKommunalPairingRows() {
   collectionRoutesPilotState.kommunalPairingPagination = null;
   collectionRoutesPilotState.kommunalPairingLoadAttempted = false;
   collectionRoutesPilotState.kommunalPairingRefreshMode = "";
+  collectionRoutesPilotState.kommunalPairingRefreshFeedback = "";
   collectionRoutesPilotState.kommunalPairingError = "";
   collectionRoutesPilotState.kommunalPairingLoadedAt = "";
   collectionRoutesPilotState.kommunalPairingSource = "";
@@ -21273,14 +21297,25 @@ function collectionRoutesSitesRefreshStatusHtml() {
   const isLoading = collectionRoutesPilotState.kommunalPairingLoading;
   const countdown = collectionRoutesSitesRefreshCountdownLabel();
   const canRefresh = collectionRoutesCanRefreshVistosSnapshot(currentUser());
+  const collectionRoutesRefreshAction = uiActionContractView({
+    id: "collection-routes-vistos-refresh",
+    busy: isLoading,
+    outcome: collectionRoutesPilotState.kommunalPairingError
+      ? "error"
+      : collectionRoutesPilotState.kommunalPairingRefreshFeedback,
+    idleLabel: "Servisní refresh z Vistosu",
+    busyLabel: "Volám Vistos…",
+    successLabel: "Obnoveno z Vistosu",
+    errorLabel: "Refresh selhal · zkusit znovu"
+  });
   return `
     <span class="employee-card-status employee-card-status--waiting collection-routes-refresh-status">${escapeHtml(collectionRoutesSitesRefreshLabel())}</span>
     <span class="collection-routes-refresh-countdown" data-collection-routes-sites-countdown>
       <span>Další automatické načtení</span>
       <strong data-collection-routes-sites-countdown-value>${escapeHtml(countdown)}</strong>
     </span>
-    ${canRefresh ? `<button class="secondary-link" type="button" data-collection-routes-sites-refresh-now ${isLoading ? "disabled" : ""}>
-      ${isLoading ? escapeHtml(collectionRoutesSitesRefreshLabel()) : "Servisní refresh z Vistosu"}
+    ${canRefresh ? `<button class="secondary-link ui-action-contract" type="button" data-collection-routes-sites-refresh-now ${uiActionContractAttributes(collectionRoutesRefreshAction)}>
+      ${escapeHtml(collectionRoutesRefreshAction.label)}
     </button>` : ""}
   `;
 }
@@ -21339,6 +21374,7 @@ async function refreshCollectionRoutesSitesReadOnlySnapshot(options = {}) {
   collectionRoutesPilotState.kommunalPairingAutoRefreshLastAt = new Date().toISOString();
   collectionRoutesPilotState.kommunalPairingLoading = true;
   collectionRoutesPilotState.kommunalPairingRefreshMode = "live";
+  collectionRoutesPilotState.kommunalPairingRefreshFeedback = "";
   collectionRoutesPilotState.kommunalPairingError = "";
   if (options.renderAfter !== false) {
     render();
@@ -21353,6 +21389,7 @@ async function refreshCollectionRoutesSitesReadOnlySnapshot(options = {}) {
       error.payload?.error || error.message || "Ruční Vistos refresh se nepodařilo dokončit.";
     collectionRoutesPilotState.kommunalPairingLoading = false;
     collectionRoutesPilotState.kommunalPairingRefreshMode = "";
+    collectionRoutesPilotState.kommunalPairingRefreshFeedback = "error";
     if (options.renderAfter !== false) {
       render();
     }
@@ -21360,6 +21397,7 @@ async function refreshCollectionRoutesSitesReadOnlySnapshot(options = {}) {
   }
   collectionRoutesPilotState.kommunalPairingLoading = false;
   collectionRoutesPilotState.kommunalPairingRefreshMode = "";
+  collectionRoutesPilotState.kommunalPairingRefreshFeedback = "success";
   await loadCollectionRoutesPilot({ force: true, renderAfter: false });
   await loadCollectionRoutesKommunalPairingRows({
     force: true,
@@ -32634,6 +32672,15 @@ function systemCheckPage(moduleItem, user) {
   const data = systemCheckState.data;
   const status = data?.production?.status || "NEOVĚŘENO";
   const generatedAt = data?.generatedAt ? formatDateTime(data.generatedAt) : "čeká na načtení";
+  const systemCheckRefreshAction = uiActionContractView({
+    id: "system-check-refresh",
+    busy: systemCheckState.loading,
+    outcome: systemCheckState.error ? "error" : systemCheckState.message ? "success" : "idle",
+    idleLabel: "Obnovit stav",
+    busyLabel: "Načítám…",
+    successLabel: "Stav obnoven",
+    errorLabel: "Obnovení selhalo · zkusit znovu"
+  });
 
   return `
     <main class="app-shell module-page module-theme-scope system-check-page" ${moduleThemeStyleAttribute()}>
@@ -32650,8 +32697,8 @@ function systemCheckPage(moduleItem, user) {
           <h1 id="module-title">Kontrola systému</h1>
           <p>Pravdivý stav produkce, Datové schránky, mobilního UI a automatizací. Neověřené věci zůstávají šedé.</p>
           <div class="module-actions">
-            <button class="primary-action" type="button" data-system-check-refresh ${systemCheckState.loading ? "disabled" : ""}>
-              ${systemCheckState.loading ? "Načítám..." : "Obnovit stav"}
+            <button class="primary-action ui-action-contract" type="button" data-system-check-refresh ${uiActionContractAttributes(systemCheckRefreshAction)}>
+              ${escapeHtml(systemCheckRefreshAction.label)}
             </button>
           </div>
         </div>
@@ -32721,24 +32768,26 @@ function selfRepairSummaryGrid() {
 
 function selfRepairOperationalOverview() {
   const monitor = selfRepairState.statusData?.monitor || {};
-  const capability = selfRepairState.statusData?.capabilities?.hourlyMonitor || "waiting";
-  const state = capability === "ready"
-    ? ["Kontrola běží", "ready"]
-    : capability === "warning"
+  const uiScan = selfRepairState.statusData?.uiInteractionScan || {};
+  const hourlyCapability = selfRepairState.statusData?.capabilities?.hourlyMonitor || "waiting";
+  const uiCapability = selfRepairState.statusData?.capabilities?.dailyUiInteractionScan || "waiting";
+  const state = hourlyCapability === "warning" || uiCapability === "warning"
       ? ["Vyžaduje pozornost", "warning"]
-      : capability === "off"
+      : hourlyCapability === "off" && uiCapability === "off"
         ? ["Pozastaveno", "off"]
-        : ["Čeká na ověření", "waiting"];
-  const description = capability === "ready" && monitor.active
-    ? "Kontrola běží v cloudu i bez otevřené aplikace. Případné chyby pouze uloží k prověření; kód, nasazení ani e-mail sama nemění."
-    : "Stav kontroly čeká na ověření nebo je pozastavený. Případné chyby se ukládají pouze k prověření; kód, nasazení ani e-mail se automaticky nemění.";
+        : hourlyCapability === "ready" && ["ready", "waiting"].includes(uiCapability)
+          ? ["Kontroly aktivní", "ready"]
+          : ["Čeká na ověření", "waiting"];
+  const description = uiScan.active
+    ? "Hodinová kontrola čte dostupnost stránek. Denní UI audit čte produkční kód a CSS, ale kliká jen v izolované syntetické stránce bez přihlášení a s blokovanou sítí. Ostré tlačítko nikdy nespustí."
+    : "Hodinová kontrola čte dostupnost stránek a chyby pouze ukládá k prověření. Kód, nasazení ani e-mail sama nemění.";
 
   return `
     <section class="self-repair-overview" aria-labelledby="self-repair-overview-title">
       <div class="self-repair-overview__head">
         <div>
           <p class="module-detail__eyebrow">Provozní stav</p>
-          <h2 id="self-repair-overview-title">Hodinová kontrola aplikace</h2>
+          <h2 id="self-repair-overview-title">Automatická kontrola aplikace</h2>
         </div>
         <strong class="self-repair-state self-repair-state--${state[1]}">${escapeHtml(state[0])}</strong>
       </div>
@@ -32747,6 +32796,8 @@ function selfRepairOperationalOverview() {
         <article><span>Další kontrola</span><strong>${escapeHtml(monitor.active ? formatDateTime(monitor.nextRunAt) || "do hodiny" : "pozastavena")}</strong></article>
         <article><span>Zkontrolované stránky</span><strong>${escapeHtml(Number(monitor.routesChecked || 0))}</strong></article>
         <article><span>Nálezy</span><strong>${escapeHtml(Number(monitor.findings || 0))}</strong></article>
+        <article><span>Denní UI audit</span><strong>${escapeHtml(uiScan.lastRunAt ? formatDateTime(uiScan.lastRunAt) : uiScan.active ? "čeká na první běh" : "vypnutý")}</strong></article>
+        <article><span>Bezpečně testované akce</span><strong>${escapeHtml(Number(uiScan.actionsChecked || 0))}</strong></article>
       </div>
       <p>${escapeHtml(description)}</p>
     </section>
@@ -32757,6 +32808,7 @@ function selfRepairCapabilityGrid() {
   const ready = selfRepairState.apiStatus === "ready" && !selfRepairState.error;
   const capabilities = selfRepairState.statusData?.capabilities || {};
   const monitor = selfRepairState.statusData?.monitor || {};
+  const uiScan = selfRepairState.statusData?.uiInteractionScan || {};
   const capability = (value, readyLabel = "Připraveno") => {
     if (value === "ready") return [readyLabel, "ready"];
     if (value === "warning") return ["Pozor", "warning"];
@@ -32764,11 +32816,13 @@ function selfRepairCapabilityGrid() {
     return ["Vypnuto", "off"];
   };
   const hourly = capability(capabilities.hourlyMonitor, "Běží");
+  const dailyUi = capability(capabilities.dailyUiInteractionScan, "Běží denně");
   const prompt = capability(capabilities.promptPreparation);
   const items = [
     ["Uživatelská hlášení", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
     ["Vyřízení případu", ready ? "Připraveno" : "Čeká", ready ? "ready" : "waiting"],
     ["Hodinová kontrola", hourly[0], hourly[1]],
+    ["Denní odezva tlačítek", dailyUi[0], dailyUi[1]],
     ["Příprava promptu", prompt[0], prompt[1]],
     ["Codex oprava", "Vypnuto", "off"],
     ["Nasazení", "Vypnuto", "off"],
@@ -32793,8 +32847,10 @@ function selfRepairCapabilityGrid() {
         <article><span>Další kontrola</span><strong>${escapeHtml(monitor.active ? formatDateTime(monitor.nextRunAt) || "do hodiny" : "pozastavena")}</strong></article>
         <article><span>Zkontrolované stránky</span><strong>${escapeHtml(Number(monitor.routesChecked || 0))}</strong></article>
         <article><span>Nálezy</span><strong>${escapeHtml(Number(monitor.findings || 0))}</strong></article>
+        <article><span>Poslední UI audit</span><strong>${escapeHtml(uiScan.lastRunAt ? formatDateTime(uiScan.lastRunAt) : "čeká na první běh")}</strong></article>
+        <article><span>Testované akce</span><strong>${escapeHtml(Number(uiScan.actionsChecked || 0))}</strong></article>
       </div>
-      <p>Fáze 2A pouze čte veřejné produkční stránky, ukládá a slučuje nálezy a připravuje návrh promptu. Codex ani žádná oprava se automaticky nespouští.</p>
+      <p>Hodinový monitor pouze čte veřejné stránky. Denní klikací audit používá produkční kód a CSS, ale samotná kliknutí provádí výhradně v syntetické stránce bez cookies a s blokovanou sítí. Codex ani žádná oprava se automaticky nespouští.</p>
     </section>
   `;
 }
@@ -32878,18 +32934,19 @@ function selfRepairEvidencePanels(evidence = []) {
   const promptDraft = evidence.find((entry) => entry?.evidenceType === "codex_prompt_draft");
   const monitorFinding = evidence.find((entry) => entry?.evidenceType === "cloud_monitor_finding");
   if (!promptDraft && !monitorFinding) return "";
+  const uiAuditFinding = String(monitorFinding?.metadata?.checkType || "").startsWith("ui_");
 
   return `
     <section class="self-repair-evidence-panel" aria-labelledby="self-repair-evidence-title">
       <div>
         <p class="module-detail__eyebrow">Read-only důkaz</p>
-        <h3 id="self-repair-evidence-title">Výstup hodinové kontroly</h3>
+        <h3 id="self-repair-evidence-title">${uiAuditFinding ? "Výstup denního UI auditu" : "Výstup hodinové kontroly"}</h3>
       </div>
       ${monitorFinding ? `
         <article class="self-repair-monitor-finding">
           <span>Nalezený stav</span>
           <p>${escapeHtml(monitorFinding.contentText || "Bez čitelného popisu.")}</p>
-          <small>Monitor pouze četl produkční stránku a zapsal výsledek.</small>
+          <small>${uiAuditFinding ? "Produkční tlačítko se neklikalo. Interakce proběhla pouze v izolované syntetické stránce bez sítě." : "Monitor pouze četl produkční stránku a zapsal výsledek."}</small>
         </article>
       ` : ""}
       ${promptDraft ? `
@@ -33016,12 +33073,12 @@ function selfRepairTechnicalManagement(moduleItem, user) {
           moduleKey: SELF_REPAIR_MODULE_KEY,
           moduleName: "Samoopravy",
           user,
-          description: "Pevně omezená hodinová read-only kontrola a bezpečnostní hranice Fáze 2A.",
-          cloudNote: "Monitor lze pozastavit nebo znovu aktivovat. Vždy jen čte veřejné stránky, zapisuje nálezy a připravuje návrh promptu; Codex, repozitář, nasazení a e-mail jsou vypnuté.",
+          description: "Hodinová read-only kontrola a denní bezpečný audit odezvy tlačítek.",
+          cloudNote: "Hodinový monitor čte veřejné stránky. Denní Browser Run kliká pouze v izolované syntetické stránce bez přihlášení a s blokovanou sítí; Codex, repozitář, nasazení a e-mail jsou vypnuté.",
           readOnly: false,
           humanDetail: true,
           toggleOnly: true,
-          toggleRuleIds: ["self-repair-hourly-monitor-proposal"]
+          toggleRuleIds: ["self-repair-hourly-monitor-proposal", "self-repair-daily-ui-interaction-scan"]
         })}
         ${genericModuleSettingsSection(moduleItem)}
       </div>
@@ -33033,6 +33090,15 @@ function selfRepairPage(moduleItem, user) {
   ensureSelfRepairData();
   ensureModuleRulesData(SELF_REPAIR_MODULE_KEY);
   const items = filteredSelfRepairCases();
+  const selfRepairRefreshAction = uiActionContractView({
+    id: "self-repair-refresh",
+    busy: selfRepairState.loading,
+    outcome: selfRepairState.error ? "error" : selfRepairState.message ? "success" : "idle",
+    idleLabel: "Obnovit seznam",
+    busyLabel: "Načítám…",
+    successLabel: "Seznam obnoven",
+    errorLabel: "Obnovení selhalo · zkusit znovu"
+  });
   const listContent = selfRepairState.loading && !selfRepairState.loaded
     ? '<p class="self-repair-empty">Načítám případy…</p>'
     : items.length
@@ -33055,7 +33121,7 @@ function selfRepairPage(moduleItem, user) {
           <div class="module-detail__eyebrow">Kontrola chyb a bezpečná evidence</div>
           <h1 id="module-title">Samoopravy</h1>
           <p>Jedno místo pro chyby a drobné úpravy z provozu. Systém je pravidelně hledá a ukládá k bezpečnému vyřízení.</p>
-          <div class="module-detail__status"><span>Stav</span><strong>Hodinová kontrola · opravy vždy potvrzuje člověk</strong></div>
+          <div class="module-detail__status"><span>Stav</span><strong>Hodinová dostupnost + denní bezpečný UI audit</strong></div>
           <div class="module-actions">
             <a class="primary-link" href="${routeHref(`${FEEDBACK_ROUTE}?new=report&module=self-repair&sourceRoute=${encodeURIComponent(SELF_REPAIR_ROUTE)}#feedback-report`)}" data-link>Nahlásit problém</a>
           </div>
@@ -33077,7 +33143,7 @@ function selfRepairPage(moduleItem, user) {
             </div>
             <div class="self-repair-list__actions">
               <span>${escapeHtml(items.length)} zobrazeno</span>
-              <button class="secondary-link" type="button" data-self-repair-refresh ${selfRepairState.loading ? "disabled" : ""}>${selfRepairState.loading ? "Načítám…" : "Obnovit seznam"}</button>
+              <button class="secondary-link ui-action-contract" type="button" data-self-repair-refresh ${uiActionContractAttributes(selfRepairRefreshAction)}>${escapeHtml(selfRepairRefreshAction.label)}</button>
             </div>
           </div>
           ${listContent}
@@ -33248,6 +33314,8 @@ async function loadDriverReports(options = {}) {
 
   driverReportsState.loading = true;
   driverReportsState.error = "";
+  if (options.force) driverReportsState.message = "";
+  if (options.force && options.renderAfter !== false) render();
 
   try {
     const params = new URLSearchParams();
@@ -33260,6 +33328,7 @@ async function loadDriverReports(options = {}) {
     if (detailId) {
       await loadDriverReportDetail(detailId, { renderAfter: false });
     }
+    if (options.force) driverReportsState.message = "Hlášení byla obnovena.";
   } catch (error) {
     driverReportsState.items = [];
     driverReportsState.selected = null;
@@ -34813,6 +34882,15 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
   const items = driverReportsState.items;
   const selected = driverReportsState.selected;
   const activeItems = driverReportVisibleItems(items);
+  const driverReportsRefreshAction = uiActionContractView({
+    id: "driver-reports-refresh",
+    busy: driverReportsState.loading,
+    outcome: driverReportsState.error ? "error" : driverReportsState.message ? "success" : "idle",
+    idleLabel: "Obnovit hlášení",
+    busyLabel: "Načítám…",
+    successLabel: "Hlášení obnovena",
+    errorLabel: "Obnovení selhalo · zkusit znovu"
+  });
 
   return `
     <main class="app-shell module-page module-theme-scope driver-reports-page" ${moduleThemeStyleAttribute()}>
@@ -34834,8 +34912,8 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
           </div>
         </div>
         <div class="driver-report-hero__actions">
-          <button class="secondary-link" type="button" data-driver-report-refresh ${driverReportsState.loading ? "disabled" : ""}>
-            ${driverReportsState.loading ? "Načítám..." : "Obnovit"}
+          <button class="secondary-link ui-action-contract" type="button" data-driver-report-refresh ${uiActionContractAttributes(driverReportsRefreshAction)}>
+            ${escapeHtml(driverReportsRefreshAction.label)}
           </button>
         </div>
       </section>
@@ -45288,6 +45366,7 @@ async function loadSelfRepairData(options = {}) {
   selfRepairState.loading = true;
   selfRepairState.error = "";
   if (options.force) selfRepairState.message = "";
+  if (options.force && options.renderAfter !== false) render();
 
   try {
     const [casesResult, statusResult] = await Promise.all([
@@ -47171,6 +47250,8 @@ async function loadSystemCheckStatus(options = {}) {
 
   systemCheckState.loading = true;
   systemCheckState.error = "";
+  if (options.force) systemCheckState.message = "";
+  if (options.force && options.renderAfter !== false) render();
 
   try {
     const result = await apiJson("/api/system-check/status");
@@ -52189,9 +52270,8 @@ document.addEventListener("click", async (event) => {
       return;
     }
     resetCollectionRoutesSitesAutoRefreshTimer();
-    await refreshCollectionRoutesSitesReadOnlySnapshot({ renderAfter: false });
+    await refreshCollectionRoutesSitesReadOnlySnapshot();
     scheduleCollectionRoutesSitesAutoRefresh(currentUser());
-    render();
     return;
   }
 

@@ -28,7 +28,8 @@ assert.match(appSource, /selfRepairState\.cases\.find\(\(item\) => !selfRepairCa
 
 assert.match(pageSource, /selfRepairOperationalOverview\(\)/);
 assert.match(pageSource, /Nahlásit problém/);
-assert.match(pageSource, /Hodinová kontrola · opravy vždy potvrzuje člověk/);
+assert.match(pageSource, /Hodinová dostupnost \+ denní bezpečný UI audit/);
+assert.match(pageSource, /uiActionContractAttributes\(selfRepairRefreshAction\)/);
 assert.match(pageSource, /Žádný aktivní případ\. Teď není potřeba nic řešit\./);
 assert.match(pageSource, /Obnovit seznam/);
 assert.match(pageSource, /selfRepairTechnicalManagement\(moduleItem, user\)/);
@@ -46,6 +47,7 @@ assert.match(technicalSource, /Technická správa/);
 assert.match(technicalSource, /Spustit servisní kontrolu/);
 assert.match(technicalSource, /selfRepairCapabilityGrid\(\)/);
 assert.match(technicalSource, /moduleRulesAutomationPanel\(\{/);
+assert.match(technicalSource, /self-repair-daily-ui-interaction-scan/);
 assert.match(technicalSource, /genericModuleSettingsSection\(moduleItem\)/);
 
 assert.match(filterSource, /status: SELF_REPAIR_ACTIVE_FILTER_VALUE/);

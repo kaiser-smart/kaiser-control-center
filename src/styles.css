@@ -2545,6 +2545,40 @@ h1 {
   outline: none;
 }
 
+button:not(:disabled):active,
+.primary-link:active,
+.back-button:active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 3px 10px rgba(37, 45, 34, 0.12);
+}
+
+.ui-action-contract {
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.ui-action-contract[data-ui-action-state="busy"] {
+  cursor: wait;
+  opacity: 0.78;
+  border-color: rgba(117, 189, 37, 0.7);
+  box-shadow: inset 0 0 0 2px rgba(117, 189, 37, 0.12), 0 8px 20px rgba(37, 45, 34, 0.07);
+}
+
+.ui-action-contract[data-ui-action-state="success"] {
+  border-color: rgba(83, 153, 35, 0.65);
+  background: rgba(231, 246, 224, 0.9);
+}
+
+.ui-action-contract[data-ui-action-state="error"] {
+  border-color: rgba(166, 43, 34, 0.55);
+  background: rgba(255, 230, 226, 0.82);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-action-contract {
+    transition: none;
+  }
+}
+
 .module-page {
   display: flex;
   flex-direction: column;
