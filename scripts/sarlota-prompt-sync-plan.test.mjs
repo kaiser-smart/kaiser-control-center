@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { __test as promptSyncTest } from "../functions/api/ai/elevenlabs/sarlota-prompt-sync.js";
 import {
+  SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE,
@@ -12,6 +13,11 @@ import {
   assert.equal(promptSyncTest.PROMPT_RULE_MARKER, "HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL");
   assert.equal(promptSyncTest.LEGACY_PROMPT_RULE_MARKERS.includes(promptSyncTest.PROMPT_RULE_MARKER), false);
   assert.equal(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE.includes(promptSyncTest.PROMPT_RULE_REQUIRED_PHRASE), true);
+  assert.equal(promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_MARKER, "SVOZOVÉ TRASY / KONTEXT A PRACOVNÍ PAMĚŤ");
+  assert.equal(
+    SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_REQUIRED_PHRASE),
+    true
+  );
   assert.equal(promptSyncTest.COLLECTION_ROUTES_GPS_RULE_MARKER, "SVOZOVÉ TRASY / GPS STANOVIŠTĚ");
   assert.equal(
     SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_GPS_RULE_REQUIRED_PHRASE),
@@ -27,6 +33,50 @@ import {
     SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_DRIVER_ACTION_RULE_REQUIRED_PHRASE),
     true
   );
+}
+
+{
+  const prompt = [
+    "Jsi Šarlota.",
+    promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_BLOCK,
+    "Bezpečný zbytek promptu."
+  ].join("\n");
+  const stripped = promptSyncTest.stripCollectionRoutesContextPromptBlocks(prompt);
+
+  assert.equal(promptSyncTest.promptHasCollectionRoutesContextRule(prompt), true);
+  assert.equal(stripped.includes(promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_MARKER), false);
+  assert.equal(stripped.includes("get_collection_routes_context"), false);
+  assert.equal(stripped.includes("Bezpečný zbytek promptu."), true);
+}
+
+{
+  const unrelatedLine = `Bezpečný starší text pouze zmiňuje ${promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_MARKER}, ale není synchronizovaným blokem.`;
+  const stripped = promptSyncTest.stripCollectionRoutesContextPromptBlocks(unrelatedLine);
+
+  assert.equal(stripped, unrelatedLine);
+}
+
+{
+  const staleContextRule = `${promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_MARKER} Starší pravidlo bez aktuálního bezpečnostního textu.`;
+  const stripped = promptSyncTest.stripCollectionRoutesContextPromptBlocks([
+    "Jsi Šarlota.",
+    staleContextRule,
+    "Bezpečný zbytek promptu."
+  ].join("\n"));
+
+  assert.equal(stripped.includes(staleContextRule), false);
+  assert.equal(stripped.includes("Bezpečný zbytek promptu."), true);
+}
+
+{
+  const patched = promptSyncTest.buildSarlotaPromptPatchText("Jsi Šarlota.\nBezpečný vlastní text.");
+
+  assert.equal(patched.includes("Bezpečný vlastní text."), true);
+  assert.equal(patched.includes(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE), true);
+  assert.equal(patched.split(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE).length - 1, 1);
+  assert.equal(patched.includes(promptSyncTest.COLLECTION_ROUTES_GPS_RULE_BLOCK), true);
+  assert.equal(patched.includes(promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_BLOCK), true);
+  assert.equal(patched.includes(promptSyncTest.COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK), true);
 }
 
 {
@@ -163,6 +213,7 @@ import {
   assert.equal(plan.ready, true);
   assert.equal(plan.prompt.willAppendDriverReportVehicleRule, true);
   assert.equal(plan.prompt.willAppendDataBoxContextRule, true);
+  assert.equal(plan.prompt.willAppendCollectionRoutesContextRule, true);
   assert.equal(plan.prompt.willAppendCollectionRoutesGpsRule, true);
   assert.equal(plan.prompt.willAppendCollectionRoutesIncidentRule, true);
   assert.equal(plan.prompt.willRemoveForbiddenDriverReportPhrases, true);
@@ -173,6 +224,7 @@ import {
     "Jsi Šarlota.",
     SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
     promptSyncTest.DATA_BOX_CONTEXT_RULE_BLOCK,
+    promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_BLOCK,
     promptSyncTest.COLLECTION_ROUTES_GPS_RULE_BLOCK,
     promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_BLOCK,
     promptSyncTest.COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK
@@ -197,6 +249,7 @@ import {
 
   assert.equal(plan.prompt.currentRulePresent, true);
   assert.equal(plan.prompt.dataBoxContextRulePresent, true);
+  assert.equal(plan.prompt.collectionRoutesContextRulePresent, true);
   assert.equal(plan.prompt.collectionRoutesGpsRulePresent, true);
   assert.equal(plan.prompt.collectionRoutesIncidentRulePresent, true);
   assert.equal(plan.prompt.collectionRoutesDriverActionRulePresent, true);

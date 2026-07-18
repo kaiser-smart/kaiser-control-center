@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.598"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.599"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: bezpečný náhled synchronizace kontextu tras",
+    text: "Chráněná synchronizace promptu nově rozpozná, doplní a po uložení ověří pravidlo Svozových tras pro trasu, počasí, služební kontext, pracovní paměť a titulky iROZHLAS. Read-only náhled před zápisem vyjmenuje chybějící bloky; first message, model ani tools nemění."
+  },
   {
     title: "Šarlota: aktuální titulky z oficiálního RSS",
     text: "Řidičská Šarlota načítá nejvýše tři aktuální titulky z oficiálního RSS iROZHLAS. Kontext obsahuje zdroj a čas načtení, nepřebírá popisy ani celé články a při výpadku pravdivě oznámí nedostupnost bez scrapingu nebo vymyšlených zpráv."
